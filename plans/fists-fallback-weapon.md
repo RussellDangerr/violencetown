@@ -52,54 +52,127 @@ If throwing weapons and items is free (doesn't consume your turn), the game acti
 - Not something you "spec into" — no unarmed mastery, no fist damage rings
 - Not terrible — the old "1-3 damage" is dead
 
-### Damage Model
+### Damage Model — LOCKED
+
+**Fists scale with player level. Weapons are flat +damage on top of fists.**
 
 ```
-WEAPON DAMAGE SPECTRUM (flat, no RNG):
+FIST DAMAGE = Level × 10
 
-Fists:           5-8  (creature-dependent)
-Common weapons:  8-12  (pipe, bottle, shovel)
-Uncommon:       12-18  (crowbar, machete, bat)
-Rare:           18-25  (katana, sledgehammer)
-Epic:           25-35  (named uniques)
-Legendary:      35-50  (hand-crafted specials)
-
-Fists vs mid-tier weapon: ~40-60% damage
-Fists vs common weapon:  ~60-80% damage
+Level 1:  10 damage
+Level 2:  20 damage
+Level 3:  30 damage
+...
+Level 10: 100 damage (cap)
 ```
 
-Fists aren't embarrassing. A 6-damage punch against a rat with 20 HP means 3-4 hits to kill. You can do it. A crowbar does it in 2. That's the difference — efficiency, not capability.
+**Leveling:** 2 levels per boss. 5 zones, 5 bosses. 10 levels total. That's the cap.
+
+| Boss | Zone | Levels Gained | Player Level After |
+|------|------|---------------|-------------------|
+| Texas Beholdem | Sewer | 1 → 3 | 3 |
+| Alien Invasion | Factory | 3 → 5 | 5 |
+| The Financier | Town | 5 → 7 | 7 |
+| Bigfoot | Circus | 7 → 9 | 9 |
+| The Deity | Graveyard | 9 → 10* | 10 (cap) |
+
+*Last boss gives 1 level to hit the cap cleanly.*
+
+**Weapons add flat +damage on top of fists.** A weapon doesn't replace your fists — it adds to them. This is a play on the classic +1/+2/+3 system, but with meaningful numbers:
+
+```
+TOTAL MELEE DAMAGE = Fist Damage + Weapon Bonus
+
+Example at Level 3 (fists = 30):
+  Bare fists:       30 damage
+  Bottle (+2):      32 damage
+  Pipe (+5):        35 damage
+  Crowbar (+8):     38 damage
+  Katana (+15):     45 damage
+  Legendary (+25):  55 damage
+```
+
+**Weapon bonus spectrum:**
+
+| Rarity | Weapon Bonus | Examples |
+|--------|-------------|----------|
+| Trash | +1 to +2 | Bottle, stick, shoe |
+| Common | +3 to +5 | Pipe, shovel, frying pan |
+| Uncommon | +6 to +10 | Crowbar, machete, bat |
+| Rare | +11 to +15 | Katana, sledgehammer |
+| Epic | +16 to +25 | Named uniques |
+| Legendary | +26 to +40 | Hand-crafted specials |
+
+Weapons are clearly meaningful (+5 on a Level 1 character is +50% damage) but your fists are always the foundation. At Level 10 with 100 base damage, a +5 pipe is only +5% — by endgame, your fists ARE the weapon and everything else is gravy. Early game, weapons matter a lot. Late game, you're a monster regardless.
+
+### Thrown Weapon Damage — 2x Weapon Bonus
+
+**Thrown damage = Fist Damage + (Weapon Bonus × 2)**
+
+Throwing a weapon does double its bonus damage. This is the incentive to throw — it's always more damage than swinging, but you lose the weapon.
+
+```
+THROWN DAMAGE = Fist Damage + (Weapon Bonus × 2)
+
+Example at Level 3 (fists = 30):
+  Throw bottle (+2):     30 + 4  = 34 damage
+  Throw pipe (+5):       30 + 10 = 40 damage
+  Throw crowbar (+8):    30 + 16 = 46 damage
+  Throw katana (+15):    30 + 30 = 60 damage
+  Throw legendary (+25): 30 + 50 = 80 damage
+```
+
+| Weapon | Melee (L3) | Thrown (L3) | Throw Gain | Worth Throwing? |
+|--------|-----------|-------------|------------|-----------------|
+| Bottle (+2) | 32 | 34 | +2 | Yes — it's garbage, toss it |
+| Pipe (+5) | 35 | 40 | +5 | Yes — decent spike for a common weapon |
+| Crowbar (+8) | 38 | 46 | +8 | Situational — good burst, hate to lose it |
+| Katana (+15) | 45 | 60 | +15 | Only to finish a tough enemy |
+| Legendary (+25) | 55 | 80 | +25 | NEVER... unless it's life or death |
+
+The pattern: throwing is always better damage per hit, but you lose the weapon and fall back to fists. Higher-bonus weapons have a bigger absolute throw gain, making the decision more agonizing. "Do I throw my +15 katana for 60 damage and finish this boss, or keep swinging for 45?"
+
+### Stack Throwing (Future Consideration)
+
+Throwing multiple items in one turn (stacking free-action throws) could get out of hand:
+
+```
+Level 3, throw 5 bottles in one turn:
+  5 × 34 = 170 damage in free actions alone
+```
+
+That's probably too much. **Stack throwing may need a cap or diminishing returns** — but we'll cross that bridge later. For now, the system works because inventory size is the natural limiter (you can only throw what you're carrying).
 
 ### Creature-Specific Fists
 
-Every creature's "fists" reflect their anatomy. Same role, different flavor:
+Every creature's "fists" reflect their anatomy. Same damage formula, different flavor:
 
-| Creature | "Fists" | Base Damage | Flavor |
-|----------|---------|-------------|--------|
-| **Human** | Fists | 6 | Straight punches, hooks. Bread and butter. |
-| **Wererat** | Claws & Bite | 7 | Faster, scrappier. Rats fight dirty. |
-| **Robot** | Metal Fists | 8 | Hardest hitting base. No pain, no hesitation. |
-| **Clown** | Slap & Shove | 5 | Weakest damage, but could have knockback/daze (comedy). |
-| **Skeleton** | Bone Strikes | 6 | Detachable arm swing? Throw your own arm, it comes back? |
+| Creature | "Fists" | Flavor |
+|----------|---------|--------|
+| **Human** | Fists | Straight punches, hooks. Bread and butter. |
+| **Wererat** | Claws & Bite | Scrappy, fast, dirty. |
+| **Robot** | Metal Fists | Mechanical precision. Satisfying clang. |
+| **Clown** | Slap & Shove | Slapstick wind-up. Comedy sound effects. |
+| **Skeleton** | Bone Strikes | Bony cracks. Detachable arm swing? |
 
-The variance is small (5-8 range). This isn't a balance lever — it's flavor. The Robot hits slightly harder bare-handed because it's made of metal. The Clown hits softer because slapstick. No creature's fists are so good that weapons don't matter.
+All creatures use the same `Level × 10` formula. No creature variance on fist damage — the difference is purely cosmetic and animation. Balance lives in the level system, not creature selection.
 
 ### How This Encourages Throwing
 
-The combat loop this creates:
+The combat loop at Level 3 (fists = 30):
 
 ```
-1. You have a crowbar (12 damage) and a frying pan (10 damage, throwable)
+1. You have a crowbar (+8) and a frying pan (+5)
 2. A bandit blocks the alley. A rat flanks from behind.
-3. FREE ACTION: Throw frying pan at the rat (10 damage — one-shots it)
-4. TURN ACTION: Move toward bandit, attack with crowbar (12 damage)
-5. Next turn: crowbar breaks / you throw it at a fleeing enemy
-6. Now you're at fists (6 damage). You're still in the fight.
-7. You see a pipe on the ground from the dead rat → FREE ACTION: pick it up
-8. Back in business.
+3. FREE ACTION: Throw frying pan at the rat (40 damage — chunks it)
+4. TURN ACTION: Move toward bandit, attack with crowbar (38 damage)
+5. Next turn: throw crowbar at fleeing bandit (46 damage — finishes him)
+6. Now you're at fists (30 damage). Still very much in the fight.
+7. Pick up pipe from dead rat → FREE ACTION: pick it up
+8. Back to 35 damage. The cycle continues.
 ```
 
-Without viable fists, step 3 never happens. The player hoards both weapons because being empty-handed is a death sentence. With viable fists, throwing is a tactical choice, not a gamble.
+Without viable fists, step 3 never happens. With 30 base damage, throwing is a tactical choice — you're trading a +5 to +8 bonus for a burst of double that. The fists underneath keep you dangerous.
 
 ### Fists and the Wealth = Danger System
 
@@ -168,23 +241,27 @@ The throw multiplier is higher on cheap weapons. This naturally creates the righ
 
 ## Design Decisions — LOCKED
 
+- **Fist damage = Level × 10.** Level 1 = 10, Level 10 = 100. Simple, significant numbers.
+- **Level cap is 10.** 2 levels per boss, 5 bosses. That's it.
+- **Weapons are +damage on top of fists.** Not replacement damage. Additive bonus.
+- **Thrown weapons do 2× their weapon bonus.** Always more damage than swinging, but you lose the weapon.
 - **Fists are not a build.** No specialization, no skill tree, no dedicated rings.
-- **Fists can't be improved directly.** No "upgrade your fists" mechanic. Arm equipment (gauntlets) can passively boost them, but you're equipping armor, not leveling fists.
-- **Fists scale with creature, not with player progression.** Your fists do 6 damage at minute 1 and 6 damage at hour 10. Weapons scale with rarity. Fists are the constant.
-- **Every creature has a fist equivalent.** Claws, metal fists, slaps, bone strikes. Same system, different flavor text and animation.
+- **All creatures use the same fist formula.** No creature-specific fist damage variance. Difference is cosmetic/animation only.
+- **Every creature has a fist equivalent.** Claws, metal fists, slaps, bone strikes. Same math, different flavor.
 
 ## Design Decisions — OPEN
 
-- **Do fists have any special property?** Speed (attack twice per turn)? Probably not — keep it simple. Fists are just damage.
-- **Can brass knuckles / gauntlets boost fist damage?** Leaning yes, as a natural Sides-zone equipment effect. But this is equipment, not a fist upgrade.
+- **Stack throwing balance** — Multiple free-action throws per turn could spike damage. May need a soft cap or diminishing returns. Start uncapped, playtest.
+- **Can brass knuckles / gauntlets add to the weapon bonus?** Leaning yes — they'd be a Sides-zone equipment that gives a small +damage that stacks with fists and doesn't get thrown away.
 - **Skeleton arm throw** — Can the Skeleton literally throw its own arm as a weapon and fight one-armed until it picks it back up? Peak comedy, fits the creature's One Cool Thing design space. TBD.
+- **Do thrown weapons land on the target tile for retrieval?** Leaning yes.
 
 ---
 
 ## Open Questions (For Gate 2)
 
-- Exact fist damage numbers per creature (the 5-8 range above is placeholder — needs balancing against actual enemy HP pools)
+- Enemy HP pools need to be designed around this damage curve (Level 1 doing 10 fist damage means early enemies need HP in the 30-80 range to create 3-8 hit fights)
 - Do fists have a unique animation per creature, or reuse the attack animation with no weapon sprite?
-- How does fist damage interact with the 5-zone system? (Fists always hit Front? Or position-based like weapons?)
+- How does fist damage interact with the 5-zone system? (Position-based targeting like weapons, presumably)
 - Does the Smooth Talker creature even HAVE fists? Or is their "fallback" something dialogue-based?
-- Thrown weapon retrieval — can you pick thrown weapons back up from the ground? (Probably yes — they land on the target's tile)
+- How does the +damage system display in UI? "Crowbar (+8)" in inventory? Damage preview in action tree?
