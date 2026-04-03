@@ -61,7 +61,7 @@
 - Flat armor as damage reduction: `actual = max(1, raw - armor)`
 - Player attack action: queue "attack [direction]" like movement
 - Melee combat only (adjacent tiles)
-- Damage sourced from equipped weapon (or bare hands fallback: 1-3 damage)
+- Damage sourced from equipped weapon (or fists fallback: 5-8 damage, creature-dependent — see `plans/fists-fallback-weapon.md`)
 - Combat messages in text log ("You hit the Rat for 7 damage. The Rat has 43 HP.")
 - NPC death: remove from map, drop loot on tile
 - Player taking damage from NPCs (resolved on NPC's tick action)
@@ -114,7 +114,7 @@ All characters have 5 hit zones: **Top** (head), **Front** (chest), **Back** (ac
 ## Open Questions (For Gate 2)
 
 - What are the per-zone HP values? Equal splits from a total pool, or zone-specific?
-- Bare hands damage: fixed 1, or 1-3 range?
+- ~~Bare hands damage: fixed 1, or 1-3 range?~~ → **RESOLVED.** Fists are 5-8 damage, creature-dependent. See `plans/fists-fallback-weapon.md`.
 - Do different weapons target different zones by default, or is it always position-based?
 - Can armor degrade? (Fits Phase 3 bag damage / item durability)
 - Do environmental hazards use this same damage formula?
