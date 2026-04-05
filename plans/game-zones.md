@@ -1,54 +1,67 @@
 # Feature: Game Zones — Static World Map
-**Phase:** Foundational (replaces Phase 1 world generation)
+**Phase:** Foundational
 **Priority:** Critical
-**Status:** Research / Design
-**Date:** 2026-04-01
+**Status:** Research / Design — **ADVENTURE PIVOT (2026-04-05)**
+**Date:** 2026-04-01 (updated 2026-04-05)
 
 ---
 
-## Design Pivot
+## Design Pivot (2026-04-05) — JRPG Adventure
 
-This plan supersedes the procedural chunk-based generation system from Phase 1. Violencetown is no longer a roguelike with shifting city chunks. It is now a **hand-crafted 2D pixelated tile map** — static, authored, persistent.
+> **This plan is now governed by `plans/adventure-transition-plan.md`.**
+>
+> Violencetown is a **2D pixel JRPG adventure**, not a roguelike. The game has a hero's journey arc, a hub zone (Street), four adventure zones, and a final confrontation. Town is renamed to **Street**. The Financier is the main villain whose arc bookends the entire game.
+>
+> **What changed:**
+> - Town → **Street** (the hub zone, always accessible)
+> - Progression is now a **linear adventure** with the player starting as Human on Street
+> - Creatures are **party members** recruited during the story, not swappable player identities
+> - No permadeath, no run-based structure, no creature parking
+> - Death = checkpoint respawn (lose gold, keep levels and key items)
+> - The Financier's vampire scheme connects all five zones and resolves in a final battle on Street
 
-### What's changing:
-- **No procedural generation.** The world is designed, not generated.
-- **No chunk regeneration.** The map doesn't shift or reset.
-- **No roguelike mechanics.** No permadeath loop, no run-based structure.
-- **Tile system stays.** The game is still tile-based, 2D, pixelated.
-- **Simplex noise biomes are gone.** Zones are hand-placed, not noise-driven.
+### Zone Map
 
-### What this resolves from the ABC Decision Matrix:
-- **Category 5 (World Structure):** Effectively **Option C — Fully Persistent**, but hand-crafted rather than procedurally generated. The world is a fixed map.
-- The "shifting city" identity is replaced by a **neighborhood identity** — each zone has a distinct look, feel, and resident creature.
+```
+                [ Graveyard ]
+                     |
+[ Factory ] — [ STREET ] — [ Circus ]
+                     |
+                [ Sewer ]
+```
+
+### Adventure Progression (Hero's Journey)
+
+| Act | Zone | Element | Enemies | Boss | Levels Gained |
+|-----|------|---------|---------|------|---------------|
+| **1** | **Street** (hub) | None | Bankers, suits (vampire hints) | None | 1 (starting) |
+| **2** | **Sewer** | Sludge | D&D fantasy monsters | **Texas Beholdem** | 1 → 3 |
+| **3** | **Circus** | Fun | Cryptids, clowns | **Bigfoot** | 3 → 5 |
+| **4** | **Factory** | Goo | Robots, aliens | **Alien Invasion** | 5 → 7 |
+| **5** | **Graveyard** | Death | Undead (skeletons, zombies) | **The Deity** | 7 → 9 |
+| **6** | **Street (Return)** | All converge | Vampires unmasked | **The Financier** | 9 → 10 (cap) |
+
+---
+
+## Previous Design Pivot (2026-04-01)
+
+> The section below preserves the original static-world pivot for reference.
+> Zone details, creature profiles, boss designs, and element mechanics remain relevant
+> but the PROGRESSION ORDER and STRUCTURE are superseded by the adventure plan above.
 
 ---
 
 ## Core Concepts
 
-### Progression — Unlock Order
+### Progression — SUPERSEDED
 
-Zones, creatures, and elements unlock sequentially. You start with one zone and one element. Beat the zone with its creature → unlock the next zone, creature, and element. Each stage slowly introduces its new element before the next zone opens.
-
-| Stage | Zone Unlocked | Creature Unlocked | Element Introduced | Meter |
-|-------|---------------|-------------------|--------------------|-------|
-| **1** | Sewer | Wererat | Sludge | Seesaw (Sludge side only) |
-| **2** | Factory | Robot | Goo | Seesaw (both sides now active) |
-| **3** | Town | Human | Bored | Limit Gauge (Bored side only) |
-| **4** | Circus | Clown | Fun | Limit Gauge (both sides now active) |
-| **5** | Graveyard | Skeleton | Death | HP (Death drains Life) |
-| **6** | Endgame | ? | Life | HP (full system — Life fights back) |
-
-**How it works:**
-- **Stage 1 — Sewer:** You start as the Wererat in the Sewer. Sludge is the only element. You learn the seesaw mechanic with only one side active (it can only tip toward Sludge). Beat Texas Beholdem → unlock Factory.
-- **Stage 2 — Factory:** You're the Robot now. Goo is introduced. The seesaw is fully active — Sludge on one side, Goo on the other. You learn to balance. Beat the Alien Invasion → unlock Town.
-- **Stage 3 — Town:** You're Human. Boredom is introduced — the limit gauge appears with only the Bored side. Sun damage (from the vampire moonblock scheme) starts draining Life, introducing Death↔Life pressure early. Beat the Financier → unlock Circus.
-- **Stage 4 — Circus:** You're the Clown. Fun is introduced — the limit gauge is fully active, both Bored and Fun extremes live. Beat Bigfoot → unlock Graveyard.
-- **Stage 5 — Graveyard:** You're the Skeleton. Death is fully introduced — being in the Graveyard actively drains Life. All three meters are now live. Beat the Deity → unlock Endgame.
-- **Stage 6 — Endgame:** Life. The final element. What this means is TBD — but Life as an endgame element suggests the opposite of Death. Healing? Resurrection? A way to fight back against everything? The culmination.
-
-**Design principle:** Each stage teaches one new mechanic before layering the next on top. By the time the player reaches the Graveyard, they understand the seesaw (Stages 1-2), the limit gauge (Stages 3-4), and are ready for the brutal simplicity of Death (Stage 5). The complexity ramps gradually.
-
-**Previous zones stay accessible.** After unlocking a new zone, you can return to earlier zones with new creatures and fuller meter systems. Going back to the Sewer as a Robot (with Goo) plays differently than going as a Wererat (with only Sludge).
+> **RENAME: "Town" → "Street" throughout this document.** References to "Town" below should be read as "Street." A full rename pass will happen during Gate 2 design.
+>
+> **See `plans/adventure-transition-plan.md` for the current progression order.**
+>
+> Key changes: You start as **Human on Street** (the hub). Creatures join as **party members** during the story: Wererat (Sewer), Clown (Circus), Robot (Factory), Skeleton (Graveyard). The Financier is the final boss, fought on Street in Act 6.
+>
+> **Previous zones stay accessible.** After completing a zone, you can return to it for side content, secrets, and items gated behind abilities gained later.
 
 ---
 
