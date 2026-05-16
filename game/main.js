@@ -144,6 +144,7 @@ class Game {
         await this._loadMap('sewer-map.json');
         this._bindSplash();
         this._bindInput();
+        this._bindTouchControls();
         document.getElementById('new-game').addEventListener('click', () => this._fullReset());
 
         // Idle animation loop — redraws at ~4fps for sprite bobble
@@ -274,6 +275,20 @@ class Game {
             if (this._autoRepeatKey === e.code) {
                 this._stopAutoRepeat();
             }
+        });
+    }
+
+    _bindTouchControls() {
+        const buttons = document.querySelectorAll('#touch-controls .tc-btn');
+        buttons.forEach(btn => {
+            const code = btn.dataset.key;
+            const fire = (e) => {
+                e.preventDefault();
+                document.dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true }));
+                document.dispatchEvent(new KeyboardEvent('keyup',   { code, bubbles: true }));
+            };
+            btn.addEventListener('pointerdown', fire);
+            btn.addEventListener('contextmenu', e => e.preventDefault());
         });
     }
 

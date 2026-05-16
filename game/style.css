@@ -130,6 +130,57 @@ body {
 }
 #new-game:hover { border-color: #8b7340; color: #d4b96a; }
 
+/* --- Touch controls --- */
+
+#touch-controls { display: none; }
+
+.tc-btn {
+    background: #2a2218;
+    border: 2px solid #8b7340;
+    color: #d4b96a;
+    font-family: 'Courier New', monospace;
+    font-weight: 700;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+    cursor: pointer;
+}
+.tc-btn:active { background: #3a2e1f; border-color: #d4b96a; }
+
+@media (pointer: coarse), (max-width: 700px) {
+    #touch-controls {
+        display: flex;
+        position: fixed;
+        left: 0; right: 0; bottom: 0;
+        padding: 12px max(12px, env(safe-area-inset-left)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-right));
+        justify-content: space-between;
+        align-items: flex-end;
+        z-index: 20;
+        pointer-events: none;
+    }
+    #touch-dpad, #touch-actions { pointer-events: auto; }
+
+    #touch-dpad {
+        display: grid;
+        grid-template-columns: repeat(3, 56px);
+        grid-template-rows: repeat(3, 56px);
+        gap: 4px;
+    }
+    #touch-dpad .tc-btn { font-size: 20px; padding: 0; opacity: 0.85; }
+    #touch-dpad .tc-btn:nth-child(1) { grid-column: 2; grid-row: 1; }
+    #touch-dpad .tc-btn:nth-child(2) { grid-column: 1; grid-row: 2; }
+    #touch-dpad .tc-btn:nth-child(3) { grid-column: 2; grid-row: 3; }
+    #touch-dpad .tc-btn:nth-child(4) { grid-column: 3; grid-row: 2; }
+
+    .tc-wait {
+        width: 72px; height: 72px;
+        font-size: 11px;
+        letter-spacing: 1px;
+        border-radius: 50%;
+        opacity: 0.85;
+    }
+}
+
 /* --- Responsive --- */
 
 @media (max-width: 700px) {
