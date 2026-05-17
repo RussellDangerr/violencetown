@@ -1,0 +1,12 @@
+Roguelike Base Pack, Roguelike Dungeon Pack, Roguelike Characters Pack
+by Kenney (www.kenney.nl)
+
+License: Creative Commons Zero, CC0 1.0 Universal
+https://creativecommons.org/publicdomain/zero/1.0/
+
+This content is free to use in personal, educational and commercial
+projects. Written permission not required. Crediting or donating is
+voluntary but appreciated.
+
+These sheets ship in the public Violencetown demo as CC0 placeholder
+art when the gitignored premium LimeZu assets are not present.

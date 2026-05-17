@@ -2,21 +2,31 @@
 // Sewer demo prototype
 
 export class SpriteSheet {
-    constructor(src, frameW, frameH) {
+    constructor(src, frameW, frameH, fallback) {
         this.img     = new Image();
         this.frameW  = frameW;
         this.frameH  = frameH;
         this.loaded  = false;
         this.failed  = false;
+        this.usingFallback = false;
 
         this._promise = new Promise((resolve) => {
-            this.img.onload = () => {
+            const finishLoad = () => {
                 this.loaded = true;
-                this.cols = Math.floor(this.img.width / frameW);
-                this.rows = Math.floor(this.img.height / frameH);
+                this.cols = Math.floor(this.img.width / this.frameW);
+                this.rows = Math.floor(this.img.height / this.frameH);
                 resolve(true);
             };
+            this.img.onload = finishLoad;
             this.img.onerror = () => {
+                if (fallback && !this.usingFallback) {
+                    this.usingFallback = true;
+                    this.frameW = fallback.frameW ?? this.frameW;
+                    this.frameH = fallback.frameH ?? this.frameH;
+                    this.img.onerror = () => { this.failed = true; resolve(false); };
+                    this.img.src = fallback.src;
+                    return;
+                }
                 this.failed = true;
                 resolve(false);
             };
@@ -48,30 +58,48 @@ export class SpriteSheet {
 
 // ── Asset paths ──────────────────────────────────────────────────────────────
 
-const A = '../assets';
+// Premium (gitignored, local-only) — pointed at a guaranteed-404 path when
+// ?placeholder=1 is in the URL, which forces every sheet through its fallback
+// so you can see the public-deploy render locally without moving files.
+const placeholderMode = typeof location !== 'undefined' && new URLSearchParams(location.search).has('placeholder');
+const A = placeholderMode ? '../assets-FORCE-MISSING' : '../assets';
+const K = './assets-placeholder/kenney';                // CC0 fallback (committed, public deploy)
+
+// Each SHEETS entry has a primary `src` (LimeZu, paid) and an optional `fallback`
+// pointing to a Kenney CC0 sheet that loads when LimeZu is absent. Frame sizes
+// differ between sets — LimeZu uses 32×32, Kenney roguelike uses 16×16.
+//
+// IMPORTANT: TILE_SPRITE_MAP / TOWN_TILE_SPRITE_MAP / ITEM_SPRITES / ENEMY_SPRITES
+// coordinates below are calibrated for the LimeZu layouts. When fallback is active
+// the same (col,row) will pull from a *different* part of the Kenney sheet — see
+// the Phase 2 TODO at the bottom of this file for the remap work.
+
+const KENNEY_TILE  = { src: `${K}/roguelikeSheet_transparent.png`,   frameW: 16, frameH: 16 };
+const KENNEY_DUNG  = { src: `${K}/roguelikeDungeon_transparent.png`, frameW: 16, frameH: 16 };
+const KENNEY_CHAR  = { src: `${K}/roguelikeChar_transparent.png`,    frameW: 16, frameH: 16 };
 
 export const SHEETS = {
     // Sewer
-    sewerTiles:   { src: `${A}/fungus-cave/Tilesets/Tileset - Sewers 32x32.png`, frameW: 32, frameH: 32 },
-    caveTiles:    { src: `${A}/fungus-cave/Tilesets/Tileset - Fungus cave and Refugee outpost 32x32.png`, frameW: 32, frameH: 32 },
-    fungusViolet: { src: `${A}/fungus-cave/Characters/Fungus - violet.png`, frameW: 16, frameH: 32 },
-    fungusRed:    { src: `${A}/fungus-cave/Characters/Fungus - red.png`, frameW: 16, frameH: 32 },
-    fungusKing:   { src: `${A}/fungus-cave/Characters/Fungus - King.png`, frameW: 16, frameH: 32 },
-    sewerMonster: { src: `${A}/fungus-cave/Characters/Sewers monster.png`, frameW: 16, frameH: 32 },
-    ghostMonster: { src: `${A}/fungus-cave/Characters/Sewers monster - ghost.png`, frameW: 16, frameH: 32 },
-    player:       { src: `${A}/fungus-cave/Characters/Cleric.png`, frameW: 16, frameH: 32 },
-    boss:         { src: `${A}/fungus-cave/Battlers/BOSS.png`, frameW: 155, frameH: 135 },
+    sewerTiles:   { src: `${A}/fungus-cave/Tilesets/Tileset - Sewers 32x32.png`, frameW: 32, frameH: 32, fallback: KENNEY_DUNG },
+    caveTiles:    { src: `${A}/fungus-cave/Tilesets/Tileset - Fungus cave and Refugee outpost 32x32.png`, frameW: 32, frameH: 32, fallback: KENNEY_DUNG },
+    fungusViolet: { src: `${A}/fungus-cave/Characters/Fungus - violet.png`, frameW: 16, frameH: 32, fallback: KENNEY_CHAR },
+    fungusRed:    { src: `${A}/fungus-cave/Characters/Fungus - red.png`, frameW: 16, frameH: 32, fallback: KENNEY_CHAR },
+    fungusKing:   { src: `${A}/fungus-cave/Characters/Fungus - King.png`, frameW: 16, frameH: 32, fallback: KENNEY_CHAR },
+    sewerMonster: { src: `${A}/fungus-cave/Characters/Sewers monster.png`, frameW: 16, frameH: 32, fallback: KENNEY_CHAR },
+    ghostMonster: { src: `${A}/fungus-cave/Characters/Sewers monster - ghost.png`, frameW: 16, frameH: 32, fallback: KENNEY_CHAR },
+    player:       { src: `${A}/fungus-cave/Characters/Cleric.png`, frameW: 16, frameH: 32, fallback: KENNEY_CHAR },
+    boss:         { src: `${A}/fungus-cave/Battlers/BOSS.png`, frameW: 155, frameH: 135, fallback: KENNEY_CHAR },
 
     // Town (Modern Exteriors)
-    townTerrains: { src: `${A}/modern-exteriors/Modern_Exteriors_32x32/ME_Theme_Sorter_32x32/1_Terrains_and_Fences_32x32.png`, frameW: 32, frameH: 32 },
-    cityTerrains: { src: `${A}/modern-exteriors/Modern_Exteriors_32x32/ME_Theme_Sorter_32x32/2_City_Terrains_32x32.png`, frameW: 32, frameH: 32 },
-    cityProps:    { src: `${A}/modern-exteriors/Modern_Exteriors_32x32/ME_Theme_Sorter_32x32/3_City_Props_32x32.png`, frameW: 32, frameH: 32 },
-    buildings:    { src: `${A}/modern-exteriors/Modern_Exteriors_32x32/ME_Theme_Sorter_32x32/4_Generic_Buildings_32x32.png`, frameW: 32, frameH: 32 },
+    townTerrains: { src: `${A}/modern-exteriors/Modern_Exteriors_32x32/ME_Theme_Sorter_32x32/1_Terrains_and_Fences_32x32.png`, frameW: 32, frameH: 32, fallback: KENNEY_TILE },
+    cityTerrains: { src: `${A}/modern-exteriors/Modern_Exteriors_32x32/ME_Theme_Sorter_32x32/2_City_Terrains_32x32.png`, frameW: 32, frameH: 32, fallback: KENNEY_TILE },
+    cityProps:    { src: `${A}/modern-exteriors/Modern_Exteriors_32x32/ME_Theme_Sorter_32x32/3_City_Props_32x32.png`, frameW: 32, frameH: 32, fallback: KENNEY_TILE },
+    buildings:    { src: `${A}/modern-exteriors/Modern_Exteriors_32x32/ME_Theme_Sorter_32x32/4_Generic_Buildings_32x32.png`, frameW: 32, frameH: 32, fallback: KENNEY_TILE },
 
     // Items (Modern Interiors)
-    grocery:      { src: `${A}/modern-interiors/1_Interiors/32x32/Theme_Sorter_32x32/16_Grocery_store_32x32.png`, frameW: 32, frameH: 32 },
+    grocery:      { src: `${A}/modern-interiors/1_Interiors/32x32/Theme_Sorter_32x32/16_Grocery_store_32x32.png`, frameW: 32, frameH: 32, fallback: KENNEY_TILE },
 
-    // UI
+    // UI — no Kenney roguelike equivalent; falls through to existing colored-box behavior
     uiStyle1:     { src: `${A}/modern-ui/32x32/Modern_UI_Style_1_32x32.png`, frameW: 32, frameH: 32 },
     uiStyle2:     { src: `${A}/modern-ui/32x32/Modern_UI_Style_2_32x32.png`, frameW: 32, frameH: 32 },
 };
@@ -144,6 +172,19 @@ export const ENEMY_SPRITES = {
     'Sewer Monster': { sheet: 'sewerMonster', col: 1, row: 0 },
 };
 
+// ── Phase 2 TODO: Kenney-specific coordinate maps ────────────────────────────
+//
+// When a sheet falls back to its Kenney source, the (col,row) values in the maps
+// above still reference the LimeZu layout. A Kenney sheet uses the same indexing
+// API but tiles are in different positions. Public-deploy parity requires parallel
+// maps keyed by sheet.usingFallback. Categories needing remapping:
+//   • TILE_SPRITE_MAP       (sewer/cave tiles → roguelikeDungeon coords)
+//   • TOWN_TILE_SPRITE_MAP  (town tiles      → roguelikeSheet coords)
+//   • ITEM_SPRITES          (caveTiles items → roguelikeSheet or Dungeon coords)
+//   • ENEMY_SPRITES         (fungus chars    → roguelikeChar monster row coords)
+// Renderer change: when sheet.usingFallback, read from a KENNEY_* map of the same
+// shape and let drawFrame/drawRegion proceed unchanged with the substituted coords.
+
 // ── Loader ───────────────────────────────────────────────────────────────────
 
 export async function loadAllSprites() {
@@ -151,7 +192,7 @@ export async function loadAllSprites() {
     const promises = [];
 
     for (const [key, def] of Object.entries(SHEETS)) {
-        const sheet = new SpriteSheet(def.src, def.frameW, def.frameH);
+        const sheet = new SpriteSheet(def.src, def.frameW, def.frameH, def.fallback);
         loaded[key] = sheet;
         promises.push(sheet.ready);
     }

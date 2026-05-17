@@ -1,2 +1,37 @@
-# Purchased asset packs — DO NOT COMMIT (licensed, not for redistribution)
+# =============================================================
+# Asset protection — DO NOT REMOVE LINES WITHOUT REVIEW
+# This repo is public. Anything that lands in git history is
+# forensically recoverable forever, even after deletion.
+# =============================================================
+
+# --- Licensed/paid asset folders (defense layer 1: explicit) ---
 assets/
+assetszipped/
+
+# --- Archive & executable files (defense layer 2: extensions) ---
+# Catches any new asset zip dropped anywhere, plus installers/launchers.
+# The repo ships pure HTML/CSS/JS; no legitimate need to commit these.
+*.zip
+*.rar
+*.7z
+*.tar
+*.tar.gz
+*.tgz
+*.exe
+*.msi
+*.dmg
+
+# --- Source-art files (defense layer 3: art extensions) ---
+# Asset packs often include editable source files alongside PNGs.
+# These are higher-value than exported sprites and must not leak.
+*.psd
+*.aseprite
+*.ase
+*.xcf
+*.kra
+*.clip
+
+# --- OS / editor housekeeping ---
+.DS_Store
+Thumbs.db
+desktop.ini
