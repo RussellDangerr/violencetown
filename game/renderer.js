@@ -4,7 +4,7 @@
 // All text: dark brown on parchment for readability (not gold-on-dark)
 
 import { TILE_PX, VIEW_TILES, CANVAS_PX, INVENTORY_SIZE } from './data.js';
-import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES } from './sprites.js';
+import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES, PLAYER_SPRITE } from './sprites.js';
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
 
 export class Renderer {
@@ -46,28 +46,59 @@ export class Renderer {
 
         ctx.textAlign = 'center';
 
-        // Title — dark text on parchment
+        // Small game-name header
         ctx.fillStyle = UI.panelBorder;
-        ctx.font = 'bold 22px monospace';
-        ctx.fillText('VIOLENCETOWN', 160, 80);
+        ctx.font = 'bold 11px monospace';
+        ctx.fillText('VIOLENCETOWN', 160, 38);
 
-        // Subtitle
-        ctx.fillStyle = UI.textLight;
-        ctx.font = '11px monospace';
-        ctx.fillText('[sewer demo prototype]', 160, 100);
-
-        // Horizontal rule
+        // Horizontal rule under header
         ctx.strokeStyle = UI.panelBorder;
         ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(60, 115); ctx.lineTo(260, 115); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(90, 44); ctx.lineTo(230, 44); ctx.stroke();
 
-        // Controls
-        ctx.fillStyle = UI.text;
-        ctx.font = '10px monospace';
-        ctx.fillText('WASD to move', 160, 135);
-        ctx.fillText('bump enemies to attack', 160, 150);
-        ctx.fillText('1-9 select item, Space to use', 160, 165);
-        ctx.fillText('~ codeball (debug)', 160, 180);
+        // Character lineup — three distinct chars from the Kenney sheet,
+        // picked from the leftmost column where small character bodies live.
+        // Coords are decorative-only (no gameplay binding), so they're picked
+        // here directly rather than referenced from ENEMY_SPRITES.
+        const lineupRow = [
+            { sheet: this.sprites?.sewerMonster, col: 0, row: 0 },
+            { sheet: this.sprites?.player,        col: 0, row: 1 },
+            { sheet: this.sprites?.fungusViolet,  col: 0, row: 2 },
+        ];
+        const charScale = 2;       // 16×16 Kenney → 32×32 displayed (nearest-neighbor)
+        const spacing   = 56;
+        const startX    = 160 - (lineupRow.length - 1) * spacing / 2 - 16;
+        const lineupY   = 70;
+        lineupRow.forEach((entry, i) => {
+            if (entry.sheet?.loaded) {
+                entry.sheet.drawFrame(
+                    ctx, entry.col, entry.row,
+                    startX + i * spacing, lineupY,
+                    entry.sheet.frameW * charScale,
+                    entry.sheet.frameH * charScale
+                );
+            }
+        });
+
+        // Big GAME START prompt — the centerpiece
+        ctx.fillStyle = UI.panelBorder;
+        ctx.font = 'bold 28px monospace';
+        ctx.fillText('GAME START', 160, 160);
+
+        // Subtitle hint
+        ctx.fillStyle = UI.textLight;
+        ctx.font = '9px monospace';
+        ctx.fillText('press SPACE or click below', 160, 178);
+
+        // Version — read from <meta name="version"> so it's a single source of truth
+        const meta = typeof document !== 'undefined'
+            ? document.querySelector('meta[name="version"]')
+            : null;
+        const version = meta ? meta.getAttribute('content') : '?';
+        ctx.textAlign = 'right';
+        ctx.fillStyle = UI.textLight;
+        ctx.font = '8px monospace';
+        ctx.fillText('v' + version, 296, 200);
 
         ctx.textAlign = 'left';
     }
@@ -192,8 +223,14 @@ export class Renderer {
             let ok = false;
             const info = ENEMY_SPRITES[e.type];
             if (info && sprites?.[info.sheet]?.loaded) {
-                const col = ((game._idleTick || 0) % 2 === 0) ? 0 : 2;
-                ok = sprites[info.sheet].drawFrame(ctx, col, info.row, px + 2, py - 4, TILE_PX - 4, TILE_PX + 4);
+                // Kenney chars are single-frame; honor `static` to use the
+                // exact col from the sprite map instead of animation flipping.
+                const col = info.static
+                    ? info.col
+                    : (((game._idleTick || 0) % 2 === 0) ? 0 : 2);
+                // 24×24 square draw — fits Kenney's 16×16 native at 1.5× upscale,
+                // avoids the vertical stretch that 28×36 produced.
+                ok = sprites[info.sheet].drawFrame(ctx, col, info.row, px + 4, py + 4, TILE_PX - 8, TILE_PX - 8);
             }
             if (!ok) {
                 ctx.fillStyle = '#cc4433';
@@ -219,15 +256,16 @@ export class Renderer {
         const ppx = half * TILE_PX;
         const ppy = half * TILE_PX;
 
-        const FACE = { down: 0, left: 1, right: 2, up: 3 };
-        const row = FACE[game.facing] ?? 0;
-        const col = game._animating
-            ? ((Math.floor(performance.now() / 80) % 2 === 0) ? 0 : 2)
-            : (((game._idleTick || 0) % 2 === 0) ? 0 : 2);
-
+        // Kenney chars are single-frame per cell — no facing/animation rows.
+        // PLAYER_SPRITE.col/row are read from sprites.js as the canonical
+        // player cell. The previous LimeZu FACE/animation logic is parked
+        // until/unless we get an animated Kenney character pack.
         let ok = false;
         if (sprites?.player?.loaded) {
-            ok = sprites.player.drawFrame(ctx, col, row, ppx + 2, ppy - 4, TILE_PX - 4, TILE_PX + 4);
+            ok = sprites.player.drawFrame(
+                ctx, PLAYER_SPRITE.col, PLAYER_SPRITE.row,
+                ppx + 4, ppy + 4, TILE_PX - 8, TILE_PX - 8
+            );
         }
         if (!ok) {
             ctx.fillStyle = '#44bb44';

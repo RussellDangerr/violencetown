@@ -1,32 +1,31 @@
-// sprites.js — Spritesheet loader and tile/region extraction
-// Sewer demo prototype
+// sprites.js — Kenney CC0 spritesheet loader and tile/region extraction
+//
+// As of v0.4.3-dev, Violencetown uses Kenney's Roguelike packs as its sole
+// sprite source (CC0 1.0, committed under game/assets-placeholder/kenney/).
+// The previous LimeZu paid-art primary + Kenney fallback architecture was
+// retired to remove dual-system overhead during early development.
+//
+// All sheets are 16×16 native; the renderer draws at TILE_PX=32 via destW/
+// destH upscale params, so the 2× nearest-neighbor scale happens at draw
+// time without pre-processing. LimeZu's archived copy lives at
+// C:\Users\caela\Desktop\LimezuAssets\ for future reference.
 
 export class SpriteSheet {
-    constructor(src, frameW, frameH, fallback) {
+    constructor(src, frameW, frameH) {
         this.img     = new Image();
         this.frameW  = frameW;
         this.frameH  = frameH;
         this.loaded  = false;
         this.failed  = false;
-        this.usingFallback = false;
 
         this._promise = new Promise((resolve) => {
-            const finishLoad = () => {
+            this.img.onload = () => {
                 this.loaded = true;
                 this.cols = Math.floor(this.img.width / this.frameW);
                 this.rows = Math.floor(this.img.height / this.frameH);
                 resolve(true);
             };
-            this.img.onload = finishLoad;
             this.img.onerror = () => {
-                if (fallback && !this.usingFallback) {
-                    this.usingFallback = true;
-                    this.frameW = fallback.frameW ?? this.frameW;
-                    this.frameH = fallback.frameH ?? this.frameH;
-                    this.img.onerror = () => { this.failed = true; resolve(false); };
-                    this.img.src = fallback.src;
-                    return;
-                }
                 this.failed = true;
                 resolve(false);
             };
@@ -48,7 +47,7 @@ export class SpriteSheet {
         return true;
     }
 
-    // Draw by pixel region (for variable-sized sprites)
+    // Draw by pixel region (for variable-sized sprites or precise extraction)
     drawRegion(ctx, sx, sy, sw, sh, dx, dy, dw, dh) {
         if (!this.loaded) return false;
         ctx.drawImage(this.img, sx, sy, sw, sh, dx, dy, dw ?? sw, dh ?? sh);
@@ -56,134 +55,117 @@ export class SpriteSheet {
     }
 }
 
-// ── Asset paths ──────────────────────────────────────────────────────────────
+// ── Kenney sheets ────────────────────────────────────────────────────────────
 
-// Premium (gitignored, local-only) — pointed at a guaranteed-404 path when
-// ?placeholder=1 is in the URL, which forces every sheet through its fallback
-// so you can see the public-deploy render locally without moving files.
-const placeholderMode = typeof location !== 'undefined' && new URLSearchParams(location.search).has('placeholder');
-const A = placeholderMode ? '../assets-FORCE-MISSING' : '../assets';
-const K = './assets-placeholder/kenney';                // CC0 fallback (committed, public deploy)
+const K = './assets-placeholder/kenney';
 
-// Each SHEETS entry has a primary `src` (LimeZu, paid) and an optional `fallback`
-// pointing to a Kenney CC0 sheet that loads when LimeZu is absent. Frame sizes
-// differ between sets — LimeZu uses 32×32, Kenney roguelike uses 16×16.
-//
-// IMPORTANT: TILE_SPRITE_MAP / TOWN_TILE_SPRITE_MAP / ITEM_SPRITES / ENEMY_SPRITES
-// coordinates below are calibrated for the LimeZu layouts. When fallback is active
-// the same (col,row) will pull from a *different* part of the Kenney sheet — see
-// the Phase 2 TODO at the bottom of this file for the remap work.
+const KENNEY_BASE    = `${K}/roguelikeSheet_transparent.png`;     // Town/exterior, items
+const KENNEY_DUNGEON = `${K}/roguelikeDungeon_transparent.png`;   // Sewer/dungeon tiles
+const KENNEY_CHAR    = `${K}/roguelikeChar_transparent.png`;      // Player, enemies
 
-const KENNEY_TILE  = { src: `${K}/roguelikeSheet_transparent.png`,   frameW: 16, frameH: 16 };
-const KENNEY_DUNG  = { src: `${K}/roguelikeDungeon_transparent.png`, frameW: 16, frameH: 16 };
-const KENNEY_CHAR  = { src: `${K}/roguelikeChar_transparent.png`,    frameW: 16, frameH: 16 };
+// Multiple sheet KEYS share underlying PNGs because the renderer/coord-maps
+// reference them by semantic name. Browser caching dedupes the HTTP requests,
+// so the cost is a few extra Image objects per page, no network overhead.
 
 export const SHEETS = {
-    // Sewer
-    sewerTiles:   { src: `${A}/fungus-cave/Tilesets/Tileset - Sewers 32x32.png`, frameW: 32, frameH: 32, fallback: KENNEY_DUNG },
-    caveTiles:    { src: `${A}/fungus-cave/Tilesets/Tileset - Fungus cave and Refugee outpost 32x32.png`, frameW: 32, frameH: 32, fallback: KENNEY_DUNG },
-    fungusViolet: { src: `${A}/fungus-cave/Characters/Fungus - violet.png`, frameW: 16, frameH: 32, fallback: KENNEY_CHAR },
-    fungusRed:    { src: `${A}/fungus-cave/Characters/Fungus - red.png`, frameW: 16, frameH: 32, fallback: KENNEY_CHAR },
-    fungusKing:   { src: `${A}/fungus-cave/Characters/Fungus - King.png`, frameW: 16, frameH: 32, fallback: KENNEY_CHAR },
-    sewerMonster: { src: `${A}/fungus-cave/Characters/Sewers monster.png`, frameW: 16, frameH: 32, fallback: KENNEY_CHAR },
-    ghostMonster: { src: `${A}/fungus-cave/Characters/Sewers monster - ghost.png`, frameW: 16, frameH: 32, fallback: KENNEY_CHAR },
-    player:       { src: `${A}/fungus-cave/Characters/Cleric.png`, frameW: 16, frameH: 32, fallback: KENNEY_CHAR },
-    boss:         { src: `${A}/fungus-cave/Battlers/BOSS.png`, frameW: 155, frameH: 135, fallback: KENNEY_CHAR },
+    // Sewer/Dungeon
+    sewerTiles:   { src: KENNEY_DUNGEON, frameW: 16, frameH: 16 },
+    caveTiles:    { src: KENNEY_DUNGEON, frameW: 16, frameH: 16 },
 
-    // Town (Modern Exteriors)
-    townTerrains: { src: `${A}/modern-exteriors/Modern_Exteriors_32x32/ME_Theme_Sorter_32x32/1_Terrains_and_Fences_32x32.png`, frameW: 32, frameH: 32, fallback: KENNEY_TILE },
-    cityTerrains: { src: `${A}/modern-exteriors/Modern_Exteriors_32x32/ME_Theme_Sorter_32x32/2_City_Terrains_32x32.png`, frameW: 32, frameH: 32, fallback: KENNEY_TILE },
-    cityProps:    { src: `${A}/modern-exteriors/Modern_Exteriors_32x32/ME_Theme_Sorter_32x32/3_City_Props_32x32.png`, frameW: 32, frameH: 32, fallback: KENNEY_TILE },
-    buildings:    { src: `${A}/modern-exteriors/Modern_Exteriors_32x32/ME_Theme_Sorter_32x32/4_Generic_Buildings_32x32.png`, frameW: 32, frameH: 32, fallback: KENNEY_TILE },
+    // Characters (player + all enemies)
+    player:       { src: KENNEY_CHAR, frameW: 16, frameH: 16 },
+    fungusViolet: { src: KENNEY_CHAR, frameW: 16, frameH: 16 },
+    fungusRed:    { src: KENNEY_CHAR, frameW: 16, frameH: 16 },
+    fungusKing:   { src: KENNEY_CHAR, frameW: 16, frameH: 16 },
+    sewerMonster: { src: KENNEY_CHAR, frameW: 16, frameH: 16 },
+    ghostMonster: { src: KENNEY_CHAR, frameW: 16, frameH: 16 },
+    boss:         { src: KENNEY_CHAR, frameW: 16, frameH: 16 },
 
-    // Items (Modern Interiors)
-    grocery:      { src: `${A}/modern-interiors/1_Interiors/32x32/Theme_Sorter_32x32/16_Grocery_store_32x32.png`, frameW: 32, frameH: 32, fallback: KENNEY_TILE },
+    // Town/exterior + items
+    townTerrains: { src: KENNEY_BASE, frameW: 16, frameH: 16 },
+    cityTerrains: { src: KENNEY_BASE, frameW: 16, frameH: 16 },
+    cityProps:    { src: KENNEY_BASE, frameW: 16, frameH: 16 },
+    buildings:    { src: KENNEY_BASE, frameW: 16, frameH: 16 },
+    grocery:      { src: KENNEY_BASE, frameW: 16, frameH: 16 },
 
-    // UI — no Kenney roguelike equivalent; falls through to existing colored-box behavior
-    uiStyle1:     { src: `${A}/modern-ui/32x32/Modern_UI_Style_1_32x32.png`, frameW: 32, frameH: 32 },
-    uiStyle2:     { src: `${A}/modern-ui/32x32/Modern_UI_Style_2_32x32.png`, frameW: 32, frameH: 32 },
+    // No Kenney equivalent for the previous LimeZu Modern UI sheet. The
+    // renderer's `if (uiSheet?.loaded)` checks fall through to a colored-
+    // rectangle fallback wherever panels would have used the parchment art.
+    // Re-add an entry here if a Kenney UI pack gets selected in the future.
 };
 
-// ── Sewer tile sprite mappings ───────────────────────────────────────────────
-// Sewers tileset (256x352, 8 cols x 11 rows):
-// Cols 0-3 rows 0-3: Brick border frame, interior = floor
-// Cols 4-7 rows 0-3: Purple sludge pool
+// ── Sewer/dungeon tile coords (Kenney Dungeon sheet — best-effort Phase A) ──
+// Coordinates picked visually from the sheet; expect 1–2 iterations to dial
+// them in. Sheet layout roughly: left/top = props, center = floors+water,
+// right = walls+facades.
 
 export const TILE_SPRITE_MAP = {
-    0: null,                  // wall — fallback color
-    1: { col: 1, row: 1 },   // floor — dark stone interior
-    2: { col: 7, row: 9 },   // sludge — bright purple from bottom-right of sheet
-    3: { col: 2, row: 2 },   // gap — floor variant
+    0: null,                  // wall  — dark fallback (intentional, frames the room)
+    1: { col: 1, row: 5 },    // floor — stone tile
+    2: { col: 1, row: 8 },    // sludge — teal water/liquid
+    3: { col: 0, row: 5 },    // gap — floor variant
     4: null,                  // grate — fallback
-    5: { col: 2, row: 1 },   // drain — floor variant
-    6: { col: 1, row: 2 },   // boss floor
-    7: { col: 6, row: 1 },   // boss trigger
+    5: { col: 2, row: 5 },    // drain — floor variant
+    6: { col: 1, row: 4 },    // boss floor
+    7: { col: 5, row: 4 },    // boss trigger — distinct accent
 };
 
-// ── Town tile sprite mappings ────────────────────────────────────────────────
-// Terrains sheet (1024x2368, 32 cols x 74 rows):
-// The green grass 9-slice set starts around row 1. Interior fill = (2, 2)
-// The grey stone 9-slice set is around col 8+, row 3+. Interior fill = (10, 4)
-// Brown brick path: around col 0, row 4+. Interior fill = (2, 5)
-//
-// These are approximations — may need visual tweaking.
+// ── Town tile coords (Kenney Base sheet — best-effort Phase A) ──────────────
+// All grid-based now (no more region: true). Coordinates approximate.
 
-// Town tiles use pixel-region references from the large exterior sheets.
-// Format: { sheet, x, y, w, h } for drawRegion (not grid-based).
-// 'region' flag tells the renderer to use drawRegion instead of drawFrame.
+// Coordinates dialed in via empirical color-sampling of the Base sheet — see
+// session 2026-05-17 where the first-pass eyeball picks all landed in wrong
+// regions. Each tile below is the center of a verified-color block.
 export const TOWN_TILE_SPRITE_MAP = {
-    10: null,  // town wall edge — keep dark fallback
-    11: { region: true, sheet: 'cityTerrains', x: 0,   y: 128, w: 32, h: 32 },  // sidewalk — concrete edge from city block
-    12: { region: true, sheet: 'cityTerrains', x: 384, y: 128, w: 32, h: 32 },  // road — grey asphalt from city block interior
-    13: { region: true, sheet: 'townTerrains', x: 32,  y: 64,  w: 32, h: 32 },  // grass — green interior from terrains
-    14: { region: true, sheet: 'buildings',     x: 0,   y: 64,  w: 32, h: 32 },  // building wall — brick facade
-    15: { region: true, sheet: 'buildings',     x: 128, y: 160, w: 32, h: 32 },  // door — from building doorways
-    16: null,  // sewer entry — dark fallback (manhole)
-    17: null,  // fence — fallback
-    18: null,  // streetlight — fallback (multi-tile, hard to do in 1x1)
-    19: { region: true, sheet: 'cityProps',     x: 0,   y: 6848, w: 32, h: 32 }, // car — red vehicle from bottom of props
-    20: null,  // bench — fallback
-    21: null,  // trash can — fallback
+    10: null,                       // town wall edge — dark fallback (intentional black border)
+    11: { col: 7,  row: 0 },        // sidewalk — grey stone (data-classified "grey")
+    12: { col: 6,  row: 4 },        // road — brown dirt path (center of 4×2 brown block)
+    13: { col: 2,  row: 10 },       // grass — green terrain (center of 5×2 solid green)
+    14: { col: 3,  row: 6 },        // building wall — orange/brown brick
+    15: null,                       // door — fallback for now (Base sheet doors live cols 30+, not yet mapped)
+    16: null,                       // sewer entry — fallback
+    17: null,                       // fence — fallback (multi-tile, deferred)
+    18: null,                       // streetlight — fallback (multi-tile)
+    19: null,                       // car — Base sheet has no car (City Pack does)
+    20: null,                       // bench — fallback
+    21: null,                       // trash can — fallback
 };
 
-// ── Item sprites ─────────────────────────────────────────────────────────────
-// Map item IDs to sprite regions (sheet + pixel coords)
-// These use drawRegion() for pixel-precise extraction from large sheets
+// ── Item sprites (Kenney Base sheet — best-effort Phase A) ──────────────────
+// Pixel-region references; the renderer extracts these via drawRegion().
+// 16-pixel grid: x = col*16, y = row*16.
 
-// Item sprites from Fungus Cave + Refugee Outpost tileset (256x1120, 8 cols x 35 rows)
-// Row 8 (y=256): wooden crates/boxes
-// Row 9 (y=288): barrels with colored liquids at cols 6-7
-// Row 13 (y=416): mushrooms and small plants
-// Row 14 (y=448): bags, sacks
 export const ITEM_SPRITES = {
-    rock:    { sheet: 'caveTiles', x: 0,   y: 256, w: 32, h: 32 },  // wooden crate (row 8, col 0)
-    pipe:    { sheet: 'caveTiles', x: 192, y: 256, w: 32, h: 32 },  // tool/axe (row 8, col 6)
-    soap:    { sheet: 'caveTiles', x: 192, y: 288, w: 32, h: 32 },  // barrel with blue liquid (row 9, col 6)
-    bandage: { sheet: 'caveTiles', x: 0,   y: 416, w: 32, h: 32 },  // red mushroom (row 13, col 0)
+    rock:    { sheet: 'caveTiles',     x: 16,  y: 32,  w: 16, h: 16 },   // skull/bone prop on Dungeon sheet
+    pipe:    { sheet: 'townTerrains',  x: 480, y: 176, w: 16, h: 16 },   // wooden post/stake
+    soap:    { sheet: 'townTerrains',  x: 528, y: 240, w: 16, h: 16 },   // barrel-like
+    bandage: { sheet: 'townTerrains',  x: 304, y: 112, w: 16, h: 16 },   // mushroom/plant
 };
 
-// ── Enemy sprites ────────────────────────────────────────────────────────────
+// ── Enemy/character sprites (Kenney Char sheet — best-effort Phase A) ──────
+// Kenney chars are single-frame per cell (no facing/animation row), so the
+// renderer's directional + idle-blink animation logic is short-circuited for
+// these. See _drawPlayer and _drawEnemies in renderer.js for the static draw.
 
 export const ENEMY_SPRITES = {
-    'Violet Fungus': { sheet: 'fungusViolet', col: 1, row: 0 },
-    'Red Fungus':    { sheet: 'fungusRed',    col: 1, row: 0 },
-    'Fungus King':   { sheet: 'fungusKing',   col: 1, row: 0 },
-    'Ghost Fungus':  { sheet: 'ghostMonster', col: 1, row: 0 },
-    'Sewer Monster': { sheet: 'sewerMonster', col: 1, row: 0 },
+    'Violet Fungus': { sheet: 'fungusViolet', col: 0, row: 0, static: true },
+    'Red Fungus':    { sheet: 'fungusRed',    col: 0, row: 1, static: true },
+    'Fungus King':   { sheet: 'fungusKing',   col: 0, row: 2, static: true },
+    'Ghost Fungus':  { sheet: 'ghostMonster', col: 0, row: 3, static: true },
+    'Sewer Monster': { sheet: 'sewerMonster', col: 0, row: 4, static: true },
 };
 
-// ── Phase 2 TODO: Kenney-specific coordinate maps ────────────────────────────
-//
-// When a sheet falls back to its Kenney source, the (col,row) values in the maps
-// above still reference the LimeZu layout. A Kenney sheet uses the same indexing
-// API but tiles are in different positions. Public-deploy parity requires parallel
-// maps keyed by sheet.usingFallback. Categories needing remapping:
-//   • TILE_SPRITE_MAP       (sewer/cave tiles → roguelikeDungeon coords)
-//   • TOWN_TILE_SPRITE_MAP  (town tiles      → roguelikeSheet coords)
-//   • ITEM_SPRITES          (caveTiles items → roguelikeSheet or Dungeon coords)
-//   • ENEMY_SPRITES         (fungus chars    → roguelikeChar monster row coords)
-// Renderer change: when sheet.usingFallback, read from a KENNEY_* map of the same
-// shape and let drawFrame/drawRegion proceed unchanged with the substituted coords.
+// Player sprite (renderer reads this; previously hardcoded col/row via FACE map)
+export const PLAYER_SPRITE = { sheet: 'player', col: 4, row: 0, static: true };
+
+// ── Phase B TODO ────────────────────────────────────────────────────────────
+// All coordinates above are first-pass picks from visual inspection of the
+// Kenney sheets. Expect to revisit them as the game's visual identity firms
+// up. Particularly worth investing in:
+//   • A consistent "Violencetown" character palette across the 5 zone enemies
+//   • Better tile-to-zone matching (sewer vs cave should look distinct)
+//   • Item icons that read clearly at TILE_PX-8 hotbar size
+// Iteration loop: edit coords here → reload page → screenshot → adjust.
 
 // ── Loader ───────────────────────────────────────────────────────────────────
 
@@ -192,7 +174,7 @@ export async function loadAllSprites() {
     const promises = [];
 
     for (const [key, def] of Object.entries(SHEETS)) {
-        const sheet = new SpriteSheet(def.src, def.frameW, def.frameH, def.fallback);
+        const sheet = new SpriteSheet(def.src, def.frameW, def.frameH);
         loaded[key] = sheet;
         promises.push(sheet.ready);
     }
