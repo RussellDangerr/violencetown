@@ -147,6 +147,14 @@ class Game {
         this._bindTouchControls();
         document.getElementById('new-game').addEventListener('click', () => this._fullReset());
 
+        // Populate version badge from <meta name="version"> — single source of truth.
+        // Lives in index.html as #version-badge, styled bottom-right in style.css.
+        const versionMeta = document.querySelector('meta[name="version"]');
+        const versionBadge = document.getElementById('version-badge');
+        if (versionMeta && versionBadge) {
+            versionBadge.textContent = 'v' + versionMeta.getAttribute('content');
+        }
+
         // Idle animation loop — redraws at ~4fps for sprite bobble
         this._idleTick = 0;
         setInterval(() => {

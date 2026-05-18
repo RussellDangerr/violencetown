@@ -130,6 +130,22 @@ body {
 }
 #new-game:hover { border-color: #8b7340; color: #d4b96a; }
 
+/* --- Version badge (always visible) --- */
+
+#version-badge {
+    position: absolute; bottom: 8px; right: 8px;
+    background: rgba(20, 16, 10, 0.85);
+    border: 1px solid #5a4a30;
+    color: #d4b96a;
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    padding: 4px 8px;
+    z-index: 10;
+    pointer-events: none;
+}
+
 /* --- Touch controls --- */
 
 #touch-controls { display: none; }
