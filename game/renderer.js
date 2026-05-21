@@ -118,6 +118,24 @@ export class Renderer {
             this._scrollY = (game._animToY - game._animFromY) * t * TILE_PX;
         }
 
+        // Screen shake (Phase F) — random offset applied to world rendering
+        // only. Magnitude scales linearly with remaining time so the shake
+        // decays to zero rather than ending abruptly. HUD is rendered after
+        // the restore so it stays fixed on screen during the shake.
+        const now = performance.now();
+        const shakeRemaining = (game._screenShakeUntil ?? 0) - now;
+        let shakeX = 0, shakeY = 0;
+        if (shakeRemaining > 0) {
+            const duration = shakeRemaining / 150; // rough normalize (0..~1.2)
+            const decay = Math.min(1, duration);
+            const mag = (game._screenShakeMagnitude ?? 0) * decay;
+            shakeX = (Math.random() - 0.5) * mag * 2;
+            shakeY = (Math.random() - 0.5) * mag * 2;
+        }
+
+        ctx.save();
+        ctx.translate(shakeX, shakeY);
+
         this._drawTiles(game);
         this._drawContainers(game);
         this._drawGroundItems(game);
@@ -128,7 +146,9 @@ export class Renderer {
         // so the HP panel + hotbar are never occluded by spammy combat.
         this._drawDamageNumbers(game);
 
-        // HUD
+        ctx.restore();
+
+        // HUD — rendered AFTER restore so screen shake doesn't affect it
         this._drawHPPanel(game);
         this._drawZoneLabel(game);
         this._drawBuffBar(game);

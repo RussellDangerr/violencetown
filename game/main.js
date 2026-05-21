@@ -107,6 +107,13 @@ class Game {
         // positions from center → final over 80ms after this time.
         this._overlayOpenedAt = 0;
 
+        // Screen shake (Phase F) — triggered on damage >= threshold. The
+        // renderer applies a per-frame random offset to world rendering
+        // (HUD stays fixed) while the timestamp is in the future. Magnitude
+        // decays linearly to zero as remaining time approaches zero.
+        this._screenShakeUntil = 0;
+        this._screenShakeMagnitude = 0;
+
         // Floating damage numbers — particle list. Each entry:
         //   { tileX, tileY, text, color, size, vx, vy, bornAt, maxAge }
         // Particles age in real time (performance.now()) and animate
@@ -944,6 +951,15 @@ class Game {
         enemyObj._staggerDy = len > 0 ? (dy / len) * 3 : 0;
         this._ensureParticleLoop(); // keep rendering through the 100ms window
 
+        // Screen shake on heavy hits or kills — Phase F. Threshold is 15
+        // damage given the small-numbers cosmology (HP 100-200, damage
+        // mostly 5-30). Kills shake regardless of damage magnitude since
+        // a killing blow is a milestone event worth a beat.
+        if (result.damage >= 15 || result.killed) {
+            const mag = result.killed ? 5 : 3 + Math.min(4, (result.damage - 15) / 5);
+            this._triggerScreenShake(150, mag);
+        }
+
         return formatDamageNumber(result);
     }
 
@@ -968,6 +984,15 @@ class Game {
         this._playerStaggerDx = sdx * 3;
         this._playerStaggerDy = sdy * 3;
         this._ensureParticleLoop(); // keep rendering through the 100ms window
+
+        // Screen shake when the player takes a meaningful hit — Phase F.
+        // Slightly more aggressive than the enemy version because the
+        // player's own pain should disrupt more of their perception. A
+        // killing blow shakes with full magnitude.
+        if (dmg >= 10 || this.playerHp <= 0) {
+            const mag = this.playerHp <= 0 ? 6 : 3 + Math.min(4, (dmg - 10) / 4);
+            this._triggerScreenShake(180, mag);
+        }
 
         return dmg;
     }
@@ -1093,6 +1118,7 @@ class Game {
         const now = performance.now();
         if ((this._playerHitFlashUntil ?? 0) > now) return true;
         if ((this._playerStaggerUntil  ?? 0) > now) return true;
+        if ((this._screenShakeUntil    ?? 0) > now) return true;
         // Overlay slide-in animation is active (Phase D)
         const overlayOpen = this.state === STATE.ITEM_OVERLAY
                          || this.state === STATE.COMBAT_OVERLAY;
@@ -1102,6 +1128,18 @@ class Game {
             if ((e._staggerUntil  ?? 0) > now) return true;
         }
         return false;
+    }
+
+    // Trigger a screen shake of the given duration (ms) and magnitude (px).
+    // Subsequent calls during an active shake replace the parameters if
+    // the new shake is bigger or longer — keeping a heavy hit dominant
+    // over a smaller subsequent hit.
+    _triggerScreenShake(duration, magnitude) {
+        const now = performance.now();
+        const newEnd = now + duration;
+        if (newEnd > (this._screenShakeUntil ?? 0)) this._screenShakeUntil = newEnd;
+        if (magnitude > (this._screenShakeMagnitude ?? 0)) this._screenShakeMagnitude = magnitude;
+        this._ensureParticleLoop();
     }
 
     // ── Log ──────────────────────────────────────────────────────────────────
