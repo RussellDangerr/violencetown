@@ -16,8 +16,39 @@ export class GameMap {
         this.enemySpawns = mapData.enemies || [];
         this.itemSpawns  = mapData.items || [];
 
+        // Containers: [{ id, type, x, y, contents: [...] }]
+        // Read as spawn data; live mutable containers live on the game state
+        // (game.containers) so chest contents don't pollute the map definition.
+        this.containerSpawns = mapData.containers || [];
+
+        // Regions: [{ name, x, y, w, h, sealed? }] — rectangular sub-areas of
+        // the map. NPCs may reference by name to constrain wander/work scope.
+        // Pure metadata; no behavior at the map level.
+        this.regions = mapData.regions || [];
+
         // Transitions: [{ x, y, toMap, toX, toY, label }]
         this.transitions = mapData.transitions || [];
+    }
+
+    // ── Container & Region lookups ───────────────────────────────────────────
+    //
+    // Convenience helpers for systems that need to find containers/regions by
+    // position or name. Containers themselves live on the game state (live);
+    // these helpers query the map's spawn data, useful for finding *which*
+    // container is at a given spot before resolving it to its live instance.
+
+    getContainerSpawnAt(x, y) {
+        return this.containerSpawns.find(c => c.x === x && c.y === y) || null;
+    }
+
+    getRegion(name) {
+        return this.regions.find(r => r.name === name) || null;
+    }
+
+    getRegionContaining(x, y) {
+        return this.regions.find(r =>
+            x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h
+        ) || null;
     }
 
     getTile(x, y) {

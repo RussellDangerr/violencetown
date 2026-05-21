@@ -26,12 +26,24 @@
         0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
     ],
     "enemies": [
-        { "id": "e1", "type": "Violet Fungus", "x": 12, "y": 9, "hp": 25, "damage": 5 },
-        { "id": "e2", "type": "Violet Fungus", "x": 13, "y": 11, "hp": 25, "damage": 5 },
-        { "id": "e3", "type": "Red Fungus", "x": 8, "y": 4, "hp": 30, "damage": 6 },
-        { "id": "e4", "type": "Red Fungus", "x": 16, "y": 7, "hp": 30, "damage": 6 },
-        { "id": "e5", "type": "Ghost Fungus", "x": 5, "y": 7, "hp": 20, "damage": 4, "sightRange": 12 },
-        { "id": "e6", "type": "Fungus King", "x": 15, "y": 10, "hp": 60, "damage": 10, "armor": 3 }
+        { "id": "e1", "type": "Violet Fungus", "x": 12, "y": 9,  "hp": 25, "damage": 5, "disposition": -30, "flipThreshold": 25,  "bribeable": true, "values": { "soap": 8,  "rock": 5, "bandage": 4, "pipe": 6 }, "behavior": ["IDLE", "WANDER", "WORKING"], "homeRegion": "soap-mine", "wanderRadius": 3, "wanderEveryTurns": 2, "wantsItems": ["rock", "soap"], "depositsTo": "soap-mine-chest" },
+        { "id": "e2", "type": "Violet Fungus", "x": 13, "y": 11, "hp": 25, "damage": 5, "disposition": -30, "flipThreshold": 25,  "bribeable": true, "values": { "soap": 8,  "rock": 5, "bandage": 4, "pipe": 6 }, "behavior": ["IDLE", "WANDER", "WORKING"], "homeRegion": "soap-mine", "wanderRadius": 3, "wanderEveryTurns": 3, "wantsItems": ["rock", "soap"], "depositsTo": "soap-mine-chest" },
+        { "id": "e3", "type": "Red Fungus",    "x": 8,  "y": 4,  "hp": 30, "damage": 6, "disposition": -50, "flipThreshold": 40,  "bribeable": true, "values": { "pipe": 12, "rock": 6, "soap": 3,    "bandage": 5 } },
+        { "id": "e4", "type": "Red Fungus",    "x": 16, "y": 7,  "hp": 30, "damage": 6, "disposition": -50, "flipThreshold": 40,  "bribeable": true, "values": { "pipe": 12, "rock": 6, "soap": 3,    "bandage": 5 } },
+        { "id": "e5", "type": "Ghost Fungus",  "x": 5,  "y": 7,  "hp": 20, "damage": 4, "sightRange": 12, "disposition": -50, "flipThreshold": 60, "bribeable": false, "values": { "bandage": 8, "soap": 4, "rock": 2, "pipe": 3 } },
+        { "id": "e6", "type": "Fungus King",   "x": 15, "y": 10, "hp": 60, "damage": 10, "armor": 3, "disposition": -80, "flipThreshold": 200, "bribeable": true, "values": { "soap": 20, "pipe": 8, "rock": 5, "bandage": 2 }, "onFlip": "becomeAlly",
+          "barks": [
+              "[Fungus King: Q3 QUOTA IS DOWN FOURTEEN PERCENT. UNACCEPTABLE.]",
+              "[Fungus King: TUESDAY'S SHIPMENT TO BANK STREET IS LATE AGAIN.]",
+              "[Fungus King: THE FINANCIER PAYS IN GOLD. I PAY YOU IN MUSHROOMS. EVERYONE WINS.]",
+              "[Fungus King: AN INTRUDER. FORM 4-J IS REQUIRED FOR UNAUTHORIZED VISITORS.]"
+          ],
+          "barkEveryTurns": 6 },
+        { "id": "carrion", "type": "Carrion", "x": 8, "y": 17, "hp": 30, "damage": 0, "sightRange": 0,
+          "behavior": ["IDLE"], "homeRegion": "south-corridor",
+          "disposition": 10, "flipThreshold": 40, "bribeable": true,
+          "values": { "water": 30, "bandage": 12, "soap": 8 }, "onFlip": "offerDiscount",
+          "adjacencyBark": "[Carrion: Road's blocked, friend. Sewer river's swollen with sludge. Come back later.]" }
     ],
     "items": [
         { "type": "rock", "x": 2, "y": 10 },
@@ -53,6 +65,13 @@
         { "type": "bandage", "x": 17, "y": 1 }
     ],
     "zoneName": "SEWER",
+    "regions": [
+        { "name": "soap-mine",      "x": 7, "y": 7,  "w": 7, "h": 5 },
+        { "name": "south-corridor", "x": 1, "y": 15, "w": 17, "h": 4 }
+    ],
+    "containers": [
+        { "id": "soap-mine-chest", "type": "chest", "x": 10, "y": 9, "contents": ["bandage"] }
+    ],
     "transitions": [
         { "x": 0, "y": 10, "toMap": "town-map.json", "toX": 27, "toY": 5, "label": "[Climb out of the sewer]" }
     ]

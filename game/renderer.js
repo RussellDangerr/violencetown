@@ -119,6 +119,7 @@ export class Renderer {
         }
 
         this._drawTiles(game);
+        this._drawContainers(game);
         this._drawGroundItems(game);
         this._drawEnemies(game);
         this._drawPlayer(game);
@@ -172,6 +173,51 @@ export class Renderer {
                 if (!ok) {
                     ctx.fillStyle = def.fallbackColor;
                     ctx.fillRect(px, py, TILE_PX, TILE_PX);
+                }
+            }
+        }
+    }
+
+    // ── Containers ───────────────────────────────────────────────────────────
+    //
+    // Placeholder chest rendering: dark-brown box with a gold lid stripe.
+    // When the chest has contents, a small gold pip floats in the center to
+    // distinguish "ripe to loot" from "already emptied." Sprite art is a
+    // polish-pass concern (step 7); the box reads at a glance and that's
+    // enough for now.
+
+    _drawContainers(game) {
+        const { ctx, half } = this;
+        for (const c of game.containers) {
+            const vx = c.x - game.playerX + half;
+            const vy = c.y - game.playerY + half;
+            if (vx < -2 || vx > VIEW_TILES + 1 || vy < -2 || vy > VIEW_TILES + 1) continue;
+            const px = vx * TILE_PX - this._scrollX;
+            const py = vy * TILE_PX - this._scrollY;
+
+            // Body
+            ctx.fillStyle = '#5a3a1a';
+            ctx.fillRect(px + 6, py + 10, TILE_PX - 12, TILE_PX - 16);
+            // Lid stripe
+            ctx.fillStyle = '#c4a050';
+            ctx.fillRect(px + 6, py + 10, TILE_PX - 12, 4);
+            // Outline
+            ctx.strokeStyle = '#2a1a08';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(px + 6, py + 10, TILE_PX - 12, TILE_PX - 16);
+
+            // Contents indicator — up to three gold pips along the lid, one
+            // per item up to a visual cap of 3. Lets the player watch the
+            // chest fill as workers deposit, without needing to read the log.
+            if (c.contents.length > 0) {
+                const pips = Math.min(3, c.contents.length);
+                ctx.fillStyle = '#ffdd44';
+                const pipSize = 3;
+                const pipGap = 2;
+                const totalWidth = pips * pipSize + (pips - 1) * pipGap;
+                const startX = px + (TILE_PX - totalWidth) / 2;
+                for (let i = 0; i < pips; i++) {
+                    ctx.fillRect(startX + i * (pipSize + pipGap), py + 11, pipSize, pipSize);
                 }
             }
         }
