@@ -1,22 +1,68 @@
-// enemies.js — Enemy entities, Bresenham LOS, greedy chase AI
-// Sewer demo prototype
+// enemies.js — Enemy entities, Bresenham LOS, dispatch to FSM or legacy chase
+//
+// Per the project's character ontology (Character > {Hero, NPC > {Enemy,
+// non-hostile NPC}}), this file holds the Enemy class — the hostile-NPC
+// subclass with chase+attack as its default. Non-hostile NPC behavior and
+// the general FSM live in npc.js. A future cleanup may rename Enemy → Npc
+// and consolidate these files; for now, the Enemy class persists for back-
+// compat with the original chase-only behavior.
+//
+// Dispatch rule (added in feature/sewer-npc-skeleton step 3): if a spawn
+// entry includes a `behavior` array, that entry is FSM-controlled and is
+// routed to tickNpcState in npc.js. If `behavior` is absent, the entry
+// runs the legacy chase logic preserved below. This makes the FSM purely
+// additive — existing map JSONs without `behavior` fields keep working.
 
 import { Entity, attack, formatDamageNumber } from './combat.js';
 import { manhattan } from './utils.js';
+import { getGreedyStep } from './pathing.js';
+import { tickNpcState } from './npc.js';
 
 const DEFAULT_SIGHT = 8;
 const DEFAULT_DAMAGE = 8;
 
 export class Enemy {
-    constructor({ id, type, x, y, hp = 50, armor = 0, damage = DEFAULT_DAMAGE, sightRange = DEFAULT_SIGHT }) {
+    constructor({
+        id, type, x, y,
+        hp = 50, armor = 0, damage = DEFAULT_DAMAGE, sightRange = DEFAULT_SIGHT,
+        // FSM fields (optional; absence triggers legacy chase behavior)
+        behavior = null,
+        homeRegion = null,
+        wanderRadius = 3,
+        wanderEveryTurns = 4,
+        // Disposition fields (read by future feature/give-action; inert here)
+        disposition = null,
+        flipThreshold = null,
+        bribeable = null,
+        values = null,
+        onFlip = null,
+    }) {
         this.id         = id;
         this.type       = type;
         this.x          = x;
         this.y          = y;
         this.damage     = damage;
         this.sightRange = sightRange;
-        this.state      = 'idle'; // 'idle' | 'chasing'
+        this.state      = 'idle'; // legacy chase state: 'idle' | 'chasing'
         this.entity     = new Entity({ name: `[${type}]`, hp, armor });
+
+        // FSM config (null behavior = legacy entry; non-null = FSM-controlled)
+        this.behavior         = behavior;
+        this.homeRegion       = homeRegion;
+        this.wanderRadius     = wanderRadius;
+        this.wanderEveryTurns = wanderEveryTurns;
+
+        // FSM runtime state (initialized lazily in tickNpcState)
+        this.fsmState         = null;
+        this._lastWanderTurn  = 0;
+
+        // Disposition data — stored but not yet read. See plans/give-action-
+        // and-disposition.md for the feature that consumes these fields.
+        this.disposition   = disposition;
+        this.flipThreshold = flipThreshold;
+        this.bribeable     = bribeable;
+        this.values        = values;
+        this.onFlip        = onFlip;
     }
 }
 
@@ -47,6 +93,14 @@ export function hasLineOfSight(map, x0, y0, x1, y1) {
 }
 
 // ── Resolve all enemies for one turn ─────────────────────────────────────────
+//
+// Two paths:
+//   1. If the enemy has a `behavior` whitelist, dispatch to tickNpcState
+//      (the FSM in npc.js). The FSM may transition IDLE ↔ WANDER and
+//      eventually WORKING / HOSTILE. Returns log messages.
+//   2. Otherwise, run the legacy chase logic — LOS check, transition to
+//      'chasing' on first sighting, attack-if-adjacent, greedy step toward
+//      player. This is exactly the v0.4.x behavior preserved for back-compat.
 
 export function resolveEnemyTurns(game) {
     const messages = [];
@@ -54,6 +108,14 @@ export function resolveEnemyTurns(game) {
     for (const enemy of game.enemies) {
         if (!enemy.entity.isAlive()) continue;
 
+        // FSM-controlled entry?
+        if (enemy.behavior) {
+            const npcMessages = tickNpcState(game, enemy);
+            for (const m of npcMessages) messages.push(m);
+            continue;
+        }
+
+        // Legacy chase logic below — unchanged from v0.4.3-dev behavior.
         const dist = manhattan(enemy.x, enemy.y, game.playerX, game.playerY);
 
         // Check LOS
@@ -91,54 +153,4 @@ export function resolveEnemyTurns(game) {
     }
 
     return messages;
-}
-
-// ── Greedy single-step pathfinding ───────────────────────────────────────────
-//
-// Generalized in feature/sewer-npc-skeleton (step 1): any entity can call this
-// to take one step toward any destination. Behavior for the existing chase use
-// is identical — the call site passes {self: enemy} so the entity skips its own
-// tile in the occupancy check.
-//
-// options:
-//   - self:        the entity moving (skipped in occupancy check). Optional.
-//   - avoidPlayer: if true (default), do not step onto the player's tile.
-//                  Workers and other non-hostile pathing should leave this true;
-//                  set false only if you specifically want to allow tile-overlap
-//                  with the player (no current use case).
-
-export function getGreedyStep(game, from, to, options = {}) {
-    const { self = null, avoidPlayer = true } = options;
-
-    const candidates = [
-        { x: from.x - 1, y: from.y },
-        { x: from.x + 1, y: from.y },
-        { x: from.x, y: from.y - 1 },
-        { x: from.x, y: from.y + 1 },
-    ];
-
-    let bestDist = manhattan(from.x, from.y, to.x, to.y);
-    let best = null;
-
-    for (const c of candidates) {
-        if (!game.map.isWalkable(c.x, c.y)) continue;
-
-        // Don't step on other living enemies (or self if for some reason
-        // a duplicate-position entity exists in game.enemies)
-        const occupied = game.enemies.some(
-            e => e !== self && e.entity.isAlive() && e.x === c.x && e.y === c.y
-        );
-        if (occupied) continue;
-
-        // Don't step on player (unless explicitly allowed)
-        if (avoidPlayer && c.x === game.playerX && c.y === game.playerY) continue;
-
-        const d = manhattan(c.x, c.y, to.x, to.y);
-        if (d < bestDist) {
-            bestDist = d;
-            best = c;
-        }
-    }
-
-    return best;
 }
