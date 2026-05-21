@@ -153,6 +153,11 @@ export const ENEMY_SPRITES = {
     'Fungus King':   { sheet: 'fungusKing',   col: 0, row: 2, static: true },
     'Ghost Fungus':  { sheet: 'ghostMonster', col: 0, row: 3, static: true },
     'Sewer Monster': { sheet: 'sewerMonster', col: 0, row: 4, static: true },
+    // Carrion the dehydrated zombie merchant — placeholder sprite reuses the
+    // sewer-monster sheet for v1. Per plans/cosmology-and-arc.md she's
+    // visually distinct (pushes a cart, dehydrated, sludge-coated), so a
+    // dedicated sprite is on the polish queue.
+    'Carrion':       { sheet: 'sewerMonster', col: 0, row: 4, static: true },
 };
 
 // Player sprite (renderer reads this; previously hardcoded col/row via FACE map)

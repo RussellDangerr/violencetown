@@ -38,6 +38,10 @@ export class Enemy {
         // chasing. The Fungus King chases AND barks.)
         barks = null,
         barkEveryTurns = 8,
+        // Adjacency bark — fires once when the player first becomes adjacent
+        // to this NPC. Used for non-hostile NPCs like Carrion who deliver a
+        // single line of dialogue on first contact.
+        adjacencyBark = null,
         // Disposition fields (read by future feature/give-action; inert here)
         disposition = null,
         flipThreshold = null,
@@ -72,6 +76,10 @@ export class Enemy {
         this.barkEveryTurns   = barkEveryTurns;
         this._barkIndex       = 0;
         this._barkOffset      = null;
+
+        // Adjacency-bark state (one-shot trigger on player-adjacency edge)
+        this.adjacencyBark    = adjacencyBark;
+        this._wasAdjacent     = false;
 
         // Disposition data — stored but not yet read. See plans/give-action-
         // and-disposition.md for the feature that consumes these fields.
@@ -133,6 +141,11 @@ export function resolveEnemyTurns(game) {
         // plans/sewer-npc-skeleton.md.
         const barkMsg = maybeBark(game, enemy);
         if (barkMsg) messages.push(barkMsg);
+
+        // Adjacency-bark check — fires once on the rising edge of
+        // player-adjacency. Used for non-hostile dialogue NPCs (Carrion).
+        const adjMsg = maybeAdjacencyBark(game, enemy);
+        if (adjMsg) messages.push(adjMsg);
 
         // FSM-controlled entry?
         if (enemy.behavior) {
@@ -213,4 +226,29 @@ function maybeBark(game, enemy) {
     const idx = enemy._barkIndex % enemy.barks.length;
     enemy._barkIndex += 1;
     return enemy.barks[idx];
+}
+
+// ── Adjacency-bark resolution ───────────────────────────────────────────────
+//
+// Edge-triggered: fires only on the turn the player BECOMES adjacent
+// (manhattan distance 1) to this NPC, having been non-adjacent on the
+// previous resolution. Doesn't re-fire while the player remains adjacent,
+// and re-arms once they step away. Used for non-hostile dialogue NPCs
+// like Carrion who deliver a single line per encounter.
+//
+// One-shot-per-approach is the right cadence for dialogue — repeated
+// barks every turn while standing next to an NPC would be log spam.
+
+function maybeAdjacencyBark(game, enemy) {
+    if (!enemy.adjacencyBark) return null;
+    const dist = manhattan(enemy.x, enemy.y, game.playerX, game.playerY);
+    const isAdjacent = dist === 1;
+    if (isAdjacent && !enemy._wasAdjacent) {
+        enemy._wasAdjacent = true;
+        return enemy.adjacencyBark;
+    }
+    if (!isAdjacent) {
+        enemy._wasAdjacent = false;
+    }
+    return null;
 }
