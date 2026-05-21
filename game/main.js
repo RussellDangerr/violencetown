@@ -102,6 +102,11 @@ class Game {
         // _openCombatOverlay, cleared after _pickCombat resolves or on Esc.
         this._combatTarget = null;
 
+        // Overlay slide-in animation timestamp (Phase D). Set when either
+        // ITEM_OVERLAY or COMBAT_OVERLAY opens; renderer lerps option
+        // positions from center → final over 80ms after this time.
+        this._overlayOpenedAt = 0;
+
         // Floating damage numbers — particle list. Each entry:
         //   { tileX, tileY, text, color, size, vx, vy, bornAt, maxAge }
         // Particles age in real time (performance.now()) and animate
@@ -579,6 +584,8 @@ class Game {
         }
 
         this.state = STATE.ITEM_OVERLAY;
+        this._overlayOpenedAt = performance.now();
+        this._ensureParticleLoop(); // animate the slide-in (Phase D)
         this._render();
     }
 
@@ -747,6 +754,8 @@ class Game {
         // give — Esc out of this menu and use 1-9 + Space.
 
         this.state = STATE.COMBAT_OVERLAY;
+        this._overlayOpenedAt = performance.now();
+        this._ensureParticleLoop(); // animate the slide-in (Phase D)
     }
 
     _pickCombat(direction) {
@@ -1084,6 +1093,10 @@ class Game {
         const now = performance.now();
         if ((this._playerHitFlashUntil ?? 0) > now) return true;
         if ((this._playerStaggerUntil  ?? 0) > now) return true;
+        // Overlay slide-in animation is active (Phase D)
+        const overlayOpen = this.state === STATE.ITEM_OVERLAY
+                         || this.state === STATE.COMBAT_OVERLAY;
+        if (overlayOpen && now - (this._overlayOpenedAt ?? 0) < 80) return true;
         for (const e of this.enemies) {
             if ((e._hitFlashUntil ?? 0) > now) return true;
             if ((e._staggerUntil  ?? 0) > now) return true;

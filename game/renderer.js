@@ -576,30 +576,46 @@ export class Renderer {
         const cx = half * TILE_PX + TILE_PX / 2;
         const cy = half * TILE_PX + TILE_PX / 2;
 
-        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        // Phase D: slide-in animation. Options lerp from the player tile
+        // center → their final positions over 80ms with ease-out, while
+        // the panel alpha and option opacity ramp 0 → 1. This is the
+        // "snappy" feel — the menu doesn't appear, it *arrives*.
+        const now = performance.now();
+        const openAt = game._overlayOpenedAt ?? now;
+        const rawT = Math.min(1, Math.max(0, (now - openAt) / 80));
+        const t = easeOutCubic(rawT);
+
+        ctx.fillStyle = `rgba(0,0,0,${0.5 * t})`;
         ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
         this._drawPlayer(game);
 
         const opts = game.overlayOptions;
-        const pos = {
+        const finalPos = {
             up:    { x: cx - 44, y: cy - TILE_PX - 38 },
             down:  { x: cx - 44, y: cy + TILE_PX + 8 },
             left:  { x: cx - TILE_PX - 84, y: cy - 16 },
             right: { x: cx + TILE_PX + 8,  y: cy - 16 },
         };
         const arr = { up: '↑', down: '↓', left: '←', right: '→' };
+        // Lerp source — center of the player tile, slightly above
+        const src = { x: cx - 44, y: cy - 16 };
 
+        const prevAlpha = ctx.globalAlpha;
+        ctx.globalAlpha = t;
         for (const [dir, opt] of Object.entries(opts)) {
-            if (!pos[dir]) continue;
-            const p = pos[dir];
+            if (!finalPos[dir]) continue;
+            const fp = finalPos[dir];
+            const px = src.x + (fp.x - src.x) * t;
+            const py = src.y + (fp.y - src.y) * t;
             const w = 88, h = 32;
 
-            drawPanelSmall(ctx, p.x, p.y, w, h);
+            drawPanelSmall(ctx, px, py, w, h);
 
             ctx.fillStyle = UI.text;
             ctx.font = 'bold 12px monospace';
-            ctx.fillText(`${arr[dir]} ${opt.label}`, p.x + 8, p.y + 21);
+            ctx.fillText(`${arr[dir]} ${opt.label}`, px + 8, py + 21);
         }
+        ctx.globalAlpha = prevAlpha;
     }
 
     // ── Throw Prompt ─────────────────────────────────────────────────────────
@@ -693,4 +709,11 @@ function hexToRgba(hex, alpha) {
     const g = parseInt(hex.slice(3, 5), 16);
     const b = parseInt(hex.slice(5, 7), 16);
     return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// Ease-out cubic — fast at the start, gentle at the end. The right curve
+// for "appearing" animations like menu slides: the motion looks decisive
+// (it commits early) and lands softly (no harsh stop).
+function easeOutCubic(t) {
+    return 1 - Math.pow(1 - t, 3);
 }
