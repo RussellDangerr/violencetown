@@ -9,6 +9,7 @@ import { DIR_NAMES, PLAYER_MAX_HP, SLUDGE_DOT, INVENTORY_SIZE, MAX_STACK } from 
 import { ITEMS, resolveUse, tickTempEquips } from './items.js';
 import { attack, formatDamageNumber } from './combat.js';
 import { Enemy, resolveEnemyTurns } from './enemies.js';
+import { applyGive } from './give-action.js';
 import { escapeHtml, manhattan, clamp } from './utils.js';
 
 // ── States ───────────────────────────────────────────────────────────────────
@@ -17,8 +18,9 @@ const STATE = {
     SPLASH:         'splash',
     IDLE:           'idle',           // waiting for input
     ITEM_SELECTED:  'item_selected',  // 1-9 pressed, slot highlighted
-    ITEM_OVERLAY:   'item_overlay',   // Space pressed, showing use/throw/smash
+    ITEM_OVERLAY:   'item_overlay',   // Space pressed, showing use/throw/smash/give
     ITEM_THROW_DIR: 'item_throw_dir', // chose Throw, waiting for direction
+    ITEM_GIVE_DIR:  'item_give_dir',  // chose Give with multiple adjacent NPCs
     RESOLVING:      'resolving',
     DEAD:           'dead',
     WIN:            'win',
@@ -237,6 +239,17 @@ class Game {
             if (this.state === STATE.ITEM_THROW_DIR) {
                 const dir = DIRS[e.code];
                 if (dir) { e.preventDefault(); this._doThrow(dir); return; }
+                if (e.code === 'Escape') { e.preventDefault(); this.state = STATE.IDLE; this.selectedSlot = -1; this._render(); return; }
+                return;
+            }
+
+            // ── ITEM_GIVE_DIR: waiting for give direction ──
+            // Same input shape as ITEM_THROW_DIR; differs only in where it
+            // dispatches. The shared direction-prompt UI in renderer.js
+            // (_drawThrowPrompt) renders the same arrows for both states.
+            if (this.state === STATE.ITEM_GIVE_DIR) {
+                const dir = DIRS[e.code];
+                if (dir) { e.preventDefault(); this._doGiveDir(dir); return; }
                 if (e.code === 'Escape') { e.preventDefault(); this.state = STATE.IDLE; this.selectedSlot = -1; this._render(); return; }
                 return;
             }
@@ -495,13 +508,35 @@ class Game {
         // Right = throw (always available)
         this.overlayOptions.right = { label: 'Throw', action: 'throw' };
 
-        // Left = smash (only if adjacent enemy)
-        const adj = this.enemies.filter(e => e.entity.isAlive() && manhattan(e.x, e.y, this.playerX, this.playerY) === 1);
-        if (adj.length > 0) {
+        // Adjacent NPCs — partitioned into hostile-eligible vs non-hostile.
+        // The behavior whitelist primitive from feature/sewer-npc-skeleton
+        // is the source of truth here: an NPC without a behavior field is
+        // assumed to be a legacy hostile (back-compat with the original
+        // chasing fungi); an NPC with a behavior list is hostile only if
+        // HOSTILE appears in it.
+        const adjAll = this.enemies.filter(e =>
+            e.entity.isAlive() && manhattan(e.x, e.y, this.playerX, this.playerY) === 1
+        );
+        const adjHostile = adjAll.filter(e =>
+            !e.behavior || e.behavior.includes('HOSTILE')
+        );
+
+        // Left = smash (only if adjacent HOSTILE-eligible enemy — prevents
+        // smashing Carrion-like non-hostiles, the same way bump-attack now
+        // refuses to attack them)
+        if (adjHostile.length > 0) {
             this.overlayOptions.left = { label: 'Smash', action: 'smash' };
         }
 
-        // Down = future (sell to NPC, etc.)
+        // Down = give (if ANY adjacent NPC exists). Bribery-immune NPCs
+        // reject the offering visibly; already-flipped ones still accept
+        // for loyalty boost. The Give action is the one item interaction
+        // that targets non-hostiles, which is why it doesn't filter by
+        // HOSTILE eligibility.
+        if (adjAll.length > 0) {
+            const label = adjAll.length === 1 ? `Give to ${adjAll[0].type}` : 'Give';
+            this.overlayOptions.down = { label, action: 'give' };
+        }
 
         this.state = STATE.ITEM_OVERLAY;
         this._render();
@@ -525,18 +560,42 @@ class Game {
                 this._render();
                 return; // don't advance yet
             case 'smash': {
-                // Melee smash on nearest adjacent enemy
-                const adj = this.enemies.filter(e => e.entity.isAlive() && manhattan(e.x, e.y, this.playerX, this.playerY) === 1);
-                adj.sort((a, b) => a.entity.hp - b.entity.hp);
-                if (adj.length > 0) {
+                // Melee smash on nearest adjacent HOSTILE-eligible enemy.
+                // Filters non-hostile NPCs (Carrion-type) out of the target
+                // pool — the bump-attack fix from step 7 extended to item-
+                // based attacks.
+                const adjHostile = this.enemies.filter(e =>
+                    e.entity.isAlive()
+                    && manhattan(e.x, e.y, this.playerX, this.playerY) === 1
+                    && (!e.behavior || e.behavior.includes('HOSTILE'))
+                );
+                adjHostile.sort((a, b) => a.entity.hp - b.entity.hp);
+                if (adjHostile.length > 0) {
                     const dmg = 10 * stack.count;
-                    const result = this.combatAttack(adj[0], dmg);
-                    this._log(`[Smashed ${item.name} on ${adj[0].entity.name} — ${result}]`);
+                    const result = this.combatAttack(adjHostile[0], dmg);
+                    this._log(`[Smashed ${item.name} on ${adjHostile[0].entity.name} — ${result}]`);
                 }
                 this._removeFromSlot(this.selectedSlot);
                 this.selectedSlot = -1;
                 this.state = STATE.IDLE;
                 this._advanceWorld();
+                return;
+            }
+            case 'give': {
+                // If exactly one adjacent NPC, give to them directly. If
+                // multiple, enter direction-pick state — same pattern as
+                // Throw, but selecting an NPC by adjacency rather than a
+                // tile by direction.
+                const adjAll = this.enemies.filter(e =>
+                    e.entity.isAlive() && manhattan(e.x, e.y, this.playerX, this.playerY) === 1
+                );
+                if (adjAll.length === 1) {
+                    this._doGive(adjAll[0]);
+                } else {
+                    this.state = STATE.ITEM_GIVE_DIR;
+                    this._log(`[Give ${item.name} — pick a direction]`);
+                    this._render();
+                }
                 return;
             }
         }
@@ -566,6 +625,50 @@ class Game {
         this.selectedSlot = -1;
         this.state = STATE.IDLE;
         this._advanceWorld();
+    }
+
+    // ── Give Action ──────────────────────────────────────────────────────────
+    //
+    // Resolve a give to a specific recipient NPC. Delegates the disposition
+    // math + flip handling to give-action.js::applyGive; main.js's job is
+    // inventory consumption, log emission, and turn advancement.
+    //
+    // Item is consumed only if accepted (bribery-immune NPCs reject — the
+    // player tried to bribe, the NPC refused, the item stays in hand).
+
+    _doGive(recipient) {
+        const stack = this.inventory[this.selectedSlot];
+        if (!stack) { this.state = STATE.IDLE; this._render(); return; }
+
+        const result = applyGive(stack.itemDef, recipient);
+        this._log(result.log);
+
+        if (result.accepted) {
+            this._removeFromSlot(this.selectedSlot);
+        }
+
+        this.selectedSlot = -1;
+        this.state = STATE.IDLE;
+        this._advanceWorld();
+    }
+
+    // Handle the direction-pick step when multiple adjacent NPCs exist.
+    // Looks up the NPC at (player + dir) and calls _doGive on them, or
+    // emits a "no one there" message if no NPC is at that tile.
+    _doGiveDir(dir) {
+        const tx = this.playerX + dir.dx;
+        const ty = this.playerY + dir.dy;
+        const recipient = this.enemies.find(e =>
+            e.entity.isAlive() && e.x === tx && e.y === ty
+        );
+        if (!recipient) {
+            this._log('[No one there to give to.]');
+            this.selectedSlot = -1;
+            this.state = STATE.IDLE;
+            this._render();
+            return;
+        }
+        this._doGive(recipient);
     }
 
     // ── World Advance (after any action) ─────────────────────────────────────

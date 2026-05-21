@@ -44,11 +44,17 @@ export function tickNpcState(game, npc) {
     if (!npc.behavior) return [];
 
     // Lazy initialization — pick a starting state from the whitelist.
-    // Prefer IDLE if available; otherwise take the first allowed state.
+    // Prefer IDLE if available; otherwise take the first allowed state;
+    // otherwise default to IDLE explicitly (for the empty-whitelist case
+    // produced by give-action::applyFlip on a legacy chaser).
     if (npc.fsmState == null) {
-        npc.fsmState = npc.behavior.includes(STATE.IDLE)
-            ? STATE.IDLE
-            : npc.behavior[0];
+        if (npc.behavior.includes(STATE.IDLE)) {
+            npc.fsmState = STATE.IDLE;
+        } else if (npc.behavior.length > 0) {
+            npc.fsmState = npc.behavior[0];
+        } else {
+            npc.fsmState = STATE.IDLE; // empty whitelist defaults to permanent IDLE
+        }
         npc._lastWanderTurn = game.turn;
     }
 
