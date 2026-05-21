@@ -33,6 +33,11 @@ export class Enemy {
         // WORKING-state fields (only meaningful if behavior includes WORKING)
         wantsItems = null,
         depositsTo = null,
+        // Bark fields (independent of FSM — barks fire on turn cadence
+        // regardless of whether the NPC is idle, wandering, working, or
+        // chasing. The Fungus King chases AND barks.)
+        barks = null,
+        barkEveryTurns = 8,
         // Disposition fields (read by future feature/give-action; inert here)
         disposition = null,
         flipThreshold = null,
@@ -61,6 +66,12 @@ export class Enemy {
         this.fsmState         = null;
         this._lastWanderTurn  = 0;
         this.carrying         = null; // string item-type when carrying, null otherwise
+
+        // Bark runtime state (initialized lazily in the bark check)
+        this.barks            = barks;
+        this.barkEveryTurns   = barkEveryTurns;
+        this._barkIndex       = 0;
+        this._barkOffset      = null;
 
         // Disposition data — stored but not yet read. See plans/give-action-
         // and-disposition.md for the feature that consumes these fields.
@@ -114,6 +125,15 @@ export function resolveEnemyTurns(game) {
     for (const enemy of game.enemies) {
         if (!enemy.entity.isAlive()) continue;
 
+        // Bark check — independent of FSM/legacy path. Any enemy with a
+        // `barks` array emits one log line every `barkEveryTurns` turns
+        // from spawn, round-robin through the bark list. Barks are pure
+        // flavor in this ship; director coupling (barks affecting other
+        // NPCs' FSM state) is deferred to feature/king-director per
+        // plans/sewer-npc-skeleton.md.
+        const barkMsg = maybeBark(game, enemy);
+        if (barkMsg) messages.push(barkMsg);
+
         // FSM-controlled entry?
         if (enemy.behavior) {
             const npcMessages = tickNpcState(game, enemy);
@@ -159,4 +179,38 @@ export function resolveEnemyTurns(game) {
     }
 
     return messages;
+}
+
+// ── Bark resolution ─────────────────────────────────────────────────────────
+//
+// Returns the next bark log-line for this enemy if the cadence fires this
+// turn, or null otherwise. Round-robins through the `barks` array. Each
+// enemy has a per-instance offset (the turn it first ticked) so multiple
+// barking NPCs don't synchronize on the same turn unless they spawned
+// together.
+//
+// Barks are NOT gated on line-of-sight or player proximity — they fire
+// whenever the player is on the same map as the bark-emitter. This is the
+// "negative-space worldbuilding" principle from plans/cosmology-and-arc.md:
+// the player hears the world doing its thing even from across walls. If
+// playtest reveals this is too chatty, a polish-pass can add proximity
+// gating.
+
+function maybeBark(game, enemy) {
+    if (!enemy.barks || enemy.barks.length === 0) return null;
+
+    // Lazy offset init: first tick records the spawn-turn so cadence starts
+    // counting from this enemy's first appearance, not from world turn 0.
+    if (enemy._barkOffset == null) {
+        enemy._barkOffset = game.turn;
+        return null; // don't bark on the spawn tick itself
+    }
+
+    const cadence = enemy.barkEveryTurns ?? 8;
+    const elapsed = game.turn - enemy._barkOffset;
+    if (elapsed <= 0 || elapsed % cadence !== 0) return null;
+
+    const idx = enemy._barkIndex % enemy.barks.length;
+    enemy._barkIndex += 1;
+    return enemy.barks[idx];
 }

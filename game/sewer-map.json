@@ -31,7 +31,14 @@
         { "id": "e3", "type": "Red Fungus",    "x": 8,  "y": 4,  "hp": 30, "damage": 6, "disposition": -50, "flipThreshold": 40,  "bribeable": true, "values": { "pipe": 12, "rock": 6, "soap": 3,    "bandage": 5 } },
         { "id": "e4", "type": "Red Fungus",    "x": 16, "y": 7,  "hp": 30, "damage": 6, "disposition": -50, "flipThreshold": 40,  "bribeable": true, "values": { "pipe": 12, "rock": 6, "soap": 3,    "bandage": 5 } },
         { "id": "e5", "type": "Ghost Fungus",  "x": 5,  "y": 7,  "hp": 20, "damage": 4, "sightRange": 12, "disposition": -50, "flipThreshold": 60, "bribeable": false, "values": { "bandage": 8, "soap": 4, "rock": 2, "pipe": 3 } },
-        { "id": "e6", "type": "Fungus King",   "x": 15, "y": 10, "hp": 60, "damage": 10, "armor": 3, "disposition": -80, "flipThreshold": 200, "bribeable": true, "values": { "soap": 20, "pipe": 8, "rock": 5, "bandage": 2 }, "onFlip": "becomeAlly" }
+        { "id": "e6", "type": "Fungus King",   "x": 15, "y": 10, "hp": 60, "damage": 10, "armor": 3, "disposition": -80, "flipThreshold": 200, "bribeable": true, "values": { "soap": 20, "pipe": 8, "rock": 5, "bandage": 2 }, "onFlip": "becomeAlly",
+          "barks": [
+              "[Fungus King: Q3 QUOTA IS DOWN FOURTEEN PERCENT. UNACCEPTABLE.]",
+              "[Fungus King: TUESDAY'S SHIPMENT TO BANK STREET IS LATE AGAIN.]",
+              "[Fungus King: THE FINANCIER PAYS IN GOLD. I PAY YOU IN MUSHROOMS. EVERYONE WINS.]",
+              "[Fungus King: AN INTRUDER. FORM 4-J IS REQUIRED FOR UNAUTHORIZED VISITORS.]"
+          ],
+          "barkEveryTurns": 6 }
     ],
     "items": [
         { "type": "rock", "x": 2, "y": 10 },
