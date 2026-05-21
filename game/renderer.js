@@ -286,17 +286,16 @@ export class Renderer {
         const { ctx, half, sprites } = this;
         const now = performance.now();
         for (const e of game.enemies) {
-            if (!e.entity.isAlive()) continue;
             const vx = e.x - game.playerX + half;
             const vy = e.y - game.playerY + half;
             if (vx < -2 || vx > VIEW_TILES + 1 || vy < -2 || vy > VIEW_TILES + 1) continue;
 
-            // Hit-flash + stagger (Phase C) — short-lived feedback when the
-            // player just damaged this enemy. The stagger eases out via the
-            // remaining-time fraction, so the offset is maximal right at the
-            // hit and decays to zero over 80ms.
-            const flashing = (e._hitFlashUntil ?? 0) > now;
-            const staggerRemaining = (e._staggerUntil ?? 0) - now;
+            const isAlive = e.entity.isAlive();
+
+            // Hit-flash + stagger (Phase C) only animate while alive —
+            // corpses are static after death.
+            const flashing = isAlive && (e._hitFlashUntil ?? 0) > now;
+            const staggerRemaining = isAlive ? (e._staggerUntil ?? 0) - now : 0;
             const staggerProgress = staggerRemaining > 0 ? staggerRemaining / 80 : 0;
             const offsetX = staggerProgress > 0 ? (e._staggerDx ?? 0) * staggerProgress : 0;
             const offsetY = staggerProgress > 0 ? (e._staggerDy ?? 0) * staggerProgress : 0;
@@ -304,40 +303,60 @@ export class Renderer {
             const px = vx * TILE_PX - this._scrollX + offsetX;
             const py = vy * TILE_PX - this._scrollY + offsetY;
 
+            // Sprite — same draw for alive and dead; the death state is
+            // expressed via the gray tint overlay below, not via a different
+            // sprite. Future polish swap could pull a fallen-character
+            // sprite from the Kenney pack if one is appropriate.
             let ok = false;
             const info = ENEMY_SPRITES[e.type];
             if (info && sprites?.[info.sheet]?.loaded) {
-                // Kenney chars are single-frame; honor `static` to use the
-                // exact col from the sprite map instead of animation flipping.
                 const col = info.static
                     ? info.col
                     : (((game._idleTick || 0) % 2 === 0) ? 0 : 2);
-                // 24×24 square draw — fits Kenney's 16×16 native at 1.5× upscale,
-                // avoids the vertical stretch that 28×36 produced.
                 ok = sprites[info.sheet].drawFrame(ctx, col, info.row, px + 4, py + 4, TILE_PX - 8, TILE_PX - 8);
             }
             if (!ok) {
-                ctx.fillStyle = '#cc4433';
+                ctx.fillStyle = isAlive ? '#cc4433' : '#555';
                 ctx.fillRect(px + 6, py + 6, TILE_PX - 12, TILE_PX - 12);
             }
 
-            // Hit-flash overlay — red tint on top of the sprite for 100ms
-            // after the hit lands. Hard fade (no easing) so the flash reads
-            // as a sharp impact rather than a soft glow.
-            if (flashing) {
-                ctx.fillStyle = 'rgba(255, 60, 40, 0.45)';
-                ctx.fillRect(px + 4, py + 4, TILE_PX - 8, TILE_PX - 8);
-            }
+            if (isAlive) {
+                // Hit-flash overlay
+                if (flashing) {
+                    ctx.fillStyle = 'rgba(255, 60, 40, 0.45)';
+                    ctx.fillRect(px + 4, py + 4, TILE_PX - 8, TILE_PX - 8);
+                }
 
-            // HP bar above enemy (with border)
-            const frac = e.entity.hp / e.entity.maxHp;
-            const bx = px + 4, by = py - 6, bw = TILE_PX - 8, bh = 5;
-            ctx.fillStyle = '#000000cc';
-            ctx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
-            ctx.fillStyle = UI.hpBg;
-            ctx.fillRect(bx, by, bw, bh);
-            ctx.fillStyle = UI.hpRed;
-            ctx.fillRect(bx, by, bw * frac, bh);
+                // HP bar above living enemy (with border)
+                const frac = e.entity.hp / e.entity.maxHp;
+                const bx = px + 4, by = py - 6, bw = TILE_PX - 8, bh = 5;
+                ctx.fillStyle = '#000000cc';
+                ctx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
+                ctx.fillStyle = UI.hpBg;
+                ctx.fillRect(bx, by, bw, bh);
+                ctx.fillStyle = UI.hpRed;
+                ctx.fillRect(bx, by, bw * frac, bh);
+            } else {
+                // Corpse — gray tint overlay turns the sprite into a faded
+                // version of itself, marking it as "defeated" without
+                // requiring a separate corpse sprite. Combined with the
+                // K.O. tag below, it reads as a clear "this enemy is done"
+                // without removing them from the world entirely. Mother 3
+                // and Persona both leave defeated enemies as visible body
+                // markers; this is the cheap version of that move.
+                ctx.fillStyle = 'rgba(60, 60, 60, 0.55)';
+                ctx.fillRect(px + 4, py + 4, TILE_PX - 8, TILE_PX - 8);
+
+                // K.O. tag below — small, faded, semi-respectful. The tag
+                // is the player's permanent record of "you fought this
+                // person here." Future merchant/loot features could read
+                // the corpse and let the player pick it up.
+                ctx.fillStyle = '#9a8a78';
+                ctx.font = 'bold 8px monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText(`[K.O.] ${e.type}`, px + TILE_PX / 2, py + TILE_PX + 2);
+                ctx.textAlign = 'left';
+            }
         }
     }
 

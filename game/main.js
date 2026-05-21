@@ -783,11 +783,16 @@ class Game {
             case 'attack': {
                 const weapon = this.equipment.weapon;
                 if (weapon) {
-                    const result = this.combatAttack(enemy, weapon.damage);
-                    this._log(`[${weapon.name} hits ${enemy.entity.name} — ${result}]`);
+                    // Visual feedback (damage number + flash + stagger +
+                    // event word + screen shake on big hits) replaces the
+                    // hit log line. combatAttack still logs kills.
+                    this.combatAttack(enemy, weapon.damage);
                 } else {
-                    this._log('[No weapon — punched for 1]');
                     enemy.entity.takeDamage(1);
+                    // Punch needs its own light visual since combatAttack
+                    // (which handles the full FX bundle) isn't called here.
+                    this._spawnDamageNumber(enemy.x, enemy.y, '-1', '#ffdd44', 14);
+                    this._spawnEventWord(enemy.x, enemy.y, 'TAP!', '#ffaa44', 14);
                 }
                 this._combatTarget = null;
                 this.state = STATE.IDLE;
@@ -960,6 +965,19 @@ class Game {
             this._triggerScreenShake(150, mag);
         }
 
+        // Event word particle — Phase E. Persona-style onomatopoeia pops
+        // out alongside the damage number. Kill events override the random
+        // hit-word with a fixed "K.O.!" so the beat reads as a milestone.
+        if (result.killed) {
+            this._spawnEventWord(enemyObj.x, enemyObj.y, 'K.O.!', '#ff8822', 22);
+            this._log(`[Defeated ${enemyObj.entity.name}]`);
+        } else {
+            const hitWords = ['POW!', 'WHACK!', 'BAM!', 'SLAM!', 'CRACK!'];
+            const word = hitWords[Math.floor(Math.random() * hitWords.length)];
+            const size = result.damage >= 15 ? 20 : 16;
+            this._spawnEventWord(enemyObj.x, enemyObj.y, word, '#ffaa44', size);
+        }
+
         return formatDamageNumber(result);
     }
 
@@ -993,6 +1011,16 @@ class Game {
             const mag = this.playerHp <= 0 ? 6 : 3 + Math.min(4, (dmg - 10) / 4);
             this._triggerScreenShake(180, mag);
         }
+
+        // Event word particle — Phase E. Player-side onomatopoeia in red
+        // to read as alarm. Heavy hits or near-death moments get a bigger
+        // word; otherwise rotates through the playerHitWords pool.
+        const playerHitWords = ['OUCH!', 'ARGH!', 'OOF!', 'AGH!'];
+        const word = this.playerHp <= 0
+            ? '...!'
+            : playerHitWords[Math.floor(Math.random() * playerHitWords.length)];
+        const size = dmg >= 15 ? 20 : 16;
+        this._spawnEventWord(this.playerX, this.playerY, word, '#ff5544', size);
 
         return dmg;
     }
@@ -1081,6 +1109,21 @@ class Game {
             vy: -40, // pixels per second upward
             bornAt: performance.now(),
             maxAge: 600,
+        });
+        this._ensureParticleLoop();
+    }
+
+    // Spawn an event-word particle ("POW!", "K.O.!", "OUCH!") — Persona-style
+    // emphasis text that pops out alongside the damage number. Larger, bolder,
+    // with a brief horizontal scatter so multiple words don't stack vertically
+    // when several hits land in the same beat.
+    _spawnEventWord(tileX, tileY, text, color, size = 18) {
+        this._damageNumbers.push({
+            tileX, tileY, text, color, size,
+            vx: (Math.random() - 0.5) * 30, // px/sec horizontal scatter
+            vy: -28,                          // slightly slower than damage numbers
+            bornAt: performance.now(),
+            maxAge: 700,
         });
         this._ensureParticleLoop();
     }

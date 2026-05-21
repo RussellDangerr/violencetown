@@ -167,14 +167,12 @@ export function resolveEnemyTurns(game) {
 
         if (enemy.state !== 'chasing') continue;
 
-        // Adjacent? Attack.
+        // Adjacent? Attack. Visual feedback (red damage number, hit-flash,
+        // stagger, event word, screen shake on big hits) replaces the
+        // attack log line. The player-death case is handled by the death-
+        // screen flow in main.js, which has its own messaging.
         if (dist <= 1) {
-            // Use game.applyDamageToPlayer so Guard buff can halve damage
-            const dealt = game.applyDamageToPlayer(enemy.damage);
-            const killed = game.playerHp === 0;
-            let s = `${dealt}`;
-            if (killed) s += ' ✕';
-            messages.push(`[${enemy.entity.name} attacks — ${s}]`);
+            game.applyDamageToPlayer(enemy.damage);
             continue;
         }
 
