@@ -264,13 +264,25 @@ export class Renderer {
 
     _drawEnemies(game) {
         const { ctx, half, sprites } = this;
+        const now = performance.now();
         for (const e of game.enemies) {
             if (!e.entity.isAlive()) continue;
             const vx = e.x - game.playerX + half;
             const vy = e.y - game.playerY + half;
             if (vx < -2 || vx > VIEW_TILES + 1 || vy < -2 || vy > VIEW_TILES + 1) continue;
-            const px = vx * TILE_PX - this._scrollX;
-            const py = vy * TILE_PX - this._scrollY;
+
+            // Hit-flash + stagger (Phase C) — short-lived feedback when the
+            // player just damaged this enemy. The stagger eases out via the
+            // remaining-time fraction, so the offset is maximal right at the
+            // hit and decays to zero over 80ms.
+            const flashing = (e._hitFlashUntil ?? 0) > now;
+            const staggerRemaining = (e._staggerUntil ?? 0) - now;
+            const staggerProgress = staggerRemaining > 0 ? staggerRemaining / 80 : 0;
+            const offsetX = staggerProgress > 0 ? (e._staggerDx ?? 0) * staggerProgress : 0;
+            const offsetY = staggerProgress > 0 ? (e._staggerDy ?? 0) * staggerProgress : 0;
+
+            const px = vx * TILE_PX - this._scrollX + offsetX;
+            const py = vy * TILE_PX - this._scrollY + offsetY;
 
             let ok = false;
             const info = ENEMY_SPRITES[e.type];
@@ -287,6 +299,14 @@ export class Renderer {
             if (!ok) {
                 ctx.fillStyle = '#cc4433';
                 ctx.fillRect(px + 6, py + 6, TILE_PX - 12, TILE_PX - 12);
+            }
+
+            // Hit-flash overlay — red tint on top of the sprite for 100ms
+            // after the hit lands. Hard fade (no easing) so the flash reads
+            // as a sharp impact rather than a soft glow.
+            if (flashing) {
+                ctx.fillStyle = 'rgba(255, 60, 40, 0.45)';
+                ctx.fillRect(px + 4, py + 4, TILE_PX - 8, TILE_PX - 8);
             }
 
             // HP bar above enemy (with border)
@@ -344,8 +364,18 @@ export class Renderer {
 
     _drawPlayer(game) {
         const { ctx, half, sprites } = this;
-        const ppx = half * TILE_PX;
-        const ppy = half * TILE_PX;
+        const now = performance.now();
+
+        // Hit-flash + stagger (Phase C) — same pattern as enemies, but
+        // reading from game._playerHitFlashUntil et al.
+        const flashing = (game._playerHitFlashUntil ?? 0) > now;
+        const staggerRemaining = (game._playerStaggerUntil ?? 0) - now;
+        const staggerProgress = staggerRemaining > 0 ? staggerRemaining / 80 : 0;
+        const offsetX = staggerProgress > 0 ? (game._playerStaggerDx ?? 0) * staggerProgress : 0;
+        const offsetY = staggerProgress > 0 ? (game._playerStaggerDy ?? 0) * staggerProgress : 0;
+
+        const ppx = half * TILE_PX + offsetX;
+        const ppy = half * TILE_PX + offsetY;
 
         // Kenney chars are single-frame per cell — no facing/animation rows.
         // PLAYER_SPRITE.col/row are read from sprites.js as the canonical
@@ -361,6 +391,14 @@ export class Renderer {
         if (!ok) {
             ctx.fillStyle = '#44bb44';
             ctx.fillRect(ppx + 6, ppy + 6, TILE_PX - 12, TILE_PX - 12);
+        }
+
+        // Hit-flash overlay — red tint when the player just took damage.
+        // Sharper alpha than the enemy flash since the player sprite tends
+        // to be more visually prominent on a dark sewer floor.
+        if (flashing) {
+            ctx.fillStyle = 'rgba(255, 50, 30, 0.5)';
+            ctx.fillRect(ppx + 4, ppy + 4, TILE_PX - 8, TILE_PX - 8);
         }
     }
 

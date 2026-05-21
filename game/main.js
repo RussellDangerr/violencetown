@@ -111,6 +111,15 @@ class Game {
         this._damageNumbers = [];
         this._particleLoopRunning = false;
 
+        // Player hit-flash + stagger — short-lived visual feedback when
+        // damage lands on the player. Timestamps are performance.now()
+        // values; the renderer checks them each frame. Enemy equivalents
+        // live as properties on the Enemy instances (set in combatAttack).
+        this._playerHitFlashUntil = 0;
+        this._playerStaggerUntil  = 0;
+        this._playerStaggerDx     = 0;
+        this._playerStaggerDy     = 0;
+
         // World
         this.groundItems = [];
         this.enemies = [];
@@ -906,13 +915,26 @@ class Game {
     combatAttack(enemyObj, damage) {
         const playerEntity = { name: '[Player]', isDead: () => false };
         const result = attack(playerEntity, enemyObj.entity, damage);
-        // Spawn a floating damage number at the enemy's tile. Yellow-gold
-        // for damage dealt; size scales gently with damage magnitude so
-        // big hits read big. Killed-in-one-hit gets a slightly bolder
-        // color treatment as a free emphasis on the kill moment.
+
+        // Floating damage number — Phase B
         const size = 14 + Math.min(10, Math.floor(result.damage / 5));
         const color = result.killed ? '#ffaa22' : '#ffdd44';
         this._spawnDamageNumber(enemyObj.x, enemyObj.y, `-${result.damage}`, color, size);
+
+        // Hit flash + stagger — Phase C. Tints the enemy sprite red for
+        // 100ms and offsets it 3px in the direction away from the player
+        // (the visual "push back" of being struck). The stagger eases out
+        // over 80ms via the renderer's progress interpolation.
+        const now = performance.now();
+        enemyObj._hitFlashUntil = now + 100;
+        enemyObj._staggerUntil  = now + 80;
+        const dx = enemyObj.x - this.playerX;
+        const dy = enemyObj.y - this.playerY;
+        const len = Math.abs(dx) + Math.abs(dy);
+        enemyObj._staggerDx = len > 0 ? (dx / len) * 3 : 0;
+        enemyObj._staggerDy = len > 0 ? (dy / len) * 3 : 0;
+        this._ensureParticleLoop(); // keep rendering through the 100ms window
+
         return formatDamageNumber(result);
     }
 
@@ -920,11 +942,24 @@ class Game {
         let dmg = rawDamage;
         if (this.hasBuff('guard')) dmg = Math.max(1, Math.floor(dmg / 2));
         this.playerHp = Math.max(0, this.playerHp - dmg);
-        // Red particle at the player's tile — damage taken reads as alarm-
-        // colored. Slightly larger than damage-dealt particles so the
-        // player's own pain is more salient than the enemy's.
+
+        // Floating damage number — Phase B
         const size = 16 + Math.min(10, Math.floor(dmg / 5));
         this._spawnDamageNumber(this.playerX, this.playerY, `-${dmg}`, '#ff4444', size);
+
+        // Hit flash + stagger on the player — Phase C. Stagger direction
+        // is randomized for the player (any adjacent enemy might have
+        // landed the hit; we don't track which), making the player jolt
+        // slightly without committing to a specific source.
+        const now = performance.now();
+        this._playerHitFlashUntil = now + 100;
+        this._playerStaggerUntil  = now + 80;
+        const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+        const [sdx, sdy] = dirs[Math.floor(Math.random() * dirs.length)];
+        this._playerStaggerDx = sdx * 3;
+        this._playerStaggerDy = sdy * 3;
+        this._ensureParticleLoop(); // keep rendering through the 100ms window
+
         return dmg;
     }
 
@@ -1017,8 +1052,10 @@ class Game {
     }
 
     // Start a requestAnimationFrame loop that re-renders the game until all
-    // particles have expired. Idempotent — calling while a loop is already
-    // running is a no-op.
+    // active visual effects have expired (damage numbers, hit flashes,
+    // staggers). Idempotent — calling while a loop is already running is a
+    // no-op. Despite the historical name "particle loop", this is really a
+    // "transient visual effects" loop.
     _ensureParticleLoop() {
         if (this._particleLoopRunning) return;
         this._particleLoopRunning = true;
@@ -1028,15 +1065,30 @@ class Game {
             this._damageNumbers = this._damageNumbers.filter(
                 dn => now - dn.bornAt < dn.maxAge
             );
-            if (this._damageNumbers.length === 0) {
+            if (!this._hasActiveEffects()) {
                 this._particleLoopRunning = false;
-                this._render(); // final clean frame with no particles
+                this._render(); // final clean frame with no effects
                 return;
             }
             this._render();
             requestAnimationFrame(loop);
         };
         requestAnimationFrame(loop);
+    }
+
+    // True if any transient visual effect is currently in flight. The
+    // particle loop continues until this returns false. Cheap to compute
+    // because the enemy count is small (single digits typically).
+    _hasActiveEffects() {
+        if (this._damageNumbers.length > 0) return true;
+        const now = performance.now();
+        if ((this._playerHitFlashUntil ?? 0) > now) return true;
+        if ((this._playerStaggerUntil  ?? 0) > now) return true;
+        for (const e of this.enemies) {
+            if ((e._hitFlashUntil ?? 0) > now) return true;
+            if ((e._staggerUntil  ?? 0) > now) return true;
+        }
+        return false;
     }
 
     // ── Log ──────────────────────────────────────────────────────────────────
