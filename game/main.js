@@ -98,6 +98,7 @@ class Game {
         // World
         this.groundItems = [];
         this.enemies = [];
+        this.containers = []; // [{ id, type, x, y, contents: [...] }] — live, mutable
         this._pendingTransition = null;
     }
 
@@ -181,6 +182,20 @@ class Game {
         }
         this.enemies = [];
         for (const s of this.map.enemySpawns) this.enemies.push(new Enemy(s));
+
+        // Live containers — copy from spawn data so opening/depositing mutates
+        // the live instance, not the map definition. Map reload re-snapshots
+        // contents from JSON, mirroring how items/enemies behave today.
+        this.containers = [];
+        for (const c of this.map.containerSpawns) {
+            this.containers.push({
+                id: c.id,
+                type: c.type,
+                x: c.x,
+                y: c.y,
+                contents: Array.isArray(c.contents) ? c.contents.slice() : []
+            });
+        }
 
         const zoneEl = document.getElementById('zone-label');
         if (zoneEl) zoneEl.textContent = this.map.zoneName;
@@ -364,6 +379,16 @@ class Game {
                 enemy.entity.takeDamage(1);
             }
             this._render(); // show facing change
+            this._advanceWorld();
+            return;
+        }
+
+        // Bump-to-open? Mirrors bump-to-attack — containers are unwalkable
+        // entities you interact with by bumping rather than moving onto.
+        const container = this.containers.find(c => c.x === nx && c.y === ny);
+        if (container) {
+            this._openContainer(container);
+            this._render();
             this._advanceWorld();
             return;
         }
@@ -611,6 +636,43 @@ class Game {
                 go = true;
             } else { this._log('[Inventory full]'); break; }
         }
+    }
+
+    // ── Containers ───────────────────────────────────────────────────────────
+    //
+    // Open a chest (or other container) the player has bumped into. Empty
+    // chests log a one-liner; full ones transfer their contents into the
+    // player's inventory item-by-item (respecting inventory-full case the
+    // same way _tryPickup does).
+    //
+    // Contents entries may be strings ('rock') OR objects ({ type: 'rock' })
+    // for forward-compat — the soap-mine workers in step 4 will deposit
+    // typed entries.
+
+    _openContainer(container) {
+        if (container.contents.length === 0) {
+            this._log(`[The ${container.type} is empty.]`);
+            return;
+        }
+
+        const summary = container.contents
+            .map(c => (typeof c === 'string' ? c : c.type))
+            .join(', ');
+        this._log(`[You open the ${container.type}: ${summary}.]`);
+
+        const remaining = [];
+        for (const entry of container.contents) {
+            const itemType = typeof entry === 'string' ? entry : entry.type;
+            const def = ITEMS[itemType];
+            if (!def) continue; // unknown item type; drop silently
+            if (this._addToInventory(def)) {
+                this._log(`[+ ${def.name}]`);
+            } else {
+                this._log('[Inventory full — the rest stays in the chest.]');
+                remaining.push(entry);
+            }
+        }
+        container.contents = remaining;
     }
 
     // ── Combat ───────────────────────────────────────────────────────────────
