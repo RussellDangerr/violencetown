@@ -124,6 +124,10 @@ export class Renderer {
         this._drawEnemies(game);
         this._drawPlayer(game);
 
+        // Floating damage numbers float above the world but under the HUD
+        // so the HP panel + hotbar are never occluded by spammy combat.
+        this._drawDamageNumbers(game);
+
         // HUD
         this._drawHPPanel(game);
         this._drawZoneLabel(game);
@@ -295,6 +299,45 @@ export class Renderer {
             ctx.fillStyle = UI.hpRed;
             ctx.fillRect(bx, by, bw * frac, bh);
         }
+    }
+
+    // ── Floating damage numbers ──────────────────────────────────────────────
+    //
+    // Each particle floats upward and fades over its 600ms lifetime. The
+    // particle stores its origin in tile-space so it tracks the camera
+    // correctly if the player moves while the particle is alive.
+    //
+    // Rendering math: position offset is velocity × elapsed (in seconds);
+    // alpha is the linear fade ramp (1 → 0) across lifetime. The text uses
+    // a black drop-shadow so it's readable against any tile background.
+
+    _drawDamageNumbers(game) {
+        const { ctx, half } = this;
+        const now = performance.now();
+        for (const dn of game._damageNumbers) {
+            const age = now - dn.bornAt;
+            if (age >= dn.maxAge) continue; // expired (filtered next loop tick)
+
+            const t = age / 1000; // seconds
+            const vx = dn.tileX - game.playerX + half;
+            const vy = dn.tileY - game.playerY + half;
+            const px = vx * TILE_PX + TILE_PX / 2 - this._scrollX + dn.vx * t;
+            const py = vy * TILE_PX + TILE_PX / 4 - this._scrollY + dn.vy * t;
+
+            const alpha = 1 - age / dn.maxAge;
+            ctx.font = `bold ${dn.size}px monospace`;
+            ctx.textAlign = 'center';
+
+            // Drop shadow for readability against any tile color
+            ctx.fillStyle = `rgba(0, 0, 0, ${alpha * 0.8})`;
+            ctx.fillText(dn.text, px + 1, py + 1);
+
+            // Main color — translate the dn.color (#rrggbb) to rgba with
+            // our computed alpha so the fade applies cleanly
+            ctx.fillStyle = hexToRgba(dn.color, alpha);
+            ctx.fillText(dn.text, px, py);
+        }
+        ctx.textAlign = 'left'; // reset for downstream HUD draws
     }
 
     // ── Player ───────────────────────────────────────────────────────────────
@@ -598,4 +641,18 @@ export class Renderer {
         this.ctx.fillStyle = color;
         this.ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
     }
+}
+
+// ── Color util ──────────────────────────────────────────────────────────────
+//
+// Convert a hex color (#rrggbb) and an alpha (0..1) to an rgba string. Used
+// by the damage-number renderer to apply per-frame alpha fades without
+// needing to pre-compute rgba strings for every brightness step.
+
+function hexToRgba(hex, alpha) {
+    if (!hex || hex[0] !== '#') return `rgba(255,255,255,${alpha})`;
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r},${g},${b},${alpha})`;
 }

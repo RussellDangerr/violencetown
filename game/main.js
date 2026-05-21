@@ -102,6 +102,15 @@ class Game {
         // _openCombatOverlay, cleared after _pickCombat resolves or on Esc.
         this._combatTarget = null;
 
+        // Floating damage numbers — particle list. Each entry:
+        //   { tileX, tileY, text, color, size, vx, vy, bornAt, maxAge }
+        // Particles age in real time (performance.now()) and animate
+        // independently of turn ticks via a requestAnimationFrame loop
+        // started by _spawnDamageNumber. The loop ends when the array is
+        // empty, so the game returns to its idle 4fps redraw cadence.
+        this._damageNumbers = [];
+        this._particleLoopRunning = false;
+
         // World
         this.groundItems = [];
         this.enemies = [];
@@ -897,6 +906,13 @@ class Game {
     combatAttack(enemyObj, damage) {
         const playerEntity = { name: '[Player]', isDead: () => false };
         const result = attack(playerEntity, enemyObj.entity, damage);
+        // Spawn a floating damage number at the enemy's tile. Yellow-gold
+        // for damage dealt; size scales gently with damage magnitude so
+        // big hits read big. Killed-in-one-hit gets a slightly bolder
+        // color treatment as a free emphasis on the kill moment.
+        const size = 14 + Math.min(10, Math.floor(result.damage / 5));
+        const color = result.killed ? '#ffaa22' : '#ffdd44';
+        this._spawnDamageNumber(enemyObj.x, enemyObj.y, `-${result.damage}`, color, size);
         return formatDamageNumber(result);
     }
 
@@ -904,6 +920,11 @@ class Game {
         let dmg = rawDamage;
         if (this.hasBuff('guard')) dmg = Math.max(1, Math.floor(dmg / 2));
         this.playerHp = Math.max(0, this.playerHp - dmg);
+        // Red particle at the player's tile — damage taken reads as alarm-
+        // colored. Slightly larger than damage-dealt particles so the
+        // player's own pain is more salient than the enemy's.
+        const size = 16 + Math.min(10, Math.floor(dmg / 5));
+        this._spawnDamageNumber(this.playerX, this.playerY, `-${dmg}`, '#ff4444', size);
         return dmg;
     }
 
@@ -971,6 +992,51 @@ class Game {
 
     _render() {
         this.renderer.renderFrame(this);
+    }
+
+    // ── Floating damage numbers ──────────────────────────────────────────────
+    //
+    // Spawn a particle at a tile coordinate that floats upward and fades
+    // over 600ms. Replaces the "damage as log line" pattern with "damage as
+    // visible event in the world." Called from combatAttack and
+    // applyDamageToPlayer when damage is dealt.
+    //
+    // Coordinates are tile-space (not pixel); the renderer converts to
+    // screen-space each frame so particles track the camera if the player
+    // moves mid-particle (rare but possible during animation overlap).
+
+    _spawnDamageNumber(tileX, tileY, text, color, size = 16) {
+        this._damageNumbers.push({
+            tileX, tileY, text, color, size,
+            vx: 0,
+            vy: -40, // pixels per second upward
+            bornAt: performance.now(),
+            maxAge: 600,
+        });
+        this._ensureParticleLoop();
+    }
+
+    // Start a requestAnimationFrame loop that re-renders the game until all
+    // particles have expired. Idempotent — calling while a loop is already
+    // running is a no-op.
+    _ensureParticleLoop() {
+        if (this._particleLoopRunning) return;
+        this._particleLoopRunning = true;
+        const loop = () => {
+            // Drop expired particles up front so the renderer never sees them.
+            const now = performance.now();
+            this._damageNumbers = this._damageNumbers.filter(
+                dn => now - dn.bornAt < dn.maxAge
+            );
+            if (this._damageNumbers.length === 0) {
+                this._particleLoopRunning = false;
+                this._render(); // final clean frame with no particles
+                return;
+            }
+            this._render();
+            requestAnimationFrame(loop);
+        };
+        requestAnimationFrame(loop);
     }
 
     // ── Log ──────────────────────────────────────────────────────────────────
