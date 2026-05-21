@@ -134,9 +134,10 @@ export class Renderer {
         this._drawVignette();
 
         // Modals
-        if (game.state === 'item_overlay') this._drawItemOverlay(game);
-        if (game.state === 'item_throw_dir') this._drawThrowPrompt(game);
-        if (game.state === 'item_give_dir')  this._drawThrowPrompt(game);
+        if (game.state === 'item_overlay')    this._drawItemOverlay(game);
+        if (game.state === 'combat_overlay')  this._drawItemOverlay(game);
+        if (game.state === 'item_throw_dir')  this._drawThrowPrompt(game);
+        if (game.state === 'item_give_dir')   this._drawThrowPrompt(game);
         if (game.state === 'win') this._drawWinOverlay(game);
     }
 

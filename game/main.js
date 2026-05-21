@@ -15,15 +15,16 @@ import { escapeHtml, manhattan, clamp } from './utils.js';
 // ── States ───────────────────────────────────────────────────────────────────
 
 const STATE = {
-    SPLASH:         'splash',
-    IDLE:           'idle',           // waiting for input
-    ITEM_SELECTED:  'item_selected',  // 1-9 pressed, slot highlighted
-    ITEM_OVERLAY:   'item_overlay',   // Space pressed, showing use/throw/smash/give
-    ITEM_THROW_DIR: 'item_throw_dir', // chose Throw, waiting for direction
-    ITEM_GIVE_DIR:  'item_give_dir',  // chose Give with multiple adjacent NPCs
-    RESOLVING:      'resolving',
-    DEAD:           'dead',
-    WIN:            'win',
+    SPLASH:          'splash',
+    IDLE:            'idle',            // waiting for input
+    ITEM_SELECTED:   'item_selected',   // 1-9 pressed, slot highlighted
+    ITEM_OVERLAY:    'item_overlay',    // Space pressed, showing use/throw/smash/give
+    ITEM_THROW_DIR:  'item_throw_dir',  // chose Throw, waiting for direction
+    ITEM_GIVE_DIR:   'item_give_dir',   // chose Give with multiple adjacent NPCs
+    COMBAT_OVERLAY:  'combat_overlay',  // bumped a hostile enemy — Attack/Defend choice
+    RESOLVING:       'resolving',
+    DEAD:            'dead',
+    WIN:             'win',
 };
 
 // ── Directions ───────────────────────────────────────────────────────────────
@@ -96,6 +97,10 @@ class Game {
 
         // Item overlay options (populated when overlay shows)
         this.overlayOptions = {}; // { up: {...}, right: {...}, left: {...}, down: {...} }
+
+        // Combat overlay target — the enemy the player just bumped. Set by
+        // _openCombatOverlay, cleared after _pickCombat resolves or on Esc.
+        this._combatTarget = null;
 
         // World
         this.groundItems = [];
@@ -254,6 +259,25 @@ class Game {
                 return;
             }
 
+            // ── COMBAT_OVERLAY: just bumped a hostile, pick how to engage ──
+            // Up/Right/Left/Down (or WASD) routes to the chosen action.
+            // Escape backs out without consuming a turn — important so a
+            // mistaken bump doesn't lock the player into combat.
+            if (this.state === STATE.COMBAT_OVERLAY) {
+                e.preventDefault();
+                if (e.code === 'ArrowUp'    || e.code === 'KeyW') { this._pickCombat('up');    return; }
+                if (e.code === 'ArrowRight' || e.code === 'KeyD') { this._pickCombat('right'); return; }
+                if (e.code === 'ArrowDown'  || e.code === 'KeyS') { this._pickCombat('down');  return; }
+                if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { this._pickCombat('left');  return; }
+                if (e.code === 'Escape') {
+                    this.state = STATE.IDLE;
+                    this._combatTarget = null;
+                    this._render();
+                    return;
+                }
+                return;
+            }
+
             // ── ITEM_OVERLAY: pick an option ──
             if (this.state === STATE.ITEM_OVERLAY) {
                 e.preventDefault();
@@ -387,23 +411,21 @@ class Game {
             // HOSTILE — are unwalkable but unattackable. Bumping them is a
             // silent no-op (same as bumping a wall). Their adjacency bark
             // mechanic delivers any dialogue when the player moves adjacent
-            // from another direction. This protects Carrion and any future
-            // non-hostile NPC from being one-shotted by an accidental bump.
-            // 'HOSTILE' string matches the STATE constant in npc.js.
+            // from another direction.
             if (enemy.behavior && !enemy.behavior.includes('HOSTILE')) {
                 return; // silent, no turn advance
             }
 
-            const weapon = this.equipment.weapon;
-            if (weapon) {
-                const result = this.combatAttack(enemy, weapon.damage);
-                this._log(`[${weapon.name} hits ${enemy.entity.name} — ${result}]`);
-            } else {
-                this._log('[No weapon — punched for 1]');
-                enemy.entity.takeDamage(1);
-            }
-            this._render(); // show facing change
-            this._advanceWorld();
+            // Bumping a hostile enemy opens the combat overlay rather than
+            // attacking immediately. The overlay lets the player choose
+            // Attack, Defend, or back out — turning a reflexive bump into a
+            // deliberate decision. The previous behavior (instant attack on
+            // bump) became too thin once the disposition system created
+            // contexts where the player might want to defuse instead of
+            // commit. Esc from the overlay backs out without consuming the
+            // turn — protects against accidental bumps.
+            this._openCombatOverlay(enemy);
+            this._render();
             return;
         }
 
@@ -669,6 +691,87 @@ class Game {
             return;
         }
         this._doGive(recipient);
+    }
+
+    // ── Combat Overlay ───────────────────────────────────────────────────────
+    //
+    // When the player bumps a hostile enemy, instead of an immediate attack
+    // a four-direction overlay appears: Up=Attack, Left=Defend. The other
+    // two slots are reserved for Phase B additions (Throw, Give quick-paths
+    // that pre-target the bumped enemy). For Phase A, Attack is the default
+    // commit, Defend adds a one-turn Guard buff, Esc backs out without
+    // consuming a turn.
+    //
+    // Reuses the existing _drawItemOverlay rendering by populating the same
+    // game.overlayOptions object — the renderer doesn't care whether the
+    // menu is for items or combat, just what options to draw.
+
+    _openCombatOverlay(enemy) {
+        this._combatTarget = enemy;
+        this.overlayOptions = {};
+
+        // Up = Attack — commit to bump-attacking with the equipped weapon.
+        // Label includes the weapon name so the player sees what they're
+        // about to swing.
+        const weapon = this.equipment.weapon;
+        const attackLabel = weapon
+            ? `Attack (${weapon.name.replace(/[\[\]]/g, '')})`
+            : 'Punch';
+        this.overlayOptions.up = { label: attackLabel, action: 'attack' };
+
+        // Left = Defend — adds Guard buff for one turn, advances world.
+        // The Guard buff halves incoming damage (existing buff in main.js
+        // applyDamageToPlayer logic).
+        this.overlayOptions.left = { label: 'Defend', action: 'defend' };
+
+        // Right and Down reserved for Phase B (Throw, Give quick-paths).
+        // Player can still use the existing item-overlay flow to throw or
+        // give — Esc out of this menu and use 1-9 + Space.
+
+        this.state = STATE.COMBAT_OVERLAY;
+    }
+
+    _pickCombat(direction) {
+        const opt = this.overlayOptions[direction];
+        if (!opt) return; // no option in that direction — ignore the keypress
+
+        const enemy = this._combatTarget;
+        if (!enemy || !enemy.entity.isAlive()) {
+            // Target died (e.g., DOT, or weird race condition) — close menu
+            // without consuming a turn.
+            this.state = STATE.IDLE;
+            this._combatTarget = null;
+            this._render();
+            return;
+        }
+
+        switch (opt.action) {
+            case 'attack': {
+                const weapon = this.equipment.weapon;
+                if (weapon) {
+                    const result = this.combatAttack(enemy, weapon.damage);
+                    this._log(`[${weapon.name} hits ${enemy.entity.name} — ${result}]`);
+                } else {
+                    this._log('[No weapon — punched for 1]');
+                    enemy.entity.takeDamage(1);
+                }
+                this._combatTarget = null;
+                this.state = STATE.IDLE;
+                this._advanceWorld();
+                return;
+            }
+            case 'defend': {
+                // Guard for 2 turns so the buff covers the upcoming enemy
+                // turn (buffs tick down at end of _advanceWorld). One turn
+                // would expire before the enemy hits.
+                this.addBuff('guard', 'Guard', 2, 'buff');
+                this._log('[Bracing — incoming damage halved.]');
+                this._combatTarget = null;
+                this.state = STATE.IDLE;
+                this._advanceWorld();
+                return;
+            }
+        }
     }
 
     // ── World Advance (after any action) ─────────────────────────────────────
