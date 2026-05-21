@@ -159,7 +159,7 @@ function tickCarrying(game, npc) {
             : npc.carrying.type;
         chest.contents.push({ type: itemType, source: npc.id });
         npc.carrying = null;
-        return `[${npc.type} drops a ${itemType} into the chest.]`;
+        return `[A ${npc.type} drops a ${itemType} into the chest.]`;
     }
 
     // Not adjacent — step toward chest
@@ -191,7 +191,7 @@ function tickFindingItem(game, npc) {
         npc.carrying = target.type;
         const idx = game.groundItems.indexOf(target);
         if (idx >= 0) game.groundItems.splice(idx, 1);
-        return `[${npc.type} picks up a ${target.type}.]`;
+        return `[A ${npc.type} pockets a ${target.type}.]`;
     }
 
     // Step toward it

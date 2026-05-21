@@ -206,10 +206,19 @@ export class Renderer {
             ctx.lineWidth = 1;
             ctx.strokeRect(px + 6, py + 10, TILE_PX - 12, TILE_PX - 16);
 
-            // Contents indicator (gold pip in the lid)
+            // Contents indicator — up to three gold pips along the lid, one
+            // per item up to a visual cap of 3. Lets the player watch the
+            // chest fill as workers deposit, without needing to read the log.
             if (c.contents.length > 0) {
+                const pips = Math.min(3, c.contents.length);
                 ctx.fillStyle = '#ffdd44';
-                ctx.fillRect(px + TILE_PX / 2 - 2, py + 11, 4, 4);
+                const pipSize = 3;
+                const pipGap = 2;
+                const totalWidth = pips * pipSize + (pips - 1) * pipGap;
+                const startX = px + (TILE_PX - totalWidth) / 2;
+                for (let i = 0; i < pips; i++) {
+                    ctx.fillRect(startX + i * (pipSize + pipGap), py + 11, pipSize, pipSize);
+                }
             }
         }
     }

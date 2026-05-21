@@ -370,6 +370,17 @@ class Game {
         // Bump attack?
         const enemy = this.enemies.find(e => e.entity.isAlive() && e.x === nx && e.y === ny);
         if (enemy) {
+            // Non-hostile NPCs — those with a behavior whitelist that omits
+            // HOSTILE — are unwalkable but unattackable. Bumping them is a
+            // silent no-op (same as bumping a wall). Their adjacency bark
+            // mechanic delivers any dialogue when the player moves adjacent
+            // from another direction. This protects Carrion and any future
+            // non-hostile NPC from being one-shotted by an accidental bump.
+            // 'HOSTILE' string matches the STATE constant in npc.js.
+            if (enemy.behavior && !enemy.behavior.includes('HOSTILE')) {
+                return; // silent, no turn advance
+            }
+
             const weapon = this.equipment.weapon;
             if (weapon) {
                 const result = this.combatAttack(enemy, weapon.damage);
