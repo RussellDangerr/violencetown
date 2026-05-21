@@ -26,8 +26,8 @@
         0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
     ],
     "enemies": [
-        { "id": "e1", "type": "Violet Fungus", "x": 12, "y": 9,  "hp": 25, "damage": 5, "disposition": -30, "flipThreshold": 25,  "bribeable": true, "values": { "soap": 8,  "rock": 5, "bandage": 4, "pipe": 6 }, "behavior": ["IDLE", "WANDER"], "homeRegion": "soap-mine", "wanderRadius": 3, "wanderEveryTurns": 2 },
-        { "id": "e2", "type": "Violet Fungus", "x": 13, "y": 11, "hp": 25, "damage": 5, "disposition": -30, "flipThreshold": 25,  "bribeable": true, "values": { "soap": 8,  "rock": 5, "bandage": 4, "pipe": 6 } },
+        { "id": "e1", "type": "Violet Fungus", "x": 12, "y": 9,  "hp": 25, "damage": 5, "disposition": -30, "flipThreshold": 25,  "bribeable": true, "values": { "soap": 8,  "rock": 5, "bandage": 4, "pipe": 6 }, "behavior": ["IDLE", "WANDER", "WORKING"], "homeRegion": "soap-mine", "wanderRadius": 3, "wanderEveryTurns": 2, "wantsItems": ["rock", "soap"], "depositsTo": "soap-mine-chest" },
+        { "id": "e2", "type": "Violet Fungus", "x": 13, "y": 11, "hp": 25, "damage": 5, "disposition": -30, "flipThreshold": 25,  "bribeable": true, "values": { "soap": 8,  "rock": 5, "bandage": 4, "pipe": 6 }, "behavior": ["IDLE", "WANDER", "WORKING"], "homeRegion": "soap-mine", "wanderRadius": 3, "wanderEveryTurns": 3, "wantsItems": ["rock", "soap"], "depositsTo": "soap-mine-chest" },
         { "id": "e3", "type": "Red Fungus",    "x": 8,  "y": 4,  "hp": 30, "damage": 6, "disposition": -50, "flipThreshold": 40,  "bribeable": true, "values": { "pipe": 12, "rock": 6, "soap": 3,    "bandage": 5 } },
         { "id": "e4", "type": "Red Fungus",    "x": 16, "y": 7,  "hp": 30, "damage": 6, "disposition": -50, "flipThreshold": 40,  "bribeable": true, "values": { "pipe": 12, "rock": 6, "soap": 3,    "bandage": 5 } },
         { "id": "e5", "type": "Ghost Fungus",  "x": 5,  "y": 7,  "hp": 20, "damage": 4, "sightRange": 12, "disposition": -50, "flipThreshold": 60, "bribeable": false, "values": { "bandage": 8, "soap": 4, "rock": 2, "pipe": 3 } },

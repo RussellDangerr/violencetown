@@ -30,6 +30,9 @@ export class Enemy {
         homeRegion = null,
         wanderRadius = 3,
         wanderEveryTurns = 4,
+        // WORKING-state fields (only meaningful if behavior includes WORKING)
+        wantsItems = null,
+        depositsTo = null,
         // Disposition fields (read by future feature/give-action; inert here)
         disposition = null,
         flipThreshold = null,
@@ -51,10 +54,13 @@ export class Enemy {
         this.homeRegion       = homeRegion;
         this.wanderRadius     = wanderRadius;
         this.wanderEveryTurns = wanderEveryTurns;
+        this.wantsItems       = wantsItems;
+        this.depositsTo       = depositsTo;
 
         // FSM runtime state (initialized lazily in tickNpcState)
         this.fsmState         = null;
         this._lastWanderTurn  = 0;
+        this.carrying         = null; // string item-type when carrying, null otherwise
 
         // Disposition data — stored but not yet read. See plans/give-action-
         // and-disposition.md for the feature that consumes these fields.
