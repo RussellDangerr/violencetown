@@ -78,7 +78,12 @@ export function resolveEnemyTurns(game) {
         }
 
         // Chase: greedy move toward player
-        const bestMove = getGreedyStep(game, enemy);
+        const bestMove = getGreedyStep(
+            game,
+            { x: enemy.x, y: enemy.y },
+            { x: game.playerX, y: game.playerY },
+            { self: enemy }
+        );
         if (bestMove) {
             enemy.x = bestMove.x;
             enemy.y = bestMove.y;
@@ -89,31 +94,46 @@ export function resolveEnemyTurns(game) {
 }
 
 // ── Greedy single-step pathfinding ───────────────────────────────────────────
+//
+// Generalized in feature/sewer-npc-skeleton (step 1): any entity can call this
+// to take one step toward any destination. Behavior for the existing chase use
+// is identical — the call site passes {self: enemy} so the entity skips its own
+// tile in the occupancy check.
+//
+// options:
+//   - self:        the entity moving (skipped in occupancy check). Optional.
+//   - avoidPlayer: if true (default), do not step onto the player's tile.
+//                  Workers and other non-hostile pathing should leave this true;
+//                  set false only if you specifically want to allow tile-overlap
+//                  with the player (no current use case).
 
-function getGreedyStep(game, enemy) {
+export function getGreedyStep(game, from, to, options = {}) {
+    const { self = null, avoidPlayer = true } = options;
+
     const candidates = [
-        { x: enemy.x - 1, y: enemy.y },
-        { x: enemy.x + 1, y: enemy.y },
-        { x: enemy.x, y: enemy.y - 1 },
-        { x: enemy.x, y: enemy.y + 1 },
+        { x: from.x - 1, y: from.y },
+        { x: from.x + 1, y: from.y },
+        { x: from.x, y: from.y - 1 },
+        { x: from.x, y: from.y + 1 },
     ];
 
-    let bestDist = manhattan(enemy.x, enemy.y, game.playerX, game.playerY);
+    let bestDist = manhattan(from.x, from.y, to.x, to.y);
     let best = null;
 
     for (const c of candidates) {
         if (!game.map.isWalkable(c.x, c.y)) continue;
 
-        // Don't step on other living enemies
+        // Don't step on other living enemies (or self if for some reason
+        // a duplicate-position entity exists in game.enemies)
         const occupied = game.enemies.some(
-            e => e !== enemy && e.entity.isAlive() && e.x === c.x && e.y === c.y
+            e => e !== self && e.entity.isAlive() && e.x === c.x && e.y === c.y
         );
         if (occupied) continue;
 
-        // Don't step on player
-        if (c.x === game.playerX && c.y === game.playerY) continue;
+        // Don't step on player (unless explicitly allowed)
+        if (avoidPlayer && c.x === game.playerX && c.y === game.playerY) continue;
 
-        const d = manhattan(c.x, c.y, game.playerX, game.playerY);
+        const d = manhattan(c.x, c.y, to.x, to.y);
         if (d < bestDist) {
             bestDist = d;
             best = c;
