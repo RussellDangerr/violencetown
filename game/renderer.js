@@ -159,7 +159,7 @@ export class Renderer {
 
         // Modals
         if (game.state === 'item_overlay')    this._drawItemOverlay(game);
-        if (game.state === 'combat_overlay')  this._drawItemOverlay(game);
+        if (game.state === 'radial_menu')     this._drawRadialMenu(game);
         if (game.state === 'item_throw_dir')  this._drawThrowPrompt(game);
         if (game.state === 'item_give_dir')   this._drawThrowPrompt(game);
         if (game.state === 'win') this._drawWinOverlay(game);
@@ -336,6 +336,30 @@ export class Renderer {
                 ctx.fillRect(bx, by, bw, bh);
                 ctx.fillStyle = UI.hpRed;
                 ctx.fillRect(bx, by, bw * frac, bh);
+
+                // Debuff / buff badges — one-letter colored markers stacked
+                // horizontally above the HP bar. Buffs (positive) show in
+                // UI.buff green; debuffs (negative) show in UI.debuff red.
+                // Letter = first character of the buff name uppercased
+                // (Blind → 'B', future Poison → 'P', Stun → 'S').
+                if (e.buffs && e.buffs.length > 0) {
+                    const badgeY = py - 16;
+                    let badgeX = px + 2;
+                    ctx.font = 'bold 9px monospace';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    for (const b of e.buffs) {
+                        // Background pill — black so the colored letter stays
+                        // readable over any sprite underneath
+                        ctx.fillStyle = '#000000cc';
+                        ctx.fillRect(badgeX, badgeY - 5, 9, 10);
+                        ctx.fillStyle = b.type === 'buff' ? UI.buff : UI.debuff;
+                        ctx.fillText((b.name?.[0] ?? '?').toUpperCase(), badgeX + 4.5, badgeY);
+                        badgeX += 11;
+                    }
+                    ctx.textAlign = 'left';
+                    ctx.textBaseline = 'alphabetic';
+                }
             } else {
                 // Corpse — gray tint overlay turns the sprite into a faded
                 // version of itself, marking it as "defeated" without
@@ -695,6 +719,196 @@ export class Renderer {
             ctx.font = 'bold 12px monospace';
             ctx.fillText(`${arr[dir]} ${opt.label}`, px + 8, py + 21);
         }
+        ctx.globalAlpha = prevAlpha;
+    }
+
+    // ── Radial Menu (Omnitrix-style combat wheel) ────────────────────────────
+    //
+    // Six-slice inner wheel + on-demand outer arc for sub-options. The active
+    // slice (game.radialInnerIndex) gets a gold highlight; if it's a category
+    // with sub-options (Throw / Give / Skill), the outer arc renders showing
+    // those options laid out along the same hemisphere as the inner slice.
+    // When game.radialDrilled is true, the cursor is on the outer arc and the
+    // sub-slice gets the highlight instead.
+
+    _drawRadialMenu(game) {
+        const { ctx, half } = this;
+        const cx = half * TILE_PX + TILE_PX / 2;
+        const cy = half * TILE_PX + TILE_PX / 2;
+
+        // Slide-in animation (Phase D convention — 80ms ease-in opacity)
+        const elapsed = performance.now() - (game._overlayOpenedAt ?? 0);
+        const t = Math.min(1, elapsed / 80);
+
+        // Slice order kept in sync with main.js RADIAL_SLICES module const.
+        // Renderer keeps its own copy because the canvas drawing layer
+        // shouldn't import from the game-logic module.
+        const slices = ['Attack', 'Skill', 'Throw', 'Give', 'Run', 'Defend'];
+        const N = slices.length;
+        const sliceAngle = (Math.PI * 2) / N;
+
+        // Inner wheel: radius from 36 (just outside the 32px player tile) to 80
+        const rInner0 = 36;
+        const rInner1 = 80;
+        // Outer arc (sub-wheel): radius from 84 to 120
+        const rOuter0 = 84;
+        const rOuter1 = 120;
+
+        // Helper: center angle of slice i in the wheel's LOCAL frame, with 12
+        // o'clock = -π/2 in canvas coords (y axis flipped, angles clockwise).
+        // The wheel's outer rotation transform maps local → world.
+        const sliceCenterAngle = (i) => i * sliceAngle - Math.PI / 2;
+
+        const prevAlpha = ctx.globalAlpha;
+        ctx.globalAlpha = t;
+
+        // Current rotation from the ease-out lerp. Game owns the math so
+        // animation state is single-sourced.
+        const innerRotation = game._currentRadialRotation
+            ? game._currentRadialRotation()
+            : -sliceAngle * (game.radialInnerIndex ?? 0);
+
+        // ── Inner wheel (slices + labels) ────────────────────────────────────
+        // Wrap the entire wheel draw in a rotation transform so the wheel
+        // itself spins around the player center. Labels rotate WITH their
+        // slices via per-label ctx.rotate — combined with the wheel rotation,
+        // the label of the slice currently at 12 o'clock ends up upright
+        // and the slice opposite (6 o'clock) is upside-down. That's the
+        // chosen design ("Rotate with the wheel").
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(innerRotation);
+        ctx.translate(-cx, -cy);
+
+        // Draw slice wedges (local frame — the rotate above maps them to world)
+        for (let i = 0; i < N; i++) {
+            const a0 = sliceCenterAngle(i) - sliceAngle / 2;
+            const a1 = sliceCenterAngle(i) + sliceAngle / 2;
+            const isActive = !game.radialDrilled && i === game.radialInnerIndex;
+
+            ctx.beginPath();
+            ctx.arc(cx, cy, rInner1, a0, a1);
+            ctx.arc(cx, cy, rInner0, a1, a0, true);
+            ctx.closePath();
+            ctx.fillStyle = isActive ? UI.gold : UI.panelBg;
+            ctx.fill();
+            ctx.strokeStyle = UI.panelBorder;
+            ctx.lineWidth = isActive ? 3 : 1;
+            ctx.stroke();
+        }
+
+        // Draw slice labels, each with a per-label rotation so the active
+        // slice's text is upright when it lands at 12 o'clock under the
+        // pointer. Math: label-i's local rotation = i*sliceAngle. Combined
+        // with the wheel's world rotation R = -activeIndex*sliceAngle, the
+        // total world rotation of label-i is (i - activeIndex)*sliceAngle —
+        // which is 0 (upright) when i == activeIndex.
+        ctx.fillStyle = UI.text;
+        ctx.font = 'bold 11px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const rLabel = (rInner0 + rInner1) / 2;
+        for (let i = 0; i < N; i++) {
+            const ang = sliceCenterAngle(i);
+            const lx = cx + Math.cos(ang) * rLabel;
+            const ly = cy + Math.sin(ang) * rLabel;
+            ctx.save();
+            ctx.translate(lx, ly);
+            ctx.rotate(i * sliceAngle); // per-label rotation (see math comment)
+            ctx.fillText(slices[i], 0, 0);
+            ctx.restore();
+        }
+
+        ctx.restore(); // pop inner wheel rotation
+
+        // ── Sub-wheel (outer arc) — same rotating-wheel treatment ────────────
+        const cat = slices[game.radialInnerIndex];
+        const subCapable = cat === 'Attack' || cat === 'Throw' || cat === 'Give' || cat === 'Skill';
+        if (subCapable) {
+            const subOptions = game._radialSubItems ? game._radialSubItems(cat) : [];
+            const subLabels = subOptions.length > 0
+                ? subOptions.map(o => o.label)
+                : ['—'];
+            const subItems = subOptions;
+
+            const M = subLabels.length;
+            // Sub-arc slice size — kept in sync with main.js _animateSubRotation
+            // so the rotation math matches the layout math exactly.
+            const span = Math.min(M * sliceAngle, Math.PI);
+            const subSliceAngle = span / M;
+            // Sub-slice layout (parallel to inner wheel): slice j is centered
+            // at angle -π/2 + j*subSliceAngle in the LOCAL frame. With
+            // subRotation = -subSliceAngle * subIndex applied, the SELECTED
+            // sub-slice lands at -π/2 (12 o'clock) under the pointer.
+            const subCenter = (j) => -Math.PI / 2 + j * subSliceAngle;
+
+            const subRotation = game._currentRadialSubRotation
+                ? game._currentRadialSubRotation()
+                : -subSliceAngle * (game.radialSubIndex?.[cat] ?? 0);
+
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(subRotation);
+            ctx.translate(-cx, -cy);
+
+            // Sub-wheel wedges
+            for (let j = 0; j < M; j++) {
+                const a0 = subCenter(j) - subSliceAngle / 2;
+                const a1 = subCenter(j) + subSliceAngle / 2;
+                const isSubActive = game.radialDrilled && j === (game.radialSubIndex?.[cat] ?? 0);
+
+                ctx.beginPath();
+                ctx.arc(cx, cy, rOuter1, a0, a1);
+                ctx.arc(cx, cy, rOuter0, a1, a0, true);
+                ctx.closePath();
+                ctx.fillStyle = isSubActive ? UI.gold : (subItems.length === 0 ? UI.panelBgDark : UI.panelBg);
+                ctx.fill();
+                ctx.strokeStyle = UI.panelBorder;
+                ctx.lineWidth = isSubActive ? 3 : 1;
+                ctx.stroke();
+            }
+
+            // Sub-wheel labels — same per-label upright-at-pointer math as
+            // the inner wheel: label-j gets local rotation j*subSliceAngle so
+            // the selected sub-slice's text is upright at 12 o'clock.
+            ctx.fillStyle = subItems.length === 0 ? UI.textLight : UI.text;
+            ctx.font = subItems.length === 0 ? '11px monospace' : 'bold 10px monospace';
+            const rSubLabel = (rOuter0 + rOuter1) / 2;
+            for (let j = 0; j < M; j++) {
+                const ang = subCenter(j);
+                const lx = cx + Math.cos(ang) * rSubLabel;
+                const ly = cy + Math.sin(ang) * rSubLabel;
+                ctx.save();
+                ctx.translate(lx, ly);
+                ctx.rotate(j * subSliceAngle);
+                ctx.fillText(subLabels[j], 0, 0);
+                ctx.restore();
+            }
+
+            ctx.restore(); // pop sub-wheel rotation
+        }
+
+        // ── Static pointer triangle at 12 o'clock (OUTSIDE any rotation) ────
+        // Small gold triangle pointing DOWN at the wheel, anchored above the
+        // wheel's top edge. Drawn after restoring rotations so it never spins
+        // with the wheel — its fixed position is what makes the spinning-wheel
+        // metaphor work.
+        const tipY = cy - rInner1 - 4;
+        const baseY = cy - rInner1 - 14;
+        ctx.beginPath();
+        ctx.moveTo(cx, tipY);            // tip pointing down at the wheel
+        ctx.lineTo(cx - 7, baseY);       // top-left
+        ctx.lineTo(cx + 7, baseY);       // top-right
+        ctx.closePath();
+        ctx.fillStyle = UI.gold;
+        ctx.fill();
+        ctx.strokeStyle = UI.panelBorder;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Restore default text alignment for whatever renders next
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
         ctx.globalAlpha = prevAlpha;
     }
 
