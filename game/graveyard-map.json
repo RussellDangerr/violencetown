@@ -27,6 +27,6 @@
         { "type": "soap", "x": 3, "y": 4 }
     ],
     "transitions": [
-        { "x": 7, "y": 13, "toMap": "town-map.json", "toX": 20, "toY": 1, "label": "[Back to TOWN]" }
+        { "x": 7, "y": 13, "toMap": "town-map.json", "toX": 8, "toY": 1, "label": "[Back to TOWN]" }
     ]
 }

@@ -78,6 +78,6 @@
         { "id": "soap-mine-chest", "type": "chest", "x": 10, "y": 9, "contents": ["bandage"] }
     ],
     "transitions": [
-        { "x": 0, "y": 10, "toMap": "town-map.json", "toX": 20, "toY": 23, "label": "[Climb out of the sewer]" }
+        { "x": 0, "y": 10, "toMap": "town-map.json", "toX": 8, "toY": 11, "label": "[Climb out of the sewer]" }
     ]
 }
