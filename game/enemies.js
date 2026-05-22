@@ -88,6 +88,31 @@ export class Enemy {
         this.bribeable     = bribeable;
         this.values        = values;
         this.onFlip        = onFlip;
+
+        // Debuffs / buffs — symmetric with Game.buffs[] on the player side.
+        // Used by Poke (applies Blind), Poison (DoT, future), Stun (skip
+        // turn, future), etc. Combat-side effect reads in resolveEnemyTurns
+        // (e.g., enemy.hasBuff('blind') halves outgoing damage).
+        this.buffs = [];
+    }
+
+    // Buff management — mirrors Game.addBuff / removeBuff / hasBuff /
+    // _tickBuffs at main.js:147-167 so both sides of combat use the same
+    // shape. Refreshing an existing buff resets its turn counter rather than
+    // stacking — same semantics as the player side.
+    addBuff(id, name, turns, type = 'debuff', extra = {}) {
+        const existing = this.buffs.find(b => b.id === id);
+        if (existing) { existing.turns = turns; return; }
+        this.buffs.push({ id, name, turns, type, ...extra });
+    }
+
+    removeBuff(id) { this.buffs = this.buffs.filter(b => b.id !== id); }
+    hasBuff(id)    { return this.buffs.some(b => b.id === id); }
+
+    tickBuffs() {
+        const expired = [];
+        for (const b of this.buffs) { b.turns--; if (b.turns <= 0) expired.push(b); }
+        for (const b of expired) this.removeBuff(b.id);
     }
 }
 
@@ -133,6 +158,12 @@ export function resolveEnemyTurns(game) {
     for (const enemy of game.enemies) {
         if (!enemy.entity.isAlive()) continue;
 
+        // Tick this enemy's buffs/debuffs (Blind, future Poison/Stun/Slow)
+        // BEFORE any FSM/legacy logic runs. Expired buffs get removed; the
+        // effect of an active buff reads later in the turn (e.g., Blind
+        // halves the damage at the attack site).
+        enemy.tickBuffs();
+
         // Bark check — independent of FSM/legacy path. Any enemy with a
         // `barks` array emits one log line every `barkEveryTurns` turns
         // from spawn, round-robin through the bark list. Barks are pure
@@ -171,8 +202,15 @@ export function resolveEnemyTurns(game) {
         // stagger, event word, screen shake on big hits) replaces the
         // attack log line. The player-death case is handled by the death-
         // screen flow in main.js, which has its own messaging.
+        //
+        // Blind debuff halves outgoing damage (deterministic — no RNG, per
+        // combat.js's "no miss" contract). The Math.max(1, ...) clamp
+        // mirrors combat.js's "at least 1 always lands" rule.
         if (dist <= 1) {
-            game.applyDamageToPlayer(enemy.damage);
+            const dmg = enemy.hasBuff('blind')
+                ? Math.max(1, Math.floor(enemy.damage * 0.5))
+                : enemy.damage;
+            game.applyDamageToPlayer(dmg);
             continue;
         }
 

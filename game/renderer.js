@@ -336,6 +336,30 @@ export class Renderer {
                 ctx.fillRect(bx, by, bw, bh);
                 ctx.fillStyle = UI.hpRed;
                 ctx.fillRect(bx, by, bw * frac, bh);
+
+                // Debuff / buff badges — one-letter colored markers stacked
+                // horizontally above the HP bar. Buffs (positive) show in
+                // UI.buff green; debuffs (negative) show in UI.debuff red.
+                // Letter = first character of the buff name uppercased
+                // (Blind → 'B', future Poison → 'P', Stun → 'S').
+                if (e.buffs && e.buffs.length > 0) {
+                    const badgeY = py - 16;
+                    let badgeX = px + 2;
+                    ctx.font = 'bold 9px monospace';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    for (const b of e.buffs) {
+                        // Background pill — black so the colored letter stays
+                        // readable over any sprite underneath
+                        ctx.fillStyle = '#000000cc';
+                        ctx.fillRect(badgeX, badgeY - 5, 9, 10);
+                        ctx.fillStyle = b.type === 'buff' ? UI.buff : UI.debuff;
+                        ctx.fillText((b.name?.[0] ?? '?').toUpperCase(), badgeX + 4.5, badgeY);
+                        badgeX += 11;
+                    }
+                    ctx.textAlign = 'left';
+                    ctx.textBaseline = 'alphabetic';
+                }
             } else {
                 // Corpse — gray tint overlay turns the sprite into a faded
                 // version of itself, marking it as "defeated" without

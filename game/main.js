@@ -588,17 +588,15 @@ class Game {
         this.overlayOptions.right = { label: 'Throw', action: 'throw' };
 
         // Adjacent NPCs — partitioned into hostile-eligible vs non-hostile.
-        // The behavior whitelist primitive from feature/sewer-npc-skeleton
-        // is the source of truth here: an NPC without a behavior field is
-        // assumed to be a legacy hostile (back-compat with the original
-        // chasing fungi); an NPC with a behavior list is hostile only if
-        // HOSTILE appears in it.
+        // Smash uses the canonical _adjacentHostiles helper so the gate
+        // semantics live in one place. Give targets ALL adjacent NPCs
+        // (including non-hostile ones like Carrion), so it uses the broader
+        // inline filter — Give is the one combat-adjacent action that
+        // legitimately targets friendlies.
         const adjAll = this.enemies.filter(e =>
             e.entity.isAlive() && manhattan(e.x, e.y, this.playerX, this.playerY) === 1
         );
-        const adjHostile = adjAll.filter(e =>
-            !e.behavior || e.behavior.includes('HOSTILE')
-        );
+        const adjHostile = this._adjacentHostiles();
 
         // Left = smash (only if adjacent HOSTILE-eligible enemy — prevents
         // smashing Carrion-like non-hostiles, the same way bump-attack now
@@ -642,14 +640,8 @@ class Game {
                 return; // don't advance yet
             case 'smash': {
                 // Melee smash on nearest adjacent HOSTILE-eligible enemy.
-                // Filters non-hostile NPCs (Carrion-type) out of the target
-                // pool — the bump-attack fix from step 7 extended to item-
-                // based attacks.
-                const adjHostile = this.enemies.filter(e =>
-                    e.entity.isAlive()
-                    && manhattan(e.x, e.y, this.playerX, this.playerY) === 1
-                    && (!e.behavior || e.behavior.includes('HOSTILE'))
-                );
+                // Friendly filtering routed through the canonical helper.
+                const adjHostile = this._adjacentHostiles();
                 adjHostile.sort((a, b) => a.entity.hp - b.entity.hp);
                 if (adjHostile.length > 0) {
                     const dmg = 10 * stack.count;
@@ -975,6 +967,7 @@ class Game {
             return [
                 { label: 'Basic',  key: 'basic'  },
                 { label: 'Cleave', key: 'cleave' },
+                { label: 'Poke',   key: 'poke'   },
             ];
         }
         if (cat === 'Throw') {
@@ -1039,14 +1032,9 @@ class Game {
         // The 0.75× multiplier is Caelan's call from the design discussion —
         // tradeoff is targets vs. per-target damage.
         if (cat === 'Attack') {
-            if (sub.key === 'basic') {
-                this._radialAttack(enemy);
-                return;
-            }
-            if (sub.key === 'cleave') {
-                this._radialCleave();
-                return;
-            }
+            if (sub.key === 'basic')  { this._radialAttack(enemy); return; }
+            if (sub.key === 'cleave') { this._radialCleave();      return; }
+            if (sub.key === 'poke')   { this._radialPoke(enemy);   return; }
             return; // unknown attack key — defensive no-op
         }
 
@@ -1073,14 +1061,9 @@ class Game {
     }
 
     _radialCleave() {
-        // Hit every cardinal-adjacent hostile-eligible enemy. Filters out
-        // non-hostile NPCs the same way bump-attack does (behavior whitelist
-        // gate from feature/sewer-npc-skeleton).
-        const hostiles = this.enemies.filter(e =>
-            e.entity.isAlive()
-            && manhattan(e.x, e.y, this.playerX, this.playerY) === 1
-            && (!e.behavior || e.behavior.includes('HOSTILE'))
-        );
+        // Hit every cardinal-adjacent hostile-eligible enemy. Friendly NPCs
+        // (Carrion, flipped allies) are filtered out by the canonical helper.
+        const hostiles = this._adjacentHostiles();
         const weapon = this.equipment.weapon;
         const baseDmg = weapon ? weapon.damage : 1;
         const cleaveDmg = Math.max(1, Math.floor(baseDmg * 0.75));
@@ -1102,6 +1085,45 @@ class Game {
 
         this.state = STATE.IDLE;
         this._advanceWorld();
+    }
+
+    _radialPoke(enemy) {
+        // Trade damage for guaranteed Blind. Deterministic — no RNG, matches
+        // combat.js's "no miss" contract. Effect: halved enemy outgoing damage
+        // for 2 turns (read by resolveEnemyTurns via enemy.hasBuff('blind')).
+        const weapon = this.equipment.weapon;
+        const baseDmg = weapon ? weapon.damage : 1;
+        const pokeDmg = Math.max(1, Math.floor(baseDmg * 0.5));
+
+        this.combatAttack(enemy, pokeDmg);
+        // Apply Blind. addBuff refreshes turns if already present (so a
+        // double-Poke just resets the timer to 2 — no stacking).
+        enemy.addBuff('blind', 'Blind', 2, 'debuff');
+        this._spawnEventWord(enemy.x, enemy.y, 'POKE!', '#ffaa44', 14);
+
+        this.state = STATE.IDLE;
+        this._advanceWorld();
+    }
+
+    // ── Canonical adjacent-hostile filter ────────────────────────────────────
+    //
+    // Returns cardinal-adjacent enemies that are (a) alive and (b) pass the
+    // behavior-whitelist HOSTILE gate. The gate's semantics: an enemy with
+    // no behavior array is a legacy hostile (back-compat with pre-FSM data);
+    // an enemy with a behavior array is hostile only if 'HOSTILE' appears
+    // in that array. Flipped allies (disposition flip removed HOSTILE) and
+    // dialogue NPCs like Carrion (behavior: [IDLE]) are both filtered out.
+    //
+    // Every combat verb (bump-attack, Smash, Cleave, Poke, future verbs)
+    // should route through this helper so the friendly-protection invariant
+    // can't be accidentally broken by a future verb forgetting to filter.
+
+    _adjacentHostiles() {
+        return this.enemies.filter(e =>
+            e.entity.isAlive()
+            && manhattan(e.x, e.y, this.playerX, this.playerY) === 1
+            && (!e.behavior || e.behavior.includes('HOSTILE'))
+        );
     }
 
     // ── World Advance (after any action) ─────────────────────────────────────
