@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "violencetown",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "-l", "3001", "--no-clipboard", "C:\\Users\\caela\\OneDrive\\Desktop\\violencetown\\game"],
+      "port": 3001
+    }
+  ]
+}

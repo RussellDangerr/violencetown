@@ -62,7 +62,12 @@
         { "type": "rock", "x": 11, "y": 9 },
         { "type": "rock", "x": 11, "y": 9 },
         { "type": "rock", "x": 16, "y": 8 },
-        { "type": "bandage", "x": 17, "y": 1 }
+        { "type": "bandage", "x": 17, "y": 1 },
+        { "type": "mystery_meat", "x": 3, "y": 3 },
+        { "type": "mystery_meat", "x": 16, "y": 12 },
+        { "type": "tunnel_mushroom", "x": 7, "y": 9 },
+        { "type": "tunnel_mushroom", "x": 13, "y": 4 },
+        { "type": "tunnel_mushroom", "x": 5, "y": 11 }
     ],
     "zoneName": "SEWER",
     "regions": [

@@ -44,10 +44,14 @@ const P = {
 // ── Item display colors ──────────────────────────────────────────────────────
 
 export const ITEM_COLORS = {
-    rock:    { bg: '#8a8878', letter: 'R' },
-    soap:    { bg: '#6688bb', letter: 'S' },
-    pipe:    { bg: '#707070', letter: 'P' },
-    bandage: { bg: '#bb6666', letter: 'B' },
+    rock:             { bg: '#8a8878', letter: 'R' },
+    soap:             { bg: '#6688bb', letter: 'S' },
+    pipe:             { bg: '#707070', letter: 'P' },
+    bandage:          { bg: '#bb6666', letter: 'B' },
+    boardwalk_burger: { bg: '#cc8844', letter: '🍔' },
+    mystery_meat:     { bg: '#884444', letter: 'M' },
+    tunnel_mushroom:  { bg: '#997755', letter: '🍄' },
+    hot_dog:          { bg: '#cc6633', letter: 'H' },
 };
 
 // ── Draw helpers ─────────────────────────────────────────────────────────────

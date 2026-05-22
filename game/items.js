@@ -9,43 +9,101 @@ export const ITEMS = {
     rock: {
         id: 'rock',
         name: '[Rock]',
+        description: 'A heavy chunk of sewer masonry. Better thrown than held.',
         useType: 'throw',
         equipSlot: 'sides',
         range: 4,
         damage: 15,
         consumable: true,
         fallbackColor: '#888888',
+        baseValue: 2,
     },
     soap: {
         id: 'soap',
         name: '[Soap]',
+        description: 'Industrial-grade lye bar. Cuts through sludge. The Sewer\'s most valuable commodity.',
         equipSlot: 'back',
-        equipDuration: 3,       // occupies back slot for 3 turns
+        equipDuration: 3,
         useType: 'self',
         effect: 'cure_sludge',
-        consumable: true,       // consumed on use, but still occupies slot for duration
+        consumable: true,
         fallbackColor: '#aaaaff',
+        baseValue: 15,
     },
     pipe: {
         id: 'pipe',
         name: '[Pipe]',
+        description: 'Rusty copper pipe, wrenched free from the wall. Swings like it means it.',
         equipSlot: 'weapon',
         useType: 'melee',
         range: 1,
         damage: 12,
         consumable: false,
         fallbackColor: '#666666',
+        baseValue: 8,
     },
     bandage: {
         id: 'bandage',
         name: '[Bandage]',
+        description: 'Torn fabric strip, reasonably clean. Stops the bleeding, not the pain.',
         equipSlot: 'front',
-        equipDuration: 2,       // occupies front slot for 2 turns
+        equipDuration: 2,
         useType: 'self',
         effect: 'heal',
         healAmount: 25,
         consumable: true,
         fallbackColor: '#ffaaaa',
+        baseValue: 10,
+    },
+
+    // ── Ambro (food — healing) ──────────────────────────────────────────────
+    boardwalk_burger: {
+        id: 'boardwalk_burger',
+        name: '[Boardwalk Burger]',
+        description: 'Jersey\'s house special. Grease-soaked, overcooked, perfect.',
+        category: 'ambro',
+        useType: 'self',
+        effect: 'heal',
+        healAmount: 15,
+        consumable: true,
+        fallbackColor: '#cc8844',
+        baseValue: 5,
+    },
+    mystery_meat: {
+        id: 'mystery_meat',
+        name: '[Mystery Meat]',
+        description: 'Found in the Sewer. Don\'t ask what it was. Heals more than it should.',
+        category: 'ambro',
+        useType: 'self',
+        effect: 'heal',
+        healAmount: 20,
+        consumable: true,
+        fallbackColor: '#884444',
+        baseValue: 3,
+    },
+    tunnel_mushroom: {
+        id: 'tunnel_mushroom',
+        name: '[Tunnel Mushroom]',
+        description: 'Grows where the sludge doesn\'t reach. Tastes like dirt and hope.',
+        category: 'ambro',
+        useType: 'self',
+        effect: 'heal',
+        healAmount: 10,
+        consumable: true,
+        fallbackColor: '#997755',
+        baseValue: 2,
+    },
+    hot_dog: {
+        id: 'hot_dog',
+        name: '[Hot Dog]',
+        description: 'Boardwalk classic. Been on the roller since this morning. Maybe yesterday.',
+        category: 'ambro',
+        useType: 'self',
+        effect: 'heal',
+        healAmount: 12,
+        consumable: true,
+        fallbackColor: '#cc6633',
+        baseValue: 3,
     },
 };
 
@@ -139,9 +197,13 @@ function resolveSelfUse(game, itemDef) {
         const before = game.playerHp;
         game.playerHp = Math.min(game.playerMaxHp, game.playerHp + itemDef.healAmount);
         const healed = game.playerHp - before;
+        if (healed > 0 && game._spawnDamageNumber) {
+            game._spawnDamageNumber(game.playerX, game.playerY, `+${healed}`, '#44ff88', 16);
+        }
+        const verb = itemDef.category === 'ambro' ? 'Ate' : 'Used';
         return equipMsg
             ? `${equipMsg} [Healed ${healed} HP]`
-            : `[Used ${itemDef.name} — healed ${healed} HP]`;
+            : `[${verb} ${itemDef.name} — healed ${healed} HP]`;
     }
 
     return equipMsg || `[Used ${itemDef.name}]`;

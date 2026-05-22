@@ -445,7 +445,7 @@ export class Renderer {
 
     _drawHPPanel(game) {
         const { ctx } = this;
-        const x = 6, y = 6, w = 170, h = 50;
+        const x = 6, y = 6, w = 170, h = 62;
 
         drawPanelSmall(ctx, x, y, w, h);
 
@@ -470,6 +470,11 @@ export class Renderer {
             ctx.font = '10px monospace';
             ctx.fillText(`⚔ ${name}  dmg:${wpn.damage}`, x + 8, y + 40);
         }
+
+        // Gold
+        ctx.fillStyle = UI.gold;
+        ctx.font = 'bold 10px monospace';
+        ctx.fillText(`$ ${game.gold}`, x + 8, y + 52);
     }
 
     // ── Zone Label (top center) ──────────────────────────────────────────────
@@ -535,17 +540,53 @@ export class Renderer {
         const ox = (CANVAS_PX - totalW) / 2;
         const oy = CANVAS_PX - sh - 20;
 
-        // Selected item name tooltip above hotbar
+        // Selected item tooltip above hotbar — name, description, and stats
         if (game.selectedSlot >= 0 && game.inventory[game.selectedSlot]) {
-            const itemName = game.inventory[game.selectedSlot].itemDef.name.replace(/[\[\]]/g, '');
-            const tw = itemName.length * 7 + 16;
+            const itemDef = game.inventory[game.selectedSlot].itemDef;
+            const itemName = itemDef.name.replace(/[\[\]]/g, '');
+
+            // Build stat line
+            let statLine = '';
+            if (itemDef.healAmount) statLine = `Heals ${itemDef.healAmount} HP`;
+            else if (itemDef.damage) statLine = `${itemDef.useType === 'throw' ? 'Throw' : 'Melee'} ${itemDef.damage} dmg`;
+
+            const desc = itemDef.description || '';
+            const hasDesc = desc.length > 0;
+            const hasStat = statLine.length > 0;
+            const lines = 1 + (hasDesc ? 1 : 0) + (hasStat ? 1 : 0);
+            const th = 10 + lines * 13;
+            const tw = Math.max(itemName.length * 7 + 16, hasDesc ? Math.min(desc.length * 5.5 + 16, 300) : 0, 120);
             const tx = (CANVAS_PX - tw) / 2;
-            const ty = oy - 24;
-            drawPanelSmall(ctx, tx, ty, tw, 18);
-            ctx.fillStyle = UI.text;
-            ctx.font = 'bold 10px monospace';
+            const ty = oy - th - 6;
+
+            drawPanelSmall(ctx, tx, ty, tw, th);
+
             ctx.textAlign = 'center';
-            ctx.fillText(itemName, CANVAS_PX / 2, ty + 13);
+            let lineY = ty + 13;
+
+            // Name
+            ctx.fillStyle = UI.gold;
+            ctx.font = 'bold 10px monospace';
+            ctx.fillText(itemName, CANVAS_PX / 2, lineY);
+            lineY += 13;
+
+            // Stat line
+            if (hasStat) {
+                ctx.fillStyle = itemDef.healAmount ? '#44ff88' : '#ffaa44';
+                ctx.font = '9px monospace';
+                ctx.fillText(statLine, CANVAS_PX / 2, lineY);
+                lineY += 13;
+            }
+
+            // Description
+            if (hasDesc) {
+                ctx.fillStyle = UI.dim || '#8a8070';
+                ctx.font = '9px monospace';
+                const maxChars = Math.floor((tw - 12) / 5.5);
+                const truncated = desc.length > maxChars ? desc.slice(0, maxChars - 2) + '..' : desc;
+                ctx.fillText(truncated, CANVAS_PX / 2, lineY);
+            }
+
             ctx.textAlign = 'left';
         }
 

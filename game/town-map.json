@@ -27,7 +27,12 @@
         { "type": "soap", "x": 16, "y": 7 },
         { "type": "rock", "x": 22, "y": 7 },
         { "type": "rock", "x": 22, "y": 7 },
-        { "type": "bandage", "x": 28, "y": 7 }
+        { "type": "bandage", "x": 28, "y": 7 },
+        { "type": "boardwalk_burger", "x": 8, "y": 7 },
+        { "type": "boardwalk_burger", "x": 8, "y": 7 },
+        { "type": "hot_dog", "x": 14, "y": 7 },
+        { "type": "hot_dog", "x": 14, "y": 7 },
+        { "type": "hot_dog", "x": 14, "y": 7 }
     ],
     "transitions": [
         { "x": 33, "y": 6, "toMap": "sewer-map.json", "toX": 1, "toY": 10, "label": "[Descend into the sewer]" }

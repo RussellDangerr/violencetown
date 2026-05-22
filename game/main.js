@@ -137,6 +137,9 @@ class Game {
         this.enemies = [];
         this.containers = []; // [{ id, type, x, y, contents: [...] }] — live, mutable
         this._pendingTransition = null;
+
+        // Economy
+        this.gold = 0;
     }
 
     // ── Buff System ──────────────────────────────────────────────────────────
@@ -549,9 +552,11 @@ class Game {
         // Build contextual options
         this.overlayOptions = {};
 
-        // Up = primary use (drink/apply/use)
+        // Up = primary use (eat/drink/apply/use)
         if (item.useType === 'self') {
-            const label = item.effect === 'heal' ? 'Drink' : item.effect === 'cure_sludge' ? 'Use' : 'Use';
+            let label = 'Use';
+            if (item.effect === 'heal') label = item.category === 'ambro' ? 'Eat' : 'Drink';
+            else if (item.effect === 'cure_sludge') label = 'Use';
             this.overlayOptions.up = { label, action: 'use' };
         } else {
             this.overlayOptions.up = { label: 'Use', action: 'use' };
@@ -938,9 +943,9 @@ class Game {
         const result = attack(playerEntity, enemyObj.entity, damage);
 
         // Floating damage number — Phase B
-        const size = 14 + Math.min(10, Math.floor(result.damage / 5));
+        const dmgSize = 14 + Math.min(10, Math.floor(result.damage / 5));
         const color = result.killed ? '#ffaa22' : '#ffdd44';
-        this._spawnDamageNumber(enemyObj.x, enemyObj.y, `-${result.damage}`, color, size);
+        this._spawnDamageNumber(enemyObj.x, enemyObj.y, `-${result.damage}`, color, dmgSize);
 
         // Hit flash + stagger — Phase C. Tints the enemy sprite red for
         // 100ms and offsets it 3px in the direction away from the player
@@ -974,8 +979,8 @@ class Game {
         } else {
             const hitWords = ['POW!', 'WHACK!', 'BAM!', 'SLAM!', 'CRACK!'];
             const word = hitWords[Math.floor(Math.random() * hitWords.length)];
-            const size = result.damage >= 15 ? 20 : 16;
-            this._spawnEventWord(enemyObj.x, enemyObj.y, word, '#ffaa44', size);
+            const hitSize = result.damage >= 15 ? 20 : 16;
+            this._spawnEventWord(enemyObj.x, enemyObj.y, word, '#ffaa44', hitSize);
         }
 
         return formatDamageNumber(result);
@@ -987,8 +992,8 @@ class Game {
         this.playerHp = Math.max(0, this.playerHp - dmg);
 
         // Floating damage number — Phase B
-        const size = 16 + Math.min(10, Math.floor(dmg / 5));
-        this._spawnDamageNumber(this.playerX, this.playerY, `-${dmg}`, '#ff4444', size);
+        const dmgSize = 16 + Math.min(10, Math.floor(dmg / 5));
+        this._spawnDamageNumber(this.playerX, this.playerY, `-${dmg}`, '#ff4444', dmgSize);
 
         // Hit flash + stagger on the player — Phase C. Stagger direction
         // is randomized for the player (any adjacent enemy might have
@@ -1019,8 +1024,8 @@ class Game {
         const word = this.playerHp <= 0
             ? '...!'
             : playerHitWords[Math.floor(Math.random() * playerHitWords.length)];
-        const size = dmg >= 15 ? 20 : 16;
-        this._spawnEventWord(this.playerX, this.playerY, word, '#ff5544', size);
+        const wordSize = dmg >= 15 ? 20 : 16;
+        this._spawnEventWord(this.playerX, this.playerY, word, '#ff5544', wordSize);
 
         return dmg;
     }
@@ -1074,6 +1079,7 @@ class Game {
         this.selectedSlot = -1;
         this.equipment = { weapon: WEAPONS.wooden_sword, top: null, bottom: null, front: null, back: null, sides: null };
         this._pendingTransition = null;
+        this.gold = 0;
         await this._loadMap('town-map.json');
         this.state = STATE.IDLE;
         this._log('[New game]');
