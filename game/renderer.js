@@ -730,20 +730,38 @@ export class Renderer {
         const rOuter0 = 84;
         const rOuter1 = 120;
 
-        // Helper: center angle of slice i, with 12 o'clock = -π/2 in canvas
-        // coords (y axis flipped, angles increase clockwise)
+        // Helper: center angle of slice i in the wheel's LOCAL frame, with 12
+        // o'clock = -π/2 in canvas coords (y axis flipped, angles clockwise).
+        // The wheel's outer rotation transform maps local → world.
         const sliceCenterAngle = (i) => i * sliceAngle - Math.PI / 2;
 
         const prevAlpha = ctx.globalAlpha;
         ctx.globalAlpha = t;
 
-        // ── Draw inner wheel slices ──────────────────────────────────────────
+        // Current rotation from the ease-out lerp. Game owns the math so
+        // animation state is single-sourced.
+        const innerRotation = game._currentRadialRotation
+            ? game._currentRadialRotation()
+            : -sliceAngle * (game.radialInnerIndex ?? 0);
+
+        // ── Inner wheel (slices + labels) ────────────────────────────────────
+        // Wrap the entire wheel draw in a rotation transform so the wheel
+        // itself spins around the player center. Labels rotate WITH their
+        // slices via per-label ctx.rotate — combined with the wheel rotation,
+        // the label of the slice currently at 12 o'clock ends up upright
+        // and the slice opposite (6 o'clock) is upside-down. That's the
+        // chosen design ("Rotate with the wheel").
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(innerRotation);
+        ctx.translate(-cx, -cy);
+
+        // Draw slice wedges (local frame — the rotate above maps them to world)
         for (let i = 0; i < N; i++) {
             const a0 = sliceCenterAngle(i) - sliceAngle / 2;
             const a1 = sliceCenterAngle(i) + sliceAngle / 2;
             const isActive = !game.radialDrilled && i === game.radialInnerIndex;
 
-            // Slice wedge — ring-shaped (donut sector), not full pie
             ctx.beginPath();
             ctx.arc(cx, cy, rInner1, a0, a1);
             ctx.arc(cx, cy, rInner0, a1, a0, true);
@@ -755,7 +773,12 @@ export class Renderer {
             ctx.stroke();
         }
 
-        // ── Draw inner wheel labels ──────────────────────────────────────────
+        // Draw slice labels, each with a per-label rotation so the active
+        // slice's text is upright when it lands at 12 o'clock under the
+        // pointer. Math: label-i's local rotation = i*sliceAngle. Combined
+        // with the wheel's world rotation R = -activeIndex*sliceAngle, the
+        // total world rotation of label-i is (i - activeIndex)*sliceAngle —
+        // which is 0 (upright) when i == activeIndex.
         ctx.fillStyle = UI.text;
         ctx.font = 'bold 11px monospace';
         ctx.textAlign = 'center';
@@ -765,35 +788,49 @@ export class Renderer {
             const ang = sliceCenterAngle(i);
             const lx = cx + Math.cos(ang) * rLabel;
             const ly = cy + Math.sin(ang) * rLabel;
-            ctx.fillText(slices[i], lx, ly);
+            ctx.save();
+            ctx.translate(lx, ly);
+            ctx.rotate(i * sliceAngle); // per-label rotation (see math comment)
+            ctx.fillText(slices[i], 0, 0);
+            ctx.restore();
         }
 
-        // ── Draw outer arc (sub-wheel) if active slice has sub-options ───────
+        ctx.restore(); // pop inner wheel rotation
+
+        // ── Sub-wheel (outer arc) — same rotating-wheel treatment ────────────
         const cat = slices[game.radialInnerIndex];
         const subCapable = cat === 'Attack' || cat === 'Throw' || cat === 'Give' || cat === 'Skill';
         if (subCapable) {
-            // game._radialSubItems returns Array<{label, key}> — pull labels
-            // directly. Empty list (e.g., Skill or no throwables) renders a
-            // single "—" placeholder so the wheel-shape still reads as XMB.
             const subOptions = game._radialSubItems ? game._radialSubItems(cat) : [];
             const subLabels = subOptions.length > 0
                 ? subOptions.map(o => o.label)
                 : ['—'];
-            const subItems = subOptions; // kept for the styling check below
+            const subItems = subOptions;
 
             const M = subLabels.length;
-            const activeCenter = sliceCenterAngle(game.radialInnerIndex);
-            // Sub-arc spans the same 60° arc as the inner slice — but it can
-            // also stretch up to a full half-circle if M is large. Cap span
-            // at 5 sub-slices' worth before stretching beyond the parent
-            // slice's angular footprint.
-            const span = Math.min(M * sliceAngle, Math.PI); // never more than 180°
+            // Sub-arc slice size — kept in sync with main.js _animateSubRotation
+            // so the rotation math matches the layout math exactly.
+            const span = Math.min(M * sliceAngle, Math.PI);
             const subSliceAngle = span / M;
-            const subStart = activeCenter - span / 2;
+            // Sub-slice layout (parallel to inner wheel): slice j is centered
+            // at angle -π/2 + j*subSliceAngle in the LOCAL frame. With
+            // subRotation = -subSliceAngle * subIndex applied, the SELECTED
+            // sub-slice lands at -π/2 (12 o'clock) under the pointer.
+            const subCenter = (j) => -Math.PI / 2 + j * subSliceAngle;
 
+            const subRotation = game._currentRadialSubRotation
+                ? game._currentRadialSubRotation()
+                : -subSliceAngle * (game.radialSubIndex?.[cat] ?? 0);
+
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(subRotation);
+            ctx.translate(-cx, -cy);
+
+            // Sub-wheel wedges
             for (let j = 0; j < M; j++) {
-                const a0 = subStart + j * subSliceAngle;
-                const a1 = subStart + (j + 1) * subSliceAngle;
+                const a0 = subCenter(j) - subSliceAngle / 2;
+                const a1 = subCenter(j) + subSliceAngle / 2;
                 const isSubActive = game.radialDrilled && j === (game.radialSubIndex?.[cat] ?? 0);
 
                 ctx.beginPath();
@@ -807,17 +844,43 @@ export class Renderer {
                 ctx.stroke();
             }
 
-            // Sub-wheel labels
+            // Sub-wheel labels — same per-label upright-at-pointer math as
+            // the inner wheel: label-j gets local rotation j*subSliceAngle so
+            // the selected sub-slice's text is upright at 12 o'clock.
             ctx.fillStyle = subItems.length === 0 ? UI.textLight : UI.text;
             ctx.font = subItems.length === 0 ? '11px monospace' : 'bold 10px monospace';
             const rSubLabel = (rOuter0 + rOuter1) / 2;
             for (let j = 0; j < M; j++) {
-                const ang = subStart + (j + 0.5) * subSliceAngle;
+                const ang = subCenter(j);
                 const lx = cx + Math.cos(ang) * rSubLabel;
                 const ly = cy + Math.sin(ang) * rSubLabel;
-                ctx.fillText(subLabels[j], lx, ly);
+                ctx.save();
+                ctx.translate(lx, ly);
+                ctx.rotate(j * subSliceAngle);
+                ctx.fillText(subLabels[j], 0, 0);
+                ctx.restore();
             }
+
+            ctx.restore(); // pop sub-wheel rotation
         }
+
+        // ── Static pointer triangle at 12 o'clock (OUTSIDE any rotation) ────
+        // Small gold triangle pointing DOWN at the wheel, anchored above the
+        // wheel's top edge. Drawn after restoring rotations so it never spins
+        // with the wheel — its fixed position is what makes the spinning-wheel
+        // metaphor work.
+        const tipY = cy - rInner1 - 4;
+        const baseY = cy - rInner1 - 14;
+        ctx.beginPath();
+        ctx.moveTo(cx, tipY);            // tip pointing down at the wheel
+        ctx.lineTo(cx - 7, baseY);       // top-left
+        ctx.lineTo(cx + 7, baseY);       // top-right
+        ctx.closePath();
+        ctx.fillStyle = UI.gold;
+        ctx.fill();
+        ctx.strokeStyle = UI.panelBorder;
+        ctx.lineWidth = 1;
+        ctx.stroke();
 
         // Restore default text alignment for whatever renders next
         ctx.textAlign = 'left';

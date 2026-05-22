@@ -51,6 +51,8 @@ const SLUDGE_DURATION = 3;
 // and Game class both reference this — kept module-level so it's a single
 // source of truth.
 const RADIAL_SLICES = ['Attack', 'Skill', 'Throw', 'Give', 'Run', 'Defend'];
+const RADIAL_SLICE_ANGLE = (Math.PI * 2) / RADIAL_SLICES.length; // 60° per slice
+const RADIAL_ANIM_MS = 120; // ease-out duration for wheel rotation
 
 // ── Game ─────────────────────────────────────────────────────────────────────
 
@@ -119,6 +121,19 @@ class Game {
         this.radialSubIndex = {};   // { 'Throw': 2, 'Give': 0, ... } — last sub-pick per category name
         this.radialDrilled = false; // false = cursor on inner wheel, true = on sub-wheel
         this._radialTarget = null;  // the bumped enemy this menu is engaging
+
+        // Wheel rotation animation state — Plan A. The wheel itself rotates
+        // around a fixed pointer at 12 o'clock instead of a moving cursor
+        // highlight. radialRotationFrom/Target are angles in radians; the
+        // current displayed angle is the eased lerp between them based on
+        // (now - StartedAt) / RADIAL_ANIM_MS. Sub-wheel has its own parallel
+        // set so drilling and sub-rotation animate independently.
+        this.radialRotationFrom      = 0;
+        this.radialRotationTarget    = 0;
+        this.radialRotationStartedAt = 0;
+        this.radialSubRotationFrom      = 0;
+        this.radialSubRotationTarget    = 0;
+        this.radialSubRotationStartedAt = 0;
 
         // Screen shake (Phase F) — triggered on damage >= threshold. The
         // renderer applies a per-frame random offset to world rendering
@@ -759,9 +774,43 @@ class Game {
         this._radialTarget = enemy;
         this.radialDrilled = false;
         // radialInnerIndex preserved from last open (or 0 default in constructor)
+        // Snap rotation to that index — no animation on open, the wheel just
+        // appears already oriented to the last-used slice.
+        const snap = -RADIAL_SLICE_ANGLE * this.radialInnerIndex;
+        this.radialRotationFrom      = snap;
+        this.radialRotationTarget    = snap;
+        this.radialRotationStartedAt = 0; // way in the past → eased lerp = 1
         this.state = STATE.RADIAL_MENU;
         this._overlayOpenedAt = performance.now();
         this._ensureParticleLoop(); // reuse the existing slide-in animation pump
+    }
+
+    // ── Wheel rotation interpolation ─────────────────────────────────────────
+    //
+    // The renderer calls these to get the current displayed angle each frame.
+    // Lives on Game so both main.js (mid-animation snapshot) and renderer.js
+    // (per-frame draw) can compute the same value without duplicating the
+    // ease-out cubic math.
+
+    _currentRadialRotation() {
+        const t = Math.min(1, (performance.now() - (this.radialRotationStartedAt || 0)) / RADIAL_ANIM_MS);
+        const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
+        return this.radialRotationFrom + (this.radialRotationTarget - this.radialRotationFrom) * eased;
+    }
+
+    _currentRadialSubRotation() {
+        const t = Math.min(1, (performance.now() - (this.radialSubRotationStartedAt || 0)) / RADIAL_ANIM_MS);
+        const eased = 1 - Math.pow(1 - t, 3);
+        return this.radialSubRotationFrom + (this.radialSubRotationTarget - this.radialSubRotationFrom) * eased;
+    }
+
+    // Shortest signed angular distance — chooses the direction that wraps less
+    // than half a turn. Used to make Right-from-Defend-to-Attack feel like one
+    // slice step (60°) instead of a 5-slice spin (300° the wrong way).
+    _shortestAngularPath(from, target) {
+        while (target - from >  Math.PI) target -= 2 * Math.PI;
+        while (target - from < -Math.PI) target += 2 * Math.PI;
+        return target;
     }
 
     _closeRadialMenu() {
@@ -779,11 +828,41 @@ class Game {
             if (items.length === 0) return; // empty sub-wheel — nothing to rotate
             const cur = this.radialSubIndex[cat] ?? 0;
             this.radialSubIndex[cat] = (cur + delta + items.length) % items.length;
+            this._animateSubRotation(items.length);
         } else {
             const n = RADIAL_SLICES.length;
             this.radialInnerIndex = (this.radialInnerIndex + delta + n) % n;
+            this._animateInnerRotation();
         }
+        this._ensureParticleLoop(); // keep the renderer running during the 120ms lerp
         this._render();
+    }
+
+    _animateInnerRotation() {
+        // Snapshot the angle currently DISPLAYED (could be mid-animation if the
+        // player is spamming arrows) as the new `From`. Then compute the new
+        // `Target` for the updated index, picking the shortest angular path so
+        // wrap-around (e.g., Defend → Attack at the boundary) feels like one
+        // slice step rather than a 5-slice unwind.
+        this.radialRotationFrom = this._currentRadialRotation();
+        const naive = -RADIAL_SLICE_ANGLE * this.radialInnerIndex;
+        this.radialRotationTarget = this._shortestAngularPath(this.radialRotationFrom, naive);
+        this.radialRotationStartedAt = performance.now();
+    }
+
+    _animateSubRotation(itemCount) {
+        // Sub-wheel slice angle depends on how many items fit in the outer arc.
+        // Renderer caps the span at π (a half-circle) — mirror that math here
+        // so the rotation animation lines up exactly with where the renderer
+        // draws each sub-slice.
+        const span = Math.min(itemCount * RADIAL_SLICE_ANGLE, Math.PI);
+        const subSliceAngle = span / itemCount;
+        const cat = RADIAL_SLICES[this.radialInnerIndex];
+        const subIdx = this.radialSubIndex[cat] ?? 0;
+        this.radialSubRotationFrom = this._currentRadialSubRotation();
+        const naive = -subSliceAngle * subIdx;
+        this.radialSubRotationTarget = this._shortestAngularPath(this.radialSubRotationFrom, naive);
+        this.radialSubRotationStartedAt = performance.now();
     }
 
     _radialCancel() {
@@ -831,6 +910,16 @@ class Game {
             const curSub = this.radialSubIndex[cat] ?? 0;
             this.radialSubIndex[cat] = Math.min(curSub, Math.max(0, items.length - 1));
             this.radialDrilled = true;
+            // Snap sub-wheel rotation to current sub-index (no animation on
+            // drill-in — the sub-wheel just appears already oriented). Skill's
+            // empty placeholder uses M=1 so the angle math doesn't divide by 0.
+            const M = Math.max(1, items.length);
+            const span = Math.min(M * RADIAL_SLICE_ANGLE, Math.PI);
+            const subSliceAngle = span / M;
+            const snap = -subSliceAngle * this.radialSubIndex[cat];
+            this.radialSubRotationFrom      = snap;
+            this.radialSubRotationTarget    = snap;
+            this.radialSubRotationStartedAt = 0;
             this._render();
         }
     }
@@ -1369,6 +1458,14 @@ class Game {
         const overlayOpen = this.state === STATE.ITEM_OVERLAY
                          || this.state === STATE.RADIAL_MENU;
         if (overlayOpen && now - (this._overlayOpenedAt ?? 0) < 80) return true;
+        // Radial wheel rotation animation (Plan A) — keeps looping for the
+        // 120ms ease-out so the wheel actually spins instead of snapping.
+        // Both the inner wheel and the sub-wheel have independent timers;
+        // either being mid-flight keeps the loop running.
+        if (this.state === STATE.RADIAL_MENU) {
+            if (now - (this.radialRotationStartedAt    ?? 0) < RADIAL_ANIM_MS) return true;
+            if (now - (this.radialSubRotationStartedAt ?? 0) < RADIAL_ANIM_MS) return true;
+        }
         for (const e of this.enemies) {
             if ((e._hitFlashUntil ?? 0) > now) return true;
             if ((e._staggerUntil  ?? 0) > now) return true;
