@@ -770,19 +770,16 @@ export class Renderer {
 
         // ── Draw outer arc (sub-wheel) if active slice has sub-options ───────
         const cat = slices[game.radialInnerIndex];
-        const subCapable = cat === 'Throw' || cat === 'Give' || cat === 'Skill';
+        const subCapable = cat === 'Attack' || cat === 'Throw' || cat === 'Give' || cat === 'Skill';
         if (subCapable) {
-            const subItems = game._radialSubItems ? game._radialSubItems(cat) : [];
-            // For Skill (empty), show a single "—" placeholder so the player
-            // still sees the sub-wheel concept without crashing on N=0 math.
-            const subLabels = subItems.length > 0
-                ? subItems.map(slotIdx => {
-                    const stack = game.inventory[slotIdx];
-                    if (!stack) return '—';
-                    const name = stack.itemDef.name.replace(/[\[\]]/g, '');
-                    return stack.count > 1 ? `${name} ×${stack.count}` : name;
-                })
-                : ['—']; // empty Throw/Give/Skill placeholder
+            // game._radialSubItems returns Array<{label, key}> — pull labels
+            // directly. Empty list (e.g., Skill or no throwables) renders a
+            // single "—" placeholder so the wheel-shape still reads as XMB.
+            const subOptions = game._radialSubItems ? game._radialSubItems(cat) : [];
+            const subLabels = subOptions.length > 0
+                ? subOptions.map(o => o.label)
+                : ['—'];
+            const subItems = subOptions; // kept for the styling check below
 
             const M = subLabels.length;
             const activeCenter = sliceCenterAngle(game.radialInnerIndex);

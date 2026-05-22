@@ -812,14 +812,16 @@ class Game {
             return;
         }
 
-        // Inner-wheel confirm
-        if (cat === 'Attack') { this._radialAttack(enemy); return; }
-        if (cat === 'Defend') { this._radialDefend();      return; }
-        if (cat === 'Run')    { this._radialRun();         return; }
+        // Inner-wheel confirm. Defend and Run fire immediately (single verb).
+        // Attack / Throw / Give / Skill all have sub-wheels — drill in.
+        if (cat === 'Defend') { this._radialDefend(); return; }
+        if (cat === 'Run')    { this._radialRun();    return; }
 
-        // Sub-wheel categories: drill in
-        if (cat === 'Throw' || cat === 'Give' || cat === 'Skill') {
-            // Pre-flight: Throw/Give need at least one usable item
+        if (cat === 'Attack' || cat === 'Throw' || cat === 'Give' || cat === 'Skill') {
+            // Pre-flight: Throw/Give need at least one usable item. Attack
+            // always has at least the Basic move available. Skill can be
+            // empty (player hasn't transformed yet) — we still drill in so
+            // the player sees the empty-slot feedback explicitly.
             const items = this._radialSubItems(cat);
             if (items.length === 0 && cat !== 'Skill') {
                 this._log(`[Nothing to ${cat.toLowerCase()}]`);
@@ -868,26 +870,47 @@ class Game {
 
     // ── Sub-wheel action firing ──────────────────────────────────────────────
 
-    // List of inventory slot indices that are valid sub-picks for a given
-    // category. Throw filters to non-self-use items; Give accepts everything;
-    // Skill returns empty (Human has no skills — placeholder slot for future
-    // creature abilities like Wererat squeeze).
+    // Sub-options available for a given category. Returns an array of
+    // { label, key } pairs where:
+    //   - label: string the renderer draws in the outer arc
+    //   - key:   payload _fireSubAction uses to dispatch (slot index for
+    //            Throw/Give, move name string for Attack)
+    //
+    // Throw filters to non-self-use items; Give accepts every occupied slot.
+    // Attack has a fixed list of move variants (Basic = standard weapon swing,
+    // Cleave = AOE all cardinal hostiles at 0.75× damage). Skill returns
+    // empty for now — reserved for future creature abilities (Wererat
+    // squeeze, Robot override, etc., per cosmology canon).
     _radialSubItems(cat) {
-        const out = [];
+        if (cat === 'Attack') {
+            return [
+                { label: 'Basic',  key: 'basic'  },
+                { label: 'Cleave', key: 'cleave' },
+            ];
+        }
         if (cat === 'Throw') {
+            const out = [];
             for (let i = 0; i < this.inventory.length; i++) {
                 const s = this.inventory[i];
-                if (s && s.itemDef.useType !== 'self') out.push(i);
+                if (s && s.itemDef.useType !== 'self') {
+                    const name = s.itemDef.name.replace(/[\[\]]/g, '');
+                    out.push({ label: s.count > 1 ? `${name} ×${s.count}` : name, key: i });
+                }
             }
             return out;
         }
         if (cat === 'Give') {
+            const out = [];
             for (let i = 0; i < this.inventory.length; i++) {
-                if (this.inventory[i]) out.push(i);
+                const s = this.inventory[i];
+                if (s) {
+                    const name = s.itemDef.name.replace(/[\[\]]/g, '');
+                    out.push({ label: s.count > 1 ? `${name} ×${s.count}` : name, key: i });
+                }
             }
             return out;
         }
-        return out; // Skill (or unknown) — empty
+        return []; // Skill (or unknown) — empty
     }
 
     _fireSubAction(cat) {
@@ -910,7 +933,7 @@ class Game {
 
         const subIdx = Math.min(this.radialSubIndex[cat] ?? 0, items.length - 1);
         this.radialSubIndex[cat] = subIdx; // clamp the persisted value too
-        const slotIdx = items[subIdx];
+        const sub = items[subIdx];
 
         const enemy = this._radialTarget;
         if (!enemy || !enemy.entity.isAlive()) {
@@ -918,12 +941,30 @@ class Game {
             return;
         }
 
-        // Set selectedSlot so the existing _doThrow / _doGive paths pick up
-        // the right item. Both methods reset selectedSlot and state→IDLE on
-        // their own, so we don't need to clean up after.
-        this.selectedSlot = slotIdx;
         this.radialDrilled = false;
         this._radialTarget = null;
+
+        // Attack moves — variant dispatch by sub-key. Basic reuses the
+        // existing single-target weapon swing (_radialAttack). Cleave is
+        // AOE: every cardinal-adjacent hostile takes 0.75× weapon damage.
+        // The 0.75× multiplier is Caelan's call from the design discussion —
+        // tradeoff is targets vs. per-target damage.
+        if (cat === 'Attack') {
+            if (sub.key === 'basic') {
+                this._radialAttack(enemy);
+                return;
+            }
+            if (sub.key === 'cleave') {
+                this._radialCleave();
+                return;
+            }
+            return; // unknown attack key — defensive no-op
+        }
+
+        // Throw / Give — sub.key is the inventory slot index. Set selectedSlot
+        // so the existing _doThrow / _doGive paths consume the right item.
+        // Both methods reset selectedSlot and state→IDLE on their own.
+        this.selectedSlot = sub.key;
 
         if (cat === 'Throw') {
             // Auto-direction toward the bumped enemy (Math.sign yields the
@@ -940,6 +981,38 @@ class Game {
             this._doGive(enemy);
             return;
         }
+    }
+
+    _radialCleave() {
+        // Hit every cardinal-adjacent hostile-eligible enemy. Filters out
+        // non-hostile NPCs the same way bump-attack does (behavior whitelist
+        // gate from feature/sewer-npc-skeleton).
+        const hostiles = this.enemies.filter(e =>
+            e.entity.isAlive()
+            && manhattan(e.x, e.y, this.playerX, this.playerY) === 1
+            && (!e.behavior || e.behavior.includes('HOSTILE'))
+        );
+        const weapon = this.equipment.weapon;
+        const baseDmg = weapon ? weapon.damage : 1;
+        const cleaveDmg = Math.max(1, Math.floor(baseDmg * 0.75));
+
+        if (hostiles.length === 0) {
+            // Defensive — radial target died mid-menu and no other hostiles
+            // around. Close without consuming a turn.
+            this._closeRadialMenu();
+            return;
+        }
+
+        for (const e of hostiles) {
+            this.combatAttack(e, cleaveDmg);
+        }
+        // Spawn a "CLEAVE!" event word at the player position so the player
+        // sees the move name fire — distinguishes Cleave from Basic visually
+        // (same damage numbers but extra event word above the player tile)
+        this._spawnEventWord(this.playerX, this.playerY, 'CLEAVE!', '#ffaa44', 16);
+
+        this.state = STATE.IDLE;
+        this._advanceWorld();
     }
 
     // ── World Advance (after any action) ─────────────────────────────────────
