@@ -159,7 +159,7 @@ export class Renderer {
 
         // Modals
         if (game.state === 'item_overlay')    this._drawItemOverlay(game);
-        if (game.state === 'combat_overlay')  this._drawItemOverlay(game);
+        if (game.state === 'radial_menu')     this._drawRadialMenu(game);
         if (game.state === 'item_throw_dir')  this._drawThrowPrompt(game);
         if (game.state === 'item_give_dir')   this._drawThrowPrompt(game);
         if (game.state === 'win') this._drawWinOverlay(game);
@@ -695,6 +695,136 @@ export class Renderer {
             ctx.font = 'bold 12px monospace';
             ctx.fillText(`${arr[dir]} ${opt.label}`, px + 8, py + 21);
         }
+        ctx.globalAlpha = prevAlpha;
+    }
+
+    // ── Radial Menu (Omnitrix-style combat wheel) ────────────────────────────
+    //
+    // Six-slice inner wheel + on-demand outer arc for sub-options. The active
+    // slice (game.radialInnerIndex) gets a gold highlight; if it's a category
+    // with sub-options (Throw / Give / Skill), the outer arc renders showing
+    // those options laid out along the same hemisphere as the inner slice.
+    // When game.radialDrilled is true, the cursor is on the outer arc and the
+    // sub-slice gets the highlight instead.
+
+    _drawRadialMenu(game) {
+        const { ctx, half } = this;
+        const cx = half * TILE_PX + TILE_PX / 2;
+        const cy = half * TILE_PX + TILE_PX / 2;
+
+        // Slide-in animation (Phase D convention — 80ms ease-in opacity)
+        const elapsed = performance.now() - (game._overlayOpenedAt ?? 0);
+        const t = Math.min(1, elapsed / 80);
+
+        // Slice order kept in sync with main.js RADIAL_SLICES module const.
+        // Renderer keeps its own copy because the canvas drawing layer
+        // shouldn't import from the game-logic module.
+        const slices = ['Attack', 'Skill', 'Throw', 'Give', 'Run', 'Defend'];
+        const N = slices.length;
+        const sliceAngle = (Math.PI * 2) / N;
+
+        // Inner wheel: radius from 36 (just outside the 32px player tile) to 80
+        const rInner0 = 36;
+        const rInner1 = 80;
+        // Outer arc (sub-wheel): radius from 84 to 120
+        const rOuter0 = 84;
+        const rOuter1 = 120;
+
+        // Helper: center angle of slice i, with 12 o'clock = -π/2 in canvas
+        // coords (y axis flipped, angles increase clockwise)
+        const sliceCenterAngle = (i) => i * sliceAngle - Math.PI / 2;
+
+        const prevAlpha = ctx.globalAlpha;
+        ctx.globalAlpha = t;
+
+        // ── Draw inner wheel slices ──────────────────────────────────────────
+        for (let i = 0; i < N; i++) {
+            const a0 = sliceCenterAngle(i) - sliceAngle / 2;
+            const a1 = sliceCenterAngle(i) + sliceAngle / 2;
+            const isActive = !game.radialDrilled && i === game.radialInnerIndex;
+
+            // Slice wedge — ring-shaped (donut sector), not full pie
+            ctx.beginPath();
+            ctx.arc(cx, cy, rInner1, a0, a1);
+            ctx.arc(cx, cy, rInner0, a1, a0, true);
+            ctx.closePath();
+            ctx.fillStyle = isActive ? UI.gold : UI.panelBg;
+            ctx.fill();
+            ctx.strokeStyle = UI.panelBorder;
+            ctx.lineWidth = isActive ? 3 : 1;
+            ctx.stroke();
+        }
+
+        // ── Draw inner wheel labels ──────────────────────────────────────────
+        ctx.fillStyle = UI.text;
+        ctx.font = 'bold 11px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const rLabel = (rInner0 + rInner1) / 2;
+        for (let i = 0; i < N; i++) {
+            const ang = sliceCenterAngle(i);
+            const lx = cx + Math.cos(ang) * rLabel;
+            const ly = cy + Math.sin(ang) * rLabel;
+            ctx.fillText(slices[i], lx, ly);
+        }
+
+        // ── Draw outer arc (sub-wheel) if active slice has sub-options ───────
+        const cat = slices[game.radialInnerIndex];
+        const subCapable = cat === 'Throw' || cat === 'Give' || cat === 'Skill';
+        if (subCapable) {
+            const subItems = game._radialSubItems ? game._radialSubItems(cat) : [];
+            // For Skill (empty), show a single "—" placeholder so the player
+            // still sees the sub-wheel concept without crashing on N=0 math.
+            const subLabels = subItems.length > 0
+                ? subItems.map(slotIdx => {
+                    const stack = game.inventory[slotIdx];
+                    if (!stack) return '—';
+                    const name = stack.itemDef.name.replace(/[\[\]]/g, '');
+                    return stack.count > 1 ? `${name} ×${stack.count}` : name;
+                })
+                : ['—']; // empty Throw/Give/Skill placeholder
+
+            const M = subLabels.length;
+            const activeCenter = sliceCenterAngle(game.radialInnerIndex);
+            // Sub-arc spans the same 60° arc as the inner slice — but it can
+            // also stretch up to a full half-circle if M is large. Cap span
+            // at 5 sub-slices' worth before stretching beyond the parent
+            // slice's angular footprint.
+            const span = Math.min(M * sliceAngle, Math.PI); // never more than 180°
+            const subSliceAngle = span / M;
+            const subStart = activeCenter - span / 2;
+
+            for (let j = 0; j < M; j++) {
+                const a0 = subStart + j * subSliceAngle;
+                const a1 = subStart + (j + 1) * subSliceAngle;
+                const isSubActive = game.radialDrilled && j === (game.radialSubIndex?.[cat] ?? 0);
+
+                ctx.beginPath();
+                ctx.arc(cx, cy, rOuter1, a0, a1);
+                ctx.arc(cx, cy, rOuter0, a1, a0, true);
+                ctx.closePath();
+                ctx.fillStyle = isSubActive ? UI.gold : (subItems.length === 0 ? UI.panelBgDark : UI.panelBg);
+                ctx.fill();
+                ctx.strokeStyle = UI.panelBorder;
+                ctx.lineWidth = isSubActive ? 3 : 1;
+                ctx.stroke();
+            }
+
+            // Sub-wheel labels
+            ctx.fillStyle = subItems.length === 0 ? UI.textLight : UI.text;
+            ctx.font = subItems.length === 0 ? '11px monospace' : 'bold 10px monospace';
+            const rSubLabel = (rOuter0 + rOuter1) / 2;
+            for (let j = 0; j < M; j++) {
+                const ang = subStart + (j + 0.5) * subSliceAngle;
+                const lx = cx + Math.cos(ang) * rSubLabel;
+                const ly = cy + Math.sin(ang) * rSubLabel;
+                ctx.fillText(subLabels[j], lx, ly);
+            }
+        }
+
+        // Restore default text alignment for whatever renders next
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
         ctx.globalAlpha = prevAlpha;
     }
 

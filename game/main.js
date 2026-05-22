@@ -21,7 +21,7 @@ const STATE = {
     ITEM_OVERLAY:    'item_overlay',    // Space pressed, showing use/throw/smash/give
     ITEM_THROW_DIR:  'item_throw_dir',  // chose Throw, waiting for direction
     ITEM_GIVE_DIR:   'item_give_dir',   // chose Give with multiple adjacent NPCs
-    COMBAT_OVERLAY:  'combat_overlay',  // bumped a hostile enemy — Attack/Defend choice
+    RADIAL_MENU:     'radial_menu',     // bumped a hostile enemy — Omnitrix-style wheel
     RESOLVING:       'resolving',
     DEAD:            'dead',
     WIN:             'win',
@@ -45,6 +45,12 @@ const WEAPONS = {
 };
 
 const SLUDGE_DURATION = 3;
+
+// ── Radial menu (Omnitrix-style combat wheel) ───────────────────────────────
+// Inner-wheel slice names in clockwise order from 12 o'clock. The renderer
+// and Game class both reference this — kept module-level so it's a single
+// source of truth.
+const RADIAL_SLICES = ['Attack', 'Skill', 'Throw', 'Give', 'Run', 'Defend'];
 
 // ── Game ─────────────────────────────────────────────────────────────────────
 
@@ -98,14 +104,21 @@ class Game {
         // Item overlay options (populated when overlay shows)
         this.overlayOptions = {}; // { up: {...}, right: {...}, left: {...}, down: {...} }
 
-        // Combat overlay target — the enemy the player just bumped. Set by
-        // _openCombatOverlay, cleared after _pickCombat resolves or on Esc.
-        this._combatTarget = null;
-
         // Overlay slide-in animation timestamp (Phase D). Set when either
-        // ITEM_OVERLAY or COMBAT_OVERLAY opens; renderer lerps option
+        // ITEM_OVERLAY or RADIAL_MENU opens; renderer lerps option
         // positions from center → final over 80ms after this time.
         this._overlayOpenedAt = 0;
+
+        // Radial combat menu (Omnitrix-style wheel). Six inner slices in
+        // clockwise order from 12 o'clock: Attack, Skill, Throw, Give, Run,
+        // Defend. The cursor index persists across encounters so muscle
+        // memory carries (the wheel "starts where you left it"). Sub-wheel
+        // picks ALSO persist per category — if you last threw a Rock, opening
+        // Throw again has the Rock pre-selected.
+        this.radialInnerIndex = 0;  // 0..5 — defaults to Attack
+        this.radialSubIndex = {};   // { 'Throw': 2, 'Give': 0, ... } — last sub-pick per category name
+        this.radialDrilled = false; // false = cursor on inner wheel, true = on sub-wheel
+        this._radialTarget = null;  // the bumped enemy this menu is engaging
 
         // Screen shake (Phase F) — triggered on damage >= threshold. The
         // renderer applies a per-frame random offset to world rendering
@@ -292,22 +305,18 @@ class Game {
                 return;
             }
 
-            // ── COMBAT_OVERLAY: just bumped a hostile, pick how to engage ──
-            // Up/Right/Left/Down (or WASD) routes to the chosen action.
-            // Escape backs out without consuming a turn — important so a
-            // mistaken bump doesn't lock the player into combat.
-            if (this.state === STATE.COMBAT_OVERLAY) {
+            // ── RADIAL_MENU: just bumped a hostile, drive the Omnitrix wheel ──
+            // Left/Right spins the cursor around the wheel (one slice per press).
+            // Up (or Space) confirms — either fires the action or drills into the
+            // sub-wheel for categories that have sub-options (Throw/Give/Skill).
+            // Down (or Esc) cancels — drops back from sub-wheel to inner, or
+            // closes the menu entirely without consuming a turn.
+            if (this.state === STATE.RADIAL_MENU) {
                 e.preventDefault();
-                if (e.code === 'ArrowUp'    || e.code === 'KeyW') { this._pickCombat('up');    return; }
-                if (e.code === 'ArrowRight' || e.code === 'KeyD') { this._pickCombat('right'); return; }
-                if (e.code === 'ArrowDown'  || e.code === 'KeyS') { this._pickCombat('down');  return; }
-                if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { this._pickCombat('left');  return; }
-                if (e.code === 'Escape') {
-                    this.state = STATE.IDLE;
-                    this._combatTarget = null;
-                    this._render();
-                    return;
-                }
+                if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { this._radialRotate('left');  return; }
+                if (e.code === 'ArrowRight' || e.code === 'KeyD') { this._radialRotate('right'); return; }
+                if (e.code === 'ArrowUp'    || e.code === 'KeyW' || e.code === 'Space') { this._radialConfirm(); return; }
+                if (e.code === 'ArrowDown'  || e.code === 'KeyS' || e.code === 'Escape') { this._radialCancel(); return; }
                 return;
             }
 
@@ -449,15 +458,13 @@ class Game {
                 return; // silent, no turn advance
             }
 
-            // Bumping a hostile enemy opens the combat overlay rather than
-            // attacking immediately. The overlay lets the player choose
-            // Attack, Defend, or back out — turning a reflexive bump into a
-            // deliberate decision. The previous behavior (instant attack on
-            // bump) became too thin once the disposition system created
-            // contexts where the player might want to defuse instead of
-            // commit. Esc from the overlay backs out without consuming the
-            // turn — protects against accidental bumps.
-            this._openCombatOverlay(enemy);
+            // Bumping a hostile enemy opens the radial wheel (Omnitrix-style)
+            // instead of attacking immediately. The wheel exposes Attack,
+            // Skill, Throw, Give, Run, Defend in a static layout so muscle
+            // memory works, with cursor persistence across encounters.
+            // Down/Esc backs out without consuming a turn — protects against
+            // accidental bumps.
+            this._openRadialMenu(enemy);
             this._render();
             return;
         }
@@ -730,91 +737,208 @@ class Game {
         this._doGive(recipient);
     }
 
-    // ── Combat Overlay ───────────────────────────────────────────────────────
+    // ── Radial Menu (Omnitrix-style combat wheel) ─────────────────────────────
     //
-    // When the player bumps a hostile enemy, instead of an immediate attack
-    // a four-direction overlay appears: Up=Attack, Left=Defend. The other
-    // two slots are reserved for Phase B additions (Throw, Give quick-paths
-    // that pre-target the bumped enemy). For Phase A, Attack is the default
-    // commit, Defend adds a one-turn Guard buff, Esc backs out without
-    // consuming a turn.
+    // Bumping a hostile enemy opens a six-slice wheel centered on the player
+    // (Attack, Skill, Throw, Give, Run, Defend, clockwise from 12 o'clock).
+    // Left/Right spins the cursor around the wheel one slice at a time.
+    // Up (or Space) confirms — fires the action directly, or drills into a
+    // sub-wheel for categories that have sub-options. Down (or Esc) cancels —
+    // backs out of the sub-wheel, or closes the menu entirely.
     //
-    // Reuses the existing _drawItemOverlay rendering by populating the same
-    // game.overlayOptions object — the renderer doesn't care whether the
-    // menu is for items or combat, just what options to draw.
+    // The cursor positions (inner index AND last sub-pick per category)
+    // persist across encounters so the wheel "starts where you left it" —
+    // muscle memory carries even though the wheel exposes more options than
+    // the player's 4 arrow keys would otherwise allow.
+    //
+    // Reuses existing combat / item resolution paths (combatAttack, doThrow,
+    // doGive, addBuff) by setting selectedSlot before delegating — keeps this
+    // method focused on menu state, not action mechanics.
 
-    _openCombatOverlay(enemy) {
-        this._combatTarget = enemy;
-        this.overlayOptions = {};
-
-        // Up = Attack — commit to bump-attacking with the equipped weapon.
-        // Label includes the weapon name so the player sees what they're
-        // about to swing.
-        const weapon = this.equipment.weapon;
-        const attackLabel = weapon
-            ? `Attack (${weapon.name.replace(/[\[\]]/g, '')})`
-            : 'Punch';
-        this.overlayOptions.up = { label: attackLabel, action: 'attack' };
-
-        // Left = Defend — adds Guard buff for one turn, advances world.
-        // The Guard buff halves incoming damage (existing buff in main.js
-        // applyDamageToPlayer logic).
-        this.overlayOptions.left = { label: 'Defend', action: 'defend' };
-
-        // Right and Down reserved for Phase B (Throw, Give quick-paths).
-        // Player can still use the existing item-overlay flow to throw or
-        // give — Esc out of this menu and use 1-9 + Space.
-
-        this.state = STATE.COMBAT_OVERLAY;
+    _openRadialMenu(enemy) {
+        this._radialTarget = enemy;
+        this.radialDrilled = false;
+        // radialInnerIndex preserved from last open (or 0 default in constructor)
+        this.state = STATE.RADIAL_MENU;
         this._overlayOpenedAt = performance.now();
-        this._ensureParticleLoop(); // animate the slide-in (Phase D)
+        this._ensureParticleLoop(); // reuse the existing slide-in animation pump
     }
 
-    _pickCombat(direction) {
-        const opt = this.overlayOptions[direction];
-        if (!opt) return; // no option in that direction — ignore the keypress
+    _closeRadialMenu() {
+        this._radialTarget = null;
+        this.radialDrilled = false;
+        this.state = STATE.IDLE;
+        this._render();
+    }
 
-        const enemy = this._combatTarget;
+    _radialRotate(direction) {
+        const delta = direction === 'right' ? 1 : -1;
+        if (this.radialDrilled) {
+            const cat = RADIAL_SLICES[this.radialInnerIndex];
+            const items = this._radialSubItems(cat);
+            if (items.length === 0) return; // empty sub-wheel — nothing to rotate
+            const cur = this.radialSubIndex[cat] ?? 0;
+            this.radialSubIndex[cat] = (cur + delta + items.length) % items.length;
+        } else {
+            const n = RADIAL_SLICES.length;
+            this.radialInnerIndex = (this.radialInnerIndex + delta + n) % n;
+        }
+        this._render();
+    }
+
+    _radialCancel() {
+        if (this.radialDrilled) {
+            // Pop sub-wheel, back to inner cursor (no turn consumed)
+            this.radialDrilled = false;
+            this._render();
+        } else {
+            // Close menu (no turn consumed) — protects accidental bumps
+            this._closeRadialMenu();
+        }
+    }
+
+    _radialConfirm() {
+        const cat = RADIAL_SLICES[this.radialInnerIndex];
+
+        // Target check — enemy might have died mid-menu (DOT, ally hit, etc.)
+        const enemy = this._radialTarget;
         if (!enemy || !enemy.entity.isAlive()) {
-            // Target died (e.g., DOT, or weird race condition) — close menu
-            // without consuming a turn.
-            this.state = STATE.IDLE;
-            this._combatTarget = null;
+            this._closeRadialMenu();
+            return;
+        }
+
+        if (this.radialDrilled) {
+            this._fireSubAction(cat);
+            return;
+        }
+
+        // Inner-wheel confirm
+        if (cat === 'Attack') { this._radialAttack(enemy); return; }
+        if (cat === 'Defend') { this._radialDefend();      return; }
+        if (cat === 'Run')    { this._radialRun();         return; }
+
+        // Sub-wheel categories: drill in
+        if (cat === 'Throw' || cat === 'Give' || cat === 'Skill') {
+            // Pre-flight: Throw/Give need at least one usable item
+            const items = this._radialSubItems(cat);
+            if (items.length === 0 && cat !== 'Skill') {
+                this._log(`[Nothing to ${cat.toLowerCase()}]`);
+                return; // stay on inner cursor — easier to recover
+            }
+            // Initialize / clamp sub-cursor to a valid index for this category
+            const curSub = this.radialSubIndex[cat] ?? 0;
+            this.radialSubIndex[cat] = Math.min(curSub, Math.max(0, items.length - 1));
+            this.radialDrilled = true;
+            this._render();
+        }
+    }
+
+    // ── Inner-wheel action firing ────────────────────────────────────────────
+
+    _radialAttack(enemy) {
+        const weapon = this.equipment.weapon;
+        if (weapon) {
+            this.combatAttack(enemy, weapon.damage);
+        } else {
+            enemy.entity.takeDamage(1);
+            this._spawnDamageNumber(enemy.x, enemy.y, '-1', '#ffdd44', 14);
+            this._spawnEventWord(enemy.x, enemy.y, 'TAP!', '#ffaa44', 14);
+        }
+        this._radialTarget = null;
+        this.state = STATE.IDLE;
+        this._advanceWorld();
+    }
+
+    _radialDefend() {
+        // Guard for 2 turns so the buff covers the upcoming enemy turn
+        this.addBuff('guard', 'Guard', 2, 'buff');
+        this._log('[Bracing — incoming damage halved.]');
+        this._radialTarget = null;
+        this.state = STATE.IDLE;
+        this._advanceWorld();
+    }
+
+    _radialRun() {
+        // Instant exit — no turn consumed. Cursor stays on Run for next open
+        // (Caelan's "starts where you left it" — if Running was the last
+        // pick, the menu opens already on Run).
+        this._log('[Backed away.]');
+        this._closeRadialMenu();
+    }
+
+    // ── Sub-wheel action firing ──────────────────────────────────────────────
+
+    // List of inventory slot indices that are valid sub-picks for a given
+    // category. Throw filters to non-self-use items; Give accepts everything;
+    // Skill returns empty (Human has no skills — placeholder slot for future
+    // creature abilities like Wererat squeeze).
+    _radialSubItems(cat) {
+        const out = [];
+        if (cat === 'Throw') {
+            for (let i = 0; i < this.inventory.length; i++) {
+                const s = this.inventory[i];
+                if (s && s.itemDef.useType !== 'self') out.push(i);
+            }
+            return out;
+        }
+        if (cat === 'Give') {
+            for (let i = 0; i < this.inventory.length; i++) {
+                if (this.inventory[i]) out.push(i);
+            }
+            return out;
+        }
+        return out; // Skill (or unknown) — empty
+    }
+
+    _fireSubAction(cat) {
+        if (cat === 'Skill') {
+            this._log('[No skills available — try transforming first]');
+            this.radialDrilled = false;
             this._render();
             return;
         }
 
-        switch (opt.action) {
-            case 'attack': {
-                const weapon = this.equipment.weapon;
-                if (weapon) {
-                    // Visual feedback (damage number + flash + stagger +
-                    // event word + screen shake on big hits) replaces the
-                    // hit log line. combatAttack still logs kills.
-                    this.combatAttack(enemy, weapon.damage);
-                } else {
-                    enemy.entity.takeDamage(1);
-                    // Punch needs its own light visual since combatAttack
-                    // (which handles the full FX bundle) isn't called here.
-                    this._spawnDamageNumber(enemy.x, enemy.y, '-1', '#ffdd44', 14);
-                    this._spawnEventWord(enemy.x, enemy.y, 'TAP!', '#ffaa44', 14);
-                }
-                this._combatTarget = null;
-                this.state = STATE.IDLE;
-                this._advanceWorld();
-                return;
-            }
-            case 'defend': {
-                // Guard for 2 turns so the buff covers the upcoming enemy
-                // turn (buffs tick down at end of _advanceWorld). One turn
-                // would expire before the enemy hits.
-                this.addBuff('guard', 'Guard', 2, 'buff');
-                this._log('[Bracing — incoming damage halved.]');
-                this._combatTarget = null;
-                this.state = STATE.IDLE;
-                this._advanceWorld();
-                return;
-            }
+        const items = this._radialSubItems(cat);
+        if (items.length === 0) {
+            // Defensive — Throw/Give pre-flight should catch this, but in case
+            // inventory changed mid-menu (e.g., consumed item via a buff tick)
+            this._log(`[Nothing to ${cat.toLowerCase()}]`);
+            this.radialDrilled = false;
+            this._render();
+            return;
+        }
+
+        const subIdx = Math.min(this.radialSubIndex[cat] ?? 0, items.length - 1);
+        this.radialSubIndex[cat] = subIdx; // clamp the persisted value too
+        const slotIdx = items[subIdx];
+
+        const enemy = this._radialTarget;
+        if (!enemy || !enemy.entity.isAlive()) {
+            this._closeRadialMenu();
+            return;
+        }
+
+        // Set selectedSlot so the existing _doThrow / _doGive paths pick up
+        // the right item. Both methods reset selectedSlot and state→IDLE on
+        // their own, so we don't need to clean up after.
+        this.selectedSlot = slotIdx;
+        this.radialDrilled = false;
+        this._radialTarget = null;
+
+        if (cat === 'Throw') {
+            // Auto-direction toward the bumped enemy (Math.sign yields the
+            // unit step on each axis — works for cardinal-adjacent enemies,
+            // which is the only kind the radial menu opens against)
+            const dir = {
+                dx: Math.sign(enemy.x - this.playerX),
+                dy: Math.sign(enemy.y - this.playerY),
+            };
+            this._doThrow(dir);
+            return;
+        }
+        if (cat === 'Give') {
+            this._doGive(enemy);
+            return;
         }
     }
 
@@ -1170,7 +1294,7 @@ class Game {
         if ((this._screenShakeUntil    ?? 0) > now) return true;
         // Overlay slide-in animation is active (Phase D)
         const overlayOpen = this.state === STATE.ITEM_OVERLAY
-                         || this.state === STATE.COMBAT_OVERLAY;
+                         || this.state === STATE.RADIAL_MENU;
         if (overlayOpen && now - (this._overlayOpenedAt ?? 0) < 80) return true;
         for (const e of this.enemies) {
             if ((e._hitFlashUntil ?? 0) > now) return true;
