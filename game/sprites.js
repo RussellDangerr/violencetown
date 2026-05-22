@@ -59,9 +59,10 @@ export class SpriteSheet {
 
 const K = './assets-placeholder/kenney';
 
-const KENNEY_BASE    = `${K}/roguelikeSheet_transparent.png`;     // Town/exterior, items
+const KENNEY_BASE    = `${K}/roguelikeSheet_transparent.png`;     // Original generic sheet (kept for compat)
 const KENNEY_DUNGEON = `${K}/roguelikeDungeon_transparent.png`;   // Sewer/dungeon tiles
 const KENNEY_CHAR    = `${K}/roguelikeChar_transparent.png`;      // Player, enemies
+const KENNEY_CITY    = `${K}/roguelikeCity_packed.png`;           // Town tiles (added 2026-05-22 — proper city pack)
 
 // Multiple sheet KEYS share underlying PNGs because the renderer/coord-maps
 // reference them by semantic name. Browser caching dedupes the HTTP requests,
@@ -81,12 +82,17 @@ export const SHEETS = {
     ghostMonster: { src: KENNEY_CHAR, frameW: 16, frameH: 16 },
     boss:         { src: KENNEY_CHAR, frameW: 16, frameH: 16 },
 
-    // Town/exterior + items
+    // Town/exterior + items — KENNEY_BASE kept for legacy ITEM_SPRITES references.
+    // Active town tile rendering uses cityTiles (KENNEY_CITY) added 2026-05-22.
     townTerrains: { src: KENNEY_BASE, frameW: 16, frameH: 16 },
     cityTerrains: { src: KENNEY_BASE, frameW: 16, frameH: 16 },
     cityProps:    { src: KENNEY_BASE, frameW: 16, frameH: 16 },
     buildings:    { src: KENNEY_BASE, frameW: 16, frameH: 16 },
     grocery:      { src: KENNEY_BASE, frameW: 16, frameH: 16 },
+
+    // Roguelike City Pack — proper town tiles with single-cell road/sidewalk/grass/
+    // buildings + cars, trees, streetlights, manhole covers (sewer entries).
+    cityTiles:    { src: KENNEY_CITY, frameW: 16, frameH: 16 },
 
     // No Kenney equivalent for the previous LimeZu Modern UI sheet. The
     // renderer's `if (uiSheet?.loaded)` checks fall through to a colored-
@@ -101,34 +107,35 @@ export const SHEETS = {
 
 export const TILE_SPRITE_MAP = {
     0: null,                  // wall  — dark fallback (intentional, frames the room)
-    1: { col: 1, row: 5 },    // floor — stone tile
-    2: { col: 1, row: 8 },    // sludge — teal water/liquid
-    3: { col: 0, row: 5 },    // gap — floor variant
-    4: null,                  // grate — fallback
-    5: { col: 2, row: 5 },    // drain — floor variant
-    6: { col: 1, row: 4 },    // boss floor
-    7: { col: 5, row: 4 },    // boss trigger — distinct accent
+    1: { col: 10, row: 3 },   // floor — cracked stone w/ X-pattern (reads as worn sewer floor)
+    2: { col: 6,  row: 16 },  // sludge — deep teal water (Kenney Dungeon row 16)
+    3: { col: 12, row: 3 },   // gap — cracked stone variant for natural variation
+    4: { col: 3,  row: 8 },   // grate — vertical iron bars
+    5: { col: 11, row: 3 },   // drain — cracked stone variant
+    6: { col: 15, row: 0 },   // boss floor — clean solid stone (contrast with worn normal floor)
+    7: { col: 10, row: 13 },  // boss trigger — stone with purple gems (accent)
 };
 
 // ── Town tile coords (Kenney Base sheet — best-effort Phase A) ──────────────
 // All grid-based now (no more region: true). Coordinates approximate.
 
-// Coordinates dialed in via empirical color-sampling of the Base sheet — see
-// session 2026-05-17 where the first-pass eyeball picks all landed in wrong
-// regions. Each tile below is the center of a verified-color block.
+// 2026-05-22 polish-session Round 4: town tiles now use the Kenney Roguelike
+// City Pack (cityTiles sheet) which has proper single-cell tiles for the
+// urban exterior — unlike the Base sheet's 2-cell terrain sets that rendered
+// as split-stripe textures. All coords verified against tile-picker overlay.
 export const TOWN_TILE_SPRITE_MAP = {
-    10: null,                       // town wall edge — dark fallback (intentional black border)
-    11: { col: 7,  row: 0 },        // sidewalk — grey stone (data-classified "grey")
-    12: { col: 6,  row: 4 },        // road — brown dirt path (center of 4×2 brown block)
-    13: { col: 2,  row: 10 },       // grass — green terrain (center of 5×2 solid green)
-    14: { col: 3,  row: 6 },        // building wall — orange/brown brick
-    15: null,                       // door — fallback for now (Base sheet doors live cols 30+, not yet mapped)
-    16: null,                       // sewer entry — fallback
-    17: null,                       // fence — fallback (multi-tile, deferred)
-    18: null,                       // streetlight — fallback (multi-tile)
-    19: null,                       // car — Base sheet has no car (City Pack does)
-    20: null,                       // bench — fallback
-    21: null,                       // trash can — fallback
+    10: null,                                            // town wall edge — dark fallback (frames the map)
+    11: { sheet: 'cityTiles', col: 0,  row: 19 },        // sidewalk — concrete slab
+    12: { sheet: 'cityTiles', col: 10, row: 21 },        // road — black asphalt center
+    13: { sheet: 'cityTiles', col: 1,  row: 26 },        // grass — pure green
+    14: { sheet: 'cityTiles', col: 0,  row: 5  },        // building wall — red brick
+    15: null,                                            // door — fallback (City Pack doors are 2-tile, deferred)
+    16: { sheet: 'cityTiles', col: 10, row: 24 },        // sewer entry — manhole cover
+    17: null,                                            // fence — fallback
+    18: null,                                            // streetlight — fallback (City Pack has them but they're 2-tile tall)
+    19: null,                                            // car — fallback (cars are 2-tile vehicles)
+    20: null,                                            // bench — fallback
+    21: null,                                            // trash can — fallback
 };
 
 // ── Item sprites (Kenney Base sheet — best-effort Phase A) ──────────────────
@@ -136,10 +143,21 @@ export const TOWN_TILE_SPRITE_MAP = {
 // 16-pixel grid: x = col*16, y = row*16.
 
 export const ITEM_SPRITES = {
-    rock:    { sheet: 'caveTiles',     x: 16,  y: 32,  w: 16, h: 16 },   // skull/bone prop on Dungeon sheet
-    pipe:    { sheet: 'townTerrains',  x: 480, y: 176, w: 16, h: 16 },   // wooden post/stake
-    soap:    { sheet: 'townTerrains',  x: 528, y: 240, w: 16, h: 16 },   // barrel-like
-    bandage: { sheet: 'townTerrains',  x: 304, y: 112, w: 16, h: 16 },   // mushroom/plant
+    // Equipment/weapon items — Kenney Dungeon sheet (visual rhymes for clarity
+    // at the 24×24 inventory display size):
+    rock:    { sheet: 'caveTiles', x: 0,  y: 0,  w: 16, h: 16 },   // brown boulder = clear "rock"
+    pipe:    { sheet: 'caveTiles', x: 16, y: 32, w: 16, h: 16 },   // long bone = elongated object reads as pipe
+    soap:    { sheet: 'caveTiles', x: 0,  y: 64, w: 16, h: 16 },   // single white mushroom = soap-bar proxy
+    bandage: { sheet: 'caveTiles', x: 48, y: 64, w: 16, h: 16 },   // small white shape = bandage roll proxy
+
+    // Ambro (food) items — mixed sources matched to fiction:
+    //   boardwalk/hot_dog = city food-stand crates (Boardwalk fare)
+    //   mystery_meat      = dungeon skull (per item: "don't ask what it was")
+    //   tunnel_mushroom   = dungeon mushroom (grows in the sewer)
+    boardwalk_burger: { sheet: 'cityTiles', x: 160, y: 288, w: 16, h: 16 },  // orange-fruit crate top
+    hot_dog:          { sheet: 'cityTiles', x: 176, y: 288, w: 16, h: 16 },  // green-veggie crate top
+    mystery_meat:     { sheet: 'caveTiles', x: 0,   y: 32,  w: 16, h: 16 },  // skull
+    tunnel_mushroom:  { sheet: 'caveTiles', x: 16,  y: 48,  w: 16, h: 16 },  // orange mushroom cluster
 };
 
 // ── Enemy/character sprites (Kenney Char sheet — best-effort Phase A) ──────
@@ -148,20 +166,25 @@ export const ITEM_SPRITES = {
 // these. See _drawPlayer and _drawEnemies in renderer.js for the static draw.
 
 export const ENEMY_SPRITES = {
-    'Violet Fungus': { sheet: 'fungusViolet', col: 0, row: 0, static: true },
-    'Red Fungus':    { sheet: 'fungusRed',    col: 0, row: 1, static: true },
-    'Fungus King':   { sheet: 'fungusKing',   col: 0, row: 2, static: true },
-    'Ghost Fungus':  { sheet: 'ghostMonster', col: 0, row: 3, static: true },
-    'Sewer Monster': { sheet: 'sewerMonster', col: 0, row: 4, static: true },
-    // Carrion the dehydrated zombie merchant — placeholder sprite reuses the
-    // sewer-monster sheet for v1. Per plans/cosmology-and-arc.md she's
-    // visually distinct (pushes a cart, dehydrated, sludge-coated), so a
-    // dedicated sprite is on the polish queue.
-    'Carrion':       { sheet: 'sewerMonster', col: 0, row: 4, static: true },
+    // Kenney char sheet cols 0-1, rows 0-3 are slimes/blobs in 4 color variants.
+    // Col 0 = passive (closed mouth), col 1 = aggressive (red mouth open).
+    // Enemies use col 1 (angry) variants for visual menace.
+    'Violet Fungus': { sheet: 'fungusViolet', col: 1, row: 0, static: true }, // cream angry slime (no purple available)
+    'Red Fungus':    { sheet: 'fungusRed',    col: 1, row: 1, static: true }, // tan angry slime (reads reddish)
+    'Fungus King':   { sheet: 'fungusKing',   col: 1, row: 2, static: true }, // brown angry slime (darker = king)
+    'Ghost Fungus':  { sheet: 'ghostMonster', col: 1, row: 3, static: true }, // green angry slime (most fungus-like)
+    'Sewer Monster': { sheet: 'sewerMonster', col: 1, row: 2, static: true }, // brown slime (sewer goop reads brown)
+    // Carrion the dehydrated zombie merchant — uses humanoid (0,5) orange-shirt.
+    // Per plans/cosmology-and-arc.md she's visually distinct (pushes a cart,
+    // dehydrated, sludge-coated). Orange-shirted humanoid is closer to "merchant
+    // figure" than the slime placeholder used previously.
+    'Carrion':       { sheet: 'sewerMonster', col: 0, row: 5, static: true },
 };
 
-// Player sprite (renderer reads this; previously hardcoded col/row via FACE map)
-export const PLAYER_SPRITE = { sheet: 'player', col: 4, row: 0, static: true };
+// Player sprite — Kenney char sheet (0,7) = brown-hat brown-belt adventurer.
+// Previous (4,0) landed on an EMPTY cell in the char sheet, causing the
+// renderer to draw a green fallback rectangle instead of a sprite.
+export const PLAYER_SPRITE = { sheet: 'player', col: 0, row: 7, static: true };
 
 // ── Phase B TODO ────────────────────────────────────────────────────────────
 // All coordinates above are first-pass picks from visual inspection of the
