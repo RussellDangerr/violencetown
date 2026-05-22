@@ -99,6 +99,12 @@ class Game {
         this._autoRepeatDir = null;
         this._AUTO_REPEAT_MS = 120; // slightly longer than 100ms animation
 
+        // Held-key stack — direction-key codes currently physically held, in
+        // press-order with most-recent at the end. Lets keyup fall back to a
+        // still-held key instead of stopping movement entirely. Fixes the
+        // "release one direction while another is held = freeze" bug.
+        this._heldDirKeys = [];
+
         // Inventory: 10 stackable slots, each { itemDef, count } or null
         this.inventory = new Array(INVENTORY_SIZE).fill(null);
         this.selectedSlot = -1; // -1 = none selected
@@ -368,6 +374,14 @@ class Game {
             const dir = DIRS[e.code];
             if (dir) {
                 e.preventDefault();
+                // Push onto the held-key stack (de-duplicate so re-pressing
+                // an already-held key just brings it back to the top instead
+                // of stacking duplicates). On keyup we'll fall back to the
+                // new top, which fixes the "releasing one direction key
+                // while another is held freezes movement" bug.
+                const heldIdx = this._heldDirKeys.indexOf(e.code);
+                if (heldIdx >= 0) this._heldDirKeys.splice(heldIdx, 1);
+                this._heldDirKeys.push(e.code);
                 this._doMove(dir);
                 this._startAutoRepeat(e.code, dir);
                 return;
@@ -387,11 +401,42 @@ class Game {
             this._stopAutoRepeat();
         });
 
-        // Stop auto-repeat when key released
+        // Direction-key release: pop from held stack, then either fall back
+        // to whichever direction key is still physically held (top of stack)
+        // or stop entirely if no held keys remain. Non-direction key releases
+        // are no-ops here — they were never in the stack.
         document.addEventListener('keyup', (e) => {
-            if (this._autoRepeatKey === e.code) {
-                this._stopAutoRepeat();
+            const heldIdx = this._heldDirKeys.indexOf(e.code);
+            if (heldIdx >= 0) this._heldDirKeys.splice(heldIdx, 1);
+
+            if (this._autoRepeatKey !== e.code) return; // not driving movement
+
+            // Released the key currently driving auto-repeat. Pick a fallback
+            // from the held stack — most-recently-pressed-still-held wins.
+            // Only resume in IDLE state; menus/overlays handle their own input.
+            if (this._heldDirKeys.length > 0 && this.state === STATE.IDLE) {
+                const fallbackCode = this._heldDirKeys[this._heldDirKeys.length - 1];
+                const fallbackDir  = DIRS[fallbackCode];
+                if (fallbackDir) {
+                    // Restart auto-repeat with the held key now on top of
+                    // the stack. We deliberately don't fire _doMove here —
+                    // that would feel like a "stutter step" since the player
+                    // didn't press anything new. Auto-repeat picks it up on
+                    // its next 120ms tick, which feels like a smooth
+                    // continuation of the held direction.
+                    this._startAutoRepeat(fallbackCode, fallbackDir);
+                    return;
+                }
             }
+            this._stopAutoRepeat();
+        });
+
+        // Window blur clears the held stack — browsers don't always fire
+        // keyup events for keys held when the window loses focus, so we'd
+        // otherwise end up with phantom held keys. Cheap defensive cleanup.
+        window.addEventListener('blur', () => {
+            this._heldDirKeys = [];
+            this._stopAutoRepeat();
         });
     }
 
@@ -763,6 +808,15 @@ class Game {
     // method focused on menu state, not action mechanics.
 
     _openRadialMenu(enemy) {
+        // Halt any in-flight walk cleanly. Auto-repeat would otherwise keep
+        // firing _doMove until the next tick's state-check catches up (up to
+        // 120ms later), which would feel like a residual lurch into the
+        // enemy you're now in combat with. Clear the held stack too — the
+        // player needs to release-and-re-press to walk again after combat,
+        // which is the safe default given they were aiming at this enemy.
+        this._stopAutoRepeat();
+        this._heldDirKeys = [];
+
         this._radialTarget = enemy;
         this.radialDrilled = false;
         // radialInnerIndex preserved from last open (or 0 default in constructor)
