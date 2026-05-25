@@ -152,6 +152,7 @@ export class Renderer {
         this._drawHPPanel(game);
         this._drawZoneLabel(game);
         this._drawBuffBar(game);
+        this._drawLogStrip(game);
         this._drawHotbar(game);
 
         // Subtle vignette border
@@ -551,6 +552,68 @@ export class Renderer {
             ctx.fillStyle = UI.gold;
             ctx.font = 'bold 11px monospace';
             ctx.fillText(`${buff.turns}`, bx + bw - 14, by + 23);
+        }
+    }
+
+    // ── In-canvas Log Strip (above hotbar) ──────────────────────────────────
+    //
+    // Persistent 3-slot rolling log rendered as a parchment strip above the
+    // hotbar. Mirrors _log() messages from main.js's _logStripMessages ring
+    // buffer (newest at end). Newest sits at the bottom of the strip (chat-
+    // window convention); older messages dim with position so the eye lands
+    // on the freshest line first. Hotbar tooltip is allowed to overlay this
+    // strip via z-order — _drawHotbar runs after _drawLogStrip in _drawScene.
+    //
+    // Color per category uses the parchment-panel palette (UI.text base);
+    // combat/pickup/gold tints make different message types visually distinct
+    // without needing to read every line.
+
+    _drawLogStrip(game) {
+        const messages = game._logStripMessages;
+        if (!messages || messages.length === 0) return;
+
+        const { ctx } = this;
+        const SX = 6;
+        const SW = 300;
+        const SH = 44;
+        const HOTBAR_OY = CANVAS_PX - 42 - 20;
+        const SY = HOTBAR_OY - SH - 6;
+
+        drawPanelSmall(ctx, SX, SY, SW, SH);
+
+        ctx.font = '10px monospace';
+        ctx.textAlign = 'left';
+
+        // Newest message bottom-aligned at line 3; older messages climb up.
+        const baselines = [SY + 16, SY + 27, SY + 38];
+        const alphas    = [0.5, 0.75, 1.0]; // oldest → newest position
+
+        const visible = messages.slice(-3);              // last N entries
+        const offset  = 3 - visible.length;              // top-align if fewer than 3
+
+        for (let i = 0; i < visible.length; i++) {
+            const m = visible[i];
+            const slot = i + offset;
+            const baseColor = this._logStripColor(m.category);
+            ctx.fillStyle = hexToRgba(baseColor, alphas[slot]);
+            // Truncate to fit width — rough char-budget for 10px monospace
+            // at 300px-16px-padding = ~284px usable, ~6px/char → ~47 chars.
+            let text = m.text;
+            if (text.length > 47) text = text.slice(0, 46) + '…';
+            ctx.fillText(text, SX + 8, baselines[slot]);
+        }
+    }
+
+    // Map a log-strip message category to a parchment-palette tint. Falls
+    // back to UI.text so unknown categories stay readable. Kept as its own
+    // method so future categories slot in without touching _drawLogStrip.
+    _logStripColor(category) {
+        switch (category) {
+            case 'combat':     return UI.hpRed;    // damage, deaths, fights
+            case 'pickup':     return UI.hpGreen;  // items collected, gold
+            case 'transition': return UI.gold;     // zone entries, milestones
+            case 'system':
+            default:           return UI.text;     // dark brown — default
         }
     }
 

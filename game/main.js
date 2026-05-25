@@ -105,6 +105,14 @@ class Game {
         // "release one direction while another is held = freeze" bug.
         this._heldDirKeys = [];
 
+        // In-canvas log strip (Phase 1B of overhead-dialogue plan). Mirrors
+        // every _log() call into a fixed-size ring buffer that the renderer
+        // draws above the hotbar. Newest message at the bottom; old ones
+        // dim with position. The DOM side log (#text-log) keeps receiving
+        // everything as a desktop history overflow.
+        this._logStripMessages = [];
+        this._STRIP_MAX = 3;
+
         // Inventory: 10 stackable slots, each { itemDef, count } or null
         this.inventory = new Array(INVENTORY_SIZE).fill(null);
         this.selectedSlot = -1; // -1 = none selected
@@ -1605,7 +1613,14 @@ class Game {
 
     // ── Log ──────────────────────────────────────────────────────────────────
 
-    _log(msg) {
+    _log(msg, category = 'system') {
+        // Mirror into the in-canvas strip (ring buffer, newest at end).
+        this._logStripMessages.push({ text: msg, category, bornAt: performance.now() });
+        if (this._logStripMessages.length > this._STRIP_MAX) {
+            this._logStripMessages.shift();
+        }
+
+        // Desktop history overflow — sidebar still receives every line.
         const log = document.getElementById('text-log');
         const line = document.createElement('div');
         line.className = 'log-line';
