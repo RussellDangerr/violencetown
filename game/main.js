@@ -1186,9 +1186,23 @@ class Game {
         this.turn++;
         this._soapUsedThisTurn = false;
 
-        // Enemies act
+        // Enemies act. Messages come back as either plain strings (legacy:
+        // FSM activity reports, tickTempEquips) or tuples (overhead-dialogue
+        // v1: barks, adjacency-barks, "spotted you!"). Tuples carry their
+        // source enemy and a category — spoken lines float above the speaker;
+        // strings fall through to the side log.
         const msgs = resolveEnemyTurns(this);
-        for (const m of msgs) this._log(m);
+        for (const m of msgs) {
+            if (typeof m === 'string') {
+                this._log(m);
+            } else if (m && (m.category === 'bark' || m.category === 'adjacency-bark' || m.category === 'spotted')) {
+                this._spawnOverheadDialogue(m.sourceEnemy.x, m.sourceEnemy.y, m.text);
+            } else {
+                // Unknown tuple shape — fail safe to the log so nothing gets
+                // dropped silently if a future category lands without a route.
+                this._log(m.text ?? String(m));
+            }
+        }
         if (this.playerHp <= 0) { this.playerHp = 0; this._die(); return; }
 
         // Temp equips tick
@@ -1492,6 +1506,34 @@ class Game {
             vy: -28,                          // slightly slower than damage numbers
             bornAt: performance.now(),
             maxAge: 700,
+        });
+        this._ensureParticleLoop();
+    }
+
+    // Spawn an overhead-dialogue particle above an NPC tile — for barks,
+    // adjacency barks, "spotted you!" lines. Distinct from event words:
+    // longer-lived (NPCs say sentences, not exclamations), no horizontal
+    // scatter (a single source speaks), and gentler rise. Strips bracket
+    // wrappers ("[Foo bar]" → "Foo bar") so dialogue reads as speech, not
+    // log fragment. Reuses the _damageNumbers array + renderer pipeline —
+    // no new particle kind, no renderer changes needed for v1.
+    //
+    // opts: { color, size, effect } overrides. `effect` is reserved for
+    // future wave/shake/typewriter animations (RuneScape-style); v1 ignores
+    // anything other than 'normal' / 'bold' but accepts the param so callers
+    // can be future-proofed.
+    _spawnOverheadDialogue(tileX, tileY, text, opts = {}) {
+        const cleanText = text.replace(/^\[|\]$/g, ''); // strip wrapping brackets
+        this._damageNumbers.push({
+            tileX, tileY,
+            text:  cleanText,
+            color: opts.color ?? '#e8d090',  // parchment gold — matches HUD vocabulary
+            size:  opts.size  ?? 11,
+            vx: 0,                            // no scatter — single source
+            vy: -8,                           // gentle rise, not pop-up
+            bornAt: performance.now(),
+            maxAge: 2000,                     // dialogue lingers; players need read time
+            effect: opts.effect ?? 'normal',  // hook for future wave/shake/typewriter
         });
         this._ensureParticleLoop();
     }
