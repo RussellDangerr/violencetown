@@ -1204,7 +1204,9 @@ class Game {
             if (typeof m === 'string') {
                 this._log(m);
             } else if (m && (m.category === 'bark' || m.category === 'adjacency-bark' || m.category === 'spotted')) {
-                this._spawnOverheadDialogue(m.sourceEnemy.x, m.sourceEnemy.y, m.text);
+                this._spawnOverheadDialogue(m.sourceEnemy.x, m.sourceEnemy.y, m.text, {
+                    sourceRef: m.sourceEnemy,   // groups per-speaker for the stack
+                });
             } else {
                 // Unknown tuple shape — fail safe to the log so nothing gets
                 // dropped silently if a future category lands without a route.
@@ -1523,25 +1525,54 @@ class Game {
     // longer-lived (NPCs say sentences, not exclamations), no horizontal
     // scatter (a single source speaks), and gentler rise. Strips bracket
     // wrappers ("[Foo bar]" → "Foo bar") so dialogue reads as speech, not
-    // log fragment. Reuses the _damageNumbers array + renderer pipeline —
-    // no new particle kind, no renderer changes needed for v1.
+    // log fragment. Reuses the _damageNumbers array + renderer pipeline.
     //
-    // opts: { color, size, effect } overrides. `effect` is reserved for
-    // future wave/shake/typewriter animations (RuneScape-style); v1 ignores
-    // anything other than 'normal' / 'bold' but accepts the param so callers
-    // can be future-proofed.
+    // Per-source stacking: when a new message lands from the same source
+    // (opts.sourceRef), existing dialogue from that source bumps up one
+    // slot. Slot 0 = newest at speaker's head, slot N = oldest near the
+    // top of the visible column. Slots beyond OVERHEAD_MAX_SLOTS accelerate
+    // their fadeout so the column stays bounded — chat-window behavior
+    // where old lines scroll off the top as new ones arrive.
+    //
+    // opts: { color, size, effect, sourceRef, maxAge } overrides. `effect`
+    // is reserved for future wave/shake/typewriter animations (RuneScape-
+    // style); v1 ignores anything other than 'normal' / 'bold' but accepts
+    // the param so callers can be future-proofed. `sourceRef` is the
+    // identity used for stacking — object reference, compared by ===.
     _spawnOverheadDialogue(tileX, tileY, text, opts = {}) {
         const cleanText = text.replace(/^\[|\]$/g, ''); // strip wrapping brackets
+        const sourceRef = opts.sourceRef ?? null;
+        const OVERHEAD_MAX_SLOTS = 3;
+        const OVERHEAD_FADEOUT_MS = 400;
+
+        // Push existing dialogue from this source up one slot. Without a
+        // sourceRef we can't group (skip the bump). Same-source particles
+        // beyond OVERHEAD_MAX_SLOTS get an accelerated fadeout so they
+        // visibly "scroll off" rather than piling indefinitely.
+        if (sourceRef) {
+            const now = performance.now();
+            for (const p of this._damageNumbers) {
+                if (p.sourceRef !== sourceRef) continue;
+                p.stackSlot = (p.stackSlot ?? 0) + 1;
+                if (p.stackSlot >= OVERHEAD_MAX_SLOTS) {
+                    const age = now - p.bornAt;
+                    p.maxAge = Math.min(p.maxAge, age + OVERHEAD_FADEOUT_MS);
+                }
+            }
+        }
+
         this._damageNumbers.push({
             tileX, tileY,
             text:  cleanText,
             color: opts.color ?? '#e8d090',  // parchment gold — matches HUD vocabulary
             size:  opts.size  ?? 11,
             vx: 0,                            // no scatter — single source
-            vy: -8,                           // gentle rise, not pop-up
+            vy: -4,                           // very gentle drift; stack does primary upward motion
             bornAt: performance.now(),
-            maxAge: 2000,                     // dialogue lingers; players need read time
-            effect: opts.effect ?? 'normal',  // hook for future wave/shake/typewriter
+            maxAge: opts.maxAge ?? 2200,     // dialogue lingers; players need read time
+            effect: opts.effect ?? 'normal', // hook for future wave/shake/typewriter
+            sourceRef,                        // identity for stack grouping
+            stackSlot: 0,                     // newest sits at the speaker's head
         });
         this._ensureParticleLoop();
     }

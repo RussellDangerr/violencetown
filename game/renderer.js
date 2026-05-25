@@ -405,8 +405,14 @@ export class Renderer {
             const t = age / 1000; // seconds
             const vx = dn.tileX - game.playerX + half;
             const vy = dn.tileY - game.playerY + half;
+            // stackSlot adds a fixed pixel offset per slot so per-source
+            // dialogue stacks chat-window-style (newest at speaker, older
+            // rising). Particles without stackSlot (damage numbers, event
+            // words) get slot 0 = no offset, behavior unchanged.
+            const STACK_LINE_PX = 14;
+            const slotOffset = (dn.stackSlot ?? 0) * STACK_LINE_PX;
             const px = vx * TILE_PX + TILE_PX / 2 - this._scrollX + dn.vx * t;
-            const py = vy * TILE_PX + TILE_PX / 4 - this._scrollY + dn.vy * t;
+            const py = vy * TILE_PX + TILE_PX / 4 - this._scrollY + dn.vy * t - slotOffset;
 
             const alpha = 1 - age / dn.maxAge;
             ctx.font = `bold ${dn.size}px monospace`;
