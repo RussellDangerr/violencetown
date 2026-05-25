@@ -105,6 +105,14 @@ class Game {
         // "release one direction while another is held = freeze" bug.
         this._heldDirKeys = [];
 
+        // In-canvas log strip (Phase 1B of overhead-dialogue plan). Mirrors
+        // every _log() call into a fixed-size ring buffer that the renderer
+        // draws above the hotbar. Newest message at the bottom; old ones
+        // dim with position. The DOM side log (#text-log) keeps receiving
+        // everything as a desktop history overflow.
+        this._logStripMessages = [];
+        this._STRIP_MAX = 3;
+
         // Inventory: 10 stackable slots, each { itemDef, count } or null
         this.inventory = new Array(INVENTORY_SIZE).fill(null);
         this.selectedSlot = -1; // -1 = none selected
@@ -1186,9 +1194,25 @@ class Game {
         this.turn++;
         this._soapUsedThisTurn = false;
 
-        // Enemies act
+        // Enemies act. Messages come back as either plain strings (legacy:
+        // FSM activity reports, tickTempEquips) or tuples (overhead-dialogue
+        // v1: barks, adjacency-barks, "spotted you!"). Tuples carry their
+        // source enemy and a category — spoken lines float above the speaker;
+        // strings fall through to the side log.
         const msgs = resolveEnemyTurns(this);
-        for (const m of msgs) this._log(m);
+        for (const m of msgs) {
+            if (typeof m === 'string') {
+                this._log(m);
+            } else if (m && (m.category === 'bark' || m.category === 'adjacency-bark' || m.category === 'spotted')) {
+                this._spawnOverheadDialogue(m.sourceEnemy.x, m.sourceEnemy.y, m.text, {
+                    sourceRef: m.sourceEnemy,   // groups per-speaker for the stack
+                });
+            } else {
+                // Unknown tuple shape — fail safe to the log so nothing gets
+                // dropped silently if a future category lands without a route.
+                this._log(m.text ?? String(m));
+            }
+        }
         if (this.playerHp <= 0) { this.playerHp = 0; this._die(); return; }
 
         // Temp equips tick
@@ -1496,6 +1520,63 @@ class Game {
         this._ensureParticleLoop();
     }
 
+    // Spawn an overhead-dialogue particle above an NPC tile — for barks,
+    // adjacency barks, "spotted you!" lines. Distinct from event words:
+    // longer-lived (NPCs say sentences, not exclamations), no horizontal
+    // scatter (a single source speaks), and gentler rise. Strips bracket
+    // wrappers ("[Foo bar]" → "Foo bar") so dialogue reads as speech, not
+    // log fragment. Reuses the _damageNumbers array + renderer pipeline.
+    //
+    // Per-source stacking: when a new message lands from the same source
+    // (opts.sourceRef), existing dialogue from that source bumps up one
+    // slot. Slot 0 = newest at speaker's head, slot N = oldest near the
+    // top of the visible column. Slots beyond OVERHEAD_MAX_SLOTS accelerate
+    // their fadeout so the column stays bounded — chat-window behavior
+    // where old lines scroll off the top as new ones arrive.
+    //
+    // opts: { color, size, effect, sourceRef, maxAge } overrides. `effect`
+    // is reserved for future wave/shake/typewriter animations (RuneScape-
+    // style); v1 ignores anything other than 'normal' / 'bold' but accepts
+    // the param so callers can be future-proofed. `sourceRef` is the
+    // identity used for stacking — object reference, compared by ===.
+    _spawnOverheadDialogue(tileX, tileY, text, opts = {}) {
+        const cleanText = text.replace(/^\[|\]$/g, ''); // strip wrapping brackets
+        const sourceRef = opts.sourceRef ?? null;
+        const OVERHEAD_MAX_SLOTS = 3;
+        const OVERHEAD_FADEOUT_MS = 400;
+
+        // Push existing dialogue from this source up one slot. Without a
+        // sourceRef we can't group (skip the bump). Same-source particles
+        // beyond OVERHEAD_MAX_SLOTS get an accelerated fadeout so they
+        // visibly "scroll off" rather than piling indefinitely.
+        if (sourceRef) {
+            const now = performance.now();
+            for (const p of this._damageNumbers) {
+                if (p.sourceRef !== sourceRef) continue;
+                p.stackSlot = (p.stackSlot ?? 0) + 1;
+                if (p.stackSlot >= OVERHEAD_MAX_SLOTS) {
+                    const age = now - p.bornAt;
+                    p.maxAge = Math.min(p.maxAge, age + OVERHEAD_FADEOUT_MS);
+                }
+            }
+        }
+
+        this._damageNumbers.push({
+            tileX, tileY,
+            text:  cleanText,
+            color: opts.color ?? '#e8d090',  // parchment gold — matches HUD vocabulary
+            size:  opts.size  ?? 11,
+            vx: 0,                            // no scatter — single source
+            vy: -4,                           // very gentle drift; stack does primary upward motion
+            bornAt: performance.now(),
+            maxAge: opts.maxAge ?? 2200,     // dialogue lingers; players need read time
+            effect: opts.effect ?? 'normal', // hook for future wave/shake/typewriter
+            sourceRef,                        // identity for stack grouping
+            stackSlot: 0,                     // newest sits at the speaker's head
+        });
+        this._ensureParticleLoop();
+    }
+
     // Start a requestAnimationFrame loop that re-renders the game until all
     // active visual effects have expired (damage numbers, hit flashes,
     // staggers). Idempotent — calling while a loop is already running is a
@@ -1563,7 +1644,14 @@ class Game {
 
     // ── Log ──────────────────────────────────────────────────────────────────
 
-    _log(msg) {
+    _log(msg, category = 'system') {
+        // Mirror into the in-canvas strip (ring buffer, newest at end).
+        this._logStripMessages.push({ text: msg, category, bornAt: performance.now() });
+        if (this._logStripMessages.length > this._STRIP_MAX) {
+            this._logStripMessages.shift();
+        }
+
+        // Desktop history overflow — sidebar still receives every line.
         const log = document.getElementById('text-log');
         const line = document.createElement('div');
         line.className = 'log-line';

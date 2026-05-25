@@ -192,7 +192,11 @@ export function resolveEnemyTurns(game) {
         if (dist <= enemy.sightRange && hasLineOfSight(game.map, enemy.x, enemy.y, game.playerX, game.playerY)) {
             if (enemy.state === 'idle') {
                 enemy.state = 'chasing';
-                messages.push(`[${enemy.entity.name} spotted you!]`);
+                messages.push({
+                    text: `[${enemy.entity.name} spotted you!]`,
+                    sourceEnemy: enemy,
+                    category: 'spotted',
+                });
             }
         }
 
@@ -261,7 +265,10 @@ function maybeBark(game, enemy) {
 
     const idx = enemy._barkIndex % enemy.barks.length;
     enemy._barkIndex += 1;
-    return enemy.barks[idx];
+    // Tuple shape (since overhead-dialogue v1): the consumer in main.js's
+    // _advanceWorld branches on category and routes spoken lines to
+    // _spawnOverheadDialogue at the source enemy's tile.
+    return { text: enemy.barks[idx], sourceEnemy: enemy, category: 'bark' };
 }
 
 // ── Adjacency-bark resolution ───────────────────────────────────────────────
@@ -281,7 +288,7 @@ function maybeAdjacencyBark(game, enemy) {
     const isAdjacent = dist === 1;
     if (isAdjacent && !enemy._wasAdjacent) {
         enemy._wasAdjacent = true;
-        return enemy.adjacencyBark;
+        return { text: enemy.adjacencyBark, sourceEnemy: enemy, category: 'adjacency-bark' };
     }
     if (!isAdjacent) {
         enemy._wasAdjacent = false;
