@@ -97,7 +97,7 @@ class Game {
         this._autoRepeatKey = null;
         this._autoRepeatInterval = null;
         this._autoRepeatDir = null;
-        this._AUTO_REPEAT_MS = 120; // slightly longer than 100ms animation
+        this._AUTO_REPEAT_MS = 100; // match animation duration so held-key walking has no dead frames between tiles
 
         // Held-key stack — direction-key codes currently physically held, in
         // press-order with most-recent at the end. Lets keyup fall back to a
