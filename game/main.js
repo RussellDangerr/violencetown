@@ -216,7 +216,7 @@ class Game {
         const splashCanvas = document.getElementById('splash-canvas');
         if (splashCanvas) this.renderer.renderSplash(splashCanvas);
 
-        await this._loadMap('sewer-map.json');
+        await this._loadMap('town-map.json');
         this._bindSplash();
         this._bindInput();
         this._bindTouchControls();
@@ -239,7 +239,7 @@ class Game {
             }
         }, 250);
 
-        this._log('[Sewer demo prototype loaded]');
+        this._log('[Violencetown loaded — Town hub ready]');
     }
 
     // ── Map Loading ──────────────────────────────────────────────────────────

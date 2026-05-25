@@ -27,6 +27,24 @@ export const TILES = {
     CAR:          { id: 19, walkable: false, hazard: null, fallbackColor: '#884444' },
     BENCH:        { id: 20, walkable: false, hazard: null, fallbackColor: '#6a5a3a' },
     TRASHCAN:     { id: 21, walkable: false, hazard: null, fallbackColor: '#4a5a4a' },
+
+    // Circus tiles (30-39) — Americana carnival, cryptid menagerie
+    CIRCUS_GROUND: { id: 30, walkable: true,  hazard: null, fallbackColor: '#c4a070' },
+    TENT_STRIPE:   { id: 31, walkable: false, hazard: null, fallbackColor: '#c43030' },
+    CONFETTI:      { id: 32, walkable: true,  hazard: null, fallbackColor: '#e8c060' },
+    SAWDUST:       { id: 33, walkable: true,  hazard: null, fallbackColor: '#a08050' },
+
+    // Factory tiles (40-49) — Oddworld-coded industrial, alien-occupied
+    FACTORY_FLOOR: { id: 40, walkable: true,  hazard: null, fallbackColor: '#3a3a3e' },
+    FACTORY_WALL:  { id: 41, walkable: false, hazard: null, fallbackColor: '#5a5a5e' },
+    GOO_VISUAL:    { id: 42, walkable: true,  hazard: null, fallbackColor: '#6abe30' },
+    CONVEYOR_VIS:  { id: 43, walkable: true,  hazard: null, fallbackColor: '#4a4a3e' },
+
+    // Graveyard tiles (50-59) — surfer-deity cemetery
+    GRAVE_DIRT:    { id: 50, walkable: true,  hazard: null, fallbackColor: '#3a2a1e' },
+    GRAVESTONE:    { id: 51, walkable: false, hazard: null, fallbackColor: '#7a7a7a' },
+    DEAD_GRASS:    { id: 52, walkable: true,  hazard: null, fallbackColor: '#3a3a2a' },
+    IRON_FENCE:    { id: 53, walkable: false, hazard: null, fallbackColor: '#1a1a1a' },
 };
 
 // Reverse lookup: id → tile def

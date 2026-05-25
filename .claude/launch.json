@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "violencetown",
-      "runtimeExecutable": "npx",
-      "runtimeArgs": ["serve", "-l", "3001", "--no-clipboard", "C:\\Users\\caela\\OneDrive\\Desktop\\violencetown\\game"],
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "3001", "--directory", "game"],
       "port": 3001
     }
   ]
