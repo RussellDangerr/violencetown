@@ -28,6 +28,6 @@
         { "type": "rock", "x": 5, "y": 5 }
     ],
     "transitions": [
-        { "x": 14, "y": 7, "toMap": "town-map.json", "toX": 1, "toY": 6, "label": "[Back to TOWN]" }
+        { "x": 14, "y": 7, "toMap": "town-map.json", "toX": 4, "toY": 6, "label": "[Back to TOWN]" }
     ]
 }

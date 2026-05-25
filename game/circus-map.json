@@ -27,6 +27,6 @@
         { "type": "bandage", "x": 4, "y": 6 }
     ],
     "transitions": [
-        { "x": 0, "y": 7, "toMap": "town-map.json", "toX": 15, "toY": 6, "label": "[Back to TOWN]" }
+        { "x": 0, "y": 7, "toMap": "town-map.json", "toX": 12, "toY": 6, "label": "[Back to TOWN]" }
     ]
 }
