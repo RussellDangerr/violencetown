@@ -103,12 +103,13 @@ export class Renderer {
             : null;
         const version = meta ? meta.getAttribute('content') : '?';
         if (this.font) {
-            this.font.drawText(ctx, 'V' + version, 296, 200, {
+            // y=192 sits above the panel's bottom 16px-cell trim/accents at
+            // y≈193+. Right-anchored 24px in from the panel's right edge
+            // (which lives at x≈304); left-anchored 24px in from the left.
+            this.font.drawText(ctx, 'V' + version, 280, 192, {
                 color: UI.textLight, scale: 1, align: 'right',
             });
-            // Credit — anchors the project to a searchable name. The repo URL
-            // lives in the help modal + og card to avoid splash crowding.
-            this.font.drawText(ctx, 'BY CAELAN GANDER', 24, 200, {
+            this.font.drawText(ctx, 'BY CAELAN GANDER', 32, 192, {
                 color: UI.textLight, scale: 1, align: 'left',
             });
         }
@@ -494,7 +495,7 @@ export class Renderer {
         const { ctx } = this;
         const x = 6, y = 6, w = 170, h = 62;
 
-        drawPanelSmall(ctx, x, y, w, h);
+        drawPanelSmall(ctx, x, y, w, h, this.uiSheet);
 
         // HP bar inside the parchment
         const bx = x + 8, by = y + 8, bw = w - 16, bh = 14;
@@ -538,7 +539,7 @@ export class Renderer {
         const w = Math.max(100, label.length * 10 + 60);
         const px = (CANVAS_PX - w) / 2;
 
-        drawPanelSmall(ctx, px, 4, w, 22);
+        drawPanelSmall(ctx, px, 4, w, 22, this.uiSheet);
 
         if (this.font) {
             this.font.drawText(ctx, label.toUpperCase(), CANVAS_PX / 2, 9, {
@@ -561,7 +562,7 @@ export class Renderer {
         const totalW = total * (bw + gap) - gap + 12;
         const px = CANVAS_PX - totalW - 6, py = 6;
 
-        drawPanelSmall(ctx, px, py, totalW, bh + 12);
+        drawPanelSmall(ctx, px, py, totalW, bh + 12, this.uiSheet);
 
         for (let i = 0; i < total; i++) {
             const buff = game.buffs[i];
@@ -607,7 +608,7 @@ export class Renderer {
         const HOTBAR_OY = CANVAS_PX - 42 - 20;
         const SY = HOTBAR_OY - SH - 6;
 
-        drawPanelSmall(ctx, SX, SY, SW, SH);
+        drawPanelSmall(ctx, SX, SY, SW, SH, this.uiSheet);
 
         // Newest message bottom-aligned at line 3; older messages climb up.
         // Top-of-glyph y baselines (bitmap font draws from top-left).
@@ -676,7 +677,9 @@ export class Renderer {
             const tx = (CANVAS_PX - tw) / 2;
             const ty = oy - th - 6;
 
-            drawPanelSmall(ctx, tx, ty, tw, th);
+            // Item tooltip uses the dark variant so it reads as an
+            // overlay above the parchment hotbar without clashing.
+            drawPanelSmall(ctx, tx, ty, tw, th, this.uiSheet, 'dark');
 
             let lineY = ty + 4;
 
@@ -708,7 +711,7 @@ export class Renderer {
         }
 
         // Parchment background strip
-        drawPanelSmall(ctx, ox, oy - 4, totalW, sh + 12);
+        drawPanelSmall(ctx, ox, oy - 4, totalW, sh + 12, this.uiSheet);
 
         for (let i = 0; i < count; i++) {
             const sx = ox + 8 + i * (sw + gap);
@@ -814,7 +817,7 @@ export class Renderer {
             const py = src.y + (fp.y - src.y) * t;
             const w = 88, h = 32;
 
-            drawPanelSmall(ctx, px, py, w, h);
+            drawPanelSmall(ctx, px, py, w, h, this.uiSheet);
 
             if (this.font) {
                 const label = opt.label.toUpperCase();
@@ -1038,7 +1041,10 @@ export class Renderer {
         ];
 
         for (const d of dirs) {
-            drawPanelSmall(ctx, d.x, d.y, 32, 32);
+            // 32×32 throw targets stay with the flat-fill fallback since
+            // drawPanelSmall thresholds the 9-slice at 64px (corners
+            // would overlap and degenerate at smaller sizes).
+            drawPanelSmall(ctx, d.x, d.y, 32, 32, this.uiSheet);
             if (this.font) {
                 this.font.drawText(ctx, d.l, d.x + 16, d.y + 8, {
                     color: UI.text, scale: 2, align: 'center',
@@ -1059,8 +1065,10 @@ export class Renderer {
         const w = 280, h = 120;
         const px = (CANVAS_PX - w) / 2, py = (CANVAS_PX - h) / 2;
 
+        // Win overlay uses the glow variant — a brighter gold trim that
+        // reads as a celebratory frame around the BOSS ROOM REACHED text.
         if (ui?.loaded) {
-            drawPanelBig(ctx, ui, px, py, w, h);
+            drawPanelBig(ctx, ui, px, py, w, h, 'glow');
         } else {
             drawPanelSmall(ctx, px, py, w, h);
         }

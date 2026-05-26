@@ -36,44 +36,37 @@ DARK_DEEP     = ( 26,  22,  16, 255)   # #1a1610 — deepest
 GLOW          = (240, 215, 130, 255)   # active-state brighter gold
 
 
+CELL = 16
+PANEL = CELL * 3  # 48px per variant — smaller corners let more panels use the 9-slice
+
+
 def draw_panel(img: Image.Image, oy: int, center_color, trim_color, accent_color):
-    """Draw one 96×96 panel variant into `img` at vertical offset `oy`."""
+    """Draw one PANEL×PANEL panel variant into `img` at vertical offset `oy`."""
     d = ImageDraw.Draw(img)
+    P = PANEL
 
-    # 1. Fill the whole 96×96 region with center color so center cell + edge
-    #    interiors are consistent.
-    d.rectangle([0, oy, 96, oy + 96], fill=center_color)
+    # 1. Fill with center color so edges + center tile cleanly.
+    d.rectangle([0, oy, P, oy + P], fill=center_color)
 
-    # 2. Outer dark border (2px) — frames the panel.
-    d.rectangle([0, oy, 95, oy + 95], outline=DARK, width=2)
+    # 2. Outer dark border (2px).
+    d.rectangle([0, oy, P - 1, oy + P - 1], outline=DARK, width=2)
 
     # 3. Inner gold trim (2px, inset 2px from outer).
-    d.rectangle([2, oy + 2, 93, oy + 93], outline=trim_color, width=2)
+    d.rectangle([2, oy + 2, P - 3, oy + P - 3], outline=trim_color, width=2)
 
-    # 4. Inner dark hairline (1px, inset 4px) — separates trim from fill.
-    d.rectangle([4, oy + 4, 91, oy + 91], outline=DARK_DEEP, width=1)
-
-    # 5. Corner gem accents — small 3×3 highlight squares inset into each
-    #    corner cell, just inside the trim. Gives the panel a "studded
-    #    parchment" character without making the edges noisy.
-    for cx, cy in [(6, 6), (87, 6), (6, 87), (87, 87)]:
-        d.rectangle([cx, oy + cy, cx + 2, oy + cy + 2], fill=accent_color)
-
-    # 6. Edge highlight pixels — a single bright pixel in the middle of each
-    #    edge cell, ornate-coin style. Tiles cleanly since each cell carries
-    #    its own mid-pixel.
-    for ex, ey in [(48, 4), (48, 91), (4, 48), (91, 48)]:
-        d.rectangle([ex, oy + ey, ex + 1, oy + ey + 1], fill=accent_color)
+    # 4. Corner gem accents — single 2×2 highlight in each corner cell, just
+    #    inside the trim. Even small panels read as "ornate" because the
+    #    accents land right at the cell joints.
+    accents = [(5, 5), (P - 7, 5), (5, P - 7), (P - 7, P - 7)]
+    for cx, cy in accents:
+        d.rectangle([cx, oy + cy, cx + 1, oy + cy + 1], fill=accent_color)
 
 
 def main():
-    img = Image.new('RGBA', (96, 96 * 3), (0, 0, 0, 0))
-    # Base variant (parchment fill, gold trim, gold accents)
-    draw_panel(img, 0,   center_color=PARCHMENT,    trim_color=BORDER_GOLD,  accent_color=HIGHLIGHT)
-    # Dark variant (dark fill, dim trim, faint accents) — for tooltips, modals
-    draw_panel(img, 96,  center_color=DARK,         trim_color=BORDER_GOLD,  accent_color=HIGHLIGHT)
-    # Glow variant (parchment fill, bright gold trim) — for active highlights
-    draw_panel(img, 192, center_color=PARCHMENT_LT, trim_color=GLOW,         accent_color=GLOW)
+    img = Image.new('RGBA', (PANEL, PANEL * 3), (0, 0, 0, 0))
+    draw_panel(img, 0,         center_color=PARCHMENT,    trim_color=BORDER_GOLD, accent_color=HIGHLIGHT)
+    draw_panel(img, PANEL,     center_color=DARK,         trim_color=BORDER_GOLD, accent_color=HIGHLIGHT)
+    draw_panel(img, PANEL * 2, center_color=PARCHMENT_LT, trim_color=GLOW,        accent_color=GLOW)
 
     here = os.path.dirname(os.path.abspath(__file__))
     out = os.path.abspath(os.path.join(here, '..', 'game', 'assets', 'ui_panel.png'))

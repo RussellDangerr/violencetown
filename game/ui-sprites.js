@@ -27,29 +27,31 @@ export const UI = {
     buff:    '#44aa44',
 };
 
-// ── 9-Slice Panel Pieces (32px cells in a 96×96 grid per variant) ───────────
+// ── 9-Slice Panel Pieces (16px cells in a 48×48 grid per variant) ──────────
 //
-// The panel atlas (game/assets/ui_panel.png) is 96×288 — three vertically
-// stacked variants: base (y=0), dark (y=96), glow (y=192). Each variant is
-// a 3×3 grid of 32×32 cells. P[piece] gives base-coords; PANEL_VARIANT_OY
-// offsets the whole grid down for the dark/glow variants.
+// The panel atlas (game/assets/ui_panel.png) is 48×144 — three vertically
+// stacked variants: base (y=0), dark (y=48), glow (y=96). Each variant is
+// a 3×3 grid of 16×16 cells. Smaller corners than the original 32px design
+// so HP / hotbar / log / buff-bar panels (most <64px tall) can still use
+// the 9-slice without their corners overlapping. P[piece] gives base-coords;
+// PANEL_VARIANT_OY offsets the grid down for the dark/glow variants.
 
 const P = {
-    tl: { x: 0,  y: 0,  w: 32, h: 32 },
-    t:  { x: 32, y: 0,  w: 32, h: 32 },
-    tr: { x: 64, y: 0,  w: 32, h: 32 },
-    l:  { x: 0,  y: 32, w: 32, h: 32 },
-    c:  { x: 32, y: 32, w: 32, h: 32 },
-    r:  { x: 64, y: 32, w: 32, h: 32 },
-    bl: { x: 0,  y: 64, w: 32, h: 32 },
-    b:  { x: 32, y: 64, w: 32, h: 32 },
-    br: { x: 64, y: 64, w: 32, h: 32 },
+    tl: { x: 0,  y: 0,  w: 16, h: 16 },
+    t:  { x: 16, y: 0,  w: 16, h: 16 },
+    tr: { x: 32, y: 0,  w: 16, h: 16 },
+    l:  { x: 0,  y: 16, w: 16, h: 16 },
+    c:  { x: 16, y: 16, w: 16, h: 16 },
+    r:  { x: 32, y: 16, w: 16, h: 16 },
+    bl: { x: 0,  y: 32, w: 16, h: 16 },
+    b:  { x: 16, y: 32, w: 16, h: 16 },
+    br: { x: 32, y: 32, w: 16, h: 16 },
 };
 
 export const PANEL_VARIANT_OY = {
     base: 0,
-    dark: 96,
-    glow: 192,
+    dark: 48,
+    glow: 96,
 };
 
 // ── Item display colors ──────────────────────────────────────────────────────
@@ -82,7 +84,7 @@ export function drawPanelBig(ctx, sheet, x, y, w, h, variant = 'base') {
         drawPanelFallback(ctx, x, y, w, h);
         return;
     }
-    const s = 32;
+    const s = 16; // cell size (matches the P.* w/h above)
     const oy = PANEL_VARIANT_OY[variant] ?? 0;
     spr(ctx, sheet, P.tl, oy, x, y, s, s);
     spr(ctx, sheet, P.tr, oy, x + w - s, y, s, s);
@@ -100,6 +102,11 @@ export function drawPanelBig(ctx, sheet, x, y, w, h, variant = 'base') {
 // that don't have the sheet (or for very small panels where 32×32 corners
 // would dominate).
 export function drawPanelSmall(ctx, x, y, w, h, sheet = null, variant = 'base') {
+    // 32 is the smallest size where the 9-slice math leaves any center to
+    // render (corners are 16×16; below 32px the top-left and top-right
+    // would overlap and the parchment look degenerates). Smaller panels —
+    // throw-direction targets, badge pills — keep the flat fallback which
+    // reads cleanly at small sizes.
     if (sheet?.loaded && w >= 32 && h >= 32) {
         drawPanelBig(ctx, sheet, x, y, w, h, variant);
         return;
