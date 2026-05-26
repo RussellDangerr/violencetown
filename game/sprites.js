@@ -208,6 +208,40 @@ export const ENEMY_SPRITES = {
 // renderer to draw a green fallback rectangle instead of a sprite.
 export const PLAYER_SPRITE = { sheet: 'player', col: 0, row: 7, static: true };
 
+// ── Zone tile coords (Circus / Factory / Graveyard) ─────────────────────────
+// These three zones previously rendered as flat fallbackColor rectangles
+// (no sprite refs anywhere). First-pass picks below render real art for the
+// 12 tile ids defined in data.js. Pick verification was done via the
+// sprite-picker tool (game/sprite-picker.html) at the correct stride.
+//
+// `sheet:` names the SpriteSheet key; renderer._drawTiles resolves it
+// against `game.renderer.sprites[sheet]`. If the key is omitted, the
+// renderer falls back to the default sewerTiles sheet.
+
+export const ZONE_TILE_SPRITE_MAP = {
+    // Circus — striped carnival awnings live in the top-right of
+    // roguelikeSheet around rows 0-3. Sand/dirt for ground variety.
+    30: { sheet: 'townTerrains', col: 8,  row: 0 },  // CIRCUS_GROUND — sand floor
+    31: { sheet: 'townTerrains', col: 10, row: 0 },  // TENT_STRIPE   — orange/white striped awning
+    32: { sheet: 'townTerrains', col: 1,  row: 5 },  // CONFETTI      — grass dotted with orange flowers
+    33: { sheet: 'townTerrains', col: 5,  row: 7 },  // SAWDUST       — packed brown dirt
+
+    // Factory — industrial gray stone from the dungeon sheet, plus the
+    // existing sludge green for "goo" since the dungeon sheet doesn't ship
+    // a dedicated goo tile. Conveyor reuses a worn-stone variant.
+    40: { sheet: 'sewerTiles', col: 10, row: 0 },   // FACTORY_FLOOR — clean stone slab
+    41: { sheet: 'sewerTiles', col: 12, row: 0 },   // FACTORY_WALL  — adjacent stone wall
+    42: { sheet: 'sewerTiles', col: 6,  row: 16 },  // GOO_VISUAL    — green water/sludge
+    43: { sheet: 'sewerTiles', col: 1,  row: 3 },   // CONVEYOR_VIS  — cracked stone for wear pattern
+
+    // Graveyard — dirt + autumn-flower grass for somber tone, plus the
+    // black coffin-shape and iron-bars from roguelikeSheet's right side.
+    50: { sheet: 'townTerrains', col: 5,  row: 7 }, // GRAVE_DIRT    — brown dirt patch
+    51: { sheet: 'townTerrains', col: 33, row: 1 }, // GRAVESTONE    — black tombstone/coffin shape
+    52: { sheet: 'townTerrains', col: 0,  row: 5 }, // DEAD_GRASS    — orange-flower grass (autumn)
+    53: { sheet: 'townTerrains', col: 32, row: 3 }, // IRON_FENCE    — vertical iron bars
+};
+
 // ── Phase B TODO ────────────────────────────────────────────────────────────
 // All coordinates above are first-pass picks from visual inspection of the
 // Kenney sheets. Expect to revisit them as the game's visual identity firms

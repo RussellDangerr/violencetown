@@ -4,7 +4,7 @@
 // All text: dark brown on parchment for readability (not gold-on-dark)
 
 import { TILE_PX, VIEW_TILES, CANVAS_PX, INVENTORY_SIZE } from './data.js';
-import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES, PLAYER_SPRITE } from './sprites.js';
+import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES, PLAYER_SPRITE } from './sprites.js';
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
 
 export class Renderer {
@@ -188,7 +188,12 @@ export class Renderer {
                 const py = vy * TILE_PX - this._scrollY;
                 const id = game.map.getTile(wx, wy);
                 const def = game.map.getTileDef(wx, wy);
-                const ref = TILE_SPRITE_MAP[id] || TOWN_TILE_SPRITE_MAP[id];
+                // Lookup chain: sewer ids 0-7 → TILE_SPRITE_MAP,
+                // town ids 10-21 → TOWN_TILE_SPRITE_MAP,
+                // circus/factory/graveyard ids 30+ → ZONE_TILE_SPRITE_MAP.
+                // Disjoint id ranges so order doesn't matter, but explicit
+                // chain keeps the resolution path readable.
+                const ref = TILE_SPRITE_MAP[id] || TOWN_TILE_SPRITE_MAP[id] || ZONE_TILE_SPRITE_MAP[id];
                 let ok = false;
                 if (ref) {
                     if (ref.region) {
