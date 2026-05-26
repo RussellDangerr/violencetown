@@ -1797,18 +1797,22 @@ class Game {
         const color = result.killed ? '#ffaa22' : '#ffdd44';
         this._spawnDamageNumber(enemyObj.x, enemyObj.y, `-${result.damage}`, color, dmgSize);
 
-        // Hit flash + stagger — Phase C. Tints the enemy sprite red for
-        // 100ms and offsets it 3px in the direction away from the player
-        // (the visual "push back" of being struck). The stagger eases out
-        // over 80ms via the renderer's progress interpolation.
+        // Hit flash + stagger — Phase C, polished in B6. Flash duration
+        // and stagger distance now scale with damage so light taps feel
+        // light and heavy hits feel heavy. Range: 80ms→200ms flash,
+        // 80ms→160ms stagger, 3px→6px push.
         const now = performance.now();
-        enemyObj._hitFlashUntil = now + 100;
-        enemyObj._staggerUntil  = now + 80;
+        const heaviness = Math.min(1, result.damage / 25);  // 0..1
+        const flashMs   = 80  + Math.round(heaviness * 120);
+        const staggerMs = 80  + Math.round(heaviness * 80);
+        const pushPx    = 3   + heaviness * 3;
+        enemyObj._hitFlashUntil = now + flashMs;
+        enemyObj._staggerUntil  = now + staggerMs;
         const dx = enemyObj.x - this.playerX;
         const dy = enemyObj.y - this.playerY;
         const len = Math.abs(dx) + Math.abs(dy);
-        enemyObj._staggerDx = len > 0 ? (dx / len) * 3 : 0;
-        enemyObj._staggerDy = len > 0 ? (dy / len) * 3 : 0;
+        enemyObj._staggerDx = len > 0 ? (dx / len) * pushPx : 0;
+        enemyObj._staggerDy = len > 0 ? (dy / len) * pushPx : 0;
         this._ensureParticleLoop(); // keep rendering through the 100ms window
 
         // Screen shake on heavy hits or kills — Phase F. Threshold is 15

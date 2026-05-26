@@ -427,9 +427,15 @@ export class Renderer {
             }
 
             if (isAlive) {
-                // Hit-flash overlay
+                // Hit-flash overlay — alpha fades as the flash ages so it
+                // pops on first frame and decays. Combined with the
+                // damage-scaled duration set in main.js combatAttack,
+                // heavier hits look heavier.
                 if (flashing) {
-                    ctx.fillStyle = 'rgba(255, 60, 40, 0.45)';
+                    const flashAge = now - (e._hitFlashUntil - 100);  // rough age proxy
+                    const flashDur = (e._hitFlashUntil ?? now) - now; // remaining
+                    const fade = Math.max(0, Math.min(1, flashDur / 120));
+                    ctx.fillStyle = `rgba(255, 60, 40, ${0.55 * fade})`;
                     ctx.fillRect(px + 4, py + 4, TILE_PX - 8, TILE_PX - 8);
                 }
 
@@ -520,17 +526,53 @@ export class Renderer {
             const py = vy * TILE_PX + TILE_PX / 4 - this._scrollY + dn.vy * t - slotOffset;
 
             const alpha = 1 - age / dn.maxAge;
-            ctx.font = `bold ${dn.size}px monospace`;
-            ctx.textAlign = 'center';
 
-            // Drop shadow for readability against any tile color
-            ctx.fillStyle = `rgba(0, 0, 0, ${alpha * 0.8})`;
-            ctx.fillText(dn.text, px + 1, py + 1);
+            // Scale-on-spawn — elastic ease-out from 0.5× → 1.0× over the
+            // first 100ms gives every number a satisfying "pop" entrance.
+            // Past 100ms it sits at 1×; past 500ms it starts shrinking again
+            // as it fades, like a deflating balloon.
+            let scaleMul = 1;
+            if (age < 100) {
+                const p = age / 100;
+                // Cubic ease-out from 0.5 → 1.0
+                scaleMul = 0.5 + 0.5 * (1 - Math.pow(1 - p, 3));
+            } else if (age > dn.maxAge - 150) {
+                const p = (age - (dn.maxAge - 150)) / 150;
+                scaleMul = 1 - 0.2 * p; // shrink slightly while fading out
+            }
 
-            // Main color — translate the dn.color (#rrggbb) to rgba with
-            // our computed alpha so the fade applies cleanly
-            ctx.fillStyle = hexToRgba(dn.color, alpha);
-            ctx.fillText(dn.text, px, py);
+            // Bitmap font path — pixel-perfect text with a black outline that
+            // tracks the scale. Falls back to canvas text if the font failed
+            // to load (defensive; main.js logs a warn in that case).
+            if (this.font) {
+                // Map dn.size (8-20px historically) to a bitmap scale
+                // (1=8px, 2=16px, 3=24px). Round to nearest integer scale
+                // so the pixels stay aligned. The scale-on-spawn modulates
+                // this within a per-particle range.
+                const baseScale = Math.max(1, Math.round(dn.size / 8));
+                const scale = Math.max(1, Math.round(baseScale * scaleMul));
+                // Per-source dialogue particles (sourceRef) get NO outline —
+                // they're already on a contrast-friendly parchment bubble.
+                // Damage numbers / event words DO get an outline since they
+                // float over varied tile backgrounds.
+                const hasOutline = !dn.sourceRef;
+                const colorWithAlpha = hexToRgba(dn.color, alpha);
+                const shadow = hasOutline ? `rgba(0, 0, 0, ${alpha * 0.85})` : null;
+                this.font.drawText(ctx, dn.text, px, py, {
+                    color: colorWithAlpha,
+                    scale,
+                    align: 'center',
+                    shadow,
+                });
+            } else {
+                // Fallback path retained — system monospace, alpha-faded.
+                ctx.font = `bold ${Math.round(dn.size * scaleMul)}px monospace`;
+                ctx.textAlign = 'center';
+                ctx.fillStyle = `rgba(0, 0, 0, ${alpha * 0.8})`;
+                ctx.fillText(dn.text, px + 1, py + 1);
+                ctx.fillStyle = hexToRgba(dn.color, alpha);
+                ctx.fillText(dn.text, px, py);
+            }
         }
         ctx.textAlign = 'left'; // reset for downstream HUD draws
     }
