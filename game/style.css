@@ -15,6 +15,8 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+    /* Stop iOS pull-to-refresh and rubber-banding when tapping near edges. */
+    overscroll-behavior: contain;
 }
 
 .hidden { display: none !important; }
@@ -87,6 +89,10 @@ body {
     image-rendering: crisp-edges;
     aspect-ratio: 1;
     height: 100%;
+    /* Block browser gestures (pinch-zoom, double-tap-zoom, panning) so taps
+       go straight to our pointer handler. Critical for the in-canvas
+       hotbar / radial-menu / item-overlay tap targets. */
+    touch-action: none;
 }
 
 /* --- Log panel --- */
@@ -174,6 +180,28 @@ body {
 }
 
 @media (pointer: coarse), (max-width: 700px) {
+    /* Reclaim wasted vertical space above the canvas in portrait. The
+       wrapper normally centers in 100vh, which leaves ~220px of empty
+       black above a 375px-tall canvas on a 812px viewport. Anchor the
+       layout to the top of the wrapper instead so the canvas sits up
+       high and the d-pad sits naturally below it. */
+    #game-wrapper {
+        align-items: flex-start;
+        padding-top: 8px;
+    }
+    #game-layout {
+        height: min(calc(100vh - 220px), 100vw);
+        max-height: 100vw;
+    }
+
+    /* On touch the version badge previously overlapped the bottom-right
+       WAIT button. Pin it to top-left under the canvas's HP panel area
+       instead; the badge sits in dead viewport space and reads cleanly. */
+    #version-badge {
+        top: 8px; left: 8px;
+        bottom: auto; right: auto;
+    }
+
     #touch-controls {
         display: flex;
         position: fixed;
