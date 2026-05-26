@@ -271,7 +271,7 @@ class Game {
         this._bindInput();
         this._bindTouchControls();
         this._bindCanvasTap(canvas);
-        document.getElementById('new-game').addEventListener('click', () => this._fullReset());
+        this._bindMenuSheet();
 
         // Populate version badge from <meta name="version"> — single source of truth.
         // Lives in index.html as #version-badge, styled bottom-right in style.css.
@@ -570,6 +570,82 @@ class Game {
         canvas.addEventListener('pointerdown', (e) => this._onCanvasPointerDown(e));
         // Prevent text selection / drag from a click-drag on the canvas.
         canvas.addEventListener('dragstart', e => e.preventDefault());
+    }
+
+    // ── Menu sheet (replaces standalone NEW + WAIT buttons) ─────────────────
+    //
+    // One DOM button (#menu-btn, "☰") opens an overlay action sheet with the
+    // four functions that used to live as separate UI: Wait (advance turn),
+    // Cancel (Escape), Help (open the controls modal), and Restart. The
+    // sheet is dismissed by tapping the backdrop, hitting Close, or pressing
+    // Escape. On desktop this collapses noise in the corner; on touch it
+    // also serves as the discoverability anchor for help — without it a
+    // first-time mobile player has no way to find the controls reference.
+
+    _bindMenuSheet() {
+        const menuBtn   = document.getElementById('menu-btn');
+        const sheet     = document.getElementById('menu-sheet');
+        const backdrop  = document.getElementById('menu-sheet-backdrop');
+        if (!menuBtn || !sheet) return;
+
+        const open  = () => { sheet.classList.remove('hidden'); };
+        const close = () => { sheet.classList.add('hidden'); };
+
+        menuBtn.addEventListener('click', open);
+        backdrop?.addEventListener('click', close);
+        // Esc closes the sheet without falling through to game state (where
+        // it would also cancel things). Captured before _bindInput's handler
+        // by checking the sheet's visibility first.
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Escape' && !sheet.classList.contains('hidden')) {
+                e.stopPropagation();
+                e.preventDefault();
+                close();
+            }
+        }, true); // capture phase — beat _bindInput's bubble-phase handler
+
+        sheet.querySelectorAll('.menu-item').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const action = btn.dataset.action;
+                close();
+                switch (action) {
+                    case 'wait':
+                        // Same as pressing Space in IDLE: log a wait line and
+                        // advance the world. Mirrors the previous WAIT
+                        // button's behavior so muscle memory carries.
+                        if (this.state === STATE.IDLE) {
+                            this._log('[Wait]');
+                            this._advanceWorld();
+                        }
+                        break;
+                    case 'cancel':
+                        // Synthetic Escape — routes through the same paths
+                        // the keyboard Escape does (close overlay, abort
+                        // throw, back out of radial menu, etc.).
+                        document.dispatchEvent(new KeyboardEvent('keydown', { code: 'Escape', bubbles: true }));
+                        break;
+                    case 'help':
+                        this._openHelpModal();
+                        break;
+                    case 'restart':
+                        // Match the previous NEW button's behavior — it had
+                        // no confirm, so we don't add one here. Consistency
+                        // beats friction for a < 30s playthrough demo.
+                        this._fullReset();
+                        break;
+                    case 'close':
+                        // No-op beyond the close() above.
+                        break;
+                }
+            });
+        });
+    }
+
+    // Stub — implemented in the help-modal commit. Defined now so the
+    // menu sheet's Help button doesn't crash if tapped before that lands.
+    _openHelpModal() {
+        const modal = document.getElementById('help-modal');
+        if (modal) modal.classList.remove('hidden');
     }
 
     // Convert a pointer event's clientX/clientY into the canvas's internal

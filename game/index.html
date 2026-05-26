@@ -47,18 +47,29 @@
                 <div id="text-log"></div>
             </div>
         </div>
-        <button id="new-game">NEW</button>
+        <button id="menu-btn" aria-label="open menu">☰</button>
         <div id="version-badge" aria-label="game version"></div>
 
-        <div id="touch-controls" aria-hidden="true">
+        <div id="touch-controls">
             <div id="touch-dpad">
-                <button class="tc-btn" data-key="ArrowUp">▲</button>
-                <button class="tc-btn" data-key="ArrowLeft">◀</button>
-                <button class="tc-btn" data-key="ArrowDown">▼</button>
-                <button class="tc-btn" data-key="ArrowRight">▶</button>
+                <button class="tc-btn" data-key="ArrowUp"    aria-label="move up">▲</button>
+                <button class="tc-btn" data-key="ArrowLeft"  aria-label="move left">◀</button>
+                <button class="tc-btn" data-key="ArrowDown"  aria-label="move down">▼</button>
+                <button class="tc-btn" data-key="ArrowRight" aria-label="move right">▶</button>
             </div>
-            <div id="touch-actions">
-                <button class="tc-btn tc-wait" data-key="Space">WAIT</button>
+        </div>
+
+        <!-- Action sheet — opened by the MENU button. Wait / Cancel / Help /
+             Restart replace the previous standalone WAIT + NEW buttons.
+             Hidden by default; toggled via .open class from main.js. -->
+        <div id="menu-sheet" class="hidden" role="dialog" aria-label="game menu" aria-modal="true">
+            <div id="menu-sheet-backdrop"></div>
+            <div id="menu-sheet-panel">
+                <button class="menu-item" data-action="wait">WAIT</button>
+                <button class="menu-item" data-action="cancel">CANCEL</button>
+                <button class="menu-item" data-action="help">HELP (?)</button>
+                <button class="menu-item menu-item-danger" data-action="restart">RESTART</button>
+                <button class="menu-item menu-item-close" data-action="close">CLOSE</button>
             </div>
         </div>
     </div>
