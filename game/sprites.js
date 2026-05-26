@@ -11,18 +11,32 @@
 // C:\Users\caela\Desktop\LimezuAssets\ for future reference.
 
 export class SpriteSheet {
-    constructor(src, frameW, frameH) {
+    // `padding` is the gap (in source pixels) between adjacent cells. Kenney's
+    // roguelike packs ship with a 1-pixel gutter between every 16×16 cell —
+    // ignoring it makes deep-row sprites drift up by `row` pixels and render
+    // halves of two cells stacked together (the "character bottom half on top"
+    // bug). Set `padding: 1` on every roguelike sheet; leave 0 for packed
+    // sheets (e.g. roguelikeCity_packed.png is gutter-free).
+    constructor(src, frameW, frameH, padding = 0) {
         this.img     = new Image();
         this.frameW  = frameW;
         this.frameH  = frameH;
+        this.padding = padding;
         this.loaded  = false;
         this.failed  = false;
 
         this._promise = new Promise((resolve) => {
             this.img.onload = () => {
                 this.loaded = true;
-                this.cols = Math.floor(this.img.width / this.frameW);
-                this.rows = Math.floor(this.img.height / this.frameH);
+                // Adding `padding` to the numerator handles Kenney's "missing
+                // trailing gutter" — the last column/row doesn't have its
+                // own trailing 1px, so the naive (W / (frameW+padding)) math
+                // undercounts by one. (e.g. roguelikeChar is 918 wide: with
+                // padding=1, (918+1)/17 = 54.0 cleanly, matching the actual
+                // 54 character columns in the sheet.)
+                const stride = this.frameW + this.padding;
+                this.cols = Math.floor((this.img.width  + this.padding) / stride);
+                this.rows = Math.floor((this.img.height + this.padding) / stride);
                 resolve(true);
             };
             this.img.onerror = () => {
@@ -35,12 +49,14 @@ export class SpriteSheet {
 
     get ready() { return this._promise; }
 
-    // Draw by grid (col, row)
+    // Draw by grid (col, row). Source coords account for any inter-cell
+    // padding declared on the sheet — see constructor for context.
     drawFrame(ctx, col, row, x, y, destW, destH) {
         if (!this.loaded) return false;
         ctx.drawImage(
             this.img,
-            col * this.frameW, row * this.frameH,
+            col * (this.frameW + this.padding),
+            row * (this.frameH + this.padding),
             this.frameW, this.frameH,
             x, y, destW ?? this.frameW, destH ?? this.frameH
         );
@@ -68,30 +84,36 @@ const KENNEY_CITY    = `${K}/roguelikeCity_packed.png`;           // Town tiles 
 // reference them by semantic name. Browser caching dedupes the HTTP requests,
 // so the cost is a few extra Image objects per page, no network overhead.
 
+// Kenney roguelike PNGs have a 1-pixel gutter between every 16×16 cell.
+// The packed City PNG does NOT (it's a tight 16-stride atlas). See the
+// SpriteSheet constructor comment for why this matters.
+const ROGUELIKE_PAD = 1;
+
 export const SHEETS = {
     // Sewer/Dungeon
-    sewerTiles:   { src: KENNEY_DUNGEON, frameW: 16, frameH: 16 },
-    caveTiles:    { src: KENNEY_DUNGEON, frameW: 16, frameH: 16 },
+    sewerTiles:   { src: KENNEY_DUNGEON, frameW: 16, frameH: 16, padding: ROGUELIKE_PAD },
+    caveTiles:    { src: KENNEY_DUNGEON, frameW: 16, frameH: 16, padding: ROGUELIKE_PAD },
 
     // Characters (player + all enemies)
-    player:       { src: KENNEY_CHAR, frameW: 16, frameH: 16 },
-    fungusViolet: { src: KENNEY_CHAR, frameW: 16, frameH: 16 },
-    fungusRed:    { src: KENNEY_CHAR, frameW: 16, frameH: 16 },
-    fungusKing:   { src: KENNEY_CHAR, frameW: 16, frameH: 16 },
-    sewerMonster: { src: KENNEY_CHAR, frameW: 16, frameH: 16 },
-    ghostMonster: { src: KENNEY_CHAR, frameW: 16, frameH: 16 },
-    boss:         { src: KENNEY_CHAR, frameW: 16, frameH: 16 },
+    player:       { src: KENNEY_CHAR, frameW: 16, frameH: 16, padding: ROGUELIKE_PAD },
+    fungusViolet: { src: KENNEY_CHAR, frameW: 16, frameH: 16, padding: ROGUELIKE_PAD },
+    fungusRed:    { src: KENNEY_CHAR, frameW: 16, frameH: 16, padding: ROGUELIKE_PAD },
+    fungusKing:   { src: KENNEY_CHAR, frameW: 16, frameH: 16, padding: ROGUELIKE_PAD },
+    sewerMonster: { src: KENNEY_CHAR, frameW: 16, frameH: 16, padding: ROGUELIKE_PAD },
+    ghostMonster: { src: KENNEY_CHAR, frameW: 16, frameH: 16, padding: ROGUELIKE_PAD },
+    boss:         { src: KENNEY_CHAR, frameW: 16, frameH: 16, padding: ROGUELIKE_PAD },
 
     // Town/exterior + items — KENNEY_BASE kept for legacy ITEM_SPRITES references.
     // Active town tile rendering uses cityTiles (KENNEY_CITY) added 2026-05-22.
-    townTerrains: { src: KENNEY_BASE, frameW: 16, frameH: 16 },
-    cityTerrains: { src: KENNEY_BASE, frameW: 16, frameH: 16 },
-    cityProps:    { src: KENNEY_BASE, frameW: 16, frameH: 16 },
-    buildings:    { src: KENNEY_BASE, frameW: 16, frameH: 16 },
-    grocery:      { src: KENNEY_BASE, frameW: 16, frameH: 16 },
+    townTerrains: { src: KENNEY_BASE, frameW: 16, frameH: 16, padding: ROGUELIKE_PAD },
+    cityTerrains: { src: KENNEY_BASE, frameW: 16, frameH: 16, padding: ROGUELIKE_PAD },
+    cityProps:    { src: KENNEY_BASE, frameW: 16, frameH: 16, padding: ROGUELIKE_PAD },
+    buildings:    { src: KENNEY_BASE, frameW: 16, frameH: 16, padding: ROGUELIKE_PAD },
+    grocery:      { src: KENNEY_BASE, frameW: 16, frameH: 16, padding: ROGUELIKE_PAD },
 
     // Roguelike City Pack — proper town tiles with single-cell road/sidewalk/grass/
     // buildings + cars, trees, streetlights, manhole covers (sewer entries).
+    // This is a *packed* atlas with NO inter-cell gutter, hence padding stays 0.
     cityTiles:    { src: KENNEY_CITY, frameW: 16, frameH: 16 },
 
     // No Kenney equivalent for the previous LimeZu Modern UI sheet. The
@@ -202,7 +224,7 @@ export async function loadAllSprites() {
     const promises = [];
 
     for (const [key, def] of Object.entries(SHEETS)) {
-        const sheet = new SpriteSheet(def.src, def.frameW, def.frameH);
+        const sheet = new SpriteSheet(def.src, def.frameW, def.frameH, def.padding ?? 0);
         loaded[key] = sheet;
         promises.push(sheet.ready);
     }
