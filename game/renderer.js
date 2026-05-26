@@ -61,29 +61,12 @@ export class Renderer {
         ctx.lineWidth = 1;
         ctx.beginPath(); ctx.moveTo(90, 44); ctx.lineTo(230, 44); ctx.stroke();
 
-        // Character lineup — three distinct chars from the Kenney sheet,
-        // picked from the leftmost column where small character bodies live.
-        // Coords are decorative-only (no gameplay binding), so they're picked
-        // here directly rather than referenced from ENEMY_SPRITES.
-        const lineupRow = [
-            { sheet: this.sprites?.sewerMonster, col: 0, row: 0 },
-            { sheet: this.sprites?.player,        col: 0, row: 1 },
-            { sheet: this.sprites?.fungusViolet,  col: 0, row: 2 },
-        ];
-        const charScale = 2;       // 16×16 Kenney → 32×32 displayed (nearest-neighbor)
-        const spacing   = 56;
-        const startX    = 160 - (lineupRow.length - 1) * spacing / 2 - 16;
-        const lineupY   = 70;
-        lineupRow.forEach((entry, i) => {
-            if (entry.sheet?.loaded) {
-                entry.sheet.drawFrame(
-                    ctx, entry.col, entry.row,
-                    startX + i * spacing, lineupY,
-                    entry.sheet.frameW * charScale,
-                    entry.sheet.frameH * charScale
-                );
-            }
-        });
+        // Cityscape silhouette — replaces an earlier character lineup that
+        // read as three skin-tone variants. Procedural noir skyline drawn
+        // directly: dark buildings with scattered window dots and a low moon.
+        // Reads as "a place bigger than you, mostly hostile, occasionally lit".
+        // Anchored inside the panel from y=56 down to y=130.
+        this._drawSplashCityscape(ctx);
 
         // Big GAME START prompt — the centerpiece. Scale 3 = 24px tall.
         if (this.font) {
@@ -113,6 +96,111 @@ export class Renderer {
                 color: UI.textLight, scale: 1, align: 'left',
             });
         }
+    }
+
+    // ── Splash cityscape ─────────────────────────────────────────────────────
+    //
+    // A procedural neo-noir skyline that fills the splash's middle band. The
+    // intent: convey "a savage town, bigger than you, with a few lit windows
+    // that hint at the lives behind every wall." Drawn purely with rects so
+    // it scales pixel-perfect at any preview size and never depends on an
+    // asset that might not load.
+    //
+    // Composition (within the panel's 288×196 interior, anchored at x≈16,
+    // y≈12 on the 320×220 splash canvas):
+    //   - Sky band:   y=56..130
+    //   - Far row:    short dim silhouettes (back layer)
+    //   - Near row:   taller silhouettes with window dots (front layer)
+    //   - Moon:       a small ochre disk top-right, partially behind near row
+    //
+    // Building positions/heights are seeded from a fixed pattern so the
+    // splash always renders the same — recruiters who reload see a stable
+    // composition, not a random one. The pattern is keyed to the canvas
+    // x-coordinate so it tiles cleanly within the panel.
+
+    _drawSplashCityscape(ctx) {
+        const PANEL_X = 24, PANEL_W = 272;
+        const SKY_Y = 56, SKY_H = 76;
+        const GROUND_Y = SKY_Y + SKY_H;
+
+        // Sky — dark band that contrasts with the parchment so the silhouettes
+        // read as foreground. A subtle horizontal gradient (top darker, bottom
+        // browner) suggests a hazy late-night downtown.
+        ctx.fillStyle = '#1a1410';
+        ctx.fillRect(PANEL_X, SKY_Y, PANEL_W, SKY_H);
+        ctx.fillStyle = '#26190f';
+        ctx.fillRect(PANEL_X, GROUND_Y - 18, PANEL_W, 18);
+
+        // Moon — small ochre disk, behind the near-row silhouettes.
+        // Aproximated with 5 stacked rects so it stays crisp at every scale.
+        const moonX = PANEL_X + PANEL_W - 56, moonY = SKY_Y + 12;
+        const moonRects = [[2,0,4,1],[1,1,6,1],[0,2,8,4],[1,6,6,1],[2,7,4,1]];
+        ctx.fillStyle = '#d4b96a';
+        for (const [dx, dy, w, h] of moonRects) {
+            ctx.fillRect(moonX + dx, moonY + dy, w, h);
+        }
+
+        // Far-row buildings — short, dim, no windows. Provides depth.
+        // Heights cycle through a 6-step pattern keyed to building index.
+        const FAR_H = [10, 14, 8, 16, 12, 10];
+        const FAR_W = 14;
+        const farY0 = GROUND_Y - 20;
+        ctx.fillStyle = '#2a1e14';
+        for (let i = 0; PANEL_X + i * FAR_W < PANEL_X + PANEL_W; i++) {
+            const h = FAR_H[i % FAR_H.length];
+            const bx = PANEL_X + i * FAR_W;
+            ctx.fillRect(bx, farY0 - h, FAR_W, h + 20);
+        }
+
+        // Near-row buildings — taller, varied widths, window dots. The
+        // pattern is deliberately uneven so the skyline reads as a real
+        // city block, not a periodic texture.
+        // Each tuple: [width, height, windowsPerRow, windowRows]
+        const NEAR_PATTERN = [
+            [22, 38, 3, 5], [16, 28, 2, 3], [28, 52, 4, 7], [14, 22, 1, 2],
+            [24, 44, 3, 6], [18, 32, 2, 4], [30, 58, 4, 8], [20, 36, 2, 5],
+            [14, 26, 1, 3], [26, 48, 3, 6],
+        ];
+        let bx = PANEL_X;
+        let i = 0;
+        ctx.fillStyle = '#100a08';
+        while (bx < PANEL_X + PANEL_W) {
+            const [bw, bh, wPerRow, wRows] = NEAR_PATTERN[i % NEAR_PATTERN.length];
+            const by = GROUND_Y - bh;
+            // Building body
+            ctx.fillRect(bx, by, bw, bh + 8); // +8 lets it run past the ground line
+            // Top-edge highlight (one pixel lighter) — gives the silhouette
+            // a slight glint that suggests the moon is grazing the rooftops.
+            ctx.fillStyle = '#3a2a18';
+            ctx.fillRect(bx, by, bw, 1);
+            ctx.fillStyle = '#100a08';
+            // Window dots — small 1×1 ochre marks, evenly spaced.
+            // Skip a deterministic ~20% so the windows look lived-in (some
+            // dark, some lit) rather than a perfect grid.
+            const wPadX = 3, wPadY = 6;
+            const wSpaceX = (bw - wPadX * 2 - wPerRow) / Math.max(1, wPerRow - 1) || 0;
+            const wSpaceY = 5;
+            for (let r = 0; r < wRows; r++) {
+                for (let c = 0; c < wPerRow; c++) {
+                    // Deterministic "lit?" — skip when (i*7 + r*3 + c) % 5 === 0
+                    if ((i * 7 + r * 3 + c) % 5 === 0) continue;
+                    const wx = bx + wPadX + c * (1 + wSpaceX);
+                    const wy = by + wPadY + r * (1 + wSpaceY);
+                    if (wy + 1 > by + bh - 2) continue; // don't draw windows past the bottom
+                    ctx.fillStyle = '#d4b96a';
+                    ctx.fillRect(Math.round(wx), Math.round(wy), 1, 1);
+                    ctx.fillStyle = '#100a08';
+                }
+            }
+            bx += bw;
+            i++;
+        }
+
+        // Ground line — single dark pixel-row separating skyline from the
+        // parchment band below, so the eye doesn't have to track where the
+        // city ends and the GAME START callout begins.
+        ctx.fillStyle = '#0a0606';
+        ctx.fillRect(PANEL_X, GROUND_Y - 1, PANEL_W, 2);
     }
 
     // ── Game Frame ───────────────────────────────────────────────────────────

@@ -51,13 +51,23 @@ body {
     padding: 10px 32px;
     cursor: pointer;
     letter-spacing: 3px;
-    transition: all 0.15s;
+    transition: background 0.15s, color 0.15s;
+    /* Subtle "click me" pulse — the border-shadow swells every 2s so the
+       eye lands on the button without the rest of the splash feeling busy. */
+    animation: splash-go-pulse 2s ease-in-out infinite;
+}
+
+@keyframes splash-go-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(212, 185, 106, 0.0); }
+    50%      { box-shadow: 0 0 12px 2px rgba(212, 185, 106, 0.45); }
 }
 
 #splash-buttons button:hover {
     background: #3a3020;
     border-color: #d4b96a;
     color: #fff;
+    /* Pause the pulse on hover — the hover state itself is the affordance. */
+    animation-play-state: paused;
 }
 
 #splash-hint {
