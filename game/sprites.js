@@ -151,13 +151,16 @@ export const TOWN_TILE_SPRITE_MAP = {
     12: { sheet: 'cityTiles', col: 10, row: 21 },        // road — black asphalt center
     13: { sheet: 'cityTiles', col: 1,  row: 26 },        // grass — pure green
     14: { sheet: 'cityTiles', col: 0,  row: 5  },        // building wall — red brick
-    15: null,                                            // door — fallback (City Pack doors are 2-tile, deferred)
+    // Town secondary tiles — best-effort picks (some 2-tile props in the
+    // city sheet are rendered as just the bottom/most-recognizable half).
+    // User can swap via sprite-picker.html if any of these read wrong.
+    15: { sheet: 'cityTiles', col: 24, row: 8 },         // door — wooden facade
     16: { sheet: 'cityTiles', col: 10, row: 24 },        // sewer entry — manhole cover
-    17: null,                                            // fence — fallback
-    18: null,                                            // streetlight — fallback (City Pack has them but they're 2-tile tall)
-    19: null,                                            // car — fallback (cars are 2-tile vehicles)
-    20: null,                                            // bench — fallback
-    21: null,                                            // trash can — fallback
+    17: { sheet: 'cityTiles', col: 16, row: 11 },        // fence — wooden plank
+    18: { sheet: 'cityTiles', col: 5,  row: 9 },         // streetlight — pole top
+    19: { sheet: 'cityTiles', col: 14, row: 12 },        // car — vehicle approx (top half of multi-tile)
+    20: { sheet: 'cityTiles', col: 10, row: 11 },        // bench — wood plank
+    21: { sheet: 'cityTiles', col: 9,  row: 9 },         // trash can — dark cylinder
 };
 
 // ── Item sprites (Kenney Base sheet — best-effort Phase A) ──────────────────
@@ -201,6 +204,16 @@ export const ENEMY_SPRITES = {
     // dehydrated, sludge-coated). Orange-shirted humanoid is closer to "merchant
     // figure" than the slime placeholder used previously.
     'Carrion':       { sheet: 'sewerMonster', col: 0, row: 5, static: true },
+
+    // Zone enemies — first-pass picks at correct post-gutter-fix stride.
+    // Greedy Green reuses the green-slime cell with passive face (col=0) so
+    // it reads visually distinct from Ghost Fungus's angry face at (1, 3).
+    // Carnival Clown + Rattling Skeleton tap the humanoid rows of the
+    // char sheet; closest matches in stock Kenney art (the pack ships no
+    // explicit clown or skeleton sprite). User can swap via sprite-picker.
+    'Greedy Green':     { sheet: 'ghostMonster', col: 0, row: 3, static: true }, // passive green slime
+    'Carnival Clown':   { sheet: 'sewerMonster', col: 1, row: 6, static: true }, // humanoid in colorful shirt
+    'Rattling Skeleton':{ sheet: 'sewerMonster', col: 1, row: 11, static: true }, // pale bearded figure (closest to skeletal)
 };
 
 // Player sprite — Kenney char sheet (0,7) = brown-hat brown-belt adventurer.
