@@ -100,7 +100,15 @@ export class Renderer {
         ctx.font = '8px monospace';
         ctx.fillText('v' + version, 296, 200);
 
+        // Credit line — author name on the same bottom band as the version,
+        // left-anchored. Anchors the project to a name a visiting recruiter
+        // can search for. The repo URL lives in the help modal + og card to
+        // avoid crowding the splash composition (panel bottom = y=208, so
+        // there isn't room for a second line without scope creep).
         ctx.textAlign = 'left';
+        ctx.fillStyle = UI.textLight;
+        ctx.font = '8px monospace';
+        ctx.fillText('by Caelan Gander', 24, 200);
     }
 
     // ── Game Frame ───────────────────────────────────────────────────────────
