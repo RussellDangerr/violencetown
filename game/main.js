@@ -2109,8 +2109,20 @@ class Game {
     // ── Log ──────────────────────────────────────────────────────────────────
 
     _log(msg, category = 'system') {
+        // Normalize common Unicode punctuation to ASCII for the bitmap-font
+        // canvas strip (which only knows printable ASCII 32-126). Em-dash,
+        // en-dash, ellipsis, smart-quotes — all collapse to ASCII equivalents.
+        // The DOM sidebar uses system fonts and would render Unicode fine, but
+        // we feed it the same normalized text for consistency between the two
+        // log surfaces.
+        const ascii = msg
+            .replace(/[—–]/g, '-')   // em-dash, en-dash → hyphen
+            .replace(/…/g, '...')         // ellipsis → three dots
+            .replace(/[‘’]/g, "'")   // smart single quotes
+            .replace(/[“”]/g, '"');  // smart double quotes
+
         // Mirror into the in-canvas strip (ring buffer, newest at end).
-        this._logStripMessages.push({ text: msg, category, bornAt: performance.now() });
+        this._logStripMessages.push({ text: ascii, category, bornAt: performance.now() });
         if (this._logStripMessages.length > this._STRIP_MAX) {
             this._logStripMessages.shift();
         }
@@ -2119,7 +2131,7 @@ class Game {
         const log = document.getElementById('text-log');
         const line = document.createElement('div');
         line.className = 'log-line';
-        line.textContent = msg;
+        line.textContent = ascii;
         log.appendChild(line);
         log.scrollTop = log.scrollHeight;
         while (log.children.length > 200) log.removeChild(log.firstChild);

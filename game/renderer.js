@@ -44,12 +44,12 @@ export class Renderer {
             ctx.strokeRect(20, 16, 280, 188);
         }
 
-        ctx.textAlign = 'center';
-
-        // Small game-name header
-        ctx.fillStyle = UI.panelBorder;
-        ctx.font = 'bold 11px monospace';
-        ctx.fillText('VIOLENCETOWN', 160, 38);
+        // Small game-name header — bitmap font, centered horizontally
+        if (this.font) {
+            this.font.drawText(ctx, 'VIOLENCETOWN', 160, 32, {
+                color: UI.panelBorder, scale: 1, align: 'center',
+            });
+        }
 
         // Horizontal rule under header
         ctx.strokeStyle = UI.panelBorder;
@@ -80,35 +80,33 @@ export class Renderer {
             }
         });
 
-        // Big GAME START prompt — the centerpiece
-        ctx.fillStyle = UI.panelBorder;
-        ctx.font = 'bold 28px monospace';
-        ctx.fillText('GAME START', 160, 160);
+        // Big GAME START prompt — the centerpiece. Scale 3 = 24px tall.
+        if (this.font) {
+            this.font.drawText(ctx, 'GAME START', 160, 148, {
+                color: UI.panelBorder, scale: 3, align: 'center',
+            });
 
-        // Subtitle hint
-        ctx.fillStyle = UI.textLight;
-        ctx.font = '9px monospace';
-        ctx.fillText('press SPACE or click below', 160, 178);
+            // Subtitle hint
+            this.font.drawText(ctx, 'PRESS SPACE OR CLICK BELOW', 160, 178, {
+                color: UI.textLight, scale: 1, align: 'center',
+            });
+        }
 
         // Version — read from <meta name="version"> so it's a single source of truth
         const meta = typeof document !== 'undefined'
             ? document.querySelector('meta[name="version"]')
             : null;
         const version = meta ? meta.getAttribute('content') : '?';
-        ctx.textAlign = 'right';
-        ctx.fillStyle = UI.textLight;
-        ctx.font = '8px monospace';
-        ctx.fillText('v' + version, 296, 200);
-
-        // Credit line — author name on the same bottom band as the version,
-        // left-anchored. Anchors the project to a name a visiting recruiter
-        // can search for. The repo URL lives in the help modal + og card to
-        // avoid crowding the splash composition (panel bottom = y=208, so
-        // there isn't room for a second line without scope creep).
-        ctx.textAlign = 'left';
-        ctx.fillStyle = UI.textLight;
-        ctx.font = '8px monospace';
-        ctx.fillText('by Caelan Gander', 24, 200);
+        if (this.font) {
+            this.font.drawText(ctx, 'V' + version, 296, 200, {
+                color: UI.textLight, scale: 1, align: 'right',
+            });
+            // Credit — anchors the project to a searchable name. The repo URL
+            // lives in the help modal + og card to avoid splash crowding.
+            this.font.drawText(ctx, 'BY CAELAN GANDER', 24, 200, {
+                color: UI.textLight, scale: 1, align: 'left',
+            });
+        }
     }
 
     // ── Game Frame ───────────────────────────────────────────────────────────
@@ -357,22 +355,22 @@ export class Renderer {
                 // Letter = first character of the buff name uppercased
                 // (Blind → 'B', future Poison → 'P', Stun → 'S').
                 if (e.buffs && e.buffs.length > 0) {
-                    const badgeY = py - 16;
+                    const badgeY = py - 20;
                     let badgeX = px + 2;
-                    ctx.font = 'bold 9px monospace';
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
                     for (const b of e.buffs) {
                         // Background pill — black so the colored letter stays
                         // readable over any sprite underneath
                         ctx.fillStyle = '#000000cc';
-                        ctx.fillRect(badgeX, badgeY - 5, 9, 10);
-                        ctx.fillStyle = b.type === 'buff' ? UI.buff : UI.debuff;
-                        ctx.fillText((b.name?.[0] ?? '?').toUpperCase(), badgeX + 4.5, badgeY);
+                        ctx.fillRect(badgeX, badgeY, 9, 10);
+                        if (this.font) {
+                            const letter = (b.name?.[0] ?? '?').toUpperCase();
+                            const color = b.type === 'buff' ? UI.buff : UI.debuff;
+                            this.font.drawText(ctx, letter, badgeX + 1, badgeY + 1, {
+                                color, scale: 1,
+                            });
+                        }
                         badgeX += 11;
                     }
-                    ctx.textAlign = 'left';
-                    ctx.textBaseline = 'alphabetic';
                 }
             } else {
                 // Corpse — gray tint overlay turns the sprite into a faded
@@ -389,11 +387,11 @@ export class Renderer {
                 // is the player's permanent record of "you fought this
                 // person here." Future merchant/loot features could read
                 // the corpse and let the player pick it up.
-                ctx.fillStyle = '#9a8a78';
-                ctx.font = 'bold 8px monospace';
-                ctx.textAlign = 'center';
-                ctx.fillText(`[K.O.] ${e.type}`, px + TILE_PX / 2, py + TILE_PX + 2);
-                ctx.textAlign = 'left';
+                if (this.font) {
+                    this.font.drawText(ctx, `[KO] ${e.type.toUpperCase()}`, px + TILE_PX / 2, py + TILE_PX - 2, {
+                        color: '#9a8a78', scale: 1, align: 'center',
+                    });
+                }
             }
         }
     }
@@ -501,24 +499,29 @@ export class Renderer {
         ctx.fillStyle = frac > 0.3 ? UI.hpGreen : UI.hpRed;
         ctx.fillRect(bx + 1, by + 1, (bw - 2) * frac, bh - 2);
 
-        // HP text — dark on parchment bar
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 11px monospace';
-        ctx.fillText(`HP ${game.playerHp} / ${game.playerMaxHp}`, bx + 4, by + 11);
+        // HP text — bitmap font, white-on-bar
+        if (this.font) {
+            this.font.drawText(ctx, `HP ${game.playerHp}/${game.playerMaxHp}`, bx + 3, by + 3, {
+                color: '#fff', scale: 1,
+            });
+        }
 
-        // Weapon (strip brackets for display)
+        // Weapon (strip brackets; drop the previous Unicode sword glyph
+        // since the bitmap font is plain ASCII — name + damage reads clearly)
         const wpn = game.equipment.weapon;
-        if (wpn) {
-            const name = wpn.name.replace(/[\[\]]/g, '');
-            ctx.fillStyle = UI.text;
-            ctx.font = '10px monospace';
-            ctx.fillText(`⚔ ${name}  dmg:${wpn.damage}`, x + 8, y + 40);
+        if (wpn && this.font) {
+            const name = wpn.name.replace(/[\[\]]/g, '').toUpperCase();
+            this.font.drawText(ctx, `${name}  ${wpn.damage} DMG`, x + 8, y + 32, {
+                color: UI.text, scale: 1,
+            });
         }
 
         // Gold
-        ctx.fillStyle = UI.gold;
-        ctx.font = 'bold 10px monospace';
-        ctx.fillText(`$ ${game.gold}`, x + 8, y + 52);
+        if (this.font) {
+            this.font.drawText(ctx, `$ ${game.gold}`, x + 8, y + 46, {
+                color: UI.gold, scale: 1,
+            });
+        }
     }
 
     // ── Zone Label (top center) ──────────────────────────────────────────────
@@ -532,17 +535,15 @@ export class Renderer {
 
         drawPanelSmall(ctx, px, 4, w, 22);
 
-        ctx.font = 'bold 11px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillStyle = UI.text;
-        ctx.fillText(label, CANVAS_PX / 2, 19);
-
-        // Turn counter right-aligned in the label
-        ctx.textAlign = 'right';
-        ctx.fillStyle = UI.dim;
-        ctx.font = '9px monospace';
-        ctx.fillText(turnText, px + w - 6, 18);
-        ctx.textAlign = 'left';
+        if (this.font) {
+            this.font.drawText(ctx, label.toUpperCase(), CANVAS_PX / 2, 9, {
+                color: UI.text, scale: 1, align: 'center',
+            });
+            // Turn counter right-aligned within the label panel
+            this.font.drawText(ctx, turnText, px + w - 6, 9, {
+                color: UI.dim, scale: 1, align: 'right',
+            });
+        }
     }
 
     // ── Buff Bar (top-right) ─────────────────────────────────────────────────
@@ -565,12 +566,15 @@ export class Renderer {
             drawInset(ctx, bx, by, bw, bh);
 
             // Name + turns
-            ctx.fillStyle = buff.type === 'debuff' ? UI.hpRed : UI.hpGreen;
-            ctx.font = 'bold 9px monospace';
-            ctx.fillText(buff.name, bx + 3, by + 11);
-            ctx.fillStyle = UI.gold;
-            ctx.font = 'bold 11px monospace';
-            ctx.fillText(`${buff.turns}`, bx + bw - 14, by + 23);
+            if (this.font) {
+                const nameColor = buff.type === 'debuff' ? UI.hpRed : UI.hpGreen;
+                this.font.drawText(ctx, buff.name.toUpperCase().slice(0, 5), bx + 3, by + 3, {
+                    color: nameColor, scale: 1,
+                });
+                this.font.drawText(ctx, `${buff.turns}`, bx + bw - 4, by + 14, {
+                    color: UI.gold, scale: 1, align: 'right',
+                });
+            }
         }
     }
 
@@ -600,11 +604,9 @@ export class Renderer {
 
         drawPanelSmall(ctx, SX, SY, SW, SH);
 
-        ctx.font = '10px monospace';
-        ctx.textAlign = 'left';
-
         // Newest message bottom-aligned at line 3; older messages climb up.
-        const baselines = [SY + 16, SY + 27, SY + 38];
+        // Top-of-glyph y baselines (bitmap font draws from top-left).
+        const baselines = [SY + 6, SY + 18, SY + 30];
         const alphas    = [0.5, 0.75, 1.0]; // oldest → newest position
 
         const visible = messages.slice(-3);              // last N entries
@@ -614,12 +616,16 @@ export class Renderer {
             const m = visible[i];
             const slot = i + offset;
             const baseColor = this._logStripColor(m.category);
-            ctx.fillStyle = hexToRgba(baseColor, alphas[slot]);
-            // Truncate to fit width — rough char-budget for 10px monospace
-            // at 300px-16px-padding = ~284px usable, ~6px/char → ~47 chars.
+            const tintedColor = hexToRgba(baseColor, alphas[slot]);
+            // Truncate to fit width — bitmap font is 8px/char at scale 1,
+            // so SW(300) minus 16px padding = ~35 chars.
             let text = m.text;
-            if (text.length > 47) text = text.slice(0, 46) + '…';
-            ctx.fillText(text, SX + 8, baselines[slot]);
+            if (text.length > 35) text = text.slice(0, 34) + '~';
+            if (this.font) {
+                this.font.drawText(ctx, text, SX + 8, baselines[slot], {
+                    color: tintedColor, scale: 1,
+                });
+            }
         }
     }
 
@@ -667,33 +673,33 @@ export class Renderer {
 
             drawPanelSmall(ctx, tx, ty, tw, th);
 
-            ctx.textAlign = 'center';
-            let lineY = ty + 13;
+            let lineY = ty + 4;
 
-            // Name
-            ctx.fillStyle = UI.gold;
-            ctx.font = 'bold 10px monospace';
-            ctx.fillText(itemName, CANVAS_PX / 2, lineY);
-            lineY += 13;
+            // Name (uppercased for bitmap-font readability emphasis)
+            if (this.font) {
+                this.font.drawText(ctx, itemName.toUpperCase(), CANVAS_PX / 2, lineY, {
+                    color: UI.gold, scale: 1, align: 'center',
+                });
+            }
+            lineY += 11;
 
             // Stat line
-            if (hasStat) {
-                ctx.fillStyle = itemDef.healAmount ? '#44ff88' : '#ffaa44';
-                ctx.font = '9px monospace';
-                ctx.fillText(statLine, CANVAS_PX / 2, lineY);
-                lineY += 13;
+            if (hasStat && this.font) {
+                const statColor = itemDef.healAmount ? '#44ff88' : '#ffaa44';
+                this.font.drawText(ctx, statLine.toUpperCase(), CANVAS_PX / 2, lineY, {
+                    color: statColor, scale: 1, align: 'center',
+                });
+                lineY += 11;
             }
 
-            // Description
-            if (hasDesc) {
-                ctx.fillStyle = UI.dim || '#8a8070';
-                ctx.font = '9px monospace';
-                const maxChars = Math.floor((tw - 12) / 5.5);
+            // Description — fits more chars at 8px-per-glyph than the old 5.5px estimate
+            if (hasDesc && this.font) {
+                const maxChars = Math.floor((tw - 12) / 8);
                 const truncated = desc.length > maxChars ? desc.slice(0, maxChars - 2) + '..' : desc;
-                ctx.fillText(truncated, CANVAS_PX / 2, lineY);
+                this.font.drawText(ctx, truncated, CANVAS_PX / 2, lineY, {
+                    color: UI.dim || '#8a8070', scale: 1, align: 'center',
+                });
             }
-
-            ctx.textAlign = 'left';
         }
 
         // Parchment background strip
@@ -719,10 +725,12 @@ export class Renderer {
                 ctx.strokeRect(sx - 1, sy - 1, sw + 2, sh + 2);
             }
 
-            // Key number
-            ctx.fillStyle = sel ? UI.gold : '#5a5040';
-            ctx.font = '9px monospace';
-            ctx.fillText(`${i + 1}`, sx + 2, sy + 9);
+            // Key number (top-left corner of slot)
+            if (this.font) {
+                this.font.drawText(ctx, `${i + 1}`, sx + 2, sy + 2, {
+                    color: sel ? UI.gold : '#5a5040', scale: 1,
+                });
+            }
 
             // Item
             if (stack) {
@@ -736,19 +744,23 @@ export class Renderer {
                     const info = ITEM_COLORS[stack.itemDef.id] || { bg: '#888', letter: '?' };
                     ctx.fillStyle = info.bg;
                     ctx.fillRect(sx + 9, sy + 11, 22, 22);
-                    ctx.fillStyle = '#fff';
-                    ctx.font = 'bold 14px monospace';
-                    ctx.fillText(info.letter, sx + 14, sy + 28);
+                    if (this.font) {
+                        this.font.drawText(ctx, info.letter, sx + 16, sy + 17, {
+                            color: '#fff', scale: 2,
+                        });
+                    }
                 }
 
                 // Stack count (bottom-right)
                 if (stack.count > 1) {
                     // Dark backing for readability
                     ctx.fillStyle = '#000000aa';
-                    ctx.fillRect(sx + sw - 16, sy + sh - 12, 14, 11);
-                    ctx.fillStyle = UI.gold;
-                    ctx.font = 'bold 9px monospace';
-                    ctx.fillText(`${stack.count}`, sx + sw - 14, sy + sh - 3);
+                    ctx.fillRect(sx + sw - 16, sy + sh - 11, 14, 10);
+                    if (this.font) {
+                        this.font.drawText(ctx, `${stack.count}`, sx + sw - 3, sy + sh - 10, {
+                            color: UI.gold, scale: 1, align: 'right',
+                        });
+                    }
                 }
             }
         }
@@ -782,7 +794,9 @@ export class Renderer {
             left:  { x: cx - TILE_PX - 84, y: cy - 16 },
             right: { x: cx + TILE_PX + 8,  y: cy - 16 },
         };
-        const arr = { up: '↑', down: '↓', left: '←', right: '→' };
+        // ASCII fallback arrows since the bitmap font is plain ASCII —
+        // ^ v < > read instantly as directional cues.
+        const arr = { up: '^', down: 'V', left: '<', right: '>' };
         // Lerp source — center of the player tile, slightly above
         const src = { x: cx - 44, y: cy - 16 };
 
@@ -797,9 +811,12 @@ export class Renderer {
 
             drawPanelSmall(ctx, px, py, w, h);
 
-            ctx.fillStyle = UI.text;
-            ctx.font = 'bold 12px monospace';
-            ctx.fillText(`${arr[dir]} ${opt.label}`, px + 8, py + 21);
+            if (this.font) {
+                const label = opt.label.toUpperCase();
+                this.font.drawText(ctx, `${arr[dir]} ${label}`, px + 8, py + 12, {
+                    color: UI.text, scale: 1,
+                });
+            }
         }
         ctx.globalAlpha = prevAlpha;
     }
@@ -885,10 +902,6 @@ export class Renderer {
         // with the wheel's world rotation R = -activeIndex*sliceAngle, the
         // total world rotation of label-i is (i - activeIndex)*sliceAngle —
         // which is 0 (upright) when i == activeIndex.
-        ctx.fillStyle = UI.text;
-        ctx.font = 'bold 11px monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
         const rLabel = (rInner0 + rInner1) / 2;
         for (let i = 0; i < N; i++) {
             const ang = sliceCenterAngle(i);
@@ -897,7 +910,13 @@ export class Renderer {
             ctx.save();
             ctx.translate(lx, ly);
             ctx.rotate(i * sliceAngle); // per-label rotation (see math comment)
-            ctx.fillText(slices[i], 0, 0);
+            // Bitmap font draws from top-left; nudge by half a glyph width/height
+            // so the visual center of the text sits at (0,0) in the rotated frame.
+            if (this.font) {
+                this.font.drawText(ctx, slices[i].toUpperCase(), 0, -4, {
+                    color: UI.text, scale: 1, align: 'center',
+                });
+            }
             ctx.restore();
         }
 
@@ -953,8 +972,7 @@ export class Renderer {
             // Sub-wheel labels — same per-label upright-at-pointer math as
             // the inner wheel: label-j gets local rotation j*subSliceAngle so
             // the selected sub-slice's text is upright at 12 o'clock.
-            ctx.fillStyle = subItems.length === 0 ? UI.textLight : UI.text;
-            ctx.font = subItems.length === 0 ? '11px monospace' : 'bold 10px monospace';
+            const subColor = subItems.length === 0 ? UI.textLight : UI.text;
             const rSubLabel = (rOuter0 + rOuter1) / 2;
             for (let j = 0; j < M; j++) {
                 const ang = subCenter(j);
@@ -963,7 +981,11 @@ export class Renderer {
                 ctx.save();
                 ctx.translate(lx, ly);
                 ctx.rotate(j * subSliceAngle);
-                ctx.fillText(subLabels[j], 0, 0);
+                if (this.font) {
+                    this.font.drawText(ctx, subLabels[j].toUpperCase(), 0, -4, {
+                        color: subColor, scale: 1, align: 'center',
+                    });
+                }
                 ctx.restore();
             }
 
@@ -1001,20 +1023,22 @@ export class Renderer {
         const cx = half * TILE_PX + TILE_PX / 2;
         const cy = half * TILE_PX + TILE_PX / 2;
 
+        // ASCII arrows (the bitmap font is plain ASCII). ^ v < > read as
+        // direction immediately and stay crisp at scale 2.
         const dirs = [
-            { x: cx - 16, y: cy - TILE_PX - 18, l: '↑' },
-            { x: cx - 16, y: cy + TILE_PX + 2,  l: '↓' },
-            { x: cx - TILE_PX - 18, y: cy - 16, l: '←' },
-            { x: cx + TILE_PX + 2,  y: cy - 16, l: '→' },
+            { x: cx - 16, y: cy - TILE_PX - 18, l: '^' },
+            { x: cx - 16, y: cy + TILE_PX + 2,  l: 'V' },
+            { x: cx - TILE_PX - 18, y: cy - 16, l: '<' },
+            { x: cx + TILE_PX + 2,  y: cy - 16, l: '>' },
         ];
 
         for (const d of dirs) {
             drawPanelSmall(ctx, d.x, d.y, 32, 32);
-            ctx.fillStyle = UI.text;
-            ctx.font = 'bold 16px monospace';
-            ctx.textAlign = 'center';
-            ctx.fillText(d.l, d.x + 16, d.y + 22);
-            ctx.textAlign = 'left';
+            if (this.font) {
+                this.font.drawText(ctx, d.l, d.x + 16, d.y + 8, {
+                    color: UI.text, scale: 2, align: 'center',
+                });
+            }
         }
     }
 
@@ -1036,21 +1060,17 @@ export class Renderer {
             drawPanelSmall(ctx, px, py, w, h);
         }
 
-        ctx.textAlign = 'center';
-
-        ctx.fillStyle = UI.panelBorder;
-        ctx.font = 'bold 18px monospace';
-        ctx.fillText('BOSS ROOM REACHED', CANVAS_PX / 2, py + 50);
-
-        ctx.fillStyle = UI.text;
-        ctx.font = '12px monospace';
-        ctx.fillText(`${game.turn} turns`, CANVAS_PX / 2, py + 74);
-
-        ctx.fillStyle = UI.textLight;
-        ctx.font = '10px monospace';
-        ctx.fillText('press N for new game', CANVAS_PX / 2, py + 96);
-
-        ctx.textAlign = 'left';
+        if (this.font) {
+            this.font.drawText(ctx, 'BOSS ROOM REACHED', CANVAS_PX / 2, py + 36, {
+                color: UI.panelBorder, scale: 2, align: 'center',
+            });
+            this.font.drawText(ctx, `${game.turn} TURNS`, CANVAS_PX / 2, py + 68, {
+                color: UI.text, scale: 1, align: 'center',
+            });
+            this.font.drawText(ctx, 'PRESS N FOR NEW GAME', CANVAS_PX / 2, py + 90, {
+                color: UI.textLight, scale: 1, align: 'center',
+            });
+        }
     }
 
     // ── Vignette (subtle edge darkening) ────────────────────────────────────
