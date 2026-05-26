@@ -163,6 +163,16 @@ body {
 }
 .tc-btn:active { background: #3a2e1f; border-color: #d4b96a; }
 
+/* Keyboard / accessibility focus — visible ring matched to brand gold. Only
+   shows for keyboard navigation (:focus-visible), not on mouse clicks, so
+   touch users don't see lingering focus rings after each tap. */
+#splash-buttons button:focus-visible,
+#new-game:focus-visible,
+.tc-btn:focus-visible {
+    outline: 2px solid #d4b96a;
+    outline-offset: 2px;
+}
+
 @media (pointer: coarse), (max-width: 700px) {
     #touch-controls {
         display: flex;
