@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Sprite Picker — Violencetown dev tool</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: #0a0a0a;
+            color: #c8b888;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            min-height: 100vh;
+            padding: 16px;
+        }
+        h1 {
+            font-size: 14px;
+            letter-spacing: 3px;
+            color: #d4b96a;
+            margin-bottom: 4px;
+        }
+        .lede {
+            color: #6a5a3a;
+            margin-bottom: 16px;
+            font-size: 11px;
+        }
+        #toolbar {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+            padding: 10px;
+            background: #1a1610;
+            border: 1px solid #3a3020;
+        }
+        label { color: #8b7340; font-size: 11px; letter-spacing: 1px; }
+        select, button, input[type=number] {
+            background: #2a2218;
+            color: #d4b96a;
+            border: 1px solid #5a4a30;
+            padding: 4px 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        button:hover { border-color: #d4b96a; }
+        #status {
+            color: #88aa44;
+            margin-left: auto;
+            font-size: 11px;
+            min-height: 1em;
+        }
+        #status.copied { color: #d4b96a; font-weight: 700; }
+        #stage {
+            position: relative;
+            display: inline-block;
+            background: #14110b;
+            border: 1px solid #3a3020;
+            padding: 4px;
+        }
+        #sheet { display: block; image-rendering: pixelated; }
+        #grid {
+            position: absolute;
+            inset: 4px;
+            pointer-events: none;
+        }
+        #hover-info {
+            position: fixed;
+            bottom: 12px; right: 12px;
+            background: #2a2218;
+            border: 2px solid #8b7340;
+            color: #d4b96a;
+            padding: 12px 16px;
+            font-size: 14px;
+            min-width: 220px;
+            box-shadow: 0 0 0 1px #0a0a0a;
+        }
+        #hover-info .coord { color: #fff; font-weight: 700; letter-spacing: 2px; }
+        #hover-info .preview-cell {
+            display: inline-block;
+            width: 64px; height: 64px;
+            image-rendering: pixelated;
+            border: 1px solid #5a4a30;
+            margin-top: 8px;
+            background-position: 0 0;
+            background-repeat: no-repeat;
+        }
+        .tip { color: #6a5a3a; font-size: 10px; margin-top: 6px; }
+    </style>
+</head>
+<body>
+    <h1>SPRITE PICKER</h1>
+    <p class="lede">browse Kenney sheets at the correct stride. click a cell to copy <code>{ col: N, row: M }</code> to clipboard.</p>
+
+    <div id="toolbar">
+        <label for="sheet-select">SHEET</label>
+        <select id="sheet-select"></select>
+        <label for="scale-input">SCALE</label>
+        <input id="scale-input" type="number" value="4" min="1" max="10">
+        <label><input type="checkbox" id="show-grid" checked> grid</label>
+        <label><input type="checkbox" id="show-labels" checked> labels</label>
+        <div id="status"></div>
+    </div>
+
+    <div id="stage">
+        <canvas id="sheet"></canvas>
+        <canvas id="grid"></canvas>
+    </div>
+
+    <div id="hover-info">
+        <div>hovered: <span class="coord" id="hover-coord">—</span></div>
+        <div id="hover-preview" class="preview-cell"></div>
+        <div class="tip">click to copy. esc resets.</div>
+    </div>
+
+    <script type="module">
+        // Sheet declarations mirror game/sprites.js. Kept inline so the picker
+        // is self-contained (no dependency on the game's module graph).
+        const K = './assets-placeholder/kenney';
+        const SHEETS = [
+            { key: 'roguelikeChar',    src: `${K}/roguelikeChar_transparent.png`,    cell: 16, padding: 1 },
+            { key: 'roguelikeDungeon', src: `${K}/roguelikeDungeon_transparent.png`, cell: 16, padding: 1 },
+            { key: 'roguelikeSheet',   src: `${K}/roguelikeSheet_transparent.png`,   cell: 16, padding: 1 },
+            { key: 'roguelikeCity',    src: `${K}/roguelikeCity_packed.png`,          cell: 16, padding: 0 },
+        ];
+
+        const $       = sel => document.querySelector(sel);
+        const sheetEl = $('#sheet');
+        const gridEl  = $('#grid');
+        const ctx     = sheetEl.getContext('2d');
+        const gctx    = gridEl.getContext('2d');
+
+        const sheetSelect = $('#sheet-select');
+        const scaleInput  = $('#scale-input');
+        const showGrid    = $('#show-grid');
+        const showLabels  = $('#show-labels');
+        const statusEl    = $('#status');
+        const hoverCoord  = $('#hover-coord');
+        const hoverPreview = $('#hover-preview');
+
+        // Populate dropdown
+        SHEETS.forEach((s, i) => {
+            const opt = document.createElement('option');
+            opt.value = i;
+            opt.textContent = s.key;
+            sheetSelect.appendChild(opt);
+        });
+
+        let current = null;  // { img, cell, padding, cols, rows }
+
+        async function loadSheet(idx) {
+            const def = SHEETS[idx];
+            const img = new Image();
+            img.src = def.src;
+            await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
+            const stride = def.cell + def.padding;
+            current = {
+                img, cell: def.cell, padding: def.padding,
+                cols: Math.floor((img.width  + def.padding) / stride),
+                rows: Math.floor((img.height + def.padding) / stride),
+            };
+            draw();
+        }
+
+        function draw() {
+            if (!current) return;
+            const scale = Math.max(1, parseInt(scaleInput.value, 10) || 4);
+            const { img, cell, padding, cols, rows } = current;
+            const stride = cell + padding;
+            // Render the sheet at scale, but only the part covered by clean
+            // cells (drop any trailing partial pixels the source PNG carries).
+            const usedW = cols * stride - padding;
+            const usedH = rows * stride - padding;
+            sheetEl.width  = usedW * scale;
+            sheetEl.height = usedH * scale;
+            gridEl.width   = sheetEl.width;
+            gridEl.height  = sheetEl.height;
+            ctx.imageSmoothingEnabled = false;
+            ctx.clearRect(0, 0, sheetEl.width, sheetEl.height);
+            ctx.drawImage(img, 0, 0, usedW, usedH, 0, 0, sheetEl.width, sheetEl.height);
+            // Grid overlay
+            gctx.clearRect(0, 0, gridEl.width, gridEl.height);
+            if (!showGrid.checked && !showLabels.checked) return;
+            const cellPx = stride * scale;
+            for (let c = 0; c < cols; c++) {
+                for (let r = 0; r < rows; r++) {
+                    const x = c * cellPx;
+                    const y = r * cellPx;
+                    if (showGrid.checked) {
+                        gctx.strokeStyle = 'rgba(139, 115, 64, 0.35)';
+                        gctx.lineWidth = 1;
+                        gctx.strokeRect(x + 0.5, y + 0.5, cell * scale, cell * scale);
+                    }
+                    if (showLabels.checked && scale >= 3) {
+                        gctx.fillStyle = 'rgba(212, 185, 106, 0.85)';
+                        gctx.font = `${Math.min(10, scale * 2)}px monospace`;
+                        gctx.fillText(`${c},${r}`, x + 2, y + 10);
+                    }
+                }
+            }
+        }
+
+        function hitTest(clientX, clientY) {
+            if (!current) return null;
+            const rect = sheetEl.getBoundingClientRect();
+            const scale = Math.max(1, parseInt(scaleInput.value, 10) || 4);
+            const stride = (current.cell + current.padding) * scale;
+            const c = Math.floor((clientX - rect.left) / stride);
+            const r = Math.floor((clientY - rect.top)  / stride);
+            if (c < 0 || c >= current.cols || r < 0 || r >= current.rows) return null;
+            return { col: c, row: r };
+        }
+
+        gridEl.style.pointerEvents = 'auto'; // capture mouse on the overlay
+        gridEl.addEventListener('mousemove', (e) => {
+            const hit = hitTest(e.clientX, e.clientY);
+            if (!hit) {
+                hoverCoord.textContent = '—';
+                hoverPreview.style.backgroundImage = 'none';
+                return;
+            }
+            hoverCoord.textContent = `${hit.col}, ${hit.row}`;
+            // Render the hovered cell into the preview swatch
+            const stride = current.cell + current.padding;
+            const sx = hit.col * stride;
+            const sy = hit.row * stride;
+            // Use a temp canvas to extract just that cell as a data URL
+            const tmp = document.createElement('canvas');
+            tmp.width = current.cell;
+            tmp.height = current.cell;
+            const tctx = tmp.getContext('2d');
+            tctx.imageSmoothingEnabled = false;
+            tctx.drawImage(current.img, sx, sy, current.cell, current.cell, 0, 0, current.cell, current.cell);
+            hoverPreview.style.backgroundImage = `url(${tmp.toDataURL()})`;
+            hoverPreview.style.backgroundSize = '64px 64px';
+        });
+        gridEl.addEventListener('click', async (e) => {
+            const hit = hitTest(e.clientX, e.clientY);
+            if (!hit) return;
+            const snippet = `{ col: ${hit.col}, row: ${hit.row} }`;
+            try {
+                await navigator.clipboard.writeText(snippet);
+                statusEl.textContent = `copied: ${snippet}`;
+                statusEl.classList.add('copied');
+                setTimeout(() => statusEl.classList.remove('copied'), 1200);
+            } catch {
+                statusEl.textContent = `(clipboard blocked) ${snippet}`;
+            }
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                statusEl.textContent = '';
+                hoverCoord.textContent = '—';
+                hoverPreview.style.backgroundImage = 'none';
+            }
+        });
+
+        // Wiring
+        sheetSelect.addEventListener('change', () => loadSheet(sheetSelect.value));
+        scaleInput.addEventListener('input',  draw);
+        showGrid.addEventListener('change',   draw);
+        showLabels.addEventListener('change', draw);
+
+        // Boot
+        loadSheet(0);
+    </script>
+</body>
+</html>
