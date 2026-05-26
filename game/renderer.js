@@ -975,6 +975,13 @@ export class Renderer {
         ctx.rotate(innerRotation);
         ctx.translate(-cx, -cy);
 
+        // Active-slice pulse — a 2Hz sine wave on alpha + line width gives
+        // the highlighted slice a slow heartbeat. Subtle enough to read as
+        // ambient state (not as a warning), strong enough to draw the eye.
+        // Uses performance.now() so it animates while the particle loop
+        // pump (started by _openRadialMenu) is running.
+        const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 1000 * Math.PI * 2);
+
         // Draw slice wedges (local frame — the rotate above maps them to world)
         for (let i = 0; i < N; i++) {
             const a0 = sliceCenterAngle(i) - sliceAngle / 2;
@@ -987,10 +994,26 @@ export class Renderer {
             ctx.closePath();
             ctx.fillStyle = isActive ? UI.gold : UI.panelBg;
             ctx.fill();
-            ctx.strokeStyle = UI.panelBorder;
-            ctx.lineWidth = isActive ? 3 : 1;
+            // Active slice gets a brighter trim that swells with the pulse.
+            ctx.strokeStyle = isActive
+                ? `rgba(240, 215, 130, ${0.7 + 0.3 * pulse})`
+                : UI.panelBorder;
+            ctx.lineWidth = isActive ? 3 + pulse : 1;
             ctx.stroke();
         }
+
+        // Inner hub — a small dark disk centered on the player tile, with a
+        // gold dot in its center. Reads as the wheel's pivot point and hides
+        // the visual seam where the rotation transform meets the player sprite.
+        ctx.beginPath();
+        ctx.arc(cx, cy, rInner0 - 4, 0, Math.PI * 2);
+        ctx.fillStyle = UI.panelBgDark;
+        ctx.fill();
+        ctx.strokeStyle = UI.panelBorder;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.fillStyle = UI.gold;
+        ctx.fillRect(cx - 1, cy - 1, 2, 2);
 
         // Draw slice labels, each with a per-label rotation so the active
         // slice's text is upright when it lands at 12 o'clock under the
@@ -1086,6 +1109,25 @@ export class Renderer {
             }
 
             ctx.restore(); // pop sub-wheel rotation
+        }
+
+        // ── Decorative outer ring (OUTSIDE any rotation) ────────────────────
+        // A faint gold ring just past the outer-arc radius, with 8 small
+        // accent dots evenly spaced around it. The ring gives the wheel a
+        // formal "summoned" feel — Persona-coded chrome around the spinning
+        // combat menu — without competing visually with the slices themselves.
+        const rRing = (game.radialDrilled ? rOuter1 : rInner1) + 6;
+        ctx.beginPath();
+        ctx.arc(cx, cy, rRing, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(212, 185, 106, ${0.4 + 0.2 * pulse})`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        for (let k = 0; k < 8; k++) {
+            const a = (k / 8) * Math.PI * 2 - Math.PI / 2;
+            const dx = cx + Math.cos(a) * rRing;
+            const dy = cy + Math.sin(a) * rRing;
+            ctx.fillStyle = UI.gold;
+            ctx.fillRect(Math.round(dx) - 1, Math.round(dy) - 1, 2, 2);
         }
 
         // ── Static pointer triangle at 12 o'clock (OUTSIDE any rotation) ────

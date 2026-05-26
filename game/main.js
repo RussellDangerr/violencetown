@@ -2079,14 +2079,12 @@ class Game {
         const overlayOpen = this.state === STATE.ITEM_OVERLAY
                          || this.state === STATE.RADIAL_MENU;
         if (overlayOpen && now - (this._overlayOpenedAt ?? 0) < 80) return true;
-        // Radial wheel rotation animation (Plan A) — keeps looping for the
-        // 120ms ease-out so the wheel actually spins instead of snapping.
-        // Both the inner wheel and the sub-wheel have independent timers;
-        // either being mid-flight keeps the loop running.
-        if (this.state === STATE.RADIAL_MENU) {
-            if (now - (this.radialRotationStartedAt    ?? 0) < RADIAL_ANIM_MS) return true;
-            if (now - (this.radialSubRotationStartedAt ?? 0) < RADIAL_ANIM_MS) return true;
-        }
+        // Radial wheel — always re-render while the wheel is open. The active
+        // slice has a 2Hz pulse animation (renderer reads performance.now()
+        // each frame), plus the rotation easing during spins. Cheaper to
+        // keep the loop alive throughout the menu's lifetime than to gate
+        // it by which sub-animation is running.
+        if (this.state === STATE.RADIAL_MENU) return true;
         for (const e of this.enemies) {
             if ((e._hitFlashUntil ?? 0) > now) return true;
             if ((e._staggerUntil  ?? 0) > now) return true;
