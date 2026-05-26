@@ -449,16 +449,53 @@ class Game {
     }
 
     _bindTouchControls() {
+        // Direction keys held on touch should auto-repeat the way they do on
+        // desktop — holding ArrowDown walks continuously, releasing stops.
+        // The original implementation dispatched keydown+keyup back-to-back
+        // on pointerdown which killed _startAutoRepeat (it sees the keyup
+        // before the next interval fires). We now mirror real keyboard
+        // semantics: pointerdown → keydown (which the IDLE handler routes
+        // into _startAutoRepeat), pointerup/cancel/leave → keyup (which the
+        // held-key stack uses to either fall back to another held direction
+        // or stop). Non-direction keys (Space → WAIT) keep the original
+        // tap-fires-once behavior; they don't participate in auto-repeat.
         const buttons = document.querySelectorAll('#touch-controls .tc-btn');
+        const HOLD_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+
         buttons.forEach(btn => {
             const code = btn.dataset.key;
-            const fire = (e) => {
-                e.preventDefault();
+            const isHold = HOLD_KEYS.has(code);
+            let down = false;
+
+            const fireDown = (e) => {
+                if (e) e.preventDefault();
+                if (down) return;            // ignore duplicate enter/down from same finger
+                down = true;
                 document.dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true }));
-                document.dispatchEvent(new KeyboardEvent('keyup',   { code, bubbles: true }));
+                if (!isHold) {
+                    // One-shot key (Space): release immediately so the input
+                    // model sees a clean tap, not a held key.
+                    document.dispatchEvent(new KeyboardEvent('keyup', { code, bubbles: true }));
+                    down = false;
+                }
             };
-            btn.addEventListener('pointerdown', fire);
-            btn.addEventListener('contextmenu', e => e.preventDefault());
+            const fireUp = (e) => {
+                if (e) e.preventDefault();
+                if (!down) return;
+                down = false;
+                if (isHold) {
+                    document.dispatchEvent(new KeyboardEvent('keyup', { code, bubbles: true }));
+                }
+            };
+
+            btn.addEventListener('pointerdown',   fireDown);
+            btn.addEventListener('pointerup',     fireUp);
+            btn.addEventListener('pointercancel', fireUp);
+            // Pointer dragged out of the button is treated as a release — the
+            // user has clearly stopped holding *this* direction. Without this
+            // a finger sliding off the button would leave it stuck.
+            btn.addEventListener('pointerleave',  fireUp);
+            btn.addEventListener('contextmenu',   e => e.preventDefault());
         });
     }
 
