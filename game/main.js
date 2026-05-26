@@ -54,6 +54,48 @@ const RADIAL_SLICES = ['Attack', 'Skill', 'Throw', 'Give', 'Run', 'Defend'];
 const RADIAL_SLICE_ANGLE = (Math.PI * 2) / RADIAL_SLICES.length; // 60° per slice
 const RADIAL_ANIM_MS = 120; // ease-out duration for wheel rotation
 
+// ── Canvas hit-test geometry ─────────────────────────────────────────────────
+// Pixel rects of in-canvas UI surfaces, in the 608x608 internal coordinate
+// space (CANVAS_PX from data.js). These mirror the positions the renderer
+// uses to draw the hotbar, item overlay, radial menu, and throw/give
+// direction prompt. Kept module-level so _onCanvasPointerDown can hit-test
+// against the same numbers the renderer drew.
+//
+// Origin: top-left. The player tile is at the center (304, 304).
+const CANVAS_INTERNAL_PX = 608;
+
+const HOTBAR_Y       = 546;
+const HOTBAR_X_START = 106;
+const HOTBAR_SLOT_W  = 42;
+const HOTBAR_SLOT_H  = 42;
+const HOTBAR_STRIDE  = 45;
+const HOTBAR_SLOTS   = 9;
+const HIT_SLOP       = 6;   // expand hit zones beyond visual rect (Apple 44pt)
+
+// Item overlay (4 directional options around the player)
+const OVERLAY_RECTS = {
+    up:    { x: 260, y: 202, w: 88, h: 32 },
+    down:  { x: 260, y: 344, w: 88, h: 32 },
+    left:  { x: 188, y: 288, w: 88, h: 32 },
+    right: { x: 344, y: 288, w: 88, h: 32 },
+};
+
+// Throw / Give direction prompt — 4 cardinal targets, 32×32 each
+const THROW_RECTS = {
+    up:    { x: 288, y: 222, w: 32, h: 32 },
+    down:  { x: 288, y: 338, w: 32, h: 32 },
+    left:  { x: 254, y: 288, w: 32, h: 32 },
+    right: { x: 338, y: 288, w: 32, h: 32 },
+};
+
+// Radial wheel (Omnitrix-style)
+const RADIAL_CENTER_X = 304;
+const RADIAL_CENTER_Y = 304;
+const RADIAL_INNER_R_MIN = 36;
+const RADIAL_INNER_R_MAX = 80;
+const RADIAL_OUTER_R_MIN = 84;
+const RADIAL_OUTER_R_MAX = 120;
+
 // ── Game ─────────────────────────────────────────────────────────────────────
 
 class Game {
@@ -228,6 +270,7 @@ class Game {
         this._bindSplash();
         this._bindInput();
         this._bindTouchControls();
+        this._bindCanvasTap(canvas);
         document.getElementById('new-game').addEventListener('click', () => this._fullReset());
 
         // Populate version badge from <meta name="version"> — single source of truth.
@@ -502,6 +545,266 @@ class Game {
     _digitToSlot(code) {
         const keys = ['Digit1','Digit2','Digit3','Digit4','Digit5','Digit6','Digit7','Digit8','Digit9','Digit0'];
         return keys.indexOf(code);
+    }
+
+    // ── Canvas tap input ─────────────────────────────────────────────────────
+    //
+    // The keyboard-only paths (Digit1-9 for inventory, Esc to cancel, arrow
+    // keys to drive radial / overlay) don't exist on touch. Rather than
+    // duplicate every UI surface as a DOM button — which would steal screen
+    // space and drift out of sync with the renderer — we hit-test pointerdown
+    // events on the canvas against the same pixel rects the renderer drew.
+    //
+    // All UI elements (hotbar, item overlay, radial menu, throw/give prompt)
+    // have known canvas-local coordinates declared as module constants at the
+    // top of this file. The renderer reads the same constants conceptually;
+    // any layout change must update both halves. We don't actually share the
+    // constants between renderer.js and main.js to keep them independently
+    // testable — drift would surface as a "I tapped where I saw the button
+    // but nothing happened" bug, easy to catch in QA.
+    //
+    // Also works on desktop (mouse clicks), so the same code path covers
+    // both pointer-fine and pointer-coarse users.
+
+    _bindCanvasTap(canvas) {
+        canvas.addEventListener('pointerdown', (e) => this._onCanvasPointerDown(e));
+        // Prevent text selection / drag from a click-drag on the canvas.
+        canvas.addEventListener('dragstart', e => e.preventDefault());
+    }
+
+    // Convert a pointer event's clientX/clientY into the canvas's internal
+    // 608×608 coordinate space. The canvas is CSS-scaled to fit the viewport
+    // (aspect-ratio:1, height:100% on desktop, viewport-bounded on mobile),
+    // so we scale by the bounding rect ratio. Returns null if the canvas
+    // hasn't laid out yet (extremely rare; defensive).
+    _canvasLocalCoords(e, canvas) {
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return null;
+        return {
+            x: (e.clientX - rect.left) * (CANVAS_INTERNAL_PX / rect.width),
+            y: (e.clientY - rect.top)  * (CANVAS_INTERNAL_PX / rect.height),
+        };
+    }
+
+    // True while a transient UI animation is in flight (overlay slide-in or
+    // radial wheel rotation). Mirrors the keyboard input gate at line 313 —
+    // taps during animations would land on a visually-empty position or
+    // mid-rotation slice and feel buggy. Gate them out cleanly.
+    _uiAnimating() {
+        const now = performance.now();
+        if (this.state === STATE.ITEM_OVERLAY || this.state === STATE.RADIAL_MENU) {
+            if (now - (this._overlayOpenedAt ?? 0) < 80) return true;
+        }
+        if (this.state === STATE.RADIAL_MENU) {
+            if (now - (this.radialRotationStartedAt    ?? 0) < RADIAL_ANIM_MS) return true;
+            if (now - (this.radialSubRotationStartedAt ?? 0) < RADIAL_ANIM_MS) return true;
+        }
+        return false;
+    }
+
+    _onCanvasPointerDown(e) {
+        // Mirror the keyboard gate: don't process taps during the move
+        // animation or while the world is resolving. Splash has its own
+        // handler (DOM button). Dead/Win are non-interactive end states.
+        if (this.state === STATE.SPLASH || this.state === STATE.RESOLVING) return;
+        if (this.state === STATE.DEAD   || this.state === STATE.WIN)        return;
+        if (this._animating || this._uiAnimating()) return;
+
+        const canvas = e.currentTarget;
+        const pt = this._canvasLocalCoords(e, canvas);
+        if (!pt) return;
+        e.preventDefault();
+
+        // Priority order is by modality: the most exclusive overlay wins. A
+        // tap while the radial menu is open should drive the radial menu,
+        // not fall through to the hotbar visible behind/under it.
+        if (this.state === STATE.ITEM_THROW_DIR || this.state === STATE.ITEM_GIVE_DIR) {
+            this._tapThrowPrompt(pt);
+            return;
+        }
+        if (this.state === STATE.RADIAL_MENU) {
+            this._tapRadialMenu(pt);
+            return;
+        }
+        if (this.state === STATE.ITEM_OVERLAY) {
+            this._tapItemOverlay(pt);
+            return;
+        }
+        // IDLE or ITEM_SELECTED → hotbar tap. Outside the hotbar = no-op (we
+        // could route "tap on world tile" to movement here in a future pass,
+        // but PD-style discrete tile taps aren't part of the current scope).
+        this._tapHotbar(pt);
+    }
+
+    _pointInRect(p, r, slop = 0) {
+        return p.x >= r.x - slop && p.x <= r.x + r.w + slop
+            && p.y >= r.y - slop && p.y <= r.y + r.h + slop;
+    }
+
+    _tapHotbar(pt) {
+        // 9 slots in a row at y=546. Inflate hit zone by HIT_SLOP each side
+        // (so the visual stays 42×42 but the effective tap zone is 54×54),
+        // clearing Apple's 44pt minimum touch target without changing layout.
+        for (let i = 0; i < HOTBAR_SLOTS; i++) {
+            const r = {
+                x: HOTBAR_X_START + i * HOTBAR_STRIDE,
+                y: HOTBAR_Y,
+                w: HOTBAR_SLOT_W,
+                h: HOTBAR_SLOT_H,
+            };
+            if (!this._pointInRect(pt, r, HIT_SLOP)) continue;
+            // Mirror the keyboard idiom:
+            //   - tap a slot when nothing's selected → select it (state ITEM_SELECTED)
+            //   - tap the same slot again            → open the use overlay
+            //   - tap a different slot               → switch selection
+            if (this.state === STATE.ITEM_SELECTED && this.selectedSlot === i) {
+                this._openItemOverlay();
+            } else {
+                this._selectItem(i);
+            }
+            return;
+        }
+        // Tap outside the hotbar while a slot is selected = cancel selection
+        // (matches Escape behavior). Keeps the UI escapable on touch.
+        if (this.state === STATE.ITEM_SELECTED) {
+            this.selectedSlot = -1;
+            this.state = STATE.IDLE;
+            this._render();
+        }
+    }
+
+    _tapItemOverlay(pt) {
+        for (const dir of ['up', 'right', 'down', 'left']) {
+            if (this.overlayOptions[dir] && this._pointInRect(pt, OVERLAY_RECTS[dir], HIT_SLOP)) {
+                this._pickOverlay(dir);
+                return;
+            }
+        }
+        // Tap outside the four options = cancel back to ITEM_SELECTED.
+        this.state = STATE.ITEM_SELECTED;
+        this._render();
+    }
+
+    _tapThrowPrompt(pt) {
+        const dirVecs = {
+            up:    { dx:  0, dy: -1 },
+            down:  { dx:  0, dy:  1 },
+            left:  { dx: -1, dy:  0 },
+            right: { dx:  1, dy:  0 },
+        };
+        for (const dir of ['up', 'right', 'down', 'left']) {
+            if (this._pointInRect(pt, THROW_RECTS[dir], HIT_SLOP)) {
+                const vec = dirVecs[dir];
+                if (this.state === STATE.ITEM_THROW_DIR) this._doThrow(vec);
+                else                                     this._doGiveDir(vec);
+                return;
+            }
+        }
+        // Tap outside the four cardinals = cancel (no turn consumed).
+        this.state = STATE.IDLE;
+        this.selectedSlot = -1;
+        this._render();
+    }
+
+    _tapRadialMenu(pt) {
+        // Polar hit-test. Inner ring picks a top-level slice; outer ring
+        // picks a sub-wheel slice (only valid when drilled). Tap outside
+        // both rings = cancel.
+        const lx = pt.x - RADIAL_CENTER_X;
+        const ly = pt.y - RADIAL_CENTER_Y;
+        const r  = Math.hypot(lx, ly);
+
+        if (r < RADIAL_INNER_R_MIN) {
+            // Tapped the wheel's dead center — treat as no-op rather than
+            // accidental cancel; the visual hub is non-interactive.
+            return;
+        }
+        if (r > RADIAL_OUTER_R_MAX + HIT_SLOP) {
+            // Tap clearly outside the wheel = cancel.
+            this._radialCancel();
+            return;
+        }
+
+        // Convert atan2 (math convention: 0=+x, CCW positive, +y is down so
+        // visually it reads as CW) into "clock angle" (0=12, CW positive).
+        // The wheel slices are addressed by clock angle.
+        const TAU = Math.PI * 2;
+        let clockAngle = Math.atan2(ly, lx) + Math.PI / 2;
+        clockAngle = ((clockAngle % TAU) + TAU) % TAU;
+
+        const drilled = this.radialDrilled;
+        const inInner = r >= RADIAL_INNER_R_MIN - HIT_SLOP && r <= RADIAL_INNER_R_MAX + HIT_SLOP;
+        const inOuter = r >= RADIAL_OUTER_R_MIN - HIT_SLOP && r <= RADIAL_OUTER_R_MAX + HIT_SLOP;
+
+        if (drilled && inOuter) {
+            // Sub-wheel hit. Span is min(M*sliceAngle, π) so a tap can land
+            // outside the visible arc — bail if so. The renderer agent's
+            // spec said sub-slices may not cover a full circle.
+            const cat   = RADIAL_SLICES[this.radialInnerIndex];
+            const items = this._radialSubItems(cat);
+            if (items.length === 0) return;
+            const span         = Math.min(items.length * RADIAL_SLICE_ANGLE, Math.PI);
+            const subAngle     = span / items.length;
+            const subRotation  = this._currentRadialSubRotation();
+            // Same math as inner wheel but using sub-slice geometry.
+            let rel = clockAngle - subRotation;
+            rel = ((rel % TAU) + TAU) % TAU;
+            // The sub-wheel is centered at 12 o'clock (clock angle 0) and
+            // spans `span` total. Slice 0 is at the center; slices spread
+            // out symmetrically (renderer renders them centered on the
+            // pointer). Re-fold rel into (-π, π] then check it's in the span.
+            let foldedRel = rel;
+            if (foldedRel > Math.PI) foldedRel -= TAU;
+            // The renderer draws sub-slice i at offset `i * subAngle` from
+            // the sub-rotation pivot, so once we've removed the rotation
+            // the slice index is round(foldedRel / subAngle), modulo M.
+            // (Same shape as inner-wheel math; the sub-wheel just has more
+            // or fewer slices than 6.)
+            const subIdx = Math.round(foldedRel / subAngle);
+            if (subIdx < -items.length / 2 || subIdx >= items.length / 2 + 1) return;
+            const wrapped = ((subIdx % items.length) + items.length) % items.length;
+            if (wrapped === this.radialSubIndex[cat]) {
+                // Tap on the already-pointed sub-slice = confirm.
+                this._radialConfirm();
+            } else {
+                // Jump-to-slice. Bypass _radialRotate's 1-slice-step idiom
+                // (a keyboard convention) and animate directly to the tapped
+                // index. _animateSubRotation reads radialSubIndex so set it
+                // first.
+                this.radialSubIndex[cat] = wrapped;
+                this._animateSubRotation(items.length);
+                this._ensureParticleLoop();
+                this._render();
+            }
+            return;
+        }
+
+        if (!drilled && inInner) {
+            // Inner-wheel hit. 6 slices, RADIAL_SLICE_ANGLE apart, rotation
+            // = -RADIAL_SLICE_ANGLE * radialInnerIndex (so slice i sits at
+            // the pointer when innerIndex === i).
+            const innerRotation = this._currentRadialRotation();
+            let rel = clockAngle - innerRotation;
+            rel = ((rel % TAU) + TAU) % TAU;
+            const idx = Math.round(rel / RADIAL_SLICE_ANGLE) % RADIAL_SLICES.length;
+            const wrapped = ((idx % RADIAL_SLICES.length) + RADIAL_SLICES.length) % RADIAL_SLICES.length;
+            if (wrapped === this.radialInnerIndex) {
+                // Tap on the already-pointed slice = confirm.
+                this._radialConfirm();
+            } else {
+                // Jump to the tapped slice. Match the muscle-memory model:
+                // tap = "select that slice now."
+                this.radialInnerIndex = wrapped;
+                this._animateInnerRotation();
+                this._ensureParticleLoop();
+                this._render();
+            }
+            return;
+        }
+
+        // Inside the wheel envelope but in the gap between rings (r ~80..84
+        // when not drilled, or otherwise off-target). Treat as no-op so a
+        // misfire doesn't accidentally cancel the whole encounter.
     }
 
     // ── Animation ─────────────────────────────────────────────────────────────
@@ -1701,4 +2004,19 @@ class Game {
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
 
-document.addEventListener('DOMContentLoaded', () => new Game().init());
+function boot() {
+    const game = new Game();
+    // Expose for in-page debugging (preview verification, console poking).
+    // Harmless in production — the global is never read by gameplay code.
+    if (typeof window !== 'undefined') window.__game = game;
+    game.init();
+}
+// Module scripts can occasionally execute after DOMContentLoaded has already
+// fired (preview-tool reloads, bf-cache restoration, etc.). Check readyState
+// up front and run boot inline if the DOM is already ready; otherwise wait
+// for the event as before.
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+} else {
+    boot();
+}
