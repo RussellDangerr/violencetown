@@ -27,7 +27,12 @@ export const UI = {
     buff:    '#44aa44',
 };
 
-// ── 9-Slice Panel Pieces (32px borders, from assembled panel at 0,0) ─────────
+// ── 9-Slice Panel Pieces (32px cells in a 96×96 grid per variant) ───────────
+//
+// The panel atlas (game/assets/ui_panel.png) is 96×288 — three vertically
+// stacked variants: base (y=0), dark (y=96), glow (y=192). Each variant is
+// a 3×3 grid of 32×32 cells. P[piece] gives base-coords; PANEL_VARIANT_OY
+// offsets the whole grid down for the dark/glow variants.
 
 const P = {
     tl: { x: 0,  y: 0,  w: 32, h: 32 },
@@ -39,6 +44,12 @@ const P = {
     bl: { x: 0,  y: 64, w: 32, h: 32 },
     b:  { x: 32, y: 64, w: 32, h: 32 },
     br: { x: 64, y: 64, w: 32, h: 32 },
+};
+
+export const PANEL_VARIANT_OY = {
+    base: 0,
+    dark: 96,
+    glow: 192,
 };
 
 // ── Item display colors ──────────────────────────────────────────────────────
@@ -56,30 +67,43 @@ export const ITEM_COLORS = {
 
 // ── Draw helpers ─────────────────────────────────────────────────────────────
 
-function spr(ctx, sheet, s, dx, dy, dw, dh) {
-    ctx.drawImage(sheet.img, s.x, s.y, s.w, s.h, dx, dy, dw ?? s.w, dh ?? s.h);
+function spr(ctx, sheet, s, oy, dx, dy, dw, dh) {
+    // `oy` shifts source-Y by the variant offset (0/96/192 for base/dark/glow).
+    ctx.drawImage(sheet.img, s.x, s.y + oy, s.w, s.h, dx, dy, dw ?? s.w, dh ?? s.h);
 }
 
-// Draw a large ornate 9-slice panel (for splash, win, dialogs)
-export function drawPanelBig(ctx, sheet, x, y, w, h) {
+// Draw a large ornate 9-slice panel (for splash, win, dialogs, modals).
+// `variant` selects which 96px band of the atlas to sample:
+//   'base' — parchment with gold trim (default)
+//   'dark' — dark fill for tooltips / overlays
+//   'glow' — brighter gold trim for active highlights
+export function drawPanelBig(ctx, sheet, x, y, w, h, variant = 'base') {
     if (!sheet?.loaded) {
         drawPanelFallback(ctx, x, y, w, h);
         return;
     }
     const s = 32;
-    spr(ctx, sheet, P.tl, x, y, s, s);
-    spr(ctx, sheet, P.tr, x + w - s, y, s, s);
-    spr(ctx, sheet, P.bl, x, y + h - s, s, s);
-    spr(ctx, sheet, P.br, x + w - s, y + h - s, s, s);
-    spr(ctx, sheet, P.t,  x + s, y, w - 2*s, s);
-    spr(ctx, sheet, P.b,  x + s, y + h - s, w - 2*s, s);
-    spr(ctx, sheet, P.l,  x, y + s, s, h - 2*s);
-    spr(ctx, sheet, P.r,  x + w - s, y + s, s, h - 2*s);
-    spr(ctx, sheet, P.c,  x + s, y + s, w - 2*s, h - 2*s);
+    const oy = PANEL_VARIANT_OY[variant] ?? 0;
+    spr(ctx, sheet, P.tl, oy, x, y, s, s);
+    spr(ctx, sheet, P.tr, oy, x + w - s, y, s, s);
+    spr(ctx, sheet, P.bl, oy, x, y + h - s, s, s);
+    spr(ctx, sheet, P.br, oy, x + w - s, y + h - s, s, s);
+    spr(ctx, sheet, P.t,  oy, x + s, y, w - 2*s, s);
+    spr(ctx, sheet, P.b,  oy, x + s, y + h - s, w - 2*s, s);
+    spr(ctx, sheet, P.l,  oy, x, y + s, s, h - 2*s);
+    spr(ctx, sheet, P.r,  oy, x + w - s, y + s, s, h - 2*s);
+    spr(ctx, sheet, P.c,  oy, x + s, y + s, w - 2*s, h - 2*s);
 }
 
-// Draw a clean small panel (parchment fill + border, no 9-slice)
-export function drawPanelSmall(ctx, x, y, w, h) {
+// Draw a small parchment panel. Uses the 9-slice atlas when a sheet is
+// passed, falling back to the original flat parchment fill for callers
+// that don't have the sheet (or for very small panels where 32×32 corners
+// would dominate).
+export function drawPanelSmall(ctx, x, y, w, h, sheet = null, variant = 'base') {
+    if (sheet?.loaded && w >= 32 && h >= 32) {
+        drawPanelBig(ctx, sheet, x, y, w, h, variant);
+        return;
+    }
     ctx.fillStyle = UI.panelBgDark;
     ctx.fillRect(x, y, w, h);
     ctx.fillStyle = UI.panelBg;
