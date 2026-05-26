@@ -6,7 +6,7 @@ Play it live at [violencetown.russelldangerr.com/game/](https://violencetown.rus
 
 ## Status
 
-v0.7.0 — overhead dialogue + in-canvas log strip shipped 2026-05-25. Active development on `dev`.
+v0.8.0 — sprite gutter fix, zone art fill-in, full UI/text/effects rework shipped 2026-05-26. Active development on `dev`.
 
 ## Play
 
