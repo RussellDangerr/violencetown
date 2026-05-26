@@ -72,6 +72,49 @@
                 <button class="menu-item menu-item-close" data-action="close">CLOSE</button>
             </div>
         </div>
+
+        <!-- In-game controls reference modal. Triggered by `?` on desktop, by
+             the Help menu item on touch. Dismissed by Escape, backdrop tap,
+             or the close button. Content mirrors README so the source of
+             truth for controls is one place. -->
+        <div id="help-modal" class="hidden" role="dialog" aria-label="how to play" aria-modal="true">
+            <div id="help-modal-backdrop"></div>
+            <div id="help-modal-panel">
+                <h2>HOW TO PLAY</h2>
+                <p class="help-lede">You are a taxi driver in Violencetown. Things have gone wrong.</p>
+
+                <h3>Move</h3>
+                <ul>
+                    <li><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> or arrows — walk one tile, hold to keep going</li>
+                    <li><span class="help-touch">On touch:</span> tap the d-pad, hold for continuous walking</li>
+                </ul>
+
+                <h3>Combat</h3>
+                <ul>
+                    <li>Walk into an enemy to open the radial wheel</li>
+                    <li><kbd>←</kbd> <kbd>→</kbd> spin the wheel · <kbd>↑</kbd> / <kbd>Space</kbd> confirm · <kbd>↓</kbd> / <kbd>Esc</kbd> cancel</li>
+                    <li><span class="help-touch">On touch:</span> tap a slice to jump, tap again to confirm. Tap outside to cancel.</li>
+                </ul>
+
+                <h3>Inventory</h3>
+                <ul>
+                    <li><kbd>1</kbd>–<kbd>9</kbd> select a slot · <kbd>Space</kbd> open use overlay · pick Use / Throw / Smash / Give with arrows</li>
+                    <li><span class="help-touch">On touch:</span> tap a hotbar slot to select, tap again to open the overlay, tap an option</li>
+                </ul>
+
+                <h3>Other</h3>
+                <ul>
+                    <li><kbd>Space</kbd> wait one turn · <kbd>Esc</kbd> cancel any menu · <kbd>?</kbd> open this help</li>
+                    <li><span class="help-touch">On touch:</span> ☰ opens the menu (Wait / Cancel / Help / Restart)</li>
+                </ul>
+
+                <p class="help-foot">No save accounts. Just play. Code at
+                    <a href="https://github.com/RussellDangerr/violencetown" target="_blank" rel="noopener">github.com/RussellDangerr/violencetown</a>.
+                </p>
+
+                <button id="help-close" class="menu-item menu-item-close">CLOSE</button>
+            </div>
+        </div>
     </div>
 
     <script type="module" src="main.js"></script>

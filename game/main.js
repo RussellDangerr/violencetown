@@ -272,6 +272,7 @@ class Game {
         this._bindTouchControls();
         this._bindCanvasTap(canvas);
         this._bindMenuSheet();
+        this._bindHelpModal();
 
         // Populate version badge from <meta name="version"> — single source of truth.
         // Lives in index.html as #version-badge, styled bottom-right in style.css.
@@ -641,11 +642,46 @@ class Game {
         });
     }
 
-    // Stub — implemented in the help-modal commit. Defined now so the
-    // menu sheet's Help button doesn't crash if tapped before that lands.
+    // ── Help modal ──────────────────────────────────────────────────────────
+    //
+    // Controls reference overlay. Triggered by `?` on desktop and the Help
+    // item in the menu sheet on touch. Content lives in index.html (#help-
+    // modal) so editing the controls list is a single-place change. The
+    // modal is purely informational — it gates no game state, so it can
+    // safely overlay any state and be dismissed without consequence.
+
     _openHelpModal() {
         const modal = document.getElementById('help-modal');
         if (modal) modal.classList.remove('hidden');
+    }
+    _closeHelpModal() {
+        const modal = document.getElementById('help-modal');
+        if (modal) modal.classList.add('hidden');
+    }
+    _bindHelpModal() {
+        const modal = document.getElementById('help-modal');
+        if (!modal) return;
+        const backdrop = document.getElementById('help-modal-backdrop');
+        const closeBtn = document.getElementById('help-close');
+        backdrop?.addEventListener('click', () => this._closeHelpModal());
+        closeBtn?.addEventListener('click', () => this._closeHelpModal());
+        // ? opens (Slash on US layouts also fires `?` via shift), Esc closes.
+        // Use capture phase to beat _bindInput's bubble-phase handler so Esc
+        // closes the modal instead of cancelling game state behind it.
+        document.addEventListener('keydown', (e) => {
+            // Skip when typing in an input (defensive — no inputs exist today)
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            if (e.key === '?' || (e.code === 'Slash' && e.shiftKey)) {
+                e.preventDefault();
+                if (modal.classList.contains('hidden')) this._openHelpModal();
+                else                                    this._closeHelpModal();
+            }
+            if (e.code === 'Escape' && !modal.classList.contains('hidden')) {
+                e.stopPropagation();
+                e.preventDefault();
+                this._closeHelpModal();
+            }
+        }, true); // capture
     }
 
     // Convert a pointer event's clientX/clientY into the canvas's internal
