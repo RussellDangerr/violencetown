@@ -843,25 +843,38 @@ export class Renderer {
         // Parchment background strip
         drawPanelSmall(ctx, ox, oy - 4, totalW, sh + 12, this.uiSheet);
 
+        // Selected-slot pulse — same 2Hz heartbeat as the radial menu's
+        // active slice so the two highlight surfaces feel consistent.
+        const selPulse = 0.5 + 0.5 * Math.sin(performance.now() / 1000 * Math.PI * 2);
+
         for (let i = 0; i < count; i++) {
             const sx = ox + 8 + i * (sw + gap);
             const sy = oy + 2;
             const stack = game.inventory[i];
             const sel = game.selectedSlot === i;
+            const isEmpty = !stack;
 
-            // Slot inset
+            // Slot frame — selected gets the parchment "glow" variant +
+            // pulsing gold halo; unselected gets a flat dark inset.
             if (sel) {
-                ctx.fillStyle = '#4a4020';
-                ctx.fillRect(sx - 1, sy - 1, sw + 2, sh + 2);
+                // Outer halo (gold, swelling with pulse)
+                ctx.fillStyle = `rgba(212, 185, 106, ${0.3 + 0.4 * selPulse})`;
+                ctx.fillRect(sx - 2, sy - 2, sw + 4, sh + 4);
             }
             drawInset(ctx, sx, sy, sw, sh);
 
-            // Selected highlight border
+            // Selected highlight border (always crisp, on top of the halo)
             if (sel) {
                 ctx.strokeStyle = UI.gold;
                 ctx.lineWidth = 2;
                 ctx.strokeRect(sx - 1, sy - 1, sw + 2, sh + 2);
             }
+
+            // Empty-slot opacity nudge — empty slots render at ~70%
+            // opacity so the filled slots draw the eye first.
+            const slotAlpha = isEmpty ? 0.7 : 1.0;
+            const prevAlpha = ctx.globalAlpha;
+            ctx.globalAlpha = slotAlpha;
 
             // Key number (top-left corner of slot)
             if (this.font) {
@@ -869,6 +882,9 @@ export class Renderer {
                     color: sel ? UI.gold : '#5a5040', scale: 1,
                 });
             }
+
+            // Reset alpha after the key number; item draw decides for itself.
+            ctx.globalAlpha = prevAlpha;
 
             // Item
             if (stack) {

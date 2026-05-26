@@ -2089,6 +2089,10 @@ class Game {
         // keep the loop alive throughout the menu's lifetime than to gate
         // it by which sub-animation is running.
         if (this.state === STATE.RADIAL_MENU) return true;
+        // Hotbar selected-slot pulse — same 2Hz heartbeat as the radial wheel.
+        // Only runs while ITEM_SELECTED so the loop stops once the player
+        // moves on or opens the overlay.
+        if (this.state === STATE.ITEM_SELECTED) return true;
         for (const e of this.enemies) {
             if ((e._hitFlashUntil ?? 0) > now) return true;
             if ((e._staggerUntil  ?? 0) > now) return true;
