@@ -65,3 +65,7 @@ deals/              # Deals frontend
 See `game/PLAN.md` for the phased development plan and `GAME_STUDIO_PLAN.md` for the 4-gate pipeline.
 
 All feature work follows the gate pipeline defined in `GAME_STUDIO_PLAN.md`.
+
+## License
+
+[MIT](LICENSE) — own code. Third-party sprite assets in `game/assets-placeholder/` are distributed under the original Kenney license bundled there.

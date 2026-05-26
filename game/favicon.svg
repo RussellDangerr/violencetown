@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges">
+  <rect width="16" height="16" fill="#0a0a0a"/>
+  <!-- Pixel "V" in parchment gold matching the splash palette -->
+  <rect x="2"  y="3" width="2" height="2" fill="#d4b96a"/>
+  <rect x="12" y="3" width="2" height="2" fill="#d4b96a"/>
+  <rect x="3"  y="5" width="2" height="2" fill="#d4b96a"/>
+  <rect x="11" y="5" width="2" height="2" fill="#d4b96a"/>
+  <rect x="4"  y="7" width="2" height="2" fill="#d4b96a"/>
+  <rect x="10" y="7" width="2" height="2" fill="#d4b96a"/>
+  <rect x="5"  y="9" width="2" height="2" fill="#d4b96a"/>
+  <rect x="9"  y="9" width="2" height="2" fill="#d4b96a"/>
+  <rect x="6" y="11" width="4" height="2" fill="#d4b96a"/>
+  <!-- One red pip at the V's tip — the "violence" beat -->
+  <rect x="7" y="13" width="2" height="1" fill="#c43030"/>
+</svg>
