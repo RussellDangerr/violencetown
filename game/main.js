@@ -5,6 +5,7 @@
 import { Renderer } from './renderer.js';
 import { loadMap } from './map.js';
 import { loadAllSprites } from './sprites.js';
+import { BitmapFont } from './bitmap-font.js';
 import { DIR_NAMES, PLAYER_MAX_HP, SLUDGE_DOT, INVENTORY_SIZE, MAX_STACK } from './data.js';
 import { ITEMS, resolveUse, tickTempEquips } from './items.js';
 import { attack, formatDamageNumber } from './combat.js';
@@ -261,6 +262,17 @@ class Game {
         this._log(spriteResult.fail > 0
             ? `[Sprites: ${spriteResult.ok} loaded, ${spriteResult.fail} missing]`
             : `[All ${spriteResult.ok} spritesheets loaded]`);
+
+        // Bitmap font for all in-canvas UI text. Loaded once and stashed on
+        // the renderer so any draw method can call `this.font.drawText(...)`
+        // without re-importing. Falls back gracefully if the atlas is
+        // missing (renderer's text helpers check `this.font` before using).
+        try {
+            this.renderer.font = await BitmapFont.load('assets/font_8x8.png');
+        } catch (e) {
+            console.warn('[bitmap-font] failed to load atlas, falling back to ctx.fillText', e);
+            this.renderer.font = null;
+        }
 
         // Render splash screen with pixel art
         const splashCanvas = document.getElementById('splash-canvas');

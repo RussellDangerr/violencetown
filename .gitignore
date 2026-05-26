@@ -8,6 +8,14 @@
 assets/
 assetszipped/
 
+# Exception: game/assets/ is reserved for procedurally-generated assets we
+# author ourselves (bitmap fonts, UI panels, wheel frames — all output of
+# scripts in tools/). These are first-party and safe to commit. Anything
+# under game/assets-placeholder/ for licensed Kenney packs stays excluded
+# because it's not the same folder.
+!game/assets/
+!game/assets/**
+
 # --- Archive & executable files (defense layer 2: extensions) ---
 # Catches any new asset zip dropped anywhere, plus installers/launchers.
 # The repo ships pure HTML/CSS/JS; no legitimate need to commit these.
