@@ -620,42 +620,84 @@ export class Renderer {
     }
 
     // ── HP Panel (top-left, parchment style) ─────────────────────────────────
+    //
+    // Three-resource stack: HP (red), MP (cyan), GP (gold card row). HP and
+    // MP render as inset bars with a bitmap-font readout. GP renders as a
+    // small "Gold Card" pill — an in-universe artifact (see
+    // plans/gold-card.md): part rewards card, part bank account, part Town
+    // ID. For the v1 HUD it's just a gold rectangle stamped "GP" with the
+    // numeric balance trailing.
+    //
+    // Weapon stays at the bottom as a one-line summary.
 
     _drawHPPanel(game) {
         const { ctx } = this;
-        const x = 6, y = 6, w = 170, h = 62;
+        const x = 6, y = 6, w = 170, h = 90;
 
         drawPanelSmall(ctx, x, y, w, h, this.uiSheet);
 
-        // HP bar inside the parchment
-        const bx = x + 8, by = y + 8, bw = w - 16, bh = 14;
-        const frac = game.playerHp / game.playerMaxHp;
+        const bx = x + 8, bw = w - 16, bh = 12;
+        let by = y + 8;
 
+        // — HP bar — always red per the violencetown palette (blood, not
+        //   "danger" — the old green→red threshold was retired here).
+        const hpFrac = game.playerHp / game.playerMaxHp;
         drawInset(ctx, bx, by, bw, bh);
-        ctx.fillStyle = frac > 0.3 ? UI.hpGreen : UI.hpRed;
-        ctx.fillRect(bx + 1, by + 1, (bw - 2) * frac, bh - 2);
-
-        // HP text — bitmap font, white-on-bar
+        ctx.fillStyle = UI.hpRed;
+        ctx.fillRect(bx + 1, by + 1, (bw - 2) * hpFrac, bh - 2);
         if (this.font) {
-            this.font.drawText(ctx, `HP ${game.playerHp}/${game.playerMaxHp}`, bx + 3, by + 3, {
+            this.font.drawText(ctx, `HP ${game.playerHp}/${game.playerMaxHp}`, bx + 3, by + 2, {
                 color: '#fff', scale: 1,
             });
         }
+        by += bh + 4;
 
-        // Weapon (strip brackets; drop the previous Unicode sword glyph
-        // since the bitmap font is plain ASCII — name + damage reads clearly)
+        // — MP bar — cyan, ties to Skills (inert for now). The bar exists
+        //   so the resource is legible the moment a skill ever spends from
+        //   it; until then it sits at full.
+        const mpFrac = (game.playerMp ?? game.playerMaxMp) / (game.playerMaxMp ?? 100);
+        drawInset(ctx, bx, by, bw, bh);
+        ctx.fillStyle = '#3a8ab0';
+        ctx.fillRect(bx + 1, by + 1, (bw - 2) * mpFrac, bh - 2);
+        if (this.font) {
+            this.font.drawText(ctx, `MP ${game.playerMp ?? 0}/${game.playerMaxMp ?? 100}`, bx + 3, by + 2, {
+                color: '#fff', scale: 1,
+            });
+        }
+        by += bh + 4;
+
+        // — Gold Card (GP) — a small dark-bordered gold pill with "GP" on
+        //   the left edge and the balance trailing. The full Gold Card
+        //   artifact (dollar-bill design with player face + town ID) lives
+        //   in lore; this is the inline credit-card-strip rendering of it.
+        const cardX = bx, cardY = by, cardW = bw, cardH = 14;
+        ctx.fillStyle = '#2a2218';            // dark border (matches panel chrome)
+        ctx.fillRect(cardX, cardY, cardW, cardH);
+        ctx.fillStyle = UI.gold;              // gold body
+        ctx.fillRect(cardX + 1, cardY + 1, cardW - 2, cardH - 2);
+        // Dark "magnetic strip" on the left third — sells the credit-card
+        // read at this size.
+        ctx.fillStyle = '#1a1208';
+        ctx.fillRect(cardX + 2, cardY + 2, 18, cardH - 4);
+        if (this.font) {
+            // "GP" stamped on the strip (white-on-dark)
+            this.font.drawText(ctx, 'GP', cardX + 5, cardY + 3, {
+                color: UI.gold, scale: 1,
+            });
+            // Balance on the gold face (dark text)
+            this.font.drawText(ctx, `${game.gold ?? 0}`, cardX + cardW - 4, cardY + 3, {
+                color: '#2a2218', scale: 1, align: 'right',
+            });
+        }
+        by += cardH + 4;
+
+        // — Weapon line at the bottom (informational; the hotbar carries
+        //   the canonical inventory).
         const wpn = game.equipment.weapon;
         if (wpn && this.font) {
             const name = wpn.name.replace(/[\[\]]/g, '').toUpperCase();
-            this.font.drawText(ctx, `${name}  ${wpn.damage} DMG`, x + 8, y + 32, {
+            this.font.drawText(ctx, `${name}  ${wpn.damage} DMG`, x + 8, by, {
                 color: UI.text, scale: 1,
-            });
-        }
-
-        // Gold
-        if (this.font) {
-            this.font.drawText(ctx, `$ ${game.gold}`, x + 8, y + 46, {
-                color: UI.gold, scale: 1,
             });
         }
     }

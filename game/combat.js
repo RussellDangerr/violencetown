@@ -7,15 +7,21 @@
 //   - You always hit; armor just means you hit softer
 
 const DEFAULT_HP    = 100;
+const DEFAULT_MP    = 100;   // Skill / mana — every creature starts at 100
 const DEFAULT_ARMOR = 0;
 
 // ── Entity ────────────────────────────────────────────────────────────────────
 
 class Entity {
-    constructor({ name, hp = DEFAULT_HP, armor = DEFAULT_ARMOR } = {}) {
+    constructor({ name, hp = DEFAULT_HP, mp = DEFAULT_MP, armor = DEFAULT_ARMOR } = {}) {
         this.name    = name ?? 'unknown';
         this.maxHp   = hp;
         this.hp      = hp;
+        // MP (Magic / Skill Points) — gates skill use once skills exist.
+        // For now it just sits at 100/100 on every entity; the HUD reads it
+        // so the resource is visible even though no skill spends from it yet.
+        this.maxMp   = mp;
+        this.mp      = mp;
         this.armor   = armor;
         this.alive   = true;
     }
@@ -70,4 +76,4 @@ function formatDamageNumber(result) {
 
 // ── Exports ───────────────────────────────────────────────────────────────────
 
-export { Entity, attack, formatDamageNumber, DEFAULT_HP, DEFAULT_ARMOR };
+export { Entity, attack, formatDamageNumber, DEFAULT_HP, DEFAULT_MP, DEFAULT_ARMOR };

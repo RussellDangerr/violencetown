@@ -61,6 +61,10 @@ export const VIEW_TILES = 19;       // odd number, player at center
 export const CANVAS_PX = TILE_PX * VIEW_TILES; // 608
 
 export const PLAYER_MAX_HP = 100;
+// MP (Magic / Skill points) — every creature starts at 100. Currently inert
+// (no skill spends from it yet); the HUD just surfaces it so the resource
+// is visible while the skill system catches up.
+export const PLAYER_MAX_MP = 100;
 export const SLUDGE_DOT = 5;
 export const INVENTORY_SIZE = 10;
 export const MAX_STACK = 99;

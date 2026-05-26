@@ -6,7 +6,7 @@ import { Renderer } from './renderer.js';
 import { loadMap } from './map.js';
 import { loadAllSprites } from './sprites.js';
 import { BitmapFont } from './bitmap-font.js';
-import { DIR_NAMES, PLAYER_MAX_HP, SLUDGE_DOT, INVENTORY_SIZE, MAX_STACK } from './data.js';
+import { DIR_NAMES, PLAYER_MAX_HP, PLAYER_MAX_MP, SLUDGE_DOT, INVENTORY_SIZE, MAX_STACK } from './data.js';
 import { ITEMS, resolveUse, tickTempEquips } from './items.js';
 import { attack, formatDamageNumber } from './combat.js';
 import { Enemy, resolveEnemyTurns } from './enemies.js';
@@ -111,6 +111,12 @@ class Game {
         this.playerY     = 0;
         this.playerHp    = PLAYER_MAX_HP;
         this.playerMaxHp = PLAYER_MAX_HP;
+        // MP — Magic / Skill points. Currently inert (nothing spends from it
+        // yet); rendered in the HUD so the resource is visible as the skill
+        // system catches up. Every creature gets the same 100/100 baseline
+        // via DEFAULT_MP in combat.js.
+        this.playerMp    = PLAYER_MAX_MP;
+        this.playerMaxMp = PLAYER_MAX_MP;
         this.extraMoves  = 0; // future: Goo, abilities, etc.
         this.facing      = 'down'; // 'down' | 'left' | 'right' | 'up'
 
@@ -1914,6 +1920,7 @@ class Game {
         this.playerX = this.map.spawn.x;
         this.playerY = this.map.spawn.y;
         this.playerHp = this.playerMaxHp;
+        this.playerMp = this.playerMaxMp;
         this.buffs = [];
         this.inventory.fill(null);
         this.tempEquips = [];
@@ -1927,6 +1934,7 @@ class Game {
     async _fullReset() {
         this.turn = 0;
         this.playerHp = this.playerMaxHp;
+        this.playerMp = this.playerMaxMp;
         this.buffs = [];
         this.inventory.fill(null);
         this.tempEquips = [];
