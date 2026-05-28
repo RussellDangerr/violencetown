@@ -17,6 +17,15 @@ body {
     justify-content: center;
     /* Stop iOS pull-to-refresh and rubber-banding when tapping near edges. */
     overscroll-behavior: contain;
+    /* Browser-game polish: kill double-tap-to-zoom (which also drives accidental
+       text selection on iOS), the gray tap-flash, and the long-press callout.
+       Pinch-zoom is preserved via touch-action: manipulation; the help modal
+       opts selection back in so its GitHub link stays copyable. */
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
 }
 
 .hidden { display: none !important; }
@@ -166,9 +175,21 @@ body {
     padding: 4px 10px;
     cursor: pointer;
     z-index: 10;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
+    transition: transform 80ms ease, box-shadow 120ms ease,
+                background-color 120ms ease, border-color 120ms ease,
+                color 120ms ease;
 }
 #menu-btn:hover { border-color: #8b7340; color: #d4b96a; }
 #menu-btn:focus-visible { outline: 2px solid #d4b96a; outline-offset: 2px; }
+#menu-btn:active {
+    transform: scale(0.93);
+    background: #2a2218;
+    border-color: #d4b96a;
+    color: #fff;
+    box-shadow: 0 0 14px rgba(212, 185, 106, 0.55),
+                0 1px 3px rgba(0, 0, 0, 0.5);
+}
 
 /* --- Version badge (always visible) --- */
 
@@ -200,8 +221,17 @@ body {
     -webkit-user-select: none;
     touch-action: manipulation;
     cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
+    transition: transform 80ms ease, box-shadow 120ms ease,
+                background-color 120ms ease, border-color 120ms ease;
 }
-.tc-btn:active { background: #3a2e1f; border-color: #d4b96a; }
+.tc-btn:active {
+    background: #3a2e1f;
+    border-color: #d4b96a;
+    transform: scale(0.93);
+    box-shadow: 0 0 14px rgba(212, 185, 106, 0.55),
+                0 1px 3px rgba(0, 0, 0, 0.5);
+}
 
 /* Keyboard / accessibility focus — visible ring matched to brand gold. Only
    shows for keyboard navigation (:focus-visible), not on mouse clicks, so
@@ -326,6 +356,11 @@ body {
         inset 0 0 0 2px #8b7340,
         inset 0 0 0 4px #1a1610,
         0 0 0 1px #0a0a0a;
+    /* Opt back in to selection — body disables it globally for browser-game
+       feel, but the GitHub link and controls reference here are worth copying. */
+    user-select: text;
+    -webkit-user-select: text;
+    -webkit-touch-callout: default;
 }
 #help-modal-panel::before,
 #help-modal-panel::after {
@@ -426,7 +461,7 @@ body {
         display: flex;
         position: fixed;
         left: 0; right: 0; bottom: 0;
-        padding: 12px max(12px, env(safe-area-inset-left)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-right));
+        padding: 16px max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-right));
         justify-content: flex-start;
         align-items: flex-end;
         z-index: 20;
@@ -436,11 +471,11 @@ body {
 
     #touch-dpad {
         display: grid;
-        grid-template-columns: repeat(3, 56px);
-        grid-template-rows: repeat(3, 56px);
-        gap: 4px;
+        grid-template-columns: repeat(3, 60px);
+        grid-template-rows: repeat(3, 60px);
+        gap: 6px;
     }
-    #touch-dpad .tc-btn { font-size: 20px; padding: 0; opacity: 0.85; }
+    #touch-dpad .tc-btn { font-size: 22px; padding: 0; opacity: 0.85; }
     #touch-dpad .tc-btn:nth-child(1) { grid-column: 2; grid-row: 1; }
     #touch-dpad .tc-btn:nth-child(2) { grid-column: 1; grid-row: 2; }
     #touch-dpad .tc-btn:nth-child(3) { grid-column: 2; grid-row: 3; }
@@ -450,12 +485,12 @@ body {
        within thumb reach but clear of the d-pad cluster. */
     #menu-btn {
         top: auto; right: auto;
-        bottom: max(12px, env(safe-area-inset-bottom));
-        right: max(12px, env(safe-area-inset-right));
-        width: 56px; height: 56px;
+        bottom: max(16px, env(safe-area-inset-bottom));
+        right: max(16px, env(safe-area-inset-right));
+        width: 60px; height: 60px;
         border-radius: 50%;
         border-width: 2px;
-        font-size: 22px;
+        font-size: 24px;
         background: #2a2218;
         color: #d4b96a;
         opacity: 0.9;
