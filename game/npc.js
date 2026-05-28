@@ -269,9 +269,9 @@ function findNearestWantedItem(game, npc) {
 // region (defined in map JSON's `regions` array). If no valid candidate
 // exists, returns null and the NPC stays put this tick.
 //
-// Math.random is intentional for v1 — seeded RNG is on the deferred-debt
-// list per Gate-2 design. Once a save system exists, deterministic wander
-// targets will matter; not now.
+// Pulls from the seeded RNG (game.rng) so wander targets are deterministic
+// and resumable across saves — the save persists the live RNG stream and
+// restores it on load.
 
 function pickWanderTarget(game, npc) {
     const radius = npc.wanderRadius ?? 3;
@@ -297,5 +297,5 @@ function pickWanderTarget(game, npc) {
     }
 
     if (candidates.length === 0) return null;
-    return candidates[Math.floor(Math.random() * candidates.length)];
+    return game.rng.pick(candidates);
 }

@@ -12,6 +12,8 @@ import { attack, formatDamageNumber } from './combat.js';
 import { Enemy, resolveEnemyTurns } from './enemies.js';
 import { applyGive } from './give-action.js';
 import { escapeHtml, manhattan, clamp } from './utils.js';
+import { RNG } from './rng.js';
+import { hasSave, readSaveRaw, writeSave, loadInto, clearSave } from './save.js';
 
 // ── States ───────────────────────────────────────────────────────────────────
 
@@ -248,6 +250,19 @@ class Game {
 
         // Economy
         this.gold = 0;
+
+        // Seeded RNG — the single source of gameplay randomness, deterministic
+        // and resumable across saves (see rng.js). Reseeded fresh here; the
+        // save restores the live stream position via setState.
+        this.rng = new RNG();
+
+        // Runtime tile mutations (portcullis / barricade / cleared cells)
+        // recorded as diffs vs the map JSON so a save can re-apply them — the
+        // map is re-snapshotted from JSON on every _loadMap.
+        this._tileDiffs = [];
+
+        // Autosave throttle — write at most every few turns unless forced.
+        this._lastAutosaveTurn = -999;
     }
 
     // ── Buff System ──────────────────────────────────────────────────────────
@@ -336,6 +351,10 @@ class Game {
         this.playerX = spawnX ?? this.map.spawn.x;
         this.playerY = spawnY ?? this.map.spawn.y;
 
+        // Fresh map = no runtime tile mutations yet. loadInto re-applies saved
+        // diffs after this returns.
+        this._tileDiffs = [];
+
         this.groundItems = [];
         for (const s of this.map.itemSpawns) {
             const def = ITEMS[s.type];
@@ -365,6 +384,36 @@ class Game {
         this._render();
     }
 
+    // ── Persistence helpers ────────────────────────────────────────────────────
+
+    // Resolve an item id to its definition. Weapons live in WEAPONS, everything
+    // else in ITEMS. Used by the save system to rehydrate equipment/inventory
+    // (we persist ids, not whole defs).
+    _resolveItemDef(id) {
+        if (!id) return null;
+        if (WEAPONS[id]) return WEAPONS[id];
+        return ITEMS[id] || null;
+    }
+
+    // Mutate a map tile at runtime AND record the change as a diff so the save
+    // can re-apply it (the map JSON is re-snapshotted on every _loadMap).
+    setTile(x, y, id) {
+        if (!this.map || !this.map.isInBounds(x, y)) return;
+        this.map.tiles[y * this.map.width + x] = id;
+        const existing = this._tileDiffs.find(d => d.x === x && d.y === y);
+        if (existing) existing.id = id;
+        else this._tileDiffs.push({ x, y, id });
+    }
+
+    // Persist the game. Debounced to every few turns unless forced (forced on
+    // map transitions and respawn; quest milestones force it in later phases).
+    autosave(opts = {}) {
+        if (this.state === STATE.SPLASH || this.state === STATE.DEAD) return;
+        if (!opts.force && (this.turn - (this._lastAutosaveTurn ?? -999)) < 5) return;
+        this._lastAutosaveTurn = this.turn;
+        writeSave(this);
+    }
+
     // ── Splash ───────────────────────────────────────────────────────────────
 
     _bindSplash() {
@@ -377,7 +426,24 @@ class Game {
             this._render();
             this._log('[Entered the town]');
         };
+        // CONTINUE loads the autosave into the live game. GAME START / Space
+        // begins fresh (the existing save survives until the fresh run's first
+        // autosave overwrites it, so a stray reload can still resume).
+        const continueGame = async () => {
+            const raw = readSaveRaw();
+            if (!raw) { start(); return; }
+            splash.classList.add('gone');
+            wrapper.classList.remove('hidden');
+            await loadInto(this, raw);
+            this._log('[Save loaded]', 'transition');
+        };
+
         document.getElementById('splash-go').addEventListener('click', start);
+        const continueBtn = document.getElementById('splash-continue');
+        if (continueBtn && hasSave()) {
+            continueBtn.classList.remove('hidden');
+            continueBtn.addEventListener('click', continueGame);
+        }
         document.addEventListener('keydown', (e) => {
             if (this.state === STATE.SPLASH && e.code === 'Space') { e.preventDefault(); start(); }
         });
@@ -1758,12 +1824,14 @@ class Game {
             this._loadMap(t.toMap, t.toX, t.toY).then(() => {
                 this._log(`[Entered ${this.map.zoneName}]`);
                 this.state = STATE.IDLE;
+                this.autosave({ force: true });
                 this._render();
             });
             return;
         }
 
         this._render();
+        this.autosave();
     }
 
     // ── Inventory ────────────────────────────────────────────────────────────
@@ -1883,7 +1951,7 @@ class Game {
             this._log(`[Defeated ${enemyObj.entity.name}]`);
         } else {
             const hitWords = ['POW!', 'WHACK!', 'BAM!', 'SLAM!', 'CRACK!'];
-            const word = hitWords[Math.floor(Math.random() * hitWords.length)];
+            const word = this.rng.pick(hitWords);
             const hitSize = result.damage >= 15 ? 20 : 16;
             this._spawnEventWord(enemyObj.x, enemyObj.y, word, '#ffaa44', hitSize);
         }
@@ -1908,7 +1976,7 @@ class Game {
         this._playerHitFlashUntil = now + 100;
         this._playerStaggerUntil  = now + 80;
         const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
-        const [sdx, sdy] = dirs[Math.floor(Math.random() * dirs.length)];
+        const [sdx, sdy] = this.rng.pick(dirs);
         this._playerStaggerDx = sdx * 3;
         this._playerStaggerDy = sdy * 3;
         this._ensureParticleLoop(); // keep rendering through the 100ms window
@@ -1928,7 +1996,7 @@ class Game {
         const playerHitWords = ['OUCH!', 'ARGH!', 'OOF!', 'AGH!'];
         const word = this.playerHp <= 0
             ? '...!'
-            : playerHitWords[Math.floor(Math.random() * playerHitWords.length)];
+            : this.rng.pick(playerHitWords);
         const wordSize = dmg >= 15 ? 20 : 16;
         this._spawnEventWord(this.playerX, this.playerY, word, '#ff5544', wordSize);
 
@@ -1974,9 +2042,15 @@ class Game {
         this.state = STATE.IDLE;
         this._render();
         this._log('[Respawned]');
+        this.autosave({ force: true });
     }
 
     async _fullReset() {
+        // RESTART begins a brand-new game: drop the save and reseed the RNG so
+        // the new run is independent of the old one.
+        clearSave();
+        this.rng = new RNG();
+        this._lastAutosaveTurn = -999;
         this.turn = 0;
         this.playerHp = this.playerMaxHp;
         this.playerMp = this.playerMaxMp;
