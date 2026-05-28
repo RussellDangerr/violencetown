@@ -1,5 +1,12 @@
 # Violencetown — Unified Development Plan
 
+> **⚠ SUPERSEDED — predates the 2026-04-01 pivot.** This plan describes the
+> original procedurally-generated chunk-city design (10s real-time ticks,
+> diagonal movement, `player.js`/`ui.js`). Those systems were removed in the
+> pivot to turn-based combat across hand-authored zones. For current state see
+> `README.md`, root `ROADMAP.md`, and the per-feature briefs in `plans/`. Kept
+> for historical reference only.
+
 **Status:** Active development
 **Foundation:** Playable skeleton (tick system, procedural city, diagonal movement, localStorage saves)
 

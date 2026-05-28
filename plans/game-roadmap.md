@@ -1,6 +1,11 @@
 # Game Feature Roadmap
 
-> See [PLAN.md](./PLAN.md) for the unified development plan with phases and task checklists.
+> **⚠ SUPERSEDED — predates the 2026-04-01 pivot.** The "procedural city /
+> 10s tick / `player.js` / `ui.js`" items below were removed in the pivot to
+> turn-based, hand-authored zones. See `README.md` and root `ROADMAP.md` for
+> current state. Kept for historical reference only.
+
+> See [game-plan.md](./game-plan.md) for the (also-superseded) unified plan.
 
 ---
 

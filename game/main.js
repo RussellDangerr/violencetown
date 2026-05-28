@@ -176,9 +176,10 @@ class Game {
 
         // Full message history for the [L] log modal. The strip above only
         // keeps the last 3 lines; this is the scrollable archive (newest at
-        // end). Capped so a long session can't grow it unbounded. Persisted
-        // in the save blob. _logModalScroll is how many display-lines we've
-        // scrolled up from the newest; the renderer clamps the upper bound.
+        // end). Capped so a long session can't grow it unbounded. Session-only
+        // — not persisted in the save blob (the log resets on reload, like a
+        // roguelike message feed). _logModalScroll is how many display-lines
+        // we've scrolled up from the newest; the renderer clamps the upper bound.
         this._logHistory = [];
         this._LOG_HISTORY_MAX = 300;
         this._logModalScroll = 0;

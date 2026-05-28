@@ -1,14 +1,14 @@
 """
 Generate the ornate 9-slice panel sprite for Violencetown's canvas UI.
 
-The atlas is laid out as three 96×96 panel variants stacked vertically
-(total 96×288), all matching the existing P.{tl,t,tr,l,c,r,bl,b,br}
-coordinates declared in ui-sprites.js — each 32×32 cell, 3×3 grid.
+The atlas is laid out as three 48×48 panel variants stacked vertically
+(total 48×144), all matching the existing P.{tl,t,tr,l,c,r,bl,b,br}
+coordinates declared in ui-sprites.js — each 16×16 cell, 3×3 grid.
 
 Variants (top → bottom):
-  1. base   (y =   0..96 ) — parchment center, gold-brown trim, dark border
-  2. dark   (y =  96..192) — dark center for tooltips / modal overlays
-  3. glow   (y = 192..288) — base + a brighter gold border for active highlights
+  1. base   (y =  0..48 ) — parchment center, gold-brown trim, dark border
+  2. dark   (y = 48..96 ) — dark center for tooltips / modal overlays
+  3. glow   (y = 96..144) — base + a brighter gold border for active highlights
 
 Each variant is its own 9-slice panel — drawPanelBig picks which 96px
 band by adding a `variant` arg later. The cells tile horizontally
