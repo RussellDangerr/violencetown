@@ -28,6 +28,10 @@ export class GameMap {
 
         // Transitions: [{ x, y, toMap, toX, toY, label }]
         this.transitions = mapData.transitions || [];
+
+        // Examinables: [{ id, x, y, text }] — points of interest the Examine
+        // skill (examine.js) inspects. Copied live onto game.examinables.
+        this.examinableSpawns = mapData.examinables || [];
     }
 
     // ── Container & Region lookups ───────────────────────────────────────────

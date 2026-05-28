@@ -14,6 +14,8 @@ import { applyGive } from './give-action.js';
 import { escapeHtml, manhattan, clamp } from './utils.js';
 import { RNG } from './rng.js';
 import { hasSave, readSaveRaw, writeSave, loadInto, clearSave } from './save.js';
+import { QuestEngine } from './quests.js';
+import { doExamine } from './examine.js';
 
 // ── States ───────────────────────────────────────────────────────────────────
 
@@ -263,6 +265,14 @@ class Game {
 
         // Autosave throttle — write at most every few turns unless forced.
         this._lastAutosaveTurn = -999;
+
+        // Quest tracking (data-driven; see quests.js). Always present so the
+        // save system and event emits can reference it unconditionally.
+        this.questEngine = new QuestEngine(this);
+
+        // Examinables for the current map — points of interest the Examine
+        // skill inspects. Repopulated per map in _loadMap.
+        this.examinables = [];
     }
 
     // ── Buff System ──────────────────────────────────────────────────────────
@@ -377,6 +387,9 @@ class Game {
             });
         }
 
+        // Examinables for this map (live copy of the spawn data).
+        this.examinables = this.map.examinableSpawns.map(e => ({ ...e }));
+
         const zoneEl = document.getElementById('zone-label');
         if (zoneEl) zoneEl.textContent = this.map.zoneName;
 
@@ -412,6 +425,12 @@ class Game {
         if (!opts.force && (this.turn - (this._lastAutosaveTurn ?? -999)) < 5) return;
         this._lastAutosaveTurn = this.turn;
         writeSave(this);
+    }
+
+    // Forward a game event to the quest engine (and future subscribers, e.g.
+    // the Witness Log journal). Null-safe so early frames never crash on it.
+    emitGameEvent(type, payload = {}) {
+        if (this.questEngine) this.questEngine.emit(type, payload);
     }
 
     // ── Splash ───────────────────────────────────────────────────────────────
@@ -563,6 +582,9 @@ class Game {
 
             // L = open the log history modal
             if (e.code === 'KeyL') { e.preventDefault(); this._openLogModal(); return; }
+
+            // E = examine the faced / adjacent point of interest (free action)
+            if (e.code === 'KeyE') { e.preventDefault(); doExamine(this); this._render(); return; }
 
             // Codeball
             if (e.code === 'Backquote') { e.preventDefault(); this._codeball(); return; }
@@ -1788,6 +1810,9 @@ class Game {
                 this._spawnOverheadDialogue(m.sourceEnemy.x, m.sourceEnemy.y, m.text, {
                     sourceRef: m.sourceEnemy,   // groups per-speaker for the stack
                 });
+                if (m.category === 'adjacency-bark') {
+                    this.emitGameEvent('npc_adjacent', { id: m.sourceEnemy.id, type: m.sourceEnemy.type });
+                }
             } else {
                 // Unknown tuple shape — fail safe to the log so nothing gets
                 // dropped silently if a future category lands without a route.
@@ -1824,6 +1849,7 @@ class Game {
             this._loadMap(t.toMap, t.toX, t.toY).then(() => {
                 this._log(`[Entered ${this.map.zoneName}]`);
                 this.state = STATE.IDLE;
+                this.emitGameEvent('map_entered', { map: t.toMap });
                 this.autosave({ force: true });
                 this._render();
             });
@@ -1862,6 +1888,7 @@ class Game {
             if (idx === -1) break;
             if (this._addToInventory(this.groundItems[idx].def)) {
                 this._log(`[Picked up ${this.groundItems[idx].def.name}]`);
+                this.emitGameEvent('item_pickup', { id: this.groundItems[idx].def.id });
                 this.groundItems.splice(idx, 1);
                 go = true;
             } else { this._log('[Inventory full]'); break; }
@@ -1949,6 +1976,9 @@ class Game {
         if (result.killed) {
             this._spawnEventWord(enemyObj.x, enemyObj.y, 'K.O.!', '#ff8822', 22);
             this._log(`[Defeated ${enemyObj.entity.name}]`);
+            this.emitGameEvent('enemy_killed', {
+                type: enemyObj.type, id: enemyObj.id, x: enemyObj.x, y: enemyObj.y, tag: enemyObj.tag,
+            });
         } else {
             const hitWords = ['POW!', 'WHACK!', 'BAM!', 'SLAM!', 'CRACK!'];
             const word = this.rng.pick(hitWords);

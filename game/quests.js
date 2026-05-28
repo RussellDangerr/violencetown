@@ -1,0 +1,175 @@
+// quests.js — data-driven, event-driven quest tracking.
+//
+// A quest is an ordered list of stages. The active stage advances when an
+// emitted game event matches its `on` condition. Scripted side-effects live in
+// stage.onEnter (run once when the engine enters the stage) and stage.onProgress
+// (run on each counter increment). A quest can also auto-start via `startOn`.
+//
+// The engine only matches event types/payloads, so quest FLOW is defined here
+// independently of the CONTENT the stages reference (the Borgir boss, the
+// Wererat, the converter, the car, the sewer set-piece). That content — and
+// the set-piece script game._sewerEscapeSetpiece — arrives in Phase D; until
+// then the onEnter hooks below no-op via optional chaining.
+//
+// NOT to be confused with the future [J] "Witness Log" journal
+// (plans/quest-journal.md), which is retrospective evidence with no objectives.
+// This is active objective tracking, surfaced as a one-line HUD goal.
+
+export const QUESTS = {
+    fix_car: {
+        id: 'fix_car',
+        title: 'A Working Car',
+        // Begins when the player walks up to the boss inside Borgir.
+        startOn: { type: 'npc_adjacent', match: { id: 'borgir_boss' } },
+        stages: [
+            {
+                id: 'examine_car',
+                objective: "Your car won't start - examine it (E)",
+                on: { type: 'examine', match: { targetId: 'car' } },
+            },
+            {
+                id: 'recover_converter',
+                objective: 'Get your converter back from the sewer',
+                on: { type: 'item_pickup', match: { id: 'catalytic_converter' } },
+            },
+            {
+                id: 'escape_sewer',
+                objective: 'Tear down the barricade and escape the sewer!',
+                // Phase D implements the set-piece as a Game method; no-op here.
+                onEnter: (game) => { if (game._sewerEscapeSetpiece) game._sewerEscapeSetpiece(); },
+                on: { type: 'map_entered', match: { map: 'town-map.json' } },
+            },
+            {
+                id: 'return_to_car',
+                objective: 'Install the converter - return to your car',
+                on: { type: 'interact_car', match: {} },
+            },
+        ],
+        onComplete: (game) => {
+            game.questEngine.state.flags.carFixed = true;
+            game.questEngine.state.flags.deliveryUnlocked = true;
+            game._log('[The car coughs, sputters, then ROARS to life. You can drive again.]', 'transition');
+        },
+    },
+};
+
+export class QuestEngine {
+    constructor(game) {
+        this.game = game;
+        this.state = { activeId: null, stageIndex: 0, counters: {}, completed: [], flags: {} };
+    }
+
+    start(questId) {
+        const q = QUESTS[questId];
+        if (!q) return;
+        if (this.state.activeId === questId || this.state.completed.includes(questId)) return;
+        this.state.activeId = questId;
+        this.state.stageIndex = 0;
+        this.game._log?.(`[New quest: ${q.title}]`, 'transition');
+        const stage = q.stages[0];
+        if (stage && stage.onEnter) stage.onEnter(this.game);
+        this.game._render?.();
+    }
+
+    // Ingest a game event. Auto-starts any quest whose startOn matches, then
+    // advances the active quest if the current stage's condition is met.
+    emit(type, payload = {}) {
+        for (const qid of Object.keys(QUESTS)) {
+            const q = QUESTS[qid];
+            if (q.startOn && q.startOn.type === type && matches(q.startOn.match, payload)
+                && this.state.activeId !== qid && !this.state.completed.includes(qid)) {
+                this.start(qid);
+            }
+        }
+
+        const id = this.state.activeId;
+        if (!id) return;
+        const stage = QUESTS[id].stages[this.state.stageIndex];
+        if (!stage || !stage.on || stage.on.type !== type) return;
+        if (!matches(stage.on.match, payload)) return;
+
+        if (stage.on.count) {
+            const key = stage.id;
+            this.state.counters[key] = (this.state.counters[key] || 0) + (payload.amount || 1);
+            if (stage.onProgress) stage.onProgress(this.game, this.state.counters[key]);
+            if (this.state.counters[key] < stage.on.count) { this.game._render?.(); return; }
+        }
+        this._advance();
+    }
+
+    _advance() {
+        const q = QUESTS[this.state.activeId];
+        this.state.stageIndex++;
+        if (this.state.stageIndex >= q.stages.length) { this._complete(); return; }
+        const stage = q.stages[this.state.stageIndex];
+        if (stage.onEnter) stage.onEnter(this.game);
+        this.game._render?.();
+    }
+
+    _complete() {
+        const id = this.state.activeId;
+        const q = QUESTS[id];
+        if (!this.state.completed.includes(id)) this.state.completed.push(id);
+        this.state.activeId = null;
+        this.state.stageIndex = 0;
+        if (q.onComplete) q.onComplete(this.game);
+        this.game._render?.();
+    }
+
+    // The current objective line for the HUD (null when no quest is active).
+    getHudText() {
+        const id = this.state.activeId;
+        if (!id) return null;
+        const stage = QUESTS[id].stages[this.state.stageIndex];
+        if (!stage) return null;
+        let t = stage.objective;
+        if (stage.on && stage.on.count) {
+            const n = Math.min(this.state.counters[stage.id] || 0, stage.on.count);
+            t += ` (${n}/${stage.on.count})`;
+        }
+        return t;
+    }
+
+    isActive(id) { return this.state.activeId === id; }
+    isComplete(id) { return this.state.completed.includes(id); }
+    getFlag(k) { return this.state.flags[k]; }
+
+    serialize() {
+        return {
+            activeId: this.state.activeId,
+            stageIndex: this.state.stageIndex,
+            counters: { ...this.state.counters },
+            completed: this.state.completed.slice(),
+            flags: { ...this.state.flags },
+        };
+    }
+
+    // Restore progress WITHOUT re-running stage.onEnter — a mid-set-piece save
+    // already persisted the spawned entities + tile diffs, so re-running would
+    // double-spawn / re-seal the sewer.
+    restore(obj) {
+        if (!obj || typeof obj !== 'object') return;
+        const valid = QUESTS[obj.activeId] ? obj.activeId : null;
+        this.state.activeId = valid;
+        this.state.stageIndex = valid ? clampStage(valid, obj.stageIndex) : 0;
+        this.state.counters = (obj.counters && typeof obj.counters === 'object') ? { ...obj.counters } : {};
+        this.state.completed = Array.isArray(obj.completed) ? obj.completed.slice() : [];
+        this.state.flags = (obj.flags && typeof obj.flags === 'object') ? { ...obj.flags } : {};
+    }
+}
+
+// Every key in matchObj must strictly equal the same key in payload.
+function matches(matchObj, payload) {
+    if (!matchObj) return true;
+    for (const k of Object.keys(matchObj)) {
+        if (payload[k] !== matchObj[k]) return false;
+    }
+    return true;
+}
+
+function clampStage(activeId, idx) {
+    const q = QUESTS[activeId];
+    if (!q) return 0;
+    if (typeof idx !== 'number' || idx < 0) return 0;
+    return Math.min(idx, q.stages.length - 1);
+}

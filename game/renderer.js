@@ -251,6 +251,7 @@ export class Renderer {
         // HUD — rendered AFTER restore so screen shake doesn't affect it
         this._drawHPPanel(game);
         this._drawZoneLabel(game);
+        this._drawQuestHUD(game);
         this._drawBuffBar(game);
         this._drawLogStrip(game);
         this._drawHotbar(game);
@@ -722,6 +723,31 @@ export class Renderer {
             this.font.drawText(ctx, turnText, px + w - 6, 9, {
                 color: UI.dim, scale: 1, align: 'right',
             });
+        }
+    }
+
+    // ── Quest HUD (active objective, right of the zone label) ────────────────
+    // The screenshot's "active quest text telling player next goal." Pulls the
+    // current objective from the quest engine; renders nothing when idle.
+    _drawQuestHUD(game) {
+        const text = game.questEngine ? game.questEngine.getHudText() : null;
+        if (!text) return;
+        const { ctx } = this;
+        const label = game.map?.zoneName || '';
+        const zoneW = Math.max(100, label.length * 10 + 60);
+        const zoneRight = (CANVAS_PX - zoneW) / 2 + zoneW;
+        const x = zoneRight + 6;
+        const w = (CANVAS_PX - 6) - x;
+        if (w < 60) return;                 // no room (very long zone name)
+        drawPanelSmall(ctx, x, 4, w, 22, this.uiSheet);
+        if (this.font) {
+            const padX = 8;
+            const maxChars = Math.max(4, Math.floor((w - padX * 2) / 8));
+            let t = text.toUpperCase();
+            if (t.length > maxChars) t = t.slice(0, maxChars - 1) + '~';
+            // Dark brown on parchment for legibility (gold is too low-contrast
+            // on the panel fill — matches the zone label's readable treatment).
+            this.font.drawText(ctx, t, x + padX, 9, { color: UI.text, scale: 1 });
         }
     }
 
