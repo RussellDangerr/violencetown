@@ -117,11 +117,22 @@ export function equipItem(game, itemDef) {
 
     // If this item has a duration, set up the temporary equip
     if (itemDef.equipDuration) {
+        // If a temp-equip already holds this slot, drop it and inherit its
+        // previousItem so the restore chain points at the REAL underlying
+        // item, not the soon-to-expire temp one. Without this, two same-slot
+        // temp equips (e.g. two soaps) corrupt the slot on expiry. Re-applying
+        // effectively refreshes the duration.
+        const existingIdx = game.tempEquips.findIndex(te => te.slot === slot);
+        let underlying = old;
+        if (existingIdx >= 0) {
+            underlying = game.tempEquips[existingIdx].previousItem;
+            game.tempEquips.splice(existingIdx, 1);
+        }
         game.tempEquips.push({
             slot,
             itemDef,
             turnsLeft: itemDef.equipDuration,
-            previousItem: old,
+            previousItem: underlying,
         });
         game.equipment[slot] = itemDef;
         return old

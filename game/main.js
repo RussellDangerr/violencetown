@@ -345,7 +345,7 @@ class Game {
         // Idle animation loop — redraws at ~4fps for sprite bobble
         this._idleTick = 0;
         setInterval(() => {
-            if (this.state !== STATE.SPLASH && !this._animating) {
+            if (this.state !== STATE.SPLASH && !this._animating && !this._particleLoopRunning) {
                 this._idleTick++;
                 this._render();
             }
@@ -550,6 +550,12 @@ class Game {
                 if (e.code === 'ArrowDown' || e.code === 'KeyS')  { this._scrollLogModal(-1);  return; }
                 if (e.code === 'PageUp')                          { this._scrollLogModal(10);  return; }
                 if (e.code === 'PageDown')                        { this._scrollLogModal(-10); return; }
+                return;
+            }
+
+            // ── WIN: N starts a new game (matches the on-screen prompt) ──
+            if (this.state === STATE.WIN) {
+                if (e.code === 'KeyN') { e.preventDefault(); this._fullReset(); }
                 return;
             }
 
@@ -1854,6 +1860,10 @@ class Game {
             const t = this._pendingTransition;
             this._pendingTransition = null;
             this._log(t.label || '[Transitioning...]');
+            // Block input during the async map load — stay RESOLVING until the
+            // new map is in place (the .then() restores IDLE). Prevents acting
+            // against the old map mid-fetch.
+            this.state = STATE.RESOLVING;
             this._loadMap(t.toMap, t.toX, t.toY).then(() => {
                 this._log(`[Entered ${this.map.zoneName}]`);
                 this.state = STATE.IDLE;
@@ -2061,6 +2071,7 @@ class Game {
 
     _die() {
         this._stopAutoRepeat();
+        this._heldDirKeys = [];   // drop held keys so respawn doesn't phantom-walk
         this.state = STATE.DEAD;
         this.renderer.flash('rgba(255, 0, 0, 0.4)');
         this._log('[You died — respawning...]');
@@ -2077,6 +2088,9 @@ class Game {
         this.tempEquips = [];
         this.selectedSlot = -1;
         this.equipment = { weapon: WEAPONS.wooden_sword, top: null, bottom: null, front: null, back: null, sides: null };
+        // Clear any transition queued before death so the first post-respawn
+        // action doesn't ghost-load a map.
+        this._pendingTransition = null;
         this.state = STATE.IDLE;
         this._render();
         this._log('[Respawned]');

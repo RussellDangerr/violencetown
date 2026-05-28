@@ -434,7 +434,6 @@ export class Renderer {
                 // damage-scaled duration set in main.js combatAttack,
                 // heavier hits look heavier.
                 if (flashing) {
-                    const flashAge = now - (e._hitFlashUntil - 100);  // rough age proxy
                     const flashDur = (e._hitFlashUntil ?? now) - now; // remaining
                     const fade = Math.max(0, Math.min(1, flashDur / 120));
                     ctx.fillStyle = `rgba(255, 60, 40, ${0.55 * fade})`;
@@ -1429,10 +1428,15 @@ export class Renderer {
     _drawVignette() {
         const { ctx } = this;
         const s = CANVAS_PX;
-        const g = ctx.createRadialGradient(s/2, s/2, s * 0.35, s/2, s/2, s * 0.55);
-        g.addColorStop(0, 'rgba(0,0,0,0)');
-        g.addColorStop(1, 'rgba(0,0,0,0.3)');
-        ctx.fillStyle = g;
+        // Cache the gradient — CANVAS_PX is fixed, so it never changes, and
+        // rebuilding it every frame (60/s in combat) churned the GC.
+        if (!this._vignetteGradient) {
+            const g = ctx.createRadialGradient(s/2, s/2, s * 0.35, s/2, s/2, s * 0.55);
+            g.addColorStop(0, 'rgba(0,0,0,0)');
+            g.addColorStop(1, 'rgba(0,0,0,0.3)');
+            this._vignetteGradient = g;
+        }
+        ctx.fillStyle = this._vignetteGradient;
         ctx.fillRect(0, 0, s, s);
     }
 
