@@ -65,6 +65,7 @@ export const ITEM_COLORS = {
     mystery_meat:     { bg: '#884444', letter: 'M' },
     tunnel_mushroom:  { bg: '#997755', letter: '🍄' },
     hot_dog:          { bg: '#cc6633', letter: 'H' },
+    catalytic_converter: { bg: '#9a8a6a', letter: 'C' },
 };
 
 // ── Draw helpers ─────────────────────────────────────────────────────────────

@@ -22,6 +22,7 @@ import {
     RADIAL_CENTER_X, RADIAL_CENTER_Y, RADIAL_INNER_R_MIN, RADIAL_INNER_R_MAX,
     RADIAL_OUTER_R_MIN, RADIAL_OUTER_R_MAX, LOG_STRIP_RECT, LOG_MODAL_RECT,
 } from './layout.js';
+import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
 
 // ── States ───────────────────────────────────────────────────────────────────
 
@@ -236,6 +237,10 @@ class Game {
         // Examinables for the current map — points of interest the Examine
         // skill inspects. Repopulated per map in _loadMap.
         this.examinables = [];
+
+        // Sewer-escape set-piece state (Phase D). null until the gauntlet fires;
+        // persisted in the save so a mid-gauntlet reload reconstructs it.
+        this._sewerEscape = null;
     }
 
     // ── Buff System ──────────────────────────────────────────────────────────
@@ -1119,6 +1124,18 @@ class Game {
             return;
         }
 
+        // Bump the broken-down car → examine / install the converter (it's a
+        // non-walkable CAR tile, so this intercepts before the wall check).
+        if (this.map.getTile(nx, ny) === 19) { this._interactCar(); return; }
+
+        // Bump a barricade → tear at it (the sewer-escape gate; costs a turn).
+        if (this.map.getTile(nx, ny) === 23) {
+            hitBarricade(this, nx, ny);
+            this._render();
+            this._advanceWorld();
+            return;
+        }
+
         // Wall?
         if (!this.map.isWalkable(nx, ny)) return; // silent, no turn advance
 
@@ -1147,6 +1164,31 @@ class Game {
 
             this._advanceWorld();
         });
+    }
+
+    // Interact with the broken-down car in town. Before the converter: a hint
+    // to examine it. Holding the converter at the return stage: install it and
+    // complete the quest. Otherwise a flavor line.
+    _interactCar() {
+        const idx = this.inventory.findIndex(s => s && s.itemDef.id === 'catalytic_converter');
+        const atReturn = this.questEngine.currentStageId() === 'return_to_car';
+        if (idx >= 0 && atReturn) {
+            this._removeFromSlot(idx);
+            this._log('[You wrench the cataclysmic converter back into place.]', 'pickup');
+            this.emitGameEvent('interact_car', {});   // completes fix_car (onComplete fires)
+        } else if (idx >= 0) {
+            this._log("[You've got the converter - but get clear of the sewer first.]");
+        } else if (this.questEngine.getFlag('carFixed')) {
+            this._log('[The car purrs. Time to make that delivery.]');
+        } else {
+            this._log("[The car won't start. Pop the hood and examine it (E).]");
+        }
+        this._render();
+    }
+
+    // The fix_car escape stage's onEnter delegates here (see quests.js).
+    _sewerEscapeSetpiece() {
+        startSewerEscape(this);
     }
 
     // ── Auto-Repeat (hold direction key = move once per second) ─────────────
@@ -1195,6 +1237,15 @@ class Game {
         const stack = this.inventory[this.selectedSlot];
         if (!stack) { this.state = STATE.IDLE; return; }
         const item = stack.itemDef;
+
+        // Quest items are held, not used/thrown/smashed/given — bail before
+        // building the overlay so the converter can't be lost.
+        if (item.questItem) {
+            this._log('[Best hold onto that.]');
+            this.state = STATE.ITEM_SELECTED;
+            this._render();
+            return;
+        }
 
         // Build contextual options
         this.overlayOptions = {};
@@ -1960,6 +2011,12 @@ class Game {
             this.emitGameEvent('enemy_killed', {
                 type: enemyObj.type, id: enemyObj.id, x: enemyObj.x, y: enemyObj.y, tag: enemyObj.tag,
             });
+            // The Were-Rat drops the converter; rat kills feed the escape waves.
+            if (enemyObj.tag === 'wererat_boss' && ITEMS.catalytic_converter) {
+                this.groundItems.push({ type: 'catalytic_converter', x: enemyObj.x, y: enemyObj.y, def: ITEMS.catalytic_converter });
+                this._log('[The Were-Rat drops your cataclysmic converter!]', 'pickup');
+            }
+            onSewerEnemyKilled(this, enemyObj);
         } else {
             const hitWords = ['POW!', 'WHACK!', 'BAM!', 'SLAM!', 'CRACK!'];
             const word = this.rng.pick(hitWords);

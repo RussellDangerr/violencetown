@@ -28,6 +28,10 @@ export const TILES = {
     BENCH:        { id: 20, walkable: false, hazard: null, fallbackColor: '#6a5a3a' },
     TRASHCAN:     { id: 21, walkable: false, hazard: null, fallbackColor: '#4a5a4a' },
 
+    // Set-piece tiles (22-23) — the sewer-escape gauntlet
+    PORTCULLIS:   { id: 22, walkable: false, hazard: null, fallbackColor: '#3a3a3a' },             // permanent one-way seal
+    BARRICADE:    { id: 23, walkable: false, hazard: null, fallbackColor: '#6a4a2a', destructible: true }, // bump/throw to clear
+
     // Circus tiles (30-39) — Americana carnival, cryptid menagerie
     CIRCUS_GROUND: { id: 30, walkable: true,  hazard: null, fallbackColor: '#c4a070' },
     TENT_STRIPE:   { id: 31, walkable: false, hazard: null, fallbackColor: '#c43030' },

@@ -43,7 +43,10 @@
           "behavior": ["IDLE"], "homeRegion": "south-corridor",
           "disposition": 10, "flipThreshold": 40, "bribeable": true,
           "values": { "water": 30, "bandage": 12, "soap": 8 }, "onFlip": "offerDiscount",
-          "adjacencyBark": "[Carrion: Road's blocked, friend. Sewer river's swollen with sludge. Come back later.]" }
+          "adjacencyBark": "[Carrion: Road's blocked, friend. Sewer river's swollen with sludge. Come back later.]" },
+        { "id": "wererat", "type": "Wererat", "x": 17, "y": 10, "hp": 80, "armor": 4, "damage": 12, "tag": "wererat_boss",
+          "barks": ["[Were-Rat: The converter's OURS now, grease-boy.]", "[Were-Rat: You smell like a dead-end job.]"],
+          "barkEveryTurns": 6 }
     ],
     "items": [
         { "type": "rock", "x": 2, "y": 10 },

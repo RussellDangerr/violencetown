@@ -42,6 +42,7 @@ export const QUESTS = {
             {
                 id: 'return_to_car',
                 objective: 'Install the converter - return to your car',
+                onEnter: (game) => { game._sewerEscape = null; },  // escaped — clear the gauntlet state
                 on: { type: 'interact_car', match: {} },
             },
         ],
@@ -128,6 +129,14 @@ export class QuestEngine {
             t += ` (${n}/${stage.on.count})`;
         }
         return t;
+    }
+
+    // The id of the active quest's current stage (null if no active quest).
+    currentStageId() {
+        const id = this.state.activeId;
+        if (!id) return null;
+        const stage = QUESTS[id].stages[this.state.stageIndex];
+        return stage ? stage.id : null;
     }
 
     isActive(id) { return this.state.activeId === id; }

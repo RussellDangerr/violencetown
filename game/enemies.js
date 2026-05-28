@@ -48,6 +48,8 @@ export class Enemy {
         bribeable = null,
         values = null,
         onFlip = null,
+        // Free-form tag for set-piece / quest hooks (e.g. 'wererat_boss', 'sewer_rat').
+        tag = null,
     }) {
         this.id         = id;
         this.type       = type;
@@ -88,6 +90,7 @@ export class Enemy {
         this.bribeable     = bribeable;
         this.values        = values;
         this.onFlip        = onFlip;
+        this.tag           = tag;
 
         // Debuffs / buffs — symmetric with Game.buffs[] on the player side.
         // Used by Poke (applies Blind), Poison (DoT, future), Stun (skip

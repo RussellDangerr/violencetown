@@ -143,6 +143,9 @@ export const TILE_SPRITE_MAP = {
     5: { col: 11, row: 3 },   // drain — cracked stone variant
     6: { col: 15, row: 0 },   // boss floor — clean solid stone (contrast with worn normal floor)
     7: { col: 10, row: 13 },  // boss trigger — stone with purple gems (accent)
+    22: { col: 3, row: 8 },   // PORTCULLIS — vertical iron bars (reuses the grate cell)
+    // 23 BARRICADE has no sprite pick yet — renders via its brown fallbackColor;
+    // swap in a crate/rubble cell via sprite-picker.html.
 };
 
 // ── Town tile coords (Kenney Base sheet — best-effort Phase A) ──────────────
@@ -190,6 +193,9 @@ export const ITEM_SPRITES = {
     hot_dog:          { sheet: 'cityTiles', x: 176, y: 288, w: 16, h: 16 },  // green-veggie crate top
     mystery_meat:     { sheet: 'caveTiles', x: 0,   y: 32,  w: 16, h: 16 },  // skull
     tunnel_mushroom:  { sheet: 'caveTiles', x: 16,  y: 48,  w: 16, h: 16 },  // orange mushroom cluster
+
+    // Quest item — best-effort prop pick (a mechanical-ish dungeon cell).
+    catalytic_converter: { sheet: 'caveTiles', x: 32, y: 0, w: 16, h: 16 },
 };
 
 // ── Enemy/character sprites (Kenney Char sheet — best-effort Phase A) ──────
@@ -221,6 +227,12 @@ export const ENEMY_SPRITES = {
     'Greedy Green':     { sheet: 'ghostMonster', col: 0, row: 3, static: true }, // passive green slime
     'Carnival Clown':   { sheet: 'sewerMonster', col: 1, row: 6, static: true }, // humanoid in colorful shirt
     'Rattling Skeleton':{ sheet: 'sewerMonster', col: 1, row: 11, static: true }, // pale bearded figure (closest to skeletal)
+
+    // Opening-arc (Phase D) — best-effort picks; Kenney ships no rat sprite, so
+    // these reuse humanoid/creature cells. Swap via sprite-picker.html.
+    'Wererat': { sheet: 'sewerMonster', col: 1, row: 9,  static: true }, // hulking humanoid = were-rat boss
+    'Rat':     { sheet: 'sewerMonster', col: 0, row: 10, static: true }, // smaller creature = sewer rat
+    'Boss':    { sheet: 'sewerMonster', col: 0, row: 5,  static: true }, // your Borgir employer (humanoid)
 };
 
 // Player sprite — Kenney char sheet (0,7) = brown-hat brown-belt adventurer.

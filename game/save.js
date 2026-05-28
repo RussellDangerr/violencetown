@@ -88,6 +88,7 @@ export function serialize(game) {
             pendingTransition: game._pendingTransition || null,
         },
         quest: game.questEngine ? game.questEngine.serialize() : null,
+        sewerEscape: game._sewerEscape || null,
     };
 }
 
@@ -157,6 +158,7 @@ export function migrate(raw) {
     if (!Array.isArray(r.world.groundItems)) r.world.groundItems = [];
     if (!Array.isArray(r.world.containers)) r.world.containers = [];
     if (r.quest === undefined) r.quest = null;
+    if (r.sewerEscape === undefined) r.sewerEscape = null;
     return r;
 }
 
@@ -253,6 +255,7 @@ export async function loadInto(game, raw) {
 
     // 6. quest progress (engine arrives in Phase C; guarded for older builds)
     if (game.questEngine && raw.quest) game.questEngine.restore(raw.quest);
+    game._sewerEscape = raw.sewerEscape || null;
 
     // 7. settle
     game._lastAutosaveTurn = game.turn;

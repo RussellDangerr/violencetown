@@ -105,6 +105,21 @@ export const ITEMS = {
         fallbackColor: '#cc6633',
         baseValue: 3,
     },
+
+    // ── Quest items ───────────────────────────────────────────────────────────
+    // questItem: true blocks throw/smash/give so it can't be lost. The malaprop
+    // ("Cataclysmic") is intentional — it's how the delivery boy says it.
+    catalytic_converter: {
+        id: 'catalytic_converter',
+        name: '[Cataclysmic Converter]',
+        description: 'The thingamajig that makes the car go. Rat people tore it clean out. Smells like grease and betrayal.',
+        category: 'quest',
+        useType: 'none',
+        consumable: false,
+        questItem: true,
+        fallbackColor: '#9a8a6a',
+        baseValue: 0,
+    },
 };
 
 // Equip an item into its slot. Returns a log message.
