@@ -16,6 +16,12 @@ import { RNG } from './rng.js';
 import { hasSave, readSaveRaw, writeSave, loadInto, clearSave } from './save.js';
 import { QuestEngine } from './quests.js';
 import { doExamine } from './examine.js';
+import {
+    CANVAS_INTERNAL_PX, HIT_SLOP, OVERLAY_RECTS, THROW_RECTS,
+    HOTBAR_X_START, HOTBAR_Y, HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_STRIDE, HOTBAR_SLOTS,
+    RADIAL_CENTER_X, RADIAL_CENTER_Y, RADIAL_INNER_R_MIN, RADIAL_INNER_R_MAX,
+    RADIAL_OUTER_R_MIN, RADIAL_OUTER_R_MAX, LOG_STRIP_RECT, LOG_MODAL_RECT,
+} from './layout.js';
 
 // ── States ───────────────────────────────────────────────────────────────────
 
@@ -61,53 +67,9 @@ const RADIAL_SLICE_ANGLE = (Math.PI * 2) / RADIAL_SLICES.length; // 60° per sli
 const RADIAL_ANIM_MS = 120; // ease-out duration for wheel rotation
 
 // ── Canvas hit-test geometry ─────────────────────────────────────────────────
-// Pixel rects of in-canvas UI surfaces, in the 608x608 internal coordinate
-// space (CANVAS_PX from data.js). These mirror the positions the renderer
-// uses to draw the hotbar, item overlay, radial menu, and throw/give
-// direction prompt. Kept module-level so _onCanvasPointerDown can hit-test
-// against the same numbers the renderer drew.
-//
-// Origin: top-left. The player tile is at the center (304, 304).
-const CANVAS_INTERNAL_PX = 608;
-
-const HOTBAR_Y       = 546;
-const HOTBAR_X_START = 106;
-const HOTBAR_SLOT_W  = 42;
-const HOTBAR_SLOT_H  = 42;
-const HOTBAR_STRIDE  = 45;
-const HOTBAR_SLOTS   = 9;
-const HIT_SLOP       = 6;   // expand hit zones beyond visual rect (Apple 44pt)
-
-// Item overlay (4 directional options around the player)
-const OVERLAY_RECTS = {
-    up:    { x: 260, y: 234, w: 88, h: 32 },
-    down:  { x: 260, y: 344, w: 88, h: 32 },
-    left:  { x: 188, y: 288, w: 88, h: 32 },
-    right: { x: 344, y: 288, w: 88, h: 32 },
-};
-
-// Throw / Give direction prompt — 4 cardinal targets, 32×32 each
-const THROW_RECTS = {
-    up:    { x: 288, y: 222, w: 32, h: 32 },
-    down:  { x: 288, y: 338, w: 32, h: 32 },
-    left:  { x: 254, y: 288, w: 32, h: 32 },
-    right: { x: 338, y: 288, w: 32, h: 32 },
-};
-
-// Radial wheel (Omnitrix-style)
-const RADIAL_CENTER_X = 304;
-const RADIAL_CENTER_Y = 304;
-const RADIAL_INNER_R_MIN = 36;
-const RADIAL_INNER_R_MAX = 80;
-const RADIAL_OUTER_R_MIN = 84;
-const RADIAL_OUTER_R_MAX = 120;
-
-// Log strip (bottom-left) — tapping it opens the [L] history modal on touch.
-// Mirrors SX/SW/SH/SY in renderer._drawLogStrip.
-const LOG_STRIP_RECT = { x: 6, y: 496, w: 300, h: 44 };
-// Log modal panel — mirrors LOG_MODAL_RECT in renderer._drawLogModal. Taps
-// in the top third scroll older, bottom third newer, elsewhere close.
-const LOG_MODAL_RECT = { x: 24, y: 44, w: 560, h: 520 };
+// All in-canvas UI geometry now lives in layout.js (imported above), the
+// single source shared with renderer.js so tap zones and drawn panels can't
+// drift. Origin top-left; the player tile is centered at (304, 304).
 
 // ── Game ─────────────────────────────────────────────────────────────────────
 

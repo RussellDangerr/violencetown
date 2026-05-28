@@ -6,6 +6,13 @@
 import { TILE_PX, VIEW_TILES, CANVAS_PX, INVENTORY_SIZE } from './data.js';
 import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES, PLAYER_SPRITE } from './sprites.js';
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
+import {
+    OVERLAY_RECTS, THROW_RECTS,
+    HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_GAP, HOTBAR_SLOTS, HOTBAR_STRIDE,
+    HOTBAR_TOTAL_W, HOTBAR_OX, HOTBAR_OY, HOTBAR_X_START, HOTBAR_Y,
+    RADIAL_INNER_R_MIN, RADIAL_INNER_R_MAX, RADIAL_OUTER_R_MIN, RADIAL_OUTER_R_MAX,
+    LOG_STRIP_RECT, LOG_MODAL_RECT,
+} from './layout.js';
 
 export class Renderer {
     constructor(canvas) {
@@ -800,11 +807,10 @@ export class Renderer {
         if (!messages || messages.length === 0) return;
 
         const { ctx } = this;
-        const SX = 6;
-        const SW = 300;
-        const SH = 44;
-        const HOTBAR_OY = CANVAS_PX - 42 - 20;
-        const SY = HOTBAR_OY - SH - 6;
+        const SX = LOG_STRIP_RECT.x;
+        const SW = LOG_STRIP_RECT.w;
+        const SH = LOG_STRIP_RECT.h;
+        const SY = LOG_STRIP_RECT.y;
 
         drawPanelSmall(ctx, SX, SY, SW, SH, this.uiSheet);
 
@@ -850,11 +856,11 @@ export class Renderer {
 
     _drawHotbar(game) {
         const { ctx, sprites } = this;
-        const sw = 42, sh = 42, gap = 3;
-        const count = 9;
-        const totalW = count * (sw + gap) - gap + 16;
-        const ox = (CANVAS_PX - totalW) / 2;
-        const oy = CANVAS_PX - sh - 20;
+        const sw = HOTBAR_SLOT_W, sh = HOTBAR_SLOT_H, gap = HOTBAR_GAP;
+        const count = HOTBAR_SLOTS;
+        const totalW = HOTBAR_TOTAL_W;
+        const ox = HOTBAR_OX;
+        const oy = HOTBAR_OY;
 
         // Selected item tooltip above hotbar — name, description, and stats
         if (game.selectedSlot >= 0 && game.inventory[game.selectedSlot]) {
@@ -916,8 +922,8 @@ export class Renderer {
         const selPulse = 0.5 + 0.5 * Math.sin(performance.now() / 1000 * Math.PI * 2);
 
         for (let i = 0; i < count; i++) {
-            const sx = ox + 8 + i * (sw + gap);
-            const sy = oy + 2;
+            const sx = HOTBAR_X_START + i * HOTBAR_STRIDE;
+            const sy = HOTBAR_Y;
             const stack = game.inventory[i];
             const sel = game.selectedSlot === i;
             const isEmpty = !stack;
@@ -1011,10 +1017,10 @@ export class Renderer {
 
         const opts = game.overlayOptions;
         const finalPos = {
-            up:    { x: cx - 44, y: cy - TILE_PX - 38 },
-            down:  { x: cx - 44, y: cy + TILE_PX + 8 },
-            left:  { x: cx - TILE_PX - 84, y: cy - 16 },
-            right: { x: cx + TILE_PX + 8,  y: cy - 16 },
+            up:    { x: OVERLAY_RECTS.up.x,    y: OVERLAY_RECTS.up.y },
+            down:  { x: OVERLAY_RECTS.down.x,  y: OVERLAY_RECTS.down.y },
+            left:  { x: OVERLAY_RECTS.left.x,  y: OVERLAY_RECTS.left.y },
+            right: { x: OVERLAY_RECTS.right.x, y: OVERLAY_RECTS.right.y },
         };
         // ASCII fallback arrows since the bitmap font is plain ASCII —
         // ^ v < > read instantly as directional cues.
@@ -1068,12 +1074,12 @@ export class Renderer {
         const N = slices.length;
         const sliceAngle = (Math.PI * 2) / N;
 
-        // Inner wheel: radius from 36 (just outside the 32px player tile) to 80
-        const rInner0 = 36;
-        const rInner1 = 80;
-        // Outer arc (sub-wheel): radius from 84 to 120
-        const rOuter0 = 84;
-        const rOuter1 = 120;
+        // Wheel radii come from layout.js so the draw matches main.js's polar
+        // hit-test (inner ring just outside the 32px player tile; outer sub-arc).
+        const rInner0 = RADIAL_INNER_R_MIN;
+        const rInner1 = RADIAL_INNER_R_MAX;
+        const rOuter0 = RADIAL_OUTER_R_MIN;
+        const rOuter1 = RADIAL_OUTER_R_MAX;
 
         // Helper: center angle of slice i in the wheel's LOCAL frame, with 12
         // o'clock = -π/2 in canvas coords (y axis flipped, angles clockwise).
@@ -1290,10 +1296,10 @@ export class Renderer {
         // ASCII arrows (the bitmap font is plain ASCII). ^ v < > read as
         // direction immediately and stay crisp at scale 2.
         const dirs = [
-            { x: cx - 16, y: cy - TILE_PX - 18, l: '^' },
-            { x: cx - 16, y: cy + TILE_PX + 2,  l: 'V' },
-            { x: cx - TILE_PX - 18, y: cy - 16, l: '<' },
-            { x: cx + TILE_PX + 2,  y: cy - 16, l: '>' },
+            { x: THROW_RECTS.up.x,    y: THROW_RECTS.up.y,    l: '^' },
+            { x: THROW_RECTS.down.x,  y: THROW_RECTS.down.y,  l: 'V' },
+            { x: THROW_RECTS.left.x,  y: THROW_RECTS.left.y,  l: '<' },
+            { x: THROW_RECTS.right.x, y: THROW_RECTS.right.y, l: '>' },
         ];
 
         for (const d of dirs) {
@@ -1354,7 +1360,7 @@ export class Renderer {
         ctx.fillStyle = 'rgba(0,0,0,0.72)';
         ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
 
-        const px = 24, py = 44, w = 560, h = 520;   // === LOG_MODAL_RECT (main.js)
+        const px = LOG_MODAL_RECT.x, py = LOG_MODAL_RECT.y, w = LOG_MODAL_RECT.w, h = LOG_MODAL_RECT.h;
         if (ui?.loaded) drawPanelBig(ctx, ui, px, py, w, h, 'base');
         else            drawPanelSmall(ctx, px, py, w, h);
 
