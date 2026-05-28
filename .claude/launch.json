@@ -4,7 +4,7 @@
     {
       "name": "violencetown",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "3001", "--directory", "game"],
+      "runtimeArgs": ["C:\\Projects\\violencetown\\dev-server.py", "3001"],
       "port": 3001
     }
   ]
