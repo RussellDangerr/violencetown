@@ -153,7 +153,7 @@ export class QuestEngine {
         this.state.activeId = valid;
         this.state.stageIndex = valid ? clampStage(valid, obj.stageIndex) : 0;
         this.state.counters = (obj.counters && typeof obj.counters === 'object') ? { ...obj.counters } : {};
-        this.state.completed = Array.isArray(obj.completed) ? obj.completed.slice() : [];
+        this.state.completed = Array.isArray(obj.completed) ? obj.completed.filter(id => !!QUESTS[id]) : [];
         this.state.flags = (obj.flags && typeof obj.flags === 'object') ? { ...obj.flags } : {};
     }
 }

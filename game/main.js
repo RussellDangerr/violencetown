@@ -80,7 +80,7 @@ const HIT_SLOP       = 6;   // expand hit zones beyond visual rect (Apple 44pt)
 
 // Item overlay (4 directional options around the player)
 const OVERLAY_RECTS = {
-    up:    { x: 260, y: 202, w: 88, h: 32 },
+    up:    { x: 260, y: 234, w: 88, h: 32 },
     down:  { x: 260, y: 344, w: 88, h: 32 },
     left:  { x: 188, y: 288, w: 88, h: 32 },
     right: { x: 344, y: 288, w: 88, h: 32 },
@@ -1299,11 +1299,17 @@ class Game {
                 // Friendly filtering routed through the canonical helper.
                 const adjHostile = this._adjacentHostiles();
                 adjHostile.sort((a, b) => a.entity.hp - b.entity.hp);
-                if (adjHostile.length > 0) {
-                    const dmg = 10 * stack.count;
-                    const result = this.combatAttack(adjHostile[0], dmg);
-                    this._log(`[Smashed ${item.name} on ${adjHostile[0].entity.name} — ${result}]`);
+                if (adjHostile.length === 0) {
+                    // Target gone between opening the overlay and confirming —
+                    // don't waste the item or a turn; drop back to selected.
+                    this._log('[Nothing to smash.]');
+                    this.state = STATE.ITEM_SELECTED;
+                    this._render();
+                    return;
                 }
+                const dmg = 10 * stack.count;
+                const result = this.combatAttack(adjHostile[0], dmg);
+                this._log(`[Smashed ${item.name} on ${adjHostile[0].entity.name} — ${result}]`);
                 this._removeFromSlot(this.selectedSlot);
                 this.selectedSlot = -1;
                 this.state = STATE.IDLE;
@@ -1795,7 +1801,6 @@ class Game {
 
     _advanceWorld() {
         this.turn++;
-        this._soapUsedThisTurn = false;
 
         // Enemies act. Messages come back as either plain strings (legacy:
         // FSM activity reports, tickTempEquips) or tuples (overhead-dialogue
@@ -1825,11 +1830,14 @@ class Game {
         const equipMsgs = tickTempEquips(this);
         for (const m of equipMsgs) this._log(m);
 
-        // Soap cancels sludge at end of turn
+        // Soap cancels sludge at end of turn. The flag is set in _doItemUse
+        // BEFORE this runs, so the reset MUST come after the check — resetting
+        // at the top of _advanceWorld wiped it before it could be consumed.
         if (this._soapUsedThisTurn && this.hasBuff('sludge')) {
             this.removeBuff('sludge');
             this._log('[Soap neutralized sludge]');
         }
+        this._soapUsedThisTurn = false;
 
         // Sludge DoT
         if (this.hasBuff('sludge')) {
@@ -1939,16 +1947,16 @@ class Game {
         const result = attack(playerEntity, enemyObj.entity, damage);
 
         // Floating damage number — Phase B
-        const dmgSize = 14 + Math.min(10, Math.floor(result.damage / 5));
+        const dmgSize = 14 + Math.min(10, Math.floor(result.dealt / 5));
         const color = result.killed ? '#ffaa22' : '#ffdd44';
-        this._spawnDamageNumber(enemyObj.x, enemyObj.y, `-${result.damage}`, color, dmgSize);
+        this._spawnDamageNumber(enemyObj.x, enemyObj.y, `-${result.dealt}`, color, dmgSize);
 
         // Hit flash + stagger — Phase C, polished in B6. Flash duration
         // and stagger distance now scale with damage so light taps feel
         // light and heavy hits feel heavy. Range: 80ms→200ms flash,
         // 80ms→160ms stagger, 3px→6px push.
         const now = performance.now();
-        const heaviness = Math.min(1, result.damage / 25);  // 0..1
+        const heaviness = Math.min(1, result.dealt / 25);  // 0..1
         const flashMs   = 80  + Math.round(heaviness * 120);
         const staggerMs = 80  + Math.round(heaviness * 80);
         const pushPx    = 3   + heaviness * 3;
@@ -1965,8 +1973,8 @@ class Game {
         // damage given the small-numbers cosmology (HP 100-200, damage
         // mostly 5-30). Kills shake regardless of damage magnitude since
         // a killing blow is a milestone event worth a beat.
-        if (result.damage >= 15 || result.killed) {
-            const mag = result.killed ? 5 : 3 + Math.min(4, (result.damage - 15) / 5);
+        if (result.dealt >= 15 || result.killed) {
+            const mag = result.killed ? 5 : 3 + Math.min(4, (result.dealt - 15) / 5);
             this._triggerScreenShake(150, mag);
         }
 
@@ -1982,7 +1990,7 @@ class Game {
         } else {
             const hitWords = ['POW!', 'WHACK!', 'BAM!', 'SLAM!', 'CRACK!'];
             const word = this.rng.pick(hitWords);
-            const hitSize = result.damage >= 15 ? 20 : 16;
+            const hitSize = result.dealt >= 15 ? 20 : 16;
             this._spawnEventWord(enemyObj.x, enemyObj.y, word, '#ffaa44', hitSize);
         }
 
@@ -2080,6 +2088,7 @@ class Game {
         // the new run is independent of the old one.
         clearSave();
         this.rng = new RNG();
+        this.questEngine = new QuestEngine(this);
         this._lastAutosaveTurn = -999;
         this.turn = 0;
         this.playerHp = this.playerMaxHp;
