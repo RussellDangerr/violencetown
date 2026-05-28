@@ -26,6 +26,7 @@ const STATE = {
     RESOLVING:       'resolving',
     DEAD:            'dead',
     WIN:             'win',
+    LOG_MODAL:       'log_modal',       // [L] — full scrollable message history
 };
 
 // ── Directions ───────────────────────────────────────────────────────────────
@@ -97,6 +98,13 @@ const RADIAL_INNER_R_MAX = 80;
 const RADIAL_OUTER_R_MIN = 84;
 const RADIAL_OUTER_R_MAX = 120;
 
+// Log strip (bottom-left) — tapping it opens the [L] history modal on touch.
+// Mirrors SX/SW/SH/SY in renderer._drawLogStrip.
+const LOG_STRIP_RECT = { x: 6, y: 496, w: 300, h: 44 };
+// Log modal panel — mirrors LOG_MODAL_RECT in renderer._drawLogModal. Taps
+// in the top third scroll older, bottom third newer, elsewhere close.
+const LOG_MODAL_RECT = { x: 24, y: 44, w: 560, h: 520 };
+
 // ── Game ─────────────────────────────────────────────────────────────────────
 
 class Game {
@@ -157,10 +165,19 @@ class Game {
         // In-canvas log strip (Phase 1B of overhead-dialogue plan). Mirrors
         // every _log() call into a fixed-size ring buffer that the renderer
         // draws above the hotbar. Newest message at the bottom; old ones
-        // dim with position. The DOM side log (#text-log) keeps receiving
-        // everything as a desktop history overflow.
+        // dim with position. The full scrollable history lives in _logHistory
+        // (below), surfaced by the [L] log modal.
         this._logStripMessages = [];
         this._STRIP_MAX = 3;
+
+        // Full message history for the [L] log modal. The strip above only
+        // keeps the last 3 lines; this is the scrollable archive (newest at
+        // end). Capped so a long session can't grow it unbounded. Persisted
+        // in the save blob. _logModalScroll is how many display-lines we've
+        // scrolled up from the newest; the renderer clamps the upper bound.
+        this._logHistory = [];
+        this._LOG_HISTORY_MAX = 300;
+        this._logModalScroll = 0;
 
         // Inventory: 10 stackable slots, each { itemDef, count } or null
         this.inventory = new Array(INVENTORY_SIZE).fill(null);
@@ -437,6 +454,20 @@ class Game {
                 return;
             }
 
+            // ── LOG_MODAL: scrollable message history ([L]) ──
+            // L or Esc closes; up/down (or W/S) scroll one line; PageUp/Down
+            // scroll a screenful. Positive scroll = toward older lines; the
+            // renderer clamps the upper bound to the history length.
+            if (this.state === STATE.LOG_MODAL) {
+                e.preventDefault();
+                if (e.code === 'KeyL' || e.code === 'Escape')    { this._closeLogModal(); return; }
+                if (e.code === 'ArrowUp'   || e.code === 'KeyW')  { this._scrollLogModal(1);   return; }
+                if (e.code === 'ArrowDown' || e.code === 'KeyS')  { this._scrollLogModal(-1);  return; }
+                if (e.code === 'PageUp')                          { this._scrollLogModal(10);  return; }
+                if (e.code === 'PageDown')                        { this._scrollLogModal(-10); return; }
+                return;
+            }
+
             // ── IDLE: main input ──
             if (this.state !== STATE.IDLE) return;
 
@@ -463,6 +494,9 @@ class Game {
 
             // Space (no item) = wait turn
             if (e.code === 'Space') { e.preventDefault(); this._log('[Wait]'); this._advanceWorld(); return; }
+
+            // L = open the log history modal
+            if (e.code === 'KeyL') { e.preventDefault(); this._openLogModal(); return; }
 
             // Codeball
             if (e.code === 'Backquote') { e.preventDefault(); this._codeball(); return; }
@@ -745,6 +779,9 @@ class Game {
         if (!pt) return;
         e.preventDefault();
 
+        // Log modal is fully modal — route taps to it and nothing behind it.
+        if (this.state === STATE.LOG_MODAL) { this._tapLogModal(pt); return; }
+
         // Priority order is by modality: the most exclusive overlay wins. A
         // tap while the radial menu is open should drive the radial menu,
         // not fall through to the hotbar visible behind/under it.
@@ -760,6 +797,14 @@ class Game {
             this._tapItemOverlay(pt);
             return;
         }
+        // Tapping the on-canvas log strip opens the full history modal — the
+        // touch equivalent of pressing L. IDLE only; in a menu the tap should
+        // drive the menu, not pop the log.
+        if (this.state === STATE.IDLE && this._pointInRect(pt, LOG_STRIP_RECT, HIT_SLOP)) {
+            this._openLogModal();
+            return;
+        }
+
         // IDLE or ITEM_SELECTED → hotbar tap. Outside the hotbar = no-op (we
         // could route "tap on world tile" to movement here in a future pass,
         // but PD-style discrete tile taps aren't part of the current scope).
@@ -2120,15 +2165,48 @@ class Game {
         this._ensureParticleLoop();
     }
 
+    // ── Log modal ([L]) ──────────────────────────────────────────────────────
+
+    _openLogModal() {
+        if (this.state !== STATE.IDLE) return;
+        this._logModalScroll = 0;        // open pinned to the newest line
+        this.state = STATE.LOG_MODAL;
+        this._render();
+    }
+
+    _closeLogModal() {
+        if (this.state !== STATE.LOG_MODAL) return;
+        this.state = STATE.IDLE;
+        this._render();
+    }
+
+    // delta > 0 scrolls toward older lines. Lower bound clamped here; the
+    // renderer clamps the upper bound (it alone knows the wrapped line count)
+    // and writes the clamped value back to _logModalScroll.
+    _scrollLogModal(delta) {
+        if (this.state !== STATE.LOG_MODAL) return;
+        this._logModalScroll = Math.max(0, this._logModalScroll + delta);
+        this._render();
+    }
+
+    // Touch routing for the open modal: top third scrolls older, bottom third
+    // newer, elsewhere (incl. outside the panel) closes.
+    _tapLogModal(pt) {
+        if (!this._pointInRect(pt, LOG_MODAL_RECT)) { this._closeLogModal(); return; }
+        const third = LOG_MODAL_RECT.h / 3;
+        const rel = pt.y - LOG_MODAL_RECT.y;
+        if (rel < third)          this._scrollLogModal(5);
+        else if (rel > 2 * third) this._scrollLogModal(-5);
+        else                      this._closeLogModal();
+    }
+
     // ── Log ──────────────────────────────────────────────────────────────────
 
     _log(msg, category = 'system') {
         // Normalize common Unicode punctuation to ASCII for the bitmap-font
-        // canvas strip (which only knows printable ASCII 32-126). Em-dash,
-        // en-dash, ellipsis, smart-quotes — all collapse to ASCII equivalents.
-        // The DOM sidebar uses system fonts and would render Unicode fine, but
-        // we feed it the same normalized text for consistency between the two
-        // log surfaces.
+        // surfaces (the canvas strip and the [L] log modal both only know
+        // printable ASCII 32-126). Em-dash, en-dash, ellipsis, smart-quotes —
+        // all collapse to ASCII equivalents.
         const ascii = msg
             .replace(/[—–]/g, '-')   // em-dash, en-dash → hyphen
             .replace(/…/g, '...')         // ellipsis → three dots
@@ -2141,14 +2219,11 @@ class Game {
             this._logStripMessages.shift();
         }
 
-        // Desktop history overflow — sidebar still receives every line.
-        const log = document.getElementById('text-log');
-        const line = document.createElement('div');
-        line.className = 'log-line';
-        line.textContent = ascii;
-        log.appendChild(line);
-        log.scrollTop = log.scrollHeight;
-        while (log.children.length > 200) log.removeChild(log.firstChild);
+        // Full history for the [L] log modal (newest at end, capped).
+        this._logHistory.push({ text: ascii, category });
+        if (this._logHistory.length > this._LOG_HISTORY_MAX) {
+            this._logHistory.shift();
+        }
     }
 }
 

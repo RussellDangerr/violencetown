@@ -264,6 +264,7 @@ export class Renderer {
         if (game.state === 'item_throw_dir')  this._drawThrowPrompt(game);
         if (game.state === 'item_give_dir')   this._drawThrowPrompt(game);
         if (game.state === 'win') this._drawWinOverlay(game);
+        if (game.state === 'log_modal') this._drawLogModal(game);
     }
 
     // ── Tiles ────────────────────────────────────────────────────────────────
@@ -1314,6 +1315,87 @@ export class Renderer {
                 color: UI.textLight, scale: 1, align: 'center',
             });
         }
+    }
+
+    // ── Log Modal ([L]) ──────────────────────────────────────────────────────
+    // Full scrollable message history (game._logHistory). Geometry mirrors
+    // LOG_MODAL_RECT in main.js so touch hit-testing lines up. Lines hard-wrap
+    // to the panel width; the newest sits at the bottom and _logModalScroll
+    // (clamped here, then written back) pages toward older lines.
+    _drawLogModal(game) {
+        const { ctx } = this;
+        const ui = this.uiSheet;
+
+        ctx.fillStyle = 'rgba(0,0,0,0.72)';
+        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+
+        const px = 24, py = 44, w = 560, h = 520;   // === LOG_MODAL_RECT (main.js)
+        if (ui?.loaded) drawPanelBig(ctx, ui, px, py, w, h, 'base');
+        else            drawPanelSmall(ctx, px, py, w, h);
+
+        if (!this.font) return;
+
+        this.font.drawText(ctx, 'MESSAGE LOG', CANVAS_PX / 2, py + 16, {
+            color: UI.panelBorder, scale: 2, align: 'center',
+        });
+
+        const padX = 24;
+        const textX = px + padX;
+        const charsPerLine = Math.max(8, Math.floor((w - padX * 2) / 8)); // 8px glyph @ scale 1
+        const contentTop = py + 56;
+        const contentBottom = py + h - 30;
+        const lineH = 12;
+        const visibleLines = Math.max(1, Math.floor((contentBottom - contentTop) / lineH));
+
+        const hist = game._logHistory || [];
+        if (hist.length === 0) {
+            this.font.drawText(ctx, 'No messages yet.', CANVAS_PX / 2, contentTop + 12, {
+                color: UI.dim, scale: 1, align: 'center',
+            });
+            return;
+        }
+
+        // Wrap each entry into display lines (oldest first → newest at bottom).
+        const lines = [];
+        for (const m of hist) {
+            const color = this._logStripColor(m.category);
+            const t = m.text;
+            if (t.length <= charsPerLine) {
+                lines.push({ text: t, color });
+            } else {
+                for (let i = 0; i < t.length; i += charsPerLine) {
+                    lines.push({ text: t.slice(i, i + charsPerLine), color });
+                }
+            }
+        }
+
+        const total = lines.length;
+        const maxScroll = Math.max(0, total - visibleLines);
+        let scroll = game._logModalScroll || 0;
+        if (scroll > maxScroll) scroll = maxScroll;
+        game._logModalScroll = scroll;            // write the clamp back
+
+        const start = Math.max(0, total - visibleLines - scroll);
+        const end = Math.min(total, start + visibleLines);
+        for (let i = start; i < end; i++) {
+            this.font.drawText(ctx, lines[i].text, textX, contentTop + (i - start) * lineH, {
+                color: lines[i].color, scale: 1,
+            });
+        }
+
+        // Footer row: older/newer affordances flank the centered close hint.
+        const footerY = py + h - 16;
+        if (start > 0) {
+            this.font.drawText(ctx, '^ OLDER', textX, footerY, { color: UI.dim, scale: 1 });
+        }
+        if (end < total) {
+            this.font.drawText(ctx, 'NEWER v', px + w - padX, footerY, {
+                color: UI.dim, scale: 1, align: 'right',
+            });
+        }
+        this.font.drawText(ctx, 'L / ESC TO CLOSE', CANVAS_PX / 2, footerY, {
+            color: UI.textLight, scale: 1, align: 'center',
+        });
     }
 
     // ── Vignette (subtle edge darkening) ────────────────────────────────────
