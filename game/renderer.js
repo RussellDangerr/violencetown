@@ -56,17 +56,25 @@ export class Renderer {
             ctx.strokeRect(20, 16, 280, 188);
         }
 
-        // Small game-name header — bitmap font, centered horizontally
+        // Small game-name header — bitmap font, centered, with a 1px dark
+        // drop-shadow so the gold lifts off the parchment.
         if (this.font) {
+            this.font.drawText(ctx, 'VIOLENCETOWN', 161, 33, {
+                color: '#1a1208', scale: 1, align: 'center',
+            });
             this.font.drawText(ctx, 'VIOLENCETOWN', 160, 32, {
-                color: UI.panelBorder, scale: 1, align: 'center',
+                color: UI.gold, scale: 1, align: 'center',
             });
         }
 
-        // Horizontal rule under header
+        // Horizontal rule under header — gold center with sewer-green tick
+        // accents at each end, echoing the in-game goo palette.
         ctx.strokeStyle = UI.panelBorder;
         ctx.lineWidth = 1;
         ctx.beginPath(); ctx.moveTo(90, 44); ctx.lineTo(230, 44); ctx.stroke();
+        ctx.fillStyle = '#9bb43e';
+        ctx.fillRect(88, 43, 3, 3);
+        ctx.fillRect(229, 43, 3, 3);
 
         // Cityscape silhouette — replaces an earlier character lineup that
         // read as three skin-tone variants. Procedural noir skyline drawn
@@ -76,9 +84,13 @@ export class Renderer {
         this._drawSplashCityscape(ctx);
 
         // Big GAME START prompt — the centerpiece. Scale 3 = 24px tall.
+        // Hard 2px black drop-shadow gives the marquee its chunky arcade weight.
         if (this.font) {
+            this.font.drawText(ctx, 'GAME START', 162, 150, {
+                color: '#0c0a07', scale: 3, align: 'center',
+            });
             this.font.drawText(ctx, 'GAME START', 160, 148, {
-                color: UI.panelBorder, scale: 3, align: 'center',
+                color: UI.gold, scale: 3, align: 'center',
             });
 
             // Subtitle hint
@@ -651,8 +663,11 @@ export class Renderer {
         //   "danger" — the old green→red threshold was retired here).
         const hpFrac = game.playerHp / game.playerMaxHp;
         drawInset(ctx, bx, by, bw, bh);
+        const hpW = (bw - 2) * hpFrac;
         ctx.fillStyle = UI.hpRed;
-        ctx.fillRect(bx + 1, by + 1, (bw - 2) * hpFrac, bh - 2);
+        ctx.fillRect(bx + 1, by + 1, hpW, bh - 2);
+        ctx.fillStyle = '#e8674a';                       // glossy top highlight
+        ctx.fillRect(bx + 1, by + 1, hpW, 1);
         if (this.font) {
             this.font.drawText(ctx, `HP ${game.playerHp}/${game.playerMaxHp}`, bx + 3, by + 2, {
                 color: '#fff', scale: 1,
@@ -665,8 +680,11 @@ export class Renderer {
         //   it; until then it sits at full.
         const mpFrac = (game.playerMp ?? game.playerMaxMp) / (game.playerMaxMp ?? 100);
         drawInset(ctx, bx, by, bw, bh);
+        const mpW = (bw - 2) * mpFrac;
         ctx.fillStyle = '#3a8ab0';
-        ctx.fillRect(bx + 1, by + 1, (bw - 2) * mpFrac, bh - 2);
+        ctx.fillRect(bx + 1, by + 1, mpW, bh - 2);
+        ctx.fillStyle = '#6fc0e0';                       // glossy top highlight
+        ctx.fillRect(bx + 1, by + 1, mpW, 1);
         if (this.font) {
             this.font.drawText(ctx, `MP ${game.playerMp ?? 0}/${game.playerMaxMp ?? 100}`, bx + 3, by + 2, {
                 color: '#fff', scale: 1,
@@ -683,6 +701,8 @@ export class Renderer {
         ctx.fillRect(cardX, cardY, cardW, cardH);
         ctx.fillStyle = UI.gold;              // gold body
         ctx.fillRect(cardX + 1, cardY + 1, cardW - 2, cardH - 2);
+        ctx.fillStyle = '#f1d488';            // brighter top highlight (embossed card)
+        ctx.fillRect(cardX + 1, cardY + 1, cardW - 2, 1);
         // Dark "magnetic strip" on the left third — sells the credit-card
         // read at this size.
         ctx.fillStyle = '#1a1208';

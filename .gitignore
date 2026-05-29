@@ -8,11 +8,34 @@
 assets/
 assetszipped/
 
-# Exception: game/assets/ is reserved for procedurally-generated assets we
-# author ourselves (bitmap fonts, UI panels, wheel frames — all output of
-# scripts in tools/). These are first-party and safe to commit. Anything
-# under game/assets-placeholder/ for licensed Kenney packs stays excluded
-# because it's not the same folder.
+# --- LimeZu (PAID, non-redistributable) — must NEVER be committed ---
+# LimeZu art is not free to redistribute, so it can't live in a public repo.
+# The source library lives OUTSIDE the repo (C:\Users\caela\Desktop\LimezuAssets\);
+# these patterns are a name-based safety net in case a copy is ever dropped
+# into the tree. PNGs aren't extension-blocked (Kenney CC0 art is allowed), so
+# the only thing standing between LimeZu and a leak is matching its name.
+# Bracket classes cover the common casings: Limezu / limezu / LimeZu / limeZu.
+*[Ll]ime[Zz]u*
+
+# --- Kenney bulk library — CC0, but keep the repo LEAN ---
+# Kenney art is CC0 (legally hostable), but there's no reason to mirror
+# Kenney's entire multi-hundred-MB catalog into a public game repo. Policy:
+# commit ONLY the curated subset the game actually renders (see the allowlist
+# below); keep the full source library out. These patterns block the library
+# folder if it's ever dropped into the tree. Bracket classes cover casings;
+# the `*Assets*` requirement means they do NOT match the curated `kenney/`
+# bundle dir (which has no "Assets" in its name).
+*[Kk]enney*[Aa]ssets*
+*[Kk]enney [Gg]ame [Aa]ssets*
+
+# --- What IS allowed (CC0 / first-party) ---
+# game/assets/ — procedurally-generated, authored by us (bitmap fonts, UI
+#   panels, wheel frames — output of tools/ scripts). First-party, safe.
+# game/assets-placeholder/kenney/ — the CURATED subset of Kenney CC0 packs the
+#   game renders. Intentionally COMMITTED: public-domain AND required to render.
+#   Only copy the specific sheets the game uses here — never whole packs or the
+#   full library. (The `assets/` and `*Kenney*Assets*` rules do NOT match this
+#   path — different names — so it stays tracked. Do not "fix" that.)
 !game/assets/
 !game/assets/**
 
@@ -38,6 +61,14 @@ assetszipped/
 *.xcf
 *.kra
 *.clip
+
+# --- Regenerable dev artifacts (keep the repo lean) ---
+# Labeled coord-picking contact sheets are large Kenney-derived montages,
+# not needed at runtime, and reproducible in seconds via
+# tools/gen_contact_sheet.py. Commit the script, not its output. Also catch
+# the underscore-prefixed scratch crops agents leave behind.
+tools/contact_*.png
+tools/_*.png
 
 # --- OS / editor housekeeping ---
 .DS_Store
