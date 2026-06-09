@@ -1,26 +1,19 @@
 // throw-vs-use.test.js — throwing a heal item must THROW (damage path), not heal.
 //
-// THE BUG (documented here, EXPECTED RED on current code):
-//   items.js::resolveUse dispatches purely on itemDef.useType:
-//       switch (itemDef.useType) { case 'self': resolveSelfUse(...) ; case 'throw': resolveThrow(...) ; ... }
-//   A heal consumable (bandage, boardwalk_burger, …) has useType:'self'. So even
-//   when the caller asks to THROW it (passes a direction + stackCount), resolveUse
-//   routes to resolveSelfUse and HEALS THE PLAYER instead of dealing damage along
-//   the throw line. There is no "force throw regardless of useType" path, so a
-//   thrown heal item can never hit an enemy.
+// THE FIX (fix/critical-path): _doThrow in main.js now calls the now-EXPORTED
+// resolveThrow directly, instead of routing through resolveUse — which dispatches
+// on itemDef.useType and would HEAL a 'self' consumable while discarding the throw
+// direction. So the unit under test here is resolveThrow: the function the throw
+// action actually uses. These are GREEN regression guards.
 //
-//   resolveThrow itself is NOT exported from items.js (only resolveUse, equipItem,
-//   tickTempEquips, ITEMS are). The task asked to exercise resolveUse/resolveThrow;
-//   since resolveThrow is internal, we drive the PUBLIC resolveUse "throw" call and
-//   assert the throw semantics, which is exactly the seam where the bug lives.
-//
-// When the dispatch bug is fixed (resolveUse honors the chosen action / a throw
-// of a self-use item is forced down the damage path), these tests go GREEN.
+// By design, resolveUse on a 'self' item STILL heals — "use" and "throw" are now
+// separate seams; throwing no longer passes through resolveUse at all. The last
+// suite pins that intentional split.
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { ITEMS, resolveUse } from '../game/items.js';
+import { ITEMS, resolveThrow, resolveUse } from '../game/items.js';
 
 // A throwable line: player at (0,0) facing east; one enemy two tiles east.
 // resolveThrow walks `range` tiles from the player; range>=2 reaches the enemy.
@@ -54,11 +47,10 @@ function makeFakeGame() {
     return g;
 }
 
-// A heal item that is a thrown range weapon's polar opposite: useType 'self'.
-const HEAL = ITEMS.bandage;          // { useType:'self', effect:'heal', healAmount:25, range:undefined }
+const HEAL = ITEMS.bandage;          // { useType:'self', effect:'heal', healAmount:25 }
 const EAST = { dx: 1, dy: 0 };
 
-describe('throwing a heal item (EXPECTED RED until the dispatch bug is fixed)', () => {
+describe('throwing a heal item via resolveThrow (regression guard — expected GREEN)', () => {
 
     test('sanity: bandage is a self-use heal item with a heal amount', () => {
         assert.equal(HEAL.useType, 'self');
@@ -66,59 +58,60 @@ describe('throwing a heal item (EXPECTED RED until the dispatch bug is fixed)', 
         assert.ok(HEAL.healAmount > 0);
     });
 
-    test('[EXPECTED RED] throwing a bandage deals damage to the enemy in line', () => {
+    test('resolveThrow is exported (the seam _doThrow now uses)', () => {
+        assert.equal(typeof resolveThrow, 'function');
+    });
+
+    test('throwing a bandage deals damage to the enemy in line', () => {
         const g = makeFakeGame();
-        // Give the heal item a throw range for this scenario; a real thrown item
-        // needs a range to travel. (Doesn't change useType, which is the bug.)
         const thrown = { ...HEAL, range: 4 };
 
-        // Caller intent: THROW. We pass a direction + stackCount, the throw-shaped
-        // call signature. A correct engine treats this as a throw.
-        resolveUse(g, thrown, EAST, 1);
+        resolveThrow(g, thrown, EAST, 1);
 
-        // DESIRED: the rat took throw damage (10 per item * stackCount).
-        // FAILS today: resolveUse saw useType:'self' and healed the player, so
-        // combatAttack was never called and the rat is untouched.
-        assert.equal(
-            g.combatAttacks.length, 1,
-            'throwing a heal item should route through combatAttack (damage), not healing',
-        );
+        assert.equal(g.combatAttacks.length, 1,
+            'throwing a heal item must route through combatAttack (damage), not healing');
         assert.equal(g.combatAttacks[0].dmg, 10, 'thrown single item should deal 10 damage');
         assert.ok(g._enemyRef.entity.hp < 50, 'enemy HP should drop from a thrown item');
     });
 
-    test('[EXPECTED RED] throwing a heal item does NOT heal the thrower', () => {
+    test('throwing a heal item does NOT heal the thrower', () => {
         const g = makeFakeGame();
         const before = g.playerHp;
         const thrown = { ...HEAL, range: 4 };
 
-        resolveUse(g, thrown, EAST, 1);
+        resolveThrow(g, thrown, EAST, 1);
 
-        // DESIRED: throwing your bandage at a rat gives up the heal — HP unchanged.
-        // FAILS today: player was healed by HEAL.healAmount because resolveUse
-        // dispatched to the self-use heal branch.
-        assert.equal(
-            g.playerHp, before,
-            'throwing a heal item must not heal the thrower (it left their hand as a projectile)',
-        );
-    });
-});
-
-// Control case — proves the harness and the real damage path are wired right,
-// so the failures above are about the dispatch bug, not the test scaffold.
-// A 'throw'-typed item (rock) MUST already deal damage on the current code.
-describe('control: a real throw item still throws (EXPECTED GREEN)', () => {
-    test('throwing a rock deals damage to the enemy in line', () => {
-        const g = makeFakeGame();
-        resolveUse(g, ITEMS.rock, EAST, 1); // rock: useType:'throw', range:4
-        assert.equal(g.combatAttacks.length, 1, 'rock should hit via combatAttack');
-        assert.ok(g._enemyRef.entity.hp < 50, 'rock should damage the enemy');
-        assert.equal(g.playerHp, 50, 'throwing a rock must not heal the player');
+        assert.equal(g.playerHp, before,
+            'throwing a heal item must not heal the thrower (it left their hand as a projectile)');
     });
 
     test('stacked throw scales damage by stack count (10 per item)', () => {
         const g = makeFakeGame();
-        resolveUse(g, ITEMS.rock, EAST, 3); // 3 rocks → 30 damage
+        const thrown = { ...HEAL, range: 4 };
+        resolveThrow(g, thrown, EAST, 3);
         assert.equal(g.combatAttacks[0].dmg, 30, 'throw damage is 10 * stackCount');
+    });
+});
+
+// By design: the "use" seam still heals a self-use item. Pins the intentional
+// throw/use split so a future change that re-merges them trips this guard.
+describe('resolveUse on a self-use item still heals (by design — expected GREEN)', () => {
+    test('using (not throwing) a bandage heals the player and deals no damage', () => {
+        const g = makeFakeGame();
+        const before = g.playerHp;
+        resolveUse(g, HEAL, null, 1); // "use" — no throw direction
+        assert.ok(g.playerHp > before, 'using a heal item should heal');
+        assert.equal(g.combatAttacks.length, 0, 'using a heal item deals no damage');
+    });
+});
+
+// Control — a real throw-type item (rock) also throws via resolveThrow.
+describe('control: a throw-type item throws via resolveThrow (expected GREEN)', () => {
+    test('throwing a rock deals damage to the enemy in line', () => {
+        const g = makeFakeGame();
+        resolveThrow(g, ITEMS.rock, EAST, 1); // rock: range 4
+        assert.equal(g.combatAttacks.length, 1, 'rock should hit via combatAttack');
+        assert.ok(g._enemyRef.entity.hp < 50, 'rock should damage the enemy');
+        assert.equal(g.playerHp, 50, 'throwing a rock must not heal the player');
     });
 });
