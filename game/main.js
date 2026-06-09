@@ -453,6 +453,7 @@ class Game {
         const wrapper = document.getElementById('game-wrapper');
         const start = () => {
             audio.init();                 // [audio] first user gesture — unlock Web Audio
+            this._applyAudioSettings();   // [settings] apply persisted volume/mute on boot
             audio.playMusic('town');      // [audio] start the ambient bed for the town hub
             splash.classList.add('gone');
             wrapper.classList.remove('hidden');
@@ -466,6 +467,7 @@ class Game {
         // autosave overwrites it, so a stray reload can still resume).
         const continueGame = async () => {
             audio.init();                 // [audio] first user gesture — unlock Web Audio
+            this._applyAudioSettings();   // [settings] apply persisted volume/mute on boot
             audio.playMusic('town');      // [audio] start the ambient bed (zone music re-syncs on map load)
             const raw = readSaveRaw();
             if (!raw) { start(); return; }
@@ -925,11 +927,11 @@ class Game {
         el.textContent = on ? 'ON' : 'OFF';
     }
 
-    // Defensive hook into feat/audio's manager if it ever lands on the game.
-    // No-ops cleanly when absent (the no-hard-dependency rule), so the sliders
-    // persist values either way and audio can read them after merge.
+    // Push the persisted volume/mute into the audio manager. `audio` is the
+    // module-level singleton imported at the top (this.audio was never assigned).
+    // applyToAudio stays duck-typed/defensive, so this is safe pre-init too.
     _applyAudioSettings() {
-        Settings.applyToAudio(this.audio);
+        Settings.applyToAudio(audio);
     }
 
     _bindOptionsModal() {
