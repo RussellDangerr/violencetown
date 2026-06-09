@@ -401,6 +401,17 @@ class Game {
         if (this.questEngine) this.questEngine.emit(type, payload);
     }
 
+    // Start the main quest DETERMINISTICALLY (fix/critical-path). Called on a
+    // fresh game start and on RESTART so fix_car can never be missed — the old
+    // adjacency-bark trigger could be skipped entirely, dead-stalling the game.
+    // No-op if the quest is already active or already completed (so a CONTINUE'd
+    // save keeps its restored progress instead of being reset to stage 0).
+    _startMainQuest() {
+        if (!this.questEngine) return;
+        if (this.questEngine.isActive('fix_car') || this.questEngine.isComplete('fix_car')) return;
+        this.questEngine.start('fix_car');
+    }
+
     // ── Splash ───────────────────────────────────────────────────────────────
 
     _bindSplash() {
@@ -410,6 +421,7 @@ class Game {
             splash.classList.add('gone');
             wrapper.classList.remove('hidden');
             this.state = STATE.IDLE;
+            this._startMainQuest();   // deterministic fix_car start (fix/critical-path)
             this._render();
             this._log('[Entered the town]');
         };
@@ -2136,6 +2148,7 @@ class Game {
         this.gold = 0;
         await this._loadMap('town-map.json');
         this.state = STATE.IDLE;
+        this._startMainQuest();   // deterministic fix_car start (fix/critical-path)
         this._log('[New game]');
     }
 
