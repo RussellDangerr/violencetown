@@ -13,6 +13,7 @@
 
 import { Enemy } from './enemies.js';
 import { clamp } from './utils.js';
+import { INVENTORY_SIZE } from './data.js';
 
 export const SAVE_VERSION = 1;
 const KEY = 'violencetown.save';
@@ -177,9 +178,12 @@ function validate(raw) {
     p.x = (typeof p.x === 'number' && isFinite(p.x)) ? p.x : undefined;
     p.y = (typeof p.y === 'number' && isFinite(p.y)) ? p.y : undefined;
 
+    // Normalize to INVENTORY_SIZE slots. An older save with extra slots is
+    // truncated; a non-quest item in a dropped slot is lost (acceptable — the
+    // count only ever shrank from 10→9). (fix/critical-path)
     const inv = Array.isArray(p.inventory) ? p.inventory : [];
     p.inventory = [];
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < INVENTORY_SIZE; i++) {
         const s = inv[i];
         p.inventory.push(s && typeof s.id === 'string'
             ? { id: s.id, count: clamp(_num(s.count, 1), 1, 99) }

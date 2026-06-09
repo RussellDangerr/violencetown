@@ -7,7 +7,7 @@ import { loadMap } from './map.js';
 import { loadAllSprites } from './sprites.js';
 import { BitmapFont } from './bitmap-font.js';
 import { DIR_NAMES, PLAYER_MAX_HP, PLAYER_MAX_MP, SLUDGE_DOT, INVENTORY_SIZE, MAX_STACK } from './data.js';
-import { ITEMS, resolveUse, tickTempEquips } from './items.js';
+import { ITEMS, resolveUse, resolveThrow, tickTempEquips } from './items.js';
 import { attack, formatDamageNumber } from './combat.js';
 import { Enemy, resolveEnemyTurns } from './enemies.js';
 import { applyGive } from './give-action.js';
@@ -36,7 +36,8 @@ const STATE = {
     RADIAL_MENU:     'radial_menu',     // bumped a hostile enemy — Omnitrix-style wheel
     RESOLVING:       'resolving',
     DEAD:            'dead',
-    WIN:             'win',
+    // (Legacy WIN state retired with the tile-7 boss-trigger trap — fix/critical-path.)
+    ENDING:          'ending',          // End of Chapter One — main-quest outro + credits (fix/critical-path)
     LOG_MODAL:       'log_modal',       // [L] — full scrollable message history
 };
 
@@ -216,6 +217,11 @@ class Game {
 
         // Economy
         this.gold = 0;
+
+        // Debug/dev flag — OFF by default so cheats never ship enabled. Opt in
+        // with ?debug / ?debug=1 in the URL (or window.VIOLENCETOWN_DEBUG=true
+        // before construction). Gates the Codeball nuke. (fix/critical-path)
+        this._debug = this._detectDebugFlag();
 
         // Seeded RNG — the single source of gameplay randomness, deterministic
         // and resumable across saves (see rng.js). Reseeded fresh here; the
@@ -401,6 +407,17 @@ class Game {
         if (this.questEngine) this.questEngine.emit(type, payload);
     }
 
+    // Start the main quest DETERMINISTICALLY (fix/critical-path). Called on a
+    // fresh game start and on RESTART so fix_car can never be missed — the old
+    // adjacency-bark trigger could be skipped entirely, dead-stalling the game.
+    // No-op if the quest is already active or already completed (so a CONTINUE'd
+    // save keeps its restored progress instead of being reset to stage 0).
+    _startMainQuest() {
+        if (!this.questEngine) return;
+        if (this.questEngine.isActive('fix_car') || this.questEngine.isComplete('fix_car')) return;
+        this.questEngine.start('fix_car');
+    }
+
     // ── Splash ───────────────────────────────────────────────────────────────
 
     _bindSplash() {
@@ -410,6 +427,7 @@ class Game {
             splash.classList.add('gone');
             wrapper.classList.remove('hidden');
             this.state = STATE.IDLE;
+            this._startMainQuest();   // deterministic fix_car start (fix/critical-path)
             this._render();
             this._log('[Entered the town]');
         };
@@ -521,9 +539,15 @@ class Game {
                 return;
             }
 
-            // ── WIN: N starts a new game (matches the on-screen prompt) ──
-            if (this.state === STATE.WIN) {
-                if (e.code === 'KeyN') { e.preventDefault(); this._fullReset(); }
+            // ── ENDING (End of Chapter One): N / Space / Enter restarts ──
+            // (fix/critical-path) Matches the on-screen "PRESS N TO PLAY AGAIN"
+            // prompt; Space/Enter accepted too since the player's hands are
+            // likely on those after the outro.
+            if (this.state === STATE.ENDING) {
+                if (e.code === 'KeyN' || e.code === 'Space' || e.code === 'Enter') {
+                    e.preventDefault();
+                    this._fullReset();
+                }
                 return;
             }
 
@@ -560,8 +584,12 @@ class Game {
             // E = examine the faced / adjacent point of interest (free action)
             if (e.code === 'KeyE') { e.preventDefault(); doExamine(this); this._render(); return; }
 
-            // Codeball
-            if (e.code === 'Backquote') { e.preventDefault(); this._codeball(); return; }
+            // Codeball — dev nuke, only when the debug flag is on (never ships
+            // enabled). Silently ignored otherwise. (fix/critical-path)
+            if (e.code === 'Backquote') {
+                if (this._debug) { e.preventDefault(); this._codeball(); }
+                return;
+            }
 
             // Any other key stops auto-repeat
             this._stopAutoRepeat();
@@ -658,7 +686,10 @@ class Game {
     }
 
     _digitToSlot(code) {
-        const keys = ['Digit1','Digit2','Digit3','Digit4','Digit5','Digit6','Digit7','Digit8','Digit9','Digit0'];
+        // Digit1..Digit9 → slots 0..8. Digit0 was dropped with the 10th
+        // inventory slot — it selected a phantom slot that the 9-cell hotbar
+        // never rendered. (fix/critical-path)
+        const keys = ['Digit1','Digit2','Digit3','Digit4','Digit5','Digit6','Digit7','Digit8','Digit9'];
         return keys.indexOf(code);
     }
 
@@ -743,10 +774,13 @@ class Game {
                         this._openHelpModal();
                         break;
                     case 'restart':
-                        // Match the previous NEW button's behavior — it had
-                        // no confirm, so we don't add one here. Consistency
-                        // beats friction for a < 30s playthrough demo.
-                        this._fullReset();
+                        // Confirm before wiping — RESTART clears the save and
+                        // reseeds, so an accidental tap shouldn't be able to
+                        // destroy a run. (fix/critical-path)
+                        if (typeof confirm !== 'function'
+                            || confirm('Restart from the beginning? This erases your current save.')) {
+                            this._fullReset();
+                        }
                         break;
                     case 'close':
                         // No-op beyond the close() above.
@@ -831,9 +865,13 @@ class Game {
     _onCanvasPointerDown(e) {
         // Mirror the keyboard gate: don't process taps during the move
         // animation or while the world is resolving. Splash has its own
-        // handler (DOM button). Dead/Win are non-interactive end states.
+        // handler (DOM button). Dead is a non-interactive end state; Ending
+        // is handled just below (tap to restart).
         if (this.state === STATE.SPLASH || this.state === STATE.RESOLVING) return;
-        if (this.state === STATE.DEAD   || this.state === STATE.WIN)        return;
+        if (this.state === STATE.DEAD) return;   // non-interactive end state
+        // ENDING (End of Chapter One): a tap anywhere restarts — touch parity
+        // with the keyboard "play again" prompt. (fix/critical-path)
+        if (this.state === STATE.ENDING) { e.preventDefault(); this._fullReset(); return; }
         if (this._animating || this._uiAnimating()) return;
 
         const canvas = e.currentTarget;
@@ -1159,8 +1197,9 @@ class Game {
             const transition = this.map.getTransition(nx, ny);
             if (transition) { this._pendingTransition = transition; }
 
-            // Win?
-            if (this.map.getTile(nx, ny) === 7) { this._win(); return; }
+            // (Legacy tile-7 "BOSS ROOM REACHED" win hook removed — fix/critical-path.
+            // Tile 7 was a stale wrong-win trap one cell east of the Wererat; it's
+            // gone from sewer-map.json and the real ending is fix_car's onComplete.)
 
             this._advanceWorld();
         });
@@ -1199,12 +1238,13 @@ class Game {
         this._autoRepeatDir = dir;
         this._autoRepeatInterval = setInterval(() => {
             if (this.state !== STATE.IDLE) { this._stopAutoRepeat(); return; }
-            // Check if next tile is blocked (wall or enemy or any collision)
-            const nx = this.playerX + dir.dx;
-            const ny = this.playerY + dir.dy;
-            const blocked = !this.map.isWalkable(nx, ny);
-            const enemyThere = this.enemies.some(e => e.entity.isAlive() && e.x === nx && e.y === ny);
-            if (blocked || enemyThere) {
+            // Stop auto-repeat BEFORE a step that commits to something the player
+            // should decide on deliberately — otherwise a held direction key
+            // sails through map transitions, vacuums up pickups (e.g. the quest
+            // converter), bumps the car/barricade, or walks into a hazard tile.
+            // The player must release and re-press to take that step. The manual
+            // _doMove path is unaffected. (fix/critical-path)
+            if (this._autoRepeatShouldStop(dir)) {
                 this._stopAutoRepeat();
                 return;
             }
@@ -1219,6 +1259,30 @@ class Game {
         }
         this._autoRepeatKey = null;
         this._autoRepeatDir = null;
+    }
+
+    // True when held-key auto-walking should HALT before stepping in `dir` —
+    // i.e. the next tile would commit to a consequential, deliberate action.
+    // Covers: any blocker (wall / enemy / container / the car tile / a barricade),
+    // a map transition, a ground-item pickup, or a hazard tile. The first manual
+    // press already happened (it started auto-repeat); this only gates the
+    // AUTOMATIC follow-up steps. (fix/critical-path)
+    _autoRepeatShouldStop(dir) {
+        const nx = this.playerX + dir.dx;
+        const ny = this.playerY + dir.dy;
+
+        // Blockers that _doMove intercepts as bump-interactions or walls.
+        if (!this.map.isWalkable(nx, ny)) return true;            // wall, car (19), barricade (23), etc.
+        if (this.enemies.some(e => e.entity.isAlive() && e.x === nx && e.y === ny)) return true;
+        if (this.containers.some(c => c.x === nx && c.y === ny)) return true;
+
+        // Consequential walkable steps the player should opt into deliberately.
+        if (this.map.getTransition(nx, ny)) return true;          // map transition
+        if (this.groundItems.some(g => g.x === nx && g.y === ny)) return true; // pickup (incl. the converter)
+        const td = this.map.getTileDef(nx, ny);
+        if (td && td.hazard) return true;                         // sludge / future hazards
+
+        return false;
     }
 
     // ── Item Selection & Overlay ──────────────────────────────────────────────
@@ -1373,7 +1437,11 @@ class Game {
         if (!stack) { this.state = STATE.IDLE; this._render(); return; }
 
         const stackCount = stack.count;
-        const msg = resolveUse(this, stack.itemDef, { dx: dir.dx, dy: dir.dy }, stackCount);
+        // Throw ALWAYS throws — call resolveThrow directly. Routing through
+        // resolveUse switched on useType, so a consumable 'self' item (burger,
+        // bandage, soap) would heal/apply and be consumed while the throw
+        // direction was discarded. (fix/critical-path)
+        const msg = resolveThrow(this, stack.itemDef, { dx: dir.dx, dy: dir.dy }, stackCount);
         if (msg) this._log(msg);
 
         if (stack.itemDef.consumable) this._removeFromSlot(this.selectedSlot);
@@ -1565,6 +1633,7 @@ class Game {
         // Target check — enemy might have died mid-menu (DOT, ally hit, etc.)
         const enemy = this._radialTarget;
         if (!enemy || !enemy.entity.isAlive()) {
+            this._log('[Target gone]');   // don't just vanish the menu silently
             this._closeRadialMenu();
             return;
         }
@@ -1665,7 +1734,11 @@ class Game {
             const out = [];
             for (let i = 0; i < this.inventory.length; i++) {
                 const s = this.inventory[i];
-                if (s && s.itemDef.useType !== 'self') {
+                // Throwable rule (single source, shared with the hotbar overlay):
+                // ANY non-quest item is throwable. Previously this filtered out
+                // useType==='self' while the overlay offered Throw for everything,
+                // so the two entry points disagreed. Quest items stay un-throwable.
+                if (s && !s.itemDef.questItem) {
                     const name = s.itemDef.name.replace(/[\[\]]/g, '');
                     out.push({ label: s.count > 1 ? `${name} ×${s.count}` : name, key: i });
                 }
@@ -1676,7 +1749,10 @@ class Game {
             const out = [];
             for (let i = 0; i < this.inventory.length; i++) {
                 const s = this.inventory[i];
-                if (s) {
+                // Quest items are un-giveable too (parity with the hotbar overlay,
+                // which bails for questItem) — applyGive has no quest guard, so
+                // without this the radial Give could consume the converter.
+                if (s && !s.itemDef.questItem) {
                     const name = s.itemDef.name.replace(/[\[\]]/g, '');
                     out.push({ label: s.count > 1 ? `${name} ×${s.count}` : name, key: i });
                 }
@@ -1710,6 +1786,7 @@ class Game {
 
         const enemy = this._radialTarget;
         if (!enemy || !enemy.entity.isAlive()) {
+            this._log('[Target gone]');   // don't just vanish the menu silently
             this._closeRadialMenu();
             return;
         }
@@ -2073,7 +2150,22 @@ class Game {
 
     // ── Codeball ─────────────────────────────────────────────────────────────
 
+    // True only when debug mode is explicitly requested — never in a shipped
+    // build. Checks ?debug / ?debug=1 in the URL and a window global escape
+    // hatch. Wrapped in try/catch so a non-browser/edge env can't throw.
+    _detectDebugFlag() {
+        try {
+            if (typeof window !== 'undefined' && window.VIOLENCETOWN_DEBUG === true) return true;
+            if (typeof location !== 'undefined' && location.search) {
+                const v = new URLSearchParams(location.search).get('debug');
+                return v === '' || v === '1' || v === 'true';
+            }
+        } catch { /* non-browser env — stay off */ }
+        return false;
+    }
+
     _codeball() {
+        if (!this._debug) return;   // dev-only cheat; hard gate even if called directly
         let kills = 0;
         for (const e of this.enemies) {
             if (!e.entity.isAlive()) continue;
@@ -2099,12 +2191,22 @@ class Game {
     }
 
     _respawn() {
-        this.playerX = this.map.spawn.x;
-        this.playerY = this.map.spawn.y;
+        // Respawn to a GUARANTEED-WALKABLE cell. map.spawn isn't always safe —
+        // during the sewer escape the spawn (1,10) is sealed under a BARRICADE
+        // tile, so the old code dropped the player inside a wall. (fix/critical-path)
+        const cell = this._safeRespawnCell();
+        this.playerX = cell.x;
+        this.playerY = cell.y;
         this.playerHp = this.playerMaxHp;
         this.playerMp = this.playerMaxMp;
         this.buffs = [];
-        this.inventory.fill(null);
+        // Preserve quest items (questItem:true) across death — wiping the whole
+        // inventory deleted the catalytic converter and soft-locked the main
+        // quest. Everything else is still cleared. (fix/critical-path)
+        for (let i = 0; i < this.inventory.length; i++) {
+            const s = this.inventory[i];
+            if (!(s && s.itemDef.questItem)) this.inventory[i] = null;
+        }
         this.tempEquips = [];
         this.selectedSlot = -1;
         this.equipment = { weapon: WEAPONS.wooden_sword, top: null, bottom: null, front: null, back: null, sides: null };
@@ -2115,6 +2217,31 @@ class Game {
         this._render();
         this._log('[Respawned]');
         this.autosave({ force: true });
+    }
+
+    // The cell to respawn into: map.spawn when it's currently walkable, else the
+    // nearest walkable cell found by an outward ring scan (preferring a non-hazard
+    // tile, falling back to any walkable one). Guarantees the player never wakes
+    // up inside a wall/barricade after death. (fix/critical-path)
+    _safeRespawnCell() {
+        const sx = this.map.spawn.x, sy = this.map.spawn.y;
+        const walkable = (x, y) => this.map.isInBounds(x, y) && this.map.isWalkable(x, y);
+        const safe = (x, y) => walkable(x, y) && !(this.map.getTileDef(x, y).hazard);
+        if (safe(sx, sy)) return { x: sx, y: sy };
+        let fallback = null;
+        const maxR = Math.max(this.map.width, this.map.height);
+        for (let r = 1; r <= maxR; r++) {
+            for (let dy = -r; dy <= r; dy++) {
+                for (let dx = -r; dx <= r; dx++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue; // ring only
+                    const x = sx + dx, y = sy + dy;
+                    if (safe(x, y)) return { x, y };
+                    if (!fallback && walkable(x, y)) fallback = { x, y };
+                }
+            }
+            if (fallback) return fallback; // nearest walkable (even if hazardous) beats searching forever
+        }
+        return { x: sx, y: sy }; // degenerate map — nothing walkable; spawn anyway
     }
 
     async _fullReset() {
@@ -2136,13 +2263,22 @@ class Game {
         this.gold = 0;
         await this._loadMap('town-map.json');
         this.state = STATE.IDLE;
+        this._startMainQuest();   // deterministic fix_car start (fix/critical-path)
         this._log('[New game]');
     }
 
-    _win() {
-        this.state = STATE.WIN;
+    // End of Chapter One — the real ending for the main quest (fix/critical-path).
+    // Driven from fix_car's onComplete: the burger courier finally gets his car
+    // running. Freezes input into a tasteful canvas outro (renderer
+    // ._drawEndingOverlay) that offers a restart. Persist first so a reload after
+    // the ending resumes a completed-quest world rather than replaying it.
+    _endChapterOne() {
+        this._stopAutoRepeat();
+        this._heldDirKeys = [];
+        this._endingTurns = this.turn;     // shown on the credits card
+        this.state = STATE.ENDING;
+        this.autosave({ force: true });
         this._render();
-        this._log(`[Boss room reached in ${this.turn} turns — you win!]`);
     }
 
     // ── Render ───────────────────────────────────────────────────────────────
@@ -2180,7 +2316,12 @@ class Game {
     _spawnEventWord(tileX, tileY, text, color, size = 18) {
         this._damageNumbers.push({
             tileX, tileY, text, color, size,
-            vx: (Math.random() - 0.5) * 30, // px/sec horizontal scatter
+            // Seeded RNG (not Math.random) so the scatter is deterministic and
+            // save/replay-stable, like all other gameplay-driven randomness. The
+            // renderer's per-frame screen-shake jitter deliberately stays on
+            // Math.random (see rng.js) — it's frame-rate-bound and never touches
+            // game state. (fix/critical-path)
+            vx: (this.rng.float() - 0.5) * 30, // px/sec horizontal scatter
             vy: -28,                          // slightly slower than damage numbers
             bornAt: performance.now(),
             maxAge: 700,

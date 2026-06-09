@@ -235,18 +235,28 @@ function resolveSelfUse(game, itemDef) {
     return equipMsg || `[Used ${itemDef.name}]`;
 }
 
-// stackCount is passed from main.js — damage = 10 per item in stack
-function resolveThrow(game, itemDef, direction, stackCount = 1) {
+// stackCount is passed from main.js — damage = 10 per item in stack.
+// Exported so the Throw action ALWAYS throws (main.js _doThrow calls this
+// directly) regardless of the item's useType — routing throw through resolveUse
+// made consumable 'self' items heal-and-vanish and silently dropped the throw.
+export function resolveThrow(game, itemDef, direction, stackCount = 1) {
     if (!direction) return `[Throw ${itemDef.name} — no direction]`;
 
     const DAMAGE_PER_ITEM = 10;
     const totalDamage = DAMAGE_PER_ITEM * stackCount;
 
+    // Now that ANY non-quest item is throwable, items defined as non-throwers
+    // (the 'self' consumables — burger, bandage, soap) carry no `range`. Give
+    // them a sane default reach (rock's range) so a thrown heal item can
+    // actually connect instead of always whiffing. (fix/critical-path)
+    const DEFAULT_THROW_RANGE = 4;
+    const range = itemDef.range || DEFAULT_THROW_RANGE;
+
     const { dx, dy } = direction;
     let tx = game.playerX;
     let ty = game.playerY;
 
-    for (let i = 0; i < itemDef.range; i++) {
+    for (let i = 0; i < range; i++) {
         tx += dx;
         ty += dy;
 

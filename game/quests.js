@@ -19,18 +19,31 @@ export const QUESTS = {
     fix_car: {
         id: 'fix_car',
         title: 'A Working Car',
-        // Begins when the player walks up to the boss inside Borgir.
-        startOn: { type: 'npc_adjacent', match: { id: 'borgir_boss' } },
+        // Started DETERMINISTICALLY (game._startMainQuest, on game start / first
+        // town entry) rather than via a fragile once-per-approach adjacency bark
+        // off the Borgir boss — the old startOn could be missed entirely if the
+        // player never stepped exactly adjacent, dead-stalling the whole game.
+        // Borgir's bark is now flavor only; it no longer gates quest start.
         stages: [
             {
                 id: 'examine_car',
                 objective: "Your car won't start - examine it (E)",
                 on: { type: 'examine', match: { targetId: 'car' } },
+                // Tolerant: if the player already examined the car before this
+                // stage went active, the 'examine' event was dropped — so
+                // auto-satisfy from the persisted flag instead of dead-stalling.
+                autoSatisfy: (game) => !!game.questEngine.state.flags.carExamined,
             },
             {
                 id: 'recover_converter',
                 objective: 'Get your converter back from the sewer',
                 on: { type: 'item_pickup', match: { id: 'catalytic_converter' } },
+                // Tolerant: the converter only advances this stage on PICKUP. If
+                // it's already in the bag when this stage is entered (e.g. grabbed
+                // out of order), it can never be re-dropped while held — so
+                // auto-satisfy when it's already carried.
+                autoSatisfy: (game) =>
+                    (game.inventory || []).some(s => s && s.itemDef.id === 'catalytic_converter'),
             },
             {
                 id: 'escape_sewer',
@@ -47,9 +60,12 @@ export const QUESTS = {
             },
         ],
         onComplete: (game) => {
+            // carFixed is read by _interactCar for the post-quest flavor line.
+            // (The old never-read deliveryUnlocked flag was removed.)
             game.questEngine.state.flags.carFixed = true;
-            game.questEngine.state.flags.deliveryUnlocked = true;
             game._log('[The car coughs, sputters, then ROARS to life. You can drive again.]', 'transition');
+            // Drive the real End-of-Chapter-One ending/credits state.
+            if (game._endChapterOne) game._endChapterOne();
         },
     },
 };
@@ -69,12 +85,21 @@ export class QuestEngine {
         this.game._log?.(`[New quest: ${q.title}]`, 'transition');
         const stage = q.stages[0];
         if (stage && stage.onEnter) stage.onEnter(this.game);
+        this._settleAutoSatisfy();   // skip past any stage already satisfied at start
         this.game._render?.();
     }
 
     // Ingest a game event. Auto-starts any quest whose startOn matches, then
     // advances the active quest if the current stage's condition is met.
     emit(type, payload = {}) {
+        // Durable side-effect: remember the car was examined EVEN IF no quest is
+        // active yet. The examine_car stage reads this flag (autoSatisfy) so an
+        // early examine — before fix_car reaches that stage — still counts and
+        // can't be lost. Flag is serialized, so it also survives save/reload.
+        if (type === 'examine' && payload.targetId === 'car') {
+            this.state.flags.carExamined = true;
+        }
+
         for (const qid of Object.keys(QUESTS)) {
             const q = QUESTS[qid];
             if (q.startOn && q.startOn.type === type && matches(q.startOn.match, payload)
@@ -104,7 +129,31 @@ export class QuestEngine {
         if (this.state.stageIndex >= q.stages.length) { this._complete(); return; }
         const stage = q.stages[this.state.stageIndex];
         if (stage.onEnter) stage.onEnter(this.game);
+        this._settleAutoSatisfy();   // chain past any freshly-entered stage already satisfied
         this.game._render?.();
+    }
+
+    // Skip forward past any stage whose `autoSatisfy(game)` predicate is already
+    // true on entry. This is what keeps the main quest from dead-stalling: a
+    // stage's gating event can be DROPPED if it fired before the stage went
+    // active (examine the car early, grab the converter out of order), so each
+    // such stage carries a predicate that re-derives "already done" from durable
+    // state (a flag, inventory contents). Loops so several satisfied stages in a
+    // row collapse in one settle, and completes the quest if it runs off the end.
+    // Does NOT re-run onEnter for a stage it's leaving — only the onEnter of the
+    // stage it lands on (mirrors _advance), so set-piece hooks fire exactly once.
+    _settleAutoSatisfy() {
+        const q = QUESTS[this.state.activeId];
+        if (!q) return;
+        let guard = 0;
+        while (this.state.stageIndex < q.stages.length && guard++ < q.stages.length + 1) {
+            const stage = q.stages[this.state.stageIndex];
+            if (!stage || typeof stage.autoSatisfy !== 'function' || !stage.autoSatisfy(this.game)) return;
+            this.state.stageIndex++;
+            if (this.state.stageIndex >= q.stages.length) { this._complete(); return; }
+            const next = q.stages[this.state.stageIndex];
+            if (next.onEnter) next.onEnter(this.game);
+        }
     }
 
     _complete() {
