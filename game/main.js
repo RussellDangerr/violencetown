@@ -218,6 +218,11 @@ class Game {
         // Economy
         this.gold = 0;
 
+        // Debug/dev flag — OFF by default so cheats never ship enabled. Opt in
+        // with ?debug / ?debug=1 in the URL (or window.VIOLENCETOWN_DEBUG=true
+        // before construction). Gates the Codeball nuke. (fix/critical-path)
+        this._debug = this._detectDebugFlag();
+
         // Seeded RNG — the single source of gameplay randomness, deterministic
         // and resumable across saves (see rng.js). Reseeded fresh here; the
         // save restores the live stream position via setState.
@@ -579,8 +584,12 @@ class Game {
             // E = examine the faced / adjacent point of interest (free action)
             if (e.code === 'KeyE') { e.preventDefault(); doExamine(this); this._render(); return; }
 
-            // Codeball
-            if (e.code === 'Backquote') { e.preventDefault(); this._codeball(); return; }
+            // Codeball — dev nuke, only when the debug flag is on (never ships
+            // enabled). Silently ignored otherwise. (fix/critical-path)
+            if (e.code === 'Backquote') {
+                if (this._debug) { e.preventDefault(); this._codeball(); }
+                return;
+            }
 
             // Any other key stops auto-repeat
             this._stopAutoRepeat();
@@ -677,7 +686,10 @@ class Game {
     }
 
     _digitToSlot(code) {
-        const keys = ['Digit1','Digit2','Digit3','Digit4','Digit5','Digit6','Digit7','Digit8','Digit9','Digit0'];
+        // Digit1..Digit9 → slots 0..8. Digit0 was dropped with the 10th
+        // inventory slot — it selected a phantom slot that the 9-cell hotbar
+        // never rendered. (fix/critical-path)
+        const keys = ['Digit1','Digit2','Digit3','Digit4','Digit5','Digit6','Digit7','Digit8','Digit9'];
         return keys.indexOf(code);
     }
 
@@ -762,10 +774,13 @@ class Game {
                         this._openHelpModal();
                         break;
                     case 'restart':
-                        // Match the previous NEW button's behavior — it had
-                        // no confirm, so we don't add one here. Consistency
-                        // beats friction for a < 30s playthrough demo.
-                        this._fullReset();
+                        // Confirm before wiping — RESTART clears the save and
+                        // reseeds, so an accidental tap shouldn't be able to
+                        // destroy a run. (fix/critical-path)
+                        if (typeof confirm !== 'function'
+                            || confirm('Restart from the beginning? This erases your current save.')) {
+                            this._fullReset();
+                        }
                         break;
                     case 'close':
                         // No-op beyond the close() above.
@@ -1617,6 +1632,7 @@ class Game {
         // Target check — enemy might have died mid-menu (DOT, ally hit, etc.)
         const enemy = this._radialTarget;
         if (!enemy || !enemy.entity.isAlive()) {
+            this._log('[Target gone]');   // don't just vanish the menu silently
             this._closeRadialMenu();
             return;
         }
@@ -1769,6 +1785,7 @@ class Game {
 
         const enemy = this._radialTarget;
         if (!enemy || !enemy.entity.isAlive()) {
+            this._log('[Target gone]');   // don't just vanish the menu silently
             this._closeRadialMenu();
             return;
         }
@@ -2132,7 +2149,22 @@ class Game {
 
     // ── Codeball ─────────────────────────────────────────────────────────────
 
+    // True only when debug mode is explicitly requested — never in a shipped
+    // build. Checks ?debug / ?debug=1 in the URL and a window global escape
+    // hatch. Wrapped in try/catch so a non-browser/edge env can't throw.
+    _detectDebugFlag() {
+        try {
+            if (typeof window !== 'undefined' && window.VIOLENCETOWN_DEBUG === true) return true;
+            if (typeof location !== 'undefined' && location.search) {
+                const v = new URLSearchParams(location.search).get('debug');
+                return v === '' || v === '1' || v === 'true';
+            }
+        } catch { /* non-browser env — stay off */ }
+        return false;
+    }
+
     _codeball() {
+        if (!this._debug) return;   // dev-only cheat; hard gate even if called directly
         let kills = 0;
         for (const e of this.enemies) {
             if (!e.entity.isAlive()) continue;
@@ -2283,7 +2315,12 @@ class Game {
     _spawnEventWord(tileX, tileY, text, color, size = 18) {
         this._damageNumbers.push({
             tileX, tileY, text, color, size,
-            vx: (Math.random() - 0.5) * 30, // px/sec horizontal scatter
+            // Seeded RNG (not Math.random) so the scatter is deterministic and
+            // save/replay-stable, like all other gameplay-driven randomness. The
+            // renderer's per-frame screen-shake jitter deliberately stays on
+            // Math.random (see rng.js) — it's frame-rate-bound and never touches
+            // game state. (fix/critical-path)
+            vx: (this.rng.float() - 0.5) * 30, // px/sec horizontal scatter
             vy: -28,                          // slightly slower than damage numbers
             bornAt: performance.now(),
             maxAge: 700,

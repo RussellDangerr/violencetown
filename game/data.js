@@ -70,7 +70,10 @@ export const PLAYER_MAX_HP = 100;
 // is visible while the skill system catches up.
 export const PLAYER_MAX_MP = 100;
 export const SLUDGE_DOT = 5;
-export const INVENTORY_SIZE = 10;
+// 9 to match the 9-slot hotbar (layout.HOTBAR_SLOTS) so every slot is both
+// rendered and tap/key reachable — a 10th slot was invisible and untappable,
+// only reachable via Digit0. Keep these two in lockstep. (fix/critical-path)
+export const INVENTORY_SIZE = 9;
 export const MAX_STACK = 99;
 
 // ── Direction helpers ────────────────────────────────────────────────────────
