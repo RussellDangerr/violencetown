@@ -332,6 +332,16 @@ class Game {
         this._bindOptionsModal(); // [settings] options/accessibility UI
         this._bindPauseOverlay(); // [settings] turn-based pause overlay
 
+        // (action-wheel overhaul) Touch ACTION button: open the wheel when idle,
+        // fire it when open. Two quick taps repeat the last action via the same
+        // _lastWheelOpenAt window the Space key uses.
+        const actionBtn = document.getElementById('action-btn');
+        if (actionBtn) actionBtn.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            if (this.state === STATE.IDLE) this._openWheel();
+            else if (this.state === STATE.RADIAL_MENU) this._fireWheel();
+        });
+
         // Populate version badge from <meta name="version"> — single source of truth.
         // Lives in index.html as #version-badge, styled bottom-right in style.css.
         const versionMeta = document.querySelector('meta[name="version"]');
@@ -1605,8 +1615,8 @@ class Game {
             this.overlayOptions.up = { label: 'Use', action: 'use' };
         }
 
-        // Right = throw (always available)
-        this.overlayOptions.right = { label: 'Throw', action: 'throw' };
+        // (action-wheel overhaul) Throw moved to the action wheel — the hotbar
+        // overlay now keeps Use / Smash / Give only (no 'right' option).
 
         // Adjacent NPCs — partitioned into hostile-eligible vs non-hostile.
         // Smash uses the canonical _adjacentHostiles helper so the gate

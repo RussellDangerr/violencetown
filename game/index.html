@@ -54,6 +54,10 @@
                 <button class="tc-btn" data-key="ArrowDown"  aria-label="move down">▼</button>
                 <button class="tc-btn" data-key="ArrowRight" aria-label="move right">▶</button>
             </div>
+            <!-- (action-wheel overhaul) Opens the action wheel on touch, and
+                 fires while it's open. Bump-to-attack is retired, so this is how
+                 touch players act and fight. -->
+            <button id="action-btn" class="tc-btn" aria-label="action wheel">✦</button>
         </div>
 
         <!-- Action sheet — opened by the MENU button. Wait / Cancel / Help /
@@ -87,22 +91,22 @@
                     <li><span class="help-touch">On touch:</span> tap the d-pad, hold for continuous walking</li>
                 </ul>
 
-                <h3>Combat</h3>
+                <h3>Combat &amp; actions</h3>
                 <ul>
-                    <li>Walk into an enemy to open the radial wheel</li>
-                    <li><kbd>←</kbd> <kbd>→</kbd> spin the wheel · <kbd>↑</kbd> / <kbd>Space</kbd> confirm · <kbd>↓</kbd> / <kbd>Esc</kbd> cancel</li>
-                    <li><span class="help-touch">On touch:</span> tap a slice to jump, tap again to confirm. Tap outside to cancel.</li>
+                    <li><kbd>Space</kbd> opens the action wheel anywhere — it pre-aims at the nearest enemy. Double-tap <kbd>Space</kbd> to instantly repeat your last action.</li>
+                    <li>On the wheel: <kbd>↑</kbd> <kbd>↓</kbd> pick a ring (action · item · direction) · <kbd>←</kbd> <kbd>→</kbd> spin it · <kbd>Space</kbd> fire · <kbd>Esc</kbd> back out toward walking</li>
+                    <li><span class="help-touch">On touch:</span> tap <strong>✦</strong> to open the wheel; tap any slice to set it (the outer ring is a direction compass); tap the center, or ✦ again, to fire</li>
                 </ul>
 
                 <h3>Inventory</h3>
                 <ul>
-                    <li><kbd>1</kbd>–<kbd>9</kbd> select a slot · <kbd>Space</kbd> open use overlay · pick Use / Throw / Smash / Give with arrows</li>
+                    <li><kbd>1</kbd>–<kbd>9</kbd> select a slot · <kbd>Space</kbd> opens its use overlay · pick Use / Smash / Give with arrows (throwing is on the action wheel)</li>
                     <li><span class="help-touch">On touch:</span> tap a hotbar slot to select, tap again to open the overlay, tap an option</li>
                 </ul>
 
                 <h3>Other</h3>
                 <ul>
-                    <li><kbd>Space</kbd> wait one turn · <kbd>Esc</kbd> cancel any menu · <kbd>?</kbd> open this help</li>
+                    <li><kbd>T</kbd> wait one turn · <kbd>Esc</kbd> cancel any menu · <kbd>?</kbd> open this help</li>
                     <li><kbd>L</kbd> open the log history · <span class="help-touch">On touch:</span> tap the log strip</li>
                     <li><kbd>E</kbd> examine what you're facing (the car, signs, oddities)</li>
                     <li><span class="help-touch">On touch:</span> ☰ opens the menu (Wait / Cancel / Help / Restart)</li>
