@@ -498,6 +498,231 @@ body {
     margin-top: 12px;
 }
 
+/* --- Options / accessibility modal ---
+   Reuses the help-modal / menu-sheet chrome (backdrop + ornate gold-on-black
+   panel with corner gems). Adds form controls — range sliders and on/off
+   toggles — restyled to sit inside the pixel-art frame. */
+
+#options-modal {
+    position: fixed; inset: 0;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+#options-modal.hidden { display: none; }
+
+#options-modal-backdrop {
+    position: absolute; inset: 0;
+    background: rgba(0, 0, 0, 0.75);
+}
+
+#options-modal-panel {
+    position: relative;
+    background: #1a1610;
+    /* Matches #menu-sheet-panel / #help-modal-panel chrome. */
+    border: 2px solid #2a2218;
+    padding: 20px 24px;
+    color: #c8b888;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    width: min(420px, 92vw);
+    max-height: 88vh;
+    overflow-y: auto;
+    box-shadow:
+        inset 0 0 0 2px #8b7340,
+        inset 0 0 0 4px #1a1610,
+        0 0 0 1px #0a0a0a;
+}
+#options-modal-panel::before,
+#options-modal-panel::after {
+    content: '';
+    position: absolute;
+    width: 3px; height: 3px;
+    background: #d4b96a;
+    pointer-events: none;
+}
+#options-modal-panel::before { top: 5px;    left: 5px; }
+#options-modal-panel::after  { bottom: 5px; right: 5px; }
+#options-modal-panel h2 {
+    color: #d4b96a;
+    font-size: 16px;
+    letter-spacing: 4px;
+    margin-bottom: 16px;
+}
+
+/* Each setting is a label + control on one baseline. The slider rows leave a
+   fixed-width readout column on the right; toggle rows push the switch to the
+   far edge. */
+.opt-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 40px;
+    padding: 4px 0;
+}
+.opt-row label {
+    color: #a89868;
+    letter-spacing: 2px;
+    font-size: 11px;
+    flex: 0 0 110px;
+}
+.opt-row-toggle label { flex: 1 1 auto; }
+
+/* Range slider — restyled track + thumb in brand gold. Both WebKit and Moz
+   pseudo-elements are covered so it looks the same across engines. */
+.opt-slider {
+    flex: 1 1 auto;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 6px;
+    background: #2a2218;
+    border: 1px solid #5a4a30;
+    cursor: pointer;
+    outline: none;
+}
+.opt-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px; height: 18px;
+    background: #d4b96a;
+    border: 1px solid #0a0a0a;
+    box-shadow: 0 0 0 1px #8b7340;
+    cursor: pointer;
+}
+.opt-slider::-moz-range-thumb {
+    width: 14px; height: 18px;
+    background: #d4b96a;
+    border: 1px solid #0a0a0a;
+    box-shadow: 0 0 0 1px #8b7340;
+    cursor: pointer;
+}
+.opt-slider:focus-visible {
+    outline: 2px solid #d4b96a;
+    outline-offset: 2px;
+}
+.opt-val {
+    flex: 0 0 34px;
+    text-align: right;
+    color: #d4b96a;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+/* On/off pill. Reuses the .menu-item look but compact and fixed-width so the
+   ON/OFF label swap doesn't reflow the row. .is-on flips it to the gold-bright
+   active state. */
+.opt-toggle {
+    flex: 0 0 64px;
+    background: #2a2218;
+    border: 1px solid #5a4a30;
+    color: #888;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    padding: 8px 0;
+    min-height: 40px;
+    cursor: pointer;
+    text-align: center;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.opt-toggle:hover,
+.opt-toggle:focus-visible {
+    border-color: #d4b96a;
+    color: #d4b96a;
+}
+.opt-toggle.is-on {
+    background: #3a3020;
+    border-color: #d4b96a;
+    color: #f1d488;
+}
+.opt-toggle:focus-visible {
+    outline: 2px solid #d4b96a;
+    outline-offset: 2px;
+}
+.opt-note {
+    margin-top: 12px;
+    padding-top: 8px;
+    border-top: 1px solid #3a3020;
+    color: #666;
+    font-size: 10px;
+    font-style: italic;
+}
+#options-close {
+    width: 100%;
+    margin-top: 12px;
+}
+
+/* --- Pause overlay ---
+   Full-screen scrim that blocks input (gated in main.js) until RESUME. Same
+   panel chrome, centered, with a tall dim backdrop so the world reads as
+   suspended behind it. */
+
+#pause-overlay {
+    position: fixed; inset: 0;
+    z-index: 55;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+#pause-overlay.hidden { display: none; }
+
+#pause-overlay-backdrop {
+    position: absolute; inset: 0;
+    background: rgba(0, 0, 0, 0.8);
+}
+
+#pause-overlay-panel {
+    position: relative;
+    background: #1a1610;
+    border: 2px solid #2a2218;
+    padding: 24px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: stretch;
+    min-width: 240px;
+    max-width: 90vw;
+    text-align: center;
+    box-shadow:
+        inset 0 0 0 2px #8b7340,
+        inset 0 0 0 4px #1a1610,
+        0 0 0 1px #0a0a0a;
+}
+#pause-overlay-panel::before,
+#pause-overlay-panel::after {
+    content: '';
+    position: absolute;
+    width: 3px; height: 3px;
+    background: #d4b96a;
+    pointer-events: none;
+}
+#pause-overlay-panel::before { top: 5px;    left: 5px; }
+#pause-overlay-panel::after  { bottom: 5px; right: 5px; }
+#pause-overlay-panel h2 {
+    color: #d4b96a;
+    font-size: 20px;
+    letter-spacing: 6px;
+    margin-bottom: 4px;
+}
+#pause-overlay-panel .pause-hint {
+    color: #6a5a3a;
+    font-size: 11px;
+    font-style: italic;
+    margin-bottom: 8px;
+}
+
+/* Keyboard focus rings for the new modal controls — same brand-gold treatment
+   as the existing menu/help buttons. */
+#options-close:focus-visible,
+#pause-resume:focus-visible,
+#pause-options:focus-visible {
+    outline: 2px solid #d4b96a;
+    outline-offset: 2px;
+}
+
 @media (pointer: coarse), (max-width: 700px) {
     /* Reclaim wasted vertical space above the canvas in portrait. The
        wrapper normally centers in 100vh, which leaves ~220px of empty

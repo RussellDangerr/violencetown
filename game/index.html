@@ -64,6 +64,7 @@
             <div id="menu-sheet-panel">
                 <button class="menu-item" data-action="wait">WAIT</button>
                 <button class="menu-item" data-action="cancel">CANCEL</button>
+                <button class="menu-item" data-action="options">OPTIONS</button>
                 <button class="menu-item" data-action="help">HELP (?)</button>
                 <button class="menu-item menu-item-danger" data-action="restart">RESTART</button>
                 <button class="menu-item menu-item-close" data-action="close">CLOSE</button>
@@ -112,6 +113,70 @@
                 </p>
 
                 <button id="help-close" class="menu-item menu-item-close">CLOSE</button>
+            </div>
+        </div>
+
+        <!-- Options / accessibility modal. Reuses the menu-sheet / help-modal
+             chrome (backdrop + ornate panel). Opened from the OPTIONS menu
+             item; dismissed by Escape, backdrop tap, or DONE. Controls are
+             wired in main.js (_bindOptionsModal) against game/settings.js,
+             which persists to its own localStorage key, independent of saves. -->
+        <div id="options-modal" class="hidden" role="dialog" aria-label="options" aria-modal="true">
+            <div id="options-modal-backdrop"></div>
+            <div id="options-modal-panel">
+                <h2>OPTIONS</h2>
+
+                <div class="opt-row">
+                    <label for="opt-music">MUSIC</label>
+                    <input type="range" id="opt-music" class="opt-slider"
+                           min="0" max="100" step="1" value="70"
+                           aria-label="music volume">
+                    <span class="opt-val" id="opt-music-val">70</span>
+                </div>
+
+                <div class="opt-row">
+                    <label for="opt-sfx">SFX</label>
+                    <input type="range" id="opt-sfx" class="opt-slider"
+                           min="0" max="100" step="1" value="80"
+                           aria-label="sound effects volume">
+                    <span class="opt-val" id="opt-sfx-val">80</span>
+                </div>
+
+                <div class="opt-row opt-row-toggle">
+                    <label for="opt-muted">MUTE ALL</label>
+                    <button type="button" id="opt-muted" class="opt-toggle"
+                            role="switch" aria-checked="false">OFF</button>
+                </div>
+
+                <div class="opt-row opt-row-toggle">
+                    <label for="opt-reduce-motion">REDUCE MOTION</label>
+                    <button type="button" id="opt-reduce-motion" class="opt-toggle"
+                            role="switch" aria-checked="false">OFF</button>
+                </div>
+
+                <div class="opt-row opt-row-toggle">
+                    <label for="opt-fullscreen">FULLSCREEN</label>
+                    <button type="button" id="opt-fullscreen" class="opt-toggle"
+                            role="switch" aria-checked="false">OFF</button>
+                </div>
+
+                <p class="opt-note">Reduce motion dampens screenshake and screen flash.</p>
+
+                <button id="options-close" class="menu-item menu-item-close">DONE</button>
+            </div>
+        </div>
+
+        <!-- Pause overlay. Turn-based pause: a full-screen scrim that blocks
+             all game input (main.js gates _bindInput on the paused flag) until
+             RESUME. Deliberately minimal — no timer to freeze in a turn-based
+             game, just a clean "stop the world" affordance. -->
+        <div id="pause-overlay" class="hidden" role="dialog" aria-label="paused" aria-modal="true">
+            <div id="pause-overlay-backdrop"></div>
+            <div id="pause-overlay-panel">
+                <h2>PAUSED</h2>
+                <p class="pause-hint">The town holds its breath.</p>
+                <button id="pause-resume" class="menu-item">RESUME</button>
+                <button id="pause-options" class="menu-item menu-item-close">OPTIONS</button>
             </div>
         </div>
     </div>

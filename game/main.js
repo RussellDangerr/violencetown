@@ -23,6 +23,7 @@ import {
     RADIAL_OUTER_R_MIN, RADIAL_OUTER_R_MAX, LOG_STRIP_RECT, LOG_MODAL_RECT,
 } from './layout.js';
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
+import * as Settings from './settings.js'; // [settings] options/accessibility store
 
 // ── States ───────────────────────────────────────────────────────────────────
 
@@ -190,6 +191,10 @@ class Game {
         this._screenShakeUntil = 0;
         this._screenShakeMagnitude = 0;
 
+        // [settings] Turn-based pause. When true, _bindInput swallows gameplay
+        // keys until RESUME. Set/cleared by the pause overlay (_setPaused).
+        this._paused = false;
+
         // Floating damage numbers — particle list. Each entry:
         //   { tileX, tileY, text, color, size, vx, vy, bornAt, maxAge }
         // Particles age in real time (performance.now()) and animate
@@ -270,6 +275,11 @@ class Game {
     // ── Boot ─────────────────────────────────────────────────────────────────
 
     async init() {
+        // [settings] Load options from their own localStorage key before any
+        // system reads them (reduceMotion gates screenshake/flash, volumes feed
+        // audio after merge). Validated/clamped inside; never throws.
+        Settings.load();
+
         const canvas = document.getElementById('game-canvas');
         this.renderer = new Renderer(canvas);
 
@@ -301,6 +311,8 @@ class Game {
         this._bindCanvasTap(canvas);
         this._bindMenuSheet();
         this._bindHelpModal();
+        this._bindOptionsModal(); // [settings] options/accessibility UI
+        this._bindPauseOverlay(); // [settings] turn-based pause overlay
 
         // Populate version badge from <meta name="version"> — single source of truth.
         // Lives in index.html as #version-badge, styled bottom-right in style.css.
@@ -442,6 +454,13 @@ class Game {
         document.addEventListener('keydown', (e) => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
             if (this.state === STATE.SPLASH || this.state === STATE.RESOLVING) return;
+            // [settings] While paused, swallow all gameplay keys. P / Escape
+            // resume (so the player isn't trapped); everything else is eaten.
+            // The pause overlay's own RESUME button also clears the flag.
+            if (this._paused) {
+                if (e.code === 'KeyP' || e.code === 'Escape') { e.preventDefault(); this._setPaused(false); }
+                return;
+            }
             if (this._animating) return; // block all input during move animation
 
             // Auto-repeat: ignore browser key repeat events (we handle our own timer)
@@ -556,6 +575,9 @@ class Game {
 
             // L = open the log history modal
             if (e.code === 'KeyL') { e.preventDefault(); this._openLogModal(); return; }
+
+            // [settings] P = pause (turn-based; blocks input until resumed)
+            if (e.code === 'KeyP') { e.preventDefault(); this._setPaused(true); return; }
 
             // E = examine the faced / adjacent point of interest (free action)
             if (e.code === 'KeyE') { e.preventDefault(); doExamine(this); this._render(); return; }
@@ -742,6 +764,9 @@ class Game {
                     case 'help':
                         this._openHelpModal();
                         break;
+                    case 'options': // [settings]
+                        this._openOptionsModal();
+                        break;
                     case 'restart':
                         // Match the previous NEW button's behavior — it had
                         // no confirm, so we don't add one here. Consistency
@@ -796,6 +821,172 @@ class Game {
                 this._closeHelpModal();
             }
         }, true); // capture
+    }
+
+    // ── [settings] Options / accessibility modal ──────────────────────────────
+    //
+    // Reads/writes game/settings.js (persisted to its own localStorage key).
+    // Two volume sliders, a mute toggle, a reduce-motion toggle, and a
+    // Fullscreen toggle (Fullscreen API). The modal overlays game state but
+    // gates none of it, like the help modal — safe to open/close any time. If
+    // an audio manager is present on the game (window.__game.audio after
+    // feat/audio merges), volume changes are pushed to it defensively; absent
+    // that, values just persist for audio to read post-merge.
+
+    _openOptionsModal() {
+        const modal = document.getElementById('options-modal');
+        if (!modal) return;
+        this._syncOptionsUI(); // reflect current settings before showing
+        modal.classList.remove('hidden');
+    }
+    _closeOptionsModal() {
+        const modal = document.getElementById('options-modal');
+        if (modal) modal.classList.add('hidden');
+    }
+
+    // Push the live settings into the DOM controls. Called on open and after a
+    // reset so the UI never drifts from the store.
+    _syncOptionsUI() {
+        const s = Settings.getSettings();
+        const music    = document.getElementById('opt-music');
+        const musicVal = document.getElementById('opt-music-val');
+        const sfx      = document.getElementById('opt-sfx');
+        const sfxVal   = document.getElementById('opt-sfx-val');
+        if (music)    music.value = Math.round(s.musicVolume * 100);
+        if (musicVal) musicVal.textContent = Math.round(s.musicVolume * 100);
+        if (sfx)      sfx.value = Math.round(s.sfxVolume * 100);
+        if (sfxVal)   sfxVal.textContent = Math.round(s.sfxVolume * 100);
+        this._setToggleUI('opt-muted',         s.muted);
+        this._setToggleUI('opt-reduce-motion', s.reduceMotion);
+        // Fullscreen reflects the actual document state, not a stored value.
+        this._setToggleUI('opt-fullscreen', !!document.fullscreenElement);
+    }
+
+    // Flip an on/off toggle button's label + class + ARIA to match `on`.
+    _setToggleUI(id, on) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.classList.toggle('is-on', !!on);
+        el.setAttribute('aria-checked', on ? 'true' : 'false');
+        el.textContent = on ? 'ON' : 'OFF';
+    }
+
+    // Defensive hook into feat/audio's manager if it ever lands on the game.
+    // No-ops cleanly when absent (the no-hard-dependency rule), so the sliders
+    // persist values either way and audio can read them after merge.
+    _applyAudioSettings() {
+        Settings.applyToAudio(this.audio);
+    }
+
+    _bindOptionsModal() {
+        const modal = document.getElementById('options-modal');
+        if (!modal) return;
+        const backdrop = document.getElementById('options-modal-backdrop');
+        const closeBtn = document.getElementById('options-close');
+        backdrop?.addEventListener('click', () => this._closeOptionsModal());
+        closeBtn?.addEventListener('click', () => this._closeOptionsModal());
+
+        // Volume sliders — live-update the readout + store on input. The store
+        // clamps/validates; we feed 0..1 (slider is 0..100).
+        const wireSlider = (sliderId, valId, key) => {
+            const slider = document.getElementById(sliderId);
+            const val    = document.getElementById(valId);
+            if (!slider) return;
+            slider.addEventListener('input', () => {
+                const pct = Number(slider.value);
+                if (val) val.textContent = pct;
+                Settings.set(key, pct / 100);
+                this._applyAudioSettings();
+            });
+        };
+        wireSlider('opt-music', 'opt-music-val', 'musicVolume');
+        wireSlider('opt-sfx',   'opt-sfx-val',   'sfxVolume');
+
+        // Mute toggle.
+        document.getElementById('opt-muted')?.addEventListener('click', () => {
+            const next = !Settings.get('muted');
+            Settings.set('muted', next);
+            this._setToggleUI('opt-muted', next);
+            this._applyAudioSettings();
+        });
+
+        // Reduce-motion toggle — read live by _triggerScreenShake / _flash, so
+        // toggling it takes effect on the very next hit; nothing else to wire.
+        document.getElementById('opt-reduce-motion')?.addEventListener('click', () => {
+            const next = !Settings.get('reduceMotion');
+            Settings.set('reduceMotion', next);
+            this._setToggleUI('opt-reduce-motion', next);
+        });
+
+        // Fullscreen toggle — drives the Fullscreen API on #game-wrapper (or
+        // documentElement as a fallback). Not a persisted setting: browsers
+        // reject programmatic fullscreen without a user gesture, so we can't
+        // restore it on boot; the toggle just mirrors/controls the live state.
+        document.getElementById('opt-fullscreen')?.addEventListener('click', () => {
+            this._toggleFullscreen();
+        });
+        // Keep the fullscreen toggle honest if the user exits via Esc/F11.
+        document.addEventListener('fullscreenchange', () => {
+            this._setToggleUI('opt-fullscreen', !!document.fullscreenElement);
+        });
+
+        // Esc closes the modal without falling through to game state. Capture
+        // phase beats _bindInput's bubble handler, matching the help modal.
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Escape' && !modal.classList.contains('hidden')) {
+                e.stopPropagation();
+                e.preventDefault();
+                this._closeOptionsModal();
+            }
+        }, true);
+    }
+
+    _toggleFullscreen() {
+        try {
+            if (document.fullscreenElement) {
+                document.exitFullscreen?.();
+            } else {
+                const el = document.getElementById('game-wrapper') || document.documentElement;
+                el.requestFullscreen?.();
+            }
+        } catch (e) {
+            // Some browsers/contexts (iframes without allowfullscreen, etc.)
+            // reject the request — fail quietly, the rest of the modal works.
+            console.warn('[settings] fullscreen toggle failed', e);
+        }
+    }
+
+    // ── [settings] Pause overlay ──────────────────────────────────────────────
+    //
+    // A turn-based "stop the world" scrim. _setPaused(true) shows the overlay
+    // and raises this._paused, which _bindInput checks to swallow gameplay
+    // keys (P / Esc still resume so the player can't get stuck). RESUME or the
+    // pause hotkey clears it. No real-time loop to freeze in a turn-based game,
+    // so this is purely an input gate plus a visible state.
+
+    _setPaused(paused) {
+        this._paused = !!paused;
+        const overlay = document.getElementById('pause-overlay');
+        if (overlay) overlay.classList.toggle('hidden', !this._paused);
+        // Stop any auto-repeat walk in flight so releasing keys post-resume
+        // doesn't leave a phantom held direction.
+        if (this._paused) {
+            this._stopAutoRepeat?.();
+            this._heldDirKeys = [];
+        }
+    }
+
+    _bindPauseOverlay() {
+        const overlay = document.getElementById('pause-overlay');
+        if (!overlay) return;
+        const backdrop = document.getElementById('pause-overlay-backdrop');
+        // Backdrop tap resumes — the scrim is the "click anywhere to continue"
+        // affordance common to turn-based pauses.
+        backdrop?.addEventListener('click', () => this._setPaused(false));
+        document.getElementById('pause-resume')?.addEventListener('click', () => this._setPaused(false));
+        // OPTIONS from the pause screen: open settings without un-pausing, so
+        // the player tweaks options and returns to the paused world.
+        document.getElementById('pause-options')?.addEventListener('click', () => this._openOptionsModal());
     }
 
     // Convert a pointer event's clientX/clientY into the canvas's internal
@@ -2082,7 +2273,7 @@ class Game {
                 if (e.entity.isDead()) kills++;
             }
         }
-        this.renderer.flash('rgba(51, 255, 51, 0.5)');
+        this._flash('rgba(51, 255, 51, 0.5)'); // [settings] reduce-motion aware
         this._log(`[CODEBALL — ${kills} eliminated]`);
         this._render();
     }
@@ -2093,7 +2284,7 @@ class Game {
         this._stopAutoRepeat();
         this._heldDirKeys = [];   // drop held keys so respawn doesn't phantom-walk
         this.state = STATE.DEAD;
-        this.renderer.flash('rgba(255, 0, 0, 0.4)');
+        this._flash('rgba(255, 0, 0, 0.4)'); // [settings] reduce-motion aware
         this._log('[You died — respawning...]');
         setTimeout(() => this._respawn(), 500);
     }
@@ -2305,11 +2496,29 @@ class Game {
     // the new shake is bigger or longer — keeping a heavy hit dominant
     // over a smaller subsequent hit.
     _triggerScreenShake(duration, magnitude) {
+        // [settings] Reduce-motion accessibility: suppress screenshake entirely
+        // when enabled. The shake is pure juice (HUD/world readability are
+        // unaffected by skipping it), so dropping it is the safe a11y choice.
+        if (Settings.get('reduceMotion')) return;
         const now = performance.now();
         const newEnd = now + duration;
         if (newEnd > (this._screenShakeUntil ?? 0)) this._screenShakeUntil = newEnd;
         if (magnitude > (this._screenShakeMagnitude ?? 0)) this._screenShakeMagnitude = magnitude;
         this._ensureParticleLoop();
+    }
+
+    // [settings] Full-screen color flash that honors reduce-motion. Unlike
+    // screenshake, a flash can be a load-bearing cue (e.g. death), so we
+    // dampen rather than drop it: reduce-motion scales the alpha down to a
+    // soft tint instead of a harsh strobe. Routes to renderer.flash, which is
+    // a one-frame fill; callers pass an rgba() string as before.
+    _flash(color) {
+        if (Settings.get('reduceMotion')) {
+            // Cut the alpha (4th rgba component) to ~35% for a gentle tint.
+            color = color.replace(/rgba\(([^,]+),([^,]+),([^,]+),\s*([\d.]+)\s*\)/,
+                (_, r, g, b, a) => `rgba(${r},${g},${b},${(parseFloat(a) * 0.35).toFixed(3)})`);
+        }
+        this.renderer.flash(color);
     }
 
     // ── Log modal ([L]) ──────────────────────────────────────────────────────
