@@ -36,7 +36,7 @@ const STATE = {
     RADIAL_MENU:     'radial_menu',     // bumped a hostile enemy — Omnitrix-style wheel
     RESOLVING:       'resolving',
     DEAD:            'dead',
-    WIN:             'win',
+    // (Legacy WIN state retired with the tile-7 boss-trigger trap — fix/critical-path.)
     ENDING:          'ending',          // End of Chapter One — main-quest outro + credits (fix/critical-path)
     LOG_MODAL:       'log_modal',       // [L] — full scrollable message history
 };
@@ -534,12 +534,6 @@ class Game {
                 return;
             }
 
-            // ── WIN: N starts a new game (matches the on-screen prompt) ──
-            if (this.state === STATE.WIN) {
-                if (e.code === 'KeyN') { e.preventDefault(); this._fullReset(); }
-                return;
-            }
-
             // ── ENDING (End of Chapter One): N / Space / Enter restarts ──
             // (fix/critical-path) Matches the on-screen "PRESS N TO PLAY AGAIN"
             // prompt; Space/Enter accepted too since the player's hands are
@@ -858,7 +852,7 @@ class Game {
         // animation or while the world is resolving. Splash has its own
         // handler (DOM button). Dead/Win are non-interactive end states.
         if (this.state === STATE.SPLASH || this.state === STATE.RESOLVING) return;
-        if (this.state === STATE.DEAD   || this.state === STATE.WIN)        return;
+        if (this.state === STATE.DEAD) return;   // non-interactive end state
         // ENDING (End of Chapter One): a tap anywhere restarts — touch parity
         // with the keyboard "play again" prompt. (fix/critical-path)
         if (this.state === STATE.ENDING) { e.preventDefault(); this._fullReset(); return; }
@@ -1187,8 +1181,9 @@ class Game {
             const transition = this.map.getTransition(nx, ny);
             if (transition) { this._pendingTransition = transition; }
 
-            // Win?
-            if (this.map.getTile(nx, ny) === 7) { this._win(); return; }
+            // (Legacy tile-7 "BOSS ROOM REACHED" win hook removed — fix/critical-path.
+            // Tile 7 was a stale wrong-win trap one cell east of the Wererat; it's
+            // gone from sewer-map.json and the real ending is fix_car's onComplete.)
 
             this._advanceWorld();
         });
@@ -2177,12 +2172,6 @@ class Game {
         this.state = STATE.IDLE;
         this._startMainQuest();   // deterministic fix_car start (fix/critical-path)
         this._log('[New game]');
-    }
-
-    _win() {
-        this.state = STATE.WIN;
-        this._render();
-        this._log(`[Boss room reached in ${this.turn} turns — you win!]`);
     }
 
     // End of Chapter One — the real ending for the main quest (fix/critical-path).

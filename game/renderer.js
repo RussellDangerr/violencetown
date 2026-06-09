@@ -283,7 +283,6 @@ export class Renderer {
         if (game.state === 'radial_menu')     this._drawRadialMenu(game);
         if (game.state === 'item_throw_dir')  this._drawThrowPrompt(game);
         if (game.state === 'item_give_dir')   this._drawThrowPrompt(game);
-        if (game.state === 'win') this._drawWinOverlay(game);
         if (game.state === 'ending') this._drawEndingOverlay(game);
         if (game.state === 'log_modal') this._drawLogModal(game);
     }
@@ -1336,38 +1335,8 @@ export class Renderer {
         }
     }
 
-    // ── Win Overlay ──────────────────────────────────────────────────────────
-
-    _drawWinOverlay(game) {
-        const { ctx } = this;
-        const ui = this.uiSheet;
-
-        ctx.fillStyle = 'rgba(0,0,0,0.6)';
-        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
-
-        const w = 280, h = 120;
-        const px = (CANVAS_PX - w) / 2, py = (CANVAS_PX - h) / 2;
-
-        // Win overlay uses the glow variant — a brighter gold trim that
-        // reads as a celebratory frame around the BOSS ROOM REACHED text.
-        if (ui?.loaded) {
-            drawPanelBig(ctx, ui, px, py, w, h, 'glow');
-        } else {
-            drawPanelSmall(ctx, px, py, w, h);
-        }
-
-        if (this.font) {
-            this.font.drawText(ctx, 'BOSS ROOM REACHED', CANVAS_PX / 2, py + 36, {
-                color: UI.panelBorder, scale: 2, align: 'center',
-            });
-            this.font.drawText(ctx, `${game.turn} TURNS`, CANVAS_PX / 2, py + 68, {
-                color: UI.text, scale: 1, align: 'center',
-            });
-            this.font.drawText(ctx, 'PRESS N FOR NEW GAME', CANVAS_PX / 2, py + 90, {
-                color: UI.textLight, scale: 1, align: 'center',
-            });
-        }
-    }
+    // (Legacy _drawWinOverlay removed with the tile-7 boss-trigger trap —
+    //  fix/critical-path. The real ending is _drawEndingOverlay below.)
 
     // ── Ending Overlay (End of Chapter One) ──────────────────────────────────
     //
