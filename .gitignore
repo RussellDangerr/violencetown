@@ -70,6 +70,13 @@ assetszipped/
 tools/contact_*.png
 tools/_*.png
 
+# --- Brainstorm / design scratch (visual companion) ---
+# Throwaway mockup HTML I serve through the dev server while designing a
+# feature, plus any superpowers brainstorm session state. Pure scratch —
+# never part of the shipped game. Keep it untracked.
+.superpowers/
+game/_design-*.html
+
 # --- OS / editor housekeeping ---
 .DS_Store
 Thumbs.db
