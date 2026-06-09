@@ -245,11 +245,18 @@ export function resolveThrow(game, itemDef, direction, stackCount = 1) {
     const DAMAGE_PER_ITEM = 10;
     const totalDamage = DAMAGE_PER_ITEM * stackCount;
 
+    // Now that ANY non-quest item is throwable, items defined as non-throwers
+    // (the 'self' consumables — burger, bandage, soap) carry no `range`. Give
+    // them a sane default reach (rock's range) so a thrown heal item can
+    // actually connect instead of always whiffing. (fix/critical-path)
+    const DEFAULT_THROW_RANGE = 4;
+    const range = itemDef.range || DEFAULT_THROW_RANGE;
+
     const { dx, dy } = direction;
     let tx = game.playerX;
     let ty = game.playerY;
 
-    for (let i = 0; i < itemDef.range; i++) {
+    for (let i = 0; i < range; i++) {
         tx += dx;
         ty += dy;
 
