@@ -2133,12 +2133,22 @@ class Game {
     }
 
     _respawn() {
-        this.playerX = this.map.spawn.x;
-        this.playerY = this.map.spawn.y;
+        // Respawn to a GUARANTEED-WALKABLE cell. map.spawn isn't always safe —
+        // during the sewer escape the spawn (1,10) is sealed under a BARRICADE
+        // tile, so the old code dropped the player inside a wall. (fix/critical-path)
+        const cell = this._safeRespawnCell();
+        this.playerX = cell.x;
+        this.playerY = cell.y;
         this.playerHp = this.playerMaxHp;
         this.playerMp = this.playerMaxMp;
         this.buffs = [];
-        this.inventory.fill(null);
+        // Preserve quest items (questItem:true) across death — wiping the whole
+        // inventory deleted the catalytic converter and soft-locked the main
+        // quest. Everything else is still cleared. (fix/critical-path)
+        for (let i = 0; i < this.inventory.length; i++) {
+            const s = this.inventory[i];
+            if (!(s && s.itemDef.questItem)) this.inventory[i] = null;
+        }
         this.tempEquips = [];
         this.selectedSlot = -1;
         this.equipment = { weapon: WEAPONS.wooden_sword, top: null, bottom: null, front: null, back: null, sides: null };
@@ -2149,6 +2159,31 @@ class Game {
         this._render();
         this._log('[Respawned]');
         this.autosave({ force: true });
+    }
+
+    // The cell to respawn into: map.spawn when it's currently walkable, else the
+    // nearest walkable cell found by an outward ring scan (preferring a non-hazard
+    // tile, falling back to any walkable one). Guarantees the player never wakes
+    // up inside a wall/barricade after death. (fix/critical-path)
+    _safeRespawnCell() {
+        const sx = this.map.spawn.x, sy = this.map.spawn.y;
+        const walkable = (x, y) => this.map.isInBounds(x, y) && this.map.isWalkable(x, y);
+        const safe = (x, y) => walkable(x, y) && !(this.map.getTileDef(x, y).hazard);
+        if (safe(sx, sy)) return { x: sx, y: sy };
+        let fallback = null;
+        const maxR = Math.max(this.map.width, this.map.height);
+        for (let r = 1; r <= maxR; r++) {
+            for (let dy = -r; dy <= r; dy++) {
+                for (let dx = -r; dx <= r; dx++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue; // ring only
+                    const x = sx + dx, y = sy + dy;
+                    if (safe(x, y)) return { x, y };
+                    if (!fallback && walkable(x, y)) fallback = { x, y };
+                }
+            }
+            if (fallback) return fallback; // nearest walkable (even if hazardous) beats searching forever
+        }
+        return { x: sx, y: sy }; // degenerate map — nothing walkable; spawn anyway
     }
 
     async _fullReset() {
