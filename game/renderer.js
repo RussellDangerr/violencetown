@@ -284,6 +284,7 @@ export class Renderer {
         if (game.state === 'item_throw_dir')  this._drawThrowPrompt(game);
         if (game.state === 'item_give_dir')   this._drawThrowPrompt(game);
         if (game.state === 'win') this._drawWinOverlay(game);
+        if (game.state === 'ending') this._drawEndingOverlay(game);
         if (game.state === 'log_modal') this._drawLogModal(game);
     }
 
@@ -1366,6 +1367,56 @@ export class Renderer {
                 color: UI.textLight, scale: 1, align: 'center',
             });
         }
+    }
+
+    // ── Ending Overlay (End of Chapter One) ──────────────────────────────────
+    //
+    // The real main-quest ending (fix/critical-path). Driven by game.state
+    // 'ending' (set in Game._endChapterOne from fix_car's onComplete). A clean
+    // canvas card — no DOM — that gives the burger courier his car-running beat
+    // and offers a restart. Mirrors the win-overlay drawing vocabulary (glow
+    // panel + bitmap font) so it sits inside the established art style.
+    _drawEndingOverlay(game) {
+        const { ctx } = this;
+        const ui = this.uiSheet;
+
+        // Full dark wash — the world recedes; this is a "chapter card", not a
+        // small toast over live play.
+        ctx.fillStyle = 'rgba(0,0,0,0.82)';
+        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+
+        const w = 460, h = 300;
+        const px = (CANVAS_PX - w) / 2, py = (CANVAS_PX - h) / 2;
+        if (ui?.loaded) drawPanelBig(ctx, ui, px, py, w, h, 'glow');
+        else            drawPanelSmall(ctx, px, py, w, h);
+
+        if (!this.font) return;
+        const cx = CANVAS_PX / 2;
+
+        // Title
+        this.font.drawText(ctx, 'END OF', cx, py + 34, { color: UI.textLight, scale: 1, align: 'center' });
+        this.font.drawText(ctx, 'CHAPTER ONE', cx, py + 52, { color: UI.panelBorder, scale: 2, align: 'center' });
+
+        // Outro — short and tasteful. Kept to the bitmap font's ASCII set.
+        const lines = [
+            'The cataclysmic converter clicks home.',
+            'The engine catches. The car ROARS to life.',
+            '',
+            'Somewhere across Violencetown, a burger',
+            'is getting cold. Not your problem yet.',
+            'Tonight, the courier just drives.',
+        ];
+        let ly = py + 96;
+        for (const line of lines) {
+            if (line) this.font.drawText(ctx, line, cx, ly, { color: UI.text, scale: 1, align: 'center' });
+            ly += 18;
+        }
+
+        // Stat line + restart prompt
+        const turns = game._endingTurns ?? game.turn;
+        this.font.drawText(ctx, `${turns} TURNS`, cx, py + h - 56, { color: UI.textLight, scale: 1, align: 'center' });
+        this.font.drawText(ctx, 'PRESS N TO PLAY AGAIN', cx, py + h - 34, { color: UI.panelBorder, scale: 1, align: 'center' });
+        this.font.drawText(ctx, '(OR TAP)', cx, py + h - 18, { color: UI.textLight, scale: 1, align: 'center' });
     }
 
     // ── Log Modal ([L]) ──────────────────────────────────────────────────────

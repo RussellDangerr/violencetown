@@ -37,6 +37,7 @@ const STATE = {
     RESOLVING:       'resolving',
     DEAD:            'dead',
     WIN:             'win',
+    ENDING:          'ending',          // End of Chapter One — main-quest outro + credits (fix/critical-path)
     LOG_MODAL:       'log_modal',       // [L] — full scrollable message history
 };
 
@@ -539,6 +540,18 @@ class Game {
                 return;
             }
 
+            // ── ENDING (End of Chapter One): N / Space / Enter restarts ──
+            // (fix/critical-path) Matches the on-screen "PRESS N TO PLAY AGAIN"
+            // prompt; Space/Enter accepted too since the player's hands are
+            // likely on those after the outro.
+            if (this.state === STATE.ENDING) {
+                if (e.code === 'KeyN' || e.code === 'Space' || e.code === 'Enter') {
+                    e.preventDefault();
+                    this._fullReset();
+                }
+                return;
+            }
+
             // ── IDLE: main input ──
             if (this.state !== STATE.IDLE) return;
 
@@ -846,6 +859,9 @@ class Game {
         // handler (DOM button). Dead/Win are non-interactive end states.
         if (this.state === STATE.SPLASH || this.state === STATE.RESOLVING) return;
         if (this.state === STATE.DEAD   || this.state === STATE.WIN)        return;
+        // ENDING (End of Chapter One): a tap anywhere restarts — touch parity
+        // with the keyboard "play again" prompt. (fix/critical-path)
+        if (this.state === STATE.ENDING) { e.preventDefault(); this._fullReset(); return; }
         if (this._animating || this._uiAnimating()) return;
 
         const canvas = e.currentTarget;
@@ -2167,6 +2183,20 @@ class Game {
         this.state = STATE.WIN;
         this._render();
         this._log(`[Boss room reached in ${this.turn} turns — you win!]`);
+    }
+
+    // End of Chapter One — the real ending for the main quest (fix/critical-path).
+    // Driven from fix_car's onComplete: the burger courier finally gets his car
+    // running. Freezes input into a tasteful canvas outro (renderer
+    // ._drawEndingOverlay) that offers a restart. Persist first so a reload after
+    // the ending resumes a completed-quest world rather than replaying it.
+    _endChapterOne() {
+        this._stopAutoRepeat();
+        this._heldDirKeys = [];
+        this._endingTurns = this.turn;     // shown on the credits card
+        this.state = STATE.ENDING;
+        this.autosave({ force: true });
+        this._render();
     }
 
     // ── Render ───────────────────────────────────────────────────────────────

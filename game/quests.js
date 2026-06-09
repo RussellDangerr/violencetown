@@ -60,9 +60,12 @@ export const QUESTS = {
             },
         ],
         onComplete: (game) => {
+            // carFixed is read by _interactCar for the post-quest flavor line.
+            // (The old never-read deliveryUnlocked flag was removed.)
             game.questEngine.state.flags.carFixed = true;
-            game.questEngine.state.flags.deliveryUnlocked = true;
             game._log('[The car coughs, sputters, then ROARS to life. You can drive again.]', 'transition');
+            // Drive the real End-of-Chapter-One ending/credits state.
+            if (game._endChapterOne) game._endChapterOne();
         },
     },
 };
