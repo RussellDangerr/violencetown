@@ -865,7 +865,8 @@ class Game {
     _onCanvasPointerDown(e) {
         // Mirror the keyboard gate: don't process taps during the move
         // animation or while the world is resolving. Splash has its own
-        // handler (DOM button). Dead/Win are non-interactive end states.
+        // handler (DOM button). Dead is a non-interactive end state; Ending
+        // is handled just below (tap to restart).
         if (this.state === STATE.SPLASH || this.state === STATE.RESOLVING) return;
         if (this.state === STATE.DEAD) return;   // non-interactive end state
         // ENDING (End of Chapter One): a tap anywhere restarts — touch parity
