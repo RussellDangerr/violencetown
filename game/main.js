@@ -21,9 +21,14 @@ import {
     HOTBAR_X_START, HOTBAR_Y, HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_STRIDE, HOTBAR_SLOTS,
     RADIAL_CENTER_X, RADIAL_CENTER_Y, RADIAL_INNER_R_MIN, RADIAL_INNER_R_MAX,
     RADIAL_OUTER_R_MIN, RADIAL_OUTER_R_MAX, LOG_STRIP_RECT, LOG_MODAL_RECT,
+    RING_HUB_R, RING_ACTION_R, RING_ITEM_R, RING_AIM_R,
 } from './layout.js';
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
+import {
+    WHEEL_ACTIONS, DIR_VEC, RING_ACTION, RING_ITEM, RING_AIM,
+    createWheelState, currentAction, moveGrip, spinRing, compose, autoAimDir,
+} from './action-wheel.js'; // (action-wheel overhaul) pure three-ring model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
 
 // ── States ───────────────────────────────────────────────────────────────────
@@ -185,6 +190,12 @@ class Game {
         this.radialSubRotationFrom      = 0;
         this.radialSubRotationTarget    = 0;
         this.radialSubRotationStartedAt = 0;
+
+        // (action-wheel overhaul) Three-ring action wheel — opened anywhere by
+        // Space / the touch ACTION button (no bump-to-attack). The pure model in
+        // action-wheel.js holds the rings + last-used persistence.
+        this.wheel = createWheelState();
+        this._lastWheelOpenAt = 0; // double-tap-Open window for express-repeat
 
         // Screen shake (Phase F) — triggered on damage >= threshold. The
         // renderer applies a per-frame random offset to world rendering
@@ -533,10 +544,15 @@ class Game {
             // closes the menu entirely without consuming a turn.
             if (this.state === STATE.RADIAL_MENU) {
                 e.preventDefault();
-                if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { this._radialRotate('left');  return; }
-                if (e.code === 'ArrowRight' || e.code === 'KeyD') { this._radialRotate('right'); return; }
-                if (e.code === 'ArrowUp'    || e.code === 'KeyW' || e.code === 'Space') { this._radialConfirm(); return; }
-                if (e.code === 'ArrowDown'  || e.code === 'KeyS' || e.code === 'Escape') { this._radialCancel(); return; }
+                // (action-wheel overhaul) Up/Down move the grip between rings
+                // (action -> item -> aim, skipping dimmed rings); Left/Right spin
+                // the held ring; Space fires; Esc steps back toward walking.
+                if (e.code === 'ArrowUp'    || e.code === 'KeyW') { moveGrip(this.wheel, -1); this._render(); return; }
+                if (e.code === 'ArrowDown'  || e.code === 'KeyS') { moveGrip(this.wheel, +1); this._render(); return; }
+                if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { spinRing(this.wheel, -1, this._wheelValidItemSlots()); this._render(); return; }
+                if (e.code === 'ArrowRight' || e.code === 'KeyD') { spinRing(this.wheel, +1, this._wheelValidItemSlots()); this._render(); return; }
+                if (e.code === 'Space'      || e.code === 'Enter') { this._fireWheel(); return; }
+                if (e.code === 'Escape') { this._closeWheel(); return; }
                 return;
             }
 
@@ -616,8 +632,12 @@ class Game {
             const slot = this._digitToSlot(e.code);
             if (slot >= 0) { e.preventDefault(); this._selectItem(slot); return; }
 
-            // Space (no item) = wait turn
-            if (e.code === 'Space') { e.preventDefault(); this._log('[Wait]'); this._advanceWorld(); return; }
+            // Space = open the action wheel (the universal "act" button). A fast
+            // double-tap repeats your last action without drawing the wheel.
+            // (action-wheel overhaul; bump-to-attack retired)
+            if (e.code === 'Space') { e.preventDefault(); this._openWheel(); return; }
+            // T = wait a turn (Space used to wait; it now opens the wheel).
+            if (e.code === 'KeyT') { e.preventDefault(); this._log('[Wait]'); this._advanceWorld(); return; }
 
             // L = open the log history modal
             if (e.code === 'KeyL') { e.preventDefault(); this._openLogModal(); return; }
@@ -1360,8 +1380,9 @@ class Game {
             // memory works, with cursor persistence across encounters.
             // Down/Esc backs out without consuming a turn — protects against
             // accidental bumps.
-            this._openRadialMenu(enemy);
-            this._render();
+            // (action-wheel overhaul) Walking into a hostile is a silent no-op
+            // now — bump-to-attack is retired; combat goes through the wheel
+            // (Space / the ACTION button). Unwalkable like a wall, no turn.
             return;
         }
 
@@ -1730,29 +1751,141 @@ class Game {
     // doGive, addBuff) by setting selectedSlot before delegating — keeps this
     // method focused on menu state, not action mechanics.
 
-    _openRadialMenu(enemy) {
-        // Halt any in-flight walk cleanly. Auto-repeat would otherwise keep
-        // firing _doMove until the next tick's state-check catches up (up to
-        // 120ms later), which would feel like a residual lurch into the
-        // enemy you're now in combat with. Clear the held stack too — the
-        // player needs to release-and-re-press to walk again after combat,
-        // which is the safe default given they were aiming at this enemy.
+    // ── Three-ring action wheel (action × item × direction) ───────────────────
+    //
+    // Opened anywhere by Space / the touch ACTION button (no bump-to-attack).
+    // The pure model lives in action-wheel.js; this layer wires open, auto-aim,
+    // double-tap-repeat, and fire-routing to the existing combat resolvers.
+
+    _openWheel() {
+        // Fast double-tap of Open = repeat the last action without drawing the
+        // wheel (if still valid). Otherwise open the wheel normally.
+        const now = performance.now();
+        const fast = now - (this._lastWheelOpenAt || 0) < 250;
+        this._lastWheelOpenAt = now;
+        if (fast && this._repeatLastAction()) return;
+
         this._stopAutoRepeat();
         this._heldDirKeys = [];
-
-        this._radialTarget = enemy;
-        this.radialDrilled = false;
-        // radialInnerIndex preserved from last open (or 0 default in constructor)
-        // Snap rotation to that index — no animation on open, the wheel just
-        // appears already oriented to the last-used slice.
-        const snap = -RADIAL_SLICE_ANGLE * this.radialInnerIndex;
-        this.radialRotationFrom      = snap;
-        this.radialRotationTarget    = snap;
-        this.radialRotationStartedAt = 0; // way in the past → eased lerp = 1
+        this.wheel.grip = RING_ACTION;
+        // Pre-aim at the nearest hostile; fall back to the player's facing.
+        const aim = autoAimDir(this.playerX, this.playerY, this._wheelHostileTargets());
+        this.wheel.aim = aim || this._facingToCardinal();
         this.state = STATE.RADIAL_MENU;
-        audio.playSfx('menu-open'); // [audio] Omnitrix combat wheel opened
-        this._overlayOpenedAt = performance.now();
-        this._ensureParticleLoop(); // reuse the existing slide-in animation pump
+        audio.playSfx('menu-open');
+        this._overlayOpenedAt = now;
+        this._ensureParticleLoop();
+        this._render();
+    }
+
+    _closeWheel() {
+        this.state = STATE.IDLE;
+        audio.playSfx('menu-cancel');
+        this._render();
+    }
+
+    _facingToCardinal() {
+        return this.facing === 'up' ? 'N'
+             : this.facing === 'right' ? 'E'
+             : this.facing === 'down' ? 'S' : 'W';
+    }
+
+    // Live hostiles anywhere on the map, as {x,y} auto-aim candidates.
+    _wheelHostileTargets() {
+        return this.enemies
+            .filter(e => e.entity.isAlive() && (!e.behavior || e.behavior.includes('HOSTILE')))
+            .map(e => ({ x: e.x, y: e.y }));
+    }
+
+    // Inventory slot indices valid for the current action's item ring.
+    // Throw/Give use any non-quest item; other actions have no item ring.
+    _wheelValidItemSlots() {
+        const action = currentAction(this.wheel);
+        if (action !== 'Throw' && action !== 'Give') return [];
+        const out = [];
+        for (let i = 0; i < this.inventory.length; i++) {
+            const s = this.inventory[i];
+            if (s && !s.itemDef.questItem) out.push(i);
+        }
+        return out;
+    }
+
+    // Re-fire the last action without drawing the wheel (express double-tap).
+    // Returns true if it fired, false if there was nothing valid to repeat.
+    _repeatLastAction() {
+        const last = this.wheel.lastFired;
+        if (!last) return false;
+        if (last.action === 'Throw' && !this.inventory[last.itemSlot]) return false;
+        this.wheel.actionIndex = WHEEL_ACTIONS.indexOf(last.action);
+        this.wheel.itemSlot = last.itemSlot;
+        this.wheel.aim = last.aim;
+        this.state = STATE.RADIAL_MENU; // _fireWheel reads/sets state itself
+        this._fireWheel();
+        // If the fire bailed (no target in that tile), _fireWheel left us in
+        // RADIAL_MENU — surface the wheel so the player can adjust.
+        if (this.state === STATE.RADIAL_MENU) {
+            audio.playSfx('menu-open');
+            this._overlayOpenedAt = performance.now();
+            this._ensureParticleLoop();
+            this._render();
+        }
+        return true;
+    }
+
+    // Compose the wheel selection and route to the existing combat resolvers.
+    _fireWheel() {
+        const { action, itemSlot, aim } = compose(this.wheel);
+        const v = DIR_VEC[aim];
+        const nx = this.playerX + v.dx, ny = this.playerY + v.dy;
+
+        if (action === 'Attack') {
+            const enemy = this.enemies.find(e => e.entity.isAlive() && e.x === nx && e.y === ny
+                && (!e.behavior || e.behavior.includes('HOSTILE')));
+            if (!enemy) { this._log('[Nothing to hit that way]'); return; } // no turn; wheel stays
+            this.wheel.lastFired = { action, itemSlot, aim };
+            const weapon = this.equipment.weapon;
+            this.combatAttack(enemy, weapon ? weapon.damage : 1);
+            this.state = STATE.IDLE;
+            this._advanceWorld();
+            return;
+        }
+        if (action === 'Throw') {
+            const slots = this._wheelValidItemSlots();
+            if (!slots.includes(itemSlot)) { this._log('[Nothing to throw]'); return; }
+            this.wheel.lastFired = { action, itemSlot, aim };
+            this.selectedSlot = itemSlot;
+            this._doThrow(v); // sets state IDLE + advances + consumes the item
+            return;
+        }
+        if (action === 'Give') {
+            const npc = this.enemies.find(e => e.entity.isAlive() && e.x === nx && e.y === ny);
+            if (!npc) { this._log('[No one there to give to]'); return; }
+            if (!this.inventory[itemSlot]) { this._log('[Nothing to give]'); return; }
+            this.wheel.lastFired = { action, itemSlot, aim };
+            this.selectedSlot = itemSlot;
+            this._doGive(npc); // sets state IDLE + advances
+            return;
+        }
+        if (action === 'Defend') {
+            this.wheel.lastFired = { action, itemSlot, aim };
+            this.addBuff('guard', 'Guard', 2, 'buff');
+            this._log('[Bracing — incoming damage halved.]');
+            this.state = STATE.IDLE;
+            this._advanceWorld();
+            return;
+        }
+        if (action === 'Run') {
+            this.wheel.lastFired = { action, itemSlot, aim };
+            const blocked = !this.map.isWalkable(nx, ny)
+                || this.enemies.some(e => e.entity.isAlive() && e.x === nx && e.y === ny);
+            this.state = STATE.IDLE;
+            if (blocked) { this._log('[Cannot run that way.]'); }
+            else { this.playerX = nx; this.playerY = ny; this._log('[Backed away.]'); }
+            this._advanceWorld();
+            return;
+        }
+        // Skill — placeholder until creature abilities land.
+        this._log('[No skills yet — try transforming first]'); // no turn consumed
     }
 
     // ── Wheel rotation interpolation ─────────────────────────────────────────

@@ -54,6 +54,15 @@ export const RADIAL_INNER_R_MAX = 80;
 export const RADIAL_OUTER_R_MIN = 84;
 export const RADIAL_OUTER_R_MAX = 120;
 
+// (action-wheel overhaul) Three concentric rings + a dead-center hub. Each ring
+// is an [inner, outer] radius band in the 608px canvas space, centered at
+// RADIAL_CENTER_*. Shared by renderer._drawRadialMenu (draw) and
+// main._tapRadialMenu (hit-test) so the tap zones match what's drawn.
+export const RING_HUB_R    = 22;
+export const RING_ACTION_R = [26, 64];
+export const RING_ITEM_R   = [66, 100];
+export const RING_AIM_R    = [102, 132];
+
 // ── Log strip (bottom-left) + [L] history modal panel ──
 export const LOG_STRIP_RECT = { x: 6, y: 496, w: 300, h: 44 };   // y = HOTBAR_OY - 44 - 6
 export const LOG_MODAL_RECT = { x: 24, y: 44, w: 560, h: 520 };

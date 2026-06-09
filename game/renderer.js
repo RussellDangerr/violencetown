@@ -6,11 +6,13 @@
 import { TILE_PX, VIEW_TILES, CANVAS_PX } from './data.js';
 import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES, PLAYER_SPRITE } from './sprites.js';
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
+import { WHEEL_ACTIONS, CARDINALS, RING_ACTION, RING_ITEM, RING_AIM, currentAction, ringsFor, compose } from './action-wheel.js'; // (action-wheel overhaul)
 import {
     OVERLAY_RECTS, THROW_RECTS,
     HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_GAP, HOTBAR_SLOTS, HOTBAR_STRIDE,
     HOTBAR_TOTAL_W, HOTBAR_OX, HOTBAR_OY, HOTBAR_X_START, HOTBAR_Y,
     RADIAL_INNER_R_MIN, RADIAL_INNER_R_MAX, RADIAL_OUTER_R_MIN, RADIAL_OUTER_R_MAX,
+    RING_HUB_R, RING_ACTION_R, RING_ITEM_R, RING_AIM_R,
     LOG_STRIP_RECT, LOG_MODAL_RECT,
 } from './layout.js';
 
@@ -1078,7 +1080,119 @@ export class Renderer {
     // When game.radialDrilled is true, the cursor is on the outer arc and the
     // sub-slice gets the highlight instead.
 
-    _drawRadialMenu(game) {
+    _drawRadialMenu(game) { this._drawWheel(game); }
+
+    // (action-wheel overhaul) Three-ring action wheel: action (inner) / item
+    // (middle) / direction-compass (outer). Rings the action doesn't use dim to
+    // a dashed circle; the held ring (game.wheel.grip) gets a cyan stroke; the
+    // selected slice in each ring is gold; the hub shows the live composition.
+    _drawWheel(game) {
+        const { ctx, half } = this;
+        const cx = half * TILE_PX + TILE_PX / 2;
+        const cy = half * TILE_PX + TILE_PX / 2;
+        const w = game.wheel;
+        const action = currentAction(w);
+        const rings = ringsFor(action);
+        const TAU = Math.PI * 2;
+
+        const t = Math.min(1, (performance.now() - (game._overlayOpenedAt ?? 0)) / 80);
+        const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 1000 * TAU);
+        const prevAlpha = ctx.globalAlpha;
+        ctx.globalAlpha = t;
+
+        // Draw one ring band: `count` slices around the circle (slice 0 at top,
+        // going clockwise); highlight `sel`; dim to a dashed circle if !active;
+        // cyan stroke when `held` (the grip). labelFn(i) -> slice text.
+        const drawRing = (band, count, sel, active, held, labelFn) => {
+            const [r0, r1] = band;
+            const rMid = (r0 + r1) / 2;
+            if (!active) {
+                ctx.beginPath();
+                ctx.arc(cx, cy, rMid, 0, TAU);
+                ctx.globalAlpha = t * 0.3;
+                ctx.strokeStyle = 'rgba(120,110,75,0.6)';
+                ctx.setLineDash([3, 5]);
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                ctx.setLineDash([]);
+                ctx.globalAlpha = t;
+                return;
+            }
+            const sliceAng = TAU / count;
+            for (let i = 0; i < count; i++) {
+                const center = -Math.PI / 2 + i * sliceAng;
+                const a0 = center - sliceAng / 2, a1 = center + sliceAng / 2;
+                const isSel = i === sel;
+                ctx.beginPath();
+                ctx.arc(cx, cy, r1, a0, a1);
+                ctx.arc(cx, cy, r0, a1, a0, true);
+                ctx.closePath();
+                ctx.fillStyle = isSel ? UI.gold : UI.panelBg;
+                ctx.fill();
+                ctx.strokeStyle = held ? 'rgba(111,211,195,0.85)'
+                    : isSel ? `rgba(240,215,130,${0.7 + 0.3 * pulse})` : UI.panelBorder;
+                ctx.lineWidth = held ? 2.5 : (isSel ? 2.5 : 1);
+                ctx.stroke();
+                const label = labelFn(i);
+                if (this.font && label) {
+                    const lx = cx + Math.cos(center) * rMid;
+                    const ly = cy + Math.sin(center) * rMid;
+                    this.font.drawText(ctx, label, Math.round(lx), Math.round(ly) - 4, {
+                        color: isSel ? UI.panelBgDark : UI.text, scale: 1, align: 'center',
+                    });
+                }
+            }
+        };
+
+        // Outer = direction compass (N/E/S/W).
+        const aimIdx = CARDINALS.indexOf(w.aim);
+        drawRing(RING_AIM_R, 4, aimIdx, rings.aim, rings.aim && w.grip === RING_AIM,
+            (i) => CARDINALS[i]);
+
+        // Middle = item ring (valid items for this action).
+        const slots = game._wheelValidItemSlots ? game._wheelValidItemSlots() : [];
+        const itemActive = rings.item && slots.length > 0;
+        drawRing(RING_ITEM_R, Math.max(1, slots.length), slots.indexOf(w.itemSlot), itemActive,
+            itemActive && w.grip === RING_ITEM,
+            (i) => {
+                const s = game.inventory[slots[i]];
+                if (!s) return '';
+                const name = s.itemDef.name.replace(/[\[\]]/g, '');
+                return s.count > 1 ? `${name} x${s.count}` : name;
+            });
+
+        // Inner = action ring (the six verbs).
+        drawRing(RING_ACTION_R, WHEEL_ACTIONS.length, w.actionIndex, true,
+            w.grip === RING_ACTION, (i) => WHEEL_ACTIONS[i].toUpperCase());
+
+        // Hub = composition readout.
+        ctx.beginPath();
+        ctx.arc(cx, cy, RING_HUB_R, 0, TAU);
+        ctx.fillStyle = UI.panelBgDark;
+        ctx.fill();
+        ctx.strokeStyle = UI.panelBorder;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        if (this.font) {
+            const c = compose(w);
+            const lines = [c.action.toUpperCase()];
+            if (rings.item) lines.push(c.itemSlot >= 0 && game.inventory[c.itemSlot]
+                ? game.inventory[c.itemSlot].itemDef.name.replace(/[\[\]]/g, '').slice(0, 8) : '--');
+            if (rings.aim) lines.push(c.aim);
+            let yy = cy - lines.length * 5;
+            for (const ln of lines) {
+                this.font.drawText(ctx, ln, cx, yy, { color: UI.text, scale: 1, align: 'center' });
+                yy += 10;
+            }
+        }
+
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+        ctx.globalAlpha = prevAlpha;
+    }
+
+    // Old two-ring Omnitrix renderer, retained dead until cleanup. Not called.
+    _drawRadialMenuOLD(game) {
         const { ctx, half } = this;
         const cx = half * TILE_PX + TILE_PX / 2;
         const cy = half * TILE_PX + TILE_PX / 2;
