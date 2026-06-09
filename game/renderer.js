@@ -1101,8 +1101,12 @@ export class Renderer {
 
         // Draw one ring band: `count` slices around the circle (slice 0 at top,
         // going clockwise); highlight `sel`; dim to a dashed circle if !active;
-        // cyan stroke when `held` (the grip). labelFn(i) -> slice text.
-        const drawRing = (band, count, sel, active, held, labelFn) => {
+        // cyan stroke when `held` (the grip). labelFn(i) -> slice text. `rot`
+        // (radians) spins the whole band — the action/item rings pass their live
+        // eased rotation so the selected slice rides up under the top pointer;
+        // the compass ring leaves it 0 and stays N-up. Labels are drawn upright
+        // (never ctx.rotate'd), so they read correctly at any rotation.
+        const drawRing = (band, count, sel, active, held, labelFn, rot = 0) => {
             const [r0, r1] = band;
             const rMid = (r0 + r1) / 2;
             if (!active) {
@@ -1119,7 +1123,7 @@ export class Renderer {
             }
             const sliceAng = TAU / count;
             for (let i = 0; i < count; i++) {
-                const center = -Math.PI / 2 + i * sliceAng;
+                const center = -Math.PI / 2 + i * sliceAng + rot;
                 const a0 = center - sliceAng / 2, a1 = center + sliceAng / 2;
                 const isSel = i === sel;
                 ctx.beginPath();
@@ -1148,9 +1152,10 @@ export class Renderer {
         drawRing(RING_AIM_R, 4, aimIdx, rings.aim, rings.aim && w.grip === RING_AIM,
             (i) => CARDINALS[i]);
 
-        // Middle = item ring (valid items for this action).
+        // Middle = item ring (valid items for this action). Rotates to pointer.
         const slots = game._wheelValidItemSlots ? game._wheelValidItemSlots() : [];
         const itemActive = rings.item && slots.length > 0;
+        const itemRot = game._wheelRingRot ? game._wheelRingRot('item') : 0;
         drawRing(RING_ITEM_R, Math.max(1, slots.length), slots.indexOf(w.itemSlot), itemActive,
             itemActive && w.grip === RING_ITEM,
             (i) => {
@@ -1158,11 +1163,29 @@ export class Renderer {
                 if (!s) return '';
                 const name = s.itemDef.name.replace(/[\[\]]/g, '');
                 return s.count > 1 ? `${name} x${s.count}` : name;
-            });
+            }, itemRot);
 
-        // Inner = action ring (the six verbs).
+        // Inner = action ring (the six verbs). Rotates to pointer.
+        const actionRot = game._wheelRingRot ? game._wheelRingRot('action') : 0;
         drawRing(RING_ACTION_R, WHEEL_ACTIONS.length, w.actionIndex, true,
-            w.grip === RING_ACTION, (i) => WHEEL_ACTIONS[i].toUpperCase());
+            w.grip === RING_ACTION, (i) => WHEEL_ACTIONS[i].toUpperCase(), actionRot);
+
+        // Fixed selection pointer at 12 o'clock. The action & item rings spin
+        // their chosen slice up to meet it; the compass ring's North also sits
+        // here. A downward gold wedge just outside the outer ring, pointing in.
+        {
+            const py = cy - RING_AIM_R[1];
+            ctx.beginPath();
+            ctx.moveTo(cx, py - 1);        // apex points down toward the rings
+            ctx.lineTo(cx - 7, py - 14);
+            ctx.lineTo(cx + 7, py - 14);
+            ctx.closePath();
+            ctx.fillStyle = UI.gold;
+            ctx.fill();
+            ctx.strokeStyle = UI.panelBgDark;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
 
         // Hub = composition readout.
         ctx.beginPath();

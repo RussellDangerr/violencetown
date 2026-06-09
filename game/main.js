@@ -161,6 +161,19 @@ class Game {
         this.wheel = createWheelState();
         this._lastWheelOpenAt = 0; // double-tap-Open window for express-repeat
 
+        // (action-wheel overhaul — spin animation) Per-ring rotation keyframes.
+        // The action and item rings rotate so their *selected* slice eases up to
+        // the fixed pointer at 12 o'clock; the compass (aim) ring never rotates.
+        // Each record is { from, to, at } in radians / performance.now() ms.
+        // main.js sets a new keyframe on every selection change (spin / tap /
+        // open); the renderer reads the live eased value via _wheelRingRot each
+        // frame. Easing is easeOutCubic over ~140ms (skipped under reduce-motion,
+        // which snaps straight to `to`).
+        this._wheelAnim = {
+            action: { from: 0, to: 0, at: 0 },
+            item:   { from: 0, to: 0, at: 0 },
+        };
+
         // Screen shake (Phase F) — triggered on damage >= threshold. The
         // renderer applies a per-frame random offset to world rendering
         // (HUD stays fixed) while the timestamp is in the future. Magnitude
@@ -523,8 +536,8 @@ class Game {
                 // the held ring; Space fires; Esc steps back toward walking.
                 if (e.code === 'ArrowUp'    || e.code === 'KeyW') { moveGrip(this.wheel, -1); this._render(); return; }
                 if (e.code === 'ArrowDown'  || e.code === 'KeyS') { moveGrip(this.wheel, +1); this._render(); return; }
-                if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { spinRing(this.wheel, -1, this._wheelValidItemSlots()); this._render(); return; }
-                if (e.code === 'ArrowRight' || e.code === 'KeyD') { spinRing(this.wheel, +1, this._wheelValidItemSlots()); this._render(); return; }
+                if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { this._spinWheel(-1); return; }
+                if (e.code === 'ArrowRight' || e.code === 'KeyD') { this._spinWheel(+1); return; }
                 if (e.code === 'Space'      || e.code === 'Enter') { this._fireWheel(); return; }
                 if (e.code === 'Escape') { this._closeWheel(); return; }
                 return;
@@ -1196,15 +1209,21 @@ class Game {
         if (r > RING_AIM_R[1] + HIT_SLOP) { this._closeWheel(); return; }   // outside = cancel
 
         const TAU = Math.PI * 2;
-        let clock = Math.atan2(ly, lx) + Math.PI / 2; // 0 = top, clockwise
-        clock = ((clock % TAU) + TAU) % TAU;
-        const slice = (count) => Math.round(clock / (TAU / count)) % count;
+        const clock = Math.atan2(ly, lx) + Math.PI / 2; // 0 = top, clockwise
+        // Undo the ring's live rotation before quantizing: the action/item rings
+        // spin their selection up to the pointer, so the visually-top slice is
+        // not slice 0. `rot` is the same value the renderer drew with this frame.
+        const slice = (count, rot = 0) => {
+            const c = (((clock - rot) % TAU) + TAU) % TAU;
+            return Math.round(c / (TAU / count)) % count;
+        };
 
         const rings = ringsFor(currentAction(this.wheel));
 
         if (r >= RING_ACTION_R[0] - HIT_SLOP && r <= RING_ACTION_R[1] + HIT_SLOP) {
-            this.wheel.actionIndex = slice(WHEEL_ACTIONS.length);
+            this.wheel.actionIndex = slice(WHEEL_ACTIONS.length, this._wheelRingRot('action'));
             this.wheel.grip = RING_ACTION;
+            this._animateWheelRing('action', WHEEL_ACTIONS.length, this.wheel.actionIndex);
             audio.playSfx('menu-confirm');
             this._render();
             return;
@@ -1212,8 +1231,9 @@ class Game {
         if (rings.item && r >= RING_ITEM_R[0] - HIT_SLOP && r <= RING_ITEM_R[1] + HIT_SLOP) {
             const slots = this._wheelValidItemSlots();
             if (slots.length) {
-                this.wheel.itemSlot = slots[slice(slots.length)];
+                this.wheel.itemSlot = slots[slice(slots.length, this._wheelRingRot('item'))];
                 this.wheel.grip = RING_ITEM;
+                this._animateWheelRing('item', slots.length, Math.max(0, slots.indexOf(this.wheel.itemSlot)));
                 audio.playSfx('menu-confirm');
                 this._render();
             }
@@ -1685,6 +1705,7 @@ class Game {
         // Pre-aim at the nearest hostile; fall back to the player's facing.
         const aim = autoAimDir(this.playerX, this.playerY, this._wheelHostileTargets());
         this.wheel.aim = aim || this._facingToCardinal();
+        this._snapWheelRot();
         this.state = STATE.RADIAL_MENU;
         audio.playSfx('menu-open');
         this._overlayOpenedAt = now;
@@ -1702,6 +1723,80 @@ class Game {
         return this.facing === 'up' ? 'N'
              : this.facing === 'right' ? 'E'
              : this.facing === 'down' ? 'S' : 'W';
+    }
+
+    // ── Wheel spin animation ──────────────────────────────────────────────
+    // The action & item rings rotate so the selected slice eases up to the
+    // fixed 12-o'clock pointer. These four helpers own that rotation:
+    //   _wheelRingRot(ring)        — live eased rotation (radians) for a frame
+    //   _animateWheelRing(...)     — start a new ease toward a slice
+    //   _snapWheelRot()            — jump rings to their selection (no spin)
+    //   _spinWheel(delta)          — spin the held ring + kick its animation
+    // The compass (aim) ring is a fixed N-up dial and never rotates here.
+
+    // Bring an arbitrary accumulated angle onto the shortest arc to `toRaw`,
+    // so a spin from the last slice to the first turns 60° rather than 300°.
+    _shortestAngularPath(from, toRaw) {
+        const TAU = Math.PI * 2;
+        let d = (toRaw - from) % TAU;
+        if (d >  Math.PI) d -= TAU;
+        if (d < -Math.PI) d += TAU;
+        return from + d;
+    }
+
+    // The rotation (radians) to apply to `ring` this frame. easeOutCubic from
+    // the keyframe's `from` to `to` over 140ms; reduce-motion snaps to `to`.
+    _wheelRingRot(ring) {
+        const a = this._wheelAnim && this._wheelAnim[ring];
+        if (!a) return 0;
+        if (Settings.get('reduceMotion')) return a.to;
+        const k = Math.min(1, (performance.now() - a.at) / 140);
+        const e = 1 - Math.pow(1 - k, 3);
+        return a.from + (a.to - a.from) * e;
+    }
+
+    // Start easing `ring` so slice `selIndex` (of `count`) lands at the pointer.
+    // `from` is the *current displayed* rotation, so chained spins never jump.
+    _animateWheelRing(ring, count, selIndex) {
+        const TAU = Math.PI * 2;
+        const cur = this._wheelRingRot(ring);
+        const toRaw = -(selIndex * (TAU / Math.max(1, count)));
+        this._wheelAnim[ring] = {
+            from: cur,
+            to: this._shortestAngularPath(cur, toRaw),
+            at: performance.now(),
+        };
+    }
+
+    // Place both rotating rings on their current selection with no animation —
+    // used when the wheel opens so it appears already-aligned, not mid-spin.
+    _snapWheelRot() {
+        const TAU = Math.PI * 2;
+        const w = this.wheel;
+        const now = performance.now();
+        const actTo = -(w.actionIndex * (TAU / WHEEL_ACTIONS.length));
+        const slots = this._wheelValidItemSlots();
+        const itemSel = Math.max(0, slots.indexOf(w.itemSlot));
+        const itemTo = slots.length ? -(itemSel * (TAU / slots.length)) : 0;
+        this._wheelAnim = {
+            action: { from: actTo, to: actTo, at: now },
+            item:   { from: itemTo, to: itemTo, at: now },
+        };
+    }
+
+    // Spin the currently-held ring by `delta` and animate it to the pointer.
+    // (The aim ring is a fixed compass — spinning it only re-highlights a
+    // cardinal in place, so it needs no rotation tween.)
+    _spinWheel(delta) {
+        spinRing(this.wheel, delta, this._wheelValidItemSlots());
+        const w = this.wheel;
+        if (w.grip === RING_ACTION) {
+            this._animateWheelRing('action', WHEEL_ACTIONS.length, w.actionIndex);
+        } else if (w.grip === RING_ITEM) {
+            const slots = this._wheelValidItemSlots();
+            this._animateWheelRing('item', slots.length, Math.max(0, slots.indexOf(w.itemSlot)));
+        }
+        this._render();
     }
 
     // Live hostiles anywhere on the map, as {x,y} auto-aim candidates.
