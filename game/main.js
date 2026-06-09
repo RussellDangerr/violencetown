@@ -7,7 +7,7 @@ import { loadMap } from './map.js';
 import { loadAllSprites } from './sprites.js';
 import { BitmapFont } from './bitmap-font.js';
 import { DIR_NAMES, PLAYER_MAX_HP, PLAYER_MAX_MP, SLUDGE_DOT, INVENTORY_SIZE, MAX_STACK } from './data.js';
-import { ITEMS, resolveUse, tickTempEquips } from './items.js';
+import { ITEMS, resolveUse, resolveThrow, tickTempEquips } from './items.js';
 import { attack, formatDamageNumber } from './combat.js';
 import { Enemy, resolveEnemyTurns } from './enemies.js';
 import { applyGive } from './give-action.js';
@@ -1385,7 +1385,11 @@ class Game {
         if (!stack) { this.state = STATE.IDLE; this._render(); return; }
 
         const stackCount = stack.count;
-        const msg = resolveUse(this, stack.itemDef, { dx: dir.dx, dy: dir.dy }, stackCount);
+        // Throw ALWAYS throws — call resolveThrow directly. Routing through
+        // resolveUse switched on useType, so a consumable 'self' item (burger,
+        // bandage, soap) would heal/apply and be consumed while the throw
+        // direction was discarded. (fix/critical-path)
+        const msg = resolveThrow(this, stack.itemDef, { dx: dir.dx, dy: dir.dy }, stackCount);
         if (msg) this._log(msg);
 
         if (stack.itemDef.consumable) this._removeFromSlot(this.selectedSlot);
@@ -1677,7 +1681,11 @@ class Game {
             const out = [];
             for (let i = 0; i < this.inventory.length; i++) {
                 const s = this.inventory[i];
-                if (s && s.itemDef.useType !== 'self') {
+                // Throwable rule (single source, shared with the hotbar overlay):
+                // ANY non-quest item is throwable. Previously this filtered out
+                // useType==='self' while the overlay offered Throw for everything,
+                // so the two entry points disagreed. Quest items stay un-throwable.
+                if (s && !s.itemDef.questItem) {
                     const name = s.itemDef.name.replace(/[\[\]]/g, '');
                     out.push({ label: s.count > 1 ? `${name} ×${s.count}` : name, key: i });
                 }
@@ -1688,7 +1696,10 @@ class Game {
             const out = [];
             for (let i = 0; i < this.inventory.length; i++) {
                 const s = this.inventory[i];
-                if (s) {
+                // Quest items are un-giveable too (parity with the hotbar overlay,
+                // which bails for questItem) — applyGive has no quest guard, so
+                // without this the radial Give could consume the converter.
+                if (s && !s.itemDef.questItem) {
                     const name = s.itemDef.name.replace(/[\[\]]/g, '');
                     out.push({ label: s.count > 1 ? `${name} ×${s.count}` : name, key: i });
                 }

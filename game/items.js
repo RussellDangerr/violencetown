@@ -235,8 +235,11 @@ function resolveSelfUse(game, itemDef) {
     return equipMsg || `[Used ${itemDef.name}]`;
 }
 
-// stackCount is passed from main.js — damage = 10 per item in stack
-function resolveThrow(game, itemDef, direction, stackCount = 1) {
+// stackCount is passed from main.js — damage = 10 per item in stack.
+// Exported so the Throw action ALWAYS throws (main.js _doThrow calls this
+// directly) regardless of the item's useType — routing throw through resolveUse
+// made consumable 'self' items heal-and-vanish and silently dropped the throw.
+export function resolveThrow(game, itemDef, direction, stackCount = 1) {
     if (!direction) return `[Throw ${itemDef.name} — no direction]`;
 
     const DAMAGE_PER_ITEM = 10;
