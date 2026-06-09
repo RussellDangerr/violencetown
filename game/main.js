@@ -23,6 +23,7 @@ import {
     RADIAL_OUTER_R_MIN, RADIAL_OUTER_R_MAX, LOG_STRIP_RECT, LOG_MODAL_RECT,
 } from './layout.js';
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
+import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
 
 // ── States ───────────────────────────────────────────────────────────────────
 
@@ -368,6 +369,9 @@ class Game {
         if (zoneEl) zoneEl.textContent = this.map.zoneName;
 
         this.renderer.zone = this.map.zoneName;
+        // [audio] swap the ambient bed to match the zone (no-op pre-init / if
+        // the same track is already playing). SEWER gets the darker loop.
+        audio.playMusic(this.map.zoneName === 'SEWER' ? 'sewer' : 'town');
         this._render();
     }
 
@@ -404,7 +408,19 @@ class Game {
     // Forward a game event to the quest engine (and future subscribers, e.g.
     // the Witness Log journal). Null-safe so early frames never crash on it.
     emitGameEvent(type, payload = {}) {
-        if (this.questEngine) this.questEngine.emit(type, payload);
+        if (this.questEngine) {
+            // [audio] Snapshot quest progress so we can fire a stinger when this
+            // event advances a stage or completes a quest — without modifying
+            // quests.js. stageIndex resets to 0 on completion, so we also watch
+            // the completed-count to catch the final advance.
+            const qs = this.questEngine.state;                       // [audio]
+            const beforeStage = qs.stageIndex;                       // [audio]
+            const beforeDone  = qs.completed.length;                 // [audio]
+            this.questEngine.emit(type, payload);
+            if (qs.stageIndex !== beforeStage || qs.completed.length !== beforeDone) { // [audio]
+                audio.playSfx('quest-advance');                      // [audio]
+            }                                                        // [audio]
+        }
     }
 
     // Start the main quest DETERMINISTICALLY (fix/critical-path). Called on a
@@ -424,6 +440,8 @@ class Game {
         const splash = document.getElementById('splash');
         const wrapper = document.getElementById('game-wrapper');
         const start = () => {
+            audio.init();                 // [audio] first user gesture — unlock Web Audio
+            audio.playMusic('town');      // [audio] start the ambient bed for the town hub
             splash.classList.add('gone');
             wrapper.classList.remove('hidden');
             this.state = STATE.IDLE;
@@ -435,6 +453,8 @@ class Game {
         // begins fresh (the existing save survives until the fresh run's first
         // autosave overwrites it, so a stray reload can still resume).
         const continueGame = async () => {
+            audio.init();                 // [audio] first user gesture — unlock Web Audio
+            audio.playMusic('town');      // [audio] start the ambient bed (zone music re-syncs on map load)
             const raw = readSaveRaw();
             if (!raw) { start(); return; }
             splash.classList.add('gone');
@@ -1175,8 +1195,9 @@ class Game {
         }
 
         // Wall?
-        if (!this.map.isWalkable(nx, ny)) return; // silent, no turn advance
+        if (!this.map.isWalkable(nx, ny)) { audio.playSfx('bump-wall'); return; } // [audio] thud on wall bump
 
+        audio.playSfx('move'); // [audio] footstep on a successful step
         // Animate: DON'T update playerX/playerY yet — wait until animation finishes
         this._animateMove(this.playerX, this.playerY, nx, ny, () => {
             // NOW snap the grid position
@@ -1355,6 +1376,7 @@ class Game {
             this.overlayOptions.down = { label, action: 'give' };
         }
 
+        audio.playSfx('menu-open'); // [audio] item use/throw/give overlay opened
         this.state = STATE.ITEM_OVERLAY;
         this._overlayOpenedAt = performance.now();
         this._ensureParticleLoop(); // animate the slide-in (Phase D)
@@ -1364,6 +1386,7 @@ class Game {
     _pickOverlay(direction) {
         const opt = this.overlayOptions[direction];
         if (!opt) return; // no option in that direction
+        audio.playSfx('menu-confirm'); // [audio] picked an overlay option
 
         const stack = this.inventory[this.selectedSlot];
         if (!stack) { this.state = STATE.IDLE; this._render(); return; }
@@ -1422,6 +1445,7 @@ class Game {
 
     _doItemUse(item) {
         if (item.effect === 'cure_sludge') this._soapUsedThisTurn = true;
+        if (item.effect === 'heal') audio.playSfx('heal'); // [audio] healing item used
 
         const msg = resolveUse(this, item, null);
         if (msg) this._log(msg);
@@ -1435,6 +1459,7 @@ class Game {
     _doThrow(dir) {
         const stack = this.inventory[this.selectedSlot];
         if (!stack) { this.state = STATE.IDLE; this._render(); return; }
+        audio.playSfx('throw'); // [audio] item thrown
 
         const stackCount = stack.count;
         // Throw ALWAYS throws — call resolveThrow directly. Routing through
@@ -1532,6 +1557,7 @@ class Game {
         this.radialRotationTarget    = snap;
         this.radialRotationStartedAt = 0; // way in the past → eased lerp = 1
         this.state = STATE.RADIAL_MENU;
+        audio.playSfx('menu-open'); // [audio] Omnitrix combat wheel opened
         this._overlayOpenedAt = performance.now();
         this._ensureParticleLoop(); // reuse the existing slide-in animation pump
     }
@@ -1617,6 +1643,7 @@ class Game {
     }
 
     _radialCancel() {
+        audio.playSfx('menu-cancel'); // [audio] backed out of the combat wheel
         if (this.radialDrilled) {
             // Pop sub-wheel, back to inner cursor (no turn consumed)
             this.radialDrilled = false;
@@ -1996,6 +2023,7 @@ class Game {
             const idx = this.groundItems.findIndex(gi => gi.x === this.playerX && gi.y === this.playerY);
             if (idx === -1) break;
             if (this._addToInventory(this.groundItems[idx].def)) {
+                audio.playSfx('pickup'); // [audio] item picked up off the ground
                 this._log(`[Picked up ${this.groundItems[idx].def.name}]`);
                 this.emitGameEvent('item_pickup', { id: this.groundItems[idx].def.id });
                 this.groundItems.splice(idx, 1);
@@ -2083,6 +2111,7 @@ class Game {
         // out alongside the damage number. Kill events override the random
         // hit-word with a fixed "K.O.!" so the beat reads as a milestone.
         if (result.killed) {
+            audio.playSfx('enemy-killed'); // [audio] K.O. sting on a kill
             this._spawnEventWord(enemyObj.x, enemyObj.y, 'K.O.!', '#ff8822', 22);
             this._log(`[Defeated ${enemyObj.entity.name}]`);
             this.emitGameEvent('enemy_killed', {
@@ -2095,6 +2124,7 @@ class Game {
             }
             onSewerEnemyKilled(this, enemyObj);
         } else {
+            audio.playSfx('attack-hit'); // [audio] impact on a non-lethal hit
             const hitWords = ['POW!', 'WHACK!', 'BAM!', 'SLAM!', 'CRACK!'];
             const word = this.rng.pick(hitWords);
             const hitSize = result.dealt >= 15 ? 20 : 16;
@@ -2108,6 +2138,7 @@ class Game {
         let dmg = rawDamage;
         if (this.hasBuff('guard')) dmg = Math.max(1, Math.floor(dmg / 2));
         this.playerHp = Math.max(0, this.playerHp - dmg);
+        audio.playSfx('take-damage'); // [audio] player got hit
 
         // Floating damage number — Phase B
         const dmgSize = 16 + Math.min(10, Math.floor(dmg / 5));
@@ -2185,6 +2216,7 @@ class Game {
         this._stopAutoRepeat();
         this._heldDirKeys = [];   // drop held keys so respawn doesn't phantom-walk
         this.state = STATE.DEAD;
+        audio.playSfx('death'); // [audio] death sting
         this.renderer.flash('rgba(255, 0, 0, 0.4)');
         this._log('[You died — respawning...]');
         setTimeout(() => this._respawn(), 500);
