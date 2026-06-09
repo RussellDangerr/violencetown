@@ -1222,12 +1222,13 @@ class Game {
         this._autoRepeatDir = dir;
         this._autoRepeatInterval = setInterval(() => {
             if (this.state !== STATE.IDLE) { this._stopAutoRepeat(); return; }
-            // Check if next tile is blocked (wall or enemy or any collision)
-            const nx = this.playerX + dir.dx;
-            const ny = this.playerY + dir.dy;
-            const blocked = !this.map.isWalkable(nx, ny);
-            const enemyThere = this.enemies.some(e => e.entity.isAlive() && e.x === nx && e.y === ny);
-            if (blocked || enemyThere) {
+            // Stop auto-repeat BEFORE a step that commits to something the player
+            // should decide on deliberately — otherwise a held direction key
+            // sails through map transitions, vacuums up pickups (e.g. the quest
+            // converter), bumps the car/barricade, or walks into a hazard tile.
+            // The player must release and re-press to take that step. The manual
+            // _doMove path is unaffected. (fix/critical-path)
+            if (this._autoRepeatShouldStop(dir)) {
                 this._stopAutoRepeat();
                 return;
             }
@@ -1242,6 +1243,30 @@ class Game {
         }
         this._autoRepeatKey = null;
         this._autoRepeatDir = null;
+    }
+
+    // True when held-key auto-walking should HALT before stepping in `dir` —
+    // i.e. the next tile would commit to a consequential, deliberate action.
+    // Covers: any blocker (wall / enemy / container / the car tile / a barricade),
+    // a map transition, a ground-item pickup, or a hazard tile. The first manual
+    // press already happened (it started auto-repeat); this only gates the
+    // AUTOMATIC follow-up steps. (fix/critical-path)
+    _autoRepeatShouldStop(dir) {
+        const nx = this.playerX + dir.dx;
+        const ny = this.playerY + dir.dy;
+
+        // Blockers that _doMove intercepts as bump-interactions or walls.
+        if (!this.map.isWalkable(nx, ny)) return true;            // wall, car (19), barricade (23), etc.
+        if (this.enemies.some(e => e.entity.isAlive() && e.x === nx && e.y === ny)) return true;
+        if (this.containers.some(c => c.x === nx && c.y === ny)) return true;
+
+        // Consequential walkable steps the player should opt into deliberately.
+        if (this.map.getTransition(nx, ny)) return true;          // map transition
+        if (this.groundItems.some(g => g.x === nx && g.y === ny)) return true; // pickup (incl. the converter)
+        const td = this.map.getTileDef(nx, ny);
+        if (td && td.hazard) return true;                         // sludge / future hazards
+
+        return false;
     }
 
     // ── Item Selection & Overlay ──────────────────────────────────────────────
