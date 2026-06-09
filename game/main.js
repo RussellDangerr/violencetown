@@ -26,8 +26,8 @@ import {
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
 import {
-    WHEEL_ACTIONS, DIR_VEC, RING_ACTION, RING_ITEM, RING_AIM,
-    createWheelState, currentAction, moveGrip, spinRing, compose, autoAimDir,
+    WHEEL_ACTIONS, CARDINALS, DIR_VEC, RING_ACTION, RING_ITEM, RING_AIM,
+    createWheelState, currentAction, ringsFor, moveGrip, spinRing, compose, autoAimDir,
 } from './action-wheel.js'; // (action-wheel overhaul) pure three-ring model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
 
@@ -1215,6 +1215,52 @@ class Game {
     }
 
     _tapRadialMenu(pt) {
+        // (action-wheel overhaul) Polar hit-test against the three rings. Tap a
+        // slice to select it; tap the hub to fire; tap outside to cancel. The
+        // compass (aim) ring doubles as a directional d-pad. Slice 0 is at the
+        // top of each ring, going clockwise — matching renderer._drawWheel.
+        const lx = pt.x - RADIAL_CENTER_X;
+        const ly = pt.y - RADIAL_CENTER_Y;
+        const r  = Math.hypot(lx, ly);
+        if (r <= RING_HUB_R) { this._fireWheel(); return; }                // hub = fire
+        if (r > RING_AIM_R[1] + HIT_SLOP) { this._closeWheel(); return; }   // outside = cancel
+
+        const TAU = Math.PI * 2;
+        let clock = Math.atan2(ly, lx) + Math.PI / 2; // 0 = top, clockwise
+        clock = ((clock % TAU) + TAU) % TAU;
+        const slice = (count) => Math.round(clock / (TAU / count)) % count;
+
+        const rings = ringsFor(currentAction(this.wheel));
+
+        if (r >= RING_ACTION_R[0] - HIT_SLOP && r <= RING_ACTION_R[1] + HIT_SLOP) {
+            this.wheel.actionIndex = slice(WHEEL_ACTIONS.length);
+            this.wheel.grip = RING_ACTION;
+            audio.playSfx('menu-confirm');
+            this._render();
+            return;
+        }
+        if (rings.item && r >= RING_ITEM_R[0] - HIT_SLOP && r <= RING_ITEM_R[1] + HIT_SLOP) {
+            const slots = this._wheelValidItemSlots();
+            if (slots.length) {
+                this.wheel.itemSlot = slots[slice(slots.length)];
+                this.wheel.grip = RING_ITEM;
+                audio.playSfx('menu-confirm');
+                this._render();
+            }
+            return;
+        }
+        if (rings.aim && r >= RING_AIM_R[0] - HIT_SLOP && r <= RING_AIM_R[1] + HIT_SLOP) {
+            this.wheel.aim = CARDINALS[slice(4)];
+            this.wheel.grip = RING_AIM;
+            audio.playSfx('menu-confirm');
+            this._render();
+            return;
+        }
+        // Tapped a dimmed/gap region — no-op.
+    }
+
+    // Old two-ring tap hit-test, retained dead until cleanup. Not called.
+    _tapRadialMenuOLD(pt) {
         // Polar hit-test. Inner ring picks a top-level slice; outer ring
         // picks a sub-wheel slice (only valid when drilled). Tap outside
         // both rings = cancel.
