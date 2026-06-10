@@ -1,0 +1,23 @@
+{
+    "width": 9,
+    "height": 7,
+    "spawn": { "x": 4, "y": 1 },
+    "zoneName": "WILDERNESS",
+    "tiles": [
+        53,53,53,53,52,53,53,53,53,
+        53,52,52,52,52,52,52,52,53,
+        53,52,52,52,52,52,52,52,53,
+        53,52,52,52,52,52,52,52,53,
+        53,52,52,52,52,52,52,52,53,
+        53,52,52,52,52,52,52,52,53,
+        53,53,53,53,53,53,53,53,53
+    ],
+    "enemies": [],
+    "items": [],
+    "examinables": [
+        { "id": "dark", "x": 4, "y": 6, "text": "[Total black. The wilderness breathes somewhere out past the fence. Without a light — or the car — going further is just a slower way to die. Turn back.]" }
+    ],
+    "transitions": [
+        { "x": 4, "y": 0, "toMap": "graveyard-map.json", "toX": 7, "toY": 12, "label": "[North — back to the graveyard's edge, and the light.]" }
+    ]
+}
