@@ -267,6 +267,12 @@ export class Renderer {
 
         ctx.restore();
 
+        // (world-structure) Wilderness blackout — a heavy radial darkness with
+        // only a faint pool of light around the player. Drawn in screen space
+        // (after the shake restore, so it stays centered) and before the HUD so
+        // HP/hotbar stay readable. Gated on zone — only the Wilderness is dark.
+        this._drawDarkness();
+
         // HUD — rendered AFTER restore so screen shake doesn't affect it
         this._drawHPPanel(game);
         this._drawZoneLabel(game);
@@ -285,6 +291,23 @@ export class Renderer {
         if (game.state === 'item_give_dir')   this._drawThrowPrompt(game);
         if (game.state === 'ending') this._drawEndingOverlay(game);
         if (game.state === 'log_modal') this._drawLogModal(game);
+    }
+
+    // (world-structure) Heavy radial darkness for the Wilderness zone — a tiny
+    // pool of light around the player, near-black beyond. "No light, no car"
+    // made literal: you can barely see, so going deeper is plainly suicidal.
+    _drawDarkness() {
+        if (this.zone !== 'WILDERNESS') return;
+        const { ctx } = this;
+        const cx = CANVAS_PX / 2, cy = CANVAS_PX / 2;
+        const g = ctx.createRadialGradient(cx, cy, TILE_PX * 0.8, cx, cy, TILE_PX * 4.5);
+        g.addColorStop(0,   'rgba(2,2,6,0)');
+        g.addColorStop(0.4, 'rgba(2,2,6,0.6)');
+        g.addColorStop(1,   'rgba(2,2,6,0.98)');
+        ctx.save();
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+        ctx.restore();
     }
 
     // ── Tiles ────────────────────────────────────────────────────────────────

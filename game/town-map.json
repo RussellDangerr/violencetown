@@ -4,19 +4,19 @@
     "spawn": { "x": 8, "y": 6 },
     "zoneName": "TOWN",
     "tiles": [
-        14,14,14,14,14,14,53,50,50,50,53,14,14,14,14,14,14,
-        14,14,14,14,14,14,11,50,50,50,11,14,14,14,14,14,14,
-        14,14,14,14,14,14,11,12,50,12,11,14,14,14,14,14,14,
+        14,14,14,14,14,14,53,17,17,17,53,14,14,14,14,14,14,
+        14,14,14,14,14,14,53,12,12,12,53,14,14,14,14,14,14,
+        14,14,14,14,14,14,53,12,12,12,53,14,14,14,14,14,14,
         14,14,14,14,15,14,11,12,12,12,11,14,19,14,14,14,14,
-        41,41,11,11,11,11,11,11,11,11,11,11,11,11,11,31,31,
-        40,42,40,12,12,12,12,12,12,12,12,12,12,12,33,32,33,
-        40,40,40,12,12,12,12,12,12,12,12,12,12,12,33,33,33,
-        40,42,40,12,12,12,12,12,12,12,12,12,12,12,33,32,33,
-        41,41,11,11,11,11,11,11,11,11,11,11,11,11,11,31,31,
+        41,41,11,11,11,11,11,11,11,11,11,11,11,11,11,10,10,
+        40,42,40,12,12,12,12,12,12,12,12,12,12,12,11,11,16,
+        40,40,40,12,12,12,12,12,12,12,12,12,12,12,11,11,16,
+        40,42,40,12,12,12,12,12,12,12,12,12,12,12,11,11,16,
+        41,41,11,11,11,11,11,11,11,11,11,11,11,11,11,10,10,
         14,14,14,14,14,14,11,12,12,12,11,14,14,14,14,14,14,
         14,14,14,14,14,14,11,12,12,12,11,14,14,14,14,14,14,
         14,14,14,14,14,14,11,12,12,12,11,14,14,14,14,14,14,
-        14,14,14,14,14,14,10,16,16,16,10,14,14,14,14,14,14
+        14,14,14,14,14,14,10,30,30,30,10,14,14,14,14,14,14
     ],
     "enemies": [],
     "items": [
@@ -34,21 +34,19 @@
         { "type": "bandage", "x": 13, "y": 6 }
     ],
     "transitions": [
-        { "x": 4,  "y": 3,  "toMap": "borgir-map.json",    "toX": 4,  "toY": 7,  "label": "[Into Borgir]" },
-        { "x": 7,  "y": 0,  "toMap": "graveyard-map.json", "toX": 7,  "toY": 12, "label": "[Through the iron gate — GRAVEYARD]" },
-        { "x": 8,  "y": 0,  "toMap": "graveyard-map.json", "toX": 7,  "toY": 12, "label": "[Through the iron gate — GRAVEYARD]" },
-        { "x": 9,  "y": 0,  "toMap": "graveyard-map.json", "toX": 7,  "toY": 12, "label": "[Through the iron gate — GRAVEYARD]" },
-        { "x": 7,  "y": 12, "toMap": "sewer-map.json",     "toX": 1,  "toY": 10, "label": "[Descend into the sewer]" },
-        { "x": 8,  "y": 12, "toMap": "sewer-map.json",     "toX": 1,  "toY": 10, "label": "[Descend into the sewer]" },
-        { "x": 9,  "y": 12, "toMap": "sewer-map.json",     "toX": 1,  "toY": 10, "label": "[Descend into the sewer]" },
-        { "x": 0,  "y": 5,  "toMap": "factory-map.json",   "toX": 13, "toY": 7,  "label": "[Through the gates — FACTORY]" },
-        { "x": 0,  "y": 6,  "toMap": "factory-map.json",   "toX": 13, "toY": 7,  "label": "[Through the gates — FACTORY]" },
-        { "x": 0,  "y": 7,  "toMap": "factory-map.json",   "toX": 13, "toY": 7,  "label": "[Through the gates — FACTORY]" },
-        { "x": 16, "y": 5,  "toMap": "circus-map.json",    "toX": 1,  "toY": 7,  "label": "[Past the ticket booth — CIRCUS]" },
-        { "x": 16, "y": 6,  "toMap": "circus-map.json",    "toX": 1,  "toY": 7,  "label": "[Past the ticket booth — CIRCUS]" },
-        { "x": 16, "y": 7,  "toMap": "circus-map.json",    "toX": 1,  "toY": 7,  "label": "[Past the ticket booth — CIRCUS]" }
+        { "x": 4,  "y": 3,  "toMap": "borgir-map.json",   "toX": 4,  "toY": 7,  "label": "[Into Borgir's]" },
+        { "x": 0,  "y": 5,  "toMap": "factory-map.json",  "toX": 13, "toY": 7,  "label": "[West — the street runs on into the FACTORY]" },
+        { "x": 0,  "y": 6,  "toMap": "factory-map.json",  "toX": 13, "toY": 7,  "label": "[West — the street runs on into the FACTORY]" },
+        { "x": 0,  "y": 7,  "toMap": "factory-map.json",  "toX": 13, "toY": 7,  "label": "[West — the street runs on into the FACTORY]" },
+        { "x": 16, "y": 5,  "toMap": "sewer-map.json",    "toX": 1,  "toY": 10, "label": "[East — down into the SEWER]" },
+        { "x": 16, "y": 6,  "toMap": "sewer-map.json",    "toX": 1,  "toY": 10, "label": "[East — down into the SEWER]" },
+        { "x": 16, "y": 7,  "toMap": "sewer-map.json",    "toX": 1,  "toY": 10, "label": "[East — down into the SEWER]" },
+        { "x": 7,  "y": 12, "toMap": "circus-map.json",   "toX": 2,  "toY": 1,  "label": "[South — out to the edge of town: the CARNIVAL]" },
+        { "x": 8,  "y": 12, "toMap": "circus-map.json",   "toX": 2,  "toY": 1,  "label": "[South — out to the edge of town: the CARNIVAL]" },
+        { "x": 9,  "y": 12, "toMap": "circus-map.json",   "toX": 2,  "toY": 1,  "label": "[South — out to the edge of town: the CARNIVAL]" }
     ],
     "examinables": [
-        { "id": "car", "x": 12, "y": 3, "text": "[The hood's popped. Where the cataclysmic converter should sit: a greasy hole and rat-sized claw marks. The tracks lead to the sewer grate.]" }
+        { "id": "car", "x": 12, "y": 3, "text": "[The hood's popped. Where the cataclysmic converter should sit: a greasy hole and rat-sized claw marks. The tracks skitter off east, toward the sewer.]" },
+        { "id": "bridge", "x": 8, "y": 0, "text": "[The North Bridge — the only road out of Violencetown. Barricaded, and the span's half out besides. You're not crossing this on foot. Get the car running first.]" }
     ]
 }
