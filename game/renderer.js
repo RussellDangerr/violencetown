@@ -6,11 +6,12 @@
 import { TILE_PX, VIEW_TILES, CANVAS_PX } from './data.js';
 import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES, PLAYER_SPRITE } from './sprites.js';
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
+import { WHEEL_ACTIONS, CARDINALS, RING_ACTION, RING_ITEM, RING_AIM, currentAction, ringsFor, compose } from './action-wheel.js'; // (action-wheel overhaul)
 import {
     OVERLAY_RECTS, THROW_RECTS,
     HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_GAP, HOTBAR_SLOTS, HOTBAR_STRIDE,
     HOTBAR_TOTAL_W, HOTBAR_OX, HOTBAR_OY, HOTBAR_X_START, HOTBAR_Y,
-    RADIAL_INNER_R_MIN, RADIAL_INNER_R_MAX, RADIAL_OUTER_R_MIN, RADIAL_OUTER_R_MAX,
+    RING_HUB_R, RING_ACTION_R, RING_ITEM_R, RING_AIM_R,
     LOG_STRIP_RECT, LOG_MODAL_RECT,
 } from './layout.js';
 
@@ -1078,229 +1079,135 @@ export class Renderer {
     // When game.radialDrilled is true, the cursor is on the outer arc and the
     // sub-slice gets the highlight instead.
 
-    _drawRadialMenu(game) {
+    _drawRadialMenu(game) { this._drawWheel(game); }
+
+    // (action-wheel overhaul) Three-ring action wheel: action (inner) / item
+    // (middle) / direction-compass (outer). Rings the action doesn't use dim to
+    // a dashed circle; the held ring (game.wheel.grip) gets a cyan stroke; the
+    // selected slice in each ring is gold; the hub shows the live composition.
+    _drawWheel(game) {
         const { ctx, half } = this;
         const cx = half * TILE_PX + TILE_PX / 2;
         const cy = half * TILE_PX + TILE_PX / 2;
+        const w = game.wheel;
+        const action = currentAction(w);
+        const rings = ringsFor(action);
+        const TAU = Math.PI * 2;
 
-        // Slide-in animation (Phase D convention — 80ms ease-in opacity)
-        const elapsed = performance.now() - (game._overlayOpenedAt ?? 0);
-        const t = Math.min(1, elapsed / 80);
-
-        // Slice order kept in sync with main.js RADIAL_SLICES module const.
-        // Renderer keeps its own copy because the canvas drawing layer
-        // shouldn't import from the game-logic module.
-        const slices = ['Attack', 'Skill', 'Throw', 'Give', 'Run', 'Defend'];
-        const N = slices.length;
-        const sliceAngle = (Math.PI * 2) / N;
-
-        // Wheel radii come from layout.js so the draw matches main.js's polar
-        // hit-test (inner ring just outside the 32px player tile; outer sub-arc).
-        const rInner0 = RADIAL_INNER_R_MIN;
-        const rInner1 = RADIAL_INNER_R_MAX;
-        const rOuter0 = RADIAL_OUTER_R_MIN;
-        const rOuter1 = RADIAL_OUTER_R_MAX;
-
-        // Helper: center angle of slice i in the wheel's LOCAL frame, with 12
-        // o'clock = -π/2 in canvas coords (y axis flipped, angles clockwise).
-        // The wheel's outer rotation transform maps local → world.
-        const sliceCenterAngle = (i) => i * sliceAngle - Math.PI / 2;
-
+        const t = Math.min(1, (performance.now() - (game._overlayOpenedAt ?? 0)) / 80);
+        const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 1000 * TAU);
         const prevAlpha = ctx.globalAlpha;
         ctx.globalAlpha = t;
 
-        // Current rotation from the ease-out lerp. Game owns the math so
-        // animation state is single-sourced.
-        const innerRotation = game._currentRadialRotation
-            ? game._currentRadialRotation()
-            : -sliceAngle * (game.radialInnerIndex ?? 0);
+        // Draw one ring band: `count` slices around the circle (slice 0 at top,
+        // going clockwise); highlight `sel`; dim to a dashed circle if !active;
+        // cyan stroke when `held` (the grip). labelFn(i) -> slice text. `rot`
+        // (radians) spins the whole band — the action/item rings pass their live
+        // eased rotation so the selected slice rides up under the top pointer;
+        // the compass ring leaves it 0 and stays N-up. Labels are drawn upright
+        // (never ctx.rotate'd), so they read correctly at any rotation.
+        const drawRing = (band, count, sel, active, held, labelFn, rot = 0) => {
+            const [r0, r1] = band;
+            const rMid = (r0 + r1) / 2;
+            if (!active) {
+                ctx.beginPath();
+                ctx.arc(cx, cy, rMid, 0, TAU);
+                ctx.globalAlpha = t * 0.3;
+                ctx.strokeStyle = 'rgba(120,110,75,0.6)';
+                ctx.setLineDash([3, 5]);
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                ctx.setLineDash([]);
+                ctx.globalAlpha = t;
+                return;
+            }
+            const sliceAng = TAU / count;
+            for (let i = 0; i < count; i++) {
+                const center = -Math.PI / 2 + i * sliceAng + rot;
+                const a0 = center - sliceAng / 2, a1 = center + sliceAng / 2;
+                const isSel = i === sel;
+                ctx.beginPath();
+                ctx.arc(cx, cy, r1, a0, a1);
+                ctx.arc(cx, cy, r0, a1, a0, true);
+                ctx.closePath();
+                ctx.fillStyle = isSel ? UI.gold : UI.panelBg;
+                ctx.fill();
+                ctx.strokeStyle = held ? 'rgba(111,211,195,0.85)'
+                    : isSel ? `rgba(240,215,130,${0.7 + 0.3 * pulse})` : UI.panelBorder;
+                ctx.lineWidth = held ? 2.5 : (isSel ? 2.5 : 1);
+                ctx.stroke();
+                const label = labelFn(i);
+                if (this.font && label) {
+                    const lx = cx + Math.cos(center) * rMid;
+                    const ly = cy + Math.sin(center) * rMid;
+                    this.font.drawText(ctx, label, Math.round(lx), Math.round(ly) - 4, {
+                        color: isSel ? UI.panelBgDark : UI.text, scale: 1, align: 'center',
+                    });
+                }
+            }
+        };
 
-        // ── Inner wheel (slices + labels) ────────────────────────────────────
-        // Wrap the entire wheel draw in a rotation transform so the wheel
-        // itself spins around the player center. Labels rotate WITH their
-        // slices via per-label ctx.rotate — combined with the wheel rotation,
-        // the label of the slice currently at 12 o'clock ends up upright
-        // and the slice opposite (6 o'clock) is upside-down. That's the
-        // chosen design ("Rotate with the wheel").
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(innerRotation);
-        ctx.translate(-cx, -cy);
+        // Outer = direction compass (N/E/S/W).
+        const aimIdx = CARDINALS.indexOf(w.aim);
+        drawRing(RING_AIM_R, 4, aimIdx, rings.aim, rings.aim && w.grip === RING_AIM,
+            (i) => CARDINALS[i]);
 
-        // Active-slice pulse — a 2Hz sine wave on alpha + line width gives
-        // the highlighted slice a slow heartbeat. Subtle enough to read as
-        // ambient state (not as a warning), strong enough to draw the eye.
-        // Uses performance.now() so it animates while the particle loop
-        // pump (started by _openRadialMenu) is running.
-        const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 1000 * Math.PI * 2);
+        // Middle = item ring (valid items for this action). Rotates to pointer.
+        const slots = game._wheelValidItemSlots ? game._wheelValidItemSlots() : [];
+        const itemActive = rings.item && slots.length > 0;
+        const itemRot = game._wheelRingRot ? game._wheelRingRot('item') : 0;
+        drawRing(RING_ITEM_R, Math.max(1, slots.length), slots.indexOf(w.itemSlot), itemActive,
+            itemActive && w.grip === RING_ITEM,
+            (i) => {
+                const s = game.inventory[slots[i]];
+                if (!s) return '';
+                const name = s.itemDef.name.replace(/[\[\]]/g, '');
+                return s.count > 1 ? `${name} x${s.count}` : name;
+            }, itemRot);
 
-        // Draw slice wedges (local frame — the rotate above maps them to world)
-        for (let i = 0; i < N; i++) {
-            const a0 = sliceCenterAngle(i) - sliceAngle / 2;
-            const a1 = sliceCenterAngle(i) + sliceAngle / 2;
-            const isActive = !game.radialDrilled && i === game.radialInnerIndex;
+        // Inner = action ring (the six verbs). Rotates to pointer.
+        const actionRot = game._wheelRingRot ? game._wheelRingRot('action') : 0;
+        drawRing(RING_ACTION_R, WHEEL_ACTIONS.length, w.actionIndex, true,
+            w.grip === RING_ACTION, (i) => WHEEL_ACTIONS[i].toUpperCase(), actionRot);
 
+        // Fixed selection pointer at 12 o'clock. The action & item rings spin
+        // their chosen slice up to meet it; the compass ring's North also sits
+        // here. A downward gold wedge just outside the outer ring, pointing in.
+        {
+            const py = cy - RING_AIM_R[1];
             ctx.beginPath();
-            ctx.arc(cx, cy, rInner1, a0, a1);
-            ctx.arc(cx, cy, rInner0, a1, a0, true);
+            ctx.moveTo(cx, py - 1);        // apex points down toward the rings
+            ctx.lineTo(cx - 7, py - 14);
+            ctx.lineTo(cx + 7, py - 14);
             ctx.closePath();
-            ctx.fillStyle = isActive ? UI.gold : UI.panelBg;
+            ctx.fillStyle = UI.gold;
             ctx.fill();
-            // Active slice gets a brighter trim that swells with the pulse.
-            ctx.strokeStyle = isActive
-                ? `rgba(240, 215, 130, ${0.7 + 0.3 * pulse})`
-                : UI.panelBorder;
-            ctx.lineWidth = isActive ? 3 + pulse : 1;
+            ctx.strokeStyle = UI.panelBgDark;
+            ctx.lineWidth = 1;
             ctx.stroke();
         }
 
-        // Inner hub — a small dark disk centered on the player tile, with a
-        // gold dot in its center. Reads as the wheel's pivot point and hides
-        // the visual seam where the rotation transform meets the player sprite.
+        // Hub = composition readout.
         ctx.beginPath();
-        ctx.arc(cx, cy, rInner0 - 4, 0, Math.PI * 2);
+        ctx.arc(cx, cy, RING_HUB_R, 0, TAU);
         ctx.fillStyle = UI.panelBgDark;
         ctx.fill();
         ctx.strokeStyle = UI.panelBorder;
         ctx.lineWidth = 1;
         ctx.stroke();
-        ctx.fillStyle = UI.gold;
-        ctx.fillRect(cx - 1, cy - 1, 2, 2);
-
-        // Draw slice labels, each with a per-label rotation so the active
-        // slice's text is upright when it lands at 12 o'clock under the
-        // pointer. Math: label-i's local rotation = i*sliceAngle. Combined
-        // with the wheel's world rotation R = -activeIndex*sliceAngle, the
-        // total world rotation of label-i is (i - activeIndex)*sliceAngle —
-        // which is 0 (upright) when i == activeIndex.
-        const rLabel = (rInner0 + rInner1) / 2;
-        for (let i = 0; i < N; i++) {
-            const ang = sliceCenterAngle(i);
-            const lx = cx + Math.cos(ang) * rLabel;
-            const ly = cy + Math.sin(ang) * rLabel;
-            ctx.save();
-            ctx.translate(lx, ly);
-            ctx.rotate(i * sliceAngle); // per-label rotation (see math comment)
-            // Bitmap font draws from top-left; nudge by half a glyph width/height
-            // so the visual center of the text sits at (0,0) in the rotated frame.
-            if (this.font) {
-                this.font.drawText(ctx, slices[i].toUpperCase(), 0, -4, {
-                    color: UI.text, scale: 1, align: 'center',
-                });
+        if (this.font) {
+            const c = compose(w);
+            const lines = [c.action.toUpperCase()];
+            if (rings.item) lines.push(c.itemSlot >= 0 && game.inventory[c.itemSlot]
+                ? game.inventory[c.itemSlot].itemDef.name.replace(/[\[\]]/g, '').slice(0, 8) : '--');
+            if (rings.aim) lines.push(c.aim);
+            let yy = cy - lines.length * 5;
+            for (const ln of lines) {
+                this.font.drawText(ctx, ln, cx, yy, { color: UI.text, scale: 1, align: 'center' });
+                yy += 10;
             }
-            ctx.restore();
         }
 
-        ctx.restore(); // pop inner wheel rotation
-
-        // ── Sub-wheel (outer arc) — same rotating-wheel treatment ────────────
-        const cat = slices[game.radialInnerIndex];
-        const subCapable = cat === 'Attack' || cat === 'Throw' || cat === 'Give' || cat === 'Skill';
-        if (subCapable) {
-            const subOptions = game._radialSubItems ? game._radialSubItems(cat) : [];
-            const subLabels = subOptions.length > 0
-                ? subOptions.map(o => o.label)
-                : ['—'];
-            const subItems = subOptions;
-
-            const M = subLabels.length;
-            // Sub-arc slice size — kept in sync with main.js _animateSubRotation
-            // so the rotation math matches the layout math exactly.
-            const span = Math.min(M * sliceAngle, Math.PI);
-            const subSliceAngle = span / M;
-            // Sub-slice layout (parallel to inner wheel): slice j is centered
-            // at angle -π/2 + j*subSliceAngle in the LOCAL frame. With
-            // subRotation = -subSliceAngle * subIndex applied, the SELECTED
-            // sub-slice lands at -π/2 (12 o'clock) under the pointer.
-            const subCenter = (j) => -Math.PI / 2 + j * subSliceAngle;
-
-            const subRotation = game._currentRadialSubRotation
-                ? game._currentRadialSubRotation()
-                : -subSliceAngle * (game.radialSubIndex?.[cat] ?? 0);
-
-            ctx.save();
-            ctx.translate(cx, cy);
-            ctx.rotate(subRotation);
-            ctx.translate(-cx, -cy);
-
-            // Sub-wheel wedges
-            for (let j = 0; j < M; j++) {
-                const a0 = subCenter(j) - subSliceAngle / 2;
-                const a1 = subCenter(j) + subSliceAngle / 2;
-                const isSubActive = game.radialDrilled && j === (game.radialSubIndex?.[cat] ?? 0);
-
-                ctx.beginPath();
-                ctx.arc(cx, cy, rOuter1, a0, a1);
-                ctx.arc(cx, cy, rOuter0, a1, a0, true);
-                ctx.closePath();
-                ctx.fillStyle = isSubActive ? UI.gold : (subItems.length === 0 ? UI.panelBgDark : UI.panelBg);
-                ctx.fill();
-                ctx.strokeStyle = UI.panelBorder;
-                ctx.lineWidth = isSubActive ? 3 : 1;
-                ctx.stroke();
-            }
-
-            // Sub-wheel labels — same per-label upright-at-pointer math as
-            // the inner wheel: label-j gets local rotation j*subSliceAngle so
-            // the selected sub-slice's text is upright at 12 o'clock.
-            const subColor = subItems.length === 0 ? UI.textLight : UI.text;
-            const rSubLabel = (rOuter0 + rOuter1) / 2;
-            for (let j = 0; j < M; j++) {
-                const ang = subCenter(j);
-                const lx = cx + Math.cos(ang) * rSubLabel;
-                const ly = cy + Math.sin(ang) * rSubLabel;
-                ctx.save();
-                ctx.translate(lx, ly);
-                ctx.rotate(j * subSliceAngle);
-                if (this.font) {
-                    this.font.drawText(ctx, subLabels[j].toUpperCase(), 0, -4, {
-                        color: subColor, scale: 1, align: 'center',
-                    });
-                }
-                ctx.restore();
-            }
-
-            ctx.restore(); // pop sub-wheel rotation
-        }
-
-        // ── Decorative outer ring (OUTSIDE any rotation) ────────────────────
-        // A faint gold ring just past the outer-arc radius, with 8 small
-        // accent dots evenly spaced around it. The ring gives the wheel a
-        // formal "summoned" feel — Persona-coded chrome around the spinning
-        // combat menu — without competing visually with the slices themselves.
-        const rRing = (game.radialDrilled ? rOuter1 : rInner1) + 6;
-        ctx.beginPath();
-        ctx.arc(cx, cy, rRing, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(212, 185, 106, ${0.4 + 0.2 * pulse})`;
-        ctx.lineWidth = 1;
-        ctx.stroke();
-        for (let k = 0; k < 8; k++) {
-            const a = (k / 8) * Math.PI * 2 - Math.PI / 2;
-            const dx = cx + Math.cos(a) * rRing;
-            const dy = cy + Math.sin(a) * rRing;
-            ctx.fillStyle = UI.gold;
-            ctx.fillRect(Math.round(dx) - 1, Math.round(dy) - 1, 2, 2);
-        }
-
-        // ── Static pointer triangle at 12 o'clock (OUTSIDE any rotation) ────
-        // Small gold triangle pointing DOWN at the wheel, anchored above the
-        // wheel's top edge. Drawn after restoring rotations so it never spins
-        // with the wheel — its fixed position is what makes the spinning-wheel
-        // metaphor work.
-        const tipY = cy - rInner1 - 4;
-        const baseY = cy - rInner1 - 14;
-        ctx.beginPath();
-        ctx.moveTo(cx, tipY);            // tip pointing down at the wheel
-        ctx.lineTo(cx - 7, baseY);       // top-left
-        ctx.lineTo(cx + 7, baseY);       // top-right
-        ctx.closePath();
-        ctx.fillStyle = UI.gold;
-        ctx.fill();
-        ctx.strokeStyle = UI.panelBorder;
-        ctx.lineWidth = 1;
-        ctx.stroke();
-
-        // Restore default text alignment for whatever renders next
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
         ctx.globalAlpha = prevAlpha;

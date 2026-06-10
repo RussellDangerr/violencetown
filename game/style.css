@@ -770,6 +770,18 @@ body {
     #touch-dpad .tc-btn:nth-child(3) { grid-column: 2; grid-row: 3; }
     #touch-dpad .tc-btn:nth-child(4) { grid-column: 3; grid-row: 2; }
 
+    /* (action-wheel overhaul) ACTION button — opens/fires the wheel on touch.
+       Pushed to the right edge, opposite the d-pad, within thumb reach. */
+    #action-btn {
+        pointer-events: auto;
+        margin-left: auto;
+        align-self: flex-end;
+        width: 84px; height: 84px;
+        border-radius: 50%;
+        font-size: 32px;
+        opacity: 0.9;
+    }
+
     /* MENU floats bottom-right on touch where the WAIT button used to sit,
        within thumb reach but clear of the d-pad cluster. */
     #menu-btn {
