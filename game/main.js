@@ -185,12 +185,16 @@ class Game {
         // keys until RESUME. Set/cleared by the pause overlay (_setPaused).
         this._paused = false;
 
-        // Floating damage numbers — particle list. Each entry:
-        //   { tileX, tileY, text, color, size, vx, vy, bornAt, maxAge }
-        // Particles age in real time (performance.now()) and animate
-        // independently of turn ticks via a requestAnimationFrame loop
-        // started by _spawnDamageNumber. The loop ends when the array is
-        // empty, so the game returns to its idle 4fps redraw cadence.
+        // Floating-text particle list — two kinds share the array:
+        //   • hit-splats (_spawnHitSplat): { tileX, tileY, text, type, crit,
+        //     dir, slot, bornAt, maxAge } — typed RuneScape-style badges with
+        //     per-type motion + a directional/omni fan (combat-feel-pass).
+        //   • event words / overhead dialogue (_spawnEventWord /
+        //     _spawnOverheadDialogue): { ..., color, size, vx, vy, [sourceRef,
+        //     stackSlot] } — the original rise-and-fade text.
+        // All age in real time (performance.now()) and animate independently of
+        // turn ticks via a requestAnimationFrame loop. The loop ends when the
+        // array is empty, so the game returns to its idle 4fps redraw cadence.
         this._damageNumbers = [];
         this._particleLoopRunning = false;
 
@@ -2068,14 +2072,16 @@ class Game {
 
     // ── Combat ───────────────────────────────────────────────────────────────
 
-    combatAttack(enemyObj, damage) {
+    combatAttack(enemyObj, damage, opts = {}) {
         const playerEntity = { name: '[Player]', isDead: () => false };
         const result = attack(playerEntity, enemyObj.entity, damage);
 
-        // Floating damage number — Phase B
-        const dmgSize = 14 + Math.min(10, Math.floor(result.dealt / 5));
-        const color = result.killed ? '#ffaa22' : '#ffdd44';
-        this._spawnDamageNumber(enemyObj.x, enemyObj.y, `-${result.dealt}`, color, dmgSize);
+        // (combat-feel-pass) Typed hit-splat. Direction = player→enemy for a
+        // direct swing/bump so the splat fans that way; AoE callers (the thrown
+        // 3×3 burst) pass opts.omni so it bursts around the target instead.
+        const splatDir = { dx: enemyObj.x - this.playerX, dy: enemyObj.y - this.playerY };
+        this._spawnHitSplat(enemyObj.x, enemyObj.y, `-${result.dealt}`, opts.type || 'physical',
+            { dir: splatDir, omni: !!opts.omni, crit: !!opts.crit });
 
         // Hit flash + stagger — Phase C, polished in B6. Flash duration
         // and stagger distance now scale with damage so light taps feel
@@ -2122,10 +2128,9 @@ class Game {
             onSewerEnemyKilled(this, enemyObj);
         } else {
             audio.playSfx('attack-hit'); // [audio] impact on a non-lethal hit
-            const hitWords = ['POW!', 'WHACK!', 'BAM!', 'SLAM!', 'CRACK!'];
-            const word = this.rng.pick(hitWords);
-            const hitSize = result.dealt >= 15 ? 20 : 16;
-            this._spawnEventWord(enemyObj.x, enemyObj.y, word, '#ffaa44', hitSize);
+            // (combat-feel-pass) The per-hit onomatopoeia ("POW!") is retired —
+            // the typed splat carries the feedback now. Words are reserved for
+            // milestone beats like the K.O. above.
         }
 
         return formatDamageNumber(result);
@@ -2137,9 +2142,10 @@ class Game {
         this.playerHp = Math.max(0, this.playerHp - dmg);
         audio.playSfx('take-damage'); // [audio] player got hit
 
-        // Floating damage number — Phase B
-        const dmgSize = 16 + Math.min(10, Math.floor(dmg / 5));
-        this._spawnDamageNumber(this.playerX, this.playerY, `-${dmg}`, '#ff4444', dmgSize);
+        // (combat-feel-pass) Typed hit-splat, omni burst — the player's attacker
+        // isn't tracked (any adjacent enemy may have landed it), so the splat
+        // sprays around the player rather than from a single direction.
+        this._spawnHitSplat(this.playerX, this.playerY, `-${dmg}`, 'physical', { omni: true });
 
         // Hit flash + stagger on the player — Phase C. Stagger direction
         // is randomized for the player (any adjacent enemy might have
@@ -2163,15 +2169,11 @@ class Game {
             this._triggerScreenShake(180, mag);
         }
 
-        // Event word particle — Phase E. Player-side onomatopoeia in red
-        // to read as alarm. Heavy hits or near-death moments get a bigger
-        // word; otherwise rotates through the playerHitWords pool.
-        const playerHitWords = ['OUCH!', 'ARGH!', 'OOF!', 'AGH!'];
-        const word = this.playerHp <= 0
-            ? '...!'
-            : this.rng.pick(playerHitWords);
-        const wordSize = dmg >= 15 ? 20 : 16;
-        this._spawnEventWord(this.playerX, this.playerY, word, '#ff5544', wordSize);
+        // (combat-feel-pass) Routine "OUCH!" word-spam is retired — the splat is
+        // the feedback. Keep only the near-death gasp as a milestone beat.
+        if (this.playerHp <= 0) {
+            this._spawnEventWord(this.playerX, this.playerY, '...!', '#ff5544', 20);
+        }
 
         return dmg;
     }
@@ -2327,13 +2329,30 @@ class Game {
     // screen-space each frame so particles track the camera if the player
     // moves mid-particle (rare but possible during animation overlap).
 
-    _spawnDamageNumber(tileX, tileY, text, color, size = 16) {
+    // (combat-feel-pass) RuneScape-style typed hit-splat. `type` picks the
+    // color + per-type animation in the renderer; `opts.dir` ({dx,dy}) makes the
+    // splat fan in the direction of the blow (a swing / a throw came from
+    // somewhere), while omitting it (or opts.omni) bursts it around the target
+    // (an AoE, or a hit with no tracked source). Simultaneous bits on one tile
+    // get incrementing `slot`s so they pre-separate instead of stacking —
+    // deterministic, so the same hit always looks the same.
+    _spawnHitSplat(tileX, tileY, text, type = 'physical', opts = {}) {
+        const born = performance.now();
+        let slot = 0;
+        for (const p of this._damageNumbers) {
+            if (p.type && p.tileX === tileX && p.tileY === tileY && born - p.bornAt < 130) slot++;
+        }
+        let dir = null;
+        if (!opts.omni && opts.dir && (opts.dir.dx || opts.dir.dy)) {
+            const len = Math.hypot(opts.dir.dx, opts.dir.dy) || 1;
+            dir = { x: opts.dir.dx / len, y: opts.dir.dy / len };
+        }
         this._damageNumbers.push({
-            tileX, tileY, text, color, size,
-            vx: 0,
-            vy: -40, // pixels per second upward
-            bornAt: performance.now(),
-            maxAge: 600,
+            tileX, tileY, text, type,
+            crit: !!opts.crit,
+            dir, slot,
+            bornAt: born,
+            maxAge: 620,
         });
         this._ensureParticleLoop();
     }

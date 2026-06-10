@@ -14,6 +14,19 @@ import {
     RING_HUB_R, RING_ACTION_R, RING_ITEM_R, RING_AIM_R,
     LOG_STRIP_RECT, LOG_MODAL_RECT,
 } from './layout.js';
+import * as Settings from './settings.js'; // (combat-feel-pass) reduce-motion for hit-splats (namespace import — see main.js)
+
+// (combat-feel-pass) Hit-splat fill colors by damage type. Crit keeps the
+// physical fill but takes a gold border (handled in _drawHitSplat). New types
+// (poison/fire) are wired but unused until something produces that damage.
+const SPLAT_COLOR = {
+    physical: '#d23f2f',
+    sludge:   '#9a52c8',
+    poison:   '#57a23e',
+    fire:     '#f0833a',
+    heal:     '#3fb56a',
+    miss:     '#3a6ea5',
+};
 
 export class Renderer {
     constructor(canvas) {
@@ -534,6 +547,11 @@ export class Renderer {
             const age = now - dn.bornAt;
             if (age >= dn.maxAge) continue; // expired (filtered next loop tick)
 
+            // (combat-feel-pass) Typed hit-splats take the RuneScape-style badge
+            // path with per-type motion. Untyped particles (overhead dialogue,
+            // milestone words like K.O.) keep the original rise-and-fade below.
+            if (dn.type) { this._drawHitSplat(game, dn, age); continue; }
+
             const t = age / 1000; // seconds
             const vx = dn.tileX - game.playerX + half;
             const vy = dn.tileY - game.playerY + half;
@@ -596,6 +614,135 @@ export class Renderer {
             }
         }
         ctx.textAlign = 'left'; // reset for downstream HUD draws
+    }
+
+    // (combat-feel-pass) Draw one RuneScape-style hit-splat: a colored badge
+    // (color = damage type) carrying the number, with a per-type animation and
+    // a directional/omni fan. Cheap canvas transforms; deterministic per hit.
+    _drawHitSplat(game, dn, age) {
+        const { ctx, half } = this;
+        const m = this._hitSplatMotion(dn, age);
+        const a = Math.max(0, Math.min(1, m.alpha));
+        if (a <= 0.01) return;
+
+        // Tile → screen (camera-tracked), then the per-type motion offset.
+        const bx = (dn.tileX - game.playerX + half) * TILE_PX + TILE_PX / 2 - this._scrollX;
+        const by = (dn.tileY - game.playerY + half) * TILE_PX + TILE_PX / 4 - this._scrollY;
+        const x = bx + m.ox;
+        const y = by + m.oy;
+
+        const color = SPLAT_COLOR[dn.type] || SPLAT_COLOR.physical;
+        const scale = 2;                          // bitmap font scale (16px glyphs)
+        const big = dn.crit ? 1.15 : 1;
+        const textW = dn.text.length * 8 * scale;
+        const w = (textW + 14) * (m.sx || 1) * big;
+        const h = 26 * (m.sy || 1) * big;
+
+        ctx.save();
+        ctx.translate(x, y);
+
+        // Heal halo — a soft radiant glow that pulses, then fades.
+        if (m.glow > 0) {
+            const r = w * 0.85;
+            const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+            g.addColorStop(0, `rgba(255,250,205,${0.5 * m.glow * a})`);
+            g.addColorStop(1, 'rgba(255,250,205,0)');
+            ctx.fillStyle = g;
+            ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+        }
+
+        ctx.scale(m.scale, m.scale);
+
+        // Badge — an ellipse "splat", filled by type, with a border (gold = crit).
+        ctx.beginPath();
+        ctx.ellipse(0, 0, w / 2, h / 2, 0, 0, Math.PI * 2);
+        ctx.fillStyle = hexToRgba(color, a);
+        ctx.fill();
+        ctx.lineWidth = dn.crit ? 2.5 : 1.5;
+        ctx.strokeStyle = dn.crit ? hexToRgba('#f0d782', a) : `rgba(255,255,255,${a * 0.55})`;
+        ctx.stroke();
+
+        // Number — white, centered, with a soft shadow for contrast.
+        if (this.font) {
+            this.font.drawText(ctx, dn.text, 0, -8, {
+                color: hexToRgba('#ffffff', a),
+                scale,
+                align: 'center',
+                shadow: `rgba(0,0,0,${a * 0.7})`,
+            });
+        }
+        ctx.restore();
+    }
+
+    // (combat-feel-pass) Per-type motion for a hit-splat. Returns pixel offsets,
+    // a uniform scale, axis stretch (sx/sy), alpha, and a heal-glow factor,
+    // driven by `age` and the splat's launch direction / fan slot. Reduce-motion
+    // dampens the amplitude. Pure math — no allocations beyond the small object.
+    _hitSplatMotion(dn, age) {
+        const reduce = Settings.get('reduceMotion');
+        const k = reduce ? 0.45 : 1;
+        const p = Math.min(1, age / dn.maxAge);
+        const e = 1 - (1 - p) * (1 - p);                 // easeOut
+
+        // Travel heading: along the blow (directional, fanned per slot) or fanned
+        // around the target (omni). Directional also drifts up a touch.
+        let ang;
+        if (dn.dir) ang = Math.atan2(dn.dir.y, dn.dir.x) + dn.slot * 0.20;
+        else ang = -Math.PI / 2 + dn.slot * (Math.PI * 2 / 6);
+        const tx = Math.cos(ang), ty = Math.sin(ang);
+
+        let alpha = 1;
+        if (p < 0.12) alpha = p / 0.12;
+        else if (p > 0.72) alpha = Math.max(0, 1 - (p - 0.72) / 0.28);
+
+        let ox = 0, oy = 0, scale = 1, sx = 1, sy = 1, glow = 0;
+
+        switch (dn.type) {
+            case 'sludge':                                // oozes + drips DOWN
+                scale = p < 0.18 ? 0.6 + 0.5 * (p / 0.18) : 1.1 - 0.1 * e;
+                sy = 1 + 0.5 * e * k;
+                sx = 1 - 0.12 * e * k;
+                ox = tx * 6 * k;
+                oy = 30 * e * k;
+                break;
+            case 'poison': {                              // rising rattle
+                const shud = Math.sin(age * 0.05) * 4 * k;
+                scale = p < 0.14 ? 0.6 + 0.4 * (p / 0.14) : 1;
+                ox = tx * 10 * e * k + shud;
+                oy = ty * 10 * e * k - 20 * e * k;
+                break;
+            }
+            case 'fire':                                  // flicker + burn up
+                alpha *= 0.6 + 0.4 * Math.sin(age * 0.045);
+                scale = (p < 0.14 ? 0.7 + 0.3 * (p / 0.14) : 1) * (1 - 0.25 * p * k);
+                ox = tx * 8 * e * k;
+                oy = -26 * e * k;
+                break;
+            case 'heal':                                  // gentle float + holy glow
+                scale = p < 0.2 ? 0.85 + 0.15 * (p / 0.2) : 1;
+                oy = -22 * e * k;
+                glow = (0.5 + 0.5 * Math.sin(age * 0.012)) * (1 - p);
+                break;
+            case 'miss':                                  // whiff sideways on the wind
+                scale = p < 0.14 ? 0.7 + 0.3 * (p / 0.14) : 1;
+                ox = (tx * 8 + 34 * e) * k;
+                oy = (-10 * e - 4 * Math.sin(age * 0.01)) * k;
+                break;
+            case 'physical':
+            default: {                                    // hard snappy pop (crit = bigger + further)
+                const pop = dn.crit ? 1.6 : 1.3;
+                const travel = dn.crit ? 26 : 16;
+                const up = dn.crit ? 42 : 14;
+                scale = p < 0.13 ? 0.5 + (pop - 0.5) * (p / 0.13)
+                      : p < 0.30 ? pop - (pop - 1) * ((p - 0.13) / 0.17)
+                      : 1;
+                ox = tx * travel * e * k;
+                oy = ty * travel * e * k - up * e * k;
+                break;
+            }
+        }
+        if (reduce) scale = 1 + (scale - 1) * 0.5;
+        return { ox, oy, scale, sx, sy, alpha, glow };
     }
 
     // ── Player ───────────────────────────────────────────────────────────────

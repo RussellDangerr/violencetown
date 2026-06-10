@@ -14,9 +14,23 @@ export const ITEMS = {
         equipSlot: 'sides',
         range: 4,
         damage: 15,
+        damageType: 'physical',
         consumable: true,
         fallbackColor: '#888888',
         baseValue: 2,
+    },
+    sludge_sack: {
+        id: 'sludge_sack',
+        name: '[Sludge Sack]',
+        description: 'A burlap sack cinched with a leather tie, heavy with sewer sludge. Bursts on impact and splashes everything close.',
+        useType: 'throw',
+        equipSlot: 'sides',
+        range: 5,
+        damage: 16,
+        damageType: 'sludge',
+        consumable: true,
+        fallbackColor: '#9a52c8',
+        baseValue: 4,
     },
     soap: {
         id: 'soap',
@@ -223,8 +237,8 @@ function resolveSelfUse(game, itemDef) {
         const before = game.playerHp;
         game.playerHp = Math.min(game.playerMaxHp, game.playerHp + itemDef.healAmount);
         const healed = game.playerHp - before;
-        if (healed > 0 && game._spawnDamageNumber) {
-            game._spawnDamageNumber(game.playerX, game.playerY, `+${healed}`, '#44ff88', 16);
+        if (healed > 0 && game._spawnHitSplat) {
+            game._spawnHitSplat(game.playerX, game.playerY, `+${healed}`, 'heal', { omni: true });
         }
         const verb = itemDef.category === 'ambro' ? 'Ate' : 'Used';
         return equipMsg
@@ -235,43 +249,65 @@ function resolveSelfUse(game, itemDef) {
     return equipMsg || `[Used ${itemDef.name}]`;
 }
 
-// stackCount is passed from main.js — damage = 10 per item in stack.
-// Exported so the Throw action ALWAYS throws (main.js _doThrow calls this
-// directly) regardless of the item's useType — routing throw through resolveUse
-// made consumable 'self' items heal-and-vanish and silently dropped the throw.
-export function resolveThrow(game, itemDef, direction, stackCount = 1) {
+// (combat-feel-pass) Thrown items fly straight and BURST over a one-shot 3×3
+// area centered on impact, applying the item's effect at HALF to every valid
+// target — respect-the-target: damage hits hostiles only, heals touch
+// friendlies only (latent until allies exist). Fully deterministic. Exported so
+// the wheel's Throw always throws (routing through resolveUse used to make
+// 'self' consumables heal-and-vanish and silently drop the throw).
+export function resolveThrow(game, itemDef, direction, _stackCount = 1) {
     if (!direction) return `[Throw ${itemDef.name} — no direction]`;
-
-    const DAMAGE_PER_ITEM = 10;
-    const totalDamage = DAMAGE_PER_ITEM * stackCount;
-
-    // Now that ANY non-quest item is throwable, items defined as non-throwers
-    // (the 'self' consumables — burger, bandage, soap) carry no `range`. Give
-    // them a sane default reach (rock's range) so a thrown heal item can
-    // actually connect instead of always whiffing. (fix/critical-path)
-    const DEFAULT_THROW_RANGE = 4;
-    const range = itemDef.range || DEFAULT_THROW_RANGE;
-
     const { dx, dy } = direction;
-    let tx = game.playerX;
-    let ty = game.playerY;
+    const range = itemDef.range || 4;
 
+    // Fly straight: stop on the first occupant (burst centered on it) or the
+    // last open tile before a wall.
+    let ix = game.playerX, iy = game.playerY;
+    let hitWall = false;
     for (let i = 0; i < range; i++) {
-        tx += dx;
-        ty += dy;
+        const nx = ix + dx, ny = iy + dy;
+        if (!game.map.isWalkable(nx, ny)) { hitWall = true; break; }
+        ix = nx; iy = ny;
+        if (game.enemies.some(e => e.entity.isAlive() && e.x === ix && e.y === iy)) break;
+    }
 
-        if (!game.map.isWalkable(tx, ty)) {
-            return `[Threw ${itemDef.name} x${stackCount} — hit a wall]`;
-        }
+    const dtype = itemDef.damageType || 'physical';
+    const isDamage = typeof itemDef.damage === 'number';
+    const isHeal = itemDef.effect === 'heal' && typeof itemDef.healAmount === 'number';
+    let affected = 0;
 
-        const hit = game.enemies.find(e => e.entity.isAlive() && e.x === tx && e.y === ty);
-        if (hit) {
-            const result = game.combatAttack(hit, totalDamage);
-            return `[Threw ${itemDef.name} x${stackCount} (${totalDamage} dmg) at ${hit.entity.name} — ${result}]`;
+    // 3×3 (radius 1) around impact, one-shot. Half effect to all valid targets.
+    for (let ax = ix - 1; ax <= ix + 1; ax++) {
+        for (let ay = iy - 1; ay <= iy + 1; ay++) {
+            if (isDamage) {
+                const foe = game.enemies.find(e => e.entity.isAlive() && e.x === ax && e.y === ay
+                    && (!e.behavior || e.behavior.includes('HOSTILE')));
+                if (foe) {
+                    game.combatAttack(foe, Math.max(1, Math.round(itemDef.damage / 2)), { type: dtype, omni: true });
+                    affected++;
+                }
+            } else if (isHeal && ax === game.playerX && ay === game.playerY) {
+                // Friendlies only. No allies in 1.0, so this catches the player
+                // if they lobbed a heal point-blank.
+                const before = game.playerHp;
+                game.playerHp = Math.min(game.playerMaxHp, game.playerHp + Math.max(1, Math.round(itemDef.healAmount / 2)));
+                const healed = game.playerHp - before;
+                if (healed > 0) {
+                    if (game._spawnHitSplat) game._spawnHitSplat(ax, ay, `+${healed}`, 'heal', { omni: true });
+                    affected++;
+                }
+            }
         }
     }
 
-    return `[Threw ${itemDef.name} x${stackCount} — missed]`;
+    if (isDamage) {
+        if (affected > 0) return `[${itemDef.name} bursts — ${affected} caught in the splash]`;
+        return hitWall ? `[${itemDef.name} splatters against the wall]` : `[Threw ${itemDef.name} — splashed no one]`;
+    }
+    if (isHeal) {
+        return affected > 0 ? `[${itemDef.name} bursts in a healing splash]` : `[Threw ${itemDef.name} — no one to mend]`;
+    }
+    return `[Threw ${itemDef.name} — it shatters harmlessly]`;
 }
 
 function resolveMelee(game, itemDef, direction) {
