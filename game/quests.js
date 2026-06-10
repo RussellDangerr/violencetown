@@ -60,12 +60,14 @@ export const QUESTS = {
             },
         ],
         onComplete: (game) => {
-            // carFixed is read by _interactCar for the post-quest flavor line.
-            // (The old never-read deliveryUnlocked flag was removed.)
+            // The car runs: set the persistent flag (read by _interactCar's flavor
+            // line) and clear the North-bridge barricade. The ending no longer
+            // fires the instant the car's fixed — it fires when the player DRIVES
+            // NORTH ACROSS the now-open bridge (main.js _doMove), so the bridge
+            // that's been the visible objective all game finally pays off.
             game.questEngine.state.flags.carFixed = true;
-            game._log('[The car coughs, sputters, then ROARS to life. You can drive again.]', 'transition');
-            // Drive the real End-of-Chapter-One ending/credits state.
-            if (game._endChapterOne) game._endChapterOne();
+            game._log('[The car coughs, sputters, then ROARS to life — and up north the bridge barricade rattles loose. Drive out of Violencetown.]', 'transition');
+            if (game._openBridgeIfCarFixed) game._openBridgeIfCarFixed();
         },
     },
 };
