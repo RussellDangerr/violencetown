@@ -13,7 +13,11 @@ import {
     HOTBAR_TOTAL_W, HOTBAR_OX, HOTBAR_OY, HOTBAR_X_START, HOTBAR_Y,
     RING_HUB_R, RING_ACTION_R, RING_ITEM_R, RING_AIM_R,
     LOG_STRIP_RECT, LOG_MODAL_RECT,
+    TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BRIBE_RECT,
+    TRADE_CELL_W, TRADE_CELL_H, tradeCellRect,
 } from './layout.js';
+import { ITEMS } from './items.js';                                          // (trade slice 1) stock item defs
+import { buyPrice, sellPrice, bribeStepCost, mood, canTrade, BRIBE_STEP } from './trade.js'; // (trade slice 1) pricing + mood smiley
 import * as Settings from './settings.js'; // (combat-feel-pass) reduce-motion for hit-splats (namespace import — see main.js)
 
 // (combat-feel-pass) Hit-splat fill colors by damage type. Crit keeps the
@@ -305,6 +309,7 @@ export class Renderer {
         if (game.state === 'item_give_dir')   this._drawThrowPrompt(game);
         if (game.state === 'ending') this._drawEndingOverlay(game);
         if (game.state === 'log_modal') this._drawLogModal(game);
+        if (game.state === 'trade') this._drawTradeModal(game);
     }
 
     // (world-structure) Heavy radial darkness for the Wilderness zone — a tiny
@@ -1544,6 +1549,165 @@ export class Renderer {
         this.font.drawText(ctx, 'L / ESC TO CLOSE', CANVAS_PX / 2, footerY, {
             color: UI.textLight, scale: 1, align: 'center',
         });
+    }
+
+    // ── Trade window (Puck's shop — trade slice 1) ──────────────────────────
+    // Two 3-wide grids on one parchment panel: BUY (the vendor's stock) and SELL
+    // (the player's bag). A mood smiley + GP readout sit up top; a bribe button
+    // and hint sit at the bottom. Cell rects come from layout.tradeCellRect, the
+    // same source main._tapTrade hit-tests against, so taps land on what's drawn.
+    _drawTradeModal(game) {
+        const { ctx } = this;
+        const ui = this.uiSheet;
+        const npc = game._tradeNpc;
+        if (!npc) return;
+
+        ctx.fillStyle = 'rgba(0,0,0,0.72)';
+        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+
+        const R = TRADE_MODAL_RECT;
+        if (ui?.loaded) drawPanelBig(ctx, ui, R.x, R.y, R.w, R.h, 'base');
+        else            drawPanelSmall(ctx, R.x, R.y, R.w, R.h);
+        if (!this.font) return;
+
+        const disp = npc.disposition ?? 0;
+        const dealing = canTrade(disp);
+        const m = mood(disp);
+
+        // Title
+        const title = `${(npc.type || 'TRADER').toUpperCase()}'S TILL`;
+        this.font.drawText(ctx, title, CANVAS_PX / 2, R.y + 14, { color: UI.panelBorder, scale: 2, align: 'center' });
+
+        // Mood row — smiley + label on the left, GP on the right.
+        const moodY = R.y + 48;
+        this._drawMoodFace(R.x + 26, moodY, m.face);
+        this.font.drawText(ctx, m.mood.toUpperCase(), R.x + 44, moodY - 3, { color: dealing ? UI.textLight : UI.hpRed, scale: 1 });
+        this.font.drawText(ctx, `GP ${game.gold ?? 0}`, R.x + R.w - 24, moodY - 6, { color: UI.gold, scale: 2, align: 'right' });
+
+        // Section headers
+        this.font.drawText(ctx, 'BUY',  TRADE_BUY_ORIGIN.x,  TRADE_BUY_ORIGIN.y - 18,  { color: UI.gold, scale: 1 });
+        this.font.drawText(ctx, 'SELL', TRADE_SELL_ORIGIN.x, TRADE_SELL_ORIGIN.y - 18, { color: UI.gold, scale: 1 });
+
+        // BUY grid — the vendor's stock.
+        const stock = npc.stock || [];
+        for (let i = 0; i < stock.length; i++) {
+            const itemDef = ITEMS[stock[i]];
+            if (!itemDef) continue;
+            const price = dealing ? buyPrice(itemDef, disp) : null;
+            this._drawTradeCell(itemDef, tradeCellRect(TRADE_BUY_ORIGIN, i), price, dealing && price != null);
+        }
+
+        // SELL grid — the player's bag (snapshot taken on open / after each trade).
+        const sell = game._tradeSell || [];
+        for (let i = 0; i < sell.length; i++) {
+            const itemDef = sell[i].itemDef;
+            const price = dealing ? sellPrice(itemDef, disp) : null;
+            this._drawTradeCell(itemDef, tradeCellRect(TRADE_SELL_ORIGIN, i), price, dealing && price != null);
+        }
+        if (sell.length === 0) {
+            this.font.drawText(ctx, 'BAG EMPTY', TRADE_SELL_ORIGIN.x, TRADE_SELL_ORIGIN.y + 8, { color: UI.dim, scale: 1 });
+        }
+
+        // Bribe button.
+        const B = TRADE_BRIBE_RECT;
+        const cost = bribeStepCost(disp);
+        const maxed = disp >= 100;
+        const canBribe = !maxed && (game.gold ?? 0) >= cost;
+        drawInset(ctx, B.x, B.y, B.w, B.h);
+        ctx.fillStyle = canBribe ? 'rgba(212,185,106,0.18)' : 'rgba(0,0,0,0.15)';
+        ctx.fillRect(B.x + 1, B.y + 1, B.w - 2, B.h - 2);
+        const bribeLabel = maxed ? 'MOOD MAXED' : `BRIBE +${BRIBE_STEP}  ${cost} GP`;
+        this.font.drawText(ctx, bribeLabel, B.x + B.w / 2, B.y + B.h / 2 - 3, {
+            color: canBribe ? UI.gold : UI.dim, scale: 1, align: 'center',
+        });
+
+        // Footer hint.
+        this.font.drawText(ctx, 'TAP TO BUY / SELL    B BRIBE    E / ESC CLOSE', CANVAS_PX / 2, R.y + R.h - 16, {
+            color: UI.textLight, scale: 1, align: 'center',
+        });
+    }
+
+    // One shop cell: inset frame, item icon, price under it. `enabled` false
+    // (won't-deal, or unsellable like a quest item) dims the cell and the price
+    // shows as "—".
+    _drawTradeCell(itemDef, r, price, enabled) {
+        const { ctx } = this;
+        drawInset(ctx, r.x, r.y, r.w, r.h);
+        const prevAlpha = ctx.globalAlpha;
+        if (!enabled) ctx.globalAlpha = 0.45;
+
+        const iconSize = 32;
+        this._drawItemIcon(itemDef, r.x + (r.w - iconSize) / 2, r.y + 8, iconSize);
+
+        if (this.font) {
+            const label = price == null ? '—' : `${price}`;
+            this.font.drawText(ctx, label, r.x + r.w / 2, r.y + r.h - 16, {
+                color: price == null ? UI.dim : UI.gold, scale: 1, align: 'center',
+            });
+        }
+        ctx.globalAlpha = prevAlpha;
+    }
+
+    // Draw an item's icon (sprite if loaded, else the ITEM_COLORS bg+letter
+    // fallback) into a size×size box. Mirrors the hotbar's item draw.
+    _drawItemIcon(itemDef, x, y, size) {
+        const { ctx, sprites } = this;
+        const spr = ITEM_SPRITES[itemDef.id];
+        let drawn = false;
+        if (spr && sprites?.[spr.sheet]?.loaded) {
+            drawn = sprites[spr.sheet].drawRegion(ctx, spr.x, spr.y, spr.w, spr.h, x, y, size, size);
+        }
+        if (!drawn) {
+            const info = ITEM_COLORS[itemDef.id] || { bg: '#888', letter: '?' };
+            ctx.fillStyle = info.bg;
+            ctx.fillRect(x, y, size, size);
+            if (this.font) {
+                this.font.drawText(ctx, info.letter, x + size / 2, y + size / 2 - 3, { color: '#fff', scale: 1, align: 'center' });
+            }
+        }
+    }
+
+    // A tiny procedural mood smiley keyed off trade.mood().face. Center at
+    // (cx, cy). Eyes flatten to brows when wary/angry; the mouth bends from a
+    // full beam to a hard frown; "refuse" goes a sour red.
+    _drawMoodFace(cx, cy, face) {
+        const { ctx } = this;
+        const r = 9;
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fillStyle = face === 'refuse' ? '#b15a4a' : '#e8c34a';
+        ctx.fill();
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = '#2a2218';
+        ctx.stroke();
+
+        // Eyes (or angled brows for the sour moods).
+        ctx.fillStyle = '#2a2218';
+        const ey = cy - 2.5, ex = 3.4;
+        if (face === 'angry' || face === 'wary' || face === 'refuse') {
+            ctx.fillRect(cx - ex - 1.5, ey - 0.5, 3.4, 2);
+            ctx.fillRect(cx + ex - 1.9, ey - 0.5, 3.4, 2);
+        } else {
+            ctx.beginPath(); ctx.arc(cx - ex, ey, 1.4, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(cx + ex, ey, 1.4, 0, Math.PI * 2); ctx.fill();
+        }
+
+        // Mouth — curvature by mood. depth>0 smiles, depth<0 frowns.
+        const depth = { beam: 4, happy: 3, content: 1.5, neutral: 0, wary: -2, angry: -3.5, refuse: -3.5 }[face] ?? 0;
+        const my = cy + 3.5;
+        ctx.strokeStyle = '#2a2218';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        if (depth === 0) {
+            ctx.moveTo(cx - 4.5, my);
+            ctx.lineTo(cx + 4.5, my);
+        } else {
+            const cornerY = my - depth * 0.5;
+            ctx.moveTo(cx - 4.5, cornerY);
+            ctx.quadraticCurveTo(cx, my + depth, cx + 4.5, cornerY);
+        }
+        ctx.stroke();
     }
 
     // ── Vignette (subtle edge darkening) ────────────────────────────────────

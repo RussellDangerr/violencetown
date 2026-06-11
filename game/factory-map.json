@@ -22,7 +22,7 @@
     ],
     "enemies": [
         { "id": "green1", "type": "Greedy Green", "x": 7, "y": 7, "hp": 25, "damage": 5, "disposition": -50, "flipThreshold": 30, "bribeable": true, "values": { "rock": 5, "soap": 3, "bandage": 4 }, "behavior": ["IDLE", "WANDER"], "wanderRadius": 2, "wanderEveryTurns": 3, "adjacencyBark": "[Greedy Green: BZZT — UNAUTHORIZED. THE GOO IS MINE.]" },
-        { "id": "puck", "type": "Puck", "x": 4, "y": 7, "hp": 30, "damage": 1, "disposition": 60, "flipThreshold": 0, "bribeable": true, "values": { "rock": 1, "soap": 4, "bandage": 3, "hot_dog": 2 }, "behavior": ["IDLE"], "adjacencyBark": "[Puck: Buyin'? Sellin'? Both, I'll bet — smart. Till's not open just yet, friend. Soon.]" }
+        { "id": "puck", "type": "Puck", "x": 4, "y": 7, "hp": 30, "damage": 1, "disposition": 60, "flipThreshold": 0, "bribeable": true, "vendor": true, "stock": ["bandage", "hot_dog", "boardwalk_burger", "soap", "rock", "sludge_sack", "pipe"], "values": { "rock": 1, "soap": 4, "bandage": 3, "hot_dog": 2 }, "behavior": ["IDLE"], "adjacencyBark": "[Puck: Buyin'? Sellin'? Both, I'll bet — smart. Step up to the till — press E.]" }
     ],
     "items": [
         { "type": "rock", "x": 5, "y": 5 },
