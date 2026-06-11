@@ -534,6 +534,22 @@ export class Renderer {
                         badgeX += 11;
                     }
                 }
+
+                // (AGGRO meter) Mood smiley over the head — the same disposition
+                // face the shop uses, now floating above any NPC that HAS a
+                // disposition. Mindless things (set-piece rats, the Wererat) have
+                // none and show nothing. Lets the player read who's hostile /
+                // wary / bribed-friendly at a glance, and watch a face soften as
+                // they hand over gifts. Sits above the HP bar; nudged higher when
+                // buff badges occupy that row.
+                if (e.disposition != null) {
+                    const faceR  = 6.5;
+                    const faceCX = px + TILE_PX / 2;
+                    const faceCY = (e.buffs && e.buffs.length > 0) ? py - 28 : py - 15;
+                    ctx.fillStyle = 'rgba(0,0,0,0.35)';   // soft backing for readability over busy sprites
+                    ctx.beginPath(); ctx.arc(faceCX, faceCY, faceR + 1.5, 0, Math.PI * 2); ctx.fill();
+                    this._drawMoodFace(faceCX, faceCY, mood(e.disposition).face, faceR);
+                }
             } else {
                 // Corpse — gray tint overlay turns the sprite into a faded
                 // version of itself, marking it as "defeated" without
@@ -1670,9 +1686,9 @@ export class Renderer {
     // A tiny procedural mood smiley keyed off trade.mood().face. Center at
     // (cx, cy). Eyes flatten to brows when wary/angry; the mouth bends from a
     // full beam to a hard frown; "refuse" goes a sour red.
-    _drawMoodFace(cx, cy, face) {
+    _drawMoodFace(cx, cy, face, r = 9) {
         const { ctx } = this;
-        const r = 9;
+        const s = r / 9;   // inner features are tuned for r=9; scale them with r
 
         ctx.beginPath();
         ctx.arc(cx, cy, r, 0, Math.PI * 2);
@@ -1684,28 +1700,28 @@ export class Renderer {
 
         // Eyes (or angled brows for the sour moods).
         ctx.fillStyle = '#2a2218';
-        const ey = cy - 2.5, ex = 3.4;
+        const ey = cy - 2.5 * s, ex = 3.4 * s;
         if (face === 'angry' || face === 'wary' || face === 'refuse') {
-            ctx.fillRect(cx - ex - 1.5, ey - 0.5, 3.4, 2);
-            ctx.fillRect(cx + ex - 1.9, ey - 0.5, 3.4, 2);
+            ctx.fillRect(cx - ex - 1.5 * s, ey - 0.5 * s, 3.4 * s, 2 * s);
+            ctx.fillRect(cx + ex - 1.9 * s, ey - 0.5 * s, 3.4 * s, 2 * s);
         } else {
-            ctx.beginPath(); ctx.arc(cx - ex, ey, 1.4, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.arc(cx + ex, ey, 1.4, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(cx - ex, ey, 1.4 * s, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(cx + ex, ey, 1.4 * s, 0, Math.PI * 2); ctx.fill();
         }
 
         // Mouth — curvature by mood. depth>0 smiles, depth<0 frowns.
-        const depth = { beam: 4, happy: 3, content: 1.5, neutral: 0, wary: -2, angry: -3.5, refuse: -3.5 }[face] ?? 0;
-        const my = cy + 3.5;
+        const depth = ({ beam: 4, happy: 3, content: 1.5, neutral: 0, wary: -2, angry: -3.5, refuse: -3.5 }[face] ?? 0) * s;
+        const my = cy + 3.5 * s;
         ctx.strokeStyle = '#2a2218';
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         if (depth === 0) {
-            ctx.moveTo(cx - 4.5, my);
-            ctx.lineTo(cx + 4.5, my);
+            ctx.moveTo(cx - 4.5 * s, my);
+            ctx.lineTo(cx + 4.5 * s, my);
         } else {
             const cornerY = my - depth * 0.5;
-            ctx.moveTo(cx - 4.5, cornerY);
-            ctx.quadraticCurveTo(cx, my + depth, cx + 4.5, cornerY);
+            ctx.moveTo(cx - 4.5 * s, cornerY);
+            ctx.quadraticCurveTo(cx, my + depth, cx + 4.5 * s, cornerY);
         }
         ctx.stroke();
     }
