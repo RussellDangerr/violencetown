@@ -31,6 +31,7 @@ export const STATE = {
     WANDER:  'WANDER',
     WORKING: 'WORKING',
     HOSTILE: 'HOSTILE', // declared but not yet routed here; legacy chase in enemies.js for now
+    ALLIED:  'ALLIED',  // a bribe-flipped ally — fights the player's hostiles (game._allyTakeTurn)
 };
 
 // ── Public API ──────────────────────────────────────────────────────────────
@@ -110,6 +111,16 @@ export function tickNpcState(game, npc) {
             // to do.
             const msg = tickWorking(game, npc);
             if (msg) messages.push(msg);
+            break;
+        }
+
+        case STATE.ALLIED: {
+            // A bribe-flipped ally. The combat + targeting + leash-follow logic
+            // lives in main.js (_allyTakeTurn), which has the attack pipeline,
+            // hit-splats, and enemy-death hooks; the FSM just delegates so npc.js
+            // stays free of combat coupling. Returns log lines to surface.
+            const allyMsgs = game._allyTakeTurn ? game._allyTakeTurn(npc) : [];
+            for (const m of allyMsgs) messages.push(m);
             break;
         }
 

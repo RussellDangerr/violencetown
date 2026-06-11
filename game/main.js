@@ -10,6 +10,7 @@ import { DIR_NAMES, PLAYER_MAX_HP, PLAYER_MAX_MP, SLUDGE_DOT, INVENTORY_SIZE, MA
 import { ITEMS, resolveUse, resolveThrow, tickTempEquips } from './items.js';
 import { attack, formatDamageNumber } from './combat.js';
 import { Enemy, resolveEnemyTurns } from './enemies.js';
+import { getGreedyStep } from './pathing.js'; // (aggro bands) ally pathfinding toward hostiles / the player
 import { applyGive } from './give-action.js';
 import { escapeHtml, manhattan, clamp } from './utils.js';
 import { RNG } from './rng.js';
@@ -2133,6 +2134,13 @@ class Game {
         const playerEntity = { name: '[Player]', isDead: () => false };
         const result = attack(playerEntity, enemyObj.entity, damage);
 
+        // (AGGRO behavior bands) Friendly fire — hitting your own bribed ally
+        // re-flips them to hostile. The blow still lands (below); they just turn
+        // on you for it. Skip if the hit killed them (nothing to re-flip).
+        if (enemyObj._ally && enemyObj.entity.isAlive()) {
+            this._revertAlly(enemyObj);
+        }
+
         // (combat-feel-pass) Typed hit-splat. Direction = player→enemy for a
         // direct swing/bump so the splat fans that way; AoE callers (the thrown
         // 3×3 burst) pass opts.omni so it bursts around the target instead.
@@ -2171,18 +2179,7 @@ class Game {
         // out alongside the damage number. Kill events override the random
         // hit-word with a fixed "K.O.!" so the beat reads as a milestone.
         if (result.killed) {
-            audio.playSfx('enemy-killed'); // [audio] K.O. sting on a kill
-            this._spawnEventWord(enemyObj.x, enemyObj.y, 'K.O.!', '#ff8822', 22);
-            this._log(`[Defeated ${enemyObj.entity.name}]`);
-            this.emitGameEvent('enemy_killed', {
-                type: enemyObj.type, id: enemyObj.id, x: enemyObj.x, y: enemyObj.y, tag: enemyObj.tag,
-            });
-            // The Were-Rat drops the converter; rat kills feed the escape waves.
-            if (enemyObj.tag === 'wererat_boss' && ITEMS.catalytic_converter) {
-                this.groundItems.push({ type: 'catalytic_converter', x: enemyObj.x, y: enemyObj.y, def: ITEMS.catalytic_converter });
-                this._log('[The Were-Rat drops your cataclysmic converter!]', 'pickup');
-            }
-            onSewerEnemyKilled(this, enemyObj);
+            this._handleEnemyDeath(enemyObj);
         } else {
             audio.playSfx('attack-hit'); // [audio] impact on a non-lethal hit
             // (combat-feel-pass) The per-hit onomatopoeia ("POW!") is retired —
@@ -2191,6 +2188,88 @@ class Game {
         }
 
         return formatDamageNumber(result);
+    }
+
+    // Shared "an enemy just died" side-effects — the K.O. beat, the kill event,
+    // the Were-Rat converter drop, and the sewer-escape wave counter. Called
+    // from combatAttack (player kills) AND _allyTakeTurn (ally kills) so a bribed
+    // ally landing the finishing blow still drops the converter / feeds the
+    // gauntlet instead of soft-locking the quest. (AGGRO behavior bands)
+    _handleEnemyDeath(enemyObj) {
+        audio.playSfx('enemy-killed'); // [audio] K.O. sting on a kill
+        this._spawnEventWord(enemyObj.x, enemyObj.y, 'K.O.!', '#ff8822', 22);
+        this._log(`[Defeated ${enemyObj.entity.name}]`);
+        this.emitGameEvent('enemy_killed', {
+            type: enemyObj.type, id: enemyObj.id, x: enemyObj.x, y: enemyObj.y, tag: enemyObj.tag,
+        });
+        // The Were-Rat drops the converter; rat kills feed the escape waves.
+        if (enemyObj.tag === 'wererat_boss' && ITEMS.catalytic_converter) {
+            this.groundItems.push({ type: 'catalytic_converter', x: enemyObj.x, y: enemyObj.y, def: ITEMS.catalytic_converter });
+            this._log('[The Were-Rat drops your cataclysmic converter!]', 'pickup');
+        }
+        onSewerEnemyKilled(this, enemyObj);
+    }
+
+    // ── Allies (bribe-flipped — AGGRO behavior bands) ──────────────────────────
+
+    // Is `e` a hostile the player's allies should hunt? Alive, not itself an
+    // ally, and either a legacy chaser (no behavior whitelist) or an explicit
+    // HOSTILE FSM entry. Non-hostile FSM NPCs (vendors, idle wanderers) and
+    // other allies are excluded.
+    _isHostileToPlayer(e) {
+        return e.entity.isAlive() && !e._ally
+            && (e.behavior == null || e.behavior.includes('HOSTILE'));
+    }
+
+    // One turn for a bribed ALLY (dispatched from npc.js's ALLIED state). Hunt
+    // the nearest hostile within SEEK tiles — attack if adjacent, else step
+    // toward it. With no hostile in range, leash-follow the player (close in only
+    // when more than LEASH tiles away) so allies neither wander off nor crowd you.
+    _allyTakeTurn(ally) {
+        const SEEK = 8, LEASH = 3;
+
+        let target = null, bestDist = Infinity;
+        for (const e of this.enemies) {
+            if (!this._isHostileToPlayer(e)) continue;
+            const d = manhattan(ally.x, ally.y, e.x, e.y);
+            if (d <= SEEK && d < bestDist) { bestDist = d; target = e; }
+        }
+
+        if (target) {
+            if (bestDist <= 1) {
+                const result = attack(ally.entity, target.entity, ally.damage);
+                if (result) {
+                    this._spawnHitSplat(target.x, target.y, `-${result.dealt}`, 'physical', { omni: true });
+                    target._hitFlashUntil = performance.now() + 120;
+                    this._ensureParticleLoop();
+                    if (result.killed) this._handleEnemyDeath(target);
+                }
+            } else {
+                const step = getGreedyStep(this, { x: ally.x, y: ally.y }, { x: target.x, y: target.y }, { self: ally });
+                if (step) { ally.x = step.x; ally.y = step.y; }
+            }
+            return [];
+        }
+
+        // No hostile in range — leash-follow the player.
+        if (manhattan(ally.x, ally.y, this.playerX, this.playerY) > LEASH) {
+            const step = getGreedyStep(this, { x: ally.x, y: ally.y }, { x: this.playerX, y: this.playerY }, { self: ally });
+            if (step) { ally.x = step.x; ally.y = step.y; }
+        }
+        return [];
+    }
+
+    // Friendly fire (or any player damage) snaps a bribed ally back to hostile.
+    // They become a legacy chaser locked onto the player — the simplest "enraged"
+    // reversion, reusing the existing chase AI rather than a new HOSTILE state.
+    _revertAlly(enemyObj) {
+        enemyObj._ally = false;
+        enemyObj.behavior = null;       // → legacy chase path in resolveEnemyTurns
+        enemyObj.fsmState = null;
+        enemyObj.state = 'chasing';     // immediately hostile, no re-acquire delay
+        enemyObj.disposition = -50;     // betrayed: head-meter goes angry + re-bribing costs more
+        enemyObj._wasFlipped = false;   // ...but they CAN be won back if you make amends
+        this._log(`[The ${enemyObj.type} turns on you!]`, 'combat');
     }
 
     applyDamageToPlayer(rawDamage) {
