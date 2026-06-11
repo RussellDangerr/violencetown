@@ -386,6 +386,9 @@ class Game {
         // [audio] swap the ambient bed to match the zone (no-op pre-init / if
         // the same track is already playing). SEWER gets the darker loop.
         audio.playMusic(this.map.zoneName === 'SEWER' ? 'sewer' : 'town');
+        // (ending) If the car's already fixed, re-open the North bridge — derives
+        // from the persistent flag so it's open again on every town re-entry.
+        this._openBridgeIfCarFixed();
         this._render();
     }
 
@@ -408,6 +411,24 @@ class Game {
         const existing = this._tileDiffs.find(d => d.x === x && d.y === y);
         if (existing) existing.id = id;
         else this._tileDiffs.push({ x, y, id });
+    }
+
+    // (ending) Once the car's fixed, the North-bridge barricade is clear — and
+    // driving across the bridge ends Chapter One (the win-trigger lives in
+    // _doMove). Derived from the PERSISTENT `carFixed` flag rather than the
+    // per-map `_tileDiffs` (which reset on every _loadMap), so the bridge re-opens
+    // whenever the town reloads — surviving leaving + returning, and CONTINUE.
+    // Safe to call anytime: no-ops unless we're in town with the car fixed.
+    _openBridgeIfCarFixed() {
+        if (!this.questEngine || !this.map || this.map.zoneName !== 'TOWN') return;
+        if (!this.questEngine.getFlag('carFixed')) return;
+        // Swap the barricade fence (tile 17) at the bridge mouth (row 0, x7-9) to
+        // walkable road (tile 12) so the player can drive across.
+        this.setTile(7, 0, 12);
+        this.setTile(8, 0, 12);
+        this.setTile(9, 0, 12);
+        const br = (this.examinables || []).find(e => e.id === 'bridge');
+        if (br) br.text = "[The barricade's down and the engine's warm. North across the bridge, out of Violencetown for good. Drive.]";
     }
 
     // Persist the game. Debounced to every few turns unless forced (forced on
@@ -1355,6 +1376,16 @@ class Game {
             // NOW snap the grid position
             this.playerX = nx;
             this.playerY = ny;
+
+            // (ending) Drive north across the now-open bridge → End of Chapter One.
+            // The bridge mouth (row 0, x7-9) is only walkable once the car's fixed
+            // (_openBridgeIfCarFixed), so reaching it here is the deliberate finale,
+            // not the instant-on-fix cut that used to happen.
+            if (ny === 0 && nx >= 7 && nx <= 9 && this.questEngine.getFlag('carFixed')) {
+                this._log('[You gun it across the bridge — Violencetown shrinks in the mirror.]', 'transition');
+                this._endChapterOne();
+                return;
+            }
 
             // Hazards
             const tileDef = this.map.getTileDef(nx, ny);
