@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="version" content="0.9.0">
     <meta name="description" content="Violencetown — a browser-based 2D RPG with tick-based combat, an Omnitrix-style radial menu, and hand-authored zones. Zero dependencies, no build step, just open and play.">
     <meta name="theme-color" content="#0a0a0a">
@@ -24,7 +24,14 @@
     <meta name="twitter:image" content="https://violencetown.russelldangerr.com/game/og-card.png">
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="apple-touch-icon" href="favicon.svg">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+
+    <!-- PWA: installable, standalone (no browser chrome), offline-capable. -->
+    <link rel="manifest" href="manifest.webmanifest">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Violencetown">
 
     <title>Violencetown</title>
     <link rel="stylesheet" href="style.css">
@@ -186,5 +193,17 @@
     </div>
 
     <script type="module" src="main.js"></script>
+
+    <!-- PWA offline shell. Network-first (see sw.js), so it never serves stale
+         code while online — it only takes over when there's no network. -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').catch((err) => {
+                    console.warn('[pwa] service worker registration failed:', err);
+                });
+            });
+        }
+    </script>
 </body>
 </html>

@@ -32,7 +32,7 @@ body {
     align-items: center;
     justify-content: center;
     /* Stop iOS pull-to-refresh and rubber-banding when tapping near edges. */
-    overscroll-behavior: contain;
+    overscroll-behavior: none;
     /* Browser-game polish: kill double-tap-to-zoom (which also drives accidental
        text selection on iOS), the gray tap-flash, and the long-press callout.
        Pinch-zoom is preserved via touch-action: manipulation; the help modal
