@@ -2,7 +2,7 @@
 
 A browser-based 2D RPG of small violences, set across a hand-authored, directional world. Zero dependencies, no build step — open and play.
 
-Play it live at [violencetown.russelldangerr.com/game/](https://violencetown.russelldangerr.com/game/).
+Play it live at [violencetown.russelldangerr.com](https://violencetown.russelldangerr.com).
 
 ## Status
 

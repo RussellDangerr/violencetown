@@ -1,0 +1,8 @@
+# Cloudflare Pages redirects.
+#
+# The Pages build output directory is `game/`, so the game is served at the
+# domain ROOT (violencetown.russelldangerr.com/), not /game/. These rules keep
+# any old /game/ links (README, bookmarks, the link on the personal site)
+# working by redirecting them to the real root paths.
+/game/*  /:splat  301
+/game    /        301
