@@ -218,6 +218,11 @@ class Game {
         this.enemies = [];
         this.containers = []; // [{ id, type, x, y, contents: [...] }] — live, mutable
         this._pendingTransition = null;
+        // (zone pursuit) Hostiles that follow you through a door, captured before
+        // _loadMap wipes the old zone and re-injected at the door you arrive at.
+        this._pendingFollowers = null;
+        this._pendingFollowersFrom = null;   // url of the zone they're chasing you OUT of
+        this._mapUrl = null;                 // url of the currently-loaded map
 
         // Economy
         this.gold = 0;
@@ -353,6 +358,7 @@ class Game {
 
     async _loadMap(url, spawnX, spawnY) {
         this.map = await loadMap(url);
+        this._mapUrl = url;
         this.playerX = spawnX ?? this.map.spawn.x;
         this.playerY = spawnY ?? this.map.spawn.y;
 
@@ -367,6 +373,16 @@ class Game {
         }
         this.enemies = [];
         for (const s of this.map.enemySpawns) this.enemies.push(new Enemy(s));
+
+        // (zone pursuit) Re-inject any hostiles that chased you through the door.
+        // They spawn at the door leading back where you came from — visible in
+        // the threshold, not out of thin air — and get one "emerging" beat
+        // before they act. Skipped on initial load / respawn / save-restore
+        // (no pending followers then).
+        if (this._pendingFollowers && this._pendingFollowers.length) {
+            this._injectFollowers();
+        }
+        this._pendingFollowers = null;
 
         // Live containers — copy from spawn data so opening/depositing mutates
         // the live instance, not the map definition. Map reload re-snapshots
@@ -396,6 +412,74 @@ class Game {
         // from the persistent flag so it's open again on every town re-entry.
         this._openBridgeIfCarFixed();
         this._render();
+    }
+
+    // ── Zone pursuit (enemies follow you through doors) ────────────────────────
+
+    // Hostiles "on your heels" as you flee through transition `t`: alive, not an
+    // ally, and either actively chasing or within FOLLOW_RANGE of the door / you.
+    // These get carried into the next zone. (Allies don't pursue — abandoning
+    // them on a zone change is a separate, future nicety.)
+    _captureFollowers(t) {
+        const FOLLOW_RANGE = 3;
+        const out = [];
+        for (const e of this.enemies) {
+            if (!e.entity.isAlive() || e._ally) continue;
+            const hostile = (e.behavior == null) || e.behavior.includes('HOSTILE');
+            if (!hostile) continue;
+            const onYourHeels = e.state === 'chasing'
+                || manhattan(e.x, e.y, t.x, t.y) <= FOLLOW_RANGE
+                || manhattan(e.x, e.y, this.playerX, this.playerY) <= FOLLOW_RANGE;
+            if (onYourHeels) out.push(e);
+        }
+        return out;
+    }
+
+    // Place the captured followers in the freshly-loaded zone at the door that
+    // leads back where they came from (so they pour in through the threshold you
+    // just used, in plain sight). Each gets a one-turn emerge delay so you get a
+    // beat to react. Falls back to your arrival tile if no matching door exists.
+    _injectFollowers() {
+        const followers = this._pendingFollowers || [];
+        const door = (this.map.transitions || []).find(tr => tr.toMap === this._pendingFollowersFrom);
+        const dx = door ? door.x : this.playerX;
+        const dy = door ? door.y : this.playerY;
+        const spots = this._spreadSpots(dx, dy, followers.length);
+        let placed = 0;
+        for (let i = 0; i < followers.length; i++) {
+            const spot = spots[i];
+            if (!spot) break;                 // ran out of room at the threshold — the rest are lost
+            const f = followers[i];
+            f.x = spot.x; f.y = spot.y;
+            f.state = 'chasing';              // they came through locked onto you
+            f._emergeDelay = 1;               // one beat to climb through before they act
+            this.enemies.push(f);
+            placed++;
+        }
+        if (placed > 0) this._log('[They shoulder through the door after you!]', 'combat');
+    }
+
+    // Up to `n` walkable, unoccupied tiles in expanding rings from (cx,cy) —
+    // nearest-the-door first. Skips the player's tile and any live enemy.
+    _spreadSpots(cx, cy, n) {
+        const out = [];
+        const taken = new Set();
+        const occupied = (x, y) =>
+            (x === this.playerX && y === this.playerY)
+            || this.enemies.some(e => e.entity.isAlive() && e.x === x && e.y === y)
+            || taken.has(x + ',' + y);
+        for (let r = 0; r <= 4 && out.length < n; r++) {
+            for (let oy = -r; oy <= r && out.length < n; oy++) {
+                for (let ox = -r; ox <= r && out.length < n; ox++) {
+                    if (Math.max(Math.abs(ox), Math.abs(oy)) !== r) continue;   // current ring shell only
+                    const x = cx + ox, y = cy + oy;
+                    if (!this.map.isWalkable(x, y) || occupied(x, y)) continue;
+                    taken.add(x + ',' + y);
+                    out.push({ x, y });
+                }
+            }
+        }
+        return out;
     }
 
     // ── Persistence helpers ────────────────────────────────────────────────────
@@ -2037,6 +2121,11 @@ class Game {
             const t = this._pendingTransition;
             this._pendingTransition = null;
             this._log(t.label || '[Transitioning...]');
+            // (zone pursuit) Snapshot the hostiles on your heels BEFORE _loadMap
+            // wipes them, plus which zone they're chasing you out of, so they can
+            // be re-injected at the matching door in the new zone.
+            this._pendingFollowers = this._captureFollowers(t);
+            this._pendingFollowersFrom = this._mapUrl;
             // Block input during the async map load — stay RESOLVING until the
             // new map is in place (the .then() restores IDLE). Prevents acting
             // against the old map mid-fetch.

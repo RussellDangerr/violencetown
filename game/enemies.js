@@ -170,6 +170,11 @@ export function resolveEnemyTurns(game) {
     for (const enemy of game.enemies) {
         if (!enemy.entity.isAlive()) continue;
 
+        // (zone pursuit) Just came through a door after the player — spend one
+        // turn "emerging" (inert, but visible in the threshold) so the player
+        // gets a beat to react to the breach before the chase resumes.
+        if (enemy._emergeDelay > 0) { enemy._emergeDelay--; continue; }
+
         // Tick this enemy's buffs/debuffs (Blind, future Poison/Stun/Slow)
         // BEFORE any FSM/legacy logic runs. Expired buffs get removed; the
         // effect of an active buff reads later in the turn (e.g., Blind
