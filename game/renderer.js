@@ -278,6 +278,7 @@ export class Renderer {
         this._drawGroundItems(game);
         this._drawEnemies(game);
         this._drawPlayer(game);
+        this._drawJammedDoor(game);
 
         // Floating damage numbers float above the world but under the HUD
         // so the HP panel + hotbar are never occluded by spammy combat.
@@ -572,6 +573,38 @@ export class Renderer {
                 }
             }
         }
+    }
+
+    // ── Wedged door (pipe-jam — zone pursuit) ───────────────────────────────
+    // A dark plank slab with an X of pipe across the door you wedged shut, plus
+    // an integrity bar that drains as the trapped pursuers pound it.
+    _drawJammedDoor(game) {
+        const j = game._jammedDoor;
+        if (!j) return;
+        const { ctx, half } = this;
+        const vx = j.x - game.playerX + half;
+        const vy = j.y - game.playerY + half;
+        if (vx < -1 || vx > VIEW_TILES || vy < -1 || vy > VIEW_TILES) return;
+        const px = vx * TILE_PX - this._scrollX;
+        const py = vy * TILE_PX - this._scrollY;
+
+        ctx.fillStyle = 'rgba(40,30,20,0.85)';
+        ctx.fillRect(px + 3, py + 3, TILE_PX - 6, TILE_PX - 6);
+        ctx.strokeStyle = '#b8b8b8';                 // the steel pipe wedged across
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(px + 6, py + 6); ctx.lineTo(px + TILE_PX - 6, py + TILE_PX - 6);
+        ctx.moveTo(px + TILE_PX - 6, py + 6); ctx.lineTo(px + 6, py + TILE_PX - 6);
+        ctx.stroke();
+
+        const frac = Math.max(0, j.integrity / (j.max || 1));
+        const bx = px + 4, by = py - 6, bw = TILE_PX - 8, bh = 4;
+        ctx.fillStyle = '#000000cc';
+        ctx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
+        ctx.fillStyle = '#3a2a1a';
+        ctx.fillRect(bx, by, bw, bh);
+        ctx.fillStyle = frac > 0.5 ? '#caa84a' : (frac > 0.25 ? '#d2802f' : '#d23f2f');
+        ctx.fillRect(bx, by, bw * frac, bh);
     }
 
     // ── Floating damage numbers ──────────────────────────────────────────────

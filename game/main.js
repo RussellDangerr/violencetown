@@ -51,6 +51,11 @@ const STATE = {
     TRADE:           'trade',           // (trade slice 1) Puck's shop window — buy/sell/bribe
 };
 
+// (zone pursuit) A wedged door's starting integrity. Trapped pursuers pound it
+// for ~their `damage` each turn, so stronger / more numerous enemies break in
+// faster — a reprieve that scales with the threat. Tuning knob.
+const PIPE_JAM_INTEGRITY = 30;
+
 // ── Directions ───────────────────────────────────────────────────────────────
 
 const DIRS = {
@@ -223,6 +228,8 @@ class Game {
         this._pendingFollowers = null;
         this._pendingFollowersFrom = null;   // url of the zone they're chasing you OUT of
         this._mapUrl = null;                 // url of the currently-loaded map
+        this._cameFrom = null;               // url of the zone you ENTERED this one from (for the pipe-jam)
+        this._jammedDoor = null;             // {x,y,toMap,integrity,max,intruders[]} while a door is wedged shut
 
         // Economy
         this.gold = 0;
@@ -359,6 +366,7 @@ class Game {
     async _loadMap(url, spawnX, spawnY) {
         this.map = await loadMap(url);
         this._mapUrl = url;
+        this._jammedDoor = null;   // per-zone: any wedged door is left behind when you leave
         this.playerX = spawnX ?? this.map.spawn.x;
         this.playerY = spawnY ?? this.map.spawn.y;
 
@@ -453,6 +461,7 @@ class Game {
             f.x = spot.x; f.y = spot.y;
             f.state = 'chasing';              // they came through locked onto you
             f._emergeDelay = 1;               // one beat to climb through before they act
+            f._intruder = true;               // marks them jammable while still near the door
             this.enemies.push(f);
             placed++;
         }
@@ -480,6 +489,61 @@ class Game {
             }
         }
         return out;
+    }
+
+    // ── Pipe-jam (wedge the door you came through — AGGRO/world feel) ───────────
+
+    // Try to wedge the door leading back to the zone you came from. Succeeds (and
+    // consumes the pipe) only if that door exists and you're within reach of it.
+    // Pursuers still near the door are pulled back behind it and start pounding
+    // (see _tickJammedDoor). Returns true if a door was jammed.
+    _tryJamDoor() {
+        const door = (this.map.transitions || []).find(tr => tr.toMap === this._cameFrom);
+        if (!door) { this._log('[No door behind you to wedge.]'); return false; }
+        if (manhattan(this.playerX, this.playerY, door.x, door.y) > 3) {
+            this._log('[Get closer to the door to wedge it shut.]');
+            return false;
+        }
+        if (this._jammedDoor) { this._log('[That door is already wedged.]'); return false; }
+
+        // Pull intruders still hanging at the threshold back behind the door.
+        const trapped = this.enemies.filter(e =>
+            e._intruder && e.entity.isAlive() && manhattan(e.x, e.y, door.x, door.y) <= 3);
+        this.enemies = this.enemies.filter(e => !trapped.includes(e));
+
+        this._jammedDoor = { x: door.x, y: door.y, toMap: door.toMap, integrity: PIPE_JAM_INTEGRITY, max: PIPE_JAM_INTEGRITY, intruders: trapped };
+        audio.playSfx('bump-wall');
+        if (this._triggerScreenShake) this._triggerScreenShake(150, 3);
+        this._log(trapped.length
+            ? '[You wedge the pipe through the door. It holds — and they start POUNDING.]'
+            : '[You wedge the pipe through the door. Sealed behind you.]', 'combat');
+        return true;
+    }
+
+    // Each turn, the trapped pursuers pound the wedged door for ~their damage.
+    // When its integrity breaks, the door bursts and they pour through (re-using
+    // the pursuit injector). Called from _advanceWorld after the enemy turns.
+    _tickJammedDoor() {
+        const j = this._jammedDoor;
+        if (!j) return;
+        const alive = j.intruders.filter(e => e.entity.isAlive());
+        if (alive.length === 0) { this._jammedDoor = null; return; }
+
+        const pound = alive.reduce((s, e) => s + Math.max(2, e.damage || 4), 0);
+        j.integrity -= pound;
+
+        if (j.integrity <= 0) {
+            this._jammedDoor = null;
+            this._pendingFollowers = alive;
+            this._pendingFollowersFrom = j.toMap;
+            this._injectFollowers();          // they burst back in at the same door, emerging one beat
+            this._pendingFollowers = null;
+            if (this._triggerScreenShake) this._triggerScreenShake(260, 5);
+            this._log('[The door BURSTS off its frame — they pour through!]', 'combat');
+        } else {
+            if (this._triggerScreenShake) this._triggerScreenShake(90, 2);
+            this._log('[The door SHUDDERS under the pounding...]');
+        }
     }
 
     // ── Persistence helpers ────────────────────────────────────────────────────
@@ -1738,6 +1802,22 @@ class Game {
     }
 
     _doItemUse(item) {
+        // (zone pursuit) The pipe's Use jams the door you came through, slamming
+        // it on pursuers mid-breach. Only consumes the pipe + the turn if a door
+        // was actually wedged; otherwise fall through (it has no normal Use).
+        if (item.canJamDoors) {
+            if (this._tryJamDoor()) {
+                this._removeFromSlot(this.selectedSlot);   // the pipe stays wedged in the door
+                this.selectedSlot = -1;
+                this.state = STATE.IDLE;
+                this._advanceWorld();
+            } else {
+                this.state = STATE.ITEM_SELECTED;          // nothing to jam — don't waste it
+                this._render();
+            }
+            return;
+        }
+
         if (item.effect === 'cure_sludge') this._soapUsedThisTurn = true;
         if (item.effect === 'heal') audio.playSfx('heal'); // [audio] healing item used
 
@@ -2093,6 +2173,10 @@ class Game {
         }
         if (this.playerHp <= 0) { this.playerHp = 0; this._die(); return; }
 
+        // (zone pursuit) A wedged door takes a pounding from the pursuers trapped
+        // behind it; it bursts when their blows break it.
+        this._tickJammedDoor();
+
         // Temp equips tick
         const equipMsgs = tickTempEquips(this);
         for (const m of equipMsgs) this._log(m);
@@ -2126,6 +2210,7 @@ class Game {
             // be re-injected at the matching door in the new zone.
             this._pendingFollowers = this._captureFollowers(t);
             this._pendingFollowersFrom = this._mapUrl;
+            this._cameFrom = this._mapUrl;   // the zone behind you — the pipe-jam targets its door
             // Block input during the async map load — stay RESOLVING until the
             // new map is in place (the .then() restores IDLE). Prevents acting
             // against the old map mid-fetch.
