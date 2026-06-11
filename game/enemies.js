@@ -50,6 +50,12 @@ export class Enemy {
         onFlip = null,
         // Free-form tag for set-piece / quest hooks (e.g. 'wererat_boss', 'sewer_rat').
         tag = null,
+        // Vendor fields (trade Slice 1). `vendor:true` makes the NPC a shopkeep —
+        // pressing [E] adjacent opens their trade window. `stock` is the list of
+        // item ids they sell (infinite supply for now); buy/sell prices come from
+        // trade.js keyed off this NPC's `disposition`.
+        vendor = null,
+        stock = null,
     }) {
         this.id         = id;
         this.type       = type;
@@ -91,6 +97,8 @@ export class Enemy {
         this.values        = values;
         this.onFlip        = onFlip;
         this.tag           = tag;
+        this.vendor        = vendor;
+        this.stock         = stock;
 
         // Debuffs / buffs — symmetric with Game.buffs[] on the player side.
         // Used by Poke (applies Blind), Poison (DoT, future), Stun (skip

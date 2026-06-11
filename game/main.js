@@ -10,6 +10,7 @@ import { DIR_NAMES, PLAYER_MAX_HP, PLAYER_MAX_MP, SLUDGE_DOT, INVENTORY_SIZE, MA
 import { ITEMS, resolveUse, resolveThrow, tickTempEquips } from './items.js';
 import { attack, formatDamageNumber } from './combat.js';
 import { Enemy, resolveEnemyTurns } from './enemies.js';
+import { getGreedyStep } from './pathing.js'; // (aggro bands) ally pathfinding toward hostiles / the player
 import { applyGive } from './give-action.js';
 import { escapeHtml, manhattan, clamp } from './utils.js';
 import { RNG } from './rng.js';
@@ -21,7 +22,9 @@ import {
     HOTBAR_X_START, HOTBAR_Y, HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_STRIDE, HOTBAR_SLOTS,
     RADIAL_CENTER_X, RADIAL_CENTER_Y, LOG_STRIP_RECT, LOG_MODAL_RECT,
     RING_HUB_R, RING_ACTION_R, RING_ITEM_R, RING_AIM_R,
+    TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BRIBE_RECT, tradeCellRect,
 } from './layout.js';
+import { canTrade, buyPrice, sellPrice, bribeStepCost, BRIBE_STEP } from './trade.js'; // (trade slice 1) disposition pricing
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
 import {
@@ -45,6 +48,7 @@ const STATE = {
     // (Legacy WIN state retired with the tile-7 boss-trigger trap — fix/critical-path.)
     ENDING:          'ending',          // End of Chapter One — main-quest outro + credits (fix/critical-path)
     LOG_MODAL:       'log_modal',       // [L] — full scrollable message history
+    TRADE:           'trade',           // (trade slice 1) Puck's shop window — buy/sell/bribe
 };
 
 // ── Directions ───────────────────────────────────────────────────────────────
@@ -147,6 +151,8 @@ class Game {
         this._logHistory = [];
         this._LOG_HISTORY_MAX = 300;
         this._logModalScroll = 0;
+        this._tradeNpc = null;           // (trade slice 1) the vendor whose shop is open, or null
+        this._tradeSell = null;          // (trade slice 1) snapshot of the sellable bag while shopping
 
         // Inventory: 10 stackable slots, each { itemDef, count } or null
         this.inventory = new Array(INVENTORY_SIZE).fill(null);
@@ -608,6 +614,17 @@ class Game {
                 return;
             }
 
+            // ── TRADE: Puck's shop window (trade slice 1) ──
+            // E / Esc closes; B bribes (raise the vendor's mood for one step's
+            // GP). Buying/selling is by tapping (or clicking) the grid cells —
+            // the canvas pointer handler routes those to _tapTrade.
+            if (this.state === STATE.TRADE) {
+                e.preventDefault();
+                if (e.code === 'KeyE' || e.code === 'Escape') { this._closeTrade(); return; }
+                if (e.code === 'KeyB') { this._bribeVendor(); return; }
+                return;
+            }
+
             // ── ENDING (End of Chapter One): N / Space / Enter restarts ──
             // (fix/critical-path) Matches the on-screen "PRESS N TO PLAY AGAIN"
             // prompt; Space/Enter accepted too since the player's hands are
@@ -657,8 +674,15 @@ class Game {
             // [settings] P = pause (turn-based; blocks input until resumed)
             if (e.code === 'KeyP') { e.preventDefault(); this._setPaused(true); return; }
 
-            // E = examine the faced / adjacent point of interest (free action)
-            if (e.code === 'KeyE') { e.preventDefault(); doExamine(this); this._render(); return; }
+            // E = trade with an adjacent vendor (Puck's till) if one's there;
+            // otherwise examine the faced / adjacent point of interest. Both are
+            // free actions (no turn cost).
+            if (e.code === 'KeyE') {
+                e.preventDefault();
+                const vendor = this._findAdjacentVendor();
+                if (vendor) { this._openTrade(vendor); return; }
+                doExamine(this); this._render(); return;
+            }
 
             // Codeball — dev nuke, only when the debug flag is on (never ships
             // enabled). Silently ignored otherwise. (fix/critical-path)
@@ -1122,6 +1146,9 @@ class Game {
 
         // Log modal is fully modal — route taps to it and nothing behind it.
         if (this.state === STATE.LOG_MODAL) { this._tapLogModal(pt); return; }
+
+        // Trade window is fully modal too — route taps to the shop.
+        if (this.state === STATE.TRADE) { this._tapTrade(pt); return; }
 
         // Priority order is by modality: the most exclusive overlay wins. A
         // tap while the radial menu is open should drive the radial menu,
@@ -2107,6 +2134,13 @@ class Game {
         const playerEntity = { name: '[Player]', isDead: () => false };
         const result = attack(playerEntity, enemyObj.entity, damage);
 
+        // (AGGRO behavior bands) Friendly fire — hitting your own bribed ally
+        // re-flips them to hostile. The blow still lands (below); they just turn
+        // on you for it. Skip if the hit killed them (nothing to re-flip).
+        if (enemyObj._ally && enemyObj.entity.isAlive()) {
+            this._revertAlly(enemyObj);
+        }
+
         // (combat-feel-pass) Typed hit-splat. Direction = player→enemy for a
         // direct swing/bump so the splat fans that way; AoE callers (the thrown
         // 3×3 burst) pass opts.omni so it bursts around the target instead.
@@ -2145,18 +2179,7 @@ class Game {
         // out alongside the damage number. Kill events override the random
         // hit-word with a fixed "K.O.!" so the beat reads as a milestone.
         if (result.killed) {
-            audio.playSfx('enemy-killed'); // [audio] K.O. sting on a kill
-            this._spawnEventWord(enemyObj.x, enemyObj.y, 'K.O.!', '#ff8822', 22);
-            this._log(`[Defeated ${enemyObj.entity.name}]`);
-            this.emitGameEvent('enemy_killed', {
-                type: enemyObj.type, id: enemyObj.id, x: enemyObj.x, y: enemyObj.y, tag: enemyObj.tag,
-            });
-            // The Were-Rat drops the converter; rat kills feed the escape waves.
-            if (enemyObj.tag === 'wererat_boss' && ITEMS.catalytic_converter) {
-                this.groundItems.push({ type: 'catalytic_converter', x: enemyObj.x, y: enemyObj.y, def: ITEMS.catalytic_converter });
-                this._log('[The Were-Rat drops your cataclysmic converter!]', 'pickup');
-            }
-            onSewerEnemyKilled(this, enemyObj);
+            this._handleEnemyDeath(enemyObj);
         } else {
             audio.playSfx('attack-hit'); // [audio] impact on a non-lethal hit
             // (combat-feel-pass) The per-hit onomatopoeia ("POW!") is retired —
@@ -2165,6 +2188,88 @@ class Game {
         }
 
         return formatDamageNumber(result);
+    }
+
+    // Shared "an enemy just died" side-effects — the K.O. beat, the kill event,
+    // the Were-Rat converter drop, and the sewer-escape wave counter. Called
+    // from combatAttack (player kills) AND _allyTakeTurn (ally kills) so a bribed
+    // ally landing the finishing blow still drops the converter / feeds the
+    // gauntlet instead of soft-locking the quest. (AGGRO behavior bands)
+    _handleEnemyDeath(enemyObj) {
+        audio.playSfx('enemy-killed'); // [audio] K.O. sting on a kill
+        this._spawnEventWord(enemyObj.x, enemyObj.y, 'K.O.!', '#ff8822', 22);
+        this._log(`[Defeated ${enemyObj.entity.name}]`);
+        this.emitGameEvent('enemy_killed', {
+            type: enemyObj.type, id: enemyObj.id, x: enemyObj.x, y: enemyObj.y, tag: enemyObj.tag,
+        });
+        // The Were-Rat drops the converter; rat kills feed the escape waves.
+        if (enemyObj.tag === 'wererat_boss' && ITEMS.catalytic_converter) {
+            this.groundItems.push({ type: 'catalytic_converter', x: enemyObj.x, y: enemyObj.y, def: ITEMS.catalytic_converter });
+            this._log('[The Were-Rat drops your cataclysmic converter!]', 'pickup');
+        }
+        onSewerEnemyKilled(this, enemyObj);
+    }
+
+    // ── Allies (bribe-flipped — AGGRO behavior bands) ──────────────────────────
+
+    // Is `e` a hostile the player's allies should hunt? Alive, not itself an
+    // ally, and either a legacy chaser (no behavior whitelist) or an explicit
+    // HOSTILE FSM entry. Non-hostile FSM NPCs (vendors, idle wanderers) and
+    // other allies are excluded.
+    _isHostileToPlayer(e) {
+        return e.entity.isAlive() && !e._ally
+            && (e.behavior == null || e.behavior.includes('HOSTILE'));
+    }
+
+    // One turn for a bribed ALLY (dispatched from npc.js's ALLIED state). Hunt
+    // the nearest hostile within SEEK tiles — attack if adjacent, else step
+    // toward it. With no hostile in range, leash-follow the player (close in only
+    // when more than LEASH tiles away) so allies neither wander off nor crowd you.
+    _allyTakeTurn(ally) {
+        const SEEK = 8, LEASH = 3;
+
+        let target = null, bestDist = Infinity;
+        for (const e of this.enemies) {
+            if (!this._isHostileToPlayer(e)) continue;
+            const d = manhattan(ally.x, ally.y, e.x, e.y);
+            if (d <= SEEK && d < bestDist) { bestDist = d; target = e; }
+        }
+
+        if (target) {
+            if (bestDist <= 1) {
+                const result = attack(ally.entity, target.entity, ally.damage);
+                if (result) {
+                    this._spawnHitSplat(target.x, target.y, `-${result.dealt}`, 'physical', { omni: true });
+                    target._hitFlashUntil = performance.now() + 120;
+                    this._ensureParticleLoop();
+                    if (result.killed) this._handleEnemyDeath(target);
+                }
+            } else {
+                const step = getGreedyStep(this, { x: ally.x, y: ally.y }, { x: target.x, y: target.y }, { self: ally });
+                if (step) { ally.x = step.x; ally.y = step.y; }
+            }
+            return [];
+        }
+
+        // No hostile in range — leash-follow the player.
+        if (manhattan(ally.x, ally.y, this.playerX, this.playerY) > LEASH) {
+            const step = getGreedyStep(this, { x: ally.x, y: ally.y }, { x: this.playerX, y: this.playerY }, { self: ally });
+            if (step) { ally.x = step.x; ally.y = step.y; }
+        }
+        return [];
+    }
+
+    // Friendly fire (or any player damage) snaps a bribed ally back to hostile.
+    // They become a legacy chaser locked onto the player — the simplest "enraged"
+    // reversion, reusing the existing chase AI rather than a new HOSTILE state.
+    _revertAlly(enemyObj) {
+        enemyObj._ally = false;
+        enemyObj.behavior = null;       // → legacy chase path in resolveEnemyTurns
+        enemyObj.fsmState = null;
+        enemyObj.state = 'chasing';     // immediately hostile, no re-acquire delay
+        enemyObj.disposition = -50;     // betrayed: head-meter goes angry + re-bribing costs more
+        enemyObj._wasFlipped = false;   // ...but they CAN be won back if you make amends
+        this._log(`[The ${enemyObj.type} turns on you!]`, 'combat');
     }
 
     applyDamageToPlayer(rawDamage) {
@@ -2583,6 +2688,127 @@ class Game {
         if (rel < third)          this._scrollLogModal(5);
         else if (rel > 2 * third) this._scrollLogModal(-5);
         else                      this._closeLogModal();
+    }
+
+    // ── Trade (Puck's shop — trade slice 1) ────────────────────────────────────
+
+    // The vendor NPC the player is facing, then any adjacent one (mirrors
+    // examine.js findExaminable). A vendor is an alive NPC flagged `vendor:true`.
+    _findAdjacentVendor() {
+        const FACE = { up: { dx: 0, dy: -1 }, down: { dx: 0, dy: 1 }, left: { dx: -1, dy: 0 }, right: { dx: 1, dy: 0 } };
+        const fd = FACE[this.facing] || { dx: 0, dy: 0 };
+        const isVendor = (e) => e && e.vendor && e.entity.isAlive();
+        const faced = this.enemies.find(e => isVendor(e) && e.x === this.playerX + fd.dx && e.y === this.playerY + fd.dy);
+        if (faced) return faced;
+        return this.enemies.find(e => isVendor(e) && manhattan(e.x, e.y, this.playerX, this.playerY) === 1) || null;
+    }
+
+    // Open the shop window for `npc`. A pure menu — the world does NOT advance
+    // (trading is paused, like the log modal), so nearby enemies don't get free
+    // turns while you browse.
+    _openTrade(npc) {
+        if (this.state !== STATE.IDLE) return;
+        if (!npc || !npc.vendor) return;
+        this._tradeNpc = npc;
+        this._tradeSell = this._tradeSellList();   // snapshot the bag layout for stable hit-testing
+        this.state = STATE.TRADE;
+        audio.playSfx('pickup');                   // a little "ka-ching" cue (reuse the pickup blip)
+        this._log(`[${npc.type} opens the till. "What'll it be?"]`, 'transition');
+        this._render();
+    }
+
+    _closeTrade() {
+        if (this.state !== STATE.TRADE) return;
+        this.state = STATE.IDLE;
+        this._tradeNpc = null;
+        this._tradeSell = null;
+        this._render();
+    }
+
+    // The player's sellable bag as [{ slot, itemDef }] in slot order. Quest /
+    // worthless items still appear (greyed, priced "—") so the bag reads true.
+    _tradeSellList() {
+        const out = [];
+        for (let i = 0; i < this.inventory.length; i++) {
+            const s = this.inventory[i];
+            if (s) out.push({ slot: i, itemDef: s.itemDef });
+        }
+        return out;
+    }
+
+    // Buy one unit of `itemId` from the open vendor. No turn cost, no confirm.
+    _buyFromVendor(itemId) {
+        const npc = this._tradeNpc;
+        if (!npc) return;
+        const itemDef = ITEMS[itemId];
+        if (!itemDef) return;
+        if (!canTrade(npc.disposition)) { this._log(`[${npc.type} won't deal with you. Sweeten the mood first.]`); this._render(); return; }
+        const price = buyPrice(itemDef, npc.disposition);
+        if (price == null) { this._log(`[${npc.type} won't sell that.]`); this._render(); return; }
+        if ((this.gold ?? 0) < price) { this._log(`[Not enough GP — ${itemDef.name} runs ${price}.]`); this._render(); return; }
+        if (!this._addToInventory(itemDef)) { this._log('[Your bag is full.]'); this._render(); return; }
+        this.gold -= price;
+        this._tradeSell = this._tradeSellList();
+        audio.playSfx('pickup');
+        this._log(`[Bought ${itemDef.name} for ${price} GP.]`, 'pickup');
+        this._render();
+    }
+
+    // Sell the bag item at inventory `slot` to the open vendor.
+    _sellToVendor(slot) {
+        const npc = this._tradeNpc;
+        if (!npc) return;
+        const stack = this.inventory[slot];
+        if (!stack) return;
+        const itemDef = stack.itemDef;
+        if (!canTrade(npc.disposition)) { this._log(`[${npc.type} won't deal with you. Sweeten the mood first.]`); this._render(); return; }
+        const price = sellPrice(itemDef, npc.disposition);
+        if (price == null) {
+            this._log(itemDef.questItem ? `[You can't sell the ${itemDef.name.replace(/[\[\]]/g, '')} — you need it.]` : `[${npc.type} won't buy that.]`);
+            this._render();
+            return;
+        }
+        this._removeFromSlot(slot);
+        this.gold = (this.gold ?? 0) + price;
+        this._tradeSell = this._tradeSellList();
+        audio.playSfx('pickup');
+        this._log(`[Sold ${itemDef.name} for ${price} GP.]`, 'pickup');
+        this._render();
+    }
+
+    // Slip the vendor gold to nudge their disposition up one BRIBE_STEP. Rising
+    // per-point cost (trade.js bribeStepCost). Disposition caps at +100.
+    _bribeVendor() {
+        const npc = this._tradeNpc;
+        if (!npc) return;
+        const disp = npc.disposition ?? 0;
+        if (disp >= 100) { this._log(`[${npc.type} already loves you. Save your gold.]`); this._render(); return; }
+        const cost = bribeStepCost(disp);
+        if ((this.gold ?? 0) < cost) { this._log(`[Not enough GP to grease the wheels — needs ${cost}.]`); this._render(); return; }
+        this.gold -= cost;
+        npc.disposition = Math.min(100, disp + BRIBE_STEP);
+        audio.playSfx('pickup');
+        this._log(`[You slip ${npc.type} ${cost} GP. Their mood warms.]`, 'transition');
+        this._render();
+    }
+
+    // Touch routing for the open shop: bribe button, a BUY cell, a SELL cell, or
+    // (anywhere outside the panel) close. Cell rects come from layout.tradeCellRect
+    // so they line up exactly with what the renderer drew.
+    _tapTrade(pt) {
+        const npc = this._tradeNpc;
+        if (!npc) { this._closeTrade(); return; }
+        if (!this._pointInRect(pt, TRADE_MODAL_RECT)) { this._closeTrade(); return; }
+        if (this._pointInRect(pt, TRADE_BRIBE_RECT, HIT_SLOP)) { this._bribeVendor(); return; }
+
+        const stock = npc.stock || [];
+        for (let i = 0; i < stock.length; i++) {
+            if (this._pointInRect(pt, tradeCellRect(TRADE_BUY_ORIGIN, i), HIT_SLOP)) { this._buyFromVendor(stock[i]); return; }
+        }
+        const sell = this._tradeSell || [];
+        for (let i = 0; i < sell.length; i++) {
+            if (this._pointInRect(pt, tradeCellRect(TRADE_SELL_ORIGIN, i), HIT_SLOP)) { this._sellToVendor(sell[i].slot); return; }
+        }
     }
 
     // ── Log ──────────────────────────────────────────────────────────────────

@@ -66,3 +66,29 @@ export const RING_AIM_R    = [102, 132];
 // ── Log strip (bottom-left) + [L] history modal panel ──
 export const LOG_STRIP_RECT = { x: 6, y: 496, w: 300, h: 44 };   // y = HOTBAR_OY - 44 - 6
 export const LOG_MODAL_RECT = { x: 24, y: 44, w: 560, h: 520 };
+
+// ── Trade window (Puck's shop — trade Slice 1) ──
+// (drawn by renderer._drawTradeModal, hit-tested by main._tapTrade). Two 3-wide
+// grids side by side: BUY (the vendor's stock) on the left, SELL (the player's
+// bag) on the right. One cell-rect helper feeds both the draw and the hit-test.
+export const TRADE_MODAL_RECT = { x: 24, y: 44, w: 560, h: 520 };
+export const TRADE_COLS       = 3;
+export const TRADE_CELL_W     = 64;
+export const TRADE_CELL_H     = 72;
+export const TRADE_COL_STRIDE = 72;
+export const TRADE_ROW_STRIDE = 80;
+export const TRADE_BUY_ORIGIN  = { x: 52,  y: 156 };
+export const TRADE_SELL_ORIGIN = { x: 320, y: 156 };
+export const TRADE_BRIBE_RECT  = { x: 52, y: 506, w: 200, h: 34 };
+
+// Rect for the `index`-th cell of a grid anchored at `origin` (BUY or SELL).
+export function tradeCellRect(origin, index) {
+    const col = index % TRADE_COLS;
+    const row = Math.floor(index / TRADE_COLS);
+    return {
+        x: origin.x + col * TRADE_COL_STRIDE,
+        y: origin.y + row * TRADE_ROW_STRIDE,
+        w: TRADE_CELL_W,
+        h: TRADE_CELL_H,
+    };
+}

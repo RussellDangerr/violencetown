@@ -114,24 +114,20 @@ function applyFlip(recipient) {
     const onFlip = recipient.onFlip || 'becomeAlly';
     switch (onFlip) {
         case 'becomeAlly':
-            // Remove HOSTILE from the behavior whitelist. The FSM dispatch
-            // in enemies.js will then route this NPC through npc.js, which
-            // sees no HOSTILE and leaves them in IDLE. They stop attacking
-            // by virtue of the whitelist alone — no FSM code change needed.
-            //
-            // Edge case: if the NPC was a legacy chaser (no behavior field
-            // at all), give them one now with HOSTILE explicitly absent.
-            // They become FSM-controlled from this moment forward.
-            //
-            // We set fsmState='IDLE' explicitly rather than relying on the
-            // lazy init in tickNpcState — this guarantees the post-flip
-            // state even when the resulting whitelist is empty (a flipped
-            // legacy chaser ends up with behavior=[] after filtering).
-            recipient.behavior = (recipient.behavior || ['HOSTILE'])
-                .filter(s => s !== 'HOSTILE');
-            recipient.state = 'idle';        // reset legacy chase state
-            recipient.fsmState = 'IDLE';     // explicit post-flip state
-            recipient._lastWanderTurn = 0;   // reset wander cadence
+            // (AGGRO behavior bands) Crossing the flip threshold turns this NPC
+            // into a fighting ALLY, not just a pacified bystander. They drop
+            // their old job/whitelist for a pure ['ALLIED'] behavior: the ALLIED
+            // FSM state (npc.js → game._allyTakeTurn) hunts the player's
+            // hostiles, attacks them, and leash-follows the player when there's
+            // no one to fight. `_ally` marks them so the player's own attacks
+            // re-flip them back to hostile (friendly fire has a cost) and so
+            // allies never target each other. Works uniformly whether the NPC
+            // was a legacy chaser (behavior null) or an FSM worker.
+            recipient._ally = true;
+            recipient.behavior = ['ALLIED'];
+            recipient.state = 'idle';        // clear legacy chase state
+            recipient.fsmState = 'ALLIED';   // explicit post-flip state
+            recipient._lastWanderTurn = 0;
             break;
 
         case 'offerDiscount':
