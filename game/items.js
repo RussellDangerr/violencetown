@@ -53,6 +53,7 @@ export const ITEMS = {
         range: 1,
         damage: 12,
         consumable: false,
+        canJamDoors: true,   // (zone pursuit) Use it to wedge the door you came through shut
         fallbackColor: '#666666',
         baseValue: 8,
     },
