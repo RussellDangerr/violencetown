@@ -456,8 +456,19 @@ export class Renderer {
         const { ctx, half, sprites } = this;
         const now = performance.now();
         for (const e of game.enemies) {
-            const vx = e.x - game.playerX + half;
-            const vy = e.y - game.playerY + half;
+            // Step-slide: enemies glide one tile instead of teleporting. Logic
+            // (AI/collision) reads the snapped e.x/e.y; only the drawn position
+            // lerps from the tile they left. (plans/movement-feel.md #6)
+            let ex = e.x, ey = e.y;
+            if (e._slideStart != null) {
+                const st = Math.min(1, (now - e._slideStart) / (e._slideMs || 1));
+                if (st < 1) {
+                    ex = e._slideFromX + (e.x - e._slideFromX) * st;
+                    ey = e._slideFromY + (e.y - e._slideFromY) * st;
+                }
+            }
+            const vx = ex - game.playerX + half;
+            const vy = ey - game.playerY + half;
             if (vx < -2 || vx > VIEW_TILES + 1 || vy < -2 || vy > VIEW_TILES + 1) continue;
 
             const isAlive = e.entity.isAlive();
@@ -839,10 +850,43 @@ export class Renderer {
         const ppx = half * TILE_PX + offsetX;
         const ppy = half * TILE_PX + offsetY;
 
-        // Kenney chars are single-frame per cell — no facing/animation rows.
-        // PLAYER_SPRITE.col/row are read from sprites.js as the canonical
-        // player cell. The previous LimeZu FACE/animation logic is parked
-        // until/unless we get an animated Kenney character pack.
+        // ── Procedural walk animation (plans/movement-feel.md §UI/UX) ─────────
+        // The Tiny Dungeon sheet has ONE static front-facing pose per character
+        // (verified — no walk frames), so we sell "a person walking" purely with
+        // transforms on that single cell: a per-tile step-bob, a foot-parity
+        // weight-shift (sway + slight waddle that alternates each step — this is
+        // what reads as left-foot/right-foot rather than a bouncing ball), a
+        // squash at footfall, and a horizontal flip for facing left. When
+        // standing, a faint breathe so the courier isn't frozen. Every amplitude
+        // is a tunable constant — dial from "grounded" to "cartoon waddle".
+        const WALK_BOB_PX   = 2.0;   // peak vertical bounce per tile
+        const WALK_SWAY_PX  = 1.0;   // peak horizontal weight-shift (alternates)
+        const WALK_LEAN_DEG = 2.5;   // peak waddle rotation (alternates); 0 = off
+        const WALK_SQUASH   = 0.06;  // scale delta at footfall
+        const IDLE_BOB_PX   = 1.0;   // standing breathe (synced to enemy idle tick)
+
+        let bob = 0, sway = 0, rot = 0, sq = 0;
+        if (game._animating) {
+            const phase = Math.sin(Math.PI * (game._animProgress || 0)); // 0→1→0 over the tile
+            const side  = (game._stepIndex % 2) ? 1 : -1;                // which "foot"
+            bob  = -phase * WALK_BOB_PX;
+            sway =  phase * WALK_SWAY_PX * side;
+            rot  =  phase * WALK_LEAN_DEG * side * Math.PI / 180;
+            sq   =  phase * WALK_SQUASH;
+        } else {
+            // Idle breathe — share the enemies' 250ms idle tick so the whole
+            // scene pulses together (game-feel.md §5A intent; player was frozen).
+            bob = ((game._idleTick || 0) % 2) ? -IDLE_BOB_PX : 0;
+        }
+        const flipX = (game.facing === 'left') ? -1 : 1;
+        const cx = ppx + TILE_PX / 2, cy = ppy + TILE_PX / 2; // sprite center
+
+        ctx.save();
+        ctx.translate(cx + sway, cy + bob);
+        if (rot) ctx.rotate(rot);
+        ctx.scale(flipX * (1 + sq), 1 - sq);
+        ctx.translate(-cx, -cy);
+
         let ok = false;
         if (sprites?.player?.loaded) {
             ok = sprites.player.drawFrame(
@@ -854,6 +898,7 @@ export class Renderer {
             ctx.fillStyle = '#44bb44';
             ctx.fillRect(ppx + 6, ppy + 6, TILE_PX - 12, TILE_PX - 12);
         }
+        ctx.restore();
 
         // Hit-flash overlay — red tint when the player just took damage.
         // Sharper alpha than the enemy flash since the player sprite tends
