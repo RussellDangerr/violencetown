@@ -10,7 +10,7 @@ import { DIR_NAMES, PLAYER_MAX_HP, PLAYER_MAX_MP, SLUDGE_DOT, INVENTORY_SIZE, MA
 import { ITEMS, resolveUse, resolveThrow, tickTempEquips } from './items.js';
 import { attack, formatDamageNumber } from './combat.js';
 import { Enemy, resolveEnemyTurns } from './enemies.js';
-import { getGreedyStep } from './pathing.js'; // (aggro bands) ally pathfinding toward hostiles / the player
+import { getGreedyStep, stepEntity } from './pathing.js'; // ally pathfinding; stepEntity = shove a character aside
 import { applyGive } from './give-action.js';
 import { escapeHtml, manhattan, clamp } from './utils.js';
 import { RNG } from './rng.js';
@@ -1502,25 +1502,28 @@ class Game {
         // Bump attack?
         const enemy = this.enemies.find(e => e.entity.isAlive() && e.x === nx && e.y === ny);
         if (enemy) {
-            // Non-hostile NPCs — those with a behavior whitelist that omits
-            // HOSTILE — are unwalkable but unattackable. Bumping them is a
-            // silent no-op (same as bumping a wall). Their adjacency bark
-            // mechanic delivers any dialogue when the player moves adjacent
-            // from another direction.
-            if (enemy.behavior && !enemy.behavior.includes('HOSTILE')) {
-                return; // silent, no turn advance
+            // (shove) Walking into a character no longer walls you off (the old
+            // silent no-op). You barge through: the character is knocked to an
+            // open side tile and you take their spot — or, if they're cornered,
+            // you swap places. Tough "heavy" characters (captains, the Sewer
+            // Merchant, bosses — flagged per type in the shopkeeper pass) can't
+            // be budged: you bounce off with a recoil. Combat stays deliberate
+            // (Space / the wheel) — a shove only displaces, it doesn't attack.
+            // Applies to everyone (hostiles + NPCs); the cast is one unified type.
+            if (this._isHeavy(enemy)) {
+                audio.playSfx('bump-wall');
+                this._bounceOff(dir);
+                return; // immovable — no step, no turn
             }
-
-            // Bumping a hostile enemy opens the radial wheel (Omnitrix-style)
-            // instead of attacking immediately. The wheel exposes Attack,
-            // Skill, Throw, Give, Run, Defend in a static layout so muscle
-            // memory works, with cursor persistence across encounters.
-            // Down/Esc backs out without consuming a turn — protects against
-            // accidental bumps.
-            // (action-wheel overhaul) Walking into a hostile is a silent no-op
-            // now — bump-to-attack is retired; combat goes through the wheel
-            // (Space / the ACTION button). Unwalkable like a wall, no turn.
-            return;
+            const dest = this._shoveDestination(enemy, dir);
+            if (!dest) {
+                audio.playSfx('bump-wall');
+                this._bounceOff(dir);
+                return; // boxed in — nowhere to put them
+            }
+            stepEntity(enemy, dest.x, dest.y, this._MOVE_MS); // knock aside / swap (animates)
+            // fall through: (nx,ny) is now vacated, so the normal move below
+            // advances the player into it with full hazard/pickup/turn handling.
         }
 
         // Bump-to-open? Mirrors bump-to-attack — containers are unwalkable
@@ -1590,6 +1593,55 @@ class Game {
             // auto-walk you straight into the new zone. (movement-feel Finding 1)
             if (!transition) this._onStepSettled();
         });
+    }
+
+    // ── Shove (barge through characters) ─────────────────────────────────────
+
+    // Tough characters that can't be pushed — you bounce off instead. No types
+    // are flagged heavy yet; the shopkeeper-refinement pass populates this
+    // (bandit captains, the Sewer Merchant, bosses) via a `heavy: true` spawn
+    // field or a future strength/tier check.
+    _isHeavy(ch) {
+        return ch.heavy === true;
+    }
+
+    // Where to knock `target` when the player barges in moving `dir`: a clear
+    // tile perpendicular to the push ("one way or the other"); if neither side
+    // is open, swap into the tile the player is leaving (handles a cornered
+    // shopkeeper); null if truly boxed in.
+    _shoveDestination(target, dir) {
+        const ex = target.x, ey = target.y;
+        const sides = dir.dx !== 0
+            ? [{ x: ex, y: ey - 1 }, { x: ex, y: ey + 1 }]   // pushing horizontally → up/down
+            : [{ x: ex - 1, y: ey }, { x: ex + 1, y: ey }];  // pushing vertically → left/right
+        for (const s of sides) {
+            if (this._tileFreeForShove(s.x, s.y, target)) return s;
+        }
+        // Cornered → swap: the character takes the tile the player is leaving.
+        if (this._tileFreeForShove(this.playerX, this.playerY, target)) {
+            return { x: this.playerX, y: this.playerY };
+        }
+        return null;
+    }
+
+    // A tile a shoved character may land on: walkable, no wall, not occupied by
+    // another living character or a container. `exclude` is the character being
+    // shoved (so it doesn't block its own destination check).
+    _tileFreeForShove(x, y, exclude = null) {
+        if (!this.map.isWalkable(x, y)) return false;
+        if (this.enemies.some(e => e !== exclude && e.entity.isAlive() && e.x === x && e.y === y)) return false;
+        if (this.containers.some(c => c.x === x && c.y === y)) return false;
+        return true;
+    }
+
+    // Recoil feedback when you bump something immovable — reuses the player
+    // stagger offset the renderer already draws, nudged back along the push.
+    _bounceOff(dir) {
+        this._playerStaggerUntil = performance.now() + 80;
+        this._playerStaggerDx = -dir.dx * 6;
+        this._playerStaggerDy = -dir.dy * 6;
+        this._ensureParticleLoop();
+        this._render();
     }
 
     // Interact with the broken-down car in town. Before the converter: a hint
