@@ -28,11 +28,21 @@ import { manhattan } from './utils.js';
 export function getGreedyStep(game, from, to, options = {}) {
     const { self = null, avoidPlayer = true } = options;
 
+    // (diagonal prototype) 8-way candidates — diagonals included so the whole
+    // cast can cut corners and swarm from the diagonals. With the Manhattan
+    // heuristic a diagonal step toward the target drops distance by 2 (vs 1 for
+    // a cardinal), so chasers naturally prefer diagonals when off-axis. No
+    // corner-cut restriction: a diagonal is allowed whenever its own tile is
+    // clear (lets things squeeze between two blockers — that's the chaos).
     const candidates = [
         { x: from.x - 1, y: from.y },
         { x: from.x + 1, y: from.y },
         { x: from.x, y: from.y - 1 },
         { x: from.x, y: from.y + 1 },
+        { x: from.x - 1, y: from.y - 1 },
+        { x: from.x + 1, y: from.y - 1 },
+        { x: from.x - 1, y: from.y + 1 },
+        { x: from.x + 1, y: from.y + 1 },
     ];
 
     let bestDist = manhattan(from.x, from.y, to.x, to.y);

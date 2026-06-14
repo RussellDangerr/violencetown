@@ -227,7 +227,11 @@ export function resolveEnemyTurns(game) {
         // Blind debuff halves outgoing damage (deterministic — no RNG, per
         // combat.js's "no miss" contract). The Math.max(1, ...) clamp
         // mirrors combat.js's "at least 1 always lands" rule.
-        if (dist <= 1) {
+        // (diagonal prototype) Chebyshev adjacency — a diagonally-adjacent
+        // chaser attacks instead of dancing beside you (Manhattan would read
+        // diagonal as distance 2 and never connect).
+        const adjacent = Math.max(Math.abs(enemy.x - game.playerX), Math.abs(enemy.y - game.playerY)) <= 1;
+        if (adjacent) {
             const dmg = enemy.hasBuff('blind')
                 ? Math.max(1, Math.floor(enemy.damage * 0.5))
                 : enemy.damage;

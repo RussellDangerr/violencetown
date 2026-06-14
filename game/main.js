@@ -825,7 +825,7 @@ class Game {
             if (dir) {
                 e.preventDefault();
                 this._noteHeld(e.code);
-                this._beginMoveOrTurn(dir, e.code);
+                this._beginMoveOrTurn();
                 return;
             }
 
@@ -1637,6 +1637,22 @@ class Game {
         return 'right';
     }
 
+    // (diagonal prototype) Combine all currently-held direction keys into one
+    // vector. Two perpendicular keys held together produce a diagonal (dx & dy
+    // both nonzero); most-recent press wins per axis. Null if nothing is held.
+    // This is the single source of "where am I trying to go" for both the first
+    // press and the continuous-walk chain, so diagonals just fall out.
+    _currentDir() {
+        let h = 0, v = 0;
+        for (const code of this._heldDirKeys) {
+            const d = DIRS[code];
+            if (!d) continue;
+            if (d.dx) h = d.dx;
+            if (d.dy) v = d.dy;
+        }
+        return (h || v) ? { dx: h, dy: v } : null;
+    }
+
     _clearTurnTimer() {
         if (this._turnTimer) { clearTimeout(this._turnTimer); this._turnTimer = null; }
         this._pendingWalkDir = null;
@@ -1645,21 +1661,20 @@ class Game {
     // A direction press from the IDLE state. From a standstill, a tap toward a
     // NEW facing just pivots (free — no turn cost); holding past _TURN_MS
     // commits to walking. If already facing that way (or mid-walk), step now.
-    _beginMoveOrTurn(dir, code) {
+    // (diagonal prototype) Direction is the combined held-key vector, so two
+    // perpendicular keys walk diagonally.
+    _beginMoveOrTurn() {
         this._clearTurnTimer();
+        const dir = this._currentDir();
+        if (!dir) return;
         const standing = !this._animating;
         if (standing && this.facing !== this._faceOf(dir)) {
             this.facing = this._faceOf(dir);   // pivot only — no step, no _advanceWorld
             this._render();
-            this._pendingWalkDir = dir;
             this._turnTimer = setTimeout(() => {
                 this._turnTimer = null;
-                this._pendingWalkDir = null;
-                // Still holding this exact key and still idle → walk.
-                const top = this._heldDirKeys[this._heldDirKeys.length - 1];
-                if (top === code && this.state === STATE.IDLE && !this._animating) {
-                    this._doMove(dir);
-                }
+                const d = this._currentDir();
+                if (d && this.state === STATE.IDLE && !this._animating) this._doMove(d);
             }, this._TURN_MS);
         } else {
             this._doMove(dir);
@@ -1674,11 +1689,10 @@ class Game {
     // such a step. (fix/critical-path safety intact)
     _onStepSettled() {
         if (this.state !== STATE.IDLE) return;
-        let next = this._queuedMoveDir;
+        // (diagonal prototype) Live held keys (which can combine into a diagonal)
+        // drive the chain; fall back to a buffered released-tap.
+        const next = this._currentDir() || this._queuedMoveDir;
         this._queuedMoveDir = null;
-        if (!next && this._heldDirKeys.length) {
-            next = DIRS[this._heldDirKeys[this._heldDirKeys.length - 1]];
-        }
         if (!next) return;
         if (this._autoRepeatShouldStop(next)) return;
         this._doMove(next);
