@@ -288,8 +288,13 @@ export class Renderer {
         this._scrollY = 0;
         if (game._animating) {
             const t = game._animProgress || 0;
-            this._scrollX = (game._animToX - game._animFromX) * t * TILE_PX;
-            this._scrollY = (game._animToY - game._animFromY) * t * TILE_PX;
+            // Round the camera scroll to WHOLE pixels. A fractional offset draws
+            // every tile at a sub-pixel x/y, and with image-smoothing off the
+            // browser rounds adjacent tile edges inconsistently — flashing thin
+            // seams ("grid lines") between tiles as you walk. Integer scroll =
+            // crisp, seam-free pixel scrolling. (movement-feel feel pass)
+            this._scrollX = Math.round((game._animToX - game._animFromX) * t * TILE_PX);
+            this._scrollY = Math.round((game._animToY - game._animFromY) * t * TILE_PX);
         }
 
         // Screen shake (Phase F) — random offset applied to world rendering
@@ -303,8 +308,8 @@ export class Renderer {
             const duration = shakeRemaining / 150; // rough normalize (0..~1.2)
             const decay = Math.min(1, duration);
             const mag = (game._screenShakeMagnitude ?? 0) * decay;
-            shakeX = (Math.random() - 0.5) * mag * 2;
-            shakeY = (Math.random() - 0.5) * mag * 2;
+            shakeX = Math.round((Math.random() - 0.5) * mag * 2); // whole-pixel shake
+            shakeY = Math.round((Math.random() - 0.5) * mag * 2); // (avoid sub-pixel seams)
         }
 
         ctx.save();
