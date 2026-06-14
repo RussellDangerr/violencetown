@@ -15,7 +15,7 @@
 
 ## One-line player-experience goal
 
-> **Combat is composing, with one grammar and honest aim** — pick a verb, pick an item, *place* it — and **every verb works on every character**, so "throw a fire potion at the strongest thing in the zone the moment you meet it" is always a real, obvious option.
+> **Combat is composing — Fight · Trick · Treat · Flight** (fight-or-flight, trick-or-treat). Pick a verb, pick an item, *place* it — one grammar, honest aim — and **every verb works on every character**, so "throw a fire potion at the strongest thing in the zone the moment you meet it" is always a real, obvious option.
 
 ---
 
@@ -60,7 +60,7 @@ The combat resolvers (`combatAttack`, `resolveThrow`, `applyGive`, `addBuff('gua
 
 ## Gate 2: Design
 
-### The grammar (verb + item rings)
+### The grammar (category → sub-verb → item rings)
 
 A **circular XMB**: one rule, identical on every menu ring.
 
@@ -71,36 +71,53 @@ A **circular XMB**: one rule, identical on every menu ring.
   Space   = the act button: same as ↑ (forward / fire). Open also uses it.
 ```
 
-`↓ = always back` is the keystone — folding cancel / up-a-layer into one button is what lets `↑ / ←→` stay perfectly consistent. There is no separate "grip between rings"; you are always *in* one ring, and `↑`/`↓` move you forward/back through the sequence.
+`↓ = always back` is the keystone — folding cancel / up-a-layer into one button is what lets `↑ / ←→` stay perfectly consistent. There is no separate "grip between rings"; you are always *in* one ring, and `↑`/`↓` move you forward/back through the sequence. The sequence is as deep as the chosen verb needs (category → sub-verb → item → aim), and the grammar is identical at every level — so the extra depth from the Fight/Trick/Treat/Flight tree costs nothing to learn. Persistence + auto-aim keep the everyday hit at `open → Space → Space`.
 
-### Rings & per-verb sequence
+### Verb taxonomy & per-leaf sequence
 
-Ring 1 is always **Verb**. Whether rings 2/3 appear is contextual to the verb:
+Ring 1 is the **category** (Fight / Trick / Treat / Flight); Ring 2 is the **sub-verb**; **Item** and/or **Aim** appear after that only if the chosen leaf needs them. Two iconic pairs in one menu — *fight-or-flight* and *trick-or-treat* (pure Halloween-Americana branding) — over a clean who/how split: **Fight** = harm them · **Trick** = act on others / the world · **Treat** = act on yourself · **Flight** = remove yourself from harm.
 
-| Verb | Ring 2 — Item | Ring 3 — Aim (reticle) | Fire resolves to |
-|---|---|---|---|
-| **Attack** | — | reticle, **range 1** (adjacent, incl. diagonal); auto = nearest hostile | `combatAttack` on the target tile |
-| **Throw** | items | reticle, **range = `item.range`** (e.g. 5); **3×3 footprint** for AoE items; auto = nearest hostile in range | `resolveThrow` |
-| **Give** | items | reticle, **range 1** (adjacent character); auto = adjacent NPC | `applyGive` |
-| **Skill** | per-skill *(future)* | per-skill *(future)* | placeholder until skills land |
-| **Defend** | — | — (self) | `addBuff('guard')` — fires on `↑`/Space at ring 1 |
-| **Run** | — | reticle, **range 1**, walkable tiles only; auto = away from threat | move one tile that way |
+```
+FIGHT  — do harm
+  • Melee   → aim (reticle, range 1, adjacent incl. diagonal; auto = nearest hostile) → combatAttack   [variant: Cleave]
+  • Ranged  → aim (reticle, line to weapon range) → ranged resolver                    [variant: Scatter]  (needs ranged weapon) dep
+  • Magic   → aim (reticle, spell range/shape)    → spell resolver                     [variant: Burst]    (needs MP / a spell)  dep
 
-Unused rings simply don't appear in the sequence — there are no dimmed "chore" rings to navigate past.
+TRICK  — act on others / the world
+  • Throw   → item → aim (reticle, range = item.range; 3×3 footprint for AoE items) → resolveThrow
+  • Trade   → opens the Trade menu (Give folded in: give / sell / bribe)                              (Give-merge dep; trade.js exists)
+  • …future abilities
+
+TREAT  — act on yourself   (shallowest branch — NO aim ring)
+  • Eat / Heal     → item → self-use (resolveUse)   — burger, bandage, potion
+  • Cleanse / Buff → item → self-use                — soap off sludge, drink a brew
+  (home of the old hotbar "Use"; hotbar 1–9 stays as a panic quick-use shortcut)
+
+FLIGHT — remove yourself from harm
+  • Defend → fires on ↑/Space → addBuff('guard')
+  • Hide   → fires → break line-of-sight / drop aggro                                                 (stealth dep)
+  • Wait   → fires → pass the turn
+  • Run    → aim (reticle, walkable tiles, range 3) → dash up to 3 tiles                              (3-tile dash dep; today 1)
+```
+
+- **`dep`** = the leaf shows in the menu *now* (greyed if unavailable), but its **mechanic** is a named item under Dependencies, built in its own pass. This build wires the leaves that already exist (Melee, Throw, Defend, Wait, Run, Trade/Give, Treat-heal).
+- **Variants (Cleave / Scatter / Burst) are not extra slots** — they're the AoE *form* a Fight leaf takes when the gear / skill / charge calls for it (same verb, wider hit).
+- **Locked leaves render greyed-but-visible** (no MP, no ranged weapon) so the player always sees the full space of choices — the agency philosophy made literal.
+- Unused rings never appear — no dimmed "chore" rings to navigate past.
 
 ### Aim = a targeting reticle (the "real placement" decision)
 
 Aim is **not** a carousel — it's a reticle, because a throw is 2-D *placement*, not a 1-D pick (you position a 3×3 to clip the brute *and* the rat behind it).
 
 - **Controls (reticle mode):** `↑↓←→` move the reticle one tile within range. **Space** fires. **Esc / back** cancels to the previous ring. (This is the one place `↓` doesn't mean "back" — it moves the reticle; back is Esc / the on-screen back affordance.)
-- **Auto-aim:** the reticle opens already on the **nearest valid target** (nearest hostile for Attack/Throw; adjacent NPC for Give; safest retreat tile for Run). So the everyday action is `open → Space → Space` with zero reticle movement.
+- **Auto-aim:** the reticle opens already on the **nearest valid target** (nearest hostile for a Fight leaf or Throw; adjacent NPC for Give; safest retreat tile for Run). So the everyday action is `open → Space → Space` with zero reticle movement.
 - **Preview, always on:** a dotted **trajectory** from the courier to the reticle, the **3×3 blast footprint** when the held item is AoE, and a highlight on **every character the action would hit** (footprint is multi-tile-target-aware so it lights up all tiles of a big enemy it overlaps).
 - **Character turn:** the courier flips/leans to face the reticle (single front-facing sprite → L/R flip only; the **trajectory line is the precise indicator**, the flip just sells the "compass float").
 - **Range feedback:** tiles beyond range are dimmed; the reticle can't leave the valid set.
 
 ### Universal agency (a hard rule, not a feature)
 
-Every verb is always selectable against every character. The wheel **never** greys out Give/Throw/Attack because a target is "important." There is **no essential-NPC flag.** This is honest because the cast is one unified entity type (vendors, NPCs, enemies are the same thing) — so you can shove, attack, give-to, or lob a potion at *anyone*, including a shopkeeper or the toughest thing in the zone, from the moment you meet them. Standardized verbiage rides along: **Throw** means the same thing at a rat or the boss, so the player learns one vocabulary of agency and trusts it everywhere.
+Every verb is always selectable against every character. The wheel **never** greys out a verb because a target is "important." There is **no essential-NPC flag.** This is honest because the cast is one unified entity type (vendors, NPCs, enemies are the same thing) — so you can shove, attack, give-to, or lob a potion at *anyone*, including a shopkeeper or the toughest thing in the zone, from the moment you meet them. Standardized verbiage rides along: **Throw** means the same thing at a rat or the boss, so the player learns one vocabulary of agency and trusts it everywhere.
 
 ### Smart defaults & express lane (kept from canon)
 - On open: last verb, last item-per-verb, and auto-aimed reticle.
@@ -118,8 +135,8 @@ Every verb is always selectable against every character. The wheel **never** gre
 
 ### Data / state
 Replace the grip+spin state (`grip`, `actionIndex`, `itemSlot`, `aim`, per-ring rotations) with a small **layer machine**:
-- `layer` ∈ {VERB, ITEM, AIM} — where you are in the sequence.
-- `verbIndex`, `itemIndex` — carousel positions (last-used persistence, session-only).
+- `layer` ∈ {CATEGORY, SUBVERB, ITEM, AIM} — where you are in the sequence (ITEM/AIM appear only if the leaf needs them).
+- `categoryIndex`, `subVerbIndex`, `itemIndex` — carousel positions (last-used persistence, session-only; restores to the last leaf).
 - `reticle` `{x, y}` and/or `targetRef` — the aim placement; seeded by auto-aim.
 - `lastFired {verb, item, aimTile}` — for double-tap-repeat.
 `compose()` builds `(verb, item, aimTile)` and routes to the existing resolvers — **no combat-math changes.**
@@ -135,7 +152,7 @@ Replace the grip+spin state (`grip`, `actionIndex`, `itemSlot`, `aim`, per-ring 
 None — wheel state is session-only muscle memory, as today. No schema change.
 
 ### Edge cases (≥5)
-1. **No valid target on open** — reticle falls back to the player's facing tile; firing Attack into an empty tile is a **silent no-op** (no turn spent).
+1. **No valid target on open** — reticle falls back to the player's facing tile; firing a Fight leaf into an empty tile is a **silent no-op** (no turn spent).
 2. **Throw/Give with nothing valid** — the Item ring is empty → the verb shows a "[nothing to throw]" beat and can't advance to aim.
 3. **AoE placed partly out of bounds / off-axis** — footprint clips to valid tiles; the off-axis case is *the point* (you can place it anywhere in range, not just on 8 rays).
 4. **Multi-tile target** — the footprint/target highlight lights every tile of a big enemy it overlaps (reticle is multi-tile-aware even before multi-tile entities ship — it just operates on tile sets).
@@ -144,21 +161,27 @@ None — wheel state is session-only muscle memory, as today. No schema change.
 7. **Reduce-motion** — carousel + reticle move snap instantly (no eased spin), per the existing accessibility setting.
 
 ### "Done when" scenario
-> A rat is one tile east. **Space** — the wheel blooms on Attack, reticle auto-locked on the rat. **Space** — hit. **Double-tap Space** — hit again, no wheel. Now: a 2×3 brute three tiles northeast with a rat tucked behind it. **Space** → `←/→` to **Throw** → `↑` → `←/→` to **Fire Potion** → `↑` (into aim) → the reticle is on the nearest rat, so I nudge it `↑↑→` onto the brute; the **3×3 footprint** lights up the brute's tiles *and* the rat behind, the trajectory arcs there — **Space**, both burn. **Esc** back to walking. At no point did I spin a compass, hunt for a ring, or get told I "can't target that one."
+> A rat is one tile east. **Space** — the wheel restores to **Fight → Melee** (where you left it), reticle auto-locked on the rat. **Space** — hit. **Double-tap Space** — hit again, no wheel. Now a 2×3 brute sits three tiles northeast with a rat tucked behind it: **Space** → `↓` out to the categories → `→` **Trick** → `↑` → **Throw** → `↑` → `→` **Fire Potion** → `↑` into aim. The reticle starts on the near rat, so I nudge it `↑↑→` onto the brute — the **3×3 footprint** lights the brute's tiles *and* the rat behind, the trajectory arcs over — **Space**, both burn, back to the world. At no point did I spin a compass, hunt for a ring, or get told I "can't target that one."
 
 ---
 
 ## Dependencies (built separately, after this UI ships)
-- **3×3 AoE damage resolution** (potions/bombs/sludge/gold) — the reticle previews the footprint; this resolves the area hit.
+The wheel makes every leaf visible + navigable now; these fill in the mechanics behind the `dep`-tagged leaves so the menu rewards exploration as the systems land:
+- **Magic** — spell system + MP spend (MP is currently inert). The `Magic` leaf is greyed until it exists.
+- **Ranged** — ranged-weapon attacks (line resolver). `Ranged` greyed without a ranged weapon.
+- **3×3 AoE damage + variants** — Cleave / Scatter / Burst and the potion/bomb/sludge/gold area hit. The reticle previews the footprint; this resolves the area damage.
+- **Hide / stealth** — break line-of-sight + drop enemy aggro (sight/LOS exists today; the hidden/de-aggro state is new).
+- **3-tile dash Run** — Run flees 1 tile today; the dash extends it to 3.
+- **Give → Trade merge** — fold the existing Give into a Trade menu (give / sell / bribe); `trade.js` exists.
 - **Multi-tile characters** (1×3, 2×2, 2×3) — reticle is built tile-set-aware to accept them.
 - **Throw `range` data** (e.g. 5) — read from items; ensure items expose it.
 - **Inspect / mid-combat commerce** (combat-ui-layers.md) — a future drill-in reachable from the wheel.
 
-## Open questions (confirm at spec review)
-1. **Verb set.** Keep the current six (Attack / Skill / Throw / Give / Defend / Run)? combat-ui-layers.md proposed **Inspect** as a verb and **Give inside Inspect**. Recommendation: keep the six now; Inspect arrives later as a drill-in. **Confirm.**
-2. **Skill** has no content yet (MP is inert). Keep it on the ring as a visible-but-empty verb, or hide it until skills land? Recommendation: hide until it does something.
-3. **The act/open key** stays **Space** (open + confirm + fire), with "wait a turn" remaining on `T`. Confirm.
-4. **Use/consume** (eat a burger to heal) stays a hotbar action (1–9), not a wheel verb. Confirm.
+## Open questions (resolved / remaining)
+1. **Verb set — RESOLVED.** Locked to the **Fight / Trick / Treat / Flight** taxonomy above (co-design 2026-06-14). Supersedes the old flat six and combat-ui-layers.md's Inspect-as-verb (Inspect stays a deferred drill-in).
+2. **Empty/locked leaves — RESOLVED.** Show **greyed-but-visible** (Magic without MP, unbuilt abilities) rather than hidden — agency/discoverability.
+3. **Use/consume — RESOLVED.** Moves into the **Treat** ring; hotbar `1–9` stays as a quick-use shortcut.
+4. **The act/open key** stays **Space** (open + confirm + fire); the standalone `T` may remain as a wait shortcut alongside the `Wait` leaf under Flight. **Confirm.**
 
 ## Gate 3 / Gate 4
 Development quality checklist + polish pass produced by the implementation plan (writing-plans). Mandatory playtest against the "Done when" scenario; no-regression on the combat resolvers and on the just-shipped movement/shove input.
