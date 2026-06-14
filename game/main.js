@@ -112,7 +112,10 @@ class Game {
         // §4). Canon datapoint: 100ms felt brisk-but-OK once the auto-repeat
         // dead-frame was removed; 150 is a touch more grounded. Dial freely.
         this._MOVE_MS = 150;
-        this._TURN_MS = 110; // tap-to-face vs hold-to-walk threshold (standstill)
+        this._TURN_MS = 70;  // tap-to-face vs hold-to-walk threshold (standstill).
+                             // 110 felt like a hitch on every direction change;
+                             // 70 keeps a deliberate quick-tap-to-turn but lets a
+                             // hold start walking promptly. Set 0 to always step.
 
         // Animation: one linear tile slide, _MOVE_MS long.
         this._animating   = false;
@@ -1693,8 +1696,9 @@ class Game {
     // True when held-key auto-walking should HALT before stepping in `dir` —
     // i.e. the next tile would commit to a consequential, deliberate action.
     // Covers: any blocker (wall / enemy / container / the car tile / a barricade),
-    // a map transition, a ground-item pickup, or a hazard tile. The first manual
-    // press already happened (it started auto-repeat); this only gates the
+    // a map transition, or a hazard tile. Ground items are intentionally NOT
+    // covered — held-walk now flows over and auto-picks-them-up (movement-feel
+    // feel pass). The first manual press already happened; this only gates the
     // AUTOMATIC follow-up steps. (fix/critical-path)
     _autoRepeatShouldStop(dir) {
         const nx = this.playerX + dir.dx;
@@ -1707,7 +1711,11 @@ class Game {
 
         // Consequential walkable steps the player should opt into deliberately.
         if (this.map.getTransition(nx, ny)) return true;          // map transition
-        if (this.groundItems.some(g => g.x === nx && g.y === ny)) return true; // pickup (incl. the converter)
+        // NOTE: ground items deliberately do NOT stop held-walk anymore — auto-
+        // pickup-while-walking is the Pokémon/DQM norm and stopping before every
+        // item made town feel like it kept "dropping" the hold (movement-feel
+        // feel pass). The quest converter is still picked up on walk-over, just
+        // without the halt. Transitions + hazards below remain deliberate stops.
         const td = this.map.getTileDef(nx, ny);
         if (td && td.hazard) return true;                         // sludge / future hazards
 

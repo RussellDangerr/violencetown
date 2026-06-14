@@ -74,8 +74,11 @@ export function getGreedyStep(game, from, to, options = {}) {
 export function stepEntity(ent, x, y, ms) {
     ent._slideFromX = ent.x;
     ent._slideFromY = ent.y;
+    if (x < ent.x) ent._faceLeft = true;        // horizontal facing for the flip;
+    else if (x > ent.x) ent._faceLeft = false;  // vertical moves keep prior facing
     ent.x = x;
     ent.y = y;
     ent._slideStart = performance.now();
     ent._slideMs = ms || 150;
+    ent._stepIndex = (ent._stepIndex || 0) + 1; // alternates the walk waddle/foot
 }

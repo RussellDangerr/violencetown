@@ -32,6 +32,43 @@ const SPLAT_COLOR = {
     miss:     '#3a6ea5',
 };
 
+// ── Procedural character walk/idle animation (plans/movement-feel.md) ─────────
+// The Tiny Dungeon / Kenney sheets have ONE static front-facing pose per
+// character, so we sell "walking" with transforms on that single cell — applied
+// identically to the player and every enemy/NPC so the whole cast moves the
+// same way. Per Caelan's feel notes: integer PIXEL bob (no sub-pixel), a small
+// alternating ROTATION waddle (NOT a squash — non-uniform scale breaks the pixel
+// ratio and reads as "off the canvas"), and a horizontal flip to face left.
+// All tunable.
+const WALK_BOB_PX   = 2;   // peak vertical bounce per tile (integer pixels)
+const WALK_LEAN_DEG = 5;   // peak waddle rotation, alternates each step; 0 = off
+const IDLE_BOB_PX   = 1;   // standing breathe (discrete pixel, synced to idle tick)
+
+// Vertical bob + waddle rotation for a walking (or idle) character. `progress`
+// is the 0→1 slide position; `stepIndex` parity picks the waddle side; `idleTick`
+// drives the standing breathe. Bob is rounded to whole pixels to stay crisp.
+function walkAnim(animating, progress, stepIndex, idleTick) {
+    if (animating) {
+        const phase = Math.sin(Math.PI * (progress || 0)); // 0→1→0 across the tile
+        const side  = (stepIndex % 2) ? 1 : -1;            // which foot leads
+        return { bob: -Math.round(phase * WALK_BOB_PX), rot: phase * WALK_LEAN_DEG * side * Math.PI / 180 };
+    }
+    return { bob: ((idleTick || 0) % 2) ? -IDLE_BOB_PX : 0, rot: 0 };
+}
+
+// Wrap a sprite draw in the character transform (bob + waddle + facing flip),
+// pivoted on the sprite centre. flipX = -1 faces left. No non-uniform scale, so
+// pixel ratios stay 1:1.
+function withWalk(ctx, cx, cy, { bob = 0, rot = 0, flipX = 1 }, draw) {
+    ctx.save();
+    ctx.translate(cx, cy + bob);
+    if (rot) ctx.rotate(rot);
+    if (flipX !== 1) ctx.scale(flipX, 1);
+    ctx.translate(-cx, -cy);
+    draw();
+    ctx.restore();
+}
+
 export class Renderer {
     constructor(canvas) {
         this.canvas = canvas;
@@ -488,18 +525,29 @@ export class Renderer {
             // expressed via the gray tint overlay below, not via a different
             // sprite. Future polish swap could pull a fallen-character
             // sprite from the Kenney pack if one is appropriate.
+            // Same walk/idle animation as the player so the whole cast moves
+            // alike: bob + waddle during a step-slide, idle breathe otherwise.
+            // Corpses stay still. (movement-feel feel pass)
+            const sliding = isAlive && e._slideStart != null && (now - e._slideStart) < (e._slideMs || 0);
+            const ea = isAlive
+                ? walkAnim(sliding, sliding ? Math.min(1, (now - e._slideStart) / (e._slideMs || 1)) : 0, e._stepIndex || 0, game._idleTick)
+                : { bob: 0, rot: 0 };
+            const eFlip = (isAlive && e._faceLeft) ? -1 : 1;
+            const ecx = px + TILE_PX / 2, ecy = py + TILE_PX / 2;
             let ok = false;
             const info = ENEMY_SPRITES[e.type];
-            if (info && sprites?.[info.sheet]?.loaded) {
-                const col = info.static
-                    ? info.col
-                    : (((game._idleTick || 0) % 2 === 0) ? 0 : 2);
-                ok = sprites[info.sheet].drawFrame(ctx, col, info.row, px + 4, py + 4, TILE_PX - 8, TILE_PX - 8);
-            }
-            if (!ok) {
-                ctx.fillStyle = isAlive ? '#cc4433' : '#555';
-                ctx.fillRect(px + 6, py + 6, TILE_PX - 12, TILE_PX - 12);
-            }
+            withWalk(ctx, ecx, ecy, { bob: ea.bob, rot: ea.rot, flipX: eFlip }, () => {
+                if (info && sprites?.[info.sheet]?.loaded) {
+                    const col = info.static
+                        ? info.col
+                        : (((game._idleTick || 0) % 2 === 0) ? 0 : 2);
+                    ok = sprites[info.sheet].drawFrame(ctx, col, info.row, px + 4, py + 4, TILE_PX - 8, TILE_PX - 8);
+                }
+                if (!ok) {
+                    ctx.fillStyle = isAlive ? '#cc4433' : '#555';
+                    ctx.fillRect(px + 6, py + 6, TILE_PX - 12, TILE_PX - 12);
+                }
+            });
 
             if (isAlive) {
                 // Hit-flash overlay — alpha fades as the flash ages so it
@@ -850,55 +898,28 @@ export class Renderer {
         const ppx = half * TILE_PX + offsetX;
         const ppy = half * TILE_PX + offsetY;
 
-        // ── Procedural walk animation (plans/movement-feel.md §UI/UX) ─────────
-        // The Tiny Dungeon sheet has ONE static front-facing pose per character
-        // (verified — no walk frames), so we sell "a person walking" purely with
-        // transforms on that single cell: a per-tile step-bob, a foot-parity
-        // weight-shift (sway + slight waddle that alternates each step — this is
-        // what reads as left-foot/right-foot rather than a bouncing ball), a
-        // squash at footfall, and a horizontal flip for facing left. When
-        // standing, a faint breathe so the courier isn't frozen. Every amplitude
-        // is a tunable constant — dial from "grounded" to "cartoon waddle".
-        const WALK_BOB_PX   = 2.0;   // peak vertical bounce per tile
-        const WALK_SWAY_PX  = 1.0;   // peak horizontal weight-shift (alternates)
-        const WALK_LEAN_DEG = 2.5;   // peak waddle rotation (alternates); 0 = off
-        const WALK_SQUASH   = 0.06;  // scale delta at footfall
-        const IDLE_BOB_PX   = 1.0;   // standing breathe (synced to enemy idle tick)
-
-        let bob = 0, sway = 0, rot = 0, sq = 0;
-        if (game._animating) {
-            const phase = Math.sin(Math.PI * (game._animProgress || 0)); // 0→1→0 over the tile
-            const side  = (game._stepIndex % 2) ? 1 : -1;                // which "foot"
-            bob  = -phase * WALK_BOB_PX;
-            sway =  phase * WALK_SWAY_PX * side;
-            rot  =  phase * WALK_LEAN_DEG * side * Math.PI / 180;
-            sq   =  phase * WALK_SQUASH;
-        } else {
-            // Idle breathe — share the enemies' 250ms idle tick so the whole
-            // scene pulses together (game-feel.md §5A intent; player was frozen).
-            bob = ((game._idleTick || 0) % 2) ? -IDLE_BOB_PX : 0;
-        }
+        // ── Procedural walk animation (plans/movement-feel.md, feel pass) ─────
+        // Single static front-facing sprite → "a person walking" via an integer
+        // pixel bob + a small alternating rotation waddle (NO squash — that broke
+        // the pixel ratio) + a horizontal flip to face left, plus a faint idle
+        // breathe when standing. Shared verbatim with the enemies via walkAnim/
+        // withWalk so the whole cast animates the same way.
+        const a = walkAnim(game._animating, game._animProgress, game._stepIndex, game._idleTick);
         const flipX = (game.facing === 'left') ? -1 : 1;
         const cx = ppx + TILE_PX / 2, cy = ppy + TILE_PX / 2; // sprite center
-
-        ctx.save();
-        ctx.translate(cx + sway, cy + bob);
-        if (rot) ctx.rotate(rot);
-        ctx.scale(flipX * (1 + sq), 1 - sq);
-        ctx.translate(-cx, -cy);
-
-        let ok = false;
-        if (sprites?.player?.loaded) {
-            ok = sprites.player.drawFrame(
-                ctx, PLAYER_SPRITE.col, PLAYER_SPRITE.row,
-                ppx + 4, ppy + 4, TILE_PX - 8, TILE_PX - 8
-            );
-        }
-        if (!ok) {
-            ctx.fillStyle = '#44bb44';
-            ctx.fillRect(ppx + 6, ppy + 6, TILE_PX - 12, TILE_PX - 12);
-        }
-        ctx.restore();
+        withWalk(ctx, cx, cy, { bob: a.bob, rot: a.rot, flipX }, () => {
+            let ok = false;
+            if (sprites?.player?.loaded) {
+                ok = sprites.player.drawFrame(
+                    ctx, PLAYER_SPRITE.col, PLAYER_SPRITE.row,
+                    ppx + 4, ppy + 4, TILE_PX - 8, TILE_PX - 8
+                );
+            }
+            if (!ok) {
+                ctx.fillStyle = '#44bb44';
+                ctx.fillRect(ppx + 6, ppy + 6, TILE_PX - 12, TILE_PX - 12);
+            }
+        });
 
         // Hit-flash overlay — red tint when the player just took damage.
         // Sharper alpha than the enemy flash since the player sprite tends
