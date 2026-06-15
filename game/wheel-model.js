@@ -168,24 +168,46 @@ export function compose(w) {
 const FACING_DELTA = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
 const cheb = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
 function facingTile(g) { const [dx, dy] = FACING_DELTA[g.facing] || [0, 1]; return { x: g.playerX + dx, y: g.playerY + dy }; }
+// Facing tile, but never a wall — fall back to the player's own tile so the
+// reticle always seeds onto a valid square.
+function safeFacing(g) {
+  const f = facingTile(g);
+  return (g.map && g.map.isWalkable(f.x, f.y)) ? f : { x: g.playerX, y: g.playerY };
+}
 
-// Reticle's starting tile: nearest hostile for Fight/Throw, adjacent character for
-// Trade, safest walkable adjacent for Run, else the player's facing tile.
+// The reticle's reach for a leaf: adjacent verbs lock to range 1, Throw uses the
+// selected item's range (fallback 5), everything else 1. Single source of truth
+// (main.js _aimRange delegates here) so the seed and the nudge-clamp agree.
+export function aimRange(leaf, game) {
+  if (leaf.aimType === 'adjacent') return 1;
+  if (leaf.key === 'throw') {
+    const s = (game.inventory || [])[game.wheel ? game.wheel.itemIndex : -1];
+    return (s && s.itemDef && s.itemDef.range) || 5;
+  }
+  return 1;
+}
+
+// Reticle's starting tile: nearest IN-RANGE hostile for Fight/Throw, adjacent
+// character for Trade, safest walkable adjacent for Run, else a safe facing tile.
+// The in-range filter matters: an un-clamped seed let Space-without-nudge fire
+// (or burst) at a target beyond the verb's reach.
 export function autoAimTile(leaf, game) {
   if (leaf.aimType === 'none') return null;
   const alive = (game.enemies || []).filter(e => e.entity.isAlive());
+  const range = aimRange(leaf, game);
   if (leaf.resolver === 'run') {
     const cands = Object.values(FACING_DELTA)
       .map(([dx, dy]) => ({ x: game.playerX + dx, y: game.playerY + dy }))
       .filter(t => game.map.isWalkable(t.x, t.y));
-    if (!cands.length) return facingTile(game);
+    if (!cands.length) return safeFacing(game);
     const distTo = t => alive.length ? Math.min(...alive.map(e => cheb(t.x, t.y, e.x, e.y))) : 99;
     return cands.sort((a, b) => distTo(b) - distTo(a))[0];
   }
-  const pool = leaf.resolver === 'trade'
+  const pool = (leaf.resolver === 'trade'
     ? alive
-    : alive.filter(e => !e.behavior || e.behavior.includes('HOSTILE'));
-  if (!pool.length) return facingTile(game);
+    : alive.filter(e => !e.behavior || e.behavior.includes('HOSTILE')))
+    .filter(e => cheb(game.playerX, game.playerY, e.x, e.y) <= range);
+  if (!pool.length) return safeFacing(game);
   return pool
     .map(e => ({ x: e.x, y: e.y, d: cheb(game.playerX, game.playerY, e.x, e.y) }))
     .sort((a, b) => a.d - b.d)

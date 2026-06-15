@@ -261,12 +261,19 @@ export function resolveThrow(game, itemDef, direction, _stackCount = 1, targetTi
     let ix, iy, hitWall = false;
 
     if (targetTile) {
-        // Real placement (wheel reticle): land on the chosen tile. The reticle is
-        // already range/walkable-clamped, so trust it as the burst centre. Because
-        // the wheel routes an offensive verb on a friendly through the Plus Ultra
-        // confirm, a non-hostile sitting on this exact tile was deliberately
-        // chosen — allowCenterFriendly lets the burst hit them (below).
+        // Real placement (wheel reticle): land on the chosen tile. A non-hostile on
+        // this exact tile was deliberately chosen (the wheel routes offensive verbs
+        // on a friendly through the Plus Ultra confirm) — allowCenterFriendly lets
+        // the burst hit them (below).
         ix = targetTile.x; iy = targetTile.y;
+        // Defensive range clamp (Chebyshev): the seed/nudge are range-clamped, but
+        // a stale express-repeat tile (player moved) or any future caller must
+        // never burst farther than the item's reach — fall the impact short.
+        const dxt = ix - game.playerX, dyt = iy - game.playerY;
+        if (Math.max(Math.abs(dxt), Math.abs(dyt)) > range) {
+            ix = game.playerX + Math.max(-range, Math.min(range, dxt));
+            iy = game.playerY + Math.max(-range, Math.min(range, dyt));
+        }
     } else {
         // Legacy direction throw (hotbar / ITEM_THROW_DIR): fly straight, stop on
         // the first occupant (burst centred on it) or the last open tile.

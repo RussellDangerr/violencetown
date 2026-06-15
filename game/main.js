@@ -28,7 +28,7 @@ import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setp
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
 import {
     createWheelState, currentLeaf, currentCategory, categoryKeys, cycle, forward, back,
-    leafEnabled, compose, autoAimTile, validItemSlots, LAYER, needsFriendlyConfirm,
+    leafEnabled, compose, autoAimTile, validItemSlots, LAYER, needsFriendlyConfirm, aimRange,
 } from './wheel-model.js'; // (combat-wheel rework) pure verb-tree model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
 
@@ -2029,11 +2029,7 @@ class Game {
 
     // The reticle's reach for the current leaf: adjacent verbs lock to range 1,
     // Throw uses the selected item's range (fallback 5), everything else 1.
-    _aimRange(leaf) {
-        if (leaf.aimType === 'adjacent') return 1;
-        if (leaf.key === 'throw') { const s = this.inventory[this.wheel.itemIndex]; return (s && s.itemDef.range) || 5; }
-        return 1;
-    }
+    _aimRange(leaf) { return aimRange(leaf, this); }
 
     // Drive the reticle while in the AIM layer: d-pad nudges it (clamped to the
     // leaf's range + walkability), Space/Enter fires, Esc backs out.
