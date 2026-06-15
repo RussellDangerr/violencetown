@@ -56,7 +56,10 @@ const wrap = (i, n) => ((i % n) + n) % n;
 
 function itemAllowedForLeaf(def, leaf) {
   if (leaf.key === 'throw')            return def.useType ? def.useType.includes('throw') : true;
-  if (leaf.resolver === 'resolveUse')  return def.useType ? def.useType.includes('use') : true;
+  // TREAT (Eat/Cleanse) consumables declare useType 'self' (see items.js); 'use'
+  // is kept as a forward-compat alias. Without 'self' the ring was always empty
+  // and forward() refused to advance — TREAT was dead through the wheel.
+  if (leaf.resolver === 'resolveUse')  return def.useType ? (def.useType.includes('self') || def.useType.includes('use')) : true;
   return true;
 }
 
