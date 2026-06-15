@@ -1536,6 +1536,18 @@ export class Renderer {
         const r = toScreen(w.reticle.x, w.reticle.y);
         const p = toScreen(game.playerX, game.playerY);
         ctx.save();
+        // AoE footprint — Throw bursts 3×3 (radius 1) around the reticle. Wash the
+        // nine tiles so the splash area reads before you commit. (Single-target
+        // verbs skip this — just the box below.)
+        if (currentLeaf(w).key === 'throw') {
+            ctx.fillStyle = 'rgba(212,185,106,0.16)';
+            for (let ax = w.reticle.x - 1; ax <= w.reticle.x + 1; ax++) {
+                for (let ay = w.reticle.y - 1; ay <= w.reticle.y + 1; ay++) {
+                    const s = toScreen(ax, ay);
+                    ctx.fillRect(s.x + 1, s.y + 1, TILE_PX - 2, TILE_PX - 2);
+                }
+            }
+        }
         ctx.strokeStyle = 'rgba(212,185,106,0.9)';
         ctx.lineWidth = 2;
         ctx.setLineDash([4, 3]);
