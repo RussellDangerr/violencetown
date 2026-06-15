@@ -1308,66 +1308,126 @@ export class Renderer {
 
     _drawRadialMenu(game) { this._drawWheel(game); }
 
-    // (combat-wheel rework) Verb-tree combat wheel — BASIC render (a later pass
-    // polishes the visuals). Centered on the player tile (304,304): the current
-    // layer's options as a vertical list, the selection in gold, disabled
-    // sub-verbs greyed, plus a one-line composition readout. The aim reticle is
-    // drawn separately (in world space) by _drawReticle.
+    // (combat-wheel rework) Verb-tree combat wheel — a horizontal "ticket-tape"
+    // carousel of bubble buttons: the selection sits in a centered viewport, the
+    // neighbours run off to the sides and FADE OUT at the edges (infinite wrap),
+    // and the strip SLIDES when you cycle — like spinning a roll of ticket tape.
+    // CATEGORY/SUBVERB/ITEM each render their own strip; AIM shows a thin hint
+    // and leaves the world + reticle (drawn by _drawReticle) visible.
     _drawWheel(game) {
         const { ctx, half } = this;
         const cx = half * TILE_PX + TILE_PX / 2;  // 304
         const cy = half * TILE_PX + TILE_PX / 2;  // 304
         const w = game.wheel;
+        const now = performance.now();
 
-        // Dim backdrop so the list reads against the world.
+        // ── AIM: no dim, just a bottom hint (keep the reticle/world readable) ──
+        if (w.layer === LAYER.AIM) {
+            if (this.font) {
+                ctx.save();
+                ctx.fillStyle = 'rgba(0,0,0,0.55)';
+                ctx.fillRect(0, CANVAS_PX - 24, CANVAS_PX, 24);
+                ctx.restore();
+                const hint = `${currentLeaf(w).label.toUpperCase()}  ·  AIM — MOVE · SPACE FIRE · ↓ BACK`;
+                this.font.drawText(ctx, hint, cx, CANVAS_PX - 16, { color: UI.gold, scale: 1, align: 'center', shadow: '#000' });
+            }
+            return;
+        }
+
+        // ── Gather the current layer's options ──
+        let options, selIndex, title;
+        if (w.layer === LAYER.CATEGORY) {
+            options = categoryKeys().map(k => ({ label: k, enabled: true }));
+            selIndex = w.categoryIndex; title = '';
+        } else if (w.layer === LAYER.SUBVERB) {
+            options = currentCategory(w).subverbs.map(s => ({ label: s.label, enabled: leafEnabled(s, game) }));
+            selIndex = w.subVerbIndex; title = categoryKeys()[w.categoryIndex];
+        } else { // ITEM
+            const slots = validItemSlots(w, game);
+            options = slots.map(i => ({ label: game.inventory[i].itemDef.name.replace(/[\[\]]/g, ''), enabled: true }));
+            selIndex = Math.max(0, slots.indexOf(w.itemIndex)); title = currentLeaf(w).label;
+        }
+
+        // Dim backdrop behind the strip.
         ctx.save();
-        ctx.fillStyle = 'rgba(0,0,0,0.45)';
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
         ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
         ctx.restore();
 
-        let options = [], selIndex = 0, title = '';
-        if (w.layer === LAYER.CATEGORY) {
-            options = categoryKeys();
-            selIndex = w.categoryIndex;
-            title = 'ACT';
-        } else if (w.layer === LAYER.SUBVERB) {
-            options = currentCategory(w).subverbs.map(s => s.label);
-            selIndex = w.subVerbIndex;
-            title = categoryKeys()[w.categoryIndex];
-        } else if (w.layer === LAYER.ITEM) {
-            const slots = validItemSlots(w, game);
-            options = slots.map(i => game.inventory[i].itemDef.name.replace(/[\[\]]/g, ''));
-            selIndex = Math.max(0, slots.indexOf(w.itemIndex));
-            title = currentLeaf(w).label;
-            if (!options.length) options = ['(no items)'];
-        } else { // AIM
-            options = ['(aim: move reticle, Space to fire)'];
-            selIndex = 0;
-            title = currentLeaf(w).label;
+        if (!options.length) {
+            if (this.font) this.font.drawText(ctx, '( nothing )', cx, cy, { color: UI.text, scale: 1, align: 'center', shadow: '#000' });
+            return;
+        }
+        const n = options.length;
+
+        // ── Slide animation: when the selection changes, ease the strip from an
+        //    offset back to 0 (shortest circular direction). reduce-motion snaps. ──
+        const reduce = (typeof Settings !== 'undefined') && Settings.get && Settings.get('reduceMotion');
+        const key = `${w.layer}:${selIndex}:${n}`;
+        if (this._wheelKey !== key) {
+            if (this._wheelLayerN === `${w.layer}:${n}` && this._wheelSel != null) {
+                let d = selIndex - this._wheelSel;
+                if (d >  n / 2) d -= n;
+                if (d < -n / 2) d += n;
+                this._wheelSlideFrom = d;
+                this._wheelSlideStart = now;
+            } else { this._wheelSlideFrom = 0; this._wheelSlideStart = 0; }
+            this._wheelKey = key;
+            this._wheelLayerN = `${w.layer}:${n}`;
+            this._wheelSel = selIndex;
+        }
+        const SLIDE_MS = 130, SPACING = 120, VPHALF = 280, FADE = 72, BW = 104, BH = 38;
+        const t = (this._wheelSlideStart && !reduce) ? Math.min(1, (now - this._wheelSlideStart) / SLIDE_MS) : 1;
+        const ease = 1 - Math.pow(1 - t, 3);                       // easeOutCubic
+        const slidePx = (this._wheelSlideFrom || 0) * SPACING * (1 - ease);
+
+        if (this.font && title) this.font.drawText(ctx, title.toUpperCase(), cx, cy - 56, { color: UI.gold, scale: 2, align: 'center', shadow: '#000' });
+
+        // ── The tape: render ±3 buttons around the selection (wrapped) ──
+        for (let k = -3; k <= 3; k++) {
+            const idx = ((selIndex + k) % n + n) % n;
+            const opt = options[idx];
+            const bx = cx + k * SPACING + slidePx;
+            const alpha = Math.max(0, Math.min(1, (VPHALF - Math.abs(bx - cx)) / FADE));
+            if (alpha <= 0.02) continue;
+            const isSel = (k === 0);
+            ctx.globalAlpha = alpha;
+            this._drawBubble(bx, cy, BW, BH, isSel, opt.enabled);
+            if (this.font) {
+                const label = opt.label.length > 12 ? opt.label.slice(0, 11) + '…' : opt.label;
+                const color = !opt.enabled ? '#6b5d44' : (isSel ? '#2a1d0e' : '#e8dcc0');
+                this.font.drawText(ctx, label, bx, cy - 4, { color, scale: 1, align: 'center' });
+            }
+            ctx.globalAlpha = 1;
         }
 
         if (this.font) {
-            // Title.
-            this.font.drawText(ctx, title.toUpperCase(), cx, cy - 72, { color: UI.gold, scale: 2, align: 'center' });
-            // Options list.
-            options.forEach((label, i) => {
-                const y = cy - 36 + i * 16;
-                let color = (i === selIndex) ? UI.gold : UI.panelBg;
-                if (w.layer === LAYER.SUBVERB) {
-                    const leaf = currentCategory(w).subverbs[i];
-                    if (leaf && !leafEnabled(leaf, game)) color = '#6b5d44';
-                }
-                const prefix = (i === selIndex) ? '> ' : '  ';
-                this.font.drawText(ctx, prefix + label, cx, y, { color, scale: 1, align: 'center', shadow: '#000' });
-            });
-            // Composition readout.
             const leaf = currentLeaf(w);
-            const readout = `${categoryKeys()[w.categoryIndex]} > ${leaf.label}`;
-            this.font.drawText(ctx, readout, cx, cy + 64, { color: UI.text, scale: 1, align: 'center', shadow: '#000' });
+            this.font.drawText(ctx, `${categoryKeys()[w.categoryIndex]} ▸ ${leaf.label}`, cx, cy + 50, { color: UI.text, scale: 1, align: 'center', shadow: '#000' });
         }
 
+        ctx.globalAlpha = 1;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
+    }
+
+    // A rounded "bubble" pill. Vector fill/stroke (always anti-aliased — the
+    // global imageSmoothing=false only affects drawImage, not paths).
+    _drawBubble(bcx, bcy, w, h, sel, enabled) {
+        const { ctx } = this;
+        const x = bcx - w / 2, y = bcy - h / 2, r = h / 2;
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y,     x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x,     y + h, r);
+        ctx.arcTo(x,     y + h, x,     y,     r);
+        ctx.arcTo(x,     y,     x + w, y,     r);
+        ctx.closePath();
+        ctx.fillStyle = sel ? UI.gold : (enabled ? 'rgba(58,46,30,0.92)' : 'rgba(40,34,24,0.82)');
+        ctx.fill();
+        ctx.lineWidth = sel ? 3 : 1.5;
+        ctx.strokeStyle = sel ? '#fff3c0' : (enabled ? 'rgba(150,130,90,0.7)' : 'rgba(90,78,56,0.5)');
+        ctx.stroke();
     }
 
     // (combat-wheel rework) Aim reticle — drawn in WORLD space (call from inside
