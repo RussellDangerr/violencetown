@@ -6,12 +6,11 @@
 import { TILE_PX, VIEW_TILES, CANVAS_PX } from './data.js';
 import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES, PLAYER_SPRITE } from './sprites.js';
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
-import { WHEEL_ACTIONS, CARDINALS, RING_ACTION, RING_ITEM, RING_AIM, currentAction, ringsFor, compose } from './action-wheel.js'; // (action-wheel overhaul)
+import { currentCategory, currentLeaf, categoryKeys, leafEnabled, validItemSlots, LAYER } from './wheel-model.js'; // (combat-wheel rework)
 import {
     OVERLAY_RECTS, THROW_RECTS,
     HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_GAP, HOTBAR_SLOTS, HOTBAR_STRIDE,
     HOTBAR_TOTAL_W, HOTBAR_OX, HOTBAR_OY, HOTBAR_X_START, HOTBAR_Y,
-    RING_HUB_R, RING_ACTION_R, RING_ITEM_R, RING_AIM_R,
     LOG_STRIP_RECT, LOG_MODAL_RECT,
     TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BRIBE_RECT,
     TRADE_CELL_W, TRADE_CELL_H, tradeCellRect,
@@ -321,6 +320,10 @@ export class Renderer {
         this._drawEnemies(game);
         this._drawPlayer(game);
         this._drawJammedDoor(game);
+
+        // (combat-wheel rework) Aim reticle lives in world space so it tracks the
+        // map; the wheel list itself is drawn in screen space after the restore.
+        if (game.wheel && game.wheel.layer === LAYER.AIM) this._drawReticle(game);
 
         // Floating damage numbers float above the world but under the HUD
         // so the HP panel + hotbar are never occluded by spammy combat.
@@ -1376,136 +1379,152 @@ export class Renderer {
 
     _drawRadialMenu(game) { this._drawWheel(game); }
 
-    // (action-wheel overhaul) Three-ring action wheel: action (inner) / item
-    // (middle) / direction-compass (outer). Rings the action doesn't use dim to
-    // a dashed circle; the held ring (game.wheel.grip) gets a cyan stroke; the
-    // selected slice in each ring is gold; the hub shows the live composition.
+    // (combat-wheel rework) Verb-tree combat wheel — a horizontal "ticket-tape"
+    // carousel of bubble buttons: the selection sits in a centered viewport, the
+    // neighbours run off to the sides and FADE OUT at the edges (infinite wrap),
+    // and the strip SLIDES when you cycle — like spinning a roll of ticket tape.
+    // CATEGORY/SUBVERB/ITEM each render their own strip; AIM shows a thin hint
+    // and leaves the world + reticle (drawn by _drawReticle) visible.
     _drawWheel(game) {
         const { ctx, half } = this;
-        const cx = half * TILE_PX + TILE_PX / 2;
-        const cy = half * TILE_PX + TILE_PX / 2;
+        const cx = half * TILE_PX + TILE_PX / 2;  // 304
+        const cy = half * TILE_PX + TILE_PX / 2;  // 304
         const w = game.wheel;
-        const action = currentAction(w);
-        const rings = ringsFor(action);
-        const TAU = Math.PI * 2;
+        const now = performance.now();
 
-        const t = Math.min(1, (performance.now() - (game._overlayOpenedAt ?? 0)) / 80);
-        const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 1000 * TAU);
-        const prevAlpha = ctx.globalAlpha;
-        ctx.globalAlpha = t;
-
-        // Draw one ring band: `count` slices around the circle (slice 0 at top,
-        // going clockwise); highlight `sel`; dim to a dashed circle if !active;
-        // cyan stroke when `held` (the grip). labelFn(i) -> slice text. `rot`
-        // (radians) spins the whole band — the action/item rings pass their live
-        // eased rotation so the selected slice rides up under the top pointer;
-        // the compass ring leaves it 0 and stays N-up. Labels are drawn upright
-        // (never ctx.rotate'd), so they read correctly at any rotation.
-        const drawRing = (band, count, sel, active, held, labelFn, rot = 0) => {
-            const [r0, r1] = band;
-            const rMid = (r0 + r1) / 2;
-            if (!active) {
-                ctx.beginPath();
-                ctx.arc(cx, cy, rMid, 0, TAU);
-                ctx.globalAlpha = t * 0.3;
-                ctx.strokeStyle = 'rgba(120,110,75,0.6)';
-                ctx.setLineDash([3, 5]);
-                ctx.lineWidth = 1;
-                ctx.stroke();
-                ctx.setLineDash([]);
-                ctx.globalAlpha = t;
-                return;
+        // ── AIM: no dim, just a bottom hint (keep the reticle/world readable) ──
+        if (w.layer === LAYER.AIM) {
+            if (this.font) {
+                ctx.save();
+                ctx.fillStyle = 'rgba(0,0,0,0.55)';
+                ctx.fillRect(0, CANVAS_PX - 24, CANVAS_PX, 24);
+                ctx.restore();
+                const hint = `${currentLeaf(w).label.toUpperCase()}  ·  AIM — MOVE · SPACE FIRE · ↓ BACK`;
+                this.font.drawText(ctx, hint, cx, CANVAS_PX - 16, { color: UI.gold, scale: 1, align: 'center', shadow: '#000' });
             }
-            const sliceAng = TAU / count;
-            for (let i = 0; i < count; i++) {
-                const center = -Math.PI / 2 + i * sliceAng + rot;
-                const a0 = center - sliceAng / 2, a1 = center + sliceAng / 2;
-                const isSel = i === sel;
-                ctx.beginPath();
-                ctx.arc(cx, cy, r1, a0, a1);
-                ctx.arc(cx, cy, r0, a1, a0, true);
-                ctx.closePath();
-                ctx.fillStyle = isSel ? UI.gold : UI.panelBg;
-                ctx.fill();
-                ctx.strokeStyle = held ? 'rgba(111,211,195,0.85)'
-                    : isSel ? `rgba(240,215,130,${0.7 + 0.3 * pulse})` : UI.panelBorder;
-                ctx.lineWidth = held ? 2.5 : (isSel ? 2.5 : 1);
-                ctx.stroke();
-                const label = labelFn(i);
-                if (this.font && label) {
-                    const lx = cx + Math.cos(center) * rMid;
-                    const ly = cy + Math.sin(center) * rMid;
-                    this.font.drawText(ctx, label, Math.round(lx), Math.round(ly) - 4, {
-                        color: isSel ? UI.panelBgDark : UI.text, scale: 1, align: 'center',
-                    });
-                }
-            }
-        };
-
-        // Outer = direction compass (N/E/S/W).
-        const aimIdx = CARDINALS.indexOf(w.aim);
-        drawRing(RING_AIM_R, 4, aimIdx, rings.aim, rings.aim && w.grip === RING_AIM,
-            (i) => CARDINALS[i]);
-
-        // Middle = item ring (valid items for this action). Rotates to pointer.
-        const slots = game._wheelValidItemSlots ? game._wheelValidItemSlots() : [];
-        const itemActive = rings.item && slots.length > 0;
-        const itemRot = game._wheelRingRot ? game._wheelRingRot('item') : 0;
-        drawRing(RING_ITEM_R, Math.max(1, slots.length), slots.indexOf(w.itemSlot), itemActive,
-            itemActive && w.grip === RING_ITEM,
-            (i) => {
-                const s = game.inventory[slots[i]];
-                if (!s) return '';
-                const name = s.itemDef.name.replace(/[\[\]]/g, '');
-                return s.count > 1 ? `${name} x${s.count}` : name;
-            }, itemRot);
-
-        // Inner = action ring (the six verbs). Rotates to pointer.
-        const actionRot = game._wheelRingRot ? game._wheelRingRot('action') : 0;
-        drawRing(RING_ACTION_R, WHEEL_ACTIONS.length, w.actionIndex, true,
-            w.grip === RING_ACTION, (i) => WHEEL_ACTIONS[i].toUpperCase(), actionRot);
-
-        // Fixed selection pointer at 12 o'clock. The action & item rings spin
-        // their chosen slice up to meet it; the compass ring's North also sits
-        // here. A downward gold wedge just outside the outer ring, pointing in.
-        {
-            const py = cy - RING_AIM_R[1];
-            ctx.beginPath();
-            ctx.moveTo(cx, py - 1);        // apex points down toward the rings
-            ctx.lineTo(cx - 7, py - 14);
-            ctx.lineTo(cx + 7, py - 14);
-            ctx.closePath();
-            ctx.fillStyle = UI.gold;
-            ctx.fill();
-            ctx.strokeStyle = UI.panelBgDark;
-            ctx.lineWidth = 1;
-            ctx.stroke();
+            return;
         }
 
-        // Hub = composition readout.
-        ctx.beginPath();
-        ctx.arc(cx, cy, RING_HUB_R, 0, TAU);
-        ctx.fillStyle = UI.panelBgDark;
-        ctx.fill();
-        ctx.strokeStyle = UI.panelBorder;
-        ctx.lineWidth = 1;
-        ctx.stroke();
+        // ── Gather the current layer's options ──
+        let options, selIndex, title;
+        if (w.layer === LAYER.CATEGORY) {
+            options = categoryKeys().map(k => ({ label: k, enabled: true }));
+            selIndex = w.categoryIndex; title = '';
+        } else if (w.layer === LAYER.SUBVERB) {
+            options = currentCategory(w).subverbs.map(s => ({ label: s.label, enabled: leafEnabled(s, game) }));
+            selIndex = w.subVerbIndex; title = categoryKeys()[w.categoryIndex];
+        } else { // ITEM
+            const slots = validItemSlots(w, game);
+            options = slots.map(i => ({ label: game.inventory[i].itemDef.name.replace(/[\[\]]/g, ''), enabled: true }));
+            selIndex = Math.max(0, slots.indexOf(w.itemIndex)); title = currentLeaf(w).label;
+        }
+
+        // Dim backdrop behind the strip.
+        ctx.save();
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+        ctx.restore();
+
+        if (!options.length) {
+            if (this.font) this.font.drawText(ctx, '( nothing )', cx, cy, { color: UI.text, scale: 1, align: 'center', shadow: '#000' });
+            return;
+        }
+        const n = options.length;
+
+        // ── Slide animation: when the selection changes, ease the strip from an
+        //    offset back to 0 (shortest circular direction). reduce-motion snaps. ──
+        const reduce = (typeof Settings !== 'undefined') && Settings.get && Settings.get('reduceMotion');
+        const key = `${w.layer}:${selIndex}:${n}`;
+        if (this._wheelKey !== key) {
+            if (this._wheelLayerN === `${w.layer}:${n}` && this._wheelSel != null) {
+                let d = selIndex - this._wheelSel;
+                if (d >  n / 2) d -= n;
+                if (d < -n / 2) d += n;
+                this._wheelSlideFrom = d;
+                this._wheelSlideStart = now;
+            } else { this._wheelSlideFrom = 0; this._wheelSlideStart = 0; }
+            this._wheelKey = key;
+            this._wheelLayerN = `${w.layer}:${n}`;
+            this._wheelSel = selIndex;
+        }
+        const SLIDE_MS = 130, SPACING = 120, VPHALF = 280, FADE = 72, BW = 104, BH = 38;
+        const t = (this._wheelSlideStart && !reduce) ? Math.min(1, (now - this._wheelSlideStart) / SLIDE_MS) : 1;
+        const ease = 1 - Math.pow(1 - t, 3);                       // easeOutCubic
+        const slidePx = (this._wheelSlideFrom || 0) * SPACING * (1 - ease);
+
+        if (this.font && title) this.font.drawText(ctx, title.toUpperCase(), cx, cy - 56, { color: UI.gold, scale: 2, align: 'center', shadow: '#000' });
+
+        // ── The tape: render ±3 buttons around the selection (wrapped) ──
+        for (let k = -3; k <= 3; k++) {
+            const idx = ((selIndex + k) % n + n) % n;
+            const opt = options[idx];
+            const bx = cx + k * SPACING + slidePx;
+            const alpha = Math.max(0, Math.min(1, (VPHALF - Math.abs(bx - cx)) / FADE));
+            if (alpha <= 0.02) continue;
+            const isSel = (k === 0);
+            ctx.globalAlpha = alpha;
+            this._drawBubble(bx, cy, BW, BH, isSel, opt.enabled);
+            if (this.font) {
+                const label = opt.label.length > 12 ? opt.label.slice(0, 11) + '…' : opt.label;
+                const color = !opt.enabled ? '#6b5d44' : (isSel ? '#2a1d0e' : '#e8dcc0');
+                this.font.drawText(ctx, label, bx, cy - 4, { color, scale: 1, align: 'center' });
+            }
+            ctx.globalAlpha = 1;
+        }
+
         if (this.font) {
-            const c = compose(w);
-            const lines = [c.action.toUpperCase()];
-            if (rings.item) lines.push(c.itemSlot >= 0 && game.inventory[c.itemSlot]
-                ? game.inventory[c.itemSlot].itemDef.name.replace(/[\[\]]/g, '').slice(0, 8) : '--');
-            if (rings.aim) lines.push(c.aim);
-            let yy = cy - lines.length * 5;
-            for (const ln of lines) {
-                this.font.drawText(ctx, ln, cx, yy, { color: UI.text, scale: 1, align: 'center' });
-                yy += 10;
-            }
+            const leaf = currentLeaf(w);
+            this.font.drawText(ctx, `${categoryKeys()[w.categoryIndex]} ▸ ${leaf.label}`, cx, cy + 50, { color: UI.text, scale: 1, align: 'center', shadow: '#000' });
         }
 
+        ctx.globalAlpha = 1;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
-        ctx.globalAlpha = prevAlpha;
+    }
+
+    // A rounded "bubble" pill. Vector fill/stroke (always anti-aliased — the
+    // global imageSmoothing=false only affects drawImage, not paths).
+    _drawBubble(bcx, bcy, w, h, sel, enabled) {
+        const { ctx } = this;
+        const x = bcx - w / 2, y = bcy - h / 2, r = h / 2;
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y,     x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x,     y + h, r);
+        ctx.arcTo(x,     y + h, x,     y,     r);
+        ctx.arcTo(x,     y,     x + w, y,     r);
+        ctx.closePath();
+        ctx.fillStyle = sel ? UI.gold : (enabled ? 'rgba(58,46,30,0.92)' : 'rgba(40,34,24,0.82)');
+        ctx.fill();
+        ctx.lineWidth = sel ? 3 : 1.5;
+        ctx.strokeStyle = sel ? '#fff3c0' : (enabled ? 'rgba(150,130,90,0.7)' : 'rgba(90,78,56,0.5)');
+        ctx.stroke();
+    }
+
+    // (combat-wheel rework) Aim reticle — drawn in WORLD space (call from inside
+    // the camera transform). A dashed line from the player to the reticle tile,
+    // plus a box on the target tile. BASIC; footprint/AoE is a later pass.
+    _drawReticle(game) {
+        const w = game.wheel;
+        if (!w || w.layer !== LAYER.AIM || !w.reticle) return;
+        const { ctx, half } = this;
+        const toScreen = (tx, ty) => ({
+            x: (tx - game.playerX + half) * TILE_PX - this._scrollX,
+            y: (ty - game.playerY + half) * TILE_PX - this._scrollY,
+        });
+        const r = toScreen(w.reticle.x, w.reticle.y);
+        const p = toScreen(game.playerX, game.playerY);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(212,185,106,0.9)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(p.x + TILE_PX / 2, p.y + TILE_PX / 2);
+        ctx.lineTo(r.x + TILE_PX / 2, r.y + TILE_PX / 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.strokeRect(r.x + 1, r.y + 1, TILE_PX - 2, TILE_PX - 2);
+        ctx.restore();
     }
 
     // ── Throw Prompt ─────────────────────────────────────────────────────────

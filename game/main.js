@@ -21,17 +21,19 @@ import {
     CANVAS_INTERNAL_PX, HIT_SLOP, OVERLAY_RECTS, THROW_RECTS,
     HOTBAR_X_START, HOTBAR_Y, HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_STRIDE, HOTBAR_SLOTS,
     RADIAL_CENTER_X, RADIAL_CENTER_Y, LOG_STRIP_RECT, LOG_MODAL_RECT,
-    RING_HUB_R, RING_ACTION_R, RING_ITEM_R, RING_AIM_R,
     TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BRIBE_RECT, tradeCellRect,
 } from './layout.js';
 import { canTrade, buyPrice, sellPrice, bribeStepCost, BRIBE_STEP } from './trade.js'; // (trade slice 1) disposition pricing
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
 import {
-    WHEEL_ACTIONS, CARDINALS, DIR_VEC, RING_ACTION, RING_ITEM, RING_AIM,
-    createWheelState, currentAction, ringsFor, moveGrip, spinRing, compose, autoAimDir,
-} from './action-wheel.js'; // (action-wheel overhaul) pure three-ring model
+    createWheelState, currentLeaf, currentCategory, categoryKeys, cycle, forward, back,
+    leafEnabled, compose, autoAimTile, validItemSlots, LAYER,
+} from './wheel-model.js'; // (combat-wheel rework) pure verb-tree model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
+
+// Chebyshev (king-move) distance — used by the wheel reticle's range clamp.
+const cheb = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
 
 // ── States ───────────────────────────────────────────────────────────────────
 
@@ -183,24 +185,12 @@ class Game {
         // Item overlay options (populated when overlay shows)
         this.overlayOptions = {}; // { up: {...}, right: {...}, left: {...}, down: {...} }
 
-        // (action-wheel overhaul) Three-ring action wheel — opened anywhere by
+        // (combat-wheel rework) Verb-tree combat wheel — opened anywhere by
         // Space / the touch ACTION button (no bump-to-attack). The pure model in
-        // action-wheel.js holds the rings + last-used persistence.
+        // wheel-model.js holds the layer/category/sub-verb/item cursor, the aim
+        // reticle, and last-fired persistence.
         this.wheel = createWheelState();
-        this._lastWheelOpenAt = 0; // double-tap-Open window for express-repeat
-
-        // (action-wheel overhaul — spin animation) Per-ring rotation keyframes.
-        // The action and item rings rotate so their *selected* slice eases up to
-        // the fixed pointer at 12 o'clock; the compass (aim) ring never rotates.
-        // Each record is { from, to, at } in radians / performance.now() ms.
-        // main.js sets a new keyframe on every selection change (spin / tap /
-        // open); the renderer reads the live eased value via _wheelRingRot each
-        // frame. Easing is easeOutCubic over ~140ms (skipped under reduce-motion,
-        // which snaps straight to `to`).
-        this._wheelAnim = {
-            action: { from: 0, to: 0, at: 0 },
-            item:   { from: 0, to: 0, at: 0 },
-        };
+        this._lastActKeyAt = 0; // double-tap-Act window for express-repeat
 
         // Screen shake (Phase F) — triggered on damage >= threshold. The
         // renderer applies a per-frame random offset to world rendering
@@ -348,14 +338,20 @@ class Game {
         this._bindOptionsModal(); // [settings] options/accessibility UI
         this._bindPauseOverlay(); // [settings] turn-based pause overlay
 
-        // (action-wheel overhaul) Touch ACTION button: open the wheel when idle,
-        // fire it when open. Two quick taps repeat the last action via the same
-        // _lastWheelOpenAt window the Space key uses.
+        // (combat-wheel rework) Touch ACTION button: open the wheel when idle;
+        // while open, drill forward through the layers (firing once composed).
         const actionBtn = document.getElementById('action-btn');
         if (actionBtn) actionBtn.addEventListener('pointerdown', (e) => {
             e.preventDefault();
-            if (this.state === STATE.IDLE) this._openWheel();
-            else if (this.state === STATE.RADIAL_MENU) this._fireWheel();
+            if (this.state === STATE.IDLE) { this._openWheel(); return; }
+            if (this.state === STATE.RADIAL_MENU) {
+                // Drill forward through the wheel; fire once fully composed.
+                const w = this.wheel;
+                if (w.layer === LAYER.SUBVERB && !leafEnabled(currentLeaf(w), this)) { audio.playSfx('bump-wall'); return; }
+                const r = forward(w, this);
+                if (w.layer === LAYER.AIM && !w.reticle) w.reticle = autoAimTile(currentLeaf(w), this);
+                if (r === 'fire') this._fireWheel(); else { audio.playSfx('menu-tick'); this._render(); }
+            }
         });
 
         // Populate version badge from <meta name="version"> — single source of truth.
@@ -739,15 +735,25 @@ class Game {
             // closes the menu entirely without consuming a turn.
             if (this.state === STATE.RADIAL_MENU) {
                 e.preventDefault();
-                // (action-wheel overhaul) Up/Down move the grip between rings
-                // (action -> item -> aim, skipping dimmed rings); Left/Right spin
-                // the held ring; Space fires; Esc steps back toward walking.
-                if (e.code === 'ArrowUp'    || e.code === 'KeyW') { moveGrip(this.wheel, -1); this._render(); return; }
-                if (e.code === 'ArrowDown'  || e.code === 'KeyS') { moveGrip(this.wheel, +1); this._render(); return; }
-                if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { this._spinWheel(-1); return; }
-                if (e.code === 'ArrowRight' || e.code === 'KeyD') { this._spinWheel(+1); return; }
-                if (e.code === 'Space'      || e.code === 'Enter') { this._fireWheel(); return; }
-                if (e.code === 'Escape') { this._closeWheel(); return; }
+                // (combat-wheel rework) One grammar drives every layer:
+                // Left/Right cycle the current ring, Up/Space/Enter drill forward
+                // (and fire when fully composed), Down/Esc step back (or close).
+                // In the AIM layer the d-pad moves the reticle instead.
+                const w = this.wheel;
+                if (w.layer === LAYER.AIM) { this._reticleKey(e.code); return; }
+                if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { cycle(w, -1, this); audio.playSfx('menu-tick'); this._render(); return; }
+                if (e.code === 'ArrowRight' || e.code === 'KeyD') { cycle(w, +1, this); audio.playSfx('menu-tick'); this._render(); return; }
+                if (e.code === 'ArrowDown'  || e.code === 'KeyS' || e.code === 'Escape') {
+                    if (back(w) === 'close') this._closeWheel(); else { audio.playSfx('menu-cancel'); this._render(); }
+                    return;
+                }
+                if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'Space' || e.code === 'Enter') {
+                    if (w.layer === LAYER.SUBVERB && !leafEnabled(currentLeaf(w), this)) { audio.playSfx('bump-wall'); return; }
+                    const r = forward(w, this);
+                    if (w.layer === LAYER.AIM && !w.reticle) w.reticle = autoAimTile(currentLeaf(w), this);
+                    if (r === 'fire') this._fireWheel(); else { audio.playSfx('menu-tick'); this._render(); }
+                    return;
+                }
                 return;
             }
 
@@ -833,10 +839,17 @@ class Game {
             const slot = this._digitToSlot(e.code);
             if (slot >= 0) { e.preventDefault(); this._selectItem(slot); return; }
 
-            // Space = open the action wheel (the universal "act" button). A fast
+            // Space = open the combat wheel (the universal "act" button). A fast
             // double-tap repeats your last action without drawing the wheel.
-            // (action-wheel overhaul; bump-to-attack retired)
-            if (e.code === 'Space') { e.preventDefault(); this._openWheel(); return; }
+            // (combat-wheel rework; bump-to-attack retired)
+            if (e.code === 'Space') {
+                e.preventDefault();
+                const now = performance.now();
+                if (now - (this._lastActKeyAt || 0) < 250 && this._canRepeatLast()) this._repeatLastAction();
+                else this._openWheel();
+                this._lastActKeyAt = now;
+                return;
+            }
             // T = wait a turn (Space used to wait; it now opens the wheel).
             if (e.code === 'KeyT') { e.preventDefault(); this._log('[Wait]'); this._advanceWorld(); return; }
 
@@ -1401,55 +1414,21 @@ class Game {
     }
 
     _tapRadialMenu(pt) {
-        // (action-wheel overhaul) Polar hit-test against the three rings. Tap a
-        // slice to select it; tap the hub to fire; tap outside to cancel. The
-        // compass (aim) ring doubles as a directional d-pad. Slice 0 is at the
-        // top of each ring, going clockwise — matching renderer._drawWheel.
-        const lx = pt.x - RADIAL_CENTER_X;
-        const ly = pt.y - RADIAL_CENTER_Y;
-        const r  = Math.hypot(lx, ly);
-        if (r <= RING_HUB_R) { this._fireWheel(); return; }                // hub = fire
-        if (r > RING_AIM_R[1] + HIT_SLOP) { this._closeWheel(); return; }   // outside = cancel
-
-        const TAU = Math.PI * 2;
-        const clock = Math.atan2(ly, lx) + Math.PI / 2; // 0 = top, clockwise
-        // Undo the ring's live rotation before quantizing: the action/item rings
-        // spin their selection up to the pointer, so the visually-top slice is
-        // not slice 0. `rot` is the same value the renderer drew with this frame.
-        const slice = (count, rot = 0) => {
-            const c = (((clock - rot) % TAU) + TAU) % TAU;
-            return Math.round(c / (TAU / count)) % count;
-        };
-
-        const rings = ringsFor(currentAction(this.wheel));
-
-        if (r >= RING_ACTION_R[0] - HIT_SLOP && r <= RING_ACTION_R[1] + HIT_SLOP) {
-            this.wheel.actionIndex = slice(WHEEL_ACTIONS.length, this._wheelRingRot('action'));
-            this.wheel.grip = RING_ACTION;
-            this._animateWheelRing('action', WHEEL_ACTIONS.length, this.wheel.actionIndex);
-            audio.playSfx('menu-confirm');
-            this._render();
-            return;
+        // (combat-wheel rework) Minimal touch: tap the center to drill forward /
+        // fire, tap elsewhere to step back / close. Full radial touch lands in a
+        // later polish pass; this keeps touch from crashing on the new state.
+        const w = this.wheel;
+        const cx = RADIAL_CENTER_X, cy = RADIAL_CENTER_Y;
+        const r = Math.hypot(pt.x - cx, pt.y - cy);
+        if (r < 40) {
+            if (w.layer === LAYER.AIM) { this._fireWheel(); return; }
+            if (w.layer === LAYER.SUBVERB && !leafEnabled(currentLeaf(w), this)) { audio.playSfx('bump-wall'); return; }
+            const res = forward(w, this);
+            if (w.layer === LAYER.AIM && !w.reticle) w.reticle = autoAimTile(currentLeaf(w), this);
+            if (res === 'fire') this._fireWheel(); else { audio.playSfx('menu-tick'); this._render(); }
+        } else {
+            if (back(w) === 'close') this._closeWheel(); else { audio.playSfx('menu-cancel'); this._render(); }
         }
-        if (rings.item && r >= RING_ITEM_R[0] - HIT_SLOP && r <= RING_ITEM_R[1] + HIT_SLOP) {
-            const slots = this._wheelValidItemSlots();
-            if (slots.length) {
-                this.wheel.itemSlot = slots[slice(slots.length, this._wheelRingRot('item'))];
-                this.wheel.grip = RING_ITEM;
-                this._animateWheelRing('item', slots.length, Math.max(0, slots.indexOf(this.wheel.itemSlot)));
-                audio.playSfx('menu-confirm');
-                this._render();
-            }
-            return;
-        }
-        if (rings.aim && r >= RING_AIM_R[0] - HIT_SLOP && r <= RING_AIM_R[1] + HIT_SLOP) {
-            this.wheel.aim = CARDINALS[slice(4)];
-            this.wheel.grip = RING_AIM;
-            audio.playSfx('menu-confirm');
-            this._render();
-            return;
-        }
-        // Tapped a dimmed/gap region — no-op.
     }
 
     // ── Animation ─────────────────────────────────────────────────────────────
@@ -2003,234 +1982,125 @@ class Game {
         this._doGive(recipient);
     }
 
-    // ── Radial Menu (Omnitrix-style combat wheel) ─────────────────────────────
-    //
-    // Bumping a hostile enemy opens a six-slice wheel centered on the player
-    // (Attack, Skill, Throw, Give, Run, Defend, clockwise from 12 o'clock).
-    // Left/Right spins the cursor around the wheel one slice at a time.
-    // Up (or Space) confirms — fires the action directly, or drills into a
-    // sub-wheel for categories that have sub-options. Down (or Esc) cancels —
-    // backs out of the sub-wheel, or closes the menu entirely.
-    //
-    // The cursor positions (inner index AND last sub-pick per category)
-    // persist across encounters so the wheel "starts where you left it" —
-    // muscle memory carries even though the wheel exposes more options than
-    // the player's 4 arrow keys would otherwise allow.
-    //
-    // Reuses existing combat / item resolution paths (combatAttack, doThrow,
-    // doGive, addBuff) by setting selectedSlot before delegating — keeps this
-    // method focused on menu state, not action mechanics.
-
-    // ── Three-ring action wheel (action × item × direction) ───────────────────
+    // ── Combat wheel (verb-tree: Fight/Trick/Treat/Flight → item → aim) ────────
     //
     // Opened anywhere by Space / the touch ACTION button (no bump-to-attack).
-    // The pure model lives in action-wheel.js; this layer wires open, auto-aim,
-    // double-tap-repeat, and fire-routing to the existing combat resolvers.
+    // The pure model lives in wheel-model.js; this layer wires open/close, the
+    // aim reticle, double-tap-repeat, and fire-routing to the existing
+    // combat/item resolvers (combatAttack, resolveThrow, resolveUse, addBuff,
+    // _doMove, _openTrade).
 
     _openWheel() {
-        // Fast double-tap of Open = repeat the last action without drawing the
-        // wheel (if still valid). Otherwise open the wheel normally.
-        const now = performance.now();
-        const fast = now - (this._lastWheelOpenAt || 0) < 250;
-        this._lastWheelOpenAt = now;
-        if (fast && this._repeatLastAction()) return;
-
+        if (this.state !== STATE.IDLE) return;
         this._stopAutoRepeat();
         this._heldDirKeys = [];
-        this.wheel.grip = RING_ACTION;
-        // Pre-aim at the nearest hostile; fall back to the player's facing.
-        const aim = autoAimDir(this.playerX, this.playerY, this._wheelHostileTargets());
-        this.wheel.aim = aim || this._facingToCardinal();
-        this._snapWheelRot();
         this.state = STATE.RADIAL_MENU;
+        this.wheel.layer = LAYER.CATEGORY;
+        this.wheel.reticle = autoAimTile(currentLeaf(this.wheel), this);
         audio.playSfx('menu-open');
-        this._overlayOpenedAt = now;
+        this._overlayOpenedAt = performance.now();
         this._ensureParticleLoop();
         this._render();
     }
 
     _closeWheel() {
         this.state = STATE.IDLE;
+        this.wheel.reticle = null;
         audio.playSfx('menu-cancel');
         this._render();
     }
 
-    _facingToCardinal() {
-        return this.facing === 'up' ? 'N'
-             : this.facing === 'right' ? 'E'
-             : this.facing === 'down' ? 'S' : 'W';
+    // The reticle's reach for the current leaf: adjacent verbs lock to range 1,
+    // Throw uses the selected item's range (fallback 5), everything else 1.
+    _aimRange(leaf) {
+        if (leaf.aimType === 'adjacent') return 1;
+        if (leaf.key === 'throw') { const s = this.inventory[this.wheel.itemIndex]; return (s && s.itemDef.range) || 5; }
+        return 1;
     }
 
-    // ── Wheel spin animation ──────────────────────────────────────────────
-    // The action & item rings rotate so the selected slice eases up to the
-    // fixed 12-o'clock pointer. These four helpers own that rotation:
-    //   _wheelRingRot(ring)        — live eased rotation (radians) for a frame
-    //   _animateWheelRing(...)     — start a new ease toward a slice
-    //   _snapWheelRot()            — jump rings to their selection (no spin)
-    //   _spinWheel(delta)          — spin the held ring + kick its animation
-    // The compass (aim) ring is a fixed N-up dial and never rotates here.
-
-    // Bring an arbitrary accumulated angle onto the shortest arc to `toRaw`,
-    // so a spin from the last slice to the first turns 60° rather than 300°.
-    _shortestAngularPath(from, toRaw) {
-        const TAU = Math.PI * 2;
-        let d = (toRaw - from) % TAU;
-        if (d >  Math.PI) d -= TAU;
-        if (d < -Math.PI) d += TAU;
-        return from + d;
-    }
-
-    // The rotation (radians) to apply to `ring` this frame. easeOutCubic from
-    // the keyframe's `from` to `to` over 140ms; reduce-motion snaps to `to`.
-    _wheelRingRot(ring) {
-        const a = this._wheelAnim && this._wheelAnim[ring];
-        if (!a) return 0;
-        if (Settings.get('reduceMotion')) return a.to;
-        const k = Math.min(1, (performance.now() - a.at) / 140);
-        const e = 1 - Math.pow(1 - k, 3);
-        return a.from + (a.to - a.from) * e;
-    }
-
-    // Start easing `ring` so slice `selIndex` (of `count`) lands at the pointer.
-    // `from` is the *current displayed* rotation, so chained spins never jump.
-    _animateWheelRing(ring, count, selIndex) {
-        const TAU = Math.PI * 2;
-        const cur = this._wheelRingRot(ring);
-        const toRaw = -(selIndex * (TAU / Math.max(1, count)));
-        this._wheelAnim[ring] = {
-            from: cur,
-            to: this._shortestAngularPath(cur, toRaw),
-            at: performance.now(),
-        };
-    }
-
-    // Place both rotating rings on their current selection with no animation —
-    // used when the wheel opens so it appears already-aligned, not mid-spin.
-    _snapWheelRot() {
-        const TAU = Math.PI * 2;
-        const w = this.wheel;
-        const now = performance.now();
-        const actTo = -(w.actionIndex * (TAU / WHEEL_ACTIONS.length));
-        const slots = this._wheelValidItemSlots();
-        const itemSel = Math.max(0, slots.indexOf(w.itemSlot));
-        const itemTo = slots.length ? -(itemSel * (TAU / slots.length)) : 0;
-        this._wheelAnim = {
-            action: { from: actTo, to: actTo, at: now },
-            item:   { from: itemTo, to: itemTo, at: now },
-        };
-    }
-
-    // Spin the currently-held ring by `delta` and animate it to the pointer.
-    // (The aim ring is a fixed compass — spinning it only re-highlights a
-    // cardinal in place, so it needs no rotation tween.)
-    _spinWheel(delta) {
-        spinRing(this.wheel, delta, this._wheelValidItemSlots());
-        const w = this.wheel;
-        if (w.grip === RING_ACTION) {
-            this._animateWheelRing('action', WHEEL_ACTIONS.length, w.actionIndex);
-        } else if (w.grip === RING_ITEM) {
-            const slots = this._wheelValidItemSlots();
-            this._animateWheelRing('item', slots.length, Math.max(0, slots.indexOf(w.itemSlot)));
+    // Drive the reticle while in the AIM layer: d-pad nudges it (clamped to the
+    // leaf's range + walkability), Space/Enter fires, Esc backs out.
+    _reticleKey(code) {
+        const w = this.wheel, leaf = currentLeaf(w), range = this._aimRange(leaf);
+        const mv = {
+            ArrowUp: [0, -1], KeyW: [0, -1], ArrowDown: [0, 1], KeyS: [0, 1],
+            ArrowLeft: [-1, 0], KeyA: [-1, 0], ArrowRight: [1, 0], KeyD: [1, 0],
+        }[code];
+        if (mv) {
+            if (!w.reticle) w.reticle = autoAimTile(leaf, this) || { x: this.playerX, y: this.playerY };
+            const nx = w.reticle.x + mv[0], ny = w.reticle.y + mv[1];
+            if (cheb(this.playerX, this.playerY, nx, ny) <= range && this.map.isWalkable(nx, ny)) {
+                w.reticle = { x: nx, y: ny }; this._render();
+            }
+            return;
         }
-        this._render();
+        if (code === 'Space' || code === 'Enter') { this._fireWheel(); return; }
+        if (code === 'Escape') { back(w); audio.playSfx('menu-cancel'); this._render(); return; }
     }
 
-    // Live hostiles anywhere on the map, as {x,y} auto-aim candidates.
-    _wheelHostileTargets() {
-        return this.enemies
-            .filter(e => e.entity.isAlive() && (!e.behavior || e.behavior.includes('HOSTILE')))
-            .map(e => ({ x: e.x, y: e.y }));
+    // Direction (sign vector) from the player toward a tile, or null.
+    _aimDir(tile) { if (!tile) return null; return { dx: Math.sign(tile.x - this.playerX), dy: Math.sign(tile.y - this.playerY) }; }
+
+    // Throw inventory `slot` toward `tile`, reusing the existing throw pipeline
+    // (which consumes the item, logs, sets state IDLE, and advances the world).
+    _throwAt(slot, tile) {
+        const dir = this._aimDir(tile);
+        if (!dir || (dir.dx === 0 && dir.dy === 0)) { this._log('[Nothing to throw at]'); this.state = STATE.IDLE; return; }
+        this.selectedSlot = slot;
+        this._doThrow(dir); // consumes item + advances world + sets state IDLE
     }
 
-    // Inventory slot indices valid for the current action's item ring.
-    // Throw/Give use any non-quest item; other actions have no item ring.
-    _wheelValidItemSlots() {
-        const action = currentAction(this.wheel);
-        if (action !== 'Throw' && action !== 'Give') return [];
-        const out = [];
-        for (let i = 0; i < this.inventory.length; i++) {
-            const s = this.inventory[i];
-            if (s && !s.itemDef.questItem) out.push(i);
-        }
-        return out;
-    }
-
-    // Re-fire the last action without drawing the wheel (express double-tap).
-    // Returns true if it fired, false if there was nothing valid to repeat.
-    _repeatLastAction() {
-        const last = this.wheel.lastFired;
-        if (!last) return false;
-        if (last.action === 'Throw' && !this.inventory[last.itemSlot]) return false;
-        this.wheel.actionIndex = WHEEL_ACTIONS.indexOf(last.action);
-        this.wheel.itemSlot = last.itemSlot;
-        this.wheel.aim = last.aim;
-        this.state = STATE.RADIAL_MENU; // _fireWheel reads/sets state itself
-        this._fireWheel();
-        // If the fire bailed (no target in that tile), _fireWheel left us in
-        // RADIAL_MENU — surface the wheel so the player can adjust.
-        if (this.state === STATE.RADIAL_MENU) {
-            audio.playSfx('menu-open');
-            this._overlayOpenedAt = performance.now();
-            this._ensureParticleLoop();
-            this._render();
+    // True if the last-fired action can be repeated as-is (express double-tap).
+    _canRepeatLast() {
+        const lf = this.wheel.lastFired; if (!lf) return false;
+        if (lf.itemSlot >= 0 && !this.inventory[lf.itemSlot]) return false;
+        if (lf.aimTile && lf.subKey === 'melee') {
+            return this.enemies.some(e => e.entity.isAlive() && e.x === lf.aimTile.x && e.y === lf.aimTile.y);
         }
         return true;
     }
 
-    // Compose the wheel selection and route to the existing combat resolvers.
-    _fireWheel() {
-        const { action, itemSlot, aim } = compose(this.wheel);
-        const v = DIR_VEC[aim];
-        const nx = this.playerX + v.dx, ny = this.playerY + v.dy;
+    // Restore the last selection into the wheel and fire it without drawing.
+    _repeatLastAction() {
+        const lf = this.wheel.lastFired; if (!lf) { this._openWheel(); return; }
+        const cats = categoryKeys();
+        this.wheel.categoryIndex = Math.max(0, cats.indexOf(lf.catKey));
+        const subs = currentCategory(this.wheel).subverbs;
+        this.wheel.subVerbIndex = Math.max(0, subs.findIndex(s => s.key === lf.subKey));
+        this.wheel.itemIndex = lf.itemSlot >= 0 ? lf.itemSlot : this.wheel.itemIndex;
+        this.wheel.reticle = lf.aimTile || autoAimTile(currentLeaf(this.wheel), this);
+        this.state = STATE.RADIAL_MENU; // _fireWheel + _closeWheel return us to IDLE
+        this._fireWheel();
+    }
 
-        if (action === 'Attack') {
-            const enemy = this.enemies.find(e => e.entity.isAlive() && e.x === nx && e.y === ny
-                && (!e.behavior || e.behavior.includes('HOSTILE')));
-            if (!enemy) { this._log('[Nothing to hit that way]'); return; } // no turn; wheel stays
-            this.wheel.lastFired = { action, itemSlot, aim };
-            const weapon = this.equipment.weapon;
-            this.combatAttack(enemy, weapon ? weapon.damage : 1);
-            this.state = STATE.IDLE;
-            this._advanceWorld();
-            return;
+    // Compose the wheel selection and route to the existing resolvers.
+    _fireWheel() {
+        const w = this.wheel;
+        const { leaf, itemSlot, aimTile } = compose(w);
+        w.lastFired = { catKey: categoryKeys()[w.categoryIndex], subKey: leaf.key, itemSlot, aimTile };
+        audio.playSfx('menu-confirm');
+        switch (leaf.resolver) {
+            case 'combatAttack': {
+                const enemy = aimTile && this.enemies.find(e => e.entity.isAlive() && e.x === aimTile.x && e.y === aimTile.y);
+                if (enemy) { this.combatAttack(enemy, this.equipment.weapon.damage); this._advanceWorld(); }
+                else { this._log('[Nothing to hit there]'); }
+                break;
+            }
+            case 'resolveThrow': { if (itemSlot >= 0 && aimTile) { this._throwAt(itemSlot, aimTile); } break; }
+            case 'resolveUse':   { if (itemSlot >= 0) { this.selectedSlot = itemSlot; this._doItemUse(this.inventory[itemSlot].itemDef); } break; }
+            case 'guard':        { this.addBuff('guard', 'Guard', 2, 'buff'); this._log('[Bracing — incoming damage reduced.]'); this._advanceWorld(); break; }
+            case 'wait':         { this._log('[Wait]'); this._advanceWorld(); break; }
+            case 'run':          { const d = this._aimDir(aimTile); if (d) { this._closeWheel(); this._doMove(d); return; } break; }
+            case 'trade': {
+                const npc = aimTile && this.enemies.find(e => e.entity.isAlive() && e.x === aimTile.x && e.y === aimTile.y);
+                this.state = STATE.IDLE;                 // _openTrade requires IDLE + npc.vendor
+                if (npc && npc.vendor) { this._openTrade(npc); return; }
+                this._log('[No one to trade with there]');
+                break;
+            }
+            default: this._log(`[${leaf.label} isn't ready yet]`); // dep stub — never crash
         }
-        if (action === 'Throw') {
-            const slots = this._wheelValidItemSlots();
-            if (!slots.includes(itemSlot)) { this._log('[Nothing to throw]'); return; }
-            this.wheel.lastFired = { action, itemSlot, aim };
-            this.selectedSlot = itemSlot;
-            this._doThrow(v); // sets state IDLE + advances + consumes the item
-            return;
-        }
-        if (action === 'Give') {
-            const npc = this.enemies.find(e => e.entity.isAlive() && e.x === nx && e.y === ny);
-            if (!npc) { this._log('[No one there to give to]'); return; }
-            if (!this.inventory[itemSlot]) { this._log('[Nothing to give]'); return; }
-            this.wheel.lastFired = { action, itemSlot, aim };
-            this.selectedSlot = itemSlot;
-            this._doGive(npc); // sets state IDLE + advances
-            return;
-        }
-        if (action === 'Defend') {
-            this.wheel.lastFired = { action, itemSlot, aim };
-            this.addBuff('guard', 'Guard', 2, 'buff');
-            this._log('[Bracing — incoming damage halved.]');
-            this.state = STATE.IDLE;
-            this._advanceWorld();
-            return;
-        }
-        if (action === 'Run') {
-            this.wheel.lastFired = { action, itemSlot, aim };
-            const blocked = !this.map.isWalkable(nx, ny)
-                || this.enemies.some(e => e.entity.isAlive() && e.x === nx && e.y === ny);
-            this.state = STATE.IDLE;
-            if (blocked) { this._log('[Cannot run that way.]'); }
-            else { this.playerX = nx; this.playerY = ny; this._log('[Backed away.]'); }
-            this._advanceWorld();
-            return;
-        }
-        // Skill — placeholder until creature abilities land.
-        this._log('[No skills yet — try transforming first]'); // no turn consumed
+        this._closeWheel();
     }
 
     // ── Canonical adjacent-hostile filter ────────────────────────────────────
