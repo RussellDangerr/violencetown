@@ -323,7 +323,7 @@ export class Renderer {
 
         // (combat-wheel rework) Aim reticle lives in world space so it tracks the
         // map; the wheel list itself is drawn in screen space after the restore.
-        if (game.wheel && game.wheel.layer === LAYER.AIM) this._drawReticle(game);
+        if (game.wheel && (game.wheel.layer === LAYER.AIM || game.wheel.layer === LAYER.CONFIRM)) this._drawReticle(game);
 
         // Floating damage numbers float above the world but under the HUD
         // so the HP panel + hotbar are never occluded by spammy combat.
@@ -1402,6 +1402,27 @@ export class Renderer {
                 const hint = `${currentLeaf(w).label.toUpperCase()}  ·  AIM — MOVE · SPACE FIRE · ↓ BACK`;
                 this.font.drawText(ctx, hint, cx, CANVAS_PX - 16, { color: UI.gold, scale: 1, align: 'center', shadow: '#000' });
             }
+            return;
+        }
+
+        // ── CONFIRM ("Plus Ultra"): about to strike a FRIENDLY — one more layer ──
+        // Reddish wash (danger), the target's name, and the "↑ again to commit"
+        // grammar. The reticle still draws in world space (see _drawReticle gate).
+        if (w.layer === LAYER.CONFIRM) {
+            ctx.save();
+            ctx.fillStyle = 'rgba(48,0,0,0.55)';
+            ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+            ctx.restore();
+            const tgt = w.reticle && game.enemies.find(e => e.entity.isAlive() && e.x === w.reticle.x && e.y === w.reticle.y);
+            const name = String((tgt && (tgt.type || (tgt.entity && tgt.entity.name))) || 'them').replace(/[\[\]]/g, '').toUpperCase();
+            if (this.font) {
+                this.font.drawText(ctx, '!! PLUS ULTRA !!', cx, cy - 42, { color: '#ff5555', scale: 2, align: 'center', shadow: '#000' });
+                this.font.drawText(ctx, `STRIKE ${name}?`, cx, cy - 8, { color: UI.gold, scale: 1, align: 'center', shadow: '#000' });
+                this.font.drawText(ctx, "THEY'RE NOT YOUR ENEMY", cx, cy + 12, { color: UI.text, scale: 1, align: 'center', shadow: '#000' });
+                this.font.drawText(ctx, '↑ AGAIN TO COMMIT  ·  ↓ BACK', cx, cy + 38, { color: '#e8dcc0', scale: 1, align: 'center', shadow: '#000' });
+            }
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'alphabetic';
             return;
         }
 

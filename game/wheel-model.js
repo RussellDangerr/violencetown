@@ -36,7 +36,28 @@ export const VERB_TREE = {
 export const categoryKeys = () => Object.keys(VERB_TREE);
 export const leafAt = (catKey, i) => VERB_TREE[catKey].subverbs[i];
 
-export const LAYER = { CATEGORY: 0, SUBVERB: 1, ITEM: 2, AIM: 3 };
+// CONFIRM is the "Plus Ultra" extra layer: reached only when an offensive verb
+// is aimed at a friendly, so committing a friendly hit takes one more deliberate
+// advance (no fat-fingering an ally/vendor). main.js renders + drives it.
+export const LAYER = { CATEGORY: 0, SUBVERB: 1, ITEM: 2, AIM: 3, CONFIRM: 4 };
+
+// Resolvers that deal harm — these are the verbs the friendly-confirm guards.
+const OFFENSIVE_RESOLVERS = new Set(['combatAttack', 'resolveThrow', 'rangedAttack', 'castSpell']);
+export const isOffensiveLeaf = (leaf) => OFFENSIVE_RESOLVERS.has(leaf.resolver);
+
+// True when firing the current (offensive) leaf would strike a FRIENDLY — a live
+// entity sitting on the reticle that is NOT a hostile chaser (an ally, vendor, or
+// idle/dialogue NPC). Hostiles (behavior null = legacy chaser, or behavior
+// includes 'HOSTILE') never need confirming. Reads game.enemies the same way
+// autoAimTile does — the model stays free of DOM/canvas, not of game state.
+export function needsFriendlyConfirm(w, game) {
+  const leaf = currentLeaf(w);
+  if (!isOffensiveLeaf(leaf) || !w.reticle) return false;
+  const t = (game.enemies || []).find(e => e.entity.isAlive() && e.x === w.reticle.x && e.y === w.reticle.y);
+  if (!t) return false;
+  const hostile = (t.behavior == null) || t.behavior.includes('HOSTILE');
+  return !hostile;
+}
 
 export function createWheelState() {
   return {
@@ -108,6 +129,11 @@ export function forward(w, game) {
       if (leaf.aimType !== 'none') { w.layer = LAYER.AIM; return; }
       return 'fire';
     case LAYER.AIM:
+      // "Plus Ultra": an offensive verb on a friendly drills one more layer —
+      // you must advance again to actually strike them.
+      if (needsFriendlyConfirm(w, game)) { w.layer = LAYER.CONFIRM; return; }
+      return 'fire';
+    case LAYER.CONFIRM:
       return 'fire';
   }
 }

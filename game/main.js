@@ -740,6 +740,17 @@ class Game {
                 // (and fire when fully composed), Down/Esc step back (or close).
                 // In the AIM layer the d-pad moves the reticle instead.
                 const w = this.wheel;
+                // "Plus Ultra" friendly-confirm layer: ↑/Space/Enter commits the
+                // hit on a friendly; ↓/Esc backs out to AIM (reticle preserved).
+                if (w.layer === LAYER.CONFIRM) {
+                    if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'Space' || e.code === 'Enter') {
+                        if (forward(w, this) === 'fire') this._fireWheel(); return;
+                    }
+                    if (e.code === 'ArrowDown' || e.code === 'KeyS' || e.code === 'Escape') {
+                        w.layer = LAYER.AIM; audio.playSfx('menu-cancel'); this._render(); return;
+                    }
+                    return;
+                }
                 if (w.layer === LAYER.AIM) { this._reticleKey(e.code); return; }
                 if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { cycle(w, -1, this); audio.playSfx('menu-tick'); this._render(); return; }
                 if (e.code === 'ArrowRight' || e.code === 'KeyD') { cycle(w, +1, this); audio.playSfx('menu-tick'); this._render(); return; }
@@ -2034,7 +2045,13 @@ class Game {
             }
             return;
         }
-        if (code === 'Space' || code === 'Enter') { this._fireWheel(); return; }
+        if (code === 'Space' || code === 'Enter') {
+            // Route through forward() so the "Plus Ultra" friendly-confirm layer
+            // can intercept an offensive shot aimed at an ally/vendor/idle NPC.
+            const r = forward(w, this);
+            if (r === 'fire') this._fireWheel(); else { audio.playSfx('menu-tick'); this._render(); }
+            return;
+        }
         if (code === 'Escape') { back(w); audio.playSfx('menu-cancel'); this._render(); return; }
     }
 
@@ -2298,6 +2315,10 @@ class Game {
         // on you for it. Skip if the hit killed them (nothing to re-flip).
         if (enemyObj._ally && enemyObj.entity.isAlive()) {
             this._revertAlly(enemyObj);
+        } else if (enemyObj.entity.isAlive()) {
+            // Reaction bus: any non-ally you harm reacts. Already-hostile chasers
+            // are unchanged; a struck friendly/neutral turns on you.
+            this._onEntityHarmed(enemyObj, { kind: opts.omni ? 'splash' : 'attack' });
         }
 
         // (combat-feel-pass) Typed hit-splat. Direction = player→enemy for a
@@ -2429,6 +2450,25 @@ class Game {
         enemyObj.disposition = -50;     // betrayed: head-meter goes angry + re-bribing costs more
         enemyObj._wasFlipped = false;   // ...but they CAN be won back if you make amends
         this._log(`[The ${enemyObj.type} turns on you!]`, 'combat');
+    }
+
+    // ── Reaction bus ──────────────────────────────────────────────────────────
+    // Single entry point for "the player just harmed this entity." A non-hostile
+    // (idle/dialogue NPC, vendor) you strike turns on you — it becomes a legacy
+    // chaser locked onto the player (the same reversion _revertAlly uses), so the
+    // existing chase AI carries it with no new state. Already-hostile chasers and
+    // bribed allies (handled by _revertAlly) are left alone. This is what makes
+    // the wheel's offensive verbs actually land on the people around you.
+    _onEntityHarmed(target, { kind = 'attack' } = {}) {
+        if (!target || !target.entity || !target.entity.isAlive() || target._ally) return;
+        const hostile = (target.behavior == null) || target.behavior.includes('HOSTILE');
+        if (hostile) return;                         // already after you — nothing to provoke
+        target.behavior = null;                      // → legacy chase path in resolveEnemyTurns
+        target.fsmState = null;
+        target.state = 'chasing';                    // aggro now, skip the LOS re-acquire beat
+        if (target.vendor) target.vendor = false;    // a vendor you struck won't keep shop
+        if (typeof target.disposition === 'number') target.disposition = Math.min(target.disposition, -50);
+        this._log(`[The ${target.type || target.entity.name} turns on you!]`, 'combat');
     }
 
     applyDamageToPlayer(rawDamage) {
