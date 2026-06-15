@@ -2101,6 +2101,21 @@ class Game {
         this.wheel.subVerbIndex = Math.max(0, subs.findIndex(s => s.key === lf.subKey));
         this.wheel.itemIndex = lf.itemSlot >= 0 ? lf.itemSlot : this.wheel.itemIndex;
         this.wheel.reticle = lf.aimTile || autoAimTile(currentLeaf(this.wheel), this);
+        // Re-clamp the restored reticle to the CURRENT player position. lastFired
+        // stores the raw tile; the player may have walked since, leaving it out of
+        // range. Without this, the CONFIRM prompt + AoE preview would read the
+        // stale tile while resolveThrow's own clamp lands the burst elsewhere —
+        // confirm/preview vs actual would disagree. Clamp here so all three agree.
+        if (this.wheel.reticle) {
+            const range = aimRange(currentLeaf(this.wheel), this);
+            const dx = this.wheel.reticle.x - this.playerX, dy = this.wheel.reticle.y - this.playerY;
+            if (Math.max(Math.abs(dx), Math.abs(dy)) > range) {
+                this.wheel.reticle = {
+                    x: this.playerX + Math.max(-range, Math.min(range, dx)),
+                    y: this.playerY + Math.max(-range, Math.min(range, dy)),
+                };
+            }
+        }
         this.state = STATE.RADIAL_MENU; // _fireWheel + _closeWheel return us to IDLE
         // Honor the "Plus Ultra" gate even on the express repeat: if the
         // remembered shot now lands on a friendly (a hostile died/moved and an

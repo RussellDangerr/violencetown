@@ -257,7 +257,7 @@ function resolveSelfUse(game, itemDef) {
 // the wheel's Throw always throws (routing through resolveUse used to make
 // 'self' consumables heal-and-vanish and silently drop the throw).
 export function resolveThrow(game, itemDef, direction, _stackCount = 1, targetTile = null) {
-    const range = itemDef.range || 4;
+    const range = itemDef.range || 5; // match wheel-model aimRange's throw fallback (single default)
     let ix, iy, hitWall = false;
 
     if (targetTile) {
