@@ -2064,13 +2064,26 @@ class Game {
     // Direction (sign vector) from the player toward a tile, or null.
     _aimDir(tile) { if (!tile) return null; return { dx: Math.sign(tile.x - this.playerX), dy: Math.sign(tile.y - this.playerY) }; }
 
-    // Throw inventory `slot` toward `tile`, reusing the existing throw pipeline
-    // (which consumes the item, logs, sets state IDLE, and advances the world).
+    // Throw inventory `slot` onto the exact reticle `tile` (real placement — the
+    // burst centres on that tile, not a collapsed cardinal direction).
     _throwAt(slot, tile) {
-        const dir = this._aimDir(tile);
-        if (!dir || (dir.dx === 0 && dir.dy === 0)) { this._log('[Nothing to throw at]'); this.state = STATE.IDLE; return; }
+        if (!tile) { this._log('[Nothing to throw at]'); this.state = STATE.IDLE; return; }
         this.selectedSlot = slot;
-        this._doThrow(dir); // consumes item + advances world + sets state IDLE
+        this._doThrowAt(tile); // consumes item + advances world + sets state IDLE
+    }
+
+    // Resolve a throw onto an exact tile (wheel reticle path). Mirrors _doThrow
+    // but passes the target tile through to resolveThrow instead of a direction.
+    _doThrowAt(tile) {
+        const stack = this.inventory[this.selectedSlot];
+        if (!stack) { this.state = STATE.IDLE; this._render(); return; }
+        audio.playSfx('throw');
+        const msg = resolveThrow(this, stack.itemDef, null, stack.count, tile);
+        if (msg) this._log(msg);
+        if (stack.itemDef.consumable) this._removeFromSlot(this.selectedSlot);
+        this.selectedSlot = -1;
+        this.state = STATE.IDLE;
+        this._advanceWorld();
     }
 
     // True if the last-fired action can be repeated as-is (express double-tap).
@@ -2152,6 +2165,13 @@ class Game {
             && manhattan(e.x, e.y, this.playerX, this.playerY) === 1
             && (!e.behavior || e.behavior.includes('HOSTILE'))
         );
+    }
+
+    // Live entities within a Chebyshev radius of a tile — the shared AoE
+    // primitive for thrown bursts (r=1 → the 3×3) and future area verbs.
+    _entitiesInRadius(cx, cy, r) {
+        return this.enemies.filter(e => e.entity.isAlive()
+            && Math.abs(e.x - cx) <= r && Math.abs(e.y - cy) <= r);
     }
 
     // ── World Advance (after any action) ─────────────────────────────────────
