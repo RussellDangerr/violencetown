@@ -28,7 +28,7 @@ import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setp
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
 import {
     createWheelState, currentLeaf, currentCategory, categoryKeys, cycle, forward, back,
-    leafEnabled, compose, autoAimTile, validItemSlots, LAYER,
+    leafEnabled, compose, autoAimTile, validItemSlots, LAYER, needsFriendlyConfirm, aimRange,
 } from './wheel-model.js'; // (combat-wheel rework) pure verb-tree model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
 
@@ -740,6 +740,17 @@ class Game {
                 // (and fire when fully composed), Down/Esc step back (or close).
                 // In the AIM layer the d-pad moves the reticle instead.
                 const w = this.wheel;
+                // "Plus Ultra" friendly-confirm layer: ↑/Space/Enter commits the
+                // hit on a friendly; ↓/Esc backs out to AIM (reticle preserved).
+                if (w.layer === LAYER.CONFIRM) {
+                    if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'Space' || e.code === 'Enter') {
+                        if (forward(w, this) === 'fire') this._fireWheel(); return;
+                    }
+                    if (e.code === 'ArrowDown' || e.code === 'KeyS' || e.code === 'Escape') {
+                        w.layer = LAYER.AIM; audio.playSfx('menu-cancel'); this._render(); return;
+                    }
+                    return;
+                }
                 if (w.layer === LAYER.AIM) { this._reticleKey(e.code); return; }
                 if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { cycle(w, -1, this); audio.playSfx('menu-tick'); this._render(); return; }
                 if (e.code === 'ArrowRight' || e.code === 'KeyD') { cycle(w, +1, this); audio.playSfx('menu-tick'); this._render(); return; }
@@ -1421,12 +1432,18 @@ class Game {
         const cx = RADIAL_CENTER_X, cy = RADIAL_CENTER_Y;
         const r = Math.hypot(pt.x - cx, pt.y - cy);
         if (r < 40) {
-            if (w.layer === LAYER.AIM) { this._fireWheel(); return; }
+            // Center tap drills forward. Route AIM through forward() too (don't
+            // short-circuit to _fireWheel) so the "Plus Ultra" friendly-confirm
+            // gate applies to touch exactly as it does to keyboard / the ACTION
+            // button. A center tap at CONFIRM resolves to 'fire' (commit).
             if (w.layer === LAYER.SUBVERB && !leafEnabled(currentLeaf(w), this)) { audio.playSfx('bump-wall'); return; }
             const res = forward(w, this);
             if (w.layer === LAYER.AIM && !w.reticle) w.reticle = autoAimTile(currentLeaf(w), this);
             if (res === 'fire') this._fireWheel(); else { audio.playSfx('menu-tick'); this._render(); }
         } else {
+            // Tap-outside steps back. CONFIRM→AIM preserves the reticle (parity
+            // with the keyboard CONFIRM handler); back() would otherwise null it.
+            if (w.layer === LAYER.CONFIRM) { w.layer = LAYER.AIM; audio.playSfx('menu-cancel'); this._render(); return; }
             if (back(w) === 'close') this._closeWheel(); else { audio.playSfx('menu-cancel'); this._render(); }
         }
     }
@@ -2012,11 +2029,7 @@ class Game {
 
     // The reticle's reach for the current leaf: adjacent verbs lock to range 1,
     // Throw uses the selected item's range (fallback 5), everything else 1.
-    _aimRange(leaf) {
-        if (leaf.aimType === 'adjacent') return 1;
-        if (leaf.key === 'throw') { const s = this.inventory[this.wheel.itemIndex]; return (s && s.itemDef.range) || 5; }
-        return 1;
-    }
+    _aimRange(leaf) { return aimRange(leaf, this); }
 
     // Drive the reticle while in the AIM layer: d-pad nudges it (clamped to the
     // leaf's range + walkability), Space/Enter fires, Esc backs out.
@@ -2034,20 +2047,39 @@ class Game {
             }
             return;
         }
-        if (code === 'Space' || code === 'Enter') { this._fireWheel(); return; }
+        if (code === 'Space' || code === 'Enter') {
+            // Route through forward() so the "Plus Ultra" friendly-confirm layer
+            // can intercept an offensive shot aimed at an ally/vendor/idle NPC.
+            const r = forward(w, this);
+            if (r === 'fire') this._fireWheel(); else { audio.playSfx('menu-tick'); this._render(); }
+            return;
+        }
         if (code === 'Escape') { back(w); audio.playSfx('menu-cancel'); this._render(); return; }
     }
 
     // Direction (sign vector) from the player toward a tile, or null.
     _aimDir(tile) { if (!tile) return null; return { dx: Math.sign(tile.x - this.playerX), dy: Math.sign(tile.y - this.playerY) }; }
 
-    // Throw inventory `slot` toward `tile`, reusing the existing throw pipeline
-    // (which consumes the item, logs, sets state IDLE, and advances the world).
+    // Throw inventory `slot` onto the exact reticle `tile` (real placement — the
+    // burst centres on that tile, not a collapsed cardinal direction).
     _throwAt(slot, tile) {
-        const dir = this._aimDir(tile);
-        if (!dir || (dir.dx === 0 && dir.dy === 0)) { this._log('[Nothing to throw at]'); this.state = STATE.IDLE; return; }
+        if (!tile) { this._log('[Nothing to throw at]'); this.state = STATE.IDLE; return; }
         this.selectedSlot = slot;
-        this._doThrow(dir); // consumes item + advances world + sets state IDLE
+        this._doThrowAt(tile); // consumes item + advances world + sets state IDLE
+    }
+
+    // Resolve a throw onto an exact tile (wheel reticle path). Mirrors _doThrow
+    // but passes the target tile through to resolveThrow instead of a direction.
+    _doThrowAt(tile) {
+        const stack = this.inventory[this.selectedSlot];
+        if (!stack) { this.state = STATE.IDLE; this._render(); return; }
+        audio.playSfx('throw');
+        const msg = resolveThrow(this, stack.itemDef, null, stack.count, tile);
+        if (msg) this._log(msg);
+        if (stack.itemDef.consumable) this._removeFromSlot(this.selectedSlot);
+        this.selectedSlot = -1;
+        this.state = STATE.IDLE;
+        this._advanceWorld();
     }
 
     // True if the last-fired action can be repeated as-is (express double-tap).
@@ -2069,7 +2101,29 @@ class Game {
         this.wheel.subVerbIndex = Math.max(0, subs.findIndex(s => s.key === lf.subKey));
         this.wheel.itemIndex = lf.itemSlot >= 0 ? lf.itemSlot : this.wheel.itemIndex;
         this.wheel.reticle = lf.aimTile || autoAimTile(currentLeaf(this.wheel), this);
+        // Re-clamp the restored reticle to the CURRENT player position. lastFired
+        // stores the raw tile; the player may have walked since, leaving it out of
+        // range. Without this, the CONFIRM prompt + AoE preview would read the
+        // stale tile while resolveThrow's own clamp lands the burst elsewhere —
+        // confirm/preview vs actual would disagree. Clamp here so all three agree.
+        if (this.wheel.reticle) {
+            const range = aimRange(currentLeaf(this.wheel), this);
+            const dx = this.wheel.reticle.x - this.playerX, dy = this.wheel.reticle.y - this.playerY;
+            if (Math.max(Math.abs(dx), Math.abs(dy)) > range) {
+                this.wheel.reticle = {
+                    x: this.playerX + Math.max(-range, Math.min(range, dx)),
+                    y: this.playerY + Math.max(-range, Math.min(range, dy)),
+                };
+            }
+        }
         this.state = STATE.RADIAL_MENU; // _fireWheel + _closeWheel return us to IDLE
+        // Honor the "Plus Ultra" gate even on the express repeat: if the
+        // remembered shot now lands on a friendly (a hostile died/moved and an
+        // ally stepped onto the tile), surface the CONFIRM layer instead of
+        // silently committing.
+        if (needsFriendlyConfirm(this.wheel, this)) {
+            this.wheel.layer = LAYER.CONFIRM; audio.playSfx('menu-tick'); this._render(); return;
+        }
         this._fireWheel();
     }
 
@@ -2122,6 +2176,13 @@ class Game {
             && manhattan(e.x, e.y, this.playerX, this.playerY) === 1
             && (!e.behavior || e.behavior.includes('HOSTILE'))
         );
+    }
+
+    // Live entities within a Chebyshev radius of a tile — the shared AoE
+    // primitive for thrown bursts (r=1 → the 3×3) and future area verbs.
+    _entitiesInRadius(cx, cy, r) {
+        return this.enemies.filter(e => e.entity.isAlive()
+            && Math.abs(e.x - cx) <= r && Math.abs(e.y - cy) <= r);
     }
 
     // ── World Advance (after any action) ─────────────────────────────────────
@@ -2298,6 +2359,10 @@ class Game {
         // on you for it. Skip if the hit killed them (nothing to re-flip).
         if (enemyObj._ally && enemyObj.entity.isAlive()) {
             this._revertAlly(enemyObj);
+        } else if (enemyObj.entity.isAlive()) {
+            // Reaction bus: any non-ally you harm reacts. Already-hostile chasers
+            // are unchanged; a struck friendly/neutral turns on you.
+            this._onEntityHarmed(enemyObj, { kind: opts.omni ? 'splash' : 'attack' });
         }
 
         // (combat-feel-pass) Typed hit-splat. Direction = player→enemy for a
@@ -2429,6 +2494,25 @@ class Game {
         enemyObj.disposition = -50;     // betrayed: head-meter goes angry + re-bribing costs more
         enemyObj._wasFlipped = false;   // ...but they CAN be won back if you make amends
         this._log(`[The ${enemyObj.type} turns on you!]`, 'combat');
+    }
+
+    // ── Reaction bus ──────────────────────────────────────────────────────────
+    // Single entry point for "the player just harmed this entity." A non-hostile
+    // (idle/dialogue NPC, vendor) you strike turns on you — it becomes a legacy
+    // chaser locked onto the player (the same reversion _revertAlly uses), so the
+    // existing chase AI carries it with no new state. Already-hostile chasers and
+    // bribed allies (handled by _revertAlly) are left alone. This is what makes
+    // the wheel's offensive verbs actually land on the people around you.
+    _onEntityHarmed(target, { kind = 'attack' } = {}) {
+        if (!target || !target.entity || !target.entity.isAlive() || target._ally) return;
+        const hostile = (target.behavior == null) || target.behavior.includes('HOSTILE');
+        if (hostile) return;                         // already after you — nothing to provoke
+        target.behavior = null;                      // → legacy chase path in resolveEnemyTurns
+        target.fsmState = null;
+        target.state = 'chasing';                    // aggro now, skip the LOS re-acquire beat
+        if (target.vendor) target.vendor = false;    // a vendor you struck won't keep shop
+        if (typeof target.disposition === 'number') target.disposition = Math.min(target.disposition, -50);
+        this._log(`[The ${target.type || target.entity.name} turns on you!]`, 'combat');
     }
 
     applyDamageToPlayer(rawDamage) {

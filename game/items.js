@@ -256,47 +256,66 @@ function resolveSelfUse(game, itemDef) {
 // friendlies only (latent until allies exist). Fully deterministic. Exported so
 // the wheel's Throw always throws (routing through resolveUse used to make
 // 'self' consumables heal-and-vanish and silently drop the throw).
-export function resolveThrow(game, itemDef, direction, _stackCount = 1) {
-    if (!direction) return `[Throw ${itemDef.name} — no direction]`;
-    const { dx, dy } = direction;
-    const range = itemDef.range || 4;
+export function resolveThrow(game, itemDef, direction, _stackCount = 1, targetTile = null) {
+    const range = itemDef.range || 5; // match wheel-model aimRange's throw fallback (single default)
+    let ix, iy, hitWall = false;
 
-    // Fly straight: stop on the first occupant (burst centered on it) or the
-    // last open tile before a wall.
-    let ix = game.playerX, iy = game.playerY;
-    let hitWall = false;
-    for (let i = 0; i < range; i++) {
-        const nx = ix + dx, ny = iy + dy;
-        if (!game.map.isWalkable(nx, ny)) { hitWall = true; break; }
-        ix = nx; iy = ny;
-        if (game.enemies.some(e => e.entity.isAlive() && e.x === ix && e.y === iy)) break;
+    if (targetTile) {
+        // Real placement (wheel reticle): land on the chosen tile. A non-hostile on
+        // this exact tile was deliberately chosen (the wheel routes offensive verbs
+        // on a friendly through the Plus Ultra confirm) — allowCenterFriendly lets
+        // the burst hit them (below).
+        ix = targetTile.x; iy = targetTile.y;
+        // Defensive range clamp (Chebyshev): the seed/nudge are range-clamped, but
+        // a stale express-repeat tile (player moved) or any future caller must
+        // never burst farther than the item's reach — fall the impact short.
+        const dxt = ix - game.playerX, dyt = iy - game.playerY;
+        if (Math.max(Math.abs(dxt), Math.abs(dyt)) > range) {
+            ix = game.playerX + Math.max(-range, Math.min(range, dxt));
+            iy = game.playerY + Math.max(-range, Math.min(range, dyt));
+        }
+    } else {
+        // Legacy direction throw (hotbar / ITEM_THROW_DIR): fly straight, stop on
+        // the first occupant (burst centred on it) or the last open tile.
+        if (!direction) return `[Throw ${itemDef.name} — no direction]`;
+        const { dx, dy } = direction;
+        ix = game.playerX; iy = game.playerY;
+        for (let i = 0; i < range; i++) {
+            const nx = ix + dx, ny = iy + dy;
+            if (!game.map.isWalkable(nx, ny)) { hitWall = true; break; }
+            ix = nx; iy = ny;
+            if (game.enemies.some(e => e.entity.isAlive() && e.x === ix && e.y === iy)) break;
+        }
     }
 
     const dtype = itemDef.damageType || 'physical';
     const isDamage = typeof itemDef.damage === 'number';
     const isHeal = itemDef.effect === 'heal' && typeof itemDef.healAmount === 'number';
+    const allowCenterFriendly = !!targetTile; // real placement implies the Plus Ultra gate already cleared
     let affected = 0;
 
-    // 3×3 (radius 1) around impact, one-shot. Half effect to all valid targets.
-    for (let ax = ix - 1; ax <= ix + 1; ax++) {
-        for (let ay = iy - 1; ay <= iy + 1; ay++) {
-            if (isDamage) {
-                const foe = game.enemies.find(e => e.entity.isAlive() && e.x === ax && e.y === ay
-                    && (!e.behavior || e.behavior.includes('HOSTILE')));
-                if (foe) {
-                    game.combatAttack(foe, Math.max(1, Math.round(itemDef.damage / 2)), { type: dtype, omni: true });
-                    affected++;
-                }
-            } else if (isHeal && ax === game.playerX && ay === game.playerY) {
-                // Friendlies only. No allies in 1.0, so this catches the player
-                // if they lobbed a heal point-blank.
-                const before = game.playerHp;
-                game.playerHp = Math.min(game.playerMaxHp, game.playerHp + Math.max(1, Math.round(itemDef.healAmount / 2)));
-                const healed = game.playerHp - before;
-                if (healed > 0) {
-                    if (game._spawnHitSplat) game._spawnHitSplat(ax, ay, `+${healed}`, 'heal', { omni: true });
-                    affected++;
-                }
+    if (isDamage) {
+        // 3×3 (radius 1) around impact, half effect. Bystander friendlies are
+        // spared (hostile-only); the deliberately-aimed centre tile's occupant is
+        // hit even if friendly (real-placement / Plus Ultra path only).
+        for (const foe of game._entitiesInRadius(ix, iy, 1)) {
+            const hostile = !foe.behavior || foe.behavior.includes('HOSTILE');
+            const isCentre = foe.x === ix && foe.y === iy;
+            if (hostile || (allowCenterFriendly && isCentre)) {
+                game.combatAttack(foe, Math.max(1, Math.round(itemDef.damage / 2)), { type: dtype, omni: true });
+                affected++;
+            }
+        }
+    } else if (isHeal) {
+        // Friendlies only — currently just the player (no allies in 1.0). Catches
+        // the player if the impact lands within radius 1 of their tile.
+        if (Math.abs(ix - game.playerX) <= 1 && Math.abs(iy - game.playerY) <= 1) {
+            const before = game.playerHp;
+            game.playerHp = Math.min(game.playerMaxHp, game.playerHp + Math.max(1, Math.round(itemDef.healAmount / 2)));
+            const healed = game.playerHp - before;
+            if (healed > 0) {
+                if (game._spawnHitSplat) game._spawnHitSplat(game.playerX, game.playerY, `+${healed}`, 'heal', { omni: true });
+                affected++;
             }
         }
     }

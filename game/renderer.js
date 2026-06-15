@@ -323,7 +323,7 @@ export class Renderer {
 
         // (combat-wheel rework) Aim reticle lives in world space so it tracks the
         // map; the wheel list itself is drawn in screen space after the restore.
-        if (game.wheel && game.wheel.layer === LAYER.AIM) this._drawReticle(game);
+        if (game.wheel && (game.wheel.layer === LAYER.AIM || game.wheel.layer === LAYER.CONFIRM)) this._drawReticle(game);
 
         // Floating damage numbers float above the world but under the HUD
         // so the HP panel + hotbar are never occluded by spammy combat.
@@ -1405,6 +1405,27 @@ export class Renderer {
             return;
         }
 
+        // ── CONFIRM ("Plus Ultra"): about to strike a FRIENDLY — one more layer ──
+        // Reddish wash (danger), the target's name, and the "↑ again to commit"
+        // grammar. The reticle still draws in world space (see _drawReticle gate).
+        if (w.layer === LAYER.CONFIRM) {
+            ctx.save();
+            ctx.fillStyle = 'rgba(48,0,0,0.55)';
+            ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+            ctx.restore();
+            const tgt = w.reticle && game.enemies.find(e => e.entity.isAlive() && e.x === w.reticle.x && e.y === w.reticle.y);
+            const name = String((tgt && (tgt.type || (tgt.entity && tgt.entity.name))) || 'them').replace(/[\[\]]/g, '').toUpperCase();
+            if (this.font) {
+                this.font.drawText(ctx, '!! PLUS ULTRA !!', cx, cy - 42, { color: '#ff5555', scale: 2, align: 'center', shadow: '#000' });
+                this.font.drawText(ctx, `STRIKE ${name}?`, cx, cy - 8, { color: UI.gold, scale: 1, align: 'center', shadow: '#000' });
+                this.font.drawText(ctx, "THEY'RE NOT YOUR ENEMY", cx, cy + 12, { color: UI.text, scale: 1, align: 'center', shadow: '#000' });
+                this.font.drawText(ctx, '↑ AGAIN TO COMMIT  ·  ↓ BACK', cx, cy + 38, { color: '#e8dcc0', scale: 1, align: 'center', shadow: '#000' });
+            }
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'alphabetic';
+            return;
+        }
+
         // ── Gather the current layer's options ──
         let options, selIndex, title;
         if (w.layer === LAYER.CATEGORY) {
@@ -1506,7 +1527,7 @@ export class Renderer {
     // plus a box on the target tile. BASIC; footprint/AoE is a later pass.
     _drawReticle(game) {
         const w = game.wheel;
-        if (!w || w.layer !== LAYER.AIM || !w.reticle) return;
+        if (!w || (w.layer !== LAYER.AIM && w.layer !== LAYER.CONFIRM) || !w.reticle) return;
         const { ctx, half } = this;
         const toScreen = (tx, ty) => ({
             x: (tx - game.playerX + half) * TILE_PX - this._scrollX,
@@ -1515,6 +1536,18 @@ export class Renderer {
         const r = toScreen(w.reticle.x, w.reticle.y);
         const p = toScreen(game.playerX, game.playerY);
         ctx.save();
+        // AoE footprint — Throw bursts 3×3 (radius 1) around the reticle. Wash the
+        // nine tiles so the splash area reads before you commit. (Single-target
+        // verbs skip this — just the box below.)
+        if (currentLeaf(w).key === 'throw') {
+            ctx.fillStyle = 'rgba(212,185,106,0.16)';
+            for (let ax = w.reticle.x - 1; ax <= w.reticle.x + 1; ax++) {
+                for (let ay = w.reticle.y - 1; ay <= w.reticle.y + 1; ay++) {
+                    const s = toScreen(ax, ay);
+                    ctx.fillRect(s.x + 1, s.y + 1, TILE_PX - 2, TILE_PX - 2);
+                }
+            }
+        }
         ctx.strokeStyle = 'rgba(212,185,106,0.9)';
         ctx.lineWidth = 2;
         ctx.setLineDash([4, 3]);
