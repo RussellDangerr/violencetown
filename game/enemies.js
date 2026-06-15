@@ -15,7 +15,7 @@
 
 import { Entity, attack, formatDamageNumber } from './combat.js';
 import { manhattan } from './utils.js';
-import { getGreedyStep } from './pathing.js';
+import { getGreedyStep, stepEntity } from './pathing.js';
 import { tickNpcState } from './npc.js';
 
 const DEFAULT_SIGHT = 8;
@@ -243,8 +243,7 @@ export function resolveEnemyTurns(game) {
             { self: enemy }
         );
         if (bestMove) {
-            enemy.x = bestMove.x;
-            enemy.y = bestMove.y;
+            stepEntity(enemy, bestMove.x, bestMove.y, game._MOVE_MS);
         }
     }
 

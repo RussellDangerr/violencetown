@@ -22,7 +22,7 @@
 // chase logic in enemies.js.
 
 import { manhattan } from './utils.js';
-import { getGreedyStep } from './pathing.js';
+import { getGreedyStep, stepEntity } from './pathing.js';
 
 // State constants — string values stored on each NPC so they're inspectable
 // in dev tools and serializable in any future save format.
@@ -95,8 +95,7 @@ export function tickNpcState(game, npc) {
                     { self: npc }
                 );
                 if (step) {
-                    npc.x = step.x;
-                    npc.y = step.y;
+                    stepEntity(npc, step.x, step.y, game._MOVE_MS);
                 }
             }
             // One step (or attempt) per wander burst — drop back to IDLE
@@ -187,8 +186,7 @@ function tickCarrying(game, npc) {
         { self: npc }
     );
     if (step) {
-        npc.x = step.x;
-        npc.y = step.y;
+        stepEntity(npc, step.x, step.y, game._MOVE_MS);
     }
     return null;
 }
@@ -219,8 +217,7 @@ function tickFindingItem(game, npc) {
         { self: npc }
     );
     if (step) {
-        npc.x = step.x;
-        npc.y = step.y;
+        stepEntity(npc, step.x, step.y, game._MOVE_MS);
     }
     return null;
 }

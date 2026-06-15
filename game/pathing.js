@@ -62,3 +62,23 @@ export function getGreedyStep(game, from, to, options = {}) {
 
     return best;
 }
+
+// ── Apply a one-tile step with a render-side slide ──────────────────────────
+//
+// Set the character's logical tile (collision/AI read x/y immediately, as
+// before) AND stamp the fields the renderer reads to interpolate a smooth
+// glide from the tile it just left — so enemies and NPCs walk their step
+// instead of teleporting, matching the player's slide. `ms` should be the
+// player's per-tile duration (game._MOVE_MS) so the whole scene moves at one
+// cadence. (plans/movement-feel.md #6)
+export function stepEntity(ent, x, y, ms) {
+    ent._slideFromX = ent.x;
+    ent._slideFromY = ent.y;
+    if (x < ent.x) ent._faceLeft = true;        // horizontal facing for the flip;
+    else if (x > ent.x) ent._faceLeft = false;  // vertical moves keep prior facing
+    ent.x = x;
+    ent.y = y;
+    ent._slideStart = performance.now();
+    ent._slideMs = ms || 150;
+    ent._stepIndex = (ent._stepIndex || 0) + 1; // alternates the walk waddle/foot
+}

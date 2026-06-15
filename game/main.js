@@ -10,7 +10,7 @@ import { DIR_NAMES, PLAYER_MAX_HP, PLAYER_MAX_MP, SLUDGE_DOT, INVENTORY_SIZE, MA
 import { ITEMS, resolveUse, resolveThrow, tickTempEquips } from './items.js';
 import { attack, formatDamageNumber } from './combat.js';
 import { Enemy, resolveEnemyTurns } from './enemies.js';
-import { getGreedyStep } from './pathing.js'; // (aggro bands) ally pathfinding toward hostiles / the player
+import { getGreedyStep, stepEntity } from './pathing.js'; // ally pathfinding; stepEntity = shove a character aside
 import { applyGive } from './give-action.js';
 import { escapeHtml, manhattan, clamp } from './utils.js';
 import { RNG } from './rng.js';
@@ -105,16 +105,29 @@ class Game {
         this.extraMoves  = 0; // future: Goo, abilities, etc.
         this.facing      = 'down'; // 'down' | 'left' | 'right' | 'up'
 
-        // Animation: 100ms slide between tiles
+        // Movement feel (DQM/Pokémon overworld) — see plans/movement-feel.md.
+        // _MOVE_MS is the single tunable for per-tile slide duration (kept
+        // LINEAR — constant velocity is correct for chained grid walking;
+        // ease-out per tile would stutter, per architecture-and-game-feel.md
+        // §4). Canon datapoint: 100ms felt brisk-but-OK once the auto-repeat
+        // dead-frame was removed; 150 is a touch more grounded. Dial freely.
+        this._MOVE_MS = 150;
+        this._TURN_MS = 70;  // tap-to-face vs hold-to-walk threshold (standstill).
+                             // 110 felt like a hitch on every direction change;
+                             // 70 keeps a deliberate quick-tap-to-turn but lets a
+                             // hold start walking promptly. Set 0 to always step.
+
+        // Animation: one linear tile slide, _MOVE_MS long.
         this._animating   = false;
         this._animStart   = 0;
         this._animFromX   = 0;
         this._animFromY   = 0;
         this._animToX     = 0;
         this._animToY     = 0;
-        this._animDuration = 100; // ms
+        this._animDuration = this._MOVE_MS; // ms (driven by _MOVE_MS)
         this._animCallback = null;
         this._animFrame   = null; // requestAnimationFrame ID
+        this._stepIndex   = 0;    // ++ per completed step → walk-anim foot parity
 
         // Equipment
         this.equipment = {
@@ -127,16 +140,20 @@ class Game {
         this.buffs = [];
         this._soapUsedThisTurn = false;
 
-        // Auto-repeat: hold a direction key to move once per second
-        this._autoRepeatKey = null;
-        this._autoRepeatInterval = null;
-        this._autoRepeatDir = null;
-        this._AUTO_REPEAT_MS = 100; // match animation duration so held-key walking has no dead frames between tiles
+        // Continuous walking (replaces the old setInterval auto-repeat, which
+        // raced the rAF slide and dropped ~every other step). We now chain the
+        // next step from the slide-completion callback (_onStepSettled), so
+        // held-key walking has zero dead frames and a dead-uniform cadence.
+        // See plans/movement-feel.md (Finding 1).
+        this._queuedMoveDir = null; // one-deep input buffer (Finding 2): a dir
+                                    // pressed mid-slide, applied on completion.
+        this._turnTimer     = null; // setTimeout id for tap-to-face → hold-to-walk
+        this._pendingWalkDir = null;// dir armed by a turn-in-place pivot
 
         // Held-key stack — direction-key codes currently physically held, in
-        // press-order with most-recent at the end. Lets keyup fall back to a
-        // still-held key instead of stopping movement entirely. Fixes the
-        // "release one direction while another is held = freeze" bug.
+        // press-order with most-recent at the end. _onStepSettled reads the
+        // top each tile to decide whether to keep walking; keyup just pops, so
+        // releasing one direction while another is held continues seamlessly.
         this._heldDirKeys = [];
 
         // In-canvas log strip (Phase 1B of overhead-dialogue plan). Mirrors
@@ -678,9 +695,21 @@ class Game {
                 if (e.code === 'KeyP' || e.code === 'Escape') { e.preventDefault(); this._setPaused(false); }
                 return;
             }
-            if (this._animating) return; // block all input during move animation
+            if (this._animating) {
+                // Mid-slide: don't throw the press away (the old hard return
+                // read as "the game ignored me" at direction changes). Buffer
+                // the latest movement intent; _onStepSettled applies it the
+                // instant this tile finishes. Non-movement keys and OS key-
+                // repeat are still ignored mid-slide. (movement-feel Finding 2)
+                if (!e.repeat && this.state === STATE.IDLE) {
+                    const d = DIRS[e.code];
+                    if (d) { e.preventDefault(); this._queuedMoveDir = d; this._noteHeld(e.code); }
+                }
+                return;
+            }
 
-            // Auto-repeat: ignore browser key repeat events (we handle our own timer)
+            // Ignore browser key-repeat events — continuous walking is driven
+            // by our own step-chaining, not the OS repeat rate.
             if (e.repeat) return;
 
             // ── ITEM_THROW_DIR: waiting for throw direction ──
@@ -788,20 +817,15 @@ class Game {
             // ── IDLE: main input ──
             if (this.state !== STATE.IDLE) return;
 
-            // Arrow/WASD = move (or bump-attack) + start auto-repeat
+            // Arrow/WASD = turn-in-place (tap toward a new direction) or walk
+            // (already facing that way, or hold past _TURN_MS). The held-key
+            // stack tracks what's physically down so _onStepSettled can chain
+            // continuous walking and keyup can fall back to another held dir.
             const dir = DIRS[e.code];
             if (dir) {
                 e.preventDefault();
-                // Push onto the held-key stack (de-duplicate so re-pressing
-                // an already-held key just brings it back to the top instead
-                // of stacking duplicates). On keyup we'll fall back to the
-                // new top, which fixes the "releasing one direction key
-                // while another is held freezes movement" bug.
-                const heldIdx = this._heldDirKeys.indexOf(e.code);
-                if (heldIdx >= 0) this._heldDirKeys.splice(heldIdx, 1);
-                this._heldDirKeys.push(e.code);
-                this._doMove(dir);
-                this._startAutoRepeat(e.code, dir);
+                this._noteHeld(e.code);
+                this._beginMoveOrTurn(dir, e.code);
                 return;
             }
 
@@ -843,34 +867,15 @@ class Game {
             this._stopAutoRepeat();
         });
 
-        // Direction-key release: pop from held stack, then either fall back
-        // to whichever direction key is still physically held (top of stack)
-        // or stop entirely if no held keys remain. Non-direction key releases
-        // are no-ops here — they were never in the stack.
+        // Direction-key release: just pop from the held stack. Continuous
+        // walking reads the stack on every step settle (_onStepSettled), so
+        // there's nothing to restart — if another direction is still held the
+        // next tile picks it up seamlessly, and if none remain, walking stops.
+        // A released tap (turn-in-place pivot) is handled by the turn-timer's
+        // still-held guard. Non-direction releases were never in the stack.
         document.addEventListener('keyup', (e) => {
             const heldIdx = this._heldDirKeys.indexOf(e.code);
             if (heldIdx >= 0) this._heldDirKeys.splice(heldIdx, 1);
-
-            if (this._autoRepeatKey !== e.code) return; // not driving movement
-
-            // Released the key currently driving auto-repeat. Pick a fallback
-            // from the held stack — most-recently-pressed-still-held wins.
-            // Only resume in IDLE state; menus/overlays handle their own input.
-            if (this._heldDirKeys.length > 0 && this.state === STATE.IDLE) {
-                const fallbackCode = this._heldDirKeys[this._heldDirKeys.length - 1];
-                const fallbackDir  = DIRS[fallbackCode];
-                if (fallbackDir) {
-                    // Restart auto-repeat with the held key now on top of
-                    // the stack. We deliberately don't fire _doMove here —
-                    // that would feel like a "stutter step" since the player
-                    // didn't press anything new. Auto-repeat picks it up on
-                    // its next 120ms tick, which feels like a smooth
-                    // continuation of the held direction.
-                    this._startAutoRepeat(fallbackCode, fallbackDir);
-                    return;
-                }
-            }
-            this._stopAutoRepeat();
         });
 
         // Window blur clears the held stack — browsers don't always fire
@@ -883,16 +888,14 @@ class Game {
     }
 
     _bindTouchControls() {
-        // Direction keys held on touch should auto-repeat the way they do on
-        // desktop — holding ArrowDown walks continuously, releasing stops.
-        // The original implementation dispatched keydown+keyup back-to-back
-        // on pointerdown which killed _startAutoRepeat (it sees the keyup
-        // before the next interval fires). We now mirror real keyboard
-        // semantics: pointerdown → keydown (which the IDLE handler routes
-        // into _startAutoRepeat), pointerup/cancel/leave → keyup (which the
-        // held-key stack uses to either fall back to another held direction
-        // or stop). Non-direction keys (Space → WAIT) keep the original
-        // tap-fires-once behavior; they don't participate in auto-repeat.
+        // Direction keys held on touch walk continuously the way they do on
+        // desktop — holding ArrowDown walks tile after tile, releasing stops.
+        // We mirror real keyboard semantics: pointerdown → keydown (which the
+        // IDLE handler routes into _beginMoveOrTurn + the held-key stack, so
+        // _onStepSettled chains the walk), pointerup/cancel/leave → keyup
+        // (which pops the held-key stack; another held direction continues,
+        // none stops). Non-direction keys (Space → WAIT) keep the original
+        // tap-fires-once behavior; they don't participate in walking.
         const buttons = document.querySelectorAll('#touch-controls .tc-btn');
         const HOLD_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 
@@ -1499,25 +1502,28 @@ class Game {
         // Bump attack?
         const enemy = this.enemies.find(e => e.entity.isAlive() && e.x === nx && e.y === ny);
         if (enemy) {
-            // Non-hostile NPCs — those with a behavior whitelist that omits
-            // HOSTILE — are unwalkable but unattackable. Bumping them is a
-            // silent no-op (same as bumping a wall). Their adjacency bark
-            // mechanic delivers any dialogue when the player moves adjacent
-            // from another direction.
-            if (enemy.behavior && !enemy.behavior.includes('HOSTILE')) {
-                return; // silent, no turn advance
+            // (shove) Walking into a character no longer walls you off (the old
+            // silent no-op). You barge through: the character is knocked to an
+            // open side tile and you take their spot — or, if they're cornered,
+            // you swap places. Tough "heavy" characters (captains, the Sewer
+            // Merchant, bosses — flagged per type in the shopkeeper pass) can't
+            // be budged: you bounce off with a recoil. Combat stays deliberate
+            // (Space / the wheel) — a shove only displaces, it doesn't attack.
+            // Applies to everyone (hostiles + NPCs); the cast is one unified type.
+            if (this._isHeavy(enemy)) {
+                audio.playSfx('bump-wall');
+                this._bounceOff(dir);
+                return; // immovable — no step, no turn
             }
-
-            // Bumping a hostile enemy opens the radial wheel (Omnitrix-style)
-            // instead of attacking immediately. The wheel exposes Attack,
-            // Skill, Throw, Give, Run, Defend in a static layout so muscle
-            // memory works, with cursor persistence across encounters.
-            // Down/Esc backs out without consuming a turn — protects against
-            // accidental bumps.
-            // (action-wheel overhaul) Walking into a hostile is a silent no-op
-            // now — bump-to-attack is retired; combat goes through the wheel
-            // (Space / the ACTION button). Unwalkable like a wall, no turn.
-            return;
+            const dest = this._shoveDestination(enemy, dir);
+            if (!dest) {
+                audio.playSfx('bump-wall');
+                this._bounceOff(dir);
+                return; // boxed in — nowhere to put them
+            }
+            stepEntity(enemy, dest.x, dest.y, this._MOVE_MS); // knock aside / swap (animates)
+            // fall through: (nx,ny) is now vacated, so the normal move below
+            // advances the player into it with full hazard/pickup/turn handling.
         }
 
         // Bump-to-open? Mirrors bump-to-attack — containers are unwalkable
@@ -1551,7 +1557,7 @@ class Game {
             // NOW snap the grid position
             this.playerX = nx;
             this.playerY = ny;
-
+            this._stepIndex++;   // alternates the walk-anim foot/weight-shift
             // (ending) Drive north across the now-open bridge → End of Chapter One.
             // The bridge mouth (row 0, x7-9) is only walkable once the car's fixed
             // (_openBridgeIfCarFixed), so reaching it here is the deliberate finale,
@@ -1581,7 +1587,61 @@ class Game {
             // gone from sewer-map.json and the real ending is fix_car's onComplete.)
 
             this._advanceWorld();
+
+            // Chain the next tile if a direction is still held or was buffered
+            // mid-slide. Skipped across a map transition so a held key doesn't
+            // auto-walk you straight into the new zone. (movement-feel Finding 1)
+            if (!transition) this._onStepSettled();
         });
+    }
+
+    // ── Shove (barge through characters) ─────────────────────────────────────
+
+    // Tough characters that can't be pushed — you bounce off instead. No types
+    // are flagged heavy yet; the shopkeeper-refinement pass populates this
+    // (bandit captains, the Sewer Merchant, bosses) via a `heavy: true` spawn
+    // field or a future strength/tier check.
+    _isHeavy(ch) {
+        return ch.heavy === true;
+    }
+
+    // Where to knock `target` when the player barges in moving `dir`: a clear
+    // tile perpendicular to the push ("one way or the other"); if neither side
+    // is open, swap into the tile the player is leaving (handles a cornered
+    // shopkeeper); null if truly boxed in.
+    _shoveDestination(target, dir) {
+        const ex = target.x, ey = target.y;
+        const sides = dir.dx !== 0
+            ? [{ x: ex, y: ey - 1 }, { x: ex, y: ey + 1 }]   // pushing horizontally → up/down
+            : [{ x: ex - 1, y: ey }, { x: ex + 1, y: ey }];  // pushing vertically → left/right
+        for (const s of sides) {
+            if (this._tileFreeForShove(s.x, s.y, target)) return s;
+        }
+        // Cornered → swap: the character takes the tile the player is leaving.
+        if (this._tileFreeForShove(this.playerX, this.playerY, target)) {
+            return { x: this.playerX, y: this.playerY };
+        }
+        return null;
+    }
+
+    // A tile a shoved character may land on: walkable, no wall, not occupied by
+    // another living character or a container. `exclude` is the character being
+    // shoved (so it doesn't block its own destination check).
+    _tileFreeForShove(x, y, exclude = null) {
+        if (!this.map.isWalkable(x, y)) return false;
+        if (this.enemies.some(e => e !== exclude && e.entity.isAlive() && e.x === x && e.y === y)) return false;
+        if (this.containers.some(c => c.x === x && c.y === y)) return false;
+        return true;
+    }
+
+    // Recoil feedback when you bump something immovable — reuses the player
+    // stagger offset the renderer already draws, nudged back along the push.
+    _bounceOff(dir) {
+        this._playerStaggerUntil = performance.now() + 80;
+        this._playerStaggerDx = -dir.dx * 6;
+        this._playerStaggerDy = -dir.dy * 6;
+        this._ensureParticleLoop();
+        this._render();
     }
 
     // Interact with the broken-down car in town. Before the converter: a hint
@@ -1609,42 +1669,88 @@ class Game {
         startSewerEscape(this);
     }
 
-    // ── Auto-Repeat (hold direction key = move once per second) ─────────────
+    // ── Continuous Walking & Turn-in-Place ──────────────────────────────────
+    //
+    // Held-key walking is chained from the slide-completion callback rather
+    // than a timer (the old setInterval raced the 100ms rAF slide and dropped
+    // ~every other step — the "jarry" stutter). See plans/movement-feel.md.
 
-    _startAutoRepeat(code, dir) {
-        this._stopAutoRepeat();
-        this._autoRepeatKey = code;
-        this._autoRepeatDir = dir;
-        this._autoRepeatInterval = setInterval(() => {
-            if (this.state !== STATE.IDLE) { this._stopAutoRepeat(); return; }
-            // Stop auto-repeat BEFORE a step that commits to something the player
-            // should decide on deliberately — otherwise a held direction key
-            // sails through map transitions, vacuums up pickups (e.g. the quest
-            // converter), bumps the car/barricade, or walks into a hazard tile.
-            // The player must release and re-press to take that step. The manual
-            // _doMove path is unaffected. (fix/critical-path)
-            if (this._autoRepeatShouldStop(dir)) {
-                this._stopAutoRepeat();
-                return;
-            }
-            this._doMove(dir);
-        }, this._AUTO_REPEAT_MS);
+    // Track a physically-held direction key, most-recent last (de-duplicated).
+    _noteHeld(code) {
+        const i = this._heldDirKeys.indexOf(code);
+        if (i >= 0) this._heldDirKeys.splice(i, 1);
+        this._heldDirKeys.push(code);
     }
 
-    _stopAutoRepeat() {
-        if (this._autoRepeatInterval) {
-            clearInterval(this._autoRepeatInterval);
-            this._autoRepeatInterval = null;
+    _faceOf(dir) {
+        if (dir.dy < 0) return 'up';
+        if (dir.dy > 0) return 'down';
+        if (dir.dx < 0) return 'left';
+        return 'right';
+    }
+
+    _clearTurnTimer() {
+        if (this._turnTimer) { clearTimeout(this._turnTimer); this._turnTimer = null; }
+        this._pendingWalkDir = null;
+    }
+
+    // A direction press from the IDLE state. From a standstill, a tap toward a
+    // NEW facing just pivots (free — no turn cost); holding past _TURN_MS
+    // commits to walking. If already facing that way (or mid-walk), step now.
+    _beginMoveOrTurn(dir, code) {
+        this._clearTurnTimer();
+        const standing = !this._animating;
+        if (standing && this.facing !== this._faceOf(dir)) {
+            this.facing = this._faceOf(dir);   // pivot only — no step, no _advanceWorld
+            this._render();
+            this._pendingWalkDir = dir;
+            this._turnTimer = setTimeout(() => {
+                this._turnTimer = null;
+                this._pendingWalkDir = null;
+                // Still holding this exact key and still idle → walk.
+                const top = this._heldDirKeys[this._heldDirKeys.length - 1];
+                if (top === code && this.state === STATE.IDLE && !this._animating) {
+                    this._doMove(dir);
+                }
+            }, this._TURN_MS);
+        } else {
+            this._doMove(dir);
         }
-        this._autoRepeatKey = null;
-        this._autoRepeatDir = null;
+    }
+
+    // Called at the end of every completed tile slide. Decides the next step:
+    // a buffered mid-slide press wins, else the top still-held direction. The
+    // _autoRepeatShouldStop gate is preserved verbatim so held-walking still
+    // halts before consequential tiles (walls/enemies/pickups/transitions/
+    // hazards) exactly as before — only the first deliberate press may take
+    // such a step. (fix/critical-path safety intact)
+    _onStepSettled() {
+        if (this.state !== STATE.IDLE) return;
+        let next = this._queuedMoveDir;
+        this._queuedMoveDir = null;
+        if (!next && this._heldDirKeys.length) {
+            next = DIRS[this._heldDirKeys[this._heldDirKeys.length - 1]];
+        }
+        if (!next) return;
+        if (this._autoRepeatShouldStop(next)) return;
+        this._doMove(next);
+    }
+
+    // Stop all continuous walking and clear pending movement intent. Named for
+    // its many existing call sites (blur, pause, map load, death, resets); it
+    // is the single "halt the walker" entry point.
+    _stopAutoRepeat() {
+        this._clearTurnTimer();
+        this._queuedMoveDir = null;
+        this._heldDirKeys = [];
     }
 
     // True when held-key auto-walking should HALT before stepping in `dir` —
     // i.e. the next tile would commit to a consequential, deliberate action.
     // Covers: any blocker (wall / enemy / container / the car tile / a barricade),
-    // a map transition, a ground-item pickup, or a hazard tile. The first manual
-    // press already happened (it started auto-repeat); this only gates the
+    // a map transition, or a hazard tile. Ground items are intentionally NOT
+    // covered — held-walk now flows over and auto-picks-them-up (movement-feel
+    // feel pass). The first manual press already happened; this only gates the
     // AUTOMATIC follow-up steps. (fix/critical-path)
     _autoRepeatShouldStop(dir) {
         const nx = this.playerX + dir.dx;
@@ -1657,7 +1763,11 @@ class Game {
 
         // Consequential walkable steps the player should opt into deliberately.
         if (this.map.getTransition(nx, ny)) return true;          // map transition
-        if (this.groundItems.some(g => g.x === nx && g.y === ny)) return true; // pickup (incl. the converter)
+        // NOTE: ground items deliberately do NOT stop held-walk anymore — auto-
+        // pickup-while-walking is the Pokémon/DQM norm and stopping before every
+        // item made town feel like it kept "dropping" the hold (movement-feel
+        // feel pass). The quest converter is still picked up on walk-over, just
+        // without the halt. Transitions + hazards below remain deliberate stops.
         const td = this.map.getTileDef(nx, ny);
         if (td && td.hazard) return true;                         // sludge / future hazards
 
@@ -2171,6 +2281,11 @@ class Game {
                 this._log(m.text ?? String(m));
             }
         }
+        // Enemies/NPCs may have just begun a one-tile slide (stepEntity). Kick
+        // the render loop so those glides animate even if the player took a
+        // single step and stopped. Idempotent + self-stopping via
+        // _hasActiveEffects. (plans/movement-feel.md #6)
+        this._ensureParticleLoop();
         if (this.playerHp <= 0) { this.playerHp = 0; this._die(); return; }
 
         // (zone pursuit) A wedged door takes a pounding from the pursuers trapped
@@ -2795,6 +2910,9 @@ class Game {
         for (const e of this.enemies) {
             if ((e._hitFlashUntil ?? 0) > now) return true;
             if ((e._staggerUntil  ?? 0) > now) return true;
+            // Mid-step glide — keep rendering so enemy/NPC slides animate even
+            // when the player is standing still. (plans/movement-feel.md #6)
+            if (e._slideStart != null && now < e._slideStart + (e._slideMs || 0)) return true;
         }
         return false;
     }
