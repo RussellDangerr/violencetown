@@ -6,12 +6,11 @@
 import { TILE_PX, VIEW_TILES, CANVAS_PX } from './data.js';
 import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES, PLAYER_SPRITE } from './sprites.js';
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
-import { WHEEL_ACTIONS, CARDINALS, RING_ACTION, RING_ITEM, RING_AIM, currentAction, ringsFor, compose } from './action-wheel.js'; // (action-wheel overhaul)
+import { currentCategory, currentLeaf, categoryKeys, leafEnabled, validItemSlots, LAYER } from './wheel-model.js'; // (combat-wheel rework)
 import {
     OVERLAY_RECTS, THROW_RECTS,
     HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_GAP, HOTBAR_SLOTS, HOTBAR_STRIDE,
     HOTBAR_TOTAL_W, HOTBAR_OX, HOTBAR_OY, HOTBAR_X_START, HOTBAR_Y,
-    RING_HUB_R, RING_ACTION_R, RING_ITEM_R, RING_AIM_R,
     LOG_STRIP_RECT, LOG_MODAL_RECT,
     TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BRIBE_RECT,
     TRADE_CELL_W, TRADE_CELL_H, tradeCellRect,
@@ -279,6 +278,10 @@ export class Renderer {
         this._drawEnemies(game);
         this._drawPlayer(game);
         this._drawJammedDoor(game);
+
+        // (combat-wheel rework) Aim reticle lives in world space so it tracks the
+        // map; the wheel list itself is drawn in screen space after the restore.
+        if (game.wheel && game.wheel.layer === LAYER.AIM) this._drawReticle(game);
 
         // Floating damage numbers float above the world but under the HUD
         // so the HP panel + hotbar are never occluded by spammy combat.
@@ -1305,136 +1308,92 @@ export class Renderer {
 
     _drawRadialMenu(game) { this._drawWheel(game); }
 
-    // (action-wheel overhaul) Three-ring action wheel: action (inner) / item
-    // (middle) / direction-compass (outer). Rings the action doesn't use dim to
-    // a dashed circle; the held ring (game.wheel.grip) gets a cyan stroke; the
-    // selected slice in each ring is gold; the hub shows the live composition.
+    // (combat-wheel rework) Verb-tree combat wheel — BASIC render (a later pass
+    // polishes the visuals). Centered on the player tile (304,304): the current
+    // layer's options as a vertical list, the selection in gold, disabled
+    // sub-verbs greyed, plus a one-line composition readout. The aim reticle is
+    // drawn separately (in world space) by _drawReticle.
     _drawWheel(game) {
         const { ctx, half } = this;
-        const cx = half * TILE_PX + TILE_PX / 2;
-        const cy = half * TILE_PX + TILE_PX / 2;
+        const cx = half * TILE_PX + TILE_PX / 2;  // 304
+        const cy = half * TILE_PX + TILE_PX / 2;  // 304
         const w = game.wheel;
-        const action = currentAction(w);
-        const rings = ringsFor(action);
-        const TAU = Math.PI * 2;
 
-        const t = Math.min(1, (performance.now() - (game._overlayOpenedAt ?? 0)) / 80);
-        const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 1000 * TAU);
-        const prevAlpha = ctx.globalAlpha;
-        ctx.globalAlpha = t;
+        // Dim backdrop so the list reads against the world.
+        ctx.save();
+        ctx.fillStyle = 'rgba(0,0,0,0.45)';
+        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+        ctx.restore();
 
-        // Draw one ring band: `count` slices around the circle (slice 0 at top,
-        // going clockwise); highlight `sel`; dim to a dashed circle if !active;
-        // cyan stroke when `held` (the grip). labelFn(i) -> slice text. `rot`
-        // (radians) spins the whole band — the action/item rings pass their live
-        // eased rotation so the selected slice rides up under the top pointer;
-        // the compass ring leaves it 0 and stays N-up. Labels are drawn upright
-        // (never ctx.rotate'd), so they read correctly at any rotation.
-        const drawRing = (band, count, sel, active, held, labelFn, rot = 0) => {
-            const [r0, r1] = band;
-            const rMid = (r0 + r1) / 2;
-            if (!active) {
-                ctx.beginPath();
-                ctx.arc(cx, cy, rMid, 0, TAU);
-                ctx.globalAlpha = t * 0.3;
-                ctx.strokeStyle = 'rgba(120,110,75,0.6)';
-                ctx.setLineDash([3, 5]);
-                ctx.lineWidth = 1;
-                ctx.stroke();
-                ctx.setLineDash([]);
-                ctx.globalAlpha = t;
-                return;
-            }
-            const sliceAng = TAU / count;
-            for (let i = 0; i < count; i++) {
-                const center = -Math.PI / 2 + i * sliceAng + rot;
-                const a0 = center - sliceAng / 2, a1 = center + sliceAng / 2;
-                const isSel = i === sel;
-                ctx.beginPath();
-                ctx.arc(cx, cy, r1, a0, a1);
-                ctx.arc(cx, cy, r0, a1, a0, true);
-                ctx.closePath();
-                ctx.fillStyle = isSel ? UI.gold : UI.panelBg;
-                ctx.fill();
-                ctx.strokeStyle = held ? 'rgba(111,211,195,0.85)'
-                    : isSel ? `rgba(240,215,130,${0.7 + 0.3 * pulse})` : UI.panelBorder;
-                ctx.lineWidth = held ? 2.5 : (isSel ? 2.5 : 1);
-                ctx.stroke();
-                const label = labelFn(i);
-                if (this.font && label) {
-                    const lx = cx + Math.cos(center) * rMid;
-                    const ly = cy + Math.sin(center) * rMid;
-                    this.font.drawText(ctx, label, Math.round(lx), Math.round(ly) - 4, {
-                        color: isSel ? UI.panelBgDark : UI.text, scale: 1, align: 'center',
-                    });
-                }
-            }
-        };
-
-        // Outer = direction compass (N/E/S/W).
-        const aimIdx = CARDINALS.indexOf(w.aim);
-        drawRing(RING_AIM_R, 4, aimIdx, rings.aim, rings.aim && w.grip === RING_AIM,
-            (i) => CARDINALS[i]);
-
-        // Middle = item ring (valid items for this action). Rotates to pointer.
-        const slots = game._wheelValidItemSlots ? game._wheelValidItemSlots() : [];
-        const itemActive = rings.item && slots.length > 0;
-        const itemRot = game._wheelRingRot ? game._wheelRingRot('item') : 0;
-        drawRing(RING_ITEM_R, Math.max(1, slots.length), slots.indexOf(w.itemSlot), itemActive,
-            itemActive && w.grip === RING_ITEM,
-            (i) => {
-                const s = game.inventory[slots[i]];
-                if (!s) return '';
-                const name = s.itemDef.name.replace(/[\[\]]/g, '');
-                return s.count > 1 ? `${name} x${s.count}` : name;
-            }, itemRot);
-
-        // Inner = action ring (the six verbs). Rotates to pointer.
-        const actionRot = game._wheelRingRot ? game._wheelRingRot('action') : 0;
-        drawRing(RING_ACTION_R, WHEEL_ACTIONS.length, w.actionIndex, true,
-            w.grip === RING_ACTION, (i) => WHEEL_ACTIONS[i].toUpperCase(), actionRot);
-
-        // Fixed selection pointer at 12 o'clock. The action & item rings spin
-        // their chosen slice up to meet it; the compass ring's North also sits
-        // here. A downward gold wedge just outside the outer ring, pointing in.
-        {
-            const py = cy - RING_AIM_R[1];
-            ctx.beginPath();
-            ctx.moveTo(cx, py - 1);        // apex points down toward the rings
-            ctx.lineTo(cx - 7, py - 14);
-            ctx.lineTo(cx + 7, py - 14);
-            ctx.closePath();
-            ctx.fillStyle = UI.gold;
-            ctx.fill();
-            ctx.strokeStyle = UI.panelBgDark;
-            ctx.lineWidth = 1;
-            ctx.stroke();
+        let options = [], selIndex = 0, title = '';
+        if (w.layer === LAYER.CATEGORY) {
+            options = categoryKeys();
+            selIndex = w.categoryIndex;
+            title = 'ACT';
+        } else if (w.layer === LAYER.SUBVERB) {
+            options = currentCategory(w).subverbs.map(s => s.label);
+            selIndex = w.subVerbIndex;
+            title = categoryKeys()[w.categoryIndex];
+        } else if (w.layer === LAYER.ITEM) {
+            const slots = validItemSlots(w, game);
+            options = slots.map(i => game.inventory[i].itemDef.name.replace(/[\[\]]/g, ''));
+            selIndex = Math.max(0, slots.indexOf(w.itemIndex));
+            title = currentLeaf(w).label;
+            if (!options.length) options = ['(no items)'];
+        } else { // AIM
+            options = ['(aim: move reticle, Space to fire)'];
+            selIndex = 0;
+            title = currentLeaf(w).label;
         }
 
-        // Hub = composition readout.
-        ctx.beginPath();
-        ctx.arc(cx, cy, RING_HUB_R, 0, TAU);
-        ctx.fillStyle = UI.panelBgDark;
-        ctx.fill();
-        ctx.strokeStyle = UI.panelBorder;
-        ctx.lineWidth = 1;
-        ctx.stroke();
         if (this.font) {
-            const c = compose(w);
-            const lines = [c.action.toUpperCase()];
-            if (rings.item) lines.push(c.itemSlot >= 0 && game.inventory[c.itemSlot]
-                ? game.inventory[c.itemSlot].itemDef.name.replace(/[\[\]]/g, '').slice(0, 8) : '--');
-            if (rings.aim) lines.push(c.aim);
-            let yy = cy - lines.length * 5;
-            for (const ln of lines) {
-                this.font.drawText(ctx, ln, cx, yy, { color: UI.text, scale: 1, align: 'center' });
-                yy += 10;
-            }
+            // Title.
+            this.font.drawText(ctx, title.toUpperCase(), cx, cy - 72, { color: UI.gold, scale: 2, align: 'center' });
+            // Options list.
+            options.forEach((label, i) => {
+                const y = cy - 36 + i * 16;
+                let color = (i === selIndex) ? UI.gold : UI.panelBg;
+                if (w.layer === LAYER.SUBVERB) {
+                    const leaf = currentCategory(w).subverbs[i];
+                    if (leaf && !leafEnabled(leaf, game)) color = '#6b5d44';
+                }
+                const prefix = (i === selIndex) ? '> ' : '  ';
+                this.font.drawText(ctx, prefix + label, cx, y, { color, scale: 1, align: 'center', shadow: '#000' });
+            });
+            // Composition readout.
+            const leaf = currentLeaf(w);
+            const readout = `${categoryKeys()[w.categoryIndex]} > ${leaf.label}`;
+            this.font.drawText(ctx, readout, cx, cy + 64, { color: UI.text, scale: 1, align: 'center', shadow: '#000' });
         }
 
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
-        ctx.globalAlpha = prevAlpha;
+    }
+
+    // (combat-wheel rework) Aim reticle — drawn in WORLD space (call from inside
+    // the camera transform). A dashed line from the player to the reticle tile,
+    // plus a box on the target tile. BASIC; footprint/AoE is a later pass.
+    _drawReticle(game) {
+        const w = game.wheel;
+        if (!w || w.layer !== LAYER.AIM || !w.reticle) return;
+        const { ctx, half } = this;
+        const toScreen = (tx, ty) => ({
+            x: (tx - game.playerX + half) * TILE_PX - this._scrollX,
+            y: (ty - game.playerY + half) * TILE_PX - this._scrollY,
+        });
+        const r = toScreen(w.reticle.x, w.reticle.y);
+        const p = toScreen(game.playerX, game.playerY);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(212,185,106,0.9)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(p.x + TILE_PX / 2, p.y + TILE_PX / 2);
+        ctx.lineTo(r.x + TILE_PX / 2, r.y + TILE_PX / 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.strokeRect(r.x + 1, r.y + 1, TILE_PX - 2, TILE_PX - 2);
+        ctx.restore();
     }
 
     // ── Throw Prompt ─────────────────────────────────────────────────────────
