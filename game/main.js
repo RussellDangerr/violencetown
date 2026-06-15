@@ -28,7 +28,7 @@ import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setp
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
 import {
     createWheelState, currentLeaf, currentCategory, categoryKeys, cycle, forward, back,
-    leafEnabled, compose, autoAimTile, validItemSlots, LAYER,
+    leafEnabled, compose, autoAimTile, validItemSlots, LAYER, needsFriendlyConfirm,
 } from './wheel-model.js'; // (combat-wheel rework) pure verb-tree model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
 
@@ -1432,12 +1432,18 @@ class Game {
         const cx = RADIAL_CENTER_X, cy = RADIAL_CENTER_Y;
         const r = Math.hypot(pt.x - cx, pt.y - cy);
         if (r < 40) {
-            if (w.layer === LAYER.AIM) { this._fireWheel(); return; }
+            // Center tap drills forward. Route AIM through forward() too (don't
+            // short-circuit to _fireWheel) so the "Plus Ultra" friendly-confirm
+            // gate applies to touch exactly as it does to keyboard / the ACTION
+            // button. A center tap at CONFIRM resolves to 'fire' (commit).
             if (w.layer === LAYER.SUBVERB && !leafEnabled(currentLeaf(w), this)) { audio.playSfx('bump-wall'); return; }
             const res = forward(w, this);
             if (w.layer === LAYER.AIM && !w.reticle) w.reticle = autoAimTile(currentLeaf(w), this);
             if (res === 'fire') this._fireWheel(); else { audio.playSfx('menu-tick'); this._render(); }
         } else {
+            // Tap-outside steps back. CONFIRM→AIM preserves the reticle (parity
+            // with the keyboard CONFIRM handler); back() would otherwise null it.
+            if (w.layer === LAYER.CONFIRM) { w.layer = LAYER.AIM; audio.playSfx('menu-cancel'); this._render(); return; }
             if (back(w) === 'close') this._closeWheel(); else { audio.playSfx('menu-cancel'); this._render(); }
         }
     }
@@ -2087,6 +2093,13 @@ class Game {
         this.wheel.itemIndex = lf.itemSlot >= 0 ? lf.itemSlot : this.wheel.itemIndex;
         this.wheel.reticle = lf.aimTile || autoAimTile(currentLeaf(this.wheel), this);
         this.state = STATE.RADIAL_MENU; // _fireWheel + _closeWheel return us to IDLE
+        // Honor the "Plus Ultra" gate even on the express repeat: if the
+        // remembered shot now lands on a friendly (a hostile died/moved and an
+        // ally stepped onto the tile), surface the CONFIRM layer instead of
+        // silently committing.
+        if (needsFriendlyConfirm(this.wheel, this)) {
+            this.wheel.layer = LAYER.CONFIRM; audio.playSfx('menu-tick'); this._render(); return;
+        }
         this._fireWheel();
     }
 

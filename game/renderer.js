@@ -1527,7 +1527,7 @@ export class Renderer {
     // plus a box on the target tile. BASIC; footprint/AoE is a later pass.
     _drawReticle(game) {
         const w = game.wheel;
-        if (!w || w.layer !== LAYER.AIM || !w.reticle) return;
+        if (!w || (w.layer !== LAYER.AIM && w.layer !== LAYER.CONFIRM) || !w.reticle) return;
         const { ctx, half } = this;
         const toScreen = (tx, ty) => ({
             x: (tx - game.playerX + half) * TILE_PX - this._scrollX,
