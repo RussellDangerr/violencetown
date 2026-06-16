@@ -21,7 +21,10 @@ export const DEFAULTS = Object.freeze({
     musicVolume: 0.7,
     sfxVolume:   0.8,
     reduceMotion: false,   // suppress / dampen screenshake + flash
-    muted:        false,   // hard mute, independent of the two volumes
+    // Default-ON until audio/music is intentionally worked on — keeps dev
+    // instances (and players) silent by default. The options mute toggle
+    // persists an unmute per-device, so turning sound ON sticks.
+    muted:        true,    // hard mute, independent of the two volumes
 });
 
 // Live, mutable copy of the settings. Seeded with defaults so callers can read
