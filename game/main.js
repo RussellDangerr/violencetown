@@ -8,6 +8,7 @@ import { loadAllSprites } from './sprites.js';
 import { BitmapFont } from './bitmap-font.js';
 import { DIR_NAMES, PLAYER_MAX_HP, PLAYER_MAX_MP, SLUDGE_DOT, INVENTORY_SIZE, MAX_STACK } from './data.js';
 import { ITEMS, resolveUse, resolveThrow, tickTempEquips } from './items.js';
+import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { attack, formatDamageNumber } from './combat.js';
 import { Enemy, resolveEnemyTurns } from './enemies.js';
 import { getGreedyStep, stepEntity } from './pathing.js'; // ally pathfinding; stepEntity = shove a character aside
@@ -104,6 +105,9 @@ class Game {
         // via DEFAULT_MP in combat.js.
         this.playerMp    = PLAYER_MAX_MP;
         this.playerMaxMp = PLAYER_MAX_MP;
+        // Known spells for FIGHT → Magic. Seeded with the debug Fireball so the
+        // Magic verb is castable; the real spell-learning system is later work.
+        this.knownSpells = ['fireball'];
         this.extraMoves  = 0; // future: Goo, abilities, etc.
         this.facing      = 'down'; // 'down' | 'left' | 'right' | 'up'
 
@@ -2138,6 +2142,25 @@ class Game {
                 const enemy = aimTile && this.enemies.find(e => e.entity.isAlive() && e.x === aimTile.x && e.y === aimTile.y);
                 if (enemy) { this.combatAttack(enemy, this.equipment.weapon.damage); this._advanceWorld(); }
                 else { this._log('[Nothing to hit there]'); }
+                break;
+            }
+            case 'castSpell': {
+                // Single known spell for now (debug Fireball); a spell-selection
+                // layer comes with the real Magic system. combatAttack carries the
+                // typed splat, death, and reaction bus; Plus Ultra already gated a
+                // friendly target upstream. MP is spent on cast (hit or fizzle).
+                const spell = SPELLS[(this.knownSpells || [])[0]];
+                if (!spell) { this._log("[You don't know any spells.]"); break; }
+                if ((this.playerMp || 0) < spell.mpCost) { this._log(`[Not enough MP — ${spell.name} needs ${spell.mpCost}.]`); break; }
+                const target = aimTile && this.enemies.find(e => e.entity.isAlive() && e.x === aimTile.x && e.y === aimTile.y);
+                this.playerMp = Math.max(0, this.playerMp - spell.mpCost);
+                if (target) {
+                    this.combatAttack(target, spell.damage, { type: spell.damageType });
+                    this._log(`[${spell.name}! ${spell.damage} ${spell.damageType} damage.]`, 'combat');
+                } else {
+                    this._log(`[${spell.name} fizzles — nothing there.]`);
+                }
+                this._advanceWorld();
                 break;
             }
             case 'resolveThrow': { if (itemSlot >= 0 && aimTile) { this._throwAt(itemSlot, aimTile); } break; }

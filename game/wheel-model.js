@@ -14,7 +14,7 @@ export const VERB_TREE = {
     { key: 'melee',  label: 'Melee',  needsItem: false, aimType: 'adjacent', resolver: 'combatAttack', available: always },
     { key: 'ranged', label: 'Ranged', needsItem: false, aimType: 'reticle',  resolver: 'rangedAttack', dep: true,
       available: (g) => !!(g.equipment && g.equipment.weapon && g.equipment.weapon.ranged) },
-    { key: 'magic',  label: 'Magic',  needsItem: false, aimType: 'reticle',  resolver: 'castSpell',    dep: true,
+    { key: 'magic',  label: 'Magic',  needsItem: false, aimType: 'reticle',  resolver: 'castSpell',
       available: (g) => (g.playerMp || 0) > 0 && ((g.knownSpells && g.knownSpells.length) || 0) > 0 },
   ]},
   TRICK: { label: 'TRICK', subverbs: [
@@ -184,6 +184,9 @@ export function aimRange(leaf, game) {
     const s = (game.inventory || [])[game.wheel ? game.wheel.itemIndex : -1];
     return (s && s.itemDef && s.itemDef.range) || 5;
   }
+  // Flat spell reticle reach for now; a per-spell range arrives with the spell-
+  // selection layer (matches spells.js fireball range = 6).
+  if (leaf.key === 'magic') return 6;
   return 1;
 }
 
