@@ -39,7 +39,11 @@ class AudioManager {
         this.master       = null;   // master gain → destination
         this.sfxGain      = null;   // SFX bus
         this.musicGain    = null;   // music bus
-        this.muted        = false;
+        // Default-muted: the graph is built silent so nothing sounds in the
+        // window before Settings.applyToAudio() runs on the first gesture.
+        // Settings (DEFAULTS.muted) is authoritative and will unmute on boot if
+        // the player has explicitly turned sound on.
+        this.muted        = true;
         this.sfxVolume    = DEFAULT_SFX_VOLUME;
         this.musicVolume  = DEFAULT_MUSIC_VOLUME;
 
