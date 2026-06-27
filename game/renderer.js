@@ -4,7 +4,7 @@
 // All text: dark brown on parchment for readability (not gold-on-dark)
 
 import { TILE_PX, VIEW_TILES, CANVAS_PX } from './data.js';
-import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES, PLAYER_SPRITE } from './sprites.js';
+import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES } from './sprites.js';
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
 import { currentCategory, currentLeaf, categoryKeys, leafEnabled, validItemSlots, LAYER } from './wheel-model.js'; // (combat-wheel rework)
 import {
@@ -321,8 +321,9 @@ export class Renderer {
         this._drawTiles(game);
         this._drawContainers(game);
         this._drawGroundItems(game);
-        this._drawEnemies(game);
-        this._drawPlayer(game);
+        // Depth pass: enemies + player draw in one y-sorted (feet-line) pass so
+        // closer characters occlude farther ones, each grounded by a drop-shadow.
+        this._drawActors(game);
         this._drawJammedDoor(game);
 
         // (combat-wheel rework) Aim reticle lives in world space so it tracks the
@@ -340,6 +341,11 @@ export class Renderer {
         // (after the shake restore, so it stays centered) and before the HUD so
         // HP/hotbar stay readable. Gated on zone — only the Wilderness is dark.
         this._drawDarkness();
+
+        // Day/night lighting grade (Town Clock) — multiply an ambient-night
+        // lightmap (with additive lamp/window/player glows) over the world. No-op
+        // in full day; the Wilderness opts out (it owns _drawDarkness).
+        this._drawLighting(game);
 
         // HUD — rendered AFTER restore so screen shake doesn't affect it
         this._drawHPPanel(game);
@@ -377,6 +383,82 @@ export class Renderer {
         ctx.fillStyle = g;
         ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
         ctx.restore();
+    }
+
+    // ── Day/night lighting (Town Clock) ──────────────────────────────────────
+    //
+    // A classic 2D lightmap: an offscreen canvas filled with the ambient night
+    // color, then additive ('lighter') warm radial glows painted at every
+    // emissive source (lamps, lit windows, and the player's own aura). That
+    // lightmap is multiplied over the rendered world — so the town darkens and
+    // cools toward night while lit pools punch back to full brightness. Drawn in
+    // screen space (after the shake restore) and beneath the HUD.
+    //
+    // game._nightLevel drives it: 0 = full day (no-op, normal daytime look); 1 =
+    // deep night. The Town Clock day-phase will animate this; for now it can be
+    // set directly. The Wilderness keeps its own blackout (_drawDarkness) and is
+    // skipped here so the two don't stack.
+    _drawLighting(game) {
+        const n = game._nightLevel ?? 0;
+        if (n <= 0.001 || this.zone === 'WILDERNESS') return;
+
+        const lm = (this._lightCanvas ??= document.createElement('canvas'));
+        if (lm.width !== CANVAS_PX) { lm.width = CANVAS_PX; lm.height = CANVAS_PX; }
+        const lctx = lm.getContext('2d');
+
+        // Ambient base — white (day) lerped toward deep cool night by nightLevel.
+        const amb = this._ambientColor(n);
+        lctx.globalCompositeOperation = 'source-over';
+        lctx.fillStyle = `rgb(${amb.r},${amb.g},${amb.b})`;
+        lctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+
+        // Additive warm lights punch holes of brightness in the night.
+        lctx.globalCompositeOperation = 'lighter';
+        for (const L of this._collectLights(game)) {
+            const grd = lctx.createRadialGradient(L.x, L.y, 0, L.x, L.y, L.radius);
+            grd.addColorStop(0,   `rgba(${L.r},${L.g},${L.b},1)`);
+            grd.addColorStop(0.5, `rgba(${L.r},${L.g},${L.b},0.55)`);
+            grd.addColorStop(1,   'rgba(0,0,0,0)');
+            lctx.fillStyle = grd;
+            lctx.fillRect(L.x - L.radius, L.y - L.radius, L.radius * 2, L.radius * 2);
+        }
+
+        const { ctx } = this;
+        ctx.save();
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.drawImage(lm, 0, 0);
+        ctx.restore();
+    }
+
+    // Emissive sources in view: the player's own warm aura (fixed at view center,
+    // so night stays navigable) plus the map's lights (lamps/windows), converted
+    // to screen space with the same scroll the world uses. Radii are in tiles.
+    _collectLights(game) {
+        const { half } = this;
+        const lights = [{
+            x: half * TILE_PX + TILE_PX / 2,
+            y: half * TILE_PX + TILE_PX / 2,
+            radius: TILE_PX * 3.2, r: 255, g: 236, b: 200,
+        }];
+        for (const L of (game.map?.lights || [])) {
+            const vx = L.x - game.playerX + half;
+            const vy = L.y - game.playerY + half;
+            if (vx < -4 || vx > VIEW_TILES + 3 || vy < -4 || vy > VIEW_TILES + 3) continue;
+            lights.push({
+                x: vx * TILE_PX - this._scrollX + TILE_PX / 2,
+                y: vy * TILE_PX - this._scrollY + TILE_PX / 2,
+                radius: (L.radius ?? 2.5) * TILE_PX,
+                r: L.r ?? 255, g: L.g ?? 205, b: L.b ?? 130,
+            });
+        }
+        return lights;
+    }
+
+    // Ambient multiply color for a night level: white (day) → deep cool night.
+    _ambientColor(n) {
+        const t = Math.max(0, Math.min(1, n));
+        const lerp = (a, b) => Math.round(a + (b - a) * t);
+        return { r: lerp(255, 48), g: lerp(255, 54), b: lerp(255, 92) };
     }
 
     // ── Tiles ────────────────────────────────────────────────────────────────
@@ -499,11 +581,20 @@ export class Renderer {
         }
     }
 
-    // ── Enemies ──────────────────────────────────────────────────────────────
+    // ── Actors (enemies + player), depth-sorted ───────────────────────────────
+    //
+    // (depth/verticality pass) One painter's-algorithm pass over the whole cast.
+    // Ground shadows are laid down first as a separate floor layer (so a nearer
+    // character's shadow never paints over a farther character's sprite), then
+    // sprites are drawn back→front by their feet-line screen Y. This is what lets
+    // the player walk in front of — and behind — other characters correctly,
+    // replacing the old "all enemies, then the player always on top" order.
 
-    _drawEnemies(game) {
-        const { ctx, half, sprites } = this;
+    _drawActors(game) {
+        const { half } = this;
         const now = performance.now();
+        const actors = [];
+
         for (const e of game.enemies) {
             // Step-slide: enemies glide one tile instead of teleporting. Logic
             // (AI/collision) reads the snapped e.x/e.y; only the drawn position
@@ -521,10 +612,7 @@ export class Renderer {
             if (vx < -2 || vx > VIEW_TILES + 1 || vy < -2 || vy > VIEW_TILES + 1) continue;
 
             const isAlive = e.entity.isAlive();
-
-            // Hit-flash + stagger (Phase C) only animate while alive —
-            // corpses are static after death.
-            const flashing = isAlive && (e._hitFlashUntil ?? 0) > now;
+            // Stagger (Phase C) knockback offset — only animates while alive.
             const staggerRemaining = isAlive ? (e._staggerUntil ?? 0) - now : 0;
             const staggerProgress = staggerRemaining > 0 ? staggerRemaining / 80 : 0;
             const offsetX = staggerProgress > 0 ? (e._staggerDx ?? 0) * staggerProgress : 0;
@@ -532,121 +620,209 @@ export class Renderer {
 
             const px = vx * TILE_PX - this._scrollX + offsetX;
             const py = vy * TILE_PX - this._scrollY + offsetY;
+            actors.push({ kind: 'enemy', e, px, py, dead: !isAlive, feetY: py + TILE_PX });
+        }
 
-            // Sprite — same draw for alive and dead; the death state is
-            // expressed via the gray tint overlay below, not via a different
-            // sprite. Future polish swap could pull a fallen-character
-            // sprite from the Kenney pack if one is appropriate.
-            // Same walk/idle animation as the player so the whole cast moves
-            // alike: bob + waddle during a step-slide, idle breathe otherwise.
-            // Corpses stay still. (movement-feel feel pass)
-            const sliding = isAlive && e._slideStart != null && (now - e._slideStart) < (e._slideMs || 0);
-            const ea = isAlive
-                ? walkAnim(sliding, sliding ? Math.min(1, (now - e._slideStart) / (e._slideMs || 1)) : 0, e._stepIndex || 0, game._idleTick)
-                : { bob: 0, rot: 0 };
-            const eFlip = (isAlive && e._faceLeft) ? -1 : 1;
-            const ecx = px + TILE_PX / 2, ecy = py + TILE_PX / 2;
-            let ok = false;
-            const info = ENEMY_SPRITES[e.type];
-            withWalk(ctx, ecx, ecy, { bob: ea.bob, rot: ea.rot, flipX: eFlip }, () => {
-                if (info && sprites?.[info.sheet]?.loaded) {
-                    const col = info.static
-                        ? info.col
-                        : (((game._idleTick || 0) % 2 === 0) ? 0 : 2);
-                    ok = sprites[info.sheet].drawFrame(ctx, col, info.row, px + 4, py + 4, TILE_PX - 8, TILE_PX - 8);
-                }
-                if (!ok) {
-                    ctx.fillStyle = isAlive ? '#cc4433' : '#555';
-                    ctx.fillRect(px + 6, py + 6, TILE_PX - 12, TILE_PX - 12);
-                }
-            });
+        // The player draws at the fixed view center; the world scrolls under it.
+        const { ppx, ppy } = this._playerScreenPos(game, now);
+        actors.push({ kind: 'player', px: ppx, py: ppy, dead: false, feetY: ppy + TILE_PX });
 
-            if (isAlive) {
-                // Hit-flash overlay — alpha fades as the flash ages so it
-                // pops on first frame and decays. Combined with the
-                // damage-scaled duration set in main.js combatAttack,
-                // heavier hits look heavier.
-                if (flashing) {
-                    const flashDur = (e._hitFlashUntil ?? now) - now; // remaining
-                    const fade = Math.max(0, Math.min(1, flashDur / 120));
-                    ctx.fillStyle = `rgba(255, 60, 40, ${0.55 * fade})`;
-                    ctx.fillRect(px + 4, py + 4, TILE_PX - 8, TILE_PX - 8);
-                }
+        // Tall props (trees, posts) join the same sort, keyed on their base tile,
+        // so the player passes in front of — and behind — them. Wider cull margin
+        // since a prop's sprite overhangs its base tile.
+        for (const p of (game.map?.propSpawns || [])) {
+            const def = PROP_SPRITES[p.type];
+            if (!def) continue;
+            const vx = p.x - game.playerX + half;
+            const vy = p.y - game.playerY + half;
+            if (vx < -3 || vx > VIEW_TILES + 2 || vy < -3 || vy > VIEW_TILES + 2) continue;
+            const px = vx * TILE_PX - this._scrollX;
+            const py = vy * TILE_PX - this._scrollY;
+            actors.push({ kind: 'prop', def, px, py, feetY: py + TILE_PX });
+        }
 
-                // HP bar above living enemy (with border). Suppressed for ambient
-                // townsfolk (Town Clock) — a floating health bar over a peaceful
-                // Violencian reads as a combat target. bx/by stay in scope for the
-                // buff badges below.
-                const frac = e.entity.hp / e.entity.maxHp;
-                const bx = px + 4, by = py - 6, bw = TILE_PX - 8, bh = 5;
-                if (!e.ambient) {
-                    ctx.fillStyle = '#000000cc';
-                    ctx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
-                    ctx.fillStyle = UI.hpBg;
-                    ctx.fillRect(bx, by, bw, bh);
-                    ctx.fillStyle = UI.hpRed;
-                    ctx.fillRect(bx, by, bw * frac, bh);
-                }
+        // Floor layer: lay every shadow down first so none can occlude a sprite
+        // standing behind it. Props get a broader pool; corpses a fainter one.
+        for (const a of actors) {
+            if (a.kind === 'prop') this._drawGroundShadow(a.px + TILE_PX / 2, a.py + TILE_PX - 3, 0.32, a.def.shadowRx ?? 12, a.def.shadowRy ?? 4.5);
+            else this._drawGroundShadow(a.px + TILE_PX / 2, a.py + TILE_PX - 4, a.dead ? 0.2 : 0.35);
+        }
 
-                // Debuff / buff badges — one-letter colored markers stacked
-                // horizontally above the HP bar. Buffs (positive) show in
-                // UI.buff green; debuffs (negative) show in UI.debuff red.
-                // Letter = first character of the buff name uppercased
-                // (Blind → 'B', future Poison → 'P', Stun → 'S').
-                if (e.buffs && e.buffs.length > 0) {
-                    const badgeY = py - 20;
-                    let badgeX = px + 2;
-                    for (const b of e.buffs) {
-                        // Background pill — black so the colored letter stays
-                        // readable over any sprite underneath
-                        ctx.fillStyle = '#000000cc';
-                        ctx.fillRect(badgeX, badgeY, 9, 10);
-                        if (this.font) {
-                            const letter = (b.name?.[0] ?? '?').toUpperCase();
-                            const color = b.type === 'buff' ? UI.buff : UI.debuff;
-                            this.font.drawText(ctx, letter, badgeX + 1, badgeY + 1, {
-                                color, scale: 1,
-                            });
-                        }
-                        badgeX += 11;
-                    }
-                }
+        // Painter's order: smaller feet-Y (further back / north) first. On a tie
+        // the player draws last so it reads on top of a same-row NPC or prop.
+        actors.sort((a, b) => (a.feetY - b.feetY) || (a.kind === 'player' ? 1 : -1));
+        for (const a of actors) {
+            if (a.kind === 'prop') this._drawPropSprite(a.def, a.px, a.py);
+            else if (a.kind === 'player') this._drawPlayerSprite(game, a.px, a.py, now);
+            else this._drawEnemySprite(game, a.e, a.px, a.py, now);
+        }
+    }
 
-                // (AGGRO meter) Mood smiley over the head — the same disposition
-                // face the shop uses, now floating above any NPC that HAS a
-                // disposition. Mindless things (set-piece rats, the Wererat) have
-                // none and show nothing. Lets the player read who's hostile /
-                // wary / bribed-friendly at a glance, and watch a face soften as
-                // they hand over gifts. Sits above the HP bar; nudged higher when
-                // buff badges occupy that row.
-                if (e.disposition != null) {
-                    const faceR  = 6.5;
-                    const faceCX = px + TILE_PX / 2;
-                    const faceCY = (e.buffs && e.buffs.length > 0) ? py - 28 : py - 15;
-                    ctx.fillStyle = 'rgba(0,0,0,0.35)';   // soft backing for readability over busy sprites
-                    ctx.beginPath(); ctx.arc(faceCX, faceCY, faceR + 1.5, 0, Math.PI * 2); ctx.fill();
-                    this._drawMoodFace(faceCX, faceCY, mood(e.disposition).face, faceR);
-                }
-            } else {
-                // Corpse — gray tint overlay turns the sprite into a faded
-                // version of itself, marking it as "defeated" without
-                // requiring a separate corpse sprite. Combined with the
-                // K.O. tag below, it reads as a clear "this enemy is done"
-                // without removing them from the world entirely. Mother 3
-                // and Persona both leave defeated enemies as visible body
-                // markers; this is the cheap version of that move.
-                ctx.fillStyle = 'rgba(60, 60, 60, 0.55)';
+    // Soft elliptical drop-shadow on the ground beneath a character — a radial
+    // gradient circle squashed vertically. Cheap, asset-free, and it grounds the
+    // sprite so the idle bob reads as "lifting off the floor" instead of sliding.
+    _drawGroundShadow(cx, cy, alpha, rx = 11, ry = 4.2) {
+        const { ctx } = this;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(1, ry / rx);
+        const g = ctx.createRadialGradient(0, 0, 0, 0, 0, rx);
+        g.addColorStop(0,    `rgba(0,0,0,${alpha})`);
+        g.addColorStop(0.55, `rgba(0,0,0,${alpha * 0.72})`);
+        g.addColorStop(1,    'rgba(0,0,0,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(0, 0, rx, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+
+    // Draw a tall prop (tree/post) anchored at its base tile, scaled uniformly
+    // (2x) from its source region so pixels stay crisp. Centered horizontally on
+    // the base tile with the sprite's bottom on the tile's bottom edge, so the
+    // overhang rises into the tiles above and depth-sorts for walk-behind.
+    _drawPropSprite(def, px, py) {
+        const { ctx, sprites } = this;
+        const sheet = sprites?.[def.sheet];
+        if (!sheet?.loaded) return;
+        const dw = def.wTiles * TILE_PX;
+        const dh = def.hTiles * TILE_PX;
+        const dx = px + TILE_PX / 2 - dw / 2;   // center on the base tile
+        const dy = py + TILE_PX - dh;           // bottom edge sits on the tile
+        sheet.drawRegion(ctx, def.sx, def.sy, def.sw, def.sh, dx, dy, dw, dh);
+    }
+
+    // ── Enemies ──────────────────────────────────────────────────────────────
+    //
+    // Draw a single enemy/NPC sprite + overlays (hit-flash, HP bar, buff badges,
+    // mood face, or corpse/KO marker) at a screen position resolved by
+    // _drawActors. The body is unchanged from the old _drawEnemies loop; only the
+    // position/cull/slide/stagger math moved up into _drawActors.
+
+    _drawEnemySprite(game, e, px, py, now) {
+        const { ctx, sprites } = this;
+        const isAlive = e.entity.isAlive();
+        // Hit-flash only animates while alive — corpses are static after death.
+        const flashing = isAlive && (e._hitFlashUntil ?? 0) > now;
+
+        // Sprite — same draw for alive and dead; the death state is expressed via
+        // the gray tint overlay below, not a different sprite. Same walk/idle
+        // animation as the player so the whole cast moves alike: bob + waddle
+        // during a step-slide, idle breathe otherwise. Corpses stay still.
+        const sliding = isAlive && e._slideStart != null && (now - e._slideStart) < (e._slideMs || 0);
+        const ea = isAlive
+            ? walkAnim(sliding, sliding ? Math.min(1, (now - e._slideStart) / (e._slideMs || 1)) : 0, e._stepIndex || 0, game._idleTick)
+            : { bob: 0, rot: 0 };
+        const eFlip = (isAlive && e._faceLeft) ? -1 : 1;
+        const ecx = px + TILE_PX / 2, ecy = py + TILE_PX / 2;
+        let ok = false;
+        const info = ENEMY_SPRITES[e.type];
+        withWalk(ctx, ecx, ecy, { bob: ea.bob, rot: ea.rot, flipX: eFlip }, () => {
+            if (info && sprites?.[info.sheet]?.loaded) {
+                const col = info.static
+                    ? info.col
+                    : (((game._idleTick || 0) % 2 === 0) ? 0 : 2);
+                ok = sprites[info.sheet].drawFrame(ctx, col, info.row, px + 4, py + 4, TILE_PX - 8, TILE_PX - 8);
+            }
+            if (!ok) {
+                ctx.fillStyle = isAlive ? '#cc4433' : '#555';
+                ctx.fillRect(px + 6, py + 6, TILE_PX - 12, TILE_PX - 12);
+            }
+        });
+
+        if (isAlive) {
+            // Hit-flash overlay — alpha fades as the flash ages so it pops on the
+            // first frame and decays. Heavier hits look heavier (duration scaled
+            // in main.js combatAttack).
+            if (flashing) {
+                const flashDur = (e._hitFlashUntil ?? now) - now; // remaining
+                const fade = Math.max(0, Math.min(1, flashDur / 120));
+                ctx.fillStyle = `rgba(255, 60, 40, ${0.55 * fade})`;
                 ctx.fillRect(px + 4, py + 4, TILE_PX - 8, TILE_PX - 8);
+            }
 
-                // K.O. tag below — small, faded, semi-respectful. The tag
-                // is the player's permanent record of "you fought this
-                // person here." Future merchant/loot features could read
-                // the corpse and let the player pick it up.
-                if (this.font) {
-                    this.font.drawText(ctx, `[KO] ${e.type.toUpperCase()}`, px + TILE_PX / 2, py + TILE_PX - 2, {
-                        color: '#9a8a78', scale: 1, align: 'center',
-                    });
+            // HP bar above living enemy (with border). Suppressed for ambient
+            // townsfolk (Town Clock) — a floating health bar over a peaceful
+            // Violencian reads as a combat target.
+            const frac = e.entity.hp / e.entity.maxHp;
+            const bx = px + 4, by = py - 6, bw = TILE_PX - 8, bh = 5;
+            if (!e.ambient) {
+                ctx.fillStyle = '#000000cc';
+                ctx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
+                ctx.fillStyle = UI.hpBg;
+                ctx.fillRect(bx, by, bw, bh);
+                ctx.fillStyle = UI.hpRed;
+                ctx.fillRect(bx, by, bw * frac, bh);
+            }
+
+            // Debuff / buff badges — one-letter colored markers stacked
+            // horizontally above the HP bar. Buffs green, debuffs red; the letter
+            // is the first character of the buff name uppercased.
+            if (e.buffs && e.buffs.length > 0) {
+                const badgeY = py - 20;
+                let badgeX = px + 2;
+                for (const b of e.buffs) {
+                    ctx.fillStyle = '#000000cc';
+                    ctx.fillRect(badgeX, badgeY, 9, 10);
+                    if (this.font) {
+                        const letter = (b.name?.[0] ?? '?').toUpperCase();
+                        const color = b.type === 'buff' ? UI.buff : UI.debuff;
+                        this.font.drawText(ctx, letter, badgeX + 1, badgeY + 1, {
+                            color, scale: 1,
+                        });
+                    }
+                    badgeX += 11;
                 }
+            }
+
+            // (AGGRO meter) Mood smiley over the head — the same disposition face
+            // the shop uses, floating above any NPC that HAS a disposition.
+            // Mindless things show nothing. Sits above the HP bar; nudged higher
+            // when buff badges occupy that row.
+            if (e.disposition != null) {
+                const faceR  = 6.5;
+                const faceCX = px + TILE_PX / 2;
+                const faceCY = (e.buffs && e.buffs.length > 0) ? py - 28 : py - 15;
+                ctx.fillStyle = 'rgba(0,0,0,0.35)';   // soft backing for readability over busy sprites
+                ctx.beginPath(); ctx.arc(faceCX, faceCY, faceR + 1.5, 0, Math.PI * 2); ctx.fill();
+                this._drawMoodFace(faceCX, faceCY, mood(e.disposition).face, faceR);
+            }
+
+            // Ambient emote balloon (Town Clock) — a transient Kenney Emote Pack
+            // speech balloon over the head, replacing the old grunt text: it pops
+            // in from the tail, holds, then floats up and fades. Drawn last so it
+            // sits above this NPC's other overhead UI.
+            if (e._emote != null) {
+                const col = EMOTE_SPRITES[e._emote];
+                const sheet = sprites?.emotes;
+                const age = now - (e._emoteStart || 0);
+                const life = e._emoteMs || 1800;
+                if (sheet?.loaded && col != null && age >= 0 && age < life) {
+                    const t    = age / life;
+                    const fade = t > 0.7 ? 1 - (t - 0.7) / 0.3 : 1;  // hold, fade the last 30%
+                    const pop  = age < 130 ? age / 130 : 1;          // quick inflate-in
+                    const rise = 4 * t;                              // gentle float up
+                    const sz   = 20 * pop;
+                    const ex   = px + TILE_PX / 2 - sz / 2;
+                    const ey   = (py - 6) - sz - rise;               // tail just above the head
+                    ctx.save();
+                    ctx.globalAlpha = Math.max(0, fade);
+                    sheet.drawFrame(ctx, col, 0, ex, ey, sz, sz);
+                    ctx.restore();
+                }
+            }
+        } else {
+            // Corpse — gray tint overlay turns the sprite into a faded version of
+            // itself, marking it "defeated" without a separate corpse sprite.
+            ctx.fillStyle = 'rgba(60, 60, 60, 0.55)';
+            ctx.fillRect(px + 4, py + 4, TILE_PX - 8, TILE_PX - 8);
+
+            // K.O. tag below — the player's permanent record of "you fought this
+            // person here."
+            if (this.font) {
+                this.font.drawText(ctx, `[KO] ${e.type.toUpperCase()}`, px + TILE_PX / 2, py + TILE_PX - 2, {
+                    color: '#9a8a78', scale: 1, align: 'center',
+                });
             }
         }
     }
@@ -900,20 +1076,30 @@ export class Renderer {
 
     // ── Player ───────────────────────────────────────────────────────────────
 
-    _drawPlayer(game) {
-        const { ctx, half, sprites } = this;
-        const now = performance.now();
-
-        // Hit-flash + stagger (Phase C) — same pattern as enemies, but
-        // reading from game._playerHitFlashUntil et al.
-        const flashing = (game._playerHitFlashUntil ?? 0) > now;
+    // The player's screen position — fixed at the view center, nudged by the
+    // Phase-C stagger knockback. The world scrolls under it, so unlike enemies it
+    // has no slide term. Shared by the depth pass and the item-overlay backdrop.
+    _playerScreenPos(game, now) {
+        const { half } = this;
         const staggerRemaining = (game._playerStaggerUntil ?? 0) - now;
         const staggerProgress = staggerRemaining > 0 ? staggerRemaining / 80 : 0;
         const offsetX = staggerProgress > 0 ? (game._playerStaggerDx ?? 0) * staggerProgress : 0;
         const offsetY = staggerProgress > 0 ? (game._playerStaggerDy ?? 0) * staggerProgress : 0;
+        return { ppx: half * TILE_PX + offsetX, ppy: half * TILE_PX + offsetY };
+    }
 
-        const ppx = half * TILE_PX + offsetX;
-        const ppy = half * TILE_PX + offsetY;
+    // Standalone player draw — used by the item-overlay backdrop, which dims the
+    // world and shows only the player. The main world render routes the player
+    // through _drawActors so it depth-sorts against the rest of the cast.
+    _drawPlayer(game) {
+        const now = performance.now();
+        const { ppx, ppy } = this._playerScreenPos(game, now);
+        this._drawPlayerSprite(game, ppx, ppy, now);
+    }
+
+    _drawPlayerSprite(game, ppx, ppy, now) {
+        const { ctx, sprites } = this;
+        const flashing = (game._playerHitFlashUntil ?? 0) > now;
 
         // ── Procedural walk animation (plans/movement-feel.md, feel pass) ─────
         // Single static front-facing sprite → "a person walking" via an integer

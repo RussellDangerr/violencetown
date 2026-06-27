@@ -262,31 +262,35 @@ export function resolveEnemyTurns(game) {
     return messages;
 }
 
-// ── Ambient grunts (Town Clock) ──────────────────────────────────────────────
+// ── Ambient emotes (Town Clock) ──────────────────────────────────────────────
 //
-// Placeholder vocalizations so EVERY character makes a little noise on the world
-// heartbeat — the world never reads as a frozen diorama. Uniform onomatopoeia for
-// now; authored `barks` data is left intact but dormant (real lines come later).
-// Separate per-NPC state (_gruntOffset/_gruntIndex) so it never collides with the
-// authored-bark machinery, and staggered offsets so a roomful doesn't grunt in
-// unison.
-const DEFAULT_GRUNTS = ['[Hrm.]', '[Mngh.]', '[Tch.]', '[Bah.]', '[Ugh.]', '[...]', '[Grr.]', '[Hmph.]', '[Pfft.]', '[Eh?]'];
-const GRUNT_EVERY = 22;   // world ticks between a character's grunts (~11s at 500ms)
-let _gruntStagger = 0;
+// The placeholder grunts are now EMOTE BALLOONS (Kenney Emote Pack) instead of
+// bracketed onomatopoeia text: on the world heartbeat a townsperson pops a small
+// down-tail speech balloon over their head — mutter dots, a yawn, a hum, a
+// grumble — so the place reads as alive without any authored copy. This sets a
+// transient `_emote` (+ `_emoteStart`/`_emoteMs`) on the NPC that the renderer
+// draws and fades; nothing routes to the log. Round-robins a curated idle set,
+// with a per-NPC offset + stagger so a crowd doesn't all react on the same beat.
+// (authored `barks` data stays intact but dormant — real lines come later.)
+const AMBIENT_EMOTES = ['dots1', 'dots2', 'dots3', 'question', 'sleep', 'music', 'exclamation', 'anger'];
+const EMOTE_EVERY = 22;   // world ticks between a character's emotes (~11s at 500ms)
+const EMOTE_MS    = 1800; // how long a balloon lingers before it fades out
+let _emoteStagger = 0;
 
-function maybeGrunt(game, enemy, clock) {
-    if (enemy._gruntOffset == null) {
-        // Stagger each character's phase so they don't all grunt on the same beat.
-        _gruntStagger = (_gruntStagger + 7) % GRUNT_EVERY;
-        enemy._gruntOffset = clock - _gruntStagger;
-        enemy._gruntIndex = enemy._gruntIndex || 0;
-        return null;
+function maybeEmote(enemy, clock) {
+    if (enemy._emoteOffset == null) {
+        // Stagger each character's phase so they don't all react on the same beat.
+        _emoteStagger = (_emoteStagger + 7) % EMOTE_EVERY;
+        enemy._emoteOffset = clock - _emoteStagger;
+        enemy._emoteIndex = enemy._emoteIndex || 0;
+        return;
     }
-    const elapsed = clock - enemy._gruntOffset;
-    if (elapsed <= 0 || elapsed % GRUNT_EVERY !== 0) return null;
-    const text = DEFAULT_GRUNTS[enemy._gruntIndex % DEFAULT_GRUNTS.length];
-    enemy._gruntIndex++;
-    return { text, sourceEnemy: enemy, category: 'bark' };
+    const elapsed = clock - enemy._emoteOffset;
+    if (elapsed <= 0 || elapsed % EMOTE_EVERY !== 0) return;
+    enemy._emote      = AMBIENT_EMOTES[enemy._emoteIndex % AMBIENT_EMOTES.length];
+    enemy._emoteStart = performance.now();
+    enemy._emoteMs    = EMOTE_MS;
+    enemy._emoteIndex++;
 }
 
 // ── Resolve ambient (heartbeat-driven) NPCs ──────────────────────────────────
@@ -305,10 +309,10 @@ export function resolveAmbientTurns(game) {
         if (npc.state === 'chasing') continue;   // engaged hostile = combat, not ambient
         if (npc._ally) continue;                  // allies resolve on the player-turn loop
 
-        // Grunt on the world clock — every non-engaged character makes a little
-        // noise so the world never feels dead (placeholder onomatopoeia for now).
-        const gruntMsg = maybeGrunt(game, npc, game.worldTick);
-        if (gruntMsg) messages.push(gruntMsg);
+        // Pop an ambient emote balloon on the world clock — every non-engaged
+        // character reacts now and then so the world never feels dead. Sets a
+        // transient _emote the renderer draws; no log/overhead-text message.
+        maybeEmote(npc, game.worldTick);
 
         // Ambient FSM step (IDLE/WANDER/WORKING) on the world clock. The behavior
         // whitelist gates who actually moves — IDLE-only NPCs (vendors, blockers)
