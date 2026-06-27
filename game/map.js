@@ -42,6 +42,12 @@ export class GameMap {
         this.propBlocked = new Set(
             this.propSpawns.filter(p => p.solid !== false).map(p => `${p.x},${p.y}`)
         );
+
+        // Lights: [{ x, y, radius?, r?, g?, b? }] — emissive points (lamps, lit
+        // windows, door spill) the day/night lighting grade adds as warm additive
+        // glows after dusk (renderer._drawLighting). Static map data; no effect
+        // while it's day (game._nightLevel === 0).
+        this.lights = mapData.lights || [];
     }
 
     // ── Container & Region lookups ───────────────────────────────────────────

@@ -342,6 +342,11 @@ export class Renderer {
         // HP/hotbar stay readable. Gated on zone — only the Wilderness is dark.
         this._drawDarkness();
 
+        // Day/night lighting grade (Town Clock) — multiply an ambient-night
+        // lightmap (with additive lamp/window/player glows) over the world. No-op
+        // in full day; the Wilderness opts out (it owns _drawDarkness).
+        this._drawLighting(game);
+
         // HUD — rendered AFTER restore so screen shake doesn't affect it
         this._drawHPPanel(game);
         this._drawZoneLabel(game);
@@ -378,6 +383,82 @@ export class Renderer {
         ctx.fillStyle = g;
         ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
         ctx.restore();
+    }
+
+    // ── Day/night lighting (Town Clock) ──────────────────────────────────────
+    //
+    // A classic 2D lightmap: an offscreen canvas filled with the ambient night
+    // color, then additive ('lighter') warm radial glows painted at every
+    // emissive source (lamps, lit windows, and the player's own aura). That
+    // lightmap is multiplied over the rendered world — so the town darkens and
+    // cools toward night while lit pools punch back to full brightness. Drawn in
+    // screen space (after the shake restore) and beneath the HUD.
+    //
+    // game._nightLevel drives it: 0 = full day (no-op, normal daytime look); 1 =
+    // deep night. The Town Clock day-phase will animate this; for now it can be
+    // set directly. The Wilderness keeps its own blackout (_drawDarkness) and is
+    // skipped here so the two don't stack.
+    _drawLighting(game) {
+        const n = game._nightLevel ?? 0;
+        if (n <= 0.001 || this.zone === 'WILDERNESS') return;
+
+        const lm = (this._lightCanvas ??= document.createElement('canvas'));
+        if (lm.width !== CANVAS_PX) { lm.width = CANVAS_PX; lm.height = CANVAS_PX; }
+        const lctx = lm.getContext('2d');
+
+        // Ambient base — white (day) lerped toward deep cool night by nightLevel.
+        const amb = this._ambientColor(n);
+        lctx.globalCompositeOperation = 'source-over';
+        lctx.fillStyle = `rgb(${amb.r},${amb.g},${amb.b})`;
+        lctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+
+        // Additive warm lights punch holes of brightness in the night.
+        lctx.globalCompositeOperation = 'lighter';
+        for (const L of this._collectLights(game)) {
+            const grd = lctx.createRadialGradient(L.x, L.y, 0, L.x, L.y, L.radius);
+            grd.addColorStop(0,   `rgba(${L.r},${L.g},${L.b},1)`);
+            grd.addColorStop(0.5, `rgba(${L.r},${L.g},${L.b},0.55)`);
+            grd.addColorStop(1,   'rgba(0,0,0,0)');
+            lctx.fillStyle = grd;
+            lctx.fillRect(L.x - L.radius, L.y - L.radius, L.radius * 2, L.radius * 2);
+        }
+
+        const { ctx } = this;
+        ctx.save();
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.drawImage(lm, 0, 0);
+        ctx.restore();
+    }
+
+    // Emissive sources in view: the player's own warm aura (fixed at view center,
+    // so night stays navigable) plus the map's lights (lamps/windows), converted
+    // to screen space with the same scroll the world uses. Radii are in tiles.
+    _collectLights(game) {
+        const { half } = this;
+        const lights = [{
+            x: half * TILE_PX + TILE_PX / 2,
+            y: half * TILE_PX + TILE_PX / 2,
+            radius: TILE_PX * 3.2, r: 255, g: 236, b: 200,
+        }];
+        for (const L of (game.map?.lights || [])) {
+            const vx = L.x - game.playerX + half;
+            const vy = L.y - game.playerY + half;
+            if (vx < -4 || vx > VIEW_TILES + 3 || vy < -4 || vy > VIEW_TILES + 3) continue;
+            lights.push({
+                x: vx * TILE_PX - this._scrollX + TILE_PX / 2,
+                y: vy * TILE_PX - this._scrollY + TILE_PX / 2,
+                radius: (L.radius ?? 2.5) * TILE_PX,
+                r: L.r ?? 255, g: L.g ?? 205, b: L.b ?? 130,
+            });
+        }
+        return lights;
+    }
+
+    // Ambient multiply color for a night level: white (day) → deep cool night.
+    _ambientColor(n) {
+        const t = Math.max(0, Math.min(1, n));
+        const lerp = (a, b) => Math.round(a + (b - a) * t);
+        return { r: lerp(255, 48), g: lerp(255, 54), b: lerp(255, 92) };
     }
 
     // ── Tiles ────────────────────────────────────────────────────────────────

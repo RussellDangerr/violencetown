@@ -101,6 +101,7 @@ class Game {
         this.map      = null;
         this.turn     = 0;
         this.worldTick = 0;   // Town Clock — free-running ambient world beat (see WORLD_TICK_MS)
+        this._nightLevel = 0; // Town Clock day/night — 0 = full day (lighting off), 1 = deep night
 
         // Player
         this.playerX     = 0;
