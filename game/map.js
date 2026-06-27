@@ -32,6 +32,16 @@ export class GameMap {
         // Examinables: [{ id, x, y, text }] — points of interest the Examine
         // skill (examine.js) inspects. Copied live onto game.examinables.
         this.examinableSpawns = mapData.examinables || [];
+
+        // Props: [{ type, x, y, solid? }] — tall, ground-anchored overlay objects
+        // (trees, posts) the renderer depth-sorts with the cast for walk-behind
+        // (depth/verticality). Static map data, like tiles — re-snapshotted on
+        // every load, no save state. A prop's base tile blocks movement unless
+        // `solid: false`; `propBlocked` is the O(1) lookup isWalkable consults.
+        this.propSpawns  = mapData.props || [];
+        this.propBlocked = new Set(
+            this.propSpawns.filter(p => p.solid !== false).map(p => `${p.x},${p.y}`)
+        );
     }
 
     // ── Container & Region lookups ───────────────────────────────────────────
@@ -66,7 +76,10 @@ export class GameMap {
     }
 
     isWalkable(x, y) {
-        return this.getTileDef(x, y).walkable;
+        // A solid prop (tree trunk, post) blocks its base tile even though the
+        // ground tile underneath stays walkable, so the player bumps the trunk
+        // but can still stand — and be occluded — on the tiles around it.
+        return this.getTileDef(x, y).walkable && !this.propBlocked.has(`${x},${y}`);
     }
 
     isInBounds(x, y) {

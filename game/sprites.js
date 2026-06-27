@@ -210,6 +210,23 @@ export const ENEMY_SPRITES = {
 // the natural read for a burger-delivery courier. Drawn via `sprites.player`.
 export const PLAYER_SPRITE = { sheet: 'player', col: 1, row: 7, static: true };
 
+// ── Props (tall, ground-anchored overlay objects — depth/verticality) ───────
+// Unlike tiles (always one cell, drawn flat), props render TALLER than a single
+// tile, anchored at their base tile, and depth-sort with the cast so the player
+// can walk in front of and behind them. Source is a pixel region (drawRegion) so
+// a multi-cell sprite scales uniformly at the game's 2x — no pixel-ratio break.
+//   sx/sy/sw/sh — source rect in the sheet (16px grid; packed = gutter-free).
+//   wTiles/hTiles — tiles the drawn sprite spans; the base (collision) tile is
+//   the bottom-center one. So a 2x2 sprite overhangs its base by one tile up and
+//   half a tile to each side, and the player walks behind that overhang.
+export const PROP_SPRITES = {
+    // Tiny Town tall conifer — 1x2 cells (col 4, rows 0-1) → 32x64 at 2x. One
+    // tile wide, two tall: a clean, narrow trunk-and-canopy that reads as a real
+    // tree. The player is occluded only when directly behind it (same column),
+    // never when merely passing alongside. shadowRx/Ry size the trunk's pool.
+    tree: { sheet: 'tinyTown', sx: 4 * 16, sy: 0, sw: 16, sh: 32, wTiles: 1, hTiles: 2, shadowRx: 12, shadowRy: 4.5 },
+};
+
 // ── Zone tile coords (Circus / Factory / Graveyard) ─────────────────────────
 // These three zones previously rendered as flat fallbackColor rectangles
 // (no sprite refs anywhere). First-pass picks below render real art for the

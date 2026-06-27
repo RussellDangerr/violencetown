@@ -4,7 +4,7 @@
 // All text: dark brown on parchment for readability (not gold-on-dark)
 
 import { TILE_PX, VIEW_TILES, CANVAS_PX } from './data.js';
-import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES, PLAYER_SPRITE } from './sprites.js';
+import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES, PLAYER_SPRITE, PROP_SPRITES } from './sprites.js';
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
 import { currentCategory, currentLeaf, categoryKeys, leafEnabled, validItemSlots, LAYER } from './wheel-model.js'; // (combat-wheel rework)
 import {
@@ -546,17 +546,33 @@ export class Renderer {
         const { ppx, ppy } = this._playerScreenPos(game, now);
         actors.push({ kind: 'player', px: ppx, py: ppy, dead: false, feetY: ppy + TILE_PX });
 
+        // Tall props (trees, posts) join the same sort, keyed on their base tile,
+        // so the player passes in front of — and behind — them. Wider cull margin
+        // since a prop's sprite overhangs its base tile.
+        for (const p of (game.map?.propSpawns || [])) {
+            const def = PROP_SPRITES[p.type];
+            if (!def) continue;
+            const vx = p.x - game.playerX + half;
+            const vy = p.y - game.playerY + half;
+            if (vx < -3 || vx > VIEW_TILES + 2 || vy < -3 || vy > VIEW_TILES + 2) continue;
+            const px = vx * TILE_PX - this._scrollX;
+            const py = vy * TILE_PX - this._scrollY;
+            actors.push({ kind: 'prop', def, px, py, feetY: py + TILE_PX });
+        }
+
         // Floor layer: lay every shadow down first so none can occlude a sprite
-        // standing behind it. Corpses cast a fainter shadow.
+        // standing behind it. Props get a broader pool; corpses a fainter one.
         for (const a of actors) {
-            this._drawGroundShadow(a.px + TILE_PX / 2, a.py + TILE_PX - 4, a.dead ? 0.2 : 0.35);
+            if (a.kind === 'prop') this._drawGroundShadow(a.px + TILE_PX / 2, a.py + TILE_PX - 3, 0.32, a.def.shadowRx ?? 12, a.def.shadowRy ?? 4.5);
+            else this._drawGroundShadow(a.px + TILE_PX / 2, a.py + TILE_PX - 4, a.dead ? 0.2 : 0.35);
         }
 
         // Painter's order: smaller feet-Y (further back / north) first. On a tie
-        // the player draws last so it reads on top of a same-row NPC.
+        // the player draws last so it reads on top of a same-row NPC or prop.
         actors.sort((a, b) => (a.feetY - b.feetY) || (a.kind === 'player' ? 1 : -1));
         for (const a of actors) {
-            if (a.kind === 'player') this._drawPlayerSprite(game, a.px, a.py, now);
+            if (a.kind === 'prop') this._drawPropSprite(a.def, a.px, a.py);
+            else if (a.kind === 'player') this._drawPlayerSprite(game, a.px, a.py, now);
             else this._drawEnemySprite(game, a.e, a.px, a.py, now);
         }
     }
@@ -564,9 +580,8 @@ export class Renderer {
     // Soft elliptical drop-shadow on the ground beneath a character — a radial
     // gradient circle squashed vertically. Cheap, asset-free, and it grounds the
     // sprite so the idle bob reads as "lifting off the floor" instead of sliding.
-    _drawGroundShadow(cx, cy, alpha) {
+    _drawGroundShadow(cx, cy, alpha, rx = 11, ry = 4.2) {
         const { ctx } = this;
-        const rx = 11, ry = 4.2;
         ctx.save();
         ctx.translate(cx, cy);
         ctx.scale(1, ry / rx);
@@ -579,6 +594,21 @@ export class Renderer {
         ctx.arc(0, 0, rx, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
+    }
+
+    // Draw a tall prop (tree/post) anchored at its base tile, scaled uniformly
+    // (2x) from its source region so pixels stay crisp. Centered horizontally on
+    // the base tile with the sprite's bottom on the tile's bottom edge, so the
+    // overhang rises into the tiles above and depth-sorts for walk-behind.
+    _drawPropSprite(def, px, py) {
+        const { ctx, sprites } = this;
+        const sheet = sprites?.[def.sheet];
+        if (!sheet?.loaded) return;
+        const dw = def.wTiles * TILE_PX;
+        const dh = def.hTiles * TILE_PX;
+        const dx = px + TILE_PX / 2 - dw / 2;   // center on the base tile
+        const dy = py + TILE_PX - dh;           // bottom edge sits on the tile
+        sheet.drawRegion(ctx, def.sx, def.sy, def.sw, def.sh, dx, dy, dw, dh);
     }
 
     // ── Enemies ──────────────────────────────────────────────────────────────
