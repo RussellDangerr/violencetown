@@ -4,7 +4,7 @@
 // All text: dark brown on parchment for readability (not gold-on-dark)
 
 import { TILE_PX, VIEW_TILES, CANVAS_PX } from './data.js';
-import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES, PLAYER_SPRITE, PROP_SPRITES } from './sprites.js';
+import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES } from './sprites.js';
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
 import { currentCategory, currentLeaf, categoryKeys, leafEnabled, validItemSlots, LAYER } from './wheel-model.js'; // (combat-wheel rework)
 import {
@@ -705,6 +705,30 @@ export class Renderer {
                 ctx.fillStyle = 'rgba(0,0,0,0.35)';   // soft backing for readability over busy sprites
                 ctx.beginPath(); ctx.arc(faceCX, faceCY, faceR + 1.5, 0, Math.PI * 2); ctx.fill();
                 this._drawMoodFace(faceCX, faceCY, mood(e.disposition).face, faceR);
+            }
+
+            // Ambient emote balloon (Town Clock) — a transient Kenney Emote Pack
+            // speech balloon over the head, replacing the old grunt text: it pops
+            // in from the tail, holds, then floats up and fades. Drawn last so it
+            // sits above this NPC's other overhead UI.
+            if (e._emote != null) {
+                const col = EMOTE_SPRITES[e._emote];
+                const sheet = sprites?.emotes;
+                const age = now - (e._emoteStart || 0);
+                const life = e._emoteMs || 1800;
+                if (sheet?.loaded && col != null && age >= 0 && age < life) {
+                    const t    = age / life;
+                    const fade = t > 0.7 ? 1 - (t - 0.7) / 0.3 : 1;  // hold, fade the last 30%
+                    const pop  = age < 130 ? age / 130 : 1;          // quick inflate-in
+                    const rise = 4 * t;                              // gentle float up
+                    const sz   = 20 * pop;
+                    const ex   = px + TILE_PX / 2 - sz / 2;
+                    const ey   = (py - 6) - sz - rise;               // tail just above the head
+                    ctx.save();
+                    ctx.globalAlpha = Math.max(0, fade);
+                    sheet.drawFrame(ctx, col, 0, ex, ey, sz, sz);
+                    ctx.restore();
+                }
             }
         } else {
             // Corpse — gray tint overlay turns the sprite into a faded version of

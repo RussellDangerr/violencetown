@@ -95,6 +95,12 @@ export const SHEETS = {
     tinyDungeon:  { src: TINY_DUNGEON, frameW: 16, frameH: 16 },
     tinyTown:     { src: TINY_TOWN,    frameW: 16, frameH: 16 },
 
+    // Kenney Emote Pack (Pixel, Style 1) — 16x16 down-tail speech balloons for
+    // Town Clock ambient reactions + disposition faces. Horizontal strip packed
+    // by tools/gen_emote_sheet.py; column order = EMOTE_SPRITES below. Packed
+    // (no gutter), padding 0.
+    emotes:       { src: `${K}/emotes_style1.png`, frameW: 16, frameH: 16 },
+
     // Aliases for the two hardcoded renderer references:
     //   • renderer._drawPlayer reads `sprites.player` directly.
     //   • renderer._drawTiles uses `sprites.sewerTiles` as the no-`sheet`
@@ -225,6 +231,18 @@ export const PROP_SPRITES = {
     // tree. The player is occluded only when directly behind it (same column),
     // never when merely passing alongside. shadowRx/Ry size the trunk's pool.
     tree: { sheet: 'tinyTown', sx: 4 * 16, sy: 0, sw: 16, sh: 32, wTiles: 1, hTiles: 2, shadowRx: 12, shadowRy: 4.5 },
+};
+
+// ── Emote balloons (Kenney Emote Pack, Pixel Style 1) ───────────────────────
+// Column index into the `emotes` strip (game/assets-placeholder/kenney/
+// emotes_style1.png, packed by tools/gen_emote_sheet.py). Drawn above an NPC's
+// head as a transient speech balloon when an ambient reaction fires — the
+// placeholder grunt text ([Hrm.]/[Tch.]) made visual. KEEP IN SYNC with that
+// script's ORDER list.
+export const EMOTE_SPRITES = {
+    dots1: 0, dots2: 1, dots3: 2, question: 3, exclamation: 4, sleep: 5,
+    music: 6, anger: 7, heart: 8, idea: 9, laugh: 10, star: 11,
+    drop: 12, faceHappy: 13, faceAngry: 14, faceSad: 15, alert: 16, swirl: 17,
 };
 
 // ── Zone tile coords (Circus / Factory / Graveyard) ─────────────────────────
