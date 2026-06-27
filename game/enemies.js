@@ -192,24 +192,25 @@ export function resolveEnemyTurns(game) {
         // halves the damage at the attack site).
         enemy.tickBuffs();
 
-        // Bark check — independent of FSM/legacy path. Any enemy with a
-        // `barks` array emits one log line every `barkEveryTurns` turns
-        // from spawn, round-robin through the bark list. Barks are pure
-        // flavor in this ship; director coupling (barks affecting other
-        // NPCs' FSM state) is deferred to feature/king-director per
-        // plans/sewer-npc-skeleton.md.
-        const barkMsg = maybeBark(game, enemy);
-        if (barkMsg) messages.push(barkMsg);
+        // Cadenced barks/grunts moved to the world heartbeat (resolveAmbientTurns)
+        // so the world chatters on its own clock, not only on player turns (Town
+        // Clock ambient-life pass). Adjacency barks stay here — they're player-
+        // proximity events, naturally turn-based.
 
         // Adjacency-bark check — fires once on the rising edge of
         // player-adjacency. Used for non-hostile dialogue NPCs (Carrion).
         const adjMsg = maybeAdjacencyBark(game, enemy);
         if (adjMsg) messages.push(adjMsg);
 
-        // FSM-controlled entry?
+        // FSM-controlled entry. Ambient states (IDLE/WANDER/WORKING) are now
+        // driven by the world heartbeat (resolveAmbientTurns); the per-turn loop
+        // only resolves ALLIED NPCs, whose combat turn must stay in lockstep with
+        // the player. Other FSM NPCs fall through to the heartbeat.
         if (enemy.behavior) {
-            const npcMessages = tickNpcState(game, enemy);
-            for (const m of npcMessages) messages.push(m);
+            if (enemy._ally) {
+                const npcMessages = tickNpcState(game, enemy);
+                for (const m of npcMessages) messages.push(m);
+            }
             continue;
         }
 
@@ -261,6 +262,33 @@ export function resolveEnemyTurns(game) {
     return messages;
 }
 
+// ── Ambient grunts (Town Clock) ──────────────────────────────────────────────
+//
+// Placeholder vocalizations so EVERY character makes a little noise on the world
+// heartbeat — the world never reads as a frozen diorama. Uniform onomatopoeia for
+// now; authored `barks` data is left intact but dormant (real lines come later).
+// Separate per-NPC state (_gruntOffset/_gruntIndex) so it never collides with the
+// authored-bark machinery, and staggered offsets so a roomful doesn't grunt in
+// unison.
+const DEFAULT_GRUNTS = ['[Hrm.]', '[Mngh.]', '[Tch.]', '[Bah.]', '[Ugh.]', '[...]', '[Grr.]', '[Hmph.]', '[Pfft.]', '[Eh?]'];
+const GRUNT_EVERY = 22;   // world ticks between a character's grunts (~11s at 500ms)
+let _gruntStagger = 0;
+
+function maybeGrunt(game, enemy, clock) {
+    if (enemy._gruntOffset == null) {
+        // Stagger each character's phase so they don't all grunt on the same beat.
+        _gruntStagger = (_gruntStagger + 7) % GRUNT_EVERY;
+        enemy._gruntOffset = clock - _gruntStagger;
+        enemy._gruntIndex = enemy._gruntIndex || 0;
+        return null;
+    }
+    const elapsed = clock - enemy._gruntOffset;
+    if (elapsed <= 0 || elapsed % GRUNT_EVERY !== 0) return null;
+    const text = DEFAULT_GRUNTS[enemy._gruntIndex % DEFAULT_GRUNTS.length];
+    enemy._gruntIndex++;
+    return { text, sourceEnemy: enemy, category: 'bark' };
+}
+
 // ── Resolve ambient (heartbeat-driven) NPCs ──────────────────────────────────
 //
 // Town Clock (feature/town-clock): NPCs spawned with `ambient: true` are driven
@@ -274,15 +302,17 @@ export function resolveAmbientTurns(game) {
 
     for (const npc of game.enemies) {
         if (!npc.entity.isAlive()) continue;
-        if (!npc.ambient) continue;
+        if (npc.state === 'chasing') continue;   // engaged hostile = combat, not ambient
+        if (npc._ally) continue;                  // allies resolve on the player-turn loop
 
-        // Cadenced bark on the world clock (not player turns).
-        const barkMsg = maybeBark(game, npc, game.worldTick);
-        if (barkMsg) messages.push(barkMsg);
+        // Grunt on the world clock — every non-engaged character makes a little
+        // noise so the world never feels dead (placeholder onomatopoeia for now).
+        const gruntMsg = maybeGrunt(game, npc, game.worldTick);
+        if (gruntMsg) messages.push(gruntMsg);
 
-        // FSM step on the world clock. Ambient NPCs are expected to carry a
-        // `behavior` whitelist; guard so a misconfigured spawn stays inert
-        // rather than throwing.
+        // Ambient FSM step (IDLE/WANDER/WORKING) on the world clock. The behavior
+        // whitelist gates who actually moves — IDLE-only NPCs (vendors, blockers)
+        // stay put; WANDER/WORKING NPCs roam/labour while the player stands still.
         if (npc.behavior) {
             const npcMessages = tickNpcState(game, npc, game.worldTick);
             for (const m of npcMessages) messages.push(m);
