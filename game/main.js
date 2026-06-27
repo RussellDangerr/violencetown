@@ -10,7 +10,7 @@ import { DIR_NAMES, PLAYER_MAX_HP, PLAYER_MAX_MP, SLUDGE_DOT, INVENTORY_SIZE, MA
 import { ITEMS, resolveUse, resolveThrow, tickTempEquips } from './items.js';
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { attack, formatDamageNumber } from './combat.js';
-import { Enemy, resolveEnemyTurns } from './enemies.js';
+import { Enemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
 import { getGreedyStep, stepEntity } from './pathing.js'; // ally pathfinding; stepEntity = shove a character aside
 import { applyGive } from './give-action.js';
 import { escapeHtml, manhattan, clamp } from './utils.js';
@@ -59,6 +59,13 @@ const STATE = {
 // faster — a reprieve that scales with the threat. Tuning knob.
 const PIPE_JAM_INTEGRITY = 30;
 
+// Town Clock (feature/town-clock): the free-running world heartbeat period, in
+// ms. Ambient NPCs get one step opportunity per beat while the player is idle,
+// so the town lives without waiting for player input. Combat is unaffected — it
+// stays on the per-player-turn loop. ~500ms reads as alive but calm (faster than
+// OSRS's 0.6s tile step); tunable.
+const WORLD_TICK_MS = 500;
+
 // ── Directions ───────────────────────────────────────────────────────────────
 
 const DIRS = {
@@ -93,6 +100,7 @@ class Game {
         this.renderer = null;
         this.map      = null;
         this.turn     = 0;
+        this.worldTick = 0;   // Town Clock — free-running ambient world beat (see WORLD_TICK_MS)
 
         // Player
         this.playerX     = 0;
@@ -374,6 +382,18 @@ class Game {
                 this._render();
             }
         }, 250);
+
+        // World heartbeat — the Town Clock (feature/town-clock). Advances
+        // ambient NPCs on a free-running beat so the town lives while the player
+        // stands still. Gated to IDLE + not mid-player-slide (never collide with
+        // the player's move animation, pause during menus) and FROZEN during
+        // combat (M1) so a fight is the pristine turn-based loop with no ambient
+        // wander/chatter competing — the world pauses for you, only when it must.
+        setInterval(() => {
+            if (this.state === STATE.IDLE && !this._animating && !this._worldFrozen()) {
+                this._ambientTick();
+            }
+        }, WORLD_TICK_MS);
 
         this._log('[Violencetown loaded — Town hub ready]');
     }
@@ -2219,22 +2239,7 @@ class Game {
         // source enemy and a category — spoken lines float above the speaker;
         // strings fall through to the side log.
         const msgs = resolveEnemyTurns(this);
-        for (const m of msgs) {
-            if (typeof m === 'string') {
-                this._log(m);
-            } else if (m && (m.category === 'bark' || m.category === 'adjacency-bark' || m.category === 'spotted')) {
-                this._spawnOverheadDialogue(m.sourceEnemy.x, m.sourceEnemy.y, m.text, {
-                    sourceRef: m.sourceEnemy,   // groups per-speaker for the stack
-                });
-                if (m.category === 'adjacency-bark') {
-                    this.emitGameEvent('npc_adjacent', { id: m.sourceEnemy.id, type: m.sourceEnemy.type });
-                }
-            } else {
-                // Unknown tuple shape — fail safe to the log so nothing gets
-                // dropped silently if a future category lands without a route.
-                this._log(m.text ?? String(m));
-            }
-        }
+        this._routeWorldMessages(msgs);
         // Enemies/NPCs may have just begun a one-tile slide (stepEntity). Kick
         // the render loop so those glides animate even if the player took a
         // single step and stopped. Idempotent + self-stopping via
@@ -2296,6 +2301,61 @@ class Game {
 
         this._render();
         this.autosave();
+    }
+
+    // Route world-advance messages: plain strings → side log; spoken tuples
+    // (barks, adjacency-barks, "spotted") → overhead dialogue above the speaker.
+    // Shared by _advanceWorld (combat-path enemies) and _ambientTick (heartbeat-
+    // driven ambient NPCs) so both speak through the same pipe.
+    _routeWorldMessages(msgs) {
+        for (const m of msgs) {
+            if (typeof m === 'string') {
+                this._log(m);
+            } else if (m && (m.category === 'bark' || m.category === 'adjacency-bark' || m.category === 'spotted')) {
+                this._spawnOverheadDialogue(m.sourceEnemy.x, m.sourceEnemy.y, m.text, {
+                    sourceRef: m.sourceEnemy,   // groups per-speaker for the stack
+                });
+                if (m.category === 'adjacency-bark') {
+                    this.emitGameEvent('npc_adjacent', { id: m.sourceEnemy.id, type: m.sourceEnemy.type });
+                }
+            } else {
+                // Unknown tuple shape — fail safe to the log so nothing gets
+                // dropped silently if a future category lands without a route.
+                this._log(m.text ?? String(m));
+            }
+        }
+    }
+
+    // Town Clock — combat freeze (M1). The world heartbeat pauses while any
+    // hostile is actively engaged: a non-ambient enemy in the legacy 'chasing'
+    // state (set by resolveEnemyTurns on aggro / line-of-sight). During a fight
+    // the game is the pristine turn-based loop with no ambient wander/chatter;
+    // ambient townsfolk never count. The RUNNING↔FROZEN "mode" is derived here,
+    // not stored, so it can never drift out of sync with the actual threat state.
+    _worldFrozen() {
+        for (const e of this.enemies) {
+            if (e.ambient) continue;
+            if (e.state === 'chasing' && e.entity.isAlive()) return true;
+        }
+        return false;
+    }
+
+    // ── Ambient world heartbeat (Town Clock) ─────────────────────────────────
+    //
+    // Fired on the free-running world tick (WORLD_TICK_MS) while the player is
+    // idle, so ambient NPCs (spawned with `ambient: true`) wander and chatter
+    // even when the player stands still. Runs on game.worldTick — it never
+    // increments game.turn and never ticks combat buffs, so combat clarity is
+    // untouched. The eureka made concrete: the world is paused for you only
+    // during a fight, never waiting on you in town. resolveEnemyTurns skips
+    // ambient NPCs, so this is their sole driver.
+    _ambientTick() {
+        this.worldTick++;
+        const msgs = resolveAmbientTurns(this);
+        this._routeWorldMessages(msgs);
+        // Kick the render loop so any wander-slides / barks started this beat
+        // animate smoothly. Idempotent + self-stopping via _hasActiveEffects.
+        this._ensureParticleLoop();
     }
 
     // ── Inventory ────────────────────────────────────────────────────────────

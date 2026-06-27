@@ -41,7 +41,7 @@ export const STATE = {
 // Returns an array of log message strings to surface to the player. Called
 // from enemies.js::resolveEnemyTurns when the NPC has a `behavior` field.
 
-export function tickNpcState(game, npc) {
+export function tickNpcState(game, npc, clock = game.turn) {
     if (!npc.behavior) return [];
 
     // Lazy initialization — pick a starting state from the whitelist.
@@ -56,7 +56,7 @@ export function tickNpcState(game, npc) {
         } else {
             npc.fsmState = STATE.IDLE; // empty whitelist defaults to permanent IDLE
         }
-        npc._lastWanderTurn = game.turn;
+        npc._lastWanderTurn = clock;
     }
 
     const messages = [];
@@ -75,11 +75,11 @@ export function tickNpcState(game, npc) {
             // Priority 2: WANDER if the cadence has elapsed and the whitelist
             // allows. Cadence throttle applies to wandering only.
             if (npc.behavior.includes(STATE.WANDER)) {
-                const turnsSince = game.turn - (npc._lastWanderTurn ?? 0);
+                const turnsSince = clock - (npc._lastWanderTurn ?? 0);
                 const cadence = npc.wanderEveryTurns ?? 4;
                 if (turnsSince >= cadence) {
                     npc.fsmState = STATE.WANDER;
-                    npc._lastWanderTurn = game.turn;
+                    npc._lastWanderTurn = clock;
                 }
             }
             break;
