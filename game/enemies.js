@@ -56,6 +56,11 @@ export class Enemy {
         // trade.js keyed off this NPC's `disposition`.
         vendor = null,
         stock = null,
+        // Town Clock (feature/town-clock): heartbeat-driven ambient NPC. When
+        // true, this NPC is advanced by the free-running world tick
+        // (game.worldTick) via resolveAmbientTurns instead of the per-player-turn
+        // resolveEnemyTurns, so it wanders/chatters while the player stands still.
+        ambient = false,
     }) {
         this.id         = id;
         this.type       = type;
@@ -99,6 +104,7 @@ export class Enemy {
         this.tag           = tag;
         this.vendor        = vendor;
         this.stock         = stock;
+        this.ambient       = ambient;
 
         // Debuffs / buffs — symmetric with Game.buffs[] on the player side.
         // Used by Poke (applies Blind), Poison (DoT, future), Stun (skip
@@ -169,6 +175,11 @@ export function resolveEnemyTurns(game) {
 
     for (const enemy of game.enemies) {
         if (!enemy.entity.isAlive()) continue;
+
+        // Town Clock (feature/town-clock): ambient NPCs are driven by the world
+        // heartbeat (resolveAmbientTurns), not the per-player-turn loop. Skip
+        // them here so they never double-advance, tick combat buffs, or burn a turn.
+        if (enemy.ambient) continue;
 
         // (zone pursuit) Just came through a door after the player — spend one
         // turn "emerging" (inert, but visible in the threshold) so the player
@@ -250,6 +261,37 @@ export function resolveEnemyTurns(game) {
     return messages;
 }
 
+// ── Resolve ambient (heartbeat-driven) NPCs ──────────────────────────────────
+//
+// Town Clock (feature/town-clock): NPCs spawned with `ambient: true` are driven
+// by the free-running world heartbeat (game.worldTick) instead of the per-
+// player-turn loop, so the town keeps living while the player stands still.
+// They never tick combat buffs and never advance game.turn — combat clarity is
+// untouched. resolveEnemyTurns skips ambient NPCs, so this is their sole driver.
+// Returns the same message shape (bark tuples / FSM strings) as resolveEnemyTurns.
+export function resolveAmbientTurns(game) {
+    const messages = [];
+
+    for (const npc of game.enemies) {
+        if (!npc.entity.isAlive()) continue;
+        if (!npc.ambient) continue;
+
+        // Cadenced bark on the world clock (not player turns).
+        const barkMsg = maybeBark(game, npc, game.worldTick);
+        if (barkMsg) messages.push(barkMsg);
+
+        // FSM step on the world clock. Ambient NPCs are expected to carry a
+        // `behavior` whitelist; guard so a misconfigured spawn stays inert
+        // rather than throwing.
+        if (npc.behavior) {
+            const npcMessages = tickNpcState(game, npc, game.worldTick);
+            for (const m of npcMessages) messages.push(m);
+        }
+    }
+
+    return messages;
+}
+
 // ── Bark resolution ─────────────────────────────────────────────────────────
 //
 // Returns the next bark log-line for this enemy if the cadence fires this
@@ -265,18 +307,19 @@ export function resolveEnemyTurns(game) {
 // playtest reveals this is too chatty, a polish-pass can add proximity
 // gating.
 
-function maybeBark(game, enemy) {
+function maybeBark(game, enemy, clock = game.turn) {
     if (!enemy.barks || enemy.barks.length === 0) return null;
 
-    // Lazy offset init: first tick records the spawn-turn so cadence starts
-    // counting from this enemy's first appearance, not from world turn 0.
+    // Lazy offset init: first tick records the spawn-clock so cadence starts
+    // counting from this enemy's first appearance, not from clock 0. `clock` is
+    // game.turn for combat-path enemies, game.worldTick for ambient NPCs.
     if (enemy._barkOffset == null) {
-        enemy._barkOffset = game.turn;
+        enemy._barkOffset = clock;
         return null; // don't bark on the spawn tick itself
     }
 
     const cadence = enemy.barkEveryTurns ?? 8;
-    const elapsed = game.turn - enemy._barkOffset;
+    const elapsed = clock - enemy._barkOffset;
     if (elapsed <= 0 || elapsed % cadence !== 0) return null;
 
     const idx = enemy._barkIndex % enemy.barks.length;

@@ -195,6 +195,11 @@ export const ENEMY_SPRITES = {
     'Boss':    { sheet: 'tinyDungeon', col: 0, row: 8, static: true }, // knight helmet — Borgir employer
     'Wererat': { sheet: 'tinyDungeon', col: 3, row: 7, static: true }, // horned viking — hulking were-rat brute
 
+    // Town — ambient Violencians (Town Clock / feature/town-clock). M0 placeholder
+    // reusing a Tiny Dungeon humanoid cell; revisit with the sprite-picker for a
+    // proper civilian read (Tiny Town has townsfolk art).
+    'Violencian': { sheet: 'tinyDungeon', col: 0, row: 7, static: true }, // purple-robed figure — generic citizen
+
     // Zone-exclusive enemies (compromise picks — no clown/skeleton art exists):
     'Greedy Green':     { sheet: 'tinyDungeon', col: 4, row: 9,  static: true }, // green-bandana goblin
     'Carnival Clown':   { sheet: 'tinyDungeon', col: 0, row: 7,  static: true }, // purple mage — most colorful humanoid

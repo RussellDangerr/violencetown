@@ -569,15 +569,20 @@ export class Renderer {
                     ctx.fillRect(px + 4, py + 4, TILE_PX - 8, TILE_PX - 8);
                 }
 
-                // HP bar above living enemy (with border)
+                // HP bar above living enemy (with border). Suppressed for ambient
+                // townsfolk (Town Clock) — a floating health bar over a peaceful
+                // Violencian reads as a combat target. bx/by stay in scope for the
+                // buff badges below.
                 const frac = e.entity.hp / e.entity.maxHp;
                 const bx = px + 4, by = py - 6, bw = TILE_PX - 8, bh = 5;
-                ctx.fillStyle = '#000000cc';
-                ctx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
-                ctx.fillStyle = UI.hpBg;
-                ctx.fillRect(bx, by, bw, bh);
-                ctx.fillStyle = UI.hpRed;
-                ctx.fillRect(bx, by, bw * frac, bh);
+                if (!e.ambient) {
+                    ctx.fillStyle = '#000000cc';
+                    ctx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
+                    ctx.fillStyle = UI.hpBg;
+                    ctx.fillRect(bx, by, bw, bh);
+                    ctx.fillStyle = UI.hpRed;
+                    ctx.fillRect(bx, by, bw * frac, bh);
+                }
 
                 // Debuff / buff badges — one-letter colored markers stacked
                 // horizontally above the HP bar. Buffs (positive) show in
