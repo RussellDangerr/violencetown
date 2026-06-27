@@ -885,7 +885,7 @@ class Game {
             if (dir) {
                 e.preventDefault();
                 this._noteHeld(e.code);
-                this._beginMoveOrTurn(dir, e.code);
+                this._beginMoveOrTurn(dir);
                 return;
             }
 
@@ -1736,7 +1736,7 @@ class Game {
     // A direction press from the IDLE state. From a standstill, a tap toward a
     // NEW facing just pivots (free — no turn cost); holding past _TURN_MS
     // commits to walking. If already facing that way (or mid-walk), step now.
-    _beginMoveOrTurn(dir, code) {
+    _beginMoveOrTurn(dir) {
         this._clearTurnTimer();
         const standing = !this._animating;
         if (standing && this.facing !== this._faceOf(dir)) {
@@ -1746,10 +1746,16 @@ class Game {
             this._turnTimer = setTimeout(() => {
                 this._turnTimer = null;
                 this._pendingWalkDir = null;
-                // Still holding this exact key and still idle → walk.
+                // Re-poll the LIVE held-key set rather than trusting the key that
+                // armed this timer. During the 70ms window the player may have
+                // pressed (and released) a second direction; if ANY direction is
+                // still physically held, commit to walking it — most-recent wins.
+                // (The old `top === code` guard dropped the walk when the arming
+                // key was released but another stayed held: the "game ignored me"
+                // feel. See plans/movement-feel.md.)
                 const top = this._heldDirKeys[this._heldDirKeys.length - 1];
-                if (top === code && this.state === STATE.IDLE && !this._animating) {
-                    this._doMove(dir);
+                if (top && this.state === STATE.IDLE && !this._animating) {
+                    this._doMove(DIRS[top]);
                 }
             }, this._TURN_MS);
         } else {
