@@ -385,10 +385,12 @@ class Game {
 
         // World heartbeat — the Town Clock (feature/town-clock). Advances
         // ambient NPCs on a free-running beat so the town lives while the player
-        // stands still. Gated to IDLE + not mid-player-slide so it never collides
-        // with the player's own move animation and pauses during menus/combat.
+        // stands still. Gated to IDLE + not mid-player-slide (never collide with
+        // the player's move animation, pause during menus) and FROZEN during
+        // combat (M1) so a fight is the pristine turn-based loop with no ambient
+        // wander/chatter competing — the world pauses for you, only when it must.
         setInterval(() => {
-            if (this.state === STATE.IDLE && !this._animating) {
+            if (this.state === STATE.IDLE && !this._animating && !this._worldFrozen()) {
                 this._ambientTick();
             }
         }, WORLD_TICK_MS);
@@ -2322,6 +2324,20 @@ class Game {
                 this._log(m.text ?? String(m));
             }
         }
+    }
+
+    // Town Clock — combat freeze (M1). The world heartbeat pauses while any
+    // hostile is actively engaged: a non-ambient enemy in the legacy 'chasing'
+    // state (set by resolveEnemyTurns on aggro / line-of-sight). During a fight
+    // the game is the pristine turn-based loop with no ambient wander/chatter;
+    // ambient townsfolk never count. The RUNNING↔FROZEN "mode" is derived here,
+    // not stored, so it can never drift out of sync with the actual threat state.
+    _worldFrozen() {
+        for (const e of this.enemies) {
+            if (e.ambient) continue;
+            if (e.state === 'chasing' && e.entity.isAlive()) return true;
+        }
+        return false;
     }
 
     // ── Ambient world heartbeat (Town Clock) ─────────────────────────────────
