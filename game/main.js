@@ -66,6 +66,16 @@ const PIPE_JAM_INTEGRITY = 30;
 // OSRS's 0.6s tile step); tunable.
 const WORLD_TICK_MS = 500;
 
+// Town Clock day/night cycle. The overworld eases day → dusk → night → dawn on
+// its own clock, driving the lighting grade (renderer._drawLighting). DAY_LENGTH_MS
+// is a full round trip; the cosine bell below keeps most of it daytime with a
+// dusk/night/dawn stretch around "midnight." NIGHT_MAX < 1 so deep night stays a
+// cool blue rather than pitch black (the player aura + lamps keep it readable).
+// All tunable; set DAY_LENGTH_MS huge (or _nightLevel by hand) to effectively
+// freeze the cycle.
+const DAY_LENGTH_MS = 5 * 60 * 1000;  // 5 min per full day↔night↔day
+const NIGHT_MAX     = 0.85;
+
 // ── Directions ───────────────────────────────────────────────────────────────
 
 const DIRS = {
@@ -102,6 +112,7 @@ class Game {
         this.turn     = 0;
         this.worldTick = 0;   // Town Clock — free-running ambient world beat (see WORLD_TICK_MS)
         this._nightLevel = 0; // Town Clock day/night — 0 = full day (lighting off), 1 = deep night
+        this._dayClockMs = 0; // accumulated overworld time driving _nightLevel (see _advanceDayClock)
 
         // Player
         this.playerX     = 0;
@@ -391,6 +402,13 @@ class Game {
         // combat (M1) so a fight is the pristine turn-based loop with no ambient
         // wander/chatter competing — the world pauses for you, only when it must.
         setInterval(() => {
+            // Day/night eases on the world clock whenever the overworld is live —
+            // including while the player walks — but pauses on the splash and
+            // during combat (frozen), consistent with the Town Clock philosophy.
+            if (this.state !== STATE.SPLASH && !this._worldFrozen()) {
+                this._advanceDayClock();
+            }
+            // Ambient NPC beat — gated to a settled idle frame (M0/M1).
             if (this.state === STATE.IDLE && !this._animating && !this._worldFrozen()) {
                 this._ambientTick();
             }
@@ -2357,6 +2375,18 @@ class Game {
         // Kick the render loop so any wander-slides / barks started this beat
         // animate smoothly. Idempotent + self-stopping via _hasActiveEffects.
         this._ensureParticleLoop();
+    }
+
+    // Town Clock day/night — advance the overworld day clock one beat and derive
+    // the lighting grade's _nightLevel. A cosine bell peaks at "midnight" and the
+    // (raw - 0.6)/0.4 lift keeps most of the cycle as full day, with a smooth
+    // dusk → night → dawn stretch in between. The idle re-render / rAF loops pick
+    // up the new level, so the light shifts even while the player stands still.
+    _advanceDayClock() {
+        this._dayClockMs = (this._dayClockMs + WORLD_TICK_MS) % DAY_LENGTH_MS;
+        const p   = this._dayClockMs / DAY_LENGTH_MS;        // 0..1 phase of the day
+        const raw = (1 - Math.cos(p * 2 * Math.PI)) / 2;     // 0 → 1 → 0 bell, peak at midnight
+        this._nightLevel = Math.max(0, (raw - 0.6) / 0.4) * NIGHT_MAX;
     }
 
     // ── Inventory ────────────────────────────────────────────────────────────
