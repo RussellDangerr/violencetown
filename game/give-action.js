@@ -97,6 +97,22 @@ export function applyGive(item, recipient) {
     };
 }
 
+// ── applyDispositionDelta ───────────────────────────────────────────────────
+//
+// Dialogue-side disposition shift: nudge `recipient`'s disposition by a flat
+// `delta` (a conversation choice, not a gift), clamped to [-100, 100]. Fires
+// the same flip-to-ally threshold logic as applyGive when crossed upward.
+// Returns { newDisposition, flipped }.
+
+export function applyDispositionDelta(recipient, delta) {
+    const current = recipient.disposition ?? 0;
+    recipient.disposition = Math.max(-100, Math.min(100, current + (delta || 0)));
+    const threshold = recipient.flipThreshold ?? 30;
+    const flipped = recipient.disposition >= threshold && !recipient._wasFlipped;
+    if (flipped) { recipient._wasFlipped = true; applyFlip(recipient); }
+    return { newDisposition: recipient.disposition, flipped };
+}
+
 // ── applyFlip ───────────────────────────────────────────────────────────────
 //
 // Dispatches on the recipient's `onFlip` value. Each onFlip mode is a

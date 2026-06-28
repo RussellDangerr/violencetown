@@ -12,7 +12,8 @@ import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball
 import { attack, formatDamageNumber } from './combat.js';
 import { Enemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
 import { getGreedyStep, stepEntity } from './pathing.js'; // ally pathfinding; stepEntity = shove a character aside
-import { applyGive } from './give-action.js';
+import { applyGive, applyDispositionDelta } from './give-action.js';
+import { getDialogue } from './dialogue.js';
 import { escapeHtml, manhattan, clamp } from './utils.js';
 import { RNG } from './rng.js';
 import { hasSave, readSaveRaw, writeSave, loadInto, clearSave } from './save.js';
@@ -52,6 +53,7 @@ const STATE = {
     ENDING:          'ending',          // End of Chapter One — main-quest outro + credits (fix/critical-path)
     LOG_MODAL:       'log_modal',       // [L] — full scrollable message history
     TRADE:           'trade',           // (trade slice 1) Puck's shop window — buy/sell/bribe
+    DIALOGUE:        'dialogue',        // (Step 4) disposition dialogue with an NPC
 };
 
 // (zone pursuit) A wedged door's starting integrity. Trapped pursuers pound it
@@ -94,6 +96,7 @@ const WEAPONS = {
 };
 
 const SLUDGE_DURATION = 3;
+const DIALOGUE_HOSTILE_AT = -40;   // (Step 4) disposition at/below which a conversation turns into a fight
 
 // ── Radial menu (Omnitrix-style combat wheel) ───────────────────────────────
 
@@ -200,6 +203,9 @@ class Game {
         this._LOG_HISTORY_MAX = 300;
         this._logModalScroll = 0;
         this._tradeNpc = null;           // (trade slice 1) the vendor whose shop is open, or null
+        this._dialogueNpc = null;        // (Step 4) the NPC we're talking to, or null
+        this._dialogueReply = '';        // the NPC's current line shown in the dialogue modal
+        this._dialogueCursor = 0;        // selected choice row (keyboard)
         this._tradeSell = null;          // (trade slice 1) snapshot of the sellable bag while shopping
 
         // Inventory: 10 stackable slots, each { itemDef, count } or null
@@ -871,6 +877,25 @@ class Game {
                 return;
             }
 
+            // ── DIALOGUE: pick a line (Step 4) ──
+            // ↑/↓ (or W/S) move the cursor over the choices + Leave; Space/Enter
+            // picks; number keys jump straight to a choice; E/Esc leaves.
+            if (this.state === STATE.DIALOGUE) {
+                e.preventDefault();
+                const choices = this._dialogueChoices();
+                const rows = choices.length + 1; // +1 for the Leave row
+                if (e.code === 'KeyE' || e.code === 'Escape') { this._closeDialogue(); return; }
+                if (e.code === 'ArrowUp'   || e.code === 'KeyW') { this._dialogueCursor = (this._dialogueCursor - 1 + rows) % rows; audio.playSfx('menu-tick'); this._render(); return; }
+                if (e.code === 'ArrowDown' || e.code === 'KeyS') { this._dialogueCursor = (this._dialogueCursor + 1) % rows; audio.playSfx('menu-tick'); this._render(); return; }
+                if (e.code === 'Space' || e.code === 'Enter') {
+                    if (this._dialogueCursor >= choices.length) { this._closeDialogue(); return; } // Leave row
+                    this._pickDialogueChoice(choices[this._dialogueCursor]); return;
+                }
+                const n = this._digitToSlot(e.code);
+                if (n >= 0 && n < choices.length) { this._dialogueCursor = n; this._pickDialogueChoice(choices[n]); return; }
+                return;
+            }
+
             // ── ENDING (End of Chapter One): N / Space / Enter restarts ──
             // (fix/critical-path) Matches the on-screen "PRESS N TO PLAY AGAIN"
             // prompt; Space/Enter accepted too since the player's hands are
@@ -929,6 +954,8 @@ class Game {
                 e.preventDefault();
                 const vendor = this._findAdjacentVendor();
                 if (vendor) { this._openTrade(vendor); return; }
+                const talker = this._findAdjacentDialogueNpc();
+                if (talker) { this._openDialogue(talker); return; }
                 doExamine(this); this._render(); return;
             }
 
@@ -1376,6 +1403,7 @@ class Game {
 
         // Trade window is fully modal too — route taps to the shop.
         if (this.state === STATE.TRADE) { this._tapTrade(pt); return; }
+        if (this.state === STATE.DIALOGUE) { return; }   // (Step 4) dialogue is keyboard-driven; ignore stray taps
 
         // Priority order is by modality: the most exclusive overlay wins. A
         // tap while the radial menu is open should drive the radial menu,
@@ -2708,6 +2736,7 @@ class Game {
         target.fsmState = null;
         target.state = 'chasing';                    // aggro now, skip the LOS re-acquire beat
         if (target.vendor) target.vendor = false;    // a vendor you struck won't keep shop
+        if (target.ambient) target.ambient = false;  // a provoked townsperson fights for real, not as ambient
         if (typeof target.disposition === 'number') target.disposition = Math.min(target.disposition, -50);
         this._log(`[The ${target.type || target.entity.name} turns on you!]`, 'combat');
     }
@@ -3183,6 +3212,78 @@ class Game {
         this.state = STATE.IDLE;
         this._tradeNpc = null;
         this._tradeSell = null;
+        this._render();
+    }
+
+    // ── Dialogue (Step 4 — disposition dialogue) ─────────────────────────────
+
+    // The faced / cardinal-adjacent NPC that has a dialogue, or null. Mirrors
+    // _findAdjacentVendor (faced tile wins, else any adjacent one), skipping
+    // current allies.
+    _findAdjacentDialogueNpc() {
+        const FACE = { up: { dx: 0, dy: -1 }, down: { dx: 0, dy: 1 }, left: { dx: -1, dy: 0 }, right: { dx: 1, dy: 0 } };
+        const fd = FACE[this.facing] || { dx: 0, dy: 0 };
+        const has = (e) => e && e.dialogueId && e.entity.isAlive() && !e._ally;
+        const faced = this.enemies.find(e => has(e) && e.x === this.playerX + fd.dx && e.y === this.playerY + fd.dy);
+        if (faced) return faced;
+        return this.enemies.find(e => has(e) && manhattan(e.x, e.y, this.playerX, this.playerY) === 1) || null;
+    }
+
+    // Open a conversation with `npc`. A pure menu — the world does NOT advance
+    // (talking is paused, like trade / the log modal). Choices move the same
+    // disposition the give-engine and the over-head mood-face read.
+    _openDialogue(npc) {
+        if (this.state !== STATE.IDLE) return;
+        const d = npc && getDialogue(npc.dialogueId);
+        if (!d) return;
+        this._dialogueNpc = npc;
+        this._dialogueReply = d.greeting || '';
+        this._dialogueCursor = 0;
+        this.state = STATE.DIALOGUE;
+        audio.playSfx('menu-open');
+        this._render();
+    }
+
+    _closeDialogue() {
+        if (this.state !== STATE.DIALOGUE) return;
+        this.state = STATE.IDLE;
+        this._dialogueNpc = null;
+        this._dialogueReply = '';
+        this._render();
+    }
+
+    // The choices on offer: every repeatable one, plus any `once` choice this
+    // NPC hasn't spent yet (spent ids live on npc._dialogueDone).
+    _dialogueChoices() {
+        const npc = this._dialogueNpc;
+        const d = npc && getDialogue(npc.dialogueId);
+        if (!d) return [];
+        const done = npc._dialogueDone || (npc._dialogueDone = new Set());
+        return d.choices.filter(c => c.repeatable || !done.has(c.id));
+    }
+
+    // Resolve a chosen line: pay any GP cost, shift disposition (visible on the
+    // mood-face), spend one-time choices, show the reply — and if the mood
+    // craters, the speaker stops talking and turns on you (talk-down's failure).
+    _pickDialogueChoice(choice) {
+        const npc = this._dialogueNpc;
+        if (!npc || !choice) return;
+        if (choice.cost && (this.gold ?? 0) < choice.cost) {
+            this._dialogueReply = `(You can't cover the ${choice.cost} GP.)`;
+            audio.playSfx('bump-wall'); this._render(); return;
+        }
+        if (choice.cost) this.gold -= choice.cost;
+        if (choice.delta) applyDispositionDelta(npc, choice.delta);
+        if (choice.once) (npc._dialogueDone || (npc._dialogueDone = new Set())).add(choice.id);
+        this._dialogueReply = choice.reply || '"..."';
+        audio.playSfx((choice.delta ?? 0) < 0 ? 'bump-wall' : 'menu-confirm');
+        if ((npc.disposition ?? 0) <= DIALOGUE_HOSTILE_AT) {
+            this._log(`[${npc.name || npc.type} has heard enough.]`, 'combat');
+            this._closeDialogue();
+            this._onEntityHarmed(npc, { kind: 'insult' });
+            return;
+        }
+        this._dialogueCursor = Math.min(this._dialogueCursor, this._dialogueChoices().length);
         this._render();
     }
 

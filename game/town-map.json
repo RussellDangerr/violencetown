@@ -44,7 +44,7 @@
         {"x": 28, "y": 22, "radius": 4.0, "r": 255, "g": 188, "b": 110}
     ],
     "enemies": [
-        {"id": "townie-w", "type": "Violencian", "x": 8, "y": 12, "hp": 10, "damage": 0, "sightRange": 0, "ambient": true, "behavior": ["IDLE", "WANDER"], "wanderRadius": 6, "wanderEveryTurns": 2, "barks": ["[Hrm.]", "[Mngh...]", "[...]"], "barkEveryTurns": 5},
+        {"id": "townie-w", "type": "Violencian", "name": "Bartho", "dialogueId": "bartho", "disposition": 0, "x": 8, "y": 12, "hp": 10, "damage": 0, "sightRange": 0, "ambient": true, "behavior": ["IDLE"], "wanderRadius": 0, "wanderEveryTurns": 2, "barks": ["[Hrm.]", "[Mngh...]", "[...]"], "barkEveryTurns": 5},
         {"id": "townie-e", "type": "Violencian", "x": 24, "y": 14, "hp": 10, "damage": 0, "sightRange": 0, "ambient": true, "behavior": ["IDLE", "WANDER"], "wanderRadius": 6, "wanderEveryTurns": 3, "barks": ["[Tch.]", "[Bah.]", "[Hmph.]"], "barkEveryTurns": 7},
         {"id": "townie-s", "type": "Violencian", "x": 16, "y": 20, "hp": 10, "damage": 0, "sightRange": 0, "ambient": true, "behavior": ["IDLE", "WANDER"], "wanderRadius": 4, "wanderEveryTurns": 4, "barks": ["[Ugh.]", "[Grr.]", "[...?]"], "barkEveryTurns": 6}
     ],
