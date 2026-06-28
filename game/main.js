@@ -31,6 +31,7 @@ import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (n
 import {
     createWheelState, currentLeaf, currentCategory, categoryKeys, cycle, forward, back,
     leafEnabled, compose, autoAimTile, validItemSlots, LAYER, needsFriendlyConfirm, aimRange,
+    affectedTiles,
 } from './wheel-model.js'; // (combat-wheel rework) pure verb-tree model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
 
@@ -128,9 +129,9 @@ class Game {
         // via DEFAULT_MP in combat.js.
         this.playerMp    = PLAYER_MAX_MP;
         this.playerMaxMp = PLAYER_MAX_MP;
-        // Known spells for FIGHT → Magic. Seeded with the debug Fireball so the
-        // Magic verb is castable; the real spell-learning system is later work.
-        this.knownSpells = ['fireball'];
+        // Known spells for FIGHT → Magic, picked from the spell ring. The real
+        // spell-learning system is later work — for now you know both.
+        this.knownSpells = ['fireball', 'coneOfCold'];
         this.extraMoves  = 0; // future: Goo, abilities, etc.
         this.facing      = 'down'; // 'down' | 'left' | 'right' | 'up'
 
@@ -2165,6 +2166,21 @@ class Game {
             ArrowLeft: [-1, 0], KeyA: [-1, 0], ArrowRight: [1, 0], KeyD: [1, 0],
         }[code];
         if (mv) {
+            // SNAPPY: for range-1 verbs (melee/cleave/run/trade) a direction is the
+            // whole gesture — point that way and it commits (firing, or drilling to
+            // the Plus-Ultra confirm if it'd clip a friendly). No separate Space.
+            // Press Space alone to commit the pre-seeded nearest target instead.
+            if (leaf.aimType === 'adjacent') {
+                w.reticle = { x: this.playerX + mv[0], y: this.playerY + mv[1] };
+                // Cleave RE-AIMS on a direction (so you see the arc + highlighted
+                // enemies) and waits for Space; single-target adjacent verbs
+                // (melee/run/trade) commit on the direction press itself.
+                if (leaf.resolver === 'cleaveAttack') { audio.playSfx('menu-tick'); this._render(); return; }
+                const r = forward(w, this);
+                if (r === 'fire') this._fireWheel(); else { audio.playSfx('menu-tick'); this._render(); }
+                return;
+            }
+            // Ranged / Throw / Magic: nudge the reticle for precise placement.
             if (!w.reticle) w.reticle = autoAimTile(leaf, this) || { x: this.playerX, y: this.playerY };
             const nx = w.reticle.x + mv[0], ny = w.reticle.y + mv[1];
             if (cheb(this.playerX, this.playerY, nx, ny) <= range && this.map.isWalkable(nx, ny)) {
@@ -2225,6 +2241,7 @@ class Game {
         const subs = currentCategory(this.wheel).subverbs;
         this.wheel.subVerbIndex = Math.max(0, subs.findIndex(s => s.key === lf.subKey));
         this.wheel.itemIndex = lf.itemSlot >= 0 ? lf.itemSlot : this.wheel.itemIndex;
+        if (lf.spellId) { const si = (this.knownSpells || []).indexOf(lf.spellId); if (si >= 0) this.wheel.spellIndex = si; }
         this.wheel.reticle = lf.aimTile || autoAimTile(currentLeaf(this.wheel), this);
         // Re-clamp the restored reticle to the CURRENT player position. lastFired
         // stores the raw tile; the player may have walked since, leaving it out of
@@ -2253,10 +2270,22 @@ class Game {
     }
 
     // Compose the wheel selection and route to the existing resolvers.
+    // Apply `damage` to every alive entity standing on any of `tiles`. Each hit
+    // routes through combatAttack (typed splat, death, reaction bus). Returns the
+    // count struck. Hits friendlies too — the Plus-Ultra confirm gated that.
+    _aoeStrike(tiles, damage, opts = {}) {
+        let hit = 0;
+        for (const t of tiles) {
+            const e = this.enemies.find(en => en.entity.isAlive() && en.x === t.x && en.y === t.y);
+            if (e) { this.combatAttack(e, damage, opts); hit++; }
+        }
+        return hit;
+    }
+
     _fireWheel() {
         const w = this.wheel;
-        const { leaf, itemSlot, aimTile } = compose(w);
-        w.lastFired = { catKey: categoryKeys()[w.categoryIndex], subKey: leaf.key, itemSlot, aimTile };
+        const { leaf, itemSlot, spellId, aimTile } = compose(w, this);
+        w.lastFired = { catKey: categoryKeys()[w.categoryIndex], subKey: leaf.key, itemSlot, spellId, aimTile };
         audio.playSfx('menu-confirm');
         switch (leaf.resolver) {
             case 'combatAttack': {
@@ -2265,22 +2294,32 @@ class Game {
                 else { this._log('[Nothing to hit there]'); }
                 break;
             }
+            case 'cleaveAttack': {
+                // Fixed 3-tile frontal arc, 2/3 weapon damage to everything in it.
+                const dmg = Math.max(1, Math.round(this.equipment.weapon.damage * 2 / 3));
+                const hit = this._aoeStrike(affectedTiles(w, this), dmg);
+                if (hit) { this._log(`[Cleave! ${hit} caught.]`, 'combat'); this._advanceWorld(); }
+                else this._log('[Cleave hits only air]');
+                break;
+            }
+            case 'spinAttack': {
+                // Sweep all 8 tiles, 2/5 weapon damage to everything around you.
+                const dmg = Math.max(1, Math.round(this.equipment.weapon.damage * 2 / 5));
+                const hit = this._aoeStrike(affectedTiles(w, this), dmg);
+                if (hit) { this._log(`[Spin! ${hit} caught.]`, 'combat'); this._advanceWorld(); }
+                else this._log('[You spin, hitting nothing]');
+                break;
+            }
             case 'castSpell': {
-                // Single known spell for now (debug Fireball); a spell-selection
-                // layer comes with the real Magic system. combatAttack carries the
-                // typed splat, death, and reaction bus; Plus Ultra already gated a
-                // friendly target upstream. MP is spent on cast (hit or fizzle).
-                const spell = SPELLS[(this.knownSpells || [])[0]];
+                // The selected spell's AoE (3×3 burst or cardinal cone) hits every
+                // entity in it for full damage. Plus Ultra already gated a friendly.
+                const spell = SPELLS[spellId] || SPELLS[(this.knownSpells || [])[0]];
                 if (!spell) { this._log("[You don't know any spells.]"); break; }
                 if ((this.playerMp || 0) < spell.mpCost) { this._log(`[Not enough MP — ${spell.name} needs ${spell.mpCost}.]`); break; }
-                const target = aimTile && this.enemies.find(e => e.entity.isAlive() && e.x === aimTile.x && e.y === aimTile.y);
                 this.playerMp = Math.max(0, this.playerMp - spell.mpCost);
-                if (target) {
-                    this.combatAttack(target, spell.damage, { type: spell.damageType });
-                    this._log(`[${spell.name}! ${spell.damage} ${spell.damageType} damage.]`, 'combat');
-                } else {
-                    this._log(`[${spell.name} fizzles — nothing there.]`);
-                }
+                const hit = this._aoeStrike(affectedTiles(w, this), spell.damage, { type: spell.damageType });
+                if (hit) this._log(`[${spell.name}! ${spell.damage} ${spell.damageType} to ${hit}.]`, 'combat');
+                else this._log(`[${spell.name} fizzles — nothing caught.]`);
                 this._advanceWorld();
                 break;
             }
