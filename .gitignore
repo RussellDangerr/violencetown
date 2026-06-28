@@ -76,6 +76,7 @@ tools/_*.png
 # never part of the shipped game. Keep it untracked.
 .superpowers/
 game/_design-*.html
+game/_ui-preview*
 
 # --- OS / editor housekeeping ---
 .DS_Store

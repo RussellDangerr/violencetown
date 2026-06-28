@@ -2039,11 +2039,12 @@ export class Renderer {
         const moodY = R.y + 48;
         this._drawMoodFace(R.x + 26, moodY, m.face);
         this.font.drawText(ctx, m.mood.toUpperCase(), R.x + 44, moodY - 3, { color: dealing ? UI.textLight : UI.hpRed, scale: 1 });
-        this.font.drawText(ctx, `GP ${game.gold ?? 0}`, R.x + R.w - 24, moodY - 6, { color: UI.gold, scale: 2, align: 'right' });
+        this.font.drawText(ctx, `GP ${game.gold ?? 0}`, R.x + R.w - 24, moodY - 6, { color: UI.panelBorder, scale: 2, align: 'right' });
 
-        // Section headers
-        this.font.drawText(ctx, 'BUY',  TRADE_BUY_ORIGIN.x,  TRADE_BUY_ORIGIN.y - 18,  { color: UI.gold, scale: 1 });
-        this.font.drawText(ctx, 'SELL', TRADE_SELL_ORIGIN.x, TRADE_SELL_ORIGIN.y - 18, { color: UI.gold, scale: 1 });
+        // Section headers — panelBorder (not gold) reads on the cream panel,
+        // matching the modal title. Gold stays only on the dark insets below.
+        this.font.drawText(ctx, 'BUY',  TRADE_BUY_ORIGIN.x,  TRADE_BUY_ORIGIN.y - 18,  { color: UI.panelBorder, scale: 1 });
+        this.font.drawText(ctx, 'SELL', TRADE_SELL_ORIGIN.x, TRADE_SELL_ORIGIN.y - 18, { color: UI.panelBorder, scale: 1 });
 
         // BUY grid — the vendor's stock.
         const stock = npc.stock || [];
