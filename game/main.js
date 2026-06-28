@@ -634,11 +634,10 @@ class Game {
     _openBridgeIfCarFixed() {
         if (!this.questEngine || !this.map || this.map.zoneName !== 'TOWN') return;
         if (!this.questEngine.getFlag('carFixed')) return;
-        // Swap the barricade fence (tile 17) at the bridge mouth (row 0, x7-9) to
-        // walkable road (tile 12) so the player can drive across.
-        this.setTile(7, 0, 12);
-        this.setTile(8, 0, 12);
-        this.setTile(9, 0, 12);
+        // Swap the barricade fence (tile 17) at the bridge mouth (rows 0-1,
+        // x14-19 — the 2x-scaled bridge gap) to walkable road (tile 12) so the
+        // player can drive across.
+        for (let x = 14; x <= 19; x++) { this.setTile(x, 0, 12); this.setTile(x, 1, 12); }
         const br = (this.examinables || []).find(e => e.id === 'bridge');
         if (br) br.text = "[The barricade's down and the engine's warm. North across the bridge, out of Violencetown for good. Drive.]";
     }
@@ -1603,7 +1602,7 @@ class Game {
             // The bridge mouth (row 0, x7-9) is only walkable once the car's fixed
             // (_openBridgeIfCarFixed), so reaching it here is the deliberate finale,
             // not the instant-on-fix cut that used to happen.
-            if (ny === 0 && nx >= 7 && nx <= 9 && this.questEngine.getFlag('carFixed')) {
+            if (ny === 0 && nx >= 14 && nx <= 19 && this.questEngine.getFlag('carFixed')) {
                 this._log('[You gun it across the bridge — Violencetown shrinks in the mirror.]', 'transition');
                 this._endChapterOne();
                 return;
