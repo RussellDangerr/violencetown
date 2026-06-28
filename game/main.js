@@ -3052,6 +3052,14 @@ class Game {
             // when the player is standing still. (plans/movement-feel.md #6)
             if (e._slideStart != null && now < e._slideStart + (e._slideMs || 0)) return true;
         }
+        // Combat arena bloom/release is mid-ease — keep the loop alive so the
+        // lit-stage transition animates smoothly instead of stepping on the idle
+        // tick. (renderer owns _arenaLevel; target is 1 in combat, 0 otherwise.)
+        const r = this.renderer;
+        if (r && r._arenaLevel != null) {
+            const target = this._inCombat() ? 1 : 0;
+            if (Math.abs(r._arenaLevel - target) > 0.01) return true;
+        }
         return false;
     }
 
