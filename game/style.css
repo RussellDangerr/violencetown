@@ -733,6 +733,104 @@ body {
     outline-offset: 2px;
 }
 
+/* ════════════════════════════════════════════════════════════════════════
+   KENNEY "PIXEL ADVENTURE" PANEL THEME  (overhaul: touch + menus)
+   A parchment 9-slice frame holding aged-brown 9-slice buttons. Declared
+   after the original dark-chrome rules so it wins on specificity ties.
+   Frames are real Kenney CC0 tiles (see tools/gen_ui_panels.py) used as
+   border-image; text colors flip to dark ink on the parchment fill.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* --- Panel frames: parchment 9-slice (replaces the dark box-shadow chrome) --- */
+#menu-sheet-panel,
+#help-modal-panel,
+#options-modal-panel,
+#pause-overlay-panel {
+    background-color: #e9dcc0;                 /* fallback if border-image fails */
+    border: 16px solid transparent;
+    border-image: url(assets/ui/panel_parchment.png) 8 fill / 16px stretch;
+    image-rendering: pixelated;
+    box-shadow: none;
+    color: #4a3a22;
+    padding: 12px 16px 16px;
+}
+/* Retire the gold corner-gem pseudo-elements — the Kenney frame has its own. */
+#menu-sheet-panel::before,  #menu-sheet-panel::after,
+#help-modal-panel::before,  #help-modal-panel::after,
+#options-modal-panel::before, #options-modal-panel::after,
+#pause-overlay-panel::before, #pause-overlay-panel::after { display: none; }
+
+/* Panel titles — dark ink on parchment. */
+#help-modal-panel h2,
+#options-modal-panel h2,
+#pause-overlay-panel h2 { color: #5a4326; }
+
+/* --- Buttons: aged-brown 9-slice --- */
+.menu-item {
+    background-color: #8a5a2c;                 /* fallback if border-image fails */
+    border: 14px solid transparent;
+    border-image: url(assets/ui/panel_brown.png) 8 fill / 14px stretch;
+    image-rendering: pixelated;
+    color: #f3e3c0;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
+    padding: 6px 10px;
+    min-height: 46px;
+    transition: filter 0.12s, color 0.12s;
+}
+.menu-item:hover,
+.menu-item:focus-visible {
+    background-color: #8a5a2c;
+    filter: brightness(1.13);
+    color: #fff8e6;
+}
+.menu-item:active { filter: brightness(0.9); transform: translateY(1px); }
+.menu-item-danger { color: #ff9a6a; }
+.menu-item-danger:hover { color: #ffb487; filter: brightness(1.05); }
+.menu-item-close { color: #e2d2ac; }
+
+/* --- Help modal content on parchment --- */
+#help-modal-panel { color: #4a3a22; }
+#help-modal-panel h3 { color: #5a4326; border-bottom-color: #bda572; }
+#help-modal-panel li { color: #4a3a22; }
+#help-modal-panel .help-lede { color: #6a5a3a; }
+#help-modal-panel .help-touch { color: #4a6a28; }
+#help-modal-panel .help-foot { color: #7a6647; border-top-color: #bda572; }
+#help-modal-panel a { color: #9a5a18; }
+#help-modal-panel a:hover { color: #6a3a08; }
+#help-modal-panel kbd {
+    background: #d9c9a4;
+    border-color: #8b7340;
+    color: #4a3a22;
+}
+
+/* --- Options modal controls on parchment --- */
+#options-modal-panel { color: #4a3a22; }
+.opt-row label { color: #5a4326; }
+.opt-val { color: #5a4326; }
+.opt-note { color: #7a6647; border-top-color: #bda572; }
+.opt-slider { background: #cbb588; border-color: #8b7340; }
+.opt-slider::-webkit-slider-thumb {
+    background: #7a5a2a; border-color: #3a2a12;
+    box-shadow: 0 0 0 1px #b9985a;
+}
+.opt-slider::-moz-range-thumb {
+    background: #7a5a2a; border-color: #3a2a12;
+    box-shadow: 0 0 0 1px #b9985a;
+}
+/* Toggle pills: simple brown fill + gold rim (crisper than a 9-slice at this
+   size). .is-on brightens toward gold. */
+.opt-toggle {
+    background: #8a5a2c;
+    border: 2px solid #d4b96a;
+    color: #e2d2ac;
+}
+.opt-toggle:hover,
+.opt-toggle:focus-visible { border-color: #fff0c4; color: #fff8e6; }
+.opt-toggle.is-on { background: #b07a2e; border-color: #ffe7a0; color: #fff8e6; }
+
+/* --- Pause overlay on parchment --- */
+#pause-overlay-panel .pause-hint { color: #7a6647; }
+
 @media (pointer: coarse), (max-width: 700px) {
     /* Reclaim wasted vertical space above the canvas in portrait. The
        wrapper normally centers in 100vh, which leaves ~220px of empty
