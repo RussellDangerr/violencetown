@@ -833,17 +833,18 @@ body {
     }
     #splash-buttons { flex-wrap: wrap; justify-content: center; }
 
-    /* Reclaim wasted vertical space above the canvas in portrait. The
-       wrapper normally centers in 100vh, which leaves ~220px of empty
-       black above a 375px-tall canvas on a 812px viewport. Anchor the
-       layout to the top of the wrapper instead so the canvas sits up
-       high and the d-pad sits naturally below it. */
+    /* A square canvas on a portrait phone is width-bound (can't exceed 100vw),
+       so the old top-anchor left a tall empty band BELOW it that read as sparse.
+       Center the canvas instead so the surrounding cobblestone backdrop frames
+       it evenly top + bottom (like the desktop layout), and drop the -220px
+       under-sizing so the canvas uses the full width. The touch controls stay
+       pinned to the bottom within thumb reach, in the field below the canvas. */
     #game-wrapper {
-        align-items: flex-start;
-        padding-top: 8px;
+        align-items: center;
+        padding-top: 0;
     }
     #game-layout {
-        height: min(calc(100vh - 220px), 100vw);
+        height: min(100vw, calc(100vh - 24px));
         max-height: 100vw;
     }
 
