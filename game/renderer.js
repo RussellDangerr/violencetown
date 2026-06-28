@@ -1770,7 +1770,7 @@ export class Renderer {
             this._drawBubble(bx, cy, BW, BH, isSel, opt.enabled);
             if (this.font) {
                 const label = opt.label.length > 12 ? opt.label.slice(0, 11) + '…' : opt.label;
-                const color = !opt.enabled ? '#6b5d44' : (isSel ? '#2a1d0e' : '#e8dcc0');
+                const color = !opt.enabled ? '#6b5d44' : (isSel ? '#2a1d0e' : '#f3e3c0');
                 this.font.drawText(ctx, label, bx, cy - 4, { color, scale: 1, align: 'center' });
             }
             ctx.globalAlpha = 1;
@@ -1798,10 +1798,12 @@ export class Renderer {
         ctx.arcTo(x,     y + h, x,     y,     r);
         ctx.arcTo(x,     y,     x + w, y,     r);
         ctx.closePath();
-        ctx.fillStyle = sel ? UI.gold : (enabled ? 'rgba(58,46,30,0.92)' : 'rgba(40,34,24,0.82)');
+        // Aged-brown pills matching the parchment menus' buttons (gold when
+        // selected). Brighter brown than before so they read on the dim wash.
+        ctx.fillStyle = sel ? UI.gold : (enabled ? 'rgba(138,90,44,0.92)' : 'rgba(74,52,30,0.82)');
         ctx.fill();
         ctx.lineWidth = sel ? 3 : 1.5;
-        ctx.strokeStyle = sel ? '#fff3c0' : (enabled ? 'rgba(150,130,90,0.7)' : 'rgba(90,78,56,0.5)');
+        ctx.strokeStyle = sel ? '#fff3c0' : (enabled ? 'rgba(212,185,106,0.7)' : 'rgba(120,100,66,0.5)');
         ctx.stroke();
     }
 

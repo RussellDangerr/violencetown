@@ -238,29 +238,28 @@ body {
    one button opens an action sheet with Wait / Cancel / Help / Restart.
    Centralizing these as a menu frees screen space (was two buttons) and
    gives Help a discoverable home on touch where ? key isn't reachable. */
+/* Desktop ☰ — aged-brown chip matching the menu buttons (gold rim, cream
+   glyph). The mobile media query overrides this to the Kenney ctrl_menu sprite. */
 #menu-btn {
     position: absolute; top: 8px; right: 8px;
-    background: #1a1610;
-    border: 1px solid #3a3020;
-    color: #b89668;
+    background: #8a5a2c;
+    border: 2px solid #d4b96a;
+    color: #f3e3c0;
     font-family: 'Courier New', monospace;
     font-size: 16px;
     line-height: 1;
     padding: 4px 10px;
     cursor: pointer;
     z-index: 10;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
-    transition: transform 80ms ease, box-shadow 120ms ease,
-                background-color 120ms ease, border-color 120ms ease,
-                color 120ms ease;
+    transition: transform 80ms ease, filter 120ms ease;
 }
-#menu-btn:hover { border-color: #8b7340; color: #d4b96a; }
+#menu-btn:hover { filter: brightness(1.12); color: #fff8e6; }
 #menu-btn:focus-visible { outline: 2px solid #d4b96a; outline-offset: 2px; }
 #menu-btn:active {
     transform: scale(0.93);
-    background: #2a2218;
-    border-color: #d4b96a;
-    color: #fff;
+    filter: brightness(0.9);
     box-shadow: 0 0 14px rgba(212, 185, 106, 0.55),
                 0 1px 3px rgba(0, 0, 0, 0.5);
 }
@@ -270,7 +269,7 @@ body {
 #version-badge {
     position: absolute; bottom: 8px; right: 8px;
     background: rgba(20, 16, 10, 0.85);
-    border: 1px solid #5a4a30;
+    border: 1px solid #8b7340;
     color: #d4b96a;
     font-family: 'Courier New', monospace;
     font-size: 10px;

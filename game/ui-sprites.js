@@ -7,7 +7,7 @@
 
 export const UI = {
     // Panel colors (matching the 9-slice panel fill)
-    panelBg:     '#c8b888',   // the inner parchment fill
+    panelBg:     '#fff1d2',   // the inner parchment fill — matches the Kenney atlas cream (tile_0007); used by sub-32px flat fallbacks
     panelBgDark: '#2a2218',   // dark variant for slots/bars
     panelBorder: '#8b7340',   // gold-brown border
     panelBorderLight: '#b8a060',
