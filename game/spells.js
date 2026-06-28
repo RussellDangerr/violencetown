@@ -1,16 +1,24 @@
 // spells.js — castable spells for the wheel's FIGHT → Magic verb.
 //
-// Minimal seed for the Magic system (the full system — MP economy, a spell-
-// selection layer, status effects, AoE shapes — is deferred per
-// plans/combat-wheel-effects.md). For now this carries a single DEBUG spell.
+// Spell shape: { id, name, mpCost, damage, damageType, range, aoe }
+//   damageType  feeds the typed hit-splat (renderer.js — 'fire' and 'cold' wired).
+//   range       reticle reach (wheel-model aimRange reads it per selected spell).
+//   aoe         { shape:'burst', radius } 3×3-style splash centred on the reticle
+//             | { shape:'cone',  depth }  cardinal triangle from the caster (widths 1,3,5…)
+//   Every enemy on an affected tile takes the full `damage` (AoE doesn't fall off).
 //
-// Spell shape: { id, name, mpCost, damage, damageType, range }
-//   damageType feeds the typed hit-splat (see renderer.js — 'fire' is wired).
-//   range is the reticle reach (wheel-model aimRange uses a flat magic range
-//   until a per-spell selection layer exists).
+// The Magic ring (wheel SPELL layer) lets the player pick between these.
 
 export const SPELLS = {
-    // DEBUG: a 999-damage nuke. Placeholder numbers — retune (or gate behind a
-    // debug flag) when the real Magic system lands.
-    fireball: { id: 'fireball', name: 'Fireball', mpCost: 50, damage: 999, damageType: 'fire', range: 6 },
+    // A real fireball: a hot 3×3 burst you lob onto a tile.
+    fireball: {
+        id: 'fireball', name: 'Fireball', mpCost: 12, damage: 20, damageType: 'fire',
+        range: 6, aoe: { shape: 'burst', radius: 1 },
+    },
+    // Cone of Cold: a widening triangle of frost from the caster. Damage only for
+    // now — the freeze/slow status is a later pass (kept off deliberately).
+    coneOfCold: {
+        id: 'coneOfCold', name: 'Cone of Cold', mpCost: 10, damage: 14, damageType: 'cold',
+        range: 3, aoe: { shape: 'cone', depth: 3 },
+    },
 };

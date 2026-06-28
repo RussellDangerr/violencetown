@@ -6,7 +6,8 @@
 import { TILE_PX, VIEW_TILES, CANVAS_PX } from './data.js';
 import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES } from './sprites.js';
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
-import { currentCategory, currentLeaf, categoryKeys, leafEnabled, validItemSlots, LAYER } from './wheel-model.js'; // (combat-wheel rework)
+import { currentCategory, currentLeaf, categoryKeys, leafEnabled, validItemSlots, LAYER, affectedTiles } from './wheel-model.js'; // (combat-wheel rework)
+import { SPELLS } from './spells.js';
 import {
     OVERLAY_RECTS, THROW_RECTS,
     HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_GAP, HOTBAR_SLOTS, HOTBAR_STRIDE,
@@ -27,6 +28,7 @@ const SPLAT_COLOR = {
     sludge:   '#9a52c8',
     poison:   '#57a23e',
     fire:     '#f0833a',
+    cold:     '#5ec3e8',
     heal:     '#3fb56a',
     miss:     '#3a6ea5',
 };
@@ -1717,10 +1719,17 @@ export class Renderer {
         } else if (w.layer === LAYER.SUBVERB) {
             options = currentCategory(w).subverbs.map(s => ({ label: s.label, enabled: leafEnabled(s, game) }));
             selIndex = w.subVerbIndex; title = categoryKeys()[w.categoryIndex];
-        } else { // ITEM
+        } else if (w.layer === LAYER.ITEM) {
             const slots = validItemSlots(w, game);
             options = slots.map(i => ({ label: game.inventory[i].itemDef.name.replace(/[\[\]]/g, ''), enabled: true }));
             selIndex = Math.max(0, slots.indexOf(w.itemIndex)); title = currentLeaf(w).label;
+        } else { // SPELL — the Magic spell ring
+            const ids = game.knownSpells || [];
+            options = ids.map(id => {
+                const sp = SPELLS[id];
+                return { label: (sp ? sp.name : id) + (sp ? ` ${sp.mpCost}MP` : ''), enabled: (game.playerMp || 0) >= (sp ? sp.mpCost : 0) };
+            });
+            selIndex = Math.max(0, w.spellIndex % Math.max(1, ids.length)); title = 'MAGIC';
         }
 
         // Dim backdrop behind the strip.
@@ -1821,18 +1830,31 @@ export class Renderer {
         const r = toScreen(w.reticle.x, w.reticle.y);
         const p = toScreen(game.playerX, game.playerY);
         ctx.save();
-        // AoE footprint — Throw bursts 3×3 (radius 1) around the reticle. Wash the
-        // nine tiles so the splash area reads before you commit. (Single-target
-        // verbs skip this — just the box below.)
-        if (currentLeaf(w).key === 'throw') {
+        // AoE footprint — wash every tile the action will hit (cleave arc, throw/
+        // fireball burst, cone). affectedTiles is the SAME function the damage uses,
+        // so the wash is exactly what gets struck. Single-target verbs return one
+        // tile → nothing extra washed, just the reticle box below.
+        const tiles = affectedTiles(w, game);
+        if (tiles.length > 1) {
             ctx.fillStyle = 'rgba(212,185,106,0.16)';
-            for (let ax = w.reticle.x - 1; ax <= w.reticle.x + 1; ax++) {
-                for (let ay = w.reticle.y - 1; ay <= w.reticle.y + 1; ay++) {
-                    const s = toScreen(ax, ay);
-                    ctx.fillRect(s.x + 1, s.y + 1, TILE_PX - 2, TILE_PX - 2);
-                }
+            for (const t of tiles) {
+                const s = toScreen(t.x, t.y);
+                ctx.fillRect(s.x + 1, s.y + 1, TILE_PX - 2, TILE_PX - 2);
             }
         }
+        // Highlight every enemy that would be caught — the "show who's hit" cue.
+        const alive = (game.enemies || []).filter(e => e.entity.isAlive());
+        ctx.lineWidth = 2;
+        for (const t of tiles) {
+            const e = alive.find(en => en.x === t.x && en.y === t.y);
+            if (!e) continue;
+            const s = toScreen(t.x, t.y);
+            ctx.fillStyle = 'rgba(230,80,60,0.24)';
+            ctx.fillRect(s.x + 1, s.y + 1, TILE_PX - 2, TILE_PX - 2);
+            ctx.strokeStyle = 'rgba(235,90,70,0.95)';
+            ctx.strokeRect(s.x + 1.5, s.y + 1.5, TILE_PX - 3, TILE_PX - 3);
+        }
+        // Aim line from the player + the reticle box.
         ctx.strokeStyle = 'rgba(212,185,106,0.9)';
         ctx.lineWidth = 2;
         ctx.setLineDash([4, 3]);
