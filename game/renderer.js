@@ -379,6 +379,7 @@ export class Renderer {
         if (game.state === 'ending') this._drawEndingOverlay(game);
         if (game.state === 'log_modal') this._drawLogModal(game);
         if (game.state === 'trade') this._drawTradeModal(game);
+        if (game.state === 'dialogue') this._drawDialogueModal(game);
     }
 
     // (world-structure) Heavy radial darkness for the Wilderness zone — a tiny
@@ -2119,6 +2120,80 @@ export class Renderer {
                 this.font.drawText(ctx, info.letter, x + size / 2, y + size / 2 - 3, { color: '#fff', scale: 1, align: 'center' });
             }
         }
+    }
+
+    // ── Dialogue modal (Step 4 — disposition dialogue) ───────────────────────
+    // Name + mood-face + disposition up top, the NPC's current line, then the
+    // choice list (delta badge + once/repeat tag) with a cursor, and Leave.
+    // Reads everything off the game (game._dialogueNpc / _dialogueReply /
+    // _dialogueCursor / _dialogueChoices()), so the renderer needs no dialogue data.
+    _drawDialogueModal(game) {
+        const { ctx } = this;
+        const ui = this.uiSheet;
+        const npc = game._dialogueNpc;
+        if (!npc || !this.font) return;
+
+        ctx.fillStyle = 'rgba(0,0,0,0.72)';
+        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+
+        const R = TRADE_MODAL_RECT;
+        if (ui?.loaded) drawPanelBig(ctx, ui, R.x, R.y, R.w, R.h, 'base');
+        else            drawPanelSmall(ctx, R.x, R.y, R.w, R.h);
+
+        const disp = npc.disposition ?? 0;
+        const m = mood(disp);
+        const innerX = R.x + 20;
+
+        this.font.drawText(ctx, (npc.name || npc.type || 'SOMEONE').toUpperCase(), CANVAS_PX / 2, R.y + 14, { color: UI.panelBorder, scale: 2, align: 'center' });
+
+        const moodY = R.y + 50;
+        this._drawMoodFace(R.x + 26, moodY, m.face);
+        this.font.drawText(ctx, m.mood.toUpperCase(), R.x + 44, moodY - 3, { color: UI.textLight, scale: 1 });
+        this.font.drawText(ctx, `${disp > 0 ? '+' : ''}${disp}`, R.x + R.w - 24, moodY - 6, { color: disp < 0 ? UI.hpRed : UI.gold, scale: 2, align: 'right' });
+
+        let ty = R.y + 82;
+        const maxChars = Math.floor((R.w - 40) / 8);
+        for (const line of this._wrapText(game._dialogueReply || '', maxChars)) {
+            this.font.drawText(ctx, line, innerX, ty, { color: UI.text, scale: 1 });
+            ty += 12;
+        }
+
+        const choices = game._dialogueChoices();
+        const cursor = game._dialogueCursor;
+        const rowH = 26;
+        let cy = R.y + 156;
+        const row = (i, label, badge, badgeColor, tag) => {
+            const sel = cursor === i;
+            if (sel) { ctx.fillStyle = 'rgba(212,185,106,0.18)'; ctx.fillRect(R.x + 12, cy - 4, R.w - 24, rowH - 2); }
+            this.font.drawText(ctx, (sel ? '> ' : '  ') + label, innerX, cy, { color: sel ? UI.textLight : UI.text, scale: 1 });
+            if (badge) this.font.drawText(ctx, badge, R.x + R.w - 92, cy, { color: badgeColor, scale: 1, align: 'right' });
+            if (tag)   this.font.drawText(ctx, tag,   R.x + R.w - 24, cy, { color: UI.dim, scale: 1, align: 'right' });
+            cy += rowH;
+        };
+        choices.forEach((c, i) => {
+            const delta = c.delta ?? 0;
+            const badge = delta ? `${delta > 0 ? '+' : ''}${delta} ${delta > 0 ? ':)' : ':('}` : '';
+            const badgeColor = delta < 0 ? UI.hpRed : (delta > 0 ? '#79c46a' : UI.dim);
+            const tag = c.cost ? `${c.cost} GP` : (c.repeatable ? 'repeat' : 'once');
+            row(i, c.label, badge, badgeColor, tag);
+        });
+        row(choices.length, 'Leave', '', null, '');
+
+        this.font.drawText(ctx, 'W/S  SELECT     SPACE  PICK     E  LEAVE', CANVAS_PX / 2, R.y + R.h - 18, { color: UI.dim, scale: 1, align: 'center' });
+    }
+
+    // Word-wrap `text` into lines no longer than `maxChars` characters (the
+    // bitmap font is fixed 8px/char at scale 1).
+    _wrapText(text, maxChars) {
+        const words = String(text).split(' ');
+        const lines = [];
+        let line = '';
+        for (const w of words) {
+            if (line && line.length + 1 + w.length > maxChars) { lines.push(line); line = w; }
+            else line = line ? line + ' ' + w : w;
+        }
+        if (line) lines.push(line);
+        return lines;
     }
 
     // A tiny procedural mood smiley keyed off trade.mood().face. Center at

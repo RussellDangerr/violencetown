@@ -48,6 +48,10 @@ export class Enemy {
         bribeable = null,
         values = null,
         onFlip = null,
+        // Display name + dialogue id (Step 4 — disposition dialogue). `name` is
+        // the NPC's shown name (e.g. "Bartho"); `dialogueId` keys into dialogue.js.
+        name = null,
+        dialogueId = null,
         // Free-form tag for set-piece / quest hooks (e.g. 'wererat_boss', 'sewer_rat').
         tag = null,
         // Vendor fields (trade Slice 1). `vendor:true` makes the NPC a shopkeep —
@@ -101,6 +105,8 @@ export class Enemy {
         this.bribeable     = bribeable;
         this.values        = values;
         this.onFlip        = onFlip;
+        this.name          = name;
+        this.dialogueId    = dialogueId;
         this.tag           = tag;
         this.vendor        = vendor;
         this.stock         = stock;
