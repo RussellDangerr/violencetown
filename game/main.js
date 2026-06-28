@@ -258,6 +258,8 @@ class Game {
         // _loadMap wipes the old zone and re-injected at the door you arrive at.
         this._pendingFollowers = null;
         this._pendingFollowersFrom = null;   // url of the zone they're chasing you OUT of
+        this._zonePursuit = false;           // (playtest) monsters don't follow you through doors for now
+        this._collectedItems = new Set();    // "map|x|y|type" of ground items already taken, so they don't respawn on zone re-entry
         this._mapUrl = null;                 // url of the currently-loaded map
         this._cameFrom = null;               // url of the zone you ENTERED this one from (for the pipe-jam)
         this._jammedDoor = null;             // {x,y,toMap,integrity,max,intruders[]} while a door is wedged shut
@@ -434,6 +436,8 @@ class Game {
 
         this.groundItems = [];
         for (const s of this.map.itemSpawns) {
+            // Skip items the player already picked up here — they don't respawn.
+            if (this._collectedItems.has(`${url}|${s.x}|${s.y}|${s.type}`)) continue;
             const def = ITEMS[s.type];
             if (def) this.groundItems.push({ type: s.type, x: s.x, y: s.y, def });
         }
@@ -487,6 +491,10 @@ class Game {
     // These get carried into the next zone. (Allies don't pursue — abandoning
     // them on a zone change is a separate, future nicety.)
     _captureFollowers(t) {
+        // (playtest) Door-pursuit is paused — monsters don't chase you between
+        // zones for now. The capture logic stays for when it's re-enabled via
+        // _zonePursuit.
+        if (!this._zonePursuit) return [];
         const FOLLOW_RANGE = 3;
         const out = [];
         for (const e of this.enemies) {
@@ -1840,7 +1848,10 @@ class Game {
 
         // Blockers that _doMove intercepts as bump-interactions or walls.
         if (!this.map.isWalkable(nx, ny)) return true;            // wall, car (19), barricade (23), etc.
-        if (this.enemies.some(e => e.entity.isAlive() && e.x === nx && e.y === ny)) return true;
+        // Held-walk barges through non-hostile NPCs (the shove handles them) — only
+        // a HOSTILE in the way halts auto-walk now. (playtest: townsfolk stopping
+        // your walk read as a bug.)
+        if (this.enemies.some(e => e.x === nx && e.y === ny && this._isHostileToPlayer(e))) return true;
         if (this.containers.some(c => c.x === nx && c.y === ny)) return true;
 
         // Consequential walkable steps the player should opt into deliberately.
@@ -2484,10 +2495,13 @@ class Game {
             go = false;
             const idx = this.groundItems.findIndex(gi => gi.x === this.playerX && gi.y === this.playerY);
             if (idx === -1) break;
-            if (this._addToInventory(this.groundItems[idx].def)) {
+            const gi = this.groundItems[idx];
+            if (this._addToInventory(gi.def)) {
                 audio.playSfx('pickup'); // [audio] item picked up off the ground
-                this._log(`[Picked up ${this.groundItems[idx].def.name}]`);
-                this.emitGameEvent('item_pickup', { id: this.groundItems[idx].def.id });
+                this._log(`[Picked up ${gi.def.name}]`);
+                this.emitGameEvent('item_pickup', { id: gi.def.id });
+                // Remember it so re-entering this zone doesn't respawn it.
+                this._collectedItems.add(`${this._mapUrl}|${gi.x}|${gi.y}|${gi.type}`);
                 this.groundItems.splice(idx, 1);
                 go = true;
             } else { this._log('[Inventory full]'); break; }
@@ -2806,6 +2820,16 @@ class Game {
         // Clear any transition queued before death so the first post-respawn
         // action doesn't ghost-load a map.
         this._pendingTransition = null;
+        // (playtest) De-aggro on respawn: drop every chaser out of the hunt so the
+        // player gets a breather instead of dying on repeat. Monsters keep their
+        // current positions (no teleport home) and fall back to loitering /
+        // wandering via their normal ambient behavior.
+        for (const e of this.enemies) {
+            if (!e.entity.isAlive() || e._ally) continue;
+            if (e.state === 'chasing') e.state = 'idle';
+            e._intruder = false;
+            e._emergeDelay = 0;
+        }
         this.state = STATE.IDLE;
         this._render();
         this._log('[Respawned]');
