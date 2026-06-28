@@ -756,56 +756,77 @@ body {
         bottom: auto; right: auto;
     }
 
+    /* Touch HUD — Kenney "Mobile Controls" Style F, gold-tinted (see
+       tools/gen_ui_controls.py). D-pad is one unified cross sprite with four
+       transparent hit-zones over its arms; action + menu are single composited
+       sprites. Glyph text is hidden (font-size:0) but kept for aria/fallback. */
     #touch-controls {
         display: flex;
         position: fixed;
         left: 0; right: 0; bottom: 0;
         padding: 16px max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-right));
-        justify-content: flex-start;
+        justify-content: space-between;
         align-items: flex-end;
         z-index: 20;
         pointer-events: none;
     }
-    #touch-dpad { pointer-events: auto; }
 
     #touch-dpad {
+        pointer-events: auto;
         display: grid;
-        grid-template-columns: repeat(3, 60px);
-        grid-template-rows: repeat(3, 60px);
-        gap: 6px;
+        grid-template-columns: repeat(3, 56px);
+        grid-template-rows: repeat(3, 56px);
+        gap: 0;
+        background: url(assets/ui/ctrl_dpad.png) center / contain no-repeat;
+        filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6));
     }
-    #touch-dpad .tc-btn { font-size: 22px; padding: 0; opacity: 0.85; }
-    #touch-dpad .tc-btn:nth-child(1) { grid-column: 2; grid-row: 1; }
-    #touch-dpad .tc-btn:nth-child(2) { grid-column: 1; grid-row: 2; }
-    #touch-dpad .tc-btn:nth-child(3) { grid-column: 2; grid-row: 3; }
-    #touch-dpad .tc-btn:nth-child(4) { grid-column: 3; grid-row: 2; }
+    /* Transparent directional hit-zones laid over the cross arms. */
+    #touch-dpad .tc-btn {
+        background: none; border: none; box-shadow: none;
+        color: transparent; font-size: 0; padding: 0; opacity: 1;
+        border-radius: 12px;
+    }
+    #touch-dpad .tc-btn:active {
+        transform: none; box-shadow: none; border-color: transparent;
+        background: radial-gradient(circle at center, rgba(255, 248, 220, 0.28), transparent 70%);
+    }
+    #touch-dpad .tc-btn:nth-child(1) { grid-column: 2; grid-row: 1; } /* up */
+    #touch-dpad .tc-btn:nth-child(2) { grid-column: 1; grid-row: 2; } /* left */
+    #touch-dpad .tc-btn:nth-child(3) { grid-column: 2; grid-row: 3; } /* down */
+    #touch-dpad .tc-btn:nth-child(4) { grid-column: 3; grid-row: 2; } /* right */
 
-    /* (action-wheel overhaul) ACTION button — opens/fires the wheel on touch.
-       Pushed to the right edge, opposite the d-pad, within thumb reach. */
+    /* ACTION button — opens/fires the action wheel. Bottom-right, primary thumb. */
     #action-btn {
         pointer-events: auto;
-        margin-left: auto;
         align-self: flex-end;
-        width: 84px; height: 84px;
-        border-radius: 50%;
-        font-size: 32px;
-        opacity: 0.9;
+        width: 88px; height: 88px;
+        background: url(assets/ui/ctrl_action.png) center / contain no-repeat;
+        border: none; box-shadow: none; border-radius: 50%;
+        color: transparent; font-size: 0;
+        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
+    }
+    #action-btn:active {
+        transform: scale(0.92);
+        filter: brightness(1.18) drop-shadow(0 1px 3px rgba(0, 0, 0, 0.6));
     }
 
-    /* MENU floats bottom-right on touch where the WAIT button used to sit,
-       within thumb reach but clear of the d-pad cluster. */
+    /* MENU button — stacked ABOVE the action button (previously it overlapped
+       the action button in the same corner). Clear of every in-canvas HUD
+       corner: HP (top-left), zone label (top-center), clock (top-right). */
     #menu-btn {
-        top: auto; right: auto;
-        bottom: max(16px, env(safe-area-inset-bottom));
+        top: auto; left: auto;
         right: max(16px, env(safe-area-inset-right));
+        bottom: calc(max(16px, env(safe-area-inset-bottom)) + 104px);
         width: 60px; height: 60px;
-        border-radius: 50%;
-        border-width: 2px;
-        font-size: 24px;
-        background: #2a2218;
-        color: #d4b96a;
-        opacity: 0.9;
+        background: url(assets/ui/ctrl_menu.png) center / contain no-repeat;
+        border: none; box-shadow: none; border-radius: 50%;
+        color: transparent; font-size: 0;
+        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
         z-index: 21;
+    }
+    #menu-btn:active {
+        transform: scale(0.92);
+        filter: brightness(1.18) drop-shadow(0 1px 3px rgba(0, 0, 0, 0.6));
     }
 }
 
