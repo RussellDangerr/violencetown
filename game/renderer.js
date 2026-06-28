@@ -358,6 +358,10 @@ export class Renderer {
         // Subtle vignette border
         this._drawVignette();
 
+        // Town Clock readout — drawn after the vignette so the corner darkening
+        // doesn't sink it, but before the modals so a menu still covers it.
+        this._drawClock(game);
+
         // Modals
         if (game.state === 'item_overlay')    this._drawItemOverlay(game);
         if (game.state === 'radial_menu')     this._drawRadialMenu(game);
@@ -1222,6 +1226,23 @@ export class Renderer {
                 color: UI.text, scale: 1,
             });
         }
+    }
+
+    // ── Town Clock readout (top-right) ───────────────────────────────────────
+    // Military-time HH:MM mirroring the day/night lighting in numerals. The day
+    // starts at noon and runs ~30 min real-time; in combat it barely moves (the
+    // per-turn beat nudges it imperceptibly), so the readout never lurches.
+
+    _drawClock(game) {
+        if (!this.font || typeof game._timeOfDay !== 'function') return;
+        const { ctx } = this;
+        const time = game._timeOfDay();
+        const rightX = ctx.canvas.width - 6;
+        const y = 7;
+        // 1px dark shadow for legibility over the world + the night lightmap
+        // (mirrors the splash title's offset-shadow style).
+        this.font.drawText(ctx, time, rightX + 1, y + 1, { color: 'rgba(0,0,0,0.8)', scale: 1, align: 'right' });
+        this.font.drawText(ctx, time, rightX, y, { color: '#e8e0c8', scale: 1, align: 'right' });
     }
 
     // ── Zone Label (top center) ──────────────────────────────────────────────

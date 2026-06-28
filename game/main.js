@@ -73,7 +73,7 @@ const WORLD_TICK_MS = 500;
 // cool blue rather than pitch black (the player aura + lamps keep it readable).
 // All tunable; set DAY_LENGTH_MS huge (or _nightLevel by hand) to effectively
 // freeze the cycle.
-const DAY_LENGTH_MS = 5 * 60 * 1000;  // 5 min per full day↔night↔day
+const DAY_LENGTH_MS = 30 * 60 * 1000;  // 30 min per full day↔night↔day (tunable; relaxed/lore-first, starts at noon)
 const NIGHT_MAX     = 0.85;
 
 // ── Directions ───────────────────────────────────────────────────────────────
@@ -395,21 +395,23 @@ class Game {
             }
         }, 250);
 
-        // World heartbeat — the Town Clock (feature/town-clock). Advances
-        // ambient NPCs on a free-running beat so the town lives while the player
-        // stands still. Gated to IDLE + not mid-player-slide (never collide with
-        // the player's move animation, pause during menus) and FROZEN during
-        // combat (M1) so a fight is the pristine turn-based loop with no ambient
-        // wander/chatter competing — the world pauses for you, only when it must.
+        // World heartbeat — the Town Clock (feature/town-clock), now the FREE-ROAM
+        // half of the unified beat. A free-running timer winds the world beat so
+        // the town lives while the player stands still: day/night eases and ambient
+        // NPCs wander/chatter. In COMBAT this timer lets go (gated by _inCombat) so
+        // the player gets unhurried turn-based thinking time — the beat is wound
+        // one-per-committed-turn from _advanceWorld instead, so the world keeps
+        // advancing in lockstep with the fight rather than freezing (supersedes M1).
         setInterval(() => {
             // Day/night eases on the world clock whenever the overworld is live —
-            // including while the player walks — but pauses on the splash and
-            // during combat (frozen), consistent with the Town Clock philosophy.
-            if (this.state !== STATE.SPLASH && !this._worldFrozen()) {
+            // including while the player walks — but pauses on the splash and in
+            // combat (the per-turn beat eases it there instead).
+            if (this.state !== STATE.SPLASH && !this._inCombat()) {
                 this._advanceDayClock();
             }
-            // Ambient NPC beat — gated to a settled idle frame (M0/M1).
-            if (this.state === STATE.IDLE && !this._animating && !this._worldFrozen()) {
+            // Ambient NPC beat — gated to a settled idle frame; in combat the
+            // per-turn beat drives ambient life instead.
+            if (this.state === STATE.IDLE && !this._animating && !this._inCombat()) {
                 this._ambientTick();
             }
         }, WORLD_TICK_MS);
@@ -2309,6 +2311,17 @@ class Game {
         this._ensureParticleLoop();
         if (this.playerHp <= 0) { this.playerHp = 0; this._die(); return; }
 
+        // Unified clock (supersedes M1's freeze): in free-roam the heartbeat timer
+        // winds the world beat, but in combat that timer lets go so the player can
+        // think — so each committed combat turn fires exactly one world beat here,
+        // keeping the town alive (ambient NPCs step, the day eases one tick) in
+        // lockstep with the fight instead of freezing it. Free-roam turns skip this
+        // (the timer already beat); only combat turns wind the beat by hand.
+        if (this._inCombat()) {
+            this._advanceDayClock();
+            this._ambientTick();
+        }
+
         // (zone pursuit) A wedged door takes a pounding from the pursuers trapped
         // behind it; it bursts when their blows break it.
         this._tickJammedDoor();
@@ -2388,13 +2401,14 @@ class Game {
         }
     }
 
-    // Town Clock — combat freeze (M1). The world heartbeat pauses while any
-    // hostile is actively engaged: a non-ambient enemy in the legacy 'chasing'
-    // state (set by resolveEnemyTurns on aggro / line-of-sight). During a fight
-    // the game is the pristine turn-based loop with no ambient wander/chatter;
-    // ambient townsfolk never count. The RUNNING↔FROZEN "mode" is derived here,
-    // not stored, so it can never drift out of sync with the actual threat state.
-    _worldFrozen() {
+    // Unified clock — the "in combat?" gate (was the M1 freeze predicate). True
+    // while any hostile is actively engaged: a non-ambient enemy in the legacy
+    // 'chasing' state (set by resolveEnemyTurns on aggro / line-of-sight); ambient
+    // townsfolk never count. It no longer FREEZES the world — instead it switches
+    // the world beat from timer-wound (free-roam) to one-per-committed-turn
+    // (combat), so the real-time heartbeat lets go and the player gets unhurried
+    // turn-based thinking time. Derived, not stored, so it can't drift out of sync.
+    _inCombat() {
         for (const e of this.enemies) {
             if (e.ambient) continue;
             if (e.state === 'chasing' && e.entity.isAlive()) return true;
@@ -2430,6 +2444,19 @@ class Game {
         const p   = this._dayClockMs / DAY_LENGTH_MS;        // 0..1 phase of the day
         const raw = (1 - Math.cos(p * 2 * Math.PI)) / 2;     // 0 → 1 → 0 bell, peak at midnight
         this._nightLevel = Math.max(0, (raw - 0.6) / 0.4) * NIGHT_MAX;
+    }
+
+    // Military-time readout (HH:MM) derived from the day-clock phase. The cycle
+    // starts at NOON — phase 0 = full day = 12:00 — and the cosine night-peak
+    // lands at midnight (phase 0.5 = 00:00): clock = (12:00 + phase·24h) wrapped.
+    // Decoupled from combat turns (a fight only nudges it imperceptibly), so the
+    // sky never lurches mid-fight. Purely derived from _dayClockMs — no state.
+    _timeOfDay() {
+        const p = this._dayClockMs / DAY_LENGTH_MS;            // 0..1 phase of the day
+        const totalMin = Math.floor(12 * 60 + p * 24 * 60) % (24 * 60);
+        const hh = Math.floor(totalMin / 60);
+        const mm = totalMin % 60;
+        return String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
     }
 
     // ── Inventory ────────────────────────────────────────────────────────────
