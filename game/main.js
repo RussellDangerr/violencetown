@@ -1753,9 +1753,9 @@ class Game {
                 // (The old `top === code` guard dropped the walk when the arming
                 // key was released but another stayed held: the "game ignored me"
                 // feel. See plans/movement-feel.md.)
-                const top = this._heldDirKeys[this._heldDirKeys.length - 1];
-                if (top && this.state === STATE.IDLE && !this._animating) {
-                    this._doMove(DIRS[top]);
+                const intent = this._intendedWalkDir();
+                if (intent && this.state === STATE.IDLE && !this._animating) {
+                    this._doMove(this._resolveWalkStep(intent));
                 }
             }, this._TURN_MS);
         } else {
@@ -1763,22 +1763,58 @@ class Game {
         }
     }
 
-    // Called at the end of every completed tile slide. Decides the next step:
-    // a buffered mid-slide press wins, else the top still-held direction. The
-    // _autoRepeatShouldStop gate is preserved verbatim so held-walking still
-    // halts before consequential tiles (walls/enemies/pickups/transitions/
-    // hazards) exactly as before — only the first deliberate press may take
-    // such a step. (fix/critical-path safety intact)
+    // Combine the live held-key set into an 8-way walk vector — the most-recent
+    // held key on each axis wins, so W+A reads as up-left and adding D while
+    // holding W flips to up-right. Folds in the one-deep mid-slide buffer so a
+    // quick tap during a slide isn't lost (movement-feel Finding 2). Returns
+    // null when nothing is held or buffered.
+    _intendedWalkDir() {
+        let h = 0, v = 0;
+        for (const code of this._heldDirKeys) {
+            const d = DIRS[code];
+            if (!d) continue;
+            if (d.dx) h = d.dx;
+            if (d.dy) v = d.dy;
+        }
+        if (this._queuedMoveDir) {
+            if (this._queuedMoveDir.dx) h = this._queuedMoveDir.dx;
+            if (this._queuedMoveDir.dy) v = this._queuedMoveDir.dy;
+        }
+        if (!h && !v) return null;
+        return { dx: h, dy: v };
+    }
+
+    // Resolve an intended (possibly diagonal) walk vector into the actual step.
+    // A diagonal is taken only when both orthogonal component tiles AND the
+    // diagonal tile are open — never cut through a wall seam. If a component is
+    // blocked, slide along whichever axis is open so a diagonal into a wall
+    // keeps you moving instead of stopping dead. Cardinals pass through.
+    _resolveWalkStep(dir) {
+        if (dir.dx === 0 || dir.dy === 0) return dir;
+        const px = this.playerX, py = this.playerY;
+        const horizOpen = this.map.isWalkable(px + dir.dx, py);
+        const vertOpen  = this.map.isWalkable(px, py + dir.dy);
+        const destOpen  = this.map.isWalkable(px + dir.dx, py + dir.dy);
+        if (horizOpen && vertOpen && destOpen) return dir;   // clean diagonal
+        if (vertOpen)  return { dx: 0, dy: dir.dy };          // slide vertically
+        if (horizOpen) return { dx: dir.dx, dy: 0 };          // slide horizontally
+        return { dx: 0, dy: dir.dy };                         // boxed in → cardinal bump
+    }
+
+    // Called at the end of every completed tile slide. Decides the next step
+    // from the combined held-key vector (8-way), resolved against wall seams.
+    // The _autoRepeatShouldStop gate is preserved verbatim so held-walking
+    // still halts before consequential tiles (walls/enemies/pickups/
+    // transitions/hazards) — only the first deliberate press may take such a
+    // step. (fix/critical-path safety intact)
     _onStepSettled() {
         if (this.state !== STATE.IDLE) return;
-        let next = this._queuedMoveDir;
+        const intent = this._intendedWalkDir();   // folds in the one-deep buffer
         this._queuedMoveDir = null;
-        if (!next && this._heldDirKeys.length) {
-            next = DIRS[this._heldDirKeys[this._heldDirKeys.length - 1]];
-        }
-        if (!next) return;
-        if (this._autoRepeatShouldStop(next)) return;
-        this._doMove(next);
+        if (!intent) return;
+        const step = this._resolveWalkStep(intent);
+        if (this._autoRepeatShouldStop(step)) return;
+        this._doMove(step);
     }
 
     // Stop all continuous walking and clear pending movement intent. Named for
@@ -2227,8 +2263,9 @@ class Game {
 
     // ── Canonical adjacent-hostile filter ────────────────────────────────────
     //
-    // Returns cardinal-adjacent enemies that are (a) alive and (b) pass the
-    // behavior-whitelist HOSTILE gate. The gate's semantics: an enemy with
+    // Returns adjacent enemies — 8-way, orthogonally or diagonally (Chebyshev
+    // distance 1) — that are (a) alive and (b) pass the behavior-whitelist
+    // HOSTILE gate. The gate's semantics: an enemy with
     // no behavior array is a legacy hostile (back-compat with pre-FSM data);
     // an enemy with a behavior array is hostile only if 'HOSTILE' appears
     // in that array. Flipped allies (disposition flip removed HOSTILE) and
@@ -2241,7 +2278,7 @@ class Game {
     _adjacentHostiles() {
         return this.enemies.filter(e =>
             e.entity.isAlive()
-            && manhattan(e.x, e.y, this.playerX, this.playerY) === 1
+            && cheb(e.x, e.y, this.playerX, this.playerY) === 1
             && (!e.behavior || e.behavior.includes('HOSTILE'))
         );
     }
@@ -2580,7 +2617,7 @@ class Game {
         }
 
         if (target) {
-            if (bestDist <= 1) {
+            if (cheb(ally.x, ally.y, target.x, target.y) <= 1) {
                 const result = attack(ally.entity, target.entity, ally.damage);
                 if (result) {
                     this._spawnHitSplat(target.x, target.y, `-${result.dealt}`, 'physical', { omni: true });
