@@ -95,6 +95,14 @@ export const SHEETS = {
     tinyDungeon:  { src: TINY_DUNGEON, frameW: 16, frameH: 16 },
     tinyTown:     { src: TINY_TOWN,    frameW: 16, frameH: 16 },
 
+    // World-dressing (Kenney CC0): the packed roguelikeCity atlas — cars,
+    // building facades, lampposts, storefronts. Gutter-free → padding 0; tiles
+    // reference it via pixel-region refs (drawRegion).
+    roguelikeCity: { src: `${K}/roguelikeCity_packed.png`, frameW: 16, frameH: 16 },
+    // The town car, pre-framed into one 32px tile from roguelikeCity (replaces
+    // the wooden-bucket placeholder at TOWN_TILE_SPRITE_MAP[19]).
+    car:           { src: './assets/car.png', frameW: 32, frameH: 32 },
+
     // Kenney Emote Pack (Pixel, Style 1) — 16x16 down-tail speech balloons for
     // Town Clock ambient reactions + disposition faces. Horizontal strip packed
     // by tools/gen_emote_sheet.py; column order = EMOTE_SPRITES below. Packed
@@ -145,12 +153,12 @@ export const TOWN_TILE_SPRITE_MAP = {
     11: { sheet: 'tinyTown', col: 1, row: 9 },       // sidewalk — light gray stone slab
     12: { sheet: 'tinyTown', col: 1, row: 2 },       // road — borderless dirt-field center (edge cells carry grass borders)
     13: { sheet: 'tinyTown', col: 0, row: 0 },       // grass — plain green
-    14: { sheet: 'tinyTown', col: 0, row: 6 },       // building wall — tan brick
+    14: { sheet: 'roguelikeCity', col: 1, row: 6 },  // building wall — red-brick city facade (world-dressing; was tinyTown tan brick)
     15: { sheet: 'tinyTown', col: 1, row: 7 },       // door — brown door in wood facade
     16: { sheet: 'tinyTown', col: 7, row: 8 },       // sewer entry — stone well opening (manhole proxy)
     17: { sheet: 'tinyTown', col: 9, row: 3 },       // fence — vertical wood plank
     18: { sheet: 'tinyTown', col: 11, row: 6 },      // streetlight — sign-on-post (no lamp in pack)
-    19: { sheet: 'tinyTown', col: 10, row: 10 },     // car — wooden bucket (placeholder, no vehicle in pack)
+    19: { sheet: 'car', col: 0, row: 0 },            // car — Kenney roguelikeCity beater (world-dressing; was the wooden-bucket placeholder)
     20: { sheet: 'tinyTown', col: 9, row: 6 },       // bench — horizontal wood rail
     21: { sheet: 'tinyTown', col: 11, row: 8 },      // trash can — pot/cauldron (cylinder proxy)
 };
