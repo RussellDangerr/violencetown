@@ -1,156 +1,140 @@
-# Combat Wheel — Radial XMB Overhaul (design spec)
+# Combat Wheel — Radial Sunburst Overhaul (design spec)
 
-**Date:** 2026-06-28 · **Status:** design approved (brainstorming), ready for an implementation plan
-**Supersedes the render of:** `combat-wheel-rework.md` (the verb-tree *model* it introduced stays;
+**Date:** 2026-06-28 · **Status:** design APPROVED (brainstorming) — ready for an implementation plan.
+**Supersedes the render of:** `combat-wheel-rework.md` (its verb-tree *model* survives but is made deeper;
 only the on-screen *tape* render + interaction are replaced).
 
 ## Context
 
-The combat action menu drifted from the XMB / spinning-wheel feel it was meant to have into a flat
-horizontal **tape** of options (`renderer._drawWheel`). It's fluid but it lost the spatial wheel that
-made selection legible and satisfying. We're rebuilding it as a true **radial** wheel — but, after
-research (below), *not* the multi-ring concentric wheel first sketched. The underlying model
-(`wheel-model.js`: depth levels CATEGORY → VERB → ITEM/SPELL → AIM, with `cycle` = spin and
-`forward`/`back` = drill/collapse) is the right abstraction and is **kept**; this is a render +
-interaction overhaul, low model risk.
+The combat action menu drifted from the XMB / spinning-wheel feel it was meant to have into a flat horizontal
+**tape** (`renderer._drawWheel`). We're rebuilding it as a **concentric radial sunburst**. The `wheel-model.js`
+depth model (CATEGORY → … → AIM, with `cycle` = spin and `forward`/`back` = drill/collapse) is the right
+abstraction and is kept, but the **verb tree gets deeper** (Fight → Melee/Ranged/Magic; Melee → Hit/Cleave/Spin),
+so this is a model *and* render overhaul.
 
-## Research basis (what shipped games do right)
+**Research note (informed, deliberate):** parallel research (radial/XMB menus; nested combat menus; game-feel /
+readability / accessibility) cautioned that *concentric* rings are the classic radial failure — **for menus with
+many options per ring**. We are choosing concentric anyway because every level here has only **3–4 options** (big,
+readable wedges) and the deeper levels render as **greyed partial-arc previews**, not full competing rings — which
+defuses the pitfall. We keep the research's other wins (predictive highlight, cursor memory, world-pause, juice,
+color+label, touch targets), most of which the codebase already enables.
 
-Three parallel research passes (radial/weapon-wheels + XMB; nested combat menus; game-feel /
-readability / accessibility) converged hard:
+## The visual model (this is the part that took the iterating — be exact)
 
-- **Do NOT nest concentric rings.** Shrinking wedges + unreadable inner labels + ambiguous angles is
-  the classic radial failure (cited disaster: *Temple of Elemental Evil*). The proven pattern is
-  *Monster Hunter World*: keep each ring **flat** and **swap** it on drill-in.
-- **4 options → the cardinals** (*Crysis* nanosuit): unambiguous on key / d-pad / thumb.
-- **≤6 wedges per ring** (*Witcher 3* signs = 5 is the sweet spot; 8 is the hard ceiling).
-- **Fixed pointer + move the content** (*XMB*): spin the ring so the choice arrives at one fixed
-  highlight, rather than a cursor chasing tiny wedges — far crisper at pixel scale.
-- **Center = dead-zone + live readout + aim origin** (*Mass Effect* fuses select + aim).
-- **Persistent text breadcrumb** for depth; **parent shown as a dimmed strip, not a second ring**
-  (*Final Fantasy* persistent column).
-- **Predictive highlight** — show the highlighted option's effect *before* commit. Called the single
-  highest-leverage legibility feature. **We already have it** (`affectedTiles`).
-- **Cursor memory** — reopen lands on last turn's action (*FF*). **We have `lastFired`.**
-- **Pause the world while open** — every weapon-wheel game does. **Our clock already holds the turn
-  during selection.**
-- **Juice:** open with overshoot; snap selection in ~100ms + an audio *tick*; hit-pause (2–3 frames) +
-  a *thunk* on commit (*Juice it or lose it*; *Art of Screenshake*). **We have procedural SFX.**
-- **Color + icon + label, never color alone**; pixel-art silhouette-first; colorblind-safe palettes
-  (blue↔orange over red↔green); ≥44px touch targets; reduce-motion path.
+At any moment the wheel is a sunburst centred on the canvas radial centre:
 
-## Goals / non-goals
+- **Center hub** — the root label **`MENU`** (or the current breadcrumb tip as you go deeper).
+- **Greyed decision-stack rings (inner)** — every level you have **locked in** (drilled past), drawn as a *full*
+  ring of curved tiles with the chosen option highlighted, **colours desaturated/greyed**. This is your decision
+  trail; it grows inward toward the hub as you drill.
+- **Active ring (bright, full)** — the level you are **on right now**. A full ring of curved, colour-coded
+  "Simon-Says" tiles; the **selected tile sits at the top** under a fixed pointer (`▲`). You **spin** this ring.
+- **Preview (partial arc of curved tiles, above the pointer)** — the **highlighted** option's children, rendered
+  as **a couple of curved arc tiles (semicircle-style segments) fanning up over the pointer** — NOT a full ring.
+  The **last-used child is centred at the top**; its neighbours render **greyed** to either side. If the option
+  has more children than the few previewed, the rest are implied (and **populate into the full active ring only
+  when you drill in**). When the highlighted option is a **leaf** (no children — e.g. Hit/Cleave/Spin), there is
+  no preview arc; show a small "fire" cue instead.
 
-**Goals**
-- Replace the tape with a radial wheel that reads at a glance: which level you're on, what's
-  left/right, what up/down does.
-- Hybrid selection: **categories direction-picked on the 4 cardinals; deeper levels spun to a fixed
-  pointer.**
-- Keep every win we already enable (predictive highlight, cursor memory, world-pause, SFX,
-  reduce-motion) and surface them in the new UI.
-- Work equally on keyboard and touch; legible on a small phone.
+Reading the wheel top-to-center gives the path: the preview tiles (next level) → the active selection (`▲`) →
+the greyed decisions → `MENU`.
 
-**Non-goals (this overhaul)**
-- No change to the verb-tree *model* (categories/verbs/spells/items, `cycle`/`forward`/`back`).
-- No new combat verbs or spells (Cleave/Spin/Fireball/Cone already shipped).
-- Full per-CVD colorblind presets are deferred to the final phase, not a blocker.
+## Interaction
 
-## Design
+- **Spin (`◄ ►` / swipe / tap a tile):** rotate the active ring so your choice comes under the top pointer. The
+  preview arc updates to the new highlight's children.
+- **Drill (`▲` / action button):** lock the highlighted tile — it desaturates into a new greyed decision ring
+  (joining the stack), the **preview arc tiles complete into the new bright active full ring**, and a fresh
+  preview arc appears for the new highlight. (Re-center / zoom transition.)
+- **Back (`▼` / swipe-down / tap a decision crumb):** collapse the active ring back into a preview arc; the most
+  recent greyed decision ring becomes bright/active again.
+- **Fire:** `▲` on a **leaf** (Hit/Cleave/Spin, a spell, a self-verb) activates the ability → **AIM** (the
+  reticle + `affectedTiles` predictive highlight) when it needs a target; the Plus-Ultra ally-confirm still gates.
+- **Cursor memory:** every level remembers its last selection; the **top wheel opens on your last category**, so a
+  repeat is drill-drill-fire. (We have `lastFired`.)
+- **Placeholders:** a level with fewer than ~2 real options is padded with temporary `placeholder` tiles so there
+  is always a full wheel to spin; real content replaces them later.
 
-### 1. Interaction — Hybrid
+## The tree (APPROVED)
 
-- **Top level (CATEGORY) = the 4 cardinals.** `Up = Fight`, `Down = Flight`, `Left = Trick`,
-  `Right = Treat`. A direction press/flick *selects that category and drills in* in one input. The
-  Up/Down axis reads as engage vs disengage.
-- **Deeper (VERB → ITEM/SPELL) = spin.** `◄ ►` (Left/Right) spins the flat ring so the choice rotates
-  up under the fixed pointer; `▲`/Space/action-button drills in (or fires when nothing is left to
-  pick); `▼`/Esc backs out one level. The category's **hue carries down** every level.
-- **AIM** is unchanged: the reticle, predictive tiles (`affectedTiles`), snappy direction-melee
-  (adjacent verbs commit on a direction), and the Plus-Ultra ally-confirm.
-- **Cursor memory:** reopening restores `lastFired`'s full path, so a repeat is two confirms.
-- **Expert bypass (Phase 4, optional):** hold a category key + flick a verb to pre-compose past the
-  rings (Witcher Quick-Cast style).
+```
+MENU
+├─ Fight
+│  ├─ Melee   → Hit · Cleave · Spin        (leaves — ▲ fires, then AIM)
+│  ├─ Ranged  → <throwable items>          (pad with placeholders when carrying < 2)
+│  └─ Magic   → Fireball · Cone of Cold
+├─ Trick  → Throw · Trade
+├─ Treat  → Eat · Cleanse
+└─ Flight → Defend · Hide · Wait · Run
+```
 
-### 2. Render
+`Hit` is the basic strike (the old single-target `combatAttack`). **Cleave and Spin relocate *under* Melee** —
+the abilities themselves are unchanged (`cleaveAttack`, `spinAttack`, `castSpell`, `resolveThrow` all stay); only
+their **position in the tree** moves. Fight's direct children become **sub-wheels** (Melee/Ranged/Magic), each with
+its own children, so the tree is one level deeper than the flat Fight ring we shipped.
 
-- **CATEGORY** draws as a 4-cardinal **compass**: four wedges/pills on Up/Down/Left/Right, color-coded,
-  the highlighted one bright; hub shows the category name.
-- **Deeper** collapses the compass into a dimmed **breadcrumb** (`Fight ▸ Cleave`) and the active
-  **flat ring** takes over: ≤6 wedges, fill = the category hue, the selected wedge at top under the
-  `▲` pointer (brighter + outlined + a non-color cue so it survives greyscale / the squint test).
-- **Hub** (center, dead-zone) names the focused choice and co-locates its cost/effect right there:
-  `2/3 dmg · hits 3`, `Fireball · 12 MP`, `Bribe · 5 GP`, item counts, etc.
-- **Predictive highlight:** as you hover a verb/spell, light the tiles it would hit via
-  `affectedTiles` (Cleave's arc off the player's facing, Spin's ring, a spell's burst/cone). At the
-  AIM level this is the existing reticle highlight.
-- **Colors (proposal):** Fight = red, Flight = blue, Trick = amber, Treat = green; carried down through
-  the drill. Every wedge also carries a **label** (and an **icon** in Phase 4) so color is never the
-  sole differentiator. Greyed/dimmed for unavailable options (never reflow positions — muscle memory).
+## Render (`renderer.js` `_drawWheel` → sunburst)
 
-### 3. Feel
+- Concentric draw order: hub → greyed decision rings → bright active ring → partial preview arc (curved tiles).
+- A reusable **curved-tile** primitive (donut-wedge) is the unit for every ring and the preview arc.
+- The selected tile of the active ring is the focal point: brightest, outlined, plus a **non-colour cue** (border /
+  pulled radius) so it survives the squint test and greyscale.
+- Colours: per-tile category/verb hue ("Simon-Says"); greyed for decided + preview. Labels on tiles; **icons**
+  (Kenney / item sprites) are a Phase-4 polish so colour is never the sole differentiator.
+- Predictive highlight via `affectedTiles` when a leaf ability is highlighted/aimed.
 
-- **Open:** quick scale overshoot (~0.85→1.05→1.0, ~150–200ms, fast ease-out).
-- **Spin:** eased angular rotation (~100–130ms, front-loaded) so the selection snaps to top; a short
-  **tick** SFX per step; interruptible (input the next spin immediately).
-- **Drill / back:** the chosen wedge **expands** into the next ring; backing **collapses** it into the
-  parent — motion encodes direction.
-- **Commit:** 2–3 frame hit-pause + a brighter flash on the chosen + a heavier **confirm** SFX
-  (existing `menu-confirm`), then collapse toward the chosen wedge.
-- **World pauses** while the wheel is open (already true — it composes one turn).
-- **Reduce-motion** (existing setting): drop overshoot/rotation/expand-collapse → instant snaps; keep
-  the color/border swap + audio so feedback survives.
+## Feel / juice
 
-### 4. Touch
+Open with a quick scale overshoot; **spin** snaps the selection to top (~100ms, front-loaded) with a `menu-tick`;
+**drill** re-centers (the active ring eases inward to greyed, the preview arc expands into the new active ring);
+**fire** gets a 2–3 frame hit-pause + a `menu-confirm` "thunk." The **world stays paused** while the wheel is open
+(already true). A **reduce-motion** path (existing setting) swaps the transitions for instant snaps, keeping the
+colour/border change + audio.
 
-- **CATEGORY:** tap or flick a cardinal quadrant (the d-pad's four directions map 1:1 to the four
-  categories). The action button drills/fires.
-- **Deeper:** tap a wedge to select it directly, or d-pad `◄►` to spin; the action button drills/fires;
-  tap a breadcrumb crumb (a back target) or swipe-down to back out.
-- ≥44px hittable wedge area at the narrowest point; dead-center dead-zone so a resting thumb doesn't
-  pre-select.
+## Touch
+
+Spin = swipe around the active ring or tap a tile; `▲` = the action button; back = swipe-down or tap a greyed
+decision crumb; ≥44px hittable wedge area; dead-center hub. The preview arc tiles are taps that drill into that
+child directly.
 
 ## Architecture (where it lands)
 
-- **`renderer.js` `_drawWheel`** — the big piece: rewrite tape → radial (compass at CATEGORY; flat
-  ring + pointer + hub + breadcrumb deeper; predictive-highlight hook; spin/drill/open animation,
-  reduce-motion aware). `_drawRadialMenu` already delegates here.
-- **`main.js`** — input: at CATEGORY, map a direction to *select category + forward* (the Hybrid
-  direction-pick); deeper levels keep `cycle` (spin) / `forward` (drill) / `back`. Touch:
-  rewrite `_tapRadialMenu` (tap a wedge / tap a cardinal quadrant / tap a breadcrumb crumb to back;
-  reuse the affected-tile/reticle work for AIM taps). The snappy `_reticleKey` stays.
-- **`layout.js`** — radial geometry: ring inner/outer radii, hub radius, pointer position, the
-  cardinal slot angles. Replaces the legacy `RING_*` / `RADIAL_*` consts (vestigial from the old
-  3-ring wheel) — clean them up.
-- **`wheel-model.js`** — small adds only: a category→cardinal map + a breadcrumb-path accessor;
-  optionally a `directionSelectCategory(w, dir)` helper. No structural model change.
-- **`audio.js`** — reuse `menu-tick` (hover/spin) + `menu-confirm` (commit); add an `menu-open` cue if
-  one doesn't exist.
-- **`settings.js`** — reduce-motion already exists; the radial honors it.
+- **`wheel-model.js`** — deeper `VERB_TREE` (Fight → Melee/Ranged/Magic sub-wheels; Melee → Hit/Cleave/Spin;
+  Ranged/Magic sub-wheels). `cycle`/`forward`/`back` already handle arbitrary depth, so the change is the tree
+  *shape* + wiring resolvers to the new leaves (`Hit` = `combatAttack`, etc.). Add accessors the renderer needs:
+  the **decision-stack path** and the **highlighted option's children** (for the preview arc). Add the
+  **placeholder-padding** rule for thin levels.
+- **`renderer.js` `_drawWheel`** — tape → sunburst (the big piece): curved-tile primitive, the four layers above,
+  the spin/drill transition + reduce-motion.
+- **`main.js`** — map spin/drill/back/fire to `cycle`/`forward`/`back`/`_fireWheel` (already close); rewrite
+  `_tapRadialMenu` for the sunburst (tap a tile / preview tile / decision crumb; AIM taps reuse the reticle work).
+  Snappy `_reticleKey` stays.
+- **`layout.js`** — sunburst geometry: hub radius, per-ring radii, the preview-arc band + angular span, pointer
+  position, curved-tile angular gap. Replace the legacy `RING_*` / `RADIAL_*` consts (vestigial 3-ring wheel).
+- **`audio.js` / `settings.js`** — reuse `menu-tick`/`menu-confirm`; reduce-motion already exists.
 
-## Phasing (each its own branch off dev → merge after verify)
+## Phasing (each a branch off dev → verify → merge)
 
-1. **Radial render replacing the tape.** Compass + flat ring + pointer + hub + breadcrumb + category
-   color. Static (no animation yet). This is the structural correction; nothing else regresses.
-2. **Hybrid input + touch.** Category direction-pick; deeper spin/drill (mostly already wired); the
-   radial tap model (wedge / quadrant / breadcrumb).
-3. **Juice + reduce-motion.** Open overshoot, spin rotation, drill expand/collapse, hit-pause, audio.
-4. **Predictive-highlight-on-hover + icons + colorblind presets.** Extend `affectedTiles` highlight to
-   the verb/spell hover (before AIM); Kenney/item icons on wedges; per-CVD palette presets.
+1. **Deeper tree + sunburst render (static).** `wheel-model` tree restructure (Fight → Melee/Ranged/Magic, Melee →
+   Hit/Cleave/Spin, etc.) + the sunburst draw (hub, greyed stack, active ring, arc-tile preview) replacing the
+   tape. No animation yet. Verify every ability still reaches its resolver through the new path.
+2. **Interaction + touch.** Spin/drill/back/fire mapped through the model; the sunburst tap model; placeholders.
+3. **Juice + reduce-motion.** Open overshoot, spin snap, drill re-center transition, fire hit-pause, audio.
+4. **Predictive-highlight-on-hover + icons + colorblind presets + placeholder polish.**
 
-## Risks / open questions
+## Risks / open
 
-- **Predictive highlight before AIM** needs a facing/seed to compute Cleave/Spin tiles at verb-hover
-  (no reticle yet) — use the player's facing + nearest hostile; confirm it reads cleanly.
-- **Color choice:** Fight=red / Treat=green is a red-green pair; mitigated by different cardinals +
-  labels + (Phase 4) icons + presets. Pick final hues against the parchment/dark UI for ≥4.5:1.
-- **Spin vs direction at deeper levels with ≤4 options** (Trick=2, Treat=2, Flight=4): keep spin
-  everywhere below CATEGORY for consistency, or let ≤4 levels also direction-pick? Default: spin
-  everywhere below the cardinals (one consistent rule). Revisit if it feels slow.
-- **Animation budget on a phone canvas** — keep transitions short + interruptible (combat is
-  high-frequency; a delightful-once animation becomes friction by the 50th turn).
+- **Concentric readability at depth** — mitigated by ≤4 options/level + greyed previews; keep the selected-at-top
+  the clear focus and watch label legibility (icons in Phase 4 help).
+- **Muscle-memory reset** — Cleave/Spin now live under Melee, so the path to them changes from the flat Fight ring
+  we just shipped. Acceptable for an overhaul; cursor memory softens repeats.
+- **Ranged sub-wheel = throwable items** — needs the placeholder rule when the bag has < 2 throwables.
+- **Leaf with no children** — show a "fire" cue, not an empty preview arc.
+- **Preview before AIM for fixed-pattern abilities** (Cleave arc / Spin ring) can preview off the player's facing;
+  reticle verbs preview at AIM.
 
 ## Already in place (low-cost wins to surface)
 
-`affectedTiles` (predictive highlight) · `lastFired` (cursor memory) · clock world-pause during the
-wheel · procedural SFX (`menu-tick`/`menu-confirm`) · reduce-motion setting · the Kenney icon set
-(touch overhaul) for wedge icons.
+`affectedTiles` (predictive highlight) · `lastFired` (cursor memory) · clock world-pause during the wheel ·
+procedural SFX (`menu-tick`/`menu-confirm`) · reduce-motion setting · the Kenney icon set for wedge icons ·
+the shipped resolvers (`combatAttack`/`cleaveAttack`/`spinAttack`/`castSpell`/`resolveThrow`).
