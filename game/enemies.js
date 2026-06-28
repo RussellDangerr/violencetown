@@ -14,7 +14,7 @@
 // additive — existing map JSONs without `behavior` fields keep working.
 
 import { Entity, attack, formatDamageNumber } from './combat.js';
-import { manhattan } from './utils.js';
+import { manhattan, chebyshev } from './utils.js';
 import { getGreedyStep, stepEntity } from './pathing.js';
 import { tickNpcState } from './npc.js';
 
@@ -239,7 +239,7 @@ export function resolveEnemyTurns(game) {
         // Blind debuff halves outgoing damage (deterministic — no RNG, per
         // combat.js's "no miss" contract). The Math.max(1, ...) clamp
         // mirrors combat.js's "at least 1 always lands" rule.
-        if (dist <= 1) {
+        if (chebyshev(enemy.x, enemy.y, game.playerX, game.playerY) <= 1) {
             const dmg = enemy.hasBuff('blind')
                 ? Math.max(1, Math.floor(enemy.damage * 0.5))
                 : enemy.damage;
