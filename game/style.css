@@ -107,7 +107,14 @@ body {
 #splash-canvas {
     image-rendering: pixelated;
     image-rendering: crisp-edges;
-    width: 640px; height: 440px;
+    /* 320×220 bitmap shown at up to 2× (640×440), but never wider than the
+       viewport (minus the box-shadow frame) nor so tall its derived height
+       crowds out the buttons/hint. Folding the height cap into the width via
+       min() keeps the 16:11 ratio exact at every size — no distortion, and
+       desktop is unchanged (min() resolves to 640). */
+    width: min(640px, calc(100vw - 24px), calc((100vh - 180px) * 320 / 220));
+    aspect-ratio: 320 / 220;
+    height: auto;
     position: relative; z-index: 1;
     /* Chunky multi-layer pixel frame: hairline black seat → gold trim →
        dark bezel, then a soft outer glow. Reads like a framed cabinet
@@ -129,65 +136,53 @@ body {
 /* Chunky beveled arcade keys. The stacked box-shadow builds a hard 3px
    "lip" beneath each button so it reads as a physical key; :active
    collapses the lip and drops the button down for a tactile press. */
+/* Aged-brown 9-slice keys matching the in-game menu buttons (parchment theme).
+   The dark arcade-cabinet vignette / scanlines / gold-breathe around them stay. */
 #splash-buttons button {
-    background: linear-gradient(180deg, var(--panel-2) 0%, var(--panel) 100%);
-    border: 2px solid var(--gold-dim);
-    color: var(--gold);
+    background-color: #8a5a2c;                 /* fallback if border-image fails */
+    border: 14px solid transparent;
+    border-image: url(assets/ui/panel_brown.png) 8 fill / 14px stretch;
+    image-rendering: pixelated;
+    color: #f3e3c0;
     font-family: 'Courier New', monospace;
     font-size: 14px; font-weight: 700;
-    padding: 12px 34px;
-    cursor: pointer;
     letter-spacing: 4px;
-    text-shadow: 0 1px 0 #000;
-    box-shadow:
-        inset 0 1px 0 rgba(241, 212, 136, 0.15),
-        0 3px 0 0 #000,
-        0 4px 6px rgba(0, 0, 0, 0.5);
-    transition: transform 70ms ease, box-shadow 70ms ease,
-                background 140ms ease, color 140ms ease, border-color 140ms ease;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
+    padding: 6px 22px; min-height: 46px;
+    cursor: pointer;
+    transition: filter 120ms ease, color 140ms ease, transform 70ms ease;
 }
 
-/* Primary key (GAME START) — gold face, breathing glow draws the eye. */
+/* Primary key (GAME START) — brighter, with a breathing gold glow. */
 #splash-go {
-    background: linear-gradient(180deg, #3a3020 0%, var(--panel) 100%);
-    border-color: var(--gold);
-    color: var(--gold-bright);
+    filter: brightness(1.1);
+    color: #fff8e6;
     animation: splash-go-pulse 2.4s ease-in-out infinite;
 }
 @keyframes splash-go-pulse {
-    0%, 100% {
-        box-shadow:
-            inset 0 1px 0 rgba(241, 212, 136, 0.2),
-            0 3px 0 0 #000, 0 4px 6px rgba(0,0,0,0.5),
-            0 0 0 0 rgba(212, 185, 106, 0);
-    }
-    50% {
-        box-shadow:
-            inset 0 1px 0 rgba(241, 212, 136, 0.2),
-            0 3px 0 0 #000, 0 4px 6px rgba(0,0,0,0.5),
-            0 0 16px 2px rgba(212, 185, 106, 0.5);
-    }
+    0%, 100% { box-shadow: 0 0 6px 1px rgba(212, 185, 106, 0.25); }
+    50%      { box-shadow: 0 0 18px 3px rgba(212, 185, 106, 0.6); }
 }
 
 #splash-buttons button:hover {
-    background: linear-gradient(180deg, #463a26 0%, var(--panel-2) 100%);
-    border-color: var(--gold-bright);
+    filter: brightness(1.15);
     color: #fff;
     animation-play-state: paused;
 }
 #splash-buttons button:active {
-    transform: translateY(3px);
-    box-shadow:
-        inset 0 1px 0 rgba(241, 212, 136, 0.15),
-        0 0 0 0 #000,
-        0 1px 2px rgba(0, 0, 0, 0.6),
-        0 0 14px 2px rgba(212, 185, 106, 0.45);
+    transform: translateY(2px);
+    filter: brightness(0.9);
     animation-play-state: paused;
 }
+/* GAME START needs its OWN state filters: its base #splash-go { filter }
+   (id specificity 1,0,0) otherwise beats the shared :hover/:active (0,1,1),
+   killing its press feedback. */
+#splash-go:hover  { filter: brightness(1.25); animation-play-state: paused; }
+#splash-go:active { filter: brightness(0.95); transform: translateY(2px); animation-play-state: paused; }
 
 #splash-hint {
     position: relative; z-index: 3;
-    font-size: 10px; color: var(--text-dim);
+    font-size: 10px; color: var(--gold-dim);
     letter-spacing: 3px; text-transform: uppercase;
     animation: splash-hint-blink 1.6s steps(1, end) infinite;
 }
@@ -238,29 +233,28 @@ body {
    one button opens an action sheet with Wait / Cancel / Help / Restart.
    Centralizing these as a menu frees screen space (was two buttons) and
    gives Help a discoverable home on touch where ? key isn't reachable. */
+/* Desktop ☰ — aged-brown chip matching the menu buttons (gold rim, cream
+   glyph). The mobile media query overrides this to the Kenney ctrl_menu sprite. */
 #menu-btn {
     position: absolute; top: 8px; right: 8px;
-    background: #1a1610;
-    border: 1px solid #3a3020;
-    color: #b89668;
+    background: #8a5a2c;
+    border: 2px solid #d4b96a;
+    color: #f3e3c0;
     font-family: 'Courier New', monospace;
     font-size: 16px;
     line-height: 1;
     padding: 4px 10px;
     cursor: pointer;
     z-index: 10;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
-    transition: transform 80ms ease, box-shadow 120ms ease,
-                background-color 120ms ease, border-color 120ms ease,
-                color 120ms ease;
+    transition: transform 80ms ease, filter 120ms ease;
 }
-#menu-btn:hover { border-color: #8b7340; color: #d4b96a; }
+#menu-btn:hover { filter: brightness(1.12); color: #fff8e6; }
 #menu-btn:focus-visible { outline: 2px solid #d4b96a; outline-offset: 2px; }
 #menu-btn:active {
     transform: scale(0.93);
-    background: #2a2218;
-    border-color: #d4b96a;
-    color: #fff;
+    filter: brightness(0.9);
     box-shadow: 0 0 14px rgba(212, 185, 106, 0.55),
                 0 1px 3px rgba(0, 0, 0, 0.5);
 }
@@ -270,7 +264,7 @@ body {
 #version-badge {
     position: absolute; bottom: 8px; right: 8px;
     background: rgba(20, 16, 10, 0.85);
-    border: 1px solid #5a4a30;
+    border: 1px solid #8b7340;
     color: #d4b96a;
     font-family: 'Courier New', monospace;
     font-size: 10px;
@@ -733,18 +727,134 @@ body {
     outline-offset: 2px;
 }
 
+/* ════════════════════════════════════════════════════════════════════════
+   KENNEY "PIXEL ADVENTURE" PANEL THEME  (overhaul: touch + menus)
+   A parchment 9-slice frame holding aged-brown 9-slice buttons. Declared
+   after the original dark-chrome rules so it wins on specificity ties.
+   Frames are real Kenney CC0 tiles (see tools/gen_ui_panels.py) used as
+   border-image; text colors flip to dark ink on the parchment fill.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* --- Panel frames: parchment 9-slice (replaces the dark box-shadow chrome) --- */
+#menu-sheet-panel,
+#help-modal-panel,
+#options-modal-panel,
+#pause-overlay-panel {
+    background-color: #e9dcc0;                 /* fallback if border-image fails */
+    border: 16px solid transparent;
+    border-image: url(assets/ui/panel_parchment.png) 8 fill / 16px stretch;
+    image-rendering: pixelated;
+    box-shadow: none;
+    color: #4a3a22;
+    padding: 12px 16px 16px;
+}
+/* Retire the gold corner-gem pseudo-elements — the Kenney frame has its own. */
+#menu-sheet-panel::before,  #menu-sheet-panel::after,
+#help-modal-panel::before,  #help-modal-panel::after,
+#options-modal-panel::before, #options-modal-panel::after,
+#pause-overlay-panel::before, #pause-overlay-panel::after { display: none; }
+
+/* Panel titles — dark ink on parchment. */
+#help-modal-panel h2,
+#options-modal-panel h2,
+#pause-overlay-panel h2 { color: #5a4326; }
+
+/* --- Buttons: aged-brown 9-slice --- */
+.menu-item {
+    background-color: #8a5a2c;                 /* fallback if border-image fails */
+    border: 14px solid transparent;
+    border-image: url(assets/ui/panel_brown.png) 8 fill / 14px stretch;
+    image-rendering: pixelated;
+    color: #f3e3c0;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
+    padding: 6px 10px;
+    min-height: 46px;
+    transition: filter 0.12s, color 0.12s;
+}
+.menu-item:hover,
+.menu-item:focus-visible {
+    background-color: #8a5a2c;
+    filter: brightness(1.13);
+    color: #fff8e6;
+}
+.menu-item:active { filter: brightness(0.9); transform: translateY(1px); }
+.menu-item-danger { color: #ff9a6a; }
+.menu-item-danger:hover { color: #ffb487; filter: brightness(1.05); }
+.menu-item-close { color: #e2d2ac; }
+
+/* --- Help modal content on parchment --- */
+#help-modal-panel { color: #4a3a22; }
+#help-modal-panel h3 { color: #5a4326; border-bottom-color: #bda572; }
+#help-modal-panel li { color: #4a3a22; }
+#help-modal-panel .help-lede { color: #6a5a3a; }
+#help-modal-panel .help-touch { color: #4a6a28; }
+#help-modal-panel .help-foot { color: #7a6647; border-top-color: #bda572; }
+#help-modal-panel a { color: #9a5a18; }
+#help-modal-panel a:hover { color: #6a3a08; }
+#help-modal-panel kbd {
+    background: #d9c9a4;
+    border-color: #8b7340;
+    color: #4a3a22;
+}
+
+/* --- Options modal controls on parchment --- */
+#options-modal-panel { color: #4a3a22; }
+.opt-row label { color: #5a4326; }
+.opt-val { color: #5a4326; }
+.opt-note { color: #7a6647; border-top-color: #bda572; }
+.opt-slider { background: #cbb588; border-color: #8b7340; }
+.opt-slider::-webkit-slider-thumb {
+    background: #7a5a2a; border-color: #3a2a12;
+    box-shadow: 0 0 0 1px #b9985a;
+}
+.opt-slider::-moz-range-thumb {
+    background: #7a5a2a; border-color: #3a2a12;
+    box-shadow: 0 0 0 1px #b9985a;
+}
+/* Toggle pills: simple brown fill + gold rim (crisper than a 9-slice at this
+   size). .is-on brightens toward gold. */
+.opt-toggle {
+    background: #8a5a2c;
+    border: 2px solid #d4b96a;
+    color: #e2d2ac;
+}
+.opt-toggle:hover,
+.opt-toggle:focus-visible { border-color: #fff0c4; color: #fff8e6; }
+.opt-toggle.is-on { background: #b07a2e; border-color: #ffe7a0; color: #fff8e6; }
+
+/* --- Pause overlay on parchment --- */
+#pause-overlay-panel .pause-hint { color: #7a6647; }
+
 @media (pointer: coarse), (max-width: 700px) {
-    /* Reclaim wasted vertical space above the canvas in portrait. The
-       wrapper normally centers in 100vh, which leaves ~220px of empty
-       black above a 375px-tall canvas on a 812px viewport. Anchor the
-       layout to the top of the wrapper instead so the canvas sits up
-       high and the d-pad sits naturally below it. */
+    /* Splash: keep the title-card stack clear of the notch / home indicator and
+       tighten the gap so it fits short phones. (The canvas itself is capped
+       responsively in the base #splash-canvas rule.) */
+    #splash {
+        gap: 16px;
+        padding: max(12px, env(safe-area-inset-top))
+                 max(12px, env(safe-area-inset-right))
+                 max(12px, env(safe-area-inset-bottom))
+                 max(12px, env(safe-area-inset-left));
+    }
+    #splash-buttons { flex-wrap: wrap; justify-content: center; }
+
+    /* A square canvas on a portrait phone is width-bound (can't exceed 100vw),
+       so the old top-anchor left a tall empty band BELOW it that read as sparse.
+       Center the canvas instead so the surrounding cobblestone backdrop frames
+       it evenly top + bottom (like the desktop layout), and drop the -220px
+       under-sizing so the canvas uses the full width. The touch controls stay
+       pinned to the bottom within thumb reach, in the field below the canvas. */
     #game-wrapper {
-        align-items: flex-start;
-        padding-top: 8px;
+        align-items: center;
+        padding-top: 0;
+        /* Reserve the bottom touch-control band (d-pad is 168px + 16px inset) so
+           the centered canvas — and the hotbar drawn at its bottom edge, which is
+           tap-hit-tested — is never pushed under the controls on short phones.
+           The canvas centers in the region ABOVE this band. */
+        padding-bottom: calc(184px + env(safe-area-inset-bottom));
     }
     #game-layout {
-        height: min(calc(100vh - 220px), 100vw);
+        height: min(100vw, calc(100vh - 184px - env(safe-area-inset-bottom)));
         max-height: 100vw;
     }
 
@@ -756,56 +866,78 @@ body {
         bottom: auto; right: auto;
     }
 
+    /* Touch HUD — Kenney "Mobile Controls" Style F, gold-tinted (see
+       tools/gen_ui_controls.py). D-pad is one unified cross sprite with four
+       transparent hit-zones over its arms; action + menu are single composited
+       sprites. Glyph text is hidden (font-size:0) but kept for aria/fallback. */
     #touch-controls {
         display: flex;
         position: fixed;
         left: 0; right: 0; bottom: 0;
         padding: 16px max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-right));
-        justify-content: flex-start;
+        justify-content: space-between;
         align-items: flex-end;
         z-index: 20;
         pointer-events: none;
     }
-    #touch-dpad { pointer-events: auto; }
 
     #touch-dpad {
+        pointer-events: auto;
         display: grid;
-        grid-template-columns: repeat(3, 60px);
-        grid-template-rows: repeat(3, 60px);
-        gap: 6px;
+        grid-template-columns: repeat(3, 56px);
+        grid-template-rows: repeat(3, 56px);
+        gap: 0;
+        background: url(assets/ui/ctrl_dpad.png) center / contain no-repeat;
+        filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6));
     }
-    #touch-dpad .tc-btn { font-size: 22px; padding: 0; opacity: 0.85; }
-    #touch-dpad .tc-btn:nth-child(1) { grid-column: 2; grid-row: 1; }
-    #touch-dpad .tc-btn:nth-child(2) { grid-column: 1; grid-row: 2; }
-    #touch-dpad .tc-btn:nth-child(3) { grid-column: 2; grid-row: 3; }
-    #touch-dpad .tc-btn:nth-child(4) { grid-column: 3; grid-row: 2; }
+    /* Transparent directional hit-zones laid over the cross arms. */
+    #touch-dpad .tc-btn {
+        background: none; border: none; box-shadow: none;
+        color: transparent; font-size: 0; padding: 0; opacity: 1;
+        border-radius: 12px;
+    }
+    #touch-dpad .tc-btn:active {
+        transform: none; box-shadow: none; border-color: transparent;
+        background: radial-gradient(circle at center, rgba(255, 248, 220, 0.28), transparent 70%);
+    }
+    #touch-dpad .tc-btn:nth-child(1) { grid-column: 2; grid-row: 1; } /* up */
+    #touch-dpad .tc-btn:nth-child(2) { grid-column: 1; grid-row: 2; } /* left */
+    #touch-dpad .tc-btn:nth-child(3) { grid-column: 2; grid-row: 3; } /* down */
+    #touch-dpad .tc-btn:nth-child(4) { grid-column: 3; grid-row: 2; } /* right */
 
-    /* (action-wheel overhaul) ACTION button — opens/fires the wheel on touch.
-       Pushed to the right edge, opposite the d-pad, within thumb reach. */
+    /* ACTION button — opens/fires the action wheel. Bottom-right, primary thumb. */
     #action-btn {
         pointer-events: auto;
-        margin-left: auto;
         align-self: flex-end;
-        width: 84px; height: 84px;
-        border-radius: 50%;
-        font-size: 32px;
-        opacity: 0.9;
+        width: 88px; height: 88px;
+        background: url(assets/ui/ctrl_action.png) center / contain no-repeat;
+        border: none; box-shadow: none; border-radius: 50%;
+        color: transparent; font-size: 0;
+        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
+    }
+    #action-btn:active {
+        transform: scale(0.92);
+        filter: brightness(1.18) drop-shadow(0 1px 3px rgba(0, 0, 0, 0.6));
     }
 
-    /* MENU floats bottom-right on touch where the WAIT button used to sit,
-       within thumb reach but clear of the d-pad cluster. */
+    /* MENU button — stacked ABOVE the action button (previously it overlapped
+       the action button in the same corner). Clear of every in-canvas HUD
+       corner: HP (top-left), zone label (top-center), clock (top-right). */
     #menu-btn {
-        top: auto; right: auto;
-        bottom: max(16px, env(safe-area-inset-bottom));
+        position: fixed;
+        top: auto; left: auto;
         right: max(16px, env(safe-area-inset-right));
+        bottom: calc(max(16px, env(safe-area-inset-bottom)) + 104px);
         width: 60px; height: 60px;
-        border-radius: 50%;
-        border-width: 2px;
-        font-size: 24px;
-        background: #2a2218;
-        color: #d4b96a;
-        opacity: 0.9;
+        background: url(assets/ui/ctrl_menu.png) center / contain no-repeat;
+        border: none; box-shadow: none; border-radius: 50%;
+        color: transparent; font-size: 0;
+        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
         z-index: 21;
+    }
+    #menu-btn:active {
+        transform: scale(0.92);
+        filter: brightness(1.18) drop-shadow(0 1px 3px rgba(0, 0, 0, 0.6));
     }
 }
 
