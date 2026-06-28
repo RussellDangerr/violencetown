@@ -107,7 +107,14 @@ body {
 #splash-canvas {
     image-rendering: pixelated;
     image-rendering: crisp-edges;
-    width: 640px; height: 440px;
+    /* 320×220 bitmap shown at up to 2× (640×440), but never wider than the
+       viewport (minus the box-shadow frame) nor so tall its derived height
+       crowds out the buttons/hint. Folding the height cap into the width via
+       min() keeps the 16:11 ratio exact at every size — no distortion, and
+       desktop is unchanged (min() resolves to 640). */
+    width: min(640px, calc(100vw - 24px), calc((100vh - 180px) * 320 / 220));
+    aspect-ratio: 320 / 220;
+    height: auto;
     position: relative; z-index: 1;
     /* Chunky multi-layer pixel frame: hairline black seat → gold trim →
        dark bezel, then a soft outer glow. Reads like a framed cabinet
@@ -129,65 +136,48 @@ body {
 /* Chunky beveled arcade keys. The stacked box-shadow builds a hard 3px
    "lip" beneath each button so it reads as a physical key; :active
    collapses the lip and drops the button down for a tactile press. */
+/* Aged-brown 9-slice keys matching the in-game menu buttons (parchment theme).
+   The dark arcade-cabinet vignette / scanlines / gold-breathe around them stay. */
 #splash-buttons button {
-    background: linear-gradient(180deg, var(--panel-2) 0%, var(--panel) 100%);
-    border: 2px solid var(--gold-dim);
-    color: var(--gold);
+    background-color: #8a5a2c;                 /* fallback if border-image fails */
+    border: 14px solid transparent;
+    border-image: url(assets/ui/panel_brown.png) 8 fill / 14px stretch;
+    image-rendering: pixelated;
+    color: #f3e3c0;
     font-family: 'Courier New', monospace;
     font-size: 14px; font-weight: 700;
-    padding: 12px 34px;
-    cursor: pointer;
     letter-spacing: 4px;
-    text-shadow: 0 1px 0 #000;
-    box-shadow:
-        inset 0 1px 0 rgba(241, 212, 136, 0.15),
-        0 3px 0 0 #000,
-        0 4px 6px rgba(0, 0, 0, 0.5);
-    transition: transform 70ms ease, box-shadow 70ms ease,
-                background 140ms ease, color 140ms ease, border-color 140ms ease;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
+    padding: 6px 22px; min-height: 46px;
+    cursor: pointer;
+    transition: filter 120ms ease, color 140ms ease, transform 70ms ease;
 }
 
-/* Primary key (GAME START) — gold face, breathing glow draws the eye. */
+/* Primary key (GAME START) — brighter, with a breathing gold glow. */
 #splash-go {
-    background: linear-gradient(180deg, #3a3020 0%, var(--panel) 100%);
-    border-color: var(--gold);
-    color: var(--gold-bright);
+    filter: brightness(1.1);
+    color: #fff8e6;
     animation: splash-go-pulse 2.4s ease-in-out infinite;
 }
 @keyframes splash-go-pulse {
-    0%, 100% {
-        box-shadow:
-            inset 0 1px 0 rgba(241, 212, 136, 0.2),
-            0 3px 0 0 #000, 0 4px 6px rgba(0,0,0,0.5),
-            0 0 0 0 rgba(212, 185, 106, 0);
-    }
-    50% {
-        box-shadow:
-            inset 0 1px 0 rgba(241, 212, 136, 0.2),
-            0 3px 0 0 #000, 0 4px 6px rgba(0,0,0,0.5),
-            0 0 16px 2px rgba(212, 185, 106, 0.5);
-    }
+    0%, 100% { box-shadow: 0 0 6px 1px rgba(212, 185, 106, 0.25); }
+    50%      { box-shadow: 0 0 18px 3px rgba(212, 185, 106, 0.6); }
 }
 
 #splash-buttons button:hover {
-    background: linear-gradient(180deg, #463a26 0%, var(--panel-2) 100%);
-    border-color: var(--gold-bright);
+    filter: brightness(1.15);
     color: #fff;
     animation-play-state: paused;
 }
 #splash-buttons button:active {
-    transform: translateY(3px);
-    box-shadow:
-        inset 0 1px 0 rgba(241, 212, 136, 0.15),
-        0 0 0 0 #000,
-        0 1px 2px rgba(0, 0, 0, 0.6),
-        0 0 14px 2px rgba(212, 185, 106, 0.45);
+    transform: translateY(2px);
+    filter: brightness(0.9);
     animation-play-state: paused;
 }
 
 #splash-hint {
     position: relative; z-index: 3;
-    font-size: 10px; color: var(--text-dim);
+    font-size: 10px; color: var(--gold-dim);
     letter-spacing: 3px; text-transform: uppercase;
     animation: splash-hint-blink 1.6s steps(1, end) infinite;
 }
@@ -831,6 +821,18 @@ body {
 #pause-overlay-panel .pause-hint { color: #7a6647; }
 
 @media (pointer: coarse), (max-width: 700px) {
+    /* Splash: keep the title-card stack clear of the notch / home indicator and
+       tighten the gap so it fits short phones. (The canvas itself is capped
+       responsively in the base #splash-canvas rule.) */
+    #splash {
+        gap: 16px;
+        padding: max(12px, env(safe-area-inset-top))
+                 max(12px, env(safe-area-inset-right))
+                 max(12px, env(safe-area-inset-bottom))
+                 max(12px, env(safe-area-inset-left));
+    }
+    #splash-buttons { flex-wrap: wrap; justify-content: center; }
+
     /* Reclaim wasted vertical space above the canvas in portrait. The
        wrapper normally centers in 100vh, which leaves ~220px of empty
        black above a 375px-tall canvas on a 812px viewport. Anchor the
