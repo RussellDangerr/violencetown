@@ -22,7 +22,17 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
-    background: #0a0a0a;
+    /* World-dressing: the page sits on a darkened Kenney cobblestone field
+       (CC0, derived from roguelikeCity) so the area around the square play-
+       field reads as a textured surface instead of black void. A soft radial
+       vignette darkens toward the screen edges to frame the game. */
+    background-color: #0a0a0a;
+    background-image:
+        radial-gradient(ellipse at center, rgba(8,8,10,0) 42%, rgba(4,4,6,0.6) 100%),
+        url('assets/bg_cobble.png');
+    background-repeat: no-repeat, repeat;
+    background-size: cover, 64px 64px;
+    image-rendering: pixelated;
     color: #c8b888;
     font-family: 'Courier New', monospace;
     font-size: 12px;
