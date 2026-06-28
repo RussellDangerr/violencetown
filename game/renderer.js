@@ -347,6 +347,15 @@ export class Renderer {
         // in full day; the Wilderness opts out (it owns _drawDarkness).
         this._drawLighting(game);
 
+        // Combat arena (lit aggro-radius). Eased in/out so the fight blooms a lit
+        // stage with the world dimming/cooling around it, releasing when the
+        // encounter clears. Drawn after day/night so it composes (the player aura
+        // still lights the arena at night), before the HUD so HP/clock stay legible.
+        const arenaTarget = (game._inCombat && game._inCombat()) ? 1 : 0;
+        const aCur = this._arenaLevel ?? 0;
+        this._arenaLevel = Math.abs(arenaTarget - aCur) < 0.01 ? arenaTarget : aCur + (arenaTarget - aCur) * 0.15;
+        this._drawArena(game);
+
         // HUD — rendered AFTER restore so screen shake doesn't affect it
         this._drawHPPanel(game);
         this._drawZoneLabel(game);
@@ -463,6 +472,63 @@ export class Renderer {
         const t = Math.max(0, Math.min(1, n));
         const lerp = (a, b) => Math.round(a + (b - a) * t);
         return { r: lerp(255, 48), g: lerp(255, 54), b: lerp(255, 92) };
+    }
+
+    // ── Combat arena (lit aggro-radius) ──────────────────────────────────────
+    //
+    // While a fight is engaged, the viewport blooms a lit "stage" around the
+    // encounter and the world beyond dims + cools, so the combat boundary is
+    // VISIBLE (no JRPG teleport-to-a-forest) and the eye is pulled to the fight.
+    // Same multiply-overlay trick as the day/night lightmap, inverted: a dim fill
+    // with a bright spotlight hole at the encounter centre. Eased by _arenaLevel
+    // (set in renderFrame) so it blooms in and releases out; the radius sizes to
+    // contain the engaged enemies. Purely visual — combat geometry stays
+    // grid-clean. The dim tone is tunable.
+    _drawArena(game) {
+        const lvl = this._arenaLevel ?? 0;
+        if (lvl <= 0.001 || this.zone === 'WILDERNESS') return;   // Wilderness owns its blackout
+
+        // Cool desaturated dark the periphery multiplies toward; lerp white →
+        // tone by level so the stage blooms in smoothly (white = no-op at lvl 0).
+        const tone = { r: 82, g: 84, b: 94 };
+        const dr = Math.round(255 + (tone.r - 255) * lvl);
+        const dg = Math.round(255 + (tone.g - 255) * lvl);
+        const db = Math.round(255 + (tone.b - 255) * lvl);
+
+        // Radius: contain the engaged (chasing) enemies + margin, clamped.
+        let maxTiles = 2.5;
+        for (const e of game.enemies) {
+            if (e.ambient || e.state !== 'chasing' || !e.entity.isAlive()) continue;
+            const d = Math.max(Math.abs(e.x - game.playerX), Math.abs(e.y - game.playerY));
+            if (d > maxTiles) maxTiles = d;
+        }
+        const coreR = Math.min(7, maxTiles + 1.5) * TILE_PX;
+        const edgeR = coreR + TILE_PX * 2.6;
+
+        const am = (this._arenaCanvas ??= document.createElement('canvas'));
+        if (am.width !== CANVAS_PX) { am.width = CANVAS_PX; am.height = CANVAS_PX; }
+        const actx = am.getContext('2d');
+
+        actx.globalCompositeOperation = 'source-over';
+        actx.fillStyle = `rgb(${dr},${dg},${db})`;
+        actx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+
+        // Punch the lit stage at the encounter — centred on the player (always at
+        // view centre; combat centres on the hero).
+        const cx = this.half * TILE_PX + TILE_PX / 2;
+        const cy = this.half * TILE_PX + TILE_PX / 2;
+        const grd = actx.createRadialGradient(cx, cy, 0, cx, cy, edgeR);
+        grd.addColorStop(0, 'rgba(255,255,255,1)');
+        grd.addColorStop(Math.min(0.98, coreR / edgeR), 'rgba(255,255,255,1)');
+        grd.addColorStop(1, 'rgba(255,255,255,0)');
+        actx.fillStyle = grd;
+        actx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+
+        const { ctx } = this;
+        ctx.save();
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.drawImage(am, 0, 0);
+        ctx.restore();
     }
 
     // ── Tiles ────────────────────────────────────────────────────────────────
