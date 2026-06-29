@@ -45,23 +45,20 @@ export const HOTBAR_OY = CANVAS_INTERNAL_PX - HOTBAR_SLOT_H - 20;     // 546 (pa
 export const HOTBAR_X_START = HOTBAR_OX + 8;                         // 103 (first slot x)
 export const HOTBAR_Y       = HOTBAR_OY + 2;                         // 548 (slot y)
 
-// ── Radial combat wheel (Omnitrix-style) ──
-// (drawn by renderer._drawRadialMenu, polar hit-test by main._tapRadialMenu)
-export const RADIAL_CENTER_X    = 304;
-export const RADIAL_CENTER_Y    = 304;
-export const RADIAL_INNER_R_MIN = 36;
-export const RADIAL_INNER_R_MAX = 80;
-export const RADIAL_OUTER_R_MIN = 84;
-export const RADIAL_OUTER_R_MAX = 120;
-
-// (action-wheel overhaul) Three concentric rings + a dead-center hub. Each ring
-// is an [inner, outer] radius band in the 608px canvas space, centered at
-// RADIAL_CENTER_*. Shared by renderer._drawRadialMenu (draw) and
-// main._tapRadialMenu (hit-test) so the tap zones match what's drawn.
-export const RING_HUB_R    = 22;
-export const RING_ACTION_R = [26, 64];
-export const RING_ITEM_R   = [66, 100];
-export const RING_AIM_R    = [102, 132];
+// ── Radial "sunburst" combat wheel ──
+// Concentric rings centred on RADIAL_CENTER_*: a hub, the greyed decision-stack
+// rings growing inward, one bright active ring, and a partial preview arc above
+// the top pointer. Shared by renderer._drawWheel (draw) and main._tapRadialMenu
+// (hit-test). The preview-arc band and pointer are derived adaptively in
+// renderer._drawWheel from wheelRingR(depth).
+export const RADIAL_CENTER_X = 304, RADIAL_CENTER_Y = 304;
+export const WHEEL_HUB_R    = 34;            // centre 'MENU' disc radius
+export const WHEEL_RING_W    = 40;           // radial thickness of each full ring
+export const WHEEL_RING_GAP  = 5;            // gap between adjacent rings
+export const WHEEL_RING0_R0  = 40;           // inner edge of the first ring out from the hub
+export const WHEEL_TILE_GAP  = 0.03;         // angular gap between tiles (radians)
+// Ring k's [inner, outer] radius (k = 0 nearest the hub).
+export function wheelRingR(k) { const r0 = WHEEL_RING0_R0 + k * (WHEEL_RING_W + WHEEL_RING_GAP); return [r0, r0 + WHEEL_RING_W]; }
 
 // ── Log strip (bottom-left) + [L] history modal panel ──
 export const LOG_STRIP_RECT = { x: 6, y: 496, w: 300, h: 44 };   // y = HOTBAR_OY - 44 - 6

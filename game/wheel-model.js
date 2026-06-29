@@ -1,55 +1,56 @@
-// wheel-model.js — pure state model for the circular-XMB combat wheel.
-// Verb tree (Fight/Trick/Treat/Flight) → item/spell → aim, navigated by one
-// grammar (forward/back/cycle). No DOM/canvas; main.js drives it and routes
-// compose(). See plans/combat-wheel-rework.md.
+// wheel-model.js — pure state model for the radial "sunburst" combat wheel.
+// A node tree (MENU → categories → verbs → leaves) walked by one grammar:
+//   cycle (rotate the active ring), drill (push a child / aim / fire), back (pop).
+// State is a `path` of indices into ROOT.children. No DOM/canvas; main.js drives
+// it and routes compose(). See plans/combat-wheel-radial-overhaul.md.
 
 import { SPELLS } from './spells.js';
 
 const always = () => true;
 
-// Leaf: { key, label, needsItem?, needsSpell?, aimType, resolver, dep?, available(game) }
+// A node is { key, label, available?, children?, resolver?, aimType?, needsItem?, needsSpell? }.
+//   children → sub-wheel; no children → leaf.
 //   aimType: 'reticle' (free placement) | 'adjacent' (range-1 direction) | 'none' (self)
-//   needsSpell: true → Magic; drills a SPELL ring (pick Fireball / Cone of Cold) before aim.
-export const VERB_TREE = {
-  FIGHT: { label: 'FIGHT', subverbs: [
-    { key: 'melee',  label: 'Melee',  needsItem: false, aimType: 'adjacent', resolver: 'combatAttack', available: always },
-    // Cleave: a fixed 3-tile frontal ARC (the aimed tile + its two flanks). You
-    // commit to all three — no sub-selecting — so it can clip an ally on the
-    // far square (the Plus-Ultra confirm guards that). 2/3 weapon damage each.
-    { key: 'cleave', label: 'Cleave', needsItem: false, aimType: 'adjacent', resolver: 'cleaveAttack', available: always },
-    // Spin: no aim — sweeps all 8 tiles around you for 2/5 damage to everything.
-    { key: 'spin',   label: 'Spin',   needsItem: false, aimType: 'none',     resolver: 'spinAttack',   available: always },
+//   needsItem → drills into the item ring; needsSpell → Magic (spell selection).
+// Ranged/Magic are LEAVES with needsItem/needsSpell — the existing item/spell
+// selection machinery handles the choice; they are not sub-wheels here.
+export const ROOT = { key: 'menu', label: 'MENU', children: [
+  { key: 'fight', label: 'Fight', children: [
+    { key: 'melee', label: 'Melee', children: [
+      { key: 'hit',    label: 'Hit',    aimType: 'adjacent', resolver: 'combatAttack', available: always },
+      // Cleave: a fixed 3-tile frontal ARC (the aimed tile + its two flanks). You
+      // commit to all three — no sub-selecting — so it can clip an ally on the
+      // far square (the Plus-Ultra confirm guards that). 2/3 weapon damage each.
+      { key: 'cleave', label: 'Cleave', aimType: 'adjacent', resolver: 'cleaveAttack', available: always },
+      // Spin: no aim — sweeps all 8 tiles around you for 2/5 damage to everything.
+      { key: 'spin',   label: 'Spin',   aimType: 'none',     resolver: 'spinAttack',   available: always },
+    ]},
     // Ranged: throw a rock/potion at range (duplicate of TRICK → Throw, by design
     // — you throw things, so it lives under both).
-    { key: 'ranged', label: 'Ranged', needsItem: true,  aimType: 'reticle',  resolver: 'resolveThrow', available: always },
-    { key: 'magic',  label: 'Magic',  needsItem: false, needsSpell: true, aimType: 'reticle', resolver: 'castSpell',
+    { key: 'ranged', label: 'Ranged', needsItem: true, aimType: 'reticle', resolver: 'resolveThrow', available: always },
+    { key: 'magic',  label: 'Magic',  needsSpell: true, aimType: 'reticle', resolver: 'castSpell',
       available: (g) => (g.playerMp || 0) > 0 && ((g.knownSpells && g.knownSpells.length) || 0) > 0 },
   ]},
-  TRICK: { label: 'TRICK', subverbs: [
-    { key: 'throw', label: 'Throw', needsItem: true,  aimType: 'reticle',  resolver: 'resolveThrow', available: always },
-    { key: 'trade', label: 'Trade', needsItem: false, aimType: 'adjacent', resolver: 'trade',        available: always },
+  { key: 'trick', label: 'Trick', children: [
+    { key: 'throw',  label: 'Throw',  needsItem: true,  aimType: 'reticle',  resolver: 'resolveThrow', available: always },
+    { key: 'defend', label: 'Defend', aimType: 'none',                       resolver: 'guard',        available: always },
+    { key: 'bribe',  label: 'Bribe',  aimType: 'adjacent',                   resolver: 'bribe',        available: always },
+    { key: 'give',   label: 'Give',   needsItem: true,  aimType: 'adjacent', resolver: 'give',         available: always },
+    { key: 'trade',  label: 'Trade',  aimType: 'adjacent',                   resolver: 'trade',        available: always },
   ]},
-  TREAT: { label: 'TREAT', subverbs: [
+  { key: 'treat', label: 'Treat', children: [
     { key: 'eat',     label: 'Eat',     needsItem: true, aimType: 'none', resolver: 'resolveUse', available: always },
     { key: 'cleanse', label: 'Cleanse', needsItem: true, aimType: 'none', resolver: 'resolveUse', available: always },
   ]},
-  FLIGHT: { label: 'FLIGHT', subverbs: [
-    { key: 'defend', label: 'Defend', needsItem: false, aimType: 'none',     resolver: 'guard', available: always },
-    { key: 'hide',   label: 'Hide',   needsItem: false, aimType: 'none',     resolver: 'hide',  dep: true, available: always },
-    { key: 'wait',   label: 'Wait',   needsItem: false, aimType: 'none',     resolver: 'wait',  available: always },
-    { key: 'run',    label: 'Run',    needsItem: false, aimType: 'adjacent', resolver: 'run',   available: always },
+  { key: 'flight', label: 'Flight', children: [
+    { key: 'run',  label: 'Run',  aimType: 'adjacent', resolver: 'run',  available: always },
+    { key: 'hide', label: 'Hide', aimType: 'none',     resolver: 'hide', available: always },
+    { key: 'wait', label: 'Wait', aimType: 'none',     resolver: 'wait', available: always },
   ]},
-};
-
-export const categoryKeys = () => Object.keys(VERB_TREE);
-export const leafAt = (catKey, i) => VERB_TREE[catKey].subverbs[i];
-
-// SPELL sits between SUBVERB and AIM (parallel to ITEM): Magic drills it to pick
-// which spell before aiming. CONFIRM is the "Plus Ultra" friendly-hit guard.
-export const LAYER = { CATEGORY: 0, SUBVERB: 1, ITEM: 2, SPELL: 3, AIM: 4, CONFIRM: 5 };
+]};
 
 const OFFENSIVE_RESOLVERS = new Set(['combatAttack', 'cleaveAttack', 'spinAttack', 'resolveThrow', 'castSpell']);
-export const isOffensiveLeaf = (leaf) => OFFENSIVE_RESOLVERS.has(leaf.resolver);
+export const isOffensiveLeaf = (node) => OFFENSIVE_RESOLVERS.has(node.resolver);
 
 // ── Geometry (the single source of truth for what an action hits) ────────────
 const cheb = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
@@ -90,7 +91,7 @@ function coneTiles(px, py, t, depth) {
 // Tiles the current action would hit — drives the preview, the friendly-confirm,
 // and damage resolution, so the highlight and the hit are guaranteed identical.
 export function affectedTiles(w, game) {
-  const leaf = currentLeaf(w);
+  const leaf = selectedNode(w);
   const px = game.playerX, py = game.playerY;
   if (leaf.resolver === 'spinAttack') return RING8.map(([dx, dy]) => ({ x: px + dx, y: py + dy }));
   const ret = w.reticle;
@@ -110,7 +111,7 @@ export function affectedTiles(w, game) {
 // live non-hostile entity (ally, vendor, idle/dialogue NPC) on ANY affected tile.
 // Spin has no aim layer, so it isn't gated (it sweeps everything by design).
 export function needsFriendlyConfirm(w, game) {
-  const leaf = currentLeaf(w);
+  const leaf = selectedNode(w);
   if (!isOffensiveLeaf(leaf) || leaf.aimType === 'none') return false;
   const tiles = affectedTiles(w, game);
   if (!tiles.length) return false;
@@ -124,34 +125,98 @@ export function needsFriendlyConfirm(w, game) {
 
 export function createWheelState() {
   return {
-    layer: LAYER.CATEGORY,
-    categoryIndex: 0,
-    subVerbIndex: 0,
+    path: [0],       // indices into ROOT.children; path[last] = selection in the active ring
     itemIndex: 0,
     spellIndex: 0,
-    reticle: null,   // {x,y} when in AIM
-    lastFired: null, // {catKey, subKey, itemSlot, spellId, aimTile}
+    reticle: null,   // {x,y} when aiming
+    lastFired: null, // {path, nodeKey, itemSlot, spellId, aimTile} — written by main.js on fire
+    aiming: false,
+    _memory: {},     // ring path-key → remembered selection index
   };
 }
 
-export const currentCategory = (w) => VERB_TREE[categoryKeys()[w.categoryIndex]];
-export const currentLeaf = (w) => currentCategory(w).subverbs[w.subVerbIndex];
-
 const wrap = (i, n) => ((i % n) + n) % n;
+
+// ── Tree-walk helpers (pure) ─────────────────────────────────────────────────
+// nodeAt / decisionPath walk the REAL unpadded children for locked parent levels
+// (a parent is always real — drilling a placeholder is a no-op, see drill()).
+function nodeAt(indices) { let n = ROOT; for (const i of indices) n = n.children[i]; return n; }
+export function activeRing(w)   { return paddedRing(nodeAt(w.path.slice(0, -1)).children); }
+export function activeIndex(w)  { return w.path[w.path.length - 1]; }
+export function selectedNode(w) { return activeRing(w)[activeIndex(w)]; }
+export function isLeaf(node)    { return !node.children || node.children.length === 0; }
+export function decisionPath(w) {
+  const out = [ROOT.label];
+  let n = ROOT;
+  for (let d = 0; d < w.path.length - 1; d++) { n = n.children[w.path[d]]; out.push(n.label); }
+  return out;
+}
+export function previewChildren(w) { const s = selectedNode(w); return (s.children || []); }
+
+// ── Placeholder padding ──────────────────────────────────────────────────────
+// A ring needs ≥2 tiles to spin. Thin rings get non-selectable placeholders
+// appended; cycle may land on one (fine), drill on one is a no-op ('bump').
+export function paddedRing(ring) {
+  if (!ring || ring.length >= 2) return ring;            // already spinnable
+  // Disposable placeholders, regenerated each call — a thin ring still spins.
+  const pads = [{ key: 'placeholder1', label: '…', placeholder: true },
+                { key: 'placeholder2', label: '…', placeholder: true }];
+  return ring.concat(pads).slice(0, 2);                  // 1 real + 1 pad, or 2 pads
+}
+
+// ── Cursor memory ────────────────────────────────────────────────────────────
+// pathKey = the CURRENT ring's key (parent path). childKey = the ring we drill
+// INTO (parent path + current selection). cycle/drill record the active index so
+// re-entering a ring restores it; drill-push opens the child on its remembered index.
+const pathKey  = (w) => w.path.slice(0, -1).join('.');
+const childKey = (w) => w.path.join('.');
+
+// If the root ring has a remembered selection, reopen the wheel on it.
+export function restoreLastCategory(w) {
+  const i = w._memory[''];
+  if (i == null) return;
+  w.path = [Math.max(0, Math.min(i, ROOT.children.length - 1))];
+}
+
+// ── cycle / drill / back ─────────────────────────────────────────────────────
+export function cycle(w, dir) {
+  const ring = activeRing(w);
+  w.path[w.path.length - 1] = wrap(activeIndex(w) + dir, ring.length);
+  w._memory[pathKey(w)] = activeIndex(w);
+}
+
+// Returns 'bump' (placeholder no-op) | 'fire' (resolve now) | 'aim' (enter reticle) | 'push' (descended into a sub-wheel).
+export function drill(w, game) {
+  const s = selectedNode(w);
+  if (s.placeholder) return 'bump';
+  if (isLeaf(s) && !s.needsItem && !s.needsSpell && s.aimType === 'none') return 'fire'; // self leaf (Spin/Defend/Wait)
+  if (isLeaf(s)) { w.aiming = (s.aimType !== 'none'); return w.aiming ? 'aim' : 'fire'; }
+  w._memory[pathKey(w)] = activeIndex(w);
+  w.path.push(w._memory[childKey(w)] ?? 0);
+  return 'push';
+}
+
+// Returns 'close' when already at the top ring.
+export function back(w) {
+  if (w.path.length <= 1) return 'close';
+  w.path.pop();
+  w.reticle = null;
+  w.aiming = false;
+}
 
 // ── Spell ring (Magic) ───────────────────────────────────────────────────────
 export const knownSpellIds = (game) => (game.knownSpells || []);
 export const selectedSpellId = (w, game) => knownSpellIds(game)[wrap(w.spellIndex, Math.max(1, knownSpellIds(game).length))];
 export const selectedSpell = (w, game) => SPELLS[selectedSpellId(w, game)];
 
-function itemAllowedForLeaf(def, leaf) {
-  if (leaf.resolver === 'resolveThrow') return def.useType ? def.useType.includes('throw') : true;
-  if (leaf.resolver === 'resolveUse')  return def.useType ? (def.useType.includes('self') || def.useType.includes('use')) : true;
+function itemAllowedForLeaf(def, node) {
+  if (node.resolver === 'resolveThrow') return def.useType ? def.useType.includes('throw') : true;
+  if (node.resolver === 'resolveUse')  return def.useType ? (def.useType.includes('self') || def.useType.includes('use')) : true;
   return true;
 }
 
 export function validItemSlots(w, game) {
-  const leaf = currentLeaf(w);
+  const leaf = selectedNode(w);
   if (!leaf.needsItem) return [];
   return (game.inventory || [])
     .map((slot, i) => ({ slot, i }))
@@ -159,92 +224,13 @@ export function validItemSlots(w, game) {
     .map(({ i }) => i);
 }
 
-export function cycle(w, dir, game) {
-  if (w.layer === LAYER.CATEGORY) {
-    w.categoryIndex = wrap(w.categoryIndex + dir, categoryKeys().length);
-    w.subVerbIndex = 0;
-  } else if (w.layer === LAYER.SUBVERB) {
-    w.subVerbIndex = wrap(w.subVerbIndex + dir, currentCategory(w).subverbs.length);
-  } else if (w.layer === LAYER.ITEM) {
-    const slots = validItemSlots(w, game);
-    if (slots.length) {
-      const at = Math.max(0, slots.indexOf(w.itemIndex));
-      w.itemIndex = slots[wrap(at + dir, slots.length)];
-    }
-  } else if (w.layer === LAYER.SPELL) {
-    const n = knownSpellIds(game).length;
-    if (n) w.spellIndex = wrap(w.spellIndex + dir, n);
-  }
-  // AIM is the reticle (handled in main.js), not a carousel here.
-}
-
-// Returns 'fire' when the action is fully composed and should resolve; else undefined.
-export function forward(w, game) {
-  const leaf = currentLeaf(w);
-  switch (w.layer) {
-    case LAYER.CATEGORY:
-      w.layer = LAYER.SUBVERB; return;
-    case LAYER.SUBVERB:
-      if (leaf.needsItem) {
-        const slots = validItemSlots(w, game);
-        if (!slots.length) return;               // empty item ring → can't advance
-        if (!slots.includes(w.itemIndex)) w.itemIndex = slots[0];
-        w.layer = LAYER.ITEM; return;
-      }
-      if (leaf.needsSpell) {
-        if (!knownSpellIds(game).length) return; // no spells → can't advance
-        w.layer = LAYER.SPELL; return;
-      }
-      if (leaf.aimType !== 'none') { w.layer = LAYER.AIM; return; }
-      return 'fire';
-    case LAYER.ITEM:
-      if (leaf.aimType !== 'none') { w.layer = LAYER.AIM; return; }
-      return 'fire';
-    case LAYER.SPELL:
-      if (leaf.aimType !== 'none') { w.layer = LAYER.AIM; return; }
-      return 'fire';
-    case LAYER.AIM:
-      if (needsFriendlyConfirm(w, game)) { w.layer = LAYER.CONFIRM; return; }
-      return 'fire';
-    case LAYER.CONFIRM:
-      return 'fire';
-  }
-}
-
-// Returns 'close' when already at the top. Leaf-aware: AIM steps back to whichever
-// of SPELL / ITEM / SUBVERB the leaf actually used.
-export function back(w) {
-  const leaf = currentLeaf(w);
-  switch (w.layer) {
-    case LAYER.CATEGORY: return 'close';
-    case LAYER.SUBVERB:  w.layer = LAYER.CATEGORY; break;
-    case LAYER.ITEM:
-    case LAYER.SPELL:    w.layer = LAYER.SUBVERB; break;
-    case LAYER.AIM:
-      w.layer = leaf.needsSpell ? LAYER.SPELL : (leaf.needsItem ? LAYER.ITEM : LAYER.SUBVERB);
-      break;
-    case LAYER.CONFIRM:  w.layer = LAYER.AIM; break;
-  }
-  if (w.layer !== LAYER.AIM && w.layer !== LAYER.CONFIRM) w.reticle = null;
-  return;
-}
-
-export function leafEnabled(leaf, game) {
-  if (!leaf.available(game)) return false;
-  if (leaf.needsItem) {
-    const slots = (game.inventory || []).filter(s => s && itemAllowedForLeaf(s.itemDef, leaf));
-    if (!slots.length) return false;
-  }
-  return true;
-}
-
 export function compose(w, game) {
-  const leaf = currentLeaf(w);
+  const node = selectedNode(w);
   return {
-    leaf,
-    itemSlot: leaf.needsItem ? w.itemIndex : -1,
-    spellId: leaf.needsSpell ? selectedSpellId(w, game) : null,
-    aimTile: leaf.aimType === 'none' ? null : (w.reticle || null),
+    node,
+    itemSlot: node.needsItem ? w.itemIndex : -1,
+    spellId:  node.needsSpell ? selectedSpellId(w, game) : null,
+    aimTile:  node.aimType === 'none' ? null : (w.reticle || null),
   };
 }
 
@@ -284,7 +270,8 @@ export function autoAimTile(leaf, game) {
     const distTo = t => alive.length ? Math.min(...alive.map(e => cheb(t.x, t.y, e.x, e.y))) : 99;
     return cands.sort((a, b) => distTo(b) - distTo(a))[0];
   }
-  const pool = (leaf.resolver === 'trade'
+  const social = leaf.resolver === 'trade' || leaf.resolver === 'bribe' || leaf.resolver === 'give';
+  const pool = (social
     ? alive
     : alive.filter(e => !e.behavior || e.behavior.includes('HOSTILE')))
     .filter(e => cheb(game.playerX, game.playerY, e.x, e.y) <= range);

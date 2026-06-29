@@ -22,17 +22,16 @@ import { doExamine } from './examine.js';
 import {
     CANVAS_INTERNAL_PX, HIT_SLOP, OVERLAY_RECTS, THROW_RECTS,
     HOTBAR_X_START, HOTBAR_Y, HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_STRIDE, HOTBAR_SLOTS,
-    RADIAL_CENTER_X, RADIAL_CENTER_Y, LOG_STRIP_RECT, LOG_MODAL_RECT,
+    RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, LOG_STRIP_RECT, LOG_MODAL_RECT,
     TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BRIBE_RECT, tradeCellRect,
 } from './layout.js';
 import { canTrade, buyPrice, sellPrice, bribeStepCost, BRIBE_STEP } from './trade.js'; // (trade slice 1) disposition pricing
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
 import {
-    createWheelState, currentLeaf, currentCategory, categoryKeys, cycle, forward, back,
-    leafEnabled, compose, autoAimTile, validItemSlots, LAYER, needsFriendlyConfirm, aimRange,
-    affectedTiles,
-} from './wheel-model.js'; // (combat-wheel rework) pure verb-tree model
+    createWheelState, cycle, drill, back, compose, autoAimTile,
+    needsFriendlyConfirm, aimRange, affectedTiles, selectedNode, restoreLastCategory,
+} from './wheel-model.js'; // (sunburst wheel) node-tree model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
 
 // Chebyshev (king-move) distance — used by the wheel reticle's range clamp.
@@ -371,19 +370,16 @@ class Game {
         this._bindOptionsModal(); // [settings] options/accessibility UI
         this._bindPauseOverlay(); // [settings] turn-based pause overlay
 
-        // (combat-wheel rework) Touch ACTION button: open the wheel when idle;
-        // while open, drill forward through the layers (firing once composed).
+        // (sunburst wheel) Touch ACTION button: open the wheel when idle; while
+        // open, drill into the current selection (firing once it's a ready leaf).
         const actionBtn = document.getElementById('action-btn');
         if (actionBtn) actionBtn.addEventListener('pointerdown', (e) => {
             e.preventDefault();
             if (this.state === STATE.IDLE) { this._openWheel(); return; }
             if (this.state === STATE.RADIAL_MENU) {
-                // Drill forward through the wheel; fire once fully composed.
                 const w = this.wheel;
-                if (w.layer === LAYER.SUBVERB && !leafEnabled(currentLeaf(w), this)) { audio.playSfx('bump-wall'); return; }
-                const r = forward(w, this);
-                if (w.layer === LAYER.AIM && !w.reticle) w.reticle = autoAimTile(currentLeaf(w), this);
-                if (r === 'fire') this._fireWheel(); else { audio.playSfx('menu-tick'); this._render(); }
+                if (w.confirming || w.aiming) { this._wheelCommit(); return; }
+                this._wheelDrill();
             }
         });
 
@@ -794,36 +790,20 @@ class Game {
             // closes the menu entirely without consuming a turn.
             if (this.state === STATE.RADIAL_MENU) {
                 e.preventDefault();
-                // (combat-wheel rework) One grammar drives every layer:
-                // Left/Right cycle the current ring, Up/Space/Enter drill forward
-                // (and fire when fully composed), Down/Esc step back (or close).
-                // In the AIM layer the d-pad moves the reticle instead.
                 const w = this.wheel;
-                // "Plus Ultra" friendly-confirm layer: ↑/Space/Enter commits the
-                // hit on a friendly; ↓/Esc backs out to AIM (reticle preserved).
-                if (w.layer === LAYER.CONFIRM) {
-                    if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'Space' || e.code === 'Enter') {
-                        if (forward(w, this) === 'fire') this._fireWheel(); return;
-                    }
-                    if (e.code === 'ArrowDown' || e.code === 'KeyS' || e.code === 'Escape') {
-                        w.layer = LAYER.AIM; audio.playSfx('menu-cancel'); this._render(); return;
-                    }
+                const UP   = (e.code === 'ArrowUp'   || e.code === 'KeyW' || e.code === 'Space' || e.code === 'Enter');
+                const DOWN = (e.code === 'ArrowDown' || e.code === 'KeyS' || e.code === 'Escape');
+                // "Plus Ultra" friendly-confirm intercept.
+                if (w.confirming) {
+                    if (UP)   { this._wheelCommit(); return; }
+                    if (DOWN) { w.confirming = false; audio.playSfx('menu-cancel'); this._render(); return; }
                     return;
                 }
-                if (w.layer === LAYER.AIM) { this._reticleKey(e.code); return; }
-                if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { cycle(w, -1, this); audio.playSfx('menu-tick'); this._render(); return; }
-                if (e.code === 'ArrowRight' || e.code === 'KeyD') { cycle(w, +1, this); audio.playSfx('menu-tick'); this._render(); return; }
-                if (e.code === 'ArrowDown'  || e.code === 'KeyS' || e.code === 'Escape') {
-                    if (back(w) === 'close') this._closeWheel(); else { audio.playSfx('menu-cancel'); this._render(); }
-                    return;
-                }
-                if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'Space' || e.code === 'Enter') {
-                    if (w.layer === LAYER.SUBVERB && !leafEnabled(currentLeaf(w), this)) { audio.playSfx('bump-wall'); return; }
-                    const r = forward(w, this);
-                    if (w.layer === LAYER.AIM && !w.reticle) w.reticle = autoAimTile(currentLeaf(w), this);
-                    if (r === 'fire') this._fireWheel(); else { audio.playSfx('menu-tick'); this._render(); }
-                    return;
-                }
+                if (w.aiming) { this._reticleKey(e.code); return; }
+                if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { cycle(w, -1); audio.playSfx('menu-tick'); this._render(); return; }
+                if (e.code === 'ArrowRight' || e.code === 'KeyD') { cycle(w, +1); audio.playSfx('menu-tick'); this._render(); return; }
+                if (DOWN) { if (back(w) === 'close') this._closeWheel(); else { audio.playSfx('menu-cancel'); this._render(); } return; }
+                if (UP)   { this._wheelDrill(); return; }
                 return;
             }
 
@@ -1506,27 +1486,17 @@ class Game {
     }
 
     _tapRadialMenu(pt) {
-        // (combat-wheel rework) Minimal touch: tap the center to drill forward /
-        // fire, tap elsewhere to step back / close. Full radial touch lands in a
-        // later polish pass; this keeps touch from crashing on the new state.
+        // Interim touch: hub tap = back/close; any other tap = drill/commit the
+        // current selection. Full per-tile radial touch lands in Phase 2.
         const w = this.wheel;
-        const cx = RADIAL_CENTER_X, cy = RADIAL_CENTER_Y;
-        const r = Math.hypot(pt.x - cx, pt.y - cy);
-        if (r < 40) {
-            // Center tap drills forward. Route AIM through forward() too (don't
-            // short-circuit to _fireWheel) so the "Plus Ultra" friendly-confirm
-            // gate applies to touch exactly as it does to keyboard / the ACTION
-            // button. A center tap at CONFIRM resolves to 'fire' (commit).
-            if (w.layer === LAYER.SUBVERB && !leafEnabled(currentLeaf(w), this)) { audio.playSfx('bump-wall'); return; }
-            const res = forward(w, this);
-            if (w.layer === LAYER.AIM && !w.reticle) w.reticle = autoAimTile(currentLeaf(w), this);
-            if (res === 'fire') this._fireWheel(); else { audio.playSfx('menu-tick'); this._render(); }
-        } else {
-            // Tap-outside steps back. CONFIRM→AIM preserves the reticle (parity
-            // with the keyboard CONFIRM handler); back() would otherwise null it.
-            if (w.layer === LAYER.CONFIRM) { w.layer = LAYER.AIM; audio.playSfx('menu-cancel'); this._render(); return; }
+        const r = Math.hypot(pt.x - RADIAL_CENTER_X, pt.y - RADIAL_CENTER_Y);
+        if (r < WHEEL_HUB_R + 8) {
+            if (w.confirming) { w.confirming = false; audio.playSfx('menu-cancel'); this._render(); return; }
             if (back(w) === 'close') this._closeWheel(); else { audio.playSfx('menu-cancel'); this._render(); }
+            return;
         }
+        if (w.confirming || w.aiming) { this._wheelCommit(); return; }
+        this._wheelDrill();
     }
 
     // ── Animation ─────────────────────────────────────────────────────────────
@@ -2138,8 +2108,11 @@ class Game {
         this._stopAutoRepeat();
         this._heldDirKeys = [];
         this.state = STATE.RADIAL_MENU;
-        this.wheel.layer = LAYER.CATEGORY;
-        this.wheel.reticle = autoAimTile(currentLeaf(this.wheel), this);
+        this.wheel.path = [0];
+        this.wheel.aiming = false;
+        this.wheel.confirming = false;
+        this.wheel.reticle = null;
+        restoreLastCategory(this.wheel);   // reopen on the last-used category
         audio.playSfx('menu-open');
         this._overlayOpenedAt = performance.now();
         this._ensureParticleLoop();
@@ -2149,8 +2122,32 @@ class Game {
     _closeWheel() {
         this.state = STATE.IDLE;
         this.wheel.reticle = null;
+        this.wheel.aiming = false;
+        this.wheel.confirming = false;
         audio.playSfx('menu-cancel');
         this._render();
+    }
+
+    // Drill the highlighted node: grey-out gate (placeholder / unavailable), then
+    // act on the drill sentinel — fire a leaf, enter AIM, or descend a sub-wheel.
+    _wheelDrill() {
+        const w = this.wheel;
+        const node = selectedNode(w);
+        if (node.placeholder) { audio.playSfx('bump-wall'); return; }
+        if (node.available && !node.available(this)) { audio.playSfx('bump-wall'); return; }
+        const r = drill(w, this);
+        if (r === 'bump') { audio.playSfx('bump-wall'); return; }
+        if (r === 'fire') { this._wheelCommit(); return; }
+        if (r === 'aim')  { if (!w.reticle) w.reticle = autoAimTile(selectedNode(w), this); audio.playSfx('menu-tick'); this._render(); return; }
+        audio.playSfx('menu-tick'); this._render();   // 'push' / descended into a sub-wheel
+    }
+
+    // Commit the composed action — surfacing the Plus-Ultra confirm if it would
+    // clip a friendly. _fireWheel (via _closeWheel) clears the confirm flag.
+    _wheelCommit() {
+        const w = this.wheel;
+        if (!w.confirming && needsFriendlyConfirm(w, this)) { w.confirming = true; audio.playSfx('menu-tick'); this._render(); return; }
+        this._fireWheel();
     }
 
     // The reticle's reach for the current leaf: adjacent verbs lock to range 1,
@@ -2160,7 +2157,7 @@ class Game {
     // Drive the reticle while in the AIM layer: d-pad nudges it (clamped to the
     // leaf's range + walkability), Space/Enter fires, Esc backs out.
     _reticleKey(code) {
-        const w = this.wheel, leaf = currentLeaf(w), range = this._aimRange(leaf);
+        const w = this.wheel, leaf = selectedNode(w), range = this._aimRange(leaf);
         const mv = {
             ArrowUp: [0, -1], KeyW: [0, -1], ArrowDown: [0, 1], KeyS: [0, 1],
             ArrowLeft: [-1, 0], KeyA: [-1, 0], ArrowRight: [1, 0], KeyD: [1, 0],
@@ -2176,8 +2173,7 @@ class Game {
                 // enemies) and waits for Space; single-target adjacent verbs
                 // (melee/run/trade) commit on the direction press itself.
                 if (leaf.resolver === 'cleaveAttack') { audio.playSfx('menu-tick'); this._render(); return; }
-                const r = forward(w, this);
-                if (r === 'fire') this._fireWheel(); else { audio.playSfx('menu-tick'); this._render(); }
+                this._wheelCommit();
                 return;
             }
             // Ranged / Throw / Magic: nudge the reticle for precise placement.
@@ -2189,10 +2185,7 @@ class Game {
             return;
         }
         if (code === 'Space' || code === 'Enter') {
-            // Route through forward() so the "Plus Ultra" friendly-confirm layer
-            // can intercept an offensive shot aimed at an ally/vendor/idle NPC.
-            const r = forward(w, this);
-            if (r === 'fire') this._fireWheel(); else { audio.playSfx('menu-tick'); this._render(); }
+            this._wheelCommit();   // surfaces the Plus-Ultra confirm if it'd clip a friendly
             return;
         }
         if (code === 'Escape') { back(w); audio.playSfx('menu-cancel'); this._render(); return; }
@@ -2227,7 +2220,7 @@ class Game {
     _canRepeatLast() {
         const lf = this.wheel.lastFired; if (!lf) return false;
         if (lf.itemSlot >= 0 && !this.inventory[lf.itemSlot]) return false;
-        if (lf.aimTile && lf.subKey === 'melee') {
+        if (lf.aimTile && lf.nodeKey === 'hit') {
             return this.enemies.some(e => e.entity.isAlive() && e.x === lf.aimTile.x && e.y === lf.aimTile.y);
         }
         return true;
@@ -2235,21 +2228,17 @@ class Game {
 
     // Restore the last selection into the wheel and fire it without drawing.
     _repeatLastAction() {
-        const lf = this.wheel.lastFired; if (!lf) { this._openWheel(); return; }
-        const cats = categoryKeys();
-        this.wheel.categoryIndex = Math.max(0, cats.indexOf(lf.catKey));
-        const subs = currentCategory(this.wheel).subverbs;
-        this.wheel.subVerbIndex = Math.max(0, subs.findIndex(s => s.key === lf.subKey));
+        const lf = this.wheel.lastFired; if (!lf || !lf.path) { this._openWheel(); return; }
+        this.wheel.path = lf.path.slice();
         this.wheel.itemIndex = lf.itemSlot >= 0 ? lf.itemSlot : this.wheel.itemIndex;
         if (lf.spellId) { const si = (this.knownSpells || []).indexOf(lf.spellId); if (si >= 0) this.wheel.spellIndex = si; }
-        this.wheel.reticle = lf.aimTile || autoAimTile(currentLeaf(this.wheel), this);
-        // Re-clamp the restored reticle to the CURRENT player position. lastFired
-        // stores the raw tile; the player may have walked since, leaving it out of
-        // range. Without this, the CONFIRM prompt + AoE preview would read the
-        // stale tile while resolveThrow's own clamp lands the burst elsewhere —
-        // confirm/preview vs actual would disagree. Clamp here so all three agree.
+        this.wheel.aiming = false;
+        this.wheel.confirming = false;
+        this.wheel.reticle = lf.aimTile || autoAimTile(selectedNode(this.wheel), this);
+        // Re-clamp the restored reticle to the CURRENT player position (they may
+        // have walked since), so confirm/preview/damage all agree on the tile.
         if (this.wheel.reticle) {
-            const range = aimRange(currentLeaf(this.wheel), this);
+            const range = aimRange(selectedNode(this.wheel), this);
             const dx = this.wheel.reticle.x - this.playerX, dy = this.wheel.reticle.y - this.playerY;
             if (Math.max(Math.abs(dx), Math.abs(dy)) > range) {
                 this.wheel.reticle = {
@@ -2259,13 +2248,7 @@ class Game {
             }
         }
         this.state = STATE.RADIAL_MENU; // _fireWheel + _closeWheel return us to IDLE
-        // Honor the "Plus Ultra" gate even on the express repeat: if the
-        // remembered shot now lands on a friendly (a hostile died/moved and an
-        // ally stepped onto the tile), surface the CONFIRM layer instead of
-        // silently committing.
-        if (needsFriendlyConfirm(this.wheel, this)) {
-            this.wheel.layer = LAYER.CONFIRM; audio.playSfx('menu-tick'); this._render(); return;
-        }
+        if (needsFriendlyConfirm(this.wheel, this)) { this.wheel.confirming = true; audio.playSfx('menu-tick'); this._render(); return; }
         this._fireWheel();
     }
 
@@ -2284,10 +2267,10 @@ class Game {
 
     _fireWheel() {
         const w = this.wheel;
-        const { leaf, itemSlot, spellId, aimTile } = compose(w, this);
-        w.lastFired = { catKey: categoryKeys()[w.categoryIndex], subKey: leaf.key, itemSlot, spellId, aimTile };
+        const { node, itemSlot, spellId, aimTile } = compose(w, this);
+        w.lastFired = { path: w.path.slice(), nodeKey: node.key, itemSlot, spellId, aimTile };
         audio.playSfx('menu-confirm');
-        switch (leaf.resolver) {
+        switch (node.resolver) {
             case 'combatAttack': {
                 const enemy = aimTile && this.enemies.find(e => e.entity.isAlive() && e.x === aimTile.x && e.y === aimTile.y);
                 if (enemy) { this.combatAttack(enemy, this.equipment.weapon.damage); this._advanceWorld(); }
@@ -2324,7 +2307,7 @@ class Game {
                 break;
             }
             case 'resolveThrow': { if (itemSlot >= 0 && aimTile) { this._throwAt(itemSlot, aimTile); } break; }
-            case 'resolveUse':   { if (itemSlot >= 0) { this.selectedSlot = itemSlot; this._doItemUse(this.inventory[itemSlot].itemDef); } break; }
+            case 'resolveUse':   { const stack = itemSlot >= 0 ? this.inventory[itemSlot] : null; if (stack) { this.selectedSlot = itemSlot; this._doItemUse(stack.itemDef); } else this._log('[Nothing to use]'); break; }
             case 'guard':        { this.addBuff('guard', 'Guard', 2, 'buff'); this._log('[Bracing — incoming damage reduced.]'); this._advanceWorld(); break; }
             case 'wait':         { this._log('[Wait]'); this._advanceWorld(); break; }
             case 'run':          { const d = this._aimDir(aimTile); if (d) { this._closeWheel(); this._doMove(d); return; } break; }
@@ -2335,7 +2318,30 @@ class Game {
                 this._log('[No one to trade with there]');
                 break;
             }
-            default: this._log(`[${leaf.label} isn't ready yet]`); // dep stub — never crash
+            case 'give': {
+                const npc = aimTile && this.enemies.find(e => e.entity.isAlive() && e.x === aimTile.x && e.y === aimTile.y);
+                if (!npc) { this._log('[No one to give to there]'); break; }
+                if (!this.inventory[itemSlot]) { this._log('[Nothing to give]'); break; }
+                this.selectedSlot = itemSlot; this._doGive(npc); return;   // _doGive consumes + advances + returns to IDLE
+            }
+            case 'bribe': {
+                const npc = aimTile && this.enemies.find(e => e.entity.isAlive() && e.x === aimTile.x && e.y === aimTile.y);
+                if (!npc) { this._log('[No one to bribe there]'); break; }
+                const cost = bribeStepCost(npc.disposition ?? 0);
+                if ((this.gold ?? 0) < cost) { this._log(`[Not enough gold to bribe — needs ${cost}g.]`); break; }
+                this.gold -= cost;
+                applyDispositionDelta(npc, BRIBE_STEP);
+                this._log(`[You slip the ${npc.type || 'stranger'} ${cost}g. (+${BRIBE_STEP} disposition.)]`);
+                this._advanceWorld();
+                break;
+            }
+            case 'hide': {
+                // Stub — no stealth system yet. Graceful no-op that spends the turn.
+                this._log('[You try to keep a low profile... (no effect yet)]');
+                this._advanceWorld();
+                break;
+            }
+            default: this._log(`[${node.label} isn't ready yet]`); // dep stub — never crash
         }
         this._closeWheel();
     }

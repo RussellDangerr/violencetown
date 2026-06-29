@@ -6,7 +6,7 @@
 import { TILE_PX, VIEW_TILES, CANVAS_PX } from './data.js';
 import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES } from './sprites.js';
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
-import { currentCategory, currentLeaf, categoryKeys, leafEnabled, validItemSlots, LAYER, affectedTiles } from './wheel-model.js'; // (combat-wheel rework)
+import { ROOT, selectedNode, activeRing, activeIndex, decisionPath, previewChildren, affectedTiles } from './wheel-model.js'; // (sunburst wheel)
 import { SPELLS } from './spells.js';
 import {
     OVERLAY_RECTS, THROW_RECTS,
@@ -15,6 +15,7 @@ import {
     LOG_STRIP_RECT, LOG_MODAL_RECT,
     TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BRIBE_RECT,
     TRADE_CELL_W, TRADE_CELL_H, tradeCellRect,
+    RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
 } from './layout.js';
 import { ITEMS } from './items.js';                                          // (trade slice 1) stock item defs
 import { buyPrice, sellPrice, bribeStepCost, mood, canTrade, BRIBE_STEP } from './trade.js'; // (trade slice 1) pricing + mood smiley
@@ -330,7 +331,7 @@ export class Renderer {
 
         // (combat-wheel rework) Aim reticle lives in world space so it tracks the
         // map; the wheel list itself is drawn in screen space after the restore.
-        if (game.wheel && (game.wheel.layer === LAYER.AIM || game.wheel.layer === LAYER.CONFIRM)) this._drawReticle(game);
+        if (game.wheel && (game.wheel.aiming || game.wheel.confirming)) this._drawReticle(game);
 
         // Floating damage numbers float above the world but under the HUD
         // so the HP panel + hotbar are never occluded by spammy combat.
@@ -1664,40 +1665,45 @@ export class Renderer {
 
     _drawRadialMenu(game) { this._drawWheel(game); }
 
-    // (combat-wheel rework) Verb-tree combat wheel — a horizontal "ticket-tape"
-    // carousel of bubble buttons: the selection sits in a centered viewport, the
-    // neighbours run off to the sides and FADE OUT at the edges (infinite wrap),
-    // and the strip SLIDES when you cycle — like spinning a roll of ticket tape.
-    // CATEGORY/SUBVERB/ITEM each render their own strip; AIM shows a thin hint
-    // and leaves the world + reticle (drawn by _drawReticle) visible.
-    _drawWheel(game) {
-        const { ctx, half } = this;
-        const cx = half * TILE_PX + TILE_PX / 2;  // 304
-        const cy = half * TILE_PX + TILE_PX / 2;  // 304
-        const w = game.wheel;
-        const now = performance.now();
+    // One donut-wedge tile (a curved "Simon-Says" segment) + a centered label.
+    // Angles in radians: `mid` = the tile's centre angle, `half` = half its width.
+    _wheelTile(r0, r1, mid, half, fill, alpha, label, txtColor, outline) {
+        const { ctx } = this, cx = RADIAL_CENTER_X, cy = RADIAL_CENTER_Y;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r1, mid - half, mid + half);
+        ctx.arc(cx, cy, r0, mid + half, mid - half, true);
+        ctx.closePath();
+        ctx.globalAlpha = alpha; ctx.fillStyle = fill; ctx.fill(); ctx.globalAlpha = 1;
+        if (outline) { ctx.lineWidth = outline.w; ctx.strokeStyle = outline.c; ctx.stroke(); }
+        if (this.font && label) {
+            const lr = (r0 + r1) / 2;
+            const lx = cx + Math.cos(mid) * lr, ly = cy + Math.sin(mid) * lr - 4;
+            this.font.drawText(ctx, label, lx, ly, { color: txtColor, scale: 1, align: 'center' });
+        }
+    }
 
-        // ── AIM: no dim, just a bottom hint (keep the reticle/world readable) ──
-        if (w.layer === LAYER.AIM) {
+    // (sunburst wheel) Concentric radial menu: hub (MENU/breadcrumb tip) · greyed
+    // decision-stack rings growing inward · one bright active ring (selection at
+    // the TOP pointer) you spin · a partial preview arc of the highlight's children
+    // fanning above the pointer. AIM/CONFIRM reuse the world reticle (see _render).
+    _drawWheel(game) {
+        const { ctx } = this;
+        const cx = RADIAL_CENTER_X, cy = RADIAL_CENTER_Y, TOP = -Math.PI / 2;
+        const w = game.wheel; if (!w) return;
+
+        // ── AIM: bottom hint only; the world + reticle stay readable ──
+        if (w.aiming) {
             if (this.font) {
-                ctx.save();
-                ctx.fillStyle = 'rgba(0,0,0,0.55)';
-                ctx.fillRect(0, CANVAS_PX - 24, CANVAS_PX, 24);
-                ctx.restore();
-                const hint = `${currentLeaf(w).label.toUpperCase()}  ·  AIM — MOVE · SPACE FIRE · ↓ BACK`;
+                ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, CANVAS_PX - 24, CANVAS_PX, 24); ctx.restore();
+                const hint = `${selectedNode(w).label.toUpperCase()}  ·  AIM — MOVE · SPACE FIRE · ↓ BACK`;
                 this.font.drawText(ctx, hint, cx, CANVAS_PX - 16, { color: UI.gold, scale: 1, align: 'center', shadow: '#000' });
             }
             return;
         }
 
-        // ── CONFIRM ("Plus Ultra"): about to strike a FRIENDLY — one more layer ──
-        // Reddish wash (danger), the target's name, and the "↑ again to commit"
-        // grammar. The reticle still draws in world space (see _drawReticle gate).
-        if (w.layer === LAYER.CONFIRM) {
-            ctx.save();
-            ctx.fillStyle = 'rgba(48,0,0,0.55)';
-            ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
-            ctx.restore();
+        // ── CONFIRM ("Plus Ultra"): about to strike a friendly ──
+        if (w.confirming) {
+            ctx.save(); ctx.fillStyle = 'rgba(48,0,0,0.55)'; ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX); ctx.restore();
             const tgt = w.reticle && game.enemies.find(e => e.entity.isAlive() && e.x === w.reticle.x && e.y === w.reticle.y);
             const name = String((tgt && (tgt.type || (tgt.entity && tgt.entity.name))) || 'them').replace(/[\[\]]/g, '').toUpperCase();
             if (this.font) {
@@ -1706,114 +1712,85 @@ export class Renderer {
                 this.font.drawText(ctx, "THEY'RE NOT YOUR ENEMY", cx, cy + 12, { color: UI.text, scale: 1, align: 'center', shadow: '#000' });
                 this.font.drawText(ctx, '↑ AGAIN TO COMMIT  ·  ↓ BACK', cx, cy + 38, { color: '#e8dcc0', scale: 1, align: 'center', shadow: '#000' });
             }
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'alphabetic';
+            ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
             return;
         }
 
-        // ── Gather the current layer's options ──
-        let options, selIndex, title;
-        if (w.layer === LAYER.CATEGORY) {
-            options = categoryKeys().map(k => ({ label: k, enabled: true }));
-            selIndex = w.categoryIndex; title = '';
-        } else if (w.layer === LAYER.SUBVERB) {
-            options = currentCategory(w).subverbs.map(s => ({ label: s.label, enabled: leafEnabled(s, game) }));
-            selIndex = w.subVerbIndex; title = categoryKeys()[w.categoryIndex];
-        } else if (w.layer === LAYER.ITEM) {
-            const slots = validItemSlots(w, game);
-            options = slots.map(i => ({ label: game.inventory[i].itemDef.name.replace(/[\[\]]/g, ''), enabled: true }));
-            selIndex = Math.max(0, slots.indexOf(w.itemIndex)); title = currentLeaf(w).label;
-        } else { // SPELL — the Magic spell ring
-            const ids = game.knownSpells || [];
-            options = ids.map(id => {
-                const sp = SPELLS[id];
-                return { label: (sp ? sp.name : id) + (sp ? ` ${sp.mpCost}MP` : ''), enabled: (game.playerMp || 0) >= (sp ? sp.mpCost : 0) };
-            });
-            selIndex = Math.max(0, w.spellIndex % Math.max(1, ids.length)); title = 'MAGIC';
-        }
+        // ── Sunburst ──
+        ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX); ctx.restore();
 
-        // Dim backdrop behind the strip.
-        ctx.save();
-        ctx.fillStyle = 'rgba(0,0,0,0.5)';
-        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
-        ctx.restore();
+        const catNode = ROOT.children[w.path[0]];
+        const HUE = ({ fight: '#c8443a', trick: '#3f78c4', treat: '#4f9b4a', flight: '#caa23a' })[catNode && catNode.key] || '#8a5a2c';
+        const depth = w.path.length;
 
-        if (!options.length) {
-            if (this.font) this.font.drawText(ctx, '( nothing )', cx, cy, { color: UI.text, scale: 1, align: 'center', shadow: '#000' });
-            return;
-        }
-        const n = options.length;
+        // The {ring, sel} at locked level d (0-based), walking the REAL tree.
+        const ringAt = (d) => { let node = ROOT; for (let k = 0; k < d; k++) node = node.children[w.path[k]]; return { ring: node.children, sel: w.path[d] }; };
 
-        // ── Slide animation: when the selection changes, ease the strip from an
-        //    offset back to 0 (shortest circular direction). reduce-motion snaps. ──
-        const reduce = (typeof Settings !== 'undefined') && Settings.get && Settings.get('reduceMotion');
-        const key = `${w.layer}:${selIndex}:${n}`;
-        if (this._wheelKey !== key) {
-            if (this._wheelLayerN === `${w.layer}:${n}` && this._wheelSel != null) {
-                let d = selIndex - this._wheelSel;
-                if (d >  n / 2) d -= n;
-                if (d < -n / 2) d += n;
-                this._wheelSlideFrom = d;
-                this._wheelSlideStart = now;
-            } else { this._wheelSlideFrom = 0; this._wheelSlideStart = 0; }
-            this._wheelKey = key;
-            this._wheelLayerN = `${w.layer}:${n}`;
-            this._wheelSel = selIndex;
-        }
-        const SLIDE_MS = 130, SPACING = 120, VPHALF = 280, FADE = 72, BW = 104, BH = 38;
-        const t = (this._wheelSlideStart && !reduce) ? Math.min(1, (now - this._wheelSlideStart) / SLIDE_MS) : 1;
-        const ease = 1 - Math.pow(1 - t, 3);                       // easeOutCubic
-        const slidePx = (this._wheelSlideFrom || 0) * SPACING * (1 - ease);
-
-        if (this.font && title) this.font.drawText(ctx, title.toUpperCase(), cx, cy - 56, { color: UI.gold, scale: 2, align: 'center', shadow: '#000' });
-
-        // ── The tape: render ±3 buttons around the selection (wrapped) ──
-        for (let k = -3; k <= 3; k++) {
-            const idx = ((selIndex + k) % n + n) % n;
-            const opt = options[idx];
-            const bx = cx + k * SPACING + slidePx;
-            const alpha = Math.max(0, Math.min(1, (VPHALF - Math.abs(bx - cx)) / FADE));
-            if (alpha <= 0.02) continue;
-            const isSel = (k === 0);
-            ctx.globalAlpha = alpha;
-            this._drawBubble(bx, cy, BW, BH, isSel, opt.enabled);
-            if (this.font) {
-                const label = opt.label.length > 12 ? opt.label.slice(0, 11) + '…' : opt.label;
-                const color = !opt.enabled ? '#6b5d44' : (isSel ? '#2a1d0e' : '#f3e3c0');
-                this.font.drawText(ctx, label, bx, cy - 4, { color, scale: 1, align: 'center' });
+        // Draw one full ring, the selected tile rotated under the TOP pointer.
+        const drawRing = (ring, selIndex, band, active) => {
+            const n = ring.length; if (!n) return;
+            const step = (Math.PI * 2) / n, half = Math.max(0.02, step / 2 - WHEEL_TILE_GAP);
+            for (let i = 0; i < n; i++) {
+                const node = ring[i];
+                const mid = TOP + (i - selIndex) * step;
+                const isSel = (i === selIndex);
+                const enabled = !node.placeholder && (!node.available || node.available(game));
+                let fill, alpha, txt, outline = null;
+                if (active) {
+                    fill = isSel ? HUE : '#6b5436';
+                    alpha = enabled ? (isSel ? 1 : 0.82) : 0.4;
+                    txt = !enabled ? '#7a6c50' : (isSel ? '#fff3d0' : '#e8dcc0');
+                    if (isSel) outline = { w: 3, c: '#fff3c0' };
+                } else {
+                    fill = isSel ? HUE : '#3a3024';
+                    alpha = (isSel ? 0.5 : 0.32) * (enabled ? 1 : 0.7);
+                    txt = isSel ? '#e8dcc0' : '#9a8c70';
+                }
+                this._wheelTile(band[0], band[1], mid, half, fill, alpha, node.placeholder ? '…' : node.label, txt, outline);
             }
-            ctx.globalAlpha = 1;
+        };
+
+        // 1) Greyed decision rings (locked parents), innermost first.
+        for (let d = 0; d < depth - 1; d++) { const r = ringAt(d); drawRing(r.ring, r.sel, wheelRingR(d), false); }
+        // 2) Bright active ring (outermost full ring).
+        const activeBand = wheelRingR(depth - 1);
+        drawRing(activeRing(w), activeIndex(w), activeBand, true);
+
+        // 3) Preview arc (the highlight's children) — a couple of curved tiles above
+        //    the pointer, last-used child centred; or a "fire" cue for a leaf.
+        const kids = previewChildren(w);
+        let outerMost = activeBand[1];
+        if (kids.length) {
+            const band = wheelRingR(depth); outerMost = band[1];
+            const memIdx = Math.max(0, Math.min((w._memory && w._memory[w.path.join('.')]) ?? 0, kids.length - 1));
+            const SPREAD = 0.42, HALF = 0.18;
+            for (let off = -1; off <= 1; off++) {
+                const j = memIdx + off; if (j < 0 || j >= kids.length) continue;
+                const center = (off === 0);
+                this._wheelTile(band[0], band[1], TOP + off * SPREAD, HALF,
+                    center ? HUE : '#4a3c2a', center ? 0.66 : 0.4, kids[j].label,
+                    center ? '#fff0cc' : '#b0a184', center ? { w: 2, c: '#e8cf90' } : null);
+            }
+        } else if (this.font) {
+            this.font.drawText(ctx, '▲ FIRE', cx, cy - activeBand[1] - 16, { color: UI.gold, scale: 1, align: 'center', shadow: '#000' });
         }
 
-        if (this.font) {
-            const leaf = currentLeaf(w);
-            this.font.drawText(ctx, `${categoryKeys()[w.categoryIndex]} ▸ ${leaf.label}`, cx, cy + 50, { color: UI.text, scale: 1, align: 'center', shadow: '#000' });
-        }
+        // 4) Hub disc + breadcrumb tip (MENU / Fight / Melee …).
+        ctx.beginPath(); ctx.arc(cx, cy, WHEEL_HUB_R, 0, Math.PI * 2); ctx.closePath();
+        ctx.fillStyle = 'rgba(30,24,16,0.95)'; ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(212,185,106,0.6)'; ctx.stroke();
+        if (this.font) { const dp = decisionPath(w); this.font.drawText(ctx, dp[dp.length - 1].toUpperCase(), cx, cy - 4, { color: UI.gold, scale: 1, align: 'center' }); }
 
-        ctx.globalAlpha = 1;
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'alphabetic';
-    }
-
-    // A rounded "bubble" pill. Vector fill/stroke (always anti-aliased — the
-    // global imageSmoothing=false only affects drawImage, not paths).
-    _drawBubble(bcx, bcy, w, h, sel, enabled) {
-        const { ctx } = this;
-        const x = bcx - w / 2, y = bcy - h / 2, r = h / 2;
+        // 5) Pointer ▲ at TOP, just outside the outermost element, pointing inward.
+        const pr = outerMost + 12;
         ctx.beginPath();
-        ctx.moveTo(x + r, y);
-        ctx.arcTo(x + w, y,     x + w, y + h, r);
-        ctx.arcTo(x + w, y + h, x,     y + h, r);
-        ctx.arcTo(x,     y + h, x,     y,     r);
-        ctx.arcTo(x,     y,     x + w, y,     r);
+        ctx.moveTo(cx, cy - pr + 10);
+        ctx.lineTo(cx - 7, cy - pr);
+        ctx.lineTo(cx + 7, cy - pr);
         ctx.closePath();
-        // Aged-brown pills matching the parchment menus' buttons (gold when
-        // selected). Brighter brown than before so they read on the dim wash.
-        ctx.fillStyle = sel ? UI.gold : (enabled ? 'rgba(138,90,44,0.92)' : 'rgba(74,52,30,0.82)');
-        ctx.fill();
-        ctx.lineWidth = sel ? 3 : 1.5;
-        ctx.strokeStyle = sel ? '#fff3c0' : (enabled ? 'rgba(212,185,106,0.7)' : 'rgba(120,100,66,0.5)');
-        ctx.stroke();
+        ctx.fillStyle = '#fff3c0'; ctx.fill();
+
+        ctx.globalAlpha = 1; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     }
 
     // (combat-wheel rework) Aim reticle — drawn in WORLD space (call from inside
@@ -1821,7 +1798,7 @@ export class Renderer {
     // plus a box on the target tile. BASIC; footprint/AoE is a later pass.
     _drawReticle(game) {
         const w = game.wheel;
-        if (!w || (w.layer !== LAYER.AIM && w.layer !== LAYER.CONFIRM) || !w.reticle) return;
+        if (!w || (!w.aiming && !w.confirming) || !w.reticle) return;
         const { ctx, half } = this;
         const toScreen = (tx, ty) => ({
             x: (tx - game.playerX + half) * TILE_PX - this._scrollX,
