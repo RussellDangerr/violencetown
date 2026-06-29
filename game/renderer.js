@@ -541,6 +541,16 @@ export class Renderer {
         const { ctx, half, sprites } = this;
         const sheet = sprites?.sewerTiles;
         const pad = 2;
+        // Car (tile 19) is painted as ONE 2×2 sprite, not a 2×2 grid of four
+        // 32px cars. The map keeps all four cells as id 19 (so the block stays a
+        // non-walkable bump-to-interact obstacle — see main.js _interactCar);
+        // this is purely a render special-case. Each car cell instead draws the
+        // ground beneath it (sidewalk, the surrounding walkable surface) so no
+        // cell reads as a hole, and the block's top-left cell is collected here
+        // and drawn as a single 64×64 pixel-doubled car AFTER the tile loop —
+        // deferred so the other three cells' ground (painted later in the loop)
+        // can't overpaint the overhanging car.
+        const carBlocks = [];
         for (let vy = -pad; vy < VIEW_TILES + pad; vy++) {
             for (let vx = -pad; vx < VIEW_TILES + pad; vx++) {
                 const wx = game.playerX - half + vx;
@@ -549,12 +559,23 @@ export class Renderer {
                 const py = vy * TILE_PX - this._scrollY;
                 const id = game.map.getTile(wx, wy);
                 const def = game.map.getTileDef(wx, wy);
+
+                // Car cell: substitute the ground sprite for the per-cell draw,
+                // and remember the block's top-left for the deferred 64×64 pass.
+                // Top-left = a tile-19 cell whose west and north neighbors aren't
+                // tile 19 (generic 2×2-block corner detection).
+                const isCar = id === 19;
+                const drawId = isCar ? 11 : id;   // 11 = SIDEWALK (the surface the car is parked on)
+                if (isCar && game.map.getTile(wx - 1, wy) !== 19 && game.map.getTile(wx, wy - 1) !== 19) {
+                    carBlocks.push({ px, py });
+                }
+
                 // Lookup chain: sewer ids 0-7 → TILE_SPRITE_MAP,
                 // town ids 10-21 → TOWN_TILE_SPRITE_MAP,
                 // circus/factory/graveyard ids 30+ → ZONE_TILE_SPRITE_MAP.
                 // Disjoint id ranges so order doesn't matter, but explicit
                 // chain keeps the resolution path readable.
-                const ref = TILE_SPRITE_MAP[id] || TOWN_TILE_SPRITE_MAP[id] || ZONE_TILE_SPRITE_MAP[id];
+                const ref = TILE_SPRITE_MAP[drawId] || TOWN_TILE_SPRITE_MAP[drawId] || ZONE_TILE_SPRITE_MAP[drawId];
                 let ok = false;
                 if (ref) {
                     if (ref.region) {
@@ -575,6 +596,25 @@ export class Renderer {
                     ctx.fillStyle = def.fallbackColor;
                     ctx.fillRect(px, py, TILE_PX, TILE_PX);
                 }
+            }
+        }
+
+        // Deferred 2×2 car pass — one crisp 64×64 pixel-doubled car per block,
+        // anchored at the top-left car cell (covers all four cells). Drawn after
+        // every cell's ground so the car overhang isn't clipped by later ground
+        // draws. imageSmoothingEnabled stays false (global default) → sharp 2× .
+        const carSheet = sprites?.car;
+        for (const b of carBlocks) {
+            let ok = false;
+            if (carSheet?.loaded) {
+                ok = carSheet.drawFrame(ctx, 0, 0, b.px, b.py, TILE_PX * 2, TILE_PX * 2);
+            }
+            if (!ok) {
+                // Car sheet not loaded — flat fill across the whole block in the
+                // car tile's fallbackColor (data.js TILES.CAR), so it still reads
+                // as one object, not four. Color inlined (TILES isn't imported here).
+                ctx.fillStyle = '#884444';
+                ctx.fillRect(b.px, b.py, TILE_PX * 2, TILE_PX * 2);
             }
         }
     }
