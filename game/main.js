@@ -2307,7 +2307,7 @@ class Game {
                 break;
             }
             case 'resolveThrow': { if (itemSlot >= 0 && aimTile) { this._throwAt(itemSlot, aimTile); } break; }
-            case 'resolveUse':   { if (itemSlot >= 0) { this.selectedSlot = itemSlot; this._doItemUse(this.inventory[itemSlot].itemDef); } break; }
+            case 'resolveUse':   { const stack = itemSlot >= 0 ? this.inventory[itemSlot] : null; if (stack) { this.selectedSlot = itemSlot; this._doItemUse(stack.itemDef); } else this._log('[Nothing to use]'); break; }
             case 'guard':        { this.addBuff('guard', 'Guard', 2, 'buff'); this._log('[Bracing — incoming damage reduced.]'); this._advanceWorld(); break; }
             case 'wait':         { this._log('[Wait]'); this._advanceWorld(); break; }
             case 'run':          { const d = this._aimDir(aimTile); if (d) { this._closeWheel(); this._doMove(d); return; } break; }
