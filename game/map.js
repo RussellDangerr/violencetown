@@ -48,6 +48,67 @@ export class GameMap {
         // glows after dusk (renderer._drawLighting). Static map data; no effect
         // while it's day (game._nightLevel === 0).
         this.lights = mapData.lights || [];
+
+        // Densify the sparse hand-authored transition tiles into full, edge-butted
+        // openings so the player can't slip past an exit. Runs after tiles + props
+        // are loaded (isWalkable needs both).
+        this.densifyTransitions();
+    }
+
+    // ── Transition densification ─────────────────────────────────────────────
+    //
+    // Hand-authored maps mark only a few sparse tiles of each door — every other
+    // tile, or one tile in from the wall — so the player can walk along an edge,
+    // slip *between* the exits, and miss the zone change entirely. For each door
+    // (transitions that share a destination), this finds the exit direction (the
+    // nearest map border), steps to the EDGE-MOST walkable tile that way, and fills
+    // EVERY walkable tile of the contiguous opening there with a transition. Result:
+    // the whole opening triggers, the marker sits on the last tile before the wall,
+    // and there are no gaps to walk through. Idempotent-ish; replaces `transitions`.
+    densifyTransitions() {
+        if (!this.transitions.length) return;
+        const W = this.width, H = this.height;
+        const groups = new Map();
+        for (const t of this.transitions) {
+            const k = `${t.toMap}|${t.toX}|${t.toY}`;
+            if (!groups.has(k)) groups.set(k, []);
+            groups.get(k).push(t);
+        }
+        const out = [];
+        for (const group of groups.values()) {
+            const s = group[0];
+            const xs = group.map(t => t.x), ys = group.map(t => t.y);
+            const xMin = Math.min(...xs), xMax = Math.max(...xs);
+            const yMin = Math.min(...ys), yMax = Math.max(...ys);
+            const cx = (xMin + xMax) / 2, cy = (yMin + yMax) / 2;
+            // Exit direction = toward the nearest map border.
+            const dist = [cx, W - 1 - cx, cy, H - 1 - cy];
+            const near = Math.min(...dist);
+            let ex = 0, ey = 0;
+            if (near === dist[0]) ex = -1; else if (near === dist[1]) ex = 1;
+            else if (near === dist[2]) ey = -1; else ey = 1;
+            const make = (x, y) => out.push({ x, y, toMap: s.toMap, toX: s.toX, toY: s.toY, label: s.label });
+            if (ex !== 0) {
+                // Horizontal exit: walk to the edge column, fill the vertical opening.
+                const probeY = ys[Math.floor(ys.length / 2)];
+                let ax = ex < 0 ? xMin : xMax;
+                while (this.isWalkable(ax + ex, probeY)) ax += ex;
+                let y0 = yMin, y1 = yMax;
+                while (this.isWalkable(ax, y0 - 1)) y0--;
+                while (this.isWalkable(ax, y1 + 1)) y1++;
+                for (let y = y0; y <= y1; y++) if (this.isWalkable(ax, y)) make(ax, y);
+            } else {
+                // Vertical exit: walk to the edge row, fill the horizontal opening.
+                const probeX = xs[Math.floor(xs.length / 2)];
+                let ay = ey < 0 ? yMin : yMax;
+                while (this.isWalkable(probeX, ay + ey)) ay += ey;
+                let x0 = xMin, x1 = xMax;
+                while (this.isWalkable(x0 - 1, ay)) x0--;
+                while (this.isWalkable(x1 + 1, ay)) x1++;
+                for (let x = x0; x <= x1; x++) if (this.isWalkable(x, ay)) make(x, ay);
+            }
+        }
+        this.transitions = out;
     }
 
     // ── Container & Region lookups ───────────────────────────────────────────
