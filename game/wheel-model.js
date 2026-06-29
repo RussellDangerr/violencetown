@@ -126,7 +126,7 @@ export function createWheelState() {
     itemIndex: 0,
     spellIndex: 0,
     reticle: null,   // {x,y} when aiming
-    lastFired: null, // {catKey, subKey, itemSlot, spellId, aimTile}
+    lastFired: null, // {node, itemSlot, spellId, aimTile} — written by main.js on fire
     aiming: false,
     _memory: {},     // ring path-key → remembered selection index
   };
@@ -143,7 +143,7 @@ export function activeIndex(w)  { return w.path[w.path.length - 1]; }
 export function selectedNode(w) { return activeRing(w)[activeIndex(w)]; }
 export function isLeaf(node)    { return !node.children || node.children.length === 0; }
 export function decisionPath(w) {
-  const out = ['MENU'];
+  const out = [ROOT.label];
   let n = ROOT;
   for (let d = 0; d < w.path.length - 1; d++) { n = n.children[w.path[d]]; out.push(n.label); }
   return out;
@@ -154,10 +154,11 @@ export function previewChildren(w) { const s = selectedNode(w); return (s.childr
 // A ring needs ≥2 tiles to spin. Thin rings get non-selectable placeholders
 // appended; cycle may land on one (fine), drill on one is a no-op ('bump').
 export function paddedRing(ring) {
-  if (!ring) return ring;
-  if (ring.length >= 2) return ring;
-  const pads = [{ key: 'placeholder1', label: '…', placeholder: true }, { key: 'placeholder2', label: '…', placeholder: true }];
-  return ring.concat(pads).slice(0, Math.max(2, ring.length + pads.length) - 0); // ensure ≥2 spinnable
+  if (!ring || ring.length >= 2) return ring;            // already spinnable
+  // Disposable placeholders, regenerated each call — a thin ring still spins.
+  const pads = [{ key: 'placeholder1', label: '…', placeholder: true },
+                { key: 'placeholder2', label: '…', placeholder: true }];
+  return ring.concat(pads).slice(0, 2);                  // 1 real + 1 pad, or 2 pads
 }
 
 // ── Cursor memory ────────────────────────────────────────────────────────────
@@ -169,7 +170,9 @@ const childKey = (w) => w.path.join('.');
 
 // If the root ring has a remembered selection, reopen the wheel on it.
 export function restoreLastCategory(w) {
-  if (w._memory[''] != null) w.path = [w._memory['']];
+  const i = w._memory[''];
+  if (i == null) return;
+  w.path = [Math.max(0, Math.min(i, ROOT.children.length - 1))];
 }
 
 // ── cycle / drill / back ─────────────────────────────────────────────────────
@@ -179,8 +182,7 @@ export function cycle(w, dir) {
   w._memory[pathKey(w)] = activeIndex(w);
 }
 
-// Drill: placeholder → no-op ('bump'); self leaf (no item/spell, aim 'none') →
-// 'fire'; aimed leaf → 'aim'; sub-wheel → push a child ring.
+// Returns 'bump' (placeholder no-op) | 'fire' (resolve now) | 'aim' (enter reticle) | 'push' (descended into a sub-wheel).
 export function drill(w, game) {
   const s = selectedNode(w);
   if (s.placeholder) return 'bump';
@@ -188,7 +190,7 @@ export function drill(w, game) {
   if (isLeaf(s)) { w.aiming = (s.aimType !== 'none'); return w.aiming ? 'aim' : 'fire'; }
   w._memory[pathKey(w)] = activeIndex(w);
   w.path.push(w._memory[childKey(w)] ?? 0);
-  return;
+  return 'push';
 }
 
 // Returns 'close' when already at the top ring.
