@@ -32,17 +32,20 @@ export const ROOT = { key: 'menu', label: 'MENU', children: [
       available: (g) => (g.playerMp || 0) > 0 && ((g.knownSpells && g.knownSpells.length) || 0) > 0 },
   ]},
   { key: 'trick', label: 'Trick', children: [
-    { key: 'throw', label: 'Throw', needsItem: true,  aimType: 'reticle',  resolver: 'resolveThrow', available: always },
-    { key: 'trade', label: 'Trade', needsItem: false, aimType: 'adjacent', resolver: 'trade',        available: always },
+    { key: 'throw',  label: 'Throw',  needsItem: true,  aimType: 'reticle',  resolver: 'resolveThrow', available: always },
+    { key: 'defend', label: 'Defend', aimType: 'none',                       resolver: 'guard',        available: always },
+    { key: 'bribe',  label: 'Bribe',  aimType: 'adjacent',                   resolver: 'bribe',        available: always },
+    { key: 'give',   label: 'Give',   needsItem: true,  aimType: 'adjacent', resolver: 'give',         available: always },
+    { key: 'trade',  label: 'Trade',  aimType: 'adjacent',                   resolver: 'trade',        available: always },
   ]},
   { key: 'treat', label: 'Treat', children: [
     { key: 'eat',     label: 'Eat',     needsItem: true, aimType: 'none', resolver: 'resolveUse', available: always },
     { key: 'cleanse', label: 'Cleanse', needsItem: true, aimType: 'none', resolver: 'resolveUse', available: always },
   ]},
   { key: 'flight', label: 'Flight', children: [
-    { key: 'defend', label: 'Defend', aimType: 'none',     resolver: 'guard', available: always },
-    { key: 'wait',   label: 'Wait',   aimType: 'none',     resolver: 'wait',  available: always },
-    { key: 'run',    label: 'Run',    aimType: 'adjacent', resolver: 'run',   available: always },
+    { key: 'run',  label: 'Run',  aimType: 'adjacent', resolver: 'run',  available: always },
+    { key: 'hide', label: 'Hide', aimType: 'none',     resolver: 'hide', available: always },
+    { key: 'wait', label: 'Wait', aimType: 'none',     resolver: 'wait', available: always },
   ]},
 ]};
 
@@ -267,7 +270,8 @@ export function autoAimTile(leaf, game) {
     const distTo = t => alive.length ? Math.min(...alive.map(e => cheb(t.x, t.y, e.x, e.y))) : 99;
     return cands.sort((a, b) => distTo(b) - distTo(a))[0];
   }
-  const pool = (leaf.resolver === 'trade'
+  const social = leaf.resolver === 'trade' || leaf.resolver === 'bribe' || leaf.resolver === 'give';
+  const pool = (social
     ? alive
     : alive.filter(e => !e.behavior || e.behavior.includes('HOSTILE')))
     .filter(e => cheb(game.playerX, game.playerY, e.x, e.y) <= range);

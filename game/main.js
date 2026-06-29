@@ -2318,6 +2318,29 @@ class Game {
                 this._log('[No one to trade with there]');
                 break;
             }
+            case 'give': {
+                const npc = aimTile && this.enemies.find(e => e.entity.isAlive() && e.x === aimTile.x && e.y === aimTile.y);
+                if (!npc) { this._log('[No one to give to there]'); break; }
+                if (!this.inventory[itemSlot]) { this._log('[Nothing to give]'); break; }
+                this.selectedSlot = itemSlot; this._doGive(npc); return;   // _doGive consumes + advances + returns to IDLE
+            }
+            case 'bribe': {
+                const npc = aimTile && this.enemies.find(e => e.entity.isAlive() && e.x === aimTile.x && e.y === aimTile.y);
+                if (!npc) { this._log('[No one to bribe there]'); break; }
+                const cost = bribeStepCost(npc.disposition ?? 0);
+                if ((this.gold ?? 0) < cost) { this._log(`[Not enough gold to bribe — needs ${cost}g.]`); break; }
+                this.gold -= cost;
+                applyDispositionDelta(npc, BRIBE_STEP);
+                this._log(`[You slip the ${npc.type || 'stranger'} ${cost}g. (+${BRIBE_STEP} disposition.)]`);
+                this._advanceWorld();
+                break;
+            }
+            case 'hide': {
+                // Stub — no stealth system yet. Graceful no-op that spends the turn.
+                this._log('[You try to keep a low profile... (no effect yet)]');
+                this._advanceWorld();
+                break;
+            }
             default: this._log(`[${node.label} isn't ready yet]`); // dep stub — never crash
         }
         this._closeWheel();
