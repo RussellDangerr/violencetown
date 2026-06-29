@@ -29,7 +29,7 @@ import { canTrade, buyPrice, sellPrice, bribeStepCost, BRIBE_STEP } from './trad
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
 import {
-    createWheelState, cycle, drill, back, compose, autoAimTile, validItemSlots,
+    createWheelState, cycle, drill, back, compose, autoAimTile,
     needsFriendlyConfirm, aimRange, affectedTiles, selectedNode, restoreLastCategory,
 } from './wheel-model.js'; // (sunburst wheel) node-tree model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
@@ -370,8 +370,8 @@ class Game {
         this._bindOptionsModal(); // [settings] options/accessibility UI
         this._bindPauseOverlay(); // [settings] turn-based pause overlay
 
-        // (combat-wheel rework) Touch ACTION button: open the wheel when idle;
-        // while open, drill forward through the layers (firing once composed).
+        // (sunburst wheel) Touch ACTION button: open the wheel when idle; while
+        // open, drill into the current selection (firing once it's a ready leaf).
         const actionBtn = document.getElementById('action-btn');
         if (actionBtn) actionBtn.addEventListener('pointerdown', (e) => {
             e.preventDefault();

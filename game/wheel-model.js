@@ -126,7 +126,7 @@ export function createWheelState() {
     itemIndex: 0,
     spellIndex: 0,
     reticle: null,   // {x,y} when aiming
-    lastFired: null, // {node, itemSlot, spellId, aimTile} — written by main.js on fire
+    lastFired: null, // {path, nodeKey, itemSlot, spellId, aimTile} — written by main.js on fire
     aiming: false,
     _memory: {},     // ring path-key → remembered selection index
   };

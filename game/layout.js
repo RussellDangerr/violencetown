@@ -49,18 +49,14 @@ export const HOTBAR_Y       = HOTBAR_OY + 2;                         // 548 (slo
 // Concentric rings centred on RADIAL_CENTER_*: a hub, the greyed decision-stack
 // rings growing inward, one bright active ring, and a partial preview arc above
 // the top pointer. Shared by renderer._drawWheel (draw) and main._tapRadialMenu
-// (hit-test). These are starting values; the render task tunes them against the
-// approved mock.
+// (hit-test). The preview-arc band and pointer are derived adaptively in
+// renderer._drawWheel from wheelRingR(depth).
 export const RADIAL_CENTER_X = 304, RADIAL_CENTER_Y = 304;
 export const WHEEL_HUB_R    = 34;            // centre 'MENU' disc radius
 export const WHEEL_RING_W    = 40;           // radial thickness of each full ring
 export const WHEEL_RING_GAP  = 5;            // gap between adjacent rings
 export const WHEEL_RING0_R0  = 40;           // inner edge of the first ring out from the hub
 export const WHEEL_TILE_GAP  = 0.03;         // angular gap between tiles (radians)
-export const WHEEL_PREVIEW_R0 = 124;         // inner edge of the preview arc (outside the active ring)
-export const WHEEL_PREVIEW_R1 = 158;         // outer edge of the preview arc
-export const WHEEL_PREVIEW_SPAN = Math.PI * 0.85; // total arc the preview tiles occupy, centred on top
-export const WHEEL_POINTER_R = 120;          // radius at which the ▲ pointer sits (just outside the active ring)
 // Ring k's [inner, outer] radius (k = 0 nearest the hub).
 export function wheelRingR(k) { const r0 = WHEEL_RING0_R0 + k * (WHEEL_RING_W + WHEEL_RING_GAP); return [r0, r0 + WHEEL_RING_W]; }
 
