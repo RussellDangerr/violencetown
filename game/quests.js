@@ -168,6 +168,16 @@ export class QuestEngine {
         this.game._render?.();
     }
 
+    // Force the active quest straight to completion (runs onComplete once).
+    // Used by tolerant interactions that must never dead-stall on a dropped stage
+    // event — e.g. installing the converter at the car when the sewer→town
+    // map_entered event was missed, leaving the quest short of return_to_car.
+    forceComplete(questId) {
+        if (!QUESTS[questId] || this.state.completed.includes(questId)) return;
+        this.state.activeId = questId;
+        this._complete();
+    }
+
     // The current objective line for the HUD (null when no quest is active).
     getHudText() {
         const id = this.state.activeId;

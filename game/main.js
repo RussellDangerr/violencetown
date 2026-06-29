@@ -1696,19 +1696,28 @@ class Game {
     // to examine it. Holding the converter at the return stage: install it and
     // complete the quest. Otherwise a flavor line.
     _interactCar() {
-        const idx = this.inventory.findIndex(s => s && s.itemDef.id === 'catalytic_converter');
-        const atReturn = this.questEngine.currentStageId() === 'return_to_car';
-        if (idx >= 0 && atReturn) {
-            this._removeFromSlot(idx);
-            this._log('[You wrench the cataclysmic converter back into place.]', 'pickup');
-            this.emitGameEvent('interact_car', {});   // completes fix_car (onComplete fires)
-        } else if (idx >= 0) {
-            this._log("[You've got the converter - but get clear of the sewer first.]");
-        } else if (this.questEngine.getFlag('carFixed')) {
+        if (this.questEngine.getFlag('carFixed')) {
             this._log('[The car purrs. Time to make that delivery.]');
-        } else {
-            this._log("[The car won't start. Pop the hood and examine it (E).]");
+            this._render();
+            return;
         }
+        const idx = this.inventory.findIndex(s => s && s.itemDef.id === 'catalytic_converter');
+        if (idx >= 0) {
+            // Holding the converter AT the car installs it and finishes the quest,
+            // no matter which stage the engine is on. The old gate required the exact
+            // 'return_to_car' stage, which a dropped sewer→town map_entered event can
+            // leave un-reached — soft-locking the finale on "get clear of the sewer
+            // first" forever. Tolerant, mirroring the quest's own autoSatisfy rule.
+            // (There's only one car, in town, so reaching here means we're home.)
+            this._removeFromSlot(idx);
+            this._sewerEscape = null;
+            this._log('[You wrench the cataclysmic converter back into place. The engine turns over!]', 'pickup');
+            this.emitGameEvent('interact_car', {});                       // advances return_to_car if we're there
+            if (!this.questEngine.getFlag('carFixed')) this.questEngine.forceComplete('fix_car'); // else force it home
+            this._render();
+            return;
+        }
+        this._log("[The car won't start. Pop the hood and examine it (E).]");
         this._render();
     }
 
