@@ -317,6 +317,9 @@ export class Renderer {
             shakeX = Math.round((Math.random() - 0.5) * mag * 2); // whole-pixel shake
             shakeY = Math.round((Math.random() - 0.5) * mag * 2); // (avoid sub-pixel seams)
         }
+        // Stash the shake offset so the zone-exit pass can re-apply the SAME world
+        // transform after the lighting/arena dim (see _drawTransitions call below).
+        this._shakeX = shakeX; this._shakeY = shakeY;
 
         ctx.save();
         ctx.translate(shakeX, shakeY);
@@ -358,6 +361,16 @@ export class Renderer {
         const aCur = this._arenaLevel ?? 0;
         this._arenaLevel = Math.abs(arenaTarget - aCur) < 0.01 ? arenaTarget : aCur + (arenaTarget - aCur) * 0.15;
         this._drawArena(game);
+
+        // Visible zone-exit markers. Drawn AFTER the day/night + arena + Wilderness
+        // dimming so the glow/arrows aren't sunk by a night multiply or the
+        // Wilderness blackout — the markers MUST stay legible. World-space, so we
+        // re-apply the same shake translate the world used; the projection inside
+        // already folds in _scrollX/_scrollY. The label hint it draws is screen-space.
+        ctx.save();
+        ctx.translate(this._shakeX || 0, this._shakeY || 0);
+        this._drawTransitions(game);
+        ctx.restore();
 
         // HUD — rendered AFTER restore so screen shake doesn't affect it
         this._drawHPPanel(game);
@@ -616,6 +629,116 @@ export class Renderer {
                 ctx.fillStyle = '#884444';
                 ctx.fillRect(b.px, b.py, TILE_PX * 2, TILE_PX * 2);
             }
+        }
+    }
+
+    // ── Zone-exit markers ──────────────────────────────────────────────────────
+    //
+    // Transition tiles teleport the player to another zone, but they're drawn as
+    // plain floor — so after the 4× map scale pushed exits to the edges, the
+    // player couldn't tell which tiles are doors. This is a RENDER-ONLY overlay:
+    // a soft pulsing gold glow + a bright arrow on every transition tile, the
+    // arrow pointing OUTWARD toward the map edge it leads through. A multi-tile
+    // door (several entries sharing a toMap along one edge) becomes a row/column
+    // of arrows = an obvious gateway. When the player stands on or orthogonally
+    // beside a transition, its `label` shows as a bottom-of-screen hint (mirrors
+    // the AIM hint in _drawWheel). Touches NO map data or trigger logic.
+    //
+    // Called from renderFrame AFTER the day/night + arena + Wilderness dimming,
+    // under a re-applied world transform, so the markers stay legible in the dark.
+    _drawTransitions(game) {
+        const trans = game.map?.transitions;
+        if (!trans || !trans.length) return;
+        const { ctx, half } = this;
+        const mw = game.map.width, mh = game.map.height;
+
+        // Pulse 0..1 (gold breathes). performance.now() matches the renderer's
+        // other time-driven effects (shake, etc.); ~4.4 s period (2π·700 ms).
+        const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 700);
+
+        const EXIT = '255,205,90'; // warm gold — clearly not floor
+
+        // Outward arrow direction = the dominant axis from the map CENTRE to the
+        // tile. A door always sits near the edge it leads through, so center→tile
+        // points outward — and this stays correct for doors set one tile INSIDE
+        // the border (e.g. town's SEWER exit at x=32 in a 34-wide map, or the
+        // factory's east exit at x=28 in 30), where a strict on-the-edge test
+        // would wrongly fall through to 'down'. A truly central tile degenerates
+        // gracefully to whichever axis dominates (or 'down' if dead-centre).
+        const E = 0.5;
+        const dirOf = (t) => {
+            const dx = (t.x + 0.5) - mw / 2;
+            const dy = (t.y + 0.5) - mh / 2;
+            if (Math.abs(dx) < E && Math.abs(dy) < E) return 'down';
+            if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? 'right' : 'left';
+            return dy >= 0 ? 'down' : 'up';
+        };
+
+        let hintLabel = null; // shown if player is on/adjacent to a transition
+
+        for (const t of trans) {
+            // Adjacency for the label hint: on the tile or one orthogonal step
+            // away. Recorded before any cull (an adjacent tile is always on-screen,
+            // but this keeps the hint independent of the draw cull).
+            const md = Math.abs(t.x - game.playerX) + Math.abs(t.y - game.playerY);
+            if (md <= 1) hintLabel = t.label || hintLabel;
+
+            const vx = t.x - game.playerX + half;
+            const vy = t.y - game.playerY + half;
+            // Cheap off-canvas cull (mirror the container/item pass margins).
+            if (vx < -2 || vx > VIEW_TILES + 1 || vy < -2 || vy > VIEW_TILES + 1) continue;
+            const px = vx * TILE_PX - this._scrollX;
+            const py = vy * TILE_PX - this._scrollY;
+
+            const cx = px + TILE_PX / 2, cy = py + TILE_PX / 2;
+
+            // 1) Soft pulsing radial glow on the tile.
+            const glowR = TILE_PX * (0.62 + 0.10 * pulse);
+            const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowR);
+            g.addColorStop(0,   `rgba(${EXIT},${0.42 + 0.20 * pulse})`);
+            g.addColorStop(0.6, `rgba(${EXIT},${0.16 + 0.10 * pulse})`);
+            g.addColorStop(1,   `rgba(${EXIT},0)`);
+            ctx.save();
+            ctx.fillStyle = g;
+            ctx.fillRect(px - TILE_PX * 0.5, py - TILE_PX * 0.5, TILE_PX * 2, TILE_PX * 2);
+
+            // 2) Bright outward-pointing arrow (filled triangle). Built pointing
+            // 'up' then rotated to the edge direction so all four share one path.
+            const dir = dirOf(t);
+            const rot = { up: 0, right: Math.PI / 2, down: Math.PI, left: -Math.PI / 2 }[dir];
+            const a = TILE_PX * 0.30;                 // arrow half-extent
+            const lift = 1 + 1.5 * pulse;             // tiny outward throb
+            ctx.translate(cx, cy);
+            ctx.rotate(rot);
+            ctx.translate(0, -lift);
+            ctx.beginPath();
+            ctx.moveTo(0, -a);                        // tip (outward)
+            ctx.lineTo(a * 0.8, a * 0.5);             // back-right
+            ctx.lineTo(0, a * 0.15);                  // notch (chevron feel)
+            ctx.lineTo(-a * 0.8, a * 0.5);            // back-left
+            ctx.closePath();
+            ctx.fillStyle = `rgba(${EXIT},${0.85 + 0.15 * pulse})`;
+            ctx.fill();
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = 'rgba(60,40,10,0.8)'; // dark edge → reads on any floor
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // 3) Label hint — dark strip + centered label near the bottom, matching
+        // the AIM hint in _drawWheel. Drawn in SCREEN space, so we undo the shake
+        // translate this method is called under (keeps the strip rock-steady).
+        if (hintLabel && this.font) {
+            ctx.save();
+            ctx.translate(-(this._shakeX || 0), -(this._shakeY || 0));
+            ctx.fillStyle = 'rgba(0,0,0,0.55)';
+            ctx.fillRect(0, CANVAS_PX - 24, CANVAS_PX, 24);
+            // Plain ASCII only — the bitmap font (32-126) renders anything else
+            // as '?', so use a hyphen separator, not an em dash.
+            const hint = `EXIT - ${String(hintLabel).toUpperCase()}`;
+            this.font.drawText(ctx, hint, CANVAS_PX / 2, CANVAS_PX - 16,
+                { color: UI.gold, scale: 1, align: 'center', shadow: '#000' });
+            ctx.restore();
         }
     }
 
