@@ -11,9 +11,10 @@ const always = () => true;
 // A node is { key, label, available?, children?, resolver?, aimType?, needsItem?, needsSpell? }.
 //   children → sub-wheel; no children → leaf.
 //   aimType: 'reticle' (free placement) | 'adjacent' (range-1 direction) | 'none' (self)
-//   needsItem → drills into the item ring; needsSpell → Magic (spell selection).
-// Ranged/Magic are LEAVES with needsItem/needsSpell — the existing item/spell
-// selection machinery handles the choice; they are not sub-wheels here.
+//   needsItem → the action uses inventory slot 0 (a throwable-item sub-wheel is a
+//   later pass). Magic is a sub-wheel whose children are the castable spells.
+// Ranged is a leaf that throws slot 0; Magic drills a spell ring (each child
+// carries its own spellId + castSpell resolver).
 export const ROOT = { key: 'menu', label: 'MENU', children: [
   { key: 'fight', label: 'Fight', children: [
     { key: 'melee', label: 'Melee', children: [
@@ -28,8 +29,14 @@ export const ROOT = { key: 'menu', label: 'MENU', children: [
     // Ranged: throw a rock/potion at range (duplicate of TRICK → Throw, by design
     // — you throw things, so it lives under both).
     { key: 'ranged', label: 'Ranged', needsItem: true, aimType: 'reticle', resolver: 'resolveThrow', available: always },
-    { key: 'magic',  label: 'Magic',  needsSpell: true, aimType: 'reticle', resolver: 'castSpell',
-      available: (g) => (g.playerMp || 0) > 0 && ((g.knownSpells && g.knownSpells.length) || 0) > 0 },
+    { key: 'magic',  label: 'Magic',
+      available: (g) => (g.playerMp || 0) > 0 && ((g.knownSpells && g.knownSpells.length) || 0) > 0,
+      children: [
+        { key: 'fireball', label: 'Fireball', spellId: 'fireball', aimType: 'reticle', resolver: 'castSpell',
+          available: (g) => (g.knownSpells || []).includes('fireball') && (g.playerMp || 0) >= (SPELLS.fireball ? SPELLS.fireball.mpCost : 0) },
+        { key: 'coneofcold', label: 'Cone of Cold', spellId: 'coneOfCold', aimType: 'reticle', resolver: 'castSpell',
+          available: (g) => (g.knownSpells || []).includes('coneOfCold') && (g.playerMp || 0) >= (SPELLS.coneOfCold ? SPELLS.coneOfCold.mpCost : 0) },
+      ] },
   ]},
   { key: 'trick', label: 'Trick', children: [
     { key: 'throw',  label: 'Throw',  needsItem: true,  aimType: 'reticle',  resolver: 'resolveThrow', available: always },
@@ -97,8 +104,8 @@ export function affectedTiles(w, game) {
   const ret = w.reticle;
   if (!ret) return [];
   if (leaf.resolver === 'cleaveAttack') return cleaveArc(px, py, ret);
-  if (leaf.key === 'magic') {
-    const sp = selectedSpell(w, game);
+  if (leaf.resolver === 'castSpell') {
+    const sp = SPELLS[leaf.spellId];
     if (sp && sp.aoe && sp.aoe.shape === 'cone')  return coneTiles(px, py, ret, sp.aoe.depth || 3);
     if (sp && sp.aoe && sp.aoe.shape === 'burst') return burstTiles(ret, sp.aoe.radius || 1);
     return [ret];
@@ -127,7 +134,6 @@ export function createWheelState() {
   return {
     path: [0],       // indices into ROOT.children; path[last] = selection in the active ring
     itemIndex: 0,
-    spellIndex: 0,
     reticle: null,   // {x,y} when aiming
     lastFired: null, // {path, nodeKey, itemSlot, spellId, aimTile} — written by main.js on fire
     aiming: false,
@@ -204,11 +210,6 @@ export function back(w) {
   w.aiming = false;
 }
 
-// ── Spell ring (Magic) ───────────────────────────────────────────────────────
-export const knownSpellIds = (game) => (game.knownSpells || []);
-export const selectedSpellId = (w, game) => knownSpellIds(game)[wrap(w.spellIndex, Math.max(1, knownSpellIds(game).length))];
-export const selectedSpell = (w, game) => SPELLS[selectedSpellId(w, game)];
-
 function itemAllowedForLeaf(def, node) {
   if (node.resolver === 'resolveThrow') return def.useType ? def.useType.includes('throw') : true;
   if (node.resolver === 'resolveUse')  return def.useType ? (def.useType.includes('self') || def.useType.includes('use')) : true;
@@ -229,7 +230,7 @@ export function compose(w, game) {
   return {
     node,
     itemSlot: node.needsItem ? w.itemIndex : -1,
-    spellId:  node.needsSpell ? selectedSpellId(w, game) : null,
+    spellId:  node.spellId || null,
     aimTile:  node.aimType === 'none' ? null : (w.reticle || null),
   };
 }
@@ -249,8 +250,8 @@ export function aimRange(leaf, game) {
     const s = (game.inventory || [])[game.wheel ? game.wheel.itemIndex : -1];
     return (s && s.itemDef && s.itemDef.range) || 5;
   }
-  if (leaf.key === 'magic') {
-    const sp = game.wheel ? selectedSpell(game.wheel, game) : null;
+  if (leaf.resolver === 'castSpell') {
+    const sp = SPELLS[leaf.spellId];
     return (sp && sp.range) || 6;
   }
   return 1;
