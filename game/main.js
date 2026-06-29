@@ -1492,6 +1492,7 @@ class Game {
         const r = Math.hypot(pt.x - RADIAL_CENTER_X, pt.y - RADIAL_CENTER_Y);
         if (r < WHEEL_HUB_R + 8) {
             if (w.confirming) { w.confirming = false; audio.playSfx('menu-cancel'); this._render(); return; }
+            if (w.aiming)     { w.aiming = false; w.reticle = null; audio.playSfx('menu-cancel'); this._render(); return; }
             if (back(w) === 'close') this._closeWheel(); else { audio.playSfx('menu-cancel'); this._render(); }
             return;
         }
@@ -2188,7 +2189,7 @@ class Game {
             this._wheelCommit();   // surfaces the Plus-Ultra confirm if it'd clip a friendly
             return;
         }
-        if (code === 'Escape') { back(w); audio.playSfx('menu-cancel'); this._render(); return; }
+        if (code === 'Escape') { w.aiming = false; w.reticle = null; audio.playSfx('menu-cancel'); this._render(); return; }
     }
 
     // Direction (sign vector) from the player toward a tile, or null.
@@ -2231,7 +2232,6 @@ class Game {
         const lf = this.wheel.lastFired; if (!lf || !lf.path) { this._openWheel(); return; }
         this.wheel.path = lf.path.slice();
         this.wheel.itemIndex = lf.itemSlot >= 0 ? lf.itemSlot : this.wheel.itemIndex;
-        if (lf.spellId) { const si = (this.knownSpells || []).indexOf(lf.spellId); if (si >= 0) this.wheel.spellIndex = si; }
         this.wheel.aiming = false;
         this.wheel.confirming = false;
         this.wheel.reticle = lf.aimTile || autoAimTile(selectedNode(this.wheel), this);
@@ -2327,6 +2327,7 @@ class Game {
             case 'bribe': {
                 const npc = aimTile && this.enemies.find(e => e.entity.isAlive() && e.x === aimTile.x && e.y === aimTile.y);
                 if (!npc) { this._log('[No one to bribe there]'); break; }
+                if (npc.bribeable === false) { this._log(`[The ${npc.type || 'stranger'} won't take your money.]`); break; }
                 const cost = bribeStepCost(npc.disposition ?? 0);
                 if ((this.gold ?? 0) < cost) { this._log(`[Not enough gold to bribe — needs ${cost}g.]`); break; }
                 this.gold -= cost;

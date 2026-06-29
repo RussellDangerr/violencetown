@@ -338,6 +338,11 @@ const SFX = {
         am._tone(NOTE.G4, NOTE.D4, 0.10, { type: 'square', gain: 0.20 });
     },
 
+    // Short high tick — spun/drilled the wheel one slice.
+    'menu-tick'(am) {
+        am._tone(NOTE.E5, NOTE.E5, 0.035, { type: 'square', gain: 0.13 });
+    },
+
     // Airy upward swish — threw an item.
     throw(am) {
         am._tone(300, 900, 0.18, { type: 'sawtooth', gain: 0.18 });

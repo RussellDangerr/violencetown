@@ -1720,6 +1720,8 @@ export class Renderer {
         ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX); ctx.restore();
 
         const catNode = ROOT.children[w.path[0]];
+        // TODO(Phase 4): per-VERB "Simon-Says" hues. For now the whole sunburst takes
+        // the top-level category's hue (deeper rings don't carry their own colors).
         const HUE = ({ fight: '#c8443a', trick: '#3f78c4', treat: '#4f9b4a', flight: '#caa23a' })[catNode && catNode.key] || '#8a5a2c';
         const depth = w.path.length;
 
