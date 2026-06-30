@@ -18,6 +18,7 @@ import {
     RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
 } from './layout.js';
 import { ITEMS } from './items.js';                                          // (trade slice 1) stock item defs
+import { hasLineOfSight } from './enemies.js';                               // (aggro overlay) READ-ONLY: same Bresenham the chase AI uses
 import { buyPrice, sellPrice, bribeStepCost, mood, canTrade, BRIBE_STEP } from './trade.js'; // (trade slice 1) pricing + mood smiley
 import * as Settings from './settings.js'; // (combat-feel-pass) reduce-motion for hit-splats (namespace import — see main.js)
 
@@ -331,6 +332,10 @@ export class Renderer {
         // closer characters occlude farther ones, each grounded by a drop-shadow.
         this._drawActors(game);
         this._drawJammedDoor(game);
+
+        // (aggro overlay) Alerted-enemy sight rings + LOS threads — world space,
+        // so they sit under the shake translate and track tiles like the reticle.
+        this._drawAggroOverlay(game);
 
         // (combat-wheel rework) Aim reticle lives in world space so it tracks the
         // map; the wheel list itself is drawn in screen space after the restore.
@@ -2011,6 +2016,90 @@ export class Renderer {
         ctx.setLineDash([]);
         ctx.strokeRect(r.x + 1, r.y + 1, TILE_PX - 2, TILE_PX - 2);
         ctx.restore();
+    }
+
+    // ── Aggro / Line-of-Sight overlay ────────────────────────────────────────
+    //
+    // PURELY VISUAL, READ-ONLY. For every enemy that's currently ALERT (chasing,
+    // i.e. the legacy-chase AI flipped e.state to 'chasing') and still alive, we
+    // wash a faint gold sight ring at its true sightRange and — when the path to
+    // the player is clear — thread a thin dashed gold line from the enemy to the
+    // player. It reuses the EXACT Bresenham (`hasLineOfSight`) the chase logic
+    // uses, so the line only shows when the enemy genuinely "sees" you.
+    //
+    // Aesthetic echoes the aim reticle / arena spotlight: low-alpha gold accent,
+    // a gentle eased breath on the ring so it reads as "alive" without flicker.
+    // Drawn in world space (same `_scrollX/Y` projection + caller's shake
+    // translate) so it tracks tiles. Reduce-motion flattens the breath.
+    _drawAggroOverlay(game) {
+        const { ctx, half } = this;
+        const now = performance.now();
+        const reduce = (typeof Settings !== 'undefined') && Settings.get && Settings.get('reduceMotion');
+
+        // Gentle 0..1 breath (~2.6s period). Reduce-motion holds it steady so the
+        // ring is a calm static wash instead of a pulse.
+        const breath = reduce ? 0.5 : (0.5 + 0.5 * Math.sin(now / 420));
+
+        const toScreen = (tx, ty) => ({
+            x: (tx - game.playerX + half) * TILE_PX - this._scrollX,
+            y: (ty - game.playerY + half) * TILE_PX - this._scrollY,
+        });
+
+        for (const e of game.enemies) {
+            // Only relevant enemies: alive AND actively alerted. The legacy chase
+            // path sets e.state='chasing' on sighting (FSM enemies route through it
+            // too), so this is the single "is hunting the player" signal. Anything
+            // idle/wandering/working draws nothing — keeps the screen uncluttered.
+            if (e.state !== 'chasing') continue;
+            if (!e.entity?.isAlive()) continue;
+
+            const c = toScreen(e.x + 0.5, e.y + 0.5);          // enemy tile center
+            const radius = (e.sightRange || 0) * TILE_PX;
+            if (radius <= 0) continue;
+
+            // Cull if the whole ring is well off-canvas (cheap bounding test).
+            if (c.x + radius < -TILE_PX || c.x - radius > CANVAS_PX + TILE_PX ||
+                c.y + radius < -TILE_PX || c.y - radius > CANVAS_PX + TILE_PX) continue;
+
+            ctx.save();
+
+            // Sight ring — faint gold stroke, breath nudges alpha between ~0.08
+            // and ~0.16 so it's always subtle. A radial gradient fill gives the
+            // very softest interior tint without washing the tiles out.
+            const ringA = 0.08 + 0.08 * breath;
+            const g = ctx.createRadialGradient(c.x, c.y, radius * 0.55, c.x, c.y, radius);
+            g.addColorStop(0,    'rgba(212,185,106,0)');
+            g.addColorStop(0.85, `rgba(212,185,106,${0.05 * breath})`);
+            g.addColorStop(1,    `rgba(212,185,106,${0.10 * breath})`);
+            ctx.fillStyle = g;
+            ctx.beginPath();
+            ctx.arc(c.x, c.y, radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = `rgba(212,185,106,${ringA + 0.04})`;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(c.x, c.y, radius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Line-of-sight thread — only when the path is genuinely clear (same
+            // Bresenham the AI uses). A thin dashed red-gold line from the enemy
+            // to the player: red shifts the read from "could see" (ring) to "sees
+            // you now". Low alpha so it never dominates.
+            if (hasLineOfSight(game.map, e.x, e.y, game.playerX, game.playerY)) {
+                const p = toScreen(game.playerX + 0.5, game.playerY + 0.5);
+                ctx.strokeStyle = `rgba(204,68,34,${0.18 + 0.12 * breath})`;
+                ctx.lineWidth = 1.5;
+                ctx.setLineDash([3, 4]);
+                ctx.beginPath();
+                ctx.moveTo(c.x, c.y);
+                ctx.lineTo(p.x, p.y);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            ctx.restore();
+        }
     }
 
     // ── Throw Prompt ─────────────────────────────────────────────────────────
