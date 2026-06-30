@@ -21,6 +21,17 @@ import { tickNpcState } from './npc.js';
 const DEFAULT_SIGHT = 8;
 const DEFAULT_DAMAGE = 8;
 
+// ── Leash tuning ─────────────────────────────────────────────────────────────
+// A chasing enemy gives up and walks home when it strays past LEASH_DISTANCE
+// tiles from its spawn, OR loses line-of-sight to the player for
+// LOST_SIGHT_BEATS consecutive turns. Both are one-line-tunable; LEASH_DISTANCE
+// is generous (≈ 2× the default sight range) so a fair foot-chase still works,
+// while LOST_SIGHT_BEATS gives the player a real "break contact and they
+// disengage" stealth beat. Per-type override via the enemy's `leashDistance` /
+// `lostSightBeats` fields (absent → these defaults).
+const LEASH_DISTANCE   = 14; // max tiles from home before a chaser breaks off
+const LOST_SIGHT_BEATS = 6;  // turns out of sight before a chaser breaks off
+
 export class Enemy {
     constructor({
         id, type, x, y,
@@ -72,8 +83,17 @@ export class Enemy {
         this.y          = y;
         this.damage     = damage;
         this.sightRange = sightRange;
-        this.state      = 'idle'; // legacy chase state: 'idle' | 'chasing'
+        this.state      = 'idle'; // legacy chase state: 'idle' | 'chasing' | 'returning'
         this.entity     = new Entity({ name: `[${type}]`, hp, armor });
+
+        // Leash anchor — where this enemy spawned. A chaser that strays too far
+        // from home (or loses sight of the player for too long) drops aggro and
+        // walks back here, then resumes idle. Runtime-only; NOT persisted (save.js
+        // re-derives it from the spawn entry on load). See the leash block in
+        // resolveEnemyTurns for the tunable thresholds.
+        this.homeX = x;
+        this.homeY = y;
+        this._lostSightTurns = 0; // consecutive chase-beats with no LOS on the player
 
         // FSM config (null behavior = legacy entry; non-null = FSM-controlled)
         this.behavior         = behavior;
@@ -220,14 +240,22 @@ export function resolveEnemyTurns(game) {
             continue;
         }
 
-        // Legacy chase logic below — unchanged from v0.4.3-dev behavior.
+        // Legacy chase logic below — unchanged from v0.4.3-dev behavior,
+        // plus the leash (a strayed/blind chaser breaks off and walks home).
         const dist = manhattan(enemy.x, enemy.y, game.playerX, game.playerY);
 
-        // Check LOS
-        if (dist <= enemy.sightRange && hasLineOfSight(game.map, enemy.x, enemy.y, game.playerX, game.playerY)) {
-            if (enemy.state === 'idle') {
+        // Check LOS. Spotting the player (re)acquires aggro from either idle
+        // OR returning — a foe walking home that catches sight of you again
+        // turns and resumes the chase. A live sighting also clears the
+        // lost-sight timer so contact has to actually break to count.
+        const canSeePlayer = dist <= enemy.sightRange &&
+            hasLineOfSight(game.map, enemy.x, enemy.y, game.playerX, game.playerY);
+        if (canSeePlayer) {
+            enemy._lostSightTurns = 0;
+            if (enemy.state === 'idle' || enemy.state === 'returning') {
+                const reacquire = enemy.state === 'idle';
                 enemy.state = 'chasing';
-                messages.push({
+                if (reacquire) messages.push({
                     text: `[${enemy.entity.name} spotted you!]`,
                     sourceEnemy: enemy,
                     category: 'spotted',
@@ -235,7 +263,49 @@ export function resolveEnemyTurns(game) {
             }
         }
 
+        // Returning: walk back toward home using the same greedy-step spine as
+        // the chase. Arrive (or get stuck against a wall) → drop to idle and
+        // resume normal LOS re-acquisition / FSM-free wander-at-rest.
+        if (enemy.state === 'returning') {
+            if (enemy.x === enemy.homeX && enemy.y === enemy.homeY) {
+                enemy.state = 'idle';
+                continue;
+            }
+            const homeMove = getGreedyStep(
+                game,
+                { x: enemy.x, y: enemy.y },
+                { x: enemy.homeX, y: enemy.homeY },
+                { self: enemy }
+            );
+            if (homeMove) stepEntity(enemy, homeMove.x, homeMove.y, game._MOVE_MS);
+            else enemy.state = 'idle'; // boxed in — give up the walk-back, idle here
+            continue;
+        }
+
         if (enemy.state !== 'chasing') continue;
+
+        // Leash: a chaser that has broken contact — out of sight — gives up when
+        // it has strayed too far from home OR stayed blind for too many beats,
+        // and heads home. Gating on !canSeePlayer means an enemy still in sight
+        // (incl. one adjacent and attacking) NEVER disengages, however far it
+        // has chased you — you have to actually break line of sight to shake it.
+        if (!canSeePlayer) {
+            enemy._lostSightTurns += 1;
+            const leashDist  = enemy.leashDistance ?? LEASH_DISTANCE;
+            const blindBeats = enemy.lostSightBeats ?? LOST_SIGHT_BEATS;
+            const tooFar  = manhattan(enemy.x, enemy.y, enemy.homeX, enemy.homeY) > leashDist;
+            const tooLong = enemy._lostSightTurns >= blindBeats;
+            if (tooFar || tooLong) {
+                enemy.state = 'returning';
+                enemy._lostSightTurns = 0;
+                messages.push({
+                    text: `[${enemy.entity.name} loses interest.]`,
+                    sourceEnemy: enemy,
+                    category: 'deaggro',
+                });
+                continue; // spend this beat disengaging; walk-home starts next turn
+            }
+        }
 
         // Adjacent? Attack. Visual feedback (red damage number, hit-flash,
         // stagger, event word, screen shake on big hits) replaces the
