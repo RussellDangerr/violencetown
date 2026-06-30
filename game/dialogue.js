@@ -29,6 +29,77 @@ export const DIALOGUES = {
               reply: '"This changes nothin\'. (pockets it immediately)"' },
         ],
     },
+
+    mince: {
+        name: 'Mince',
+        greeting: '"Pssst. Hey. You buyin\'? You look like a buyin\' guy."',
+        choices: [
+            { id: 'goldcard', label: 'Ask why everything costs Gold Card', once: true,
+              reply: '"Surcharge on the surcharge, friend. That\'s the Card. You don\'t pay it, you ARE it."' },
+            { id: 'deal', label: 'Ask what he\'s selling', once: true, delta: 5,
+              reply: '"Eh. Half a rock, mostly. But it\'s MY half a rock. Respect that."' },
+            { id: 'flatter', label: '[Flatter him]', repeatable: true, delta: 3,
+              reply: '"Smart guy. I LIKE a smart guy."' },
+            { id: 'insult', label: '[Call him a two-bit hustler]', repeatable: true, delta: -25,
+              reply: '"Two-BIT? I am at LEAST a four-bit hustler, you mope."' },
+            { id: 'bribe', label: '[Bribe - 5 GP]', repeatable: true, delta: 10, cost: 5,
+              reply: '"Now THAT\'S a language I speak. (it vanishes)"' },
+        ],
+    },
+
+    glunk: {
+        name: 'Glunk',
+        greeting: '"...you\'re standin\' in my leanin\' spot."',
+        choices: [
+            { id: 'sewer', label: 'Ask about the smell off the sewer', once: true,
+              reply: '"Smells like the sewer. \'Cause it\'s the sewer. Genius work, that."' },
+            { id: 'wall', label: 'Admire how well he holds up the wall', once: true, delta: 8,
+              reply: '"...heh. Wall\'d fall right over without me. Somebody gets it."' },
+            { id: 'flatter', label: '[Flatter him]', repeatable: true, delta: 3,
+              reply: '"Keep it comin\'. I got all day. Literally."' },
+            { id: 'insult', label: '[Tell him to get a job]', repeatable: true, delta: -25,
+              reply: '"This IS the job. Leanin\'. Don\'t you disrespect the leanin\'."' },
+            { id: 'bribe', label: '[Bribe - 5 GP]', repeatable: true, delta: 10, cost: 5,
+              reply: '"Mm. I\'ll lean a little friendlier, then. (pockets it)"' },
+        ],
+    },
+
+    praline: {
+        name: 'Praline',
+        greeting: '"Ugh, do NOT look at the floor. I just got the floor lookin\' decent."',
+        choices: [
+            { id: 'grime', label: 'Ask if the grime ever comes off', once: true,
+              reply: '"Off? Sweetheart, the grime is load-bearin\'. Take it off, the whole town sags."' },
+            { id: 'tidy', label: 'Say the plaza looks spotless', once: true, delta: 8,
+              reply: '"...SPOTLESS. You hear that, everybody? SOMEBODY noticed."' },
+            { id: 'flatter', label: '[Flatter her]', repeatable: true, delta: 3,
+              reply: '"Oh, you. Go on, then. Go ON."' },
+            { id: 'insult', label: '[Track mud on her floor]', repeatable: true, delta: -25,
+              reply: '"You did NOT. You did not just— get OUT, get out get out!"' },
+            { id: 'bribe', label: '[Bribe - 5 GP]', repeatable: true, delta: 10, cost: 5,
+              reply: '"Mm. Buys a mop. Buys me likin\' you. (snatches it)"' },
+        ],
+    },
+
+    // Talk-down-a-hostile: Knuckles spawns hostile (legacy chaser, low
+    // disposition). Walk up adjacent and press [E] mid-fight to open this. The
+    // 'standdown' choice lands a big positive delta that crosses flipThreshold
+    // (30), so applyDispositionDelta fires give-action's becomeAlly flip —
+    // clearing the hostile chase and converting him to a fighting ally. The
+    // angry barbs stay repeatable: keep poking him and the disposition craters
+    // back past DIALOGUE_HOSTILE_AT, snapping the fight back on.
+    knuckles: {
+        name: 'Knuckles',
+        greeting: '"You got a LOT of nerve walkin\' up on me like that."',
+        choices: [
+            { id: 'standdown', label: '[Hands up — apologize, back off slow]', once: true, delta: 70,
+              reply: '"...alright. ALRIGHT. You\'re backin\' off. Fine. I hate this. But fine — I\'m with ya."' },
+            { id: 'why', label: 'Ask what his problem even is', once: true,
+              reply: '"My PROBLEM? You\'re breathin\' my air in MY plaza, that\'s my problem."' },
+            { id: 'taunt', label: '[Square up and taunt him]', repeatable: true, delta: -25,
+              reply: '"Oh, you wanna GO? You absolutely wanna GO."' },
+        ],
+    },
 };
 
 export function getDialogue(id) {
