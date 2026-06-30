@@ -81,6 +81,9 @@ export function serialize(game) {
         },
         world: {
             groundItems: (game.groundItems || []).map(g => ({ type: g.type, x: g.x, y: g.y })),
+            // Picked-up ground items, so collected items stay gone after reload.
+            // Live form is a Set of keys; persist as a plain array.
+            collectedItems: game._collectedItems ? [...game._collectedItems] : [],
             containers: (game.containers || []).map(c => ({
                 id: c.id, type: c.type, x: c.x, y: c.y, contents: (c.contents || []).slice(),
             })),
@@ -157,6 +160,7 @@ export function migrate(raw) {
     if (!Array.isArray(r.world.tileDiffs)) r.world.tileDiffs = [];
     if (!Array.isArray(r.world.enemies)) r.world.enemies = [];
     if (!Array.isArray(r.world.groundItems)) r.world.groundItems = [];
+    if (!Array.isArray(r.world.collectedItems)) r.world.collectedItems = [];
     if (!Array.isArray(r.world.containers)) r.world.containers = [];
     if (r.quest === undefined) r.quest = null;
     if (r.sewerEscape === undefined) r.sewerEscape = null;
@@ -192,6 +196,10 @@ function validate(raw) {
     if (!p.equipment || typeof p.equipment !== 'object') p.equipment = {};
     if (!Array.isArray(p.buffs)) p.buffs = [];
     if (!Array.isArray(p.tempEquips)) p.tempEquips = [];
+    // collectedItems is a Set of string keys on the live game; drop anything
+    // non-string so a malformed save can't poison the lookup.
+    const ci = Array.isArray(raw.world?.collectedItems) ? raw.world.collectedItems : [];
+    if (raw.world) raw.world.collectedItems = ci.filter(k => typeof k === 'string');
     raw.turn = Math.max(0, _num(raw.turn, 0));
     return raw;
 }
@@ -244,6 +252,9 @@ export async function loadInto(game, raw) {
     game.groundItems = raw.world.groundItems
         .map(g => ({ type: g.type, x: g.x, y: g.y, def: R(g.type) }))
         .filter(g => g.def);
+    // Picked-up items stay collected across reload — rehydrate into the Set the
+    // runtime uses for no-respawn checks.
+    game._collectedItems = new Set(raw.world.collectedItems || []);
     game.containers = raw.world.containers.map(c => ({
         id: c.id, type: c.type, x: c.x, y: c.y, contents: (c.contents || []).slice(),
     }));
