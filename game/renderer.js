@@ -560,9 +560,10 @@ export class Renderer {
         // this is purely a render special-case. Each car cell instead draws the
         // ground beneath it (sidewalk, the surrounding walkable surface) so no
         // cell reads as a hole, and the block's top-left cell is collected here
-        // and drawn as a single 64×64 pixel-doubled car AFTER the tile loop —
-        // deferred so the other three cells' ground (painted later in the loop)
-        // can't overpaint the overhanging car.
+        // and drawn as a single 64×64 car (the full-res 48×48 sprite stretched
+        // over the block) AFTER the tile loop — deferred so the other three
+        // cells' ground (painted later in the loop) can't overpaint the
+        // overhanging car.
         const carBlocks = [];
         for (let vy = -pad; vy < VIEW_TILES + pad; vy++) {
             for (let vx = -pad; vx < VIEW_TILES + pad; vx++) {
@@ -612,10 +613,13 @@ export class Renderer {
             }
         }
 
-        // Deferred 2×2 car pass — one crisp 64×64 pixel-doubled car per block,
-        // anchored at the top-left car cell (covers all four cells). Drawn after
-        // every cell's ground so the car overhang isn't clipped by later ground
-        // draws. imageSmoothingEnabled stays false (global default) → sharp 2× .
+        // Deferred 2×2 car pass — one crisp car per block, anchored at the
+        // top-left car cell (covers all four cells). The car sheet's single
+        // 48×48 frame (full-res side-view sprite from roguelikeCity) is stretched
+        // over the 64×64 block, so it reads sharp instead of pixel-doubling a
+        // tiny 32px cell. Drawn after every cell's ground so the car overhang
+        // isn't clipped by later ground draws. imageSmoothingEnabled stays false
+        // (global default) → no blur on the upscale.
         const carSheet = sprites?.car;
         for (const b of carBlocks) {
             let ok = false;
