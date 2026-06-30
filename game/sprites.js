@@ -99,9 +99,13 @@ export const SHEETS = {
     // building facades, lampposts, storefronts. Gutter-free → padding 0; tiles
     // reference it via pixel-region refs (drawRegion).
     roguelikeCity: { src: `${K}/roguelikeCity_packed.png`, frameW: 16, frameH: 16 },
-    // The town car, pre-framed into one 32px tile from roguelikeCity (replaces
-    // the wooden-bucket placeholder at TOWN_TILE_SPRITE_MAP[19]).
-    car:           { src: './assets/car.png', frameW: 32, frameH: 32 },
+    // The town car: the full-resolution side-view beater lifted straight from
+    // roguelikeCity (orange left-facing car, src px 503–539 × 392–415) onto a
+    // 48×48 transparent canvas, wheels resting low. The renderer stretches this
+    // one frame over the 2×2-tile (64×64) footprint, so the bigger native art
+    // reads crisp instead of pixel-doubling a tiny 32px cell. Drawn at
+    // TOWN_TILE_SPRITE_MAP[19] (replaces the wooden-bucket placeholder).
+    car:           { src: './assets/car.png', frameW: 48, frameH: 48 },
 
     // Kenney Emote Pack (Pixel, Style 1) — 16x16 down-tail speech balloons for
     // Town Clock ambient reactions + disposition faces. Horizontal strip packed
