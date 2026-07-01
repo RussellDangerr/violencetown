@@ -1207,11 +1207,14 @@ export class Renderer {
         const y = by + m.oy;
 
         const color = SPLAT_COLOR[dn.type] || SPLAT_COLOR.physical;
-        const scale = 2;                          // bitmap font scale (16px glyphs)
-        const big = dn.crit ? 1.15 : 1;
+        const scale = 1;                          // bitmap font scale (8px glyphs — small)
+        const big = dn.crit ? 1.2 : 1;
         const textW = dn.text.length * 8 * scale;
-        const w = (textW + 14) * (m.sx || 1) * big;
-        const h = 26 * (m.sy || 1) * big;
+        // Round badge — radius fits the number plus a little pad, so short hits
+        // read as a small circle rather than a wide oval.
+        const r = (Math.max(textW, 8) / 2 + 6) * big;
+        const w = r * 2 * (m.sx || 1);
+        const h = r * 2 * (m.sy || 1);
 
         ctx.save();
         ctx.translate(x, y);
@@ -1228,18 +1231,18 @@ export class Renderer {
 
         ctx.scale(m.scale, m.scale);
 
-        // Badge — an ellipse "splat", filled by type, with a border (gold = crit).
+        // Badge — a round "splat", filled by type, with a border (gold = crit).
         ctx.beginPath();
         ctx.ellipse(0, 0, w / 2, h / 2, 0, 0, Math.PI * 2);
         ctx.fillStyle = hexToRgba(color, a);
         ctx.fill();
-        ctx.lineWidth = dn.crit ? 2.5 : 1.5;
+        ctx.lineWidth = dn.crit ? 2 : 1.25;
         ctx.strokeStyle = dn.crit ? hexToRgba('#f0d782', a) : `rgba(255,255,255,${a * 0.55})`;
         ctx.stroke();
 
         // Number — white, centered, with a soft shadow for contrast.
         if (this.font) {
-            this.font.drawText(ctx, dn.text, 0, -8, {
+            this.font.drawText(ctx, dn.text, 0, -4, {
                 color: hexToRgba('#ffffff', a),
                 scale,
                 align: 'center',
