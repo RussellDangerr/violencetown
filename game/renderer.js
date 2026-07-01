@@ -1426,32 +1426,9 @@ export class Renderer {
         }
         by += bh + 4;
 
-        // — Gold Card (GP) — a small dark-bordered gold pill with "GP" on
-        //   the left edge and the balance trailing. The full Gold Card
-        //   artifact (dollar-bill design with player face + town ID) lives
-        //   in lore; this is the inline credit-card-strip rendering of it.
-        const cardX = bx, cardY = by, cardW = bw, cardH = 14;
-        ctx.fillStyle = '#2a2218';            // dark border (matches panel chrome)
-        ctx.fillRect(cardX, cardY, cardW, cardH);
-        ctx.fillStyle = UI.gold;              // gold body
-        ctx.fillRect(cardX + 1, cardY + 1, cardW - 2, cardH - 2);
-        ctx.fillStyle = '#f1d488';            // brighter top highlight (embossed card)
-        ctx.fillRect(cardX + 1, cardY + 1, cardW - 2, 1);
-        // Dark "magnetic strip" on the left third — sells the credit-card
-        // read at this size.
-        ctx.fillStyle = '#1a1208';
-        ctx.fillRect(cardX + 2, cardY + 2, 18, cardH - 4);
-        if (this.font) {
-            // "GP" stamped on the strip (white-on-dark)
-            this.font.drawText(ctx, 'GP', cardX + 5, cardY + 3, {
-                color: UI.gold, scale: 1,
-            });
-            // Balance on the gold face (dark text)
-            this.font.drawText(ctx, `${game.gold ?? 0}`, cardX + cardW - 4, cardY + 3, {
-                color: '#2a2218', scale: 1, align: 'right',
-            });
-        }
-        by += cardH + 4;
+        // — Gold Card (GP) — an embossed credit-card chip (see plans/gold-card.md).
+        this._drawGoldCard(game, bx, by, bw);
+        by += 14 + 4;
 
         // — Weapon line at the bottom (informational; the hotbar carries
         //   the canonical inventory).
@@ -1460,6 +1437,39 @@ export class Renderer {
             const name = wpn.name.replace(/[\[\]]/g, '').toUpperCase();
             this.font.drawText(ctx, `${name}  ${wpn.damage} DMG`, x + 8, by, {
                 color: UI.text, scale: 1,
+            });
+        }
+    }
+
+    // The Gold Card (GP) rendered as an embossed credit-card chip: a gold body
+    // with an EMV contact pad on the left, a "GP" label, and the balance on the
+    // right. Split out of _drawHPPanel so the card can grow its own flourishes.
+    _drawGoldCard(game, cardX, cardY, cardW) {
+        const { ctx } = this;
+        const cardH = 14;
+        // Bezel + gold body, embossed with a top highlight and a bottom shadow.
+        ctx.fillStyle = '#1a1208';                      // dark bezel
+        ctx.fillRect(cardX, cardY, cardW, cardH);
+        ctx.fillStyle = UI.gold;                        // gold body
+        ctx.fillRect(cardX + 1, cardY + 1, cardW - 2, cardH - 2);
+        ctx.fillStyle = '#f4dd9a';                      // top highlight
+        ctx.fillRect(cardX + 1, cardY + 1, cardW - 2, 1);
+        ctx.fillStyle = '#a8894a';                      // bottom shadow
+        ctx.fillRect(cardX + 1, cardY + cardH - 2, cardW - 2, 1);
+        // EMV contact chip — a muted-gold pad with cross contact lines. Replaces
+        // the old flat magnetic strip; reads as a real credit-card chip.
+        const chipX = cardX + 4, chipY = cardY + 3, chipW = 12, chipH = 8;
+        ctx.fillStyle = '#8b7340';
+        ctx.fillRect(chipX, chipY, chipW, chipH);
+        ctx.fillStyle = '#c9a955';
+        ctx.fillRect(chipX + 1, chipY + 1, chipW - 2, chipH - 2);
+        ctx.fillStyle = '#8b7340';
+        ctx.fillRect(chipX + 1, chipY + Math.floor(chipH / 2), chipW - 2, 1);   // horizontal contact
+        ctx.fillRect(chipX + Math.floor(chipW / 2), chipY + 1, 1, chipH - 2);   // vertical contact
+        if (this.font) {
+            this.font.drawText(ctx, 'GP', chipX + chipW + 4, cardY + 3, { color: '#2a2012', scale: 1 });
+            this.font.drawText(ctx, `${game.gold ?? 0}`, cardX + cardW - 4, cardY + 3, {
+                color: '#2a2012', scale: 1, align: 'right',
             });
         }
     }
