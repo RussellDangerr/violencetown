@@ -1517,7 +1517,7 @@ export class Renderer {
     _drawQuestLog(game) {
         const { ctx } = this;
         const R = QUESTLOG_RECT;
-        const PAD = 8;
+        const PAD = 12;                      // buffer so text clears the ornate corners
         const LH = 12;                       // line height (8px glyph + 4px lead)
         const innerW = R.w - PAD * 2;
         const maxChars = Math.max(4, Math.floor(innerW / 8));
@@ -1528,12 +1528,14 @@ export class Renderer {
         const tx = R.x + PAD;
         let y = R.y + PAD;
 
-        // (a) HEADER — zone (gold) then " · HH:MM · T:turn" (dim).
+        // (a) HEADER — LOCATION left-aligned, TIME right-aligned. (Turn counter
+        // dropped for now per playtest; the two ends read like a title bar.)
         const zone = (game.map?.zoneName || '').toUpperCase();
         this.font.drawText(ctx, zone, tx, y, { color: UI.gold, scale: 1 });
         const timeStr = (typeof game._timeOfDay === 'function') ? game._timeOfDay() : '';
-        const metaStr = ` ${timeStr ? '· ' + timeStr + ' ' : ''}· T:${game.turn}`;
-        this.font.drawText(ctx, metaStr, tx + zone.length * 8, y, { color: UI.dim, scale: 1 });
+        if (timeStr) {
+            this.font.drawText(ctx, timeStr, R.x + R.w - PAD, y, { color: UI.dim, scale: 1, align: 'right' });
+        }
         y += LH;
 
         // (b) OBJECTIVE — active quest text (gold). Skip the line if none, so
