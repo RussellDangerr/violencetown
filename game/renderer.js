@@ -122,11 +122,13 @@ export class Renderer {
         // Small game-name header — bitmap font, centered, with a 1px dark
         // drop-shadow so the gold lifts off the parchment.
         if (this.font) {
-            this.font.drawText(ctx, 'VIOLENCETOWN', 161, 33, {
-                color: '#1a1208', scale: 1, align: 'center',
+            // Wordmark — a bold gold marquee with a bronze bevel that reads on
+            // the dark stone panel (a black drop-shadow would vanish here).
+            this.font.drawText(ctx, 'VIOLENCETOWN', 162, 32, {
+                color: '#6a5320', scale: 2, align: 'center',
             });
-            this.font.drawText(ctx, 'VIOLENCETOWN', 160, 32, {
-                color: UI.gold, scale: 1, align: 'center',
+            this.font.drawText(ctx, 'VIOLENCETOWN', 160, 30, {
+                color: UI.gold, scale: 2, align: 'center',
             });
         }
 
@@ -134,10 +136,10 @@ export class Renderer {
         // accents at each end, echoing the in-game goo palette.
         ctx.strokeStyle = UI.panelBorder;
         ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(90, 44); ctx.lineTo(230, 44); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(66, 50); ctx.lineTo(254, 50); ctx.stroke();
         ctx.fillStyle = '#9bb43e';
-        ctx.fillRect(88, 43, 3, 3);
-        ctx.fillRect(229, 43, 3, 3);
+        ctx.fillRect(64, 49, 3, 3);
+        ctx.fillRect(253, 49, 3, 3);
 
         // Cityscape silhouette — replaces an earlier character lineup that
         // read as three skin-tone variants. Procedural noir skyline drawn
@@ -150,7 +152,7 @@ export class Renderer {
         // Hard 2px black drop-shadow gives the marquee its chunky arcade weight.
         if (this.font) {
             this.font.drawText(ctx, 'GAME START', 162, 150, {
-                color: '#0c0a07', scale: 3, align: 'center',
+                color: '#5a4420', scale: 3, align: 'center',
             });
             this.font.drawText(ctx, 'GAME START', 160, 148, {
                 color: UI.gold, scale: 3, align: 'center',
@@ -205,13 +207,15 @@ export class Renderer {
         const SKY_Y = 56, SKY_H = 76;
         const GROUND_Y = SKY_Y + SKY_H;
 
-        // Sky — dark band that contrasts with the parchment so the silhouettes
-        // read as foreground. A subtle horizontal gradient (top darker, bottom
-        // browner) suggests a hazy late-night downtown.
-        ctx.fillStyle = '#1a1410';
+        // Sky — a dusk gradient (deep indigo night above, warm ember at the
+        // horizon) so the near-black skyline silhouettes crisply against it on
+        // the dark stone panel; lit gold windows + a low moon punch through.
+        const sky = ctx.createLinearGradient(0, SKY_Y, 0, GROUND_Y);
+        sky.addColorStop(0,    '#241f3a');
+        sky.addColorStop(0.55, '#3a2a3a');
+        sky.addColorStop(1,    '#4a2e22');
+        ctx.fillStyle = sky;
         ctx.fillRect(PANEL_X, SKY_Y, PANEL_W, SKY_H);
-        ctx.fillStyle = '#26190f';
-        ctx.fillRect(PANEL_X, GROUND_Y - 18, PANEL_W, 18);
 
         // Moon — small ochre disk, behind the near-row silhouettes.
         // Aproximated with 5 stacked rects so it stays crisp at every scale.
