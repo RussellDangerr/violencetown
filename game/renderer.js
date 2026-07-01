@@ -4,7 +4,7 @@
 // All text: dark brown on parchment for readability (not gold-on-dark)
 
 import { TILE_PX, VIEW_TILES, CANVAS_PX } from './data.js';
-import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES } from './sprites.js';
+import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES, EQUIP_FIGURE_SPRITE } from './sprites.js';
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
 import { ROOT, selectedNode, activeRing, activeIndex, decisionPath, previewChildren, affectedTiles } from './wheel-model.js'; // (sunburst wheel)
 import { SPELLS } from './spells.js';
@@ -16,6 +16,7 @@ import {
     TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BRIBE_RECT,
     TRADE_CELL_W, TRADE_CELL_H, tradeCellRect,
     RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
+    EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS,
 } from './layout.js';
 import { ITEMS } from './items.js';                                          // (trade slice 1) stock item defs
 import { hasLineOfSight } from './enemies.js';                               // (aggro overlay) READ-ONLY: same Bresenham the chase AI uses
@@ -395,6 +396,7 @@ export class Renderer {
         if (game.state === 'log_modal') this._drawLogModal(game);
         if (game.state === 'trade') this._drawTradeModal(game);
         if (game.state === 'dialogue') this._drawDialogueModal(game);
+        if (game.state === 'equipment') this._drawEquipmentModal(game);
     }
 
     // (world-structure) Heavy radial darkness for the Wilderness zone — a tiny
@@ -2400,6 +2402,100 @@ export class Renderer {
         row(choices.length, 'Leave', '', null, '');
 
         this.font.drawText(ctx, 'W/S  SELECT     SPACE  PICK     E  LEAVE', CANVAS_PX / 2, R.y + R.h - 18, { color: UI.dim, scale: 1, align: 'center' });
+    }
+
+    // ── Equipment screen (Stage 3 — read-only Vitruvian dress-up) ────────────
+    // A front-facing mannequin ringed by 6 body-zone slot plates. Reads
+    // game.equipment (weapon set, all armor slots null today → EMPTY plates).
+    // Purely a display; no hit-testing beyond "tap outside = close" in main.js.
+    _drawEquipmentModal(game) {
+        const { ctx, sprites } = this;
+        const ui = this.uiSheet;
+        if (!this.font) return;
+
+        // Scrim
+        ctx.fillStyle = 'rgba(0,0,0,0.72)';
+        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+
+        // Ornate panel
+        const R = EQUIPMENT_MODAL_RECT;
+        if (ui?.loaded) drawPanelBig(ctx, ui, R.x, R.y, R.w, R.h, 'base');
+        else            drawPanelSmall(ctx, R.x, R.y, R.w, R.h);
+
+        // Title
+        this.font.drawText(ctx, 'EQUIPMENT', CANVAS_PX / 2, R.y + 14, { color: UI.gold, scale: 2, align: 'center' });
+
+        const F = EQUIP_FIGURE_RECT;
+        const fcx = F.x + F.w / 2, fcy = F.y + F.h / 2;
+
+        // Faint Vitruvian circle + square behind the figure.
+        const prevAlpha = ctx.globalAlpha;
+        ctx.globalAlpha = 0.25;
+        ctx.strokeStyle = UI.panelBorder;
+        ctx.lineWidth = 2;
+        const rad = Math.min(F.w, F.h) / 2 + 20;
+        ctx.beginPath();
+        ctx.arc(fcx, fcy, rad, 0, Math.PI * 2);
+        ctx.stroke();
+        const sq = rad * 1.35;
+        ctx.strokeRect(fcx - sq / 2, fcy - sq / 2, sq, sq);
+        ctx.globalAlpha = prevAlpha;
+
+        // The mannequin — the Roguelike Characters front-facing figure, scaled
+        // to fill the figure box. Falls back to a simple humanoid silhouette if
+        // the sheet hasn't loaded.
+        const fig = EQUIP_FIGURE_SPRITE;
+        const sheet = sprites?.[fig.sheet];
+        let drawn = false;
+        if (sheet?.loaded) {
+            drawn = sheet.drawFrame(ctx, fig.col, fig.row, F.x, F.y, F.w, F.h);
+        }
+        if (!drawn) {
+            // Silhouette fallback: head disc + torso + legs.
+            ctx.fillStyle = UI.panelBorder;
+            const hr = F.w * 0.22;
+            ctx.beginPath(); ctx.arc(fcx, F.y + hr + 6, hr, 0, Math.PI * 2); ctx.fill();
+            ctx.fillRect(fcx - F.w * 0.28, F.y + hr * 2 + 8, F.w * 0.56, F.h * 0.45);
+            ctx.fillRect(fcx - F.w * 0.22, F.y + F.h * 0.6, F.w * 0.18, F.h * 0.38);
+            ctx.fillRect(fcx + F.w * 0.04, F.y + F.h * 0.6, F.w * 0.18, F.h * 0.38);
+        }
+
+        // Slot plates ringing the figure.
+        for (const slot of EQUIP_SLOT_RECTS) {
+            const s = slot;
+            drawInset(ctx, s.x, s.y, s.w, s.h);
+
+            // Connector line from the plate toward the figure's matching zone.
+            const zx = F.x + (s.zone?.fx ?? 0.5) * F.w;
+            const zy = F.y + (s.zone?.fy ?? 0.5) * F.h;
+            const pcx = s.x + s.w / 2, pcy = s.y + s.h / 2;
+            ctx.save();
+            ctx.globalAlpha = 0.5;
+            ctx.strokeStyle = UI.panelBorder;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(pcx, pcy);
+            ctx.lineTo(zx, zy);
+            ctx.stroke();
+            ctx.restore();
+
+            // Label (zone caption) in gold along the top of the plate.
+            this.font.drawText(ctx, s.label, s.x + s.w / 2, s.y + 4, { color: UI.gold, scale: 1, align: 'center' });
+
+            // Equipped item (icon + name) or EMPTY.
+            const item = game.equipment ? game.equipment[s.key] : null;
+            if (item) {
+                const iconSize = 20;
+                this._drawItemIcon(item, s.x + 6, s.y + s.h - iconSize - 4, iconSize);
+                const name = (item.name || item.id || '').replace(/^\[|\]$/g, '');
+                this.font.drawText(ctx, name.toUpperCase(), s.x + iconSize + 12, s.y + s.h - iconSize + 2, { color: UI.text, scale: 1 });
+            } else {
+                this.font.drawText(ctx, 'EMPTY', s.x + s.w / 2, s.y + s.h - 16, { color: UI.dim, scale: 1, align: 'center' });
+            }
+        }
+
+        // Footer hint.
+        this.font.drawText(ctx, 'C / ESC  CLOSE', CANVAS_PX / 2, R.y + R.h - 16, { color: UI.textLight, scale: 1, align: 'center' });
     }
 
     // Word-wrap `text` into lines no longer than `maxChars` characters (the

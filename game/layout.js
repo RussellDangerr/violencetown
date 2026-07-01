@@ -81,6 +81,33 @@ export const TRADE_BUY_ORIGIN  = { x: 52,  y: 156 };
 export const TRADE_SELL_ORIGIN = { x: 320, y: 156 };
 export const TRADE_BRIBE_RECT  = { x: 52, y: 506, w: 200, h: 34 };
 
+// ── Equipment screen (Stage 3 — read-only Vitruvian dress-up) ──
+// (drawn by renderer._drawEquipmentModal, hit-tested by main._tapEquipmentScreen).
+// One big ornate panel; a centred figure box with the 6 equip slots ringing it.
+// Each slot rect carries its own `label` and the `game.equipment` key it reads.
+export const EQUIPMENT_MODAL_RECT = { x: 24, y: 44, w: 560, h: 520 };
+
+// Centred ~140×300 figure box inside the modal (the mannequin + Vitruvian
+// circle/square draw relative to this).
+export const EQUIP_FIGURE_RECT = {
+    x: EQUIPMENT_MODAL_RECT.x + (EQUIPMENT_MODAL_RECT.w - 140) / 2,   // 234
+    y: EQUIPMENT_MODAL_RECT.y + 120,                                  // 164
+    w: 140,
+    h: 300,
+};
+
+// The 6 slot plates ringing the figure. `key` indexes game.equipment; `label`
+// is the body-zone caption. `zone` (0..1 of the figure box) is where the
+// connector line points on the mannequin.
+export const EQUIP_SLOT_RECTS = [
+    { key: 'top',    label: 'HEAD',    x: 256, y: 60,  w: 96, h: 48, zone: { fx: 0.5, fy: 0.06 } },  // above
+    { key: 'sides',  label: 'ARMS',    x: 60,  y: 240, w: 96, h: 48, zone: { fx: 0.08, fy: 0.42 } }, // left
+    { key: 'front',  label: 'TORSO',   x: 452, y: 240, w: 96, h: 48, zone: { fx: 0.92, fy: 0.42 } }, // right
+    { key: 'back',   label: 'BACK',    x: 60,  y: 380, w: 96, h: 48, zone: { fx: 0.2,  fy: 0.68 } }, // lower-left
+    { key: 'bottom', label: 'FEET',    x: 452, y: 380, w: 96, h: 48, zone: { fx: 0.5,  fy: 0.98 } }, // below (right stack)
+    { key: 'weapon', label: 'WEAPON',  x: 256, y: 480, w: 96, h: 48, zone: { fx: 0.5,  fy: 0.55 } }, // bottom-center
+];
+
 // Rect for the `index`-th cell of a grid anchored at `origin` (BUY or SELL).
 export function tradeCellRect(origin, index) {
     const col = index % TRADE_COLS;

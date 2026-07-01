@@ -24,6 +24,7 @@ import {
     HOTBAR_X_START, HOTBAR_Y, HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_STRIDE, HOTBAR_SLOTS,
     RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, QUESTLOG_RECT, LOG_MODAL_RECT,
     TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BRIBE_RECT, tradeCellRect,
+    EQUIPMENT_MODAL_RECT,
 } from './layout.js';
 import { canTrade, buyPrice, sellPrice, bribeStepCost, BRIBE_STEP } from './trade.js'; // (trade slice 1) disposition pricing
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
@@ -54,6 +55,7 @@ const STATE = {
     LOG_MODAL:       'log_modal',       // [L] — full scrollable message history
     TRADE:           'trade',           // (trade slice 1) Puck's shop window — buy/sell/bribe
     DIALOGUE:        'dialogue',        // (Step 4) disposition dialogue with an NPC
+    EQUIPMENT:       'equipment',       // (Stage 3) read-only Vitruvian equipment screen
 };
 
 // (zone pursuit) A wedged door's starting integrity. Trapped pursuers pound it
@@ -877,6 +879,15 @@ class Game {
                 return;
             }
 
+            // ── EQUIPMENT: read-only Vitruvian screen (Stage 3) ──
+            // C / Esc closes. No unequip logic — it's a display screen, so no
+            // other keys are handled here.
+            if (this.state === STATE.EQUIPMENT) {
+                e.preventDefault();
+                if (e.code === 'KeyC' || e.code === 'Escape') { this._closeEquipmentScreen(); return; }
+                return;
+            }
+
             // ── ENDING (End of Chapter One): N / Space / Enter restarts ──
             // (fix/critical-path) Matches the on-screen "PRESS N TO PLAY AGAIN"
             // prompt; Space/Enter accepted too since the player's hands are
@@ -924,6 +935,9 @@ class Game {
 
             // L = open the log history modal
             if (e.code === 'KeyL') { e.preventDefault(); this._openLogModal(); return; }
+
+            // C = open the (read-only) equipment / Vitruvian screen
+            if (e.code === 'KeyC') { e.preventDefault(); this._openEquipmentScreen(); return; }
 
             // [settings] P = pause (turn-based; blocks input until resumed)
             if (e.code === 'KeyP') { e.preventDefault(); this._setPaused(true); return; }
@@ -1110,6 +1124,9 @@ class Game {
                         break;
                     case 'options': // [settings]
                         this._openOptionsModal();
+                        break;
+                    case 'equipment': // (Stage 3) read-only Vitruvian screen
+                        this._openEquipmentScreen();
                         break;
                     case 'restart':
                         // Confirm before wiping — RESTART clears the save and
@@ -1385,6 +1402,7 @@ class Game {
         // Trade window is fully modal too — route taps to the shop.
         if (this.state === STATE.TRADE) { this._tapTrade(pt); return; }
         if (this.state === STATE.DIALOGUE) { return; }   // (Step 4) dialogue is keyboard-driven; ignore stray taps
+        if (this.state === STATE.EQUIPMENT) { this._tapEquipmentScreen(pt); return; }   // (Stage 3) tap outside = close
 
         // Priority order is by modality: the most exclusive overlay wins. A
         // tap while the radial menu is open should drive the radial menu,
@@ -3305,6 +3323,30 @@ class Game {
         this._dialogueNpc = null;
         this._dialogueReply = '';
         this._render();
+    }
+
+    // ── Equipment screen (Stage 3 — read-only Vitruvian dress-up) ────────────
+
+    // Open the equipment screen. A pure menu — the world does NOT advance
+    // (like trade / dialogue / the log modal). Read-only: it just reads
+    // game.equipment (all armor slots null today → every plate shows EMPTY).
+    _openEquipmentScreen() {
+        if (this.state !== STATE.IDLE) return;
+        this.state = STATE.EQUIPMENT;
+        audio.playSfx('menu-open');
+        this._render();
+    }
+
+    _closeEquipmentScreen() {
+        if (this.state !== STATE.EQUIPMENT) return;
+        this.state = STATE.IDLE;
+        this._render();
+    }
+
+    // A tap anywhere outside the equipment panel dismisses it (there's no
+    // unequip logic to hit-test — the slots are display-only).
+    _tapEquipmentScreen(pt) {
+        if (!this._pointInRect(pt, EQUIPMENT_MODAL_RECT)) this._closeEquipmentScreen();
     }
 
     // The choices on offer: every repeatable one, plus any `once` choice this
