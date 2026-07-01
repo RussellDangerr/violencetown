@@ -2441,24 +2441,30 @@ export class Renderer {
         ctx.strokeRect(fcx - sq / 2, fcy - sq / 2, sq, sq);
         ctx.globalAlpha = prevAlpha;
 
-        // The mannequin — the Roguelike Characters front-facing figure, scaled
-        // to fill the figure box. Falls back to a simple humanoid silhouette if
-        // the sheet hasn't loaded.
-        const fig = EQUIP_FIGURE_SPRITE;
-        const sheet = sprites?.[fig.sheet];
-        let drawn = false;
-        if (sheet?.loaded) {
-            drawn = sheet.drawFrame(ctx, fig.col, fig.row, F.x, F.y, F.w, F.h);
-        }
-        if (!drawn) {
-            // Silhouette fallback: head disc + torso + legs.
-            ctx.fillStyle = UI.panelBorder;
-            const hr = F.w * 0.22;
-            ctx.beginPath(); ctx.arc(fcx, F.y + hr + 6, hr, 0, Math.PI * 2); ctx.fill();
-            ctx.fillRect(fcx - F.w * 0.28, F.y + hr * 2 + 8, F.w * 0.56, F.h * 0.45);
-            ctx.fillRect(fcx - F.w * 0.22, F.y + F.h * 0.6, F.w * 0.18, F.h * 0.38);
-            ctx.fillRect(fcx + F.w * 0.04, F.y + F.h * 0.6, F.w * 0.18, F.h * 0.38);
-        }
+        // The figure — a clean line-drawn STICK FIGURE in the Vitruvian spread
+        // pose (round head, spine, arms fanning down-and-out, legs fanning
+        // down-and-out). Reads far better than a stretched sprite, and the
+        // spread limbs echo the reach toward the ARMS / FEET slots.
+        const headCy = F.y + F.h * 0.10, headR = F.w * 0.16;
+        const shoulderY = F.y + F.h * 0.30, hipY = F.y + F.h * 0.62;
+        const armEndY = F.y + F.h * 0.52, footY = F.y + F.h * 0.98;
+        const armSpan = F.w * 0.72, legSpan = F.w * 0.42;
+        ctx.save();
+        ctx.strokeStyle = UI.gold;
+        ctx.lineWidth = 4;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath(); ctx.arc(fcx, headCy, headR, 0, Math.PI * 2); ctx.stroke();        // head
+        ctx.beginPath(); ctx.moveTo(fcx, headCy + headR); ctx.lineTo(fcx, hipY); ctx.stroke();  // spine
+        ctx.beginPath();                                                                    // arms
+        ctx.moveTo(fcx - armSpan, armEndY); ctx.lineTo(fcx, shoulderY); ctx.lineTo(fcx + armSpan, armEndY);
+        ctx.stroke();
+        ctx.beginPath();                                                                    // legs
+        ctx.moveTo(fcx - legSpan, footY); ctx.lineTo(fcx, hipY); ctx.lineTo(fcx + legSpan, footY);
+        ctx.stroke();
+        ctx.fillStyle = UI.gold;                                                            // eye dot (echoes the sketch)
+        ctx.beginPath(); ctx.arc(fcx + headR * 0.35, headCy - headR * 0.1, 1.6, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
 
         // Slot plates ringing the figure.
         for (const slot of EQUIP_SLOT_RECTS) {
