@@ -1730,7 +1730,7 @@ export class Renderer {
             // Key number (top-left corner of slot)
             if (this.font) {
                 this.font.drawText(ctx, `${i + 1}`, sx + 2, sy + 2, {
-                    color: sel ? UI.gold : '#5a5040', scale: 1,
+                    color: sel ? UI.gold : UI.textLight, scale: 1,
                 });
             }
 
@@ -2160,7 +2160,7 @@ export class Renderer {
 
         // Title
         this.font.drawText(ctx, 'END OF', cx, py + 34, { color: UI.textLight, scale: 1, align: 'center' });
-        this.font.drawText(ctx, 'CHAPTER ONE', cx, py + 52, { color: UI.panelBorder, scale: 2, align: 'center' });
+        this.font.drawText(ctx, 'CHAPTER ONE', cx, py + 52, { color: UI.gold, scale: 2, align: 'center' });
 
         // Outro — short and tasteful. Kept to the bitmap font's ASCII set.
         const lines = [
@@ -2180,7 +2180,7 @@ export class Renderer {
         // Stat line + restart prompt
         const turns = game._endingTurns ?? game.turn;
         this.font.drawText(ctx, `${turns} TURNS`, cx, py + h - 56, { color: UI.textLight, scale: 1, align: 'center' });
-        this.font.drawText(ctx, 'PRESS N TO PLAY AGAIN', cx, py + h - 34, { color: UI.panelBorder, scale: 1, align: 'center' });
+        this.font.drawText(ctx, 'PRESS N TO PLAY AGAIN', cx, py + h - 34, { color: UI.gold, scale: 1, align: 'center' });
         this.font.drawText(ctx, '(OR TAP)', cx, py + h - 18, { color: UI.textLight, scale: 1, align: 'center' });
     }
 
@@ -2203,7 +2203,7 @@ export class Renderer {
         if (!this.font) return;
 
         this.font.drawText(ctx, 'MESSAGE LOG', CANVAS_PX / 2, py + 16, {
-            color: UI.panelBorder, scale: 2, align: 'center',
+            color: UI.gold, scale: 2, align: 'center',
         });
 
         const padX = 24;
@@ -2290,18 +2290,18 @@ export class Renderer {
 
         // Title
         const title = `${(npc.type || 'TRADER').toUpperCase()}'S TILL`;
-        this.font.drawText(ctx, title, CANVAS_PX / 2, R.y + 14, { color: UI.panelBorder, scale: 2, align: 'center' });
+        this.font.drawText(ctx, title, CANVAS_PX / 2, R.y + 14, { color: UI.gold, scale: 2, align: 'center' });
 
         // Mood row — smiley + label on the left, GP on the right.
         const moodY = R.y + 48;
         this._drawMoodFace(R.x + 26, moodY, m.face);
         this.font.drawText(ctx, m.mood.toUpperCase(), R.x + 44, moodY - 3, { color: dealing ? UI.textLight : UI.hpRed, scale: 1 });
-        this.font.drawText(ctx, `GP ${game.gold ?? 0}`, R.x + R.w - 24, moodY - 6, { color: UI.panelBorder, scale: 2, align: 'right' });
+        this.font.drawText(ctx, `GP ${game.gold ?? 0}`, R.x + R.w - 24, moodY - 6, { color: UI.gold, scale: 2, align: 'right' });
 
-        // Section headers — panelBorder (not gold) reads on the cream panel,
-        // matching the modal title. Gold stays only on the dark insets below.
-        this.font.drawText(ctx, 'BUY',  TRADE_BUY_ORIGIN.x,  TRADE_BUY_ORIGIN.y - 18,  { color: UI.panelBorder, scale: 1 });
-        this.font.drawText(ctx, 'SELL', TRADE_SELL_ORIGIN.x, TRADE_SELL_ORIGIN.y - 18, { color: UI.panelBorder, scale: 1 });
+        // Section headers in gold — high-contrast on the dark stone panel
+        // (matches the modal title). Insets below stay dark with gold/light text.
+        this.font.drawText(ctx, 'BUY',  TRADE_BUY_ORIGIN.x,  TRADE_BUY_ORIGIN.y - 18,  { color: UI.gold, scale: 1 });
+        this.font.drawText(ctx, 'SELL', TRADE_SELL_ORIGIN.x, TRADE_SELL_ORIGIN.y - 18, { color: UI.gold, scale: 1 });
 
         // BUY grid — the vendor's stock.
         const stock = npc.stock || [];
@@ -2404,7 +2404,7 @@ export class Renderer {
         const m = mood(disp);
         const innerX = R.x + 20;
 
-        this.font.drawText(ctx, (npc.name || npc.type || 'SOMEONE').toUpperCase(), CANVAS_PX / 2, R.y + 14, { color: UI.panelBorder, scale: 2, align: 'center' });
+        this.font.drawText(ctx, (npc.name || npc.type || 'SOMEONE').toUpperCase(), CANVAS_PX / 2, R.y + 14, { color: UI.gold, scale: 2, align: 'center' });
 
         const moodY = R.y + 50;
         this._drawMoodFace(R.x + 26, moodY, m.face);

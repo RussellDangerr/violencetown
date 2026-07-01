@@ -6,20 +6,22 @@
 // ── Parchment Color Palette (sampled from Style 1 sheet) ─────────────────────
 
 export const UI = {
-    // Panel colors (matching the 9-slice panel fill)
-    panelBg:     '#fff1d2',   // the inner parchment fill — matches the Kenney atlas cream (tile_0007); used by sub-32px flat fallbacks
-    panelBgDark: '#2a2218',   // dark variant for slots/bars
-    panelBorder: '#8b7340',   // gold-brown border
-    panelBorderLight: '#b8a060',
+    // Panel colors — DARK-ORNATE (Fantasy UI Borders). Panels are dark stone
+    // with a gold ornate frame; text is light. The inset wells (panelBgDark)
+    // sit a step DARKER than the panel fill so drawInset bars/slots still read.
+    panelBg:     '#2a2620',   // panel stone fill — matches the atlas base center
+    panelBgDark: '#14110b',   // inset wells for slots/bars (darker than panelBg)
+    panelBorder: '#8b7340',   // gold-brown border (strokeRect chrome)
+    panelBorderLight: '#d4b96a',
 
-    // Text colors
+    // Text colors — light on dark
     gold:    '#d4b96a',
-    text:    '#5a4a30',   // dark text on parchment (readable!)
-    textLight: '#8a7848',
-    white:   '#f0e8d0',
-    dim:     '#6a5a3a',
+    text:    '#e8dcc0',   // primary light cream text on dark panels
+    textLight: '#a89878', // muted secondary
+    white:   '#f4ecd8',
+    dim:     '#8a7d60',   // quiet hints (still legible on the dark stone)
 
-    // Status
+    // Status (colored + self-contained — unchanged)
     hpGreen: '#55aa44',
     hpRed:   '#cc4422',
     hpBg:    '#3a2010',
