@@ -22,7 +22,7 @@ import { doExamine } from './examine.js';
 import {
     CANVAS_INTERNAL_PX, HIT_SLOP, OVERLAY_RECTS, THROW_RECTS,
     HOTBAR_X_START, HOTBAR_Y, HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_STRIDE, HOTBAR_SLOTS,
-    RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, LOG_STRIP_RECT, LOG_MODAL_RECT,
+    RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, QUESTLOG_RECT, LOG_MODAL_RECT,
     TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BRIBE_RECT, tradeCellRect,
 } from './layout.js';
 import { canTrade, buyPrice, sellPrice, bribeStepCost, BRIBE_STEP } from './trade.js'; // (trade slice 1) disposition pricing
@@ -1401,10 +1401,10 @@ class Game {
             this._tapItemOverlay(pt);
             return;
         }
-        // Tapping the on-canvas log strip opens the full history modal — the
-        // touch equivalent of pressing L. IDLE only; in a menu the tap should
-        // drive the menu, not pop the log.
-        if (this.state === STATE.IDLE && this._pointInRect(pt, LOG_STRIP_RECT, HIT_SLOP)) {
+        // Tapping the on-canvas Quest Log panel opens the full history modal —
+        // the touch equivalent of pressing L. IDLE only; in a menu the tap
+        // should drive the menu, not pop the log.
+        if (this.state === STATE.IDLE && this._pointInRect(pt, QUESTLOG_RECT, HIT_SLOP)) {
             this._openLogModal();
             return;
         }

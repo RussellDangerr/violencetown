@@ -60,8 +60,11 @@ export const WHEEL_TILE_GAP  = 0.03;         // angular gap between tiles (radia
 // Ring k's [inner, outer] radius (k = 0 nearest the hub).
 export function wheelRingR(k) { const r0 = WHEEL_RING0_R0 + k * (WHEEL_RING_W + WHEEL_RING_GAP); return [r0, r0 + WHEEL_RING_W]; }
 
-// ── Log strip (bottom-left) + [L] history modal panel ──
-export const LOG_STRIP_RECT = { x: 6, y: 496, w: 300, h: 44 };   // y = HOTBAR_OY - 44 - 6
+// ── Quest Log panel (bottom-left) + [L] history modal panel ──
+// One consolidated "Quest Log" box holding the zone/time/turn header, the active
+// objective, and the last few log-feed lines. Sits above the hotbar (HOTBAR_OY
+// = 546). Shared by renderer._drawQuestLog (draw) and main.js (tap → [L] history).
+export const QUESTLOG_RECT = { x: 6, y: 436, w: 340, h: 104 };
 export const LOG_MODAL_RECT = { x: 24, y: 44, w: 560, h: 520 };
 
 // ── Trade window (Puck's shop — trade Slice 1) ──

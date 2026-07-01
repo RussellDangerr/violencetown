@@ -12,7 +12,7 @@ import {
     OVERLAY_RECTS, THROW_RECTS,
     HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_GAP, HOTBAR_SLOTS, HOTBAR_STRIDE,
     HOTBAR_TOTAL_W, HOTBAR_OX, HOTBAR_OY, HOTBAR_X_START, HOTBAR_Y,
-    LOG_STRIP_RECT, LOG_MODAL_RECT,
+    QUESTLOG_RECT, LOG_MODAL_RECT,
     TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BRIBE_RECT,
     TRADE_CELL_W, TRADE_CELL_H, tradeCellRect,
     RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
@@ -167,13 +167,13 @@ export class Renderer {
             : null;
         const version = meta ? meta.getAttribute('content') : '?';
         if (this.font) {
-            // y=192 sits above the panel's bottom 16px-cell trim/accents at
-            // y≈193+. Right-anchored 24px in from the panel's right edge
-            // (which lives at x≈304); left-anchored 24px in from the left.
-            this.font.drawText(ctx, 'V' + version, 280, 192, {
+            // y=186 clears the panel's bottom 16px-cell trim/accents at y≈193+
+            // (was 192, which clipped the descenders). Right-anchored 24px in
+            // from the panel's right edge (x≈304); left-anchored 24px from left.
+            this.font.drawText(ctx, 'V' + version, 280, 186, {
                 color: UI.textLight, scale: 1, align: 'right',
             });
-            this.font.drawText(ctx, 'BY CAELAN GANDER', 32, 192, {
+            this.font.drawText(ctx, 'BY CAELAN GANDER', 32, 186, {
                 color: UI.textLight, scale: 1, align: 'left',
             });
         }
@@ -379,18 +379,12 @@ export class Renderer {
 
         // HUD — rendered AFTER restore so screen shake doesn't affect it
         this._drawHPPanel(game);
-        this._drawZoneLabel(game);
-        this._drawQuestHUD(game);
         this._drawBuffBar(game);
-        this._drawLogStrip(game);
+        this._drawQuestLog(game);
         this._drawHotbar(game);
 
         // Subtle vignette border
         this._drawVignette();
-
-        // Town Clock readout — drawn after the vignette so the corner darkening
-        // doesn't sink it, but before the modals so a menu still covers it.
-        this._drawClock(game);
 
         // Modals
         if (game.state === 'item_overlay')    this._drawItemOverlay(game);
@@ -1470,70 +1464,6 @@ export class Renderer {
         }
     }
 
-    // ── Town Clock readout (top-right) ───────────────────────────────────────
-    // Military-time HH:MM mirroring the day/night lighting in numerals. The day
-    // starts at noon and runs ~30 min real-time; in combat it barely moves (the
-    // per-turn beat nudges it imperceptibly), so the readout never lurches.
-
-    _drawClock(game) {
-        if (!this.font || typeof game._timeOfDay !== 'function') return;
-        const { ctx } = this;
-        const time = game._timeOfDay();
-        const rightX = ctx.canvas.width - 6;
-        const y = 7;
-        // 1px dark shadow for legibility over the world + the night lightmap
-        // (mirrors the splash title's offset-shadow style).
-        this.font.drawText(ctx, time, rightX + 1, y + 1, { color: 'rgba(0,0,0,0.8)', scale: 1, align: 'right' });
-        this.font.drawText(ctx, time, rightX, y, { color: '#e8e0c8', scale: 1, align: 'right' });
-    }
-
-    // ── Zone Label (top center) ──────────────────────────────────────────────
-
-    _drawZoneLabel(game) {
-        const { ctx } = this;
-        const label = game.map?.zoneName || '';
-        const turnText = `T:${game.turn}`;
-        const w = Math.max(100, label.length * 10 + 60);
-        const px = (CANVAS_PX - w) / 2;
-
-        drawPanelSmall(ctx, px, 4, w, 22, this.uiSheet);
-
-        if (this.font) {
-            this.font.drawText(ctx, label.toUpperCase(), CANVAS_PX / 2, 9, {
-                color: UI.text, scale: 1, align: 'center',
-            });
-            // Turn counter right-aligned within the label panel
-            this.font.drawText(ctx, turnText, px + w - 6, 9, {
-                color: UI.dim, scale: 1, align: 'right',
-            });
-        }
-    }
-
-    // ── Quest HUD (active objective, right of the zone label) ────────────────
-    // The screenshot's "active quest text telling player next goal." Pulls the
-    // current objective from the quest engine; renders nothing when idle.
-    _drawQuestHUD(game) {
-        const text = game.questEngine ? game.questEngine.getHudText() : null;
-        if (!text) return;
-        const { ctx } = this;
-        const label = game.map?.zoneName || '';
-        const zoneW = Math.max(100, label.length * 10 + 60);
-        const zoneRight = (CANVAS_PX - zoneW) / 2 + zoneW;
-        const x = zoneRight + 6;
-        const w = (CANVAS_PX - 6) - x;
-        if (w < 60) return;                 // no room (very long zone name)
-        drawPanelSmall(ctx, x, 4, w, 22, this.uiSheet);
-        if (this.font) {
-            const padX = 8;
-            const maxChars = Math.max(4, Math.floor((w - padX * 2) / 8));
-            let t = text.toUpperCase();
-            if (t.length > maxChars) t = t.slice(0, maxChars - 1) + '~';
-            // Dark brown on parchment for legibility (gold is too low-contrast
-            // on the panel fill — matches the zone label's readable treatment).
-            this.font.drawText(ctx, t, x + padX, 9, { color: UI.text, scale: 1 });
-        }
-    }
-
     // ── Buff Bar (top-right) ─────────────────────────────────────────────────
 
     _drawBuffBar(game) {
@@ -1566,59 +1496,77 @@ export class Renderer {
         }
     }
 
-    // ── In-canvas Log Strip (above hotbar) ──────────────────────────────────
+    // ── Quest Log (consolidated bottom-left "one box") ───────────────────────
     //
-    // Persistent 3-slot rolling log rendered as a parchment strip above the
-    // hotbar. Mirrors _log() messages from main.js's _logStripMessages ring
-    // buffer (newest at end). Newest sits at the bottom of the strip (chat-
-    // window convention); older messages dim with position so the eye lands
-    // on the freshest line first. Hotbar tooltip is allowed to overlay this
-    // strip via z-order — _drawHotbar runs after _drawLogStrip in _drawScene.
+    // Stage 1 HUD consolidation: the five scattered top/bottom surfaces (zone
+    // label, quest objective, clock, turn counter, and the rolling log strip)
+    // collapse into ONE ornate parchment panel at QUESTLOG_RECT, clearing the
+    // top of the screen entirely. Layout, top → bottom, inside ~8px padding:
     //
-    // Color per category uses the parchment-panel palette (UI.text base);
-    // combat/pickup/gold tints make different message types visually distinct
-    // without needing to read every line.
+    //   (a) HEADER   : zone name (gold) · HH:MM · T:turn (dim)
+    //   (b) OBJECTIVE: active quest text (gold), truncated to width; skipped
+    //                  (feed shifts up one line) when there's no objective.
+    //   (c) FEED     : last 3 log messages, category-tinted, age-faded, newest
+    //                  at the bottom — chat-window convention.
+    //
+    // The bitmap font is 8px/char at scale 1 and lines advance 12px. With the
+    // panel 104px tall the interior (after 8px top + bottom padding) is 88px =
+    // room for header (12) + objective (12) + a 12px gap + three feed lines
+    // (36) with margin to spare, so nothing spills past QUESTLOG_RECT.
 
-    _drawLogStrip(game) {
+    _drawQuestLog(game) {
+        const { ctx } = this;
+        const R = QUESTLOG_RECT;
+        const PAD = 8;
+        const LH = 12;                       // line height (8px glyph + 4px lead)
+        const innerW = R.w - PAD * 2;
+        const maxChars = Math.max(4, Math.floor(innerW / 8));
+
+        drawPanelSmall(ctx, R.x, R.y, R.w, R.h, this.uiSheet);
+        if (!this.font) return;
+
+        const tx = R.x + PAD;
+        let y = R.y + PAD;
+
+        // (a) HEADER — zone (gold) then " · HH:MM · T:turn" (dim).
+        const zone = (game.map?.zoneName || '').toUpperCase();
+        this.font.drawText(ctx, zone, tx, y, { color: UI.gold, scale: 1 });
+        const timeStr = (typeof game._timeOfDay === 'function') ? game._timeOfDay() : '';
+        const metaStr = ` ${timeStr ? '· ' + timeStr + ' ' : ''}· T:${game.turn}`;
+        this.font.drawText(ctx, metaStr, tx + zone.length * 8, y, { color: UI.dim, scale: 1 });
+        y += LH;
+
+        // (b) OBJECTIVE — active quest text (gold). Skip the line if none, so
+        // the feed shifts up to fill the space.
+        const objective = game.questEngine ? game.questEngine.getHudText() : null;
+        if (objective) {
+            let t = objective.toUpperCase();
+            if (t.length > maxChars) t = t.slice(0, maxChars - 1) + '~';
+            this.font.drawText(ctx, t, tx, y, { color: UI.gold, scale: 1 });
+            y += LH;
+        }
+
+        // (c) MESSAGE FEED — last 3, oldest → newest, age-faded. Anchored to the
+        // panel's bottom so a missing objective grows the visible feed upward.
         const messages = game._logStripMessages;
         if (!messages || messages.length === 0) return;
-
-        const { ctx } = this;
-        const SX = LOG_STRIP_RECT.x;
-        const SW = LOG_STRIP_RECT.w;
-        const SH = LOG_STRIP_RECT.h;
-        const SY = LOG_STRIP_RECT.y;
-
-        drawPanelSmall(ctx, SX, SY, SW, SH, this.uiSheet);
-
-        // Newest message bottom-aligned at line 3; older messages climb up.
-        // Top-of-glyph y baselines (bitmap font draws from top-left).
-        const baselines = [SY + 6, SY + 18, SY + 30];
-        const alphas    = [0.5, 0.75, 1.0]; // oldest → newest position
-
-        const visible = messages.slice(-3);              // last N entries
-        const offset  = 3 - visible.length;              // top-align if fewer than 3
-
+        const visible = messages.slice(-3);
+        const alphas  = [0.5, 0.75, 1.0];    // oldest → newest
+        const feedTop = R.y + R.h - PAD - visible.length * LH;
+        const startY  = Math.max(y, feedTop);
         for (let i = 0; i < visible.length; i++) {
             const m = visible[i];
-            const slot = i + offset;
-            const baseColor = this._logStripColor(m.category);
-            const tintedColor = hexToRgba(baseColor, alphas[slot]);
-            // Truncate to fit width — bitmap font is 8px/char at scale 1,
-            // so SW(300) minus 16px padding = ~35 chars.
+            const alpha = alphas[alphas.length - visible.length + i];
+            const tinted = hexToRgba(this._logStripColor(m.category), alpha);
             let text = m.text;
-            if (text.length > 35) text = text.slice(0, 34) + '~';
-            if (this.font) {
-                this.font.drawText(ctx, text, SX + 8, baselines[slot], {
-                    color: tintedColor, scale: 1,
-                });
-            }
+            if (text.length > maxChars) text = text.slice(0, maxChars - 1) + '~';
+            this.font.drawText(ctx, text, tx, startY + i * LH, { color: tinted, scale: 1 });
         }
     }
 
     // Map a log-strip message category to a parchment-palette tint. Falls
     // back to UI.text so unknown categories stay readable. Kept as its own
-    // method so future categories slot in without touching _drawLogStrip.
+    // method so future categories slot in without touching _drawQuestLog.
     _logStripColor(category) {
         switch (category) {
             case 'combat':     return UI.hpRed;    // damage, deaths, fights
