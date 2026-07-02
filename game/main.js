@@ -274,6 +274,12 @@ class Game {
 
         // Economy
         this.gold = 0;
+        // (Phase 2) Car fuel. The Cataclysmic Converter runs the fixed car too
+        // HOT ('raw' → it punches straight through the North bridge into the
+        // Canyon). Pouring a bottle of alcohol in the tank slows it ('alcohol' →
+        // it ramps the bridge clean into Downtown). Set at the car (_interactCar),
+        // read at the bridge (_playBridgeCutscene).
+        this.carFuel = 'raw';
 
         // Debug/dev flag — OFF by default so cheats never ship enabled. Opt in
         // with ?debug / ?debug=1 in the URL (or window.VIOLENCETOWN_DEBUG=true
@@ -1629,8 +1635,7 @@ class Game {
             // (_openBridgeIfCarFixed), so reaching it here is the deliberate finale,
             // not the instant-on-fix cut that used to happen.
             if (ny === 0 && nx >= 14 && nx <= 19 && this.questEngine.getFlag('carFixed')) {
-                this._log('[You gun it across the bridge — Violencetown shrinks in the mirror.]', 'transition');
-                this._endChapterOne();
+                this._playBridgeCutscene();   // (Phase 2) fuel decides: crash → Canyon, or ramp → Downtown
                 return;
             }
 
@@ -1715,7 +1720,22 @@ class Game {
     // complete the quest. Otherwise a flavor line.
     _interactCar() {
         if (this.questEngine.getFlag('carFixed')) {
-            this._log('[The car purrs. Time to make that delivery.]');
+            // (Phase 2) The Cataclysmic Converter runs the car way too hot — floor
+            // it at the bridge and you punch straight through. Pouring a bottle of
+            // alcohol in the tank burns fast and weak, taming the engine just
+            // enough to make the ramp.
+            const alc = this.inventory.findIndex(s => s && s.itemDef.id === 'alcohol');
+            if (this.carFuel !== 'alcohol' && alc >= 0) {
+                this._removeFromSlot(alc);
+                this.carFuel = 'alcohol';
+                audio.playSfx('pickup');
+                this._log('[You empty the whole bottle into the tank. The engine coughs, then drops into a slower, meaner idle. That should tame the jump.]', 'pickup');
+                this._render();
+                return;
+            }
+            this._log(this.carFuel === 'alcohol'
+                ? '[The car idles low and steady now — the alcohol is doing its work. Ready for the bridge.]'
+                : '[The car SNARLS, revving way past redline. At this speed you will never make the ramp — you will go straight through the bridge. There has to be a way to slow it down.]');
             this._render();
             return;
         }
@@ -2979,6 +2999,7 @@ class Game {
         this.equipment = { weapon: WEAPONS.wooden_sword, top: null, bottom: null, front: null, back: null, sides: null };
         this._pendingTransition = null;
         this.gold = 0;
+        this.carFuel = 'raw';
         await this._loadMap('town-map.json');
         this.state = STATE.IDLE;
         this._startMainQuest();   // deterministic fix_car start (fix/critical-path)
@@ -2997,6 +3018,55 @@ class Game {
         this.state = STATE.ENDING;
         this.autosave({ force: true });
         this._render();
+    }
+
+    // (Phase 2) Crossing the North bridge with the car fixed. The Cataclysmic
+    // Converter runs the car TOO fast — you punch straight through the wooden
+    // bridge into the Canyon — UNLESS you've poured alcohol in the tank to slow
+    // it, in which case you ramp clean over into Downtown. Reuses the ending beat
+    // pattern (input blocked via RESOLVING, shake + flash + logs), then a short
+    // beat later loads the destination zone.
+    _playBridgeCutscene() {
+        this._stopAutoRepeat();
+        this._heldDirKeys = [];
+        this.state = STATE.RESOLVING;                 // block input through the beat
+        if (this.carFuel === 'alcohol') {
+            this._log('[You feed it the doctored fuel and floor it — the engine burbles, tamed —]', 'transition');
+            this._log('[— you hit the ramp CLEAN and SAIL over the canyon. Downtown rises up to meet you.]', 'transition');
+            audio.playSfx('quest-advance');
+            this._flash('rgba(255, 220, 120, 0.35)');
+            this._triggerScreenShake(280, 4);
+            this._render();
+            setTimeout(() => this._rampToDowntown(), 1100);
+        } else {
+            this._log('[The Cataclysmic Converter SCREAMS — too fast, WAY too fast —]', 'combat');
+            this._log('[— you punch STRAIGHT THROUGH the wooden bridge and slam the far canyon wall. The world goes end over end.]', 'combat');
+            audio.playSfx('take-damage');
+            this._flash('rgba(200, 40, 40, 0.5)');
+            this._triggerScreenShake(520, 9);
+            this._render();
+            setTimeout(() => this._crashToCanyon(), 1100);
+        }
+    }
+
+    // Bridge FAIL (too fast) → wake at the bottom of the Canyon. (Phase 3 fills it
+    // with Pike + the grappling hook + the fight out; for now it's a scaffold room
+    // with a placeholder scramble-out exit.)
+    async _crashToCanyon() {
+        await this._loadMap('canyon-map.json');
+        this.state = STATE.IDLE;
+        this._log('[You come to at the bottom of the canyon, ears ringing and the car a write-off. No climbing back up the way you fell.]', 'transition');
+        this._render();
+    }
+
+    // Bridge SUCCESS (alcohol) → ramp over into Downtown. (Phase 4 builds Downtown
+    // out + starts Main Quest 2; for now it's a scaffold street.)
+    async _rampToDowntown() {
+        await this._loadMap('downtown-map.json');
+        this.state = STATE.IDLE;
+        this._log('[You skid to a stop on a Downtown street, the engine ticking as it cools. The real part of town. Now — that delivery.]', 'transition');
+        this._render();
+        // (Phase 4) this._startMainQuest2();
     }
 
     // ── Render ───────────────────────────────────────────────────────────────

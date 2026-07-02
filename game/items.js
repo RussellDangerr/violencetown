@@ -135,6 +135,20 @@ export const ITEMS = {
         fallbackColor: '#9a8a6a',
         baseValue: 0,
     },
+
+    // (Phase 2) A bottle of alcohol — NOT for drinking. Poured into the fixed
+    // car's tank it burns fast and weak, slowing the too-hot engine just enough
+    // to ramp the North bridge instead of punching through it. Bought from Hooch
+    // the bootlegger in Town; consumed at the car (_interactCar).
+    alcohol: {
+        id: 'alcohol',
+        name: '[Bottle of Alcohol]',
+        description: 'Cheap, high-proof, and mean. Burns FAST and burns out fast — barely a push. Not a drink. A tank\'s worth of "slow down".',
+        useType: 'none',
+        consumable: false,
+        fallbackColor: '#8a5a2a',
+        baseValue: 20,
+    },
 };
 
 // Equip an item into its slot. Returns a log message.

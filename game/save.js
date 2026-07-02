@@ -62,6 +62,7 @@ export function serialize(game) {
             mp: game.playerMp, maxMp: game.playerMaxMp,
             facing: game.facing,
             gold: game.gold,
+            carFuel: game.carFuel,
             equipment: {
                 weapon: idOf(game.equipment.weapon),
                 top: idOf(game.equipment.top),
@@ -230,6 +231,7 @@ export async function loadInto(game, raw) {
     game.playerHp = p.hp; game.playerMaxHp = p.maxHp;
     game.playerMp = p.mp; game.playerMaxMp = p.maxMp;
     game.gold = p.gold;
+    game.carFuel = p.carFuel || 'raw';
     game.facing = p.facing;
 
     // 3. equipment / inventory / temp-equips / buffs (rehydrate defs by id)

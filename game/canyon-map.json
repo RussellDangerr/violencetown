@@ -1,0 +1,27 @@
+{
+    "_scaffold": "PLACEHOLDER (Phase 2). A minimal walkable room so the bridge-crash lands somewhere. Phase 3 hand-authors the real Canyon: Pike the prospector, the grappling hook (buy/quest/kill), hostile cave-critters, and the grapple-out escape. The scramble-out transition below is a stand-in for that escape.",
+    "width": 14,
+    "height": 10,
+    "spawn": {"x": 7, "y": 5},
+    "zoneName": "CANYON",
+    "tiles": [
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,52,52,52,52,52,52,52,52,52,52,52,52,0,
+        0,52,52,52,52,52,52,52,52,52,52,52,52,0,
+        0,52,52,52,52,52,52,52,52,52,52,52,52,0,
+        0,52,52,52,52,52,52,52,52,52,52,52,52,0,
+        0,52,52,52,52,52,52,52,52,52,52,52,52,0,
+        0,52,52,52,52,52,52,52,52,52,52,52,52,0,
+        0,52,52,52,52,52,52,52,52,52,52,52,52,0,
+        0,52,52,52,52,52,52,52,52,52,52,52,52,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0
+    ],
+    "enemies": [],
+    "items": [],
+    "examinables": [
+        {"id": "canyon_todo", "x": 7, "y": 4, "text": "[Sheer walls, a wrecked car, and a cold wind down here. (Placeholder — Pike the prospector, the grappling hook, and the fight out get built here next.)]"}
+    ],
+    "transitions": [
+        {"x": 7, "y": 1, "toMap": "town-map.json", "toX": 16, "toY": 12, "label": "[Scramble up the rockfall — back toward town. (placeholder exit)]"}
+    ]
+}
