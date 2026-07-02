@@ -1817,7 +1817,7 @@ export class Renderer {
 
     // One donut-wedge tile (a curved "Simon-Says" segment) + a centered label.
     // Angles in radians: `mid` = the tile's centre angle, `half` = half its width.
-    _wheelTile(r0, r1, mid, half, fill, alpha, label, txtColor, outline) {
+    _wheelTile(r0, r1, mid, half, fill, alpha, label, txtColor, outline, icon) {
         const { ctx } = this, cx = RADIAL_CENTER_X, cy = RADIAL_CENTER_Y;
         ctx.beginPath();
         ctx.arc(cx, cy, r1, mid - half, mid + half);
@@ -1825,10 +1825,16 @@ export class Renderer {
         ctx.closePath();
         ctx.globalAlpha = alpha; ctx.fillStyle = fill; ctx.fill(); ctx.globalAlpha = 1;
         if (outline) { ctx.lineWidth = outline.w; ctx.strokeStyle = outline.c; ctx.stroke(); }
-        if (this.font && label) {
-            const lr = (r0 + r1) / 2;
-            const lx = cx + Math.cos(mid) * lr, ly = cy + Math.sin(mid) * lr - 4;
-            this.font.drawText(ctx, label, lx, ly, { color: txtColor, scale: 1, align: 'center' });
+        if (!this.font) return;
+        const lr = (r0 + r1) / 2;
+        const lx = cx + Math.cos(mid) * lr, ly = cy + Math.sin(mid) * lr;
+        if (icon) {
+            // (Phase 4) a monochrome glyph stacked over the label, in the tile's
+            // TEXT colour (never a hue) — a colour-independent shape cue.
+            this.font.drawText(ctx, icon, lx, ly - 11, { color: txtColor, scale: 1.4, align: 'center' });
+            if (label) this.font.drawText(ctx, label, lx, ly + 3, { color: txtColor, scale: 1, align: 'center' });
+        } else if (label) {
+            this.font.drawText(ctx, label, lx, ly - 4, { color: txtColor, scale: 1, align: 'center' });
         }
     }
 
@@ -1925,13 +1931,22 @@ export class Renderer {
         //    (spin to bring one into a slot); the pip carousel (§5) hints how many.
         const ring = activeRing(w), sel = activeIndex(w), n = ring.length;
         const activeBand = wheelRingR(depth - 1);
+        // (Phase 4) verified monochrome glyphs — a colour-free shape cue per node.
+        const WHEEL_ICONS = {
+            fight: '⚔', trick: '♦', treat: '♥', flight: '»',
+            melee: '⚔', ranged: '➹', magic: '✦',
+            hit: '✶', cleave: '⚔', spin: '⟳',
+            throw: '➹', defend: '⛊', bribe: '¤', give: '♥', trade: '⇄',
+            eat: '♥', cleanse: '✧', run: '»', hide: '☾', wait: '⏱',
+        };
         const drawSlot = (mid, node, isSel) => {
             const en = tileEnabled(node);
             this._wheelTile(activeBand[0], activeBand[1], mid, QHALF,
                 isSel ? HUE : '#6b5436', en ? (isSel ? 1 : 0.82) : 0.4,
                 node.placeholder ? '…' : node.label,
                 !en ? '#7a6c50' : (isSel ? '#fff3d0' : '#e8dcc0'),
-                isSel ? { w: 3, c: '#fff3c0' } : null);
+                isSel ? { w: 3, c: '#fff3c0' } : null,
+                node.placeholder ? null : WHEEL_ICONS[node.key]);
         };
         // `spin` rotates the whole active ring (options + Back) so a cycle sweeps
         // the new selection up under the fixed pointer.
