@@ -802,9 +802,9 @@ class Game {
                     return;
                 }
                 if (w.aiming) { this._reticleKey(e.code); return; }
-                if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { cycle(w, -1); audio.playSfx('menu-tick'); this._render(); return; }
-                if (e.code === 'ArrowRight' || e.code === 'KeyD') { cycle(w, +1); audio.playSfx('menu-tick'); this._render(); return; }
-                if (DOWN) { if (back(w) === 'close') this._closeWheel(); else { audio.playSfx('menu-cancel'); this._render(); } return; }
+                if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { this._wheelCycle(-1); return; }
+                if (e.code === 'ArrowRight' || e.code === 'KeyD') { this._wheelCycle(+1); return; }
+                if (DOWN) { this._wheelBack(); return; }
                 if (UP)   { this._wheelDrill(); return; }
                 return;
             }
@@ -1521,10 +1521,7 @@ class Game {
         }
 
         // Hub = back / close.
-        if (r < WHEEL_HUB_R + 8) {
-            if (back(w) === 'close') this._closeWheel(); else { audio.playSfx('menu-cancel'); this._render(); }
-            return;
-        }
+        if (r < WHEEL_HUB_R + 8) { this._wheelBack(); return; }
         // Ignore taps beyond the wheel (preview band outer + slop) so a stray far
         // tap doesn't misfire a quadrant.
         if (r > wheelRingR(w.path.length)[1] + 12) return;
@@ -1532,15 +1529,10 @@ class Game {
         // Cardinal by angle: atan2 → right=0, down=π/2, left=±π, up=-π/2. Bucket the
         // full turn into four quadrants centred on each cardinal.
         const a = (Math.atan2(dy, dx) + Math.PI * 2) % (Math.PI * 2); // 0..2π
-        if (a >= Math.PI * 0.25 && a < Math.PI * 0.75) {              // BOTTOM → back
-            if (back(w) === 'close') this._closeWheel(); else { audio.playSfx('menu-cancel'); this._render(); }
-        } else if (a >= Math.PI * 0.75 && a < Math.PI * 1.25) {       // LEFT → prev
-            cycle(w, -1); audio.playSfx('menu-tick'); this._render();
-        } else if (a >= Math.PI * 1.25 && a < Math.PI * 1.75) {       // TOP → drill
-            this._wheelDrill();
-        } else {                                                       // RIGHT → next
-            cycle(w, +1); audio.playSfx('menu-tick'); this._render();
-        }
+        if      (a >= Math.PI * 0.25 && a < Math.PI * 0.75) this._wheelBack();     // BOTTOM → back
+        else if (a >= Math.PI * 0.75 && a < Math.PI * 1.25) this._wheelCycle(-1);  // LEFT → prev
+        else if (a >= Math.PI * 1.25 && a < Math.PI * 1.75) this._wheelDrill();    // TOP → drill
+        else                                                this._wheelCycle(+1);  // RIGHT → next
     }
 
     // ── Animation ─────────────────────────────────────────────────────────────
@@ -2165,6 +2157,7 @@ class Game {
         this.wheel.aiming = false;
         this.wheel.confirming = false;
         this.wheel.reticle = null;
+        this.wheel._spinAt = 0; this.wheel._drillAt = 0;   // clear stale juice timestamps
         restoreLastCategory(this.wheel);   // reopen on the last-used category
         audio.playSfx('menu-open');
         this._overlayOpenedAt = performance.now();
@@ -2181,6 +2174,22 @@ class Game {
         this._render();
     }
 
+    // Spin the active ring one slot and stamp the spin so the renderer sweeps it.
+    _wheelCycle(dir) {
+        const w = this.wheel;
+        cycle(w, dir);
+        w._spinAt = performance.now(); w._spinDir = dir;
+        audio.playSfx('menu-tick'); this._render();
+    }
+
+    // Collapse one level (or close at the root) and stamp the re-center pop.
+    _wheelBack() {
+        const w = this.wheel;
+        if (back(w) === 'close') { this._closeWheel(); return; }
+        w._drillAt = performance.now(); w._drillDir = -1;
+        audio.playSfx('menu-cancel'); this._render();
+    }
+
     // Drill the highlighted node: grey-out gate (placeholder / unavailable), then
     // act on the drill sentinel — fire a leaf, enter AIM, or descend a sub-wheel.
     _wheelDrill() {
@@ -2192,6 +2201,7 @@ class Game {
         if (r === 'bump') { audio.playSfx('bump-wall'); return; }
         if (r === 'fire') { this._wheelCommit(); return; }
         if (r === 'aim')  { if (!w.reticle) w.reticle = autoAimTile(selectedNode(w), this); audio.playSfx('menu-tick'); this._render(); return; }
+        w._drillAt = performance.now(); w._drillDir = +1;
         audio.playSfx('menu-tick'); this._render();   // 'push' / descended into a sub-wheel
     }
 

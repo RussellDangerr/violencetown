@@ -138,6 +138,8 @@ export function createWheelState() {
     lastFired: null, // {path, nodeKey, itemSlot, spellId, aimTile} — written by main.js on fire
     aiming: false,
     _memory: {},     // ring path-key → remembered selection index
+    // (Phase 3 juice) animation timestamps — written by main.js, read by the renderer.
+    _spinAt: 0, _spinDir: 0, _drillAt: 0, _drillDir: 0,
   };
 }
 

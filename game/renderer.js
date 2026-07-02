@@ -1885,6 +1885,34 @@ export class Renderer {
         const wrap = (i, m) => ((i % m) + m) % m;
         const tileEnabled = (node) => !node.placeholder && (!node.available || node.available(game));
 
+        // ── (Phase 3 juice) easing reads performance.now() each frame — the menu
+        //    render loop stays alive while the wheel is open (_hasActiveEffects).
+        //    reduce-motion snaps everything to rest (no scale/rotation) but keeps
+        //    colour + audio. Computed values are stashed on _wheelAnim so the
+        //    animation can be probed headless (rAF is throttled there).
+        const reduce = (typeof Settings !== 'undefined') && Settings.get && Settings.get('reduceMotion');
+        const now = (typeof performance !== 'undefined') ? performance.now() : 0;
+        const smooth = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
+        let scale = 1, spin = 0;
+        if (!reduce) {
+            // Open overshoot: 0.85 → 1.05 → 1.0 over 180ms.
+            const ot = (now - (game._overlayOpenedAt ?? 0)) / 180;
+            if (ot >= 0 && ot < 1) scale = (ot < 0.55) ? 0.85 + 0.20 * smooth(ot / 0.55)
+                                                        : 1.05 - 0.05 * smooth((ot - 0.55) / 0.45);
+            // Drill / back re-center pop: a quick 0.90 → 1.0 punch on a depth change.
+            const dt = (now - (w._drillAt ?? 0)) / 150;
+            if (dt >= 0 && dt < 1) scale *= 0.90 + 0.10 * smooth(dt);
+            // Spin sweep: the active ring rotates ±90° → 0 over 120ms after a cycle,
+            // so the newly-selected tile sweeps up into the TOP slot.
+            const st = (now - (w._spinAt ?? 0)) / 120;
+            if (w._spinAt && st >= 0 && st < 1) spin = (w._spinDir || 0) * (Math.PI / 2) * (1 - smooth(st));
+        }
+        this._wheelAnim = { scale, spin, reduce: !!reduce };
+
+        // Everything below the wash scales about the centre (the open/drill pop).
+        ctx.save();
+        if (scale !== 1) { ctx.translate(cx, cy); ctx.scale(scale, scale); ctx.translate(-cx, -cy); }
+
         // 1) Greyed decision breadcrumb: each locked parent's chosen tile at TOP,
         //    stacked inward toward the hub (innermost = the earliest choice).
         for (let d = 0; d < depth - 1; d++) {
@@ -1905,11 +1933,13 @@ export class Renderer {
                 !en ? '#7a6c50' : (isSel ? '#fff3d0' : '#e8dcc0'),
                 isSel ? { w: 3, c: '#fff3c0' } : null);
         };
-        drawSlot(TOP, ring[sel], true);
-        if (n >= 2) drawSlot(LEFT,  ring[wrap(sel - 1, n)], false);
-        if (n >= 2) drawSlot(RIGHT, ring[wrap(sel + 1, n)], false);
+        // `spin` rotates the whole active ring (options + Back) so a cycle sweeps
+        // the new selection up under the fixed pointer.
+        drawSlot(TOP + spin, ring[sel], true);
+        if (n >= 2) drawSlot(LEFT + spin,  ring[wrap(sel - 1, n)], false);
+        if (n >= 2) drawSlot(RIGHT + spin, ring[wrap(sel + 1, n)], false);
         // Reserved BACK tile — down always collapses a level (or CLOSES at the root).
-        this._wheelTile(activeBand[0], activeBand[1], BOTTOM, QHALF, '#2c2620', 0.8,
+        this._wheelTile(activeBand[0], activeBand[1], BOTTOM + spin, QHALF, '#2c2620', 0.8,
             depth === 1 ? '▼ CLOSE' : '▼ BACK', '#b7a988', null);
 
         // 3) Preview arc (the highlight's children) — a couple of curved tiles above
@@ -1956,6 +1986,7 @@ export class Renderer {
         ctx.closePath();
         ctx.fillStyle = '#fff3c0'; ctx.fill();
 
+        ctx.restore();   // undo the open/drill scale transform
         ctx.globalAlpha = 1; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     }
 
