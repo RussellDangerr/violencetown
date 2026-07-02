@@ -2524,7 +2524,7 @@ class Game {
         if (this.enemies.some(e => e._isSummon)) {
             for (const e of this.enemies) if (e._isSummon) e._summonTurnsLeft--;
             const gone = this.enemies.filter(e => e._isSummon && e._summonTurnsLeft <= 0);
-            for (const e of gone) this._log(`[The ${(e.type || 'summon').toLowerCase()} melts back into the crowd.]`);
+            for (const e of gone) this._log(`[${e.type || 'The summon'} slinks back into the crowd.]`);
             if (gone.length) this.enemies = this.enemies.filter(e => !(e._isSummon && e._summonTurnsLeft <= 0));
         }
 
@@ -2996,7 +2996,7 @@ class Game {
             if (this._tileFreeForShove(x, y)) { spot = { x, y }; break; }
         }
         if (!spot) { this._log('[No room beside you to summon anything.]'); return false; }
-        const name = type.charAt(0).toUpperCase() + type.slice(1);
+        const name = opts.summonName || (type.charAt(0).toUpperCase() + type.slice(1));
         this._summonSeq = (this._summonSeq || 0) + 1;
         const ally = new Enemy({
             id: `summon_${type}_${this.turn}_${this._summonSeq}`,
@@ -3010,7 +3010,7 @@ class Game {
         ally._isSummon = true;
         ally._summonTurnsLeft = turns;
         this.enemies.push(ally);
-        this._log(`[You whistle sharp — a ${name.toLowerCase()} bounds out of the crowd, all teeth.]`, 'combat');
+        this._log(`[You whistle sharp — ${name} bounds out of the crowd, all teeth.]`, 'combat');
         return true;
     }
 

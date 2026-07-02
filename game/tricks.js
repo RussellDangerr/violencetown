@@ -24,7 +24,7 @@ export const TRICKS = {
     // to fight at your side for a couple of turns, then melts back into the
     // crowd. No damage/aim: `summon` routes it to _spawnSummon (main.js).
     hire_lion: {
-        id: 'hire_lion', name: 'Hire a Lion', gpCost: 12,
-        summon: 'lion', summonTurns: 2, summonHp: 30, summonDamage: 12,
+        id: 'hire_lion', name: 'Hire Lire', gpCost: 12,
+        summon: 'lion', summonName: 'Lire', summonTurns: 2, summonHp: 30, summonDamage: 12,
     },
 };

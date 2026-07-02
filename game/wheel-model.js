@@ -54,7 +54,7 @@ export const ROOT = { key: 'menu', label: 'MENU', children: [
     { key: 'rayblast', label: 'Ray Blast', trickId: 'ray_blast', aimType: 'reticle', resolver: 'castTrick',
       available: (g) => (g.grantedTricks || []).includes('ray_blast') && (g.gold || 0) >= (TRICKS.ray_blast ? TRICKS.ray_blast.gpCost : 0) },
     // Hire a Lion — a self-target summon (no aim); granted by the Lion Whip.
-    { key: 'hirelion', label: 'Hire a Lion', trickId: 'hire_lion', aimType: 'none', resolver: 'castTrick',
+    { key: 'hirelion', label: 'Hire Lire', trickId: 'hire_lion', aimType: 'none', resolver: 'castTrick',
       available: (g) => (g.grantedTricks || []).includes('hire_lion') && (g.gold || 0) >= (TRICKS.hire_lion ? TRICKS.hire_lion.gpCost : 0) },
   ]},
   { key: 'treat', label: 'Treat', children: [
