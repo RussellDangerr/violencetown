@@ -22,7 +22,7 @@ import { doExamine } from './examine.js';
 import {
     CANVAS_INTERNAL_PX, HIT_SLOP, OVERLAY_RECTS, THROW_RECTS,
     HOTBAR_X_START, HOTBAR_Y, HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_STRIDE, HOTBAR_SLOTS,
-    RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, QUESTLOG_RECT, LOG_MODAL_RECT,
+    RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, wheelRingR, QUESTLOG_RECT, LOG_MODAL_RECT,
     TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BRIBE_RECT, tradeCellRect,
     EQUIPMENT_MODAL_RECT,
 } from './layout.js';
@@ -1504,18 +1504,43 @@ class Game {
     }
 
     _tapRadialMenu(pt) {
-        // Interim touch: hub tap = back/close; any other tap = drill/commit the
-        // current selection. Full per-tile radial touch lands in Phase 2.
+        // Touch parity with the keyboard d-pad: the active ring is a COMPASS, so a
+        // tap in the TOP quadrant drills, LEFT/RIGHT spin to prev/next, and the
+        // BOTTOM quadrant (or the hub) goes BACK. AIM/CONFIRM overlays don't draw
+        // the compass, so they keep the interim hub-cancels / tap-commits behaviour.
         const w = this.wheel;
-        const r = Math.hypot(pt.x - RADIAL_CENTER_X, pt.y - RADIAL_CENTER_Y);
+        const dx = pt.x - RADIAL_CENTER_X, dy = pt.y - RADIAL_CENTER_Y;
+        const r = Math.hypot(dx, dy);
+
+        if (w.confirming || w.aiming) {
+            if (r < WHEEL_HUB_R + 8) {
+                if (w.confirming) w.confirming = false; else { w.aiming = false; w.reticle = null; }
+                audio.playSfx('menu-cancel'); this._render(); return;
+            }
+            this._wheelCommit(); return;
+        }
+
+        // Hub = back / close.
         if (r < WHEEL_HUB_R + 8) {
-            if (w.confirming) { w.confirming = false; audio.playSfx('menu-cancel'); this._render(); return; }
-            if (w.aiming)     { w.aiming = false; w.reticle = null; audio.playSfx('menu-cancel'); this._render(); return; }
             if (back(w) === 'close') this._closeWheel(); else { audio.playSfx('menu-cancel'); this._render(); }
             return;
         }
-        if (w.confirming || w.aiming) { this._wheelCommit(); return; }
-        this._wheelDrill();
+        // Ignore taps beyond the wheel (preview band outer + slop) so a stray far
+        // tap doesn't misfire a quadrant.
+        if (r > wheelRingR(w.path.length)[1] + 12) return;
+
+        // Cardinal by angle: atan2 → right=0, down=π/2, left=±π, up=-π/2. Bucket the
+        // full turn into four quadrants centred on each cardinal.
+        const a = (Math.atan2(dy, dx) + Math.PI * 2) % (Math.PI * 2); // 0..2π
+        if (a >= Math.PI * 0.25 && a < Math.PI * 0.75) {              // BOTTOM → back
+            if (back(w) === 'close') this._closeWheel(); else { audio.playSfx('menu-cancel'); this._render(); }
+        } else if (a >= Math.PI * 0.75 && a < Math.PI * 1.25) {       // LEFT → prev
+            cycle(w, -1); audio.playSfx('menu-tick'); this._render();
+        } else if (a >= Math.PI * 1.25 && a < Math.PI * 1.75) {       // TOP → drill
+            this._wheelDrill();
+        } else {                                                       // RIGHT → next
+            cycle(w, +1); audio.playSfx('menu-tick'); this._render();
+        }
     }
 
     // ── Animation ─────────────────────────────────────────────────────────────

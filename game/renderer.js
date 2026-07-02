@@ -1878,35 +1878,39 @@ export class Renderer {
         // The {ring, sel} at locked level d (0-based), walking the REAL tree.
         const ringAt = (d) => { let node = ROOT; for (let k = 0; k < d; k++) node = node.children[w.path[k]]; return { ring: node.children, sel: w.path[d] }; };
 
-        // Draw one full ring, the selected tile rotated under the TOP pointer.
-        const drawRing = (ring, selIndex, band, active) => {
-            const n = ring.length; if (!n) return;
-            const step = (Math.PI * 2) / n, half = Math.max(0.02, step / 2 - WHEEL_TILE_GAP);
-            for (let i = 0; i < n; i++) {
-                const node = ring[i];
-                const mid = TOP + (i - selIndex) * step;
-                const isSel = (i === selIndex);
-                const enabled = !node.placeholder && (!node.available || node.available(game));
-                let fill, alpha, txt, outline = null;
-                if (active) {
-                    fill = isSel ? HUE : '#6b5436';
-                    alpha = enabled ? (isSel ? 1 : 0.82) : 0.4;
-                    txt = !enabled ? '#7a6c50' : (isSel ? '#fff3d0' : '#e8dcc0');
-                    if (isSel) outline = { w: 3, c: '#fff3c0' };
-                } else {
-                    fill = isSel ? HUE : '#3a3024';
-                    alpha = (isSel ? 0.5 : 0.32) * (enabled ? 1 : 0.7);
-                    txt = isSel ? '#e8dcc0' : '#9a8c70';
-                }
-                this._wheelTile(band[0], band[1], mid, half, fill, alpha, node.placeholder ? '…' : node.label, txt, outline);
-            }
-        };
+        // Compass cardinals: TOP (above) is the selection; the flanks are prev
+        // (left) and next (right); the bottom is the reserved BACK.
+        const RIGHT = 0, BOTTOM = Math.PI / 2, LEFT = Math.PI;
+        const QHALF = Math.PI / 4 - WHEEL_TILE_GAP * 2;   // quadrant tile half-width
+        const wrap = (i, m) => ((i % m) + m) % m;
+        const tileEnabled = (node) => !node.placeholder && (!node.available || node.available(game));
 
-        // 1) Greyed decision rings (locked parents), innermost first.
-        for (let d = 0; d < depth - 1; d++) { const r = ringAt(d); drawRing(r.ring, r.sel, wheelRingR(d), false); }
-        // 2) Bright active ring (outermost full ring).
+        // 1) Greyed decision breadcrumb: each locked parent's chosen tile at TOP,
+        //    stacked inward toward the hub (innermost = the earliest choice).
+        for (let d = 0; d < depth - 1; d++) {
+            const r = ringAt(d), node = r.ring[r.sel], band = wheelRingR(d);
+            this._wheelTile(band[0], band[1], TOP, QHALF, HUE, 0.3, node.label, '#9a8c70', null);
+        }
+
+        // 2) Active compass ring (outermost): top = selected, left = prev, right =
+        //    next, bottom = reserved BACK. Options beyond prev/sel/next are OFF-SCREEN
+        //    (spin to bring one into a slot); the pip carousel (§5) hints how many.
+        const ring = activeRing(w), sel = activeIndex(w), n = ring.length;
         const activeBand = wheelRingR(depth - 1);
-        drawRing(activeRing(w), activeIndex(w), activeBand, true);
+        const drawSlot = (mid, node, isSel) => {
+            const en = tileEnabled(node);
+            this._wheelTile(activeBand[0], activeBand[1], mid, QHALF,
+                isSel ? HUE : '#6b5436', en ? (isSel ? 1 : 0.82) : 0.4,
+                node.placeholder ? '…' : node.label,
+                !en ? '#7a6c50' : (isSel ? '#fff3d0' : '#e8dcc0'),
+                isSel ? { w: 3, c: '#fff3c0' } : null);
+        };
+        drawSlot(TOP, ring[sel], true);
+        if (n >= 2) drawSlot(LEFT,  ring[wrap(sel - 1, n)], false);
+        if (n >= 2) drawSlot(RIGHT, ring[wrap(sel + 1, n)], false);
+        // Reserved BACK tile — down always collapses a level (or CLOSES at the root).
+        this._wheelTile(activeBand[0], activeBand[1], BOTTOM, QHALF, '#2c2620', 0.8,
+            depth === 1 ? '▼ CLOSE' : '▼ BACK', '#b7a988', null);
 
         // 3) Preview arc (the highlight's children) — a couple of curved tiles above
         //    the pointer, last-used child centred; or a "fire" cue for a leaf.
@@ -1931,9 +1935,19 @@ export class Renderer {
         ctx.beginPath(); ctx.arc(cx, cy, WHEEL_HUB_R, 0, Math.PI * 2); ctx.closePath();
         ctx.fillStyle = 'rgba(30,24,16,0.95)'; ctx.fill();
         ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(212,185,106,0.6)'; ctx.stroke();
-        if (this.font) { const dp = decisionPath(w); this.font.drawText(ctx, dp[dp.length - 1].toUpperCase(), cx, cy - 4, { color: UI.gold, scale: 1, align: 'center' }); }
+        if (this.font) { const dp = decisionPath(w); this.font.drawText(ctx, dp[dp.length - 1].toUpperCase(), cx, cy - 6, { color: UI.gold, scale: 1, align: 'center' }); }
 
-        // 5) Pointer ▲ at TOP, just outside the outermost element, pointing inward.
+        // 5) Off-screen carousel: one pip per active-ring option (selected filled),
+        //    drawn on top of the hub — hints the options currently spun off-screen.
+        if (n > 3) {
+            const pipGap = 7, py = cy + 12, x0 = cx - (n - 1) * pipGap / 2;
+            for (let i = 0; i < n; i++) {
+                ctx.beginPath(); ctx.arc(x0 + i * pipGap, py, 2, 0, Math.PI * 2); ctx.closePath();
+                ctx.fillStyle = (i === sel) ? '#fff3c0' : 'rgba(212,185,106,0.4)'; ctx.fill();
+            }
+        }
+
+        // 6) Pointer ▲ at TOP, just outside the outermost element, pointing inward.
         const pr = outerMost + 12;
         ctx.beginPath();
         ctx.moveTo(cx, cy - pr + 10);
