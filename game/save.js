@@ -107,6 +107,7 @@ function serEnemy(e) {
         barks: e.barks, barkEveryTurns: e.barkEveryTurns, adjacencyBark: e.adjacencyBark,
         disposition: e.disposition, flipThreshold: e.flipThreshold, bribeable: e.bribeable,
         values: e.values, onFlip: e.onFlip,
+        vendor: e.vendor, stock: e.stock, gold: e.gold, giftLog: e.giftLog,   // (transaction spine)
         // runtime
         state: e.state, fsmState: e.fsmState, lastWanderTurn: e._lastWanderTurn,
         carrying: e.carrying, barkIndex: e._barkIndex, barkOffset: e._barkOffset,

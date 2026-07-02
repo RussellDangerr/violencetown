@@ -31,6 +31,11 @@ const DEFAULT_DAMAGE = 8;
 // `lostSightBeats` fields (absent → these defaults).
 const LEASH_DISTANCE   = 14; // max tiles from home before a chaser breaks off
 const LOST_SIGHT_BEATS = 6;  // turns out of sight before a chaser breaks off
+// (transaction spine) A vendor's "till" — the gold they can pay out when you SELL
+// to them, so the transferGold conservation has a funded source. Generous enough
+// that it never runs dry in normal play; a real number so it saves/loads. Plain
+// NPCs start at 0 (they don't buy/sell).
+const VENDOR_WALLET    = 9999;
 
 export class Enemy {
     constructor({
@@ -71,6 +76,9 @@ export class Enemy {
         // trade.js keyed off this NPC's `disposition`.
         vendor = null,
         stock = null,
+        // (transaction spine) real gold + a transaction log (restored from saves).
+        gold = null,
+        giftLog = null,
         // Town Clock (feature/town-clock): heartbeat-driven ambient NPC. When
         // true, this NPC is advanced by the free-running world tick
         // (game.worldTick) via resolveAmbientTurns instead of the per-player-turn
@@ -130,6 +138,11 @@ export class Enemy {
         this.tag           = tag;
         this.vendor        = vendor;
         this.stock         = stock;
+        // (transaction spine) Vendors carry a funded till so SELL has a source;
+        // plain NPCs start empty. Both round-trip via serEnemy. giftLog is a
+        // stub for future barter/memory.
+        this.gold          = gold != null ? gold : (vendor ? VENDOR_WALLET : 0);
+        this.giftLog       = Array.isArray(giftLog) ? giftLog : [];
         this.ambient       = ambient;
 
         // Debuffs / buffs — symmetric with Game.buffs[] on the player side.

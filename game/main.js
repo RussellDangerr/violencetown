@@ -12,7 +12,7 @@ import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball
 import { attack, formatDamageNumber } from './combat.js';
 import { Enemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
 import { getGreedyStep, stepEntity } from './pathing.js'; // ally pathfinding; stepEntity = shove a character aside
-import { applyGive, applyDispositionDelta } from './give-action.js';
+import { applyDispositionDelta, reactToTransaction } from './give-action.js';
 import { getDialogue } from './dialogue.js';
 import { escapeHtml, manhattan, clamp } from './utils.js';
 import { RNG } from './rng.js';
@@ -26,7 +26,7 @@ import {
     TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BRIBE_RECT, tradeCellRect,
     EQUIPMENT_MODAL_RECT,
 } from './layout.js';
-import { canTrade, buyPrice, sellPrice, bribeStepCost, BRIBE_STEP } from './trade.js'; // (trade slice 1) disposition pricing
+import { canTrade, buyPrice, sellPrice, bribeStepCost, BRIBE_STEP, transferGold } from './trade.js'; // pricing + the transaction spine
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
 import {
@@ -2092,7 +2092,7 @@ class Game {
         const stack = this.inventory[this.selectedSlot];
         if (!stack) { this.state = STATE.IDLE; this._render(); return; }
 
-        const result = applyGive(stack.itemDef, recipient);
+        const result = reactToTransaction(recipient, 'give', { item: stack.itemDef });
         this._log(result.log);
 
         if (result.accepted) {
@@ -2340,9 +2340,8 @@ class Game {
             case 'run':          { const d = this._aimDir(aimTile); if (d) { this._closeWheel(); this._doMove(d); return; } break; }
             case 'trade': {
                 const npc = aimTile && this.enemies.find(e => e.entity.isAlive() && e.x === aimTile.x && e.y === aimTile.y);
-                this.state = STATE.IDLE;                 // _openTrade requires IDLE + npc.vendor
-                if (npc && npc.vendor) { this._openTrade(npc); return; }
-                this._log('[No one to trade with there]');
+                this.state = STATE.IDLE;                 // _openTrade requires IDLE
+                if (this._tryTradeWith(npc)) return;     // opens on success; else logs a distinct reason
                 break;
             }
             case 'give': {
@@ -2357,8 +2356,8 @@ class Game {
                 if (npc.bribeable === false) { this._log(`[The ${npc.type || 'stranger'} won't take your money.]`); break; }
                 const cost = bribeStepCost(npc.disposition ?? 0);
                 if ((this.gold ?? 0) < cost) { this._log(`[Not enough gold to bribe — needs ${cost}g.]`); break; }
-                this.gold -= cost;
-                applyDispositionDelta(npc, BRIBE_STEP);
+                transferGold(this, npc, cost, 'bribe');                        // gold → the NPC's pocket
+                reactToTransaction(npc, 'bribe', { delta: BRIBE_STEP, gold: cost });
                 this._log(`[You slip the ${npc.type || 'stranger'} ${cost}g. (+${BRIBE_STEP} disposition.)]`);
                 this._advanceWorld();
                 break;
@@ -3266,6 +3265,19 @@ class Game {
         return this.enemies.find(e => isVendor(e) && manhattan(e.x, e.y, this.playerX, this.playerY) === 1) || null;
     }
 
+    // (transaction spine) Try to open trade with the targeted NPC, emitting a
+    // DISTINCT reason for each failure — so aiming Trade at a mob no longer reads
+    // the same as aiming at empty air (the old `if (npc && npc.vendor)` collapsed
+    // both). Mirrors the GIVE/BRIBE "check existence first" pattern. Returns true
+    // if the shop opened.
+    _tryTradeWith(npc) {
+        if (!npc) { this._log('[No one there to trade with.]'); return false; }
+        if (!npc.vendor) { this._log(`[The ${npc.type || 'stranger'} doesn't trade.]`); return false; }
+        if (!canTrade(npc.disposition)) { this._log(`[The ${npc.type || 'stranger'} won't deal with you — sweeten the mood first.]`); return false; }
+        this._openTrade(npc);
+        return true;
+    }
+
     // Open the shop window for `npc`. A pure menu — the world does NOT advance
     // (trading is paused, like the log modal), so nearby enemies don't get free
     // turns while you browse.
@@ -3369,8 +3381,8 @@ class Game {
             this._dialogueReply = `(You can't cover the ${choice.cost} GP.)`;
             audio.playSfx('bump-wall'); this._render(); return;
         }
-        if (choice.cost) this.gold -= choice.cost;
-        if (choice.delta) applyDispositionDelta(npc, choice.delta);
+        if (choice.cost) transferGold(this, npc, choice.cost, 'dialogue');
+        if (choice.delta) applyDispositionDelta(npc, choice.delta);   // conversational shift (not a transaction)
         if (choice.once) (npc._dialogueDone || (npc._dialogueDone = new Set())).add(choice.id);
         this._dialogueReply = choice.reply || '"..."';
         audio.playSfx((choice.delta ?? 0) < 0 ? 'bump-wall' : 'menu-confirm');
@@ -3406,7 +3418,7 @@ class Game {
         if (price == null) { this._log(`[${npc.type} won't sell that.]`); this._render(); return; }
         if ((this.gold ?? 0) < price) { this._log(`[Not enough GP — ${itemDef.name} runs ${price}.]`); this._render(); return; }
         if (!this._addToInventory(itemDef)) { this._log('[Your bag is full.]'); this._render(); return; }
-        this.gold -= price;
+        transferGold(this, npc, price, 'buy');           // gold → the vendor's till (guarded above)
         this._tradeSell = this._tradeSellList();
         audio.playSfx('pickup');
         this._log(`[Bought ${itemDef.name} for ${price} GP.]`, 'pickup');
@@ -3427,8 +3439,11 @@ class Game {
             this._render();
             return;
         }
+        if (!transferGold(npc, this, price, 'sell')) {   // vendor pays from its till
+            this._log(`[${npc.type} is tapped out — can't buy that right now.]`);
+            this._render(); return;
+        }
         this._removeFromSlot(slot);
-        this.gold = (this.gold ?? 0) + price;
         this._tradeSell = this._tradeSellList();
         audio.playSfx('pickup');
         this._log(`[Sold ${itemDef.name} for ${price} GP.]`, 'pickup');
@@ -3444,8 +3459,8 @@ class Game {
         if (disp >= 100) { this._log(`[${npc.type} already loves you. Save your gold.]`); this._render(); return; }
         const cost = bribeStepCost(disp);
         if ((this.gold ?? 0) < cost) { this._log(`[Not enough GP to grease the wheels — needs ${cost}.]`); this._render(); return; }
-        this.gold -= cost;
-        npc.disposition = Math.min(100, disp + BRIBE_STEP);
+        transferGold(this, npc, cost, 'bribe');
+        reactToTransaction(npc, 'bribe', { delta: BRIBE_STEP, gold: cost });   // clamps + flips like the wheel bribe
         audio.playSfx('pickup');
         this._log(`[You slip ${npc.type} ${cost} GP. Their mood warms.]`, 'transition');
         this._render();
