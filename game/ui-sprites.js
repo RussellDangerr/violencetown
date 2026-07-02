@@ -70,6 +70,7 @@ export const ITEM_COLORS = {
     red_cape:         { bg: '#c03030', letter: 'C' },
     shoe_bags:        { bg: '#3a3a3a', letter: 'F' },
     ray_gun:          { bg: '#4aa0a0', letter: 'Z' },
+    fearmur:          { bg: '#d8d0b8', letter: 'J' },
     boardwalk_burger: { bg: '#cc8844', letter: '🍔' },
     mystery_meat:     { bg: '#884444', letter: 'M' },
     tunnel_mushroom:  { bg: '#997755', letter: '🍄' },

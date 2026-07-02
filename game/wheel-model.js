@@ -37,6 +37,10 @@ export const ROOT = { key: 'menu', label: 'MENU', children: [
           available: (g) => (g.knownSpells || []).includes('fireball') && (g.playerMp || 0) >= (SPELLS.fireball ? SPELLS.fireball.mpCost : 0) },
         { key: 'coneofcold', label: 'Cone of Cold', spellId: 'coneOfCold', aimType: 'reticle', resolver: 'castSpell',
           available: (g) => (g.knownSpells || []).includes('coneOfCold') && (g.playerMp || 0) >= (SPELLS.coneOfCold ? SPELLS.coneOfCold.mpCost : 0) },
+        // Boo! — self-centred fear burst, no aim (fires around you). Granted by
+        // the Fearmur (grantsSpells → knownSpells), so it only appears when worn.
+        { key: 'boo', label: 'Boo!', spellId: 'boo', aimType: 'none', resolver: 'castBoo',
+          available: (g) => (g.knownSpells || []).includes('boo') && (g.playerMp || 0) >= (SPELLS.boo ? SPELLS.boo.mpCost : 0) },
       ] },
   ]},
   { key: 'trick', label: 'Trick', children: [
@@ -106,6 +110,11 @@ export function affectedTiles(w, game) {
   const leaf = selectedNode(w);
   const px = game.playerX, py = game.playerY;
   if (leaf.resolver === 'spinAttack') return RING8.map(([dx, dy]) => ({ x: px + dx, y: py + dy }));
+  // (fear) Boo! — a self-centred burst around the player; no reticle needed.
+  if (leaf.resolver === 'castBoo') {
+    const sp = SPELLS[leaf.spellId];
+    return burstTiles({ x: px, y: py }, (sp && sp.aoe && sp.aoe.radius) || 2);
+  }
   const ret = w.reticle;
   if (!ret) return [];
   if (leaf.resolver === 'cleaveAttack') return cleaveArc(px, py, ret);

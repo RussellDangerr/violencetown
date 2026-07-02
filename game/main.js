@@ -103,6 +103,13 @@ const WEAPONS = {
         id: 'ray_gun', name: '[Ray Gun]', damage: 22, damageType: 'energy', equipSlot: 'weapon',
         useType: 'equip', grantsTricks: ['ray_blast'],
     },
+    // Fearmur — a leg-bone club. Grants the Boo! fear spell (MP) while worn, and
+    // fears an enemy you hit twice in a row (onHit: 'fearOnRepeat'). Source: the
+    // Graveyard (world drop deferred; the def lives here for the fear mechanics).
+    fearmur: {
+        id: 'fearmur', name: '[Fearmur]', damage: 14, equipSlot: 'weapon',
+        useType: 'equip', grantsSpells: ['boo'], onHit: 'fearOnRepeat',
+    },
 };
 
 // Spells the player always knows. Equipped weapons grant MORE on top (see
@@ -148,6 +155,7 @@ class Game {
         // parallel list the Trick ring reads.
         this.knownSpells   = [...BASE_SPELLS];
         this.grantedTricks = [];
+        this._lastHitTarget = null;   // (fear) id of the enemy the last Melee-Hit struck
         this.extraMoves  = 0; // future: Goo, abilities, etc.
         this.facing      = 'down'; // 'down' | 'left' | 'right' | 'up'
 
@@ -2323,11 +2331,25 @@ class Game {
         switch (node.resolver) {
             case 'combatAttack': {
                 const enemy = aimTile && this.enemies.find(e => e.entity.isAlive() && e.x === aimTile.x && e.y === aimTile.y);
-                if (enemy) { this.combatAttack(enemy, this.equipment.weapon.damage); this._advanceWorld(); }
+                if (enemy) {
+                    const wpn = this.equipment.weapon;
+                    // (fear) Fearmur fears an enemy struck twice in a row — check
+                    // BEFORE the hit (which may kill it and reset the tracker).
+                    const repeat = wpn && wpn.onHit === 'fearOnRepeat' && this._lastHitTarget === enemy.id;
+                    this.combatAttack(enemy, wpn.damage);
+                    if (enemy.entity.isAlive()) {
+                        if (repeat) { this._applyFear(enemy, 3); this._log('[The Fearmur cracks bone — it recoils in terror!]', 'combat'); }
+                        this._lastHitTarget = enemy.id;
+                    } else {
+                        this._lastHitTarget = null;   // dead → streak broken
+                    }
+                    this._advanceWorld();
+                }
                 else { this._log('[Nothing to hit there]'); }
                 break;
             }
             case 'cleaveAttack': {
+                this._lastHitTarget = null;   // (fear) AoE breaks the Fearmur single-target streak
                 // Fixed 3-tile frontal arc, 2/3 weapon damage to everything in it.
                 const dmg = Math.max(1, Math.round(this.equipment.weapon.damage * 2 / 3));
                 const hit = this._aoeStrike(affectedTiles(w, this), dmg);
@@ -2336,6 +2358,7 @@ class Game {
                 break;
             }
             case 'spinAttack': {
+                this._lastHitTarget = null;   // (fear) AoE breaks the Fearmur single-target streak
                 // Sweep all 8 tiles, 2/5 weapon damage to everything around you.
                 const dmg = Math.max(1, Math.round(this.equipment.weapon.damage * 2 / 5));
                 const hit = this._aoeStrike(affectedTiles(w, this), dmg);
@@ -2368,6 +2391,25 @@ class Game {
                 const hit = this._aoeStrike(affectedTiles(w, this), trick.damage, { type: trick.damageType });
                 if (hit) this._log(`[${trick.name}! ${trick.damage} ${trick.damageType} to ${hit}. (-${trick.gpCost}g)]`, 'combat');
                 else this._log(`[${trick.name} fizzles — nothing caught. (-${trick.gpCost}g)]`);
+                this._advanceWorld();
+                break;
+            }
+            case 'castBoo': {
+                // Fear everyone around you — no damage. MP-costed, granted by the
+                // Fearmur. Uses the self-burst from affectedTiles; _applyFear skips
+                // allies/townsfolk (so `feared` counts only real routs).
+                const spell = SPELLS[spellId];
+                if (!spell) { this._log("[You don't know that spell.]"); break; }
+                if ((this.playerMp || 0) < spell.mpCost) { this._log(`[Not enough MP — ${spell.name} needs ${spell.mpCost}.]`); break; }
+                this.playerMp = Math.max(0, this.playerMp - spell.mpCost);
+                const tiles = affectedTiles(w, this);
+                let feared = 0;
+                for (const e of this.enemies) {
+                    if (!e.entity.isAlive()) continue;
+                    if (tiles.some(t => t.x === e.x && t.y === e.y) && this._applyFear(e, spell.fear || 3)) feared++;
+                }
+                if (feared) this._log(`[BOO! ${feared} flee in terror!]`, 'combat');
+                else this._log('[Boo! ...nothing flinches.]');
                 this._advanceWorld();
                 break;
             }
@@ -2907,6 +2949,18 @@ class Game {
         const gt = (w && w.grantsTricks) || [];
         this.knownSpells   = [...new Set([...BASE_SPELLS, ...gs])];
         this.grantedTricks = [...new Set(gt)];
+    }
+
+    // (fear) Fear an enemy for `turns`: while the buff is up it flees each turn
+    // (the override in resolveEnemyTurns), then resumes normal logic. Allies and
+    // ambient townsfolk are immune (they don't tick combat buffs, so fearing
+    // them would strand a buff that never expires). Pops a '!' over its head.
+    _applyFear(enemyObj, turns) {
+        if (!enemyObj || !enemyObj.entity || !enemyObj.entity.isAlive()) return false;
+        if (enemyObj._ally || enemyObj.ambient) return false;
+        enemyObj.addBuff('feared', 'Feared', turns, 'debuff');
+        if (this._spawnOverheadDialogue) this._spawnOverheadDialogue(enemyObj.x, enemyObj.y, '!', { color: '#e8c34a', size: 20 });
+        return true;
     }
 
     applyDamageToPlayer(rawDamage) {

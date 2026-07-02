@@ -68,6 +68,50 @@ export function getGreedyStep(game, from, to, options = {}) {
     return best;
 }
 
+// ── Flee: one step AWAY from the player ─────────────────────────────────────
+//
+// The inverse of getGreedyStep — pick the 8-way neighbour that most INCREASES
+// Chebyshev distance from the player. A feared enemy's retreat. Same occupancy
+// and no-corner-cutting rules as the chase step. Returns {x,y}, or null when
+// boxed in / already as far as it can get (nowhere strictly better → cower).
+export function fleeStep(game, enemy) {
+    const fx = enemy.x, fy = enemy.y;
+    const px = game.playerX, py = game.playerY;
+
+    const ortho = [
+        { x: fx - 1, y: fy }, { x: fx + 1, y: fy },
+        { x: fx, y: fy - 1 }, { x: fx, y: fy + 1 },
+    ];
+    const diag = [
+        { x: fx - 1, y: fy - 1 }, { x: fx + 1, y: fy - 1 },
+        { x: fx - 1, y: fy + 1 }, { x: fx + 1, y: fy + 1 },
+    ];
+
+    let bestDist = chebyshev(fx, fy, px, py);
+    let best = null;
+
+    const free = (x, y) => {
+        if (!game.map.isWalkable(x, y)) return false;
+        if (game.enemies.some(e => e !== enemy && e.entity.isAlive() && e.x === x && e.y === y)) return false;
+        if (x === px && y === py) return false;   // never flee onto the player
+        if (game.containers?.some(cc => cc.x === x && cc.y === y)) return false;
+        return true;
+    };
+    const consider = (c) => {
+        if (!free(c.x, c.y)) return;
+        const d = chebyshev(c.x, c.y, px, py);
+        if (d > bestDist) { bestDist = d; best = c; }
+    };
+
+    for (const c of ortho) consider(c);
+    for (const c of diag) {
+        // No corner-cutting: both orthogonal components must be open floor.
+        if (!game.map.isWalkable(c.x, fy) || !game.map.isWalkable(fx, c.y)) continue;
+        consider(c);
+    }
+    return best;
+}
+
 // ── Apply a one-tile step with a render-side slide ──────────────────────────
 //
 // Set the character's logical tile (collision/AI read x/y immediately, as

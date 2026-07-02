@@ -15,7 +15,7 @@
 
 import { Entity, attack, formatDamageNumber } from './combat.js';
 import { manhattan, chebyshev } from './utils.js';
-import { getGreedyStep, stepEntity } from './pathing.js';
+import { getGreedyStep, stepEntity, fleeStep } from './pathing.js';
 import { tickNpcState } from './npc.js';
 
 const DEFAULT_SIGHT = 8;
@@ -218,6 +218,16 @@ export function resolveEnemyTurns(game) {
         // halves the damage at the attack site).
         enemy.tickBuffs();
 
+        // (fear) A feared enemy flees this turn — one step directly away from
+        // the player — and does nothing else (no bark, chase, or attack). Its
+        // prior state is untouched, so when the buff ticks out it resumes normal
+        // logic (re-chases if it still has LOS). Allies are never feared.
+        if (enemy.hasBuff('feared')) {
+            const away = fleeStep(game, enemy);
+            if (away) stepEntity(enemy, away.x, away.y, game._MOVE_MS);
+            continue;
+        }
+
         // Cadenced barks/grunts moved to the world heartbeat (resolveAmbientTurns)
         // so the world chatters on its own clock, not only on player turns (Town
         // Clock ambient-life pass). Adjacency barks stay here — they're player-
@@ -384,6 +394,7 @@ export function resolveAmbientTurns(game) {
         if (!npc.entity.isAlive()) continue;
         if (npc.state === 'chasing') continue;   // engaged hostile = combat, not ambient
         if (npc._ally) continue;                  // allies resolve on the player-turn loop
+        if (npc.hasBuff('feared')) continue;      // (fear) the per-turn loop owns its flee
 
         // Pop an ambient emote balloon on the world clock — every non-engaged
         // character reacts now and then so the world never feels dead. Sets a
