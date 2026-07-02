@@ -39,6 +39,36 @@ At any moment the wheel is a sunburst centred on the canvas radial centre:
 Reading the wheel top-to-center gives the path: the preview tiles (next level) → the active selection (`▲`) →
 the greyed decisions → `MENU`.
 
+### Amendment (2026-07-02, Caelan) — the active ring is a directional COMPASS, not a full ring
+
+Playtesting the shipped Phase-1 sunburst surfaced a collision: with the MENU ring's four categories drawn as a
+*full* ring (selection at top), the fourth option lands at **6 o'clock** — exactly where "**down = Back**" wants
+to live. Watching the live wheel (`[Fight]` at top, `Flight` left, `Trick` right, `Treat` stranded at the bottom),
+Caelan reframed the render: **the active ring is a compass/d-pad, showing at most three options at once, with the
+bottom reserved for Back.** This *supersedes* the "Active ring (bright, **full**)" bullet above (the tree *model*
+is unchanged — only the on-screen active-ring render changes). Concretely:
+
+- **Three visible slots, not a full ring.** The active level shows **top = the selected option** (the `▲`/drill
+  target), **left (9 o'clock) = the previous option** (`◄` brings it to top), **right (3 o'clock) = the next
+  option** (`►`). That's it — three curved tiles in the top hemisphere.
+- **The bottom (6 o'clock) is reserved for BACK.** A distinct muted tile labelled **`▼ BACK`** (or **`▼ CLOSE`**
+  at the root ring). `down` always means "collapse a level" — never a category. This removes the Treat-vs-Back
+  collision by design and makes `down` a stable, always-present affordance.
+- **Everything else is OFF-SCREEN.** Options that aren't the selected/prev/next (e.g. `Treat` at MENU, or the 4th
+  and 5th verbs under `Trick`) are **off-screen** — you **spin** to rotate them into the left/right/top slots. A
+  small **carousel indicator** (a row of pips, one per option in the ring, the selected one filled — or a
+  `‹ n/N ›` cue) tells the player *how many* options exist and *where* they are, so nothing is hidden without a
+  hint. When the ring has ≤ 3 options there is nothing off-screen and no indicator is needed.
+- **This is what the keyboard already does.** Phase-1 shipped `◄` = prev, `►` = next, `▼` = back, `▲` = drill —
+  a d-pad. The compass render simply makes the wheel *look* like the control it already is, and reads the same on
+  a touch d-pad (tap the top / left / right / bottom slot).
+- **The greyed decision stack becomes a breadcrumb, coherently.** Each locked parent level draws just its **chosen
+  tile at the top, greyed**, stacked inward toward the `MENU` hub — a vertical breadcrumb of decisions rather than
+  full greyed rings competing with the compass. (Reading top→center still gives the path.)
+- **Unchanged:** the hub (`MENU`/breadcrumb tip), the **preview arc** of the selected option's children fanning
+  above the pointer, the `▲` pointer, AIM/CONFIRM, cursor memory, and every resolver. Only the active-ring
+  *shape* (full ring → 3-slot compass + reserved Back + off-screen indicator) and the greyed-ring *shape* change.
+
 ## Interaction
 
 - **Spin (`◄ ►` / swipe / tap a tile):** rotate the active ring so your choice comes under the top pointer. The

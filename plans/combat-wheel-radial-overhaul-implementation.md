@@ -248,19 +248,33 @@ preview_eval: (() => { const g = window.__game; g._openWheel();
 
 ## PHASE 2 — Interaction + touch  (branch `feature/wheel-sunburst-2`)
 
-Outcome: the sunburst is fully drivable on keyboard + touch; the AIM hand-off works.
+Outcome: the sunburst reads as a **directional compass** (per the 2026-07-02 design amendment) and is fully
+drivable on keyboard **and** touch; the AIM hand-off works.
 
-- **Task 2.1 — Keyboard mapping.** In `main.js`'s RADIAL_MENU keydown handler, route `◄►` → `cycle`, `▲`/Space →
-  `drill` (→ `_fireWheel` on `'fire'`, → enter AIM on `'aim'`), `▼`/Esc → `back` (→ `_closeWheel` on `'close'`).
-  Keep the snappy `_reticleKey` for AIM. *Verify:* drive each via keydown, assert `path`/state transitions.
-- **Task 2.2 — `_fireWheel` against the tree.** Update `_fireWheel` to read `compose(w,this).node` (was `leaf`);
-  the resolver switch is unchanged (the resolvers didn't move). *Verify:* each leaf fires correct damage/effect
-  (reuse the combat-aiming damage probes).
-- **Task 2.3 — Touch: rewrite `_tapRadialMenu`.** Hit-test the active ring's tiles (angular sector +
-  `wheelRingR(activeDepth)`), the preview arc tiles (drill into that child), and the hub (back/close). A tap on a
-  tile = select it (+ drill if it was already selected, mirroring the keyboard). Reuse `RADIAL_CENTER_*` +
-  `WHEEL_*`. *Verify:* dispatch `PointerEvent`s at computed tile centers, assert selection/drill.
-- **Task 2.4 — Verify both inputs + console + commit + merge.**
+> **Status note (2026-07-02):** the original Task 2.1 (keyboard `◄►`→`cycle`, `▲`→`drill`, `▼`→`back`) and Task 2.2
+> (`_fireWheel` reads `compose(w,this).node`) **already shipped in Phase 1's branch** (`feature/wheel-sunburst-1`,
+> commit "sunburst render + input rewiring to the node-tree model"). The keyboard is already the d-pad. So Phase 2's
+> real remaining work is the **compass render** (making the wheel *look* like that d-pad) + **touch parity**.
+
+- **Task 2.1 — Compass active-ring render + reserved Back tile.** In `renderer.js` `_drawWheel`, replace the
+  full-ring draw for the **active** level with the 3-slot compass: **top (−π/2) = selected**, **left (π) = prev**
+  (`cycle(-1)`), **right (0) = next** (`cycle(+1)`) — three curved tiles in the top hemisphere. Draw a distinct
+  muted **BACK** tile in the **bottom quadrant (π/2)**, labelled `▼ BACK`, or `▼ CLOSE` when `w.path.length === 1`
+  (root). Keep the hub label (`decisionPath` tip), the preview arc of the selected node's children, and the `▲`
+  pointer. *Verify:* pixel-probe the top/left/right/bottom quadrants show the expected labels/hues.
+- **Task 2.2 — Off-screen carousel indicator + greyed breadcrumb.** When `activeRing(w).length > 3`, draw a
+  **carousel indicator** — a row of pips (one per ring option, the selected one filled) near the hub, or a
+  `‹ n/N ›` cue — so off-screen options are hinted, not hidden. (≤ 3 options → no indicator.) Redraw the greyed
+  **decision-stack** rings as an inward **breadcrumb** — each locked parent level shows just its chosen tile at the
+  top, greyed — so it stays coherent with the compass. *Verify:* indicator pip-count equals `activeRing` length
+  after drilling into `Trick` (5) vs `Melee` (3).
+- **Task 2.3 — Touch parity: 4-quadrant `_tapRadialMenu`.** Replace the interim stub (hub=back, else=drill) with a
+  quadrant hit-test on the active band (`wheelRingR(w.path.length - 1)`): **top slot → drill**, **left → `cycle(-1)`
+  + render**, **right → `cycle(+1)` + render**, **bottom → `back`** (→ `_closeWheel` on `'close'`), **hub →
+  back/close**. Keep the AIM/CONFIRM tap paths. Reuse `RADIAL_CENTER_*`, `WHEEL_HUB_R`, `wheelRingR`, `WHEEL_*`.
+  *Verify:* dispatch `PointerEvent`s at each quadrant centre, assert the same `path`/state transitions as the keys.
+- **Task 2.4 — Verify both inputs + console clean + naming guard + commit + push.** Per
+  `[[feedback-branch-merge-control]]`, **push `feature/wheel-sunburst-2` and stop — Caelan makes the merge call.**
 
 ## PHASE 3 — Juice + reduce-motion  (branch `feature/wheel-sunburst-3`)
 
