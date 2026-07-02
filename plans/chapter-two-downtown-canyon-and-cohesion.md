@@ -43,16 +43,35 @@ embodies "many ways to play," with the grappling hook as a carefully-introduced 
 
 ## Phase 0 — World re-routing & Factory tiles  (carried from the old Phase 5; Caelan-driven)
 
-Data-only transition edits + a sprite-cell repaint; Caelan hand-authors the map geometry.
-- **Target topology:** West arm **Town ⟷ Carnival ⟷ Factory** (Carnival gates the Factory); South arm
-  **Town ⟷ Graveyard ⟷ Wilderness** (graveyard first). These are `transitions`-array edits in the
-  `*-map.json` files (the transition engine is generic — `_loadMap`/`getTransition`, no code). Wiring
-  them *coherently* (doors on the right edges, matching labels, walkable landings) is map-edge
-  authoring = Caelan's pass.
+Transition edits, two NEW zones, and a sprite-cell repaint; Caelan hand-authors the map geometry
+(Claude scaffolds the maps + wiring). Current built topology: Factory = west dead-end off Town, Sewer =
+east, Carnival = south (→ Graveyard → Wilderness), Borgir = interior.
+
+- **NEW zone — Park** (Caelan, this session): a zone **between Town and the Factory** on the west arm →
+  **Town ⟷ Park ⟷ Factory**. Park fills the "gates the Factory" role the plan had tentatively floated
+  for the Carnival, so **the Carnival does NOT move** — it stays on the south arm exactly as it is
+  (**Town ⟷ Carnival ⟷ Graveyard ⟷ Wilderness**, unchanged). This *supersedes* the old
+  Carnival-west / graveyard-first re-route. Park = base Town, not Downtown.
+- **NEW zone — Cave** (Caelan, this session): south of the **Sewer**, entered through **a hole in the
+  wall** → **Sewer ⟷ Cave**. A dark cave with a boss + a friendly NPC (see the Bestiary doc). Opts into
+  the Wilderness `_drawDarkness` treatment.
+- **Resulting topology:**
+  ```
+                         [Downtown]           (north bridge — Chapter Two)
+                             |
+  [Factory] — [Park] — [TOWN] — [Sewer] —(hole)— [Cave]
+                             |
+                         [Carnival] — [Graveyard] — [Wilderness]
+  ```
+  All are `transitions`-array edits (the engine is generic — `_loadMap`/`getTransition`, no code) plus
+  two new `park-map.json` / `cave-map.json` files. Wiring them *coherently* (edges, labels, walkable
+  landings, the sewer hole) is map-edge authoring = Caelan's pass.
 - **Factory tile overhaul:** `FACTORY_FLOOR/WALL/CONVEYOR_VIS` (data.js ids 40–43) currently proxy
   with generic Tiny Dungeon stone/wood; re-pick sprite cells in `sprites.js ZONE_TILE_SPRITE_MAP`
   toward metallic/machinery reads. Claude can prep candidate cells; Caelan picks.
-- Note: this now sits alongside the **new bridge → Downtown** link (Phase 2/4).
+- **Bestiary:** the creatures for Cave / Carnival / Park / Factory live in `plans/bestiary.md` (started
+  this session). Several need new mechanics (Weredigo invisibility + blind combat; the Ruffian's
+  steal-and-flee; the friendly Bear NPC) — flagged there.
 
 ---
 
