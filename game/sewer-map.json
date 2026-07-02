@@ -10,7 +10,7 @@
         0,1,1,1,1,1,1,1,1,0,0,1,1,1,1,1,1,0,0,0,
         0,0,0,1,1,1,1,1,1,0,0,1,1,1,1,1,1,0,0,0,
         0,0,0,1,1,1,0,0,0,0,0,0,0,1,1,1,1,0,0,0,
-        0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,1,1,1,0,
+        0,0,0,0,0,1,0,0,0,0,0,4,0,1,0,0,1,1,1,0,
         0,0,0,0,0,1,1,2,2,1,1,1,1,1,0,0,1,1,1,0,
         0,0,0,1,1,1,1,2,2,1,1,1,1,1,0,0,1,1,1,0,
         0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,
@@ -57,7 +57,11 @@
         {"type": "mystery_meat", "x": 16, "y": 12},
         {"type": "tunnel_mushroom", "x": 7, "y": 9},
         {"type": "tunnel_mushroom", "x": 13, "y": 4},
-        {"type": "tunnel_mushroom", "x": 5, "y": 11}
+        {"type": "tunnel_mushroom", "x": 5, "y": 11},
+        {"type": "foil_hat", "x": 15, "y": 4},
+        {"type": "cardboard_cuirass", "x": 17, "y": 13},
+        {"type": "latex_gloves", "x": 2, "y": 2},
+        {"type": "shoe_bags", "x": 9, "y": 8}
     ],
     "zoneName": "SEWER",
     "regions": [
@@ -69,5 +73,10 @@
     ],
     "transitions": [
         {"x": 0, "y": 10, "toMap": "town-map.json", "toX": 28, "toY": 12, "label": "[West — climb out, back to the street]"}
+    ],
+    "examinables": [
+        {"id": "cape_grate", "x": 11, "y": 6, "grants": "red_cape",
+         "text": "[A tattered red cape, snagged and half-sucked through the bars of a storm grate. Somebody left in a hurry. You work it free.]",
+         "spentText": "[The storm grate, empty now. The bars still smell faintly of somebody's exit.]"}
     ]
 }

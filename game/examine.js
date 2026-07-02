@@ -29,7 +29,12 @@ export function doExamine(game) {
         game._log('[Nothing here worth examining.]');
         return false;
     }
-    game._log(target.text || `[You examine the ${target.id}.]`);
     game.emitGameEvent('examine', { targetId: target.id });
+    // Some examinables yield a one-time item (e.g. the Red Cape in a grate);
+    // main.js owns the inventory + collected-set bookkeeping and its logging.
+    if (target.grants && game._grantFromExaminable) {
+        return game._grantFromExaminable(target);
+    }
+    game._log(target.text || `[You examine the ${target.id}.]`);
     return true;
 }

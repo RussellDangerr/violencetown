@@ -213,7 +213,6 @@ class Game {
 
         // Inventory: 10 stackable slots, each { itemDef, count } or null
         this.inventory = new Array(INVENTORY_SIZE).fill(null);
-        this._seedStartingArmor();   // (equipment MVP) a few persistent pieces to test equip/unequip
         this.selectedSlot = -1; // -1 = none selected
 
         // Item overlay options (populated when overlay shows)
@@ -1639,8 +1638,12 @@ class Game {
             // Hazards
             const tileDef = this.map.getTileDef(nx, ny);
             if (tileDef.hazard === 'sludge' && !this.hasBuff('sludge')) {
-                this.addBuff('sludge', 'Sludge', SLUDGE_DURATION, 'debuff');
-                this._log('[Stepped in sludge — 3 turns]');
+                if (this._hasSludgeImmunity()) {
+                    this._log('[The sludge slides right off your bagged feet.]');
+                } else {
+                    this.addBuff('sludge', 'Sludge', SLUDGE_DURATION, 'debuff');
+                    this._log('[Stepped in sludge — 3 turns]');
+                }
             }
 
             // Pickup
@@ -2454,8 +2457,8 @@ class Game {
         }
         this._soapUsedThisTurn = false;
 
-        // Sludge DoT
-        if (this.hasBuff('sludge')) {
+        // Sludge DoT — Shoe Bags keep it off even if you equipped them mid-sludge.
+        if (this.hasBuff('sludge') && !this._hasSludgeImmunity()) {
             this.playerHp -= SLUDGE_DOT;
             this._log(`[Sludge — ${SLUDGE_DOT} damage]`);
             if (this.playerHp <= 0) { this.playerHp = 0; this._die(); return; }
@@ -2581,15 +2584,6 @@ class Game {
 
     // ── Inventory ────────────────────────────────────────────────────────────
 
-    // (equipment MVP) Drop a couple of persistent armor pieces into a fresh bag
-    // so equip / unequip + the armor math can be exercised right away. Real loot
-    // placement comes later — relocate these when armor gets a proper source.
-    _seedStartingArmor() {
-        for (const id of ['tin_helm', 'gutter_boots', 'bin_lid']) {
-            if (ITEMS[id]) this._addToInventory(ITEMS[id]);
-        }
-    }
-
     _addToInventory(itemDef) {
         for (let i = 0; i < INVENTORY_SIZE; i++) {
             const s = this.inventory[i];
@@ -2625,6 +2619,26 @@ class Game {
                 go = true;
             } else { this._log('[Inventory full]'); break; }
         }
+    }
+
+    // An examinable that yields a one-time item (the Red Cape wedged in a grate).
+    // Called from doExamine when the target has a `grants` id. Adds the item once,
+    // remembers it in _collectedItems (same key as ground pickups) so it survives
+    // reload, and shows the `spentText` on later examines. Returns true (examined).
+    _grantFromExaminable(target) {
+        const key = `${this._mapUrl}|${target.x}|${target.y}|${target.grants}`;
+        if (this._collectedItems.has(key)) {
+            this._log(target.spentText || '[Nothing left here now.]');
+            return true;
+        }
+        const def = ITEMS[target.grants];
+        if (!def) { this._log(target.text || `[You examine the ${target.id}.]`); return true; }
+        if (!this._addToInventory(def)) { this._log('[Your bag is full — leave it for now.]'); return true; }
+        this._collectedItems.add(key);
+        this._log(target.text || `[You take the ${def.name}.]`);
+        this._log(`[+ ${def.name}]`, 'pickup');
+        audio.playSfx('pickup');
+        return true;
     }
 
     // ── Containers ───────────────────────────────────────────────────────────
@@ -2845,6 +2859,13 @@ class Game {
         return total;
     }
 
+    // True if any worn armor grants sludge immunity (Shoe Bags). Sludge is a raw
+    // HP drain that bypasses the armor sum, so it gets its own gate.
+    _hasSludgeImmunity() {
+        const eq = this.equipment || {};
+        return ['top', 'bottom', 'front', 'back', 'sides'].some(k => eq[k] && eq[k].sludgeImmune);
+    }
+
     applyDamageToPlayer(rawDamage) {
         let dmg = rawDamage;
         if (this.hasBuff('guard')) dmg = Math.max(1, Math.floor(dmg / 2));
@@ -3007,7 +3028,6 @@ class Game {
         this.playerMp = this.playerMaxMp;
         this.buffs = [];
         this.inventory.fill(null);
-        this._seedStartingArmor();   // (equipment MVP) fresh bag gets the test armor pieces back
         this.tempEquips = [];
         this.selectedSlot = -1;
         this.equipment = { weapon: WEAPONS.wooden_sword, top: null, bottom: null, front: null, back: null, sides: null };

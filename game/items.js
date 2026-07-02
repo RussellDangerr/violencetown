@@ -73,41 +73,65 @@ export const ITEMS = {
         baseValue: 10,
     },
 
-    // ── Armor (persistent equips — worn until you take them off) ───────────────
-    // MVP test pieces so the equip / unequip + armor plumbing is exercisable
-    // now. Real placement (loot, shops) and a proper armor tier come later.
-    tin_helm: {
-        id: 'tin_helm',
-        name: '[Tin Helm]',
-        description: 'A dented cooking pot with a chin-strap. Rings like a bell when struck — usually your head.',
+    // ── Armor (persistent equips — the Sewer starter set) ─────────────────────
+    // A full one-piece-per-body-zone set of junk-punk scavenger gear, found
+    // around the Sewer. Four are pure data (they ride the _playerArmor() sum);
+    // Shoe Bags carry `sludgeImmune` (see _hasSludgeImmunity in main.js).
+    foil_hat: {
+        id: 'foil_hat',
+        name: '[Foil Hat]',
+        description: 'Tin-foil, triple-layered. They can\'t read you now.',
         equipSlot: 'top',
-        useType: 'equip',
-        armor: 3,
-        consumable: false,
-        fallbackColor: '#b8b090',
-        baseValue: 12,
-    },
-    gutter_boots: {
-        id: 'gutter_boots',
-        name: '[Gutter Boots]',
-        description: 'Ankle-high, tar-sealed, and only slightly haunted. Keeps the Sewer out of your socks.',
-        equipSlot: 'bottom',
         useType: 'equip',
         armor: 2,
         consumable: false,
-        fallbackColor: '#6a5238',
-        baseValue: 9,
+        fallbackColor: '#c8c8d0',
+        baseValue: 10,
     },
-    bin_lid: {
-        id: 'bin_lid',
-        name: '[Bin Lid]',
-        description: 'A galvanised trash-can lid with a fist-strap bolted on. A poor shield, but an honest one.',
+    cardboard_cuirass: {
+        id: 'cardboard_cuirass',
+        name: '[Cardboard Cuirass]',
+        description: 'A refrigerator box with the arm-holes torn out. FRAGILE, stencilled on both sides. It is not wrong.',
+        equipSlot: 'front',
+        useType: 'equip',
+        armor: 4,
+        consumable: false,
+        fallbackColor: '#b58a56',
+        baseValue: 14,
+    },
+    latex_gloves: {
+        id: 'latex_gloves',
+        name: '[Latex Gloves]',
+        description: 'Powder-blue, one size too big, snapped at the wrist. Surgical, in the loosest sense.',
         equipSlot: 'sides',
         useType: 'equip',
-        armor: 3,
+        armor: 1,
         consumable: false,
-        fallbackColor: '#8a8f96',
-        baseValue: 11,
+        fallbackColor: '#9fc7e8',
+        baseValue: 8,
+    },
+    red_cape: {
+        id: 'red_cape',
+        name: '[Red Cape]',
+        description: 'Torn from something that left in a hurry. Snags on everything. Makes you feel taller.',
+        equipSlot: 'back',
+        useType: 'equip',
+        armor: 1,
+        consumable: false,
+        fallbackColor: '#c03030',
+        baseValue: 10,
+    },
+    shoe_bags: {
+        id: 'shoe_bags',
+        name: '[Shoe Bags]',
+        description: 'Garbage-bag socks, double-knotted at the shin. The Sewer stays out of your socks.',
+        equipSlot: 'bottom',
+        useType: 'equip',
+        armor: 2,
+        sludgeImmune: true,
+        consumable: false,
+        fallbackColor: '#3a3a3a',
+        baseValue: 10,
     },
 
     // ── Ambro (food — healing) ──────────────────────────────────────────────
