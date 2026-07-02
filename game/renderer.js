@@ -4,6 +4,13 @@
 // All text: dark brown on parchment for readability (not gold-on-dark)
 
 import { TILE_PX, VIEW_TILES, CANVAS_PX } from './data.js';
+
+// Supersample factor: render the canvas at SS x the internal 608 resolution so
+// the (anti-aliased) VT323 text stays sharp under the pixel-art upscale rather
+// than being blown up soft. All drawing stays in 608 coords via a base
+// ctx.setTransform(SS,…) at the top of each frame; tap input maps via
+// CANVAS_INTERNAL_PX (608) independently, so it's unaffected.
+const SS = 2;
 import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES, EQUIP_FIGURE_SPRITE } from './sprites.js';
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
 import { ROOT, selectedNode, activeRing, activeIndex, decisionPath, previewChildren, affectedTiles } from './wheel-model.js'; // (sunburst wheel)
@@ -81,8 +88,8 @@ export class Renderer {
     constructor(canvas) {
         this.canvas = canvas;
         this.ctx    = canvas.getContext('2d');
-        canvas.width  = CANVAS_PX;
-        canvas.height = CANVAS_PX;
+        canvas.width  = CANVAS_PX * SS;
+        canvas.height = CANVAS_PX * SS;
         this.ctx.imageSmoothingEnabled = false;
 
         this.half    = (VIEW_TILES - 1) / 2;
@@ -101,8 +108,9 @@ export class Renderer {
 
     renderSplash(splashCanvas) {
         const ctx = splashCanvas.getContext('2d');
-        splashCanvas.width = 320;
-        splashCanvas.height = 220;
+        splashCanvas.width = 320 * SS;
+        splashCanvas.height = 220 * SS;
+        ctx.setTransform(SS, 0, 0, SS, 0, 0);
         ctx.imageSmoothingEnabled = false;
 
         ctx.fillStyle = '#0e0c08';
@@ -293,6 +301,7 @@ export class Renderer {
 
     renderFrame(game) {
         const { ctx } = this;
+        ctx.setTransform(SS, 0, 0, SS, 0, 0);   // supersample: draw in 608 coords at SS density
         ctx.imageSmoothingEnabled = false;
         ctx.clearRect(0, 0, CANVAS_PX, CANVAS_PX);
 

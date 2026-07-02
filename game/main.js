@@ -352,7 +352,7 @@ class Game {
         // without re-importing. Falls back gracefully if the atlas is
         // missing (renderer's text helpers check `this.font` before using).
         try {
-            this.renderer.font = await BitmapFont.load('assets/font_8x8.png');
+            this.renderer.font = await BitmapFont.load('assets/fonts/VT323.ttf');
         } catch (e) {
             console.warn('[bitmap-font] failed to load atlas, falling back to ctx.fillText', e);
             this.renderer.font = null;
