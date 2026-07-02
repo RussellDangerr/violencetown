@@ -9,6 +9,7 @@ import { BitmapFont } from './bitmap-font.js';
 import { DIR_NAMES, PLAYER_MAX_HP, PLAYER_MAX_MP, SLUDGE_DOT, INVENTORY_SIZE, MAX_STACK } from './data.js';
 import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem } from './items.js';
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
+import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
 import { attack, formatDamageNumber } from './combat.js';
 import { Enemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
 import { getGreedyStep, stepEntity } from './pathing.js'; // ally pathfinding; stepEntity = shove a character aside
@@ -95,7 +96,18 @@ const WEAPONS = {
     wooden_sword: {
         id: 'wooden_sword', name: '[Wooden Sword]', damage: 10, equipSlot: 'weapon', icon: 'sword',
     },
+    // Ray Gun — a tech weapon that GRANTS the Ray Blast trick (GP) while worn.
+    // Its world source is the Factory alien boss (deferred); the def lives here
+    // so the weapon-grants-skill wiring is real and testable now.
+    ray_gun: {
+        id: 'ray_gun', name: '[Ray Gun]', damage: 22, damageType: 'energy', equipSlot: 'weapon',
+        useType: 'equip', grantsTricks: ['ray_blast'],
+    },
 };
+
+// Spells the player always knows. Equipped weapons grant MORE on top (see
+// _refreshGrantedSkills); the real spell-learning system is later work.
+const BASE_SPELLS = ['fireball', 'coneOfCold'];
 
 const SLUDGE_DURATION = 3;
 const DIALOGUE_HOSTILE_AT = -40;   // (Step 4) disposition at/below which a conversation turns into a fight
@@ -131,9 +143,11 @@ class Game {
         // DEFAULT_MP in combat.js.
         this.playerMp    = PLAYER_MAX_MP;
         this.playerMaxMp = PLAYER_MAX_MP;
-        // Known spells for FIGHT → Magic, picked from the spell ring. The real
-        // spell-learning system is later work — for now you know both.
-        this.knownSpells = ['fireball', 'coneOfCold'];
+        // Known spells for FIGHT → Magic (base set; equipped weapons grant more
+        // via _refreshGrantedSkills). Granted TRICKS (GP skills) live in a
+        // parallel list the Trick ring reads.
+        this.knownSpells   = [...BASE_SPELLS];
+        this.grantedTricks = [];
         this.extraMoves  = 0; // future: Goo, abilities, etc.
         this.facing      = 'down'; // 'down' | 'left' | 'right' | 'up'
 
@@ -166,6 +180,7 @@ class Game {
             weapon: WEAPONS.wooden_sword,
             top: null, bottom: null, front: null, back: null, sides: null,
         };
+        this._refreshGrantedSkills();   // derive Magic/Trick grants from the equipped weapon
         this.tempEquips = [];
 
         // Buffs: [{ id, name, turns, type, ...extra }]
@@ -2058,6 +2073,7 @@ class Game {
 
         const msg = resolveUse(this, item, null);
         if (msg) this._log(msg);
+        this._refreshGrantedSkills();   // a weapon may have changed → refresh Magic/Trick grants
 
         // Consumables are spent; a persistent equip (armor) moves out of the bag
         // and onto the body, so it leaves the hotbar slot too.
@@ -2337,6 +2353,21 @@ class Game {
                 const hit = this._aoeStrike(affectedTiles(w, this), spell.damage, { type: spell.damageType });
                 if (hit) this._log(`[${spell.name}! ${spell.damage} ${spell.damageType} to ${hit}.]`, 'combat');
                 else this._log(`[${spell.name} fizzles — nothing caught.]`);
+                this._advanceWorld();
+                break;
+            }
+            case 'castTrick': {
+                // Trick skills cost GP, not MP — "turning tricks for money".
+                // Granted by tech gear (the Ray Gun grants Ray Blast). Same AoE
+                // path as spells; the gold guard mirrors the bribe idiom above.
+                if (!(this.grantedTricks || []).includes(node.trickId)) { this._log("[You don't have that trick.]"); break; }
+                const trick = TRICKS[node.trickId];
+                if (!trick) { this._log("[That trick isn't ready yet]"); break; }
+                if ((this.gold ?? 0) < trick.gpCost) { this._log(`[Not enough GP — ${trick.name} needs ${trick.gpCost}g.]`); break; }
+                this.gold = Math.max(0, (this.gold ?? 0) - trick.gpCost);
+                const hit = this._aoeStrike(affectedTiles(w, this), trick.damage, { type: trick.damageType });
+                if (hit) this._log(`[${trick.name}! ${trick.damage} ${trick.damageType} to ${hit}. (-${trick.gpCost}g)]`, 'combat');
+                else this._log(`[${trick.name} fizzles — nothing caught. (-${trick.gpCost}g)]`);
                 this._advanceWorld();
                 break;
             }
@@ -2866,6 +2897,18 @@ class Game {
         return ['top', 'bottom', 'front', 'back', 'sides'].some(k => eq[k] && eq[k].sludgeImmune);
     }
 
+    // Rebuild the skills the equipped weapon grants: spells feed the Magic ring
+    // (knownSpells = base + weapon.grantsSpells), tricks feed the Trick ring
+    // (grantedTricks = weapon.grantsTricks). Call after any weapon change — equip,
+    // new game, respawn, save-load. Additive over the base spells; idempotent.
+    _refreshGrantedSkills() {
+        const w = this.equipment && this.equipment.weapon;
+        const gs = (w && w.grantsSpells) || [];
+        const gt = (w && w.grantsTricks) || [];
+        this.knownSpells   = [...new Set([...BASE_SPELLS, ...gs])];
+        this.grantedTricks = [...new Set(gt)];
+    }
+
     applyDamageToPlayer(rawDamage) {
         let dmg = rawDamage;
         if (this.hasBuff('guard')) dmg = Math.max(1, Math.floor(dmg / 2));
@@ -2972,6 +3015,7 @@ class Game {
         this.tempEquips = [];
         this.selectedSlot = -1;
         this.equipment = { weapon: WEAPONS.wooden_sword, top: null, bottom: null, front: null, back: null, sides: null };
+        this._refreshGrantedSkills();   // reset weapon → no granted skills
         // Clear any transition queued before death so the first post-respawn
         // action doesn't ghost-load a map.
         this._pendingTransition = null;
@@ -3031,6 +3075,7 @@ class Game {
         this.tempEquips = [];
         this.selectedSlot = -1;
         this.equipment = { weapon: WEAPONS.wooden_sword, top: null, bottom: null, front: null, back: null, sides: null };
+        this._refreshGrantedSkills();   // fresh weapon → no granted skills
         this._pendingTransition = null;
         this.gold = 0;
         await this._loadMap('town-map.json');

@@ -69,6 +69,7 @@ export const ITEM_COLORS = {
     latex_gloves:     { bg: '#9fc7e8', letter: 'G' },
     red_cape:         { bg: '#c03030', letter: 'C' },
     shoe_bags:        { bg: '#3a3a3a', letter: 'F' },
+    ray_gun:          { bg: '#4aa0a0', letter: 'Z' },
     boardwalk_burger: { bg: '#cc8844', letter: '🍔' },
     mystery_meat:     { bg: '#884444', letter: 'M' },
     tunnel_mushroom:  { bg: '#997755', letter: '🍄' },

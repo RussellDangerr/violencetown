@@ -5,6 +5,7 @@
 // it and routes compose(). See plans/combat-wheel-radial-overhaul.md.
 
 import { SPELLS } from './spells.js';
+import { TRICKS } from './tricks.js';
 
 const always = () => true;
 
@@ -44,6 +45,10 @@ export const ROOT = { key: 'menu', label: 'MENU', children: [
     { key: 'bribe',  label: 'Bribe',  aimType: 'adjacent',                   resolver: 'bribe',        available: always },
     { key: 'give',   label: 'Give',   needsItem: true,  aimType: 'adjacent', resolver: 'give',         available: always },
     { key: 'trade',  label: 'Trade',  aimType: 'adjacent',                   resolver: 'trade',        available: always },
+    // GP-costed tricks granted by equipped tech gear (Ray Gun → Ray Blast).
+    // Gated on grantedTricks + gold; the castTrick resolver spends the GP.
+    { key: 'rayblast', label: 'Ray Blast', trickId: 'ray_blast', aimType: 'reticle', resolver: 'castTrick',
+      available: (g) => (g.grantedTricks || []).includes('ray_blast') && (g.gold || 0) >= (TRICKS.ray_blast ? TRICKS.ray_blast.gpCost : 0) },
   ]},
   { key: 'treat', label: 'Treat', children: [
     { key: 'eat',     label: 'Eat',     needsItem: true, aimType: 'none', resolver: 'resolveUse', available: always },
@@ -56,7 +61,7 @@ export const ROOT = { key: 'menu', label: 'MENU', children: [
   ]},
 ]};
 
-const OFFENSIVE_RESOLVERS = new Set(['combatAttack', 'cleaveAttack', 'spinAttack', 'resolveThrow', 'castSpell']);
+const OFFENSIVE_RESOLVERS = new Set(['combatAttack', 'cleaveAttack', 'spinAttack', 'resolveThrow', 'castSpell', 'castTrick']);
 export const isOffensiveLeaf = (node) => OFFENSIVE_RESOLVERS.has(node.resolver);
 
 // ── Geometry (the single source of truth for what an action hits) ────────────
@@ -108,6 +113,12 @@ export function affectedTiles(w, game) {
     const sp = SPELLS[leaf.spellId];
     if (sp && sp.aoe && sp.aoe.shape === 'cone')  return coneTiles(px, py, ret, sp.aoe.depth || 3);
     if (sp && sp.aoe && sp.aoe.shape === 'burst') return burstTiles(ret, sp.aoe.radius || 1);
+    return [ret];
+  }
+  if (leaf.resolver === 'castTrick') {
+    const tr = TRICKS[leaf.trickId];
+    if (tr && tr.aoe && tr.aoe.shape === 'cone')  return coneTiles(px, py, ret, tr.aoe.depth || 3);
+    if (tr && tr.aoe && tr.aoe.shape === 'burst') return burstTiles(ret, tr.aoe.radius || 1);
     return [ret];
   }
   if (leaf.resolver === 'resolveThrow') return burstTiles(ret, 1); // throw bursts 3×3
@@ -253,6 +264,10 @@ export function aimRange(leaf, game) {
   if (leaf.resolver === 'castSpell') {
     const sp = SPELLS[leaf.spellId];
     return (sp && sp.range) || 6;
+  }
+  if (leaf.resolver === 'castTrick') {
+    const tr = TRICKS[leaf.trickId];
+    return (tr && tr.range) || 6;
   }
   return 1;
 }
