@@ -4,7 +4,14 @@
 // All text: dark brown on parchment for readability (not gold-on-dark)
 
 import { TILE_PX, VIEW_TILES, CANVAS_PX } from './data.js';
-import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES } from './sprites.js';
+
+// Supersample factor: render the canvas at SS x the internal 608 resolution so
+// the (anti-aliased) VT323 text stays sharp under the pixel-art upscale rather
+// than being blown up soft. All drawing stays in 608 coords via a base
+// ctx.setTransform(SS,…) at the top of each frame; tap input maps via
+// CANVAS_INTERNAL_PX (608) independently, so it's unaffected.
+const SS = 2;
+import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES, EQUIP_FIGURE_SPRITE } from './sprites.js';
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
 import { ROOT, selectedNode, activeRing, activeIndex, decisionPath, previewChildren, affectedTiles } from './wheel-model.js'; // (sunburst wheel)
 import { SPELLS } from './spells.js';
@@ -12,10 +19,11 @@ import {
     OVERLAY_RECTS, THROW_RECTS,
     HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_GAP, HOTBAR_SLOTS, HOTBAR_STRIDE,
     HOTBAR_TOTAL_W, HOTBAR_OX, HOTBAR_OY, HOTBAR_X_START, HOTBAR_Y,
-    LOG_STRIP_RECT, LOG_MODAL_RECT,
+    QUESTLOG_RECT, LOG_MODAL_RECT,
     TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BRIBE_RECT,
     TRADE_CELL_W, TRADE_CELL_H, tradeCellRect,
     RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
+    EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS,
 } from './layout.js';
 import { ITEMS } from './items.js';                                          // (trade slice 1) stock item defs
 import { hasLineOfSight } from './enemies.js';                               // (aggro overlay) READ-ONLY: same Bresenham the chase AI uses
@@ -80,8 +88,8 @@ export class Renderer {
     constructor(canvas) {
         this.canvas = canvas;
         this.ctx    = canvas.getContext('2d');
-        canvas.width  = CANVAS_PX;
-        canvas.height = CANVAS_PX;
+        canvas.width  = CANVAS_PX * SS;
+        canvas.height = CANVAS_PX * SS;
         this.ctx.imageSmoothingEnabled = false;
 
         this.half    = (VIEW_TILES - 1) / 2;
@@ -100,8 +108,9 @@ export class Renderer {
 
     renderSplash(splashCanvas) {
         const ctx = splashCanvas.getContext('2d');
-        splashCanvas.width = 320;
-        splashCanvas.height = 220;
+        splashCanvas.width = 320 * SS;
+        splashCanvas.height = 220 * SS;
+        ctx.setTransform(SS, 0, 0, SS, 0, 0);
         ctx.imageSmoothingEnabled = false;
 
         ctx.fillStyle = '#0e0c08';
@@ -121,11 +130,13 @@ export class Renderer {
         // Small game-name header — bitmap font, centered, with a 1px dark
         // drop-shadow so the gold lifts off the parchment.
         if (this.font) {
-            this.font.drawText(ctx, 'VIOLENCETOWN', 161, 33, {
-                color: '#1a1208', scale: 1, align: 'center',
+            // Wordmark — a bold gold marquee with a bronze bevel that reads on
+            // the dark stone panel (a black drop-shadow would vanish here).
+            this.font.drawText(ctx, 'VIOLENCETOWN', 162, 32, {
+                color: '#6a5320', scale: 2, align: 'center',
             });
-            this.font.drawText(ctx, 'VIOLENCETOWN', 160, 32, {
-                color: UI.gold, scale: 1, align: 'center',
+            this.font.drawText(ctx, 'VIOLENCETOWN', 160, 30, {
+                color: UI.gold, scale: 2, align: 'center',
             });
         }
 
@@ -133,10 +144,10 @@ export class Renderer {
         // accents at each end, echoing the in-game goo palette.
         ctx.strokeStyle = UI.panelBorder;
         ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(90, 44); ctx.lineTo(230, 44); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(66, 50); ctx.lineTo(254, 50); ctx.stroke();
         ctx.fillStyle = '#9bb43e';
-        ctx.fillRect(88, 43, 3, 3);
-        ctx.fillRect(229, 43, 3, 3);
+        ctx.fillRect(64, 49, 3, 3);
+        ctx.fillRect(253, 49, 3, 3);
 
         // Cityscape silhouette — replaces an earlier character lineup that
         // read as three skin-tone variants. Procedural noir skyline drawn
@@ -149,7 +160,7 @@ export class Renderer {
         // Hard 2px black drop-shadow gives the marquee its chunky arcade weight.
         if (this.font) {
             this.font.drawText(ctx, 'GAME START', 162, 150, {
-                color: '#0c0a07', scale: 3, align: 'center',
+                color: '#5a4420', scale: 3, align: 'center',
             });
             this.font.drawText(ctx, 'GAME START', 160, 148, {
                 color: UI.gold, scale: 3, align: 'center',
@@ -167,13 +178,13 @@ export class Renderer {
             : null;
         const version = meta ? meta.getAttribute('content') : '?';
         if (this.font) {
-            // y=192 sits above the panel's bottom 16px-cell trim/accents at
-            // y≈193+. Right-anchored 24px in from the panel's right edge
-            // (which lives at x≈304); left-anchored 24px in from the left.
-            this.font.drawText(ctx, 'V' + version, 280, 192, {
+            // y=186 clears the panel's bottom 16px-cell trim/accents at y≈193+
+            // (was 192, which clipped the descenders). Right-anchored 24px in
+            // from the panel's right edge (x≈304); left-anchored 24px from left.
+            this.font.drawText(ctx, 'V' + version, 280, 186, {
                 color: UI.textLight, scale: 1, align: 'right',
             });
-            this.font.drawText(ctx, 'BY CAELAN GANDER', 32, 192, {
+            this.font.drawText(ctx, 'BY CAELAN GANDER', 32, 186, {
                 color: UI.textLight, scale: 1, align: 'left',
             });
         }
@@ -204,13 +215,15 @@ export class Renderer {
         const SKY_Y = 56, SKY_H = 76;
         const GROUND_Y = SKY_Y + SKY_H;
 
-        // Sky — dark band that contrasts with the parchment so the silhouettes
-        // read as foreground. A subtle horizontal gradient (top darker, bottom
-        // browner) suggests a hazy late-night downtown.
-        ctx.fillStyle = '#1a1410';
+        // Sky — a dusk gradient (deep indigo night above, warm ember at the
+        // horizon) so the near-black skyline silhouettes crisply against it on
+        // the dark stone panel; lit gold windows + a low moon punch through.
+        const sky = ctx.createLinearGradient(0, SKY_Y, 0, GROUND_Y);
+        sky.addColorStop(0,    '#241f3a');
+        sky.addColorStop(0.55, '#3a2a3a');
+        sky.addColorStop(1,    '#4a2e22');
+        ctx.fillStyle = sky;
         ctx.fillRect(PANEL_X, SKY_Y, PANEL_W, SKY_H);
-        ctx.fillStyle = '#26190f';
-        ctx.fillRect(PANEL_X, GROUND_Y - 18, PANEL_W, 18);
 
         // Moon — small ochre disk, behind the near-row silhouettes.
         // Aproximated with 5 stacked rects so it stays crisp at every scale.
@@ -288,6 +301,7 @@ export class Renderer {
 
     renderFrame(game) {
         const { ctx } = this;
+        ctx.setTransform(SS, 0, 0, SS, 0, 0);   // supersample: draw in 608 coords at SS density
         ctx.imageSmoothingEnabled = false;
         ctx.clearRect(0, 0, CANVAS_PX, CANVAS_PX);
 
@@ -379,18 +393,12 @@ export class Renderer {
 
         // HUD — rendered AFTER restore so screen shake doesn't affect it
         this._drawHPPanel(game);
-        this._drawZoneLabel(game);
-        this._drawQuestHUD(game);
         this._drawBuffBar(game);
-        this._drawLogStrip(game);
+        this._drawQuestLog(game);
         this._drawHotbar(game);
 
         // Subtle vignette border
         this._drawVignette();
-
-        // Town Clock readout — drawn after the vignette so the corner darkening
-        // doesn't sink it, but before the modals so a menu still covers it.
-        this._drawClock(game);
 
         // Modals
         if (game.state === 'item_overlay')    this._drawItemOverlay(game);
@@ -401,6 +409,7 @@ export class Renderer {
         if (game.state === 'log_modal') this._drawLogModal(game);
         if (game.state === 'trade') this._drawTradeModal(game);
         if (game.state === 'dialogue') this._drawDialogueModal(game);
+        if (game.state === 'equipment') this._drawEquipmentModal(game);
     }
 
     // (world-structure) Heavy radial darkness for the Wilderness zone — a tiny
@@ -1207,11 +1216,14 @@ export class Renderer {
         const y = by + m.oy;
 
         const color = SPLAT_COLOR[dn.type] || SPLAT_COLOR.physical;
-        const scale = 2;                          // bitmap font scale (16px glyphs)
-        const big = dn.crit ? 1.15 : 1;
+        const scale = 1;                          // bitmap font scale (8px glyphs — small)
+        const big = dn.crit ? 1.2 : 1;
         const textW = dn.text.length * 8 * scale;
-        const w = (textW + 14) * (m.sx || 1) * big;
-        const h = 26 * (m.sy || 1) * big;
+        // Round badge — radius fits the number plus a little pad, so short hits
+        // read as a small circle rather than a wide oval.
+        const r = (Math.max(textW, 8) / 2 + 6) * big;
+        const w = r * 2 * (m.sx || 1);
+        const h = r * 2 * (m.sy || 1);
 
         ctx.save();
         ctx.translate(x, y);
@@ -1228,18 +1240,18 @@ export class Renderer {
 
         ctx.scale(m.scale, m.scale);
 
-        // Badge — an ellipse "splat", filled by type, with a border (gold = crit).
+        // Badge — a round "splat", filled by type, with a border (gold = crit).
         ctx.beginPath();
         ctx.ellipse(0, 0, w / 2, h / 2, 0, 0, Math.PI * 2);
         ctx.fillStyle = hexToRgba(color, a);
         ctx.fill();
-        ctx.lineWidth = dn.crit ? 2.5 : 1.5;
+        ctx.lineWidth = dn.crit ? 2 : 1.25;
         ctx.strokeStyle = dn.crit ? hexToRgba('#f0d782', a) : `rgba(255,255,255,${a * 0.55})`;
         ctx.stroke();
 
         // Number — white, centered, with a soft shadow for contrast.
         if (this.font) {
-            this.font.drawText(ctx, dn.text, 0, -8, {
+            this.font.drawText(ctx, dn.text, 0, -4, {
                 color: hexToRgba('#ffffff', a),
                 scale,
                 align: 'center',
@@ -1432,32 +1444,9 @@ export class Renderer {
         }
         by += bh + 4;
 
-        // — Gold Card (GP) — a small dark-bordered gold pill with "GP" on
-        //   the left edge and the balance trailing. The full Gold Card
-        //   artifact (dollar-bill design with player face + town ID) lives
-        //   in lore; this is the inline credit-card-strip rendering of it.
-        const cardX = bx, cardY = by, cardW = bw, cardH = 14;
-        ctx.fillStyle = '#2a2218';            // dark border (matches panel chrome)
-        ctx.fillRect(cardX, cardY, cardW, cardH);
-        ctx.fillStyle = UI.gold;              // gold body
-        ctx.fillRect(cardX + 1, cardY + 1, cardW - 2, cardH - 2);
-        ctx.fillStyle = '#f1d488';            // brighter top highlight (embossed card)
-        ctx.fillRect(cardX + 1, cardY + 1, cardW - 2, 1);
-        // Dark "magnetic strip" on the left third — sells the credit-card
-        // read at this size.
-        ctx.fillStyle = '#1a1208';
-        ctx.fillRect(cardX + 2, cardY + 2, 18, cardH - 4);
-        if (this.font) {
-            // "GP" stamped on the strip (white-on-dark)
-            this.font.drawText(ctx, 'GP', cardX + 5, cardY + 3, {
-                color: UI.gold, scale: 1,
-            });
-            // Balance on the gold face (dark text)
-            this.font.drawText(ctx, `${game.gold ?? 0}`, cardX + cardW - 4, cardY + 3, {
-                color: '#2a2218', scale: 1, align: 'right',
-            });
-        }
-        by += cardH + 4;
+        // — Gold Card (GP) — an embossed credit-card chip (see plans/gold-card.md).
+        this._drawGoldCard(game, bx, by, bw);
+        by += 14 + 4;
 
         // — Weapon line at the bottom (informational; the hotbar carries
         //   the canonical inventory).
@@ -1470,67 +1459,36 @@ export class Renderer {
         }
     }
 
-    // ── Town Clock readout (top-right) ───────────────────────────────────────
-    // Military-time HH:MM mirroring the day/night lighting in numerals. The day
-    // starts at noon and runs ~30 min real-time; in combat it barely moves (the
-    // per-turn beat nudges it imperceptibly), so the readout never lurches.
-
-    _drawClock(game) {
-        if (!this.font || typeof game._timeOfDay !== 'function') return;
+    // The Gold Card (GP) rendered as an embossed credit-card chip: a gold body
+    // with an EMV contact pad on the left, a "GP" label, and the balance on the
+    // right. Split out of _drawHPPanel so the card can grow its own flourishes.
+    _drawGoldCard(game, cardX, cardY, cardW) {
         const { ctx } = this;
-        const time = game._timeOfDay();
-        const rightX = ctx.canvas.width - 6;
-        const y = 7;
-        // 1px dark shadow for legibility over the world + the night lightmap
-        // (mirrors the splash title's offset-shadow style).
-        this.font.drawText(ctx, time, rightX + 1, y + 1, { color: 'rgba(0,0,0,0.8)', scale: 1, align: 'right' });
-        this.font.drawText(ctx, time, rightX, y, { color: '#e8e0c8', scale: 1, align: 'right' });
-    }
-
-    // ── Zone Label (top center) ──────────────────────────────────────────────
-
-    _drawZoneLabel(game) {
-        const { ctx } = this;
-        const label = game.map?.zoneName || '';
-        const turnText = `T:${game.turn}`;
-        const w = Math.max(100, label.length * 10 + 60);
-        const px = (CANVAS_PX - w) / 2;
-
-        drawPanelSmall(ctx, px, 4, w, 22, this.uiSheet);
-
+        const cardH = 14;
+        // Bezel + gold body, embossed with a top highlight and a bottom shadow.
+        ctx.fillStyle = '#1a1208';                      // dark bezel
+        ctx.fillRect(cardX, cardY, cardW, cardH);
+        ctx.fillStyle = UI.gold;                        // gold body
+        ctx.fillRect(cardX + 1, cardY + 1, cardW - 2, cardH - 2);
+        ctx.fillStyle = '#f4dd9a';                      // top highlight
+        ctx.fillRect(cardX + 1, cardY + 1, cardW - 2, 1);
+        ctx.fillStyle = '#a8894a';                      // bottom shadow
+        ctx.fillRect(cardX + 1, cardY + cardH - 2, cardW - 2, 1);
+        // EMV contact chip — a muted-gold pad with cross contact lines. Replaces
+        // the old flat magnetic strip; reads as a real credit-card chip.
+        const chipX = cardX + 4, chipY = cardY + 3, chipW = 12, chipH = 8;
+        ctx.fillStyle = '#8b7340';
+        ctx.fillRect(chipX, chipY, chipW, chipH);
+        ctx.fillStyle = '#c9a955';
+        ctx.fillRect(chipX + 1, chipY + 1, chipW - 2, chipH - 2);
+        ctx.fillStyle = '#8b7340';
+        ctx.fillRect(chipX + 1, chipY + Math.floor(chipH / 2), chipW - 2, 1);   // horizontal contact
+        ctx.fillRect(chipX + Math.floor(chipW / 2), chipY + 1, 1, chipH - 2);   // vertical contact
         if (this.font) {
-            this.font.drawText(ctx, label.toUpperCase(), CANVAS_PX / 2, 9, {
-                color: UI.text, scale: 1, align: 'center',
+            this.font.drawText(ctx, 'GP', chipX + chipW + 4, cardY + 3, { color: '#2a2012', scale: 1 });
+            this.font.drawText(ctx, `${game.gold ?? 0}`, cardX + cardW - 4, cardY + 3, {
+                color: '#2a2012', scale: 1, align: 'right',
             });
-            // Turn counter right-aligned within the label panel
-            this.font.drawText(ctx, turnText, px + w - 6, 9, {
-                color: UI.dim, scale: 1, align: 'right',
-            });
-        }
-    }
-
-    // ── Quest HUD (active objective, right of the zone label) ────────────────
-    // The screenshot's "active quest text telling player next goal." Pulls the
-    // current objective from the quest engine; renders nothing when idle.
-    _drawQuestHUD(game) {
-        const text = game.questEngine ? game.questEngine.getHudText() : null;
-        if (!text) return;
-        const { ctx } = this;
-        const label = game.map?.zoneName || '';
-        const zoneW = Math.max(100, label.length * 10 + 60);
-        const zoneRight = (CANVAS_PX - zoneW) / 2 + zoneW;
-        const x = zoneRight + 6;
-        const w = (CANVAS_PX - 6) - x;
-        if (w < 60) return;                 // no room (very long zone name)
-        drawPanelSmall(ctx, x, 4, w, 22, this.uiSheet);
-        if (this.font) {
-            const padX = 8;
-            const maxChars = Math.max(4, Math.floor((w - padX * 2) / 8));
-            let t = text.toUpperCase();
-            if (t.length > maxChars) t = t.slice(0, maxChars - 1) + '~';
-            // Dark brown on parchment for legibility (gold is too low-contrast
-            // on the panel fill — matches the zone label's readable treatment).
-            this.font.drawText(ctx, t, x + padX, 9, { color: UI.text, scale: 1 });
         }
     }
 
@@ -1566,59 +1524,79 @@ export class Renderer {
         }
     }
 
-    // ── In-canvas Log Strip (above hotbar) ──────────────────────────────────
+    // ── Quest Log (consolidated bottom-left "one box") ───────────────────────
     //
-    // Persistent 3-slot rolling log rendered as a parchment strip above the
-    // hotbar. Mirrors _log() messages from main.js's _logStripMessages ring
-    // buffer (newest at end). Newest sits at the bottom of the strip (chat-
-    // window convention); older messages dim with position so the eye lands
-    // on the freshest line first. Hotbar tooltip is allowed to overlay this
-    // strip via z-order — _drawHotbar runs after _drawLogStrip in _drawScene.
+    // Stage 1 HUD consolidation: the five scattered top/bottom surfaces (zone
+    // label, quest objective, clock, turn counter, and the rolling log strip)
+    // collapse into ONE ornate parchment panel at QUESTLOG_RECT, clearing the
+    // top of the screen entirely. Layout, top → bottom, inside ~8px padding:
     //
-    // Color per category uses the parchment-panel palette (UI.text base);
-    // combat/pickup/gold tints make different message types visually distinct
-    // without needing to read every line.
+    //   (a) HEADER   : zone name (gold) · HH:MM · T:turn (dim)
+    //   (b) OBJECTIVE: active quest text (gold), truncated to width; skipped
+    //                  (feed shifts up one line) when there's no objective.
+    //   (c) FEED     : last 3 log messages, category-tinted, age-faded, newest
+    //                  at the bottom — chat-window convention.
+    //
+    // The bitmap font is 8px/char at scale 1 and lines advance 12px. With the
+    // panel 104px tall the interior (after 8px top + bottom padding) is 88px =
+    // room for header (12) + objective (12) + a 12px gap + three feed lines
+    // (36) with margin to spare, so nothing spills past QUESTLOG_RECT.
 
-    _drawLogStrip(game) {
+    _drawQuestLog(game) {
+        const { ctx } = this;
+        const R = QUESTLOG_RECT;
+        const PAD = 12;                      // buffer so text clears the ornate corners
+        const LH = 12;                       // line height (8px glyph + 4px lead)
+        const innerW = R.w - PAD * 2;
+        const maxChars = Math.max(4, Math.floor(innerW / 8));
+
+        drawPanelSmall(ctx, R.x, R.y, R.w, R.h, this.uiSheet);
+        if (!this.font) return;
+
+        const tx = R.x + PAD;
+        let y = R.y + PAD;
+
+        // (a) HEADER — LOCATION left-aligned, TIME right-aligned. (Turn counter
+        // dropped for now per playtest; the two ends read like a title bar.)
+        const zone = (game.map?.zoneName || '').toUpperCase();
+        this.font.drawText(ctx, zone, tx, y, { color: UI.gold, scale: 1 });
+        const timeStr = (typeof game._timeOfDay === 'function') ? game._timeOfDay() : '';
+        if (timeStr) {
+            this.font.drawText(ctx, timeStr, R.x + R.w - PAD, y, { color: UI.dim, scale: 1, align: 'right' });
+        }
+        y += LH;
+
+        // (b) OBJECTIVE — active quest text (gold). Skip the line if none, so
+        // the feed shifts up to fill the space.
+        const objective = game.questEngine ? game.questEngine.getHudText() : null;
+        if (objective) {
+            let t = objective.toUpperCase();
+            if (t.length > maxChars) t = t.slice(0, maxChars - 1) + '~';
+            this.font.drawText(ctx, t, tx, y, { color: UI.gold, scale: 1 });
+            y += LH;
+        }
+
+        // (c) MESSAGE FEED — last 3, oldest → newest, age-faded. Anchored to the
+        // panel's bottom so a missing objective grows the visible feed upward.
         const messages = game._logStripMessages;
         if (!messages || messages.length === 0) return;
-
-        const { ctx } = this;
-        const SX = LOG_STRIP_RECT.x;
-        const SW = LOG_STRIP_RECT.w;
-        const SH = LOG_STRIP_RECT.h;
-        const SY = LOG_STRIP_RECT.y;
-
-        drawPanelSmall(ctx, SX, SY, SW, SH, this.uiSheet);
-
-        // Newest message bottom-aligned at line 3; older messages climb up.
-        // Top-of-glyph y baselines (bitmap font draws from top-left).
-        const baselines = [SY + 6, SY + 18, SY + 30];
-        const alphas    = [0.5, 0.75, 1.0]; // oldest → newest position
-
-        const visible = messages.slice(-3);              // last N entries
-        const offset  = 3 - visible.length;              // top-align if fewer than 3
-
+        const visible = messages.slice(-3);
+        const alphas  = [0.5, 0.75, 1.0];    // oldest → newest
+        const feedTop = R.y + R.h - PAD - visible.length * LH;
+        const startY  = Math.max(y, feedTop);
         for (let i = 0; i < visible.length; i++) {
             const m = visible[i];
-            const slot = i + offset;
-            const baseColor = this._logStripColor(m.category);
-            const tintedColor = hexToRgba(baseColor, alphas[slot]);
-            // Truncate to fit width — bitmap font is 8px/char at scale 1,
-            // so SW(300) minus 16px padding = ~35 chars.
+            const alpha = alphas[alphas.length - visible.length + i];
+            const tinted = hexToRgba(this._logStripColor(m.category), alpha);
             let text = m.text;
-            if (text.length > 35) text = text.slice(0, 34) + '~';
-            if (this.font) {
-                this.font.drawText(ctx, text, SX + 8, baselines[slot], {
-                    color: tintedColor, scale: 1,
-                });
-            }
+            if (text.length > maxChars) text = text.slice(0, maxChars - 1) + '~';
+            this.font.drawText(ctx, text, tx, startY + i * LH, { color: tinted, scale: 1 });
         }
     }
 
     // Map a log-strip message category to a parchment-palette tint. Falls
     // back to UI.text so unknown categories stay readable. Kept as its own
-    // method so future categories slot in without touching _drawLogStrip.
+    // method so future categories slot in without touching _drawQuestLog.
     _logStripColor(category) {
         switch (category) {
             case 'combat':     return UI.hpRed;    // damage, deaths, fights
@@ -1730,7 +1708,7 @@ export class Renderer {
             // Key number (top-left corner of slot)
             if (this.font) {
                 this.font.drawText(ctx, `${i + 1}`, sx + 2, sy + 2, {
-                    color: sel ? UI.gold : '#5a5040', scale: 1,
+                    color: sel ? UI.gold : UI.textLight, scale: 1,
                 });
             }
 
@@ -2160,7 +2138,7 @@ export class Renderer {
 
         // Title
         this.font.drawText(ctx, 'END OF', cx, py + 34, { color: UI.textLight, scale: 1, align: 'center' });
-        this.font.drawText(ctx, 'CHAPTER ONE', cx, py + 52, { color: UI.panelBorder, scale: 2, align: 'center' });
+        this.font.drawText(ctx, 'CHAPTER ONE', cx, py + 52, { color: UI.gold, scale: 2, align: 'center' });
 
         // Outro — short and tasteful. Kept to the bitmap font's ASCII set.
         const lines = [
@@ -2180,7 +2158,7 @@ export class Renderer {
         // Stat line + restart prompt
         const turns = game._endingTurns ?? game.turn;
         this.font.drawText(ctx, `${turns} TURNS`, cx, py + h - 56, { color: UI.textLight, scale: 1, align: 'center' });
-        this.font.drawText(ctx, 'PRESS N TO PLAY AGAIN', cx, py + h - 34, { color: UI.panelBorder, scale: 1, align: 'center' });
+        this.font.drawText(ctx, 'PRESS N TO PLAY AGAIN', cx, py + h - 34, { color: UI.gold, scale: 1, align: 'center' });
         this.font.drawText(ctx, '(OR TAP)', cx, py + h - 18, { color: UI.textLight, scale: 1, align: 'center' });
     }
 
@@ -2203,7 +2181,7 @@ export class Renderer {
         if (!this.font) return;
 
         this.font.drawText(ctx, 'MESSAGE LOG', CANVAS_PX / 2, py + 16, {
-            color: UI.panelBorder, scale: 2, align: 'center',
+            color: UI.gold, scale: 2, align: 'center',
         });
 
         const padX = 24;
@@ -2290,18 +2268,18 @@ export class Renderer {
 
         // Title
         const title = `${(npc.type || 'TRADER').toUpperCase()}'S TILL`;
-        this.font.drawText(ctx, title, CANVAS_PX / 2, R.y + 14, { color: UI.panelBorder, scale: 2, align: 'center' });
+        this.font.drawText(ctx, title, CANVAS_PX / 2, R.y + 14, { color: UI.gold, scale: 2, align: 'center' });
 
         // Mood row — smiley + label on the left, GP on the right.
         const moodY = R.y + 48;
         this._drawMoodFace(R.x + 26, moodY, m.face);
         this.font.drawText(ctx, m.mood.toUpperCase(), R.x + 44, moodY - 3, { color: dealing ? UI.textLight : UI.hpRed, scale: 1 });
-        this.font.drawText(ctx, `GP ${game.gold ?? 0}`, R.x + R.w - 24, moodY - 6, { color: UI.panelBorder, scale: 2, align: 'right' });
+        this.font.drawText(ctx, `GP ${game.gold ?? 0}`, R.x + R.w - 24, moodY - 6, { color: UI.gold, scale: 2, align: 'right' });
 
-        // Section headers — panelBorder (not gold) reads on the cream panel,
-        // matching the modal title. Gold stays only on the dark insets below.
-        this.font.drawText(ctx, 'BUY',  TRADE_BUY_ORIGIN.x,  TRADE_BUY_ORIGIN.y - 18,  { color: UI.panelBorder, scale: 1 });
-        this.font.drawText(ctx, 'SELL', TRADE_SELL_ORIGIN.x, TRADE_SELL_ORIGIN.y - 18, { color: UI.panelBorder, scale: 1 });
+        // Section headers in gold — high-contrast on the dark stone panel
+        // (matches the modal title). Insets below stay dark with gold/light text.
+        this.font.drawText(ctx, 'BUY',  TRADE_BUY_ORIGIN.x,  TRADE_BUY_ORIGIN.y - 18,  { color: UI.gold, scale: 1 });
+        this.font.drawText(ctx, 'SELL', TRADE_SELL_ORIGIN.x, TRADE_SELL_ORIGIN.y - 18, { color: UI.gold, scale: 1 });
 
         // BUY grid — the vendor's stock.
         const stock = npc.stock || [];
@@ -2404,7 +2382,7 @@ export class Renderer {
         const m = mood(disp);
         const innerX = R.x + 20;
 
-        this.font.drawText(ctx, (npc.name || npc.type || 'SOMEONE').toUpperCase(), CANVAS_PX / 2, R.y + 14, { color: UI.panelBorder, scale: 2, align: 'center' });
+        this.font.drawText(ctx, (npc.name || npc.type || 'SOMEONE').toUpperCase(), CANVAS_PX / 2, R.y + 14, { color: UI.gold, scale: 2, align: 'center' });
 
         const moodY = R.y + 50;
         this._drawMoodFace(R.x + 26, moodY, m.face);
@@ -2440,6 +2418,106 @@ export class Renderer {
         row(choices.length, 'Leave', '', null, '');
 
         this.font.drawText(ctx, 'W/S  SELECT     SPACE  PICK     E  LEAVE', CANVAS_PX / 2, R.y + R.h - 18, { color: UI.dim, scale: 1, align: 'center' });
+    }
+
+    // ── Equipment screen (Stage 3 — read-only Vitruvian dress-up) ────────────
+    // A front-facing mannequin ringed by 6 body-zone slot plates. Reads
+    // game.equipment (weapon set, all armor slots null today → EMPTY plates).
+    // Purely a display; no hit-testing beyond "tap outside = close" in main.js.
+    _drawEquipmentModal(game) {
+        const { ctx, sprites } = this;
+        const ui = this.uiSheet;
+        if (!this.font) return;
+
+        // Scrim
+        ctx.fillStyle = 'rgba(0,0,0,0.72)';
+        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+
+        // Ornate panel
+        const R = EQUIPMENT_MODAL_RECT;
+        if (ui?.loaded) drawPanelBig(ctx, ui, R.x, R.y, R.w, R.h, 'base');
+        else            drawPanelSmall(ctx, R.x, R.y, R.w, R.h);
+
+        // Title
+        this.font.drawText(ctx, 'EQUIPMENT', CANVAS_PX / 2, R.y + 14, { color: UI.gold, scale: 2, align: 'center' });
+
+        const F = EQUIP_FIGURE_RECT;
+        const fcx = F.x + F.w / 2, fcy = F.y + F.h / 2;
+
+        // Faint Vitruvian circle + square behind the figure.
+        const prevAlpha = ctx.globalAlpha;
+        ctx.globalAlpha = 0.25;
+        ctx.strokeStyle = UI.panelBorder;
+        ctx.lineWidth = 2;
+        const rad = Math.min(F.w, F.h) / 2 + 20;
+        ctx.beginPath();
+        ctx.arc(fcx, fcy, rad, 0, Math.PI * 2);
+        ctx.stroke();
+        const sq = rad * 1.35;
+        ctx.strokeRect(fcx - sq / 2, fcy - sq / 2, sq, sq);
+        ctx.globalAlpha = prevAlpha;
+
+        // The figure — a clean line-drawn STICK FIGURE in the Vitruvian spread
+        // pose (round head, spine, arms fanning down-and-out, legs fanning
+        // down-and-out). Reads far better than a stretched sprite, and the
+        // spread limbs echo the reach toward the ARMS / FEET slots.
+        const headCy = F.y + F.h * 0.10, headR = F.w * 0.16;
+        const shoulderY = F.y + F.h * 0.30, hipY = F.y + F.h * 0.62;
+        const armEndY = F.y + F.h * 0.52, footY = F.y + F.h * 0.98;
+        const armSpan = F.w * 0.72, legSpan = F.w * 0.42;
+        ctx.save();
+        ctx.strokeStyle = UI.gold;
+        ctx.lineWidth = 4;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath(); ctx.arc(fcx, headCy, headR, 0, Math.PI * 2); ctx.stroke();        // head
+        ctx.beginPath(); ctx.moveTo(fcx, headCy + headR); ctx.lineTo(fcx, hipY); ctx.stroke();  // spine
+        ctx.beginPath();                                                                    // arms
+        ctx.moveTo(fcx - armSpan, armEndY); ctx.lineTo(fcx, shoulderY); ctx.lineTo(fcx + armSpan, armEndY);
+        ctx.stroke();
+        ctx.beginPath();                                                                    // legs
+        ctx.moveTo(fcx - legSpan, footY); ctx.lineTo(fcx, hipY); ctx.lineTo(fcx + legSpan, footY);
+        ctx.stroke();
+        ctx.fillStyle = UI.gold;                                                            // eye dot (echoes the sketch)
+        ctx.beginPath(); ctx.arc(fcx + headR * 0.35, headCy - headR * 0.1, 1.6, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+
+        // Slot plates ringing the figure.
+        for (const slot of EQUIP_SLOT_RECTS) {
+            const s = slot;
+            drawInset(ctx, s.x, s.y, s.w, s.h);
+
+            // Connector line from the plate toward the figure's matching zone.
+            const zx = F.x + (s.zone?.fx ?? 0.5) * F.w;
+            const zy = F.y + (s.zone?.fy ?? 0.5) * F.h;
+            const pcx = s.x + s.w / 2, pcy = s.y + s.h / 2;
+            ctx.save();
+            ctx.globalAlpha = 0.5;
+            ctx.strokeStyle = UI.panelBorder;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(pcx, pcy);
+            ctx.lineTo(zx, zy);
+            ctx.stroke();
+            ctx.restore();
+
+            // Label (zone caption) in gold along the top of the plate.
+            this.font.drawText(ctx, s.label, s.x + s.w / 2, s.y + 4, { color: UI.gold, scale: 1, align: 'center' });
+
+            // Equipped item (icon + name) or EMPTY.
+            const item = game.equipment ? game.equipment[s.key] : null;
+            if (item) {
+                const iconSize = 20;
+                this._drawItemIcon(item, s.x + 6, s.y + s.h - iconSize - 4, iconSize);
+                const name = (item.name || item.id || '').replace(/^\[|\]$/g, '');
+                this.font.drawText(ctx, name.toUpperCase(), s.x + iconSize + 12, s.y + s.h - iconSize + 2, { color: UI.text, scale: 1 });
+            } else {
+                this.font.drawText(ctx, 'EMPTY', s.x + s.w / 2, s.y + s.h - 16, { color: UI.dim, scale: 1, align: 'center' });
+            }
+        }
+
+        // Footer hint.
+        this.font.drawText(ctx, 'C / ESC  CLOSE', CANVAS_PX / 2, R.y + R.h - 16, { color: UI.textLight, scale: 1, align: 'center' });
     }
 
     // Word-wrap `text` into lines no longer than `maxChars` characters (the
