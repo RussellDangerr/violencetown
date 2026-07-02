@@ -61,7 +61,8 @@
         {"type": "foil_hat", "x": 15, "y": 4},
         {"type": "cardboard_cuirass", "x": 17, "y": 13},
         {"type": "latex_gloves", "x": 2, "y": 2},
-        {"type": "shoe_bags", "x": 9, "y": 8}
+        {"type": "shoe_bags", "x": 9, "y": 8},
+        {"type": "gator_tail", "x": 9, "y": 12}
     ],
     "zoneName": "SEWER",
     "regions": [

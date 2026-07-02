@@ -53,6 +53,9 @@ export const ROOT = { key: 'menu', label: 'MENU', children: [
     // Gated on grantedTricks + gold; the castTrick resolver spends the GP.
     { key: 'rayblast', label: 'Ray Blast', trickId: 'ray_blast', aimType: 'reticle', resolver: 'castTrick',
       available: (g) => (g.grantedTricks || []).includes('ray_blast') && (g.gold || 0) >= (TRICKS.ray_blast ? TRICKS.ray_blast.gpCost : 0) },
+    // Hire a Lion — a self-target summon (no aim); granted by the Lion Whip.
+    { key: 'hirelion', label: 'Hire a Lion', trickId: 'hire_lion', aimType: 'none', resolver: 'castTrick',
+      available: (g) => (g.grantedTricks || []).includes('hire_lion') && (g.gold || 0) >= (TRICKS.hire_lion ? TRICKS.hire_lion.gpCost : 0) },
   ]},
   { key: 'treat', label: 'Treat', children: [
     { key: 'eat',     label: 'Eat',     needsItem: true, aimType: 'none', resolver: 'resolveUse', available: always },
@@ -265,6 +268,12 @@ function safeFacing(g) {
 // Reticle reach: adjacent verbs lock to 1, Throw uses the item's range (else 5),
 // Magic uses the selected spell's range, everything else 1.
 export function aimRange(leaf, game) {
+  // Melee Hit reaches as far as the equipped weapon allows (Lion Whip = 3);
+  // every other adjacent verb (Cleave/Bribe/Give/Trade/Run) stays range 1.
+  if (leaf.resolver === 'combatAttack') {
+    const w = game && game.equipment && game.equipment.weapon;
+    return (w && w.reach) || 1;
+  }
   if (leaf.aimType === 'adjacent') return 1;
   if (leaf.resolver === 'resolveThrow') {
     const s = (game.inventory || [])[game.wheel ? game.wheel.itemIndex : -1];

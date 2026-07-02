@@ -71,6 +71,8 @@ export const ITEM_COLORS = {
     shoe_bags:        { bg: '#3a3a3a', letter: 'F' },
     ray_gun:          { bg: '#4aa0a0', letter: 'Z' },
     fearmur:          { bg: '#d8d0b8', letter: 'J' },
+    gator_tail:       { bg: '#6b7a4a', letter: 'Y' },
+    lion_whip:        { bg: '#b8863a', letter: 'W' },
     boardwalk_burger: { bg: '#cc8844', letter: '🍔' },
     mystery_meat:     { bg: '#884444', letter: 'M' },
     tunnel_mushroom:  { bg: '#997755', letter: '🍄' },

@@ -20,4 +20,11 @@ export const TRICKS = {
         id: 'ray_blast', name: 'Ray Blast', gpCost: 6, damage: 18, damageType: 'energy', range: 6,
         // no aoe → single-target bolt
     },
+    // Hire a Lion — a carnival tamer's whistle. Spend GP and a lion bounds out
+    // to fight at your side for a couple of turns, then melts back into the
+    // crowd. No damage/aim: `summon` routes it to _spawnSummon (main.js).
+    hire_lion: {
+        id: 'hire_lion', name: 'Hire a Lion', gpCost: 12,
+        summon: 'lion', summonTurns: 2, summonHp: 30, summonDamage: 12,
+    },
 };

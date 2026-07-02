@@ -110,6 +110,17 @@ const WEAPONS = {
         id: 'fearmur', name: '[Fearmur]', damage: 14, equipSlot: 'weapon',
         useType: 'equip', grantsSpells: ['boo'], onHit: 'fearOnRepeat',
     },
+    // Gator Tail — a dehydrated gator club. Heavy, mean, and you're not sure
+    // where it came from (Lonny, the Sewer's own alligator, has a theory).
+    gator_tail: {
+        id: 'gator_tail', name: '[Gator Tail]', damage: 16, equipSlot: 'weapon', useType: 'equip',
+    },
+    // Lion Whip — a carnival tamer's whip. Reaches 3 tiles and YANKS whatever it
+    // strikes one tile closer; grants the "Hire a Lion" trick (GP) while worn.
+    lion_whip: {
+        id: 'lion_whip', name: '[Lion Whip]', damage: 12, equipSlot: 'weapon', useType: 'equip',
+        reach: 3, pullDistance: 1, grantsTricks: ['hire_lion'],
+    },
 };
 
 // Spells the player always knows. Equipped weapons grant MORE on top (see
@@ -467,7 +478,7 @@ class Game {
         for (const s of this.map.itemSpawns) {
             // Skip items the player already picked up here — they don't respawn.
             if (this._collectedItems.has(`${url}|${s.x}|${s.y}|${s.type}`)) continue;
-            const def = ITEMS[s.type];
+            const def = this._resolveItemDef(s.type);   // resolves WEAPONS too, so weapons can drop as loot
             if (def) this.groundItems.push({ type: s.type, x: s.x, y: s.y, def });
         }
         this.enemies = [];
@@ -2226,7 +2237,11 @@ class Game {
             // whole gesture — point that way and it commits (firing, or drilling to
             // the Plus-Ultra confirm if it'd clip a friendly). No separate Space.
             // Press Space alone to commit the pre-seeded nearest target instead.
-            if (leaf.aimType === 'adjacent') {
+            // A reach weapon (Lion Whip, reach>1) turns single-target Hit into a
+            // placed reticle within reach — it falls through to the nudge path
+            // below. Range-1 verbs keep the snappy "point-and-commit" gesture.
+            const reachyHit = leaf.resolver === 'combatAttack' && range > 1;
+            if (leaf.aimType === 'adjacent' && !reachyHit) {
                 w.reticle = { x: this.playerX + mv[0], y: this.playerY + mv[1] };
                 // Cleave RE-AIMS on a direction (so you see the arc + highlighted
                 // enemies) and waits for Space; single-target adjacent verbs
@@ -2235,7 +2250,7 @@ class Game {
                 this._wheelCommit();
                 return;
             }
-            // Ranged / Throw / Magic: nudge the reticle for precise placement.
+            // Ranged / Throw / Magic / reach-melee: nudge the reticle for precise placement.
             if (!w.reticle) w.reticle = autoAimTile(leaf, this) || { x: this.playerX, y: this.playerY };
             const nx = w.reticle.x + mv[0], ny = w.reticle.y + mv[1];
             if (cheb(this.playerX, this.playerY, nx, ny) <= range && this.map.isWalkable(nx, ny)) {
@@ -2339,6 +2354,7 @@ class Game {
                     this.combatAttack(enemy, wpn.damage);
                     if (enemy.entity.isAlive()) {
                         if (repeat) { this._applyFear(enemy, 3); this._log('[The Fearmur cracks bone — it recoils in terror!]', 'combat'); }
+                        if (wpn && wpn.pullDistance) this._pullEnemyToward(enemy, wpn.pullDistance);   // (Lion Whip) yank it closer
                         this._lastHitTarget = enemy.id;
                     } else {
                         this._lastHitTarget = null;   // dead → streak broken
@@ -2388,6 +2404,12 @@ class Game {
                 if (!trick) { this._log("[That trick isn't ready yet]"); break; }
                 if ((this.gold ?? 0) < trick.gpCost) { this._log(`[Not enough GP — ${trick.name} needs ${trick.gpCost}g.]`); break; }
                 this.gold = Math.max(0, (this.gold ?? 0) - trick.gpCost);
+                if (trick.summon) {
+                    // Summon trick (Hire a Lion) — no damage; spawn a temporary ally.
+                    this._spawnSummon(trick.summon, trick.summonTurns || 2, trick);
+                    this._advanceWorld();
+                    break;
+                }
                 const hit = this._aoeStrike(affectedTiles(w, this), trick.damage, { type: trick.damageType });
                 if (hit) this._log(`[${trick.name}! ${trick.damage} ${trick.damageType} to ${hit}. (-${trick.gpCost}g)]`, 'combat');
                 else this._log(`[${trick.name} fizzles — nothing caught. (-${trick.gpCost}g)]`);
@@ -2495,6 +2517,17 @@ class Game {
         // strings fall through to the side log.
         const msgs = resolveEnemyTurns(this);
         this._routeWorldMessages(msgs);
+
+        // (summon) Temporary summoned allies (the hired lion) act above in
+        // resolveEnemyTurns, THEN their timer ticks — so a fresh summon still
+        // gets its turn. At zero they melt away.
+        if (this.enemies.some(e => e._isSummon)) {
+            for (const e of this.enemies) if (e._isSummon) e._summonTurnsLeft--;
+            const gone = this.enemies.filter(e => e._isSummon && e._summonTurnsLeft <= 0);
+            for (const e of gone) this._log(`[The ${(e.type || 'summon').toLowerCase()} melts back into the crowd.]`);
+            if (gone.length) this.enemies = this.enemies.filter(e => !(e._isSummon && e._summonTurnsLeft <= 0));
+        }
+
         // Enemies/NPCs may have just begun a one-tile slide (stepEntity). Kick
         // the render loop so those glides animate even if the player took a
         // single step and stopped. Idempotent + self-stopping via
@@ -2949,6 +2982,51 @@ class Game {
         const gt = (w && w.grantsTricks) || [];
         this.knownSpells   = [...new Set([...BASE_SPELLS, ...gs])];
         this.grantedTricks = [...new Set(gt)];
+    }
+
+    // (Hire a Lion) Spawn a temporary ally on a free tile beside the player. It
+    // fights through the existing ally pipeline (_allyTakeTurn) and melts away
+    // when its summon timer runs out (ticked in _advanceWorld). Returns true if
+    // it found room to appear.
+    _spawnSummon(type, turns, opts = {}) {
+        const RING = [[0, -1], [1, 0], [0, 1], [-1, 0], [-1, -1], [1, -1], [1, 1], [-1, 1]];
+        let spot = null;
+        for (const [dx, dy] of RING) {
+            const x = this.playerX + dx, y = this.playerY + dy;
+            if (this._tileFreeForShove(x, y)) { spot = { x, y }; break; }
+        }
+        if (!spot) { this._log('[No room beside you to summon anything.]'); return false; }
+        const name = type.charAt(0).toUpperCase() + type.slice(1);
+        this._summonSeq = (this._summonSeq || 0) + 1;
+        const ally = new Enemy({
+            id: `summon_${type}_${this.turn}_${this._summonSeq}`,
+            type: name, x: spot.x, y: spot.y,
+            hp: opts.summonHp || 30, damage: opts.summonDamage || 12,
+            behavior: ['ALLIED'],
+        });
+        ally._ally = true;
+        ally.fsmState = 'ALLIED';
+        ally.state = 'idle';
+        ally._isSummon = true;
+        ally._summonTurnsLeft = turns;
+        this.enemies.push(ally);
+        this._log(`[You whistle sharp — a ${name.toLowerCase()} bounds out of the crowd, all teeth.]`, 'combat');
+        return true;
+    }
+
+    // (Lion Whip) Yank a struck enemy up to `dist` tiles toward the player, one
+    // hop at a time, stopping at the first blocked tile. Reuses the shove
+    // occupancy check; never pulls the enemy onto the player's own tile.
+    _pullEnemyToward(target, dist) {
+        for (let i = 0; i < dist; i++) {
+            const dx = Math.sign(this.playerX - target.x);
+            const dy = Math.sign(this.playerY - target.y);
+            if (dx === 0 && dy === 0) break;
+            const nx = target.x + dx, ny = target.y + dy;
+            if (nx === this.playerX && ny === this.playerY) break;   // already adjacent — don't overlap us
+            if (!this._tileFreeForShove(nx, ny, target)) break;      // wall / occupied → stop
+            stepEntity(target, nx, ny, this._MOVE_MS);
+        }
     }
 
     // (fear) Fear an enemy for `turns`: while the buff is up it flees each turn

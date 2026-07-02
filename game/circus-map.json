@@ -32,7 +32,8 @@
     ],
     "items": [
         {"type": "hot_dog", "x": 16, "y": 6},
-        {"type": "bandage", "x": 40, "y": 16}
+        {"type": "bandage", "x": 40, "y": 16},
+        {"type": "lion_whip", "x": 10, "y": 5}
     ],
     "examinables": [
         {"id": "booth", "x": 28, "y": 12, "text": "[A shuttered game booth — RING THE BOTTLE, WIN A PRIZE. The bottles are glued down. The tents stretch east as far as you can see.]"}
