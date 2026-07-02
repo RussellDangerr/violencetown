@@ -7,7 +7,7 @@ import { loadMap } from './map.js';
 import { loadAllSprites } from './sprites.js';
 import { BitmapFont } from './bitmap-font.js';
 import { DIR_NAMES, PLAYER_MAX_HP, PLAYER_MAX_MP, SLUDGE_DOT, INVENTORY_SIZE, MAX_STACK } from './data.js';
-import { ITEMS, resolveUse, resolveThrow, tickTempEquips } from './items.js';
+import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem } from './items.js';
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { attack, formatDamageNumber } from './combat.js';
 import { Enemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
@@ -24,7 +24,7 @@ import {
     HOTBAR_X_START, HOTBAR_Y, HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_STRIDE, HOTBAR_SLOTS,
     RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, QUESTLOG_RECT, LOG_MODAL_RECT,
     TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BRIBE_RECT, tradeCellRect,
-    EQUIPMENT_MODAL_RECT,
+    EQUIPMENT_MODAL_RECT, EQUIP_SLOT_RECTS,
 } from './layout.js';
 import { canTrade, buyPrice, sellPrice, bribeStepCost, BRIBE_STEP } from './trade.js'; // (trade slice 1) disposition pricing
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
@@ -93,12 +93,13 @@ const DIRS = {
 
 const WEAPONS = {
     wooden_sword: {
-        id: 'wooden_sword', name: '[Wooden Sword]', damage: 10, equipSlot: 'weapon',
+        id: 'wooden_sword', name: '[Wooden Sword]', damage: 10, equipSlot: 'weapon', icon: 'sword',
     },
 };
 
 const SLUDGE_DURATION = 3;
 const DIALOGUE_HOSTILE_AT = -40;   // (Step 4) disposition at/below which a conversation turns into a fight
+const MP_REGEN = 2;                // MP recovered per world-turn — FIGHT → Magic spells spend it
 
 // ── Radial menu (Omnitrix-style combat wheel) ───────────────────────────────
 
@@ -124,10 +125,10 @@ class Game {
         this.playerY     = 0;
         this.playerHp    = PLAYER_MAX_HP;
         this.playerMaxHp = PLAYER_MAX_HP;
-        // MP — Magic / Skill points. Currently inert (nothing spends from it
-        // yet); rendered in the HUD so the resource is visible as the skill
-        // system catches up. Every creature gets the same 100/100 baseline
-        // via DEFAULT_MP in combat.js.
+        // MP — Magic / Skill points. FIGHT → Magic spells (Fireball, Cone of
+        // Cold) spend from it; it trickles back MP_REGEN per turn in
+        // _advanceWorld. Every creature gets the same 100/100 baseline via
+        // DEFAULT_MP in combat.js.
         this.playerMp    = PLAYER_MAX_MP;
         this.playerMaxMp = PLAYER_MAX_MP;
         // Known spells for FIGHT → Magic, picked from the spell ring. The real
@@ -212,6 +213,7 @@ class Game {
 
         // Inventory: 10 stackable slots, each { itemDef, count } or null
         this.inventory = new Array(INVENTORY_SIZE).fill(null);
+        this._seedStartingArmor();   // (equipment MVP) a few persistent pieces to test equip/unequip
         this.selectedSlot = -1; // -1 = none selected
 
         // Item overlay options (populated when overlay shows)
@@ -2054,7 +2056,9 @@ class Game {
         const msg = resolveUse(this, item, null);
         if (msg) this._log(msg);
 
-        if (item.consumable) this._removeFromSlot(this.selectedSlot);
+        // Consumables are spent; a persistent equip (armor) moves out of the bag
+        // and onto the body, so it leaves the hotbar slot too.
+        if (item.consumable || item.useType === 'equip') this._removeFromSlot(this.selectedSlot);
         this.selectedSlot = -1;
         this.state = STATE.IDLE;
         this._advanceWorld();
@@ -2460,6 +2464,11 @@ class Game {
         // Tick buffs
         this._tickBuffs();
 
+        // MP trickles back each turn — FIGHT → Magic spells spend it, this refills.
+        if (this.playerMp < this.playerMaxMp) {
+            this.playerMp = Math.min(this.playerMaxMp, this.playerMp + MP_REGEN);
+        }
+
         // Transition?
         if (this._pendingTransition) {
             const t = this._pendingTransition;
@@ -2571,6 +2580,15 @@ class Game {
     }
 
     // ── Inventory ────────────────────────────────────────────────────────────
+
+    // (equipment MVP) Drop a couple of persistent armor pieces into a fresh bag
+    // so equip / unequip + the armor math can be exercised right away. Real loot
+    // placement comes later — relocate these when armor gets a proper source.
+    _seedStartingArmor() {
+        for (const id of ['tin_helm', 'gutter_boots', 'bin_lid']) {
+            if (ITEMS[id]) this._addToInventory(ITEMS[id]);
+        }
+    }
 
     _addToInventory(itemDef) {
         for (let i = 0; i < INVENTORY_SIZE; i++) {
@@ -2814,9 +2832,23 @@ class Game {
         this._log(`[The ${target.type || target.entity.name} turns on you!]`, 'combat');
     }
 
+    // Total damage-reduction from worn armor. Flat MVP: every equipped body-zone
+    // piece's `armor` sums into one number (per-zone hit-location comes later).
+    // The weapon slot is excluded — a sword isn't armor.
+    _playerArmor() {
+        const eq = this.equipment || {};
+        let total = 0;
+        for (const key of ['top', 'bottom', 'front', 'back', 'sides']) {
+            const it = eq[key];
+            if (it && it.armor) total += it.armor;
+        }
+        return total;
+    }
+
     applyDamageToPlayer(rawDamage) {
         let dmg = rawDamage;
         if (this.hasBuff('guard')) dmg = Math.max(1, Math.floor(dmg / 2));
+        dmg = Math.max(1, dmg - this._playerArmor());   // worn armor soaks the hit (min 1 always lands)
         this.playerHp = Math.max(0, this.playerHp - dmg);
         audio.playSfx('take-damage'); // [audio] player got hit
 
@@ -2975,6 +3007,7 @@ class Game {
         this.playerMp = this.playerMaxMp;
         this.buffs = [];
         this.inventory.fill(null);
+        this._seedStartingArmor();   // (equipment MVP) fresh bag gets the test armor pieces back
         this.tempEquips = [];
         this.selectedSlot = -1;
         this.equipment = { weapon: WEAPONS.wooden_sword, top: null, bottom: null, front: null, back: null, sides: null };
@@ -3346,6 +3379,17 @@ class Game {
     // A tap anywhere outside the equipment panel dismisses it (there's no
     // unequip logic to hit-test — the slots are display-only).
     _tapEquipmentScreen(pt) {
+        // Tap a filled armor plate to take that piece off (back into your bag).
+        // The weapon plate is inert here — the weapon slot is never emptied.
+        for (const s of EQUIP_SLOT_RECTS) {
+            if (s.key === 'weapon') continue;
+            if (!this._pointInRect(pt, s)) continue;
+            if (!this.equipment[s.key]) return;          // empty plate — nothing to remove
+            const msg = unequipItem(this, s.key);
+            if (msg) this._log(msg);
+            this._render();
+            return;
+        }
         if (!this._pointInRect(pt, EQUIPMENT_MODAL_RECT)) this._closeEquipmentScreen();
     }
 

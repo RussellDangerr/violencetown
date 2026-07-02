@@ -40,6 +40,7 @@ export const ITEMS = {
         equipDuration: 3,
         useType: 'self',
         effect: 'cure_sludge',
+        armor: 2,               // a bar strapped at your back turns a hit or two while it lasts
         consumable: true,
         fallbackColor: '#aaaaff',
         baseValue: 15,
@@ -66,9 +67,47 @@ export const ITEMS = {
         useType: 'self',
         effect: 'heal',
         healAmount: 25,
+        armor: 1,               // wrapped across the front — a little padding while it holds
         consumable: true,
         fallbackColor: '#ffaaaa',
         baseValue: 10,
+    },
+
+    // ── Armor (persistent equips — worn until you take them off) ───────────────
+    // MVP test pieces so the equip / unequip + armor plumbing is exercisable
+    // now. Real placement (loot, shops) and a proper armor tier come later.
+    tin_helm: {
+        id: 'tin_helm',
+        name: '[Tin Helm]',
+        description: 'A dented cooking pot with a chin-strap. Rings like a bell when struck — usually your head.',
+        equipSlot: 'top',
+        useType: 'equip',
+        armor: 3,
+        consumable: false,
+        fallbackColor: '#b8b090',
+        baseValue: 12,
+    },
+    gutter_boots: {
+        id: 'gutter_boots',
+        name: '[Gutter Boots]',
+        description: 'Ankle-high, tar-sealed, and only slightly haunted. Keeps the Sewer out of your socks.',
+        equipSlot: 'bottom',
+        useType: 'equip',
+        armor: 2,
+        consumable: false,
+        fallbackColor: '#6a5238',
+        baseValue: 9,
+    },
+    bin_lid: {
+        id: 'bin_lid',
+        name: '[Bin Lid]',
+        description: 'A galvanised trash-can lid with a fist-strap bolted on. A poor shield, but an honest one.',
+        equipSlot: 'sides',
+        useType: 'equip',
+        armor: 3,
+        consumable: false,
+        fallbackColor: '#8a8f96',
+        baseValue: 11,
     },
 
     // ── Ambro (food — healing) ──────────────────────────────────────────────
@@ -177,6 +216,37 @@ export function equipItem(game, itemDef) {
         : `[${itemDef.name} equipped to ${slot}]`;
 }
 
+// Persistent equip via the Use action (armor pieces — useType: 'equip'). Moves
+// the item into its body-zone slot; any piece already worn there goes back into
+// the bag. The caller (main.js _doItemUse) removes the used item from the
+// hotbar so it isn't duplicated.
+function resolveEquip(game, itemDef) {
+    const slot = itemDef.equipSlot;
+    if (!slot) return `[${itemDef.name} can't be worn]`;
+    const old = game.equipment[slot];
+    game.equipment[slot] = itemDef;
+    if (old && old.id !== itemDef.id) game._addToInventory(old);
+    return old && old.id !== itemDef.id
+        ? `[Equipped ${itemDef.name} — ${old.name} back in your bag]`
+        : `[Equipped ${itemDef.name}]`;
+}
+
+// Take a worn armor piece off and return it to the bag. Weapon and temp-equips
+// are excluded: the weapon slot is never emptied (melee reads
+// equipment.weapon.damage), and duration equips wear off on their own. Returns
+// a log message, or null on a no-op (empty / weapon slot).
+export function unequipItem(game, slot) {
+    if (slot === 'weapon') return null;
+    const item = game.equipment[slot];
+    if (!item) return null;
+    if ((game.tempEquips || []).some(te => te.slot === slot)) {
+        return `[${item.name} will wear off on its own]`;
+    }
+    if (!game._addToInventory(item)) return '[Your bag is full — no room to stow it]';
+    game.equipment[slot] = null;
+    return `[Unequipped ${item.name}]`;
+}
+
 // Called each turn during enemy resolution to tick down temp equips
 export function tickTempEquips(game) {
     const messages = [];
@@ -212,6 +282,8 @@ export function resolveUse(game, itemDef, direction, stackCount = 1) {
             return resolveThrow(game, itemDef, direction, stackCount);
         case 'melee':
             return resolveMelee(game, itemDef, direction);
+        case 'equip':
+            return resolveEquip(game, itemDef);
         default:
             return `[Used ${itemDef.name}]`;
     }

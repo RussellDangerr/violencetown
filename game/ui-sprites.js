@@ -61,8 +61,12 @@ export const PANEL_VARIANT_OY = {
 export const ITEM_COLORS = {
     rock:             { bg: '#8a8878', letter: 'R' },
     soap:             { bg: '#6688bb', letter: 'S' },
+    sludge_sack:      { bg: '#9a52c8', letter: 'K' },
     pipe:             { bg: '#707070', letter: 'P' },
     bandage:          { bg: '#bb6666', letter: 'B' },
+    tin_helm:         { bg: '#b8b090', letter: 'H' },
+    gutter_boots:     { bg: '#6a5238', letter: 'F' },
+    bin_lid:          { bg: '#8a8f96', letter: 'L' },
     boardwalk_burger: { bg: '#cc8844', letter: '🍔' },
     mystery_meat:     { bg: '#884444', letter: 'M' },
     tunnel_mushroom:  { bg: '#997755', letter: '🍄' },

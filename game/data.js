@@ -65,9 +65,9 @@ export const VIEW_TILES = 19;       // odd number, player at center
 export const CANVAS_PX = TILE_PX * VIEW_TILES; // 608
 
 export const PLAYER_MAX_HP = 100;
-// MP (Magic / Skill points) — every creature starts at 100. Currently inert
-// (no skill spends from it yet); the HUD just surfaces it so the resource
-// is visible while the skill system catches up.
+// MP (Magic / Skill points) — every creature starts at 100. FIGHT → Magic
+// spells spend from it; the player's regenerates a little each turn (MP_REGEN
+// in main.js). The HUD surfaces it as a cyan bar.
 export const PLAYER_MAX_MP = 100;
 export const SLUDGE_DOT = 5;
 // 9 to match the 9-slot hotbar (layout.HOTBAR_SLOTS) so every slot is both

@@ -1427,9 +1427,8 @@ export class Renderer {
         }
         by += bh + 4;
 
-        // — MP bar — cyan, ties to Skills (inert for now). The bar exists
-        //   so the resource is legible the moment a skill ever spends from
-        //   it; until then it sits at full.
+        // — MP bar — cyan. FIGHT → Magic spells spend from it; it regenerates a
+        //   little each turn (MP_REGEN in main.js), so this drains and refills.
         const mpFrac = (game.playerMp ?? game.playerMaxMp) / (game.playerMaxMp ?? 100);
         drawInset(ctx, bx, by, bw, bh);
         const mpW = (bw - 2) * mpFrac;
@@ -2350,6 +2349,7 @@ export class Renderer {
         if (spr && sprites?.[spr.sheet]?.loaded) {
             drawn = sprites[spr.sheet].drawRegion(ctx, spr.x, spr.y, spr.w, spr.h, x, y, size, size);
         }
+        if (!drawn && itemDef.icon === 'sword') { this._drawSwordIcon(x, y, size); drawn = true; }
         if (!drawn) {
             const info = ITEM_COLORS[itemDef.id] || { bg: '#888', letter: '?' };
             ctx.fillStyle = info.bg;
@@ -2358,6 +2358,33 @@ export class Renderer {
                 this.font.drawText(ctx, info.letter, x + size / 2, y + size / 2 - 3, { color: '#fff', scale: 1, align: 'center' });
             }
         }
+    }
+
+    // A tiny procedural short-sword icon for the default weapon, so the WEAPON
+    // slot (and hotbar) reads as a blade instead of a fallback "?". Drawn on a
+    // dark plate, blade pointing up-and-right with a gold crossguard + pommel.
+    _drawSwordIcon(x, y, size) {
+        const { ctx } = this;
+        ctx.save();
+        ctx.fillStyle = '#2a241a';                       // dark plate so it reads on any panel
+        ctx.fillRect(x, y, size, size);
+        ctx.translate(x + size / 2, y + size / 2);
+        ctx.rotate(-Math.PI / 4);                        // blade points up-right
+        const bw = Math.max(2, size * 0.14);             // blade width
+        const bl = size * 0.60;                          // blade length (guard → tip)
+        const gl = size * 0.28;                          // grip length (guard → pommel)
+        ctx.fillStyle = '#d8d8e0';                       // steel blade
+        ctx.fillRect(-bw / 2, -bl, bw, bl);
+        ctx.fillStyle = '#f4f4fa';                       // bright edge highlight
+        ctx.fillRect(-bw / 2, -bl, Math.max(1, bw * 0.35), bl);
+        ctx.fillStyle = UI.gold;                         // crossguard
+        const gw = size * 0.50, gh = Math.max(2, size * 0.12);
+        ctx.fillRect(-gw / 2, -gh / 2, gw, gh);
+        ctx.fillStyle = '#7a5230';                       // wrapped grip
+        ctx.fillRect(-bw / 2, 0, bw, gl);
+        ctx.fillStyle = UI.gold;                         // pommel
+        ctx.beginPath(); ctx.arc(0, gl, bw * 0.8, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
     }
 
     // ── Dialogue modal (Step 4 — disposition dialogue) ───────────────────────
@@ -2438,8 +2465,11 @@ export class Renderer {
         if (ui?.loaded) drawPanelBig(ctx, ui, R.x, R.y, R.w, R.h, 'base');
         else            drawPanelSmall(ctx, R.x, R.y, R.w, R.h);
 
-        // Title
-        this.font.drawText(ctx, 'EQUIPMENT', CANVAS_PX / 2, R.y + 14, { color: UI.gold, scale: 2, align: 'center' });
+        // Title (left) + total worn armor (right) — flank the centered HEAD
+        // plate so neither is occluded by it.
+        this.font.drawText(ctx, 'EQUIPMENT', R.x + 20, R.y + 14, { color: UI.gold, scale: 2, align: 'left' });
+        const armorTotal = game._playerArmor ? game._playerArmor() : 0;
+        this.font.drawText(ctx, 'ARMOR ' + armorTotal, R.x + R.w - 20, R.y + 14, { color: UI.gold, scale: 2, align: 'right' });
 
         const F = EQUIP_FIGURE_RECT;
         const fcx = F.x + F.w / 2, fcy = F.y + F.h / 2;
@@ -2511,13 +2541,14 @@ export class Renderer {
                 this._drawItemIcon(item, s.x + 6, s.y + s.h - iconSize - 4, iconSize);
                 const name = (item.name || item.id || '').replace(/^\[|\]$/g, '');
                 this.font.drawText(ctx, name.toUpperCase(), s.x + iconSize + 12, s.y + s.h - iconSize + 2, { color: UI.text, scale: 1 });
+                if (item.armor) this.font.drawText(ctx, '+' + item.armor, s.x + s.w - 6, s.y + 4, { color: UI.gold, scale: 1, align: 'right' });
             } else {
                 this.font.drawText(ctx, 'EMPTY', s.x + s.w / 2, s.y + s.h - 16, { color: UI.dim, scale: 1, align: 'center' });
             }
         }
 
         // Footer hint.
-        this.font.drawText(ctx, 'C / ESC  CLOSE', CANVAS_PX / 2, R.y + R.h - 16, { color: UI.textLight, scale: 1, align: 'center' });
+        this.font.drawText(ctx, 'TAP A PLATE TO REMOVE   ·   C / ESC  CLOSE', CANVAS_PX / 2, R.y + R.h - 16, { color: UI.textLight, scale: 1, align: 'center' });
     }
 
     // Word-wrap `text` into lines no longer than `maxChars` characters (the
