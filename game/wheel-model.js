@@ -15,9 +15,13 @@ const always = () => true;
 //   later pass). Magic is a sub-wheel whose children are the castable spells.
 // Ranged is a leaf that throws slot 0; Magic drills a spell ring (each child
 // carries its own spellId + castSpell resolver).
+// (Phase 0 colour language) Category + Fight-method nodes carry their own
+// `color`/`text`; the renderer paints each wedge from these (falling back to a
+// hue map). Fight red; Melee red (base), Magic purple (red+mana-blue), Ranged
+// amber (red+warm). Trick gold. Treat green. Flight now nests under Trick.
 export const ROOT = { key: 'menu', label: 'MENU', children: [
-  { key: 'fight', label: 'Fight', children: [
-    { key: 'melee', label: 'Melee', children: [
+  { key: 'fight', label: 'Fight', color: '#c8443a', text: '#fff3d0', children: [
+    { key: 'melee', label: 'Melee', color: '#c8443a', text: '#fff3d0', children: [
       { key: 'hit',    label: 'Hit',    aimType: 'adjacent', resolver: 'combatAttack', available: always },
       // Cleave: a fixed 3-tile frontal ARC (the aimed tile + its two flanks). You
       // commit to all three — no sub-selecting — so it can clip an ally on the
@@ -28,8 +32,8 @@ export const ROOT = { key: 'menu', label: 'MENU', children: [
     ]},
     // Ranged: throw a rock/potion at range (duplicate of TRICK → Throw, by design
     // — you throw things, so it lives under both).
-    { key: 'ranged', label: 'Ranged', needsItem: true, aimType: 'reticle', resolver: 'resolveThrow', available: always },
-    { key: 'magic',  label: 'Magic',
+    { key: 'ranged', label: 'Ranged', color: '#e08a2a', text: '#2a1400', needsItem: true, aimType: 'reticle', resolver: 'resolveThrow', available: always },
+    { key: 'magic',  label: 'Magic',  color: '#8250c4', text: '#f0e6ff',
       available: (g) => (g.playerMp || 0) > 0 && ((g.knownSpells && g.knownSpells.length) || 0) > 0,
       children: [
         { key: 'fireball', label: 'Fireball', spellId: 'fireball', aimType: 'reticle', resolver: 'castSpell',
@@ -38,21 +42,22 @@ export const ROOT = { key: 'menu', label: 'MENU', children: [
           available: (g) => (g.knownSpells || []).includes('coneOfCold') && (g.playerMp || 0) >= (SPELLS.coneOfCold ? SPELLS.coneOfCold.mpCost : 0) },
       ] },
   ]},
-  { key: 'trick', label: 'Trick', children: [
+  // Trick — the gold "situational GP" category. Flight (evasion) nests here now (spec §6).
+  { key: 'trick', label: 'Trick', color: '#cba43c', text: '#2a1f06', children: [
     { key: 'throw',  label: 'Throw',  needsItem: true,  aimType: 'reticle',  resolver: 'resolveThrow', available: always },
     { key: 'defend', label: 'Defend', aimType: 'none',                       resolver: 'guard',        available: always },
     { key: 'bribe',  label: 'Bribe',  aimType: 'adjacent',                   resolver: 'bribe',        available: always },
     { key: 'give',   label: 'Give',   needsItem: true,  aimType: 'adjacent', resolver: 'give',         available: always },
     { key: 'trade',  label: 'Trade',  aimType: 'adjacent',                   resolver: 'trade',        available: always },
+    { key: 'flight', label: 'Flight', color: '#cba43c', text: '#2a1f06', children: [
+      { key: 'run',  label: 'Run',  aimType: 'adjacent', resolver: 'run',  available: always },
+      { key: 'hide', label: 'Hide', aimType: 'none',     resolver: 'hide', available: always },
+      { key: 'wait', label: 'Wait', aimType: 'none',     resolver: 'wait', available: always },
+    ]},
   ]},
-  { key: 'treat', label: 'Treat', children: [
+  { key: 'treat', label: 'Treat', color: '#4f9b4a', text: '#effbe9', children: [
     { key: 'eat',     label: 'Eat',     needsItem: true, aimType: 'none', resolver: 'resolveUse', available: always },
     { key: 'cleanse', label: 'Cleanse', needsItem: true, aimType: 'none', resolver: 'resolveUse', available: always },
-  ]},
-  { key: 'flight', label: 'Flight', children: [
-    { key: 'run',  label: 'Run',  aimType: 'adjacent', resolver: 'run',  available: always },
-    { key: 'hide', label: 'Hide', aimType: 'none',     resolver: 'hide', available: always },
-    { key: 'wait', label: 'Wait', aimType: 'none',     resolver: 'wait', available: always },
   ]},
 ]};
 
