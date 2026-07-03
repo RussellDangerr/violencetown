@@ -226,6 +226,10 @@ export const ENEMY_SPRITES = {
     // proper civilian read (Tiny Town has townsfolk art).
     'Violencian': { sheet: 'tinyDungeon', col: 0, row: 7, static: true }, // purple-robed figure — generic citizen
 
+    // Canyon — Pike the ageless prospector (reuses the gaunt robed-monk cell; a
+    // proper grizzled-prospector read is a later sprite-picker pass).
+    'Pike': { sheet: 'tinyDungeon', col: 2, row: 7, static: true }, // bald robed monk — gaunt, weathered
+
     // Zone-exclusive enemies (compromise picks — no clown/skeleton art exists):
     'Greedy Green':     { sheet: 'tinyDungeon', col: 4, row: 9,  static: true }, // green-bandana goblin
     'Carnival Clown':   { sheet: 'tinyDungeon', col: 0, row: 7,  static: true }, // purple mage — most colorful humanoid

@@ -149,6 +149,16 @@ export const ITEMS = {
         fallbackColor: '#8a5a2a',
         baseValue: 20,
     },
+    grappling_hook: {
+        id: 'grappling_hook',
+        name: '[Grappling Hook]',
+        description: "Pike's big coil of rope and an iron hook that bites stone and holds. A way UP.",
+        useType: 'none',
+        consumable: false,
+        questItem: true,
+        fallbackColor: '#9a7b4a',
+        baseValue: 1000,
+    },
 };
 
 // Equip an item into its slot. Returns a log message.

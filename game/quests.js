@@ -16,6 +16,25 @@
 // This is active objective tracking, surfaced as a one-line HUD goal.
 
 export const QUESTS = {
+    // ── Chapter Two: the Canyon fail-branch escape (Pike + the grappling hook).
+    //    The engine tracks ONE quest, so this is the single canyon objective; Pike's
+    //    "deal" route is flag-driven (dialogue onPick + _handleEnemyDeath) so it
+    //    never competes with this for the active slot.
+    canyon_escape: {
+        id: 'canyon_escape',
+        title: 'Out of the Canyon',
+        stages: [
+            {
+                id: 'find_way_out',
+                objective: "Escape the canyon — get Pike's rope: buy it, earn it, or take it",
+                on: { type: 'map_entered', match: { map: 'downtown-map.json' } },
+            },
+        ],
+        onComplete: (game) => {
+            game._log('[You sink the hook into the rock, haul yourself up over the canyon lip, and out onto a Downtown street. Out at last.]', 'transition');
+        },
+    },
+
     fix_car: {
         id: 'fix_car',
         title: 'A Working Car',

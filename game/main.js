@@ -1649,9 +1649,16 @@ class Game {
             // Pickup
             this._tryPickup();
 
-            // Transition?
+            // Transition? A transition may `require` an item (e.g. the canyon
+            // escape needs the grappling hook) — data-driven so any door can gate.
             const transition = this.map.getTransition(nx, ny);
-            if (transition) { this._pendingTransition = transition; }
+            if (transition) {
+                if (transition.requires && !(this.inventory || []).some(s => s && s.itemDef.id === transition.requires)) {
+                    this._log(transition.requiresMsg || '[You need something to get through here.]');
+                } else {
+                    this._pendingTransition = transition;
+                }
+            }
 
             // (Legacy tile-7 "BOSS ROOM REACHED" win hook removed — fix/critical-path.
             // Tile 7 was a stale wrong-win trap one cell east of the Wererat; it's
@@ -2748,7 +2755,32 @@ class Game {
             this.groundItems.push({ type: 'catalytic_converter', x: enemyObj.x, y: enemyObj.y, def: ITEMS.catalytic_converter });
             this._log('[The Were-Rat drops your cataclysmic converter!]', 'pickup');
         }
+        // Pike guards his climbing rope with his life — take it off his body.
+        if (enemyObj.tag === 'pike_boss' && ITEMS.grappling_hook) {
+            this.groundItems.push({ type: 'grappling_hook', x: enemyObj.x, y: enemyObj.y, def: ITEMS.grappling_hook });
+            this._log('[Pike crumples. His big coil of rope — the grappling hook — thuds to the stone.]', 'pickup');
+        }
+        // Pike's deal (his dialogue onPick set the flag): clearing the LAST canyon
+        // critter earns the rope — no coin, no killing Pike.
+        if (enemyObj.tag === 'canyon_critter' && this.questEngine && this.questEngine.getFlag('pikeDeal')
+            && !this.questEngine.getFlag('pikeDealPaid')
+            && !this.enemies.some(e => e.tag === 'canyon_critter' && e.entity.isAlive())) {
+            this.questEngine.state.flags.pikeDealPaid = true;
+            this._grantItem('grappling_hook', '["Deal\'s a deal." Pike coils the big rope into your pack — the grappling hook is yours.]');
+        }
         onSewerEnemyKilled(this, enemyObj);
+    }
+
+    // Grant an item straight into the bag (quest rewards, dialogue gifts). Emits
+    // item_pickup so quests + HUD react exactly like a ground pickup.
+    _grantItem(id, msg) {
+        const def = ITEMS[id];
+        if (!def) return false;
+        if (!this._addToInventory(def)) { this._log('[Your bag is full — no room for it.]'); return false; }
+        if (msg) this._log(msg, 'pickup');
+        this.emitGameEvent('item_pickup', { id });
+        this._render();
+        return true;
     }
 
     // ── Allies (bribe-flipped — AGGRO behavior bands) ──────────────────────────
@@ -3056,6 +3088,7 @@ class Game {
         await this._loadMap('canyon-map.json');
         this.state = STATE.IDLE;
         this._log('[You come to at the bottom of the canyon, ears ringing and the car a write-off. No climbing back up the way you fell.]', 'transition');
+        if (this.questEngine) this.questEngine.start('canyon_escape');
         this._render();
     }
 
@@ -3454,6 +3487,12 @@ class Game {
         if (choice.cost) transferGold(this, npc, choice.cost, 'dialogue');
         if (choice.delta) applyDispositionDelta(npc, choice.delta);   // conversational shift (not a transaction)
         if (choice.once) (npc._dialogueDone || (npc._dialogueDone = new Set())).add(choice.id);
+        // (Chapter Two) a choice can start a quest and/or run a side-effect — the
+        // general dialogue-consequence hook every multi-path quest rides.
+        if (choice.questId && this.questEngine && !this.questEngine.isActive(choice.questId) && !this.questEngine.isComplete(choice.questId)) {
+            this.questEngine.start(choice.questId);
+        }
+        if (typeof choice.onPick === 'function') choice.onPick(this, npc);
         this._dialogueReply = choice.reply || '"..."';
         audio.playSfx((choice.delta ?? 0) < 0 ? 'bump-wall' : 'menu-confirm');
         if ((npc.disposition ?? 0) <= DIALOGUE_HOSTILE_AT) {

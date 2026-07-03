@@ -69,6 +69,7 @@ export const ITEM_COLORS = {
     hot_dog:          { bg: '#cc6633', letter: 'H' },
     catalytic_converter: { bg: '#9a8a6a', letter: 'C' },
     alcohol:          { bg: '#8a5a2a', letter: 'A' },
+    grappling_hook:   { bg: '#9a7b4a', letter: 'G' },
 };
 
 // ── Draw helpers ─────────────────────────────────────────────────────────────

@@ -87,7 +87,9 @@ export class GameMap {
             let ex = 0, ey = 0;
             if (near === dist[0]) ex = -1; else if (near === dist[1]) ex = 1;
             else if (near === dist[2]) ey = -1; else ey = 1;
-            const make = (x, y) => out.push({ x, y, toMap: s.toMap, toX: s.toX, toY: s.toY, label: s.label });
+            // Spread the source so custom fields survive densification (e.g. the
+            // `requires`/`requiresMsg` item-gate on the canyon climb-out).
+            const make = (x, y) => out.push({ ...s, x, y });
             if (ex !== 0) {
                 // Horizontal exit: walk to the edge column, fill the vertical opening.
                 const probeY = ys[Math.floor(ys.length / 2)];

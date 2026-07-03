@@ -13,6 +13,27 @@
 // disposition that craters past the hostile threshold turns the speaker on you.
 
 export const DIALOGUES = {
+    pike: {
+        name: 'Pike',
+        greeting: '"...Company. Ain\'t had company since the river dried up. You fall in like the rest of the junk? Heh."',
+        choices: [
+            { id: 'lore', label: "Ask how long he's been down here", once: true, delta: 4,
+              reply: '"Floated my wagon across when this was still a RIVER. She sank. I woke on the mud — still here. The water did somethin\' to me. Don\'t age, don\'t die, don\'t leave. Just prospect."' },
+            { id: 'buy', label: 'Ask about the rope (the grappling hook)', once: true,
+              reply: '"My climbin\' rope? She\'ll haul you clean out of this pit. Cost you a thousand — give or take how much I like you. Open the till and we\'ll talk. Press E."' },
+            { id: 'deal', label: 'Offer to clear the critters for the rope', once: true,
+              onPick: (game, npc) => {
+                  if (!game.questEngine) return;
+                  game.questEngine.state.flags.pikeDeal = true;
+                  const alive = (game.enemies || []).some(e => e.tag === 'canyon_critter' && e.entity && e.entity.isAlive());
+                  if (!alive) {
+                      game.questEngine.state.flags.pikeDealPaid = true;
+                      if (game._grantItem) game._grantItem('grappling_hook', '[Pike eyes the still bodies. "...Already done? Then she\'s yours." He presses the rope into your hands.]');
+                  }
+              },
+              reply: '"...Hah. The vermin gnawin\' at my wagon? Put the two of \'em down and the rope\'s yours — free and clear. A deal\'s a deal down here."' },
+        ],
+    },
     bartho: {
         name: 'Bartho',
         greeting: '"...what."',
