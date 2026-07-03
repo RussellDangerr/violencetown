@@ -23,7 +23,8 @@ import {
     CANVAS_INTERNAL_PX, HIT_SLOP, OVERLAY_RECTS, THROW_RECTS,
     HOTBAR_X_START, HOTBAR_Y, HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_STRIDE, HOTBAR_SLOTS,
     RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, wheelRingR, QUESTLOG_RECT, LOG_MODAL_RECT,
-    TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BRIBE_RECT, tradeCellRect,
+    TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BUYBACK_ORIGIN, TRADE_BRIBE_RECT,
+    TRADE_COLS, tradeCellRect,
     EQUIPMENT_MODAL_RECT,
 } from './layout.js';
 import { canTrade, buyPrice, sellPrice, bribeStepCost, BRIBE_STEP } from './trade.js'; // (trade slice 1) disposition pricing
@@ -71,6 +72,19 @@ const PIPE_JAM_INTEGRITY = 30;
 // stays on the per-player-turn loop. ~500ms reads as alive but calm (faster than
 // OSRS's 0.6s tile step); tunable.
 const WORLD_TICK_MS = 500;
+
+// (Phase 6c) The reversible economy. A vendor window keeps a BUYBACK ledger for
+// BUYBACK_MS: everything you buy can be sold back for what you paid, and
+// everything you sell can be re-bought for what you got — locked prices, so you
+// can freely test item+gold combos to manage disposition, then undo. The same
+// timer is the disposition "tick clock": moods drift back toward a resting value
+// (0) on a slow cadence, so a bribe is a repeated cost, not a one-time trivialize
+// (gold-weighting research). Decay never un-allies (allies stay bought) and never
+// touches an ally's loyalty — only transient mood. All tunable.
+const BUYBACK_MS               = 5 * 60 * 1000;  // reversible-trade window (~5 min)
+const DISPOSITION_DECAY_MS     = 20000;          // free-roam: nudge one step this often
+const DISPOSITION_DECAY_TURNS  = 40;             // combat: nudge one step every N turns
+const DISPOSITION_DECAY_STEP   = 1;              // points toward resting per nudge
 
 // Town Clock day/night cycle. The overworld eases day → dusk → night → dawn on
 // its own clock, driving the lighting grade (renderer._drawLighting). DAY_LENGTH_MS
@@ -221,6 +235,9 @@ class Game {
         this._dialogueReply = '';        // the NPC's current line shown in the dialogue modal
         this._dialogueCursor = 0;        // selected choice row (keyboard)
         this._tradeSell = null;          // (trade slice 1) snapshot of the sellable bag while shopping
+        this._tradeTimer = null;         // (Phase 6c) 1s re-render while trading so the buyback countdown ticks
+        this._dispositionDecayAccMs = 0; // (Phase 6c) free-roam decay accumulator (ms)
+        this._dispositionDecayTurns = 0; // (Phase 6c) combat decay turn counter
 
         // Inventory: 10 stackable slots, each { itemDef, count } or null
         this.inventory = new Array(INVENTORY_SIZE).fill(null);
@@ -433,6 +450,17 @@ class Game {
             // per-turn beat drives ambient life instead.
             if (this.state === STATE.IDLE && !this._animating && !this._inCombat()) {
                 this._ambientTick();
+            }
+            // (Phase 6c) Disposition tick clock — free-roam half. Accumulate real
+            // time and nudge moods toward resting on the slow decay cadence. Runs
+            // whenever the overworld is live (not splash / not combat — combat
+            // winds it per-turn in _advanceWorld instead).
+            if (this.state !== STATE.SPLASH && !this._inCombat()) {
+                this._dispositionDecayAccMs += WORLD_TICK_MS;
+                if (this._dispositionDecayAccMs >= DISPOSITION_DECAY_MS) {
+                    this._dispositionDecayAccMs = 0;
+                    this._tickDispositionDecay();
+                }
             }
         }, WORLD_TICK_MS);
 
@@ -2622,6 +2650,13 @@ class Game {
         if (this._inCombat()) {
             this._advanceDayClock();
             this._ambientTick();
+            // (Phase 6c) Disposition tick clock — combat half. Hand-wound per
+            // committed turn so moods still drift during a fight; the free-roam
+            // timer is let go here (same split as the day clock above).
+            if (++this._dispositionDecayTurns >= DISPOSITION_DECAY_TURNS) {
+                this._dispositionDecayTurns = 0;
+                this._tickDispositionDecay();
+            }
         }
 
         // (zone pursuit) A wedged door takes a pounding from the pursuers trapped
@@ -2750,6 +2785,29 @@ class Game {
         const p   = this._dayClockMs / DAY_LENGTH_MS;        // 0..1 phase of the day
         const raw = (1 - Math.cos(p * 2 * Math.PI)) / 2;     // 0 → 1 → 0 bell, peak at midnight
         this._nightLevel = Math.max(0, (raw - 0.6) / 0.4) * NIGHT_MAX;
+    }
+
+    // (Phase 6c) The disposition tick clock — one nudge of every non-ally NPC's
+    // mood toward its resting value (0 = neutral), so bribes/gifts and insults
+    // both fade over time (a bribe becomes a repeated cost, not a one-time
+    // trivialize; a slight fades). Wound on the free-roam heartbeat (time) and
+    // per-turn in combat (see the call sites). DELIBERATELY does not route through
+    // applyDispositionDelta: that fires the upward ally-flip whenever disposition
+    // ≥ threshold, which a downward decay must NOT re-trigger — and per the locked
+    // decision allies stay bought (decay never un-allies). So it mutates the mood
+    // directly, clamped, and leaves _ally/_wasFlipped untouched. Resting value is
+    // 0 for all NPCs today; a per-NPC `restingDisposition` can drive it later.
+    _tickDispositionDecay() {
+        const step = DISPOSITION_DECAY_STEP;
+        for (const e of this.enemies) {
+            if (!e || !e.entity || !e.entity.isAlive()) continue;
+            if (e._ally) continue;                 // loyalty is locked once flipped
+            const d = e.disposition;
+            if (d == null || d === 0) continue;    // no mood tracked / already resting
+            const rest = e.restingDisposition ?? 0;
+            if (d === rest) continue;
+            e.disposition = d > rest ? Math.max(rest, d - step) : Math.min(rest, d + step);
+        }
     }
 
     // Military-time readout (HH:MM) derived from the day-clock phase. The cycle
@@ -3484,6 +3542,18 @@ class Game {
         if (!npc || !npc.entity || !npc.entity.isAlive()) return;
         this._tradeNpc = npc;
         this._tradeSell = this._tradeSellList();   // snapshot the bag layout for stable hit-testing
+        // (Phase 6c) Vendors keep a reversible BUYBACK ledger, keyed to the NPC +
+        // the moment the window opened. Reuse it while the ~5-min window is still
+        // live (so closing/re-opening within the window keeps your locked prices);
+        // re-lock a fresh one once it's expired. Non-vendors (offer mode) have no
+        // buyback — a gift isn't a purchase.
+        if (npc.vendor) {
+            const now = performance.now();
+            if (!npc._buyback || (now - npc._buyback.openedAt) >= BUYBACK_MS) {
+                npc._buyback = { openedAt: now, entries: {} };   // entries[itemId] = { rebuyPrice, rebuyQty, refundPrice, refundQty }
+            }
+            this._startTradeTimer();   // tick the countdown while the window is open
+        }
         this.state = STATE.TRADE;
         audio.playSfx('pickup');                   // a little "ka-ching" cue (reuse the pickup blip)
         if (npc.vendor) this._log(`[${npc.type} opens the till. "What'll it be?"]`, 'transition');
@@ -3491,8 +3561,23 @@ class Game {
         this._render();
     }
 
+    // (Phase 6c) A 1s re-render loop while a vendor window is open, so the buyback
+    // countdown visibly ticks down (the modal is otherwise a static paused draw).
+    // Self-stops the instant we leave the trade state; cleared on close.
+    _startTradeTimer() {
+        this._stopTradeTimer();
+        this._tradeTimer = setInterval(() => {
+            if (this.state !== STATE.TRADE) { this._stopTradeTimer(); return; }
+            this._render();
+        }, 1000);
+    }
+    _stopTradeTimer() {
+        if (this._tradeTimer) { clearInterval(this._tradeTimer); this._tradeTimer = null; }
+    }
+
     _closeTrade() {
         if (this.state !== STATE.TRADE) return;
+        this._stopTradeTimer();   // (Phase 6c) stop the buyback-countdown re-render
         this.state = STATE.IDLE;
         this._tradeNpc = null;
         this._tradeSell = null;
@@ -3627,16 +3712,70 @@ class Game {
             this._render();
             return;
         }
+        // (Phase 6c) BUYBACK — re-buy something you sold this window at the LOCKED
+        // price you got for it, not the current market rate. Consumes a rebuy
+        // credit; bypasses the disposition/price gate (it's an undo, not a deal).
+        const e = this._buybackEntry(npc, itemId);
+        if (e && e.rebuyQty > 0 && this._buybackLive(npc)) {
+            const price = e.rebuyPrice;
+            if ((this.gold ?? 0) < price) { this._log(`[Not enough GP to buy it back — needs ${price}.]`); this._render(); return; }
+            if (!this._addToInventory(itemDef)) { this._log('[Your bag is full.]'); this._render(); return; }
+            this.gold -= price;
+            e.rebuyQty -= 1;
+            this._tradeSell = this._tradeSellList();
+            audio.playSfx('pickup');
+            this._log(`[Bought back ${itemDef.name} for ${price} GP.]`, 'pickup');
+            this._render();
+            return;
+        }
         if (!canTrade(npc.disposition)) { this._log(`[${npc.type} won't deal with you. Sweeten the mood first.]`); this._render(); return; }
         const price = buyPrice(itemDef, npc.disposition);
         if (price == null) { this._log(`[${npc.type} won't sell that.]`); this._render(); return; }
         if ((this.gold ?? 0) < price) { this._log(`[Not enough GP — ${itemDef.name} runs ${price}.]`); this._render(); return; }
         if (!this._addToInventory(itemDef)) { this._log('[Your bag is full.]'); this._render(); return; }
         this.gold -= price;
+        // Record a REFUND credit: within the window you can sell this back for
+        // exactly what you paid (Phase 6c reversibility).
+        this._buybackRecord(npc, itemId, 'refund', price);
         this._tradeSell = this._tradeSellList();
         audio.playSfx('pickup');
         this._log(`[Bought ${itemDef.name} for ${price} GP.]`, 'pickup');
         this._render();
+    }
+
+    // ── Buyback ledger (Phase 6c) ─────────────────────────────────────────────
+    // npc._buyback.entries[itemId] = { rebuyPrice, rebuyQty, refundPrice, refundQty }.
+    // A market BUY records a refund credit (sell it back for what you paid); a
+    // market SELL records a rebuy credit (buy it back for what you got). Undo
+    // actions consume the matching credit at the locked price; they don't create
+    // new credits (no infinite ping-pong). The ledger self-expires after BUYBACK_MS.
+    _buybackLive(npc) {
+        return !!(npc._buyback && (performance.now() - npc._buyback.openedAt) < BUYBACK_MS);
+    }
+    // Milliseconds left in the buyback window (0 when expired / no ledger). The
+    // renderer reads this for the countdown so BUYBACK_MS stays in this module.
+    _buybackRemainingMs(npc) {
+        if (!npc._buyback) return 0;
+        return Math.max(0, npc._buyback.openedAt + BUYBACK_MS - performance.now());
+    }
+    _buybackEntry(npc, itemId) {
+        return npc._buyback && npc._buyback.entries[itemId];
+    }
+    _buybackRecord(npc, itemId, kind, price) {
+        if (!npc._buyback) return;
+        const e = npc._buyback.entries[itemId] ||
+            (npc._buyback.entries[itemId] = { rebuyPrice: 0, rebuyQty: 0, refundPrice: 0, refundQty: 0 });
+        if (kind === 'rebuy')  { e.rebuyPrice = price;  e.rebuyQty  += 1; }
+        else                   { e.refundPrice = price; e.refundQty += 1; }
+    }
+    // Sold items still buyable back this window (drives the buyback render row +
+    // its tap targets). Returns [{ itemId, price }] for entries with rebuyQty>0.
+    _buybackList(npc) {
+        if (!this._buybackLive(npc)) return [];
+        const out = [];
+        const entries = npc._buyback.entries;
+        for (const id in entries) if (entries[id].rebuyQty > 0) out.push({ itemId: id, price: entries[id].rebuyPrice });
+        return out;
     }
 
     // Sell the bag item at inventory `slot` to the open vendor.
@@ -3646,6 +3785,24 @@ class Game {
         const stack = this.inventory[slot];
         if (!stack) return;
         const itemDef = stack.itemDef;
+
+        // (Phase 6c) REFUND — sell back something you bought this window for
+        // exactly what you paid, bypassing the market sellPrice + disposition gate.
+        // Consumes a refund credit; it's an undo, not a market sale (so it records
+        // no rebuy credit).
+        const e = this._buybackEntry(npc, itemDef.id);
+        if (e && e.refundQty > 0 && this._buybackLive(npc)) {
+            const refund = e.refundPrice;
+            this._removeFromSlot(slot);
+            this.gold = (this.gold ?? 0) + refund;
+            e.refundQty -= 1;
+            this._tradeSell = this._tradeSellList();
+            audio.playSfx('pickup');
+            this._log(`[Refunded ${itemDef.name} for ${refund} GP.]`, 'pickup');
+            this._render();
+            return;
+        }
+
         if (!canTrade(npc.disposition)) { this._log(`[${npc.type} won't deal with you. Sweeten the mood first.]`); this._render(); return; }
         const price = sellPrice(itemDef, npc.disposition);
         if (price == null) {
@@ -3655,6 +3812,9 @@ class Game {
         }
         this._removeFromSlot(slot);
         this.gold = (this.gold ?? 0) + price;
+        // Record a REBUY credit: within the window you can buy this back for
+        // exactly what you got (Phase 6c reversibility).
+        this._buybackRecord(npc, itemDef.id, 'rebuy', price);
         this._tradeSell = this._tradeSellList();
         audio.playSfx('pickup');
         this._log(`[Sold ${itemDef.name} for ${price} GP.]`, 'pickup');
@@ -3694,8 +3854,18 @@ class Game {
         }
         if (loot) return;   // a chest has no right column
 
-        // RIGHT column: SELL (vendor) or OFFER (non-vendor). Same grid.
         const offerMode = !npc.vendor;   // (Phase 6a)
+
+        // (Phase 6c) BUYBACK row — sold items you can re-buy at the locked price.
+        // Vendor-only; tapping routes through _buyFromVendor's rebuy path.
+        if (!offerMode) {
+            const bb = this._buybackList(npc);
+            for (let i = 0; i < bb.length && i < TRADE_COLS; i++) {
+                if (this._pointInRect(pt, tradeCellRect(TRADE_BUYBACK_ORIGIN, i), HIT_SLOP)) { this._buyFromVendor(bb[i].itemId); return; }
+            }
+        }
+
+        // RIGHT column: SELL (vendor) or OFFER (non-vendor). Same grid.
         const sell = this._tradeSell || [];
         for (let i = 0; i < sell.length; i++) {
             if (this._pointInRect(pt, tradeCellRect(TRADE_SELL_ORIGIN, i), HIT_SLOP)) {

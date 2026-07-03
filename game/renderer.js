@@ -20,8 +20,8 @@ import {
     HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_GAP, HOTBAR_SLOTS, HOTBAR_STRIDE,
     HOTBAR_TOTAL_W, HOTBAR_OX, HOTBAR_OY, HOTBAR_X_START, HOTBAR_Y,
     QUESTLOG_RECT, LOG_MODAL_RECT,
-    TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BRIBE_RECT,
-    TRADE_CELL_W, TRADE_CELL_H, tradeCellRect,
+    TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BUYBACK_ORIGIN, TRADE_BRIBE_RECT,
+    TRADE_CELL_W, TRADE_CELL_H, TRADE_COLS, tradeCellRect,
     RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
     EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS,
 } from './layout.js';
@@ -2438,6 +2438,25 @@ export class Renderer {
             }
             if (sell.length === 0) {
                 this.font.drawText(ctx, 'BAG EMPTY', TRADE_SELL_ORIGIN.x, TRADE_SELL_ORIGIN.y + 8, { color: UI.dim, scale: 1 });
+            }
+        }
+
+        // (Phase 6c) BUYBACK row — vendor only. Items you sold this window, still
+        // re-buyable at the LOCKED price, with a live countdown to the window's
+        // close. Refunds (buy→sell-back) ride the SELL column, so only re-buyable
+        // sold items need their own row here. Capped at TRADE_COLS for one row.
+        if (!container && !offerMode && npc._buyback && game._buybackList) {
+            const remaining = game._buybackRemainingMs(npc);
+            const bb = game._buybackList(npc);
+            if (bb.length > 0) {
+                const secs = Math.ceil(remaining / 1000);
+                const clock = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+                this.font.drawText(ctx, `BUYBACK  ${clock}`, TRADE_BUYBACK_ORIGIN.x, TRADE_BUYBACK_ORIGIN.y - 18, { color: UI.gold, scale: 1 });
+                for (let i = 0; i < bb.length && i < TRADE_COLS; i++) {
+                    const def = ITEMS[bb[i].itemId];
+                    if (!def) continue;
+                    this._drawTradeCell(def, tradeCellRect(TRADE_BUYBACK_ORIGIN, i), bb[i].price, true);
+                }
             }
         }
 

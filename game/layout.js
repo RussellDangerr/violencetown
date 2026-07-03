@@ -79,6 +79,9 @@ export const TRADE_COL_STRIDE = 72;
 export const TRADE_ROW_STRIDE = 80;
 export const TRADE_BUY_ORIGIN  = { x: 52,  y: 156 };
 export const TRADE_SELL_ORIGIN = { x: 320, y: 156 };
+// (Phase 6c) BUYBACK row — sold items you can re-buy at the locked price, drawn
+// below the two grids and above the bribe button. One row of up to TRADE_COLS.
+export const TRADE_BUYBACK_ORIGIN = { x: 52, y: 416 };
 export const TRADE_BRIBE_RECT  = { x: 52, y: 506, w: 200, h: 34 };
 
 // ── Equipment screen (Stage 3 — read-only Vitruvian dress-up) ──
