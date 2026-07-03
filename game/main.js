@@ -32,6 +32,7 @@ import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (n
 import {
     createWheelState, cycle, drill, back, compose, autoAimTile,
     needsFriendlyConfirm, aimRange, affectedTiles, selectedNode, restoreLastCategory, verbApplies,
+    targetVerbs, createTargetWheelState,
 } from './wheel-model.js'; // (sunburst wheel) node-tree model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
 
@@ -48,6 +49,7 @@ const STATE = {
     ITEM_THROW_DIR:  'item_throw_dir',  // chose Throw, waiting for direction
     ITEM_GIVE_DIR:   'item_give_dir',   // chose Give with multiple adjacent NPCs
     RADIAL_MENU:     'radial_menu',     // bumped a hostile enemy — Omnitrix-style wheel
+    TARGET_WHEEL:    'target_wheel',    // (Target Wheel) tapped a target — Price-is-Right verb wheel
     RESOLVING:       'resolving',
     DEAD:            'dead',
     // (Legacy WIN state retired with the tile-7 boss-trigger trap — fix/critical-path.)
@@ -222,6 +224,7 @@ class Game {
         // wheel-model.js holds the layer/category/sub-verb/item cursor, the aim
         // reticle, and last-fired persistence.
         this.wheel = createWheelState();
+        this.targetWheel = createTargetWheelState();   // (Target Wheel) tapped-target verb wheel
         this._lastActKeyAt = 0; // double-tap-Act window for express-repeat
 
         // Screen shake (Phase F) — triggered on damage >= threshold. The
@@ -809,6 +812,13 @@ class Game {
                 return;
             }
 
+            // ── TARGET_WHEEL: drive the tapped-target verb wheel ──
+            if (this.state === STATE.TARGET_WHEEL) {
+                e.preventDefault();
+                this._targetWheelKey(e.code);
+                return;
+            }
+
             // ── ITEM_OVERLAY: pick an option ──
             if (this.state === STATE.ITEM_OVERLAY) {
                 e.preventDefault();
@@ -945,6 +955,12 @@ class Game {
             // E = trade with an adjacent vendor (Puck's till) if one's there;
             // otherwise examine the faced / adjacent point of interest. Both are
             // free actions (no turn cost).
+            // (Target Wheel) F = focus the faced target → its verb wheel.
+            if (e.code === 'KeyF') {
+                e.preventDefault();
+                this._openTargetWheelFaced();
+                return;
+            }
             if (e.code === 'KeyE') {
                 e.preventDefault();
                 const vendor = this._findAdjacentVendor();
@@ -1415,6 +1431,10 @@ class Game {
             this._tapRadialMenu(pt);
             return;
         }
+        if (this.state === STATE.TARGET_WHEEL) {
+            this._tapTargetWheel(pt);
+            return;
+        }
         if (this.state === STATE.ITEM_OVERLAY) {
             this._tapItemOverlay(pt);
             return;
@@ -1427,9 +1447,13 @@ class Game {
             return;
         }
 
-        // IDLE or ITEM_SELECTED → hotbar tap. Outside the hotbar = no-op (we
-        // could route "tap on world tile" to movement here in a future pass,
-        // but PD-style discrete tile taps aren't part of the current scope).
+        // (Target Wheel) An IDLE tap on the world focuses the tapped tile's
+        // target; nothing there → fall through to the hotbar.
+        if (this.state === STATE.IDLE) {
+            const tile = this._screenToTile(pt);
+            if (this._openTargetWheel(tile.x, tile.y)) return;
+        }
+        // IDLE or ITEM_SELECTED → hotbar tap.
         this._tapHotbar(pt);
     }
 
@@ -2172,6 +2196,133 @@ class Game {
         this.wheel.confirming = false;
         audio.playSfx('menu-cancel');
         this._render();
+    }
+
+    // ── Target Wheel ("The Price is Right") ─────────────────────────────────
+    // Tap a target → a full ring of the verbs valid for THAT thing (Examine,
+    // Talk, Trade, Hit, Take…), colour-coded, alphabetical; picks route to the
+    // existing resolvers. A sibling of the Player Wheel on the same machinery.
+
+    // 608-space canvas point → world tile (camera inverse; tiles are
+    // 608/(2·half+1) px, player centred at 304, scroll ~0 while idle).
+    _screenToTile(pt) {
+        const half = (this.renderer && this.renderer.half) || 9;
+        const TILE = 608 / (2 * half + 1);
+        const sx = (this.renderer && this.renderer._scrollX) || 0;
+        const sy = (this.renderer && this.renderer._scrollY) || 0;
+        return {
+            x: Math.floor((pt.x + sx) / TILE - half + this.playerX),
+            y: Math.floor((pt.y + sy) / TILE - half + this.playerY),
+        };
+    }
+
+    // What's targetable at a tile: a live entity, else a ground item, else an
+    // examinable. Returns { x, y, npc?, item?, examinable? } or null.
+    _targetAt(x, y) {
+        const npc = (this.enemies || []).find(e => e.entity.isAlive() && e.x === x && e.y === y);
+        const item = (this.groundItems || []).find(gi => gi.x === x && gi.y === y);
+        const examinable = (this.examinables || []).find(e => e.x === x && e.y === y);
+        if (!npc && !item && !examinable) return null;
+        return { x, y, npc: npc || null, item: item || null, examinable: examinable || null };
+    }
+
+    _openTargetWheel(x, y) {
+        if (this.state !== STATE.IDLE) return false;
+        const target = this._targetAt(x, y);
+        if (!target) return false;
+        const verbs = targetVerbs(target, this);
+        if (!verbs.length) return false;
+        this._stopAutoRepeat();
+        Object.assign(this.targetWheel, { x, y, target, verbs, sel: 0, _openAt: performance.now(), _spinAt: 0 });
+        this.state = STATE.TARGET_WHEEL;
+        audio.playSfx('menu-open');
+        this._ensureParticleLoop();
+        this._render();
+        return true;
+    }
+
+    _closeTargetWheel() {
+        this.state = STATE.IDLE;
+        audio.playSfx('menu-cancel');
+        this._render();
+    }
+
+    // Open on the target the player is FACING (the desktop/keyboard path).
+    _openTargetWheelFaced() {
+        const FACE = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+        const [dx, dy] = FACE[this.facing] || [0, 1];
+        return this._openTargetWheel(this.playerX + dx, this.playerY + dy);
+    }
+
+    _targetWheelKey(code) {
+        const tw = this.targetWheel, n = tw.verbs.length;
+        if (!n) { this._closeTargetWheel(); return; }
+        if (code === 'ArrowLeft'  || code === 'KeyA') { tw.sel = ((tw.sel - 1) % n + n) % n; tw._spinAt = performance.now(); tw._spinDir = -1; audio.playSfx('menu-tick'); this._render(); return; }
+        if (code === 'ArrowRight' || code === 'KeyD') { tw.sel = (tw.sel + 1) % n; tw._spinAt = performance.now(); tw._spinDir = 1; audio.playSfx('menu-tick'); this._render(); return; }
+        if (code === 'ArrowUp' || code === 'KeyW' || code === 'Space' || code === 'Enter') { this._fireTargetVerb(tw.verbs[tw.sel]); return; }
+        if (code === 'ArrowDown' || code === 'KeyS' || code === 'Escape') { this._closeTargetWheel(); return; }
+    }
+
+    _tapTargetWheel(pt) {
+        const tw = this.targetWheel, n = tw.verbs.length;
+        const dx = pt.x - RADIAL_CENTER_X, dy = pt.y - RADIAL_CENTER_Y;
+        const r = Math.hypot(dx, dy);
+        if (r < WHEEL_HUB_R + 8) { this._closeTargetWheel(); return; }        // hub = close
+        if (!n || r > wheelRingR(0)[1] + 14) return;                          // outside the ring — ignore
+        const TOP = -Math.PI / 2, step = (Math.PI * 2) / n;
+        let a = Math.atan2(dy, dx) - TOP; a = ((a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+        const i = Math.round(a / step) % n;
+        if (i === tw.sel) { this._fireTargetVerb(tw.verbs[i]); return; }        // tap selected → fire
+        tw.sel = i; tw._spinAt = performance.now(); audio.playSfx('menu-tick'); this._render();
+    }
+
+    // Route the chosen verb to the existing resolver; the wheel closes into IDLE.
+    _fireTargetVerb(verb) {
+        const tw = this.targetWheel, t = tw.target, npc = t && t.npc;
+        this.state = STATE.IDLE;   // the resolvers below assume IDLE
+        switch (verb.resolver) {
+            case 'examine': {
+                const txt = (t.examinable && t.examinable.text)
+                    || (npc && `[${(npc.name || npc.type)}. ${(npc.behavior == null || npc.behavior.includes('HOSTILE')) ? 'Looks like trouble.' : 'Minding their own business.'}]`)
+                    || (t.item && `[${(t.item.def && t.item.def.name) || t.item.type}. ${(t.item.def && t.item.def.description) || ''}]`)
+                    || '[Nothing worth examining.]';
+                this._log(txt);
+                if (t.examinable) this.emitGameEvent('examine', { targetId: t.examinable.id });
+                audio.playSfx('menu-confirm'); this._render(); break;
+            }
+            case 'talk':  if (npc) this._openDialogue(npc); break;
+            case 'trade': if (npc) this._openTrade(npc); break;
+            case 'bribe': if (npc) this._bribeTarget(npc); break;
+            case 'give':  if (npc) { const slot = this.inventory.findIndex(s => s); if (slot >= 0) { this.selectedSlot = slot; this._doGive(npc); } else { this._log('[Nothing to give.]'); this._render(); } } break;
+            case 'hit':   if (npc) { this.combatAttack(npc, this.equipment.weapon.damage); this._advanceWorld(); this._render(); } break;
+            case 'throw': { const slot = this.inventory.findIndex(s => s && s.itemDef.useType && String(s.itemDef.useType).includes('throw')); if (slot >= 0) { const msg = resolveThrow(this, this.inventory[slot].itemDef, null, this.inventory[slot].count, { x: t.x, y: t.y }); if (msg) this._log(msg); this._removeFromSlot(slot); this._advanceWorld(); } else this._log('[Nothing to throw.]'); this._render(); break; }
+            case 'take':  this._takeItemAt(t.x, t.y); this._render(); break;
+            default: this._render();
+        }
+    }
+
+    _bribeTarget(npc) {
+        if (npc.bribeable === false) { this._log(`[The ${npc.type || 'stranger'} won't take your money.]`); this._render(); return; }
+        const cost = bribeStepCost(npc.disposition ?? 0);
+        if ((this.gold ?? 0) < cost) { this._log(`[Not enough gold to bribe — needs ${cost}g.]`); this._render(); return; }
+        this.gold -= cost;
+        applyDispositionDelta(npc, BRIBE_STEP);
+        this._log(`[You slip the ${npc.type || 'stranger'} ${cost}g. (+${BRIBE_STEP} disposition.)]`);
+        this._advanceWorld(); this._render();
+    }
+
+    // Take a specific ground item at a tile (not _tryPickup, which is player-tile only).
+    _takeItemAt(x, y) {
+        const idx = (this.groundItems || []).findIndex(gi => gi.x === x && gi.y === y);
+        if (idx === -1) { this._log('[Nothing to take there.]'); return; }
+        const gi = this.groundItems[idx];
+        const def = ITEMS[gi.type];
+        if (!def) { this.groundItems.splice(idx, 1); return; }
+        if (!this._addToInventory(def)) { this._log('[Your bag is full.]'); return; }
+        this._collectedItems.add(`${this._mapUrl}|${x}|${y}|${gi.type}`);
+        this.groundItems.splice(idx, 1);
+        audio.playSfx('pickup');
+        this._log(`[Took ${def.name}.]`, 'pickup');
     }
 
     // Spin the active ring one slot and stamp the spin so the renderer sweeps it.

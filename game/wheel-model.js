@@ -309,3 +309,33 @@ export function verbApplies(node, game) {
   const pool = social ? alive : alive.filter(e => !e.behavior || e.behavior.includes('HOSTILE'));
   return pool.some(e => cheb(game.playerX, game.playerY, e.x, e.y) <= 1);
 }
+
+// ── Target Wheel ("The Price is Right") ──────────────────────────────────────
+// The verbs valid for a tapped TARGET, alphabetical. A target descriptor is
+// { x, y, npc?, item?, examinable? }. Colours ride the shared language: Examine
+// steel, social/economic gold, Hit red, Throw amber, Take green. Adjacent-only
+// verbs (Talk/Trade/Bribe/Give/Hit) gate on range 1; Examine + ranged Throw don't.
+export function targetVerbs(target, game) {
+  if (!target) return [];
+  const adj = cheb(game.playerX, game.playerY, target.x, target.y) <= 1;
+  const haveItem  = (game.inventory || []).some(s => s);
+  const haveThrow = (game.inventory || []).some(s => s && s.itemDef && s.itemDef.useType && String(s.itemDef.useType).includes('throw'));
+  const V = [];
+  V.push({ key: 'examine', label: 'Examine', color: '#9aa0a6', text: '#23262b', icon: '?', resolver: 'examine' });
+  if (target.npc) {
+    const e = target.npc;
+    const hostile = (!e.behavior || e.behavior.includes('HOSTILE')) && !e._ally;
+    if (e.dialogueId && adj)          V.push({ key: 'talk',  label: 'Talk',  color: '#3f9aa0', text: '#eafafa', resolver: 'talk' });
+    if (e.vendor && adj)              V.push({ key: 'trade', label: 'Trade', color: '#cba43c', text: '#2a1f06', icon: '⇄', resolver: 'trade' });
+    if (adj && e.bribeable !== false) V.push({ key: 'bribe', label: 'Bribe', color: '#cba43c', text: '#2a1f06', icon: '¤', resolver: 'bribe' });
+    if (adj && haveItem && e.bribeable !== false) V.push({ key: 'give', label: 'Give', color: '#cba43c', text: '#2a1f06', icon: '♥', resolver: 'give' });
+    if (hostile && adj)               V.push({ key: 'hit',   label: 'Hit',   color: '#c8443a', text: '#fff3d0', icon: '⚔', resolver: 'hit' });
+    if (hostile && haveThrow)         V.push({ key: 'throw', label: 'Throw', color: '#e08a2a', text: '#2a1400', icon: '➹', resolver: 'throw' });
+  }
+  if (target.item) V.push({ key: 'take', label: 'Take', color: '#4f9b4a', text: '#effbe9', resolver: 'take' });
+  return V.sort((a, b) => (a.label < b.label ? -1 : a.label > b.label ? 1 : 0));
+}
+
+export function createTargetWheelState() {
+  return { x: 0, y: 0, target: null, verbs: [], sel: 0, _openAt: 0, _spinAt: 0, _spinDir: 0 };
+}

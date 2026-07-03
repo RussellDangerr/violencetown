@@ -403,6 +403,7 @@ export class Renderer {
         // Modals
         if (game.state === 'item_overlay')    this._drawItemOverlay(game);
         if (game.state === 'radial_menu')     this._drawRadialMenu(game);
+        if (game.state === 'target_wheel')    this._drawTargetWheel(game);
         if (game.state === 'item_throw_dir')  this._drawThrowPrompt(game);
         if (game.state === 'item_give_dir')   this._drawThrowPrompt(game);
         if (game.state === 'ending') this._drawEndingOverlay(game);
@@ -1814,6 +1815,49 @@ export class Renderer {
     // sub-slice gets the highlight instead.
 
     _drawRadialMenu(game) { this._drawWheel(game); }
+
+    // (Target Wheel — "The Price is Right") A full pegged ring of the tapped
+    // target's verbs: each a colour-language wedge, gold trim + rim pegs, the
+    // selected verb spun under the top pointer, the target named in the hub.
+    _drawTargetWheel(game) {
+        const { ctx } = this;
+        const tw = game.targetWheel; if (!tw || !tw.verbs || !tw.verbs.length) return;
+        const cx = RADIAL_CENTER_X, cy = RADIAL_CENTER_Y, TOP = -Math.PI / 2;
+        const n = tw.verbs.length, step = (Math.PI * 2) / n;
+        ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX); ctx.restore();
+        const now = (typeof performance !== 'undefined') ? performance.now() : 0;
+        const reduce = (typeof Settings !== 'undefined') && Settings.get && Settings.get('reduceMotion');
+        let scale = 1;
+        if (!reduce) { const ot = (now - (tw._openAt || 0)) / 160; if (ot >= 0 && ot < 1) { const s = ot * ot * (3 - 2 * ot); scale = 0.86 + 0.14 * s; } }
+        ctx.save();
+        if (scale !== 1) { ctx.translate(cx, cy); ctx.scale(scale, scale); ctx.translate(-cx, -cy); }
+        const band = wheelRingR(0);
+        const half = step / 2 - WHEEL_TILE_GAP;
+        for (let i = 0; i < n; i++) {
+            const v = tw.verbs[i], mid = TOP + (i - tw.sel) * step, isSel = (i === tw.sel);
+            this._wheelTile(band[0], band[1], mid, half,
+                v.color || '#6b5436', isSel ? 1 : 0.58,
+                v.label, v.text || '#fff3d0',
+                isSel ? { w: 3, c: '#fff3c0' } : { w: 1.5, c: '#d9b34a' },
+                v.icon || null);
+            const a = mid - step / 2, pr = band[1] + 3;
+            ctx.beginPath(); ctx.arc(cx + Math.cos(a) * pr, cy + Math.sin(a) * pr, 3, 0, Math.PI * 2); ctx.closePath();
+            ctx.fillStyle = '#e8c14f'; ctx.fill();
+        }
+        ctx.beginPath(); ctx.arc(cx, cy, WHEEL_HUB_R, 0, Math.PI * 2); ctx.closePath();
+        ctx.fillStyle = 'rgba(30,24,16,0.95)'; ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(212,185,106,0.6)'; ctx.stroke();
+        if (this.font) {
+            const t = tw.target;
+            const name = (t.npc && (t.npc.name || t.npc.type)) || (t.item && ((t.item.def && t.item.def.name) || t.item.type)) || (t.examinable && t.examinable.id) || '?';
+            this.font.drawText(ctx, String(name).replace(/[\[\]]/g, '').toUpperCase().slice(0, 9), cx, cy - 3, { color: UI.gold, scale: 1, align: 'center' });
+        }
+        const ppr = band[1] + 12;
+        ctx.beginPath(); ctx.moveTo(cx, cy - ppr + 10); ctx.lineTo(cx - 7, cy - ppr); ctx.lineTo(cx + 7, cy - ppr); ctx.closePath();
+        ctx.fillStyle = '#e8462f'; ctx.fill();
+        ctx.restore();
+        ctx.globalAlpha = 1; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    }
 
     // One donut-wedge tile (a curved "Simon-Says" segment) + a centered label.
     // Angles in radians: `mid` = the tile's centre angle, `half` = half its width.
