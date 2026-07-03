@@ -189,6 +189,16 @@ class Game {
         // releasing one direction while another is held continues seamlessly.
         this._heldDirKeys = [];
 
+        // Physical held-key set — the raw truth of what direction keys are down
+        // RIGHT NOW, independent of the walk stack. Every scene/state teardown
+        // empties _heldDirKeys (map load, wheel/menu/pause/death clears), so a
+        // key physically held across a transition fires no fresh keydown in the
+        // new scene and walking dies until you re-press. _physicalHeld survives
+        // those teardowns (mutated only by real keydown/keyup, cleared only on
+        // blur) so _resumeHeldWalk can rebuild the walk stack and keep you
+        // walking with no re-press. (movement-feel resume-fix, 2026-07-03)
+        this._physicalHeld = new Set();
+
         // In-canvas log strip (Phase 1B of overhead-dialogue plan). Mirrors
         // every _log() call into a fixed-size ring buffer that the renderer
         // draws above the hotbar. Newest message at the bottom; old ones
@@ -751,6 +761,12 @@ class Game {
                 if (e.code === 'KeyP' || e.code === 'Escape') { e.preventDefault(); this._setPaused(false); }
                 return;
             }
+            // Record the raw physical key state BEFORE any state-specific early
+            // return, so a direction held while a menu/wheel is open (or during a
+            // slide, or on OS key-repeat) is remembered and _resumeHeldWalk can
+            // pick it up when we return to IDLE. Gated exactly like the walk stack
+            // (past SPLASH/RESOLVING/paused), never cleared by scene teardown.
+            if (DIRS[e.code]) this._physicalHeld.add(e.code);
             if (this._animating) {
                 // Mid-slide: don't throw the press away (the old hard return
                 // read as "the game ignored me" at direction changes). Buffer
@@ -990,6 +1006,10 @@ class Game {
         document.addEventListener('keyup', (e) => {
             const heldIdx = this._heldDirKeys.indexOf(e.code);
             if (heldIdx >= 0) this._heldDirKeys.splice(heldIdx, 1);
+            // Physical release always drops from the raw set (the source of truth
+            // that survives scene teardown), even if the walk stack was already
+            // cleared by a transition.
+            this._physicalHeld.delete(e.code);
         });
 
         // Window blur clears the held stack — browsers don't always fire
@@ -998,6 +1018,10 @@ class Game {
         window.addEventListener('blur', () => {
             this._heldDirKeys = [];
             this._stopAutoRepeat();
+            // Blur is the SOLE place _physicalHeld is cleared — a key held while
+            // focus is lost may never fire its keyup, so we forget it here to
+            // avoid a phantom held key resuming a walk on refocus.
+            this._physicalHeld.clear();
         });
     }
 
@@ -1353,6 +1377,9 @@ class Game {
         if (this._paused) {
             this._stopAutoRepeat?.();
             this._heldDirKeys = [];
+        } else {
+            // On resume, keep walking if a direction is still physically held.
+            this._resumeHeldWalk?.();
         }
     }
 
@@ -1894,6 +1921,26 @@ class Game {
         this._doMove(step);
     }
 
+    // Re-arm continuous walking from the physically-held keys after a scene or
+    // state change emptied the walk stack. Call this at every point the world
+    // returns to a live IDLE (map transition, wheel/menu/pause/dialogue close,
+    // respawn): if a direction is still physically down, rebuild _heldDirKeys
+    // from _physicalHeld and kick one step so the player keeps walking with NO
+    // re-press. Routed through _onStepSettled, so the FIRST step in the new
+    // scene still respects _autoRepeatShouldStop (the transition/hazard gate —
+    // no blind auto-walk into the next screen) and _animating (no double-step).
+    // Only ever acts in IDLE, so a key held while a menu is open can't step
+    // until the menu actually closes. (movement-feel resume-fix, 2026-07-03)
+    _resumeHeldWalk() {
+        if (this.state !== STATE.IDLE || this._animating) return;
+        const held = [...this._physicalHeld].filter(code => DIRS[code]);
+        if (held.length === 0) return;
+        // Set iteration is insertion order → roughly press order, good enough
+        // for the same-axis tie-break _intendedWalkDir does.
+        this._heldDirKeys = held;
+        this._onStepSettled();
+    }
+
     // Stop all continuous walking and clear pending movement intent. Named for
     // its many existing call sites (blur, pause, map load, death, resets); it
     // is the single "halt the walker" entry point.
@@ -2196,6 +2243,7 @@ class Game {
         this.wheel.confirming = false;
         audio.playSfx('menu-cancel');
         this._render();
+        this._resumeHeldWalk();   // resume walking if a dir was held through the wheel
     }
 
     // ── Target Wheel ("The Price is Right") ─────────────────────────────────
@@ -2245,6 +2293,7 @@ class Game {
         this.state = STATE.IDLE;
         audio.playSfx('menu-cancel');
         this._render();
+        this._resumeHeldWalk();
     }
 
     // Open on the target the player is FACING (the desktop/keyboard path).
@@ -2668,6 +2717,10 @@ class Game {
                 this.emitGameEvent('map_entered', { map: t.toMap });
                 this.autosave({ force: true });
                 this._render();
+                // Keep walking into the new zone if a direction is still held —
+                // the first step still passes the transition/hazard gate, so no
+                // double-warp. (movement-feel resume-fix)
+                this._resumeHeldWalk();
             });
             return;
         }
@@ -3121,6 +3174,7 @@ class Game {
         }
         this.state = STATE.IDLE;
         this._render();
+        this._resumeHeldWalk();   // resume walking only if a dir is genuinely still held
         this._log('[Respawned]');
         this.autosave({ force: true });
     }
@@ -3473,6 +3527,7 @@ class Game {
         this._tradeNpc = null;
         this._tradeSell = null;
         this._render();
+        this._resumeHeldWalk();
     }
 
     // ── Dialogue (Step 4 — disposition dialogue) ─────────────────────────────
@@ -3510,6 +3565,7 @@ class Game {
         this._dialogueNpc = null;
         this._dialogueReply = '';
         this._render();
+        this._resumeHeldWalk();
     }
 
     // ── Equipment screen (Stage 3 — read-only Vitruvian dress-up) ────────────
