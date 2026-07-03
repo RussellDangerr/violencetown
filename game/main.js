@@ -7,7 +7,7 @@ import { loadMap } from './map.js';
 import { loadAllSprites } from './sprites.js';
 import { BitmapFont } from './bitmap-font.js';
 import { DIR_NAMES, PLAYER_MAX_HP, PLAYER_MAX_MP, SLUDGE_DOT, INVENTORY_SIZE, MAX_STACK } from './data.js';
-import { ITEMS, resolveUse, resolveThrow, tickTempEquips } from './items.js';
+import { ITEMS, itemTier, resolveUse, resolveThrow, tickTempEquips } from './items.js';
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { attack, formatDamageNumber } from './combat.js';
 import { Enemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
@@ -2319,9 +2319,13 @@ class Game {
         this.state = STATE.IDLE;   // the resolvers below assume IDLE
         switch (verb.resolver) {
             case 'examine': {
+                // (Phase 6d) An item's examine names its value tier — the legible
+                // "how good/valuable is this" read (Grey→Orange).
+                const itemDef = t.item && t.item.def;
+                const itemTxt = itemDef && `[${itemDef.name || t.item.type} (${itemTier(itemDef).name}). ${itemDef.description || ''}]`;
                 const txt = (t.examinable && t.examinable.text)
                     || (npc && `[${(npc.name || npc.type)}. ${(npc.behavior == null || npc.behavior.includes('HOSTILE')) ? 'Looks like trouble.' : 'Minding their own business.'}]`)
-                    || (t.item && `[${(t.item.def && t.item.def.name) || t.item.type}. ${(t.item.def && t.item.def.description) || ''}]`)
+                    || itemTxt
                     || '[Nothing worth examining.]';
                 this._log(txt);
                 if (t.examinable) this.emitGameEvent('examine', { targetId: t.examinable.id });
@@ -3799,6 +3803,27 @@ class Game {
             this._tradeSell = this._tradeSellList();
             audio.playSfx('pickup');
             this._log(`[Refunded ${itemDef.name} for ${refund} GP.]`, 'pickup');
+            this._render();
+            return;
+        }
+
+        // (Phase 6d) SPECIAL BUY — a vendor's `specialBuys` map overrides the
+        // ordinary market: it pays a FIXED price for a listed item even when
+        // sellPrice() would refuse it (questItems included). The archetype is Macc
+        // paying 500 for the Cataclysmic Converter no ordinary merchant wants —
+        // the legible signal that an odd item has a real use. Records a rebuy
+        // credit, so the sale is reversible for the buyback window (⚠️ on current
+        // dev the Converter is still the car-fix item — buying it back within the
+        // window undoes a soft-lock; after the window it's gone. Caelan's call at
+        // merge whether to gate this behind carFixed or accept the freedom-path.)
+        const special = npc.specialBuys && npc.specialBuys[itemDef.id];
+        if (special != null) {
+            this._removeFromSlot(slot);
+            this.gold = (this.gold ?? 0) + special;
+            this._buybackRecord(npc, itemDef.id, 'rebuy', special);
+            this._tradeSell = this._tradeSellList();
+            audio.playSfx('pickup');
+            this._log(`[${npc.type} takes the ${itemDef.name.replace(/[\[\]]/g, '')} off your hands for ${special} GP.]`, 'pickup');
             this._render();
             return;
         }

@@ -127,15 +127,58 @@ export const ITEMS = {
     catalytic_converter: {
         id: 'catalytic_converter',
         name: '[Cataclysmic Converter]',
-        description: 'The thingamajig that makes the car go. Rat people tore it clean out. Smells like grease and betrayal.',
+        description: 'The thingamajig that makes the car go. Rat people tore it clean out. Smells like grease and betrayal. No ordinary merchant wants it — but Macc pays.',
         category: 'quest',
         useType: 'none',
         consumable: false,
         questItem: true,
+        // (Phase 6d) An ORANGE tier despite baseValue 0: worthless to ordinary
+        // merchants, but a legendary find to the one buyer who wants it (Macc,
+        // 500 GP). The tier + the special buyer are how "this has a special use"
+        // reads without a segregated quest-item tab.
+        tier: 'orange',
         fallbackColor: '#9a8a6a',
         baseValue: 0,
     },
+
+    // ── Special / mechanic-shop stock (Phase 6d) ──────────────────────────────
+    // Macc the raccoon mechanic sells the chain. Its canyon rappel-route effect
+    // is wired on the chapter-two canyon branch (not on dev yet) — here it's an
+    // ordinary ownable item whose description teaches the route.
+    chain: {
+        id: 'chain',
+        name: '[Rappel Chain]',
+        description: 'A coil of greasy tow-chain off Macc\'s wall. "Bolt it to the canyon lip," he says, "and climb down like you got sense." A way into the gorge that isn\'t a crash.',
+        useType: 'none',
+        equipSlot: 'sides',
+        consumable: false,
+        tier: 'blue',
+        fallbackColor: '#7a7a7a',
+        baseValue: 40,
+    },
 };
+
+// ── Value tiers (Phase 6d) ────────────────────────────────────────────────────
+// A Borderlands-style rarity ladder that makes worth legible at a glance —
+// examine text names the tier, the trade cell wears its colour. By default the
+// tier is DERIVED from baseValue (so tier and price stay in sync — the tier is
+// the visible face of the value that also sets the price); an item may override
+// with an explicit `tier` when its worth isn't its ordinary-market value (the
+// Converter: baseValue 0 to a merchant, but an Orange find to Macc).
+export const VALUE_TIERS = [
+    { key: 'grey',   name: 'Common',    color: '#9aa0a6', max: 3 },
+    { key: 'green',  name: 'Uncommon',  color: '#4f9b4a', max: 9 },
+    { key: 'blue',   name: 'Rare',      color: '#4a86c8', max: 24 },
+    { key: 'purple', name: 'Epic',      color: '#9a52c8', max: 59 },
+    { key: 'orange', name: 'Legendary', color: '#e08a2a', max: Infinity },
+];
+
+export function itemTier(itemDef) {
+    if (!itemDef) return VALUE_TIERS[0];
+    if (itemDef.tier) return VALUE_TIERS.find(t => t.key === itemDef.tier) || VALUE_TIERS[0];
+    const v = itemDef.baseValue ?? 0;
+    return VALUE_TIERS.find(t => v <= t.max) || VALUE_TIERS[VALUE_TIERS.length - 1];
+}
 
 // Equip an item into its slot. Returns a log message.
 // If the slot is occupied, the old item is stored as a pending restore.

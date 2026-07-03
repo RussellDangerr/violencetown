@@ -25,7 +25,7 @@ import {
     RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
     EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS,
 } from './layout.js';
-import { ITEMS } from './items.js';                                          // (trade slice 1) stock item defs
+import { ITEMS, itemTier } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
 import { hasLineOfSight } from './enemies.js';                               // (aggro overlay) READ-ONLY: same Bresenham the chase AI uses
 import { buyPrice, sellPrice, bribeStepCost, mood, canTrade, BRIBE_STEP } from './trade.js'; // (trade slice 1) pricing + mood smiley
 import * as Settings from './settings.js'; // (combat-feel-pass) reduce-motion for hit-splats (namespace import — see main.js)
@@ -2432,8 +2432,16 @@ export class Renderer {
                     const marker = itemDef.questItem ? '◆' : '♥';
                     this._drawTradeCell(itemDef, tradeCellRect(TRADE_SELL_ORIGIN, i), null, true, marker);
                 } else {
-                    const price = dealing ? sellPrice(itemDef, disp) : null;
-                    this._drawTradeCell(itemDef, tradeCellRect(TRADE_SELL_ORIGIN, i), price, dealing && price != null);
+                    // (Phase 6d) A special-buyer pays a fixed price even for items
+                    // sellPrice() refuses (the questItem Converter → 500 to Macc),
+                    // so show that instead of a dimmed "—".
+                    const special = npc.specialBuys && npc.specialBuys[itemDef.id];
+                    if (special != null) {
+                        this._drawTradeCell(itemDef, tradeCellRect(TRADE_SELL_ORIGIN, i), special, true);
+                    } else {
+                        const price = dealing ? sellPrice(itemDef, disp) : null;
+                        this._drawTradeCell(itemDef, tradeCellRect(TRADE_SELL_ORIGIN, i), price, dealing && price != null);
+                    }
                 }
             }
             if (sell.length === 0) {
@@ -2487,15 +2495,21 @@ export class Renderer {
     // One shop cell: inset frame, item icon, price under it. `enabled` false
     // (won't-deal, or unsellable like a quest item) dims the cell and the price
     // shows as "—". `marker` (Phase 6a offer mode) replaces the price with a
-    // give/quest glyph drawn in gold, and the cell stays fully lit.
+    // give/quest glyph drawn in gold, and the cell stays fully lit. (Phase 6d) A
+    // value-tier colour bar rides the cell's top edge for at-a-glance rarity.
     _drawTradeCell(itemDef, r, price, enabled, marker) {
         const { ctx } = this;
         drawInset(ctx, r.x, r.y, r.w, r.h);
         const prevAlpha = ctx.globalAlpha;
         if (!enabled && !marker) ctx.globalAlpha = 0.45;
 
+        // (Phase 6d) tier bar — a 3px band of the item's rarity colour at the top.
+        const tier = itemTier(itemDef);
+        ctx.fillStyle = tier.color;
+        ctx.fillRect(r.x + 1, r.y + 1, r.w - 2, 3);
+
         const iconSize = 32;
-        this._drawItemIcon(itemDef, r.x + (r.w - iconSize) / 2, r.y + 8, iconSize);
+        this._drawItemIcon(itemDef, r.x + (r.w - iconSize) / 2, r.y + 10, iconSize);
 
         if (this.font) {
             const label = marker != null ? marker : (price == null ? '—' : `${price}`);
