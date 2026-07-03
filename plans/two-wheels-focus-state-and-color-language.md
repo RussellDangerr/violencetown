@@ -239,18 +239,30 @@ examine layering + the item-`class` taxonomy + the dev item-table view · the ag
 
 ## 12. Suggested build sequence (each its own `feature/*` branch off dev; decompose into plans)
 
-This design is large; the implementation plan should **decompose** it. A low-risk → high-payoff order:
+This design is large; the implementation plan should **decompose** it. A low-risk → high-payoff order.
+**Progress (2026-07-03): steps 0–2 are BUILT + verified in-browser + MERGED to `dev` (`24c4a46`)** — the
+whole wheel arc landed as one `--no-ff` merge (`feature/wheel-target-wheel`). Steps 3–5 remain.
 
-0. **Color language + Flight-under-Trick** — pure re-color + one re-nest **on the existing Player Wheel**.
-   Lowest risk, immediate visual win, and it establishes the palette everything else uses.
-1. **The `appliesTo` verb model** — the primitive. No new UI yet; prove it by graying invalid verbs on the
-   Player Wheel.
-2. **The Target Wheel** — render (Price-is-Right) + tap-to-focus + keyboard path, driven by `appliesTo`,
-   with pre-viz on hover.
-3. **Layered examine text + the item-`class` taxonomy + the dev item-table view** — the description-rich
-   foundation. (Can run in parallel with 2; it's mostly data.)
-4. **Dominant-slice + the flapper** — the Player-Wheel game-show feel + the bottom-right move.
-5. **Combat entry/exit re-skin** — tone down + blocky aggro circle + LoS lines + audio/vignette + flee-out.
+0. ✅ **DONE (merged).** **Color language + Flight-under-Trick** — colours became data on the verb-tree nodes;
+   Flight nested under gold Trick; leaf spells wear their own colour (Fireball ember / Cone of Cold ice);
+   `HUE` follows the current section. (`feature/wheel-colors-p0`; plan `…-phase0-*-implementation.md`.)
+1. ✅ **DONE (merged).** **The `appliesTo` verb model** — `verbApplies(node, game)` grays out (and gates
+   firing of) verbs with no valid target in range; routed through `tileEnabled` + `_wheelDrill`.
+   (`feature/wheel-colors-p1`.)
+2. ✅ **DONE (merged).** **The Target Wheel** — `STATE.TARGET_WHEEL`; `targetVerbs()` builds the alphabetical,
+   colour-coded verb ring for a tapped target (Examine/Talk/Trade/Bribe/Give/Hit/Throw/Take); `_screenToTile`
+   camera-inverse; `_drawTargetWheel` (Price-is-Right); picks route to the existing resolvers; F = focus the
+   faced target. (`feature/wheel-target-wheel`.) *v1 centres the wheel + inline examine text — position-at-tile
+   + hover pre-viz are folded into step 3/4 polish.*
+3. ⏳ **Layered examine text + the item-`class` taxonomy + the dev item-table view** — the description-rich
+   foundation. (Mostly data; enriches the Target Wheel's Examine path.)
+4. ⏳ **Dominant-slice + the flapper** — the Player-Wheel game-show feel + the **bottom-right corner move**
+   (+ the §5.1 "current tier dominates the circle" note).
+5. ⏳ **Combat entry/exit re-skin** — tone down + blocky aggro circle + LoS lines + audio/vignette + flee-out.
+
+> **Merge note:** steps 0–2 sit on the *new* `dev`. The **Armory** arc (unmerged, off the old `8d962fb`)
+> touched `wheel-model.js` and **will conflict** with the wheel restructure when merged — reconcile by
+> slotting its Boo!/Ray-Blast/Hire-Lire nodes into the new Trick/Magic tree.
 
 ---
 
