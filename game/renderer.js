@@ -405,7 +405,6 @@ export class Renderer {
         if (game.state === 'radial_menu')     this._drawRadialMenu(game);
         if (game.state === 'target_wheel')    this._drawTargetWheel(game);
         if (game.state === 'item_throw_dir')  this._drawThrowPrompt(game);
-        if (game.state === 'item_give_dir')   this._drawThrowPrompt(game);
         if (game.state === 'ending') this._drawEndingOverlay(game);
         if (game.state === 'log_modal') this._drawLogModal(game);
         if (game.state === 'trade') this._drawTradeModal(game);
@@ -1985,7 +1984,7 @@ export class Renderer {
             fight: '⚔', trick: '♦', treat: '♥', flight: '»',
             melee: '⚔', ranged: '➹', magic: '✦',
             hit: '✶', cleave: '⚔', spin: '⟳',
-            throw: '➹', defend: '⛊', bribe: '¤', give: '♥', trade: '⇄',
+            throw: '➹', defend: '⛊', bribe: '¤', trade: '⇄',
             eat: '♥', cleanse: '✧', run: '»', hide: '☾', wait: '⏱',
         };
         const drawSlot = (mid, node, isSel) => {
@@ -2378,43 +2377,58 @@ export class Renderer {
         const disp = npc.disposition ?? 0;
         const dealing = canTrade(disp);
         const m = mood(disp);
+        // (Phase 6a) A non-vendor opens OFFER mode: one satchel→NPC give column,
+        // no BUY, prices replaced by a give/quest marker. Giving is NEVER gated
+        // by disposition (it's how you raise a sour mood), so offer cells stay
+        // live even when `dealing` is false.
+        const offerMode = !npc.vendor;
 
         // Title
-        const title = `${(npc.type || 'TRADER').toUpperCase()}'S TILL`;
+        const title = offerMode ? `OFFER TO ${(npc.type || 'SOMEONE').toUpperCase()}`
+                                : `${(npc.type || 'TRADER').toUpperCase()}'S TILL`;
         this.font.drawText(ctx, title, CANVAS_PX / 2, R.y + 14, { color: UI.gold, scale: 2, align: 'center' });
 
         // Mood row — smiley + label on the left, GP on the right.
         const moodY = R.y + 48;
         this._drawMoodFace(R.x + 26, moodY, m.face);
-        this.font.drawText(ctx, m.mood.toUpperCase(), R.x + 44, moodY - 3, { color: dealing ? UI.textLight : UI.hpRed, scale: 1 });
+        this.font.drawText(ctx, m.mood.toUpperCase(), R.x + 44, moodY - 3, { color: (dealing || offerMode) ? UI.textLight : UI.hpRed, scale: 1 });
         this.font.drawText(ctx, `GP ${game.gold ?? 0}`, R.x + R.w - 24, moodY - 6, { color: UI.gold, scale: 2, align: 'right' });
 
-        // Section headers in gold — high-contrast on the dark stone panel
-        // (matches the modal title). Insets below stay dark with gold/light text.
-        this.font.drawText(ctx, 'BUY',  TRADE_BUY_ORIGIN.x,  TRADE_BUY_ORIGIN.y - 18,  { color: UI.gold, scale: 1 });
-        this.font.drawText(ctx, 'SELL', TRADE_SELL_ORIGIN.x, TRADE_SELL_ORIGIN.y - 18, { color: UI.gold, scale: 1 });
+        // Section headers in gold. In offer mode there's no BUY column; the right
+        // column becomes OFFER.
+        if (!offerMode) this.font.drawText(ctx, 'BUY', TRADE_BUY_ORIGIN.x, TRADE_BUY_ORIGIN.y - 18, { color: UI.gold, scale: 1 });
+        this.font.drawText(ctx, offerMode ? 'OFFER' : 'SELL', TRADE_SELL_ORIGIN.x, TRADE_SELL_ORIGIN.y - 18, { color: UI.gold, scale: 1 });
 
-        // BUY grid — the vendor's stock.
-        const stock = npc.stock || [];
-        for (let i = 0; i < stock.length; i++) {
-            const itemDef = ITEMS[stock[i]];
-            if (!itemDef) continue;
-            const price = dealing ? buyPrice(itemDef, disp) : null;
-            this._drawTradeCell(itemDef, tradeCellRect(TRADE_BUY_ORIGIN, i), price, dealing && price != null);
+        // BUY grid — the vendor's stock (shop mode only).
+        if (!offerMode) {
+            const stock = npc.stock || [];
+            for (let i = 0; i < stock.length; i++) {
+                const itemDef = ITEMS[stock[i]];
+                if (!itemDef) continue;
+                const price = dealing ? buyPrice(itemDef, disp) : null;
+                this._drawTradeCell(itemDef, tradeCellRect(TRADE_BUY_ORIGIN, i), price, dealing && price != null);
+            }
         }
 
-        // SELL grid — the player's bag (snapshot taken on open / after each trade).
+        // Right grid — the player's bag (snapshot taken on open / after each trade).
+        // Shop mode shows a SELL price; offer mode shows a give marker (a quest
+        // item wears a quest-point ◆ instead of a gold price — Phase 6a/6d).
         const sell = game._tradeSell || [];
         for (let i = 0; i < sell.length; i++) {
             const itemDef = sell[i].itemDef;
-            const price = dealing ? sellPrice(itemDef, disp) : null;
-            this._drawTradeCell(itemDef, tradeCellRect(TRADE_SELL_ORIGIN, i), price, dealing && price != null);
+            if (offerMode) {
+                const marker = itemDef.questItem ? '◆' : '♥';
+                this._drawTradeCell(itemDef, tradeCellRect(TRADE_SELL_ORIGIN, i), null, true, marker);
+            } else {
+                const price = dealing ? sellPrice(itemDef, disp) : null;
+                this._drawTradeCell(itemDef, tradeCellRect(TRADE_SELL_ORIGIN, i), price, dealing && price != null);
+            }
         }
         if (sell.length === 0) {
             this.font.drawText(ctx, 'BAG EMPTY', TRADE_SELL_ORIGIN.x, TRADE_SELL_ORIGIN.y + 8, { color: UI.dim, scale: 1 });
         }
 
-        // Bribe button.
+        // Bribe button (works in both modes — bribing lifts any NPC's mood).
         const B = TRADE_BRIBE_RECT;
         const cost = bribeStepCost(disp);
         const maxed = disp >= 100;
@@ -2428,27 +2442,28 @@ export class Renderer {
         });
 
         // Footer hint.
-        this.font.drawText(ctx, 'TAP TO BUY / SELL    B BRIBE    E / ESC CLOSE', CANVAS_PX / 2, R.y + R.h - 16, {
+        this.font.drawText(ctx, offerMode ? 'TAP TO GIVE    B BRIBE    E / ESC CLOSE' : 'TAP TO BUY / SELL    B BRIBE    E / ESC CLOSE', CANVAS_PX / 2, R.y + R.h - 16, {
             color: UI.textLight, scale: 1, align: 'center',
         });
     }
 
     // One shop cell: inset frame, item icon, price under it. `enabled` false
     // (won't-deal, or unsellable like a quest item) dims the cell and the price
-    // shows as "—".
-    _drawTradeCell(itemDef, r, price, enabled) {
+    // shows as "—". `marker` (Phase 6a offer mode) replaces the price with a
+    // give/quest glyph drawn in gold, and the cell stays fully lit.
+    _drawTradeCell(itemDef, r, price, enabled, marker) {
         const { ctx } = this;
         drawInset(ctx, r.x, r.y, r.w, r.h);
         const prevAlpha = ctx.globalAlpha;
-        if (!enabled) ctx.globalAlpha = 0.45;
+        if (!enabled && !marker) ctx.globalAlpha = 0.45;
 
         const iconSize = 32;
         this._drawItemIcon(itemDef, r.x + (r.w - iconSize) / 2, r.y + 8, iconSize);
 
         if (this.font) {
-            const label = price == null ? '—' : `${price}`;
+            const label = marker != null ? marker : (price == null ? '—' : `${price}`);
             this.font.drawText(ctx, label, r.x + r.w / 2, r.y + r.h - 16, {
-                color: price == null ? UI.dim : UI.gold, scale: 1, align: 'center',
+                color: (marker != null || price != null) ? UI.gold : UI.dim, scale: 1, align: 'center',
             });
         }
         ctx.globalAlpha = prevAlpha;

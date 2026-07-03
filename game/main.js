@@ -45,9 +45,9 @@ const STATE = {
     SPLASH:          'splash',
     IDLE:            'idle',            // waiting for input
     ITEM_SELECTED:   'item_selected',   // 1-9 pressed, slot highlighted
-    ITEM_OVERLAY:    'item_overlay',    // Space pressed, showing use/throw/smash/give
+    ITEM_OVERLAY:    'item_overlay',    // Space pressed, showing use/throw/smash
     ITEM_THROW_DIR:  'item_throw_dir',  // chose Throw, waiting for direction
-    ITEM_GIVE_DIR:   'item_give_dir',   // chose Give with multiple adjacent NPCs
+    // (Phase 6a) ITEM_GIVE_DIR retired — Give folded into the Trade window.
     RADIAL_MENU:     'radial_menu',     // bumped a hostile enemy — Omnitrix-style wheel
     TARGET_WHEEL:    'target_wheel',    // (Target Wheel) tapped a target — Price-is-Right verb wheel
     RESOLVING:       'resolving',
@@ -792,17 +792,6 @@ class Game {
                 return;
             }
 
-            // ── ITEM_GIVE_DIR: waiting for give direction ──
-            // Same input shape as ITEM_THROW_DIR; differs only in where it
-            // dispatches. The shared direction-prompt UI in renderer.js
-            // (_drawThrowPrompt) renders the same arrows for both states.
-            if (this.state === STATE.ITEM_GIVE_DIR) {
-                const dir = DIRS[e.code];
-                if (dir) { e.preventDefault(); this._doGiveDir(dir); return; }
-                if (e.code === 'Escape') { e.preventDefault(); this.state = STATE.IDLE; this.selectedSlot = -1; this._render(); return; }
-                return;
-            }
-
             // ── RADIAL_MENU: just bumped a hostile, drive the Omnitrix wheel ──
             // Left/Right spins the cursor around the wheel (one slice per press).
             // Up (or Space) confirms — either fires the action or drills into the
@@ -1450,7 +1439,7 @@ class Game {
         // Priority order is by modality: the most exclusive overlay wins. A
         // tap while the radial menu is open should drive the radial menu,
         // not fall through to the hotbar visible behind/under it.
-        if (this.state === STATE.ITEM_THROW_DIR || this.state === STATE.ITEM_GIVE_DIR) {
+        if (this.state === STATE.ITEM_THROW_DIR) {
             this._tapThrowPrompt(pt);
             return;
         }
@@ -1543,8 +1532,7 @@ class Game {
         for (const dir of ['up', 'right', 'down', 'left']) {
             if (this._pointInRect(pt, THROW_RECTS[dir], HIT_SLOP)) {
                 const vec = dirVecs[dir];
-                if (this.state === STATE.ITEM_THROW_DIR) this._doThrow(vec);
-                else                                     this._doGiveDir(vec);
+                this._doThrow(vec);   // (Phase 6a) throw-only now — give left this prompt
                 return;
             }
         }
@@ -2022,17 +2010,10 @@ class Game {
         }
 
         // (action-wheel overhaul) Throw moved to the action wheel — the hotbar
-        // overlay now keeps Use / Smash / Give only (no 'right' option).
+        // overlay now keeps Use / Smash only. (Phase 6a) Give left the overlay
+        // too — handing an item to an NPC is now the Trade window's offer mode
+        // (Target-Wheel → Trade on any adjacent NPC).
 
-        // Adjacent NPCs — partitioned into hostile-eligible vs non-hostile.
-        // Smash uses the canonical _adjacentHostiles helper so the gate
-        // semantics live in one place. Give targets ALL adjacent NPCs
-        // (including non-hostile ones like Carrion), so it uses the broader
-        // inline filter — Give is the one combat-adjacent action that
-        // legitimately targets friendlies.
-        const adjAll = this.enemies.filter(e =>
-            e.entity.isAlive() && manhattan(e.x, e.y, this.playerX, this.playerY) === 1
-        );
         const adjHostile = this._adjacentHostiles();
 
         // Left = smash (only if adjacent HOSTILE-eligible enemy — prevents
@@ -2042,17 +2023,7 @@ class Game {
             this.overlayOptions.left = { label: 'Smash', action: 'smash' };
         }
 
-        // Down = give (if ANY adjacent NPC exists). Bribery-immune NPCs
-        // reject the offering visibly; already-flipped ones still accept
-        // for loyalty boost. The Give action is the one item interaction
-        // that targets non-hostiles, which is why it doesn't filter by
-        // HOSTILE eligibility.
-        if (adjAll.length > 0) {
-            const label = adjAll.length === 1 ? `Give to ${adjAll[0].type}` : 'Give';
-            this.overlayOptions.down = { label, action: 'give' };
-        }
-
-        audio.playSfx('menu-open'); // [audio] item use/throw/give overlay opened
+        audio.playSfx('menu-open'); // [audio] item use/throw overlay opened
         this.state = STATE.ITEM_OVERLAY;
         this._overlayOpenedAt = performance.now();
         this._ensureParticleLoop(); // animate the slide-in (Phase D)
@@ -2097,23 +2068,6 @@ class Game {
                 this.selectedSlot = -1;
                 this.state = STATE.IDLE;
                 this._advanceWorld();
-                return;
-            }
-            case 'give': {
-                // If exactly one adjacent NPC, give to them directly. If
-                // multiple, enter direction-pick state — same pattern as
-                // Throw, but selecting an NPC by adjacency rather than a
-                // tile by direction.
-                const adjAll = this.enemies.filter(e =>
-                    e.entity.isAlive() && manhattan(e.x, e.y, this.playerX, this.playerY) === 1
-                );
-                if (adjAll.length === 1) {
-                    this._doGive(adjAll[0]);
-                } else {
-                    this.state = STATE.ITEM_GIVE_DIR;
-                    this._log(`[Give ${item.name} — pick a direction]`);
-                    this._render();
-                }
                 return;
             }
         }
@@ -2176,6 +2130,12 @@ class Game {
     // Item is consumed only if accepted (bribery-immune NPCs reject — the
     // player tried to bribe, the NPC refused, the item stays in hand).
 
+    // (Phase 6a) The internal give routine — now only called from the Target
+    // Wheel's Trade verb (which routes a lone-item give straight through) and,
+    // going forward, the Trade window's offer mode (_offerFromTrade). Consumes
+    // the selected slot, delegates disposition math + flip to applyGive, and
+    // advances the world. Kept even though the give VERB/UI died: the MATH is
+    // what folds into trade.
     _doGive(recipient) {
         const stack = this.inventory[this.selectedSlot];
         if (!stack) { this.state = STATE.IDLE; this._render(); return; }
@@ -2192,23 +2152,23 @@ class Game {
         this._advanceWorld();
     }
 
-    // Handle the direction-pick step when multiple adjacent NPCs exist.
-    // Looks up the NPC at (player + dir) and calls _doGive on them, or
-    // emits a "no one there" message if no NPC is at that tile.
-    _doGiveDir(dir) {
-        const tx = this.playerX + dir.dx;
-        const ty = this.playerY + dir.dy;
-        const recipient = this.enemies.find(e =>
-            e.entity.isAlive() && e.x === tx && e.y === ty
-        );
-        if (!recipient) {
-            this._log('[No one there to give to.]');
-            this.selectedSlot = -1;
-            this.state = STATE.IDLE;
-            this._render();
-            return;
+    // Offer the bag item at `slot` to the currently-open trade NPC — the Trade
+    // window's give path (Phase 6a: give folds into trade). Unlike _doGive this
+    // is a PAUSED-MENU action: it does NOT advance the world and it keeps the
+    // window OPEN (like buy/sell), so the player can hand over several items and
+    // watch the mood-face move. Delegates disposition/flip to applyGive.
+    _offerFromTrade(slot) {
+        const npc = this._tradeNpc;
+        const stack = this.inventory[slot];
+        if (!npc || !stack) return;
+        const result = applyGive(stack.itemDef, npc);
+        this._log(result.log);
+        if (result.accepted) {
+            this._removeFromSlot(slot);
+            this._tradeSell = this._tradeSellList();
+            audio.playSfx('pickup');
         }
-        this._doGive(recipient);
+        this._render();
     }
 
     // ── Combat wheel (verb-tree: Fight/Trick/Treat/Flight → item → aim) ────────
@@ -2340,9 +2300,8 @@ class Game {
                 audio.playSfx('menu-confirm'); this._render(); break;
             }
             case 'talk':  if (npc) this._openDialogue(npc); break;
-            case 'trade': if (npc) this._openTrade(npc); break;
+            case 'trade': if (npc) this._openTrade(npc); break;   // (Phase 6a) any adjacent NPC → shop or offer window
             case 'bribe': if (npc) this._bribeTarget(npc); break;
-            case 'give':  if (npc) { const slot = this.inventory.findIndex(s => s); if (slot >= 0) { this.selectedSlot = slot; this._doGive(npc); } else { this._log('[Nothing to give.]'); this._render(); } } break;
             case 'hit':   if (npc) { this.combatAttack(npc, this.equipment.weapon.damage); this._advanceWorld(); this._render(); } break;
             case 'throw': { const slot = this.inventory.findIndex(s => s && s.itemDef.useType && String(s.itemDef.useType).includes('throw')); if (slot >= 0) { const msg = resolveThrow(this, this.inventory[slot].itemDef, null, this.inventory[slot].count, { x: t.x, y: t.y }); if (msg) this._log(msg); this._removeFromSlot(slot); this._advanceWorld(); } else this._log('[Nothing to throw.]'); this._render(); break; }
             case 'take':  this._takeItemAt(t.x, t.y); this._render(); break;
@@ -2575,17 +2534,13 @@ class Game {
             case 'wait':         { this._log('[Wait]'); this._advanceWorld(); break; }
             case 'run':          { const d = this._aimDir(aimTile); if (d) { this._closeWheel(); this._doMove(d); return; } break; }
             case 'trade': {
+                // (Phase 6a) Trade opens for ANY adjacent NPC now — vendors get
+                // the shop columns, non-vendors get offer mode (hand over items).
                 const npc = aimTile && this.enemies.find(e => e.entity.isAlive() && e.x === aimTile.x && e.y === aimTile.y);
-                this.state = STATE.IDLE;                 // _openTrade requires IDLE + npc.vendor
-                if (npc && npc.vendor) { this._openTrade(npc); return; }
+                this.state = STATE.IDLE;                 // _openTrade requires IDLE
+                if (npc) { this._openTrade(npc); return; }
                 this._log('[No one to trade with there]');
                 break;
-            }
-            case 'give': {
-                const npc = aimTile && this.enemies.find(e => e.entity.isAlive() && e.x === aimTile.x && e.y === aimTile.y);
-                if (!npc) { this._log('[No one to give to there]'); break; }
-                if (!this.inventory[itemSlot]) { this._log('[Nothing to give]'); break; }
-                this.selectedSlot = itemSlot; this._doGive(npc); return;   // _doGive consumes + advances + returns to IDLE
             }
             case 'bribe': {
                 const npc = aimTile && this.enemies.find(e => e.entity.isAlive() && e.x === aimTile.x && e.y === aimTile.y);
@@ -3507,17 +3462,22 @@ class Game {
         return this.enemies.find(e => isVendor(e) && manhattan(e.x, e.y, this.playerX, this.playerY) === 1) || null;
     }
 
-    // Open the shop window for `npc`. A pure menu — the world does NOT advance
+    // Open the trade window for `npc`. A pure menu — the world does NOT advance
     // (trading is paused, like the log modal), so nearby enemies don't get free
     // turns while you browse.
+    // (Phase 6a) Two modes: a VENDOR opens the shop (buy/sell columns); a
+    // NON-vendor opens OFFER mode (a single satchel→NPC column — hand items over
+    // for 0 GP, the fold-in of the old Give verb). The renderer + _tapTrade
+    // branch on `!npc.vendor`.
     _openTrade(npc) {
         if (this.state !== STATE.IDLE) return;
-        if (!npc || !npc.vendor) return;
+        if (!npc || !npc.entity || !npc.entity.isAlive()) return;
         this._tradeNpc = npc;
         this._tradeSell = this._tradeSellList();   // snapshot the bag layout for stable hit-testing
         this.state = STATE.TRADE;
         audio.playSfx('pickup');                   // a little "ka-ching" cue (reuse the pickup blip)
-        this._log(`[${npc.type} opens the till. "What'll it be?"]`, 'transition');
+        if (npc.vendor) this._log(`[${npc.type} opens the till. "What'll it be?"]`, 'transition');
+        else            this._log(`[You open your satchel to ${npc.type}.]`, 'transition');
         this._render();
     }
 
@@ -3703,13 +3663,20 @@ class Game {
         if (!this._pointInRect(pt, TRADE_MODAL_RECT)) { this._closeTrade(); return; }
         if (this._pointInRect(pt, TRADE_BRIBE_RECT, HIT_SLOP)) { this._bribeVendor(); return; }
 
+        const offerMode = !npc.vendor;   // (Phase 6a) non-vendor → give column
+        // BUY column — vendors only (a non-vendor has no stock).
         const stock = npc.stock || [];
         for (let i = 0; i < stock.length; i++) {
             if (this._pointInRect(pt, tradeCellRect(TRADE_BUY_ORIGIN, i), HIT_SLOP)) { this._buyFromVendor(stock[i]); return; }
         }
+        // The right column is SELL (vendor) or OFFER (non-vendor). Same grid.
         const sell = this._tradeSell || [];
         for (let i = 0; i < sell.length; i++) {
-            if (this._pointInRect(pt, tradeCellRect(TRADE_SELL_ORIGIN, i), HIT_SLOP)) { this._sellToVendor(sell[i].slot); return; }
+            if (this._pointInRect(pt, tradeCellRect(TRADE_SELL_ORIGIN, i), HIT_SLOP)) {
+                if (offerMode) this._offerFromTrade(sell[i].slot);
+                else           this._sellToVendor(sell[i].slot);
+                return;
+            }
         }
     }
 

@@ -43,11 +43,18 @@ export const ROOT = { key: 'menu', label: 'MENU', children: [
       ] },
   ]},
   // Trick — the gold "situational GP" category. Flight (evasion) nests here now (spec §6).
+  // (Phase 6a) GIVE was removed from the wheel — handing an item to any NPC now
+  // happens inside the widened Trade window (offer mode). The give-action.js math
+  // (applyGive/applyDispositionDelta/applyFlip) stays; only the verb/node died.
+  // ⚠️ ARMORY RECONCILIATION: when feature/weapons-armory merges, its Trick
+  // children add `rayblast` (Ray Blast, castTrick) + `hirelion` (Hire Lire,
+  // castTrick) here and `boo` (castBoo) under Magic, plus a TRICKS import — those
+  // need tricks.js + castTrick/castBoo + grantedTricks (15-file arc, not on dev).
+  // Slot them in as SIBLINGS of Bribe/Trade below; do NOT resurrect `give`.
   { key: 'trick', label: 'Trick', color: '#cba43c', text: '#2a1f06', children: [
     { key: 'throw',  label: 'Throw',  needsItem: true,  aimType: 'reticle',  resolver: 'resolveThrow', available: always },
     { key: 'defend', label: 'Defend', aimType: 'none',                       resolver: 'guard',        available: always },
     { key: 'bribe',  label: 'Bribe',  aimType: 'adjacent',                   resolver: 'bribe',        available: always },
-    { key: 'give',   label: 'Give',   needsItem: true,  aimType: 'adjacent', resolver: 'give',         available: always },
     { key: 'trade',  label: 'Trade',  aimType: 'adjacent',                   resolver: 'trade',        available: always },
     { key: 'flight', label: 'Flight', color: '#cba43c', text: '#2a1f06', children: [
       { key: 'run',  label: 'Run',  aimType: 'adjacent', resolver: 'run',  available: always },
@@ -278,7 +285,7 @@ export function autoAimTile(leaf, game) {
     const distTo = t => alive.length ? Math.min(...alive.map(e => cheb(t.x, t.y, e.x, e.y))) : 99;
     return cands.sort((a, b) => distTo(b) - distTo(a))[0];
   }
-  const social = leaf.resolver === 'trade' || leaf.resolver === 'bribe' || leaf.resolver === 'give';
+  const social = leaf.resolver === 'trade' || leaf.resolver === 'bribe';
   const pool = (social
     ? alive
     : alive.filter(e => !e.behavior || e.behavior.includes('HOSTILE')))
@@ -292,9 +299,9 @@ export function autoAimTile(leaf, game) {
 
 // (Phase 1 — appliesTo) Does this verb have a valid TARGET in range right now?
 // Categories + self-verbs + free-placement (reticle) verbs always apply; only an
-// ADJACENT-target verb (Hit/Cleave/Bribe/Give/Trade) or Run needs a real
-// neighbour. Drives the wheel's gray-out (tileEnabled) + the fire-gate
-// (_wheelDrill). Item/MP presence is a separate axis, handled by `available`.
+// ADJACENT-target verb (Hit/Cleave/Bribe/Trade) or Run needs a real neighbour.
+// Drives the wheel's gray-out (tileEnabled) + the fire-gate (_wheelDrill).
+// Item/MP presence is a separate axis, handled by `available`.
 export function verbApplies(node, game) {
   if (!node || node.placeholder) return false;
   if (node.children && node.children.length) return true;   // a category — always navigable
@@ -305,7 +312,7 @@ export function verbApplies(node, game) {
       game.map && game.map.isWalkable(game.playerX + dx, game.playerY + dy));
   }
   const alive = (game.enemies || []).filter(e => e.entity.isAlive());
-  const social = node.resolver === 'trade' || node.resolver === 'bribe' || node.resolver === 'give';
+  const social = node.resolver === 'trade' || node.resolver === 'bribe';
   const pool = social ? alive : alive.filter(e => !e.behavior || e.behavior.includes('HOSTILE'));
   return pool.some(e => cheb(game.playerX, game.playerY, e.x, e.y) <= 1);
 }
@@ -314,11 +321,13 @@ export function verbApplies(node, game) {
 // The verbs valid for a tapped TARGET, alphabetical. A target descriptor is
 // { x, y, npc?, item?, examinable? }. Colours ride the shared language: Examine
 // steel, social/economic gold, Hit red, Throw amber, Take green. Adjacent-only
-// verbs (Talk/Trade/Bribe/Give/Hit) gate on range 1; Examine + ranged Throw don't.
+// verbs (Talk/Trade/Bribe/Hit) gate on range 1; Examine + ranged Throw don't.
+// (Phase 6a) Trade now shows for ANY adjacent NPC (not just vendors) — the
+// widened trade window is where you hand an item to a non-vendor (offer mode),
+// so Give folded into it. Bandit/townsfolk/boss all become "trade-able".
 export function targetVerbs(target, game) {
   if (!target) return [];
   const adj = cheb(game.playerX, game.playerY, target.x, target.y) <= 1;
-  const haveItem  = (game.inventory || []).some(s => s);
   const haveThrow = (game.inventory || []).some(s => s && s.itemDef && s.itemDef.useType && String(s.itemDef.useType).includes('throw'));
   const V = [];
   V.push({ key: 'examine', label: 'Examine', color: '#9aa0a6', text: '#23262b', icon: '?', resolver: 'examine' });
@@ -326,9 +335,8 @@ export function targetVerbs(target, game) {
     const e = target.npc;
     const hostile = (!e.behavior || e.behavior.includes('HOSTILE')) && !e._ally;
     if (e.dialogueId && adj)          V.push({ key: 'talk',  label: 'Talk',  color: '#3f9aa0', text: '#eafafa', resolver: 'talk' });
-    if (e.vendor && adj)              V.push({ key: 'trade', label: 'Trade', color: '#cba43c', text: '#2a1f06', icon: '⇄', resolver: 'trade' });
+    if (adj)                          V.push({ key: 'trade', label: 'Trade', color: '#cba43c', text: '#2a1f06', icon: '⇄', resolver: 'trade' });
     if (adj && e.bribeable !== false) V.push({ key: 'bribe', label: 'Bribe', color: '#cba43c', text: '#2a1f06', icon: '¤', resolver: 'bribe' });
-    if (adj && haveItem && e.bribeable !== false) V.push({ key: 'give', label: 'Give', color: '#cba43c', text: '#2a1f06', icon: '♥', resolver: 'give' });
     if (hostile && adj)               V.push({ key: 'hit',   label: 'Hit',   color: '#c8443a', text: '#fff3d0', icon: '⚔', resolver: 'hit' });
     if (hostile && haveThrow)         V.push({ key: 'throw', label: 'Throw', color: '#e08a2a', text: '#2a1400', icon: '➹', resolver: 'throw' });
   }
