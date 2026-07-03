@@ -1876,9 +1876,14 @@ export class Renderer {
         ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX); ctx.restore();
 
         const catNode = ROOT.children[w.path[0]];
-        // (Phase 0 colour language) each node carries its own `color`/`text`; `HUE`
-        // is now only a fallback for nodes that don't (and for the preview arc).
-        const HUE = (catNode && catNode.color) || ({ fight: '#c8443a', trick: '#cba43c', treat: '#4f9b4a' })[catNode && catNode.key] || '#8a5a2c';
+        // (Phase 0) `HUE` = the current SECTION's colour — the deepest *ancestor*
+        // along the path that defines one (excludes the selection itself) — so
+        // uncolored leaves inherit their section (Magic → purple), not the top-level
+        // category, and the accent reflects the tier you're in. Leaf wedges that
+        // set their own `color` (Fireball ember, Cone of Cold ice) override it.
+        let sectionColor = null, _sn = ROOT;
+        for (let k = 0; k < w.path.length - 1; k++) { _sn = (_sn && _sn.children) ? _sn.children[w.path[k]] : null; if (_sn && _sn.color) sectionColor = _sn.color; }
+        const HUE = sectionColor || (catNode && catNode.color) || ({ fight: '#c8443a', trick: '#cba43c', treat: '#4f9b4a' })[catNode && catNode.key] || '#8a5a2c';
         const depth = w.path.length;
 
         // The {ring, sel} at locked level d (0-based), walking the REAL tree.

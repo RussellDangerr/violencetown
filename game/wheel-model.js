@@ -36,9 +36,9 @@ export const ROOT = { key: 'menu', label: 'MENU', children: [
     { key: 'magic',  label: 'Magic',  color: '#8250c4', text: '#f0e6ff',
       available: (g) => (g.playerMp || 0) > 0 && ((g.knownSpells && g.knownSpells.length) || 0) > 0,
       children: [
-        { key: 'fireball', label: 'Fireball', spellId: 'fireball', aimType: 'reticle', resolver: 'castSpell',
+        { key: 'fireball', label: 'Fireball', spellId: 'fireball', color: '#e0552a', text: '#fff0e0', aimType: 'reticle', resolver: 'castSpell',
           available: (g) => (g.knownSpells || []).includes('fireball') && (g.playerMp || 0) >= (SPELLS.fireball ? SPELLS.fireball.mpCost : 0) },
-        { key: 'coneofcold', label: 'Cone of Cold', spellId: 'coneOfCold', aimType: 'reticle', resolver: 'castSpell',
+        { key: 'coneofcold', label: 'Cone of Cold', spellId: 'coneOfCold', color: '#4aa6dc', text: '#eaf6ff', aimType: 'reticle', resolver: 'castSpell',
           available: (g) => (g.knownSpells || []).includes('coneOfCold') && (g.playerMp || 0) >= (SPELLS.coneOfCold ? SPELLS.coneOfCold.mpCost : 0) },
       ] },
   ]},
