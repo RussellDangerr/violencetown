@@ -13,7 +13,7 @@ import { TILE_PX, VIEW_TILES, CANVAS_PX } from './data.js';
 const SS = 2;
 import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES, EQUIP_FIGURE_SPRITE } from './sprites.js';
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
-import { ROOT, selectedNode, activeRing, activeIndex, decisionPath, previewChildren, affectedTiles } from './wheel-model.js'; // (sunburst wheel)
+import { ROOT, selectedNode, activeRing, activeIndex, decisionPath, previewChildren, affectedTiles, verbApplies } from './wheel-model.js'; // (sunburst wheel)
 import { SPELLS } from './spells.js';
 import {
     OVERLAY_RECTS, THROW_RECTS,
@@ -1894,7 +1894,7 @@ export class Renderer {
         const RIGHT = 0, BOTTOM = Math.PI / 2, LEFT = Math.PI;
         const QHALF = Math.PI / 4 - WHEEL_TILE_GAP * 2;   // quadrant tile half-width
         const wrap = (i, m) => ((i % m) + m) % m;
-        const tileEnabled = (node) => !node.placeholder && (!node.available || node.available(game));
+        const tileEnabled = (node) => !node.placeholder && (!node.available || node.available(game)) && verbApplies(node, game);
 
         // ── (Phase 3 juice) easing reads performance.now() each frame — the menu
         //    render loop stays alive while the wheel is open (_hasActiveEffects).

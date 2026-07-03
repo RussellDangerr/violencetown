@@ -31,7 +31,7 @@ import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setp
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
 import {
     createWheelState, cycle, drill, back, compose, autoAimTile,
-    needsFriendlyConfirm, aimRange, affectedTiles, selectedNode, restoreLastCategory,
+    needsFriendlyConfirm, aimRange, affectedTiles, selectedNode, restoreLastCategory, verbApplies,
 } from './wheel-model.js'; // (sunburst wheel) node-tree model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
 
@@ -2197,6 +2197,7 @@ class Game {
         const node = selectedNode(w);
         if (node.placeholder) { audio.playSfx('bump-wall'); return; }
         if (node.available && !node.available(this)) { audio.playSfx('bump-wall'); return; }
+        if (!verbApplies(node, this)) { audio.playSfx('bump-wall'); return; }   // (Phase 1) no valid target → bump
         const r = drill(w, this);
         if (r === 'bump') { audio.playSfx('bump-wall'); return; }
         if (r === 'fire') { this._wheelCommit(); return; }

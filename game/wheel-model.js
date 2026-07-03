@@ -289,3 +289,23 @@ export function autoAimTile(leaf, game) {
     .sort((a, b) => a.d - b.d)
     .map(({ x, y }) => ({ x, y }))[0];
 }
+
+// (Phase 1 — appliesTo) Does this verb have a valid TARGET in range right now?
+// Categories + self-verbs + free-placement (reticle) verbs always apply; only an
+// ADJACENT-target verb (Hit/Cleave/Bribe/Give/Trade) or Run needs a real
+// neighbour. Drives the wheel's gray-out (tileEnabled) + the fire-gate
+// (_wheelDrill). Item/MP presence is a separate axis, handled by `available`.
+export function verbApplies(node, game) {
+  if (!node || node.placeholder) return false;
+  if (node.children && node.children.length) return true;   // a category — always navigable
+  if (node.aimType === 'none') return true;                 // self verb — no target
+  if (node.aimType === 'reticle') return true;              // free tile placement — always aimable
+  if (node.resolver === 'run') {
+    return Object.values(FACING_DELTA).some(([dx, dy]) =>
+      game.map && game.map.isWalkable(game.playerX + dx, game.playerY + dy));
+  }
+  const alive = (game.enemies || []).filter(e => e.entity.isAlive());
+  const social = node.resolver === 'trade' || node.resolver === 'bribe' || node.resolver === 'give';
+  const pool = social ? alive : alive.filter(e => !e.behavior || e.behavior.includes('HOSTILE'));
+  return pool.some(e => cheb(game.playerX, game.playerY, e.x, e.y) <= 1);
+}
