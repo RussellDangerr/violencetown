@@ -2377,72 +2377,90 @@ export class Renderer {
         const disp = npc.disposition ?? 0;
         const dealing = canTrade(disp);
         const m = mood(disp);
-        // (Phase 6a) A non-vendor opens OFFER mode: one satchel→NPC give column,
-        // no BUY, prices replaced by a give/quest marker. Giving is NEVER gated
-        // by disposition (it's how you raise a sour mood), so offer cells stay
-        // live even when `dealing` is false.
-        const offerMode = !npc.vendor;
+        // Three modes share this one modal:
+        //  • shop  (a vendor)      — BUY (priced) + SELL columns + bribe.
+        //  • offer (a non-vendor)  — one satchel→NPC give column (Phase 6a).
+        //  • loot  (a chest shim)  — a zero-cost TAKE column, no mood/bribe/sell
+        //                            (Phase 6b: chests route through this window).
+        const container = !!npc._container;
+        const offerMode = !container && !npc.vendor;
 
         // Title
-        const title = offerMode ? `OFFER TO ${(npc.type || 'SOMEONE').toUpperCase()}`
+        const title = container ? `THE ${(npc.type || 'CHEST').toUpperCase()}`
+                    : offerMode ? `OFFER TO ${(npc.type || 'SOMEONE').toUpperCase()}`
                                 : `${(npc.type || 'TRADER').toUpperCase()}'S TILL`;
         this.font.drawText(ctx, title, CANVAS_PX / 2, R.y + 14, { color: UI.gold, scale: 2, align: 'center' });
 
-        // Mood row — smiley + label on the left, GP on the right.
+        // Mood row — smiley + label on the left, GP on the right. A chest has no
+        // mood, so it only shows the player's GP.
         const moodY = R.y + 48;
-        this._drawMoodFace(R.x + 26, moodY, m.face);
-        this.font.drawText(ctx, m.mood.toUpperCase(), R.x + 44, moodY - 3, { color: (dealing || offerMode) ? UI.textLight : UI.hpRed, scale: 1 });
+        if (!container) {
+            this._drawMoodFace(R.x + 26, moodY, m.face);
+            this.font.drawText(ctx, m.mood.toUpperCase(), R.x + 44, moodY - 3, { color: (dealing || offerMode) ? UI.textLight : UI.hpRed, scale: 1 });
+        }
         this.font.drawText(ctx, `GP ${game.gold ?? 0}`, R.x + R.w - 24, moodY - 6, { color: UI.gold, scale: 2, align: 'right' });
 
-        // Section headers in gold. In offer mode there's no BUY column; the right
-        // column becomes OFFER.
-        if (!offerMode) this.font.drawText(ctx, 'BUY', TRADE_BUY_ORIGIN.x, TRADE_BUY_ORIGIN.y - 18, { color: UI.gold, scale: 1 });
-        this.font.drawText(ctx, offerMode ? 'OFFER' : 'SELL', TRADE_SELL_ORIGIN.x, TRADE_SELL_ORIGIN.y - 18, { color: UI.gold, scale: 1 });
+        // Left-column header: TAKE (chest) / BUY (vendor) / — (offer has none).
+        if (container)       this.font.drawText(ctx, 'TAKE', TRADE_BUY_ORIGIN.x, TRADE_BUY_ORIGIN.y - 18, { color: UI.gold, scale: 1 });
+        else if (!offerMode) this.font.drawText(ctx, 'BUY',  TRADE_BUY_ORIGIN.x, TRADE_BUY_ORIGIN.y - 18, { color: UI.gold, scale: 1 });
+        if (!container) this.font.drawText(ctx, offerMode ? 'OFFER' : 'SELL', TRADE_SELL_ORIGIN.x, TRADE_SELL_ORIGIN.y - 18, { color: UI.gold, scale: 1 });
 
-        // BUY grid — the vendor's stock (shop mode only).
-        if (!offerMode) {
+        // LEFT grid — chest TAKE cells (0 GP) or vendor BUY cells (priced).
+        if (container || !offerMode) {
             const stock = npc.stock || [];
             for (let i = 0; i < stock.length; i++) {
                 const itemDef = ITEMS[stock[i]];
                 if (!itemDef) continue;
-                const price = dealing ? buyPrice(itemDef, disp) : null;
-                this._drawTradeCell(itemDef, tradeCellRect(TRADE_BUY_ORIGIN, i), price, dealing && price != null);
+                if (container) {
+                    this._drawTradeCell(itemDef, tradeCellRect(TRADE_BUY_ORIGIN, i), 0, true);   // free
+                } else {
+                    const price = dealing ? buyPrice(itemDef, disp) : null;
+                    this._drawTradeCell(itemDef, tradeCellRect(TRADE_BUY_ORIGIN, i), price, dealing && price != null);
+                }
+            }
+            if (container && stock.length === 0) {
+                this.font.drawText(ctx, 'EMPTY', TRADE_BUY_ORIGIN.x, TRADE_BUY_ORIGIN.y + 8, { color: UI.dim, scale: 1 });
             }
         }
 
-        // Right grid — the player's bag (snapshot taken on open / after each trade).
-        // Shop mode shows a SELL price; offer mode shows a give marker (a quest
-        // item wears a quest-point ◆ instead of a gold price — Phase 6a/6d).
-        const sell = game._tradeSell || [];
-        for (let i = 0; i < sell.length; i++) {
-            const itemDef = sell[i].itemDef;
-            if (offerMode) {
-                const marker = itemDef.questItem ? '◆' : '♥';
-                this._drawTradeCell(itemDef, tradeCellRect(TRADE_SELL_ORIGIN, i), null, true, marker);
-            } else {
-                const price = dealing ? sellPrice(itemDef, disp) : null;
-                this._drawTradeCell(itemDef, tradeCellRect(TRADE_SELL_ORIGIN, i), price, dealing && price != null);
+        // RIGHT grid — shop SELL / offer give column. A chest has no right column.
+        if (!container) {
+            const sell = game._tradeSell || [];
+            for (let i = 0; i < sell.length; i++) {
+                const itemDef = sell[i].itemDef;
+                if (offerMode) {
+                    const marker = itemDef.questItem ? '◆' : '♥';
+                    this._drawTradeCell(itemDef, tradeCellRect(TRADE_SELL_ORIGIN, i), null, true, marker);
+                } else {
+                    const price = dealing ? sellPrice(itemDef, disp) : null;
+                    this._drawTradeCell(itemDef, tradeCellRect(TRADE_SELL_ORIGIN, i), price, dealing && price != null);
+                }
+            }
+            if (sell.length === 0) {
+                this.font.drawText(ctx, 'BAG EMPTY', TRADE_SELL_ORIGIN.x, TRADE_SELL_ORIGIN.y + 8, { color: UI.dim, scale: 1 });
             }
         }
-        if (sell.length === 0) {
-            this.font.drawText(ctx, 'BAG EMPTY', TRADE_SELL_ORIGIN.x, TRADE_SELL_ORIGIN.y + 8, { color: UI.dim, scale: 1 });
-        }
 
-        // Bribe button (works in both modes — bribing lifts any NPC's mood).
-        const B = TRADE_BRIBE_RECT;
-        const cost = bribeStepCost(disp);
-        const maxed = disp >= 100;
-        const canBribe = !maxed && (game.gold ?? 0) >= cost;
-        drawInset(ctx, B.x, B.y, B.w, B.h);
-        ctx.fillStyle = canBribe ? 'rgba(212,185,106,0.18)' : 'rgba(0,0,0,0.15)';
-        ctx.fillRect(B.x + 1, B.y + 1, B.w - 2, B.h - 2);
-        const bribeLabel = maxed ? 'MOOD MAXED' : `BRIBE +${BRIBE_STEP}  ${cost} GP`;
-        this.font.drawText(ctx, bribeLabel, B.x + B.w / 2, B.y + B.h / 2 - 3, {
-            color: canBribe ? UI.gold : UI.dim, scale: 1, align: 'center',
-        });
+        // Bribe button — shop/offer only (a chest can't be bribed).
+        if (!container) {
+            const B = TRADE_BRIBE_RECT;
+            const cost = bribeStepCost(disp);
+            const maxed = disp >= 100;
+            const canBribe = !maxed && (game.gold ?? 0) >= cost;
+            drawInset(ctx, B.x, B.y, B.w, B.h);
+            ctx.fillStyle = canBribe ? 'rgba(212,185,106,0.18)' : 'rgba(0,0,0,0.15)';
+            ctx.fillRect(B.x + 1, B.y + 1, B.w - 2, B.h - 2);
+            const bribeLabel = maxed ? 'MOOD MAXED' : `BRIBE +${BRIBE_STEP}  ${cost} GP`;
+            this.font.drawText(ctx, bribeLabel, B.x + B.w / 2, B.y + B.h / 2 - 3, {
+                color: canBribe ? UI.gold : UI.dim, scale: 1, align: 'center',
+            });
+        }
 
         // Footer hint.
-        this.font.drawText(ctx, offerMode ? 'TAP TO GIVE    B BRIBE    E / ESC CLOSE' : 'TAP TO BUY / SELL    B BRIBE    E / ESC CLOSE', CANVAS_PX / 2, R.y + R.h - 16, {
+        const footer = container ? 'TAP TO TAKE    E / ESC CLOSE'
+                     : offerMode ? 'TAP TO GIVE    B BRIBE    E / ESC CLOSE'
+                                 : 'TAP TO BUY / SELL    B BRIBE    E / ESC CLOSE';
+        this.font.drawText(ctx, footer, CANVAS_PX / 2, R.y + R.h - 16, {
             color: UI.textLight, scale: 1, align: 'center',
         });
     }

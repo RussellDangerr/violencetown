@@ -1650,11 +1650,11 @@ class Game {
 
         // Bump-to-open? Mirrors bump-to-attack — containers are unwalkable
         // entities you interact with by bumping rather than moving onto.
+        // (Phase 6b) Opening a chest now pops the Trade window (loot mode) — a
+        // PAUSED menu like shopping, so it does NOT advance the world here.
         const container = this.containers.find(c => c.x === nx && c.y === ny);
         if (container) {
             this._openContainer(container);
-            this._render();
-            this._advanceWorld();
             return;
         }
 
@@ -2815,30 +2815,40 @@ class Game {
     // for forward-compat — the soap-mine workers in step 4 will deposit
     // typed entries.
 
+    // (Phase 6b) A chest opens the SAME Trade window as a merchant — no separate
+    // loot UI. It's modelled as a zero-cost "vendor" whose stock is its contents
+    // and whose buy = TAKE (move an item into the bag for 0 GP, decrement the
+    // chest). A chest has no disposition, so the pricing/canTrade guards are
+    // bypassed. This is also the window buyback (6c) will ride.
     _openContainer(container) {
-        if (container.contents.length === 0) {
-            this._log(`[The ${container.type} is empty.]`);
+        if (this.state !== STATE.IDLE) return;
+        if (!container || container.contents.length === 0) {
+            this._log(`[The ${container ? container.type : 'container'} is empty.]`);
             return;
         }
+        this._tradeNpc = {
+            type: container.type,
+            vendor: true,          // shop-style layout (buy column), not offer mode
+            bribeable: false,
+            disposition: 100,      // benign value for any mood()/canTrade() call
+            _container: container, // the marker the buy/tap/render paths branch on
+            stock: this._containerStock(container),
+            entity: { isAlive: () => true },
+        };
+        this._tradeSell = this._tradeSellList();
+        this.state = STATE.TRADE;
+        audio.playSfx('pickup');
+        this._log(`[You pry open the ${container.type}.]`, 'transition');
+        this._render();
+    }
 
-        const summary = container.contents
-            .map(c => (typeof c === 'string' ? c : c.type))
-            .join(', ');
-        this._log(`[You open the ${container.type}: ${summary}.]`);
-
-        const remaining = [];
-        for (const entry of container.contents) {
-            const itemType = typeof entry === 'string' ? entry : entry.type;
-            const def = ITEMS[itemType];
-            if (!def) continue; // unknown item type; drop silently
-            if (this._addToInventory(def)) {
-                this._log(`[+ ${def.name}]`);
-            } else {
-                this._log('[Inventory full — the rest stays in the chest.]');
-                remaining.push(entry);
-            }
-        }
-        container.contents = remaining;
+    // Normalize a container's mixed string-or-{type} contents into an array of
+    // item-id strings — the shape the Trade BUY column + _tapTrade read. Unknown
+    // / undefined ids drop out (they'd render nothing anyway).
+    _containerStock(container) {
+        return (container.contents || [])
+            .map(e => (typeof e === 'string' ? e : e && e.type))
+            .filter(id => id && ITEMS[id]);
     }
 
     // ── Combat ───────────────────────────────────────────────────────────────
@@ -3604,6 +3614,19 @@ class Game {
         if (!npc) return;
         const itemDef = ITEMS[itemId];
         if (!itemDef) return;
+        // (Phase 6b) Container "buy" = TAKE: 0 GP, no disposition/price gate —
+        // move one matching entry out of the chest and into the bag.
+        if (npc._container) {
+            const cont = npc._container;
+            if (!this._addToInventory(itemDef)) { this._log('[Your bag is full — leave something.]'); this._render(); return; }
+            const idx = cont.contents.findIndex(e => (typeof e === 'string' ? e : e && e.type) === itemId);
+            if (idx >= 0) cont.contents.splice(idx, 1);
+            npc.stock = this._containerStock(cont);
+            audio.playSfx('pickup');
+            this._log(`[Took ${itemDef.name}.]`, 'pickup');
+            this._render();
+            return;
+        }
         if (!canTrade(npc.disposition)) { this._log(`[${npc.type} won't deal with you. Sweeten the mood first.]`); this._render(); return; }
         const price = buyPrice(itemDef, npc.disposition);
         if (price == null) { this._log(`[${npc.type} won't sell that.]`); this._render(); return; }
@@ -3661,15 +3684,18 @@ class Game {
         const npc = this._tradeNpc;
         if (!npc) { this._closeTrade(); return; }
         if (!this._pointInRect(pt, TRADE_MODAL_RECT)) { this._closeTrade(); return; }
-        if (this._pointInRect(pt, TRADE_BRIBE_RECT, HIT_SLOP)) { this._bribeVendor(); return; }
+        const loot = !!npc._container;   // (Phase 6b) chest — take-only, no bribe/sell
+        if (!loot && this._pointInRect(pt, TRADE_BRIBE_RECT, HIT_SLOP)) { this._bribeVendor(); return; }
 
-        const offerMode = !npc.vendor;   // (Phase 6a) non-vendor → give column
-        // BUY column — vendors only (a non-vendor has no stock).
+        // LEFT column: vendor BUY / chest TAKE (a non-vendor NPC has no stock).
         const stock = npc.stock || [];
         for (let i = 0; i < stock.length; i++) {
             if (this._pointInRect(pt, tradeCellRect(TRADE_BUY_ORIGIN, i), HIT_SLOP)) { this._buyFromVendor(stock[i]); return; }
         }
-        // The right column is SELL (vendor) or OFFER (non-vendor). Same grid.
+        if (loot) return;   // a chest has no right column
+
+        // RIGHT column: SELL (vendor) or OFFER (non-vendor). Same grid.
+        const offerMode = !npc.vendor;   // (Phase 6a)
         const sell = this._tradeSell || [];
         for (let i = 0; i < sell.length; i++) {
             if (this._pointInRect(pt, tradeCellRect(TRADE_SELL_ORIGIN, i), HIT_SLOP)) {
