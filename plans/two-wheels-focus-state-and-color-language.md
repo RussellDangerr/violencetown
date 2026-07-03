@@ -42,8 +42,15 @@ resolvers). This split is the whole unlock.
 | Lives | bottom-right corner | pops around the tapped target, out in the field |
 | Contents | Fight / Trick / Treat | Examine + only the verbs that apply, A→Z |
 
-**Examine (and Talk, Trade, Give, Take) are _target_ verbs, not wheel verbs.** They live on the Target
+**Examine (and Talk, Trade, ~~Give~~, Take) are _target_ verbs, not wheel verbs.** They live on the Target
 Wheel and never pollute the Player Wheel. That dissolves the "bury Examine under Trick" knot.
+
+> **Superseded 2026-07-03 — GIVE folds into TRADE.** Caelan cut the standalone **Give** verb from both
+> wheels; giving an item to an NPC (incl. 0 GP / quest items) now happens **inside the trade window**, and
+> the Target-Wheel **Trade** verb widens from vendor-only to **any adjacent NPC**. The `give-action.js`
+> disposition math is unchanged — only the verb/node/UI is gone. Full removal + reroute plan:
+> `plans/chapter-two-downtown-canyon-and-cohesion.md` **Phase 6a**. Wherever this doc lists **Give** as a
+> shipped Target verb (§5 gold row, §6 "peaceful Trade/Give", §12 step 2), read it as folded into Trade.
 
 A few verbs live in **both** by nature — **Hit** and **Throw**: initiate from the Player Wheel and aim,
 *or* tap a target and pick it off the Target Wheel. They wear the same color in both places (see §5).

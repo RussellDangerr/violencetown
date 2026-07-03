@@ -36,8 +36,32 @@ forward here as **Phase 0** (still Caelan-hand-authored).
 - **NPC trade / inventories deferred:** Caelan will hand-author curated merchant stock later with more
   items; **do NOT** procedurally generate NPC inventories now.
 
+### Trade-window decisions (locked 2026-07-03 — the "reversible economy" pass; detailed in the new Phase 6)
+- **GIVE is removed; it folds into TRADE.** The give verb bloats the menus and duplicates what Trade
+  already does. Handing an item to any NPC — including for **0 GP** (your boss, a sack of sludge) or a
+  **quest item** (marked with a quest-point symbol, not a gold price) — happens **inside the trade
+  window**. The `give-action.js` *math* stays (it's what shifts disposition / flips an ally); only the
+  give VERB / node / UI dies. (Supersedes the two-wheels spec's Give verb — see Phase 6 + that doc's note.)
+- **The trade window is the ONE item-transaction surface** — merchants **and** bandit chests both open
+  it. No separate loot UI. "Loot the corpse" = a trade window whose stock is the chest's contents.
+- **Trades are reversible** — an ~**5-minute buyback window** at **locked prices** (Borderlands buyback ×
+  Outward's confirm-heavy barter, hybridized): everything you buy/sell can be refunded/re-bought at the
+  exact price for that window, so the player can freely test item + gold combos to manage disposition
+  before committing. The buyback timer **is** the **disposition tick clock**.
+- **No quest-item tab; quest items are regular items.** The Cataclysmic Converter is an ordinary item —
+  it just has no *ordinary* buyer. Legibility comes from **surfacing all options** (a 0-GP item a
+  specific NPC wants teaches "this has a special use"), not from a segregated tab. Special-buyer NPCs +
+  a Grey/Green/Blue/Purple/Orange **value-tier** convention make worth legible (see Phase 6).
+- **Macc the raccoon mechanic** (new Town NPC) is the archetype special-buyer: buys the Converter for
+  **500 GP**, and **sells a chain (100 GP) that opens a rappel route through the Canyon** — a fourth path
+  that ties the economy to the mobility unlock (see Phase 3 + Phase 6). The Converter is also **throwable
+  for huge damage** — another "true, freely-chosen option," not a locked quest object.
+- **Economy tuning target:** Outward-tight **silver-to-item ratios** — reuse the `gold-weighting-and-
+  bribery-research` findings; balance `baseValue` + the `trade.js` bands, don't restructure.
+
 **Intended outcome:** a cohesive economy spine + a two-path bridge arc (Downtown vs. Canyon) that
-embodies "many ways to play," with the grappling hook as a carefully-introduced mobility unlock.
+embodies "many ways to play," with the grappling hook as a carefully-introduced mobility unlock, and a
+**reversible, legible trade window** that is the single home for buying, selling, gifting, and looting.
 
 ---
 
@@ -171,6 +195,14 @@ alcohol'd drive → ramp → Downtown; the breadcrumb reads before you need it.
 - **Escape = the hook's first use** (amusement-park theory: get it, immediately use it — no teasing) —
   a GRAPPLE_ANCHOR (Phase 5) on the canyon wall lets you swing/climb **up to Downtown** (the far side
   you crashed into) or back to Town (§Open). This teaches the mechanic in-context.
+- **A fourth path — Macc's chain (2026-07-03).** The player doesn't have to crash or pay Pike 1,000 GP:
+  **Macc the raccoon mechanic** (a Town mechanic shop — see Phase 6) sells a **chain for 100 GP** that
+  **rappels the canyon wall** — a cheap, deliberate route that hands the player agency instead of a
+  forced fall. Macc's **dialogue exposes the option** ("that converter'll punch you clean off the bridge…
+  unless you've got a way down — I've got chain"). Mechanically the chain is a **lighter grapple**: it
+  reuses the Phase-5 GRAPPLE_ANCHOR path (descend/traverse) rather than being a separate system. Keeps
+  the "many ways" promise: crash (default) · alcohol-ramp (avoid the canyon) · Macc's chain (rappel in on
+  purpose) · Pike's hook (climb out). All roads still converge on the `canyon_escape` gate.
 
 **Reuse:** vendor/trade (Phase 1), `_handleEnemyDeath` tag-drop, dialogue system, `emitGameEvent` +
 quest gate, `autoSatisfy` (tolerant if the hook's already in the bag). **Files:** `game/canyon-map.json`,
@@ -183,9 +215,10 @@ the canyon exit; the escape swing works.
 ## Phase 4 — Downtown zone + Main Quest 2 (the burger delivery)
 
 - **Downtown** (`game/downtown-map.json`, new) — across the bridge; "the real part of town." Bank, the
-  **vampire**, a couple of buildings, **better merchants** (curated stock — no procedural loadouts),
-  **city lights** (neon via the `lights` array + night lightmap), a **casino**. Caelan hand-authors the
-  layout; Claude scaffolds the JSON + wires the bridge-landing transition.
+  **vampire**, a couple of buildings, **better merchants** (curated stock — no procedural loadouts;
+  apply the Phase-6 **special-buyer** pattern here too — some Downtown merchants pay for things Town
+  won't), **city lights** (neon via the `lights` array + night lightmap), a **casino**. Caelan
+  hand-authors the layout; Claude scaffolds the JSON + wires the bridge-landing transition.
 - **Main Quest 2 — deliver a burger + fries to a target** (makes the Borgir courier premise real; today
   it's lore only). New `deliver_food` quest in `quests.js`: obtain burger+fries → find the target in
   Downtown → hand it over. **Multi-path completion** (give-item OR a dialogue hand-off) via a new
@@ -221,6 +254,125 @@ no teased-locked content anywhere the hook isn't yet available.
 
 ---
 
+## Phase 6 — Economy cohesion & the reversible trade window (2026-07-03)
+
+The trade-window brain-dump, filed against the current code (verified by a 4-reader recon, 2026-07-03).
+This **extends Phase 1's spine** rather than replacing it: Phase 1 unified *gold flow + NPC reactions*;
+Phase 6 unifies *the surfaces* (give/loot fold into trade) and adds *reversibility + legibility*. It is
+**designed, not built** — build it after Phase 1 lands (it rides `transferGold` / `reactToTransaction`).
+
+### 6a — GIVE folds into TRADE (delete the verb; keep the math)
+
+Recon confirms **no quest or dialogue on `dev` depends on GIVE as its own verb** (the only quest,
+`fix_car`, gates on examine/item_pickup/map_entered/interact_car). So the fold is safe. `give-action.js`
+(`applyGive`, `applyDispositionDelta`, `applyFlip`) **stays** — Trade calls it. Only the give *surface* dies.
+
+- **DELETE (verb / node / UI):** the Player-Wheel `give` node (`wheel-model.js:50`); the Target-Wheel
+  `give` verb push (`wheel-model.js:331`); `resolver==='give'` from the two `social` OR-sets
+  (`wheel-model.js:281`, `:308`); the `case 'give'` in `_fireTargetVerb` (`main.js:2296`) and `_wheelFire`
+  (`main.js:2535`); the ITEM_OVERLAY Down=Give affordance (`main.js:1998`) + `_pickOverlay` give case
+  (`:2055`); the whole `ITEM_GIVE_DIR` machinery (STATE `main.js:50`, key handler `:783`, tap routing
+  `:1426`/`:1520`, `_doGiveDir` `:2151`, renderer dispatch `renderer.js:408`); the `give:'♥'` wheel icon
+  (`renderer.js:1988`). Keep `_doGive` (`main.js:2132`) as the **internal** routine the window calls.
+- **WIDEN the trade window to reach non-vendors + offer for 0 GP:** `_openTrade` (`main.js:3459`) currently
+  `return`s unless `npc.vendor`. Add an **"offer" mode** when `npc.vendor` is falsy: hide buy/sell columns,
+  show only a satchel→NPC **offer** column. On confirm route through `applyGive(item, npc)` (i.e.
+  `reactToTransaction(npc,'give',{item})` once the spine merges — the spine's `'give'` transaction *type*
+  already anticipates this) → consume the item, fire the flip/disposition log, advance the world.
+- **Quest-item marker:** quest items already carry `questItem` (`trade.js:60` → `sellPrice` returns null).
+  Render them in the offer column with a **quest-point symbol instead of a gold price** — the "0 GP /
+  different symbol" Caelan described. (A future MQ2 delivery = offering the right questItem to the right
+  NPC emits a new quest event — that wiring is NEW, filed under Phase 4.)
+- **Reroute the entry points:** Target-Wheel `⇄ Trade` (`wheel-model.js:329`) widens its gate from
+  `e.vendor && adj` to **`adj`** (any adjacent NPC — non-vendors must be trade-able to receive gifts).
+  Player-Wheel Trick→Trade (`wheel-model.js:51` → `_wheelFire 'trade'` `main.js:2528`) already calls
+  `_openTrade`; it just needs the widened `_openTrade`. **Bribe stays separate** (gold-out, no item).
+- **Cross-cutting:** supersede the two-wheels spec's Give verb (§2/§5/§6/§12 — note added there); after the
+  fold the Target Wheel's gold cluster is Bribe + Trade (a §13-style "are two gold wedges confusing?"
+  open decision). ⚠️ **Armory-arc conflict:** the unmerged Armory arc also rewrites the Trick children in
+  `wheel-model.js`; do the give-removal **in the same pass** as slotting Boo!/Ray-Blast/Hire-Lire.
+
+### 6b — One surface: bandit chests route through the trade window
+
+Today chests are a **separate instant no-UI dump** — `_openContainer` (`main.js:2810`) bump-empties
+`container.contents` into the bag, no modal. Route them through the window instead: model a chest as a
+**zero-cost vendor** whose `stock` is `container.contents` and whose "buy" **moves + removes** the item
+(instead of minting from `ITEMS` and charging gold). Gaps to close (recon): (1) a **finite-stock /
+decrement-source** branch in the buy handler (vendor stock is infinite today); (2) a **disposition
+bypass** (chests have no `npc.disposition`, so skip the `canTrade`/pricing guards); (3) **normalize**
+container entries (strings-or-`{type}`) into the `stock` shape `_tapTrade` reads. Bandit "loot the corpse"
+becomes the same reversible window as shopping — which is also where buyback (6c) applies.
+
+### 6c — Reversibility: the ~5-min buyback window + the disposition tick clock
+
+The centerpiece. **No buyback ledger or shop timer exists today** (recon); buy/sell are fire-and-forget
+`this.gold ±= price` (Phase 1 replaces those with `transferGold`). Disposition is **frozen between
+explicit actions** — no clock anywhere. Add both, sharing one timer:
+
+- **Buyback ledger, keyed to the NPC + a timestamp** (survives closing/re-opening within the window). In
+  `_openTrade` (`main.js:3462`, beside the `_tradeSell` snapshot): `npc._buyback ??= { openedAt, entries:[] }`;
+  reuse it if `now - openedAt < BUYBACK_MS` (~5 min), else re-lock. It records **qty owned + the locked
+  price** at the moment the window opened — the anti-glitch guarantee Caelan asked for (the game
+  definitively remembers ownership state, so each item is priced as player-owned vs. shop-owned).
+  - **On SELL** (`_sellToVendor` `:3604`): push `{ itemId, refundPrice, qty++ }` so the player can re-buy
+    at the price they got, not the current market price.
+  - **On re-BUY** (`_buyFromVendor` `:3586`): if the item has a live ledger entry with `qty>0` and the
+    window is unexpired, charge the **locked** price and decrement — bypassing `buyPrice(...,current
+    disposition)`. Otherwise fall through to the normal buy.
+  - **Render** a third buyback row (`_tapTrade` `:3644` already loops buy/sell cells — add a buyback loop).
+    Show the **visual countdown timer**. Lore joke: it's all **store credit** anyway (gold *points* =
+    credit cards) — the timer is your "return window."
+- **Disposition tick clock — same timer.** Attach to the existing free-roam heartbeat
+  (`setInterval(WORLD_TICK_MS)` `main.js:415`, inside the `IDLE && !_inCombat()` guard beside
+  `_ambientTick`), and hand-wind it per committed turn in combat (`_advanceWorld` `:2618`, where the day
+  clock already winds) so it drifts in fights too. It does **not** fire every tick — it nudges disposition
+  toward a resting value on the shop-timer cadence. Route mutations through `applyDispositionDelta`
+  (`give-action.js:107`) to keep the flip logic consistent. **Prices/mood read `npc.disposition` live
+  every render — zero read-side plumbing needed.**
+- ⚠️ **Un-ally gap (flag):** `applyDispositionDelta` only auto-fires the **upward** ally flip; a downward
+  decay past the ally threshold would **not** un-ally today. If decay should cost loyalty, add the
+  symmetric downward handling (an Open decision — see below).
+- **Confirm-vs-buyback (resolves an old tension):** memory `trade-system-design` says "single-tap = the
+  commit, **no confirm**"; Outward uses a hard "press T to confirm." The **buyback window supersedes the
+  need for a hard confirm** — everything is reversible for 5 minutes, so instant tap-to-commit stays and
+  the safety net is the timer, not a modal. (Keep a confirm only if a *destructive/irreversible* trade
+  ever exists.)
+
+### 6d — Legibility: no quest-item tab; value tiers; special buyers
+
+- **No quest-item tab.** Quest items are **regular items** with `questItem:true` (can't be *sold*, can be
+  *offered*). The player learns "this is special" by **seeing all their options**, not from a segregated
+  UI — a 0-GP item a specific NPC will take is a deliberate, discoverable signal.
+- **Value-tier convention — Grey / Green / Blue / Purple / Orange** (Borderlands rarity), each a rough
+  damage/GP band, so worth is legible at a glance. This is the **item-`class`/dev-table** work already
+  filed as wheel **§12.3** (task #56) — do them together; the tiers drive both the examine text and the
+  trade prices.
+- **Special-buyer NPCs — Macc the raccoon mechanic** (Town mechanic shop): buys the **Cataclysmic
+  Converter for 500 GP** (nobody else will), and sells the **canyon chain (100 GP, Phase 3)**. The
+  Converter is **also throwable for huge damage** — the point is *true, freely-chosen* options, legibly
+  presented, beat an undroppable-quest-item straitjacket. Macc's dialogue exposes the canyon-chain path.
+
+### 6e — Economy tuning (balance, not structure)
+
+Outward-tight **silver-to-item ratios**: tune `baseValue` per item + the `trade.js` BANDS (`buy` 1.0–2.4 /
+`sell` 0.70–0.40). No structural change — fold in the `gold-weighting-and-bribery-research` verdicts
+(rising-marginal-cost bribery, per-encounter cap, ~40% sell-back, income anchor E≈8–15/encounter) when
+this balance pass happens. Largely post-1.0.
+
+**Reuse:** Phase-1 `transferGold`/`reactToTransaction`, `applyGive`/`applyDispositionDelta`, `_openTrade`/
+`_tapTrade`, `buyPrice`/`sellPrice`/`canTrade`, `_openContainer`, the `WORLD_TICK_MS` heartbeat, `questItem`.
+**Files:** `game/wheel-model.js`, `game/renderer.js`, `game/main.js`, `game/trade.js`, `game/give-action.js`,
+`game/items.js` (Macc's stock, value tiers). **Verify (in-browser):** give-verb gone but you can hand any
+NPC an item via the trade window (0-GP + quest-point marker); a chest opens the trade window; buy→refund at
+the same price within the window, sell→re-buy at the locked price, timer counts down; disposition drifts on
+the shop cadence; Macc buys the Converter for 500 and sells the chain.
+
+**Build note:** 6a (give-fold) and 6b (chests) are Phase-1-adjacent cohesion and can land early; 6c
+(buyback + clock) is the biggest, most bug-prone piece (ledger correctness, timer, decay) — give it its own
+branch + a careful Done-When. Each sub-phase = its own `feature/*` branch; Caelan merges each.
+
+---
+
 ## Suggested build order
 
 1. **Phase 1 (transaction spine)** — foundation; everything merchant/quest rides it. Low risk, high
@@ -249,6 +401,14 @@ the merge call. Planning-doc edits go on the `plan` branch. Naming guard clean b
    near-guarantee unless you've done the alcohol mission? (That's the current design; confirm.)
 7. **Per-NPC inventories / finite stock / NPCs reselling gifts** — still deferred; when Caelan has the
    item roster, revisit on the Phase-1 spine.
+8. **Buyback window length & clock model (Phase 6c)** — ~5 min real-time (fits the `WORLD_TICK_MS`
+   pattern) vs. turn-based? And does disposition drift *up*, *down*, or *toward a per-NPC resting value*?
+9. **Un-ally on decay (Phase 6c)** — should disposition decaying past the ally threshold **revert** an
+   ally (adds symmetric downward-flip handling), or do allies stay bought once flipped?
+10. **Two gold wedges (Phase 6a)** — after Give folds away, Bribe + Trade are both gold on the Target
+    Wheel. Fine, or does one need a distinct tone? (mirrors two-wheels spec §13.)
+11. **Where is Macc's shop?** A Town street storefront (as described) — confirm it's Town, not Downtown,
+    and whether the Converter-sale (500 GP) is his only hook or he anchors a small side-quest.
 
 ## Verification (per phase, in-browser)
 
