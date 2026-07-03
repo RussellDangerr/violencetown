@@ -1876,9 +1876,9 @@ export class Renderer {
         ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX); ctx.restore();
 
         const catNode = ROOT.children[w.path[0]];
-        // TODO(Phase 4): per-VERB "Simon-Says" hues. For now the whole sunburst takes
-        // the top-level category's hue (deeper rings don't carry their own colors).
-        const HUE = ({ fight: '#c8443a', trick: '#3f78c4', treat: '#4f9b4a', flight: '#caa23a' })[catNode && catNode.key] || '#8a5a2c';
+        // (Phase 0 colour language) each node carries its own `color`/`text`; `HUE`
+        // is now only a fallback for nodes that don't (and for the preview arc).
+        const HUE = (catNode && catNode.color) || ({ fight: '#c8443a', trick: '#cba43c', treat: '#4f9b4a' })[catNode && catNode.key] || '#8a5a2c';
         const depth = w.path.length;
 
         // The {ring, sel} at locked level d (0-based), walking the REAL tree.
@@ -1923,7 +1923,7 @@ export class Renderer {
         //    stacked inward toward the hub (innermost = the earliest choice).
         for (let d = 0; d < depth - 1; d++) {
             const r = ringAt(d), node = r.ring[r.sel], band = wheelRingR(d);
-            this._wheelTile(band[0], band[1], TOP, QHALF, HUE, 0.3, node.label, '#9a8c70', null);
+            this._wheelTile(band[0], band[1], TOP, QHALF, node.color || HUE, 0.3, node.label, '#9a8c70', null);
         }
 
         // 2) Active compass ring (outermost): top = selected, left = prev, right =
@@ -1941,10 +1941,14 @@ export class Renderer {
         };
         const drawSlot = (mid, node, isSel) => {
             const en = tileEnabled(node);
+            // (Phase 0) each wedge paints from its own node.color/node.text; flanks
+            // dim via alpha, so opening Fight reads red / amber / purple.
+            const col = node.color || HUE;
+            const txt = !en ? '#7a6c50' : (node.text || (isSel ? '#fff3d0' : '#e8dcc0'));
             this._wheelTile(activeBand[0], activeBand[1], mid, QHALF,
-                isSel ? HUE : '#6b5436', en ? (isSel ? 1 : 0.82) : 0.4,
+                col, en ? (isSel ? 1 : 0.5) : 0.32,
                 node.placeholder ? '…' : node.label,
-                !en ? '#7a6c50' : (isSel ? '#fff3d0' : '#e8dcc0'),
+                txt,
                 isSel ? { w: 3, c: '#fff3c0' } : null,
                 node.placeholder ? null : WHEEL_ICONS[node.key]);
         };
