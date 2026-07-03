@@ -15,9 +15,13 @@ const always = () => true;
 //   later pass). Magic is a sub-wheel whose children are the castable spells.
 // Ranged is a leaf that throws slot 0; Magic drills a spell ring (each child
 // carries its own spellId + castSpell resolver).
+// (Phase 0 colour language) Category + Fight-method nodes carry their own
+// `color`/`text`; the renderer paints each wedge from these (falling back to a
+// hue map). Fight red; Melee red (base), Magic purple (red+mana-blue), Ranged
+// amber (red+warm). Trick gold. Treat green. Flight now nests under Trick.
 export const ROOT = { key: 'menu', label: 'MENU', children: [
-  { key: 'fight', label: 'Fight', children: [
-    { key: 'melee', label: 'Melee', children: [
+  { key: 'fight', label: 'Fight', color: '#c8443a', text: '#fff3d0', children: [
+    { key: 'melee', label: 'Melee', color: '#c8443a', text: '#fff3d0', children: [
       { key: 'hit',    label: 'Hit',    aimType: 'adjacent', resolver: 'combatAttack', available: always },
       // Cleave: a fixed 3-tile frontal ARC (the aimed tile + its two flanks). You
       // commit to all three — no sub-selecting — so it can clip an ally on the
@@ -28,31 +32,32 @@ export const ROOT = { key: 'menu', label: 'MENU', children: [
     ]},
     // Ranged: throw a rock/potion at range (duplicate of TRICK → Throw, by design
     // — you throw things, so it lives under both).
-    { key: 'ranged', label: 'Ranged', needsItem: true, aimType: 'reticle', resolver: 'resolveThrow', available: always },
-    { key: 'magic',  label: 'Magic',
+    { key: 'ranged', label: 'Ranged', color: '#e08a2a', text: '#2a1400', needsItem: true, aimType: 'reticle', resolver: 'resolveThrow', available: always },
+    { key: 'magic',  label: 'Magic',  color: '#8250c4', text: '#f0e6ff',
       available: (g) => (g.playerMp || 0) > 0 && ((g.knownSpells && g.knownSpells.length) || 0) > 0,
       children: [
-        { key: 'fireball', label: 'Fireball', spellId: 'fireball', aimType: 'reticle', resolver: 'castSpell',
+        { key: 'fireball', label: 'Fireball', spellId: 'fireball', color: '#e0552a', text: '#fff0e0', aimType: 'reticle', resolver: 'castSpell',
           available: (g) => (g.knownSpells || []).includes('fireball') && (g.playerMp || 0) >= (SPELLS.fireball ? SPELLS.fireball.mpCost : 0) },
-        { key: 'coneofcold', label: 'Cone of Cold', spellId: 'coneOfCold', aimType: 'reticle', resolver: 'castSpell',
+        { key: 'coneofcold', label: 'Cone of Cold', spellId: 'coneOfCold', color: '#4aa6dc', text: '#eaf6ff', aimType: 'reticle', resolver: 'castSpell',
           available: (g) => (g.knownSpells || []).includes('coneOfCold') && (g.playerMp || 0) >= (SPELLS.coneOfCold ? SPELLS.coneOfCold.mpCost : 0) },
       ] },
   ]},
-  { key: 'trick', label: 'Trick', children: [
+  // Trick — the gold "situational GP" category. Flight (evasion) nests here now (spec §6).
+  { key: 'trick', label: 'Trick', color: '#cba43c', text: '#2a1f06', children: [
     { key: 'throw',  label: 'Throw',  needsItem: true,  aimType: 'reticle',  resolver: 'resolveThrow', available: always },
     { key: 'defend', label: 'Defend', aimType: 'none',                       resolver: 'guard',        available: always },
     { key: 'bribe',  label: 'Bribe',  aimType: 'adjacent',                   resolver: 'bribe',        available: always },
     { key: 'give',   label: 'Give',   needsItem: true,  aimType: 'adjacent', resolver: 'give',         available: always },
     { key: 'trade',  label: 'Trade',  aimType: 'adjacent',                   resolver: 'trade',        available: always },
+    { key: 'flight', label: 'Flight', color: '#cba43c', text: '#2a1f06', children: [
+      { key: 'run',  label: 'Run',  aimType: 'adjacent', resolver: 'run',  available: always },
+      { key: 'hide', label: 'Hide', aimType: 'none',     resolver: 'hide', available: always },
+      { key: 'wait', label: 'Wait', aimType: 'none',     resolver: 'wait', available: always },
+    ]},
   ]},
-  { key: 'treat', label: 'Treat', children: [
+  { key: 'treat', label: 'Treat', color: '#4f9b4a', text: '#effbe9', children: [
     { key: 'eat',     label: 'Eat',     needsItem: true, aimType: 'none', resolver: 'resolveUse', available: always },
     { key: 'cleanse', label: 'Cleanse', needsItem: true, aimType: 'none', resolver: 'resolveUse', available: always },
-  ]},
-  { key: 'flight', label: 'Flight', children: [
-    { key: 'run',  label: 'Run',  aimType: 'adjacent', resolver: 'run',  available: always },
-    { key: 'hide', label: 'Hide', aimType: 'none',     resolver: 'hide', available: always },
-    { key: 'wait', label: 'Wait', aimType: 'none',     resolver: 'wait', available: always },
   ]},
 ]};
 
@@ -138,6 +143,8 @@ export function createWheelState() {
     lastFired: null, // {path, nodeKey, itemSlot, spellId, aimTile} — written by main.js on fire
     aiming: false,
     _memory: {},     // ring path-key → remembered selection index
+    // (Phase 3 juice) animation timestamps — written by main.js, read by the renderer.
+    _spinAt: 0, _spinDir: 0, _drillAt: 0, _drillDir: 0,
   };
 }
 
@@ -281,4 +288,54 @@ export function autoAimTile(leaf, game) {
     .map(e => ({ x: e.x, y: e.y, d: cheb(game.playerX, game.playerY, e.x, e.y) }))
     .sort((a, b) => a.d - b.d)
     .map(({ x, y }) => ({ x, y }))[0];
+}
+
+// (Phase 1 — appliesTo) Does this verb have a valid TARGET in range right now?
+// Categories + self-verbs + free-placement (reticle) verbs always apply; only an
+// ADJACENT-target verb (Hit/Cleave/Bribe/Give/Trade) or Run needs a real
+// neighbour. Drives the wheel's gray-out (tileEnabled) + the fire-gate
+// (_wheelDrill). Item/MP presence is a separate axis, handled by `available`.
+export function verbApplies(node, game) {
+  if (!node || node.placeholder) return false;
+  if (node.children && node.children.length) return true;   // a category — always navigable
+  if (node.aimType === 'none') return true;                 // self verb — no target
+  if (node.aimType === 'reticle') return true;              // free tile placement — always aimable
+  if (node.resolver === 'run') {
+    return Object.values(FACING_DELTA).some(([dx, dy]) =>
+      game.map && game.map.isWalkable(game.playerX + dx, game.playerY + dy));
+  }
+  const alive = (game.enemies || []).filter(e => e.entity.isAlive());
+  const social = node.resolver === 'trade' || node.resolver === 'bribe' || node.resolver === 'give';
+  const pool = social ? alive : alive.filter(e => !e.behavior || e.behavior.includes('HOSTILE'));
+  return pool.some(e => cheb(game.playerX, game.playerY, e.x, e.y) <= 1);
+}
+
+// ── Target Wheel ("The Price is Right") ──────────────────────────────────────
+// The verbs valid for a tapped TARGET, alphabetical. A target descriptor is
+// { x, y, npc?, item?, examinable? }. Colours ride the shared language: Examine
+// steel, social/economic gold, Hit red, Throw amber, Take green. Adjacent-only
+// verbs (Talk/Trade/Bribe/Give/Hit) gate on range 1; Examine + ranged Throw don't.
+export function targetVerbs(target, game) {
+  if (!target) return [];
+  const adj = cheb(game.playerX, game.playerY, target.x, target.y) <= 1;
+  const haveItem  = (game.inventory || []).some(s => s);
+  const haveThrow = (game.inventory || []).some(s => s && s.itemDef && s.itemDef.useType && String(s.itemDef.useType).includes('throw'));
+  const V = [];
+  V.push({ key: 'examine', label: 'Examine', color: '#9aa0a6', text: '#23262b', icon: '?', resolver: 'examine' });
+  if (target.npc) {
+    const e = target.npc;
+    const hostile = (!e.behavior || e.behavior.includes('HOSTILE')) && !e._ally;
+    if (e.dialogueId && adj)          V.push({ key: 'talk',  label: 'Talk',  color: '#3f9aa0', text: '#eafafa', resolver: 'talk' });
+    if (e.vendor && adj)              V.push({ key: 'trade', label: 'Trade', color: '#cba43c', text: '#2a1f06', icon: '⇄', resolver: 'trade' });
+    if (adj && e.bribeable !== false) V.push({ key: 'bribe', label: 'Bribe', color: '#cba43c', text: '#2a1f06', icon: '¤', resolver: 'bribe' });
+    if (adj && haveItem && e.bribeable !== false) V.push({ key: 'give', label: 'Give', color: '#cba43c', text: '#2a1f06', icon: '♥', resolver: 'give' });
+    if (hostile && adj)               V.push({ key: 'hit',   label: 'Hit',   color: '#c8443a', text: '#fff3d0', icon: '⚔', resolver: 'hit' });
+    if (hostile && haveThrow)         V.push({ key: 'throw', label: 'Throw', color: '#e08a2a', text: '#2a1400', icon: '➹', resolver: 'throw' });
+  }
+  if (target.item) V.push({ key: 'take', label: 'Take', color: '#4f9b4a', text: '#effbe9', resolver: 'take' });
+  return V.sort((a, b) => (a.label < b.label ? -1 : a.label > b.label ? 1 : 0));
+}
+
+export function createTargetWheelState() {
+  return { x: 0, y: 0, target: null, verbs: [], sel: 0, _openAt: 0, _spinAt: 0, _spinDir: 0 };
 }

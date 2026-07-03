@@ -13,7 +13,7 @@ import { TILE_PX, VIEW_TILES, CANVAS_PX } from './data.js';
 const SS = 2;
 import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES, EQUIP_FIGURE_SPRITE } from './sprites.js';
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
-import { ROOT, selectedNode, activeRing, activeIndex, decisionPath, previewChildren, affectedTiles } from './wheel-model.js'; // (sunburst wheel)
+import { ROOT, selectedNode, activeRing, activeIndex, decisionPath, previewChildren, affectedTiles, verbApplies } from './wheel-model.js'; // (sunburst wheel)
 import { SPELLS } from './spells.js';
 import {
     OVERLAY_RECTS, THROW_RECTS,
@@ -403,6 +403,7 @@ export class Renderer {
         // Modals
         if (game.state === 'item_overlay')    this._drawItemOverlay(game);
         if (game.state === 'radial_menu')     this._drawRadialMenu(game);
+        if (game.state === 'target_wheel')    this._drawTargetWheel(game);
         if (game.state === 'item_throw_dir')  this._drawThrowPrompt(game);
         if (game.state === 'item_give_dir')   this._drawThrowPrompt(game);
         if (game.state === 'ending') this._drawEndingOverlay(game);
@@ -1815,9 +1816,52 @@ export class Renderer {
 
     _drawRadialMenu(game) { this._drawWheel(game); }
 
+    // (Target Wheel — "The Price is Right") A full pegged ring of the tapped
+    // target's verbs: each a colour-language wedge, gold trim + rim pegs, the
+    // selected verb spun under the top pointer, the target named in the hub.
+    _drawTargetWheel(game) {
+        const { ctx } = this;
+        const tw = game.targetWheel; if (!tw || !tw.verbs || !tw.verbs.length) return;
+        const cx = RADIAL_CENTER_X, cy = RADIAL_CENTER_Y, TOP = -Math.PI / 2;
+        const n = tw.verbs.length, step = (Math.PI * 2) / n;
+        ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX); ctx.restore();
+        const now = (typeof performance !== 'undefined') ? performance.now() : 0;
+        const reduce = (typeof Settings !== 'undefined') && Settings.get && Settings.get('reduceMotion');
+        let scale = 1;
+        if (!reduce) { const ot = (now - (tw._openAt || 0)) / 160; if (ot >= 0 && ot < 1) { const s = ot * ot * (3 - 2 * ot); scale = 0.86 + 0.14 * s; } }
+        ctx.save();
+        if (scale !== 1) { ctx.translate(cx, cy); ctx.scale(scale, scale); ctx.translate(-cx, -cy); }
+        const band = wheelRingR(0);
+        const half = step / 2 - WHEEL_TILE_GAP;
+        for (let i = 0; i < n; i++) {
+            const v = tw.verbs[i], mid = TOP + (i - tw.sel) * step, isSel = (i === tw.sel);
+            this._wheelTile(band[0], band[1], mid, half,
+                v.color || '#6b5436', isSel ? 1 : 0.58,
+                v.label, v.text || '#fff3d0',
+                isSel ? { w: 3, c: '#fff3c0' } : { w: 1.5, c: '#d9b34a' },
+                v.icon || null);
+            const a = mid - step / 2, pr = band[1] + 3;
+            ctx.beginPath(); ctx.arc(cx + Math.cos(a) * pr, cy + Math.sin(a) * pr, 3, 0, Math.PI * 2); ctx.closePath();
+            ctx.fillStyle = '#e8c14f'; ctx.fill();
+        }
+        ctx.beginPath(); ctx.arc(cx, cy, WHEEL_HUB_R, 0, Math.PI * 2); ctx.closePath();
+        ctx.fillStyle = 'rgba(30,24,16,0.95)'; ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(212,185,106,0.6)'; ctx.stroke();
+        if (this.font) {
+            const t = tw.target;
+            const name = (t.npc && (t.npc.name || t.npc.type)) || (t.item && ((t.item.def && t.item.def.name) || t.item.type)) || (t.examinable && t.examinable.id) || '?';
+            this.font.drawText(ctx, String(name).replace(/[\[\]]/g, '').toUpperCase().slice(0, 9), cx, cy - 3, { color: UI.gold, scale: 1, align: 'center' });
+        }
+        const ppr = band[1] + 12;
+        ctx.beginPath(); ctx.moveTo(cx, cy - ppr + 10); ctx.lineTo(cx - 7, cy - ppr); ctx.lineTo(cx + 7, cy - ppr); ctx.closePath();
+        ctx.fillStyle = '#e8462f'; ctx.fill();
+        ctx.restore();
+        ctx.globalAlpha = 1; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    }
+
     // One donut-wedge tile (a curved "Simon-Says" segment) + a centered label.
     // Angles in radians: `mid` = the tile's centre angle, `half` = half its width.
-    _wheelTile(r0, r1, mid, half, fill, alpha, label, txtColor, outline) {
+    _wheelTile(r0, r1, mid, half, fill, alpha, label, txtColor, outline, icon) {
         const { ctx } = this, cx = RADIAL_CENTER_X, cy = RADIAL_CENTER_Y;
         ctx.beginPath();
         ctx.arc(cx, cy, r1, mid - half, mid + half);
@@ -1825,10 +1869,16 @@ export class Renderer {
         ctx.closePath();
         ctx.globalAlpha = alpha; ctx.fillStyle = fill; ctx.fill(); ctx.globalAlpha = 1;
         if (outline) { ctx.lineWidth = outline.w; ctx.strokeStyle = outline.c; ctx.stroke(); }
-        if (this.font && label) {
-            const lr = (r0 + r1) / 2;
-            const lx = cx + Math.cos(mid) * lr, ly = cy + Math.sin(mid) * lr - 4;
-            this.font.drawText(ctx, label, lx, ly, { color: txtColor, scale: 1, align: 'center' });
+        if (!this.font) return;
+        const lr = (r0 + r1) / 2;
+        const lx = cx + Math.cos(mid) * lr, ly = cy + Math.sin(mid) * lr;
+        if (icon) {
+            // (Phase 4) a monochrome glyph stacked over the label, in the tile's
+            // TEXT colour (never a hue) — a colour-independent shape cue.
+            this.font.drawText(ctx, icon, lx, ly - 11, { color: txtColor, scale: 1.4, align: 'center' });
+            if (label) this.font.drawText(ctx, label, lx, ly + 3, { color: txtColor, scale: 1, align: 'center' });
+        } else if (label) {
+            this.font.drawText(ctx, label, lx, ly - 4, { color: txtColor, scale: 1, align: 'center' });
         }
     }
 
@@ -1870,43 +1920,95 @@ export class Renderer {
         ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX); ctx.restore();
 
         const catNode = ROOT.children[w.path[0]];
-        // TODO(Phase 4): per-VERB "Simon-Says" hues. For now the whole sunburst takes
-        // the top-level category's hue (deeper rings don't carry their own colors).
-        const HUE = ({ fight: '#c8443a', trick: '#3f78c4', treat: '#4f9b4a', flight: '#caa23a' })[catNode && catNode.key] || '#8a5a2c';
+        // (Phase 0) `HUE` = the current SECTION's colour — the deepest *ancestor*
+        // along the path that defines one (excludes the selection itself) — so
+        // uncolored leaves inherit their section (Magic → purple), not the top-level
+        // category, and the accent reflects the tier you're in. Leaf wedges that
+        // set their own `color` (Fireball ember, Cone of Cold ice) override it.
+        let sectionColor = null, _sn = ROOT;
+        for (let k = 0; k < w.path.length - 1; k++) { _sn = (_sn && _sn.children) ? _sn.children[w.path[k]] : null; if (_sn && _sn.color) sectionColor = _sn.color; }
+        const HUE = sectionColor || (catNode && catNode.color) || ({ fight: '#c8443a', trick: '#cba43c', treat: '#4f9b4a' })[catNode && catNode.key] || '#8a5a2c';
         const depth = w.path.length;
 
         // The {ring, sel} at locked level d (0-based), walking the REAL tree.
         const ringAt = (d) => { let node = ROOT; for (let k = 0; k < d; k++) node = node.children[w.path[k]]; return { ring: node.children, sel: w.path[d] }; };
 
-        // Draw one full ring, the selected tile rotated under the TOP pointer.
-        const drawRing = (ring, selIndex, band, active) => {
-            const n = ring.length; if (!n) return;
-            const step = (Math.PI * 2) / n, half = Math.max(0.02, step / 2 - WHEEL_TILE_GAP);
-            for (let i = 0; i < n; i++) {
-                const node = ring[i];
-                const mid = TOP + (i - selIndex) * step;
-                const isSel = (i === selIndex);
-                const enabled = !node.placeholder && (!node.available || node.available(game));
-                let fill, alpha, txt, outline = null;
-                if (active) {
-                    fill = isSel ? HUE : '#6b5436';
-                    alpha = enabled ? (isSel ? 1 : 0.82) : 0.4;
-                    txt = !enabled ? '#7a6c50' : (isSel ? '#fff3d0' : '#e8dcc0');
-                    if (isSel) outline = { w: 3, c: '#fff3c0' };
-                } else {
-                    fill = isSel ? HUE : '#3a3024';
-                    alpha = (isSel ? 0.5 : 0.32) * (enabled ? 1 : 0.7);
-                    txt = isSel ? '#e8dcc0' : '#9a8c70';
-                }
-                this._wheelTile(band[0], band[1], mid, half, fill, alpha, node.placeholder ? '…' : node.label, txt, outline);
-            }
-        };
+        // Compass cardinals: TOP (above) is the selection; the flanks are prev
+        // (left) and next (right); the bottom is the reserved BACK.
+        const RIGHT = 0, BOTTOM = Math.PI / 2, LEFT = Math.PI;
+        const QHALF = Math.PI / 4 - WHEEL_TILE_GAP * 2;   // quadrant tile half-width
+        const wrap = (i, m) => ((i % m) + m) % m;
+        const tileEnabled = (node) => !node.placeholder && (!node.available || node.available(game)) && verbApplies(node, game);
 
-        // 1) Greyed decision rings (locked parents), innermost first.
-        for (let d = 0; d < depth - 1; d++) { const r = ringAt(d); drawRing(r.ring, r.sel, wheelRingR(d), false); }
-        // 2) Bright active ring (outermost full ring).
+        // ── (Phase 3 juice) easing reads performance.now() each frame — the menu
+        //    render loop stays alive while the wheel is open (_hasActiveEffects).
+        //    reduce-motion snaps everything to rest (no scale/rotation) but keeps
+        //    colour + audio. Computed values are stashed on _wheelAnim so the
+        //    animation can be probed headless (rAF is throttled there).
+        const reduce = (typeof Settings !== 'undefined') && Settings.get && Settings.get('reduceMotion');
+        const now = (typeof performance !== 'undefined') ? performance.now() : 0;
+        const smooth = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
+        let scale = 1, spin = 0;
+        if (!reduce) {
+            // Open overshoot: 0.85 → 1.05 → 1.0 over 180ms.
+            const ot = (now - (game._overlayOpenedAt ?? 0)) / 180;
+            if (ot >= 0 && ot < 1) scale = (ot < 0.55) ? 0.85 + 0.20 * smooth(ot / 0.55)
+                                                        : 1.05 - 0.05 * smooth((ot - 0.55) / 0.45);
+            // Drill / back re-center pop: a quick 0.90 → 1.0 punch on a depth change.
+            const dt = (now - (w._drillAt ?? 0)) / 150;
+            if (dt >= 0 && dt < 1) scale *= 0.90 + 0.10 * smooth(dt);
+            // Spin sweep: the active ring rotates ±90° → 0 over 120ms after a cycle,
+            // so the newly-selected tile sweeps up into the TOP slot.
+            const st = (now - (w._spinAt ?? 0)) / 120;
+            if (w._spinAt && st >= 0 && st < 1) spin = (w._spinDir || 0) * (Math.PI / 2) * (1 - smooth(st));
+        }
+        this._wheelAnim = { scale, spin, reduce: !!reduce };
+
+        // Everything below the wash scales about the centre (the open/drill pop).
+        ctx.save();
+        if (scale !== 1) { ctx.translate(cx, cy); ctx.scale(scale, scale); ctx.translate(-cx, -cy); }
+
+        // 1) Greyed decision breadcrumb: each locked parent's chosen tile at TOP,
+        //    stacked inward toward the hub (innermost = the earliest choice).
+        for (let d = 0; d < depth - 1; d++) {
+            const r = ringAt(d), node = r.ring[r.sel], band = wheelRingR(d);
+            this._wheelTile(band[0], band[1], TOP, QHALF, node.color || HUE, 0.3, node.label, '#9a8c70', null);
+        }
+
+        // 2) Active compass ring (outermost): top = selected, left = prev, right =
+        //    next, bottom = reserved BACK. Options beyond prev/sel/next are OFF-SCREEN
+        //    (spin to bring one into a slot); the pip carousel (§5) hints how many.
+        const ring = activeRing(w), sel = activeIndex(w), n = ring.length;
         const activeBand = wheelRingR(depth - 1);
-        drawRing(activeRing(w), activeIndex(w), activeBand, true);
+        // (Phase 4) verified monochrome glyphs — a colour-free shape cue per node.
+        const WHEEL_ICONS = {
+            fight: '⚔', trick: '♦', treat: '♥', flight: '»',
+            melee: '⚔', ranged: '➹', magic: '✦',
+            hit: '✶', cleave: '⚔', spin: '⟳',
+            throw: '➹', defend: '⛊', bribe: '¤', give: '♥', trade: '⇄',
+            eat: '♥', cleanse: '✧', run: '»', hide: '☾', wait: '⏱',
+        };
+        const drawSlot = (mid, node, isSel) => {
+            const en = tileEnabled(node);
+            // (Phase 0) each wedge paints from its own node.color/node.text; flanks
+            // dim via alpha, so opening Fight reads red / amber / purple.
+            const col = node.color || HUE;
+            const txt = !en ? '#7a6c50' : (node.text || (isSel ? '#fff3d0' : '#e8dcc0'));
+            this._wheelTile(activeBand[0], activeBand[1], mid, QHALF,
+                col, en ? (isSel ? 1 : 0.5) : 0.32,
+                node.placeholder ? '…' : node.label,
+                txt,
+                isSel ? { w: 3, c: '#fff3c0' } : null,
+                node.placeholder ? null : WHEEL_ICONS[node.key]);
+        };
+        // `spin` rotates the whole active ring (options + Back) so a cycle sweeps
+        // the new selection up under the fixed pointer.
+        drawSlot(TOP + spin, ring[sel], true);
+        if (n >= 2) drawSlot(LEFT + spin,  ring[wrap(sel - 1, n)], false);
+        if (n >= 2) drawSlot(RIGHT + spin, ring[wrap(sel + 1, n)], false);
+        // Reserved BACK tile — down always collapses a level (or CLOSES at the root).
+        this._wheelTile(activeBand[0], activeBand[1], BOTTOM + spin, QHALF, '#2c2620', 0.8,
+            depth === 1 ? '▼ CLOSE' : '▼ BACK', '#b7a988', null);
 
         // 3) Preview arc (the highlight's children) — a couple of curved tiles above
         //    the pointer, last-used child centred; or a "fire" cue for a leaf.
@@ -1931,9 +2033,19 @@ export class Renderer {
         ctx.beginPath(); ctx.arc(cx, cy, WHEEL_HUB_R, 0, Math.PI * 2); ctx.closePath();
         ctx.fillStyle = 'rgba(30,24,16,0.95)'; ctx.fill();
         ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(212,185,106,0.6)'; ctx.stroke();
-        if (this.font) { const dp = decisionPath(w); this.font.drawText(ctx, dp[dp.length - 1].toUpperCase(), cx, cy - 4, { color: UI.gold, scale: 1, align: 'center' }); }
+        if (this.font) { const dp = decisionPath(w); this.font.drawText(ctx, dp[dp.length - 1].toUpperCase(), cx, cy - 6, { color: UI.gold, scale: 1, align: 'center' }); }
 
-        // 5) Pointer ▲ at TOP, just outside the outermost element, pointing inward.
+        // 5) Off-screen carousel: one pip per active-ring option (selected filled),
+        //    drawn on top of the hub — hints the options currently spun off-screen.
+        if (n > 3) {
+            const pipGap = 7, py = cy + 12, x0 = cx - (n - 1) * pipGap / 2;
+            for (let i = 0; i < n; i++) {
+                ctx.beginPath(); ctx.arc(x0 + i * pipGap, py, 2, 0, Math.PI * 2); ctx.closePath();
+                ctx.fillStyle = (i === sel) ? '#fff3c0' : 'rgba(212,185,106,0.4)'; ctx.fill();
+            }
+        }
+
+        // 6) Pointer ▲ at TOP, just outside the outermost element, pointing inward.
         const pr = outerMost + 12;
         ctx.beginPath();
         ctx.moveTo(cx, cy - pr + 10);
@@ -1942,6 +2054,7 @@ export class Renderer {
         ctx.closePath();
         ctx.fillStyle = '#fff3c0'; ctx.fill();
 
+        ctx.restore();   // undo the open/drill scale transform
         ctx.globalAlpha = 1; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     }
 
