@@ -99,6 +99,24 @@ Magic purple, Ranged amber.
 **Glitter is a separate emphasis _layer_**, not a color — a shimmer overlay applied to the *notable* move
 for a target (see §7), on top of whatever category color the wedge already has.
 
+### 5.1 Leaf-tier colours + the current-tier accent (playtest refinement, 2026-07-03)
+
+Colour identifies the **category** in the upper tiers, but at the **leaf tier it identifies the _thing_** —
+each spell / throwable / item wears its **own** colour + silhouette, NOT the category's. Fireball is ember,
+Cone of Cold is ice; a thrown rock is grey, a potion green. The "which section am I in?" cue does **not**
+come from making every leaf purple — it comes from the **persistent section context** (the greyed breadcrumb
+and the wheel's fallback accent, both purple while you're in Magic). This is the more useful signal at the
+leaf: you already know you're casting; what you need is *which* spell.
+*(Phase 0 implements this for the two spells and makes the fallback accent follow the current section rather
+than the top-level category. The same rule extends to the Ranged/Throw ring — throwables keep their item
+colours instead of all going amber — once that ring is item-driven.)*
+
+**The current tier should dominate the circle.** Dropping into Magic doesn't yet read strongly enough as
+"you are in MAGIC" — the section is a thin arc while the top-level red still fills most of the wheel. The
+current tier should **swell to own the circle**: the §12.4 dominant-slice, extended from the selected
+*wedge* to the current *section's* whole identity (colour + fill), so the tier you're on is unmistakable.
+Flagged for the dominant-slice phase (§12.4).
+
 ---
 
 ## 6. Player Wheel — structure & feel (evolution of the compass)
@@ -247,6 +265,11 @@ This design is large; the implementation plan should **decompose** it. A low-ris
 4. **Corner orientation** — *default:* selected wedge faces up-left into the play field.
 5. **Scope** — *default:* one design, decomposed into the §12 sequence (each phase its own branch + plan),
    Caelan merges each.
+6. **Leaf colours** — *default (Phase 0, done for spells):* leaves wear their own colour, section cued by
+   context (§5.1). *Confirm* the same for throwables once the Ranged/Throw ring is item-driven.
+7. **The hotbar's future** — Caelan suspects the 9-slot hotbar is on its way out as item interaction moves
+   onto the wheels (Target Wheel = "Take / Use this"; Player Wheel Treat = consume). *Open:* keep it, slim
+   it, or retire it once the Target Wheel lands — revisit at the Target Wheel phase, not now.
 
 ---
 
