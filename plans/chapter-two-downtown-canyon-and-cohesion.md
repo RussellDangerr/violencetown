@@ -1,5 +1,41 @@
 # Violencetown — Chapter Two: Downtown, the Canyon & Systems Cohesion
 
+## ✅ BUILT / SHIPPED STATUS (updated 2026-07-04) — read this first
+
+Most of this plan is now **built and either shipped or merged to dev**. Current: **main = v0.12.0
+(LIVE)**, **dev** has everything below + a v0.13.0 ship pending.
+
+- **Phase 6 (6a–6d, the reversible economy) — BUILT + SHIPPED in v0.12.0 (live).** give→trade (offer
+  mode), chests→trade (loot mode), the ~5-min buyback window (per-unit LIFO price stacks) + the
+  disposition tick clock, value tiers (Grey→Orange) + special-buyer **Macc**. A pre-prod adversarial
+  review caught + fixed **8 ship-blockers before launch** — a deterministic **gold-dup** (buyback
+  last-write-wins price → per-unit price stacks), **two permanent quest soft-locks** (Macc special-buy
+  + offer-mode give-away of the sole car-fix Converter), a dead-player auto-walk regression, and
+  save/load dropping vendor fields. **Decision: quest items are protected EVERYWHERE** (offer +
+  specialBuys guard `!questItem`; Macc's Converter-buy is inert on this build and **auto-re-enables**
+  when the Converter stops being a questItem). 6e (economy tuning) is still open/post-1.0.
+- **Phases 1–3 (transaction spine, bridge cutscene + alcohol side-mission, Canyon + Pike + grappling
+  hook) — BUILT + MERGED to dev (2026-07-04).** The Armory arc (the *previous* plan's Phases 1–4)
+  also merged. Both were reconciled against the shipped v0.12.0 economy.
+- **ECONOMY RECONCILIATION (Caelan's calls, 2026-07-04):** the plan's Phase-1 **transaction spine is
+  FUSED UNDERNEATH** Phase 6, not instead of it — `transferGold` (strict conservation + funded NPC
+  wallets, VENDOR_WALLET) is the gold-movement layer; the buyback ledger + give-fold sit on top; ALL
+  gold routes through transferGold and buy/sell still record buyback credits. This is what "Phase 6
+  extends Phase 1's spine" always meant — Phase 6 was only built on raw gold because the spine wasn't
+  merged yet. **Give-fold kept** (`_tryTradeWith` no longer gates non-vendors; `_offerFromTrade` routes
+  through `reactToTransaction`). **Both canyon items kept** (chain = Macc rappel-DOWN; grappling_hook =
+  Pike escape UP — complementary, resolving Open-decision #2's canyon-route question).
+- **STILL OPEN / NOT BUILT:** Phase 0 (world re-route + Factory tiles, Caelan-driven), **Phase 4
+  (Downtown + MQ2 burger delivery)**, **Phase 5 (the real GRAPPLE_ANCHOR swing mechanic** — the canyon
+  escape is currently a data-gated `requires` transition placeholder). 6e economy tuning.
+- **Process note that earned its keep:** run an adversarial pre-prod review before shipping economy/
+  core changes (it caught the 8 blockers); a merge is only done when the game RUNS (git auto-merge hid
+  a dropped import + a dropped brace during the arc merges). See repo `CLAUDE.md` "Branch & merge
+  hygiene".
+
+The rest of this doc is the original plan (design intent + the phases). Where a phase says "designed,
+not built," check the status above — 1–3 and 6 are done.
+
 ## Context
 
 The armory arc (Phases 1–4 of the previous plan — Sewer armor, GP/MP skills, Fear, Weapons) is
