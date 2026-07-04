@@ -17,9 +17,9 @@ class Entity {
         this.name    = name ?? 'unknown';
         this.maxHp   = hp;
         this.hp      = hp;
-        // MP (Magic / Skill Points) — gates skill use once skills exist.
-        // For now it just sits at 100/100 on every entity; the HUD reads it
-        // so the resource is visible even though no skill spends from it yet.
+        // MP (Magic / Skill Points) — gates skill use. The player spends it on
+        // FIGHT → Magic spells and regenerates a little each turn; enemies carry
+        // the field for symmetry but don't cast yet.
         this.maxMp   = mp;
         this.mp      = mp;
         this.armor   = armor;

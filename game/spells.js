@@ -21,4 +21,11 @@ export const SPELLS = {
         id: 'coneOfCold', name: 'Cone of Cold', mpCost: 10, damage: 14, damageType: 'cold',
         range: 3, aoe: { shape: 'cone', depth: 3 },
     },
+    // Boo! — no damage; a self-centred burst of dread that FEARS every enemy
+    // around you (they flee for `fear` turns). Granted by the Fearmur; resolved
+    // by the castBoo resolver (main.js), not castSpell (which deals damage).
+    boo: {
+        id: 'boo', name: 'Boo!', mpCost: 8, damage: 0, damageType: 'fear',
+        range: 0, fear: 3, aoe: { shape: 'self', radius: 2 },
+    },
 };

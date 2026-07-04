@@ -40,6 +40,7 @@ export const ITEMS = {
         equipDuration: 3,
         useType: 'self',
         effect: 'cure_sludge',
+        armor: 2,               // a bar strapped at your back turns a hit or two while it lasts
         consumable: true,
         fallbackColor: '#aaaaff',
         baseValue: 15,
@@ -66,8 +67,70 @@ export const ITEMS = {
         useType: 'self',
         effect: 'heal',
         healAmount: 25,
+        armor: 1,               // wrapped across the front — a little padding while it holds
         consumable: true,
         fallbackColor: '#ffaaaa',
+        baseValue: 10,
+    },
+
+    // ── Armor (persistent equips — the Sewer starter set) ─────────────────────
+    // A full one-piece-per-body-zone set of junk-punk scavenger gear, found
+    // around the Sewer. Four are pure data (they ride the _playerArmor() sum);
+    // Shoe Bags carry `sludgeImmune` (see _hasSludgeImmunity in main.js).
+    foil_hat: {
+        id: 'foil_hat',
+        name: '[Foil Hat]',
+        description: 'Tin-foil, triple-layered. They can\'t read you now.',
+        equipSlot: 'top',
+        useType: 'equip',
+        armor: 2,
+        consumable: false,
+        fallbackColor: '#c8c8d0',
+        baseValue: 10,
+    },
+    cardboard_cuirass: {
+        id: 'cardboard_cuirass',
+        name: '[Cardboard Cuirass]',
+        description: 'A refrigerator box with the arm-holes torn out. FRAGILE, stencilled on both sides. It is not wrong.',
+        equipSlot: 'front',
+        useType: 'equip',
+        armor: 4,
+        consumable: false,
+        fallbackColor: '#b58a56',
+        baseValue: 14,
+    },
+    latex_gloves: {
+        id: 'latex_gloves',
+        name: '[Latex Gloves]',
+        description: 'Powder-blue, one size too big, snapped at the wrist. Surgical, in the loosest sense.',
+        equipSlot: 'sides',
+        useType: 'equip',
+        armor: 1,
+        consumable: false,
+        fallbackColor: '#9fc7e8',
+        baseValue: 8,
+    },
+    red_cape: {
+        id: 'red_cape',
+        name: '[Red Cape]',
+        description: 'Torn from something that left in a hurry. Snags on everything. Makes you feel taller.',
+        equipSlot: 'back',
+        useType: 'equip',
+        armor: 1,
+        consumable: false,
+        fallbackColor: '#c03030',
+        baseValue: 10,
+    },
+    shoe_bags: {
+        id: 'shoe_bags',
+        name: '[Shoe Bags]',
+        description: 'Garbage-bag socks, double-knotted at the shin. The Sewer stays out of your socks.',
+        equipSlot: 'bottom',
+        useType: 'equip',
+        armor: 2,
+        sludgeImmune: true,
+        consumable: false,
+        fallbackColor: '#3a3a3a',
         baseValue: 10,
     },
 
@@ -220,6 +283,37 @@ export function equipItem(game, itemDef) {
         : `[${itemDef.name} equipped to ${slot}]`;
 }
 
+// Persistent equip via the Use action (armor pieces — useType: 'equip'). Moves
+// the item into its body-zone slot; any piece already worn there goes back into
+// the bag. The caller (main.js _doItemUse) removes the used item from the
+// hotbar so it isn't duplicated.
+function resolveEquip(game, itemDef) {
+    const slot = itemDef.equipSlot;
+    if (!slot) return `[${itemDef.name} can't be worn]`;
+    const old = game.equipment[slot];
+    game.equipment[slot] = itemDef;
+    if (old && old.id !== itemDef.id) game._addToInventory(old);
+    return old && old.id !== itemDef.id
+        ? `[Equipped ${itemDef.name} — ${old.name} back in your bag]`
+        : `[Equipped ${itemDef.name}]`;
+}
+
+// Take a worn armor piece off and return it to the bag. Weapon and temp-equips
+// are excluded: the weapon slot is never emptied (melee reads
+// equipment.weapon.damage), and duration equips wear off on their own. Returns
+// a log message, or null on a no-op (empty / weapon slot).
+export function unequipItem(game, slot) {
+    if (slot === 'weapon') return null;
+    const item = game.equipment[slot];
+    if (!item) return null;
+    if ((game.tempEquips || []).some(te => te.slot === slot)) {
+        return `[${item.name} will wear off on its own]`;
+    }
+    if (!game._addToInventory(item)) return '[Your bag is full — no room to stow it]';
+    game.equipment[slot] = null;
+    return `[Unequipped ${item.name}]`;
+}
+
 // Called each turn during enemy resolution to tick down temp equips
 export function tickTempEquips(game) {
     const messages = [];
@@ -255,6 +349,8 @@ export function resolveUse(game, itemDef, direction, stackCount = 1) {
             return resolveThrow(game, itemDef, direction, stackCount);
         case 'melee':
             return resolveMelee(game, itemDef, direction);
+        case 'equip':
+            return resolveEquip(game, itemDef);
         default:
             return `[Used ${itemDef.name}]`;
     }

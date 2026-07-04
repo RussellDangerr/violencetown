@@ -5,6 +5,7 @@
 // it and routes compose(). See plans/combat-wheel-radial-overhaul.md.
 
 import { SPELLS } from './spells.js';
+import { TRICKS } from './tricks.js';
 
 const always = () => true;
 
@@ -40,6 +41,10 @@ export const ROOT = { key: 'menu', label: 'MENU', children: [
           available: (g) => (g.knownSpells || []).includes('fireball') && (g.playerMp || 0) >= (SPELLS.fireball ? SPELLS.fireball.mpCost : 0) },
         { key: 'coneofcold', label: 'Cone of Cold', spellId: 'coneOfCold', color: '#4aa6dc', text: '#eaf6ff', aimType: 'reticle', resolver: 'castSpell',
           available: (g) => (g.knownSpells || []).includes('coneOfCold') && (g.playerMp || 0) >= (SPELLS.coneOfCold ? SPELLS.coneOfCold.mpCost : 0) },
+        // Boo! — self-centred fear burst, no aim (fires around you). Granted by
+        // the Fearmur (grantsSpells → knownSpells), so it only appears when worn.
+        { key: 'boo', label: 'Boo!', spellId: 'boo', aimType: 'none', resolver: 'castBoo',
+          available: (g) => (g.knownSpells || []).includes('boo') && (g.playerMp || 0) >= (SPELLS.boo ? SPELLS.boo.mpCost : 0) },
       ] },
   ]},
   // Trick — the gold "situational GP" category. Flight (evasion) nests here now (spec §6).
@@ -56,6 +61,14 @@ export const ROOT = { key: 'menu', label: 'MENU', children: [
     { key: 'defend', label: 'Defend', aimType: 'none',                       resolver: 'guard',        available: always },
     { key: 'bribe',  label: 'Bribe',  aimType: 'adjacent',                   resolver: 'bribe',        available: always },
     { key: 'trade',  label: 'Trade',  aimType: 'adjacent',                   resolver: 'trade',        available: always },
+    // (Armory reconciliation) GP-costed tricks granted by equipped tech gear —
+    // siblings of Bribe/Trade, gated on grantedTricks + gold; castTrick spends GP.
+    { key: 'rayblast', label: 'Ray Blast', trickId: 'ray_blast', aimType: 'reticle', resolver: 'castTrick',
+      available: (g) => (g.grantedTricks || []).includes('ray_blast') && (g.gold || 0) >= (TRICKS.ray_blast ? TRICKS.ray_blast.gpCost : 0) },
+    // Hire a Lion — a self-target summon (no aim); granted by the Lion Whip.
+    { key: 'hirelion', label: 'Hire Lire', trickId: 'hire_lion', aimType: 'none', resolver: 'castTrick',
+      available: (g) => (g.grantedTricks || []).includes('hire_lion') && (g.gold || 0) >= (TRICKS.hire_lion ? TRICKS.hire_lion.gpCost : 0) },
+    // Flight (evasion) sub-wheel — kept from dev's two-wheels layout (spec §6).
     { key: 'flight', label: 'Flight', color: '#cba43c', text: '#2a1f06', children: [
       { key: 'run',  label: 'Run',  aimType: 'adjacent', resolver: 'run',  available: always },
       { key: 'hide', label: 'Hide', aimType: 'none',     resolver: 'hide', available: always },
@@ -68,7 +81,7 @@ export const ROOT = { key: 'menu', label: 'MENU', children: [
   ]},
 ]};
 
-const OFFENSIVE_RESOLVERS = new Set(['combatAttack', 'cleaveAttack', 'spinAttack', 'resolveThrow', 'castSpell']);
+const OFFENSIVE_RESOLVERS = new Set(['combatAttack', 'cleaveAttack', 'spinAttack', 'resolveThrow', 'castSpell', 'castTrick']);
 export const isOffensiveLeaf = (node) => OFFENSIVE_RESOLVERS.has(node.resolver);
 
 // ── Geometry (the single source of truth for what an action hits) ────────────
@@ -113,6 +126,11 @@ export function affectedTiles(w, game) {
   const leaf = selectedNode(w);
   const px = game.playerX, py = game.playerY;
   if (leaf.resolver === 'spinAttack') return RING8.map(([dx, dy]) => ({ x: px + dx, y: py + dy }));
+  // (fear) Boo! — a self-centred burst around the player; no reticle needed.
+  if (leaf.resolver === 'castBoo') {
+    const sp = SPELLS[leaf.spellId];
+    return burstTiles({ x: px, y: py }, (sp && sp.aoe && sp.aoe.radius) || 2);
+  }
   const ret = w.reticle;
   if (!ret) return [];
   if (leaf.resolver === 'cleaveAttack') return cleaveArc(px, py, ret);
@@ -120,6 +138,12 @@ export function affectedTiles(w, game) {
     const sp = SPELLS[leaf.spellId];
     if (sp && sp.aoe && sp.aoe.shape === 'cone')  return coneTiles(px, py, ret, sp.aoe.depth || 3);
     if (sp && sp.aoe && sp.aoe.shape === 'burst') return burstTiles(ret, sp.aoe.radius || 1);
+    return [ret];
+  }
+  if (leaf.resolver === 'castTrick') {
+    const tr = TRICKS[leaf.trickId];
+    if (tr && tr.aoe && tr.aoe.shape === 'cone')  return coneTiles(px, py, ret, tr.aoe.depth || 3);
+    if (tr && tr.aoe && tr.aoe.shape === 'burst') return burstTiles(ret, tr.aoe.radius || 1);
     return [ret];
   }
   if (leaf.resolver === 'resolveThrow') return burstTiles(ret, 1); // throw bursts 3×3
@@ -259,6 +283,12 @@ function safeFacing(g) {
 // Reticle reach: adjacent verbs lock to 1, Throw uses the item's range (else 5),
 // Magic uses the selected spell's range, everything else 1.
 export function aimRange(leaf, game) {
+  // Melee Hit reaches as far as the equipped weapon allows (Lion Whip = 3);
+  // every other adjacent verb (Cleave/Bribe/Give/Trade/Run) stays range 1.
+  if (leaf.resolver === 'combatAttack') {
+    const w = game && game.equipment && game.equipment.weapon;
+    return (w && w.reach) || 1;
+  }
   if (leaf.aimType === 'adjacent') return 1;
   if (leaf.resolver === 'resolveThrow') {
     const s = (game.inventory || [])[game.wheel ? game.wheel.itemIndex : -1];
@@ -267,6 +297,10 @@ export function aimRange(leaf, game) {
   if (leaf.resolver === 'castSpell') {
     const sp = SPELLS[leaf.spellId];
     return (sp && sp.range) || 6;
+  }
+  if (leaf.resolver === 'castTrick') {
+    const tr = TRICKS[leaf.trickId];
+    return (tr && tr.range) || 6;
   }
   return 1;
 }

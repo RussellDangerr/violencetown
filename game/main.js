@@ -7,8 +7,9 @@ import { loadMap } from './map.js';
 import { loadAllSprites } from './sprites.js';
 import { BitmapFont } from './bitmap-font.js';
 import { DIR_NAMES, PLAYER_MAX_HP, PLAYER_MAX_MP, SLUDGE_DOT, INVENTORY_SIZE, MAX_STACK } from './data.js';
-import { ITEMS, itemTier, resolveUse, resolveThrow, tickTempEquips } from './items.js';
+import { ITEMS, itemTier, resolveUse, resolveThrow, tickTempEquips, unequipItem } from './items.js';
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
+import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
 import { attack, formatDamageNumber } from './combat.js';
 import { Enemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
 import { getGreedyStep, stepEntity } from './pathing.js'; // ally pathfinding; stepEntity = shove a character aside
@@ -25,7 +26,7 @@ import {
     RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, wheelRingR, QUESTLOG_RECT, LOG_MODAL_RECT,
     TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BUYBACK_ORIGIN, TRADE_BRIBE_RECT,
     TRADE_COLS, tradeCellRect,
-    EQUIPMENT_MODAL_RECT,
+    EQUIPMENT_MODAL_RECT, EQUIP_SLOT_RECTS,
 } from './layout.js';
 import { canTrade, buyPrice, sellPrice, bribeStepCost, BRIBE_STEP } from './trade.js'; // (trade slice 1) disposition pricing
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
@@ -109,12 +110,42 @@ const DIRS = {
 
 const WEAPONS = {
     wooden_sword: {
-        id: 'wooden_sword', name: '[Wooden Sword]', damage: 10, equipSlot: 'weapon',
+        id: 'wooden_sword', name: '[Wooden Sword]', damage: 10, equipSlot: 'weapon', icon: 'sword',
+    },
+    // Ray Gun — a tech weapon that GRANTS the Ray Blast trick (GP) while worn.
+    // Its world source is the Factory alien boss (deferred); the def lives here
+    // so the weapon-grants-skill wiring is real and testable now.
+    ray_gun: {
+        id: 'ray_gun', name: '[Ray Gun]', damage: 22, damageType: 'energy', equipSlot: 'weapon',
+        useType: 'equip', grantsTricks: ['ray_blast'],
+    },
+    // Fearmur — a leg-bone club. Grants the Boo! fear spell (MP) while worn, and
+    // fears an enemy you hit twice in a row (onHit: 'fearOnRepeat'). Source: the
+    // Graveyard (world drop deferred; the def lives here for the fear mechanics).
+    fearmur: {
+        id: 'fearmur', name: '[Fearmur]', damage: 14, equipSlot: 'weapon',
+        useType: 'equip', grantsSpells: ['boo'], onHit: 'fearOnRepeat',
+    },
+    // Gator Tail — a dehydrated gator club. Heavy, mean, and you're not sure
+    // where it came from (Lonny, the Sewer's own alligator, has a theory).
+    gator_tail: {
+        id: 'gator_tail', name: '[Gator Tail]', damage: 16, equipSlot: 'weapon', useType: 'equip',
+    },
+    // Lion Whip — a carnival tamer's whip. Reaches 3 tiles and YANKS whatever it
+    // strikes one tile closer; grants the "Hire a Lion" trick (GP) while worn.
+    lion_whip: {
+        id: 'lion_whip', name: '[Lion Whip]', damage: 12, equipSlot: 'weapon', useType: 'equip',
+        reach: 3, pullDistance: 1, grantsTricks: ['hire_lion'],
     },
 };
 
+// Spells the player always knows. Equipped weapons grant MORE on top (see
+// _refreshGrantedSkills); the real spell-learning system is later work.
+const BASE_SPELLS = ['fireball', 'coneOfCold'];
+
 const SLUDGE_DURATION = 3;
 const DIALOGUE_HOSTILE_AT = -40;   // (Step 4) disposition at/below which a conversation turns into a fight
+const MP_REGEN = 2;                // MP recovered per world-turn — FIGHT → Magic spells spend it
 
 // ── Radial menu (Omnitrix-style combat wheel) ───────────────────────────────
 
@@ -140,15 +171,18 @@ class Game {
         this.playerY     = 0;
         this.playerHp    = PLAYER_MAX_HP;
         this.playerMaxHp = PLAYER_MAX_HP;
-        // MP — Magic / Skill points. Currently inert (nothing spends from it
-        // yet); rendered in the HUD so the resource is visible as the skill
-        // system catches up. Every creature gets the same 100/100 baseline
-        // via DEFAULT_MP in combat.js.
+        // MP — Magic / Skill points. FIGHT → Magic spells (Fireball, Cone of
+        // Cold) spend from it; it trickles back MP_REGEN per turn in
+        // _advanceWorld. Every creature gets the same 100/100 baseline via
+        // DEFAULT_MP in combat.js.
         this.playerMp    = PLAYER_MAX_MP;
         this.playerMaxMp = PLAYER_MAX_MP;
-        // Known spells for FIGHT → Magic, picked from the spell ring. The real
-        // spell-learning system is later work — for now you know both.
-        this.knownSpells = ['fireball', 'coneOfCold'];
+        // Known spells for FIGHT → Magic (base set; equipped weapons grant more
+        // via _refreshGrantedSkills). Granted TRICKS (GP skills) live in a
+        // parallel list the Trick ring reads.
+        this.knownSpells   = [...BASE_SPELLS];
+        this.grantedTricks = [];
+        this._lastHitTarget = null;   // (fear) id of the enemy the last Melee-Hit struck
         this.extraMoves  = 0; // future: Goo, abilities, etc.
         this.facing      = 'down'; // 'down' | 'left' | 'right' | 'up'
 
@@ -181,6 +215,7 @@ class Game {
             weapon: WEAPONS.wooden_sword,
             top: null, bottom: null, front: null, back: null, sides: null,
         };
+        this._refreshGrantedSkills();   // derive Magic/Trick grants from the equipped weapon
         this.tempEquips = [];
 
         // Buffs: [{ id, name, turns, type, ...extra }]
@@ -484,7 +519,7 @@ class Game {
         for (const s of this.map.itemSpawns) {
             // Skip items the player already picked up here — they don't respawn.
             if (this._collectedItems.has(`${url}|${s.x}|${s.y}|${s.type}`)) continue;
-            const def = ITEMS[s.type];
+            const def = this._resolveItemDef(s.type);   // resolves WEAPONS too, so weapons can drop as loot
             if (def) this.groundItems.push({ type: s.type, x: s.x, y: s.y, def });
         }
         this.enemies = [];
@@ -1721,8 +1756,12 @@ class Game {
             // Hazards
             const tileDef = this.map.getTileDef(nx, ny);
             if (tileDef.hazard === 'sludge' && !this.hasBuff('sludge')) {
-                this.addBuff('sludge', 'Sludge', SLUDGE_DURATION, 'debuff');
-                this._log('[Stepped in sludge — 3 turns]');
+                if (this._hasSludgeImmunity()) {
+                    this._log('[The sludge slides right off your bagged feet.]');
+                } else {
+                    this.addBuff('sludge', 'Sludge', SLUDGE_DURATION, 'debuff');
+                    this._log('[Stepped in sludge — 3 turns]');
+                }
             }
 
             // Pickup
@@ -2132,8 +2171,11 @@ class Game {
 
         const msg = resolveUse(this, item, null);
         if (msg) this._log(msg);
+        this._refreshGrantedSkills();   // a weapon may have changed → refresh Magic/Trick grants
 
-        if (item.consumable) this._removeFromSlot(this.selectedSlot);
+        // Consumables are spent; a persistent equip (armor) moves out of the bag
+        // and onto the body, so it leaves the hotbar slot too.
+        if (item.consumable || item.useType === 'equip') this._removeFromSlot(this.selectedSlot);
         this.selectedSlot = -1;
         this.state = STATE.IDLE;
         this._advanceWorld();
@@ -2435,7 +2477,11 @@ class Game {
             // whole gesture — point that way and it commits (firing, or drilling to
             // the Plus-Ultra confirm if it'd clip a friendly). No separate Space.
             // Press Space alone to commit the pre-seeded nearest target instead.
-            if (leaf.aimType === 'adjacent') {
+            // A reach weapon (Lion Whip, reach>1) turns single-target Hit into a
+            // placed reticle within reach — it falls through to the nudge path
+            // below. Range-1 verbs keep the snappy "point-and-commit" gesture.
+            const reachyHit = leaf.resolver === 'combatAttack' && range > 1;
+            if (leaf.aimType === 'adjacent' && !reachyHit) {
                 w.reticle = { x: this.playerX + mv[0], y: this.playerY + mv[1] };
                 // Cleave RE-AIMS on a direction (so you see the arc + highlighted
                 // enemies) and waits for Space; single-target adjacent verbs
@@ -2444,7 +2490,7 @@ class Game {
                 this._wheelCommit();
                 return;
             }
-            // Ranged / Throw / Magic: nudge the reticle for precise placement.
+            // Ranged / Throw / Magic / reach-melee: nudge the reticle for precise placement.
             if (!w.reticle) w.reticle = autoAimTile(leaf, this) || { x: this.playerX, y: this.playerY };
             const nx = w.reticle.x + mv[0], ny = w.reticle.y + mv[1];
             if (cheb(this.playerX, this.playerY, nx, ny) <= range && this.map.isWalkable(nx, ny)) {
@@ -2540,11 +2586,26 @@ class Game {
         switch (node.resolver) {
             case 'combatAttack': {
                 const enemy = aimTile && this.enemies.find(e => e.entity.isAlive() && e.x === aimTile.x && e.y === aimTile.y);
-                if (enemy) { this.combatAttack(enemy, this.equipment.weapon.damage); this._advanceWorld(); }
+                if (enemy) {
+                    const wpn = this.equipment.weapon;
+                    // (fear) Fearmur fears an enemy struck twice in a row — check
+                    // BEFORE the hit (which may kill it and reset the tracker).
+                    const repeat = wpn && wpn.onHit === 'fearOnRepeat' && this._lastHitTarget === enemy.id;
+                    this.combatAttack(enemy, wpn.damage);
+                    if (enemy.entity.isAlive()) {
+                        if (repeat) { this._applyFear(enemy, 3); this._log('[The Fearmur cracks bone — it recoils in terror!]', 'combat'); }
+                        if (wpn && wpn.pullDistance) this._pullEnemyToward(enemy, wpn.pullDistance);   // (Lion Whip) yank it closer
+                        this._lastHitTarget = enemy.id;
+                    } else {
+                        this._lastHitTarget = null;   // dead → streak broken
+                    }
+                    this._advanceWorld();
+                }
                 else { this._log('[Nothing to hit there]'); }
                 break;
             }
             case 'cleaveAttack': {
+                this._lastHitTarget = null;   // (fear) AoE breaks the Fearmur single-target streak
                 // Fixed 3-tile frontal arc, 2/3 weapon damage to everything in it.
                 const dmg = Math.max(1, Math.round(this.equipment.weapon.damage * 2 / 3));
                 const hit = this._aoeStrike(affectedTiles(w, this), dmg);
@@ -2553,6 +2614,7 @@ class Game {
                 break;
             }
             case 'spinAttack': {
+                this._lastHitTarget = null;   // (fear) AoE breaks the Fearmur single-target streak
                 // Sweep all 8 tiles, 2/5 weapon damage to everything around you.
                 const dmg = Math.max(1, Math.round(this.equipment.weapon.damage * 2 / 5));
                 const hit = this._aoeStrike(affectedTiles(w, this), dmg);
@@ -2570,6 +2632,46 @@ class Game {
                 const hit = this._aoeStrike(affectedTiles(w, this), spell.damage, { type: spell.damageType });
                 if (hit) this._log(`[${spell.name}! ${spell.damage} ${spell.damageType} to ${hit}.]`, 'combat');
                 else this._log(`[${spell.name} fizzles — nothing caught.]`);
+                this._advanceWorld();
+                break;
+            }
+            case 'castTrick': {
+                // Trick skills cost GP, not MP — "turning tricks for money".
+                // Granted by tech gear (the Ray Gun grants Ray Blast). Same AoE
+                // path as spells; the gold guard mirrors the bribe idiom above.
+                if (!(this.grantedTricks || []).includes(node.trickId)) { this._log("[You don't have that trick.]"); break; }
+                const trick = TRICKS[node.trickId];
+                if (!trick) { this._log("[That trick isn't ready yet]"); break; }
+                if ((this.gold ?? 0) < trick.gpCost) { this._log(`[Not enough GP — ${trick.name} needs ${trick.gpCost}g.]`); break; }
+                this.gold = Math.max(0, (this.gold ?? 0) - trick.gpCost);
+                if (trick.summon) {
+                    // Summon trick (Hire a Lion) — no damage; spawn a temporary ally.
+                    this._spawnSummon(trick.summon, trick.summonTurns || 2, trick);
+                    this._advanceWorld();
+                    break;
+                }
+                const hit = this._aoeStrike(affectedTiles(w, this), trick.damage, { type: trick.damageType });
+                if (hit) this._log(`[${trick.name}! ${trick.damage} ${trick.damageType} to ${hit}. (-${trick.gpCost}g)]`, 'combat');
+                else this._log(`[${trick.name} fizzles — nothing caught. (-${trick.gpCost}g)]`);
+                this._advanceWorld();
+                break;
+            }
+            case 'castBoo': {
+                // Fear everyone around you — no damage. MP-costed, granted by the
+                // Fearmur. Uses the self-burst from affectedTiles; _applyFear skips
+                // allies/townsfolk (so `feared` counts only real routs).
+                const spell = SPELLS[spellId];
+                if (!spell) { this._log("[You don't know that spell.]"); break; }
+                if ((this.playerMp || 0) < spell.mpCost) { this._log(`[Not enough MP — ${spell.name} needs ${spell.mpCost}.]`); break; }
+                this.playerMp = Math.max(0, this.playerMp - spell.mpCost);
+                const tiles = affectedTiles(w, this);
+                let feared = 0;
+                for (const e of this.enemies) {
+                    if (!e.entity.isAlive()) continue;
+                    if (tiles.some(t => t.x === e.x && t.y === e.y) && this._applyFear(e, spell.fear || 3)) feared++;
+                }
+                if (feared) this._log(`[BOO! ${feared} flee in terror!]`, 'combat');
+                else this._log('[Boo! ...nothing flinches.]');
                 this._advanceWorld();
                 break;
             }
@@ -2651,6 +2753,17 @@ class Game {
         // strings fall through to the side log.
         const msgs = resolveEnemyTurns(this);
         this._routeWorldMessages(msgs);
+
+        // (summon) Temporary summoned allies (the hired lion) act above in
+        // resolveEnemyTurns, THEN their timer ticks — so a fresh summon still
+        // gets its turn. At zero they melt away.
+        if (this.enemies.some(e => e._isSummon)) {
+            for (const e of this.enemies) if (e._isSummon) e._summonTurnsLeft--;
+            const gone = this.enemies.filter(e => e._isSummon && e._summonTurnsLeft <= 0);
+            for (const e of gone) this._log(`[${e.type || 'The summon'} slinks back into the crowd.]`);
+            if (gone.length) this.enemies = this.enemies.filter(e => !(e._isSummon && e._summonTurnsLeft <= 0));
+        }
+
         // Enemies/NPCs may have just begun a one-tile slide (stepEntity). Kick
         // the render loop so those glides animate even if the player took a
         // single step and stopped. Idempotent + self-stopping via
@@ -2693,8 +2806,8 @@ class Game {
         }
         this._soapUsedThisTurn = false;
 
-        // Sludge DoT
-        if (this.hasBuff('sludge')) {
+        // Sludge DoT — Shoe Bags keep it off even if you equipped them mid-sludge.
+        if (this.hasBuff('sludge') && !this._hasSludgeImmunity()) {
             this.playerHp -= SLUDGE_DOT;
             this._log(`[Sludge — ${SLUDGE_DOT} damage]`);
             if (this.playerHp <= 0) { this.playerHp = 0; this._die(); return; }
@@ -2702,6 +2815,11 @@ class Game {
 
         // Tick buffs
         this._tickBuffs();
+
+        // MP trickles back each turn — FIGHT → Magic spells spend it, this refills.
+        if (this.playerMp < this.playerMaxMp) {
+            this.playerMp = Math.min(this.playerMaxMp, this.playerMp + MP_REGEN);
+        }
 
         // Transition?
         if (this._pendingTransition) {
@@ -2877,6 +2995,26 @@ class Game {
                 go = true;
             } else { this._log('[Inventory full]'); break; }
         }
+    }
+
+    // An examinable that yields a one-time item (the Red Cape wedged in a grate).
+    // Called from doExamine when the target has a `grants` id. Adds the item once,
+    // remembers it in _collectedItems (same key as ground pickups) so it survives
+    // reload, and shows the `spentText` on later examines. Returns true (examined).
+    _grantFromExaminable(target) {
+        const key = `${this._mapUrl}|${target.x}|${target.y}|${target.grants}`;
+        if (this._collectedItems.has(key)) {
+            this._log(target.spentText || '[Nothing left here now.]');
+            return true;
+        }
+        const def = ITEMS[target.grants];
+        if (!def) { this._log(target.text || `[You examine the ${target.id}.]`); return true; }
+        if (!this._addToInventory(def)) { this._log('[Your bag is full — leave it for now.]'); return true; }
+        this._collectedItems.add(key);
+        this._log(target.text || `[You take the ${def.name}.]`);
+        this._log(`[+ ${def.name}]`, 'pickup');
+        audio.playSfx('pickup');
+        return true;
     }
 
     // ── Containers ───────────────────────────────────────────────────────────
@@ -3094,9 +3232,99 @@ class Game {
         this._log(`[The ${target.type || target.entity.name} turns on you!]`, 'combat');
     }
 
+    // Total damage-reduction from worn armor. Flat MVP: every equipped body-zone
+    // piece's `armor` sums into one number (per-zone hit-location comes later).
+    // The weapon slot is excluded — a sword isn't armor.
+    _playerArmor() {
+        const eq = this.equipment || {};
+        let total = 0;
+        for (const key of ['top', 'bottom', 'front', 'back', 'sides']) {
+            const it = eq[key];
+            if (it && it.armor) total += it.armor;
+        }
+        return total;
+    }
+
+    // True if any worn armor grants sludge immunity (Shoe Bags). Sludge is a raw
+    // HP drain that bypasses the armor sum, so it gets its own gate.
+    _hasSludgeImmunity() {
+        const eq = this.equipment || {};
+        return ['top', 'bottom', 'front', 'back', 'sides'].some(k => eq[k] && eq[k].sludgeImmune);
+    }
+
+    // Rebuild the skills the equipped weapon grants: spells feed the Magic ring
+    // (knownSpells = base + weapon.grantsSpells), tricks feed the Trick ring
+    // (grantedTricks = weapon.grantsTricks). Call after any weapon change — equip,
+    // new game, respawn, save-load. Additive over the base spells; idempotent.
+    _refreshGrantedSkills() {
+        const w = this.equipment && this.equipment.weapon;
+        const gs = (w && w.grantsSpells) || [];
+        const gt = (w && w.grantsTricks) || [];
+        this.knownSpells   = [...new Set([...BASE_SPELLS, ...gs])];
+        this.grantedTricks = [...new Set(gt)];
+    }
+
+    // (Hire a Lion) Spawn a temporary ally on a free tile beside the player. It
+    // fights through the existing ally pipeline (_allyTakeTurn) and melts away
+    // when its summon timer runs out (ticked in _advanceWorld). Returns true if
+    // it found room to appear.
+    _spawnSummon(type, turns, opts = {}) {
+        const RING = [[0, -1], [1, 0], [0, 1], [-1, 0], [-1, -1], [1, -1], [1, 1], [-1, 1]];
+        let spot = null;
+        for (const [dx, dy] of RING) {
+            const x = this.playerX + dx, y = this.playerY + dy;
+            if (this._tileFreeForShove(x, y)) { spot = { x, y }; break; }
+        }
+        if (!spot) { this._log('[No room beside you to summon anything.]'); return false; }
+        const name = opts.summonName || (type.charAt(0).toUpperCase() + type.slice(1));
+        this._summonSeq = (this._summonSeq || 0) + 1;
+        const ally = new Enemy({
+            id: `summon_${type}_${this.turn}_${this._summonSeq}`,
+            type: name, x: spot.x, y: spot.y,
+            hp: opts.summonHp || 30, damage: opts.summonDamage || 12,
+            behavior: ['ALLIED'],
+        });
+        ally._ally = true;
+        ally.fsmState = 'ALLIED';
+        ally.state = 'idle';
+        ally._isSummon = true;
+        ally._summonTurnsLeft = turns;
+        this.enemies.push(ally);
+        this._log(`[You whistle sharp — ${name} bounds out of the crowd, all teeth.]`, 'combat');
+        return true;
+    }
+
+    // (Lion Whip) Yank a struck enemy up to `dist` tiles toward the player, one
+    // hop at a time, stopping at the first blocked tile. Reuses the shove
+    // occupancy check; never pulls the enemy onto the player's own tile.
+    _pullEnemyToward(target, dist) {
+        for (let i = 0; i < dist; i++) {
+            const dx = Math.sign(this.playerX - target.x);
+            const dy = Math.sign(this.playerY - target.y);
+            if (dx === 0 && dy === 0) break;
+            const nx = target.x + dx, ny = target.y + dy;
+            if (nx === this.playerX && ny === this.playerY) break;   // already adjacent — don't overlap us
+            if (!this._tileFreeForShove(nx, ny, target)) break;      // wall / occupied → stop
+            stepEntity(target, nx, ny, this._MOVE_MS);
+        }
+    }
+
+    // (fear) Fear an enemy for `turns`: while the buff is up it flees each turn
+    // (the override in resolveEnemyTurns), then resumes normal logic. Allies and
+    // ambient townsfolk are immune (they don't tick combat buffs, so fearing
+    // them would strand a buff that never expires). Pops a '!' over its head.
+    _applyFear(enemyObj, turns) {
+        if (!enemyObj || !enemyObj.entity || !enemyObj.entity.isAlive()) return false;
+        if (enemyObj._ally || enemyObj.ambient) return false;
+        enemyObj.addBuff('feared', 'Feared', turns, 'debuff');
+        if (this._spawnOverheadDialogue) this._spawnOverheadDialogue(enemyObj.x, enemyObj.y, '!', { color: '#e8c34a', size: 20 });
+        return true;
+    }
+
     applyDamageToPlayer(rawDamage) {
         let dmg = rawDamage;
         if (this.hasBuff('guard')) dmg = Math.max(1, Math.floor(dmg / 2));
+        dmg = Math.max(1, dmg - this._playerArmor());   // worn armor soaks the hit (min 1 always lands)
         this.playerHp = Math.max(0, this.playerHp - dmg);
         audio.playSfx('take-damage'); // [audio] player got hit
 
@@ -3201,6 +3429,7 @@ class Game {
         this.tempEquips = [];
         this.selectedSlot = -1;
         this.equipment = { weapon: WEAPONS.wooden_sword, top: null, bottom: null, front: null, back: null, sides: null };
+        this._refreshGrantedSkills();   // reset weapon → no granted skills
         // Clear any transition queued before death so the first post-respawn
         // action doesn't ghost-load a map.
         this._pendingTransition = null;
@@ -3261,6 +3490,7 @@ class Game {
         this.tempEquips = [];
         this.selectedSlot = -1;
         this.equipment = { weapon: WEAPONS.wooden_sword, top: null, bottom: null, front: null, back: null, sides: null };
+        this._refreshGrantedSkills();   // fresh weapon → no granted skills
         this._pendingTransition = null;
         this.gold = 0;
         await this._loadMap('town-map.json');
@@ -3663,6 +3893,17 @@ class Game {
     // A tap anywhere outside the equipment panel dismisses it (there's no
     // unequip logic to hit-test — the slots are display-only).
     _tapEquipmentScreen(pt) {
+        // Tap a filled armor plate to take that piece off (back into your bag).
+        // The weapon plate is inert here — the weapon slot is never emptied.
+        for (const s of EQUIP_SLOT_RECTS) {
+            if (s.key === 'weapon') continue;
+            if (!this._pointInRect(pt, s)) continue;
+            if (!this.equipment[s.key]) return;          // empty plate — nothing to remove
+            const msg = unequipItem(this, s.key);
+            if (msg) this._log(msg);
+            this._render();
+            return;
+        }
         if (!this._pointInRect(pt, EQUIPMENT_MODAL_RECT)) this._closeEquipmentScreen();
     }
 

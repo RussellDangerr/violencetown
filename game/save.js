@@ -245,6 +245,9 @@ export async function loadInto(game, raw) {
         top: R(p.equipment.top), bottom: R(p.equipment.bottom),
         front: R(p.equipment.front), back: R(p.equipment.back), sides: R(p.equipment.sides),
     };
+    // knownSpells/grantedTricks aren't persisted — re-derive them from the
+    // restored weapon (the Ray Gun grants Ray Blast, etc.).
+    if (game._refreshGrantedSkills) game._refreshGrantedSkills();
     game.inventory = p.inventory.map(s => {
         if (!s) return null;
         const def = R(s.id);
