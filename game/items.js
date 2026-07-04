@@ -204,10 +204,10 @@ export const ITEMS = {
         baseValue: 0,
     },
 
-    // ── Special / mechanic-shop stock (Phase 6d) ──────────────────────────────
-    // Macc the raccoon mechanic sells the chain. Its canyon rappel-route effect
-    // is wired on the chapter-two canyon branch (not on dev yet) — here it's an
-    // ordinary ownable item whose description teaches the route.
+    // ── Special / mechanic-shop stock (Phase 6d + Chapter Two) ────────────────
+    // Two complementary canyon-traversal items (Caelan's call: keep both):
+    //  • chain — Macc's cheap rappel DOWN into the gorge (an alternate entry).
+    //  • grappling_hook — Pike's expensive way UP/OUT (the mobility unlock).
     chain: {
         id: 'chain',
         name: '[Rappel Chain]',
@@ -218,6 +218,29 @@ export const ITEMS = {
         tier: 'blue',
         fallbackColor: '#7a7a7a',
         baseValue: 40,
+    },
+    // (Phase 2) A bottle of alcohol — NOT for drinking. Poured into the fixed
+    // car's tank it burns fast and weak, slowing the too-hot engine just enough
+    // to ramp the North bridge instead of punching through it. Bought from Hooch
+    // the bootlegger in Town; consumed at the car (_interactCar).
+    alcohol: {
+        id: 'alcohol',
+        name: '[Bottle of Alcohol]',
+        description: 'Cheap, high-proof, and mean. Burns FAST and burns out fast — barely a push. Not a drink. A tank\'s worth of "slow down".',
+        useType: 'none',
+        consumable: false,
+        fallbackColor: '#8a5a2a',
+        baseValue: 20,
+    },
+    grappling_hook: {
+        id: 'grappling_hook',
+        name: '[Grappling Hook]',
+        description: "Pike's big coil of rope and an iron hook that bites stone and holds. A way UP.",
+        useType: 'none',
+        consumable: false,
+        questItem: true,
+        fallbackColor: '#9a7b4a',
+        baseValue: 1000,
     },
 };
 

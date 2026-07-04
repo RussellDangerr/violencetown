@@ -1,0 +1,31 @@
+{
+    "_scaffold": "PARTIAL (Phase 3 wired the MECHANICS onto a still-placeholder room). Functional now: Pike the prospector (buy the rope / take his deal / kill him for it), 2 canyon critters for the fight-out beat, and the grappling-hook-GATED climb-out to Downtown. The GEOMETRY is Caelan's to hand-author — the real canyon (the wrecked car, Pike's sunken covered wagon, ledges, and the Phase-5 GRAPPLE_ANCHOR that replaces this plain hook-gated exit with an actual swing).",
+    "width": 14,
+    "height": 10,
+    "spawn": {"x": 7, "y": 5},
+    "zoneName": "CANYON",
+    "tiles": [
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,52,52,52,52,52,52,52,52,52,52,52,52,0,
+        0,52,52,52,52,52,52,52,52,52,52,52,52,0,
+        0,52,52,52,52,52,52,52,52,52,52,52,52,0,
+        0,52,52,52,52,52,52,52,52,52,52,52,52,0,
+        0,52,52,52,52,52,52,52,52,52,52,52,52,0,
+        0,52,52,52,52,52,52,52,52,52,52,52,52,0,
+        0,52,52,52,52,52,52,52,52,52,52,52,52,0,
+        0,52,52,52,52,52,52,52,52,52,52,52,52,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0
+    ],
+    "enemies": [
+        {"id": "pike", "type": "Pike", "name": "Pike", "dialogueId": "pike", "x": 3, "y": 5, "hp": 45, "damage": 6, "disposition": 30, "bribeable": true, "vendor": true, "stock": ["grappling_hook"], "tag": "pike_boss", "behavior": ["IDLE"], "sightRange": 0, "barks": ["[Pike: Careful near the wagon.]", "[Pike: Rope ain't cheap, friend.]", "[Pike: The river took my years. Left me all this patience.]"], "barkEveryTurns": 6, "adjacencyBark": "[Pike: Buyin' the rope, or just gawkin'? Press E.]"},
+        {"id": "canyon-rat-1", "type": "Rat", "name": "Canyon Rat", "x": 9, "y": 4, "hp": 14, "damage": 4, "tag": "canyon_critter", "sightRange": 6, "barks": ["[skreee!]", "[hiss]"], "barkEveryTurns": 5},
+        {"id": "canyon-rat-2", "type": "Rat", "name": "Canyon Rat", "x": 10, "y": 6, "hp": 14, "damage": 4, "tag": "canyon_critter", "sightRange": 6, "barks": ["[chitter]", "[skree]"], "barkEveryTurns": 5}
+    ],
+    "items": [],
+    "examinables": [
+        {"id": "canyon_wreck", "x": 7, "y": 6, "text": "[Your car, folded around a boulder — a total write-off. Half-buried in the old silt beside it: the ribs of a COVERED WAGON, and a grizzled man perched on a rock like he grew there.]"}
+    ],
+    "transitions": [
+        {"x": 7, "y": 1, "toMap": "downtown-map.json", "toX": 8, "toY": 10, "label": "[You sink the hook into the rockface and haul yourself up — out of the canyon, toward Downtown.]", "requires": "grappling_hook", "requiresMsg": "[Sheer rock, straight up. You'd need a good hook and a rope to climb out of this pit — and Pike has one.]"}
+    ]
+}

@@ -13,7 +13,7 @@ import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed s
 import { attack, formatDamageNumber } from './combat.js';
 import { Enemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
 import { getGreedyStep, stepEntity } from './pathing.js'; // ally pathfinding; stepEntity = shove a character aside
-import { applyGive, applyDispositionDelta } from './give-action.js';
+import { applyDispositionDelta, reactToTransaction } from './give-action.js';
 import { getDialogue } from './dialogue.js';
 import { escapeHtml, manhattan, clamp } from './utils.js';
 import { RNG } from './rng.js';
@@ -28,7 +28,7 @@ import {
     TRADE_COLS, tradeCellRect,
     EQUIPMENT_MODAL_RECT, EQUIP_SLOT_RECTS,
 } from './layout.js';
-import { canTrade, buyPrice, sellPrice, bribeStepCost, BRIBE_STEP } from './trade.js'; // (trade slice 1) disposition pricing
+import { canTrade, buyPrice, sellPrice, bribeStepCost, BRIBE_STEP, transferGold } from './trade.js'; // pricing + the transaction spine
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
 import {
@@ -339,6 +339,12 @@ class Game {
 
         // Economy
         this.gold = 0;
+        // (Phase 2) Car fuel. The Cataclysmic Converter runs the fixed car too
+        // HOT ('raw' → it punches straight through the North bridge into the
+        // Canyon). Pouring a bottle of alcohol in the tank slows it ('alcohol' →
+        // it ramps the bridge clean into Downtown). Set at the car (_interactCar),
+        // read at the bridge (_playBridgeCutscene).
+        this.carFuel = 'raw';
 
         // Debug/dev flag — OFF by default so cheats never ship enabled. Opt in
         // with ?debug / ?debug=1 in the URL (or window.VIOLENCETOWN_DEBUG=true
@@ -1748,8 +1754,7 @@ class Game {
             // (_openBridgeIfCarFixed), so reaching it here is the deliberate finale,
             // not the instant-on-fix cut that used to happen.
             if (ny === 0 && nx >= 14 && nx <= 19 && this.questEngine.getFlag('carFixed')) {
-                this._log('[You gun it across the bridge — Violencetown shrinks in the mirror.]', 'transition');
-                this._endChapterOne();
+                this._playBridgeCutscene();   // (Phase 2) fuel decides: crash → Canyon, or ramp → Downtown
                 return;
             }
 
@@ -1767,9 +1772,16 @@ class Game {
             // Pickup
             this._tryPickup();
 
-            // Transition?
+            // Transition? A transition may `require` an item (e.g. the canyon
+            // escape needs the grappling hook) — data-driven so any door can gate.
             const transition = this.map.getTransition(nx, ny);
-            if (transition) { this._pendingTransition = transition; }
+            if (transition) {
+                if (transition.requires && !(this.inventory || []).some(s => s && s.itemDef.id === transition.requires)) {
+                    this._log(transition.requiresMsg || '[You need something to get through here.]');
+                } else {
+                    this._pendingTransition = transition;
+                }
+            }
 
             // (Legacy tile-7 "BOSS ROOM REACHED" win hook removed — fix/critical-path.
             // Tile 7 was a stale wrong-win trap one cell east of the Wererat; it's
@@ -1838,7 +1850,22 @@ class Game {
     // complete the quest. Otherwise a flavor line.
     _interactCar() {
         if (this.questEngine.getFlag('carFixed')) {
-            this._log('[The car purrs. Time to make that delivery.]');
+            // (Phase 2) The Cataclysmic Converter runs the car way too hot — floor
+            // it at the bridge and you punch straight through. Pouring a bottle of
+            // alcohol in the tank burns fast and weak, taming the engine just
+            // enough to make the ramp.
+            const alc = this.inventory.findIndex(s => s && s.itemDef.id === 'alcohol');
+            if (this.carFuel !== 'alcohol' && alc >= 0) {
+                this._removeFromSlot(alc);
+                this.carFuel = 'alcohol';
+                audio.playSfx('pickup');
+                this._log('[You empty the whole bottle into the tank. The engine coughs, then drops into a slower, meaner idle. That should tame the jump.]', 'pickup');
+                this._render();
+                return;
+            }
+            this._log(this.carFuel === 'alcohol'
+                ? '[The car idles low and steady now — the alcohol is doing its work. Ready for the bridge.]'
+                : '[The car SNARLS, revving way past redline. At this speed you will never make the ramp — you will go straight through the bridge. There has to be a way to slow it down.]');
             this._render();
             return;
         }
@@ -2219,7 +2246,7 @@ class Game {
         const stack = this.inventory[this.selectedSlot];
         if (!stack) { this.state = STATE.IDLE; this._render(); return; }
 
-        const result = applyGive(stack.itemDef, recipient);
+        const result = reactToTransaction(recipient, 'give', { item: stack.itemDef });
         this._log(result.log);
 
         if (result.accepted) {
@@ -2235,7 +2262,8 @@ class Game {
     // window's give path (Phase 6a: give folds into trade). Unlike _doGive this
     // is a PAUSED-MENU action: it does NOT advance the world and it keeps the
     // window OPEN (like buy/sell), so the player can hand over several items and
-    // watch the mood-face move. Delegates disposition/flip to applyGive.
+    // watch the mood-face move. Routes through the spine's reactToTransaction seam
+    // (records giftLog + delegates disposition/flip to applyGive), same as _doGive.
     _offerFromTrade(slot) {
         const npc = this._tradeNpc;
         const stack = this.inventory[slot];
@@ -2244,7 +2272,7 @@ class Game {
         // one (e.g. the sole car-fix Converter) would soft-lock the main quest.
         // Matches the questItem block on throw/smash/sell. (pre-prod review fix)
         if (stack.itemDef.questItem) { this._log('[Best hold onto that.]'); this._render(); return; }
-        const result = applyGive(stack.itemDef, npc);
+        const result = reactToTransaction(npc, 'give', { item: stack.itemDef });
         this._log(result.log);
         if (result.accepted) {
             this._removeFromSlot(slot);
@@ -2400,7 +2428,7 @@ class Game {
         if (npc.bribeable === false) { this._log(`[The ${npc.type || 'stranger'} won't take your money.]`); this._render(); return; }
         const cost = bribeStepCost(npc.disposition ?? 0);
         if ((this.gold ?? 0) < cost) { this._log(`[Not enough gold to bribe — needs ${cost}g.]`); this._render(); return; }
-        this.gold -= cost;
+        transferGold(this, npc, cost, 'bribe');   // (spine) gold → the NPC's pocket
         applyDispositionDelta(npc, BRIBE_STEP);
         this._log(`[You slip the ${npc.type || 'stranger'} ${cost}g. (+${BRIBE_STEP} disposition.)]`);
         this._advanceWorld(); this._render();
@@ -2685,6 +2713,9 @@ class Game {
                 // the shop columns, non-vendors get offer mode (hand over items).
                 const npc = aimTile && this.enemies.find(e => e.entity.isAlive() && e.x === aimTile.x && e.y === aimTile.y);
                 this.state = STATE.IDLE;                 // _openTrade requires IDLE
+                // (give-fold, Caelan's call) ANY adjacent NPC opens the window —
+                // vendors get the shop, non-vendors get offer mode. Not gated on
+                // npc.vendor (that would regress the give-into-trade fold).
                 if (npc) { this._openTrade(npc); return; }
                 this._log('[No one to trade with there]');
                 break;
@@ -2695,8 +2726,8 @@ class Game {
                 if (npc.bribeable === false) { this._log(`[The ${npc.type || 'stranger'} won't take your money.]`); break; }
                 const cost = bribeStepCost(npc.disposition ?? 0);
                 if ((this.gold ?? 0) < cost) { this._log(`[Not enough gold to bribe — needs ${cost}g.]`); break; }
-                this.gold -= cost;
-                applyDispositionDelta(npc, BRIBE_STEP);
+                transferGold(this, npc, cost, 'bribe');                        // gold → the NPC's pocket
+                reactToTransaction(npc, 'bribe', { delta: BRIBE_STEP, gold: cost });
                 this._log(`[You slip the ${npc.type || 'stranger'} ${cost}g. (+${BRIBE_STEP} disposition.)]`);
                 this._advanceWorld();
                 break;
@@ -3147,7 +3178,32 @@ class Game {
             this.groundItems.push({ type: 'catalytic_converter', x: enemyObj.x, y: enemyObj.y, def: ITEMS.catalytic_converter });
             this._log('[The Were-Rat drops your cataclysmic converter!]', 'pickup');
         }
+        // Pike guards his climbing rope with his life — take it off his body.
+        if (enemyObj.tag === 'pike_boss' && ITEMS.grappling_hook) {
+            this.groundItems.push({ type: 'grappling_hook', x: enemyObj.x, y: enemyObj.y, def: ITEMS.grappling_hook });
+            this._log('[Pike crumples. His big coil of rope — the grappling hook — thuds to the stone.]', 'pickup');
+        }
+        // Pike's deal (his dialogue onPick set the flag): clearing the LAST canyon
+        // critter earns the rope — no coin, no killing Pike.
+        if (enemyObj.tag === 'canyon_critter' && this.questEngine && this.questEngine.getFlag('pikeDeal')
+            && !this.questEngine.getFlag('pikeDealPaid')
+            && !this.enemies.some(e => e.tag === 'canyon_critter' && e.entity.isAlive())) {
+            this.questEngine.state.flags.pikeDealPaid = true;
+            this._grantItem('grappling_hook', '["Deal\'s a deal." Pike coils the big rope into your pack — the grappling hook is yours.]');
+        }
         onSewerEnemyKilled(this, enemyObj);
+    }
+
+    // Grant an item straight into the bag (quest rewards, dialogue gifts). Emits
+    // item_pickup so quests + HUD react exactly like a ground pickup.
+    _grantItem(id, msg) {
+        const def = ITEMS[id];
+        if (!def) return false;
+        if (!this._addToInventory(def)) { this._log('[Your bag is full — no room for it.]'); return false; }
+        if (msg) this._log(msg, 'pickup');
+        this.emitGameEvent('item_pickup', { id });
+        this._render();
+        return true;
     }
 
     // ── Allies (bribe-flipped — AGGRO behavior bands) ──────────────────────────
@@ -3493,6 +3549,7 @@ class Game {
         this._refreshGrantedSkills();   // fresh weapon → no granted skills
         this._pendingTransition = null;
         this.gold = 0;
+        this.carFuel = 'raw';
         await this._loadMap('town-map.json');
         this.state = STATE.IDLE;
         this._startMainQuest();   // deterministic fix_car start (fix/critical-path)
@@ -3511,6 +3568,56 @@ class Game {
         this.state = STATE.ENDING;
         this.autosave({ force: true });
         this._render();
+    }
+
+    // (Phase 2) Crossing the North bridge with the car fixed. The Cataclysmic
+    // Converter runs the car TOO fast — you punch straight through the wooden
+    // bridge into the Canyon — UNLESS you've poured alcohol in the tank to slow
+    // it, in which case you ramp clean over into Downtown. Reuses the ending beat
+    // pattern (input blocked via RESOLVING, shake + flash + logs), then a short
+    // beat later loads the destination zone.
+    _playBridgeCutscene() {
+        this._stopAutoRepeat();
+        this._heldDirKeys = [];
+        this.state = STATE.RESOLVING;                 // block input through the beat
+        if (this.carFuel === 'alcohol') {
+            this._log('[You feed it the doctored fuel and floor it — the engine burbles, tamed —]', 'transition');
+            this._log('[— you hit the ramp CLEAN and SAIL over the canyon. Downtown rises up to meet you.]', 'transition');
+            audio.playSfx('quest-advance');
+            this._flash('rgba(255, 220, 120, 0.35)');
+            this._triggerScreenShake(280, 4);
+            this._render();
+            setTimeout(() => this._rampToDowntown(), 1100);
+        } else {
+            this._log('[The Cataclysmic Converter SCREAMS — too fast, WAY too fast —]', 'combat');
+            this._log('[— you punch STRAIGHT THROUGH the wooden bridge and slam the far canyon wall. The world goes end over end.]', 'combat');
+            audio.playSfx('take-damage');
+            this._flash('rgba(200, 40, 40, 0.5)');
+            this._triggerScreenShake(520, 9);
+            this._render();
+            setTimeout(() => this._crashToCanyon(), 1100);
+        }
+    }
+
+    // Bridge FAIL (too fast) → wake at the bottom of the Canyon. (Phase 3 fills it
+    // with Pike + the grappling hook + the fight out; for now it's a scaffold room
+    // with a placeholder scramble-out exit.)
+    async _crashToCanyon() {
+        await this._loadMap('canyon-map.json');
+        this.state = STATE.IDLE;
+        this._log('[You come to at the bottom of the canyon, ears ringing and the car a write-off. No climbing back up the way you fell.]', 'transition');
+        if (this.questEngine) this.questEngine.start('canyon_escape');
+        this._render();
+    }
+
+    // Bridge SUCCESS (alcohol) → ramp over into Downtown. (Phase 4 builds Downtown
+    // out + starts Main Quest 2; for now it's a scaffold street.)
+    async _rampToDowntown() {
+        await this._loadMap('downtown-map.json');
+        this.state = STATE.IDLE;
+        this._log('[You skid to a stop on a Downtown street, the engine ticking as it cools. The real part of town. Now — that delivery.]', 'transition');
+        this._render();
+        // (Phase 4) this._startMainQuest2();
     }
 
     // ── Render ───────────────────────────────────────────────────────────────
@@ -3779,6 +3886,16 @@ class Game {
         return this.enemies.find(e => isVendor(e) && manhattan(e.x, e.y, this.playerX, this.playerY) === 1) || null;
     }
 
+    // (transaction spine + give-fold) Open trade with the targeted NPC, or log if
+    // there's no one there. Non-vendors open OFFER mode (the give-into-trade fold),
+    // so this no longer rejects on !npc.vendor or gates on disposition — the shop
+    // columns handle "won't deal" themselves. Returns true if the window opened.
+    _tryTradeWith(npc) {
+        if (!npc) { this._log('[No one there to trade with.]'); return false; }
+        this._openTrade(npc);
+        return true;
+    }
+
     // Open the trade window for `npc`. A pure menu — the world does NOT advance
     // (trading is paused, like the log modal), so nearby enemies don't get free
     // turns while you browse.
@@ -3927,9 +4044,15 @@ class Game {
             this._dialogueReply = `(You can't cover the ${choice.cost} GP.)`;
             audio.playSfx('bump-wall'); this._render(); return;
         }
-        if (choice.cost) this.gold -= choice.cost;
-        if (choice.delta) applyDispositionDelta(npc, choice.delta);
+        if (choice.cost) transferGold(this, npc, choice.cost, 'dialogue');
+        if (choice.delta) applyDispositionDelta(npc, choice.delta);   // conversational shift (not a transaction)
         if (choice.once) (npc._dialogueDone || (npc._dialogueDone = new Set())).add(choice.id);
+        // (Chapter Two) a choice can start a quest and/or run a side-effect — the
+        // general dialogue-consequence hook every multi-path quest rides.
+        if (choice.questId && this.questEngine && !this.questEngine.isActive(choice.questId) && !this.questEngine.isComplete(choice.questId)) {
+            this.questEngine.start(choice.questId);
+        }
+        if (typeof choice.onPick === 'function') choice.onPick(this, npc);
         this._dialogueReply = choice.reply || '"..."';
         audio.playSfx((choice.delta ?? 0) < 0 ? 'bump-wall' : 'menu-confirm');
         if ((npc.disposition ?? 0) <= DIALOGUE_HOSTILE_AT) {
@@ -3980,7 +4103,7 @@ class Game {
             const price = e.rebuy[e.rebuy.length - 1];   // this unit's own locked price (LIFO)
             if ((this.gold ?? 0) < price) { this._log(`[Not enough GP to buy it back — needs ${price}.]`); this._render(); return; }
             if (!this._addToInventory(itemDef)) { this._log('[Your bag is full.]'); this._render(); return; }
-            this.gold -= price;
+            transferGold(this, npc, price, 'rebuy');   // (spine) player pays the vendor back
             e.rebuy.pop();
             this._tradeSell = this._tradeSellList();
             audio.playSfx('pickup');
@@ -3993,9 +4116,10 @@ class Game {
         if (price == null) { this._log(`[${npc.type} won't sell that.]`); this._render(); return; }
         if ((this.gold ?? 0) < price) { this._log(`[Not enough GP — ${itemDef.name} runs ${price}.]`); this._render(); return; }
         if (!this._addToInventory(itemDef)) { this._log('[Your bag is full.]'); this._render(); return; }
-        this.gold -= price;
-        // Record a REFUND credit: within the window you can sell this back for
-        // exactly what you paid (Phase 6c reversibility).
+        // (fuse: spine + buyback) Move gold through the conserved choke-point into
+        // the vendor's till, AND record a REFUND credit so the buy is reversible
+        // for the window at exactly what you paid (Phase 6c).
+        transferGold(this, npc, price, 'buy');
         this._buybackRecord(npc, itemId, 'refund', price);
         this._tradeSell = this._tradeSellList();
         audio.playSfx('pickup');
@@ -4059,9 +4183,12 @@ class Game {
         // no rebuy credit).
         const e = this._buybackEntry(npc, itemDef.id);
         if (e && e.refund.length > 0 && this._buybackLive(npc)) {
-            const refund = e.refund.pop();   // this unit's own locked buy price (LIFO)
+            const refund = e.refund[e.refund.length - 1];   // peek this unit's locked buy price (LIFO)
+            // (spine) vendor pays the refund from its till; only then consume the
+            // credit + item (so a tapped-out till leaves everything untouched).
+            if (!transferGold(npc, this, refund, 'refund')) { this._log(`[${npc.type} can't cover that refund right now.]`); this._render(); return; }
+            e.refund.pop();
             this._removeFromSlot(slot);
-            this.gold = (this.gold ?? 0) + refund;
             this._tradeSell = this._tradeSellList();
             audio.playSfx('pickup');
             this._log(`[Refunded ${itemDef.name} for ${refund} GP.]`, 'pickup');
@@ -4079,8 +4206,9 @@ class Game {
         // once the Converter's role changes (stops being a questItem) in chapter two.
         const special = (!itemDef.questItem && npc.specialBuys) ? npc.specialBuys[itemDef.id] : null;
         if (special != null) {
+            // (spine) the special-buyer pays from its till; conserve gold.
+            if (!transferGold(npc, this, special, 'sell')) { this._log(`[${npc.type} is tapped out — can't buy that right now.]`); this._render(); return; }
             this._removeFromSlot(slot);
-            this.gold = (this.gold ?? 0) + special;
             this._buybackRecord(npc, itemDef.id, 'rebuy', special);
             this._tradeSell = this._tradeSellList();
             audio.playSfx('pickup');
@@ -4096,10 +4224,14 @@ class Game {
             this._render();
             return;
         }
+        if (!transferGold(npc, this, price, 'sell')) {   // vendor pays from its till
+            this._log(`[${npc.type} is tapped out — can't buy that right now.]`);
+            this._render(); return;
+        }
         this._removeFromSlot(slot);
-        this.gold = (this.gold ?? 0) + price;
-        // Record a REBUY credit: within the window you can buy this back for
-        // exactly what you got (Phase 6c reversibility).
+        // (fuse: spine + buyback) Gold already moved vendor→player via transferGold
+        // above (do NOT credit again). Just record a REBUY credit so the sale is
+        // reversible for the window at exactly what you got (Phase 6c).
         this._buybackRecord(npc, itemDef.id, 'rebuy', price);
         this._tradeSell = this._tradeSellList();
         audio.playSfx('pickup');
@@ -4116,8 +4248,8 @@ class Game {
         if (disp >= 100) { this._log(`[${npc.type} already loves you. Save your gold.]`); this._render(); return; }
         const cost = bribeStepCost(disp);
         if ((this.gold ?? 0) < cost) { this._log(`[Not enough GP to grease the wheels — needs ${cost}.]`); this._render(); return; }
-        this.gold -= cost;
-        npc.disposition = Math.min(100, disp + BRIBE_STEP);
+        transferGold(this, npc, cost, 'bribe');
+        reactToTransaction(npc, 'bribe', { delta: BRIBE_STEP, gold: cost });   // clamps + flips like the wheel bribe
         audio.playSfx('pickup');
         this._log(`[You slip ${npc.type} ${cost} GP. Their mood warms.]`, 'transition');
         this._render();

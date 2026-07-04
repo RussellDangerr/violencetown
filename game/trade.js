@@ -73,3 +73,21 @@ export function bribeStepCost(disposition) {
     }
     return cost;
 }
+
+// ── The transaction spine ────────────────────────────────────────────────────
+//
+// transferGold is the SINGLE choke-point for gold moving between two holders — a
+// "holder" is anything with a numeric `gold` (the player Game, or an NPC). Buy,
+// sell, bribe, and dialogue costs all route through here instead of poking
+// `game.gold` (and, before now, never touching the NPC's side). It strictly
+// CONSERVES gold: it returns false and moves nothing if `from` can't cover the
+// amount. That makes gold auditable and opens future hooks — a vendor's till
+// running dry, an NPC that pays you back, taxes — all in one place. `reason` is
+// advisory (for logging / future hooks).
+export function transferGold(from, to, amount, reason = '') {
+    if (!from || !to || !(amount > 0)) return false;
+    if ((from.gold ?? 0) < amount) return false;
+    from.gold = (from.gold ?? 0) - amount;
+    to.gold   = (to.gold ?? 0) + amount;
+    return true;
+}

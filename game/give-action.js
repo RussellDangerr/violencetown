@@ -113,6 +113,29 @@ export function applyDispositionDelta(recipient, delta) {
     return { newDisposition: recipient.disposition, flipped };
 }
 
+// ── reactToTransaction ──────────────────────────────────────────────────────
+//
+// (transaction spine) One seam for "the target reacts to a transaction I just
+// made with them." It records the transaction in the NPC's `giftLog` (a stub for
+// future barter/memory — "what did the player hand me, and when?") and then
+// applies the disposition consequence, delegating to the existing math:
+//   - GIVE  weights the shift by the item's `values` (applyGive)
+//   - BRIBE is a flat delta (applyDispositionDelta)
+// Both fire the shared flip-to-ally/discount logic. buy/sell don't shift
+// disposition today (they're gated by canTrade), so they just log. Returns
+// whatever the underlying handler returns (GIVE's {accepted, flipped, log}).
+export function reactToTransaction(npc, type, payload = {}) {
+    if (!npc) return null;
+    if (Array.isArray(npc.giftLog)) {
+        npc.giftLog.push({ type, itemId: payload.item?.id ?? null, gold: payload.gold ?? null });
+    }
+    switch (type) {
+        case 'give':  return applyGive(payload.item, npc);
+        case 'bribe': return applyDispositionDelta(npc, payload.delta ?? 0);
+        default:      return null;
+    }
+}
+
 // ── applyFlip ───────────────────────────────────────────────────────────────
 //
 // Dispatches on the recipient's `onFlip` value. Each onFlip mode is a

@@ -1,0 +1,29 @@
+{
+    "_scaffold": "PLACEHOLDER (Phase 2). A minimal walkable street so a successful bridge-ramp lands somewhere. Phase 4 hand-authors the real Downtown: the bank, the vampire, better merchants, city lights, a casino, and Main Quest 2 (deliver the burger + fries). The west transition below is a stand-in for the return route.",
+    "width": 16,
+    "height": 12,
+    "spawn": {"x": 8, "y": 6},
+    "zoneName": "DOWNTOWN",
+    "tiles": [
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,12,12,12,12,12,12,12,12,12,12,12,12,12,12,0,
+        0,12,12,12,12,12,12,12,12,12,12,12,12,12,12,0,
+        0,12,12,12,12,12,12,12,12,12,12,12,12,12,12,0,
+        0,12,12,12,12,12,12,12,12,12,12,12,12,12,12,0,
+        0,12,12,12,12,12,12,12,12,12,12,12,12,12,12,0,
+        0,12,12,12,12,12,12,12,12,12,12,12,12,12,12,0,
+        0,12,12,12,12,12,12,12,12,12,12,12,12,12,12,0,
+        0,12,12,12,12,12,12,12,12,12,12,12,12,12,12,0,
+        0,12,12,12,12,12,12,12,12,12,12,12,12,12,12,0,
+        0,12,12,12,12,12,12,12,12,12,12,12,12,12,12,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+    ],
+    "enemies": [],
+    "items": [],
+    "examinables": [
+        {"id": "downtown_todo", "x": 8, "y": 5, "text": "[Neon, a bank, a flickering casino sign — the real part of town. (Placeholder — Downtown and the burger delivery get built out next.)]"}
+    ],
+    "transitions": [
+        {"x": 1, "y": 6, "toMap": "town-map.json", "toX": 16, "toY": 12, "label": "[West — back over the bridge to old town. (placeholder)]"}
+    ]
+}

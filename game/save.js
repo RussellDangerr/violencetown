@@ -62,6 +62,7 @@ export function serialize(game) {
             mp: game.playerMp, maxMp: game.playerMaxMp,
             facing: game.facing,
             gold: game.gold,
+            carFuel: game.carFuel,
             equipment: {
                 weapon: idOf(game.equipment.weapon),
                 top: idOf(game.equipment.top),
@@ -114,7 +115,8 @@ function serEnemy(e) {
         // a 5-min window keyed to performance.now() which resets on reload, and with
         // quest items now unsellable it is no longer a soft-lock vector.
         name: e.name, dialogueId: e.dialogueId,
-        vendor: e.vendor, stock: e.stock, specialBuys: e.specialBuys,
+        // (transaction spine) real gold + giftLog round-trip alongside the shop config.
+        vendor: e.vendor, stock: e.stock, specialBuys: e.specialBuys, gold: e.gold, giftLog: e.giftLog,
         // runtime
         state: e.state, fsmState: e.fsmState, lastWanderTurn: e._lastWanderTurn,
         carrying: e.carrying, barkIndex: e._barkIndex, barkOffset: e._barkOffset,
@@ -237,6 +239,7 @@ export async function loadInto(game, raw) {
     game.playerHp = p.hp; game.playerMaxHp = p.maxHp;
     game.playerMp = p.mp; game.playerMaxMp = p.maxMp;
     game.gold = p.gold;
+    game.carFuel = p.carFuel || 'raw';
     game.facing = p.facing;
 
     // 3. equipment / inventory / temp-equips / buffs (rehydrate defs by id)
