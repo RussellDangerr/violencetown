@@ -7,7 +7,7 @@
 // in when there's genuinely no network. Successful responses are cached as they
 // load, so once you've played online the whole game works offline.
 
-const CACHE = 'violencetown-v3';
+const CACHE = 'violencetown-v4';
 
 // Minimal cold-start shell. Everything else (the JS modules, sprite sheets,
 // maps) is cached at runtime on first load by the fetch handler below.
