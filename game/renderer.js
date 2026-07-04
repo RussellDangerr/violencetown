@@ -20,12 +20,12 @@ import {
     HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_GAP, HOTBAR_SLOTS, HOTBAR_STRIDE,
     HOTBAR_TOTAL_W, HOTBAR_OX, HOTBAR_OY, HOTBAR_X_START, HOTBAR_Y,
     QUESTLOG_RECT, LOG_MODAL_RECT,
-    TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BRIBE_RECT,
-    TRADE_CELL_W, TRADE_CELL_H, tradeCellRect,
+    TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BUYBACK_ORIGIN, TRADE_BRIBE_RECT,
+    TRADE_CELL_W, TRADE_CELL_H, TRADE_COLS, tradeCellRect,
     RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
     EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS,
 } from './layout.js';
-import { ITEMS } from './items.js';                                          // (trade slice 1) stock item defs
+import { ITEMS, itemTier } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
 import { hasLineOfSight } from './enemies.js';                               // (aggro overlay) READ-ONLY: same Bresenham the chase AI uses
 import { buyPrice, sellPrice, bribeStepCost, mood, canTrade, BRIBE_STEP } from './trade.js'; // (trade slice 1) pricing + mood smiley
 import * as Settings from './settings.js'; // (combat-feel-pass) reduce-motion for hit-splats (namespace import — see main.js)
@@ -405,7 +405,6 @@ export class Renderer {
         if (game.state === 'radial_menu')     this._drawRadialMenu(game);
         if (game.state === 'target_wheel')    this._drawTargetWheel(game);
         if (game.state === 'item_throw_dir')  this._drawThrowPrompt(game);
-        if (game.state === 'item_give_dir')   this._drawThrowPrompt(game);
         if (game.state === 'ending') this._drawEndingOverlay(game);
         if (game.state === 'log_modal') this._drawLogModal(game);
         if (game.state === 'trade') this._drawTradeModal(game);
@@ -1985,7 +1984,7 @@ export class Renderer {
             fight: '⚔', trick: '♦', treat: '♥', flight: '»',
             melee: '⚔', ranged: '➹', magic: '✦',
             hit: '✶', cleave: '⚔', spin: '⟳',
-            throw: '➹', defend: '⛊', bribe: '¤', give: '♥', trade: '⇄',
+            throw: '➹', defend: '⛊', bribe: '¤', trade: '⇄',
             eat: '♥', cleanse: '✧', run: '»', hide: '☾', wait: '⏱',
         };
         const drawSlot = (mid, node, isSel) => {
@@ -2378,77 +2377,144 @@ export class Renderer {
         const disp = npc.disposition ?? 0;
         const dealing = canTrade(disp);
         const m = mood(disp);
+        // Three modes share this one modal:
+        //  • shop  (a vendor)      — BUY (priced) + SELL columns + bribe.
+        //  • offer (a non-vendor)  — one satchel→NPC give column (Phase 6a).
+        //  • loot  (a chest shim)  — a zero-cost TAKE column, no mood/bribe/sell
+        //                            (Phase 6b: chests route through this window).
+        const container = !!npc._container;
+        const offerMode = !container && !npc.vendor;
 
         // Title
-        const title = `${(npc.type || 'TRADER').toUpperCase()}'S TILL`;
+        const title = container ? `THE ${(npc.type || 'CHEST').toUpperCase()}`
+                    : offerMode ? `OFFER TO ${(npc.type || 'SOMEONE').toUpperCase()}`
+                                : `${(npc.type || 'TRADER').toUpperCase()}'S TILL`;
         this.font.drawText(ctx, title, CANVAS_PX / 2, R.y + 14, { color: UI.gold, scale: 2, align: 'center' });
 
-        // Mood row — smiley + label on the left, GP on the right.
+        // Mood row — smiley + label on the left, GP on the right. A chest has no
+        // mood, so it only shows the player's GP.
         const moodY = R.y + 48;
-        this._drawMoodFace(R.x + 26, moodY, m.face);
-        this.font.drawText(ctx, m.mood.toUpperCase(), R.x + 44, moodY - 3, { color: dealing ? UI.textLight : UI.hpRed, scale: 1 });
+        if (!container) {
+            this._drawMoodFace(R.x + 26, moodY, m.face);
+            this.font.drawText(ctx, m.mood.toUpperCase(), R.x + 44, moodY - 3, { color: (dealing || offerMode) ? UI.textLight : UI.hpRed, scale: 1 });
+        }
         this.font.drawText(ctx, `GP ${game.gold ?? 0}`, R.x + R.w - 24, moodY - 6, { color: UI.gold, scale: 2, align: 'right' });
 
-        // Section headers in gold — high-contrast on the dark stone panel
-        // (matches the modal title). Insets below stay dark with gold/light text.
-        this.font.drawText(ctx, 'BUY',  TRADE_BUY_ORIGIN.x,  TRADE_BUY_ORIGIN.y - 18,  { color: UI.gold, scale: 1 });
-        this.font.drawText(ctx, 'SELL', TRADE_SELL_ORIGIN.x, TRADE_SELL_ORIGIN.y - 18, { color: UI.gold, scale: 1 });
+        // Left-column header: TAKE (chest) / BUY (vendor) / — (offer has none).
+        if (container)       this.font.drawText(ctx, 'TAKE', TRADE_BUY_ORIGIN.x, TRADE_BUY_ORIGIN.y - 18, { color: UI.gold, scale: 1 });
+        else if (!offerMode) this.font.drawText(ctx, 'BUY',  TRADE_BUY_ORIGIN.x, TRADE_BUY_ORIGIN.y - 18, { color: UI.gold, scale: 1 });
+        if (!container) this.font.drawText(ctx, offerMode ? 'OFFER' : 'SELL', TRADE_SELL_ORIGIN.x, TRADE_SELL_ORIGIN.y - 18, { color: UI.gold, scale: 1 });
 
-        // BUY grid — the vendor's stock.
-        const stock = npc.stock || [];
-        for (let i = 0; i < stock.length; i++) {
-            const itemDef = ITEMS[stock[i]];
-            if (!itemDef) continue;
-            const price = dealing ? buyPrice(itemDef, disp) : null;
-            this._drawTradeCell(itemDef, tradeCellRect(TRADE_BUY_ORIGIN, i), price, dealing && price != null);
+        // LEFT grid — chest TAKE cells (0 GP) or vendor BUY cells (priced).
+        if (container || !offerMode) {
+            const stock = npc.stock || [];
+            for (let i = 0; i < stock.length; i++) {
+                const itemDef = ITEMS[stock[i]];
+                if (!itemDef) continue;
+                if (container) {
+                    this._drawTradeCell(itemDef, tradeCellRect(TRADE_BUY_ORIGIN, i), 0, true);   // free
+                } else {
+                    const price = dealing ? buyPrice(itemDef, disp) : null;
+                    this._drawTradeCell(itemDef, tradeCellRect(TRADE_BUY_ORIGIN, i), price, dealing && price != null);
+                }
+            }
+            if (container && stock.length === 0) {
+                this.font.drawText(ctx, 'EMPTY', TRADE_BUY_ORIGIN.x, TRADE_BUY_ORIGIN.y + 8, { color: UI.dim, scale: 1 });
+            }
         }
 
-        // SELL grid — the player's bag (snapshot taken on open / after each trade).
-        const sell = game._tradeSell || [];
-        for (let i = 0; i < sell.length; i++) {
-            const itemDef = sell[i].itemDef;
-            const price = dealing ? sellPrice(itemDef, disp) : null;
-            this._drawTradeCell(itemDef, tradeCellRect(TRADE_SELL_ORIGIN, i), price, dealing && price != null);
-        }
-        if (sell.length === 0) {
-            this.font.drawText(ctx, 'BAG EMPTY', TRADE_SELL_ORIGIN.x, TRADE_SELL_ORIGIN.y + 8, { color: UI.dim, scale: 1 });
+        // RIGHT grid — shop SELL / offer give column. A chest has no right column.
+        if (!container) {
+            const sell = game._tradeSell || [];
+            for (let i = 0; i < sell.length; i++) {
+                const itemDef = sell[i].itemDef;
+                if (offerMode) {
+                    const marker = itemDef.questItem ? '◆' : '♥';
+                    this._drawTradeCell(itemDef, tradeCellRect(TRADE_SELL_ORIGIN, i), null, true, marker);
+                } else {
+                    // (Phase 6d) A special-buyer pays a fixed price even for items
+                    // sellPrice() refuses (the questItem Converter → 500 to Macc),
+                    // so show that instead of a dimmed "—".
+                    const special = npc.specialBuys && npc.specialBuys[itemDef.id];
+                    if (special != null) {
+                        this._drawTradeCell(itemDef, tradeCellRect(TRADE_SELL_ORIGIN, i), special, true);
+                    } else {
+                        const price = dealing ? sellPrice(itemDef, disp) : null;
+                        this._drawTradeCell(itemDef, tradeCellRect(TRADE_SELL_ORIGIN, i), price, dealing && price != null);
+                    }
+                }
+            }
+            if (sell.length === 0) {
+                this.font.drawText(ctx, 'BAG EMPTY', TRADE_SELL_ORIGIN.x, TRADE_SELL_ORIGIN.y + 8, { color: UI.dim, scale: 1 });
+            }
         }
 
-        // Bribe button.
-        const B = TRADE_BRIBE_RECT;
-        const cost = bribeStepCost(disp);
-        const maxed = disp >= 100;
-        const canBribe = !maxed && (game.gold ?? 0) >= cost;
-        drawInset(ctx, B.x, B.y, B.w, B.h);
-        ctx.fillStyle = canBribe ? 'rgba(212,185,106,0.18)' : 'rgba(0,0,0,0.15)';
-        ctx.fillRect(B.x + 1, B.y + 1, B.w - 2, B.h - 2);
-        const bribeLabel = maxed ? 'MOOD MAXED' : `BRIBE +${BRIBE_STEP}  ${cost} GP`;
-        this.font.drawText(ctx, bribeLabel, B.x + B.w / 2, B.y + B.h / 2 - 3, {
-            color: canBribe ? UI.gold : UI.dim, scale: 1, align: 'center',
-        });
+        // (Phase 6c) BUYBACK row — vendor only. Items you sold this window, still
+        // re-buyable at the LOCKED price, with a live countdown to the window's
+        // close. Refunds (buy→sell-back) ride the SELL column, so only re-buyable
+        // sold items need their own row here. Capped at TRADE_COLS for one row.
+        if (!container && !offerMode && npc._buyback && game._buybackList) {
+            const remaining = game._buybackRemainingMs(npc);
+            const bb = game._buybackList(npc);
+            if (bb.length > 0) {
+                const secs = Math.ceil(remaining / 1000);
+                const clock = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+                this.font.drawText(ctx, `BUYBACK  ${clock}`, TRADE_BUYBACK_ORIGIN.x, TRADE_BUYBACK_ORIGIN.y - 18, { color: UI.gold, scale: 1 });
+                for (let i = 0; i < bb.length && i < TRADE_COLS; i++) {
+                    const def = ITEMS[bb[i].itemId];
+                    if (!def) continue;
+                    this._drawTradeCell(def, tradeCellRect(TRADE_BUYBACK_ORIGIN, i), bb[i].price, true);
+                }
+            }
+        }
+
+        // Bribe button — shop/offer only (a chest can't be bribed).
+        if (!container) {
+            const B = TRADE_BRIBE_RECT;
+            const cost = bribeStepCost(disp);
+            const maxed = disp >= 100;
+            const canBribe = !maxed && (game.gold ?? 0) >= cost;
+            drawInset(ctx, B.x, B.y, B.w, B.h);
+            ctx.fillStyle = canBribe ? 'rgba(212,185,106,0.18)' : 'rgba(0,0,0,0.15)';
+            ctx.fillRect(B.x + 1, B.y + 1, B.w - 2, B.h - 2);
+            const bribeLabel = maxed ? 'MOOD MAXED' : `BRIBE +${BRIBE_STEP}  ${cost} GP`;
+            this.font.drawText(ctx, bribeLabel, B.x + B.w / 2, B.y + B.h / 2 - 3, {
+                color: canBribe ? UI.gold : UI.dim, scale: 1, align: 'center',
+            });
+        }
 
         // Footer hint.
-        this.font.drawText(ctx, 'TAP TO BUY / SELL    B BRIBE    E / ESC CLOSE', CANVAS_PX / 2, R.y + R.h - 16, {
+        const footer = container ? 'TAP TO TAKE    E / ESC CLOSE'
+                     : offerMode ? 'TAP TO GIVE    B BRIBE    E / ESC CLOSE'
+                                 : 'TAP TO BUY / SELL    B BRIBE    E / ESC CLOSE';
+        this.font.drawText(ctx, footer, CANVAS_PX / 2, R.y + R.h - 16, {
             color: UI.textLight, scale: 1, align: 'center',
         });
     }
 
     // One shop cell: inset frame, item icon, price under it. `enabled` false
     // (won't-deal, or unsellable like a quest item) dims the cell and the price
-    // shows as "—".
-    _drawTradeCell(itemDef, r, price, enabled) {
+    // shows as "—". `marker` (Phase 6a offer mode) replaces the price with a
+    // give/quest glyph drawn in gold, and the cell stays fully lit. (Phase 6d) A
+    // value-tier colour bar rides the cell's top edge for at-a-glance rarity.
+    _drawTradeCell(itemDef, r, price, enabled, marker) {
         const { ctx } = this;
         drawInset(ctx, r.x, r.y, r.w, r.h);
         const prevAlpha = ctx.globalAlpha;
-        if (!enabled) ctx.globalAlpha = 0.45;
+        if (!enabled && !marker) ctx.globalAlpha = 0.45;
+
+        // (Phase 6d) tier bar — a 3px band of the item's rarity colour at the top.
+        const tier = itemTier(itemDef);
+        ctx.fillStyle = tier.color;
+        ctx.fillRect(r.x + 1, r.y + 1, r.w - 2, 3);
 
         const iconSize = 32;
-        this._drawItemIcon(itemDef, r.x + (r.w - iconSize) / 2, r.y + 8, iconSize);
+        this._drawItemIcon(itemDef, r.x + (r.w - iconSize) / 2, r.y + 10, iconSize);
 
         if (this.font) {
-            const label = price == null ? '—' : `${price}`;
+            const label = marker != null ? marker : (price == null ? '—' : `${price}`);
             this.font.drawText(ctx, label, r.x + r.w / 2, r.y + r.h - 16, {
-                color: price == null ? UI.dim : UI.gold, scale: 1, align: 'center',
+                color: (marker != null || price != null) ? UI.gold : UI.dim, scale: 1, align: 'center',
             });
         }
         ctx.globalAlpha = prevAlpha;

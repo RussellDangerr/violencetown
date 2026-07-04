@@ -71,6 +71,11 @@ export class Enemy {
         // trade.js keyed off this NPC's `disposition`.
         vendor = null,
         stock = null,
+        // (Phase 6d) Special-buyer override: { itemId: fixedPrice }. A vendor with
+        // this buys the listed items for the fixed GP even when they're questItems
+        // that sellPrice() would refuse — the archetype is Macc paying 500 for the
+        // Cataclysmic Converter that no ordinary merchant wants.
+        specialBuys = null,
         // Town Clock (feature/town-clock): heartbeat-driven ambient NPC. When
         // true, this NPC is advanced by the free-running world tick
         // (game.worldTick) via resolveAmbientTurns instead of the per-player-turn
@@ -130,6 +135,7 @@ export class Enemy {
         this.tag           = tag;
         this.vendor        = vendor;
         this.stock         = stock;
+        this.specialBuys   = specialBuys;
         this.ambient       = ambient;
 
         // Debuffs / buffs — symmetric with Game.buffs[] on the player side.
