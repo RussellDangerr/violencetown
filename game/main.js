@@ -1989,13 +1989,18 @@ class Game {
         if (this.enemies.some(e => e.x === nx && e.y === ny && this._isHostileToPlayer(e))) return true;
         if (this.containers.some(c => c.x === nx && c.y === ny)) return true;
 
-        // Consequential walkable steps the player should opt into deliberately.
-        if (this.map.getTransition(nx, ny)) return true;          // map transition
-        // NOTE: ground items deliberately do NOT stop held-walk anymore — auto-
-        // pickup-while-walking is the Pokémon/DQM norm and stopping before every
-        // item made town feel like it kept "dropping" the hold (movement-feel
-        // feel pass). The quest converter is still picked up on walk-over, just
-        // without the halt. Transitions + hazards below remain deliberate stops.
+        // (2026-07-04, Caelan's call) Zone transitions NO LONGER halt held-walk —
+        // a held direction now walks you smoothly THROUGH the doorway (Pokémon/DQM
+        // seamless-zone feel), then the async load's .then() re-arms the walk
+        // (_resumeHeldWalk) so you keep going in the new zone with no re-press. The
+        // old halt made you stop one tile short of every exit and re-tap. Removing
+        // it loosens a deliberate safety (the movement-feel plan flagged this as an
+        // explicit decision) — accepted for the feel. The Chapter-One bridge ending
+        // is a separate hardcoded tile check (gated on carFixed), not a
+        // getTransition, so it is unaffected.
+        // NOTE: ground items also deliberately do NOT stop held-walk (auto-pickup
+        // while walking is the norm). Hazards still DO stop — stepping into sludge
+        // is a real consequence you should opt into.
         const td = this.map.getTileDef(nx, ny);
         if (td && td.hazard) return true;                         // sludge / future hazards
 
