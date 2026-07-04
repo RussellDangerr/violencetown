@@ -2,6 +2,31 @@ All feature planning and development follows the 4-gate pipeline defined in GAME
 Always develop on the dev branch.
 Always plan on the plan branch.
 
+## Branch & merge hygiene — keep merge conflicts small
+
+Merge pain here comes from long-lived feature branches that all edit the SAME core files
+(`main.js`, `wheel-model.js`, `trade.js`, `give-action.js`) getting merged at different times,
+after dev has moved on underneath them. Two levers control it:
+
+1. **Merge a finished, verified branch to dev PROMPTLY** — before starting the next feature that
+   touches the same core file. Short-lived branches barely conflict; a branch that touches core
+   files and sits unmerged while dev advances accrues conflict debt that grows every time dev moves.
+2. **Parallelize only FILE-DISJOINT work.** If the next feature will rewrite the wheel model or the
+   economy, don't build it beside another *unmerged* branch that touches the same file — merge that
+   one first so the new work builds ON TOP of it.
+
+**Before starting sweeping changes to a core file** (`main.js`, `wheel-model.js`, `trade.js`,
+`give-action.js`, the economy, the wheel model): run `git branch --no-merged dev`, and for any
+unmerged branch check `git diff dev <branch> --stat` for overlap with the file you're about to
+rewrite. If one overlaps, FLAG it to Caelan *before* the change — "merge it first, or reconcile
+later?" — his call, but surface it up front, not after the collision.
+
+**A merge is done when the game RUNS, not when the conflict markers are gone.** Git auto-merges by
+line, so it silently drops a needed import or lets one side's method win — this bit us twice (a
+dropped `applyGive` import; a dropped closing brace), both invisible to "0 conflict markers" but
+fatal at runtime. After every merge + conflict resolution: restart the dev server, load the game,
+check the console for errors, and smoke-test the touched systems BEFORE committing.
+
 ## Repo location
 
 The canonical working copy lives at **`C:\Projects\violencetown`**. An older `C:\Users\caela\OneDrive\Desktop\violencetown` exists but is abandoned (OneDrive sync froze it on an old snapshot mid-session). Do not pull from or commit to the OneDrive path.
