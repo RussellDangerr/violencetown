@@ -1948,7 +1948,11 @@ class Game {
     // Only ever acts in IDLE, so a key held while a menu is open can't step
     // until the menu actually closes. (movement-feel resume-fix, 2026-07-03)
     _resumeHeldWalk() {
-        if (this.state !== STATE.IDLE || this._animating) return;
+        // Never auto-walk a dead / zero-HP player: _closeWheel (and friends) force
+        // state=IDLE synchronously even when the fire that opened them just killed
+        // the player via _advanceWorld→_die, and resuming here would step the 0-HP
+        // player and re-enter _die. Guard on HP. (pre-prod review fix)
+        if (this.state !== STATE.IDLE || this._animating || this.playerHp <= 0) return;
         const held = [...this._physicalHeld].filter(code => DIRS[code]);
         if (held.length === 0) return;
         // Set iteration is insertion order → roughly press order, good enough
@@ -2189,6 +2193,10 @@ class Game {
         const npc = this._tradeNpc;
         const stack = this.inventory[slot];
         if (!npc || !stack) return;
+        // Quest items can never be handed away — there's no recovery, so giving
+        // one (e.g. the sole car-fix Converter) would soft-lock the main quest.
+        // Matches the questItem block on throw/smash/sell. (pre-prod review fix)
+        if (stack.itemDef.questItem) { this._log('[Best hold onto that.]'); this._render(); return; }
         const result = applyGive(stack.itemDef, npc);
         this._log(result.log);
         if (result.accepted) {
@@ -3157,8 +3165,10 @@ class Game {
     // ── Death / Respawn / Win ────────────────────────────────────────────────
 
     _die() {
+        if (this.state === STATE.DEAD) return;   // re-entry guard: never stack respawn timers (pre-prod review)
         this._stopAutoRepeat();
         this._heldDirKeys = [];   // drop held keys so respawn doesn't phantom-walk
+        this._physicalHeld.clear();   // and drop the RAW held set so nothing re-arms a walk during the death window
         this.state = STATE.DEAD;
         audio.playSfx('death'); // [audio] death sting
         this._flash('rgba(255, 0, 0, 0.4)'); // [settings] reduce-motion aware (wraps renderer.flash)
@@ -3554,7 +3564,7 @@ class Game {
         if (npc.vendor) {
             const now = performance.now();
             if (!npc._buyback || (now - npc._buyback.openedAt) >= BUYBACK_MS) {
-                npc._buyback = { openedAt: now, entries: {} };   // entries[itemId] = { rebuyPrice, rebuyQty, refundPrice, refundQty }
+                npc._buyback = { openedAt: now, entries: {} };   // entries[itemId] = { rebuy:[price…], refund:[price…] }
             }
             this._startTradeTimer();   // tick the countdown while the window is open
         }
@@ -3720,12 +3730,12 @@ class Game {
         // price you got for it, not the current market rate. Consumes a rebuy
         // credit; bypasses the disposition/price gate (it's an undo, not a deal).
         const e = this._buybackEntry(npc, itemId);
-        if (e && e.rebuyQty > 0 && this._buybackLive(npc)) {
-            const price = e.rebuyPrice;
+        if (e && e.rebuy.length > 0 && this._buybackLive(npc)) {
+            const price = e.rebuy[e.rebuy.length - 1];   // this unit's own locked price (LIFO)
             if ((this.gold ?? 0) < price) { this._log(`[Not enough GP to buy it back — needs ${price}.]`); this._render(); return; }
             if (!this._addToInventory(itemDef)) { this._log('[Your bag is full.]'); this._render(); return; }
             this.gold -= price;
-            e.rebuyQty -= 1;
+            e.rebuy.pop();
             this._tradeSell = this._tradeSellList();
             audio.playSfx('pickup');
             this._log(`[Bought back ${itemDef.name} for ${price} GP.]`, 'pickup');
@@ -3748,11 +3758,14 @@ class Game {
     }
 
     // ── Buyback ledger (Phase 6c) ─────────────────────────────────────────────
-    // npc._buyback.entries[itemId] = { rebuyPrice, rebuyQty, refundPrice, refundQty }.
-    // A market BUY records a refund credit (sell it back for what you paid); a
-    // market SELL records a rebuy credit (buy it back for what you got). Undo
-    // actions consume the matching credit at the locked price; they don't create
-    // new credits (no infinite ping-pong). The ledger self-expires after BUYBACK_MS.
+    // npc._buyback.entries[itemId] = { rebuy: [price…], refund: [price…] } — a
+    // LIFO stack of PER-UNIT locked prices, one per credit. A market BUY pushes a
+    // refund credit (sell it back for what you paid); a market SELL pushes a rebuy
+    // credit (buy it back for what you got). Undo pops the matching unit's own
+    // price and creates no new credit (no ping-pong). Per-unit prices are the
+    // anti-exploit: buying the same item cheap then dear no longer lets you refund
+    // both at the dearer price (a gold-dup fixed in the pre-prod review). Self-
+    // expires after BUYBACK_MS.
     _buybackLive(npc) {
         return !!(npc._buyback && (performance.now() - npc._buyback.openedAt) < BUYBACK_MS);
     }
@@ -3768,17 +3781,21 @@ class Game {
     _buybackRecord(npc, itemId, kind, price) {
         if (!npc._buyback) return;
         const e = npc._buyback.entries[itemId] ||
-            (npc._buyback.entries[itemId] = { rebuyPrice: 0, rebuyQty: 0, refundPrice: 0, refundQty: 0 });
-        if (kind === 'rebuy')  { e.rebuyPrice = price;  e.rebuyQty  += 1; }
-        else                   { e.refundPrice = price; e.refundQty += 1; }
+            (npc._buyback.entries[itemId] = { rebuy: [], refund: [] });
+        if (kind === 'rebuy') e.rebuy.push(price);
+        else                  e.refund.push(price);
     }
     // Sold items still buyable back this window (drives the buyback render row +
-    // its tap targets). Returns [{ itemId, price }] for entries with rebuyQty>0.
+    // its tap targets). Returns [{ itemId, price }] — price is the NEXT unit's
+    // locked re-buy price (LIFO: the top of the stack), for entries with a credit.
     _buybackList(npc) {
         if (!this._buybackLive(npc)) return [];
         const out = [];
         const entries = npc._buyback.entries;
-        for (const id in entries) if (entries[id].rebuyQty > 0) out.push({ itemId: id, price: entries[id].rebuyPrice });
+        for (const id in entries) {
+            const q = entries[id].rebuy;
+            if (q && q.length > 0) out.push({ itemId: id, price: q[q.length - 1] });
+        }
         return out;
     }
 
@@ -3795,11 +3812,10 @@ class Game {
         // Consumes a refund credit; it's an undo, not a market sale (so it records
         // no rebuy credit).
         const e = this._buybackEntry(npc, itemDef.id);
-        if (e && e.refundQty > 0 && this._buybackLive(npc)) {
-            const refund = e.refundPrice;
+        if (e && e.refund.length > 0 && this._buybackLive(npc)) {
+            const refund = e.refund.pop();   // this unit's own locked buy price (LIFO)
             this._removeFromSlot(slot);
             this.gold = (this.gold ?? 0) + refund;
-            e.refundQty -= 1;
             this._tradeSell = this._tradeSellList();
             audio.playSfx('pickup');
             this._log(`[Refunded ${itemDef.name} for ${refund} GP.]`, 'pickup');
@@ -3808,15 +3824,14 @@ class Game {
         }
 
         // (Phase 6d) SPECIAL BUY — a vendor's `specialBuys` map overrides the
-        // ordinary market: it pays a FIXED price for a listed item even when
-        // sellPrice() would refuse it (questItems included). The archetype is Macc
-        // paying 500 for the Cataclysmic Converter no ordinary merchant wants —
-        // the legible signal that an odd item has a real use. Records a rebuy
-        // credit, so the sale is reversible for the buyback window (⚠️ on current
-        // dev the Converter is still the car-fix item — buying it back within the
-        // window undoes a soft-lock; after the window it's gone. Caelan's call at
-        // merge whether to gate this behind carFixed or accept the freedom-path.)
-        const special = npc.specialBuys && npc.specialBuys[itemDef.id];
+        // ordinary market: it pays a FIXED price for a listed item that sellPrice()
+        // would otherwise ignore (e.g. a zero-baseValue oddment). The archetype is
+        // Macc paying 500 for the Cataclysmic Converter no ordinary merchant wants.
+        // (pre-prod review) QUEST ITEMS are EXCLUDED: on this build the Converter is
+        // still the sole car-fix item, so a special-buy of it would soft-lock the
+        // quest with no recovery. The guard is `!questItem`, so it AUTO-RE-ENABLES
+        // once the Converter's role changes (stops being a questItem) in chapter two.
+        const special = (!itemDef.questItem && npc.specialBuys) ? npc.specialBuys[itemDef.id] : null;
         if (special != null) {
             this._removeFromSlot(slot);
             this.gold = (this.gold ?? 0) + special;

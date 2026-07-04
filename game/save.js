@@ -107,6 +107,14 @@ function serEnemy(e) {
         barks: e.barks, barkEveryTurns: e.barkEveryTurns, adjacencyBark: e.adjacencyBark,
         disposition: e.disposition, flipThreshold: e.flipThreshold, bribeable: e.bribeable,
         values: e.values, onFlip: e.onFlip,
+        // Static identity + shop config. Without these, hydrateEnemy's `new Enemy(s)`
+        // reverts them to null on reload — NPCs lose their name/dialogue and vendors
+        // (Macc, Puck) stop being vendors, silently degrading to gift mode. (pre-prod
+        // review fix.) The transient buyback ledger (_buyback) stays RAM-only: it's
+        // a 5-min window keyed to performance.now() which resets on reload, and with
+        // quest items now unsellable it is no longer a soft-lock vector.
+        name: e.name, dialogueId: e.dialogueId,
+        vendor: e.vendor, stock: e.stock, specialBuys: e.specialBuys,
         // runtime
         state: e.state, fsmState: e.fsmState, lastWanderTurn: e._lastWanderTurn,
         carrying: e.carrying, barkIndex: e._barkIndex, barkOffset: e._barkOffset,

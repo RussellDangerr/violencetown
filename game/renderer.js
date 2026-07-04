@@ -2429,13 +2429,17 @@ export class Renderer {
             for (let i = 0; i < sell.length; i++) {
                 const itemDef = sell[i].itemDef;
                 if (offerMode) {
-                    const marker = itemDef.questItem ? '◆' : '♥';
-                    this._drawTradeCell(itemDef, tradeCellRect(TRADE_SELL_ORIGIN, i), null, true, marker);
+                    // Quest items can't be handed away (pre-prod review): draw them
+                    // DIMMED + non-tappable with the ◆ marker; regular items are a
+                    // lit ♥ give cell.
+                    const q = itemDef.questItem;
+                    this._drawTradeCell(itemDef, tradeCellRect(TRADE_SELL_ORIGIN, i), null, !q, q ? '◆' : '♥');
                 } else {
-                    // (Phase 6d) A special-buyer pays a fixed price even for items
-                    // sellPrice() refuses (the questItem Converter → 500 to Macc),
-                    // so show that instead of a dimmed "—".
-                    const special = npc.specialBuys && npc.specialBuys[itemDef.id];
+                    // (Phase 6d) A special-buyer pays a fixed price for an oddment
+                    // sellPrice() refuses. Quest items are EXCLUDED (pre-prod review:
+                    // the car-fix Converter must not be sellable), so they fall
+                    // through to the dimmed "—" like any unsellable item.
+                    const special = (!itemDef.questItem && npc.specialBuys) ? npc.specialBuys[itemDef.id] : null;
                     if (special != null) {
                         this._drawTradeCell(itemDef, tradeCellRect(TRADE_SELL_ORIGIN, i), special, true);
                     } else {
@@ -2501,7 +2505,9 @@ export class Renderer {
         const { ctx } = this;
         drawInset(ctx, r.x, r.y, r.w, r.h);
         const prevAlpha = ctx.globalAlpha;
-        if (!enabled && !marker) ctx.globalAlpha = 0.45;
+        // Dim a disabled cell — including a marker cell that's disabled, e.g. a
+        // quest item in offer mode that can't be handed away (pre-prod review).
+        if (!enabled) ctx.globalAlpha = 0.45;
 
         // (Phase 6d) tier bar — a 3px band of the item's rarity colour at the top.
         const tier = itemTier(itemDef);
