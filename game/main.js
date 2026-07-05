@@ -777,6 +777,16 @@ class Game {
         this.questEngine.start('fix_car');
     }
 
+    // (Phase 4) Main Quest 2 — the burger delivery. Started deterministically the
+    // first time the player reaches Downtown, from BOTH arrival paths (the
+    // canyon-grapple climb-out via canyon_escape.onComplete, and the alcohol-ramp
+    // via _rampToDowntown). Guarded so it never clobbers an active quest or restarts.
+    _startMainQuest2() {
+        const qe = this.questEngine; if (!qe) return;
+        if (qe.state.activeId || qe.isComplete('deliver_burger')) return;
+        qe.start('deliver_burger');
+    }
+
     // ── Splash ───────────────────────────────────────────────────────────────
 
     _bindSplash() {
@@ -3683,8 +3693,8 @@ class Game {
         await this._loadMap('downtown-map.json');
         this.state = STATE.IDLE;
         this._log('[You skid to a stop on a Downtown street, the engine ticking as it cools. The real part of town. Now — that delivery.]', 'transition');
+        this._startMainQuest2();   // (Phase 4) MQ2 begins on arrival
         this._render();
-        // (Phase 4) this._startMainQuest2();
     }
 
     // ── Render ───────────────────────────────────────────────────────────────
