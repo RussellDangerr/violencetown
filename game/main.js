@@ -942,6 +942,7 @@ class Game {
             if (this.state === STATE.JOURNAL) {
                 e.preventDefault();
                 if (e.code === 'KeyJ' || e.code === 'Escape')     { this._closeJournal(); return; }
+                if (e.code === 'Tab' || e.code === 'KeyM')        { this._journalTab = (this._journalTab === 'map' ? 'quests' : 'map'); audio.playSfx('menu-tick'); this._render(); return; }
                 if (e.code === 'ArrowUp'   || e.code === 'KeyW')  { this._scrollJournal(1);  return; }
                 if (e.code === 'ArrowDown' || e.code === 'KeyS')  { this._scrollJournal(-1); return; }
                 return;
@@ -1034,6 +1035,7 @@ class Game {
             // L = open the log history modal
             if (e.code === 'KeyL') { e.preventDefault(); this._openLogModal(); return; }
             if (e.code === 'KeyJ') { e.preventDefault(); this._openJournal(); return; }
+            if (e.code === 'KeyM') { e.preventDefault(); this._openWorldMap(); return; }
 
             // C = open the (read-only) equipment / Vitruvian screen
             if (e.code === 'KeyC') { e.preventDefault(); this._openEquipmentScreen(); return; }
@@ -3922,6 +3924,17 @@ class Game {
     _openJournal() {
         if (this.state !== STATE.IDLE) return;
         this._journalScroll = 0;
+        this._journalTab = 'quests';
+        this.state = STATE.JOURNAL;
+        audio.playSfx('menu-open');
+        this._render();
+    }
+
+    // (Phase 4 map) Open the journal straight to its rudimentary world-map tab.
+    _openWorldMap() {
+        if (this.state !== STATE.IDLE) return;
+        this._journalScroll = 0;
+        this._journalTab = 'map';
         this.state = STATE.JOURNAL;
         audio.playSfx('menu-open');
         this._render();
