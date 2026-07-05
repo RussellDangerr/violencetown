@@ -19,7 +19,7 @@ import {
     OVERLAY_RECTS, THROW_RECTS,
     HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_GAP, HOTBAR_SLOTS, HOTBAR_STRIDE,
     HOTBAR_TOTAL_W, HOTBAR_OX, HOTBAR_OY, HOTBAR_X_START, HOTBAR_Y,
-    QUESTLOG_RECT, LOG_MODAL_RECT, JOURNAL_RECT,
+    QUESTLOG_RECT, LOG_MODAL_RECT, JOURNAL_RECT, TARGET_LIST_RECT, TARGET_LIST_ROW_H,
     TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BUYBACK_ORIGIN, TRADE_BRIBE_RECT,
     TRADE_CELL_W, TRADE_CELL_H, TRADE_COLS, tradeCellRect,
     RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
@@ -404,7 +404,7 @@ export class Renderer {
         // Modals
         if (game.state === 'item_overlay')    this._drawItemOverlay(game);
         if (game.state === 'radial_menu')     this._drawRadialMenu(game);
-        if (game.state === 'target_wheel')    this._drawTargetWheel(game);
+        if (game.state === 'target_list')     this._drawTargetList(game);
         if (game.state === 'item_throw_dir')  this._drawThrowPrompt(game);
         if (game.state === 'ending') this._drawEndingOverlay(game);
         if (game.state === 'log_modal') this._drawLogModal(game);
@@ -1816,6 +1816,30 @@ export class Renderer {
     // sub-slice gets the highlight instead.
 
     _drawRadialMenu(game) { this._drawWheel(game); }
+
+    // (Target List) A RuneScape-style vertical menu — the target named at the top,
+    // its ordered verbs as rows (each in its colour-language hue), the selected row
+    // highlighted, drawn in the ornate panel chrome. The ONLY non-radial target
+    // surface, so it never gets confused with the action wheel.
+    _drawTargetList(game) {
+        const { ctx } = this; const ui = this.uiSheet; if (!this.font) return;
+        const tl = game.targetList; if (!tl || !tl.verbs.length) return;
+        ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX); ctx.restore();
+        const RH = TARGET_LIST_ROW_H, px = TARGET_LIST_RECT.x, py = TARGET_LIST_RECT.y, w = TARGET_LIST_RECT.w;
+        const h = 44 + tl.verbs.length * RH + 8;
+        if (ui?.loaded) drawPanelBig(ctx, ui, px, py, w, h, 'base');
+        else            drawPanelSmall(ctx, px, py, w, h);
+        const t = tl.target;
+        const name = (t.npc && (t.npc.name || t.npc.type)) || (t.item && ((t.item.def && t.item.def.name) || t.item.type)) || (t.examinable && t.examinable.id) || '?';
+        this.font.drawText(ctx, String(name).replace(/[\[\]]/g, '').toUpperCase().slice(0, 18), px + w / 2, py + 14, { color: UI.gold, scale: 1, align: 'center' });
+        for (let i = 0; i < tl.verbs.length; i++) {
+            const v = tl.verbs[i], sel = (i === tl.sel), ry = py + 44 + i * RH;
+            if (sel) { ctx.fillStyle = 'rgba(212,185,106,0.18)'; ctx.fillRect(px + 8, ry - 2, w - 16, RH - 4); }
+            const col = sel ? UI.textLight : (v.key === 'cancel' ? UI.dim : (v.color || UI.text));
+            this.font.drawText(ctx, (sel ? '> ' : '  ') + v.label, px + 16, ry + 6, { color: col, scale: 1 });
+        }
+        ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    }
 
     // (Target Wheel — "The Price is Right") A full pegged ring of the tapped
     // target's verbs: each a colour-language wedge, gold trim + rim pegs, the

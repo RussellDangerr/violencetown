@@ -23,7 +23,7 @@ import { doExamine } from './examine.js';
 import {
     CANVAS_INTERNAL_PX, HIT_SLOP, OVERLAY_RECTS, THROW_RECTS,
     HOTBAR_X_START, HOTBAR_Y, HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_STRIDE, HOTBAR_SLOTS,
-    RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, wheelRingR, QUESTLOG_RECT, LOG_MODAL_RECT,
+    RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, wheelRingR, QUESTLOG_RECT, LOG_MODAL_RECT, targetListRowRect,
     TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BUYBACK_ORIGIN, TRADE_BRIBE_RECT,
     TRADE_COLS, tradeCellRect,
     EQUIPMENT_MODAL_RECT, EQUIP_SLOT_RECTS,
@@ -34,7 +34,7 @@ import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (n
 import {
     createWheelState, cycle, drill, back, compose, autoAimTile,
     needsFriendlyConfirm, aimRange, affectedTiles, selectedNode, restoreLastCategory, verbApplies,
-    targetVerbs, createTargetWheelState, isCombatActive,
+    orderedTargetVerbs, isCombatActive,
 } from './wheel-model.js'; // (sunburst wheel) node-tree model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
 
@@ -51,7 +51,7 @@ const STATE = {
     ITEM_THROW_DIR:  'item_throw_dir',  // chose Throw, waiting for direction
     // (Phase 6a) ITEM_GIVE_DIR retired — Give folded into the Trade window.
     RADIAL_MENU:     'radial_menu',     // bumped a hostile enemy — Omnitrix-style wheel
-    TARGET_WHEEL:    'target_wheel',    // (Target Wheel) tapped a target — Price-is-Right verb wheel
+    TARGET_LIST:     'target_list',     // (Target List) tapped/focused a target — RuneScape-style verb menu
     RESOLVING:       'resolving',
     DEAD:            'dead',
     // (Legacy WIN state retired with the tile-7 boss-trigger trap — fix/critical-path.)
@@ -288,7 +288,7 @@ class Game {
         // wheel-model.js holds the layer/category/sub-verb/item cursor, the aim
         // reticle, and last-fired persistence.
         this.wheel = createWheelState();
-        this.targetWheel = createTargetWheelState();   // (Target Wheel) tapped-target verb wheel
+        this.targetList = { x: 0, y: 0, target: null, verbs: [], sel: 0 };   // (Target List) RuneScape-style verb menu
         this._lastActKeyAt = 0; // double-tap-Act window for express-repeat
 
         // Screen shake (Phase F) — triggered on damage >= threshold. The
@@ -901,10 +901,14 @@ class Game {
                 return;
             }
 
-            // ── TARGET_WHEEL: drive the tapped-target verb wheel ──
-            if (this.state === STATE.TARGET_WHEEL) {
+            // ── TARGET_LIST: drive the RuneScape-style verb menu ──
+            if (this.state === STATE.TARGET_LIST) {
                 e.preventDefault();
-                this._targetWheelKey(e.code);
+                const n = this.targetList.verbs.length;
+                if (e.code === 'ArrowUp'   || e.code === 'KeyW') { this.targetList.sel = (this.targetList.sel - 1 + n) % n; audio.playSfx('menu-tick'); this._render(); return; }
+                if (e.code === 'ArrowDown' || e.code === 'KeyS') { this.targetList.sel = (this.targetList.sel + 1) % n; audio.playSfx('menu-tick'); this._render(); return; }
+                if (e.code === 'Space' || e.code === 'Enter' || e.code === 'KeyE') { this._fireTargetVerb(this.targetList.verbs[this.targetList.sel]); return; }
+                if (e.code === 'Escape' || e.code === 'KeyF') { this._closeTargetList(); return; }
                 return;
             }
 
@@ -1059,7 +1063,7 @@ class Game {
             // (Target Wheel) F = focus the faced target → its verb wheel.
             if (e.code === 'KeyF') {
                 e.preventDefault();
-                this._openTargetWheelFaced();
+                this._openTargetListFaced();
                 return;
             }
             if (e.code === 'KeyE') {
@@ -1545,8 +1549,8 @@ class Game {
             this._tapRadialMenu(pt);
             return;
         }
-        if (this.state === STATE.TARGET_WHEEL) {
-            this._tapTargetWheel(pt);
+        if (this.state === STATE.TARGET_LIST) {
+            this._tapTargetList(pt);
             return;
         }
         if (this.state === STATE.ITEM_OVERLAY) {
@@ -1565,7 +1569,7 @@ class Game {
         // target; nothing there → fall through to the hotbar.
         if (this.state === STATE.IDLE) {
             const tile = this._screenToTile(pt);
-            if (this._openTargetWheel(tile.x, tile.y)) return;
+            if (this._openTargetList(tile.x, tile.y)) return;
         }
         // IDLE or ITEM_SELECTED → hotbar tap.
         this._tapHotbar(pt);
@@ -2390,23 +2394,26 @@ class Game {
         return { x, y, npc: npc || null, item: item || null, examinable: examinable || null };
     }
 
-    _openTargetWheel(x, y) {
+    // (Target List) Open the RuneScape-style verb list on a target — same target
+    // resolution as the retired Target Wheel, but ordered verbs + a Cancel row,
+    // drawn as a vertical list. Static (no particle loop needed).
+    _openTargetList(x, y) {
         if (this.state !== STATE.IDLE) return false;
         const target = this._targetAt(x, y);
         if (!target) return false;
-        const verbs = targetVerbs(target, this);
+        const verbs = orderedTargetVerbs(target, this);
         if (!verbs.length) return false;
         this._stopAutoRepeat();
-        Object.assign(this.targetWheel, { x, y, target, verbs, sel: 0, _openAt: performance.now(), _spinAt: 0 });
-        this.state = STATE.TARGET_WHEEL;
+        Object.assign(this.targetList, { x, y, target, verbs, sel: 0 });
+        this.state = STATE.TARGET_LIST;
         audio.playSfx('menu-open');
-        this._ensureParticleLoop();
         this._render();
         return true;
     }
 
-    _closeTargetWheel() {
+    _closeTargetList() {
         this.state = STATE.IDLE;
+        this.targetList.target = null;
         audio.playSfx('menu-cancel');
         this._render();
         this._resumeHeldWalk();
@@ -2439,38 +2446,31 @@ class Game {
         this._resumeHeldWalk();
     }
 
-    // Open on the target the player is FACING (the desktop/keyboard path).
-    _openTargetWheelFaced() {
+    // Open the Target List on the target the player is FACING (keyboard/pad path).
+    _openTargetListFaced() {
         const FACE = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
         const [dx, dy] = FACE[this.facing] || [0, 1];
-        return this._openTargetWheel(this.playerX + dx, this.playerY + dy);
+        return this._openTargetList(this.playerX + dx, this.playerY + dy);
     }
 
-    _targetWheelKey(code) {
-        const tw = this.targetWheel, n = tw.verbs.length;
-        if (!n) { this._closeTargetWheel(); return; }
-        if (code === 'ArrowLeft'  || code === 'KeyA') { tw.sel = ((tw.sel - 1) % n + n) % n; tw._spinAt = performance.now(); tw._spinDir = -1; audio.playSfx('menu-tick'); this._render(); return; }
-        if (code === 'ArrowRight' || code === 'KeyD') { tw.sel = (tw.sel + 1) % n; tw._spinAt = performance.now(); tw._spinDir = 1; audio.playSfx('menu-tick'); this._render(); return; }
-        if (code === 'ArrowUp' || code === 'KeyW' || code === 'Space' || code === 'Enter') { this._fireTargetVerb(tw.verbs[tw.sel]); return; }
-        if (code === 'ArrowDown' || code === 'KeyS' || code === 'Escape') { this._closeTargetWheel(); return; }
+    // (Target List) Tap a row: first tap on a non-selected row selects it, a tap on
+    // the selected row fires it, a tap off any row cancels. Reuses targetListRowRect.
+    _tapTargetList(pt) {
+        const tl = this.targetList;
+        for (let i = 0; i < tl.verbs.length; i++) {
+            if (this._pointInRect(pt, targetListRowRect(i), 4)) {
+                if (i === tl.sel) { this._fireTargetVerb(tl.verbs[i]); return; }
+                tl.sel = i; audio.playSfx('menu-tick'); this._render(); return;
+            }
+        }
+        this._closeTargetList();
     }
 
-    _tapTargetWheel(pt) {
-        const tw = this.targetWheel, n = tw.verbs.length;
-        const dx = pt.x - RADIAL_CENTER_X, dy = pt.y - RADIAL_CENTER_Y;
-        const r = Math.hypot(dx, dy);
-        if (r < WHEEL_HUB_R + 8) { this._closeTargetWheel(); return; }        // hub = close
-        if (!n || r > wheelRingR(0)[1] + 14) return;                          // outside the ring — ignore
-        const TOP = -Math.PI / 2, step = (Math.PI * 2) / n;
-        let a = Math.atan2(dy, dx) - TOP; a = ((a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-        const i = Math.round(a / step) % n;
-        if (i === tw.sel) { this._fireTargetVerb(tw.verbs[i]); return; }        // tap selected → fire
-        tw.sel = i; tw._spinAt = performance.now(); audio.playSfx('menu-tick'); this._render();
-    }
-
-    // Route the chosen verb to the existing resolver; the wheel closes into IDLE.
+    // Route the chosen verb (from the Target List) to the existing resolvers; the
+    // `cancel` row just closes the list.
     _fireTargetVerb(verb) {
-        const tw = this.targetWheel, t = tw.target, npc = t && t.npc;
+        const t = this.targetList.target, npc = t && t.npc;
+        if (verb.resolver === 'cancel') { this._closeTargetList(); return; }
         this.state = STATE.IDLE;   // the resolvers below assume IDLE
         switch (verb.resolver) {
             case 'examine': {

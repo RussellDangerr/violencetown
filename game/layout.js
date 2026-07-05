@@ -67,6 +67,13 @@ export function wheelRingR(k) { const r0 = WHEEL_RING0_R0 + k * (WHEEL_RING_W + 
 export const QUESTLOG_RECT = { x: 6, y: 436, w: 340, h: 104 };
 export const LOG_MODAL_RECT = { x: 24, y: 44, w: 560, h: 520 };
 export const JOURNAL_RECT   = { x: 24, y: 44, w: 560, h: 520 };   // (Phase 4) quest journal + world-map tab
+// (Target List) A compact centred RuneScape-style verb menu. Height is computed
+// per-target in the renderer (44px title band + one ROW_H row per verb).
+export const TARGET_LIST_RECT  = { x: 180, y: 150, w: 248 };
+export const TARGET_LIST_ROW_H = 30;
+export function targetListRowRect(i) {
+  return { x: TARGET_LIST_RECT.x + 10, y: TARGET_LIST_RECT.y + 44 + i * TARGET_LIST_ROW_H, w: TARGET_LIST_RECT.w - 20, h: TARGET_LIST_ROW_H - 4 };
+}
 
 // ── Trade window (Puck's shop — trade Slice 1) ──
 // (drawn by renderer._drawTradeModal, hit-tested by main._tapTrade). Two 3-wide
