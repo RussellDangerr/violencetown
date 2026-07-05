@@ -23,7 +23,7 @@ import { doExamine } from './examine.js';
 import {
     CANVAS_INTERNAL_PX, HIT_SLOP, OVERLAY_RECTS, THROW_RECTS,
     HOTBAR_X_START, HOTBAR_Y, HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_STRIDE, HOTBAR_SLOTS,
-    RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, wheelRingR, QUESTLOG_RECT, LOG_MODAL_RECT,
+    RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, wheelRingR, QUESTLOG_RECT, LOG_MODAL_RECT, targetListRowRect,
     TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BUYBACK_ORIGIN, TRADE_BRIBE_RECT,
     TRADE_COLS, tradeCellRect,
     EQUIPMENT_MODAL_RECT, EQUIP_SLOT_RECTS,
@@ -910,6 +910,17 @@ class Game {
                 return;
             }
 
+            // ── TARGET_LIST: drive the RuneScape-style verb menu ──
+            if (this.state === STATE.TARGET_LIST) {
+                e.preventDefault();
+                const n = this.targetList.verbs.length;
+                if (e.code === 'ArrowUp'   || e.code === 'KeyW') { this.targetList.sel = (this.targetList.sel - 1 + n) % n; audio.playSfx('menu-tick'); this._render(); return; }
+                if (e.code === 'ArrowDown' || e.code === 'KeyS') { this.targetList.sel = (this.targetList.sel + 1) % n; audio.playSfx('menu-tick'); this._render(); return; }
+                if (e.code === 'Space' || e.code === 'Enter' || e.code === 'KeyE') { this._fireTargetVerb(this.targetList.verbs[this.targetList.sel]); return; }
+                if (e.code === 'Escape' || e.code === 'KeyF') { this._closeTargetList(); return; }
+                return;
+            }
+
             // ── ITEM_OVERLAY: pick an option ──
             if (this.state === STATE.ITEM_OVERLAY) {
                 e.preventDefault();
@@ -1549,6 +1560,10 @@ class Game {
         }
         if (this.state === STATE.TARGET_WHEEL) {
             this._tapTargetWheel(pt);
+            return;
+        }
+        if (this.state === STATE.TARGET_LIST) {
+            this._tapTargetList(pt);
             return;
         }
         if (this.state === STATE.ITEM_OVERLAY) {
@@ -2496,8 +2511,27 @@ class Game {
     }
 
     // Route the chosen verb to the existing resolver; the wheel closes into IDLE.
+    // (Target List) Tap a row: first tap on a non-selected row selects it, a tap on
+    // the selected row fires it, a tap off any row cancels. Reuses targetListRowRect.
+    _tapTargetList(pt) {
+        const tl = this.targetList;
+        for (let i = 0; i < tl.verbs.length; i++) {
+            if (this._pointInRect(pt, targetListRowRect(i), 4)) {
+                if (i === tl.sel) { this._fireTargetVerb(tl.verbs[i]); return; }
+                tl.sel = i; audio.playSfx('menu-tick'); this._render(); return;
+            }
+        }
+        this._closeTargetList();
+    }
+
+    // Route the chosen verb to the existing resolvers. Reads the target from
+    // whichever surface is active (the Target List, or the legacy wheel); the
+    // `cancel` row just closes it.
     _fireTargetVerb(verb) {
-        const tw = this.targetWheel, t = tw.target, npc = t && t.npc;
+        const fromList = (this.state === STATE.TARGET_LIST);
+        const src = fromList ? this.targetList : this.targetWheel;
+        const t = src.target, npc = t && t.npc;
+        if (verb.resolver === 'cancel') { fromList ? this._closeTargetList() : this._closeTargetWheel(); return; }
         this.state = STATE.IDLE;   // the resolvers below assume IDLE
         switch (verb.resolver) {
             case 'examine': {
