@@ -34,7 +34,7 @@ import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (n
 import {
     createWheelState, cycle, drill, back, compose, autoAimTile,
     needsFriendlyConfirm, aimRange, affectedTiles, selectedNode, restoreLastCategory, verbApplies,
-    targetVerbs, createTargetWheelState, isCombatActive,
+    targetVerbs, orderedTargetVerbs, createTargetWheelState, isCombatActive,
 } from './wheel-model.js'; // (sunburst wheel) node-tree model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
 
@@ -52,6 +52,7 @@ const STATE = {
     // (Phase 6a) ITEM_GIVE_DIR retired — Give folded into the Trade window.
     RADIAL_MENU:     'radial_menu',     // bumped a hostile enemy — Omnitrix-style wheel
     TARGET_WHEEL:    'target_wheel',    // (Target Wheel) tapped a target — Price-is-Right verb wheel
+    TARGET_LIST:     'target_list',     // (Target List) tapped/focused a target — RuneScape-style verb menu
     RESOLVING:       'resolving',
     DEAD:            'dead',
     // (Legacy WIN state retired with the tile-7 boss-trigger trap — fix/critical-path.)
@@ -289,6 +290,7 @@ class Game {
         // reticle, and last-fired persistence.
         this.wheel = createWheelState();
         this.targetWheel = createTargetWheelState();   // (Target Wheel) tapped-target verb wheel
+        this.targetList = { x: 0, y: 0, target: null, verbs: [], sel: 0 };   // (Target List) RuneScape-style verb menu
         this._lastActKeyAt = 0; // double-tap-Act window for express-repeat
 
         // Screen shake (Phase F) — triggered on damage >= threshold. The
@@ -2407,6 +2409,31 @@ class Game {
 
     _closeTargetWheel() {
         this.state = STATE.IDLE;
+        audio.playSfx('menu-cancel');
+        this._render();
+        this._resumeHeldWalk();
+    }
+
+    // (Target List) Open the RuneScape-style verb list on a target — same target
+    // resolution as the retired Target Wheel, but ordered verbs + a Cancel row,
+    // drawn as a vertical list. Static (no particle loop needed).
+    _openTargetList(x, y) {
+        if (this.state !== STATE.IDLE) return false;
+        const target = this._targetAt(x, y);
+        if (!target) return false;
+        const verbs = orderedTargetVerbs(target, this);
+        if (!verbs.length) return false;
+        this._stopAutoRepeat();
+        Object.assign(this.targetList, { x, y, target, verbs, sel: 0 });
+        this.state = STATE.TARGET_LIST;
+        audio.playSfx('menu-open');
+        this._render();
+        return true;
+    }
+
+    _closeTargetList() {
+        this.state = STATE.IDLE;
+        this.targetList.target = null;
         audio.playSfx('menu-cancel');
         this._render();
         this._resumeHeldWalk();
