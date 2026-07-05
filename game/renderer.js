@@ -13,7 +13,7 @@ import { TILE_PX, VIEW_TILES, CANVAS_PX } from './data.js';
 const SS = 2;
 import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES, EQUIP_FIGURE_SPRITE } from './sprites.js';
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
-import { ROOT, selectedNode, activeRing, activeIndex, decisionPath, previewChildren, affectedTiles, verbApplies } from './wheel-model.js'; // (sunburst wheel)
+import { ROOT, selectedNode, activeRing, activeIndex, decisionPath, previewChildren, affectedTiles, verbApplies, isCombatActive, flapperDeflection } from './wheel-model.js'; // (sunburst wheel)
 import { SPELLS } from './spells.js';
 import {
     OVERLAY_RECTS, THROW_RECTS,
@@ -410,6 +410,7 @@ export class Renderer {
         if (game.state === 'trade') this._drawTradeModal(game);
         if (game.state === 'dialogue') this._drawDialogueModal(game);
         if (game.state === 'equipment') this._drawEquipmentModal(game);
+        if (game.state === 'inspect') this._drawInspectPanel(game);
     }
 
     // (world-structure) Heavy radial darkness for the Wilderness zone — a tiny
@@ -1822,7 +1823,19 @@ export class Renderer {
         const tw = game.targetWheel; if (!tw || !tw.verbs || !tw.verbs.length) return;
         const cx = RADIAL_CENTER_X, cy = RADIAL_CENTER_Y, TOP = -Math.PI / 2;
         const n = tw.verbs.length, step = (Math.PI * 2) / n;
-        ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX); ctx.restore();
+        // (§12.5) match the Player Wheel's fight re-skin so targeting a foe
+        // mid-fight feels the same: red-ward wash + a soft rim vignette.
+        const combat = isCombatActive(game);
+        ctx.save();
+        ctx.fillStyle = combat ? 'rgba(38,4,4,0.52)' : 'rgba(0,0,0,0.5)';
+        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+        if (combat) {
+            const rg = ctx.createRadialGradient(cx, cy, CANVAS_PX * 0.34, cx, cy, CANVAS_PX * 0.72);
+            rg.addColorStop(0, 'rgba(150,20,20,0)');
+            rg.addColorStop(1, 'rgba(140,12,12,0.30)');
+            ctx.fillStyle = rg; ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+        }
+        ctx.restore();
         const now = (typeof performance !== 'undefined') ? performance.now() : 0;
         const reduce = (typeof Settings !== 'undefined') && Settings.get && Settings.get('reduceMotion');
         let scale = 1;
@@ -1837,7 +1850,7 @@ export class Renderer {
                 v.color || '#6b5436', isSel ? 1 : 0.58,
                 v.label, v.text || '#fff3d0',
                 isSel ? { w: 3, c: '#fff3c0' } : { w: 1.5, c: '#d9b34a' },
-                v.icon || null);
+                v.icon || null, isSel);   // (§12.4) selected verb rises
             const a = mid - step / 2, pr = band[1] + 3;
             ctx.beginPath(); ctx.arc(cx + Math.cos(a) * pr, cy + Math.sin(a) * pr, 3, 0, Math.PI * 2); ctx.closePath();
             ctx.fillStyle = '#e8c14f'; ctx.fill();
@@ -1853,22 +1866,90 @@ export class Renderer {
         const ppr = band[1] + 12;
         ctx.beginPath(); ctx.moveTo(cx, cy - ppr + 10); ctx.lineTo(cx - 7, cy - ppr); ctx.lineTo(cx + 7, cy - ppr); ctx.closePath();
         ctx.fillStyle = '#e8462f'; ctx.fill();
+        // (§12.4) Flapper — the same brass clicker as the Player Wheel, ticking
+        // against the rim pegs as verbs spin under the pointer.
+        let flapAngle = 0;
+        if (!reduce && tw._spinAt) {
+            const fst = (now - tw._spinAt) / 120;
+            if (fst >= 0 && fst < 1) flapAngle = flapperDeflection(fst, tw._spinDir || 0);
+        }
+        ctx.save();
+        ctx.translate(cx, cy - band[1] - 26);
+        ctx.rotate(flapAngle);
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-4, 13); ctx.lineTo(4, 13); ctx.closePath();
+        ctx.fillStyle = '#d9b34a'; ctx.fill();
+        ctx.lineWidth = 1; ctx.strokeStyle = '#2a2218'; ctx.stroke();
+        ctx.restore();
         ctx.restore();
         ctx.globalAlpha = 1; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     }
 
+    // (§12.3) Examine → a modal INSPECT panel layered over the dimmed world:
+    // a tier-coloured title, the tier label, the wrapped description, and a
+    // dismiss hint. game.inspect = { title, tierName, tierColor, body }. The log
+    // line + the examine quest event still fire from the caller; this is the
+    // legible presentation layer. Blocks until any key / tap (see main.js).
+    _drawInspectPanel(game) {
+        const { ctx } = this;
+        const ui = this.uiSheet;
+        const insp = game.inspect;
+        if (!insp || !this.font) return;
+
+        ctx.fillStyle = 'rgba(0,0,0,0.72)';
+        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+
+        const w = 400, padX = 22;
+        const maxChars = Math.max(8, Math.floor((w - padX * 2) / 8));
+        const bodyLines = this._wrapText(insp.body || '', maxChars);
+        const hasTier = !!insp.tierName;
+        const h = (hasTier ? 60 : 44) + bodyLines.length * 12 + 24;
+        const px = Math.round((CANVAS_PX - w) / 2);
+        const py = Math.round((CANVAS_PX - h) / 2);
+
+        if (ui?.loaded) drawPanelBig(ctx, ui, px, py, w, h, 'glow');
+        else            drawPanelSmall(ctx, px, py, w, h);
+
+        const cx = CANVAS_PX / 2;
+        let ty = py + 16;
+        this.font.drawText(ctx, String(insp.title || 'Examine').toUpperCase(), cx, ty,
+            { color: insp.tierColor || UI.gold, scale: 2, align: 'center' });
+        ty += 24;
+        if (hasTier) {
+            this.font.drawText(ctx, String(insp.tierName).toUpperCase(), cx, ty,
+                { color: insp.tierColor || UI.gold, scale: 1, align: 'center' });
+            ty += 16;
+        }
+        ty += 4;
+        const innerX = px + padX;
+        for (const line of bodyLines) {
+            this.font.drawText(ctx, line, innerX, ty, { color: UI.text, scale: 1 });
+            ty += 12;
+        }
+        this.font.drawText(ctx, '▼ CLOSE · ANY KEY', cx, py + h - 14, { color: UI.dim, scale: 1, align: 'center' });
+        ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    }
+
     // One donut-wedge tile (a curved "Simon-Says" segment) + a centered label.
     // Angles in radians: `mid` = the tile's centre angle, `half` = half its width.
-    _wheelTile(r0, r1, mid, half, fill, alpha, label, txtColor, outline, icon) {
+    _wheelTile(r0, r1, mid, half, fill, alpha, label, txtColor, outline, icon, dominant = false) {
         const { ctx } = this, cx = RADIAL_CENTER_X, cy = RADIAL_CENTER_Y;
+        // (§12.4) the selected wedge "rises" — a touch wider + a longer outer
+        // radius so the current choice reads as the hero slice at a glance.
+        // Static emphasis (no pulse), so reduce-motion is unaffected.
+        const r1d = dominant ? r1 + 4 : r1;
+        const halfd = dominant ? half + 0.06 : half;
         ctx.beginPath();
-        ctx.arc(cx, cy, r1, mid - half, mid + half);
-        ctx.arc(cx, cy, r0, mid + half, mid - half, true);
+        ctx.arc(cx, cy, r1d, mid - halfd, mid + halfd);
+        ctx.arc(cx, cy, r0, mid + halfd, mid - halfd, true);
         ctx.closePath();
         ctx.globalAlpha = alpha; ctx.fillStyle = fill; ctx.fill(); ctx.globalAlpha = 1;
+        if (dominant) {   // soft outer glow to lift the hero slice off the ring
+            ctx.save(); ctx.globalAlpha = 0.5; ctx.lineWidth = 5;
+            ctx.strokeStyle = 'rgba(255,243,192,0.55)'; ctx.stroke(); ctx.restore();
+        }
         if (outline) { ctx.lineWidth = outline.w; ctx.strokeStyle = outline.c; ctx.stroke(); }
         if (!this.font) return;
-        const lr = (r0 + r1) / 2;
+        const lr = (r0 + r1d) / 2;
         const lx = cx + Math.cos(mid) * lr, ly = cy + Math.sin(mid) * lr;
         if (icon) {
             // (Phase 4) a monochrome glyph stacked over the label, in the tile's
@@ -1915,7 +1996,19 @@ export class Renderer {
         }
 
         // ── Sunburst ──
-        ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX); ctx.restore();
+        // (§12.5) When a fight is live, re-skin the backdrop: a red-ward wash + a
+        // soft rim vignette. Subtle — wedge colours stay untouched for legibility.
+        const combat = isCombatActive(game);
+        ctx.save();
+        ctx.fillStyle = combat ? 'rgba(38,4,4,0.52)' : 'rgba(0,0,0,0.5)';
+        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+        if (combat) {
+            const rg = ctx.createRadialGradient(cx, cy, CANVAS_PX * 0.34, cx, cy, CANVAS_PX * 0.72);
+            rg.addColorStop(0, 'rgba(150,20,20,0)');
+            rg.addColorStop(1, 'rgba(140,12,12,0.30)');
+            ctx.fillStyle = rg; ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+        }
+        ctx.restore();
 
         const catNode = ROOT.children[w.path[0]];
         // (Phase 0) `HUE` = the current SECTION's colour — the deepest *ancestor*
@@ -1997,7 +2090,8 @@ export class Renderer {
                 node.placeholder ? '…' : node.label,
                 txt,
                 isSel ? { w: 3, c: '#fff3c0' } : null,
-                node.placeholder ? null : WHEEL_ICONS[node.key]);
+                node.placeholder ? null : WHEEL_ICONS[node.key],
+                isSel && en);   // (§12.4) the live selection rises as the hero slice
         };
         // `spin` rotates the whole active ring (options + Back) so a cycle sweeps
         // the new selection up under the fixed pointer.
@@ -2052,7 +2146,40 @@ export class Renderer {
         ctx.closePath();
         ctx.fillStyle = '#fff3c0'; ctx.fill();
 
+        // (§12.4) Flapper — a brass clicker above the pointer that kicks in the
+        // spin direction as a slice cycles past, then springs back to rest. Driven
+        // by the same spin timing as the ring sweep; reduce-motion holds it still.
+        let flapAngle = 0;
+        if (!reduce && w._spinAt) {
+            const fst = (now - w._spinAt) / 120;
+            if (fst >= 0 && fst < 1) flapAngle = flapperDeflection(fst, w._spinDir || 0);
+        }
+        ctx.save();
+        ctx.translate(cx, cy - outerMost - 26);
+        ctx.rotate(flapAngle);
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-4, 13); ctx.lineTo(4, 13); ctx.closePath();
+        ctx.fillStyle = '#d9b34a'; ctx.fill();
+        ctx.lineWidth = 1; ctx.strokeStyle = '#2a2218'; ctx.stroke();
+        ctx.restore();
+
         ctx.restore();   // undo the open/drill scale transform
+
+        // (§12.5) Threat readout — a compact combat banner (count + nearest foe)
+        // while a fight is live; drawn in screen space so the wheel's pop can't
+        // wobble it. Reuses the crossed-swords glyph the Fight wedge wears.
+        if (combat && this.font) {
+            const foes = (game.enemies || []).filter(e => !e.ambient && e.state === 'chasing' && e.entity && e.entity.isAlive());
+            if (foes.length) {
+                let near = foes[0], nd = Infinity;
+                for (const e of foes) {
+                    const d = Math.max(Math.abs(e.x - game.playerX), Math.abs(e.y - game.playerY));
+                    if (d < nd) { nd = d; near = e; }
+                }
+                const nm = String(near.type || (near.entity && near.entity.name) || 'FOE').replace(/[\[\]]/g, '').toUpperCase().slice(0, 12);
+                ctx.save(); ctx.fillStyle = 'rgba(40,0,0,0.6)'; ctx.fillRect(0, CANVAS_PX - 26, CANVAS_PX, 26); ctx.restore();
+                this.font.drawText(ctx, `⚔ ${foes.length}  ${nm}`, cx, CANVAS_PX - 16, { color: '#e8462f', scale: 1, align: 'center', shadow: '#000' });
+            }
+        }
         ctx.globalAlpha = 1; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     }
 
