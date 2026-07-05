@@ -141,6 +141,78 @@ export const DIALOGUES = {
               reply: '"Oh, you wanna GO? You absolutely wanna GO."' },
         ],
     },
+
+    // ── Chapter Two · Downtown cast (Phase 4) ────────────────────────────────
+    // STUBS. Greetings + placeholder choices so every Downtown NPC is talkable
+    // and the playground is walkable end-to-end. The burger hand-off (diner_cook)
+    // and the delivery choice (mq2_recipient) get their real quest hooks in the
+    // MQ2 wiring pass — for now they just talk. Rewrite freely.
+    diner_cook: {
+        name: 'Short-Order Cook',
+        greeting: '"Order up — oh. You. You\'re the delivery type, aren\'t you. I can always tell."',
+        choices: [
+            { id: 'burger', label: 'Ask about the burger and fries', repeatable: true,
+              reply: '"Bag\'s under the lamp. Somebody out there\'s waitin\' on it. (Placeholder — the real hand-off gets wired next.)"' },
+            { id: 'flatter', label: '[Compliment the grease]', repeatable: true, delta: 3,
+              reply: '"Forty years on this griddle. Damn right it\'s good grease."' },
+            { id: 'bribe', label: '[Bribe - 5 GP]', repeatable: true, delta: 10, cost: 5,
+              reply: '"...extra pickles for you, then."' },
+        ],
+    },
+    banker: {
+        name: 'The Financier',
+        greeting: '"Welcome to First Blood. *a smile with too many teeth* ...you look positively FULL of life. How can we serve you?"',
+        choices: [
+            { id: 'loan', label: 'Ask what the bank actually does', once: true,
+              reply: '"We lend. We collect. We are very, very patient about the collecting. (Placeholder — the Financier\'s arc comes later.)"' },
+            { id: 'flatter', label: '[Flatter him]', repeatable: true, delta: 3,
+              reply: '"Charming. We do so like the charming ones."' },
+            { id: 'insult', label: '[Call him a bloodsucker]', repeatable: true, delta: -25,
+              reply: '"*the smile does not move* ...how droll."' },
+        ],
+    },
+    casino_op: {
+        name: 'Pit Boss',
+        greeting: '"Table\'s open, the odds are terrible, and the drinks are free. What\'s your poison?"',
+        choices: [
+            { id: 'games', label: 'Ask what they\'re running', once: true,
+              reply: '"Everything that takes your money. (Placeholder — the casino minigames come later.)"' },
+            { id: 'flatter', label: '[Flatter the house]', repeatable: true, delta: 3,
+              reply: '"Ha! House always likes a talker."' },
+            { id: 'bribe', label: '[Bribe - 5 GP]', repeatable: true, delta: 10, cost: 5,
+              reply: '"...comped. Enjoy the floor."' },
+        ],
+    },
+    mq2_recipient: {
+        name: 'Stranded Traveler',
+        greeting: '"Hey — hey, you. You didn\'t happen to bring food, did you? I haven\'t eaten since the bridge."',
+        choices: [
+            { id: 'ask', label: 'Ask what they\'re doing out here', repeatable: true,
+              reply: '"Waitin\'. Starvin\'. Same as always. (Placeholder — the delivery hand-off gets wired next.)"' },
+            { id: 'flatter', label: '[Reassure them]', repeatable: true, delta: 3,
+              reply: '"...thanks. That helps. A little."' },
+        ],
+    },
+    downtown_merchant: {
+        name: 'Corner Merchant',
+        greeting: '"Fresh stock, downtown prices. Press E to see the goods."',
+        choices: [
+            { id: 'ask', label: 'Ask how business is', repeatable: true,
+              reply: '"Slow. Everybody\'s broke or bitten. You buyin\' or browsin\'?"' },
+            { id: 'bribe', label: '[Bribe - 5 GP]', repeatable: true, delta: 10, cost: 5,
+              reply: '"...I\'ll knock a little off. Maybe."' },
+        ],
+    },
+    downtown_merchant2: {
+        name: 'Newsstand Kid',
+        greeting: '"Papers, gum, batteries, secrets. What\'s it gonna be?"',
+        choices: [
+            { id: 'ask', label: 'Ask what\'s in the news', repeatable: true,
+              reply: '"Bank bought another block. Nobody saw the buyer. Spooky, right?"' },
+            { id: 'flatter', label: '[Flatter the kid]', repeatable: true, delta: 3,
+              reply: '"*grins* ...you\'re alright."' },
+        ],
+    },
 };
 
 export function getDialogue(id) {

@@ -1,0 +1,31 @@
+{
+    "_note": "Downtown interior (Borgir pattern). The First Blood Bank — home of the Financier (the 'vampire' banker). Placeholder geometry/text; return door leads back to the Downtown sidewalk in front of the bank. Tiles: 14 wall, 11 floor, 15 door.",
+    "width": 12,
+    "height": 12,
+    "spawn": {"x": 6, "y": 9},
+    "zoneName": "FIRST BLOOD BANK",
+    "tiles": [
+        14,14,14,14,14,14,14,14,14,14,14,14,
+        14,14,14,14,14,14,14,14,14,14,14,14,
+        14,14,11,11,11,11,11,11,11,11,14,14,
+        14,14,11,11,11,11,11,11,11,11,14,14,
+        14,14,11,11,11,11,11,11,11,11,14,14,
+        14,14,11,11,11,11,11,11,11,11,14,14,
+        14,14,11,11,11,11,11,11,11,11,14,14,
+        14,14,11,11,11,11,11,11,11,11,14,14,
+        14,14,11,11,11,11,11,11,11,11,14,14,
+        14,14,11,11,11,11,11,11,11,11,14,14,
+        14,14,14,14,14,14,15,14,14,14,14,14,
+        14,14,14,14,14,14,14,14,14,14,14,14
+    ],
+    "enemies": [
+        {"id": "bank-financier", "type": "Banker", "name": "The Financier", "x": 6, "y": 4, "hp": 30, "damage": 0, "sightRange": 0, "disposition": 0, "behavior": ["IDLE"], "dialogueId": "banker"}
+    ],
+    "items": [],
+    "examinables": [
+        {"id": "bank_vault", "x": 6, "y": 2, "text": "[A vault door, cold to the touch even from here. The air in the bank is wrong — too clean, too quiet, and it smells faintly of copper.]"}
+    ],
+    "transitions": [
+        {"x": 6, "y": 10, "toMap": "downtown-map.json", "toX": 12, "toY": 4, "label": "[Back out to the street]"}
+    ]
+}
