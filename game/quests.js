@@ -5,6 +5,13 @@
 // stage.onEnter (run once when the engine enters the stage) and stage.onProgress
 // (run on each counter increment). A quest can also auto-start via `startOn`.
 //
+// (Phase 4) Optional PRESENTATIONAL stage fields — read by the Journal + the
+// world map, ignored by the event matcher: `location` (a short "where" string,
+// e.g. "Downtown · The Diner"), `description` (a longer journal line), and
+// `targetZone` (a zoneName the world map highlights so "go here next" is clear).
+// The delivery event type `item_given { npc, item }` is emitted by BOTH the
+// trade-window give and a dialogue `consumesItem` choice.
+//
 // The engine only matches event types/payloads, so quest FLOW is defined here
 // independently of the CONTENT the stages reference (the Borgir boss, the
 // Wererat, the converter, the car, the sewer set-piece). That content — and
@@ -222,6 +229,19 @@ export class QuestEngine {
     isActive(id) { return this.state.activeId === id; }
     isComplete(id) { return this.state.completed.includes(id); }
     getFlag(k) { return this.state.flags[k]; }
+
+    // (§delivery) True when the active stage is a delivery expecting exactly this
+    // item handed to this NPC. The trade window uses it to permit an otherwise
+    // un-give-able quest item when handing it over IS the current objective
+    // (stage `on: { type: 'item_given', match: { item, npc } }`).
+    expectsDelivery(itemId, npcId) {
+        const id = this.state.activeId;
+        if (!id) return false;
+        const stage = QUESTS[id].stages[this.state.stageIndex];
+        if (!stage || !stage.on || stage.on.type !== 'item_given') return false;
+        const m = stage.on.match || {};
+        return (m.item == null || m.item === itemId) && (m.npc == null || m.npc === npcId);
+    }
 
     serialize() {
         return {

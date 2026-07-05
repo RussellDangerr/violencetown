@@ -2273,16 +2273,32 @@ class Game {
         const npc = this._tradeNpc;
         const stack = this.inventory[slot];
         if (!npc || !stack) return;
-        // Quest items can never be handed away — there's no recovery, so giving
-        // one (e.g. the sole car-fix Converter) would soft-lock the main quest.
-        // Matches the questItem block on throw/smash/sell. (pre-prod review fix)
-        if (stack.itemDef.questItem) { this._log('[Best hold onto that.]'); this._render(); return; }
-        const result = reactToTransaction(npc, 'give', { item: stack.itemDef });
+        const def = stack.itemDef;
+        // (§delivery) The active quest stage may be a delivery expecting exactly
+        // this item -> this NPC; then the hand-off IS the objective.
+        const isDelivery = this.questEngine && this.questEngine.expectsDelivery(def.id, npc.id);
+        // Quest items can't be handed away by default — there's no recovery, so
+        // giving one (e.g. the sole car-fix Converter) would soft-lock the quest.
+        // EXCEPTION: a sanctioned delivery. Matches the block on throw/smash/sell.
+        if (def.questItem && !isDelivery) { this._log('[Best hold onto that.]'); this._render(); return; }
+        if (isDelivery) {
+            // Bypass the barter/disposition math — consume it, emit, let the quest react.
+            this._removeFromSlot(slot);
+            this._tradeSell = this._tradeSellList();
+            audio.playSfx('pickup');
+            this._log(`[You hand over the ${String(def.name || def.id).replace(/[\[\]]/g, '')}.]`);
+            this.emitGameEvent('item_given', { npc: npc.id, item: def.id });
+            this._render();
+            return;
+        }
+        const result = reactToTransaction(npc, 'give', { item: def });
         this._log(result.log);
         if (result.accepted) {
             this._removeFromSlot(slot);
             this._tradeSell = this._tradeSellList();
             audio.playSfx('pickup');
+            // (§delivery) make every hand-off quest-trackable — the trade-window idiom.
+            this.emitGameEvent('item_given', { npc: npc.id, item: def.id });
         }
         this._render();
     }
@@ -4068,7 +4084,16 @@ class Game {
         const d = npc && getDialogue(npc.dialogueId);
         if (!d) return [];
         const done = npc._dialogueDone || (npc._dialogueDone = new Set());
-        return d.choices.filter(c => c.repeatable || !done.has(c.id));
+        return d.choices.filter(c => {
+            if (!(c.repeatable || !done.has(c.id))) return false;
+            // (§delivery / quest-gating) a choice can be conditional: `available(game,npc)`
+            // gates on any state (quest stage, flags), and `requiresItem` shows it
+            // only while the player holds that item. Makes deliveries + branching
+            // dialogue authorable as data instead of hand-written filters.
+            if (typeof c.available === 'function' && !c.available(this, npc)) return false;
+            if (c.requiresItem && !(this.inventory || []).some(s => s && s.itemDef && s.itemDef.id === c.requiresItem)) return false;
+            return true;
+        });
     }
 
     // Resolve a chosen line: pay any GP cost, shift disposition (visible on the
@@ -4090,6 +4115,16 @@ class Game {
             this.questEngine.start(choice.questId);
         }
         if (typeof choice.onPick === 'function') choice.onPick(this, npc);
+        // (§delivery) a choice can consume a held item as part of the hand-off, and
+        // it emits the same `item_given` event the trade-window give does — so one
+        // quest stage (on: item_given) advances via EITHER idiom (dialogue or trade).
+        if (choice.consumesItem) {
+            const si = (this.inventory || []).findIndex(s => s && s.itemDef && s.itemDef.id === choice.consumesItem);
+            if (si >= 0) {
+                this._removeFromSlot(si);
+                this.emitGameEvent('item_given', { npc: npc.id, item: choice.consumesItem });
+            }
+        }
         this._dialogueReply = choice.reply || '"..."';
         audio.playSfx((choice.delta ?? 0) < 0 ? 'bump-wall' : 'menu-confirm');
         if ((npc.disposition ?? 0) <= DIALOGUE_HOSTILE_AT) {
