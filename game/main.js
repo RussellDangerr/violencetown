@@ -34,7 +34,7 @@ import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (n
 import {
     createWheelState, cycle, drill, back, compose, autoAimTile,
     needsFriendlyConfirm, aimRange, affectedTiles, selectedNode, restoreLastCategory, verbApplies,
-    targetVerbs, createTargetWheelState,
+    targetVerbs, createTargetWheelState, isCombatActive,
 } from './wheel-model.js'; // (sunburst wheel) node-tree model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
 
@@ -60,6 +60,7 @@ const STATE = {
     TRADE:           'trade',           // (trade slice 1) Puck's shop window — buy/sell/bribe
     DIALOGUE:        'dialogue',        // (Step 4) disposition dialogue with an NPC
     EQUIPMENT:       'equipment',       // (Stage 3) read-only Vitruvian equipment screen
+    INSPECT:         'inspect',         // (§12.3) Examine → a layered inspect panel
 };
 
 // (zone pursuit) A wedged door's starting integrity. Trapped pursuers pound it
@@ -853,6 +854,9 @@ class Game {
             // by our own step-chaining, not the OS repeat rate.
             if (e.repeat) return;
 
+            // (§12.3) INSPECT panel — any key dismisses it back to walking.
+            if (this.state === STATE.INSPECT) { e.preventDefault(); this._closeInspect(); return; }
+
             // ── ITEM_THROW_DIR: waiting for throw direction ──
             if (this.state === STATE.ITEM_THROW_DIR) {
                 const dir = DIRS[e.code];
@@ -1498,6 +1502,7 @@ class Game {
         e.preventDefault();
 
         // Log modal is fully modal — route taps to it and nothing behind it.
+        if (this.state === STATE.INSPECT) { this._closeInspect(); return; }
         if (this.state === STATE.LOG_MODAL) { this._tapLogModal(pt); return; }
 
         // Trade window is fully modal too — route taps to the shop.
@@ -2367,6 +2372,33 @@ class Game {
         this._resumeHeldWalk();
     }
 
+    // (§12.3) Examine → a modal inspect panel. Builds the normalized descriptor
+    // (brackets stripped from the body for panel display), shows it, and blocks
+    // until any key/tap. Callers still log the line + emit the examine event;
+    // this is the legible presentation layer over that same read.
+    _openInspect(desc) {
+        if (!desc) return;
+        this.inspect = {
+            title: String(desc.title || 'Examine').replace(/[\[\]]/g, '').trim(),
+            tierName: desc.tierName || null,
+            tierColor: desc.tierColor || null,
+            body: String(desc.body || '').replace(/[\[\]]/g, '').trim(),
+        };
+        this._stopAutoRepeat();
+        this._heldDirKeys = [];
+        this.state = STATE.INSPECT;
+        audio.playSfx('menu-confirm');
+        this._render();
+    }
+
+    _closeInspect() {
+        this.inspect = null;
+        this.state = STATE.IDLE;
+        audio.playSfx('menu-cancel');
+        this._render();
+        this._resumeHeldWalk();
+    }
+
     // Open on the target the player is FACING (the desktop/keyboard path).
     _openTargetWheelFaced() {
         const FACE = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
@@ -2405,14 +2437,23 @@ class Game {
                 // (Phase 6d) An item's examine names its value tier — the legible
                 // "how good/valuable is this" read (Grey→Orange).
                 const itemDef = t.item && t.item.def;
-                const itemTxt = itemDef && `[${itemDef.name || t.item.type} (${itemTier(itemDef).name}). ${itemDef.description || ''}]`;
+                const tier = itemDef ? itemTier(itemDef) : null;
+                const itemTxt = itemDef && `[${itemDef.name || t.item.type} (${tier.name}). ${itemDef.description || ''}]`;
                 const txt = (t.examinable && t.examinable.text)
                     || (npc && `[${(npc.name || npc.type)}. ${(npc.behavior == null || npc.behavior.includes('HOSTILE')) ? 'Looks like trouble.' : 'Minding their own business.'}]`)
                     || itemTxt
                     || '[Nothing worth examining.]';
                 this._log(txt);
                 if (t.examinable) this.emitGameEvent('examine', { targetId: t.examinable.id });
-                audio.playSfx('menu-confirm'); this._render(); break;
+                // (§12.3) Surface it as a layered inspect panel: an item wears its
+                // value tier + colour; NPC/examinable fall back to a gold title.
+                const desc = itemDef
+                    ? { title: itemDef.name || t.item.type, tierName: tier.name, tierColor: tier.color, body: itemDef.description || txt }
+                    : npc
+                        ? { title: npc.name || npc.type, body: txt }
+                        : { title: (t.examinable && t.examinable.id) ? String(t.examinable.id).replace(/_/g, ' ') : 'Examine', body: txt };
+                this._openInspect(desc);
+                break;
             }
             case 'talk':  if (npc) this._openDialogue(npc); break;
             case 'trade': if (npc) this._openTrade(npc); break;   // (Phase 6a) any adjacent NPC → shop or offer window
@@ -2915,13 +2956,9 @@ class Game {
     // the world beat from timer-wound (free-roam) to one-per-committed-turn
     // (combat), so the real-time heartbeat lets go and the player gets unhurried
     // turn-based thinking time. Derived, not stored, so it can't drift out of sync.
-    _inCombat() {
-        for (const e of this.enemies) {
-            if (e.ambient) continue;
-            if (e.state === 'chasing' && e.entity.isAlive()) return true;
-        }
-        return false;
-    }
+    // The world locks (turn-based combat) whenever a non-ambient enemy is chasing.
+    // Shared with the wheel's §12.5 combat re-skin via the pure wheel-model helper.
+    _inCombat() { return isCombatActive(this); }
 
     // ── Ambient world heartbeat (Town Clock) ─────────────────────────────────
     //

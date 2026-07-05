@@ -51,11 +51,6 @@ export const ROOT = { key: 'menu', label: 'MENU', children: [
   // (Phase 6a) GIVE was removed from the wheel — handing an item to any NPC now
   // happens inside the widened Trade window (offer mode). The give-action.js math
   // (applyGive/applyDispositionDelta/applyFlip) stays; only the verb/node died.
-  // ⚠️ ARMORY RECONCILIATION: when feature/weapons-armory merges, its Trick
-  // children add `rayblast` (Ray Blast, castTrick) + `hirelion` (Hire Lire,
-  // castTrick) here and `boo` (castBoo) under Magic, plus a TRICKS import — those
-  // need tricks.js + castTrick/castBoo + grantedTricks (15-file arc, not on dev).
-  // Slot them in as SIBLINGS of Bribe/Trade below; do NOT resurrect `give`.
   { key: 'trick', label: 'Trick', color: '#cba43c', text: '#2a1f06', children: [
     { key: 'throw',  label: 'Throw',  needsItem: true,  aimType: 'reticle',  resolver: 'resolveThrow', available: always },
     { key: 'defend', label: 'Defend', aimType: 'none',                       resolver: 'guard',        available: always },
@@ -349,6 +344,31 @@ export function verbApplies(node, game) {
   const social = node.resolver === 'trade' || node.resolver === 'bribe';
   const pool = social ? alive : alive.filter(e => !e.behavior || e.behavior.includes('HOSTILE'));
   return pool.some(e => cheb(game.playerX, game.playerY, e.x, e.y) <= 1);
+}
+
+// ── Combat state (§12.5 aggro re-skin) ───────────────────────────────────────
+// True when the player is in an active fight: any non-ambient, still-alive enemy
+// is CHASING (the same signal that locks the world in main._inCombat, which now
+// delegates here). Drives the wheel's combat re-skin. Pure — game in, bool out.
+export function isCombatActive(game) {
+  return (game && game.enemies || []).some(e =>
+    !e.ambient && e.state === 'chasing' && e.entity && e.entity.isAlive());
+}
+
+// ── Flapper (§12.4) ──────────────────────────────────────────────────────────
+// A wheel-of-fortune "clicker": it kicks in the spin direction the instant a
+// slice cycles, then springs back past rest and settles. `p` is the spin
+// animation progress in [0,1] (0 = just cycled, 1 = settled); `dir` is the cycle
+// direction (±1, 0 = at rest). Returns a deflection in radians (rest = 0).
+// reduce-motion callers hold it at 0 rather than calling this. Pure/testable:
+//   flapperDeflection(0, 1) ≈ +0.5 · flapperDeflection(1, dir) = 0 · (*, 0) = 0.
+export function flapperDeflection(p, dir) {
+  if (!dir) return 0;
+  const t = Math.max(0, Math.min(1, p));
+  const MAX = 0.5;                          // ~28° peak kick
+  const decay = (1 - t) * (1 - t);          // eased fall back toward rest
+  const spring = Math.sin(t * Math.PI) * 0.18; // brief counter-wobble past 0
+  return dir * (MAX * decay - spring);
 }
 
 // ── Target Wheel ("The Price is Right") ──────────────────────────────────────

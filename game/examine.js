@@ -35,6 +35,11 @@ export function doExamine(game) {
     if (target.grants && game._grantFromExaminable) {
         return game._grantFromExaminable(target);
     }
-    game._log(target.text || `[You examine the ${target.id}.]`);
+    const body = target.text || `[You examine the ${target.id}.]`;
+    game._log(body);
+    // (§12.3) Also surface it as a layered inspect panel. Examinables carry no
+    // value tier, so the title is the de-underscored id on a gold heading; the
+    // log line above keeps the history entry and any examine quest event fired.
+    if (game._openInspect) game._openInspect({ title: String(target.id).replace(/_/g, ' '), body });
     return true;
 }

@@ -1,88 +1,129 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  VERB_TREE, categoryKeys, leafAt, LAYER,
-  createWheelState, currentLeaf, cycle, forward, back,
-  validItemSlots, leafEnabled, compose, autoAimTile,
+  ROOT, createWheelState, cycle, drill, back,
+  selectedNode, isOffensiveLeaf, verbApplies,
+  isCombatActive, flapperDeflection,
 } from '../game/wheel-model.js';
 
-const G = { inventory: [], enemies: [], containers: [], equipment: {}, playerMp: 0 };
+const catKeys = () => ROOT.children.map(c => c.key);
+const kidKeys = (node) => (node.children || []).map(c => c.key);
 
-test('verb tree has the four categories in order', () => {
-  assert.deepEqual(categoryKeys(), ['FIGHT', 'TRICK', 'TREAT', 'FLIGHT']);
+// A minimal game stub — enough for the pure walkers/predicates below.
+const stubGame = (over = {}) => ({
+  playerX: 5, playerY: 5, playerMp: 0, facing: 'down',
+  inventory: [], enemies: [], knownSpells: [], grantedTricks: [], gold: 0,
+  equipment: {}, map: { isWalkable: () => true }, ...over,
 });
 
-test('Fight→Melee is adjacent, no-item, combatAttack', () => {
-  const melee = leafAt('FIGHT', 0);
-  assert.equal(melee.key, 'melee');
-  assert.equal(melee.needsItem, false);
-  assert.equal(melee.aimType, 'adjacent');
-  assert.equal(melee.resolver, 'combatAttack');
+// ── Tree shape (the live sunburst ROOT) ──────────────────────────────────────
+
+test('ROOT is Fight / Trick / Treat, in order', () => {
+  assert.deepEqual(catKeys(), ['fight', 'trick', 'treat']);
 });
 
-test('Trick→Throw needs item + reticle; Treat→Eat is self-use', () => {
-  const t = VERB_TREE.TRICK.subverbs.find(s => s.key === 'throw');
-  assert.equal(t.needsItem, true); assert.equal(t.aimType, 'reticle'); assert.equal(t.resolver, 'resolveThrow');
-  const eat = VERB_TREE.TREAT.subverbs.find(s => s.key === 'eat');
-  assert.equal(eat.aimType, 'none'); assert.equal(eat.needsItem, true); assert.equal(eat.resolver, 'resolveUse');
+test('Fight → Melee/Ranged/Magic; Melee → Hit/Cleave/Spin', () => {
+  const fight = ROOT.children[0];
+  assert.deepEqual(kidKeys(fight), ['melee', 'ranged', 'magic']);
+  assert.deepEqual(kidKeys(fight.children[0]), ['hit', 'cleave', 'spin']);
 });
 
-test('new wheel starts at CATEGORY on FIGHT', () => {
+test('Flight nests under Trick (not a top-level category); Armory tricks are Trick siblings', () => {
+  assert.ok(!catKeys().includes('flight'));
+  const trick = ROOT.children[1];
+  assert.ok(kidKeys(trick).includes('flight'));
+  assert.ok(kidKeys(trick).includes('rayblast'));
+  assert.ok(kidKeys(trick).includes('hirelion'));
+});
+
+test('Treat → Eat/Cleanse (self-use)', () => {
+  const treat = ROOT.children[2];
+  assert.deepEqual(kidKeys(treat), ['eat', 'cleanse']);
+});
+
+// ── cycle / drill / back grammar ─────────────────────────────────────────────
+
+test('a fresh wheel opens on the root ring at Fight', () => {
   const w = createWheelState();
-  assert.equal(w.layer, LAYER.CATEGORY);
-  assert.equal(w.categoryIndex, 0);
-  assert.equal(w.reticle, null);
-  assert.equal(w.lastFired, null);
+  assert.deepEqual(w.path, [0]);
+  assert.equal(selectedNode(w).key, 'fight');
 });
 
-test('cycle wraps category index', () => {
+test('cycle wraps the active ring', () => {
   const w = createWheelState();
-  cycle(w, -1, G); assert.equal(w.categoryIndex, 3);
-  cycle(w, +1, G); assert.equal(w.categoryIndex, 0);
+  cycle(w, -1);
+  assert.equal(selectedNode(w).key, 'treat');   // wrapped back to last
+  cycle(w, 1);
+  assert.equal(selectedNode(w).key, 'fight');
 });
 
-test('Defend forward = fire (no item/aim); Melee forward enters AIM', () => {
+test('drill descends a category', () => {
   const w = createWheelState();
-  w.categoryIndex = 3;                 // FLIGHT
-  forward(w, G); assert.equal(w.layer, LAYER.SUBVERB);
-  assert.equal(currentLeaf(w).key, 'defend');
-  assert.equal(forward(w, G), 'fire');
-  const w2 = createWheelState();       // FIGHT/Melee
-  forward(w2, G);                      // SUBVERB
-  assert.equal(forward(w2, G), undefined);
-  assert.equal(w2.layer, LAYER.AIM);
+  assert.equal(drill(w, stubGame()), 'push');
+  assert.equal(selectedNode(w).key, 'melee');
 });
 
-test('back pops layers and closes at the top', () => {
+test('drill aims an adjacent leaf (Hit)', () => {
   const w = createWheelState();
-  forward(w, G); back(w); assert.equal(w.layer, LAYER.CATEGORY);
-  assert.equal(back(w), 'close');
+  w.path = [0, 0, 0];                            // Fight → Melee → Hit
+  assert.equal(selectedNode(w).key, 'hit');
+  assert.equal(drill(w, stubGame()), 'aim');
 });
 
-test('Magic disabled without MP/spells; Melee always enabled; Throw needs throwables', () => {
-  assert.equal(leafEnabled(VERB_TREE.FIGHT.subverbs[2], G), false);
-  assert.equal(leafEnabled(VERB_TREE.FIGHT.subverbs[0], G), true);
-  assert.equal(leafEnabled(VERB_TREE.TRICK.subverbs[0], G), false);
-});
-
-test('compose returns leaf, item slot, reticle tile', () => {
+test('drill fires a self leaf (Spin)', () => {
   const w = createWheelState();
-  w.categoryIndex = 1; w.subVerbIndex = 0; // TRICK/Throw
-  w.itemIndex = 2; w.reticle = { x: 5, y: 7 };
-  const c = compose(w);
-  assert.equal(c.leaf.key, 'throw');
-  assert.equal(c.itemSlot, 2);
-  assert.deepEqual(c.aimTile, { x: 5, y: 7 });
+  w.path = [0, 0, 0];                            // Fight → Melee → Hit
+  cycle(w, 1); cycle(w, 1);                      // Hit → Cleave → Spin
+  assert.equal(selectedNode(w).key, 'spin');
+  assert.equal(drill(w, stubGame()), 'fire');
 });
 
-test('autoAim picks nearest hostile, else facing tile', () => {
-  const board = {
-    playerX: 5, playerY: 5, facing: 'down', map: { isWalkable: () => true },
-    enemies: [
-      { x: 5, y: 9, entity: { isAlive: () => true }, behavior: ['HOSTILE'] },
-      { x: 6, y: 5, entity: { isAlive: () => true }, behavior: ['HOSTILE'] },
-    ],
-  };
-  assert.deepEqual(autoAimTile(VERB_TREE.FIGHT.subverbs[0], board), { x: 6, y: 5 });
-  assert.deepEqual(autoAimTile(VERB_TREE.FIGHT.subverbs[0], { ...board, enemies: [] }), { x: 5, y: 6 });
+test('back pops a level, then closes at the root', () => {
+  const w = createWheelState();
+  w.path = [0, 0];
+  assert.notEqual(back(w), 'close');             // → [0]
+  assert.equal(back(w), 'close');                // at root
+});
+
+// ── verbApplies / isOffensiveLeaf ────────────────────────────────────────────
+
+test('isOffensiveLeaf flags attack verbs, not social ones', () => {
+  const hit = ROOT.children[0].children[0].children[0];
+  assert.equal(isOffensiveLeaf(hit), true);
+  const bribe = ROOT.children[1].children.find(c => c.key === 'bribe');
+  assert.equal(isOffensiveLeaf(bribe), false);
+});
+
+test('verbApplies: a category always applies; an adjacent verb needs a live neighbour', () => {
+  const fight = ROOT.children[0];
+  assert.equal(verbApplies(fight, stubGame()), true);
+  const hit = fight.children[0].children[0];
+  assert.equal(verbApplies(hit, stubGame()), false);             // nobody adjacent
+  const foe = { x: 6, y: 5, behavior: ['HOSTILE'], entity: { isAlive: () => true } };
+  assert.equal(verbApplies(hit, stubGame({ enemies: [foe] })), true);
+});
+
+// ── §12.5 isCombatActive ─────────────────────────────────────────────────────
+
+test('isCombatActive: only a non-ambient, alive, chasing enemy counts', () => {
+  const chasing = { state: 'chasing', entity: { isAlive: () => true } };
+  const idle    = { state: 'idle',    entity: { isAlive: () => true } };
+  const dead    = { state: 'chasing', entity: { isAlive: () => false } };
+  const ambient = { state: 'chasing', ambient: true, entity: { isAlive: () => true } };
+  assert.equal(isCombatActive(stubGame({ enemies: [] })), false);
+  assert.equal(isCombatActive(stubGame({ enemies: [idle] })), false);
+  assert.equal(isCombatActive(stubGame({ enemies: [dead] })), false);
+  assert.equal(isCombatActive(stubGame({ enemies: [ambient] })), false);
+  assert.equal(isCombatActive(stubGame({ enemies: [idle, chasing] })), true);
+});
+
+// ── §12.4 flapperDeflection ──────────────────────────────────────────────────
+
+test('flapperDeflection: rests at 0, kicks in the cycle direction, settles', () => {
+  assert.equal(flapperDeflection(0, 0), 0);          // no direction → rest
+  assert.equal(flapperDeflection(1, 1), 0);          // fully settled → rest
+  assert.equal(flapperDeflection(1, -1), 0);
+  assert.ok(flapperDeflection(0, 1) > 0.4);          // fresh kick, positive
+  assert.ok(flapperDeflection(0, -1) < -0.4);        // mirrored for the other dir
+  assert.equal(flapperDeflection(5, 1), 0);          // p clamps into [0,1]
 });
