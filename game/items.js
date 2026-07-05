@@ -147,6 +147,22 @@ export const ITEMS = {
         fallbackColor: '#cc8844',
         baseValue: 5,
     },
+
+    // (Phase 4) MQ2 deliverable — a quest item, so it can't be sold/thrown/given
+    // away EXCEPT to its sanctioned delivery target (QuestEngine.expectsDelivery).
+    // Templates: boardwalk_burger (food) + catalytic_converter (questItem).
+    burger_fries: {
+        id: 'burger_fries',
+        name: '[Burger & Fries]',
+        description: 'A warm paper bag, grease-spotted, smells incredible. For delivery — not for eating.',
+        category: 'quest',
+        useType: 'none',
+        consumable: false,
+        questItem: true,
+        tier: 'orange',
+        baseValue: 0,
+        fallbackColor: '#cc8844',
+    },
     mystery_meat: {
         id: 'mystery_meat',
         name: '[Mystery Meat]',

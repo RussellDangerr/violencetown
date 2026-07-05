@@ -151,8 +151,15 @@ export const DIALOGUES = {
         name: 'Short-Order Cook',
         greeting: '"Order up — oh. You. You\'re the delivery type, aren\'t you. I can always tell."',
         choices: [
+            // (Phase 4 MQ2) The dialogue delivery idiom: only shown at the get_burger
+            // stage; grants the deliverable via _grantItem (emits item_pickup → the
+            // quest advances). The trade window is the other idiom.
+            { id: 'take_burger', label: 'Take the burger and fries for delivery', once: true,
+              available: (g) => g.questEngine && g.questEngine.currentStageId && g.questEngine.currentStageId() === 'get_burger',
+              onPick: (g) => { if (g._grantItem) g._grantItem('burger_fries', '[The cook slides a warm paper bag across the counter. Burger and fries — for delivery.]'); },
+              reply: '"Bag\'s hot. Somebody past the bank\'s waitin\' on it. Don\'t eat it, delivery type."' },
             { id: 'burger', label: 'Ask about the burger and fries', repeatable: true,
-              reply: '"Bag\'s under the lamp. Somebody out there\'s waitin\' on it. (Placeholder — the real hand-off gets wired next.)"' },
+              reply: '"Bag\'s under the lamp. Somebody out there\'s waitin\' on it."' },
             { id: 'flatter', label: '[Compliment the grease]', repeatable: true, delta: 3,
               reply: '"Forty years on this griddle. Damn right it\'s good grease."' },
             { id: 'bribe', label: '[Bribe - 5 GP]', repeatable: true, delta: 10, cost: 5,
@@ -187,8 +194,15 @@ export const DIALOGUES = {
         name: 'Stranded Traveler',
         greeting: '"Hey — hey, you. You didn\'t happen to bring food, did you? I haven\'t eaten since the bridge."',
         choices: [
+            // (Phase 4 MQ2) Dialogue delivery: only shown at the handoff stage while
+            // the player holds the bag; consumesItem removes it AND emits item_given
+            // (same event the satchel give fires), so either idiom completes MQ2.
+            { id: 'deliver', label: "Here's your burger and fries", once: true,
+              requiresItem: 'burger_fries', consumesItem: 'burger_fries',
+              available: (g) => g.questEngine && g.questEngine.currentStageId && g.questEngine.currentStageId() === 'handoff',
+              reply: '"...oh, thank god. Thank you — really. Here, take this for your trouble."' },
             { id: 'ask', label: 'Ask what they\'re doing out here', repeatable: true,
-              reply: '"Waitin\'. Starvin\'. Same as always. (Placeholder — the delivery hand-off gets wired next.)"' },
+              reply: '"Waitin\'. Starvin\'. Same as always."' },
             { id: 'flatter', label: '[Reassure them]', repeatable: true, delta: 3,
               reply: '"...thanks. That helps. A little."' },
         ],

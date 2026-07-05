@@ -39,6 +39,40 @@ export const QUESTS = {
         ],
         onComplete: (game) => {
             game._log('[You sink the hook into the rock, haul yourself up over the canyon lip, and out onto a Downtown street. Out at last.]', 'transition');
+            if (game._startMainQuest2) game._startMainQuest2();   // (Phase 4) chain into MQ2 on arrival
+        },
+    },
+
+    // ── Chapter Two: Main Quest 2 — the burger delivery (Phase 4 playground).
+    //    STRUCTURE is real (2 stages; both delivery idioms via item_given; journal
+    //    location + description; world-map targetZone). The TEXT is placeholder for
+    //    Caelan to author. Started deterministically on Downtown arrival (both the
+    //    canyon-grapple climb-out and the alcohol-ramp → game._startMainQuest2).
+    deliver_burger: {
+        id: 'deliver_burger',
+        title: 'Special Delivery',
+        stages: [
+            {
+                id: 'get_burger',
+                objective: 'Pick up the burger + fries at the diner',
+                location: 'Downtown · The Diner',
+                description: 'The diner cook has a delivery bagged and waiting. The diner is the leftmost door on the Downtown strip.',
+                targetZone: 'DOWNTOWN',
+                on: { type: 'item_pickup', match: { id: 'burger_fries' } },
+                autoSatisfy: (game) => (game.inventory || []).some(s => s && s.itemDef.id === 'burger_fries'),
+            },
+            {
+                id: 'handoff',
+                objective: 'Deliver the burger + fries to the stranded traveler',
+                location: 'Downtown · the street',
+                description: 'The stranded traveler on the Downtown street is waiting on this. Hand it over — talk to them, or offer it from your satchel.',
+                targetZone: 'DOWNTOWN',
+                on: { type: 'item_given', match: { item: 'burger_fries', npc: 'dt-recipient' } },
+            },
+        ],
+        onComplete: (game) => {
+            game.gold = (game.gold || 0) + 50;
+            game._log('[Delivered. The traveler presses a little Gold Card credit into your hand. +50 GP.]', 'transition');
         },
     },
 
