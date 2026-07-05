@@ -61,6 +61,7 @@ const STATE = {
     DIALOGUE:        'dialogue',        // (Step 4) disposition dialogue with an NPC
     EQUIPMENT:       'equipment',       // (Stage 3) read-only Vitruvian equipment screen
     INSPECT:         'inspect',         // (§12.3) Examine → a layered inspect panel
+    JOURNAL:         'journal',         // (Phase 4) [J] — quest journal + witness log + world-map tab
 };
 
 // (zone pursuit) A wedged door's starting integrity. Trapped pursuers pound it
@@ -937,6 +938,15 @@ class Game {
                 return;
             }
 
+            // ── JOURNAL: quest log (checklist + completed) + witness feed ([J]) ──
+            if (this.state === STATE.JOURNAL) {
+                e.preventDefault();
+                if (e.code === 'KeyJ' || e.code === 'Escape')     { this._closeJournal(); return; }
+                if (e.code === 'ArrowUp'   || e.code === 'KeyW')  { this._scrollJournal(1);  return; }
+                if (e.code === 'ArrowDown' || e.code === 'KeyS')  { this._scrollJournal(-1); return; }
+                return;
+            }
+
             // ── TRADE: Puck's shop window (trade slice 1) ──
             // E / Esc closes; B bribes (raise the vendor's mood for one step's
             // GP). Buying/selling is by tapping (or clicking) the grid cells —
@@ -1023,6 +1033,7 @@ class Game {
 
             // L = open the log history modal
             if (e.code === 'KeyL') { e.preventDefault(); this._openLogModal(); return; }
+            if (e.code === 'KeyJ') { e.preventDefault(); this._openJournal(); return; }
 
             // C = open the (read-only) equipment / Vitruvian screen
             if (e.code === 'KeyC') { e.preventDefault(); this._openEquipmentScreen(); return; }
@@ -1503,6 +1514,7 @@ class Game {
 
         // Log modal is fully modal — route taps to it and nothing behind it.
         if (this.state === STATE.INSPECT) { this._closeInspect(); return; }
+        if (this.state === STATE.JOURNAL) { this._closeJournal(); return; }
         if (this.state === STATE.LOG_MODAL) { this._tapLogModal(pt); return; }
 
         // Trade window is fully modal too — route taps to the shop.
@@ -3903,6 +3915,28 @@ class Game {
     _closeLogModal() {
         if (this.state !== STATE.LOG_MODAL) return;
         this.state = STATE.IDLE;
+        this._render();
+    }
+
+    // ── Journal ([J]) — quest checklist + completed + witness log (+ map tab) ──
+    _openJournal() {
+        if (this.state !== STATE.IDLE) return;
+        this._journalScroll = 0;
+        this.state = STATE.JOURNAL;
+        audio.playSfx('menu-open');
+        this._render();
+    }
+
+    _closeJournal() {
+        if (this.state !== STATE.JOURNAL) return;
+        this.state = STATE.IDLE;
+        audio.playSfx('menu-cancel');
+        this._render();
+        this._resumeHeldWalk();
+    }
+
+    _scrollJournal(delta) {
+        this._journalScroll = Math.max(0, (this._journalScroll || 0) + delta);
         this._render();
     }
 

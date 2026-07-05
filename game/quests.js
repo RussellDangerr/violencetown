@@ -101,7 +101,15 @@ export const QUESTS = {
 export class QuestEngine {
     constructor(game) {
         this.game = game;
-        this.state = { activeId: null, stageIndex: 0, counters: {}, completed: [], flags: {} };
+        this.state = { activeId: null, stageIndex: 0, counters: {}, completed: [], flags: {}, journal: [] };
+    }
+
+    // (Phase 4 journal) Append a witness-log line — the chronological record the
+    // Journal screen shows beneath the active-quest checklist + completed list.
+    _note(text) {
+        const j = this.state.journal || (this.state.journal = []);
+        j.push({ turn: (this.game && this.game.turn) || 0, text });
+        if (j.length > 60) j.shift();
     }
 
     start(questId) {
@@ -110,6 +118,7 @@ export class QuestEngine {
         if (this.state.activeId === questId || this.state.completed.includes(questId)) return;
         this.state.activeId = questId;
         this.state.stageIndex = 0;
+        this._note(`Began "${q.title}".`);
         this.game._log?.(`[New quest: ${q.title}]`, 'transition');
         const stage = q.stages[0];
         if (stage && stage.onEnter) stage.onEnter(this.game);
@@ -156,6 +165,7 @@ export class QuestEngine {
         this.state.stageIndex++;
         if (this.state.stageIndex >= q.stages.length) { this._complete(); return; }
         const stage = q.stages[this.state.stageIndex];
+        this._note(`→ ${stage.objective}`);
         if (stage.onEnter) stage.onEnter(this.game);
         this._settleAutoSatisfy();   // chain past any freshly-entered stage already satisfied
         this.game._render?.();
@@ -188,9 +198,10 @@ export class QuestEngine {
         const id = this.state.activeId;
         const q = QUESTS[id];
         if (!this.state.completed.includes(id)) this.state.completed.push(id);
+        if (q) this._note(`Completed "${q.title}".`);
         this.state.activeId = null;
         this.state.stageIndex = 0;
-        if (q.onComplete) q.onComplete(this.game);
+        if (q && q.onComplete) q.onComplete(this.game);
         this.game._render?.();
     }
 
@@ -243,6 +254,30 @@ export class QuestEngine {
         return (m.item == null || m.item === itemId) && (m.npc == null || m.npc === npcId);
     }
 
+    // (Phase 4 journal) A render-ready view of the active quest for the Journal:
+    // the title + every stage flagged done / current, with the current stage's
+    // location + description surfaced. null when no quest is active.
+    getActiveQuestView() {
+        const id = this.state.activeId;
+        if (!id) return null;
+        const q = QUESTS[id];
+        const cur = this.state.stageIndex;
+        return {
+            id, title: q.title,
+            stages: q.stages.map((s, i) => ({
+                objective: s.objective,
+                location: s.location || null,
+                description: s.description || null,
+                done: i < cur,
+                current: i === cur,
+            })),
+        };
+    }
+
+    // Titles of completed quests, and the witness-log lines (oldest first).
+    getCompletedTitles() { return this.state.completed.map(id => (QUESTS[id] && QUESTS[id].title) || id); }
+    getJournalLines() { return (this.state.journal || []).slice(); }
+
     serialize() {
         return {
             activeId: this.state.activeId,
@@ -250,6 +285,7 @@ export class QuestEngine {
             counters: { ...this.state.counters },
             completed: this.state.completed.slice(),
             flags: { ...this.state.flags },
+            journal: (this.state.journal || []).slice(),
         };
     }
 
@@ -264,6 +300,7 @@ export class QuestEngine {
         this.state.counters = (obj.counters && typeof obj.counters === 'object') ? { ...obj.counters } : {};
         this.state.completed = Array.isArray(obj.completed) ? obj.completed.filter(id => !!QUESTS[id]) : [];
         this.state.flags = (obj.flags && typeof obj.flags === 'object') ? { ...obj.flags } : {};
+        this.state.journal = Array.isArray(obj.journal) ? obj.journal.slice() : [];
     }
 }
 
