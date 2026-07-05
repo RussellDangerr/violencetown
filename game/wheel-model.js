@@ -401,3 +401,23 @@ export function targetVerbs(target, game) {
 export function createTargetWheelState() {
   return { x: 0, y: 0, target: null, verbs: [], sel: 0, _openAt: 0, _spinAt: 0, _spinDir: 0 };
 }
+
+// ── Target List (RuneScape-style menu) ───────────────────────────────────────
+// The interact-with-a-target menu is a vertical LIST, not a ring (only the ACTION
+// wheel is radial — so the two never get confused). Same verb set as targetVerbs,
+// re-ordered by CONVENTION: the natural default action on top, then other verbs,
+// then Examine, then a Cancel row at the bottom. (`Walk here` + path-then-act
+// arrive with the pointer-model slice; not present yet.)
+const TARGET_VERB_RANK = { hit: 0, talk: 0, take: 0, trade: 20, bribe: 30, throw: 40, examine: 90 };
+export function orderedTargetVerbs(target, game) {
+  const verbs = targetVerbs(target, game).slice();
+  const npc = target && target.npc;
+  const hostile = npc && ((!npc.behavior || npc.behavior.includes('HOSTILE')) && !npc._ally);
+  const defaultKey = target.item ? 'take'
+    : npc ? (hostile ? 'hit' : (npc.dialogueId ? 'talk' : 'examine'))
+    : 'examine';
+  const rank = (v) => (v.key === defaultKey ? -1 : (TARGET_VERB_RANK[v.key] ?? 50));
+  verbs.sort((a, b) => rank(a) - rank(b) || (a.label < b.label ? -1 : a.label > b.label ? 1 : 0));
+  verbs.push({ key: 'cancel', label: 'Cancel', resolver: 'cancel', color: '#4a3c2a', text: '#b0a184' });
+  return verbs;
+}
