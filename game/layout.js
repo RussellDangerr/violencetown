@@ -66,6 +66,7 @@ export function wheelRingR(k) { const r0 = WHEEL_RING0_R0 + k * (WHEEL_RING_W + 
 // = 546). Shared by renderer._drawQuestLog (draw) and main.js (tap → [L] history).
 export const QUESTLOG_RECT = { x: 6, y: 436, w: 340, h: 104 };
 export const LOG_MODAL_RECT = { x: 24, y: 44, w: 560, h: 520 };
+export const JOURNAL_RECT   = { x: 24, y: 44, w: 560, h: 520 };   // (Phase 4) quest journal + world-map tab
 
 // ── Trade window (Puck's shop — trade Slice 1) ──
 // (drawn by renderer._drawTradeModal, hit-tested by main._tapTrade). Two 3-wide

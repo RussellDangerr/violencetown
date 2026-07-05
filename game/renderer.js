@@ -19,7 +19,7 @@ import {
     OVERLAY_RECTS, THROW_RECTS,
     HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_GAP, HOTBAR_SLOTS, HOTBAR_STRIDE,
     HOTBAR_TOTAL_W, HOTBAR_OX, HOTBAR_OY, HOTBAR_X_START, HOTBAR_Y,
-    QUESTLOG_RECT, LOG_MODAL_RECT,
+    QUESTLOG_RECT, LOG_MODAL_RECT, JOURNAL_RECT,
     TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BUYBACK_ORIGIN, TRADE_BRIBE_RECT,
     TRADE_CELL_W, TRADE_CELL_H, TRADE_COLS, tradeCellRect,
     RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
@@ -411,6 +411,7 @@ export class Renderer {
         if (game.state === 'dialogue') this._drawDialogueModal(game);
         if (game.state === 'equipment') this._drawEquipmentModal(game);
         if (game.state === 'inspect') this._drawInspectPanel(game);
+        if (game.state === 'journal') this._drawJournal(game);
     }
 
     // (world-structure) Heavy radial darkness for the Wilderness zone — a tiny
@@ -1882,6 +1883,70 @@ export class Renderer {
         ctx.restore();
         ctx.restore();
         ctx.globalAlpha = 1; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    }
+
+    // (Phase 4) Journal — the "where am I in the quest" screen ([J]). Shows the
+    // active quest as a stage CHECKLIST (done checked, current highlighted with
+    // its location + description), the COMPLETED quests, and a scrollable WITNESS
+    // LOG. Reads QuestEngine.getActiveQuestView / getCompletedTitles /
+    // getJournalLines. Same ornate-panel chrome as the log modal.
+    _drawJournal(game) {
+        const { ctx } = this;
+        const ui = this.uiSheet;
+        if (!this.font) return;
+        const R = JOURNAL_RECT;
+        ctx.fillStyle = 'rgba(0,0,0,0.72)';
+        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+        if (ui?.loaded) drawPanelBig(ctx, ui, R.x, R.y, R.w, R.h, 'base');
+        else            drawPanelSmall(ctx, R.x, R.y, R.w, R.h);
+
+        const qe = game.questEngine;
+        const cx = CANVAS_PX / 2;
+        const innerX = R.x + 22;
+        const maxChars = Math.max(8, Math.floor((R.w - 56) / 8));
+        let y = R.y + 16;
+
+        this.font.drawText(ctx, 'JOURNAL', cx, y, { color: UI.gold, scale: 2, align: 'center' });
+        y += 30;
+
+        // Active quest — the stage checklist.
+        const view = qe ? qe.getActiveQuestView() : null;
+        if (view) {
+            this.font.drawText(ctx, view.title.toUpperCase(), innerX, y, { color: UI.gold, scale: 1 }); y += 15;
+            for (const st of view.stages) {
+                const mark = st.done ? '✓' : st.current ? '▸' : '·';
+                const col = st.done ? UI.dim : st.current ? UI.textLight : UI.text;
+                for (const line of this._wrapText(`${mark} ${st.objective}`, maxChars)) {
+                    this.font.drawText(ctx, line, innerX + 6, y, { color: col, scale: 1 }); y += 12;
+                }
+                if (st.current && st.location) { this.font.drawText(ctx, `   @ ${st.location}`, innerX + 6, y, { color: UI.gold, scale: 1 }); y += 12; }
+                if (st.current && st.description) for (const line of this._wrapText(`   ${st.description}`, maxChars)) { this.font.drawText(ctx, line, innerX + 6, y, { color: UI.dim, scale: 1 }); y += 12; }
+            }
+        } else {
+            this.font.drawText(ctx, 'No active quest.', innerX, y, { color: UI.dim, scale: 1 }); y += 15;
+        }
+
+        // Completed quests.
+        const done = qe ? qe.getCompletedTitles() : [];
+        if (done.length) {
+            y += 6;
+            this.font.drawText(ctx, 'COMPLETED', innerX, y, { color: UI.textLight, scale: 1 }); y += 14;
+            for (const t of done) { this.font.drawText(ctx, `✓ ${t}`, innerX + 6, y, { color: UI.dim, scale: 1 }); y += 12; }
+        }
+
+        // Witness log — scrollable feed filling the rest of the panel.
+        y += 8;
+        this.font.drawText(ctx, 'WITNESS LOG', innerX, y, { color: UI.textLight, scale: 1 }); y += 14;
+        const lines = [];
+        for (const e of (qe ? qe.getJournalLines() : [])) for (const w of this._wrapText(e.text, maxChars)) lines.push(w);
+        const bottom = R.y + R.h - 26;
+        const rows = Math.max(1, Math.floor((bottom - y) / 12));
+        const scroll = Math.max(0, Math.min(game._journalScroll || 0, Math.max(0, lines.length - rows)));
+        const startI = Math.max(0, lines.length - rows - scroll);
+        for (const line of lines.slice(startI, startI + rows)) { this.font.drawText(ctx, line, innerX + 6, y, { color: UI.text, scale: 1 }); y += 12; }
+
+        this.font.drawText(ctx, '▼ CLOSE · J    ↑↓ SCROLL', cx, R.y + R.h - 12, { color: UI.dim, scale: 1, align: 'center' });
+        ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     }
 
     // (§12.3) Examine → a modal INSPECT panel layered over the dimmed world:
