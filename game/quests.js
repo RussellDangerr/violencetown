@@ -278,6 +278,15 @@ export class QuestEngine {
     getCompletedTitles() { return this.state.completed.map(id => (QUESTS[id] && QUESTS[id].title) || id); }
     getJournalLines() { return (this.state.journal || []).slice(); }
 
+    // (Phase 4 map) The active stage's targetZone — a zoneName the world map
+    // highlights as "go here next" — or null.
+    getTargetZone() {
+        const id = this.state.activeId;
+        if (!id) return null;
+        const s = QUESTS[id].stages[this.state.stageIndex];
+        return (s && s.targetZone) || null;
+    }
+
     serialize() {
         return {
             activeId: this.state.activeId,

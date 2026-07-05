@@ -26,6 +26,7 @@ import {
     EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS,
 } from './layout.js';
 import { ITEMS, itemTier } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
+import { WORLD_ZONES, overworldZone, connectorPairs } from './world-map.js'; // (Phase 4) rudimentary world map
 import { hasLineOfSight } from './enemies.js';                               // (aggro overlay) READ-ONLY: same Bresenham the chase AI uses
 import { buyPrice, sellPrice, bribeStepCost, mood, canTrade, BRIBE_STEP } from './trade.js'; // (trade slice 1) pricing + mood smiley
 import * as Settings from './settings.js'; // (combat-feel-pass) reduce-motion for hit-splats (namespace import — see main.js)
@@ -1907,7 +1908,20 @@ export class Renderer {
         let y = R.y + 16;
 
         this.font.drawText(ctx, 'JOURNAL', cx, y, { color: UI.gold, scale: 2, align: 'center' });
-        y += 30;
+        y += 26;
+
+        // Tabs: QUESTS | MAP (Tab / M switches).
+        const tab = game._journalTab || 'quests';
+        this.font.drawText(ctx, 'QUESTS', cx - 46, y, { color: tab === 'quests' ? UI.gold : UI.dim, scale: 1, align: 'center' });
+        this.font.drawText(ctx, 'MAP',    cx + 46, y, { color: tab === 'map'    ? UI.gold : UI.dim, scale: 1, align: 'center' });
+        y += 18;
+
+        if (tab === 'map') {
+            this._drawWorldMapBody(game, R, y);
+            this.font.drawText(ctx, '▼ CLOSE · J    TAB/M SWITCH', cx, R.y + R.h - 12, { color: UI.dim, scale: 1, align: 'center' });
+            ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+            return;
+        }
 
         // Active quest — the stage checklist.
         const view = qe ? qe.getActiveQuestView() : null;
@@ -1945,8 +1959,55 @@ export class Renderer {
         const startI = Math.max(0, lines.length - rows - scroll);
         for (const line of lines.slice(startI, startI + rows)) { this.font.drawText(ctx, line, innerX + 6, y, { color: UI.text, scale: 1 }); y += 12; }
 
-        this.font.drawText(ctx, '▼ CLOSE · J    ↑↓ SCROLL', cx, R.y + R.h - 12, { color: UI.dim, scale: 1, align: 'center' });
+        this.font.drawText(ctx, '▼ CLOSE · J    ↑↓ SCROLL · TAB/M MAP', cx, R.y + R.h - 12, { color: UI.dim, scale: 1, align: 'center' });
         ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    }
+
+    // (Phase 4) The rudimentary world map — plain labeled boxes on a grid, one per
+    // overworld screen, connector lines between neighbours. The current zone is
+    // filled gold ("YOU"); the active quest's targetZone is ringed red ("» GO").
+    // Old-Zelda subscreen style: flat boxes, no interior detail. `top` = the y to
+    // start below the tab header.
+    _drawWorldMapBody(game, R, top) {
+        const { ctx } = this;
+        const here = overworldZone(game.map && game.map.zoneName);
+        const target = game.questEngine ? overworldZone(game.questEngine.getTargetZone()) : null;
+
+        const cols = WORLD_ZONES.map(z => z.col), rows = WORLD_ZONES.map(z => z.row);
+        const c0 = Math.min(...cols), c1 = Math.max(...cols), r0 = Math.min(...rows), r1 = Math.max(...rows);
+        const bw = 92, bh = 40, gx = 26, gy = 20;
+        const gridW = (c1 - c0) * (bw + gx) + bw;
+        const gridH = (r1 - r0) * (bh + gy) + bh;
+        const ox = R.x + Math.round((R.w - gridW) / 2);
+        const oy = top + Math.round(((R.y + R.h - 30 - top) - gridH) / 2);
+        const boxOf = (z) => ({ x: ox + (z.col - c0) * (bw + gx), y: oy + (z.row - r0) * (bh + gy), w: bw, h: bh });
+        const centerOf = (z) => { const b = boxOf(z); return { x: b.x + b.w / 2, y: b.y + b.h / 2 }; };
+        const byName = (n) => WORLD_ZONES.find(z => z.zoneName === n);
+
+        // Connectors first (behind the boxes).
+        ctx.strokeStyle = 'rgba(212,185,106,0.5)'; ctx.lineWidth = 2;
+        for (const [a, b] of connectorPairs()) {
+            const za = byName(a), zb = byName(b); if (!za || !zb) continue;
+            const ca = centerOf(za), cb = centerOf(zb);
+            ctx.beginPath(); ctx.moveTo(ca.x, ca.y); ctx.lineTo(cb.x, cb.y); ctx.stroke();
+        }
+
+        // Boxes.
+        for (const z of WORLD_ZONES) {
+            const b = boxOf(z);
+            const isHere = z.zoneName === here;
+            const isTarget = z.zoneName === target;
+            ctx.fillStyle = isHere ? 'rgba(212,185,106,0.85)' : 'rgba(30,24,16,0.9)';
+            ctx.fillRect(b.x, b.y, b.w, b.h);
+            ctx.lineWidth = isTarget ? 3 : 2;
+            ctx.strokeStyle = isTarget ? '#e8462f' : isHere ? '#fff3c0' : 'rgba(212,185,106,0.6)';
+            ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
+            if (!this.font) continue;
+            const txtCol = isHere ? '#2a2010' : UI.text;
+            this.font.drawText(ctx, z.label, b.x + b.w / 2, b.y + b.h / 2 - 4, { color: txtCol, scale: 1, align: 'center' });
+            if (isHere)        this.font.drawText(ctx, 'YOU',  b.x + b.w / 2, b.y + b.h / 2 + 8, { color: '#7a2010', scale: 1, align: 'center' });
+            else if (isTarget) this.font.drawText(ctx, '» GO', b.x + b.w / 2, b.y + b.h / 2 + 8, { color: '#e8462f', scale: 1, align: 'center' });
+        }
     }
 
     // (§12.3) Examine → a modal INSPECT panel layered over the dimmed world:
