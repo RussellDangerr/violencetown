@@ -404,7 +404,6 @@ export class Renderer {
         // Modals
         if (game.state === 'item_overlay')    this._drawItemOverlay(game);
         if (game.state === 'radial_menu')     this._drawRadialMenu(game);
-        if (game.state === 'target_wheel')    this._drawTargetWheel(game);
         if (game.state === 'target_list')     this._drawTargetList(game);
         if (game.state === 'item_throw_dir')  this._drawThrowPrompt(game);
         if (game.state === 'ending') this._drawEndingOverlay(game);
