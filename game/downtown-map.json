@@ -1,29 +1,50 @@
 {
-    "_scaffold": "PLACEHOLDER (Phase 2). A minimal walkable street so a successful bridge-ramp lands somewhere. Phase 4 hand-authors the real Downtown: the bank, the vampire, better merchants, city lights, a casino, and Main Quest 2 (deliver the burger + fries). The west transition below is a stand-in for the return route.",
-    "width": 16,
-    "height": 12,
-    "spawn": {"x": 8, "y": 6},
+    "_note": "Chapter Two Phase 4 playground. A walkable Downtown street with three ENTERABLE buildings (diner/bank/casino, each its own interior map) and a placed, interactable cast. Geometry + text are placeholders for Caelan to hand-author; the BONES (walkability, enterable buildings, interactable NPCs, transitions) are what matter here. Building doors sit >=4 tiles from any side edge so densifyTransitions treats 'north into the building' as the door's nearest border and fills only the door tile. Tiles: 10 wall, 11 sidewalk, 12 road, 14 building, 15 door.",
+    "width": 24,
+    "height": 16,
+    "spawn": {"x": 12, "y": 8},
     "zoneName": "DOWNTOWN",
     "tiles": [
-        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-        0,12,12,12,12,12,12,12,12,12,12,12,12,12,12,0,
-        0,12,12,12,12,12,12,12,12,12,12,12,12,12,12,0,
-        0,12,12,12,12,12,12,12,12,12,12,12,12,12,12,0,
-        0,12,12,12,12,12,12,12,12,12,12,12,12,12,12,0,
-        0,12,12,12,12,12,12,12,12,12,12,12,12,12,12,0,
-        0,12,12,12,12,12,12,12,12,12,12,12,12,12,12,0,
-        0,12,12,12,12,12,12,12,12,12,12,12,12,12,12,0,
-        0,12,12,12,12,12,12,12,12,12,12,12,12,12,12,0,
-        0,12,12,12,12,12,12,12,12,12,12,12,12,12,12,0,
-        0,12,12,12,12,12,12,12,12,12,12,12,12,12,12,0,
-        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,
+        10,11,11,14,14,14,14,14,11,11,14,14,14,14,14,11,14,14,14,14,14,11,11,10,
+        10,11,11,14,14,14,14,14,11,11,14,14,14,14,14,11,14,14,14,14,14,11,11,10,
+        10,11,11,14,14,15,14,14,11,11,14,14,15,14,14,11,14,14,15,14,14,11,11,10,
+        10,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,10,
+        10,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,10,
+        10,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,10,
+        10,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,10,
+        10,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,10,
+        10,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,10,
+        10,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,10,
+        10,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,10,
+        10,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,10,
+        10,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,10,
+        10,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,10,
+        10,10,10,10,10,10,10,10,10,10,10,12,12,12,10,10,10,10,10,10,10,10,10,10
     ],
-    "enemies": [],
+    "enemies": [
+        {"id": "dt-recipient", "type": "Stranger", "name": "Stranded Traveler", "x": 12, "y": 11, "hp": 10, "damage": 0, "sightRange": 0, "disposition": 0, "behavior": ["IDLE"], "dialogueId": "mq2_recipient"},
+        {"id": "dt-merch1", "type": "Vendor", "name": "Corner Merchant", "x": 5, "y": 8, "hp": 10, "damage": 0, "sightRange": 0, "disposition": 0, "behavior": ["IDLE"], "vendor": true, "stock": ["bandage", "rock"], "dialogueId": "downtown_merchant"},
+        {"id": "dt-merch2", "type": "Vendor", "name": "Newsstand Kid", "x": 18, "y": 8, "hp": 10, "damage": 0, "sightRange": 0, "disposition": 0, "behavior": ["IDLE"], "vendor": true, "stock": ["bandage"], "dialogueId": "downtown_merchant2"},
+        {"id": "dt-folk1", "type": "Violencian", "name": "Local", "x": 9, "y": 12, "hp": 10, "damage": 0, "sightRange": 0, "disposition": 0, "behavior": ["IDLE", "WANDER"], "wanderRadius": 2, "wanderEveryTurns": 3, "barks": ["[Nice night for it.]", "[Neon's buzzin'.]"], "barkEveryTurns": 6},
+        {"id": "dt-folk2", "type": "Violencian", "name": "Local", "x": 15, "y": 9, "hp": 10, "damage": 0, "sightRange": 0, "disposition": 0, "behavior": ["IDLE", "WANDER"], "wanderRadius": 2, "wanderEveryTurns": 4, "barks": ["[Watch where you're walkin'.]", "[Big city, huh.]"], "barkEveryTurns": 7}
+    ],
     "items": [],
     "examinables": [
-        {"id": "downtown_todo", "x": 8, "y": 5, "text": "[Neon, a bank, a flickering casino sign — the real part of town. (Placeholder — Downtown and the burger delivery get built out next.)]"}
+        {"id": "downtown_neon", "x": 15, "y": 10, "text": "[Neon hums over the wet street. This is the real part of town — the part with money in it.]"},
+        {"id": "bank_facade", "x": 12, "y": 4, "text": "[FIRST BLOOD BANK, gold letters on black glass. The windows are mirrored. Something behind them is very, very still.]"}
+    ],
+    "lights": [
+        {"x": 5, "y": 4, "radius": 3.5, "r": 255, "g": 190, "b": 110},
+        {"x": 12, "y": 4, "radius": 3.5, "r": 150, "g": 180, "b": 255},
+        {"x": 18, "y": 4, "radius": 4.0, "r": 200, "g": 90, "b": 230}
     ],
     "transitions": [
-        {"x": 1, "y": 6, "toMap": "town-map.json", "toX": 16, "toY": 12, "label": "[West — back over the bridge to old town. (placeholder)]"}
+        {"x": 5, "y": 3, "toMap": "diner-map.json", "toX": 6, "toY": 9, "label": "[Into the diner]"},
+        {"x": 12, "y": 3, "toMap": "bank-map.json", "toX": 6, "toY": 9, "label": "[Into the First Blood Bank]"},
+        {"x": 18, "y": 3, "toMap": "casino-map.json", "toX": 6, "toY": 9, "label": "[Into the casino]"},
+        {"x": 11, "y": 15, "toMap": "town-map.json", "toX": 16, "toY": 12, "label": "[South — back over the bridge to old town]"},
+        {"x": 12, "y": 15, "toMap": "town-map.json", "toX": 16, "toY": 12, "label": "[South — back over the bridge to old town]"},
+        {"x": 13, "y": 15, "toMap": "town-map.json", "toX": 16, "toY": 12, "label": "[South — back over the bridge to old town]"}
     ]
 }
