@@ -1869,7 +1869,7 @@ export class Renderer {
         const tl = game.targetList; if (!tl || !tl.verbs.length) return;
         ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX); ctx.restore();
         const RH = TARGET_LIST_ROW_H, px = TARGET_LIST_RECT.x, py = TARGET_LIST_RECT.y, w = TARGET_LIST_RECT.w;
-        const h = 44 + tl.verbs.length * RH + 8;
+        const h = 44 + tl.verbs.length * RH + 22;   // +room for the exit-cue footer
         this._targetListRect = { x: px, y: py, w, h };   // stashed for the ✕ / tap-outside hit-test (menu grammar)
         if (ui?.loaded) drawPanelBig(ctx, ui, px, py, w, h, 'base');
         else            drawPanelSmall(ctx, px, py, w, h);
@@ -1882,6 +1882,7 @@ export class Renderer {
             const col = sel ? UI.textLight : (v.key === 'cancel' ? UI.dim : (v.color || UI.text));
             this.font.drawText(ctx, (sel ? '> ' : '  ') + v.label, px + 16, ry + 6, { color: col, scale: 1 });
         }
+        this.font.drawText(ctx, '↑↓ PICK · ESC CLOSE', px + w / 2, py + h - 14, { color: UI.dim, scale: 1, align: 'center' });
         ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     }
 
