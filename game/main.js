@@ -282,6 +282,7 @@ class Game {
         this._dialogueReply = '';        // the NPC's current line shown in the dialogue modal
         this._dialogueCursor = 0;        // selected choice row (keyboard)
         this._tradeSell = null;          // (trade slice 1) snapshot of the sellable bag while shopping
+        this._tradeCursor = null;        // (menu grammar) keyboard / d-pad cursor over the trade grid
         this._tradeTimer = null;         // (Phase 6c) 1s re-render while trading so the buyback countdown ticks
         this._dispositionDecayAccMs = 0; // (Phase 6c) free-roam decay accumulator (ms)
         this._dispositionDecayTurns = 0; // (Phase 6c) combat decay turn counter
@@ -1014,6 +1015,20 @@ class Game {
                 e.preventDefault();
                 if (e.code === 'KeyE' || e.code === 'Escape') { this._closeTrade(); return; }
                 if (e.code === 'KeyB') { this._bribeVendor(); return; }
+                // (menu grammar) keyboard / d-pad navigation: arrows move the cursor
+                // over the grid slots; Space/Enter activates the SAME action a tap
+                // would (shared _tradeActivate). Cancel is Esc / ✕ / tap-outside.
+                const slots = this._tradeSlots();
+                if (slots.length) {
+                    this._tradeCursor = this._clampTradeCursor(this._tradeCursor);
+                    let ci = slots.findIndex(s => s.zone === this._tradeCursor.zone && s.index === this._tradeCursor.index);
+                    if (ci < 0) ci = 0;
+                    if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { this._tradeCursor = slots[Math.max(0, ci - 1)]; audio.playSfx('menu-tick'); this._render(); return; }
+                    if (e.code === 'ArrowRight' || e.code === 'KeyD') { this._tradeCursor = slots[Math.min(slots.length - 1, ci + 1)]; audio.playSfx('menu-tick'); this._render(); return; }
+                    if (e.code === 'ArrowUp'    || e.code === 'KeyW') { this._tradeCursor = slots[Math.max(0, ci - TRADE_COLS)]; audio.playSfx('menu-tick'); this._render(); return; }
+                    if (e.code === 'ArrowDown'  || e.code === 'KeyS') { this._tradeCursor = slots[Math.min(slots.length - 1, ci + TRADE_COLS)]; audio.playSfx('menu-tick'); this._render(); return; }
+                    if (e.code === 'Space' || e.code === 'Enter') { this._tradeActivate(this._tradeCursor.zone, this._tradeCursor.index); this._tradeCursor = this._clampTradeCursor(this._tradeCursor); this._render(); return; }
+                }
                 return;
             }
 
@@ -4165,6 +4180,7 @@ class Game {
         if (!npc || !npc.entity || !npc.entity.isAlive()) return;
         this._tradeNpc = npc;
         this._tradeSell = this._tradeSellList();   // snapshot the bag layout for stable hit-testing
+        this._tradeCursor = this._clampTradeCursor({ zone: 'buy', index: 0 });   // (menu grammar) cursor on the first cell
         // (Phase 6c) Vendors keep a reversible BUYBACK ledger, keyed to the NPC +
         // the moment the window opened. Reuse it while the ~5-min window is still
         // live (so closing/re-opening within the window keeps your locked prices);
@@ -4541,35 +4557,63 @@ class Game {
         if (!npc) { this._closeTrade(); return; }
         if (!this._pointInRect(pt, TRADE_MODAL_RECT)) { this._closeTrade(); return; }
         const loot = !!npc._container;   // (Phase 6b) chest — take-only, no bribe/sell
-        if (!loot && this._pointInRect(pt, TRADE_BRIBE_RECT, HIT_SLOP)) { this._bribeVendor(); return; }
+        if (!loot && this._pointInRect(pt, TRADE_BRIBE_RECT, HIT_SLOP)) { this._tradeActivate('bribe', 0); return; }
 
         // LEFT column: vendor BUY / chest TAKE (a non-vendor NPC has no stock).
         const stock = npc.stock || [];
         for (let i = 0; i < stock.length; i++) {
-            if (this._pointInRect(pt, tradeCellRect(TRADE_BUY_ORIGIN, i), HIT_SLOP)) { this._buyFromVendor(stock[i]); return; }
+            if (this._pointInRect(pt, tradeCellRect(TRADE_BUY_ORIGIN, i), HIT_SLOP)) { this._tradeActivate('buy', i); return; }
         }
         if (loot) return;   // a chest has no right column
 
         const offerMode = !npc.vendor;   // (Phase 6a)
-
-        // (Phase 6c) BUYBACK row — sold items you can re-buy at the locked price.
-        // Vendor-only; tapping routes through _buyFromVendor's rebuy path.
         if (!offerMode) {
             const bb = this._buybackList(npc);
             for (let i = 0; i < bb.length && i < TRADE_COLS; i++) {
-                if (this._pointInRect(pt, tradeCellRect(TRADE_BUYBACK_ORIGIN, i), HIT_SLOP)) { this._buyFromVendor(bb[i].itemId); return; }
+                if (this._pointInRect(pt, tradeCellRect(TRADE_BUYBACK_ORIGIN, i), HIT_SLOP)) { this._tradeActivate('buyback', i); return; }
             }
         }
 
         // RIGHT column: SELL (vendor) or OFFER (non-vendor). Same grid.
         const sell = this._tradeSell || [];
         for (let i = 0; i < sell.length; i++) {
-            if (this._pointInRect(pt, tradeCellRect(TRADE_SELL_ORIGIN, i), HIT_SLOP)) {
-                if (offerMode) this._offerFromTrade(sell[i].slot);
-                else           this._sellToVendor(sell[i].slot);
-                return;
-            }
+            if (this._pointInRect(pt, tradeCellRect(TRADE_SELL_ORIGIN, i), HIT_SLOP)) { this._tradeActivate('sell', i); return; }
         }
+    }
+
+    // (menu grammar) The one per-cell trade action — buy / sell / offer / buyback /
+    // bribe — that BOTH a tap (_tapTrade) and a keyboard Confirm route through, so
+    // pointer and keys can never drift.
+    _tradeActivate(zone, index) {
+        const npc = this._tradeNpc; if (!npc) return;
+        const loot = !!npc._container, offerMode = !npc.vendor;
+        if (zone === 'bribe') { if (!loot) this._bribeVendor(); return; }
+        if (zone === 'buy')   { const stock = npc.stock || []; if (stock[index] != null) this._buyFromVendor(stock[index]); return; }
+        if (zone === 'buyback' && !offerMode && !loot) { const bb = this._buybackList(npc); if (bb[index]) this._buyFromVendor(bb[index].itemId); return; }
+        if (zone === 'sell')  { const sell = this._tradeSell || []; if (sell[index]) { if (offerMode) this._offerFromTrade(sell[index].slot); else this._sellToVendor(sell[index].slot); } return; }
+    }
+
+    // (menu grammar) The navigable slot list, in cursor order: BUY cells, then
+    // BUYBACK, then SELL, then the Bribe button (mirrors the on-screen layout).
+    _tradeSlots() {
+        const npc = this._tradeNpc; if (!npc) return [];
+        const loot = !!npc._container, offerMode = !npc.vendor;
+        const slots = [];
+        (npc.stock || []).forEach((_, i) => slots.push({ zone: 'buy', index: i }));
+        if (!loot) {
+            if (!offerMode) this._buybackList(npc).slice(0, TRADE_COLS).forEach((_, i) => slots.push({ zone: 'buyback', index: i }));
+            (this._tradeSell || []).forEach((_, i) => slots.push({ zone: 'sell', index: i }));
+            slots.push({ zone: 'bribe', index: 0 });
+        }
+        return slots;
+    }
+
+    // Snap a (possibly stale, post-transaction) cursor to a valid slot.
+    _clampTradeCursor(c) {
+        const slots = this._tradeSlots();
+        if (!slots.length) return { zone: 'buy', index: 0 };
+        if (c && slots.some(s => s.zone === c.zone && s.index === c.index)) return c;
+        return slots[0];
     }
 
     // ── Log ──────────────────────────────────────────────────────────────────

@@ -2801,10 +2801,23 @@ export class Renderer {
             });
         }
 
+        // (menu grammar) keyboard / d-pad cursor highlight over the active cell.
+        const cur = game._tradeCursor;
+        if (cur && game._tradeSlots && game._tradeSlots().some(s => s.zone === cur.zone && s.index === cur.index)) {
+            const cr = cur.zone === 'bribe'   ? TRADE_BRIBE_RECT
+                     : cur.zone === 'sell'    ? tradeCellRect(TRADE_SELL_ORIGIN, cur.index)
+                     : cur.zone === 'buyback' ? tradeCellRect(TRADE_BUYBACK_ORIGIN, cur.index)
+                     :                          tradeCellRect(TRADE_BUY_ORIGIN, cur.index);
+            ctx.save();
+            ctx.strokeStyle = '#fff3c0'; ctx.lineWidth = 2.5;
+            ctx.strokeRect(cr.x - 2, cr.y - 2, cr.w + 4, cr.h + 4);
+            ctx.restore();
+        }
+
         // Footer hint.
-        const footer = container ? 'TAP TO TAKE    E / ESC CLOSE'
-                     : offerMode ? 'TAP TO GIVE    B BRIBE    E / ESC CLOSE'
-                                 : 'TAP TO BUY / SELL    B BRIBE    E / ESC CLOSE';
+        const footer = container ? 'TAP OR ↑↓←→ + SPACE · TAKE    E / ESC CLOSE'
+                     : offerMode ? 'TAP OR ↑↓←→ + SPACE · GIVE    B BRIBE    E / ESC CLOSE'
+                                 : 'TAP OR ↑↓←→ + SPACE · BUY/SELL    B BRIBE    E / ESC CLOSE';
         this.font.drawText(ctx, footer, CANVAS_PX / 2, R.y + R.h - 16, {
             color: UI.textLight, scale: 1, align: 'center',
         });
