@@ -12,7 +12,7 @@ import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
 import { attack, formatDamageNumber } from './combat.js';
 import { Enemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
-import { getGreedyStep, stepEntity } from './pathing.js'; // ally pathfinding; stepEntity = shove a character aside
+import { getGreedyStep, stepEntity, findPath } from './pathing.js'; // pathfinding (greedy chase + BFS click-to-move); stepEntity = shove a character aside
 import { applyDispositionDelta, reactToTransaction } from './give-action.js';
 import { getDialogue } from './dialogue.js';
 import { escapeHtml, manhattan, clamp } from './utils.js';
@@ -34,7 +34,7 @@ import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (n
 import {
     createWheelState, cycle, drill, back, compose, autoAimTile,
     needsFriendlyConfirm, aimRange, affectedTiles, selectedNode, restoreLastCategory, verbApplies,
-    orderedTargetVerbs, isCombatActive,
+    orderedTargetVerbs, isCombatActive, defaultVerb,
 } from './wheel-model.js'; // (sunburst wheel) node-tree model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
 
@@ -250,6 +250,16 @@ class Game {
         // walking with no re-press. (movement-feel resume-fix, 2026-07-03)
         this._physicalHeld = new Set();
 
+        // Click-to-walk path (pointer model): a BFS tile list the Hero walks one
+        // step per settle, plus an optional action fired on arrival (path-then-
+        // act). Consumed in _onStepSettled; cleared by _stopAutoRepeat (same-map
+        // interrupts: keypress/menu/pause/blur/death) and _resumeHeldWalk (a path
+        // never survives a zone change — it just stops at the seam).
+        this._pathQueue = [];
+        this._pathArrive = null;
+        this._pressTimer = null;    // touch long-press timer → full Target List
+        this._pressStart = null;    // pointerdown client pos, to cancel the press on drag
+
         // In-canvas log strip (Phase 1B of overhead-dialogue plan). Mirrors
         // every _log() call into a fixed-size ring buffer that the renderer
         // draws above the hotbar. Newest message at the bottom; old ones
@@ -438,7 +448,6 @@ class Game {
         await this._loadMap('town-map.json');
         this._bindSplash();
         this._bindInput();
-        this._bindTouchControls();
         this._bindCanvasTap(canvas);
         this._bindMenuSheet();
         this._bindHelpModal();
@@ -802,6 +811,7 @@ class Game {
             this._startMainQuest();   // deterministic fix_car start (fix/critical-path)
             this._render();
             this._log('[Entered the town]');
+            this._maybeShowFirstRunHint();
         };
         // CONTINUE loads the autosave into the live game. GAME START / Space
         // begins fresh (the existing save survives until the fresh run's first
@@ -816,6 +826,7 @@ class Game {
             wrapper.classList.remove('hidden');
             await loadInto(this, raw);
             this._log('[Save loaded]', 'transition');
+            this._maybeShowFirstRunHint();
         };
 
         document.getElementById('splash-go').addEventListener('click', start);
@@ -827,6 +838,30 @@ class Game {
         document.addEventListener('keydown', (e) => {
             if (this.state === STATE.SPLASH && e.code === 'Space') { e.preventDefault(); start(); }
         });
+    }
+
+    // (pointer model) One-time onboarding line, shown on the first ever run and
+    // dismissed by the first tap/keypress (which still flows through to the game)
+    // or after ~6s. Gated by a persisted Settings flag so it never repeats.
+    _maybeShowFirstRunHint() {
+        if (Settings.get('firstRunHintSeen')) return;
+        const el = document.getElementById('first-run-hint');
+        if (!el) return;
+        Settings.set('firstRunHintSeen', true);
+        el.classList.remove('hidden');
+        let done = false;
+        const hide = () => {
+            if (done) return; done = true;
+            el.classList.add('hidden');
+            clearTimeout(timer);
+            document.removeEventListener('pointerdown', hide, true);
+            document.removeEventListener('keydown', hide, true);
+        };
+        const timer = setTimeout(hide, 6000);
+        // Capture so the hint clears on the FIRST input; we never preventDefault,
+        // so that same tap/key still reaches the game (moves the player, etc.).
+        document.addEventListener('pointerdown', hide, true);
+        document.addEventListener('keydown', hide, true);
     }
 
     // ── Input ────────────────────────────────────────────────────────────────
@@ -1114,55 +1149,6 @@ class Game {
         });
     }
 
-    _bindTouchControls() {
-        // Direction keys held on touch walk continuously the way they do on
-        // desktop — holding ArrowDown walks tile after tile, releasing stops.
-        // We mirror real keyboard semantics: pointerdown → keydown (which the
-        // IDLE handler routes into _beginMoveOrTurn + the held-key stack, so
-        // _onStepSettled chains the walk), pointerup/cancel/leave → keyup
-        // (which pops the held-key stack; another held direction continues,
-        // none stops). Non-direction keys (Space → WAIT) keep the original
-        // tap-fires-once behavior; they don't participate in walking.
-        const buttons = document.querySelectorAll('#touch-controls .tc-btn');
-        const HOLD_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
-
-        buttons.forEach(btn => {
-            const code = btn.dataset.key;
-            const isHold = HOLD_KEYS.has(code);
-            let down = false;
-
-            const fireDown = (e) => {
-                if (e) e.preventDefault();
-                if (down) return;            // ignore duplicate enter/down from same finger
-                down = true;
-                document.dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true }));
-                if (!isHold) {
-                    // One-shot key (Space): release immediately so the input
-                    // model sees a clean tap, not a held key.
-                    document.dispatchEvent(new KeyboardEvent('keyup', { code, bubbles: true }));
-                    down = false;
-                }
-            };
-            const fireUp = (e) => {
-                if (e) e.preventDefault();
-                if (!down) return;
-                down = false;
-                if (isHold) {
-                    document.dispatchEvent(new KeyboardEvent('keyup', { code, bubbles: true }));
-                }
-            };
-
-            btn.addEventListener('pointerdown',   fireDown);
-            btn.addEventListener('pointerup',     fireUp);
-            btn.addEventListener('pointercancel', fireUp);
-            // Pointer dragged out of the button is treated as a release — the
-            // user has clearly stopped holding *this* direction. Without this
-            // a finger sliding off the button would leave it stuck.
-            btn.addEventListener('pointerleave',  fireUp);
-            btn.addEventListener('contextmenu',   e => e.preventDefault());
-        });
-    }
-
     _digitToSlot(code) {
         // Digit1..Digit9 → slots 0..8. Digit0 was dropped with the 10th
         // inventory slot — it selected a phantom slot that the 9-cell hotbar
@@ -1192,6 +1178,27 @@ class Game {
 
     _bindCanvasTap(canvas) {
         canvas.addEventListener('pointerdown', (e) => this._onCanvasPointerDown(e));
+        // Long-press bookkeeping: releasing / dragging / cancelling before the timer
+        // fires means it was a normal tap (default action already ran) — drop it.
+        const cancelPress = () => { if (this._pressTimer) { clearTimeout(this._pressTimer); this._pressTimer = null; } };
+        canvas.addEventListener('pointerup', cancelPress);
+        canvas.addEventListener('pointercancel', cancelPress);
+        canvas.addEventListener('pointerleave', cancelPress);
+        canvas.addEventListener('pointermove', (e) => {
+            if (!this._pressTimer || !this._pressStart) return;
+            const dx = e.clientX - this._pressStart.x, dy = e.clientY - this._pressStart.y;
+            if (dx * dx + dy * dy > 100) cancelPress();   // moved >10px → a drag, not a press
+        });
+        // Desktop: right-click a thing → the full Target List (all verbs, ungated;
+        // a needsAdjacent pick then walks-then-fires). The equivalent of long-press.
+        canvas.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            if (this.state !== STATE.IDLE) return;
+            const pt = this._canvasLocalCoords(e, canvas);
+            if (!pt) return;
+            const tile = this._screenToTile(pt);
+            if (this._targetAt(tile.x, tile.y)) this._openTargetList(tile.x, tile.y);
+        });
         // Prevent text selection / drag from a click-drag on the canvas.
         canvas.addEventListener('dragstart', e => e.preventDefault());
     }
@@ -1569,10 +1576,35 @@ class Game {
         // target; nothing there → fall through to the hotbar.
         if (this.state === STATE.IDLE) {
             const tile = this._screenToTile(pt);
-            if (this._openTargetList(tile.x, tile.y)) return;
+            // Bare tap on a thing → walk adjacent (if needed) → fire its DEFAULT
+            // verb (Take/Talk/Hit/Examine). The full Target List is on long-press /
+            // right-click (see _bindCanvasTap) or the F key.
+            const target = this._targetAt(tile.x, tile.y);
+            if (target) {
+                const v = defaultVerb(target, this);
+                if (v) { this._actOnTarget(v, target); this._armLongPress(tile, e); return; }
+            }
+            // Click-to-move: empty walkable ground → BFS-path the Hero there.
+            if (this.map.isWalkable(tile.x, tile.y) && !(tile.x === this.playerX && tile.y === this.playerY)) {
+                const path = findPath(this, { x: this.playerX, y: this.playerY }, tile);
+                if (path && path.length) { this._walkPath(path); return; }
+            }
         }
         // IDLE or ITEM_SELECTED → hotbar tap.
         this._tapHotbar(pt);
+    }
+
+    // Touch long-press: a quick tap already fired the default action; if the finger
+    // stays put over a thing ~450ms, open the full Target List instead (opening it
+    // halts the walk the tap just started). Cancelled on pointerup / drag / cancel
+    // (see _bindCanvasTap) and by _stopAutoRepeat. Desktop uses right-click.
+    _armLongPress(tile, e) {
+        if (this._pressTimer) clearTimeout(this._pressTimer);
+        this._pressStart = e ? { x: e.clientX, y: e.clientY } : null;
+        this._pressTimer = setTimeout(() => {
+            this._pressTimer = null;
+            if (this.state === STATE.IDLE) this._openTargetList(tile.x, tile.y);
+        }, 450);
     }
 
     _pointInRect(p, r, slop = 0) {
@@ -2028,12 +2060,44 @@ class Game {
     // step. (fix/critical-path safety intact)
     _onStepSettled() {
         if (this.state !== STATE.IDLE) return;
-        const intent = this._intendedWalkDir();   // folds in the one-deep buffer
+        // Manual input always OVERRIDES a click-to-walk: a held / just-pressed
+        // direction cancels the path and takes over (press WASD mid-path to grab
+        // the wheel back). Read the intent (folds in the one-deep buffer) first.
+        const intent = this._intendedWalkDir();
         this._queuedMoveDir = null;
-        if (!intent) return;
-        const step = this._resolveWalkStep(intent);
-        if (this._autoRepeatShouldStop(step)) return;
-        this._doMove(step);
+        if (intent) {
+            this._pathQueue = [];
+            this._pathArrive = null;
+            const step = this._resolveWalkStep(intent);
+            if (this._autoRepeatShouldStop(step)) return;
+            this._doMove(step);
+            return;
+        }
+        // No manual input → advance the click-to-walk path one tile, reusing the
+        // same halt gate as held-walk. When the queue drains, the next settle fires
+        // the deferred action (path-then-act). A blocked tile (wall/hostile/hazard)
+        // aborts BOTH the path and its pending action.
+        if (this._pathQueue.length) {
+            const node = this._pathQueue.shift();
+            const step = this._resolveWalkStep({ dx: node.x - this.playerX, dy: node.y - this.playerY });
+            if (this._autoRepeatShouldStop(step)) { this._pathQueue = []; this._pathArrive = null; }
+            else { this._doMove(step); return; }
+        } else if (this._pathArrive) {
+            const arrive = this._pathArrive; this._pathArrive = null; arrive();
+        }
+    }
+
+    // Start a click-to-walk along a BFS path (from pathing.findPath). onArrive, if
+    // given, fires once the Hero reaches the end (path-then-act). Returns false on
+    // a null path; fires onArrive immediately for an empty (already-there) path.
+    _walkPath(path, onArrive = null) {
+        if (!path) return false;
+        this._stopAutoRepeat();               // cancel any held-walk / prior path first
+        if (path.length === 0) { if (onArrive) onArrive(); return true; }
+        this._pathQueue = path.slice();
+        this._pathArrive = onArrive;
+        this._onStepSettled();                // kick the first step now
+        return true;
     }
 
     // Re-arm continuous walking from the physically-held keys after a scene or
@@ -2047,6 +2111,11 @@ class Game {
     // Only ever acts in IDLE, so a key held while a menu is open can't step
     // until the menu actually closes. (movement-feel resume-fix, 2026-07-03)
     _resumeHeldWalk() {
+        // A click-to-walk path never survives a scene boundary — drop it so a
+        // stale (old-map-coords) path can't auto-walk you after a zone load. Held-
+        // key walking still resumes below from the physical-held set.
+        this._pathQueue = [];
+        this._pathArrive = null;
         // Never auto-walk a dead / zero-HP player: _closeWheel (and friends) force
         // state=IDLE synchronously even when the fire that opened them just killed
         // the player via _advanceWorld→_die, and resuming here would step the 0-HP
@@ -2067,6 +2136,9 @@ class Game {
         this._clearTurnTimer();
         this._queuedMoveDir = null;
         this._heldDirKeys = [];
+        this._pathQueue = [];       // cancel any click-to-walk in progress
+        this._pathArrive = null;
+        if (this._pressTimer) { clearTimeout(this._pressTimer); this._pressTimer = null; }
     }
 
     // True when held-key auto-walking should HALT before stepping in `dir` —
@@ -2467,11 +2539,33 @@ class Game {
     }
 
     // Route the chosen verb (from the Target List) to the existing resolvers; the
-    // `cancel` row just closes the list.
+    // `cancel` row just closes the list. Adjacency-requiring verbs walk the Hero
+    // adjacent FIRST (path-then-act) — see _actOnTarget.
     _fireTargetVerb(verb) {
-        const t = this.targetList.target, npc = t && t.npc;
         if (verb.resolver === 'cancel') { this._closeTargetList(); return; }
-        this.state = STATE.IDLE;   // the resolvers below assume IDLE
+        this.state = STATE.IDLE;   // the resolvers + click-walk assume IDLE
+        this._actOnTarget(verb, this.targetList.target);
+    }
+
+    // Perform `verb` on `t`, walking the Hero adjacent FIRST when the verb needs
+    // adjacency and we're not there yet (path-then-act: BG3 × RuneScape). Shared by
+    // the Target List and a bare tap's default action. Rangeless verbs (examine /
+    // throw) fire in place.
+    _actOnTarget(verb, t) {
+        if (!verb || !t) { this._render(); return; }
+        const near = Math.max(Math.abs(this.playerX - t.x), Math.abs(this.playerY - t.y)) <= 1;
+        if (verb.needsAdjacent && !near) {
+            const path = findPath(this, { x: this.playerX, y: this.playerY }, { x: t.x, y: t.y }, { adjacent: true });
+            if (path) { this._walkPath(path, () => this._fireResolver(verb, t)); return; }
+            this._render(); return;   // unreachable — can't get adjacent to act
+        }
+        this._fireResolver(verb, t);
+    }
+
+    // Fire a verb's resolver on `t`, assuming the Hero is already positioned for it.
+    _fireResolver(verb, t) {
+        const npc = t && t.npc;
+        this.state = STATE.IDLE;
         switch (verb.resolver) {
             case 'examine': {
                 // (Phase 6d) An item's examine names its value tier — the legible

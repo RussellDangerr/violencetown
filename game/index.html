@@ -53,17 +53,14 @@
         </div>
         <button id="menu-btn" aria-label="open menu">☰</button>
         <div id="version-badge" aria-label="game version"></div>
+        <!-- (pointer model) one-time onboarding line, shown on the first run and
+             dismissed by the first tap/keypress (see main._maybeShowFirstRunHint). -->
+        <div id="first-run-hint" class="hidden" aria-hidden="true">Tap to move · tap a target to act · long-press for options</div>
 
+        <!-- (pointer model) The on-screen d-pad is gone — tap the world to move,
+             tap a target to act, long-press for the full options. Only the action-
+             wheel opener remains on touch (the ☰ menu is above). -->
         <div id="touch-controls">
-            <div id="touch-dpad">
-                <button class="tc-btn" data-key="ArrowUp"    aria-label="move up">▲</button>
-                <button class="tc-btn" data-key="ArrowLeft"  aria-label="move left">◀</button>
-                <button class="tc-btn" data-key="ArrowDown"  aria-label="move down">▼</button>
-                <button class="tc-btn" data-key="ArrowRight" aria-label="move right">▶</button>
-            </div>
-            <!-- (action-wheel overhaul) Opens the action wheel on touch, and
-                 fires while it's open. Bump-to-attack is retired, so this is how
-                 touch players act and fight. -->
             <button id="action-btn" class="tc-btn" aria-label="action wheel">✦</button>
         </div>
 
@@ -93,10 +90,11 @@
                 <h2>HOW TO PLAY</h2>
                 <p class="help-lede">You deliver burgers on foot for Borgir — ever since rat-people tore the cataclysmic converter out of your car (or so the boss says). You dream of a Yellow Card: a licence to drive a real Violencetown taxi. First, get the car running.</p>
 
-                <h3>Move</h3>
+                <h3>Move &amp; interact</h3>
                 <ul>
                     <li><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> or arrows — walk one tile, hold to keep going</li>
-                    <li><span class="help-touch">On touch:</span> tap the d-pad, hold for continuous walking</li>
+                    <li><span class="help-touch">Tap / click the ground</span> to walk there (paths around buildings)</li>
+                    <li><span class="help-touch">Tap / click a target</span> → walk over &amp; do the obvious thing (Take / Talk / Attack); <span class="help-touch">long-press or right-click</span> for all options · <kbd>F</kbd> opens that list for who you face</li>
                 </ul>
 
                 <h3>Combat &amp; actions</h3>

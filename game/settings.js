@@ -25,6 +25,7 @@ export const DEFAULTS = Object.freeze({
     // instances (and players) silent by default. The options mute toggle
     // persists an unmute per-device, so turning sound ON sticks.
     muted:        true,    // hard mute, independent of the two volumes
+    firstRunHintSeen: false, // (pointer model) one-time "tap to move" hint shown?
 });
 
 // Live, mutable copy of the settings. Seeded with defaults so callers can read
@@ -59,6 +60,7 @@ export function validate(raw) {
         sfxVolume:    clamp01(o.sfxVolume,   DEFAULTS.sfxVolume),
         reduceMotion: asBool(o.reduceMotion, DEFAULTS.reduceMotion),
         muted:        asBool(o.muted,        DEFAULTS.muted),
+        firstRunHintSeen: asBool(o.firstRunHintSeen, DEFAULTS.firstRunHintSeen),
     };
 }
 

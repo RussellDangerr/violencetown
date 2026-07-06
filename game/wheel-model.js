@@ -381,23 +381,23 @@ export function flapperDeflection(p, dir) {
 // so Give folded into it. Bandit/townsfolk/boss all become "trade-able".
 export function targetVerbs(target, game) {
   if (!target) return [];
-  const adj = cheb(game.playerX, game.playerY, target.x, target.y) <= 1;
   const haveThrow = (game.inventory || []).some(s => s && s.itemDef && s.itemDef.useType && String(s.itemDef.useType).includes('throw'));
   const V = [];
   V.push({ key: 'examine', label: 'Examine', color: '#9aa0a6', text: '#23262b', icon: '?', resolver: 'examine' });
   if (target.npc) {
     const e = target.npc;
     const hostile = (!e.behavior || e.behavior.includes('HOSTILE')) && !e._ally;
-    if (e.dialogueId && adj)          V.push({ key: 'talk',  label: 'Talk',  color: '#3f9aa0', text: '#eafafa', resolver: 'talk' });
-    if (adj)                          V.push({ key: 'trade', label: 'Trade', color: '#cba43c', text: '#2a1f06', icon: '⇄', resolver: 'trade' });
-    if (adj && e.bribeable !== false) V.push({ key: 'bribe', label: 'Bribe', color: '#cba43c', text: '#2a1f06', icon: '¤', resolver: 'bribe' });
-    if (hostile && adj)               V.push({ key: 'hit',   label: 'Hit',   color: '#c8443a', text: '#fff3d0', icon: '⚔', resolver: 'hit' });
-    if (hostile && haveThrow)         V.push({ key: 'throw', label: 'Throw', color: '#e08a2a', text: '#2a1400', icon: '➹', resolver: 'throw' });
+    if (e.dialogueId)          V.push({ key: 'talk',  label: 'Talk',  color: '#3f9aa0', text: '#eafafa', resolver: 'talk',  needsAdjacent: true });
+    V.push({ key: 'trade', label: 'Trade', color: '#cba43c', text: '#2a1f06', icon: '⇄', resolver: 'trade', needsAdjacent: true });
+    if (e.bribeable !== false) V.push({ key: 'bribe', label: 'Bribe', color: '#cba43c', text: '#2a1f06', icon: '¤', resolver: 'bribe', needsAdjacent: true });
+    if (hostile)               V.push({ key: 'hit',   label: 'Hit',   color: '#c8443a', text: '#fff3d0', icon: '⚔', resolver: 'hit',   needsAdjacent: true });
+    if (hostile && haveThrow)  V.push({ key: 'throw', label: 'Throw', color: '#e08a2a', text: '#2a1400', icon: '➹', resolver: 'throw' });
   }
-  // Take is adjacency-gated like the NPC verbs — no reaching across the map to
-  // grab an item. Taking a distant item auto-walks there first once the pointer
-  // model (path-then-act) lands; until then a far item shows only Examine.
-  if (target.item && adj) V.push({ key: 'take', label: 'Take', color: '#4f9b4a', text: '#effbe9', resolver: 'take' });
+  // Verbs are offered regardless of range; the adjacency-requiring ones carry
+  // needsAdjacent and the fire path walks the Hero adjacent FIRST (path-then-act,
+  // pointer-model slice). Examine + Throw are rangeless. (Supersedes the old
+  // offer-time adjacency gate — walking now prevents the reach-across-map grab.)
+  if (target.item) V.push({ key: 'take', label: 'Take', color: '#4f9b4a', text: '#effbe9', resolver: 'take', needsAdjacent: true });
   return V.sort((a, b) => (a.label < b.label ? -1 : a.label > b.label ? 1 : 0));
 }
 
@@ -412,13 +412,24 @@ export function createTargetWheelState() {
 // then Examine, then a Cancel row at the bottom. (`Walk here` + path-then-act
 // arrive with the pointer-model slice; not present yet.)
 const TARGET_VERB_RANK = { hit: 0, talk: 0, take: 0, trade: 20, bribe: 30, throw: 40, examine: 90 };
-export function orderedTargetVerbs(target, game) {
-  const verbs = targetVerbs(target, game).slice();
-  const npc = target && target.npc;
+
+// The default verb for a target — the top-of-list / bare-tap action, chosen by
+// TYPE independent of range: item→Take, hostile NPC→Hit, friendly-with-dialogue
+// →Talk, else Examine. Returns the full verb object (or null).
+export function defaultVerb(target, game) {
+  if (!target) return null;
+  const verbs = targetVerbs(target, game);
+  const npc = target.npc;
   const hostile = npc && ((!npc.behavior || npc.behavior.includes('HOSTILE')) && !npc._ally);
-  const defaultKey = target.item ? 'take'
+  const key = target.item ? 'take'
     : npc ? (hostile ? 'hit' : (npc.dialogueId ? 'talk' : 'examine'))
     : 'examine';
+  return verbs.find(v => v.key === key) || verbs.find(v => v.key === 'examine') || verbs[0] || null;
+}
+
+export function orderedTargetVerbs(target, game) {
+  const verbs = targetVerbs(target, game).slice();
+  const defaultKey = (defaultVerb(target, game) || {}).key;
   const rank = (v) => (v.key === defaultKey ? -1 : (TARGET_VERB_RANK[v.key] ?? 50));
   verbs.sort((a, b) => rank(a) - rank(b) || (a.label < b.label ? -1 : a.label > b.label ? 1 : 0));
   verbs.push({ key: 'cancel', label: 'Cancel', resolver: 'cancel', color: '#4a3c2a', text: '#b0a184' });
