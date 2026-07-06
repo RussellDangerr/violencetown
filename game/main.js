@@ -900,6 +900,12 @@ class Game {
             // by our own step-chaining, not the OS repeat rate.
             if (e.repeat) return;
 
+            // (menu grammar) UNIVERSAL CANCEL — Escape closes / backs out of any menu
+            // through the one _closeCurrentMenu hook, so exit is consistent everywhere.
+            // The wheel returns false (its Esc = back-one-level, with confirming/aiming
+            // nuance) and falls through to its own block below.
+            if (e.code === 'Escape' && this._closeCurrentMenu()) { e.preventDefault(); return; }
+
             // (§12.3) INSPECT panel — any key dismisses it back to walking.
             if (this.state === STATE.INSPECT) { e.preventDefault(); this._closeInspect(); return; }
 
@@ -1516,6 +1522,28 @@ class Game {
             if (now - (this._overlayOpenedAt ?? 0) < 80) return true;
         }
         return false;
+    }
+
+    // (menu grammar) The single "Cancel / get out of this menu" hook — routes each
+    // menu state to its EXISTING close method, so exit behavior lives in one place.
+    // Called by the universal Escape, the ✕/tap-outside affordance, and (later) the
+    // gamepad B button. Returns true if it closed something. RADIAL_MENU returns
+    // false on purpose: its Esc/back grammar (confirming/aiming/depth) stays in the
+    // wheel's own keydown block, and a tap outside the ring calls _closeWheel directly.
+    _closeCurrentMenu() {
+        switch (this.state) {
+            case STATE.INSPECT:        this._closeInspect(); return true;
+            case STATE.TARGET_LIST:    this._closeTargetList(); return true;
+            case STATE.JOURNAL:        this._closeJournal(); return true;
+            case STATE.LOG_MODAL:      this._closeLogModal(); return true;
+            case STATE.TRADE:          this._closeTrade(); return true;
+            case STATE.DIALOGUE:       this._closeDialogue(); return true;
+            case STATE.EQUIPMENT:      this._closeEquipmentScreen(); return true;
+            case STATE.ITEM_OVERLAY:   this.state = STATE.ITEM_SELECTED; this._render(); return true;
+            case STATE.ITEM_SELECTED:  this.selectedSlot = -1; this.state = STATE.IDLE; this._render(); this._resumeHeldWalk(); return true;
+            case STATE.ITEM_THROW_DIR: this.selectedSlot = -1; this.state = STATE.IDLE; this._render(); this._resumeHeldWalk(); return true;
+            default: return false;
+        }
     }
 
     _onCanvasPointerDown(e) {
