@@ -130,3 +130,11 @@ export function tradeCellRect(origin, index) {
         h: TRADE_CELL_H,
     };
 }
+
+// (menu grammar) The always-visible ✕ / Back chip — a ~30px tappable target at a
+// panel's top-right inner corner, the device-agnostic exit on every Menu. Drawn by
+// renderer._drawCloseButton and hit-tested in main._onCanvasPointerDown, both off
+// the SAME panel rect so the button and its hit-zone can't drift.
+export function closeButtonRect(r) {
+    return { x: r.x + r.w - 36, y: r.y + 6, w: 30, h: 30 };
+}

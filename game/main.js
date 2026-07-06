@@ -282,6 +282,7 @@ class Game {
         this._dialogueReply = '';        // the NPC's current line shown in the dialogue modal
         this._dialogueCursor = 0;        // selected choice row (keyboard)
         this._tradeSell = null;          // (trade slice 1) snapshot of the sellable bag while shopping
+        this._tradeCursor = null;        // (menu grammar) keyboard / d-pad cursor over the trade grid
         this._tradeTimer = null;         // (Phase 6c) 1s re-render while trading so the buyback countdown ticks
         this._dispositionDecayAccMs = 0; // (Phase 6c) free-roam decay accumulator (ms)
         this._dispositionDecayTurns = 0; // (Phase 6c) combat decay turn counter
@@ -900,7 +901,16 @@ class Game {
             // by our own step-chaining, not the OS repeat rate.
             if (e.repeat) return;
 
-            // (§12.3) INSPECT panel — any key dismisses it back to walking.
+            // (menu grammar) UNIVERSAL CANCEL — Escape closes / backs out of any menu
+            // through the one _closeCurrentMenu hook, so exit is consistent everywhere.
+            // The wheel returns false (its Esc = back-one-level, with confirming/aiming
+            // nuance) and falls through to its own block below.
+            if (e.code === 'Escape' && this._closeCurrentMenu()) { e.preventDefault(); return; }
+
+            // (§12.3 / menu grammar) INSPECT is a PROMPT, not a Menu — ANY key
+            // dismisses it, and if that key is a held direction, _closeInspect's
+            // _resumeHeldWalk starts the walk, so one press both clears the panel
+            // and moves you. (Do not turn this into arrow-navigation.)
             if (this.state === STATE.INSPECT) { e.preventDefault(); this._closeInspect(); return; }
 
             // ── ITEM_THROW_DIR: waiting for throw direction ──
@@ -1005,6 +1015,20 @@ class Game {
                 e.preventDefault();
                 if (e.code === 'KeyE' || e.code === 'Escape') { this._closeTrade(); return; }
                 if (e.code === 'KeyB') { this._bribeVendor(); return; }
+                // (menu grammar) keyboard / d-pad navigation: arrows move the cursor
+                // over the grid slots; Space/Enter activates the SAME action a tap
+                // would (shared _tradeActivate). Cancel is Esc / ✕ / tap-outside.
+                const slots = this._tradeSlots();
+                if (slots.length) {
+                    this._tradeCursor = this._clampTradeCursor(this._tradeCursor);
+                    let ci = slots.findIndex(s => s.zone === this._tradeCursor.zone && s.index === this._tradeCursor.index);
+                    if (ci < 0) ci = 0;
+                    if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { this._tradeCursor = slots[Math.max(0, ci - 1)]; audio.playSfx('menu-tick'); this._render(); return; }
+                    if (e.code === 'ArrowRight' || e.code === 'KeyD') { this._tradeCursor = slots[Math.min(slots.length - 1, ci + 1)]; audio.playSfx('menu-tick'); this._render(); return; }
+                    if (e.code === 'ArrowUp'    || e.code === 'KeyW') { this._tradeCursor = slots[Math.max(0, ci - TRADE_COLS)]; audio.playSfx('menu-tick'); this._render(); return; }
+                    if (e.code === 'ArrowDown'  || e.code === 'KeyS') { this._tradeCursor = slots[Math.min(slots.length - 1, ci + TRADE_COLS)]; audio.playSfx('menu-tick'); this._render(); return; }
+                    if (e.code === 'Space' || e.code === 'Enter') { this._tradeActivate(this._tradeCursor.zone, this._tradeCursor.index); this._tradeCursor = this._clampTradeCursor(this._tradeCursor); this._render(); return; }
+                }
                 return;
             }
 
@@ -1518,6 +1542,28 @@ class Game {
         return false;
     }
 
+    // (menu grammar) The single "Cancel / get out of this menu" hook — routes each
+    // menu state to its EXISTING close method, so exit behavior lives in one place.
+    // Called by the universal Escape, the ✕/tap-outside affordance, and (later) the
+    // gamepad B button. Returns true if it closed something. RADIAL_MENU returns
+    // false on purpose: its Esc/back grammar (confirming/aiming/depth) stays in the
+    // wheel's own keydown block, and a tap outside the ring calls _closeWheel directly.
+    _closeCurrentMenu() {
+        switch (this.state) {
+            case STATE.INSPECT:        this._closeInspect(); return true;
+            case STATE.TARGET_LIST:    this._closeTargetList(); return true;
+            case STATE.JOURNAL:        this._closeJournal(); return true;
+            case STATE.LOG_MODAL:      this._closeLogModal(); return true;
+            case STATE.TRADE:          this._closeTrade(); return true;
+            case STATE.DIALOGUE:       this._closeDialogue(); return true;
+            case STATE.EQUIPMENT:      this._closeEquipmentScreen(); return true;
+            case STATE.ITEM_OVERLAY:   this.state = STATE.ITEM_SELECTED; this._render(); return true;
+            case STATE.ITEM_SELECTED:  this.selectedSlot = -1; this.state = STATE.IDLE; this._render(); this._resumeHeldWalk(); return true;
+            case STATE.ITEM_THROW_DIR: this.selectedSlot = -1; this.state = STATE.IDLE; this._render(); this._resumeHeldWalk(); return true;
+            default: return false;
+        }
+    }
+
     _onCanvasPointerDown(e) {
         // Only the PRIMARY button (left mouse / touch / pen) drives taps. A right
         // or middle click also fires a pointerdown, but that's the context-menu
@@ -1540,6 +1586,20 @@ class Game {
         const pt = this._canvasLocalCoords(e, canvas);
         if (!pt) return;
         e.preventDefault();
+
+        // (menu grammar) Universal ✕ / tap-outside close. The renderer stashed the
+        // open Menu's panel rect + ✕ rect; a tap on the ✕ or anywhere OUTSIDE the
+        // panel closes it via the one Cancel hook. In-panel taps (rows / grid cells /
+        // choices) fall through to the per-state handlers below. Wheel: a tap well
+        // outside the ring closes it.
+        const _mpr = this.renderer._menuPanelRect, _cbr = this.renderer._closeBtnRect;
+        if (_mpr) {
+            if (_cbr && this._pointInRect(pt, _cbr, HIT_SLOP)) { this._closeCurrentMenu(); return; }
+            if (!this._pointInRect(pt, _mpr)) { this._closeCurrentMenu(); return; }
+        } else if (this.state === STATE.RADIAL_MENU) {
+            const _dx = pt.x - RADIAL_CENTER_X, _dy = pt.y - RADIAL_CENTER_Y;
+            if (_dx * _dx + _dy * _dy > 230 * 230) { this._closeWheel(); return; }
+        }
 
         // Log modal is fully modal — route taps to it and nothing behind it.
         if (this.state === STATE.INSPECT) { this._closeInspect(); return; }
@@ -4027,7 +4087,9 @@ class Game {
     _closeLogModal() {
         if (this.state !== STATE.LOG_MODAL) return;
         this.state = STATE.IDLE;
+        audio.playSfx('menu-cancel');
         this._render();
+        this._resumeHeldWalk();   // (menu grammar) was dropping a held walk on close
     }
 
     // ── Journal ([J]) — quest checklist + completed + witness log (+ map tab) ──
@@ -4118,6 +4180,7 @@ class Game {
         if (!npc || !npc.entity || !npc.entity.isAlive()) return;
         this._tradeNpc = npc;
         this._tradeSell = this._tradeSellList();   // snapshot the bag layout for stable hit-testing
+        this._tradeCursor = this._clampTradeCursor({ zone: 'buy', index: 0 });   // (menu grammar) cursor on the first cell
         // (Phase 6c) Vendors keep a reversible BUYBACK ledger, keyed to the NPC +
         // the moment the window opened. Reuse it while the ~5-min window is still
         // live (so closing/re-opening within the window keeps your locked prices);
@@ -4214,7 +4277,9 @@ class Game {
     _closeEquipmentScreen() {
         if (this.state !== STATE.EQUIPMENT) return;
         this.state = STATE.IDLE;
+        audio.playSfx('menu-cancel');
         this._render();
+        this._resumeHeldWalk();   // (menu grammar) was dropping a held walk on close
     }
 
     // A tap anywhere outside the equipment panel dismisses it (there's no
@@ -4492,35 +4557,63 @@ class Game {
         if (!npc) { this._closeTrade(); return; }
         if (!this._pointInRect(pt, TRADE_MODAL_RECT)) { this._closeTrade(); return; }
         const loot = !!npc._container;   // (Phase 6b) chest — take-only, no bribe/sell
-        if (!loot && this._pointInRect(pt, TRADE_BRIBE_RECT, HIT_SLOP)) { this._bribeVendor(); return; }
+        if (!loot && this._pointInRect(pt, TRADE_BRIBE_RECT, HIT_SLOP)) { this._tradeActivate('bribe', 0); return; }
 
         // LEFT column: vendor BUY / chest TAKE (a non-vendor NPC has no stock).
         const stock = npc.stock || [];
         for (let i = 0; i < stock.length; i++) {
-            if (this._pointInRect(pt, tradeCellRect(TRADE_BUY_ORIGIN, i), HIT_SLOP)) { this._buyFromVendor(stock[i]); return; }
+            if (this._pointInRect(pt, tradeCellRect(TRADE_BUY_ORIGIN, i), HIT_SLOP)) { this._tradeActivate('buy', i); return; }
         }
         if (loot) return;   // a chest has no right column
 
         const offerMode = !npc.vendor;   // (Phase 6a)
-
-        // (Phase 6c) BUYBACK row — sold items you can re-buy at the locked price.
-        // Vendor-only; tapping routes through _buyFromVendor's rebuy path.
         if (!offerMode) {
             const bb = this._buybackList(npc);
             for (let i = 0; i < bb.length && i < TRADE_COLS; i++) {
-                if (this._pointInRect(pt, tradeCellRect(TRADE_BUYBACK_ORIGIN, i), HIT_SLOP)) { this._buyFromVendor(bb[i].itemId); return; }
+                if (this._pointInRect(pt, tradeCellRect(TRADE_BUYBACK_ORIGIN, i), HIT_SLOP)) { this._tradeActivate('buyback', i); return; }
             }
         }
 
         // RIGHT column: SELL (vendor) or OFFER (non-vendor). Same grid.
         const sell = this._tradeSell || [];
         for (let i = 0; i < sell.length; i++) {
-            if (this._pointInRect(pt, tradeCellRect(TRADE_SELL_ORIGIN, i), HIT_SLOP)) {
-                if (offerMode) this._offerFromTrade(sell[i].slot);
-                else           this._sellToVendor(sell[i].slot);
-                return;
-            }
+            if (this._pointInRect(pt, tradeCellRect(TRADE_SELL_ORIGIN, i), HIT_SLOP)) { this._tradeActivate('sell', i); return; }
         }
+    }
+
+    // (menu grammar) The one per-cell trade action — buy / sell / offer / buyback /
+    // bribe — that BOTH a tap (_tapTrade) and a keyboard Confirm route through, so
+    // pointer and keys can never drift.
+    _tradeActivate(zone, index) {
+        const npc = this._tradeNpc; if (!npc) return;
+        const loot = !!npc._container, offerMode = !npc.vendor;
+        if (zone === 'bribe') { if (!loot) this._bribeVendor(); return; }
+        if (zone === 'buy')   { const stock = npc.stock || []; if (stock[index] != null) this._buyFromVendor(stock[index]); return; }
+        if (zone === 'buyback' && !offerMode && !loot) { const bb = this._buybackList(npc); if (bb[index]) this._buyFromVendor(bb[index].itemId); return; }
+        if (zone === 'sell')  { const sell = this._tradeSell || []; if (sell[index]) { if (offerMode) this._offerFromTrade(sell[index].slot); else this._sellToVendor(sell[index].slot); } return; }
+    }
+
+    // (menu grammar) The navigable slot list, in cursor order: BUY cells, then
+    // BUYBACK, then SELL, then the Bribe button (mirrors the on-screen layout).
+    _tradeSlots() {
+        const npc = this._tradeNpc; if (!npc) return [];
+        const loot = !!npc._container, offerMode = !npc.vendor;
+        const slots = [];
+        (npc.stock || []).forEach((_, i) => slots.push({ zone: 'buy', index: i }));
+        if (!loot) {
+            if (!offerMode) this._buybackList(npc).slice(0, TRADE_COLS).forEach((_, i) => slots.push({ zone: 'buyback', index: i }));
+            (this._tradeSell || []).forEach((_, i) => slots.push({ zone: 'sell', index: i }));
+            slots.push({ zone: 'bribe', index: 0 });
+        }
+        return slots;
+    }
+
+    // Snap a (possibly stale, post-transaction) cursor to a valid slot.
+    _clampTradeCursor(c) {
+        const slots = this._tradeSlots();
+        if (!slots.length) return { zone: 'buy', index: 0 };
+        if (c && slots.some(s => s.zone === c.zone && s.index === c.index)) return c;
+        return slots[0];
     }
 
     // ── Log ──────────────────────────────────────────────────────────────────
