@@ -12,7 +12,7 @@ import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
 import { attack, formatDamageNumber } from './combat.js';
 import { Enemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
-import { getGreedyStep, stepEntity } from './pathing.js'; // ally pathfinding; stepEntity = shove a character aside
+import { getGreedyStep, stepEntity, findPath } from './pathing.js'; // pathfinding (greedy chase + BFS click-to-move); stepEntity = shove a character aside
 import { applyDispositionDelta, reactToTransaction } from './give-action.js';
 import { getDialogue } from './dialogue.js';
 import { escapeHtml, manhattan, clamp } from './utils.js';
@@ -1578,6 +1578,13 @@ class Game {
         if (this.state === STATE.IDLE) {
             const tile = this._screenToTile(pt);
             if (this._openTargetList(tile.x, tile.y)) return;
+            // Click-to-move: a tap on empty walkable ground paths the Hero there
+            // (BFS routes around buildings). A tile with a target was already
+            // handled by _openTargetList above.
+            if (this.map.isWalkable(tile.x, tile.y) && !(tile.x === this.playerX && tile.y === this.playerY)) {
+                const path = findPath(this, { x: this.playerX, y: this.playerY }, tile);
+                if (path && path.length) { this._walkPath(path); return; }
+            }
         }
         // IDLE or ITEM_SELECTED → hotbar tap.
         this._tapHotbar(pt);
