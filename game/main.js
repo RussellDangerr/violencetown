@@ -250,6 +250,14 @@ class Game {
         // walking with no re-press. (movement-feel resume-fix, 2026-07-03)
         this._physicalHeld = new Set();
 
+        // Click-to-walk path (pointer model): a BFS tile list the Hero walks one
+        // step per settle, plus an optional action fired on arrival (path-then-
+        // act). Consumed in _onStepSettled; cleared by _stopAutoRepeat (same-map
+        // interrupts: keypress/menu/pause/blur/death) and _resumeHeldWalk (a path
+        // never survives a zone change — it just stops at the seam).
+        this._pathQueue = [];
+        this._pathArrive = null;
+
         // In-canvas log strip (Phase 1B of overhead-dialogue plan). Mirrors
         // every _log() call into a fixed-size ring buffer that the renderer
         // draws above the hotbar. Newest message at the bottom; old ones
@@ -2028,12 +2036,44 @@ class Game {
     // step. (fix/critical-path safety intact)
     _onStepSettled() {
         if (this.state !== STATE.IDLE) return;
-        const intent = this._intendedWalkDir();   // folds in the one-deep buffer
+        // Manual input always OVERRIDES a click-to-walk: a held / just-pressed
+        // direction cancels the path and takes over (press WASD mid-path to grab
+        // the wheel back). Read the intent (folds in the one-deep buffer) first.
+        const intent = this._intendedWalkDir();
         this._queuedMoveDir = null;
-        if (!intent) return;
-        const step = this._resolveWalkStep(intent);
-        if (this._autoRepeatShouldStop(step)) return;
-        this._doMove(step);
+        if (intent) {
+            this._pathQueue = [];
+            this._pathArrive = null;
+            const step = this._resolveWalkStep(intent);
+            if (this._autoRepeatShouldStop(step)) return;
+            this._doMove(step);
+            return;
+        }
+        // No manual input → advance the click-to-walk path one tile, reusing the
+        // same halt gate as held-walk. When the queue drains, the next settle fires
+        // the deferred action (path-then-act). A blocked tile (wall/hostile/hazard)
+        // aborts BOTH the path and its pending action.
+        if (this._pathQueue.length) {
+            const node = this._pathQueue.shift();
+            const step = this._resolveWalkStep({ dx: node.x - this.playerX, dy: node.y - this.playerY });
+            if (this._autoRepeatShouldStop(step)) { this._pathQueue = []; this._pathArrive = null; }
+            else { this._doMove(step); return; }
+        } else if (this._pathArrive) {
+            const arrive = this._pathArrive; this._pathArrive = null; arrive();
+        }
+    }
+
+    // Start a click-to-walk along a BFS path (from pathing.findPath). onArrive, if
+    // given, fires once the Hero reaches the end (path-then-act). Returns false on
+    // a null path; fires onArrive immediately for an empty (already-there) path.
+    _walkPath(path, onArrive = null) {
+        if (!path) return false;
+        this._stopAutoRepeat();               // cancel any held-walk / prior path first
+        if (path.length === 0) { if (onArrive) onArrive(); return true; }
+        this._pathQueue = path.slice();
+        this._pathArrive = onArrive;
+        this._onStepSettled();                // kick the first step now
+        return true;
     }
 
     // Re-arm continuous walking from the physically-held keys after a scene or
@@ -2047,6 +2087,11 @@ class Game {
     // Only ever acts in IDLE, so a key held while a menu is open can't step
     // until the menu actually closes. (movement-feel resume-fix, 2026-07-03)
     _resumeHeldWalk() {
+        // A click-to-walk path never survives a scene boundary — drop it so a
+        // stale (old-map-coords) path can't auto-walk you after a zone load. Held-
+        // key walking still resumes below from the physical-held set.
+        this._pathQueue = [];
+        this._pathArrive = null;
         // Never auto-walk a dead / zero-HP player: _closeWheel (and friends) force
         // state=IDLE synchronously even when the fire that opened them just killed
         // the player via _advanceWorld→_die, and resuming here would step the 0-HP
@@ -2067,6 +2112,8 @@ class Game {
         this._clearTurnTimer();
         this._queuedMoveDir = null;
         this._heldDirKeys = [];
+        this._pathQueue = [];       // cancel any click-to-walk in progress
+        this._pathArrive = null;
     }
 
     // True when held-key auto-walking should HALT before stepping in `dir` —
