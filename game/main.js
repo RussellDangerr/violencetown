@@ -257,6 +257,8 @@ class Game {
         // never survives a zone change — it just stops at the seam).
         this._pathQueue = [];
         this._pathArrive = null;
+        this._pressTimer = null;    // touch long-press timer → full Target List
+        this._pressStart = null;    // pointerdown client pos, to cancel the press on drag
 
         // In-canvas log strip (Phase 1B of overhead-dialogue plan). Mirrors
         // every _log() call into a fixed-size ring buffer that the renderer
@@ -1200,6 +1202,27 @@ class Game {
 
     _bindCanvasTap(canvas) {
         canvas.addEventListener('pointerdown', (e) => this._onCanvasPointerDown(e));
+        // Long-press bookkeeping: releasing / dragging / cancelling before the timer
+        // fires means it was a normal tap (default action already ran) — drop it.
+        const cancelPress = () => { if (this._pressTimer) { clearTimeout(this._pressTimer); this._pressTimer = null; } };
+        canvas.addEventListener('pointerup', cancelPress);
+        canvas.addEventListener('pointercancel', cancelPress);
+        canvas.addEventListener('pointerleave', cancelPress);
+        canvas.addEventListener('pointermove', (e) => {
+            if (!this._pressTimer || !this._pressStart) return;
+            const dx = e.clientX - this._pressStart.x, dy = e.clientY - this._pressStart.y;
+            if (dx * dx + dy * dy > 100) cancelPress();   // moved >10px → a drag, not a press
+        });
+        // Desktop: right-click a thing → the full Target List (all verbs, ungated;
+        // a needsAdjacent pick then walks-then-fires). The equivalent of long-press.
+        canvas.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            if (this.state !== STATE.IDLE) return;
+            const pt = this._canvasLocalCoords(e, canvas);
+            if (!pt) return;
+            const tile = this._screenToTile(pt);
+            if (this._targetAt(tile.x, tile.y)) this._openTargetList(tile.x, tile.y);
+        });
         // Prevent text selection / drag from a click-drag on the canvas.
         canvas.addEventListener('dragstart', e => e.preventDefault());
     }
@@ -1581,7 +1604,10 @@ class Game {
             // verb (Take/Talk/Hit/Examine). The full Target List is on long-press /
             // right-click (see _bindCanvasTap) or the F key.
             const target = this._targetAt(tile.x, tile.y);
-            if (target) { const v = defaultVerb(target, this); if (v) { this._actOnTarget(v, target); return; } }
+            if (target) {
+                const v = defaultVerb(target, this);
+                if (v) { this._actOnTarget(v, target); this._armLongPress(tile, e); return; }
+            }
             // Click-to-move: empty walkable ground → BFS-path the Hero there.
             if (this.map.isWalkable(tile.x, tile.y) && !(tile.x === this.playerX && tile.y === this.playerY)) {
                 const path = findPath(this, { x: this.playerX, y: this.playerY }, tile);
@@ -1590,6 +1616,19 @@ class Game {
         }
         // IDLE or ITEM_SELECTED → hotbar tap.
         this._tapHotbar(pt);
+    }
+
+    // Touch long-press: a quick tap already fired the default action; if the finger
+    // stays put over a thing ~450ms, open the full Target List instead (opening it
+    // halts the walk the tap just started). Cancelled on pointerup / drag / cancel
+    // (see _bindCanvasTap) and by _stopAutoRepeat. Desktop uses right-click.
+    _armLongPress(tile, e) {
+        if (this._pressTimer) clearTimeout(this._pressTimer);
+        this._pressStart = e ? { x: e.clientX, y: e.clientY } : null;
+        this._pressTimer = setTimeout(() => {
+            this._pressTimer = null;
+            if (this.state === STATE.IDLE) this._openTargetList(tile.x, tile.y);
+        }, 450);
     }
 
     _pointInRect(p, r, slop = 0) {
@@ -2123,6 +2162,7 @@ class Game {
         this._heldDirKeys = [];
         this._pathQueue = [];       // cancel any click-to-walk in progress
         this._pathArrive = null;
+        if (this._pressTimer) { clearTimeout(this._pressTimer); this._pressTimer = null; }
     }
 
     // True when held-key auto-walking should HALT before stepping in `dir` —
