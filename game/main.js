@@ -906,7 +906,10 @@ class Game {
             // nuance) and falls through to its own block below.
             if (e.code === 'Escape' && this._closeCurrentMenu()) { e.preventDefault(); return; }
 
-            // (§12.3) INSPECT panel — any key dismisses it back to walking.
+            // (§12.3 / menu grammar) INSPECT is a PROMPT, not a Menu — ANY key
+            // dismisses it, and if that key is a held direction, _closeInspect's
+            // _resumeHeldWalk starts the walk, so one press both clears the panel
+            // and moves you. (Do not turn this into arrow-navigation.)
             if (this.state === STATE.INSPECT) { e.preventDefault(); this._closeInspect(); return; }
 
             // ── ITEM_THROW_DIR: waiting for throw direction ──
@@ -4069,7 +4072,9 @@ class Game {
     _closeLogModal() {
         if (this.state !== STATE.LOG_MODAL) return;
         this.state = STATE.IDLE;
+        audio.playSfx('menu-cancel');
         this._render();
+        this._resumeHeldWalk();   // (menu grammar) was dropping a held walk on close
     }
 
     // ── Journal ([J]) — quest checklist + completed + witness log (+ map tab) ──
@@ -4256,7 +4261,9 @@ class Game {
     _closeEquipmentScreen() {
         if (this.state !== STATE.EQUIPMENT) return;
         this.state = STATE.IDLE;
+        audio.playSfx('menu-cancel');
         this._render();
+        this._resumeHeldWalk();   // (menu grammar) was dropping a held walk on close
     }
 
     // A tap anywhere outside the equipment panel dismisses it (there's no
