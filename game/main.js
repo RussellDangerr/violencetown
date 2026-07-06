@@ -1519,6 +1519,12 @@ class Game {
     }
 
     _onCanvasPointerDown(e) {
+        // Only the PRIMARY button (left mouse / touch / pen) drives taps. A right
+        // or middle click also fires a pointerdown, but that's the context-menu
+        // gesture (the full Target List) — handled by the contextmenu listener in
+        // _bindCanvasTap. Letting it through here would fire the default action
+        // first, then the menu would bail because the state left IDLE.
+        if (e.button >= 1) return;
         // Mirror the keyboard gate: don't process taps during the move
         // animation or while the world is resolving. Splash has its own
         // handler (DOM button). Dead is a non-interactive end state; Ending
