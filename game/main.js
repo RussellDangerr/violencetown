@@ -1569,6 +1569,20 @@ class Game {
         if (!pt) return;
         e.preventDefault();
 
+        // (menu grammar) Universal ✕ / tap-outside close. The renderer stashed the
+        // open Menu's panel rect + ✕ rect; a tap on the ✕ or anywhere OUTSIDE the
+        // panel closes it via the one Cancel hook. In-panel taps (rows / grid cells /
+        // choices) fall through to the per-state handlers below. Wheel: a tap well
+        // outside the ring closes it.
+        const _mpr = this.renderer._menuPanelRect, _cbr = this.renderer._closeBtnRect;
+        if (_mpr) {
+            if (_cbr && this._pointInRect(pt, _cbr, HIT_SLOP)) { this._closeCurrentMenu(); return; }
+            if (!this._pointInRect(pt, _mpr)) { this._closeCurrentMenu(); return; }
+        } else if (this.state === STATE.RADIAL_MENU) {
+            const _dx = pt.x - RADIAL_CENTER_X, _dy = pt.y - RADIAL_CENTER_Y;
+            if (_dx * _dx + _dy * _dy > 230 * 230) { this._closeWheel(); return; }
+        }
+
         // Log modal is fully modal — route taps to it and nothing behind it.
         if (this.state === STATE.INSPECT) { this._closeInspect(); return; }
         if (this.state === STATE.JOURNAL) { this._closeJournal(); return; }

@@ -23,7 +23,7 @@ import {
     TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BUYBACK_ORIGIN, TRADE_BRIBE_RECT,
     TRADE_CELL_W, TRADE_CELL_H, TRADE_COLS, tradeCellRect,
     RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
-    EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS,
+    EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, closeButtonRect,
 } from './layout.js';
 import { ITEMS, itemTier } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
 import { WORLD_ZONES, overworldZone, connectorPairs } from './world-map.js'; // (Phase 4) rudimentary world map
@@ -413,6 +413,49 @@ export class Renderer {
         if (game.state === 'equipment') this._drawEquipmentModal(game);
         if (game.state === 'inspect') this._drawInspectPanel(game);
         if (game.state === 'journal') this._drawJournal(game);
+
+        // (menu grammar) Universal ✕ / Back affordance — after the current Menu is
+        // drawn, stash its panel rect + draw a tappable close chip at the top-right.
+        // main hit-tests renderer._closeBtnRect / _menuPanelRect, kept here in ONE
+        // place so the chip and its hit-zone can't drift. Prompts (inspect) + the
+        // wheel are excluded (any-tap / native ▼CLOSE); target_list uses the rect
+        // _drawTargetList stashed this frame (its height is per-verb-count).
+        const CLOSE_PANEL = {
+            target_list: this._targetListRect,
+            journal:     JOURNAL_RECT,
+            log_modal:   LOG_MODAL_RECT,
+            trade:       TRADE_MODAL_RECT,
+            equipment:   EQUIPMENT_MODAL_RECT,
+            dialogue:    TRADE_MODAL_RECT,
+        }[game.state] || null;
+        this._menuPanelRect = CLOSE_PANEL;
+        this._closeBtnRect = CLOSE_PANEL ? closeButtonRect(CLOSE_PANEL) : null;
+        if (this._closeBtnRect) this._drawCloseButton(this.ctx, this._closeBtnRect);
+    }
+
+    // (menu grammar) The ✕ / Back chip — a small dark rounded plate with a gold X,
+    // top-right of a Menu panel: the always-visible, tappable exit on every Menu
+    // (paired with Esc + tap-outside; gamepad B later). The X is drawn as strokes,
+    // not a glyph, since the bitmap font is ASCII-only.
+    _drawCloseButton(ctx, r) {
+        const x = r.x, y = r.y, w = r.w, h = r.h, rad = 6;
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(x + rad, y);
+        ctx.arcTo(x + w, y, x + w, y + h, rad);
+        ctx.arcTo(x + w, y + h, x, y + h, rad);
+        ctx.arcTo(x, y + h, x, y, rad);
+        ctx.arcTo(x, y, x + w, y, rad);
+        ctx.closePath();
+        ctx.fillStyle = UI.panelBg; ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = UI.panelBorder; ctx.stroke();
+        const m = 9;
+        ctx.lineWidth = 2.5; ctx.strokeStyle = UI.gold; ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(x + m, y + m); ctx.lineTo(x + w - m, y + h - m);
+        ctx.moveTo(x + w - m, y + m); ctx.lineTo(x + m, y + h - m);
+        ctx.stroke();
+        ctx.restore();
     }
 
     // (world-structure) Heavy radial darkness for the Wilderness zone — a tiny
@@ -1827,6 +1870,7 @@ export class Renderer {
         ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX); ctx.restore();
         const RH = TARGET_LIST_ROW_H, px = TARGET_LIST_RECT.x, py = TARGET_LIST_RECT.y, w = TARGET_LIST_RECT.w;
         const h = 44 + tl.verbs.length * RH + 8;
+        this._targetListRect = { x: px, y: py, w, h };   // stashed for the ✕ / tap-outside hit-test (menu grammar)
         if (ui?.loaded) drawPanelBig(ctx, ui, px, py, w, h, 'base');
         else            drawPanelSmall(ctx, px, py, w, h);
         const t = tl.target;
