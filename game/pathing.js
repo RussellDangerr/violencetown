@@ -27,6 +27,20 @@ import { chebyshev } from './utils.js';
 //                  set false only if you specifically want to allow tile-overlap
 //                  with the player (no current use case).
 
+// A tile a character may step onto — the single source of truth for occupancy,
+// shared by getGreedyStep, fleeStep, and findPath so every mover (player click-
+// to-move OR enemy/NPC chase) agrees about what's blocked: open floor, no other
+// living character (self excluded), no container, and — unless allowed — not the
+// player's own tile.
+export function stepFree(game, x, y, opts = {}) {
+    const { self = null, avoidPlayer = true } = opts;
+    if (!game.map.isWalkable(x, y)) return false;
+    if (game.enemies.some(e => e !== self && e.entity.isAlive() && e.x === x && e.y === y)) return false;
+    if (avoidPlayer && x === game.playerX && y === game.playerY) return false;
+    if (game.containers?.some(cc => cc.x === x && cc.y === y)) return false;
+    return true;
+}
+
 export function getGreedyStep(game, from, to, options = {}) {
     const { self = null, avoidPlayer = true } = options;
 
@@ -42,15 +56,7 @@ export function getGreedyStep(game, from, to, options = {}) {
     let bestDist = chebyshev(from.x, from.y, to.x, to.y);
     let best = null;
 
-    // A tile this character may step onto: open floor, no other living
-    // character (self excluded), not the player (unless allowed), no container.
-    const free = (x, y) => {
-        if (!game.map.isWalkable(x, y)) return false;
-        if (game.enemies.some(e => e !== self && e.entity.isAlive() && e.x === x && e.y === y)) return false;
-        if (avoidPlayer && x === game.playerX && y === game.playerY) return false;
-        if (game.containers?.some(cc => cc.x === x && cc.y === y)) return false;
-        return true;
-    };
+    const free = (x, y) => stepFree(game, x, y, { self, avoidPlayer });
 
     const consider = (c) => {
         if (!free(c.x, c.y)) return;
@@ -90,13 +96,7 @@ export function fleeStep(game, enemy) {
     let bestDist = chebyshev(fx, fy, px, py);
     let best = null;
 
-    const free = (x, y) => {
-        if (!game.map.isWalkable(x, y)) return false;
-        if (game.enemies.some(e => e !== enemy && e.entity.isAlive() && e.x === x && e.y === y)) return false;
-        if (x === px && y === py) return false;   // never flee onto the player
-        if (game.containers?.some(cc => cc.x === x && cc.y === y)) return false;
-        return true;
-    };
+    const free = (x, y) => stepFree(game, x, y, { self: enemy });   // avoidPlayer defaults true
     const consider = (c) => {
         if (!free(c.x, c.y)) return;
         const d = chebyshev(c.x, c.y, px, py);
@@ -130,4 +130,68 @@ export function stepEntity(ent, x, y, ms) {
     ent._slideStart = performance.now();
     ent._slideMs = ms || 150;
     ent._stepIndex = (ent._stepIndex || 0) + 1; // alternates the walk waddle/foot
+}
+
+// ── Full path (BFS) — for click-to-move / click-to-interact ──────────────────
+//
+// Breadth-first search from `from` to `to` over the 8-way grid, reusing stepFree
+// (so it agrees with the greedy chase about occupancy) and the same no-corner-
+// cutting rule. Unlike getGreedyStep this WON'T dead-end on a concave wall — it
+// finds the shortest step-path or reports there is none.
+//
+// Returns the path as an array of { x, y } tiles EXCLUDING `from` (each one a
+// single step from the last); `[]` when already satisfied; `null` when the
+// destination is unreachable.
+//
+// options:
+//   - adjacent:   goal is any tile with Chebyshev ≤ 1 of `to` (and never `to`
+//                 itself) — used to walk UP TO an NPC/item, then act.
+//   - self:       the mover, skipped in the occupancy check (default null = Hero).
+//   - avoidPlayer: default false — the Hero paths from its own tile, so its
+//                 current tile must not read as blocked.
+//   - maxNodes:   explored-node safety cap (default 4096).
+export function findPath(game, from, to, options = {}) {
+    const { adjacent = false, self = null, avoidPlayer = false, maxNodes = 4096 } = options;
+    const isTarget = (n) => n.x === to.x && n.y === to.y;
+    const goal = (n) => adjacent ? (chebyshev(n.x, n.y, to.x, to.y) <= 1 && !isTarget(n)) : isTarget(n);
+
+    if (goal(from)) return [];   // already there (or already adjacent)
+
+    const key = (x, y) => `${x},${y}`;
+    const prev = new Map();
+    const seen = new Set([key(from.x, from.y)]);
+    const queue = [from];
+    let head = 0, explored = 0;
+    const NB = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]];
+
+    while (head < queue.length) {
+        const cur = queue[head++];
+        if (++explored > maxNodes) break;
+        for (const [dx, dy] of NB) {
+            const nx = cur.x + dx, ny = cur.y + dy, k = key(nx, ny);
+            if (seen.has(k)) continue;
+            // No corner-cutting: a diagonal needs both orthogonal seams open.
+            if (dx !== 0 && dy !== 0 &&
+                (!game.map.isWalkable(cur.x + dx, cur.y) || !game.map.isWalkable(cur.x, cur.y + dy))) continue;
+            // In adjacent mode the target's own tile is never walked onto (we stop
+            // beside it); otherwise it must be a stand-able tile like any other.
+            const passable = (adjacent && nx === to.x && ny === to.y)
+                ? false
+                : stepFree(game, nx, ny, { self, avoidPlayer });
+            if (!passable) continue;
+            seen.add(k);
+            prev.set(k, cur);
+            const node = { x: nx, y: ny };
+            if (goal(node)) {
+                const path = [];
+                for (let c = node; c && !(c.x === from.x && c.y === from.y); c = prev.get(key(c.x, c.y))) {
+                    path.push({ x: c.x, y: c.y });
+                }
+                path.reverse();
+                return path;
+            }
+            queue.push(node);
+        }
+    }
+    return null;
 }
