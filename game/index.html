@@ -54,16 +54,10 @@
         <button id="menu-btn" aria-label="open menu">☰</button>
         <div id="version-badge" aria-label="game version"></div>
 
+        <!-- (pointer model) The on-screen d-pad is gone — tap the world to move,
+             tap a target to act, long-press for the full options. Only the action-
+             wheel opener remains on touch (the ☰ menu is above). -->
         <div id="touch-controls">
-            <div id="touch-dpad">
-                <button class="tc-btn" data-key="ArrowUp"    aria-label="move up">▲</button>
-                <button class="tc-btn" data-key="ArrowLeft"  aria-label="move left">◀</button>
-                <button class="tc-btn" data-key="ArrowDown"  aria-label="move down">▼</button>
-                <button class="tc-btn" data-key="ArrowRight" aria-label="move right">▶</button>
-            </div>
-            <!-- (action-wheel overhaul) Opens the action wheel on touch, and
-                 fires while it's open. Bump-to-attack is retired, so this is how
-                 touch players act and fight. -->
             <button id="action-btn" class="tc-btn" aria-label="action wheel">✦</button>
         </div>
 
