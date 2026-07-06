@@ -394,7 +394,10 @@ export function targetVerbs(target, game) {
     if (hostile && adj)               V.push({ key: 'hit',   label: 'Hit',   color: '#c8443a', text: '#fff3d0', icon: '⚔', resolver: 'hit' });
     if (hostile && haveThrow)         V.push({ key: 'throw', label: 'Throw', color: '#e08a2a', text: '#2a1400', icon: '➹', resolver: 'throw' });
   }
-  if (target.item) V.push({ key: 'take', label: 'Take', color: '#4f9b4a', text: '#effbe9', resolver: 'take' });
+  // Take is adjacency-gated like the NPC verbs — no reaching across the map to
+  // grab an item. Taking a distant item auto-walks there first once the pointer
+  // model (path-then-act) lands; until then a far item shows only Examine.
+  if (target.item && adj) V.push({ key: 'take', label: 'Take', color: '#4f9b4a', text: '#effbe9', resolver: 'take' });
   return V.sort((a, b) => (a.label < b.label ? -1 : a.label > b.label ? 1 : 0));
 }
 

@@ -20,10 +20,16 @@ test('hostile NPC: Attack (hit) default on top', () => {
   assert.equal(list[list.length - 1], 'cancel');
 });
 
-test('ground item: Take default, then Examine, then Cancel', () => {
+test('adjacent ground item: Take default, then Examine, then Cancel', () => {
   const item = { def: { name: '[Rock]' } };
-  const list = orderedTargetVerbs({ x: 6, y: 5, item }, G).map(v => v.key);
+  const list = orderedTargetVerbs({ x: 6, y: 5, item }, G).map(v => v.key);   // player 5,5 → cheb 1
   assert.deepEqual(list, ['take', 'examine', 'cancel']);
+});
+
+test('non-adjacent item: Take is gated out (no teleport-grab) — Examine + Cancel only', () => {
+  const item = { def: { name: '[Rock]' } };
+  const list = orderedTargetVerbs({ x: 9, y: 9, item }, G).map(v => v.key);   // player 5,5 → cheb 4
+  assert.deepEqual(list, ['examine', 'cancel']);
 });
 
 test('always ends with a cancel verb carrying the cancel resolver', () => {
