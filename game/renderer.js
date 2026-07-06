@@ -2287,28 +2287,21 @@ export class Renderer {
             }
         }
 
-        // 6) Pointer ▲ at TOP, just outside the outermost element, pointing inward.
-        const pr = outerMost + 12;
-        ctx.beginPath();
-        ctx.moveTo(cx, cy - pr + 10);
-        ctx.lineTo(cx - 7, cy - pr);
-        ctx.lineTo(cx + 7, cy - pr);
-        ctx.closePath();
-        ctx.fillStyle = '#fff3c0'; ctx.fill();
-
-        // (§12.4) Flapper — a brass clicker above the pointer that kicks in the
-        // spin direction as a slice cycles past, then springs back to rest. Driven
-        // by the same spin timing as the ring sweep; reduce-motion holds it still.
+        // 6) Flapper-pointer ▼ at TOP: ONE downward clicker just outside the rim
+        // that deflects in the spin direction as a slice sweeps under it, then
+        // springs back to rest (wheel-of-fortune feel). Replaces the old static
+        // pointer + a separate (upside-down) brass flapper — one element, so
+        // there's no doubled pointer. Reduce-motion holds it still. (§12.4, fix)
         let flapAngle = 0;
         if (!reduce && w._spinAt) {
             const fst = (now - w._spinAt) / 120;
             if (fst >= 0 && fst < 1) flapAngle = flapperDeflection(fst, w._spinDir || 0);
         }
         ctx.save();
-        ctx.translate(cx, cy - outerMost - 26);
+        ctx.translate(cx, cy - outerMost - 14);            // pivot just outside the outermost element
         ctx.rotate(flapAngle);
-        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-4, 13); ctx.lineTo(4, 13); ctx.closePath();
-        ctx.fillStyle = '#d9b34a'; ctx.fill();
+        ctx.beginPath(); ctx.moveTo(0, 12); ctx.lineTo(-7, 0); ctx.lineTo(7, 0); ctx.closePath();  // tip points DOWN into the wheel
+        ctx.fillStyle = '#fff3c0'; ctx.fill();
         ctx.lineWidth = 1; ctx.strokeStyle = '#2a2218'; ctx.stroke();
         ctx.restore();
 
