@@ -34,7 +34,7 @@ import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (n
 import {
     createWheelState, cycle, drill, back, compose, autoAimTile,
     needsFriendlyConfirm, aimRange, affectedTiles, selectedNode, restoreLastCategory, verbApplies,
-    orderedTargetVerbs, isCombatActive,
+    orderedTargetVerbs, isCombatActive, defaultVerb,
 } from './wheel-model.js'; // (sunburst wheel) node-tree model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
 
@@ -1577,10 +1577,12 @@ class Game {
         // target; nothing there → fall through to the hotbar.
         if (this.state === STATE.IDLE) {
             const tile = this._screenToTile(pt);
-            if (this._openTargetList(tile.x, tile.y)) return;
-            // Click-to-move: a tap on empty walkable ground paths the Hero there
-            // (BFS routes around buildings). A tile with a target was already
-            // handled by _openTargetList above.
+            // Bare tap on a thing → walk adjacent (if needed) → fire its DEFAULT
+            // verb (Take/Talk/Hit/Examine). The full Target List is on long-press /
+            // right-click (see _bindCanvasTap) or the F key.
+            const target = this._targetAt(tile.x, tile.y);
+            if (target) { const v = defaultVerb(target, this); if (v) { this._actOnTarget(v, target); return; } }
+            // Click-to-move: empty walkable ground → BFS-path the Hero there.
             if (this.map.isWalkable(tile.x, tile.y) && !(tile.x === this.playerX && tile.y === this.playerY)) {
                 const path = findPath(this, { x: this.playerX, y: this.playerY }, tile);
                 if (path && path.length) { this._walkPath(path); return; }
@@ -2521,11 +2523,33 @@ class Game {
     }
 
     // Route the chosen verb (from the Target List) to the existing resolvers; the
-    // `cancel` row just closes the list.
+    // `cancel` row just closes the list. Adjacency-requiring verbs walk the Hero
+    // adjacent FIRST (path-then-act) — see _actOnTarget.
     _fireTargetVerb(verb) {
-        const t = this.targetList.target, npc = t && t.npc;
         if (verb.resolver === 'cancel') { this._closeTargetList(); return; }
-        this.state = STATE.IDLE;   // the resolvers below assume IDLE
+        this.state = STATE.IDLE;   // the resolvers + click-walk assume IDLE
+        this._actOnTarget(verb, this.targetList.target);
+    }
+
+    // Perform `verb` on `t`, walking the Hero adjacent FIRST when the verb needs
+    // adjacency and we're not there yet (path-then-act: BG3 × RuneScape). Shared by
+    // the Target List and a bare tap's default action. Rangeless verbs (examine /
+    // throw) fire in place.
+    _actOnTarget(verb, t) {
+        if (!verb || !t) { this._render(); return; }
+        const near = Math.max(Math.abs(this.playerX - t.x), Math.abs(this.playerY - t.y)) <= 1;
+        if (verb.needsAdjacent && !near) {
+            const path = findPath(this, { x: this.playerX, y: this.playerY }, { x: t.x, y: t.y }, { adjacent: true });
+            if (path) { this._walkPath(path, () => this._fireResolver(verb, t)); return; }
+            this._render(); return;   // unreachable — can't get adjacent to act
+        }
+        this._fireResolver(verb, t);
+    }
+
+    // Fire a verb's resolver on `t`, assuming the Hero is already positioned for it.
+    _fireResolver(verb, t) {
+        const npc = t && t.npc;
+        this.state = STATE.IDLE;
         switch (verb.resolver) {
             case 'examine': {
                 // (Phase 6d) An item's examine names its value tier — the legible
