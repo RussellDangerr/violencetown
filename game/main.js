@@ -811,6 +811,7 @@ class Game {
             this._startMainQuest();   // deterministic fix_car start (fix/critical-path)
             this._render();
             this._log('[Entered the town]');
+            this._maybeShowFirstRunHint();
         };
         // CONTINUE loads the autosave into the live game. GAME START / Space
         // begins fresh (the existing save survives until the fresh run's first
@@ -825,6 +826,7 @@ class Game {
             wrapper.classList.remove('hidden');
             await loadInto(this, raw);
             this._log('[Save loaded]', 'transition');
+            this._maybeShowFirstRunHint();
         };
 
         document.getElementById('splash-go').addEventListener('click', start);
@@ -836,6 +838,30 @@ class Game {
         document.addEventListener('keydown', (e) => {
             if (this.state === STATE.SPLASH && e.code === 'Space') { e.preventDefault(); start(); }
         });
+    }
+
+    // (pointer model) One-time onboarding line, shown on the first ever run and
+    // dismissed by the first tap/keypress (which still flows through to the game)
+    // or after ~6s. Gated by a persisted Settings flag so it never repeats.
+    _maybeShowFirstRunHint() {
+        if (Settings.get('firstRunHintSeen')) return;
+        const el = document.getElementById('first-run-hint');
+        if (!el) return;
+        Settings.set('firstRunHintSeen', true);
+        el.classList.remove('hidden');
+        let done = false;
+        const hide = () => {
+            if (done) return; done = true;
+            el.classList.add('hidden');
+            clearTimeout(timer);
+            document.removeEventListener('pointerdown', hide, true);
+            document.removeEventListener('keydown', hide, true);
+        };
+        const timer = setTimeout(hide, 6000);
+        // Capture so the hint clears on the FIRST input; we never preventDefault,
+        // so that same tap/key still reaches the game (moves the player, etc.).
+        document.addEventListener('pointerdown', hide, true);
+        document.addEventListener('keydown', hide, true);
     }
 
     // ── Input ────────────────────────────────────────────────────────────────

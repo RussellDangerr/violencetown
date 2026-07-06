@@ -825,6 +825,25 @@ body {
 /* --- Pause overlay on parchment --- */
 #pause-overlay-panel .pause-hint { color: #7a6647; }
 
+/* (pointer model) First-run onboarding line — centered near the bottom; a quiet
+   gold-on-dark hint shown on the first run, dismissed by the first tap/keypress. */
+#first-run-hint {
+    position: fixed;
+    left: 50%; bottom: 14%;
+    transform: translateX(-50%);
+    max-width: 90vw;
+    padding: 10px 16px;
+    background: rgba(20, 16, 10, 0.82);
+    border: 1px solid rgba(212, 185, 106, 0.5);
+    border-radius: 10px;
+    color: #e8cf90;
+    font-size: 15px;
+    text-align: center;
+    z-index: 30;
+    pointer-events: none;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
 @media (pointer: coarse), (max-width: 700px) {
     /* Splash: keep the title-card stack clear of the notch / home indicator and
        tighten the gap so it fits short phones. (The canvas itself is capped
