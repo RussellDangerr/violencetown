@@ -99,7 +99,7 @@ export const TRADE_BUYBACK_ORIGIN = { x: 52, y: 416 };
 export const TRADE_BRIBE_RECT  = { x: 52, y: 506, w: 200, h: 34 };
 
 // ── Equipment screen (Stage 3 — read-only Vitruvian dress-up) ──
-// (drawn by renderer._drawEquipmentModal, hit-tested by main._tapEquipmentScreen).
+// (drawn by renderer._drawEquipmentModal, hit-tested by main._tapDevice via deviceEquipLayout).
 // One big ornate panel; a centred figure box with the 6 equip slots ringing it.
 // Each slot rect carries its own `label` and the `game.equipment` key it reads.
 export const EQUIPMENT_MODAL_RECT = { x: 24, y: 44, w: 560, h: 520 };
@@ -143,4 +143,55 @@ export function tradeCellRect(origin, index) {
 // the SAME panel rect so the button and its hit-zone can't drift.
 export function closeButtonRect(r) {
     return { x: r.x + r.w - 36, y: r.y + 6, w: 30, h: 30 };
+}
+
+// ── Remoticon device (Slice 3) — one tabbed, soft-pausing overlay ─────────────
+// Reuses the proven full-panel bezel. A title/✕ band sits at the top (the ✕ chip
+// from closeButtonRect lives there), a tab strip sits BELOW it (so it can't
+// collide with the chip), and the body region below that hosts one of the four
+// existing draw bodies (ITEMS/GEAR/QUESTS/MAP). Geometry lives here so
+// renderer._drawDevice (draw) and main.js (hit-test) share ONE source of truth.
+export const DEVICE_RECT = { x: 24, y: 44, w: 560, h: 520 };
+export const DEVICE_TABS = ['items', 'gear', 'quests', 'map'];
+export const DEVICE_TAB_H = 30;                        // tab-strip height
+const DEVICE_TAB_TOP = DEVICE_RECT.y + 38;             // below the title/✕ band (the chip ends at y+36)
+const DEVICE_TAB_PAD = 14;                             // strip inset from the frame sides
+
+// The `i`-th tab's hit/draw rect, evenly dividing the strip below the title band.
+export function deviceTabRect(i) {
+    const stripX = DEVICE_RECT.x + DEVICE_TAB_PAD;
+    const tabW = (DEVICE_RECT.w - DEVICE_TAB_PAD * 2) / DEVICE_TABS.length;
+    return { x: stripX + i * tabW, y: DEVICE_TAB_TOP, w: tabW - 4, h: DEVICE_TAB_H };
+}
+
+// The body region below the tab strip that hosts the active tab's draw body.
+export function deviceBodyRect() {
+    const top = DEVICE_TAB_TOP + DEVICE_TAB_H + 8;
+    return { x: DEVICE_RECT.x + 14, y: top, w: DEVICE_RECT.w - 28, h: DEVICE_RECT.y + DEVICE_RECT.h - 12 - top };
+}
+
+// Pure tab cycle (wraps both ways); an unknown current tab resets to the first.
+export function cycleDeviceTab(current, dir) {
+    const i = DEVICE_TABS.indexOf(current);
+    if (i < 0) return DEVICE_TABS[0];
+    return DEVICE_TABS[(i + dir + DEVICE_TABS.length) % DEVICE_TABS.length];
+}
+
+// (Slice 3) GEAR tab — map the equipment figure + 6 slot plates from the full
+// modal space into the (shorter) device body, PROPORTIONALLY, so nothing
+// overflows the tab strip or the frame. A pure dy-shift would push the bottom
+// WEAPON plate off; scaling fits it. renderer._drawEquipmentModal (draw) and
+// main._tapDevice (hit-test) both read this ONE helper, so the plates and their
+// tap zones can never drift.
+export function deviceEquipLayout(bodyRect) {
+    const M = EQUIPMENT_MODAL_RECT;
+    const sx = bodyRect.w / M.w, sy = bodyRect.h / M.h;
+    const map = (r) => ({
+        ...r,
+        x: bodyRect.x + (r.x - M.x) * sx,
+        y: bodyRect.y + (r.y - M.y) * sy,
+        w: r.w * sx,
+        h: r.h * sy,
+    });
+    return { figure: map(EQUIP_FIGURE_RECT), slots: EQUIP_SLOT_RECTS.map(map) };
 }

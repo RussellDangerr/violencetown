@@ -19,11 +19,12 @@ import {
     OVERLAY_RECTS, THROW_RECTS,
     HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_GAP, HOTBAR_SLOTS, HOTBAR_STRIDE,
     HOTBAR_TOTAL_W, HOTBAR_OX, HOTBAR_OY, HOTBAR_X_START, HOTBAR_Y,
-    QUESTLOG_RECT, LOG_MODAL_RECT, JOURNAL_RECT, TARGET_LIST_RECT, TARGET_LIST_ROW_H,
+    QUESTLOG_RECT, LOG_MODAL_RECT, TARGET_LIST_RECT, TARGET_LIST_ROW_H,
     TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BUYBACK_ORIGIN, TRADE_BRIBE_RECT,
     TRADE_CELL_W, TRADE_CELL_H, TRADE_COLS, tradeCellRect,
     RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
     EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, closeButtonRect,
+    DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceEquipLayout,
 } from './layout.js';
 import { ITEMS, itemTier } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
 import { WORLD_ZONES, overworldZone, connectorPairs } from './world-map.js'; // (Phase 4) rudimentary world map
@@ -410,9 +411,8 @@ export class Renderer {
         if (game.state === 'log_modal') this._drawLogModal(game);
         if (game.state === 'trade') this._drawTradeModal(game);
         if (game.state === 'dialogue') this._drawDialogueModal(game);
-        if (game.state === 'equipment') this._drawEquipmentModal(game);
         if (game.state === 'inspect') this._drawInspectPanel(game);
-        if (game.state === 'journal') this._drawJournal(game);
+        if (game.state === 'device') this._drawDevice(game);
 
         // (menu grammar) Universal ✕ / Back affordance — after the current Menu is
         // drawn, stash its panel rect + draw a tappable close chip at the top-right.
@@ -422,11 +422,10 @@ export class Renderer {
         // _drawTargetList stashed this frame (its height is per-verb-count).
         const CLOSE_PANEL = {
             target_list: this._targetListRect,
-            journal:     JOURNAL_RECT,
             log_modal:   LOG_MODAL_RECT,
             trade:       TRADE_MODAL_RECT,
-            equipment:   EQUIPMENT_MODAL_RECT,
             dialogue:    TRADE_MODAL_RECT,
+            device:      DEVICE_RECT,
         }[game.state] || null;
         this._menuPanelRect = CLOSE_PANEL;
         this._closeBtnRect = CLOSE_PANEL ? closeButtonRect(CLOSE_PANEL) : null;
@@ -1654,16 +1653,59 @@ export class Renderer {
 
     // ── Inventory Hotbar (bottom) ────────────────────────────────────────────
 
-    _drawHotbar(game) {
+    // (Slice 3) The Remoticon — one soft-pausing device that hosts the four status
+    // bodies (ITEMS/GEAR/QUESTS/MAP) as tabs inside a shared bezel. The frame + tab
+    // strip live here; each tab body is delegated to its existing draw routine,
+    // passed the shared deviceBodyRect() so it renders in-frame. The ✕ close chip +
+    // tap-outside come free from the CLOSE_PANEL machinery (device is registered there).
+    _drawDevice(game) {
+        const { ctx } = this;
+        const ui = this.uiSheet;
+        const R = DEVICE_RECT;
+        ctx.fillStyle = 'rgba(0,0,0,0.72)';
+        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+        if (ui?.loaded) drawPanelBig(ctx, ui, R.x, R.y, R.w, R.h, 'base');
+        else            drawPanelSmall(ctx, R.x, R.y, R.w, R.h);
+        if (!this.font) return;
+
+        // Title (the ✕ chip is drawn top-right by the CLOSE_PANEL machinery).
+        this.font.drawText(ctx, 'REMOTICON', CANVAS_PX / 2, R.y + 12, { color: UI.gold, scale: 2, align: 'center' });
+
+        // Tab strip — active tab gold + stroked, the rest dim.
+        const active = game._deviceTab || 'items';
+        for (let i = 0; i < DEVICE_TABS.length; i++) {
+            const t = deviceTabRect(i);
+            const on = DEVICE_TABS[i] === active;
+            drawInset(ctx, t.x, t.y, t.w, t.h);
+            if (on) { ctx.strokeStyle = UI.gold; ctx.lineWidth = 2; ctx.strokeRect(t.x + 1, t.y + 1, t.w - 2, t.h - 2); }
+            this.font.drawText(ctx, DEVICE_TABS[i].toUpperCase(), t.x + t.w / 2, t.y + t.h / 2 - 4, { color: on ? UI.gold : UI.dim, scale: 1, align: 'center' });
+        }
+
+        // Delegate the active tab's body into the shared body region.
+        const body = deviceBodyRect();
+        if      (active === 'items')  this._drawHotbar(game, body);
+        else if (active === 'gear')   this._drawEquipmentModal(game, body);
+        else if (active === 'quests') this._drawJournalQuestsBody(game, body);
+        else if (active === 'map')    this._drawWorldMapBody(game, body, body.y);
+
+        this.font.drawText(ctx, '[ ] TABS   ESC CLOSE', CANVAS_PX / 2, R.y + R.h - 12, { color: UI.dim, scale: 1, align: 'center' });
+        ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    }
+
+    _drawHotbar(game, bodyRect) {
         const { ctx, sprites } = this;
         const sw = HOTBAR_SLOT_W, sh = HOTBAR_SLOT_H, gap = HOTBAR_GAP;
         const count = HOTBAR_SLOTS;
         const totalW = HOTBAR_TOTAL_W;
-        const ox = HOTBAR_OX;
-        const oy = HOTBAR_OY;
+        // (Slice 3) hosted = drawn inside the Remoticon ITEMS tab; else the bottom HUD.
+        const hosted = !!bodyRect;
+        const ox = hosted ? Math.round(bodyRect.x + (bodyRect.w - totalW) / 2) : HOTBAR_OX;
+        const oy = hosted ? bodyRect.y + 44 : HOTBAR_OY;
+        const xStart = ox + 8;
+        const slotY = oy + 2;
 
         // Selected item tooltip above hotbar — name, description, and stats
-        if (game.selectedSlot >= 0 && game.inventory[game.selectedSlot]) {
+        if (!hosted && game.selectedSlot >= 0 && game.inventory[game.selectedSlot]) {
             const itemDef = game.inventory[game.selectedSlot].itemDef;
             const itemName = itemDef.name.replace(/[\[\]]/g, '');
 
@@ -1722,8 +1764,8 @@ export class Renderer {
         const selPulse = 0.5 + 0.5 * Math.sin(performance.now() / 1000 * Math.PI * 2);
 
         for (let i = 0; i < count; i++) {
-            const sx = HOTBAR_X_START + i * HOTBAR_STRIDE;
-            const sy = HOTBAR_Y;
+            const sx = xStart + i * HOTBAR_STRIDE;
+            const sy = slotY;
             const stack = game.inventory[i];
             const sel = game.selectedSlot === i;
             const isEmpty = !stack;
@@ -1960,37 +2002,18 @@ export class Renderer {
     // its location + description), the COMPLETED quests, and a scrollable WITNESS
     // LOG. Reads QuestEngine.getActiveQuestView / getCompletedTitles /
     // getJournalLines. Same ornate-panel chrome as the log modal.
-    _drawJournal(game) {
+    // (Slice 3) The QUESTS-tab body — active-quest checklist + completed + a
+    // scrollable witness log — hosted inside the Remoticon at bodyRect R. The device
+    // owns the tab strip + scrim; the MAP tab draws via _drawWorldMapBody.
+    // (Extracted from the retired standalone Journal.)
+    _drawJournalQuestsBody(game, R) {
         const { ctx } = this;
-        const ui = this.uiSheet;
         if (!this.font) return;
-        const R = JOURNAL_RECT;
-        ctx.fillStyle = 'rgba(0,0,0,0.72)';
-        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
-        if (ui?.loaded) drawPanelBig(ctx, ui, R.x, R.y, R.w, R.h, 'base');
-        else            drawPanelSmall(ctx, R.x, R.y, R.w, R.h);
 
         const qe = game.questEngine;
-        const cx = CANVAS_PX / 2;
         const innerX = R.x + 22;
         const maxChars = Math.max(8, Math.floor((R.w - 56) / 8));
-        let y = R.y + 16;
-
-        this.font.drawText(ctx, 'JOURNAL', cx, y, { color: UI.gold, scale: 2, align: 'center' });
-        y += 26;
-
-        // Tabs: QUESTS | MAP (Tab / M switches).
-        const tab = game._journalTab || 'quests';
-        this.font.drawText(ctx, 'QUESTS', cx - 46, y, { color: tab === 'quests' ? UI.gold : UI.dim, scale: 1, align: 'center' });
-        this.font.drawText(ctx, 'MAP',    cx + 46, y, { color: tab === 'map'    ? UI.gold : UI.dim, scale: 1, align: 'center' });
-        y += 18;
-
-        if (tab === 'map') {
-            this._drawWorldMapBody(game, R, y);
-            this.font.drawText(ctx, '▼ CLOSE · J    TAB/M SWITCH', cx, R.y + R.h - 12, { color: UI.dim, scale: 1, align: 'center' });
-            ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-            return;
-        }
+        let y = R.y + 6;
 
         // Active quest — the stage checklist.
         const view = qe ? qe.getActiveQuestView() : null;
@@ -2028,7 +2051,6 @@ export class Renderer {
         const startI = Math.max(0, lines.length - rows - scroll);
         for (const line of lines.slice(startI, startI + rows)) { this.font.drawText(ctx, line, innerX + 6, y, { color: UI.text, scale: 1 }); y += 12; }
 
-        this.font.drawText(ctx, '▼ CLOSE · J    ↑↓ SCROLL · TAB/M MAP', cx, R.y + R.h - 12, { color: UI.dim, scale: 1, align: 'center' });
         ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     }
 
@@ -2968,27 +2990,29 @@ export class Renderer {
     // A front-facing mannequin ringed by 6 body-zone slot plates. Reads
     // game.equipment (weapon set, all armor slots null today → EMPTY plates).
     // Purely a display; no hit-testing beyond "tap outside = close" in main.js.
-    _drawEquipmentModal(game) {
+    // (Slice 3) bodyRect present => hosted inside the Remoticon GEAR tab: skip the
+    // scrim/panel/title and scale the figure + plates into the body via the shared
+    // deviceEquipLayout (so main._tapDevice's hit-test reads the SAME rects).
+    _drawEquipmentModal(game, bodyRect) {
         const { ctx, sprites } = this;
         const ui = this.uiSheet;
         if (!this.font) return;
+        const hosted = !!bodyRect;
 
-        // Scrim
-        ctx.fillStyle = 'rgba(0,0,0,0.72)';
-        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+        if (!hosted) {
+            ctx.fillStyle = 'rgba(0,0,0,0.72)';
+            ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+            const R = EQUIPMENT_MODAL_RECT;
+            if (ui?.loaded) drawPanelBig(ctx, ui, R.x, R.y, R.w, R.h, 'base');
+            else            drawPanelSmall(ctx, R.x, R.y, R.w, R.h);
+            this.font.drawText(ctx, 'EQUIPMENT', R.x + 20, R.y + 14, { color: UI.gold, scale: 2, align: 'left' });
+            const armorTotal = game._playerArmor ? game._playerArmor() : 0;
+            this.font.drawText(ctx, 'ARMOR ' + armorTotal, R.x + R.w - 20, R.y + 14, { color: UI.gold, scale: 2, align: 'right' });
+        }
 
-        // Ornate panel
-        const R = EQUIPMENT_MODAL_RECT;
-        if (ui?.loaded) drawPanelBig(ctx, ui, R.x, R.y, R.w, R.h, 'base');
-        else            drawPanelSmall(ctx, R.x, R.y, R.w, R.h);
-
-        // Title (left) + total worn armor (right) — flank the centered HEAD
-        // plate so neither is occluded by it.
-        this.font.drawText(ctx, 'EQUIPMENT', R.x + 20, R.y + 14, { color: UI.gold, scale: 2, align: 'left' });
-        const armorTotal = game._playerArmor ? game._playerArmor() : 0;
-        this.font.drawText(ctx, 'ARMOR ' + armorTotal, R.x + R.w - 20, R.y + 14, { color: UI.gold, scale: 2, align: 'right' });
-
-        const F = EQUIP_FIGURE_RECT;
+        const _eq = hosted ? deviceEquipLayout(bodyRect) : { figure: EQUIP_FIGURE_RECT, slots: EQUIP_SLOT_RECTS };
+        const F = _eq.figure;
+        const EQ_SLOTS = _eq.slots;
         const fcx = F.x + F.w / 2, fcy = F.y + F.h / 2;
 
         // Faint Vitruvian circle + square behind the figure.
@@ -3030,7 +3054,7 @@ export class Renderer {
         ctx.restore();
 
         // Slot plates ringing the figure.
-        for (const slot of EQUIP_SLOT_RECTS) {
+        for (const slot of EQ_SLOTS) {
             const s = slot;
             drawInset(ctx, s.x, s.y, s.w, s.h);
 
@@ -3064,8 +3088,8 @@ export class Renderer {
             }
         }
 
-        // Footer hint.
-        this.font.drawText(ctx, 'TAP A PLATE TO REMOVE   ·   C / ESC  CLOSE', CANVAS_PX / 2, R.y + R.h - 16, { color: UI.textLight, scale: 1, align: 'center' });
+        // Footer hint (standalone only — the device frame draws its own footer).
+        if (!hosted) this.font.drawText(ctx, 'TAP A PLATE TO REMOVE   ·   C / ESC  CLOSE', CANVAS_PX / 2, EQUIPMENT_MODAL_RECT.y + EQUIPMENT_MODAL_RECT.h - 16, { color: UI.textLight, scale: 1, align: 'center' });
     }
 
     // Word-wrap `text` into lines no longer than `maxChars` characters (the

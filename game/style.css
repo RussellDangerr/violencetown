@@ -259,6 +259,19 @@ body {
                 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
+/* (Slice 3) Remoticon opener — a standalone always-visible button stacked below
+   the ☰ menu; opens/pockets the tabbed device (ITEMS·GEAR·QUESTS·MAP). Desktop
+   mouse + touch both tap it; keyboard uses Tab. Uses the .tc-btn palette; the
+   ☰ button ends at ~36px so top:42px clears it with a small gap. */
+#remoticon-btn {
+    position: absolute; top: 42px; right: 8px;
+    width: 40px; height: 34px;
+    border-radius: 6px;
+    font-size: 18px; line-height: 1;
+    padding: 0;
+    z-index: 10;
+}
+
 /* --- Version badge (always visible) --- */
 
 #version-badge {
@@ -934,6 +947,19 @@ body {
     #menu-btn:active {
         transform: scale(0.92);
         filter: brightness(1.18) drop-shadow(0 1px 3px rgba(0, 0, 0, 0.6));
+    }
+    /* (Slice 3) On touch, move the Remoticon opener into the bottom-right thumb
+       stack, above the ☰ menu button (phones have no Tab key). Keeps the .tc-btn
+       glyph look since there's no ctrl_remoticon sprite yet. */
+    #remoticon-btn {
+        position: fixed;
+        top: auto; left: auto;
+        right: max(16px, env(safe-area-inset-right));
+        bottom: calc(max(16px, env(safe-area-inset-bottom)) + 184px);
+        width: 60px; height: 60px;
+        border-radius: 50%;
+        font-size: 28px;
+        z-index: 21;
     }
 }
 
