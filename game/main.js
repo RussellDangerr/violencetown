@@ -27,6 +27,7 @@ import {
     TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BUYBACK_ORIGIN, TRADE_BRIBE_RECT,
     TRADE_COLS, tradeCellRect,
     EQUIPMENT_MODAL_RECT, EQUIP_SLOT_RECTS,
+    DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceEquipLayout,
 } from './layout.js';
 import { canTrade, buyPrice, sellPrice, bribeStepCost, BRIBE_STEP, transferGold } from './trade.js'; // pricing + the transaction spine
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
@@ -59,9 +60,8 @@ const STATE = {
     LOG_MODAL:       'log_modal',       // [L] — full scrollable message history
     TRADE:           'trade',           // (trade slice 1) Puck's shop window — buy/sell/bribe
     DIALOGUE:        'dialogue',        // (Step 4) disposition dialogue with an NPC
-    EQUIPMENT:       'equipment',       // (Stage 3) read-only Vitruvian equipment screen
     INSPECT:         'inspect',         // (§12.3) Examine → a layered inspect panel
-    JOURNAL:         'journal',         // (Phase 4) [J] — quest journal + witness log + world-map tab
+    DEVICE:          'device',          // (Slice 3) the Remoticon — one tabbed, soft-pausing device (ITEMS·GEAR·QUESTS·MAP; absorbs the retired EQUIPMENT + JOURNAL states)
 };
 
 // (zone pursuit) A wedged door's starting integrity. Trapped pursuers pound it
@@ -302,6 +302,7 @@ class Game {
         this.targetList = { x: 0, y: 0, target: null, verbs: [], sel: 0 };   // (Target List) RuneScape-style verb menu
         this._lastActKeyAt = 0; // double-tap-Act window for express-repeat
         this._wheelOpenedByHold = false; // (Slice 2) true only between a HOLD-mode open and its release; cleared by every wheel close
+        this._deviceTab = 'items';       // (Slice 3) the Remoticon's active tab (ITEMS·GEAR·QUESTS·MAP)
 
         // Screen shake (Phase F) — triggered on damage >= threshold. The
         // renderer applies a per-frame random offset to world rendering
@@ -475,6 +476,10 @@ class Game {
             actionBtn.addEventListener('pointerup', releaseWheel);
             actionBtn.addEventListener('pointercancel', releaseWheel);
         }
+        // (Slice 3) The on-screen Remoticon opener — pull out / pocket the tabbed
+        // device. One symbol (_toggleDevice) so Slice 4's gamepad Back binds to it.
+        const remoticonBtn = document.getElementById('remoticon-btn');
+        if (remoticonBtn) remoticonBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); this._toggleDevice(); });
 
         // Populate version badge from <meta name="version"> — single source of truth.
         // Lives in index.html as #version-badge, styled bottom-right in style.css.
@@ -921,6 +926,22 @@ class Game {
             // and moves you. (Do not turn this into arrow-navigation.)
             if (this.state === STATE.INSPECT) { e.preventDefault(); this._closeInspect(); return; }
 
+            // ── DEVICE (Remoticon): modal tabbed device; world is soft-paused ──
+            // Esc already closed it via the universal Cancel above. Here: Tab pockets
+            // it, [ ] cycle tabs, C/J/M jump to a tab; everything else is swallowed.
+            if (this.state === STATE.DEVICE) {
+                e.preventDefault();
+                if (e.code === 'Tab')          { this._closeDevice();   return; }
+                if (e.code === 'BracketLeft')  { this._deviceCycleTab(-1); return; }
+                if (e.code === 'BracketRight') { this._deviceCycleTab(1);  return; }
+                if (e.code === 'KeyC') { this._deviceTab = 'gear';   this._render(); return; }
+                if (e.code === 'KeyJ') { this._deviceTab = 'quests'; this._render(); return; }
+                if (e.code === 'KeyM') { this._deviceTab = 'map';    this._render(); return; }
+                if (this._deviceTab === 'quests' && (e.code === 'ArrowUp'   || e.code === 'KeyW')) { this._scrollJournal(1);  return; }
+                if (this._deviceTab === 'quests' && (e.code === 'ArrowDown' || e.code === 'KeyS')) { this._scrollJournal(-1); return; }
+                return;
+            }
+
             // ── ITEM_THROW_DIR: waiting for throw direction ──
             if (this.state === STATE.ITEM_THROW_DIR) {
                 const dir = DIRS[e.code];
@@ -1005,15 +1026,7 @@ class Game {
                 return;
             }
 
-            // ── JOURNAL: quest log (checklist + completed) + witness feed ([J]) ──
-            if (this.state === STATE.JOURNAL) {
-                e.preventDefault();
-                if (e.code === 'KeyJ' || e.code === 'Escape')     { this._closeJournal(); return; }
-                if (e.code === 'Tab' || e.code === 'KeyM')        { this._journalTab = (this._journalTab === 'map' ? 'quests' : 'map'); audio.playSfx('menu-tick'); this._render(); return; }
-                if (e.code === 'ArrowUp'   || e.code === 'KeyW')  { this._scrollJournal(1);  return; }
-                if (e.code === 'ArrowDown' || e.code === 'KeyS')  { this._scrollJournal(-1); return; }
-                return;
-            }
+            // (Slice 3) JOURNAL in-state keydown retired — the DEVICE block above owns QUESTS/MAP.
 
             // ── TRADE: Puck's shop window (trade slice 1) ──
             // E / Esc closes; B bribes (raise the vendor's mood for one step's
@@ -1060,13 +1073,7 @@ class Game {
             }
 
             // ── EQUIPMENT: read-only Vitruvian screen (Stage 3) ──
-            // C / Esc closes. No unequip logic — it's a display screen, so no
-            // other keys are handled here.
-            if (this.state === STATE.EQUIPMENT) {
-                e.preventDefault();
-                if (e.code === 'KeyC' || e.code === 'Escape') { this._closeEquipmentScreen(); return; }
-                return;
-            }
+            // (Slice 3) EQUIPMENT in-state keydown retired — the DEVICE block above owns GEAR.
 
             // ── ENDING (End of Chapter One): N / Space / Enter restarts ──
             // (fix/critical-path) Matches the on-screen "PRESS N TO PLAY AGAIN"
@@ -1112,6 +1119,10 @@ class Game {
             }
             // T = wait a turn (Space used to wait; it now opens the wheel).
             if (e.code === 'KeyT') { e.preventDefault(); this._log('[Wait]'); this._advanceWorld(); return; }
+
+            // Tab = pull out the Remoticon device (opens to ITEMS). preventDefault
+            // early so focus never leaves the canvas. (Slice 3)
+            if (e.code === 'Tab') { e.preventDefault(); this._openDevice('items'); return; }
 
             // L = open the log history modal
             if (e.code === 'KeyL') { e.preventDefault(); this._openLogModal(); return; }
@@ -1296,9 +1307,7 @@ class Game {
                     case 'options': // [settings]
                         this._openOptionsModal();
                         break;
-                    case 'equipment': // (Stage 3) read-only Vitruvian screen
-                        this._openEquipmentScreen();
-                        break;
+                    // (Slice 3) the 'equipment' menu-sheet action was retired with its row — Tab / the ▤ button open the Remoticon (GEAR tab).
                     case 'restart':
                         // Confirm before wiping — RESTART clears the save and
                         // reseeds, so an accidental tap shouldn't be able to
@@ -1584,11 +1593,10 @@ class Game {
         switch (this.state) {
             case STATE.INSPECT:        this._closeInspect(); return true;
             case STATE.TARGET_LIST:    this._closeTargetList(); return true;
-            case STATE.JOURNAL:        this._closeJournal(); return true;
             case STATE.LOG_MODAL:      this._closeLogModal(); return true;
             case STATE.TRADE:          this._closeTrade(); return true;
             case STATE.DIALOGUE:       this._closeDialogue(); return true;
-            case STATE.EQUIPMENT:      this._closeEquipmentScreen(); return true;
+            case STATE.DEVICE:         this._closeDevice(); return true;
             case STATE.ITEM_OVERLAY:   this.state = STATE.ITEM_SELECTED; this._render(); return true;
             case STATE.ITEM_SELECTED:  this.selectedSlot = -1; this.state = STATE.IDLE; this._render(); this._resumeHeldWalk(); return true;
             case STATE.ITEM_THROW_DIR: this.selectedSlot = -1; this.state = STATE.IDLE; this._render(); this._resumeHeldWalk(); return true;
@@ -1641,13 +1649,12 @@ class Game {
 
         // Log modal is fully modal — route taps to it and nothing behind it.
         if (this.state === STATE.INSPECT) { this._closeInspect(); return; }
-        if (this.state === STATE.JOURNAL) { this._closeJournal(); return; }
         if (this.state === STATE.LOG_MODAL) { this._tapLogModal(pt); return; }
 
         // Trade window is fully modal too — route taps to the shop.
         if (this.state === STATE.TRADE) { this._tapTrade(pt); return; }
         if (this.state === STATE.DIALOGUE) { return; }   // (Step 4) dialogue is keyboard-driven; ignore stray taps
-        if (this.state === STATE.EQUIPMENT) { this._tapEquipmentScreen(pt); return; }   // (Stage 3) tap outside = close
+        if (this.state === STATE.DEVICE) { this._tapDevice(pt); return; }   // (Slice 3) in-panel tab/body taps (✕ + outside handled above)
 
         // Priority order is by modality: the most exclusive overlay wins. A
         // tap while the radial menu is open should drive the radial menu,
@@ -4157,32 +4164,73 @@ class Game {
     }
 
     // ── Journal ([J]) — quest checklist + completed + witness log (+ map tab) ──
-    _openJournal() {
-        if (this.state !== STATE.IDLE) return;
-        this._journalScroll = 0;
-        this._journalTab = 'quests';
-        this.state = STATE.JOURNAL;
+    // (Slice 3) The Remoticon device — one tabbed, soft-pausing overlay. _openDevice
+    // enters STATE.DEVICE on a tab and pauses the world; _closeDevice restores IDLE
+    // (the pause release resumes any held walk, so we don't call _resumeHeldWalk
+    // again). Tab / the on-screen button toggle it; [ ] cycle tabs; C/J/M jump to a
+    // tab. The ✕ chip + tap-outside come from the Slice-1 CLOSE_PANEL machinery
+    // (device is registered there), routing Cancel through _closeCurrentMenu.
+    _openDevice(tab = 'items') {
+        if (this.state !== STATE.IDLE && this.state !== STATE.DEVICE) return;
+        this._deviceTab = DEVICE_TABS.includes(tab) ? tab : 'items';
+        this.state = STATE.DEVICE;
         audio.playSfx('menu-open');
         this._render();
     }
 
-    // (Phase 4 map) Open the journal straight to its rudimentary world-map tab.
-    _openWorldMap() {
-        if (this.state !== STATE.IDLE) return;
-        this._journalScroll = 0;
-        this._journalTab = 'map';
-        this.state = STATE.JOURNAL;
-        audio.playSfx('menu-open');
-        this._render();
-    }
-
-    _closeJournal() {
-        if (this.state !== STATE.JOURNAL) return;
+    _closeDevice() {
+        if (this.state !== STATE.DEVICE) return;
         this.state = STATE.IDLE;
         audio.playSfx('menu-cancel');
         this._render();
-        this._resumeHeldWalk();
+        this._resumeHeldWalk();   // resume a held walk (matches the other modal closers)
     }
+
+    _toggleDevice() {
+        if (this.state === STATE.DEVICE) this._closeDevice();
+        else this._openDevice('items');
+    }
+
+    _deviceCycleTab(dir) {
+        this._deviceTab = cycleDeviceTab(this._deviceTab, dir);
+        audio.playSfx('menu-tick');
+        this._render();
+    }
+
+    // Tap inside the open device: a tab-strip tap switches tabs. (Body taps — e.g.
+    // GEAR unequip — arrive in S3-T2.) The ✕ chip + tap-outside close are handled
+    // earlier by the CLOSE_PANEL block, so only IN-PANEL taps reach here.
+    _tapDevice(pt) {
+        // Tab strip → switch tabs.
+        for (let i = 0; i < DEVICE_TABS.length; i++) {
+            if (this._pointInRect(pt, deviceTabRect(i), HIT_SLOP)) {
+                this._deviceTab = DEVICE_TABS[i];
+                audio.playSfx('menu-tick');
+                this._render();
+                return;
+            }
+        }
+        // GEAR body → tap a filled plate to unequip (the weapon plate is inert).
+        // Reads the SAME scaled slots the renderer draws, so the tap can't drift.
+        if (this._deviceTab === 'gear') {
+            const { slots } = deviceEquipLayout(deviceBodyRect());
+            for (const s of slots) {
+                if (s.key === 'weapon') continue;
+                if (!this._pointInRect(pt, s)) continue;
+                if (!this.equipment[s.key]) return;   // empty plate — nothing to remove
+                const msg = unequipItem(this, s.key);
+                if (msg) this._log(msg);
+                this._render();
+                return;
+            }
+        }
+    }
+
+    // (Slice 3) The old [J] / [M] openers now route into the Remoticon device on the
+    // QUESTS / MAP tab (the standalone Journal state was retired). _scrollJournal
+    // stays — the QUESTS tab reuses _journalScroll.
+    _openJournal()  { this._journalScroll = 0; this._openDevice('quests'); }
+    _openWorldMap() { this._journalScroll = 0; this._openDevice('map'); }
 
     _scrollJournal(delta) {
         this._journalScroll = Math.max(0, (this._journalScroll || 0) + delta);
@@ -4331,37 +4379,10 @@ class Game {
     // Open the equipment screen. A pure menu — the world does NOT advance
     // (like trade / dialogue / the log modal). Read-only: it just reads
     // game.equipment (all armor slots null today → every plate shows EMPTY).
-    _openEquipmentScreen() {
-        if (this.state !== STATE.IDLE) return;
-        this.state = STATE.EQUIPMENT;
-        audio.playSfx('menu-open');
-        this._render();
-    }
-
-    _closeEquipmentScreen() {
-        if (this.state !== STATE.EQUIPMENT) return;
-        this.state = STATE.IDLE;
-        audio.playSfx('menu-cancel');
-        this._render();
-        this._resumeHeldWalk();   // (menu grammar) was dropping a held walk on close
-    }
-
-    // A tap anywhere outside the equipment panel dismisses it (there's no
-    // unequip logic to hit-test — the slots are display-only).
-    _tapEquipmentScreen(pt) {
-        // Tap a filled armor plate to take that piece off (back into your bag).
-        // The weapon plate is inert here — the weapon slot is never emptied.
-        for (const s of EQUIP_SLOT_RECTS) {
-            if (s.key === 'weapon') continue;
-            if (!this._pointInRect(pt, s)) continue;
-            if (!this.equipment[s.key]) return;          // empty plate — nothing to remove
-            const msg = unequipItem(this, s.key);
-            if (msg) this._log(msg);
-            this._render();
-            return;
-        }
-        if (!this._pointInRect(pt, EQUIPMENT_MODAL_RECT)) this._closeEquipmentScreen();
-    }
+    // (Slice 3) [C] / the ☰ GEAR entry now open the Remoticon on the GEAR tab; the
+    // standalone equipment screen + its close/tap handlers were retired — the device
+    // owns close (_closeDevice) and unequip (_tapDevice, via deviceEquipLayout).
+    _openEquipmentScreen() { this._openDevice('gear'); }
 
     // The choices on offer: every repeatable one, plus any `once` choice this
     // NPC hasn't spent yet (spent ids live on npc._dialogueDone).
