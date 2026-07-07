@@ -2163,6 +2163,10 @@ export class Renderer {
     _drawWheel(game) {
         const { ctx } = this;
         const cx = RADIAL_CENTER_X, cy = RADIAL_CENTER_Y, TOP = -Math.PI / 2;
+        // (Slice 2) Full-screen AIM/CONFIRM/threat text re-centres on the SCREEN
+        // (CC), not the wheel hub — the wheel moved to a bottom-right anchor, but
+        // these strips are full-width takeovers that must stay screen-centred.
+        const CC = CANVAS_PX / 2;
         const w = game.wheel; if (!w) return;
 
         // ── AIM: bottom hint only; the world + reticle stay readable ──
@@ -2170,7 +2174,7 @@ export class Renderer {
             if (this.font) {
                 ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, CANVAS_PX - 24, CANVAS_PX, 24); ctx.restore();
                 const hint = `${selectedNode(w).label.toUpperCase()}  ·  AIM — MOVE · SPACE FIRE · ↓ BACK`;
-                this.font.drawText(ctx, hint, cx, CANVAS_PX - 16, { color: UI.gold, scale: 1, align: 'center', shadow: '#000' });
+                this.font.drawText(ctx, hint, CC, CANVAS_PX - 16, { color: UI.gold, scale: 1, align: 'center', shadow: '#000' });
             }
             return;
         }
@@ -2181,10 +2185,10 @@ export class Renderer {
             const tgt = w.reticle && game.enemies.find(e => e.entity.isAlive() && e.x === w.reticle.x && e.y === w.reticle.y);
             const name = String((tgt && (tgt.type || (tgt.entity && tgt.entity.name))) || 'them').replace(/[\[\]]/g, '').toUpperCase();
             if (this.font) {
-                this.font.drawText(ctx, '!! PLUS ULTRA !!', cx, cy - 42, { color: '#ff5555', scale: 2, align: 'center', shadow: '#000' });
-                this.font.drawText(ctx, `STRIKE ${name}?`, cx, cy - 8, { color: UI.gold, scale: 1, align: 'center', shadow: '#000' });
-                this.font.drawText(ctx, "THEY'RE NOT YOUR ENEMY", cx, cy + 12, { color: UI.text, scale: 1, align: 'center', shadow: '#000' });
-                this.font.drawText(ctx, '↑ AGAIN TO COMMIT  ·  ↓ BACK', cx, cy + 38, { color: '#e8dcc0', scale: 1, align: 'center', shadow: '#000' });
+                this.font.drawText(ctx, '!! PLUS ULTRA !!', CC, CC - 42, { color: '#ff5555', scale: 2, align: 'center', shadow: '#000' });
+                this.font.drawText(ctx, `STRIKE ${name}?`, CC, CC - 8, { color: UI.gold, scale: 1, align: 'center', shadow: '#000' });
+                this.font.drawText(ctx, "THEY'RE NOT YOUR ENEMY", CC, CC + 12, { color: UI.text, scale: 1, align: 'center', shadow: '#000' });
+                this.font.drawText(ctx, '↑ AGAIN TO COMMIT  ·  ↓ BACK', CC, CC + 38, { color: '#e8dcc0', scale: 1, align: 'center', shadow: '#000' });
             }
             ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
             return;
@@ -2365,7 +2369,7 @@ export class Renderer {
                 }
                 const nm = String(near.type || (near.entity && near.entity.name) || 'FOE').replace(/[\[\]]/g, '').toUpperCase().slice(0, 12);
                 ctx.save(); ctx.fillStyle = 'rgba(40,0,0,0.6)'; ctx.fillRect(0, CANVAS_PX - 26, CANVAS_PX, 26); ctx.restore();
-                this.font.drawText(ctx, `⚔ ${foes.length}  ${nm}`, cx, CANVAS_PX - 16, { color: '#e8462f', scale: 1, align: 'center', shadow: '#000' });
+                this.font.drawText(ctx, `⚔ ${foes.length}  ${nm}`, CC, CANVAS_PX - 16, { color: '#e8462f', scale: 1, align: 'center', shadow: '#000' });
             }
         }
         ctx.globalAlpha = 1; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';

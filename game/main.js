@@ -301,6 +301,7 @@ class Game {
         this.wheel = createWheelState();
         this.targetList = { x: 0, y: 0, target: null, verbs: [], sel: 0 };   // (Target List) RuneScape-style verb menu
         this._lastActKeyAt = 0; // double-tap-Act window for express-repeat
+        this._wheelOpenedByHold = false; // (Slice 2) true only between a HOLD-mode open and its release; cleared by every wheel close
 
         // Screen shake (Phase F) — triggered on damage >= threshold. The
         // renderer applies a per-frame random offset to world rendering
@@ -460,13 +461,20 @@ class Game {
         const actionBtn = document.getElementById('action-btn');
         if (actionBtn) actionBtn.addEventListener('pointerdown', (e) => {
             e.preventDefault();
-            if (this.state === STATE.IDLE) { this._openWheel(); return; }
+            if (this.state === STATE.IDLE) { this._wheelOpenerDown(); return; }   // (Slice 2) hold vs tap-toggle
             if (this.state === STATE.RADIAL_MENU) {
                 const w = this.wheel;
                 if (w.confirming || w.aiming) { this._wheelCommit(); return; }
                 this._wheelDrill();
             }
         });
+        // (Slice 2) Release of the touch ACTION button — closes the wheel in
+        // 'hold' mode (mirrors Space keyup); pointercancel covers a lost pointer.
+        if (actionBtn) {
+            const releaseWheel = (e) => { e.preventDefault(); this._wheelOpenerUp(); };
+            actionBtn.addEventListener('pointerup', releaseWheel);
+            actionBtn.addEventListener('pointercancel', releaseWheel);
+        }
 
         // Populate version badge from <meta name="version"> — single source of truth.
         // Lives in index.html as #version-badge, styled bottom-right in style.css.
@@ -1098,7 +1106,7 @@ class Game {
                 e.preventDefault();
                 const now = performance.now();
                 if (now - (this._lastActKeyAt || 0) < 250 && this._canRepeatLast()) this._repeatLastAction();
-                else this._openWheel();
+                else this._wheelOpenerDown();   // (Slice 2) hold vs tap-toggle open mode
                 this._lastActKeyAt = now;
                 return;
             }
@@ -1158,6 +1166,9 @@ class Game {
             // that survives scene teardown), even if the walk stack was already
             // cleared by a transition.
             this._physicalHeld.delete(e.code);
+            // (Slice 2) Wheel opener release — closes the wheel in 'hold' mode
+            // (a no-op in 'tap-toggle'; the mode guard lives in _wheelOpenerUp).
+            if (e.code === 'Space') this._wheelOpenerUp();
         });
 
         // Window blur clears the held stack — browsers don't always fire
@@ -1384,6 +1395,7 @@ class Game {
         this._setToggleUI('opt-reduce-motion', s.reduceMotion);
         // Fullscreen reflects the actual document state, not a stored value.
         this._setToggleUI('opt-fullscreen', !!document.fullscreenElement);
+        this._setWheelOpenUI(s.wheelOpenMode);   // (Slice 2) HOLD / TAP
     }
 
     // Flip an on/off toggle button's label + class + ARIA to match `on`.
@@ -1393,6 +1405,17 @@ class Game {
         el.classList.toggle('is-on', !!on);
         el.setAttribute('aria-checked', on ? 'true' : 'false');
         el.textContent = on ? 'ON' : 'OFF';
+    }
+
+    // (Slice 2) WHEEL OPEN is a 2-value ENUM (HOLD/TAP), not on/off, so it can't
+    // use _setToggleUI (which forces ON/OFF text). aria-checked=true means HOLD.
+    _setWheelOpenUI(mode) {
+        const el = document.getElementById('opt-wheel-open');
+        if (!el) return;
+        const hold = (mode === 'hold');
+        el.classList.toggle('is-on', hold);
+        el.setAttribute('aria-checked', hold ? 'true' : 'false');
+        el.textContent = hold ? 'HOLD' : 'TAP';
     }
 
     // Push the persisted volume/mute into the audio manager. `audio` is the
@@ -1452,6 +1475,15 @@ class Game {
         // Keep the fullscreen toggle honest if the user exits via Esc/F11.
         document.addEventListener('fullscreenchange', () => {
             this._setToggleUI('opt-fullscreen', !!document.fullscreenElement);
+        });
+
+        // (Slice 2) WHEEL OPEN toggle — flips 'tap-toggle' ↔ 'hold'. The opener
+        // (_wheelOpenerDown/Up) reads Settings live, so this applies immediately
+        // with no reload. Settings.set persists it per-device.
+        document.getElementById('opt-wheel-open')?.addEventListener('click', () => {
+            const next = Settings.get('wheelOpenMode') === 'hold' ? 'tap-toggle' : 'hold';
+            Settings.set('wheelOpenMode', next);
+            this._setWheelOpenUI(next);
         });
 
         // Esc closes the modal without falling through to game state. Capture
@@ -1597,8 +1629,14 @@ class Game {
             if (_cbr && this._pointInRect(pt, _cbr, HIT_SLOP)) { this._closeCurrentMenu(); return; }
             if (!this._pointInRect(pt, _mpr)) { this._closeCurrentMenu(); return; }
         } else if (this.state === STATE.RADIAL_MENU) {
+            // (Slice 2) Depth-dynamic cull: close on a tap beyond the wheel's real
+            // outer extent for the CURRENT depth. The old fixed 230px left the small
+            // shallow wheel un-closable by a nearby tap (a 160px tap was neither a
+            // quadrant hit nor an outside-close). Mirrors the far-tap ignore in
+            // _tapRadialMenu (wheelRingR(path.length)[1] + 12), plus HIT_SLOP.
             const _dx = pt.x - RADIAL_CENTER_X, _dy = pt.y - RADIAL_CENTER_Y;
-            if (_dx * _dx + _dy * _dy > 230 * 230) { this._closeWheel(); return; }
+            const _cull = wheelRingR(this.wheel.path.length)[1] + HIT_SLOP + 12;
+            if (_dx * _dx + _dy * _dy > _cull * _cull) { this._closeWheel(); return; }
         }
 
         // Log modal is fully modal — route taps to it and nothing behind it.
@@ -2499,9 +2537,35 @@ class Game {
         this.wheel.reticle = null;
         this.wheel.aiming = false;
         this.wheel.confirming = false;
+        // (Slice 2) Clear the HOLD latch on EVERY close path (Esc/_wheelBack, the
+        // tap-outside cull, fire-then-close, or a hold-release) so a stale 'true'
+        // can never survive a close and let a later Space/pointer release re-close
+        // a freshly-opened wheel. _wheelOpenerUp reads the flag before this runs.
+        this._wheelOpenedByHold = false;
         audio.playSfx('menu-cancel');
         this._render();
         this._resumeHeldWalk();   // resume walking if a dir was held through the wheel
+    }
+
+    // (Slice 2) The ONE opener seam for the wheel — Space, the touch ACTION
+    // button, and (Slice 4) the gamepad shoulder button all route through this
+    // pair, so the hold-vs-tap-toggle open mode lives in one place. tap-toggle =
+    // today's behaviour (open + stay until Esc / tap-outside / ▼CLOSE). hold =
+    // press-and-hold to keep it up, release to close — but a release mid-AIM or
+    // mid-CONFIRM is ignored, so it can't nuke a half-placed reticle. Reads
+    // Settings live, so the Options toggle applies immediately (no reload).
+    _wheelOpenerDown() {
+        if (this.state !== STATE.IDLE) return;
+        this._openWheel();
+        this._wheelOpenedByHold = (Settings.get('wheelOpenMode') === 'hold');
+    }
+
+    _wheelOpenerUp() {
+        if (this._wheelOpenedByHold && this.state === STATE.RADIAL_MENU
+            && !this.wheel.aiming && !this.wheel.confirming) {
+            this._closeWheel();
+        }
+        this._wheelOpenedByHold = false;
     }
 
     // ── Target Wheel ("The Price is Right") ─────────────────────────────────

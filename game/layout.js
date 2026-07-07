@@ -51,7 +51,13 @@ export const HOTBAR_Y       = HOTBAR_OY + 2;                         // 548 (slo
 // the top pointer. Shared by renderer._drawWheel (draw) and main._tapRadialMenu
 // (hit-test). The preview-arc band and pointer are derived adaptively in
 // renderer._drawWheel from wheelRingR(depth).
-export const RADIAL_CENTER_X = 304, RADIAL_CENTER_Y = 304;
+// (Slice 2) Bottom-right thumb-reach anchor. Clearance is LOCKED to the wheel's
+// real max span: the deepest ACTIVE ring is wheelRingR(2) (outer 170) at depth 3
+// (Fight→Melee — no depth-4 ring exists in wheel-model.js), with the ▲FIRE cue /
+// flapper at cy-186 (top only). At (400,360): right 400+170=570 < 608; bottom
+// 360+170=530 (≤538 under the 1.05 open-overshoot) < HOTBAR_OY 546; top
+// 360-186=174 > 0. Re-measure if wheel-model.js ever gains a 4th ring level.
+export const RADIAL_CENTER_X = 400, RADIAL_CENTER_Y = 360;
 export const WHEEL_HUB_R    = 34;            // centre 'MENU' disc radius
 export const WHEEL_RING_W    = 40;           // radial thickness of each full ring
 export const WHEEL_RING_GAP  = 5;            // gap between adjacent rings
