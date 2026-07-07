@@ -26,6 +26,10 @@ export const DEFAULTS = Object.freeze({
     // persists an unmute per-device, so turning sound ON sticks.
     muted:        true,    // hard mute, independent of the two volumes
     firstRunHintSeen: false, // (pointer model) one-time "tap to move" hint shown?
+    // (Slice 2) how the action wheel opens: 'tap-toggle' (tap opens + stays —
+    // today's behaviour) or 'hold' (press-and-hold opens, release closes).
+    // Toggled in Options; the opener reads it live via Settings.get().
+    wheelOpenMode: 'tap-toggle',
 });
 
 // Live, mutable copy of the settings. Seeded with defaults so callers can read
@@ -49,6 +53,12 @@ function asBool(v, fallback) {
     return typeof v === 'boolean' ? v : fallback;
 }
 
+// Coerce to one of a fixed set of allowed values, else the fallback — the
+// string-enum counterpart to clamp01/asBool (used by wheelOpenMode).
+function asEnum(v, allowed, fallback) {
+    return allowed.includes(v) ? v : fallback;
+}
+
 // Coerce an arbitrary parsed object into a fully-valid settings object. Unknown
 // keys are dropped; missing/invalid known keys fall back to DEFAULTS. Pure —
 // returns a fresh object, never mutates its input.
@@ -61,6 +71,7 @@ export function validate(raw) {
         reduceMotion: asBool(o.reduceMotion, DEFAULTS.reduceMotion),
         muted:        asBool(o.muted,        DEFAULTS.muted),
         firstRunHintSeen: asBool(o.firstRunHintSeen, DEFAULTS.firstRunHintSeen),
+        wheelOpenMode:    asEnum(o.wheelOpenMode, ['hold', 'tap-toggle'], DEFAULTS.wheelOpenMode),
     };
 }
 
