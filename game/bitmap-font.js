@@ -52,5 +52,3 @@ export class BitmapFont {
         ctx.restore();
     }
 }
-
-export const GLYPH_SIZE = { w: PX_PER_SCALE * ADV_RATIO, h: PX_PER_SCALE };

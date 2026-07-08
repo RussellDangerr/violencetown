@@ -1,11 +1,5 @@
 // utils.js — small helpers (clean slate, no noise/RNG)
 
-export function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-}
-
 export function clamp(v, min, max) {
     return v < min ? min : v > max ? max : v;
 }

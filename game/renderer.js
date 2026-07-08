@@ -11,10 +11,9 @@ import { TILE_PX, VIEW_TILES, CANVAS_PX } from './data.js';
 // ctx.setTransform(SS,…) at the top of each frame; tap input maps via
 // CANVAS_INTERNAL_PX (608) independently, so it's unaffected.
 const SS = 2;
-import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES, EQUIP_FIGURE_SPRITE } from './sprites.js';
+import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES } from './sprites.js';
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
 import { ROOT, selectedNode, activeRing, activeIndex, decisionPath, previewChildren, affectedTiles, verbApplies, isCombatActive, flapperDeflection } from './wheel-model.js'; // (sunburst wheel)
-import { SPELLS } from './spells.js';
 import {
     OVERLAY_RECTS, THROW_RECTS,
     HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_GAP, HOTBAR_SLOTS, HOTBAR_STRIDE,
@@ -55,7 +54,6 @@ const SPLAT_COLOR = {
 // All tunable.
 const WALK_BOB_PX   = 2;   // peak vertical bounce per tile (integer pixels)
 const WALK_LEAN_DEG = 5;   // peak waddle rotation, alternates each step; 0 = off
-const IDLE_BOB_PX   = 1;   // standing breathe (discrete pixel, synced to idle tick)
 
 // Vertical bob + waddle rotation for a walking (or idle) character. `progress`
 // is the 0→1 slide position; `stepIndex` parity picks the waddle side; `idleTick`
@@ -1926,75 +1924,6 @@ export class Renderer {
         }
         this.font.drawText(ctx, '↑↓ PICK · ESC CLOSE', px + w / 2, py + h - 14, { color: UI.dim, scale: 1, align: 'center' });
         ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-    }
-
-    // (Target Wheel — "The Price is Right") A full pegged ring of the tapped
-    // target's verbs: each a colour-language wedge, gold trim + rim pegs, the
-    // selected verb spun under the top pointer, the target named in the hub.
-    _drawTargetWheel(game) {
-        const { ctx } = this;
-        const tw = game.targetWheel; if (!tw || !tw.verbs || !tw.verbs.length) return;
-        const cx = RADIAL_CENTER_X, cy = RADIAL_CENTER_Y, TOP = -Math.PI / 2;
-        const n = tw.verbs.length, step = (Math.PI * 2) / n;
-        // (§12.5) match the Player Wheel's fight re-skin so targeting a foe
-        // mid-fight feels the same: red-ward wash + a soft rim vignette.
-        const combat = isCombatActive(game);
-        ctx.save();
-        ctx.fillStyle = combat ? 'rgba(38,4,4,0.52)' : 'rgba(0,0,0,0.5)';
-        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
-        if (combat) {
-            const rg = ctx.createRadialGradient(cx, cy, CANVAS_PX * 0.34, cx, cy, CANVAS_PX * 0.72);
-            rg.addColorStop(0, 'rgba(150,20,20,0)');
-            rg.addColorStop(1, 'rgba(140,12,12,0.30)');
-            ctx.fillStyle = rg; ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
-        }
-        ctx.restore();
-        const now = (typeof performance !== 'undefined') ? performance.now() : 0;
-        const reduce = (typeof Settings !== 'undefined') && Settings.get && Settings.get('reduceMotion');
-        let scale = 1;
-        if (!reduce) { const ot = (now - (tw._openAt || 0)) / 160; if (ot >= 0 && ot < 1) { const s = ot * ot * (3 - 2 * ot); scale = 0.86 + 0.14 * s; } }
-        ctx.save();
-        if (scale !== 1) { ctx.translate(cx, cy); ctx.scale(scale, scale); ctx.translate(-cx, -cy); }
-        const band = wheelRingR(0);
-        const half = step / 2 - WHEEL_TILE_GAP;
-        for (let i = 0; i < n; i++) {
-            const v = tw.verbs[i], mid = TOP + (i - tw.sel) * step, isSel = (i === tw.sel);
-            this._wheelTile(band[0], band[1], mid, half,
-                v.color || '#6b5436', isSel ? 1 : 0.58,
-                v.label, v.text || '#fff3d0',
-                isSel ? { w: 3, c: '#fff3c0' } : { w: 1.5, c: '#d9b34a' },
-                v.icon || null, isSel);   // (§12.4) selected verb rises
-            const a = mid - step / 2, pr = band[1] + 3;
-            ctx.beginPath(); ctx.arc(cx + Math.cos(a) * pr, cy + Math.sin(a) * pr, 3, 0, Math.PI * 2); ctx.closePath();
-            ctx.fillStyle = '#e8c14f'; ctx.fill();
-        }
-        ctx.beginPath(); ctx.arc(cx, cy, WHEEL_HUB_R, 0, Math.PI * 2); ctx.closePath();
-        ctx.fillStyle = 'rgba(30,24,16,0.95)'; ctx.fill();
-        ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(212,185,106,0.6)'; ctx.stroke();
-        if (this.font) {
-            const t = tw.target;
-            const name = (t.npc && (t.npc.name || t.npc.type)) || (t.item && ((t.item.def && t.item.def.name) || t.item.type)) || (t.examinable && t.examinable.id) || '?';
-            this.font.drawText(ctx, String(name).replace(/[\[\]]/g, '').toUpperCase().slice(0, 9), cx, cy - 3, { color: UI.gold, scale: 1, align: 'center' });
-        }
-        const ppr = band[1] + 12;
-        ctx.beginPath(); ctx.moveTo(cx, cy - ppr + 10); ctx.lineTo(cx - 7, cy - ppr); ctx.lineTo(cx + 7, cy - ppr); ctx.closePath();
-        ctx.fillStyle = '#e8462f'; ctx.fill();
-        // (§12.4) Flapper — the same brass clicker as the Player Wheel, ticking
-        // against the rim pegs as verbs spin under the pointer.
-        let flapAngle = 0;
-        if (!reduce && tw._spinAt) {
-            const fst = (now - tw._spinAt) / 120;
-            if (fst >= 0 && fst < 1) flapAngle = flapperDeflection(fst, tw._spinDir || 0);
-        }
-        ctx.save();
-        ctx.translate(cx, cy - band[1] - 26);
-        ctx.rotate(flapAngle);
-        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-4, 13); ctx.lineTo(4, 13); ctx.closePath();
-        ctx.fillStyle = '#d9b34a'; ctx.fill();
-        ctx.lineWidth = 1; ctx.strokeStyle = '#2a2218'; ctx.stroke();
-        ctx.restore();
-        ctx.restore();
-        ctx.globalAlpha = 1; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     }
 
     // (Phase 4) Journal — the "where am I in the quest" screen ([J]). Shows the

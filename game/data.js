@@ -75,16 +75,3 @@ export const SLUDGE_DOT = 5;
 // only reachable via Digit0. Keep these two in lockstep. (fix/critical-path)
 export const INVENTORY_SIZE = 9;
 export const MAX_STACK = 99;
-
-// ── Direction helpers ────────────────────────────────────────────────────────
-
-export const DIR_NAMES = {
-    '0,-1':  'North',
-    '0,1':   'South',
-    '-1,0':  'West',
-    '1,0':   'East',
-    '-1,-1': 'NW',
-    '1,-1':  'NE',
-    '-1,1':  'SW',
-    '1,1':   'SE',
-};

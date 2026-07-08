@@ -6,7 +6,7 @@ import { Renderer } from './renderer.js';
 import { loadMap } from './map.js';
 import { loadAllSprites } from './sprites.js';
 import { BitmapFont } from './bitmap-font.js';
-import { DIR_NAMES, PLAYER_MAX_HP, PLAYER_MAX_MP, SLUDGE_DOT, INVENTORY_SIZE, MAX_STACK } from './data.js';
+import { PLAYER_MAX_HP, PLAYER_MAX_MP, SLUDGE_DOT, INVENTORY_SIZE, MAX_STACK } from './data.js';
 import { ITEMS, itemTier, resolveUse, resolveThrow, tickTempEquips, unequipItem } from './items.js';
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
@@ -15,7 +15,7 @@ import { Enemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
 import { getGreedyStep, stepEntity, findPath } from './pathing.js'; // pathfinding (greedy chase + BFS click-to-move); stepEntity = shove a character aside
 import { applyDispositionDelta, reactToTransaction } from './give-action.js';
 import { getDialogue } from './dialogue.js';
-import { escapeHtml, manhattan, clamp } from './utils.js';
+import { manhattan, clamp } from './utils.js';
 import { RNG } from './rng.js';
 import { hasSave, readSaveRaw, writeSave, loadInto, clearSave } from './save.js';
 import { QuestEngine } from './quests.js';
@@ -2575,10 +2575,10 @@ class Game {
         this._wheelOpenedByHold = false;
     }
 
-    // ── Target Wheel ("The Price is Right") ─────────────────────────────────
-    // Tap a target → a full ring of the verbs valid for THAT thing (Examine,
+    // ── Target List (tap-a-target verb menu) ────────────────────────────────
+    // Tap a target → a vertical LIST of the verbs valid for THAT thing (Examine,
     // Talk, Trade, Hit, Take…), colour-coded, alphabetical; picks route to the
-    // existing resolvers. A sibling of the Player Wheel on the same machinery.
+    // existing resolvers. Only the ACTION wheel is radial, so the two never mix.
 
     // 608-space canvas point → world tile (camera inverse; tiles are
     // 608/(2·half+1) px, player centred at 304, scroll ~0 while idle).
@@ -3616,10 +3616,14 @@ class Game {
         return ['top', 'bottom', 'front', 'back', 'sides'].some(k => eq[k] && eq[k].sludgeImmune);
     }
 
+    // The "gear reshapes the wheel" build loop: a weapon that carries
+    // grantsSpells / grantsTricks adds slices to the wheel's Magic / Trick rings.
     // Rebuild the skills the equipped weapon grants: spells feed the Magic ring
     // (knownSpells = base + weapon.grantsSpells), tricks feed the Trick ring
     // (grantedTricks = weapon.grantsTricks). Call after any weapon change — equip,
     // new game, respawn, save-load. Additive over the base spells; idempotent.
+    // (The showcase trigger gear — Fearmur, Lion Whip — is wired but deferred as
+    // world-drops, so grantsTricks can read as unused on the shipped build.)
     _refreshGrantedSkills() {
         const w = this.equipment && this.equipment.weapon;
         const gs = (w && w.grantsSpells) || [];
@@ -4268,16 +4272,6 @@ class Game {
         const faced = this.enemies.find(e => isVendor(e) && e.x === this.playerX + fd.dx && e.y === this.playerY + fd.dy);
         if (faced) return faced;
         return this.enemies.find(e => isVendor(e) && manhattan(e.x, e.y, this.playerX, this.playerY) === 1) || null;
-    }
-
-    // (transaction spine + give-fold) Open trade with the targeted NPC, or log if
-    // there's no one there. Non-vendors open OFFER mode (the give-into-trade fold),
-    // so this no longer rejects on !npc.vendor or gates on disposition — the shop
-    // columns handle "won't deal" themselves. Returns true if the window opened.
-    _tryTradeWith(npc) {
-        if (!npc) { this._log('[No one there to trade with.]'); return false; }
-        this._openTrade(npc);
-        return true;
     }
 
     // Open the trade window for `npc`. A pure menu — the world does NOT advance

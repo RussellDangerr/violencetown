@@ -9,6 +9,9 @@
 //
 // (Roadmap, later slices: drag-to-swap equipment barter, NPC loadouts +
 // stat-gear, item drop rates, recovery-on-death. Not here.)
+//
+// This module only READS disposition to price things; it is MOVED by gifts,
+// bribes, and dialogue over in give-action.js — two halves of one spine.
 
 export const TRADE_FLOOR = -50;   // disposition below this == "won't deal"
 export const BRIBE_STEP  = 5;     // disposition gained per bribe tap

@@ -1,9 +1,12 @@
-// items.js — Item definitions and use-phase resolution
-// Sewer demo prototype
+// items.js — Item definitions and use-phase resolution (equip / use / throw).
 //
 // All items are equippable. Each has an equipSlot and an optional duration.
 // When equipped with a duration, the item occupies the slot for N turns,
 // then the previously equipped item in that slot is restored.
+//
+// Thrown consumables burst over a 3×3 area at half effect (resolveThrow); the
+// affected tiles come from wheel-model.js `affectedTiles`, so the on-screen
+// highlight and the damage resolution use the exact same geometry.
 
 export const ITEMS = {
     rock: {

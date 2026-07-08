@@ -432,44 +432,6 @@ export function resolveAmbientTurns(game) {
     return messages;
 }
 
-// ── Bark resolution ─────────────────────────────────────────────────────────
-//
-// Returns the next bark log-line for this enemy if the cadence fires this
-// turn, or null otherwise. Round-robins through the `barks` array. Each
-// enemy has a per-instance offset (the turn it first ticked) so multiple
-// barking NPCs don't synchronize on the same turn unless they spawned
-// together.
-//
-// Barks are NOT gated on line-of-sight or player proximity — they fire
-// whenever the player is on the same map as the bark-emitter. This is the
-// "negative-space worldbuilding" principle from plans/cosmology-and-arc.md:
-// the player hears the world doing its thing even from across walls. If
-// playtest reveals this is too chatty, a polish-pass can add proximity
-// gating.
-
-function maybeBark(game, enemy, clock = game.turn) {
-    if (!enemy.barks || enemy.barks.length === 0) return null;
-
-    // Lazy offset init: first tick records the spawn-clock so cadence starts
-    // counting from this enemy's first appearance, not from clock 0. `clock` is
-    // game.turn for combat-path enemies, game.worldTick for ambient NPCs.
-    if (enemy._barkOffset == null) {
-        enemy._barkOffset = clock;
-        return null; // don't bark on the spawn tick itself
-    }
-
-    const cadence = enemy.barkEveryTurns ?? 8;
-    const elapsed = clock - enemy._barkOffset;
-    if (elapsed <= 0 || elapsed % cadence !== 0) return null;
-
-    const idx = enemy._barkIndex % enemy.barks.length;
-    enemy._barkIndex += 1;
-    // Tuple shape (since overhead-dialogue v1): the consumer in main.js's
-    // _advanceWorld branches on category and routes spoken lines to
-    // _spawnOverheadDialogue at the source enemy's tile.
-    return { text: enemy.barks[idx], sourceEnemy: enemy, category: 'bark' };
-}
-
 // ── Adjacency-bark resolution ───────────────────────────────────────────────
 //
 // Edge-triggered: fires only on the turn the player BECOMES adjacent

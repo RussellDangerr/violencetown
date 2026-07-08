@@ -13,6 +13,9 @@
 // All functions here are isolated from world state except for the
 // recipient instance they mutate. main.js handles inventory consumption,
 // UI flow, and log emission; this module handles the disposition math.
+//
+// The disposition this module MOVES is the same value trade.js READS to price
+// buy / sell / bribe — two halves of one transaction spine.
 
 // Tuning constant — controls how much disposition each unit of `values`
 // shifts. Currently 5 (so values:{soap:8} means soap gives +40 disposition).

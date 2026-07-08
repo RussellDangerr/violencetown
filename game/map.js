@@ -120,18 +120,8 @@ export class GameMap {
     // these helpers query the map's spawn data, useful for finding *which*
     // container is at a given spot before resolving it to its live instance.
 
-    getContainerSpawnAt(x, y) {
-        return this.containerSpawns.find(c => c.x === x && c.y === y) || null;
-    }
-
     getRegion(name) {
         return this.regions.find(r => r.name === name) || null;
-    }
-
-    getRegionContaining(x, y) {
-        return this.regions.find(r =>
-            x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h
-        ) || null;
     }
 
     getTile(x, y) {

@@ -239,11 +239,6 @@ export const ENEMY_SPRITES = {
 // the natural read for a burger-delivery courier. Drawn via `sprites.player`.
 export const PLAYER_SPRITE = { sheet: 'player', col: 1, row: 7, static: true };
 
-// Equipment-screen mannequin — the front-facing Roguelike Characters figure
-// (col 0, row 0: pale neutral body). Bigger and clearer than the 16×16 world
-// player sprite, so it reads as a Vitruvian dress-up figure at ~140×300.
-export const EQUIP_FIGURE_SPRITE = { sheet: 'roguelikeChar', col: 0, row: 0 };
-
 // ── Props (tall, ground-anchored overlay objects — depth/verticality) ───────
 // Unlike tiles (always one cell, drawn flat), props render TALLER than a single
 // tile, anchored at their base tile, and depth-sort with the cast so the player

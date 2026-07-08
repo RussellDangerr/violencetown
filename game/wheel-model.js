@@ -2,7 +2,7 @@
 // A node tree (MENU → categories → verbs → leaves) walked by one grammar:
 //   cycle (rotate the active ring), drill (push a child / aim / fire), back (pop).
 // State is a `path` of indices into ROOT.children. No DOM/canvas; main.js drives
-// it and routes compose(). See plans/combat-wheel-radial-overhaul.md.
+// it and routes compose().
 
 import { SPELLS } from './spells.js';
 import { TRICKS } from './tricks.js';
@@ -243,21 +243,6 @@ export function back(w) {
   w.aiming = false;
 }
 
-function itemAllowedForLeaf(def, node) {
-  if (node.resolver === 'resolveThrow') return def.useType ? def.useType.includes('throw') : true;
-  if (node.resolver === 'resolveUse')  return def.useType ? (def.useType.includes('self') || def.useType.includes('use')) : true;
-  return true;
-}
-
-export function validItemSlots(w, game) {
-  const leaf = selectedNode(w);
-  if (!leaf.needsItem) return [];
-  return (game.inventory || [])
-    .map((slot, i) => ({ slot, i }))
-    .filter(({ slot }) => slot && itemAllowedForLeaf(slot.itemDef, leaf))
-    .map(({ i }) => i);
-}
-
 export function compose(w, game) {
   const node = selectedNode(w);
   return {
@@ -371,7 +356,7 @@ export function flapperDeflection(p, dir) {
   return dir * (MAX * decay - spring);
 }
 
-// ── Target Wheel ("The Price is Right") ──────────────────────────────────────
+// ── Target List verbs ────────────────────────────────────────────────────────
 // The verbs valid for a tapped TARGET, alphabetical. A target descriptor is
 // { x, y, npc?, item?, examinable? }. Colours ride the shared language: Examine
 // steel, social/economic gold, Hit red, Throw amber, Take green. Adjacent-only
@@ -399,10 +384,6 @@ export function targetVerbs(target, game) {
   // offer-time adjacency gate — walking now prevents the reach-across-map grab.)
   if (target.item) V.push({ key: 'take', label: 'Take', color: '#4f9b4a', text: '#effbe9', resolver: 'take', needsAdjacent: true });
   return V.sort((a, b) => (a.label < b.label ? -1 : a.label > b.label ? 1 : 0));
-}
-
-export function createTargetWheelState() {
-  return { x: 0, y: 0, target: null, verbs: [], sel: 0, _openAt: 0, _spinAt: 0, _spinDir: 0 };
 }
 
 // ── Target List (RuneScape-style menu) ───────────────────────────────────────

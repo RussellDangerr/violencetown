@@ -135,8 +135,6 @@ class AudioManager {
         if (this.master) this.master.gain.value = this.muted ? 0 : MASTER_CEILING;
     }
 
-    toggleMute() { this.setMuted(!this.muted); return this.muted; }
-
     // ── SFX ──────────────────────────────────────────────────────────────────
 
     // Play a named one-shot. Unknown names are ignored (so a typo at a call
