@@ -233,6 +233,6 @@ These are *not* canon yet. Listed so they don't drift unnoticed.
 
 ## Source / authorship note
 
-This document was synthesized from a design conversation on 2026-05-21 between Caelan Gander and Claude. The canon decisions in this document were made by Caelan; the structure, framing, and connective tissue were drafted by Claude. Future updates should preserve the canon decisions and revise only the framing as needed.
+This document captures the game's narrative canon, worked out in a design session on 2026-05-21. It was designed by Caelan Gander and developed in collaboration with Claude Code: the canon and design decisions are Caelan's; Claude helped draft, structure, and connect them. Future updates should preserve the canon decisions and revise only the framing as needed.
 
 When in doubt about whether something is canon: if it's in this doc, it's canon. If it's not, it's pending.

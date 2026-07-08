@@ -27,10 +27,6 @@ dropped `applyGive` import; a dropped closing brace), both invisible to "0 confl
 fatal at runtime. After every merge + conflict resolution: restart the dev server, load the game,
 check the console for errors, and smoke-test the touched systems BEFORE committing.
 
-## Repo location
-
-The canonical working copy lives at **`C:\Projects\violencetown`**. An older `C:\Users\caela\OneDrive\Desktop\violencetown` exists but is abandoned (OneDrive sync froze it on an old snapshot mid-session). Do not pull from or commit to the OneDrive path.
-
 ## Dev server
 
 Use `python dev-server.py 3001` (the wrapper next to the repo root) — not `python -m http.server`. The wrapper:

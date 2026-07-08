@@ -2,13 +2,12 @@
 //
 // As of v0.4.3-dev, Violencetown uses Kenney's Roguelike packs as its sole
 // sprite source (CC0 1.0, committed under game/assets-placeholder/kenney/).
-// The previous LimeZu paid-art primary + Kenney fallback architecture was
-// retired to remove dual-system overhead during early development.
+// An earlier dual-source setup (a separate primary art set with Kenney as
+// fallback) was retired to remove dual-system overhead during early development.
 //
 // All sheets are 16×16 native; the renderer draws at TILE_PX=32 via destW/
 // destH upscale params, so the 2× nearest-neighbor scale happens at draw
-// time without pre-processing. LimeZu's archived copy lives at
-// C:\Users\caela\Desktop\LimezuAssets\ for future reference.
+// time without pre-processing.
 
 export class SpriteSheet {
     // `padding` is the gap (in source pixels) between adjacent cells. Kenney's

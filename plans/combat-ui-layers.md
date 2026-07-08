@@ -184,7 +184,7 @@ Caelan's directive: "the options tree and the navigation of those keyboard short
 - Double-tap optimization: pressing Up twice in rapid succession from IDLE should bump + Attack without the player needing to wait for the overlay to fully animate. The overlay appears AND the attack resolves — the player sees the result, not the menu.
 - Escape from any depth to IDLE: if the player mashes Escape 3 times quickly, all layers peel off in rapid succession (50ms each = 150ms total) and they're back to walking. No "are you sure?" prompts. No confirmation dialogs. Escape means escape.
 
-**The PlayStation XMB reference (Caelan's "Grammy-winning PlayStation"):**
+**The PlayStation XMB reference:**
 - Left/Right moves between CATEGORIES (Target selection, Equipment slots, Loot list)
 - Up/Down moves between ITEMS within a category
 - Enter selects, Escape backs out

@@ -59,7 +59,7 @@ from years of use.
   (debt collectors, faction allegiance via card scan, lost-card
   consequences).
 
-## Visual TODO when GP gets its own feature pass
+## Visual notes — for GP's own feature pass
 
 - Draw the full Gold Card as an inspectable artifact (open it from
   the menu sheet?). Faithful dollar-bill / credit-card render with

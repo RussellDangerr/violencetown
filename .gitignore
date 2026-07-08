@@ -10,7 +10,7 @@ assetszipped/
 
 # --- LimeZu (PAID, non-redistributable) — must NEVER be committed ---
 # LimeZu art is not free to redistribute, so it can't live in a public repo.
-# The source library lives OUTSIDE the repo (C:\Users\caela\Desktop\LimezuAssets\);
+# The source library lives OUTSIDE the repo;
 # these patterns are a name-based safety net in case a copy is ever dropped
 # into the tree. PNGs aren't extension-blocked (Kenney CC0 art is allowed), so
 # the only thing standing between LimeZu and a leak is matching its name.
@@ -77,6 +77,13 @@ tools/_*.png
 .superpowers/
 game/_design-*.html
 game/_ui-preview*
+
+# --- Local dev config & collaborator files (not for the public repo) ---
+# .claude/launch.json is a machine-specific dev-server launch path.
+# *-TheDangerrZone* are a collaborator's parallel variants, maintained
+# locally and not ours to publish.
+.claude/launch.json
+*-TheDangerrZone*
 
 # --- OS / editor housekeeping ---
 .DS_Store

@@ -1,6 +1,6 @@
 # Sprite Polish Playbook
 
-A repeatable workflow for sprite/tile iteration sessions on canvas-rendered HTML5 games using Kenney pixel-art packs. Written originally for Violencetown (2026-05-22), but the workflow generalizes to Clown City, Pain Mountain, or any project with a data-driven sprite-coord map.
+A repeatable workflow for sprite/tile iteration sessions on canvas-rendered HTML5 games using Kenney pixel-art packs. Written originally for Violencetown (2026-05-22), but the workflow generalizes to any project with a data-driven sprite-coord map.
 
 ---
 
@@ -17,8 +17,8 @@ A repeatable workflow for sprite/tile iteration sessions on canvas-rendered HTML
 ## Prerequisites (one-time)
 
 1. **Game has a data-driven sprite-map architecture.** Look for a `sprites.js` (or equivalent) that exports tile/item/character → `{col, row}` mappings consumed by a separate renderer. If sprite coords are scattered through render code, refactor first — every polish iteration will be 10× slower otherwise.
-2. **Dev server runs locally.** Note the port (Violencetown: `3001`; Clown City: TBD; Pain Mountain: N/A — Godot).
-3. **Kenney All-in-1 pack installed.** Per memory: `C:\Users\caela\OneDrive\Desktop\KenneyAssets\`. CC0-safe for public repos.
+2. **Dev server runs locally.** Note the port (Violencetown: `3001`).
+3. **Kenney All-in-1 pack installed** — CC0-safe for public repos.
 4. **Chrome MCP available** (or any way to drive a browser + take screenshots programmatically).
 
 ---
@@ -95,7 +95,7 @@ Render the candidate tile at 10–20× scale with `image-rendering: pixelated` a
 **Take a screenshot of the overlay.** That screenshot is now your tile-identification reference for this entire session.
 
 ### Phase 4 — Edit `sprites.js`, hard-reload
-Edit the broken coord in `sprites.js`. Save. **Hard-reload with `Ctrl+Shift+R`** — regular reload caches ES modules and your change won't appear. (I burned 10 minutes on this; don't repeat the mistake.)
+Edit the broken coord in `sprites.js`. Save. **Hard-reload with `Ctrl+Shift+R`** — regular reload caches ES modules and your change won't appear.
 
 ### Phase 5 — Screenshot, compare, iterate
 Take a new screenshot. Compare to baseline from Phase 1. If the new tile still looks off, return to Phase 3 with new candidates. Most coords need 1–2 iterations to land.
@@ -179,7 +179,7 @@ And reference in your tile-map entries with explicit sheet field:
 
 Paste into Claude (any model) to bootstrap a fresh polish session:
 
-> Polish session for [PROJECT] sprites. Repo at `C:\Users\caela\OneDrive\Desktop\<project>`. Follow the workflow in `plans/sprite-polish-playbook.md`: baseline screenshot via Chrome MCP at localhost:<PORT>, identify worst-offender sprites in `game/sprites.js`, build tile-picker overlay to pick correct coords, hard-reload, screenshot, compare, iterate. Do 3-5 rounds covering [SCENE / ZONE / SPRITE CATEGORY]. Auto mode, don't commit unless asked.
+> Polish session for [PROJECT] sprites. Repo at `<repo-path>`. Follow the workflow in `plans/sprite-polish-playbook.md`: baseline screenshot via Chrome MCP at localhost:<PORT>, identify worst-offender sprites in `game/sprites.js`, build tile-picker overlay to pick correct coords, hard-reload, screenshot, compare, iterate. Do 3-5 rounds covering [SCENE / ZONE / SPRITE CATEGORY]. Auto mode, don't commit unless asked.
 
 ---
 

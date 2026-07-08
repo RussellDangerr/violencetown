@@ -1,13 +1,13 @@
 # Architecture & Game-Feel Direction
 
-Captured 2026-05-24. Records the decisions made during a session that started with "should I switch to a tile editor?", widened to "should I switch to an engine?", and landed on "actually, my movement just needs polish." Written as a reference so future-Caelan can re-find the decisions without re-deriving them.
+Captured 2026-05-24. Records the decisions made during a session that started with "should I switch to a tile editor?", widened to "should I switch to an engine?", and landed on "actually, my movement just needs polish." Written as a reference to re-find these decisions without re-deriving them.
 
 ---
 
 ## TL;DR
 
 - **V-town stays vanilla JS.** The architecture fits the game shape; conversion would be cost without benefit.
-- **Pain Mountain remains the Godot learning vehicle.** Different game shape, engine-shaped problem.
+- **A separate Godot project remains the engine-learning vehicle.** Different game shape, engine-shaped problem.
 - **"I need an engine" decomposes** into separable purchases: tile editor, data visualization (creature cards), movement polish. All solvable without conversion.
 - **Movement fluidity is mostly perception polish, not architecture.** Five tunings on the path to DQM-feel; two were already done, three identified, one fixed.
 
@@ -30,7 +30,7 @@ Two structural properties:
 1. **World state is fully describable as flat data.** A `Uint8Array` of tile IDs + JSON arrays of `{x, y, hp, type}` entities. No per-entity continuous motion, no physics bodies, no animation trees to coordinate. Wrapping each enemy in a `Node2D` with a `Sprite2D` child and a `CollisionShape2D` sibling buys nothing.
 2. **Single viewport, single render pass.** The `Renderer` is roughly `(state, sprite maps) → pixels`. A scene graph's job is coordinating many objects across layers and cameras; V-town has one camera and a fixed draw order.
 
-Scenes start mattering when entities have continuous motion, layered children that move together, multiple cameras, physics bodies, or non-programmers placing entities visually. None describe V-town. All describe Pain Mountain.
+Scenes start mattering when entities have continuous motion, layered children that move together, multiple cameras, physics bodies, or non-programmers placing entities visually. None describe V-town. All describe a real-time, physics-driven game shape.
 
 ### What a conversion would look like
 
@@ -172,7 +172,7 @@ These are the tunings that require upfront architectural commitment. The remaini
 | # | Decision | Status |
 |---|---|---|
 | A | Stay vanilla for V-town | active |
-| B | Pain Mountain = Godot learning project | active |
+| B | Separate Godot project = engine-learning vehicle | active |
 | C | `_AUTO_REPEAT_MS: 120 → 100` | edited on `dev`, untested, uncommitted |
 | D | Walk-cycle restoration is the next-biggest movement lever | committed as direction |
 | E | Bestiary view is a defensible next debug-tool | committed as direction |
@@ -187,7 +187,7 @@ These are the tunings that require upfront architectural commitment. The remaini
 | G | Does `roguelikeChar_transparent.png` have walk frames? | when starting Finding 3 — verify with picker overlay |
 | H | When to implement Findings 2 + 3? | after feel-test of Finding 1 confirms diagnosis |
 | I | When to build bestiary view v1? | before enemy roster grows past ~6 types |
-| J | When to start Pain Mountain in earnest? | independent of V-town; tracked separately |
+| J | When to start the separate Godot project in earnest? | independent of V-town; tracked separately |
 | K | Clean up stale `origin/claude/*` branches? | housekeeping pass, any time |
 
 ---
@@ -212,5 +212,3 @@ These are the tunings that require upfront architectural commitment. The remaini
 - `plans/sprite-polish-playbook.md` — the workflow that proved the in-game debug tool pattern (tile-picker overlay)
 - `plans/cosmology-and-arc.md` — narrative canon driving zone + enemy roster growth (which is what makes bestiary view worthwhile)
 - `plans/give-action-feature.md` — example of design doc written mid-build paying off later
-- `~/.claude/projects/C--Users-caela/memory/project_violencetown.md` — auto-memory snapshot
-- `~/.claude/plans/mutable-mixing-feather.md` — v0.5.0 combat-radial-menu plan (Plans A/B/C)
