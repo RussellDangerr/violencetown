@@ -1,0 +1,16 @@
+Violencetown — third-party asset notices
+========================================
+
+The project's own source code is MIT-licensed (see LICENSE). It bundles the
+following third-party assets, each under its own terms:
+
+Kenney sprite packs (Roguelike Base / Dungeon / Characters / City; Tiny Town;
+Tiny Dungeon) — by Kenney, www.kenney.nl
+  License:   Creative Commons Zero v1.0 Universal (CC0 1.0) — public domain.
+  Location:  game/assets-placeholder/kenney/
+  Full text: game/assets-placeholder/kenney/LICENSE.txt
+
+VT323 font — by The VT323 Project Authors (Peter Hull)
+  License:   SIL Open Font License, Version 1.1.
+  Location:  game/assets/fonts/VT323.ttf
+  Full text: game/assets/fonts/OFL.txt
