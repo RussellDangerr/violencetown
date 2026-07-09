@@ -2697,6 +2697,15 @@ class Game {
     // throw) fire in place.
     _actOnTarget(verb, t) {
         if (!verb || !t) { this._render(); return; }
+        // The car is a 2x2 non-walkable block whose examinable is a single point,
+        // and only some of its sides are open — so "walk up and examine" means
+        // pathing to the nearest open tile beside the WHOLE block, not the tapped
+        // tile (whose own neighbours may all be walls or other car tiles).
+        if (verb.resolver === 'examine' && t.examinable && t.examinable.id === 'car') {
+            const path = this._carApproachPath();
+            if (path && path.length) { this._walkPath(path, () => this._fireResolver(verb, t)); return; }
+            this._fireResolver(verb, t); return;   // already beside it (or boxed in) → examine now
+        }
         const near = Math.max(Math.abs(this.playerX - t.x), Math.abs(this.playerY - t.y)) <= 1;
         if (verb.needsAdjacent && !near) {
             const path = findPath(this, { x: this.playerX, y: this.playerY }, { x: t.x, y: t.y }, { adjacent: true });
@@ -2704,6 +2713,24 @@ class Game {
             this._render(); return;   // unreachable — can't get adjacent to act
         }
         this._fireResolver(verb, t);
+    }
+
+    // Shortest path ending on an open tile beside the town car (a 2x2 non-walkable
+    // block). Tries adjacency of each of the car's own tiles and keeps the
+    // shortest, so it finds whichever side is actually open; returns [] if the
+    // Hero is already beside the car, or null if it's boxed in.
+    _carApproachPath() {
+        const carEx = (this.examinables || []).find(e => e.id === 'car');
+        if (!carEx) return null;
+        let best = null;
+        for (let dy = -1; dy <= 2; dy++) for (let dx = -1; dx <= 2; dx++) {
+            const cx = carEx.x + dx, cy = carEx.y + dy;
+            if (this.map.getTile(cx, cy) !== 19) continue;
+            const p = findPath(this, { x: this.playerX, y: this.playerY }, { x: cx, y: cy }, { adjacent: true });
+            if (p && p.length === 0) return [];   // already beside a car tile
+            if (p && (best === null || p.length < best.length)) best = p;
+        }
+        return best;
     }
 
     // Fire a verb's resolver on `t`, assuming the Hero is already positioned for it.
