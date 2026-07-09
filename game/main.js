@@ -2598,7 +2598,14 @@ class Game {
     _targetAt(x, y) {
         const npc = (this.enemies || []).find(e => e.entity.isAlive() && e.x === x && e.y === y);
         const item = (this.groundItems || []).find(gi => gi.x === x && gi.y === y);
-        const examinable = (this.examinables || []).find(e => e.x === x && e.y === y);
+        let examinable = (this.examinables || []).find(e => e.x === x && e.y === y);
+        // The town car is a 2x2 block of non-walkable tiles (id 19) but its
+        // examinable is a single point. Tapping ANY of its four tiles resolves to
+        // the car, so Examine — the default verb for an examinable — is one easy
+        // tap away: the intended first beat of the main quest.
+        if (!npc && !item && !examinable && this.map.getTile(x, y) === 19) {
+            examinable = (this.examinables || []).find(e => e.id === 'car') || null;
+        }
         if (!npc && !item && !examinable) return null;
         return { x, y, npc: npc || null, item: item || null, examinable: examinable || null };
     }
