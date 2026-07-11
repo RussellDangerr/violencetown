@@ -6,8 +6,10 @@ import { Renderer } from './renderer.js';
 import { loadMap } from './map.js';
 import { loadAllSprites } from './sprites.js';
 import { BitmapFont } from './bitmap-font.js';
-import { PLAYER_MAX_HP, PLAYER_MAX_MP, SLUDGE_DOT, INVENTORY_SIZE, MAX_STACK } from './data.js';
-import { ITEMS, itemTier, resolveUse, resolveThrow, tickTempEquips, unequipItem } from './items.js';
+import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, MAX_STACK } from './data.js';
+import { ITEMS, itemTier, resolveUse, resolveThrow, tickTempEquips, unequipItem, ownedItemDefs, hasItemDef } from './items.js';
+import { WEAPONS } from './weapons.js';
+import { tickBuffList } from './buffs.js';
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
 import { attack, formatDamageNumber } from './combat.js';
@@ -109,37 +111,6 @@ const DIRS = {
 };
 
 // ── Starting equipment ───────────────────────────────────────────────────────
-
-const WEAPONS = {
-    wooden_sword: {
-        id: 'wooden_sword', name: '[Wooden Sword]', damage: 10, equipSlot: 'weapon', icon: 'sword',
-    },
-    // Ray Gun — a tech weapon that GRANTS the Ray Blast trick (GP) while worn.
-    // Its world source is the Factory alien boss (deferred); the def lives here
-    // so the weapon-grants-skill wiring is real and testable now.
-    ray_gun: {
-        id: 'ray_gun', name: '[Ray Gun]', damage: 22, damageType: 'energy', equipSlot: 'weapon',
-        useType: 'equip', grantsTricks: ['ray_blast'],
-    },
-    // Fearmur — a leg-bone club. Grants the Boo! fear spell (MP) while worn, and
-    // fears an enemy you hit twice in a row (onHit: 'fearOnRepeat'). Source: the
-    // Graveyard (world drop deferred; the def lives here for the fear mechanics).
-    fearmur: {
-        id: 'fearmur', name: '[Fearmur]', damage: 14, equipSlot: 'weapon',
-        useType: 'equip', grantsSpells: ['boo'], onHit: 'fearOnRepeat',
-    },
-    // Gator Tail — a dehydrated gator club. Heavy, mean, and you're not sure
-    // where it came from (Lonny, the Sewer's own alligator, has a theory).
-    gator_tail: {
-        id: 'gator_tail', name: '[Gator Tail]', damage: 16, equipSlot: 'weapon', useType: 'equip',
-    },
-    // Lion Whip — a carnival tamer's whip. Reaches 3 tiles and YANKS whatever it
-    // strikes one tile closer; grants the "Hire a Lion" trick (GP) while worn.
-    lion_whip: {
-        id: 'lion_whip', name: '[Lion Whip]', damage: 12, equipSlot: 'weapon', useType: 'equip',
-        reach: 3, pullDistance: 1, grantsTricks: ['hire_lion'],
-    },
-};
 
 // Spells the player always knows. Equipped weapons grant MORE on top (see
 // _refreshGrantedSkills); the real spell-learning system is later work.
@@ -402,18 +373,11 @@ class Game {
     removeBuff(id) { this.buffs = this.buffs.filter(b => b.id !== id); }
     hasBuff(id) { return this.buffs.some(b => b.id === id); }
 
+    // De-smeared behind the shared buff table (PD-4): decrement, fire each buff's
+    // onTick while active, then on expiry log + fire onExpire (e.g. the recover
+    // heal). See game/buffs.js — Enemy.tickBuffs runs the same helper.
     _tickBuffs() {
-        const expired = [];
-        for (const b of this.buffs) { b.turns--; if (b.turns <= 0) expired.push(b); }
-        for (const b of expired) {
-            this.removeBuff(b.id);
-            this._log(`[${b.name} expired]`);
-            if (b.id === 'recover' && b.pendingHeal) {
-                const before = this.playerHp;
-                this.playerHp = clamp(this.playerHp + b.pendingHeal, 0, this.playerMaxHp);
-                this._log(`[Recover — healed ${this.playerHp - before} HP]`);
-            }
-        }
+        tickBuffList(this.buffs, this, this, (b) => this._log(`[${b.name} expired]`));
     }
 
     // ── Boot ─────────────────────────────────────────────────────────────────
@@ -506,28 +470,18 @@ class Game {
         // one-per-committed-turn from _advanceWorld instead, so the world keeps
         // advancing in lockstep with the fight rather than freezing (supersedes M1).
         setInterval(() => {
-            // Day/night eases on the world clock whenever the overworld is live —
-            // including while the player walks — but pauses on the splash and in
-            // combat (the per-turn beat eases it there instead).
-            if (this.state !== STATE.SPLASH && !this._inCombat()) {
-                this._advanceDayClock();
-            }
-            // Ambient NPC beat — gated to a settled idle frame; in combat the
-            // per-turn beat drives ambient life instead.
-            if (this.state === STATE.IDLE && !this._animating && !this._inCombat()) {
-                this._ambientTick();
-            }
-            // (Phase 6c) Disposition tick clock — free-roam half. Accumulate real
-            // time and nudge moods toward resting on the slow decay cadence. Runs
-            // whenever the overworld is live (not splash / not combat — combat
-            // winds it per-turn in _advanceWorld instead).
-            if (this.state !== STATE.SPLASH && !this._inCombat()) {
-                this._dispositionDecayAccMs += WORLD_TICK_MS;
-                if (this._dispositionDecayAccMs >= DISPOSITION_DECAY_MS) {
-                    this._dispositionDecayAccMs = 0;
-                    this._tickDispositionDecay();
-                }
-            }
+            // Free-roam DRIVER (CD-5): the timer lets go on the splash and in combat
+            // (the per-turn hand-wind in _advanceWorld takes over there). Otherwise
+            // wind exactly one world beat, gating ambient to a settled idle frame and
+            // decaying dispositions on the wall-clock (ms) cadence.
+            if (this.state === STATE.SPLASH || this._inCombat()) return;
+            this._dispositionDecayAccMs += WORLD_TICK_MS;
+            const decayDue = this._dispositionDecayAccMs >= DISPOSITION_DECAY_MS;
+            if (decayDue) this._dispositionDecayAccMs = 0;
+            this._worldBeat({
+                ambient: this.state === STATE.IDLE && !this._animating,
+                decayDue,
+            });
         }, WORLD_TICK_MS);
 
         this._log('[Violencetown loaded — Town hub ready]');
@@ -2764,7 +2718,7 @@ class Game {
             case 'trade': if (npc) this._openTrade(npc); break;   // (Phase 6a) any adjacent NPC → shop or offer window
             case 'bribe': if (npc) this._bribeTarget(npc); break;
             case 'hit':   if (npc) { this.combatAttack(npc, this.equipment.weapon.damage); this._advanceWorld(); this._render(); } break;
-            case 'throw': { const slot = this.inventory.findIndex(s => s && s.itemDef.useType && String(s.itemDef.useType).includes('throw')); if (slot >= 0) { const msg = resolveThrow(this, this.inventory[slot].itemDef, null, this.inventory[slot].count, { x: t.x, y: t.y }); if (msg) this._log(msg); this._removeFromSlot(slot); this._advanceWorld(); } else this._log('[Nothing to throw.]'); this._render(); break; }
+            case 'throw': { const th = this._resolveThrowable(); if (th) { const msg = resolveThrow(this, th.itemDef, null, th.count, { x: t.x, y: t.y }); if (msg) this._log(msg); th.consume(); this._advanceWorld(); } else this._log('[Nothing to throw.]'); this._render(); break; }
             case 'take':  this._takeItemAt(t.x, t.y); this._render(); break;
             default: this._render();
         }
@@ -3148,22 +3102,16 @@ class Game {
         this._ensureParticleLoop();
         if (this.playerHp <= 0) { this.playerHp = 0; this._die(); return; }
 
-        // Unified clock (supersedes M1's freeze): in free-roam the heartbeat timer
-        // winds the world beat, but in combat that timer lets go so the player can
-        // think — so each committed combat turn fires exactly one world beat here,
-        // keeping the town alive (ambient NPCs step, the day eases one tick) in
-        // lockstep with the fight instead of freezing it. Free-roam turns skip this
-        // (the timer already beat); only combat turns wind the beat by hand.
+        // Combat DRIVER (CD-5): the free-roam timer lets go so the player gets
+        // unhurried turn-based thinking time, so each committed combat turn hand-
+        // winds exactly one world beat here — keeping the town alive (ambient NPCs
+        // step, the day eases one tick) in lockstep with the fight instead of
+        // freezing it. Ambient runs every combat turn; decay counts turns. Same
+        // dual-clock split as free-roam, one shared seam (_worldBeat).
         if (this._inCombat()) {
-            this._advanceDayClock();
-            this._ambientTick();
-            // (Phase 6c) Disposition tick clock — combat half. Hand-wound per
-            // committed turn so moods still drift during a fight; the free-roam
-            // timer is let go here (same split as the day clock above).
-            if (++this._dispositionDecayTurns >= DISPOSITION_DECAY_TURNS) {
-                this._dispositionDecayTurns = 0;
-                this._tickDispositionDecay();
-            }
+            const decayDue = ++this._dispositionDecayTurns >= DISPOSITION_DECAY_TURNS;
+            if (decayDue) this._dispositionDecayTurns = 0;
+            this._worldBeat({ ambient: true, decayDue });
         }
 
         // (zone pursuit) A wedged door takes a pounding from the pursuers trapped
@@ -3183,15 +3131,11 @@ class Game {
         }
         this._soapUsedThisTurn = false;
 
-        // Sludge DoT — Shoe Bags keep it off even if you equipped them mid-sludge.
-        if (this.hasBuff('sludge') && !this._hasSludgeImmunity()) {
-            this.playerHp -= SLUDGE_DOT;
-            this._log(`[Sludge — ${SLUDGE_DOT} damage]`);
-            if (this.playerHp <= 0) { this.playerHp = 0; this._die(); return; }
-        }
-
-        // Tick buffs
+        // Tick buffs — the sludge DoT now lives in its buff def's onTick (buffs.js).
+        // Its death check moves right after the tick so a sludge death still skips
+        // the rest of the beat (MP regen, etc.), exactly as the inline block did.
         this._tickBuffs();
+        if (this.playerHp <= 0) { this.playerHp = 0; this._die(); return; }
 
         // MP trickles back each turn — FIGHT → Magic spells spend it, this refills.
         if (this.playerMp < this.playerMaxMp) {
@@ -3283,6 +3227,20 @@ class Game {
         this._ensureParticleLoop();
     }
 
+    // (CD-5) One beat of the living world: ease the day clock, optionally step
+    // ambient life, and (when its cadence is due) decay dispositions. The two
+    // DRIVERS stay separate — the free-roam heartbeat timer and the per-combat-turn
+    // hand-wind (the dual-clock is deliberate) — but this SEQUENCE is the single
+    // place both call, so "works in combat, not free-roam" drift can't creep in.
+    // `ambient` gates the ambient step (free-roam only on a settled idle frame,
+    // combat every turn); `decayDue` is the caller's cadence verdict (free-roam
+    // accumulates ms, combat counts turns).
+    _worldBeat({ ambient, decayDue }) {
+        this._advanceDayClock();
+        if (ambient) this._ambientTick();
+        if (decayDue) this._tickDispositionDecay();
+    }
+
     // Town Clock day/night — advance the overworld day clock one beat and derive
     // the lighting grade's _nightLevel. A cosine bell peaks at "midnight" and the
     // (raw - 0.6)/0.4 lift keeps most of the cycle as full day, with a smooth
@@ -3349,6 +3307,33 @@ class Game {
         if (!s) return;
         s.count--;
         if (s.count <= 0) this.inventory[slot] = null;
+    }
+
+    // Read-only ownership lens (PD-2). Walks inventory + equipment + temp-equips
+    // as one sequence (items.js) — the single "do I own item X" answer, so a
+    // check can't miss equipped gear the way an inventory-only scan did.
+    ownedItems() { return ownedItemDefs(this); }
+    hasItem(pred) { return hasItemDef(this, pred); }
+
+    // Find a throwable the player has ANYWHERE (inventory first, else an equipped
+    // one — e.g. a rock stowed in the 'sides' slot), returning { itemDef, count,
+    // consume }. consume() removes exactly that source: a bag-slot decrement, or
+    // clearing the equip slot (unequip-and-throw) so the Throw verb never lies.
+    _resolveThrowable() {
+        const isThrow = d => d && d.useType && String(d.useType).includes('throw');
+        const slot = (this.inventory || []).findIndex(s => s && isThrow(s.itemDef));
+        if (slot >= 0) {
+            const st = this.inventory[slot];
+            return { itemDef: st.itemDef, count: st.count, consume: () => this._removeFromSlot(slot) };
+        }
+        const eq = this.equipment || {};
+        for (const k of Object.keys(eq)) {
+            if (isThrow(eq[k])) {
+                const def = eq[k];
+                return { itemDef: def, count: 1, consume: () => { this.equipment[k] = null; this._refreshGrantedSkills?.(); } };
+            }
+        }
+        return null;
     }
 
     _tryPickup() {

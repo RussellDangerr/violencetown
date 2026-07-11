@@ -23,6 +23,7 @@ import {
     loadInto as loadIntoReal,
 } from '../game/save.js';
 import { QuestEngine } from '../game/quests.js';
+import { Enemy } from '../game/enemies.js';
 
 // ── Minimal global stubs (localStorage + document) ───────────────────────────
 // save.js's write/read path uses localStorage; enemies.js's chain never calls
@@ -99,17 +100,11 @@ function makePopulatedGame() {
     ];
     g.groundItems = [{ type: 'rock', x: 3, y: 4, def: ITEM_DEFS.rock }];
     g.containers = [{ id: 'chest1', type: 'crate', x: 1, y: 1, contents: ['rock', 'soap'] }];
-    g.enemies = [{
-        id: 'rat1', type: 'sewer_rat', x: 5, y: 5,
-        entity: { hp: 30, maxHp: 50, alive: true, armor: 2 },
-        damage: 8, sightRange: 8, behavior: null, homeRegion: null,
-        wanderRadius: 3, wanderEveryTurns: 4, wantsItems: null, depositsTo: null,
-        barks: null, barkEveryTurns: 8, adjacencyBark: null,
-        disposition: null, flipThreshold: null, bribeable: null, values: null, onFlip: null,
-        state: 'idle', fsmState: null, _lastWanderTurn: 0, carrying: null,
-        _barkIndex: 0, _barkOffset: null, _wasAdjacent: false, buffs: [],
-        isBarricade: undefined, tag: 'sewer_rat',
-    }];
+    // A real Enemy instance — serEnemy delegates to Enemy.toSave() (PD-5), and the
+    // live game only ever holds Enemy instances in game.enemies.
+    const rat = new Enemy({ id: 'rat1', type: 'sewer_rat', x: 5, y: 5, hp: 50, armor: 2, damage: 8, sightRange: 8, tag: 'sewer_rat' });
+    rat.entity.maxHp = 50; rat.entity.hp = 30;   // wounded — current HP below max
+    g.enemies = [rat];
     g._tileDiffs = [{ x: 2, y: 2, id: 23 }, { x: 2, y: 3, id: 22 }];
     g._pendingTransition = null;
 
@@ -288,6 +283,46 @@ describe('save round-trip (EXPECTED GREEN)', () => {
 
         clearSave();
         assert.equal(hasSave(), false);
+    });
+});
+
+// ── PD-5: co-located save contract preserves ambient + allegiance runtime ─────
+// Regression for the two round-trip bugs this fix closes: an `ambient` NPC used
+// to reload as a per-turn combat enemy (ambient dropped), and a flipped ally /
+// summon used to reload INERT (_ally dropped → resolveEnemyTurns gates the ally
+// turn on _ally, so it neither fights nor is hostile).
+describe('enemy save contract: ambient + allegiance round-trip (PD-5)', () => {
+    const rt = (e) => Enemy.fromSave(JSON.parse(JSON.stringify(e.toSave())));
+
+    test('an ambient NPC stays ambient across a round-trip', () => {
+        const amb = new Enemy({ id: 'amb1', type: 'Violencian', x: 3, y: 3, behavior: ['IDLE', 'WANDER'], ambient: true, name: 'Local' });
+        assert.equal(rt(amb).ambient, true, 'ambient must survive — else it reloads as a combat enemy');
+    });
+
+    test('a bribe-flipped ally keeps fighting (ally/wasFlipped/fsmState) across a round-trip', () => {
+        const ally = new Enemy({ id: 'kn', type: 'Knuckles', x: 4, y: 4, behavior: ['ALLIED'], name: 'Knuckles' });
+        ally._ally = true; ally._wasFlipped = true; ally.fsmState = 'ALLIED';
+        const out = rt(ally);
+        assert.equal(out._ally, true, 'a saved ally must reload as an ally, not inert');
+        assert.equal(out._wasFlipped, true);
+        assert.equal(out.fsmState, 'ALLIED');
+    });
+
+    test('a summon preserves its countdown across a round-trip', () => {
+        const lion = new Enemy({ id: 'lion', type: 'Lion', x: 5, y: 5, behavior: ['ALLIED'] });
+        lion._ally = true; lion._isSummon = true; lion._summonTurnsLeft = 7;
+        const out = rt(lion);
+        assert.equal(out._ally, true);
+        assert.equal(out._isSummon, true);
+        assert.equal(out._summonTurnsLeft, 7);
+    });
+
+    test('a plain enemy gains no phantom ally/ambient flags', () => {
+        const rat = new Enemy({ id: 'rat', type: 'Rat', x: 1, y: 1 });
+        const out = rt(rat);
+        assert.ok(!out._ally);
+        assert.equal(out.ambient, false);
+        assert.ok(!out._isSummon);
     });
 });
 

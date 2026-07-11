@@ -17,6 +17,7 @@ import { Entity, attack, formatDamageNumber } from './combat.js';
 import { manhattan, chebyshev } from './utils.js';
 import { getGreedyStep, stepEntity, fleeStep } from './pathing.js';
 import { tickNpcState } from './npc.js';
+import { tickBuffList } from './buffs.js';
 
 const DEFAULT_SIGHT = 8;
 const DEFAULT_DAMAGE = 8;
@@ -107,6 +108,8 @@ export class Enemy {
         this.homeX = x;
         this.homeY = y;
         this._lostSightTurns = 0; // consecutive chase-beats with no LOS on the player
+        this._lastSeenX = null;   // (PD-1) last tile the player was SEEN on — a blind
+        this._lastSeenY = null;   // chaser pursues THIS, not the player's true position
 
         // FSM config (null behavior = legacy entry; non-null = FSM-controlled)
         this.behavior         = behavior;
@@ -171,10 +174,76 @@ export class Enemy {
     removeBuff(id) { this.buffs = this.buffs.filter(b => b.id !== id); }
     hasBuff(id)    { return this.buffs.some(b => b.id === id); }
 
-    tickBuffs() {
-        const expired = [];
-        for (const b of this.buffs) { b.turns--; if (b.turns <= 0) expired.push(b); }
-        for (const b of expired) this.removeBuff(b.id);
+    // Runs the shared buff table (buffs.js) — the same helper the player's
+    // _tickBuffs uses, so the two sides can't silently diverge again. Enemy buffs
+    // currently carry no onTick/onExpire (blind is read at attack time, feared is a
+    // movement override), so this just decrements + expires — but any future enemy
+    // status hook lands here for free.
+    tickBuffs(game) {
+        tickBuffList(this.buffs, this, game, null);
+    }
+
+    // ── Save contract (PD-5) ──────────────────────────────────────────────────
+    // The save SHAPE lives on the class so it can't silently drift from the
+    // constructor — the drift that already shipped bugs (NPCs losing name/dialogue;
+    // vendors degrading to gift mode). save.js serEnemy/hydrateEnemy are thin
+    // adapters over these two methods.
+    //
+    // Persisted: static identity + shop config (else `new Enemy(s)` reverts them to
+    // null) AND the allegiance runtime — an ally/summon whose _ally isn't restored
+    // reloads as an INERT ALLIED-labelled NPC that neither fights (resolveEnemyTurns
+    // gates the ally turn on _ally) nor is hostile. Deliberately NOT persisted
+    // (re-derived / RAM-only): homeX/homeY, _lostSightTurns, _buyback, render/emote
+    // transients.
+    toSave() {
+        return {
+            id: this.id, type: this.type, x: this.x, y: this.y,
+            hp: this.entity.hp, maxHp: this.entity.maxHp, alive: this.entity.alive, armor: this.entity.armor,
+            damage: this.damage, sightRange: this.sightRange,
+            behavior: this.behavior, homeRegion: this.homeRegion,
+            wanderRadius: this.wanderRadius, wanderEveryTurns: this.wanderEveryTurns,
+            wantsItems: this.wantsItems, depositsTo: this.depositsTo,
+            barks: this.barks, barkEveryTurns: this.barkEveryTurns, adjacencyBark: this.adjacencyBark,
+            disposition: this.disposition, flipThreshold: this.flipThreshold, bribeable: this.bribeable,
+            values: this.values, onFlip: this.onFlip,
+            name: this.name, dialogueId: this.dialogueId,
+            vendor: this.vendor, stock: this.stock, specialBuys: this.specialBuys, gold: this.gold, giftLog: this.giftLog,
+            ambient: this.ambient,
+            // runtime
+            state: this.state, fsmState: this.fsmState, lastWanderTurn: this._lastWanderTurn,
+            carrying: this.carrying, barkIndex: this._barkIndex, barkOffset: this._barkOffset,
+            wasAdjacent: this._wasAdjacent, buffs: (this.buffs || []).map(b => ({ ...b })),
+            // allegiance runtime (see note above)
+            ally: this._ally, wasFlipped: this._wasFlipped,
+            isSummon: this._isSummon, summonTurnsLeft: this._summonTurnsLeft,
+            // phase-D extras (present only when set on the live enemy)
+            isBarricade: this.isBarricade, tag: this.tag,
+        };
+    }
+
+    static fromSave(s) {
+        const e = new Enemy(s);   // config fields incl. ambient; s.hp → Entity
+        const num = (v, d) => (typeof v === 'number' && isFinite(v)) ? v : d;
+        e.entity.maxHp = num(s.maxHp, e.entity.maxHp);
+        e.entity.hp = Math.max(0, Math.min(num(s.hp, e.entity.maxHp), e.entity.maxHp));
+        e.entity.alive = s.alive !== false;
+        e.state = s.state || 'idle';
+        e.fsmState = s.fsmState ?? null;
+        e._lastWanderTurn = num(s.lastWanderTurn, 0);
+        e.carrying = s.carrying ?? null;
+        e._barkIndex = num(s.barkIndex, 0);
+        e._barkOffset = (typeof s.barkOffset === 'number') ? s.barkOffset : null;
+        e._wasAdjacent = s.wasAdjacent === true;
+        e.buffs = Array.isArray(s.buffs) ? s.buffs.map(b => ({ ...b })) : [];
+        // Allegiance (PD-5): restore ally/summon runtime so a persisted ally keeps
+        // fighting instead of reloading inert.
+        if (s.ally) e._ally = true;
+        if (s.wasFlipped) e._wasFlipped = true;
+        if (s.isSummon) e._isSummon = true;
+        if (typeof s.summonTurnsLeft === 'number') e._summonTurnsLeft = s.summonTurnsLeft;
+        if (s.isBarricade) e.isBarricade = true;
+        if (s.tag != null) e.tag = s.tag;
+        return e;
     }
 }
 
@@ -235,7 +304,7 @@ export function resolveEnemyTurns(game) {
         // BEFORE any FSM/legacy logic runs. Expired buffs get removed; the
         // effect of an active buff reads later in the turn (e.g., Blind
         // halves the damage at the attack site).
-        enemy.tickBuffs();
+        enemy.tickBuffs(game);
 
         // (fear) A feared enemy flees this turn — one step directly away from
         // the player — and does nothing else (no bark, chase, or attack). Its
@@ -281,6 +350,8 @@ export function resolveEnemyTurns(game) {
             hasLineOfSight(game.map, enemy.x, enemy.y, game.playerX, game.playerY);
         if (canSeePlayer) {
             enemy._lostSightTurns = 0;
+            enemy._lastSeenX = game.playerX;   // (PD-1) refresh the last-seen mark
+            enemy._lastSeenY = game.playerY;   // only while the player is actually in view
             if (enemy.state === 'idle' || enemy.state === 'returning') {
                 const reacquire = enemy.state === 'idle';
                 enemy.state = 'chasing';
@@ -336,6 +407,25 @@ export function resolveEnemyTurns(game) {
             }
         }
 
+        // (PD-1) Pursue the LAST-SEEN tile when blind — path to where the player
+        // was last actually visible, not their true position (no tracking through
+        // walls). Reaching that spot without re-sighting them breaks the chase; the
+        // leash above is the outer backstop.
+        const chaseTarget = canSeePlayer
+            ? { x: game.playerX, y: game.playerY }
+            : { x: enemy._lastSeenX, y: enemy._lastSeenY };
+        if (!canSeePlayer &&
+            (chaseTarget.x == null || (enemy.x === chaseTarget.x && enemy.y === chaseTarget.y))) {
+            enemy.state = 'returning';
+            enemy._lostSightTurns = 0;
+            messages.push({
+                text: `[${enemy.entity.name} loses the trail.]`,
+                sourceEnemy: enemy,
+                category: 'deaggro',
+            });
+            continue;
+        }
+
         // Adjacent? Attack. Visual feedback (red damage number, hit-flash,
         // stagger, event word, screen shake on big hits) replaces the
         // attack log line. The player-death case is handled by the death-
@@ -352,11 +442,12 @@ export function resolveEnemyTurns(game) {
             continue;
         }
 
-        // Chase: greedy move toward player
+        // Chase: greedy move toward the pursuit target — the player's true position
+        // while in sight, else the last-seen tile (PD-1).
         const bestMove = getGreedyStep(
             game,
             { x: enemy.x, y: enemy.y },
-            { x: game.playerX, y: game.playerY },
+            chaseTarget,
             { self: enemy }
         );
         if (bestMove) {

@@ -6,6 +6,7 @@
 
 import { SPELLS } from './spells.js';
 import { TRICKS } from './tricks.js';
+import { hasItemDef } from './items.js';
 
 const always = () => true;
 
@@ -366,7 +367,7 @@ export function flapperDeflection(p, dir) {
 // so Give folded into it. Bandit/townsfolk/boss all become "trade-able".
 export function targetVerbs(target, game) {
   if (!target) return [];
-  const haveThrow = (game.inventory || []).some(s => s && s.itemDef && s.itemDef.useType && String(s.itemDef.useType).includes('throw'));
+  const haveThrow = hasItemDef(game, d => d && d.useType && String(d.useType).includes('throw'));
   const V = [];
   V.push({ key: 'examine', label: 'Examine', color: '#9aa0a6', text: '#23262b', icon: '?', resolver: 'examine' });
   if (target.npc) {

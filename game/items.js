@@ -398,6 +398,24 @@ export function resolveUse(game, itemDef, direction, stackCount = 1) {
     }
 }
 
+// ── Ownership lens (PD-2) ────────────────────────────────────────────────────
+// The player holds items in THREE separate stores — inventory slots, equipped
+// gear (a named-slot map), and temp-equips. A "do I own / can I use item X"
+// check that scans only the bag misses equipped gear — which is how a throwable
+// stowed in the 'sides' slot used to hide its own Throw verb. These walk all
+// three as one read-only sequence so any ownership question has a single answer.
+export function* ownedItemDefs(game) {
+    for (const s of (game.inventory || [])) if (s && s.itemDef) yield s.itemDef;
+    const eq = game.equipment || {};
+    for (const k of Object.keys(eq)) if (eq[k]) yield eq[k];
+    for (const t of (game.tempEquips || [])) if (t && t.itemDef) yield t.itemDef;
+}
+
+export function hasItemDef(game, pred) {
+    for (const def of ownedItemDefs(game)) if (pred(def)) return true;
+    return false;
+}
+
 function resolveSelfUse(game, itemDef) {
     // Equip into slot (with duration if applicable)
     const equipMsg = equipItem(game, itemDef);

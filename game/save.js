@@ -97,34 +97,10 @@ export function serialize(game) {
     };
 }
 
-function serEnemy(e) {
-    return {
-        id: e.id, type: e.type, x: e.x, y: e.y,
-        hp: e.entity.hp, maxHp: e.entity.maxHp, alive: e.entity.alive, armor: e.entity.armor,
-        damage: e.damage, sightRange: e.sightRange,
-        behavior: e.behavior, homeRegion: e.homeRegion,
-        wanderRadius: e.wanderRadius, wanderEveryTurns: e.wanderEveryTurns,
-        wantsItems: e.wantsItems, depositsTo: e.depositsTo,
-        barks: e.barks, barkEveryTurns: e.barkEveryTurns, adjacencyBark: e.adjacencyBark,
-        disposition: e.disposition, flipThreshold: e.flipThreshold, bribeable: e.bribeable,
-        values: e.values, onFlip: e.onFlip,
-        // Static identity + shop config. Without these, hydrateEnemy's `new Enemy(s)`
-        // reverts them to null on reload — NPCs lose their name/dialogue and vendors
-        // (Macc, Puck) stop being vendors, silently degrading to gift mode. (pre-prod
-        // review fix.) The transient buyback ledger (_buyback) stays RAM-only: it's
-        // a 5-min window keyed to performance.now() which resets on reload, and with
-        // quest items now unsellable it is no longer a soft-lock vector.
-        name: e.name, dialogueId: e.dialogueId,
-        // (transaction spine) real gold + giftLog round-trip alongside the shop config.
-        vendor: e.vendor, stock: e.stock, specialBuys: e.specialBuys, gold: e.gold, giftLog: e.giftLog,
-        // runtime
-        state: e.state, fsmState: e.fsmState, lastWanderTurn: e._lastWanderTurn,
-        carrying: e.carrying, barkIndex: e._barkIndex, barkOffset: e._barkOffset,
-        wasAdjacent: e._wasAdjacent, buffs: (e.buffs || []).map(b => ({ ...b })),
-        // phase-D extras (present only when set on the live enemy)
-        isBarricade: e.isBarricade, tag: e.tag,
-    };
-}
+// The enemy save shape lives WITH the Enemy class (enemies.js toSave/fromSave) so
+// it can't drift from the constructor — the drift that already shipped bugs.
+// These are thin adapters over it.
+function serEnemy(e) { return e.toSave(); }
 
 // ── Write (atomic + backup) ──────────────────────────────────────────────────
 
@@ -293,20 +269,4 @@ export async function loadInto(game, raw) {
     return true;
 }
 
-function hydrateEnemy(s) {
-    const e = new Enemy(s);                       // reads config fields; hp → Entity
-    e.entity.maxHp = _num(s.maxHp, e.entity.maxHp);
-    e.entity.hp = clamp(_num(s.hp, e.entity.maxHp), 0, e.entity.maxHp);
-    e.entity.alive = s.alive !== false;
-    e.state = s.state || 'idle';
-    e.fsmState = s.fsmState ?? null;
-    e._lastWanderTurn = _num(s.lastWanderTurn, 0);
-    e.carrying = s.carrying ?? null;
-    e._barkIndex = _num(s.barkIndex, 0);
-    e._barkOffset = (typeof s.barkOffset === 'number') ? s.barkOffset : null;
-    e._wasAdjacent = s.wasAdjacent === true;
-    e.buffs = Array.isArray(s.buffs) ? s.buffs.map(b => ({ ...b })) : [];
-    if (s.isBarricade) e.isBarricade = true;
-    if (s.tag != null) e.tag = s.tag;
-    return e;
-}
+function hydrateEnemy(s) { return Enemy.fromSave(s); }

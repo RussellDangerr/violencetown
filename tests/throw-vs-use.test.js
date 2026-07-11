@@ -13,7 +13,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { ITEMS, resolveThrow, resolveUse } from '../game/items.js';
+import { ITEMS, resolveThrow, resolveUse, ownedItemDefs, hasItemDef } from '../game/items.js';
 
 // A throwable line: player at (0,0) facing east; one enemy two tiles east.
 // resolveThrow walks `range` tiles from the player; range>=2 reaches the enemy.
@@ -113,5 +113,38 @@ describe('control: a throw-type item throws via resolveThrow (expected GREEN)', 
         assert.equal(g.combatAttacks.length, 1, 'rock should hit via combatAttack');
         assert.ok(g._enemyRef.entity.hp < 50, 'rock should damage the enemy');
         assert.equal(g.playerHp, 50, 'throwing a rock must not heal the player');
+    });
+});
+
+// ── PD-2: the ownership lens counts equipped + temp-equipped items, not just the
+// bag — so a throwable stowed in an equip slot no longer hides its own Throw verb.
+describe('ownership lens walks inventory + equipment + tempEquips (PD-2)', () => {
+    const isThrow = d => d && d.useType && String(d.useType).includes('throw');
+
+    test('a throwable equipped in a slot (empty bag) is still "owned" — the Throw-verb bug', () => {
+        const g = { inventory: [null, null], equipment: { sides: ITEMS.rock, weapon: null }, tempEquips: [] };
+        assert.equal(hasItemDef(g, isThrow), true);
+    });
+
+    test('a throwable in the bag is owned; a non-throwable is not', () => {
+        const inBag = { inventory: [{ itemDef: ITEMS.rock, count: 1 }], equipment: {}, tempEquips: [] };
+        assert.equal(hasItemDef(inBag, isThrow), true);
+        const none = { inventory: [null], equipment: { sides: ITEMS.bandage }, tempEquips: [] };
+        assert.equal(hasItemDef(none, isThrow), false, 'bandage is self-use, not throwable');
+    });
+
+    test('ownedItemDefs yields defs from all three stores', () => {
+        const g = {
+            inventory: [{ itemDef: ITEMS.bandage, count: 1 }, null],
+            equipment: { sides: ITEMS.rock, weapon: null },
+            tempEquips: [{ itemDef: ITEMS.sludge_sack }],
+        };
+        const ids = [...ownedItemDefs(g)].map(d => d.id).sort();
+        assert.deepEqual(ids, ['bandage', 'rock', 'sludge_sack']);
+    });
+
+    test('tolerates missing stores (partial game / test stubs)', () => {
+        assert.equal(hasItemDef({}, isThrow), false);
+        assert.deepEqual([...ownedItemDefs({})], []);
     });
 });
