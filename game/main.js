@@ -3871,7 +3871,7 @@ class Game {
         if (c.timeSkip) this._skipTime(c.timeSkip);            // 3. time
         if (c.status) this.addBuff(c.status, (BUFF_DEFS[c.status] && BUFF_DEFS[c.status].name) || c.status, 6, 'debuff'); // 4. status
         if (c.take) this._applyTake(c.take);                   // 5. taken
-        if (c.gift && Array.isArray(c.gift.items)) for (const id of c.gift.items) this._addToInventory(this._resolveItemDef(id)); // 6. given
+        if (c.gift && Array.isArray(c.gift.items)) for (const id of c.gift.items) { const gd = this._resolveItemDef(id); if (gd) this._addToInventory(gd); } // 6. given (guard unknown ids)
         if (c.gift && c.gift.heal) this.playerHp = this.playerMaxHp;
         this._pendingTransition = null;                        // 7. de-aggro + resume (mirror _respawn's tail)
         for (const e of this.enemies) {
