@@ -62,6 +62,51 @@ export function pickScenario(ctx, scenarios, rand) {
 // interprets them. Seeded with the generic fallback; sewer flavor added in Task 5.
 export const DEFEAT_SCENARIOS = [
     {
+        id: 'processed_by_fungus',
+        when: c => c.zone && /sewer/i.test(c.zone) && c.by && /Fungus/.test(c.by.type || ''),
+        weight: 3,
+        consequence: {
+            wakeAt: { spot: { x: 10, y: 10 } },      // a spore-cell by the soap-mine
+            hp: 0.5, timeSkip: 'hours', status: 'hunched',
+            take: { categories: ['ambro'], recoverable: false },   // they feast on your food/mushrooms — gone
+            log: '[You wake in a spore-cell. Your provisions are gone; the Fungus fed well.]',
+        },
+    },
+    {
+        id: 'robbed_by_wererats',
+        when: c => c.zone && /sewer/i.test(c.zone) && c.by && (c.by.type || '') === 'Wererat',
+        weight: 3,
+        consequence: {
+            wakeAt: null,                            // dumped at the sewer mouth (spawn)
+            hp: 0.6, status: 'rattled',
+            take: { gold: 0.3, loot: 'all', recoverable: true, stashAt: { spot: { x: 17, y: 10 } } },
+            log: "[The rats rolled you and scampered off with your haul. You'll want it back.]",
+        },
+    },
+    {
+        id: 'swept_into_sludge',
+        when: c => c.zone && /sewer/i.test(c.zone) && (c.cause === 'sludge' || c.cause === 'fall'),
+        weight: 2,
+        consequence: {
+            wakeAt: { spot: { x: 3, y: 10 } },       // washed downstream
+            hp: 0.5, status: 'sludged',
+            take: { breakables: true, recoverable: false },
+            log: '[The sludge river took you downstream. Your kit is soaked and cracked.]',
+        },
+    },
+    {
+        id: 'patched_by_carrion',
+        when: c => c.zone && /sewer/i.test(c.zone),
+        weight: 1,                                   // the hope roll — any sewer defeat, low weight
+        consequence: {
+            wakeAt: { spot: { x: 8, y: 16 } },        // Carrion's corridor
+            hp: 1.0,
+            take: { gold: 0.1, recoverable: false },  // a small fee, not a robbery
+            gift: { items: ['bandage'] },
+            log: "[Carrion dragged you to his corner and patched you up. 'You owe me,' he grunts.]",
+        },
+    },
+    {
         id: 'beaten_and_dumped',
         when: () => true,             // generic fallback — always eligible, lowest weight
         weight: 1,
