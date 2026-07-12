@@ -2875,40 +2875,51 @@ export class Renderer {
         const npc = game._dialogueNpc;
         if (!npc || !this.font) return;
 
-        ctx.fillStyle = 'rgba(0,0,0,0.72)';
+        // (Fallout-style bottom panel) Light dim only — the world (the player + the
+        // NPC you're talking to) stays visible up top; the conversation lives in a
+        // wide panel across the bottom. VT323 is scalable, so text uses fractional
+        // scales and the *real* per-char advance (cw) to fit without 8x8 cramping.
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
         ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
 
         const R = DIALOGUE_RECT;
         if (ui?.loaded) drawPanelBig(ctx, ui, R.x, R.y, R.w, R.h, 'base');
         else            drawPanelSmall(ctx, R.x, R.y, R.w, R.h);
 
+        const cw = (s) => Math.max(1, this.font.measure('X', s));   // real px/char at scale s
         const disp = npc.disposition ?? 0;
         const m = mood(disp);
         const innerX = R.x + 18;
 
-        this.font.drawText(ctx, (npc.name || npc.type || 'SOMEONE').toUpperCase(), CANVAS_PX / 2, R.y + 12, { color: UI.gold, scale: 2, align: 'center' });
+        // Header: name (left). The ✕ close chip owns the top-right corner (drawn by
+        // the CLOSE_PANEL machinery), so the disposition number lives on the mood row
+        // below it — not the title row — to avoid colliding with the chip.
+        this.font.drawText(ctx, (npc.name || npc.type || 'SOMEONE').toUpperCase(), innerX, R.y + 10, { color: UI.gold, scale: 2 });
 
-        const moodY = R.y + 46;
-        this._drawMoodFace(R.x + 22, moodY, m.face);
-        this.font.drawText(ctx, m.mood.toUpperCase(), R.x + 42, moodY - 2, { color: UI.textLight, scale: 1 });
-        this.font.drawText(ctx, `${disp > 0 ? '+' : ''}${disp}`, R.x + R.w - 22, moodY - 6, { color: disp < 0 ? UI.hpRed : UI.gold, scale: 2, align: 'right' });
+        // Mood face + label (left) · disposition (right, big).
+        const moodY = R.y + 42;
+        this._drawMoodFace(R.x + 20, moodY, m.face);
+        this.font.drawText(ctx, m.mood.toUpperCase(), R.x + 40, moodY, { color: UI.textLight, scale: 1 });
+        this.font.drawText(ctx, `${disp > 0 ? '+' : ''}${disp}`, R.x + R.w - 16, moodY - 4, { color: disp < 0 ? UI.hpRed : UI.gold, scale: 2, align: 'right' });
 
-        // NPC reply — bigger, readable (scale 2).
-        let ty = R.y + 74;
-        const replyChars = Math.max(8, Math.floor((R.w - 36) / 16));
+        // NPC reply — scale 1.5; the wide panel + real advance means it rarely wraps.
+        let ty = R.y + 66;
+        const replyChars = Math.max(8, Math.floor((R.w - 36) / cw(1.5)));
         for (const line of this._wrapText(game._dialogueReply || '', replyChars)) {
-            this.font.drawText(ctx, line, innerX, ty, { color: UI.text, scale: 2 });
-            ty += 20;
+            this.font.drawText(ctx, line, innerX, ty, { color: UI.text, scale: 1.5 });
+            ty += 22;
         }
 
-        // Options — scale-2 labels in TALL, clickable rows. Long labels wrap; each
-        // row's hit-rect is stashed on this._dialogueRects for main._tapDialogue
+        // Choices — big scale-2 labels in clickable rows; the delta badge (scale 2)
+        // and the once/repeat/GP tag (scale 1.5) share the right column, side by side.
+        // Each row's hit-rect is stashed on this._dialogueRects for main._tapDialogue
         // (a click/tap on a row == pick it; the Leave row closes).
         const choices = game._dialogueChoices();
         const cursor = game._dialogueCursor;
-        const labelChars = Math.max(6, Math.floor((R.w - 128) / 16));   // leave room for the badge/tag column
-        const lineH = 18, padY = 9;
-        let cy = ty + 14;
+        const RIGHT_COL = 150;                                          // reserve for badge + tag
+        const labelChars = Math.max(6, Math.floor((R.w - 36 - RIGHT_COL) / cw(2)));
+        const lineH = 22, padY = 7;
+        let cy = ty + 10;
         this._dialogueRects = [];
         const drawRow = (idx, label, badge, badgeColor, tag, isLeave) => {
             const sel = cursor === idx;
@@ -2918,10 +2929,11 @@ export class Renderer {
             lines.forEach((ln, li) => {
                 this.font.drawText(ctx, (li === 0 ? (sel ? '> ' : '  ') : '    ') + ln, innerX, cy + padY + li * lineH, { color: sel ? UI.textLight : UI.text, scale: 2 });
             });
-            if (badge) this.font.drawText(ctx, badge, R.x + R.w - 92, cy + padY, { color: badgeColor, scale: 1, align: 'right' });
-            if (tag)   this.font.drawText(ctx, tag,   R.x + R.w - 20, cy + padY, { color: UI.dim, scale: 1, align: 'right' });
+            const midY = cy + padY + 2;
+            if (badge) this.font.drawText(ctx, badge, R.x + R.w - 74, midY, { color: badgeColor, scale: 2,   align: 'right' });
+            if (tag)   this.font.drawText(ctx, tag,   R.x + R.w - 16, midY, { color: UI.dim,     scale: 1.5, align: 'right' });
             this._dialogueRects.push({ rect: { x: R.x + 10, y: cy, w: R.w - 20, h: rowH }, choiceIndex: idx, isLeave });
-            cy += rowH + 4;
+            cy += rowH + 3;
         };
         choices.forEach((c, i) => {
             const delta = c.delta ?? 0;
@@ -2932,7 +2944,7 @@ export class Renderer {
         });
         drawRow(choices.length, 'Leave', '', null, '', true);
 
-        this.font.drawText(ctx, 'CLICK or W/S  ·  SPACE picks  ·  E / X / tap-outside leaves', CANVAS_PX / 2, R.y + R.h - 16, { color: UI.dim, scale: 1, align: 'center' });
+        this.font.drawText(ctx, 'CLICK or W/S  ·  SPACE picks  ·  E / X / tap-outside leaves', R.x + R.w / 2, R.y + R.h - 16, { color: UI.dim, scale: 1, align: 'center' });
     }
 
     // ── Equipment screen (Stage 3 — read-only Vitruvian dress-up) ────────────
