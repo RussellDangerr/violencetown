@@ -2669,9 +2669,18 @@ class Game {
         // pathing to the nearest open tile beside the WHOLE block, not the tapped
         // tile (whose own neighbours may all be walls or other car tiles).
         if (verb.resolver === 'examine' && t.examinable && t.examinable.id === 'car') {
+            // Walk to the car's open side, then INSTALL the converter if we're holding
+            // it (the quest finish — same as bumping the car) — else examine it. Bump
+            // was the only trigger before, which the click/tap never does; this makes
+            // tapping the car discover the install too (and it's the ONLY way on touch,
+            // where there's no d-pad to bump with).
+            const holdingConverter = (this.inventory || []).some(s => s && s.itemDef && s.itemDef.id === 'catalytic_converter');
+            const act = (holdingConverter && !this.questEngine.getFlag('carFixed'))
+                ? () => this._interactCar()
+                : () => this._fireResolver(verb, t);
             const path = this._carApproachPath();
-            if (path && path.length) { this._walkPath(path, () => this._fireResolver(verb, t)); return; }
-            this._fireResolver(verb, t); return;   // already beside it (or boxed in) → examine now
+            if (path && path.length) { this._walkPath(path, act); return; }
+            act(); return;   // already beside it (or boxed in) → act now
         }
         const near = Math.max(Math.abs(this.playerX - t.x), Math.abs(this.playerY - t.y)) <= 1;
         if (verb.needsAdjacent && !near) {
