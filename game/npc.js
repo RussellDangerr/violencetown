@@ -6,10 +6,8 @@
 // become HOSTILE, no matter the stimulus. This makes the system character-
 // agnostic from the AI's perspective.
 //
-// Current states (steps 3-4): IDLE, WANDER, WORKING.
-// Future states: HOSTILE (still routed via legacy enemies.js chase logic;
-// will be consolidated here in a later step), ALLIED (when
-// feature/give-action ships and disposition flips an enemy).
+// States: IDLE, WANDER, WORKING (ambient), HOSTILE (the chase — relocated here
+// from enemies.js in PD-3 step 4), ALLIED (a disposition-flipped ally).
 //
 // State priority on each tick: WORKING (if there's work) > WANDER (if the
 // cadence has elapsed) > stay IDLE. This gives workers diligence — once
@@ -17,12 +15,24 @@
 // keeping wanderers lazy in the absence of stimulus.
 //
 // Per the project ontology (Character > {Hero, NPC > {Enemy, friendly NPC}}),
-// this file operates on the NPC tier. The Enemy class instances pass through
-// here when they have a `behavior` field; otherwise they run the legacy
-// chase logic in enemies.js.
+// this file operates on the NPC tier. Every non-ambient Enemy instance is now
+// dispatched here by resolveEnemyTurns (enemies.js), routed by allegiance into
+// the HOSTILE (chase), ALLIED, or ambient states.
 
-import { manhattan } from './utils.js';
-import { getGreedyStep, stepEntity } from './pathing.js';
+import { manhattan, chebyshev } from './utils.js';
+import { getGreedyStep, stepEntity, hasLineOfSight } from './pathing.js';
+
+// ── Leash tuning ─────────────────────────────────────────────────────────────
+// A chasing enemy gives up and walks home when it strays past LEASH_DISTANCE
+// tiles from its spawn, OR loses line-of-sight to the player for
+// LOST_SIGHT_BEATS consecutive turns. Both are one-line-tunable; LEASH_DISTANCE
+// is generous (≈ 2× the default sight range) so a fair foot-chase still works,
+// while LOST_SIGHT_BEATS gives the player a real "break contact and they
+// disengage" stealth beat. Per-type override via the enemy's `leashDistance` /
+// `lostSightBeats` fields (absent → these defaults). (Moved here with the chase
+// from enemies.js, PD-3 step 4.)
+const LEASH_DISTANCE   = 14; // max tiles from home before a chaser breaks off
+const LOST_SIGHT_BEATS = 6;  // turns out of sight before a chaser breaks off
 
 // State constants — string values stored on each NPC so they're inspectable
 // in dev tools and serializable in any future save format.
@@ -30,7 +40,7 @@ export const STATE = {
     IDLE:    'IDLE',
     WANDER:  'WANDER',
     WORKING: 'WORKING',
-    HOSTILE: 'HOSTILE', // declared but not yet routed here; legacy chase in enemies.js for now
+    HOSTILE: 'HOSTILE', // chases + attacks the player (the relocated legacy chase)
     ALLIED:  'ALLIED',  // a bribe-flipped ally — fights the player's hostiles (game._allyTakeTurn)
 };
 
@@ -38,24 +48,22 @@ export const STATE = {
 //
 // Run one tick of the FSM for a single NPC. Mutates the NPC (state, x, y,
 // carrying, turn counters) and the world (groundItems, container.contents).
-// Returns an array of log message strings to surface to the player. Called
-// from enemies.js::resolveEnemyTurns when the NPC has a `behavior` field.
+// Returns an array of log messages (plain strings for FSM activity; rich
+// { text, sourceEnemy, category } objects from the HOSTILE chase). Called for
+// every non-ambient Enemy from enemies.js::resolveEnemyTurns, dispatched by
+// allegiance; also for neutrals on the world heartbeat (resolveAmbientTurns).
 
 export function tickNpcState(game, npc, clock = game.turn) {
-    if (!npc.behavior) return [];
-
-    // Lazy initialization — pick a starting state from the whitelist.
-    // Prefer IDLE if available; otherwise take the first allowed state;
-    // otherwise default to IDLE explicitly (for the empty-whitelist case
-    // produced by give-action::applyFlip on a legacy chaser).
+    // Lazy initialization — pick a starting state. Allegiance decides first
+    // (a born-hostile with null `behavior` has no whitelist to read); otherwise
+    // fall back to the ambient whitelist: prefer IDLE, else the first allowed
+    // state, else IDLE (the empty-whitelist case a flipped legacy chaser leaves).
     if (npc.fsmState == null) {
-        if (npc.behavior.includes(STATE.IDLE)) {
-            npc.fsmState = STATE.IDLE;
-        } else if (npc.behavior.length > 0) {
-            npc.fsmState = npc.behavior[0];
-        } else {
-            npc.fsmState = STATE.IDLE; // empty whitelist defaults to permanent IDLE
-        }
+        if (npc.allegiance === 'hostile')      npc.fsmState = STATE.HOSTILE;
+        else if (npc.allegiance === 'ally')    npc.fsmState = STATE.ALLIED;
+        else if (npc.behavior && npc.behavior.includes(STATE.IDLE)) npc.fsmState = STATE.IDLE;
+        else if (npc.behavior && npc.behavior.length > 0)          npc.fsmState = npc.behavior[0];
+        else                                   npc.fsmState = STATE.IDLE;
         npc._lastWanderTurn = clock;
     }
 
@@ -120,6 +128,125 @@ export function tickNpcState(game, npc, clock = game.turn) {
             // stays free of combat coupling. Returns log lines to surface.
             const allyMsgs = game._allyTakeTurn ? game._allyTakeTurn(npc) : [];
             for (const m of allyMsgs) messages.push(m);
+            break;
+        }
+
+        case STATE.HOSTILE: {
+            // Legacy chase logic — relocated verbatim from enemies.js (PD-3 step 4),
+            // plus the leash (a strayed/blind chaser breaks off and walks home).
+            const dist = manhattan(npc.x, npc.y, game.playerX, game.playerY);
+
+            // Check LOS. Spotting the player (re)acquires aggro from either idle
+            // OR returning — a foe walking home that catches sight of you again
+            // turns and resumes the chase. A live sighting also clears the
+            // lost-sight timer so contact has to actually break to count.
+            const canSeePlayer = dist <= npc.sightRange &&
+                hasLineOfSight(game.map, npc.x, npc.y, game.playerX, game.playerY);
+            if (canSeePlayer) {
+                npc._lostSightTurns = 0;
+                npc._lastSeenX = game.playerX;   // (PD-1) refresh the last-seen mark
+                npc._lastSeenY = game.playerY;   // only while the player is actually in view
+                if (npc.state === 'idle' || npc.state === 'returning') {
+                    const reacquire = npc.state === 'idle';
+                    npc.state = 'chasing';
+                    if (reacquire) messages.push({
+                        text: `[${npc.entity.name} spotted you!]`,
+                        sourceEnemy: npc,
+                        category: 'spotted',
+                    });
+                }
+            }
+
+            // Returning: walk back toward home using the same greedy-step spine as
+            // the chase. Arrive (or get stuck against a wall) → drop to idle and
+            // resume normal LOS re-acquisition / FSM-free wander-at-rest.
+            if (npc.state === 'returning') {
+                if (npc.x === npc.homeX && npc.y === npc.homeY) {
+                    npc.state = 'idle';
+                    break;
+                }
+                const homeMove = getGreedyStep(
+                    game,
+                    { x: npc.x, y: npc.y },
+                    { x: npc.homeX, y: npc.homeY },
+                    { self: npc }
+                );
+                if (homeMove) stepEntity(npc, homeMove.x, homeMove.y, game._MOVE_MS);
+                else npc.state = 'idle'; // boxed in — give up the walk-back, idle here
+                break;
+            }
+
+            if (npc.state !== 'chasing') break;
+
+            // Leash: a chaser that has broken contact — out of sight — gives up when
+            // it has strayed too far from home OR stayed blind for too many beats,
+            // and heads home. Gating on !canSeePlayer means an enemy still in sight
+            // (incl. one adjacent and attacking) NEVER disengages, however far it
+            // has chased you — you have to actually break line of sight to shake it.
+            if (!canSeePlayer) {
+                npc._lostSightTurns += 1;
+                const leashDist  = npc.leashDistance ?? LEASH_DISTANCE;
+                const blindBeats = npc.lostSightBeats ?? LOST_SIGHT_BEATS;
+                const tooFar  = manhattan(npc.x, npc.y, npc.homeX, npc.homeY) > leashDist;
+                const tooLong = npc._lostSightTurns >= blindBeats;
+                if (tooFar || tooLong) {
+                    npc.state = 'returning';
+                    npc._lostSightTurns = 0;
+                    messages.push({
+                        text: `[${npc.entity.name} loses interest.]`,
+                        sourceEnemy: npc,
+                        category: 'deaggro',
+                    });
+                    break; // spend this beat disengaging; walk-home starts next turn
+                }
+            }
+
+            // (PD-1) Pursue the LAST-SEEN tile when blind — path to where the player
+            // was last actually visible, not their true position (no tracking through
+            // walls). Reaching that spot without re-sighting them breaks the chase; the
+            // leash above is the outer backstop.
+            const chaseTarget = canSeePlayer
+                ? { x: game.playerX, y: game.playerY }
+                : { x: npc._lastSeenX, y: npc._lastSeenY };
+            if (!canSeePlayer &&
+                (chaseTarget.x == null || (npc.x === chaseTarget.x && npc.y === chaseTarget.y))) {
+                npc.state = 'returning';
+                npc._lostSightTurns = 0;
+                messages.push({
+                    text: `[${npc.entity.name} loses the trail.]`,
+                    sourceEnemy: npc,
+                    category: 'deaggro',
+                });
+                break;
+            }
+
+            // Adjacent? Attack. Visual feedback (red damage number, hit-flash,
+            // stagger, event word, screen shake on big hits) replaces the
+            // attack log line. The player-death case is handled by the death-
+            // screen flow in main.js, which has its own messaging.
+            //
+            // Blind debuff halves outgoing damage (deterministic — no RNG, per
+            // combat.js's "no miss" contract). The Math.max(1, ...) clamp
+            // mirrors combat.js's "at least 1 always lands" rule.
+            if (chebyshev(npc.x, npc.y, game.playerX, game.playerY) <= 1) {
+                const dmg = npc.hasBuff('blind')
+                    ? Math.max(1, Math.floor(npc.damage * 0.5))
+                    : npc.damage;
+                game.applyDamageToPlayer(dmg);
+                break;
+            }
+
+            // Chase: greedy move toward the pursuit target — the player's true position
+            // while in sight, else the last-seen tile (PD-1).
+            const bestMove = getGreedyStep(
+                game,
+                { x: npc.x, y: npc.y },
+                chaseTarget,
+                { self: npc }
+            );
+            if (bestMove) {
+                stepEntity(npc, bestMove.x, bestMove.y, game._MOVE_MS);
+            }
             break;
         }
 

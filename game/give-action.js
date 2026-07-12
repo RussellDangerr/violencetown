@@ -157,17 +157,16 @@ function applyFlip(recipient) {
     switch (onFlip) {
         case 'becomeAlly':
             // (AGGRO behavior bands) Crossing the flip threshold turns this NPC
-            // into a fighting ALLY, not just a pacified bystander. They drop
-            // their old job/whitelist for a pure ['ALLIED'] behavior: the ALLIED
-            // FSM state (npc.js → game._allyTakeTurn) hunts the player's
+            // into a fighting ALLY, not just a pacified bystander. Setting
+            // allegiance='ally' + fsmState='ALLIED' routes them into the ALLIED
+            // FSM state (npc.js → game._allyTakeTurn), which hunts the player's
             // hostiles, attacks them, and leash-follows the player when there's
             // no one to fight. `_ally` marks them so the player's own attacks
             // re-flip them back to hostile (friendly fire has a cost) and so
             // allies never target each other. Works uniformly whether the NPC
-            // was a legacy chaser (behavior null) or an FSM worker.
+            // was a born-hostile chaser or an FSM worker.
             recipient._ally = true;
-            recipient.behavior = ['ALLIED'];
-            recipient.allegiance = 'ally';   // (PD-3 dual-write) gates now read allegiance
+            recipient.allegiance = 'ally';   // authoritative — routes to the ALLIED FSM state
             recipient.state = 'idle';        // clear legacy chase state
             recipient.fsmState = 'ALLIED';   // explicit post-flip state
             recipient._lastWanderTurn = 0;

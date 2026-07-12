@@ -3583,13 +3583,12 @@ class Game {
     }
 
     // Friendly fire (or any player damage) snaps a bribed ally back to hostile.
-    // They become a legacy chaser locked onto the player — the simplest "enraged"
-    // reversion, reusing the existing chase AI rather than a new HOSTILE state.
+    // They drop into the HOSTILE chase locked onto the player — the simplest
+    // "enraged" reversion, reusing the shared chase FSM (npc.js).
     _revertAlly(enemyObj) {
         enemyObj._ally = false;
-        enemyObj.behavior = null;       // → legacy chase path in resolveEnemyTurns
-        enemyObj.allegiance = 'hostile'; // (PD-3 dual-write) gates now read allegiance
-        enemyObj.fsmState = null;
+        enemyObj.allegiance = 'hostile'; // authoritative — routes to the HOSTILE chase (npc.js)
+        enemyObj.fsmState = 'HOSTILE';
         enemyObj.state = 'chasing';     // immediately hostile, no re-acquire delay
         enemyObj.disposition = -50;     // betrayed: head-meter goes angry + re-bribing costs more
         enemyObj._wasFlipped = false;   // ...but they CAN be won back if you make amends
@@ -3598,17 +3597,16 @@ class Game {
 
     // ── Reaction bus ──────────────────────────────────────────────────────────
     // Single entry point for "the player just harmed this entity." A non-hostile
-    // (idle/dialogue NPC, vendor) you strike turns on you — it becomes a legacy
-    // chaser locked onto the player (the same reversion _revertAlly uses), so the
-    // existing chase AI carries it with no new state. Already-hostile chasers and
-    // bribed allies (handled by _revertAlly) are left alone. This is what makes
-    // the wheel's offensive verbs actually land on the people around you.
+    // (idle/dialogue NPC, vendor) you strike turns on you — it drops into the
+    // HOSTILE chase locked onto the player (the same reversion _revertAlly uses),
+    // so the shared chase FSM carries it. Already-hostile chasers and bribed
+    // allies (handled by _revertAlly) are left alone. This is what makes the
+    // wheel's offensive verbs actually land on the people around you.
     _onEntityHarmed(target, { kind = 'attack' } = {}) {
         if (!target || !target.entity || !target.entity.isAlive() || target._ally) return;
         if (isHostile(target)) return;               // already after you — nothing to provoke
-        target.behavior = null;                      // → legacy chase path in resolveEnemyTurns
-        target.allegiance = 'hostile';               // (PD-3 dual-write) gates now read allegiance
-        target.fsmState = null;
+        target.allegiance = 'hostile';               // authoritative — routes to the HOSTILE chase (npc.js)
+        target.fsmState = 'HOSTILE';
         target.state = 'chasing';                    // aggro now, skip the LOS re-acquire beat
         if (target.vendor) target.vendor = false;    // a vendor you struck won't keep shop
         if (target.ambient) target.ambient = false;  // a provoked townsperson fights for real, not as ambient

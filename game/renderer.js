@@ -27,7 +27,7 @@ import {
 } from './layout.js';
 import { ITEMS, itemTier } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
 import { WORLD_ZONES, overworldZone, connectorPairs } from './world-map.js'; // (Phase 4) rudimentary world map
-import { hasLineOfSight } from './enemies.js';                               // (aggro overlay) READ-ONLY: same Bresenham the chase AI uses
+import { hasLineOfSight } from './pathing.js';                               // (aggro overlay) READ-ONLY: same Bresenham the chase AI uses
 import { buyPrice, sellPrice, bribeStepCost, mood, canTrade, BRIBE_STEP } from './trade.js'; // (trade slice 1) pricing + mood smiley
 import * as Settings from './settings.js'; // (combat-feel-pass) reduce-motion for hit-splats (namespace import — see main.js)
 
