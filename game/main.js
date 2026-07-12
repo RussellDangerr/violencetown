@@ -9,7 +9,7 @@ import { BitmapFont } from './bitmap-font.js';
 import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, MAX_STACK } from './data.js';
 import { ITEMS, itemTier, resolveUse, resolveThrow, tickTempEquips, unequipItem, ownedItemDefs, hasItemDef } from './items.js';
 import { WEAPONS } from './weapons.js';
-import { tickBuffList } from './buffs.js';
+import { tickBuffList, BUFF_DEFS } from './buffs.js';
 import { SKILL_SLOTS, mergeKnown, isActive, learnInto, equipSkill, unequipSkill } from './skills.js';
 import { isBoss, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS } from './defeat-scenarios.js';
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
@@ -3860,8 +3860,61 @@ class Game {
         this._runScenario(pick, ctx);
     }
 
-    // Task 3 replaces this stub with the full template runner. For now: today's wipe.
-    _runScenario(_pick, _ctx) { this._respawn(); }
+    // Run a scenario's declarative consequence. The safe floor (quest items +
+    // equipped weapon + essential) is NEVER touched — only the at-risk pool.
+    _runScenario(pick, _ctx) {
+        const c = (pick && pick.consequence) || {};
+        const cell = this._resolveWakeCell(c.wakeAt);          // 1. wake location
+        this.playerX = cell.x; this.playerY = cell.y;
+        this.playerHp = Math.max(1, Math.round(this.playerMaxHp * (c.hp ?? 0.5)));  // 2. vitals
+        this.playerMp = this.playerMaxMp;
+        if (c.timeSkip) this._skipTime(c.timeSkip);            // 3. time
+        if (c.status) this.addBuff(c.status, (BUFF_DEFS[c.status] && BUFF_DEFS[c.status].name) || c.status, 6, 'debuff'); // 4. status
+        if (c.take) this._applyTake(c.take);                   // 5. taken
+        if (c.gift && Array.isArray(c.gift.items)) for (const id of c.gift.items) this._addToInventory(this._resolveItemDef(id)); // 6. given
+        if (c.gift && c.gift.heal) this.playerHp = this.playerMaxHp;
+        this._pendingTransition = null;                        // 7. de-aggro + resume (mirror _respawn's tail)
+        for (const e of this.enemies) {
+            if (!e.entity.isAlive() || e._ally) continue;
+            if (e.state === 'chasing') e.state = 'idle';
+            e._intruder = false; e._emergeDelay = 0;
+        }
+        this.state = STATE.IDLE;
+        if (c.log) this._log(c.log, 'transition');
+        this._render();
+        this._resumeHeldWalk();
+        this.autosave({ force: true });
+    }
+
+    // Resolve a wakeAt spec to a walkable cell. { spot:{x,y} } → that tile if
+    // walkable; missing/unknown → _safeRespawnCell (zone spawn).
+    _resolveWakeCell(wakeAt) {
+        if (wakeAt && wakeAt.spot && typeof wakeAt.spot === 'object'
+            && this.map.isWalkable(wakeAt.spot.x, wakeAt.spot.y)) return wakeAt.spot;
+        return this._safeRespawnCell();
+    }
+
+    // Advance the day/night clock a coarse amount (a scuffle vs. to-morning).
+    _skipTime(kind) {
+        const beats = kind === 'morning' ? 40 : 8;
+        for (let i = 0; i < beats; i++) this._advanceDayClock();
+        this.turn += beats;
+    }
+
+    // Apply a take-rule to the at-risk pool. The safe floor is never in `atRisk`.
+    _applyTake(take) {
+        const weapon = this.equipment && this.equipment.weapon;
+        const { atRisk } = partitionInventory(this.inventory, weapon);
+        const taken = matchTake(take, atRisk);
+        let takenGold = 0;
+        if (take.gold) { takenGold = Math.floor((this.gold || 0) * take.gold); this.gold -= takenGold; }
+        for (const e of taken) this.inventory[e.i] = null;
+        // Task 4 adds the recoverable stash; until it exists this is a safe no-op
+        // via optional-chaining (recoverable items are simply removed for now).
+        if (take.recoverable && (taken.length || takenGold)) {
+            this._spawnStash?.(take.stashAt, taken.map(e => e.itemDef.id), takenGold);
+        }
+    }
 
     _runBossRetry(boss) {
         if (boss && boss.entity) boss.entity.hp = boss.entity.maxHp;   // reset the boss to full
