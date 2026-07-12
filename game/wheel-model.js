@@ -7,6 +7,7 @@
 import { SPELLS } from './spells.js';
 import { TRICKS } from './tricks.js';
 import { hasItemDef } from './items.js';
+import { isHostile } from './ai.js';
 
 const always = () => true;
 
@@ -157,7 +158,7 @@ export function needsFriendlyConfirm(w, game) {
   return (game.enemies || []).some(e => {
     if (!e.entity.isAlive()) return false;
     if (!tiles.some(t => t.x === e.x && t.y === e.y)) return false;
-    const hostile = (e.behavior == null) || e.behavior.includes('HOSTILE');
+    const hostile = isHostile(e);
     return !hostile;
   });
 }
@@ -303,7 +304,7 @@ export function autoAimTile(leaf, game) {
   const social = leaf.resolver === 'trade' || leaf.resolver === 'bribe';
   const pool = (social
     ? alive
-    : alive.filter(e => !e.behavior || e.behavior.includes('HOSTILE')))
+    : alive.filter(e => isHostile(e)))
     .filter(e => cheb(game.playerX, game.playerY, e.x, e.y) <= range);
   if (!pool.length) return safeFacing(game);
   return pool
@@ -328,7 +329,7 @@ export function verbApplies(node, game) {
   }
   const alive = (game.enemies || []).filter(e => e.entity.isAlive());
   const social = node.resolver === 'trade' || node.resolver === 'bribe';
-  const pool = social ? alive : alive.filter(e => !e.behavior || e.behavior.includes('HOSTILE'));
+  const pool = social ? alive : alive.filter(e => isHostile(e));
   return pool.some(e => cheb(game.playerX, game.playerY, e.x, e.y) <= 1);
 }
 
@@ -372,7 +373,7 @@ export function targetVerbs(target, game) {
   V.push({ key: 'examine', label: 'Examine', color: '#9aa0a6', text: '#23262b', icon: '?', resolver: 'examine' });
   if (target.npc) {
     const e = target.npc;
-    const hostile = (!e.behavior || e.behavior.includes('HOSTILE')) && !e._ally;
+    const hostile = isHostile(e);
     if (e.dialogueId)          V.push({ key: 'talk',  label: 'Talk',  color: '#3f9aa0', text: '#eafafa', resolver: 'talk',  needsAdjacent: true });
     V.push({ key: 'trade', label: 'Trade', color: '#cba43c', text: '#2a1f06', icon: '⇄', resolver: 'trade', needsAdjacent: true });
     if (e.bribeable !== false) V.push({ key: 'bribe', label: 'Bribe', color: '#cba43c', text: '#2a1f06', icon: '¤', resolver: 'bribe', needsAdjacent: true });
@@ -402,7 +403,7 @@ export function defaultVerb(target, game) {
   if (!target) return null;
   const verbs = targetVerbs(target, game);
   const npc = target.npc;
-  const hostile = npc && ((!npc.behavior || npc.behavior.includes('HOSTILE')) && !npc._ally);
+  const hostile = isHostile(npc);
   const key = target.item ? 'take'
     : npc ? (hostile ? 'hit' : (npc.dialogueId ? 'talk' : 'examine'))
     : 'examine';

@@ -8,6 +8,8 @@
 // affected tiles come from wheel-model.js `affectedTiles`, so the on-screen
 // highlight and the damage resolution use the exact same geometry.
 
+import { isHostile } from './ai.js';
+
 export const ITEMS = {
     rock: {
         id: 'rock',
@@ -498,7 +500,7 @@ export function resolveThrow(game, itemDef, direction, _stackCount = 1, targetTi
         // spared (hostile-only); the deliberately-aimed centre tile's occupant is
         // hit even if friendly (real-placement / Plus Ultra path only).
         for (const foe of game._entitiesInRadius(ix, iy, 1)) {
-            const hostile = !foe.behavior || foe.behavior.includes('HOSTILE');
+            const hostile = isHostile(foe);
             const isCentre = foe.x === ix && foe.y === iy;
             if (hostile || (allowCenterFriendly && isCentre)) {
                 game.combatAttack(foe, Math.max(1, Math.round(itemDef.damage / 2)), { type: dtype, omni: true });

@@ -167,6 +167,7 @@ function applyFlip(recipient) {
             // was a legacy chaser (behavior null) or an FSM worker.
             recipient._ally = true;
             recipient.behavior = ['ALLIED'];
+            recipient.allegiance = 'ally';   // (PD-3 dual-write) gates now read allegiance
             recipient.state = 'idle';        // clear legacy chase state
             recipient.fsmState = 'ALLIED';   // explicit post-flip state
             recipient._lastWanderTurn = 0;

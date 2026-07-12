@@ -14,6 +14,7 @@ import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
 import { attack, formatDamageNumber } from './combat.js';
 import { Enemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
+import { isHostile } from './ai.js';
 import { getGreedyStep, stepEntity, findPath } from './pathing.js'; // pathfinding (greedy chase + BFS click-to-move); stepEntity = shove a character aside
 import { applyDispositionDelta, reactToTransaction } from './give-action.js';
 import { getDialogue } from './dialogue.js';
@@ -565,7 +566,7 @@ class Game {
         const out = [];
         for (const e of this.enemies) {
             if (!e.entity.isAlive() || e._ally) continue;
-            const hostile = (e.behavior == null) || e.behavior.includes('HOSTILE');
+            const hostile = isHostile(e);
             if (!hostile) continue;
             const onYourHeels = e.state === 'chasing'
                 || manhattan(e.x, e.y, t.x, t.y) <= FOLLOW_RANGE
@@ -2699,7 +2700,7 @@ class Game {
                 const tier = itemDef ? itemTier(itemDef) : null;
                 const itemTxt = itemDef && `[${itemDef.name || t.item.type} (${tier.name}). ${itemDef.description || ''}]`;
                 const txt = (t.examinable && t.examinable.text)
-                    || (npc && `[${(npc.name || npc.type)}. ${(npc.behavior == null || npc.behavior.includes('HOSTILE')) ? 'Looks like trouble.' : 'Minding their own business.'}]`)
+                    || (npc && `[${(npc.name || npc.type)}. ${isHostile(npc) ? 'Looks like trouble.' : 'Minding their own business.'}]`)
                     || itemTxt
                     || '[Nothing worth examining.]';
                 this._log(txt);
@@ -3061,7 +3062,7 @@ class Game {
         return this.enemies.filter(e =>
             e.entity.isAlive()
             && cheb(e.x, e.y, this.playerX, this.playerY) === 1
-            && (!e.behavior || e.behavior.includes('HOSTILE'))
+            && isHostile(e)
         );
     }
 
@@ -3540,8 +3541,7 @@ class Game {
     // HOSTILE FSM entry. Non-hostile FSM NPCs (vendors, idle wanderers) and
     // other allies are excluded.
     _isHostileToPlayer(e) {
-        return e.entity.isAlive() && !e._ally
-            && (e.behavior == null || e.behavior.includes('HOSTILE'));
+        return e.entity.isAlive() && isHostile(e);
     }
 
     // One turn for a bribed ALLY (dispatched from npc.js's ALLIED state). Hunt
@@ -3588,6 +3588,7 @@ class Game {
     _revertAlly(enemyObj) {
         enemyObj._ally = false;
         enemyObj.behavior = null;       // → legacy chase path in resolveEnemyTurns
+        enemyObj.allegiance = 'hostile'; // (PD-3 dual-write) gates now read allegiance
         enemyObj.fsmState = null;
         enemyObj.state = 'chasing';     // immediately hostile, no re-acquire delay
         enemyObj.disposition = -50;     // betrayed: head-meter goes angry + re-bribing costs more
@@ -3604,9 +3605,9 @@ class Game {
     // the wheel's offensive verbs actually land on the people around you.
     _onEntityHarmed(target, { kind = 'attack' } = {}) {
         if (!target || !target.entity || !target.entity.isAlive() || target._ally) return;
-        const hostile = (target.behavior == null) || target.behavior.includes('HOSTILE');
-        if (hostile) return;                         // already after you — nothing to provoke
+        if (isHostile(target)) return;               // already after you — nothing to provoke
         target.behavior = null;                      // → legacy chase path in resolveEnemyTurns
+        target.allegiance = 'hostile';               // (PD-3 dual-write) gates now read allegiance
         target.fsmState = null;
         target.state = 'chasing';                    // aggro now, skip the LOS re-acquire beat
         if (target.vendor) target.vendor = false;    // a vendor you struck won't keep shop
