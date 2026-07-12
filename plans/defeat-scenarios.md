@@ -122,9 +122,13 @@ take: {
 4. **`patched_by_carrion`** — `when`: sewer, low weight (the hope roll). Wake at Carrion's corridor, `hp:1.0`, small `gold` cost via `take:{ gold: small }` (recoverable:false — payment), `gift:{ items:['bandage'] }`, nothing else taken. The "given."
 5. **`beaten_and_dumped`** (GENERIC FALLBACK, `when: () => true`, lowest weight) — wake at the zone entrance, `status:'rattled'`, `take:{ loot: small, recoverable:false }`. Covers any unhandled defeater/zone so the system never has nothing to run.
 
+### Legibility — showing what's protected
+
+Defeat is only fair if the player can tell what survives it. Because *what's taken* depends on who beats you (unpredictable by design — the whole point), we surface the half that IS predictable: the **safe floor**. In the Remoticon **ITEMS** and **GEAR** tabs, every safe-floor item (quest items, the equipped weapon, any `essential`-flagged item) gets a small **protected glyph** (a lock/shield corner badge) plus a one-line legend ("🔒 kept if you're defeated"). Everything unmarked reads as "at-risk — *may* be taken." We deliberately do NOT pre-mark specific at-risk items as doomed — they aren't; it's aggressor-dependent. This is the minimal honest indicator; the richer essentials-vs-loot categorization UI is **System 3**, which builds on the same `isSafe()` predicate this system introduces.
+
 ### Boss exception + persistence seam
 
-If `ctx.by` is a **boss** (flagged via `tag` ending `_boss`, or an explicit `boss:true`): skip scenarios, run `runBossRetry()` — **reset the boss to full HP** and bump the player to a nearby **staging tile** with HP restored, a `rattled` status, and NO item loss ("finish it in one go, grind and retry"). Beating the boss is **System 2's** trigger (world-shift: Wererat down → Lonny's quest, sewer relaxes) — out of scope here; this spec only guarantees the retry.
+If `ctx.by` is a **boss** — for now ONLY the Wererat (`tag === 'wererat_boss'`); other uniques like the **Fungus King are ordinary enemies that respawn and run normal scenarios** — skip the scenario table and run `runBossRetry()`: **reset the boss to full HP** and bump the player to a nearby **staging tile** with HP restored, a `rattled` status, and NO item loss ("finish it in one go, grind and retry"). *You* beating the Wererat is **System 2's** trigger (world-shift: Lonny's quest opens, the sewer relaxes) — out of scope here; this spec only guarantees the retry. Boss detection is a small `isBoss(enemy)` accessor keyed on the `_boss` tag suffix, so future bosses opt in by tag with no code change.
 
 ### Integration Map
 
@@ -133,7 +137,8 @@ If `ctx.by` is a **boss** (flagged via `tag` ending `_boss`, or an explicit `bos
 - **`game/buffs.js`** — `rattled` / `hunched` / `sludged` def(s): temporary, expiring, light effect (or purely cosmetic/flavor for MVF).
 - **`game/save.js`** — no new schema expected (aftermath persists via inventory/buffs/containers). Verify a scenario's spawned stash-container round-trips.
 - **`game/items.js` / map JSON** — an `essential` flag lever (optional this pass; safe floor works with questItem + weapon alone); a `category` on food/mushroom items if not already present (needed by the beast take-rule).
-- **`game/enemies.js`** — a `boss` accessor (tag-based) for the boss seam.
+- **`game/enemies.js`** — an `isBoss(enemy)` accessor (`_boss`-tag) for the boss seam.
+- **`game/renderer.js` / `game/layout.js`** — the **protected glyph** + legend on safe-floor items in the ITEMS + GEAR device bodies; a small badge rect in layout, drawn against the shared `isSafe()` so the marker and the take-logic can never disagree.
 
 ### Data Schema
 
@@ -158,7 +163,7 @@ New `Game` field: `this._lastDefeatedBy` (transient, not persisted — reset on 
 
 ### Done When
 
-Player HP→0 in the sewer → a **weighted scenario** fires (not a flat wipe) → you wake at the scenario's spot, the clock has advanced, a **temporary** status is applied, **aggressor-appropriate** items are taken while the **safe floor (quest item + weapon) is intact** → for a *humanoid* robbery a **recoverable stash** exists at a reachable tile (and reclaiming it returns the goods); for a *beast/fall* the loss is simply gone → occasionally a **gift/rescue** roll leaves you better off → a **boss** defeat instead resets the boss and bumps you to retry with no item loss → **save/reload preserves the aftermath** (inventory, stash, status, position) → an **unhandled defeater** hits the generic fallback without crashing → console clean; old saves load unchanged.
+Player HP→0 in the sewer → a **weighted scenario** fires (not a flat wipe) → you wake at the scenario's spot, the clock has advanced, a **temporary** status is applied, **aggressor-appropriate** items are taken while the **safe floor (quest item + weapon) is intact** → for a *humanoid* robbery a **recoverable stash** exists at a reachable tile (and reclaiming it returns the goods); for a *beast/fall* the loss is simply gone → occasionally a **gift/rescue** roll leaves you better off → a **boss** defeat instead resets the boss and bumps you to retry with no item loss → **save/reload preserves the aftermath** (inventory, stash, status, position) → an **unhandled defeater** hits the generic fallback without crashing → in the ITEMS/GEAR tabs the safe-floor items (incl. the quest converter) show a **protected glyph** so the player can tell at a glance what survives → console clean; old saves load unchanged.
 
 ---
 
