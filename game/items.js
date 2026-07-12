@@ -229,6 +229,7 @@ export const ITEMS = {
         description: 'The thingamajig that makes the car go. Rat people tore it clean out. Smells like grease and betrayal. No ordinary merchant wants it — but Macc pays.',
         category: 'quest',
         useType: 'none',
+        useHint: "[The Cataclysmic Converter belongs in your car — head to your car in Town and tap (or walk into) it to drop it back in.]",
         consumable: false,
         questItem: true,
         // (Phase 6d) An ORANGE tier despite baseValue 0: worthless to ordinary
@@ -413,7 +414,7 @@ export function resolveUse(game, itemDef, direction, stackCount = 1) {
         case 'learn':
             return resolveLearn(game, itemDef);
         default:
-            return `[Used ${itemDef.name}]`;
+            return itemDef.useHint || `[Used ${itemDef.name}]`;
     }
 }
 
