@@ -18,6 +18,7 @@ import { manhattan, chebyshev } from './utils.js';
 import { getGreedyStep, stepEntity, fleeStep } from './pathing.js';
 import { tickNpcState } from './npc.js';
 import { tickBuffList } from './buffs.js';
+import { parseCapabilities, deriveAllegiance } from './ai.js';
 
 const DEFAULT_SIGHT = 8;
 const DEFAULT_DAMAGE = 8;
@@ -113,6 +114,11 @@ export class Enemy {
 
         // FSM config (null behavior = legacy entry; non-null = FSM-controlled)
         this.behavior         = behavior;
+        // (PD-3/NH-3) `behavior` is parsed ONCE into orthogonal fields; runtime code
+        // reads these, not `behavior`. Additive for now — behavior/_ally still drive
+        // dispatch until later tasks flip over.
+        this.capabilities = parseCapabilities(behavior);
+        this.allegiance   = deriveAllegiance({ behavior });
         this.homeRegion       = homeRegion;
         this.wanderRadius     = wanderRadius;
         this.wanderEveryTurns = wanderEveryTurns;
