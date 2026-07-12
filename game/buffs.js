@@ -32,8 +32,8 @@ export const BUFF_DEFS = {
     sludge: {
         onTick(owner, game) {
             if (game._hasSludgeImmunity && game._hasSludgeImmunity()) return;
-            game._lastDefeatedBy = { cause: 'sludge' };
             game.playerHp -= SLUDGE_DOT;
+            if (game.playerHp <= 0) game._lastDefeatedBy = { cause: 'sludge' };   // only claim the defeat when it's the killing tick
             game._log(`[Sludge — ${SLUDGE_DOT} damage]`);
         },
     },

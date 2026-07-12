@@ -42,7 +42,9 @@ export function matchTake(take, atRisk) {
         if (take.loot) return true;
         return false;
     });
-    if (typeof take.loot === 'number' && take.loot < 1) out = out.slice(0, Math.floor(out.length * take.loot));
+    // Fractional loot takes AT LEAST one when anything is at-risk (else a 1-item
+    // bag under loot:0.5 would floor to 0 while the log claims "some are gone").
+    if (typeof take.loot === 'number' && take.loot < 1) out = out.slice(0, Math.min(out.length, Math.max(1, Math.round(out.length * take.loot))));
     return out;
 }
 
@@ -50,7 +52,7 @@ export function matchTake(take, atRisk) {
 // the chosen scenario, or the last eligible (the generic fallback has when:()=>true
 // so there is always at least one). Null only if the table is empty.
 export function pickScenario(ctx, scenarios, rand) {
-    const eligible = (scenarios || []).filter(s => { try { return s.when(ctx); } catch { return false; } });
+    const eligible = (scenarios || []).filter(s => { try { return s.when(ctx); } catch (e) { console.warn('[defeat] scenario when() threw:', s.id, e); return false; } });
     if (!eligible.length) return null;
     const total = eligible.reduce((n, s) => n + (s.weight || 1), 0);
     let r = rand() * total;
@@ -79,7 +81,7 @@ export const DEFEAT_SCENARIOS = [
         consequence: {
             wakeAt: null,                            // dumped at the sewer mouth (spawn)
             hp: 0.6, status: 'rattled',
-            take: { gold: 0.3, loot: 'all', recoverable: true, stashAt: { spot: { x: 17, y: 10 } } },
+            take: { loot: 'all', recoverable: true, stashAt: { spot: { x: 17, y: 10 } } },
             log: "[The rats rolled you and scampered off with your haul. You'll want it back.]",
         },
     },

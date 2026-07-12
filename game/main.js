@@ -3838,7 +3838,7 @@ class Game {
         this.state = STATE.DEAD;
         audio.playSfx('death'); // [audio] death sting
         this._flash('rgba(255, 0, 0, 0.4)'); // [settings] reduce-motion aware (wraps renderer.flash)
-        this._log('[You died — respawning...]');
+        this._log('[You go down...]');
         setTimeout(() => this._resolveDefeat(), 500);
     }
 
@@ -3868,10 +3868,11 @@ class Game {
         this.playerX = cell.x; this.playerY = cell.y;
         this.playerHp = Math.max(1, Math.round(this.playerMaxHp * (c.hp ?? 0.5)));  // 2. vitals
         this.playerMp = this.playerMaxMp;
+        this.buffs = [];                                       // clean slate (matches _respawn) — no DoT carries past the defeat
         if (c.timeSkip) this._skipTime(c.timeSkip);            // 3. time
         if (c.status) this.addBuff(c.status, (BUFF_DEFS[c.status] && BUFF_DEFS[c.status].name) || c.status, 6, 'debuff'); // 4. status
         if (c.take) this._applyTake(c.take);                   // 5. taken
-        if (c.gift && Array.isArray(c.gift.items)) for (const id of c.gift.items) { const gd = this._resolveItemDef(id); if (gd) this._addToInventory(gd); } // 6. given (guard unknown ids)
+        if (c.gift && Array.isArray(c.gift.items)) for (const id of c.gift.items) { const gd = this._resolveItemDef(id); if (gd && !this._addToInventory(gd)) this._log('[No room — you leave it behind.]'); } // 6. given (guard unknown ids + full bag)
         if (c.gift && c.gift.heal) this.playerHp = this.playerMaxHp;
         this._pendingTransition = null;                        // 7. de-aggro + resume (mirror _respawn's tail)
         for (const e of this.enemies) {
@@ -3889,14 +3890,16 @@ class Game {
     // Resolve a wakeAt spec to a walkable cell. { spot:{x,y} } → that tile if
     // walkable; missing/unknown → _safeRespawnCell (zone spawn).
     _resolveWakeCell(wakeAt) {
-        if (wakeAt && wakeAt.spot && typeof wakeAt.spot === 'object'
-            && this.map.isWalkable(wakeAt.spot.x, wakeAt.spot.y)) return wakeAt.spot;
+        if (wakeAt && wakeAt.spot && typeof wakeAt.spot === 'object') {
+            if (this.map.isWalkable(wakeAt.spot.x, wakeAt.spot.y)) return wakeAt.spot;
+            console.warn('[defeat] wake spot not walkable; falling back to spawn:', wakeAt.spot);
+        }
         return this._safeRespawnCell();
     }
 
     // Advance the day/night clock a coarse amount (a scuffle vs. to-morning).
     _skipTime(kind) {
-        const beats = kind === 'morning' ? 40 : 8;
+        const beats = kind === 'morning' ? 40 : kind === 'hours' ? 20 : 8;
         for (let i = 0; i < beats; i++) this._advanceDayClock();
         this.turn += beats;
     }
@@ -3913,7 +3916,7 @@ class Game {
         // reclaim (free) by prying it open. Gold taken is a non-recoverable
         // mugging for now (gold-in-stash is a documented follow-up).
         if (take.recoverable && taken.length) {
-            this._spawnStash(take.stashAt, taken.map(e => e.itemDef.id), takenGold);
+            this._spawnStash(take.stashAt, taken.flatMap(e => Array(Math.max(1, e.count | 0)).fill(e.itemDef.id)), takenGold);
         }
     }
 
@@ -3958,6 +3961,8 @@ class Game {
         const cell = this._safeRespawnCell();
         this.playerX = cell.x; this.playerY = cell.y;
         this.playerHp = this.playerMaxHp; this.playerMp = this.playerMaxMp;
+        this.buffs = [];                          // clean slate (matches _respawn)
+        this._pendingTransition = null;           // don't ghost-load a queued transition after the retry
         this.addBuff('rattled', 'Rattled', 6, 'debuff');
         for (const e of this.enemies) {                 // de-aggro so the retry starts calm
             if (!e.entity.isAlive() || e._ally) continue;
