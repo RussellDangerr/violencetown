@@ -40,13 +40,13 @@ export const ROOT = { key: 'menu', label: 'MENU', children: [
       available: (g) => (g.playerMp || 0) > 0 && ((g.knownSpells && g.knownSpells.length) || 0) > 0,
       children: [
         { key: 'fireball', label: 'Fireball', spellId: 'fireball', color: '#e0552a', text: '#fff0e0', aimType: 'reticle', resolver: 'castSpell',
-          available: (g) => (g.knownSpells || []).includes('fireball') && (g.playerMp || 0) >= (SPELLS.fireball ? SPELLS.fireball.mpCost : 0) },
+          available: (g) => (g.hasSpell ? g.hasSpell('fireball') : (g.knownSpells || []).includes('fireball')) && (g.playerMp || 0) >= (SPELLS.fireball ? SPELLS.fireball.mpCost : 0) },
         { key: 'coneofcold', label: 'Cone of Cold', spellId: 'coneOfCold', color: '#4aa6dc', text: '#eaf6ff', aimType: 'reticle', resolver: 'castSpell',
-          available: (g) => (g.knownSpells || []).includes('coneOfCold') && (g.playerMp || 0) >= (SPELLS.coneOfCold ? SPELLS.coneOfCold.mpCost : 0) },
+          available: (g) => (g.hasSpell ? g.hasSpell('coneOfCold') : (g.knownSpells || []).includes('coneOfCold')) && (g.playerMp || 0) >= (SPELLS.coneOfCold ? SPELLS.coneOfCold.mpCost : 0) },
         // Boo! — self-centred fear burst, no aim (fires around you). Granted by
         // the Fearmur (grantsSpells → knownSpells), so it only appears when worn.
         { key: 'boo', label: 'Boo!', spellId: 'boo', aimType: 'none', resolver: 'castBoo',
-          available: (g) => (g.knownSpells || []).includes('boo') && (g.playerMp || 0) >= (SPELLS.boo ? SPELLS.boo.mpCost : 0) },
+          available: (g) => (g.hasSpell ? g.hasSpell('boo') : (g.knownSpells || []).includes('boo')) && (g.playerMp || 0) >= (SPELLS.boo ? SPELLS.boo.mpCost : 0) },
       ] },
   ]},
   // Trick — the gold "situational GP" category. Flight (evasion) nests here now (spec §6).
@@ -61,10 +61,10 @@ export const ROOT = { key: 'menu', label: 'MENU', children: [
     // (Armory reconciliation) GP-costed tricks granted by equipped tech gear —
     // siblings of Bribe/Trade, gated on grantedTricks + gold; castTrick spends GP.
     { key: 'rayblast', label: 'Ray Blast', trickId: 'ray_blast', aimType: 'reticle', resolver: 'castTrick',
-      available: (g) => (g.grantedTricks || []).includes('ray_blast') && (g.gold || 0) >= (TRICKS.ray_blast ? TRICKS.ray_blast.gpCost : 0) },
+      available: (g) => (g.hasTrick ? g.hasTrick('ray_blast') : (g.grantedTricks || []).includes('ray_blast')) && (g.gold || 0) >= (TRICKS.ray_blast ? TRICKS.ray_blast.gpCost : 0) },
     // Hire a Lion — a self-target summon (no aim); granted by the Lion Whip.
     { key: 'hirelion', label: 'Hire Lire', trickId: 'hire_lion', aimType: 'none', resolver: 'castTrick',
-      available: (g) => (g.grantedTricks || []).includes('hire_lion') && (g.gold || 0) >= (TRICKS.hire_lion ? TRICKS.hire_lion.gpCost : 0) },
+      available: (g) => (g.hasTrick ? g.hasTrick('hire_lion') : (g.grantedTricks || []).includes('hire_lion')) && (g.gold || 0) >= (TRICKS.hire_lion ? TRICKS.hire_lion.gpCost : 0) },
     // Flight (evasion) sub-wheel — kept from dev's two-wheels layout (spec §6).
     { key: 'flight', label: 'Flight', color: '#cba43c', text: '#2a1f06', children: [
       { key: 'run',  label: 'Run',  aimType: 'adjacent', resolver: 'run',  available: always },
