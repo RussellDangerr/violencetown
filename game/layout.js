@@ -151,7 +151,7 @@ export function closeButtonRect(r) {
 // existing draw bodies (ITEMS/GEAR/QUESTS/MAP). Geometry lives here so
 // renderer._drawDevice (draw) and main.js (hit-test) share ONE source of truth.
 export const DEVICE_RECT = { x: 24, y: 44, w: 560, h: 520 };
-export const DEVICE_TABS = ['items', 'gear', 'quests', 'map'];
+export const DEVICE_TABS = ['items', 'gear', 'quests', 'map', 'skills'];
 export const DEVICE_TAB_H = 30;                        // tab-strip height
 const DEVICE_TAB_TOP = DEVICE_RECT.y + 38;             // below the title/✕ band (the chip ends at y+36)
 const DEVICE_TAB_PAD = 14;                             // strip inset from the frame sides
@@ -193,4 +193,37 @@ export function deviceEquipLayout(bodyRect) {
         h: r.h * sy,
     });
     return { figure: map(EQUIP_FIGURE_RECT), slots: EQUIP_SLOT_RECTS.map(map) };
+}
+
+// (Ring builds) The SKILLS tab body — two rows (tricks, then spells) of learned
+// skills as tappable chips. Each chip carries { id, type, slotted } so the
+// renderer styles it and _tapDevice toggles it; chips wrap within the body
+// width. Pure geometry — the renderer resolves display names + slot caps.
+// renderer._drawDeviceSkills (draw) and main._tapDevice (hit-test) share this
+// one helper so the chips and their tap zones can't drift.
+export function deviceSkillsLayout(bodyRect, game) {
+    const pad = 8, chipW = 108, chipH = 26, gap = 8, headerH = 22, rowGap = 16;
+    const x0 = bodyRect.x + pad;
+    const perRow = Math.max(1, Math.floor((bodyRect.w - pad * 2 + gap) / (chipW + gap)));
+    const meta = [
+        { type: 'trick', label: 'TRICKS', pool: [...(game.learnedTricks || [])], eq: game.equippedTricks || [] },
+        { type: 'spell', label: 'SPELLS', pool: [...(game.learnedSpells || [])], eq: game.equippedSpells || [] },
+    ];
+    const rows = [], chips = [];
+    let y = bodyRect.y + 6;
+    for (const m of meta) {
+        const gridTop = y + headerH;
+        m.pool.forEach((id, i) => {
+            chips.push({
+                id, type: m.type, slotted: m.eq.includes(id),
+                x: x0 + (i % perRow) * (chipW + gap),
+                y: gridTop + Math.floor(i / perRow) * (chipH + 6),
+                w: chipW, h: chipH,
+            });
+        });
+        const nRows = Math.max(1, Math.ceil(m.pool.length / perRow));
+        rows.push({ type: m.type, label: m.label, x: x0, headerY: y, count: m.eq.length, empty: m.pool.length === 0, emptyY: gridTop });
+        y = gridTop + nRows * (chipH + 6) + rowGap;
+    }
+    return { rows, chips };
 }

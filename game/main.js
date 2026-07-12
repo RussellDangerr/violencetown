@@ -31,7 +31,7 @@ import {
     TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BUYBACK_ORIGIN, TRADE_BRIBE_RECT,
     TRADE_COLS, tradeCellRect,
     EQUIPMENT_MODAL_RECT, EQUIP_SLOT_RECTS,
-    DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceEquipLayout,
+    DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceEquipLayout, deviceSkillsLayout,
 } from './layout.js';
 import { canTrade, buyPrice, sellPrice, bribeStepCost, BRIBE_STEP, transferGold } from './trade.js'; // pricing + the transaction spine
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
@@ -894,7 +894,7 @@ class Game {
 
             // ── DEVICE (Remoticon): modal tabbed device; world is soft-paused ──
             // Esc already closed it via the universal Cancel above. Here: Tab pockets
-            // it, [ ] cycle tabs, C/J/M jump to a tab; everything else is swallowed.
+            // it, [ ] cycle tabs, C/J/M/K jump to a tab; everything else is swallowed.
             if (this.state === STATE.DEVICE) {
                 e.preventDefault();
                 if (e.code === 'Tab')          { this._closeDevice();   return; }
@@ -903,6 +903,7 @@ class Game {
                 if (e.code === 'KeyC') { this._deviceTab = 'gear';   this._render(); return; }
                 if (e.code === 'KeyJ') { this._deviceTab = 'quests'; this._render(); return; }
                 if (e.code === 'KeyM') { this._deviceTab = 'map';    this._render(); return; }
+                if (e.code === 'KeyK') { this._deviceTab = 'skills'; this._render(); return; }
                 if (this._deviceTab === 'quests' && (e.code === 'ArrowUp'   || e.code === 'KeyW')) { this._scrollJournal(1);  return; }
                 if (this._deviceTab === 'quests' && (e.code === 'ArrowDown' || e.code === 'KeyS')) { this._scrollJournal(-1); return; }
                 return;
@@ -4274,6 +4275,20 @@ class Game {
                 this._render();
                 return;
             }
+        }
+        // SKILLS body → tap a learned chip to slot / unslot it (loadout edit).
+        // Reads the SAME chips the renderer draws, so the tap can't drift.
+        if (this._deviceTab === 'skills') {
+            const { chips } = deviceSkillsLayout(deviceBodyRect(), this);
+            for (const c of chips) {
+                if (!this._pointInRect(pt, c)) continue;
+                if (c.slotted) this._unequipSkill(c.id, c.type);
+                else           this._equipSkill(c.id, c.type);
+                audio.playSfx('menu-tick');
+                this._render();
+                return;
+            }
+            return;
         }
         // GEAR body → tap a filled plate to unequip (the weapon plate is inert).
         // Reads the SAME scaled slots the renderer draws, so the tap can't drift.

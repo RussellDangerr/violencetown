@@ -23,9 +23,12 @@ import {
     TRADE_CELL_W, TRADE_CELL_H, TRADE_COLS, tradeCellRect,
     RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
     EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, closeButtonRect,
-    DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceEquipLayout,
+    DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceEquipLayout, deviceSkillsLayout,
 } from './layout.js';
 import { ITEMS, itemTier } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
+import { SPELLS } from './spells.js';                                        // (ring builds) SKILLS-tab chip labels
+import { TRICKS } from './tricks.js';                                        // (ring builds) SKILLS-tab chip labels
+import { SKILL_SLOTS } from './skills.js';                                   // (ring builds) loadout capacity per ring
 import { WORLD_ZONES, overworldZone, connectorPairs } from './world-map.js'; // (Phase 4) rudimentary world map
 import { hasLineOfSight } from './pathing.js';                               // (aggro overlay) READ-ONLY: same Bresenham the chase AI uses
 import { buyPrice, sellPrice, bribeStepCost, mood, canTrade, BRIBE_STEP } from './trade.js'; // (trade slice 1) pricing + mood smiley
@@ -1685,9 +1688,29 @@ export class Renderer {
         else if (active === 'gear')   this._drawEquipmentModal(game, body);
         else if (active === 'quests') this._drawJournalQuestsBody(game, body);
         else if (active === 'map')    this._drawWorldMapBody(game, body, body.y);
+        else if (active === 'skills') this._drawDeviceSkills(game, body);
 
         this.font.drawText(ctx, '[ ] TABS   ESC CLOSE', CANVAS_PX / 2, R.y + R.h - 12, { color: UI.dim, scale: 1, align: 'center' });
         ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    }
+
+    // (Ring builds) SKILLS tab — the learned pool as tappable chips, two rows
+    // (tricks, spells). Slotted chips are gold-stroked + gold-labelled; tapping a
+    // chip (main._tapDevice) slots/unslots it. Geometry from deviceSkillsLayout.
+    _drawDeviceSkills(game, bodyRect) {
+        const { ctx } = this;
+        const { rows, chips } = deviceSkillsLayout(bodyRect, game);
+        for (const row of rows) {
+            this.font.drawText(ctx, `${row.label}  ${row.count}/${SKILL_SLOTS[row.type]}`, row.x, row.headerY, { color: UI.gold, scale: 1 });
+            if (row.empty) this.font.drawText(ctx, '(none learned yet)', row.x + 8, row.emptyY + 4, { color: UI.dim, scale: 1 });
+        }
+        for (const c of chips) {
+            drawInset(ctx, c.x, c.y, c.w, c.h);
+            if (c.slotted) { ctx.strokeStyle = UI.gold; ctx.lineWidth = 2; ctx.strokeRect(c.x + 1, c.y + 1, c.w - 2, c.h - 2); }
+            const def = c.type === 'trick' ? TRICKS[c.id] : SPELLS[c.id];
+            const name = ((def && def.name) || c.id).replace(/[\[\]]/g, '');
+            this.font.drawText(ctx, name, c.x + c.w / 2, c.y + c.h / 2 - 4, { color: c.slotted ? UI.gold : UI.dim, scale: 1, align: 'center' });
+        }
     }
 
     _drawHotbar(game, bodyRect) {
