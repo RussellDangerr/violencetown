@@ -10,6 +10,7 @@ import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, MAX_STACK } from './data.
 import { ITEMS, itemTier, resolveUse, resolveThrow, tickTempEquips, unequipItem, ownedItemDefs, hasItemDef } from './items.js';
 import { WEAPONS } from './weapons.js';
 import { tickBuffList } from './buffs.js';
+import { SKILL_SLOTS, mergeKnown, isActive, learnInto, equipSkill, unequipSkill } from './skills.js';
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
 import { attack, formatDamageNumber } from './combat.js';
@@ -156,6 +157,16 @@ class Game {
         // parallel list the Trick ring reads.
         this.knownSpells   = [...BASE_SPELLS];
         this.grantedTricks = [];
+        // Ring-builds ability axis (learned POOL + capped EQUIPPED subset — the
+        // loadout IS the build). The pools are append-only and persisted; the
+        // loadouts are the player's choice and persisted. suppressedSkills is
+        // transient (NH-2 `blocked`), never saved. _refreshGrantedSkills merges
+        // these into knownSpells/grantedTricks.
+        this.learnedTricks    = new Set();
+        this.learnedSpells    = new Set();
+        this.equippedTricks   = [];
+        this.equippedSpells   = [];
+        this.suppressedSkills = new Set();
         this._lastHitTarget = null;   // (fear) id of the enemy the last Melee-Hit struck
         this.extraMoves  = 0; // future: Goo, abilities, etc.
         this.facing      = 'down'; // 'down' | 'left' | 'right' | 'up'
@@ -2968,7 +2979,7 @@ class Game {
                 // Trick skills cost GP, not MP — "turning tricks for money".
                 // Granted by tech gear (the Ray Gun grants Ray Blast). Same AoE
                 // path as spells; the gold guard mirrors the bribe idiom above.
-                if (!(this.grantedTricks || []).includes(node.trickId)) { this._log("[You don't have that trick.]"); break; }
+                if (!this.hasTrick(node.trickId)) { this._log("[You don't have that trick.]"); break; }
                 const trick = TRICKS[node.trickId];
                 if (!trick) { this._log("[That trick isn't ready yet]"); break; }
                 if ((this.gold ?? 0) < trick.gpCost) { this._log(`[Not enough GP — ${trick.name} needs ${trick.gpCost}g.]`); break; }
@@ -3634,21 +3645,26 @@ class Game {
         return ['top', 'bottom', 'front', 'back', 'sides'].some(k => eq[k] && eq[k].sludgeImmune);
     }
 
-    // The "gear reshapes the wheel" build loop: a weapon that carries
-    // grantsSpells / grantsTricks adds slices to the wheel's Magic / Trick rings.
-    // Rebuild the skills the equipped weapon grants: spells feed the Magic ring
-    // (knownSpells = base + weapon.grantsSpells), tricks feed the Trick ring
-    // (grantedTricks = weapon.grantsTricks). Call after any weapon change — equip,
-    // new game, respawn, save-load. Additive over the base spells; idempotent.
-    // (The showcase trigger gear — Fearmur, Lion Whip — is wired but deferred as
-    // world-drops, so grantsTricks can read as unused on the shipped build.)
+    // The "gear reshapes the wheel" build loop, now three-source (NetHack struct
+    // prop): the active rings = base ∪ the player's equipped loadout ∪ the
+    // equipped weapon's grants. Spells feed the Magic ring
+    // (knownSpells = base + equippedSpells + weapon.grantsSpells), tricks feed the
+    // Trick ring (grantedTricks = equippedTricks + weapon.grantsTricks). Call
+    // after any change to weapon OR loadout — equip, learn, slot, new game,
+    // respawn, save-load. De-duped; suppression is applied at READ (hasSpell/
+    // hasTrick), not here. With an empty loadout this equals the old base+gear.
     _refreshGrantedSkills() {
         const w = this.equipment && this.equipment.weapon;
         const gs = (w && w.grantsSpells) || [];
         const gt = (w && w.grantsTricks) || [];
-        this.knownSpells   = [...new Set([...BASE_SPELLS, ...gs])];
-        this.grantedTricks = [...new Set(gt)];
+        this.knownSpells   = mergeKnown(BASE_SPELLS, this.equippedSpells, gs);
+        this.grantedTricks = mergeKnown([], this.equippedTricks, gt);
     }
+
+    // The single gate for "can this skill fire right now" — present in the merged
+    // list AND not suppressed. Cast paths and (the wheel) route through these.
+    hasSpell(id) { return isActive(this.knownSpells   || [], this.suppressedSkills, id); }
+    hasTrick(id) { return isActive(this.grantedTricks || [], this.suppressedSkills, id); }
 
     // (Hire a Lion) Spawn a temporary ally on a free tile beside the player. It
     // fights through the existing ally pipeline (_allyTakeTurn) and melts away
