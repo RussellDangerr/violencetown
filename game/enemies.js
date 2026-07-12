@@ -36,7 +36,8 @@ export class Enemy {
     constructor({
         id, type, x, y,
         hp = 50, armor = 0, damage = DEFAULT_DAMAGE, sightRange = DEFAULT_SIGHT,
-        // FSM fields (optional; absence triggers legacy chase behavior)
+        // FSM/spawn input — parsed ONCE into capabilities + allegiance (ai.js);
+        // absence (null) = a born-hostile chaser. Runtime reads those, not behavior.
         behavior = null,
         homeRegion = null,
         wanderRadius = 3,
