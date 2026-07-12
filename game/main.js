@@ -3434,7 +3434,7 @@ class Game {
     _containerStock(container) {
         return (container.contents || [])
             .map(e => (typeof e === 'string' ? e : e && e.type))
-            .filter(id => id && ITEMS[id]);
+            .filter(id => id && this._resolveItemDef(id));   // ITEMS + WEAPONS (a robbery stash may hold either)
     }
 
     // ── Combat ───────────────────────────────────────────────────────────────
@@ -3909,11 +3909,48 @@ class Game {
         let takenGold = 0;
         if (take.gold) { takenGold = Math.floor((this.gold || 0) * take.gold); this.gold -= takenGold; }
         for (const e of taken) this.inventory[e.i] = null;
-        // Task 4 adds the recoverable stash; until it exists this is a safe no-op
-        // via optional-chaining (recoverable items are simply removed for now).
-        if (take.recoverable && (taken.length || takenGold)) {
-            this._spawnStash?.(take.stashAt, taken.map(e => e.itemDef.id), takenGold);
+        // A recoverable robbery drops the taken ITEMS into a stash the player can
+        // reclaim (free) by prying it open. Gold taken is a non-recoverable
+        // mugging for now (gold-in-stash is a documented follow-up).
+        if (take.recoverable && taken.length) {
+            this._spawnStash(take.stashAt, taken.map(e => e.itemDef.id), takenGold);
         }
+    }
+
+    // Spawn a stash chest of recoverable loot at a reachable tile near `stashAt`.
+    // One chest holds all the taken item ids; the player reclaims via _openContainer
+    // (free take-only). Persists like any container (save.js serializes containers).
+    _spawnStash(stashAt, itemIds, _gold) {
+        if (!itemIds || !itemIds.length) return;
+        const near = (stashAt && stashAt.spot && typeof stashAt.spot === 'object')
+            ? stashAt.spot : { x: this.playerX, y: this.playerY };
+        const cell = this._stashTile(near) || this._safeRespawnCell();
+        this.containers.push({
+            id: `stash_${this.turn}_${Math.round(cell.x)}_${Math.round(cell.y)}`,
+            type: 'chest',
+            x: cell.x, y: cell.y,
+            contents: itemIds.slice(),
+        });
+    }
+
+    // Nearest walkable, unoccupied tile to `near` (outward ring scan, radius ≤ 6).
+    // Avoids containers, live enemies, ground items, and the player's own tile.
+    _stashTile(near) {
+        const occupied = (x, y) =>
+            this.containers.some(c => c.x === x && c.y === y) ||
+            (this.groundItems || []).some(g => g.x === x && g.y === y) ||
+            this.enemies.some(e => e.entity.isAlive() && e.x === x && e.y === y) ||
+            (this.playerX === x && this.playerY === y);
+        const ok = (x, y) => this.map.isInBounds(x, y) && this.map.isWalkable(x, y) && !occupied(x, y);
+        if (ok(near.x, near.y)) return { x: near.x, y: near.y };
+        for (let r = 1; r <= 6; r++) {
+            for (let dx = -r; dx <= r; dx++) for (let dy = -r; dy <= r; dy++) {
+                if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;   // ring perimeter only
+                const x = near.x + dx, y = near.y + dy;
+                if (ok(x, y)) return { x, y };
+            }
+        }
+        return null;
     }
 
     _runBossRetry(boss) {
