@@ -19,7 +19,7 @@ import {
     HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_GAP, HOTBAR_SLOTS, HOTBAR_STRIDE,
     HOTBAR_TOTAL_W, HOTBAR_OX, HOTBAR_OY, HOTBAR_X_START, HOTBAR_Y,
     QUESTLOG_RECT, LOG_MODAL_RECT, TARGET_LIST_RECT, TARGET_LIST_ROW_H,
-    TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BUYBACK_ORIGIN, TRADE_BRIBE_RECT,
+    TRADE_MODAL_RECT, DIALOGUE_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BUYBACK_ORIGIN, TRADE_BRIBE_RECT,
     TRADE_CELL_W, TRADE_CELL_H, TRADE_COLS, tradeCellRect,
     RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
     EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, closeButtonRect,
@@ -425,7 +425,7 @@ export class Renderer {
             target_list: this._targetListRect,
             log_modal:   LOG_MODAL_RECT,
             trade:       TRADE_MODAL_RECT,
-            dialogue:    TRADE_MODAL_RECT,
+            dialogue:    DIALOGUE_RECT,
             device:      DEVICE_RECT,
         }[game.state] || null;
         this._menuPanelRect = CLOSE_PANEL;
@@ -2892,50 +2892,61 @@ export class Renderer {
         ctx.fillStyle = 'rgba(0,0,0,0.72)';
         ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
 
-        const R = TRADE_MODAL_RECT;
+        const R = DIALOGUE_RECT;
         if (ui?.loaded) drawPanelBig(ctx, ui, R.x, R.y, R.w, R.h, 'base');
         else            drawPanelSmall(ctx, R.x, R.y, R.w, R.h);
 
         const disp = npc.disposition ?? 0;
         const m = mood(disp);
-        const innerX = R.x + 20;
+        const innerX = R.x + 18;
 
-        this.font.drawText(ctx, (npc.name || npc.type || 'SOMEONE').toUpperCase(), CANVAS_PX / 2, R.y + 14, { color: UI.gold, scale: 2, align: 'center' });
+        this.font.drawText(ctx, (npc.name || npc.type || 'SOMEONE').toUpperCase(), CANVAS_PX / 2, R.y + 12, { color: UI.gold, scale: 2, align: 'center' });
 
-        const moodY = R.y + 50;
-        this._drawMoodFace(R.x + 26, moodY, m.face);
-        this.font.drawText(ctx, m.mood.toUpperCase(), R.x + 44, moodY - 3, { color: UI.textLight, scale: 1 });
-        this.font.drawText(ctx, `${disp > 0 ? '+' : ''}${disp}`, R.x + R.w - 24, moodY - 6, { color: disp < 0 ? UI.hpRed : UI.gold, scale: 2, align: 'right' });
+        const moodY = R.y + 46;
+        this._drawMoodFace(R.x + 22, moodY, m.face);
+        this.font.drawText(ctx, m.mood.toUpperCase(), R.x + 42, moodY - 2, { color: UI.textLight, scale: 1 });
+        this.font.drawText(ctx, `${disp > 0 ? '+' : ''}${disp}`, R.x + R.w - 22, moodY - 6, { color: disp < 0 ? UI.hpRed : UI.gold, scale: 2, align: 'right' });
 
-        let ty = R.y + 82;
-        const maxChars = Math.floor((R.w - 40) / 8);
-        for (const line of this._wrapText(game._dialogueReply || '', maxChars)) {
-            this.font.drawText(ctx, line, innerX, ty, { color: UI.text, scale: 1 });
-            ty += 12;
+        // NPC reply — bigger, readable (scale 2).
+        let ty = R.y + 74;
+        const replyChars = Math.max(8, Math.floor((R.w - 36) / 16));
+        for (const line of this._wrapText(game._dialogueReply || '', replyChars)) {
+            this.font.drawText(ctx, line, innerX, ty, { color: UI.text, scale: 2 });
+            ty += 20;
         }
 
+        // Options — scale-2 labels in TALL, clickable rows. Long labels wrap; each
+        // row's hit-rect is stashed on this._dialogueRects for main._tapDialogue
+        // (a click/tap on a row == pick it; the Leave row closes).
         const choices = game._dialogueChoices();
         const cursor = game._dialogueCursor;
-        const rowH = 26;
-        let cy = R.y + 156;
-        const row = (i, label, badge, badgeColor, tag) => {
-            const sel = cursor === i;
-            if (sel) { ctx.fillStyle = 'rgba(212,185,106,0.18)'; ctx.fillRect(R.x + 12, cy - 4, R.w - 24, rowH - 2); }
-            this.font.drawText(ctx, (sel ? '> ' : '  ') + label, innerX, cy, { color: sel ? UI.textLight : UI.text, scale: 1 });
-            if (badge) this.font.drawText(ctx, badge, R.x + R.w - 92, cy, { color: badgeColor, scale: 1, align: 'right' });
-            if (tag)   this.font.drawText(ctx, tag,   R.x + R.w - 24, cy, { color: UI.dim, scale: 1, align: 'right' });
-            cy += rowH;
+        const labelChars = Math.max(6, Math.floor((R.w - 128) / 16));   // leave room for the badge/tag column
+        const lineH = 18, padY = 9;
+        let cy = ty + 14;
+        this._dialogueRects = [];
+        const drawRow = (idx, label, badge, badgeColor, tag, isLeave) => {
+            const sel = cursor === idx;
+            const lines = this._wrapText(label, labelChars);
+            const rowH = lines.length * lineH + padY * 2;
+            if (sel) { ctx.fillStyle = 'rgba(212,185,106,0.18)'; ctx.fillRect(R.x + 10, cy, R.w - 20, rowH); }
+            lines.forEach((ln, li) => {
+                this.font.drawText(ctx, (li === 0 ? (sel ? '> ' : '  ') : '    ') + ln, innerX, cy + padY + li * lineH, { color: sel ? UI.textLight : UI.text, scale: 2 });
+            });
+            if (badge) this.font.drawText(ctx, badge, R.x + R.w - 92, cy + padY, { color: badgeColor, scale: 1, align: 'right' });
+            if (tag)   this.font.drawText(ctx, tag,   R.x + R.w - 20, cy + padY, { color: UI.dim, scale: 1, align: 'right' });
+            this._dialogueRects.push({ rect: { x: R.x + 10, y: cy, w: R.w - 20, h: rowH }, choiceIndex: idx, isLeave });
+            cy += rowH + 4;
         };
         choices.forEach((c, i) => {
             const delta = c.delta ?? 0;
             const badge = delta ? `${delta > 0 ? '+' : ''}${delta} ${delta > 0 ? ':)' : ':('}` : '';
             const badgeColor = delta < 0 ? UI.hpRed : (delta > 0 ? '#79c46a' : UI.dim);
             const tag = c.cost ? `${c.cost} GP` : (c.repeatable ? 'repeat' : 'once');
-            row(i, c.label, badge, badgeColor, tag);
+            drawRow(i, c.label, badge, badgeColor, tag, false);
         });
-        row(choices.length, 'Leave', '', null, '');
+        drawRow(choices.length, 'Leave', '', null, '', true);
 
-        this.font.drawText(ctx, 'W/S  SELECT     SPACE  PICK     E  LEAVE', CANVAS_PX / 2, R.y + R.h - 18, { color: UI.dim, scale: 1, align: 'center' });
+        this.font.drawText(ctx, 'CLICK or W/S  ·  SPACE picks  ·  E / X / tap-outside leaves', CANVAS_PX / 2, R.y + R.h - 16, { color: UI.dim, scale: 1, align: 'center' });
     }
 
     // ── Equipment screen (Stage 3 — read-only Vitruvian dress-up) ────────────

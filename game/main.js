@@ -1620,7 +1620,7 @@ class Game {
 
         // Trade window is fully modal too — route taps to the shop.
         if (this.state === STATE.TRADE) { this._tapTrade(pt); return; }
-        if (this.state === STATE.DIALOGUE) { return; }   // (Step 4) dialogue is keyboard-driven; ignore stray taps
+        if (this.state === STATE.DIALOGUE) { this._tapDialogue(pt); return; }   // click a choice row (✕ + tap-outside handled above)
         if (this.state === STATE.DEVICE) { this._tapDevice(pt); return; }   // (Slice 3) in-panel tab/body taps (✕ + outside handled above)
 
         // Priority order is by modality: the most exclusive overlay wins. A
@@ -4451,6 +4451,21 @@ class Game {
         this._dialogueReply = '';
         this._render();
         this._resumeHeldWalk();
+    }
+
+    // A tap inside the dialogue panel picks the tapped choice (or Leave). The ✕ and
+    // tap-outside already closed above via the universal menu handler, so only
+    // in-panel row taps reach here. Row hit-rects are stashed by the renderer
+    // (_dialogueRects) so the tap zones can't drift from what's drawn.
+    _tapDialogue(pt) {
+        for (const r of (this.renderer._dialogueRects || [])) {
+            if (!this._pointInRect(pt, r.rect, HIT_SLOP)) continue;
+            if (r.isLeave) { this._closeDialogue(); return; }
+            const choices = this._dialogueChoices();
+            const c = choices[r.choiceIndex];
+            if (c) { this._dialogueCursor = r.choiceIndex; this._pickDialogueChoice(c); }
+            return;
+        }
     }
 
     // ── Equipment screen (Stage 3 — read-only Vitruvian dress-up) ────────────

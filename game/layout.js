@@ -85,6 +85,10 @@ export function targetListRowRect(i) {
 // grids side by side: BUY (the vendor's stock) on the left, SELL (the player's
 // bag) on the right. One cell-rect helper feeds both the draw and the hit-test.
 export const TRADE_MODAL_RECT = { x: 24, y: 44, w: 560, h: 520 };
+// (dialogue polish) The conversation modal gets its OWN, smaller rect than the
+// trade window: a wider tap-outside margin (easier to tap-to-leave, esp. mobile)
+// and room to render bigger text. Centered in the 608px canvas with ~56px margins.
+export const DIALOGUE_RECT = { x: 56, y: 72, w: 496, h: 464 };
 export const TRADE_COLS       = 3;
 export const TRADE_CELL_W     = 64;
 export const TRADE_CELL_H     = 72;
