@@ -14,6 +14,7 @@
 import { Enemy } from './enemies.js';
 import { clamp } from './utils.js';
 import { INVENTORY_SIZE } from './data.js';
+import { SKILL_SLOTS, sanitizeEquipped } from './skills.js';
 
 export const SAVE_VERSION = 1;
 const KEY = 'violencetown.save';
@@ -63,6 +64,10 @@ export function serialize(game) {
             facing: game.facing,
             gold: game.gold,
             carFuel: game.carFuel,
+            learnedTricks:  [...(game.learnedTricks  || [])],
+            learnedSpells:  [...(game.learnedSpells  || [])],
+            equippedTricks: [...(game.equippedTricks || [])],
+            equippedSpells: [...(game.equippedSpells || [])],
             equipment: {
                 weapon: idOf(game.equipment.weapon),
                 top: idOf(game.equipment.top),
@@ -182,6 +187,12 @@ function validate(raw) {
     if (!p.equipment || typeof p.equipment !== 'object') p.equipment = {};
     if (!Array.isArray(p.buffs)) p.buffs = [];
     if (!Array.isArray(p.tempEquips)) p.tempEquips = [];
+    // Ring-builds: coerce to string arrays; equipped ⊆ learned, clamped to cap.
+    const asIds = (a) => (Array.isArray(a) ? a.filter(id => typeof id === 'string') : []);
+    p.learnedTricks  = asIds(p.learnedTricks);
+    p.learnedSpells  = asIds(p.learnedSpells);
+    p.equippedTricks = sanitizeEquipped(p.learnedTricks, asIds(p.equippedTricks), SKILL_SLOTS.trick);
+    p.equippedSpells = sanitizeEquipped(p.learnedSpells, asIds(p.equippedSpells), SKILL_SLOTS.spell);
     // collectedItems is a Set of string keys on the live game; drop anything
     // non-string so a malformed save can't poison the lookup.
     const ci = Array.isArray(raw.world?.collectedItems) ? raw.world.collectedItems : [];
@@ -224,8 +235,14 @@ export async function loadInto(game, raw) {
         top: R(p.equipment.top), bottom: R(p.equipment.bottom),
         front: R(p.equipment.front), back: R(p.equipment.back), sides: R(p.equipment.sides),
     };
-    // knownSpells/grantedTricks aren't persisted — re-derive them from the
-    // restored weapon (the Ray Gun grants Ray Blast, etc.).
+    // Ring-builds: restore the learned pool + equipped loadout BEFORE refreshing
+    // grants, so the merge (base ∪ equipped ∪ gear) includes the slotted skills.
+    game.learnedTricks  = new Set(p.learnedTricks  || []);
+    game.learnedSpells  = new Set(p.learnedSpells  || []);
+    game.equippedTricks = [...(p.equippedTricks || [])];
+    game.equippedSpells = [...(p.equippedSpells || [])];
+    // knownSpells/grantedTricks are derived, not stored — rebuild from the
+    // restored weapon + loadout (the Ray Gun grants Ray Blast, etc.).
     if (game._refreshGrantedSkills) game._refreshGrantedSkills();
     game.inventory = p.inventory.map(s => {
         if (!s) return null;

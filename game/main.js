@@ -3666,6 +3666,33 @@ class Game {
     hasSpell(id) { return isActive(this.knownSpells   || [], this.suppressedSkills, id); }
     hasTrick(id) { return isActive(this.grantedTricks || [], this.suppressedSkills, id); }
 
+    // Learn a skill into the pool from any source (tomes now; trainers/quests
+    // reuse this hook). Auto-slots if there's room (generous — usable at once).
+    // Idempotent — returns true only if newly learned. type: 'trick' | 'spell'.
+    _learnSkill(id, type) {
+        const pool     = type === 'trick' ? this.learnedTricks  : this.learnedSpells;
+        const equipped = type === 'trick' ? this.equippedTricks : this.equippedSpells;
+        const learned  = learnInto(pool, equipped, SKILL_SLOTS[type], id);
+        this._refreshGrantedSkills();
+        if (learned) {
+            const def = type === 'trick' ? TRICKS[id] : SPELLS[id];
+            this._log(`[Learned ${(def && def.name) || id}!]`, 'transition');
+        }
+        return learned;
+    }
+
+    // Slot / unslot a learned skill (the GEAR-tab loadout). Both refresh the
+    // merged grants so the wheel updates immediately.
+    _equipSkill(id, type) {
+        const pool     = type === 'trick' ? this.learnedTricks  : this.learnedSpells;
+        const equipped = type === 'trick' ? this.equippedTricks : this.equippedSpells;
+        if (equipSkill(pool, equipped, SKILL_SLOTS[type], id)) this._refreshGrantedSkills();
+    }
+    _unequipSkill(id, type) {
+        const equipped = type === 'trick' ? this.equippedTricks : this.equippedSpells;
+        if (unequipSkill(equipped, id)) this._refreshGrantedSkills();
+    }
+
     // (Hire a Lion) Spawn a temporary ally on a free tile beside the player. It
     // fights through the existing ally pipeline (_allyTakeTurn) and melts away
     // when its summon timer runs out (ticked in _advanceWorld). Returns true if

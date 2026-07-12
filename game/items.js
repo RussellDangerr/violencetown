@@ -11,6 +11,21 @@
 import { isHostile } from './ai.js';
 
 export const ITEMS = {
+    // (Ring builds) A learning source: using it adds a skill to the learned pool
+    // (auto-slotting if there's room), then the tome is consumed. The same
+    // useType:'learn' + learns/learnType shape backs any future trainer/quest.
+    tome_ray_blast: {
+        id: 'tome_ray_blast',
+        name: '[Tome of Ray Blast]',
+        description: 'A scorched schematic. Study it and the Ray Blast trick is yours — no gun required.',
+        useType: 'learn',
+        learns: 'ray_blast',
+        learnType: 'trick',
+        equipSlot: 'back',
+        consumable: true,
+        fallbackColor: '#c8a24a',
+        baseValue: 30,
+    },
     rock: {
         id: 'rock',
         name: '[Rock]',
@@ -395,6 +410,8 @@ export function resolveUse(game, itemDef, direction, stackCount = 1) {
             return resolveMelee(game, itemDef, direction);
         case 'equip':
             return resolveEquip(game, itemDef);
+        case 'learn':
+            return resolveLearn(game, itemDef);
         default:
             return `[Used ${itemDef.name}]`;
     }
@@ -416,6 +433,15 @@ export function* ownedItemDefs(game) {
 export function hasItemDef(game, pred) {
     for (const def of ownedItemDefs(game)) if (pred(def)) return true;
     return false;
+}
+
+// Learning source (tomes now; trainers/quests reuse the same hook). The item is
+// consumed by the caller (main.js: `if (item.consumable) _removeFromSlot`), so a
+// tome for a skill you already know crumbles anyway — learning is idempotent.
+function resolveLearn(game, itemDef) {
+    if (!itemDef.learns || !game._learnSkill) return `[Used ${itemDef.name}]`;
+    const learned = game._learnSkill(itemDef.learns, itemDef.learnType || 'spell');
+    return learned ? null : '[You already knew that — the tome crumbles.]';
 }
 
 function resolveSelfUse(game, itemDef) {

@@ -85,6 +85,11 @@ function makePopulatedGame() {
     g.playerMp = 40; g.playerMaxMp = 100;
     g.facing = 'left';
     g.gold = 256;
+    // Ring-builds: a learned pool with one slotted trick + one slotted spell.
+    g.learnedTricks = new Set(['ray_blast']);
+    g.learnedSpells = new Set(['boo']);
+    g.equippedTricks = ['ray_blast'];
+    g.equippedSpells = ['boo'];
     g.equipment = {
         weapon: ITEM_DEFS.pipe, top: null, bottom: null,
         front: ITEM_DEFS.bandage, back: null, sides: ITEM_DEFS.rock,
@@ -219,6 +224,36 @@ describe('save round-trip (EXPECTED GREEN)', () => {
         assert.equal(dst.tempEquips[0].turnsLeft, 2);
         assert.equal(dst.buffs.length, 1);
         assert.equal(dst.buffs[0].id, 'guard');
+    });
+
+    test('ring-builds: learned pool + equipped loadout survive serialize→loadInto', async () => {
+        const src = makePopulatedGame();
+        const blob = JSON.parse(JSON.stringify(serialize(src)));
+
+        const dst = makeBlankGame();
+        await loadIntoReal(dst, blob);
+
+        assert.deepEqual([...dst.learnedTricks].sort(), ['ray_blast']);
+        assert.deepEqual([...dst.learnedSpells].sort(), ['boo']);
+        assert.deepEqual(dst.equippedTricks, ['ray_blast']);
+        assert.deepEqual(dst.equippedSpells, ['boo']);
+    });
+
+    test('ring-builds: an old save with no skill fields loads as an empty pool', async () => {
+        const src = makePopulatedGame();
+        const blob = JSON.parse(JSON.stringify(serialize(src)));
+        delete blob.player.learnedTricks;
+        delete blob.player.learnedSpells;
+        delete blob.player.equippedTricks;
+        delete blob.player.equippedSpells;
+
+        const dst = makeBlankGame();
+        await loadIntoReal(dst, blob);
+
+        assert.deepEqual([...dst.learnedTricks], []);
+        assert.deepEqual([...dst.learnedSpells], []);
+        assert.deepEqual(dst.equippedTricks, []);
+        assert.deepEqual(dst.equippedSpells, []);
     });
 
     test('world: tileDiffs, ground items, containers, and enemies round-trip', async () => {
