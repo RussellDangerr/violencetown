@@ -11,6 +11,7 @@ import { ITEMS, itemTier, resolveUse, resolveThrow, tickTempEquips, unequipItem,
 import { WEAPONS } from './weapons.js';
 import { tickBuffList } from './buffs.js';
 import { SKILL_SLOTS, mergeKnown, isActive, learnInto, equipSkill, unequipSkill } from './skills.js';
+import { isBoss, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS } from './defeat-scenarios.js';
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
 import { attack, formatDamageNumber } from './combat.js';
@@ -168,6 +169,7 @@ class Game {
         this.equippedSpells   = [];
         this.suppressedSkills = new Set();
         this._lastHitTarget = null;   // (fear) id of the enemy the last Melee-Hit struck
+        this._lastDefeatedBy = null;   // the enemy or {cause} that last damaged the player — read by _die
         this.extraMoves  = 0; // future: Goo, abilities, etc.
         this.facing      = 'down'; // 'down' | 'left' | 'right' | 'up'
 
@@ -3751,7 +3753,8 @@ class Game {
         return true;
     }
 
-    applyDamageToPlayer(rawDamage) {
+    applyDamageToPlayer(rawDamage, attacker = null) {
+        if (attacker) this._lastDefeatedBy = attacker;
         let dmg = rawDamage;
         if (this.hasBuff('guard')) dmg = Math.max(1, Math.floor(dmg / 2));
         dmg = Math.max(1, dmg - this._playerArmor());   // worn armor soaks the hit (min 1 always lands)
@@ -3836,7 +3839,46 @@ class Game {
         audio.playSfx('death'); // [audio] death sting
         this._flash('rgba(255, 0, 0, 0.4)'); // [settings] reduce-motion aware (wraps renderer.flash)
         this._log('[You died — respawning...]');
-        setTimeout(() => this._respawn(), 500);
+        setTimeout(() => this._resolveDefeat(), 500);
+    }
+
+    _resolveDefeat() {
+        const by = this._lastDefeatedBy;
+        this._lastDefeatedBy = null;
+        // Boss (Wererat) → reset the encounter and retry; no scenario, no loss.
+        if (isBoss(by)) { this._runBossRetry(by); return; }
+        // Otherwise pick a scenario, weighted by (zone × who-beat-you × state).
+        // Task 3 swaps the runner stub for the full template; for now the generic
+        // fallback delegates to _respawn so ordinary defeats are unchanged.
+        const ctx = {
+            zone: this.map && (this.map.zoneName || this.map.url),
+            by: (by && by.entity) ? by : null,       // an Enemy has .entity; a {cause} does not
+            cause: (by && by.cause) || 'unknown',
+            quest: this.questEngine && this.questEngine.state,
+        };
+        const pick = pickScenario(ctx, DEFEAT_SCENARIOS, () => this.rng.float());
+        this._runScenario(pick, ctx);
+    }
+
+    // Task 3 replaces this stub with the full template runner. For now: today's wipe.
+    _runScenario(_pick, _ctx) { this._respawn(); }
+
+    _runBossRetry(boss) {
+        if (boss && boss.entity) boss.entity.hp = boss.entity.maxHp;   // reset the boss to full
+        const cell = this._safeRespawnCell();
+        this.playerX = cell.x; this.playerY = cell.y;
+        this.playerHp = this.playerMaxHp; this.playerMp = this.playerMaxMp;
+        this.addBuff('rattled', 'Rattled', 6, 'debuff');
+        for (const e of this.enemies) {                 // de-aggro so the retry starts calm
+            if (!e.entity.isAlive() || e._ally) continue;
+            if (e.state === 'chasing') e.state = 'idle';
+            e._intruder = false; e._emergeDelay = 0;
+        }
+        this.state = STATE.IDLE;
+        this._log('[Down but not out. Regroup and finish it.]', 'transition');
+        this._render();
+        this._resumeHeldWalk();
+        this.autosave({ force: true });
     }
 
     _respawn() {

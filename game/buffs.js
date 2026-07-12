@@ -32,6 +32,7 @@ export const BUFF_DEFS = {
     sludge: {
         onTick(owner, game) {
             if (game._hasSludgeImmunity && game._hasSludgeImmunity()) return;
+            game._lastDefeatedBy = { cause: 'sludge' };
             game.playerHp -= SLUDGE_DOT;
             game._log(`[Sludge — ${SLUDGE_DOT} damage]`);
         },

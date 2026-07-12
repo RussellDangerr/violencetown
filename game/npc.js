@@ -232,7 +232,7 @@ export function tickNpcState(game, npc, clock = game.turn) {
                 const dmg = npc.hasBuff('blind')
                     ? Math.max(1, Math.floor(npc.damage * 0.5))
                     : npc.damage;
-                game.applyDamageToPlayer(dmg);
+                game.applyDamageToPlayer(dmg, npc);
                 break;
             }
 
