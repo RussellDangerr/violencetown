@@ -25,9 +25,9 @@ import { hasSave, readSaveRaw, writeSave, loadInto, clearSave } from './save.js'
 import { QuestEngine } from './quests.js';
 import { doExamine } from './examine.js';
 import {
-    CANVAS_INTERNAL_PX, HIT_SLOP, OVERLAY_RECTS, THROW_RECTS,
+    CANVAS_INTERNAL_PX, HIT_SLOP, THROW_RECTS,
     HOTBAR_X_START, HOTBAR_Y, HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_STRIDE, HOTBAR_SLOTS,
-    RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, wheelRingR, QUESTLOG_RECT, LOG_MODAL_RECT, targetListRowRect,
+    RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, wheelRingR, QUESTLOG_RECT, LOG_MODAL_RECT, targetListRowRect, itemOverlayRowRect,
     TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BUYBACK_ORIGIN, TRADE_BRIBE_RECT,
     TRADE_COLS, tradeCellRect,
     EQUIPMENT_MODAL_RECT, EQUIP_SLOT_RECTS,
@@ -275,7 +275,8 @@ class Game {
         this.selectedSlot = -1; // -1 = none selected
 
         // Item overlay options (populated when overlay shows)
-        this.overlayOptions = {}; // { up: {...}, right: {...}, left: {...}, down: {...} }
+        this.overlayOptions = []; // ordered [{ label, action }] — the item's tappable action list
+        this.overlayCursor = 0;   // highlighted row in the item-overlay list
 
         // (combat-wheel rework) Verb-tree combat wheel — opened anywhere by
         // Space / the touch ACTION button (no bump-to-attack). The pure model in
@@ -953,14 +954,14 @@ class Game {
                 return;
             }
 
-            // ── ITEM_OVERLAY: pick an option ──
+            // ── ITEM_OVERLAY: navigate + pick from the action list ──
             if (this.state === STATE.ITEM_OVERLAY) {
                 e.preventDefault();
-                if (e.code === 'ArrowUp' || e.code === 'KeyW')    { this._pickOverlay('up'); return; }
-                if (e.code === 'ArrowRight' || e.code === 'KeyD')  { this._pickOverlay('right'); return; }
-                if (e.code === 'ArrowDown' || e.code === 'KeyS')   { this._pickOverlay('down'); return; }
-                if (e.code === 'ArrowLeft' || e.code === 'KeyA')   { this._pickOverlay('left'); return; }
-                if (e.code === 'Escape') { this.state = STATE.ITEM_SELECTED; this._render(); return; }
+                const n = this.overlayOptions.length;
+                if (n && (e.code === 'ArrowUp' || e.code === 'KeyW'))   { this.overlayCursor = (this.overlayCursor - 1 + n) % n; audio.playSfx('menu-tick'); this._render(); return; }
+                if (n && (e.code === 'ArrowDown' || e.code === 'KeyS')) { this.overlayCursor = (this.overlayCursor + 1) % n;     audio.playSfx('menu-tick'); this._render(); return; }
+                if (e.code === 'Space' || e.code === 'Enter' || e.code === 'NumpadEnter') { this._pickOverlay(this.overlayCursor); return; }
+                if (e.code === 'Escape') { this._closeCurrentMenu(); return; }
                 return;
             }
 
@@ -1702,14 +1703,15 @@ class Game {
                 h: HOTBAR_SLOT_H,
             };
             if (!this._pointInRect(pt, r, HIT_SLOP)) continue;
-            // Mirror the keyboard idiom:
-            //   - tap a slot when nothing's selected → select it (state ITEM_SELECTED)
-            //   - tap the same slot again            → open the use overlay
-            //   - tap a different slot               → switch selection
-            if (this.state === STATE.ITEM_SELECTED && this.selectedSlot === i) {
-                this._openItemOverlay();
+            // ONE tap on an item opens its action list — no select-then-tap-again
+            // two-step (Caelan's #1 complaint: a single click "did nothing"). An
+            // empty slot just logs. Quest items still bail inside _openItemOverlay,
+            // dropping back to ITEM_SELECTED with their "hold onto it" note.
+            if (this.inventory[i]) {
+                this._selectItem(i);      // set selectedSlot (+ ITEM_SELECTED)
+                this._openItemOverlay();  // → ITEM_OVERLAY list
             } else {
-                this._selectItem(i);
+                this._selectItem(i);      // "[Slot N empty]"
             }
             return;
         }
@@ -1723,15 +1725,17 @@ class Game {
     }
 
     _tapItemOverlay(pt) {
-        for (const dir of ['up', 'right', 'down', 'left']) {
-            if (this.overlayOptions[dir] && this._pointInRect(pt, OVERLAY_RECTS[dir], HIT_SLOP)) {
-                this._pickOverlay(dir);
-                return;
+        // Only IN-panel taps reach here — the ✕ chip and tap-outside are caught
+        // earlier by the CLOSE_PANEL menu-grammar block. Rows behave like the
+        // Target List: tap a row to highlight it, tap the highlighted row to fire.
+        for (let i = 0; i < this.overlayOptions.length; i++) {
+            if (this._pointInRect(pt, itemOverlayRowRect(i), 4)) {
+                if (i === this.overlayCursor) { this._pickOverlay(i); return; }
+                this.overlayCursor = i; audio.playSfx('menu-tick'); this._render(); return;
             }
         }
-        // Tap outside the four options = cancel back to ITEM_SELECTED.
-        this.state = STATE.ITEM_SELECTED;
-        this._render();
+        // An in-panel tap that misses every row (title band / footer) does nothing;
+        // the ✕ / tap-outside / Esc are the ways out.
     }
 
     _tapThrowPrompt(pt) {
@@ -2282,31 +2286,26 @@ class Game {
             return;
         }
 
-        // Build contextual options
-        this.overlayOptions = {};
+        // Build the contextual action list (order = draw order = cursor order).
+        this.overlayOptions = [];
+        this.overlayCursor = 0;
 
-        // Up = primary use (eat/drink/apply/use)
+        // Primary use (eat/drink/apply/use) — always first.
+        let useLabel = 'Use';
         if (item.useType === 'self') {
-            let label = 'Use';
-            if (item.effect === 'heal') label = item.category === 'ambro' ? 'Eat' : 'Drink';
-            else if (item.effect === 'cure_sludge') label = 'Use';
-            this.overlayOptions.up = { label, action: 'use' };
-        } else {
-            this.overlayOptions.up = { label: 'Use', action: 'use' };
+            if (item.effect === 'heal') useLabel = item.category === 'ambro' ? 'Eat' : 'Drink';
+            else if (item.effect === 'cure_sludge') useLabel = 'Use';
         }
+        this.overlayOptions.push({ label: useLabel, action: 'use' });
 
         // (action-wheel overhaul) Throw moved to the action wheel — the hotbar
-        // overlay now keeps Use / Smash only. (Phase 6a) Give left the overlay
-        // too — handing an item to an NPC is now the Trade window's offer mode
-        // (Target-Wheel → Trade on any adjacent NPC).
+        // overlay keeps Use / Smash only. (Phase 6a) Giving an item to an NPC is
+        // the Trade window's offer mode (Target-Wheel → Trade on any adjacent NPC).
 
-        const adjHostile = this._adjacentHostiles();
-
-        // Left = smash (only if adjacent HOSTILE-eligible enemy — prevents
-        // smashing Carrion-like non-hostiles, the same way bump-attack now
-        // refuses to attack them)
-        if (adjHostile.length > 0) {
-            this.overlayOptions.left = { label: 'Smash', action: 'smash' };
+        // Smash — only if an adjacent HOSTILE-eligible enemy exists (prevents
+        // smashing Carrion-like non-hostiles, the same way bump-attack refuses).
+        if (this._adjacentHostiles().length > 0) {
+            this.overlayOptions.push({ label: 'Smash', action: 'smash' });
         }
 
         audio.playSfx('menu-open'); // [audio] item use/throw overlay opened
@@ -2316,9 +2315,9 @@ class Game {
         this._render();
     }
 
-    _pickOverlay(direction) {
-        const opt = this.overlayOptions[direction];
-        if (!opt) return; // no option in that direction
+    _pickOverlay(index) {
+        const opt = this.overlayOptions[index];
+        if (!opt) return; // no option at that row
         audio.playSfx('menu-confirm'); // [audio] picked an overlay option
 
         const stack = this.inventory[this.selectedSlot];

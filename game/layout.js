@@ -12,14 +12,17 @@
 export const CANVAS_INTERNAL_PX = 608;   // mirrors data.js CANVAS_PX
 export const HIT_SLOP = 6;               // tap-zone expansion (Apple 44pt min target)
 
-// ── Item-use overlay — 4 directional option panels around the player tile ──
-// (drawn by renderer._drawItemOverlay, hit-tested by main._tapItemOverlay)
-export const OVERLAY_RECTS = {
-    up:    { x: 260, y: 234, w: 88, h: 32 },
-    down:  { x: 260, y: 344, w: 88, h: 32 },
-    left:  { x: 188, y: 288, w: 88, h: 32 },
-    right: { x: 344, y: 288, w: 88, h: 32 },
-};
+// ── Item-use overlay — a compact tappable list of the item's actions ──
+// (drawn by renderer._drawItemOverlay, hit-tested by main._tapItemOverlay).
+// Was four directional panels around the player tile; now a vertical verb list
+// like the Target List, so ONE tap on a hotbar item opens options big enough to
+// tap on mobile. Height is computed per-item in the renderer (44px title band +
+// one ROW_H row per option).
+export const ITEM_OVERLAY_RECT  = { x: 196, y: 176, w: 216 };
+export const ITEM_OVERLAY_ROW_H = 30;
+export function itemOverlayRowRect(i) {
+  return { x: ITEM_OVERLAY_RECT.x + 10, y: ITEM_OVERLAY_RECT.y + 44 + i * ITEM_OVERLAY_ROW_H, w: ITEM_OVERLAY_RECT.w - 20, h: ITEM_OVERLAY_ROW_H - 4 };
+}
 
 // ── Throw / Give direction prompt — 4 cardinal 32x32 targets ──
 // (drawn by renderer._drawThrowPrompt, hit-tested by main._tapThrowPrompt)

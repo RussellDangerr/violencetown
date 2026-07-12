@@ -15,10 +15,11 @@ import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRI
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
 import { ROOT, selectedNode, activeRing, activeIndex, decisionPath, previewChildren, affectedTiles, verbApplies, isCombatActive, flapperDeflection } from './wheel-model.js'; // (sunburst wheel)
 import {
-    OVERLAY_RECTS, THROW_RECTS,
+    THROW_RECTS,
     HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_GAP, HOTBAR_SLOTS, HOTBAR_STRIDE,
     HOTBAR_TOTAL_W, HOTBAR_OX, HOTBAR_OY, HOTBAR_X_START, HOTBAR_Y,
     QUESTLOG_RECT, LOG_MODAL_RECT, TARGET_LIST_RECT, TARGET_LIST_ROW_H,
+    ITEM_OVERLAY_RECT, ITEM_OVERLAY_ROW_H,
     TRADE_MODAL_RECT, DIALOGUE_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BUYBACK_ORIGIN, TRADE_BRIBE_RECT,
     TRADE_CELL_W, TRADE_CELL_H, TRADE_COLS, tradeCellRect,
     RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
@@ -422,6 +423,7 @@ export class Renderer {
         // wheel are excluded (any-tap / native ▼CLOSE); target_list uses the rect
         // _drawTargetList stashed this frame (its height is per-verb-count).
         const CLOSE_PANEL = {
+            item_overlay: this._itemOverlayRect,
             target_list: this._targetListRect,
             log_modal:   LOG_MODAL_RECT,
             trade:       TRADE_MODAL_RECT,
@@ -1859,57 +1861,41 @@ export class Renderer {
 
     // ── Item Overlay ─────────────────────────────────────────────────────────
 
+    // (interaction polish) The item-use overlay — a compact vertical action list
+    // in the ornate panel chrome, same grammar as the Target List: the item named
+    // at the top, its verbs as rows, the highlighted row picked on confirm. One
+    // tap on a hotbar item opens it. Fades in over 80ms; the ✕ / tap-outside come
+    // free from the CLOSE_PANEL machinery (item_overlay stashes its rect below).
     _drawItemOverlay(game) {
-        const { ctx, half } = this;
-        const ui = this.uiSheet;
-        const cx = half * TILE_PX + TILE_PX / 2;
-        const cy = half * TILE_PX + TILE_PX / 2;
+        const { ctx } = this; const ui = this.uiSheet; if (!this.font) return;
+        const opts = game.overlayOptions || [];
+        const stack = game.inventory[game.selectedSlot];
+        const item = stack && stack.itemDef;
 
-        // Phase D: slide-in animation. Options lerp from the player tile
-        // center → their final positions over 80ms with ease-out, while
-        // the panel alpha and option opacity ramp 0 → 1. This is the
-        // "snappy" feel — the menu doesn't appear, it *arrives*.
         const now = performance.now();
         const openAt = game._overlayOpenedAt ?? now;
-        const rawT = Math.min(1, Math.max(0, (now - openAt) / 80));
-        const t = easeOutCubic(rawT);
+        const t = easeOutCubic(Math.min(1, Math.max(0, (now - openAt) / 80)));
 
-        ctx.fillStyle = `rgba(0,0,0,${0.5 * t})`;
-        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
-        this._drawPlayer(game);
+        ctx.save(); ctx.fillStyle = `rgba(0,0,0,${0.5 * t})`; ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX); ctx.restore();
 
-        const opts = game.overlayOptions;
-        const finalPos = {
-            up:    { x: OVERLAY_RECTS.up.x,    y: OVERLAY_RECTS.up.y },
-            down:  { x: OVERLAY_RECTS.down.x,  y: OVERLAY_RECTS.down.y },
-            left:  { x: OVERLAY_RECTS.left.x,  y: OVERLAY_RECTS.left.y },
-            right: { x: OVERLAY_RECTS.right.x, y: OVERLAY_RECTS.right.y },
-        };
-        // ASCII fallback arrows since the bitmap font is plain ASCII —
-        // ^ v < > read instantly as directional cues.
-        const arr = { up: '^', down: 'V', left: '<', right: '>' };
-        // Lerp source — center of the player tile, slightly above
-        const src = { x: cx - 44, y: cy - 16 };
+        const RH = ITEM_OVERLAY_ROW_H, px = ITEM_OVERLAY_RECT.x, py = ITEM_OVERLAY_RECT.y, w = ITEM_OVERLAY_RECT.w;
+        const h = 44 + opts.length * RH + 22;   // title band + rows + exit-cue footer
+        this._itemOverlayRect = { x: px, y: py, w, h };   // stashed for the ✕ / tap-outside hit-test (menu grammar)
 
-        const prevAlpha = ctx.globalAlpha;
-        ctx.globalAlpha = t;
-        for (const [dir, opt] of Object.entries(opts)) {
-            if (!finalPos[dir]) continue;
-            const fp = finalPos[dir];
-            const px = src.x + (fp.x - src.x) * t;
-            const py = src.y + (fp.y - src.y) * t;
-            const w = 88, h = 32;
+        const prevAlpha = ctx.globalAlpha; ctx.globalAlpha = t;
+        if (ui?.loaded) drawPanelBig(ctx, ui, px, py, w, h, 'base');
+        else            drawPanelSmall(ctx, px, py, w, h);
 
-            drawPanelSmall(ctx, px, py, w, h, this.uiSheet);
-
-            if (this.font) {
-                const label = opt.label.toUpperCase();
-                this.font.drawText(ctx, `${arr[dir]} ${label}`, px + 8, py + 12, {
-                    color: UI.text, scale: 1,
-                });
-            }
+        const title = (item && item.name) ? item.name : 'ITEM';
+        this.font.drawText(ctx, String(title).replace(/[\[\]]/g, '').toUpperCase().slice(0, 16), px + w / 2, py + 14, { color: UI.gold, scale: 1, align: 'center' });
+        for (let i = 0; i < opts.length; i++) {
+            const sel = (i === game.overlayCursor), ry = py + 44 + i * RH;
+            if (sel) { ctx.fillStyle = 'rgba(212,185,106,0.18)'; ctx.fillRect(px + 8, ry - 2, w - 16, RH - 4); }
+            this.font.drawText(ctx, (sel ? '> ' : '  ') + String(opts[i].label).toUpperCase(), px + 16, ry + 6, { color: sel ? UI.textLight : UI.text, scale: 1 });
         }
+        this.font.drawText(ctx, '↑↓ PICK · ESC CLOSE', px + w / 2, py + h - 14, { color: UI.dim, scale: 1, align: 'center' });
         ctx.globalAlpha = prevAlpha;
+        ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     }
 
     // ── Radial Menu (Omnitrix-style combat wheel) ────────────────────────────
