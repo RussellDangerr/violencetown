@@ -220,6 +220,7 @@ export class Enemy {
             carrying: this.carrying, barkIndex: this._barkIndex, barkOffset: this._barkOffset,
             wasAdjacent: this._wasAdjacent, buffs: (this.buffs || []).map(b => ({ ...b })),
             // allegiance runtime (see note above)
+            allegiance: this.allegiance,
             ally: this._ally, wasFlipped: this._wasFlipped,
             isSummon: this._isSummon, summonTurnsLeft: this._summonTurnsLeft,
             // phase-D extras (present only when set on the live enemy)
@@ -243,6 +244,9 @@ export class Enemy {
         e.buffs = Array.isArray(s.buffs) ? s.buffs.map(b => ({ ...b })) : [];
         // Allegiance (PD-5): restore ally/summon runtime so a persisted ally keeps
         // fighting instead of reloading inert.
+        // (PD-3) A serialized allegiance wins; OLD saves (no allegiance) keep the
+        // value the ctor derived from behavior/_ally.
+        if (s.allegiance) e.allegiance = s.allegiance;
         if (s.ally) e._ally = true;
         if (s.wasFlipped) e._wasFlipped = true;
         if (s.isSummon) e._isSummon = true;

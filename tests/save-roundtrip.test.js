@@ -326,6 +326,23 @@ describe('enemy save contract: ambient + allegiance round-trip (PD-5)', () => {
     });
 });
 
+describe('allegiance round-trip + derive-from-old-save (PD-3)', () => {
+  const rt = (e) => Enemy.fromSave(JSON.parse(JSON.stringify(e.toSave())));
+  test('a provoked neutral stays hostile across a round-trip', () => {
+    const e = new Enemy({ id:'n', type:'Local', x:1, y:1, behavior:['IDLE','WANDER'] });
+    e.allegiance = 'hostile';                       // provoked at runtime
+    assert.equal(rt(e).allegiance, 'hostile', 'runtime provoke must survive reload');
+  });
+  test('an OLD save (no allegiance) derives from behavior/_ally', () => {
+    const oldAlly    = Enemy.fromSave({ id:'a', type:'X', x:0, y:0, behavior:['ALLIED'], ally:true });
+    const oldHostile = Enemy.fromSave({ id:'h', type:'X', x:0, y:0, behavior:null });
+    const oldFolk    = Enemy.fromSave({ id:'f', type:'X', x:0, y:0, behavior:['IDLE'] });
+    assert.equal(oldAlly.allegiance, 'ally');
+    assert.equal(oldHostile.allegiance, 'hostile');
+    assert.equal(oldFolk.allegiance, 'neutral');
+  });
+});
+
 // ── Migration / defaults for partial & old blobs ─────────────────────────────
 describe('migrate + load partial/old blobs without throwing (EXPECTED GREEN)', () => {
 
