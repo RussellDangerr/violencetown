@@ -427,3 +427,16 @@ existing Tier-1 set (PD-1..5, CD-2, CD-5); they sharpen items already on the boa
 - **Refactor appetite** — are the L-effort consolidations (PD-14) worth doing for their own sake, or only folded into feature work that already touches those surfaces?
 - **CD-1** — build the unified `worldInteractions` dispatch now, or keep `_interactCar` explicit until the canyon-grapple interaction is actually on the roadmap? (Study leans: wait for the 2nd real item-on-world interaction.)
 - **CD-7** — is the zone-pursuit / stealth thread greenlit? The data-flag line-of-sight (`blocksSight` on `TILES`) is gated on it.
+
+---
+
+## Continuation roadmap (2026-07-11 — post-foundation + PD-3)
+
+**Done + merged to dev:** foundation batch (PD-1,2,4,5 · CD-2,5) + PD-3+NH-3 (AI consolidation). Remaining backlog packaged into 5 themed passes, built one at a time (brainstorm → spec → subagent-driven build). **Recommended order A → B → C → D**, with E folded in opportunistically.
+
+- **A · Your toolkit** — PD-8/NH-1 (persisted learned-skill axis) + NH-2 (reversible suppression / the `blocked` field) + PD-7/OL-6 (item pull-model + bare-hands sentinel). One "what can I do right now" grammar over abilities + items. Files: `main.js` (`_refreshGrantedSkills`), `wheel-model.js` (verb/availability predicates + a `hasSkill` accessor), `save.js`. **⛔ design-gated:** learned skills permanent / respec-able / slot-limited (decide before serializing). *[STARTED 2026-07-11]*
+- **B · Enemies worth fighting** — PD-6 (flee/steal/doze opt-in states on the clean FSM) + CD-7 (data-flag `blocksSight` LOS) + finish the parked zone-pursuit. The PD-3 payoff. Files: `npc.js`/`enemies.js` (the `capabilities` set). **⛔ gate:** CD-7 needs the stealth/zone-pursuit thread greenlit.
+- **C · A town that lives** — PD-9 (Statistics + Badges "rap sheet") + PD-10/NH-4 (dedupe witness log + flavor line-pools = living-world chatter) + OL-2 (timed tile transitions). Rides the `emitGameEvent` bus + CD-5's `_worldBeat` (both done). Additive, low-risk, high fiction/portfolio value.
+- **D · Author-time leverage** — OL-3 (bestiary / content-graph `_design` viewer) + OL-4 (verb×target coverage) + OL-1 (reverse index "who-wants-what") + PD-16/NH-5 (build-time map DSL). Leverages the CD-2 validator; do before hand-authoring a big new zone. Debug-only.
+- **E · Structure & polish (fold-in)** — PD-15/FE-1 (kill car special-casing via tile/sprite descriptors) · PD-13/PD-14 (target-pick seam + modal-descriptor table) · PD-11 (save-migration scaffold) · FE-2/FE-3 (auto-travel + pre-tap verb hint) · PD-12 (buff extend-vs-reset). Do-when-in-that-surface.
+- **Held (gated on a concrete trigger):** CD-1 (2nd item-on-world interaction), CD-4 (input-tape replay), CD-6 (tile-state plane), OL-7 (equipment sprite layers). *(OL-5's ownership half shipped inside PD-2; FE-2 mostly validates the pointer model.)*
