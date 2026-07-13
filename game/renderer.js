@@ -20,7 +20,7 @@ import {
     HOTBAR_TOTAL_W, HOTBAR_OX, HOTBAR_OY, HOTBAR_X_START, HOTBAR_Y,
     QUESTLOG_RECT, LOG_MODAL_RECT, TARGET_LIST_RECT, TARGET_LIST_ROW_H,
     ITEM_OVERLAY_RECT, ITEM_OVERLAY_ROW_H,
-    TRADE_MODAL_RECT, DIALOGUE_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BUYBACK_ORIGIN, TRADE_BRIBE_RECT,
+    TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BUYBACK_ORIGIN, TRADE_BRIBE_RECT,
     TRADE_CELL_W, TRADE_CELL_H, TRADE_COLS, tradeCellRect,
     RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
     EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, closeButtonRect,
@@ -427,7 +427,7 @@ export class Renderer {
             target_list: this._targetListRect,
             log_modal:   LOG_MODAL_RECT,
             trade:       TRADE_MODAL_RECT,
-            dialogue:    DIALOGUE_RECT,
+            dialogue:    this._dialogueRect,
             device:      DEVICE_RECT,
         }[game.state] || null;
         this._menuPanelRect = CLOSE_PANEL;
@@ -2875,76 +2875,137 @@ export class Renderer {
         const npc = game._dialogueNpc;
         if (!npc || !this.font) return;
 
-        // (Fallout-style bottom panel) Light dim only — the world (the player + the
-        // NPC you're talking to) stays visible up top; the conversation lives in a
-        // wide panel across the bottom. VT323 is scalable, so text uses fractional
-        // scales and the *real* per-char advance (cw) to fit without 8x8 cramping.
-        ctx.fillStyle = 'rgba(0,0,0,0.35)';
-        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+        // (Dialogue window — Fallout × Morrowind design pass) A content-sized panel
+        // anchored to the bottom of the screen, so the world (player + the NPC) stays
+        // visible up top. TWO voices, told apart by TREATMENT, not size: the NPC's
+        // line sits in a dark inset "well" behind a gold bar (they speak); the
+        // player's responses are a numbered, clickable list with implication chips
+        // (you choose). One consistent body size; height grows with the option count
+        // (2..~10 fit, Morrowind-style). VT323 is scalable → fractional scales + the
+        // real per-char advance (cw) do the fitting.
+        const GOOD = '#79c46a', BAD = UI.hpRed;
+        const S_NAME = 1.6, S_BODY = 1.3, S_META = 1.0;
+        const cw = (s) => Math.max(1, this.font.measure('X', s));
+        const bodyLH = 22;
+        const disp = npc.disposition ?? 0;
+        const m = mood(disp);
 
-        const R = DIALOGUE_RECT;
+        // ── measure pass (size the panel to its content) ──
+        const R_X = 16, R_W = 576, R_BOTTOM = 592, PAD = 16, wellPadX = 14;
+        const speechChars = Math.max(8, Math.floor((R_W - PAD * 2 - wellPadX - 6) / cw(S_BODY)));
+        const speechLines = this._wrapText(game._dialogueReply || '', speechChars);
+
+        const choices = game._dialogueChoices();
+        const NUM_GUTTER = 26, RIGHT_COL = 122;
+        const optChars = Math.max(8, Math.floor((R_W - PAD * 2 - NUM_GUTTER - RIGHT_COL) / cw(S_BODY)));
+        const rows = choices.map((c, i) => ({ c, idx: i, leave: false, lines: this._wrapText(c.label, optChars) }));
+        rows.push({ c: null, idx: choices.length, leave: true, lines: ['Leave'] });
+
+        const rowPadY = 5;
+        const rowHeight = (r) => r.lines.length * bodyLH + rowPadY * 2;
+        const headerH = 46, respLabelH = 22, footerH = 24;
+        const speechH = speechLines.length * bodyLH + 16;
+        const optionsH = rows.reduce((s, r) => s + rowHeight(r) + 3, 0);
+        // Cap the option list at ~6 rows (Caelan's "5 options + Leave" standard); more
+        // than that scrolls inside a fixed viewport instead of growing the panel taller.
+        const VIEWPORT_CAP = 6 * (bodyLH + rowPadY * 2 + 3);   // 6 single-line rows
+        const viewportH = Math.min(optionsH, VIEWPORT_CAP);
+        const panelH = PAD + headerH + speechH + respLabelH + viewportH + footerH;
+        const R = { x: R_X, w: R_W, y: Math.max(60, R_BOTTOM - panelH), h: 0 };
+        R.h = R_BOTTOM - R.y;
+        this._dialogueRect = R;   // dynamic rect for the ✕ / tap-outside menu grammar
+        this._dialogueScrollable = optionsH > viewportH;
+
+        // ── draw pass ──
+        ctx.fillStyle = 'rgba(0,0,0,0.38)';
+        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
         if (ui?.loaded) drawPanelBig(ctx, ui, R.x, R.y, R.w, R.h, 'base');
         else            drawPanelSmall(ctx, R.x, R.y, R.w, R.h);
 
-        const cw = (s) => Math.max(1, this.font.measure('X', s));   // real px/char at scale s
-        const disp = npc.disposition ?? 0;
-        const m = mood(disp);
-        const innerX = R.x + 18;
+        const innerX = R.x + PAD;
+        let y = R.y + PAD;
 
-        // Header: name (left). The ✕ close chip owns the top-right corner (drawn by
-        // the CLOSE_PANEL machinery), so the disposition number lives on the mood row
-        // below it — not the title row — to avoid colliding with the chip.
-        this.font.drawText(ctx, (npc.name || npc.type || 'SOMEONE').toUpperCase(), innerX, R.y + 10, { color: UI.gold, scale: 2 });
+        // Header — mood face + NAME; mood word + disposition beneath (both LEFT, so
+        // they clear the ✕ chip that owns the top-right corner).
+        this._drawMoodFace(innerX + 10, y + 11, m.face, 10);
+        this.font.drawText(ctx, (npc.name || npc.type || 'SOMEONE').toUpperCase(), innerX + 28, y, { color: UI.gold, scale: S_NAME });
+        const moodWord = m.mood.toUpperCase();
+        this.font.drawText(ctx, moodWord, innerX + 28, y + 24, { color: UI.dim, scale: S_META });
+        this.font.drawText(ctx, `${disp > 0 ? '+' : ''}${disp}`, innerX + 28 + cw(S_META) * (moodWord.length + 1), y + 24, { color: disp < 0 ? BAD : (disp > 0 ? GOOD : UI.dim), scale: S_META });
+        y += headerH;
 
-        // Mood face + label (left) · disposition (right, big).
-        const moodY = R.y + 42;
-        this._drawMoodFace(R.x + 20, moodY, m.face);
-        this.font.drawText(ctx, m.mood.toUpperCase(), R.x + 40, moodY, { color: UI.textLight, scale: 1 });
-        this.font.drawText(ctx, `${disp > 0 ? '+' : ''}${disp}`, R.x + R.w - 16, moodY - 4, { color: disp < 0 ? UI.hpRed : UI.gold, scale: 2, align: 'right' });
+        // NPC speech — dark inset well + gold accent bar; cream text (their voice).
+        const wellH = speechH - 6;
+        drawInset(ctx, innerX, y, R.w - PAD * 2, wellH);
+        ctx.fillStyle = UI.gold; ctx.fillRect(innerX, y, 3, wellH);
+        let sy = y + 8;
+        for (const ln of speechLines) { this.font.drawText(ctx, ln, innerX + wellPadX, sy, { color: UI.white, scale: S_BODY }); sy += bodyLH; }
+        y += speechH;
 
-        // NPC reply — scale 1.5; the wide panel + real advance means it rarely wraps.
-        let ty = R.y + 66;
-        const replyChars = Math.max(8, Math.floor((R.w - 36) / cw(1.5)));
-        for (const line of this._wrapText(game._dialogueReply || '', replyChars)) {
-            this.font.drawText(ctx, line, innerX, ty, { color: UI.text, scale: 1.5 });
-            ty += 22;
+        // "RESPOND" divider — the switch to the player's voice.
+        this.font.drawText(ctx, 'RESPOND', innerX, y + 3, { color: UI.dim, scale: S_META });
+        ctx.strokeStyle = UI.panelBorder; ctx.globalAlpha = 0.45;
+        ctx.beginPath(); ctx.moveTo(innerX + cw(S_META) * 9, y + 9); ctx.lineTo(R.x + R.w - PAD, y + 9); ctx.stroke();
+        ctx.globalAlpha = 1;
+        y += respLabelH;
+
+        // Response rows — numbered + clickable, implication chip on the right (colored
+        // delta + once/repeat/GP). Selected row gets a gold bar + brighter text. The
+        // list scrolls inside a fixed viewport when taller than VIEWPORT_CAP: the
+        // highlighted row is kept in view (cursor-follow), only visible rows get a
+        // hit-rect (clamped to the viewport), and a slim gold thumb shows position.
+        const cursor = game._dialogueCursor;
+        const optsTop = y, optsBottom = y + viewportH;
+
+        // Row offsets within the (pre-scroll) content, for cursor-follow + clipping.
+        const rowY = []; let acc = 0;
+        for (const r of rows) { rowY.push(acc); acc += rowHeight(r) + 3; }
+
+        let scroll = this._dialogueScroll || 0;
+        const maxScroll = Math.max(0, optionsH - viewportH);
+        const ci = rows.findIndex(r => r.idx === cursor);
+        if (ci >= 0) {
+            const top = rowY[ci], bot = rowY[ci] + rowHeight(rows[ci]);
+            if (top < scroll) scroll = top;
+            else if (bot > scroll + viewportH) scroll = bot - viewportH;
+        }
+        scroll = Math.max(0, Math.min(scroll, maxScroll));
+        this._dialogueScroll = scroll;
+
+        ctx.save();
+        ctx.beginPath(); ctx.rect(R.x + 8, optsTop, R.w - 16, viewportH); ctx.clip();
+        this._dialogueRects = [];
+        for (let ri = 0; ri < rows.length; ri++) {
+            const r = rows[ri];
+            const rh = rowHeight(r);
+            const cy = optsTop + rowY[ri] - scroll;
+            if (cy + rh <= optsTop || cy >= optsBottom) continue;   // fully clipped → skip
+            const sel = cursor === r.idx;
+            if (sel) { ctx.fillStyle = 'rgba(212,185,106,0.16)'; ctx.fillRect(R.x + 10, cy, R.w - 20, rh); ctx.fillStyle = UI.gold; ctx.fillRect(R.x + 10, cy, 3, rh); }
+            this.font.drawText(ctx, r.leave ? 'X' : String(r.idx + 1), innerX + 2, cy + rowPadY + 1, { color: sel ? UI.gold : UI.textLight, scale: S_META });
+            const labelColor = r.leave ? UI.dim : (sel ? UI.white : UI.text);
+            r.lines.forEach((ln, li) => this.font.drawText(ctx, ln, innerX + NUM_GUTTER, cy + rowPadY + li * bodyLH, { color: labelColor, scale: S_BODY }));
+            if (!r.leave) {
+                const chipR = R.x + R.w - PAD - (this._dialogueScrollable ? 12 : 0);   // clear the scrollbar
+                const delta = r.c.delta ?? 0;
+                if (delta) this.font.drawText(ctx, `${delta > 0 ? '+' : ''}${delta} ${delta > 0 ? ':)' : ':('}`, chipR - 62, cy + rowPadY + 1, { color: delta < 0 ? BAD : GOOD, scale: S_BODY, align: 'right' });
+                const tag = r.c.cost ? `${r.c.cost} GP` : (r.c.repeatable ? 'repeat' : 'once');
+                this.font.drawText(ctx, tag, chipR, cy + rowPadY + 3, { color: UI.dim, scale: S_META, align: 'right' });
+            }
+            const hy = Math.max(cy, optsTop), hy2 = Math.min(cy + rh, optsBottom);
+            if (hy2 > hy) this._dialogueRects.push({ rect: { x: R.x + 10, y: hy, w: R.w - 20, h: hy2 - hy }, choiceIndex: r.idx, isLeave: r.leave });
+        }
+        ctx.restore();
+
+        if (this._dialogueScrollable) {
+            const trackX = R.x + R.w - 12, trackW = 4;
+            ctx.fillStyle = 'rgba(10,8,4,0.6)'; ctx.fillRect(trackX - 1, optsTop, trackW + 2, viewportH);   // dark well so the thumb reads against the gold frame
+            const thumbH = Math.max(20, viewportH * (viewportH / optionsH));
+            const thumbY = optsTop + (maxScroll ? (scroll / maxScroll) * (viewportH - thumbH) : 0);
+            ctx.fillStyle = UI.panelBorderLight; ctx.fillRect(trackX, thumbY, trackW, thumbH);
         }
 
-        // Choices — big scale-2 labels in clickable rows; the delta badge (scale 2)
-        // and the once/repeat/GP tag (scale 1.5) share the right column, side by side.
-        // Each row's hit-rect is stashed on this._dialogueRects for main._tapDialogue
-        // (a click/tap on a row == pick it; the Leave row closes).
-        const choices = game._dialogueChoices();
-        const cursor = game._dialogueCursor;
-        const RIGHT_COL = 150;                                          // reserve for badge + tag
-        const labelChars = Math.max(6, Math.floor((R.w - 36 - RIGHT_COL) / cw(2)));
-        const lineH = 22, padY = 7;
-        let cy = ty + 10;
-        this._dialogueRects = [];
-        const drawRow = (idx, label, badge, badgeColor, tag, isLeave) => {
-            const sel = cursor === idx;
-            const lines = this._wrapText(label, labelChars);
-            const rowH = lines.length * lineH + padY * 2;
-            if (sel) { ctx.fillStyle = 'rgba(212,185,106,0.18)'; ctx.fillRect(R.x + 10, cy, R.w - 20, rowH); }
-            lines.forEach((ln, li) => {
-                this.font.drawText(ctx, (li === 0 ? (sel ? '> ' : '  ') : '    ') + ln, innerX, cy + padY + li * lineH, { color: sel ? UI.textLight : UI.text, scale: 2 });
-            });
-            const midY = cy + padY + 2;
-            if (badge) this.font.drawText(ctx, badge, R.x + R.w - 74, midY, { color: badgeColor, scale: 2,   align: 'right' });
-            if (tag)   this.font.drawText(ctx, tag,   R.x + R.w - 16, midY, { color: UI.dim,     scale: 1.5, align: 'right' });
-            this._dialogueRects.push({ rect: { x: R.x + 10, y: cy, w: R.w - 20, h: rowH }, choiceIndex: idx, isLeave });
-            cy += rowH + 3;
-        };
-        choices.forEach((c, i) => {
-            const delta = c.delta ?? 0;
-            const badge = delta ? `${delta > 0 ? '+' : ''}${delta} ${delta > 0 ? ':)' : ':('}` : '';
-            const badgeColor = delta < 0 ? UI.hpRed : (delta > 0 ? '#79c46a' : UI.dim);
-            const tag = c.cost ? `${c.cost} GP` : (c.repeatable ? 'repeat' : 'once');
-            drawRow(i, c.label, badge, badgeColor, tag, false);
-        });
-        drawRow(choices.length, 'Leave', '', null, '', true);
-
-        this.font.drawText(ctx, 'CLICK or W/S  ·  SPACE picks  ·  E / X / tap-outside leaves', R.x + R.w / 2, R.y + R.h - 16, { color: UI.dim, scale: 1, align: 'center' });
+        this.font.drawText(ctx, '1-9 / CLICK  ·  W/S move  ·  E / X / tap-outside leaves', R.x + R.w / 2, R.y + R.h - 15, { color: UI.dim, scale: S_META, align: 'center' });
     }
 
     // ── Equipment screen (Stage 3 — read-only Vitruvian dress-up) ────────────

@@ -1213,6 +1213,14 @@ class Game {
             const tile = this._screenToTile(pt);
             if (this._targetAt(tile.x, tile.y)) this._openTargetList(tile.x, tile.y);
         });
+        // Mouse wheel scrolls the dialogue response list when it overflows its
+        // viewport (>6 rows). The renderer clamps + cursor-follows on the next draw.
+        canvas.addEventListener('wheel', (e) => {
+            if (this.state !== STATE.DIALOGUE || !this.renderer._dialogueScrollable) return;
+            e.preventDefault();
+            this.renderer._dialogueScroll = (this.renderer._dialogueScroll || 0) + Math.sign(e.deltaY) * 26;
+            this._render();
+        }, { passive: false });
         // Prevent text selection / drag from a click-drag on the canvas.
         canvas.addEventListener('dragstart', e => e.preventDefault());
     }
@@ -4438,6 +4446,7 @@ class Game {
         this._dialogueNpc = npc;
         this._dialogueReply = d.greeting || '';
         this._dialogueCursor = 0;
+        this.renderer._dialogueScroll = 0;   // fresh scroll for the response list
         this.state = STATE.DIALOGUE;
         audio.playSfx('menu-open');
         this._render();
