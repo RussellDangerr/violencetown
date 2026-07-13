@@ -2159,7 +2159,9 @@ export class Renderer {
         // soft rim vignette. Subtle — wedge colours stay untouched for legibility.
         const combat = isCombatActive(game);
         ctx.save();
-        ctx.fillStyle = combat ? 'rgba(38,4,4,0.52)' : 'rgba(0,0,0,0.5)';
+        // Lighter scrim — the compact corner wheel doesn't need to black out the
+        // scene behind it; keep the world readable while the wheel is open.
+        ctx.fillStyle = combat ? 'rgba(38,4,4,0.4)' : 'rgba(0,0,0,0.32)';
         ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
         if (combat) {
             const rg = ctx.createRadialGradient(cx, cy, CANVAS_PX * 0.34, cx, cy, CANVAS_PX * 0.72);
@@ -2956,6 +2958,7 @@ export class Renderer {
         // hit-rect (clamped to the viewport), and a slim gold thumb shows position.
         const cursor = game._dialogueCursor;
         const optsTop = y, optsBottom = y + viewportH;
+        this._dialogueOptsRect = { x: R.x, y: optsTop, w: R.w, h: viewportH };   // touch-drag scroll region
 
         // Row offsets within the (pre-scroll) content, for cursor-follow + clipping.
         const rowY = []; let acc = 0;
@@ -2964,11 +2967,14 @@ export class Renderer {
         let scroll = this._dialogueScroll || 0;
         const maxScroll = Math.max(0, optionsH - viewportH);
         const ci = rows.findIndex(r => r.idx === cursor);
-        if (ci >= 0) {
+        // Cursor-follow ONLY when the cursor actually moved (keyboard nav / a pick) —
+        // otherwise it fights manual wheel/drag scrolling and snaps the view back.
+        if (ci >= 0 && cursor !== this._dialogueLastCursor) {
             const top = rowY[ci], bot = rowY[ci] + rowHeight(rows[ci]);
             if (top < scroll) scroll = top;
             else if (bot > scroll + viewportH) scroll = bot - viewportH;
         }
+        this._dialogueLastCursor = cursor;
         scroll = Math.max(0, Math.min(scroll, maxScroll));
         this._dialogueScroll = scroll;
 

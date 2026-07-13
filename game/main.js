@@ -1195,10 +1195,29 @@ class Game {
         // Long-press bookkeeping: releasing / dragging / cancelling before the timer
         // fires means it was a normal tap (default action already ran) — drop it.
         const cancelPress = () => { if (this._pressTimer) { clearTimeout(this._pressTimer); this._pressTimer = null; } };
-        canvas.addEventListener('pointerup', cancelPress);
-        canvas.addEventListener('pointercancel', cancelPress);
-        canvas.addEventListener('pointerleave', cancelPress);
+        // Resolve a dialogue drag: a press that never moved past the threshold is a
+        // tap → pick the row; a real drag scrolled the list and picks nothing.
+        const endPress = (e) => {
+            cancelPress();
+            if (this._dlgDrag) {
+                const d = this._dlgDrag; this._dlgDrag = null;
+                if (!d.moved && e && e.type === 'pointerup') this._tapDialogue(d.downPt);
+            }
+        };
+        canvas.addEventListener('pointerup', endPress);
+        canvas.addEventListener('pointercancel', endPress);
+        canvas.addEventListener('pointerleave', endPress);
         canvas.addEventListener('pointermove', (e) => {
+            if (this._dlgDrag) {
+                const p = this._canvasLocalCoords(e, canvas);
+                if (p) {
+                    this.renderer._dialogueScroll = (this.renderer._dialogueScroll || 0) - (p.y - this._dlgDrag.lastY);
+                    this._dlgDrag.lastY = p.y;
+                    if (Math.abs(p.y - this._dlgDrag.startY) > 6) this._dlgDrag.moved = true;
+                    this._render();
+                }
+                return;
+            }
             if (!this._pressTimer || !this._pressStart) return;
             const dx = e.clientX - this._pressStart.x, dy = e.clientY - this._pressStart.y;
             if (dx * dx + dy * dy > 100) cancelPress();   // moved >10px → a drag, not a press
@@ -1629,7 +1648,17 @@ class Game {
 
         // Trade window is fully modal too — route taps to the shop.
         if (this.state === STATE.TRADE) { this._tapTrade(pt); return; }
-        if (this.state === STATE.DIALOGUE) { this._tapDialogue(pt); return; }   // click a choice row (✕ + tap-outside handled above)
+        if (this.state === STATE.DIALOGUE) {
+            // Touch/pointer drag scrolls the response list when it overflows; a press
+            // that doesn't drag resolves as a normal row pick on pointerup. Non-
+            // scrollable dialogues keep the immediate pick-on-down feel.
+            const optsR = this.renderer._dialogueOptsRect;
+            if (this.renderer._dialogueScrollable && optsR && this._pointInRect(pt, optsR)) {
+                this._dlgDrag = { startY: pt.y, lastY: pt.y, downPt: pt, moved: false };
+                return;
+            }
+            this._tapDialogue(pt); return;   // click a choice row (✕ + tap-outside handled above)
+        }
         if (this.state === STATE.DEVICE) { this._tapDevice(pt); return; }   // (Slice 3) in-panel tab/body taps (✕ + outside handled above)
 
         // Priority order is by modality: the most exclusive overlay wins. A
@@ -4446,7 +4475,8 @@ class Game {
         this._dialogueNpc = npc;
         this._dialogueReply = d.greeting || '';
         this._dialogueCursor = 0;
-        this.renderer._dialogueScroll = 0;   // fresh scroll for the response list
+        this.renderer._dialogueScroll = 0;         // fresh scroll for the response list
+        this.renderer._dialogueLastCursor = -1;    // force cursor-follow on the first frame
         this.state = STATE.DIALOGUE;
         audio.playSfx('menu-open');
         this._render();

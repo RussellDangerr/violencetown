@@ -54,17 +54,19 @@ export const HOTBAR_Y       = HOTBAR_OY + 2;                         // 548 (slo
 // the top pointer. Shared by renderer._drawWheel (draw) and main._tapRadialMenu
 // (hit-test). The preview-arc band and pointer are derived adaptively in
 // renderer._drawWheel from wheelRingR(depth).
-// (Slice 2) Bottom-right thumb-reach anchor. Clearance is LOCKED to the wheel's
-// real max span: the deepest ACTIVE ring is wheelRingR(2) (outer 170) at depth 3
-// (Fight→Melee — no depth-4 ring exists in wheel-model.js), with the ▲FIRE cue /
-// flapper at cy-186 (top only). At (400,360): right 400+170=570 < 608; bottom
-// 360+170=530 (≤538 under the 1.05 open-overshoot) < HOTBAR_OY 546; top
-// 360-186=174 > 0. Re-measure if wheel-model.js ever gains a 4th ring level.
-export const RADIAL_CENTER_X = 400, RADIAL_CENTER_Y = 360;
-export const WHEEL_HUB_R    = 34;            // centre 'MENU' disc radius
-export const WHEEL_RING_W    = 40;           // radial thickness of each full ring
-export const WHEEL_RING_GAP  = 5;            // gap between adjacent rings
-export const WHEEL_RING0_R0  = 40;           // inner edge of the first ring out from the hub
+// (interaction polish) Compact wheel tucked into the BOTTOM-RIGHT corner, so it
+// no longer dominates the screen and sits opposite the bottom-left message log
+// (QUESTLOG_RECT, right edge x=346). Clearance is LOCKED to the wheel's real max
+// span: the deepest ACTIVE ring is wheelRingR(2) (outer 120) at depth 3 (Fight→
+// Melee — no depth-4 ring exists in wheel-model.js), ▲FIRE cue / flapper above the
+// top pointer. At (477,416) with the 1.05 open-overshoot (max radius 126): right
+// 477+126=603 < 608; left 477-126=351 > 346 (clears the log); bottom 416+126=542
+// < HOTBAR_OY 546; top clears 0. Re-measure if wheel-model.js gains a 4th ring.
+export const RADIAL_CENTER_X = 477, RADIAL_CENTER_Y = 416;
+export const WHEEL_HUB_R    = 24;            // centre 'MENU' disc radius
+export const WHEEL_RING_W    = 28;           // radial thickness of each full ring
+export const WHEEL_RING_GAP  = 4;            // gap between adjacent rings
+export const WHEEL_RING0_R0  = 28;           // inner edge of the first ring out from the hub
 export const WHEEL_TILE_GAP  = 0.03;         // angular gap between tiles (radians)
 // Ring k's [inner, outer] radius (k = 0 nearest the hub).
 export function wheelRingR(k) { const r0 = WHEEL_RING0_R0 + k * (WHEEL_RING_W + WHEEL_RING_GAP); return [r0, r0 + WHEEL_RING_W]; }
