@@ -24,6 +24,7 @@ import { RNG } from './rng.js';
 import { hasSave, readSaveRaw, writeSave, loadInto, clearSave } from './save.js';
 import { QuestEngine } from './quests.js';
 import { doExamine } from './examine.js';
+import { recordDrop, pendingDrops } from './drops.js'; // per-zone runtime dropped-items layer (pure, node-tested)
 import {
     CANVAS_INTERNAL_PX, HIT_SLOP, THROW_RECTS,
     HOTBAR_X_START, HOTBAR_Y, HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_STRIDE, HOTBAR_SLOTS,
@@ -332,6 +333,14 @@ class Game {
         this._pendingFollowersFrom = null;   // url of the zone they're chasing you OUT of
         this._zonePursuit = false;           // (playtest) monsters don't follow you through doors for now
         this._collectedItems = new Set();    // "map|x|y|type" of ground items already taken, so they don't respawn on zone re-entry
+        // Runtime ground-drops per map ("mapUrl" → [{ type, x, y }]), so a drop
+        // survives leaving and re-entering a zone. Recorded today for enemy
+        // death-drops; the player-drop path routes through here once a drop verb
+        // exists. Twin of _collectedItems (which stops AUTHORED spawns respawning
+        // once taken); together they make the world permanent, never regenerative
+        // (drops.js dedups records so a re-killed respawning boss can't farm it).
+        // Persisted.
+        this._droppedItems = {};
         this._mapUrl = null;                 // url of the currently-loaded map
         this._cameFrom = null;               // url of the zone you ENTERED this one from (for the pipe-jam)
         this._jammedDoor = null;             // {x,y,toMap,integrity,max,intruders[]} while a door is wedged shut
@@ -520,6 +529,14 @@ class Game {
             const def = this._resolveItemDef(s.type);   // resolves WEAPONS too, so weapons can drop as loot
             if (def) this.groundItems.push({ type: s.type, x: s.x, y: s.y, def });
         }
+        // Re-inject runtime drops recorded for this map (enemy death-drops today,
+        // player drops once that path exists), minus any the player has since
+        // picked up (their _collectedItems key). pendingDrops (drops.js) is the
+        // node-tested filter; here we just resolve defs and place them.
+        for (const d of pendingDrops(this._droppedItems, this._collectedItems, url)) {
+            const def = this._resolveItemDef(d.type);
+            if (def) this.groundItems.push({ type: d.type, x: d.x, y: d.y, def });
+        }
         this.enemies = [];
         for (const s of this.map.enemySpawns) this.enemies.push(new Enemy(s));
 
@@ -700,6 +717,15 @@ class Game {
         if (!id) return null;
         if (WEAPONS[id]) return WEAPONS[id];
         return ITEMS[id] || null;
+    }
+
+    // Record a runtime drop against the current map so it survives zone changes;
+    // the CALLER then places it into groundItems. Deduped on {type,x,y} in
+    // drops.js so a re-killed respawning boss can't farm duplicate records.
+    // Called today for enemy death-drops; the player-drop path routes through
+    // here once a drop verb exists.
+    _recordDrop(type, x, y) {
+        recordDrop(this._droppedItems, this._mapUrl, type, x, y);
     }
 
     // Mutate a map tile at runtime AND record the change as a diff so the save
@@ -3560,11 +3586,13 @@ class Game {
         });
         // The Were-Rat drops the converter; rat kills feed the escape waves.
         if (enemyObj.tag === 'wererat_boss' && ITEMS.catalytic_converter) {
+            this._recordDrop('catalytic_converter', enemyObj.x, enemyObj.y);
             this.groundItems.push({ type: 'catalytic_converter', x: enemyObj.x, y: enemyObj.y, def: ITEMS.catalytic_converter });
             this._log('[The Were-Rat drops your cataclysmic converter!]', 'pickup');
         }
         // Pike guards his climbing rope with his life — take it off his body.
         if (enemyObj.tag === 'pike_boss' && ITEMS.grappling_hook) {
+            this._recordDrop('grappling_hook', enemyObj.x, enemyObj.y);
             this.groundItems.push({ type: 'grappling_hook', x: enemyObj.x, y: enemyObj.y, def: ITEMS.grappling_hook });
             this._log('[Pike crumples. His big coil of rope — the grappling hook — thuds to the stone.]', 'pickup');
         }

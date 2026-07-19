@@ -90,6 +90,8 @@ export function serialize(game) {
             // Picked-up ground items, so collected items stay gone after reload.
             // Live form is a Set of keys; persist as a plain array.
             collectedItems: game._collectedItems ? [...game._collectedItems] : [],
+            // Runtime ground-drops per map, so dropped items survive zone changes.
+            droppedItems: game._droppedItems || {},
             containers: (game.containers || []).map(c => ({
                 id: c.id, type: c.type, x: c.x, y: c.y, contents: (c.contents || []).slice(),
             })),
@@ -152,6 +154,7 @@ export function migrate(raw) {
     if (!Array.isArray(r.world.enemies)) r.world.enemies = [];
     if (!Array.isArray(r.world.groundItems)) r.world.groundItems = [];
     if (!Array.isArray(r.world.collectedItems)) r.world.collectedItems = [];
+    if (!r.world.droppedItems || typeof r.world.droppedItems !== 'object') r.world.droppedItems = {};
     if (!Array.isArray(r.world.containers)) r.world.containers = [];
     if (r.quest === undefined) r.quest = null;
     if (r.sewerEscape === undefined) r.sewerEscape = null;
@@ -262,6 +265,7 @@ export async function loadInto(game, raw) {
     // Picked-up items stay collected across reload — rehydrate into the Set the
     // runtime uses for no-respawn checks.
     game._collectedItems = new Set(raw.world.collectedItems || []);
+    game._droppedItems = raw.world.droppedItems || {};
     game.containers = raw.world.containers.map(c => ({
         id: c.id, type: c.type, x: c.x, y: c.y, contents: (c.contents || []).slice(),
     }));

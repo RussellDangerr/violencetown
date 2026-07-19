@@ -457,3 +457,25 @@ describe('migrate + load partial/old blobs without throwing (EXPECTED GREEN)', (
         assert.equal(dst.inventory[2], null, 'slot without id rejected');
     });
 });
+
+// ── Task 2: runtime ground-drops persist per-zone (twin of _collectedItems) ───
+describe('runtime dropped-items persistence (Task 2)', () => {
+
+    test('runtime dropped items persist per-zone across a save round-trip', async () => {
+        const g = makeBlankGame();
+        g._droppedItems = { 'sewer-map.json': [{ type: 'red_cape', x: 4, y: 9 }] };
+        const blob = JSON.parse(JSON.stringify(serialize(g)));
+        const g2 = makeBlankGame();
+        await loadIntoReal(g2, blob);
+        assert.deepEqual(g2._droppedItems['sewer-map.json'], [{ type: 'red_cape', x: 4, y: 9 }]);
+    });
+
+    test('old save (no droppedItems) loads as an empty map without throwing', async () => {
+        const g = makeBlankGame();
+        const blob = JSON.parse(JSON.stringify(serialize(g)));
+        delete blob.world.droppedItems;
+        const g2 = makeBlankGame();
+        await loadIntoReal(g2, blob);
+        assert.deepEqual(g2._droppedItems, {});
+    });
+});
