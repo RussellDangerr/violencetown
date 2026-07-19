@@ -10,7 +10,12 @@ import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, MAX_STACK } from './data.
 import { ITEMS, itemTier, resolveUse, resolveThrow, tickTempEquips, unequipItem, ownedItemDefs, hasItemDef } from './items.js';
 import { WEAPONS } from './weapons.js';
 import { tickBuffList } from './buffs.js';
-import { SKILL_SLOTS, mergeKnown, isActive, learnInto, equipSkill, unequipSkill } from './skills.js';
+import { mergeKnown, isActive } from './skills.js'; // (rings) merge/read helpers still live here until Task 5 folds them into rings.js
+import { RINGS, FUSIONS } from './ring-data.js';
+import {
+    unlockedSlots, resolveAdjacencies, slottedActives, aggregatePassives,
+    slotRing, unslotRing, acquireRing, sanitizeSlots,
+} from './rings.js';
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
 import { attack, formatDamageNumber } from './combat.js';
@@ -158,16 +163,16 @@ class Game {
         // parallel list the Trick ring reads.
         this.knownSpells   = [...BASE_SPELLS];
         this.grantedTricks = [];
-        // Ring-builds ability axis (learned POOL + capped EQUIPPED subset — the
-        // loadout IS the build). The pools are append-only and persisted; the
-        // loadouts are the player's choice and persisted. suppressedSkills is
-        // transient (NH-2 `blocked`), never saved. _refreshGrantedSkills merges
-        // these into knownSpells/grantedTricks.
-        this.learnedTricks    = new Set();
-        this.learnedSpells    = new Set();
-        this.equippedTricks   = [];
-        this.equippedSpells   = [];
-        this.suppressedSkills = new Set();
+        // Remembrance Rings — the ONE slotting system (supersedes the skills loadout).
+        // ownedRings = the pool (fashioned at Platero); ringSlots = per-slot assignment
+        // ("hand:finger" → ringId|null); ringTier = the unlock ladder (0..4);
+        // discoveredFusions = fusion ids seen at least once (for the log). All persisted.
+        this.ownedRings       = new Set();
+        this.ringSlots        = {};
+        this.ringTier         = 0;
+        this.discoveredFusions = new Set();
+        this.suppressedSkills = new Set();   // kept: still gates hasSpell/hasTrick at READ
+        this.ringMods         = {};          // aggregate passives, recomputed by _refreshGrantedSkills
         this._lastHitTarget = null;   // (fear) id of the enemy the last Melee-Hit struck
         this.extraMoves  = 0; // future: Goo, abilities, etc.
         this.facing      = 'down'; // 'down' | 'left' | 'right' | 'up'
@@ -3719,20 +3724,28 @@ class Game {
         return ['top', 'bottom', 'front', 'back', 'sides'].some(k => eq[k] && eq[k].sludgeImmune);
     }
 
-    // The "gear reshapes the wheel" build loop, now three-source (NetHack struct
-    // prop): the active rings = base ∪ the player's equipped loadout ∪ the
-    // equipped weapon's grants. Spells feed the Magic ring
-    // (knownSpells = base + equippedSpells + weapon.grantsSpells), tricks feed the
-    // Trick ring (grantedTricks = equippedTricks + weapon.grantsTricks). Call
-    // after any change to weapon OR loadout — equip, learn, slot, new game,
-    // respawn, save-load. De-duped; suppression is applied at READ (hasSpell/
-    // hasTrick), not here. With an empty loadout this equals the old base+gear.
+    // (Remembrance Rings) The active skills = base ∪ slotted-ring actives ∪ fusion
+    // actives ∪ the equipped weapon's grants. Actives are split into spells (Magic
+    // ring) vs tricks (Trick ring) by which registry defines them. Also recomputes
+    // the aggregate passive modifiers and records any newly-seen fusions. Call after
+    // any change to weapon OR rings (acquire, slot, unslot, unlock, new game, load).
     _refreshGrantedSkills() {
-        const w = this.equipment && this.equipment.weapon;
+        const w  = this.equipment && this.equipment.weapon;
         const gs = (w && w.grantsSpells) || [];
         const gt = (w && w.grantsTricks) || [];
-        this.knownSpells   = mergeKnown(BASE_SPELLS, this.equippedSpells, gs);
-        this.grantedTricks = mergeKnown([], this.equippedTricks, gt);
+        const getRing = (id) => RINGS[id] || null;
+
+        const ringActives = slottedActives(this.ringSlots, getRing);
+        const adj = resolveAdjacencies(this.ringTier, this.ringSlots, getRing, FUSIONS);
+        for (const f of adj.fusions) if (f.fusion.id) this.discoveredFusions.add(f.fusion.id);
+
+        const actives = [...ringActives, ...adj.grantedActives];
+        const ringSpells = actives.filter(a => SPELLS[a]);
+        const ringTricks = actives.filter(a => TRICKS[a]);
+
+        this.knownSpells   = mergeKnown(BASE_SPELLS, ringSpells, gs);
+        this.grantedTricks = mergeKnown([], ringTricks, gt);
+        this.ringMods      = aggregatePassives(this.ringSlots, getRing);
     }
 
     // The single gate for "can this skill fire right now" — present in the merged
@@ -3740,31 +3753,31 @@ class Game {
     hasSpell(id) { return isActive(this.knownSpells   || [], this.suppressedSkills, id); }
     hasTrick(id) { return isActive(this.grantedTricks || [], this.suppressedSkills, id); }
 
-    // Learn a skill into the pool from any source (tomes now; trainers/quests
-    // reuse this hook). Auto-slots if there's room (generous — usable at once).
-    // Idempotent — returns true only if newly learned. type: 'trick' | 'spell'.
-    _learnSkill(id, type) {
-        const pool     = type === 'trick' ? this.learnedTricks  : this.learnedSpells;
-        const equipped = type === 'trick' ? this.equippedTricks : this.equippedSpells;
-        const learned  = learnInto(pool, equipped, SKILL_SLOTS[type], id);
+    // Acquire a fashioned ring into the pool (from Platero; auto-slots if room).
+    // Idempotent — returns true only if newly acquired.
+    _acquireRing(ringId) {
+        const got = acquireRing(this.ownedRings, this.ringSlots, this.ringTier, ringId);
         this._refreshGrantedSkills();
-        if (learned) {
-            const def = type === 'trick' ? TRICKS[id] : SPELLS[id];
-            this._log(`[Learned ${(def && def.name) || id}!]`, 'transition');
+        if (got) {
+            const def = RINGS[ringId];
+            this._log(`[You slip on the ${(def && def.name || ringId).replace(/[\[\]]/g, '')}.]`, 'transition');
         }
-        return learned;
+        return got;
     }
 
-    // Slot / unslot a learned skill (the GEAR-tab loadout). Both refresh the
-    // merged grants so the wheel updates immediately.
-    _equipSkill(id, type) {
-        const pool     = type === 'trick' ? this.learnedTricks  : this.learnedSpells;
-        const equipped = type === 'trick' ? this.equippedTricks : this.equippedSpells;
-        if (equipSkill(pool, equipped, SKILL_SLOTS[type], id)) this._refreshGrantedSkills();
+    // Slot / unslot a ring (the hands UI, Task 5). Both refresh grants so the wheel
+    // and passives update immediately.
+    _slotRing(slotKey, ringId) {
+        if (slotRing(this.ringSlots, this.ownedRings, this.ringTier, slotKey, ringId)) this._refreshGrantedSkills();
     }
-    _unequipSkill(id, type) {
-        const equipped = type === 'trick' ? this.equippedTricks : this.equippedSpells;
-        if (unequipSkill(equipped, id)) this._refreshGrantedSkills();
+    _unslotRing(slotKey) {
+        if (unslotRing(this.ringSlots, slotKey)) this._refreshGrantedSkills();
+    }
+
+    // Raise the unlock tier (Task 6 gates call this). Reveals more finger slots.
+    _setRingTier(tier) {
+        this.ringTier = Math.max(this.ringTier, tier);
+        this._refreshGrantedSkills();
     }
 
     // (Hire a Lion) Spawn a temporary ally on a free tile beside the player. It
@@ -4349,18 +4362,12 @@ class Game {
                 return;
             }
         }
-        // SKILLS body → tap a learned chip to slot / unslot it (loadout edit).
-        // Reads the SAME chips the renderer draws, so the tap can't drift.
+        // SKILLS body → the two-hands ring loadout. The old learned/equipped-chip
+        // hit-test (and _equipSkill/_unequipSkill) was removed with the skills
+        // store in Task 3; there is nothing to slot here until the hands UI lands.
+        // TODO(Task 5): rewire socket taps to _slotRing/_unslotRing once
+        // deviceSkillsLayout returns hand sockets.
         if (this._deviceTab === 'skills') {
-            const { chips } = deviceSkillsLayout(deviceBodyRect(), this);
-            for (const c of chips) {
-                if (!this._pointInRect(pt, c)) continue;
-                if (c.slotted) this._unequipSkill(c.id, c.type);
-                else           this._equipSkill(c.id, c.type);
-                audio.playSfx('menu-tick');
-                this._render();
-                return;
-            }
             return;
         }
         // GEAR body → tap a filled plate to unequip (the weapon plate is inert).
