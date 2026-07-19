@@ -1,6 +1,14 @@
-All feature planning and development follows the 4-gate pipeline defined in GAME_STUDIO_PLAN.md. Read it before starting any feature work.
-Always develop on the dev branch.
-Always plan on the plan branch.
+Feature work is *guided* by the 4-gate pipeline in GAME_STUDIO_PLAN.md (Research → Design →
+Development → Polish). Treat it as a checklist that catches real mistakes, not a ceremony to
+perform — scale it to the size of the change. It exists to facilitate development, not hinder it.
+
+**Branches:** develop on `dev`. Specs and plans live in `plans/*.md` on `dev` as well, committed
+beside the code they describe — that is where every recent spec actually lives. (The legacy `plan`
+branch is badly diverged and is no longer the planning surface; don't write new plans there.)
+Feature branches remain the norm for substantial work, and Caelan makes the merge-to-`dev` call.
+
+**What survives the session is what got committed.** Any decision worth keeping goes into a file
+before the conversation ends — the repo is the source of truth, not the chat history.
 
 ## Branch & merge hygiene — keep merge conflicts small
 
