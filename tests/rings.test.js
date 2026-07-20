@@ -6,6 +6,7 @@ import {
     unlockedFingers, unlockedSlots, adjacentPairs,
     findFusion, resolveAdjacencies, slottedActives, aggregatePassives,
     slotRing, unslotRing, acquireRing, sanitizeSlots,
+    mergeKnown, isActive,   // (ring Task 5) relocated here from the retired skills.js
 } from '../game/rings.js';
 
 // A tiny fixture roster + fusion table.
@@ -160,5 +161,30 @@ describe('sanitizeSlots', () => {
         const clean = sanitizeSlots(dirty, owned, 1);
         assert.deepEqual(clean, { 'left:ring': 'rat' });               // not counted twice
         assert.deepEqual(aggregatePassives(clean, get), { evasion: 5 }); // +5, never +10
+    });
+});
+
+// ── Skill-merge helpers (relocated from the retired skills.js, ring Task 5) ────
+// These two drive hasSpell/hasTrick (main.js). Their only unit tests lived in the
+// deleted skills.test.js; ported here so the merge + suppression-aware read stay
+// covered now that skills.js is gone.
+describe('mergeKnown', () => {
+    test('unions base, ring actives, and gear with no dupes, base first', () => {
+        assert.deepEqual(mergeKnown(['a', 'b'], ['b', 'c'], ['c', 'd']), ['a', 'b', 'c', 'd']);
+    });
+    test('empty ring actives + gear returns the base unchanged', () => {
+        assert.deepEqual(mergeKnown(['a', 'b'], [], []), ['a', 'b']);
+    });
+});
+
+describe('isActive', () => {
+    test('true when present and not suppressed', () => {
+        assert.equal(isActive(['a', 'b'], new Set(), 'a'), true);
+    });
+    test('false when suppressed', () => {
+        assert.equal(isActive(['a', 'b'], new Set(['a']), 'a'), false);
+    });
+    test('false when absent', () => {
+        assert.equal(isActive(['a'], new Set(), 'z'), false);
     });
 });

@@ -65,6 +65,16 @@ export const ROOT = { key: 'menu', label: 'MENU', children: [
     // Hire a Lion — a self-target summon (no aim); granted by the Lion Whip.
     { key: 'hirelion', label: 'Hire Lire', trickId: 'hire_lion', aimType: 'none', resolver: 'castTrick',
       available: (g) => (g.hasTrick ? g.hasTrick('hire_lion') : (g.grantedTricks || []).includes('hire_lion')) && (g.gold || 0) >= (TRICKS.hire_lion ? TRICKS.hire_lion.gpCost : 0) },
+    // (Remembrance Rings) Ring/fusion tricks — siblings of the Armory tricks,
+    // surfaced the same static-node way (gated on grantedTricks), so slotting a
+    // ring at the SKILLS hands actually changes the wheel. Rat Form is a self
+    // transform (Rat Ring); Ember Rat is a fire burst (Rat+Fire fusion). They
+    // appear only while the granting ring(s) are slotted — an empty-hands wheel
+    // is unchanged. gpCost feeds the gold gate (Rat Form is free).
+    { key: 'ratform', label: 'Rat Form', trickId: 'rat_form', aimType: 'none', resolver: 'castTrick',
+      available: (g) => (g.hasTrick ? g.hasTrick('rat_form') : (g.grantedTricks || []).includes('rat_form')) && (g.gold || 0) >= (TRICKS.rat_form ? TRICKS.rat_form.gpCost : 0) },
+    { key: 'emberrat', label: 'Ember Rat', trickId: 'ember_rat', aimType: 'reticle', resolver: 'castTrick',
+      available: (g) => (g.hasTrick ? g.hasTrick('ember_rat') : (g.grantedTricks || []).includes('ember_rat')) && (g.gold || 0) >= (TRICKS.ember_rat ? TRICKS.ember_rat.gpCost : 0) },
     // Flight (evasion) sub-wheel — kept from dev's two-wheels layout (spec §6).
     { key: 'flight', label: 'Flight', color: '#cba43c', text: '#2a1f06', children: [
       { key: 'run',  label: 'Run',  aimType: 'adjacent', resolver: 'run',  available: always },

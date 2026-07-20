@@ -9,6 +9,11 @@
 //
 // All values are in the fixed 608x608 internal canvas coordinate space.
 
+// (ring Task 5) rings.js is a PURE slot model (no game/DOM deps), so importing it
+// keeps this module dependency-light while letting the hands geometry derive from
+// the one source of truth for the unlock ladder + adjacency.
+import { unlockedSlots, adjacentPairs, HANDS } from './rings.js';
+
 export const CANVAS_INTERNAL_PX = 608;   // mirrors data.js CANVAS_PX
 export const HIT_SLOP = 6;               // tap-zone expansion (Apple 44pt min target)
 
@@ -203,35 +208,68 @@ export function deviceEquipLayout(bodyRect) {
     return { figure: map(EQUIP_FIGURE_RECT), slots: EQUIP_SLOT_RECTS.map(map) };
 }
 
-// (Ring builds) The SKILLS tab body — two rows (tricks, then spells) of learned
-// skills as tappable chips. Each chip carries { id, type, slotted } so the
-// renderer styles it and _tapDevice toggles it; chips wrap within the body
-// width. Pure geometry — the renderer resolves display names + slot caps.
-// renderer._drawDeviceSkills (draw) and main._tapDevice (hit-test) share this
-// one helper so the chips and their tap zones can't drift.
+// (Remembrance Rings, Task 5) The SKILLS tab body IS THE HANDS — two hands split
+// the body left/right, five fingers fan across each (thumbs facing inward), tips
+// staggered anatomically. A socket sits at every UNLOCKED finger's tip; unrevealed
+// fingers are returned bare (socket:null) so nothing hints they exist. Links join
+// within-hand adjacent unlocked sockets (the fusion/resonance seams).
+//
+// Returns:
+//   hands:   [{ hand, label, palmX, palmW, palmY, fingers:[{ finger, key, cx,
+//                tipY, palmY, unlocked, ringId, socket }] }]   — for the silhouette
+//   sockets: [{ key, hand, finger, x, y, w, h, ringId }]        — UNLOCKED only; the
+//                                                                 shared draw+hit-test contract
+//   links:   [{ a, b, ax, ay, bx, by }]                         — renderer marks fusible
+//
+// renderer._drawDeviceSkills (draw) and main._tapDevice (hit-test) read the SAME
+// `sockets`, so a ring's tap zone can never drift from its drawn well. Fusibility
+// is display-only, so the renderer computes it (keeps this module content-free).
 export function deviceSkillsLayout(bodyRect, game) {
-    const pad = 8, chipW = 108, chipH = 26, gap = 8, headerH = 22, rowGap = 16;
-    const x0 = bodyRect.x + pad;
-    const perRow = Math.max(1, Math.floor((bodyRect.w - pad * 2 + gap) / (chipW + gap)));
-    const meta = [
-        { type: 'trick', label: 'TRICKS', pool: [...(game.learnedTricks || [])], eq: game.equippedTricks || [] },
-        { type: 'spell', label: 'SPELLS', pool: [...(game.learnedSpells || [])], eq: game.equippedSpells || [] },
-    ];
-    const rows = [], chips = [];
-    let y = bodyRect.y + 6;
-    for (const m of meta) {
-        const gridTop = y + headerH;
-        m.pool.forEach((id, i) => {
-            chips.push({
-                id, type: m.type, slotted: m.eq.includes(id),
-                x: x0 + (i % perRow) * (chipW + gap),
-                y: gridTop + Math.floor(i / perRow) * (chipH + 6),
-                w: chipW, h: chipH,
-            });
+    const tier = (game && game.ringTier) || 0;
+    const unlockedKeys = new Set(unlockedSlots(tier).map(s => s.key));
+    const ringOf = (key) => (game && game.ringSlots && game.ringSlots[key]) || null;
+
+    const socketW = 40, socketH = 34;
+    const handW   = bodyRect.w / 2;
+    const palmY   = bodyRect.y + bodyRect.h - 70;   // baseline the fingers rise from
+    const reach   = bodyRect.h - 190;               // the longest finger's rise above the palm
+
+    // Relative tip height per finger (anatomical stagger) and the L→R draw order
+    // per hand — thumbs face inward so the two hands read as a mirrored pair.
+    const REACH = { thumb: 0.42, index: 0.80, middle: 1.0, ring: 0.86, pinky: 0.58 };
+    const orderFor = (hand) => hand === 'left'
+        ? ['thumb', 'index', 'middle', 'ring', 'pinky']
+        : ['pinky', 'ring', 'middle', 'index', 'thumb'];
+
+    const socketByKey = {};
+    const hands = HANDS.map((hand, hi) => {
+        const originX = bodyRect.x + hi * handW;
+        const order = orderFor(hand);
+        const slotW = handW / (order.length + 1);   // even spread with a slotW margin each side
+        const fingers = order.map((finger, fi) => {
+            const cx = originX + slotW * (fi + 1);
+            const tipY = palmY - reach * REACH[finger];
+            const key = `${hand}:${finger}`;
+            const unlocked = unlockedKeys.has(key);
+            const ringId = unlocked ? ringOf(key) : null;
+            const socket = unlocked
+                ? { key, hand, finger, x: cx - socketW / 2, y: tipY - socketH / 2, w: socketW, h: socketH, ringId }
+                : null;
+            if (socket) socketByKey[key] = socket;
+            return { finger, key, cx, tipY, palmY, unlocked, ringId, socket };
         });
-        const nRows = Math.max(1, Math.ceil(m.pool.length / perRow));
-        rows.push({ type: m.type, label: m.label, x: x0, headerY: y, count: m.eq.length, empty: m.pool.length === 0, emptyY: gridTop });
-        y = gridTop + nRows * (chipH + 6) + rowGap;
-    }
-    return { rows, chips };
+        return { hand, label: hand.toUpperCase(), palmX: originX + slotW * 0.6, palmW: handW - slotW * 1.2, palmY, fingers };
+    });
+
+    const sockets = Object.values(socketByKey);
+    const links = adjacentPairs(tier).map(({ a, b }) => {
+        const sa = socketByKey[a], sb = socketByKey[b];
+        return {
+            a, b,
+            ax: sa.x + sa.w / 2, ay: sa.y + sa.h / 2,
+            bx: sb.x + sb.w / 2, by: sb.y + sb.h / 2,
+        };
+    });
+
+    return { hands, sockets, links };
 }

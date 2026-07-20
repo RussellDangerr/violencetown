@@ -152,3 +152,21 @@ export function sanitizeSlots(slots, owned, tier) {
     }
     return out;
 }
+
+// ── Skill-merge helpers (relocated from the retired skills.js, ring Task 5) ────
+// Rings feed the same two outputs the wheel reads (knownSpells / grantedTricks);
+// these two pure functions do the merge + the suppression-aware read, so the one
+// slotting system lives here and skills.js is gone.
+
+// The active list = base ∪ granted-from-rings ∪ gear-granted, de-duped, order
+// stable (base, then ring actives, then gear). Suppression is applied at READ
+// (isActive), never here — so unsuppressing restores a skill by construction.
+export function mergeKnown(base, ringActives, granted) {
+    return [...new Set([...base, ...ringActives, ...granted])];
+}
+
+// A skill can fire iff it's in the merged list AND not currently suppressed
+// (NH-2 `blocked`). `suppressed` is a Set.
+export function isActive(list, suppressed, id) {
+    return list.includes(id) && !suppressed.has(id);
+}

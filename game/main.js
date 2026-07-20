@@ -10,11 +10,11 @@ import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, MAX_STACK } from './data.
 import { ITEMS, itemTier, resolveUse, resolveThrow, tickTempEquips, unequipItem, ownedItemDefs, hasItemDef } from './items.js';
 import { WEAPONS } from './weapons.js';
 import { tickBuffList, BUFF_DEFS } from './buffs.js';
-import { SKILL_SLOTS, mergeKnown, isActive, learnInto, equipSkill, unequipSkill } from './skills.js'; // mergeKnown/isActive drive the ring merge; the rest are legacy skills helpers (skills.js retired in ring Task 5)
 import { RINGS, FUSIONS } from './ring-data.js';
 import {
     unlockedSlots, resolveAdjacencies, slottedActives, aggregatePassives,
     slotRing, unslotRing, acquireRing, sanitizeSlots,
+    mergeKnown, isActive,   // (ring Task 5) skill-merge helpers, relocated from the retired skills.js
 } from './rings.js';
 import { isBoss, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS } from './defeat-scenarios.js';
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
@@ -4553,12 +4553,25 @@ class Game {
                 return;
             }
         }
-        // SKILLS body → the two-hands ring loadout. The old learned/equipped-chip
-        // hit-test (and _equipSkill/_unequipSkill) was removed with the skills
-        // store in Task 3; there is nothing to slot here until the hands UI lands.
-        // TODO(Task 5): rewire socket taps to _slotRing/_unslotRing once
-        // deviceSkillsLayout returns hand sockets.
+        // SKILLS body → the two-hands ring loadout. Tapping a FILLED socket
+        // unslots that ring; tapping an EMPTY unlocked socket cycles the next
+        // owned-but-unslotted ring into it. Reads the SAME sockets deviceSkillsLayout
+        // hands the renderer, so the tap can't drift from the drawn well.
         if (this._deviceTab === 'skills') {
+            const { sockets } = deviceSkillsLayout(deviceBodyRect(), this);
+            for (const s of sockets) {
+                if (!this._pointInRect(pt, s, HIT_SLOP)) continue;
+                if (s.ringId) {
+                    this._unslotRing(s.key);
+                } else {
+                    const slotted = new Set(Object.values(this.ringSlots || {}).filter(Boolean));
+                    const next = [...this.ownedRings].find(id => !slotted.has(id));
+                    if (next) this._slotRing(s.key, next);
+                }
+                audio.playSfx('menu-tick');
+                this._render();
+                return;
+            }
             return;
         }
         // GEAR body → tap a filled plate to unequip (the weapon plate is inert).
