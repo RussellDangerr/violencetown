@@ -9,13 +9,14 @@ import { BitmapFont } from './bitmap-font.js';
 import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, MAX_STACK } from './data.js';
 import { ITEMS, itemTier, resolveUse, resolveThrow, tickTempEquips, unequipItem, ownedItemDefs, hasItemDef } from './items.js';
 import { WEAPONS } from './weapons.js';
-import { tickBuffList } from './buffs.js';
-import { mergeKnown, isActive } from './skills.js'; // (rings) merge/read helpers still live here until Task 5 folds them into rings.js
+import { tickBuffList, BUFF_DEFS } from './buffs.js';
+import { SKILL_SLOTS, mergeKnown, isActive, learnInto, equipSkill, unequipSkill } from './skills.js'; // mergeKnown/isActive drive the ring merge; the rest are legacy skills helpers (skills.js retired in ring Task 5)
 import { RINGS, FUSIONS } from './ring-data.js';
 import {
     unlockedSlots, resolveAdjacencies, slottedActives, aggregatePassives,
     slotRing, unslotRing, acquireRing, sanitizeSlots,
 } from './rings.js';
+import { isBoss, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS } from './defeat-scenarios.js';
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
 import { attack, formatDamageNumber } from './combat.js';
@@ -175,6 +176,7 @@ class Game {
         this.ringMods         = {};          // aggregate passives, recomputed by _refreshGrantedSkills
         this._lastHitTarget = null;   // (fear) id of the enemy the last Melee-Hit struck
         this._ratFormTurns = 0;        // (Rat Ring) turns left folded into a rat; while >0 the player can enter GRATE tiles
+        this._lastDefeatedBy = null;   // the enemy or {cause} that last damaged the player — read by _die
         this.extraMoves  = 0; // future: Goo, abilities, etc.
         this.facing      = 'down'; // 'down' | 'left' | 'right' | 'up'
 
@@ -3534,7 +3536,7 @@ class Game {
     _containerStock(container) {
         return (container.contents || [])
             .map(e => (typeof e === 'string' ? e : e && e.type))
-            .filter(id => id && ITEMS[id]);
+            .filter(id => id && this._resolveItemDef(id));   // ITEMS + WEAPONS (a robbery stash may hold either)
     }
 
     // ── Combat ───────────────────────────────────────────────────────────────
@@ -3891,7 +3893,8 @@ class Game {
         return true;
     }
 
-    applyDamageToPlayer(rawDamage) {
+    applyDamageToPlayer(rawDamage, attacker = null) {
+        if (attacker) this._lastDefeatedBy = attacker;
         let dmg = rawDamage;
         if (this.hasBuff('guard')) dmg = Math.max(1, Math.floor(dmg / 2));
         dmg = Math.max(1, dmg - this._playerArmor());   // worn armor soaks the hit (min 1 always lands)
@@ -3975,8 +3978,142 @@ class Game {
         this.state = STATE.DEAD;
         audio.playSfx('death'); // [audio] death sting
         this._flash('rgba(255, 0, 0, 0.4)'); // [settings] reduce-motion aware (wraps renderer.flash)
-        this._log('[You died — respawning...]');
-        setTimeout(() => this._respawn(), 500);
+        this._log('[You go down...]');
+        setTimeout(() => this._resolveDefeat(), 500);
+    }
+
+    _resolveDefeat() {
+        const by = this._lastDefeatedBy;
+        this._lastDefeatedBy = null;
+        // Boss (Wererat) → reset the encounter and retry; no scenario, no loss.
+        if (isBoss(by)) { this._runBossRetry(by); return; }
+        // Otherwise pick a scenario, weighted by (zone × who-beat-you × state).
+        // Task 3 swaps the runner stub for the full template; for now the generic
+        // fallback delegates to _respawn so ordinary defeats are unchanged.
+        const ctx = {
+            zone: this.map && (this.map.zoneName || this.map.url),
+            by: (by && by.entity) ? by : null,       // an Enemy has .entity; a {cause} does not
+            cause: (by && by.cause) || 'unknown',
+            quest: this.questEngine && this.questEngine.state,
+        };
+        const pick = pickScenario(ctx, DEFEAT_SCENARIOS, () => this.rng.float());
+        this._runScenario(pick, ctx);
+    }
+
+    // Run a scenario's declarative consequence. The safe floor (quest items +
+    // equipped weapon + essential) is NEVER touched — only the at-risk pool.
+    _runScenario(pick, _ctx) {
+        const c = (pick && pick.consequence) || {};
+        const cell = this._resolveWakeCell(c.wakeAt);          // 1. wake location
+        this.playerX = cell.x; this.playerY = cell.y;
+        this.playerHp = Math.max(1, Math.round(this.playerMaxHp * (c.hp ?? 0.5)));  // 2. vitals
+        this.playerMp = this.playerMaxMp;
+        this.buffs = [];                                       // clean slate (matches _respawn) — no DoT carries past the defeat
+        if (c.timeSkip) this._skipTime(c.timeSkip);            // 3. time
+        if (c.status) this.addBuff(c.status, (BUFF_DEFS[c.status] && BUFF_DEFS[c.status].name) || c.status, 6, 'debuff'); // 4. status
+        if (c.take) this._applyTake(c.take);                   // 5. taken
+        if (c.gift && Array.isArray(c.gift.items)) for (const id of c.gift.items) { const gd = this._resolveItemDef(id); if (gd && !this._addToInventory(gd)) this._log('[No room — you leave it behind.]'); } // 6. given (guard unknown ids + full bag)
+        if (c.gift && c.gift.heal) this.playerHp = this.playerMaxHp;
+        this._pendingTransition = null;                        // 7. de-aggro + resume (mirror _respawn's tail)
+        for (const e of this.enemies) {
+            if (!e.entity.isAlive() || e._ally) continue;
+            if (e.state === 'chasing') e.state = 'idle';
+            e._intruder = false; e._emergeDelay = 0;
+        }
+        this.state = STATE.IDLE;
+        if (c.log) this._log(c.log, 'transition');
+        this._render();
+        this._resumeHeldWalk();
+        this.autosave({ force: true });
+    }
+
+    // Resolve a wakeAt spec to a walkable cell. { spot:{x,y} } → that tile if
+    // walkable; missing/unknown → _safeRespawnCell (zone spawn).
+    _resolveWakeCell(wakeAt) {
+        if (wakeAt && wakeAt.spot && typeof wakeAt.spot === 'object') {
+            if (this.map.isWalkable(wakeAt.spot.x, wakeAt.spot.y)) return wakeAt.spot;
+            console.warn('[defeat] wake spot not walkable; falling back to spawn:', wakeAt.spot);
+        }
+        return this._safeRespawnCell();
+    }
+
+    // Advance the day/night clock a coarse amount (a scuffle vs. to-morning).
+    _skipTime(kind) {
+        const beats = kind === 'morning' ? 40 : kind === 'hours' ? 20 : 8;
+        for (let i = 0; i < beats; i++) this._advanceDayClock();
+        this.turn += beats;
+    }
+
+    // Apply a take-rule to the at-risk pool. The safe floor is never in `atRisk`.
+    _applyTake(take) {
+        const weapon = this.equipment && this.equipment.weapon;
+        const { atRisk } = partitionInventory(this.inventory, weapon);
+        const taken = matchTake(take, atRisk);
+        let takenGold = 0;
+        if (take.gold) { takenGold = Math.floor((this.gold || 0) * take.gold); this.gold -= takenGold; }
+        for (const e of taken) this.inventory[e.i] = null;
+        // A recoverable robbery drops the taken ITEMS into a stash the player can
+        // reclaim (free) by prying it open. Gold taken is a non-recoverable
+        // mugging for now (gold-in-stash is a documented follow-up).
+        if (take.recoverable && taken.length) {
+            this._spawnStash(take.stashAt, taken.flatMap(e => Array(Math.max(1, e.count | 0)).fill(e.itemDef.id)), takenGold);
+        }
+    }
+
+    // Spawn a stash chest of recoverable loot at a reachable tile near `stashAt`.
+    // One chest holds all the taken item ids; the player reclaims via _openContainer
+    // (free take-only). Persists like any container (save.js serializes containers).
+    _spawnStash(stashAt, itemIds, _gold) {
+        if (!itemIds || !itemIds.length) return;
+        const near = (stashAt && stashAt.spot && typeof stashAt.spot === 'object')
+            ? stashAt.spot : { x: this.playerX, y: this.playerY };
+        const cell = this._stashTile(near) || this._safeRespawnCell();
+        this.containers.push({
+            id: `stash_${this.turn}_${Math.round(cell.x)}_${Math.round(cell.y)}`,
+            type: 'chest',
+            x: cell.x, y: cell.y,
+            contents: itemIds.slice(),
+        });
+    }
+
+    // Nearest walkable, unoccupied tile to `near` (outward ring scan, radius ≤ 6).
+    // Avoids containers, live enemies, ground items, and the player's own tile.
+    _stashTile(near) {
+        const occupied = (x, y) =>
+            this.containers.some(c => c.x === x && c.y === y) ||
+            (this.groundItems || []).some(g => g.x === x && g.y === y) ||
+            this.enemies.some(e => e.entity.isAlive() && e.x === x && e.y === y) ||
+            (this.playerX === x && this.playerY === y);
+        const ok = (x, y) => this.map.isInBounds(x, y) && this.map.isWalkable(x, y) && !occupied(x, y);
+        if (ok(near.x, near.y)) return { x: near.x, y: near.y };
+        for (let r = 1; r <= 6; r++) {
+            for (let dx = -r; dx <= r; dx++) for (let dy = -r; dy <= r; dy++) {
+                if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;   // ring perimeter only
+                const x = near.x + dx, y = near.y + dy;
+                if (ok(x, y)) return { x, y };
+            }
+        }
+        return null;
+    }
+
+    _runBossRetry(boss) {
+        if (boss && boss.entity) boss.entity.hp = boss.entity.maxHp;   // reset the boss to full
+        const cell = this._safeRespawnCell();
+        this.playerX = cell.x; this.playerY = cell.y;
+        this.playerHp = this.playerMaxHp; this.playerMp = this.playerMaxMp;
+        this.buffs = [];                          // clean slate (matches _respawn)
+        this._pendingTransition = null;           // don't ghost-load a queued transition after the retry
+        this.addBuff('rattled', 'Rattled', 6, 'debuff');
+        for (const e of this.enemies) {                 // de-aggro so the retry starts calm
+            if (!e.entity.isAlive() || e._ally) continue;
+            if (e.state === 'chasing') e.state = 'idle';
+            e._intruder = false; e._emergeDelay = 0;
+        }
+        this.state = STATE.IDLE;
+        this._log('[Down but not out. Regroup and finish it.]', 'transition');
+        this._render();
+        this._resumeHeldWalk();
+        this.autosave({ force: true });
     }
 
     _respawn() {

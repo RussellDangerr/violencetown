@@ -33,6 +33,7 @@ export const BUFF_DEFS = {
         onTick(owner, game) {
             if (game._hasSludgeImmunity && game._hasSludgeImmunity()) return;
             game.playerHp -= SLUDGE_DOT;
+            if (game.playerHp <= 0) game._lastDefeatedBy = { cause: 'sludge' };   // only claim the defeat when it's the killing tick
             game._log(`[Sludge — ${SLUDGE_DOT} damage]`);
         },
     },
@@ -46,6 +47,13 @@ export const BUFF_DEFS = {
             game._log(`[Recover — healed ${game.playerHp - before} HP]`);
         },
     },
+
+    // Post-defeat flavor statuses (Outward-style). Temporary + cosmetic — no
+    // per-turn effect; tickBuffList decrements + drops them like any buff. They
+    // read the defeat on the HUD, never a permanent stat cut.
+    rattled: { name: 'Rattled' },
+    hunched: { name: 'Hunched' },
+    sludged: { name: 'Sludged' },
 };
 
 // Advance a buff list one turn: fire each still-active buff's onTick, decrement,

@@ -32,6 +32,7 @@ import { TRICKS } from './tricks.js';                                        // 
 import { SKILL_SLOTS } from './skills.js';                                   // (ring builds) loadout capacity per ring
 import { WORLD_ZONES, overworldZone, connectorPairs } from './world-map.js'; // (Phase 4) rudimentary world map
 import { hasLineOfSight } from './pathing.js';                               // (aggro overlay) READ-ONLY: same Bresenham the chase AI uses
+import { isSafe } from './defeat-scenarios.js';   // (defeat legibility) mark safe-floor items
 import { buyPrice, sellPrice, bribeStepCost, mood, canTrade, BRIBE_STEP } from './trade.js'; // (trade slice 1) pricing + mood smiley
 import * as Settings from './settings.js'; // (combat-feel-pass) reduce-motion for hit-splats (namespace import — see main.js)
 
@@ -1844,6 +1845,9 @@ export class Renderer {
                     }
                 }
 
+                // (defeat legibility) mark safe-floor items — kept through a defeat.
+                if (isSafe(stack.itemDef, game.equipment && game.equipment.weapon)) this._drawSafeBadge(ctx, sx + sw, sy);
+
                 // Stack count (bottom-right)
                 if (stack.count > 1) {
                     // Dark backing for readability
@@ -1857,6 +1861,8 @@ export class Renderer {
                 }
             }
         }
+        // (defeat legibility) tell the player what survives a defeat (device only)
+        if (hosted && this.font) this.font.drawText(ctx, 'gold corner = kept if defeated', ox, oy + sh + 8, { color: UI.dim, scale: 1 });
     }
 
     // ── Item Overlay ─────────────────────────────────────────────────────────
@@ -3014,6 +3020,27 @@ export class Renderer {
         this.font.drawText(ctx, '1-9 / CLICK  ·  W/S move  ·  E / X / tap-outside leaves', R.x + R.w / 2, R.y + R.h - 15, { color: UI.dim, scale: S_META, align: 'center' });
     }
 
+    // (defeat legibility) A gold "dog-ear" in a slot/plate's top-right corner,
+    // marking an item as safe-floor — kept through any defeat. (rx, ry) is the
+    // slot's top-right corner. Shared by the ITEMS hotbar + the GEAR plates.
+    _drawSafeBadge(ctx, rx, ry) {
+        ctx.save();
+        ctx.fillStyle = UI.gold;
+        ctx.beginPath();
+        ctx.moveTo(rx, ry);
+        ctx.lineTo(rx - 9, ry);
+        ctx.lineTo(rx, ry + 9);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#00000088';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(rx - 9, ry);
+        ctx.lineTo(rx, ry + 9);
+        ctx.stroke();
+        ctx.restore();
+    }
+
     // ── Equipment screen (Stage 3 — read-only Vitruvian dress-up) ────────────
     // A front-facing mannequin ringed by 6 body-zone slot plates. Reads
     // game.equipment (weapon set, all armor slots null today → EMPTY plates).
@@ -3085,6 +3112,9 @@ export class Renderer {
         for (const slot of EQ_SLOTS) {
             const s = slot;
             drawInset(ctx, s.x, s.y, s.w, s.h);
+            // (defeat legibility) badge the safe-floor gear (the equipped weapon).
+            const _eqItem = game.equipment[s.key];
+            if (_eqItem && isSafe(_eqItem, game.equipment.weapon)) this._drawSafeBadge(ctx, s.x + s.w, s.y);
 
             // Connector line from the plate toward the figure's matching zone.
             const zx = F.x + (s.zone?.fx ?? 0.5) * F.w;
