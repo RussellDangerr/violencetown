@@ -129,6 +129,16 @@ const SLUDGE_DURATION = 3;
 const DIALOGUE_HOSTILE_AT = -40;   // (Step 4) disposition at/below which a conversation turns into a fight
 const MP_REGEN = 2;                // MP recovered per world-turn — FIGHT → Magic spells spend it
 
+// (Remembrance Rings) The two HIDDEN tier gates — the only progression gates in
+// the game NOT earned by beating something. Both tunable, kept deliberately
+// not-too-late (spec). Thumb (tier 3) = "cool enough": the highest disposition
+// any NPC has ever shown you (scale -100..100; ally-flip is at 30). Pinky
+// (tier 4) = "fancy enough": gold on hand. RING_IGNITE_DAMAGE is the small flat
+// burn a Fire-Ring-style on-hit trigger deals (cf. SLUDGE_DOT = 5).
+const RING_THUMB_DISPOSITION = 70;   // above EVERY authored NPC baseline (the friendliest, Puck, starts at 60) so the thumb reveal must be EARNED by raising someone, not tripped just by walking up to a cheerful vendor
+const RING_PINKY_GP          = 500;
+const RING_IGNITE_DAMAGE     = 6;
+
 // ── Radial menu (Omnitrix-style combat wheel) ───────────────────────────────
 
 // ── Canvas hit-test geometry ─────────────────────────────────────────────────
@@ -174,6 +184,7 @@ class Game {
         this.discoveredFusions = new Set();
         this.suppressedSkills = new Set();   // kept: still gates hasSpell/hasTrick at READ
         this.ringMods         = {};          // aggregate passives, recomputed by _refreshGrantedSkills
+        this._peakDisposition = 0;           // (rings) highest disposition any NPC has ever shown — monotonic; gates the hidden thumb tier
         this._lastHitTarget = null;   // (fear) id of the enemy the last Melee-Hit struck
         this._ratFormTurns = 0;        // (Rat Ring) turns left folded into a rat; while >0 the player can enter GRATE tiles
         this._lastDefeatedBy = null;   // the enemy or {cause} that last damaged the player — read by _die
@@ -3259,6 +3270,10 @@ class Game {
             this.playerMp = Math.min(this.playerMaxMp, this.playerMp + MP_REGEN);
         }
 
+        // (Remembrance Rings) The two hidden tiers unlock on social states (peak
+        // disposition, gold) rather than kills — checked every beat, monotonic.
+        this._checkRingUnlocks();
+
         // Transition?
         if (this._pendingTransition) {
             const t = this._pendingTransition;
@@ -3543,7 +3558,19 @@ class Game {
 
     combatAttack(enemyObj, damage, opts = {}) {
         const playerEntity = { name: '[Player]', isDead: () => false };
-        const result = attack(playerEntity, enemyObj.entity, damage);
+
+        // (Rings) Passive damage modifiers fold into the swing before it lands.
+        // A `<type>Damage` passive (fireDamage today, any future coldDamage /
+        // energyDamage) is a PERCENT bonus applied only when the swing's damage
+        // type matches (opts.type) — type-generic so a new element needs no code
+        // here, only data. armor/evasion passives read on the DEFENDER side
+        // (_playerArmor / a future dodge path), not here.
+        let dmg = damage;
+        const mods = this.ringMods || {};
+        const typeBonus = opts.type && mods[opts.type + 'Damage'];
+        if (typeBonus) dmg = Math.round(dmg * (1 + typeBonus / 100));
+
+        const result = attack(playerEntity, enemyObj.entity, dmg);
 
         // (AGGRO behavior bands) Friendly fire — hitting your own bribed ally
         // re-flips them to hostile. The blow still lands (below); they just turn
@@ -3600,6 +3627,21 @@ class Game {
             // (combat-feel-pass) The per-hit onomatopoeia ("POW!") is retired —
             // the typed splat carries the feedback now. Words are reserved for
             // milestone beats like the K.O. above.
+        }
+
+        // (Rings) On-hit triggers (e.g. Fire Ring → ignite). Ghost/elemental
+        // framing only — never gore/cruelty (content rule). Fires only on a
+        // target that survived the main hit (its own death was already handled
+        // above), using the seeded RNG so the proc is deterministic — never
+        // Math.random (determinism rule). A trigger that lands the killing blow
+        // routes its own _handleEnemyDeath inside _applyTrigger.
+        if (enemyObj.entity.isAlive()) {
+            for (const key of Object.keys(this.ringSlots)) {
+                const r = RINGS[this.ringSlots[key]];
+                if (r && r.trigger && r.trigger.on === 'hit' && this.rng.float() < (r.trigger.chance ?? 1)) {
+                    this._applyTrigger(r.trigger, enemyObj);
+                }
+            }
         }
 
         return formatDamageNumber(result);
@@ -3770,6 +3812,8 @@ class Game {
             const it = eq[key];
             if (it && it.armor) total += it.armor;
         }
+        // (Rings) A slotted ring's `armor` passive soaks alongside worn armor.
+        total += (this.ringMods && this.ringMods.armor) || 0;
         return total;
     }
 
@@ -3834,6 +3878,57 @@ class Game {
     _setRingTier(tier) {
         this.ringTier = Math.max(this.ringTier, tier);
         this._refreshGrantedSkills();
+    }
+
+    // (Remembrance Rings) The two HIDDEN tiers unlock on SOCIAL states, not kills
+    // — the reveal (spec). Thumb (tier 3) on the highest disposition any NPC has
+    // ever shown ("cool enough"); pinky (tier 4) on gold on hand ("fancy
+    // enough"). Called every world beat. The peak is monotonic (poll the current
+    // best each beat and keep the max), so decay never re-locks a revealed tier.
+    // Nothing here — no log, no UI, no save field — narrates a tier before it
+    // fires; the hand simply gains a socket on a finger that was always drawn bare.
+    _checkRingUnlocks() {
+        let best = this._peakDisposition || 0;
+        for (const e of this.enemies) {
+            if (e && e.disposition != null && e.disposition > best) best = e.disposition;
+        }
+        this._peakDisposition = best;
+
+        // The two gates read INDEPENDENT axes (disposition for the thumb, gold for
+        // the pinky), but the ladder is anatomically CONTIGUOUS — tier 4 can't
+        // reveal a pinky without also revealing the thumb (tier 3). So the gold
+        // gate FORCES the thumb reveal when disposition hasn't earned it yet, and
+        // we emit the thumb's own line explicitly either way: a gold-first player
+        // must never get a socket that no log ever narrated (Risk 3 — the reveal
+        // must neither leak early nor land silently). Each gate stays a sufficient
+        // condition for its own finger, in ladder order.
+        const dispReady = this._peakDisposition >= RING_THUMB_DISPOSITION;
+        const goldReady = (this.gold || 0) >= RING_PINKY_GP;
+
+        if (this.ringTier < 3 && (dispReady || goldReady)) {
+            this._setRingTier(3);
+            this._log('[Your hands feel… readier. Your thumbs, even.]', 'transition');
+        }
+        if (this.ringTier < 4 && goldReady) {
+            this._setRingTier(4);
+            this._log('[Fancy enough, now, for a pinky ring.]', 'transition');
+        }
+    }
+
+    // (Remembrance Rings) Resolve a ring's on-hit trigger. Ghost/elemental
+    // framing only (content rule). `ignite` is a one-shot cinder burst — small
+    // flat fire damage on the struck foe, modelled on the sludge DoT's flat tick
+    // rather than a persistent status (keeping the change inside the combat path,
+    // no new buff table entry). If it lands the killing blow it routes the shared
+    // death beat. Extend here as more triggers are authored.
+    _applyTrigger(trigger, enemyObj) {
+        if (!trigger || !enemyObj || !enemyObj.entity || !enemyObj.entity.isAlive()) return;
+        if (trigger.effect === 'ignite') {
+            const dealt = enemyObj.entity.takeDamage(RING_IGNITE_DAMAGE);
+            this._spawnHitSplat(enemyObj.x, enemyObj.y, `-${dealt}`, 'fire', { omni: true });
+            this._log('[Cinders catch — it burns.]', 'combat');
+            if (enemyObj.entity.isDead()) this._handleEnemyDeath(enemyObj);
+        }
     }
 
     // (Hire a Lion) Spawn a temporary ally on a free tile beside the player. It
