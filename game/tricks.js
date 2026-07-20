@@ -27,4 +27,20 @@ export const TRICKS = {
         id: 'hire_lion', name: 'Hire Lire', gpCost: 12,
         summon: 'lion', summonName: 'Lire', summonTurns: 2, summonHp: 30, summonDamage: 12,
     },
+    // Rat Form — a braid of wererat fur (the Rat Ring). Fold down into a rat for
+    // a few turns: small enough to slip through the sewer grates. No aim, no
+    // damage, no cost — a utility transform. `transform` routes it to the
+    // rat-form branch in castTrick (main.js); the countdown ticks in _advanceWorld.
+    rat_form: {
+        id: 'rat_form', name: 'Rat Form', gpCost: 0,
+        transform: 'rat', transformTurns: 3,
+    },
+    // Ember Rat — the Rat Ring beside a Fire Ring. Conjure a rat of cinder and
+    // grudge and send it scurrying into a knot of foes, where it bursts into
+    // flame. A ghost/elemental, NEVER a live animal (content rule). Mechanically
+    // just a fire burst — reuses the same damage/aoe path as the other Tricks.
+    ember_rat: {
+        id: 'ember_rat', name: 'Ember Rat', gpCost: 4, damage: 14, damageType: 'fire', range: 5,
+        aoe: { shape: 'burst', radius: 1 },
+    },
 };

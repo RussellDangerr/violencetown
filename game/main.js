@@ -174,6 +174,7 @@ class Game {
         this.suppressedSkills = new Set();   // kept: still gates hasSpell/hasTrick at READ
         this.ringMods         = {};          // aggregate passives, recomputed by _refreshGrantedSkills
         this._lastHitTarget = null;   // (fear) id of the enemy the last Melee-Hit struck
+        this._ratFormTurns = 0;        // (Rat Ring) turns left folded into a rat; while >0 the player can enter GRATE tiles
         this.extraMoves  = 0; // future: Goo, abilities, etc.
         this.facing      = 'down'; // 'down' | 'left' | 'right' | 'up'
 
@@ -1955,7 +1956,7 @@ class Game {
         }
 
         // Wall?
-        if (!this.map.isWalkable(nx, ny)) { audio.playSfx('bump-wall'); return; } // [audio] thud on wall bump
+        if (!this._canEnter(nx, ny)) { audio.playSfx('bump-wall'); return; } // [audio] thud on wall bump (Rat Form may open a grate)
 
         audio.playSfx('move'); // [audio] footstep on a successful step
         // Animate: DON'T update playerX/playerY yet — wait until animation finishes
@@ -3061,6 +3062,14 @@ class Game {
                 if (!trick) { this._log("[That trick isn't ready yet]"); break; }
                 if ((this.gold ?? 0) < trick.gpCost) { this._log(`[Not enough GP — ${trick.name} needs ${trick.gpCost}g.]`); break; }
                 this.gold = Math.max(0, (this.gold ?? 0) - trick.gpCost);
+                if (trick.transform) {
+                    // Rat Form — fold down into a rat for a few turns (slips
+                    // through grates). No aim/damage; just set the countdown.
+                    this._ratFormTurns = trick.transformTurns || 3;
+                    this._log('[You fold down into a rat. The world goes enormous.]', 'transition');
+                    this._advanceWorld();
+                    break;
+                }
                 if (trick.summon) {
                     // Summon trick (Hire a Lion) — no damage; spawn a temporary ally.
                     this._spawnSummon(trick.summon, trick.summonTurns || 2, trick);
@@ -3163,6 +3172,16 @@ class Game {
 
     // ── World Advance (after any action) ─────────────────────────────────────
 
+    // Player-only movement gate. Rings can open tiles that are globally
+    // unwalkable: while in Rat Form (_ratFormTurns > 0) the player may step onto
+    // GRATE tiles (id 4). This is PLAYER-only — enemies, pathing.js, and the AI
+    // keep calling map.isWalkable directly, so nothing can follow you through the
+    // grate. A non-rat step onto a grate still bumps.
+    _canEnter(x, y) {
+        if (this.map.isWalkable(x, y)) return true;
+        return this._ratFormTurns > 0 && this.map.getTile(x, y) === 4;
+    }
+
     _advanceWorld() {
         this.turn++;
 
@@ -3182,6 +3201,13 @@ class Game {
             const gone = this.enemies.filter(e => e._isSummon && e._summonTurnsLeft <= 0);
             for (const e of gone) this._log(`[${e.type || 'The summon'} slinks back into the crowd.]`);
             if (gone.length) this.enemies = this.enemies.filter(e => !(e._isSummon && e._summonTurnsLeft <= 0));
+        }
+
+        // (Rat Form) the transform lasts a few beats — count it down each world
+        // beat and unfold at zero. Ticks once per committed turn, like the summon.
+        if (this._ratFormTurns > 0) {
+            this._ratFormTurns--;
+            if (this._ratFormTurns === 0) this._log('[You unfold. Human again.]', 'transition');
         }
 
         // Enemies/NPCs may have just begun a one-tile slide (stepEntity). Kick
