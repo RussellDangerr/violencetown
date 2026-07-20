@@ -24,7 +24,7 @@ import {
     TRADE_CELL_W, TRADE_CELL_H, TRADE_COLS, tradeCellRect,
     RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
     EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, closeButtonRect,
-    DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceEquipLayout, deviceSkillsLayout,
+    DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceEquipLayout, deviceRingsLayout,
 } from './layout.js';
 import { ITEMS, itemTier } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
 import { RINGS, FUSIONS } from './ring-data.js';                             // (rings Task 5) SKILLS-tab hands: ring names + fusion spark
@@ -1690,7 +1690,7 @@ export class Renderer {
         else if (active === 'gear')   this._drawEquipmentModal(game, body);
         else if (active === 'quests') this._drawJournalQuestsBody(game, body);
         else if (active === 'map')    this._drawWorldMapBody(game, body, body.y);
-        else if (active === 'skills') this._drawDeviceSkills(game, body);
+        else if (active === 'rings') this._drawDeviceRings(game, body);
 
         this.font.drawText(ctx, '[ ] TABS   ESC CLOSE', CANVAS_PX / 2, R.y + R.h - 12, { color: UI.dim, scale: 1, align: 'center' });
         ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
@@ -1698,13 +1698,13 @@ export class Renderer {
 
     // (Remembrance Rings, Task 5) SKILLS tab → THE HANDS. Two anatomically
     // complete hands are drawn at all times; a socket sits only on an UNLOCKED
-    // finger (deviceSkillsLayout returns socket:null for the rest, so nothing
+    // finger (deviceRingsLayout returns socket:null for the rest, so nothing
     // hints thumb/pinky exist before they're revealed). A spark rides every link
     // whose two adjacent rings have an authored fusion. Tapping a socket
     // (main._tapDevice) slots/unslots — it reads the SAME sockets, so no drift.
-    _drawDeviceSkills(game, bodyRect) {
+    _drawDeviceRings(game, bodyRect) {
         const { ctx } = this;
-        const { hands, links } = deviceSkillsLayout(bodyRect, game);
+        const { hands, links } = deviceRingsLayout(bodyRect, game);
         const strip = (s) => (s || '').replace(/[\[\]]/g, '');
 
         this.font.drawText(ctx, 'THE HANDS', bodyRect.x + bodyRect.w / 2, bodyRect.y - 2, { color: UI.gold, scale: 1, align: 'center' });

@@ -38,7 +38,7 @@ import {
     TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BUYBACK_ORIGIN, TRADE_BRIBE_RECT,
     TRADE_COLS, tradeCellRect,
     EQUIPMENT_MODAL_RECT, EQUIP_SLOT_RECTS,
-    DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceEquipLayout, deviceSkillsLayout,
+    DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceEquipLayout, deviceRingsLayout,
 } from './layout.js';
 import { canTrade, buyPrice, sellPrice, bribeStepCost, BRIBE_STEP, transferGold } from './trade.js'; // pricing + the transaction spine
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
@@ -949,7 +949,7 @@ class Game {
                 if (e.code === 'KeyC') { this._deviceTab = 'gear';   this._render(); return; }
                 if (e.code === 'KeyJ') { this._deviceTab = 'quests'; this._render(); return; }
                 if (e.code === 'KeyM') { this._deviceTab = 'map';    this._render(); return; }
-                if (e.code === 'KeyK') { this._deviceTab = 'skills'; this._render(); return; }
+                if (e.code === 'KeyR') { this._deviceTab = 'rings'; this._render(); return; }
                 if (this._deviceTab === 'quests' && (e.code === 'ArrowUp'   || e.code === 'KeyW')) { this._scrollJournal(1);  return; }
                 if (this._deviceTab === 'quests' && (e.code === 'ArrowDown' || e.code === 'KeyS')) { this._scrollJournal(-1); return; }
                 return;
@@ -4650,10 +4650,10 @@ class Game {
         }
         // SKILLS body → the two-hands ring loadout. Tapping a FILLED socket
         // unslots that ring; tapping an EMPTY unlocked socket cycles the next
-        // owned-but-unslotted ring into it. Reads the SAME sockets deviceSkillsLayout
+        // owned-but-unslotted ring into it. Reads the SAME sockets deviceRingsLayout
         // hands the renderer, so the tap can't drift from the drawn well.
-        if (this._deviceTab === 'skills') {
-            const { sockets } = deviceSkillsLayout(deviceBodyRect(), this);
+        if (this._deviceTab === 'rings') {
+            const { sockets } = deviceRingsLayout(deviceBodyRect(), this);
             for (const s of sockets) {
                 if (!this._pointInRect(pt, s, HIT_SLOP)) continue;
                 if (s.ringId) {

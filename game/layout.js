@@ -164,7 +164,7 @@ export function closeButtonRect(r) {
 // existing draw bodies (ITEMS/GEAR/QUESTS/MAP). Geometry lives here so
 // renderer._drawDevice (draw) and main.js (hit-test) share ONE source of truth.
 export const DEVICE_RECT = { x: 24, y: 44, w: 560, h: 520 };
-export const DEVICE_TABS = ['items', 'gear', 'quests', 'map', 'skills'];
+export const DEVICE_TABS = ['items', 'gear', 'quests', 'map', 'rings'];
 export const DEVICE_TAB_H = 30;                        // tab-strip height
 const DEVICE_TAB_TOP = DEVICE_RECT.y + 38;             // below the title/✕ band (the chip ends at y+36)
 const DEVICE_TAB_PAD = 14;                             // strip inset from the frame sides
@@ -221,10 +221,10 @@ export function deviceEquipLayout(bodyRect) {
 //                                                                 shared draw+hit-test contract
 //   links:   [{ a, b, ax, ay, bx, by }]                         — renderer marks fusible
 //
-// renderer._drawDeviceSkills (draw) and main._tapDevice (hit-test) read the SAME
+// renderer._drawDeviceRings (draw) and main._tapDevice (hit-test) read the SAME
 // `sockets`, so a ring's tap zone can never drift from its drawn well. Fusibility
 // is display-only, so the renderer computes it (keeps this module content-free).
-export function deviceSkillsLayout(bodyRect, game) {
+export function deviceRingsLayout(bodyRect, game) {
     const tier = (game && game.ringTier) || 0;
     const unlockedKeys = new Set(unlockedSlots(tier).map(s => s.key));
     const ringOf = (key) => (game && game.ringSlots && game.ringSlots[key]) || null;
