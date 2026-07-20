@@ -3621,6 +3621,19 @@ class Game {
             this.groundItems.push({ type: 'catalytic_converter', x: enemyObj.x, y: enemyObj.y, def: ITEMS.catalytic_converter });
             this._log('[The Were-Rat drops your cataclysmic converter!]', 'pickup');
         }
+        // (Remembrance Rings) The Were-Rat also leaves a remembrance — a braided
+        // tuft of fur → the Rat Ring (fashioned at Platero). Drop it on a free
+        // adjacent tile so it doesn't stack on the converter; persist it (Task 2).
+        if (enemyObj.tag === 'wererat_boss' && ITEMS.wererat_fur) {
+            let fx = enemyObj.x, fy = enemyObj.y;
+            for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+                const tx = enemyObj.x + dx, ty = enemyObj.y + dy;
+                if (this.map.isWalkable(tx, ty) && !this.groundItems.some(gi => gi.x === tx && gi.y === ty)) { fx = tx; fy = ty; break; }
+            }
+            this._recordDrop('wererat_fur', fx, fy);
+            this.groundItems.push({ type: 'wererat_fur', x: fx, y: fy, def: ITEMS.wererat_fur });
+            this._log('[Among the matted fur, one coarse braided tuft stays warm — a remembrance.]', 'pickup');
+        }
         // Pike guards his climbing rope with his life — take it off his body.
         if (enemyObj.tag === 'pike_boss' && ITEMS.grappling_hook) {
             this._recordDrop('grappling_hook', enemyObj.x, enemyObj.y);
@@ -3636,6 +3649,21 @@ class Game {
             this._grantItem('grappling_hook', '["Deal\'s a deal." Pike coils the big rope into your pack — the grappling hook is yours.]');
         }
         onSewerEnemyKilled(this, enemyObj);
+    }
+
+    // (Remembrance Rings) Platero's craft: consume a remembrance material from
+    // the bag and grant its ring. Wired from Platero's dialogue choice (onPick).
+    // Self-guarding: no material in the bag → nothing is consumed; already own the
+    // ring → the material is kept. Returns true only on a successful fashioning.
+    _fashionRing(materialId, ringId) {
+        if (this.ownedRings.has(ringId)) { this._log('[Platero: "You already wear its like."]'); return false; }
+        const idx = (this.inventory || []).findIndex(s => s && s.itemDef && s.itemDef.id === materialId);
+        if (idx < 0) { this._log('[Platero: "Bring me the material and I\'ll set it into a ring."]'); return false; }
+        this._removeFromSlot(idx);
+        this._acquireRing(ringId);   // logs its own "[You slip on the …]" line
+        this._log('[Platero turns it in the light. It becomes a ring.]', 'transition');
+        this._render();
+        return true;
     }
 
     // Grant an item straight into the bag (quest rewards, dialogue gifts). Emits

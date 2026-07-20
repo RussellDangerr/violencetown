@@ -183,6 +183,22 @@ export const ITEMS = {
         baseValue: 0,
         fallbackColor: '#cc8844',
     },
+    // (Remembrance Rings) Dropped by the Were-Rat boss. A quest item so it can't
+    // be sold / thrown / given / lost; carried to Platero (Downtown) and fashioned
+    // into the Rat Ring. useType 'none' — inert in the bag; Platero's dialogue
+    // (_fashionRing) consumes it.
+    wererat_fur: {
+        id: 'wererat_fur',
+        name: '[Tuft of Wererat Fur]',
+        description: 'A braided tuft that stays blood-warm. Platero could set it into something you\'d wear.',
+        category: 'quest',
+        useType: 'none',
+        consumable: false,
+        questItem: true,
+        tier: 'orange',
+        baseValue: 0,
+        fallbackColor: '#7a5a3a',
+    },
     mystery_meat: {
         id: 'mystery_meat',
         name: '[Mystery Meat]',
