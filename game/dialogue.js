@@ -34,6 +34,21 @@ export const DIALOGUES = {
               reply: '"...Hah. The vermin gnawin\' at my wagon? Put the two of \'em down and the rope\'s yours — free and clear. A deal\'s a deal down here."' },
         ],
     },
+    // (Remembrance Rings) Platero — the Downtown silversmith who fashions a boss
+    // remembrance material into a wearable ring. The "fashion" choice is
+    // repeatable and self-guards through _fashionRing (needs the material in the
+    // bag; won't re-make a ring you already wear), so it's safe to always offer.
+    platero: {
+        name: 'Platero',
+        greeting: '"A silversmith remembers every piece he sets. Bring me something a fight left behind, and I\'ll set it into a ring you can wear."',
+        choices: [
+            { id: 'about', label: 'Ask what he means by "remembrance"', once: true, delta: 3,
+              reply: '"The big ones — the ones that nearly finished you — leave a little of themselves behind. Fur, ash, a tooth. Silver holds a memory better than a mind does. Wear it, and you keep the fight."' },
+            { id: 'fashion_rat', label: 'Have him fashion the wererat fur into a ring', repeatable: true,
+              onPick: (game) => { if (game._fashionRing) game._fashionRing('wererat_fur', 'rat_ring'); },
+              reply: '"Let\'s see what you\'re carrying, then."' },
+        ],
+    },
     bartho: {
         name: 'Bartho',
         greeting: '"...what."',

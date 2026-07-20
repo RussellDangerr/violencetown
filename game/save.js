@@ -14,7 +14,7 @@
 import { Enemy } from './enemies.js';
 import { clamp } from './utils.js';
 import { INVENTORY_SIZE } from './data.js';
-import { SKILL_SLOTS, sanitizeEquipped } from './skills.js';
+import { sanitizeSlots } from './rings.js';
 
 export const SAVE_VERSION = 1;
 const KEY = 'violencetown.save';
@@ -64,10 +64,10 @@ export function serialize(game) {
             facing: game.facing,
             gold: game.gold,
             carFuel: game.carFuel,
-            learnedTricks:  [...(game.learnedTricks  || [])],
-            learnedSpells:  [...(game.learnedSpells  || [])],
-            equippedTricks: [...(game.equippedTricks || [])],
-            equippedSpells: [...(game.equippedSpells || [])],
+            ownedRings:       [...(game.ownedRings || [])],
+            ringSlots:        { ...(game.ringSlots || {}) },
+            ringTier:         game.ringTier || 0,
+            discoveredFusions:[...(game.discoveredFusions || [])],
             equipment: {
                 weapon: idOf(game.equipment.weapon),
                 top: idOf(game.equipment.top),
@@ -90,6 +90,8 @@ export function serialize(game) {
             // Picked-up ground items, so collected items stay gone after reload.
             // Live form is a Set of keys; persist as a plain array.
             collectedItems: game._collectedItems ? [...game._collectedItems] : [],
+            // Runtime ground-drops per map, so dropped items survive zone changes.
+            droppedItems: game._droppedItems || {},
             containers: (game.containers || []).map(c => ({
                 id: c.id, type: c.type, x: c.x, y: c.y, contents: (c.contents || []).slice(),
             })),
@@ -152,6 +154,7 @@ export function migrate(raw) {
     if (!Array.isArray(r.world.enemies)) r.world.enemies = [];
     if (!Array.isArray(r.world.groundItems)) r.world.groundItems = [];
     if (!Array.isArray(r.world.collectedItems)) r.world.collectedItems = [];
+    if (!r.world.droppedItems || typeof r.world.droppedItems !== 'object') r.world.droppedItems = {};
     if (!Array.isArray(r.world.containers)) r.world.containers = [];
     if (r.quest === undefined) r.quest = null;
     if (r.sewerEscape === undefined) r.sewerEscape = null;
@@ -187,12 +190,12 @@ function validate(raw) {
     if (!p.equipment || typeof p.equipment !== 'object') p.equipment = {};
     if (!Array.isArray(p.buffs)) p.buffs = [];
     if (!Array.isArray(p.tempEquips)) p.tempEquips = [];
-    // Ring-builds: coerce to string arrays; equipped ⊆ learned, clamped to cap.
+    // Remembrance Rings: coerce + sanitize (slots ⊆ unlocked ∩ owned).
     const asIds = (a) => (Array.isArray(a) ? a.filter(id => typeof id === 'string') : []);
-    p.learnedTricks  = asIds(p.learnedTricks);
-    p.learnedSpells  = asIds(p.learnedSpells);
-    p.equippedTricks = sanitizeEquipped(p.learnedTricks, asIds(p.equippedTricks), SKILL_SLOTS.trick);
-    p.equippedSpells = sanitizeEquipped(p.learnedSpells, asIds(p.equippedSpells), SKILL_SLOTS.spell);
+    p.ownedRings = asIds(p.ownedRings);
+    p.ringTier   = Number.isInteger(p.ringTier) ? Math.max(0, Math.min(4, p.ringTier)) : 0;
+    p.ringSlots  = sanitizeSlots(p.ringSlots, new Set(p.ownedRings), p.ringTier);
+    p.discoveredFusions = asIds(p.discoveredFusions);
     // collectedItems is a Set of string keys on the live game; drop anything
     // non-string so a malformed save can't poison the lookup.
     const ci = Array.isArray(raw.world?.collectedItems) ? raw.world.collectedItems : [];
@@ -235,14 +238,14 @@ export async function loadInto(game, raw) {
         top: R(p.equipment.top), bottom: R(p.equipment.bottom),
         front: R(p.equipment.front), back: R(p.equipment.back), sides: R(p.equipment.sides),
     };
-    // Ring-builds: restore the learned pool + equipped loadout BEFORE refreshing
-    // grants, so the merge (base ∪ equipped ∪ gear) includes the slotted skills.
-    game.learnedTricks  = new Set(p.learnedTricks  || []);
-    game.learnedSpells  = new Set(p.learnedSpells  || []);
-    game.equippedTricks = [...(p.equippedTricks || [])];
-    game.equippedSpells = [...(p.equippedSpells || [])];
+    // Remembrance Rings: restore the owned pool + slot assignments BEFORE refreshing
+    // grants, so the merge (base ∪ slotted-ring actives ∪ fusion ∪ gear) is complete.
+    game.ownedRings        = new Set(p.ownedRings || []);
+    game.ringSlots         = { ...(p.ringSlots || {}) };
+    game.ringTier          = p.ringTier || 0;
+    game.discoveredFusions = new Set(p.discoveredFusions || []);
     // knownSpells/grantedTricks are derived, not stored — rebuild from the
-    // restored weapon + loadout (the Ray Gun grants Ray Blast, etc.).
+    // restored weapon + rings (a slotted Rat Ring grants Rat Form, etc.).
     if (game._refreshGrantedSkills) game._refreshGrantedSkills();
     game.inventory = p.inventory.map(s => {
         if (!s) return null;
@@ -262,6 +265,7 @@ export async function loadInto(game, raw) {
     // Picked-up items stay collected across reload — rehydrate into the Set the
     // runtime uses for no-respawn checks.
     game._collectedItems = new Set(raw.world.collectedItems || []);
+    game._droppedItems = raw.world.droppedItems || {};
     game.containers = raw.world.containers.map(c => ({
         id: c.id, type: c.type, x: c.x, y: c.y, contents: (c.contents || []).slice(),
     }));

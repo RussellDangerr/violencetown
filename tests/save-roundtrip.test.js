@@ -85,11 +85,13 @@ function makePopulatedGame() {
     g.playerMp = 40; g.playerMaxMp = 100;
     g.facing = 'left';
     g.gold = 256;
-    // Ring-builds: a learned pool with one slotted trick + one slotted spell.
-    g.learnedTricks = new Set(['ray_blast']);
-    g.learnedSpells = new Set(['boo']);
-    g.equippedTricks = ['ray_blast'];
-    g.equippedSpells = ['boo'];
+    // Remembrance Rings: an owned pool with two slotted rings, mid-tier, one
+    // fusion already seen. Both slots are unlocked at tier 1 (ring + middle) and
+    // both rings are owned, so validate's sanitizeSlots keeps them.
+    g.ownedRings = new Set(['rat_ring', 'fire_ring']);
+    g.ringSlots = { 'left:ring': 'rat_ring', 'left:middle': 'fire_ring' };
+    g.ringTier = 1;
+    g.discoveredFusions = new Set(['ember_rat']);
     g.equipment = {
         weapon: ITEM_DEFS.pipe, top: null, bottom: null,
         front: ITEM_DEFS.bandage, back: null, sides: ITEM_DEFS.rock,
@@ -226,34 +228,34 @@ describe('save round-trip (EXPECTED GREEN)', () => {
         assert.equal(dst.buffs[0].id, 'guard');
     });
 
-    test('ring-builds: learned pool + equipped loadout survive serialize→loadInto', async () => {
+    test('rings: owned pool + slots + tier + discovered fusions survive serialize→loadInto', async () => {
         const src = makePopulatedGame();
         const blob = JSON.parse(JSON.stringify(serialize(src)));
 
         const dst = makeBlankGame();
         await loadIntoReal(dst, blob);
 
-        assert.deepEqual([...dst.learnedTricks].sort(), ['ray_blast']);
-        assert.deepEqual([...dst.learnedSpells].sort(), ['boo']);
-        assert.deepEqual(dst.equippedTricks, ['ray_blast']);
-        assert.deepEqual(dst.equippedSpells, ['boo']);
+        assert.deepEqual([...dst.ownedRings].sort(), ['fire_ring', 'rat_ring']);
+        assert.deepEqual(dst.ringSlots, { 'left:ring': 'rat_ring', 'left:middle': 'fire_ring' });
+        assert.equal(dst.ringTier, 1);
+        assert.deepEqual([...dst.discoveredFusions].sort(), ['ember_rat']);
     });
 
-    test('ring-builds: an old save with no skill fields loads as an empty pool', async () => {
+    test('rings: an old save with no ring fields loads as an empty pool', async () => {
         const src = makePopulatedGame();
         const blob = JSON.parse(JSON.stringify(serialize(src)));
-        delete blob.player.learnedTricks;
-        delete blob.player.learnedSpells;
-        delete blob.player.equippedTricks;
-        delete blob.player.equippedSpells;
+        delete blob.player.ownedRings;
+        delete blob.player.ringSlots;
+        delete blob.player.ringTier;
+        delete blob.player.discoveredFusions;
 
         const dst = makeBlankGame();
         await loadIntoReal(dst, blob);
 
-        assert.deepEqual([...dst.learnedTricks], []);
-        assert.deepEqual([...dst.learnedSpells], []);
-        assert.deepEqual(dst.equippedTricks, []);
-        assert.deepEqual(dst.equippedSpells, []);
+        assert.equal(dst.ownedRings.size, 0);
+        assert.deepEqual(dst.ringSlots, {});
+        assert.equal(dst.ringTier, 0);
+        assert.equal(dst.discoveredFusions.size, 0);
     });
 
     test('world: tileDiffs, ground items, containers, and enemies round-trip', async () => {
@@ -455,5 +457,27 @@ describe('migrate + load partial/old blobs without throwing (EXPECTED GREEN)', (
         assert.equal(dst.inventory[0].count, 99, 'count clamped to 99');
         assert.equal(dst.inventory[1], null, 'string slot rejected');
         assert.equal(dst.inventory[2], null, 'slot without id rejected');
+    });
+});
+
+// ── Task 2: runtime ground-drops persist per-zone (twin of _collectedItems) ───
+describe('runtime dropped-items persistence (Task 2)', () => {
+
+    test('runtime dropped items persist per-zone across a save round-trip', async () => {
+        const g = makeBlankGame();
+        g._droppedItems = { 'sewer-map.json': [{ type: 'red_cape', x: 4, y: 9 }] };
+        const blob = JSON.parse(JSON.stringify(serialize(g)));
+        const g2 = makeBlankGame();
+        await loadIntoReal(g2, blob);
+        assert.deepEqual(g2._droppedItems['sewer-map.json'], [{ type: 'red_cape', x: 4, y: 9 }]);
+    });
+
+    test('old save (no droppedItems) loads as an empty map without throwing', async () => {
+        const g = makeBlankGame();
+        const blob = JSON.parse(JSON.stringify(serialize(g)));
+        delete blob.world.droppedItems;
+        const g2 = makeBlankGame();
+        await loadIntoReal(g2, blob);
+        assert.deepEqual(g2._droppedItems, {});
     });
 });

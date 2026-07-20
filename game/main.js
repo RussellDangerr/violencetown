@@ -10,7 +10,12 @@ import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, MAX_STACK } from './data.
 import { ITEMS, itemTier, resolveUse, resolveThrow, tickTempEquips, unequipItem, ownedItemDefs, hasItemDef } from './items.js';
 import { WEAPONS } from './weapons.js';
 import { tickBuffList } from './buffs.js';
-import { SKILL_SLOTS, mergeKnown, isActive, learnInto, equipSkill, unequipSkill } from './skills.js';
+import { mergeKnown, isActive } from './skills.js'; // (rings) merge/read helpers still live here until Task 5 folds them into rings.js
+import { RINGS, FUSIONS } from './ring-data.js';
+import {
+    unlockedSlots, resolveAdjacencies, slottedActives, aggregatePassives,
+    slotRing, unslotRing, acquireRing, sanitizeSlots,
+} from './rings.js';
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
 import { attack, formatDamageNumber } from './combat.js';
@@ -24,6 +29,7 @@ import { RNG } from './rng.js';
 import { hasSave, readSaveRaw, writeSave, loadInto, clearSave } from './save.js';
 import { QuestEngine } from './quests.js';
 import { doExamine } from './examine.js';
+import { recordDrop, pendingDrops } from './drops.js'; // per-zone runtime dropped-items layer (pure, node-tested)
 import {
     CANVAS_INTERNAL_PX, HIT_SLOP, THROW_RECTS,
     HOTBAR_X_START, HOTBAR_Y, HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_STRIDE, HOTBAR_SLOTS,
@@ -157,17 +163,18 @@ class Game {
         // parallel list the Trick ring reads.
         this.knownSpells   = [...BASE_SPELLS];
         this.grantedTricks = [];
-        // Ring-builds ability axis (learned POOL + capped EQUIPPED subset — the
-        // loadout IS the build). The pools are append-only and persisted; the
-        // loadouts are the player's choice and persisted. suppressedSkills is
-        // transient (NH-2 `blocked`), never saved. _refreshGrantedSkills merges
-        // these into knownSpells/grantedTricks.
-        this.learnedTricks    = new Set();
-        this.learnedSpells    = new Set();
-        this.equippedTricks   = [];
-        this.equippedSpells   = [];
-        this.suppressedSkills = new Set();
+        // Remembrance Rings — the ONE slotting system (supersedes the skills loadout).
+        // ownedRings = the pool (fashioned at Platero); ringSlots = per-slot assignment
+        // ("hand:finger" → ringId|null); ringTier = the unlock ladder (0..4);
+        // discoveredFusions = fusion ids seen at least once (for the log). All persisted.
+        this.ownedRings       = new Set();
+        this.ringSlots        = {};
+        this.ringTier         = 0;
+        this.discoveredFusions = new Set();
+        this.suppressedSkills = new Set();   // kept: still gates hasSpell/hasTrick at READ
+        this.ringMods         = {};          // aggregate passives, recomputed by _refreshGrantedSkills
         this._lastHitTarget = null;   // (fear) id of the enemy the last Melee-Hit struck
+        this._ratFormTurns = 0;        // (Rat Ring) turns left folded into a rat; while >0 the player can enter GRATE tiles
         this.extraMoves  = 0; // future: Goo, abilities, etc.
         this.facing      = 'down'; // 'down' | 'left' | 'right' | 'up'
 
@@ -332,6 +339,14 @@ class Game {
         this._pendingFollowersFrom = null;   // url of the zone they're chasing you OUT of
         this._zonePursuit = false;           // (playtest) monsters don't follow you through doors for now
         this._collectedItems = new Set();    // "map|x|y|type" of ground items already taken, so they don't respawn on zone re-entry
+        // Runtime ground-drops per map ("mapUrl" → [{ type, x, y }]), so a drop
+        // survives leaving and re-entering a zone. Recorded today for enemy
+        // death-drops; the player-drop path routes through here once a drop verb
+        // exists. Twin of _collectedItems (which stops AUTHORED spawns respawning
+        // once taken); together they make the world permanent, never regenerative
+        // (drops.js dedups records so a re-killed respawning boss can't farm it).
+        // Persisted.
+        this._droppedItems = {};
         this._mapUrl = null;                 // url of the currently-loaded map
         this._cameFrom = null;               // url of the zone you ENTERED this one from (for the pipe-jam)
         this._jammedDoor = null;             // {x,y,toMap,integrity,max,intruders[]} while a door is wedged shut
@@ -520,6 +535,14 @@ class Game {
             const def = this._resolveItemDef(s.type);   // resolves WEAPONS too, so weapons can drop as loot
             if (def) this.groundItems.push({ type: s.type, x: s.x, y: s.y, def });
         }
+        // Re-inject runtime drops recorded for this map (enemy death-drops today,
+        // player drops once that path exists), minus any the player has since
+        // picked up (their _collectedItems key). pendingDrops (drops.js) is the
+        // node-tested filter; here we just resolve defs and place them.
+        for (const d of pendingDrops(this._droppedItems, this._collectedItems, url)) {
+            const def = this._resolveItemDef(d.type);
+            if (def) this.groundItems.push({ type: d.type, x: d.x, y: d.y, def });
+        }
         this.enemies = [];
         for (const s of this.map.enemySpawns) this.enemies.push(new Enemy(s));
 
@@ -700,6 +723,15 @@ class Game {
         if (!id) return null;
         if (WEAPONS[id]) return WEAPONS[id];
         return ITEMS[id] || null;
+    }
+
+    // Record a runtime drop against the current map so it survives zone changes;
+    // the CALLER then places it into groundItems. Deduped on {type,x,y} in
+    // drops.js so a re-killed respawning boss can't farm duplicate records.
+    // Called today for enemy death-drops; the player-drop path routes through
+    // here once a drop verb exists.
+    _recordDrop(type, x, y) {
+        recordDrop(this._droppedItems, this._mapUrl, type, x, y);
     }
 
     // Mutate a map tile at runtime AND record the change as a diff so the save
@@ -1924,7 +1956,7 @@ class Game {
         }
 
         // Wall?
-        if (!this.map.isWalkable(nx, ny)) { audio.playSfx('bump-wall'); return; } // [audio] thud on wall bump
+        if (!this._canEnter(nx, ny)) { audio.playSfx('bump-wall'); return; } // [audio] thud on wall bump (Rat Form may open a grate)
 
         audio.playSfx('move'); // [audio] footstep on a successful step
         // Animate: DON'T update playerX/playerY yet — wait until animation finishes
@@ -3030,6 +3062,14 @@ class Game {
                 if (!trick) { this._log("[That trick isn't ready yet]"); break; }
                 if ((this.gold ?? 0) < trick.gpCost) { this._log(`[Not enough GP — ${trick.name} needs ${trick.gpCost}g.]`); break; }
                 this.gold = Math.max(0, (this.gold ?? 0) - trick.gpCost);
+                if (trick.transform) {
+                    // Rat Form — fold down into a rat for a few turns (slips
+                    // through grates). No aim/damage; just set the countdown.
+                    this._ratFormTurns = trick.transformTurns || 3;
+                    this._log('[You fold down into a rat. The world goes enormous.]', 'transition');
+                    this._advanceWorld();
+                    break;
+                }
                 if (trick.summon) {
                     // Summon trick (Hire a Lion) — no damage; spawn a temporary ally.
                     this._spawnSummon(trick.summon, trick.summonTurns || 2, trick);
@@ -3132,6 +3172,16 @@ class Game {
 
     // ── World Advance (after any action) ─────────────────────────────────────
 
+    // Player-only movement gate. Rings can open tiles that are globally
+    // unwalkable: while in Rat Form (_ratFormTurns > 0) the player may step onto
+    // GRATE tiles (id 4). This is PLAYER-only — enemies, pathing.js, and the AI
+    // keep calling map.isWalkable directly, so nothing can follow you through the
+    // grate. A non-rat step onto a grate still bumps.
+    _canEnter(x, y) {
+        if (this.map.isWalkable(x, y)) return true;
+        return this._ratFormTurns > 0 && this.map.getTile(x, y) === 4;
+    }
+
     _advanceWorld() {
         this.turn++;
 
@@ -3151,6 +3201,13 @@ class Game {
             const gone = this.enemies.filter(e => e._isSummon && e._summonTurnsLeft <= 0);
             for (const e of gone) this._log(`[${e.type || 'The summon'} slinks back into the crowd.]`);
             if (gone.length) this.enemies = this.enemies.filter(e => !(e._isSummon && e._summonTurnsLeft <= 0));
+        }
+
+        // (Rat Form) the transform lasts a few beats — count it down each world
+        // beat and unfold at zero. Ticks once per committed turn, like the summon.
+        if (this._ratFormTurns > 0) {
+            this._ratFormTurns--;
+            if (this._ratFormTurns === 0) this._log('[You unfold. Human again.]', 'transition');
         }
 
         // Enemies/NPCs may have just begun a one-tile slide (stepEntity). Kick
@@ -3560,11 +3617,26 @@ class Game {
         });
         // The Were-Rat drops the converter; rat kills feed the escape waves.
         if (enemyObj.tag === 'wererat_boss' && ITEMS.catalytic_converter) {
+            this._recordDrop('catalytic_converter', enemyObj.x, enemyObj.y);
             this.groundItems.push({ type: 'catalytic_converter', x: enemyObj.x, y: enemyObj.y, def: ITEMS.catalytic_converter });
             this._log('[The Were-Rat drops your cataclysmic converter!]', 'pickup');
         }
+        // (Remembrance Rings) The Were-Rat also leaves a remembrance — a braided
+        // tuft of fur → the Rat Ring (fashioned at Platero). Drop it on a free
+        // adjacent tile so it doesn't stack on the converter; persist it (Task 2).
+        if (enemyObj.tag === 'wererat_boss' && ITEMS.wererat_fur) {
+            let fx = enemyObj.x, fy = enemyObj.y;
+            for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+                const tx = enemyObj.x + dx, ty = enemyObj.y + dy;
+                if (this.map.isWalkable(tx, ty) && !this.groundItems.some(gi => gi.x === tx && gi.y === ty)) { fx = tx; fy = ty; break; }
+            }
+            this._recordDrop('wererat_fur', fx, fy);
+            this.groundItems.push({ type: 'wererat_fur', x: fx, y: fy, def: ITEMS.wererat_fur });
+            this._log('[Among the matted fur, one coarse braided tuft stays warm — a remembrance.]', 'pickup');
+        }
         // Pike guards his climbing rope with his life — take it off his body.
         if (enemyObj.tag === 'pike_boss' && ITEMS.grappling_hook) {
+            this._recordDrop('grappling_hook', enemyObj.x, enemyObj.y);
             this.groundItems.push({ type: 'grappling_hook', x: enemyObj.x, y: enemyObj.y, def: ITEMS.grappling_hook });
             this._log('[Pike crumples. His big coil of rope — the grappling hook — thuds to the stone.]', 'pickup');
         }
@@ -3577,6 +3649,21 @@ class Game {
             this._grantItem('grappling_hook', '["Deal\'s a deal." Pike coils the big rope into your pack — the grappling hook is yours.]');
         }
         onSewerEnemyKilled(this, enemyObj);
+    }
+
+    // (Remembrance Rings) Platero's craft: consume a remembrance material from
+    // the bag and grant its ring. Wired from Platero's dialogue choice (onPick).
+    // Self-guarding: no material in the bag → nothing is consumed; already own the
+    // ring → the material is kept. Returns true only on a successful fashioning.
+    _fashionRing(materialId, ringId) {
+        if (this.ownedRings.has(ringId)) { this._log('[Platero: "You already wear its like."]'); return false; }
+        const idx = (this.inventory || []).findIndex(s => s && s.itemDef && s.itemDef.id === materialId);
+        if (idx < 0) { this._log('[Platero: "Bring me the material and I\'ll set it into a ring."]'); return false; }
+        this._removeFromSlot(idx);
+        this._acquireRing(ringId);   // logs its own "[You slip on the …]" line
+        this._log('[Platero turns it in the light. It becomes a ring.]', 'transition');
+        this._render();
+        return true;
     }
 
     // Grant an item straight into the bag (quest rewards, dialogue gifts). Emits
@@ -3691,20 +3778,28 @@ class Game {
         return ['top', 'bottom', 'front', 'back', 'sides'].some(k => eq[k] && eq[k].sludgeImmune);
     }
 
-    // The "gear reshapes the wheel" build loop, now three-source (NetHack struct
-    // prop): the active rings = base ∪ the player's equipped loadout ∪ the
-    // equipped weapon's grants. Spells feed the Magic ring
-    // (knownSpells = base + equippedSpells + weapon.grantsSpells), tricks feed the
-    // Trick ring (grantedTricks = equippedTricks + weapon.grantsTricks). Call
-    // after any change to weapon OR loadout — equip, learn, slot, new game,
-    // respawn, save-load. De-duped; suppression is applied at READ (hasSpell/
-    // hasTrick), not here. With an empty loadout this equals the old base+gear.
+    // (Remembrance Rings) The active skills = base ∪ slotted-ring actives ∪ fusion
+    // actives ∪ the equipped weapon's grants. Actives are split into spells (Magic
+    // ring) vs tricks (Trick ring) by which registry defines them. Also recomputes
+    // the aggregate passive modifiers and records any newly-seen fusions. Call after
+    // any change to weapon OR rings (acquire, slot, unslot, unlock, new game, load).
     _refreshGrantedSkills() {
-        const w = this.equipment && this.equipment.weapon;
+        const w  = this.equipment && this.equipment.weapon;
         const gs = (w && w.grantsSpells) || [];
         const gt = (w && w.grantsTricks) || [];
-        this.knownSpells   = mergeKnown(BASE_SPELLS, this.equippedSpells, gs);
-        this.grantedTricks = mergeKnown([], this.equippedTricks, gt);
+        const getRing = (id) => RINGS[id] || null;
+
+        const ringActives = slottedActives(this.ringSlots, getRing);
+        const adj = resolveAdjacencies(this.ringTier, this.ringSlots, getRing, FUSIONS);
+        for (const f of adj.fusions) if (f.fusion.id) this.discoveredFusions.add(f.fusion.id);
+
+        const actives = [...ringActives, ...adj.grantedActives];
+        const ringSpells = actives.filter(a => SPELLS[a]);
+        const ringTricks = actives.filter(a => TRICKS[a]);
+
+        this.knownSpells   = mergeKnown(BASE_SPELLS, ringSpells, gs);
+        this.grantedTricks = mergeKnown([], ringTricks, gt);
+        this.ringMods      = aggregatePassives(this.ringSlots, getRing);
     }
 
     // The single gate for "can this skill fire right now" — present in the merged
@@ -3712,31 +3807,31 @@ class Game {
     hasSpell(id) { return isActive(this.knownSpells   || [], this.suppressedSkills, id); }
     hasTrick(id) { return isActive(this.grantedTricks || [], this.suppressedSkills, id); }
 
-    // Learn a skill into the pool from any source (tomes now; trainers/quests
-    // reuse this hook). Auto-slots if there's room (generous — usable at once).
-    // Idempotent — returns true only if newly learned. type: 'trick' | 'spell'.
-    _learnSkill(id, type) {
-        const pool     = type === 'trick' ? this.learnedTricks  : this.learnedSpells;
-        const equipped = type === 'trick' ? this.equippedTricks : this.equippedSpells;
-        const learned  = learnInto(pool, equipped, SKILL_SLOTS[type], id);
+    // Acquire a fashioned ring into the pool (from Platero; auto-slots if room).
+    // Idempotent — returns true only if newly acquired.
+    _acquireRing(ringId) {
+        const got = acquireRing(this.ownedRings, this.ringSlots, this.ringTier, ringId);
         this._refreshGrantedSkills();
-        if (learned) {
-            const def = type === 'trick' ? TRICKS[id] : SPELLS[id];
-            this._log(`[Learned ${(def && def.name) || id}!]`, 'transition');
+        if (got) {
+            const def = RINGS[ringId];
+            this._log(`[You slip on the ${(def && def.name || ringId).replace(/[\[\]]/g, '')}.]`, 'transition');
         }
-        return learned;
+        return got;
     }
 
-    // Slot / unslot a learned skill (the GEAR-tab loadout). Both refresh the
-    // merged grants so the wheel updates immediately.
-    _equipSkill(id, type) {
-        const pool     = type === 'trick' ? this.learnedTricks  : this.learnedSpells;
-        const equipped = type === 'trick' ? this.equippedTricks : this.equippedSpells;
-        if (equipSkill(pool, equipped, SKILL_SLOTS[type], id)) this._refreshGrantedSkills();
+    // Slot / unslot a ring (the hands UI, Task 5). Both refresh grants so the wheel
+    // and passives update immediately.
+    _slotRing(slotKey, ringId) {
+        if (slotRing(this.ringSlots, this.ownedRings, this.ringTier, slotKey, ringId)) this._refreshGrantedSkills();
     }
-    _unequipSkill(id, type) {
-        const equipped = type === 'trick' ? this.equippedTricks : this.equippedSpells;
-        if (unequipSkill(equipped, id)) this._refreshGrantedSkills();
+    _unslotRing(slotKey) {
+        if (unslotRing(this.ringSlots, slotKey)) this._refreshGrantedSkills();
+    }
+
+    // Raise the unlock tier (Task 6 gates call this). Reveals more finger slots.
+    _setRingTier(tier) {
+        this.ringTier = Math.max(this.ringTier, tier);
+        this._refreshGrantedSkills();
     }
 
     // (Hire a Lion) Spawn a temporary ally on a free tile beside the player. It
@@ -4321,18 +4416,12 @@ class Game {
                 return;
             }
         }
-        // SKILLS body → tap a learned chip to slot / unslot it (loadout edit).
-        // Reads the SAME chips the renderer draws, so the tap can't drift.
+        // SKILLS body → the two-hands ring loadout. The old learned/equipped-chip
+        // hit-test (and _equipSkill/_unequipSkill) was removed with the skills
+        // store in Task 3; there is nothing to slot here until the hands UI lands.
+        // TODO(Task 5): rewire socket taps to _slotRing/_unslotRing once
+        // deviceSkillsLayout returns hand sockets.
         if (this._deviceTab === 'skills') {
-            const { chips } = deviceSkillsLayout(deviceBodyRect(), this);
-            for (const c of chips) {
-                if (!this._pointInRect(pt, c)) continue;
-                if (c.slotted) this._unequipSkill(c.id, c.type);
-                else           this._equipSkill(c.id, c.type);
-                audio.playSfx('menu-tick');
-                this._render();
-                return;
-            }
             return;
         }
         // GEAR body → tap a filled plate to unequip (the weapon plate is inert).

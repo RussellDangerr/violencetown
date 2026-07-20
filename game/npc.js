@@ -373,6 +373,7 @@ function findNearestWantedItem(game, npc) {
     let bestDist = Infinity;
 
     for (const item of game.groundItems) {
+        if (item.def && item.def.questItem) continue;   // never let a worker carry off a quest / remembrance item
         if (!npc.wantsItems.includes(item.type)) continue;
 
         // Within wander radius (Chebyshev for the search box; greedy
