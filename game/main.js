@@ -950,6 +950,8 @@ class Game {
                 if (e.code === 'KeyJ') { this._deviceTab = 'quests'; this._render(); return; }
                 if (e.code === 'KeyM') { this._deviceTab = 'map';    this._render(); return; }
                 if (e.code === 'KeyR') { this._deviceTab = 'rings'; this._render(); return; }
+                if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { this._deviceCycleTab(-1); return; }
+                if (e.code === 'ArrowRight' || e.code === 'KeyD') { this._deviceCycleTab(1);  return; }
                 if (this._deviceTab === 'quests' && (e.code === 'ArrowUp'   || e.code === 'KeyW')) { this._scrollJournal(1);  return; }
                 if (this._deviceTab === 'quests' && (e.code === 'ArrowDown' || e.code === 'KeyS')) { this._scrollJournal(-1); return; }
                 return;
