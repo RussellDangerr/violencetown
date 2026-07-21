@@ -38,7 +38,7 @@ import {
     TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BUYBACK_ORIGIN, TRADE_BRIBE_RECT,
     TRADE_COLS, tradeCellRect,
     EQUIPMENT_MODAL_RECT, EQUIP_SLOT_RECTS,
-    DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceEquipLayout, deviceRingsLayout,
+    DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceBagSlotRects, deviceEquipLayout, deviceRingsLayout,
 } from './layout.js';
 import { canTrade, buyPrice, sellPrice, bribeStepCost, BRIBE_STEP, transferGold } from './trade.js'; // pricing + the transaction spine
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
@@ -4650,6 +4650,30 @@ class Game {
                 return;
             }
         }
+        // ITEMS (Bag) body → tap a gear item to wear it (swap-aware). Usables are
+        // used from the XMB bar, not here; quest items are held. Reads the SAME
+        // slot rects deviceBagSlotRects hands the renderer, so the tap can't drift.
+        if (this._deviceTab === 'items') {
+            const rects = deviceBagSlotRects(deviceBodyRect());
+            for (let i = 0; i < rects.length; i++) {
+                if (!this._pointInRect(pt, rects[i], HIT_SLOP)) continue;
+                const stack = this.inventory[i];
+                if (!stack) return;                       // empty slot — nothing to do
+                const def = stack.itemDef;
+                if (def.useType === 'equip' && def.equipSlot) {
+                    const msg = resolveUse(this, def, null);   // useType:'equip' → resolveEquip (re-bags any displaced piece)
+                    this._removeFromSlot(i);                   // the worn copy leaves the bag
+                    this._refreshGrantedSkills();
+                    if (msg) this._log(msg);
+                    audio.playSfx('menu-confirm');
+                } else {
+                    this._log(def.questItem ? '[Best hold onto that.]' : `[${def.name} — used from the bar.]`);
+                }
+                this._render();
+                return;
+            }
+            return;
+        }
         // SKILLS body → the two-hands ring loadout. Tapping a FILLED socket
         // unslots that ring; tapping an EMPTY unlocked socket cycles the next
         // owned-but-unslotted ring into it. Reads the SAME sockets deviceRingsLayout
@@ -4678,9 +4702,20 @@ class Game {
             for (const s of slots) {
                 if (s.key === 'weapon') continue;
                 if (!this._pointInRect(pt, s)) continue;
-                if (!this.equipment[s.key]) return;   // empty plate — nothing to remove
-                const msg = unequipItem(this, s.key);
-                if (msg) this._log(msg);
+                if (this.equipment[s.key]) {
+                    const msg = unequipItem(this, s.key);   // filled plate → back to the bag
+                    if (msg) this._log(msg);
+                } else {
+                    // empty plate → wear the first spare gear in the bag for this slot
+                    const spareIdx = this.inventory.findIndex(
+                        st => st && st.itemDef.useType === 'equip' && st.itemDef.equipSlot === s.key);
+                    if (spareIdx < 0) { this._log(`[No spare ${s.key} gear in your bag.]`); return; }
+                    const def = this.inventory[spareIdx].itemDef;
+                    const msg = resolveUse(this, def, null);
+                    this._removeFromSlot(spareIdx);
+                    this._refreshGrantedSkills();
+                    if (msg) this._log(msg);
+                }
                 this._render();
                 return;
             }

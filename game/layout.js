@@ -182,6 +182,20 @@ export function deviceBodyRect() {
     return { x: DEVICE_RECT.x + 14, y: top, w: DEVICE_RECT.w - 28, h: DEVICE_RECT.y + DEVICE_RECT.h - 12 - top };
 }
 
+// Bag (ITEMS-tab) slot rects — the SAME geometry _drawHotbar draws in its
+// hosted branch (ox + 8, oy = body.y + 44, slotY = oy + 2, stride HOTBAR_STRIDE).
+// Shared so _tapDevice's ITEMS hit-test can never drift from the drawn grid.
+export function deviceBagSlotRects(bodyRect) {
+    const ox = Math.round(bodyRect.x + (bodyRect.w - HOTBAR_TOTAL_W) / 2);
+    const xStart = ox + 8;
+    const slotY = bodyRect.y + 44 + 2;
+    const rects = [];
+    for (let i = 0; i < HOTBAR_SLOTS; i++) {
+        rects.push({ x: xStart + i * HOTBAR_STRIDE, y: slotY, w: HOTBAR_SLOT_W, h: HOTBAR_SLOT_H });
+    }
+    return rects;
+}
+
 // Pure tab cycle (wraps both ways); an unknown current tab resets to the first.
 export function cycleDeviceTab(current, dir) {
     const i = DEVICE_TABS.indexOf(current);
