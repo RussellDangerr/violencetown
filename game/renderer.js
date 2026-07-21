@@ -25,7 +25,9 @@ import {
     RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
     EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, closeButtonRect,
     DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceEquipLayout, deviceRingsLayout,
+    xmbBarLayout,                                                            // (XMB) usable-bar geometry
 } from './layout.js';
+import { buildXmbBar, resolveXmbSelection } from './xmb.js';                 // (XMB) usable-bar model
 import { ITEMS, itemTier } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
 import { RINGS, FUSIONS } from './ring-data.js';                             // (rings Task 5) SKILLS-tab hands: ring names + fusion spark
 import { findFusion } from './rings.js';                                     // (rings Task 5) mark a link fusible when its two rings have an authored fusion
@@ -399,7 +401,7 @@ export class Renderer {
         this._drawHPPanel(game);
         this._drawBuffBar(game);
         this._drawQuestLog(game);
-        this._drawHotbar(game);
+        this._drawXmbBar(game);
 
         // Subtle vignette border
         this._drawVignette();
@@ -1918,6 +1920,48 @@ export class Renderer {
         }
         // (defeat legibility) tell the player what survives a defeat (device only)
         if (hosted && this.font) this.font.drawText(ctx, 'gold corner = kept if defeated', ox, oy + sh + 8, { color: UI.dim, scale: 1 });
+    }
+
+    // (XMB) The always-live usable-bar that replaces the flat bottom hotbar:
+    // category chips (only non-empty ones) over the selected category's current
+    // item. A projection over game.inventory — see game/xmb.js. Drawn nothing
+    // when the player holds no usables (pure browse state).
+    _drawXmbBar(game) {
+        const { ctx } = this;
+        if (!this.font) return;
+        const bar = buildXmbBar(game.inventory);
+        if (!bar.columns.length) return;                 // no usables → no bar
+        const sel = resolveXmbSelection(bar, game.xmbCat, game.xmbPick);
+        const lay = xmbBarLayout(bar);
+
+        // Parchment strip behind the whole bar.
+        const left = lay.chips[0].x - 10;
+        const right = lay.chips[lay.chips.length - 1].x + lay.chips[lay.chips.length - 1].w + 10;
+        drawPanelSmall(ctx, left, lay.chips[0].y - 6, right - left, (lay.bottom - lay.chips[0].y) + 10, this.uiSheet);
+
+        // Category chips.
+        for (const chip of lay.chips) {
+            const on = sel && chip.key === sel.column.key;
+            drawInset(ctx, chip.x, chip.y, chip.w, chip.h);
+            if (on) { ctx.strokeStyle = UI.gold; ctx.lineWidth = 2; ctx.strokeRect(chip.x + 1, chip.y + 1, chip.w - 2, chip.h - 2); }
+            this.font.drawText(ctx, chip.label, chip.x + chip.w / 2, chip.y + chip.h / 2 - 4, { color: on ? UI.gold : UI.dim, scale: 1, align: 'center' });
+        }
+
+        // Current item cell (icon + name + count), with ▲/▼ affordance when the
+        // column holds more than one item.
+        if (sel) {
+            const c = lay.current;
+            drawInset(ctx, c.x, c.y, c.w, c.h);
+            this._drawItemIcon(sel.item.itemDef, c.x + 3, c.y + 3, c.w - 6);
+            const name = (sel.item.itemDef.name || sel.item.itemDef.id || '').replace(/[\[\]]/g, '');
+            this.font.drawText(ctx, name.toUpperCase(), c.x + c.w + 14, c.y + 4, { color: UI.textLight, scale: 1 });
+            if (sel.item.count > 1) this.font.drawText(ctx, '×' + sel.item.count, c.x + c.w + 14, c.y + 18, { color: UI.gold, scale: 1 });
+            if (sel.column.items.length > 1) {
+                this.font.drawText(ctx, '▲', lay.up.x, lay.up.y, { color: UI.dim, scale: 1 });
+                this.font.drawText(ctx, '▼', lay.down.x, lay.down.y, { color: UI.dim, scale: 1 });
+            }
+        }
+        ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     }
 
     // ── Item Overlay ─────────────────────────────────────────────────────────

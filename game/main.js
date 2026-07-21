@@ -298,6 +298,11 @@ class Game {
         this.overlayOptions = []; // ordered [{ label, action }] — the item's tappable action list
         this.overlayCursor = 0;   // highlighted row in the item-overlay list
 
+        // (XMB) Always-live usable-bar cursor. A projection over `inventory`, so
+        // it is not saved — it rebuilds from the bag on load and clamps itself.
+        this.xmbCat = 'throw';   // current category; re-clamped to a non-empty one at use time
+        this.xmbPick = {};       // remembered item id per category: { throw, drink, eat }
+
         // (combat-wheel rework) Verb-tree combat wheel — opened anywhere by
         // Space / the touch ACTION button (no bump-to-attack). The pure model in
         // wheel-model.js holds the layer/category/sub-verb/item cursor, the aim
