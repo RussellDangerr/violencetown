@@ -53,6 +53,36 @@ export const HOTBAR_OY = CANVAS_INTERNAL_PX - HOTBAR_SLOT_H - 20;     // 546 (pa
 export const HOTBAR_X_START = HOTBAR_OX + 8;                         // 103 (first slot x)
 export const HOTBAR_Y       = HOTBAR_OY + 2;                         // 548 (slot y)
 
+// ── XMB usable-bar (bottom HUD) ────────────────────────────────────────────
+// A horizontal row of category chips over a single "current item" cell, aligned
+// to the bottom where the flat hotbar used to sit (HOTBAR_OY..+SLOT_H).
+export const XMB_CHIP_W   = 96;
+export const XMB_CHIP_H   = 20;
+export const XMB_CHIP_GAP = 6;
+export const XMB_ITEM_H   = 46;   // current-item cell height (icon + name band)
+
+// Geometry for the XMB bar given a built bar ({columns:[{key,label,items}]}).
+// Returns { chips:[{key,label,x,y,w,h}], current:{x,y,w,h}, up, down, bottom }.
+export function xmbBarLayout(bar) {
+    const cols = (bar && bar.columns) || [];
+    const cx = CANVAS_INTERNAL_PX / 2;
+    const bottom = HOTBAR_OY + HOTBAR_SLOT_H;                 // 588 — align with old hotbar bottom
+    const chipY = bottom - XMB_ITEM_H - XMB_CHIP_H - 6;
+    const n = cols.length;
+    const totalW = n > 0 ? n * XMB_CHIP_W + (n - 1) * XMB_CHIP_GAP : 0;
+    const startX = Math.round(cx - totalW / 2);
+    const chips = cols.map((c, i) => ({
+        key: c.key, label: c.label,
+        x: startX + i * (XMB_CHIP_W + XMB_CHIP_GAP), y: chipY, w: XMB_CHIP_W, h: XMB_CHIP_H,
+    }));
+    const iconSize = XMB_ITEM_H - 6;                          // 40
+    const itemY = chipY + XMB_CHIP_H + 6;
+    const current = { x: Math.round(cx - iconSize / 2), y: itemY, w: iconSize, h: iconSize };
+    const up   = { x: current.x + current.w + 10, y: itemY - 4,               w: 18, h: 14 };
+    const down = { x: current.x + current.w + 10, y: itemY + current.h - 10,  w: 18, h: 14 };
+    return { chips, current, up, down, bottom };
+}
+
 // ── Radial "sunburst" combat wheel ──
 // Concentric rings centred on RADIAL_CENTER_*: a hub, the greyed decision-stack
 // rings growing inward, one bright active ring, and a partial preview arc above
