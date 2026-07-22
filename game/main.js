@@ -41,6 +41,7 @@ import {
     DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceBagSlotRects, deviceEquipLayout, deviceRingsLayout,
 } from './layout.js';
 import { canTrade, buyPrice, sellPrice, bribeStepCost, BRIBE_STEP, transferGold } from './trade.js'; // pricing + the transaction spine
+import { buildXmbBar, resolveXmbSelection, cycleXmbCategory, cycleXmbItem, xmbCategoryOf, XMB_LABELS } from './xmb.js';
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
 import {
@@ -1109,6 +1110,18 @@ class Game {
 
             // ── IDLE: main input ──
             if (this.state !== STATE.IDLE) return;
+
+            // (XMB) Shift + arrows / WASD scrolls the always-live usable-bar;
+            // bare arrows/WASD still walk. Enter uses the highlighted item.
+            // Must run BEFORE the bare-arrow move handler below — DIRS[e.code]
+            // doesn't check e.shiftKey, so it would otherwise eat Shift+arrow
+            // as a walk/turn before this block ever saw it.
+            const XMB_NAV = {
+                ArrowLeft: 'catPrev', KeyA: 'catPrev', ArrowRight: 'catNext', KeyD: 'catNext',
+                ArrowUp: 'itemPrev', KeyW: 'itemPrev', ArrowDown: 'itemNext', KeyS: 'itemNext',
+            };
+            if (e.shiftKey && XMB_NAV[e.code]) { e.preventDefault(); this._xmbNav(XMB_NAV[e.code]); return; }
+            if (e.code === 'Enter' || e.code === 'NumpadEnter') { e.preventDefault(); this._useXmbCurrent(); return; }
 
             // Arrow/WASD = turn-in-place (tap toward a new direction) or walk
             // (already facing that way, or hold past _TURN_MS). The held-key
@@ -2966,6 +2979,53 @@ class Game {
         this.selectedSlot = -1;
         this.state = STATE.IDLE;
         this._advanceWorld();
+    }
+
+    // (XMB) Move the usable-bar cursor. action ∈ catPrev|catNext|itemPrev|itemNext.
+    _xmbNav(action) {
+        const bar = buildXmbBar(this.inventory);
+        if (!bar.columns.length) return;
+        if (!bar.columns.some(c => c.key === this.xmbCat)) this.xmbCat = bar.columns[0].key;
+        if (action === 'catPrev' || action === 'catNext') {
+            this.xmbCat = cycleXmbCategory(bar, this.xmbCat, action === 'catNext' ? 1 : -1);
+        } else {
+            const id = cycleXmbItem(bar, this.xmbCat, this.xmbPick, action === 'itemNext' ? 1 : -1);
+            if (id) this.xmbPick = { ...this.xmbPick, [this.xmbCat]: id };
+        }
+        audio.playSfx('menu-tick');
+        this._render();
+    }
+
+    // (XMB) Use the highlighted bar item: THROW auto-aims the nearest hostile in
+    // range and bursts; DRINK/EAT consume on the spot. Both reuse the existing
+    // resolver bridges (_doThrowAt / _doItemUse), which consume + advance the world.
+    _useXmbCurrent() {
+        const bar = buildXmbBar(this.inventory);
+        const sel = resolveXmbSelection(bar, this.xmbCat, this.xmbPick);
+        if (!sel) { this._log('[Nothing usable on the bar.]'); return; }
+        this.xmbCat = sel.column.key;
+        this.xmbPick = { ...this.xmbPick, [sel.column.key]: sel.item.itemDef.id };
+        const def = sel.item.itemDef;
+        this.selectedSlot = sel.item.slot;              // both bridges read selectedSlot
+        if (sel.column.key === 'throw') {
+            const tile = this._xmbAimTile(def.range || 5);
+            if (!tile) { this.selectedSlot = -1; this._log(`[No target in range for ${def.name}.]`); this._render(); return; }
+            this._doThrowAt(tile);
+        } else {
+            this._doItemUse(def);
+        }
+    }
+
+    // (XMB) Nearest alive hostile within Chebyshev `range`; else null (never waste
+    // a throw on empty ground).
+    _xmbAimTile(range) {
+        let best = null, bestD = Infinity;
+        for (const e of this.enemies) {
+            if (!e.entity.isAlive() || !isHostile(e)) continue;
+            const d = Math.max(Math.abs(e.x - this.playerX), Math.abs(e.y - this.playerY));
+            if (d <= range && d < bestD) { bestD = d; best = { x: e.x, y: e.y }; }
+        }
+        return best;
     }
 
     // True if the last-fired action can be repeated as-is (express double-tap).
