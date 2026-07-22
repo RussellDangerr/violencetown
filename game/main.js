@@ -39,6 +39,7 @@ import {
     TRADE_COLS, tradeCellRect,
     EQUIPMENT_MODAL_RECT, EQUIP_SLOT_RECTS,
     DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceBagSlotRects, deviceEquipLayout, deviceRingsLayout,
+    xmbBarLayout,
 } from './layout.js';
 import { canTrade, buyPrice, sellPrice, bribeStepCost, BRIBE_STEP, transferGold } from './trade.js'; // pricing + the transaction spine
 import { buildXmbBar, resolveXmbSelection, cycleXmbCategory, cycleXmbItem, xmbCategoryOf, XMB_LABELS } from './xmb.js';
@@ -1756,6 +1757,7 @@ class Game {
         // (Target Wheel) An IDLE tap on the world focuses the tapped tile's
         // target; nothing there → fall through to the hotbar.
         if (this.state === STATE.IDLE) {
+            if (this._tapXmbBar(pt)) return;   // (XMB) consumed a bottom-bar tap
             const tile = this._screenToTile(pt);
             // Bare tap on a thing → walk adjacent (if needed) → fire its DEFAULT
             // verb (Take/Talk/Hit/Examine). The full Target List is on long-press /
@@ -3026,6 +3028,27 @@ class Game {
             if (d <= range && d < bestD) { bestD = d; best = { x: e.x, y: e.y }; }
         }
         return best;
+    }
+
+    // (XMB) Touch/click on the bottom bar. Tap a chip → switch category; tap the
+    // ▲/▼ affordance → scroll the item column; tap the current-item cell → use it.
+    // Returns true when the tap was on the bar (so it doesn't also move the world).
+    _tapXmbBar(pt) {
+        const bar = buildXmbBar(this.inventory);
+        if (!bar.columns.length) return false;
+        const lay = xmbBarLayout(bar);
+        for (const chip of lay.chips) {
+            if (this._pointInRect(pt, chip, HIT_SLOP)) {
+                this.xmbCat = chip.key; audio.playSfx('menu-tick'); this._render(); return true;
+            }
+        }
+        const sel = resolveXmbSelection(bar, this.xmbCat, this.xmbPick);
+        if (sel && sel.column.items.length > 1) {
+            if (this._pointInRect(pt, lay.up, HIT_SLOP))   { this._xmbNav('itemPrev'); return true; }
+            if (this._pointInRect(pt, lay.down, HIT_SLOP)) { this._xmbNav('itemNext'); return true; }
+        }
+        if (this._pointInRect(pt, lay.current, HIT_SLOP)) { this._useXmbCurrent(); return true; }
+        return false;
     }
 
     // True if the last-fired action can be repeated as-is (express double-tap).
