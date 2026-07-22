@@ -2866,11 +2866,29 @@ class Game {
         const gi = this.groundItems[idx];
         const def = ITEMS[gi.type];
         if (!def) { this.groundItems.splice(idx, 1); return; }
+
+        // (XMB routing) Gear auto-equips into a FREE body slot; otherwise it waits
+        // in the bag as spare (swap it in from the GEAR tab). Usables land in the
+        // bag and surface on the XMB bar. The log names where the item went.
+        const markTaken = () => {
+            this._collectedItems.add(`${this._mapUrl}|${x}|${y}|${gi.type}`);
+            this.groundItems.splice(idx, 1);
+            audio.playSfx('pickup');
+        };
+
+        if (def.useType === 'equip' && def.equipSlot && !this.equipment[def.equipSlot]) {
+            this.equipment[def.equipSlot] = def;
+            markTaken();
+            this._log(`[Equipped ${def.name}.]`, 'pickup');
+            return;
+        }
+
         if (!this._addToInventory(def)) { this._log('[Your bag is full.]'); return; }
-        this._collectedItems.add(`${this._mapUrl}|${x}|${y}|${gi.type}`);
-        this.groundItems.splice(idx, 1);
-        audio.playSfx('pickup');
-        this._log(`[Took ${def.name}.]`, 'pickup');
+        markTaken();
+        const cat = xmbCategoryOf(def);
+        if (cat)                          this._log(`[Took ${def.name} → ${XMB_LABELS[cat]}.]`, 'pickup');
+        else if (def.useType === 'equip') this._log(`[Stashed ${def.name} in your bag.]`, 'pickup');
+        else                              this._log(`[Took ${def.name}.]`, 'pickup');
     }
 
     // Spin the active ring one slot and stamp the spin so the renderer sweeps it.
