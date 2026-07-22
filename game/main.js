@@ -1773,8 +1773,11 @@ class Game {
                 if (path && path.length) { this._walkPath(path); return; }
             }
         }
-        // IDLE or ITEM_SELECTED → hotbar tap.
-        this._tapHotbar(pt);
+        // ITEM_SELECTED → legacy hotbar tap (slot re-select / tap-outside cancel).
+        // In IDLE the bottom bar is the XMB (handled above by _tapXmbBar), so we
+        // must NOT fall through to the removed flat-hotbar geometry — doing so
+        // opened an item overlay for a slot that is no longer drawn.
+        if (this.state === STATE.ITEM_SELECTED) this._tapHotbar(pt);
     }
 
     // Touch long-press: a quick tap already fired the default action; if the finger
@@ -3022,7 +3025,7 @@ class Game {
     _useXmbCurrent() {
         const bar = buildXmbBar(this.inventory);
         const sel = resolveXmbSelection(bar, this.xmbCat, this.xmbPick);
-        if (!sel) { this._log('[Nothing usable on the bar.]'); return; }
+        if (!sel) { this._log('[Nothing usable on the bar.]'); this._render(); return; }
         this.xmbCat = sel.column.key;
         this.xmbPick = { ...this.xmbPick, [sel.column.key]: sel.item.itemDef.id };
         const def = sel.item.itemDef;
