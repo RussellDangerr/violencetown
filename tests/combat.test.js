@@ -14,7 +14,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { Entity, attack, formatDamageNumber, DEFAULT_HP, DEFAULT_ARMOR } from '../game/combat.js';
+import { Entity, attack, formatDamageNumber, computeHit, DEFAULT_HP, DEFAULT_ARMOR } from '../game/combat.js';
 
 describe('Entity defaults', () => {
     test('defaults to 100 HP, 0 armor, alive', () => {
@@ -136,5 +136,33 @@ describe('formatDamageNumber()', () => {
 
     test('null result formats to null', () => {
         assert.equal(formatDamageNumber(null), null);
+    });
+});
+
+describe('computeHit — the bucket law (Gold Standard Law 2)', () => {
+    test('base alone passes through', () => {
+        assert.equal(computeHit({ base: 10 }), 10);
+    });
+    test('flats add before multipliers', () => {
+        // (10 + 5) × 2 = 30
+        assert.equal(computeHit({ base: 10, flats: 5, elemental: 2 }), 30);
+    });
+    test('multipliers from different categories multiply', () => {
+        // 20 × 2 (weakness) × 1.5 (backstab) = 60 — the "above 50" worked example
+        assert.equal(computeHit({ base: 20, elemental: 2, positional: 1.5 }), 60);
+    });
+    test('outgoing and incoming status buckets fold in', () => {
+        // Blind attacker: 8 × 0.5 = 4
+        assert.equal(computeHit({ base: 8, outgoingMult: 0.5 }), 4);
+        // Guarding defender: 10 × 0.5 = 5
+        assert.equal(computeHit({ base: 10, incomingMult: 0.5 }), 5);
+    });
+    test('rounds ONCE at the end, floor at 1', () => {
+        // 9 × 0.5 = 4.5 → rounds to 5 (round-once law; the old inline floor gave 4)
+        assert.equal(computeHit({ base: 9, outgoingMult: 0.5 }), 5);
+        // elemental immunity ×0 is the one true zero — no floor to 1
+        assert.equal(computeHit({ base: 20, elemental: 0 }), 0);
+        // tiny positive result floors at 1
+        assert.equal(computeHit({ base: 1, outgoingMult: 0.4 }), 1);
     });
 });

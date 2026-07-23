@@ -10,6 +10,24 @@ const DEFAULT_HP    = 100;
 const DEFAULT_MP    = 100;   // Skill / mana — every creature starts at 100
 const DEFAULT_ARMOR = 0;
 
+// ── The one pipeline (Gold Standard Law 2) ────────────────────────────────────
+//
+// Every damage number in the game is computed here. The bucket law:
+//   - flats ADD to base (same-family bonuses share one bucket)
+//   - earned multipliers (elemental, positional) and status buckets
+//     (attacker-outgoing, defender-incoming) MULTIPLY — independent
+//     achievements both count fully
+//   - round ONCE at the end; a positive hit lands for at least 1
+//   - elemental immunity (×0) is the one true zero
+// Armor is NOT applied here — Entity.takeDamage subtracts it last (min 1),
+// so the full formula is: max(1, computeHit(...) − armor).
+
+function computeHit({ base, flats = 0, elemental = 1, positional = 1, outgoingMult = 1, incomingMult = 1 } = {}) {
+    const raw = (base + flats) * elemental * positional * outgoingMult * incomingMult;
+    if (raw <= 0) return 0;
+    return Math.max(1, Math.round(raw));
+}
+
 // ── Entity ────────────────────────────────────────────────────────────────────
 
 class Entity {
@@ -76,4 +94,4 @@ function formatDamageNumber(result) {
 
 // ── Exports ───────────────────────────────────────────────────────────────────
 
-export { Entity, attack, formatDamageNumber, DEFAULT_HP, DEFAULT_MP, DEFAULT_ARMOR };
+export { Entity, attack, formatDamageNumber, computeHit, DEFAULT_HP, DEFAULT_MP, DEFAULT_ARMOR };
