@@ -41,7 +41,7 @@ import {
     DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceBagSlotRects, deviceEquipLayout, deviceRingsLayout,
     xmbBarLayout,
 } from './layout.js';
-import { canTrade, buyPrice, sellPrice, bribeStepCost, BRIBE_STEP, transferGold } from './trade.js'; // pricing + the transaction spine
+import { canTrade, buyPrice, sellPrice, bribeStepCost, BRIBE_STEP, transferGold, burnGold } from './trade.js'; // pricing + the transaction spine
 import { buildXmbBar, resolveXmbSelection, cycleXmbCategory, cycleXmbItem, xmbCategoryOf, XMB_LABELS } from './xmb.js';
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
@@ -3202,7 +3202,7 @@ class Game {
                 const trick = TRICKS[node.trickId];
                 if (!trick) { this._log("[That trick isn't ready yet]"); break; }
                 if ((this.gold ?? 0) < trick.gpCost) { this._log(`[Not enough GP — ${trick.name} needs ${trick.gpCost}g.]`); break; }
-                this.gold = Math.max(0, (this.gold ?? 0) - trick.gpCost);
+                burnGold(this, trick.gpCost, 'trick'); // declared sink (Law 6a) — the guard above covers it
                 if (trick.transform) {
                     // Rat Form — fold down into a rat for a few turns (slips
                     // through grates). No aim/damage; just set the countdown.

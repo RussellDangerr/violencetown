@@ -82,15 +82,26 @@ export function bribeStepCost(disposition) {
 // transferGold is the SINGLE choke-point for gold moving between two holders — a
 // "holder" is anything with a numeric `gold` (the player Game, or an NPC). Buy,
 // sell, bribe, and dialogue costs all route through here instead of poking
-// `game.gold` (and, before now, never touching the NPC's side). It strictly
-// CONSERVES gold: it returns false and moves nothing if `from` can't cover the
-// amount. That makes gold auditable and opens future hooks — a vendor's till
-// running dry, an NPC that pays you back, taxes — all in one place. `reason` is
-// advisory (for logging / future hooks).
+// `game.gold` (and, before now, never touching the NPC's side). Transfers
+// CONSERVE gold — it returns false and moves nothing if `from` can't cover the
+// amount; declared sinks burn via burnGold instead (Law 6a). That makes gold
+// auditable and opens future hooks — a vendor's till running dry, an NPC that
+// pays you back, taxes — all in one place. `reason` is advisory (for logging /
+// future hooks).
 export function transferGold(from, to, amount, reason = '') {
     if (!from || !to || !(amount > 0)) return false;
     if ((from.gold ?? 0) < amount) return false;
     from.gold = (from.gold ?? 0) - amount;
     to.gold   = (to.gold ?? 0) + amount;
+    return true;
+}
+
+// burnGold — the declared SINK. Transfers conserve (transferGold); burns remove
+// gold from the world on purpose (offscreen purchases, trick costs). Every burn
+// goes through here so the economy audit has one hook. Returns false if holder
+// can't cover it.
+export function burnGold(holder, amount, reason = '') {
+    if (!(amount > 0) || (holder.gold ?? 0) < amount) return false;
+    holder.gold -= amount;
     return true;
 }

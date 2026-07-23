@@ -2,7 +2,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { Enemy, spawnEnemy } from '../game/enemies.js';
-import { transferGold } from '../game/trade.js';
+import { transferGold, burnGold } from '../game/trade.js';
 
 describe('Law 6 — the wallet is the loot', () => {
     test('transferGold moves an enemy wallet to a receiver and conserves total', () => {
@@ -46,5 +46,17 @@ describe('Law 6 — the wallet is the loot', () => {
     test('spawnEnemy: an unmugged spawn keeps its authored gold', () => {
         const e = spawnEnemy({ id: 'b5', type: 'Bandit', x: 0, y: 0, gold: 40 }, new Set(['someone-else']));
         assert.equal(e.gold, 40);
+    });
+
+    test('burnGold: the declared sink reduces the holder and returns true', () => {
+        const holder = { gold: 50 };
+        assert.equal(burnGold(holder, 30, 'heal'), true);
+        assert.equal(holder.gold, 20);
+    });
+
+    test('burnGold: insufficient gold → false, holder untouched', () => {
+        const holder = { gold: 10 };
+        assert.equal(burnGold(holder, 30, 'heal'), false);
+        assert.equal(holder.gold, 10);
     });
 });

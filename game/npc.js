@@ -22,6 +22,7 @@
 import { manhattan, chebyshev } from './utils.js';
 import { getGreedyStep, stepEntity, hasLineOfSight } from './pathing.js';
 import { healPurchase } from './ai.js';
+import { burnGold } from './trade.js';
 
 // ── Leash tuning ─────────────────────────────────────────────────────────────
 // A chasing enemy gives up and walks home when it strays past LEASH_DISTANCE
@@ -227,10 +228,13 @@ export function tickNpcState(game, npc, clock = game.turn) {
             // economy for now; the vendor the enemy notionally pays is
             // offscreen) — intentional, first wallet extra.
             const buy = healPurchase(npc.entity.hp, npc.entity.maxHp, npc.gold);
-            if (buy) {
-                npc.gold -= buy.spend;
+            if (buy && burnGold(npc, buy.spend, 'heal')) {
                 npc.entity.hp = Math.min(npc.entity.maxHp, npc.entity.hp + buy.heal);
-                game._log(`[${npc.name ?? npc.type} buys back ${buy.heal} HP! (−${buy.spend} GP)]`);
+                messages.push({
+                    text: `[${npc.name ?? npc.type} buys back ${buy.heal} HP! (-${buy.spend} GP)]`,
+                    sourceEnemy: npc,
+                    category: 'combat',
+                });
                 break;   // the purchase IS the turn
             }
 
