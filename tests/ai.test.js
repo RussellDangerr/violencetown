@@ -49,4 +49,7 @@ describe('healPurchase — Law 6a/6b (peg-priced heal, extras only)', () => {
     test('broke (gold < 20) → no purchase; the sliver can never heal', () => {
         assert.equal(healPurchase(10, 100, 19), null);
     });
+    test('zero-spend edge → no purchase (no zero-buy soft-lock)', () => {
+        assert.equal(healPurchase(16, 16, 50), null);  // full-HP vermin with gold: no zero-buy soft-lock
+    });
 });

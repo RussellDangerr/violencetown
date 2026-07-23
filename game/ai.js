@@ -38,5 +38,6 @@ export function isHostile(e) {
 export function healPurchase(hp, maxHp, gold) {
     if (hp > 40 || gold < 20) return null;
     const spend = Math.min(gold, maxHp - hp);
+    if (spend <= 0) return null;   // full-HP or sub-Hundred edge — no zero-GP turns
     return { spend, heal: spend };
 }
