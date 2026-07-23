@@ -248,6 +248,11 @@ git commit -m "feat(combat): guard and blind flow through computeHit's named buc
 
 ### Task 4: Elemental matchups — weak ×2 / resist ×½ / immune ×0
 
+*(Carry-forwards from Task 3's quality review: (a) in `applyDamageToPlayer`, add `if (dmg === 0)
+return 0;` between the computeHit call and the armor line — the 0-contract must not be floored
+back to 1; (b) fix three stale blind comments: buffs.js:22, enemies.js:167, enemies.js:290-291 —
+blind now applies inside applyDamageToPlayer's single pipeline call.)*
+
 **Files:**
 - Modify: `game/enemies.js` (ctor: `weak`, `resist`, `immune` arrays)
 - Modify: `game/combat.js` (add `elementalMult`)
