@@ -586,6 +586,16 @@ git commit -m "feat(combat): enemies buy heals at the peg — the first wallet e
 
 ### Task 8: The balance harness
 
+*(Amendments accumulated from Tasks 1-7 reviews: (a) the ROSTER is not hardcoded — the harness
+reads every `game/*-map.json`'s enemySpawns (plain JSON, headlessly readable; skip the
+`*-TheDangerrZone.json` snapshots) so the Law 0 lint sees the REAL world — Task 1's review found
+every map enemy is currently sub-100 non-vermin, and the golden table must document that honestly
+as lint flags, not hide it; (b) economy lint hooks: `burnGold` in trade.js is the declared-sink
+primitive, `transferGold` the conserving flow — the harness reports per-zone faucet (sum of spawn
+wallets) and names the sink hooks; (c) import HEAL_HP_FLOOR/HEAL_MIN_GOLD from ai.js and state the
+default grunt policy in the report header; (d) lint that any spawn with `hp < 100` carries
+`vermin: true`, and vermin wallets ≤ 5.)*
+
 **Files:**
 - Create: `tools/balance-harness.mjs`
 - Test: `tests/balance-harness.test.js` (create)
