@@ -19,10 +19,13 @@ const DEFAULT_ARMOR = 0;
 //     achievements both count fully
 //   - round ONCE at the end; a positive hit lands for at least 1
 //   - elemental immunity (×0) is the one true zero
-// Armor is NOT applied here — Entity.takeDamage subtracts it last (min 1),
-// so the full formula is: max(1, computeHit(...) − armor).
+// Armor is NOT applied here — Entity.takeDamage subtracts it last (min 1).
+// 0 means the hit does not happen — call sites must skip attack()/takeDamage
+// entirely on 0 (immunity), never floor it back to 1 via armor math.
+// Never chain computeHit(computeHit(...)) — pass all buckets in one call
+// (round-once).
 
-function computeHit({ base, flats = 0, elemental = 1, positional = 1, outgoingMult = 1, incomingMult = 1 } = {}) {
+function computeHit({ base = 0, flats = 0, elemental = 1, positional = 1, outgoingMult = 1, incomingMult = 1 } = {}) {
     const raw = (base + flats) * elemental * positional * outgoingMult * incomingMult;
     if (raw <= 0) return 0;
     return Math.max(1, Math.round(raw));

@@ -19,7 +19,7 @@ import {
 import { isBoss, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS } from './defeat-scenarios.js';
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
-import { attack, formatDamageNumber } from './combat.js';
+import { attack, formatDamageNumber, computeHit } from './combat.js';
 import { Enemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
 import { isHostile } from './ai.js';
 import { getGreedyStep, stepEntity, findPath } from './pathing.js'; // pathfinding (greedy chase + BFS click-to-move); stepEntity = shove a character aside
@@ -4101,8 +4101,13 @@ class Game {
 
     applyDamageToPlayer(rawDamage, attacker = null) {
         if (attacker) this._lastDefeatedBy = attacker;
-        let dmg = rawDamage;
-        if (this.hasBuff('guard')) dmg = Math.max(1, Math.floor(dmg / 2));
+        // Blind (outgoing, attacker) and guard (incoming, defender) compose in
+        // one computeHit call — round once, no double-rounding.
+        let dmg = computeHit({
+            base: rawDamage,
+            outgoingMult: attacker?.hasBuff?.('blind') ? 0.5 : 1,
+            incomingMult: this.hasBuff('guard') ? 0.5 : 1,
+        });
         dmg = Math.max(1, dmg - this._playerArmor());   // worn armor soaks the hit (min 1 always lands)
         this.playerHp = Math.max(0, this.playerHp - dmg);
         audio.playSfx('take-damage'); // [audio] player got hit

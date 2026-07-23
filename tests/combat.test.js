@@ -165,4 +165,10 @@ describe('computeHit — the bucket law (Gold Standard Law 2)', () => {
         // tiny positive result floors at 1
         assert.equal(computeHit({ base: 1, outgoingMult: 0.4 }), 1);
     });
+    test('immunity annihilates flats and other multipliers', () => {
+        assert.equal(computeHit({ base: 20, flats: 10, elemental: 0, positional: 1.5 }), 0);
+    });
+    test('missing base yields 0, never NaN', () => {
+        assert.equal(computeHit({}), 0);
+    });
 });

@@ -225,14 +225,11 @@ export function tickNpcState(game, npc, clock = game.turn) {
             // attack log line. The player-death case is handled by the death-
             // screen flow in main.js, which has its own messaging.
             //
-            // Blind debuff halves outgoing damage (deterministic — no RNG, per
-            // combat.js's "no miss" contract). The Math.max(1, ...) clamp
-            // mirrors combat.js's "at least 1 always lands" rule.
+            // Raw damage only — blind (outgoing) and guard (incoming) both
+            // fold into the single computeHit call inside applyDamageToPlayer,
+            // so they compose in one round instead of double-rounding.
             if (chebyshev(npc.x, npc.y, game.playerX, game.playerY) <= 1) {
-                const dmg = npc.hasBuff('blind')
-                    ? Math.max(1, Math.floor(npc.damage * 0.5))
-                    : npc.damage;
-                game.applyDamageToPlayer(dmg, npc);
+                game.applyDamageToPlayer(npc.damage, npc);   // blind folds in at the one computeHit call site
                 break;
             }
 
