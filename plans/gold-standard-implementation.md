@@ -420,6 +420,13 @@ git commit -m "feat(combat): backstab — x1.5 from the tile directly behind the
 
 ### Task 6: Wallets — loot on death, respawns come back broke
 
+*(Carry-forwards from Task 5's reviews: (a) ally melee (main.js:~3888) routes through computeHit
+with the ally's damage as base — allies are combatants, the pipeline is for everyone (matters for
+Task 9's lion); (b) ally movement (main.js:~3897/3905 direct x/y assignment) goes through
+stepEntity so allies have real facing; (c) `_lastDx`/`_lastDy` join toSave/fromSave so a mid-fight
+reload doesn't erase an enemy's back. Deferred cosmetics, not in scope: immune-AoE double-logging,
+"shrugged off" phrasing.)*
+
 **Files:**
 - Modify: `game/main.js` (`_handleEnemyDeath`; spawn loop ~567; save/load fields)
 - Test: `tests/wallets.test.js` (create)
