@@ -19,7 +19,7 @@ import {
 import { isBoss, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS } from './defeat-scenarios.js';
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
-import { attack, formatDamageNumber, computeHit } from './combat.js';
+import { attack, formatDamageNumber, computeHit, elementalMult } from './combat.js';
 import { Enemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
 import { isHostile } from './ai.js';
 import { getGreedyStep, stepEntity, findPath } from './pathing.js'; // pathfinding (greedy chase + BFS click-to-move); stepEntity = shove a character aside
@@ -3115,7 +3115,9 @@ class Game {
         let hit = 0;
         for (const t of tiles) {
             const e = this.enemies.find(en => en.entity.isAlive() && en.x === t.x && en.y === t.y);
-            if (e) { this.combatAttack(e, damage, opts); hit++; }
+            // combatAttack composes the elemental matchup itself and returns null
+            // on immune (already logged) — only count tiles that actually landed.
+            if (e && this.combatAttack(e, damage, opts)) hit++;
         }
         return hit;
     }
@@ -3681,7 +3683,16 @@ class Game {
         const typeBonus = opts.type && mods[opts.type + 'Damage'];
         if (typeBonus) dmg = Math.round(dmg * (1 + typeBonus / 100));
 
-        const result = attack(playerEntity, enemyObj.entity, dmg);
+        // Law 2: elemental matchup folds in here — the one computeHit call for
+        // this swing (round-once). Immune skips attack() entirely (0-contract).
+        const finalDmg = computeHit({
+            base: dmg,
+            elemental: elementalMult(opts.type, enemyObj),
+            positional: 1,               // backstab lands here in Task 5
+        });
+        if (finalDmg === 0) { this._log(`[${enemyObj.type} is immune!]`); return null; }
+
+        const result = attack(playerEntity, enemyObj.entity, finalDmg);
 
         // (AGGRO behavior bands) Friendly fire — hitting your own bribed ally
         // re-flips them to hostile. The blow still lands (below); they just turn
@@ -4108,6 +4119,7 @@ class Game {
             outgoingMult: attacker?.hasBuff?.('blind') ? 0.5 : 1,
             incomingMult: this.hasBuff('guard') ? 0.5 : 1,
         });
+        if (dmg === 0) return 0;   // 0-contract: hit doesn't happen, never floor back via armor
         dmg = Math.max(1, dmg - this._playerArmor());   // worn armor soaks the hit (min 1 always lands)
         this.playerHp = Math.max(0, this.playerHp - dmg);
         audio.playSfx('take-damage'); // [audio] player got hit

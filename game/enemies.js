@@ -71,6 +71,9 @@ export class Enemy {
         // Law 0 (plans/gold-standard-design.md): ambient vermin (rats, etc.) are
         // legally exempt from The Hundred and may spawn with sub-100 HP.
         vermin = false,
+        // Law 2 (plans/gold-standard-design.md): elemental matchups. Arrays of
+        // damageType strings read by combat.js's elementalMult.
+        weak = null, resist = null, immune = null,
         // Vendor fields (trade Slice 1). `vendor:true` makes the NPC a shopkeep —
         // pressing [E] adjacent opens their trade window. `stock` is the list of
         // item ids they sell (infinite supply for now); buy/sell prices come from
@@ -151,6 +154,9 @@ export class Enemy {
         this.dialogueId    = dialogueId;
         this.tag           = tag;
         this.vermin        = !!vermin;
+        this.weak          = weak;
+        this.resist        = resist;
+        this.immune        = immune;
         this.vendor        = vendor;
         this.stock         = stock;
         this.specialBuys   = specialBuys;
@@ -163,8 +169,9 @@ export class Enemy {
 
         // Debuffs / buffs — symmetric with Game.buffs[] on the player side.
         // Used by Poke (applies Blind), Poison (DoT, future), Stun (skip
-        // turn, future), etc. Combat-side effect reads in resolveEnemyTurns
-        // (e.g., enemy.hasBuff('blind') halves outgoing damage).
+        // turn, future), etc. Combat-side effect reads inside
+        // applyDamageToPlayer's single computeHit call (main.js) — e.g.,
+        // enemy.hasBuff('blind') halves its outgoing damage there.
         this.buffs = [];
     }
 
@@ -229,6 +236,10 @@ export class Enemy {
             // Law 0 (plans/gold-standard-design.md): the vermin exemption must
             // survive a reload, or a saved rat comes back an illegal sub-Hundred.
             vermin: this.vermin,
+            // Law 2 (plans/gold-standard-design.md): elemental matchups must
+            // survive a reload the same way — ctor↔save drift already shipped
+            // bugs once (vermin).
+            weak: this.weak, resist: this.resist, immune: this.immune,
         };
     }
 
@@ -288,7 +299,8 @@ export function resolveEnemyTurns(game) {
         // Tick this enemy's buffs/debuffs (Blind, future Poison/Stun/Slow)
         // BEFORE any FSM/legacy logic runs. Expired buffs get removed; the
         // effect of an active buff reads later in the turn (e.g., Blind
-        // halves the damage at the attack site).
+        // folds into applyDamageToPlayer's single computeHit call and
+        // halves the enemy's outgoing damage there).
         enemy.tickBuffs(game);
 
         // (fear) A feared enemy flees this turn — one step directly away from

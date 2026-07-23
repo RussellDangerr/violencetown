@@ -14,7 +14,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { Entity, attack, formatDamageNumber, computeHit, DEFAULT_HP, DEFAULT_ARMOR } from '../game/combat.js';
+import { Entity, attack, formatDamageNumber, computeHit, elementalMult, DEFAULT_HP, DEFAULT_ARMOR } from '../game/combat.js';
 
 describe('Entity defaults', () => {
     test('defaults to 100 HP, 0 armor, alive', () => {
@@ -170,5 +170,18 @@ describe('computeHit — the bucket law (Gold Standard Law 2)', () => {
     });
     test('missing base yields 0, never NaN', () => {
         assert.equal(computeHit({}), 0);
+    });
+});
+
+describe('elementalMult — Law 2 elemental family', () => {
+    const gasbag = { weak: ['fire'], resist: ['cold'], immune: ['fear'] };
+    test('weakness doubles', () => assert.equal(elementalMult('fire', gasbag), 2));
+    test('resistance halves', () => assert.equal(elementalMult('cold', gasbag), 0.5));
+    test('immunity zeroes', () => assert.equal(elementalMult('fear', gasbag), 0));
+    test('untyped damage or unlisted type is neutral', () => {
+        assert.equal(elementalMult(undefined, gasbag), 1);
+        assert.equal(elementalMult('energy', gasbag), 1);
+        assert.equal(elementalMult('fire', {}), 1);
+        assert.equal(elementalMult('fire', null), 1);
     });
 });

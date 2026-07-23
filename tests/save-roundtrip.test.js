@@ -372,6 +372,15 @@ describe('enemy save contract: ambient + allegiance round-trip (PD-5)', () => {
         assert.equal(out.entity.maxHp, 16);
         assert.equal(out.entity.hp, 16);
     });
+
+    test('an enemy keeps its weak/immune elemental arrays across a round-trip', () => {
+        // Law 2 (plans/gold-standard-design.md): ctor↔save drift already shipped
+        // bugs once (vermin) — weak/resist/immune must not repeat it.
+        const gasbag = new Enemy({ id: 'gas', type: 'Gasbag', x: 6, y: 6, weak: ['fire'], immune: ['fear'] });
+        const out = rt(gasbag);
+        assert.deepEqual(out.weak, ['fire']);
+        assert.deepEqual(out.immune, ['fear']);
+    });
 });
 
 describe('allegiance round-trip + derive-from-old-save (PD-3)', () => {

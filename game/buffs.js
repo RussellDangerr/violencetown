@@ -19,7 +19,8 @@
 // documented riders at their read sites rather than table entries:
 //   - `guard`  — a passive damage-halve read in applyDamageToPlayer (not a tick).
 //   - `feared` — a movement override in resolveEnemyTurns (flee instead of act).
-//   - `blind`  — read at the enemy's attack to halve its outgoing damage.
+//   - `blind`  — folds into applyDamageToPlayer's single computeHit call
+//     (outgoingMult) to halve the attacker's outgoing damage.
 
 import { SLUDGE_DOT } from './data.js';
 

@@ -31,6 +31,16 @@ function computeHit({ base = 0, flats = 0, elemental = 1, positional = 1, outgoi
     return Math.max(1, Math.round(raw));
 }
 
+// Elemental matchup (Law 2): weakness ×2, resist ×½, immune ×0, else ×1.
+// `target` carries optional weak/resist/immune arrays of damageType strings.
+function elementalMult(damageType, target) {
+    if (!damageType || !target) return 1;
+    if (target.immune?.includes(damageType)) return 0;
+    if (target.weak?.includes(damageType))   return 2;
+    if (target.resist?.includes(damageType)) return 0.5;
+    return 1;
+}
+
 // ── Entity ────────────────────────────────────────────────────────────────────
 
 class Entity {
@@ -97,4 +107,4 @@ function formatDamageNumber(result) {
 
 // ── Exports ───────────────────────────────────────────────────────────────────
 
-export { Entity, attack, formatDamageNumber, computeHit, DEFAULT_HP, DEFAULT_MP, DEFAULT_ARMOR };
+export { Entity, attack, formatDamageNumber, computeHit, elementalMult, DEFAULT_HP, DEFAULT_MP, DEFAULT_ARMOR };
