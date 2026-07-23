@@ -1,6 +1,6 @@
-import { test } from 'node:test';
+import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { findPath } from '../game/pathing.js';
+import { findPath, stepEntity } from '../game/pathing.js';
 import { chebyshev } from '../game/utils.js';
 
 // A fake game whose walkability reads a string grid ('#' = wall, else floor).
@@ -71,4 +71,24 @@ test('already there / already adjacent → []', () => {
   const g = makeGame(['.....']);
   assert.deepEqual(findPath(g, { x: 2, y: 0 }, { x: 2, y: 0 }), []);
   assert.deepEqual(findPath(g, { x: 3, y: 0 }, { x: 4, y: 0 }, { adjacent: true }), []);
+});
+
+// Pins: stepEntity stamps _lastDx/_lastDy (the backstab facing) via Math.sign
+// of the move, read from the OLD position before x/y are overwritten.
+describe('stepEntity — facing stamp (_lastDx/_lastDy)', () => {
+  test('a diagonal step stamps its direction', () => {
+    const e = { x: 5, y: 5 };
+    stepEntity(e, 6, 6, 100);
+    assert.equal(e._lastDx, 1);
+    assert.equal(e._lastDy, 1);
+    assert.equal(e.x, 6);
+    assert.equal(e.y, 6);
+  });
+  test('the next step restamps from the new position', () => {
+    const e = { x: 5, y: 5 };
+    stepEntity(e, 6, 6, 100);   // (1,1)
+    stepEntity(e, 6, 5, 100);   // north from (6,6) → (0,-1)
+    assert.equal(e._lastDx, 0);
+    assert.equal(e._lastDy, -1);
+  });
 });

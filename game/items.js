@@ -584,7 +584,8 @@ function resolveMelee(game, itemDef, direction) {
 
     const hit = game.enemies.find(e => e.entity.isAlive() && e.x === tx && e.y === ty);
     if (hit) {
-        const result = game.combatAttack(hit, itemDef.damage);
+        // Swung item's own damageType (undefined → neutral), matching the weapon paths.
+        const result = game.combatAttack(hit, itemDef.damage, { type: itemDef.damageType });
         return `[Hit ${hit.entity.name} with ${itemDef.name} — ${result}]`;
     }
 

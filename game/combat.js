@@ -42,9 +42,10 @@ function elementalMult(damageType, target) {
 }
 
 // Backstab (Law 2 positional, ×1.5): the attacker stands on the tile DIRECTLY
-// behind the target's last step direction. Strict — diagonals don't count, and
-// a target that has never moved has no back. The 5-Zone Body's "Back" zone,
-// as a rule instead of an HP pool.
+// behind the target's last step direction. Strict — only the single tile
+// directly opposite the last step counts (a diagonal step yields a diagonal
+// back tile); a target that has never moved has no back. The 5-Zone Body's
+// "Back" zone, as a rule instead of an HP pool.
 function isBackstab(attackerX, attackerY, target) {
     if (!target._lastDx && !target._lastDy) return false;
     return attackerX === target.x - target._lastDx

@@ -197,7 +197,7 @@ describe('isBackstab — Law 2 positional', () => {
     test('any other adjacent tile → false', () => {
         const e = { x: 5, y: 5, _lastDx: 0, _lastDy: -1 };
         assert.equal(isBackstab(4, 5, e), false);
-        assert.equal(isBackstab(4, 6, e), false);              // diagonal-behind is NOT a backstab
+        assert.equal(isBackstab(4, 6, e), false);              // diagonal-behind of a CARDINAL facing is not the back tile
     });
     test('an enemy that has never moved cannot be backstabbed', () => {
         assert.equal(isBackstab(5, 6, { x: 5, y: 5 }), false);

@@ -229,6 +229,9 @@ export function tickNpcState(game, npc, clock = game.turn) {
             // fold into the single computeHit call inside applyDamageToPlayer,
             // so they compose in one round instead of double-rounding.
             if (chebyshev(npc.x, npc.y, game.playerX, game.playerY) <= 1) {
+                // Attacking faces the target — a shove buys one backstab window, not a farm.
+                npc._lastDx = Math.sign(game.playerX - npc.x);
+                npc._lastDy = Math.sign(game.playerY - npc.y);
                 game.applyDamageToPlayer(npc.damage, npc);   // blind folds in at the one computeHit call site
                 break;
             }
