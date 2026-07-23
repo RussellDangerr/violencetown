@@ -74,6 +74,11 @@ export class Enemy {
         // Law 2 (plans/gold-standard-design.md): elemental matchups. Arrays of
         // damageType strings read by combat.js's elementalMult.
         weak = null, resist = null, immune = null,
+        // (carry-forward c) Facing for backstab (combat.js isBackstab), normally
+        // stamped live by pathing.js's stepEntity. Persisted so a mid-fight
+        // reload doesn't erase an enemy's back — mirrors x/y: ctor param + field
+        // + toSave, restored via fromSave's `new Enemy(s)` same as x/y.
+        _lastDx = 0, _lastDy = 0,
         // Vendor fields (trade Slice 1). `vendor:true` makes the NPC a shopkeep —
         // pressing [E] adjacent opens their trade window. `stock` is the list of
         // item ids they sell (infinite supply for now); buy/sell prices come from
@@ -157,6 +162,10 @@ export class Enemy {
         this.weak          = weak;
         this.resist        = resist;
         this.immune        = immune;
+        // (carry-forward c) restored facing; overwritten live by stepEntity on
+        // this enemy's next move, same as x/y.
+        this._lastDx       = _lastDx;
+        this._lastDy       = _lastDy;
         this.vendor        = vendor;
         this.stock         = stock;
         this.specialBuys   = specialBuys;
@@ -240,6 +249,9 @@ export class Enemy {
             // survive a reload the same way — ctor↔save drift already shipped
             // bugs once (vermin).
             weak: this.weak, resist: this.resist, immune: this.immune,
+            // (carry-forward c) facing for backstab — a mid-fight reload must
+            // not erase an enemy's back.
+            _lastDx: this._lastDx, _lastDy: this._lastDy,
         };
     }
 

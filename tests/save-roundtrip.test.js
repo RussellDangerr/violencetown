@@ -501,3 +501,45 @@ describe('runtime dropped-items persistence (Task 2)', () => {
         assert.deepEqual(g2._droppedItems, {});
     });
 });
+
+// ── Task 6: mugged enemies stay broke across a save round-trip (Law 6d) ──────
+describe('muggedIds persistence (Task 6)', () => {
+
+    test('mugged enemy ids persist across a save round-trip', async () => {
+        const g = makeBlankGame();
+        g._muggedIds = new Set(['bandit1', 'thug2']);
+        const blob = JSON.parse(JSON.stringify(serialize(g)));
+        const g2 = makeBlankGame();
+        await loadIntoReal(g2, blob);
+        assert.deepEqual([...g2._muggedIds].sort(), ['bandit1', 'thug2']);
+    });
+
+    test('old save (no muggedIds) loads as an empty set without throwing', async () => {
+        const g = makeBlankGame();
+        const blob = JSON.parse(JSON.stringify(serialize(g)));
+        delete blob.world.muggedIds;
+        const g2 = makeBlankGame();
+        await loadIntoReal(g2, blob);
+        assert.equal(g2._muggedIds.size, 0);
+    });
+});
+
+// ── Task 6: Enemy._lastDx/_lastDy (carry-forward c) round-trip ───────────────
+describe('enemy facing (_lastDx/_lastDy) round-trip (Task 6 carry-forward c)', () => {
+    const rt = (e) => Enemy.fromSave(JSON.parse(JSON.stringify(e.toSave())));
+
+    test('a mid-fight facing survives a reload (backstab back must not reset)', () => {
+        const e = new Enemy({ id: 'brute', type: 'Brute', x: 4, y: 4 });
+        e._lastDx = 1; e._lastDy = 0; // stepEntity would have stamped this live
+        const out = rt(e);
+        assert.equal(out._lastDx, 1);
+        assert.equal(out._lastDy, 0);
+    });
+
+    test('an enemy that never moved has no back (0,0), same as a fresh spawn', () => {
+        const e = new Enemy({ id: 'fresh', type: 'Rat', x: 1, y: 1 });
+        const out = rt(e);
+        assert.equal(out._lastDx, 0);
+        assert.equal(out._lastDy, 0);
+    });
+});

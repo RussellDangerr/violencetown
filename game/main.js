@@ -359,6 +359,10 @@ class Game {
         this._pendingFollowersFrom = null;   // url of the zone they're chasing you OUT of
         this._zonePursuit = false;           // (playtest) monsters don't follow you through doors for now
         this._collectedItems = new Set();    // "map|x|y|type" of ground items already taken, so they don't respawn on zone re-entry
+        // Law 6 (plans/gold-standard-design.md): ids of enemies already looted on
+        // death, so a respawn (zone re-entry re-spawns from map.enemySpawns) comes
+        // back broke instead of farmable for gold every time. Persisted.
+        this._muggedIds = new Set();
         // Runtime ground-drops per map ("mapUrl" → [{ type, x, y }]), so a drop
         // survives leaving and re-entering a zone. Recorded today for enemy
         // death-drops; the player-drop path routes through here once a drop verb
@@ -564,7 +568,11 @@ class Game {
             if (def) this.groundItems.push({ type: d.type, x: d.x, y: d.y, def });
         }
         this.enemies = [];
-        for (const s of this.map.enemySpawns) this.enemies.push(new Enemy(s));
+        for (const s of this.map.enemySpawns) {
+            const e = new Enemy(s);
+            if (this._muggedIds.has(e.id)) e.gold = 0; // Law 6: already looted — respawns broke
+            this.enemies.push(e);
+        }
 
         // (zone pursuit) Re-inject any hostiles that chased you through the door.
         // They spawn at the door leading back where you came from — visible in
@@ -3790,6 +3798,16 @@ class Game {
     // ally landing the finishing blow still drops the converter / feeds the
     // gauntlet instead of soft-locking the quest. (AGGRO behavior bands)
     _handleEnemyDeath(enemyObj) {
+        // Law 6: the wallet IS the loot — whatever gold this enemy carries moves
+        // to the player through the trade spine (conserves; never mints/burns).
+        // Mark them mugged so a respawn (zone re-entry) comes back broke, not
+        // farmable every reload.
+        if (enemyObj.gold > 0) {
+            const loot = enemyObj.gold;
+            transferGold(enemyObj, this, loot, 'loot');
+            this._log(`[Looted ${loot} GP.]`);
+            this._muggedIds.add(enemyObj.id);
+        }
         audio.playSfx('enemy-killed'); // [audio] K.O. sting on a kill
         this._spawnEventWord(enemyObj.x, enemyObj.y, 'K.O.!', '#ff8822', 22);
         this._log(`[Defeated ${enemyObj.entity.name}]`);
@@ -3885,7 +3903,10 @@ class Game {
 
         if (target) {
             if (cheb(ally.x, ally.y, target.x, target.y) <= 1) {
-                const result = attack(ally.entity, target.entity, ally.damage);
+                // Route through the one pipeline (Law 2) same as everyone else —
+                // no elemental/positional for allies yet, just base damage.
+                const finalDmg = computeHit({ base: ally.damage });
+                const result = attack(ally.entity, target.entity, finalDmg);
                 if (result) {
                     this._spawnHitSplat(target.x, target.y, `-${result.dealt}`, 'physical', { omni: true });
                     target._hitFlashUntil = performance.now() + 120;
@@ -3893,8 +3914,10 @@ class Game {
                     if (result.killed) this._handleEnemyDeath(target);
                 }
             } else {
+                // stepEntity (not a direct x/y poke) so allies get real facing +
+                // slide anim, same as hostiles.
                 const step = getGreedyStep(this, { x: ally.x, y: ally.y }, { x: target.x, y: target.y }, { self: ally });
-                if (step) { ally.x = step.x; ally.y = step.y; }
+                if (step) stepEntity(ally, step.x, step.y, this._MOVE_MS);
             }
             return [];
         }
@@ -3902,7 +3925,7 @@ class Game {
         // No hostile in range — leash-follow the player.
         if (manhattan(ally.x, ally.y, this.playerX, this.playerY) > LEASH) {
             const step = getGreedyStep(this, { x: ally.x, y: ally.y }, { x: this.playerX, y: this.playerY }, { self: ally });
-            if (step) { ally.x = step.x; ally.y = step.y; }
+            if (step) stepEntity(ally, step.x, step.y, this._MOVE_MS);
         }
         return [];
     }
