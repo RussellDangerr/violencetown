@@ -21,6 +21,7 @@
 
 import { manhattan, chebyshev } from './utils.js';
 import { getGreedyStep, stepEntity, hasLineOfSight } from './pathing.js';
+import { healPurchase } from './ai.js';
 
 // ── Leash tuning ─────────────────────────────────────────────────────────────
 // A chasing enemy gives up and walks home when it strays past LEASH_DISTANCE
@@ -218,6 +219,19 @@ export function tickNpcState(game, npc, clock = game.turn) {
                     category: 'deaggro',
                 });
                 break;
+            }
+
+            // Law 6a/6b (plans/gold-standard-design.md): a hurt, solvent enemy
+            // spends its turn buying HP back at the peg instead of swinging —
+            // the purchase IS the turn. Spent gold is BURNED (leaves the
+            // economy for now; the vendor the enemy notionally pays is
+            // offscreen) — intentional, first wallet extra.
+            const buy = healPurchase(npc.entity.hp, npc.entity.maxHp, npc.gold);
+            if (buy) {
+                npc.gold -= buy.spend;
+                npc.entity.hp = Math.min(npc.entity.maxHp, npc.entity.hp + buy.heal);
+                game._log(`[${npc.name ?? npc.type} buys back ${buy.heal} HP! (−${buy.spend} GP)]`);
+                break;   // the purchase IS the turn
             }
 
             // Adjacent? Attack. Visual feedback (red damage number, hit-flash,

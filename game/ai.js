@@ -31,3 +31,12 @@ export function deriveAllegiance(src) {
 export function isHostile(e) {
   return !!e && e.allegiance === 'hostile';
 }
+
+// healPurchase — Law 6: enemies buy heals at the peg (1 GP = 1 HP).
+// Rule: at or below 40 HP and holding at least 20 GP, spend min(gold, missing HP).
+// Returns { spend, heal } or null. Pure — npc.js applies the result.
+export function healPurchase(hp, maxHp, gold) {
+    if (hp > 40 || gold < 20) return null;
+    const spend = Math.min(gold, maxHp - hp);
+    return { spend, heal: spend };
+}
