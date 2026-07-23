@@ -38,9 +38,11 @@ import {
     TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BUYBACK_ORIGIN, TRADE_BRIBE_RECT,
     TRADE_COLS, tradeCellRect,
     EQUIPMENT_MODAL_RECT, EQUIP_SLOT_RECTS,
-    DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceEquipLayout, deviceRingsLayout,
+    DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceBagSlotRects, deviceEquipLayout, deviceRingsLayout,
+    xmbBarLayout,
 } from './layout.js';
 import { canTrade, buyPrice, sellPrice, bribeStepCost, BRIBE_STEP, transferGold } from './trade.js'; // pricing + the transaction spine
+import { buildXmbBar, resolveXmbSelection, cycleXmbCategory, cycleXmbItem, xmbCategoryOf, XMB_LABELS } from './xmb.js';
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
 import {
@@ -297,6 +299,11 @@ class Game {
         // Item overlay options (populated when overlay shows)
         this.overlayOptions = []; // ordered [{ label, action }] — the item's tappable action list
         this.overlayCursor = 0;   // highlighted row in the item-overlay list
+
+        // (XMB) Always-live usable-bar cursor. A projection over `inventory`, so
+        // it is not saved — it rebuilds from the bag on load and clamps itself.
+        this.xmbCat = 'throw';   // current category; re-clamped to a non-empty one at use time
+        this.xmbPick = {};       // remembered item id per category: { throw, drink, eat }
 
         // (combat-wheel rework) Verb-tree combat wheel — opened anywhere by
         // Space / the touch ACTION button (no bump-to-attack). The pure model in
@@ -950,6 +957,8 @@ class Game {
                 if (e.code === 'KeyJ') { this._deviceTab = 'quests'; this._render(); return; }
                 if (e.code === 'KeyM') { this._deviceTab = 'map';    this._render(); return; }
                 if (e.code === 'KeyR') { this._deviceTab = 'rings'; this._render(); return; }
+                if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { this._deviceCycleTab(-1); return; }
+                if (e.code === 'ArrowRight' || e.code === 'KeyD') { this._deviceCycleTab(1);  return; }
                 if (this._deviceTab === 'quests' && (e.code === 'ArrowUp'   || e.code === 'KeyW')) { this._scrollJournal(1);  return; }
                 if (this._deviceTab === 'quests' && (e.code === 'ArrowDown' || e.code === 'KeyS')) { this._scrollJournal(-1); return; }
                 return;
@@ -1102,6 +1111,18 @@ class Game {
 
             // ── IDLE: main input ──
             if (this.state !== STATE.IDLE) return;
+
+            // (XMB) Shift + arrows / WASD scrolls the always-live usable-bar;
+            // bare arrows/WASD still walk. Enter uses the highlighted item.
+            // Must run BEFORE the bare-arrow move handler below — DIRS[e.code]
+            // doesn't check e.shiftKey, so it would otherwise eat Shift+arrow
+            // as a walk/turn before this block ever saw it.
+            const XMB_NAV = {
+                ArrowLeft: 'catPrev', KeyA: 'catPrev', ArrowRight: 'catNext', KeyD: 'catNext',
+                ArrowUp: 'itemPrev', KeyW: 'itemPrev', ArrowDown: 'itemNext', KeyS: 'itemNext',
+            };
+            if (e.shiftKey && XMB_NAV[e.code]) { e.preventDefault(); this._xmbNav(XMB_NAV[e.code]); return; }
+            if (e.code === 'Enter' || e.code === 'NumpadEnter') { e.preventDefault(); this._useXmbCurrent(); return; }
 
             // Arrow/WASD = turn-in-place (tap toward a new direction) or walk
             // (already facing that way, or hold past _TURN_MS). The held-key
@@ -1736,6 +1757,7 @@ class Game {
         // (Target Wheel) An IDLE tap on the world focuses the tapped tile's
         // target; nothing there → fall through to the hotbar.
         if (this.state === STATE.IDLE) {
+            if (this._tapXmbBar(pt)) return;   // (XMB) consumed a bottom-bar tap
             const tile = this._screenToTile(pt);
             // Bare tap on a thing → walk adjacent (if needed) → fire its DEFAULT
             // verb (Take/Talk/Hit/Examine). The full Target List is on long-press /
@@ -1751,8 +1773,11 @@ class Game {
                 if (path && path.length) { this._walkPath(path); return; }
             }
         }
-        // IDLE or ITEM_SELECTED → hotbar tap.
-        this._tapHotbar(pt);
+        // ITEM_SELECTED → legacy hotbar tap (slot re-select / tap-outside cancel).
+        // In IDLE the bottom bar is the XMB (handled above by _tapXmbBar), so we
+        // must NOT fall through to the removed flat-hotbar geometry — doing so
+        // opened an item overlay for a slot that is no longer drawn.
+        if (this.state === STATE.ITEM_SELECTED) this._tapHotbar(pt);
     }
 
     // Touch long-press: a quick tap already fired the default action; if the finger
@@ -2844,11 +2869,29 @@ class Game {
         const gi = this.groundItems[idx];
         const def = ITEMS[gi.type];
         if (!def) { this.groundItems.splice(idx, 1); return; }
+
+        // (XMB routing) Gear auto-equips into a FREE body slot; otherwise it waits
+        // in the bag as spare (swap it in from the GEAR tab). Usables land in the
+        // bag and surface on the XMB bar. The log names where the item went.
+        const markTaken = () => {
+            this._collectedItems.add(`${this._mapUrl}|${x}|${y}|${gi.type}`);
+            this.groundItems.splice(idx, 1);
+            audio.playSfx('pickup');
+        };
+
+        if (def.useType === 'equip' && def.equipSlot && !this.equipment[def.equipSlot]) {
+            this.equipment[def.equipSlot] = def;
+            markTaken();
+            this._log(`[Equipped ${def.name}.]`, 'pickup');
+            return;
+        }
+
         if (!this._addToInventory(def)) { this._log('[Your bag is full.]'); return; }
-        this._collectedItems.add(`${this._mapUrl}|${x}|${y}|${gi.type}`);
-        this.groundItems.splice(idx, 1);
-        audio.playSfx('pickup');
-        this._log(`[Took ${def.name}.]`, 'pickup');
+        markTaken();
+        const cat = xmbCategoryOf(def);
+        if (cat)                          this._log(`[Took ${def.name} → ${XMB_LABELS[cat]}.]`, 'pickup');
+        else if (def.useType === 'equip') this._log(`[Stashed ${def.name} in your bag.]`, 'pickup');
+        else                              this._log(`[Took ${def.name}.]`, 'pickup');
     }
 
     // Spin the active ring one slot and stamp the spin so the renderer sweeps it.
@@ -2959,6 +3002,74 @@ class Game {
         this.selectedSlot = -1;
         this.state = STATE.IDLE;
         this._advanceWorld();
+    }
+
+    // (XMB) Move the usable-bar cursor. action ∈ catPrev|catNext|itemPrev|itemNext.
+    _xmbNav(action) {
+        const bar = buildXmbBar(this.inventory);
+        if (!bar.columns.length) return;
+        if (!bar.columns.some(c => c.key === this.xmbCat)) this.xmbCat = bar.columns[0].key;
+        if (action === 'catPrev' || action === 'catNext') {
+            this.xmbCat = cycleXmbCategory(bar, this.xmbCat, action === 'catNext' ? 1 : -1);
+        } else {
+            const id = cycleXmbItem(bar, this.xmbCat, this.xmbPick, action === 'itemNext' ? 1 : -1);
+            if (id) this.xmbPick = { ...this.xmbPick, [this.xmbCat]: id };
+        }
+        audio.playSfx('menu-tick');
+        this._render();
+    }
+
+    // (XMB) Use the highlighted bar item: THROW auto-aims the nearest hostile in
+    // range and bursts; DRINK/EAT consume on the spot. Both reuse the existing
+    // resolver bridges (_doThrowAt / _doItemUse), which consume + advance the world.
+    _useXmbCurrent() {
+        const bar = buildXmbBar(this.inventory);
+        const sel = resolveXmbSelection(bar, this.xmbCat, this.xmbPick);
+        if (!sel) { this._log('[Nothing usable on the bar.]'); this._render(); return; }
+        this.xmbCat = sel.column.key;
+        this.xmbPick = { ...this.xmbPick, [sel.column.key]: sel.item.itemDef.id };
+        const def = sel.item.itemDef;
+        this.selectedSlot = sel.item.slot;              // both bridges read selectedSlot
+        if (sel.column.key === 'throw') {
+            const tile = this._xmbAimTile(def.range || 5);
+            if (!tile) { this.selectedSlot = -1; this._log(`[No target in range for ${def.name}.]`); this._render(); return; }
+            this._doThrowAt(tile);
+        } else {
+            this._doItemUse(def);
+        }
+    }
+
+    // (XMB) Nearest alive hostile within Chebyshev `range`; else null (never waste
+    // a throw on empty ground).
+    _xmbAimTile(range) {
+        let best = null, bestD = Infinity;
+        for (const e of this.enemies) {
+            if (!e.entity.isAlive() || !isHostile(e)) continue;
+            const d = Math.max(Math.abs(e.x - this.playerX), Math.abs(e.y - this.playerY));
+            if (d <= range && d < bestD) { bestD = d; best = { x: e.x, y: e.y }; }
+        }
+        return best;
+    }
+
+    // (XMB) Touch/click on the bottom bar. Tap a chip → switch category; tap the
+    // ▲/▼ affordance → scroll the item column; tap the current-item cell → use it.
+    // Returns true when the tap was on the bar (so it doesn't also move the world).
+    _tapXmbBar(pt) {
+        const bar = buildXmbBar(this.inventory);
+        if (!bar.columns.length) return false;
+        const lay = xmbBarLayout(bar);
+        for (const chip of lay.chips) {
+            if (this._pointInRect(pt, chip, HIT_SLOP)) {
+                this.xmbCat = chip.key; audio.playSfx('menu-tick'); this._render(); return true;
+            }
+        }
+        const sel = resolveXmbSelection(bar, this.xmbCat, this.xmbPick);
+        if (sel && sel.column.items.length > 1) {
+            if (this._pointInRect(pt, lay.up, HIT_SLOP))   { this._xmbNav('itemPrev'); return true; }
+            if (this._pointInRect(pt, lay.down, HIT_SLOP)) { this._xmbNav('itemNext'); return true; }
+        }
+        if (this._pointInRect(pt, lay.current, HIT_SLOP)) { this._useXmbCurrent(); return true; }
+        return false;
     }
 
     // True if the last-fired action can be repeated as-is (express double-tap).
@@ -4648,6 +4759,30 @@ class Game {
                 return;
             }
         }
+        // ITEMS (Bag) body → tap a gear item to wear it (swap-aware). Usables are
+        // used from the XMB bar, not here; quest items are held. Reads the SAME
+        // slot rects deviceBagSlotRects hands the renderer, so the tap can't drift.
+        if (this._deviceTab === 'items') {
+            const rects = deviceBagSlotRects(deviceBodyRect());
+            for (let i = 0; i < rects.length; i++) {
+                if (!this._pointInRect(pt, rects[i], HIT_SLOP)) continue;
+                const stack = this.inventory[i];
+                if (!stack) return;                       // empty slot — nothing to do
+                const def = stack.itemDef;
+                if (def.useType === 'equip' && def.equipSlot) {
+                    const msg = resolveUse(this, def, null);   // useType:'equip' → resolveEquip (re-bags any displaced piece)
+                    this._removeFromSlot(i);                   // the worn copy leaves the bag
+                    this._refreshGrantedSkills();
+                    if (msg) this._log(msg);
+                    audio.playSfx('menu-confirm');
+                } else {
+                    this._log(def.questItem ? '[Best hold onto that.]' : `[${def.name} — used from the bar.]`);
+                }
+                this._render();
+                return;
+            }
+            return;
+        }
         // SKILLS body → the two-hands ring loadout. Tapping a FILLED socket
         // unslots that ring; tapping an EMPTY unlocked socket cycles the next
         // owned-but-unslotted ring into it. Reads the SAME sockets deviceRingsLayout
@@ -4676,9 +4811,20 @@ class Game {
             for (const s of slots) {
                 if (s.key === 'weapon') continue;
                 if (!this._pointInRect(pt, s)) continue;
-                if (!this.equipment[s.key]) return;   // empty plate — nothing to remove
-                const msg = unequipItem(this, s.key);
-                if (msg) this._log(msg);
+                if (this.equipment[s.key]) {
+                    const msg = unequipItem(this, s.key);   // filled plate → back to the bag
+                    if (msg) this._log(msg);
+                } else {
+                    // empty plate → wear the first spare gear in the bag for this slot
+                    const spareIdx = this.inventory.findIndex(
+                        st => st && st.itemDef.useType === 'equip' && st.itemDef.equipSlot === s.key);
+                    if (spareIdx < 0) { this._log(`[No spare ${s.key} gear in your bag.]`); return; }
+                    const def = this.inventory[spareIdx].itemDef;
+                    const msg = resolveUse(this, def, null);
+                    this._removeFromSlot(spareIdx);
+                    this._refreshGrantedSkills();
+                    if (msg) this._log(msg);
+                }
                 this._render();
                 return;
             }
