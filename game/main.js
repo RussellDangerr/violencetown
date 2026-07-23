@@ -19,7 +19,7 @@ import {
 import { isBoss, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS } from './defeat-scenarios.js';
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
-import { attack, formatDamageNumber, computeHit, elementalMult } from './combat.js';
+import { attack, formatDamageNumber, computeHit, elementalMult, isBackstab } from './combat.js';
 import { Enemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
 import { isHostile } from './ai.js';
 import { getGreedyStep, stepEntity, findPath } from './pathing.js'; // pathfinding (greedy chase + BFS click-to-move); stepEntity = shove a character aside
@@ -3122,6 +3122,13 @@ class Game {
         return hit;
     }
 
+    // Count alive enemies standing on any of `tiles` — lets a swing's caller
+    // tell "hit only air" (no enemies present, no turn) apart from "enemies
+    // present but all immune" (turn still spent) without re-running combatAttack.
+    _enemiesPresent(tiles) {
+        return tiles.filter(t => this.enemies.some(en => en.entity.isAlive() && en.x === t.x && en.y === t.y)).length;
+    }
+
     _fireWheel() {
         const w = this.wheel;
         const { node, itemSlot, spellId, aimTile } = compose(w, this);
@@ -3135,7 +3142,7 @@ class Game {
                     // (fear) Fearmur fears an enemy struck twice in a row — check
                     // BEFORE the hit (which may kill it and reset the tracker).
                     const repeat = wpn && wpn.onHit === 'fearOnRepeat' && this._lastHitTarget === enemy.id;
-                    this.combatAttack(enemy, wpn.damage);
+                    this.combatAttack(enemy, wpn.damage, { type: wpn && wpn.damageType });
                     if (enemy.entity.isAlive()) {
                         if (repeat) { this._applyFear(enemy, 3); this._log('[The Fearmur cracks bone — it recoils in terror!]', 'combat'); }
                         if (wpn && wpn.pullDistance) this._pullEnemyToward(enemy, wpn.pullDistance);   // (Lion Whip) yank it closer
@@ -3152,8 +3159,10 @@ class Game {
                 this._lastHitTarget = null;   // (fear) AoE breaks the Fearmur single-target streak
                 // Fixed 3-tile frontal arc, 2/3 weapon damage to everything in it.
                 const dmg = Math.max(1, Math.round(this.equipment.weapon.damage * 2 / 3));
-                const hit = this._aoeStrike(affectedTiles(w, this), dmg);
+                const tiles = affectedTiles(w, this);
+                const hit = this._aoeStrike(tiles, dmg);
                 if (hit) { this._log(`[Cleave! ${hit} caught.]`, 'combat'); this._advanceWorld(); }
+                else if (this._enemiesPresent(tiles) > 0) { this._log('[Cleave connects — shrugged off, immune.]', 'combat'); this._advanceWorld(); }
                 else this._log('[Cleave hits only air]');
                 break;
             }
@@ -3161,8 +3170,10 @@ class Game {
                 this._lastHitTarget = null;   // (fear) AoE breaks the Fearmur single-target streak
                 // Sweep all 8 tiles, 2/5 weapon damage to everything around you.
                 const dmg = Math.max(1, Math.round(this.equipment.weapon.damage * 2 / 5));
-                const hit = this._aoeStrike(affectedTiles(w, this), dmg);
+                const tiles = affectedTiles(w, this);
+                const hit = this._aoeStrike(tiles, dmg);
                 if (hit) { this._log(`[Spin! ${hit} caught.]`, 'combat'); this._advanceWorld(); }
+                else if (this._enemiesPresent(tiles) > 0) { this._log('[Spin connects — shrugged off, immune.]', 'combat'); this._advanceWorld(); }
                 else this._log('[You spin, hitting nothing]');
                 break;
             }
@@ -3681,16 +3692,20 @@ class Game {
         let dmg = damage;
         const mods = this.ringMods || {};
         const typeBonus = opts.type && mods[opts.type + 'Damage'];
-        if (typeBonus) dmg = Math.round(dmg * (1 + typeBonus / 100));
+        if (typeBonus) dmg = dmg * (1 + typeBonus / 100);   // raw into computeHit — round once, there
 
-        // Law 2: elemental matchup folds in here — the one computeHit call for
-        // this swing (round-once). Immune skips attack() entirely (0-contract).
+        // Law 2: elemental matchup + positional (backstab) fold in here — the one
+        // computeHit call for this swing (round-once). Immune skips attack()
+        // entirely (0-contract). Backstab: standing on the tile directly behind
+        // the target's last step (5-Zone Body's "Back" zone as a rule).
+        const backstab = isBackstab(this.playerX, this.playerY, enemyObj);
         const finalDmg = computeHit({
             base: dmg,
             elemental: elementalMult(opts.type, enemyObj),
-            positional: 1,               // backstab lands here in Task 5
+            positional: backstab ? 1.5 : 1,
         });
         if (finalDmg === 0) { this._log(`[${enemyObj.type} is immune!]`); return null; }
+        if (backstab) this._log('[Backstab!]', 'combat');
 
         const result = attack(playerEntity, enemyObj.entity, finalDmg);
 
@@ -4046,10 +4061,15 @@ class Game {
     _applyTrigger(trigger, enemyObj) {
         if (!trigger || !enemyObj || !enemyObj.entity || !enemyObj.entity.isAlive()) return;
         if (trigger.effect === 'ignite') {
-            const dealt = enemyObj.entity.takeDamage(RING_IGNITE_DAMAGE);
-            this._spawnHitSplat(enemyObj.x, enemyObj.y, `-${dealt}`, 'fire', { omni: true });
-            this._log('[Cinders catch — it burns.]', 'combat');
-            if (enemyObj.entity.isDead()) this._handleEnemyDeath(enemyObj);
+            // Route through the one pipeline — a fire-immune foe takes no cinder
+            // damage at all (0-contract), rather than armor flooring it to 1.
+            const igniteDmg = computeHit({ base: RING_IGNITE_DAMAGE, elemental: elementalMult('fire', enemyObj) });
+            if (igniteDmg > 0) {
+                const dealt = enemyObj.entity.takeDamage(igniteDmg);
+                this._spawnHitSplat(enemyObj.x, enemyObj.y, `-${dealt}`, 'fire', { omni: true });
+                this._log('[Cinders catch — it burns.]', 'combat');
+                if (enemyObj.entity.isDead()) this._handleEnemyDeath(enemyObj);
+            }
         }
     }
 

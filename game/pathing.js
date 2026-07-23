@@ -123,6 +123,8 @@ export function fleeStep(game, enemy) {
 export function stepEntity(ent, x, y, ms) {
     ent._slideFromX = ent.x;
     ent._slideFromY = ent.y;
+    ent._lastDx = Math.sign(x - ent.x);   // facing for backstab (Law 2 positional)
+    ent._lastDy = Math.sign(y - ent.y);
     if (x < ent.x) ent._faceLeft = true;        // horizontal facing for the flip;
     else if (x > ent.x) ent._faceLeft = false;  // vertical moves keep prior facing
     ent.x = x;

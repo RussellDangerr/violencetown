@@ -546,8 +546,9 @@ export function resolveThrow(game, itemDef, direction, _stackCount = 1, targetTi
             const hostile = isHostile(foe);
             const isCentre = foe.x === ix && foe.y === iy;
             if (hostile || (allowCenterFriendly && isCentre)) {
-                game.combatAttack(foe, Math.max(1, Math.round(itemDef.damage / 2)), { type: dtype, omni: true });
-                affected++;
+                // combatAttack returns null on immune (0-contract) — an immune foe
+                // wasn't "caught in the splash", so don't count it.
+                if (game.combatAttack(foe, Math.max(1, Math.round(itemDef.damage / 2)), { type: dtype, omni: true })) affected++;
             }
         }
     } else if (isHeal) {

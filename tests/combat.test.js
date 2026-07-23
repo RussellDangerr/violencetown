@@ -14,7 +14,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { Entity, attack, formatDamageNumber, computeHit, elementalMult, DEFAULT_HP, DEFAULT_ARMOR } from '../game/combat.js';
+import { Entity, attack, formatDamageNumber, computeHit, elementalMult, isBackstab, DEFAULT_HP, DEFAULT_ARMOR } from '../game/combat.js';
 
 describe('Entity defaults', () => {
     test('defaults to 100 HP, 0 armor, alive', () => {
@@ -183,5 +183,23 @@ describe('elementalMult — Law 2 elemental family', () => {
         assert.equal(elementalMult('energy', gasbag), 1);
         assert.equal(elementalMult('fire', {}), 1);
         assert.equal(elementalMult('fire', null), 1);
+    });
+    test('a type in both weak and immune → immune wins (0)', () => {
+        assert.equal(elementalMult('fire', { weak: ['fire'], immune: ['fire'] }), 0);
+    });
+});
+
+describe('isBackstab — Law 2 positional', () => {
+    test('attacker on the tile directly behind the facing → true', () => {
+        const e = { x: 5, y: 5, _lastDx: 0, _lastDy: -1 };   // moved north, faces north
+        assert.equal(isBackstab(5, 6, e), true);               // player directly south
+    });
+    test('any other adjacent tile → false', () => {
+        const e = { x: 5, y: 5, _lastDx: 0, _lastDy: -1 };
+        assert.equal(isBackstab(4, 5, e), false);
+        assert.equal(isBackstab(4, 6, e), false);              // diagonal-behind is NOT a backstab
+    });
+    test('an enemy that has never moved cannot be backstabbed', () => {
+        assert.equal(isBackstab(5, 6, { x: 5, y: 5 }), false);
     });
 });
