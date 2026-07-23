@@ -1,5 +1,7 @@
 # Violencetown — Chapter Two: Downtown, the Canyon & Systems Cohesion
 
+> **STATUS (2026-07-23):** BUILT except **Phase 5** (the grappling-hook swing) and Phase 0 (Park/Cave zones). The Phase-5 swing now has its own actionable plan at `plans/grapple-swing.md`. See `plans/undeveloped-backlog.md` for the full audit.
+
 ## ✅ BUILT / SHIPPED STATUS (updated 2026-07-04) — read this first
 
 Most of this plan is now **built and either shipped or merged to dev**. Current: **main = v0.12.0

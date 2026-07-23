@@ -1,5 +1,7 @@
 # Equipment, Weapons & the Carnival — Plan
 
+> **STATUS (2026-07-23):** Armor set + Fear system + 3 of 4 weapons BUILT/SHIPPED. The loose ends (Ray Gun world source, `circus`→`carnival` rename) now have an actionable plan at `plans/ray-gun-and-carnival.md`. See `plans/undeveloped-backlog.md`.
+
 _Branch target: `plan` branch (planning only). Date: 2026-07-02. Author: lead design pass off five research reports, grounded against the `feature/equipment-armor` / `feature/hud-overhaul` working tree._
 
 ---

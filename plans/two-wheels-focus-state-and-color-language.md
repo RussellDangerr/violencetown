@@ -1,5 +1,7 @@
 # Violencetown — The Two Wheels, the Focus State & the Color Language (design spec)
 
+> **STATUS (2026-07-23):** Mostly BUILT (colour language, `appliesTo`, the Target List, dominant-slice + flapper, combat re-skin). The one gap — §8 **layered examine** — is now designed + planned at `plans/layered-examine.md` + `plans/layered-examine-implementation.md`. See `plans/undeveloped-backlog.md`.
+
 **Date:** 2026-07-03 · **Status:** design — awaiting Caelan's review before an implementation plan.
 **Author:** brainstormed with Caelan (2026-07-02→03). This is an **evolution of the existing radial
 compass wheel** (the `feature/wheel-sunburst-*` stack), NOT a rebuild — the model, nav, resolvers, and
