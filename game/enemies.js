@@ -226,6 +226,9 @@ export class Enemy {
             isSummon: this._isSummon, summonTurnsLeft: this._summonTurnsLeft,
             // phase-D extras (present only when set on the live enemy)
             isBarricade: this.isBarricade, tag: this.tag,
+            // Law 0 (plans/gold-standard-design.md): the vermin exemption must
+            // survive a reload, or a saved rat comes back an illegal sub-Hundred.
+            vermin: this.vermin,
         };
     }
 

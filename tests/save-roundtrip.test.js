@@ -361,6 +361,17 @@ describe('enemy save contract: ambient + allegiance round-trip (PD-5)', () => {
         assert.equal(out.ambient, false);
         assert.ok(!out._isSummon);
     });
+
+    test('a vermin rat keeps its Law 0 exemption across a round-trip', () => {
+        // Law 0 (plans/gold-standard-design.md): vermin is the one legal
+        // sub-Hundred spawn — if the flag drops on reload, the saved rat comes
+        // back as an illegal 16-HP combatant of consequence.
+        const rat = new Enemy({ id: 'vrat', type: 'Rat', x: 2, y: 2, hp: 16, tag: 'sewer_rat', vermin: true });
+        const out = rt(rat);
+        assert.equal(out.vermin, true, 'vermin must survive — else Law 0 is violated on reload');
+        assert.equal(out.entity.maxHp, 16);
+        assert.equal(out.entity.hp, 16);
+    });
 });
 
 describe('allegiance round-trip + derive-from-old-save (PD-3)', () => {
