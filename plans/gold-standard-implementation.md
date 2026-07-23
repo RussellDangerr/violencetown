@@ -167,28 +167,33 @@ git commit -m "feat(combat): computeHit — the one damage pipeline with named b
 - Modify: `game/main.js` (~line 4105, the guard halving in the player damage path)
 - Test: `tests/combat.test.js` (already covers the math); full suite guards the migration
 
-- [ ] **Step 1: Migrate Blind (npc.js ~232)**
+*(Amended after Task 2's quality review: chaining two computeHit calls double-rounds — a blinded
+9-damage enemy vs a guarding player must be round(9×0.25)=2, not round(round(4.5)×0.5)=3. Both
+status mults therefore compose in ONE call, in applyDamageToPlayer, which already receives the
+attacker.)*
 
-Add `computeHit` to the existing import from `./combat.js` at the top of `npc.js`. Replace:
+- [ ] **Step 1: npc.js ~232 — pass RAW damage; blind moves to the receiving side**
+
+Replace:
 
 ```js
 const dmg = npc.hasBuff('blind')
     ? Math.max(1, Math.floor(npc.damage * 0.5))
     : npc.damage;
+game.applyDamageToPlayer(dmg, npc);
 ```
 
 with:
 
 ```js
-const dmg = computeHit({ base: npc.damage, outgoingMult: npc.hasBuff('blind') ? 0.5 : 1 });
+game.applyDamageToPlayer(npc.damage, npc);   // blind folds in at the one computeHit call site
 ```
 
-Note the deliberate behavior delta: odd damage under Blind now rounds (9 → 5) instead of flooring
-(9 → 4) — the round-once law. This is spec'd, not accidental.
+(Update the comment above it: blind is now applied in applyDamageToPlayer's single pipeline call.)
 
-- [ ] **Step 2: Migrate Guard (main.js ~4105)**
+- [ ] **Step 2: main.js ~4105 — ONE computeHit call composing both status buckets**
 
-`computeHit` is exported from `./combat.js`; add it to main.js's existing combat import. Replace:
+Add `computeHit` to main.js's combat import. In `applyDamageToPlayer(dmg, npc)`, replace:
 
 ```js
 if (this.hasBuff('guard')) dmg = Math.max(1, Math.floor(dmg / 2));
@@ -197,7 +202,33 @@ if (this.hasBuff('guard')) dmg = Math.max(1, Math.floor(dmg / 2));
 with:
 
 ```js
-if (this.hasBuff('guard')) dmg = computeHit({ base: dmg, incomingMult: 0.5 });
+dmg = computeHit({
+    base: dmg,
+    outgoingMult: npc?.hasBuff?.('blind') ? 0.5 : 1,
+    incomingMult: this.hasBuff('guard') ? 0.5 : 1,
+});
+```
+
+(Callers that pass no attacker — environmental damage — get outgoingMult 1 via the optional chain.)
+Behavior deltas, both spec'd: blind 9 → 5 (round, not floor); blind+guard 9 → 2 (one round, not two).
+
+- [ ] **Step 2b: combat.js hygiene from Task 2's review**
+
+- Default `base = 0` in computeHit's destructure (a missing base must yield 0, not NaN — NaN
+  propagates into hp and makes an entity unkillable).
+- Fix the comment block: the full formula line becomes "0 means the hit does not happen — call
+  sites must skip attack()/takeDamage entirely on 0 (immunity), never floor it back to 1 via
+  armor math"; add "never chain computeHit(computeHit(...)) — pass all buckets in one call
+  (round-once)".
+- Two new asserts in the computeHit describe block:
+
+```js
+    test('immunity annihilates flats and other multipliers', () => {
+        assert.equal(computeHit({ base: 20, flats: 10, elemental: 0, positional: 1.5 }), 0);
+    });
+    test('missing base yields 0, never NaN', () => {
+        assert.equal(computeHit({}), 0);
+    });
 ```
 
 - [ ] **Step 3: Run the full suite + smoke test**
