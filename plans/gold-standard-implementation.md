@@ -334,6 +334,18 @@ git commit -m "feat(combat): elemental matchups — weak x2, resist half, immune
 
 ### Task 5: Backstab ×1.5
 
+*(Carry-forwards from Task 4's quality review — all small, same files: (a) items.js:~549
+resolveThrow gates `affected++` on combatAttack's return (immune ≠ caught in splash); (b)
+main.js:~4049 ring ignite routes through computeHit + elementalMult instead of raw takeDamage;
+(c) main.js:~3684 ring typeBonus stops pre-rounding — pass `dmg * (1 + typeBonus/100)` raw as
+computeHit's base so rounding happens once; (d) all-immune cleave/spin still consumes the turn
+(match spells' behavior); (e) one new assert: a type in both weak and immune → 0 (immune wins);
+(f) thread the equipped weapon's damageType into the wheel's basic-attack combatAttack call
+(main.js:~3138) as opts.type — the Ray Gun's energy typing must fire on basic hits. Also note:
+AoE-via-combatAttack means point-blank AoE gets backstab on the enemy you're directly behind —
+this is spec (the design's worked example composes spell × weakness × backstab); no discriminator
+needed unless Caelan later rules backstab melee-only.)*
+
 **Files:**
 - Modify: `game/pathing.js` (`stepEntity` ~123: record last step direction)
 - Modify: `game/combat.js` (add `isBackstab`)
