@@ -29,7 +29,7 @@ const PORTCULLIS_CELL = { x: 13, y: 10 };     // slams down mid-hall (3-wide, so
 let _ratSeq = 0;
 
 function makeRat(x, y) {
-    return new Enemy({ id: 'rat_' + (_ratSeq++), type: 'Rat', x, y, hp: 16, damage: 6, sightRange: 10, tag: 'sewer_rat' });
+    return new Enemy({ id: 'rat_' + (_ratSeq++), type: 'Rat', x, y, hp: 16, damage: 6, sightRange: 10, tag: 'sewer_rat', vermin: true });
 }
 
 function spawnRats(game, n) {

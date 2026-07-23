@@ -35,7 +35,9 @@ const VENDOR_WALLET    = 9999;
 export class Enemy {
     constructor({
         id, type, x, y,
-        hp = 50, armor = 0, damage = DEFAULT_DAMAGE, sightRange = DEFAULT_SIGHT,
+        // Law 0 (plans/gold-standard-design.md): every combatant of consequence
+        // has exactly 100 HP by default; only vermin:true spawns may go below it.
+        hp = 100, armor = 0, damage = DEFAULT_DAMAGE, sightRange = DEFAULT_SIGHT,
         // FSM/spawn input — parsed ONCE into capabilities + allegiance (ai.js);
         // absence (null) = a born-hostile chaser. Runtime reads those, not behavior.
         behavior = null,
@@ -66,6 +68,9 @@ export class Enemy {
         dialogueId = null,
         // Free-form tag for set-piece / quest hooks (e.g. 'wererat_boss', 'sewer_rat').
         tag = null,
+        // Law 0 (plans/gold-standard-design.md): ambient vermin (rats, etc.) are
+        // legally exempt from The Hundred and may spawn with sub-100 HP.
+        vermin = false,
         // Vendor fields (trade Slice 1). `vendor:true` makes the NPC a shopkeep —
         // pressing [E] adjacent opens their trade window. `stock` is the list of
         // item ids they sell (infinite supply for now); buy/sell prices come from
@@ -145,6 +150,7 @@ export class Enemy {
         this.name          = name;
         this.dialogueId    = dialogueId;
         this.tag           = tag;
+        this.vermin        = !!vermin;
         this.vendor        = vendor;
         this.stock         = stock;
         this.specialBuys   = specialBuys;
