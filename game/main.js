@@ -20,7 +20,7 @@ import { isBoss, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS }
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
 import { attack, formatDamageNumber, computeHit, elementalMult, isBackstab } from './combat.js';
-import { Enemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
+import { Enemy, spawnEnemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
 import { isHostile } from './ai.js';
 import { getGreedyStep, stepEntity, findPath } from './pathing.js'; // pathfinding (greedy chase + BFS click-to-move); stepEntity = shove a character aside
 import { applyDispositionDelta, reactToTransaction } from './give-action.js';
@@ -568,11 +568,7 @@ class Game {
             if (def) this.groundItems.push({ type: d.type, x: d.x, y: d.y, def });
         }
         this.enemies = [];
-        for (const s of this.map.enemySpawns) {
-            const e = new Enemy(s);
-            if (this._muggedIds.has(e.id)) e.gold = 0; // Law 6: already looted — respawns broke
-            this.enemies.push(e);
-        }
+        for (const s of this.map.enemySpawns) this.enemies.push(spawnEnemy(s, this._muggedIds));
 
         // (zone pursuit) Re-inject any hostiles that chased you through the door.
         // They spawn at the door leading back where you came from — visible in
@@ -3798,22 +3794,22 @@ class Game {
     // ally landing the finishing blow still drops the converter / feeds the
     // gauntlet instead of soft-locking the quest. (AGGRO behavior bands)
     _handleEnemyDeath(enemyObj) {
-        // Law 6: the wallet IS the loot — whatever gold this enemy carries moves
-        // to the player through the trade spine (conserves; never mints/burns).
-        // Mark them mugged so a respawn (zone re-entry) comes back broke, not
-        // farmable every reload.
-        if (enemyObj.gold > 0) {
-            const loot = enemyObj.gold;
-            transferGold(enemyObj, this, loot, 'loot');
-            this._log(`[Looted ${loot} GP.]`);
-            this._muggedIds.add(enemyObj.id);
-        }
         audio.playSfx('enemy-killed'); // [audio] K.O. sting on a kill
         this._spawnEventWord(enemyObj.x, enemyObj.y, 'K.O.!', '#ff8822', 22);
         this._log(`[Defeated ${enemyObj.entity.name}]`);
         this.emitGameEvent('enemy_killed', {
             type: enemyObj.type, id: enemyObj.id, x: enemyObj.x, y: enemyObj.y, tag: enemyObj.tag,
         });
+        // Law 6: the wallet IS the loot — whatever gold this enemy carries moves
+        // to the player through the trade spine (conserves; never mints/burns).
+        // Mark them mugged so a respawn (zone re-entry) comes back broke, not
+        // farmable every reload.
+        if (enemyObj.gold > 0) {
+            const loot = enemyObj.gold;
+            transferGold(enemyObj, this, loot, 'loot'); // can't fail — amount == balance, guarded > 0
+            this._log(`[Looted ${loot} GP.]`, 'pickup');
+            this._muggedIds.add(enemyObj.id);
+        }
         // The Were-Rat drops the converter; rat kills feed the escape waves.
         if (enemyObj.tag === 'wererat_boss' && ITEMS.catalytic_converter) {
             this._recordDrop('catalytic_converter', enemyObj.x, enemyObj.y);

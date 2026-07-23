@@ -284,6 +284,16 @@ export class Enemy {
     }
 }
 
+// ── Spawn from a map entry ───────────────────────────────────────────────────
+
+// Law 6d: a spawn the player already mugged comes back broke — no gold-farming
+// a respawning enemy by re-entering its zone. Pure so it's Node-testable.
+export function spawnEnemy(spawnDef, muggedIds) {
+    const e = new Enemy(spawnDef);
+    if (muggedIds?.has(e.id)) e.gold = 0;
+    return e;
+}
+
 // ── Resolve all enemies for one turn ─────────────────────────────────────────
 //
 // One dispatcher: every alive, non-ambient enemy is routed to tickNpcState

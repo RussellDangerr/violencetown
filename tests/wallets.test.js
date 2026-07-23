@@ -1,7 +1,7 @@
 // wallets.test.js — Law 6: loot = remaining wallet; respawns come back broke.
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { Enemy } from '../game/enemies.js';
+import { Enemy, spawnEnemy } from '../game/enemies.js';
 import { transferGold } from '../game/trade.js';
 
 describe('Law 6 — the wallet is the loot', () => {
@@ -36,5 +36,15 @@ describe('Law 6 — the wallet is the loot', () => {
         const bandit = new Enemy({ id: 'b3', type: 'Bandit', x: 0, y: 0, gold: 77 });
         const out = Enemy.fromSave(JSON.parse(JSON.stringify(bandit.toSave())));
         assert.equal(out.gold, 77);
+    });
+
+    test('spawnEnemy: an already-mugged spawn comes back broke (Law 6d)', () => {
+        const e = spawnEnemy({ id: 'b4', type: 'Bandit', x: 0, y: 0, gold: 40 }, new Set(['b4']));
+        assert.equal(e.gold, 0);
+    });
+
+    test('spawnEnemy: an unmugged spawn keeps its authored gold', () => {
+        const e = spawnEnemy({ id: 'b5', type: 'Bandit', x: 0, y: 0, gold: 40 }, new Set(['someone-else']));
+        assert.equal(e.gold, 40);
     });
 });
