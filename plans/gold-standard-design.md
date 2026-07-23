@@ -34,8 +34,14 @@ differentiation lives in mitigation (armor, resistances, immunities) and behavio
 
 - Payoff: every damage number is self-interpreting. Hit the armored knight for 2 and you know
   *exactly* how strong he is, because you know he has 100 like everyone else.
+- **The Vermin exception:** The Hundred applies to combatants of consequence — anyone with a
+  nameplate and a wallet. Ambient swarm creatures (sewer rats at 16 HP) are explicitly
+  **sub-Hundred**: declared with `vermin: true`, one-shottable, wallets 0–5. A rat is 16% of a
+  person's worth of violence; that's legible too. Without this carve-out, swarm fodder is
+  arithmetically impossible (nothing with 100 HP dies in 1–2 turns of act-1 weapons).
 - Code divergence to fix: `combat.js` already declares this ("Everything starts with 100 HP") but
-  the Enemy ctor defaults `hp = 50` (`enemies.js`). The default becomes 100; nothing may override it.
+  the Enemy ctor defaults `hp = 50` (`enemies.js`). The default becomes 100; only `vermin: true`
+  spawns may go below it.
 
 ### Law 1 — The Peg
 **1 GP ≈ 1 HP** is the market rate for *lazy* violence. Ungated gold solutions — bribes, mercenary
@@ -83,22 +89,30 @@ sites into named incoming/outgoing multiplier buckets in this one pipeline.
 
 ### Law 3 — Armor is the wall, and walls are puzzles
 Flat subtraction, minimum 1, stays (more legible than any curve under The Hundred — the knight
-taking 2 IS the design). Constraint: **armor ≤ 80% of the act's reference weapon damage** (act 1:
-reference = Wooden Sword 10 → armor cap 8), EXCEPT declared **puzzle walls** that demand their
-specific counter (armor-piercing, elemental, positional). Puzzle walls are allowed to floor you to
+taking 2 IS the design). Constraint: **regular enemies cap armor at 10** (half the act-1 reference
+weapon of 20 — see Law 4), EXCEPT declared **puzzle walls** that demand their specific counter
+(armor-piercing, elemental, positional). Puzzle walls are allowed to floor you to
 1 precisely so the message is unmistakable: *this fight is a lock, go find the key.*
 
 ### Law 4 — Roles, not levels
 One flat power band for the whole act; enemies differ by **role** and **archetype shape**, not
 level. Because damage is deterministic, TTK is exact — `ceil(100 / net dmg per turn)` — so these
-bands are declarations, not hopes:
+bands are declarations, not hopes.
 
-| Role     | TTK vs reference loadout | Their dmg/turn | Armor    | Wallet (GP) |
-|----------|--------------------------|----------------|----------|-------------|
-| Fodder   | 1–2 turns                | 4–6            | 0        | 0–20        |
-| Standard | 3–4 turns                | 8–12           | 0–4      | 20–60       |
-| Elite    | 6–8 turns                | 14–18          | 4–8      | 100–200     |
-| Boss     | per phase: 3–4           | 16–24          | varies   | 500–1,500   |
+**Reference loadout (act 1): a 20-damage weapon** — the geared act-1 player (Ray Gun tier), not
+the tutorial Wooden Sword. "Lazy" = basic attacks only; "informed" = weakness and/or positioning
+exploited (×2 elemental is the workhorse: 20 × 2 = 40/turn; with backstab, 60). The derivation
+anchor is the design statement "above 50 damage if used correctly."
+
+| Role     | TTK lazy | TTK informed | Their dmg/turn | Armor  | Wallet (GP) |
+|----------|----------|--------------|----------------|--------|-------------|
+| Vermin   | 1 (one-shot) | 1        | 4–6            | 0      | 0–5         |
+| Standard | 5–6 turns | 2–3         | 8–12           | 0–4    | 20–60       |
+| Elite    | 7–10 turns | 3–4        | 14–18          | 6–10   | 100–200     |
+| Boss     | — | per phase: 3–4      | 16–24          | varies | 500–1,500   |
+
+Regular enemies cap armor at **10** (half the reference weapon — lazy play never falls below half
+rate); only declared puzzle walls exceed it (Law 3).
 
 Archetypes (brute / tank / swarm / lurker / caster) redistribute within the band along
 `threat × toughness ≈ constant` — a brute trades armor for damage; a tank the reverse; swarm units
@@ -148,6 +162,7 @@ Every combatant shows **HP/100 and GP** on its nameplate.
 | Item | Now | Becomes | Why |
 |------|-----|---------|-----|
 | Enemy ctor default HP | 50 | 100 | Law 0 |
+| Sewer rats (16 HP) | implicit sub-100 | `vermin: true` — legally sub-Hundred | Law 0 vermin exception |
 | Summoned lion | 12 GP; 30 HP, 12 dmg × 2 turns | 50 GP; 100 HP, ~25 dmg × 2 turns | Law 0 + peg (50 GP → 50 total dmg) |
 | Guard / Blind | special-cased riders at read sites | named incoming/outgoing buckets in the one pipeline | Law 2 |
 | Enemy gold | vendors only (`VENDOR_WALLET`) | every enemy carries a role-band wallet | Law 6; extends the existing transferGold conservation spine |
