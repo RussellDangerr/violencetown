@@ -1058,6 +1058,38 @@ export class Renderer {
                 ctx.fillRect(bx, by, bw, bh);
                 ctx.fillStyle = UI.hpRed;
                 ctx.fillRect(bx, by, bw * frac, bh);
+
+                // Wallet pips (Law 6e) — 1 pip = 100 GP = one Hundred (full heal)
+                // this enemy can afford, so the row IS the player's "what's his
+                // ceiling" readout. bw is only 24px, which fits at most 5
+                // individually-drawn pips at a 4px stride (3px pip + 1px gap);
+                // above that the per-pip read stops helping anyway, so we swap to
+                // a solid bar + numeral overlay and let the number carry it.
+                // Broke (gold <= 0) draws nothing — an empty row is itself the
+                // tell that he's out of tricks.
+                const gold = e.gold ?? 0;
+                if (gold > 0) {
+                    const gh = 2, gy = by - 4; // 2px row, backing touches HP bar's own backing plate
+                    ctx.fillStyle = '#000000cc';
+                    ctx.fillRect(bx - 1, gy - 1, bw + 2, gh + 2);
+                    const pips = Math.floor(gold / 100);
+                    const sliver = gold % 100;
+                    ctx.fillStyle = UI.gold;
+                    if (pips <= 5) {
+                        for (let i = 0; i < pips; i++) ctx.fillRect(bx + i * 4, gy, 3, gh);
+                        if (sliver > 0) {
+                            const sw = Math.max(1, Math.round(3 * sliver / 100));
+                            ctx.fillRect(bx + pips * 4, gy, sw, gh);
+                        }
+                    } else {
+                        ctx.fillRect(bx, gy, bw, gh);
+                        if (this.font) {
+                            this.font.drawText(ctx, `${pips}`, bx + bw / 2, gy, {
+                                color: '#2a2012', scale: 1, align: 'center', shadow: '#000',
+                            });
+                        }
+                    }
+                }
             }
 
             // Debuff / buff badges — one-letter colored markers stacked
