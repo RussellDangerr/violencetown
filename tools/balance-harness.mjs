@@ -84,19 +84,30 @@ function entityKey(e) {
     return (e.zone && e.id) ? `[${e.zone}/${e.id} ${e.type}]` : `[${e.type}]`;
 }
 
+// Sanity floor for negative armor (Law 3 amended 2026-07-24): the fragility
+// stops bottom out at -80 (one-shot); -90 leaves a small margin below that
+// floor for the lint without licensing an armor value nobody authors.
+const ARMOR_FLOOR = -90;
+
 // Per-entity lint (Law 0 / Law 3 / Law 6). Returns an array of flag strings;
 // empty means clean.
 export function lintEntity(e) {
     const flags = [];
     const key = entityKey(e);
-    if (!e.vermin && e.hp !== 100) {
+    // Law 0 amended 2026-07-24 (repeals the vermin exception): every combatant
+    // has exactly 100 HP, no exemptions — softness is negative armor now, so a
+    // sub-Hundred hp of ANY kind (vermin included) is a flat data error.
+    if (e.hp !== 100) {
         flags.push(`${key} Law 0 — hp ${e.hp}, expected 100`);
     }
     if (e.vermin && e.gold > 5) {
         flags.push(`${key} Law 6 — vermin wallet ${e.gold} GP, expected <= 5`);
     }
-    if (!e.puzzleWall && e.armor > ARMOR_CAP) {
-        flags.push(`${key} Law 3 — armor ${e.armor}, expected <= ${ARMOR_CAP} (no puzzleWall declared)`);
+    // Armor sanity (Law 3): regular enemies live in [-90, ARMOR_CAP] — the
+    // fragility stops bottom out at -80 and the cap is half the reference
+    // weapon; only a declared puzzleWall may sit outside that band.
+    if (!e.puzzleWall && (e.armor > ARMOR_CAP || e.armor < ARMOR_FLOOR)) {
+        flags.push(`${key} Law 3 — armor ${e.armor} outside [${ARMOR_FLOOR}, ${ARMOR_CAP}]`);
     }
     return flags;
 }

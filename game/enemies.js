@@ -35,8 +35,9 @@ const VENDOR_WALLET    = 9999;
 export class Enemy {
     constructor({
         id, type, x, y,
-        // Law 0 (plans/gold-standard-design.md): every combatant of consequence
-        // has exactly 100 HP by default; only vermin:true spawns may go below it.
+        // Law 0 (plans/gold-standard-design.md, amended 2026-07-24): every
+        // combatant has exactly 100 HP, no exemptions — this is just the ctor
+        // default. Softness lives in negative armor (Law 3), not a lower hp.
         hp = 100, armor = 0, damage = DEFAULT_DAMAGE, sightRange = DEFAULT_SIGHT,
         // FSM/spawn input — parsed ONCE into capabilities + allegiance (ai.js);
         // absence (null) = a born-hostile chaser. Runtime reads those, not behavior.
@@ -68,8 +69,9 @@ export class Enemy {
         dialogueId = null,
         // Free-form tag for set-piece / quest hooks (e.g. 'wererat_boss', 'sewer_rat').
         tag = null,
-        // Law 0 (plans/gold-standard-design.md): ambient vermin (rats, etc.) are
-        // legally exempt from The Hundred and may spawn with sub-100 HP.
+        // Law 0 (plans/gold-standard-design.md, amended 2026-07-24): vermin is
+        // now a ROLE marker only (ambient swarm class, challenge GP <= 5, Law 6)
+        // — it no longer licenses sub-100 HP; that exemption is repealed.
         vermin = false,
         // Law 2 (plans/gold-standard-design.md): elemental matchups. Arrays of
         // damageType strings read by combat.js's elementalMult.
@@ -242,8 +244,8 @@ export class Enemy {
             isSummon: this._isSummon, summonTurnsLeft: this._summonTurnsLeft,
             // phase-D extras (present only when set on the live enemy)
             isBarricade: this.isBarricade, tag: this.tag,
-            // Law 0 (plans/gold-standard-design.md): the vermin exemption must
-            // survive a reload, or a saved rat comes back an illegal sub-Hundred.
+            // vermin is a role marker (Law 0/6) — must survive a reload the same
+            // way any other config field does, or a saved rat loses its role.
             vermin: this.vermin,
             // Law 2 (plans/gold-standard-design.md): elemental matchups must
             // survive a reload the same way — ctor↔save drift already shipped

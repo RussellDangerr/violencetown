@@ -30,8 +30,14 @@ describe('harness math', () => {
         assert.equal(pegRate(18, 6), 3);       // Ray Blast
         assert.equal(pegRate(50, 50), 1);      // lion at peg
     });
-    test('lintEntity flags a non-vermin sub-Hundred enemy (Law 0)', () => {
+    test('lintEntity flags a sub-Hundred enemy (Law 0)', () => {
         const flags = lintEntity({ type: 'Grunt', hp: 50, armor: 0, damage: 8, gold: 20, vermin: false });
+        assert.ok(flags.some(f => f.includes('Law 0')));
+    });
+    // Law 0 amended 2026-07-24: the vermin sub-Hundred exemption is repealed —
+    // a vermin spawn now needs hp 100 same as anyone else, or it flags too.
+    test('lintEntity flags a sub-Hundred vermin too — the exemption is repealed (Law 0)', () => {
+        const flags = lintEntity({ type: 'Rat', hp: 16, armor: -80, damage: 6, gold: 0, vermin: true });
         assert.ok(flags.some(f => f.includes('Law 0')));
     });
     test('lintEntity flags armor over cap without puzzleWall (Law 3)', () => {
@@ -40,8 +46,14 @@ describe('harness math', () => {
         const ok = lintEntity({ type: 'Knight', hp: 100, armor: 14, damage: 8, gold: 0, vermin: false, puzzleWall: true });
         assert.ok(!ok.some(f => f.includes('armor')));
     });
-    test('lintEntity flags a rich vermin (Law 6)', () => {
-        const flags = lintEntity({ type: 'Rat', hp: 16, armor: 0, damage: 6, gold: 50, vermin: true });
+    test('lintEntity flags armor below the negative-armor sanity floor (Law 3)', () => {
+        const under = lintEntity({ type: 'Ghost', hp: 100, armor: -95, damage: 8, gold: 0, vermin: false });
+        assert.ok(under.some(f => f.includes('armor') && f.includes('outside')));
+        const ok = lintEntity({ type: 'Ghost', hp: 100, armor: -95, damage: 8, gold: 0, vermin: false, puzzleWall: true });
+        assert.ok(!ok.some(f => f.includes('armor')));
+    });
+    test('lintEntity flags a rich vermin (Law 6) — hp 100 here isolates the wallet check', () => {
+        const flags = lintEntity({ type: 'Rat', hp: 100, armor: -80, damage: 6, gold: 50, vermin: true });
         assert.ok(flags.some(f => f.includes('vermin')));
     });
     test('loadMapRoster reads real map JSONs and skips snapshots', () => {

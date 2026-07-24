@@ -36,7 +36,7 @@
         53,53,53,53,53,53,53,53,53,53,53,53,53,53,53,53,53,53,53,53,53,53,53,53,53,53,53,53,53,53
     ],
     "enemies": [
-        {"id": "skel1", "type": "Rattling Skeleton", "x": 14, "y": 14, "hp": 18, "damage": 4, "disposition": -40, "flipThreshold": 30, "bribeable": true, "values": {"bandage": 5, "rock": 4, "soap": 3}, "behavior": ["IDLE", "WANDER"], "wanderRadius": 4, "wanderEveryTurns": 3, "adjacencyBark": "[Skeleton: rattles disapprovingly]"}
+        {"id": "skel1", "type": "Rattling Skeleton", "x": 14, "y": 14, "hp": 100, "armor": -80, "damage": 4, "disposition": -40, "flipThreshold": 30, "bribeable": true, "values": {"bandage": 5, "rock": 4, "soap": 3}, "behavior": ["IDLE", "WANDER"], "wanderRadius": 4, "wanderEveryTurns": 3, "adjacencyBark": "[Skeleton: rattles disapprovingly]"}
     ],
     "items": [
         {"type": "soap", "x": 6, "y": 8},

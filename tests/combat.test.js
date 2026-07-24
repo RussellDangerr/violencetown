@@ -65,6 +65,24 @@ describe('Entity.takeDamage — armor reduction', () => {
         assert.equal(e.hp, 0, 'hp floors at 0');
         assert.equal(e.isDead(), true);
     });
+
+    // Negative armor (Law 3 amended 2026-07-24, repeals the vermin sub-Hundred
+    // exception): max(1, raw - armor) already ADDS the deficit when armor is
+    // negative, so softness lives entirely in the armor stat and The Hundred
+    // never bends. These are PINS, not new behavior — takeDamage needs no change.
+    test("Caelan's example: -10 armor turns a 1-hit into 11", () => {
+        const e = new Entity({ hp: 100, armor: -10 });
+        const dealt = e.takeDamage(1);
+        assert.equal(dealt, 11, 'max(1, 1 - (-10)) = 11');
+        assert.equal(e.hp, 89);
+    });
+    test("Caelan's example: -80 armor one-shots to a reference (20) swing", () => {
+        const e = new Entity({ hp: 100, armor: -80 });
+        const dealt = e.takeDamage(20);
+        assert.equal(dealt, 100, 'max(1, 20 - (-80)) = 100');
+        assert.equal(e.hp, 0);
+        assert.equal(e.isDead(), true);
+    });
 });
 
 describe('attack()', () => {
