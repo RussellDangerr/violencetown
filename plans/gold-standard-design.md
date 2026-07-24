@@ -69,6 +69,12 @@ opportunity-turns, not gold: spells sit at **1.5–2.5 dmg per MP** (AoE justifi
 band). GP is the *non-renewable* solvency currency: gated tricks must beat spells' raw rate
 (**≥ 2.5 dmg per GP**) to justify spending real money.
 
+The peg is a **target rate, not just a ceiling** — the autonomous band is **0.5–1.0 dmg per GP**.
+Above 1.0 is a balance violation (autonomy outperforming skill). Below 0.5 is a *content* failure:
+a summon nobody would rationally buy is dead content, and the lint should say so while it's still
+cheap to retune. Both sides are enforced by `lintSkills` (`AUTONOMOUS_MAX_RATE` /
+`AUTONOMOUS_MIN_RATE` in `tools/balance-harness.mjs`).
+
 ### Law 2 — Earned multipliers (no dice, ever)
 Combat stays deterministic — "no rolls, no misses" is permanent. Damage spikes are **conditions the
 player engineers**, not luck:
