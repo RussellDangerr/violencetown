@@ -8,11 +8,13 @@ up); (2) the GEAR tab equips "whatever's first" on tap with no screen showing op
 
 ## The idea in one paragraph
 
-The REMOTICON gets two things: a **50-slot bag split into a 10-slot SAFE zone (kept on defeat) and
-a 40-slot PACK zone (at-risk)**, and a **unified tap-to-inspect interaction** — tapping any item or
-gear slot selects it and shows an inspector panel with its stats and action buttons, instead of
-acting immediately. The inspector is one component reused across the ITEMS and GEAR tabs, so the
-whole device speaks one grammar: tap to inspect, then choose.
+Three things, shippable independently. **(Part 0)** The live HUD panels get a single geometry source
+and a non-overlap invariant test, so windows like the message log and the DRINK/EAT verb menu can
+never clip each other again. **(Part 1)** The bag grows to a **50-slot layout split into a 10-slot
+SAFE zone (kept on defeat) and a 40-slot PACK zone (at-risk)**. **(Part 2)** A **unified
+tap-to-inspect interaction** — tapping any item or gear slot selects it and shows an inspector panel
+with its stats and action buttons, instead of acting immediately — reused across the ITEMS and GEAR
+tabs, so the whole device speaks one grammar: tap to inspect, then choose.
 
 ## Decisions locked in brainstorming
 
@@ -23,6 +25,43 @@ whole device speaks one grammar: tap to inspect, then choose.
 - `Drop` action: **in** (a 50-slot bag needs a way to ditch junk).
 
 ---
+
+## Part 0 — HUD panels must not overlap
+
+**The bug (from the FACTORY screenshot):** the bottom message-log panel (`QUESTLOG_RECT`
+`{x:6, y:436, w:340, h:104}`, so it spans y 436–540) and the contextual **DRINK / EAT** verb menu
+are drawn as independent framed panels with no awareness of each other. Their frames cross, the log
+text is clipped, and taps near the boundary land ambiguously. This is a general problem: several HUD
+panels (HP/MP/GP card, message log, usable bar, target/verb menu, item-action overlay) are each
+positioned by their own constant with no shared arbiter, so nothing prevents two from occupying the
+same screen space.
+
+**The fix — two parts:**
+
+1. **A single panel-geometry source + a non-overlap invariant.** Collect the live HUD panels' rects
+   into one place (extend `game/layout.js`, which already owns most of them) as pure rect functions
+   keyed by the game state that shows them. Add a pure `rectsOverlap(a, b)` and a
+   `hudPanelsFor(state)` that returns the set of panels visible in a given state. Then a **net-new
+   test** asserts that no two *interactive* panels intersect in any representative state (idle,
+   target_list/verb-menu open, item-action overlay open, usable-bar present). This turns "do windows
+   overlap?" from an eyeball question into a `node --test` gate — exactly the "true bug testing"
+   asked for.
+
+2. **De-conflict the actual collisions the test finds.** The known one is the message log vs the
+   contextual verb menu. Resolve by giving them **disjoint vertical bands**: the bottom strip is
+   partitioned so the log occupies its band and any contextual menu opens in a reserved band that
+   doesn't touch it (or the log yields — shrinks/hides — while a bottom menu is open). The exact
+   partition is chosen from the census the recon produces; the invariant test is what proves it
+   holds. Contextual menus that must appear near their trigger get clamped to stay inside their
+   reserved band rather than drawn at a fixed rect that can collide.
+
+**Why a test, not just a re-position:** panels are added over time; a one-off nudge fixes today's
+collision and the next new panel reintroduces it. The invariant test fails the moment any two
+interactive panels are placed on top of each other, so the guarantee survives future UI work — the
+same "golden gate" discipline the balance harness gave the combat numbers.
+
+This phase is independent of Parts 1–2 (it touches HUD layout, not the bag or the device tabs) and
+ships on its own; it goes first because a clean panel-layout invariant is the frame the rest sits in.
 
 ## Part 1 — Inventory data model
 
