@@ -1971,6 +1971,22 @@ class Game {
                 return; // boxed in — nowhere to put them
             }
             stepEntity(enemy, dest.x, dest.y, this._MOVE_MS); // knock aside / swap (animates)
+            // Law 2 positional (ruled 2026-07-24): a shove spins its victim clean
+            // around, and the recovery turn below (npc.js HOSTILE case) makes that
+            // spin cash out as exactly one backstab window. No extra facing stamp
+            // needed here — stepEntity above already set _lastDx/_lastDy to the
+            // victim's actual displacement (its own step, unit-length since the
+            // shove destination is always one tile away), and the player is about
+            // to fall through into (nx,ny) == the victim's PRE-shove tile. That
+            // makes the player's landing spot exactly the tile stepEntity's stamp
+            // calls "behind" the victim — true for BOTH flavors: knock-aside moves
+            // the victim sideways and the player takes the tile it vacated (behind
+            // its knock direction); swap moves the victim onto the player's old
+            // tile — i.e. backward, toward where the player used to stand — while
+            // the player advances onto the victim's old tile, again landing behind
+            // the victim's new facing. Traced both; neither needs a manual re-stamp.
+            enemy._spunTurns = 1; // burns on the victim's next HOSTILE turn (npc.js)
+            this._log(`[You shove ${enemy.name ?? enemy.type} so hard they spin around!]`, 'combat');
             // fall through: (nx,ny) is now vacated, so the normal move below
             // advances the player into it with full hazard/pickup/turn handling.
         }

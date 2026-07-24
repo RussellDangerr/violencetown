@@ -81,6 +81,12 @@ export class Enemy {
         // reload doesn't erase an enemy's back — mirrors x/y: ctor param + field
         // + toSave, restored via fromSave's `new Enemy(s)` same as x/y.
         _lastDx = 0, _lastDy = 0,
+        // Law 2 positional (ruled 2026-07-24): a shove spins its victim clean
+        // around and it spends its next HOSTILE turn recovering (npc.js) — the
+        // backstab window survives exactly one follow-up hit. Persisted the
+        // same way as _lastDx/_lastDy so a mid-fight reload doesn't erase a
+        // still-recovering shove victim.
+        _spunTurns = 0,
         // Vendor fields (trade Slice 1). `vendor:true` makes the NPC a shopkeep —
         // pressing [E] adjacent opens their trade window. `stock` is the list of
         // item ids they sell (infinite supply for now); buy/sell prices come from
@@ -168,6 +174,8 @@ export class Enemy {
         // this enemy's next move, same as x/y.
         this._lastDx       = _lastDx;
         this._lastDy       = _lastDy;
+        // (Law 2 positional) restored recovery-turn count; see ctor param note.
+        this._spunTurns    = _spunTurns;
         this.vendor        = vendor;
         this.stock         = stock;
         this.specialBuys   = specialBuys;
@@ -254,6 +262,9 @@ export class Enemy {
             // (carry-forward c) facing for backstab — a mid-fight reload must
             // not erase an enemy's back.
             _lastDx: this._lastDx, _lastDy: this._lastDy,
+            // Law 2 positional: a mid-fight reload must not erase a spun
+            // victim's recovery turn (that would hand back the free hit).
+            _spunTurns: this._spunTurns,
         };
     }
 

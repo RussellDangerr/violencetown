@@ -544,3 +544,21 @@ describe('enemy facing (_lastDx/_lastDy) round-trip (Task 6 carry-forward c)', (
         assert.equal(out._lastDy, 0);
     });
 });
+
+// ── Task 15: Enemy._spunTurns (shove recovery) round-trip ───────────────────
+describe('enemy shove recovery (_spunTurns) round-trip (Task 15)', () => {
+    const rt = (e) => Enemy.fromSave(JSON.parse(JSON.stringify(e.toSave())));
+
+    test('a spun enemy stays spun across save/load', () => {
+        const e = new Enemy({ id: 'grunt', type: 'Grunt', x: 3, y: 3 });
+        e._spunTurns = 1; // main.js's shove resolver would have set this live
+        const out = rt(e);
+        assert.equal(out._spunTurns, 1);
+    });
+
+    test('an enemy that was never shoved round-trips at 0', () => {
+        const e = new Enemy({ id: 'fresh', type: 'Rat', x: 1, y: 1 });
+        const out = rt(e);
+        assert.equal(out._spunTurns, 0);
+    });
+});

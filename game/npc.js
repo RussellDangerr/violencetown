@@ -222,6 +222,16 @@ export function tickNpcState(game, npc, clock = game.turn) {
                 break;
             }
 
+            // Law 2 positional (ruled 2026-07-24): a shove spins its victim clean
+            // around, and it spends its NEXT turn recovering — no heal purchase,
+            // no attack, no re-face, no move — so the shove's backstab window
+            // survives exactly one follow-up hit instead of dying before the
+            // player can cash it in.
+            if (npc._spunTurns > 0) {
+                npc._spunTurns--;
+                break;
+            }
+
             // Law 6a/6b (plans/gold-standard-design.md): a hurt, solvent enemy
             // spends its turn buying HP back at the peg instead of swinging —
             // the purchase IS the turn. Spent gold is BURNED (leaves the
