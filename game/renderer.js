@@ -36,6 +36,7 @@ import { hasLineOfSight } from './pathing.js';                               // 
 import { isSafe } from './defeat-scenarios.js';   // (defeat legibility) mark safe-floor items
 import { buyPrice, sellPrice, bribeStepCost, mood, canTrade, BRIBE_STEP } from './trade.js'; // (trade slice 1) pricing + mood smiley
 import * as Settings from './settings.js'; // (combat-feel-pass) reduce-motion for hit-splats (namespace import — see main.js)
+import { challengeGp } from './enemies.js'; // (Law 6f) nameplate pips read the composite kit, not raw gold
 
 // (combat-feel-pass) Hit-splat fill colors by damage type. Crit keeps the
 // physical fill but takes a gold border (handled in _drawHitSplat). New types
@@ -1095,17 +1096,20 @@ export class Renderer {
 
             // Wallet pips (Law 6e) — 1 pip = 100 GP = one Hundred (full heal) this
             // enemy can afford, so the row IS the player's "what's his ceiling"
-            // readout. Suppressed for ambient townsfolk (same reasoning as the HP
-            // bar) via its own !e.ambient guard, and drawn AFTER the mood-face disc
-            // above so that disc (py-23..py-7, centered) can't soft-dim the gold.
-            // Broke (gold <= 0) draws nothing — an empty row is itself the tell
+            // readout. Pips show the COMPOSITE kit (Law 6f: liquid gold + carried
+            // potion/gear value) — loot is liquid gold only, this is a challenge
+            // rating, not a promise of lootable coins. Suppressed for ambient
+            // townsfolk (same reasoning as the HP bar) via its own !e.ambient
+            // guard, and drawn AFTER the mood-face disc above so that disc
+            // (py-23..py-7, centered) can't soft-dim the gold.
+            // Broke (chal GP <= 0) draws nothing — an empty row is itself the tell
             // that he's out of tricks. The 24px row fits 6 slots at a 4px stride
             // (3px pip + 1px gap): 5 pips + an overflow cap = 24px = bw exactly.
             // The tile nameplate caps the read at 5 + overflow; pips > 5 means
             // 500+ GP = boss-tier (Elites cap at 200 GP = 2 pips), and exact
             // boss-wallet dread (Law 6e's KH multi-bar) belongs on the dedicated
             // boss frame, deferred to the first boss build — not a 24px nameplate.
-            const gold = e.gold ?? 0;
+            const gold = challengeGp(e);
             if (!e.ambient && gold > 0) {
                 const gh = 2, gy = by - 4; // 2px row above the HP bar's own backing plate
                 ctx.fillStyle = '#000000cc';

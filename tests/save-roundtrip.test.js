@@ -562,3 +562,23 @@ describe('enemy shove recovery (_spunTurns) round-trip (Task 15)', () => {
         assert.equal(out._spunTurns, 0);
     });
 });
+
+// ── Task 16: Enemy.loadout (Law 6f composite kit) round-trip ────────────────
+describe('enemy loadout (Law 6f) round-trip (Task 16)', () => {
+    const rt = (e) => Enemy.fromSave(JSON.parse(JSON.stringify(e.toSave())));
+
+    test('a boss loadout survives a reload (Challenge GP must not drop on load)', () => {
+        const e = new Enemy({
+            id: 'boss', type: 'Boss', x: 0, y: 0, gold: 40,
+            loadout: [{ name: 'Big Potion', value: 60 }, { name: 'Spiked Fez', value: 400 }],
+        });
+        const out = rt(e);
+        assert.deepEqual(out.loadout, [{ name: 'Big Potion', value: 60 }, { name: 'Spiked Fez', value: 400 }]);
+    });
+
+    test('an enemy with no loadout round-trips null', () => {
+        const e = new Enemy({ id: 'fresh', type: 'Rat', x: 1, y: 1 });
+        const out = rt(e);
+        assert.equal(out.loadout, null);
+    });
+});

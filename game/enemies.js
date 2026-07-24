@@ -101,6 +101,12 @@ export class Enemy {
         // (transaction spine) real gold + a transaction log (restored from saves).
         gold = null,
         giftLog = null,
+        // Law 6f (plans/gold-standard-design.md): the potions/gear this enemy
+        // carries — array of { name, value }. Its value counts toward Challenge
+        // GP (challengeGp below) but is NOT yet consumed by AI (not USED in a
+        // fight); that lands with boss spending policies. Loot stays liquid
+        // gold only — a loadout item never becomes lootable coin on death.
+        loadout = null,
         // Town Clock (feature/town-clock): heartbeat-driven ambient NPC. When
         // true, this NPC is advanced by the free-running world tick
         // (game.worldTick) via resolveAmbientTurns instead of the per-player-turn
@@ -184,6 +190,7 @@ export class Enemy {
         // stub for future barter/memory.
         this.gold          = gold != null ? gold : (vendor ? VENDOR_WALLET : 0);
         this.giftLog       = Array.isArray(giftLog) ? giftLog : [];
+        this.loadout       = loadout;
         this.ambient       = ambient;
 
         // Debuffs / buffs — symmetric with Game.buffs[] on the player side.
@@ -241,6 +248,9 @@ export class Enemy {
             values: this.values, onFlip: this.onFlip,
             name: this.name, dialogueId: this.dialogueId,
             vendor: this.vendor, stock: this.stock, specialBuys: this.specialBuys, gold: this.gold, giftLog: this.giftLog,
+            // Law 6f: the carried kit must survive a reload the same way gold
+            // does, or a boss's Challenge GP would drop on save/load.
+            loadout: this.loadout,
             ambient: this.ambient,
             // runtime
             state: this.state, fsmState: this.fsmState, lastWanderTurn: this._lastWanderTurn,
@@ -295,6 +305,13 @@ export class Enemy {
         if (s.tag != null) e.tag = s.tag;
         return e;
     }
+}
+
+// Law 6f — the nameplate number is the whole kit: liquid gold + carried item
+// values. Loot stays liquid gold only; the rest dies with its owner.
+export function challengeGp(e) {
+    const items = e.loadout?.reduce((s, it) => s + (it.value ?? 0), 0) ?? 0;
+    return (e.gold ?? 0) + items;
 }
 
 // ── Spawn from a map entry ───────────────────────────────────────────────────

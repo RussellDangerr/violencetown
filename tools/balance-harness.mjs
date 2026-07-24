@@ -11,6 +11,11 @@ import { WEAPONS } from '../game/weapons.js';
 import { SPELLS } from '../game/spells.js';
 import { TRICKS } from '../game/tricks.js';
 import { HEAL_HP_FLOOR, HEAL_MIN_GOLD } from '../game/ai.js';
+// enemies.js's transitive imports (npc/pathing/buffs/ai/combat/utils) never touch
+// the DOM at module-evaluation time (tests/wallets.test.js and tests/save-
+// roundtrip.test.js already import Enemy from here under bare `node --test`),
+// so this pure helper is safe to pull into a headless Node tool too.
+import { challengeGp } from '../game/enemies.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const GAME_DIR  = path.join(__dirname, '..', 'game');
@@ -100,8 +105,11 @@ export function lintEntity(e) {
     if (e.hp !== 100) {
         flags.push(`${key} Law 0 — hp ${e.hp}, expected 100`);
     }
-    if (e.vermin && e.gold > 5) {
-        flags.push(`${key} Law 6 — vermin wallet ${e.gold} GP, expected <= 5`);
+    // Law 6f: the vermin cap reads the COMPOSITE Challenge GP (gold + any
+    // carried kit), not raw gold — a vermin swarm authored with a loadout
+    // must still price under 5, same as a plain wallet would.
+    if (e.vermin && challengeGp(e) > 5) {
+        flags.push(`${key} Law 6 — vermin wallet ${challengeGp(e)} GP, expected <= 5`);
     }
     // Armor sanity (Law 3): regular enemies live in [-90, ARMOR_CAP] — the
     // fragility stops bottom out at -80 and the cap is half the reference
@@ -182,9 +190,10 @@ export function lintSkills() {
 //
 // Real shape found in game/town-map.json (and every other current map): a
 // top-level `enemies` array of spawn objects — `{ id, type, x, y, hp, damage,
-// ... }`. No map currently authors `gold`/`vermin`/`puzzleWall` (two sewer
-// spawns carry `armor`), so those default exactly like the Enemy ctor defaults
-// (enemies.js): hp 100, armor 0, damage 8 (DEFAULT_DAMAGE), gold 0, vermin false.
+// ... }`. No map currently authors `gold`/`vermin`/`puzzleWall`/`loadout` (two
+// sewer spawns carry `armor`), so those default exactly like the Enemy ctor
+// defaults (enemies.js): hp 100, armor 0, damage 8 (DEFAULT_DAMAGE), gold 0,
+// vermin false, loadout null.
 export function loadMapRoster() {
     const files = fs.readdirSync(GAME_DIR)
         .filter(f => f.endsWith('-map.json') && !f.includes('TheDangerrZone'))
@@ -208,6 +217,10 @@ export function loadMapRoster() {
                 gold: s.gold ?? 0,
                 vermin: s.vermin ?? false,
                 puzzleWall: s.puzzleWall ?? false,
+                // Law 6f: pass through an authored loadout (potions/gear this
+                // enemy carries) so challengeGp sees the whole kit; no map
+                // authors one yet, so this is a no-op today.
+                loadout: s.loadout ?? null,
             });
         }
     }
@@ -221,9 +234,10 @@ export function loadMapRoster() {
 export const STATBLOCK_START = '<!-- statblock:start -->';
 export const STATBLOCK_END = '<!-- statblock:end -->';
 
-// e is a loadMapRoster entry (zone/id/type/hp/armor/damage/gold/vermin/puzzleWall),
-// optionally with weak/resist/immune arrays — the roster doesn't set those today,
-// but a future map/entity shape may, so the block reads them if present.
+// e is a loadMapRoster entry (zone/id/type/hp/armor/damage/gold/vermin/
+// puzzleWall/loadout), optionally with weak/resist/immune arrays — the roster
+// doesn't set those today, but a future map/entity shape may, so the block
+// reads them if present.
 export function statBlock(e) {
     const lazy = ttk(e.hp, REFERENCE_DAMAGE, e.armor ?? 0);
     const informed = ttk(e.hp, REFERENCE_DAMAGE * 2, e.armor ?? 0);
@@ -232,11 +246,21 @@ export function statBlock(e) {
     // Ties the block to ARMOR_CAP the same way lintEntity does (Law 3) — a
     // puzzleWall is exempt there too.
     const armorNote = (!e.puzzleWall && armor > ARMOR_CAP) ? ` (over cap ${ARMOR_CAP})` : '';
+    // Law 6f: the card states Challenge GP (liquid gold + carried kit value) —
+    // a challenge rating, not a loot promise. Split it into liquid/kit only
+    // when there's a kit to show; a gold-only entity's Challenge GP already IS
+    // its liquid gold, so a split there would just repeat the same number.
+    const liquid = e.gold ?? 0;
+    const chalGp = challengeGp(e);
+    const kit = chalGp - liquid;
+    const challengeLine = kit > 0
+        ? `**Challenge:** ${chalGp} GP (${liquid} liquid + ${kit} kit)`
+        : `**Challenge:** ${chalGp} GP`;
     return [
         STATBLOCK_START,
         `**HP:** ${e.hp}${e.vermin ? ' (vermin)' : e.hp === 100 ? ' — The Hundred' : ''} · **Armor:** ${armor}${armorNote} · **Damage:** ${e.damage}/turn`,
-        `**Wallet:** ${e.gold ?? 0} GP · **Weak:** ${list(e.weak)} · **Resist:** ${list(e.resist)} · **Immune:** ${list(e.immune)}`,
-        `**TTK (reference loadout):** ${lazy} lazy / ${informed} informed · **Buyout at peg:** ~${(e.hp ?? 0) + (e.gold ?? 0)} GP`,
+        `${challengeLine} · **Weak:** ${list(e.weak)} · **Resist:** ${list(e.resist)} · **Immune:** ${list(e.immune)}`,
+        `**TTK (reference loadout):** ${lazy} lazy / ${informed} informed · **Buyout at peg:** ~${(e.hp ?? 0) + liquid} GP`,
         STATBLOCK_END,
     ].join('\n');
 }
@@ -274,7 +298,10 @@ const ENEMY_COLS = [
     { head: 'hp',           w: 5,  num: true },
     { head: 'armor',        w: 6,  num: true },
     { head: 'dmg',          w: 5,  num: true },
-    { head: 'gold',         w: 6,  num: true },
+    // Law 6f: renamed from `gold` — this column is Challenge GP (liquid gold +
+    // carried kit value), a challenge rating, not lootable coins. Widened by 1
+    // to fit the longer header without misaligning against the numeric body.
+    { head: 'chal_gp',      w: 7,  num: true },
     { head: 'ttk_lazy',     w: 13, num: true },
     { head: 'ttk_informed', w: 13, num: true },
     { head: 'ttd',          w: 5,  num: true },
@@ -324,7 +351,7 @@ export function report(roster = loadMapRoster()) {
 
     lines.push('--- ENEMIES (TTK vs the reference loadout; TTD vs the reference player) ---');
     lines.push(...table(ENEMY_COLS, sorted.map(e => [
-        `${e.zone}/${e.id}`, e.type, e.hp, e.armor, e.damage, e.gold,
+        `${e.zone}/${e.id}`, e.type, e.hp, e.armor, e.damage, challengeGp(e),
         ttk(e.hp, REFERENCE_DAMAGE, e.armor),
         ttk(e.hp, REFERENCE_DAMAGE * 2, e.armor),
         ttdOf(e.damage),
@@ -362,6 +389,9 @@ export function report(roster = loadMapRoster()) {
 
     lines.push('--- ECONOMY (per-zone faucet = sum of spawn wallets) ---');
     const zones = [...new Set(sorted.map(e => e.zone))].sort(byCodepoint);
+    // Deliberately LIQUID gold, not challengeGp (Law 6f): the faucet measures
+    // lootable inflow into the player's pocket, not the challenge the zone
+    // poses — a boss's carried kit dies with him, it never faucets in.
     lines.push(...table(ECON_COLS, zones.map(z =>
         [z, sorted.filter(e => e.zone === z).reduce((sum, e) => sum + e.gold, 0)])));
     lines.push("sinks: burnGold('heal'|'trick'), bribes/buyouts via transferGold");

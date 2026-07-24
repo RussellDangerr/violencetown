@@ -1,7 +1,7 @@
 // wallets.test.js — Law 6: loot = remaining wallet; respawns come back broke.
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { Enemy, spawnEnemy } from '../game/enemies.js';
+import { Enemy, spawnEnemy, challengeGp } from '../game/enemies.js';
 import { transferGold, burnGold } from '../game/trade.js';
 
 describe('Law 6 — the wallet is the loot', () => {
@@ -58,5 +58,21 @@ describe('Law 6 — the wallet is the loot', () => {
         const holder = { gold: 10 };
         assert.equal(burnGold(holder, 30, 'heal'), false);
         assert.equal(holder.gold, 10);
+    });
+});
+
+describe('challengeGp — Law 6f: the wallet number is the whole kit', () => {
+    test('gold-only enemy reads as pure gold', () => {
+        const e = new Enemy({ id: 'g', type: 'Grunt', x: 0, y: 0, gold: 40 });
+        assert.equal(challengeGp(e), 40);
+    });
+    test('loadout values add to the composite', () => {
+        const e = new Enemy({ id: 'b', type: 'Boss', x: 0, y: 0, gold: 40, loadout: [{ name: 'Big Potion', value: 60 }, { name: 'Spiked Fez', value: 400 }] });
+        assert.equal(challengeGp(e), 500);
+    });
+    test('null-safe on bare objects and missing values', () => {
+        assert.equal(challengeGp({ gold: 10 }), 10);
+        assert.equal(challengeGp({}), 0);
+        assert.equal(challengeGp({ gold: 5, loadout: [{ name: 'IOU' }] }), 5);
     });
 });
