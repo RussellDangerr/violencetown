@@ -361,6 +361,27 @@ describe('enemy save contract: ambient + allegiance round-trip (PD-5)', () => {
         assert.equal(out.ambient, false);
         assert.ok(!out._isSummon);
     });
+
+    test('a vermin rat round-trips its flag and hp untouched', () => {
+        // Law 0 amended 2026-07-24: vermin is now a ROLE marker (ambient swarm,
+        // challenge GP <= 5), not an HP exemption — a sub-Hundred hp here is a
+        // lint violation (Law 0), not legal data, but the ctor/save layer still
+        // must not silently coerce or drop it (that's the lint's job, not save's).
+        const rat = new Enemy({ id: 'vrat', type: 'Rat', x: 2, y: 2, hp: 16, tag: 'sewer_rat', vermin: true });
+        const out = rt(rat);
+        assert.equal(out.vermin, true, 'vermin flag must survive a reload');
+        assert.equal(out.entity.maxHp, 16);
+        assert.equal(out.entity.hp, 16);
+    });
+
+    test('an enemy keeps its weak/immune elemental arrays across a round-trip', () => {
+        // Law 2 (plans/gold-standard-design.md): ctor↔save drift already shipped
+        // bugs once (vermin) — weak/resist/immune must not repeat it.
+        const gasbag = new Enemy({ id: 'gas', type: 'Gasbag', x: 6, y: 6, weak: ['fire'], immune: ['fear'] });
+        const out = rt(gasbag);
+        assert.deepEqual(out.weak, ['fire']);
+        assert.deepEqual(out.immune, ['fear']);
+    });
 });
 
 describe('allegiance round-trip + derive-from-old-save (PD-3)', () => {
@@ -479,5 +500,85 @@ describe('runtime dropped-items persistence (Task 2)', () => {
         const g2 = makeBlankGame();
         await loadIntoReal(g2, blob);
         assert.deepEqual(g2._droppedItems, {});
+    });
+});
+
+// ── Task 6: mugged enemies stay broke across a save round-trip (Law 6d) ──────
+describe('muggedIds persistence (Task 6)', () => {
+
+    test('mugged enemy ids persist across a save round-trip', async () => {
+        const g = makeBlankGame();
+        g._muggedIds = new Set(['bandit1', 'thug2']);
+        const blob = JSON.parse(JSON.stringify(serialize(g)));
+        const g2 = makeBlankGame();
+        await loadIntoReal(g2, blob);
+        assert.deepEqual([...g2._muggedIds].sort(), ['bandit1', 'thug2']);
+    });
+
+    test('old save (no muggedIds) loads as an empty set without throwing', async () => {
+        const g = makeBlankGame();
+        const blob = JSON.parse(JSON.stringify(serialize(g)));
+        delete blob.world.muggedIds;
+        const g2 = makeBlankGame();
+        await loadIntoReal(g2, blob);
+        assert.equal(g2._muggedIds.size, 0);
+    });
+});
+
+// ── Task 6: Enemy._lastDx/_lastDy (carry-forward c) round-trip ───────────────
+describe('enemy facing (_lastDx/_lastDy) round-trip (Task 6 carry-forward c)', () => {
+    const rt = (e) => Enemy.fromSave(JSON.parse(JSON.stringify(e.toSave())));
+
+    test('a mid-fight facing survives a reload (backstab back must not reset)', () => {
+        const e = new Enemy({ id: 'brute', type: 'Brute', x: 4, y: 4 });
+        e._lastDx = 1; e._lastDy = 0; // stepEntity would have stamped this live
+        const out = rt(e);
+        assert.equal(out._lastDx, 1);
+        assert.equal(out._lastDy, 0);
+    });
+
+    test('an enemy that never moved has no back (0,0), same as a fresh spawn', () => {
+        const e = new Enemy({ id: 'fresh', type: 'Rat', x: 1, y: 1 });
+        const out = rt(e);
+        assert.equal(out._lastDx, 0);
+        assert.equal(out._lastDy, 0);
+    });
+});
+
+// ── Task 15: Enemy._spunTurns (shove recovery) round-trip ───────────────────
+describe('enemy shove recovery (_spunTurns) round-trip (Task 15)', () => {
+    const rt = (e) => Enemy.fromSave(JSON.parse(JSON.stringify(e.toSave())));
+
+    test('a spun enemy stays spun across save/load', () => {
+        const e = new Enemy({ id: 'grunt', type: 'Grunt', x: 3, y: 3 });
+        e._spunTurns = 1; // main.js's shove resolver would have set this live
+        const out = rt(e);
+        assert.equal(out._spunTurns, 1);
+    });
+
+    test('an enemy that was never shoved round-trips at 0', () => {
+        const e = new Enemy({ id: 'fresh', type: 'Rat', x: 1, y: 1 });
+        const out = rt(e);
+        assert.equal(out._spunTurns, 0);
+    });
+});
+
+// ── Task 16: Enemy.loadout (Law 6f composite kit) round-trip ────────────────
+describe('enemy loadout (Law 6f) round-trip (Task 16)', () => {
+    const rt = (e) => Enemy.fromSave(JSON.parse(JSON.stringify(e.toSave())));
+
+    test('a boss loadout survives a reload (Challenge GP must not drop on load)', () => {
+        const e = new Enemy({
+            id: 'boss', type: 'Boss', x: 0, y: 0, gold: 40,
+            loadout: [{ name: 'Big Potion', value: 60 }, { name: 'Spiked Fez', value: 400 }],
+        });
+        const out = rt(e);
+        assert.deepEqual(out.loadout, [{ name: 'Big Potion', value: 60 }, { name: 'Spiked Fez', value: 400 }]);
+    });
+
+    test('an enemy with no loadout round-trips null', () => {
+        const e = new Enemy({ id: 'fresh', type: 'Rat', x: 1, y: 1 });
+        const out = rt(e);
+        assert.equal(out.loadout, null);
     });
 });

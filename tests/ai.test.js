@@ -1,7 +1,7 @@
 // ai.test.js — the shared AI predicates (PD-3/NH-3).
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { isHostile, deriveAllegiance, parseCapabilities } from '../game/ai.js';
+import { isHostile, deriveAllegiance, parseCapabilities, healPurchase } from '../game/ai.js';
 
 describe('deriveAllegiance', () => {
   test('no behavior array → hostile (born chaser)', () => {
@@ -33,5 +33,23 @@ describe('isHostile', () => {
     assert.equal(isHostile({ allegiance: 'hostile' }), true);
     assert.equal(isHostile({ allegiance: 'neutral' }), false);
     assert.equal(isHostile({ allegiance: 'ally' }), false);
+  });
+});
+
+describe('healPurchase — Law 6a/6b (peg-priced heal, extras only)', () => {
+  test('hurt and solvent → spends 1 GP per HP, capped at missing HP', () => {
+    assert.deepEqual(healPurchase(30, 100, 200), { spend: 70, heal: 70 });
+  });
+  test('hurt grunt with 20 GP → the whole 20, ceiling 50 (the readable prediction)', () => {
+    assert.deepEqual(healPurchase(30, 100, 20), { spend: 20, heal: 20 });
+  });
+  test('not hurt enough (hp > 40) → no purchase', () => {
+    assert.equal(healPurchase(41, 100, 200), null);
+  });
+  test('broke (gold < 20) → no purchase; the sliver can never heal', () => {
+    assert.equal(healPurchase(10, 100, 19), null);
+  });
+  test('zero-spend edge → no purchase (no zero-buy soft-lock)', () => {
+    assert.equal(healPurchase(16, 16, 50), null);  // full-HP vermin with gold: no zero-buy soft-lock
   });
 });

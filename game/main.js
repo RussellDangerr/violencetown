@@ -19,8 +19,8 @@ import {
 import { isBoss, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS } from './defeat-scenarios.js';
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
-import { attack, formatDamageNumber } from './combat.js';
-import { Enemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
+import { attack, formatDamageNumber, computeHit, elementalMult, isBackstab } from './combat.js';
+import { Enemy, spawnEnemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
 import { isHostile } from './ai.js';
 import { getGreedyStep, stepEntity, findPath } from './pathing.js'; // pathfinding (greedy chase + BFS click-to-move); stepEntity = shove a character aside
 import { applyDispositionDelta, reactToTransaction } from './give-action.js';
@@ -41,7 +41,7 @@ import {
     DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceBagSlotRects, deviceEquipLayout, deviceRingsLayout,
     xmbBarLayout,
 } from './layout.js';
-import { canTrade, buyPrice, sellPrice, bribeStepCost, BRIBE_STEP, transferGold } from './trade.js'; // pricing + the transaction spine
+import { canTrade, buyPrice, sellPrice, bribeStepCost, BRIBE_STEP, transferGold, burnGold } from './trade.js'; // pricing + the transaction spine
 import { buildXmbBar, resolveXmbSelection, cycleXmbCategory, cycleXmbItem, xmbCategoryOf, XMB_LABELS } from './xmb.js';
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
@@ -359,6 +359,10 @@ class Game {
         this._pendingFollowersFrom = null;   // url of the zone they're chasing you OUT of
         this._zonePursuit = false;           // (playtest) monsters don't follow you through doors for now
         this._collectedItems = new Set();    // "map|x|y|type" of ground items already taken, so they don't respawn on zone re-entry
+        // Law 6 (plans/gold-standard-design.md): ids of enemies already looted on
+        // death, so a respawn (zone re-entry re-spawns from map.enemySpawns) comes
+        // back broke instead of farmable for gold every time. Persisted.
+        this._muggedIds = new Set();
         // Runtime ground-drops per map ("mapUrl" → [{ type, x, y }]), so a drop
         // survives leaving and re-entering a zone. Recorded today for enemy
         // death-drops; the player-drop path routes through here once a drop verb
@@ -564,7 +568,7 @@ class Game {
             if (def) this.groundItems.push({ type: d.type, x: d.x, y: d.y, def });
         }
         this.enemies = [];
-        for (const s of this.map.enemySpawns) this.enemies.push(new Enemy(s));
+        for (const s of this.map.enemySpawns) this.enemies.push(spawnEnemy(s, this._muggedIds));
 
         // (zone pursuit) Re-inject any hostiles that chased you through the door.
         // They spawn at the door leading back where you came from — visible in
@@ -1967,6 +1971,22 @@ class Game {
                 return; // boxed in — nowhere to put them
             }
             stepEntity(enemy, dest.x, dest.y, this._MOVE_MS); // knock aside / swap (animates)
+            // Law 2 positional (ruled 2026-07-24): a shove spins its victim clean
+            // around, and the recovery turn below (npc.js HOSTILE case) makes that
+            // spin cash out as exactly one backstab window. No extra facing stamp
+            // needed here — stepEntity above already set _lastDx/_lastDy to the
+            // victim's actual displacement (its own step, unit-length since the
+            // shove destination is always one tile away), and the player is about
+            // to fall through into (nx,ny) == the victim's PRE-shove tile. That
+            // makes the player's landing spot exactly the tile stepEntity's stamp
+            // calls "behind" the victim — true for BOTH flavors: knock-aside moves
+            // the victim sideways and the player takes the tile it vacated (behind
+            // its knock direction); swap moves the victim onto the player's old
+            // tile — i.e. backward, toward where the player used to stand — while
+            // the player advances onto the victim's old tile, again landing behind
+            // the victim's new facing. Traced both; neither needs a manual re-stamp.
+            enemy._spunTurns = 1; // burns on the victim's next HOSTILE turn (npc.js)
+            this._log(`[You shove ${enemy.name ?? enemy.type} so hard they spin around!]`, 'combat');
             // fall through: (nx,ny) is now vacated, so the normal move below
             // advances the player into it with full hazard/pickup/turn handling.
         }
@@ -2845,7 +2865,7 @@ class Game {
             case 'talk':  if (npc) this._openDialogue(npc); break;
             case 'trade': if (npc) this._openTrade(npc); break;   // (Phase 6a) any adjacent NPC → shop or offer window
             case 'bribe': if (npc) this._bribeTarget(npc); break;
-            case 'hit':   if (npc) { this.combatAttack(npc, this.equipment.weapon.damage); this._advanceWorld(); this._render(); } break;
+            case 'hit':   if (npc) { this.combatAttack(npc, this.equipment.weapon.damage, { type: this.equipment.weapon.damageType }); this._advanceWorld(); this._render(); } break;
             case 'throw': { const th = this._resolveThrowable(); if (th) { const msg = resolveThrow(this, th.itemDef, null, th.count, { x: t.x, y: t.y }); if (msg) this._log(msg); th.consume(); this._advanceWorld(); } else this._log('[Nothing to throw.]'); this._render(); break; }
             case 'take':  this._takeItemAt(t.x, t.y); this._render(); break;
             default: this._render();
@@ -3115,9 +3135,18 @@ class Game {
         let hit = 0;
         for (const t of tiles) {
             const e = this.enemies.find(en => en.entity.isAlive() && en.x === t.x && en.y === t.y);
-            if (e) { this.combatAttack(e, damage, opts); hit++; }
+            // combatAttack composes the elemental matchup itself and returns null
+            // on immune (already logged) — only count tiles that actually landed.
+            if (e && this.combatAttack(e, damage, opts)) hit++;
         }
         return hit;
+    }
+
+    // Count alive enemies standing on any of `tiles` — lets a swing's caller
+    // tell "hit only air" (no enemies present, no turn) apart from "enemies
+    // present but all immune" (turn still spent) without re-running combatAttack.
+    _enemiesPresent(tiles) {
+        return tiles.filter(t => this.enemies.some(en => en.entity.isAlive() && en.x === t.x && en.y === t.y)).length;
     }
 
     _fireWheel() {
@@ -3133,7 +3162,7 @@ class Game {
                     // (fear) Fearmur fears an enemy struck twice in a row — check
                     // BEFORE the hit (which may kill it and reset the tracker).
                     const repeat = wpn && wpn.onHit === 'fearOnRepeat' && this._lastHitTarget === enemy.id;
-                    this.combatAttack(enemy, wpn.damage);
+                    this.combatAttack(enemy, wpn.damage, { type: wpn && wpn.damageType });
                     if (enemy.entity.isAlive()) {
                         if (repeat) { this._applyFear(enemy, 3); this._log('[The Fearmur cracks bone — it recoils in terror!]', 'combat'); }
                         if (wpn && wpn.pullDistance) this._pullEnemyToward(enemy, wpn.pullDistance);   // (Lion Whip) yank it closer
@@ -3149,18 +3178,26 @@ class Game {
             case 'cleaveAttack': {
                 this._lastHitTarget = null;   // (fear) AoE breaks the Fearmur single-target streak
                 // Fixed 3-tile frontal arc, 2/3 weapon damage to everything in it.
-                const dmg = Math.max(1, Math.round(this.equipment.weapon.damage * 2 / 3));
-                const hit = this._aoeStrike(affectedTiles(w, this), dmg);
+                // Pass the raw fraction (not pre-rounded) + the weapon's type so
+                // computeHit rounds once and elemental matchups apply, same as a
+                // single hit — the weapon-AoE case the basic-hit typing pass missed.
+                const dmg = this.equipment.weapon.damage * 2 / 3;
+                const tiles = affectedTiles(w, this);
+                const hit = this._aoeStrike(tiles, dmg, { type: this.equipment.weapon.damageType });
                 if (hit) { this._log(`[Cleave! ${hit} caught.]`, 'combat'); this._advanceWorld(); }
+                else if (this._enemiesPresent(tiles) > 0) { this._log('[Cleave connects — shrugged off, immune.]', 'combat'); this._advanceWorld(); }
                 else this._log('[Cleave hits only air]');
                 break;
             }
             case 'spinAttack': {
                 this._lastHitTarget = null;   // (fear) AoE breaks the Fearmur single-target streak
                 // Sweep all 8 tiles, 2/5 weapon damage to everything around you.
-                const dmg = Math.max(1, Math.round(this.equipment.weapon.damage * 2 / 5));
-                const hit = this._aoeStrike(affectedTiles(w, this), dmg);
+                // Raw fraction + weapon type, as Cleave above — round once, type applies.
+                const dmg = this.equipment.weapon.damage * 2 / 5;
+                const tiles = affectedTiles(w, this);
+                const hit = this._aoeStrike(tiles, dmg, { type: this.equipment.weapon.damageType });
                 if (hit) { this._log(`[Spin! ${hit} caught.]`, 'combat'); this._advanceWorld(); }
+                else if (this._enemiesPresent(tiles) > 0) { this._log('[Spin connects — shrugged off, immune.]', 'combat'); this._advanceWorld(); }
                 else this._log('[You spin, hitting nothing]');
                 break;
             }
@@ -3185,7 +3222,7 @@ class Game {
                 const trick = TRICKS[node.trickId];
                 if (!trick) { this._log("[That trick isn't ready yet]"); break; }
                 if ((this.gold ?? 0) < trick.gpCost) { this._log(`[Not enough GP — ${trick.name} needs ${trick.gpCost}g.]`); break; }
-                this.gold = Math.max(0, (this.gold ?? 0) - trick.gpCost);
+                burnGold(this, trick.gpCost, 'trick'); // declared sink (Law 6a) — the guard above covers it
                 if (trick.transform) {
                     // Rat Form — fold down into a rat for a few turns (slips
                     // through grates). No aim/damage; just set the countdown.
@@ -3196,7 +3233,9 @@ class Game {
                 }
                 if (trick.summon) {
                     // Summon trick (Hire a Lion) — no damage; spawn a temporary ally.
-                    this._spawnSummon(trick.summon, trick.summonTurns || 2, trick);
+                    // `??` not `||`, matching _spawnSummon's hp/damage pass-through: an
+                    // explicit 0 means zero turns, not "give me the default".
+                    this._spawnSummon(trick.summon, trick.summonTurns ?? 2, trick);
                     this._advanceWorld();
                     break;
                 }
@@ -3679,9 +3718,22 @@ class Game {
         let dmg = damage;
         const mods = this.ringMods || {};
         const typeBonus = opts.type && mods[opts.type + 'Damage'];
-        if (typeBonus) dmg = Math.round(dmg * (1 + typeBonus / 100));
+        if (typeBonus) dmg = dmg * (1 + typeBonus / 100);   // raw into computeHit — round once, there
 
-        const result = attack(playerEntity, enemyObj.entity, dmg);
+        // Law 2: elemental matchup + positional (backstab) fold in here — the one
+        // computeHit call for this swing (round-once). Immune skips attack()
+        // entirely (0-contract). Backstab: standing on the tile directly behind
+        // the target's last step (5-Zone Body's "Back" zone as a rule).
+        const backstab = isBackstab(this.playerX, this.playerY, enemyObj);
+        const finalDmg = computeHit({
+            base: dmg,
+            elemental: elementalMult(opts.type, enemyObj),
+            positional: backstab ? 1.5 : 1,
+        });
+        if (finalDmg === 0) { this._log(`[${enemyObj.type} is immune!]`); return null; }
+        if (backstab) this._log('[Backstab!]', 'combat');
+
+        const result = attack(playerEntity, enemyObj.entity, finalDmg);
 
         // (AGGRO behavior bands) Friendly fire — hitting your own bribed ally
         // re-flips them to hostile. The blow still lands (below); they just turn
@@ -3770,6 +3822,16 @@ class Game {
         this.emitGameEvent('enemy_killed', {
             type: enemyObj.type, id: enemyObj.id, x: enemyObj.x, y: enemyObj.y, tag: enemyObj.tag,
         });
+        // Law 6: the wallet IS the loot — whatever gold this enemy carries moves
+        // to the player through the trade spine (conserves; never mints/burns).
+        // Mark them mugged so a respawn (zone re-entry) comes back broke, not
+        // farmable every reload.
+        if (enemyObj.gold > 0) {
+            const loot = enemyObj.gold;
+            transferGold(enemyObj, this, loot, 'loot'); // can't fail — amount == balance, guarded > 0
+            this._log(`[Looted ${loot} GP.]`, 'pickup');
+            this._muggedIds.add(enemyObj.id);
+        }
         // The Were-Rat drops the converter; rat kills feed the escape waves.
         if (enemyObj.tag === 'wererat_boss' && ITEMS.catalytic_converter) {
             this._recordDrop('catalytic_converter', enemyObj.x, enemyObj.y);
@@ -3859,7 +3921,10 @@ class Game {
 
         if (target) {
             if (cheb(ally.x, ally.y, target.x, target.y) <= 1) {
-                const result = attack(ally.entity, target.entity, ally.damage);
+                // Route through the one pipeline (Law 2) same as everyone else —
+                // no elemental/positional for allies yet, just base damage.
+                const finalDmg = computeHit({ base: ally.damage });
+                const result = attack(ally.entity, target.entity, finalDmg);
                 if (result) {
                     this._spawnHitSplat(target.x, target.y, `-${result.dealt}`, 'physical', { omni: true });
                     target._hitFlashUntil = performance.now() + 120;
@@ -3867,8 +3932,10 @@ class Game {
                     if (result.killed) this._handleEnemyDeath(target);
                 }
             } else {
+                // stepEntity (not a direct x/y poke) so allies get real facing +
+                // slide anim, same as hostiles.
                 const step = getGreedyStep(this, { x: ally.x, y: ally.y }, { x: target.x, y: target.y }, { self: ally });
-                if (step) { ally.x = step.x; ally.y = step.y; }
+                if (step) stepEntity(ally, step.x, step.y, this._MOVE_MS);
             }
             return [];
         }
@@ -3876,7 +3943,7 @@ class Game {
         // No hostile in range — leash-follow the player.
         if (manhattan(ally.x, ally.y, this.playerX, this.playerY) > LEASH) {
             const step = getGreedyStep(this, { x: ally.x, y: ally.y }, { x: this.playerX, y: this.playerY }, { self: ally });
-            if (step) { ally.x = step.x; ally.y = step.y; }
+            if (step) stepEntity(ally, step.x, step.y, this._MOVE_MS);
         }
         return [];
     }
@@ -4035,10 +4102,15 @@ class Game {
     _applyTrigger(trigger, enemyObj) {
         if (!trigger || !enemyObj || !enemyObj.entity || !enemyObj.entity.isAlive()) return;
         if (trigger.effect === 'ignite') {
-            const dealt = enemyObj.entity.takeDamage(RING_IGNITE_DAMAGE);
-            this._spawnHitSplat(enemyObj.x, enemyObj.y, `-${dealt}`, 'fire', { omni: true });
-            this._log('[Cinders catch — it burns.]', 'combat');
-            if (enemyObj.entity.isDead()) this._handleEnemyDeath(enemyObj);
+            // Route through the one pipeline — a fire-immune foe takes no cinder
+            // damage at all (0-contract), rather than armor flooring it to 1.
+            const igniteDmg = computeHit({ base: RING_IGNITE_DAMAGE, elemental: elementalMult('fire', enemyObj) });
+            if (igniteDmg > 0) {
+                const dealt = enemyObj.entity.takeDamage(igniteDmg);
+                this._spawnHitSplat(enemyObj.x, enemyObj.y, `-${dealt}`, 'fire', { omni: true });
+                this._log('[Cinders catch — it burns.]', 'combat');
+                if (enemyObj.entity.isDead()) this._handleEnemyDeath(enemyObj);
+            }
         }
     }
 
@@ -4059,7 +4131,13 @@ class Game {
         const ally = new Enemy({
             id: `summon_${type}_${this.turn}_${this._summonSeq}`,
             type: name, x: spot.x, y: spot.y,
-            hp: opts.summonHp || 30, damage: opts.summonDamage || 12,
+            // Pass through undefined so the Enemy ctor's own defaults apply — a
+            // summon is a combatant, so Law 0's hp 100 is its floor too. The old
+            // `|| 30` silently undercut The Hundred for any trick omitting the field
+            // (and `|| 12` was a stale copy of the pre-retune lion's damage).
+            // Narrowing this deliberately drops `||`'s rescue of falsy values: a def
+            // saying summonHp: 0 now builds a 0-HP summon instead of quietly getting 30.
+            hp: opts.summonHp, damage: opts.summonDamage,
             behavior: ['ALLIED'],
         });
         ally._ally = true;
@@ -4101,8 +4179,14 @@ class Game {
 
     applyDamageToPlayer(rawDamage, attacker = null) {
         if (attacker) this._lastDefeatedBy = attacker;
-        let dmg = rawDamage;
-        if (this.hasBuff('guard')) dmg = Math.max(1, Math.floor(dmg / 2));
+        // Blind (outgoing, attacker) and guard (incoming, defender) compose in
+        // one computeHit call — round once, no double-rounding.
+        let dmg = computeHit({
+            base: rawDamage,
+            outgoingMult: attacker?.hasBuff?.('blind') ? 0.5 : 1,
+            incomingMult: this.hasBuff('guard') ? 0.5 : 1,
+        });
+        if (dmg === 0) return 0;   // 0-contract: hit doesn't happen, never floor back via armor
         dmg = Math.max(1, dmg - this._playerArmor());   // worn armor soaks the hit (min 1 always lands)
         this.playerHp = Math.max(0, this.playerHp - dmg);
         audio.playSfx('take-damage'); // [audio] player got hit

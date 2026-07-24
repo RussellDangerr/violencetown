@@ -31,3 +31,18 @@ export function deriveAllegiance(src) {
 export function isHostile(e) {
   return !!e && e.allegiance === 'hostile';
 }
+
+// Default grunt heal policy — per-enemy policies come later (first boss build).
+export const HEAL_HP_FLOOR  = 40; // buy only at or below this HP
+export const HEAL_MIN_GOLD  = 20; // a sliver below this can never heal
+
+// healPurchase — Law 6: enemies buy heals at the peg (1 GP = 1 HP).
+// Rule: at or below HEAL_HP_FLOOR and holding at least HEAL_MIN_GOLD,
+// spend min(gold, missing HP).
+// Returns { spend, heal } or null. Pure — npc.js applies the result.
+export function healPurchase(hp, maxHp, gold) {
+  if (hp > HEAL_HP_FLOOR || gold < HEAL_MIN_GOLD) return null;
+  const spend = Math.min(gold, maxHp - hp);
+  if (spend <= 0) return null; // full-HP edge — no zero-GP turns
+  return { spend, heal: spend };
+}

@@ -10,6 +10,48 @@ const DEFAULT_HP    = 100;
 const DEFAULT_MP    = 100;   // Skill / mana — every creature starts at 100
 const DEFAULT_ARMOR = 0;
 
+// ── The one pipeline (Gold Standard Law 2) ────────────────────────────────────
+//
+// Every damage number in the game is computed here. The bucket law:
+//   - flats ADD to base (same-family bonuses share one bucket)
+//   - earned multipliers (elemental, positional) and status buckets
+//     (attacker-outgoing, defender-incoming) MULTIPLY — independent
+//     achievements both count fully
+//   - round ONCE at the end; a positive hit lands for at least 1
+//   - elemental immunity (×0) is the one true zero
+// Armor is NOT applied here — Entity.takeDamage subtracts it last (min 1).
+// 0 means the hit does not happen — call sites must skip attack()/takeDamage
+// entirely on 0 (immunity), never floor it back to 1 via armor math.
+// Never chain computeHit(computeHit(...)) — pass all buckets in one call
+// (round-once).
+
+function computeHit({ base = 0, flats = 0, elemental = 1, positional = 1, outgoingMult = 1, incomingMult = 1 } = {}) {
+    const raw = (base + flats) * elemental * positional * outgoingMult * incomingMult;
+    if (raw <= 0) return 0;
+    return Math.max(1, Math.round(raw));
+}
+
+// Elemental matchup (Law 2): weakness ×2, resist ×½, immune ×0, else ×1.
+// `target` carries optional weak/resist/immune arrays of damageType strings.
+function elementalMult(damageType, target) {
+    if (!damageType || !target) return 1;
+    if (target.immune?.includes(damageType)) return 0;
+    if (target.weak?.includes(damageType))   return 2;
+    if (target.resist?.includes(damageType)) return 0.5;
+    return 1;
+}
+
+// Backstab (Law 2 positional, ×1.5): the attacker stands on the tile DIRECTLY
+// behind the target's last step direction. Strict — only the single tile
+// directly opposite the last step counts (a diagonal step yields a diagonal
+// back tile); a target that has never moved has no back. The 5-Zone Body's
+// "Back" zone, as a rule instead of an HP pool.
+function isBackstab(attackerX, attackerY, target) {
+    if (!target._lastDx && !target._lastDy) return false;
+    return attackerX === target.x - target._lastDx
+        && attackerY === target.y - target._lastDy;
+}
+
 // ── Entity ────────────────────────────────────────────────────────────────────
 
 class Entity {
@@ -76,4 +118,4 @@ function formatDamageNumber(result) {
 
 // ── Exports ───────────────────────────────────────────────────────────────────
 
-export { Entity, attack, formatDamageNumber, DEFAULT_HP, DEFAULT_MP, DEFAULT_ARMOR };
+export { Entity, attack, formatDamageNumber, computeHit, elementalMult, isBackstab, DEFAULT_HP, DEFAULT_MP, DEFAULT_ARMOR };

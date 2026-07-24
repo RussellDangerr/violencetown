@@ -1,6 +1,9 @@
 # The Violencetown Gold Standard — combat & balancing spec
 
-**Status:** Draft — awaiting Caelan's review
+**Status:** Adopted — Laws 0–4 and 6 implemented via `plans/gold-standard-implementation.md`
+(Tasks 1–13, branch `feature/gold-standard`). Law 5 (boss spending) and the deferred hooks below
+await the first boss build. Open design rulings are collected at the end of `plans/balancing-bible.md`.
+Round 2 (negative armor / shove-spin / challenge GP) implemented 2026-07-24.
 **Date:** 2026-07-23
 **Supersedes:** the combat-math sections of `plans/combat-health-system.md` (its genre research and
 "chess, not slot machines" goal carry forward unchanged; its 2026-03-30 "flat 100 HP is superseded"
@@ -34,34 +37,46 @@ differentiation lives in mitigation (armor, resistances, immunities) and behavio
 
 - Payoff: every damage number is self-interpreting. Hit the armored knight for 2 and you know
   *exactly* how strong he is, because you know he has 100 like everyone else.
-- **The Vermin exception:** The Hundred applies to combatants of consequence — anyone with a
-  nameplate and a wallet. Ambient swarm creatures (sewer rats at 16 HP) are explicitly
-  **sub-Hundred**: declared with `vermin: true`, one-shottable, wallets 0–5. A rat is 16% of a
-  person's worth of violence; that's legible too. Without this carve-out, swarm fodder is
-  arithmetically impossible (nothing with 100 HP dies in 1–2 turns of act-1 weapons).
-- Code divergence to fix: `combat.js` already declares this ("Everything starts with 100 HP") but
-  the Enemy ctor defaults `hp = 50` (`enemies.js`). The default becomes 100; only `vermin: true`
-  spawns may go below it.
+- **No exceptions — fragility is negative armor (amended 2026-07-24, repeals the Vermin
+  exception).** Rats and townsfolk carry 100 HP like everyone else; their softness lives in
+  **negative armor** (Law 3) — `max(1, hit − armor)` already adds the deficit, so hitting a 1 on a
+  −10 rat deals 11, and a reference swing against −80 one-shots. The denominator never changes;
+  the splat shows the bonus. `vermin: true` survives as a ROLE marker (ambient swarm class,
+  challenge GP ≤ 5) but no longer licenses sub-100 HP.
+- Code note: the Enemy ctor defaults `hp = 100`; the Law 0 lint flags ANY non-100 combatant, no
+  exemptions.
 
 ### Law 1 — The Peg
-**1 GP ≈ 1 HP** is the market rate for *lazy* violence. Ungated gold solutions — bribes, mercenary
-summons — clear a basic enemy at ~100 GP. Gates (equipment, aiming, positioning, risk) buy rates
-*above* peg; nothing ungated may beat it.
+**1 GP ≈ 1 HP** is the market rate for *lazy* violence. Autonomous gold solutions — bribes,
+mercenary summons — clear a basic enemy at ~100 GP. Per-cast skill (aiming, positioning, risk) buys
+rates *above* peg; nothing autonomous may beat it.
+
+The peg keys on **autonomy, not gating**. A gate alone earns nothing — every trick in `TRICKS` is
+gated behind gear (Ray Blast ← Ray Gun, Hire a Lion ← Lion Whip, Rat Form / Ember Rat ← rings), so
+"gated" doesn't distinguish anything. What earns above-peg is skill spent *per use*: a bolt you must
+aim every cast is skill expression; a summon that fights on its own after one purchase is not, and
+is priced at peg however it was unlocked.
 
 The exchange-rate ladder (current + retuned content):
 
-| Route                              | Rate            | Why it's allowed             |
-|------------------------------------|-----------------|------------------------------|
-| Bribe / buyout                     | ~1:1 remaining HP | Zero skill, zero risk — pure peg |
-| Hire a Lion (retuned: 50 GP)       | 1:1 (50 total dmg) | Ungated, autonomous          |
-| Ray Blast (6 GP → 18 dmg)          | 3:1             | Gated: Ray Gun equipped + aim |
-| Cleave into 3 enemies              | 2× weapon, free | Positioning is the payment   |
-| Spin fully surrounded              | 3.2× weapon, free | Risk is the payment          |
+| Route                              | Rate               | Why it's allowed                                          |
+|------------------------------------|--------------------|-----------------------------------------------------------|
+| Bribe / buyout                     | ~1:1 remaining HP  | Zero skill, zero risk — pure peg                          |
+| Hire a Lion (retuned: 50 GP)       | 1:1 (50 total dmg) | Gated behind Lion Whip, but priced at peg — autonomy costs no skill |
+| Ray Blast (6 GP → 18 dmg)          | 3:1                | Gated: Ray Gun equipped + aim                             |
+| Cleave into 3 enemies              | 2× weapon, free    | Positioning is the payment                                |
+| Spin fully surrounded              | 3.2× weapon, free  | Risk is the payment                                       |
 
 MP is the *renewable* skill currency (regenerates per turn), so spell efficiency prices in
 opportunity-turns, not gold: spells sit at **1.5–2.5 dmg per MP** (AoE justifies the top of the
-band). GP is the *non-renewable* solvency currency: gated tricks must beat spells' raw rate
+band). GP is the *non-renewable* solvency currency: per-cast tricks must beat spells' raw rate
 (**≥ 2.5 dmg per GP**) to justify spending real money.
+
+The peg is a **target rate, not just a ceiling** — the autonomous band is **0.5–1.0 dmg per GP**.
+Above 1.0 is a balance violation (autonomy outperforming skill). Below 0.5 is a *content* failure:
+a summon nobody would rationally buy is dead content, and the lint should say so while it's still
+cheap to retune. Both sides are enforced by `lintSkills` (`AUTONOMOUS_MAX_RATE` /
+`AUTONOMOUS_MIN_RATE` in `tools/balance-harness.mjs`).
 
 ### Law 2 — Earned multipliers (no dice, ever)
 Combat stays deterministic — "no rolls, no misses" is permanent. Damage spikes are **conditions the
@@ -69,7 +84,10 @@ player engineers**, not luck:
 
 - **Elemental:** weakness **×2**, resist **×½**, immune **×0**. The clean doubling family — mental
   math survives. (The Persona verb: find the weakness, exploit it.)
-- **Positional:** backstab **×1.5**.
+- **Positional:** backstab **×1.5**. **Shove spins (ruled 2026-07-24):** a shove turns its victim
+  clean around — `[You shove X so hard they spin around!]` — and they spend their next turn
+  recovering, so the window survives exactly one follow-up hit. Feared enemies remain
+  backstabbable while fleeing; that emergent synergy is canon.
 - Statuses do NOT add attacker-side multipliers by default — they modify the *target's* own output
   and behavior, which is already how Guard (×0.5 incoming) and Blind (×0.5 outgoing) work. A future
   status may declare an attacker-side multiplier explicitly, priced when it does.
@@ -94,6 +112,15 @@ weapon of 20 — see Law 4), EXCEPT declared **puzzle walls** that demand their 
 (armor-piercing, elemental, positional). Puzzle walls are allowed to floor you to
 1 precisely so the message is unmistakable: *this fight is a lock, go find the key.*
 
+**Negative armor is the fragility axis (amended 2026-07-24).** Armor spans **−80 … +10**;
+`max(1, hit − armor)` needs no change — negative armor ADDS damage, so soft targets die on
+schedule without ever touching The Hundred. The standard fragility stops, vs the 20-damage
+reference: **−80** one-shot (vermin, townsfolk), **−30** TTK 2 (fodder fighters), **−15** TTK 3,
+**−5** TTK 4, **0** TTK 5 (standard), **+5…+10** elite walls. Retune recipe for existing content:
+preserve a fighter's current lazy TTK via `new_armor = 20 − ceil(100 / old_TTK)`, snapped to the
+nearest stop; damage-0 civilians snap straight to −80 (a Violencian goes down in one punch — this
+is Violencetown).
+
 ### Law 4 — Roles, not levels
 One flat power band for the whole act; enemies differ by **role** and **archetype shape**, not
 level. Because damage is deterministic, TTK is exact — `ceil(100 / net dmg per turn)` — so these
@@ -104,12 +131,17 @@ the tutorial Wooden Sword. "Lazy" = basic attacks only; "informed" = weakness an
 exploited (×2 elemental is the workhorse: 20 × 2 = 40/turn; with backstab, 60). The derivation
 anchor is the design statement "above 50 damage if used correctly."
 
-| Role     | TTK lazy | TTK informed | Their dmg/turn | Armor  | Wallet (GP) |
-|----------|----------|--------------|----------------|--------|-------------|
-| Vermin   | 1 (one-shot) | 1        | 4–6            | 0      | 0–5         |
-| Standard | 5–6 turns | 2–3         | 8–12           | 0–4    | 20–60       |
-| Elite    | 7–10 turns | 3–4        | 14–18          | 6–10   | 100–200     |
-| Boss     | — | per phase: 3–4      | 16–24          | varies | 500–1,500   |
+| Role     | Armor      | TTK lazy | TTK informed | Their dmg/turn | Challenge GP |
+|----------|------------|----------|--------------|----------------|--------------|
+| Vermin / townsfolk | −80 | 1 (one-shot) | 1     | 0–6            | 0–5          |
+| Fodder fighters    | −30 | 2        | 2            | 4–6            | 5–20         |
+| Standard | −5 … 0     | 4–5      | 2–3          | 8–12           | 20–60        |
+| Elite    | +5 … +10   | 7–10     | 3–4          | 14–18          | 100–200      |
+| Boss     | varies     | —        | per phase: 3–4 | 16–24        | 500–2,500    |
+
+*(Amended 2026-07-24: HP left the table — it's always 100 now. Armor is the durability axis in
+both directions, and the wallet column is **Challenge GP** — the composite kit value of Law 6f,
+not lootable coins.)*
 
 Regular enemies cap armor at **10** (half the reference weapon — lazy play never falls below half
 rate); only declared puzzle walls exceed it (Law 3).
@@ -154,6 +186,15 @@ Every combatant shows **HP/100 and GP** on its nameplate.
   the heal. AI spending policies are decision lists over (HP, GP, position) — e.g. `hp < 40 AND
   gp ≥ 100 → buy full heal` — so a player reading nameplates can *prove* ceilings: "he's at 35
   with 20 GP; his best case is 55; I can finish this."
+- **6f — Challenge GP is a composite (ruled 2026-07-24).** The nameplate number is the enemy's
+  **total liquidatable kit**: liquid gold + the value of every usable potion and piece of gear it
+  carries — the RuneScape PvP loadout read, made exact. It doubles as the challenge rating
+  denominated in GP: a 2,500 GP boss is a 2,500-point PROBLEM, not 2,500 lootable coins. **Loot
+  stays liquid gold only** (plus whatever physically drops); the gear/potion share of the number
+  dies with its owner unless separately dropped. The dread display is the NUMBER itself — the
+  future boss frame shows `2,500g` outright ("9 bars of dread" is really 2,500-gp-in-the-wallet
+  dread); tile pips keep the 5+overflow cap. Implementation: `challengeGp(e) = e.gold +
+  Σ loadout item values`; an enemy with no loadout reads as pure gold.
 
 ---
 
@@ -179,7 +220,7 @@ Every combatant shows **HP/100 and GP** on its nameplate.
    `spells.js`, `tricks.js`, `enemies.js`, `buffs.js`):
    - **TTK/TTD matrix** — for every enemy × every loadout: turns you need to kill it (TTK) and
      turns it needs to kill you (TTD), exact arithmetic both ways;
-   - **Peg lint** — flags any GP/MP rate outside its declared band, any ungated above-peg rate,
+   - **Peg lint** — flags any GP/MP rate outside its declared band, any autonomous above-peg rate,
      any armor over cap without a `puzzleWall` declaration, any max-HP ≠ 100;
    - **Economy lint** — per zone: faucet (sum of wallets + quest gold) vs sinks (shops, tricks,
      bribes, buyouts); target: peg-solutions affordable for ~10–20% of encounters;

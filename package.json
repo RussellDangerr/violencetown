@@ -26,6 +26,10 @@
   ],
   "scripts": {
     "start": "python dev-server.py 3001",
-    "test": "node --test"
+    "test": "node --test",
+    "balance": "node tools/balance-harness.mjs",
+    "balance:check": "node tools/balance-harness.mjs --check",
+    "balance:write": "node tools/balance-harness.mjs --write",
+    "balance:cards": "node tools/balance-harness.mjs --cards"
   }
 }

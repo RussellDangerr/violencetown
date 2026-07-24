@@ -14,7 +14,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { Entity, attack, formatDamageNumber, DEFAULT_HP, DEFAULT_ARMOR } from '../game/combat.js';
+import { Entity, attack, formatDamageNumber, computeHit, elementalMult, isBackstab, DEFAULT_HP, DEFAULT_ARMOR } from '../game/combat.js';
 
 describe('Entity defaults', () => {
     test('defaults to 100 HP, 0 armor, alive', () => {
@@ -63,6 +63,24 @@ describe('Entity.takeDamage — armor reduction', () => {
         const dealt = e.takeDamage(1000);
         assert.equal(dealt, 1000, 'dealt is the post-armor amount, not the clamped loss');
         assert.equal(e.hp, 0, 'hp floors at 0');
+        assert.equal(e.isDead(), true);
+    });
+
+    // Negative armor (Law 3 amended 2026-07-24, repeals the vermin sub-Hundred
+    // exception): max(1, raw - armor) already ADDS the deficit when armor is
+    // negative, so softness lives entirely in the armor stat and The Hundred
+    // never bends. These are PINS, not new behavior — takeDamage needs no change.
+    test("Caelan's example: -10 armor turns a 1-hit into 11", () => {
+        const e = new Entity({ hp: 100, armor: -10 });
+        const dealt = e.takeDamage(1);
+        assert.equal(dealt, 11, 'max(1, 1 - (-10)) = 11');
+        assert.equal(e.hp, 89);
+    });
+    test("Caelan's example: -80 armor one-shots to a reference (20) swing", () => {
+        const e = new Entity({ hp: 100, armor: -80 });
+        const dealt = e.takeDamage(20);
+        assert.equal(dealt, 100, 'max(1, 20 - (-80)) = 100');
+        assert.equal(e.hp, 0);
         assert.equal(e.isDead(), true);
     });
 });
@@ -136,5 +154,70 @@ describe('formatDamageNumber()', () => {
 
     test('null result formats to null', () => {
         assert.equal(formatDamageNumber(null), null);
+    });
+});
+
+describe('computeHit — the bucket law (Gold Standard Law 2)', () => {
+    test('base alone passes through', () => {
+        assert.equal(computeHit({ base: 10 }), 10);
+    });
+    test('flats add before multipliers', () => {
+        // (10 + 5) × 2 = 30
+        assert.equal(computeHit({ base: 10, flats: 5, elemental: 2 }), 30);
+    });
+    test('multipliers from different categories multiply', () => {
+        // 20 × 2 (weakness) × 1.5 (backstab) = 60 — the "above 50" worked example
+        assert.equal(computeHit({ base: 20, elemental: 2, positional: 1.5 }), 60);
+    });
+    test('outgoing and incoming status buckets fold in', () => {
+        // Blind attacker: 8 × 0.5 = 4
+        assert.equal(computeHit({ base: 8, outgoingMult: 0.5 }), 4);
+        // Guarding defender: 10 × 0.5 = 5
+        assert.equal(computeHit({ base: 10, incomingMult: 0.5 }), 5);
+    });
+    test('rounds ONCE at the end, floor at 1', () => {
+        // 9 × 0.5 = 4.5 → rounds to 5 (round-once law; the old inline floor gave 4)
+        assert.equal(computeHit({ base: 9, outgoingMult: 0.5 }), 5);
+        // elemental immunity ×0 is the one true zero — no floor to 1
+        assert.equal(computeHit({ base: 20, elemental: 0 }), 0);
+        // tiny positive result floors at 1
+        assert.equal(computeHit({ base: 1, outgoingMult: 0.4 }), 1);
+    });
+    test('immunity annihilates flats and other multipliers', () => {
+        assert.equal(computeHit({ base: 20, flats: 10, elemental: 0, positional: 1.5 }), 0);
+    });
+    test('missing base yields 0, never NaN', () => {
+        assert.equal(computeHit({}), 0);
+    });
+});
+
+describe('elementalMult — Law 2 elemental family', () => {
+    const gasbag = { weak: ['fire'], resist: ['cold'], immune: ['fear'] };
+    test('weakness doubles', () => assert.equal(elementalMult('fire', gasbag), 2));
+    test('resistance halves', () => assert.equal(elementalMult('cold', gasbag), 0.5));
+    test('immunity zeroes', () => assert.equal(elementalMult('fear', gasbag), 0));
+    test('untyped damage or unlisted type is neutral', () => {
+        assert.equal(elementalMult(undefined, gasbag), 1);
+        assert.equal(elementalMult('energy', gasbag), 1);
+        assert.equal(elementalMult('fire', {}), 1);
+        assert.equal(elementalMult('fire', null), 1);
+    });
+    test('a type in both weak and immune → immune wins (0)', () => {
+        assert.equal(elementalMult('fire', { weak: ['fire'], immune: ['fire'] }), 0);
+    });
+});
+
+describe('isBackstab — Law 2 positional', () => {
+    test('attacker on the tile directly behind the facing → true', () => {
+        const e = { x: 5, y: 5, _lastDx: 0, _lastDy: -1 };   // moved north, faces north
+        assert.equal(isBackstab(5, 6, e), true);               // player directly south
+    });
+    test('any other adjacent tile → false', () => {
+        const e = { x: 5, y: 5, _lastDx: 0, _lastDy: -1 };
+        assert.equal(isBackstab(4, 5, e), false);
+        assert.equal(isBackstab(4, 6, e), false);              // diagonal-behind of a CARDINAL facing is not the back tile
+    });
+    test('an enemy that has never moved cannot be backstabbed', () => {
+        assert.equal(isBackstab(5, 6, { x: 5, y: 5 }), false);
     });
 });

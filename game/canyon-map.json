@@ -17,9 +17,9 @@
         0,0,0,0,0,0,0,0,0,0,0,0,0,0
     ],
     "enemies": [
-        {"id": "pike", "type": "Pike", "name": "Pike", "dialogueId": "pike", "x": 3, "y": 5, "hp": 45, "damage": 6, "disposition": 30, "bribeable": true, "vendor": true, "stock": ["grappling_hook"], "tag": "pike_boss", "behavior": ["IDLE"], "sightRange": 0, "barks": ["[Pike: Careful near the wagon.]", "[Pike: Rope ain't cheap, friend.]", "[Pike: The river took my years. Left me all this patience.]"], "barkEveryTurns": 6, "adjacencyBark": "[Pike: Buyin' the rope, or just gawkin'? Press E.]"},
-        {"id": "canyon-rat-1", "type": "Rat", "name": "Canyon Rat", "x": 9, "y": 4, "hp": 14, "damage": 4, "tag": "canyon_critter", "sightRange": 6, "barks": ["[skreee!]", "[hiss]"], "barkEveryTurns": 5},
-        {"id": "canyon-rat-2", "type": "Rat", "name": "Canyon Rat", "x": 10, "y": 6, "hp": 14, "damage": 4, "tag": "canyon_critter", "sightRange": 6, "barks": ["[chitter]", "[skree]"], "barkEveryTurns": 5}
+        {"id": "pike", "type": "Pike", "name": "Pike", "dialogueId": "pike", "x": 3, "y": 5, "hp": 100, "armor": -15, "damage": 6, "disposition": 30, "bribeable": true, "vendor": true, "stock": ["grappling_hook"], "tag": "pike_boss", "behavior": ["IDLE"], "sightRange": 0, "barks": ["[Pike: Careful near the wagon.]", "[Pike: Rope ain't cheap, friend.]", "[Pike: The river took my years. Left me all this patience.]"], "barkEveryTurns": 6, "adjacencyBark": "[Pike: Buyin' the rope, or just gawkin'? Press E.]"},
+        {"id": "canyon-rat-1", "type": "Rat", "name": "Canyon Rat", "x": 9, "y": 4, "hp": 100, "armor": -80, "damage": 4, "tag": "canyon_critter", "sightRange": 6, "vermin": true, "barks": ["[skreee!]", "[hiss]"], "barkEveryTurns": 5},
+        {"id": "canyon-rat-2", "type": "Rat", "name": "Canyon Rat", "x": 10, "y": 6, "hp": 100, "armor": -80, "damage": 4, "tag": "canyon_critter", "sightRange": 6, "vermin": true, "barks": ["[chitter]", "[skree]"], "barkEveryTurns": 5}
     ],
     "items": [],
     "examinables": [

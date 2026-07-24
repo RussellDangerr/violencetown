@@ -21,6 +21,8 @@
 
 import { manhattan, chebyshev } from './utils.js';
 import { getGreedyStep, stepEntity, hasLineOfSight } from './pathing.js';
+import { healPurchase } from './ai.js';
+import { burnGold } from './trade.js';
 
 // ── Leash tuning ─────────────────────────────────────────────────────────────
 // A chasing enemy gives up and walks home when it strays past LEASH_DISTANCE
@@ -220,19 +222,45 @@ export function tickNpcState(game, npc, clock = game.turn) {
                 break;
             }
 
+            // Law 2 positional (ruled 2026-07-24): a shove spins its victim clean
+            // around, and it spends its NEXT turn recovering — no heal purchase,
+            // no attack, no re-face, no move — so the shove's backstab window
+            // survives exactly one follow-up hit instead of dying before the
+            // player can cash it in.
+            if (npc._spunTurns > 0) {
+                npc._spunTurns--;
+                break;
+            }
+
+            // Law 6a/6b (plans/gold-standard-design.md): a hurt, solvent enemy
+            // spends its turn buying HP back at the peg instead of swinging —
+            // the purchase IS the turn. Spent gold is BURNED (leaves the
+            // economy for now; the vendor the enemy notionally pays is
+            // offscreen) — intentional, first wallet extra.
+            const buy = healPurchase(npc.entity.hp, npc.entity.maxHp, npc.gold);
+            if (buy && burnGold(npc, buy.spend, 'heal')) {
+                npc.entity.hp = Math.min(npc.entity.maxHp, npc.entity.hp + buy.heal);
+                messages.push({
+                    text: `[${npc.name ?? npc.type} buys back ${buy.heal} HP! (-${buy.spend} GP)]`,
+                    sourceEnemy: npc,
+                    category: 'combat',
+                });
+                break;   // the purchase IS the turn
+            }
+
             // Adjacent? Attack. Visual feedback (red damage number, hit-flash,
             // stagger, event word, screen shake on big hits) replaces the
             // attack log line. The player-death case is handled by the death-
             // screen flow in main.js, which has its own messaging.
             //
-            // Blind debuff halves outgoing damage (deterministic — no RNG, per
-            // combat.js's "no miss" contract). The Math.max(1, ...) clamp
-            // mirrors combat.js's "at least 1 always lands" rule.
+            // Raw damage only — blind (outgoing) and guard (incoming) both
+            // fold into the single computeHit call inside applyDamageToPlayer,
+            // so they compose in one round instead of double-rounding.
             if (chebyshev(npc.x, npc.y, game.playerX, game.playerY) <= 1) {
-                const dmg = npc.hasBuff('blind')
-                    ? Math.max(1, Math.floor(npc.damage * 0.5))
-                    : npc.damage;
-                game.applyDamageToPlayer(dmg, npc);
+                // Attacking faces the target — a shove buys one backstab window, not a farm.
+                npc._lastDx = Math.sign(game.playerX - npc.x);
+                npc._lastDy = Math.sign(game.playerY - npc.y);
+                game.applyDamageToPlayer(npc.damage, npc);   // blind folds in at the one computeHit call site
                 break;
             }
 

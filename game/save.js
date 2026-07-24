@@ -92,6 +92,9 @@ export function serialize(game) {
             collectedItems: game._collectedItems ? [...game._collectedItems] : [],
             // Runtime ground-drops per map, so dropped items survive zone changes.
             droppedItems: game._droppedItems || {},
+            // Law 6: enemies already looted on death, so respawns stay broke
+            // across a reload too (twin of collectedItems — a Set of ids).
+            muggedIds: game._muggedIds ? [...game._muggedIds] : [],
             containers: (game.containers || []).map(c => ({
                 id: c.id, type: c.type, x: c.x, y: c.y, contents: (c.contents || []).slice(),
             })),
@@ -155,6 +158,7 @@ export function migrate(raw) {
     if (!Array.isArray(r.world.groundItems)) r.world.groundItems = [];
     if (!Array.isArray(r.world.collectedItems)) r.world.collectedItems = [];
     if (!r.world.droppedItems || typeof r.world.droppedItems !== 'object') r.world.droppedItems = {};
+    if (!Array.isArray(r.world.muggedIds)) r.world.muggedIds = [];
     if (!Array.isArray(r.world.containers)) r.world.containers = [];
     if (r.quest === undefined) r.quest = null;
     if (r.sewerEscape === undefined) r.sewerEscape = null;
@@ -200,6 +204,10 @@ function validate(raw) {
     // non-string so a malformed save can't poison the lookup.
     const ci = Array.isArray(raw.world?.collectedItems) ? raw.world.collectedItems : [];
     if (raw.world) raw.world.collectedItems = ci.filter(k => typeof k === 'string');
+    // muggedIds is a Set of enemy ids on the live game; drop non-strings same as
+    // collectedItems so a malformed save can't poison the lookup.
+    const mi = Array.isArray(raw.world?.muggedIds) ? raw.world.muggedIds : [];
+    if (raw.world) raw.world.muggedIds = mi.filter(k => typeof k === 'string');
     raw.turn = Math.max(0, _num(raw.turn, 0));
     return raw;
 }
@@ -215,6 +223,10 @@ export async function loadInto(game, raw) {
     raw = validate(migrate(raw));
     const p = raw.player;
     const R = (id) => game._resolveItemDef(id);
+
+    // Law 6: restore the mugged set BEFORE _loadMap spawns enemies from the map
+    // JSON below, or a previously-looted enemy would respawn funded.
+    game._muggedIds = new Set(raw.world.muggedIds ?? []);
 
     // 1. baseline map (spawns JSON enemies/items/containers; sets renderer
     //    zone). Missing coords fall back to the map spawn; clamp to bounds so

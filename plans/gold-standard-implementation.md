@@ -167,28 +167,33 @@ git commit -m "feat(combat): computeHit — the one damage pipeline with named b
 - Modify: `game/main.js` (~line 4105, the guard halving in the player damage path)
 - Test: `tests/combat.test.js` (already covers the math); full suite guards the migration
 
-- [ ] **Step 1: Migrate Blind (npc.js ~232)**
+*(Amended after Task 2's quality review: chaining two computeHit calls double-rounds — a blinded
+9-damage enemy vs a guarding player must be round(9×0.25)=2, not round(round(4.5)×0.5)=3. Both
+status mults therefore compose in ONE call, in applyDamageToPlayer, which already receives the
+attacker.)*
 
-Add `computeHit` to the existing import from `./combat.js` at the top of `npc.js`. Replace:
+- [ ] **Step 1: npc.js ~232 — pass RAW damage; blind moves to the receiving side**
+
+Replace:
 
 ```js
 const dmg = npc.hasBuff('blind')
     ? Math.max(1, Math.floor(npc.damage * 0.5))
     : npc.damage;
+game.applyDamageToPlayer(dmg, npc);
 ```
 
 with:
 
 ```js
-const dmg = computeHit({ base: npc.damage, outgoingMult: npc.hasBuff('blind') ? 0.5 : 1 });
+game.applyDamageToPlayer(npc.damage, npc);   // blind folds in at the one computeHit call site
 ```
 
-Note the deliberate behavior delta: odd damage under Blind now rounds (9 → 5) instead of flooring
-(9 → 4) — the round-once law. This is spec'd, not accidental.
+(Update the comment above it: blind is now applied in applyDamageToPlayer's single pipeline call.)
 
-- [ ] **Step 2: Migrate Guard (main.js ~4105)**
+- [ ] **Step 2: main.js ~4105 — ONE computeHit call composing both status buckets**
 
-`computeHit` is exported from `./combat.js`; add it to main.js's existing combat import. Replace:
+Add `computeHit` to main.js's combat import. In `applyDamageToPlayer(dmg, npc)`, replace:
 
 ```js
 if (this.hasBuff('guard')) dmg = Math.max(1, Math.floor(dmg / 2));
@@ -197,7 +202,33 @@ if (this.hasBuff('guard')) dmg = Math.max(1, Math.floor(dmg / 2));
 with:
 
 ```js
-if (this.hasBuff('guard')) dmg = computeHit({ base: dmg, incomingMult: 0.5 });
+dmg = computeHit({
+    base: dmg,
+    outgoingMult: npc?.hasBuff?.('blind') ? 0.5 : 1,
+    incomingMult: this.hasBuff('guard') ? 0.5 : 1,
+});
+```
+
+(Callers that pass no attacker — environmental damage — get outgoingMult 1 via the optional chain.)
+Behavior deltas, both spec'd: blind 9 → 5 (round, not floor); blind+guard 9 → 2 (one round, not two).
+
+- [ ] **Step 2b: combat.js hygiene from Task 2's review**
+
+- Default `base = 0` in computeHit's destructure (a missing base must yield 0, not NaN — NaN
+  propagates into hp and makes an entity unkillable).
+- Fix the comment block: the full formula line becomes "0 means the hit does not happen — call
+  sites must skip attack()/takeDamage entirely on 0 (immunity), never floor it back to 1 via
+  armor math"; add "never chain computeHit(computeHit(...)) — pass all buckets in one call
+  (round-once)".
+- Two new asserts in the computeHit describe block:
+
+```js
+    test('immunity annihilates flats and other multipliers', () => {
+        assert.equal(computeHit({ base: 20, flats: 10, elemental: 0, positional: 1.5 }), 0);
+    });
+    test('missing base yields 0, never NaN', () => {
+        assert.equal(computeHit({}), 0);
+    });
 ```
 
 - [ ] **Step 3: Run the full suite + smoke test**
@@ -216,6 +247,11 @@ git commit -m "feat(combat): guard and blind flow through computeHit's named buc
 ---
 
 ### Task 4: Elemental matchups — weak ×2 / resist ×½ / immune ×0
+
+*(Carry-forwards from Task 3's quality review: (a) in `applyDamageToPlayer`, add `if (dmg === 0)
+return 0;` between the computeHit call and the armor line — the 0-contract must not be floored
+back to 1; (b) fix three stale blind comments: buffs.js:22, enemies.js:167, enemies.js:290-291 —
+blind now applies inside applyDamageToPlayer's single pipeline call.)*
 
 **Files:**
 - Modify: `game/enemies.js` (ctor: `weak`, `resist`, `immune` arrays)
@@ -298,6 +334,18 @@ git commit -m "feat(combat): elemental matchups — weak x2, resist half, immune
 
 ### Task 5: Backstab ×1.5
 
+*(Carry-forwards from Task 4's quality review — all small, same files: (a) items.js:~549
+resolveThrow gates `affected++` on combatAttack's return (immune ≠ caught in splash); (b)
+main.js:~4049 ring ignite routes through computeHit + elementalMult instead of raw takeDamage;
+(c) main.js:~3684 ring typeBonus stops pre-rounding — pass `dmg * (1 + typeBonus/100)` raw as
+computeHit's base so rounding happens once; (d) all-immune cleave/spin still consumes the turn
+(match spells' behavior); (e) one new assert: a type in both weak and immune → 0 (immune wins);
+(f) thread the equipped weapon's damageType into the wheel's basic-attack combatAttack call
+(main.js:~3138) as opts.type — the Ray Gun's energy typing must fire on basic hits. Also note:
+AoE-via-combatAttack means point-blank AoE gets backstab on the enemy you're directly behind —
+this is spec (the design's worked example composes spell × weakness × backstab); no discriminator
+needed unless Caelan later rules backstab melee-only.)*
+
 **Files:**
 - Modify: `game/pathing.js` (`stepEntity` ~123: record last step direction)
 - Modify: `game/combat.js` (add `isBackstab`)
@@ -371,6 +419,13 @@ git commit -m "feat(combat): backstab — x1.5 from the tile directly behind the
 ---
 
 ### Task 6: Wallets — loot on death, respawns come back broke
+
+*(Carry-forwards from Task 5's reviews: (a) ally melee (main.js:~3888) routes through computeHit
+with the ally's damage as base — allies are combatants, the pipeline is for everyone (matters for
+Task 9's lion); (b) ally movement (main.js:~3897/3905 direct x/y assignment) goes through
+stepEntity so allies have real facing; (c) `_lastDx`/`_lastDy` join toSave/fromSave so a mid-fight
+reload doesn't erase an enemy's back. Deferred cosmetics, not in scope: immune-AoE double-logging,
+"shrugged off" phrasing.)*
 
 **Files:**
 - Modify: `game/main.js` (`_handleEnemyDeath`; spawn loop ~567; save/load fields)
@@ -530,6 +585,16 @@ git commit -m "feat(combat): enemies buy heals at the peg — the first wallet e
 ---
 
 ### Task 8: The balance harness
+
+*(Amendments accumulated from Tasks 1-7 reviews: (a) the ROSTER is not hardcoded — the harness
+reads every `game/*-map.json`'s enemySpawns (plain JSON, headlessly readable; skip the
+`*-TheDangerrZone.json` snapshots) so the Law 0 lint sees the REAL world — Task 1's review found
+every map enemy is currently sub-100 non-vermin, and the golden table must document that honestly
+as lint flags, not hide it; (b) economy lint hooks: `burnGold` in trade.js is the declared-sink
+primitive, `transferGold` the conserving flow — the harness reports per-zone faucet (sum of spawn
+wallets) and names the sink hooks; (c) import HEAL_HP_FLOOR/HEAL_MIN_GOLD from ai.js and state the
+default grunt policy in the report header; (d) lint that any spawn with `hp < 100` carries
+`vermin: true`, and vermin wallets ≤ 5.)*
 
 **Files:**
 - Create: `tools/balance-harness.mjs`
@@ -931,3 +996,86 @@ Merge to `dev` is Caelan's call, per CLAUDE.md.
   wallets exist at scale.
 - **5-Zone Body ruling** — awaiting Caelan; `isBackstab` is written so a zone system can replace
   its facing check without touching callers.
+
+---
+
+# Round 2 — the 2026-07-24 rulings (Tasks 14–17)
+
+Caelan's rulings: (1) negative armor replaces the vermin HP exception — everyone is 100 HP, softness
+is armor < 0 (hit 1 vs −10 → 11); (2) shove spins its victim (message: "[You shove X so hard they
+spin around!]") and buys exactly one backstab window; (3) the wallet number is composite Challenge
+GP (gold + potion/gear values ≈ challenge rating), loot stays liquid gold. Spec amended in
+`plans/gold-standard-design.md` (Laws 0/2/3/4/6f).
+
+### Task 14: Negative armor — repeal the vermin exception, retune the world
+
+**Files:** every `game/*-map.json` enemy entry (not the `*-TheDangerrZone.json` snapshots),
+`game/sewer-setpiece.js`, `tools/balance-harness.mjs` (lint), `tests/combat.test.js`,
+`tests/combat-lawzero.test.js`, `tests/balance-harness.test.js`, `tools/balance-golden.txt`.
+
+- [ ] Pin Caelan's example in `tests/combat.test.js`: `new Entity({hp:100, armor:-10}).takeDamage(1)`
+  deals 11 (max(1, 1−(−10))); and a −80 target dies to one reference-damage hit. Verify
+  `Entity.takeDamage` needs NO change (it already subtracts a negative).
+- [ ] Retune recipe: damage-0 civilians → armor **−80**, hp 100. Fighters preserve their current
+  lazy TTK: `new_armor = 20 − ceil(100/old_TTK)` snapped to stops {−80, −30, −15, −5, 0, +5, +10}.
+  Expected table (verify each old TTK before applying): rats/townsfolk/vendors/banker/cook/
+  operator/stranger/carrion → −80; clown (20hp) / ghost fungus (20) → −80; greedy green (25),
+  puck (30), red fungus (30), violet fungus (25) → −30; pike (45), borgir boss (50) → −15;
+  fungus king (60/3) → −5 (armor field replaced); wererat (80/4) → 0. All hp fields → 100 (or
+  removed — ctor default). Canyon rats + sewer rat keep/gain `vermin: true` (role marker).
+- [ ] `game/sewer-setpiece.js` rat: `hp: 16` removed, `armor: -80` added, vermin stays.
+- [ ] Harness lint: Law 0 flags ANY `hp !== 100` (vermin exemption removed); armor sanity flag
+  outside [−90, ARMOR_CAP] without puzzleWall; vermin challenge-wallet ≤ 5 unchanged. Update
+  `tests/combat-lawzero.test.js` (vermin rat is now 100 hp / −80 armor) and harness tests.
+- [ ] `npm run balance:write` — the golden's lint section should COLLAPSE (34 Law 0 flags → 0;
+  only coneOfCold remains). Read the TTK columns: every fighter's lazy TTK unchanged from the
+  previous golden; civilians drop to 1. The diff IS the review artifact for Caelan.
+- [ ] Old saves carry old hp/armor until respawn — acceptable content patch; note in commit body.
+- [ ] Full suite zero-new; commit `feat(balance): negative armor — everyone is 100 HP, softness is armor`.
+
+### Task 15: Shove spins — one honest backstab window
+
+**Files:** `game/main.js` (shove resolver, ~1969), `game/npc.js` (HOSTILE turn), `game/enemies.js`
+(persist `_spunTurns`), `tests/save-roundtrip.test.js`.
+
+- [ ] Read the real shove resolver first (both knock-aside and swap flavors). On a successful
+  shove: stamp the victim's facing AWAY from the player (`_lastDx/_lastDy = sign(victim − player)`
+  — stepEntity's stamp from the knockback step may already do this; verify and don't double-stamp
+  wrongly), set `victim._spunTurns = 1`, log exactly `[You shove ${name} so hard they spin around!]`.
+- [ ] `game/npc.js` HOSTILE case, before the heal-purchase block: `if (npc._spunTurns > 0) {
+  npc._spunTurns--; break; }` — the recovery turn; no attack, no re-face, no move. Terse comment:
+  spun victims spend the turn recovering, so the shove window survives exactly one follow-up hit.
+- [ ] Persist `_spunTurns` through toSave (mirror `_lastDx`); one round-trip assertion.
+- [ ] Geometry check in report: after a swap-shove the player stands on the vacated tile directly
+  behind the spun victim → next hit backstabs (×1.5, `[Backstab!]`). After knock-aside, player
+  must step in — still one window because the victim's recovery turn passes. State both traces.
+- [ ] Full suite zero-new; commit `feat(combat): shove spins its victim — one backstab window`.
+
+### Task 16: Composite Challenge GP
+
+**Files:** `game/enemies.js` (loadout + challengeGp), `game/renderer.js` (pips read composite),
+`tools/balance-harness.mjs` (column + lint), `tests/wallets.test.js`, `tests/balance-harness.test.js`.
+
+- [ ] `game/enemies.js`: ctor param `loadout = null` (array of `{ name, value }` — the potions and
+  gear this enemy carries; not yet consumed by AI, that lands with boss spending policies), persist
+  in toSave. Export pure `challengeGp(e)` = `(e.gold ?? 0) + Σ (loadout[].value ?? 0)`. TDD in
+  wallets.test.js: gold-only enemy → gold; gold 40 + loadout [{value 60}] → 100; null-safe.
+- [ ] `game/renderer.js` pips: read `challengeGp(e)` instead of `e.gold` (import; verify no import
+  cycle — enemies.js must not import renderer). Comment: the nameplate shows the composite kit
+  (Law 6f); loot is liquid gold only.
+- [ ] Harness: ENEMIES column `gold` → `chal_gp` via challengeGp (roster entries gain optional
+  loadout passthrough from map JSON); ECONOMY faucet stays LIQUID gold (comment why: the faucet
+  measures lootable inflow, not challenge). Law 6 vermin lint reads challengeGp. Golden regen.
+- [ ] Bible + Law 4 band table already say Challenge GP (spec amended); confirm bible price-list
+  section needs no change beyond the column rename note (Task 17 refreshes it).
+- [ ] Full suite zero-new; commit `feat(balance): challenge GP — the wallet is the whole kit`.
+
+### Task 17: Round-2 close-out
+
+- [ ] Refresh `plans/balancing-bible.md`: Laws 0/3/4 amendments (negative armor stops table), 6f
+  composite, shove ruling; move townsfolk/shove/boss-frame from Open Rulings to a "Ruled
+  2026-07-24" section (wallet population stays open — loadout/gold assignment is content work the
+  retune did NOT do beyond armor); price-list refresh from the new golden.
+- [ ] Full verify: `node --test` (known 8 only), `balance:check`, `balance:cards` no-op, naming grep.
+- [ ] Spec status line: append "Round 2 (negative armor / shove-spin / challenge GP) implemented."
+- [ ] Commit `docs(balance): round-2 close-out`.

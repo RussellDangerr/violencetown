@@ -35,7 +35,10 @@ const VENDOR_WALLET    = 9999;
 export class Enemy {
     constructor({
         id, type, x, y,
-        hp = 50, armor = 0, damage = DEFAULT_DAMAGE, sightRange = DEFAULT_SIGHT,
+        // Law 0 (plans/gold-standard-design.md, amended 2026-07-24): every
+        // combatant has exactly 100 HP, no exemptions — this is just the ctor
+        // default. Softness lives in negative armor (Law 3), not a lower hp.
+        hp = 100, armor = 0, damage = DEFAULT_DAMAGE, sightRange = DEFAULT_SIGHT,
         // FSM/spawn input — parsed ONCE into capabilities + allegiance (ai.js);
         // absence (null) = a born-hostile chaser. Runtime reads those, not behavior.
         behavior = null,
@@ -66,6 +69,24 @@ export class Enemy {
         dialogueId = null,
         // Free-form tag for set-piece / quest hooks (e.g. 'wererat_boss', 'sewer_rat').
         tag = null,
+        // Law 0 (plans/gold-standard-design.md, amended 2026-07-24): vermin is
+        // now a ROLE marker only (ambient swarm class, challenge GP <= 5, Law 6)
+        // — it no longer licenses sub-100 HP; that exemption is repealed.
+        vermin = false,
+        // Law 2 (plans/gold-standard-design.md): elemental matchups. Arrays of
+        // damageType strings read by combat.js's elementalMult.
+        weak = null, resist = null, immune = null,
+        // (carry-forward c) Facing for backstab (combat.js isBackstab), normally
+        // stamped live by pathing.js's stepEntity. Persisted so a mid-fight
+        // reload doesn't erase an enemy's back — mirrors x/y: ctor param + field
+        // + toSave, restored via fromSave's `new Enemy(s)` same as x/y.
+        _lastDx = 0, _lastDy = 0,
+        // Law 2 positional (ruled 2026-07-24): a shove spins its victim clean
+        // around and it spends its next HOSTILE turn recovering (npc.js) — the
+        // backstab window survives exactly one follow-up hit. Persisted the
+        // same way as _lastDx/_lastDy so a mid-fight reload doesn't erase a
+        // still-recovering shove victim.
+        _spunTurns = 0,
         // Vendor fields (trade Slice 1). `vendor:true` makes the NPC a shopkeep —
         // pressing [E] adjacent opens their trade window. `stock` is the list of
         // item ids they sell (infinite supply for now); buy/sell prices come from
@@ -80,6 +101,12 @@ export class Enemy {
         // (transaction spine) real gold + a transaction log (restored from saves).
         gold = null,
         giftLog = null,
+        // Law 6f (plans/gold-standard-design.md): the potions/gear this enemy
+        // carries — array of { name, value }. Its value counts toward Challenge
+        // GP (challengeGp below) but is NOT yet consumed by AI (not USED in a
+        // fight); that lands with boss spending policies. Loot stays liquid
+        // gold only — a loadout item never becomes lootable coin on death.
+        loadout = null,
         // Town Clock (feature/town-clock): heartbeat-driven ambient NPC. When
         // true, this NPC is advanced by the free-running world tick
         // (game.worldTick) via resolveAmbientTurns instead of the per-player-turn
@@ -145,6 +172,16 @@ export class Enemy {
         this.name          = name;
         this.dialogueId    = dialogueId;
         this.tag           = tag;
+        this.vermin        = !!vermin;
+        this.weak          = weak;
+        this.resist        = resist;
+        this.immune        = immune;
+        // (carry-forward c) restored facing; overwritten live by stepEntity on
+        // this enemy's next move, same as x/y.
+        this._lastDx       = _lastDx;
+        this._lastDy       = _lastDy;
+        // (Law 2 positional) restored recovery-turn count; see ctor param note.
+        this._spunTurns    = _spunTurns;
         this.vendor        = vendor;
         this.stock         = stock;
         this.specialBuys   = specialBuys;
@@ -153,12 +190,14 @@ export class Enemy {
         // stub for future barter/memory.
         this.gold          = gold != null ? gold : (vendor ? VENDOR_WALLET : 0);
         this.giftLog       = Array.isArray(giftLog) ? giftLog : [];
+        this.loadout       = loadout;
         this.ambient       = ambient;
 
         // Debuffs / buffs — symmetric with Game.buffs[] on the player side.
         // Used by Poke (applies Blind), Poison (DoT, future), Stun (skip
-        // turn, future), etc. Combat-side effect reads in resolveEnemyTurns
-        // (e.g., enemy.hasBuff('blind') halves outgoing damage).
+        // turn, future), etc. Combat-side effect reads inside
+        // applyDamageToPlayer's single computeHit call (main.js) — e.g.,
+        // enemy.hasBuff('blind') halves its outgoing damage there.
         this.buffs = [];
     }
 
@@ -209,6 +248,9 @@ export class Enemy {
             values: this.values, onFlip: this.onFlip,
             name: this.name, dialogueId: this.dialogueId,
             vendor: this.vendor, stock: this.stock, specialBuys: this.specialBuys, gold: this.gold, giftLog: this.giftLog,
+            // Law 6f: the carried kit must survive a reload the same way gold
+            // does, or a boss's Challenge GP would drop on save/load.
+            loadout: this.loadout,
             ambient: this.ambient,
             // runtime
             state: this.state, fsmState: this.fsmState, lastWanderTurn: this._lastWanderTurn,
@@ -220,6 +262,19 @@ export class Enemy {
             isSummon: this._isSummon, summonTurnsLeft: this._summonTurnsLeft,
             // phase-D extras (present only when set on the live enemy)
             isBarricade: this.isBarricade, tag: this.tag,
+            // vermin is a role marker (Law 0/6) — must survive a reload the same
+            // way any other config field does, or a saved rat loses its role.
+            vermin: this.vermin,
+            // Law 2 (plans/gold-standard-design.md): elemental matchups must
+            // survive a reload the same way — ctor↔save drift already shipped
+            // bugs once (vermin).
+            weak: this.weak, resist: this.resist, immune: this.immune,
+            // (carry-forward c) facing for backstab — a mid-fight reload must
+            // not erase an enemy's back.
+            _lastDx: this._lastDx, _lastDy: this._lastDy,
+            // Law 2 positional: a mid-fight reload must not erase a spun
+            // victim's recovery turn (that would hand back the free hit).
+            _spunTurns: this._spunTurns,
         };
     }
 
@@ -252,6 +307,23 @@ export class Enemy {
     }
 }
 
+// Law 6f — the nameplate number is the whole kit: liquid gold + carried item
+// values. Loot stays liquid gold only; the rest dies with its owner.
+export function challengeGp(e) {
+    const items = e.loadout?.reduce((s, it) => s + (it.value ?? 0), 0) ?? 0;
+    return (e.gold ?? 0) + items;
+}
+
+// ── Spawn from a map entry ───────────────────────────────────────────────────
+
+// Law 6d: a spawn the player already mugged comes back broke — no gold-farming
+// a respawning enemy by re-entering its zone. Pure so it's Node-testable.
+export function spawnEnemy(spawnDef, muggedIds) {
+    const e = new Enemy(spawnDef);
+    if (muggedIds?.has(e.id)) e.gold = 0;
+    return e;
+}
+
 // ── Resolve all enemies for one turn ─────────────────────────────────────────
 //
 // One dispatcher: every alive, non-ambient enemy is routed to tickNpcState
@@ -279,7 +351,8 @@ export function resolveEnemyTurns(game) {
         // Tick this enemy's buffs/debuffs (Blind, future Poison/Stun/Slow)
         // BEFORE any FSM/legacy logic runs. Expired buffs get removed; the
         // effect of an active buff reads later in the turn (e.g., Blind
-        // halves the damage at the attack site).
+        // folds into applyDamageToPlayer's single computeHit call and
+        // halves the enemy's outgoing damage there).
         enemy.tickBuffs(game);
 
         // (fear) A feared enemy flees this turn — one step directly away from
