@@ -1058,38 +1058,6 @@ export class Renderer {
                 ctx.fillRect(bx, by, bw, bh);
                 ctx.fillStyle = UI.hpRed;
                 ctx.fillRect(bx, by, bw * frac, bh);
-
-                // Wallet pips (Law 6e) — 1 pip = 100 GP = one Hundred (full heal)
-                // this enemy can afford, so the row IS the player's "what's his
-                // ceiling" readout. bw is only 24px, which fits at most 5
-                // individually-drawn pips at a 4px stride (3px pip + 1px gap);
-                // above that the per-pip read stops helping anyway, so we swap to
-                // a solid bar + numeral overlay and let the number carry it.
-                // Broke (gold <= 0) draws nothing — an empty row is itself the
-                // tell that he's out of tricks.
-                const gold = e.gold ?? 0;
-                if (gold > 0) {
-                    const gh = 2, gy = by - 4; // 2px row, backing touches HP bar's own backing plate
-                    ctx.fillStyle = '#000000cc';
-                    ctx.fillRect(bx - 1, gy - 1, bw + 2, gh + 2);
-                    const pips = Math.floor(gold / 100);
-                    const sliver = gold % 100;
-                    ctx.fillStyle = UI.gold;
-                    if (pips <= 5) {
-                        for (let i = 0; i < pips; i++) ctx.fillRect(bx + i * 4, gy, 3, gh);
-                        if (sliver > 0) {
-                            const sw = Math.max(1, Math.round(3 * sliver / 100));
-                            ctx.fillRect(bx + pips * 4, gy, sw, gh);
-                        }
-                    } else {
-                        ctx.fillRect(bx, gy, bw, gh);
-                        if (this.font) {
-                            this.font.drawText(ctx, `${pips}`, bx + bw / 2, gy, {
-                                color: '#2a2012', scale: 1, align: 'center', shadow: '#000',
-                            });
-                        }
-                    }
-                }
             }
 
             // Debuff / buff badges — one-letter colored markers stacked
@@ -1123,6 +1091,42 @@ export class Renderer {
                 ctx.fillStyle = 'rgba(0,0,0,0.35)';   // soft backing for readability over busy sprites
                 ctx.beginPath(); ctx.arc(faceCX, faceCY, faceR + 1.5, 0, Math.PI * 2); ctx.fill();
                 this._drawMoodFace(faceCX, faceCY, mood(e.disposition).face, faceR);
+            }
+
+            // Wallet pips (Law 6e) — 1 pip = 100 GP = one Hundred (full heal) this
+            // enemy can afford, so the row IS the player's "what's his ceiling"
+            // readout. Suppressed for ambient townsfolk (same reasoning as the HP
+            // bar) via its own !e.ambient guard, and drawn AFTER the mood-face disc
+            // above so that disc (py-23..py-7, centered) can't soft-dim the gold.
+            // Broke (gold <= 0) draws nothing — an empty row is itself the tell
+            // that he's out of tricks. The 24px row fits 6 slots at a 4px stride
+            // (3px pip + 1px gap): 5 pips + an overflow cap = 24px = bw exactly.
+            // The tile nameplate caps the read at 5 + overflow; pips > 5 means
+            // 500+ GP = boss-tier (Elites cap at 200 GP = 2 pips), and exact
+            // boss-wallet dread (Law 6e's KH multi-bar) belongs on the dedicated
+            // boss frame, deferred to the first boss build — not a 24px nameplate.
+            const gold = e.gold ?? 0;
+            if (!e.ambient && gold > 0) {
+                const gh = 2, gy = by - 4; // 2px row above the HP bar's own backing plate
+                ctx.fillStyle = '#000000cc';
+                ctx.fillRect(bx - 1, gy - 1, bw + 2, gh + 2);
+                const pips = Math.floor(gold / 100);
+                const sliver = gold % 100;
+                ctx.fillStyle = UI.gold;
+                if (pips <= 5) {
+                    for (let i = 0; i < pips; i++) ctx.fillRect(bx + i * 4, gy, 3, gh);
+                    if (sliver > 0) {
+                        const sw = Math.max(1, Math.round(3 * sliver / 100));
+                        ctx.fillRect(bx + pips * 4, gy, sw, gh);
+                    }
+                } else {
+                    for (let i = 0; i < 5; i++) ctx.fillRect(bx + i * 4, gy, 3, gh);
+                    // Overflow cap in the 6th slot: brighter gold (the Gold Card's
+                    // highlight tone) reads as "5+ Hundreds — and then some",
+                    // visibly distinct from a flat UI.gold pip. No numeral.
+                    ctx.fillStyle = '#f4dd9a';
+                    ctx.fillRect(bx + 20, gy, 3, gh);
+                }
             }
 
             // Ambient emote balloon (Town Clock) — a transient Kenney Emote Pack
