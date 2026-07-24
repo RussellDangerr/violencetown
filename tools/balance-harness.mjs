@@ -20,12 +20,35 @@ const GOLDEN_PATH = path.join(__dirname, 'balance-golden.txt');
 export const REFERENCE_DAMAGE = 20; // act-1 geared reference (Ray Gun tier)
 export const ARMOR_CAP = 10;        // half reference; puzzle walls are exempt (Law 3)
 
+// The TTD baseline — the unarmored reference player. Nothing grants player armor
+// today; the day a ring does, this is the grep hit.
+export const PLAYER_HP = 100;
+export const PLAYER_ARMOR = 0;
+
+// Skill peg bands (Law 1). GP is non-renewable, so gated tricks must beat spells'
+// raw rate; MP regenerates, so spells price in opportunity-turns.
+const TRICK_MIN_RATE = 2.5;
+const SPELL_MIN_RATE = 1.5;
+const SPELL_MAX_RATE = 2.5;
+
+// Hermetic ordering — plain codepoint compare, never localeCompare (host/ICU
+// dependent, so a golden could differ across machines).
+const byCodepoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
 // ── Pure math ─────────────────────────────────────────────────────────────
 
 // Turns to kill: exact ceil(hp / net dmg-per-turn), floored at 1 dmg/turn so a
 // fully-stonewalled attacker still gets a (large, finite) number instead of Infinity.
+// Callers must NOT pass dmgPerTurn 0 — combat.js's contract is that 0 means the hit
+// does not happen, and flooring it back to 1 here would lie. See ttdOf.
 export function ttk(hp, dmgPerTurn, armor) {
     return Math.ceil(hp / Math.max(1, dmgPerTurn - armor));
+}
+
+// Turns for this entity to kill the reference player. A 0-damage entity never kills
+// anyone — '-' beats a number that collides with a real 1-damage attacker.
+export function ttdOf(damage) {
+    return damage > 0 ? ttk(PLAYER_HP, damage, PLAYER_ARMOR) : '-';
 }
 
 // Peg rate — damage bought per unit of currency (GP or MP).
@@ -33,40 +56,54 @@ export function pegRate(damage, cost) {
     return damage / cost;
 }
 
+// The greppable flag key. Map ids are file-local duplicates (e1/e2 recur per map),
+// so the key must be zone/id. Synthetic entities without them degrade to the type.
+function entityKey(e) {
+    return (e.zone && e.id) ? `[${e.zone}/${e.id} ${e.type}]` : `[${e.type}]`;
+}
+
 // Per-entity lint (Law 0 / Law 3 / Law 6). Returns an array of flag strings;
-// empty means clean. Order doesn't matter to callers — they just count/filter.
+// empty means clean.
 export function lintEntity(e) {
     const flags = [];
+    const key = entityKey(e);
     if (!e.vermin && e.hp !== 100) {
-        flags.push(`Law 0: ${e.type} has ${e.hp} HP, not 100 (non-vermin must be exactly The Hundred)`);
+        flags.push(`${key} Law 0 — hp ${e.hp}, expected 100`);
     }
     if (e.vermin && e.gold > 5) {
-        flags.push(`Law 6 vermin wallet: ${e.type} (vermin) carries ${e.gold} GP, over the 0-5 cap`);
+        flags.push(`${key} Law 6 — vermin wallet ${e.gold} GP, expected <= 5`);
     }
     if (!e.puzzleWall && e.armor > ARMOR_CAP) {
-        flags.push(`Law 3 armor: ${e.type} armor ${e.armor} exceeds the cap of ${ARMOR_CAP} (no puzzleWall declared)`);
+        flags.push(`${key} Law 3 — armor ${e.armor}, expected <= ${ARMOR_CAP} (no puzzleWall declared)`);
     }
     return flags;
 }
 
-// Skill lint (Law 1 — the peg ladder). Tricks (GP, non-renewable) must clear
-// >= 2.5 dmg/GP to justify spending real money; spells (MP, renewable) sit in
-// the 1.5-2.5 dmg/MP band. Utility skills (no `damage` field: summons,
-// transforms) aren't priced this way and are skipped.
+// Skill lint (Law 1 — the peg ladder). Utility skills (no `damage` field: summons,
+// transforms) aren't priced this way and are skipped. A free damage source is the one
+// thing a rate check can't catch (x/0 is Infinity, which passes) — flag it by name.
 export function lintSkills() {
     const flags = [];
     for (const t of Object.values(TRICKS)) {
         if (typeof t.damage !== 'number') continue;
+        if (!(t.gpCost > 0)) {
+            flags.push(`[skill/${t.id}] Law 1 — free damage source: ${t.damage} dmg for ${t.gpCost} GP`);
+            continue;
+        }
         const rate = pegRate(t.damage, t.gpCost);
-        if (rate < 2.5) {
-            flags.push(`Law 1 trick rate: '${t.name}' at ${rate.toFixed(2)} dmg/GP, below the 2.5 gated floor`);
+        if (rate < TRICK_MIN_RATE) {
+            flags.push(`[skill/${t.id}] Law 1 — ${rate.toFixed(2)} dmg/GP, expected >= ${TRICK_MIN_RATE.toFixed(2)}`);
         }
     }
     for (const s of Object.values(SPELLS)) {
         if (!(s.damage > 0)) continue;
+        if (!(s.mpCost > 0)) {
+            flags.push(`[skill/${s.id}] Law 1 — free damage source: ${s.damage} dmg for ${s.mpCost} MP`);
+            continue;
+        }
         const rate = pegRate(s.damage, s.mpCost);
-        if (rate < 1.5 || rate > 2.5) {
-            flags.push(`Law 1 spell rate: '${s.name}' at ${rate.toFixed(2)} dmg/MP, outside the [1.5, 2.5] band`);
+        if (rate < SPELL_MIN_RATE || rate > SPELL_MAX_RATE) {
+            flags.push(`[skill/${s.id}] Law 1 — ${rate.toFixed(2)} dmg/MP, expected [${SPELL_MIN_RATE.toFixed(2)}, ${SPELL_MAX_RATE.toFixed(2)}]`);
         }
     }
     return flags;
@@ -76,14 +113,13 @@ export function lintSkills() {
 //
 // Real shape found in game/town-map.json (and every other current map): a
 // top-level `enemies` array of spawn objects — `{ id, type, x, y, hp, damage,
-// ... }`. No map currently authors `armor`/`gold`/`vermin`/`puzzleWall` (two
-// sewer spawns carry `armor`; nothing authors gold/vermin/puzzleWall yet), so
-// those default exactly like the Enemy ctor defaults (enemies.js): hp 100,
-// armor 0, damage 8 (DEFAULT_DAMAGE), gold 0, vermin false, puzzleWall false.
+// ... }`. No map currently authors `gold`/`vermin`/`puzzleWall` (two sewer
+// spawns carry `armor`), so those default exactly like the Enemy ctor defaults
+// (enemies.js): hp 100, armor 0, damage 8 (DEFAULT_DAMAGE), gold 0, vermin false.
 export function loadMapRoster() {
     const files = fs.readdirSync(GAME_DIR)
         .filter(f => f.endsWith('-map.json') && !f.includes('TheDangerrZone'))
-        .sort();
+        .sort(byCodepoint);
 
     const roster = [];
     for (const file of files) {
@@ -109,66 +145,101 @@ export function loadMapRoster() {
     return roster;
 }
 
-// ── Report ────────────────────────────────────────────────────────────────
+// ── Table formatting ──────────────────────────────────────────────────────
+//
+// Column widths are DECLARED, not derived from content: when the Law 0 retune
+// lands (hp 10 -> 100) every column must stay put, so the golden diff shows the
+// balance change instead of a whole-file reflow. Overflow is allowed — a long name
+// ruffles only its own row. `num` right-aligns so digit growth is visible and the
+// column stays decimal-aligned. The zone/id key column doubles as the Creature Card
+// lookup key (map ids repeat across files, so zone alone can't identify a spawn).
+const ENEMY_COLS = [
+    { head: 'zone/id',      w: 24 },
+    { head: 'type',         w: 20 },
+    { head: 'hp',           w: 5,  num: true },
+    { head: 'armor',        w: 6,  num: true },
+    { head: 'dmg',          w: 5,  num: true },
+    { head: 'gold',         w: 6,  num: true },
+    { head: 'ttk_lazy',     w: 13, num: true },
+    { head: 'ttk_informed', w: 13, num: true },
+    { head: 'ttd',          w: 5,  num: true },
+];
+const WEAPON_COLS = [
+    { head: 'id', w: 14 }, { head: 'damage', w: 7, num: true }, { head: 'type', w: 8 },
+];
+const SPELL_COLS = [
+    { head: 'id', w: 12 }, { head: 'mpCost', w: 7, num: true },
+    { head: 'damage', w: 7, num: true }, { head: 'dmg/mp', w: 7, num: true },
+];
+const TRICK_COLS = [
+    { head: 'id', w: 12 }, { head: 'gpCost', w: 7, num: true },
+    { head: 'damage', w: 7, num: true }, { head: 'dmg/gp', w: 7, num: true },
+];
+const ECON_COLS = [
+    { head: 'zone', w: 12 }, { head: 'faucet_gp', w: 10, num: true },
+];
 
-function padCols(rows) {
-    if (!rows.length) return [];
-    const widths = rows[0].map((_, i) => Math.max(...rows.map(r => String(r[i]).length)));
-    return rows.map(r => r.map((cell, i) => String(cell).padEnd(widths[i])).join('  ').trimEnd());
+function table(cols, rows) {
+    return [cols.map(c => c.head), ...rows].map(r =>
+        r.map((cell, i) => {
+            const s = String(cell);
+            return cols[i].num ? s.padStart(cols[i].w) : s.padEnd(cols[i].w);
+        }).join('  ').trimEnd()
+    );
 }
 
-export function report() {
+// ── Report ────────────────────────────────────────────────────────────────
+
+// `roster` is injectable so tests can drive the formatting directly.
+export function report(roster = loadMapRoster()) {
     const lines = [];
     lines.push('=== Violencetown Balance Harness ===');
     lines.push('generated by tools/balance-harness.mjs — deterministic, no timestamps');
-    lines.push(`reference damage ${REFERENCE_DAMAGE} | armor cap ${ARMOR_CAP} | peg 1 GP : 1 HP | grunt heal policy: hp <= ${HEAL_HP_FLOOR}, gold >= ${HEAL_MIN_GOLD}`);
+    lines.push(`reference damage ${REFERENCE_DAMAGE} | armor cap ${ARMOR_CAP} | peg 1 GP : 1 HP | grunt heal policy: hp <= ${HEAL_HP_FLOOR}, gold >= ${HEAL_MIN_GOLD} | TTD vs player ${PLAYER_HP} HP / ${PLAYER_ARMOR} armor`);
     lines.push('');
 
-    const roster = loadMapRoster().slice().sort((a, b) =>
-        a.zone === b.zone ? a.type.localeCompare(b.type) : a.zone.localeCompare(b.zone)
+    const sorted = roster.slice().sort((a, b) =>
+        byCodepoint(a.zone, b.zone) || byCodepoint(a.type, b.type) || byCodepoint(String(a.id), String(b.id))
     );
 
-    lines.push('--- ENEMIES (zone, type, hp, armor, dmg, gold, TTK-lazy, TTK-informed, TTD) ---');
-    const enemyHeader = ['zone', 'type', 'hp', 'armor', 'dmg', 'gold', 'ttk_lazy', 'ttk_informed', 'ttd'];
-    const enemyRows = roster.map(e => [
-        e.zone, e.type, e.hp, e.armor, e.damage, e.gold,
+    lines.push('--- ENEMIES (TTK vs the reference loadout; TTD vs the reference player) ---');
+    lines.push(...table(ENEMY_COLS, sorted.map(e => [
+        `${e.zone}/${e.id}`, e.type, e.hp, e.armor, e.damage, e.gold,
         ttk(e.hp, REFERENCE_DAMAGE, e.armor),
         ttk(e.hp, REFERENCE_DAMAGE * 2, e.armor),
-        ttk(100, e.damage, 0),
-    ]);
-    for (const row of padCols([enemyHeader, ...enemyRows])) lines.push(row);
+        ttdOf(e.damage),
+    ])));
     lines.push('');
 
     lines.push('--- WEAPONS (raw damage) ---');
-    const weaponRows = Object.values(WEAPONS)
-        .slice().sort((a, b) => a.id.localeCompare(b.id))
-        .map(w => [w.id, w.damage, w.damageType ?? '-']);
-    for (const row of padCols([['id', 'damage', 'type'], ...weaponRows])) lines.push(row);
+    lines.push(...table(WEAPON_COLS, Object.values(WEAPONS)
+        .slice().sort((a, b) => byCodepoint(a.id, b.id))
+        .map(w => [w.id, w.damage, w.damageType ?? '-'])));
     lines.push('');
 
     lines.push('--- SPELLS (dmg per MP) ---');
-    const spellRows = Object.values(SPELLS)
-        .slice().sort((a, b) => a.id.localeCompare(b.id))
-        .map(s => [s.id, s.mpCost, s.damage, (s.damage > 0 ? pegRate(s.damage, s.mpCost).toFixed(2) : '-')]);
-    for (const row of padCols([['id', 'mpCost', 'damage', 'dmg/mp'], ...spellRows])) lines.push(row);
+    lines.push(...table(SPELL_COLS, Object.values(SPELLS)
+        .slice().sort((a, b) => byCodepoint(a.id, b.id))
+        .map(s => [s.id, s.mpCost, s.damage,
+            (s.damage > 0 && s.mpCost > 0) ? pegRate(s.damage, s.mpCost).toFixed(2) : '-'])));
     lines.push('');
 
     lines.push('--- TRICKS (dmg per GP) ---');
-    const trickRows = Object.values(TRICKS)
-        .slice().sort((a, b) => a.id.localeCompare(b.id))
-        .map(t => [t.id, t.gpCost, t.damage ?? '-', (typeof t.damage === 'number' ? pegRate(t.damage, t.gpCost).toFixed(2) : '-')]);
-    for (const row of padCols([['id', 'gpCost', 'damage', 'dmg/gp'], ...trickRows])) lines.push(row);
+    lines.push(...table(TRICK_COLS, Object.values(TRICKS)
+        .slice().sort((a, b) => byCodepoint(a.id, b.id))
+        .map(t => [t.id, t.gpCost, t.damage ?? '-',
+            (typeof t.damage === 'number' && t.gpCost > 0) ? pegRate(t.damage, t.gpCost).toFixed(2) : '-'])));
     lines.push('');
 
     lines.push('--- ECONOMY (per-zone faucet = sum of spawn wallets) ---');
-    const zones = [...new Set(roster.map(e => e.zone))].sort();
-    const econRows = zones.map(z => [z, roster.filter(e => e.zone === z).reduce((sum, e) => sum + e.gold, 0)]);
-    for (const row of padCols([['zone', 'faucet_gp'], ...econRows])) lines.push(row);
+    const zones = [...new Set(sorted.map(e => e.zone))].sort(byCodepoint);
+    lines.push(...table(ECON_COLS, zones.map(z =>
+        [z, sorted.filter(e => e.zone === z).reduce((sum, e) => sum + e.gold, 0)])));
     lines.push("sinks: burnGold('heal'|'trick'), bribes/buyouts via transferGold");
     lines.push('');
 
     lines.push('--- LINT ---');
-    const entityFlags = roster.flatMap(e => lintEntity(e).map(f => `[${e.zone}/${e.type}] ${f}`));
+    const entityFlags = sorted.flatMap(e => lintEntity(e));
     const skillFlags = lintSkills();
     for (const f of entityFlags) lines.push(f);
     for (const f of skillFlags) lines.push(f);
@@ -179,20 +250,30 @@ export function report() {
 
 // ── CLI ───────────────────────────────────────────────────────────────────
 
+const USAGE = 'usage: node tools/balance-harness.mjs [--write | --check]';
+
 function main() {
     const args = process.argv.slice(2);
-    const out = report();
+    const unknown = args.filter(a => a !== '--write' && a !== '--check');
+    if (unknown.length) {
+        console.error(`unknown argument: ${unknown.join(' ')}`);
+        console.error(USAGE);
+        process.exit(1);
+    }
 
+    // Dispatch BEFORE rendering — a mode that doesn't need the full report shouldn't
+    // pay for one (or die inside it on a malformed map).
     if (args.includes('--write')) {
-        fs.writeFileSync(GOLDEN_PATH, out);
+        fs.writeFileSync(GOLDEN_PATH, report());
         console.log(`wrote ${GOLDEN_PATH}`);
         return;
     }
 
     if (args.includes('--check')) {
         const existing = fs.existsSync(GOLDEN_PATH) ? fs.readFileSync(GOLDEN_PATH, 'utf8') : null;
-        if (existing !== out) {
-            console.log(out);
+        const fresh = report();
+        if (existing !== fresh) {
+            console.log(fresh);
             console.error('balance drift: tools/balance-golden.txt is stale — review the diff above, then `npm run balance:write`');
             process.exit(1);
         }
@@ -200,7 +281,7 @@ function main() {
         return;
     }
 
-    console.log(out);
+    console.log(report());
 }
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;

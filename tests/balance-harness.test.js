@@ -1,7 +1,20 @@
 // balance-harness.test.js — the harness's pure math.
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { ttk, pegRate, lintEntity, lintSkills, loadMapRoster, REFERENCE_DAMAGE, ARMOR_CAP } from '../tools/balance-harness.mjs';
+import { ttk, ttdOf, pegRate, lintEntity, lintSkills, loadMapRoster, report, REFERENCE_DAMAGE, ARMOR_CAP } from '../tools/balance-harness.mjs';
+
+// A minimal roster entry — spread over to vary one field at a time.
+const spawn = (over = {}) => ({
+    zone: 'sewer', id: 'e1', type: 'Red Fungus',
+    hp: 100, armor: 0, damage: 8, gold: 0, vermin: false, puzzleWall: false, ...over,
+});
+
+// The ENEMIES header + the first data row of a rendered report.
+function enemyRows(text) {
+    const lines = text.split('\n');
+    const start = lines.findIndex(l => l.startsWith('--- ENEMIES'));
+    return lines.slice(start + 1, lines.indexOf('', start));
+}
 
 describe('harness math', () => {
     test('ttk is exact ceil(hp / net-per-turn), min-1 floor', () => {
@@ -36,4 +49,41 @@ describe('harness math', () => {
         assert.ok(!roster.some(e => e.zone.includes('TheDangerrZone')));
     });
     test('REFERENCE_DAMAGE is the act-1 anchor', () => assert.equal(REFERENCE_DAMAGE, 20));
+    test('ttd is "-" for a 0-damage entity — 0 means the hit does not happen', () => {
+        assert.equal(ttdOf(0), '-');
+        assert.equal(ttdOf(1), 100);   // a real 1-damage attacker still reads 100
+        assert.equal(ttdOf(12), 9);
+    });
+    test('lintEntity on a compliant entity returns no flags', () => {
+        assert.deepEqual(lintEntity(spawn()), []);
+    });
+    test('lintSkills flags Cone of Cold in the keyed format', () => {
+        const flags = lintSkills();
+        const cold = flags.find(f => f.startsWith('[skill/coneOfCold]'));
+        assert.ok(cold, `expected a coneOfCold flag, got: ${JSON.stringify(flags)}`);
+        assert.equal(cold, '[skill/coneOfCold] Law 1 — 1.40 dmg/MP, expected [1.50, 2.50]');
+    });
+});
+
+describe('report()', () => {
+    test('is byte-identical across two calls (determinism pin)', () => {
+        assert.equal(report(), report());
+    });
+    test('declared column widths hold — an outsized row ruffles only itself', () => {
+        const normal = [spawn()];
+        const withMonster = [
+            spawn(),
+            spawn({ zone: 'an-extremely-long-zone-name', id: 'boss', type: 'A Preposterously Long Type Name', gold: 1500 }),
+        ];
+        const plain = enemyRows(report(normal));
+        const stretched = enemyRows(report(withMonster));
+
+        assert.equal(stretched[0], plain[0]);                 // header did not reflow
+        const normalRow = stretched.find(l => l.startsWith('sewer/e1'));
+        assert.equal(normalRow, plain[1]);                    // the normal row did not reflow
+
+        // and the 1500-gold boss still fits its declared gold column
+        const bossRow = stretched.find(l => l.startsWith('an-extremely-long-zone-name'));
+        assert.ok(bossRow.includes('1500'));
+    });
 });
