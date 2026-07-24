@@ -2,7 +2,8 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ttk, ttdOf, pegRate, lintEntity, lintSkills, loadMapRoster, report, REFERENCE_DAMAGE, ARMOR_CAP } from '../tools/balance-harness.mjs';
+import { ttk, ttdOf, pegRate, lintEntity, lintSkills, loadMapRoster, report, trickDamage, normEol, REFERENCE_DAMAGE, ARMOR_CAP } from '../tools/balance-harness.mjs';
+import { TRICKS } from '../game/tricks.js';
 
 // A minimal roster entry — spread over to vary one field at a time.
 const spawn = (over = {}) => ({
@@ -58,6 +59,19 @@ describe('harness math', () => {
     test('lintEntity on a compliant entity returns no flags', () => {
         assert.deepEqual(lintEntity(spawn()), []);
     });
+    // Read from the REAL trick def, never literals: the point is that editing
+    // tricks.js moves this test, so the peg can't drift unnoticed.
+    test('hire_lion sits exactly at the peg — 1.00 dmg/GP over its whole lifetime', () => {
+        const lion = TRICKS.hire_lion;
+        assert.equal(trickDamage(lion), lion.summonDamage * lion.summonTurns);
+        assert.equal(pegRate(trickDamage(lion), lion.gpCost).toFixed(2), '1.00');
+        assert.deepEqual(lintSkills().filter(f => f.startsWith('[skill/hire_lion]')), []);
+    });
+    test('trickDamage prices a summon by lifetime, a bolt outright, utility not at all', () => {
+        assert.equal(trickDamage({ damage: 18, gpCost: 6 }), 18);
+        assert.equal(trickDamage({ summon: 'lion', summonDamage: 25, summonTurns: 2 }), 50);
+        assert.equal(trickDamage({ transform: 'rat', transformTurns: 3 }), null);
+    });
     test('lintSkills flags Cone of Cold in the keyed format', () => {
         const flags = lintSkills();
         const cold = flags.find(f => f.startsWith('[skill/coneOfCold]'));
@@ -87,8 +101,10 @@ describe('report()', () => {
         const bossRow = stretched.find(l => l.startsWith('an-extremely-long-zone-name'));
         assert.ok(bossRow.includes('1500'));
     });
+    // normEol on both sides: core.autocrlf hands fresh checkouts a CRLF golden while
+    // report() emits LF, and an exact compare would then fail on checkout alone.
     test('report() matches the committed golden — drift shows up in npm test', () => {
         const golden = readFileSync(new URL('../tools/balance-golden.txt', import.meta.url), 'utf8');
-        assert.equal(report(), golden);
+        assert.equal(normEol(report()), normEol(golden));
     });
 });

@@ -4109,7 +4109,11 @@ class Game {
         const ally = new Enemy({
             id: `summon_${type}_${this.turn}_${this._summonSeq}`,
             type: name, x: spot.x, y: spot.y,
-            hp: opts.summonHp || 30, damage: opts.summonDamage || 12,
+            // Pass through undefined so the Enemy ctor's own defaults apply — a
+            // summon is a combatant, so Law 0's hp 100 is its floor too. The old
+            // `|| 30` silently undercut The Hundred for any trick omitting the field
+            // (and `|| 12` was a stale copy of the pre-retune lion's damage).
+            hp: opts.summonHp, damage: opts.summonDamage,
             behavior: ['ALLIED'],
         });
         ally._ally = true;

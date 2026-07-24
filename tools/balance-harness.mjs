@@ -30,10 +30,18 @@ export const PLAYER_ARMOR = 0;
 const TRICK_MIN_RATE = 2.5;
 const SPELL_MIN_RATE = 1.5;
 const SPELL_MAX_RATE = 2.5;
+// A summon is a combatant you rent, not a bolt you buy: nothing ungated may beat
+// the 1 GP : 1 HP peg, so its whole-lifetime damage caps at parity with its price.
+const SUMMON_MAX_RATE = 1;
 
 // Hermetic ordering — plain codepoint compare, never localeCompare (host/ICU
 // dependent, so a golden could differ across machines).
 const byCodepoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
+// Line endings are NOT part of the balance data. core.autocrlf hands a CRLF copy
+// of the golden to fresh checkouts while report() always emits LF, so every exact
+// comparison normalizes first (.gitattributes pins the file too — belt and braces).
+export const normEol = s => s.replace(/\r\n/g, '\n');
 
 // ── Pure math ─────────────────────────────────────────────────────────────
 
@@ -79,18 +87,36 @@ export function lintEntity(e) {
     return flags;
 }
 
-// Skill lint (Law 1 — the peg ladder). Utility skills (no `damage` field: summons,
-// transforms) aren't priced this way and are skipped. A free damage source is the one
-// thing a rate check can't catch (x/0 is Infinity, which passes) — flag it by name.
+// What a Trick's GP actually buys, in damage. A direct trick states it outright; a
+// summon spends its damage over a lifetime, so the peg prices the whole hire
+// (summonDamage x summonTurns). Returns null for utility skills (transforms), which
+// aren't priced this way. The table and the lint both read this — one number, one story.
+export function trickDamage(t) {
+    if (typeof t.damage === 'number') return t.damage;
+    if (t.summon) return (t.summonDamage ?? 0) * (t.summonTurns ?? 0);
+    return null;
+}
+
+// Skill lint (Law 1 — the peg ladder). A free damage source is the one thing a rate
+// check can't catch (x/0 is Infinity, which passes) — flag it by name.
 export function lintSkills() {
     const flags = [];
     for (const t of Object.values(TRICKS)) {
-        if (typeof t.damage !== 'number') continue;
+        const damage = trickDamage(t);
+        if (damage === null) continue;
         if (!(t.gpCost > 0)) {
-            flags.push(`[skill/${t.id}] Law 1 — free damage source: ${t.damage} dmg for ${t.gpCost} GP`);
+            flags.push(`[skill/${t.id}] Law 1 — free damage source: ${damage} dmg for ${t.gpCost} GP`);
             continue;
         }
-        const rate = pegRate(t.damage, t.gpCost);
+        const rate = pegRate(damage, t.gpCost);
+        // Summons sit at the OTHER end of the ladder: gated bolts must beat the peg,
+        // a rented combatant must not exceed it.
+        if (t.summon) {
+            if (rate > SUMMON_MAX_RATE) {
+                flags.push(`[skill/${t.id}] Law 1 — ${rate.toFixed(2)} dmg/GP over ${t.summonTurns} turns, expected <= ${SUMMON_MAX_RATE.toFixed(2)} (above peg)`);
+            }
+            continue;
+        }
         if (rate < TRICK_MIN_RATE) {
             flags.push(`[skill/${t.id}] Law 1 — ${rate.toFixed(2)} dmg/GP, expected >= ${TRICK_MIN_RATE.toFixed(2)}`);
         }
@@ -232,8 +258,13 @@ export function report(roster = loadMapRoster()) {
     lines.push('--- TRICKS (dmg per GP) ---');
     lines.push(...table(TRICK_COLS, Object.values(TRICKS)
         .slice().sort((a, b) => byCodepoint(a.id, b.id))
-        .map(t => [t.id, t.gpCost, t.damage ?? '-',
-            (typeof t.damage === 'number' && t.gpCost > 0) ? pegRate(t.damage, t.gpCost).toFixed(2) : '-'])));
+        .map(t => {
+            const damage = trickDamage(t);
+            if (damage === null) return [t.id, t.gpCost, '-', '-'];
+            return [t.id, t.gpCost, t.summon ? `${damage}*` : damage,
+                t.gpCost > 0 ? pegRate(damage, t.gpCost).toFixed(2) : '-'];
+        })));
+    lines.push('* summon total = summonDamage x summonTurns (whole-lifetime damage)');
     lines.push('');
 
     lines.push('--- ECONOMY (per-zone faucet = sum of spawn wallets) ---');
@@ -275,8 +306,8 @@ function main() {
     }
 
     if (args.includes('--check')) {
-        const existing = fs.existsSync(GOLDEN_PATH) ? fs.readFileSync(GOLDEN_PATH, 'utf8') : null;
-        const fresh = report();
+        const existing = fs.existsSync(GOLDEN_PATH) ? normEol(fs.readFileSync(GOLDEN_PATH, 'utf8')) : null;
+        const fresh = normEol(report());
         if (existing !== fresh) {
             console.log(fresh);
             console.error('balance drift: tools/balance-golden.txt is stale — review the diff above, then `npm run balance:write`');

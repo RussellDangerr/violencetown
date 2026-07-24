@@ -56,9 +56,10 @@ fireball           12       20     1.67
 --- TRICKS (dmg per GP) ---
 id             gpCost   damage   dmg/gp
 ember_rat           4       14     3.50
-hire_lion          50        -        -
+hire_lion          50      50*     1.00
 rat_form            0        -        -
 ray_blast           6       18     3.00
+* summon total = summonDamage x summonTurns (whole-lifetime damage)
 
 --- ECONOMY (per-zone faucet = sum of spawn wallets) ---
 zone               faucet_gp
