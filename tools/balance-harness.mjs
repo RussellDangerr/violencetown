@@ -114,6 +114,10 @@ export function lintEntity(e) {
 // summonDamage still spawns an Enemy that hits for DEFAULT_DAMAGE, so lint-as-0 would
 // wave through an over-peg summon and print a false `0*` in the table.
 export function trickDamage(t) {
+    // A hybrid (both a bolt AND a summon) would price as the bolt here but be
+    // judged by the autonomous band below — wrong on both halves. None exist;
+    // flag the day one does rather than mis-price it silently.
+    if (typeof t.damage === 'number' && t.summon) return null;
     if (typeof t.damage === 'number') return t.damage;
     if (t.summon) return (t.summonDamage ?? ENEMY_DEFAULT_DAMAGE) * (t.summonTurns ?? SUMMON_DEFAULT_TURNS);
     return null;
@@ -124,6 +128,10 @@ export function trickDamage(t) {
 export function lintSkills() {
     const flags = [];
     for (const t of Object.values(TRICKS)) {
+        if (typeof t.damage === 'number' && t.summon) {
+            flags.push(`[skill/${t.id}] Law 1 — hybrid bolt+summon has no priced band; split it or extend the law`);
+            continue;
+        }
         const damage = trickDamage(t);
         if (damage === null) continue;
         if (!(t.gpCost > 0)) {

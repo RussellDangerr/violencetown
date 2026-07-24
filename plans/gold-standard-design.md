@@ -66,7 +66,7 @@ The exchange-rate ladder (current + retuned content):
 
 MP is the *renewable* skill currency (regenerates per turn), so spell efficiency prices in
 opportunity-turns, not gold: spells sit at **1.5–2.5 dmg per MP** (AoE justifies the top of the
-band). GP is the *non-renewable* solvency currency: gated tricks must beat spells' raw rate
+band). GP is the *non-renewable* solvency currency: per-cast tricks must beat spells' raw rate
 (**≥ 2.5 dmg per GP**) to justify spending real money.
 
 The peg is a **target rate, not just a ceiling** — the autonomous band is **0.5–1.0 dmg per GP**.
