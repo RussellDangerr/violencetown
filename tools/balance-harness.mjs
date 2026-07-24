@@ -223,7 +223,7 @@ export function statBlock(e) {
     const armorNote = (!e.puzzleWall && armor > ARMOR_CAP) ? ` (over cap ${ARMOR_CAP})` : '';
     return [
         STATBLOCK_START,
-        `**HP:** ${e.hp}${e.vermin ? ' (vermin)' : ' — The Hundred'} · **Armor:** ${armor}${armorNote} · **Damage:** ${e.damage}/turn`,
+        `**HP:** ${e.hp}${e.vermin ? ' (vermin)' : e.hp === 100 ? ' — The Hundred' : ''} · **Armor:** ${armor}${armorNote} · **Damage:** ${e.damage}/turn`,
         `**Wallet:** ${e.gold ?? 0} GP · **Weak:** ${list(e.weak)} · **Resist:** ${list(e.resist)} · **Immune:** ${list(e.immune)}`,
         `**TTK (reference loadout):** ${lazy} lazy / ${informed} informed · **Buyout at peg:** ~${(e.hp ?? 0) + (e.gold ?? 0)} GP`,
         STATBLOCK_END,
