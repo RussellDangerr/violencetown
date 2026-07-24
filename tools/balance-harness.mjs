@@ -154,8 +154,8 @@ export function loadMapRoster() {
 // column stays decimal-aligned. The zone/id key column doubles as the Creature Card
 // lookup key (map ids repeat across files, so zone alone can't identify a spawn).
 const ENEMY_COLS = [
-    { head: 'zone/id',      w: 24 },
-    { head: 'type',         w: 20 },
+    { head: 'zone/id',      w: 32 },
+    { head: 'type',         w: 24 },
     { head: 'hp',           w: 5,  num: true },
     { head: 'armor',        w: 6,  num: true },
     { head: 'dmg',          w: 5,  num: true },
@@ -176,7 +176,7 @@ const TRICK_COLS = [
     { head: 'damage', w: 7, num: true }, { head: 'dmg/gp', w: 7, num: true },
 ];
 const ECON_COLS = [
-    { head: 'zone', w: 12 }, { head: 'faucet_gp', w: 10, num: true },
+    { head: 'zone', w: 16 }, { head: 'faucet_gp', w: 10, num: true },
 ];
 
 function table(cols, rows) {
@@ -198,6 +198,11 @@ export function report(roster = loadMapRoster()) {
     lines.push(`reference damage ${REFERENCE_DAMAGE} | armor cap ${ARMOR_CAP} | peg 1 GP : 1 HP | grunt heal policy: hp <= ${HEAL_HP_FLOOR}, gold >= ${HEAL_MIN_GOLD} | TTD vs player ${PLAYER_HP} HP / ${PLAYER_ARMOR} armor`);
     lines.push('');
 
+    // Sort is (zone, type, id) but the displayed key column is zone/id, so within a
+    // zone the key reads non-monotonically (sewer/carrion, e6, e5, e3, e4, ...).
+    // Deliberate: type-sort keeps sibling spawns (both Red Fungus rows) adjacent,
+    // which is the right affordance for balance work. Tradeoff: renaming a spawn's
+    // `type` moves its row (delete+insert in the diff) — accepted.
     const sorted = roster.slice().sort((a, b) =>
         byCodepoint(a.zone, b.zone) || byCodepoint(a.type, b.type) || byCodepoint(String(a.id), String(b.id))
     );

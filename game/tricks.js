@@ -23,9 +23,11 @@ export const TRICKS = {
     // Hire a Lion — a carnival tamer's whistle. Spend GP and a lion bounds out
     // to fight at your side for a couple of turns, then melts back into the
     // crowd. No damage/aim: `summon` routes it to _spawnSummon (main.js).
+    // 50 GP -> 25 dmg x 2 turns = 50 total damage: exactly at peg (Law 1). The
+    // lion is a combatant, so The Hundred applies: 100 HP.
     hire_lion: {
-        id: 'hire_lion', name: 'Hire Lire', gpCost: 12,
-        summon: 'lion', summonName: 'Lire', summonTurns: 2, summonHp: 30, summonDamage: 12,
+        id: 'hire_lion', name: 'Hire Lire', gpCost: 50,
+        summon: 'lion', summonName: 'Lire', summonTurns: 2, summonHp: 100, summonDamage: 25,
     },
     // Rat Form — a braid of wererat fur (the Rat Ring). Fold down into a rat for
     // a few turns: small enough to slip through the sewer grates. No aim, no

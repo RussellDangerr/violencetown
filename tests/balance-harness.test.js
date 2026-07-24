@@ -1,6 +1,7 @@
 // balance-harness.test.js — the harness's pure math.
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { ttk, ttdOf, pegRate, lintEntity, lintSkills, loadMapRoster, report, REFERENCE_DAMAGE, ARMOR_CAP } from '../tools/balance-harness.mjs';
 
 // A minimal roster entry — spread over to vary one field at a time.
@@ -85,5 +86,9 @@ describe('report()', () => {
         // and the 1500-gold boss still fits its declared gold column
         const bossRow = stretched.find(l => l.startsWith('an-extremely-long-zone-name'));
         assert.ok(bossRow.includes('1500'));
+    });
+    test('report() matches the committed golden — drift shows up in npm test', () => {
+        const golden = readFileSync(new URL('../tools/balance-golden.txt', import.meta.url), 'utf8');
+        assert.equal(report(), golden);
     });
 });
