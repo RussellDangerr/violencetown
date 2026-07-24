@@ -203,6 +203,52 @@ export function loadMapRoster() {
     return roster;
 }
 
+// ── Creature card stat blocks ────────────────────────────────────────────────
+//
+// Generated from the SAME loadMapRoster entries + ttk/REFERENCE_DAMAGE the report()
+// golden lints, so a wiki card and the harness can never quietly disagree.
+export const STATBLOCK_START = '<!-- statblock:start -->';
+export const STATBLOCK_END = '<!-- statblock:end -->';
+
+// e is a loadMapRoster entry (zone/id/type/hp/armor/damage/gold/vermin/puzzleWall),
+// optionally with weak/resist/immune arrays — the roster doesn't set those today,
+// but a future map/entity shape may, so the block reads them if present.
+export function statBlock(e) {
+    const lazy = ttk(e.hp, REFERENCE_DAMAGE, e.armor ?? 0);
+    const informed = ttk(e.hp, REFERENCE_DAMAGE * 2, e.armor ?? 0);
+    const list = a => (a && a.length ? a.join(', ') : '—');
+    const armor = e.armor ?? 0;
+    // Ties the block to ARMOR_CAP the same way lintEntity does (Law 3) — a
+    // puzzleWall is exempt there too.
+    const armorNote = (!e.puzzleWall && armor > ARMOR_CAP) ? ` (over cap ${ARMOR_CAP})` : '';
+    return [
+        STATBLOCK_START,
+        `**HP:** ${e.hp}${e.vermin ? ' (vermin)' : ' — The Hundred'} · **Armor:** ${armor}${armorNote} · **Damage:** ${e.damage}/turn`,
+        `**Wallet:** ${e.gold ?? 0} GP · **Weak:** ${list(e.weak)} · **Resist:** ${list(e.resist)} · **Immune:** ${list(e.immune)}`,
+        `**TTK (reference loadout):** ${lazy} lazy / ${informed} informed · **Buyout at peg:** ~${(e.hp ?? 0) + (e.gold ?? 0)} GP`,
+        STATBLOCK_END,
+    ].join('\n');
+}
+
+// Pure string op — no fs, so it's trivially testable and reusable for a preview
+// mode later. Replaces an existing marker pair in place; otherwise inserts right
+// after the closing frontmatter fence (so the block sits above the prose, next to
+// the other machine-facing metadata). A card with no frontmatter at all prepends
+// instead — there's no fence to anchor after, and prepending keeps the block the
+// first thing a reader (or the next run of this same function) hits.
+export function applyStatBlock(cardText, block) {
+    const markerRe = /<!-- statblock:start -->[\s\S]*?<!-- statblock:end -->/;
+    if (markerRe.test(cardText)) {
+        return cardText.replace(markerRe, block);
+    }
+    const fenced = cardText.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n/);
+    if (fenced) {
+        const idx = fenced[0].length;
+        return cardText.slice(0, idx) + '\n' + block + '\n\n' + cardText.slice(idx);
+    }
+    return block + '\n\n' + cardText;
+}
+
 // ── Table formatting ──────────────────────────────────────────────────────
 //
 // Column widths are DECLARED, not derived from content: when the Law 0 retune
@@ -320,13 +366,60 @@ export function report(roster = loadMapRoster()) {
     return lines.join('\n') + '\n';
 }
 
+// ── Creature card wiring (--cards) ───────────────────────────────────────────
+
+const CARDS_DIR = path.join(__dirname, '..', 'wiki', 'Creature Cards');
+
+// Minimal scalar-only frontmatter read — every card's frontmatter today is flat
+// `key: value` lines (name/region/tier/status), so a line parser is enough; no
+// need for a real YAML dep to read one more scalar (`enemyId`) off the same shape.
+function parseFrontmatter(text) {
+    const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
+    if (!m) return {};
+    const out = {};
+    for (const line of m[1].split(/\r?\n/)) {
+        const kv = line.match(/^(\w+):\s*(.*)$/);
+        if (!kv) continue;
+        out[kv[1]] = kv[2].trim().replace(/^["']|["']$/g, '');
+    }
+    return out;
+}
+
+// A card wires up once it declares `enemyId: zone/id` matching a live roster
+// entry. No card has one today (every cryptid is an unimplemented boss) — that
+// makes this a clean no-op on real data, by design; it starts doing something
+// the day a cryptid gets implemented and its card gains the field.
+function runCards() {
+    const files = fs.readdirSync(CARDS_DIR).filter(f => f.endsWith('.md')).sort(byCodepoint);
+    const roster = loadMapRoster();
+    const byKey = new Map(roster.map(e => [`${e.zone}/${e.id}`, e]));
+
+    let wired = 0, written = 0;
+    for (const file of files) {
+        const full = path.join(CARDS_DIR, file);
+        const text = fs.readFileSync(full, 'utf8');
+        const fm = parseFrontmatter(text);
+        if (!fm.enemyId) continue;
+        const entry = byKey.get(fm.enemyId);
+        if (!entry) continue;
+        wired++;
+        const updated = applyStatBlock(text, statBlock(entry));
+        if (updated !== text) {
+            fs.writeFileSync(full, updated);
+            written++;
+            console.log(`wired ${file} -> ${fm.enemyId}`);
+        }
+    }
+    console.log(`${files.length} cards scanned, ${wired} wired, ${written} written`);
+}
+
 // ── CLI ───────────────────────────────────────────────────────────────────
 
-const USAGE = 'usage: node tools/balance-harness.mjs [--write | --check]';
+const USAGE = 'usage: node tools/balance-harness.mjs [--write | --check | --cards]';
 
 function main() {
     const args = process.argv.slice(2);
-    const unknown = args.filter(a => a !== '--write' && a !== '--check');
+    const unknown = args.filter(a => a !== '--write' && a !== '--check' && a !== '--cards');
     if (unknown.length) {
         console.error(`unknown argument: ${unknown.join(' ')}`);
         console.error(USAGE);
@@ -350,6 +443,11 @@ function main() {
             process.exit(1);
         }
         console.log('balance golden matches — no drift');
+        return;
+    }
+
+    if (args.includes('--cards')) {
+        runCards();
         return;
     }
 

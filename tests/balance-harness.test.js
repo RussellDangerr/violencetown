@@ -2,7 +2,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ttk, ttdOf, pegRate, lintEntity, lintSkills, loadMapRoster, report, trickDamage, normEol, GOLDEN_PATH, REFERENCE_DAMAGE, ARMOR_CAP } from '../tools/balance-harness.mjs';
+import { ttk, ttdOf, pegRate, lintEntity, lintSkills, loadMapRoster, report, trickDamage, normEol, GOLDEN_PATH, REFERENCE_DAMAGE, ARMOR_CAP, statBlock, applyStatBlock } from '../tools/balance-harness.mjs';
 import { TRICKS } from '../game/tricks.js';
 
 // A minimal roster entry — spread over to vary one field at a time.
@@ -114,5 +114,40 @@ describe('report()', () => {
     // must break loudly here rather than leave this test passing against nothing.
     test('report() matches the committed golden — drift shows up in npm test', () => {
         assert.equal(normEol(report()), normEol(readFileSync(GOLDEN_PATH, 'utf8')));
+    });
+});
+
+describe('statBlock — creature card generation', () => {
+    test('renders a marker-wrapped block from an entity', () => {
+        const md = statBlock({ zone: 'sewer', id: 'wererat', type: 'Wererat', hp: 100, armor: 4, damage: 12, gold: 150, vermin: false, weak: ['fire'] });
+        assert.ok(md.startsWith('<!-- statblock:start -->'));
+        assert.ok(md.trimEnd().endsWith('<!-- statblock:end -->'));
+        assert.ok(md.includes('100'));           // The Hundred, stated
+        assert.ok(md.includes('150 GP'));        // the wallet
+        assert.ok(md.includes('fire'));          // the weakness
+        assert.ok(md.includes('TTK'));           // the derived read
+    });
+    test('a vermin block labels sub-Hundred HP honestly', () => {
+        const md = statBlock({ zone: 'sewer', id: 'rat', type: 'Rat', hp: 16, armor: 0, damage: 6, gold: 0, vermin: true });
+        assert.ok(md.includes('16'));
+        assert.ok(/vermin/i.test(md));
+    });
+});
+
+describe('applyStatBlock — marker-managed injection (pure string op)', () => {
+    test('inserts a block after frontmatter when no markers exist', () => {
+        const card = '---\nname: Wererat\ntier: Boss\n---\n\n# Wererat\n\nA big rat.\n';
+        const out = applyStatBlock(card, '<!-- statblock:start -->\nX\n<!-- statblock:end -->');
+        assert.ok(out.includes('<!-- statblock:start -->'));
+        assert.ok(out.includes('# Wererat'));    // original body preserved
+        assert.ok(out.indexOf('---', 3) < out.indexOf('<!-- statblock:start -->')); // block after frontmatter
+    });
+    test('replaces an existing block in place, leaving surrounding text', () => {
+        const card = '---\nname: X\n---\n# X\n<!-- statblock:start -->\nOLD\n<!-- statblock:end -->\nafter\n';
+        const out = applyStatBlock(card, '<!-- statblock:start -->\nNEW\n<!-- statblock:end -->');
+        assert.ok(out.includes('NEW'));
+        assert.ok(!out.includes('OLD'));
+        assert.ok(out.includes('after'));         // trailing text kept
+        assert.equal((out.match(/statblock:start/g) || []).length, 1); // no duplicate block
     });
 });
