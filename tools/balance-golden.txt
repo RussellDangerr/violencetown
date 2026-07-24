@@ -56,10 +56,11 @@ fireball           12       20     1.67
 --- TRICKS (dmg per GP) ---
 id             gpCost   damage   dmg/gp
 ember_rat           4       14     3.50
-hire_lion          50      50*     1.00
+hire_lion*         50       50     1.00
 rat_form            0        -        -
 ray_blast           6       18     3.00
-* summon total = summonDamage x summonTurns (whole-lifetime damage)
+* summon: damage is the whole-hire ceiling (summonDamage x summonTurns), so
+  dmg/gp is per HIRE, not per turn — not comparable to a bolt's per-cast rate.
 
 --- ECONOMY (per-zone faucet = sum of spawn wallets) ---
 zone               faucet_gp

@@ -14,7 +14,9 @@ import { HEAL_HP_FLOOR, HEAL_MIN_GOLD } from '../game/ai.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const GAME_DIR  = path.join(__dirname, '..', 'game');
-const GOLDEN_PATH = path.join(__dirname, 'balance-golden.txt');
+// Exported so the round-trip test binds to the same path the CLI writes — renaming
+// the golden then breaks in one place instead of silently un-testing itself.
+export const GOLDEN_PATH = path.join(__dirname, 'balance-golden.txt');
 
 // ── Constants (Law 4 / Law 3) ────────────────────────────────────────────────
 export const REFERENCE_DAMAGE = 20; // act-1 geared reference (Ray Gun tier)
@@ -30,9 +32,21 @@ export const PLAYER_ARMOR = 0;
 const TRICK_MIN_RATE = 2.5;
 const SPELL_MIN_RATE = 1.5;
 const SPELL_MAX_RATE = 2.5;
-// A summon is a combatant you rent, not a bolt you buy: nothing ungated may beat
-// the 1 GP : 1 HP peg, so its whole-lifetime damage caps at parity with its price.
-const SUMMON_MAX_RATE = 1;
+
+// The peg keys on AUTONOMY, not gating (Law 1 as amended — every trick in TRICKS is
+// gated behind gear, so a gate distinguishes nothing). A summon fights on its own
+// after one purchase, so it buys no skill expression and is held at 1 GP : 1 HP
+// however it was unlocked. Two-sided: "1:1" is a rate, not a ceiling, so a summon
+// priced well UNDER the peg is a design smell too (dead gold, nobody hires it).
+const AUTONOMOUS_MAX_RATE = 1;
+const AUTONOMOUS_MIN_RATE = 0.5;
+
+// Runtime fallbacks the lint must mirror, or a def that omits a field lints as one
+// thing and plays as another. Both are the values game/ actually applies when the
+// field is absent: the Enemy ctor's DEFAULT_DAMAGE (enemies.js) and castTrick's
+// summon-turn fallback (main.js). loadMapRoster reads the damage one too.
+const ENEMY_DEFAULT_DAMAGE = 8;
+const SUMMON_DEFAULT_TURNS = 2;
 
 // Hermetic ordering — plain codepoint compare, never localeCompare (host/ICU
 // dependent, so a golden could differ across machines).
@@ -88,12 +102,20 @@ export function lintEntity(e) {
 }
 
 // What a Trick's GP actually buys, in damage. A direct trick states it outright; a
-// summon spends its damage over a lifetime, so the peg prices the whole hire
-// (summonDamage x summonTurns). Returns null for utility skills (transforms), which
-// aren't priced this way. The table and the lint both read this — one number, one story.
+// summon spends its damage over a lifetime, so the peg prices the whole hire.
+// Returns null for utility skills (transforms), which aren't priced this way. The
+// table and the lint both read this — one number, one story.
+//
+// The summon figure is a CEILING: summonDamage x summonTurns assumes it survives all
+// N turns with a target adjacent every one of them. That is the right quantity for a
+// <= check — the cap must hold in the best case, or it isn't a cap.
+//
+// Omitted fields fall back to what the RUNTIME does, never to 0: a def with no
+// summonDamage still spawns an Enemy that hits for DEFAULT_DAMAGE, so lint-as-0 would
+// wave through an over-peg summon and print a false `0*` in the table.
 export function trickDamage(t) {
     if (typeof t.damage === 'number') return t.damage;
-    if (t.summon) return (t.summonDamage ?? 0) * (t.summonTurns ?? 0);
+    if (t.summon) return (t.summonDamage ?? ENEMY_DEFAULT_DAMAGE) * (t.summonTurns ?? SUMMON_DEFAULT_TURNS);
     return null;
 }
 
@@ -109,11 +131,13 @@ export function lintSkills() {
             continue;
         }
         const rate = pegRate(damage, t.gpCost);
-        // Summons sit at the OTHER end of the ladder: gated bolts must beat the peg,
-        // a rented combatant must not exceed it.
+        // Summons sit at the OTHER end of the ladder: a skill-expressing bolt must beat
+        // the peg, an autonomous combatant is held AT it.
         if (t.summon) {
-            if (rate > SUMMON_MAX_RATE) {
-                flags.push(`[skill/${t.id}] Law 1 — ${rate.toFixed(2)} dmg/GP over ${t.summonTurns} turns, expected <= ${SUMMON_MAX_RATE.toFixed(2)} (above peg)`);
+            if (rate > AUTONOMOUS_MAX_RATE) {
+                flags.push(`[skill/${t.id}] Law 1 — ${rate.toFixed(2)} dmg/GP over ${t.summonTurns ?? SUMMON_DEFAULT_TURNS} turns, expected <= ${AUTONOMOUS_MAX_RATE.toFixed(2)} (above peg — autonomy buys no skill discount)`);
+            } else if (rate < AUTONOMOUS_MIN_RATE) {
+                flags.push(`[skill/${t.id}] Law 1 — ${rate.toFixed(2)} dmg/GP over ${t.summonTurns ?? SUMMON_DEFAULT_TURNS} turns, expected >= ${AUTONOMOUS_MIN_RATE.toFixed(2)} (well under peg — is this worth the gold?)`);
             }
             continue;
         }
@@ -161,7 +185,7 @@ export function loadMapRoster() {
                 type: s.type,
                 hp: s.hp ?? 100,
                 armor: s.armor ?? 0,
-                damage: s.damage ?? 8,
+                damage: s.damage ?? ENEMY_DEFAULT_DAMAGE,
                 gold: s.gold ?? 0,
                 vermin: s.vermin ?? false,
                 puzzleWall: s.puzzleWall ?? false,
@@ -256,15 +280,19 @@ export function report(roster = loadMapRoster()) {
     lines.push('');
 
     lines.push('--- TRICKS (dmg per GP) ---');
-    lines.push(...table(TRICK_COLS, Object.values(TRICKS)
-        .slice().sort((a, b) => byCodepoint(a.id, b.id))
-        .map(t => {
-            const damage = trickDamage(t);
-            if (damage === null) return [t.id, t.gpCost, '-', '-'];
-            return [t.id, t.gpCost, t.summon ? `${damage}*` : damage,
-                t.gpCost > 0 ? pegRate(damage, t.gpCost).toFixed(2) : '-'];
-        })));
-    lines.push('* summon total = summonDamage x summonTurns (whole-lifetime damage)');
+    // The star rides the left-aligned id, never a numeric cell — the num columns owe
+    // the reader decimal alignment.
+    const tricks = Object.values(TRICKS).slice().sort((a, b) => byCodepoint(a.id, b.id));
+    lines.push(...table(TRICK_COLS, tricks.map(t => {
+        const damage = trickDamage(t);
+        if (damage === null) return [t.id, t.gpCost, '-', '-'];
+        return [t.summon ? `${t.id}*` : t.id, t.gpCost, damage,
+            t.gpCost > 0 ? pegRate(damage, t.gpCost).toFixed(2) : '-'];
+    })));
+    if (tricks.some(t => t.summon)) {
+        lines.push('* summon: damage is the whole-hire ceiling (summonDamage x summonTurns), so');
+        lines.push('  dmg/gp is per HIRE, not per turn — not comparable to a bolt\'s per-cast rate.');
+    }
     lines.push('');
 
     lines.push('--- ECONOMY (per-zone faucet = sum of spawn wallets) ---');

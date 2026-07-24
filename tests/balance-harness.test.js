@@ -2,7 +2,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ttk, ttdOf, pegRate, lintEntity, lintSkills, loadMapRoster, report, trickDamage, normEol, REFERENCE_DAMAGE, ARMOR_CAP } from '../tools/balance-harness.mjs';
+import { ttk, ttdOf, pegRate, lintEntity, lintSkills, loadMapRoster, report, trickDamage, normEol, GOLDEN_PATH, REFERENCE_DAMAGE, ARMOR_CAP } from '../tools/balance-harness.mjs';
 import { TRICKS } from '../game/tricks.js';
 
 // A minimal roster entry — spread over to vary one field at a time.
@@ -64,13 +64,20 @@ describe('harness math', () => {
     test('hire_lion sits exactly at the peg — 1.00 dmg/GP over its whole lifetime', () => {
         const lion = TRICKS.hire_lion;
         assert.equal(trickDamage(lion), lion.summonDamage * lion.summonTurns);
-        assert.equal(pegRate(trickDamage(lion), lion.gpCost).toFixed(2), '1.00');
+        assert.equal(pegRate(trickDamage(lion), lion.gpCost), 1);   // exactly 1, not "1.00"-rounded
         assert.deepEqual(lintSkills().filter(f => f.startsWith('[skill/hire_lion]')), []);
     });
     test('trickDamage prices a summon by lifetime, a bolt outright, utility not at all', () => {
         assert.equal(trickDamage({ damage: 18, gpCost: 6 }), 18);
         assert.equal(trickDamage({ summon: 'lion', summonDamage: 25, summonTurns: 2 }), 50);
         assert.equal(trickDamage({ transform: 'rat', transformTurns: 3 }), null);
+    });
+    // The hole this closes: omitted fields must price at what the RUNTIME does, or an
+    // over-peg summon lints clean as 0 dmg. 8 x 2 = 16 is what {summon} alone spawns.
+    test('trickDamage falls back to the runtime defaults, never to 0', () => {
+        assert.equal(trickDamage({ summon: 'goon' }), 16);
+        assert.equal(trickDamage({ summon: 'goon', summonTurns: 3 }), 24);
+        assert.equal(trickDamage({ summon: 'goon', summonDamage: 25 }), 50);
     });
     test('lintSkills flags Cone of Cold in the keyed format', () => {
         const flags = lintSkills();
@@ -103,8 +110,9 @@ describe('report()', () => {
     });
     // normEol on both sides: core.autocrlf hands fresh checkouts a CRLF golden while
     // report() emits LF, and an exact compare would then fail on checkout alone.
+    // GOLDEN_PATH from the harness, not a second copy of the path: renaming the golden
+    // must break loudly here rather than leave this test passing against nothing.
     test('report() matches the committed golden — drift shows up in npm test', () => {
-        const golden = readFileSync(new URL('../tools/balance-golden.txt', import.meta.url), 'utf8');
-        assert.equal(normEol(report()), normEol(golden));
+        assert.equal(normEol(report()), normEol(readFileSync(GOLDEN_PATH, 'utf8')));
     });
 });

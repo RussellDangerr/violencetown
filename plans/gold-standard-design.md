@@ -44,19 +44,25 @@ differentiation lives in mitigation (armor, resistances, immunities) and behavio
   spawns may go below it.
 
 ### Law 1 — The Peg
-**1 GP ≈ 1 HP** is the market rate for *lazy* violence. Ungated gold solutions — bribes, mercenary
-summons — clear a basic enemy at ~100 GP. Gates (equipment, aiming, positioning, risk) buy rates
-*above* peg; nothing ungated may beat it.
+**1 GP ≈ 1 HP** is the market rate for *lazy* violence. Autonomous gold solutions — bribes,
+mercenary summons — clear a basic enemy at ~100 GP. Per-cast skill (aiming, positioning, risk) buys
+rates *above* peg; nothing autonomous may beat it.
+
+The peg keys on **autonomy, not gating**. A gate alone earns nothing — every trick in `TRICKS` is
+gated behind gear (Ray Blast ← Ray Gun, Hire a Lion ← Lion Whip, Rat Form / Ember Rat ← rings), so
+"gated" doesn't distinguish anything. What earns above-peg is skill spent *per use*: a bolt you must
+aim every cast is skill expression; a summon that fights on its own after one purchase is not, and
+is priced at peg however it was unlocked.
 
 The exchange-rate ladder (current + retuned content):
 
-| Route                              | Rate            | Why it's allowed             |
-|------------------------------------|-----------------|------------------------------|
-| Bribe / buyout                     | ~1:1 remaining HP | Zero skill, zero risk — pure peg |
-| Hire a Lion (retuned: 50 GP)       | 1:1 (50 total dmg) | Ungated, autonomous          |
-| Ray Blast (6 GP → 18 dmg)          | 3:1             | Gated: Ray Gun equipped + aim |
-| Cleave into 3 enemies              | 2× weapon, free | Positioning is the payment   |
-| Spin fully surrounded              | 3.2× weapon, free | Risk is the payment          |
+| Route                              | Rate               | Why it's allowed                                          |
+|------------------------------------|--------------------|-----------------------------------------------------------|
+| Bribe / buyout                     | ~1:1 remaining HP  | Zero skill, zero risk — pure peg                          |
+| Hire a Lion (retuned: 50 GP)       | 1:1 (50 total dmg) | Gated behind Lion Whip, but priced at peg — autonomy costs no skill |
+| Ray Blast (6 GP → 18 dmg)          | 3:1                | Gated: Ray Gun equipped + aim                             |
+| Cleave into 3 enemies              | 2× weapon, free    | Positioning is the payment                                |
+| Spin fully surrounded              | 3.2× weapon, free  | Risk is the payment                                       |
 
 MP is the *renewable* skill currency (regenerates per turn), so spell efficiency prices in
 opportunity-turns, not gold: spells sit at **1.5–2.5 dmg per MP** (AoE justifies the top of the
@@ -179,7 +185,7 @@ Every combatant shows **HP/100 and GP** on its nameplate.
    `spells.js`, `tricks.js`, `enemies.js`, `buffs.js`):
    - **TTK/TTD matrix** — for every enemy × every loadout: turns you need to kill it (TTK) and
      turns it needs to kill you (TTD), exact arithmetic both ways;
-   - **Peg lint** — flags any GP/MP rate outside its declared band, any ungated above-peg rate,
+   - **Peg lint** — flags any GP/MP rate outside its declared band, any autonomous above-peg rate,
      any armor over cap without a `puzzleWall` declaration, any max-HP ≠ 100;
    - **Economy lint** — per zone: faucet (sum of wallets + quest gold) vs sinks (shops, tricks,
      bribes, buyouts); target: peg-solutions affordable for ~10–20% of encounters;

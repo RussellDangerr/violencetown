@@ -1,5 +1,6 @@
 # The balance golden is compared byte-for-byte (harness --check + the round-trip
 # test), so it must check out LF everywhere — core.autocrlf=true would otherwise
 # hand a CRLF copy to every fresh clone and fail the gate on checkout alone.
-# Deliberately narrow: normalizing the whole repo would churn every file.
-tools/balance-golden.txt text eol=lf
+# Deliberately narrow: normalizing the whole repo would churn every file. Globbed so
+# a renamed or additional golden stays covered instead of silently falling out.
+tools/*-golden.txt text eol=lf

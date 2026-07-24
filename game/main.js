@@ -3213,7 +3213,9 @@ class Game {
                 }
                 if (trick.summon) {
                     // Summon trick (Hire a Lion) — no damage; spawn a temporary ally.
-                    this._spawnSummon(trick.summon, trick.summonTurns || 2, trick);
+                    // `??` not `||`, matching _spawnSummon's hp/damage pass-through: an
+                    // explicit 0 means zero turns, not "give me the default".
+                    this._spawnSummon(trick.summon, trick.summonTurns ?? 2, trick);
                     this._advanceWorld();
                     break;
                 }
@@ -4113,6 +4115,8 @@ class Game {
             // summon is a combatant, so Law 0's hp 100 is its floor too. The old
             // `|| 30` silently undercut The Hundred for any trick omitting the field
             // (and `|| 12` was a stale copy of the pre-retune lion's damage).
+            // Narrowing this deliberately drops `||`'s rescue of falsy values: a def
+            // saying summonHp: 0 now builds a 0-HP summon instead of quietly getting 30.
             hp: opts.summonHp, damage: opts.summonDamage,
             behavior: ['ALLIED'],
         });
