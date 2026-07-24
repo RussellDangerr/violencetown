@@ -43,6 +43,6 @@ export const HEAL_MIN_GOLD  = 20; // a sliver below this can never heal
 export function healPurchase(hp, maxHp, gold) {
   if (hp > HEAL_HP_FLOOR || gold < HEAL_MIN_GOLD) return null;
   const spend = Math.min(gold, maxHp - hp);
-  if (spend <= 0) return null; // full-HP or sub-Hundred edge — no zero-GP turns
+  if (spend <= 0) return null; // full-HP edge — no zero-GP turns
   return { spend, heal: spend };
 }

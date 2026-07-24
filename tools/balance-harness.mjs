@@ -190,10 +190,11 @@ export function lintSkills() {
 //
 // Real shape found in game/town-map.json (and every other current map): a
 // top-level `enemies` array of spawn objects — `{ id, type, x, y, hp, damage,
-// ... }`. No map currently authors `gold`/`vermin`/`puzzleWall`/`loadout` (two
-// sewer spawns carry `armor`), so those default exactly like the Enemy ctor
-// defaults (enemies.js): hp 100, armor 0, damage 8 (DEFAULT_DAMAGE), gold 0,
-// vermin false, loadout null.
+// ... }`. Post-retune (Task 14): every spawn authors `hp: 100` and `armor`
+// explicitly, and `vermin: true` marks the three rats (two canyon, plus the
+// dynamic sewer spawn outside this static roster). No map authors `gold` or
+// `loadout` yet, so those default exactly like the Enemy ctor defaults
+// (enemies.js): gold 0, loadout null.
 export function loadMapRoster() {
     const files = fs.readdirSync(GAME_DIR)
         .filter(f => f.endsWith('-map.json') && !f.includes('TheDangerrZone'))

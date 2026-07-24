@@ -3,6 +3,7 @@
 **Status:** Adopted — Laws 0–4 and 6 implemented via `plans/gold-standard-implementation.md`
 (Tasks 1–13, branch `feature/gold-standard`). Law 5 (boss spending) and the deferred hooks below
 await the first boss build. Open design rulings are collected at the end of `plans/balancing-bible.md`.
+Round 2 (negative armor / shove-spin / challenge GP) implemented 2026-07-24.
 **Date:** 2026-07-23
 **Supersedes:** the combat-math sections of `plans/combat-health-system.md` (its genre research and
 "chess, not slot machines" goal carry forward unchanged; its 2026-03-30 "flat 100 HP is superseded"

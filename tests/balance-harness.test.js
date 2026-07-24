@@ -139,10 +139,13 @@ describe('statBlock — creature card generation', () => {
         assert.ok(md.includes('fire'));          // the weakness
         assert.ok(md.includes('TTK'));           // the derived read
     });
-    test('a vermin block labels sub-Hundred HP honestly', () => {
-        const md = statBlock({ zone: 'sewer', id: 'rat', type: 'Rat', hp: 16, armor: 0, damage: 6, gold: 0, vermin: true });
-        assert.ok(md.includes('16'));
-        assert.ok(/vermin/i.test(md));
+    // Post-retune (Law 0 amended 2026-07-24): vermin no longer means sub-Hundred
+    // HP — a vermin card is 100 HP / negative armor like anyone else, and
+    // statBlock's only vermin-specific behavior left is the role suffix.
+    test('a vermin block is 100 HP like everyone else, with the (vermin) role suffix', () => {
+        const md = statBlock({ zone: 'sewer', id: 'rat', type: 'Rat', hp: 100, armor: -80, damage: 6, gold: 0, vermin: true });
+        assert.ok(md.includes('100'));
+        assert.ok(/\(vermin\)/i.test(md));
     });
 });
 
