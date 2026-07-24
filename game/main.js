@@ -3162,9 +3162,12 @@ class Game {
             case 'cleaveAttack': {
                 this._lastHitTarget = null;   // (fear) AoE breaks the Fearmur single-target streak
                 // Fixed 3-tile frontal arc, 2/3 weapon damage to everything in it.
-                const dmg = Math.max(1, Math.round(this.equipment.weapon.damage * 2 / 3));
+                // Pass the raw fraction (not pre-rounded) + the weapon's type so
+                // computeHit rounds once and elemental matchups apply, same as a
+                // single hit — the weapon-AoE case the basic-hit typing pass missed.
+                const dmg = this.equipment.weapon.damage * 2 / 3;
                 const tiles = affectedTiles(w, this);
-                const hit = this._aoeStrike(tiles, dmg);
+                const hit = this._aoeStrike(tiles, dmg, { type: this.equipment.weapon.damageType });
                 if (hit) { this._log(`[Cleave! ${hit} caught.]`, 'combat'); this._advanceWorld(); }
                 else if (this._enemiesPresent(tiles) > 0) { this._log('[Cleave connects — shrugged off, immune.]', 'combat'); this._advanceWorld(); }
                 else this._log('[Cleave hits only air]');
@@ -3173,9 +3176,10 @@ class Game {
             case 'spinAttack': {
                 this._lastHitTarget = null;   // (fear) AoE breaks the Fearmur single-target streak
                 // Sweep all 8 tiles, 2/5 weapon damage to everything around you.
-                const dmg = Math.max(1, Math.round(this.equipment.weapon.damage * 2 / 5));
+                // Raw fraction + weapon type, as Cleave above — round once, type applies.
+                const dmg = this.equipment.weapon.damage * 2 / 5;
                 const tiles = affectedTiles(w, this);
-                const hit = this._aoeStrike(tiles, dmg);
+                const hit = this._aoeStrike(tiles, dmg, { type: this.equipment.weapon.damageType });
                 if (hit) { this._log(`[Spin! ${hit} caught.]`, 'combat'); this._advanceWorld(); }
                 else if (this._enemiesPresent(tiles) > 0) { this._log('[Spin connects — shrugged off, immune.]', 'combat'); this._advanceWorld(); }
                 else this._log('[You spin, hitting nothing]');
