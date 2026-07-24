@@ -996,3 +996,86 @@ Merge to `dev` is Caelan's call, per CLAUDE.md.
   wallets exist at scale.
 - **5-Zone Body ruling** — awaiting Caelan; `isBackstab` is written so a zone system can replace
   its facing check without touching callers.
+
+---
+
+# Round 2 — the 2026-07-24 rulings (Tasks 14–17)
+
+Caelan's rulings: (1) negative armor replaces the vermin HP exception — everyone is 100 HP, softness
+is armor < 0 (hit 1 vs −10 → 11); (2) shove spins its victim (message: "[You shove X so hard they
+spin around!]") and buys exactly one backstab window; (3) the wallet number is composite Challenge
+GP (gold + potion/gear values ≈ challenge rating), loot stays liquid gold. Spec amended in
+`plans/gold-standard-design.md` (Laws 0/2/3/4/6f).
+
+### Task 14: Negative armor — repeal the vermin exception, retune the world
+
+**Files:** every `game/*-map.json` enemy entry (not the `*-TheDangerrZone.json` snapshots),
+`game/sewer-setpiece.js`, `tools/balance-harness.mjs` (lint), `tests/combat.test.js`,
+`tests/combat-lawzero.test.js`, `tests/balance-harness.test.js`, `tools/balance-golden.txt`.
+
+- [ ] Pin Caelan's example in `tests/combat.test.js`: `new Entity({hp:100, armor:-10}).takeDamage(1)`
+  deals 11 (max(1, 1−(−10))); and a −80 target dies to one reference-damage hit. Verify
+  `Entity.takeDamage` needs NO change (it already subtracts a negative).
+- [ ] Retune recipe: damage-0 civilians → armor **−80**, hp 100. Fighters preserve their current
+  lazy TTK: `new_armor = 20 − ceil(100/old_TTK)` snapped to stops {−80, −30, −15, −5, 0, +5, +10}.
+  Expected table (verify each old TTK before applying): rats/townsfolk/vendors/banker/cook/
+  operator/stranger/carrion → −80; clown (20hp) / ghost fungus (20) → −80; greedy green (25),
+  puck (30), red fungus (30), violet fungus (25) → −30; pike (45), borgir boss (50) → −15;
+  fungus king (60/3) → −5 (armor field replaced); wererat (80/4) → 0. All hp fields → 100 (or
+  removed — ctor default). Canyon rats + sewer rat keep/gain `vermin: true` (role marker).
+- [ ] `game/sewer-setpiece.js` rat: `hp: 16` removed, `armor: -80` added, vermin stays.
+- [ ] Harness lint: Law 0 flags ANY `hp !== 100` (vermin exemption removed); armor sanity flag
+  outside [−90, ARMOR_CAP] without puzzleWall; vermin challenge-wallet ≤ 5 unchanged. Update
+  `tests/combat-lawzero.test.js` (vermin rat is now 100 hp / −80 armor) and harness tests.
+- [ ] `npm run balance:write` — the golden's lint section should COLLAPSE (34 Law 0 flags → 0;
+  only coneOfCold remains). Read the TTK columns: every fighter's lazy TTK unchanged from the
+  previous golden; civilians drop to 1. The diff IS the review artifact for Caelan.
+- [ ] Old saves carry old hp/armor until respawn — acceptable content patch; note in commit body.
+- [ ] Full suite zero-new; commit `feat(balance): negative armor — everyone is 100 HP, softness is armor`.
+
+### Task 15: Shove spins — one honest backstab window
+
+**Files:** `game/main.js` (shove resolver, ~1969), `game/npc.js` (HOSTILE turn), `game/enemies.js`
+(persist `_spunTurns`), `tests/save-roundtrip.test.js`.
+
+- [ ] Read the real shove resolver first (both knock-aside and swap flavors). On a successful
+  shove: stamp the victim's facing AWAY from the player (`_lastDx/_lastDy = sign(victim − player)`
+  — stepEntity's stamp from the knockback step may already do this; verify and don't double-stamp
+  wrongly), set `victim._spunTurns = 1`, log exactly `[You shove ${name} so hard they spin around!]`.
+- [ ] `game/npc.js` HOSTILE case, before the heal-purchase block: `if (npc._spunTurns > 0) {
+  npc._spunTurns--; break; }` — the recovery turn; no attack, no re-face, no move. Terse comment:
+  spun victims spend the turn recovering, so the shove window survives exactly one follow-up hit.
+- [ ] Persist `_spunTurns` through toSave (mirror `_lastDx`); one round-trip assertion.
+- [ ] Geometry check in report: after a swap-shove the player stands on the vacated tile directly
+  behind the spun victim → next hit backstabs (×1.5, `[Backstab!]`). After knock-aside, player
+  must step in — still one window because the victim's recovery turn passes. State both traces.
+- [ ] Full suite zero-new; commit `feat(combat): shove spins its victim — one backstab window`.
+
+### Task 16: Composite Challenge GP
+
+**Files:** `game/enemies.js` (loadout + challengeGp), `game/renderer.js` (pips read composite),
+`tools/balance-harness.mjs` (column + lint), `tests/wallets.test.js`, `tests/balance-harness.test.js`.
+
+- [ ] `game/enemies.js`: ctor param `loadout = null` (array of `{ name, value }` — the potions and
+  gear this enemy carries; not yet consumed by AI, that lands with boss spending policies), persist
+  in toSave. Export pure `challengeGp(e)` = `(e.gold ?? 0) + Σ (loadout[].value ?? 0)`. TDD in
+  wallets.test.js: gold-only enemy → gold; gold 40 + loadout [{value 60}] → 100; null-safe.
+- [ ] `game/renderer.js` pips: read `challengeGp(e)` instead of `e.gold` (import; verify no import
+  cycle — enemies.js must not import renderer). Comment: the nameplate shows the composite kit
+  (Law 6f); loot is liquid gold only.
+- [ ] Harness: ENEMIES column `gold` → `chal_gp` via challengeGp (roster entries gain optional
+  loadout passthrough from map JSON); ECONOMY faucet stays LIQUID gold (comment why: the faucet
+  measures lootable inflow, not challenge). Law 6 vermin lint reads challengeGp. Golden regen.
+- [ ] Bible + Law 4 band table already say Challenge GP (spec amended); confirm bible price-list
+  section needs no change beyond the column rename note (Task 17 refreshes it).
+- [ ] Full suite zero-new; commit `feat(balance): challenge GP — the wallet is the whole kit`.
+
+### Task 17: Round-2 close-out
+
+- [ ] Refresh `plans/balancing-bible.md`: Laws 0/3/4 amendments (negative armor stops table), 6f
+  composite, shove ruling; move townsfolk/shove/boss-frame from Open Rulings to a "Ruled
+  2026-07-24" section (wallet population stays open — loadout/gold assignment is content work the
+  retune did NOT do beyond armor); price-list refresh from the new golden.
+- [ ] Full verify: `node --test` (known 8 only), `balance:check`, `balance:cards` no-op, naming grep.
+- [ ] Spec status line: append "Round 2 (negative armor / shove-spin / challenge GP) implemented."
+- [ ] Commit `docs(balance): round-2 close-out`.
