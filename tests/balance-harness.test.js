@@ -7,9 +7,15 @@ import { TRICKS } from '../game/tricks.js';
 import { ITEMS } from '../game/items.js';
 
 // A minimal roster entry — spread over to vary one field at a time.
+// A COMPLIANT baseline spawn — every lint must pass on this, so it has to satisfy
+// Law 4's kit band too, not just Law 0/3. At armor 0 that is the standard band
+// (20-60 GP): bandage 25 + fire_bottle 12 + 8 liquid = 45 GP, 18% liquid.
+// Before the kit lint existed a bare `gold: 0` counted as compliant; it no longer
+// does, and a fixture that lies about compliance makes every test using it weaker.
 const spawn = (over = {}) => ({
     zone: 'sewer', id: 'e1', type: 'Red Fungus',
-    hp: 100, armor: 0, damage: 8, gold: 0, vermin: false, puzzleWall: false, ...over,
+    hp: 100, armor: 0, damage: 8, gold: 8, loadout: ['bandage', 'fire_bottle'],
+    vermin: false, puzzleWall: false, ...over,
 });
 
 // The ENEMIES header + the first data row of a rendered report.
