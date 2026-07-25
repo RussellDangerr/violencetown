@@ -20,6 +20,9 @@ import { ITEMS, resolveThrow, resolveUse, ownedItemDefs, hasItemDef } from '../g
 function makeFakeGame() {
     const enemy = {
         x: 2, y: 0,
+        // resolveThrow's damage branch spares non-hostiles (isHostile reads
+        // allegiance — ai.js), so a stub target must declare it.
+        allegiance: 'hostile',
         entity: {
             name: '[Sewer Rat]',
             hp: 50, maxHp: 50, alive: true,
@@ -37,6 +40,13 @@ function makeFakeGame() {
         map: { isWalkable: () => true },  // open corridor along the throw line
         hasBuff() { return false; },
         _spawnDamageNumber(x, y, text, color, size) { this.damageNumbers.push({ x, y, text, color, size }); },
+        // Mirrors Game._entitiesInRadius (main.js) — the shared AoE primitive
+        // resolveThrow's 3x3 burst walks. Absent here until now, which is why the
+        // rock throw died with "not a function" in the mock but works in play.
+        _entitiesInRadius(cx, cy, r) {
+            return this.enemies.filter(e => e.entity.isAlive()
+                && Math.abs(e.x - cx) <= r && Math.abs(e.y - cy) <= r);
+        },
         combatAttack(enemyObj, dmg) {
             this.combatAttacks.push({ target: enemyObj.entity.name, dmg });
             enemyObj.entity.takeDamage(dmg);
@@ -62,34 +72,54 @@ describe('throwing a heal item via resolveThrow (regression guard — expected G
         assert.equal(typeof resolveThrow, 'function');
     });
 
-    test('throwing a bandage deals damage to the enemy in line', () => {
+    test('throwing a heal item deals NO damage — it has no damage field', () => {
         const g = makeFakeGame();
         const thrown = { ...HEAL, range: 4 };
 
         resolveThrow(g, thrown, EAST, 1);
 
-        assert.equal(g.combatAttacks.length, 1,
-            'throwing a heal item must route through combatAttack (damage), not healing');
-        assert.equal(g.combatAttacks[0].dmg, 10, 'thrown single item should deal 10 damage');
-        assert.ok(g._enemyRef.entity.hp < 50, 'enemy HP should drop from a thrown item');
+        assert.equal(g.combatAttacks.length, 0,
+            'a heal item has no `damage` field, so the burst takes the heal branch, never combatAttack');
+        assert.equal(g._enemyRef.entity.hp, 50, 'a thrown heal leaves enemies untouched');
     });
 
-    test('throwing a heal item does NOT heal the thrower', () => {
+    // The original regression this block guards — "Throw always throws" — still
+    // holds: a thrown heal must never behave like DRINKING it. What changed is
+    // that a burst landing ON you now mends you at half effect (see below).
+    test('throwing a heal item does NOT heal the thrower when it lands out of burst range', () => {
         const g = makeFakeGame();
         const before = g.playerHp;
         const thrown = { ...HEAL, range: 4 };
 
-        resolveThrow(g, thrown, EAST, 1);
+        resolveThrow(g, thrown, EAST, 1);   // impact is the enemy tile, 2 away
 
         assert.equal(g.playerHp, before,
-            'throwing a heal item must not heal the thrower (it left their hand as a projectile)');
+            'it left their hand as a projectile — a distant burst mends no one');
     });
 
-    test('stacked throw scales damage by stack count (10 per item)', () => {
+    test('a heal burst landing beside the thrower mends them at HALF effect', () => {
         const g = makeFakeGame();
+        const before = g.playerHp;
         const thrown = { ...HEAL, range: 4 };
-        resolveThrow(g, thrown, EAST, 3);
-        assert.equal(g.combatAttacks[0].dmg, 30, 'throw damage is 10 * stackCount');
+
+        // Real-placement (wheel reticle) onto the tile beside the player — inside the 3x3.
+        resolveThrow(g, thrown, null, 1, { x: g.playerX + 1, y: g.playerY });
+
+        assert.equal(g.playerHp, before + Math.round(HEAL.healAmount / 2),
+            'the burst mends friendlies inside its 3x3 at half effect');
+        assert.equal(g.combatAttacks.length, 0, 'still no damage — heal branch only');
+    });
+
+    test('stack count does NOT scale the burst (flat half effect)', () => {
+        const one = makeFakeGame(), three = makeFakeGame();
+        const thrown = { ...HEAL, range: 4 };
+        const beside = (g) => ({ x: g.playerX + 1, y: g.playerY });
+
+        resolveThrow(one, thrown, null, 1, beside(one));
+        resolveThrow(three, thrown, null, 3, beside(three));
+
+        assert.equal(three.playerHp, one.playerHp,
+            'the 3x3 burst applies a flat half effect — resolveThrow ignores stackCount (_stackCount)');
     });
 });
 

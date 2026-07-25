@@ -69,6 +69,16 @@ assetszipped/
 # the underscore-prefixed scratch crops agents leave behind.
 tools/contact_*.png
 tools/_*.png
+# Agent coord-picking crops that landed in the CURATED asset dir instead of
+# tools/ — both rules above contain a slash, so git anchors them to the repo
+# root and they never reach game/assets-placeholder/. An agent that cd's into
+# that dir and saves a bare filename escapes them entirely (that is exactly how
+# the q_*/z_* crops of roguelikeSheet_transparent.png got there). q_/z_ are
+# scratch prefixes; every real asset here is descriptively named
+# (roguelikeSheet_transparent, tinyTown_packed), so promoting a crop to a real
+# sprite means renaming it out of this pattern first. Extension-scoped on
+# purpose: a bare `_*` would swallow the tracked game/_redirects.
+game/assets-placeholder/**/[qz]_*.png
 
 # --- Brainstorm / design scratch (visual companion) ---
 # Throwaway mockup HTML I serve through the dev server while designing a

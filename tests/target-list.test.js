@@ -2,9 +2,16 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { orderedTargetVerbs, defaultVerb, targetVerbs } from '../game/wheel-model.js';
 
+// Stubs carry `allegiance`, NOT the authored `behavior` array: since PD-3 the
+// runtime hostility predicate is isHostile(e) === (e.allegiance === 'hostile')
+// (ai.js), and a real Enemy gets that field once at construction via
+// deriveAllegiance. A bare stub never runs the ctor, so it must state allegiance
+// itself. (These stubs used to say behavior:['HOSTILE'] — which was always a
+// fiction: deriveAllegiance maps a non-null behavior array to 'neutral', so a
+// born-hostile is behavior:null. Don't reintroduce it.)
 const G = { playerX: 5, playerY: 5, inventory: [] };
-const friendly = { x: 6, y: 5, behavior: ['IDLE'], dialogueId: 'x', bribeable: true, entity: { isAlive: () => true } };
-const hostile  = { x: 6, y: 5, behavior: ['HOSTILE'], entity: { isAlive: () => true } };
+const friendly = { x: 6, y: 5, allegiance: 'neutral', dialogueId: 'x', bribeable: true, entity: { isAlive: () => true } };
+const hostile  = { x: 6, y: 5, allegiance: 'hostile', entity: { isAlive: () => true } };
 const rock     = { def: { name: '[Rock]' } };
 
 test('friendly NPC: Talk default on top, Cancel last', () => {
