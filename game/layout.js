@@ -17,6 +17,18 @@ import { unlockedSlots, adjacentPairs, HANDS } from './rings.js';
 export const CANVAS_INTERNAL_PX = 608;   // mirrors data.js CANVAS_PX
 export const HIT_SLOP = 6;               // tap-zone expansion (Apple 44pt min target)
 
+// Pure rect intersection — true iff a and b share positive area. Edge-touching
+// (a.right === b.left) is NOT overlap, so panels may abut without clipping.
+export function rectsOverlap(a, b) {
+  return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+}
+
+// Grow a rect by `slop` on every side — used to test the TAP zone (HIT_SLOP)
+// for overlap, not just the drawn rect, so no tap can land ambiguously.
+export function expandRect(r, slop) {
+  return { x: r.x - slop, y: r.y - slop, w: r.w + 2 * slop, h: r.h + 2 * slop };
+}
+
 // ── Item-use overlay — a compact tappable list of the item's actions ──
 // (drawn by renderer._drawItemOverlay, hit-tested by main._tapItemOverlay).
 // Was four directional panels around the player tile; now a vertical verb list
