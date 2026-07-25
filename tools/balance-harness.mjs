@@ -114,8 +114,46 @@ function entityKey(e) {
 // floor for the lint without licensing an armor value nobody authors.
 const ARMOR_FLOOR = -90;
 
-// Per-entity lint (Law 0 / Law 3 / Law 6). Returns an array of flag strings;
-// empty means clean.
+// Law 4's role ladder, keyed off ARMOR — which already encodes it across the whole
+// roster, so no new authored field is needed. Ordered most-fragile first;
+// bandForArmor takes the first row the armor reaches.
+//
+// The 'bruiser' row is an OPEN QUESTION, not settled law: Law 3 lists -15 as a
+// fragility stop (TTK 3) but Law 4's role table jumps -30 -> -5, leaving no band
+// for it. 15-40 is interpolated between fodder and standard and awaits a ruling.
+export const ROLE_BANDS = [
+    { role: 'vermin',   maxArmor: -80, min: 0,   max: 5 },
+    { role: 'fodder',   maxArmor: -30, min: 5,   max: 20 },
+    { role: 'bruiser',  maxArmor: -15, min: 15,  max: 40 },
+    { role: 'standard', maxArmor: 0,   min: 20,  max: 60 },
+    { role: 'elite',    maxArmor: 10,  min: 100, max: 200 },
+];
+
+export function bandForArmor(armor) {
+    for (const b of ROLE_BANDS) if (armor <= b.maxArmor) return b;
+    return ROLE_BANDS[ROLE_BANDS.length - 1];
+}
+
+// Liquidity target: gold is ~20% of the kit, the rest carried as items. Authored
+// kits never land on round numbers, so the lint accepts a range. Below the min the
+// kill feels unrewarded; above the max the enemy carries a purse, not a loadout.
+export const LIQUID_MIN = 0.10;
+export const LIQUID_MAX = 0.30;
+
+// Does this roster entry actually fight? Civilians (damage 0) and heartbeat-driven
+// ambient townsfolk carry nothing, so the kit laws don't apply to them.
+//
+// Vendors are excluded too, and that exclusion is load-bearing: a shopkeep's gold
+// is a TILL (VENDOR_WALLET, funding the transferGold conservation when the player
+// sells) — not a kit to be looted. Puck and Pike both carry a damage value and
+// would otherwise lint as under-equipped fighters. Buying a vendor's statline out
+// of the fight is Law 6c's job, a different mechanism entirely.
+function isFighter(e) {
+    return (e.damage ?? 0) > 0 && !e.ambient && !e.vendor;
+}
+
+// Per-entity lint (Law 0 / Law 3 / Law 4 / Law 6). Returns an array of flag
+// strings; empty means clean.
 export function lintEntity(e) {
     const flags = [];
     const key = entityKey(e);
@@ -136,6 +174,22 @@ export function lintEntity(e) {
     // weapon; only a declared puzzleWall may sit outside that band.
     if (!e.puzzleWall && (e.armor > ARMOR_CAP || e.armor < ARMOR_FLOOR)) {
         flags.push(`${key} Law 3 — armor ${e.armor} outside [${ARMOR_FLOOR}, ${ARMOR_CAP}]`);
+    }
+    // Law 4 — a fighter's kit must land in the band its armor declares. Vermin are
+    // covered by the tighter <=5 cap above, so they're excluded here rather than
+    // double-flagged.
+    const band = bandForArmor(e.armor);
+    const gp = challengeGp(e);
+    if (isFighter(e) && !e.vermin && (gp < band.min || gp > band.max)) {
+        flags.push(`${key} Law 4 — challenge ${gp} GP outside the ${band.role} band [${band.min}, ${band.max}]`);
+    }
+    // Law 6 — ~20% of the kit is liquid coin, the rest carried. Vermin are exempt:
+    // the 0-5 band is too small for a percentage to mean anything.
+    if (isFighter(e) && !e.vermin && gp > 0) {
+        const liquid = (e.gold ?? 0) / gp;
+        if (liquid < LIQUID_MIN || liquid > LIQUID_MAX) {
+            flags.push(`${key} Law 6 — ${Math.round(liquid * 100)}% liquid, expected ${LIQUID_MIN * 100}-${LIQUID_MAX * 100}%`);
+        }
     }
     return flags;
 }
@@ -274,6 +328,11 @@ export function loadMapRoster() {
                 gold: s.gold ?? 0,
                 vermin: s.vermin ?? false,
                 puzzleWall: s.puzzleWall ?? false,
+                // Needed by the Law 4 kit lint: a vendor's gold is a till, not a
+                // kit (see isFighter). Without this every shopkeep with a damage
+                // value lints as an under-equipped fighter.
+                vendor: s.vendor ?? false,
+                ambient: s.ambient ?? false,
                 // Law 6f: pass through an authored loadout (potions/gear this
                 // enemy carries) so challengeGp sees the whole kit; no map
                 // authors one yet, so this is a no-op today.

@@ -2,7 +2,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ttk, ttdOf, pegRate, lintEntity, lintSkills, loadMapRoster, report, trickDamage, normEol, GOLDEN_PATH, REFERENCE_DAMAGE, ARMOR_CAP, statBlock, applyStatBlock, dotValue, DOT_DISCOUNT, lintItems, itemPegValue } from '../tools/balance-harness.mjs';
+import { ttk, ttdOf, pegRate, lintEntity, lintSkills, loadMapRoster, report, trickDamage, normEol, GOLDEN_PATH, REFERENCE_DAMAGE, ARMOR_CAP, statBlock, applyStatBlock, dotValue, DOT_DISCOUNT, lintItems, itemPegValue, bandForArmor, ROLE_BANDS } from '../tools/balance-harness.mjs';
 import { TRICKS } from '../game/tricks.js';
 import { ITEMS } from '../game/items.js';
 
@@ -215,5 +215,43 @@ describe('lintItems — Law 1 peg for consumables', () => {
         assert.ok(ITEMS.fire_bottle, 'fire_bottle should exist');
         assert.equal(ITEMS.fire_bottle.baseValue, 12);
         assert.equal(itemPegValue(ITEMS.fire_bottle), 12);
+    });
+});
+
+// ── Law 4 role bands, derived from armor ─────────────────────────────────────
+describe('Law 4 role bands derived from armor', () => {
+    test('armor already encodes the role ladder', () => {
+        assert.equal(bandForArmor(-80).role, 'vermin');
+        assert.equal(bandForArmor(-30).role, 'fodder');
+        assert.equal(bandForArmor(-15).role, 'bruiser');
+        assert.equal(bandForArmor(-5).role, 'standard');
+        assert.equal(bandForArmor(0).role, 'standard');
+        assert.equal(bandForArmor(10).role, 'elite');
+    });
+    test('the bands match Law 4', () => {
+        assert.deepEqual([bandForArmor(-80).min, bandForArmor(-80).max], [0, 5]);
+        assert.deepEqual([bandForArmor(-30).min, bandForArmor(-30).max], [5, 20]);
+        assert.deepEqual([bandForArmor(0).min, bandForArmor(0).max], [20, 60]);
+        assert.deepEqual([bandForArmor(10).min, bandForArmor(10).max], [100, 200]);
+    });
+    test('an over-budget kit is flagged', () => {
+        const flags = lintEntity({ zone: 'sewer', id: 'e1', type: 'Violet Fungus', hp: 100, armor: -30, damage: 5, gold: 2, loadout: ['bandage', 'fire_bottle'] });
+        assert.ok(flags.some(f => /Law 4/.test(f)), `expected a band flag, got ${JSON.stringify(flags)}`);
+    });
+    test('a kit inside its band with sane liquidity is clean', () => {
+        const flags = lintEntity({ zone: 'sewer', id: 'e1', type: 'Violet Fungus', hp: 100, armor: -30, damage: 5, gold: 3, loadout: ['tunnel_mushroom'] });
+        assert.deepEqual(flags, []);      // 3 + 9 = 12 GP, in 5-20; liquid 25%
+    });
+    test('all-coin-no-kit is flagged on liquidity', () => {
+        const flags = lintEntity({ zone: 'sewer', id: 'e1', type: 'Violet Fungus', hp: 100, armor: -30, damage: 5, gold: 15, loadout: [] });
+        assert.ok(flags.some(f => /liquid/.test(f)), `expected a liquidity flag, got ${JSON.stringify(flags)}`);
+    });
+    test('a vendor is not a fighter — a till is not a kit', () => {
+        const flags = lintEntity({ zone: 'factory', id: 'puck', type: 'Puck', hp: 100, armor: -30, damage: 1, gold: 0, vendor: true });
+        assert.deepEqual(flags, []);
+    });
+    test('a civilian and an ambient townsfolk are exempt', () => {
+        assert.deepEqual(lintEntity({ zone: 'town', id: 'f1', type: 'Violencian', hp: 100, armor: -80, damage: 0, gold: 0 }), []);
+        assert.deepEqual(lintEntity({ zone: 'town', id: 'f2', type: 'Violencian', hp: 100, armor: -80, damage: 4, gold: 0, ambient: true }), []);
     });
 });
