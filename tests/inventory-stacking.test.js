@@ -126,6 +126,6 @@ describe('inventory stacking (local mirror of main.js::_addToInventory — EXPEC
 
     test('sanity: the limits under test are the real game constants', () => {
         assert.equal(MAX_STACK, 99);
-        assert.equal(INVENTORY_SIZE, 10);
+        assert.equal(INVENTORY_SIZE, 50);
     });
 });

@@ -292,7 +292,7 @@ class Game {
         this._dispositionDecayAccMs = 0; // (Phase 6c) free-roam decay accumulator (ms)
         this._dispositionDecayTurns = 0; // (Phase 6c) combat decay turn counter
 
-        // Inventory: 10 stackable slots, each { itemDef, count } or null
+        // Inventory: INVENTORY_SIZE slots (SAFE 0..9 + PACK 10..49), each { itemDef, count } or null
         this.inventory = new Array(INVENTORY_SIZE).fill(null);
         this.selectedSlot = -1; // -1 = none selected
 
