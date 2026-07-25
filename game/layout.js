@@ -95,6 +95,32 @@ export function xmbBarLayout(bar) {
     return { chips, current, up, down, bottom };
 }
 
+// The XMB usable-bar's background PANEL rect for `n` visible category chips
+// (1-3), mirroring renderer.js:1978-1980. n=3 is the worst case (widest). The
+// bar is centered on canvas-center x=304; chip stride is XMB_CHIP_W(96)+6.
+export function xmbBarPanelRect(n = 3) {
+  const chipW = 96, gap = 6, stride = chipW + gap;   // 102
+  const totalChips = n * stride - gap;               // n=3 -> 300
+  const left = 304 - totalChips / 2 - 10;            // n=3 -> 144
+  const right = 304 + totalChips / 2 + 10;           // n=3 -> 464
+  const top = 510, bottom = 592;                     // chipY-6 .. current-bottom+10
+  return { x: left, y: top, w: right - left, h: bottom - top };
+}
+
+// The set of INTERACTIVE HUD panels visible+tappable in a given game-state
+// name. Each entry { name, rect } is what a tap can hit. The invariant: no two
+// of these may overlap (under HIT_SLOP), or a tap is ambiguous. 'idle' is the
+// only always-live combination (message log + usable bar); the modal states
+// are exclusive overlays tested separately if they gain persistent siblings.
+export function hudInteractiveRects(state) {
+  const rects = [];
+  if (state === 'idle') {
+    rects.push({ name: 'questlog', rect: QUESTLOG_RECT });
+    rects.push({ name: 'xmb', rect: xmbBarPanelRect(3) });
+  }
+  return rects;
+}
+
 // ── Radial "sunburst" combat wheel ──
 // Concentric rings centred on RADIAL_CENTER_*: a hub, the greyed decision-stack
 // rings growing inward, one bright active ring, and a partial preview arc above
