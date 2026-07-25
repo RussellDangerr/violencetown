@@ -70,18 +70,43 @@ More system write-ups (combat feel, the unified world clock, zone pursuit) live 
 
 ## Controls
 
+Keys are **modal** — the same key means different things depending on what's open. `Tab` is the clearest case: it opens the Remoticon from the world, and pockets it again from inside.
+
+**In the world**
+
 | Key | Action |
 |-----|--------|
-| W A S D / Arrows | Walk one tile (hold to keep moving). Items are picked up automatically. Walk into a zone's edge to travel. |
-| Space | Nothing selected: open the **action wheel** (pre-aims at the nearest enemy; double-tap to repeat your last action). With an item selected (1–9): open its use overlay. |
+| W A S D / Arrows | Press toward a *new* facing to **turn in place**; press the way you're already facing (or keep holding) to **walk**. Hold two directions to move diagonally. Items are picked up automatically. Walk into a zone's edge to travel. |
+| Space | Open the **action wheel**, pre-aimed at the nearest enemy. Double-tap to repeat your last action. |
+| Tab | Open the **Remoticon** (your device) on the ITEMS tab |
+| C / J / M | Jump straight to the Remoticon's **Gear**, **Quests**, or **Map** tab |
+| Shift + ←→ / ↑↓ | Drive the **usable bar** along the bottom — `←→` changes category, `↑↓` steps through items |
+| Enter | Use the item currently showing on the usable bar |
 | 1–9 | Select an inventory slot |
+| F | Open the **verb menu** for whatever you're facing (attack, talk, trade, examine…) |
+| E | **Trade** with an adjacent vendor, else **talk** to an adjacent NPC, else **examine** what you face |
 | T | Wait one turn |
-| E | Examine what you're facing — or open a **vendor's shop** (Puck, in the Factory) when adjacent |
-| L | Open the message-log history |
-| ? | How-to-play |
-| Esc | Cancel a menu / deselect |
+| L | Message-log history |
+| P | Pause |
+| ? | How-to-play (works anywhere) |
+| Esc | Cancel / close whatever is open |
 
-The **action wheel** is concentric rings — the action, the item to use, and an aim compass. `↑`/`↓` pick a ring, `←`/`→` spin it, `Space` fires, `Esc` backs out. On touch: tap to move, the `✦` button opens/fires the wheel, `☰` opens the device, and in-canvas panels are tapped directly.
+**In the action wheel** — one grammar, three keys. It's a menu tree, not a set of rings you pick between.
+
+| Key | Action |
+|-----|--------|
+| ← → (or A D) | Spin the current ring |
+| ↑ / W / Space / Enter | Go **deeper** — and firing an action is just drilling into it |
+| ↓ / S / Esc | Back **out** one level; closes the wheel at the top |
+| Arrows, while aiming | Nudge the reticle tile by tile |
+
+When an action would catch a friendly, the wheel asks first: `↑` confirms, `↓` cancels.
+
+**In the Remoticon** — `Tab` or `Esc` pockets it, `[` `]` (or `←→`) cycle tabs, and `C` `J` `M` `R` jump to Gear / Quests / Map / Rings.
+
+**Touch and mouse.** Tap the ground to path there — the only route that walks more than one tile at a time. `✦` opens the wheel and fires it (it's hidden on desktop, where `Space` does the job); `▤` opens the Remoticon, `☰` the menu. In-canvas panels are tapped directly.
+
+Two asymmetries worth knowing: **the Remoticon's item, gear and ring actions are pointer-only** — there's no keyboard cursor inside it yet — while **aiming the reticle, turning in place, and the 1–9 hotbar are keyboard-only**.
 
 ## Project structure
 
@@ -93,22 +118,36 @@ game/
   wheel-model.js    # Pure state model for the radial action wheel (see Design notes)
   map.js            # Map loader, tiles, transitions, regions
   *-map.json        # Hand-authored zones (town, sewer, factory, carnival, graveyard, wilderness, interiors)
+  world-map.js      # Zone graph for the Remoticon's MAP tab
+  sewer-setpiece.js # Hand-scripted sewer encounter
   data.js           # Constants + tile definitions
   items.js          # Item defs; equip / use / throw resolution
-  combat.js         # Entity + flat HP/damage/armor
-  enemies.js        # Enemy class, line-of-sight, enemy-turn resolution
+  weapons.js        # Weapon defs + their wheel verbs
+  inventory.js      # Pure bag model — stacking, zone routing (safe vs pack)
+  inspector.js      # Item stats, verbs, and gear-swap deltas
+  drops.js          # Loot tables + what breaks on defeat
+  combat.js         # One damage pipeline — flats add, categories multiply, armor last
+  buffs.js          # Timed modifiers
+  enemies.js        # Enemy class, line-of-sight, enemy-turn resolution, challenge GP
+  ai.js             # Allegiance + hostility predicates (the one source of truth)
   npc.js            # NPC finite-state machine (idle/wander/work)
   pathing.js        # Greedy chase + BFS pathfinding
   give-action.js    # Disposition / bribery / ally-flip (see Design notes)
   trade.js          # Shop / barter pricing — disposition bands (see Design notes)
   quests.js         # Data-driven quest engine
   dialogue.js       # NPC dialogue tables
+  examine.js        # Layered examine text
   spells.js tricks.js # Wheel-granted abilities
+  rings.js ring-data.js # Remembrance rings — sockets and their effects
+  defeat-scenarios.js # What happens when you lose (instead of a game-over)
   save.js           # Versioned localStorage save/load
   rng.js            # Mulberry32 seeded RNG
+  utils.js          # Shared helpers
   audio.js          # Procedural Web Audio SFX + ambient bed
   settings.js       # Options / accessibility store
+  xmb.js            # Model for the always-on usable bar
   sprites.js layout.js ui-sprites.js bitmap-font.js  # Rendering support (sheets, rects, panels, font)
+  content-validate.js # Startup sanity checks on authored content
   assets/           # First-party procedural atlases (font, UI panels) + VT323 font
   assets-placeholder/kenney/  # Curated Kenney CC0 sprite sheets (with their license)
   manifest.webmanifest sw.js  # PWA manifest + offline service worker

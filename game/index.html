@@ -52,11 +52,11 @@
             <canvas id="game-canvas"></canvas>
         </div>
         <button id="menu-btn" aria-label="open menu">☰</button>
-        <button id="remoticon-btn" class="tc-btn" aria-label="open remoticon (device)">▤</button>
+        <button id="remoticon-btn" class="tc-btn" aria-label="open remoticon (device)" title="Remoticon — your device (Tab)">▤</button>
         <div id="version-badge" aria-label="game version"></div>
         <!-- (pointer model) one-time onboarding line, shown on the first run and
              dismissed by the first tap/keypress (see main._maybeShowFirstRunHint). -->
-        <div id="first-run-hint" class="hidden" aria-hidden="true">Tap to move · tap a target to act · long-press for options</div>
+        <div id="first-run-hint" class="hidden" aria-hidden="true">Tap to move · tap a target to act · long-press for options · WASD + Space · Tab for your device · ? for help</div>
 
         <!-- (pointer model) The on-screen d-pad is gone — tap the world to move,
              tap a target to act, long-press for the full options. Only the action-
@@ -92,7 +92,7 @@
 
                 <h3>Move &amp; interact</h3>
                 <ul>
-                    <li><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> or arrows — walk one tile, hold to keep going</li>
+                    <li><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> or arrows — press toward a new direction to <em>turn</em>, press again (or hold) to <em>walk</em>. Hold two for diagonals.</li>
                     <li><span class="help-touch">Tap / click the ground</span> to walk there (paths around buildings)</li>
                     <li><span class="help-touch">Tap / click a target</span> → walk over &amp; do the obvious thing (Take / Talk / Attack); <span class="help-touch">long-press or right-click</span> for all options · <kbd>F</kbd> opens that list for who you face</li>
                 </ul>
@@ -100,23 +100,26 @@
                 <h3>Combat &amp; actions</h3>
                 <ul>
                     <li><kbd>Space</kbd> opens the action wheel anywhere — it pre-aims at the nearest enemy. Double-tap <kbd>Space</kbd> to instantly repeat your last action.</li>
-                    <li>On the wheel: <kbd>↑</kbd> <kbd>↓</kbd> pick a ring (action · item · direction) · <kbd>←</kbd> <kbd>→</kbd> spin it · <kbd>Space</kbd> fire · <kbd>Esc</kbd> back out toward walking</li>
-                    <li><span class="help-touch">On touch:</span> tap <strong>✦</strong> to open the wheel; tap any slice to set it (the outer ring is a direction compass); tap the center, or ✦ again, to fire</li>
+                    <li>The wheel is a menu you walk into: <kbd>←</kbd> <kbd>→</kbd> spin the ring · <kbd>↑</kbd> (or <kbd>Space</kbd>) go deeper — <em>firing is just going deeper into an action</em> · <kbd>↓</kbd> (or <kbd>Esc</kbd>) back out, closing at the top</li>
+                    <li>While aiming, arrows nudge the reticle. If an action would catch a friendly, the wheel asks first — <kbd>↑</kbd> confirms, <kbd>↓</kbd> cancels.</li>
+                    <li><span class="help-touch">On touch:</span> tap <strong>✦</strong> to open the wheel. The wheel reads as a compass: tap <strong>above</strong> the hub to go deeper (fire), <strong>left/right</strong> to spin, <strong>below</strong> or on the <strong>hub itself</strong> to back out.</li>
                 </ul>
 
                 <h3>Inventory</h3>
                 <ul>
-                    <li><kbd>1</kbd>–<kbd>9</kbd> select a slot · <kbd>Space</kbd> opens its use overlay · pick Use / Smash / Give with arrows (throwing is on the action wheel)</li>
-                    <li><span class="help-touch">On touch:</span> tap a hotbar slot to select, tap again to open the overlay, tap an option</li>
+                    <li>The bar along the bottom is always live: <kbd>Shift</kbd>+<kbd>←</kbd> <kbd>→</kbd> changes category, <kbd>Shift</kbd>+<kbd>↑</kbd> <kbd>↓</kbd> steps through items, <kbd>Enter</kbd> uses what's showing</li>
+                    <li><kbd>1</kbd>–<kbd>9</kbd> select a slot · <kbd>Space</kbd> opens its use overlay · pick Use / Eat / Drink, or Smash when something hostile is next to you (throwing is on the action wheel; giving is in Trade)</li>
+                    <li><span class="help-touch">On touch:</span> tap a category chip to switch, <strong>▲ ▼</strong> to step items, and the item cell to use it. Everything else lives in the Remoticon's ITEMS tab.</li>
                 </ul>
 
                 <h3>Other</h3>
                 <ul>
-                    <li><kbd>T</kbd> wait one turn · <kbd>Esc</kbd> cancel any menu · <kbd>?</kbd> open this help</li>
+                    <li><kbd>T</kbd> wait one turn · <kbd>P</kbd> pause · <kbd>Esc</kbd> cancel any menu · <kbd>?</kbd> open this help</li>
                     <li><kbd>L</kbd> open the log history · <span class="help-touch">On touch:</span> tap the log strip</li>
-                    <li><kbd>E</kbd> examine what you're facing (the car, signs, oddities)</li>
-                    <li><kbd>Tab</kbd> open the Remoticon (ITEMS · GEAR · QUESTS · MAP · RINGS); <kbd>[</kbd> <kbd>]</kbd> switch tabs; <kbd>C</kbd>/<kbd>J</kbd>/<kbd>M</kbd>/<kbd>R</kbd> jump to GEAR/QUESTS/MAP/RINGS · <span class="help-touch">On touch:</span> tap the <strong>▤</strong> button</li>
-                    <li><span class="help-touch">On touch:</span> ☰ opens the menu (Wait / Cancel / Options / Help / Restart)</li>
+                    <li><kbd>E</kbd> trades with an adjacent shopkeeper, else talks to whoever's next to you, else examines what you face</li>
+                    <li><kbd>Tab</kbd> opens the Remoticon (ITEMS · GEAR · QUESTS · MAP · RINGS) and pockets it again · <span class="help-touch">or tap</span> <strong>▤</strong>. Inside: <kbd>[</kbd> <kbd>]</kbd> switch tabs, <kbd>R</kbd> jumps to RINGS. From the world, <kbd>C</kbd> <kbd>J</kbd> <kbd>M</kbd> open it straight on GEAR / QUESTS / MAP.</li>
+                    <li>Items, gear and rings are handled by tapping them inside the Remoticon — <span class="help-touch">tap a slot, then an action</span></li>
+                    <li><strong>☰</strong> opens the menu (Wait / Cancel / Options / Help / Restart)</li>
                 </ul>
 
                 <p class="help-foot">Autosaves locally — CONTINUE on the splash resumes your run. Code at
