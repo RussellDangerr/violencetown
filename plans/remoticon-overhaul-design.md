@@ -1,6 +1,10 @@
 # REMOTICON overhaul — inventory zones + equipment inspector (design)
 
-**Status:** Draft — awaiting Caelan's review
+**Status:** Implemented via `plans/remoticon-overhaul-implementation.md` (branch `feature/remoticon-overhaul`,
+Tasks A1–C3). Part 0 (HUD de-overlap) + Part 1 (50-slot two-zone bag) + Part 2 (tap-to-inspect
+inspector + GEAR chooser) all shipped and reviewed. Open ruling for Caelan: using a consumable from
+the REMOTICON now advances a world turn (closes a free-heal-while-paused gap, matches the canonical
+use-path) — decide whether item-use should instead close the device or stay a true freeze.
 **Date:** 2026-07-24
 **Branch:** `feature/remoticon-overhaul` (from `dev` @ `0220293`)
 **Motivating bugs:** (1) the 9-slot bag fills up and blocks pickups (the cape couldn't be picked
