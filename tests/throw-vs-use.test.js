@@ -20,6 +20,9 @@ import { ITEMS, resolveThrow, resolveUse, ownedItemDefs, hasItemDef } from '../g
 function makeFakeGame() {
     const enemy = {
         x: 2, y: 0,
+        // resolveThrow's damage branch spares non-hostiles (isHostile reads
+        // allegiance — ai.js), so a stub target must declare it.
+        allegiance: 'hostile',
         entity: {
             name: '[Sewer Rat]',
             hp: 50, maxHp: 50, alive: true,
@@ -37,6 +40,13 @@ function makeFakeGame() {
         map: { isWalkable: () => true },  // open corridor along the throw line
         hasBuff() { return false; },
         _spawnDamageNumber(x, y, text, color, size) { this.damageNumbers.push({ x, y, text, color, size }); },
+        // Mirrors Game._entitiesInRadius (main.js) — the shared AoE primitive
+        // resolveThrow's 3x3 burst walks. Absent here until now, which is why the
+        // rock throw died with "not a function" in the mock but works in play.
+        _entitiesInRadius(cx, cy, r) {
+            return this.enemies.filter(e => e.entity.isAlive()
+                && Math.abs(e.x - cx) <= r && Math.abs(e.y - cy) <= r);
+        },
         combatAttack(enemyObj, dmg) {
             this.combatAttacks.push({ target: enemyObj.entity.name, dmg });
             enemyObj.entity.takeDamage(dmg);
