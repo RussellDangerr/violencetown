@@ -19,12 +19,19 @@ export function itemActions(itemDef, zone) {
     return [primaryAction(itemDef), toggle, { id: 'drop', label: 'Drop' }];
 }
 
-// One-line stat summary for the panel header.
+// One-line stat summary for the panel header. Gear folds in sludge-immunity;
+// weapons read their damageType (energy/sludge/…) rather than a blanket "Melee"
+// — only a THROW item is prefixed with the verb, since a ranged/energy weapon
+// isn't melee and a plain physical weapon needs no qualifier.
 export function itemStatLine(itemDef) {
     if (!itemDef) return '';
     if (itemDef.questItem) return 'Always kept';
     if (itemDef.healAmount) return `Heals ${itemDef.healAmount} HP`;
-    if (itemDef.armor) return `+${itemDef.armor} armor`;
-    if (itemDef.damage) return `${itemDef.useType === 'throw' ? 'Throw' : 'Melee'} ${itemDef.damage} dmg`;
+    if (itemDef.armor) return `+${itemDef.armor} armor${itemDef.sludgeImmune ? ', sludge-proof' : ''}`;
+    if (itemDef.damage) {
+        if (itemDef.useType === 'throw') return `Throw ${itemDef.damage} dmg`;
+        const dt = itemDef.damageType;
+        return dt && dt !== 'physical' ? `${dt} ${itemDef.damage} dmg` : `${itemDef.damage} dmg`;
+    }
     return itemDef.description || '';
 }

@@ -955,7 +955,7 @@ class Game {
 
             // ── DEVICE (Remoticon): modal tabbed device; world is soft-paused ──
             // Esc already closed it via the universal Cancel above. Here: Tab pockets
-            // it, [ ] cycle tabs, C/J/M/K jump to a tab; everything else is swallowed.
+            // it, [ ] cycle tabs, C/J/M/R jump to a tab; everything else is swallowed.
             if (this.state === STATE.DEVICE) {
                 e.preventDefault();
                 if (e.code === 'Tab')          { this._closeDevice();   return; }
@@ -4797,7 +4797,7 @@ class Game {
     // (Slice 3) The Remoticon device — one tabbed, soft-pausing overlay. _openDevice
     // enters STATE.DEVICE on a tab and pauses the world; _closeDevice restores IDLE
     // (the pause release resumes any held walk, so we don't call _resumeHeldWalk
-    // again). Tab / the on-screen button toggle it; [ ] cycle tabs; C/J/M jump to a
+    // again). Tab / the on-screen button toggle it; [ ] cycle tabs; C/J/M/R jump to a
     // tab. The ✕ chip + tap-outside come from the Slice-1 CLOSE_PANEL machinery
     // (device is registered there), routing Cancel through _closeCurrentMenu.
     _openDevice(tab = 'items') {
@@ -4858,26 +4858,37 @@ class Game {
                 for (let a = 0; a < actions.length; a++) {
                     if (!this._pointInRect(pt, rows[a], HIT_SLOP)) continue;
                     const cfg = { size: INVENTORY_SIZE, safeSlots: SAFE_SLOTS, maxStack: MAX_STACK };
+                    const idx = sel.index;
+                    this._deviceSel = null;   // selection resolves this frame; the panel drops
                     switch (actions[a].id) {
                         case 'use':
                         case 'equip': {
+                            // Route through resolveUse like canonical _doItemUse, but GATE the
+                            // removal the same way — the paused device supplies no throw/melee
+                            // DIRECTION, so resolveUse is a no-op for those and the item must
+                            // survive (a rock is `consumable:true` yet nothing was thrown; the
+                            // pipe is a non-consumable tool). Only a self-use (heal), an equip
+                            // (moves onto the body), or a learn (tome crumbles) truly consumes
+                            // it here, and only a real use costs a world beat — closing the
+                            // free-heal-while-paused gap without wasting a turn on a no-op.
                             const msg = resolveUse(this, def, null);   // equip → resolveEquip (re-bags any displaced piece)
-                            this._removeFromSlot(sel.index);
-                            this._refreshGrantedSkills();
                             if (msg) this._log(msg);
+                            this._refreshGrantedSkills();
+                            const usedUp = def.useType === 'self' || def.useType === 'equip'
+                                || (def.useType === 'learn' && def.consumable);
+                            if (usedUp) { this._removeFromSlot(idx); this._advanceWorld(); }
                             break;
                         }
                         case 'protect':
-                            if (!moveToZone(this.inventory, sel.index, 'safe', cfg)) this._log('[Safe slots full.]');
+                            if (!moveToZone(this.inventory, idx, 'safe', cfg)) this._log('[Safe slots full.]');
                             break;
                         case 'unprotect':
-                            if (!moveToZone(this.inventory, sel.index, 'pack', cfg)) this._log('[Pack is full.]');
+                            if (!moveToZone(this.inventory, idx, 'pack', cfg)) this._log('[Pack is full.]');
                             break;
                         case 'drop':
-                            this.inventory[sel.index] = null;
+                            this.inventory[idx] = null;
                             break;
                     }
-                    this._deviceSel = null;
                     audio.playSfx('menu-confirm');
                     this._render();
                     return;

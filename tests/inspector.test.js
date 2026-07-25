@@ -19,8 +19,31 @@ describe('itemActions — context actions by item kind and zone', () => {
     });
 });
 
+const SLUDGE_GEAR = { id: 'shoe_bags', name: '[Shoe Bags]', useType: 'equip', equipSlot: 'bottom', armor: 2, sludgeImmune: true };
+const RAY_GUN    = { id: 'ray_gun', name: '[Ray Gun]', useType: 'equip', equipSlot: 'weapon', damage: 22, damageType: 'energy' };
+const PIPE       = { id: 'pipe', name: '[Pipe]', useType: 'melee', damage: 12 };
+const ROCK       = { id: 'rock', name: '[Rock]', useType: 'throw', damage: 15, damageType: 'physical' };
+
 describe('itemStatLine', () => {
     test('heal item', () => assert.equal(itemStatLine(POTION), 'Heals 10 HP'));
     test('armor gear', () => assert.equal(itemStatLine(GEAR), '+2 armor'));
     test('quest item', () => assert.equal(itemStatLine(QUEST), 'Always kept'));
+    test('sludge-immune gear notes it', () => {
+        const line = itemStatLine(SLUDGE_GEAR);
+        assert.match(line, /sludge/);
+        assert.equal(line, '+2 armor, sludge-proof');
+    });
+    test('an energy weapon reads its damageType, not "Melee"', () => {
+        const line = itemStatLine(RAY_GUN);
+        assert.equal(line, 'energy 22 dmg');
+        assert.doesNotMatch(line, /Melee/);
+    });
+    test('a plain melee weapon drops the "Melee" word', () => {
+        const line = itemStatLine(PIPE);
+        assert.equal(line, '12 dmg');
+        assert.doesNotMatch(line, /Melee/);
+    });
+    test('a throw weapon keeps the Throw verb', () => {
+        assert.equal(itemStatLine(ROCK), 'Throw 15 dmg');
+    });
 });

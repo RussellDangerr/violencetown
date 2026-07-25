@@ -1841,13 +1841,18 @@ export class Renderer {
             this.font.drawText(ctx, 'PACK', rects[10].x, rects[10].y - 12, { color: UI.dim, scale: 1 });
         }
 
-        // The bag is browsed by TAP (main._tapDevice), not by number key or a
-        // selected-slot cursor — so no per-slot digit label or selection halo here.
+        // The bag is browsed by TAP (main._tapDevice): one tap SELECTS a slot and
+        // opens the inspector panel below. The selected slot wears a gold halo (like
+        // the active tab) so the eye links it to the panel. No per-slot digit label.
+        const selIdx = (game._deviceSel && game._deviceSel.tab === 'items') ? game._deviceSel.index : -1;
         for (let i = 0; i < rects.length; i++) {
             const rect = rects[i];
             const stack = game.inventory[i];
 
             drawInset(ctx, rect.x, rect.y, rect.w, rect.h);
+            if (i === selIdx) {
+                ctx.strokeStyle = UI.gold; ctx.lineWidth = 2; ctx.strokeRect(rect.x + 1, rect.y + 1, rect.w - 2, rect.h - 2);
+            }
 
             if (stack) {
                 // Try sprite
@@ -1926,14 +1931,17 @@ export class Renderer {
         this.font.drawText(ctx, itemStatLine(def), tx, p.y + 36, { color: UI.text, scale: 1 });
         this.font.drawText(ctx, `${zone}${qty}`, tx, p.y + 52, { color: UI.dim, scale: 1 });
 
-        // Action buttons — one per action, on the shared action-row rects.
+        // Action buttons — one per action, on the shared action-row rects. Drop is
+        // destructive (whole-stack, no confirm) so it wears red, not gold — with
+        // HIT_SLOP eating the gap between buttons, the color is the dead-zone cue.
         const actions = itemActions(def, zoneOf(sel.index, SAFE_SLOTS));
         const rows = inspectorActionRects(bodyRect);
         for (let i = 0; i < actions.length; i++) {
             const r = rows[i];
+            const col = actions[i].id === 'drop' ? UI.hpRed : UI.gold;
             drawInset(ctx, r.x, r.y, r.w, r.h);
-            ctx.strokeStyle = UI.gold; ctx.lineWidth = 1; ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
-            this.font.drawText(ctx, actions[i].label, r.x + r.w / 2, r.y + r.h / 2 - 4, { color: UI.gold, scale: 1, align: 'center' });
+            ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
+            this.font.drawText(ctx, actions[i].label, r.x + r.w / 2, r.y + r.h / 2 - 4, { color: col, scale: 1, align: 'center' });
         }
     }
 
