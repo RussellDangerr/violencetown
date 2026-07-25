@@ -4871,6 +4871,10 @@ class Game {
                             // (moves onto the body), or a learn (tome crumbles) truly consumes
                             // it here, and only a real use costs a world beat — closing the
                             // free-heal-while-paused gap without wasting a turn on a no-op.
+                            // Soap's cure is deferred: resolveUse only logs intent — the actual
+                            // removeBuff('sludge') fires in _advanceWorld gated on this flag, so
+                            // it MUST be set before resolveUse, exactly as canonical _doItemUse.
+                            if (def.effect === 'cure_sludge') this._soapUsedThisTurn = true;
                             const msg = resolveUse(this, def, null);   // equip → resolveEquip (re-bags any displaced piece)
                             if (msg) this._log(msg);
                             this._refreshGrantedSkills();
