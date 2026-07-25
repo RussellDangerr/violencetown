@@ -83,6 +83,25 @@ export function pegRate(damage, cost) {
     return damage / cost;
 }
 
+// Law 1, the time value of damage (plans/enemy-kits-and-dots-design.md §1c).
+// Damage delivered later is worth less: in a turn-based game a DoT that needs N
+// turns lets the target act N times, and Law 4's exact TTK means late ticks land
+// on a corpse. WoW prices this from the other side — a DoT's coefficient scales
+// with duration against a 15s baseline, so Corruption gets +20% total for taking
+// 18s. Same statement, inverted.
+//
+// delta = 0.8 is DERIVED, not imported: Law 4's standard role is TTK 4-5 lazy, so
+// the reference fight is five turns and one turn of delay costs one fifth of it.
+export const DOT_DISCOUNT = 0.8;
+
+// Discounted worth of `dmg` per turn for `turns` turns. Rounds ONCE at the end
+// (Law 2's rounding discipline). turns=1 is an instant hit and returns dmg exactly.
+export function dotValue(dmg, turns) {
+    let total = 0;
+    for (let i = 0; i < turns; i++) total += dmg * Math.pow(DOT_DISCOUNT, i);
+    return Math.round(total);
+}
+
 // The greppable flag key. Map ids are file-local duplicates (e1/e2 recur per map),
 // so the key must be zone/id. Synthetic entities without them degrade to the type.
 function entityKey(e) {

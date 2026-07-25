@@ -2,7 +2,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ttk, ttdOf, pegRate, lintEntity, lintSkills, loadMapRoster, report, trickDamage, normEol, GOLDEN_PATH, REFERENCE_DAMAGE, ARMOR_CAP, statBlock, applyStatBlock } from '../tools/balance-harness.mjs';
+import { ttk, ttdOf, pegRate, lintEntity, lintSkills, loadMapRoster, report, trickDamage, normEol, GOLDEN_PATH, REFERENCE_DAMAGE, ARMOR_CAP, statBlock, applyStatBlock, dotValue, DOT_DISCOUNT } from '../tools/balance-harness.mjs';
 import { TRICKS } from '../game/tricks.js';
 
 // A minimal roster entry — spread over to vary one field at a time.
@@ -164,5 +164,29 @@ describe('applyStatBlock — marker-managed injection (pure string op)', () => {
         assert.ok(!out.includes('OLD'));
         assert.ok(out.includes('after'));         // trailing text kept
         assert.equal((out.match(/statblock:start/g) || []).length, 1); // no duplicate block
+    });
+});
+
+describe('dotValue — Law 1 time value of damage', () => {
+    test('an instant hit is undiscounted', () => {
+        assert.equal(dotValue(3, 1), 3);
+    });
+    test('sludge_sack 3x5 discounts 15 nominal to 10', () => {
+        assert.equal(dotValue(3, 5), 10);   // 3*(1+.8+.64+.512+.4096) = 10.0848
+    });
+    test('fire_bottle 5x3 discounts 15 nominal to 12', () => {
+        assert.equal(dotValue(5, 3), 12);   // 5*(1+.8+.64) = 12.2
+    });
+    test('same nominal total, faster delivery is worth more', () => {
+        assert.ok(dotValue(5, 3) > dotValue(3, 5));  // both deliver 15
+    });
+    test('tunnel_mushroom 5x2 prices at 9', () => {
+        assert.equal(dotValue(5, 2), 9);    // 5*(1+.8) = 9
+    });
+    test('the discount is the documented 0.8', () => {
+        assert.equal(DOT_DISCOUNT, 0.8);
+    });
+    test('zero turns is worth nothing', () => {
+        assert.equal(dotValue(5, 0), 0);
     });
 });
