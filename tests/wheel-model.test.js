@@ -122,9 +122,13 @@ test('isCombatActive: only a non-ambient, alive, chasing enemy counts', () => {
 // ── §12.4 flapperDeflection ──────────────────────────────────────────────────
 
 test('flapperDeflection: rests at 0, kicks in the cycle direction, settles', () => {
-  assert.equal(flapperDeflection(0, 0), 0);          // no direction → rest
-  assert.equal(flapperDeflection(1, 1), 0);          // fully settled → rest
-  assert.equal(flapperDeflection(1, -1), 0);
+  assert.equal(flapperDeflection(0, 0), 0);          // no direction → exact early-return
+  // "Fully settled" is |x| < epsilon, not === 0: the spring term is
+  // Math.sin(t*PI)*0.18, and Math.sin(Math.PI) is 1.2246e-16 in IEEE-754 (pi
+  // isn't exactly representable), so t=1 leaves ~2e-17 behind. That is ~2e-14 px
+  // of deflection on a 1000px wheel — invisible, and inherent to float math.
+  assert.ok(Math.abs(flapperDeflection(1, 1)) < 1e-9, 'settled deflection should be ~0');
+  assert.ok(Math.abs(flapperDeflection(1, -1)) < 1e-9, 'settled deflection should be ~0');
   assert.ok(flapperDeflection(0, 1) > 0.4);          // fresh kick, positive
   assert.ok(flapperDeflection(0, -1) < -0.4);        // mirrored for the other dir
   assert.equal(flapperDeflection(5, 1), 0);          // p clamps into [0,1]
