@@ -4,6 +4,9 @@
 (Tasks 1–13, branch `feature/gold-standard`). Law 5 (boss spending) and the deferred hooks below
 await the first boss build. Open design rulings are collected at the end of `plans/balancing-bible.md`.
 Round 2 (negative armor / shove-spin / challenge GP) implemented 2026-07-24.
+Round 3 (consumable repricing / kits / **Law 7 DoT floor**) implemented 2026-07-25 via
+`plans/enemy-kits-and-dots-design.md` — that spec **amends Law 6f** (the unused kit now drops) and
+**adds Laws 6g and 7**.
 **Date:** 2026-07-23
 **Supersedes:** the combat-math sections of `plans/combat-health-system.md` (its genre research and
 "chess, not slot machines" goal carry forward unchanged; its 2026-03-30 "flat 100 HP is superseded"
@@ -77,6 +80,29 @@ Above 1.0 is a balance violation (autonomy outperforming skill). Below 0.5 is a 
 a summon nobody would rationally buy is dead content, and the lint should say so while it's still
 cheap to retune. Both sides are enforced by `lintSkills` (`AUTONOMOUS_MAX_RATE` /
 `AUTONOMOUS_MIN_RATE` in `tools/balance-harness.mjs`).
+
+**Consumables price at peg (added 2026-07-25).** A consumable is the purest *lazy violence* in the
+game — you buy the solution, point it, and it works. No gate, no per-cast aim. So its `baseValue`
+is the **HP-equivalent of its effect**: heals price at the HP they restore, damage sources at the HP
+they remove. The ≥2.5 dmg/GP trick rate does NOT apply; that band exists for gated, aimed abilities.
+Persistent gear is out of scope — armor's HP-equivalent depends on how many hits it eats, which is
+not a number a lint can know. Enforced by `lintItems` in `tools/balance-harness.mjs`, whose absence
+is exactly why the catalog had drifted to 2–7× above peg unnoticed.
+
+**Damage over time is discounted — the time value of damage (added 2026-07-25).**
+
+```
+value = Σ dmg_i × δ^i        δ = 0.8,  i = 0 on the turn it lands
+```
+
+Damage delivered later is worth less: in a turn-based game a DoT that needs N turns lets the target
+act N times, and Law 4's exact TTK means late ticks land on a corpse. WoW prices this from the other
+side — a DoT's spell coefficient scales with duration against a 15s baseline, so Corruption earns
++20% total damage for taking 18s instead of 15. Compensating the delay and pricing the delay are the
+same statement. **δ = 0.8 is derived here, not imported:** Law 4's standard role is TTK 4–5 lazy, so
+the reference fight is five turns and one turn of delay costs one fifth of it. The worked case: a
+3×5 sludge sack and a 5×3 fire bottle both deliver 15 nominal damage, and price at 10 and 12 — the
+fire bottle is worth more because it gets there sooner.
 
 ### Law 2 — Earned multipliers (no dice, ever)
 Combat stays deterministic — "no rolls, no misses" is permanent. Damage spikes are **conditions the
@@ -189,12 +215,56 @@ Every combatant shows **HP/100 and GP** on its nameplate.
 - **6f — Challenge GP is a composite (ruled 2026-07-24).** The nameplate number is the enemy's
   **total liquidatable kit**: liquid gold + the value of every usable potion and piece of gear it
   carries — the RuneScape PvP loadout read, made exact. It doubles as the challenge rating
-  denominated in GP: a 2,500 GP boss is a 2,500-point PROBLEM, not 2,500 lootable coins. **Loot
-  stays liquid gold only** (plus whatever physically drops); the gear/potion share of the number
-  dies with its owner unless separately dropped. The dread display is the NUMBER itself — the
-  future boss frame shows `2,500g` outright ("9 bars of dread" is really 2,500-gp-in-the-wallet
-  dread); tile pips keep the 5+overflow cap. Implementation: `challengeGp(e) = e.gold +
-  Σ loadout item values`; an enemy with no loadout reads as pure gold.
+  denominated in GP: a 2,500 GP boss is a 2,500-point PROBLEM, not 2,500 lootable coins. The dread
+  display is the NUMBER itself — the future boss frame shows `2,500g` outright ("9 bars of dread"
+  is really 2,500-gp-in-the-wallet dread); tile pips keep the 5+overflow cap. Implementation:
+  `challengeGp(e) = e.gold + Σ loadout item values`; an enemy with no loadout reads as pure gold.
+
+  **AMENDED 2026-07-25 (`plans/enemy-kits-and-dots-design.md` §6): the unused kit DROPS.** This
+  repeals the original "loot stays liquid gold only; the gear/potion share dies with its owner."
+  Kill an enemy before he drinks the potion and the potion is yours. The kit depletes as he fights,
+  so what drops is exactly what he did not get to use — the reward for rushing him. Farming stays
+  closed because `spawnEnemy` clears `loadout` as well as `gold` for a mugged id (6d).
+
+- **6g — Kits are authored; budgets are derived (added 2026-07-25).** An enemy's budget comes from
+  its **armor**, which already encodes Law 4's role ladder across the whole roster — no new authored
+  field. The **kit** is authored per spawn as a list of item ids, because that is where character
+  lives: a Violet Fungus carries spore-caps it can eat, a Wererat carries somebody else's supper.
+  Roughly **20% is liquid coin** (lint band 10–30%), the rest carried. A spawn with no authored kit
+  inherits a role default, so an enemy added by someone who never read this document cannot ship
+  broke — which is precisely how Law 6's wallets sat empty through an entire release.
+
+### Law 7 — The DoT Floor (added 2026-07-25)
+A damage-over-time effect **never lands the killing tick on the player.** It floors at 1 HP, in a
+fight or out of one — one rule, no combat boundary, because Violencetown has no combat mode and
+inventing one is what makes Baldur's Gate 3's transition feel arbitrary. Precedent: Diablo II
+("Poison Length Damage can only reduce a Character to 1 remaining Life") and Dragon Quest VI, which
+made field poison non-lethal *and in the same game moved the tick from every 8 steps to every step*.
+Removing the death is what buys permission to raise the pressure.
+
+- **7a — It does not self-cure at the floor.** You stand there at 1 HP still burning; the next thing
+  that connects ends it. This is DQ VI's and D2's choice, not Pokémon Gen IV's (which floors *and*
+  cleanses). The dread survives the floor.
+- **7b — It cannot kill you, but it can CLAIM the kill.** While any DoT is active it stamps
+  `_lastDefeatedBy = { cause }`, so when something else lands the finishing blow the defeat scenario
+  still reads the DoT. Without this the floor would orphan `swept_into_sludge`. The sludge doesn't
+  finish you — it makes sure the river gets you when something else does.
+- **7c — Lethal DoT is a separate effect, not a flag.** Mojang did not add `canKill` to Poison; they
+  shipped `fatal_poison` as its own effect id that a designer must deliberately reach for. If a boss
+  ever needs a killing burn it is a distinct `BUFF_DEFS` entry, and the default stays safe.
+- **7d — Enemies get no floor.** D2's floor is player-only; so is ours. It is an explicit
+  player-experience concession, not a simulation rule. A sludge bomb absolutely finishes a fungus.
+- **Why no downed state.** The interactive "collapse, then spend a turn saving yourself" beat is
+  deliberately absent. BG3's is the documented anti-pattern: *"Any damage you receive while
+  unconscious counts as one failure,"* three failures kills, so a DoT ticking on a downed character
+  is an unattended death with zero player input. And the good version already exists — `_die()`
+  routes to `_resolveDefeat()`, a narrative defeat scenario. There is no death in Violencetown, so
+  a time-based death was never reachable to begin with.
+- **The clock is player input.** `_tickBuffs()` runs only inside `_advanceWorld()`; the free-running
+  heartbeat moves ambient NPCs and does NOT tick buffs. Poison advances when you act. Standing still
+  is free, reading your whole bag is free — so BG3's *"one turn is 6 seconds outside combat"* failure
+  is structurally impossible here. Patrols run on the wall clock and you do not: you can hold your
+  breath, but the guard keeps walking.
 
 ---
 
@@ -206,8 +276,8 @@ Every combatant shows **HP/100 and GP** on its nameplate.
 | Sewer rats (16 HP) | implicit sub-100 | `vermin: true` — legally sub-Hundred | Law 0 vermin exception |
 | Summoned lion | 12 GP; 30 HP, 12 dmg × 2 turns | 50 GP; 100 HP, ~25 dmg × 2 turns | Law 0 + peg (50 GP → 50 total dmg) |
 | Guard / Blind | special-cased riders at read sites | named incoming/outgoing buckets in the one pipeline | Law 2 |
-| Enemy gold | vendors only (`VENDOR_WALLET`) | every enemy carries a role-band wallet | Law 6; extends the existing transferGold conservation spine |
-| Kill reward | undefined (no gold in drops) | loot = remaining wallet | Law 6 |
+| Enemy gold | vendors only (`VENDOR_WALLET`) | ~~every enemy carries a role-band wallet~~ **DONE 2026-07-25** — 12 fighters carry authored kits | Law 6; extends the existing transferGold conservation spine |
+| Kill reward | undefined (no gold in drops) | ~~loot = remaining wallet~~ **DONE** — plus the unused kit as ground items (6f amended) | Law 6 |
 | Ray Blast | 6 GP → 18 dmg | unchanged (3:1, gated) | already legal — the reference example of a justified above-peg rate |
 | Nameplates | HP only | HP + GP pips (Hundreds) | Law 6e |
 

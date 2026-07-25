@@ -1,6 +1,6 @@
 {
   "name": "violencetown",
-  "version": "0.19.0",
+  "version": "0.20.0",
   "description": "A browser-based 2D action-RPG of small violences — zero-dependency vanilla JavaScript on HTML5 Canvas, no build step, installable as a PWA.",
   "homepage": "https://violencetown.russelldangerr.com",
   "repository": {

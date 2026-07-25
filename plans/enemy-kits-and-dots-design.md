@@ -1,6 +1,9 @@
 # Enemy Kits, Consumable Repricing & Damage-Over-Time — design spec
 
-**Status:** Design (Gate 2) — awaiting implementation plan
+**Status:** **Implemented 2026-07-25** on `feature/enemy-kits-and-dots` via
+`plans/enemy-kits-and-dots-implementation.md` (18 tasks, 4 phases). Two sections carry inline
+corrections found during implementation — §5a (species is not allegiance) and §11 (Phase A does not
+ship alone). Open questions in §9 remain open.
 **Date:** 2026-07-25
 **Extends:** `plans/gold-standard-design.md` (Laws 0–6). This spec **amends Law 6f** and adds the
 authoring model Law 6 never specified. Every other Law is unchanged and load-bearing here.
@@ -311,9 +314,21 @@ Preserving magnitude is what keeps **one `baseValue` per item** honest across bo
 §9.3 for what breaks if a future item's two worths diverge. The specific healing numbers were not
 specified in the ruling and are derived from this rule rather than authored; they need confirming.
 
-Implementation seam: an item's effect resolves against the **eater's** faction, read from the
-existing `ai.js` allegiance parse — the one source of truth for who counts as what. No new
-faction concept is introduced.
+Implementation seam: an item's effect resolves against the **eater's** species.
+
+> **Corrected during implementation.** This section originally claimed the split could read the
+> existing `ai.js` **allegiance** parse, "the one source of truth for who counts as what." That was
+> wrong. Allegiance is `hostile`/`ally`/`neutral` — it describes *who you fight*, not *what you are*,
+> so a bribed Violet Fungus would become an ally and stop being able to eat mushrooms. Species needs
+> its own field: `sewerDweller`, with an `isSewerDweller(e)` predicate beside the allegiance ones in
+> `ai.js`. There is a test asserting a flipped fungus keeps its species.
+
+One limitation found in implementation: the sign-flip applies cleanly to **DoT** items (a negative
+`dmg` through the same `tickBuffList` machinery) and to the **give** path, but not to a flat-`damage`
+item thrown at a sewer-dweller. `resolveThrow`'s damage branch routes through `combatAttack` →
+`Math.max(1, raw - armor)`, which would clamp a would-be heal back to at least 1 damage. So a thrown
+`mystery_meat` harms everyone; hand-fed, it heals a sewer-dweller. Documented rather than forced —
+bending the combat pipeline to carry healing was not worth it for one item.
 
 ### 5b. Poisoning as a social attack
 
@@ -446,5 +461,10 @@ each independently verifiable and each leaving the game playable.
 | **C — Kits** | §3, §6, §8's `lintEntity`/`content-validate` work | 13 fighters carry authored kits; pips light up; kills drop coin and unused kit; mugged respawns come back empty |
 | **D — Faction food** | §5: the eater-decides split and social poisoning through `give-action.js` | a fungus heals off a mushroom that poisons the player; gifting poisoned food damages *and* drops disposition |
 
-Phase A alone fixes a shipped balance bug and is worth landing on its own even if the rest waits.
+> **Corrected during implementation: Phase A does NOT ship alone.** This originally read "Phase A
+> alone fixes a shipped balance bug and is worth landing on its own even if the rest waits." It
+> isn't. Phase A replaces `sludge_sack`'s flat `damage` and `tunnel_mushroom`'s `effect: 'heal'`
+> with a `dot` field that nothing reads until Phase B, so between the two phases `resolveThrow`
+> falls through to *"it shatters harmlessly"* and both items are inert. **A and B ship together.**
+
 Phase C is the one that makes the marquee idea of v0.19.0 finally visible to a player.

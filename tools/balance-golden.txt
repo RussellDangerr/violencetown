@@ -32,7 +32,7 @@ sewer/wererat                     Wererat                     100       0     12
 town/townie-hooch                 Bootlegger                  100     -80      0        0              1              1      -
 town/townie-e                     Violencian                  100     -80      0        0              1              1      -
 town/townie-glunk                 Violencian                  100     -80      0        0              1              1      -
-town/townie-knuckles              Violencian                  100     -80      2        0              1              1     50
+town/townie-knuckles              Violencian                  100     -80      2        4              1              1     50
 town/townie-macc                  Violencian                  100     -80      0        0              1              1      -
 town/townie-mince                 Violencian                  100     -80      0        0              1              1      -
 town/townie-praline               Violencian                  100     -80      0        0              1              1      -
@@ -74,7 +74,7 @@ downtown                   0
 factory                    3
 graveyard                  1
 sewer                     28
-town                       0
+town                       1
 sinks: burnGold('heal'|'trick'), bribes/buyouts via transferGold
 
 --- LINT ---
