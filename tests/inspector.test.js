@@ -1,7 +1,7 @@
 // inspector.test.js — the pure inspector model (what stats + actions a selection shows).
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { itemActions, itemStatLine } from '../game/inspector.js';
+import { itemActions, itemStatLine, equipOptions } from '../game/inspector.js';
 
 const POTION = { id: 'bandage', name: '[Bandage]', useType: 'self', healAmount: 10 };
 const GEAR   = { id: 'foil_hat', name: '[Foil Hat]', useType: 'equip', equipSlot: 'top', armor: 2 };
@@ -45,5 +45,25 @@ describe('itemStatLine', () => {
     });
     test('a throw weapon keeps the Throw verb', () => {
         assert.equal(itemStatLine(ROCK), 'Throw 15 dmg');
+    });
+});
+
+describe('equipOptions — the GEAR chooser model', () => {
+    const worn = { id: 'foil_hat', name: '[Foil Hat]', equipSlot: 'top', armor: 2 };
+    const crown = { id: 'tin_crown', name: '[Tin Crown]', equipSlot: 'top', armor: 4, useType: 'equip' };
+    const bag = [
+        { itemDef: crown, count: 1 },
+        { itemDef: { id: 'gloves', equipSlot: 'sides', armor: 1, useType: 'equip' }, count: 1 },
+    ];
+    test('lists bag items for the slot with armor delta vs worn, plus a Bare row', () => {
+        const opts = equipOptions('top', worn, bag);
+        assert.deepEqual(opts.map(o => o.id), ['tin_crown', '__bare__']);
+        assert.equal(opts[0].delta, 2);
+        assert.equal(opts[0].bagIndex, 0);
+        assert.equal(opts[1].id, '__bare__');
+    });
+    test('no worn item → deltas are the candidate armor itself', () => {
+        const opts = equipOptions('top', null, bag);
+        assert.equal(opts[0].delta, 4);
     });
 });

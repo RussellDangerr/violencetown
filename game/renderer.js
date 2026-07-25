@@ -24,9 +24,10 @@ import {
     EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, closeButtonRect,
     DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceEquipLayout, deviceRingsLayout,
     inspectorPanelRect, inspectorActionRects,                               // (C1) tap-to-inspect panel + action-row geometry
+    gearOptionRects,                                                        // (C2) GEAR chooser option-row geometry
     xmbBarLayout,                                                            // (XMB) usable-bar geometry
 } from './layout.js';
-import { itemStatLine, itemActions } from './inspector.js';                  // (C1) tap-to-inspect: stat line + context actions
+import { itemStatLine, itemActions, equipOptions } from './inspector.js';    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
 import { zoneOf } from './inventory.js';                                     // (C1) safe/pack label for the inspector
 import { buildXmbBar, resolveXmbSelection } from './xmb.js';                 // (XMB) usable-bar model
 import { ITEMS, itemTier } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
@@ -3270,6 +3271,52 @@ export class Renderer {
 
         // Footer hint (standalone only — the device frame draws its own footer).
         if (!hosted) this.font.drawText(ctx, 'TAP A PLATE TO REMOVE   ·   C / ESC  CLOSE', CANVAS_PX / 2, EQUIPMENT_MODAL_RECT.y + EQUIPMENT_MODAL_RECT.h - 16, { color: UI.textLight, scale: 1, align: 'center' });
+
+        // (C2) An open GEAR chooser overlays the plates with an options list.
+        if (hosted && game._deviceSel && game._deviceSel.tab === 'gear') this._drawGearPicker(game, bodyRect);
+    }
+
+    // (C2) The GEAR chooser — over a selected armor slot, list every bag item that
+    // fits it (name + armor delta vs the worn piece) plus a Bare (unequip) row.
+    // Reads the SAME equipOptions/gearOptionRects the tap handler does, so the
+    // drawn rows and their tap zones can't drift. Mirrors _drawInspector's idioms.
+    _drawGearPicker(game, bodyRect) {
+        const { ctx } = this;
+        if (!this.font) return;
+        const slotKey = game._deviceSel.slotKey;
+        const label = (EQUIP_SLOT_RECTS.find(s => s.key === slotKey) || {}).label || slotKey.toUpperCase();
+        const worn = game.equipment[slotKey];
+        const opts = equipOptions(slotKey, worn, game.inventory);
+        const rows = gearOptionRects(bodyRect, opts.length);
+
+        // Titled panel enclosing the option column (+ header band above row 0).
+        const px = bodyRect.x + (bodyRect.w - 200) / 2 - 8;
+        const py = bodyRect.y + 30;
+        const pw = 216;
+        const ph = (opts.length ? (rows[opts.length - 1].y + rows[opts.length - 1].h) : (py + 26)) - py + 12;
+        drawPanelSmall(ctx, px, py, pw, ph, this.uiSheet);
+        this.font.drawText(ctx, `${label} — CHOOSE`, px + pw / 2, py + 8, { color: UI.gold, scale: 1, align: 'center' });
+
+        // Empty bag AND nothing worn → a quiet note, no rows.
+        if (!opts.length) {
+            this.font.drawText(ctx, `[No ${label.toLowerCase()} gear]`, px + pw / 2, py + 26, { color: UI.dim, scale: 1, align: 'center' });
+            return;
+        }
+
+        for (let i = 0; i < opts.length; i++) {
+            const opt = opts[i], r = rows[i];
+            drawInset(ctx, r.x, r.y, r.w, r.h);
+            const name = (opt.name || opt.id || '').replace(/[\[\]]/g, '');
+            const isBare = opt.id === '__bare__';
+            this.font.drawText(ctx, isBare ? 'Bare (remove)' : name, r.x + 8, r.y + r.h / 2 - 4, { color: isBare ? UI.textLight : UI.text, scale: 1 });
+            if (opt.sludgeImmune) this.font.drawText(ctx, 'sludge-proof', r.x + 8, r.y + r.h - 9, { color: UI.dim, scale: 1 });
+
+            // Armor delta: +N green / −N red / 0 dim, right-aligned.
+            const d = opt.delta;
+            const dTxt = d > 0 ? `+${d}` : d < 0 ? `−${-d}` : '0';
+            const dCol = d > 0 ? UI.buff : d < 0 ? UI.hpRed : UI.dim;
+            this.font.drawText(ctx, dTxt, r.x + r.w - 8, r.y + r.h / 2 - 4, { color: dCol, scale: 1, align: 'right' });
+        }
     }
 
     // Word-wrap `text` into lines no longer than `maxChars` characters (the

@@ -4,6 +4,7 @@ import {
   DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H,
   deviceTabRect, deviceBodyRect, cycleDeviceTab, closeButtonRect,
   deviceBagSlotRects, rectsOverlap, inspectorPanelRect,
+  gearOptionRects, deviceEquipLayout,
 } from '../game/layout.js';
 
 test('DEVICE_RECT reuses the proven {24,44,560,520} panel bezel', () => {
@@ -90,4 +91,15 @@ test('the inspector panel does not overlap any bag slot', () => {
     assert.ok(!rectsOverlap(r, panel), 'inspector panel overlaps a bag slot');
   }
   assert.ok(panel.y + panel.h <= body.y + body.h + 0.5, 'inspector panel escapes the body bottom');
+});
+
+test('gear option rows do not overlap the equipment plates', () => {
+  const body = deviceBodyRect();
+  const { slots } = deviceEquipLayout(body);
+  const rows = gearOptionRects(body, 6);
+  for (const row of rows)
+    for (const plate of slots)
+      assert.ok(!rectsOverlap(row, plate), `gear option row overlaps the ${plate.key} plate`);
+  for (const row of rows)
+    assert.ok(row.x + row.w <= body.x + body.w + 0.5 && row.y + row.h <= body.y + body.h + 0.5, 'gear option row escapes body');
 });

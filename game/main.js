@@ -18,7 +18,7 @@ import {
 } from './rings.js';
 import { isBoss, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS } from './defeat-scenarios.js';
 import { addToInventory as addToInv, moveToZone, zoneOf } from './inventory.js';
-import { itemActions } from './inspector.js';   // (C1) tap-to-inspect: context actions for a selected bag item
+import { itemActions, equipOptions } from './inspector.js';   // (C1) tap-to-inspect: context actions; (C2) GEAR chooser options
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
 import { attack, formatDamageNumber, computeHit, elementalMult, isBackstab } from './combat.js';
@@ -41,7 +41,7 @@ import {
     TRADE_COLS, tradeCellRect,
     EQUIPMENT_MODAL_RECT, EQUIP_SLOT_RECTS,
     DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceBagSlotRects, deviceEquipLayout, deviceRingsLayout,
-    inspectorActionRects,
+    inspectorActionRects, gearOptionRects,
     xmbBarLayout,
 } from './layout.js';
 import { canTrade, buyPrice, sellPrice, bribeStepCost, BRIBE_STEP, transferGold, burnGold } from './trade.js'; // pricing + the transaction spine
@@ -4934,27 +4934,49 @@ class Game {
             }
             return;
         }
-        // GEAR body → tap a filled plate to unequip (the weapon plate is inert).
-        // Reads the SAME scaled slots the renderer draws, so the tap can't drift.
+        // GEAR body → tap a slot plate to open its CHOOSER: a list of every bag
+        // item that fits, each with its armor delta vs the worn piece, plus a Bare
+        // (unequip) row. Tapping a row equips (or bares) that slot. Reads the SAME
+        // rects the renderer draws (deviceEquipLayout / gearOptionRects), so the
+        // taps can't drift. The weapon plate stays out of scope — weapon swap lives
+        // on the ITEMS tap.
         if (this._deviceTab === 'gear') {
+            // 1) An open chooser: its option rows take priority over the plates.
+            const sel = this._deviceSel;
+            if (sel && sel.tab === 'gear') {
+                const opts = equipOptions(sel.slotKey, this.equipment[sel.slotKey], this.inventory);
+                const rows = gearOptionRects(deviceBodyRect(), opts.length);
+                for (let i = 0; i < opts.length; i++) {
+                    if (!this._pointInRect(pt, rows[i], HIT_SLOP)) continue;
+                    const opt = opts[i];
+                    if (opt.bagIndex >= 0) {
+                        const def = this.inventory[opt.bagIndex].itemDef;
+                        const msg = resolveUse(this, def, null);   // equip → resolveEquip (re-bags any displaced piece)
+                        this._removeFromSlot(opt.bagIndex);
+                        this._refreshGrantedSkills();
+                        if (msg) this._log(msg);
+                    } else if (opt.id === '__bare__') {
+                        const msg = unequipItem(this, sel.slotKey);
+                        if (msg) this._log(msg);
+                    }
+                    this._deviceSel = null;
+                    audio.playSfx('menu-confirm');
+                    this._render();
+                    return;
+                }
+                // A tap outside every row closes the chooser (picker convention).
+                this._deviceSel = null;
+                this._render();
+                return;
+            }
+            // 2) No chooser open: a plate tap opens one for that armor slot. Only
+            //    the 5 armor slots open a chooser — the weapon plate is inert here.
             const { slots } = deviceEquipLayout(deviceBodyRect());
             for (const s of slots) {
                 if (s.key === 'weapon') continue;
                 if (!this._pointInRect(pt, s)) continue;
-                if (this.equipment[s.key]) {
-                    const msg = unequipItem(this, s.key);   // filled plate → back to the bag
-                    if (msg) this._log(msg);
-                } else {
-                    // empty plate → wear the first spare gear in the bag for this slot
-                    const spareIdx = this.inventory.findIndex(
-                        st => st && st.itemDef.useType === 'equip' && st.itemDef.equipSlot === s.key);
-                    if (spareIdx < 0) { this._log(`[No spare ${s.key} gear in your bag.]`); return; }
-                    const def = this.inventory[spareIdx].itemDef;
-                    const msg = resolveUse(this, def, null);
-                    this._removeFromSlot(spareIdx);
-                    this._refreshGrantedSkills();
-                    if (msg) this._log(msg);
-                }
+                this._deviceSel = { tab: 'gear', slotKey: s.key };
+                audio.playSfx('menu-tick');
                 this._render();
                 return;
             }

@@ -317,6 +317,20 @@ export function deviceEquipLayout(bodyRect) {
     return { figure: map(EQUIP_FIGURE_RECT), slots: EQUIP_SLOT_RECTS.map(map) };
 }
 
+// The GEAR chooser's option rows — a centered column living in the clear
+// vertical band between the HEAD plate (top) and the WEAPON plate (bottom). A
+// right-side column would collide with the TORSO/FEET plates, which scale to the
+// right edge; centering a narrow column keeps it clear of the flanking
+// ARMS/TORSO/BACK/FEET plates too. Pinned by tests/device-layout.test.js.
+export function gearOptionRects(bodyRect, n) {
+  const w = 200, x = bodyRect.x + (bodyRect.w - w) / 2;
+  const rowH = 26, gap = 4;
+  const y0 = bodyRect.y + 60;
+  const rects = [];
+  for (let i = 0; i < n; i++) rects.push({ x, y: y0 + i * (rowH + gap), w, h: rowH });
+  return rects;
+}
+
 // (Remembrance Rings, Task 5) The SKILLS tab body IS THE HANDS — two hands split
 // the body left/right, five fingers fan across each (thumbs facing inward), tips
 // staggered anatomically. A socket sits at every UNLOCKED finger's tip; unrevealed

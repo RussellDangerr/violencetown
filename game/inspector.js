@@ -35,3 +35,22 @@ export function itemStatLine(itemDef) {
     }
     return itemDef.description || '';
 }
+
+// equipOptions — the GEAR chooser: every bag item that fits `slotKey`, each
+// with its armor delta vs the currently-worn piece, plus a "Bare" unequip row.
+// Pure: takes the slot key, the worn itemDef (or null), and the bag array.
+export function equipOptions(slotKey, worn, bag) {
+    const wornArmor = (worn && worn.armor) || 0;
+    const opts = [];
+    (bag || []).forEach((stack, bagIndex) => {
+        const d = stack && stack.itemDef;
+        if (!d || d.useType !== 'equip' || d.equipSlot !== slotKey) return;
+        opts.push({
+            id: d.id, name: d.name, bagIndex,
+            delta: ((d.armor || 0) - wornArmor),
+            sludgeImmune: !!d.sludgeImmune,
+        });
+    });
+    if (worn) opts.push({ id: '__bare__', name: 'Bare', bagIndex: -1, delta: -wornArmor });
+    return opts;
+}
