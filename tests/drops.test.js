@@ -9,7 +9,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { recordDrop, pendingDrops } from '../game/drops.js';
+import { recordDrop, pendingDrops, dropLoadout } from '../game/drops.js';
 
 describe('recordDrop', () => {
     test('records a new drop into the per-map bucket', () => {
@@ -67,5 +67,34 @@ describe('pendingDrops', () => {
 
     test('an unknown map url yields no drops', () => {
         assert.deepEqual(pendingDrops({}, new Set(), 'nowhere'), []);
+    });
+});
+
+// Task 14 — the unused kit drops on death. _handleEnemyDeath (main.js) can't
+// be exercised directly under node (Game touches `document` at load, per the
+// file header above), so this covers dropLoadout — the pure resolver it
+// delegates to for "which ground items does a remaining loadout become".
+describe('dropLoadout — the unused kit drops on death', () => {
+    test('every remaining loadout item resolves to a ground item at the enemy tile', () => {
+        const drops = dropLoadout(['tunnel_mushroom', 'fire_bottle'], 4, 9);
+        assert.equal(drops.length, 2);
+        assert.deepEqual(drops.map(d => d.type), ['tunnel_mushroom', 'fire_bottle']);
+        for (const d of drops) {
+            assert.equal(d.x, 4);
+            assert.equal(d.y, 9);
+            assert.ok(d.def, `expected a resolved def for ${d.type}`);
+        }
+    });
+
+    test('an enemy that already spent its kit (empty loadout) drops nothing', () => {
+        assert.deepEqual(dropLoadout([], 4, 9), []);
+    });
+
+    // _handleEnemyDeath gates `this._muggedIds.add(enemyObj.id)` on this exact
+    // "did anything actually drop" signal — a non-empty result is precisely
+    // the condition under which the id lands in the mugged set.
+    test('a non-empty drop is the signal _handleEnemyDeath mugs the id on', () => {
+        assert.equal(dropLoadout(['tunnel_mushroom'], 0, 0).length > 0, true);
+        assert.equal(dropLoadout([], 0, 0).length > 0, false);
     });
 });

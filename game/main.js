@@ -32,7 +32,7 @@ import { RNG } from './rng.js';
 import { hasSave, readSaveRaw, writeSave, loadInto, clearSave } from './save.js';
 import { QuestEngine } from './quests.js';
 import { doExamine } from './examine.js';
-import { recordDrop, pendingDrops } from './drops.js'; // per-zone runtime dropped-items layer (pure, node-tested)
+import { recordDrop, pendingDrops, dropLoadout } from './drops.js'; // per-zone runtime dropped-items layer (pure, node-tested)
 import {
     CANVAS_INTERNAL_PX, HIT_SLOP, THROW_RECTS,
     HOTBAR_X_START, HOTBAR_Y, HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_STRIDE, HOTBAR_SLOTS,
@@ -3846,6 +3846,20 @@ class Game {
             this._log(`[Looted ${loot} GP.]`, 'pickup');
             this._muggedIds.add(enemyObj.id);
         }
+        // Law 6f AS AMENDED: the unused kit drops. He spent his tricks or he
+        // didn't — what's left is the reward for rushing him. Farming stays
+        // closed because spawnEnemy clears the loadout for a mugged id, exactly
+        // as it clears the gold.
+        const kit = dropLoadout(enemyObj.loadout, enemyObj.x, enemyObj.y);
+        for (const item of kit) {
+            this._recordDrop(item.type, item.x, item.y);
+            this.groundItems.push(item);
+        }
+        if (kit.length) {
+            this._log(`[They drop what they didn't get to use.]`, 'pickup');
+            this._muggedIds.add(enemyObj.id);
+        }
+        enemyObj.loadout = [];
         // The Were-Rat drops the converter; rat kills feed the escape waves.
         if (enemyObj.tag === 'wererat_boss' && ITEMS.catalytic_converter) {
             this._recordDrop('catalytic_converter', enemyObj.x, enemyObj.y);
