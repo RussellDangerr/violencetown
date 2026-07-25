@@ -23,7 +23,7 @@ import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
 import { attack, formatDamageNumber, computeHit, elementalMult, isBackstab } from './combat.js';
 import { Enemy, spawnEnemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
-import { isHostile } from './ai.js';
+import { isHostile, rockClatter } from './ai.js';
 import { getGreedyStep, stepEntity, findPath } from './pathing.js'; // pathfinding (greedy chase + BFS click-to-move); stepEntity = shove a character aside
 import { applyDispositionDelta, reactToTransaction } from './give-action.js';
 import { getDialogue } from './dialogue.js';
@@ -2521,6 +2521,18 @@ class Game {
         this._advanceWorld();
     }
 
+    // (Task 9) After a throw resolves, a pullsAggro item (the rock) sends any
+    // idle/wandering enemy within earshot of the landing tile to investigate —
+    // ai.js::rockClatter sets a FALSE last-seen so they path there blind,
+    // without the thrower ever having been spotted. One helper, called from
+    // every resolveThrow call site (direction-throw, wheel reticle, target-list)
+    // so the affordance is uniform regardless of how the throw was aimed.
+    _rockClatter(itemDef, x, y) {
+        if (!itemDef || !itemDef.pullsAggro) return;
+        rockClatter(this.enemies, x, y);
+        this._log('[The rock clatters off down the tunnel.]');
+    }
+
     _doThrow(dir) {
         const stack = this.inventory[this.selectedSlot];
         if (!stack) { this.state = STATE.IDLE; this._render(); return; }
@@ -2533,6 +2545,10 @@ class Game {
         // direction was discarded. (fix/critical-path)
         const msg = resolveThrow(this, stack.itemDef, { dx: dir.dx, dy: dir.dy }, stackCount);
         if (msg) this._log(msg);
+        // Legacy direction-throw has no computed impact tile at this call site
+        // (resolveThrow resolves it internally and doesn't return it) — the
+        // player's own tile is the best available origin for the clatter.
+        this._rockClatter(stack.itemDef, this.playerX, this.playerY);
 
         if (stack.itemDef.consumable) this._removeFromSlot(this.selectedSlot);
         this.selectedSlot = -1;
@@ -2870,7 +2886,7 @@ class Game {
             case 'trade': if (npc) this._openTrade(npc); break;   // (Phase 6a) any adjacent NPC → shop or offer window
             case 'bribe': if (npc) this._bribeTarget(npc); break;
             case 'hit':   if (npc) { this.combatAttack(npc, this.equipment.weapon.damage, { type: this.equipment.weapon.damageType }); this._advanceWorld(); this._render(); } break;
-            case 'throw': { const th = this._resolveThrowable(); if (th) { const msg = resolveThrow(this, th.itemDef, null, th.count, { x: t.x, y: t.y }); if (msg) this._log(msg); th.consume(); this._advanceWorld(); } else this._log('[Nothing to throw.]'); this._render(); break; }
+            case 'throw': { const th = this._resolveThrowable(); if (th) { const msg = resolveThrow(this, th.itemDef, null, th.count, { x: t.x, y: t.y }); if (msg) this._log(msg); this._rockClatter(th.itemDef, t.x, t.y); th.consume(); this._advanceWorld(); } else this._log('[Nothing to throw.]'); this._render(); break; }
             case 'take':  this._takeItemAt(t.x, t.y); this._render(); break;
             default: this._render();
         }
@@ -3022,6 +3038,7 @@ class Game {
         audio.playSfx('throw');
         const msg = resolveThrow(this, stack.itemDef, null, stack.count, tile);
         if (msg) this._log(msg);
+        this._rockClatter(stack.itemDef, tile.x, tile.y);
         if (stack.itemDef.consumable) this._removeFromSlot(this.selectedSlot);
         this.selectedSlot = -1;
         this.state = STATE.IDLE;

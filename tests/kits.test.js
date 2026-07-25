@@ -2,6 +2,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnEnemy, challengeGp } from '../game/enemies.js';
+import { rockClatter } from '../game/ai.js';
 
 describe('kit fallback — nothing ships broke by omission', () => {
     test('a fighter authored with no kit inherits its band default', () => {
@@ -27,5 +28,25 @@ describe('kit fallback — nothing ships broke by omission', () => {
         assert.equal(e.gold, 0);
         assert.deepEqual(e.loadout, []);
         assert.equal(challengeGp(e), 0);
+    });
+});
+
+describe('rock — the stealth affordance', () => {
+    test('enemies within earshot retarget to the landing tile', () => {
+        const near = { x: 5, y: 5, _lastSeenX: null, _lastSeenY: null, state: 'idle', sightRange: 8 };
+        const far  = { x: 40, y: 40, _lastSeenX: null, _lastSeenY: null, state: 'idle', sightRange: 8 };
+        rockClatter([near, far], 6, 6);
+        assert.deepEqual([near._lastSeenX, near._lastSeenY], [6, 6]);
+        assert.equal(near.state, 'chasing');
+        assert.equal(far._lastSeenX, null);
+    });
+    test('it does not disturb an enemy already chasing the player', () => {
+        const busy = { x: 5, y: 5, _lastSeenX: 1, _lastSeenY: 1, state: 'chasing', sightRange: 8 };
+        rockClatter([busy], 6, 6);
+        assert.deepEqual([busy._lastSeenX, busy._lastSeenY], [1, 1]);
+    });
+    test('null-safe', () => {
+        rockClatter(null, 1, 1);
+        rockClatter([null, undefined], 1, 1);
     });
 });

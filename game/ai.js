@@ -46,3 +46,20 @@ export function healPurchase(hp, maxHp, gold) {
   if (spend <= 0) return null; // full-HP edge — no zero-GP turns
   return { spend, heal: spend };
 }
+
+// The rock's clatter — the game's first stealth affordance. It reuses PD-1's
+// existing seam: npc.js already pursues _lastSeenX/_lastSeenY rather than the
+// player's true position, so a rock sets a FALSE last-seen without the thrower
+// ever having been seen.
+//
+// An enemy already chasing is NOT redirected — a rock distracts, it does not
+// rescue you from a fight you already started.
+export function rockClatter(enemies, x, y) {
+  for (const e of enemies || []) {
+    if (!e || e.state === 'chasing') continue;
+    const range = e.sightRange ?? 8;
+    if (Math.max(Math.abs(e.x - x), Math.abs(e.y - y)) > range) continue;
+    e._lastSeenX = x; e._lastSeenY = y;
+    e.state = 'chasing';
+  }
+}
