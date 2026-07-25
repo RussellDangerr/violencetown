@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H,
   deviceTabRect, deviceBodyRect, cycleDeviceTab, closeButtonRect,
-  deviceBagSlotRects, rectsOverlap,
+  deviceBagSlotRects, rectsOverlap, inspectorPanelRect,
 } from '../game/layout.js';
 
 test('DEVICE_RECT reuses the proven {24,44,560,520} panel bezel', () => {
@@ -81,4 +81,13 @@ test('deviceBagSlotRects returns 50 rects: SAFE row (0-9) above PACK grid (10-49
   for (let i = 0; i < rects.length; i++)
     for (let j = i + 1; j < rects.length; j++)
       assert.ok(!rectsOverlap(rects[i], rects[j]), `bag slots ${i} and ${j} overlap`);
+});
+
+test('the inspector panel does not overlap any bag slot', () => {
+  const body = deviceBodyRect();
+  const panel = inspectorPanelRect(body);
+  for (const r of deviceBagSlotRects(body)) {
+    assert.ok(!rectsOverlap(r, panel), 'inspector panel overlaps a bag slot');
+  }
+  assert.ok(panel.y + panel.h <= body.y + body.h + 0.5, 'inspector panel escapes the body bottom');
 });

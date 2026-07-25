@@ -23,8 +23,11 @@ import {
     RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
     EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, closeButtonRect,
     DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceEquipLayout, deviceRingsLayout,
+    inspectorPanelRect, inspectorActionRects,                               // (C1) tap-to-inspect panel + action-row geometry
     xmbBarLayout,                                                            // (XMB) usable-bar geometry
 } from './layout.js';
+import { itemStatLine, itemActions } from './inspector.js';                  // (C1) tap-to-inspect: stat line + context actions
+import { zoneOf } from './inventory.js';                                     // (C1) safe/pack label for the inspector
 import { buildXmbBar, resolveXmbSelection } from './xmb.js';                 // (XMB) usable-bar model
 import { ITEMS, itemTier } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
 import { RINGS, FUSIONS } from './ring-data.js';                             // (rings Task 5) SKILLS-tab hands: ring names + fusion spark
@@ -1728,7 +1731,12 @@ export class Renderer {
 
         // Delegate the active tab's body into the shared body region.
         const body = deviceBodyRect();
-        if      (active === 'items')  this._drawHotbar(game, body);
+        if (active === 'items') {
+            this._drawHotbar(game, body);
+            if (game._deviceSel && game._deviceSel.tab === 'items' && game.inventory[game._deviceSel.index]) {
+                this._drawInspector(game, body);
+            }
+        }
         else if (active === 'gear')   this._drawEquipmentModal(game, body);
         else if (active === 'quests') this._drawJournalQuestsBody(game, body);
         else if (active === 'map')    this._drawWorldMapBody(game, body, body.y);
@@ -1878,6 +1886,55 @@ export class Renderer {
         }
         // (defeat legibility) tell the player what survives a defeat.
         if (this.font) this.font.drawText(ctx, 'SAFE zone + quest items = kept if defeated', rects[0].x, rects[49].y + rects[49].h + 8, { color: UI.dim, scale: 1 });
+    }
+
+    // (C1) Tap-to-inspect panel. When a bag slot is selected (game._deviceSel),
+    // this draws below the bag grid: the item's icon + name, its one-line stat
+    // summary (itemStatLine), its stack/zone label, and a button per context
+    // action (itemActions). Buttons land on inspectorActionRects — the SAME rects
+    // main._tapDevice hit-tests — so the labels can't drift from their tap zones.
+    // A quest item yields no actions, so it shows the stat line only.
+    _drawInspector(game, bodyRect) {
+        const { ctx, sprites } = this;
+        if (!this.font) return;
+        const sel = game._deviceSel;
+        const stack = game.inventory[sel.index];
+        if (!stack) return;
+        const def = stack.itemDef;
+        const p = inspectorPanelRect(bodyRect);
+        drawPanelSmall(ctx, p.x, p.y, p.w, p.h, this.uiSheet);
+
+        // Item icon (sprite, else the colored-letter fallback — mirrors _drawHotbar).
+        const ix = p.x + 12, iy = p.y + 12;
+        const spr = ITEM_SPRITES[def.id];
+        let drawn = false;
+        if (spr && sprites?.[spr.sheet]?.loaded) {
+            drawn = sprites[spr.sheet].drawRegion(ctx, spr.x, spr.y, spr.w, spr.h, ix, iy, 32, 32);
+        }
+        if (!drawn) {
+            const info = ITEM_COLORS[def.id] || { bg: '#888', letter: '?' };
+            ctx.fillStyle = info.bg; ctx.fillRect(ix, iy, 32, 32);
+            this.font.drawText(ctx, info.letter, ix + 8, iy + 8, { color: '#fff', scale: 2 });
+        }
+
+        // Header: name (gold), stat line (light), stack/zone label (dim).
+        const tx = ix + 44;
+        const name = (def.name || def.id || '').replace(/[\[\]]/g, '');
+        const zone = zoneOf(sel.index, SAFE_SLOTS).toUpperCase();
+        const qty = stack.count > 1 ? ` x${stack.count}` : '';
+        this.font.drawText(ctx, name, tx, p.y + 12, { color: UI.gold, scale: 2 });
+        this.font.drawText(ctx, itemStatLine(def), tx, p.y + 36, { color: UI.text, scale: 1 });
+        this.font.drawText(ctx, `${zone}${qty}`, tx, p.y + 52, { color: UI.dim, scale: 1 });
+
+        // Action buttons — one per action, on the shared action-row rects.
+        const actions = itemActions(def, zoneOf(sel.index, SAFE_SLOTS));
+        const rows = inspectorActionRects(bodyRect);
+        for (let i = 0; i < actions.length; i++) {
+            const r = rows[i];
+            drawInset(ctx, r.x, r.y, r.w, r.h);
+            ctx.strokeStyle = UI.gold; ctx.lineWidth = 1; ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
+            this.font.drawText(ctx, actions[i].label, r.x + r.w / 2, r.y + r.h / 2 - 4, { color: UI.gold, scale: 1, align: 'center' });
+        }
     }
 
     // (XMB) The always-live usable-bar that replaces the flat bottom hotbar:

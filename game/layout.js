@@ -275,6 +275,22 @@ export function deviceBagSlotRects(bodyRect) {
     return rects;
 }
 
+// The inspector panel sits below the bag grid (which ends ~y382) in the lower
+// band of the device body — it MUST NOT overlap the bag slots. Enforced by
+// tests/device-layout.test.js.
+export function inspectorPanelRect(bodyRect) {
+  return { x: bodyRect.x + 8, y: bodyRect.y + 300, w: bodyRect.w - 16, h: 120 };
+}
+// Up to 3 action buttons in a row along the bottom of the inspector panel.
+export function inspectorActionRects(bodyRect) {
+  const p = inspectorPanelRect(bodyRect);
+  const n = 3, bw = 96, gap = 12, rowW = n * bw + (n - 1) * gap;
+  const ox = p.x + (p.w - rowW) / 2, y = p.y + p.h - 34;
+  const rects = [];
+  for (let i = 0; i < n; i++) rects.push({ x: ox + i * (bw + gap), y, w: bw, h: 26 });
+  return rects;
+}
+
 // Pure tab cycle (wraps both ways); an unknown current tab resets to the first.
 export function cycleDeviceTab(current, dir) {
     const i = DEVICE_TABS.indexOf(current);
