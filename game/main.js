@@ -6,7 +6,7 @@ import { Renderer } from './renderer.js';
 import { loadMap } from './map.js';
 import { loadAllSprites } from './sprites.js';
 import { BitmapFont } from './bitmap-font.js';
-import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, MAX_STACK } from './data.js';
+import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, MAX_STACK } from './data.js';
 import { ITEMS, itemTier, resolveUse, resolveThrow, tickTempEquips, unequipItem, ownedItemDefs, hasItemDef } from './items.js';
 import { WEAPONS } from './weapons.js';
 import { tickBuffList, BUFF_DEFS } from './buffs.js';
@@ -17,6 +17,7 @@ import {
     mergeKnown, isActive,   // (ring Task 5) skill-merge helpers, relocated from the retired skills.js
 } from './rings.js';
 import { isBoss, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS } from './defeat-scenarios.js';
+import { addToInventory as addToInv } from './inventory.js';
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
 import { attack, formatDamageNumber, computeHit, elementalMult, isBackstab } from './combat.js';
@@ -3574,14 +3575,7 @@ class Game {
     // ── Inventory ────────────────────────────────────────────────────────────
 
     _addToInventory(itemDef) {
-        for (let i = 0; i < INVENTORY_SIZE; i++) {
-            const s = this.inventory[i];
-            if (s && s.itemDef.id === itemDef.id && s.count < MAX_STACK) { s.count++; return true; }
-        }
-        for (let i = 0; i < INVENTORY_SIZE; i++) {
-            if (!this.inventory[i]) { this.inventory[i] = { itemDef, count: 1 }; return true; }
-        }
-        return false;
+        return addToInv(this.inventory, itemDef, { size: INVENTORY_SIZE, safeSlots: SAFE_SLOTS, maxStack: MAX_STACK });
     }
 
     _removeFromSlot(slot) {
@@ -4337,7 +4331,7 @@ class Game {
     // Apply a take-rule to the at-risk pool. The safe floor is never in `atRisk`.
     _applyTake(take) {
         const weapon = this.equipment && this.equipment.weapon;
-        const { atRisk } = partitionInventory(this.inventory, weapon);
+        const { atRisk } = partitionInventory(this.inventory, weapon, SAFE_SLOTS);
         const taken = matchTake(take, atRisk);
         let takenGold = 0;
         if (take.gold) { takenGold = Math.floor((this.gold || 0) * take.gold); this.gold -= takenGold; }
