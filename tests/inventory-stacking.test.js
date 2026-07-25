@@ -32,7 +32,7 @@ const ROCK = { id: 'rock', name: '[Rock]' };
 const SOAP = { id: 'soap', name: '[Soap]' };
 const occupiedSlots = (g) => g.inventory.filter(Boolean).length;
 
-describe('inventory stacking (local mirror of main.js::_addToInventory — EXPECTED GREEN)', () => {
+describe('inventory stacking (real import of game/inventory.js::addToInventory — EXPECTED GREEN)', () => {
 
     test('first pickup of an item fills one slot with count 1', () => {
         const g = newGame();
