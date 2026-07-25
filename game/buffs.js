@@ -24,19 +24,63 @@
 
 import { SLUDGE_DOT } from './data.js';
 
+export const DOT_FLOOR = 1;
+
+// One tick of a damage-over-time debuff. Shared by every DoT so they cannot
+// diverge (the discipline challengeGp and affectedTiles already follow).
+// `buff.dmg` is authored per-instance so a 3x5 sludge sack and a 5x3 fire bottle
+// differ without needing separate defs; it falls back to the legacy tile-hazard
+// constant so an old save's bare {id:'sludge'} still ticks.
+//
+// tickBuffList's contract is onTick(owner, game, buff) where owner === game for
+// PLAYER buffs and owner is the Enemy for enemy buffs. This function MUST branch
+// on that: the old sludge def wrote game.playerHp unconditionally, which was safe
+// only because sludge has never been an enemy buff. poison and fire will be.
+function applyDot(owner, game, buff, label, cause) {
+    const dmg = buff.dmg ?? SLUDGE_DOT;
+
+    if (owner === game) {
+        // Law 7: a DoT never lands the killing tick on the PLAYER — it floors at
+        // 1 and does NOT self-cure, so you stand there at 1 HP still burning.
+        // Clamped upward too: sewer fare on a sewer-dweller is a negative dmg
+        // (a regeneration) and must never exceed the Hundred.
+        game.playerHp = Math.min(game.playerMaxHp, Math.max(DOT_FLOOR, game.playerHp - dmg));
+        // It still CLAIMS the defeat, so when something else finishes the player
+        // the scenario reads the DoT (defeat-scenarios.js keys on cause 'sludge').
+        // Healing never claims a defeat.
+        if (dmg > 0) game._lastDefeatedBy = { cause };
+    } else {
+        // Enemies get NO floor. D2's floor is player-only and so is ours — an
+        // explicit player-experience concession, not a simulation rule. A sludge
+        // bomb absolutely finishes a Violet Fungus.
+        const ent = owner.entity;
+        if (!ent) return;
+        ent.hp = Math.min(ent.maxHp, ent.hp - dmg);
+        if (ent.hp <= 0) { ent.hp = 0; ent.alive = false; }
+    }
+    game._log(`[${owner === game ? 'You' : (owner.name ?? owner.type)} — ${label} ${Math.abs(dmg)}]`);
+}
+
 export const BUFF_DEFS = {
-    // Sludge — a damage-over-time debuff on the PLAYER. Ticks flat SLUDGE_DOT each
-    // turn it's active, unless the player has sludge immunity (Shoe Bags). Soap
-    // cancels the buff entirely one step earlier (in _advanceWorld), so a cancelled
-    // sludge never reaches this hook. (Migrated from the inline _advanceWorld block;
-    // the death check stays in _advanceWorld right after the tick.)
+    // Sludge — a damage-over-time debuff. Ticks per-buff dmg each turn it's
+    // active, unless the player has sludge immunity (Shoe Bags — a PLAYER
+    // affordance; an enemy has no such gear). Soap cancels the buff entirely one
+    // step earlier (in _advanceWorld), so a cancelled sludge never reaches this
+    // hook. (Migrated from the inline _advanceWorld block; the death check stays
+    // in _advanceWorld right after the tick.)
     sludge: {
-        onTick(owner, game) {
-            if (game._hasSludgeImmunity && game._hasSludgeImmunity()) return;
-            game.playerHp -= SLUDGE_DOT;
-            if (game.playerHp <= 0) game._lastDefeatedBy = { cause: 'sludge' };   // only claim the defeat when it's the killing tick
-            game._log(`[Sludge — ${SLUDGE_DOT} damage]`);
+        onTick(owner, game, buff) {
+            if (owner === game && game._hasSludgeImmunity && game._hasSludgeImmunity()) return;
+            applyDot(owner, game, buff, 'Sludge', 'sludge');
         },
+    },
+    poison: {
+        name: 'Poisoned',
+        onTick(owner, game, buff) { applyDot(owner, game, buff, 'Poison', 'poison'); },
+    },
+    fire: {
+        name: 'Burning',
+        onTick(owner, game, buff) { applyDot(owner, game, buff, 'Burning', 'fire'); },
     },
 
     // Recover — a delayed heal (pendingHeal) that lands when the buff expires.
