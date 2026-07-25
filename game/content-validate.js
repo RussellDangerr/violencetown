@@ -59,6 +59,8 @@ export function validateContent(maps) {
         for (const e of (data.enemies || [])) {
             for (const id of (e.stock || []))
                 if (!itemIds.has(id)) P(`${file}: enemy ${e.id || '?'} stocks unknown item '${id}'`);
+            for (const id of (e.loadout || []))
+                if (!itemIds.has(id)) P(`${file}: enemy ${e.id || '?'} carries unknown item '${id}'`);
             if (e.dialogueId && !dialogueIds.has(e.dialogueId))
                 P(`${file}: enemy ${e.id || '?'} has unknown dialogueId '${e.dialogueId}'`);
         }

@@ -26,3 +26,22 @@ test('content graph has no dangling ids (quests / maps / dialogue resolve)', () 
     if (warnings.length) console.warn('\n[content-integrity WARN]\n' + warnings.join('\n') + '\n');
     assert.deepEqual(problems, [], '\nDangling content references:\n' + problems.join('\n') + '\n');
 });
+
+test('a loadout naming an unknown item is a hard problem', () => {
+    const { problems } = validateContent([{ file: 'x-map.json', data: { enemies: [
+        { id: 'e1', type: 'Thug', damage: 5, loadout: ['not_an_item'] },
+    ] } }]);
+    assert.ok(problems.some(p => /not_an_item/.test(p)), problems.join('\n'));
+});
+test('a real loadout passes clean', () => {
+    const { problems } = validateContent([{ file: 'x-map.json', data: { enemies: [
+        { id: 'e1', type: 'Thug', damage: 5, gold: 3, loadout: ['tunnel_mushroom'] },
+    ] } }]);
+    // validateContent also walks the real global QUESTS/DIALOGUES graph, which
+    // references real maps/npcs outside this test's one synthetic map — noise
+    // pre-existing before Task 15 and unrelated to loadouts (confirmed: the same
+    // noise appears with no loadout field at all). Scope the assertion to what
+    // this test actually covers: authoring a real item id raises no unknown-item
+    // complaint about it.
+    assert.ok(!problems.some(p => p.includes('carries unknown item')), problems.join('\n'));
+});
