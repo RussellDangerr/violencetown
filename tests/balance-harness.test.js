@@ -114,7 +114,9 @@ describe('report()', () => {
         const normal = [spawn()];
         const withMonster = [
             spawn(),
-            spawn({ zone: 'an-extremely-long-zone-name', id: 'boss', type: 'A Preposterously Long Type Name', gold: 1500 }),
+            // loadout cleared so challenge GP is exactly the 1500 this asserts on —
+            // the baseline fixture's kit would otherwise make the column read 1537.
+            spawn({ zone: 'an-extremely-long-zone-name', id: 'boss', type: 'A Preposterously Long Type Name', gold: 1500, loadout: [] }),
         ];
         const plain = enemyRows(report(normal));
         const stretched = enemyRows(report(withMonster));
