@@ -1823,47 +1823,23 @@ export class Renderer {
         const rects = deviceBagSlotRects(bodyRect);
         const sh = rects[0].h;
 
-        // Zone labels above each band.
+        // Parchment bands behind each zone (drawn first so the labels sit on top).
+        drawPanelSmall(ctx, rects[0].x - 4, rects[0].y - 4, (rects[9].x + rects[9].w) - rects[0].x + 8, sh + 8, this.uiSheet);
+        drawPanelSmall(ctx, rects[10].x - 4, rects[10].y - 4, (rects[19].x + rects[19].w) - rects[10].x + 8, (rects[49].y + rects[49].h) - rects[10].y + 8, this.uiSheet);
+
+        // Zone labels, on top of the bands.
         if (this.font) {
             this.font.drawText(ctx, 'SAFE', rects[0].x, rects[0].y - 12, { color: UI.dim, scale: 1 });
             this.font.drawText(ctx, 'PACK', rects[10].x, rects[10].y - 12, { color: UI.dim, scale: 1 });
         }
 
-        // Parchment bands behind each zone.
-        drawPanelSmall(ctx, rects[0].x - 4, rects[0].y - 4, (rects[9].x + rects[9].w) - rects[0].x + 8, sh + 8, this.uiSheet);
-        drawPanelSmall(ctx, rects[10].x - 4, rects[10].y - 4, (rects[19].x + rects[19].w) - rects[10].x + 8, (rects[49].y + rects[49].h) - rects[10].y + 8, this.uiSheet);
-
-        // Selected-slot pulse — same 2Hz heartbeat as the radial menu's active slice.
-        const selPulse = 0.5 + 0.5 * Math.sin(performance.now() / 1000 * Math.PI * 2);
-
+        // The bag is browsed by TAP (main._tapDevice), not by number key or a
+        // selected-slot cursor — so no per-slot digit label or selection halo here.
         for (let i = 0; i < rects.length; i++) {
             const rect = rects[i];
             const stack = game.inventory[i];
-            const sel = game.selectedSlot === i;
-            const isEmpty = !stack;
 
-            // Slot frame — selected gets a pulsing gold halo; unselected a flat inset.
-            if (sel) {
-                ctx.fillStyle = `rgba(212, 185, 106, ${0.3 + 0.4 * selPulse})`;
-                ctx.fillRect(rect.x - 2, rect.y - 2, rect.w + 4, rect.h + 4);
-            }
             drawInset(ctx, rect.x, rect.y, rect.w, rect.h);
-            if (sel) {
-                ctx.strokeStyle = UI.gold;
-                ctx.lineWidth = 2;
-                ctx.strokeRect(rect.x - 1, rect.y - 1, rect.w + 2, rect.h + 2);
-            }
-
-            // Empty slots draw dimmer so the filled ones lead the eye.
-            const slotAlpha = isEmpty ? 0.7 : 1.0;
-            const prevAlpha = ctx.globalAlpha;
-            ctx.globalAlpha = slotAlpha;
-            if (this.font) {
-                this.font.drawText(ctx, `${i + 1}`, rect.x + 2, rect.y + 2, {
-                    color: sel ? UI.gold : UI.textLight, scale: 1,
-                });
-            }
-            ctx.globalAlpha = prevAlpha;
 
             if (stack) {
                 // Try sprite
