@@ -54,6 +54,19 @@ export const ITEMS = {
         fallbackColor: '#9a52c8',
         baseValue: 10,
     },
+    fire_bottle: {
+        id: 'fire_bottle',
+        name: '[Fire Bottle]',
+        description: 'A bottle, a rag, and somebody else\'s problem. Lights what it lands on and keeps at it.',
+        useType: 'throw',
+        equipSlot: 'sides',
+        range: 5,
+        dot: { id: 'fire', dmg: 5, turns: 3 },
+        damageType: 'fire',
+        consumable: true,
+        fallbackColor: '#e07a2a',
+        baseValue: 12,
+    },
     soap: {
         id: 'soap',
         name: '[Soap]',
@@ -543,10 +556,32 @@ export function resolveThrow(game, itemDef, direction, _stackCount = 1, targetTi
     const dtype = itemDef.damageType || 'physical';
     const isDamage = typeof itemDef.damage === 'number';
     const isHeal = itemDef.effect === 'heal' && typeof itemDef.healAmount === 'number';
+    const isDot = !!(itemDef.dot && typeof itemDef.dot.dmg === 'number' && typeof itemDef.dot.turns === 'number');
     const allowCenterFriendly = !!targetTile; // real placement implies the Plus Ultra gate already cleared
     let affected = 0;
 
-    if (isDamage) {
+    if (isDot) {
+        // The 3x3 burst applies HALF TURNS at the edge, not half damage. A weaker
+        // tick would misprice the item against the harness's dotValue ladder,
+        // whereas a shorter burn is exactly "less of the same thing".
+        // Re-throwing REFRESHES (longest duration, strongest tick) rather than
+        // stacking a second instance — two sludge sacks should not double-tick.
+        for (const foe of game._entitiesInRadius(ix, iy, 1)) {
+            const hostile = isHostile(foe);
+            const isCentre = foe.x === ix && foe.y === iy;
+            if (!(hostile || (allowCenterFriendly && isCentre))) continue;
+            const turns = isCentre ? itemDef.dot.turns : Math.max(1, Math.floor(itemDef.dot.turns / 2));
+            const list = foe.buffs || (foe.buffs = []);
+            const existing = list.find(b => b.id === itemDef.dot.id);
+            if (existing) {
+                existing.turns = Math.max(existing.turns, turns);
+                existing.dmg   = Math.max(existing.dmg ?? 0, itemDef.dot.dmg);
+            } else {
+                list.push({ id: itemDef.dot.id, turns, dmg: itemDef.dot.dmg });
+            }
+            affected++;
+        }
+    } else if (isDamage) {
         // 3×3 (radius 1) around impact, half effect. Bystander friendlies are
         // spared (hostile-only); the deliberately-aimed centre tile's occupant is
         // hit even if friendly (real-placement / Plus Ultra path only).
@@ -573,6 +608,10 @@ export function resolveThrow(game, itemDef, direction, _stackCount = 1, targetTi
         }
     }
 
+    if (isDot) {
+        if (affected > 0) return `[${itemDef.name} bursts — ${affected} caught in it]`;
+        return hitWall ? `[${itemDef.name} splatters against the wall]` : `[Threw ${itemDef.name} — splashed no one]`;
+    }
     if (isDamage) {
         if (affected > 0) return `[${itemDef.name} bursts — ${affected} caught in the splash]`;
         return hitWall ? `[${itemDef.name} splatters against the wall]` : `[Threw ${itemDef.name} — splashed no one]`;

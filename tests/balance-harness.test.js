@@ -211,4 +211,9 @@ describe('lintItems — Law 1 peg for consumables', () => {
     test('every consumable in ITEMS is at peg', () => {
         assert.deepEqual(lintItems(), []);
     });
+    test('fire_bottle exists and is at peg', () => {
+        assert.ok(ITEMS.fire_bottle, 'fire_bottle should exist');
+        assert.equal(ITEMS.fire_bottle.baseValue, 12);
+        assert.equal(itemPegValue(ITEMS.fire_bottle), 12);
+    });
 });

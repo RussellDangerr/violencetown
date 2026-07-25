@@ -178,3 +178,28 @@ describe('ownership lens walks inventory + equipment + tempEquips (PD-2)', () =>
         assert.deepEqual([...ownedItemDefs({})], []);
     });
 });
+
+describe('thrown DoT items apply their buff (Law 7)', () => {
+    test('a sludge sack lands a 3x5 sludge DoT on the centre target', () => {
+        const g = makeFakeGame();
+        const target = g.enemies[0];
+        resolveThrow(g, ITEMS.sludge_sack, null, 1, { x: target.x, y: target.y });
+        const dot = target.buffs?.find(b => b.id === 'sludge');
+        assert.ok(dot, 'expected a sludge DoT on the target');
+        assert.equal(dot.dmg, 3);
+        assert.equal(dot.turns, 5);
+    });
+    test('a DoT throw no longer shatters harmlessly', () => {
+        const g = makeFakeGame();
+        const target = g.enemies[0];
+        const msg = resolveThrow(g, ITEMS.sludge_sack, null, 1, { x: target.x, y: target.y });
+        assert.ok(!/shatters harmlessly/.test(msg), `got: ${msg}`);
+    });
+    test('re-throwing refreshes rather than stacking a second buff', () => {
+        const g = makeFakeGame();
+        const target = g.enemies[0];
+        resolveThrow(g, ITEMS.sludge_sack, null, 1, { x: target.x, y: target.y });
+        resolveThrow(g, ITEMS.sludge_sack, null, 1, { x: target.x, y: target.y });
+        assert.equal(target.buffs.filter(b => b.id === 'sludge').length, 1);
+    });
+});
