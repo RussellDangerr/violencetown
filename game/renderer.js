@@ -3235,6 +3235,11 @@ export class Renderer {
         for (const slot of EQ_SLOTS) {
             const s = slot;
             drawInset(ctx, s.x, s.y, s.w, s.h);
+            // (C2) gold halo on the plate whose chooser is open — same idiom C1 uses
+            // on the selected bag slot, so the eye links the plate to the picker panel.
+            if (game._deviceSel && game._deviceSel.tab === 'gear' && game._deviceSel.slotKey === s.key) {
+                ctx.strokeStyle = UI.gold; ctx.lineWidth = 2; ctx.strokeRect(s.x + 1, s.y + 1, s.w - 2, s.h - 2);
+            }
             // (defeat legibility) badge the safe-floor gear (the equipped weapon).
             const _eqItem = game.equipment[s.key];
             if (_eqItem && isSafe(_eqItem, game.equipment.weapon)) this._drawSafeBadge(ctx, s.x + s.w, s.y);
@@ -3313,7 +3318,7 @@ export class Renderer {
 
             // Armor delta: +N green / −N red / 0 dim, right-aligned.
             const d = opt.delta;
-            const dTxt = d > 0 ? `+${d}` : d < 0 ? `−${-d}` : '0';
+            const dTxt = d > 0 ? `+${d}` : d < 0 ? `-${-d}` : '0';
             const dCol = d > 0 ? UI.buff : d < 0 ? UI.hpRed : UI.dim;
             this.font.drawText(ctx, dTxt, r.x + r.w - 8, r.y + r.h / 2 - 4, { color: dCol, scale: 1, align: 'right' });
         }

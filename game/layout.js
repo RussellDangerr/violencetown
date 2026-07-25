@@ -321,10 +321,14 @@ export function deviceEquipLayout(bodyRect) {
 // vertical band between the HEAD plate (top) and the WEAPON plate (bottom). A
 // right-side column would collide with the TORSO/FEET plates, which scale to the
 // right edge; centering a narrow column keeps it clear of the flanking
-// ARMS/TORSO/BACK/FEET plates too. Pinned by tests/device-layout.test.js.
+// ARMS/TORSO/BACK/FEET plates too. gap = 2×HIT_SLOP so adjacent rows' tap zones
+// never overlap (matches inspectorActionRects). Assumes few rows per slot — the
+// current catalog gives ≤2 (one equip item + Bare); a slot that ever gained many
+// items would need this uncapped column capped or scrolled. Pinned by
+// tests/device-layout.test.js.
 export function gearOptionRects(bodyRect, n) {
   const w = 200, x = bodyRect.x + (bodyRect.w - w) / 2;
-  const rowH = 26, gap = 4;
+  const rowH = 26, gap = 12;
   const y0 = bodyRect.y + 60;
   const rects = [];
   for (let i = 0; i < n; i++) rects.push({ x, y: y0 + i * (rowH + gap), w, h: rowH });
