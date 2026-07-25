@@ -2,8 +2,9 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ttk, ttdOf, pegRate, lintEntity, lintSkills, loadMapRoster, report, trickDamage, normEol, GOLDEN_PATH, REFERENCE_DAMAGE, ARMOR_CAP, statBlock, applyStatBlock, dotValue, DOT_DISCOUNT } from '../tools/balance-harness.mjs';
+import { ttk, ttdOf, pegRate, lintEntity, lintSkills, loadMapRoster, report, trickDamage, normEol, GOLDEN_PATH, REFERENCE_DAMAGE, ARMOR_CAP, statBlock, applyStatBlock, dotValue, DOT_DISCOUNT, lintItems, itemPegValue } from '../tools/balance-harness.mjs';
 import { TRICKS } from '../game/tricks.js';
+import { ITEMS } from '../game/items.js';
 
 // A minimal roster entry — spread over to vary one field at a time.
 const spawn = (over = {}) => ({
@@ -188,5 +189,26 @@ describe('dotValue — Law 1 time value of damage', () => {
     });
     test('zero turns is worth nothing', () => {
         assert.equal(dotValue(5, 0), 0);
+    });
+});
+
+describe('lintItems — Law 1 peg for consumables', () => {
+    test('a heal prices at the HP it restores', () => {
+        assert.equal(itemPegValue({ consumable: true, effect: 'heal', healAmount: 25 }), 25);
+    });
+    test('a flat throwable prices at its damage', () => {
+        assert.equal(itemPegValue({ consumable: true, useType: 'throw', damage: 3 }), 3);
+    });
+    test('a DoT throwable prices at its discounted value', () => {
+        assert.equal(itemPegValue({ consumable: true, useType: 'throw', dot: { id: 'sludge', dmg: 3, turns: 5 } }), 10);
+    });
+    test('persistent gear is out of scope — no peg opinion', () => {
+        assert.equal(itemPegValue({ consumable: false, equipSlot: 'top', armor: 2 }), null);
+    });
+    test('a quest item with no numeric effect is out of scope', () => {
+        assert.equal(itemPegValue({ consumable: false, useType: 'none' }), null);
+    });
+    test('every consumable in ITEMS is at peg', () => {
+        assert.deepEqual(lintItems(), []);
     });
 });

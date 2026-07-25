@@ -16,6 +16,7 @@ import { HEAL_HP_FLOOR, HEAL_MIN_GOLD } from '../game/ai.js';
 // roundtrip.test.js already import Enemy from here under bare `node --test`),
 // so this pure helper is safe to pull into a headless Node tool too.
 import { challengeGp } from '../game/enemies.js';
+import { ITEMS } from '../game/items.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const GAME_DIR  = path.join(__dirname, '..', 'game');
@@ -202,6 +203,42 @@ export function lintSkills() {
             flags.push(`[skill/${s.id}] Law 1 — ${rate.toFixed(2)} dmg/MP, expected [${SPELL_MIN_RATE.toFixed(2)}, ${SPELL_MAX_RATE.toFixed(2)}]`);
         }
     }
+    return flags;
+}
+
+// What Law 1 says this consumable should cost, or null if the peg has no opinion.
+//
+// SCOPE: consumables with a numeric effect. Persistent gear is deliberately
+// excluded (plans/enemy-kits-and-dots-design.md §1b) — armor's HP-equivalent
+// depends on how many hits it eats, which is not a number a lint can know.
+//
+// A consumable is LAZY VIOLENCE in Law 1's sense: you buy the solution, point it,
+// and it works. No gate, no per-cast aim. So it prices at the peg (1 GP ~ 1 HP),
+// NOT at the >=2.5 dmg/GP trick rate, which exists for gated aimed abilities.
+export function itemPegValue(def) {
+    if (!def || !def.consumable) return null;
+    if (def.dot && typeof def.dot.dmg === 'number' && typeof def.dot.turns === 'number') {
+        return dotValue(def.dot.dmg, def.dot.turns);
+    }
+    if (def.effect === 'heal' && typeof def.healAmount === 'number') return def.healAmount;
+    if (typeof def.damage === 'number') return def.damage;
+    return null;
+}
+
+// Peg lint over the item catalog (Law 1). The absence of THIS function is why the
+// catalog drifted to 2-7x above peg unnoticed — lintSkills covered tricks, spells
+// and summons; nothing ever covered the things you buy in a shop.
+export function lintItems() {
+    const flags = [];
+    for (const [id, def] of Object.entries(ITEMS)) {
+        const expected = itemPegValue(def);
+        if (expected === null) continue;
+        const actual = def.baseValue ?? 0;
+        if (actual !== expected) {
+            flags.push(`[item/${id}] Law 1 — baseValue ${actual}, expected ${expected} (HP-equivalent of its effect)`);
+        }
+    }
+    flags.sort(byCodepoint);
     return flags;
 }
 
