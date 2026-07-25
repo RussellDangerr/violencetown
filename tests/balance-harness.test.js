@@ -2,7 +2,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ttk, ttdOf, pegRate, lintEntity, lintSkills, loadMapRoster, report, trickDamage, normEol, GOLDEN_PATH, REFERENCE_DAMAGE, ARMOR_CAP, statBlock, applyStatBlock, dotValue, DOT_DISCOUNT, lintItems, itemPegValue, bandForArmor, ROLE_BANDS } from '../tools/balance-harness.mjs';
+import { ttk, ttdOf, pegRate, lintEntity, lintSkills, loadMapRoster, report, trickDamage, normEol, GOLDEN_PATH, REFERENCE_DAMAGE, ARMOR_CAP, statBlock, applyStatBlock, dotValue, DOT_DISCOUNT, lintItems, itemPegValue, poitionPegValue, bandForArmor, ROLE_BANDS } from '../tools/balance-harness.mjs';
 import { TRICKS } from '../game/tricks.js';
 import { ITEMS } from '../game/items.js';
 
@@ -207,8 +207,8 @@ describe('lintItems — Law 1 peg for consumables', () => {
     test('a flat throwable prices at its damage', () => {
         assert.equal(itemPegValue({ consumable: true, useType: 'throw', damage: 3 }), 3);
     });
-    test('a DoT throwable prices at its discounted value', () => {
-        assert.equal(itemPegValue({ consumable: true, useType: 'throw', dot: { id: 'sludge', dmg: 3, turns: 5 } }), 10);
+    test('a poition throwable prices at its discounted value', () => {
+        assert.equal(itemPegValue({ consumable: true, useType: 'throw', poition: { stat: 'health', amount: -3, turns: 5 } }), 10);
     });
     test('persistent gear is out of scope — no peg opinion', () => {
         assert.equal(itemPegValue({ consumable: false, equipSlot: 'top', armor: 2 }), null);
@@ -223,6 +223,51 @@ describe('lintItems — Law 1 peg for consumables', () => {
         assert.ok(ITEMS.fire_bottle, 'fire_bottle should exist');
         assert.equal(ITEMS.fire_bottle.baseValue, 12);
         assert.equal(itemPegValue(ITEMS.fire_bottle), 12);
+    });
+});
+
+describe('poitionPegValue — Law 1 peg for the six poition stats', () => {
+    test('health: HP-equivalent is |amount|, discounted over turns', () => {
+        assert.equal(poitionPegValue({ stat: 'health', amount: 25, turns: 1 }), 25);
+        assert.equal(poitionPegValue({ stat: 'health', amount: -3, turns: 5 }), dotValue(3, 5));
+    });
+    test('mana: MP buys damage at the spell floor (1.5 dmg/MP)', () => {
+        assert.equal(poitionPegValue({ stat: 'mana', amount: 20, turns: 1 }), 30);
+    });
+    test('gold: 1 GP ~ 1 HP is the peg itself', () => {
+        assert.equal(poitionPegValue({ stat: 'gold', amount: 50, turns: 1 }), 50);
+    });
+    test('strength: +dmg per hit, once per turn, discounted like a DoT', () => {
+        assert.equal(poitionPegValue({ stat: 'strength', amount: 6, turns: 5 }), 20);
+        assert.equal(poitionPegValue({ stat: 'strength', amount: 6, turns: 5 }), dotValue(6, 5));
+    });
+    test('defence: dmg prevented per incoming hit, once per turn, discounted like a DoT', () => {
+        assert.equal(poitionPegValue({ stat: 'defence', amount: 4, turns: 6 }), 15);
+        assert.equal(poitionPegValue({ stat: 'defence', amount: 4, turns: 6 }), dotValue(4, 6));
+    });
+    test('speed: a free action is worth one reference swing (REFERENCE_DAMAGE)', () => {
+        assert.equal(poitionPegValue({ stat: 'speed', amount: 2, turns: 1 }), REFERENCE_DAMAGE * 2);
+    });
+    test('the sign of amount never changes the price — only magnitude is priced', () => {
+        assert.equal(
+            poitionPegValue({ stat: 'health', amount: 25, turns: 1 }),
+            poitionPegValue({ stat: 'health', amount: -25, turns: 1 }),
+        );
+    });
+    test('an unknown stat has no peg opinion', () => {
+        assert.equal(poitionPegValue({ stat: 'luck', amount: 5, turns: 1 }), null);
+    });
+    test('a malformed poition (missing amount/turns) has no peg opinion', () => {
+        assert.equal(poitionPegValue(null), null);
+        assert.equal(poitionPegValue({ stat: 'health' }), null);
+    });
+    test('all six new poitions are at peg', () => {
+        assert.equal(itemPegValue(ITEMS.health_poition), ITEMS.health_poition.baseValue);
+        assert.equal(itemPegValue(ITEMS.mana_poition), ITEMS.mana_poition.baseValue);
+        assert.equal(itemPegValue(ITEMS.gold_poition), ITEMS.gold_poition.baseValue);
+        assert.equal(itemPegValue(ITEMS.strength_poition), ITEMS.strength_poition.baseValue);
+        assert.equal(itemPegValue(ITEMS.defence_poition), ITEMS.defence_poition.baseValue);
+        assert.equal(itemPegValue(ITEMS.speed_poition), ITEMS.speed_poition.baseValue);
     });
 });
 

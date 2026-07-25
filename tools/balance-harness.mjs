@@ -260,6 +260,36 @@ export function lintSkills() {
     return flags;
 }
 
+// What a poition's amount is worth in HP-equivalent, or null if the stat has
+// no priced conversion (an unknown stat, or a malformed poition). Every band
+// converts to an HP-equivalent MAGNITUDE first, then applies the same
+// dotValue discount for time-delayed delivery (Law 1 §1c) — the sign of
+// `amount` (potion vs. poison) never changes the price, only the direction.
+//
+//   health    — already HP; the peg itself.
+//   mana      — MP buys damage at the spell floor, SPELL_MIN_RATE (1.5 dmg/MP).
+//   gold      — 1 GP ~ 1 HP is the peg itself.
+//   strength  — +dmg per hit, once per turn, same shape as a DoT tick.
+//   defence   — dmg prevented per incoming hit, once per turn, same shape.
+//   speed     — a free action is worth one reference swing, REFERENCE_DAMAGE.
+export function poitionPegValue(p) {
+    if (!p || typeof p.amount !== 'number' || typeof p.turns !== 'number') return null;
+    const mag = Math.abs(p.amount);
+    switch (p.stat) {
+        case 'health':
+        case 'gold':
+        case 'strength':
+        case 'defence':
+            return dotValue(mag, p.turns);
+        case 'mana':
+            return dotValue(mag * SPELL_MIN_RATE, p.turns);
+        case 'speed':
+            return dotValue(mag * REFERENCE_DAMAGE, p.turns);
+        default:
+            return null;
+    }
+}
+
 // What Law 1 says this consumable should cost, or null if the peg has no opinion.
 //
 // SCOPE: consumables with a numeric effect. Persistent gear is deliberately
@@ -271,8 +301,9 @@ export function lintSkills() {
 // NOT at the >=2.5 dmg/GP trick rate, which exists for gated aimed abilities.
 export function itemPegValue(def) {
     if (!def || !def.consumable) return null;
-    if (def.dot && typeof def.dot.dmg === 'number' && typeof def.dot.turns === 'number') {
-        return dotValue(def.dot.dmg, def.dot.turns);
+    if (def.poition) {
+        const v = poitionPegValue(def.poition);
+        if (v !== null) return v;
     }
     if (def.effect === 'heal' && typeof def.healAmount === 'number') return def.healAmount;
     if (typeof def.damage === 'number') return def.damage;

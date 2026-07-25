@@ -18,6 +18,7 @@
 // buy / sell / bribe — two halves of one transaction spine.
 
 import { isHostile, isSewerDweller } from './ai.js';
+import { poitionBuff } from './items.js';
 
 // Tuning constant — controls how much disposition each unit of `values`
 // shifts. Currently 5 (so values:{soap:8} means soap gives +40 disposition).
@@ -121,8 +122,9 @@ export function applyGive(item, recipient) {
 // Delivers a sewerFare item's damage/heal directly to `recipient` — a hand-fed
 // dose, not a thrown splash, so it lands at FULL magnitude (no half-turns, no
 // half-damage the way resolveThrow's 3x3 burst discounts a near-miss). Mirrors
-// resolveThrow's isDot branch (game/items.js) for `dot` items so the two paths
-// can't drift on the sign-flip rule; `damage` items (mystery_meat) are applied
+// resolveThrow's isDot branch (game/items.js) for `poition` items, both riding
+// the shared poitionBuff helper, so the two paths can't drift on the sign-flip
+// rule; `damage` items (mystery_meat) are applied
 // as a direct HP delta instead of through Game.combatAttack — that pipeline
 // (Entity.takeDamage's `Math.max(1, dmg - armor)` floor, elemental/backstab/
 // hit-splat/kill-event machinery) is built for positive combat damage only
@@ -130,15 +132,18 @@ export function applyGive(item, recipient) {
 // gift never goes through combatAttack in the first place, so that limitation
 // doesn't apply here — a flat damage/heal number is all this needs.
 function applySewerFareEffect(item, recipient, dwellerFriendly) {
-    if (item.dot) {
-        const dmg = dwellerFriendly ? -item.dot.dmg : item.dot.dmg;
+    if (item.poition) {
+        // poitionBuff's `flip` does the sign inversion — see its doc comment
+        // in items.js. dwellerFriendly IS the flip here: medicine for a sewer-
+        // dweller, poison for anyone else.
+        const buff = poitionBuff(item.poition, dwellerFriendly);
         const list = recipient.buffs || (recipient.buffs = []);
-        const existing = list.find(b => b.id === item.dot.id);
+        const existing = list.find(b => b.id === buff.id);
         if (existing) {
-            existing.turns = item.dot.turns; // a direct feeding is the whole dose — no half-turns to reconcile
-            existing.dmg = Math.abs(dmg) > Math.abs(existing.dmg ?? 0) ? dmg : existing.dmg;
+            existing.turns = buff.turns; // a direct feeding is the whole dose — no half-turns to reconcile
+            existing.dmg = Math.abs(buff.dmg) > Math.abs(existing.dmg ?? 0) ? buff.dmg : existing.dmg;
         } else {
-            list.push({ id: item.dot.id, turns: item.dot.turns, dmg });
+            list.push({ id: buff.id, turns: buff.turns, dmg: buff.dmg });
         }
     } else if (typeof item.damage === 'number') {
         const ent = recipient.entity;

@@ -10,6 +10,24 @@
 
 import { isHostile, isSewerDweller } from './ai.js';
 
+// ── Poition (data + lint only — see plans/*poition* for the follow-up that
+// wires the other five stats) ────────────────────────────────────────────────
+// A poition moves exactly one of six stats by a signed amount: positive is a
+// potion, negative is a poison — same object, same shape, the sign is the
+// whole difference. Only `health` is wired to a runtime effect today (it
+// rides applyDot in buffs.js); mana/gold/strength/defence/speed are priced by
+// the lint (tools/balance-harness.mjs) but inert until the follow-up task.
+//
+// A poition's buff record: { id, turns, dmg }. `dmg` is POSITIVE for harm and
+// NEGATIVE for healing, matching applyDot's existing sign convention — so a
+// potion (amount +5) becomes dmg -5 and heals. The sign inversion lives here,
+// in one place, rather than at each call site.
+export function poitionBuff(p, flip = false) {
+    if (!p) return null;
+    const amount = flip ? -p.amount : p.amount;
+    return { id: p.as || p.stat, turns: p.turns ?? 1, dmg: -amount };
+}
+
 export const ITEMS = {
     // (Ring builds) A learning source: using it adds a skill to the learned pool
     // (auto-slotting if there's room), then the tome is consumed. The same
@@ -47,7 +65,7 @@ export const ITEMS = {
         useType: 'throw',
         equipSlot: 'sides',
         range: 5,
-        dot: { id: 'sludge', dmg: 3, turns: 5 },
+        poition: { stat: 'health', amount: -3, turns: 5, as: 'sludge' },
         damageType: 'sludge',
         sewerFare: true,       // Phase D: medicine to the things that live down there
         consumable: true,
@@ -61,7 +79,7 @@ export const ITEMS = {
         useType: 'throw',
         equipSlot: 'sides',
         range: 5,
-        dot: { id: 'fire', dmg: 5, turns: 3 },
+        poition: { stat: 'health', amount: -5, turns: 3, as: 'fire' },
         damageType: 'fire',
         consumable: true,
         fallbackColor: '#e07a2a',
@@ -237,7 +255,7 @@ export const ITEMS = {
         useType: 'throw',
         equipSlot: 'sides',
         range: 4,
-        dot: { id: 'poison', dmg: 5, turns: 2 },
+        poition: { stat: 'health', amount: -5, turns: 2, as: 'poison' },
         damageType: 'poison',
         sewerFare: true,
         consumable: true,
@@ -315,6 +333,86 @@ export const ITEMS = {
         questItem: true,
         fallbackColor: '#9a7b4a',
         baseValue: 1000,
+    },
+
+    // ── Poition (a potion, a poison — the pun is the point) ──────────────────
+    // The six below are the beneficial half of the category: a poition moves
+    // exactly one of six stats, and here amount is always positive. Their
+    // negative-amount siblings are the sludge_sack / tunnel_mushroom /
+    // fire_bottle health-poitions above. Only health is wired to a runtime
+    // effect today; the other five are data + lint only until the follow-up
+    // task teaches resolveUse what to do with them.
+    health_poition: {
+        id: 'health_poition',
+        name: '[Health Poition]',
+        description: 'Vial of thick red syrup, corked with a wine stopper. Stings on the way down. Works anyway.',
+        category: 'poition',
+        poition: { stat: 'health', amount: 25, turns: 1 },
+        consumable: true,
+        useType: 'self',
+        equipSlot: 'front',
+        fallbackColor: '#c8384a',
+        baseValue: 25,
+    },
+    mana_poition: {
+        id: 'mana_poition',
+        name: '[Mana Poition]',
+        description: 'Vial of something blue that fizzes on its own. Drink it fast — thinking about it too long makes it worse.',
+        category: 'poition',
+        poition: { stat: 'mana', amount: 20, turns: 1 },
+        consumable: true,
+        useType: 'self',
+        equipSlot: 'front',
+        fallbackColor: '#4a86c8',
+        baseValue: 30,
+    },
+    gold_poition: {
+        id: 'gold_poition',
+        name: '[Gold Poition]',
+        description: "Swallow it and cough up loose change for about a minute straight. Where it comes from is above your pay grade.",
+        category: 'poition',
+        poition: { stat: 'gold', amount: 50, turns: 1 },
+        consumable: true,
+        useType: 'self',
+        equipSlot: 'front',
+        fallbackColor: '#e0b83a',
+        baseValue: 50,
+    },
+    strength_poition: {
+        id: 'strength_poition',
+        name: '[Strength Poition]',
+        description: 'Thick as tar and tastes like a bad idea. Your arms believe it before your brain does.',
+        category: 'poition',
+        poition: { stat: 'strength', amount: 6, turns: 5 },
+        consumable: true,
+        useType: 'self',
+        equipSlot: 'front',
+        fallbackColor: '#b5522a',
+        baseValue: 20,
+    },
+    defence_poition: {
+        id: 'defence_poition',
+        name: '[Defence Poition]',
+        description: 'Sets like plaster somewhere behind your ribs. Hurts going down, helps for a while after.',
+        category: 'poition',
+        poition: { stat: 'defence', amount: 4, turns: 6 },
+        consumable: true,
+        useType: 'self',
+        equipSlot: 'front',
+        fallbackColor: '#7a8a9a',
+        baseValue: 15,
+    },
+    speed_poition: {
+        id: 'speed_poition',
+        name: '[Speed Poition]',
+        description: 'Fizzy, cold, gone in one gulp. Everything after moves faster than your judgment does.',
+        category: 'poition',
+        poition: { stat: 'speed', amount: 2, turns: 1 },
+        consumable: true,
+        useType: 'self',
+        equipSlot: 'front',
+        fallbackColor: '#3ac8a0',
+        baseValue: 40,
     },
 };
 
@@ -556,7 +654,7 @@ export function resolveThrow(game, itemDef, direction, _stackCount = 1, targetTi
     const dtype = itemDef.damageType || 'physical';
     const isDamage = typeof itemDef.damage === 'number';
     const isHeal = itemDef.effect === 'heal' && typeof itemDef.healAmount === 'number';
-    const isDot = !!(itemDef.dot && typeof itemDef.dot.dmg === 'number' && typeof itemDef.dot.turns === 'number');
+    const isDot = !!(itemDef.poition && typeof itemDef.poition.amount === 'number' && typeof itemDef.poition.turns === 'number');
     const allowCenterFriendly = !!targetTile; // real placement implies the Plus Ultra gate already cleared
     let affected = 0;
 
@@ -570,13 +668,14 @@ export function resolveThrow(game, itemDef, direction, _stackCount = 1, targetTi
             const hostile = isHostile(foe);
             const isCentre = foe.x === ix && foe.y === iy;
             if (!(hostile || (allowCenterFriendly && isCentre))) continue;
-            const turns = isCentre ? itemDef.dot.turns : Math.max(1, Math.floor(itemDef.dot.turns / 2));
+            const turns = isCentre ? itemDef.poition.turns : Math.max(1, Math.floor(itemDef.poition.turns / 2));
             // Magnitude preserved, sign flipped: the same five-times-two is poison
             // to a human and regeneration to the things that live down here. One
             // baseValue stays honest for both because the numbers are identical.
-            const dmg = (itemDef.sewerFare && isSewerDweller(foe)) ? -itemDef.dot.dmg : itemDef.dot.dmg;
+            // poitionBuff's `flip` does the inversion — see its doc comment above.
+            const buff = poitionBuff(itemDef.poition, !!(itemDef.sewerFare && isSewerDweller(foe)));
             const list = foe.buffs || (foe.buffs = []);
-            const existing = list.find(b => b.id === itemDef.dot.id);
+            const existing = list.find(b => b.id === buff.id);
             if (existing) {
                 existing.turns = Math.max(existing.turns, turns);
                 // "Refresh takes the strongest tick" — with dmg now signed, "strongest"
@@ -584,9 +683,9 @@ export function resolveThrow(game, itemDef, direction, _stackCount = 1, targetTi
                 // since a given foe's species doesn't change between throws), not the
                 // arithmetic max. Math.max(-5, -3) would pick -3 — the WEAKER heal —
                 // exactly backwards from the harm case it was copied from.
-                existing.dmg = Math.abs(dmg) > Math.abs(existing.dmg ?? 0) ? dmg : existing.dmg;
+                existing.dmg = Math.abs(buff.dmg) > Math.abs(existing.dmg ?? 0) ? buff.dmg : existing.dmg;
             } else {
-                list.push({ id: itemDef.dot.id, turns, dmg });
+                list.push({ id: buff.id, turns, dmg: buff.dmg });
             }
             affected++;
         }

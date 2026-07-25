@@ -3,7 +3,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { Enemy, spawnEnemy, challengeGp, resolveLoadout } from '../game/enemies.js';
 import { transferGold, burnGold } from '../game/trade.js';
-import { ITEMS } from '../game/items.js';
+import { ITEMS, poitionBuff } from '../game/items.js';
 
 describe('Law 6 — the wallet is the loot', () => {
     test('transferGold moves an enemy wallet to a receiver and conserves total', () => {
@@ -94,7 +94,7 @@ describe('challengeGp over real item ids (Law 6f)', () => {
         const defs = resolveLoadout(['bandage', 'fire_bottle']);
         assert.equal(defs.length, 2);
         assert.equal(defs[0], ITEMS.bandage);
-        assert.equal(defs[1].dot.id, 'fire');
+        assert.equal(poitionBuff(defs[1].poition).id, 'fire');
     });
     test('resolveLoadout is null-safe', () => {
         assert.deepEqual(resolveLoadout(null), []);
