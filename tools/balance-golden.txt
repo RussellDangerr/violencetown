@@ -7,10 +7,10 @@ zone/id                           type                         hp   armor    dmg
 bank/bank-financier               Banker                      100     -80      0        0              1              1      -
 borgir/borgir_boss                Boss                        100     -15      0        0              3              2      -
 canyon/pike                       Pike                        100     -15      6        0              3              2     17
-canyon/canyon-rat-1               Rat                         100     -80      4        0              1              1     25
-canyon/canyon-rat-2               Rat                         100     -80      4        0              1              1     25
+canyon/canyon-rat-1               Rat                         100     -80      4        1              1              1     25
+canyon/canyon-rat-2               Rat                         100     -80      4        1              1              1     25
 casino/casino-pit-boss            Operator                    100     -80      0        0              1              1      -
-circus/clown1                     Carnival Clown              100     -80      4        0              1              1     25
+circus/clown1                     Carnival Clown              100     -80      4        4              1              1     25
 diner/diner-cook                  Cook                        100     -80      0        0              1              1      -
 downtown/dt-recipient             Stranger                    100     -80      0        0              1              1      -
 downtown/dt-merch1                Vendor                      100     -80      0        0              1              1      -
@@ -18,17 +18,17 @@ downtown/dt-merch2                Vendor                      100     -80      0
 downtown/dt-folk1                 Violencian                  100     -80      0        0              1              1      -
 downtown/dt-folk2                 Violencian                  100     -80      0        0              1              1      -
 downtown/dt-platero               Violencian                  100     -80      0        0              1              1      -
-factory/green1                    Greedy Green                100     -30      5        0              2              2     20
+factory/green1                    Greedy Green                100     -30      5       13              2              2     20
 factory/puck                      Puck                        100     -30      1        0              2              2    100
-graveyard/skel1                   Rattling Skeleton           100     -80      4        0              1              1     25
+graveyard/skel1                   Rattling Skeleton           100     -80      4        4              1              1     25
 sewer/carrion                     Carrion                     100     -80      0        0              1              1      -
-sewer/e6                          Fungus King                 100      -5     10        0              4              3     10
-sewer/e5                          Ghost Fungus                100     -80      4        0              1              1     25
-sewer/e3                          Red Fungus                  100     -30      6        0              2              2     17
-sewer/e4                          Red Fungus                  100     -30      6        0              2              2     17
-sewer/e1                          Violet Fungus               100     -30      5        0              2              2     20
-sewer/e2                          Violet Fungus               100     -30      5        0              2              2     20
-sewer/wererat                     Wererat                     100       0     12        0              5              3      9
+sewer/e6                          Fungus King                 100      -5     10       43              4              3     10
+sewer/e5                          Ghost Fungus                100     -80      4        4              1              1     25
+sewer/e3                          Red Fungus                  100     -30      6       11              2              2     17
+sewer/e4                          Red Fungus                  100     -30      6       11              2              2     17
+sewer/e1                          Violet Fungus               100     -30      5       12              2              2     20
+sewer/e2                          Violet Fungus               100     -30      5       12              2              2     20
+sewer/wererat                     Wererat                     100       0     12       43              5              3      9
 town/townie-hooch                 Bootlegger                  100     -80      0        0              1              1      -
 town/townie-e                     Violencian                  100     -80      0        0              1              1      -
 town/townie-glunk                 Violencian                  100     -80      0        0              1              1      -
@@ -66,14 +66,14 @@ ray_blast           6       18     3.00
 zone               faucet_gp
 bank                       0
 borgir                     0
-canyon                     0
+canyon                     2
 casino                     0
-circus                     0
+circus                     1
 diner                      0
 downtown                   0
-factory                    0
-graveyard                  0
-sewer                      0
+factory                    3
+graveyard                  1
+sewer                     28
 town                       0
 sinks: burnGold('heal'|'trick'), bribes/buyouts via transferGold
 
