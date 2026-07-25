@@ -20,6 +20,7 @@ import { stepEntity, fleeStep } from './pathing.js';
 import { tickNpcState } from './npc.js';
 import { tickBuffList } from './buffs.js';
 import { parseCapabilities, deriveAllegiance } from './ai.js';
+import { ITEMS } from './items.js';
 
 const DEFAULT_SIGHT = 8;
 const DEFAULT_DAMAGE = 8;
@@ -102,10 +103,12 @@ export class Enemy {
         gold = null,
         giftLog = null,
         // Law 6f (plans/gold-standard-design.md): the potions/gear this enemy
-        // carries — array of { name, value }. Its value counts toward Challenge
-        // GP (challengeGp below) but is NOT yet consumed by AI (not USED in a
-        // fight); that lands with boss spending policies. Loot stays liquid
-        // gold only — a loadout item never becomes lootable coin on death.
+        // carries — an array of ITEMS ids (resolveLoadout below resolves them to
+        // real defs; legacy { name, value } literals still count too, for old
+        // saves/fixtures). Value counts toward Challenge GP (challengeGp below)
+        // but is NOT yet consumed by AI (not USED in a fight); that lands with
+        // boss spending policies. Loot stays liquid gold only — a loadout item
+        // never becomes lootable coin on death.
         loadout = null,
         // Town Clock (feature/town-clock): heartbeat-driven ambient NPC. When
         // true, this NPC is advanced by the free-running world tick
@@ -307,20 +310,59 @@ export class Enemy {
     }
 }
 
+// Resolve a loadout to real item defs. Entries are item IDS so an enemy can
+// actually USE what it carries and so the death drop is a one-liner. Unknown ids
+// are dropped rather than throwing — content-validate.js is where a typo gets
+// caught loudly, at author time.
+export function resolveLoadout(loadout) {
+    if (!Array.isArray(loadout)) return [];
+    return loadout.map(x => (typeof x === 'string' ? ITEMS[x] : x)).filter(Boolean);
+}
+
 // Law 6f — the nameplate number is the whole kit: liquid gold + carried item
-// values. Loot stays liquid gold only; the rest dies with its owner.
+// values. Accepts item IDS (the authoring form) and legacy {value} literals (old
+// saves and fixtures), so both read the same number.
 export function challengeGp(e) {
-    const items = e.loadout?.reduce((s, it) => s + (it.value ?? 0), 0) ?? 0;
+    const items = (e.loadout ?? []).reduce((s, x) => {
+        const def = (typeof x === 'string') ? ITEMS[x] : x;
+        return s + (def?.value ?? def?.baseValue ?? 0);
+    }, 0);
     return (e.gold ?? 0) + items;
 }
 
 // ── Spawn from a map entry ───────────────────────────────────────────────────
 
-// Law 6d: a spawn the player already mugged comes back broke — no gold-farming
-// a respawning enemy by re-entering its zone. Pure so it's Node-testable.
+// Stock kits by armor band. This is the OMISSION BACKSTOP, not the authoring
+// surface: a summon, a runtime set-piece spawn, or a new enemy added by someone
+// who didn't read the spec inherits a legal kit instead of shipping broke —
+// which is precisely how Law 6's wallets sat empty through a whole release.
+// Explicit authoring always wins.
+const KIT_DEFAULTS = [
+    { maxArmor: -80, gold: 1, loadout: ['rock'] },                           //  4 GP
+    { maxArmor: -30, gold: 3, loadout: ['tunnel_mushroom'] },                // 12 GP
+    { maxArmor: -15, gold: 6, loadout: ['tunnel_mushroom', 'fire_bottle'] }, // 27 GP
+    { maxArmor: 0,   gold: 8, loadout: ['bandage', 'fire_bottle'] },         // 45 GP
+    { maxArmor: 10,  gold: 30, loadout: ['bandage', 'bandage', 'fire_bottle', 'sludge_sack', 'boardwalk_burger'] }, // 117 GP
+];
+
+function defaultKit(armor) {
+    for (const k of KIT_DEFAULTS) if (armor <= k.maxArmor) return k;
+    return KIT_DEFAULTS[KIT_DEFAULTS.length - 1];
+}
+
+// Law 6d: a spawn the player already mugged comes back broke — no gold AND no
+// kit, so re-entering a zone can't farm either half of the wallet. Pure so it
+// stays Node-testable.
 export function spawnEnemy(spawnDef, muggedIds) {
     const e = new Enemy(spawnDef);
-    if (muggedIds?.has(e.id)) e.gold = 0;
+    const fights = (e.damage ?? 0) > 0 && !e.ambient;
+    if (fights && spawnDef.gold == null && spawnDef.loadout == null) {
+        const kit = defaultKit(e.entity.armor ?? 0);
+        e.gold = kit.gold;
+        e.loadout = [...kit.loadout];
+    }
+    if (!Array.isArray(e.loadout)) e.loadout = e.loadout ? [...e.loadout] : [];
+    if (muggedIds?.has(e.id)) { e.gold = 0; e.loadout = []; }
     return e;
 }
 

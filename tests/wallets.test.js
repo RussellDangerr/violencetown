@@ -1,8 +1,9 @@
 // wallets.test.js — Law 6: loot = remaining wallet; respawns come back broke.
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { Enemy, spawnEnemy, challengeGp } from '../game/enemies.js';
+import { Enemy, spawnEnemy, challengeGp, resolveLoadout } from '../game/enemies.js';
 import { transferGold, burnGold } from '../game/trade.js';
+import { ITEMS } from '../game/items.js';
 
 describe('Law 6 — the wallet is the loot', () => {
     test('transferGold moves an enemy wallet to a receiver and conserves total', () => {
@@ -74,5 +75,30 @@ describe('challengeGp — Law 6f: the wallet number is the whole kit', () => {
         assert.equal(challengeGp({ gold: 10 }), 10);
         assert.equal(challengeGp({}), 0);
         assert.equal(challengeGp({ gold: 5, loadout: [{ name: 'IOU' }] }), 5);
+    });
+});
+
+describe('challengeGp over real item ids (Law 6f)', () => {
+    test('a loadout of ids sums their baseValue', () => {
+        const e = new Enemy({ id: 'k', type: 'Fungus', x: 0, y: 0, gold: 4, loadout: ['tunnel_mushroom', 'mystery_meat'] });
+        assert.equal(challengeGp(e), 4 + 9 + 3);
+    });
+    test('an unknown id contributes 0 rather than NaN', () => {
+        const e = new Enemy({ id: 'k2', type: 'Fungus', x: 0, y: 0, gold: 5, loadout: ['not_a_real_item'] });
+        assert.equal(challengeGp(e), 5);
+    });
+    test('legacy literal {value} objects still count — old saves keep working', () => {
+        assert.equal(challengeGp({ gold: 10, loadout: [{ name: 'Big Potion', value: 60 }] }), 70);
+    });
+    test('resolveLoadout hands back real defs an enemy can USE', () => {
+        const defs = resolveLoadout(['bandage', 'fire_bottle']);
+        assert.equal(defs.length, 2);
+        assert.equal(defs[0], ITEMS.bandage);
+        assert.equal(defs[1].dot.id, 'fire');
+    });
+    test('resolveLoadout is null-safe', () => {
+        assert.deepEqual(resolveLoadout(null), []);
+        assert.deepEqual(resolveLoadout(undefined), []);
+        assert.deepEqual(resolveLoadout(['nope']), []);
     });
 });
