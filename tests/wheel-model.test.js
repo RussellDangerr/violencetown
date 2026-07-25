@@ -99,7 +99,9 @@ test('verbApplies: a category always applies; an adjacent verb needs a live neig
   assert.equal(verbApplies(fight, stubGame()), true);
   const hit = fight.children[0].children[0];
   assert.equal(verbApplies(hit, stubGame()), false);             // nobody adjacent
-  const foe = { x: 6, y: 5, behavior: ['HOSTILE'], entity: { isAlive: () => true } };
+  // `allegiance`, not the authored `behavior` array — isHostile() reads allegiance
+  // (ai.js) and a bare stub never runs the Enemy ctor that derives it.
+  const foe = { x: 6, y: 5, allegiance: 'hostile', entity: { isAlive: () => true } };
   assert.equal(verbApplies(hit, stubGame({ enemies: [foe] })), true);
 });
 
