@@ -148,7 +148,10 @@ export function wheelRingR(k) { const r0 = WHEEL_RING0_R0 + k * (WHEEL_RING_W + 
 // One consolidated "Quest Log" box holding the zone/time/turn header, the active
 // objective, and the last few log-feed lines. Sits above the hotbar (HOTBAR_OY
 // = 546). Shared by renderer._drawQuestLog (draw) and main.js (tap → [L] history).
-export const QUESTLOG_RECT = { x: 6, y: 436, w: 340, h: 104 };
+// h chosen so the panel's HIT_SLOP-expanded bottom (y + h + 6) clears the XMB
+// usable-bar's HIT_SLOP-expanded top (510 - 6 = 504): 436 + 62 + 6 = 504.
+// Enforced by tests/hud-layout.test.js's non-overlap invariant.
+export const QUESTLOG_RECT = { x: 6, y: 436, w: 340, h: 62 };
 export const LOG_MODAL_RECT = { x: 24, y: 44, w: 560, h: 520 };
 // (Target List) A compact centred RuneScape-style verb menu. Height is computed
 // per-target in the renderer (44px title band + one ROW_H row per verb).

@@ -1665,11 +1665,13 @@ export class Renderer {
             y += LH;
         }
 
-        // (c) MESSAGE FEED — last 3, oldest → newest, age-faded. Anchored to the
+        // (c) MESSAGE FEED — last 2, oldest → newest, age-faded. Anchored to the
         // panel's bottom so a missing objective grows the visible feed upward.
+        // shorter panel (h 62) — 2 feed lines (A3 shrink; 3 lines overflowed
+        // the panel bottom by ~10px when header+objective+feed all show).
         const messages = game._logStripMessages;
         if (!messages || messages.length === 0) return;
-        const visible = messages.slice(-3);
+        const visible = messages.slice(-2);
         const alphas  = [0.5, 0.75, 1.0];    // oldest → newest
         const feedTop = R.y + R.h - PAD - visible.length * LH;
         const startY  = Math.max(y, feedTop);
