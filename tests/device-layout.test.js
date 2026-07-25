@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H,
   deviceTabRect, deviceBodyRect, cycleDeviceTab, closeButtonRect,
+  deviceBagSlotRects, rectsOverlap,
 } from '../game/layout.js';
 
 test('DEVICE_RECT reuses the proven {24,44,560,520} panel bezel', () => {
@@ -65,4 +66,19 @@ test('deviceBodyRect sits below the tab strip and inside the frame', () => {
 test('DEVICE_TAB_H is a named constant (no magic number)', () => {
   assert.equal(typeof DEVICE_TAB_H, 'number');
   assert.equal(deviceTabRect(0).h, DEVICE_TAB_H);
+});
+
+test('deviceBagSlotRects returns 50 rects: SAFE row (0-9) above PACK grid (10-49), none overlapping', () => {
+  const body = deviceBodyRect();
+  const rects = deviceBagSlotRects(body);
+  assert.equal(rects.length, 50);
+  for (let i = 1; i < 10; i++) assert.equal(rects[i].y, rects[0].y, `SAFE slot ${i} not on the SAFE row`);
+  assert.ok(rects[10].y > rects[0].y + rects[0].h, 'PACK grid must sit below the SAFE row');
+  for (const r of rects) {
+    assert.ok(r.x >= body.x - 0.5 && r.x + r.w <= body.x + body.w + 0.5, 'slot escapes body x');
+    assert.ok(r.y >= body.y - 0.5 && r.y + r.h <= body.y + body.h + 0.5, 'slot escapes body y');
+  }
+  for (let i = 0; i < rects.length; i++)
+    for (let j = i + 1; j < rects.length; j++)
+      assert.ok(!rectsOverlap(rects[i], rects[j]), `bag slots ${i} and ${j} overlap`);
 });

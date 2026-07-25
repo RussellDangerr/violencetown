@@ -3,7 +3,7 @@
 // Small panels: hand-colored parchment fill matching the sprite palette
 // All text: dark brown on parchment for readability (not gold-on-dark)
 
-import { TILE_PX, VIEW_TILES, CANVAS_PX } from './data.js';
+import { TILE_PX, VIEW_TILES, CANVAS_PX, SAFE_SLOTS } from './data.js';
 
 // Supersample factor: render the canvas at SS x the internal 608 resolution so
 // the (anti-aliased) VT323 text stays sharp under the pixel-art upscale rather
@@ -16,15 +16,13 @@ import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-s
 import { ROOT, selectedNode, activeRing, activeIndex, decisionPath, previewChildren, affectedTiles, verbApplies, isCombatActive, flapperDeflection } from './wheel-model.js'; // (sunburst wheel)
 import {
     THROW_RECTS,
-    HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_GAP, HOTBAR_SLOTS, HOTBAR_STRIDE,
-    HOTBAR_TOTAL_W, HOTBAR_OX, HOTBAR_OY, HOTBAR_X_START, HOTBAR_Y,
     QUESTLOG_RECT, LOG_MODAL_RECT, TARGET_LIST_RECT, TARGET_LIST_ROW_H,
     ITEM_OVERLAY_RECT, ITEM_OVERLAY_ROW_H,
     TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BUYBACK_ORIGIN, TRADE_BRIBE_RECT,
     TRADE_CELL_W, TRADE_CELL_H, TRADE_COLS, tradeCellRect,
     RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
     EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, closeButtonRect,
-    DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceEquipLayout, deviceRingsLayout,
+    DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceEquipLayout, deviceRingsLayout,
     xmbBarLayout,                                                            // (XMB) usable-bar geometry
 } from './layout.js';
 import { buildXmbBar, resolveXmbSelection } from './xmb.js';                 // (XMB) usable-bar model
@@ -1817,151 +1815,93 @@ export class Renderer {
 
     _drawHotbar(game, bodyRect) {
         const { ctx, sprites } = this;
-        const sw = HOTBAR_SLOT_W, sh = HOTBAR_SLOT_H, gap = HOTBAR_GAP;
-        const count = HOTBAR_SLOTS;
-        const totalW = HOTBAR_TOTAL_W;
-        // (Slice 3) hosted = drawn inside the Remoticon ITEMS tab; else the bottom HUD.
-        const hosted = !!bodyRect;
-        const ox = hosted ? Math.round(bodyRect.x + (bodyRect.w - totalW) / 2) : HOTBAR_OX;
-        const oy = hosted ? bodyRect.y + 44 : HOTBAR_OY;
-        const xStart = ox + 8;
-        const slotY = oy + 2;
+        // (B4) Only the hosted path is live: the Remoticon ITEMS tab. The bottom HUD
+        // is the XMB bar now. Renders the whole 50-slot bag as a SAFE row (0-9) over
+        // a PACK grid (10-49). Slot geometry comes from deviceBagSlotRects so the
+        // draw and main._tapDevice's hit-test can never drift.
+        if (!bodyRect) return;
+        const rects = deviceBagSlotRects(bodyRect);
+        const sh = rects[0].h;
 
-        // Selected item tooltip above hotbar — name, description, and stats
-        if (!hosted && game.selectedSlot >= 0 && game.inventory[game.selectedSlot]) {
-            const itemDef = game.inventory[game.selectedSlot].itemDef;
-            const itemName = itemDef.name.replace(/[\[\]]/g, '');
-
-            // Build stat line
-            let statLine = '';
-            if (itemDef.healAmount) statLine = `Heals ${itemDef.healAmount} HP`;
-            else if (itemDef.damage) statLine = `${itemDef.useType === 'throw' ? 'Throw' : 'Melee'} ${itemDef.damage} dmg`;
-
-            const desc = itemDef.description || '';
-            const hasDesc = desc.length > 0;
-            const hasStat = statLine.length > 0;
-            const lines = 1 + (hasDesc ? 1 : 0) + (hasStat ? 1 : 0);
-            const th = 10 + lines * 13;
-            const tw = Math.max(itemName.length * 7 + 16, hasDesc ? Math.min(desc.length * 5.5 + 16, 300) : 0, 120);
-            const tx = (CANVAS_PX - tw) / 2;
-            const ty = oy - th - 6;
-
-            // Item tooltip uses the dark variant so it reads as an
-            // overlay above the parchment hotbar without clashing.
-            drawPanelSmall(ctx, tx, ty, tw, th, this.uiSheet, 'dark');
-
-            let lineY = ty + 4;
-
-            // Name (uppercased for bitmap-font readability emphasis)
-            if (this.font) {
-                this.font.drawText(ctx, itemName.toUpperCase(), CANVAS_PX / 2, lineY, {
-                    color: UI.gold, scale: 1, align: 'center',
-                });
-            }
-            lineY += 11;
-
-            // Stat line
-            if (hasStat && this.font) {
-                const statColor = itemDef.healAmount ? '#44ff88' : '#ffaa44';
-                this.font.drawText(ctx, statLine.toUpperCase(), CANVAS_PX / 2, lineY, {
-                    color: statColor, scale: 1, align: 'center',
-                });
-                lineY += 11;
-            }
-
-            // Description — fits more chars at 8px-per-glyph than the old 5.5px estimate
-            if (hasDesc && this.font) {
-                const maxChars = Math.floor((tw - 12) / 8);
-                const truncated = desc.length > maxChars ? desc.slice(0, maxChars - 2) + '..' : desc;
-                this.font.drawText(ctx, truncated, CANVAS_PX / 2, lineY, {
-                    color: UI.dim || '#8a8070', scale: 1, align: 'center',
-                });
-            }
+        // Zone labels above each band.
+        if (this.font) {
+            this.font.drawText(ctx, 'SAFE', rects[0].x, rects[0].y - 12, { color: UI.dim, scale: 1 });
+            this.font.drawText(ctx, 'PACK', rects[10].x, rects[10].y - 12, { color: UI.dim, scale: 1 });
         }
 
-        // Parchment background strip
-        drawPanelSmall(ctx, ox, oy - 4, totalW, sh + 12, this.uiSheet);
+        // Parchment bands behind each zone.
+        drawPanelSmall(ctx, rects[0].x - 4, rects[0].y - 4, (rects[9].x + rects[9].w) - rects[0].x + 8, sh + 8, this.uiSheet);
+        drawPanelSmall(ctx, rects[10].x - 4, rects[10].y - 4, (rects[19].x + rects[19].w) - rects[10].x + 8, (rects[49].y + rects[49].h) - rects[10].y + 8, this.uiSheet);
 
-        // Selected-slot pulse — same 2Hz heartbeat as the radial menu's
-        // active slice so the two highlight surfaces feel consistent.
+        // Selected-slot pulse — same 2Hz heartbeat as the radial menu's active slice.
         const selPulse = 0.5 + 0.5 * Math.sin(performance.now() / 1000 * Math.PI * 2);
 
-        for (let i = 0; i < count; i++) {
-            const sx = xStart + i * HOTBAR_STRIDE;
-            const sy = slotY;
+        for (let i = 0; i < rects.length; i++) {
+            const rect = rects[i];
             const stack = game.inventory[i];
             const sel = game.selectedSlot === i;
             const isEmpty = !stack;
 
-            // Slot frame — selected gets the parchment "glow" variant +
-            // pulsing gold halo; unselected gets a flat dark inset.
+            // Slot frame — selected gets a pulsing gold halo; unselected a flat inset.
             if (sel) {
-                // Outer halo (gold, swelling with pulse)
                 ctx.fillStyle = `rgba(212, 185, 106, ${0.3 + 0.4 * selPulse})`;
-                ctx.fillRect(sx - 2, sy - 2, sw + 4, sh + 4);
+                ctx.fillRect(rect.x - 2, rect.y - 2, rect.w + 4, rect.h + 4);
             }
-            drawInset(ctx, sx, sy, sw, sh);
-
-            // Selected highlight border (always crisp, on top of the halo)
+            drawInset(ctx, rect.x, rect.y, rect.w, rect.h);
             if (sel) {
                 ctx.strokeStyle = UI.gold;
                 ctx.lineWidth = 2;
-                ctx.strokeRect(sx - 1, sy - 1, sw + 2, sh + 2);
+                ctx.strokeRect(rect.x - 1, rect.y - 1, rect.w + 2, rect.h + 2);
             }
 
-            // Empty-slot opacity nudge — empty slots render at ~70%
-            // opacity so the filled slots draw the eye first.
+            // Empty slots draw dimmer so the filled ones lead the eye.
             const slotAlpha = isEmpty ? 0.7 : 1.0;
             const prevAlpha = ctx.globalAlpha;
             ctx.globalAlpha = slotAlpha;
-
-            // Key number (top-left corner of slot)
             if (this.font) {
-                this.font.drawText(ctx, `${i + 1}`, sx + 2, sy + 2, {
+                this.font.drawText(ctx, `${i + 1}`, rect.x + 2, rect.y + 2, {
                     color: sel ? UI.gold : UI.textLight, scale: 1,
                 });
             }
-
-            // Reset alpha after the key number; item draw decides for itself.
             ctx.globalAlpha = prevAlpha;
 
-            // Item
             if (stack) {
                 // Try sprite
                 const spr = ITEM_SPRITES[stack.itemDef.id];
                 let drawn = false;
                 if (spr && sprites?.[spr.sheet]?.loaded) {
-                    drawn = sprites[spr.sheet].drawRegion(ctx, spr.x, spr.y, spr.w, spr.h, sx + 7, sy + 9, 24, 24);
+                    drawn = sprites[spr.sheet].drawRegion(ctx, spr.x, spr.y, spr.w, spr.h, rect.x + 7, rect.y + 9, 24, 24);
                 }
                 if (!drawn) {
                     const info = ITEM_COLORS[stack.itemDef.id] || { bg: '#888', letter: '?' };
                     ctx.fillStyle = info.bg;
-                    ctx.fillRect(sx + 9, sy + 11, 22, 22);
+                    ctx.fillRect(rect.x + 9, rect.y + 11, 22, 22);
                     if (this.font) {
-                        this.font.drawText(ctx, info.letter, sx + 16, sy + 17, {
+                        this.font.drawText(ctx, info.letter, rect.x + 16, rect.y + 17, {
                             color: '#fff', scale: 2,
                         });
                     }
                 }
 
-                // (defeat legibility) mark safe-floor items — kept through a defeat.
-                if (isSafe(stack.itemDef, game.equipment && game.equipment.weapon)) this._drawSafeBadge(ctx, sx + sw, sy);
+                // (defeat legibility) gold corner = kept through a defeat: any item
+                // in the SAFE zone OR an intrinsically-safe (quest) item.
+                const kept = i < SAFE_SLOTS || isSafe(stack.itemDef, game.equipment && game.equipment.weapon);
+                if (kept) this._drawSafeBadge(ctx, rect.x + rect.w, rect.y);
 
                 // Stack count (bottom-right)
                 if (stack.count > 1) {
-                    // Dark backing for readability
                     ctx.fillStyle = '#000000aa';
-                    ctx.fillRect(sx + sw - 16, sy + sh - 11, 14, 10);
+                    ctx.fillRect(rect.x + rect.w - 16, rect.y + rect.h - 11, 14, 10);
                     if (this.font) {
-                        this.font.drawText(ctx, `${stack.count}`, sx + sw - 3, sy + sh - 10, {
+                        this.font.drawText(ctx, `${stack.count}`, rect.x + rect.w - 3, rect.y + rect.h - 10, {
                             color: UI.gold, scale: 1, align: 'right',
                         });
                     }
                 }
             }
         }
-        // (defeat legibility) tell the player what survives a defeat (device only)
-        if (hosted && this.font) this.font.drawText(ctx, 'gold corner = kept if defeated', ox, oy + sh + 8, { color: UI.dim, scale: 1 });
+        // (defeat legibility) tell the player what survives a defeat.
+        if (this.font) this.font.drawText(ctx, 'SAFE zone + quest items = kept if defeated', rects[0].x, rects[49].y + rects[49].h + 8, { color: UI.dim, scale: 1 });
     }
 
     // (XMB) The always-live usable-bar that replaces the flat bottom hotbar:

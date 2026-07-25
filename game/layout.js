@@ -253,16 +253,24 @@ export function deviceBodyRect() {
     return { x: DEVICE_RECT.x + 14, y: top, w: DEVICE_RECT.w - 28, h: DEVICE_RECT.y + DEVICE_RECT.h - 12 - top };
 }
 
-// Bag (ITEMS-tab) slot rects — the SAME geometry _drawHotbar draws in its
-// hosted branch (ox + 8, oy = body.y + 44, slotY = oy + 2, stride HOTBAR_STRIDE).
-// Shared so _tapDevice's ITEMS hit-test can never drift from the drawn grid.
+// The ITEMS-tab bag as two zones, returned in SLOT-INDEX order (0..9 = SAFE
+// row, 10..49 = PACK grid), so main._tapDevice's `inventory[i]` indexing and
+// the renderer stay in lockstep. 10 columns; SAFE is the top row, PACK is the
+// four rows below it with a gap band between. Non-overlap is pinned by
+// tests/device-layout.test.js.
 export function deviceBagSlotRects(bodyRect) {
-    const ox = Math.round(bodyRect.x + (bodyRect.w - HOTBAR_TOTAL_W) / 2);
-    const xStart = ox + 8;
-    const slotY = bodyRect.y + 44 + 2;
+    const COLS = 10, SLOT = 38, GAP = 6, STRIDE = SLOT + GAP;   // 44; 10*44-6 = 434 < body.w
+    const gridW = COLS * STRIDE - GAP;
+    const ox = Math.round(bodyRect.x + (bodyRect.w - gridW) / 2);
+    const safeY = bodyRect.y + 30;                 // below the "SAFE" label
+    const packY = safeY + SLOT + 24;               // gap band + "PACK" label
     const rects = [];
-    for (let i = 0; i < HOTBAR_SLOTS; i++) {
-        rects.push({ x: xStart + i * HOTBAR_STRIDE, y: slotY, w: HOTBAR_SLOT_W, h: HOTBAR_SLOT_H });
+    for (let i = 0; i < 50; i++) {
+        const inSafe = i < 10;
+        const col = inSafe ? i : (i - 10) % COLS;
+        const row = inSafe ? 0 : Math.floor((i - 10) / COLS);
+        const y = inSafe ? safeY : packY + row * STRIDE;
+        rects.push({ x: ox + col * STRIDE, y, w: SLOT, h: SLOT });
     }
     return rects;
 }
