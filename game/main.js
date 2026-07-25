@@ -6,7 +6,7 @@ import { Renderer } from './renderer.js';
 import { loadMap } from './map.js';
 import { loadAllSprites } from './sprites.js';
 import { BitmapFont } from './bitmap-font.js';
-import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, MAX_STACK } from './data.js';
+import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, MAX_STACK } from './data.js';
 import { ITEMS, itemTier, resolveUse, resolveThrow, tickTempEquips, unequipItem, ownedItemDefs, hasItemDef } from './items.js';
 import { WEAPONS } from './weapons.js';
 import { tickBuffList, BUFF_DEFS } from './buffs.js';
@@ -17,6 +17,8 @@ import {
     mergeKnown, isActive,   // (ring Task 5) skill-merge helpers, relocated from the retired skills.js
 } from './rings.js';
 import { isBoss, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS } from './defeat-scenarios.js';
+import { addToInventory as addToInv, moveToZone, zoneOf } from './inventory.js';
+import { itemActions, equipOptions } from './inspector.js';   // (C1) tap-to-inspect: context actions; (C2) GEAR chooser options
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
 import { attack, formatDamageNumber, computeHit, elementalMult, isBackstab } from './combat.js';
@@ -39,6 +41,7 @@ import {
     TRADE_COLS, tradeCellRect,
     EQUIPMENT_MODAL_RECT, EQUIP_SLOT_RECTS,
     DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceBagSlotRects, deviceEquipLayout, deviceRingsLayout,
+    inspectorActionRects, gearOptionRects,
     xmbBarLayout,
 } from './layout.js';
 import { canTrade, buyPrice, sellPrice, bribeStepCost, BRIBE_STEP, transferGold, burnGold } from './trade.js'; // pricing + the transaction spine
@@ -292,7 +295,7 @@ class Game {
         this._dispositionDecayAccMs = 0; // (Phase 6c) free-roam decay accumulator (ms)
         this._dispositionDecayTurns = 0; // (Phase 6c) combat decay turn counter
 
-        // Inventory: 10 stackable slots, each { itemDef, count } or null
+        // Inventory: INVENTORY_SIZE slots (SAFE 0..9 + PACK 10..49), each { itemDef, count } or null
         this.inventory = new Array(INVENTORY_SIZE).fill(null);
         this.selectedSlot = -1; // -1 = none selected
 
@@ -314,6 +317,7 @@ class Game {
         this._lastActKeyAt = 0; // double-tap-Act window for express-repeat
         this._wheelOpenedByHold = false; // (Slice 2) true only between a HOLD-mode open and its release; cleared by every wheel close
         this._deviceTab = 'items';       // (Slice 3) the Remoticon's active tab (ITEMS·GEAR·QUESTS·MAP)
+        this._deviceSel = null;          // (C1) inspector sub-selection inside ITEMS: { tab:'items', index } or null
 
         // Screen shake (Phase F) — triggered on damage >= threshold. The
         // renderer applies a per-frame random offset to world rendering
@@ -951,16 +955,16 @@ class Game {
 
             // ── DEVICE (Remoticon): modal tabbed device; world is soft-paused ──
             // Esc already closed it via the universal Cancel above. Here: Tab pockets
-            // it, [ ] cycle tabs, C/J/M/K jump to a tab; everything else is swallowed.
+            // it, [ ] cycle tabs, C/J/M/R jump to a tab; everything else is swallowed.
             if (this.state === STATE.DEVICE) {
                 e.preventDefault();
                 if (e.code === 'Tab')          { this._closeDevice();   return; }
                 if (e.code === 'BracketLeft')  { this._deviceCycleTab(-1); return; }
                 if (e.code === 'BracketRight') { this._deviceCycleTab(1);  return; }
-                if (e.code === 'KeyC') { this._deviceTab = 'gear';   this._render(); return; }
-                if (e.code === 'KeyJ') { this._deviceTab = 'quests'; this._render(); return; }
-                if (e.code === 'KeyM') { this._deviceTab = 'map';    this._render(); return; }
-                if (e.code === 'KeyR') { this._deviceTab = 'rings'; this._render(); return; }
+                if (e.code === 'KeyC') { this._deviceTab = 'gear';   this._deviceSel = null; this._render(); return; }
+                if (e.code === 'KeyJ') { this._deviceTab = 'quests'; this._deviceSel = null; this._render(); return; }
+                if (e.code === 'KeyM') { this._deviceTab = 'map';    this._deviceSel = null; this._render(); return; }
+                if (e.code === 'KeyR') { this._deviceTab = 'rings'; this._deviceSel = null; this._render(); return; }
                 if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { this._deviceCycleTab(-1); return; }
                 if (e.code === 'ArrowRight' || e.code === 'KeyD') { this._deviceCycleTab(1);  return; }
                 if (this._deviceTab === 'quests' && (e.code === 'ArrowUp'   || e.code === 'KeyW')) { this._scrollJournal(1);  return; }
@@ -3574,14 +3578,7 @@ class Game {
     // ── Inventory ────────────────────────────────────────────────────────────
 
     _addToInventory(itemDef) {
-        for (let i = 0; i < INVENTORY_SIZE; i++) {
-            const s = this.inventory[i];
-            if (s && s.itemDef.id === itemDef.id && s.count < MAX_STACK) { s.count++; return true; }
-        }
-        for (let i = 0; i < INVENTORY_SIZE; i++) {
-            if (!this.inventory[i]) { this.inventory[i] = { itemDef, count: 1 }; return true; }
-        }
-        return false;
+        return addToInv(this.inventory, itemDef, { size: INVENTORY_SIZE, safeSlots: SAFE_SLOTS, maxStack: MAX_STACK });
     }
 
     _removeFromSlot(slot) {
@@ -4337,7 +4334,7 @@ class Game {
     // Apply a take-rule to the at-risk pool. The safe floor is never in `atRisk`.
     _applyTake(take) {
         const weapon = this.equipment && this.equipment.weapon;
-        const { atRisk } = partitionInventory(this.inventory, weapon);
+        const { atRisk } = partitionInventory(this.inventory, weapon, SAFE_SLOTS);
         const taken = matchTake(take, atRisk);
         let takenGold = 0;
         if (take.gold) { takenGold = Math.floor((this.gold || 0) * take.gold); this.gold -= takenGold; }
@@ -4800,12 +4797,13 @@ class Game {
     // (Slice 3) The Remoticon device — one tabbed, soft-pausing overlay. _openDevice
     // enters STATE.DEVICE on a tab and pauses the world; _closeDevice restores IDLE
     // (the pause release resumes any held walk, so we don't call _resumeHeldWalk
-    // again). Tab / the on-screen button toggle it; [ ] cycle tabs; C/J/M jump to a
+    // again). Tab / the on-screen button toggle it; [ ] cycle tabs; C/J/M/R jump to a
     // tab. The ✕ chip + tap-outside come from the Slice-1 CLOSE_PANEL machinery
     // (device is registered there), routing Cancel through _closeCurrentMenu.
     _openDevice(tab = 'items') {
         if (this.state !== STATE.IDLE && this.state !== STATE.DEVICE) return;
         this._deviceTab = DEVICE_TABS.includes(tab) ? tab : 'items';
+        this._deviceSel = null;   // (C1) a fresh open starts with no inspector selection
         this.state = STATE.DEVICE;
         audio.playSfx('menu-open');
         this._render();
@@ -4826,6 +4824,7 @@ class Game {
 
     _deviceCycleTab(dir) {
         this._deviceTab = cycleDeviceTab(this._deviceTab, dir);
+        this._deviceSel = null;   // (C1) leaving/entering a tab drops any stale inspector selection
         audio.playSfx('menu-tick');
         this._render();
     }
@@ -4838,29 +4837,76 @@ class Game {
         for (let i = 0; i < DEVICE_TABS.length; i++) {
             if (this._pointInRect(pt, deviceTabRect(i), HIT_SLOP)) {
                 this._deviceTab = DEVICE_TABS[i];
+                this._deviceSel = null;   // (C1) switching tabs drops any inspector selection
                 audio.playSfx('menu-tick');
                 this._render();
                 return;
             }
         }
-        // ITEMS (Bag) body → tap a gear item to wear it (swap-aware). Usables are
-        // used from the XMB bar, not here; quest items are held. Reads the SAME
-        // slot rects deviceBagSlotRects hands the renderer, so the tap can't drift.
+        // ITEMS (Bag) tab — tap-to-inspect. A tap SELECTS a filled slot; the
+        // inspector panel then shows the item's stats + action buttons. A second
+        // tap on an action row dispatches (Use/Equip · Protect/Unprotect · Drop).
+        // Reads the SAME rects the renderer draws (deviceBagSlotRects /
+        // inspectorActionRects), so the taps can't drift from the drawn surfaces.
         if (this._deviceTab === 'items') {
+            const sel = this._deviceSel;
+            // 1) Inspector action rows — only when a slot is selected + still filled.
+            if (sel && sel.tab === 'items' && this.inventory[sel.index]) {
+                const def = this.inventory[sel.index].itemDef;
+                const actions = itemActions(def, zoneOf(sel.index, SAFE_SLOTS));
+                const rows = inspectorActionRects(deviceBodyRect());
+                for (let a = 0; a < actions.length; a++) {
+                    if (!this._pointInRect(pt, rows[a], HIT_SLOP)) continue;
+                    const cfg = { size: INVENTORY_SIZE, safeSlots: SAFE_SLOTS, maxStack: MAX_STACK };
+                    const idx = sel.index;
+                    this._deviceSel = null;   // selection resolves this frame; the panel drops
+                    switch (actions[a].id) {
+                        case 'use':
+                        case 'equip': {
+                            // Route through resolveUse like canonical _doItemUse, but GATE the
+                            // removal the same way — the paused device supplies no throw/melee
+                            // DIRECTION, so resolveUse is a no-op for those and the item must
+                            // survive (a rock is `consumable:true` yet nothing was thrown; the
+                            // pipe is a non-consumable tool). Only a self-use (heal), an equip
+                            // (moves onto the body), or a learn (tome crumbles) truly consumes
+                            // it here, and only a real use costs a world beat — closing the
+                            // free-heal-while-paused gap without wasting a turn on a no-op.
+                            // Soap's cure is deferred: resolveUse only logs intent — the actual
+                            // removeBuff('sludge') fires in _advanceWorld gated on this flag, so
+                            // it MUST be set before resolveUse, exactly as canonical _doItemUse.
+                            if (def.effect === 'cure_sludge') this._soapUsedThisTurn = true;
+                            const msg = resolveUse(this, def, null);   // equip → resolveEquip (re-bags any displaced piece)
+                            if (msg) this._log(msg);
+                            this._refreshGrantedSkills();
+                            const usedUp = def.useType === 'self' || def.useType === 'equip'
+                                || (def.useType === 'learn' && def.consumable);
+                            if (usedUp) { this._removeFromSlot(idx); this._advanceWorld(); }
+                            break;
+                        }
+                        case 'protect':
+                            if (!moveToZone(this.inventory, idx, 'safe', cfg)) this._log('[Safe slots full.]');
+                            break;
+                        case 'unprotect':
+                            if (!moveToZone(this.inventory, idx, 'pack', cfg)) this._log('[Pack is full.]');
+                            break;
+                        case 'drop':
+                            this.inventory[idx] = null;
+                            break;
+                    }
+                    audio.playSfx('menu-confirm');
+                    this._render();
+                    return;
+                }
+            }
+            // 2) Otherwise a slot tap: SELECT a filled slot, clear on an empty one.
             const rects = deviceBagSlotRects(deviceBodyRect());
             for (let i = 0; i < rects.length; i++) {
                 if (!this._pointInRect(pt, rects[i], HIT_SLOP)) continue;
-                const stack = this.inventory[i];
-                if (!stack) return;                       // empty slot — nothing to do
-                const def = stack.itemDef;
-                if (def.useType === 'equip' && def.equipSlot) {
-                    const msg = resolveUse(this, def, null);   // useType:'equip' → resolveEquip (re-bags any displaced piece)
-                    this._removeFromSlot(i);                   // the worn copy leaves the bag
-                    this._refreshGrantedSkills();
-                    if (msg) this._log(msg);
-                    audio.playSfx('menu-confirm');
+                if (this.inventory[i]) {
+                    this._deviceSel = { tab: 'items', index: i };
+                    audio.playSfx('menu-tick');
                 } else {
-                    this._log(def.questItem ? '[Best hold onto that.]' : `[${def.name} — used from the bar.]`);
+                    this._deviceSel = null;
                 }
                 this._render();
                 return;
@@ -4888,27 +4934,49 @@ class Game {
             }
             return;
         }
-        // GEAR body → tap a filled plate to unequip (the weapon plate is inert).
-        // Reads the SAME scaled slots the renderer draws, so the tap can't drift.
+        // GEAR body → tap a slot plate to open its CHOOSER: a list of every bag
+        // item that fits, each with its armor delta vs the worn piece, plus a Bare
+        // (unequip) row. Tapping a row equips (or bares) that slot. Reads the SAME
+        // rects the renderer draws (deviceEquipLayout / gearOptionRects), so the
+        // taps can't drift. The weapon plate stays out of scope — weapon swap lives
+        // on the ITEMS tap.
         if (this._deviceTab === 'gear') {
+            // 1) An open chooser: its option rows take priority over the plates.
+            const sel = this._deviceSel;
+            if (sel && sel.tab === 'gear') {
+                const opts = equipOptions(sel.slotKey, this.equipment[sel.slotKey], this.inventory);
+                const rows = gearOptionRects(deviceBodyRect(), opts.length);
+                for (let i = 0; i < opts.length; i++) {
+                    if (!this._pointInRect(pt, rows[i], HIT_SLOP)) continue;
+                    const opt = opts[i];
+                    if (opt.bagIndex >= 0) {
+                        const def = this.inventory[opt.bagIndex].itemDef;
+                        const msg = resolveUse(this, def, null);   // equip → resolveEquip (re-bags any displaced piece)
+                        this._removeFromSlot(opt.bagIndex);
+                        this._refreshGrantedSkills();
+                        if (msg) this._log(msg);
+                    } else if (opt.id === '__bare__') {
+                        const msg = unequipItem(this, sel.slotKey);
+                        if (msg) this._log(msg);
+                    }
+                    this._deviceSel = null;
+                    audio.playSfx('menu-confirm');
+                    this._render();
+                    return;
+                }
+                // A tap outside every row closes the chooser (picker convention).
+                this._deviceSel = null;
+                this._render();
+                return;
+            }
+            // 2) No chooser open: a plate tap opens one for that armor slot. Only
+            //    the 5 armor slots open a chooser — the weapon plate is inert here.
             const { slots } = deviceEquipLayout(deviceBodyRect());
             for (const s of slots) {
                 if (s.key === 'weapon') continue;
                 if (!this._pointInRect(pt, s)) continue;
-                if (this.equipment[s.key]) {
-                    const msg = unequipItem(this, s.key);   // filled plate → back to the bag
-                    if (msg) this._log(msg);
-                } else {
-                    // empty plate → wear the first spare gear in the bag for this slot
-                    const spareIdx = this.inventory.findIndex(
-                        st => st && st.itemDef.useType === 'equip' && st.itemDef.equipSlot === s.key);
-                    if (spareIdx < 0) { this._log(`[No spare ${s.key} gear in your bag.]`); return; }
-                    const def = this.inventory[spareIdx].itemDef;
-                    const msg = resolveUse(this, def, null);
-                    this._removeFromSlot(spareIdx);
-                    this._refreshGrantedSkills();
-                    if (msg) this._log(msg);
-                }
+                this._deviceSel = { tab: 'gear', slotKey: s.key };
+                audio.playSfx('menu-tick');
                 this._render();
                 return;
             }

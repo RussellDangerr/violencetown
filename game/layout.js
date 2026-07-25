@@ -17,6 +17,18 @@ import { unlockedSlots, adjacentPairs, HANDS } from './rings.js';
 export const CANVAS_INTERNAL_PX = 608;   // mirrors data.js CANVAS_PX
 export const HIT_SLOP = 6;               // tap-zone expansion (Apple 44pt min target)
 
+// Pure rect intersection — true iff a and b share positive area. Edge-touching
+// (a.right === b.left) is NOT overlap, so panels may abut without clipping.
+export function rectsOverlap(a, b) {
+  return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+}
+
+// Grow a rect by `slop` on every side — used to test the TAP zone (HIT_SLOP)
+// for overlap, not just the drawn rect, so no tap can land ambiguously.
+export function expandRect(r, slop) {
+  return { x: r.x - slop, y: r.y - slop, w: r.w + 2 * slop, h: r.h + 2 * slop };
+}
+
 // ── Item-use overlay — a compact tappable list of the item's actions ──
 // (drawn by renderer._drawItemOverlay, hit-tested by main._tapItemOverlay).
 // Was four directional panels around the player tile; now a vertical verb list
@@ -83,6 +95,32 @@ export function xmbBarLayout(bar) {
     return { chips, current, up, down, bottom };
 }
 
+// The XMB usable-bar's background PANEL rect for `n` visible category chips
+// (1-3), mirroring renderer.js:1978-1980. n=3 is the worst case (widest). The
+// bar is centered on canvas-center x=304; chip stride is XMB_CHIP_W(96)+6.
+export function xmbBarPanelRect(n = 3) {
+  const chipW = 96, gap = 6, stride = chipW + gap;   // 102
+  const totalChips = n * stride - gap;               // n=3 -> 300
+  const left = 304 - totalChips / 2 - 10;            // n=3 -> 144
+  const right = 304 + totalChips / 2 + 10;           // n=3 -> 464
+  const top = 510, bottom = 592;                     // chipY-6 .. current-bottom+10
+  return { x: left, y: top, w: right - left, h: bottom - top };
+}
+
+// The set of INTERACTIVE HUD panels visible+tappable in a given game-state
+// name. Each entry { name, rect } is what a tap can hit. The invariant: no two
+// of these may overlap (under HIT_SLOP), or a tap is ambiguous. 'idle' is the
+// only always-live combination (message log + usable bar); the modal states
+// are exclusive overlays tested separately if they gain persistent siblings.
+export function hudInteractiveRects(state) {
+  const rects = [];
+  if (state === 'idle') {
+    rects.push({ name: 'questlog', rect: QUESTLOG_RECT });
+    rects.push({ name: 'xmb', rect: xmbBarPanelRect(3) });
+  }
+  return rects;
+}
+
 // ── Radial "sunburst" combat wheel ──
 // Concentric rings centred on RADIAL_CENTER_*: a hub, the greyed decision-stack
 // rings growing inward, one bright active ring, and a partial preview arc above
@@ -110,7 +148,10 @@ export function wheelRingR(k) { const r0 = WHEEL_RING0_R0 + k * (WHEEL_RING_W + 
 // One consolidated "Quest Log" box holding the zone/time/turn header, the active
 // objective, and the last few log-feed lines. Sits above the hotbar (HOTBAR_OY
 // = 546). Shared by renderer._drawQuestLog (draw) and main.js (tap → [L] history).
-export const QUESTLOG_RECT = { x: 6, y: 436, w: 340, h: 104 };
+// h chosen so the panel's HIT_SLOP-expanded bottom (y + h + 6) clears the XMB
+// usable-bar's HIT_SLOP-expanded top (510 - 6 = 504): 436 + 62 + 6 = 504.
+// Enforced by tests/hud-layout.test.js's non-overlap invariant.
+export const QUESTLOG_RECT = { x: 6, y: 436, w: 340, h: 62 };
 export const LOG_MODAL_RECT = { x: 24, y: 44, w: 560, h: 520 };
 // (Target List) A compact centred RuneScape-style verb menu. Height is computed
 // per-target in the renderer (44px title band + one ROW_H row per verb).
@@ -212,18 +253,42 @@ export function deviceBodyRect() {
     return { x: DEVICE_RECT.x + 14, y: top, w: DEVICE_RECT.w - 28, h: DEVICE_RECT.y + DEVICE_RECT.h - 12 - top };
 }
 
-// Bag (ITEMS-tab) slot rects — the SAME geometry _drawHotbar draws in its
-// hosted branch (ox + 8, oy = body.y + 44, slotY = oy + 2, stride HOTBAR_STRIDE).
-// Shared so _tapDevice's ITEMS hit-test can never drift from the drawn grid.
+// The ITEMS-tab bag as two zones, returned in SLOT-INDEX order (0..9 = SAFE
+// row, 10..49 = PACK grid), so main._tapDevice's `inventory[i]` indexing and
+// the renderer stay in lockstep. 10 columns; SAFE is the top row, PACK is the
+// four rows below it with a gap band between. Non-overlap is pinned by
+// tests/device-layout.test.js.
 export function deviceBagSlotRects(bodyRect) {
-    const ox = Math.round(bodyRect.x + (bodyRect.w - HOTBAR_TOTAL_W) / 2);
-    const xStart = ox + 8;
-    const slotY = bodyRect.y + 44 + 2;
+    const COLS = 10, SLOT = 38, GAP = 6, STRIDE = SLOT + GAP;   // 44; 10*44-6 = 434 < body.w
+    const gridW = COLS * STRIDE - GAP;
+    const ox = Math.round(bodyRect.x + (bodyRect.w - gridW) / 2);
+    const safeY = bodyRect.y + 30;                 // below the "SAFE" label
+    const packY = safeY + SLOT + 24;               // gap band + "PACK" label
     const rects = [];
-    for (let i = 0; i < HOTBAR_SLOTS; i++) {
-        rects.push({ x: xStart + i * HOTBAR_STRIDE, y: slotY, w: HOTBAR_SLOT_W, h: HOTBAR_SLOT_H });
+    for (let i = 0; i < 50; i++) {
+        const inSafe = i < 10;
+        const col = inSafe ? i : (i - 10) % COLS;
+        const row = inSafe ? 0 : Math.floor((i - 10) / COLS);
+        const y = inSafe ? safeY : packY + row * STRIDE;
+        rects.push({ x: ox + col * STRIDE, y, w: SLOT, h: SLOT });
     }
     return rects;
+}
+
+// The inspector panel sits below the bag grid (which ends ~y382) in the lower
+// band of the device body — it MUST NOT overlap the bag slots. Enforced by
+// tests/device-layout.test.js.
+export function inspectorPanelRect(bodyRect) {
+  return { x: bodyRect.x + 8, y: bodyRect.y + 300, w: bodyRect.w - 16, h: 120 };
+}
+// Up to 3 action buttons in a row along the bottom of the inspector panel.
+export function inspectorActionRects(bodyRect) {
+  const p = inspectorPanelRect(bodyRect);
+  const n = 3, bw = 96, gap = 12, rowW = n * bw + (n - 1) * gap;
+  const ox = p.x + (p.w - rowW) / 2, y = p.y + p.h - 34;
+  const rects = [];
+  for (let i = 0; i < n; i++) rects.push({ x: ox + i * (bw + gap), y, w: bw, h: 26 });
+  return rects;
 }
 
 // Pure tab cycle (wraps both ways); an unknown current tab resets to the first.
@@ -250,6 +315,24 @@ export function deviceEquipLayout(bodyRect) {
         h: r.h * sy,
     });
     return { figure: map(EQUIP_FIGURE_RECT), slots: EQUIP_SLOT_RECTS.map(map) };
+}
+
+// The GEAR chooser's option rows — a centered column living in the clear
+// vertical band between the HEAD plate (top) and the WEAPON plate (bottom). A
+// right-side column would collide with the TORSO/FEET plates, which scale to the
+// right edge; centering a narrow column keeps it clear of the flanking
+// ARMS/TORSO/BACK/FEET plates too. gap = 2×HIT_SLOP so adjacent rows' tap zones
+// never overlap (matches inspectorActionRects). Assumes few rows per slot — the
+// current catalog gives ≤2 (one equip item + Bare); a slot that ever gained many
+// items would need this uncapped column capped or scrolled. Pinned by
+// tests/device-layout.test.js.
+export function gearOptionRects(bodyRect, n) {
+  const w = 200, x = bodyRect.x + (bodyRect.w - w) / 2;
+  const rowH = 26, gap = 12;
+  const y0 = bodyRect.y + 60;
+  const rects = [];
+  for (let i = 0; i < n; i++) rects.push({ x, y: y0 + i * (rowH + gap), w, h: rowH });
+  return rects;
 }
 
 // (Remembrance Rings, Task 5) The SKILLS tab body IS THE HANDS — two hands split

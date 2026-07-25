@@ -180,9 +180,9 @@ function validate(raw) {
     p.x = (typeof p.x === 'number' && isFinite(p.x)) ? p.x : undefined;
     p.y = (typeof p.y === 'number' && isFinite(p.y)) ? p.y : undefined;
 
-    // Normalize to INVENTORY_SIZE slots. An older save with extra slots is
-    // truncated; a non-quest item in a dropped slot is lost (acceptable — the
-    // count only ever shrank from 10→9). (fix/critical-path)
+    // Normalize to INVENTORY_SIZE slots. The bag now GROWS (9/10-slot saves
+    // pad with nulls); an old save with more slots than the current size would
+    // still truncate, but that no longer happens in practice. (remoticon-overhaul)
     const inv = Array.isArray(p.inventory) ? p.inventory : [];
     p.inventory = [];
     for (let i = 0; i < INVENTORY_SIZE; i++) {

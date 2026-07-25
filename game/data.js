@@ -70,8 +70,9 @@ export const PLAYER_MAX_HP = 100;
 // in main.js). The HUD surfaces it as a cyan bar.
 export const PLAYER_MAX_MP = 100;
 export const SLUDGE_DOT = 5;
-// 9 to match the 9-slot hotbar (layout.HOTBAR_SLOTS) so every slot is both
-// rendered and tap/key reachable — a 10th slot was invisible and untappable,
-// only reachable via Digit0. Keep these two in lockstep. (fix/critical-path)
-export const INVENTORY_SIZE = 9;
+// The bag is two zones: SAFE (indices 0..SAFE_SLOTS-1, kept on defeat) + PACK
+// (SAFE_SLOTS..INVENTORY_SIZE-1, at-risk). Rendered as a grid in the REMOTICON
+// ITEMS tab, no longer coupled to the 9-slot XMB usable-bar. (remoticon-overhaul)
+export const INVENTORY_SIZE = 50;
+export const SAFE_SLOTS = 10;
 export const MAX_STACK = 99;

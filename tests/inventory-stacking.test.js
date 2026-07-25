@@ -1,34 +1,16 @@
 // inventory-stacking.test.js — stacking respects MAX_STACK and the slot limit.
 //
-// ⚠ SEAM NOTE (read me):
-//   The real stacking logic lives in game/main.js::_addToInventory (the Game
-//   class). main.js cannot be imported under Node — it touches `document` at
-//   module-evaluation time — so we CANNOT call the real method here without a
-//   refactor (which is another branch's lane; do NOT move it from this branch).
-//
-//   Therefore the `addToInventory` function below is a FAITHFUL LOCAL COPY of
-//   game/main.js::_addToInventory (as of this commit). It is a transcription,
-//   not the production code. ACTION ITEM: once main.js exposes inventory
-//   stacking through an importable seam (e.g. a pure helper in items.js or
-//   data.js, or a Game made constructible under Node), delete this copy and
-//   re-point these tests at the real implementation.
-//
-//   To keep the test honest in the meantime, the LIMITS it checks (MAX_STACK,
-//   INVENTORY_SIZE) are imported from the REAL game/data.js — so if those
-//   constants change, the test tracks them automatically and only the tiny
-//   loop body is mirrored.
-//
-//   The reference snippet being mirrored (game/main.js:1897-1906):
-//     _addToInventory(itemDef) {
-//         for (let i = 0; i < INVENTORY_SIZE; i++) {
-//             const s = this.inventory[i];
-//             if (s && s.itemDef.id === itemDef.id && s.count < MAX_STACK) { s.count++; return true; }
-//         }
-//         for (let i = 0; i < INVENTORY_SIZE; i++) {
-//             if (!this.inventory[i]) { this.inventory[i] = { itemDef, count: 1 }; return true; }
-//         }
-//         return false;
-//     }
+// SEAM-NOTE (remoticon-overhaul B3): this used to be a hand-copied mirror of
+// game/main.js::_addToInventory's old 2-loop SAFE-first fill. B3 made the real
+// _addToInventory delegate to the pure PACK-first router in game/inventory.js
+// (SAFE = [0, SAFE_SLOTS), PACK = [SAFE_SLOTS, size)), so a from-index-0 mirror
+// would now lie about production behavior. Rather than keep a stale copy, this
+// file calls the REAL addToInventory from game/inventory.js — with safeSlots:0
+// so the whole array is one zone, which reproduces the from-index-0 fill order
+// these tests were written against (a wash: 0 safe slots + PACK-first search
+// from 0 == the old plain linear scan). This file stays scoped to generic
+// stacking/slot-limit behavior; real zone-routing coverage (PACK-first, SAFE
+// overflow, protect/unprotect) lives in tests/inventory-zones.test.js.
 //
 // These assertions are EXPECTED GREEN — they pin the intended stacking contract.
 
@@ -36,19 +18,13 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { MAX_STACK, INVENTORY_SIZE } from '../game/data.js';
+import { addToInventory as realAddToInventory } from '../game/inventory.js';
 
-// ── Faithful local mirror of Game._addToInventory ────────────────────────────
-// Operates on a plain { inventory: [...] } "game" so it matches the real method
-// shape (which mutates this.inventory). Returns true if the item was stored.
+// ── Thin adapter over the real pure module ────────────────────────────────
+// Operates on a plain { inventory: [...] } "game" so it matches the shape
+// these tests were written against. Returns true if the item was stored.
 function addToInventory(game, itemDef) {
-    for (let i = 0; i < INVENTORY_SIZE; i++) {
-        const s = game.inventory[i];
-        if (s && s.itemDef.id === itemDef.id && s.count < MAX_STACK) { s.count++; return true; }
-    }
-    for (let i = 0; i < INVENTORY_SIZE; i++) {
-        if (!game.inventory[i]) { game.inventory[i] = { itemDef, count: 1 }; return true; }
-    }
-    return false;
+    return realAddToInventory(game.inventory, itemDef, { size: INVENTORY_SIZE, safeSlots: 0, maxStack: MAX_STACK });
 }
 
 const newGame = () => ({ inventory: new Array(INVENTORY_SIZE).fill(null) });
@@ -56,7 +32,7 @@ const ROCK = { id: 'rock', name: '[Rock]' };
 const SOAP = { id: 'soap', name: '[Soap]' };
 const occupiedSlots = (g) => g.inventory.filter(Boolean).length;
 
-describe('inventory stacking (local mirror of main.js::_addToInventory — EXPECTED GREEN)', () => {
+describe('inventory stacking (real import of game/inventory.js::addToInventory — EXPECTED GREEN)', () => {
 
     test('first pickup of an item fills one slot with count 1', () => {
         const g = newGame();
@@ -126,6 +102,6 @@ describe('inventory stacking (local mirror of main.js::_addToInventory — EXPEC
 
     test('sanity: the limits under test are the real game constants', () => {
         assert.equal(MAX_STACK, 99);
-        assert.equal(INVENTORY_SIZE, 10);
+        assert.equal(INVENTORY_SIZE, 50);
     });
 });

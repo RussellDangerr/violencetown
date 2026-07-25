@@ -19,12 +19,16 @@ export function isBoss(enemy) {
 }
 
 // Split inventory into { safe, atRisk } — entries carry the slot index so the
-// caller can null the taken slots. Skips empty slots.
-export function partitionInventory(inventory, equippedWeapon) {
+// caller can null the taken slots. Skips empty slots. An item is kept if it's
+// in a SAFE-zone slot (index < safeSlots) OR intrinsically safe (isSafe) —
+// quest/equipped/essential items are safe wherever they sit. safeSlots
+// defaults to 0 (no zone) so pre-B3 callers keep their old all-PACK behavior.
+export function partitionInventory(inventory, equippedWeapon, safeSlots = 0) {
     const safe = [], atRisk = [];
     (inventory || []).forEach((slot, i) => {
         if (!slot || !slot.itemDef) return;
-        (isSafe(slot.itemDef, equippedWeapon) ? safe : atRisk).push({ i, itemDef: slot.itemDef, count: slot.count });
+        const kept = i < safeSlots || isSafe(slot.itemDef, equippedWeapon);
+        (kept ? safe : atRisk).push({ i, itemDef: slot.itemDef, count: slot.count });
     });
     return { safe, atRisk };
 }

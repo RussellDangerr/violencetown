@@ -3,7 +3,7 @@
 // Small panels: hand-colored parchment fill matching the sprite palette
 // All text: dark brown on parchment for readability (not gold-on-dark)
 
-import { TILE_PX, VIEW_TILES, CANVAS_PX } from './data.js';
+import { TILE_PX, VIEW_TILES, CANVAS_PX, SAFE_SLOTS } from './data.js';
 
 // Supersample factor: render the canvas at SS x the internal 608 resolution so
 // the (anti-aliased) VT323 text stays sharp under the pixel-art upscale rather
@@ -16,17 +16,19 @@ import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-s
 import { ROOT, selectedNode, activeRing, activeIndex, decisionPath, previewChildren, affectedTiles, verbApplies, isCombatActive, flapperDeflection } from './wheel-model.js'; // (sunburst wheel)
 import {
     THROW_RECTS,
-    HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_GAP, HOTBAR_SLOTS, HOTBAR_STRIDE,
-    HOTBAR_TOTAL_W, HOTBAR_OX, HOTBAR_OY, HOTBAR_X_START, HOTBAR_Y,
     QUESTLOG_RECT, LOG_MODAL_RECT, TARGET_LIST_RECT, TARGET_LIST_ROW_H,
     ITEM_OVERLAY_RECT, ITEM_OVERLAY_ROW_H,
     TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BUYBACK_ORIGIN, TRADE_BRIBE_RECT,
     TRADE_CELL_W, TRADE_CELL_H, TRADE_COLS, tradeCellRect,
     RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
     EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, closeButtonRect,
-    DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceEquipLayout, deviceRingsLayout,
+    DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceEquipLayout, deviceRingsLayout,
+    inspectorPanelRect, inspectorActionRects,                               // (C1) tap-to-inspect panel + action-row geometry
+    gearOptionRects,                                                        // (C2) GEAR chooser option-row geometry
     xmbBarLayout,                                                            // (XMB) usable-bar geometry
 } from './layout.js';
+import { itemStatLine, itemActions, equipOptions } from './inspector.js';    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
+import { zoneOf } from './inventory.js';                                     // (C1) safe/pack label for the inspector
 import { buildXmbBar, resolveXmbSelection } from './xmb.js';                 // (XMB) usable-bar model
 import { ITEMS, itemTier } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
 import { RINGS, FUSIONS } from './ring-data.js';                             // (rings Task 5) SKILLS-tab hands: ring names + fusion spark
@@ -1665,11 +1667,13 @@ export class Renderer {
             y += LH;
         }
 
-        // (c) MESSAGE FEED — last 3, oldest → newest, age-faded. Anchored to the
+        // (c) MESSAGE FEED — last 2, oldest → newest, age-faded. Anchored to the
         // panel's bottom so a missing objective grows the visible feed upward.
+        // shorter panel (h 62) — 2 feed lines (A3 shrink; 3 lines overflowed
+        // the panel bottom by ~10px when header+objective+feed all show).
         const messages = game._logStripMessages;
         if (!messages || messages.length === 0) return;
-        const visible = messages.slice(-3);
+        const visible = messages.slice(-2);
         const alphas  = [0.5, 0.75, 1.0];    // oldest → newest
         const feedTop = R.y + R.h - PAD - visible.length * LH;
         const startY  = Math.max(y, feedTop);
@@ -1728,7 +1732,12 @@ export class Renderer {
 
         // Delegate the active tab's body into the shared body region.
         const body = deviceBodyRect();
-        if      (active === 'items')  this._drawHotbar(game, body);
+        if (active === 'items') {
+            this._drawHotbar(game, body);
+            if (game._deviceSel && game._deviceSel.tab === 'items' && game.inventory[game._deviceSel.index]) {
+                this._drawInspector(game, body);
+            }
+        }
         else if (active === 'gear')   this._drawEquipmentModal(game, body);
         else if (active === 'quests') this._drawJournalQuestsBody(game, body);
         else if (active === 'map')    this._drawWorldMapBody(game, body, body.y);
@@ -1815,151 +1824,126 @@ export class Renderer {
 
     _drawHotbar(game, bodyRect) {
         const { ctx, sprites } = this;
-        const sw = HOTBAR_SLOT_W, sh = HOTBAR_SLOT_H, gap = HOTBAR_GAP;
-        const count = HOTBAR_SLOTS;
-        const totalW = HOTBAR_TOTAL_W;
-        // (Slice 3) hosted = drawn inside the Remoticon ITEMS tab; else the bottom HUD.
-        const hosted = !!bodyRect;
-        const ox = hosted ? Math.round(bodyRect.x + (bodyRect.w - totalW) / 2) : HOTBAR_OX;
-        const oy = hosted ? bodyRect.y + 44 : HOTBAR_OY;
-        const xStart = ox + 8;
-        const slotY = oy + 2;
+        // (B4) Only the hosted path is live: the Remoticon ITEMS tab. The bottom HUD
+        // is the XMB bar now. Renders the whole 50-slot bag as a SAFE row (0-9) over
+        // a PACK grid (10-49). Slot geometry comes from deviceBagSlotRects so the
+        // draw and main._tapDevice's hit-test can never drift.
+        if (!bodyRect) return;
+        const rects = deviceBagSlotRects(bodyRect);
+        const sh = rects[0].h;
 
-        // Selected item tooltip above hotbar — name, description, and stats
-        if (!hosted && game.selectedSlot >= 0 && game.inventory[game.selectedSlot]) {
-            const itemDef = game.inventory[game.selectedSlot].itemDef;
-            const itemName = itemDef.name.replace(/[\[\]]/g, '');
+        // Parchment bands behind each zone (drawn first so the labels sit on top).
+        drawPanelSmall(ctx, rects[0].x - 4, rects[0].y - 4, (rects[9].x + rects[9].w) - rects[0].x + 8, sh + 8, this.uiSheet);
+        drawPanelSmall(ctx, rects[10].x - 4, rects[10].y - 4, (rects[19].x + rects[19].w) - rects[10].x + 8, (rects[49].y + rects[49].h) - rects[10].y + 8, this.uiSheet);
 
-            // Build stat line
-            let statLine = '';
-            if (itemDef.healAmount) statLine = `Heals ${itemDef.healAmount} HP`;
-            else if (itemDef.damage) statLine = `${itemDef.useType === 'throw' ? 'Throw' : 'Melee'} ${itemDef.damage} dmg`;
-
-            const desc = itemDef.description || '';
-            const hasDesc = desc.length > 0;
-            const hasStat = statLine.length > 0;
-            const lines = 1 + (hasDesc ? 1 : 0) + (hasStat ? 1 : 0);
-            const th = 10 + lines * 13;
-            const tw = Math.max(itemName.length * 7 + 16, hasDesc ? Math.min(desc.length * 5.5 + 16, 300) : 0, 120);
-            const tx = (CANVAS_PX - tw) / 2;
-            const ty = oy - th - 6;
-
-            // Item tooltip uses the dark variant so it reads as an
-            // overlay above the parchment hotbar without clashing.
-            drawPanelSmall(ctx, tx, ty, tw, th, this.uiSheet, 'dark');
-
-            let lineY = ty + 4;
-
-            // Name (uppercased for bitmap-font readability emphasis)
-            if (this.font) {
-                this.font.drawText(ctx, itemName.toUpperCase(), CANVAS_PX / 2, lineY, {
-                    color: UI.gold, scale: 1, align: 'center',
-                });
-            }
-            lineY += 11;
-
-            // Stat line
-            if (hasStat && this.font) {
-                const statColor = itemDef.healAmount ? '#44ff88' : '#ffaa44';
-                this.font.drawText(ctx, statLine.toUpperCase(), CANVAS_PX / 2, lineY, {
-                    color: statColor, scale: 1, align: 'center',
-                });
-                lineY += 11;
-            }
-
-            // Description — fits more chars at 8px-per-glyph than the old 5.5px estimate
-            if (hasDesc && this.font) {
-                const maxChars = Math.floor((tw - 12) / 8);
-                const truncated = desc.length > maxChars ? desc.slice(0, maxChars - 2) + '..' : desc;
-                this.font.drawText(ctx, truncated, CANVAS_PX / 2, lineY, {
-                    color: UI.dim || '#8a8070', scale: 1, align: 'center',
-                });
-            }
+        // Zone labels, on top of the bands.
+        if (this.font) {
+            this.font.drawText(ctx, 'SAFE', rects[0].x, rects[0].y - 12, { color: UI.dim, scale: 1 });
+            this.font.drawText(ctx, 'PACK', rects[10].x, rects[10].y - 12, { color: UI.dim, scale: 1 });
         }
 
-        // Parchment background strip
-        drawPanelSmall(ctx, ox, oy - 4, totalW, sh + 12, this.uiSheet);
-
-        // Selected-slot pulse — same 2Hz heartbeat as the radial menu's
-        // active slice so the two highlight surfaces feel consistent.
-        const selPulse = 0.5 + 0.5 * Math.sin(performance.now() / 1000 * Math.PI * 2);
-
-        for (let i = 0; i < count; i++) {
-            const sx = xStart + i * HOTBAR_STRIDE;
-            const sy = slotY;
+        // The bag is browsed by TAP (main._tapDevice): one tap SELECTS a slot and
+        // opens the inspector panel below. The selected slot wears a gold halo (like
+        // the active tab) so the eye links it to the panel. No per-slot digit label.
+        const selIdx = (game._deviceSel && game._deviceSel.tab === 'items') ? game._deviceSel.index : -1;
+        for (let i = 0; i < rects.length; i++) {
+            const rect = rects[i];
             const stack = game.inventory[i];
-            const sel = game.selectedSlot === i;
-            const isEmpty = !stack;
 
-            // Slot frame — selected gets the parchment "glow" variant +
-            // pulsing gold halo; unselected gets a flat dark inset.
-            if (sel) {
-                // Outer halo (gold, swelling with pulse)
-                ctx.fillStyle = `rgba(212, 185, 106, ${0.3 + 0.4 * selPulse})`;
-                ctx.fillRect(sx - 2, sy - 2, sw + 4, sh + 4);
-            }
-            drawInset(ctx, sx, sy, sw, sh);
-
-            // Selected highlight border (always crisp, on top of the halo)
-            if (sel) {
-                ctx.strokeStyle = UI.gold;
-                ctx.lineWidth = 2;
-                ctx.strokeRect(sx - 1, sy - 1, sw + 2, sh + 2);
+            drawInset(ctx, rect.x, rect.y, rect.w, rect.h);
+            if (i === selIdx) {
+                ctx.strokeStyle = UI.gold; ctx.lineWidth = 2; ctx.strokeRect(rect.x + 1, rect.y + 1, rect.w - 2, rect.h - 2);
             }
 
-            // Empty-slot opacity nudge — empty slots render at ~70%
-            // opacity so the filled slots draw the eye first.
-            const slotAlpha = isEmpty ? 0.7 : 1.0;
-            const prevAlpha = ctx.globalAlpha;
-            ctx.globalAlpha = slotAlpha;
-
-            // Key number (top-left corner of slot)
-            if (this.font) {
-                this.font.drawText(ctx, `${i + 1}`, sx + 2, sy + 2, {
-                    color: sel ? UI.gold : UI.textLight, scale: 1,
-                });
-            }
-
-            // Reset alpha after the key number; item draw decides for itself.
-            ctx.globalAlpha = prevAlpha;
-
-            // Item
             if (stack) {
                 // Try sprite
                 const spr = ITEM_SPRITES[stack.itemDef.id];
                 let drawn = false;
                 if (spr && sprites?.[spr.sheet]?.loaded) {
-                    drawn = sprites[spr.sheet].drawRegion(ctx, spr.x, spr.y, spr.w, spr.h, sx + 7, sy + 9, 24, 24);
+                    drawn = sprites[spr.sheet].drawRegion(ctx, spr.x, spr.y, spr.w, spr.h, rect.x + 7, rect.y + 9, 24, 24);
                 }
                 if (!drawn) {
                     const info = ITEM_COLORS[stack.itemDef.id] || { bg: '#888', letter: '?' };
                     ctx.fillStyle = info.bg;
-                    ctx.fillRect(sx + 9, sy + 11, 22, 22);
+                    ctx.fillRect(rect.x + 9, rect.y + 11, 22, 22);
                     if (this.font) {
-                        this.font.drawText(ctx, info.letter, sx + 16, sy + 17, {
+                        this.font.drawText(ctx, info.letter, rect.x + 16, rect.y + 17, {
                             color: '#fff', scale: 2,
                         });
                     }
                 }
 
-                // (defeat legibility) mark safe-floor items — kept through a defeat.
-                if (isSafe(stack.itemDef, game.equipment && game.equipment.weapon)) this._drawSafeBadge(ctx, sx + sw, sy);
+                // (defeat legibility) gold corner = kept through a defeat: any item
+                // in the SAFE zone OR an intrinsically-safe (quest) item.
+                const kept = i < SAFE_SLOTS || isSafe(stack.itemDef, game.equipment && game.equipment.weapon);
+                if (kept) this._drawSafeBadge(ctx, rect.x + rect.w, rect.y);
 
                 // Stack count (bottom-right)
                 if (stack.count > 1) {
-                    // Dark backing for readability
                     ctx.fillStyle = '#000000aa';
-                    ctx.fillRect(sx + sw - 16, sy + sh - 11, 14, 10);
+                    ctx.fillRect(rect.x + rect.w - 16, rect.y + rect.h - 11, 14, 10);
                     if (this.font) {
-                        this.font.drawText(ctx, `${stack.count}`, sx + sw - 3, sy + sh - 10, {
+                        this.font.drawText(ctx, `${stack.count}`, rect.x + rect.w - 3, rect.y + rect.h - 10, {
                             color: UI.gold, scale: 1, align: 'right',
                         });
                     }
                 }
             }
         }
-        // (defeat legibility) tell the player what survives a defeat (device only)
-        if (hosted && this.font) this.font.drawText(ctx, 'gold corner = kept if defeated', ox, oy + sh + 8, { color: UI.dim, scale: 1 });
+        // (defeat legibility) tell the player what survives a defeat.
+        if (this.font) this.font.drawText(ctx, 'SAFE zone + quest items = kept if defeated', rects[0].x, rects[49].y + rects[49].h + 8, { color: UI.dim, scale: 1 });
+    }
+
+    // (C1) Tap-to-inspect panel. When a bag slot is selected (game._deviceSel),
+    // this draws below the bag grid: the item's icon + name, its one-line stat
+    // summary (itemStatLine), its stack/zone label, and a button per context
+    // action (itemActions). Buttons land on inspectorActionRects — the SAME rects
+    // main._tapDevice hit-tests — so the labels can't drift from their tap zones.
+    // A quest item yields no actions, so it shows the stat line only.
+    _drawInspector(game, bodyRect) {
+        const { ctx, sprites } = this;
+        if (!this.font) return;
+        const sel = game._deviceSel;
+        const stack = game.inventory[sel.index];
+        if (!stack) return;
+        const def = stack.itemDef;
+        const p = inspectorPanelRect(bodyRect);
+        drawPanelSmall(ctx, p.x, p.y, p.w, p.h, this.uiSheet);
+
+        // Item icon (sprite, else the colored-letter fallback — mirrors _drawHotbar).
+        const ix = p.x + 12, iy = p.y + 12;
+        const spr = ITEM_SPRITES[def.id];
+        let drawn = false;
+        if (spr && sprites?.[spr.sheet]?.loaded) {
+            drawn = sprites[spr.sheet].drawRegion(ctx, spr.x, spr.y, spr.w, spr.h, ix, iy, 32, 32);
+        }
+        if (!drawn) {
+            const info = ITEM_COLORS[def.id] || { bg: '#888', letter: '?' };
+            ctx.fillStyle = info.bg; ctx.fillRect(ix, iy, 32, 32);
+            this.font.drawText(ctx, info.letter, ix + 8, iy + 8, { color: '#fff', scale: 2 });
+        }
+
+        // Header: name (gold), stat line (light), stack/zone label (dim).
+        const tx = ix + 44;
+        const name = (def.name || def.id || '').replace(/[\[\]]/g, '');
+        const zone = zoneOf(sel.index, SAFE_SLOTS).toUpperCase();
+        const qty = stack.count > 1 ? ` x${stack.count}` : '';
+        this.font.drawText(ctx, name, tx, p.y + 12, { color: UI.gold, scale: 2 });
+        this.font.drawText(ctx, itemStatLine(def), tx, p.y + 36, { color: UI.text, scale: 1 });
+        this.font.drawText(ctx, `${zone}${qty}`, tx, p.y + 52, { color: UI.dim, scale: 1 });
+
+        // Action buttons — one per action, on the shared action-row rects. Drop is
+        // destructive (whole-stack, no confirm) so it wears red, not gold — with
+        // HIT_SLOP eating the gap between buttons, the color is the dead-zone cue.
+        const actions = itemActions(def, zoneOf(sel.index, SAFE_SLOTS));
+        const rows = inspectorActionRects(bodyRect);
+        for (let i = 0; i < actions.length; i++) {
+            const r = rows[i];
+            const col = actions[i].id === 'drop' ? UI.hpRed : UI.gold;
+            drawInset(ctx, r.x, r.y, r.w, r.h);
+            ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
+            this.font.drawText(ctx, actions[i].label, r.x + r.w / 2, r.y + r.h / 2 - 4, { color: col, scale: 1, align: 'center' });
+        }
     }
 
     // (XMB) The always-live usable-bar that replaces the flat bottom hotbar:
@@ -3251,6 +3235,11 @@ export class Renderer {
         for (const slot of EQ_SLOTS) {
             const s = slot;
             drawInset(ctx, s.x, s.y, s.w, s.h);
+            // (C2) gold halo on the plate whose chooser is open — same idiom C1 uses
+            // on the selected bag slot, so the eye links the plate to the picker panel.
+            if (game._deviceSel && game._deviceSel.tab === 'gear' && game._deviceSel.slotKey === s.key) {
+                ctx.strokeStyle = UI.gold; ctx.lineWidth = 2; ctx.strokeRect(s.x + 1, s.y + 1, s.w - 2, s.h - 2);
+            }
             // (defeat legibility) badge the safe-floor gear (the equipped weapon).
             const _eqItem = game.equipment[s.key];
             if (_eqItem && isSafe(_eqItem, game.equipment.weapon)) this._drawSafeBadge(ctx, s.x + s.w, s.y);
@@ -3287,6 +3276,52 @@ export class Renderer {
 
         // Footer hint (standalone only — the device frame draws its own footer).
         if (!hosted) this.font.drawText(ctx, 'TAP A PLATE TO REMOVE   ·   C / ESC  CLOSE', CANVAS_PX / 2, EQUIPMENT_MODAL_RECT.y + EQUIPMENT_MODAL_RECT.h - 16, { color: UI.textLight, scale: 1, align: 'center' });
+
+        // (C2) An open GEAR chooser overlays the plates with an options list.
+        if (hosted && game._deviceSel && game._deviceSel.tab === 'gear') this._drawGearPicker(game, bodyRect);
+    }
+
+    // (C2) The GEAR chooser — over a selected armor slot, list every bag item that
+    // fits it (name + armor delta vs the worn piece) plus a Bare (unequip) row.
+    // Reads the SAME equipOptions/gearOptionRects the tap handler does, so the
+    // drawn rows and their tap zones can't drift. Mirrors _drawInspector's idioms.
+    _drawGearPicker(game, bodyRect) {
+        const { ctx } = this;
+        if (!this.font) return;
+        const slotKey = game._deviceSel.slotKey;
+        const label = (EQUIP_SLOT_RECTS.find(s => s.key === slotKey) || {}).label || slotKey.toUpperCase();
+        const worn = game.equipment[slotKey];
+        const opts = equipOptions(slotKey, worn, game.inventory);
+        const rows = gearOptionRects(bodyRect, opts.length);
+
+        // Titled panel enclosing the option column (+ header band above row 0).
+        const px = bodyRect.x + (bodyRect.w - 200) / 2 - 8;
+        const py = bodyRect.y + 30;
+        const pw = 216;
+        const ph = (opts.length ? (rows[opts.length - 1].y + rows[opts.length - 1].h) : (py + 26)) - py + 12;
+        drawPanelSmall(ctx, px, py, pw, ph, this.uiSheet);
+        this.font.drawText(ctx, `${label} — CHOOSE`, px + pw / 2, py + 8, { color: UI.gold, scale: 1, align: 'center' });
+
+        // Empty bag AND nothing worn → a quiet note, no rows.
+        if (!opts.length) {
+            this.font.drawText(ctx, `[No ${label.toLowerCase()} gear]`, px + pw / 2, py + 26, { color: UI.dim, scale: 1, align: 'center' });
+            return;
+        }
+
+        for (let i = 0; i < opts.length; i++) {
+            const opt = opts[i], r = rows[i];
+            drawInset(ctx, r.x, r.y, r.w, r.h);
+            const name = (opt.name || opt.id || '').replace(/[\[\]]/g, '');
+            const isBare = opt.id === '__bare__';
+            this.font.drawText(ctx, isBare ? 'Bare (remove)' : name, r.x + 8, r.y + r.h / 2 - 4, { color: isBare ? UI.textLight : UI.text, scale: 1 });
+            if (opt.sludgeImmune) this.font.drawText(ctx, 'sludge-proof', r.x + 8, r.y + r.h - 9, { color: UI.dim, scale: 1 });
+
+            // Armor delta: +N green / −N red / 0 dim, right-aligned.
+            const d = opt.delta;
+            const dTxt = d > 0 ? `+${d}` : d < 0 ? `-${-d}` : '0';
+            const dCol = d > 0 ? UI.buff : d < 0 ? UI.hpRed : UI.dim;
+            this.font.drawText(ctx, dTxt, r.x + r.w - 8, r.y + r.h / 2 - 4, { color: dCol, scale: 1, align: 'right' });
+        }
     }
 
     // Word-wrap `text` into lines no longer than `maxChars` characters (the

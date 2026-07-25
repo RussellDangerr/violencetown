@@ -54,6 +54,29 @@ describe('matchTake', () => {
   });
 });
 
+describe('partitionInventory — zonal safety (remoticon-overhaul)', () => {
+    test('an ordinary item in a SAFE slot (index < safeSlots) is safe', () => {
+        const inv = new Array(50).fill(null);
+        inv[2] = { itemDef: loot, count: 1 };
+        inv[15] = { itemDef: loot, count: 1 };
+        const { safe, atRisk } = partitionInventory(inv, weapon, 10);
+        assert.deepEqual(safe.map(e => e.i), [2]);
+        assert.deepEqual(atRisk.map(e => e.i), [15]);
+    });
+    test('a quest item is safe even in a PACK slot (free, index-independent)', () => {
+        const inv = new Array(50).fill(null);
+        inv[20] = { itemDef: quest, count: 1 };
+        const { safe, atRisk } = partitionInventory(inv, weapon, 10);
+        assert.deepEqual(safe.map(e => e.i), [20]);
+        assert.equal(atRisk.length, 0);
+    });
+    test('safeSlots defaults to 0 — old 2-arg calls keep their behavior', () => {
+        const inv = [{ itemDef: loot, count: 1 }];
+        const { atRisk } = partitionInventory(inv, weapon);
+        assert.deepEqual(atRisk.map(e => e.i), [0]);
+    });
+});
+
 describe('pickScenario', () => {
   const S = [
     { id: 'fungus', when: c => c.zone === 'sewer' && /Fungus/.test(c.by?.type || ''), weight: 3, consequence: {} },
