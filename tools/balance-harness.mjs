@@ -457,9 +457,11 @@ export function report(roster = loadMapRoster()) {
     lines.push('--- LINT ---');
     const entityFlags = sorted.flatMap(e => lintEntity(e));
     const skillFlags = lintSkills();
+    const itemFlags = lintItems();
     for (const f of entityFlags) lines.push(f);
     for (const f of skillFlags) lines.push(f);
-    lines.push(`total flags: ${entityFlags.length + skillFlags.length}`);
+    for (const f of itemFlags) lines.push(f);
+    lines.push(`total flags: ${entityFlags.length + skillFlags.length + itemFlags.length}`);
 
     return lines.join('\n') + '\n';
 }
