@@ -131,5 +131,7 @@ test('flapperDeflection: rests at 0, kicks in the cycle direction, settles', () 
   assert.ok(Math.abs(flapperDeflection(1, -1)) < 1e-9, 'settled deflection should be ~0');
   assert.ok(flapperDeflection(0, 1) > 0.4);          // fresh kick, positive
   assert.ok(flapperDeflection(0, -1) < -0.4);        // mirrored for the other dir
-  assert.equal(flapperDeflection(5, 1), 0);          // p clamps into [0,1]
+  // p clamps into [0,1], so p=5 must land exactly on the p=1 result (comparing
+  // the two identical computations is exact — no epsilon needed to prove clamping).
+  assert.equal(flapperDeflection(5, 1), flapperDeflection(1, 1));
 });
