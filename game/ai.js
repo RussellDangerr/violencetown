@@ -32,6 +32,14 @@ export function isHostile(e) {
   return !!e && e.allegiance === 'hostile';
 }
 
+// SPECIES, not allegiance. Sewer fare is poison to humans and medicine to the
+// things that live down there, and that must survive a disposition flip — a
+// bribed Violet Fungus is your ally and still eats mushrooms. Deliberately NOT
+// derived from `allegiance`, which answers a different question.
+export function isSewerDweller(e) {
+  return !!(e && e.sewerDweller);
+}
+
 // Default grunt heal policy — per-enemy policies come later (first boss build).
 export const HEAL_HP_FLOOR  = 40; // buy only at or below this HP
 export const HEAL_MIN_GOLD  = 20; // a sliver below this can never heal

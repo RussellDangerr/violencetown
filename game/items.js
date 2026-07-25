@@ -8,7 +8,7 @@
 // affected tiles come from wheel-model.js `affectedTiles`, so the on-screen
 // highlight and the damage resolution use the exact same geometry.
 
-import { isHostile } from './ai.js';
+import { isHostile, isSewerDweller } from './ai.js';
 
 export const ITEMS = {
     // (Ring builds) A learning source: using it adds a skill to the learned pool
@@ -571,13 +571,22 @@ export function resolveThrow(game, itemDef, direction, _stackCount = 1, targetTi
             const isCentre = foe.x === ix && foe.y === iy;
             if (!(hostile || (allowCenterFriendly && isCentre))) continue;
             const turns = isCentre ? itemDef.dot.turns : Math.max(1, Math.floor(itemDef.dot.turns / 2));
+            // Magnitude preserved, sign flipped: the same five-times-two is poison
+            // to a human and regeneration to the things that live down here. One
+            // baseValue stays honest for both because the numbers are identical.
+            const dmg = (itemDef.sewerFare && isSewerDweller(foe)) ? -itemDef.dot.dmg : itemDef.dot.dmg;
             const list = foe.buffs || (foe.buffs = []);
             const existing = list.find(b => b.id === itemDef.dot.id);
             if (existing) {
                 existing.turns = Math.max(existing.turns, turns);
-                existing.dmg   = Math.max(existing.dmg ?? 0, itemDef.dot.dmg);
+                // "Refresh takes the strongest tick" — with dmg now signed, "strongest"
+                // means largest MAGNITUDE (heals and poisons never mix on one target,
+                // since a given foe's species doesn't change between throws), not the
+                // arithmetic max. Math.max(-5, -3) would pick -3 — the WEAKER heal —
+                // exactly backwards from the harm case it was copied from.
+                existing.dmg = Math.abs(dmg) > Math.abs(existing.dmg ?? 0) ? dmg : existing.dmg;
             } else {
-                list.push({ id: itemDef.dot.id, turns, dmg: itemDef.dot.dmg });
+                list.push({ id: itemDef.dot.id, turns, dmg });
             }
             affected++;
         }
@@ -585,6 +594,16 @@ export function resolveThrow(game, itemDef, direction, _stackCount = 1, targetTi
         // 3×3 (radius 1) around impact, half effect. Bystander friendlies are
         // spared (hostile-only); the deliberately-aimed centre tile's occupant is
         // hit even if friendly (real-placement / Plus Ultra path only).
+        //
+        // KNOWN LIMITATION (Task 16): mystery_meat carries sewerFare:true but its
+        // flat `damage` is NOT sign-flipped for a sewer-dweller the way `dot` is
+        // above — it always harms, human or not. combatAttack's pipeline (and
+        // Entity.takeDamage's `Math.max(1, rawDamage - armor)` floor underneath
+        // it) is built for positive damage only; a negative `damage` would still
+        // clamp to "at least 1 damage" instead of healing, and forcing negative
+        // numbers through the elemental/backstab/hit-splat/kill-event machinery
+        // built for harm risks corrupting all of it for a single sewer item. Left
+        // as-is rather than butchering the combat pipeline for one edge case.
         for (const foe of game._entitiesInRadius(ix, iy, 1)) {
             const hostile = isHostile(foe);
             const isCentre = foe.x === ix && foe.y === iy;

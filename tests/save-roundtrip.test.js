@@ -563,6 +563,29 @@ describe('enemy shove recovery (_spunTurns) round-trip (Task 15)', () => {
     });
 });
 
+// ── Task 16: Enemy.sewerDweller (species, not allegiance) round-trip ────────
+describe('enemy sewerDweller (species marker) round-trip (Task 16)', () => {
+    const rt = (e) => Enemy.fromSave(JSON.parse(JSON.stringify(e.toSave())));
+
+    test('a sewer-dweller stays a sewer-dweller across a reload', () => {
+        const e = new Enemy({ id: 'e1', type: 'Violet Fungus', x: 0, y: 0, sewerDweller: true });
+        assert.equal(rt(e).sewerDweller, true);
+    });
+
+    test('a bribed (ally-flipped) sewer-dweller keeps its species across a reload', () => {
+        const e = new Enemy({ id: 'e2', type: 'Violet Fungus', x: 0, y: 0, sewerDweller: true, behavior: ['IDLE', 'WANDER'] });
+        e.allegiance = 'ally'; e._ally = true; e._wasFlipped = true; // bribed mid-fight
+        const out = rt(e);
+        assert.equal(out.sewerDweller, true, 'species must not be lost when allegiance flips');
+        assert.equal(out.allegiance, 'ally');
+    });
+
+    test('an ordinary enemy round-trips sewerDweller false, not undefined', () => {
+        const e = new Enemy({ id: 'rat', type: 'Rat', x: 1, y: 1 });
+        assert.equal(rt(e).sewerDweller, false);
+    });
+});
+
 // ── Task 16: Enemy.loadout (Law 6f composite kit) round-trip ────────────────
 describe('enemy loadout (Law 6f) round-trip (Task 16)', () => {
     const rt = (e) => Enemy.fromSave(JSON.parse(JSON.stringify(e.toSave())));

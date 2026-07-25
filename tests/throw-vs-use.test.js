@@ -14,6 +14,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { ITEMS, resolveThrow, resolveUse, ownedItemDefs, hasItemDef } from '../game/items.js';
+import { tickBuffList } from '../game/buffs.js';
 
 // A throwable line: player at (0,0) facing east; one enemy two tiles east.
 // resolveThrow walks `range` tiles from the player; range>=2 reaches the enemy.
@@ -39,6 +40,7 @@ function makeFakeGame() {
         damageNumbers: [],
         map: { isWalkable: () => true },  // open corridor along the throw line
         hasBuff() { return false; },
+        _log() {}, // real Game logs to a scrollback; tests don't need to see it
         _spawnDamageNumber(x, y, text, color, size) { this.damageNumbers.push({ x, y, text, color, size }); },
         // Mirrors Game._entitiesInRadius (main.js) — the shared AoE primitive
         // resolveThrow's 3x3 burst walks. Absent here until now, which is why the
@@ -201,5 +203,45 @@ describe('thrown DoT items apply their buff (Law 7)', () => {
         resolveThrow(g, ITEMS.sludge_sack, null, 1, { x: target.x, y: target.y });
         resolveThrow(g, ITEMS.sludge_sack, null, 1, { x: target.x, y: target.y });
         assert.equal(target.buffs.filter(b => b.id === 'sludge').length, 1);
+    });
+});
+
+// Task 16 — sewer fare flips sign (not magnitude) on a sewer-dweller. Same
+// mock as above; the only difference between the two cases is the target's
+// `sewerDweller` flag, proving the eater — not the item — decides.
+describe('sewer fare — the eater decides (Task 16)', () => {
+    test('a tunnel mushroom thrown at a sewer-dweller leaves a NEGATIVE dmg (it heals)', () => {
+        const g = makeFakeGame();
+        const target = g.enemies[0];
+        target.sewerDweller = true;
+        resolveThrow(g, ITEMS.tunnel_mushroom, null, 1, { x: target.x, y: target.y });
+        const dot = target.buffs?.find(b => b.id === 'poison');
+        assert.ok(dot, 'expected a poison buff entry on the target');
+        assert.equal(dot.dmg, -5, 'same magnitude as the human dose, sign flipped to heal');
+        assert.equal(dot.turns, 2);
+    });
+    test('the same throw at an ordinary enemy leaves a POSITIVE dmg (it poisons)', () => {
+        const g = makeFakeGame();
+        const target = g.enemies[0];
+        resolveThrow(g, ITEMS.tunnel_mushroom, null, 1, { x: target.x, y: target.y });
+        const dot = target.buffs?.find(b => b.id === 'poison');
+        assert.ok(dot, 'expected a poison buff entry on the target');
+        assert.equal(dot.dmg, 5);
+    });
+    test('the negative dmg actually HEALS when the buff ticks (applyDot, buffs.js)', () => {
+        const g = makeFakeGame();
+        const target = g.enemies[0];
+        target.sewerDweller = true;
+        target.entity.hp = 40; // wounded, so a heal is visible and does not clip at maxHp
+        resolveThrow(g, ITEMS.tunnel_mushroom, null, 1, { x: target.x, y: target.y });
+        tickBuffList(target.buffs, target, g, null);
+        assert.equal(target.entity.hp, 45, 'a -5 dmg tick is a +5 heal via the shared DoT machinery');
+    });
+    test('the positive dmg actually HARMS a human when the buff ticks', () => {
+        const g = makeFakeGame();
+        const target = g.enemies[0];
+        resolveThrow(g, ITEMS.tunnel_mushroom, null, 1, { x: target.x, y: target.y });
+        tickBuffList(target.buffs, target, g, null);
+        assert.equal(target.entity.hp, 45, 'a +5 dmg tick harms a human the same as any other poison');
     });
 });

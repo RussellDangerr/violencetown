@@ -2,7 +2,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnEnemy, challengeGp } from '../game/enemies.js';
-import { rockClatter } from '../game/ai.js';
+import { rockClatter, isSewerDweller } from '../game/ai.js';
 
 describe('kit fallback — nothing ships broke by omission', () => {
     test('a fighter authored with no kit inherits its band default', () => {
@@ -48,5 +48,22 @@ describe('rock — the stealth affordance', () => {
     test('null-safe', () => {
         rockClatter(null, 1, 1);
         rockClatter([null, undefined], 1, 1);
+    });
+});
+
+describe('sewer fare — the eater decides', () => {
+    test('species is independent of allegiance', () => {
+        assert.equal(isSewerDweller({ sewerDweller: true, allegiance: 'ally' }), true);
+        assert.equal(isSewerDweller({ sewerDweller: true, allegiance: 'hostile' }), true);
+        assert.equal(isSewerDweller({ allegiance: 'hostile' }), false);
+    });
+    test('a bribed fungus can still eat its mushrooms', () => {
+        const flipped = { sewerDweller: true, allegiance: 'ally', _wasFlipped: true };
+        assert.equal(isSewerDweller(flipped), true);
+    });
+    test('the player is never a sewer dweller', () => {
+        assert.equal(isSewerDweller(null), false);
+        assert.equal(isSewerDweller(undefined), false);
+        assert.equal(isSewerDweller({}), false);
     });
 });

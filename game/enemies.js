@@ -115,6 +115,11 @@ export class Enemy {
         // (game.worldTick) via resolveAmbientTurns instead of the per-player-turn
         // resolveEnemyTurns, so it wanders/chatters while the player stands still.
         ambient = false,
+        // Species, not allegiance (ai.js::isSewerDweller) — sewer fare (Phase D)
+        // is poison to humans and medicine to whatever eats it down here. Must
+        // survive a bribe flip, so it is deliberately NOT derived from behavior/
+        // allegiance the way deriveAllegiance's other fields are.
+        sewerDweller = false,
     }) {
         this.id         = id;
         this.type       = type;
@@ -195,6 +200,7 @@ export class Enemy {
         this.giftLog       = Array.isArray(giftLog) ? giftLog : [];
         this.loadout       = loadout;
         this.ambient       = ambient;
+        this.sewerDweller  = !!sewerDweller;
 
         // Debuffs / buffs — symmetric with Game.buffs[] on the player side.
         // Used by Poke (applies Blind), Poison (DoT, future), Stun (skip
@@ -255,6 +261,10 @@ export class Enemy {
             // does, or a boss's Challenge GP would drop on save/load.
             loadout: this.loadout,
             ambient: this.ambient,
+            // Species marker (ai.js::isSewerDweller) — must survive a reload same
+            // as vermin/weak/resist/immune did, or a reloaded Violet Fungus would
+            // start taking poison damage from its own mushrooms.
+            sewerDweller: this.sewerDweller,
             // runtime
             state: this.state, fsmState: this.fsmState, lastWanderTurn: this._lastWanderTurn,
             carrying: this.carrying, barkIndex: this._barkIndex, barkOffset: this._barkOffset,
