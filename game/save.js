@@ -83,6 +83,11 @@ export function serialize(game) {
                 previousItemId: idOf(te.previousItem),
             })),
             buffs: (game.buffs || []).map(b => ({ ...b })),
+            // Speed Poition charges — transient combat-adjacent runtime state,
+            // same tier as buffs just above; persisted so a haste/slow mid-charge
+            // survives a reload instead of quietly resetting to 0.
+            hasteCharges: game._hasteCharges || 0,
+            slowCharges: game._slowCharges || 0,
             inventory: (game.inventory || []).map(s => s ? { id: s.itemDef.id, count: s.count } : null),
         },
         world: {
@@ -173,6 +178,8 @@ function validate(raw) {
     p.maxMp = _num(p.maxMp, 100);
     p.mp = clamp(_num(p.mp, p.maxMp), 0, p.maxMp);
     p.gold = Math.max(0, _num(p.gold, 0));
+    p.hasteCharges = Math.max(0, _num(p.hasteCharges, 0));
+    p.slowCharges = Math.max(0, _num(p.slowCharges, 0));
     if (!['up', 'down', 'left', 'right'].includes(p.facing)) p.facing = 'down';
     // Leave x/y undefined when absent/invalid so _loadMap falls back to the
     // map's spawn (a known-walkable tile) instead of (0,0), which is usually a
@@ -241,6 +248,8 @@ export async function loadInto(game, raw) {
     game.playerHp = p.hp; game.playerMaxHp = p.maxHp;
     game.playerMp = p.mp; game.playerMaxMp = p.maxMp;
     game.gold = p.gold;
+    game._hasteCharges = p.hasteCharges;
+    game._slowCharges = p.slowCharges;
     game.carFuel = p.carFuel || 'raw';
     game.facing = p.facing;
 

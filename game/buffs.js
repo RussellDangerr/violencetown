@@ -21,6 +21,16 @@
 //   - `feared` — a movement override in resolveEnemyTurns (flee instead of act).
 //   - `blind`  — folds into applyDamageToPlayer's single computeHit call
 //     (outgoingMult) to halve the attacker's outgoing damage.
+//   - `strength` / `defence` — Poition riders. No onTick at all: the buff just
+//     has to exist and count down. `strength` is read as a computeHit `flats`
+//     bonus in Game.combatAttack (Law 2); `defence` is summed into
+//     Game._playerArmor(). Both are carried as { stat, amount } rather than
+//     the DoT `{ dmg }` shape — see items.js's poitionBuff and this file's
+//     sumBuffStat, its read-side counterpart.
+//
+// `speed` isn't even a buff — it never touches this list. A haste/slow
+// poition converts straight into Game._hasteCharges/_slowCharges, spent at
+// the _advanceWorld chokepoint (main.js) via this file's worldBeatPlan.
 
 import { SLUDGE_DOT } from './data.js';
 
@@ -83,6 +93,30 @@ export const BUFF_DEFS = {
         onTick(owner, game, buff) { applyDot(owner, game, buff, 'Burning', 'fire'); },
     },
 
+    // Health/mana Poitions with turns > 1 (none authored today — both ship
+    // turns:1/instant — but a lasting one falls through to here rather than
+    // silently no-op'ing, same "support it for real" spirit as sludge/poison/
+    // fire above). Health rides applyDot directly, player-only floor and all.
+    health: {
+        name: 'Health Poition',
+        onTick(owner, game, buff) { applyDot(owner, game, buff, 'Health', 'health_poition'); },
+    },
+    // Mana has no enemy-side equivalent (Entity.mp exists for symmetry but
+    // nothing spends an enemy's MP yet), so — like applyDot's player branch —
+    // this only ever fires for the player; an enemy owner is a no-op rather
+    // than writing into a resource that doesn't drive anything for them.
+    mana: {
+        name: 'Mana Poition',
+        onTick(owner, game, buff) {
+            if (owner !== game) return;
+            const dmg = buff.dmg ?? 0;
+            const before = game.playerMp;
+            game.playerMp = Math.min(game.playerMaxMp, Math.max(0, game.playerMp - dmg));
+            const delta = game.playerMp - before;
+            game._log(`[Mana ${delta >= 0 ? 'restored' : 'drained'} ${Math.abs(delta)}]`);
+        },
+    },
+
     // Recover — a delayed heal (pendingHeal) that lands when the buff expires.
     recover: {
         onExpire(owner, game, buff) {
@@ -120,4 +154,40 @@ export function tickBuffList(buffs, owner, game, onExpireLog) {
         const def = BUFF_DEFS[b.id];
         if (def && def.onExpire) def.onExpire(owner, game, b);
     }
+}
+
+// ── Rider read (strength / defence) ──────────────────────────────────────────
+//
+// The strength/defence Poition riders carry no onTick — they just have to
+// exist and count down (tickBuffList already does that for any hookless
+// buff, per the post-defeat flavor statuses above). The value is read where
+// the number is actually computed: Game.combatAttack's `flats` bucket for
+// strength, Game._playerArmor's sum for defence. Both go through this one
+// helper (Game._poitionMod delegates here) so there's exactly one place that
+// knows a rider buff's payload lives at `.stat`/`.amount`, not `.dmg`.
+// Extracted to a plain export (rather than living only as a Game method)
+// because main.js touches `document` at load and can't be imported under
+// Node — this is the pure sliver tests/poition.test.js exercises directly.
+export function sumBuffStat(buffs, stat) {
+    return (buffs || []).reduce((n, b) => n + (b.stat === stat ? (b.amount || 0) : 0), 0);
+}
+
+// ── Speed charge arithmetic (haste / slow) ───────────────────────────────────
+//
+// Pure decision for one Game._advanceWorld() call, given the current haste/
+// slow charge counts: how many times the world-turn body should run this
+// call (0, 1, or 2) and what the charges should be afterward. A haste charge
+// SKIPS the beat entirely (spent here, at the top, so no call site can forget
+// it); a slow charge means the beat that's about to run should run TWICE.
+// Haste wins if both are somehow active — holding still leaves nothing to
+// double. Extracted so the charge-spend arithmetic is unit-testable under
+// Node without a real Game or the enemy-turn/day-clock machinery the actual
+// beat touches (main.js can't be imported — see drops.js's header comment
+// for the pattern this follows).
+export function worldBeatPlan(hasteCharges, slowCharges) {
+    hasteCharges = hasteCharges || 0;
+    slowCharges = slowCharges || 0;
+    if (hasteCharges > 0) return { runs: 0, hasteCharges: hasteCharges - 1, slowCharges };
+    if (slowCharges > 0) return { runs: 2, hasteCharges, slowCharges: slowCharges - 1 };
+    return { runs: 1, hasteCharges, slowCharges };
 }

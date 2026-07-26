@@ -9,7 +9,7 @@ import { BitmapFont } from './bitmap-font.js';
 import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, MAX_STACK } from './data.js';
 import { ITEMS, itemTier, resolveUse, resolveThrow, tickTempEquips, unequipItem, ownedItemDefs, hasItemDef } from './items.js';
 import { WEAPONS } from './weapons.js';
-import { tickBuffList, BUFF_DEFS } from './buffs.js';
+import { tickBuffList, BUFF_DEFS, sumBuffStat, worldBeatPlan } from './buffs.js';
 import { RINGS, FUSIONS } from './ring-data.js';
 import {
     unlockedSlots, resolveAdjacencies, slottedActives, aggregatePassives,
@@ -231,6 +231,11 @@ class Game {
         // Buffs: [{ id, name, turns, type, ...extra }]
         this.buffs = [];
         this._soapUsedThisTurn = false;
+        // Speed Poition charges — haste skips a world-turn entirely, slow runs
+        // one twice. Spent at the _advanceWorld chokepoint; see its comment and
+        // buffs.js's worldBeatPlan. Persisted in save.js alongside gold/buffs.
+        this._hasteCharges = 0;
+        this._slowCharges = 0;
 
         // Continuous walking (replaces the old setInterval auto-repeat, which
         // raced the rAF slide and dropped ~every other step). We now chain the
@@ -428,6 +433,16 @@ class Game {
     }
     removeBuff(id) { this.buffs = this.buffs.filter(b => b.id !== id); }
     hasBuff(id) { return this.buffs.some(b => b.id === id); }
+
+    // Sum of active poition buffs for one stat (strength/defence). These are
+    // RIDERS, not ticks: the buff has no onTick, it just has to exist and
+    // count down, and the value is read where the number is actually computed
+    // (combatAttack's flats bucket, _playerArmor's sum) — the same pattern
+    // guard and blind already use (see buffs.js's header comment). Delegates
+    // to buffs.js's sumBuffStat, which is the pure/testable half of this.
+    _poitionMod(stat) {
+        return sumBuffStat(this.buffs, stat);
+    }
 
     // De-smeared behind the shared buff table (PD-4): decrement, fire each buff's
     // onTick while active, then on expiry log + fire onExpire (e.g. the recover
@@ -3366,7 +3381,38 @@ class Game {
         return this._ratFormTurns > 0 && this.map.getTile(x, y) === 4;
     }
 
+    // Speed Poition chokepoint. In a turn-based game where one input = one
+    // world turn, "speed" can only mean the world doesn't advance — so the
+    // charge is spent HERE, at the single call-through every action already
+    // uses (~15 call sites), rather than at each site individually where a
+    // new one could forget it. worldBeatPlan (buffs.js) is the pure decision;
+    // this just carries it out. Named _advanceWorldOnce (not the `_worldBeat`
+    // named in the original design note) because `_worldBeat` already names
+    // the unrelated ambient/day-clock/disposition-decay heartbeat below,
+    // shared with free-roam — reusing it here would have silently clobbered it.
     _advanceWorld() {
+        const plan = worldBeatPlan(this._hasteCharges, this._slowCharges);
+        this._hasteCharges = plan.hasteCharges;
+        this._slowCharges = plan.slowCharges;
+        if (plan.runs === 0) {
+            this._log(`[The world holds still. (${this._hasteCharges} left)]`);
+            return;
+        }
+        this._advanceWorldOnce();
+        // Slow's second beat only fires if the first one left things in a
+        // state where "again, right now" is safe: not dead (die() already
+        // guards re-entry, but there's nothing to advance for a corpse) and
+        // not mid zone-transition (that branch below sets RESOLVING and
+        // returns while _loadMap's promise is still in flight — running the
+        // enemy-turn machinery again against the OLD map while the new one
+        // loads is exactly the kind of race the CLAUDE.md merge-hygiene notes
+        // warn about, just at runtime instead of at merge time).
+        if (plan.runs === 2 && this.playerHp > 0 && this.state !== STATE.DEAD && this.state !== STATE.RESOLVING) {
+            this._advanceWorldOnce();
+        }
+    }
+
+    _advanceWorldOnce() {
         this.turn++;
 
         // Enemies act. Messages come back as either plain strings (legacy:
@@ -3423,7 +3469,7 @@ class Game {
 
         // Soap cancels sludge at end of turn. The flag is set in _doItemUse
         // BEFORE this runs, so the reset MUST come after the check — resetting
-        // at the top of _advanceWorld wiped it before it could be consumed.
+        // at the top of _advanceWorldOnce wiped it before it could be consumed.
         if (this._soapUsedThisTurn && this.hasBuff('sludge')) {
             this.removeBuff('sludge');
             this._log('[Soap neutralized sludge]');
@@ -3741,6 +3787,13 @@ class Game {
         const backstab = isBackstab(this.playerX, this.playerY, enemyObj);
         const finalDmg = computeHit({
             base: dmg,
+            // (Poition) An active Strength Poition adds flat damage here — Law
+            // 2's flats bucket ("same-family flat bonuses add"), read at the
+            // one place the player's attacks compute their number. Covers
+            // every player-initiated hit that routes through combatAttack
+            // (weapon swing, Cleave/Spin, item Smash, spells, tricks, thrown
+            // splash) since they all funnel through this single computeHit call.
+            flats: this._poitionMod('strength'),
             elemental: elementalMult(opts.type, enemyObj),
             positional: backstab ? 1.5 : 1,
         });
@@ -4020,6 +4073,9 @@ class Game {
         }
         // (Rings) A slotted ring's `armor` passive soaks alongside worn armor.
         total += (this.ringMods && this.ringMods.armor) || 0;
+        // (Poition) An active Defence Poition rides alongside worn armor +
+        // rings the same way — a rider read, not a tick (see _poitionMod).
+        total += this._poitionMod('defence');
         return total;
     }
 

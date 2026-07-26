@@ -9,23 +9,41 @@
 // highlight and the damage resolution use the exact same geometry.
 
 import { isHostile, isSewerDweller } from './ai.js';
+import { burnGold } from './trade.js';
 
-// ── Poition (data + lint only — see plans/*poition* for the follow-up that
-// wires the other five stats) ────────────────────────────────────────────────
+// ── Poition (all six stats wired) ────────────────────────────────────────────
 // A poition moves exactly one of six stats by a signed amount: positive is a
 // potion, negative is a poison — same object, same shape, the sign is the
-// whole difference. Only `health` is wired to a runtime effect today (it
-// rides applyDot in buffs.js); mana/gold/strength/defence/speed are priced by
-// the lint (tools/balance-harness.mjs) but inert until the follow-up task.
+// whole difference. Two runtime families:
+//   - TICK stats (health, mana, gold) — an instant (turns:1) delivers the
+//     whole amount immediately; a lasting one (turns>1) rides the shared
+//     tick machinery (buffs.js's BUFF_DEFS / applyDot). Thrown/given health
+//     poitions already used this (sludge/fire/poison aliases); resolveSelfUse
+//     below is what lets DRINKING one do the same thing.
+//   - RIDER stats (strength, defence) — no tick at all. The buff just has to
+//     exist and count down; the value is read where the number is actually
+//     computed (Law 2's flats bucket in combatAttack, the sum in
+//     _playerArmor) — see buffs.js's sumBuffStat.
+// `speed` is neither — it never touches a buff list. It converts straight
+// into haste/slow CHARGES spent at the _advanceWorld chokepoint (main.js);
+// see buffs.js's worldBeatPlan.
 //
-// A poition's buff record: { id, turns, dmg }. `dmg` is POSITIVE for harm and
-// NEGATIVE for healing, matching applyDot's existing sign convention — so a
-// potion (amount +5) becomes dmg -5 and heals. The sign inversion lives here,
-// in one place, rather than at each call site.
+// poitionBuff is the ONE flip seam every path (thrown burst, hand-fed sewer
+// fare, and self-use below) routes through, so a species-dependent sign
+// inversion can't drift into a second implementation. It emits one of two
+// record shapes depending on the stat family — not two competing seams, one
+// seam whose output shape depends on what's being moved:
+//   - tick stats  → { id, turns, dmg }    (dmg negated: a potion heals, i.e.
+//                                          applyDot's `hp - dmg` convention)
+//   - rider stats → { id, turns, stat, amount }  (read via sumBuffStat)
 export function poitionBuff(p, flip = false) {
     if (!p) return null;
     const amount = flip ? -p.amount : p.amount;
-    return { id: p.as || p.stat, turns: p.turns ?? 1, dmg: -amount };
+    const turns = p.turns ?? 1;
+    if (p.stat === 'strength' || p.stat === 'defence') {
+        return { id: p.as || p.stat, turns, stat: p.stat, amount };
+    }
+    return { id: p.as || p.stat, turns, dmg: -amount };
 }
 
 export const ITEMS = {
@@ -339,9 +357,8 @@ export const ITEMS = {
     // The six below are the beneficial half of the category: a poition moves
     // exactly one of six stats, and here amount is always positive. Their
     // negative-amount siblings are the sludge_sack / tunnel_mushroom /
-    // fire_bottle health-poitions above. Only health is wired to a runtime
-    // effect today; the other five are data + lint only until the follow-up
-    // task teaches resolveUse what to do with them.
+    // fire_bottle health-poitions above. All six resolve through
+    // resolveSelfUse's poition branch below when drunk (useType:'self').
     health_poition: {
         id: 'health_poition',
         name: '[Health Poition]',
@@ -610,7 +627,98 @@ function resolveSelfUse(game, itemDef) {
             : `[${verb} ${itemDef.name} — healed ${healed} HP]`;
     }
 
+    if (itemDef.poition) {
+        const msg = applyPoitionSelf(game, itemDef);
+        return equipMsg ? `${equipMsg} ${msg}` : msg;
+    }
+
     return equipMsg || `[Used ${itemDef.name}]`;
+}
+
+// Drinking a poition (useType:'self') resolves its ONE stat right here — the
+// counterpart to resolveThrow's isDot branch and give-action.js's
+// applySewerFareEffect, both of which already apply a `poition` to something
+// OTHER than the player. Same flip seam (poitionBuff) as those two, so a
+// species-dependent inversion can't grow a second implementation: `flip` is
+// always computed from isSewerDweller the same way applySewerFareGive does,
+// even though every shipped self-use poition has sewerFare:false today (so
+// flip is always false in practice) — a future effect that makes the PLAYER
+// a sewer-dweller (Rat Form?) inherits the inversion for free instead of
+// needing its own.
+function applyPoitionSelf(game, itemDef) {
+    const p = itemDef.poition;
+    const flip = !!(itemDef.sewerFare && isSewerDweller(game));
+    const buff = poitionBuff(p, flip);
+    // Recover the flipped, signed amount regardless of which shape poitionBuff
+    // returned (rider carries it as `.amount`; tick carries it negated as `.dmg`).
+    const amount = buff.stat ? buff.amount : -buff.dmg;
+
+    switch (p.stat) {
+        case 'health': {
+            if (p.turns > 1) {
+                game.addBuff(buff.id, 'Health Poition', buff.turns, amount >= 0 ? 'buff' : 'debuff', { dmg: buff.dmg });
+                return `[${itemDef.name} — takes hold]`;
+            }
+            const before = game.playerHp;
+            game.playerHp = Math.max(0, Math.min(game.playerMaxHp, game.playerHp + amount));
+            const delta = game.playerHp - before;
+            if (delta > 0 && game._spawnHitSplat) game._spawnHitSplat(game.playerX, game.playerY, `+${delta}`, 'heal', { omni: true });
+            return delta >= 0 ? `[${itemDef.name} — healed ${delta} HP]` : `[${itemDef.name} — lost ${-delta} HP]`;
+        }
+        case 'mana': {
+            // MP is real (main.js:3231/:3276 spend it on spells) — instant like
+            // health; turns>1 rides the same tick machinery (buffs.js) for symmetry.
+            if (p.turns > 1) {
+                game.addBuff(buff.id, 'Mana Poition', buff.turns, amount >= 0 ? 'buff' : 'debuff', { dmg: buff.dmg });
+                return `[${itemDef.name} — takes hold]`;
+            }
+            const before = game.playerMp;
+            game.playerMp = Math.max(0, Math.min(game.playerMaxMp, game.playerMp + amount));
+            const delta = game.playerMp - before;
+            return delta >= 0 ? `[${itemDef.name} — restored ${delta} MP]` : `[${itemDef.name} — drained ${-delta} MP]`;
+        }
+        case 'gold': {
+            if (amount >= 0) {
+                // Minting: a gold potion conjures GP from nowhere. trade.js's
+                // transferGold requires a real `from` holder with the balance to
+                // move, and burnGold only ever REMOVES gold — neither models
+                // "gold that appears from nothing," so there's no home for this
+                // in the transaction spine. Direct mutation, same as every other
+                // poition's potion side.
+                game.gold = (game.gold || 0) + amount;
+                return `[${itemDef.name} — +${amount}g]`;
+            }
+            // Poisoning: burnGold IS the declared sink, but its contract is
+            // all-or-nothing (refuses the whole burn if the holder can't cover
+            // it) — a gold poison needs the OPPOSITE: take whatever's there and
+            // no more, never refuse. Pre-clamp so the call to burnGold always
+            // succeeds; burnGold still owns the actual mutation + audit hook.
+            const take = Math.min(-amount, game.gold || 0);
+            if (take > 0) burnGold(game, take, 'gold_poition');
+            return `[${itemDef.name} — lost ${take}g]`;
+        }
+        case 'strength':
+        case 'defence': {
+            // Rider — no tick, just has to exist and count down (see buffs.js's
+            // header comment + sumBuffStat). addBuff refreshes turns on a
+            // re-drink rather than stacking, same as every other buff.
+            const name = p.stat === 'strength' ? 'Strength Poition' : 'Defence Poition';
+            game.addBuff(buff.id, name, buff.turns, amount >= 0 ? 'buff' : 'debuff', { stat: buff.stat, amount: buff.amount });
+            return `[${itemDef.name} — ${p.stat} ${amount >= 0 ? '+' : ''}${amount} for ${buff.turns} turns]`;
+        }
+        case 'speed': {
+            // Charges, not a buff — never touches game.buffs. See
+            // _advanceWorld's chokepoint guard (main.js) + worldBeatPlan (buffs.js).
+            if (amount >= 0) {
+                game._hasteCharges = (game._hasteCharges || 0) + amount;
+                return `[${itemDef.name} — the world holds still for your next ${amount} actions]`;
+            }
+            game._slowCharges = (game._slowCharges || 0) + (-amount);
+            return `[${itemDef.name} — the world doubles up for your next ${-amount} actions]`;
+        }
+        default:
+            return `[Used ${itemDef.name}]`;
+    }
 }
 
 // (combat-feel-pass) Thrown items fly straight and BURST over a one-shot 3×3
