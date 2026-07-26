@@ -52,7 +52,17 @@ The game's name is always one word: **Violencetown**. Never "Violence Town", "vi
 
 Citizens of the game are **Violencians** — this is the in-fiction demonym and is correct as written; do not "fix" it.
 
-Before merging, run `git grep -iE 'violence[ _-]+town'` from the repo root — it must return zero lines (excluding this CLAUDE.md, which contains the rule definition).
+A **Poition** is the consumable category added in v0.20.0 — a deliberate portmanteau of *poison* and *potion*, because the same object is one or the other depending on who drinks it. Spelled `poition` everywhere (id, field, prose); it is not a typo for either parent word, and do not "fix" it.
+
+**`defence`** is British-spelled, like the demonym above — in the `poition.stat` value, item ids, prose and code. Never `defense`.
+
+Before merging, run this from the repo root — it must return zero lines:
+
+```bash
+git grep -iE 'violence[ _-]+town' -- ':!CLAUDE.md' ':!plans/item-hotbar-xmb-implementation.md'
+```
+
+Both exclusions are files that *quote the rule itself* rather than violate it.
 
 ## Recent infrastructure (since v0.8.0)
 
@@ -63,4 +73,10 @@ Before merging, run `git grep -iE 'violence[ _-]+town'` from the repo root — i
 - **Generation scripts** live in `tools/`:
   - `tools/gen_font.py` — regenerates the bitmap font atlas.
   - `tools/gen_ui_panel.py` — regenerates the 9-slice panel atlas.
-- **Player resources:** HP (red bar) / MP (cyan bar, currently inert) / GP (Gold Card pill). All three live on the `_drawHPPanel` surface. GP is the same value as `game.gold`. See `plans/gold-card.md` for the in-universe lore the Gold Card is intended to grow into.
+- **Player resources:** HP (red bar) / MP (cyan bar) / GP (Gold Card pill). All three live on the `_drawHPPanel` surface. GP is the same value as `game.gold`. **MP is live** — spells spend it (fireball 12, coneOfCold 10, boo 8) and a `mana_poition` restores it; an older note here called it inert, which it has not been for some time. See `plans/gold-card.md` for the in-universe lore the Gold Card is intended to grow into.
+
+## Planning surface (corrected 2026-07-25)
+
+Specs and plans for work being *done* live in `plans/*.md` on `dev`, beside the code. The **`plan` branch is still used** — for parking work that is *not* being done: backlogs, open rulings, ideas deliberately deferred. Its latest is `plans/next-session-open-work.md`. Read it with `git show plan:plans/next-session-open-work.md` rather than checking the branch out; it is badly diverged from `dev`, so use `git worktree add` if you need to write to it.
+
+(An earlier note here said not to write new plans on `plan` at all. That over-corrected — the distinction is active-work vs parked-work, not "never".)
