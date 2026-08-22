@@ -4,6 +4,8 @@
 > Zone definitions: `plans/game-zones.md`
 > Open design decisions: `plans/abc-decision-matrix.md`
 > All feature development follows the 4-gate pipeline in `GAME_STUDIO_PLAN.md`.
+> **Systems audit (2026-08-21): `plans/systems-audit-2026-08.md`** — inventory, the TTK finding,
+> the lock/key gate pass, and a proposed order of operations. Read it before planning new systems.
 
 ## Design Status
 
