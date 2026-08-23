@@ -129,14 +129,22 @@ Per the 2026-06-09 Outward research: cheap entry, rising marginal cost toward a 
 no RNG.
 
 ```
-T  = npc.flipThreshold ?? 100
-p(d) = clamp01((d − (−100)) / (T − (−100)))
-costPerPoint(d) = 1 + 4 × p(d)          // 1 GP/pt at the floor → 5 GP/pt at the threshold
+CEIL = max(100, npc.flipThreshold ?? 100)     // the same number the meter clamps to
+p(d) = clamp01((d − (−100)) / (CEIL − (−100)))
+costPerPoint(d) = 1 + 4 × p(d)                // 1 GP/pt at the floor → 5 GP/pt at the ceiling
 ```
 
 Points are awarded one at a time, each deducting `costPerPoint(currentDisposition + awarded)` from the
 surplus pool, until the pool cannot afford the next point. Deterministic, monotonic, integer output.
 Iteration is bounded at 400 points as a runaway guard.
+
+**The denominator is `CEIL`, not `flipThreshold`.** An earlier draft of this spec used the threshold
+and it is wrong: Puck is authored `flipThreshold: 0`, so `p` clamps to 1 at every disposition above
+zero and he sits permanently at the maximum 5 GP/pt. Using the ceiling makes the curve mean "affection
+gets harder the more they already like you", which holds for every NPC whether or not they have a
+flip left to buy — and it makes the meter's display range and the curve's range the same number.
+Caught by running the real numbers in `game/_design-offer.html`; the flip itself stays protected
+separately by §4.3.
 
 ### 4.3 The gold ceiling — replaces the memo's per-encounter cap
 
@@ -144,6 +152,7 @@ The `gold-weighting-and-bribery-research` memo proposed a ~+30 per-encounter cap
 disposition. **This spec replaces that with a structural ceiling**, and the deviation is deliberate:
 
 ```
+T = npc.flipThreshold ?? 100                   // the threshold itself, NOT §4.2's CEIL
 goldCeiling = (disposition < T) ? T − 1 : Infinity
 ```
 
@@ -203,7 +212,7 @@ Usable inner height 504. Band budget:
 | --- | ---: | --- |
 | Header | 48 | mood face · NPC name (scale 2) · disposition meter · GP (scale 2) · ✕ chip |
 | Column headers | 14 | `<NPC>'S GOODS` / `YOUR SATCHEL` |
-| Lists | 240 | two 268-wide scrolling columns, 6 rows of 40 |
+| Lists | 240 | two 264-wide scrolling columns with a 16px gutter, 6 rows of 40 |
 | Trays | 60 | YOU GIVE (6 slots) / YOU TAKE (6 slots), 36px cells |
 | Description | 56 | name · tier · value · wrapped description · goodwill weight |
 | Ledger | 48 | giving / taking summary · balance · MAKE THE OFFER |
@@ -230,7 +239,7 @@ re-authored.
 
 ### 5.2 Rows
 
-268 wide × 40 tall. Left-edge 3px tier bar in the rarity colour · 24px icon · name · tier name ·
+264 wide × 40 tall. Left-edge 3px tier bar in the rarity colour · 24px icon · name · tier name ·
 price right-aligned. Stack counts render as `[Soap] ×3`. A staged row gets the gold halo plus a
 `staged ×2` line. Scroll thumbs are proportional, so a 7-item shop and a 22-stack satchel read
 differently at a glance.
@@ -443,8 +452,21 @@ No local Node on this machine, so `npm test` runs elsewhere; in-browser verifica
 - `tests/offer.test.js` — staging and un-staging, stack counts, balance sign, surplus floored at 0,
   the `values` multiplier, the rising curve's monotonicity and determinism, the gold ceiling
   (including the `Infinity` branch for Puck), quest-item refusal, every commit-refusal reason.
-- `tests/offer-layout.test.js` — every returned rect inside the panel; no two hit-testable rects
-  overlap once expanded by `HIT_SLOP`; row count and scroll offsets behave at 0, 1 and 50 items.
+- `tests/offer-layout.test.js` — every returned rect inside the panel; the two-part overlap invariant
+  below; row count and scroll offsets behave at 0, 1 and 50 items.
+
+**The overlap invariant is per-group, not global.** An earlier draft of this spec asserted "no two
+hit-testable rects overlap once expanded by `HIT_SLOP`", which is impossible for anything tiled —
+two adjacent 40px rows expanded by 6 each necessarily overlap by 12. The correct pair of assertions:
+
+1. **Siblings inside a tiled group** (list rows, tray slots) tile exactly at **zero** slop. Slop
+   between siblings would be ambiguous anyway — which row did the tap mean?
+2. **Across groups** (a list vs a tray vs the button vs the ✕ chip) nothing overlaps once expanded
+   by `HIT_SLOP`. Slop is a group-boundary affordance, not an inter-sibling one.
+
+This surfaced a real geometry constraint: **the gutter between the two columns must exceed
+`2 × HIT_SLOP`.** At the 8px gutter the columns' expanded hit rects met in the gap, so a tap 4px into
+the gutter was ambiguous. Columns are 264 wide with a 16px gutter, verified passing.
 
 **Backfilled:** `tests/trade.test.js`. `tests/wallets.test.js` is currently the only test importing
 from `trade.js` and it imports only `transferGold`/`burnGold` — **`band`, `buyPrice`, `sellPrice`,
@@ -457,6 +479,24 @@ disposition round-trips.
 ---
 
 ## 11. Verification
+
+### The design preview
+
+`game/_design-offer.html` renders this screen at 608×608 against the **real** modules — real `ITEMS`,
+real `buyPrice`/`sellPrice`/`band`/`mood`, real `UI` palette and `drawInset`/`drawPanelSmall` chrome,
+real VT323 metrics — with Puck copied verbatim from `game/factory-map.json:40`. It is not a drawing of
+the screen; it is the screen's arithmetic, and it prints a pass/fail fit report beneath the canvas.
+
+Serve with `python dev-server.py 3001` and open `http://localhost:3001/_design-offer.html` (the dev
+server's root is `game/`, not the repo root).
+
+It is **local-only and untracked** — `.gitignore:88` excludes `game/_design-*.html` by project
+convention, so it will not be in a fresh clone. Regenerate it from this section if you need it.
+Every check currently passes with a clean console; the two failures it caught on first render are
+recorded in §4.2 and §10 as corrections to this spec.
+
+### In the game
+
 
 In-browser at `localhost:3001`, console clean, on each of:
 
