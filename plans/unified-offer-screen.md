@@ -94,6 +94,9 @@ a bribe is nothing but the shape of that balance:
 | goods + gold | goods | a barter with a sweetener |
 | less than you take | goods | a **bad deal** — they accept, and resent it |
 
+Gold appears in whichever tray it belongs to, so a sale is `give: [2 soap], gold: −18` and a purchase
+is `gold: +30, take: [bandage]`. Same field, same arithmetic, opposite sign.
+
 **Any imbalance converts to disposition.** Surplus in their favour buys goodwill; a shortfall costs
 it. That is the whole mechanic, and it is why the four verbs were ever separate and no longer need to
 be. A bad deal is a move the player is allowed to make, not an error the screen blocks.
@@ -111,13 +114,27 @@ This is the only new economy rule. Everything else — `band`, `buyPrice`, `sell
 
 ### 4.1 The balance
 
-```
-givenValue = Σ over given items of  sellPrice(item, disposition) × (npc.values[item.id] ?? 1)
-           + givenGold
-takenValue = Σ over taken items of  buyPrice(item, disposition)
+**Gold is signed and sits on whichever side it belongs to.** `offer.gold > 0` is gold the player
+hands over; `offer.gold < 0` is gold the NPC pays out. Without the negative half the model cannot
+express a sale at all, which is the single most common thing a player does in a shop.
 
-balance    = givenValue − takenValue
+**Market value and gift value are two different numbers.** The `values` weight is affection, not
+money: Puck pays 9 GP for a bar of soap he sells at 18, and his `soap: 4` does not make him pay 72.
+Weighting the settlement price was an error in an earlier draft of this spec — it would have let the
+player mint gold out of an NPC's fondness.
+
 ```
+marketGiven = Σ over given items of  sellPrice(item, disposition) × count  +  max(0, offer.gold)
+marketTaken = Σ over taken items of  buyPrice(item, disposition)  × count  +  max(0, −offer.gold)
+giftValue   = Σ over given items of  sellPrice(item, disposition) × count × (npc.values[id] ?? 1)
+
+balance     = marketGiven − marketTaken          // this is what settles the gold
+```
+
+The weight enters only when a **surplus** is converted to goodwill (§4.2): gold in the tray pays the
+bill first, whatever is left over is the surplus, and the item share of that surplus is amplified by
+the average weight of the items given (`giftValue / marketItemsGiven`). So selling soap at the asking
+price moves nothing, while handing the same soap over for free moves +16.
 
 The balance is signed, and **both signs move disposition**:
 
@@ -131,6 +148,13 @@ A negative balance is **not a refusal**. It is an offer the NPC will take while 
 That is what makes the balance a two-way lever rather than a wall, and it is why the meter has
 something to say in both directions.
 
+**The balance auto-settles to zero as you stage.** Put a bandage in the take tray and the screen
+drops the 30 GP it costs into the give tray for you; put two soap in the give tray and it drops the
+18 GP Puck owes you into the take tray. The player then *deliberately* drags it off zero — take back
+some of the gold to buy goodwill, or short him to buy nothing. Settling is the default and the
+imbalance is the decision, which is what keeps ordinary shopping fast while making generosity and
+lowballing both explicit acts.
+
 Authored `values` weights become a **multiplier**, so an item an NPC actually wants punches far above
 its market price, while an item they have no opinion about still counts at face value. Gold's
 multiplier is always 1. This is what makes the give tray meaningful on the five merchants (Macc,
@@ -143,7 +167,7 @@ Per the 2026-06-09 Outward research: cheap entry, rising marginal cost toward a 
 no RNG.
 
 ```
-CEIL = max(100, npc.flipThreshold ?? 100)     // the same number the meter clamps to
+CEIL = max(100, npc.flipThreshold ?? 30)      // the same number the meter clamps to
 p(d) = clamp01((d − (−100)) / (CEIL − (−100)))
 costPerPoint(d) = 1 + 4 × p(d)                // 1 GP/pt at the floor → 5 GP/pt at the ceiling
 ```
@@ -166,9 +190,14 @@ The `gold-weighting-and-bribery-research` memo proposed a ~+30 per-encounter cap
 disposition. **This spec replaces that with a structural ceiling**, and the deviation is deliberate:
 
 ```
-T = npc.flipThreshold ?? 100                   // the threshold itself, NOT §4.2's CEIL
+T = npc.flipThreshold ?? 30                    // the threshold itself, NOT §4.2's CEIL
 goldCeiling = (disposition < T) ? T − 1 : Infinity
 ```
+
+`?? 30` is not a new number: it is the default `previewGive` and `applyDispositionDelta` already use
+(`give-action.js:49`, `:235`). An earlier draft of this spec said `?? 100`, which would have silently
+disagreed with the flip logic it sits beside. For `CEIL` the default is immaterial — `max(100, …)`
+swallows it — but for the gold ceiling it decides where gold stops, so it must match.
 
 Gold-sourced points may never carry an NPC **across** an uncrossed `flipThreshold`. Item-sourced
 points are uncapped and can cross freely.
@@ -670,3 +699,5 @@ not rebuild a deleted verb.
 | 16 | Resentment uses §4.2's curve mirrored (`5 − 4p`), so betrayal is cheaper than affection when they like you and dearer when they don't. | Claude |
 | 17 | Untracked and container partners cannot be shortchanged, since they have no resentment to spend. | Claude |
 | 18 | Rounding always favours the NPC — goodwill rounds down, resentment rounds up. | Claude |
+| 19 | Gold is a single signed field, not two — negative means the NPC pays out. Without it the model cannot express a sale. | Claude |
+| 20 | The balance auto-settles to zero as items are staged; the player drags it off zero deliberately. | Claude |
