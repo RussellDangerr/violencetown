@@ -528,7 +528,17 @@ These are not extras; each one blocks the screen from working as designed.
 
 ## 10. Testing
 
-No local Node on this machine, so `npm test` runs elsewhere; in-browser verification is the local net.
+**Node is available locally** — v24.18.0 / npm 11.16.0. An earlier note in this project's memory
+claimed otherwise and this spec repeated it; both were stale. Baseline on `feature/unified-offer-screen`
+before any of this work: **404 tests, 87 suites, 0 failures, 395ms.**
+
+```bash
+npm test                          # the whole suite (node --test)
+node --test tests/offer.test.js   # one file
+```
+
+Every task in the implementation plan is therefore genuinely test-driven: the failing test can be run
+and seen to fail before the code exists.
 
 **New:**
 - `tests/offer.test.js` — staging and un-staging, stack counts, balance sign, surplus floored at 0,
@@ -551,9 +561,9 @@ This surfaced a real geometry constraint: **the gutter between the two columns m
 the gutter was ambiguous. Columns are 264 wide with a 16px gutter, verified passing.
 
 **Backfilled:** `tests/trade.test.js`. `tests/wallets.test.js` is currently the only test importing
-from `trade.js` and it imports only `transferGold`/`burnGold` — **`band`, `buyPrice`, `sellPrice`,
-`bribeStepCost`, `canTrade` and `mood` have zero coverage.** A pricing-adjacent change cannot land
-without a net.
+from `trade.js` and it imports only `transferGold`/`burnGold` (16 tests, 3 suites) — **`band`,
+`buyPrice`, `sellPrice`, `bribeStepCost`, `canTrade` and `mood` have zero coverage.** A
+pricing-adjacent change cannot land without a net.
 
 **Extended:** `tests/save-roundtrip.test.js` asserts `_offer` is absent from the save and that
 disposition round-trips.
@@ -583,7 +593,7 @@ column gutter (§10), and the resentment rounding direction (§4.4).
 ### In the game
 
 
-In-browser at `localhost:3001`, console clean, on each of:
+With `npm test` green, then in-browser at `localhost:3001`, console clean, on each of:
 
 - **Puck** — vendor with authored `values`; stage 2 soap, watch the meter run 60 → 80 and the
   multipliers move `×1.2 → ×1.0`; commit; confirm the prices actually change afterward.
