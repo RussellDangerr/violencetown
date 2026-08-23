@@ -23,6 +23,17 @@ answers).
 > - **Thieve drills to Coin / Kit / Gear** on the existing wheel grammar. No new panel.
 > - **Seen means refused** — the verb greys out. Hidden always succeeds. No dice anywhere.
 > - **Anyone with pockets** is a valid target, with an author opt-out for quest-critical NPCs.
+>
+> **Revised 2026-08-23 (Caelan) — notice is a separate question from success:**
+> - **A clean theft is genuinely clean.** Take little enough and there is **no disposition change and
+>   no hostility** — they never know. The −100 is the price of being *noticed*, not of stealing.
+> - **Weight vs. buffer, not a roll.** What you take has a weight (gold, item value, and for gear the
+>   actual stat swing you remove from them); each victim has a notice buffer. Under it is clean, over
+>   it is noticed. Deterministic and shown on the wheel *before* you commit.
+> - **Being noticed does not hand them your position.** They learn they were robbed, not by whom or
+>   from where — hostile and searching, but sweeping, not beelining.
+> - **Peripheral is graded, not forbidden.** Dead behind = full buffer; peripheral = a much smaller
+>   one; `DIRECT` = still refused outright.
 > - **Both dither treatments get built** behind a toggle; the loser is deleted after Caelan looks at
 >   them side by side in the real game.
 
@@ -55,8 +66,9 @@ Three properties make that work and all three are design constraints, not flavou
 1. **Decidable.** You can see the safe tile *before* you commit. The theft is a plan, not a gamble.
 2. **Absolute.** Hidden always succeeds; seen cannot be attempted. There is no roll to lose, so
    there is nothing to save-scum and nothing to feel cheated by.
-3. **Consequential.** The victim hates you afterward at −100 and hunts you — but has to *find* you
-   first, and you get exactly one beat of head start.
+3. **Consequential in proportion.** Take a little and nothing happens at all. Take enough to be felt
+   and the victim hates you at −100 and hunts you — without knowing who you are or where you went.
+   Fail to be found, and the whole street gets a little colder toward everyone.
 
 ### Genre references
 
@@ -79,7 +91,8 @@ Three properties make that work and all three are design constraints, not flavou
 
 **In:** a shared perception module; enemy facing; a four-state awareness ladder; noise as a
 first-class stimulus; a threat-visualisation pass replacing the aggro overlay; the Thieve verb and
-its three branches; a downward disposition flip; per-enemy theft persistence.
+its three branches; the weight-against-buffer notice model; a downward disposition flip; area
+paranoia on a failed search; per-enemy theft persistence.
 
 **Out (named, not forgotten):** cover/crouch mechanics; per-tile properties (that is the audit's
 tag layer, §5.4); a sneak stance; light level affecting detection *in v1*; witnesses; player-side
@@ -95,7 +108,7 @@ fog of war; NPC-on-NPC theft.
 | Theft trivialises the economy | Steal limit is a small fixed number (50 GP base). `_robbed` closes farming exactly the way `_muggedIds` closes corpse-farming. |
 | Theft breaks a quest by robbing the wrong NPC | `thievable: false`, mirroring the existing `bribeable: false`. |
 | Verb-list freeze (audit §7 item 10) | Acknowledged and spent deliberately. Thieve adds *edges*, not a node: it wires stealth × disposition × wallets × loadout × AI × the shove. Audit §4 argues this is the cluster worth investing in. |
-| No Node on the dev machine — tests can be written but not run | Same as rings / defeat-scenarios. Tests ship to CI; in-browser verification is the local gate. |
+| Concurrent work on `feature/unified-offer-screen` rewrites the same `give-action.js` seam | Phases 1–4 are file-disjoint and proceed now; phase 5 sequences after that branch lands. See *Coordinating with the offer screen*. |
 
 ---
 
@@ -176,10 +189,18 @@ failure of a pure cone: standing at a flank is `PERIPHERAL`, two beats of that m
 You can be hidden from a room while still in someone's peripheral vision — but you cannot pick the
 pocket of a person who is half-aware of you. The theft is specifically the behind-them move.
 
-**Thieve requires BOTH**: you are hidden (nobody in the room holds `DIRECT` on you) *and* the victim
-is blind to you (`NONE`, not merely non-`DIRECT`). The first clause is what makes "there are no
-witnesses" true by construction rather than by assertion — a third party watching you rob someone
-blocks the verb even though the victim never sees a thing.
+**Thieve requires** that you are hidden — nobody in the room holds `DIRECT` on you, the victim
+included. That clause is what makes "there are no witnesses" true by construction rather than by
+assertion: a third party watching you rob someone blocks the verb even though the victim never sees
+a thing.
+
+The victim's own verdict is **not** a gate but a **grade** — it sizes the notice buffer (below):
+
+| Victim's verdict on your tile | Meaning |
+|---|---|
+| `NONE` (dead behind) | full notice buffer — the clean approach |
+| `PERIPHERAL` (their flank) | buffer reduced hard — only the lightest touch goes unnoticed |
+| `DIRECT` | refused outright; the verb greys out |
 
 ### API — `perception.js`
 
@@ -204,6 +225,19 @@ SUSPICION_BEATS  = 2        // consecutive peripheral beats → suspicious
 INVESTIGATE_WAIT = 1        // beats spent turning before walking to look
 SWEEP_BEATS      = 3        // beats scanning at last-seen before giving up
 CALM_BEATS       = 6        // suspicious with no stimulus → idle
+BLIND_SWEEP_BEATS = 8       // a robbed victim with no last-seen sweeps this long
+```
+
+And in `theft.js`:
+
+```js
+STEAL_BASE         = 50     // GP ceiling on a Coin take, before passives
+NOTICE_BASE        = 3      // weight a victim fails to notice, before passives
+PERIPHERAL_PENALTY = 0.5    // buffer multiplier when robbed from their flank (floor 1)
+COIN_PER_WEIGHT    = 25     // GP per point of weight
+VALUE_PER_WEIGHT   = 25     // item baseValue per point of weight
+PARANOIA_DELTA     = -25    // exactly one trade.js BAND — see Paranoia below
+PARANOIA_RADIUS    = 6
 ```
 
 ### The awareness ladder
@@ -229,6 +263,7 @@ idle → suspicious → searching → chasing → returning → idle
 | `suspicious` | `CALM_BEATS`, no stimulus | `idle` | |
 | `searching` | `DIRECT` | `chasing` | |
 | `searching` | reached last-seen, no contact | sweep `SWEEP_BEATS`, then `returning` | scans in place, rotating facing |
+| `searching` | **no last-seen at all** (a robbed victim) | sweep `BLIND_SWEEP_BEATS`, then **paranoia**, then `returning` | wanders its home region rotating facing — it has nowhere to go |
 | `chasing` | lost sight | `searching` | today's inline last-seen branch, now named |
 | any | leash exceeded / blind too long | `returning` → `idle` | existing leash, unchanged |
 
@@ -316,11 +351,11 @@ yields, which is what makes a theft a plan. `loadout` entries resolve through `r
 (`enemies.js`), which already tolerates the legacy `{ name, value }` literals still present in old
 saves and fixtures; an entry that resolves to no real def is skipped rather than stolen as a ghost.
 
-**Steal limit.** `stealLimit = STEAL_BASE (50) + passives.stealLimit`. `aggregatePassives`
-(`rings.js`) already sums numeric ring passives into one object, so a `stealLimit` passive on a ring
-or a piece of gear costs exactly one authored number and no new plumbing. That is Caelan's "goes up
-with perks/equipment," for free, and it is a fresh edge into the ring system the audit calls
-under-connected (§3.1).
+**Steal limit.** `stealLimit = STEAL_BASE (50) + passives.stealLimit`, and its sibling axis
+`noticeBuffer = NOTICE_BASE (3) + passives.noticeBuffer` — see *Notice* below for why there are two.
+`aggregatePassives` (`rings.js`) already sums numeric ring passives into one object, so each costs
+exactly one authored number and no new plumbing. That is Caelan's "goes up with perks/equipment," for
+free, and it is two fresh edges into the ring system the audit calls under-connected (§3.1).
 
 **Gold moves through `transferGold` only.** `theft.js` computes the amount and never touches gold
 itself; `main.js` performs the transfer. The single-choke-point invariant in `trade.js` is
@@ -341,7 +376,54 @@ re-applied at spawn rather than stored — one source of truth.
 
 **Cost.** One world turn, through `_advanceWorld` like every other verb.
 
+### Notice — weight against a buffer
+
+**Succeeding and being noticed are two different questions.** A theft from a blind spot always
+succeeds. Whether the victim *notices* is decided separately, by how much you took — and if they do
+not notice, **nothing happens at all**: no disposition change, no hostility, no search. A clean
+theft is genuinely clean. The −100 is the price of being noticed, not the price of stealing.
+
+**Weight** — what a take costs you, in one table:
+
+| Branch | Weight |
+|---|---|
+| Coin | `ceil(gp / 25)` — 50 GP = 2, 100 GP = 4 |
+| Kit | `max(1, ceil(baseValue / 25))` — a rock is 1, a real item is more |
+| Gear | `max(3, armor × 2 + damage)` — the stat swing you are removing from them |
+
+Gear is deliberately heavy because it is the **action-economy** take: lifting the crowbar
+(`damage: 12`) is a 12-weight act, and stealing someone's weapon should never be quiet. That is the
+material weight behind the verb — you are not just moving an icon, you are moving their combat
+numbers onto your side of the fight.
+
+**Buffer** — what a victim fails to notice:
+
+```
+noticeBuffer = NOTICE_BASE (3) + passives.noticeBuffer
+             × PERIPHERAL_PENALTY (0.5, floored at 1) if the victim's verdict on you is PERIPHERAL
+```
+
+Clean iff `weightTaken + weight ≤ noticeBuffer`, where `weightTaken` accumulates in `_robbed` and
+**never refills**. So one pocket is quiet and the second is not — Caelan's "you just couldn't steal
+more than one item," falling out of the arithmetic rather than being asserted as a rule.
+
+Worked, at base: 50 GP is weight 2 against a buffer of 3 — clean. Go back for another 50 and you are
+at 4 — noticed. A rock (1) then coin (2) hits exactly 3 — clean, and the last quiet thing you will
+take from that person. The crowbar is 12 against 3 and is *always* noticed, from anyone, forever.
+From their flank the buffer is 1, so only the lightest touch survives.
+
+**Two perk axes, not one.** `stealLimit` (50 base, rising with passives toward ~100) governs *how
+much* you can take; `noticeBuffer` governs *how quietly*. They are deliberately separate, and they
+pull against each other: a limit perk alone makes you take 100 GP — weight 4 — and get noticed for
+it. Wanting both is a build. That is the fixed-budget corollary from audit §6 arriving on its own.
+
+**The wheel prices it before you commit.** Each branch renders its verdict — `Coin · 50 GP · clean`
+versus `Gear · Crowbar · NOTICED` — so the decision is informed, deterministic, and never a gamble.
+No dice anywhere in the system, exactly as ruled.
+
 ### The consequence
+
+Everything below fires **only on a noticed theft.**
 
 `give-action.js` gains `applyHostileFlip(recipient)` — the mirror of the existing `applyFlip`,
 which today handles only the *upward* `becomeAlly` / `offerDiscount` cases. There is currently no
@@ -364,14 +446,44 @@ fades, the hostility does not, and only a bribe undoes the latter.
 the `giftLog` records what was taken. The transaction spine grows an edge, which is precisely what
 audit §4 asks for.
 
-**Then the hunt.** `state = 'searching'`, last-seen ← **the player's tile at the moment of the
-theft**, and facing is **not** changed on this beat. They spin and start hunting on their *next*
-turn. That is "immediately hostile, does not necessarily find you immediately," and it is exactly
-one beat of grace to be somewhere else.
+**Then the hunt — and they do not know where you are.** `state = 'searching'` with **no last-seen
+tile**, and facing unchanged. They know they were robbed; they do not know by whom or from where. So
+they sweep their area rather than beelining at you. Being noticed costs you a permanent enemy, not
+your position.
 
-**Victim only reacts** in v1. By construction there cannot be a witness who saw *you* — the verb
-refuses if anyone holds `DIRECT` on you. A bystander who watched the *victim* without seeing the
-thief is a deliberate v2 extension, not a v1 hole.
+**Victim only reacts** at the moment of the theft. By construction there cannot be a witness who saw
+*you* — the verb refuses if anyone holds `DIRECT` on you. The neighbourhood's reaction comes later
+and indirectly, below.
+
+### Paranoia — what a failed search leaves behind
+
+A search that ends without a culprit does not simply reset. The victim tells people, and the
+**immediate area gets warier of everyone**: every living NPC within `PARANOIA_RADIUS` (6 tiles),
+excluding the victim and excluding your own allies, takes **−25 disposition**.
+
+That number is not arbitrary. `trade.js`'s `BANDS` are spaced **exactly 25 points apart**, so one
+failed search moves every merchant in earshot **down precisely one price band** — `friendly` to
+`neutral`, `neutral` to `wary`. The paranoia is legible the instant you try to buy something, without
+a single new UI element. Four thefts in one district and the shops hit the `TRADE_FLOOR` and stop
+dealing with you at all.
+
+**Why this one does not feel goofy.** The Baldur's Gate version reads as omniscience — everyone
+instantly knows, someone points at you, a popup announces your crime. This version never accuses
+you of anything:
+
+- It is **social, not omniscient.** Nobody identifies you. The district just gets colder.
+- It is **already visible.** Every nameplate carries a mood smiley; they all tick down one notch at
+  once. You watch a neighbourhood sour.
+- It is **temporary, for free.** The existing decay (1 point per ~20s of free-roam) walks −25 back to
+  0 in about eight minutes. A district cools off on its own. No new code, no timers.
+- It is **bounded and earned.** A radius, not a zone; and only on a search that *fails*.
+
+That last clause is the real design: **get caught and it stays between the two of you; get away with
+it and the chill spreads.** There is no strictly correct play, which is what makes it a decision. If
+the victim spots you mid-search the chase begins and no paranoia fires — they got their man.
+
+Applied through `applyDispositionDelta`, so the existing clamp, the upward-flip guard, and the
+`_ally` exemption all hold without special-casing.
 
 ### The shove combo — emergent, zero new code
 
@@ -410,7 +522,14 @@ persisted.
 
 | Field | Shape | Notes |
 |---|---|---|
-| `_robbed` | `{ [enemyId]: { gold: n, items: [ids], hostile: true } }` | applied in `spawnEnemy` **after** JSON hydration |
+| `_robbed` | `{ [enemyId]: { gold: n, items: [ids], weightTaken: n, noticed: bool } }` | applied in `spawnEnemy` **after** JSON hydration |
+
+`weightTaken` is the accumulator the notice buffer is measured against and it never decreases —
+that is what makes the second pocket riskier than the first, permanently and across zone re-entry.
+`noticed` replaces the earlier `hostile` flag: it records that this victim's theft was *noticed*,
+which is what re-applies the −100 and the hostility on respawn. A clean theft records `gold` /
+`items` / `weightTaken` and **nothing else**, because a clean theft has no social consequence to
+persist.
 
 ### The persistence trap
 
@@ -441,11 +560,20 @@ non-string keys the same way.
 | Player in Rat Form | Flagged as a v2 detection modifier; no v1 effect |
 | Save/load mid-`searching` | `state`, `_lastSeen*`, `_awareBeats`, `_sweepBeats` all persist |
 | Robbing a vendor mid-trade | Unreachable — the trade window and the wheel are different states |
+| A clean theft, then the victim wanders into you | Nothing carried over; they were never told. Ordinary perception applies |
+| Robbing an ally *cleanly* | Nothing happens — they stay your ally. `applyHostileFlip` fires only on notice |
+| Victim dies before its search ends | No paranoia; a corpse tells no one |
+| Paranoia radius spans a zone edge | Radius is measured in the current map only; NPCs on other maps are not loaded |
+| Paranoia would push a vendor below `TRADE_FLOOR` | Allowed and intended — the shop closes to you until decay lifts it. See open question 4 |
+| Two clean thefts, second exceeds the buffer | The *second* is noticed; the first stays clean and unrecorded socially |
+| `weightTaken` present but `noticed` false on respawn | Goods stay gone, mood untouched — the accumulator is the only thing that survives a clean job |
 
 ### Testing
 
-Node tests, committed and run in CI (**no Node on the dev machine — they cannot be run locally**;
-in-browser verification is the local gate, same as rings and defeat-scenarios):
+Node tests, run with `npm test` **locally** — Node v24.18.0 is installed on this machine as of
+2026-08-23, so the long-standing "tests ship to CI unrun" caveat that applied to rings and
+defeat-scenarios **no longer holds**. Every phase gate is now a green test run *and* an in-browser
+check, not one or the other:
 
 - `tests/perception.test.js` — the 3/2/3 adjacent split for all eight facings; range clamps; LOS
   interaction; `(0,0)` facing fallback; `sightRange 0`.
@@ -455,16 +583,50 @@ in-browser verification is the local gate, same as rings and defeat-scenarios):
   port of today's `rockClatter` behaviour, so this is also a regression test).
 - `tests/theft.test.js` — steal limit with and without passives; gold conservation; loadout removal;
   highest-value selection and its tie-break; `applyHostileFlip` leaving `_wasFlipped` alone.
+- `tests/notice.test.js` — the weight table for all three branches; `weightTaken` accumulating and
+  never refilling; the peripheral buffer penalty and its floor of 1; **a clean theft mutating no
+  disposition and no allegiance** (the regression that matters most — it is the whole point of the
+  revision); the worked examples above as fixtures.
+- `tests/paranoia.test.js` — radius; victim and `_ally` both exempt; −25 lands on a band boundary in
+  `trade.js`; fires only on a *failed* search, never when the victim acquires the player.
 - `tests/save-roundtrip.test.js` — extend for `_robbed` and the new enemy fields.
 
 Also: `tools/balance-harness.mjs` and its golden diff should be re-run after Phase 1, since blind
 spots change effective threat. Any golden movement is a finding, not noise.
 
+### Coordinating with `feature/unified-offer-screen`
+
+That branch is live *concurrently* (`plans/unified-offer-screen.md`, being built 2026-08-23 in the
+primary checkout while this work runs in a `git worktree` at
+`.claude/worktrees/stealth-perception`). It collapses buy / sell / give / bribe into **one verb —
+make an offer** — and consolidates the flip logic in `give-action.js` behind a single shared curve.
+
+Measured overlap:
+
+| File | Offer screen | This feature | Risk |
+|---|---|---|---|
+| `wheel-model.js` | one passing reference | the Thieve subtree | none |
+| `renderer.js` | `_drawTradeModal` 2772–2919 | `_drawAggroOverlay` 2533, sprite pips 1086 | low — disjoint functions |
+| `main.js` | `_tapTrade` 5491, `_takeItemAt` 2924, `_containerStock` 3764 | wheel resolver 3280–3340, world beat 3390–3600 | moderate — disjoint regions |
+| `give-action.js` | consolidates flip logic; wires `previewGive` | `applyHostileFlip`, `reactToTransaction('theft')` | **high — same functions** |
+
+**The high-overlap file is also the reason the merge is easy, if it is done in the right order.** A
+theft is the offer screen's own verb with the sign flipped — you take without giving — so theft
+belongs *on* the unified spine, not beside it. Two consequences for this plan:
+
+1. **Phases 1–4 are file-disjoint and proceed now.** They touch `perception.js`, `theft.js` (new),
+   `npc.js`, `enemies.js`, `ai.js`, and a renderer function the offer screen never opens.
+2. **Phase 5 sequences after the offer screen lands on `dev`**, and is authored against its
+   consolidated `give-action.js` rather than today's. `previewGive` — written long ago, exported,
+   documented as the hover seam, and consumed by nothing until that branch — is exactly the preview
+   pattern the wheel's `clean` / `NOTICED` verdict needs. Reuse it; do not invent a second one.
+
+This is CLAUDE.md's merge-hygiene rule applied literally: merge the finished branch promptly, and
+parallelise only file-disjoint work.
+
 ### Build order
 
-One branch, six phase-commits, each verified in-browser before the next. They are a dependency
-chain, so there is no parallel-branch conflict risk (`feature/diagonal-prototype`, the only other
-unmerged branch, is 328 commits behind and one ahead — a fossil).
+One branch, six phase-commits, each gated on a green `npm test` **and** an in-browser check.
 
 | Phase | Ships | Verified by |
 |---|---|---|
@@ -472,7 +634,8 @@ unmerged branch, is 328 commits behind and one ahead — a fossil).
 | **2** | The awareness ladder | `?` → `!` observable; the turn-to-look beat exists; leash unchanged |
 | **3** | Noise; `rockClatter` retires into `emitNoise` | The rock still works identically; a swing pulls attention |
 | **4** | Threat rendering; `_drawAggroOverlay` retires; both dither treatments behind a toggle | Cones legible; pips correct; no mud over day/night or arena |
-| **5** | `theft.js`, the wheel subtree, `applyHostileFlip`, `_robbed` | Full loop: sneak → rob → they hunt → zone re-entry keeps it. **Shove → Thieve works.** |
+| — | *↑ all of the above is disjoint from the offer screen. ↓ phase 5 waits for it to land on `dev`.* | |
+| **5** | `theft.js`, the wheel subtree, notice/weight, `applyHostileFlip`, paranoia, `_robbed` | Full loop: sneak → rob clean → **nothing happens** → rob heavy → noticed → blind sweep → district cools. **Shove → Thieve works.** |
 | **6** | Polish: night shrinks sight, `equipped` authoring, audio, first-time hint, tuning | |
 
 Per Caelan's standing rule the branch is finished and pushed, and **the merge-to-`dev` call is
@@ -489,6 +652,13 @@ his**.
    is roughly one line — steal at night becomes a real strategy. Deferred to Phase 6 because it
    silently retunes every existing chase.
 3. **Should `sightRange` be retuned per spawn after Phase 1?** Answerable only from play.
+4. **Does paranoia stack across repeated failed searches in one district?** Spec'd as yes — it is
+   plain `applyDispositionDelta`, so four failed searches drive a neighbourhood to the `TRADE_FLOOR`
+   and the shops stop dealing. That is either the best consequence in the feature or too punishing,
+   and only play will say. The existing decay is the release valve either way.
+5. **Should a clean theft be *completely* silent, or leave a tell?** Spec'd as completely silent —
+   no log line, no mood tick, nothing. The alternative (a faint "something feels lighter" bark a few
+   beats later) is more alive but risks reading as a bug the first time it happens.
 
 ## Non-goals
 
