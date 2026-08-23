@@ -92,9 +92,11 @@ a bribe is nothing but the shape of that balance:
 | goods, nothing taken | — | a gift |
 | gold, nothing taken | — | a bribe |
 | goods + gold | goods | a barter with a sweetener |
+| less than you take | goods | a **bad deal** — they accept, and resent it |
 
-**Any surplus in the NPC's favour converts to disposition.** That is the whole mechanic. It is why
-the four verbs were ever separate and why they no longer need to be.
+**Any imbalance converts to disposition.** Surplus in their favour buys goodwill; a shortfall costs
+it. That is the whole mechanic, and it is why the four verbs were ever separate and no longer need to
+be. A bad deal is a move the player is allowed to make, not an error the screen blocks.
 
 This is a return to the original 2026-06-09 design, which specified *"multi-select by tapping several
 then swipe them together"* and *"a smiley AGGRO meter + the overpay/bribe amount in coins"*. The
@@ -107,15 +109,27 @@ shipped build simplified the multi-select away; this restores it.
 This is the only new economy rule. Everything else — `band`, `buyPrice`, `sellPrice`,
 `transferGold` — is unchanged.
 
-### 4.1 Surplus
+### 4.1 The balance
 
 ```
 givenValue = Σ over given items of  sellPrice(item, disposition) × (npc.values[item.id] ?? 1)
            + givenGold
 takenValue = Σ over taken items of  buyPrice(item, disposition)
 
-surplus    = max(0, givenValue − takenValue)
+balance    = givenValue − takenValue
 ```
+
+The balance is signed, and **both signs move disposition**:
+
+| balance | name | effect |
+| --- | --- | --- |
+| `> 0` | surplus | goodwill, §4.2 |
+| `= 0` | a straight trade | disposition unmoved |
+| `< 0` | deficit — a **bad deal** | resentment, §4.4 |
+
+A negative balance is **not a refusal**. It is an offer the NPC will take while thinking less of you.
+That is what makes the balance a two-way lever rather than a wall, and it is why the meter has
+something to say in both directions.
 
 Authored `values` weights become a **multiplier**, so an item an NPC actually wants punches far above
 its market price, while an item they have no opinion about still counts at face value. Gold's
@@ -167,7 +181,61 @@ Wererat boss has no `bribeable` flag, no `flipThreshold` and no `disposition`, s
 or above their own threshold (Puck is `disposition: 60, flipThreshold: 0`) are not frozen out of gold
 entirely.
 
-### 4.4 Refusals — who gold and gifts do not work on
+### 4.4 Deficit to resentment — the bad deal
+
+The exact mirror of §4.2, using the same `p(d)`:
+
+```
+resentCostPerPoint(d) = 5 − 4 × p(d)          // 5 GP/pt at the floor → 1 GP/pt at the ceiling
+```
+
+Points are removed one at a time by the same loop, same determinism.
+
+**Resentment rounds UP against the player; goodwill rounds DOWN.** Any remaining shortfall, however
+small, costs one more whole point — while in §4.2 you only earn points you have fully paid for. Both
+directions round in the NPC's favour, which is the principle worth stating once and applying
+everywhere. This is not cosmetic: rounding resentment down instead refuses almost every bad deal over
+a fractional remainder. Caught in the preview, where a −29 GP lowball absorbed 14 points at ≈27 GP and
+then bounced on the leftover 2 GP.
+
+**The asymmetry is the design.** Goodwill costs *more* as an NPC warms to you; resentment costs
+*less*. At Puck's +60 that is 4.2 GP per point to gain against 1.8 per point to lose — betrayal runs
+about 2.3× cheaper than affection, which is the feel we want. At the bottom it inverts: someone who
+already dislikes you is cheap to win over and expensive to offend further, because they are braced
+for it. So the system self-stabilises instead of spiralling.
+
+Two bounds, both required:
+
+```
+RESENT_MAX_PER_OFFER = 25        // one offer can cost at most 25 points
+RESENT_FLOOR         = −25       // no amount of bad dealing goes below this
+```
+
+They close the loop on each other. At the floor there is no resentment left to absorb a deficit, so
+the lowball lever stops being offered rather than becoming a free lunch — the commit button refuses
+with `HE WON'T TAKE ANOTHER BAD DEAL`. And because `RESENT_FLOOR` sits above `TRADE_FLOOR = -50`, a
+bad dealer is never locked out of a shop; the prices just get punishing (`×1.9 buy / ×0.45 sell` in
+the `wary` band). Options narrowed, never removed.
+
+**Verified numbers** (from the preview, not estimated):
+
+- Dropping Puck the full 25 points costs a shortfall of exactly **51 GP** — a real insult in a shop
+  where a bandage is 30.
+- Swapping a 1 GP rock for a 30 GP bandage is a −29 balance → **−15 disposition, accepted**, carrying
+  Puck 60 → 45 and `warm` → `friendly`, so his buy multiplier worsens ×1.2 → ×1.4 and his sell
+  multiplier ×0.60 → ×0.55. The player pays for the lowball in every price thereafter.
+
+**Untracked and container partners cannot be shortchanged.** An NPC with `disposition == null`
+(§4.5) has no resentment to spend, so a deficit against them must be covered in full — otherwise the
+lowball would be free. Containers do no disposition math at all: contents are priced 0 and the give
+tray is disabled.
+
+**An open ruling this makes more pressing.** `applyDispositionDelta` only auto-fires the *upward*
+ally flip; decay past the threshold does not un-ally today, noted in the Phase 6 evolution and still
+open as decision #9. Bad deals hand the player a fast way to drive an ally's disposition down, so an
+ally you repeatedly shortchange stays an ally. Out of scope here — flagged so the ruling gets made.
+
+### 4.5 Refusals — who gold and gifts do not work on
 
 Three cases the surplus rule must handle explicitly. Each is a live gap today.
 
@@ -191,11 +259,11 @@ future content cannot reopen the hole.
 The through-line is the buff-design rule: never let the player throw something into a void. A refusal
 is always stated, always on the row, always before the item is spent.
 
-### 4.5 What does not change
+### 4.6 What does not change
 
 - `buyPrice` / `sellPrice` / the six `band` rows / `TRADE_FLOOR = -50` — untouched.
 - `transferGold` still conserves and still refuses when the payer cannot cover.
-- Buying and selling still do not move disposition on their own. Only **surplus** does.
+- Buying and selling still do not move disposition on their own. Only an **unbalanced** offer does — surplus up, deficit down.
 
 ---
 
@@ -225,9 +293,12 @@ Total 480 plus gaps, inside 504.
 A 320×12 bar with tick marks at every band boundary (−50, −25, 0, +25, +50, +75).
 
 - **Solid fill** = current disposition, coloured by band.
-- **Dashed gold extension** = where the staged offer will land them, updating live as items are staged.
-- **Beside it:** `+60 → +80 ADORING` — current, projected, and the projected band name.
-- **Beside that, the payoff:** `BUY ×1.2 → ×1.0` and `SELL ×0.60 → ×0.70`.
+- **Dashed gold extension, rightward** = where a surplus offer will land them.
+- **Dashed red retreat, leftward, drawn inside the existing fill** = what a bad deal will cost them.
+  Same affordance, mirrored; the player sees the damage before committing, never after.
+- **Beside it:** `+60 → +76 ADORING` in green, or `+60 → +35 FRIENDLY` in red.
+- **Beside that, the payoff or the price:** `BUY ×1.2 → ×1.0` when you overpay,
+  `BUY ×1.2 → ×1.4` in red when you shortchange.
 
 The player watches prices improve as they stage a gift. The game has never shown this.
 
@@ -270,10 +341,21 @@ GIVING   2 × [Soap]  +  30 GP          BALANCE                 [ MAKE THE OFFER
 TAKING   1 × [Bandage]                 +18 IN HIS FAVOUR
 ```
 
-The commit button disables with a stated reason rather than failing silently:
+A negative balance does **not** disable the button. It arms it with a warning, because taking a bad
+deal is a legitimate move (§4.4):
 
-- `YOU'RE 21 GP SHORT` — the player cannot cover a negative balance.
-- `HIS TILL IS 40 GP SHORT` — the NPC cannot cover what they owe. Checked **before** commit;
+```
+GIVING   1 x [Rock]                    BALANCE                 [ MAKE THE OFFER ]
+TAKING   1 x [Bandage]                 29 GP SHORT             -16 . HE'LL REMEMBER THIS
+```
+
+The button only *disables*, always with a stated reason, when the offer genuinely cannot happen:
+
+- `HE WON'T TAKE ANOTHER BAD DEAL` — the deficit needs more resentment than `RESENT_MAX_PER_OFFER`
+  or `RESENT_FLOOR` has left. This is the shortfall's real ceiling.
+- `HE CAN'T BE SHORTCHANGED` — an untracked (`disposition == null`) partner or a container, where
+  there is no resentment to spend, so the balance must be covered in full.
+- `HIS TILL IS 40 GP SHORT` — the NPC cannot cover what they owe **you**. Checked *before* commit;
   `transferGold` returning false must never be discovered mid-transaction.
 - `HE WON'T DEAL` — disposition below `TRADE_FLOOR`. See 5.5.
 - `NOTHING STAGED` — both trays empty.
@@ -490,10 +572,13 @@ the screen; it is the screen's arithmetic, and it prints a pass/fail fit report 
 Serve with `python dev-server.py 3001` and open `http://localhost:3001/_design-offer.html` (the dev
 server's root is `game/`, not the repo root).
 
+Append `?bad` to the URL to flip it from the overpay scenario to the lowball one and exercise §4.4.
+
 It is **local-only and untracked** — `.gitignore:88` excludes `game/_design-*.html` by project
 convention, so it will not be in a fresh clone. Regenerate it from this section if you need it.
-Every check currently passes with a clean console; the two failures it caught on first render are
-recorded in §4.2 and §10 as corrections to this spec.
+All **14** checks pass in both scenarios with a clean console. Three of them were failures it caught,
+now recorded as corrections to this spec: the curve denominator (§4.2), the overlap invariant and the
+column gutter (§10), and the resentment rounding direction (§4.4).
 
 ### In the game
 
@@ -526,7 +611,7 @@ Named explicitly so the next reader does not assume they were forgotten:
 - **Drag-to-swap equipment barter**, NPC equipment loadouts, and disposition-when-worn gear — Slice 2
   of the original trade design, still parked.
 - **Haggling, per-merchant markup, weight.** Price inputs stay `baseValue` and `disposition`.
-- **Buy/sell moving disposition on their own.** Only surplus does. `reactToTransaction`'s deliberate
+- **Buy/sell moving disposition on their own.** Only an unbalanced offer does. `reactToTransaction`'s deliberate
   `default: return null` for non-give, non-bribe stays.
 - **De-duplicating the three bribe implementations.**
 - **Turn cost.** `_offerFromTrade` and `_bribeVendor` are free today (the trade path never calls
@@ -570,3 +655,8 @@ not rebuild a deleted verb.
 | 11 | `bribeable: false` blocks gold-sourced goodwill, closing a live hole where `_bribeVendor` ignores the flag. | Claude |
 | 12 | An untracked NPC (`disposition == null`) shows no meter and refuses gifts, instead of silently gaining the field at 0. | Claude |
 | 13 | Every refusal is stated on the row before the item is spent — never a silent `+0`. | Claude |
+| 14 | A bad deal is a legitimate move: a deficit is accepted and converts to resentment rather than disabling the commit button. | Caelan |
+| 15 | Bad deals are bounded twice — at most 25 points per offer, and never below −25 total. | Caelan |
+| 16 | Resentment uses §4.2's curve mirrored (`5 − 4p`), so betrayal is cheaper than affection when they like you and dearer when they don't. | Claude |
+| 17 | Untracked and container partners cannot be shortchanged, since they have no resentment to spend. | Claude |
+| 18 | Rounding always favours the NPC — goodwill rounds down, resentment rounds up. | Claude |
