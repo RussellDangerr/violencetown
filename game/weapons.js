@@ -30,7 +30,7 @@ export const WEAPONS = {
         useType: 'equip', grantsSpells: ['boo'], onHit: 'fearOnRepeat',
         category: 'weapon',
         baseValue: 28,
-        description: 'A single femur, gripped at the joint and colder than it has any right to be. The name isn\'t subtle, and neither is the bone.',
+        description: "A single femur, gripped at the joint and colder than it has any right to be. It hasn't warmed up once.",
     },
     // Gator Tail — a dehydrated gator club. Heavy, mean, and you're not sure
     // where it came from (Lonny, the Sewer's own alligator, has a theory).
@@ -38,7 +38,7 @@ export const WEAPONS = {
         id: 'gator_tail', name: '[Gator Tail]', damage: 16, equipSlot: 'weapon', useType: 'equip',
         category: 'weapon',
         baseValue: 18,
-        description: 'A stiff, leathery tail, heavier than it looks and reeking faintly of swamp water. You\'ve carried worse for less reason.',
+        description: "A stiff, leathery tail, heavier than it looks and reeking faintly of swamp water. You've carried worse for less reason.",
     },
     // Lion Whip — a carnival tamer's whip. Reaches 3 tiles and YANKS whatever it
     // strikes one tile closer; grants the "Hire a Lion" trick (GP) while worn.
@@ -47,6 +47,6 @@ export const WEAPONS = {
         reach: 3, pullDistance: 1, grantsTricks: ['hire_lion'],
         category: 'weapon',
         baseValue: 26,
-        description: 'A tamer\'s whip, braided leather gone shiny at the grip. Crack it right and something always comes closer.',
+        description: "A tamer's whip, braided leather gone shiny at the grip. Crack it right and something always comes closer.",
     },
 };
