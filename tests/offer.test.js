@@ -867,6 +867,23 @@ describe('staging', () => {
     assert.equal(o.give.length, 1);
     assert.equal(o.give[0].count, 2, "five clicks on a stack of two must not stage five");
   });
+
+  test('a new entry always starts at count 1, even if the entry argument carries its own count', () => {
+    const o = stage(emptyOffer(), 'give', { def: SOAP, slot: 3, count: 5 });
+    assert.equal(o.give[0].count, 1, "one click stages one unit, never the whole stack");
+  });
+
+  test('unstaging a missing index leaves the rest of the offer untouched', () => {
+    const before = { give: [{ def: SOAP, slot: 3, count: 1 }], take: [], gold: 40 };
+    const after = unstage(before, 'give', 7);
+    assert.deepEqual(after, before, "a miss must not blank the other tray or the gold");
+  });
+
+  test('an unrecognized side falls back to give, rather than writing a garbage field', () => {
+    const o = stage(emptyOffer(), 'gold', { def: SOAP, slot: 3 });
+    assert.equal(o.gold, 0, "gold must stay a number, never overwritten by a stray side");
+    assert.equal(o.give.length, 1);
+  });
 });
 
 describe('commitBlocker — every refusal is a sentence', () => {
@@ -984,5 +1001,68 @@ describe('commitBlocker — every refusal is a sentence', () => {
   test('draining a till to the exact gold on hand is not a shortfall', () => {
     const o = { give: [{ def: SOAP, count: 2 }], take: [], gold: -18 };
     assert.equal(commitBlocker(PUCK, o, { ...ctx, npcGold: 18 }), null);
+  });
+
+  test('fractional gold is truncated before it is priced, not just before it is drawn', () => {
+    const o = { give: [], take: [], gold: 31.9 };
+    assert.equal(commitBlocker(PUCK, o, { ...ctx, playerGold: 30 }), "YOU'RE 1 GP SHORT");
+  });
+
+  test('gold that truncates to exactly what the player has is not a shortfall', () => {
+    const o = { give: [], take: [], gold: 30.9 };
+    assert.equal(commitBlocker(PUCK, o, { ...ctx, playerGold: 30 }), null);
+  });
+
+  test('exactly at the trade floor, the deal still goes through, paid in full', () => {
+    const edge = { ...PUCK, disposition: -50 };
+    // buyPrice(BANDAGE, -50) = ceil(25 * 2.4) = 60 -- the hostile band's own rate.
+    const o = { give: [], take: [{ def: BANDAGE, count: 1 }], gold: 60 };
+    assert.equal(commitBlocker(edge, o, ctx), null);
+  });
+
+  test('one point below the trade floor, the deal is refused', () => {
+    const edge = { ...PUCK, disposition: -51 };
+    const o = { give: [], take: [{ def: BANDAGE, count: 1 }], gold: 0 };
+    assert.match(commitBlocker(edge, o, ctx), /WON'T DEAL/);
+  });
+
+  test('a null NPC does not throw, and prices as neutral', () => {
+    // buyPrice(SOAP, 0) = 24, so this settles at zero -- the floor gate is
+    // the line under test, not the balance check below it.
+    const o = { give: [], take: [{ def: SOAP, count: 1 }], gold: 24 };
+    assert.equal(commitBlocker(null, o, ctx), null);
+  });
+
+  test('a NaN disposition prices as neutral, not as a refusal', () => {
+    const npc = { type: 'Violencian', disposition: NaN };
+    const o = { give: [], take: [{ def: SOAP, count: 1 }], gold: 24 };
+    assert.equal(commitBlocker(npc, o, ctx), null);
+  });
+
+  test('commitBlocker works with no ctx argument at all', () => {
+    const o = { give: [{ def: SOAP, count: 2 }], take: [], gold: 0 };
+    assert.equal(commitBlocker(PUCK, o), null);
+  });
+
+  test('every refusal uses THEY or THEIR, matching the voice used elsewhere in the feature', () => {
+    // main.js: "Their mood warms". Task 14: "They take it, and remember."
+    const hostile = { ...PUCK, disposition: -80 };
+    const untracked = { type: 'Violencian' };
+    assert.equal(
+      commitBlocker(hostile, { give: [], take: [{ def: BANDAGE, count: 1 }], gold: 0 }, ctx),
+      "THEY WON'T DEAL"
+    );
+    assert.equal(
+      commitBlocker(PUCK, { give: [], take: [{ def: BANDAGE, count: 20 }], gold: 0 }, ctx),
+      "THEY WON'T TAKE ANOTHER BAD DEAL"
+    );
+    assert.equal(
+      commitBlocker(untracked, { give: [], take: [{ def: BANDAGE, count: 1 }], gold: 0 }, ctx),
+      "THEY CAN'T BE SHORTCHANGED"
+    );
+    assert.equal(
+      commitBlocker(PUCK, { give: [{ def: SOAP, count: 2 }], take: [], gold: -18 }, { ...ctx, npcGold: 5 }),
+      "THEIR TILL IS 13 GP SHORT"
+    );
   });
 });

@@ -400,6 +400,7 @@ function sameEntry(a, b) {
 // Undefined for every call site until Task 13 has a real number to pass, so
 // today's callers are unaffected -- Infinity never binds.
 export function stage(offer, side, entry, max = Infinity) {
+    side = side === 'take' ? 'take' : 'give';
     const cap = Number.isFinite(max) ? Math.max(0, Math.floor(max)) : Infinity;
     const o = offer || emptyOffer();
     const list = (o[side] || []).map(e => ({ ...e }));
@@ -410,6 +411,7 @@ export function stage(offer, side, entry, max = Infinity) {
 }
 
 export function unstage(offer, side, index) {
+    side = side === 'take' ? 'take' : 'give';
     const o = offer || emptyOffer();
     const list = (o[side] || []).map(e => ({ ...e }));
     const e = list[index];
@@ -431,25 +433,28 @@ export function commitBlocker(npc, offer, ctx = {}) {
     const staged = (o.give || []).length + (o.take || []).length + (o.gold ? 1 : 0);
     if (!staged) return 'NOTHING STAGED';
 
-    const gold = o.gold || 0;
+    // Truncated for the same reason offerBalance truncates its own gold: a drag
+    // handle can leave a fraction on the tray, and it must not reach the button's
+    // own arithmetic either -- unitCount's comment names the same source.
+    const gold = Math.trunc(o.gold || 0);
     const playerGold = ctx.playerGold ?? 0;
     if (gold > playerGold) return `YOU'RE ${gold - playerGold} GP SHORT`;
 
     // The floor gates TAKING, not giving — a hostile NPC is a puzzle, not a wall.
-    // You can always gift or bribe your way back up to where he'll deal, in the
+    // You can always gift or bribe your way back up to where they'll deal, in the
     // same sitting. (Options narrowed, never removed.) Checked before the till,
-    // so a hostile NPC always hears the reason he can act on, not the one he can't.
+    // so a hostile NPC always hears the reason they can act on, not the one they can't.
     const takingSomething = (o.take || []).length > 0 || gold < 0;
-    if (takingSomething && !canTrade(dispositionOf(npc))) return "HE WON'T DEAL";
+    if (takingSomething && !canTrade(dispositionOf(npc))) return "THEY WON'T DEAL";
 
     const owedToPlayer = Math.max(0, -gold);
     const npcGold = ctx.npcGold ?? 0;
-    if (owedToPlayer > npcGold) return `HIS TILL IS ${owedToPlayer - npcGold} GP SHORT`;
+    if (owedToPlayer > npcGold) return `THEIR TILL IS ${owedToPlayer - npcGold} GP SHORT`;
 
     if (offerBalance(npc, o).balance < 0) {
         const noResentment = !npc || npc.disposition == null || npc._container || ctx.isContainer;
-        if (noResentment) return "HE CAN'T BE SHORTCHANGED";
-        if (resolveOffer(npc, o).patienceExceeded) return "HE WON'T TAKE ANOTHER BAD DEAL";
+        if (noResentment) return "THEY CAN'T BE SHORTCHANGED";
+        if (resolveOffer(npc, o).patienceExceeded) return "THEY WON'T TAKE ANOTHER BAD DEAL";
     }
     return null;
 }
