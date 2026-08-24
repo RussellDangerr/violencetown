@@ -1955,6 +1955,11 @@ permanently unflippable. Display only — the math is untouched.
 > and tapping it is a dead no-op — contents 2→2, bag delta 0, no log. Whatever replaces these paths
 > must resolve through `_resolveItemDef`, or the bug simply moves house.
 
+> **Decide `L.close` here, once.** `renderer.js` already builds `_closeBtnRect` from a state→panel map
+> (`CLOSE_PANEL`), and `main.js` hit-tests *that*. `offerLayout` also returns `L.close`. If the offer
+> state joins the map, `L.close` is a duplicate of the same chip and they can drift. Either wire offer
+> into `CLOSE_PANEL` and drop `L.close`, or keep `L.close` and stay out of the map — **not both.**
+
 - [ ] **Step 1: Add the imports**
 
 At the top of `game/renderer.js`, widen the existing `layout.js` import to include `MODAL_RECT` and
@@ -2333,6 +2338,13 @@ the NPC's mood line instead of dead space.
 > coerces it to 0. `commitBlocker` catches the offer, but `_drawOfferLedger` paints `R.balance`
 > directly, so a ten-item theft from a hostile NPC would read `+0 IN THEIR FAVOUR`. Render the blocker
 > state first, or the ledger lies about what is on the table.
+
+> **Look at the tray motion before this hardens.** The give tray sits under THEIR goods and the take
+> tray under YOUR satchel, while staging runs `yours → give` and `theirs → take` — so both
+> interactions move an item *diagonally* across the panel. Swapping them makes both motions vertical,
+> at the cost of the "YOU GIVE … YOU TAKE" left-to-right reading order the ledger also uses. Caelan
+> approved the current arrangement from a static mockup; it has never been seen in motion. Check it on
+> touch during verification and raise it with him rather than changing it unilaterally.
 
 - [ ] **Step 2: Register the screen and retire the old one in the dispatch**
 
