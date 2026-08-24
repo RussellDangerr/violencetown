@@ -100,3 +100,46 @@ export function settledGold(npc, offer) {
     // blocker will only refuse. A gift stages at zero and stays a gift.
     return (g < 0 && !canTrade(dispositionOf(npc))) ? 0 : g;
 }
+
+// ── The curves ───────────────────────────────────────────────────────────────
+
+export const DISPOSITION_MIN = -100;
+const GUARD_ITERATIONS = 400;          // runaway guard; no real offer approaches it
+
+// The top of this NPC's meter — and the denominator of both curves. At least
+// 100, but a high flipThreshold raises it (the Fungus King is authored 200, and
+// clamping him to 100 would make him permanently unflippable).
+//
+// `?? 30` is the default previewGive and applyDispositionDelta already use
+// (give-action.js) — it must not silently disagree with the flip logic.
+export function dispositionCeil(npc) {
+    return Math.max(100, (npc && npc.flipThreshold) ?? 30);
+}
+
+function progress(d, ceil) {
+    const span = ceil - DISPOSITION_MIN;
+    if (!(span > 0)) return 1;
+    return Math.max(0, Math.min(1, (d - DISPOSITION_MIN) / span));
+}
+
+// GP per point of goodwill. Rises as they warm to you: pleasing someone who
+// already likes you costs more. 1 GP/pt at the floor, 5 at the ceiling.
+export function costPerPoint(d, ceil) {
+    return 1 + 4 * progress(d, ceil);
+}
+
+// How many points a surplus buys. Awarded one at a time so the rising cost
+// applies across the climb, and rounded DOWN — you only get points you have
+// fully paid for. (Resentment rounds the other way; see resentmentFor.)
+export function goodwillFor(surplus, npc) {
+    if (!(surplus > 0)) return 0;
+    const ceil = dispositionCeil(npc);
+    const d0 = dispositionOf(npc);
+    let pool = surplus, pts = 0;
+    while (pts < GUARD_ITERATIONS) {
+        const c = costPerPoint(d0 + pts, ceil);
+        if (pool < c) break;
+        pool -= c; pts++;
+    }
+    return pts;
+}

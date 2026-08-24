@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { emptyOffer, offerBalance, settledGold } from '../game/offer.js';
+import { emptyOffer, offerBalance, settledGold, dispositionCeil, costPerPoint, goodwillFor } from '../game/offer.js';
 
 const PUCK = {
   type: 'Puck', disposition: 60, flipThreshold: 0, vendor: true,
@@ -146,5 +146,64 @@ describe('offerBalance — the signed heart of the model', () => {
     const enemy = { type: 'Bandit', disposition: -80 };
     const g = settledGold(enemy, { give: [{ def: SOAP, count: 3 }], take: [] });
     assert.equal(g, 0, 'a gift below the floor stages at zero, not a refused payout');
+  });
+});
+
+const KING = { type: 'Fungus King', disposition: -80, flipThreshold: 200, values: { soap: 20 } };
+
+describe('the goodwill curve', () => {
+  test('the ceiling is at least 100, and rises for a high threshold', () => {
+    assert.equal(dispositionCeil(PUCK), 100, 'flipThreshold 0 must not drag the ceiling down');
+    assert.equal(dispositionCeil(KING), 200);
+    assert.equal(dispositionCeil({}), 100, 'a missing flipThreshold defaults to 30, so max(100,30)');
+  });
+
+  test('a point costs 1 GP at the floor and 5 GP at the ceiling', () => {
+    assert.equal(costPerPoint(-100, 100), 1);
+    assert.equal(costPerPoint(100, 100), 5);
+    assert.equal(costPerPoint(0, 100), 3, 'halfway');
+  });
+
+  test('cost rises monotonically with disposition', () => {
+    let prev = -Infinity;
+    for (let d = -100; d <= 100; d += 5) {
+      const c = costPerPoint(d, 100);
+      assert.ok(c >= prev, `cost fell at d=${d}`);
+      prev = c;
+    }
+  });
+
+  test('the curve clamps outside its range instead of running away', () => {
+    assert.equal(costPerPoint(-500, 100), 1);
+    assert.equal(costPerPoint(500, 100), 5);
+  });
+
+  test('goodwill is deterministic — same input, same output, every time', () => {
+    const a = goodwillFor(72, PUCK), b = goodwillFor(72, PUCK);
+    assert.equal(a, b);
+    assert.equal(a, 16, 'the spec worked example: 72 GP of surplus on Puck at +60');
+  });
+
+  test('goodwill rounds DOWN — you only get points you fully paid for', () => {
+    assert.equal(goodwillFor(0, PUCK), 0);
+    assert.equal(goodwillFor(1, PUCK), 0, 'a point costs 4.2 GP at +60; 1 GP buys none');
+  });
+
+  test('goodwill is monotonic in the surplus', () => {
+    let prev = -1;
+    for (let gp = 0; gp <= 200; gp += 7) {
+      const pts = goodwillFor(gp, PUCK);
+      assert.ok(pts >= prev, `points fell at ${gp} GP`);
+      prev = pts;
+    }
+  });
+
+  test('affection is cheap early — the Fungus King at -80 buys points for about 1 GP', () => {
+    assert.ok(goodwillFor(10, KING) >= 7, 'ten gold should buy most of ten points down there');
+  });
+
+  test('a negative or nonsense surplus buys nothing', () => {
+    assert.equal(goodwillFor(-50, PUCK), 0);
+    assert.equal(goodwillFor(NaN, PUCK), 0);
   });
 });
