@@ -333,6 +333,16 @@ describe('the gold ceiling', () => {
     assert.equal(typeof capped.goldRefusedPoints, 'number');
   });
 
+  test('the refused count uses the same formula as the ceiling branch', () => {
+    // rawCurve - fromGold, with fromGold 0. Keeping the formula identical is
+    // what makes the two branches comparable; a bare 0 would make the field
+    // mean different things depending on which branch produced it.
+    assert.equal(
+      splitGoodwill(GHOST, { itemValue: 0, gold: 100000 }).goldRefusedPoints,
+      goodwillFor(100000, GHOST).points,
+    );
+  });
+
   test('a garbage flipThreshold falls back to the default 30 — gold stops at 29', () => {
     // Same input class dispositionOf and dispositionCeil already sanitize
     // (see "a garbage flipThreshold falls back to the default ceiling" above);

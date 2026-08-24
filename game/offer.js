@@ -210,8 +210,14 @@ export function splitGoodwill(npc, { itemValue = 0, gold = 0 } = {}) {
     const items = goodwillFor(itemValue, npc);
 
     if (npc && npc.bribeable === false) {
-        // Gifts still land on someone who refuses bribes; only the gold is refused.
-        // All of it — so the refusal is the whole amount gold could have bought.
+        // Gifts still land on someone who refuses bribes; only the gold is
+        // refused. This is what gold ASKED FOR on the curve, not what it
+        // could have obtained — the ceiling branch below would still cap a
+        // bribeable NPC's gold at flipThreshold - 1, but that logic never
+        // runs here, since this branch returns first. Same formula as the
+        // sibling branch's goldRefusedPoints (rawCurve - fromGold, fromGold
+        // here being 0) — that symmetry is what keeps the field comparable
+        // across branches instead of meaning something different in each.
         const refused = goodwillFor(gold, { ...npc, disposition: d0 + items.points }).points;
         return { points: items.points, fromItems: items.points, fromGold: 0,
                  unspent: items.unspent, goldRefusedPoints: refused };
