@@ -1945,6 +1945,16 @@ change live so the player watches prices improve or worsen before committing.
 is authored `flipThreshold: 200`, and clamping the underlying value to ±100 would make him
 permanently unflippable. Display only — the math is untouched.
 
+> **Do not reintroduce the bare-`ITEMS` shape.** Task 7's review found six siblings of the
+> ground-item deletion bug, all the same silent-failure pattern: `const def = ITEMS[id]; if (!def)
+> return;` — which drops every weapon, because weapons live in `WEAPONS`. Four were fixed in Task 7.
+> **Three were deliberately left alone because Task 15 deletes them**: `_buyFromVendor`
+> (`main.js:5319`) and the two renderer sites (`:2821` TAKE/BUY column, `:2877` buyback row).
+>
+> Verified live: a chest containing `lion_whip` admits it into `npc.stock`, the cell is never drawn,
+> and tapping it is a dead no-op — contents 2→2, bag delta 0, no log. Whatever replaces these paths
+> must resolve through `_resolveItemDef`, or the bug simply moves house.
+
 - [ ] **Step 1: Add the imports**
 
 At the top of `game/renderer.js`, widen the existing `layout.js` import to include `MODAL_RECT` and
