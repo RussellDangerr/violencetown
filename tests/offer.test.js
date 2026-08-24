@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { emptyOffer, offerBalance, settledGold, dispositionCeil, costPerPoint, goodwillFor } from '../game/offer.js';
+import { emptyOffer, offerBalance, settledGold, dispositionCeil, goodwillCostPerPoint, goodwillFor } from '../game/offer.js';
 
 const PUCK = {
   type: 'Puck', disposition: 60, flipThreshold: 0, vendor: true,
@@ -159,23 +159,23 @@ describe('the goodwill curve', () => {
   });
 
   test('a point costs 1 GP at the floor and 5 GP at the ceiling', () => {
-    assert.equal(costPerPoint(-100, 100), 1);
-    assert.equal(costPerPoint(100, 100), 5);
-    assert.equal(costPerPoint(0, 100), 3, 'halfway');
+    assert.equal(goodwillCostPerPoint(-100, 100), 1);
+    assert.equal(goodwillCostPerPoint(100, 100), 5);
+    assert.equal(goodwillCostPerPoint(0, 100), 3, 'halfway');
   });
 
   test('cost rises monotonically with disposition', () => {
     let prev = -Infinity;
     for (let d = -100; d <= 100; d += 5) {
-      const c = costPerPoint(d, 100);
+      const c = goodwillCostPerPoint(d, 100);
       assert.ok(c >= prev, `cost fell at d=${d}`);
       prev = c;
     }
   });
 
   test('the curve clamps outside its range instead of running away', () => {
-    assert.equal(costPerPoint(-500, 100), 1);
-    assert.equal(costPerPoint(500, 100), 5);
+    assert.equal(goodwillCostPerPoint(-500, 100), 1);
+    assert.equal(goodwillCostPerPoint(500, 100), 5);
   });
 
   test('goodwill is deterministic — same input, same output, every time', () => {
@@ -199,7 +199,7 @@ describe('the goodwill curve', () => {
   });
 
   test('affection is cheap early — the Fungus King at -80 buys points for about 1 GP', () => {
-    assert.ok(goodwillFor(10, KING) >= 7, 'ten gold should buy most of ten points down there');
+    assert.equal(goodwillFor(10, KING), 7);
   });
 
   test('a negative or nonsense surplus buys nothing', () => {
@@ -216,11 +216,25 @@ describe('the goodwill curve', () => {
       'NaN must be treated identically to a missing disposition, not specially');
     assert.equal(goodwillFor(5, { disposition: NaN }), 1);
     assert.equal(goodwillFor(5, { disposition: Infinity }), 1);
-    assert.notEqual(goodwillFor(5, { disposition: NaN }), 400, 'the old jackpot must be gone');
   });
 
   test('offerBalance also stays finite with a NaN disposition — the sanitization is at the funnel', () => {
     const b = offerBalance({ disposition: NaN }, { give: [{ def: SOAP, count: 1 }], take: [], gold: 0 });
     assert.ok(Number.isFinite(b.balance), 'a NaN disposition must not leak NaN into the balance');
+  });
+
+  test('a surplus that exactly pays for N points buys N, not N-1', () => {
+    // cost(k) = 3 + k/50 at neutral; sum k=0..24 is 81 exactly.
+    assert.equal(goodwillFor(81, { disposition: 0, flipThreshold: 30 }), 25);
+  });
+
+  test('goodwill can never exceed the headroom to the ceiling', () => {
+    assert.equal(goodwillFor(100000, PUCK), 40);   // +60 on a 100 ceiling
+  });
+
+  test('a garbage flipThreshold falls back to the default ceiling', () => {
+    for (const t of [NaN, Infinity, -Infinity, 'abc', {}]) {
+      assert.equal(dispositionCeil({ flipThreshold: t }), 100, `ceiling leaked on ${String(t)}`);
+    }
   });
 });

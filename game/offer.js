@@ -27,7 +27,7 @@ export function emptyOffer() {
 // throwing.
 function dispositionOf(npc) {
     const d = (npc && npc.disposition) ?? 0;
-    // A non-finite disposition would make costPerPoint return NaN, and since
+    // A non-finite disposition would make goodwillCostPerPoint return NaN, and since
     // `pool < NaN` is always false the goodwill loop would run to its guard and
     // pay out the MAXIMUM instead of zero. Fail to neutral, not to jackpot.
     return Number.isFinite(d) ? d : 0;
@@ -108,7 +108,7 @@ export function settledGold(npc, offer) {
 // ── The curves ───────────────────────────────────────────────────────────────
 
 export const DISPOSITION_MIN = -100;
-const GUARD_ITERATIONS = 400;          // runaway guard; no real offer approaches it
+const EPSILON = 1e-9;   // float-drift tolerance on the last point
 
 // The top of this NPC's meter — and the denominator of both curves. At least
 // 100, but a high flipThreshold raises it (the Fungus King is authored 200, and
@@ -117,18 +117,24 @@ const GUARD_ITERATIONS = 400;          // runaway guard; no real offer approache
 // `?? 30` is the default previewGive and applyDispositionDelta already use
 // (give-action.js) — it must not silently disagree with the flip logic.
 export function dispositionCeil(npc) {
-    return Math.max(100, (npc && npc.flipThreshold) ?? 30);
+    const t = (npc && npc.flipThreshold) ?? 30;
+    // Sanitized for the same reason dispositionOf is: a non-finite ceiling makes
+    // this NaN, which becomes NaN meter geometry downstream, and an Infinite one
+    // pins the curve at its cheapest rate — the jackpot through the other door.
+    return Math.max(100, Number.isFinite(t) ? t : 30);
 }
 
 function progress(d, ceil) {
     const span = ceil - DISPOSITION_MIN;
+    // Unreachable by construction — dispositionCeil never returns below 100, so
+    // span is always positive. Kept as a divide-by-zero guard, not a live path.
     if (!(span > 0)) return 1;
     return Math.max(0, Math.min(1, (d - DISPOSITION_MIN) / span));
 }
 
 // GP per point of goodwill. Rises as they warm to you: pleasing someone who
 // already likes you costs more. 1 GP/pt at the floor, 5 at the ceiling.
-export function costPerPoint(d, ceil) {
+export function goodwillCostPerPoint(d, ceil) {
     return 1 + 4 * progress(d, ceil);
 }
 
@@ -139,10 +145,18 @@ export function goodwillFor(surplus, npc) {
     if (!(surplus > 0)) return 0;
     const ceil = dispositionCeil(npc);
     const d0 = dispositionOf(npc);
+    // Capped at the headroom to the ceiling, not an arbitrary iteration count —
+    // goodwill can never move an NPC past the top of their own meter, so a gift
+    // can never project more points than that meter has room for.
+    const room = Math.max(0, ceil - d0);
     let pool = surplus, pts = 0;
-    while (pts < GUARD_ITERATIONS) {
-        const c = costPerPoint(d0 + pts, ceil);
-        if (!Number.isFinite(c) || pool < c) break;
+    while (pts < room) {
+        const c = goodwillCostPerPoint(d0 + pts, ceil);
+        // EPSILON absorbs float drift on the last point of an exact-payment
+        // surplus (e.g. 81 GP for 25 points at 3+k/50 each) — without it the
+        // running subtraction can land a hair under the true cost and refuse
+        // a point the player fully paid for.
+        if (pool + EPSILON < c) break;
         pool -= c; pts++;
     }
     return pts;
