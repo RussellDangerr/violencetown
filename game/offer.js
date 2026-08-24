@@ -110,17 +110,6 @@ export function settledGold(npc, offer) {
 // One call, everything the screen needs. Both the renderer (to draw the meter's
 // ghost segment and the ledger) and main.js (to commit) go through here, so what
 // the player was shown and what actually happens can never diverge.
-
-// The GP cost of exactly `n` points bought in order starting at d0 — the same
-// running total goodwillFor's own loop accumulates internally, replayed here
-// so a point count splitGoodwill has already resolved (some possibly refused
-// by the flip ceiling) can be priced without re-deciding how many there are.
-function costOfPoints(d0, ceil, n) {
-    let sum = 0;
-    for (let i = 0; i < n; i++) sum += goodwillCostPerPoint(d0 + i, ceil);
-    return sum;
-}
-
 export function resolveOffer(npc, offer) {
     const o = offer || emptyOffer();
     const bal = offerBalance(npc, o);
@@ -141,18 +130,11 @@ export function resolveOffer(npc, offer) {
         const avgWeight = bal.givenItemsValue > 0 ? bal.giftValue / bal.givenItemsValue : 1;
         const g = splitGoodwill(npc, { itemValue: itemSurplus * avgWeight, gold: goldSurplus });
 
-        // Recomputed rather than taken from splitGoodwill's own `unspent`: this
-        // divides the item half back out of its giftWeight-inflated units and
-        // sums only the cost of points that actually landed (not the flip
-        // ceiling's refused ones), so both halves land in the same real-GP
-        // unit as `shortfall`. Pinned in tests/offer.test.js, "the three
-        // accounting seams".
-        const ceil = dispositionCeil(npc);
-        const afterItems = d0 + g.fromItems;
-        const itemsCost = costOfPoints(d0, ceil, g.fromItems);
-        const goldCost = costOfPoints(afterItems, ceil, g.fromGold);
+        // itemsSpent is denominated in the same giftWeight-inflated units as
+        // itemValue above; divide back out so both halves land in the real-GP
+        // unit `shortfall` also uses.
         const unspent = Math.max(0,
-            (itemSurplus - itemsCost / avgWeight) + (goldSurplus - goldCost));
+            (itemSurplus - g.itemsSpent / avgWeight) + (goldSurplus - g.goldSpent));
 
         return { ...bal, points: g.points, fromItems: g.fromItems, fromGold: g.fromGold,
                  projected: d0 + g.points, shortfall: 0, unspent,
@@ -216,10 +198,18 @@ export function goodwillCostPerPoint(d, ceil) {
 // without `unspent` there is no way to tell that apart from a bug and no way
 // to write the honest line ("already as fond of you as he can be") instead
 // of a bare +0 that looks broken.
-export function goodwillFor(surplus, npc) {
+//
+// `cap` is a second, independent stopping point below the ceiling's own
+// `room` — splitGoodwill uses it for the flip threshold, which can refuse
+// gold before the ceiling would. The loop always climbs all the way to
+// `room` regardless of `cap`; it snapshots pool/pts the moment `pts`
+// reaches `cap`, so `points`/`spent`/`unspent` report the capped prefix
+// while `refusedByCap` (points bought after the snapshot, i.e. what the
+// same money would have bought past the cap) falls out of that one walk.
+export function goodwillFor(surplus, npc, cap = Infinity) {
     // No valid surplus means nothing was ever staged to spend — 0 unspent,
     // not the raw (possibly negative or NaN) input echoed back.
-    if (!(surplus > 0)) return { points: 0, unspent: 0 };
+    if (!(surplus > 0)) return { points: 0, spent: 0, unspent: 0, refusedByCap: 0 };
     const ceil = dispositionCeil(npc);
     const d0 = dispositionOf(npc);
     // Capped at the headroom to the ceiling, not an arbitrary iteration count —
@@ -228,8 +218,14 @@ export function goodwillFor(surplus, npc) {
     // Floored: a fractional d0 (e.g. 99.5 against ceil 100) gives room 0.5,
     // and `pts < room` would still admit one point, breaching the ceiling.
     const room = Math.floor(Math.max(0, ceil - d0));
+    // Same floor/clamp dispositionCeil applies to its own input: a fractional
+    // or negative cap (a fractional flipThreshold; a threshold already
+    // crossed) must not mint a fractional point or go below "capped at zero".
+    const effectiveCap = Number.isFinite(cap) ? Math.max(0, Math.floor(cap)) : Infinity;
     let pool = surplus, pts = 0;
+    let cappedPool = null, cappedPts = null;
     while (pts < room) {
+        if (pts === effectiveCap && cappedPool === null) { cappedPool = pool; cappedPts = pts; }
         const c = goodwillCostPerPoint(d0 + pts, ceil);
         // EPSILON absorbs float drift on the last point of an exact-payment
         // surplus (e.g. 81 GP for 25 points at 3+k/50 each) — without it the
@@ -238,7 +234,15 @@ export function goodwillFor(surplus, npc) {
         if (pool + EPSILON < c) break;
         pool -= c; pts++;
     }
-    return { points: pts, unspent: Math.max(0, pool) };
+    // The snapshot is never taken above when the cap doesn't bind (room or
+    // pool exhaustion arrives first) — falls back to the walk's own end.
+    if (cappedPool === null) { cappedPool = pool; cappedPts = pts; }
+    return {
+        points: cappedPts,
+        spent: surplus - cappedPool,
+        unspent: Math.max(0, cappedPool),
+        refusedByCap: Math.max(0, pts - cappedPts),
+    };
 }
 
 // Goodwill, split by where it came from, because gold and gifts are bounded
@@ -274,23 +278,23 @@ export function splitGoodwill(npc, { itemValue = 0, gold = 0 } = {}) {
         : afterItems < threshold         ? threshold - 1
         : Infinity;
 
-    const goldCurve = goodwillFor(gold, { ...npc, disposition: afterItems });
-    // Floored: a fractional flipThreshold still passes Number.isFinite, so
-    // without this an authored 60.5 would mint fractional points of goodwill
-    // that eventually land on npc.disposition itself.
-    const allowed = Number.isFinite(goldCeiling)
-        ? Math.max(0, Math.min(Math.floor(goldCeiling - afterItems), goldCurve.points))
-        : goldCurve.points;
+    // The cap itself may be fractional or negative (a fractional
+    // flipThreshold; a threshold already crossed) — goodwillFor floors and
+    // floors-at-zero the same way dispositionCeil does for its own input.
+    const cap = Number.isFinite(goldCeiling) ? goldCeiling - afterItems : Infinity;
+    const goldCurve = goodwillFor(gold, { ...npc, disposition: afterItems }, cap);
 
     return {
-        points: items.points + allowed,
+        points: items.points + goldCurve.points,
         fromItems: items.points,
-        fromGold: allowed,
+        fromGold: goldCurve.points,
+        itemsSpent: items.spent,
+        goldSpent: goldCurve.spent,
         unspent: items.unspent + goldCurve.unspent,
         // Points gold wanted to buy but the flip ceiling refused. Distinct from
         // `unspent` — that is "no room left to feel", this is "gold can't carry
         // him across his own threshold". They want different log lines.
-        goldRefusedPoints: Math.max(0, goldCurve.points - allowed),
+        goldRefusedPoints: goldCurve.refusedByCap,
     };
 }
 
