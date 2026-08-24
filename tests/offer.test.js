@@ -392,4 +392,13 @@ describe('the gold ceiling', () => {
       assert.equal(r.points, 29, `flipThreshold ${String(t)} must fall back to the default ceiling`);
     }
   });
+
+  test('gold never COSTS disposition — the floor cannot round below zero', () => {
+    // afterItems 60 against a 60.5 threshold: ceiling 59.5, floor(-0.5) is -1.
+    // Without Math.max(0, ...) this returns points: -1 — paying him makes him
+    // like you less. Reachable from a fractional flipThreshold in map JSON.
+    const r = splitGoodwill({ disposition: 60, flipThreshold: 60.5 }, { gold: 500 });
+    assert.equal(r.fromGold, 0);
+    assert.equal(r.points, 0, 'gold that cannot buy a point buys zero, never a negative one');
+  });
 });
