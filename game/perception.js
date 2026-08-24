@@ -141,3 +141,41 @@ export function nextAwareness(npc, verdict, playerPos) {
             return { state, awareBeats: 0, sweepBeats };
     }
 }
+
+// ── Noise ───────────────────────────────────────────────────────────────────
+//
+// Generalises ai.js's rockClatter, which its own comment called "the game's first
+// stealth affordance". Same rule, now the general case: a sound sets a FALSE
+// last-seen without the maker ever having been seen. An enemy already chasing (or
+// already searching, which has its own lead) is NOT redirected — a rock distracts,
+// it does not rescue you from a fight you already started.
+//
+// Sound ignores walls in v1. It goes around corners, which is both truthful and
+// the forgiving direction for the AI: noise cannot see through a wall to find
+// you, it can only mislocate attention.
+//
+// NOTE: rockClatter is NOT yet retired into this — that happens with the main.js
+// call-site wiring, which is deferred until feature/unified-offer-screen lands.
+
+export const NOISE = {
+    step:         1,   // effectively silent; present so it is tunable
+    door:         4,   // a door, the pipe-jam
+    cast:         5,
+    melee:        6,   // fighting is loud; a brawl draws a crowd
+    throwImpact:  8,   // preserves the rock's shipped `sightRange ?? 8` reach
+    theft:        0,   // silent BY DEFINITION — only the victim ever reacts
+};
+
+export function emitNoise(watchers, x, y, loudness) {
+    if (!(loudness > 0)) return;
+    for (const w of watchers || []) {
+        if (!w || !w.entity?.isAlive?.()) continue;
+        if (w.state !== 'idle' && w.state !== 'suspicious') continue;
+        if (chebyshev(w.x, w.y, x, y) > loudness + (w.hearingRange ?? 0)) continue;
+        w._lastSeenX = x;
+        w._lastSeenY = y;
+        w.state = 'suspicious';
+        w._awareBeats = 0;
+        w._sweepBeats = 0;
+    }
+}
