@@ -2145,7 +2145,7 @@ counts render as `[Soap] x3`. A staged row gets a gold halo and a `staged xN` li
                 ctx.fillStyle = 'rgba(212,185,106,0.12)';
                 ctx.fillRect(r.x, r.y, r.w, r.h);
             }
-            const tier = VALUE_TIERS.find(v => v.key === itemTier(def)) || VALUE_TIERS[0];
+            const tier = itemTier(def);   // returns the tier OBJECT, not a key
             ctx.fillStyle = tier.color; ctx.fillRect(r.x, r.y, 3, r.h);
             this._drawItemIcon(def, r.x + 10, r.y + 8, 24);
 
@@ -2215,6 +2215,13 @@ the NPC's mood line instead of dead space.
 > pixel-sample colours (the screenshot tool is broken here), so this is genuinely unverified rather
 > than verified-fine. Look at the whole panel together during this task's visual pass.
 
+> **`itemTier(def)` returns the tier OBJECT** — `{key, name, color, max}` — not a key string. An
+> earlier draft of this plan wrote `VALUE_TIERS.find(v => v.key === itemTier(def))`, which compares a
+> string to an object, always misses, and silently paints **every** row grey/Common. It came from the
+> design preview, where it went unnoticed because the preview's fit report checked geometry and never
+> checked colour. Task 10 caught and fixed it; do not reintroduce it. `VALUE_TIERS` does not need
+> importing.
+
 - [ ] **Step 1: Write the methods**
 
 ```js
@@ -2277,7 +2284,7 @@ the NPC's mood line instead of dead space.
         }
 
         const def = sel.def;
-        const tier = VALUE_TIERS.find(v => v.key === itemTier(def)) || VALUE_TIERS[0];
+        const tier = itemTier(def);   // returns the tier OBJECT, not a key
         let x = L.desc.x + 10;
         this.font.drawText(ctx, def.name, x, L.desc.y + 6, { color: UI.gold, scale: 1 });
         x += this.font.measure(def.name, 1) + 14;
