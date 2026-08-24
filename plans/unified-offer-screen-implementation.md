@@ -2202,6 +2202,19 @@ The description strip is **never empty** — with an item selected it carries na
 what the NPC pays, the written description and the goodwill weight; with nothing selected it carries
 the NPC's mood line instead of dead space.
 
+> **Two things carried forward from Task 9.**
+>
+> `L.close` vs `CLOSE_PANEL` is **decided**: the ✕ chip goes through `renderer.js`'s existing
+> state→panel map, like every other modal. The state key is **`trade`**, not `offer` — `STATE.TRADE`
+> keeps its name so the wheel and Target List resolvers don't move, and `TRADE_MODAL_RECT` aliases the
+> frozen `MODAL_RECT` after Task 8. `offerLayout`'s own `close` field is therefore unread and should be
+> gone; if it is still there, remove it.
+>
+> **Meter spacing needs an eye, not a probe.** Task 9's implementer flagged that the multiplier rows
+> sit at `mb.y - 5` and `mb.y + 8` against a 12px meter bar, and may crowd its edges. They could only
+> pixel-sample colours (the screenshot tool is broken here), so this is genuinely unverified rather
+> than verified-fine. Look at the whole panel together during this task's visual pass.
+
 - [ ] **Step 1: Write the methods**
 
 ```js
