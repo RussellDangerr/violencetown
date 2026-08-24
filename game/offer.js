@@ -27,7 +27,9 @@ export function emptyOffer() {
 // throwing.
 function dispositionOf(npc) {
     const d = (npc && npc.disposition) ?? 0;
-    // Sanitized here so every OTHER disposition read in this module (offerBalance's pricing included) doesn't have to guard against NaN separately.
+    // Sanitized here so every OTHER disposition read in this module
+    // (offerBalance's pricing included) doesn't have to guard against NaN
+    // separately.
     return Number.isFinite(d) ? d : 0;
 }
 
@@ -105,7 +107,9 @@ export function settledGold(npc, offer) {
 
 // ── The curves ───────────────────────────────────────────────────────────────
 //
-// Argument order: goodwillFor/resentmentFor take npc last; offerBalance/splitGoodwill take npc first — two sentence shapes, not an inconsistency.
+// Argument order: goodwillFor/resentmentFor take npc last;
+// offerBalance/splitGoodwill take npc first — two sentence shapes, not
+// an inconsistency.
 
 export const DISPOSITION_MIN = -100;
 const EPSILON = 1e-9;   // float-drift tolerance on the last point
@@ -126,7 +130,10 @@ export function dispositionCeil(npc) {
 
 function progress(d, ceil) {
     const span = ceil - DISPOSITION_MIN;
-    // Unreachable via dispositionCeil, but both cost functions are exported for Tasks 9-11's curve draw; the degenerate span must price at the worst case for the player either way — goodwill's own max (5), resentment's own min (1).
+    // Unreachable via dispositionCeil, but both cost functions are
+    // exported for Tasks 9-11's curve draw; the degenerate span must
+    // price at the worst case for the player either way — goodwill's
+    // own max (5), resentment's own min (1).
     if (!(span > 0)) return 1;
     return Math.max(0, Math.min(1, (d - DISPOSITION_MIN) / span));
 }

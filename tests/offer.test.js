@@ -543,18 +543,26 @@ describe('resentment — bad deals are a move, not an error', () => {
   });
 
   test('resentmentFor never mutates the npc it is handed', () => {
-    const before = structuredClone(PUCK);
-    resentmentFor(200, PUCK);
-    assert.deepEqual(PUCK, before);
+    // A fresh local fixture, not the shared PUCK: nine earlier tests have
+    // already run PUCK through this function, so an idempotent mutation
+    // would already be present in the fixture before this snapshot -- and
+    // structuredClone alone doesn't help, since by then the contamination
+    // is in PUCK itself, not just in the shallow copy of it.
+    const npc = { type: 'Puck', disposition: 60, flipThreshold: 0, values: { soap: 4 } };
+    const before = structuredClone(npc);
+    resentmentFor(200, npc);
+    assert.deepEqual(npc, before);
   });
 
   test('a degenerate span prices at the worst case for the player, both directions', () => {
-    // ceil <= DISPOSITION_MIN collapses progress() to 1, pricing goodwill at
-    // its own maximum (5) and resentment at its own minimum (1) -- expensive
-    // to gain favour, cheap to rack up resentment, both against the player.
-    // Mutating that degenerate return from 1 to 0 flips both curves instead.
-    assert.equal(goodwillCostPerPoint(0, 0), 5);
-    assert.equal(resentmentCostPerPoint(0, 0), 1);
+    // ceil=0 is NOT degenerate: span = 0 - DISPOSITION_MIN = 100 > 0, so this
+    // would take the normal clamped path and land on 5/1 anyway, proving
+    // nothing about the guard. ceil = DISPOSITION_MIN (-100) makes span
+    // exactly 0, which is the branch that must price at the worst case for
+    // the player either way -- goodwill's own max (5), resentment's own
+    // min (1). Mutating that branch's `return 1` to `return 0` flips both.
+    assert.equal(goodwillCostPerPoint(0, -100), 5);
+    assert.equal(resentmentCostPerPoint(0, -100), 1);
   });
 
   test('a non-finite disposition prices as neutral here too, not as a refusal', () => {
