@@ -2922,8 +2922,14 @@ class Game {
         const idx = (this.groundItems || []).findIndex(gi => gi.x === x && gi.y === y);
         if (idx === -1) { this._log('[Nothing to take there.]'); return; }
         const gi = this.groundItems[idx];
-        const def = ITEMS[gi.type];
-        if (!def) { this.groundItems.splice(idx, 1); return; }
+        // Resolve through _resolveItemDef so WEAPONS are found too (a bare ITEMS
+        // lookup used to miss them). Leave an unresolvable item where it lies,
+        // and say so, rather than deleting it off the floor with no log.
+        const def = this._resolveItemDef(gi.type);
+        if (!def) {
+            this._log(`[Whatever that is, it won't come loose.]`);
+            return;
+        }
 
         // (XMB routing) Gear auto-equips into a FREE body slot; otherwise it waits
         // in the bag as spare (swap it in from the GEAR tab). Usables land in the
