@@ -331,11 +331,20 @@ A 320×12 bar with tick marks at every band boundary (−50, −25, 0, +25, +50,
 
 The player watches prices improve as they stage a gift. The game has never shown this.
 
-**Display clamp.** `applyGive` is unclamped (`give-action.js:97`) and the Fungus King is authored
-`disposition: -80, flipThreshold: 200` (`game/sewer-map.json:34`), so clamping the underlying value to
-±100 would make him permanently unflippable. The meter therefore clamps **display only**, to
-`max(100, flipThreshold)` per NPC. His bar stays legible; the math is untouched; nothing is
-re-authored.
+**The ceiling is per-NPC, and it is one number for both the meter and the value.**
+`applyGive` is unclamped (`give-action.js:97`) but `applyDispositionDelta` hard-clamps to ±100, and
+the Fungus King is authored `disposition: -80, flipThreshold: 200` (`game/sewer-map.json:34`) — so a
+flat ±100 clamp makes him permanently unflippable.
+
+An earlier draft of this section called the fix a *display-only* clamp and claimed "the math is
+untouched." That was wrong: the offer screen commits through `applyDispositionDelta`, so the flat
+clamp does touch the math and would have silently stranded him. The ceiling is therefore real, not
+cosmetic — `dispositionCeil(npc) = max(100, flipThreshold ?? 30)` bounds **both** the drawn meter and
+the legal value, and `applyDispositionDelta` clamps to `[-100, dispositionCeil(npc)]`.
+
+For every NPC except the King that ceiling is exactly 100, so this changes nothing anywhere else. It
+also means goodwill can never project past the top of the bar it is drawn on, which is what stops the
+screen promising a `+400` swing on a meter 200 wide.
 
 ### 5.2 Rows
 
@@ -701,3 +710,5 @@ not rebuild a deleted verb.
 | 18 | Rounding always favours the NPC — goodwill rounds down, resentment rounds up. | Claude |
 | 19 | Gold is a single signed field, not two — negative means the NPC pays out. Without it the model cannot express a sale. | Claude |
 | 20 | The balance auto-settles to zero as items are staged; the player drags it off zero deliberately. | Claude |
+| 21 | The per-NPC ceiling is real, not display-only — it bounds the meter, the curve, and the committed value alike. | Claude |
+| 22 | Goodwill is capped at the headroom to that ceiling, so a projection can never exceed the bar it is drawn on. | Claude |

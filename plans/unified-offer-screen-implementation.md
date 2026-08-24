@@ -713,7 +713,7 @@ it rounds **up** against the player, where goodwill rounds down.
 Append to `tests/offer.test.js`:
 
 ```js
-import { RESENT_MAX_PER_OFFER, RESENT_FLOOR, resentCostPerPoint, resentmentFor } from '../game/offer.js';
+import { RESENT_MAX_PER_OFFER, RESENT_FLOOR, goodwillCostPerPoint, resentCostPerPoint, resentmentFor } from '../game/offer.js';
 
 describe('resentment — bad deals are a move, not an error', () => {
   test('the bounds are the specced constants', () => {
@@ -723,17 +723,17 @@ describe('resentment — bad deals are a move, not an error', () => {
 
   test('the resentment curve is the goodwill curve mirrored', () => {
     for (const d of [-100, -50, 0, 50, 100]) {
-      assert.equal(resentCostPerPoint(d, 100), 6 - costPerPoint(d, 100),
+      assert.equal(resentCostPerPoint(d, 100), 6 - goodwillCostPerPoint(d, 100),
         `curves are not mirrored at d=${d}`);
     }
   });
 
   test('betrayal is cheaper than affection when they like you', () => {
-    assert.ok(resentCostPerPoint(60, 100) < costPerPoint(60, 100));
+    assert.ok(resentCostPerPoint(60, 100) < goodwillCostPerPoint(60, 100));
   });
 
   test('and dearer than affection when they do not', () => {
-    assert.ok(resentCostPerPoint(-80, 100) > costPerPoint(-80, 100));
+    assert.ok(resentCostPerPoint(-80, 100) > goodwillCostPerPoint(-80, 100));
   });
 
   test('the spec worked example: a 29 GP shortfall costs Puck 15 points', () => {
@@ -2620,6 +2620,12 @@ move disposition, then log. Nothing half-applies.
         }
 
         // Disposition last, so a flip fires against a world that already settled.
+        //
+        // NOT applyDispositionDelta's raw call: it hard-clamps to [-100, 100],
+        // and the Fungus King is authored flipThreshold: 200, so routing through
+        // the bare clamp makes him permanently unflippable — the exact outcome
+        // the display-only meter clamp was supposed to avoid. See the amendment
+        // note below; give-action.js now clamps to the NPC's own ceiling.
         if (R.points !== 0 && npc.disposition != null) {
             applyDispositionDelta(npc, R.points);
         }
@@ -2657,6 +2663,22 @@ move disposition, then log. Nothing half-applies.
         this._log(deal + mood, 'transition');
     }
 ```
+
+> **Amendment — the clamp must be the NPC's own ceiling, not a flat ±100.**
+> `applyDispositionDelta` (`give-action.js`) clamps to `[-100, 100]`. The Fungus King is authored
+> `disposition: -80, flipThreshold: 200`, so under that clamp he can never reach his own threshold
+> and is permanently unflippable — which is precisely what the spec's display-only meter clamp was
+> introduced to prevent. Spec §5.1 says "the math is untouched"; the flat clamp touches it.
+>
+> Fix, as part of this task: `give-action.js` imports `dispositionCeil` from `./offer.js` (no cycle —
+> `offer.js` imports only `trade.js`) and clamps to `[DISPOSITION_MIN, dispositionCeil(recipient)]`.
+> For every NPC except the King that ceiling is exactly 100, so this is a strictly-safe
+> generalization: identical behaviour everywhere, and the King becomes reachable. It also makes the
+> meter's drawn range and the value's legal range one number, which is what `dispositionCeil`'s own
+> comment already claims.
+>
+> Add a test to `tests/offer.test.js` or a give-action test proving the King can cross 200, and one
+> proving an ordinary NPC still stops at 100.
 
 - [ ] **Step 2: Add the container-take helper**
 
