@@ -108,7 +108,7 @@ fog of war; NPC-on-NPC theft.
 | Theft trivialises the economy | Steal limit is a small fixed number (50 GP base). `_robbed` closes farming exactly the way `_muggedIds` closes corpse-farming. |
 | Theft breaks a quest by robbing the wrong NPC | `thievable: false`, mirroring the existing `bribeable: false`. |
 | Verb-list freeze (audit §7 item 10) | Acknowledged and spent deliberately. Thieve adds *edges*, not a node: it wires stealth × disposition × wallets × loadout × AI × the shove. Audit §4 argues this is the cluster worth investing in. |
-| Concurrent work on `feature/unified-offer-screen` rewrites the same `give-action.js` seam | Phases 1–4 are file-disjoint and proceed now; phase 5 sequences after that branch lands. See *Coordinating with the offer screen*. |
+| Concurrent work on `feature/unified-offer-screen` collides with this | Checked against their real diff, not their plan: `give-action.js`, `trade.js` and `wheel-model.js` are untouched. One shared import hunk in `renderer.js` is the whole exposure. See *Coordinating with the offer screen*. |
 
 ---
 
@@ -601,28 +601,40 @@ primary checkout while this work runs in a `git worktree` at
 `.claude/worktrees/stealth-perception`). It collapses buy / sell / give / bribe into **one verb —
 make an offer** — and consolidates the flip logic in `give-action.js` behind a single shared curve.
 
-Measured overlap:
+**Corrected 2026-08-23 against their actual diff.** An earlier draft of this section predicted a
+high-conflict collision in `give-action.js` and gated Phase 5 behind their merge. That prediction
+was read off their *plan*; the 74-commit diff says something different, and the correction matters
+because it removes the gate entirely.
 
-| File | Offer screen | This feature | Risk |
+What they have actually built is three **new** modules — `offer.js` (the basket, `resolveOffer`,
+`commitBlocker`), `disposition-curves.js` (goodwill / resentment), `item-registry.js`
+(`resolveItemDef`) — plus `layout.js`, `weapons.js`, and **25 lines of `main.js` / 8 of
+`enemies.js`.** Measured overlap:
+
+| File | Predicted | Actual | Risk |
 |---|---|---|---|
-| `wheel-model.js` | one passing reference | the Thieve subtree | none |
-| `renderer.js` | `_drawTradeModal` 2772–2919 | `_drawAggroOverlay` 2533, sprite pips 1086 | low — disjoint functions |
-| `main.js` | `_tapTrade` 5491, `_takeItemAt` 2924, `_containerStock` 3764 | wheel resolver 3280–3340, world beat 3390–3600 | moderate — disjoint regions |
-| `give-action.js` | consolidates flip logic; wires `previewGive` | `applyHostileFlip`, `reactToTransaction('theft')` | **high — same functions** |
+| `give-action.js` | consolidates flip logic | **untouched; API byte-identical to `dev`** | **none** |
+| `trade.js` | shared pricing curve | **untouched** — imported by `offer.js`, never modified | **none** |
+| `wheel-model.js` | one passing reference | **untouched** | **none** |
+| `renderer.js` | `_drawTradeModal` | untouched *so far*; their Tasks 9–11 replace it | low — different function, shared import block |
+| `main.js` | four regions | 25 lines, all in `_resolveItemDef` / `_takeItemAt` / `_grantItem` | low — disjoint from the wheel resolver |
+| `enemies.js` | — | one import line | trivial |
 
-**The high-overlap file is also the reason the merge is easy, if it is done in the right order.** A
-theft is the offer screen's own verb with the sign flipped — you take without giving — so theft
-belongs *on* the unified spine, not beside it. Two consequences for this plan:
+**So there is no gate, and no phase ordering.** All six phases proceed in sequence. The only real
+collision left is the *import block* at the top of `renderer.js`, which both branches widen; whoever
+merges second keeps both sets and re-runs the game.
 
-1. **Phases 1–4 are file-disjoint and proceed now.** They touch `perception.js`, `theft.js` (new),
-   `npc.js`, `enemies.js`, `ai.js`, and a renderer function the offer screen never opens.
-2. **Phase 5 sequences after the offer screen lands on `dev`**, and is authored against its
-   consolidated `give-action.js` rather than today's. `previewGive` — written long ago, exported,
-   documented as the hover seam, and consumed by nothing until that branch — is exactly the preview
-   pattern the wheel's `clean` / `NOTICED` verdict needs. Reuse it; do not invent a second one.
+Three things their branch does change about this design:
 
-This is CLAUDE.md's merge-hygiene rule applied literally: merge the finished branch promptly, and
-parallelise only file-disjoint work.
+1. **`ITEMS[id]` cannot resolve a weapon** — weapons live in `WEAPONS` — and stolen Gear is
+   overwhelmingly weapons. The theft resolver goes through the *Game method* `_resolveItemDef`,
+   which is correct on `dev` and on their branch alike. This was a latent bug in the first draft.
+2. **Weapons now carry `baseValue`**, so a stolen weapon prices properly once they merge, and
+   degrades to the weight floor of 1 before then. No ordering dependency.
+3. **They independently landed on 25 as the resentment unit** (`RESENT_MAX_PER_OFFER = 25`,
+   `RESENT_FLOOR = -25`) — the same band spacing paranoia is tied to here. Their floor caps what a
+   bad *deal* can cost you; theft deliberately punches through it to −100. Keep the two distinct on
+   purpose: haggling badly should never make an enemy, and robbing someone should.
 
 ### Build order
 
@@ -634,7 +646,7 @@ One branch, six phase-commits, each gated on a green `npm test` **and** an in-br
 | **2** | The awareness ladder | `?` → `!` observable; the turn-to-look beat exists; leash unchanged |
 | **3** | Noise; `rockClatter` retires into `emitNoise` | The rock still works identically; a swing pulls attention |
 | **4** | Threat rendering; `_drawAggroOverlay` retires; both dither treatments behind a toggle | Cones legible; pips correct; no mud over day/night or arena |
-| — | *↑ all of the above is disjoint from the offer screen. ↓ phase 5 waits for it to land on `dev`.* | |
+| — | *No gate here. The concurrent offer-screen branch leaves `give-action.js`, `trade.js` and `wheel-model.js` untouched — measured, not assumed.* | |
 | **5** | `theft.js`, the wheel subtree, notice/weight, `applyHostileFlip`, paranoia, `_robbed` | Full loop: sneak → rob clean → **nothing happens** → rob heavy → noticed → blind sweep → district cools. **Shove → Thieve works.** |
 | **6** | Polish: night shrinks sight, `equipped` authoring, audio, first-time hint, tuning | |
 

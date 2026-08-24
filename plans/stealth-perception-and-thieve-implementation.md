@@ -313,6 +313,10 @@ In `game/enemies.js`, add the import at the top of the file, beside the existing
 import { FACING_VECTORS } from './perception.js';
 ```
 
+> **Merge note.** `feature/unified-offer-screen` changes one line in this same block — `import
+> { ITEMS } from './items.js'` becomes `import { resolveItemDef } from './item-registry.js'`. Adding
+> a new line beside it is a one-hunk conflict at worst; keep both.
+
 Add to the constructor's destructured parameter list, immediately after the `_spunTurns = 0,` entry:
 
 ```js
@@ -1090,6 +1094,13 @@ other consumer:
 import { perceives, facingOf, VERDICT } from './perception.js';
 ```
 
+> **Merge note.** This import block is the single point where this plan and
+> `feature/unified-offer-screen` collide: their Tasks 9–11 widen the same block (adding `MODAL_RECT`,
+> `offerLayout` from `layout.js` and `band` from `trade.js`) while replacing `_drawTradeModal` with
+> `_drawOfferScreen`. Different functions, one shared hunk. Whichever branch merges second takes both
+> sets of imports — do not drop either side, and re-run the game after resolving, because a dropped
+> import here is exactly the silent-but-fatal failure CLAUDE.md's merge-hygiene section describes.
+
 - [ ] **Step 3: Repoint the call site**
 
 At `renderer.js:361`, change:
@@ -1364,25 +1375,61 @@ git commit -m "theft: weight against a buffer, and gear costs what it swings"
 
 ---
 
-# ⛔ GATE — Tasks 9–12 wait for `feature/unified-offer-screen`
+# Coordinating with `feature/unified-offer-screen` — measured, not assumed
 
-Everything above is file-disjoint from that branch and ships without it. Everything below touches
-`give-action.js`, which that branch is actively consolidating (`applyGive` becomes a thin caller over
-one shared curve, and `previewGive` finally gets a consumer).
+**Revised 2026-08-23 after reading that branch's actual diff.** The hard gate that stood here was
+written against what their *plan* said it would touch. The diff says otherwise, and the difference
+matters: **there is no gate.** Tasks 9–13 proceed in order with the rest.
 
-**Before starting Task 9, confirm the offer screen has landed:**
+### What they have actually changed (74 commits, `dev..feature/unified-offer-screen`)
 
-```bash
-git -C "C:/Code/violencetown" log --oneline dev -5
-git fetch origin && git rebase dev
-```
+| File | Their change |
+|---|---|
+| `game/offer.js` | **new**, 251 lines — basket, balance, `resolveOffer`, `stage`/`unstage`, `commitBlocker` |
+| `game/disposition-curves.js` | **new**, 227 lines — goodwill / resentment curves |
+| `game/item-registry.js` | **new**, 29 lines — `resolveItemDef`, `ALL_ITEM_IDS`, `WEAPON_ONLY_IDS` |
+| `game/weapons.js` | +17 — every weapon gains `category`, `baseValue`, `description` |
+| `game/layout.js` | +106 — `offerLayout()` |
+| `game/main.js` | **+25 only** — `_resolveItemDef` delegates to the registry; three bare `ITEMS[id]` lookups fixed |
+| `game/enemies.js` | **+8 only** — the `ITEMS` import becomes `resolveItemDef` |
+| `game/content-validate.js` | +15 |
 
-If `plans/unified-offer-screen.md` work is on `dev`, rebase and continue. If it is not, **stop and
-ask Caelan** — building Task 11 against today's `give-action.js` guarantees a hand-merge later.
+### The four files I feared, and their real status
 
-When it has landed, read `give-action.js` before writing Task 11: `applyHostileFlip` must sit beside
-the consolidated flip logic, and the wheel's `clean` / `NOTICED` preview must reuse `previewGive`'s
-pattern rather than inventing a second one.
+| File | Feared | Actual | Their remaining Tasks 8–20 |
+|---|---|---|---|
+| `give-action.js` | high | **untouched — API byte-identical to `dev`** | two mentions, both prose comments |
+| `trade.js` | moderate | **untouched** | imported by `offer.js`, never modified |
+| `wheel-model.js` | low | **untouched** | one mention, inside a `grep` command |
+| `renderer.js` | low | **untouched so far** | **Tasks 9–11, 15 replace `_drawTradeModal`** |
+
+So `applyHostileFlip` (Task 10), `BANDS_STEP` (Task 11) and the Thieve subtree (Task 9) have **zero
+conflict surface** and need no sequencing whatsoever.
+
+### The two places that DO still collide
+
+1. **`renderer.js`** — their Tasks 9–11 build `_drawOfferScreen` in place of `_drawTradeModal`
+   (2772–2919); my Task 7 replaces `_drawAggroOverlay` (2533). Different functions, but **both widen
+   the import block at the top of the file.** Expect a one-hunk import conflict and nothing else.
+2. **`main.js`** — their Tasks 12–17 rework opening/closing, hit-testing, commit, and **delete the
+   old trade path**; my Tasks 6 and 12 add noise call sites (~2546, `combatAttack`) and the Thieve
+   resolver (~3340). Different regions; their landed 25-line diff touches none of mine.
+
+Neither is a reason to wait. Whichever branch merges second resolves an import hunk.
+
+### Three things their branch teaches this plan
+
+- **`ITEMS[id]` is a bug, and `resolveItemDef` is the fix.** Weapons live in `WEAPONS`, not `ITEMS`,
+  so a bare `ITEMS[id]` lookup **cannot resolve a weapon** — and stolen Gear is overwhelmingly
+  weapons. Task 12 therefore resolves through `this._resolveItemDef(id)`, the *Game method*, which
+  exists on **both** `dev` (inline `WEAPONS[id] || ITEMS[id]`) and their branch (delegating to the
+  registry). That single choice is merge-proof in both directions and needs no rewrite either way.
+- **Weapons now carry `baseValue`** (wooden sword 6, ray gun 45). `gearWeight` reads `armor`/`damage`
+  and is unaffected; `itemWeight` gets richer after their merge and degrades to its floor of 1
+  before it. No branch-order dependency.
+- **They independently landed on 25 as the resentment unit** (`RESENT_MAX_PER_OFFER = 25`,
+  `RESENT_FLOOR = -25`) — the same band spacing this plan ties paranoia to. See the note in Task 11
+  on why theft deliberately punches through their floor.
 
 ---
 
@@ -1661,6 +1708,12 @@ import { BANDS_STEP } from './trade.js';
 // nobody points. It is social, not omniscient. And it fires ONLY on a search that
 // fails — get caught and it stays between the two of you; get away with it and
 // the chill spreads.
+// Note for whoever merges this beside feature/unified-offer-screen: that branch's
+// disposition-curves.js caps a bad DEAL at RESENT_FLOOR = -25 and
+// RESENT_MAX_PER_OFFER = 25 — the same unit, arrived at independently. Theft and
+// its paranoia deliberately punch through that floor and can stack to -100,
+// because a crime is not a bad deal: haggling badly should never be able to make
+// an enemy, and robbing someone should. Keep the two floors distinct on purpose.
 export const PARANOIA_DELTA  = -BANDS_STEP;
 export const PARANOIA_RADIUS = 6;
 
@@ -1883,7 +1936,12 @@ In `game/main.js`, in the wheel resolver switch (beside `case 'bribe':`), add:
                     if (gp <= 0) { this._log('[Their pockets are empty]'); break; }
                     weight = coinWeight(gp);
                 } else {
-                    const resolve = (id) => ITEMS[id] ?? null;
+                    // MERGE-PROOF, and a bug fix: a bare ITEMS[id] cannot resolve a
+                    // WEAPON, and stolen Gear is overwhelmingly weapons. The Game
+                    // method does WEAPONS-then-ITEMS on dev and delegates to
+                    // item-registry.js on feature/unified-offer-screen — correct
+                    // either side of that merge, with no rewrite.
+                    const resolve = (id) => this._resolveItemDef(id);
                     const isKit = node.resolver === 'thieveKit';
                     took = isKit ? kitTake(victim, resolve) : gearTake(victim, resolve);
                     if (!took) { this._log('[Nothing there to take]'); break; }
