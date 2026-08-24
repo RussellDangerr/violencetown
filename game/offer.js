@@ -76,7 +76,12 @@ export function offerBalance(npc, offer) {
     let takenValue = Math.max(0, -gold);
     for (const t of o.take || []) {
         const n = unitCount(t.count);
-        const unit = buyPrice(t.def, d) || 0;
+        // A container's own stock is never priced -- loot is free, matching
+        // main.js's Container "buy" shim (0 GP, no disposition/price gate).
+        // Gold moving out of a container's till is unaffected; only its ITEM
+        // stock prices at zero, so give-side pricing into a container (a
+        // separate loop above) is untouched.
+        const unit = (npc && npc._container) ? 0 : (buyPrice(t.def, d) || 0);
         takenValue += unit * n;
     }
     return { givenValue, takenValue, balance: givenValue - takenValue, giftValue, givenItemsValue };
@@ -390,12 +395,17 @@ function sameEntry(a, b) {
     return a.source === b.source && a.index === b.index;
 }
 
-export function stage(offer, side, entry) {
+// `max` mirrors goodwillFor's cap idiom: a second, independent ceiling (the
+// real stack size, or a container's remaining stock) supplied by the caller.
+// Undefined for every call site until Task 13 has a real number to pass, so
+// today's callers are unaffected -- Infinity never binds.
+export function stage(offer, side, entry, max = Infinity) {
+    const cap = Number.isFinite(max) ? Math.max(0, Math.floor(max)) : Infinity;
     const o = offer || emptyOffer();
     const list = (o[side] || []).map(e => ({ ...e }));
     const hit = list.find(e => sameEntry(e, entry));
-    if (hit) hit.count += 1;
-    else list.push({ ...entry, count: 1 });
+    if (hit) hit.count = Math.min(hit.count + 1, cap);
+    else list.push({ ...entry, count: Math.min(1, cap) });
     return { ...o, [side]: list };
 }
 

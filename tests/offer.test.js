@@ -860,6 +860,13 @@ describe('staging', () => {
     o = stage(o, 'give', { def: BANDAGE, slot: 3 });
     assert.equal(o.give.length, 2, "matching on slot alone would fold soap and a bandage into one entry");
   });
+
+  test('a max caps staging at the real stack size, not the click count', () => {
+    let o = emptyOffer();
+    for (let i = 0; i < 5; i++) o = stage(o, 'give', { def: SOAP, slot: 3 }, 2);
+    assert.equal(o.give.length, 1);
+    assert.equal(o.give[0].count, 2, "five clicks on a stack of two must not stage five");
+  });
 });
 
 describe('commitBlocker — every refusal is a sentence', () => {
@@ -916,10 +923,27 @@ describe('commitBlocker — every refusal is a sentence', () => {
     assert.match(commitBlocker(untracked, o, ctx), /CAN'T BE SHORTCHANGED/);
   });
 
-  test('a container cannot be shortchanged either', () => {
+  test('a container cannot be shortchanged either -- via its till, not its stock', () => {
+    // Item takes from a container price at 0 (the next test), so the only way
+    // left to shortchange one is gold: paying out 10 GP for nothing is still a
+    // real deficit even though the till itself can easily cover it.
+    const chest = { type: 'Chest', disposition: 100, _container: true };
+    const o = { give: [], take: [], gold: -10 };
+    assert.match(commitBlocker(chest, o, { ...ctx, npcGold: 50, isContainer: true }), /CAN'T BE SHORTCHANGED/);
+  });
+
+  test('taking loot from a container is free and unblocked', () => {
     const chest = { type: 'Chest', disposition: 100, _container: true };
     const o = { give: [], take: [{ def: BANDAGE, count: 1 }], gold: 0 };
-    assert.match(commitBlocker(chest, o, { ...ctx, isContainer: true }), /CAN'T BE SHORTCHANGED/);
+    assert.equal(offerBalance(chest, o).balance, 0, "a container's own stock must price at zero");
+    assert.equal(commitBlocker(chest, o, { ...ctx, isContainer: true }), null);
+  });
+
+  test('a container prices only its OWN stock at zero -- giving items into one still counts normally', () => {
+    const chest = { type: 'Chest', disposition: 100, _container: true };
+    const b = offerBalance(chest, { give: [{ def: SOAP, count: 2 }], take: [], gold: 0 });
+    // adoring band (disposition 100): sell x0.70, floor(15 * 0.70) = 10 each.
+    assert.equal(b.givenValue, 20);
   });
 
   test('the player-short check outranks the floor -- you hear about your own wallet first', () => {
