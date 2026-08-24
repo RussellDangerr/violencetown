@@ -263,7 +263,7 @@ export function giftWeight(npc, def) {
 //   balance = 0  a straight trade — disposition unmoved
 //   balance < 0  deficit  — a bad deal they will take while thinking less of you
 export function offerBalance(npc, offer) {
-    const d = (npc && npc.disposition) ?? 0;
+    const d = dispositionOf(npc);
     const o = offer || emptyOffer();
     const gold = o.gold || 0;
     // Signed gold sits on whichever side it belongs to: positive is the player
@@ -467,7 +467,7 @@ export function costPerPoint(d, ceil) {
 export function goodwillFor(surplus, npc) {
     if (!(surplus > 0)) return 0;
     const ceil = dispositionCeil(npc);
-    const d0 = (npc && npc.disposition) ?? 0;
+    const d0 = dispositionOf(npc);
     let pool = surplus, pts = 0;
     while (pts < GUARD_ITERATIONS) {
         const c = costPerPoint(d0 + pts, ceil);
@@ -605,7 +605,7 @@ Append to `game/offer.js`:
 // today but _bribeVendor never checks it, so the Ghost Fungus — the only NPC in
 // the game authored bribeable:false — is bribeable through the trade window.
 export function splitGoodwill(npc, { itemValue = 0, gold = 0 } = {}) {
-    const d0 = (npc && npc.disposition) ?? 0;
+    const d0 = dispositionOf(npc);
     const fromItems = goodwillFor(itemValue, npc);
 
     if (npc && npc.bribeable === false) {
@@ -795,7 +795,7 @@ export function resentCostPerPoint(d, ceil) {
 // fractional remainder.
 export function resentmentFor(deficit, npc) {
     if (!(deficit > 0)) return { points: 0, shortfall: 0 };
-    const d0 = (npc && npc.disposition) ?? 0;
+    const d0 = dispositionOf(npc);
     if (d0 <= RESENT_FLOOR) return { points: 0, shortfall: deficit };
 
     const ceil = dispositionCeil(npc);
@@ -1195,7 +1195,7 @@ export function commitBlocker(npc, offer, ctx = {}) {
     // You can always gift or bribe your way back up to where he'll deal, in the
     // same sitting. (Options narrowed, never removed.)
     const takingSomething = (o.take || []).length > 0 || gold < 0;
-    if (takingSomething && !canTrade((npc && npc.disposition) ?? 0)) return "HE WON'T DEAL";
+    if (takingSomething && !canTrade(dispositionOf(npc))) return "HE WON'T DEAL";
 
     if (offerBalance(npc, o).balance < 0) {
         const noResentment = !npc || npc.disposition == null || npc._container || ctx.isContainer;
