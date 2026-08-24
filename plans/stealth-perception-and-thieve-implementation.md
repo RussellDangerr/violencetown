@@ -1728,6 +1728,13 @@ export function spreadParanoia(npcs, origin, victim = null) {
 }
 ```
 
+> **Re-read `applyDispositionDelta` after rebasing — do not assume its contract.** (Caelan,
+> 2026-08-24.) The offer-screen branch changes its clamp from a flat `[-100, 100]` to
+> `[-100, dispositionCeil(npc)]`. For every authored NPC except the Fungus King that ceiling is
+> exactly 100, so paranoia's behaviour is unchanged in practice — but the comment above says "reuses
+> the clamp", and after the rebase that clamp is a different function. Verify, then keep or reword
+> the comment. `applyHostileFlip` sets `disposition = -100` directly and is unaffected either way.
+
 - [ ] **Step 5: Fire it when a robbed victim's blind sweep ends**
 
 In `game/npc.js`, in the `case STATE.HOSTILE:` block, at the point where the transition sets
