@@ -27,12 +27,7 @@ export function emptyOffer() {
 // throwing.
 function dispositionOf(npc) {
     const d = (npc && npc.disposition) ?? 0;
-    // A non-finite disposition already fails safe on its own inside goodwillFor:
-    // room = Math.max(0, ceil - NaN) is NaN, and `pts < NaN` is always false, so
-    // the loop runs zero iterations — the headroom cap kills that jackpot
-    // independently. This sanitization is defence in depth, not the sole
-    // barrier: every OTHER disposition read in this module (offerBalance's
-    // pricing included) would otherwise go NaN too.
+    // Sanitized here so every OTHER disposition read in this module (offerBalance's pricing included) doesn't have to guard against NaN separately.
     return Number.isFinite(d) ? d : 0;
 }
 
@@ -110,11 +105,7 @@ export function settledGold(npc, offer) {
 
 // ── The curves ───────────────────────────────────────────────────────────────
 //
-// Argument order is deliberate, not inconsistent. goodwillFor(surplus, npc) and
-// resentmentFor(deficit, npc) put npc LAST — "N gold's worth of this, for this
-// person." offerBalance(npc, offer) and splitGoodwill(npc, …) put npc FIRST —
-// "for this npc, evaluate this basket." Two consistent sentence shapes, not
-// one inconsistency; don't "fix" it into a single order.
+// Argument order: goodwillFor/resentmentFor take npc last; offerBalance/splitGoodwill take npc first — two sentence shapes, not an inconsistency.
 
 export const DISPOSITION_MIN = -100;
 const EPSILON = 1e-9;   // float-drift tolerance on the last point
@@ -135,12 +126,7 @@ export function dispositionCeil(npc) {
 
 function progress(d, ceil) {
     const span = ceil - DISPOSITION_MIN;
-    // Unreachable via goodwillFor — every ceil it passes in comes from
-    // dispositionCeil, which never returns below 100, so span is always
-    // positive there. But goodwillCostPerPoint is EXPORTED, and Tasks 9-11
-    // call it directly to draw the curve; (0, 0), (0, -100) and (0, NaN) all
-    // reach this branch from a direct caller and price at the maximum, 5
-    // GP/point. Live for them, not a dead path.
+    // Unreachable via dispositionCeil, but both cost functions are exported for Tasks 9-11's curve draw; the degenerate span must price at the worst case for the player either way — goodwill's own max (5), resentment's own min (1).
     if (!(span > 0)) return 1;
     return Math.max(0, Math.min(1, (d - DISPOSITION_MIN) / span));
 }
@@ -171,11 +157,10 @@ export function goodwillFor(surplus, npc) {
     const d0 = dispositionOf(npc);
     // Capped at the headroom to the ceiling, not an arbitrary iteration count —
     // goodwill can never move an NPC past the top of their own meter, so a
-    // gift can never project more points than that meter has room for. This
-    // is also what makes an unconditional iteration ceiling unnecessary: cost
-    // is never below 1 GP/point, so iterations can never outrun the surplus
-    // either, and room itself is always finite.
-    const room = Math.max(0, ceil - d0);
+    // gift can never project more points than that meter has room for.
+    // Floored: a fractional d0 (e.g. 99.5 against ceil 100) gives room 0.5,
+    // and `pts < room` would still admit one point, breaching the ceiling.
+    const room = Math.floor(Math.max(0, ceil - d0));
     let pool = surplus, pts = 0;
     while (pts < room) {
         const c = goodwillCostPerPoint(d0 + pts, ceil);
@@ -256,7 +241,7 @@ export const RESENT_FLOOR = -25;          // bad dealing never drags anyone belo
 // already doesn't, because they are braced for it. That asymmetry is the design:
 // betrayal runs ~2.3x cheaper than affection at Puck's +60, while at the bottom
 // the system self-stabilises instead of spiralling.
-export function resentCostPerPoint(d, ceil) {
+export function resentmentCostPerPoint(d, ceil) {
     return 5 - 4 * progress(d, ceil);
 }
 
@@ -265,37 +250,28 @@ export function resentCostPerPoint(d, ceil) {
 // anything above zero means they will not take the deal at all.
 //
 // Rounds UP against the player: any remaining shortfall, however small, costs
-// one more whole point. Goodwill rounds DOWN. Both directions round in the NPC's
-// favour. Rounding down here instead refuses almost every bad deal over a
-// fractional remainder.
+// one more whole point. Goodwill rounds DOWN — both directions round in the NPC's favour.
 export function resentmentFor(deficit, npc) {
     if (!(deficit > 0)) return { points: 0, shortfall: 0 };
     const d0 = dispositionOf(npc);
     if (d0 <= RESENT_FLOOR) return { points: 0, shortfall: deficit };
 
     const ceil = dispositionCeil(npc);
-    const room = Math.min(RESENT_MAX_PER_OFFER, d0 - RESENT_FLOOR);
+    // Floored for the same reason goodwillFor's room is: a fractional d0
+    // (e.g. -24.5 against RESENT_FLOOR -25) gives room 0.5, and `pts < room`
+    // would still admit one point, breaching the floor.
+    const room = Math.floor(Math.min(RESENT_MAX_PER_OFFER, d0 - RESENT_FLOOR));
     let pool = deficit, pts = 0;
-    // Mirrors goodwillFor's EPSILON guard, but it has to sit somewhere
-    // different, because this loop can hit zero exactly and still get the
-    // wrong answer two different ways. Dropping Puck his spec-exact 51 GP
-    // exhausts `room` at pts=25 with `pool` sitting on 1.02e-14 of drift —
-    // `Math.max(0, pool)` alone read that dust as a live shortfall and
-    // refused the exact payment the spec names. Paying an exact 17 GP at
-    // d0=-18 does the opposite: 5 points cost exactly 17.00, but the drift
-    // lands pool a hair ABOVE zero instead of below, and a bare `pool > 0`
-    // reads that as still owing, so it takes a 6th point nobody paid for.
-    // The obvious mirror — break BEFORE paying once pool looks spent,
-    // the same shape as goodwillFor's guard — does not touch the first
-    // case at all (that loop exits on the room cap, not on pool crossing
-    // zero, so the break never fires) and leaves the headline bug in place.
-    // Both failure modes are the same float dust landing on different sides
-    // of zero, so both the loop's own continuation test AND the final
-    // shortfall need the EPSILON tolerance — fixing only one still misreads
-    // whichever case that one doesn't cover.
+    // Both the loop test and the final shortfall need EPSILON: float dust from
+    // the running subtraction lands on EITHER side of zero depending on which
+    // exit fires (room cap vs. pool exhaustion), so guarding only one still
+    // misreads the other. Both cases are pinned in tests/offer.test.js.
     while (pool > EPSILON && pts < room) {
-        pool -= resentCostPerPoint(d0 - pts, ceil);
+        pool -= resentmentCostPerPoint(d0 - pts, ceil);
         pts++;
     }
-    return { points: -pts, shortfall: pool > EPSILON ? pool : 0 };
+    // `-pts || 0` instead of a bare `-pts`: at pts=0 this is -0, not 0 — same
+    // value under ===, but Object.is/JSON-adjacent code could tell, and there
+    // is nothing gained by exposing it here.
+    return { points: -pts || 0, shortfall: pool > EPSILON ? pool : 0 };
 }

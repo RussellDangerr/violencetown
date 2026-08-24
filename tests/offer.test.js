@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { emptyOffer, offerBalance, settledGold, dispositionCeil, goodwillCostPerPoint, goodwillFor, splitGoodwill, RESENT_MAX_PER_OFFER, RESENT_FLOOR, resentCostPerPoint, resentmentFor } from '../game/offer.js';
+import { emptyOffer, offerBalance, settledGold, dispositionCeil, goodwillCostPerPoint, goodwillFor, splitGoodwill, RESENT_MAX_PER_OFFER, RESENT_FLOOR, resentmentCostPerPoint, resentmentFor } from '../game/offer.js';
 
 const PUCK = {
   type: 'Puck', disposition: 60, flipThreshold: 0, vendor: true,
@@ -269,6 +269,14 @@ describe('the goodwill curve', () => {
       assert.equal(r.points, 0, 'no room left to buy, no matter the price');
       assert.equal(r.unspent, 10, 'the entire gift is reported back, not silently swallowed as +0');
     });
+
+    test('a fractional disposition never breaches the ceiling via a rounded-up room', () => {
+      // d0=99.5 against ceil 100 gives room 0.5 before Math.floor; `pts <
+      // room` would still admit one point, landing at 100.5 -- above the
+      // ceiling the room calculation exists to enforce.
+      const r = goodwillFor(1e9, { disposition: 99.5, flipThreshold: 0 });
+      assert.equal(r.points, 0, 'half a point of headroom must round down to zero, not up to one');
+    });
   });
 });
 
@@ -417,17 +425,17 @@ describe('resentment — bad deals are a move, not an error', () => {
     // other, so a 1-ulp gap never surfaces. If Tasks 9-11 ever chart the two
     // curves against each other directly, widen this to a tolerance.
     for (const d of [-100, -50, 0, 50, 100]) {
-      assert.equal(resentCostPerPoint(d, 100), 6 - goodwillCostPerPoint(d, 100),
+      assert.equal(resentmentCostPerPoint(d, 100), 6 - goodwillCostPerPoint(d, 100),
         `curves are not mirrored at d=${d}`);
     }
   });
 
   test('betrayal is cheaper than affection when they like you', () => {
-    assert.ok(resentCostPerPoint(60, 100) < goodwillCostPerPoint(60, 100));
+    assert.ok(resentmentCostPerPoint(60, 100) < goodwillCostPerPoint(60, 100));
   });
 
   test('and dearer than affection when they do not', () => {
-    assert.ok(resentCostPerPoint(-80, 100) > goodwillCostPerPoint(-80, 100));
+    assert.ok(resentmentCostPerPoint(-80, 100) > goodwillCostPerPoint(-80, 100));
   });
 
   test('the spec worked example: a 29 GP shortfall costs Puck 15 points', () => {
@@ -444,7 +452,7 @@ describe('resentment — bad deals are a move, not an error', () => {
 
   test('dropping Puck the full 25 points costs 51 GP', () => {
     let gp = 0;
-    for (let i = 0; i < 25; i++) gp += resentCostPerPoint(60 - i, 100);
+    for (let i = 0; i < 25; i++) gp += resentmentCostPerPoint(60 - i, 100);
     assert.equal(Math.round(gp), 51);
   });
 
@@ -470,11 +478,11 @@ describe('resentment — bad deals are a move, not an error', () => {
   });
 
   test('an exact single-point payment stops there — the boundary itself', () => {
-    // resentCostPerPoint(50, 100) is exactly 2 (no float drift at all here),
+    // resentmentCostPerPoint(50, 100) is exactly 2 (no float drift at all here),
     // so this pins the loop's own continuation test directly: `pool > 0`
     // widened to `pool >= 0` re-enters the loop on the leftover zero and
     // charges a second point (-2) nobody paid for.
-    assert.equal(resentCostPerPoint(50, 100), 2);
+    assert.equal(resentmentCostPerPoint(50, 100), 2);
     const r = resentmentFor(2, { disposition: 50 });
     assert.equal(r.points, -1);
     assert.equal(r.shortfall, 0);
@@ -483,9 +491,9 @@ describe('resentment — bad deals are a move, not an error', () => {
   test('the ceiling comes from dispositionCeil, not a hardcoded 100', () => {
     // Same disposition as Puck (60) but the Fungus King's raised ceiling
     // (flipThreshold 200) makes every point DEARER, not cheaper —
-    // resentCostPerPoint(60, 200) is ~2.87 against Puck's 1.80, because +60
-    // is only 53% up a 200-wide meter and he is still braced. So the
-    // identical 29 GP shortfall buys fewer points here, not more: 10
+    // resentmentCostPerPoint(60, 200) is ~2.87 against Puck's 1.80, because +60
+    // is only 53% up the 300-wide meter (-100 to 200) and he is still braced.
+    // So the identical 29 GP shortfall buys fewer points here, not more: 10
     // against Puck's 15 — a hardcoded ceil of 100 would silently give -15,
     // same as Puck, and nothing in this file would catch it.
     const warmKing = { ...KING, disposition: 60 };
@@ -523,9 +531,55 @@ describe('resentment — bad deals are a move, not an error', () => {
     assert.equal(resentmentFor(-10, PUCK).points, 0);
   });
 
+  test('a sub-EPSILON deficit returns positive zero, not negative zero', () => {
+    // deficit > 0 but too small to buy even one point exits the loop at
+    // pts=0; a bare `-pts` there is -0. node:assert/strict's equal is
+    // Object.is underneath, so this is not cosmetic: assert.equal(-0, 0)
+    // actually throws in this suite, and a future test built the ordinary
+    // way (assert.equal(result.points, 0)) would fail on it by surprise.
+    const r = resentmentFor(1e-15, { disposition: 0 });
+    assert.equal(r.points, 0);
+    assert.ok(!Object.is(r.points, -0), 'points must not be negative zero');
+  });
+
   test('resentmentFor never mutates the npc it is handed', () => {
-    const before = { ...PUCK };
+    const before = structuredClone(PUCK);
     resentmentFor(200, PUCK);
     assert.deepEqual(PUCK, before);
+  });
+
+  test('a degenerate span prices at the worst case for the player, both directions', () => {
+    // ceil <= DISPOSITION_MIN collapses progress() to 1, pricing goodwill at
+    // its own maximum (5) and resentment at its own minimum (1) -- expensive
+    // to gain favour, cheap to rack up resentment, both against the player.
+    // Mutating that degenerate return from 1 to 0 flips both curves instead.
+    assert.equal(goodwillCostPerPoint(0, 0), 5);
+    assert.equal(resentmentCostPerPoint(0, 0), 1);
+  });
+
+  test('a non-finite disposition prices as neutral here too, not as a refusal', () => {
+    // Unlike goodwill, a raw (unsanitized) disposition read here would go to
+    // room = NaN -> zero iterations -> { points: -0, shortfall: deficit }, i.e.
+    // the deal refused outright, not merely priced at 0 points.
+    assert.deepEqual(resentmentFor(29, { disposition: NaN }), resentmentFor(29, {}));
+  });
+
+  test('a partial shortfall reports what is left, not the whole deficit', () => {
+    // Puck absorbs 25 points for ~51 GP; 60 GP leaves ~9 unabsorbed, not 60.
+    // The true residue is 9.000000000000004 -- shortfall is a raw float,
+    // never rounded -- so this needs the same EPSILON-scale tolerance the
+    // fix itself uses, not exact equality.
+    const r = resentmentFor(60, PUCK);
+    assert.equal(r.points, -25);
+    assert.ok(Math.abs(r.shortfall - 9) < 1e-9, `shortfall was ${r.shortfall}`);
+  });
+
+  test('a fractional disposition never breaches the floor via a rounded-up room', () => {
+    // d0=-24.5 gives room 0.5 before Math.floor; `pts < room` would still
+    // admit one point, landing at -25.5 -- half a point below RESENT_FLOOR.
+    // Not reachable from disposition alone today, but splitGoodwill already
+    // carries the identical Math.floor for the mirrored ceiling hazard.
+    const r = resentmentFor(1e9, { disposition: RESENT_FLOOR + 0.5 });
+    assert.equal(r.points, 0, 'half a point of headroom must round down to zero, not up to one');
   });
 });
