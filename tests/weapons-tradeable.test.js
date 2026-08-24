@@ -1,3 +1,25 @@
+// weapons-tradeable.test.js — Task 7. Weapons carry the fields the offer
+// screen renders, price on both sides of a trade, and no longer vanish when
+// taken off the ground unresolved.
+//
+// _takeItemAt is a Game method, and Game isn't exported — main.js touches
+// `document` at module-evaluation time (the boot() call at the bottom), so
+// the whole file throws on import under Node (save-roundtrip.test.js hit the
+// same wall and documents it). liveMethod() below works around that without
+// a bare regex check on the source text: it extracts the CURRENT method body
+// straight out of main.js and turns it into a real, callable function closed
+// over the handful of free-variable bindings the body reads outside `this`.
+// Calling it against a stub `this` runs the actual production logic — not a
+// hand-copied duplicate of it — so a future edit to the real method is what
+// this test exercises, not a paraphrase of what it used to do.
+//
+// A prior version of the ground-take test here anchored on a bare
+// `src.indexOf('_takeItemAt(')`, which matches the CALL SITE two methods
+// earlier, not the definition — most of its 1400-char budget was spent on an
+// unrelated method, and the regex-based assertions it did reach passed for
+// several mutants that fully restored the original silent-delete bug. This
+// version replaces that with the behavioral tests below.
+
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -5,48 +27,120 @@ import { fileURLToPath } from 'node:url';
 import { WEAPONS } from '../game/weapons.js';
 import { ITEMS, itemTier } from '../game/items.js';
 import { sellPrice, buyPrice } from '../game/trade.js';
+import { audio } from '../game/audio.js';
+import { xmbCategoryOf, XMB_LABELS } from '../game/xmb.js';
+
+const mainSrc = readFileSync(fileURLToPath(new URL('../game/main.js', import.meta.url)), 'utf8');
+
+// Extract a class method's live source by its exact `name(params) {`
+// signature (unique — a call site never repeats the parameter NAMES, only a
+// definition does) and slice to its own closing brace: a method body in this
+// file closes on `\n    }` at the 4-space class-member indent. Returns a real
+// function closed over `freeVars`, the free (non-`this`) identifiers the body
+// reads — pass in anything the OLD, buggy shape of the method might reference
+// too (e.g. ITEMS), not just what the current fix uses, so a regression back
+// to that shape still runs far enough for the assertions below to catch it,
+// rather than merely throwing ReferenceError because a name was withheld.
+function liveMethod(name, params, freeVars = {}) {
+    const signature = `${name}(${params}) {`;
+    const at = mainSrc.indexOf(signature);
+    assert.ok(at > 0, `${name}(${params}) not found in main.js`);
+    const closeAt = mainSrc.indexOf('\n    }', at);
+    assert.ok(closeAt > at, `${name} body never closes`);
+    const body = mainSrc.slice(at + name.length, closeAt + '\n    }'.length);
+    const freeNames = Object.keys(freeVars);
+    const factory = new Function(...freeNames, `return function ${body}`);
+    return factory(...freeNames.map(n => freeVars[n]));
+}
+
+// A stub `this` carrying exactly the state _takeItemAt reads/writes.
+function stubGame(overrides = {}) {
+    return {
+        groundItems: [],
+        _collectedItems: new Set(),
+        equipment: {},
+        _mapUrl: 'test-map',
+        logs: [],
+        _log(msg, category) { this.logs.push({ msg, category }); },
+        _resolveItemDef(id) { return WEAPONS[id] || ITEMS[id] || null; },
+        _addToInventory(def) { (this.inventory ??= []).push(def); return true; },
+        ...overrides,
+    };
+}
+
+// The calibrated baseValue/tier per weapon (Step 3). Pinned exactly, not just
+// "> 0" — a flattened baseValue (e.g. every weapon set to 1) satisfies a bare
+// positivity check but would still pass buy/sell; this is what actually
+// catches a calibration regression.
+const EXPECTED = {
+    wooden_sword: { baseValue: 8,  tier: 'green' },
+    gator_tail:   { baseValue: 18, tier: 'blue' },
+    lion_whip:    { baseValue: 26, tier: 'purple' },
+    fearmur:      { baseValue: 28, tier: 'purple' },
+    ray_gun:      { baseValue: 45, tier: 'purple' },
+};
 
 describe('weapons are first-class tradeable items', () => {
-  test('every weapon carries the fields the offer screen renders', () => {
-    for (const [id, def] of Object.entries(WEAPONS)) {
-      assert.equal(typeof def.baseValue, 'number', `${id} has no baseValue`);
-      assert.ok(def.baseValue > 0, `${id} baseValue must be positive`);
-      assert.equal(typeof def.description, 'string', `${id} has no description`);
-      assert.ok(def.description.length > 20, `${id} description is too short to be real`);
-      assert.equal(typeof def.name, 'string', `${id} has no name`);
-    }
-  });
+    test('every weapon carries the fields the offer screen renders, at its calibrated value', () => {
+        assert.deepEqual(Object.keys(WEAPONS).sort(), Object.keys(EXPECTED).sort(),
+            'WEAPONS and EXPECTED have drifted apart — a weapon was added/removed without updating the calibration pin');
+        for (const [id, def] of Object.entries(WEAPONS)) {
+            assert.equal(typeof def.description, 'string', `${id} has no description`);
+            assert.ok(def.description.length > 20, `${id} description is too short to be real`);
+            assert.equal(typeof def.name, 'string', `${id} has no name`);
+            assert.equal(def.baseValue, EXPECTED[id].baseValue, `${id} baseValue drifted from its calibrated value`);
+        }
+    });
 
-  test('every weapon prices on both sides of a trade', () => {
-    for (const [id, def] of Object.entries(WEAPONS)) {
-      assert.ok(sellPrice(def, 0) > 0, `${id} cannot be sold`);
-      assert.ok(buyPrice(def, 0) > 0, `${id} cannot be bought`);
-    }
-  });
+    test('every weapon prices on both sides of a trade', () => {
+        for (const [id, def] of Object.entries(WEAPONS)) {
+            assert.ok(sellPrice(def, 0) > 0, `${id} cannot be sold`);
+            assert.ok(buyPrice(def, 0) > 0, `${id} cannot be bought`);
+        }
+    });
 
-  test('every weapon resolves to a rarity tier', () => {
-    for (const [id, def] of Object.entries(WEAPONS)) {
-      assert.ok(itemTier(def), `${id} has no tier`);
-    }
-  });
+    test('every weapon resolves to its calibrated rarity tier', () => {
+        for (const [id, def] of Object.entries(WEAPONS)) {
+            assert.equal(itemTier(def).key, EXPECTED[id].tier, `${id} tier drifted from its calibrated value`);
+        }
+    });
 
-  test('no weapon id collides with an item id', () => {
-    for (const id of Object.keys(WEAPONS)) {
-      assert.equal(ITEMS[id], undefined,
-        `${id} exists in both registries — _resolveItemDef would hide one`);
-    }
-  });
+    test('no weapon id collides with an item id', () => {
+        for (const id of Object.keys(WEAPONS)) {
+            assert.equal(ITEMS[id], undefined,
+                `${id} exists in both registries — _resolveItemDef would hide one`);
+        }
+    });
 });
 
-describe('the ground-take path no longer swallows unresolvable items', () => {
-  test('_takeItemAt resolves through _resolveItemDef, not a bare ITEMS lookup', () => {
-    const src = readFileSync(fileURLToPath(new URL('../game/main.js', import.meta.url)), 'utf8');
-    const at = src.indexOf('_takeItemAt(');
-    assert.ok(at > 0, '_takeItemAt not found in main.js');
-    const fn = src.slice(at, at + 1400);
-    assert.ok(!/ITEMS\[gi\.type\]/.test(fn),
-      '_takeItemAt still does a bare ITEMS[gi.type] lookup — a weapon on the floor is deleted silently');
-    assert.ok(/_resolveItemDef\(/.test(fn),
-      '_takeItemAt must resolve through _resolveItemDef so WEAPONS are found');
-  });
+describe('_takeItemAt — the ground-take path no longer swallows unresolvable items', () => {
+    const takeItemAt = liveMethod('_takeItemAt', 'x, y', { audio, xmbCategoryOf, XMB_LABELS, ITEMS, WEAPONS });
+
+    test('a weapon on the floor resolves and lands in the bag when its slot is taken', () => {
+        const g = stubGame({
+            groundItems: [{ type: 'lion_whip', x: 3, y: 4 }],
+            equipment: { weapon: WEAPONS.wooden_sword },   // slot occupied -> bag, not auto-equip
+        });
+        takeItemAt.call(g, 3, 4);
+        assert.deepEqual(g.groundItems, [], 'lion_whip did not leave the floor');
+        assert.ok(g.inventory && g.inventory.includes(WEAPONS.lion_whip), 'lion_whip never reached the bag');
+        assert.equal(g.logs.length, 1);
+        assert.doesNotMatch(g.logs[0].msg, /won't come loose/);
+    });
+
+    test('a weapon on the floor auto-equips into a free slot', () => {
+        const g = stubGame({ groundItems: [{ type: 'fearmur', x: 5, y: 5 }] });
+        takeItemAt.call(g, 5, 5);
+        assert.equal(g.equipment.weapon, WEAPONS.fearmur);
+        assert.deepEqual(g.groundItems, []);
+    });
+
+    test('an unresolvable id stays on the floor and logs a line, instead of being deleted', () => {
+        const g = stubGame({ groundItems: [{ type: 'not_a_real_item_xyz', x: 7, y: 7 }] });
+        takeItemAt.call(g, 7, 7);
+        assert.equal(g.groundItems.length, 1, 'the unresolvable item was removed from the floor');
+        assert.equal(g.groundItems[0].type, 'not_a_real_item_xyz');
+        assert.equal(g.logs.length, 1, 'expected exactly one log line');
+        assert.match(g.logs[0].msg, /won't come loose/);
+    });
 });
