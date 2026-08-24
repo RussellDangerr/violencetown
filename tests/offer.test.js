@@ -884,6 +884,19 @@ describe('staging', () => {
     assert.equal(o.gold, 0, "gold must stay a number, never overwritten by a stray side");
     assert.equal(o.give.length, 1);
   });
+
+  test('a click past max is refused, not clamped -- staged units are never destroyed', () => {
+    let o = emptyOffer();
+    for (let i = 0; i < 3; i++) o = stage(o, 'give', { def: SOAP, slot: 3 }, 5);
+    assert.equal(o.give[0].count, 3);
+    o = stage(o, 'give', { def: SOAP, slot: 3 }, 0);
+    assert.equal(o.give[0].count, 3, "a max of 0 must not rewrite an existing count down to 0");
+  });
+
+  test('staging at max 0 with nothing staged yet is a no-op, not a live zero-count row', () => {
+    const o = stage(emptyOffer(), 'give', { def: SOAP, slot: 9 }, 0);
+    assert.equal(o.give.length, 0);
+  });
 });
 
 describe('commitBlocker — every refusal is a sentence', () => {
@@ -1064,5 +1077,13 @@ describe('commitBlocker — every refusal is a sentence', () => {
       commitBlocker(PUCK, { give: [{ def: SOAP, count: 2 }], take: [], gold: -18 }, { ...ctx, npcGold: 5 }),
       "THEIR TILL IS 13 GP SHORT"
     );
+  });
+
+  test('a gold crumb below 1 does not read as staged', () => {
+    // The guard must see the same truncated value every check below it does --
+    // otherwise a fraction passes as staged while every later check sees a
+    // truncated zero, and the commit button fires on nothing.
+    assert.equal(commitBlocker(PUCK, { give: [], take: [], gold: 0.4 }, ctx), 'NOTHING STAGED');
+    assert.equal(commitBlocker(PUCK, { give: [], take: [], gold: 0.9 }, { playerGold: 0 }), 'NOTHING STAGED');
   });
 });

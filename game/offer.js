@@ -405,8 +405,13 @@ export function stage(offer, side, entry, max = Infinity) {
     const o = offer || emptyOffer();
     const list = (o[side] || []).map(e => ({ ...e }));
     const hit = list.find(e => sameEntry(e, entry));
-    if (hit) hit.count = Math.min(hit.count + 1, cap);
-    else list.push({ ...entry, count: Math.min(1, cap) });
+    if (hit) {
+        if (hit.count >= cap) return o;
+        hit.count += 1;
+    } else {
+        if (cap < 1) return o;
+        list.push({ ...entry, count: 1 });
+    }
     return { ...o, [side]: list };
 }
 
@@ -430,13 +435,15 @@ export function unstage(offer, side, index) {
 // Order matters — the most fundamental reason wins, so the message stays true.
 export function commitBlocker(npc, offer, ctx = {}) {
     const o = offer || emptyOffer();
-    const staged = (o.give || []).length + (o.take || []).length + (o.gold ? 1 : 0);
-    if (!staged) return 'NOTHING STAGED';
-
     // Truncated for the same reason offerBalance truncates its own gold: a drag
     // handle can leave a fraction on the tray, and it must not reach the button's
-    // own arithmetic either -- unitCount's comment names the same source.
+    // own arithmetic either -- unitCount's comment names the same source. Hoisted
+    // above `staged` itself: a sub-1 crumb must not read as something staged when
+    // every check below sees a truncated zero and waves the whole commit through.
     const gold = Math.trunc(o.gold || 0);
+    const staged = (o.give || []).length + (o.take || []).length + (gold ? 1 : 0);
+    if (!staged) return 'NOTHING STAGED';
+
     const playerGold = ctx.playerGold ?? 0;
     if (gold > playerGold) return `YOU'RE ${gold - playerGold} GP SHORT`;
 
