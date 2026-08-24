@@ -1021,8 +1021,11 @@ export function resolveOffer(npc, offer) {
         const itemSurplus = Math.max(0, bal.balance - goldSurplus);
         const avgWeight = bal.givenItemsValue > 0 ? bal.giftValue / bal.givenItemsValue : 1;
         const g = splitGoodwill(npc, { itemValue: itemSurplus * avgWeight, gold: goldSurplus });
+        // `unspent` is goodwill's mirror of resentment's `shortfall`: surplus the NPC
+        // had no room left to feel. Without it, gifting someone who already adores
+        // you shows +0 and looks broken, with no way to write the honest line.
         return { ...bal, points: g.points, fromItems: g.fromItems, fromGold: g.fromGold,
-                 projected: d0 + g.points, shortfall: 0, refused: false };
+                 projected: d0 + g.points, shortfall: 0, unspent: g.unspent, refused: false };
     }
 
     const r = resentmentFor(-bal.balance, npc);
@@ -2677,8 +2680,16 @@ move disposition, then log. Nothing half-applies.
 > meter's drawn range and the value's legal range one number, which is what `dispositionCeil`'s own
 > comment already claims.
 >
-> Add a test to `tests/offer.test.js` or a give-action test proving the King can cross 200, and one
-> proving an ordinary NPC still stops at 100.
+> **All three writers, not just one.** `applyDispositionDelta` is only one of three functions that
+> write `disposition`. `previewGive`/`applyGive` (`give-action.js:46, 97`) are completely unclamped
+> and reachable through `reactToTransaction(npc, 'give', …)`; `applySewerFareGive` (`:193`) clamps to
+> a hardcoded flat `[-100, 100]`, which contradicts the King's 200 outright. Extend the ceiling to
+> all three, or spec §5.1 promises an invariant the code does not hold.
+>
+> Add tests proving the King can cross 200 **through each writer**, and that an ordinary NPC still
+> stops at 100. Note the King flips on a knife edge: `dispositionCeil` is exactly his `flipThreshold`
+> of 200 and the flip test is `>=`, so the headroom cap delivering exactly 280 points from −80 is
+> load-bearing. Make that a real assertion, not an approximate one.
 
 - [ ] **Step 2: Add the container-take helper**
 

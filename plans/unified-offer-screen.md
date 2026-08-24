@@ -326,6 +326,10 @@ A 320×12 bar with tick marks at every band boundary (−50, −25, 0, +25, +50,
 - **Dashed red retreat, leftward, drawn inside the existing fill** = what a bad deal will cost them.
   Same affordance, mirrored; the player sees the damage before committing, never after.
 - **Beside it:** `+60 → +76 ADORING` in green, or `+60 → +35 FRIENDLY` in red.
+- **Band ticks sit where the bands are, not evenly.** `trade.js`'s bands are fixed at −50…+75, so on
+  an NPC whose ceiling is 100 they span the bar; on the Fungus King, whose ceiling is 200, they
+  occupy only the left two-thirds. That is correct — the bands really do stop at +75 — but Tasks
+  9–11 must not assume ticks reach the right edge.
 - **Beside that, the payoff or the price:** `BUY ×1.2 → ×1.0` when you overpay,
   `BUY ×1.2 → ×1.4` in red when you shortchange.
 
@@ -345,6 +349,20 @@ the legal value, and `applyDispositionDelta` clamps to `[-100, dispositionCeil(n
 For every NPC except the King that ceiling is exactly 100, so this changes nothing anywhere else. It
 also means goodwill can never project past the top of the bar it is drawn on, which is what stops the
 screen promising a `+400` swing on a meter 200 wide.
+
+**Scope of that claim, stated honestly.** Three functions write disposition, and the ceiling binds
+only where it is applied:
+
+| writer | bound |
+| --- | --- |
+| `applyDispositionDelta` | clamps to `[-100, dispositionCeil(npc)]` — the offer screen's path |
+| `previewGive` / `applyGive` | **unclamped** (`give-action.js:46, 97`), reachable via `reactToTransaction(npc, 'give', …)` |
+| `applySewerFareGive` | hardcoded flat `[-100, 100]` (`give-action.js:193`) — contradicts the King's 200 |
+
+Task 14 extends the ceiling to all three, so the invariant is true rather than aspirational. Until it
+does, this section's claim covers **the value committed through the offer screen** only. An earlier
+draft asserted the broader version without checking the other two writers — the same failure mode
+this section was written to correct.
 
 ### 5.2 Rows
 
@@ -712,3 +730,4 @@ not rebuild a deleted verb.
 | 20 | The balance auto-settles to zero as items are staged; the player drags it off zero deliberately. | Claude |
 | 21 | The per-NPC ceiling is real, not display-only — it bounds the meter, the curve, and the committed value alike. | Claude |
 | 22 | Goodwill is capped at the headroom to that ceiling, so a projection can never exceed the bar it is drawn on. | Claude |
+| 23 | Goodwill reports its **unspent** surplus, mirroring resentment's `shortfall`, so "he is already as fond of you as he can be" is sayable. | Claude |
