@@ -25,26 +25,67 @@ plan can actually be run and seen to fail.
 
 ---
 
-## ▶ RESUME HERE — execution status (2026-08-24)
+## ▶ RESUME HERE — execution status (2026-08-24, after Task 11)
 
-**Branch:** `feature/unified-offer-screen`, 56 commits ahead of `dev`, tree clean, **534 tests / 96 suites / 0 fail** (baseline was 404).
-**Method:** `superpowers:subagent-driven-development` — fresh implementer per task, then a spec-compliance review, then a code-quality review, looping until both approve.
+**Branch:** `feature/unified-offer-screen`, tree clean, **600 tests / 102 suites / 0 fail** (baseline was 404).
+**Method:** now **inline development** — Caelan's call. Tasks 1–10 ran through
+`superpowers:subagent-driven-development` (fresh implementer, spec review, quality review); Task 11
+onward is written directly. Mutation testing stays either way — it is what has found everything.
 
 | Task | State |
 | --- | --- |
-| 1 · the signed balance | ✅ both gates |
-| 2 · goodwill curve | ✅ both gates |
-| 3 · gold ceiling | ✅ both gates |
-| 4 · resentment | ✅ both gates |
-| 5 · `resolveOffer` | ✅ both gates |
-| 6 · staging + `commitBlocker` | ✅ spec gate; **quality re-review outstanding** (agent died on a 529, left no damage) |
-| 6a · split `offer.js` | ⏭ **NEXT** |
-| 7–20 | not started |
+| 1–6 · the pure model | ✅ both gates |
+| 6a · split `offer.js` / `disposition-curves.js` | ✅ |
+| 7 · weapons + `item-registry.js` | ✅ |
+| 8 · `offerLayout()` | ✅ |
+| 9 · panel + header | ✅ |
+| 10 · the two list columns | ✅ |
+| 11 · trays, description strip, ledger | ✅ **done — the screen now draws in full** |
+| 12 · open/close + the close contract | ⏭ **NEXT** |
+| 13–20 | not started |
 
-**`game/offer.js` is complete** — 460 lines, pure, imports only `trade.js`, mutates nothing. `tests/offer.test.js` is 1068 lines / 130 tests. Nothing in `game/` imports it yet.
+**The draw layer is complete.** `game/offer.js` (251 lines) + `game/disposition-curves.js` (227) are
+pure; `offerLayout()` returns every rect; `renderer.js` has all five `_drawOffer*` methods and they
+have been seen rendering correctly in four states.
+
+### ⚠ The dispatch swap is deliberately NOT done
+`renderFrame` still calls `_drawTradeModal`. Task 11 Step 2 said to swap it to `_drawOfferScreen`
+now; doing so would **blank the live trade window**, because `_drawOfferScreen` opens with
+`if (!game._offerNpc) return` and nothing sets `_offerNpc` until Task 12's `_openOffer`. Do the swap
+**in Task 12, in the same commit as the opener.**
+
+### ✅ Screenshots WORK — through the Playwright MCP
+The whole run up to here assumed they did not. `mcp__Claude_Browser__computer{screenshot}` genuinely
+fails ("the Browser pane is not displayed"), but
+`mcp__plugin_playwright_playwright__browser_take_screenshot` with
+`target: '#game-canvas', scale: 'device'` returns a real PNG that the Read tool renders. **Use it.**
+All four Task 11 defects were invisible to pixel-sampling — a probe only answers the question you
+already knew to ask.
+
+Recipe: `browser_navigate` to `http://localhost:3001/` → click `#splash-go` → `await import('/offer.js')`
+etc. from the page → install the Task-12/13 accessors (`_offerNpc`, `_offer`, `_offerTheirsList`,
+`_offerYoursList`, `_offerSelection`, `_stagedCount`, `_offerBlocker`) as console stubs →
+monkey-patch `renderer._drawTradeModal` to call `_drawOfferScreen` → `game.state = 'trade'`.
+Playwright writes the PNG into the repo root — **move it to the scratchpad and `rm -rf
+.playwright-mcp` before committing.**
 
 ### To resume
-Re-dispatch the Task 6 quality re-review (the questions are in the transcript: does the new container-free-pricing branch have a surviving mutant; is `stage`'s `max` pinned or only its effect at one value; did rewriting the container test to a gold deficit lose the item-deficit coverage). Then Task 6a, then Task 7.
+Task 12. Also still open: the Task 6 quality re-review (does the container-free-pricing branch have
+a surviving mutant; is `stage`'s `max` pinned or only its effect at one value; did rewriting the
+container test to a gold deficit lose the item-deficit coverage).
+
+### Two design questions for Caelan — both need eyes, not a ruling from me
+1. **The tray motion.** The give tray sits under THEIR goods and the take tray under YOUR satchel,
+   while staging runs `yours → give` and `theirs → take` — so both interactions move an item
+   *diagonally* across the panel. Swapping the trays makes both motions vertical, at the cost of the
+   "YOU GIVE … YOU TAKE" left-to-right reading order the ledger also uses. He approved the current
+   arrangement from a static mockup; it has now been seen static but never in motion.
+2. **The meter projects damage on a refused offer.** On `THEY'VE HAD ENOUGH` the meter still sweeps
+   the red ghost `+40 → +15` and shows the worse multipliers, drawn identically to a bad deal they
+   *would* accept. It arguably explains the refusal — "this is what you were asking me to swallow" —
+   but the player cannot tell "this will happen" from "this is why they said no". The balance figure
+   already suppresses itself when blocked; the meter does not. Leave it, or dim/outline the ghost
+   when a blocker is live?
 
 ### Live decisions still owed by Caelan
 1. **The stealth/Thieve commit `821c806`** rides on this branch — another session committed `plans/stealth-perception-and-thieve.md` here. Merging this branch carries it. Leave, or move to its own branch?
@@ -2210,10 +2251,14 @@ the NPC's mood line instead of dead space.
 > frozen `MODAL_RECT` after Task 8. `offerLayout`'s own `close` field is therefore unread and should be
 > gone; if it is still there, remove it.
 >
-> **Meter spacing needs an eye, not a probe.** Task 9's implementer flagged that the multiplier rows
-> sit at `mb.y - 5` and `mb.y + 8` against a 12px meter bar, and may crowd its edges. They could only
-> pixel-sample colours (the screenshot tool is broken here), so this is genuinely unverified rather
-> than verified-fine. Look at the whole panel together during this task's visual pass.
+> **Meter spacing — ANSWERED in Task 11.** The rows do not crowd the bar: they sit well to its right,
+> clear of it horizontally. But chasing it found the real problem — because the renderer invented
+> `mb.y - 5` / `mb.y + 8` at the draw, the layout could not see that the meter *band* runs 8px deeper
+> than the meter *bar*, and `colHeadY` cleared the bar while landing on the SELL row. Both offsets are
+> now `L.meterMulTopY` / `L.meterMulBotY`, and the clearance is pinned by test.
+>
+> (The premise that the screenshot tool is broken was also wrong — see the RESUME HERE block. It is
+> broken in the Browser pane and works through the Playwright MCP.)
 
 > **`itemTier(def)` returns the tier OBJECT** — `{key, name, color, max}` — not a key string. An
 > earlier draft of this plan wrote `VALUE_TIERS.find(v => v.key === itemTier(def))`, which compares a
@@ -2222,7 +2267,7 @@ the NPC's mood line instead of dead space.
 > checked colour. Task 10 caught and fixed it; do not reintroduce it. `VALUE_TIERS` does not need
 > importing.
 
-- [ ] **Step 1: Write the methods**
+- [x] **Step 1: Write the methods**
 
 ```js
     // The staged offer, made unambiguous. Gold rides in whichever tray its sign
@@ -2366,7 +2411,13 @@ the NPC's mood line instead of dead space.
 > approved the current arrangement from a static mockup; it has never been seen in motion. Check it on
 > touch during verification and raise it with him rather than changing it unilaterally.
 
-- [ ] **Step 2: Register the screen and retire the old one in the dispatch**
+- [~] **Step 2: Register the screen and retire the old one in the dispatch** — DEFERRED to Task 12
+
+> **NOT DONE IN TASK 11 — and that is on purpose.** `_drawOfferScreen` opens with
+> `const npc = game._offerNpc; if (!npc) return;`, and nothing sets `_offerNpc` until Task 12's
+> `_openOffer`. Making this swap here leaves every commit between Task 11 and Task 12 with a trade
+> window that renders *nothing* — the old screen retired before the new one can be reached. Do the
+> swap in Task 12, in the same commit as the opener, where it can actually be exercised.
 
 In `renderFrame`'s flat run of state guards (`renderer.js:412-422`), replace:
 
