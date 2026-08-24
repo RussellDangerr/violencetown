@@ -842,6 +842,24 @@ describe('staging', () => {
     stage(before, 'give', { def: SOAP, slot: 3 });
     assert.equal(before.give.length, 0);
   });
+
+  test('unstaging never mutates the offer it came from', () => {
+    const staged = stage(stage(emptyOffer(), 'give', { def: SOAP, slot: 3 }), 'give', { def: SOAP, slot: 3 });
+    unstage(staged, 'give', 0);
+    assert.equal(staged.give[0].count, 2, "the caller's own basket must not have decremented");
+  });
+
+  test("staging does not brand the caller's entry object", () => {
+    const entry = { def: SOAP, slot: 3 };
+    stage(emptyOffer(), 'give', entry);
+    assert.equal('count' in entry, false, 'stage must clone the entry, not write count onto it');
+  });
+
+  test('two different items from the same slot stage separately, never merge', () => {
+    let o = stage(emptyOffer(), 'give', { def: SOAP, slot: 3 });
+    o = stage(o, 'give', { def: BANDAGE, slot: 3 });
+    assert.equal(o.give.length, 2, "matching on slot alone would fold soap and a bandage into one entry");
+  });
 });
 
 describe('commitBlocker — every refusal is a sentence', () => {
@@ -902,5 +920,45 @@ describe('commitBlocker — every refusal is a sentence', () => {
     const chest = { type: 'Chest', disposition: 100, _container: true };
     const o = { give: [], take: [{ def: BANDAGE, count: 1 }], gold: 0 };
     assert.match(commitBlocker(chest, o, { ...ctx, isContainer: true }), /CAN'T BE SHORTCHANGED/);
+  });
+
+  test('the player-short check outranks the floor -- you hear about your own wallet first', () => {
+    const hostile = { ...PUCK, disposition: -80 };
+    const o = { give: [], take: [{ def: BANDAGE, count: 1 }], gold: 900 };
+    assert.match(commitBlocker(hostile, o, { ...ctx, playerGold: 100 }), /800 GP SHORT/);
+  });
+
+  test('the floor outranks the till -- a hostile NPC cannot be fixed by finding him more gold', () => {
+    const hostile = { ...PUCK, disposition: -80 };
+    const o = { give: [], take: [], gold: -100 };
+    assert.match(commitBlocker(hostile, o, { ...ctx, npcGold: 5 }), /WON'T DEAL/);
+  });
+
+  test('the till outranks a patience-exceeding balance', () => {
+    const o = { give: [], take: [{ def: BANDAGE, count: 20 }], gold: -1 };
+    assert.match(commitBlocker(PUCK, o, { ...ctx, npcGold: 0 }), /TILL IS 1 GP SHORT/);
+  });
+
+  test('a hostile NPC paying gold out is gated by the floor too, not just taking items', () => {
+    const hostile = { ...PUCK, disposition: -80 };
+    const o = { give: [], take: [], gold: -40 };
+    assert.match(commitBlocker(hostile, o, ctx), /WON'T DEAL/);
+  });
+
+  test('a perfectly balanced offer from an untracked NPC is never shortchanged', () => {
+    const untracked = { type: 'Violencian' };
+    // buyPrice(SOAP, 0) = ceil(15 * 1.6) = 24 -- the gold exactly settles the soap.
+    const o = { give: [], take: [{ def: SOAP, count: 1 }], gold: 24 };
+    assert.equal(commitBlocker(untracked, o, ctx), null);
+  });
+
+  test('spending every last gold piece is not a shortfall', () => {
+    const o = { give: [], take: [], gold: 750 };
+    assert.equal(commitBlocker(PUCK, o, ctx), null);
+  });
+
+  test('draining a till to the exact gold on hand is not a shortfall', () => {
+    const o = { give: [{ def: SOAP, count: 2 }], take: [], gold: -18 };
+    assert.equal(commitBlocker(PUCK, o, { ...ctx, npcGold: 18 }), null);
   });
 });
