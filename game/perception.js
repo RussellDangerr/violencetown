@@ -81,3 +81,63 @@ export function perceives(map, watcher, tx, ty) {
 export function spotters(map, watchers, x, y) {
     return (watchers || []).filter(w => perceives(map, w, x, y) === VERDICT.DIRECT);
 }
+
+// ── The awareness ladder ────────────────────────────────────────────────────
+//
+// idle → suspicious → searching → chasing → returning → idle
+//
+// This is a RENAME, not a new state axis. Enemies already carry `fsmState`
+// (IDLE/WANDER/WORKING/HOSTILE/ALLIED) and a legacy `state`
+// (idle/chasing/returning); a third variable would be exactly the ballooning
+// plans/systems-audit-2026-08.md warns about. So the ladder extends `state` —
+// and most of it already existed unnamed, since a blind chaser already pursued
+// _lastSeenX/Y and gave up on arrival. That was searching without a name.
+
+export const SUSPICION_BEATS   = 2;  // consecutive PERIPHERAL beats → suspicious
+export const CALM_BEATS        = 6;  // sweeping a KNOWN last-seen this long → returning
+export const BLIND_SWEEP_BEATS = 8;  // a robbed victim, with NO last-seen, casts about longer
+
+// Pure: reads the npc, returns the transition. The caller applies it.
+// Returns { state, awareBeats, sweepBeats, faceTo?, lastSeen? }.
+export function nextAwareness(npc, verdict, playerPos) {
+    const state = npc.state ?? 'idle';
+    const awareBeats = npc._awareBeats ?? 0;
+    const sweepBeats = npc._sweepBeats ?? 0;
+
+    // A live sighting outranks every other transition, from any state.
+    if (verdict === VERDICT.DIRECT) {
+        return { state: 'chasing', awareBeats: 0, sweepBeats: 0, lastSeen: { ...playerPos } };
+    }
+
+    if (verdict === VERDICT.PERIPHERAL) {
+        const beats = awareBeats + 1;
+        if (state === 'idle' && beats >= SUSPICION_BEATS) {
+            // Turn to look — and DON'T advance. This beat is the window in which
+            // the player ducks back behind the corner; it is the whole reason a
+            // peripheral glance is not a death sentence.
+            return { state: 'suspicious', awareBeats: 0, sweepBeats: 0, faceTo: { ...playerPos } };
+        }
+        return { state, awareBeats: beats, sweepBeats };
+    }
+
+    // verdict === NONE
+    switch (state) {
+        case 'suspicious':
+            return { state: 'searching', awareBeats: 0, sweepBeats: 0 };
+        case 'chasing':
+            // Lost contact. Becomes a search of the LAST-SEEN tile — deliberately
+            // NOT refreshed here, so a blind chaser never tracks through a wall.
+            return { state: 'searching', awareBeats: 0, sweepBeats: 0 };
+        case 'searching': {
+            const beats = sweepBeats + 1;
+            // No last-seen means a theft victim: they know they were robbed but not
+            // by whom or from where, so there is nowhere to walk to. They cast about
+            // for longer before giving up.
+            const limit = (npc._lastSeenX == null) ? BLIND_SWEEP_BEATS : CALM_BEATS;
+            if (beats >= limit) return { state: 'returning', awareBeats: 0, sweepBeats: 0 };
+            return { state, awareBeats: 0, sweepBeats: beats };
+        }
+        default:
+            return { state, awareBeats: 0, sweepBeats };
+    }
+}
