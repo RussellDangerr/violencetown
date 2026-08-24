@@ -2252,6 +2252,12 @@ the NPC's mood line instead of dead space.
     }
 ```
 
+> **Draw the blocker before the balance.** `resolveOffer({ disposition: -70 }, { take: [10 bandages] })`
+> returns `balance: 0, points: 0` — `buyPrice` is `null` below `TRADE_FLOOR` and `offerBalance`
+> coerces it to 0. `commitBlocker` catches the offer, but `_drawOfferLedger` paints `R.balance`
+> directly, so a ten-item theft from a hostile NPC would read `+0 IN HIS FAVOUR`. Render the blocker
+> state first, or the ledger lies about what is on the table.
+
 - [ ] **Step 2: Register the screen and retire the old one in the dispatch**
 
 In `renderFrame`'s flat run of state guards (`renderer.js:412-422`), replace:
@@ -2834,6 +2840,17 @@ move disposition, then log. Nothing half-applies.
 > stops at 100. Note the King flips on a knife edge: `dispositionCeil` is exactly his `flipThreshold`
 > of 200 and the flip test is `>=`, so the headroom cap delivering exactly 280 points from −80 is
 > load-bearing. Make that a real assertion, not an approximate one.
+
+> **Write the line `unspent` was bought for.** Task 5's quality review found that `unspent` — added
+> specifically so "gifting someone who already adores you" would not render as a bare `+0` — has no
+> consumer, because `_logOffer` as drafted renders `points === 0` as an empty `]`. The field shipped;
+> the sentence never got written. It now arrives split by provenance as `itemUnspent` / `goldUnspent`,
+> because fusing them makes "393 GP wasted" wrong in kind when 94 of it is soap market value.
+>
+> `_logOffer` must say the honest thing in each case, in house voice:
+> - gold that bought nothing → `[Puck pockets the gold. It buys nothing he wants.]`
+> - a gift with no room left → `[Puck is already as fond of you as he can be.]`
+> - `goldRefusedPoints > 0` → gold reached his doorstep and no further; distinct from having no room.
 
 - [ ] **Step 2: Add the container-take helper**
 
