@@ -343,7 +343,7 @@ export function settledGold(npc, offer) {
 cd C:/Code/violencetown && node --test tests/offer.test.js
 ```
 
-Expected: PASS, 12 tests. (The review pass later grew this file to 17.)
+Expected: **0 failures**, and no previously-passing test now failing. The exact count is deliberately not gated: each task's review round adds tests, so a predicted number goes stale the moment it is written. `fail 0` plus a non-decreasing count is the gate.)
 
 Note the last test: `buyPrice` returns `null` below `TRADE_FLOOR`, and `|| 0` turns that into 0 —
 which is why the `band` import is present but unused so far. Task 5 uses it for the refusal reason.
@@ -521,7 +521,7 @@ export function goodwillFor(surplus, npc) {
 cd C:/Code/violencetown && node --test tests/offer.test.js
 ```
 
-Expected: PASS, 26 tests in this file (17 from Task 1 after its review, plus 9 new).
+Expected: **0 failures**, and no previously-passing test now failing. The exact count is deliberately not gated: each task's review round adds tests, so a predicted number goes stale the moment it is written. `fail 0` plus a non-decreasing count is the gate.
 
 - [ ] **Step 5: Commit**
 
@@ -670,7 +670,7 @@ export function splitGoodwill(npc, { itemValue = 0, gold = 0 } = {}) {
 cd C:/Code/violencetown && node --test tests/offer.test.js
 ```
 
-Expected: PASS, 33 tests in this file.
+Expected: **0 failures**, and no previously-passing test now failing. The exact count is deliberately not gated: each task's review round adds tests, so a predicted number goes stale the moment it is written. `fail 0` plus a non-decreasing count is the gate.
 
 - [ ] **Step 5: Commit**
 
@@ -859,7 +859,7 @@ export function resentmentFor(deficit, npc) {
 cd C:/Code/violencetown && node --test tests/offer.test.js
 ```
 
-Expected: PASS, 46 tests in this file.
+Expected: **0 failures**, and no previously-passing test now failing. The exact count is deliberately not gated: each task's review round adds tests, so a predicted number goes stale the moment it is written. `fail 0` plus a non-decreasing count is the gate.
 
 - [ ] **Step 5: Commit**
 
@@ -1037,7 +1037,7 @@ export function resolveOffer(npc, offer) {
 cd C:/Code/violencetown && node --test tests/offer.test.js
 ```
 
-Expected: PASS, 55 tests in this file.
+Expected: **0 failures**, and no previously-passing test now failing. The exact count is deliberately not gated: each task's review round adds tests, so a predicted number goes stale the moment it is written. `fail 0` plus a non-decreasing count is the gate.
 
 - [ ] **Step 5: Commit**
 
@@ -1256,7 +1256,7 @@ export function commitBlocker(npc, offer, ctx = {}) {
 cd C:/Code/violencetown && node --test tests/offer.test.js
 ```
 
-Expected: PASS, 69 tests in this file.
+Expected: **0 failures**, and no previously-passing test now failing. The exact count is deliberately not gated: each task's review round adds tests, so a predicted number goes stale the moment it is written. `fail 0` plus a non-decreasing count is the gate.
 
 - [ ] **Step 5: Run the whole suite — nothing else may have moved**
 
@@ -1264,7 +1264,7 @@ Expected: PASS, 69 tests in this file.
 cd C:/Code/violencetown && npm test 2>&1 | tail -8
 ```
 
-Expected: `pass 473`, `fail 0` — the 404 baseline plus this file's 69.
+Expected: **`fail 0`**, and the total no lower than the previous task's. The 404-test baseline predates this branch; everything above it is this file.
 
 - [ ] **Step 6: Commit**
 
@@ -1700,7 +1700,7 @@ export function offerLayout(panelRect, game) {
 cd C:/Code/violencetown && node --test tests/offer-layout.test.js
 ```
 
-Expected: PASS, 13 tests.
+Expected: **0 failures**, and no previously-passing test now failing. The exact count is deliberately not gated: each task's review round adds tests, so a predicted number goes stale the moment it is written. `fail 0` plus a non-decreasing count is the gate.
 
 - [ ] **Step 5: Run the whole suite — the `MODAL_RECT` aliasing must be invisible**
 
