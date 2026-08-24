@@ -857,6 +857,12 @@ The single function the renderer and `main.js` both call. Everything the screen 
 the projected disposition, the meter's ghost segment, the ledger warning — comes out of here, so what
 the player was shown and what actually happens cannot diverge.
 
+> **Return-shape note from Task 1's review.** `offerBalance` returns `givenItemsValue` (a GP total,
+> renamed from `itemsGiven` because the old name read as a count) and a `giftValue` that does **not**
+> fold gold in. So `avgWeight` is a plain `giftValue / givenItemsValue` — an earlier draft added the
+> gold in one place only to subtract it back out in the other. Use `dispositionOf(npc)` rather than
+> repeating `(npc && npc.disposition) ?? 0`.
+
 **Surplus attribution.** Gold in the tray pays the bill first; whatever is left is the surplus. The
 item share of that surplus is amplified by the average weight of the items given
 (`giftValue / itemsGiven`), so the weighting applies to generosity and never to settlement.
@@ -956,8 +962,8 @@ Append to `game/offer.js`:
 export function resolveOffer(npc, offer) {
     const o = offer || emptyOffer();
     const bal = offerBalance(npc, o);
-    const d0 = (npc && npc.disposition) ?? 0;
-    const goldGiven = Math.max(0, o.gold || 0);
+    const d0 = dispositionOf(npc);
+    const goldGiven = Math.max(0, Math.trunc(o.gold || 0));
 
     if (bal.balance === 0) {
         return { ...bal, points: 0, fromItems: 0, fromGold: 0, projected: d0, shortfall: 0, refused: false };
@@ -969,7 +975,7 @@ export function resolveOffer(npc, offer) {
         // generosity is weighted and settlement never is.
         const goldSurplus = Math.max(0, goldGiven - bal.takenValue);
         const itemSurplus = Math.max(0, bal.balance - goldSurplus);
-        const avgWeight = bal.itemsGiven > 0 ? (bal.giftValue - goldGiven) / bal.itemsGiven : 1;
+        const avgWeight = bal.givenItemsValue > 0 ? bal.giftValue / bal.givenItemsValue : 1;
         const g = splitGoodwill(npc, { itemValue: itemSurplus * avgWeight, gold: goldSurplus });
         return { ...bal, points: g.points, fromItems: g.fromItems, fromGold: g.fromGold,
                  projected: d0 + g.points, shortfall: 0, refused: false };
