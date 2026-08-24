@@ -24,9 +24,8 @@ Dev server: `python dev-server.py 3001`.
 
 ## Progress — updated 2026-08-24
 
-**Done: the two new modules, complete and fully tested.** `npm test` → **484 tests, 106 suites,
-0 fail.** Deliberately, **no existing game file has been modified** — `git diff dev...HEAD --stat`
-shows only additions.
+**Every genuinely file-disjoint task is done.** `npm test` -> **492 tests, 108 suites, 0 fail.**
+Balance golden unchanged throughout.
 
 | Task | State | Commit |
 |---|---|---|
@@ -34,20 +33,38 @@ shows only additions.
 | 4 — the awareness ladder (`nextAwareness`) | **done**, 14 tests | `479a475` |
 | 6 (pure half) — `emitNoise` + the `NOISE` table | **done**, 15 tests | `33d1439` |
 | 8 — `theft.js`: weight, buffer, the three takes | **done**, 33 tests | `dbeee5e` |
+| 2 — `enemies.js` ctor fields + save contract | **done**, 8 tests | `6ba4446` |
+| 3 — `npc.js` sight check onto `perceives` | **done**, verified live | `1fd8429` |
+| 5 — `npc.js` ladder wiring | **done**, verified live | `13de300` |
 
-**Deferred until `feature/unified-offer-screen` merges to `dev`** — every task that edits a file
-that branch is rewriting. Caelan's sequencing call, 2026-08-24, applying CLAUDE.md's
-parallelise-only-file-disjoint rule:
+Verified in the browser on `:3002` (this worktree's own server; the primary checkout owns 3001):
+the 3/2/3 split holds against the real map on a real spawned enemy for all eight facings; a player
+in any rear tile leaves the enemy idle across four beats; a player on the flank accrues one beat,
+turns the enemy on the second without moving it, and is spotted on the third.
 
-- Task 2 — `enemies.js` ctor fields (`facing`, `hearingRange`, `equipped`, `thievable`)
-- Task 3 — `npc.js` sight check swaps onto `perceives`
-- Task 5 — `npc.js` ladder wiring + `enemies.js` counters + `save.js`
+### Blocked — every remaining task edits a file the offer screen is rewriting
+
+`feature/unified-offer-screen` is at Task 11 of 20 and **not merged to `dev`**. Its remaining tasks
+touch `main.js` (15 refs), `renderer.js` (10), `layout.js` (7), `trade.js` (3), `pathing.js` (2),
+`give-action.js` (2, and specifically about *turning hostile*), `wheel-model.js` (1).
+
 - Task 6 (wiring half) — retire `rockClatter` from `ai.js`, add `main.js` call sites.
-  **`NOISE.throwImpact` is pinned to 8 so that retirement preserves the rock exactly.**
-- Tasks 7, 9–13 — `renderer.js`, `wheel-model.js`, `main.js`, `give-action.js`, `trade.js`
+  `ai.js` is clear, but its only caller is `main.js`, so the two move together.
+  **`NOISE.throwImpact` is pinned to 8 by a test so that retirement preserves the rock exactly.**
+- Task 7 — `renderer.js` threat overlay
+- Tasks 9–13 — `wheel-model.js`, `give-action.js`, `trade.js`, `main.js`
 
 **On resuming:** `git fetch && git rebase dev`, then `git diff dev...HEAD --stat` before writing a
 line, and re-read `applyDispositionDelta` (its clamp changes — see the note in Task 11).
+
+### One design consequence found in play, for Caelan
+
+Every neutral townsperson in Town is authored **`sightRange: 0`** — they perceive literally nothing,
+and only actual hostiles have cones. That is fine for the AI (they were never meant to chase), but
+it decides something the spec left implicit: since `isHidden` is "nobody holds DIRECT on you",
+**a crowded town square counts as hidden**, and you can pick a pocket in front of a dozen witnesses.
+Either that is correct (they are scenery) or shopkeepers and townsfolk want a small real
+`sightRange` before Thieve ships. Worth a ruling at Task 12, not before.
 
 ---
 
