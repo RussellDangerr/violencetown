@@ -73,7 +73,7 @@ function stubGame(overrides = {}) {
 // positivity check but would still pass buy/sell; this is what actually
 // catches a calibration regression.
 const EXPECTED = {
-    wooden_sword: { baseValue: 8,  tier: 'green' },
+    wooden_sword: { baseValue: 6,  tier: 'green' },
     gator_tail:   { baseValue: 18, tier: 'blue' },
     lion_whip:    { baseValue: 26, tier: 'purple' },
     fearmur:      { baseValue: 28, tier: 'purple' },

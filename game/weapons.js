@@ -8,7 +8,8 @@
 export const WEAPONS = {
     wooden_sword: {
         id: 'wooden_sword', name: '[Wooden Sword]', damage: 10, equipSlot: 'weapon', icon: 'sword',
-        baseValue: 8,
+        category: 'weapon',
+        baseValue: 6,
         description: 'A practice blade, all splinters and optimism. Swings true enough.',
     },
     // Ray Gun — a tech weapon that GRANTS the Ray Blast trick (GP) while worn.
@@ -17,6 +18,7 @@ export const WEAPONS = {
     ray_gun: {
         id: 'ray_gun', name: '[Ray Gun]', damage: 22, damageType: 'energy', equipSlot: 'weapon',
         useType: 'equip', grantsTricks: ['ray_blast'],
+        category: 'weapon',
         baseValue: 45,
         description: 'Dented brass housing around a coil of glass that hums when charged. Nobody has explained how it works, least of all it.',
     },
@@ -26,21 +28,24 @@ export const WEAPONS = {
     fearmur: {
         id: 'fearmur', name: '[Fearmur]', damage: 14, equipSlot: 'weapon',
         useType: 'equip', grantsSpells: ['boo'], onHit: 'fearOnRepeat',
+        category: 'weapon',
         baseValue: 28,
-        description: 'A single leg bone, gripped at the joint and colder than it has any right to be. The fear seems to come with it.',
+        description: 'A single femur, gripped at the joint and colder than it has any right to be. The name isn\'t subtle, and neither is the bone.',
     },
     // Gator Tail — a dehydrated gator club. Heavy, mean, and you're not sure
     // where it came from (Lonny, the Sewer's own alligator, has a theory).
     gator_tail: {
         id: 'gator_tail', name: '[Gator Tail]', damage: 16, equipSlot: 'weapon', useType: 'equip',
+        category: 'weapon',
         baseValue: 18,
-        description: 'A stiff, leathery tail, heavier than it looks and smelling faintly of swamp water. Swings like a sandbag with a grudge.',
+        description: 'A stiff, leathery tail, heavier than it looks and reeking faintly of swamp water. You\'ve carried worse for less reason.',
     },
     // Lion Whip — a carnival tamer's whip. Reaches 3 tiles and YANKS whatever it
     // strikes one tile closer; grants the "Hire a Lion" trick (GP) while worn.
     lion_whip: {
         id: 'lion_whip', name: '[Lion Whip]', damage: 12, equipSlot: 'weapon', useType: 'equip',
         reach: 3, pullDistance: 1, grantsTricks: ['hire_lion'],
+        category: 'weapon',
         baseValue: 26,
         description: 'A tamer\'s whip, braided leather gone shiny at the grip. Crack it right and something always comes closer.',
     },
