@@ -1401,9 +1401,22 @@ will ever be, and it only gets more expensive.**
 cd C:/Code/violencetown && git branch --no-merged dev
 ```
 
-- [ ] **Step 2: Move the curves block** — everything from the `// ── The curves ──` banner through
-`resentmentFor` — into `game/disposition-curves.js`, plus `dispositionOf` (the single shared edge)
-and `DISPOSITION_MIN`. The new module imports nothing.
+- [ ] **Step 2: Move by NAME, not by banner position.** The file is no longer split cleanly by that
+banner and a literal cut will file the wrong things. As of Task 6 the layout is: `── The projection ──`
+at the top (correct side), `── The curves ──` in the middle, and the Task 6 staging block *below* it —
+so cutting at the banner would put `stage`, `unstage` and `commitBlocker` into the **curves** file.
+
+Move into `game/disposition-curves.js` exactly these, wherever they currently sit:
+`progress`, `dispositionOf`, `DISPOSITION_MIN`, `dispositionCeil`, `goodwillCostPerPoint`,
+`resentmentCostPerPoint`, `goodwillFor`, `splitGoodwill`, `resentmentFor`, `RESENT_MAX_PER_OFFER`,
+`RESENT_FLOOR`. The new module imports nothing.
+
+Everything else stays in `offer.js`: `emptyOffer`, `unitCount`, `giftWeight`, `offerBalance`,
+`settledGold`, `resolveOffer`, `sameEntry`, `stage`, `unstage`, `commitBlocker`.
+
+`dispositionOf` was deliberately moved beside `dispositionCeil` during Task 5's review precisely so
+this cut is one-way — verify before you start that it is still the only symbol the curves side needs
+from the basket side, or you will create an import cycle.
 
 - [ ] **Step 3: `offer.js` imports what it needs** from `./disposition-curves.js` and re-exports
 nothing it does not use.
