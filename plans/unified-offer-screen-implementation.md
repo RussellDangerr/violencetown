@@ -521,7 +521,7 @@ export function goodwillFor(surplus, npc) {
 cd C:/Code/violencetown && node --test tests/offer.test.js
 ```
 
-Expected: PASS, 21 tests.
+Expected: PASS, 26 tests in this file (17 from Task 1 after its review, plus 9 new).
 
 - [ ] **Step 5: Commit**
 
@@ -670,7 +670,7 @@ export function splitGoodwill(npc, { itemValue = 0, gold = 0 } = {}) {
 cd C:/Code/violencetown && node --test tests/offer.test.js
 ```
 
-Expected: PASS, 28 tests.
+Expected: PASS, 33 tests in this file.
 
 - [ ] **Step 5: Commit**
 
@@ -799,6 +799,13 @@ cd C:/Code/violencetown && node --test tests/offer.test.js
 
 Expected: FAIL — no export named `RESENT_MAX_PER_OFFER`.
 
+
+> **Non-finite guard — inherit it, do not re-open it.** Task 2's review found that a `NaN`
+> disposition made `goodwillFor` run to its iteration cap and pay out the *maximum* goodwill
+> instead of zero, because `pool < NaN` is always false. `dispositionOf` now sanitizes non-finite
+> values to 0, and the loop breaks on a non-finite cost. `resentmentFor` below has the same loop
+> shape and the same hazard.
+
 - [ ] **Step 3: Write the minimal implementation**
 
 Append to `game/offer.js`:
@@ -852,7 +859,7 @@ export function resentmentFor(deficit, npc) {
 cd C:/Code/violencetown && node --test tests/offer.test.js
 ```
 
-Expected: PASS, 41 tests.
+Expected: PASS, 46 tests in this file.
 
 - [ ] **Step 5: Commit**
 
@@ -1030,7 +1037,7 @@ export function resolveOffer(npc, offer) {
 cd C:/Code/violencetown && node --test tests/offer.test.js
 ```
 
-Expected: PASS, 50 tests.
+Expected: PASS, 55 tests in this file.
 
 - [ ] **Step 5: Commit**
 
@@ -1249,7 +1256,7 @@ export function commitBlocker(npc, offer, ctx = {}) {
 cd C:/Code/violencetown && node --test tests/offer.test.js
 ```
 
-Expected: PASS, 64 tests.
+Expected: PASS, 69 tests in this file.
 
 - [ ] **Step 5: Run the whole suite — nothing else may have moved**
 
@@ -1257,7 +1264,7 @@ Expected: PASS, 64 tests.
 cd C:/Code/violencetown && npm test 2>&1 | tail -8
 ```
 
-Expected: `pass 468`, `fail 0` (the 404 baseline plus 64 new).
+Expected: `pass 473`, `fail 0` — the 404 baseline plus this file's 69.
 
 - [ ] **Step 6: Commit**
 
