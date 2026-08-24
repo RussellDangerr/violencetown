@@ -557,6 +557,12 @@ Spec §4.3 and §4.5. Gold may never carry an NPC **across** an uncrossed `flipT
 And `bribeable: false` means gold buys no affection at all — closing a live hole where
 `_bribeVendor` never checks the flag even though `_bribeTarget` does.
 
+> **Task 2 changed `goodwillFor`'s contract.** It now returns `{ points, unspent }`, mirroring
+> `resentmentFor`'s `{ points, shortfall }` — `unspent` is surplus the NPC had no headroom left to
+> feel. Read `.points` where you need the number, and carry `unspent` through so Task 5 can write the
+> honest line when a gift buys nothing. Note also that `assert.equal` under `node:assert/strict` is
+> reference equality for objects — use `assert.deepEqual` when comparing whole results.
+
 - [ ] **Step 1: Write the failing test**
 
 Append to `tests/offer.test.js`:
@@ -571,6 +577,7 @@ describe('the gold ceiling', () => {
   test('items and gold each contribute, and the total is their sum', () => {
     const r = splitGoodwill(PUCK, { itemValue: 36, gold: 30 });
     assert.equal(r.points, r.fromItems + r.fromGold);
+    assert.equal(typeof r.unspent, 'number', 'unspent must be carried through from goodwillFor');
     assert.ok(r.fromItems > 0 && r.fromGold > 0);
   });
 
@@ -643,24 +650,37 @@ Append to `game/offer.js`:
 // the game authored bribeable:false — is bribeable through the trade window.
 export function splitGoodwill(npc, { itemValue = 0, gold = 0 } = {}) {
     const d0 = dispositionOf(npc);
-    const fromItems = goodwillFor(itemValue, npc);
+    // goodwillFor returns { points, unspent } as of Task 2 — surplus the NPC had
+    // no headroom left to feel. Carry it through so resolveOffer can say so.
+    const items = goodwillFor(itemValue, npc);
 
     if (npc && npc.bribeable === false) {
-        return { points: fromItems, fromItems, fromGold: 0 };
+        // Gifts still land on someone who refuses bribes; only the gold is refused.
+        return { points: items.points, fromItems: items.points, fromGold: 0,
+                 unspent: items.unspent, goldRefused: gold > 0 };
     }
 
     const threshold = (npc && npc.flipThreshold) ?? 30;
-    const afterItems = d0 + fromItems;
+    const afterItems = d0 + items.points;
     // Gold stops one point short of an uncrossed threshold. If they are already
     // at or above it there is no flip left to protect, so gold is unbounded.
     const goldCeiling = afterItems < threshold ? threshold - 1 : Infinity;
 
-    const rawFromGold = goodwillFor(gold, { ...npc, disposition: afterItems });
+    const raw = goodwillFor(gold, { ...npc, disposition: afterItems });
     const allowed = goldCeiling === Infinity
-        ? rawFromGold
-        : Math.max(0, Math.min(rawFromGold, goldCeiling - afterItems));
+        ? raw.points
+        : Math.max(0, Math.min(raw.points, goldCeiling - afterItems));
 
-    return { points: fromItems + allowed, fromItems, fromGold: allowed };
+    return {
+        points: items.points + allowed,
+        fromItems: items.points,
+        fromGold: allowed,
+        unspent: items.unspent + raw.unspent,
+        // Points gold wanted to buy but the flip ceiling refused. Distinct from
+        // `unspent` — that is "no room left to feel", this is "gold can't carry
+        // him across his own threshold". They want different log lines.
+        goldRefused: Math.max(0, raw.points - allowed),
+    };
 }
 ```
 
