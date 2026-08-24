@@ -19,8 +19,9 @@ export const HIT_SLOP = 6;               // tap-zone expansion (Apple 44pt min t
 
 // The one modal bezel. LOG_MODAL_RECT, TRADE_MODAL_RECT, EQUIPMENT_MODAL_RECT and
 // DEVICE_RECT were four separate literals of this identical rect; they now alias
-// it, so the panel can be retuned in one place.
-export const MODAL_RECT = { x: 24, y: 44, w: 560, h: 520 };
+// it, so the panel can be retuned in one place. Frozen because that sharing means
+// a stray `.w =` on any one of the five names would silently retune all five.
+export const MODAL_RECT = Object.freeze({ x: 24, y: 44, w: 560, h: 520 });
 
 // Pure rect intersection — true iff a and b share positive area. Edge-touching
 // (a.right === b.left) is NOT overlap, so panels may abut without clipping.
