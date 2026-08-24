@@ -670,7 +670,13 @@ describe('resolveOffer — one call, the whole projection', () => {
       const r = resolveOffer(PUCK, { give: [{ def: SOAP, count: 100 }], take: [], gold: 0 });
       assert.equal(r.points, 40, 'capped at his headroom to the 100 ceiling');
       assert.equal(r.givenItemsValue, 900);
-      assert.equal(r.unspent, 854.1);
+      // Tolerance, not ===: this value is an exact terminating decimal in
+      // rational arithmetic, but costOfPoints reaches it via a 40-term float
+      // summation, and whether that summation happens to land bit-exact on
+      // 854.1 is luck, not structure -- a change to goodwillCostPerPoint's
+      // constants or the summation order can re-roll it without being a
+      // regression. The tightest mutant on this case still misses by 3.9.
+      assert.ok(Math.abs(r.unspent - 854.1) < 1e-9);
     });
 
     test('gold spent on ceiling-refused points is not lost — the doorstep case', () => {
@@ -693,7 +699,10 @@ describe('resolveOffer — one call, the whole projection', () => {
       // The GP charged for those 41 refused points must land back in unspent
       // rather than disappearing inside goodwillFor's internal accounting —
       // this is the only assertion in the file that a goldCost of 0 fails.
-      assert.equal(r.unspent, 99664.28);
+      // Tolerance for the same reason as the 854.1 case above: exact in
+      // rational arithmetic, bit-exact here only by luck of where a 109-term
+      // summation happens to round.
+      assert.ok(Math.abs(r.unspent - 99664.28) < 1e-9);
     });
 
     test('a mixed surplus prices the item and gold halves on their own segments', () => {
@@ -702,7 +711,10 @@ describe('resolveOffer — one call, the whole projection', () => {
       // that prices item points across the whole climb instead of their own
       // segment, or prices gold from d0 instead of afterItems, both diverge
       // from this exact figure while every other committed case (all
-      // fromItems=0 or fromGold=0) cannot tell the difference.
+      // fromItems=0 or fromGold=0) cannot tell the difference. This is the
+      // ONLY case in the file that kills the d0-instead-of-afterItems
+      // mutant -- do not weaken or re-baseline this assertion without
+      // replacing that coverage.
       const r = resolveOffer(PUCK, {
         give: [{ def: SOAP, count: 5 }], take: [{ def: BANDAGE, count: 1 }], gold: 100,
       });
