@@ -25,6 +25,60 @@ plan can actually be run and seen to fail.
 
 ---
 
+## ■ CORRECTIONS FOUND BY AUDIT (2026-08-24) — READ BEFORE TASK 13
+
+A five-lens read-only audit of `main.js` (45 agents, each finding adversarially re-checked) was run
+before Task 12. It found the plan wrong in ways that would have shipped broken code. Task 12's are
+fixed and committed; **the rest are still live in the text below.** Treat every `main.js:NNNN` in
+this document as advisory and re-grep — every line number the audit checked was stale by 1–17 lines.
+
+### Already fixed in Task 12's commits
+- **Four exits from `STATE.TRADE`, not one.** `_closeTrade` is also called from the TRADE keyboard
+  block (`E`/`Escape`) and twice from `_tapTrade`. Plus `_fullReset` (RESTART), which goes through no
+  closer at all. Patching only `_closeCurrentMenu` meant the first in-panel click closed the screen.
+- **Four entry points, not three.** The prose collapses `_fireResolver` and `_fireWheel` into one and
+  counts the container as the third — but the container never called `_openTrade`, so the grep
+  cannot find it. There is also a **third** `state = STATE.IDLE` workaround at `_fireResolver`
+  (unmentioned), and the Target-List verb can fire `_openOffer` from a `_walkPath` arrival callback
+  minutes later.
+- **Task 12's cited `_openContainer` range stops one line short** of `this.state = STATE.TRADE`.
+- **Task 12 could not produce a working screen.** Without the dispatch swap the screen draws nothing;
+  with it, `_drawOfferLists` throws on `game._offerTheirsList()`. Task 13 Step 1's three accessors
+  were pulled forward into Task 12. **Task 13 Step 1 is DONE — skip it.**
+- **`trade: MODAL_RECT` in `CLOSE_PANEL` was never written** (it read `TRADE_MODAL_RECT`, the same
+  frozen object). Now written, so Task 15 can retire the trade-era names safely.
+
+### STILL LIVE — errors in the text below
+- **Task 13: `offerLayout(MODAL_RECT, this).rowsVisible` is wrong twice over.** `offerLayout` takes
+  ONE parameter and its return object has no `rowsVisible` key — the count is the module-level
+  `OFFER_ROWS_VISIBLE`. As written `rows` is `undefined`, so `c.index >= scroll + undefined` is
+  always false and a list can never scroll to follow the cursor. Silent, not a crash.
+- **Task 14: `give-action.js` importing `dispositionCeil` from `./offer.js` fails.** The Task 6a
+  split moved it to `./disposition-curves.js`; `offer.js` does not re-export it.
+- **Task 13 says five `this._tradeSell = this._tradeSellList()` assignments. There are nine**
+  (and one fewer now that `_openContainer` lost its). Re-grep before deleting.
+- **Task 14: `_takeFromContainer` splices the wrong index.** `e.index` is the index into the
+  FILTERED `_containerStock()` list; `_containerStock` drops unresolvable ids, so any chest holding
+  one gives back a shifted index and the take removes the wrong item.
+- **Task 13: `stage()`'s `max` is never passed for a container**, so a chest row can be staged past
+  its remaining stock. The parameter exists and is already tested.
+- **Task 13/14: nothing stops gold being staged INTO a chest.** `settledGold` returns 0 for a
+  container, so the gold would leave the player and reach nobody.
+- **Task 15: `tests/content-integrity.test.js` asserts `main.js` still contains `_buyFromVendor(`.**
+  Deleting it early fails that test.
+
+### Also worth knowing
+- An `Enemy`'s `disposition` defaults to **`null`**, not 0 — an unauthored NPC hits the
+  "NO OPINION OF YOU EITHER WAY" branch. Vendors get `VENDOR_WALLET` gold by default.
+- **Disposition decays while the offer screen is open.** The free-roam heartbeat is gated on
+  SPLASH and `_inCombat()` only, so `_tickDispositionDecay` keeps running — a partner set to +40
+  reads +39 within seconds, and a basket staged at one disposition can become blocked at another.
+  A design question for Caelan, not a defect.
+- Nothing persists the basket: `serialize()` is a hand-written allow-list and nothing enumerates
+  `this`. Do not add `_offer*` to it.
+
+---
+
 ## ▶ RESUME HERE — execution status (2026-08-24, after Task 11)
 
 **Branch:** `feature/unified-offer-screen`, tree clean, **600 tests / 102 suites / 0 fail** (baseline was 404).
@@ -40,19 +94,30 @@ onward is written directly. Mutation testing stays either way — it is what has
 | 8 · `offerLayout()` | ✅ |
 | 9 · panel + header | ✅ |
 | 10 · the two list columns | ✅ |
-| 11 · trays, description strip, ledger | ✅ **done — the screen now draws in full** |
-| 12 · open/close + the close contract | ⏭ **NEXT** |
-| 13–20 | not started |
+| 11 · trays, description strip, ledger | ✅ done — the screen draws in full |
+| 12 · open/close, all four exits, the dispatch swap | ✅ **done — the screen OPENS** |
+| 13 · staging + input (Step 1 already done in 12) | ⏭ **NEXT** |
+| 14–20 | not started |
 
 **The draw layer is complete.** `game/offer.js` (251 lines) + `game/disposition-curves.js` (227) are
 pure; `offerLayout()` returns every rect; `renderer.js` has all five `_drawOffer*` methods and they
 have been seen rendering correctly in four states.
 
-### ⚠ The dispatch swap is deliberately NOT done
+### ✅ The dispatch swap is DONE (Task 12)
+`renderFrame` now calls `_drawOfferScreen`, and the modal dispatch is wrapped in `try/finally` so a
+throw inside any modal draw can no longer take the ✕ chip and tap-outside down with it. The screen
+has been opened in the browser on a live vendor and a live crate, through real DOM events.
+
+<details><summary>The superseded Task 11 note</summary>
+
+### ⚠ The dispatch swap was deliberately NOT done in Task 11
 `renderFrame` still calls `_drawTradeModal`. Task 11 Step 2 said to swap it to `_drawOfferScreen`
 now; doing so would **blank the live trade window**, because `_drawOfferScreen` opens with
 `if (!game._offerNpc) return` and nothing sets `_offerNpc` until Task 12's `_openOffer`. Do the swap
-**in Task 12, in the same commit as the opener.**
+**in Task 12, in the same commit as the opener.** (It was — together with Task 13 Step 1, which it
+turned out to need.)
+
+</details>
 
 ### ✅ Screenshots WORK — through the Playwright MCP
 The whole run up to here assumed they did not. `mcp__Claude_Browser__computer{screenshot}` genuinely
