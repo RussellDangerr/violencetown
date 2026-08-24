@@ -1436,6 +1436,18 @@ for them buys nothing. But Tasks 9–11 add `renderer.js` import sites for `good
 split after and you rewrite them. **The window between Task 6 and Task 9 is the cheapest this split
 will ever be, and it only gets more expensive.**
 
+> **Carry the single-killer tests across intact.** Task 6's mutation battery found that **each of the
+> six fixes applied during review is protected by exactly one test.** Losing any single one of them
+> silently un-pins a fix. Named, so they can be checked off after the move: `taking loot from a
+> container is free and unblocked` · `a null NPC does not throw, and prices as neutral` · `a container
+> prices only its OWN stock at zero` · `a container cannot be shortchanged — via its till, not its
+> stock` · `an unrecognized side falls back to give` · `a max caps staging at the real stack size` ·
+> `a new entry always starts at count 1` · `unstaging decrements, then removes`.
+>
+> Also: `EPSILON` is module-private and used only by `goodwillFor` and `resentmentFor` — it travels
+> with them into `disposition-curves.js`. And `tests/offer.test.js` will need a second import (or a
+> re-export from `offer.js`); decide which deliberately rather than by accident.
+
 - [ ] **Step 1: Check for overlapping unmerged work first** — it is still a core-file restructure.
 
 ```bash
