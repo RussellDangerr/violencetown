@@ -2100,11 +2100,16 @@ and stamp `_nightLevel` onto each enemy in `_worldBeat`:
 
 Verify with the existing day clock that a guard's cone visibly shortens at night.
 
-- [ ] **Step 2: The `blind` debuff shortens perception**
+- [ ] **Step 2: The `blind` debuff shortens perception — BLOCKED, verify before building**
 
-Poke already applies a `blind` debuff that halves an enemy's outgoing damage. Making it also halve
-what they *see* costs one line and is the spec's cheapest edge. In `game/perception.js`, in
-`perceives`, after the night calculation:
+**Corrected 2026-08-24.** The premise of this step was wrong. `blind` is *read* at `main.js:4270`,
+where it halves an attacker's outgoing damage — but `grep` finds **no code anywhere that applies
+it**, and **there is no Poke verb**; both exist only in comments (`enemies.js:242`,
+`main.js:3353`). Halving sight for `blind` today would author an edge to a debuff nothing can
+produce, which is the audit's no-edges failure inverted.
+
+**Do this step only once something actually applies `blind`.** When that day comes, it is still one
+line. In `game/perception.js`, in `perceives`, after the night calculation:
 
 ```js
     // (edge) A blinded enemy sees half as far. Poke has applied this debuff since
