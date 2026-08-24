@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 import { ITEMS } from '../game/items.js';
 import { resolveItemDef } from '../game/item-registry.js';
 import { emptyOffer, commitBlocker } from '../game/offer.js';
-import { MODAL_RECT } from '../game/layout.js';
+import { MODAL_RECT, HIT_SLOP, offerLayout } from '../game/layout.js';
 
 const mainSrc = readFileSync(fileURLToPath(new URL('../game/main.js', import.meta.url)), 'utf8');
 
@@ -121,6 +121,18 @@ function stubGame(overrides = {}) {
         ...overrides,
     };
 }
+
+// Three points inside the panel that hit NO interactive rect, even expanded by
+// HIT_SLOP: the header band, the column gutter, and below the commit row. Pinned
+// as dead space by a test of their own.
+const DEAD_SPACE = [
+    { x: MODAL_RECT.x + 1, y: MODAL_RECT.y + 1 },
+    { x: MODAL_RECT.x + MODAL_RECT.w / 2, y: MODAL_RECT.y + MODAL_RECT.h / 2 },
+    { x: MODAL_RECT.x + MODAL_RECT.w - 1, y: MODAL_RECT.y + MODAL_RECT.h - 1 },
+];
+const this_inPanel = (pt) =>
+    pt.x >= MODAL_RECT.x && pt.x < MODAL_RECT.x + MODAL_RECT.w &&
+    pt.y >= MODAL_RECT.y && pt.y < MODAL_RECT.y + MODAL_RECT.h;
 
 const alive = { isAlive: () => true };
 const dead = { isAlive: () => false };
@@ -315,14 +327,31 @@ describe('_tapOffer', () => {
         // closer that leaves _offerNpc / _offer alive.
         const g = stubGame();
         openOffer.call(g, puck());
-        for (const pt of [
-            { x: MODAL_RECT.x + 1, y: MODAL_RECT.y + 1 },
-            { x: MODAL_RECT.x + MODAL_RECT.w / 2, y: MODAL_RECT.y + MODAL_RECT.h / 2 },
-            { x: MODAL_RECT.x + MODAL_RECT.w - 1, y: MODAL_RECT.y + MODAL_RECT.h - 1 },
-        ]) {
+        for (const pt of DEAD_SPACE) {
             tapOffer.call(g, pt);
             assert.equal(g.state, STATE.TRADE, `tap at ${pt.x},${pt.y} closed the screen`);
             assert.ok(g._offerNpc, 'the partner was dropped');
+        }
+    });
+
+    test('the dead-space points this suite taps really are dead space', () => {
+        // Guards the test above from quietly becoming a tautology. The panel
+        // centre sits in the 16px column gutter with only 2px of clearance from
+        // each column once HIT_SLOP is applied — widen the slop or narrow the
+        // gutter and it would start landing on a row, at which point "a tap
+        // inside does not close" would be testing a row activation instead.
+        const L = offerLayout(MODAL_RECT);
+        const groups = [L.theirs, L.yours, L.giveTray, L.takeTray, [L.button]];
+        const near = (pt, r) => pt.x >= r.x - HIT_SLOP && pt.x < r.x + r.w + HIT_SLOP &&
+                                pt.y >= r.y - HIT_SLOP && pt.y < r.y + r.h + HIT_SLOP;
+        for (const pt of DEAD_SPACE) {
+            assert.ok(this_inPanel(pt), `${pt.x},${pt.y} is not even inside the panel`);
+            for (const rects of groups) {
+                for (const r of rects) {
+                    assert.ok(!near(pt, r),
+                        `${pt.x},${pt.y} now lands on an interactive rect ${JSON.stringify(r)}`);
+                }
+            }
         }
     });
 });
