@@ -12,13 +12,6 @@
 // Calling it against a stub `this` runs the actual production logic — not a
 // hand-copied duplicate of it — so a future edit to the real method is what
 // this test exercises, not a paraphrase of what it used to do.
-//
-// A prior version of the ground-take test here anchored on a bare
-// `src.indexOf('_takeItemAt(')`, which matches the CALL SITE two methods
-// earlier, not the definition — most of its 1400-char budget was spent on an
-// unrelated method, and the regex-based assertions it did reach passed for
-// several mutants that fully restored the original silent-delete bug. This
-// version replaces that with the behavioral tests below.
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -29,6 +22,7 @@ import { ITEMS, itemTier } from '../game/items.js';
 import { sellPrice, buyPrice } from '../game/trade.js';
 import { audio } from '../game/audio.js';
 import { xmbCategoryOf, XMB_LABELS } from '../game/xmb.js';
+import { resolveItemDef } from '../game/item-registry.js';
 
 const mainSrc = readFileSync(fileURLToPath(new URL('../game/main.js', import.meta.url)), 'utf8');
 
@@ -41,6 +35,10 @@ const mainSrc = readFileSync(fileURLToPath(new URL('../game/main.js', import.met
 // too (e.g. ITEMS), not just what the current fix uses, so a regression back
 // to that shape still runs far enough for the assertions below to catch it,
 // rather than merely throwing ReferenceError because a name was withheld.
+// 'use strict' matters here: a class body is strict by default, but a bare
+// `new Function` body is sloppy — an assignment to an undeclared variable
+// inside the extracted method would silently create a global under sloppy
+// mode instead of throwing, which the real method never gets away with.
 function liveMethod(name, params, freeVars = {}) {
     const signature = `${name}(${params}) {`;
     const at = mainSrc.indexOf(signature);
@@ -49,11 +47,14 @@ function liveMethod(name, params, freeVars = {}) {
     assert.ok(closeAt > at, `${name} body never closes`);
     const body = mainSrc.slice(at + name.length, closeAt + '\n    }'.length);
     const freeNames = Object.keys(freeVars);
-    const factory = new Function(...freeNames, `return function ${body}`);
+    const factory = new Function(...freeNames, `'use strict'; return function ${body}`);
     return factory(...freeNames.map(n => freeVars[n]));
 }
 
 // A stub `this` carrying exactly the state _takeItemAt reads/writes.
+// _resolveItemDef delegates to the real resolveItemDef (item-registry.js)
+// rather than reimplementing "weapons win over items" a second time here —
+// if the real resolver regresses, this stub regresses with it.
 function stubGame(overrides = {}) {
     return {
         groundItems: [],
@@ -62,16 +63,15 @@ function stubGame(overrides = {}) {
         _mapUrl: 'test-map',
         logs: [],
         _log(msg, category) { this.logs.push({ msg, category }); },
-        _resolveItemDef(id) { return WEAPONS[id] || ITEMS[id] || null; },
+        _resolveItemDef(id) { return resolveItemDef(id); },
         _addToInventory(def) { (this.inventory ??= []).push(def); return true; },
         ...overrides,
     };
 }
 
-// The calibrated baseValue/tier per weapon (Step 3). Pinned exactly, not just
-// "> 0" — a flattened baseValue (e.g. every weapon set to 1) satisfies a bare
-// positivity check but would still pass buy/sell; this is what actually
-// catches a calibration regression.
+// The calibrated baseValue/tier per weapon (Step 3), pinned exactly so a
+// calibration regression (e.g. every weapon flattened to the same value)
+// fails here.
 const EXPECTED = {
     wooden_sword: { baseValue: 6,  tier: 'green' },
     gator_tail:   { baseValue: 18, tier: 'blue' },
@@ -89,6 +89,9 @@ describe('weapons are first-class tradeable items', () => {
             assert.ok(def.description.length > 20, `${id} description is too short to be real`);
             assert.equal(typeof def.name, 'string', `${id} has no name`);
             assert.equal(def.baseValue, EXPECTED[id].baseValue, `${id} baseValue drifted from its calibrated value`);
+            // defeat-scenarios.js's matchTake reads take.categories.includes(d.category)
+            // — not inert by code, only by no defeat scenario naming 'weapon' yet.
+            assert.equal(def.category, 'weapon', `${id} category drifted`);
         }
     });
 

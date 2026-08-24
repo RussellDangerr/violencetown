@@ -55,6 +55,13 @@ test('a real loadout passes clean', () => {
 // authoring trap: stock still validates clean (not a hard problem — nothing
 // is actually dangling), but now WARNS so the gap is caught here, not in play.
 test('a weapon authored into vendor/chest stock validates clean but warns about the buy-path gap', () => {
+    // The warning's premise is that _buyFromVendor still exists and still has
+    // the gap. Task 15 deletes it outright rather than patching it — once
+    // that happens this warning starts naming a function that's gone and
+    // should be deleted too. Fail here instead of going quietly stale.
+    const mainSrc = readFileSync(fileURLToPath(new URL('../game/main.js', import.meta.url)), 'utf8');
+    assert.match(mainSrc, /_buyFromVendor\(/, 'the warning names a function that is gone — delete the warning in content-validate.js');
+
     const { problems, warnings } = validateContent([{ file: 'x-map.json', data: { enemies: [
         { id: 'e1', type: 'Merchant', vendor: true, stock: ['lion_whip'] },
     ] } }]);
