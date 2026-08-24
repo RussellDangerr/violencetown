@@ -206,4 +206,21 @@ describe('the goodwill curve', () => {
     assert.equal(goodwillFor(-50, PUCK), 0);
     assert.equal(goodwillFor(NaN, PUCK), 0);
   });
+
+  test('a non-finite disposition fails to neutral, not to a jackpot', () => {
+    // "Neutral" means the funnel treats it exactly like a MISSING disposition
+    // (dispositionOf already maps that to 0) — not a special zero-points case.
+    // At neutral (0) a point costs 3 GP, so 5 GP still buys exactly one, same
+    // as goodwillFor(5, {}). What the guard kills is the pre-fix jackpot: 400.
+    assert.equal(goodwillFor(5, { disposition: NaN }), goodwillFor(5, {}),
+      'NaN must be treated identically to a missing disposition, not specially');
+    assert.equal(goodwillFor(5, { disposition: NaN }), 1);
+    assert.equal(goodwillFor(5, { disposition: Infinity }), 1);
+    assert.notEqual(goodwillFor(5, { disposition: NaN }), 400, 'the old jackpot must be gone');
+  });
+
+  test('offerBalance also stays finite with a NaN disposition — the sanitization is at the funnel', () => {
+    const b = offerBalance({ disposition: NaN }, { give: [{ def: SOAP, count: 1 }], take: [], gold: 0 });
+    assert.ok(Number.isFinite(b.balance), 'a NaN disposition must not leak NaN into the balance');
+  });
 });

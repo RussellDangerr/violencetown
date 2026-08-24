@@ -26,7 +26,11 @@ export function emptyOffer() {
 // npc (or a missing `disposition` on one) prices as neutral instead of
 // throwing.
 function dispositionOf(npc) {
-    return (npc && npc.disposition) ?? 0;
+    const d = (npc && npc.disposition) ?? 0;
+    // A non-finite disposition would make costPerPoint return NaN, and since
+    // `pool < NaN` is always false the goodwill loop would run to its guard and
+    // pay out the MAXIMUM instead of zero. Fail to neutral, not to jackpot.
+    return Number.isFinite(d) ? d : 0;
 }
 
 // A count is a whole, non-negative number of units. Fractions from a drag
@@ -138,7 +142,7 @@ export function goodwillFor(surplus, npc) {
     let pool = surplus, pts = 0;
     while (pts < GUARD_ITERATIONS) {
         const c = costPerPoint(d0 + pts, ceil);
-        if (pool < c) break;
+        if (!Number.isFinite(c) || pool < c) break;
         pool -= c; pts++;
     }
     return pts;
