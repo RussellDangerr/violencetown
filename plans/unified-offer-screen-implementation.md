@@ -656,11 +656,20 @@ export function splitGoodwill(npc, { itemValue = 0, gold = 0 } = {}) {
 
     if (npc && npc.bribeable === false) {
         // Gifts still land on someone who refuses bribes; only the gold is refused.
+        // All of it — the refusal is the whole amount gold ASKED for. Not what it
+        // could have bought: some of those points would have been ceiling-denied
+        // anyway, so "could have bought" would overstate it on the only NPC this
+        // branch ever fires for.
+        const refused = goodwillFor(gold, { ...npc, disposition: d0 + items.points }).points;
         return { points: items.points, fromItems: items.points, fromGold: 0,
                  unspent: items.unspent, goldRefusedPoints: refused };
     }
 
-    const threshold = (npc && npc.flipThreshold) ?? 30;
+    const rawT = (npc && npc.flipThreshold) ?? 30;
+    // The third numeric door into this module, guarded like the other two.
+    // An Infinity threshold would otherwise read as "no ceiling" and hand the
+    // most unflippable NPC the freest gold — the intent exactly inverted.
+    const threshold = Number.isFinite(rawT) ? rawT : 30;
     const afterItems = d0 + items.points;
     // Gold stops one point short of an uncrossed threshold. If they are already
     // at or above it there is no flip left to protect, so gold is unbounded.
@@ -676,14 +685,21 @@ export function splitGoodwill(npc, { itemValue = 0, gold = 0 } = {}) {
         fromItems: items.points,
         fromGold: allowed,
         unspent: items.unspent + raw.unspent,
-        // POINTS gold wanted to buy but the flip ceiling refused — note the unit,
-        // which is why the name carries it. Distinct from `unspent` (leftover GP):
-        // that is "no room left to feel", this is "gold can't carry him across his
-        // own threshold". Different situations, different log lines, different units.
+        // Points gold wanted to buy but the flip ceiling refused. Distinct from
+        // `unspent` — that is "no room left to feel", this is "gold can't carry
+        // him across his own threshold". They want different log lines. Suffixed
+        // (unlike `unspent`/`shortfall`) because it has zero consumers to disturb —
+        // the asymmetry itself signals "this one is points, not GP".
         goldRefusedPoints: Math.max(0, raw.points - allowed),
     };
 }
 ```
+
+> **Shipped shape (after review).** The block above is what landed. Two things moved during review and
+> both matter to anyone extending it: `flipThreshold` is sanitized with `Number.isFinite` (an
+> `Infinity` threshold otherwise reads as "no ceiling" and hands the most unflippable NPC the freest
+> gold), and the field is `goldRefusedPoints` — numeric on **both** branches, suffixed because it is
+> denominated in points while its neighbour `unspent` is denominated in GP.
 
 - [ ] **Step 4: Run the test and watch it pass**
 
