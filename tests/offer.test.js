@@ -38,6 +38,12 @@ describe('offerBalance — the signed heart of the model', () => {
       'selling: Puck owes 18');
   });
 
+  test('settledGold ignores whatever gold is already sitting in the offer', () => {
+    // 30 is buyPrice(BANDAGE, 60) itself -- if the gold already on the tray were
+    // NOT zeroed first, this would settle at 0 (30 given - 30 taken), not 30.
+    assert.equal(settledGold(PUCK, { give: [], take: [{ def: BANDAGE, count: 1 }], gold: 30 }), 30);
+  });
+
   test('an item the NPC has no opinion about still counts at face value', () => {
     const stranger = { type: 'Violencian', disposition: 60 };   // no values block at all
     const b = offerBalance(stranger, { give: [{ def: SOAP, count: 1 }], take: [], gold: 0 });
@@ -885,6 +891,41 @@ describe('staging', () => {
     assert.equal(o.give.length, 1);
   });
 
+  test('staging an increment clones the entry, not just the array', () => {
+    const first = stage(emptyOffer(), 'give', { def: SOAP, slot: 3 });
+    stage(first, 'give', { def: SOAP, slot: 3 });
+    assert.equal(first.give[0].count, 1, "incrementing a clone must not write into the source offer");
+  });
+
+  test('unstaging one entry among several leaves the rest exactly alone', () => {
+    let o = stage(emptyOffer(), 'give', { def: SOAP, slot: 1 });
+    o = stage(o, 'give', { def: BANDAGE, slot: 2 });
+    o = stage(o, 'give', { def: ROCK, slot: 3 });
+    o = unstage(o, 'give', 0);
+    assert.equal(o.give.length, 2);
+    assert.equal(o.give[0].def, BANDAGE);
+    assert.equal(o.give[1].def, ROCK);
+  });
+
+  test('staging by source and index merges when both match -- the container/ground path', () => {
+    let o = stage(emptyOffer(), 'take', { def: BANDAGE, source: 'chest-1', index: 2 });
+    o = stage(o, 'take', { def: BANDAGE, source: 'chest-1', index: 2 });
+    assert.equal(o.take.length, 1);
+    assert.equal(o.take[0].count, 2);
+  });
+
+  test('a different source at the same index stages separately', () => {
+    let o = stage(emptyOffer(), 'take', { def: BANDAGE, source: 'chest-1', index: 2 });
+    o = stage(o, 'take', { def: BANDAGE, source: 'chest-2', index: 2 });
+    assert.equal(o.take.length, 2);
+  });
+
+  test('the same source at a different index stages separately', () => {
+    let o = stage(emptyOffer(), 'take', { def: BANDAGE, source: 'chest-1', index: 2 });
+    o = stage(o, 'take', { def: BANDAGE, source: 'chest-1', index: 5 });
+    assert.equal(o.take.length, 2);
+  });
+
   test('a click past max is refused, not clamped -- staged units are never destroyed', () => {
     let o = emptyOffer();
     for (let i = 0; i < 3; i++) o = stage(o, 'give', { def: SOAP, slot: 3 }, 5);
@@ -956,10 +997,22 @@ describe('commitBlocker — every refusal is a sentence', () => {
   test('a container cannot be shortchanged either -- via its till, not its stock', () => {
     // Item takes from a container price at 0 (the next test), so the only way
     // left to shortchange one is gold: paying out 10 GP for nothing is still a
-    // real deficit even though the till itself can easily cover it.
+    // real deficit even though the till itself can easily cover it. ctx carries
+    // no isContainer flag, so this isolates npc._container on its own.
     const chest = { type: 'Chest', disposition: 100, _container: true };
     const o = { give: [], take: [], gold: -10 };
-    assert.match(commitBlocker(chest, o, { ...ctx, npcGold: 50, isContainer: true }), /CAN'T BE SHORTCHANGED/);
+    assert.match(commitBlocker(chest, o, { ...ctx, npcGold: 50 }), /CAN'T BE SHORTCHANGED/);
+  });
+
+  test('ctx.isContainer alone protects an NPC that is not itself flagged as a container', () => {
+    const notAContainer = { type: 'Violencian', disposition: 50 };
+    const o = { give: [], take: [], gold: -10 };
+    assert.match(commitBlocker(notAContainer, o, { ...ctx, npcGold: 50, isContainer: true }), /CAN'T BE SHORTCHANGED/);
+  });
+
+  test('a null NPC with a real deficit does not throw', () => {
+    const o = { give: [], take: [{ def: BANDAGE, count: 1 }], gold: 0 };
+    assert.match(commitBlocker(null, o, ctx), /CAN'T BE SHORTCHANGED/);
   });
 
   test('taking loot from a container is free and unblocked', () => {
