@@ -410,6 +410,12 @@ describe('resentment — bad deals are a move, not an error', () => {
   });
 
   test('the resentment curve is the goodwill curve mirrored', () => {
+    // These five points are where 4*progress(d,100) is exactly representable
+    // in binary, so exact equality holds here but is not a general claim —
+    // e.g. d=-97 differs by 1 ulp. Harmless: resentmentFor only ever feeds
+    // this an integer d0-pts and never compares the two curves against each
+    // other, so a 1-ulp gap never surfaces. If Tasks 9-11 ever chart the two
+    // curves against each other directly, widen this to a tolerance.
     for (const d of [-100, -50, 0, 50, 100]) {
       assert.equal(resentCostPerPoint(d, 100), 6 - goodwillCostPerPoint(d, 100),
         `curves are not mirrored at d=${d}`);
@@ -440,6 +446,51 @@ describe('resentment — bad deals are a move, not an error', () => {
     let gp = 0;
     for (let i = 0; i < 25; i++) gp += resentCostPerPoint(60 - i, 100);
     assert.equal(Math.round(gp), 51);
+  });
+
+  test('paying the spec-exact 51 GP is accepted, not refused on float dust', () => {
+    // The 25-point cap binds here BEFORE pool ever crosses zero — summing
+    // the 25 real costs leaves ~1.02e-14 of float drift sitting in pool when
+    // the room cap ends the loop. Math.max(0, pool) alone read that dust as
+    // a live shortfall and refused the exact payment named above; a caller
+    // (Task 5) must be able to spend precisely the number this file quotes.
+    const r = resentmentFor(51, PUCK);
+    assert.equal(r.points, -25);
+    assert.equal(r.shortfall, 0, 'paying exactly the quoted price must not be refused');
+  });
+
+  test('an exact mid-loop payment does not take a bonus point off float dust', () => {
+    // At disposition -18, five points cost exactly 17.00 GP — but the same
+    // drift that undercounts the 51 GP case above can also land pool a hair
+    // ABOVE zero instead of below, and a bare `pool > 0` reads that as still
+    // owing, taking a 6th point nobody paid for.
+    const r = resentmentFor(17, { disposition: -18 });
+    assert.equal(r.points, -5, 'exactly-paid points must not spill into an extra one');
+    assert.equal(r.shortfall, 0);
+  });
+
+  test('an exact single-point payment stops there — the boundary itself', () => {
+    // resentCostPerPoint(50, 100) is exactly 2 (no float drift at all here),
+    // so this pins the loop's own continuation test directly: `pool > 0`
+    // widened to `pool >= 0` re-enters the loop on the leftover zero and
+    // charges a second point (-2) nobody paid for.
+    assert.equal(resentCostPerPoint(50, 100), 2);
+    const r = resentmentFor(2, { disposition: 50 });
+    assert.equal(r.points, -1);
+    assert.equal(r.shortfall, 0);
+  });
+
+  test('the ceiling comes from dispositionCeil, not a hardcoded 100', () => {
+    // Same disposition as Puck (60) but the Fungus King's raised ceiling
+    // (flipThreshold 200) makes every point cheaper: resentCostPerPoint(60,
+    // 200) is ~2.87, not Puck's 1.80. The identical 29 GP shortfall that
+    // costs Puck 15 points (see above) buys more points per GP here, so it
+    // costs only 10 — a hardcoded ceil of 100 would silently give -15, same
+    // as Puck, and nothing in this file would catch it.
+    const warmKing = { ...KING, disposition: 60 };
+    const r = resentmentFor(29, warmKing);
+    assert.equal(r.points, -10);
+    assert.equal(r.shortfall, 0);
   });
 
   test('one offer can never cost more than RESENT_MAX_PER_OFFER', () => {

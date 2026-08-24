@@ -276,9 +276,26 @@ export function resentmentFor(deficit, npc) {
     const ceil = dispositionCeil(npc);
     const room = Math.min(RESENT_MAX_PER_OFFER, d0 - RESENT_FLOOR);
     let pool = deficit, pts = 0;
-    while (pool > 0 && pts < room) {
+    // Mirrors goodwillFor's EPSILON guard, but it has to sit somewhere
+    // different, because this loop can hit zero exactly and still get the
+    // wrong answer two different ways. Dropping Puck his spec-exact 51 GP
+    // exhausts `room` at pts=25 with `pool` sitting on 1.02e-14 of drift —
+    // `Math.max(0, pool)` alone read that dust as a live shortfall and
+    // refused the exact payment the spec names. Paying an exact 17 GP at
+    // d0=-18 does the opposite: 5 points cost exactly 17.00, but the drift
+    // lands pool a hair ABOVE zero instead of below, and a bare `pool > 0`
+    // reads that as still owing, so it takes a 6th point nobody paid for.
+    // The obvious mirror — break BEFORE paying once pool looks spent,
+    // the same shape as goodwillFor's guard — does not touch the first
+    // case at all (that loop exits on the room cap, not on pool crossing
+    // zero, so the break never fires) and leaves the headline bug in place.
+    // Both failure modes are the same float dust landing on different sides
+    // of zero, so both the loop's own continuation test AND the final
+    // shortfall need the EPSILON tolerance — fixing only one still misreads
+    // whichever case that one doesn't cover.
+    while (pool > EPSILON && pts < room) {
         pool -= resentCostPerPoint(d0 - pts, ceil);
         pts++;
     }
-    return { points: -pts, shortfall: Math.max(0, pool) };
+    return { points: -pts, shortfall: pool > EPSILON ? pool : 0 };
 }
