@@ -111,3 +111,78 @@ describe('spotters — the "am I hidden" predicate', () => {
         assert.deepEqual(spotters(openMap(), null, 0, 0), []);
     });
 });
+
+// ── Authored spawn facing on the Enemy class ────────────────────────────────
+//
+// An enemy that has never taken a step has no facing to read, so map JSON can
+// declare one. The subtle requirement is that it must NOT win over a restored
+// one: save.js reconstructs via `new Enemy(s)` carrying the persisted
+// _lastDx/_lastDy, so an unconditional assignment would silently re-point every
+// enemy that had turned, on every reload.
+
+import { Enemy } from '../game/enemies.js';
+
+describe('authored spawn facing', () => {
+    test('seeds the facing stamp for an enemy that has never moved', () => {
+        const e = new Enemy({ id: 'e1', type: 'guard', x: 3, y: 3, facing: 'W' });
+        assert.deepEqual(facingOf(e), { fx: -1, fy: 0 });
+    });
+
+    test('every compass point resolves', () => {
+        for (const [name, [fx, fy]] of Object.entries(FACING_VECTORS)) {
+            const e = new Enemy({ id: 'e', type: 'guard', x: 0, y: 0, facing: name });
+            assert.deepEqual(facingOf(e), { fx, fy }, `facing ${name}`);
+        }
+    });
+
+    test('a RESTORED live facing wins over the authored one', () => {
+        const e = new Enemy({ id: 'e1', type: 'guard', x: 3, y: 3, facing: 'W', _lastDx: 0, _lastDy: -1 });
+        assert.deepEqual(facingOf(e), { fx: 0, fy: -1 });
+    });
+
+    test('an unknown facing string is ignored rather than crashing', () => {
+        const e = new Enemy({ id: 'e1', type: 'guard', x: 3, y: 3, facing: 'NORTHWESTISH' });
+        assert.deepEqual(facingOf(e), { fx: 0, fy: 1 });
+    });
+
+    test('no authored facing and no movement → south', () => {
+        const e = new Enemy({ id: 'e1', type: 'guard', x: 3, y: 3 });
+        assert.deepEqual(facingOf(e), { fx: 0, fy: 1 });
+    });
+});
+
+describe('the new Enemy fields round-trip through toSave', () => {
+    test('hearingRange, equipped and thievable survive a save', () => {
+        const e = new Enemy({
+            id: 'e1', type: 'guard', x: 1, y: 1,
+            hearingRange: 3, equipped: ['crowbar'], thievable: false,
+        });
+        const s = e.toSave();
+        assert.equal(s.hearingRange, 3);
+        assert.deepEqual(s.equipped, ['crowbar']);
+        assert.equal(s.thievable, false);
+
+        const back = new Enemy(s);
+        assert.equal(back.hearingRange, 3);
+        assert.deepEqual(back.equipped, ['crowbar']);
+        assert.equal(back.thievable, false);
+    });
+
+    test('the ladder counters survive a save taken mid-hunt', () => {
+        const e = new Enemy({ id: 'e1', type: 'guard', x: 1, y: 1 });
+        e._awareBeats = 1;
+        e._sweepBeats = 4;
+        const back = new Enemy(e.toSave());
+        assert.equal(back._awareBeats, 1);
+        assert.equal(back._sweepBeats, 4);
+    });
+
+    test('the defaults are absent/zero, not undefined arithmetic', () => {
+        const e = new Enemy({ id: 'e1', type: 'guard', x: 1, y: 1 });
+        assert.equal(e.hearingRange, null);
+        assert.equal(e.equipped, null);
+        assert.equal(e.thievable, null);
+        assert.equal(e._awareBeats, 0);
+        assert.equal(e._sweepBeats, 0);
+    });
+});
