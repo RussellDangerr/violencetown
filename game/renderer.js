@@ -434,11 +434,10 @@ export class Renderer {
             item_overlay: this._itemOverlayRect,
             target_list: this._targetListRect,
             log_modal:   LOG_MODAL_RECT,
-            trade:       TRADE_MODAL_RECT,
+            trade:       TRADE_MODAL_RECT,   // STATE.TRADE is also the offer screen's state —
+                                              // one panel rect (== MODAL_RECT) serves both.
             dialogue:    this._dialogueRect,
             device:      DEVICE_RECT,
-            offer:       MODAL_RECT,   // the ✕ chip's one source of truth; offerLayout's own
-                                       // `close` field goes unused so there's only one.
         }[game.state] || null;
         this._menuPanelRect = CLOSE_PANEL;
         this._closeBtnRect = CLOSE_PANEL ? closeButtonRect(CLOSE_PANEL) : null;

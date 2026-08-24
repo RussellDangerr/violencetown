@@ -467,7 +467,6 @@ export function offerLayout(panelRect) {
         ledgerBalanceX:     px + 268,
         button:             { x: buttonX, y: ledgerY - 2, w: buttonW, h: 40 },
         hintY:              P.y + 506,
-        close:              closeButtonRect(P),
     };
 }
 
