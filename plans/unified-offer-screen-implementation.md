@@ -1368,6 +1368,54 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 
 ---
 
+---
+
+## Task 6a: Split `offer.js` at the curves seam
+
+**Files:**
+- Create: `game/disposition-curves.js`
+- Modify: `game/offer.js`, `tests/offer.test.js`
+
+**Do this immediately after Task 6 and before Task 9.** The timing is the whole point, and it is not
+arbitrary.
+
+`game/offer.js` holds two responsibilities with a one-way dependency between them: *what is this
+basket worth* (`emptyOffer`, `unitCount`, `giftWeight`, `offerBalance`, `settledGold`, plus Tasks 5–6)
+and *what does an imbalance do to a relationship* (`progress`, both cost curves, `goodwillFor`,
+`splitGoodwill`, `resentmentFor`). The only edge between them is `dispositionOf`. The `// ── The
+curves ──` banner already marks the seam.
+
+**Why not now:** Tasks 5 and 6 both append to this file, and CLAUDE.md forbids restructuring a core
+file that unmerged work is about to rewrite.
+
+**Why not later:** today `offer.js` has exactly **one** importer — the test file, one import line.
+Tasks 7 and 8 touch `weapons.js`/`main.js` and `layout.js`, neither of which imports it, so waiting
+for them buys nothing. But Tasks 9–11 add `renderer.js` import sites for `goodwillCostPerPoint` and
+`resentmentCostPerPoint`. Split before those exist and they get written against the final layout;
+split after and you rewrite them. **The window between Task 6 and Task 9 is the cheapest this split
+will ever be, and it only gets more expensive.**
+
+- [ ] **Step 1: Check for overlapping unmerged work first** — it is still a core-file restructure.
+
+```bash
+cd C:/Code/violencetown && git branch --no-merged dev
+```
+
+- [ ] **Step 2: Move the curves block** — everything from the `// ── The curves ──` banner through
+`resentmentFor` — into `game/disposition-curves.js`, plus `dispositionOf` (the single shared edge)
+and `DISPOSITION_MIN`. The new module imports nothing.
+
+- [ ] **Step 3: `offer.js` imports what it needs** from `./disposition-curves.js` and re-exports
+nothing it does not use.
+
+- [ ] **Step 4: Split the test file to match**, keeping each describe block with the module it tests.
+
+- [ ] **Step 5: Run the suite.** Behaviour-preserving: `fail 0`, count unchanged.
+
+- [ ] **Step 6: Commit** as a pure move, so the diff reads as a rename rather than a rewrite.
+
+---
+
 ## Task 7: Weapons become first-class tradeable items
 
 **Files:**
