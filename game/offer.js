@@ -200,54 +200,44 @@ export function goodwillFor(surplus, npc) {
 // no disposition, so six +5 bribes at 10 GP each currently flip the sewer boss
 // into an ally for 60 GP.
 //
-// bribeable:false zeroes the gold half outright. _bribeTarget respects that flag
-// today but _bribeVendor never checks it, so the Ghost Fungus — the only NPC in
-// the game authored bribeable:false — is bribeable through the trade window.
+// bribeable:false is folded in as the degenerate ceiling: right where the
+// gifts left them, so gold moves nobody. _bribeTarget respects the flag today,
+// _bribeVendor never checks it, so the Ghost Fungus is bribeable through the
+// trade window. She won't stay the only caller: every chest's _openContainer
+// shim (main.js) is bribeable:false, disposition:100, and once Tasks 12-17
+// route container offers through here, chests are the dominant caller of this
+// branch, not the Fungus.
 export function splitGoodwill(npc, { itemValue = 0, gold = 0 } = {}) {
     const d0 = dispositionOf(npc);
-    // goodwillFor returns { points, unspent } as of Task 2 — surplus the NPC had
-    // no headroom left to feel. Carry it through so resolveOffer can say so.
     const items = goodwillFor(itemValue, npc);
-
-    if (npc && npc.bribeable === false) {
-        // Gifts still land on someone who refuses bribes; only the gold is
-        // refused. This is what gold ASKED FOR on the curve, not what it
-        // could have obtained — the ceiling branch below would still cap a
-        // bribeable NPC's gold at flipThreshold - 1, but that logic never
-        // runs here, since this branch returns first. Same formula as the
-        // sibling branch's goldRefusedPoints (rawCurve - fromGold, fromGold
-        // here being 0) — that symmetry is what keeps the field comparable
-        // across branches instead of meaning something different in each.
-        const refused = goodwillFor(gold, { ...npc, disposition: d0 + items.points }).points;
-        return { points: items.points, fromItems: items.points, fromGold: 0,
-                 unspent: items.unspent, goldRefusedPoints: refused };
-    }
-
-    const rawT = (npc && npc.flipThreshold) ?? 30;
-    // The third numeric door into this module, guarded like the other two.
-    // An Infinity threshold would otherwise read as "no ceiling" and hand the
-    // most unflippable NPC the freest gold — the intent exactly inverted.
-    const threshold = Number.isFinite(rawT) ? rawT : 30;
     const afterItems = d0 + items.points;
-    // Gold stops one point short of an uncrossed threshold. If they are already
-    // at or above it there is no flip left to protect, so gold is unbounded.
-    const goldCeiling = afterItems < threshold ? threshold - 1 : Infinity;
 
-    const raw = goodwillFor(gold, { ...npc, disposition: afterItems });
-    const allowed = goldCeiling === Infinity
-        ? raw.points
-        : Math.max(0, Math.min(raw.points, goldCeiling - afterItems));
+    const rawThreshold = (npc && npc.flipThreshold) ?? 30;
+    const threshold = Number.isFinite(rawThreshold) ? rawThreshold : 30;
+
+    // Where gold may climb to. Someone who refuses bribes is the degenerate
+    // ceiling: right where the gifts left them, so gold moves nobody.
+    const goldCeiling =
+        (npc && npc.bribeable === false) ? afterItems
+        : afterItems < threshold         ? threshold - 1
+        : Infinity;
+
+    const goldCurve = goodwillFor(gold, { ...npc, disposition: afterItems });
+    // Floored: a fractional flipThreshold still passes Number.isFinite, so
+    // without this an authored 60.5 would mint fractional points of goodwill
+    // that eventually land on npc.disposition itself.
+    const allowed = Number.isFinite(goldCeiling)
+        ? Math.max(0, Math.min(Math.floor(goldCeiling - afterItems), goldCurve.points))
+        : goldCurve.points;
 
     return {
         points: items.points + allowed,
         fromItems: items.points,
         fromGold: allowed,
-        unspent: items.unspent + raw.unspent,
+        unspent: items.unspent + goldCurve.unspent,
         // Points gold wanted to buy but the flip ceiling refused. Distinct from
         // `unspent` — that is "no room left to feel", this is "gold can't carry
-        // him across his own threshold". They want different log lines. Suffixed
-        // (unlike `unspent`/`shortfall`) because it has zero consumers to disturb —
-        // the asymmetry itself signals "this one is points, not GP".
-        goldRefusedPoints: Math.max(0, raw.points - allowed),
+        // him across his own threshold". They want different log lines.
+        goldRefusedPoints: Math.max(0, goldCurve.points - allowed),
     };
 }

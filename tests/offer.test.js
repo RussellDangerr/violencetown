@@ -293,10 +293,13 @@ describe('the gold ceiling', () => {
   });
 
   test('60 GP of bribes can no longer flip the sewer boss', () => {
-    // The Wererat has no bribeable flag, no flipThreshold and no disposition,
-    // so T defaults to 30 and gold stops at 29 — short of the flip.
-    const r = splitGoodwill(BOSS, { itemValue: 0, gold: 100000 });
-    assert.ok(r.points <= 29, `gold bought ${r.points} points on an unauthored NPC`);
+    // The old live bug: 60 GP at a flat 5 GP/point bought +30, enough to flip
+    // him. The Wererat has no bribeable flag, no flipThreshold and no
+    // disposition, so threshold defaults to 30 and the rising curve means
+    // 60 GP buys only 18 points now — nowhere near 30.
+    assert.equal(splitGoodwill(BOSS, { gold: 60 }).points, 18);
+    // Even unlimited gold caps at 29 — one short of the flip, never 30.
+    assert.equal(splitGoodwill(BOSS, { gold: 100000 }).points, 29);
   });
 
   test('items are NOT capped by the gold ceiling — gifts stay the clever path', () => {
@@ -333,14 +336,41 @@ describe('the gold ceiling', () => {
     assert.equal(typeof capped.goldRefusedPoints, 'number');
   });
 
-  test('the refused count uses the same formula as the ceiling branch', () => {
-    // rawCurve - fromGold, with fromGold 0. Keeping the formula identical is
-    // what makes the two branches comparable; a bare 0 would make the field
-    // mean different things depending on which branch produced it.
-    assert.equal(
-      splitGoodwill(GHOST, { itemValue: 0, gold: 100000 }).goldRefusedPoints,
-      goodwillFor(100000, GHOST).points,
-    );
+  test('the refused count is measured AFTER the gift has moved them', () => {
+    const withGift = splitGoodwill(GHOST, { itemValue: 200, gold: 100000 });
+    assert.equal(withGift.fromItems, 73, 'a 200-value gift lifts the Fungus from -50 to +23');
+    assert.equal(withGift.goldRefusedPoints, 77,
+      'from +23 the same gold asks for 77 points, not the 150 it asks for from -50');
+    assert.equal(splitGoodwill(GHOST, { itemValue: 0, gold: 100000 }).goldRefusedPoints, 150);
+  });
+
+  test('unspent carries BOTH halves', () => {
+    const r = splitGoodwill({ ...GHOST, bribeable: true }, { itemValue: 200, gold: 100000 });
+    assert.ok(r.unspent > 99000, 'drop the gold half and this collapses to the gift half alone');
+  });
+
+  test('the ceiling reports exactly what it refused', () => {
+    const r = splitGoodwill({ ...GHOST, bribeable: true }, { itemValue: 0, gold: 100000 });
+    assert.equal(r.fromGold, 109);
+    assert.equal(r.goldRefusedPoints, 41, 'the curve wanted 150; the flip ceiling allowed 109');
+  });
+
+  test('an NPC sitting EXACTLY on their threshold is not frozen out of gold', () => {
+    // The "at" half of "at or above" — the Puck case only covers "above".
+    const r = splitGoodwill({ disposition: 60, flipThreshold: 60 }, { gold: 500 });
+    assert.equal(r.fromGold, 40);
+  });
+
+  test('a fractional flipThreshold does not mint fractional disposition', () => {
+    // Without Math.floor this is { fromGold: 109.5, points: 109.5,
+    // goldRefusedPoints: 40.5 } — fractional GP-bought points that would
+    // eventually land on npc.disposition itself. 60.5 still passes
+    // Number.isFinite, so this is reachable from map JSON alone.
+    const r = splitGoodwill({ disposition: -50, flipThreshold: 60.5 }, { gold: 100000 });
+    assert.equal(r.fromGold, 109);
+    assert.equal(r.points, 109);
+    assert.equal(r.goldRefusedPoints, 41);
+    assert.ok(Number.isInteger(r.fromGold) && Number.isInteger(r.points));
   });
 
   test('a garbage flipThreshold falls back to the default 30 — gold stops at 29', () => {
