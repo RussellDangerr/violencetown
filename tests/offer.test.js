@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { emptyOffer, offerBalance, settledGold, dispositionCeil, goodwillCostPerPoint, goodwillFor, splitGoodwill, RESENT_MAX_PER_OFFER, RESENT_FLOOR, resentmentCostPerPoint, resentmentFor } from '../game/offer.js';
+import { emptyOffer, offerBalance, settledGold, dispositionCeil, goodwillCostPerPoint, goodwillFor, splitGoodwill, RESENT_MAX_PER_OFFER, RESENT_FLOOR, resentmentCostPerPoint, resentmentFor, resolveOffer } from '../game/offer.js';
 
 const PUCK = {
   type: 'Puck', disposition: 60, flipThreshold: 0, vendor: true,
@@ -589,5 +589,126 @@ describe('resentment — bad deals are a move, not an error', () => {
     // carries the identical Math.floor for the mirrored ceiling hazard.
     const r = resentmentFor(1e9, { disposition: RESENT_FLOOR + 0.5 });
     assert.equal(r.points, 0, 'half a point of headroom must round down to zero, not up to one');
+  });
+});
+
+describe('resolveOffer — one call, the whole projection', () => {
+  test('a settled sale moves nothing', () => {
+    const r = resolveOffer(PUCK, { give: [{ def: SOAP, count: 2 }], take: [], gold: -18 });
+    assert.equal(r.balance, 0);
+    assert.equal(r.points, 0);
+    assert.equal(r.projected, 60);
+  });
+
+  test('a settled purchase moves nothing', () => {
+    const r = resolveOffer(PUCK, { give: [], take: [{ def: BANDAGE, count: 1 }], gold: 30 });
+    assert.equal(r.balance, 0);
+    assert.equal(r.points, 0);
+  });
+
+  test('handing two soap over for free is +16, and crosses into adoring', () => {
+    const r = resolveOffer(PUCK, { give: [{ def: SOAP, count: 2 }], take: [], gold: 0 });
+    assert.equal(r.balance, 18, 'the market surplus');
+    assert.equal(r.points, 16, 'amplified by his soap weight of 4');
+    assert.equal(r.projected, 76);
+  });
+
+  test('the same soap inside a purchase projects identically', () => {
+    const r = resolveOffer(PUCK, {
+      give: [{ def: SOAP, count: 2 }], take: [{ def: BANDAGE, count: 1 }], gold: 30,
+    });
+    assert.equal(r.points, 16, 'gold paid the bill; the soap is still a gift on top');
+    assert.equal(r.projected, 76);
+  });
+
+  test('a pure bribe routes through the gold half', () => {
+    const r = resolveOffer(PUCK, { give: [], take: [], gold: 30 });
+    assert.equal(r.fromItems, 0);
+    assert.ok(r.fromGold > 0);
+    assert.equal(r.points, r.fromGold);
+  });
+
+  test('a lowball is accepted and costs 15', () => {
+    const r = resolveOffer(PUCK, {
+      give: [{ def: ROCK, count: 1 }], take: [{ def: BANDAGE, count: 1 }], gold: 0,
+    });
+    assert.equal(r.balance, -29);
+    assert.equal(r.points, -15);
+    assert.equal(r.projected, 45);
+    assert.equal(r.refused, false);
+  });
+
+  test('a lowball bigger than his patience is refused', () => {
+    const r = resolveOffer(PUCK, { give: [], take: [{ def: BANDAGE, count: 20 }], gold: 0 });
+    assert.equal(r.points, -RESENT_MAX_PER_OFFER);
+    assert.equal(r.refused, true);
+    assert.ok(r.shortfall > 0);
+  });
+
+  test('an empty offer is inert', () => {
+    const r = resolveOffer(PUCK, emptyOffer());
+    assert.equal(r.points, 0);
+    assert.equal(r.refused, false);
+  });
+
+  test('resolveOffer mutates neither the npc nor the offer', () => {
+    const npc = { ...PUCK };
+    const offer = { give: [{ def: SOAP, count: 2 }], take: [], gold: 0 };
+    const snapshot = JSON.stringify({ npc, offer });
+    resolveOffer(npc, offer);
+    assert.equal(JSON.stringify({ npc, offer }), snapshot);
+  });
+
+  describe('the three accounting seams', () => {
+    test('unspent is honest GP even when the surplus is entirely a weighted gift', () => {
+      // 100 soap on Puck: way past his 40-point headroom to the 100 ceiling,
+      // so most of the (weighted) value buys nothing. If the item half of
+      // `unspent` were left in its giftWeight-inflated units (weight 4), a
+      // caller printing it as gold would overstate the waste by 4x.
+      const r = resolveOffer(PUCK, { give: [{ def: SOAP, count: 100 }], take: [], gold: 0 });
+      assert.equal(r.points, 40, 'capped at his headroom to the 100 ceiling');
+      // givenItemsValue for 100 soap at Puck's warm rate (9 each) is 900 real GP.
+      assert.equal(r.givenItemsValue, 900);
+      // unspent must never exceed the real GP actually on the table — the old
+      // (buggy) sum could read as high as unspent-in-weight-4-units, i.e. up
+      // to ~4x an honest number.
+      assert.ok(r.unspent < r.givenItemsValue,
+        `unspent (${r.unspent}) must be denominated in real GP, not weight-4 units`);
+      assert.ok(r.unspent > 0, 'headroom of 40 cannot absorb the full 900 GP of weighted gift');
+    });
+
+    test('gold spent on ceiling-refused points is not lost — the doorstep case', () => {
+      // Sharpest right at the doorstep: one point shy of the flip threshold,
+      // so the gold ceiling admits ZERO points no matter how much is offered.
+      // Every GP staged must come back as unspent — none may vanish into
+      // goodwillFor's internal "cost" of points the ceiling then refused.
+      const r = resolveOffer({ disposition: 59, flipThreshold: 60 }, { give: [], take: [], gold: 500 });
+      assert.equal(r.points, 0);
+      assert.equal(r.fromGold, 0);
+      assert.ok(r.goldRefusedPoints > 0, 'the curve wanted points; the threshold refused all of them');
+      assert.equal(r.unspent, 500, 'the whole 500 GP is accounted for, not just the fraction old code saw');
+    });
+
+    test('goldRefusedPoints survives the trip through resolveOffer', () => {
+      // Three review rounds argued about a field nothing reads (see Task 5's
+      // notes) — this is the something that reads it.
+      const bribable = { type: 'Ghost Fungus', disposition: -50, flipThreshold: 60, bribeable: true, values: { bandage: 8 } };
+      const r = resolveOffer(bribable, { give: [], take: [], gold: 100000 });
+      assert.equal(r.fromGold, 109);
+      assert.equal(r.goldRefusedPoints, 41, 'the curve wanted 150; the flip ceiling allowed 109');
+    });
+
+    test('a fully-settled offer and a refused offer both report a clean zero, not undefined', () => {
+      // Downstream consumers (the ledger line, the meter's ghost segment)
+      // read unspent/goldRefusedPoints unconditionally; neither branch that
+      // skips splitGoodwill may leave them missing.
+      const settled = resolveOffer(PUCK, { give: [], take: [{ def: BANDAGE, count: 1 }], gold: 30 });
+      assert.equal(settled.unspent, 0);
+      assert.equal(settled.goldRefusedPoints, 0);
+
+      const refused = resolveOffer(PUCK, { give: [], take: [{ def: BANDAGE, count: 20 }], gold: 0 });
+      assert.equal(refused.unspent, 0);
+      assert.equal(refused.goldRefusedPoints, 0);
+    });
   });
 });

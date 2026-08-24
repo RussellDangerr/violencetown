@@ -282,3 +282,63 @@ export function resentmentFor(deficit, npc) {
     // is nothing gained by exposing it here.
     return { points: -pts || 0, shortfall: pool > EPSILON ? pool : 0 };
 }
+
+// ── The projection ───────────────────────────────────────────────────────────
+//
+// One call, everything the screen needs. Both the renderer (to draw the meter's
+// ghost segment and the ledger) and main.js (to commit) go through here, so what
+// the player was shown and what actually happens can never diverge.
+
+// The GP cost of exactly `n` points bought in order starting at d0 — the same
+// running total goodwillFor's own loop accumulates internally, replayed here
+// so a point count splitGoodwill has already resolved (some possibly refused
+// by the flip ceiling) can be priced without re-deciding how many there are.
+function costOfPoints(d0, ceil, n) {
+    let sum = 0;
+    for (let i = 0; i < n; i++) sum += goodwillCostPerPoint(d0 + i, ceil);
+    return sum;
+}
+
+export function resolveOffer(npc, offer) {
+    const o = offer || emptyOffer();
+    const bal = offerBalance(npc, o);
+    const d0 = dispositionOf(npc);
+    const goldGiven = Math.max(0, Math.trunc(o.gold || 0));
+
+    if (bal.balance === 0) {
+        return { ...bal, points: 0, fromItems: 0, fromGold: 0, projected: d0,
+                 shortfall: 0, unspent: 0, goldRefusedPoints: 0, refused: false };
+    }
+
+    if (bal.balance > 0) {
+        // Gold pays the bill first; what's left over is the surplus. The item
+        // share of it is amplified by the average weight of what was given, so
+        // generosity is weighted and settlement never is.
+        const goldSurplus = Math.max(0, goldGiven - bal.takenValue);
+        const itemSurplus = Math.max(0, bal.balance - goldSurplus);
+        const avgWeight = bal.givenItemsValue > 0 ? bal.giftValue / bal.givenItemsValue : 1;
+        const g = splitGoodwill(npc, { itemValue: itemSurplus * avgWeight, gold: goldSurplus });
+
+        // Recomputed rather than taken from splitGoodwill's own `unspent`: this
+        // divides the item half back out of its giftWeight-inflated units and
+        // sums only the cost of points that actually landed (not the flip
+        // ceiling's refused ones), so both halves land in the same real-GP
+        // unit as `shortfall`. Pinned in tests/offer.test.js, "the three
+        // accounting seams".
+        const ceil = dispositionCeil(npc);
+        const afterItems = d0 + g.fromItems;
+        const itemsCost = costOfPoints(d0, ceil, g.fromItems);
+        const goldCost = costOfPoints(afterItems, ceil, g.fromGold);
+        const unspent = Math.max(0,
+            (itemSurplus - itemsCost / avgWeight) + (goldSurplus - goldCost));
+
+        return { ...bal, points: g.points, fromItems: g.fromItems, fromGold: g.fromGold,
+                 projected: d0 + g.points, shortfall: 0, unspent,
+                 goldRefusedPoints: g.goldRefusedPoints, refused: false };
+    }
+
+    const r = resentmentFor(-bal.balance, npc);
+    return { ...bal, points: r.points, fromItems: 0, fromGold: 0,
+             projected: d0 + r.points, shortfall: r.shortfall,
+             unspent: 0, goldRefusedPoints: 0, refused: r.shortfall > 0 };
+}
