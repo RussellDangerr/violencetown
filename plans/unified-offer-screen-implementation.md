@@ -1306,18 +1306,18 @@ export function commitBlocker(npc, offer, ctx = {}) {
 
     const owedToPlayer = Math.max(0, -gold);
     const npcGold = ctx.npcGold ?? 0;
-    if (owedToPlayer > npcGold) return `HIS TILL IS ${owedToPlayer - npcGold} GP SHORT`;
+    if (owedToPlayer > npcGold) return `THEIR TILL IS ${owedToPlayer - npcGold} GP SHORT`;
 
     // The floor gates TAKING, not giving — a hostile NPC is a puzzle, not a wall.
     // You can always gift or bribe your way back up to where he'll deal, in the
     // same sitting. (Options narrowed, never removed.)
     const takingSomething = (o.take || []).length > 0 || gold < 0;
-    if (takingSomething && !canTrade(dispositionOf(npc))) return "HE WON'T DEAL";
+    if (takingSomething && !canTrade(dispositionOf(npc))) return "THEY WON'T DEAL";
 
     if (offerBalance(npc, o).balance < 0) {
         const noResentment = !npc || npc.disposition == null || npc._container || ctx.isContainer;
-        if (noResentment) return "HE CAN'T BE SHORTCHANGED";
-        if (resolveOffer(npc, o).refused) return "HE WON'T TAKE ANOTHER BAD DEAL";
+        if (noResentment) return "THEY CAN'T BE SHORTCHANGED";
+        if (resolveOffer(npc, o).refused) return "THEY WON'T TAKE ANOTHER BAD DEAL";
     }
     return null;
 }
@@ -2246,11 +2246,11 @@ the NPC's mood line instead of dead space.
         this.font.drawText(ctx, taking, L.desc.x + 56, L.ledgerY + 16, { color: UI.text, scale: 1 });
 
         this.font.drawText(ctx, 'BALANCE', 300, L.ledgerY, { color: UI.dim, scale: 1 });
-        const balTxt = R.balance >= 0 ? `+${R.balance} IN HIS FAVOUR` : `${-R.balance} GP SHORT`;
+        const balTxt = R.balance >= 0 ? `+${R.balance} IN THEIR FAVOUR` : `${-R.balance} GP SHORT`;
         this.font.drawText(ctx, balTxt, 300, L.ledgerY + 16,
             { color: R.balance >= 0 ? '#79c46a' : UI.hpRed, scale: 1 });
         if (R.points < 0) {
-            this.font.drawText(ctx, `${R.points} . HE'LL REMEMBER THIS`, 300, L.ledgerY + 30,
+            this.font.drawText(ctx, `${R.points} . THEY'LL REMEMBER THIS`, 300, L.ledgerY + 30,
                 { color: UI.hpRed, scale: 1 });
         }
 
@@ -2268,7 +2268,7 @@ the NPC's mood line instead of dead space.
 > **Draw the blocker before the balance.** `resolveOffer({ disposition: -70 }, { take: [10 bandages] })`
 > returns `balance: 0, points: 0` — `buyPrice` is `null` below `TRADE_FLOOR` and `offerBalance`
 > coerces it to 0. `commitBlocker` catches the offer, but `_drawOfferLedger` paints `R.balance`
-> directly, so a ten-item theft from a hostile NPC would read `+0 IN HIS FAVOUR`. Render the blocker
+> directly, so a ten-item theft from a hostile NPC would read `+0 IN THEIR FAVOUR`. Render the blocker
 > state first, or the ledger lies about what is on the table.
 
 - [ ] **Step 2: Register the screen and retire the old one in the dispatch**
@@ -2890,7 +2890,7 @@ move disposition, then log. Nothing half-applies.
 
 On Puck: stage two soap with nothing taken, confirm the meter projects 60 → 76, commit, and confirm
 **his prices actually change afterward** (re-open and check a bandage now costs 25 rather than 30).
-Then stage a rock against a bandage, confirm the red retreat and the `-15 . HE'LL REMEMBER THIS`
+Then stage a rock against a bandage, confirm the red retreat and the `-15 . THEY'LL REMEMBER THIS`
 warning, commit, and confirm his prices got worse.
 
 - [ ] **Step 4: Commit**
@@ -3243,13 +3243,13 @@ Console must be clean throughout.
 - [ ] **A plain Violencian** (no vendor, no `values`) — the take side is empty with a stated reason;
       the give tray still generates goodwill from GP value alone.
 - [ ] **A chest** — take-only, give tray disabled, reachable **by tap** and not only by bumping.
-- [ ] **Someone below −50** — the lists render, taking is refused with `HE WON'T DEAL`, the give tray
+- [ ] **Someone below −50** — the lists render, taking is refused with `THEY WON'T DEAL`, the give tray
       still works, and gifting up past the floor unlocks trading **in the same sitting**.
 - [ ] **The Fungus King** (`flipThreshold: 200`) — the meter renders legibly without clamping his math.
 - [ ] **The Ghost Fungus** (`bribeable: false`) — gold in the tray generates no goodwill; gifts still do.
 - [ ] **Scroll** — all 50 bag slots reachable; the thumb is proportional at 1 item and at 50.
 - [ ] **A bad deal** — the red retreat, the warning, the commit, and worse prices afterward.
-- [ ] **An unabsorbable lowball** — refused with `HE WON'T TAKE ANOTHER BAD DEAL`.
+- [ ] **An unabsorbable lowball** — refused with `THEY WON'T TAKE ANOTHER BAD DEAL`.
 - [ ] **Escape mid-basket** — the staged offer is discarded and nothing was spent.
 
 - [ ] **Step 4: Glyph check**
