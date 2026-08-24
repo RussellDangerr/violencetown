@@ -211,11 +211,17 @@ export function splitGoodwill(npc, { itemValue = 0, gold = 0 } = {}) {
 
     if (npc && npc.bribeable === false) {
         // Gifts still land on someone who refuses bribes; only the gold is refused.
+        // All of it — so the refusal is the whole amount gold could have bought.
+        const refused = goodwillFor(gold, { ...npc, disposition: d0 + items.points }).points;
         return { points: items.points, fromItems: items.points, fromGold: 0,
-                 unspent: items.unspent, goldRefused: gold > 0 };
+                 unspent: items.unspent, goldRefusedPoints: refused };
     }
 
-    const threshold = (npc && npc.flipThreshold) ?? 30;
+    const rawT = (npc && npc.flipThreshold) ?? 30;
+    // The third numeric door into this module, guarded like the other two.
+    // An Infinity threshold would otherwise read as "no ceiling" and hand the
+    // most unflippable NPC the freest gold — the intent exactly inverted.
+    const threshold = Number.isFinite(rawT) ? rawT : 30;
     const afterItems = d0 + items.points;
     // Gold stops one point short of an uncrossed threshold. If they are already
     // at or above it there is no flip left to protect, so gold is unbounded.
@@ -233,7 +239,9 @@ export function splitGoodwill(npc, { itemValue = 0, gold = 0 } = {}) {
         unspent: items.unspent + raw.unspent,
         // Points gold wanted to buy but the flip ceiling refused. Distinct from
         // `unspent` — that is "no room left to feel", this is "gold can't carry
-        // him across his own threshold". They want different log lines.
-        goldRefused: Math.max(0, raw.points - allowed),
+        // him across his own threshold". They want different log lines. Suffixed
+        // (unlike `unspent`/`shortfall`) because it has zero consumers to disturb —
+        // the asymmetry itself signals "this one is points, not GP".
+        goldRefusedPoints: Math.max(0, raw.points - allowed),
     };
 }

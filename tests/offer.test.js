@@ -320,4 +320,26 @@ describe('the gold ceiling', () => {
     const r = splitGoodwill(GHOST, { itemValue: 200, gold: 0 });
     assert.ok(r.fromItems > 0);
   });
+
+  test('goldRefusedPoints is a number on both branches, never a boolean', () => {
+    // The bribeable:false branch — a stray `gold > 0` here reads as `true`,
+    // which is `1` in a numeric context: "1 point refused" on the one NPC
+    // where every point was refused.
+    const refused = splitGoodwill(GHOST, { itemValue: 0, gold: 100000 });
+    assert.equal(typeof refused.goldRefusedPoints, 'number');
+
+    // The flip-ceiling branch.
+    const capped = splitGoodwill({ ...GHOST, bribeable: true }, { itemValue: 0, gold: 100000 });
+    assert.equal(typeof capped.goldRefusedPoints, 'number');
+  });
+
+  test('a garbage flipThreshold falls back to the default 30 — gold stops at 29', () => {
+    // Same input class dispositionOf and dispositionCeil already sanitize
+    // (see "a garbage flipThreshold falls back to the default ceiling" above);
+    // this is the threshold's own door, in splitGoodwill.
+    for (const t of [NaN, Infinity, -Infinity, 'abc', {}]) {
+      const r = splitGoodwill({ type: 'Test', flipThreshold: t }, { itemValue: 0, gold: 100000 });
+      assert.equal(r.points, 29, `flipThreshold ${String(t)} must fall back to the default ceiling`);
+    }
+  });
 });
