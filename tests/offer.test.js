@@ -180,31 +180,36 @@ describe('the goodwill curve', () => {
 
   test('goodwill is deterministic — same input, same output, every time', () => {
     const a = goodwillFor(72, PUCK), b = goodwillFor(72, PUCK);
-    assert.equal(a, b);
-    assert.equal(a, 16, 'the spec worked example: 72 GP of surplus on Puck at +60');
+    assert.deepEqual(a, b, 'two separate calls must return equal-shaped objects, not just equal points');
+    assert.equal(a.points, 16, 'the spec worked example: 72 GP of surplus on Puck at +60');
   });
 
   test('goodwill rounds DOWN — you only get points you fully paid for', () => {
-    assert.equal(goodwillFor(0, PUCK), 0);
-    assert.equal(goodwillFor(1, PUCK), 0, 'a point costs 4.2 GP at +60; 1 GP buys none');
+    assert.equal(goodwillFor(0, PUCK).points, 0);
+    const one = goodwillFor(1, PUCK);
+    assert.equal(one.points, 0, 'a point costs 4.2 GP at +60; 1 GP buys none');
+    assert.equal(one.unspent, 1, 'the whole 1 GP goes unspent — it never affords even one point');
   });
 
   test('goodwill is monotonic in the surplus', () => {
     let prev = -1;
     for (let gp = 0; gp <= 200; gp += 7) {
-      const pts = goodwillFor(gp, PUCK);
+      const pts = goodwillFor(gp, PUCK).points;
       assert.ok(pts >= prev, `points fell at ${gp} GP`);
       prev = pts;
     }
   });
 
   test('affection is cheap early — the Fungus King at -80 buys points for about 1 GP', () => {
-    assert.equal(goodwillFor(10, KING), 7);
+    assert.equal(goodwillFor(10, KING).points, 7);
   });
 
   test('a negative or nonsense surplus buys nothing', () => {
-    assert.equal(goodwillFor(-50, PUCK), 0);
-    assert.equal(goodwillFor(NaN, PUCK), 0);
+    const negative = goodwillFor(-50, PUCK), nan = goodwillFor(NaN, PUCK);
+    assert.equal(negative.points, 0);
+    assert.equal(negative.unspent, 0, 'no valid surplus means nothing to report as left over');
+    assert.equal(nan.points, 0);
+    assert.equal(nan.unspent, 0, 'unspent must not leak the NaN input back out');
   });
 
   test('a non-finite disposition fails to neutral, not to a jackpot', () => {
@@ -212,10 +217,10 @@ describe('the goodwill curve', () => {
     // (dispositionOf already maps that to 0) — not a special zero-points case.
     // At neutral (0) a point costs 3 GP, so 5 GP still buys exactly one, same
     // as goodwillFor(5, {}). What the guard kills is the pre-fix jackpot: 400.
-    assert.equal(goodwillFor(5, { disposition: NaN }), goodwillFor(5, {}),
+    assert.deepEqual(goodwillFor(5, { disposition: NaN }), goodwillFor(5, {}),
       'NaN must be treated identically to a missing disposition, not specially');
-    assert.equal(goodwillFor(5, { disposition: NaN }), 1);
-    assert.equal(goodwillFor(5, { disposition: Infinity }), 1);
+    assert.equal(goodwillFor(5, { disposition: NaN }).points, 1);
+    assert.equal(goodwillFor(5, { disposition: Infinity }).points, 1);
   });
 
   test('offerBalance also stays finite with a NaN disposition — the sanitization is at the funnel', () => {
@@ -225,16 +230,44 @@ describe('the goodwill curve', () => {
 
   test('a surplus that exactly pays for N points buys N, not N-1', () => {
     // cost(k) = 3 + k/50 at neutral; sum k=0..24 is 81 exactly.
-    assert.equal(goodwillFor(81, { disposition: 0, flipThreshold: 30 }), 25);
+    const r = goodwillFor(81, { disposition: 0, flipThreshold: 30 });
+    assert.equal(r.points, 25);
+    assert.equal(r.unspent, 0, 'an exact payment leaves nothing behind, once EPSILON absorbs the drift');
   });
 
   test('goodwill can never exceed the headroom to the ceiling', () => {
-    assert.equal(goodwillFor(100000, PUCK), 40);   // +60 on a 100 ceiling
+    const r = goodwillFor(100000, PUCK);   // +60 on a 100 ceiling: 40 points of headroom
+    assert.equal(r.points, 40);
+    assert.ok(r.unspent > 99000, 'almost all of a huge overpayment must come back as unspent, not vanish');
   });
 
   test('a garbage flipThreshold falls back to the default ceiling', () => {
     for (const t of [NaN, Infinity, -Infinity, 'abc', {}]) {
       assert.equal(dispositionCeil({ flipThreshold: t }), 100, `ceiling leaked on ${String(t)}`);
     }
+  });
+
+  describe('unspent — the mirror of resentmentFor\'s shortfall', () => {
+    test('a comfortable surplus on a warm NPC leaves most of it spent, a little unspent', () => {
+      // Puck +60, headroom to 100 is 40 points; filling it costs ~183.6 GP.
+      const r = goodwillFor(200, PUCK);
+      assert.equal(r.points, 40, 'capped at headroom, same as the 100000-GP case');
+      assert.ok(r.unspent > 10 && r.unspent < 20,
+        'the 16.4 GP that overshoots the ceiling must be reported, not discarded');
+    });
+
+    test('a hostile NPC with a raised ceiling has more room, so less is wasted', () => {
+      // The Fungus King: -80 disposition, flipThreshold 200 -> 280 points of headroom.
+      const r = goodwillFor(1920, KING);
+      assert.equal(r.points, 280);
+      assert.ok(r.unspent > 1000, 'even 1920 GP cannot fill 280 points of headroom on its own');
+    });
+
+    test('an NPC already at their own ceiling can never be pleased further — everything is unspent', () => {
+      const contentAlly = { disposition: 100, flipThreshold: 0 };   // already at the max
+      const r = goodwillFor(10, contentAlly);
+      assert.equal(r.points, 0, 'no room left to buy, no matter the price');
+      assert.equal(r.unspent, 10, 'the entire gift is reported back, not silently swallowed as +0');
+    });
   });
 });

@@ -27,9 +27,12 @@ export function emptyOffer() {
 // throwing.
 function dispositionOf(npc) {
     const d = (npc && npc.disposition) ?? 0;
-    // A non-finite disposition would make goodwillCostPerPoint return NaN, and since
-    // `pool < NaN` is always false the goodwill loop would run to its guard and
-    // pay out the MAXIMUM instead of zero. Fail to neutral, not to jackpot.
+    // A non-finite disposition already fails safe on its own inside goodwillFor:
+    // room = Math.max(0, ceil - NaN) is NaN, and `pts < NaN` is always false, so
+    // the loop runs zero iterations — the headroom cap kills that jackpot
+    // independently. This sanitization is defence in depth, not the sole
+    // barrier: every OTHER disposition read in this module (offerBalance's
+    // pricing included) would otherwise go NaN too.
     return Number.isFinite(d) ? d : 0;
 }
 
@@ -106,6 +109,12 @@ export function settledGold(npc, offer) {
 }
 
 // ── The curves ───────────────────────────────────────────────────────────────
+//
+// Argument order is deliberate, not inconsistent. goodwillFor(surplus, npc) and
+// resentmentFor(deficit, npc) put npc LAST — "N gold's worth of this, for this
+// person." offerBalance(npc, offer) and splitGoodwill(npc, …) put npc FIRST —
+// "for this npc, evaluate this basket." Two consistent sentence shapes, not
+// one inconsistency; don't "fix" it into a single order.
 
 export const DISPOSITION_MIN = -100;
 const EPSILON = 1e-9;   // float-drift tolerance on the last point
@@ -126,8 +135,12 @@ export function dispositionCeil(npc) {
 
 function progress(d, ceil) {
     const span = ceil - DISPOSITION_MIN;
-    // Unreachable by construction — dispositionCeil never returns below 100, so
-    // span is always positive. Kept as a divide-by-zero guard, not a live path.
+    // Unreachable via goodwillFor — every ceil it passes in comes from
+    // dispositionCeil, which never returns below 100, so span is always
+    // positive there. But goodwillCostPerPoint is EXPORTED, and Tasks 9-11
+    // call it directly to draw the curve; (0, 0), (0, -100) and (0, NaN) all
+    // reach this branch from a direct caller and price at the maximum, 5
+    // GP/point. Live for them, not a dead path.
     if (!(span > 0)) return 1;
     return Math.max(0, Math.min(1, (d - DISPOSITION_MIN) / span));
 }
@@ -138,16 +151,30 @@ export function goodwillCostPerPoint(d, ceil) {
     return 1 + 4 * progress(d, ceil);
 }
 
-// How many points a surplus buys. Awarded one at a time so the rising cost
-// applies across the climb, and rounded DOWN — you only get points you have
-// fully paid for. (Resentment rounds the other way; see resentmentFor.)
+// How many points a surplus buys, and how much of it could not be spent.
+// Awarded one at a time so the rising cost applies across the climb, and
+// rounded DOWN — you only get points you have fully paid for.
+//
+// Mirrors resentmentFor's { points, shortfall }: this is { points, unspent }
+// because goodwill can run out of ROOM (the NPC hits their ceiling) the same
+// way resentment runs out of WILLINGNESS (the NPC won't go any lower). Both
+// leave gold on the table, and the caller needs to know THAT it happened —
+// gifting someone already at their ceiling is worth exactly 0 points, and
+// without `unspent` there is no way to tell that apart from a bug and no way
+// to write the honest line ("already as fond of you as he can be") instead
+// of a bare +0 that looks broken.
 export function goodwillFor(surplus, npc) {
-    if (!(surplus > 0)) return 0;
+    // No valid surplus means nothing was ever staged to spend — 0 unspent,
+    // not the raw (possibly negative or NaN) input echoed back.
+    if (!(surplus > 0)) return { points: 0, unspent: 0 };
     const ceil = dispositionCeil(npc);
     const d0 = dispositionOf(npc);
     // Capped at the headroom to the ceiling, not an arbitrary iteration count —
-    // goodwill can never move an NPC past the top of their own meter, so a gift
-    // can never project more points than that meter has room for.
+    // goodwill can never move an NPC past the top of their own meter, so a
+    // gift can never project more points than that meter has room for. This
+    // is also what makes an unconditional iteration ceiling unnecessary: cost
+    // is never below 1 GP/point, so iterations can never outrun the surplus
+    // either, and room itself is always finite.
     const room = Math.max(0, ceil - d0);
     let pool = surplus, pts = 0;
     while (pts < room) {
@@ -159,5 +186,5 @@ export function goodwillFor(surplus, npc) {
         if (pool + EPSILON < c) break;
         pool -= c; pts++;
     }
-    return pts;
+    return { points: pts, unspent: Math.max(0, pool) };
 }
