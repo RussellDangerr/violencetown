@@ -444,13 +444,27 @@ export function offerLayout(panelRect) {
     }));
     const listH = OFFER_ROWS_VISIBLE * OFFER_ROW_H;
 
-    const ledgerY = P.y + 464;
+    // 460, not 464: the band is three rows deep when a bad deal is staged
+    // (GIVING / TAKING on the left, BALANCE / figure / "they'll remember this"
+    // on the right), and at 464 the third row's baseline landed exactly on the
+    // hint line with no gap at all.
+    const ledgerY = P.y + 460;
     const buttonW = 156, buttonX = pr - buttonW;
 
     return {
         panel: P,
         meterBar:          { x: px, y: P.y + 60, w: 320, h: 12 },
-        colHeadY:           P.y + 94,
+        // The two multiplier rows the header stacks beside the meter. They used
+        // to be `mb.y - 5` / `mb.y + 8` invented inside the renderer, which put
+        // the band's real bottom (68 + a 12px glyph box = 80) somewhere the
+        // containment suite could not see -- and a colHeadY that cleared the
+        // 12px BAR still landed on top of the SELL row.
+        meterMulTopY:       P.y + 55,
+        meterMulBotY:       P.y + 68,
+        // 86, not 94: drawText's y is the TOP of the glyph box, so a scale-1
+        // header at 94 ran to 106 and bit 4px into the first row at 102 -- the
+        // staged row's border clipped the header's descenders.
+        colHeadY:           P.y + 86,
         theirs:             rows(leftX),
         yours:              rows(rightX),
         theirsScrollTrack:  { x: leftX + colW - 5,  y: listY, w: 3, h: listH },
@@ -462,7 +476,11 @@ export function offerLayout(panelRect) {
         // label at ledger.x, value at ledgerValueX, BALANCE at ledgerBalanceX —
         // gives the renderer a truncation bound so a long give-list can't run
         // into the balance figure.
-        ledger:             { x: px, y: ledgerY, w: buttonX - px - 8, h: 20 },
+        // h is the whole band, not one row: 3 rows of 14 plus the last row's
+        // text height. An earlier 20 described only the first row, which made
+        // the containment test pass over a band that actually ran 22px further.
+        ledger:             { x: px, y: ledgerY, w: buttonX - px - 8, h: 42 },
+        ledgerRowH:         14,
         ledgerValueX:       px + 56,
         ledgerBalanceX:     px + 268,
         button:             { x: buttonX, y: ledgerY - 2, w: buttonW, h: 40 },

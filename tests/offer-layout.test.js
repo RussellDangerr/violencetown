@@ -118,6 +118,39 @@ test('ROWS_VISIBLE rows of 40px is what the band budget affords', () => {
   assert.equal(L.theirs[0].h, 40);
 });
 
+// drawText's y is the TOP of the glyph box, and a VT323 scale-1 box is 12px
+// tall -- so a bare label Y needs 12px of clearance ahead of whatever rect
+// follows it, not the 8 colHeadY originally had. Neither of these is a rect,
+// so the non-overlap suite could not see them.
+const TEXT_H = 12;
+
+test('the column headers clear the first list row', () => {
+  const L = offerLayout(PANEL);
+  assert.ok(L.colHeadY + TEXT_H <= L.theirs[0].y,
+    `colHeadY=${L.colHeadY} + ${TEXT_H} runs into theirs[0].y=${L.theirs[0].y}`);
+  assert.ok(L.colHeadY + TEXT_H <= L.yours[0].y);
+  // ...and clear of the meter BAND above it -- which is deeper than the bar,
+  // because the SELL multiplier hangs below the bar's bottom edge.
+  const meterBandBottom = Math.max(L.meterBar.y + L.meterBar.h, L.meterMulBotY + TEXT_H);
+  assert.ok(L.colHeadY >= meterBandBottom,
+    `colHeadY=${L.colHeadY} sits on the meter band ending at ${meterBandBottom}`);
+  assert.ok(L.meterMulTopY >= PANEL.y, 'the BUY row escapes the panel');
+});
+
+test('the tray labels clear the tray slots', () => {
+  const L = offerLayout(PANEL);
+  assert.ok(L.trayLabelY + TEXT_H <= L.giveTray[0].y,
+    `trayLabelY=${L.trayLabelY} runs into giveTray[0].y=${L.giveTray[0].y}`);
+  assert.ok(L.trayLabelY + TEXT_H <= L.takeTray[0].y);
+});
+
+test('the hint line clears the ledger band above it', () => {
+  const L = offerLayout(PANEL);
+  assert.ok(L.ledger.y + L.ledger.h <= L.hintY,
+    `ledger ends at ${L.ledger.y + L.ledger.h}, hintY=${L.hintY}`);
+  assert.ok(L.hintY + TEXT_H <= PANEL.y + PANEL.h);
+});
+
 test('every bare Y scalar lands inside the panel band', () => {
   const L = offerLayout(PANEL);
   const ys = { colHeadY: L.colHeadY, trayLabelY: L.trayLabelY, hintY: L.hintY };

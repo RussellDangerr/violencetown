@@ -3009,8 +3009,6 @@ export class Renderer {
     // fossil of the retired 8x8 atlas and wraps ~40% narrower than the space
     // allows. The real VT323 advance is scale * 4.8.
     //
-    // Trays, description and ledger are drawn by later tasks; this one adds
-    // the panel, the header, the meter, and the two scrolling goods lists.
     _drawOfferScreen(game) {
         const ctx = this.ctx;
         const npc = game._offerNpc;
@@ -3025,9 +3023,179 @@ export class Renderer {
         const R = resolveOffer(npc, game._offer);
         this._drawOfferHeader(game, L, R);
         this._drawOfferLists(game, L, R);
+        this._drawOfferTrays(game, L, R);
+        this._drawOfferDescription(game, L, R);
+        this._drawOfferLedger(game, L, R);
 
         this.font.drawText(ctx, 'TAB SIDE  SPACE STAGE  ENTER OFFER  ESC CLOSE',
             L.panel.x + 8, L.hintY, { color: UI.dim, scale: 1 });
+    }
+
+    // The staged offer, made unambiguous. Gold rides in whichever tray its sign
+    // puts it in — a coin chip, because gold is just another thing you can offer.
+    _drawOfferTrays(game, L) {
+        const ctx = this.ctx;
+        const offer = game._offer || { give: [], take: [], gold: 0 };
+        const gold = offer.gold || 0;
+        this.font.drawText(ctx, 'YOU GIVE', L.giveTray[0].x, L.trayLabelY, { color: UI.dim, scale: 1 });
+        this.font.drawText(ctx, 'YOU TAKE', L.takeTray[0].x, L.trayLabelY, { color: UI.dim, scale: 1 });
+
+        const slot = (r, filled) => {
+            drawInset(ctx, r.x, r.y, r.w, r.h);
+            ctx.strokeStyle = filled ? UI.gold : '#3a352c';
+            ctx.lineWidth = 1;
+            if (!filled) ctx.setLineDash([3, 3]);
+            ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+            ctx.setLineDash([]);
+        };
+        const coin = (r, amount) => {
+            slot(r, true);
+            ctx.strokeStyle = UI.gold; ctx.lineWidth = 1.2;
+            ctx.beginPath(); ctx.arc(r.x + 18, r.y + 13, 7, 0, Math.PI * 2); ctx.stroke();
+            this.font.drawText(ctx, String(amount), r.x + r.w / 2, r.y + 23,
+                { color: UI.gold, scale: 1, align: 'center' });
+        };
+        const fill = (rects, entries, goldHere) => {
+            rects.forEach(r => slot(r, false));
+            let i = 0;
+            for (const e of entries || []) {
+                const r = rects[i++]; if (!r) break;
+                slot(r, true);
+                this._drawItemIcon(e.def, r.x + 8, r.y + 6, 20);
+                if (e.count > 1) this.font.drawText(ctx, `x${e.count}`, r.x + r.w - 3, r.y + 25,
+                    { color: UI.gold, scale: 1, align: 'right' });
+            }
+            if (goldHere > 0 && rects[i]) coin(rects[i], goldHere);
+        };
+        fill(L.giveTray, offer.give, Math.max(0, gold));
+        fill(L.takeTray, offer.take, Math.max(0, -gold));
+    }
+
+    // Never empty. With a selection it carries name, tier, market value, what
+    // they pay, the written description and the goodwill weight — the three
+    // things the old screen could not show, together. With no selection it
+    // carries the NPC's mood line rather than dead space.
+    _drawOfferDescription(game, L) {
+        const ctx = this.ctx;
+        const npc = game._offerNpc;
+        const d = npc.disposition ?? 0;
+        drawInset(ctx, L.desc.x, L.desc.y, L.desc.w, L.desc.h);
+        const sel = game._offerSelection ? game._offerSelection() : null;
+
+        if (!sel) {
+            const m = mood(d);
+            const who = String(npc.type).toUpperCase();
+            this.font.drawText(ctx, `${who} IS ${m.mood.toUpperCase()}.`,
+                L.desc.x + 10, L.desc.y + 6, { color: UI.gold, scale: 1 });
+            this.font.drawText(ctx, 'PICK SOMETHING TO SEE WHAT IT IS WORTH TO THEM.',
+                L.desc.x + 10, L.desc.y + 24, { color: UI.dim, scale: 1 });
+            return;
+        }
+
+        const def = sel.def;
+        const tier = itemTier(def);          // returns the tier OBJECT, not a key
+        let x = L.desc.x + 10;
+        this.font.drawText(ctx, def.name, x, L.desc.y + 6, { color: UI.gold, scale: 1 });
+        x += this.font.measure(def.name, 1) + 14;
+        this.font.drawText(ctx, tier.name.toUpperCase(), x, L.desc.y + 6, { color: tier.color, scale: 1 });
+        x += this.font.measure(tier.name, 1) + 14;
+        const pays = sellPrice(def, d);
+        this.font.drawText(ctx, `${def.baseValue ?? 0} GP BASE - PAYS ${pays == null ? '-' : pays}`,
+            x, L.desc.y + 6, { color: UI.dim, scale: 1 });
+
+        const weight = npc.values && npc.values[def.id];
+        if (weight > 1) {
+            this.font.drawText(ctx, `VALUES THIS x${weight}`,
+                L.desc.x + L.desc.w - 10, L.desc.y + 6, { color: '#79c46a', scale: 1, align: 'right' });
+        }
+
+        // Measured wrap against the real advance. NOT the /8 idiom, which is a
+        // fossil of the retired 8x8 atlas and wraps ~40% narrow.
+        const maxPx = L.desc.w - 20;
+        const words = String(def.description || '').split(/\s+/);
+        const lines = []; let cur = '';
+        for (const w of words) {
+            const t = cur ? `${cur} ${w}` : w;
+            if (this.font.measure(t, 1) > maxPx && cur) { lines.push(cur); cur = w; } else cur = t;
+        }
+        if (cur) lines.push(cur);
+        lines.slice(0, 2).forEach((ln, i) =>
+            this.font.drawText(ctx, ln, L.desc.x + 10, L.desc.y + 24 + i * 14, { color: UI.text, scale: 1 }));
+    }
+
+    // The ledger. A negative balance does NOT disable the button — it arms it
+    // with a warning, because taking a bad deal is a legitimate move.
+    //
+    // The blocker is resolved FIRST and suppresses the balance figure. Below
+    // TRADE_FLOOR buyPrice returns null and offerBalance coerces it to 0, so a
+    // ten-item theft from a hostile NPC computes balance 0 — and printing that
+    // as "+0 IN THEIR FAVOUR" over a refused offer is the ledger lying about
+    // what is on the table.
+    _drawOfferLedger(game, L, R) {
+        const ctx = this.ctx;
+        const rowH = L.ledgerRowH;
+        ctx.fillStyle = '#3a352c';
+        ctx.fillRect(L.desc.x, L.desc.y + L.desc.h + 8, L.desc.w, 1);
+
+        const offer = game._offer || { give: [], take: [], gold: 0 };
+        const gold = offer.gold || 0;
+        const nameOf = (e) => `${e.count} x ${e.def.name}`;
+        const giving = [...(offer.give || []).map(nameOf), gold > 0 ? `${gold} GP` : null]
+            .filter(Boolean).join('  +  ') || 'NOTHING';
+        const taking = [...(offer.take || []).map(nameOf), gold < 0 ? `${-gold} GP` : null]
+            .filter(Boolean).join('  +  ') || 'NOTHING';
+
+        // Both columns truncate against what actually follows them: the give/take
+        // list against the balance column, the balance column against the button.
+        // Neither bound is a literal -- ledger.x + ledger.w is the button's left
+        // edge less its gutter, so a wider button moves both automatically.
+        const fitTo = (s, maxPx) => {
+            if (this.font.measure(s, 1) <= maxPx) return s;
+            let out = s;
+            while (out.length > 1 && this.font.measure(`${out}...`, 1) > maxPx) out = out.slice(0, -1);
+            return `${out}...`;
+        };
+        const listPx = L.ledgerBalanceX - L.ledgerValueX - 10;
+        const balPx  = L.ledger.x + L.ledger.w - L.ledgerBalanceX;
+
+        this.font.drawText(ctx, 'GIVING', L.ledger.x, L.ledger.y, { color: UI.dim, scale: 1 });
+        this.font.drawText(ctx, fitTo(giving, listPx), L.ledgerValueX, L.ledger.y, { color: UI.text, scale: 1 });
+        this.font.drawText(ctx, 'TAKING', L.ledger.x, L.ledger.y + rowH, { color: UI.dim, scale: 1 });
+        this.font.drawText(ctx, fitTo(taking, listPx), L.ledgerValueX, L.ledger.y + rowH, { color: UI.text, scale: 1 });
+
+        const blocker = game._offerBlocker ? game._offerBlocker() : null;
+        this.font.drawText(ctx, 'BALANCE', L.ledgerBalanceX, L.ledger.y, { color: UI.dim, scale: 1 });
+
+        // An EMPTY basket is not a refusal. `NOTHING STAGED` blocks the commit
+        // like any other blocker, but printing NO DEAL beside GIVING NOTHING /
+        // TAKING NOTHING reads as though they turned the player down, when the
+        // player has not yet put anything on the table. Same staged test as
+        // commitBlocker's first guard, truncation and all.
+        const staged = (offer.give || []).length + (offer.take || []).length
+                     + (Math.trunc(gold) ? 1 : 0);
+        if (!staged) {
+            this.font.drawText(ctx, '-', L.ledgerBalanceX, L.ledger.y + rowH,
+                { color: UI.dim, scale: 1 });
+        } else if (blocker) {
+            this.font.drawText(ctx, 'NO DEAL', L.ledgerBalanceX, L.ledger.y + rowH,
+                { color: UI.dim, scale: 1 });
+        } else {
+            const balTxt = R.balance >= 0 ? `+${R.balance} IN THEIR FAVOUR` : `${-R.balance} GP SHORT`;
+            this.font.drawText(ctx, fitTo(balTxt, balPx), L.ledgerBalanceX, L.ledger.y + rowH,
+                { color: R.balance >= 0 ? '#79c46a' : UI.hpRed, scale: 1 });
+            if (R.points < 0) {
+                this.font.drawText(ctx, fitTo(`${R.points} THEY'LL REMEMBER`, balPx),
+                    L.ledgerBalanceX, L.ledger.y + rowH * 2, { color: UI.hpRed, scale: 1 });
+            }
+        }
+
+        const b = L.button;
+        drawInset(ctx, b.x, b.y, b.w, b.h);
+        ctx.strokeStyle = blocker ? UI.dim : UI.gold;
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(b.x + 1, b.y + 1, b.w - 2, b.h - 2);
+        this.font.drawText(ctx, blocker || 'MAKE THE OFFER', b.x + b.w / 2, b.y + 14,
+            { color: blocker ? UI.dim : UI.gold, scale: 1, align: 'center' });
     }
 
     // Header: mood face, name, the disposition meter, and the player's gold.
@@ -3090,9 +3258,9 @@ export class Renderer {
         const arrow = (a, b, fmt) => (a === b ? fmt(a) : `${fmt(a)} > ${fmt(b)}`);
         if (b0 && b1) {
             this.font.drawText(ctx, `BUY x${arrow(b0.buy, b1.buy, v => v.toFixed(1))}`,
-                mulX, mb.y - 5, { color: mulCol, scale: 1 });
+                mulX, L.meterMulTopY, { color: mulCol, scale: 1 });
             this.font.drawText(ctx, `SELL x${arrow(b0.sell, b1.sell, v => v.toFixed(2))}`,
-                mulX, mb.y + 8, { color: mulCol, scale: 1 });
+                mulX, L.meterMulBotY, { color: mulCol, scale: 1 });
         }
     }
 
@@ -3133,7 +3301,6 @@ export class Renderer {
                 ctx.fillRect(r.x, r.y, r.w, r.h);
             }
             const tier = itemTier(def);
-            ctx.fillStyle = tier.color; ctx.fillRect(r.x, r.y, 3, r.h);
             this._drawItemIcon(def, r.x + 10, r.y + 8, 24);
 
             const name = entry.count > 1 ? `${def.name} x${entry.count}` : def.name;
@@ -3150,6 +3317,12 @@ export class Renderer {
                 ctx.strokeStyle = UI.gold; ctx.lineWidth = 1.5;
                 ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
             }
+            // AFTER the staged border, not before: a 1.5px stroke inset 1px
+            // covers x+0.25..x+1.75 of a 3px bar, and staging an item was
+            // repainting its tier stripe solid gold -- losing, on exactly the
+            // rows the player is acting on, the one cue this screen was built
+            // to add.
+            ctx.fillStyle = tier.color; ctx.fillRect(r.x, r.y, 3, r.h);
         }
         // Proportional thumb — an honest read on how deep the list is.
         if (list.length > rects.length) {
