@@ -948,6 +948,30 @@ the player was shown and what actually happens cannot diverge.
 item share of that surplus is amplified by the average weight of the items given
 (`giftValue / itemsGiven`), so the weighting applies to generosity and never to settlement.
 
+> **Two accounting seams Task 3's review left for you. Neither is optional.**
+>
+> **1. `unspent` arrives in two different currencies.** You pass
+> `itemValue: itemSurplus * avgWeight` (gift-*weighted* value) and `gold: goldSurplus` (plain GP), so
+> `splitGoodwill` sums an `unspent` whose two halves are denominated differently. The result is
+> neither GP nor weighted units, while the field is documented as the mirror of `shortfall`, which is
+> GP. If a log line ever prints it as gold it will be wrong whenever a gift is involved. Either
+> divide the item half back out by `avgWeight` before reporting, or rename what you forward so the
+> unit is honest.
+>
+> **2. Gold spent on ceiling-refused points vanishes.** For `{ gold: 100000 }` on a bribeable Fungus:
+> 335.72 GP bought the 109 allowed points, 99476.5 comes back as `unspent`, and **187.78 GP is in
+> neither field** — it is what the curve charged for the 41 points the ceiling then refused. Sharpest
+> right at the doorstep: `{ disposition: 59, flipThreshold: 60 }` with `gold: 500` yields
+> `points: 0, unspent: 312.22`, so the player handed over 500 GP, got nothing, and the honest line can
+> only account for 312 of it. Decide whether `resolveOffer` reports that third bucket or folds it into
+> `unspent`; do not leave it unaccounted.
+>
+> **3. `goldRefusedPoints` currently has no consumer.** `resolveOffer` as drafted drops it, and no
+> later task reads it. It is the only field that can say "he took your gold and it moved him nothing
+> because it cannot carry him across his own threshold" — a distinct situation from "no room left to
+> feel". Forward it, or delete it from `splitGoodwill` entirely. Three review rounds have now argued
+> about a field nothing reads; end that here.
+
 - [ ] **Step 1: Write the failing test**
 
 Add `resolveOffer` to the existing `../game/offer.js` import, then append:
@@ -1062,7 +1086,8 @@ export function resolveOffer(npc, offer) {
         // had no room left to feel. Without it, gifting someone who already adores
         // you shows +0 and looks broken, with no way to write the honest line.
         return { ...bal, points: g.points, fromItems: g.fromItems, fromGold: g.fromGold,
-                 projected: d0 + g.points, shortfall: 0, unspent: g.unspent, refused: false };
+                 projected: d0 + g.points, shortfall: 0, unspent: g.unspent,
+                 goldRefusedPoints: g.goldRefusedPoints, refused: false };
     }
 
     const r = resentmentFor(-bal.balance, npc);
