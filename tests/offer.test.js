@@ -482,11 +482,12 @@ describe('resentment — bad deals are a move, not an error', () => {
 
   test('the ceiling comes from dispositionCeil, not a hardcoded 100', () => {
     // Same disposition as Puck (60) but the Fungus King's raised ceiling
-    // (flipThreshold 200) makes every point cheaper: resentCostPerPoint(60,
-    // 200) is ~2.87, not Puck's 1.80. The identical 29 GP shortfall that
-    // costs Puck 15 points (see above) buys more points per GP here, so it
-    // costs only 10 — a hardcoded ceil of 100 would silently give -15, same
-    // as Puck, and nothing in this file would catch it.
+    // (flipThreshold 200) makes every point DEARER, not cheaper —
+    // resentCostPerPoint(60, 200) is ~2.87 against Puck's 1.80, because +60
+    // is only 53% up a 200-wide meter and he is still braced. So the
+    // identical 29 GP shortfall buys fewer points here, not more: 10
+    // against Puck's 15 — a hardcoded ceil of 100 would silently give -15,
+    // same as Puck, and nothing in this file would catch it.
     const warmKing = { ...KING, disposition: 60 };
     const r = resentmentFor(29, warmKing);
     assert.equal(r.points, -10);
