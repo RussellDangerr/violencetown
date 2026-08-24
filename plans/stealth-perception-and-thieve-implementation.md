@@ -22,6 +22,35 @@ Dev server: `python dev-server.py 3001`.
 
 ---
 
+## Progress — updated 2026-08-24
+
+**Done: the two new modules, complete and fully tested.** `npm test` → **484 tests, 106 suites,
+0 fail.** Deliberately, **no existing game file has been modified** — `git diff dev...HEAD --stat`
+shows only additions.
+
+| Task | State | Commit |
+|---|---|---|
+| 1 — `perception.js`: facing + the three-zone verdict | **done**, 18 tests | `f9f2d6a` |
+| 4 — the awareness ladder (`nextAwareness`) | **done**, 14 tests | `479a475` |
+| 6 (pure half) — `emitNoise` + the `NOISE` table | **done**, 15 tests | `33d1439` |
+| 8 — `theft.js`: weight, buffer, the three takes | **done**, 33 tests | `dbeee5e` |
+
+**Deferred until `feature/unified-offer-screen` merges to `dev`** — every task that edits a file
+that branch is rewriting. Caelan's sequencing call, 2026-08-24, applying CLAUDE.md's
+parallelise-only-file-disjoint rule:
+
+- Task 2 — `enemies.js` ctor fields (`facing`, `hearingRange`, `equipped`, `thievable`)
+- Task 3 — `npc.js` sight check swaps onto `perceives`
+- Task 5 — `npc.js` ladder wiring + `enemies.js` counters + `save.js`
+- Task 6 (wiring half) — retire `rockClatter` from `ai.js`, add `main.js` call sites.
+  **`NOISE.throwImpact` is pinned to 8 so that retirement preserves the rock exactly.**
+- Tasks 7, 9–13 — `renderer.js`, `wheel-model.js`, `main.js`, `give-action.js`, `trade.js`
+
+**On resuming:** `git fetch && git rebase dev`, then `git diff dev...HEAD --stat` before writing a
+line, and re-read `applyDispositionDelta` (its clamp changes — see the note in Task 11).
+
+---
+
 ## Working directory
 
 **Every command in this plan runs from the worktree, not the primary checkout:**
