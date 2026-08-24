@@ -57,6 +57,14 @@ Violating any of these will fail review even if the tests pass.
    The real VT323 advance is `scale × 4.8`. Measure with `this.font.measure('X', scale)`.
 7. **Log lines are bracketed sentences in house voice** — `[The Violet Fungus pockets the soap.
    Disposition +40.]`, never `Offer committed.`
+7a. **Rejected alternatives go in the commit message, not the source.** A code comment says what the
+   code does and why the number is that number. It does **not** re-argue a review round, pre-empt an
+   objection, or prove that some other approach would have been worse — `git blame` finds the commit
+   message, and a test proves the behaviour executably. This rule exists because `game/offer.js`
+   reached 1.5 comment lines per line of code, with a quarter of that prose addressed to reviewers
+   rather than readers, and the ratio rose at every review round. If a fix needs seventeen lines of
+   justification, the justification belongs in the commit and the comment should point at the test
+   that pins it.
 8. **Naming:** Violencetown is one word; citizens are Violencians; `poition` is deliberate;
    `defence` is British. Before merging, this must return zero lines:
 
