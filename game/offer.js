@@ -241,3 +241,44 @@ export function splitGoodwill(npc, { itemValue = 0, gold = 0 } = {}) {
         goldRefusedPoints: Math.max(0, goldCurve.points - allowed),
     };
 }
+
+// ── Resentment: the bad deal ─────────────────────────────────────────────────
+//
+// A negative balance is NOT a refusal. It is an offer the NPC will take while
+// thinking less of you, which is what makes the balance a two-way lever rather
+// than a wall.
+
+export const RESENT_MAX_PER_OFFER = 25;   // one offer's worst possible damage
+export const RESENT_FLOOR = -25;          // bad dealing never drags anyone below this
+
+// GP of shortfall per point of resentment — costPerPoint mirrored. It costs LESS
+// to disappoint someone who already likes you and MORE to offend someone who
+// already doesn't, because they are braced for it. That asymmetry is the design:
+// betrayal runs ~2.3x cheaper than affection at Puck's +60, while at the bottom
+// the system self-stabilises instead of spiralling.
+export function resentCostPerPoint(d, ceil) {
+    return 5 - 4 * progress(d, ceil);
+}
+
+// What a deficit costs. Returns { points, shortfall } where points is NEGATIVE
+// and shortfall is the GP the NPC's remaining patience could not absorb —
+// anything above zero means they will not take the deal at all.
+//
+// Rounds UP against the player: any remaining shortfall, however small, costs
+// one more whole point. Goodwill rounds DOWN. Both directions round in the NPC's
+// favour. Rounding down here instead refuses almost every bad deal over a
+// fractional remainder.
+export function resentmentFor(deficit, npc) {
+    if (!(deficit > 0)) return { points: 0, shortfall: 0 };
+    const d0 = dispositionOf(npc);
+    if (d0 <= RESENT_FLOOR) return { points: 0, shortfall: deficit };
+
+    const ceil = dispositionCeil(npc);
+    const room = Math.min(RESENT_MAX_PER_OFFER, d0 - RESENT_FLOOR);
+    let pool = deficit, pts = 0;
+    while (pool > 0 && pts < room) {
+        pool -= resentCostPerPoint(d0 - pts, ceil);
+        pts++;
+    }
+    return { points: -pts, shortfall: Math.max(0, pool) };
+}

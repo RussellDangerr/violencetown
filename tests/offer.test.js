@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { emptyOffer, offerBalance, settledGold, dispositionCeil, goodwillCostPerPoint, goodwillFor, splitGoodwill } from '../game/offer.js';
+import { emptyOffer, offerBalance, settledGold, dispositionCeil, goodwillCostPerPoint, goodwillFor, splitGoodwill, RESENT_MAX_PER_OFFER, RESENT_FLOOR, resentCostPerPoint, resentmentFor } from '../game/offer.js';
 
 const PUCK = {
   type: 'Puck', disposition: 60, flipThreshold: 0, vendor: true,
@@ -400,5 +400,80 @@ describe('the gold ceiling', () => {
     const r = splitGoodwill({ disposition: 60, flipThreshold: 60.5 }, { gold: 500 });
     assert.equal(r.fromGold, 0);
     assert.equal(r.points, 0, 'gold that cannot buy a point buys zero, never a negative one');
+  });
+});
+
+describe('resentment — bad deals are a move, not an error', () => {
+  test('the bounds are the specced constants', () => {
+    assert.equal(RESENT_MAX_PER_OFFER, 25);
+    assert.equal(RESENT_FLOOR, -25);
+  });
+
+  test('the resentment curve is the goodwill curve mirrored', () => {
+    for (const d of [-100, -50, 0, 50, 100]) {
+      assert.equal(resentCostPerPoint(d, 100), 6 - goodwillCostPerPoint(d, 100),
+        `curves are not mirrored at d=${d}`);
+    }
+  });
+
+  test('betrayal is cheaper than affection when they like you', () => {
+    assert.ok(resentCostPerPoint(60, 100) < goodwillCostPerPoint(60, 100));
+  });
+
+  test('and dearer than affection when they do not', () => {
+    assert.ok(resentCostPerPoint(-80, 100) > goodwillCostPerPoint(-80, 100));
+  });
+
+  test('the spec worked example: a 29 GP shortfall costs Puck 15 points', () => {
+    const r = resentmentFor(29, PUCK);
+    assert.equal(r.points, -15);
+    assert.equal(r.shortfall, 0, 'the deal is absorbed, not refused');
+  });
+
+  test('resentment rounds UP — any shortfall costs at least one whole point', () => {
+    const r = resentmentFor(0.5, PUCK);
+    assert.equal(r.points, -1);
+    assert.equal(r.shortfall, 0);
+  });
+
+  test('dropping Puck the full 25 points costs 51 GP', () => {
+    let gp = 0;
+    for (let i = 0; i < 25; i++) gp += resentCostPerPoint(60 - i, 100);
+    assert.equal(Math.round(gp), 51);
+  });
+
+  test('one offer can never cost more than RESENT_MAX_PER_OFFER', () => {
+    const r = resentmentFor(1e9, PUCK);
+    assert.equal(r.points, -RESENT_MAX_PER_OFFER);
+    assert.ok(r.shortfall > 0, 'the unabsorbed remainder must be reported');
+  });
+
+  test('no amount of bad dealing goes below the floor', () => {
+    const nearFloor = { ...PUCK, disposition: RESENT_FLOOR + 3 };
+    const r = resentmentFor(1e9, nearFloor);
+    assert.equal(r.points, -3, 'only the three points of headroom are available');
+    assert.ok(nearFloor.disposition + r.points >= RESENT_FLOOR);
+  });
+
+  test('an NPC already at the floor absorbs nothing, so the lever closes', () => {
+    const r = resentmentFor(1e9, { ...PUCK, disposition: RESENT_FLOOR });
+    assert.equal(r.points, 0);
+    assert.ok(r.shortfall > 0, 'the whole deficit is unabsorbed — the deal must be refused');
+  });
+
+  test('an NPC below the floor also absorbs nothing', () => {
+    const r = resentmentFor(50, { ...PUCK, disposition: -80 });
+    assert.equal(r.points, 0);
+  });
+
+  test('a zero or negative deficit costs nothing', () => {
+    assert.equal(resentmentFor(0, PUCK).points, 0);
+    assert.equal(resentmentFor(-10, PUCK).points, 0);
+  });
+
+  test('resentmentFor never mutates the npc it is handed', () => {
+    const before = { ...PUCK };
+    resentmentFor(200, PUCK);
+    assert.deepEqual(PUCK, before);
   });
 });
