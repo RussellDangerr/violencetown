@@ -1,7 +1,7 @@
 // weapons.js — the weapon definitions, extracted from main.js so they're a pure,
 // importable data module (main.js and the content-integrity check both consume
 // it). Weapons live here; everything else lives in ITEMS (items.js). The save
-// system resolves an id via WEAPONS[id] || ITEMS[id] (see main.js _resolveItemDef).
+// system resolves an id via WEAPONS[id] || ITEMS[id] (see item-registry.js resolveItemDef).
 //
 // Several weapons GRANT a skill while worn (grantsTricks / grantsSpells) — the
 // gear-derived ability wiring reads these in _refreshGrantedSkills.
