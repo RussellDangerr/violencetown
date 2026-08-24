@@ -23,6 +23,47 @@ plan can actually be run and seen to fail.
 
 ---
 
+---
+
+## ▶ RESUME HERE — execution status (2026-08-24)
+
+**Branch:** `feature/unified-offer-screen`, 56 commits ahead of `dev`, tree clean, **534 tests / 96 suites / 0 fail** (baseline was 404).
+**Method:** `superpowers:subagent-driven-development` — fresh implementer per task, then a spec-compliance review, then a code-quality review, looping until both approve.
+
+| Task | State |
+| --- | --- |
+| 1 · the signed balance | ✅ both gates |
+| 2 · goodwill curve | ✅ both gates |
+| 3 · gold ceiling | ✅ both gates |
+| 4 · resentment | ✅ both gates |
+| 5 · `resolveOffer` | ✅ both gates |
+| 6 · staging + `commitBlocker` | ✅ spec gate; **quality re-review outstanding** (agent died on a 529, left no damage) |
+| 6a · split `offer.js` | ⏭ **NEXT** |
+| 7–20 | not started |
+
+**`game/offer.js` is complete** — 460 lines, pure, imports only `trade.js`, mutates nothing. `tests/offer.test.js` is 1068 lines / 130 tests. Nothing in `game/` imports it yet.
+
+### To resume
+Re-dispatch the Task 6 quality re-review (the questions are in the transcript: does the new container-free-pricing branch have a surviving mutant; is `stage`'s `max` pinned or only its effect at one value; did rewriting the container test to a gold deficit lose the item-deficit coverage). Then Task 6a, then Task 7.
+
+### Live decisions still owed by Caelan
+1. **The stealth/Thieve commit `821c806`** rides on this branch — another session committed `plans/stealth-perception-and-thieve.md` here. Merging this branch carries it. Leave, or move to its own branch?
+2. **Decision #7, the gold ceiling** — replaces his written +30-per-encounter cap. Now built, tested and load-bearing; reversing it ripples through Tasks 5 and 14.
+
+### What review actually caught (none of these were coding errors)
+Every defect so far originated in this plan or the spec, not in an implementation:
+- The model **could not express selling** — gold was one-directional.
+- The `values` weight inflated the **settlement price**, letting the player mint gold from an NPC's fondness.
+- Float drift **under-paid the player** on 80 of 141 exactly-payable deficits, and made the spec's own headline figure (51 GP) get the deal *refused*.
+- A "runaway guard" that failed toward a **jackpot** — 5 GP bought 400 disposition points.
+- Three unsanitized numeric doors; a boolean masquerading as a count.
+- A chest about to **charge for loot**; `stage` with no ceiling.
+- **The design's central thesis was unpinned** — rejecting *any* negative balance passed the entire suite until an implementer noticed and added a test unasked.
+
+Implementers correctly refused a wrong instruction of mine **five times**. Mutation testing found survivors in every single round, including rounds where a previous reviewer had already run a battery.
+
+---
+
 ## Before you start
 
 - [ ] **Confirm the baseline is green**
