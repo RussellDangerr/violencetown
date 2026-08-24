@@ -18,8 +18,7 @@
 // advisories that can lag intentionally (zone naming) — surfaced, never fatal.
 
 import { QUESTS } from './quests.js';
-import { ITEMS } from './items.js';
-import { WEAPONS } from './weapons.js';
+import { ALL_ITEM_IDS, WEAPON_ONLY_IDS } from './item-registry.js';
 import { DIALOGUES } from './dialogue.js';
 import { zoneByName, overworldZone } from './world-map.js';
 
@@ -46,10 +45,9 @@ export function validateContent(maps) {
     const P = (m) => problems.push(m);
     const W = (m) => warnings.push(m);
 
-    // Id universes. The game resolves an item id via WEAPONS[id] || ITEMS[id]
-    // (main.js _resolveItemDef), so the item closure is the union.
-    const itemIds = new Set([...Object.keys(ITEMS), ...Object.keys(WEAPONS)]);
-    const weaponOnlyIds = new Set(Object.keys(WEAPONS).filter(id => !ITEMS[id]));
+    // Id universes — item-registry.js is the one place these are built.
+    const itemIds = ALL_ITEM_IDS;
+    const weaponOnlyIds = WEAPON_ONLY_IDS;
     const dialogueIds = new Set(Object.keys(DIALOGUES));
     const mapFileSet = new Set(maps.map(m => m.file));
     const npcIds = new Set();
@@ -60,13 +58,8 @@ export function validateContent(maps) {
         for (const e of (data.enemies || [])) {
             for (const id of (e.stock || [])) {
                 if (!itemIds.has(id)) P(`${file}: enemy ${e.id || '?'} stocks unknown item '${id}'`);
-                // A weapon validates clean here (it IS a known id) but the
-                // vendor/chest buy path (_buyFromVendor) still does a bare
-                // ITEMS lookup and silently no-ops on it — unlike loadout and
-                // examinable.grants, this site wasn't fixed, because Task 15
-                // deletes _buyFromVendor outright rather than patching it.
-                // Warn now so authoring a weapon into stock is caught here,
-                // not discovered as a dead tap in play.
+                // _buyFromVendor still can't resolve a weapon (pending Task 15) —
+                // warn so authoring one into stock is caught here, not in play.
                 else if (weaponOnlyIds.has(id)) W(`${file}: enemy ${e.id || '?'} stocks weapon '${id}' — the vendor/chest buy path doesn't resolve WEAPONS yet (pending Task 15)`);
             }
             for (const id of (e.loadout || []))

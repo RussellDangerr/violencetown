@@ -9,6 +9,7 @@ import { BitmapFont } from './bitmap-font.js';
 import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, MAX_STACK } from './data.js';
 import { ITEMS, itemTier, resolveUse, resolveThrow, tickTempEquips, unequipItem, ownedItemDefs, hasItemDef } from './items.js';
 import { WEAPONS } from './weapons.js';
+import { resolveItemDef } from './item-registry.js';
 import { tickBuffList, BUFF_DEFS, sumBuffStat, worldBeatPlan } from './buffs.js';
 import { RINGS, FUSIONS } from './ring-data.js';
 import {
@@ -759,13 +760,11 @@ class Game {
 
     // ── Persistence helpers ────────────────────────────────────────────────────
 
-    // Resolve an item id to its definition. Weapons live in WEAPONS, everything
-    // else in ITEMS. Used by the save system to rehydrate equipment/inventory
-    // (we persist ids, not whole defs).
+    // Resolve an item id to its definition — delegates to item-registry.js,
+    // the one shared spelling of "weapons win over items". Used by the save
+    // system to rehydrate equipment/inventory (we persist ids, not whole defs).
     _resolveItemDef(id) {
-        if (!id) return null;
-        if (WEAPONS[id]) return WEAPONS[id];
-        return ITEMS[id] || null;
+        return resolveItemDef(id);
     }
 
     // Record a runtime drop against the current map so it survives zone changes;
