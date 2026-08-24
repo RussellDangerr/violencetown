@@ -188,3 +188,52 @@ export function goodwillFor(surplus, npc) {
     }
     return { points: pts, unspent: Math.max(0, pool) };
 }
+
+// Goodwill, split by where it came from, because gold and gifts are bounded
+// differently. Items climb the curve first (they are the clever path and are
+// uncapped); gold climbs what is left, and may never carry an NPC ACROSS an
+// uncrossed flipThreshold.
+//
+// This replaces the gold-weighting memo's proposed +30 per-encounter cap: it
+// needs no persisted state and no bookkeeping, and it closes a hole the numeric
+// cap would not — the Wererat boss has no bribeable flag, no flipThreshold and
+// no disposition, so six +5 bribes at 10 GP each currently flip the sewer boss
+// into an ally for 60 GP.
+//
+// bribeable:false zeroes the gold half outright. _bribeTarget respects that flag
+// today but _bribeVendor never checks it, so the Ghost Fungus — the only NPC in
+// the game authored bribeable:false — is bribeable through the trade window.
+export function splitGoodwill(npc, { itemValue = 0, gold = 0 } = {}) {
+    const d0 = dispositionOf(npc);
+    // goodwillFor returns { points, unspent } as of Task 2 — surplus the NPC had
+    // no headroom left to feel. Carry it through so resolveOffer can say so.
+    const items = goodwillFor(itemValue, npc);
+
+    if (npc && npc.bribeable === false) {
+        // Gifts still land on someone who refuses bribes; only the gold is refused.
+        return { points: items.points, fromItems: items.points, fromGold: 0,
+                 unspent: items.unspent, goldRefused: gold > 0 };
+    }
+
+    const threshold = (npc && npc.flipThreshold) ?? 30;
+    const afterItems = d0 + items.points;
+    // Gold stops one point short of an uncrossed threshold. If they are already
+    // at or above it there is no flip left to protect, so gold is unbounded.
+    const goldCeiling = afterItems < threshold ? threshold - 1 : Infinity;
+
+    const raw = goodwillFor(gold, { ...npc, disposition: afterItems });
+    const allowed = goldCeiling === Infinity
+        ? raw.points
+        : Math.max(0, Math.min(raw.points, goldCeiling - afterItems));
+
+    return {
+        points: items.points + allowed,
+        fromItems: items.points,
+        fromGold: allowed,
+        unspent: items.unspent + raw.unspent,
+        // Points gold wanted to buy but the flip ceiling refused. Distinct from
+        // `unspent` — that is "no room left to feel", this is "gold can't carry
+        // him across his own threshold". They want different log lines.
+        goldRefused: Math.max(0, raw.points - allowed),
+    };
+}

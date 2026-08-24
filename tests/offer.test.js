@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { emptyOffer, offerBalance, settledGold, dispositionCeil, goodwillCostPerPoint, goodwillFor } from '../game/offer.js';
+import { emptyOffer, offerBalance, settledGold, dispositionCeil, goodwillCostPerPoint, goodwillFor, splitGoodwill } from '../game/offer.js';
 
 const PUCK = {
   type: 'Puck', disposition: 60, flipThreshold: 0, vendor: true,
@@ -269,5 +269,55 @@ describe('the goodwill curve', () => {
       assert.equal(r.points, 0, 'no room left to buy, no matter the price');
       assert.equal(r.unspent, 10, 'the entire gift is reported back, not silently swallowed as +0');
     });
+  });
+});
+
+const GHOST = { type: 'Ghost Fungus', disposition: -50, flipThreshold: 60, bribeable: false, values: { bandage: 8 } };
+const BOSS  = { type: 'Wererat' };   // no disposition, no flipThreshold, no bribeable — as authored
+
+describe('the gold ceiling', () => {
+  test('items and gold each contribute, and the total is their sum', () => {
+    const r = splitGoodwill(PUCK, { itemValue: 36, gold: 30 });
+    assert.equal(r.points, r.fromItems + r.fromGold);
+    assert.equal(typeof r.unspent, 'number', 'unspent must be carried through from goodwillFor');
+    assert.ok(r.fromItems > 0 && r.fromGold > 0);
+  });
+
+  test('gold cannot carry an NPC across an uncrossed flip threshold', () => {
+    // bribeable:true — otherwise the bribeable:false branch short-circuits and
+    // this passes for the wrong reason.
+    const bribable = { ...GHOST, bribeable: true };
+    const r = splitGoodwill(bribable, { itemValue: 0, gold: 100000 });
+    assert.equal(bribable.disposition + r.points, bribable.flipThreshold - 1,
+      'gold must stop exactly one point short of the threshold');
+  });
+
+  test('60 GP of bribes can no longer flip the sewer boss', () => {
+    // The Wererat has no bribeable flag, no flipThreshold and no disposition,
+    // so T defaults to 30 and gold stops at 29 — short of the flip.
+    const r = splitGoodwill(BOSS, { itemValue: 0, gold: 100000 });
+    assert.ok(r.points <= 29, `gold bought ${r.points} points on an unauthored NPC`);
+  });
+
+  test('items are NOT capped by the gold ceiling — gifts stay the clever path', () => {
+    const r = splitGoodwill({ ...GHOST, bribeable: true }, { itemValue: 100000, gold: 0 });
+    assert.ok(GHOST.disposition + r.points > GHOST.flipThreshold,
+      'a generous enough gift must be able to cross the threshold');
+  });
+
+  test('an NPC already at or above their threshold is not frozen out of gold', () => {
+    // Puck sits at +60 with flipThreshold 0 — already past it.
+    const r = splitGoodwill(PUCK, { itemValue: 0, gold: 200 });
+    assert.ok(r.fromGold > 0, 'gold must still work on an already-flipped NPC');
+  });
+
+  test('bribeable:false means gold buys no affection at all', () => {
+    const r = splitGoodwill(GHOST, { itemValue: 0, gold: 100000 });
+    assert.equal(r.fromGold, 0);
+  });
+
+  test('...but bribeable:false still lets gifts land', () => {
+    const r = splitGoodwill(GHOST, { itemValue: 200, gold: 0 });
+    assert.ok(r.fromItems > 0);
   });
 });
