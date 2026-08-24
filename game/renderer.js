@@ -3009,8 +3009,8 @@ export class Renderer {
     // fossil of the retired 8x8 atlas and wraps ~40% narrower than the space
     // allows. The real VT323 advance is scale * 4.8.
     //
-    // Lists, trays, description and ledger are drawn by later tasks; this one
-    // is the panel, the header, and the meter.
+    // Trays, description and ledger are drawn by later tasks; this one adds
+    // the panel, the header, the meter, and the two scrolling goods lists.
     _drawOfferScreen(game) {
         const ctx = this.ctx;
         const npc = game._offerNpc;
@@ -3024,6 +3024,7 @@ export class Renderer {
 
         const R = resolveOffer(npc, game._offer);
         this._drawOfferHeader(game, L, R);
+        this._drawOfferLists(game, L, R);
 
         this.font.drawText(ctx, 'TAB SIDE  SPACE STAGE  ENTER OFFER  ESC CLOSE',
             L.panel.x + 8, L.hintY, { color: UI.dim, scale: 1 });
@@ -3092,6 +3093,71 @@ export class Renderer {
                 mulX, mb.y - 5, { color: mulCol, scale: 1 });
             this.font.drawText(ctx, `SELL x${arrow(b0.sell, b1.sell, v => v.toFixed(2))}`,
                 mulX, mb.y + 8, { color: mulCol, scale: 1 });
+        }
+    }
+
+    // The two goods columns. Each is a clipped viewport with a proportional
+    // thumb, so all 50 bag slots are reachable — the old grid showed 15 and
+    // silently dropped the rest off the bottom of the canvas.
+    _drawOfferLists(game, L, R) {
+        const ctx = this.ctx;
+        const npc = game._offerNpc;
+        const d = npc.disposition ?? 0;
+
+        this.font.drawText(ctx, `${String(npc.type).toUpperCase()}'S GOODS`,
+            L.theirs[0].x, L.colHeadY, { color: UI.dim, scale: 1 });
+        this.font.drawText(ctx, 'YOUR SATCHEL',
+            L.yours[0].x, L.colHeadY, { color: UI.dim, scale: 1 });
+
+        const theirs = game._offerTheirsList();
+        const yours  = game._offerYoursList();
+        this._drawOfferColumn(game, L.theirs, L.theirsScrollTrack, theirs,
+            game._offer.scroll.theirs, 'take', (def) => buyPrice(def, d));
+        this._drawOfferColumn(game, L.yours, L.yoursScrollTrack, yours,
+            game._offer.scroll.yours, 'give', (def) => sellPrice(def, d));
+    }
+
+    // One column: `rects` are the visible row slots, `list` is the full backing
+    // list, `scroll` is the index of the first visible row.
+    _drawOfferColumn(game, rects, thumb, list, scroll, side, priceOf) {
+        const ctx = this.ctx;
+        for (let i = 0; i < rects.length; i++) {
+            const entry = list[scroll + i];
+            if (!entry) continue;
+            const r = rects[i];
+            const def = entry.def;
+            const staged = game._stagedCount(side, entry);
+
+            if (staged) {
+                ctx.fillStyle = 'rgba(212,185,106,0.12)';
+                ctx.fillRect(r.x, r.y, r.w, r.h);
+            }
+            const tier = itemTier(def);
+            ctx.fillStyle = tier.color; ctx.fillRect(r.x, r.y, 3, r.h);
+            this._drawItemIcon(def, r.x + 10, r.y + 8, 24);
+
+            const name = entry.count > 1 ? `${def.name} x${entry.count}` : def.name;
+            this.font.drawText(ctx, name, r.x + 42, r.y + 6, { color: UI.text, scale: 1 });
+            this.font.drawText(ctx, tier.name.toLowerCase(), r.x + 42, r.y + 22,
+                { color: tier.color, scale: 1 });
+
+            const price = priceOf(def);
+            this.font.drawText(ctx, price == null ? '-' : String(price),
+                r.x + r.w - 10, r.y + 6, { color: UI.gold, scale: 1, align: 'right' });
+            if (staged) {
+                this.font.drawText(ctx, `staged x${staged}`, r.x + r.w - 10, r.y + 22,
+                    { color: '#79c46a', scale: 1, align: 'right' });
+                ctx.strokeStyle = UI.gold; ctx.lineWidth = 1.5;
+                ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
+            }
+        }
+        // Proportional thumb — an honest read on how deep the list is.
+        if (list.length > rects.length) {
+            const frac = rects.length / list.length;
+            const travel = thumb.h * (1 - frac);
+            const top = thumb.y + travel * (scroll / Math.max(1, list.length - rects.length));
+            ctx.fillStyle = 'rgba(139,115,64,0.5)';
+            ctx.fillRect(thumb.x, top, thumb.w, Math.max(12, thumb.h * frac));
         }
     }
 
