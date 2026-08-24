@@ -28,7 +28,7 @@ describe('offerBalance — the signed heart of the model', () => {
     const b = offerBalance(PUCK, { give: [{ def: SOAP, count: 2 }], take: [], gold: 0 });
     assert.equal(b.givenValue, 18, 'he pays 9 a bar, not 36 — his soap:4 is affection, not cash');
     assert.equal(b.giftValue, 72, 'the weighted worth is tracked separately, for goodwill only');
-    assert.equal(b.itemsGiven, 18);
+    assert.equal(b.givenItemsValue, 18);
   });
 
   test('settledGold is what the screen drops in a tray for you', () => {
@@ -56,9 +56,10 @@ describe('offerBalance — the signed heart of the model', () => {
       give: [{ def: SOAP, count: 2 }], take: [{ def: BANDAGE, count: 1 }], gold: 30,
     });
     assert.equal(b.givenValue, 48, '18 of soap at market + 30 gold');
+    assert.equal(b.givenItemsValue, 18, 'the item-only total, gold excluded');
     assert.equal(b.takenValue, 30);
     assert.equal(b.balance, 18);
-    assert.equal(b.giftValue, 102, '72 of weighted soap + the 30 gold');
+    assert.equal(b.giftValue, 72, 'weighted soap only — gold carries no gift weight');
   });
 
   test('a lowball: a rock for a bandage', () => {
@@ -77,7 +78,7 @@ describe('offerBalance — the signed heart of the model', () => {
     assert.equal(b.balance, 0, 'selling at the asking price is a straight trade, not a gift');
   });
 
-  test('a straight settled purchase moves nothing', () => {
+  test('a straight settled purchase has a zero balance', () => {
     const b = offerBalance(PUCK, { give: [], take: [{ def: BANDAGE, count: 1 }], gold: 30 });
     assert.equal(b.balance, 0, 'paying exactly the asking price is a straight trade');
   });
@@ -89,12 +90,43 @@ describe('offerBalance — the signed heart of the model', () => {
     assert.equal(b.giftValue, 0);
   });
 
-  test('below the trade floor everything prices at zero rather than throwing', () => {
+  test('below the trade floor, giving still prices but taking stays refused', () => {
+    // Enemy is below TRADE_FLOOR (-50): no band, so buyPrice refuses. But a gift
+    // still prices at the hostile band's rate — max(1, floor(15 * 0.40)) = 6 —
+    // so a hostile NPC is a puzzle you can gift your way out of, not a wall.
     const enemy = { type: 'Bandit', disposition: -80 };
     const b = offerBalance(enemy, {
       give: [{ def: SOAP, count: 1 }], take: [{ def: BANDAGE, count: 1 }], gold: 5,
     });
-    assert.equal(b.givenValue, 5, 'no band, so items price at 0 — only the gold counts');
-    assert.equal(b.takenValue, 0);
+    assert.equal(b.givenValue, 11, '5 gold + soap priced at the hostile band (6)');
+    assert.equal(b.takenValue, 0, 'taking stays refused below the floor');
+    assert.equal(b.balance, 11);
+  });
+
+  test('multiple rows on the same side accumulate', () => {
+    const b = offerBalance(PUCK, {
+      give: [{ def: SOAP, count: 1 }, { def: ROCK, count: 1 }], take: [], gold: 0,
+    });
+    // soap: floor(15 * 0.60) = 9. rock: max(1, floor(3 * 0.60)) = 1. 9 + 1 = 10.
+    assert.equal(b.givenValue, 10);
+    assert.equal(b.givenItemsValue, 10);
+  });
+
+  test('a row with no count field defaults to 1', () => {
+    const b = offerBalance(PUCK, { give: [{ def: SOAP }], take: [], gold: 0 });
+    assert.equal(b.givenValue, 9, 'no count field at all still prices exactly one unit');
+  });
+
+  test('offerBalance(null, null) returns clean zeros rather than throwing', () => {
+    const b = offerBalance(null, null);
+    assert.deepEqual(b, { givenValue: 0, takenValue: 0, balance: 0, giftValue: 0, givenItemsValue: 0 });
+  });
+
+  test('a zero or negative count contributes nothing — no phantom item, no fabricated surplus', () => {
+    const zero = offerBalance(PUCK, { give: [{ def: SOAP, count: 0 }], take: [], gold: 0 });
+    assert.equal(zero.givenValue, 0, 'count 0 must not invent a phantom unit');
+
+    const negative = offerBalance(PUCK, { give: [{ def: SOAP, count: -3 }], take: [], gold: 0 });
+    assert.equal(negative.givenValue, 0, 'a negative count must not fabricate a surplus');
   });
 });
