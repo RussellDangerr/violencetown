@@ -662,19 +662,15 @@ describe('resolveOffer — one call, the whole projection', () => {
   describe('the three accounting seams', () => {
     test('unspent is honest GP even when the surplus is entirely a weighted gift', () => {
       // 100 soap on Puck: way past his 40-point headroom to the 100 ceiling,
-      // so most of the (weighted) value buys nothing. If the item half of
-      // `unspent` were left in its giftWeight-inflated units (weight 4), a
-      // caller printing it as gold would overstate the waste by 4x.
+      // so most of the (weighted) value buys nothing. givenItemsValue is 900
+      // real GP (100 * 9); the exact figure below is 900 minus the real-GP
+      // cost of the 40 points he actually bought, divided back out of his
+      // soap:4 weight — pinned, not bounded, so a formula that skips the
+      // avgWeight division (or applies it the wrong way) fails here.
       const r = resolveOffer(PUCK, { give: [{ def: SOAP, count: 100 }], take: [], gold: 0 });
       assert.equal(r.points, 40, 'capped at his headroom to the 100 ceiling');
-      // givenItemsValue for 100 soap at Puck's warm rate (9 each) is 900 real GP.
       assert.equal(r.givenItemsValue, 900);
-      // unspent must never exceed the real GP actually on the table — the old
-      // (buggy) sum could read as high as unspent-in-weight-4-units, i.e. up
-      // to ~4x an honest number.
-      assert.ok(r.unspent < r.givenItemsValue,
-        `unspent (${r.unspent}) must be denominated in real GP, not weight-4 units`);
-      assert.ok(r.unspent > 0, 'headroom of 40 cannot absorb the full 900 GP of weighted gift');
+      assert.equal(r.unspent, 854.1);
     });
 
     test('gold spent on ceiling-refused points is not lost — the doorstep case', () => {
@@ -686,16 +682,33 @@ describe('resolveOffer — one call, the whole projection', () => {
       assert.equal(r.points, 0);
       assert.equal(r.fromGold, 0);
       assert.ok(r.goldRefusedPoints > 0, 'the curve wanted points; the threshold refused all of them');
-      assert.equal(r.unspent, 500, 'the whole 500 GP is accounted for, not just the fraction old code saw');
+      assert.equal(r.unspent, 500, 'the whole 500 GP is accounted for');
     });
 
-    test('goldRefusedPoints survives the trip through resolveOffer', () => {
-      // Three review rounds argued about a field nothing reads (see Task 5's
-      // notes) — this is the something that reads it.
+    test('goldRefusedPoints survives the trip through resolveOffer, with unspent pinned alongside it', () => {
       const bribable = { type: 'Ghost Fungus', disposition: -50, flipThreshold: 60, bribeable: true, values: { bandage: 8 } };
       const r = resolveOffer(bribable, { give: [], take: [], gold: 100000 });
       assert.equal(r.fromGold, 109);
       assert.equal(r.goldRefusedPoints, 41, 'the curve wanted 150; the flip ceiling allowed 109');
+      // The GP charged for those 41 refused points must land back in unspent
+      // rather than disappearing inside goodwillFor's internal accounting —
+      // this is the only assertion in the file that a goldCost of 0 fails.
+      assert.equal(r.unspent, 99664.28);
+    });
+
+    test('a mixed surplus prices the item and gold halves on their own segments', () => {
+      // 5 soap (weight 4) plus 100 gold, buying a bandage: items and gold
+      // BOTH land points here (39 from items, 1 from gold), so a formula
+      // that prices item points across the whole climb instead of their own
+      // segment, or prices gold from d0 instead of afterItems, both diverge
+      // from this exact figure while every other committed case (all
+      // fromItems=0 or fromGold=0) cannot tell the difference.
+      const r = resolveOffer(PUCK, {
+        give: [{ def: SOAP, count: 5 }], take: [{ def: BANDAGE, count: 1 }], gold: 100,
+      });
+      assert.equal(r.fromItems, 39);
+      assert.equal(r.fromGold, 1);
+      assert.ok(Math.abs(r.unspent - 65.365) < 1e-9);
     });
 
     test('a fully-settled offer and a refused offer both report a clean zero, not undefined', () => {
