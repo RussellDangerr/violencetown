@@ -190,9 +190,16 @@ The `gold-weighting-and-bribery-research` memo proposed a ~+30 per-encounter cap
 disposition. **This spec replaces that with a structural ceiling**, and the deviation is deliberate:
 
 ```
-T = npc.flipThreshold ?? 30                    // the threshold itself, NOT §4.2's CEIL
+rawT = npc.flipThreshold ?? 30                 // the threshold itself, NOT §4.2's CEIL
+T    = Number.isFinite(rawT) ? rawT : 30       // the third numeric door — guard it
 goldCeiling = (disposition < T) ? T − 1 : Infinity
 ```
+
+**That `Number.isFinite` is load-bearing, not defensive garnish.** Without it a `flipThreshold` of
+`Infinity` makes `T − 1` still `Infinity`, which the ceiling check then reads as "no ceiling at all" —
+so the most unflippable NPC anyone could author would get the *freest* gold. The intent exactly
+inverted. `disposition` and `flipThreshold` are the two numeric doors into this module and both are
+guarded the same way, for the same reason.
 
 `?? 30` is not a new number: it is the default `previewGive` and `applyDispositionDelta` already use
 (`give-action.js:49`, `:235`). An earlier draft of this spec said `?? 100`, which would have silently

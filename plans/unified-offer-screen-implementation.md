@@ -657,7 +657,7 @@ export function splitGoodwill(npc, { itemValue = 0, gold = 0 } = {}) {
     if (npc && npc.bribeable === false) {
         // Gifts still land on someone who refuses bribes; only the gold is refused.
         return { points: items.points, fromItems: items.points, fromGold: 0,
-                 unspent: items.unspent, goldRefused: gold > 0 };
+                 unspent: items.unspent, goldRefusedPoints: refused };
     }
 
     const threshold = (npc && npc.flipThreshold) ?? 30;
@@ -676,10 +676,11 @@ export function splitGoodwill(npc, { itemValue = 0, gold = 0 } = {}) {
         fromItems: items.points,
         fromGold: allowed,
         unspent: items.unspent + raw.unspent,
-        // Points gold wanted to buy but the flip ceiling refused. Distinct from
-        // `unspent` — that is "no room left to feel", this is "gold can't carry
-        // him across his own threshold". They want different log lines.
-        goldRefused: Math.max(0, raw.points - allowed),
+        // POINTS gold wanted to buy but the flip ceiling refused — note the unit,
+        // which is why the name carries it. Distinct from `unspent` (leftover GP):
+        // that is "no room left to feel", this is "gold can't carry him across his
+        // own threshold". Different situations, different log lines, different units.
+        goldRefusedPoints: Math.max(0, raw.points - allowed),
     };
 }
 ```
