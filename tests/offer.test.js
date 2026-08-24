@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { emptyOffer, offerBalance, settledGold, dispositionCeil, goodwillCostPerPoint, goodwillFor, splitGoodwill, RESENT_MAX_PER_OFFER, RESENT_FLOOR, resentmentCostPerPoint, resentmentFor, resolveOffer } from '../game/offer.js';
+import { emptyOffer, offerBalance, settledGold, dispositionCeil, goodwillCostPerPoint, goodwillFor, splitGoodwill, RESENT_MAX_PER_OFFER, RESENT_FLOOR, resentmentCostPerPoint, resentmentFor, resolveOffer, stage, unstage, commitBlocker } from '../game/offer.js';
 
 const PUCK = {
   type: 'Puck', disposition: 60, flipThreshold: 0, vendor: true,
@@ -807,5 +807,91 @@ describe('resolveOffer — one call, the whole projection', () => {
       assert.equal(deficitCase.goldUnspent, 0);
       assert.equal(deficitCase.goldRefusedPoints, 0);
     });
+  });
+});
+
+describe('staging', () => {
+  test('staging adds, and staging the same thing again increments', () => {
+    let o = stage(emptyOffer(), 'give', { def: SOAP, slot: 3 });
+    o = stage(o, 'give', { def: SOAP, slot: 3 });
+    assert.equal(o.give.length, 1);
+    assert.equal(o.give[0].count, 2);
+  });
+
+  test('the same item in a different bag slot stages separately', () => {
+    let o = stage(emptyOffer(), 'give', { def: SOAP, slot: 3 });
+    o = stage(o, 'give', { def: SOAP, slot: 9 });
+    assert.equal(o.give.length, 2);
+  });
+
+  test('unstaging decrements, then removes the entry', () => {
+    let o = stage(stage(emptyOffer(), 'give', { def: SOAP, slot: 3 }), 'give', { def: SOAP, slot: 3 });
+    o = unstage(o, 'give', 0);
+    assert.equal(o.give[0].count, 1);
+    o = unstage(o, 'give', 0);
+    assert.equal(o.give.length, 0);
+  });
+
+  test('unstaging an index that is not there is a no-op, not a crash', () => {
+    const o = unstage(emptyOffer(), 'give', 7);
+    assert.equal(o.give.length, 0);
+  });
+
+  test('staging never mutates the offer it was given', () => {
+    const before = emptyOffer();
+    stage(before, 'give', { def: SOAP, slot: 3 });
+    assert.equal(before.give.length, 0);
+  });
+});
+
+describe('commitBlocker — every refusal is a sentence', () => {
+  const ctx = { playerGold: 750, npcGold: 9999 };
+
+  test('an empty offer has nothing to commit', () => {
+    assert.match(commitBlocker(PUCK, emptyOffer(), ctx), /NOTHING STAGED/);
+  });
+
+  test('a good offer is not blocked', () => {
+    const o = { give: [{ def: SOAP, count: 2 }], take: [], gold: 0 };
+    assert.equal(commitBlocker(PUCK, o, ctx), null);
+  });
+
+  test('the player cannot stage gold they do not have', () => {
+    const o = { give: [], take: [], gold: 900 };
+    assert.match(commitBlocker(PUCK, o, { ...ctx, playerGold: 100 }), /800 GP SHORT/);
+  });
+
+  test("the NPC's till is checked BEFORE commit, not discovered during it", () => {
+    const o = { give: [{ def: SOAP, count: 2 }], take: [], gold: -18 };
+    assert.match(commitBlocker(PUCK, o, { ...ctx, npcGold: 5 }), /TILL IS 13 GP SHORT/);
+  });
+
+  test('below the trade floor he will not deal at all', () => {
+    const hostile = { ...PUCK, disposition: -80 };
+    const o = { give: [], take: [{ def: BANDAGE, count: 1 }], gold: 0 };
+    assert.match(commitBlocker(hostile, o, ctx), /WON'T DEAL/);
+  });
+
+  test("...but the give tray still works below the floor, so he can be won round", () => {
+    const hostile = { ...PUCK, disposition: -80 };
+    const o = { give: [{ def: SOAP, count: 2 }], take: [], gold: 0 };
+    assert.equal(commitBlocker(hostile, o, ctx), null);
+  });
+
+  test('an unabsorbable lowball is refused with a reason', () => {
+    const o = { give: [], take: [{ def: BANDAGE, count: 20 }], gold: 0 };
+    assert.match(commitBlocker(PUCK, o, ctx), /WON'T TAKE ANOTHER BAD DEAL/);
+  });
+
+  test('an untracked NPC cannot be shortchanged', () => {
+    const untracked = { type: 'Violencian' };   // disposition undefined, not 0
+    const o = { give: [], take: [{ def: BANDAGE, count: 1 }], gold: 0 };
+    assert.match(commitBlocker(untracked, o, ctx), /CAN'T BE SHORTCHANGED/);
+  });
+
+  test('a container cannot be shortchanged either', () => {
+    const chest = { type: 'Chest', disposition: 100, _container: true };
+    const o = { give: [], take: [{ def: BANDAGE, count: 1 }], gold: 0 };
+    assert.match(commitBlocker(chest, o, { ...ctx, isContainer: true }), /CAN'T BE SHORTCHANGED/);
   });
 });

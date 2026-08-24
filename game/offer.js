@@ -377,3 +377,68 @@ export function resentmentFor(deficit, npc) {
     return { points: -pts || 0, shortfall: pool > EPSILON ? pool : 0 };
 }
 
+// ── Staging ──────────────────────────────────────────────────────────────────
+//
+// Immutable: every call returns a NEW offer, so the screen re-derives from the
+// return value and a stale reference can never draw a stale basket.
+//
+// Entries key off their SOURCE, not their item id, so the same item sitting in
+// two bag slots stages as two entries and un-staging one leaves the other alone.
+function sameEntry(a, b) {
+    if (a.def !== b.def) return false;
+    if ('slot' in b) return a.slot === b.slot;
+    return a.source === b.source && a.index === b.index;
+}
+
+export function stage(offer, side, entry) {
+    const o = offer || emptyOffer();
+    const list = (o[side] || []).map(e => ({ ...e }));
+    const hit = list.find(e => sameEntry(e, entry));
+    if (hit) hit.count += 1;
+    else list.push({ ...entry, count: 1 });
+    return { ...o, [side]: list };
+}
+
+export function unstage(offer, side, index) {
+    const o = offer || emptyOffer();
+    const list = (o[side] || []).map(e => ({ ...e }));
+    const e = list[index];
+    if (!e) return o;
+    e.count -= 1;
+    if (e.count <= 0) list.splice(index, 1);
+    return { ...o, [side]: list };
+}
+
+// ── Refusals ─────────────────────────────────────────────────────────────────
+//
+// null when the offer can be made, else a short uppercase sentence the ledger
+// bar shows on the disabled button. Never a silent no-op: the player is always
+// told why, and always before an item is spent.
+//
+// Order matters — the most fundamental reason wins, so the message stays true.
+export function commitBlocker(npc, offer, ctx = {}) {
+    const o = offer || emptyOffer();
+    const staged = (o.give || []).length + (o.take || []).length + (o.gold ? 1 : 0);
+    if (!staged) return 'NOTHING STAGED';
+
+    const gold = o.gold || 0;
+    const playerGold = ctx.playerGold ?? 0;
+    if (gold > playerGold) return `YOU'RE ${gold - playerGold} GP SHORT`;
+
+    const owedToPlayer = Math.max(0, -gold);
+    const npcGold = ctx.npcGold ?? 0;
+    if (owedToPlayer > npcGold) return `HIS TILL IS ${owedToPlayer - npcGold} GP SHORT`;
+
+    // The floor gates TAKING, not giving — a hostile NPC is a puzzle, not a wall.
+    // You can always gift or bribe your way back up to where he'll deal, in the
+    // same sitting. (Options narrowed, never removed.)
+    const takingSomething = (o.take || []).length > 0 || gold < 0;
+    if (takingSomething && !canTrade(dispositionOf(npc))) return "HE WON'T DEAL";
+
+    if (offerBalance(npc, o).balance < 0) {
+        const noResentment = !npc || npc.disposition == null || npc._container || ctx.isContainer;
+        if (noResentment) return "HE CAN'T BE SHORTCHANGED";
+        if (resolveOffer(npc, o).patienceExceeded) return "HE WON'T TAKE ANOTHER BAD DEAL";
+    }
+    return null;
+}
