@@ -611,6 +611,11 @@ describe('resolveOffer — one call, the whole projection', () => {
     assert.equal(r.balance, 18, 'the market surplus');
     assert.equal(r.points, 16, 'amplified by his soap weight of 4');
     assert.equal(r.projected, 76);
+    // A surplus is never a refusal — shortfall belongs to the deficit branch
+    // only. Pinned because `shortfall: unspent` also passes every other test
+    // in this file, and a consumer reading shortfall > 0 as a refusal would
+    // then mis-report every generous gift as one.
+    assert.equal(r.shortfall, 0);
   });
 
   test('the same soap inside a purchase projects identically', () => {
@@ -659,6 +664,28 @@ describe('resolveOffer — one call, the whole projection', () => {
     assert.equal(JSON.stringify({ npc, offer }), snapshot);
   });
 
+  test('a null offer does not throw', () => {
+    // offerBalance's equivalent null-offer guard is pinned (see
+    // offerBalance(null, null) above); resolveOffer's own `offer ||
+    // emptyOffer()` deserves the same, since deleting it makes this throw
+    // instead of returning the inert result an absent offer should.
+    const r = resolveOffer(PUCK, null);
+    assert.equal(r.points, 0);
+    assert.equal(r.balance, 0);
+  });
+
+  test('a raised ceiling (flipThreshold 200) is honoured by the unspent math, not just the point count', () => {
+    // The Fungus King's ceiling is 200, not the default 100 every other
+    // resolveOffer test uses. fromGold/points already come from splitGoodwill
+    // (which reads the real ceiling), so they pass even if resolveOffer's own
+    // `dispositionCeil(npc)` call were hardcoded to 100 -- only unspent, which
+    // resolveOffer prices itself, exposes that. Under that mutant this comes
+    // back 0 instead of ~129.52.
+    const r = resolveOffer(KING, { give: [], take: [], gold: 1000 });
+    assert.equal(r.fromGold, 279);
+    assert.ok(Math.abs(r.unspent - 129.52) < 1e-6);
+  });
+
   describe('the three accounting seams', () => {
     test('unspent is honest GP even when the surplus is entirely a weighted gift', () => {
       // 100 soap on Puck: way past his 40-point headroom to the 100 ceiling,
@@ -675,7 +702,7 @@ describe('resolveOffer — one call, the whole projection', () => {
       // summation, and whether that summation happens to land bit-exact on
       // 854.1 is luck, not structure -- a change to goodwillCostPerPoint's
       // constants or the summation order can re-roll it without being a
-      // regression. The tightest mutant on this case still misses by 3.9.
+      // regression.
       assert.ok(Math.abs(r.unspent - 854.1) < 1e-9);
     });
 
