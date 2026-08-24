@@ -410,52 +410,91 @@ export function deviceRingsLayout(bodyRect, game) {
 // ── The unified offer screen ─────────────────────────────────────────────────
 //
 // One panel: a header with the disposition meter, two scrolling goods lists, the
-// give/take trays, an always-populated description strip, and the ledger bar.
+// give/take trays, an always-populated description strip, and the ledger band.
 // renderer._drawOfferScreen (draw) and main._tapOffer (hit-test) read this SAME
 // function, so a row's tap zone can never drift from where it was painted.
+// offerRowIndexAt / offerTraySlotAt do the hit-testing here too, so the slop
+// policy pinned by tests/offer-layout.test.js can't drift out of sync with it.
 //
 // The numbers come from game/_design-offer.html, which renders this at 608x608
 // against real VT323 metrics and prints a fit report. Non-overlap is pinned by
-// tests/offer-layout.test.js — and note the invariant there is PER-GROUP:
-// siblings tile exactly at zero slop, only cross-group rects get HIT_SLOP.
-// That forces the column gutter to exceed 2 * HIT_SLOP; at 8px the two columns'
-// tap zones met inside the gap.
+// tests/offer-layout.test.js.
+//
+// Everything is derived from `P` (both position and size) rather than the fixed
+// canvas, so a same-size panel moved elsewhere on the 608x608 canvas gets a pure
+// translation of this same layout.
 export const OFFER_ROWS_VISIBLE = 6;
 export const OFFER_ROW_H = 40;
 export const OFFER_TRAY_SLOTS = 6;
 
-export function offerLayout(panelRect, game) {
+export function offerLayout(panelRect) {
     const P = panelRect || MODAL_RECT;
     const px = P.x + 8, pr = P.x + P.w - 8;
-    const colW = 264, gutter = 16;          // gutter MUST exceed 2 * HIT_SLOP
+    const gutter = 16;                       // gutter MUST exceed 2 * HIT_SLOP
+    const colW = (pr - px - gutter) / 2;
     const leftX = px, rightX = px + colW + gutter;
 
-    const listY = 146;
+    const listY = P.y + 102;
     const rows = (ox) => Array.from({ length: OFFER_ROWS_VISIBLE }, (_, i) => ({
         x: ox, y: listY + i * OFFER_ROW_H, w: colW, h: OFFER_ROW_H,
     }));
-    const trayY = 404;
+    const trayY = P.y + 360;
     const tray = (ox) => Array.from({ length: OFFER_TRAY_SLOTS }, (_, i) => ({
         x: ox + i * 42, y: trayY, w: 36, h: 36,
     }));
     const listH = OFFER_ROWS_VISIBLE * OFFER_ROW_H;
 
+    const ledgerY = P.y + 464;
+    const buttonW = 156, buttonX = pr - buttonW;
+
     return {
         panel: P,
-        meterBar:     { x: px, y: 104, w: 320, h: 12 },
-        colHeadY:     138,
-        theirs:       rows(leftX),
-        yours:        rows(rightX),
-        theirsScroll: { x: leftX + colW - 5,  y: listY, w: 3, h: listH },
-        yoursScroll:  { x: rightX + colW - 5, y: listY, w: 3, h: listH },
-        trayLabelY:   390,
-        giveTray:     tray(leftX),
-        takeTray:     tray(rightX),
-        desc:         { x: px, y: 444, w: pr - px, h: 54 },
-        ledgerY:      508,
-        button:       { x: 420, y: 506, w: 156, h: 40 },
-        hintY:        550,
-        close:        closeButtonRect(P),
-        rowsVisible:  OFFER_ROWS_VISIBLE,
+        meterBar:          { x: px, y: P.y + 60, w: 320, h: 12 },
+        colHeadY:           P.y + 94,
+        theirs:             rows(leftX),
+        yours:              rows(rightX),
+        theirsScrollTrack:  { x: leftX + colW - 5,  y: listY, w: 3, h: listH },
+        yoursScrollTrack:   { x: rightX + colW - 5, y: listY, w: 3, h: listH },
+        trayLabelY:         P.y + 346,
+        giveTray:           tray(leftX),
+        takeTray:           tray(rightX),
+        desc:               { x: px, y: P.y + 400, w: pr - px, h: 54 },
+        // label at ledger.x, value at ledgerValueX, BALANCE at ledgerBalanceX —
+        // gives the renderer a truncation bound so a long give-list can't run
+        // into the balance figure.
+        ledger:             { x: px, y: ledgerY, w: buttonX - px - 8, h: 20 },
+        ledgerValueX:       px + 56,
+        ledgerBalanceX:     px + 268,
+        button:             { x: buttonX, y: ledgerY - 2, w: buttonW, h: 40 },
+        hintY:              P.y + 506,
+        close:              closeButtonRect(P),
     };
+}
+
+function _ptInRect(pt, r) {
+    return pt.x >= r.x && pt.x < r.x + r.w && pt.y >= r.y && pt.y < r.y + r.h;
+}
+
+// Resolve a tap point to a data index within one scrolling list column, or -1.
+// ZERO slop — rows tile with no real gap, so expanding any one of them would
+// overlap its neighbour and make the tap ambiguous (the thing this module
+// exists to prevent). `scroll` is the data index of the first visible row.
+export function offerRowIndexAt(L, pt, side, scroll) {
+    const rows = side === 'yours' ? L.yours : L.theirs;
+    for (let i = 0; i < rows.length; i++) {
+        if (_ptInRect(pt, rows[i])) return i + (scroll || 0);
+    }
+    return -1;
+}
+
+// Resolve a tap point to a slot index within one tray, or -1. ZERO slop here
+// too, though tray slots already have a real 6px gap (36px slots, 42px
+// stride) — a tap landing in that gap is genuinely ambiguous and returns -1
+// rather than guessing which neighbour it meant.
+export function offerTraySlotAt(L, pt, side) {
+    const slots = side === 'take' ? L.takeTray : L.giveTray;
+    for (let i = 0; i < slots.length; i++) {
+        if (_ptInRect(pt, slots[i])) return i;
+    }
+    return -1;
 }
