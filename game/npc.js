@@ -21,7 +21,7 @@
 
 import { manhattan, chebyshev } from './utils.js';
 import { getGreedyStep, stepEntity } from './pathing.js';
-import { perceives, VERDICT } from './perception.js';
+import { perceives, nextAwareness, VERDICT } from './perception.js';
 import { healPurchase } from './ai.js';
 import { burnGold } from './trade.js';
 
@@ -151,19 +151,56 @@ export function tickNpcState(game, npc, clock = game.turn) {
             // a foe walking home that catches sight of you again turns and resumes
             // the chase. A live sighting also clears the lost-sight timer so contact
             // has to actually break to count.
-            const canSeePlayer = perceives(game.map, npc, game.playerX, game.playerY) === VERDICT.DIRECT;
+            const verdict = perceives(game.map, npc, game.playerX, game.playerY);
+            const canSeePlayer = verdict === VERDICT.DIRECT;
             if (canSeePlayer) {
                 npc._lostSightTurns = 0;
+                npc._awareBeats = 0;             // a real sighting outranks any accrued suspicion
+                npc._sweepBeats = 0;
                 npc._lastSeenX = game.playerX;   // (PD-1) refresh the last-seen mark
                 npc._lastSeenY = game.playerY;   // only while the player is actually in view
-                if (npc.state === 'idle' || npc.state === 'returning') {
-                    const reacquire = npc.state === 'idle';
+                if (npc.state === 'idle' || npc.state === 'suspicious' || npc.state === 'returning') {
+                    const reacquire = npc.state !== 'returning';
                     npc.state = 'chasing';
                     if (reacquire) messages.push({
                         text: `[${npc.entity.name} spotted you!]`,
                         sourceEnemy: npc,
                         category: 'spotted',
                     });
+                }
+            } else if (npc.state === 'idle' || npc.state === 'suspicious') {
+                // (ladder) nextAwareness owns the PRE-CHASE states only — the
+                // idle → suspicious promotion on sustained peripheral contact, and
+                // suspicious → searching. The chasing / returning / leash logic
+                // below is deliberately left exactly as it was: it already
+                // implements "pursue the last-seen tile, give up on arrival",
+                // which IS searching, just under the older name. Renaming it would
+                // risk the leash for no gain until the renderer needs the label.
+                //
+                // Consequence worth knowing: BLIND_SWEEP_BEATS has no runtime
+                // consumer yet. It only applies to a searcher with NO last-seen
+                // mark, which today only a theft can produce — so it wires up with
+                // the Thieve verb, not here.
+                const before = npc.state;
+                const t = nextAwareness(npc, verdict, { x: game.playerX, y: game.playerY });
+                npc.state       = t.state;
+                npc._awareBeats = t.awareBeats;
+                npc._sweepBeats = t.sweepBeats;
+                if (t.faceTo) {
+                    // Turn toward the disturbance, and remember where it was so the
+                    // search that follows has somewhere to walk to.
+                    npc._lastDx = Math.sign(t.faceTo.x - npc.x);
+                    npc._lastDy = Math.sign(t.faceTo.y - npc.y);
+                    npc._lastSeenX = t.faceTo.x;
+                    npc._lastSeenY = t.faceTo.y;
+                }
+                if (npc.state === 'suspicious') {
+                    if (before !== 'suspicious') messages.push({
+                        text: `[${npc.entity.name} looks your way...]`,
+                        sourceEnemy: npc,
+                        category: 'spotted',
+                    });
+                    break;   // turning to look IS the turn — no move, no attack
                 }
             }
 
@@ -186,7 +223,10 @@ export function tickNpcState(game, npc, clock = game.turn) {
                 break;
             }
 
-            if (npc.state !== 'chasing') break;
+            // 'searching' runs the same pursuit spine as 'chasing' below — it
+            // walks to the last-seen tile and gives up on arrival. That is exactly
+            // what the blind-chase branch already did; it just has a name now.
+            if (npc.state !== 'chasing' && npc.state !== 'searching') break;
 
             // Leash: a chaser that has broken contact — out of sight — gives up when
             // it has strayed too far from home OR stayed blind for too many beats,
