@@ -20,7 +20,8 @@
 // the HOSTILE (chase), ALLIED, or ambient states.
 
 import { manhattan, chebyshev } from './utils.js';
-import { getGreedyStep, stepEntity, hasLineOfSight } from './pathing.js';
+import { getGreedyStep, stepEntity } from './pathing.js';
+import { perceives, VERDICT } from './perception.js';
 import { healPurchase } from './ai.js';
 import { burnGold } from './trade.js';
 
@@ -136,14 +137,21 @@ export function tickNpcState(game, npc, clock = game.turn) {
         case STATE.HOSTILE: {
             // Legacy chase logic — relocated verbatim from enemies.js (PD-3 step 4),
             // plus the leash (a strayed/blind chaser breaks off and walks home).
-            const dist = manhattan(npc.x, npc.y, game.playerX, game.playerY);
-
-            // Check LOS. Spotting the player (re)acquires aggro from either idle
-            // OR returning — a foe walking home that catches sight of you again
-            // turns and resumes the chase. A live sighting also clears the
-            // lost-sight timer so contact has to actually break to count.
-            const canSeePlayer = dist <= npc.sightRange &&
-                hasLineOfSight(game.map, npc.x, npc.y, game.playerX, game.playerY);
+            // (perception) ONE source of truth, shared with the threat overlay, so
+            // what the player is shown and what the AI acts on can never disagree.
+            // Only DIRECT — the forward cone — counts as "sees you"; PERIPHERAL
+            // feeds the suspicion ladder instead, and the rear three tiles are blind.
+            //
+            // Note this also moves the range metric from Manhattan to Chebyshev.
+            // Manhattan was the stricter of the two on diagonals, so sight widens
+            // very slightly diagonally — correct, since movement is 8-way and the
+            // overlay has always drawn sight as a circle.
+            //
+            // Spotting the player (re)acquires aggro from either idle OR returning —
+            // a foe walking home that catches sight of you again turns and resumes
+            // the chase. A live sighting also clears the lost-sight timer so contact
+            // has to actually break to count.
+            const canSeePlayer = perceives(game.map, npc, game.playerX, game.playerY) === VERDICT.DIRECT;
             if (canSeePlayer) {
                 npc._lostSightTurns = 0;
                 npc._lastSeenX = game.playerX;   // (PD-1) refresh the last-seen mark
