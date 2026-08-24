@@ -21,6 +21,7 @@ import { tickNpcState } from './npc.js';
 import { tickBuffList } from './buffs.js';
 import { parseCapabilities, deriveAllegiance } from './ai.js';
 import { ITEMS } from './items.js';
+import { WEAPONS } from './weapons.js';
 
 const DEFAULT_SIGHT = 8;
 const DEFAULT_DAMAGE = 8;
@@ -326,7 +327,7 @@ export class Enemy {
 // caught loudly, at author time.
 export function resolveLoadout(loadout) {
     if (!Array.isArray(loadout)) return [];
-    return loadout.map(x => (typeof x === 'string' ? ITEMS[x] : x)).filter(Boolean);
+    return loadout.map(x => (typeof x === 'string' ? (WEAPONS[x] || ITEMS[x]) : x)).filter(Boolean);
 }
 
 // Law 6f — the nameplate number is the whole kit: liquid gold + carried item
@@ -334,7 +335,7 @@ export function resolveLoadout(loadout) {
 // saves and fixtures), so both read the same number.
 export function challengeGp(e) {
     const items = (e.loadout ?? []).reduce((s, x) => {
-        const def = (typeof x === 'string') ? ITEMS[x] : x;
+        const def = (typeof x === 'string') ? (WEAPONS[x] || ITEMS[x]) : x;
         return s + (def?.value ?? def?.baseValue ?? 0);
     }, 0);
     return (e.gold ?? 0) + items;

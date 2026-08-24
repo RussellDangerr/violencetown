@@ -45,3 +45,29 @@ test('a real loadout passes clean', () => {
     // complaint about it.
     assert.ok(!problems.some(p => p.includes('carries unknown item')), problems.join('\n'));
 });
+
+// A weapon id resolves through the same itemIds union as an ITEMS id (the
+// game's own WEAPONS[id] || ITEMS[id]), so it structurally validates clean
+// everywhere. But the vendor/chest buy path (_buyFromVendor) still does a
+// bare ITEMS lookup on `stock` and silently no-ops — unlike loadout and
+// examinable.grants, deliberately left unfixed because Task 15 deletes that
+// whole path rather than patching it. This pins the advisory that closes the
+// authoring trap: stock still validates clean (not a hard problem — nothing
+// is actually dangling), but now WARNS so the gap is caught here, not in play.
+test('a weapon authored into vendor/chest stock validates clean but warns about the buy-path gap', () => {
+    const { problems, warnings } = validateContent([{ file: 'x-map.json', data: { enemies: [
+        { id: 'e1', type: 'Merchant', vendor: true, stock: ['lion_whip'] },
+    ] } }]);
+    assert.ok(!problems.some(p => p.includes('stocks unknown item')), problems.join('\n'));
+    assert.ok(warnings.some(w => /stocks weapon 'lion_whip'/.test(w) && /stock/.test(w)), warnings.join('\n'));
+});
+
+// loadout and examinable.grants ARE fixed (resolveLoadout, _grantFromExaminable
+// both resolve WEAPONS now) — a weapon there gets no such warning.
+test('a weapon in a loadout or an examinable grant raises no stock-style warning', () => {
+    const { warnings } = validateContent([{ file: 'x-map.json', data: {
+        enemies: [{ id: 'e1', type: 'Thug', damage: 5, gold: 3, loadout: ['lion_whip'] }],
+        examinables: [{ id: 'x1', x: 0, y: 0, grants: 'lion_whip' }],
+    } }]);
+    assert.ok(!warnings.some(w => /lion_whip/.test(w)), warnings.join('\n'));
+});

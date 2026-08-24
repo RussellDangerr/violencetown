@@ -3713,7 +3713,7 @@ class Game {
             this._log(target.spentText || '[Nothing left here now.]');
             return true;
         }
-        const def = ITEMS[target.grants];
+        const def = this._resolveItemDef(target.grants);   // WEAPONS too, not just ITEMS
         if (!def) { this._log(target.text || `[You examine the ${target.id}.]`); return true; }
         if (!this._addToInventory(def)) { this._log('[Your bag is full — leave it for now.]'); return true; }
         this._collectedItems.add(key);
@@ -3973,7 +3973,7 @@ class Game {
     // Grant an item straight into the bag (quest rewards, dialogue gifts). Emits
     // item_pickup so quests + HUD react exactly like a ground pickup.
     _grantItem(id, msg) {
-        const def = ITEMS[id];
+        const def = this._resolveItemDef(id);   // WEAPONS too, not just ITEMS
         if (!def) return false;
         if (!this._addToInventory(def)) { this._log('[Your bag is full — no room for it.]'); return false; }
         if (msg) this._log(msg, 'pickup');

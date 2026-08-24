@@ -144,3 +144,66 @@ describe('_takeItemAt — the ground-take path no longer swallows unresolvable i
         assert.match(g.logs[0].msg, /won't come loose/);
     });
 });
+
+// _takeItemAt's bare-ITEMS shape had two siblings that hit the same wall
+// without the destructive splice: a quest reward or dialogue gift of a
+// weapon silently failed (_grantItem), and an examinable granting one fell
+// through to plain examine text instead of handing it over
+// (_grantFromExaminable). Same liveMethod technique, same reasoning: both
+// still take ITEMS as a free var so a regression to the old shape runs
+// (and is caught by the assertions), not just ReferenceErrors.
+describe('_grantItem — quest/dialogue gifts resolve WEAPONS too', () => {
+    const grantItem = liveMethod('_grantItem', 'id, msg', { ITEMS, WEAPONS });
+
+    test('granting a weapon id succeeds and lands in the bag', () => {
+        const g = stubGame({ events: [] });
+        g.emitGameEvent = (type, payload) => g.events.push({ type, payload });
+        g._render = () => {};
+        const ok = grantItem.call(g, 'gator_tail', '[You are given a Gator Tail.]');
+        assert.equal(ok, true);
+        assert.ok(g.inventory && g.inventory.includes(WEAPONS.gator_tail));
+        assert.deepEqual(g.events, [{ type: 'item_pickup', payload: { id: 'gator_tail' } }]);
+    });
+
+    test('an unresolvable id is refused, not silently swallowed', () => {
+        const g = stubGame();
+        g.emitGameEvent = () => { throw new Error('should not fire on a refused grant'); };
+        g._render = () => { throw new Error('should not render on a refused grant'); };
+        const ok = grantItem.call(g, 'not_a_real_item_xyz');
+        assert.equal(ok, false);
+        assert.equal(g.inventory, undefined, 'nothing should have reached the bag');
+    });
+});
+
+describe('_grantFromExaminable — an examinable granting a weapon resolves it', () => {
+    const grantFromExaminable = liveMethod('_grantFromExaminable', 'target', { audio, ITEMS, WEAPONS });
+
+    test('a weapon-granting examinable adds it to the bag once', () => {
+        const g = stubGame();
+        const target = { id: 'whip_rack', x: 2, y: 2, grants: 'lion_whip', text: '[You take the whip.]' };
+        const handled = grantFromExaminable.call(g, target);
+        assert.equal(handled, true);
+        assert.ok(g.inventory && g.inventory.includes(WEAPONS.lion_whip));
+        assert.ok(g._collectedItems.has('test-map|2|2|lion_whip'));
+    });
+
+    test('a second examine after taking it shows spentText, not a re-grant', () => {
+        const g = stubGame();
+        const target = { id: 'whip_rack', x: 2, y: 2, grants: 'lion_whip', text: '[You take the whip.]', spentText: '[The rack is bare.]' };
+        grantFromExaminable.call(g, target);
+        const before = g.inventory.length;
+        grantFromExaminable.call(g, target);
+        assert.equal(g.inventory.length, before, 'a second examine must not grant a second copy');
+        assert.equal(g.logs.at(-1).msg, '[The rack is bare.]');
+    });
+
+    test('an unresolvable grants id falls through to plain examine text, not a crash', () => {
+        const g = stubGame();
+        const target = { id: 'mystery_crate', x: 9, y: 9, grants: 'not_a_real_item_xyz', text: '[A locked crate.]' };
+        const handled = grantFromExaminable.call(g, target);
+        assert.equal(handled, true);
+        assert.equal(g.inventory, undefined);
+        assert.equal(g.logs.length, 1);
+        assert.equal(g.logs[0].msg, '[A locked crate.]');
+    });
+});

@@ -49,6 +49,7 @@ export function validateContent(maps) {
     // Id universes. The game resolves an item id via WEAPONS[id] || ITEMS[id]
     // (main.js _resolveItemDef), so the item closure is the union.
     const itemIds = new Set([...Object.keys(ITEMS), ...Object.keys(WEAPONS)]);
+    const weaponOnlyIds = new Set(Object.keys(WEAPONS).filter(id => !ITEMS[id]));
     const dialogueIds = new Set(Object.keys(DIALOGUES));
     const mapFileSet = new Set(maps.map(m => m.file));
     const npcIds = new Set();
@@ -57,8 +58,17 @@ export function validateContent(maps) {
     // ── Map references ───────────────────────────────────────────────────────
     for (const { file, data } of maps) {
         for (const e of (data.enemies || [])) {
-            for (const id of (e.stock || []))
+            for (const id of (e.stock || [])) {
                 if (!itemIds.has(id)) P(`${file}: enemy ${e.id || '?'} stocks unknown item '${id}'`);
+                // A weapon validates clean here (it IS a known id) but the
+                // vendor/chest buy path (_buyFromVendor) still does a bare
+                // ITEMS lookup and silently no-ops on it — unlike loadout and
+                // examinable.grants, this site wasn't fixed, because Task 15
+                // deletes _buyFromVendor outright rather than patching it.
+                // Warn now so authoring a weapon into stock is caught here,
+                // not discovered as a dead tap in play.
+                else if (weaponOnlyIds.has(id)) W(`${file}: enemy ${e.id || '?'} stocks weapon '${id}' — the vendor/chest buy path doesn't resolve WEAPONS yet (pending Task 15)`);
+            }
             for (const id of (e.loadout || []))
                 if (!itemIds.has(id)) P(`${file}: enemy ${e.id || '?'} carries unknown item '${id}'`);
             if (e.dialogueId && !dialogueIds.has(e.dialogueId))
