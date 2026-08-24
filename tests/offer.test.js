@@ -344,6 +344,16 @@ describe('the gold ceiling', () => {
     assert.equal(splitGoodwill(GHOST, { itemValue: 0, gold: 100000 }).goldRefusedPoints, 150);
   });
 
+  test('a refusing partner still accounts for the gold — chests included', () => {
+    // The chest shim is bribeable:false, disposition:100 (main.js _openContainer),
+    // so once Tasks 12-17 land it, not the Ghost Fungus, is this branch's usual
+    // caller. Staging gold into a chest must report it as unspent, not swallow it.
+    const chest = { type: 'Chest', disposition: 100, bribeable: false };
+    const r = splitGoodwill(chest, { itemValue: 0, gold: 500 });
+    assert.equal(r.points, 0);
+    assert.equal(r.unspent, 500, 'the whole 500 comes back accounted for');
+  });
+
   test('unspent carries BOTH halves', () => {
     const r = splitGoodwill({ ...GHOST, bribeable: true }, { itemValue: 200, gold: 100000 });
     assert.ok(r.unspent > 99000, 'drop the gold half and this collapses to the gift half alone');
