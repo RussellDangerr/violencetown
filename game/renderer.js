@@ -26,6 +26,7 @@ import {
     inspectorPanelRect, inspectorActionRects,                               // (C1) tap-to-inspect panel + action-row geometry
     gearOptionRects,                                                        // (C2) GEAR chooser option-row geometry
     xmbBarLayout,                                                            // (XMB) usable-bar geometry
+    MODAL_RECT, offerLayout,                                                 // (offer screen) the one panel + its geometry
 } from './layout.js';
 import { itemStatLine, itemActions, equipOptions } from './inspector.js';    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
 import { zoneOf } from './inventory.js';                                     // (C1) safe/pack label for the inspector
@@ -36,9 +37,11 @@ import { findFusion } from './rings.js';                                     // 
 import { WORLD_ZONES, overworldZone, connectorPairs } from './world-map.js'; // (Phase 4) rudimentary world map
 import { hasLineOfSight } from './pathing.js';                               // (aggro overlay) READ-ONLY: same Bresenham the chase AI uses
 import { isSafe } from './defeat-scenarios.js';   // (defeat legibility) mark safe-floor items
-import { buyPrice, sellPrice, bribeStepCost, mood, canTrade, BRIBE_STEP } from './trade.js'; // (trade slice 1) pricing + mood smiley
+import { buyPrice, sellPrice, bribeStepCost, mood, canTrade, band, BRIBE_STEP } from './trade.js'; // (trade slice 1) pricing + mood smiley; band feeds the offer meter's multiplier readout
 import * as Settings from './settings.js'; // (combat-feel-pass) reduce-motion for hit-splats (namespace import — see main.js)
 import { challengeGp } from './enemies.js'; // (Law 6f) nameplate pips read the composite kit, not raw gold
+import { resolveOffer } from './offer.js';                                  // (offer screen) pure basket→projection
+import { dispositionCeil, DISPOSITION_MIN } from './disposition-curves.js'; // (offer screen) meter ceiling + floor — offer.js does not re-export these
 
 // (combat-feel-pass) Hit-splat fill colors by damage type. Crit keeps the
 // physical fill but takes a gold border (handled in _drawHitSplat). New types
@@ -434,6 +437,8 @@ export class Renderer {
             trade:       TRADE_MODAL_RECT,
             dialogue:    this._dialogueRect,
             device:      DEVICE_RECT,
+            offer:       MODAL_RECT,   // the ✕ chip's one source of truth; offerLayout's own
+                                       // `close` field goes unused so there's only one.
         }[game.state] || null;
         this._menuPanelRect = CLOSE_PANEL;
         this._closeBtnRect = CLOSE_PANEL ? closeButtonRect(CLOSE_PANEL) : null;
@@ -2993,6 +2998,102 @@ export class Renderer {
         ctx.fillStyle = UI.gold;                         // pommel
         ctx.beginPath(); ctx.arc(0, gl, bw * 0.8, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
+    }
+
+    // ── The unified offer screen ─────────────────────────────────────────────
+    //
+    // One panel for buying, selling, giving and bribing, because they are one
+    // verb: make an offer. Geometry comes from layout.offerLayout, which
+    // main._tapOffer hit-tests against, so nothing can drift.
+    //
+    // Text is measured with this.font.measure — NEVER the /8 idiom, which is a
+    // fossil of the retired 8x8 atlas and wraps ~40% narrower than the space
+    // allows. The real VT323 advance is scale * 4.8.
+    //
+    // Lists, trays, description and ledger are drawn by later tasks; this one
+    // is the panel, the header, and the meter.
+    _drawOfferScreen(game) {
+        const ctx = this.ctx;
+        const npc = game._offerNpc;
+        if (!npc) return;
+        const L = offerLayout(MODAL_RECT);
+
+        ctx.fillStyle = 'rgba(0,0,0,0.72)';
+        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+        drawPanelSmall(ctx, L.panel.x, L.panel.y, L.panel.w, L.panel.h, this.uiSheet, 'base');
+        if (!this.font) return;
+
+        const R = resolveOffer(npc, game._offer);
+        this._drawOfferHeader(game, L, R);
+
+        this.font.drawText(ctx, 'TAB SIDE  SPACE STAGE  ENTER OFFER  ESC CLOSE',
+            L.panel.x + 8, L.hintY, { color: UI.dim, scale: 1 });
+    }
+
+    // Header: mood face, name, the disposition meter, and the player's gold.
+    _drawOfferHeader(game, L, R) {
+        const ctx = this.ctx;
+        const npc = game._offerNpc;
+        const d = npc.disposition ?? 0;
+
+        this._drawMoodFace(L.panel.x + 24, L.panel.y + 20, mood(d).face);
+        this.font.drawText(ctx, String(npc.type).toUpperCase(),
+            L.panel.x + 44, L.panel.y + 10, { color: UI.gold, scale: 2 });
+        this.font.drawText(ctx, `GP ${game.gold ?? 0}`,
+            L.panel.x + L.panel.w - 44, L.panel.y + 10, { color: UI.gold, scale: 2, align: 'right' });
+
+        // An untracked NPC has no meter to draw — see spec 4.5. Say so plainly
+        // rather than inventing a zero they never had.
+        if (npc.disposition == null) {
+            this.font.drawText(ctx, 'NO OPINION OF YOU EITHER WAY',
+                L.meterBar.x, L.meterBar.y, { color: UI.dim, scale: 1 });
+            return;
+        }
+
+        const ceil = dispositionCeil(npc);
+        const mb = L.meterBar;
+        const at = (v) => mb.x + ((Math.max(DISPOSITION_MIN, Math.min(ceil, v)) - DISPOSITION_MIN)
+                                  / (ceil - DISPOSITION_MIN)) * mb.w;
+
+        drawInset(ctx, mb.x, mb.y, mb.w, mb.h);
+        ctx.fillStyle = d >= 50 ? '#79c46a' : d >= 0 ? UI.textLight : UI.hpRed;
+        ctx.fillRect(mb.x, mb.y, at(d) - mb.x, mb.h);
+
+        // The projection: gold rightward for a surplus, red leftward for a bad
+        // deal. Same affordance, mirrored — the player sees the damage BEFORE
+        // committing, never after.
+        if (R.points !== 0) {
+            const lo = Math.min(at(d), at(R.projected)), hi = Math.max(at(d), at(R.projected));
+            const up = R.points > 0;
+            ctx.fillStyle = up ? 'rgba(212,185,106,0.5)' : 'rgba(204,68,34,0.45)';
+            ctx.fillRect(lo, mb.y, hi - lo, mb.h);
+            ctx.strokeStyle = up ? UI.gold : UI.hpRed;
+            ctx.lineWidth = 1; ctx.setLineDash([2, 2]);
+            ctx.strokeRect(lo, mb.y, hi - lo, mb.h);
+            ctx.setLineDash([]);
+        }
+
+        ctx.fillStyle = UI.panelBg;
+        for (const v of [-50, -25, 0, 25, 50, 75]) ctx.fillRect(at(v), mb.y, 1, mb.h);
+
+        const b0 = band(d), b1 = band(R.projected);
+        const sign = (v) => (v > 0 ? `+${v}` : String(v));
+        const dirCol = R.points > 0 ? '#79c46a' : R.points < 0 ? UI.hpRed : UI.text;
+        const label = R.points !== 0
+            ? `${sign(d)} > ${sign(R.projected)} ${(b1 ? b1.mood : "WON'T DEAL").toUpperCase()}`
+            : `${sign(d)} ${(b0 ? b0.mood : "WON'T DEAL").toUpperCase()}`;
+        this.font.drawText(ctx, label, mb.x + mb.w + 12, mb.y + 1, { color: dirCol, scale: 1 });
+
+        // The payoff: the multipliers the player is actually buying or losing.
+        const mulX = mb.x + mb.w + 12 + this.font.measure(label, 1) + 14;
+        const mulCol = (b1 === b0) ? UI.dim : dirCol;
+        const arrow = (a, b, fmt) => (a === b ? fmt(a) : `${fmt(a)} > ${fmt(b)}`);
+        if (b0 && b1) {
+            this.font.drawText(ctx, `BUY x${arrow(b0.buy, b1.buy, v => v.toFixed(1))}`,
+                mulX, mb.y - 5, { color: mulCol, scale: 1 });
+            this.font.drawText(ctx, `SELL x${arrow(b0.sell, b1.sell, v => v.toFixed(2))}`,
+                mulX, mb.y + 8, { color: mulCol, scale: 1 });
+        }
     }
 
     // ── Dialogue modal (Step 4 — disposition dialogue) ───────────────────────
