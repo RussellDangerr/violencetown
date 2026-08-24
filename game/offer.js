@@ -425,15 +425,16 @@ export function commitBlocker(npc, offer, ctx = {}) {
     const playerGold = ctx.playerGold ?? 0;
     if (gold > playerGold) return `YOU'RE ${gold - playerGold} GP SHORT`;
 
+    // The floor gates TAKING, not giving — a hostile NPC is a puzzle, not a wall.
+    // You can always gift or bribe your way back up to where he'll deal, in the
+    // same sitting. (Options narrowed, never removed.) Checked before the till,
+    // so a hostile NPC always hears the reason he can act on, not the one he can't.
+    const takingSomething = (o.take || []).length > 0 || gold < 0;
+    if (takingSomething && !canTrade(dispositionOf(npc))) return "HE WON'T DEAL";
+
     const owedToPlayer = Math.max(0, -gold);
     const npcGold = ctx.npcGold ?? 0;
     if (owedToPlayer > npcGold) return `HIS TILL IS ${owedToPlayer - npcGold} GP SHORT`;
-
-    // The floor gates TAKING, not giving — a hostile NPC is a puzzle, not a wall.
-    // You can always gift or bribe your way back up to where he'll deal, in the
-    // same sitting. (Options narrowed, never removed.)
-    const takingSomething = (o.take || []).length > 0 || gold < 0;
-    if (takingSomething && !canTrade(dispositionOf(npc))) return "HE WON'T DEAL";
 
     if (offerBalance(npc, o).balance < 0) {
         const noResentment = !npc || npc.disposition == null || npc._container || ctx.isContainer;
