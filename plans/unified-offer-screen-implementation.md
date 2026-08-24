@@ -2847,6 +2847,12 @@ move disposition, then log. Nothing half-applies.
 > the sentence never got written. It now arrives split by provenance as `itemUnspent` / `goldUnspent`,
 > because fusing them makes "393 GP wasted" wrong in kind when 94 of it is soap market value.
 >
+> **Write the lines, or cut the fields.** `itemUnspent`, `goldUnspent` and `goldRefusedPoints` are
+> being carried nine tasks on the strength of a log line that does not yet exist. Task 5's own text
+> already tried to close this loop once — *"three review rounds have argued about a field nothing
+> reads; end that here"* — and forwarding the field did not end it. If this task arrives with the
+> lines still unwritten, the answer is **deletion**, not a fifth round of argument.
+>
 > `_logOffer` must say the honest thing in each case, in house voice:
 > - gold that bought nothing → `[Puck pockets the gold. It buys nothing he wants.]`
 > - a gift with no room left → `[Puck is already as fond of you as he can be.]`
