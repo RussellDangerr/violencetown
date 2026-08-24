@@ -22,17 +22,6 @@ export function emptyOffer() {
     return { give: [], take: [], gold: 0 };
 }
 
-// Every disposition read in this module funnels through here, so a missing
-// npc (or a missing `disposition` on one) prices as neutral instead of
-// throwing.
-function dispositionOf(npc) {
-    const d = (npc && npc.disposition) ?? 0;
-    // Sanitized here so every OTHER disposition read in this module
-    // (offerBalance's pricing included) doesn't have to guard against NaN
-    // separately.
-    return Number.isFinite(d) ? d : 0;
-}
-
 // A count is a whole, non-negative number of units. Fractions from a drag
 // handle and NaN from an empty quantity field must not reach the settlement.
 function unitCount(c) {
@@ -113,17 +102,15 @@ export function settledGold(npc, offer) {
 //
 // The return shape is spelled out field by field rather than inheriting
 // offerBalance's via `{...bal}`, so its size is a decision, not a byproduct of
-// the balance calculation growing a field. giftValue/givenItemsValue are kept
-// (the meter's ghost segment reads the weighting they carry) but no longer
-// arrive as a side effect of the spread.
+// the balance calculation growing a field. givenValue/takenValue/giftValue/
+// givenItemsValue are cut entirely — nothing here reads them, and a caller
+// wanting tray totals calls offerBalance, which is exported and tested on
+// its own.
 //
 // itemUnspent and goldUnspent are reported separately rather than summed,
 // because they are different in KIND, not just in source: itemUnspent is
 // market value of a gift the NPC had no room left to appreciate; goldUnspent
-// is real money that bought nothing. goldRefusedPoints is not redundant with
-// goldUnspent > 0 && fromGold === 0 — that same condition also holds when the
-// NPC is simply already at their disposition ceiling, which is a different
-// story than "gold couldn't carry him across his own threshold".
+// is real money that bought nothing.
 export function resolveOffer(npc, offer) {
     const o = offer || emptyOffer();
     const bal = offerBalance(npc, o);
@@ -132,10 +119,9 @@ export function resolveOffer(npc, offer) {
 
     if (bal.balance === 0) {
         return {
-            givenValue: bal.givenValue, takenValue: bal.takenValue, balance: bal.balance,
-            giftValue: bal.giftValue, givenItemsValue: bal.givenItemsValue,
-            points: 0, fromItems: 0, fromGold: 0, projected: d0, shortfall: 0,
-            itemUnspent: 0, goldUnspent: 0, goldRefusedPoints: 0, patienceExceeded: false,
+            balance: bal.balance, points: 0, fromItems: 0, fromGold: 0, projected: d0,
+            shortfall: 0, itemUnspent: 0, goldUnspent: 0, goldRefusedPoints: 0,
+            patienceExceeded: false,
         };
     }
 
@@ -156,24 +142,18 @@ export function resolveOffer(npc, offer) {
         const goldUnspent = Math.max(0, goldSurplus - g.goldSpent);
 
         return {
-            givenValue: bal.givenValue, takenValue: bal.takenValue, balance: bal.balance,
-            giftValue: bal.giftValue, givenItemsValue: bal.givenItemsValue,
-            points: g.points, fromItems: g.fromItems, fromGold: g.fromGold,
+            balance: bal.balance, points: g.points, fromItems: g.fromItems, fromGold: g.fromGold,
             projected: d0 + g.points, shortfall: 0,
             itemUnspent, goldUnspent, goldRefusedPoints: g.goldRefusedPoints,
             patienceExceeded: false,
         };
     }
 
-    // A deficit is not a refusal: `patienceExceeded` says this shortfall is
-    // bigger than his patience, which is one input to Task 6's commitBlocker,
-    // not the same thing as it — a caller reading `false` as "he'll take it"
-    // would be reading a name this field doesn't claim.
+    // A deficit is not a refusal: `patienceExceeded` is one input to Task 6's
+    // commitBlocker, not the same thing as it.
     const r = resentmentFor(-bal.balance, npc);
     return {
-        givenValue: bal.givenValue, takenValue: bal.takenValue, balance: bal.balance,
-        giftValue: bal.giftValue, givenItemsValue: bal.givenItemsValue,
-        points: r.points, fromItems: 0, fromGold: 0,
+        balance: bal.balance, points: r.points, fromItems: 0, fromGold: 0,
         projected: d0 + r.points, shortfall: r.shortfall,
         itemUnspent: 0, goldUnspent: 0, goldRefusedPoints: 0,
         patienceExceeded: r.shortfall > 0,
@@ -188,6 +168,17 @@ export function resolveOffer(npc, offer) {
 
 export const DISPOSITION_MIN = -100;
 const EPSILON = 1e-9;   // float-drift tolerance on the last point
+
+// Every disposition read in this module funnels through here, so a missing
+// npc (or a missing `disposition` on one) prices as neutral instead of
+// throwing.
+export function dispositionOf(npc) {
+    const d = (npc && npc.disposition) ?? 0;
+    // Sanitized here so every OTHER disposition read in this module
+    // (offerBalance's pricing included) doesn't have to guard against NaN
+    // separately.
+    return Number.isFinite(d) ? d : 0;
+}
 
 // The top of this NPC's meter — and the denominator of both curves. At least
 // 100, but a high flipThreshold raises it (the Fungus King is authored 200, and
@@ -239,6 +230,12 @@ export function goodwillCostPerPoint(d, ceil) {
 // reaches `cap`, so `points`/`spent`/`unspent` report the capped prefix
 // while `refusedByCap` (points bought after the snapshot, i.e. what the
 // same money would have bought past the cap) falls out of that one walk.
+// The `cappedPool === null` check appears twice — here, and again after the
+// loop. The one here is a no-op on its own (`pts` climbs by exactly 1 each
+// pass, so it can equal a fixed `effectiveCap` at most once); the one after
+// the loop is not — every call using the default `cap = Infinity` relies on
+// it entirely, since `pts` never equals `Infinity` and this one never fires
+// for them. They stand or fall together, not one at a time.
 export function goodwillFor(surplus, npc, cap = Infinity) {
     // No valid surplus means nothing was ever staged to spend — 0 unspent,
     // not the raw (possibly negative or NaN) input echoed back.
@@ -323,10 +320,10 @@ export function splitGoodwill(npc, { itemValue = 0, gold = 0 } = {}) {
         fromGold: goldCurve.points,
         itemsSpent: items.spent,
         goldSpent: goldCurve.spent,
-        unspent: items.unspent + goldCurve.unspent,
-        // Points gold wanted to buy but the flip ceiling refused. Distinct from
-        // `unspent` — that is "no room left to feel", this is "gold can't carry
-        // him across his own threshold". They want different log lines.
+        // Points gold wanted to buy but the flip ceiling refused — distinct
+        // from goldCurve.unspent, which is "no room left to feel"; this is
+        // "gold can't carry him across his own threshold". They want
+        // different log lines.
         goldRefusedPoints: goldCurve.refusedByCap,
     };
 }

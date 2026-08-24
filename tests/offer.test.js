@@ -247,6 +247,21 @@ describe('the goodwill curve', () => {
     }
   });
 
+  test('a binding cap prices unspent from the capped prefix, not the uncapped walk', () => {
+    // The Ghost Fungus at -50, capped at exactly the 109 points splitGoodwill's
+    // own gold leg allows: the curve would spend 100000 - 99476.50 = 523.50 GP
+    // if it climbed the full 150-point walk to the ceiling, but only 335.72 of
+    // that pays for the 109 points the cap actually admits. Measuring unspent
+    // from the FINAL (uncapped) pool instead of the snapshot at the cap passes
+    // every other test in this file and reports 99476.50 here instead — the
+    // 187.78 GP difference is exactly the "gold in neither field" bug this
+    // module exists to close.
+    const ghostAt50 = { type: 'Ghost Fungus', disposition: -50, flipThreshold: 60, values: { bandage: 8 } };
+    const r = goodwillFor(100000, ghostAt50, 109);
+    assert.equal(r.points, 109);
+    assert.ok(Math.abs(r.unspent - 99664.28) < 1e-9);
+  });
+
   describe('unspent — the mirror of resentmentFor\'s shortfall', () => {
     test('a comfortable surplus on a warm NPC leaves most of it spent, a little unspent', () => {
       // Puck +60, headroom to 100 is 40 points; filling it costs ~183.6 GP.
@@ -287,7 +302,8 @@ describe('the gold ceiling', () => {
   test('items and gold each contribute, and the total is their sum', () => {
     const r = splitGoodwill(PUCK, { itemValue: 36, gold: 30 });
     assert.equal(r.points, r.fromItems + r.fromGold);
-    assert.equal(typeof r.unspent, 'number', 'unspent must be carried through from goodwillFor');
+    assert.equal(typeof r.itemsSpent, 'number', 'itemsSpent must be carried through from goodwillFor');
+    assert.equal(typeof r.goldSpent, 'number', 'goldSpent must be carried through from goodwillFor');
     assert.ok(r.fromItems > 0 && r.fromGold > 0);
   });
 
@@ -355,16 +371,17 @@ describe('the gold ceiling', () => {
   test('a refusing partner still accounts for the gold — chests included', () => {
     // The chest shim is bribeable:false, disposition:100 (main.js _openContainer),
     // so once Tasks 12-17 land it, not the Ghost Fungus, is this branch's usual
-    // caller. Staging gold into a chest must report it as unspent, not swallow it.
+    // caller. Staging gold into a chest must spend none of it, not swallow it.
     const chest = { type: 'Chest', disposition: 100, bribeable: false };
     const r = splitGoodwill(chest, { itemValue: 0, gold: 500 });
     assert.equal(r.points, 0);
-    assert.equal(r.unspent, 500, 'the whole 500 comes back accounted for');
+    assert.equal(r.goldSpent, 0, 'nothing was spent — the chest is already at its ceiling');
   });
 
-  test('unspent carries BOTH halves', () => {
+  test('itemsSpent and goldSpent both carry a nonzero value', () => {
     const r = splitGoodwill({ ...GHOST, bribeable: true }, { itemValue: 200, gold: 100000 });
-    assert.ok(r.unspent > 99000, 'drop the gold half and this collapses to the gift half alone');
+    assert.ok(r.itemsSpent > 0 && r.goldSpent > 0,
+      'both halves must actually spend something, not just the gift half alone');
   });
 
   test('the ceiling reports exactly what it refused', () => {
@@ -691,13 +708,16 @@ describe('resolveOffer — one call, the whole projection', () => {
     test('itemUnspent is honest GP even when the surplus is entirely a weighted gift', () => {
       // 100 soap on Puck: way past his 40-point headroom to the 100 ceiling,
       // so most of the (weighted) value buys nothing. givenItemsValue is 900
-      // real GP (100 * 9); the exact figure below is 900 minus the real-GP
-      // cost of the 40 points he actually bought, divided back out of his
-      // soap:4 weight — pinned, not bounded, so a formula that skips the
-      // avgWeight division (or applies it the wrong way) fails here.
-      const r = resolveOffer(PUCK, { give: [{ def: SOAP, count: 100 }], take: [], gold: 0 });
+      // real GP (100 * 9) -- resolveOffer no longer exposes it, so check it
+      // via offerBalance directly, which is the exported, separately-tested
+      // way to get tray totals. The exact figure below is 900 minus the
+      // real-GP cost of the 40 points he actually bought, divided back out
+      // of his soap:4 weight — pinned, not bounded, so a formula that skips
+      // the avgWeight division (or applies it the wrong way) fails here.
+      const offer = { give: [{ def: SOAP, count: 100 }], take: [], gold: 0 };
+      assert.equal(offerBalance(PUCK, offer).givenItemsValue, 900);
+      const r = resolveOffer(PUCK, offer);
       assert.equal(r.points, 40, 'capped at his headroom to the 100 ceiling');
-      assert.equal(r.givenItemsValue, 900);
       assert.equal(r.goldUnspent, 0, 'no gold was given, and no summation means no float drift to tolerate');
       // Tolerance, not ===: this value is an exact terminating decimal in
       // rational arithmetic, but splitGoodwill reaches it via a 40-term float
