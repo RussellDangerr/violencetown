@@ -122,11 +122,29 @@ describe('offerBalance — the signed heart of the model', () => {
     assert.deepEqual(b, { givenValue: 0, takenValue: 0, balance: 0, giftValue: 0, givenItemsValue: 0 });
   });
 
-  test('a zero or negative count contributes nothing — no phantom item, no fabricated surplus', () => {
+  test('a zero, negative, or NaN count contributes nothing — no phantom item, no fabricated surplus', () => {
     const zero = offerBalance(PUCK, { give: [{ def: SOAP, count: 0 }], take: [], gold: 0 });
     assert.equal(zero.givenValue, 0, 'count 0 must not invent a phantom unit');
 
     const negative = offerBalance(PUCK, { give: [{ def: SOAP, count: -3 }], take: [], gold: 0 });
     assert.equal(negative.givenValue, 0, 'a negative count must not fabricate a surplus');
+
+    const nan = offerBalance(PUCK, { give: [{ def: SOAP, count: NaN }], take: [], gold: 0 });
+    assert.equal(nan.givenValue, 0, 'NaN from an empty quantity field must not poison the balance');
+
+    // The take side is where the original bug lived: a negative count used to
+    // fabricate a surplus (balance: +30 on a bandage that was never handed over).
+    const takenNegative = offerBalance(PUCK, { give: [], take: [{ def: BANDAGE, count: -1 }], gold: 0 });
+    assert.equal(takenNegative.takenValue, 0, 'a negative take count must not fabricate a surplus');
+    assert.equal(takenNegative.balance, 0);
+  });
+
+  test('settledGold below the trade floor never quotes a payout he will refuse', () => {
+    // Puck's other settledGold test sells at disposition 60 — well above the
+    // floor, where a payout is honest. Below the floor the NPC won't pay out
+    // at all, so quoting one would auto-stage a gift into a blocked offer.
+    const enemy = { type: 'Bandit', disposition: -80 };
+    const g = settledGold(enemy, { give: [{ def: SOAP, count: 3 }], take: [] });
+    assert.equal(g, 0, 'a gift below the floor stages at zero, not a refused payout');
   });
 });

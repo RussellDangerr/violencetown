@@ -15,7 +15,7 @@
 //
 // Design: plans/unified-offer-screen.md §4. Geometry: layout.js offerLayout().
 
-import { buyPrice, sellPrice, TRADE_FLOOR } from './trade.js';
+import { buyPrice, canTrade, sellPrice, TRADE_FLOOR } from './trade.js';
 
 // A fresh, empty basket.
 export function emptyOffer() {
@@ -27,6 +27,13 @@ export function emptyOffer() {
 // throwing.
 function dispositionOf(npc) {
     return (npc && npc.disposition) ?? 0;
+}
+
+// A count is a whole, non-negative number of units. Fractions from a drag
+// handle and NaN from an empty quantity field must not reach the settlement.
+function unitCount(c) {
+    const n = Math.trunc(c ?? 1);
+    return Number.isFinite(n) ? Math.max(0, n) : 0;
 }
 
 // The weight an NPC puts on an item beyond its market price. An authored
@@ -63,7 +70,7 @@ export function offerBalance(npc, offer) {
     let giftValue  = 0;   // gold carries no gift weight, so it never enters here
     let givenItemsValue = 0;
     for (const g of o.give || []) {
-        const n = Math.max(0, Math.trunc(g.count ?? 1));
+        const n = unitCount(g.count);
         // sellPrice is null below TRADE_FLOOR, which would price a gift at zero
         // and make "gift your way back up to where he'll deal" impossible. Fall
         // back to the hostile band so a gift is always worth SOMETHING. Taking
@@ -75,7 +82,7 @@ export function offerBalance(npc, offer) {
     }
     let takenValue = Math.max(0, -gold);
     for (const t of o.take || []) {
-        const n = Math.max(0, Math.trunc(t.count ?? 1));
+        const n = unitCount(t.count);
         const unit = buyPrice(t.def, d) || 0;
         takenValue += unit * n;
     }
@@ -88,5 +95,8 @@ export function offerBalance(npc, offer) {
 // deliberately, which is the whole interaction.
 export function settledGold(npc, offer) {
     const z = offerBalance(npc, { ...(offer || emptyOffer()), gold: 0 });
-    return -z.balance;
+    const g = -z.balance;
+    // Below the floor he won't pay out, so don't quote a payout the commit
+    // blocker will only refuse. A gift stages at zero and stays a gift.
+    return (g < 0 && !canTrade(dispositionOf(npc))) ? 0 : g;
 }
