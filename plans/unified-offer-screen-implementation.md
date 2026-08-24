@@ -2292,12 +2292,18 @@ changes. The basket lives at `game._offer`, RAM-only, cleared on close.
 **Closing always discards the basket.** Nothing is committed until `MAKE THE OFFER` is pressed, so
 `Escape` is always safe and never needs a confirm.
 
-> **Guard the gold before it reaches `offerBalance`.** `offerBalance` is the one function in
-> `game/offer.js` that does not finite-guard its input — `dispositionOf`, `dispositionCeil` and
-> `unitCount` all do. A `gold` of `Infinity` produces `balance: Infinity` and then `unspent: NaN`,
-> which would render as `NaN GP` in the ledger. Unreachable until this task wires real gold in, which
-> is exactly why it is this task's problem: sanitize where the number enters (`_offer.gold` and the
-> staged amount) rather than deep in the pure module.
+> **Guard the gold — at the entry AND in the module.** `offerBalance` is the one function in
+> `game/offer.js` that does not finite-guard its input; `dispositionOf`, `unitCount`, `dispositionCeil`
+> and `splitGoodwill` all do. A `gold` of `Infinity` produces `balance: Infinity` and then
+> `unspent: NaN`, which the ledger would render as `NaN GP`.
+>
+> Do **both**, and the reasoning for each is different. Clamp where the number enters `main.js`
+> (`_offer.gold` and the staged amount) because that is where a bad value can actually originate.
+> *And* add the one-line `Number.isFinite` guard inside `offerBalance`, because a UI clamp only
+> protects the one caller that exists today, while the module's own convention — stated in
+> `dispositionCeil`'s comment, that a non-finite value "becomes NaN meter geometry downstream" —
+> protects every caller, including the container and chest offers `splitGoodwill` already anticipates.
+> An earlier draft of this note framed it as either/or; the module's four other guards argue for both.
 
 - [ ] **Step 1: Add the imports and the constructor fields**
 
@@ -2439,12 +2445,18 @@ missed refresh drifted the hit-test away from the draw. It is replaced by lists 
 so draw and hit-test cannot disagree by construction. Unlike `_tradeSellList`, the derived satchel
 **keeps `count`**, so a stack of nine rocks is one row reading `[Rock] x9`.
 
-> **Guard the gold before it reaches `offerBalance`.** `offerBalance` is the one function in
-> `game/offer.js` that does not finite-guard its input — `dispositionOf`, `dispositionCeil` and
-> `unitCount` all do. A `gold` of `Infinity` produces `balance: Infinity` and then `unspent: NaN`,
-> which would render as `NaN GP` in the ledger. Unreachable until this task wires real gold in, which
-> is exactly why it is this task's problem: sanitize where the number enters (`_offer.gold` and the
-> staged amount) rather than deep in the pure module.
+> **Guard the gold — at the entry AND in the module.** `offerBalance` is the one function in
+> `game/offer.js` that does not finite-guard its input; `dispositionOf`, `unitCount`, `dispositionCeil`
+> and `splitGoodwill` all do. A `gold` of `Infinity` produces `balance: Infinity` and then
+> `unspent: NaN`, which the ledger would render as `NaN GP`.
+>
+> Do **both**, and the reasoning for each is different. Clamp where the number enters `main.js`
+> (`_offer.gold` and the staged amount) because that is where a bad value can actually originate.
+> *And* add the one-line `Number.isFinite` guard inside `offerBalance`, because a UI clamp only
+> protects the one caller that exists today, while the module's own convention — stated in
+> `dispositionCeil`'s comment, that a non-finite value "becomes NaN meter geometry downstream" —
+> protects every caller, including the container and chest offers `splitGoodwill` already anticipates.
+> An earlier draft of this note framed it as either/or; the module's four other guards argue for both.
 
 - [ ] **Step 1: Write the derivation and selection helpers**
 
