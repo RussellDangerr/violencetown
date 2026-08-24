@@ -245,7 +245,7 @@ export function commitBlocker(npc, offer, ctx = {}) {
     if (offerBalance(npc, o).balance < 0) {
         const noResentment = !npc || npc.disposition == null || npc._container || ctx.isContainer;
         if (noResentment) return "THEY CAN'T BE SHORTCHANGED";
-        if (resolveOffer(npc, o).patienceExceeded) return "THEY WON'T TAKE ANOTHER BAD DEAL";
+        if (resolveOffer(npc, o).patienceExceeded) return "THEY'VE HAD ENOUGH";
     }
     return null;
 }

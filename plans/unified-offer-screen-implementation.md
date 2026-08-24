@@ -1261,7 +1261,7 @@ describe('commitBlocker — every refusal is a sentence', () => {
 
   test('an unabsorbable lowball is refused with a reason', () => {
     const o = { give: [], take: [{ def: BANDAGE, count: 20 }], gold: 0 };
-    assert.match(commitBlocker(PUCK, o, ctx), /WON'T TAKE ANOTHER BAD DEAL/);
+    assert.match(commitBlocker(PUCK, o, ctx), /HAD ENOUGH/);
   });
 
   test('an untracked NPC cannot be shortchanged', () => {
@@ -1358,7 +1358,7 @@ export function commitBlocker(npc, offer, ctx = {}) {
     if (offerBalance(npc, o).balance < 0) {
         const noResentment = !npc || npc.disposition == null || npc._container || ctx.isContainer;
         if (noResentment) return "THEY CAN'T BE SHORTCHANGED";
-        if (resolveOffer(npc, o).refused) return "THEY WON'T TAKE ANOTHER BAD DEAL";
+        if (resolveOffer(npc, o).patienceExceeded) return "THEY'VE HAD ENOUGH";
     }
     return null;
 }
@@ -3344,7 +3344,7 @@ Console must be clean throughout.
 - [ ] **The Ghost Fungus** (`bribeable: false`) — gold in the tray generates no goodwill; gifts still do.
 - [ ] **Scroll** — all 50 bag slots reachable; the thumb is proportional at 1 item and at 50.
 - [ ] **A bad deal** — the red retreat, the warning, the commit, and worse prices afterward.
-- [ ] **An unabsorbable lowball** — refused with `THEY WON'T TAKE ANOTHER BAD DEAL`.
+- [ ] **An unabsorbable lowball** — refused with `THEY'VE HAD ENOUGH`.
 - [ ] **Escape mid-basket** — the staged offer is discarded and nothing was spent.
 
 - [ ] **Step 4: Glyph check**

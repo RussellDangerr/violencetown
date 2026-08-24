@@ -249,7 +249,7 @@ RESENT_FLOOR         = −25       // no amount of bad dealing goes below this
 
 They close the loop on each other. At the floor there is no resentment left to absorb a deficit, so
 the lowball lever stops being offered rather than becoming a free lunch — the commit button refuses
-with `THEY WON'T TAKE ANOTHER BAD DEAL`. And because `RESENT_FLOOR` sits above `TRADE_FLOOR = -50`, a
+with `THEY'VE HAD ENOUGH`. And because `RESENT_FLOOR` sits above `TRADE_FLOOR = -50`, a
 bad dealer is never locked out of a shop; the prices just get punishing (`×1.9 buy / ×0.45 sell` in
 the `wary` band). Options narrowed, never removed.
 
@@ -414,7 +414,7 @@ TAKING   1 x [Bandage]                 29 GP SHORT             -16 . THEY'LL REM
 
 The button only *disables*, always with a stated reason, when the offer genuinely cannot happen:
 
-- `THEY WON'T TAKE ANOTHER BAD DEAL` — the deficit needs more resentment than `RESENT_MAX_PER_OFFER`
+- `THEY'VE HAD ENOUGH` — the deficit needs more resentment than `RESENT_MAX_PER_OFFER`
   or `RESENT_FLOOR` has left. This is the shortfall's real ceiling.
 - `THEY CAN'T BE SHORTCHANGED` — an untracked (`disposition == null`) partner or a container, where
   there is no resentment to spend, so the balance must be covered in full.

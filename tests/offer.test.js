@@ -519,7 +519,7 @@ describe('commitBlocker — every refusal is a sentence', () => {
 
   test('an unabsorbable lowball is refused with a reason', () => {
     const o = { give: [], take: [{ def: BANDAGE, count: 20 }], gold: 0 };
-    assert.match(commitBlocker(PUCK, o, ctx), /WON'T TAKE ANOTHER BAD DEAL/);
+    assert.match(commitBlocker(PUCK, o, ctx), /HAD ENOUGH/);
   });
 
   test('a bad deal within his patience costs him, but is not blocked', () => {
@@ -663,7 +663,7 @@ describe('commitBlocker — every refusal is a sentence', () => {
     );
     assert.equal(
       commitBlocker(PUCK, { give: [], take: [{ def: BANDAGE, count: 20 }], gold: 0 }, ctx),
-      "THEY WON'T TAKE ANOTHER BAD DEAL"
+      "THEY'VE HAD ENOUGH"
     );
     assert.equal(
       commitBlocker(untracked, { give: [], take: [{ def: BANDAGE, count: 1 }], gold: 0 }, ctx),
