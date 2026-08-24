@@ -412,36 +412,45 @@ export class Renderer {
         // Subtle vignette border
         this._drawVignette();
 
-        // Modals
-        if (game.state === 'item_overlay')    this._drawItemOverlay(game);
-        if (game.state === 'radial_menu')     this._drawRadialMenu(game);
-        if (game.state === 'target_list')     this._drawTargetList(game);
-        if (game.state === 'item_throw_dir')  this._drawThrowPrompt(game);
-        if (game.state === 'ending') this._drawEndingOverlay(game);
-        if (game.state === 'log_modal') this._drawLogModal(game);
-        if (game.state === 'trade') this._drawTradeModal(game);
-        if (game.state === 'dialogue') this._drawDialogueModal(game);
-        if (game.state === 'inspect') this._drawInspectPanel(game);
-        if (game.state === 'device') this._drawDevice(game);
-
-        // (menu grammar) Universal ✕ / Back affordance — after the current Menu is
-        // drawn, stash its panel rect + draw a tappable close chip at the top-right.
-        // main hit-tests renderer._closeBtnRect / _menuPanelRect, kept here in ONE
-        // place so the chip and its hit-zone can't drift. Prompts (inspect) + the
-        // wheel are excluded (any-tap / native ▼CLOSE); target_list uses the rect
-        // _drawTargetList stashed this frame (its height is per-verb-count).
-        const CLOSE_PANEL = {
-            item_overlay: this._itemOverlayRect,
-            target_list: this._targetListRect,
-            log_modal:   LOG_MODAL_RECT,
-            trade:       TRADE_MODAL_RECT,   // STATE.TRADE is also the offer screen's state —
-                                              // one panel rect (== MODAL_RECT) serves both.
-            dialogue:    this._dialogueRect,
-            device:      DEVICE_RECT,
-        }[game.state] || null;
-        this._menuPanelRect = CLOSE_PANEL;
-        this._closeBtnRect = CLOSE_PANEL ? closeButtonRect(CLOSE_PANEL) : null;
-        if (this._closeBtnRect) this._drawCloseButton(this.ctx, this._closeBtnRect);
+        // Modals. Wrapped so that a throw inside ANY modal draw still reaches the
+        // ✕ stash below: that block is what publishes _menuPanelRect and
+        // _closeBtnRect, so without the `finally` a mid-draw exception takes the
+        // chip AND tap-outside down with it and the only way out of the menu left
+        // is the keyboard. A `finally` rather than hoisting the stash above the
+        // dispatch, because target_list and dialogue stash their own rects DURING
+        // it — their height is content-sized — and hoisting would read last
+        // frame's.
+        try {
+            if (game.state === 'item_overlay')    this._drawItemOverlay(game);
+            if (game.state === 'radial_menu')     this._drawRadialMenu(game);
+            if (game.state === 'target_list')     this._drawTargetList(game);
+            if (game.state === 'item_throw_dir')  this._drawThrowPrompt(game);
+            if (game.state === 'ending') this._drawEndingOverlay(game);
+            if (game.state === 'log_modal') this._drawLogModal(game);
+            if (game.state === 'trade') this._drawOfferScreen(game);
+            if (game.state === 'dialogue') this._drawDialogueModal(game);
+            if (game.state === 'inspect') this._drawInspectPanel(game);
+            if (game.state === 'device') this._drawDevice(game);
+        } finally {
+            // (menu grammar) Universal ✕ / Back affordance — after the current Menu is
+            // drawn, stash its panel rect + draw a tappable close chip at the top-right.
+            // main hit-tests renderer._closeBtnRect / _menuPanelRect, kept here in ONE
+            // place so the chip and its hit-zone can't drift. Prompts (inspect) + the
+            // wheel are excluded (any-tap / native ▼CLOSE); target_list uses the rect
+            // _drawTargetList stashed this frame (its height is per-verb-count).
+            const CLOSE_PANEL = {
+                item_overlay: this._itemOverlayRect,
+                target_list: this._targetListRect,
+                log_modal:   LOG_MODAL_RECT,
+                trade:       MODAL_RECT,   // STATE.TRADE is also the offer screen's state —
+                                           // one panel rect serves both.
+                dialogue:    this._dialogueRect,
+                device:      DEVICE_RECT,
+            }[game.state] || null;
+            this._menuPanelRect = CLOSE_PANEL;
+            this._closeBtnRect = CLOSE_PANEL ? closeButtonRect(CLOSE_PANEL) : null;
+            if (this._closeBtnRect) this._drawCloseButton(this.ctx, this._closeBtnRect);
+        }
     }
 
     // (menu grammar) The ✕ / Back chip — a small dark rounded plate with a gold X,
@@ -3012,7 +3021,11 @@ export class Renderer {
     _drawOfferScreen(game) {
         const ctx = this.ctx;
         const npc = game._offerNpc;
-        if (!npc) return;
+        // Symmetric: _drawOfferLists reads game._offer.scroll.theirs unguarded and
+        // the trays read game._offer.give. Guarding only the npc leaves a
+        // half-cleared close (state back in TRADE with _offer already nulled)
+        // throwing from inside the frame instead of simply not drawing.
+        if (!npc || !game._offer || !game._offer.scroll) return;
         const L = offerLayout(MODAL_RECT);
 
         ctx.fillStyle = 'rgba(0,0,0,0.72)';
@@ -3085,9 +3098,13 @@ export class Renderer {
         if (!sel) {
             const m = mood(d);
             const who = String(npc.type).toUpperCase();
-            this.font.drawText(ctx, `${who} IS ${m.mood.toUpperCase()}.`,
-                L.desc.x + 10, L.desc.y + 6, { color: UI.gold, scale: 1 });
-            this.font.drawText(ctx, 'PICK SOMETHING TO SEE WHAT IT IS WORTH TO THEM.',
+            const line = npc._container
+                ? `THE ${who} IS OPEN.`
+                : `${who} IS ${m.mood.toUpperCase()}.`;
+            this.font.drawText(ctx, line, L.desc.x + 10, L.desc.y + 6, { color: UI.gold, scale: 1 });
+            this.font.drawText(ctx, npc._container
+                ? 'PICK SOMETHING TO SEE WHAT IT IS.'
+                : 'PICK SOMETHING TO SEE WHAT IT IS WORTH TO THEM.',
                 L.desc.x + 10, L.desc.y + 24, { color: UI.dim, scale: 1 });
             return;
         }
@@ -3099,8 +3116,13 @@ export class Renderer {
         x += this.font.measure(def.name, 1) + 14;
         this.font.drawText(ctx, tier.name.toUpperCase(), x, L.desc.y + 6, { color: tier.color, scale: 1 });
         x += this.font.measure(tier.name, 1) + 14;
+        // A chest has no till and buys nothing, so quoting what it "PAYS" invents a
+        // transaction that cannot happen. Its rows are worth their base value to
+        // the player and nothing to the box.
         const pays = sellPrice(def, d);
-        this.font.drawText(ctx, `${def.baseValue ?? 0} GP BASE - PAYS ${pays == null ? '-' : pays}`,
+        this.font.drawText(ctx, npc._container
+            ? `${def.baseValue ?? 0} GP BASE - FREE TO TAKE`
+            : `${def.baseValue ?? 0} GP BASE - PAYS ${pays == null ? '-' : pays}`,
             x, L.desc.y + 6, { color: UI.dim, scale: 1 });
 
         const weight = npc.values && npc.values[def.id];
@@ -3204,11 +3226,23 @@ export class Renderer {
         const npc = game._offerNpc;
         const d = npc.disposition ?? 0;
 
-        this._drawMoodFace(L.panel.x + 24, L.panel.y + 20, mood(d).face);
+        // A container is not a person. Its shim carries `disposition: 100` purely
+        // so mood()/canTrade() have a benign value to read -- it was never meant
+        // to be SEEN, and the old _drawTradeModal branched on `_container` and
+        // skipped the mood row entirely. Drawn as-is it gives a wooden crate a
+        // smiling face, an ADORING label and a full meter.
+        const isContainer = !!npc._container;
+        if (!isContainer) this._drawMoodFace(L.panel.x + 24, L.panel.y + 20, mood(d).face);
         this.font.drawText(ctx, String(npc.type).toUpperCase(),
-            L.panel.x + 44, L.panel.y + 10, { color: UI.gold, scale: 2 });
+            L.panel.x + (isContainer ? 8 : 44), L.panel.y + 10, { color: UI.gold, scale: 2 });
         this.font.drawText(ctx, `GP ${game.gold ?? 0}`,
             L.panel.x + L.panel.w - 44, L.panel.y + 10, { color: UI.gold, scale: 2, align: 'right' });
+
+        if (isContainer) {
+            this.font.drawText(ctx, 'EVERYTHING HERE IS FREE',
+                L.meterBar.x, L.meterBar.y, { color: UI.dim, scale: 1 });
+            return;
+        }
 
         // An untracked NPC has no meter to draw — see spec 4.5. Say so plainly
         // rather than inventing a zero they never had.
@@ -3279,8 +3313,14 @@ export class Renderer {
 
         const theirs = game._offerTheirsList();
         const yours  = game._offerYoursList();
+        // A container's contents are FREE -- offerBalance charges 0 for them
+        // (offer.js, the `_container` branch). Pricing this column at
+        // buyPrice(def, shim.disposition) would put a real number beside every
+        // row of loot the model then hands over for nothing: the screen quoting
+        // a price the ledger does not charge.
         this._drawOfferColumn(game, L.theirs, L.theirsScrollTrack, theirs,
-            game._offer.scroll.theirs, 'take', (def) => buyPrice(def, d));
+            game._offer.scroll.theirs, 'take',
+            (def) => (npc._container ? 0 : buyPrice(def, d)));
         this._drawOfferColumn(game, L.yours, L.yoursScrollTrack, yours,
             game._offer.scroll.yours, 'give', (def) => sellPrice(def, d));
     }
