@@ -883,6 +883,15 @@ describe('commitBlocker — every refusal is a sentence', () => {
     assert.match(commitBlocker(PUCK, o, ctx), /WON'T TAKE ANOTHER BAD DEAL/);
   });
 
+  test('a bad deal within his patience costs him, but is not blocked', () => {
+    // Taking one ROCK (buyPrice 4 at his warm band) is a real deficit --
+    // resentmentFor absorbs it with room to spare (shortfall 0), so this
+    // is the 'a deficit is not a refusal' path: distinct from the lowball
+    // above, which blows through his patience.
+    const o = { give: [], take: [{ def: ROCK, count: 1 }], gold: 0 };
+    assert.equal(commitBlocker(PUCK, o, ctx), null);
+  });
+
   test('an untracked NPC cannot be shortchanged', () => {
     const untracked = { type: 'Violencian' };   // disposition undefined, not 0
     const o = { give: [], take: [{ def: BANDAGE, count: 1 }], gold: 0 };
