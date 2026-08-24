@@ -23,6 +23,18 @@ export function emptyOffer() {
     return { give: [], take: [], gold: 0 };
 }
 
+// Gold is a whole, FINITE number of coins, signed. `|| 0` alone looks like it
+// sanitizes, and for NaN it does -- NaN is falsy, so it becomes 0 by accident.
+// Infinity is not falsy: `Math.trunc(Infinity)` is Infinity, which makes an
+// Infinity balance and then a NaN `unspent` that the ledger renders as "NaN GP".
+// A string '1e400' coerces the same way. Every other numeric door in this module
+// and disposition-curves.js already guards; these three gold reads were the ones
+// that did not.
+function goldAmount(g) {
+    const n = Math.trunc(g || 0);
+    return Number.isFinite(n) ? n : 0;
+}
+
 // A count is a whole, non-negative number of units. Fractions from a drag
 // handle and NaN from an empty quantity field must not reach the settlement.
 function unitCount(c) {
@@ -52,7 +64,7 @@ export function giftWeight(npc, def) {
 export function offerBalance(npc, offer) {
     const d = dispositionOf(npc);
     const o = offer || emptyOffer();
-    const gold = Math.trunc(o.gold || 0);
+    const gold = goldAmount(o.gold);
     // Signed gold sits on whichever side it belongs to: positive is the player
     // paying, negative is the NPC paying out. Two trays, one field.
     //
@@ -121,7 +133,7 @@ export function resolveOffer(npc, offer) {
     const o = offer || emptyOffer();
     const bal = offerBalance(npc, o);
     const d0 = dispositionOf(npc);
-    const goldGiven = Math.max(0, Math.trunc(o.gold || 0));
+    const goldGiven = Math.max(0, goldAmount(o.gold));
 
     if (bal.balance === 0) {
         return {
@@ -224,7 +236,7 @@ export function commitBlocker(npc, offer, ctx = {}) {
     // own arithmetic either -- unitCount's comment names the same source. Hoisted
     // above `staged` itself: a sub-1 crumb must not read as something staged when
     // every check below sees a truncated zero and waves the whole commit through.
-    const gold = Math.trunc(o.gold || 0);
+    const gold = goldAmount(o.gold);
     const staged = (o.give || []).length + (o.take || []).length + (gold ? 1 : 0);
     if (!staged) return 'NOTHING STAGED';
 
