@@ -640,20 +640,20 @@ describe('resolveOffer — one call, the whole projection', () => {
     assert.equal(r.balance, -29);
     assert.equal(r.points, -15);
     assert.equal(r.projected, 45);
-    assert.equal(r.refused, false);
+    assert.equal(r.patienceExceeded, false);
   });
 
   test('a lowball bigger than his patience is refused', () => {
     const r = resolveOffer(PUCK, { give: [], take: [{ def: BANDAGE, count: 20 }], gold: 0 });
     assert.equal(r.points, -RESENT_MAX_PER_OFFER);
-    assert.equal(r.refused, true);
+    assert.equal(r.patienceExceeded, true);
     assert.ok(r.shortfall > 0);
   });
 
   test('an empty offer is inert', () => {
     const r = resolveOffer(PUCK, emptyOffer());
     assert.equal(r.points, 0);
-    assert.equal(r.refused, false);
+    assert.equal(r.patienceExceeded, false);
   });
 
   test('resolveOffer mutates neither the npc nor the offer', () => {
@@ -674,20 +674,21 @@ describe('resolveOffer — one call, the whole projection', () => {
     assert.equal(r.balance, 0);
   });
 
-  test('a raised ceiling (flipThreshold 200) is honoured by the unspent math, not just the point count', () => {
+  test('a raised ceiling (flipThreshold 200) is honoured by the goldUnspent math, not just the point count', () => {
     // The Fungus King's ceiling is 200, not the default 100 every other
     // resolveOffer test uses. fromGold/points already come from splitGoodwill
     // (which reads the real ceiling), so they pass even if resolveOffer's own
-    // `dispositionCeil(npc)` call were hardcoded to 100 -- only unspent, which
-    // resolveOffer prices itself, exposes that. Under that mutant this comes
-    // back 0 instead of ~129.52.
+    // `dispositionCeil(npc)` call were hardcoded to 100 -- only goldUnspent,
+    // which resolveOffer prices itself, exposes that. Under that mutant this
+    // comes back 0 instead of ~129.52.
     const r = resolveOffer(KING, { give: [], take: [], gold: 1000 });
     assert.equal(r.fromGold, 279);
-    assert.ok(Math.abs(r.unspent - 129.52) < 1e-6);
+    assert.equal(r.itemUnspent, 0, 'no items were given');
+    assert.ok(Math.abs(r.goldUnspent - 129.52) < 1e-6);
   });
 
   describe('the three accounting seams', () => {
-    test('unspent is honest GP even when the surplus is entirely a weighted gift', () => {
+    test('itemUnspent is honest GP even when the surplus is entirely a weighted gift', () => {
       // 100 soap on Puck: way past his 40-point headroom to the 100 ceiling,
       // so most of the (weighted) value buys nothing. givenItemsValue is 900
       // real GP (100 * 9); the exact figure below is 900 minus the real-GP
@@ -697,13 +698,14 @@ describe('resolveOffer — one call, the whole projection', () => {
       const r = resolveOffer(PUCK, { give: [{ def: SOAP, count: 100 }], take: [], gold: 0 });
       assert.equal(r.points, 40, 'capped at his headroom to the 100 ceiling');
       assert.equal(r.givenItemsValue, 900);
+      assert.equal(r.goldUnspent, 0, 'no gold was given, and no summation means no float drift to tolerate');
       // Tolerance, not ===: this value is an exact terminating decimal in
-      // rational arithmetic, but costOfPoints reaches it via a 40-term float
+      // rational arithmetic, but splitGoodwill reaches it via a 40-term float
       // summation, and whether that summation happens to land bit-exact on
       // 854.1 is luck, not structure -- a change to goodwillCostPerPoint's
       // constants or the summation order can re-roll it without being a
       // regression.
-      assert.ok(Math.abs(r.unspent - 854.1) < 1e-9);
+      assert.ok(Math.abs(r.itemUnspent - 854.1) < 1e-9);
     });
 
     test('gold spent on ceiling-refused points is not lost — the doorstep case', () => {
@@ -715,21 +717,23 @@ describe('resolveOffer — one call, the whole projection', () => {
       assert.equal(r.points, 0);
       assert.equal(r.fromGold, 0);
       assert.ok(r.goldRefusedPoints > 0, 'the curve wanted points; the threshold refused all of them');
-      assert.equal(r.unspent, 500, 'the whole 500 GP is accounted for');
+      assert.equal(r.itemUnspent, 0);
+      assert.equal(r.goldUnspent, 500, 'the whole 500 GP is accounted for');
     });
 
-    test('goldRefusedPoints survives the trip through resolveOffer, with unspent pinned alongside it', () => {
+    test('goldRefusedPoints survives the trip through resolveOffer, with goldUnspent pinned alongside it', () => {
       const bribable = { type: 'Ghost Fungus', disposition: -50, flipThreshold: 60, bribeable: true, values: { bandage: 8 } };
       const r = resolveOffer(bribable, { give: [], take: [], gold: 100000 });
       assert.equal(r.fromGold, 109);
       assert.equal(r.goldRefusedPoints, 41, 'the curve wanted 150; the flip ceiling allowed 109');
-      // The GP charged for those 41 refused points must land back in unspent
-      // rather than disappearing inside goodwillFor's internal accounting —
-      // this is the only assertion in the file that a goldCost of 0 fails.
-      // Tolerance for the same reason as the 854.1 case above: exact in
-      // rational arithmetic, bit-exact here only by luck of where a 109-term
-      // summation happens to round.
-      assert.ok(Math.abs(r.unspent - 99664.28) < 1e-9);
+      assert.equal(r.itemUnspent, 0);
+      // The GP charged for those 41 refused points must land back in
+      // goldUnspent rather than disappearing inside goodwillFor's internal
+      // accounting — this is the only assertion in the file that a goldSpent
+      // of 0 fails. Tolerance for the same reason as the 854.1 case above:
+      // exact in rational arithmetic, bit-exact here only by luck of where a
+      // 109-term summation happens to round.
+      assert.ok(Math.abs(r.goldUnspent - 99664.28) < 1e-9);
     });
 
     test('a mixed surplus prices the item and gold halves on their own segments', () => {
@@ -737,30 +741,51 @@ describe('resolveOffer — one call, the whole projection', () => {
       // BOTH land points here (39 from items, 1 from gold), so a formula
       // that prices item points across the whole climb instead of their own
       // segment, or prices gold from d0 instead of afterItems, both diverge
-      // from this exact figure while every other committed case (all
+      // from these exact figures while every other committed case (all
       // fromItems=0 or fromGold=0) cannot tell the difference. This is the
       // ONLY case in the file that kills the d0-instead-of-afterItems
-      // mutant -- do not weaken or re-baseline this assertion without
+      // mutant -- do not weaken or re-baseline these assertions without
       // replacing that coverage.
       const r = resolveOffer(PUCK, {
         give: [{ def: SOAP, count: 5 }], take: [{ def: BANDAGE, count: 1 }], gold: 100,
       });
       assert.equal(r.fromItems, 39);
       assert.equal(r.fromGold, 1);
-      assert.ok(Math.abs(r.unspent - 65.365) < 1e-9);
+      assert.ok(Math.abs(r.itemUnspent - 0.345) < 1e-9);
+      assert.ok(Math.abs(r.goldUnspent - 65.02) < 1e-9);
+    });
+
+    test('itemUnspent and goldUnspent are different in KIND, not just in source', () => {
+      // At disposition 95 (ceiling 100, room for only 5 points), 10 soap
+      // (weight 4) plus 300 gold: the gift alone fills every remaining point
+      // of room, so the 300 gold buys nothing at all -- fromGold is 0 for a
+      // reason a single combined "unspent: 393.825" cannot distinguish from
+      // "he's at his ceiling and neither half landed". itemUnspent (soap
+      // market value he had no room left to appreciate) and goldUnspent
+      // (real money that bought nothing) are reported separately so a log
+      // line doesn't call one number "393 GP wasted" when it is two
+      // different kinds of nothing.
+      const npc = { type: 'Almost-Full', disposition: 95, values: { soap: 4 } };
+      const r = resolveOffer(npc, { give: [{ def: SOAP, count: 10 }], take: [], gold: 300 });
+      assert.equal(r.fromItems, 5, 'the gift alone fills his remaining headroom');
+      assert.equal(r.fromGold, 0, 'no room left for gold to buy anything');
+      assert.equal(r.goldUnspent, 300, 'no summation happens when fromGold is 0 -- exact, not tolerant');
+      assert.ok(Math.abs(r.itemUnspent - 93.825) < 1e-9);
     });
 
     test('a fully-settled offer and a refused offer both report a clean zero, not undefined', () => {
       // Downstream consumers (the ledger line, the meter's ghost segment)
-      // read unspent/goldRefusedPoints unconditionally; neither branch that
-      // skips splitGoodwill may leave them missing.
+      // read itemUnspent/goldUnspent/goldRefusedPoints unconditionally;
+      // neither branch that skips splitGoodwill may leave them missing.
       const settled = resolveOffer(PUCK, { give: [], take: [{ def: BANDAGE, count: 1 }], gold: 30 });
-      assert.equal(settled.unspent, 0);
+      assert.equal(settled.itemUnspent, 0);
+      assert.equal(settled.goldUnspent, 0);
       assert.equal(settled.goldRefusedPoints, 0);
 
-      const refused = resolveOffer(PUCK, { give: [], take: [{ def: BANDAGE, count: 20 }], gold: 0 });
-      assert.equal(refused.unspent, 0);
-      assert.equal(refused.goldRefusedPoints, 0);
+      const deficitCase = resolveOffer(PUCK, { give: [], take: [{ def: BANDAGE, count: 20 }], gold: 0 });
+      assert.equal(deficitCase.itemUnspent, 0);
+      assert.equal(deficitCase.goldUnspent, 0);
+      assert.equal(deficitCase.goldRefusedPoints, 0);
     });
   });
 });

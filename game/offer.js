@@ -110,6 +110,20 @@ export function settledGold(npc, offer) {
 // One call, everything the screen needs. Both the renderer (to draw the meter's
 // ghost segment and the ledger) and main.js (to commit) go through here, so what
 // the player was shown and what actually happens can never diverge.
+//
+// The return shape is spelled out field by field rather than inheriting
+// offerBalance's via `{...bal}`, so its size is a decision, not a byproduct of
+// the balance calculation growing a field. giftValue/givenItemsValue are kept
+// (the meter's ghost segment reads the weighting they carry) but no longer
+// arrive as a side effect of the spread.
+//
+// itemUnspent and goldUnspent are reported separately rather than summed,
+// because they are different in KIND, not just in source: itemUnspent is
+// market value of a gift the NPC had no room left to appreciate; goldUnspent
+// is real money that bought nothing. goldRefusedPoints is not redundant with
+// goldUnspent > 0 && fromGold === 0 — that same condition also holds when the
+// NPC is simply already at their disposition ceiling, which is a different
+// story than "gold couldn't carry him across his own threshold".
 export function resolveOffer(npc, offer) {
     const o = offer || emptyOffer();
     const bal = offerBalance(npc, o);
@@ -117,8 +131,12 @@ export function resolveOffer(npc, offer) {
     const goldGiven = Math.max(0, Math.trunc(o.gold || 0));
 
     if (bal.balance === 0) {
-        return { ...bal, points: 0, fromItems: 0, fromGold: 0, projected: d0,
-                 shortfall: 0, unspent: 0, goldRefusedPoints: 0, refused: false };
+        return {
+            givenValue: bal.givenValue, takenValue: bal.takenValue, balance: bal.balance,
+            giftValue: bal.giftValue, givenItemsValue: bal.givenItemsValue,
+            points: 0, fromItems: 0, fromGold: 0, projected: d0, shortfall: 0,
+            itemUnspent: 0, goldUnspent: 0, goldRefusedPoints: 0, patienceExceeded: false,
+        };
     }
 
     if (bal.balance > 0) {
@@ -131,20 +149,35 @@ export function resolveOffer(npc, offer) {
         const g = splitGoodwill(npc, { itemValue: itemSurplus * avgWeight, gold: goldSurplus });
 
         // itemsSpent is denominated in the same giftWeight-inflated units as
-        // itemValue above; divide back out so both halves land in the real-GP
-        // unit `shortfall` also uses.
-        const unspent = Math.max(0,
-            (itemSurplus - g.itemsSpent / avgWeight) + (goldSurplus - g.goldSpent));
+        // itemValue above; divide back out so itemUnspent lands in the same
+        // real-GP unit as goldUnspent and shortfall. Clamped independently —
+        // either half's own subtraction can drift a hair negative on its own.
+        const itemUnspent = Math.max(0, itemSurplus - g.itemsSpent / avgWeight);
+        const goldUnspent = Math.max(0, goldSurplus - g.goldSpent);
 
-        return { ...bal, points: g.points, fromItems: g.fromItems, fromGold: g.fromGold,
-                 projected: d0 + g.points, shortfall: 0, unspent,
-                 goldRefusedPoints: g.goldRefusedPoints, refused: false };
+        return {
+            givenValue: bal.givenValue, takenValue: bal.takenValue, balance: bal.balance,
+            giftValue: bal.giftValue, givenItemsValue: bal.givenItemsValue,
+            points: g.points, fromItems: g.fromItems, fromGold: g.fromGold,
+            projected: d0 + g.points, shortfall: 0,
+            itemUnspent, goldUnspent, goldRefusedPoints: g.goldRefusedPoints,
+            patienceExceeded: false,
+        };
     }
 
+    // A deficit is not a refusal: `patienceExceeded` says this shortfall is
+    // bigger than his patience, which is one input to Task 6's commitBlocker,
+    // not the same thing as it — a caller reading `false` as "he'll take it"
+    // would be reading a name this field doesn't claim.
     const r = resentmentFor(-bal.balance, npc);
-    return { ...bal, points: r.points, fromItems: 0, fromGold: 0,
-             projected: d0 + r.points, shortfall: r.shortfall,
-             unspent: 0, goldRefusedPoints: 0, refused: r.shortfall > 0 };
+    return {
+        givenValue: bal.givenValue, takenValue: bal.takenValue, balance: bal.balance,
+        giftValue: bal.giftValue, givenItemsValue: bal.givenItemsValue,
+        points: r.points, fromItems: 0, fromGold: 0,
+        projected: d0 + r.points, shortfall: r.shortfall,
+        itemUnspent: 0, goldUnspent: 0, goldRefusedPoints: 0,
+        patienceExceeded: r.shortfall > 0,
+    };
 }
 
 // ── The curves ───────────────────────────────────────────────────────────────
