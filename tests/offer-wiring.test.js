@@ -1,0 +1,538 @@
+// offer-wiring.test.js — Task 12. Opening, closing and deriving the offer
+// screen's state.
+//
+// main.js touches `document` at module-evaluation time, so the whole file
+// throws on import under Node. liveMethod() (the same technique as
+// weapons-tradeable.test.js, and the same reasoning) lifts the CURRENT method
+// body straight out of the source and turns it into a real callable closed over
+// the free variables it reads — so these tests exercise the production logic,
+// not a paraphrase of it.
+//
+// STATE and BUYBACK_MS are module-scope consts in main.js and are NOT exported.
+// liveConst() lifts them out of the same source rather than hand-copying them,
+// so a renamed state or a retuned window fails here instead of silently drifting
+// the test away from the code.
+
+import { test, describe } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { ITEMS } from '../game/items.js';
+import { resolveItemDef } from '../game/item-registry.js';
+import { emptyOffer, commitBlocker } from '../game/offer.js';
+import { MODAL_RECT } from '../game/layout.js';
+
+const mainSrc = readFileSync(fileURLToPath(new URL('../game/main.js', import.meta.url)), 'utf8');
+
+// See weapons-tradeable.test.js for the full rationale. 'use strict' matters:
+// a class body is strict by default but a bare `new Function` body is sloppy,
+// so an assignment to an undeclared variable — a hard error in the real method —
+// would silently create a global and pass.
+function liveMethod(name, params, freeVars = {}) {
+    const signature = `${name}(${params}) {`;
+    const at = mainSrc.indexOf(signature);
+    assert.ok(at > 0, `${name}(${params}) not found in main.js`);
+    const closeAt = mainSrc.indexOf('\n    }', at);
+    assert.ok(closeAt > at, `${name} body never closes`);
+    const body = mainSrc.slice(at + name.length, closeAt + '\n    }'.length);
+    const freeNames = Object.keys(freeVars);
+    const factory = new Function(...freeNames, `'use strict'; return function ${body}`);
+    return factory(...freeNames.map(n => freeVars[n]));
+}
+
+// Lift a module-scope `const NAME = <expr>;` out of main.js and evaluate it.
+// Object literals close on a line-start `};`, scalars on the first `;`.
+// The declarations in main.js are column-aligned, so the gap around `=` is any
+// run of spaces, not one.
+function liveConst(name) {
+    const decl = new RegExp(`\\nconst ${name}\\s*=\\s*`);
+    const m = decl.exec(mainSrc);
+    assert.ok(m, `const ${name} not found in main.js`);
+    const at = m.index;
+    const from = at + m[0].length;
+    const objEnd = mainSrc.indexOf('\n};', from);
+    const lineEnd = mainSrc.indexOf(';', from);
+    const isObj = mainSrc[from] === '{';
+    const expr = isObj ? mainSrc.slice(from, objEnd + 2) : mainSrc.slice(from, lineEnd + 1);
+    return new Function(`'use strict'; return ${expr}`)();
+}
+
+const STATE = liveConst('STATE');
+const BUYBACK_MS = liveConst('BUYBACK_MS');
+
+// Sanity: if these ever stop being what the rest of the file assumes, every
+// assertion below turns into a tautology, so pin them here rather than trusting.
+test('the lifted module constants are the real ones', () => {
+    assert.equal(STATE.TRADE, 'trade');
+    assert.equal(STATE.IDLE, 'idle');
+    assert.equal(BUYBACK_MS, 5 * 60 * 1000);
+});
+
+// ── stubs ───────────────────────────────────────────────────────────────────
+
+const audio = { played: [], playSfx(n) { this.played.push(n); } };
+
+const openOffer = liveMethod('_openOffer', 'npc', { STATE, BUYBACK_MS, audio, emptyOffer });
+const closeOffer = liveMethod('_closeOffer', '', { STATE, audio });
+const tapOffer = liveMethod('_tapOffer', 'pt', { MODAL_RECT });
+const theirsList = liveMethod('_offerTheirsList', '');
+const yoursList = liveMethod('_offerYoursList', '');
+const stagedCount = liveMethod('_stagedCount', 'side, entry');
+const offerSelection = liveMethod('_offerSelection', '');
+const offerBlocker = liveMethod('_offerBlocker', '', { commitBlocker });
+
+function stubGame(overrides = {}) {
+    audio.played = [];
+    return {
+        // Every lifted method is installed on the stub, so a method that calls a
+        // sibling (_tapOffer → _closeOffer, _offerSelection → _offerYoursList)
+        // reaches the REAL one. Stubbing those out would let the production call
+        // chain rot untested — which is how a stubbed _resolveItemDef once let a
+        // gutted resolver survive the whole suite.
+        _openOffer: openOffer,
+        _closeOffer: closeOffer,
+        _tapOffer: tapOffer,
+        _offerTheirsList: theirsList,
+        _offerYoursList: yoursList,
+        _stagedCount: stagedCount,
+        _offerSelection: offerSelection,
+        _offerBlocker: offerBlocker,
+        state: STATE.IDLE,
+        gold: 100,
+        inventory: [],
+        logs: [],
+        renders: 0,
+        resumed: 0,
+        timerStarts: 0,
+        timerStops: 0,
+        _offerNpc: null,
+        _offer: null,
+        _offerCursor: null,
+        _tradeTimer: null,
+        _log(msg, cat) { this.logs.push({ msg, cat }); },
+        _render() { this.renders++; },
+        _resumeHeldWalk() { this.resumed++; },
+        _startTradeTimer() { this.timerStarts++; },
+        _stopTradeTimer() { this.timerStops++; },
+        _resolveItemDef(id) { return resolveItemDef(id); },
+        _containerStock(c) { return (c.contents || []).map(e => (typeof e === 'string' ? e : e.type)); },
+        _buybackList() { return []; },
+        _pointInRect(pt, r) { return pt.x >= r.x && pt.x < r.x + r.w && pt.y >= r.y && pt.y < r.y + r.h; },
+        ...overrides,
+    };
+}
+
+const alive = { isAlive: () => true };
+const dead = { isAlive: () => false };
+const puck = () => ({ type: 'puck', vendor: true, disposition: 40, gold: 200, entity: alive, stock: ['soap', 'rock'] });
+const friend = () => ({ type: 'gus', disposition: 10, entity: alive });
+const chestShim = (contents = ['rock', 'soap']) => ({
+    type: 'chest', vendor: true, bribeable: false, disposition: 100,
+    _container: { type: 'chest', contents }, stock: contents, entity: alive,
+});
+
+// ── _openOffer ──────────────────────────────────────────────────────────────
+
+describe('_openOffer', () => {
+    test('refuses unless the game is IDLE', () => {
+        // KEEP the gate: the [E] branch reaches _openOffer with no IDLE
+        // assignment of its own and is live in DEAD and ENDING.
+        for (const s of [STATE.DEAD, STATE.ENDING, STATE.DIALOGUE, STATE.TRADE, STATE.RADIAL_MENU]) {
+            const g = stubGame({ state: s });
+            openOffer.call(g, puck());
+            assert.equal(g.state, s, `opened from ${s}`);
+            assert.equal(g._offerNpc, null);
+        }
+    });
+
+    test('refuses a missing, entity-less or dead partner', () => {
+        for (const npc of [null, undefined, {}, { entity: null }, { entity: dead }]) {
+            const g = stubGame();
+            openOffer.call(g, npc);
+            assert.equal(g.state, STATE.IDLE);
+            assert.equal(g._offerNpc, null);
+        }
+    });
+
+    test('opens with a fresh basket the renderer can read', () => {
+        const g = stubGame();
+        const npc = puck();
+        openOffer.call(g, npc);
+        assert.equal(g.state, STATE.TRADE);
+        assert.equal(g._offerNpc, npc);
+        // _drawOfferLists reads _offer.scroll.theirs / .yours unguarded, and the
+        // trays read .give / .take. All four must exist on the first frame.
+        assert.deepEqual(g._offer.give, []);
+        assert.deepEqual(g._offer.take, []);
+        assert.equal(g._offer.gold, 0);
+        assert.deepEqual(g._offer.scroll, { theirs: 0, yours: 0 });
+        assert.equal(g._offer.selection, null);
+        assert.deepEqual(g._offerCursor, { side: 'yours', index: 0 });
+        assert.equal(g.renders, 1, 'must re-render — that is what publishes the close-chip hit-zone');
+    });
+
+    test('a second open does not inherit the first basket', () => {
+        const g = stubGame();
+        openOffer.call(g, puck());
+        g._offer.give.push({ def: ITEMS.rock, count: 3 });
+        g._offer.gold = 40;
+        g.state = STATE.IDLE;
+        openOffer.call(g, friend());
+        assert.deepEqual(g._offer.give, []);
+        assert.equal(g._offer.gold, 0);
+    });
+
+    test('a vendor gets a buyback ledger and the countdown timer', () => {
+        const g = stubGame();
+        const npc = puck();
+        openOffer.call(g, npc);
+        assert.ok(npc._buyback, 'no ledger locked');
+        assert.deepEqual(npc._buyback.entries, {});
+        assert.equal(g.timerStarts, 1);
+    });
+
+    test('a CONTAINER gets neither, even though its shim is vendor:true', () => {
+        // The single subtlest line in the method. A bare `if (npc.vendor)` would
+        // newly spin a 1s setInterval and lock a buyback ledger for every wooden
+        // crate — neither of which _openContainer ever did.
+        const g = stubGame();
+        const shim = chestShim();
+        openOffer.call(g, shim);
+        assert.equal(shim._buyback, undefined, 'a chest locked a buyback ledger');
+        assert.equal(g.timerStarts, 0, 'a chest started the countdown timer');
+        assert.equal(g.state, STATE.TRADE);
+    });
+
+    test('a non-vendor NPC gets neither', () => {
+        const g = stubGame();
+        const npc = friend();
+        openOffer.call(g, npc);
+        assert.equal(npc._buyback, undefined);
+        assert.equal(g.timerStarts, 0);
+    });
+
+    test('a live buyback ledger survives a close and re-open; an expired one is re-locked', () => {
+        const g = stubGame();
+        const npc = puck();
+        openOffer.call(g, npc);
+        npc._buyback.entries.soap = { rebuy: [9] };
+        const lockedAt = npc._buyback.openedAt;
+
+        g.state = STATE.IDLE;
+        openOffer.call(g, npc);
+        assert.equal(npc._buyback.openedAt, lockedAt, 'a live ledger was thrown away');
+        assert.deepEqual(npc._buyback.entries.soap, { rebuy: [9] });
+
+        npc._buyback.openedAt = lockedAt - BUYBACK_MS - 1;
+        g.state = STATE.IDLE;
+        openOffer.call(g, npc);
+        assert.deepEqual(npc._buyback.entries, {}, 'an expired ledger was not re-locked');
+    });
+
+    test('the log line says which of the three shapes opened, and names the container', () => {
+        const vg = stubGame(); openOffer.call(vg, puck());
+        assert.match(vg.logs[0].msg, /puck opens the till/);
+
+        const fg = stubGame(); openOffer.call(fg, friend());
+        assert.match(fg.logs[0].msg, /open your satchel to gus/);
+
+        // Not a generic "[You lift the lid.]" — the line must still say WHAT the
+        // player opened, as _openContainer's did.
+        const cg = stubGame(); openOffer.call(cg, chestShim());
+        assert.match(cg.logs[0].msg, /pry open the chest/);
+    });
+
+    test('plays the open cue', () => {
+        const g = stubGame();
+        openOffer.call(g, puck());
+        assert.deepEqual(audio.played, ['menu-open']);
+    });
+});
+
+// ── _closeOffer ─────────────────────────────────────────────────────────────
+
+describe('_closeOffer', () => {
+    test('discards the basket and returns to IDLE', () => {
+        const g = stubGame();
+        openOffer.call(g, puck());
+        g._offer.give.push({ def: ITEMS.rock, count: 2 });
+        closeOffer.call(g);
+        assert.equal(g.state, STATE.IDLE);
+        assert.equal(g._offerNpc, null);
+        assert.equal(g._offer, null);
+        assert.equal(g._offerCursor, null);
+        assert.equal(g.timerStops, 1);
+        assert.equal(g.resumed, 1, 'a walk held through the menu must keep going');
+    });
+
+    test('clears the basket even when the state has already moved on', () => {
+        // _closeTrade guards on state FIRST, which is why _tradeCursor stays
+        // dirty forever. Callers that set IDLE before closing (the pattern the
+        // wheel and _fireResolver use) would otherwise strand a live basket and
+        // a reference to an NPC.
+        const g = stubGame();
+        openOffer.call(g, puck());
+        g.state = STATE.IDLE;
+        closeOffer.call(g);
+        assert.equal(g._offerNpc, null, 'a basket survived a close from a non-TRADE state');
+        assert.equal(g._offer, null);
+        assert.equal(g._offerCursor, null);
+    });
+
+    test('does not stop a timer or resume walking when it was not the open screen', () => {
+        const g = stubGame({ state: STATE.DIALOGUE });
+        closeOffer.call(g);
+        assert.equal(g.state, STATE.DIALOGUE, 'clobbered another menu’s state');
+        assert.equal(g.timerStops, 0);
+        assert.equal(g.resumed, 0);
+    });
+
+    test('plays the cancel cue', () => {
+        const g = stubGame();
+        openOffer.call(g, puck());
+        audio.played.length = 0;
+        closeOffer.call(g);
+        assert.deepEqual(audio.played, ['menu-cancel']);
+    });
+});
+
+// ── _tapOffer ───────────────────────────────────────────────────────────────
+
+describe('_tapOffer', () => {
+    test('a tap OUTSIDE the panel closes, like every other modal', () => {
+        const g = stubGame();
+        openOffer.call(g, puck());
+        tapOffer.call(g, { x: MODAL_RECT.x - 5, y: MODAL_RECT.y - 5 });
+        assert.equal(g.state, STATE.IDLE);
+        assert.equal(g._offerNpc, null);
+    });
+
+    test('a tap INSIDE the panel does NOT close the screen', () => {
+        // The regression this method exists to prevent: _tapTrade opens with
+        // `if (!this._tradeNpc) { this._closeTrade(); return; }`, and _tradeNpc
+        // is permanently null once the entry points are repointed — so routing
+        // offer taps there closed the screen on the first click, through a
+        // closer that leaves _offerNpc / _offer alive.
+        const g = stubGame();
+        openOffer.call(g, puck());
+        for (const pt of [
+            { x: MODAL_RECT.x + 1, y: MODAL_RECT.y + 1 },
+            { x: MODAL_RECT.x + MODAL_RECT.w / 2, y: MODAL_RECT.y + MODAL_RECT.h / 2 },
+            { x: MODAL_RECT.x + MODAL_RECT.w - 1, y: MODAL_RECT.y + MODAL_RECT.h - 1 },
+        ]) {
+            tapOffer.call(g, pt);
+            assert.equal(g.state, STATE.TRADE, `tap at ${pt.x},${pt.y} closed the screen`);
+            assert.ok(g._offerNpc, 'the partner was dropped');
+        }
+    });
+});
+
+// ── the derived lists ───────────────────────────────────────────────────────
+
+describe('the derived lists', () => {
+    test('_offerYoursList keeps counts and slot indices, and skips holes', () => {
+        const g = stubGame({
+            inventory: [
+                { itemDef: ITEMS.rock, count: 9 },
+                null,
+                { itemDef: ITEMS.soap, count: 1 },
+            ],
+        });
+        const out = yoursList.call(g);
+        assert.equal(out.length, 2, 'an empty slot became a row');
+        assert.deepEqual(out[0], { def: ITEMS.rock, count: 9, slot: 0 });
+        // slot 2, not 1 — the index must survive the hole, or staging edits the
+        // wrong bag slot.
+        assert.equal(out[1].slot, 2);
+    });
+
+    test('_offerTheirsList is empty with no partner', () => {
+        assert.deepEqual(theirsList.call(stubGame()), []);
+    });
+
+    test('_offerTheirsList reads a container by contents, tagged so staging can find it', () => {
+        const g = stubGame();
+        const shim = chestShim(['rock', 'soap']);
+        g._offerNpc = shim;
+        const out = theirsList.call(g);
+        assert.equal(out.length, 2);
+        assert.equal(out[0].source, 'contents');
+        assert.equal(out[0].index, 0);
+        assert.equal(out[0].count, 1, 'one contents index is one unit');
+        assert.equal(out[1].def, ITEMS.soap);
+    });
+
+    test('_offerTheirsList drops ids that resolve to nothing rather than seating a blank row', () => {
+        const g = stubGame();
+        g._offerNpc = chestShim(['rock', 'not_a_real_item', 'soap']);
+        const out = theirsList.call(g);
+        assert.equal(out.length, 2);
+        assert.deepEqual(out.map(e => e.def.id), ['rock', 'soap']);
+    });
+
+    test('_offerTheirsList reads a vendor by stock, and appends the buyback shelf', () => {
+        const g = stubGame({ _buybackList: () => [{ itemId: 'soap' }] });
+        g._offerNpc = puck();
+        const out = theirsList.call(g);
+        assert.deepEqual(out.map(e => e.source), ['stock', 'stock', 'buyback']);
+        assert.equal(out[2].boughtBack, true);
+    });
+
+    test('_offerTheirsList gives a plain NPC nothing to take', () => {
+        const g = stubGame();
+        g._offerNpc = friend();
+        assert.deepEqual(theirsList.call(g), []);
+    });
+});
+
+// ── _stagedCount / _offerSelection / _offerBlocker ──────────────────────────
+
+describe('the row accessors', () => {
+    test('_stagedCount is 0 with no basket and with an empty one', () => {
+        const g = stubGame();
+        assert.equal(stagedCount.call(g, 'give', { def: ITEMS.rock, slot: 0 }), 0);
+        openOffer.call(g, puck());
+        assert.equal(stagedCount.call(g, 'give', { def: ITEMS.rock, slot: 0 }), 0);
+    });
+
+    test('_stagedCount matches a bag row by SLOT, not just by def', () => {
+        // Two slots can hold the same item; matching on def alone would light up
+        // both rows and stage the wrong one.
+        const g = stubGame();
+        openOffer.call(g, puck());
+        g._offer.give.push({ def: ITEMS.rock, count: 2, slot: 3 });
+        assert.equal(stagedCount.call(g, 'give', { def: ITEMS.rock, slot: 3 }), 2);
+        assert.equal(stagedCount.call(g, 'give', { def: ITEMS.rock, slot: 0 }), 0);
+    });
+
+    test('_stagedCount matches a partner row by source AND index', () => {
+        const g = stubGame();
+        openOffer.call(g, chestShim());
+        g._offer.take.push({ def: ITEMS.rock, count: 1, source: 'contents', index: 4 });
+        assert.equal(stagedCount.call(g, 'take', { def: ITEMS.rock, source: 'contents', index: 4 }), 1);
+        assert.equal(stagedCount.call(g, 'take', { def: ITEMS.rock, source: 'contents', index: 0 }), 0);
+        assert.equal(stagedCount.call(g, 'take', { def: ITEMS.rock, source: 'stock', index: 4 }), 0);
+    });
+
+    test('_offerSelection is null with nothing picked and resolves a picked row', () => {
+        // The bag and the stock must hold DIFFERENT items, or swapping the two
+        // sides of the ternary returns the same def and the test cannot tell.
+        // Puck's stock is ['soap', 'rock']; the bag is a bandage.
+        const g = stubGame({ inventory: [{ itemDef: ITEMS.bandage, count: 1 }] });
+        openOffer.call(g, puck());
+        assert.equal(offerSelection.call(g), null);
+
+        g._offer.selection = { side: 'yours', index: 0 };
+        assert.equal(offerSelection.call(g).def, ITEMS.bandage, 'the yours side read the partner');
+
+        g._offer.selection = { side: 'theirs', index: 0 };
+        assert.equal(offerSelection.call(g).def, ITEMS.soap, 'the theirs side read the bag');
+
+        // a stale index must not throw or hand back a hole
+        g._offer.selection = { side: 'yours', index: 99 };
+        assert.equal(offerSelection.call(g), null);
+    });
+
+    test('_offerBlocker refuses with no partner and reports an empty basket', () => {
+        const g = stubGame();
+        assert.equal(offerBlocker.call(g), 'NOTHING STAGED');
+        openOffer.call(g, puck());
+        assert.equal(offerBlocker.call(g), 'NOTHING STAGED');
+    });
+
+    test('a chest hands over free loot without a blocker', () => {
+        const g = stubGame();
+        openOffer.call(g, chestShim());
+        // Taking loot for nothing is a deficit on paper. commitBlocker reads
+        // `npc._container` off the shim itself, so the shortchange arm never
+        // arms and the take is clean.
+        g._offer.take.push({ def: ITEMS.soap, count: 1, source: 'contents', index: 0 });
+        assert.equal(offerBlocker.call(g), null, 'a chest refused to hand over free loot');
+    });
+
+    test('gold is a FINITE number of coins before it ever reaches the ledger', () => {
+        // `Math.trunc(g || 0)` looks like it sanitizes, and for NaN it does by
+        // accident (NaN is falsy). Infinity is not falsy: it survives to become
+        // an Infinity balance and then a NaN `unspent` the ledger prints as
+        // "NaN GP". A string '1e400' coerces the same way.
+        const g = stubGame();
+        openOffer.call(g, puck());
+        for (const bad of [Infinity, -Infinity, NaN, '1e400', '  ']) {
+            g._offer.gold = bad;
+            assert.equal(offerBlocker.call(g), 'NOTHING STAGED',
+                `gold ${String(bad)} staged something`);
+        }
+    });
+
+    test('_offerBlocker passes the real wallets through', () => {
+        const g = stubGame({ gold: 5 });
+        const npc = puck();
+        openOffer.call(g, npc);
+        g._offer.gold = 40;
+        assert.match(offerBlocker.call(g), /YOU'RE 35 GP SHORT/);
+        g.gold = 500; g._offer.gold = -1000;
+        assert.match(offerBlocker.call(g), /THEIR TILL IS 800 GP SHORT/);
+    });
+});
+
+// ── the wiring itself, asserted against the source ──────────────────────────
+//
+// These are source-level because the paths they protect live in a keydown
+// switch and a pointer router that liveMethod cannot lift in isolation. They
+// are narrow on purpose: each pins one edit the audit found the plan omitting.
+
+describe('the wiring', () => {
+    test('_openOffer is the only thing that enters STATE.TRADE', () => {
+        const entries = mainSrc.match(/state = STATE\.TRADE/g) || [];
+        // Two: _openOffer, and the retired _openTrade that Task 15 deletes.
+        assert.equal(entries.length, 2,
+            'a new path enters STATE.TRADE without going through _openOffer');
+        assert.ok(/_openOffer\(shim\)/.test(mainSrc),
+            '_openContainer no longer hands its shim to _openOffer');
+        assert.ok(!/this\._tradeNpc = \{/.test(mainSrc),
+            '_openContainer still builds its shim onto the retired _tradeNpc');
+    });
+
+    test('every close path out of the offer screen is _closeOffer', () => {
+        // Four exits, not one: the TRADE keyboard block, the universal Cancel
+        // hook, the pointer router, and RESTART.
+        assert.ok(/KeyE' \|\| e\.code === 'Escape'\) \{ this\._closeOffer\(\)/.test(mainSrc),
+            'the E / Escape key inside the trade block still calls _closeTrade');
+        assert.ok(/case STATE\.TRADE:\s+this\._closeOffer\(\); return true;/.test(mainSrc),
+            '_closeCurrentMenu still routes TRADE to _closeTrade');
+        assert.ok(/state === STATE\.TRADE\) \{ this\._tapOffer\(pt\); return; \}/.test(mainSrc),
+            'pointer events in TRADE still route to _tapTrade');
+        assert.ok(/_fullReset\(\) \{[\s\S]{0,600}?this\._closeOffer\(\);/.test(mainSrc),
+            'RESTART leaves the offer screen open and the basket alive');
+    });
+
+    test('no entry point still opens the retired trade window', () => {
+        const calls = (mainSrc.match(/this\._openTrade\(/g) || []).length;
+        assert.equal(calls, 0, `${calls} call site(s) still open the old trade window`);
+    });
+
+    test('the partner column prices a container at zero, not like a shop', () => {
+        // offerBalance charges 0 for a container's contents. _drawOfferColumn
+        // would otherwise price them at buyPrice(def, 100) -- the shim's benign
+        // disposition -- putting a real number beside every row of loot the
+        // ledger then hands over for nothing. A source pin because the price
+        // function is a closure inside a canvas draw; the behaviour it protects
+        // is checked by eye in the browser pass.
+        const rendererSrc = readFileSync(fileURLToPath(new URL('../game/renderer.js', import.meta.url)), 'utf8');
+        assert.ok(/npc\._container \? 0 : buyPrice\(def, d\)/.test(rendererSrc),
+            'the partner column no longer prices a container at zero');
+    });
+
+    test('the renderer dispatches the offer screen, not the retired modal', () => {
+        const rendererSrc = readFileSync(fileURLToPath(new URL('../game/renderer.js', import.meta.url)), 'utf8');
+        assert.ok(/state === 'trade'\) this\._drawOfferScreen\(game\)/.test(rendererSrc),
+            'renderFrame still draws _drawTradeModal for STATE.TRADE');
+        // The close-chip stash must survive a throw inside any modal draw, or a
+        // mid-draw exception takes the X chip and tap-outside down with it.
+        const dispatchAt = rendererSrc.indexOf("this._drawOfferScreen(game)");
+        const finallyAt = rendererSrc.indexOf('} finally {', dispatchAt);
+        const stashAt = rendererSrc.indexOf('this._menuPanelRect = CLOSE_PANEL', dispatchAt);
+        assert.ok(finallyAt > dispatchAt && stashAt > finallyAt,
+            'the CLOSE_PANEL stash is no longer protected from a modal draw throwing');
+    });
+});

@@ -44,7 +44,9 @@ import {
     DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceBagSlotRects, deviceEquipLayout, deviceRingsLayout,
     inspectorActionRects, gearOptionRects,
     xmbBarLayout,
+    MODAL_RECT,                                    // (offer screen) the one panel every modal shares
 } from './layout.js';
+import { emptyOffer, commitBlocker } from './offer.js';   // (offer screen) the basket model
 import { canTrade, buyPrice, sellPrice, bribeStepCost, BRIBE_STEP, transferGold, burnGold } from './trade.js'; // pricing + the transaction spine
 import { buildXmbBar, resolveXmbSelection, cycleXmbCategory, cycleXmbItem, xmbCategoryOf, XMB_LABELS } from './xmb.js';
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
@@ -298,6 +300,12 @@ class Game {
         this._tradeSell = null;          // (trade slice 1) snapshot of the sellable bag while shopping
         this._tradeCursor = null;        // (menu grammar) keyboard / d-pad cursor over the trade grid
         this._tradeTimer = null;         // (Phase 6c) 1s re-render while trading so the buyback countdown ticks
+        // (offer screen) The staged offer. RAM only — serialize() is a hand-written
+        // allow-list and these are deliberately not on it: an offer in progress is
+        // not a fact about the world, and closing always discards it.
+        this._offerNpc = null;           // the partner whose offer screen is open, or null
+        this._offer = null;              // the staged basket — { give, take, gold, scroll, selection }
+        this._offerCursor = null;        // keyboard cursor: { side, index } (Task 13 moves it)
         this._dispositionDecayAccMs = 0; // (Phase 6c) free-roam decay accumulator (ms)
         this._dispositionDecayTurns = 0; // (Phase 6c) combat decay turn counter
 
@@ -1078,7 +1086,7 @@ class Game {
             // the canvas pointer handler routes those to _tapTrade.
             if (this.state === STATE.TRADE) {
                 e.preventDefault();
-                if (e.code === 'KeyE' || e.code === 'Escape') { this._closeTrade(); return; }
+                if (e.code === 'KeyE' || e.code === 'Escape') { this._closeOffer(); return; }
                 if (e.code === 'KeyB') { this._bribeVendor(); return; }
                 // (menu grammar) keyboard / d-pad navigation: arrows move the cursor
                 // over the grid slots; Space/Enter activates the SAME action a tap
@@ -1203,7 +1211,7 @@ class Game {
             if (e.code === 'KeyE') {
                 e.preventDefault();
                 const vendor = this._findAdjacentVendor();
-                if (vendor) { this._openTrade(vendor); return; }
+                if (vendor) { this._openOffer(vendor); return; }
                 const talker = this._findAdjacentDialogueNpc();
                 if (talker) { this._openDialogue(talker); return; }
                 doExamine(this); this._render(); return;
@@ -1677,7 +1685,7 @@ class Game {
             case STATE.INSPECT:        this._closeInspect(); return true;
             case STATE.TARGET_LIST:    this._closeTargetList(); return true;
             case STATE.LOG_MODAL:      this._closeLogModal(); return true;
-            case STATE.TRADE:          this._closeTrade(); return true;
+            case STATE.TRADE:          this._closeOffer(); return true;
             case STATE.DIALOGUE:       this._closeDialogue(); return true;
             case STATE.DEVICE:         this._closeDevice(); return true;
             case STATE.ITEM_OVERLAY:   this.state = STATE.ITEM_SELECTED; this._render(); return true;
@@ -1734,8 +1742,10 @@ class Game {
         if (this.state === STATE.INSPECT) { this._closeInspect(); return; }
         if (this.state === STATE.LOG_MODAL) { this._tapLogModal(pt); return; }
 
-        // Trade window is fully modal too — route taps to the shop.
-        if (this.state === STATE.TRADE) { this._tapTrade(pt); return; }
+        // The offer screen is fully modal too — route taps to it. NOT _tapTrade:
+        // that reads _tradeNpc, which is null for every offer, and its null arm
+        // closes the window.
+        if (this.state === STATE.TRADE) { this._tapOffer(pt); return; }
         if (this.state === STATE.DIALOGUE) {
             // Touch/pointer drag scrolls the response list when it overflows; a press
             // that doesn't drag resolves as a normal row pick on pointerup. Non-
@@ -2897,7 +2907,7 @@ class Game {
                 break;
             }
             case 'talk':  if (npc) this._openDialogue(npc); break;
-            case 'trade': if (npc) this._openTrade(npc); break;   // (Phase 6a) any adjacent NPC → shop or offer window
+            case 'trade': if (npc) this._openOffer(npc); break;   // (Phase 6a) any adjacent NPC → the offer screen
             case 'bribe': if (npc) this._bribeTarget(npc); break;
             case 'hit':   if (npc) { this.combatAttack(npc, this.equipment.weapon.damage, { type: this.equipment.weapon.damageType }); this._advanceWorld(); this._render(); } break;
             case 'throw': { const th = this._resolveThrowable(); if (th) { const msg = resolveThrow(this, th.itemDef, null, th.count, { x: t.x, y: t.y }); if (msg) this._log(msg); this._rockClatter(th.itemDef, t.x, t.y); th.consume(); this._advanceWorld(); } else this._log('[Nothing to throw.]'); this._render(); break; }
@@ -3318,7 +3328,7 @@ class Game {
                 // (give-fold, Caelan's call) ANY adjacent NPC opens the window —
                 // vendors get the shop, non-vendors get offer mode. Not gated on
                 // npc.vendor (that would regress the give-into-trade fold).
-                if (npc) { this._openTrade(npc); return; }
+                if (npc) { this._openOffer(npc); return; }
                 this._log('[No one to trade with there]');
                 break;
             }
@@ -3744,20 +3754,23 @@ class Game {
             this._log(`[The ${container ? container.type : 'container'} is empty.]`);
             return;
         }
-        this._tradeNpc = {
+        // A chest is a partner with nothing to say: the shim exists so one screen
+        // serves merchants, companions and furniture alike. `disposition: 100` is
+        // a benign value for mood()/canTrade() to read and is deliberately NOT
+        // shown — the header suppresses the face and meter on `_container`, and
+        // the model prices its contents at zero.
+        //
+        // No _tradeSell snapshot: the offer screen derives both lists every frame.
+        const shim = {
             type: container.type,
-            vendor: true,          // shop-style layout (buy column), not offer mode
+            vendor: true,          // stock-bearing side, not the empty give-only shape
             bribeable: false,
-            disposition: 100,      // benign value for any mood()/canTrade() call
-            _container: container, // the marker the buy/tap/render paths branch on
+            disposition: 100,
+            _container: container, // the container OBJECT — every path branches on this
             stock: this._containerStock(container),
             entity: { isAlive: () => true },
         };
-        this._tradeSell = this._tradeSellList();
-        this.state = STATE.TRADE;
-        audio.playSfx('pickup');
-        this._log(`[You pry open the ${container.type}.]`, 'transition');
-        this._render();
+        this._openOffer(shim);     // owns the state change, the cue and the log line
     }
 
     // Normalize a container's mixed string-or-{type} contents into an array of
@@ -4562,6 +4575,11 @@ class Game {
     }
 
     async _fullReset() {
+        // RESTART is reachable from the DOM ☰ sheet in ANY state, including with
+        // the offer screen open — the one path out of STATE.TRADE that goes
+        // through no closer at all. Discard the basket first, or _offerNpc keeps
+        // a reference to an NPC from a run that no longer exists.
+        this._closeOffer();
         // RESTART begins a brand-new game: drop the save and reseed the RNG so
         // the new run is independent of the old one.
         clearSave();
@@ -5149,6 +5167,148 @@ class Game {
         if (npc.vendor) this._log(`[${npc.type} opens the till. "What'll it be?"]`, 'transition');
         else            this._log(`[You open your satchel to ${npc.type}.]`, 'transition');
         this._render();
+    }
+
+    // ── The offer screen (unified trade/give) ─────────────────────────
+
+    // Open the offer screen for `npc`. A pure MENU — no _advanceWorld, so nearby
+    // enemies get no free turns while the player browses. (The free-roam
+    // heartbeat still ticks the day clock and disposition decay underneath, the
+    // same as it does for every other open menu.)
+    //
+    // One screen, three shapes: a vendor's stock fills the take side, a chest's
+    // contents fill it for free, and any other living NPC gets an empty take
+    // side. What differs is which trays have anything in them, never which
+    // screen you are on.
+    _openOffer(npc) {
+        // KEEP this gate. Three of the four callers already force IDLE
+        // themselves, which makes it look redundant — it is not: the [E] branch
+        // reaches here with no such assignment, and is live in STATE.DEAD and
+        // STATE.ENDING.
+        if (this.state !== STATE.IDLE) return;
+        if (!npc || !npc.entity || !npc.entity.isAlive()) return;
+        this._offerNpc = npc;
+        this._offer = { ...emptyOffer(), scroll: { theirs: 0, yours: 0 }, selection: null };
+        this._offerCursor = { side: 'yours', index: 0 };
+        // `&& !npc._container` matters: the container shim is vendor:true, so a
+        // bare `npc.vendor` would newly spin a 1s interval and a buyback ledger
+        // for every wooden crate. _openContainer never did either.
+        if (npc.vendor && !npc._container) {
+            const now = performance.now();
+            if (!npc._buyback || (now - npc._buyback.openedAt) >= BUYBACK_MS) {
+                npc._buyback = { openedAt: now, entries: {} };
+            }
+            this._startTradeTimer();
+        }
+        this.state = STATE.TRADE;
+        audio.playSfx('menu-open');
+        if (npc._container)   this._log(`[You pry open the ${npc.type}.]`, 'transition');
+        else if (npc.vendor)  this._log(`[${npc.type} opens the till. "What'll it be?"]`, 'transition');
+        else                  this._log(`[You open your satchel to ${npc.type}.]`, 'transition');
+        this._render();
+    }
+
+    // Closing DISCARDS the basket. Nothing is committed until the player presses
+    // MAKE THE OFFER, so Escape is always safe and never needs a confirm.
+    //
+    // The fields are cleared BEFORE the state guard on purpose. _closeTrade
+    // guards first, which is why it can leave _tradeCursor dirty forever; here a
+    // caller that already set IDLE (the pattern the wheel and _fireResolver use)
+    // would otherwise get a no-op and strand a live basket.
+    _closeOffer() {
+        this._offerNpc = null;
+        this._offer = null;
+        this._offerCursor = null;
+        if (this.state !== STATE.TRADE) return;
+        this._stopTradeTimer();
+        this.state = STATE.IDLE;
+        audio.playSfx('menu-cancel');
+        this._render();              // publishes _menuPanelRect / _closeBtnRect, not just paint
+        this._resumeHeldWalk();      // a walk held THROUGH the menu keeps going
+    }
+
+    // ── The offer screen's derived state ─────────────────────────────────
+    //
+    // Derived EVERY FRAME from the live inventory rather than snapshotted at
+    // open. The old _tradeSell snapshot was refreshed by nine separate manual
+    // assignments; any missed one drifted the hit-test away from the draw.
+
+    // The partner's side. A vendor's stock has infinite supply; a container's
+    // contents are finite; anyone else offers nothing to take.
+    _offerTheirsList() {
+        const npc = this._offerNpc; if (!npc) return [];
+        const out = [];
+        if (npc._container) {
+            // _container holds the container OBJECT itself, not an id.
+            (this._containerStock(npc._container) || []).forEach((id, index) => {
+                const def = this._resolveItemDef(id);
+                if (def) out.push({ def, count: 1, source: 'contents', index });
+            });
+            return out;
+        }
+        (npc.stock || []).forEach((id, index) => {
+            const def = this._resolveItemDef(id);
+            if (def) out.push({ def, count: 1, source: 'stock', index });
+        });
+        if (npc.vendor) {
+            this._buybackList(npc).forEach((e, index) => {
+                const def = this._resolveItemDef(e.itemId);
+                if (def) out.push({ def, count: 1, source: 'buyback', index, boughtBack: true });
+            });
+        }
+        return out;
+    }
+
+    // The player's side — the whole bag, counts intact, so a stack of nine rocks
+    // is ONE row reading "[Rock] x9" rather than nine identical rows.
+    _offerYoursList() {
+        const out = [];
+        for (let i = 0; i < this.inventory.length; i++) {
+            const st = this.inventory[i];
+            if (st && st.itemDef) out.push({ def: st.itemDef, count: st.count, slot: i });
+        }
+        return out;
+    }
+
+    // How many of `entry` are currently staged on `side`.
+    _stagedCount(side, entry) {
+        const list = (this._offer && this._offer[side === 'give' ? 'give' : 'take']) || [];
+        const hit = list.find(e => e.def === entry.def &&
+            ('slot' in entry ? e.slot === entry.slot : e.source === entry.source && e.index === entry.index));
+        return hit ? hit.count : 0;
+    }
+
+    // The item the description strip is describing, or null.
+    _offerSelection() {
+        const sel = this._offer && this._offer.selection;
+        if (!sel) return null;
+        const list = sel.side === 'theirs' ? this._offerTheirsList() : this._offerYoursList();
+        return list[sel.index] || null;
+    }
+
+    // Why MAKE THE OFFER is disabled, or null when it is armed.
+    _offerBlocker() {
+        const npc = this._offerNpc; if (!npc) return 'NOTHING STAGED';
+        // No `isContainer` here: commitBlocker's own noResentment test already
+        // ORs `npc._container`, and this npc IS the shim -- passing the flag
+        // hands it the same bit twice, from the same object, where the two can
+        // never disagree. The ctx field stays for callers that hold a container
+        // WITHOUT its shim; this is not one.
+        return commitBlocker(npc, this._offer, {
+            playerGold: this.gold ?? 0,
+            npcGold: npc.gold ?? 0,
+        });
+    }
+
+    // (Task 12 interim) Pointer routing for the offer screen. Staging arrives in
+    // Task 13; what this must do TODAY is stop the old _tapTrade from handling
+    // these taps — its first line is `if (!this._tradeNpc) { this._closeTrade(); }`,
+    // and _tradeNpc is permanently null once the entry points are repointed, so
+    // every in-panel tap would close the screen through the wrong closer and
+    // leave the basket alive. Out-of-panel taps still close, matching every
+    // other modal.
+    _tapOffer(pt) {
+        if (!this._pointInRect(pt, MODAL_RECT)) { this._closeOffer(); return; }
     }
 
     // (Phase 6c) A 1s re-render loop while a vendor window is open, so the buyback
