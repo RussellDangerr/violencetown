@@ -19,8 +19,10 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { ITEMS } from '../game/items.js';
 import { resolveItemDef } from '../game/item-registry.js';
-import { emptyOffer, commitBlocker } from '../game/offer.js';
-import { MODAL_RECT, HIT_SLOP, offerLayout } from '../game/layout.js';
+import { emptyOffer, commitBlocker, stage, unstage, settledGold, offerBalance } from '../game/offer.js';
+import {
+    MODAL_RECT, HIT_SLOP, offerLayout, offerRowIndexAt, offerTraySlotAt, OFFER_ROWS_VISIBLE,
+} from '../game/layout.js';
 
 const mainSrc = readFileSync(fileURLToPath(new URL('../game/main.js', import.meta.url)), 'utf8');
 
@@ -74,7 +76,12 @@ const audio = { played: [], playSfx(n) { this.played.push(n); } };
 
 const openOffer = liveMethod('_openOffer', 'npc', { STATE, BUYBACK_MS, audio, emptyOffer });
 const closeOffer = liveMethod('_closeOffer', '', { STATE, audio });
-const tapOffer = liveMethod('_tapOffer', 'pt', { MODAL_RECT });
+const tapOffer = liveMethod('_tapOffer', 'pt',
+    { MODAL_RECT, HIT_SLOP, offerLayout, offerRowIndexAt, offerTraySlotAt });
+const offerActivate = liveMethod('_offerActivate', 'zone, index', { stage, unstage, settledGold, audio });
+const canStageGive = liveMethod('_canStageGive', 'entry');
+const commitOffer = liveMethod('_commitOffer', '');
+const pointInRect = liveMethod('_pointInRect', 'p, r, slop = 0');
 const theirsList = liveMethod('_offerTheirsList', '');
 const yoursList = liveMethod('_offerYoursList', '');
 const stagedCount = liveMethod('_stagedCount', 'side, entry');
@@ -97,6 +104,9 @@ function stubGame(overrides = {}) {
         _stagedCount: stagedCount,
         _offerSelection: offerSelection,
         _offerBlocker: offerBlocker,
+        _offerActivate: offerActivate,
+        _canStageGive: canStageGive,
+        _commitOffer: commitOffer,
         state: STATE.IDLE,
         gold: 100,
         inventory: [],
@@ -117,7 +127,13 @@ function stubGame(overrides = {}) {
         _resolveItemDef(id) { return resolveItemDef(id); },
         _containerStock(c) { return (c.contents || []).map(e => (typeof e === 'string' ? e : e.type)); },
         _buybackList() { return []; },
-        _pointInRect(pt, r) { return pt.x >= r.x && pt.x < r.x + r.w && pt.y >= r.y && pt.y < r.y + r.h; },
+        // The REAL one, lifted. A hand-written two-arg stub silently dropped the
+        // `slop` argument, which made every hit-test assertion here blind to slop
+        // bugs -- two mutants that reintroduced HIT_SLOP scanning survived the
+        // whole suite because of it. main._pointInRect is also CLOSED on the far
+        // edge (`<=`) where layout._ptInRect is half-open, and that difference is
+        // load-bearing.
+        _pointInRect: pointInRect,
         ...overrides,
     };
 }
@@ -369,7 +385,9 @@ describe('the derived lists', () => {
         });
         const out = yoursList.call(g);
         assert.equal(out.length, 2, 'an empty slot became a row');
-        assert.deepEqual(out[0], { def: ITEMS.rock, count: 9, slot: 0 });
+        // `max` is the staging ceiling and equals the stack: you cannot hand over
+        // ten rocks from a slot holding nine.
+        assert.deepEqual(out[0], { def: ITEMS.rock, count: 9, max: 9, slot: 0 });
         // slot 2, not 1 — the index must survive the hole, or staging edits the
         // wrong bag slot.
         assert.equal(out[1].slot, 2);
@@ -501,6 +519,191 @@ describe('the row accessors', () => {
         assert.match(offerBlocker.call(g), /YOU'RE 35 GP SHORT/);
         g.gold = 500; g._offer.gold = -1000;
         assert.match(offerBlocker.call(g), /THEIR TILL IS 800 GP SHORT/);
+    });
+});
+
+// -- staging (Task 13) ------------------------------------------------------
+
+describe('_offerActivate - staging', () => {
+    const withBag = (...stacks) => stubGame({ inventory: stacks });
+
+    test('staging a satchel row moves it into the give tray', () => {
+        const g = withBag({ itemDef: ITEMS.soap, count: 2 });
+        openOffer.call(g, puck());
+        offerActivate.call(g, 'yours', 0);
+        assert.equal(g._offer.give.length, 1);
+        assert.equal(g._offer.give[0].def, ITEMS.soap);
+        assert.equal(g._offer.give[0].count, 1);
+        assert.deepEqual(g._offer.selection, { side: 'yours', index: 0 });
+    });
+
+    test('A BAG ROW CANNOT BE STAGED PAST WHAT THE PLAYER OWNS', () => {
+        // The exploit this closes: with no ceiling, stage() defaults to Infinity,
+        // so five clicks on a two-stack of soap stages five. Task 14's commit
+        // would pay out for all five while _removeFromSlot silently no-ops on the
+        // emptied slot -- minting gold, repeatably and silently.
+        const g = withBag({ itemDef: ITEMS.soap, count: 2 });
+        openOffer.call(g, puck());
+        for (let i = 0; i < 5; i++) offerActivate.call(g, 'yours', 0);
+        assert.equal(g._offer.give[0].count, 2, 'staged more soap than the player owns');
+        assert.match(g.logs.at(-1).msg, /all the .*Soap.* you have/i,
+            'the refusal was silent - every refusal is stated on the row');
+    });
+
+    test('a CHEST row is one unit and cannot be staged twice', () => {
+        const g = stubGame();
+        openOffer.call(g, chestShim(['rock', 'soap']));
+        offerActivate.call(g, 'theirs', 0);
+        offerActivate.call(g, 'theirs', 0);
+        assert.equal(g._offer.take[0].count, 1, 'a single chest slot was duplicated');
+    });
+
+    test('a VENDOR stock row has no ceiling - supply is infinite', () => {
+        const g = stubGame();
+        openOffer.call(g, puck());
+        for (let i = 0; i < 4; i++) offerActivate.call(g, 'theirs', 0);
+        assert.equal(g._offer.take[0].count, 4);
+    });
+
+    test('the gold re-settles on every stage, so an ordinary purchase reads zero', () => {
+        const g = stubGame();
+        const npc = puck();
+        openOffer.call(g, npc);
+        offerActivate.call(g, 'theirs', 0);
+        assert.ok(g._offer.gold > 0, 'the player is paying, so gold must be positive');
+        assert.equal(offerBalance(npc, g._offer).balance, 0,
+            'an untouched purchase must settle to a zero balance');
+    });
+
+    test('un-staging from a tray re-settles too', () => {
+        const g = stubGame();
+        const npc = puck();
+        openOffer.call(g, npc);
+        offerActivate.call(g, 'theirs', 0);
+        const paid = g._offer.gold;
+        assert.ok(paid > 0);
+        offerActivate.call(g, 'takeTray', 0);
+        assert.equal(g._offer.take.length, 0);
+        assert.equal(g._offer.gold, 0, 'gold stayed at ' + paid + ' after the item left the tray');
+    });
+
+    test('a chest refuses the give side and says so', () => {
+        const g = stubGame({ inventory: [{ itemDef: ITEMS.soap, count: 1 }] });
+        openOffer.call(g, chestShim());
+        offerActivate.call(g, 'yours', 0);
+        assert.equal(g._offer.give.length, 0);
+        assert.match(g.logs.at(-1).msg, /isn't interested/);
+    });
+
+    test('a dead activation zone is a no-op, not a throw', () => {
+        const g = stubGame();
+        openOffer.call(g, puck());
+        offerActivate.call(g, 'yours', 99);
+        offerActivate.call(g, 'nonsense', 0);
+        assert.deepEqual(g._offer.give, []);
+        assert.deepEqual(g._offer.take, []);
+    });
+
+    test('staging preserves scroll and selection without re-attaching them', () => {
+        // stage() returns { ...o, [side]: list }, so the other fields ride along.
+        // An earlier draft re-attached scroll/selection by hand; that was
+        // redundant, and this is what makes it safe to have dropped.
+        const g = stubGame({ inventory: [{ itemDef: ITEMS.rock, count: 3 }] });
+        openOffer.call(g, puck());
+        g._offer.scroll.yours = 4;
+        offerActivate.call(g, 'yours', 0);
+        assert.ok(g._offer.scroll, 'staging dropped scroll entirely - the screen would blank');
+        assert.equal(g._offer.scroll.yours, 4, 'staging lost the scroll position');
+    });
+});
+
+describe('_canStageGive', () => {
+    test('an ordinary item stages', () => {
+        const g = stubGame(); g._offerNpc = puck();
+        assert.equal(canStageGive.call(g, { def: ITEMS.soap }), true);
+    });
+
+    test('a quest item is refused in the house words', () => {
+        const g = stubGame({ questEngine: { expectsDelivery: () => false } });
+        g._offerNpc = puck();
+        const quest = Object.values(ITEMS).find(d => d.questItem);
+        assert.ok(quest, 'no quest item in ITEMS to test with');
+        assert.equal(canStageGive.call(g, { def: quest }), false);
+        assert.match(g.logs.at(-1).msg, /Best hold onto that/);
+    });
+
+    test('THE SANCTIONED DELIVERY IS ALLOWED THROUGH', () => {
+        // The gate an earlier draft got wrong. It also refused anything with a
+        // falsy baseValue -- and all three such defs in the game are quest items,
+        // so that clause could only ever fire on the one case this clause lets
+        // through: the delivery the quest is actually asking for.
+        const g = stubGame({ questEngine: { expectsDelivery: () => true } });
+        g._offerNpc = puck();
+        const quest = Object.values(ITEMS).find(d => d.questItem && !d.baseValue);
+        assert.ok(quest, 'no zero-value quest item to test with');
+        assert.equal(canStageGive.call(g, { def: quest }), true,
+            'the gate blocked a delivery the quest expects');
+    });
+
+    test('a zero-value item is not refused for being worthless', () => {
+        const g = stubGame({ questEngine: { expectsDelivery: () => true } });
+        g._offerNpc = { type: 'gus', disposition: 10, entity: alive };
+        const quest = Object.values(ITEMS).find(d => d.questItem && !d.baseValue);
+        assert.equal(canStageGive.call(g, { def: quest }), true);
+    });
+});
+
+describe('_tapOffer - routing through the layout helpers', () => {
+    test('a tap 3px into a row stages THAT row, not the one above it', () => {
+        // The whole reason _tapOffer calls offerRowIndexAt instead of scanning
+        // with HIT_SLOP. Rows tile edge to edge, so a slop-expanded row 0
+        // swallows the top 7px of row 1 -- 48 of 260 scanned y-values resolve to
+        // the wrong row under the hand-rolled version.
+        const g = stubGame();
+        openOffer.call(g, puck());
+        const L = offerLayout(MODAL_RECT);
+        const r1 = L.theirs[1];
+        tapOffer.call(g, { x: r1.x + 5, y: r1.y + 3 });
+        assert.equal(g._offer.selection.index, 1,
+            'a tap just inside row 1 activated a different row');
+    });
+
+    test('the scroll offset is folded in, so a scrolled list stages the right item', () => {
+        const g = stubGame();
+        openOffer.call(g, puck());
+        g._offer.scroll.theirs = 1;
+        const L = offerLayout(MODAL_RECT);
+        tapOffer.call(g, { x: L.theirs[0].x + 5, y: L.theirs[0].y + 5 });
+        assert.equal(g._offer.selection.index, 1, 'the scroll offset was ignored');
+    });
+
+    test('a tap in the 6px tray gap un-stages nothing rather than guessing a neighbour', () => {
+        // Something must ALREADY be in the tray for this to discriminate: a gap
+        // tap that wrongly resolves to slot 0 calls unstage(0), and unstage on an
+        // empty tray is a no-op, so an empty-tray version of this test passes
+        // whether the bug is present or not.
+        const g = stubGame({ inventory: [{ itemDef: ITEMS.soap, count: 2 }] });
+        openOffer.call(g, puck());
+        offerActivate.call(g, 'yours', 0);
+        offerActivate.call(g, 'yours', 0);
+        assert.equal(g._offer.give[0].count, 2, 'setup failed to stage two soap');
+
+        const L = offerLayout(MODAL_RECT);
+        const slot0 = L.giveTray[0];
+        const gap = { x: slot0.x + slot0.w + 3, y: slot0.y + 5 };
+        assert.ok(gap.x < L.giveTray[1].x, 'the probe point is not actually in the gap');
+        tapOffer.call(g, gap);
+        assert.equal(g._offer.give[0].count, 2,
+            'a tap in the gap un-staged from the slot to its left');
+        assert.equal(g.state, STATE.TRADE, 'a gap tap closed the screen');
+    });
+
+    test('a tap on the commit button routes to the commit zone', () => {
+        const g = stubGame();
+        openOffer.call(g, puck());
+        const L = offerLayout(MODAL_RECT);
+        tapOffer.call(g, { x: L.button.x + L.button.w / 2, y: L.button.y + L.button.h / 2 });
+        assert.match(g.logs.at(-1).msg, /NOTHING STAGED/);
     });
 });
 
