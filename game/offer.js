@@ -109,7 +109,12 @@ export function settledGold(npc, offer) {
     const g = -z.balance;
     // Below the floor he won't pay out, so don't quote a payout the commit
     // blocker will only refuse. A gift stages at zero and stays a gift.
-    return (g < 0 && !canTrade(dispositionOf(npc))) ? 0 : g;
+    //
+    // `|| 0` normalizes NEGATIVE ZERO: negating a zero balance yields -0, which
+    // is falsy and therefore harmless in every reader today, but it is still a
+    // -0 sitting in live game state waiting to be printed or Object.is-compared.
+    const settled = (g < 0 && !canTrade(dispositionOf(npc))) ? 0 : g;
+    return settled || 0;
 }
 
 // ── The projection ───────────────────────────────────────────────────────────
