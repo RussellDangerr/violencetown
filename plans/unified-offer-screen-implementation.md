@@ -70,7 +70,16 @@ this document as advisory and re-grep — every line number the audit checked wa
 - The `itemUnspent` / `goldUnspent` / `goldRefusedPoints` sentences are written — gated on
   conditions, not on the raw fields, which fire on nearly every offer as rounding remainders.
 
-### STILL LIVE (Task 15+)
+### FIXED IN TASK 15
+- The whole retired path is gone: 12 methods from `main.js`, 2 from `renderer.js`, the `TRADE_*`
+  grid constants and `tradeCellRect` from `layout.js`, and the three retired fields.
+- **`TRADE_MODAL_RECT` went too.** The plan said keep it "— other code may still name it"; nothing
+  did. It was an alias of `MODAL_RECT` with zero users.
+- The `content-integrity` tripwire fired as designed. The weapon-in-stock gap is CLOSED (rows build
+  through `_resolveItemDef`), so the `content-validate` warning was deleted and its test now pins
+  the fix instead of the advisory.
+
+### STILL LIVE (Task 16+)
 - **Task 15 says five `this._tradeSell = this._tradeSellList()` assignments. There are nine**
   (and one fewer now that `_openContainer` lost its). Re-grep before deleting. `_tradeSlots`,
   `_clampTradeCursor`, `_tradeActivate`, `_openTrade` and `_tapTrade` are all dead as of Task 13.
@@ -90,14 +99,11 @@ this document as advisory and re-grep — every line number the audit checked wa
   its remaining stock. The parameter exists and is already tested.
 - **Task 13/14: nothing stops gold being staged INTO a chest.** `settledGold` returns 0 for a
   container, so the gold would leave the player and reach nobody.
-- **Task 15: `tests/content-integrity.test.js` asserts `main.js` still contains `_buyFromVendor(`.**
-  Deleting it early fails that test.
-- **Task 15's dead list is now larger.** `_openTrade`, `_tapTrade`, `_closeTrade`, `_tradeSlots`,
-  `_clampTradeCursor`, `_tradeActivate`, `_offerFromTrade`, `_tradeSellList` and the `_tradeNpc` /
-  `_tradeSell` / `_tradeCursor` fields are all unreachable as of Task 14. Re-grep rather than
-  trusting any count in this document.
 - **The plan's bag-removal sort was dead and is gone.** `_removeFromSlot` nulls in place; it does
   not splice. Do not reintroduce it “for safety” — the TAKE loop is the one that needs it.
+- **`main-TheDangerrZone.js` still has its own `_doGive` / `_doGiveDir`.** That file was untouched;
+  if it is live, it is running a give path this branch retired everywhere else. Worth a look before
+  1.0, but out of scope here.
 
 ### Also worth knowing
 - An `Enemy`'s `disposition` defaults to **`null`**, not 0 — an unauthored NPC hits the
@@ -130,8 +136,9 @@ onward is written directly. Mutation testing stays either way — it is what has
 | 12 · open/close, all four exits, the dispatch swap | ✅ **done — the screen OPENS** |
 | 13 · staging, auto-settle, keyboard parity | ✅ **done — the screen WORKS** |
 | 14 · committing the offer | ✅ **done — the loop CLOSES** |
-| 15 · delete the old trade path | ⏭ **NEXT** |
-| 16–20 | not started |
+| 15 · delete the old trade path | ✅ **done — 600 lines out** |
+| 16 · chests reachable by tap | ⏭ **NEXT** |
+| 17–20 | not started |
 
 **The draw layer is complete.** `game/offer.js` (251 lines) + `game/disposition-curves.js` (227) are
 pure; `offerLayout()` returns every rect; `renderer.js` has all five `_drawOffer*` methods and they
