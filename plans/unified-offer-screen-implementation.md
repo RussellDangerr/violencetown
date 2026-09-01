@@ -48,15 +48,31 @@ this document as advisory and re-grep — every line number the audit checked wa
 - **`trade: MODAL_RECT` in `CLOSE_PANEL` was never written** (it read `TRADE_MODAL_RECT`, the same
   frozen object). Now written, so Task 15 can retire the trade-era names safely.
 
+### FIXED IN TASK 13 (all five verified against source before acting)
+- `offerLayout(MODAL_RECT, this).rowsVisible` — one parameter, no such key. Uses `OFFER_ROWS_VISIBLE`.
+- The hand-rolled `HIT_SLOP` hit-test loops — 48 of 260 y-values resolved to the wrong row. Uses
+  `offerRowIndexAt` / `offerTraySlotAt`.
+- `stage()`'s `max` was never passed — every derived row now carries an honest ceiling.
+- `_canStageGive`'s `!def.baseValue` clause would have blocked the only delivery quest that ships.
+  Deleted; the quest clause reuses the existing `[Best hold onto that.]` rule.
+- The `scroll`/`selection` re-attachment was redundant (`stage` spreads the whole offer). Dropped
+  and pinned by test.
+
 ### STILL LIVE — errors in the text below
-- **Task 13: `offerLayout(MODAL_RECT, this).rowsVisible` is wrong twice over.** `offerLayout` takes
-  ONE parameter and its return object has no `rowsVisible` key — the count is the module-level
-  `OFFER_ROWS_VISIBLE`. As written `rows` is `undefined`, so `c.index >= scroll + undefined` is
-  always false and a list can never scroll to follow the cursor. Silent, not a crash.
 - **Task 14: `give-action.js` importing `dispositionCeil` from `./offer.js` fails.** The Task 6a
   split moved it to `./disposition-curves.js`; `offer.js` does not re-export it.
-- **Task 13 says five `this._tradeSell = this._tradeSellList()` assignments. There are nine**
-  (and one fewer now that `_openContainer` lost its). Re-grep before deleting.
+- **Task 15 says five `this._tradeSell = this._tradeSellList()` assignments. There are nine**
+  (and one fewer now that `_openContainer` lost its). Re-grep before deleting. `_tradeSlots`,
+  `_clampTradeCursor`, `_tradeActivate`, `_openTrade` and `_tapTrade` are all dead as of Task 13.
+- **Task 14: `bribeable === false` is enforced nowhere on this screen.** `give-action.js:80` refuses
+  a gift from a bribery-immune NPC (`[The X ignores your offering.]`); the shipped case is the Ghost
+  Fungus at `sewer-map.json:33`. Neither `_canStageGive` nor `commitBlocker` checks it, so today
+  such an offer would be accepted and move no disposition — a silent `+0`, which decision #13
+  forbids. Note the rule must gate a **surplus**, not staging: refusing all give-side staging would
+  break selling to them.
+- **Task 14: a sanctioned delivery does not advance the quest through this path.** The live give
+  path (`main.js:2632-2640`) bypasses the barter math, consumes the item and emits `item_given`.
+  Committing a delivery through `resolveOffer` will not emit it unless Task 14 does.
 - **Task 14: `_takeFromContainer` splices the wrong index.** `e.index` is the index into the
   FILTERED `_containerStock()` list; `_containerStock` drops unresolvable ids, so any chest holding
   one gives back a shifted index and the take removes the wrong item.
@@ -96,8 +112,9 @@ onward is written directly. Mutation testing stays either way — it is what has
 | 10 · the two list columns | ✅ |
 | 11 · trays, description strip, ledger | ✅ done — the screen draws in full |
 | 12 · open/close, all four exits, the dispatch swap | ✅ **done — the screen OPENS** |
-| 13 · staging + input (Step 1 already done in 12) | ⏭ **NEXT** |
-| 14–20 | not started |
+| 13 · staging, auto-settle, keyboard parity | ✅ **done — the screen WORKS** |
+| 14 · committing the offer | ⏭ **NEXT** |
+| 15–20 | not started |
 
 **The draw layer is complete.** `game/offer.js` (251 lines) + `game/disposition-curves.js` (227) are
 pure; `offerLayout()` returns every rect; `renderer.js` has all five `_drawOffer*` methods and they
