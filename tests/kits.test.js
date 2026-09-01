@@ -33,8 +33,11 @@ describe('kit fallback — nothing ships broke by omission', () => {
 
 describe('rock — the stealth affordance', () => {
     test('enemies within earshot retarget to the landing tile', () => {
-        const near = { x: 5, y: 5, _lastSeenX: null, _lastSeenY: null, state: 'idle', sightRange: 8 };
-        const far  = { x: 40, y: 40, _lastSeenX: null, _lastSeenY: null, state: 'idle', sightRange: 8 };
+        // `allegiance: 'hostile'` is what the Enemy ctor derives for a born-hostile
+        // (null behavior). It became load-bearing when rockClatter was restricted to
+        // hostiles, so the fixture now states it rather than relying on a bare object.
+        const near = { x: 5, y: 5, _lastSeenX: null, _lastSeenY: null, state: 'idle', sightRange: 8, allegiance: 'hostile' };
+        const far  = { x: 40, y: 40, _lastSeenX: null, _lastSeenY: null, state: 'idle', sightRange: 8, allegiance: 'hostile' };
         rockClatter([near, far], 6, 6);
         assert.deepEqual([near._lastSeenX, near._lastSeenY], [6, 6]);
         assert.equal(near.state, 'chasing');
@@ -65,5 +68,44 @@ describe('sewer fare — the eater decides', () => {
         assert.equal(isSewerDweller(null), false);
         assert.equal(isSewerDweller(undefined), false);
         assert.equal(isSewerDweller({}), false);
+    });
+});
+
+// ── rockClatter must not put a NEUTRAL into the chase state ──────────────────
+//
+// (2026-08-24) `state: 'chasing'` is not only the AI's chase flag — renderer.js
+// reads it in three places, including _drawArena, which blooms the lit combat
+// arena around anything "chasing". A townsperson can never actually chase (their
+// behavior whitelist excludes HOSTILE, so npc.js's HOSTILE branch never runs for
+// them), but setting the flag still lights the combat stage around a shopkeeper.
+//
+// This was dormant only because every townsperson is authored sightRange 0, so
+// the rock had to land on their exact tile. Giving townsfolk real sight (so they
+// can serve as theft witnesses) would have made it routine.
+describe('rockClatter and non-hostiles', () => {
+    const townie = (over = {}) => ({
+        x: 8, y: 6, state: 'idle',
+        behavior: ['IDLE', 'WANDER'], allegiance: 'neutral',
+        sightRange: 4, ...over,
+    });
+
+    test('a neutral within earshot is NOT put into the chase state', () => {
+        const t = townie();
+        rockClatter([t], 6, 6);
+        assert.equal(t.state, 'idle',
+            'a townsperson in state "chasing" blooms the combat arena around them');
+    });
+
+    test('a bribed ally is left alone too', () => {
+        const a = townie({ allegiance: 'ally', _ally: true });
+        rockClatter([a], 6, 6);
+        assert.equal(a.state, 'idle');
+    });
+
+    test('but a real hostile still investigates — the rock still works', () => {
+        const h = { x: 8, y: 6, state: 'idle', behavior: null, allegiance: 'hostile', sightRange: 8 };
+        rockClatter([h], 6, 6);
+        assert.equal(h.state, 'chasing');
+        assert.deepEqual([h._lastSeenX, h._lastSeenY], [6, 6]);
     });
 });

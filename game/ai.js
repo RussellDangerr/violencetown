@@ -65,6 +65,12 @@ export function healPurchase(hp, maxHp, gold) {
 export function rockClatter(enemies, x, y) {
   for (const e of enemies || []) {
     if (!e || e.state === 'chasing') continue;
+    // Hostiles only. `state: 'chasing'` is not just the AI's flag — renderer.js
+    // reads it in three places, and _drawArena blooms the lit combat stage around
+    // anything carrying it. A townsperson can never actually chase (their behavior
+    // whitelist excludes HOSTILE, so npc.js's HOSTILE branch never runs for them),
+    // so setting it on one only lights a combat arena around a shopkeeper.
+    if (!isHostile(e)) continue;
     const range = e.sightRange ?? 8;
     if (Math.max(Math.abs(e.x - x), Math.abs(e.y - y)) > range) continue;
     e._lastSeenX = x; e._lastSeenY = y;

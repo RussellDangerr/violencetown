@@ -27,6 +27,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { Enemy } from '../game/enemies.js';
 import { tickNpcState } from '../game/npc.js';
+import { perceives, spotters, VERDICT } from '../game/perception.js';
 
 // A fake game exposing exactly what the HOSTILE branch reads. Walls from a
 // string grid ('#'), everything else open floor.
@@ -39,6 +40,9 @@ function makeGame(rows, playerX, playerY) {
         turn: 0,
         _MOVE_MS: 150,
         map: { isWalkable: (x, y) => x >= 0 && y >= 0 && x < W && y < H && rows[y][x] !== '#' },
+        // The ambient WANDER state pulls from the seeded world RNG. Deterministic
+        // here so a wandering neutral takes the same step every run.
+        rng: { pick: (arr) => arr[0], float: () => 0.5 },
         damageTaken: 0,
         applyDamageToPlayer(dmg) { this.damageTaken += dmg; },
     };
@@ -203,5 +207,57 @@ describe('breaking contact', () => {
         g.playerX = 0; g.playerY = 8;
         tickNpcState(g, e, 2);
         assert.deepEqual([e._lastSeenX, e._lastSeenY], [5, 7], 'must still point at the old tile');
+    });
+});
+
+describe('sight does not make a townsperson dangerous', () => {
+    // Townsfolk were authored sightRange 0 back when sight meant "will chase".
+    // They now carry real sight so they can serve as theft WITNESSES — the
+    // isHidden check counts anyone holding DIRECT on you. The safety property
+    // that makes that legal: their behavior whitelist excludes HOSTILE, so
+    // npc.js's HOSTILE branch — where the chase and the whole ladder live —
+    // never runs for them. Sight makes them observers, never pursuers.
+    const townie = (g, x, y) => {
+        const e = new Enemy({
+            id: 'n1', type: 'Violencian', x, y,
+            behavior: ['IDLE', 'WANDER'], sightRange: 4, facing: 'S',
+            wanderEveryTurns: 1,
+        });
+        g.enemies.push(e);
+        return e;
+    };
+
+    test('a neutral staring straight at the player never enters the chase', () => {
+        const g = makeGame(openRoom, 5, 6);
+        const e = townie(g, 5, 4);            // facing S, player dead ahead in its cone
+        for (let i = 1; i <= 10; i++) {
+            tickNpcState(g, e, i);
+            assert.notEqual(e.state, 'chasing', `beat ${i}`);
+            assert.notEqual(e.state, 'suspicious', `beat ${i} — the ladder is HOSTILE-only`);
+        }
+        assert.equal(g.damageTaken, 0, 'and it never attacks');
+        assert.equal(e.allegiance, 'neutral', 'and stays neutral');
+    });
+
+    test('its fsmState stays ambient, so the HOSTILE branch is never entered', () => {
+        const g = makeGame(openRoom, 5, 6);
+        const e = townie(g, 5, 4);
+        for (let i = 1; i <= 5; i++) tickNpcState(g, e, i);
+        assert.ok(['IDLE', 'WANDER', 'WORKING'].includes(e.fsmState), `was ${e.fsmState}`);
+    });
+
+    test('but it DOES now count as a witness — it can hold DIRECT on you', () => {
+        const g = makeGame(openRoom, 5, 6);
+        const e = townie(g, 5, 4);
+        assert.equal(perceives(g.map, e, g.playerX, g.playerY), VERDICT.DIRECT,
+            'a townsperson facing you must be able to see you, or the theft rule is vacuous');
+        assert.equal(spotters(g.map, [e], g.playerX, g.playerY).length, 1);
+    });
+
+    test('and its blind spot works the same as anyone else\'s', () => {
+        const g = makeGame(openRoom, 5, 3);
+        const e = townie(g, 5, 4);            // facing S, player behind it
+        assert.equal(perceives(g.map, e, g.playerX, g.playerY), VERDICT.NONE);
+        assert.deepEqual(spotters(g.map, [e], g.playerX, g.playerY), []);
     });
 });
