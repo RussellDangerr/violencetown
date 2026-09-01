@@ -19,7 +19,13 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { ITEMS } from '../game/items.js';
 import { resolveItemDef } from '../game/item-registry.js';
-import { emptyOffer, commitBlocker, stage, unstage, settledGold, offerBalance } from '../game/offer.js';
+import {
+    emptyOffer, commitBlocker, stage, unstage, settledGold, offerBalance, resolveOffer,
+} from '../game/offer.js';
+import { transferGold, sellPrice, buyPrice } from '../game/trade.js';
+import { applyDispositionDelta, previewGive, applyGive } from '../game/give-action.js';
+import { isHostile } from '../game/ai.js';
+import { dispositionCeil } from '../game/disposition-curves.js';
 import {
     MODAL_RECT, HIT_SLOP, offerLayout, offerRowIndexAt, offerTraySlotAt, OFFER_ROWS_VISIBLE,
 } from '../game/layout.js';
@@ -82,6 +88,14 @@ const offerActivate = liveMethod('_offerActivate', 'zone, index', { stage, unsta
 const canStageGive = liveMethod('_canStageGive', 'entry');
 const commitOffer = liveMethod('_commitOffer', '');
 const pointInRect = liveMethod('_pointInRect', 'p, r, slop = 0');
+const containerEntries = liveMethod('_containerEntries', 'container');
+const containerStock = liveMethod('_containerStock', 'container');
+const takeFromContainer = liveMethod('_takeFromContainer', 'npc, at');
+const removeFromSlot = liveMethod('_removeFromSlot', 'slot');
+const buybackRecord = liveMethod('_buybackRecord', 'npc, itemId, kind, price');
+const logOffer = liveMethod('_logOffer', 'npc, R, { given, taken, gold }', { dispositionCeil });
+const commitOfferFull = liveMethod('_commitOffer', '',
+    { resolveOffer, transferGold, sellPrice, buyPrice, applyDispositionDelta, isHostile, emptyOffer, audio });
 const theirsList = liveMethod('_offerTheirsList', '');
 const yoursList = liveMethod('_offerYoursList', '');
 const stagedCount = liveMethod('_stagedCount', 'side, entry');
@@ -125,7 +139,15 @@ function stubGame(overrides = {}) {
         _startTradeTimer() { this.timerStarts++; },
         _stopTradeTimer() { this.timerStops++; },
         _resolveItemDef(id) { return resolveItemDef(id); },
-        _containerStock(c) { return (c.contents || []).map(e => (typeof e === 'string' ? e : e.type)); },
+        _containerEntries: containerEntries,
+        _containerStock: containerStock,
+        _takeFromContainer: takeFromContainer,
+        _removeFromSlot: removeFromSlot,
+        _buybackRecord: buybackRecord,
+        _logOffer: logOffer,
+        events: [],
+        emitGameEvent(name, payload) { this.events.push({ name, payload }); },
+        _addToInventory(def) { (this.got ||= []).push(def.id); return true; },
         _buybackList() { return []; },
         // The REAL one, lifted. A hand-written two-arg stub silently dropped the
         // `slop` argument, which made every hit-test assertion here blind to slop
@@ -409,12 +431,28 @@ describe('the derived lists', () => {
         assert.equal(out[1].def, ITEMS.soap);
     });
 
-    test('_offerTheirsList drops ids that resolve to nothing rather than seating a blank row', () => {
+    test('_offerTheirsList drops unresolvable ids AND keeps the real contents index', () => {
+        // The index is what the commit splices by. _containerStock filters, so a
+        // position in ITS output is not a position in chest.contents -- taking by
+        // the former removes the wrong item from any chest holding an
+        // unresolvable entry. Here soap is contents[2], not stock[1].
         const g = stubGame();
         g._offerNpc = chestShim(['rock', 'not_a_real_item', 'soap']);
         const out = theirsList.call(g);
         assert.equal(out.length, 2);
         assert.deepEqual(out.map(e => e.def.id), ['rock', 'soap']);
+        assert.deepEqual(out.map(e => e.index), [0, 2],
+            'the row index is a position in the FILTERED list, not in chest.contents');
+    });
+
+    test('taking from a chest with an unresolvable entry removes the right item', () => {
+        const g = stubGame();
+        const shim = chestShim(['rock', 'not_a_real_item', 'soap']);
+        g._offerNpc = shim;
+        const soap = theirsList.call(g).find(e => e.def.id === 'soap');
+        takeFromContainer.call(g, shim, soap.index);
+        assert.deepEqual(shim._container.contents, ['rock', 'not_a_real_item'],
+            'the wrong entry was spliced out of the chest');
     });
 
     test('_offerTheirsList reads a vendor by stock, and appends the buyback shelf', () => {
@@ -704,6 +742,303 @@ describe('_tapOffer - routing through the layout helpers', () => {
         const L = offerLayout(MODAL_RECT);
         tapOffer.call(g, { x: L.button.x + L.button.w / 2, y: L.button.y + L.button.h / 2 });
         assert.match(g.logs.at(-1).msg, /NOTHING STAGED/);
+    });
+});
+
+// -- committing (Task 14) ---------------------------------------------------
+
+describe('_commitOffer', () => {
+    // The real _commitOffer, not the seam stub.
+    const commit = commitOfferFull;
+
+    const vendor = (over = {}) => Object.assign(
+        { id: 'puck', type: 'puck', vendor: true, disposition: 40, gold: 200, entity: alive,
+          stock: ['bandage', 'soap'], values: { soap: 4 }, behavior: ['IDLE'] }, over);
+
+    test('a blocked offer changes nothing and says why', () => {
+        const g = stubGame({ gold: 5 });
+        const npc = vendor();
+        openOffer.call(g, npc);
+        g._offer.gold = 40;                       // more than the player has
+        commit.call(g);
+        assert.equal(g.gold, 5, 'gold moved on a blocked offer');
+        assert.equal(npc.gold, 200);
+        assert.match(g.logs.at(-1).msg, /GP SHORT/);
+        assert.ok(g._offer.take !== null, 'the basket was cleared by a refusal');
+    });
+
+    test('a purchase moves gold one way and the item the other', () => {
+        const g = stubGame({ gold: 100 });
+        const npc = vendor();
+        openOffer.call(g, npc);
+        offerActivate.call(g, 'theirs', 0);        // buy a bandage
+        const price = g._offer.gold;
+        assert.ok(price > 0);
+        commit.call(g);
+        assert.equal(g.gold, 100 - price, 'the player did not pay');
+        assert.equal(npc.gold, 200 + price, 'the vendor was not paid');
+        assert.deepEqual(g.got, ['bandage'], 'the item never reached the bag');
+        assert.deepEqual(g._offer.take, [], 'the basket survived the commit');
+    });
+
+    test('a sale moves gold the other way and empties the slot', () => {
+        const g = stubGame({ gold: 10, inventory: [{ itemDef: ITEMS.soap, count: 1 }] });
+        const npc = vendor();
+        openOffer.call(g, npc);
+        offerActivate.call(g, 'yours', 0);
+        const owed = -g._offer.gold;
+        assert.ok(owed > 0, 'the vendor owes nothing for a sale');
+        commit.call(g);
+        assert.equal(g.gold, 10 + owed);
+        assert.equal(npc.gold, 200 - owed);
+        assert.equal(g.inventory[0], null, 'the sold item stayed in the bag');
+    });
+
+    test('GIVING FROM TWO SLOTS REMOVES BOTH - highest slot first', () => {
+        // Splicing low-to-high would shift the slot of the one still to go.
+        const g = stubGame({ inventory: [
+            { itemDef: ITEMS.soap, count: 1 }, null, { itemDef: ITEMS.rock, count: 1 },
+        ] });
+        const npc = vendor();
+        openOffer.call(g, npc);
+        offerActivate.call(g, 'yours', 0);
+        offerActivate.call(g, 'yours', 1);
+        assert.equal(g._offer.give.length, 2, 'setup failed to stage both');
+        commit.call(g);
+        assert.equal(g.inventory[0], null, 'slot 0 survived');
+        assert.equal(g.inventory[2], null, 'slot 2 survived');
+    });
+
+    test('TAKING TWO CHEST ROWS REMOVES BOTH - highest contents index first', () => {
+        const g = stubGame();
+        const shim = chestShim(['rock', 'soap', 'bandage']);
+        openOffer.call(g, shim);
+        offerActivate.call(g, 'theirs', 0);        // contents[0] rock
+        offerActivate.call(g, 'theirs', 2);        // contents[2] bandage
+        commit.call(g);
+        assert.deepEqual(shim._container.contents, ['soap'],
+            'ascending splices shifted the second index and took the wrong item');
+    });
+
+    test('every hand-off emits item_given, or a delivery quest soft-locks', () => {
+        const g = stubGame({ inventory: [{ itemDef: ITEMS.soap, count: 2 }] });
+        const npc = vendor();
+        openOffer.call(g, npc);
+        offerActivate.call(g, 'yours', 0);
+        offerActivate.call(g, 'yours', 0);
+        commit.call(g);
+        const given = g.events.filter(e => e.name === 'item_given');
+        assert.equal(given.length, 2, 'one event per unit handed over');
+        assert.deepEqual(given[0].payload, { npc: 'puck', item: 'soap' });
+    });
+
+    test('a surplus moves disposition and a straight trade does not', () => {
+        const g = stubGame({ inventory: [{ itemDef: ITEMS.soap, count: 2 }] });
+        const npc = vendor();
+        openOffer.call(g, npc);
+        offerActivate.call(g, 'yours', 0);
+        offerActivate.call(g, 'yours', 0);
+        g._offer.gold = 0;                         // refuse the payout: a gift
+        const before = npc.disposition;
+        commit.call(g);
+        assert.ok(npc.disposition > before, 'a gift moved no disposition');
+
+        const g2 = stubGame({ gold: 100 });
+        const npc2 = vendor();
+        openOffer.call(g2, npc2);
+        offerActivate.call(g2, 'theirs', 0);       // settled purchase
+        commit.call(g2);
+        assert.equal(npc2.disposition, 40, 'a settled trade moved disposition');
+    });
+
+    test('the basket is emptied but the scroll position survives', () => {
+        const g = stubGame({ gold: 100 });
+        openOffer.call(g, vendor());
+        g._offer.scroll.theirs = 3;
+        offerActivate.call(g, 'theirs', 0);
+        commit.call(g);
+        assert.deepEqual(g._offer.give, []);
+        assert.deepEqual(g._offer.take, []);
+        assert.equal(g._offer.gold, 0);
+        assert.equal(g._offer.selection, null);
+        assert.equal(g._offer.scroll.theirs, 3, 'the list jumped back to the top');
+    });
+
+    test('a partner turned hostile by the deal does not keep the screen open', () => {
+        const g = stubGame({ gold: 100 });
+        // isHostile reads `allegiance`, not the behavior whitelist -- a fixture
+        // setting behavior:['HOSTILE'] is not hostile to this code at all.
+        const npc = vendor({ allegiance: 'hostile' });
+        openOffer.call(g, npc);
+        offerActivate.call(g, 'theirs', 0);
+        commit.call(g);
+        assert.equal(g.state, STATE.IDLE, 'left standing in a hostile partner\u2019s window');
+        assert.equal(g._offerNpc, null);
+    });
+});
+
+describe('_logOffer - the sentences the unspent fields were kept for', () => {
+    const npc = () => ({ type: 'puck', disposition: 40 });
+    const lines = (R, parts) => {
+        const g = stubGame();
+        logOffer.call(g, npc(), R, parts);
+        return g.logs.map(l => l.msg);
+    };
+    const R0 = { points: 0, projected: 40, fromGold: 0, fromItems: 0,
+                 itemUnspent: 0, goldUnspent: 0, goldRefusedPoints: 0 };
+    const none = { given: [], taken: [], gold: 0 };
+
+    test('a purchase reads as a purchase', () => {
+        const out = lines({ ...R0 }, { given: [], taken: [{ count: 1 }], gold: 30 });
+        assert.match(out[0], /You hand puck 30 GP for 1 item\./);
+    });
+
+    test('a gift names the disposition it bought', () => {
+        const out = lines({ ...R0, points: 16 }, { given: [{ count: 2 }], taken: [], gold: 0 });
+        assert.match(out[0], /You hand puck 2 items\. Disposition \+16\./);
+    });
+
+    test('a bad deal says they remember', () => {
+        const out = lines({ ...R0, points: -15 }, { given: [{ count: 1 }], taken: [{ count: 1 }], gold: 0 });
+        assert.match(out[0], /take it, and remember\. Disposition -15/);
+    });
+
+    test('GOLD THAT BOUGHT NOTHING IS SAID OUT LOUD', () => {
+        // The condition is "money changed hands and bought no goodwill at all",
+        // NOT goldUnspent > 0 -- goodwill rounds down, so a remainder is left
+        // over on almost every offer and would fire this on a normal purchase.
+        const out = lines({ ...R0, fromGold: 0, goldUnspent: 12 }, { given: [], taken: [], gold: 12 });
+        assert.match(out.at(-1), /pockets the gold\. It buys nothing he wants\./);
+    });
+
+    test('a rounding remainder on an ordinary purchase says nothing', () => {
+        const out = lines({ ...R0, fromGold: 3, goldUnspent: 2, points: 3, projected: 43 },
+                          { given: [], taken: [{ count: 1 }], gold: 20 });
+        assert.equal(out.length, 1, `extra sentence: ${out.slice(1).join(' | ')}`);
+    });
+
+    test('A GIFT WITH NO ROOM LEFT IS SAID OUT LOUD', () => {
+        // Gated on the CEILING, not on the remainder. puck's ceil is 100.
+        const out = lines({ ...R0, itemUnspent: 20, points: 60, projected: 100 },
+                          { given: [{ count: 3 }], taken: [], gold: 0 });
+        assert.match(out.at(-1), /already as fond of you as he can be/);
+    });
+
+    test('a gift with room left does NOT claim they are already as fond as they can be', () => {
+        // The line this test exists for: it fired on a merchant sitting at 76 of
+        // 100, because itemUnspent is a rounding remainder on nearly every gift.
+        const out = lines({ ...R0, itemUnspent: 14, points: 16, projected: 76 },
+                          { given: [{ count: 2 }], taken: [], gold: 0 });
+        assert.equal(out.length, 1,
+            `claimed a full heart at 76 of 100: ${out.slice(1).join(' | ')}`);
+    });
+
+    test('GOLD REFUSED AT THE CEILING IS ITS OWN SENTENCE', () => {
+        // Distinct from having no room at all: they would still warm to a GIFT,
+        // just not to money. Fusing the two would say the wrong thing.
+        const out = lines({ ...R0, goldRefusedPoints: 3, goldUnspent: 40 }, none);
+        assert.match(out.at(-1), /buys nothing more\. Some things aren't for sale\./);
+        assert.ok(!out.some(l => /pockets the gold/.test(l)),
+            'both gold sentences fired for one offer');
+    });
+
+    test('a chest is TAKEN FROM, not handed things', () => {
+        const g = stubGame();
+        logOffer.call(g, { type: 'crate', disposition: 100, _container: {} },
+            { ...R0, projected: 100 }, { given: [], taken: [{ count: 2 }], gold: 0 });
+        assert.match(g.logs[0].msg, /You take 2 items from the crate\./);
+        assert.ok(!/You hand/.test(g.logs[0].msg));
+    });
+
+    test('a clean deal says nothing extra', () => {
+        const out = lines({ ...R0 }, { given: [{ count: 1 }], taken: [], gold: 0 });
+        assert.equal(out.length, 1);
+    });
+
+    test('an untracked partner never gets the ceiling line', () => {
+        const g = stubGame();
+        logOffer.call(g, { type: 'stranger', disposition: null },
+            { ...R0, itemUnspent: 20, projected: 0 }, { given: [{ count: 1 }], taken: [], gold: 0 });
+        assert.equal(g.logs.length, 1);
+    });
+});
+
+describe('the disposition ceiling is the NPC own, across all three writers', () => {
+    const king = () => ({ type: 'Fungus King', disposition: -80, flipThreshold: 200,
+                          bribeable: true, values: { soap: 20 }, behavior: ['HOSTILE'] });
+    const ordinary = () => ({ type: 'puck', disposition: 60, flipThreshold: 0,
+                              bribeable: true, values: { soap: 4 } });
+
+    test('the ceiling is the threshold when the threshold is above 100', () => {
+        assert.equal(dispositionCeil(king()), 200);
+        assert.equal(dispositionCeil(ordinary()), 100);
+    });
+
+    test('THE FUNGUS KING CAN REACH HIS OWN THRESHOLD - on the knife edge', () => {
+        // dispositionCeil IS his flipThreshold and the flip test is >=, so the
+        // headroom of exactly 280 from -80 is load-bearing. One point short must
+        // not flip him.
+        const k = king();
+        const r = applyDispositionDelta(k, 280);
+        assert.equal(k.disposition, 200);
+        assert.equal(r.flipped, true, 'exactly 280 failed to flip the King');
+
+        const k2 = king();
+        applyDispositionDelta(k2, 279);
+        assert.equal(k2.disposition, 199);
+        assert.ok(!k2._wasFlipped, '279 flipped him a point early');
+    });
+
+    test('previewGive is clamped too - it was the unclamped writer', () => {
+        // previewGive had no clamp at all, so a gift could push an ordinary NPC
+        // past 100 into a range no band, no meter and no flip test can see.
+        // applyGive writes preview.newDisposition straight through.
+        const p = ordinary();
+        p.disposition = 95;
+        const big = previewGive({ id: 'soap' }, p);       // soap:4 x SHIFT
+        assert.ok(big.newDisposition <= 100, `previewGive returned ${big.newDisposition}`);
+
+        const k = king();
+        k.disposition = 150;
+        const kp = previewGive({ id: 'soap' }, k);
+        assert.ok(kp.newDisposition > 100,
+            'the King was clamped to 100 by a preview that should use his own ceiling');
+        assert.ok(kp.newDisposition <= 200);
+    });
+
+    test('applyGive respects the ceiling through the same preview', () => {
+        const p = ordinary();
+        p.disposition = 99;
+        for (let i = 0; i < 5; i++) applyGive({ id: 'soap', name: '[Soap]' }, p);
+        assert.equal(p.disposition, 100, 'gifting carried an ordinary NPC past 100');
+    });
+
+    test('an ordinary NPC still stops at 100, and at -100', () => {
+        const a = ordinary(); applyDispositionDelta(a, 500);
+        assert.equal(a.disposition, 100);
+        const b = ordinary(); applyDispositionDelta(b, -500);
+        assert.equal(b.disposition, -100);
+    });
+});
+
+describe('commitBlocker - a bribery-immune NPC', () => {
+    const immune = { type: 'Ghost Fungus', disposition: 0, bribeable: false, gold: 50 };
+    const ctx = { playerGold: 100, npcGold: 50 };
+
+    test('refuses to be BOUGHT rather than pocketing a silent +0', () => {
+        const gift = { give: [{ def: ITEMS.soap, count: 1 }], take: [], gold: 0 };
+        assert.equal(commitBlocker(immune, gift, ctx), "THEY WON'T BE BOUGHT");
+    });
+
+    test('still trades evenly - an even trade is not an offering', () => {
+        const even = { give: [{ def: ITEMS.soap, count: 1 }], take: [], gold: -8 };
+        assert.equal(commitBlocker(immune, even, ctx), null);
+    });
+
+    test('an ordinary NPC still accepts a gift', () => {
+        const ok = { type: 'puck', disposition: 40, bribeable: true, gold: 50 };
+        const gift = { give: [{ def: ITEMS.soap, count: 1 }], take: [], gold: 0 };
+        assert.equal(commitBlocker(ok, gift, ctx), null);
     });
 });
 

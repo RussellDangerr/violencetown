@@ -49,7 +49,8 @@ import {
     // the slop policy cannot drift from the rects the renderer drew.
     MODAL_RECT, offerLayout, offerRowIndexAt, offerTraySlotAt, OFFER_ROWS_VISIBLE,
 } from './layout.js';
-import { emptyOffer, commitBlocker, stage, unstage, settledGold } from './offer.js';   // (offer screen) the basket model
+import { emptyOffer, commitBlocker, stage, unstage, settledGold, resolveOffer } from './offer.js';
+import { dispositionCeil } from './disposition-curves.js';   // the ceiling the log lines test against   // (offer screen) the basket model
 import { canTrade, buyPrice, sellPrice, bribeStepCost, BRIBE_STEP, transferGold, burnGold } from './trade.js'; // pricing + the transaction spine
 import { buildXmbBar, resolveXmbSelection, cycleXmbCategory, cycleXmbItem, xmbCategoryOf, XMB_LABELS } from './xmb.js';
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
@@ -3804,9 +3805,33 @@ class Game {
     // item-id strings — the shape the Trade BUY column + _tapTrade read. Unknown
     // / undefined ids drop out (they'd render nothing anyway).
     _containerStock(container) {
-        return (container.contents || [])
-            .map(e => (typeof e === 'string' ? e : e && e.type))
-            .filter(id => id && this._resolveItemDef(id));   // ITEMS + WEAPONS (a robbery stash may hold either)
+        return this._containerEntries(container).map(e => e.def.id);
+    }
+
+    // Every resolvable entry in a container, each carrying `at` -- its index into
+    // the REAL contents array.
+    //
+    // This distinction is the whole point. _containerStock FILTERS (a chest may
+    // hold an id no registry resolves), so a position in its output is not a
+    // position in chest.contents. Taking by the former splices the wrong item out
+    // of any chest holding an unresolvable entry -- silently, and only for that
+    // chest, which is exactly the kind of bug that ships.
+    _containerEntries(container) {
+        const out = [];
+        ((container && container.contents) || []).forEach((raw, at) => {
+            const id = typeof raw === 'string' ? raw : raw && raw.type;
+            const def = id && this._resolveItemDef(id);   // ITEMS + WEAPONS (a robbery stash may hold either)
+            if (def) out.push({ def, at });
+        });
+        return out;
+    }
+
+    // Remove ONE unit at the container's real contents index.
+    _takeFromContainer(npc, at) {
+        const chest = npc && npc._container;   // the container OBJECT, not an id
+        if (!chest || !Array.isArray(chest.contents)) return;
+        chest.contents.splice(at, 1);
+        npc.stock = this._containerStock(chest);
     }
 
     // ── Combat ───────────────────────────────────────────────────────────────
@@ -5271,11 +5296,12 @@ class Game {
         // Without `max`, stage() defaults to Infinity and a row can be staged
         // more times than it can be delivered.
         if (npc._container) {
-            // _container holds the container OBJECT itself, not an id.
-            (this._containerStock(npc._container) || []).forEach((id, index) => {
-                const def = this._resolveItemDef(id);
-                if (def) out.push({ def, count: 1, max: 1, source: 'contents', index });
-            });
+            // _container holds the container OBJECT itself, not an id. `index` is
+            // the index into chest.contents, NOT into the filtered stock list --
+            // the commit splices by it.
+            for (const e of this._containerEntries(npc._container)) {
+                out.push({ def: e.def, count: 1, max: 1, source: 'contents', index: e.at });
+            }
             return out;
         }
         (npc.stock || []).forEach((id, index) => {
@@ -5432,12 +5458,124 @@ class Game {
         if (ti >= 0) { this._offerActivate('takeTray', ti); return; }
     }
 
-    // (Task 14 seam) Striking the deal -- moving goods, settling gold and writing
-    // the disposition -- is the next task. Until then the button reports why it
-    // is refused and otherwise does nothing, which is inert rather than wrong.
+    // Commit the staged offer. The ONE place this screen mutates the world.
+    //
+    // Order is load-bearing: refuse first, then gold, then items, then
+    // disposition, then the log. transferGold returning false must never be
+    // discovered halfway through, which is why _offerBlocker checked both tills
+    // before we got here.
     _commitOffer() {
+        const npc = this._offerNpc; if (!npc || !this._offer) return;
         const blocker = this._offerBlocker();
-        if (blocker) { this._log(`[${blocker}]`); this._render(); }
+        if (blocker) { this._log(`[${blocker}]`); this._render(); return; }
+
+        const R = resolveOffer(npc, this._offer);
+        const gold = this._offer.gold || 0;
+        const given = this._offer.give;
+        const taken = this._offer.take;
+
+        if (gold > 0 && !transferGold(this, npc, gold, 'offer')) { this._render(); return; }
+        if (gold < 0 && !transferGold(npc, this, -gold, 'offer')) { this._render(); return; }
+
+        // Items out of the bag. NO sort: _removeFromSlot nulls the slot in place
+        // rather than splicing, so nothing shifts and order cannot matter. (An
+        // earlier draft sorted highest-slot-first "so earlier splices cannot
+        // shift the indices" -- there are no splices on this path, and a
+        // mutation run proved the sort dead. The TAKE loop below is the one that
+        // genuinely needs it: chest.contents really is spliced.)
+        const d = npc.disposition ?? 0;
+        for (const e of given) {
+            const unit = sellPrice(e.def, d) || 0;
+            for (let n = 0; n < e.count; n++) {
+                this._removeFromSlot(e.slot);
+                // ONE price per call -- the ledger is per-unit LIFO stacks, which
+                // is what closed the gold-dup exploit found in pre-prod review.
+                this._buybackRecord(npc, e.def.id, 'rebuy', unit);
+                // Every hand-off is quest-trackable, the same idiom the retired
+                // trade window used. Without this a sanctioned delivery is
+                // consumed and the quest never advances -- a soft-lock.
+                this.emitGameEvent('item_given', { npc: npc.id, item: e.def.id });
+            }
+        }
+
+        // Items into the bag. A container's contents are finite and must be
+        // spliced; a vendor's stock is infinite and is not. Splice highest index
+        // FIRST, for the same reason the bag does.
+        for (const e of [...taken].sort((a, b) => (b.index ?? 0) - (a.index ?? 0))) {
+            const unit = buyPrice(e.def, d) || 0;
+            for (let n = 0; n < e.count; n++) {
+                this._addToInventory(e.def);
+                if (e.source === 'contents') this._takeFromContainer(npc, e.index);
+                else                         this._buybackRecord(npc, e.def.id, 'refund', unit);
+            }
+        }
+
+        // Disposition last, so a flip fires against a world that already settled.
+        if (R.points !== 0 && npc.disposition != null) applyDispositionDelta(npc, R.points);
+
+        this._logOffer(npc, R, { given, taken, gold });
+        this._offer = { ...emptyOffer(), scroll: this._offer.scroll, selection: null };
+
+        // A committed offer can turn the partner hostile -- sewer fare does
+        // exactly that. Do not leave the player standing in an offer window
+        // belonging to someone now chasing them.
+        if (isHostile(npc) || !npc.entity || !npc.entity.isAlive()) { this._closeOffer(); return; }
+
+        audio.playSfx('menu-confirm');
+        this._render();
+    }
+
+    // One bracketed sentence in house voice, naming what actually moved -- then
+    // the sentence the surplus was bought for.
+    //
+    // itemUnspent / goldUnspent / goldRefusedPoints were carried nine tasks on
+    // the strength of a log line that did not exist, and the standing ruling was
+    // write the lines or cut the fields. These are the lines. They are reported
+    // separately because they differ in KIND: unspent gold is money the NPC
+    // pocketed for nothing, unspent item value is fondness they had no room
+    // left to feel, and refused gold is gold that reached a ceiling it is not
+    // allowed to cross.
+    _logOffer(npc, R, { given, taken, gold }) {
+        const units = (list) => list.reduce((n, e) => n + e.count, 0);
+        const gave = units(given), took = units(taken);
+        const out = [];
+        if (gave) out.push(`${gave} item${gave > 1 ? 's' : ''}`);
+        if (gold > 0) out.push(`${gold} GP`);
+        const back = [];
+        if (took) back.push(`${took} item${took > 1 ? 's' : ''}`);
+        if (gold < 0) back.push(`${-gold} GP`);
+
+        // A chest is not handed anything -- "You hand crate nothing for 2 items"
+        // is grammatical and still wrong. You take FROM a container.
+        const deal = npc._container
+            ? `[You take ${back.join(' and ') || 'nothing'} from the ${npc.type}.`
+            : back.length
+                ? `[You hand ${npc.type} ${out.join(' and ') || 'nothing'} for ${back.join(' and ')}.`
+                : `[You hand ${npc.type} ${out.join(' and ')}.`;
+        const mood = R.points > 0 ? ` Disposition +${R.points}.]`
+                   : R.points < 0 ? ` They take it, and remember. Disposition ${R.points}.]`
+                   : `]`;
+        this._log(deal + mood, 'transition');
+
+        // These three fire on CONDITIONS, not on the raw unspent fields.
+        //
+        // itemUnspent and goldUnspent are non-zero on almost every offer, because
+        // goodwill rounds DOWN and the remainder that did not buy a whole point
+        // is "unspent". Printing "already as fond of you as he can be" off that
+        // said it to a merchant sitting at 76 of 100 -- the sentence is about the
+        // CEILING, so it has to ask about the ceiling.
+        if (R.goldRefusedPoints > 0) {
+            // Gold reached a threshold it is not allowed to carry them across.
+            // Distinct from having no room at all: they would still warm to a
+            // GIFT, just not to money.
+            this._log(`[${npc.type} takes the gold, but it buys nothing more. Some things aren't for sale.]`);
+        } else if (gold > 0 && R.fromGold === 0 && R.points >= 0) {
+            // Money changed hands and bought no goodwill whatsoever.
+            this._log(`[${npc.type} pockets the gold. It buys nothing he wants.]`);
+        }
+        if (R.itemUnspent > 0 && npc.disposition != null && R.projected >= dispositionCeil(npc)) {
+            this._log(`[${npc.type} is already as fond of you as he can be.]`);
+        }
     }
 
     // (Phase 6c) A 1s re-render loop while a vendor window is open, so the buyback
