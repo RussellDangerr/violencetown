@@ -1102,6 +1102,50 @@ describe('disposition decay and the open offer screen', () => {
     });
 });
 
+// ── reaching a chest at all (Task 16) ─────────────────────────────
+
+describe('_targetAt resolves containers', () => {
+    const targetAt = liveMethod('_targetAt', 'x, y');
+    const world = (over = {}) => stubGame({
+        enemies: [], groundItems: [], examinables: [], containers: [],
+        map: { getTile: () => 0, isWalkable: () => true },
+        ...over,
+    });
+    const crate = { type: 'crate', x: 6, y: 5, contents: ['rock'] };
+
+    test('a chest tile is a target — it was not one before, so touch could not open it', () => {
+        const g = world({ containers: [crate] });
+        const t = targetAt.call(g, 6, 5);
+        assert.ok(t, 'a chest tile still resolves to nothing');
+        assert.equal(t.container, crate);
+    });
+
+    test('bare ground is still not a target', () => {
+        assert.equal(targetAt.call(world(), 6, 5), null);
+    });
+
+    test('the container rides alongside an NPC rather than replacing them', () => {
+        const npc = { x: 6, y: 5, entity: alive, type: 'gus' };
+        const t = targetAt.call(world({ containers: [crate], enemies: [npc] }), 6, 5);
+        assert.equal(t.npc, npc);
+        assert.equal(t.container, crate);
+    });
+
+    test('a chest somewhere else is not picked up', () => {
+        const t = targetAt.call(world({ containers: [crate] }), 9, 9);
+        assert.equal(t, null);
+    });
+
+    test('the Open verb actually opens the container', () => {
+        // A source pin: _fireResolver is a large switch with a dozen free
+        // variables, so lifting it whole to exercise one case costs more than it
+        // proves. The behaviour was verified in the live game -- tapping a crate
+        // opens the offer screen on its shim.
+        assert.ok(/case 'open':\s+if \(t\.container\) this\._openContainer\(t\.container\);/.test(mainSrc),
+            "the 'open' verb no longer reaches _openContainer");
+    });
+});
+
 // ── the wiring itself, asserted against the source ──────────────────────────
 //
 // These are source-level because the paths they protect live in a keydown

@@ -395,6 +395,10 @@ export function targetVerbs(target, game) {
   // pointer-model slice). Examine + Throw are rangeless. (Supersedes the old
   // offer-time adjacency gate — walking now prevents the reach-across-map grab.)
   if (target.item) V.push({ key: 'take', label: 'Take', color: '#4f9b4a', text: '#effbe9', resolver: 'take', needsAdjacent: true });
+  // A container's tile is never walkable, so Open carries needsAdjacent and the
+  // fire path stops BESIDE it — the same path-then-act the car already uses.
+  // Until this existed, bumping was the only way in and touch had none.
+  if (target.container) V.push({ key: 'open', label: 'Open', color: '#9a7b4f', text: '#f7efe2', icon: '\u25a1', resolver: 'open', needsAdjacent: true });
   return V.sort((a, b) => (a.label < b.label ? -1 : a.label > b.label ? 1 : 0));
 }
 
@@ -404,11 +408,11 @@ export function targetVerbs(target, game) {
 // re-ordered by CONVENTION: the natural default action on top, then other verbs,
 // then Examine, then a Cancel row at the bottom. (`Walk here` + path-then-act
 // arrive with the pointer-model slice; not present yet.)
-const TARGET_VERB_RANK = { hit: 0, talk: 0, take: 0, trade: 20, bribe: 30, throw: 40, examine: 90 };
+const TARGET_VERB_RANK = { hit: 0, talk: 0, take: 0, open: 0, trade: 20, bribe: 30, throw: 40, examine: 90 };
 
 // The default verb for a target — the top-of-list / bare-tap action, chosen by
 // TYPE independent of range: item→Take, hostile NPC→Hit, friendly-with-dialogue
-// →Talk, else Examine. Returns the full verb object (or null).
+// →Talk, container→Open, else Examine. Returns the full verb object (or null).
 export function defaultVerb(target, game) {
   if (!target) return null;
   const verbs = targetVerbs(target, game);
@@ -416,6 +420,7 @@ export function defaultVerb(target, game) {
   const hostile = isHostile(npc);
   const key = target.item ? 'take'
     : npc ? (hostile ? 'hit' : (npc.dialogueId ? 'talk' : 'examine'))
+    : target.container ? 'open'
     : 'examine';
   return verbs.find(v => v.key === key) || verbs.find(v => v.key === 'examine') || verbs[0] || null;
 }

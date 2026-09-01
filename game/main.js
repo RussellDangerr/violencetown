@@ -2685,6 +2685,7 @@ class Game {
     _targetAt(x, y) {
         const npc = (this.enemies || []).find(e => e.entity.isAlive() && e.x === x && e.y === y);
         const item = (this.groundItems || []).find(gi => gi.x === x && gi.y === y);
+        const container = (this.containers || []).find(c => c.x === x && c.y === y);
         let examinable = (this.examinables || []).find(e => e.x === x && e.y === y);
         // The town car is a 2x2 block of non-walkable tiles (id 19) but its
         // examinable is a single point. Tapping ANY of its four tiles resolves to
@@ -2693,8 +2694,9 @@ class Game {
         if (!npc && !item && !examinable && this.map.getTile(x, y) === 19) {
             examinable = (this.examinables || []).find(e => e.id === 'car') || null;
         }
-        if (!npc && !item && !examinable) return null;
-        return { x, y, npc: npc || null, item: item || null, examinable: examinable || null };
+        if (!npc && !item && !examinable && !container) return null;
+        return { x, y, npc: npc || null, item: item || null, examinable: examinable || null,
+                 container: container || null };
     }
 
     // (Target List) Open the RuneScape-style verb list on a target — same target
@@ -2840,9 +2842,11 @@ class Game {
                 const itemDef = t.item && t.item.def;
                 const tier = itemDef ? itemTier(itemDef) : null;
                 const itemTxt = itemDef && `[${itemDef.name || t.item.type} (${tier.name}). ${itemDef.description || ''}]`;
+                const chest = t.container;
                 const txt = (t.examinable && t.examinable.text)
                     || (npc && `[${(npc.name || npc.type)}. ${isHostile(npc) ? 'Looks like trouble.' : 'Minding their own business.'}]`)
                     || itemTxt
+                    || (chest && `[A ${chest.type}. ${(chest.contents || []).length ? 'Something rattles inside.' : 'Empty.'}]`)
                     || '[Nothing worth examining.]';
                 this._log(txt);
                 if (t.examinable) this.emitGameEvent('examine', { targetId: t.examinable.id });
@@ -2862,6 +2866,7 @@ class Game {
             case 'hit':   if (npc) { this.combatAttack(npc, this.equipment.weapon.damage, { type: this.equipment.weapon.damageType }); this._advanceWorld(); this._render(); } break;
             case 'throw': { const th = this._resolveThrowable(); if (th) { const msg = resolveThrow(this, th.itemDef, null, th.count, { x: t.x, y: t.y }); if (msg) this._log(msg); this._rockClatter(th.itemDef, t.x, t.y); th.consume(); this._advanceWorld(); } else this._log('[Nothing to throw.]'); this._render(); break; }
             case 'take':  this._takeItemAt(t.x, t.y); this._render(); break;
+            case 'open':  if (t.container) this._openContainer(t.container); break;
             default: this._render();
         }
     }
