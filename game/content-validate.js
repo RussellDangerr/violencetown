@@ -58,9 +58,6 @@ export function validateContent(maps) {
         for (const e of (data.enemies || [])) {
             for (const id of (e.stock || [])) {
                 if (!itemIds.has(id)) P(`${file}: enemy ${e.id || '?'} stocks unknown item '${id}'`);
-                // _buyFromVendor still can't resolve a weapon (pending Task 15) —
-                // warn so authoring one into stock is caught here, not in play.
-                else if (weaponOnlyIds.has(id)) W(`${file}: enemy ${e.id || '?'} stocks weapon '${id}' — the vendor/chest buy path doesn't resolve WEAPONS yet (pending Task 15)`);
             }
             for (const id of (e.loadout || []))
                 if (!itemIds.has(id)) P(`${file}: enemy ${e.id || '?'} carries unknown item '${id}'`);

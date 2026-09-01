@@ -38,8 +38,6 @@ import {
     CANVAS_INTERNAL_PX, HIT_SLOP, THROW_RECTS,
     HOTBAR_X_START, HOTBAR_Y, HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_STRIDE, HOTBAR_SLOTS,
     RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, wheelRingR, QUESTLOG_RECT, LOG_MODAL_RECT, targetListRowRect, itemOverlayRowRect,
-    TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BUYBACK_ORIGIN, TRADE_BRIBE_RECT,
-    TRADE_COLS, tradeCellRect,
     EQUIPMENT_MODAL_RECT, EQUIP_SLOT_RECTS,
     DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceBagSlotRects, deviceEquipLayout, deviceRingsLayout,
     inspectorActionRects, gearOptionRects,
@@ -49,8 +47,7 @@ import {
     // the slop policy cannot drift from the rects the renderer drew.
     MODAL_RECT, offerLayout, offerRowIndexAt, offerTraySlotAt, OFFER_ROWS_VISIBLE,
 } from './layout.js';
-import { emptyOffer, commitBlocker, stage, unstage, settledGold, resolveOffer } from './offer.js';
-import { dispositionCeil } from './disposition-curves.js';   // the ceiling the log lines test against   // (offer screen) the basket model
+import { emptyOffer, commitBlocker, stage, unstage, settledGold, resolveOffer } from './offer.js';   // (offer screen) the basket model
 import { canTrade, buyPrice, sellPrice, bribeStepCost, BRIBE_STEP, transferGold, burnGold } from './trade.js'; // pricing + the transaction spine
 import { buildXmbBar, resolveXmbSelection, cycleXmbCategory, cycleXmbItem, xmbCategoryOf, XMB_LABELS } from './xmb.js';
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
@@ -297,12 +294,9 @@ class Game {
         this._logHistory = [];
         this._LOG_HISTORY_MAX = 300;
         this._logModalScroll = 0;
-        this._tradeNpc = null;           // (trade slice 1) the vendor whose shop is open, or null
         this._dialogueNpc = null;        // (Step 4) the NPC we're talking to, or null
         this._dialogueReply = '';        // the NPC's current line shown in the dialogue modal
         this._dialogueCursor = 0;        // selected choice row (keyboard)
-        this._tradeSell = null;          // (trade slice 1) snapshot of the sellable bag while shopping
-        this._tradeCursor = null;        // (menu grammar) keyboard / d-pad cursor over the trade grid
         this._tradeTimer = null;         // (Phase 6c) 1s re-render while trading so the buyback countdown ticks
         // (offer screen) The staged offer. RAM only — serialize() is a hand-written
         // allow-list and these are deliberately not on it: an offer in progress is
@@ -1762,9 +1756,7 @@ class Game {
         if (this.state === STATE.INSPECT) { this._closeInspect(); return; }
         if (this.state === STATE.LOG_MODAL) { this._tapLogModal(pt); return; }
 
-        // The offer screen is fully modal too — route taps to it. NOT _tapTrade:
-        // that reads _tradeNpc, which is null for every offer, and its null arm
-        // closes the window.
+        // The offer screen is fully modal too — route taps to it.
         if (this.state === STATE.TRADE) { this._tapOffer(pt); return; }
         if (this.state === STATE.DIALOGUE) {
             // Touch/pointer drag scrolls the response list when it overflows; a press
@@ -2609,75 +2601,13 @@ class Game {
     // Item is consumed only if accepted (bribery-immune NPCs reject — the
     // player tried to bribe, the NPC refused, the item stays in hand).
 
-    // (Phase 6a) The internal give routine — now only called from the Target
-    // Wheel's Trade verb (which routes a lone-item give straight through) and,
-    // going forward, the Trade window's offer mode (_offerFromTrade). Consumes
-    // the selected slot, delegates disposition math + flip to applyGive, and
-    // advances the world. Kept even though the give VERB/UI died: the MATH is
-    // what folds into trade.
-    _doGive(recipient) {
-        const stack = this.inventory[this.selectedSlot];
-        if (!stack) { this.state = STATE.IDLE; this._render(); return; }
-
-        const result = reactToTransaction(recipient, 'give', { item: stack.itemDef });
-        this._log(result.log);
-
-        if (result.accepted) {
-            this._removeFromSlot(this.selectedSlot);
-        }
-
-        this.selectedSlot = -1;
-        this.state = STATE.IDLE;
-        this._advanceWorld();
-    }
-
-    // Offer the bag item at `slot` to the currently-open trade NPC — the Trade
-    // window's give path (Phase 6a: give folds into trade). Unlike _doGive this
-    // is a PAUSED-MENU action: it does NOT advance the world and it keeps the
-    // window OPEN (like buy/sell), so the player can hand over several items and
-    // watch the mood-face move. Routes through the spine's reactToTransaction seam
-    // (records giftLog + delegates disposition/flip to applyGive), same as _doGive.
-    _offerFromTrade(slot) {
-        const npc = this._tradeNpc;
-        const stack = this.inventory[slot];
-        if (!npc || !stack) return;
-        const def = stack.itemDef;
-        // (§delivery) The active quest stage may be a delivery expecting exactly
-        // this item -> this NPC; then the hand-off IS the objective.
-        const isDelivery = this.questEngine && this.questEngine.expectsDelivery(def.id, npc.id);
-        // Quest items can't be handed away by default — there's no recovery, so
-        // giving one (e.g. the sole car-fix Converter) would soft-lock the quest.
-        // EXCEPTION: a sanctioned delivery. Matches the block on throw/smash/sell.
-        if (def.questItem && !isDelivery) { this._log('[Best hold onto that.]'); this._render(); return; }
-        if (isDelivery) {
-            // Bypass the barter/disposition math — consume it, emit, let the quest react.
-            this._removeFromSlot(slot);
-            this._tradeSell = this._tradeSellList();
-            audio.playSfx('pickup');
-            this._log(`[You hand over the ${String(def.name || def.id).replace(/[\[\]]/g, '')}.]`);
-            this.emitGameEvent('item_given', { npc: npc.id, item: def.id });
-            this._render();
-            return;
-        }
-        const result = reactToTransaction(npc, 'give', { item: def });
-        this._log(result.log);
-        if (result.accepted) {
-            this._removeFromSlot(slot);
-            this._tradeSell = this._tradeSellList();
-            audio.playSfx('pickup');
-            // (§delivery) make every hand-off quest-trackable — the trade-window idiom.
-            this.emitGameEvent('item_given', { npc: npc.id, item: def.id });
-        }
-        this._render();
-    }
-
     // ── Combat wheel (verb-tree: Fight/Trick/Treat/Flight → item → aim) ────────
     //
     // Opened anywhere by Space / the touch ACTION button (no bump-to-attack).
     // The pure model lives in wheel-model.js; this layer wires open/close, the
     // aim reticle, double-tap-repeat, and fire-routing to the existing
     // combat/item resolvers (combatAttack, resolveThrow, resolveUse, addBuff,
-    // _doMove, _openTrade).
+    // _doMove, _openOffer).
 
     _openWheel() {
         if (this.state !== STATE.IDLE) return;
@@ -3344,7 +3274,7 @@ class Game {
                 // (Phase 6a) Trade opens for ANY adjacent NPC now — vendors get
                 // the shop columns, non-vendors get offer mode (hand over items).
                 const npc = aimTile && this.enemies.find(e => e.entity.isAlive() && e.x === aimTile.x && e.y === aimTile.y);
-                this.state = STATE.IDLE;                 // _openTrade requires IDLE
+                this.state = STATE.IDLE;                 // _openOffer requires IDLE
                 // (give-fold, Caelan's call) ANY adjacent NPC opens the window —
                 // vendors get the shop, non-vendors get offer mode. Not gated on
                 // npc.vendor (that would regress the give-into-trade fold).
@@ -3801,9 +3731,10 @@ class Game {
         this._openOffer(shim);     // owns the state change, the cue and the log line
     }
 
-    // Normalize a container's mixed string-or-{type} contents into an array of
-    // item-id strings — the shape the Trade BUY column + _tapTrade read. Unknown
-    // / undefined ids drop out (they'd render nothing anyway).
+    // A container's contents as plain item-id strings. Unknown / undefined ids
+    // drop out. Prefer _containerEntries when you need to act on an entry — this
+    // loses the position, and a position in THIS list is not a position in
+    // chest.contents.
     _containerStock(container) {
         return this._containerEntries(container).map(e => e.def.id);
     }
@@ -5189,38 +5120,6 @@ class Game {
         return this.enemies.find(e => isVendor(e) && manhattan(e.x, e.y, this.playerX, this.playerY) === 1) || null;
     }
 
-    // Open the trade window for `npc`. A pure menu — the world does NOT advance
-    // (trading is paused, like the log modal), so nearby enemies don't get free
-    // turns while you browse.
-    // (Phase 6a) Two modes: a VENDOR opens the shop (buy/sell columns); a
-    // NON-vendor opens OFFER mode (a single satchel→NPC column — hand items over
-    // for 0 GP, the fold-in of the old Give verb). The renderer + _tapTrade
-    // branch on `!npc.vendor`.
-    _openTrade(npc) {
-        if (this.state !== STATE.IDLE) return;
-        if (!npc || !npc.entity || !npc.entity.isAlive()) return;
-        this._tradeNpc = npc;
-        this._tradeSell = this._tradeSellList();   // snapshot the bag layout for stable hit-testing
-        this._tradeCursor = this._clampTradeCursor({ zone: 'buy', index: 0 });   // (menu grammar) cursor on the first cell
-        // (Phase 6c) Vendors keep a reversible BUYBACK ledger, keyed to the NPC +
-        // the moment the window opened. Reuse it while the ~5-min window is still
-        // live (so closing/re-opening within the window keeps your locked prices);
-        // re-lock a fresh one once it's expired. Non-vendors (offer mode) have no
-        // buyback — a gift isn't a purchase.
-        if (npc.vendor) {
-            const now = performance.now();
-            if (!npc._buyback || (now - npc._buyback.openedAt) >= BUYBACK_MS) {
-                npc._buyback = { openedAt: now, entries: {} };   // entries[itemId] = { rebuy:[price…], refund:[price…] }
-            }
-            this._startTradeTimer();   // tick the countdown while the window is open
-        }
-        this.state = STATE.TRADE;
-        audio.playSfx('pickup');                   // a little "ka-ching" cue (reuse the pickup blip)
-        if (npc.vendor) this._log(`[${npc.type} opens the till. "What'll it be?"]`, 'transition');
-        else            this._log(`[You open your satchel to ${npc.type}.]`, 'transition');
-        this._render();
-    }
-
     // ── The offer screen (unified trade/give) ─────────────────────────
 
     // Open the offer screen for `npc`. A pure MENU — no _advanceWorld, so nearby
@@ -5413,8 +5312,8 @@ class Game {
     }
 
     // A quest item may only be staged when the quest actually wants it delivered
-    // here. Reuses the rule and the words the retired give path already had
-    // (main.js `_offerFromTrade`), rather than inventing a second phrasing.
+    // here. Reuses the rule and the words the retired give path had, rather than
+    // inventing a second phrasing.
     //
     // Deliberately NOT gated on baseValue. Exactly three defs in the game have a
     // falsy one -- burger_fries, wererat_fur, catalytic_converter -- and all
@@ -5557,23 +5456,30 @@ class Game {
                    : `]`;
         this._log(deal + mood, 'transition');
 
-        // These three fire on CONDITIONS, not on the raw unspent fields.
+        // Each fires when a surplus existed and bought NOTHING -- never on the
+        // raw unspent field alone. Both halves are load-bearing, and each was
+        // got wrong once.
         //
-        // itemUnspent and goldUnspent are non-zero on almost every offer, because
-        // goodwill rounds DOWN and the remainder that did not buy a whole point
-        // is "unspent". Printing "already as fond of you as he can be" off that
-        // said it to a merchant sitting at 76 of 100 -- the sentence is about the
-        // CEILING, so it has to ask about the ceiling.
+        // `unspent > 0` alone fires on nearly every offer, because goodwill
+        // rounds DOWN and the remainder is unspent: measured, a 40 GP bribe with
+        // room left leaves 1.1 and a two-soap gift leaves 0.68. Testing the raw
+        // gold instead ("money changed hands and bought no points") fires on an
+        // ordinary settled purchase, where the gold IS the price and there is no
+        // surplus at all -- a settled buy has goldUnspent 0, while the same bribe
+        // against a partner at the ceiling has goldUnspent 40.
+        //
+        // So: a surplus existed (`unspent > 0`) AND it converted to nothing
+        // (`from* === 0`). Symmetric across gold and items, which stay separate
+        // because they differ in kind -- pocketed money is not unfelt fondness.
         if (R.goldRefusedPoints > 0) {
             // Gold reached a threshold it is not allowed to carry them across.
             // Distinct from having no room at all: they would still warm to a
             // GIFT, just not to money.
             this._log(`[${npc.type} takes the gold, but it buys nothing more. Some things aren't for sale.]`);
-        } else if (gold > 0 && R.fromGold === 0 && R.points >= 0) {
-            // Money changed hands and bought no goodwill whatsoever.
+        } else if (R.goldUnspent > 0 && R.fromGold === 0) {
             this._log(`[${npc.type} pockets the gold. It buys nothing he wants.]`);
         }
-        if (R.itemUnspent > 0 && npc.disposition != null && R.projected >= dispositionCeil(npc)) {
+        if (R.itemUnspent > 0 && R.fromItems === 0) {
             this._log(`[${npc.type} is already as fond of you as he can be.]`);
         }
     }
@@ -5590,16 +5496,6 @@ class Game {
     }
     _stopTradeTimer() {
         if (this._tradeTimer) { clearInterval(this._tradeTimer); this._tradeTimer = null; }
-    }
-
-    _closeTrade() {
-        if (this.state !== STATE.TRADE) return;
-        this._stopTradeTimer();   // (Phase 6c) stop the buyback-countdown re-render
-        this.state = STATE.IDLE;
-        this._tradeNpc = null;
-        this._tradeSell = null;
-        this._render();
-        this._resumeHeldWalk();
     }
 
     // ── Dialogue (Step 4 — disposition dialogue) ─────────────────────────────
@@ -5727,68 +5623,6 @@ class Game {
         this._render();
     }
 
-    // The player's sellable bag as [{ slot, itemDef }] in slot order. Quest /
-    // worthless items still appear (greyed, priced "—") so the bag reads true.
-    _tradeSellList() {
-        const out = [];
-        for (let i = 0; i < this.inventory.length; i++) {
-            const s = this.inventory[i];
-            if (s) out.push({ slot: i, itemDef: s.itemDef });
-        }
-        return out;
-    }
-
-    // Buy one unit of `itemId` from the open vendor. No turn cost, no confirm.
-    _buyFromVendor(itemId) {
-        const npc = this._tradeNpc;
-        if (!npc) return;
-        const itemDef = ITEMS[itemId];
-        if (!itemDef) return;
-        // (Phase 6b) Container "buy" = TAKE: 0 GP, no disposition/price gate —
-        // move one matching entry out of the chest and into the bag.
-        if (npc._container) {
-            const cont = npc._container;
-            if (!this._addToInventory(itemDef)) { this._log('[Your bag is full — leave something.]'); this._render(); return; }
-            const idx = cont.contents.findIndex(e => (typeof e === 'string' ? e : e && e.type) === itemId);
-            if (idx >= 0) cont.contents.splice(idx, 1);
-            npc.stock = this._containerStock(cont);
-            audio.playSfx('pickup');
-            this._log(`[Took ${itemDef.name}.]`, 'pickup');
-            this._render();
-            return;
-        }
-        // (Phase 6c) BUYBACK — re-buy something you sold this window at the LOCKED
-        // price you got for it, not the current market rate. Consumes a rebuy
-        // credit; bypasses the disposition/price gate (it's an undo, not a deal).
-        const e = this._buybackEntry(npc, itemId);
-        if (e && e.rebuy.length > 0 && this._buybackLive(npc)) {
-            const price = e.rebuy[e.rebuy.length - 1];   // this unit's own locked price (LIFO)
-            if ((this.gold ?? 0) < price) { this._log(`[Not enough GP to buy it back — needs ${price}.]`); this._render(); return; }
-            if (!this._addToInventory(itemDef)) { this._log('[Your bag is full.]'); this._render(); return; }
-            transferGold(this, npc, price, 'rebuy');   // (spine) player pays the vendor back
-            e.rebuy.pop();
-            this._tradeSell = this._tradeSellList();
-            audio.playSfx('pickup');
-            this._log(`[Bought back ${itemDef.name} for ${price} GP.]`, 'pickup');
-            this._render();
-            return;
-        }
-        if (!canTrade(npc.disposition)) { this._log(`[${npc.type} won't deal with you. Sweeten the mood first.]`); this._render(); return; }
-        const price = buyPrice(itemDef, npc.disposition);
-        if (price == null) { this._log(`[${npc.type} won't sell that.]`); this._render(); return; }
-        if ((this.gold ?? 0) < price) { this._log(`[Not enough GP — ${itemDef.name} runs ${price}.]`); this._render(); return; }
-        if (!this._addToInventory(itemDef)) { this._log('[Your bag is full.]'); this._render(); return; }
-        // (fuse: spine + buyback) Move gold through the conserved choke-point into
-        // the vendor's till, AND record a REFUND credit so the buy is reversible
-        // for the window at exactly what you paid (Phase 6c).
-        transferGold(this, npc, price, 'buy');
-        this._buybackRecord(npc, itemId, 'refund', price);
-        this._tradeSell = this._tradeSellList();
-        audio.playSfx('pickup');
-        this._log(`[Bought ${itemDef.name} for ${price} GP.]`, 'pickup');
-        this._render();
-    }
-
     // ── Buyback ledger (Phase 6c) ─────────────────────────────────────────────
     // npc._buyback.entries[itemId] = { rebuy: [price…], refund: [price…] } — a
     // LIFO stack of PER-UNIT locked prices, one per credit. A market BUY pushes a
@@ -5829,159 +5663,6 @@ class Game {
             if (q && q.length > 0) out.push({ itemId: id, price: q[q.length - 1], count: q.length });
         }
         return out;
-    }
-
-    // Sell the bag item at inventory `slot` to the open vendor.
-    _sellToVendor(slot) {
-        const npc = this._tradeNpc;
-        if (!npc) return;
-        const stack = this.inventory[slot];
-        if (!stack) return;
-        const itemDef = stack.itemDef;
-
-        // (Phase 6c) REFUND — sell back something you bought this window for
-        // exactly what you paid, bypassing the market sellPrice + disposition gate.
-        // Consumes a refund credit; it's an undo, not a market sale (so it records
-        // no rebuy credit).
-        const e = this._buybackEntry(npc, itemDef.id);
-        if (e && e.refund.length > 0 && this._buybackLive(npc)) {
-            const refund = e.refund[e.refund.length - 1];   // peek this unit's locked buy price (LIFO)
-            // (spine) vendor pays the refund from its till; only then consume the
-            // credit + item (so a tapped-out till leaves everything untouched).
-            if (!transferGold(npc, this, refund, 'refund')) { this._log(`[${npc.type} can't cover that refund right now.]`); this._render(); return; }
-            e.refund.pop();
-            this._removeFromSlot(slot);
-            this._tradeSell = this._tradeSellList();
-            audio.playSfx('pickup');
-            this._log(`[Refunded ${itemDef.name} for ${refund} GP.]`, 'pickup');
-            this._render();
-            return;
-        }
-
-        // (Phase 6d) SPECIAL BUY — a vendor's `specialBuys` map overrides the
-        // ordinary market: it pays a FIXED price for a listed item that sellPrice()
-        // would otherwise ignore (e.g. a zero-baseValue oddment). The archetype is
-        // Macc paying 500 for the Cataclysmic Converter no ordinary merchant wants.
-        // (pre-prod review) QUEST ITEMS are EXCLUDED: on this build the Converter is
-        // still the sole car-fix item, so a special-buy of it would soft-lock the
-        // quest with no recovery. The guard is `!questItem`, so it AUTO-RE-ENABLES
-        // once the Converter's role changes (stops being a questItem) in chapter two.
-        const special = (!itemDef.questItem && npc.specialBuys) ? npc.specialBuys[itemDef.id] : null;
-        if (special != null) {
-            // (spine) the special-buyer pays from its till; conserve gold.
-            if (!transferGold(npc, this, special, 'sell')) { this._log(`[${npc.type} is tapped out — can't buy that right now.]`); this._render(); return; }
-            this._removeFromSlot(slot);
-            this._buybackRecord(npc, itemDef.id, 'rebuy', special);
-            this._tradeSell = this._tradeSellList();
-            audio.playSfx('pickup');
-            this._log(`[${npc.type} takes the ${itemDef.name.replace(/[\[\]]/g, '')} off your hands for ${special} GP.]`, 'pickup');
-            this._render();
-            return;
-        }
-
-        if (!canTrade(npc.disposition)) { this._log(`[${npc.type} won't deal with you. Sweeten the mood first.]`); this._render(); return; }
-        const price = sellPrice(itemDef, npc.disposition);
-        if (price == null) {
-            this._log(itemDef.questItem ? `[You can't sell the ${itemDef.name.replace(/[\[\]]/g, '')} — you need it.]` : `[${npc.type} won't buy that.]`);
-            this._render();
-            return;
-        }
-        if (!transferGold(npc, this, price, 'sell')) {   // vendor pays from its till
-            this._log(`[${npc.type} is tapped out — can't buy that right now.]`);
-            this._render(); return;
-        }
-        this._removeFromSlot(slot);
-        // (fuse: spine + buyback) Gold already moved vendor→player via transferGold
-        // above (do NOT credit again). Just record a REBUY credit so the sale is
-        // reversible for the window at exactly what you got (Phase 6c).
-        this._buybackRecord(npc, itemDef.id, 'rebuy', price);
-        this._tradeSell = this._tradeSellList();
-        audio.playSfx('pickup');
-        this._log(`[Sold ${itemDef.name} for ${price} GP.]`, 'pickup');
-        this._render();
-    }
-
-    // Slip the vendor gold to nudge their disposition up one BRIBE_STEP. Rising
-    // per-point cost (trade.js bribeStepCost). Disposition caps at +100.
-    _bribeVendor() {
-        const npc = this._tradeNpc;
-        if (!npc) return;
-        const disp = npc.disposition ?? 0;
-        if (disp >= 100) { this._log(`[${npc.type} already loves you. Save your gold.]`); this._render(); return; }
-        const cost = bribeStepCost(disp);
-        if ((this.gold ?? 0) < cost) { this._log(`[Not enough GP to grease the wheels — needs ${cost}.]`); this._render(); return; }
-        transferGold(this, npc, cost, 'bribe');
-        reactToTransaction(npc, 'bribe', { delta: BRIBE_STEP, gold: cost });   // clamps + flips like the wheel bribe
-        audio.playSfx('pickup');
-        this._log(`[You slip ${npc.type} ${cost} GP. Their mood warms.]`, 'transition');
-        this._render();
-    }
-
-    // Touch routing for the open shop: bribe button, a BUY cell, a SELL cell, or
-    // (anywhere outside the panel) close. Cell rects come from layout.tradeCellRect
-    // so they line up exactly with what the renderer drew.
-    _tapTrade(pt) {
-        const npc = this._tradeNpc;
-        if (!npc) { this._closeTrade(); return; }
-        if (!this._pointInRect(pt, TRADE_MODAL_RECT)) { this._closeTrade(); return; }
-        const loot = !!npc._container;   // (Phase 6b) chest — take-only, no bribe/sell
-        if (!loot && this._pointInRect(pt, TRADE_BRIBE_RECT, HIT_SLOP)) { this._tradeActivate('bribe', 0); return; }
-
-        // LEFT column: vendor BUY / chest TAKE (a non-vendor NPC has no stock).
-        const stock = npc.stock || [];
-        for (let i = 0; i < stock.length; i++) {
-            if (this._pointInRect(pt, tradeCellRect(TRADE_BUY_ORIGIN, i), HIT_SLOP)) { this._tradeActivate('buy', i); return; }
-        }
-        if (loot) return;   // a chest has no right column
-
-        const offerMode = !npc.vendor;   // (Phase 6a)
-        if (!offerMode) {
-            const bb = this._buybackList(npc);
-            for (let i = 0; i < bb.length && i < TRADE_COLS; i++) {
-                if (this._pointInRect(pt, tradeCellRect(TRADE_BUYBACK_ORIGIN, i), HIT_SLOP)) { this._tradeActivate('buyback', i); return; }
-            }
-        }
-
-        // RIGHT column: SELL (vendor) or OFFER (non-vendor). Same grid.
-        const sell = this._tradeSell || [];
-        for (let i = 0; i < sell.length; i++) {
-            if (this._pointInRect(pt, tradeCellRect(TRADE_SELL_ORIGIN, i), HIT_SLOP)) { this._tradeActivate('sell', i); return; }
-        }
-    }
-
-    // (menu grammar) The one per-cell trade action — buy / sell / offer / buyback /
-    // bribe — that BOTH a tap (_tapTrade) and a keyboard Confirm route through, so
-    // pointer and keys can never drift.
-    _tradeActivate(zone, index) {
-        const npc = this._tradeNpc; if (!npc) return;
-        const loot = !!npc._container, offerMode = !npc.vendor;
-        if (zone === 'bribe') { if (!loot) this._bribeVendor(); return; }
-        if (zone === 'buy')   { const stock = npc.stock || []; if (stock[index] != null) this._buyFromVendor(stock[index]); return; }
-        if (zone === 'buyback' && !offerMode && !loot) { const bb = this._buybackList(npc); if (bb[index]) this._buyFromVendor(bb[index].itemId); return; }
-        if (zone === 'sell')  { const sell = this._tradeSell || []; if (sell[index]) { if (offerMode) this._offerFromTrade(sell[index].slot); else this._sellToVendor(sell[index].slot); } return; }
-    }
-
-    // (menu grammar) The navigable slot list, in cursor order: BUY cells, then
-    // BUYBACK, then SELL, then the Bribe button (mirrors the on-screen layout).
-    _tradeSlots() {
-        const npc = this._tradeNpc; if (!npc) return [];
-        const loot = !!npc._container, offerMode = !npc.vendor;
-        const slots = [];
-        (npc.stock || []).forEach((_, i) => slots.push({ zone: 'buy', index: i }));
-        if (!loot) {
-            if (!offerMode) this._buybackList(npc).slice(0, TRADE_COLS).forEach((_, i) => slots.push({ zone: 'buyback', index: i }));
-            (this._tradeSell || []).forEach((_, i) => slots.push({ zone: 'sell', index: i }));
-            slots.push({ zone: 'bribe', index: 0 });
-        }
-        return slots;
-    }
-
-    // Snap a (possibly stale, post-transaction) cursor to a valid slot.
-    _clampTradeCursor(c) {
-        const slots = this._tradeSlots();
-        if (!slots.length) return { zone: 'buy', index: 0 };
-        if (c && slots.some(s => s.zone === c.zone && s.index === c.index)) return c;
-        return slots[0];
     }
 
     // ── Log ──────────────────────────────────────────────────────────────────

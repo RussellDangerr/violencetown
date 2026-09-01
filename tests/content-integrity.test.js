@@ -10,6 +10,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { resolveItemDef } from '../game/item-registry.js';
+import { buyPrice } from '../game/trade.js';
 import { join } from 'node:path';
 
 import { validateContent } from '../game/content-validate.js';
@@ -46,27 +48,33 @@ test('a real loadout passes clean', () => {
     assert.ok(!problems.some(p => p.includes('carries unknown item')), problems.join('\n'));
 });
 
-// A weapon id resolves through the same itemIds union as an ITEMS id (the
-// game's own WEAPONS[id] || ITEMS[id]), so it structurally validates clean
-// everywhere. But the vendor/chest buy path (_buyFromVendor) still does a
-// bare ITEMS lookup on `stock` and silently no-ops — unlike loadout and
-// examinable.grants, deliberately left unfixed because Task 15 deletes that
-// whole path rather than patching it. This pins the advisory that closes the
-// authoring trap: stock still validates clean (not a hard problem — nothing
-// is actually dangling), but now WARNS so the gap is caught here, not in play.
-test('a weapon authored into vendor/chest stock validates clean but warns about the buy-path gap', () => {
-    // The warning's premise is that _buyFromVendor still exists and still has
-    // the gap. Task 15 deletes it outright rather than patching it — once
-    // that happens this warning starts naming a function that's gone and
-    // should be deleted too. Fail here instead of going quietly stale.
+// A weapon authored into vendor or chest stock used to validate clean while
+// silently failing in play: the old buy path did a bare ITEMS lookup and
+// no-opped on a weapon, so content-validate carried a WARNING about the gap.
+//
+// The gap is CLOSED. The offer screen builds its rows through _resolveItemDef
+// (WEAPONS || ITEMS), so a stocked weapon is a real, priced, buyable row — and
+// the warning that described the gap went with the path that had it. This test
+// now pins the FIX rather than the advisory.
+test('a weapon authored into vendor/chest stock is fully supported — no problem, no warning', () => {
+    // The retired path must stay retired: if _buyFromVendor comes back, the
+    // bare-ITEMS gap may come back with it.
     const mainSrc = readFileSync(fileURLToPath(new URL('../game/main.js', import.meta.url)), 'utf8');
-    assert.match(mainSrc, /_buyFromVendor\(/, 'the warning names a function that is gone — delete the warning in content-validate.js');
+    assert.ok(!/_buyFromVendor\(/.test(mainSrc),
+        'the bare-ITEMS vendor buy path is back — the weapon-in-stock gap may be back with it');
 
     const { problems, warnings } = validateContent([{ file: 'x-map.json', data: { enemies: [
         { id: 'e1', type: 'Merchant', vendor: true, stock: ['lion_whip'] },
     ] } }]);
     assert.ok(!problems.some(p => p.includes('stocks unknown item')), problems.join('\n'));
-    assert.ok(warnings.some(w => /stocks weapon 'lion_whip'/.test(w) && /stock/.test(w)), warnings.join('\n'));
+    assert.ok(!warnings.some(w => /stocks weapon/.test(w)),
+        'a stocked weapon still warns, but the path that could not resolve it is gone:\n' + warnings.join('\n'));
+
+    // And it really does resolve, at a real price — the thing the warning
+    // existed to say was impossible.
+    const def = resolveItemDef('lion_whip');
+    assert.ok(def && def.baseValue > 0, 'lion_whip does not resolve to a priceable def');
+    assert.ok(buyPrice(def, 40) > 0, 'a stocked weapon cannot be bought');
 });
 
 // loadout and examinable.grants ARE fixed (resolveLoadout, _grantFromExaminable

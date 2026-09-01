@@ -911,15 +911,30 @@ describe('_logOffer - the sentences the unspent fields were kept for', () => {
         assert.match(out.at(-1), /pockets the gold\. It buys nothing he wants\./);
     });
 
-    test('a rounding remainder on an ordinary purchase says nothing', () => {
-        const out = lines({ ...R0, fromGold: 3, goldUnspent: 2, points: 3, projected: 43 },
-                          { given: [], taken: [{ count: 1 }], gold: 20 });
-        assert.equal(out.length, 1, `extra sentence: ${out.slice(1).join(' | ')}`);
+    test('a rounding remainder says nothing - the surplus bought something', () => {
+        // Measured against the live model: a 40 GP bribe with room left leaves
+        // goldUnspent 1.1 and a two-soap gift leaves itemUnspent 0.68. Firing on
+        // `unspent > 0` alone would narrate both.
+        const gold = lines({ ...R0, fromGold: 10, goldUnspent: 1.1, points: 10 },
+                           { given: [], taken: [], gold: 40 });
+        assert.equal(gold.length, 1, `extra sentence: ${gold.slice(1).join(' | ')}`);
+        const item = lines({ ...R0, fromItems: 4, itemUnspent: 0.68, points: 4 },
+                           { given: [{ count: 2 }], taken: [], gold: 0 });
+        assert.equal(item.length, 1, `extra sentence: ${item.slice(1).join(' | ')}`);
+    });
+
+    test('AN ORDINARY SETTLED PURCHASE SAYS NOTHING EXTRA', () => {
+        // The false positive this condition shipped with once: the gold in a
+        // settled purchase is the PRICE, not a surplus, and a settled buy has
+        // goldUnspent 0. Testing the raw gold instead narrated every purchase.
+        const out = lines({ ...R0, fromGold: 0, goldUnspent: 0, points: 0 },
+                          { given: [], taken: [{ count: 1 }], gold: 37 });
+        assert.equal(out.length, 1, `narrated a plain purchase: ${out.slice(1).join(' | ')}`);
     });
 
     test('A GIFT WITH NO ROOM LEFT IS SAID OUT LOUD', () => {
-        // Gated on the CEILING, not on the remainder. puck's ceil is 100.
-        const out = lines({ ...R0, itemUnspent: 20, points: 60, projected: 100 },
+        // At the ceiling the whole item surplus goes unspent and buys 0 points.
+        const out = lines({ ...R0, itemUnspent: 20, fromItems: 0, points: 0 },
                           { given: [{ count: 3 }], taken: [], gold: 0 });
         assert.match(out.at(-1), /already as fond of you as he can be/);
     });
@@ -927,10 +942,10 @@ describe('_logOffer - the sentences the unspent fields were kept for', () => {
     test('a gift with room left does NOT claim they are already as fond as they can be', () => {
         // The line this test exists for: it fired on a merchant sitting at 76 of
         // 100, because itemUnspent is a rounding remainder on nearly every gift.
-        const out = lines({ ...R0, itemUnspent: 14, points: 16, projected: 76 },
+        const out = lines({ ...R0, itemUnspent: 0.68, fromItems: 4, points: 16 },
                           { given: [{ count: 2 }], taken: [], gold: 0 });
         assert.equal(out.length, 1,
-            `claimed a full heart at 76 of 100: ${out.slice(1).join(' | ')}`);
+            `claimed a full heart with room left: ${out.slice(1).join(' | ')}`);
     });
 
     test('GOLD REFUSED AT THE CEILING IS ITS OWN SENTENCE', () => {
@@ -955,10 +970,10 @@ describe('_logOffer - the sentences the unspent fields were kept for', () => {
         assert.equal(out.length, 1);
     });
 
-    test('an untracked partner never gets the ceiling line', () => {
+    test('an untracked partner has no surplus to convert, so says nothing extra', () => {
         const g = stubGame();
         logOffer.call(g, { type: 'stranger', disposition: null },
-            { ...R0, itemUnspent: 20, projected: 0 }, { given: [{ count: 1 }], taken: [], gold: 0 });
+            { ...R0, itemUnspent: 0, fromItems: 0 }, { given: [{ count: 1 }], taken: [], gold: 0 });
         assert.equal(g.logs.length, 1);
     });
 });
@@ -1096,9 +1111,10 @@ describe('disposition decay and the open offer screen', () => {
 describe('the wiring', () => {
     test('_openOffer is the only thing that enters STATE.TRADE', () => {
         const entries = mainSrc.match(/state = STATE\.TRADE/g) || [];
-        // Two: _openOffer, and the retired _openTrade that Task 15 deletes.
-        assert.equal(entries.length, 2,
-            'a new path enters STATE.TRADE without going through _openOffer');
+        // Exactly one now: _openOffer. The retired _openTrade was the second,
+        // and Task 15 deleted it.
+        assert.equal(entries.length, 1,
+            'a path enters STATE.TRADE without going through _openOffer');
         assert.ok(/_openOffer\(shim\)/.test(mainSrc),
             '_openContainer no longer hands its shim to _openOffer');
         assert.ok(!/this\._tradeNpc = \{/.test(mainSrc),

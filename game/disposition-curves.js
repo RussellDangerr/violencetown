@@ -136,12 +136,11 @@ export function goodwillFor(surplus, npc, cap = Infinity) {
 // into an ally for 60 GP.
 //
 // bribeable:false is folded in as the degenerate ceiling: right where the
-// gifts left them, so gold moves nobody. _bribeTarget respects the flag today,
-// _bribeVendor never checks it, so the Ghost Fungus is bribeable through the
-// trade window. She won't stay the only caller: every chest's _openContainer
-// shim (main.js) is bribeable:false, disposition:100, and once Tasks 12-17
-// route container offers through here, chests are the dominant caller of this
-// branch, not the Fungus.
+// gifts left them, so gold moves nobody. The offer screen enforces it too —
+// commitBlocker refuses a SURPLUS to a bribery-immune partner rather than
+// pocketing it for no goodwill. The Ghost Fungus is the shipped case; every
+// chest's shim is also bribeable:false, so containers are the dominant caller
+// of this branch.
 export function splitGoodwill(npc, { itemValue = 0, gold = 0 } = {}) {
     const d0 = dispositionOf(npc);
     const items = goodwillFor(itemValue, npc);

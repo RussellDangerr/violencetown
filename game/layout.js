@@ -17,7 +17,7 @@ import { unlockedSlots, adjacentPairs, HANDS } from './rings.js';
 export const CANVAS_INTERNAL_PX = 608;   // mirrors data.js CANVAS_PX
 export const HIT_SLOP = 6;               // tap-zone expansion (Apple 44pt min target)
 
-// The one modal bezel. LOG_MODAL_RECT, TRADE_MODAL_RECT, EQUIPMENT_MODAL_RECT and
+// The one modal bezel. LOG_MODAL_RECT, EQUIPMENT_MODAL_RECT and
 // DEVICE_RECT were four separate literals of this identical rect; they now alias
 // it, so the panel can be retuned in one place. Frozen because that sharing means
 // a stray `.w =` on any one of the five names would silently retune all five.
@@ -167,25 +167,14 @@ export function targetListRowRect(i) {
   return { x: TARGET_LIST_RECT.x + 10, y: TARGET_LIST_RECT.y + 44 + i * TARGET_LIST_ROW_H, w: TARGET_LIST_RECT.w - 20, h: TARGET_LIST_ROW_H - 4 };
 }
 
-// ── Trade window (Puck's shop — trade Slice 1) ──
-// (drawn by renderer._drawTradeModal, hit-tested by main._tapTrade). Two 3-wide
-// grids side by side: BUY (the vendor's stock) on the left, SELL (the player's
-// bag) on the right. One cell-rect helper feeds both the draw and the hit-test.
-export const TRADE_MODAL_RECT = MODAL_RECT;
-// The dialogue window is sized to its content at draw time (bottom-anchored, grows
-// with the option count) — see renderer._drawDialogueModal, which stashes the live
-// rect on this._dialogueRect for the ✕ / tap-outside menu grammar.
-export const TRADE_COLS       = 3;
-export const TRADE_CELL_W     = 64;
-export const TRADE_CELL_H     = 72;
-export const TRADE_COL_STRIDE = 72;
-export const TRADE_ROW_STRIDE = 80;
-export const TRADE_BUY_ORIGIN  = { x: 52,  y: 156 };
-export const TRADE_SELL_ORIGIN = { x: 320, y: 156 };
-// (Phase 6c) BUYBACK row — sold items you can re-buy at the locked price, drawn
-// below the two grids and above the bribe button. One row of up to TRADE_COLS.
-export const TRADE_BUYBACK_ORIGIN = { x: 52, y: 416 };
-export const TRADE_BRIBE_RECT  = { x: 52, y: 506, w: 200, h: 34 };
+// The dialogue window has no constant here on purpose: it is sized to its
+// content at draw time (bottom-anchored, growing with the option count) — see
+// renderer._drawDialogueModal, which stashes the live rect on this._dialogueRect
+// for the ✕ / tap-outside menu grammar.
+//
+// The trade window's two-grid geometry lived here until the offer screen
+// replaced it. TRADE_MODAL_RECT went with it: it was an alias of MODAL_RECT and
+// nothing named it any more.
 
 // ── Equipment screen (Stage 3 — read-only Vitruvian dress-up) ──
 // (drawn by renderer._drawEquipmentModal, hit-tested by main._tapDevice via deviceEquipLayout).
@@ -213,18 +202,6 @@ export const EQUIP_SLOT_RECTS = [
     { key: 'bottom', label: 'FEET',    x: 452, y: 380, w: 96, h: 48, zone: { fx: 0.5,  fy: 0.98 } }, // below (right stack)
     { key: 'weapon', label: 'WEAPON',  x: 256, y: 480, w: 96, h: 48, zone: { fx: 0.5,  fy: 0.55 } }, // bottom-center
 ];
-
-// Rect for the `index`-th cell of a grid anchored at `origin` (BUY or SELL).
-export function tradeCellRect(origin, index) {
-    const col = index % TRADE_COLS;
-    const row = Math.floor(index / TRADE_COLS);
-    return {
-        x: origin.x + col * TRADE_COL_STRIDE,
-        y: origin.y + row * TRADE_ROW_STRIDE,
-        w: TRADE_CELL_W,
-        h: TRADE_CELL_H,
-    };
-}
 
 // (menu grammar) The always-visible ✕ / Back chip — a ~30px tappable target at a
 // panel's top-right inner corner, the device-agnostic exit on every Menu. Drawn by
