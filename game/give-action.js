@@ -19,6 +19,7 @@
 
 import { isHostile, isSewerDweller } from './ai.js';
 import { poitionBuff } from './items.js';
+import { DISPOSITION_MIN, dispositionCeil } from './disposition-curves.js';   // one ceiling, three writers
 
 // Tuning constant — controls how much disposition each unit of `values`
 // shifts. Currently 5 (so values:{soap:8} means soap gives +40 disposition).
@@ -38,12 +39,29 @@ const SEWER_FARE_PENALTY_BASE = 40;
 // without mutating anything. Used by Phase B's hover-preview UI to show
 // the player the consequence before they commit.
 
+// Every write to `disposition` in this file goes through here.
+//
+// The ceiling is the NPC's OWN, not a flat 100. The Fungus King is authored
+// `disposition: -80, flipThreshold: 200`, so a flat clamp made him permanently
+// unflippable -- he could never reach his own threshold, which is exactly the
+// outcome the meter's per-NPC range was introduced to prevent. dispositionCeil
+// is max(100, flipThreshold ?? 30), so for every other NPC in the game it is
+// exactly 100 and nothing changes.
+//
+// previewGive was UNCLAMPED before this, so an ordinary NPC could be gifted
+// past 100 into a range no band, no meter and no flip test could see.
+function clampDisposition(recipient, value) {
+    return Math.max(DISPOSITION_MIN, Math.min(dispositionCeil(recipient), value));
+}
+
 export function previewGive(item, recipient) {
+
+
     const itemId = item?.id;
     const valueWeight = recipient.values?.[itemId] ?? 0;
     const shift = valueWeight * SHIFT_MULTIPLIER;
     const current = recipient.disposition ?? 0;
-    const newDisposition = current + shift;
+    const newDisposition = clampDisposition(recipient, current + shift);
     const threshold = recipient.flipThreshold ?? 30;
     const wasAtOrAboveThreshold = current >= threshold;
     const wouldFlip = newDisposition >= threshold && !wasAtOrAboveThreshold;
@@ -190,7 +208,7 @@ function applySewerFareGive(item, recipient) {
     const wouldBeCredit = weight * SHIFT_MULTIPLIER;
     const penalty = -(SEWER_FARE_PENALTY_BASE + wouldBeCredit);
     const current = recipient.disposition ?? 0;
-    const newDisposition = Math.max(-100, Math.min(100, current + penalty));
+    const newDisposition = clampDisposition(recipient, current + penalty);
     recipient.disposition = newDisposition;
 
     const threshold = recipient.flipThreshold ?? 30;
@@ -223,13 +241,13 @@ function applySewerFareGive(item, recipient) {
 // ── applyDispositionDelta ───────────────────────────────────────────────────
 //
 // Dialogue-side disposition shift: nudge `recipient`'s disposition by a flat
-// `delta` (a conversation choice, not a gift), clamped to [-100, 100]. Fires
+// `delta` (a conversation choice, not a gift), clamped to the recipient's own
 // the same flip-to-ally threshold logic as applyGive when crossed upward.
 // Returns { newDisposition, flipped }.
 
 export function applyDispositionDelta(recipient, delta) {
     const current = recipient.disposition ?? 0;
-    recipient.disposition = Math.max(-100, Math.min(100, current + (delta || 0)));
+    recipient.disposition = clampDisposition(recipient, current + (delta || 0));
     const threshold = recipient.flipThreshold ?? 30;
     const flipped = recipient.disposition >= threshold && !recipient._wasFlipped;
     if (flipped) { recipient._wasFlipped = true; applyFlip(recipient); }
