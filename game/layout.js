@@ -432,6 +432,14 @@ export function offerLayout(panelRect) {
     const px = P.x + 8, pr = P.x + P.w - 8;
     const gutter = 16;                       // gutter MUST exceed 2 * HIT_SLOP
     const colW = (pr - px - gutter) / 2;
+    // YOUR satchel on the LEFT, their goods on the RIGHT -- Caelan's call,
+    // 2026-09-01. It puts each column directly above the tray it stages into
+    // (yours -> YOU GIVE on the left, theirs -> YOU TAKE on the right), so both
+    // staging motions are vertical instead of crossing the panel diagonally,
+    // while the trays keep reading YOU GIVE -> YOU TAKE left-to-right in the
+    // same order as the ledger's GIVING / TAKING. The cost is the Fallout-3
+    // convention of the vendor's stock on the left, which he traded away
+    // knowingly.
     const leftX = px, rightX = px + colW + gutter;
 
     const listY = P.y + 102;
@@ -465,10 +473,10 @@ export function offerLayout(panelRect) {
         // header at 94 ran to 106 and bit 4px into the first row at 102 -- the
         // staged row's border clipped the header's descenders.
         colHeadY:           P.y + 86,
-        theirs:             rows(leftX),
-        yours:              rows(rightX),
-        theirsScrollTrack:  { x: leftX + colW - 5,  y: listY, w: 3, h: listH },
-        yoursScrollTrack:   { x: rightX + colW - 5, y: listY, w: 3, h: listH },
+        yours:              rows(leftX),
+        theirs:             rows(rightX),
+        yoursScrollTrack:   { x: leftX + colW - 5,  y: listY, w: 3, h: listH },
+        theirsScrollTrack:  { x: rightX + colW - 5, y: listY, w: 3, h: listH },
         trayLabelY:         P.y + 346,
         giveTray:           tray(leftX),
         takeTray:           tray(rightX),

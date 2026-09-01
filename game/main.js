@@ -3632,6 +3632,14 @@ class Game {
         for (const e of this.enemies) {
             if (!e || !e.entity || !e.entity.isAlive()) continue;
             if (e._ally) continue;                 // loyalty is locked once flipped
+            // The partner whose offer screen is OPEN holds still (Caelan's call,
+            // 2026-09-01). The rest of the town keeps drifting, so the world is
+            // still alive while you shop -- but the prices in front of you, and
+            // whether MAKE THE OFFER is armed, cannot move under your hands
+            // while you are deciding. Without this a vendor set to +40 reads +39
+            // within seconds and a basket staged at one disposition can become
+            // blocked at another.
+            if (e === this._offerNpc) continue;
             const d = e.disposition;
             if (d == null || d === 0) continue;    // no mood tracked / already resting
             const rest = e.restingDisposition ?? 0;

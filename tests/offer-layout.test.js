@@ -65,8 +65,12 @@ test('no cross-group hit rects overlap once expanded by HIT_SLOP', () => {
 
 test('the gutter between the columns exceeds 2 x HIT_SLOP', () => {
   const L = offerLayout(PANEL);
-  const leftRight = L.theirs[0].x + L.theirs[0].w;
-  const gutter = L.yours[0].x - leftRight;
+  // Side-agnostic: which column sits on the left is a design decision that has
+  // already changed once. What must hold is that the GAP between them clears
+  // twice the slop, whichever way round they are.
+  const [left, right] = L.theirs[0].x < L.yours[0].x ? [L.theirs[0], L.yours[0]]
+                                                     : [L.yours[0], L.theirs[0]];
+  const gutter = right.x - (left.x + left.w);
   assert.ok(gutter > 2 * HIT_SLOP,
     `gutter ${gutter} must exceed ${2 * HIT_SLOP} or taps in the gap are ambiguous`);
 });

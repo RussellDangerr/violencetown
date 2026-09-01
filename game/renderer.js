@@ -3267,8 +3267,18 @@ export class Renderer {
         if (R.points !== 0) {
             const lo = Math.min(at(d), at(R.projected)), hi = Math.max(at(d), at(R.projected));
             const up = R.points > 0;
-            ctx.fillStyle = up ? 'rgba(212,185,106,0.5)' : 'rgba(204,68,34,0.45)';
-            ctx.fillRect(lo, mb.y, hi - lo, mb.h);
+            // A REFUSED offer gets the outline without the fill (Caelan's call,
+            // 2026-09-01). Filled, the ghost promises a consequence that is not
+            // going to happen -- drawn identically whether they will take the
+            // bad deal or have just refused it. Hollow, it still shows the size
+            // of what was proposed, which is exactly the reason for the refusal,
+            // without reading as a done thing. The balance figure already blanks
+            // itself when blocked; this is the meter catching up.
+            const blocked = game._offerBlocker ? !!game._offerBlocker() : false;
+            if (!blocked) {
+                ctx.fillStyle = up ? 'rgba(212,185,106,0.5)' : 'rgba(204,68,34,0.45)';
+                ctx.fillRect(lo, mb.y, hi - lo, mb.h);
+            }
             ctx.strokeStyle = up ? UI.gold : UI.hpRed;
             ctx.lineWidth = 1; ctx.setLineDash([2, 2]);
             ctx.strokeRect(lo, mb.y, hi - lo, mb.h);

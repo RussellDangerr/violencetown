@@ -504,6 +504,51 @@ describe('the row accessors', () => {
     });
 });
 
+// ── the open partner holds still ──────────────────────────────────
+
+describe('disposition decay and the open offer screen', () => {
+    const tickDecay = liveMethod('_tickDispositionDecay', '',
+        { DISPOSITION_DECAY_STEP: liveConst('DISPOSITION_DECAY_STEP') });
+
+    const townsfolk = () => ([
+        { type: 'a', disposition: 40, restingDisposition: 0, entity: alive },
+        { type: 'b', disposition: -30, restingDisposition: 0, entity: alive },
+        { type: 'c', disposition: 40, restingDisposition: 0, entity: alive },
+    ]);
+
+    test('the rest of the town keeps drifting toward resting', () => {
+        const g = stubGame({ enemies: townsfolk() });
+        tickDecay.call(g);
+        assert.deepEqual(g.enemies.map(e => e.disposition), [39, -29, 39]);
+    });
+
+    test('the partner whose screen is OPEN holds still', () => {
+        // Caelan's call: the world stays alive while you shop, but the prices in
+        // front of you and whether MAKE THE OFFER is armed cannot move under
+        // your hands while you are deciding.
+        const g = stubGame({ enemies: townsfolk() });
+        g._offerNpc = g.enemies[1];
+        tickDecay.call(g);
+        assert.deepEqual(g.enemies.map(e => e.disposition), [39, -30, 39],
+            'the open partner drifted, or the rest of the town froze with it');
+    });
+
+    test('with no screen open nothing is exempt', () => {
+        const g = stubGame({ enemies: townsfolk(), _offerNpc: null });
+        tickDecay.call(g);
+        assert.deepEqual(g.enemies.map(e => e.disposition), [39, -29, 39]);
+    });
+
+    test('an ally is still exempt, and the exemption is not what freezes the partner', () => {
+        const es = townsfolk();
+        es[0]._ally = true;
+        const g = stubGame({ enemies: es });
+        g._offerNpc = es[2];
+        tickDecay.call(g);
+        assert.deepEqual(es.map(e => e.disposition), [40, -29, 40]);
+    });
+});
+
 // ── the wiring itself, asserted against the source ──────────────────────────
 //
 // These are source-level because the paths they protect live in a keydown
@@ -550,6 +595,27 @@ describe('the wiring', () => {
         const rendererSrc = readFileSync(fileURLToPath(new URL('../game/renderer.js', import.meta.url)), 'utf8');
         assert.ok(/npc\._container \? 0 : buyPrice\(def, d\)/.test(rendererSrc),
             'the partner column no longer prices a container at zero');
+    });
+
+    test('a REFUSED offer gets the ghost outline without the fill', () => {
+        // Filled, the projection promises a consequence that is not going to
+        // happen -- drawn identically whether they will take the bad deal or
+        // have just refused it. A source pin: the fill is a canvas call inside
+        // a draw method, and the behaviour it protects is checked by eye.
+        const rendererSrc = readFileSync(fileURLToPath(new URL('../game/renderer.js', import.meta.url)), 'utf8');
+        assert.ok(/const blocked = game\._offerBlocker \? !!game\._offerBlocker\(\) : false;/.test(rendererSrc),
+            'the meter no longer asks whether the offer is blocked');
+        assert.ok(/if \(!blocked\) \{[\s\S]{0,220}?ctx\.fillRect\(lo, mb\.y, hi - lo, mb\.h\);[\s\S]{0,40}?\}/.test(rendererSrc),
+            'the ghost fill is no longer gated on the offer being unblocked');
+    });
+
+    test('the two goods columns sit above the tray each one stages into', () => {
+        // Caelan's call: YOUR SATCHEL left over YOU GIVE, their goods right over
+        // YOU TAKE, so neither staging motion crosses the panel.
+        const L = offerLayout(MODAL_RECT);
+        assert.equal(L.yours[0].x, L.giveTray[0].x, 'the satchel no longer sits above the give tray');
+        assert.equal(L.theirs[0].x, L.takeTray[0].x, 'their goods no longer sit above the take tray');
+        assert.ok(L.yours[0].x < L.theirs[0].x, 'the satchel is meant to be the LEFT column');
     });
 
     test('the renderer dispatches the offer screen, not the retired modal', () => {
