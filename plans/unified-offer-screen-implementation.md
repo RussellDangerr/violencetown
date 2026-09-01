@@ -59,8 +59,18 @@ this document as advisory and re-grep — every line number the audit checked wa
   and pinned by test.
 
 ### STILL LIVE — errors in the text below
-- **Task 14: `give-action.js` importing `dispositionCeil` from `./offer.js` fails.** The Task 6a
-  split moved it to `./disposition-curves.js`; `offer.js` does not re-export it.
+### FIXED IN TASK 14
+- `give-action.js` now imports `dispositionCeil` from `./disposition-curves.js` (the plan said
+  `./offer.js`, which the 6a split emptied) and clamps **all three** writers to the NPC's own
+  ceiling. The Fungus King is reachable; everyone else is unchanged at 100.
+- `_takeFromContainer` splices the REAL contents index. One normalization (`_containerEntries`)
+  now owns the id-resolution rule and carries `at`.
+- `bribeable === false` refuses a surplus in `commitBlocker`.
+- Every hand-off emits `item_given`, so a sanctioned delivery advances its quest.
+- The `itemUnspent` / `goldUnspent` / `goldRefusedPoints` sentences are written — gated on
+  conditions, not on the raw fields, which fire on nearly every offer as rounding remainders.
+
+### STILL LIVE (Task 15+)
 - **Task 15 says five `this._tradeSell = this._tradeSellList()` assignments. There are nine**
   (and one fewer now that `_openContainer` lost its). Re-grep before deleting. `_tradeSlots`,
   `_clampTradeCursor`, `_tradeActivate`, `_openTrade` and `_tapTrade` are all dead as of Task 13.
@@ -82,6 +92,12 @@ this document as advisory and re-grep — every line number the audit checked wa
   container, so the gold would leave the player and reach nobody.
 - **Task 15: `tests/content-integrity.test.js` asserts `main.js` still contains `_buyFromVendor(`.**
   Deleting it early fails that test.
+- **Task 15's dead list is now larger.** `_openTrade`, `_tapTrade`, `_closeTrade`, `_tradeSlots`,
+  `_clampTradeCursor`, `_tradeActivate`, `_offerFromTrade`, `_tradeSellList` and the `_tradeNpc` /
+  `_tradeSell` / `_tradeCursor` fields are all unreachable as of Task 14. Re-grep rather than
+  trusting any count in this document.
+- **The plan's bag-removal sort was dead and is gone.** `_removeFromSlot` nulls in place; it does
+  not splice. Do not reintroduce it “for safety” — the TAKE loop is the one that needs it.
 
 ### Also worth knowing
 - An `Enemy`'s `disposition` defaults to **`null`**, not 0 — an unauthored NPC hits the
@@ -113,8 +129,9 @@ onward is written directly. Mutation testing stays either way — it is what has
 | 11 · trays, description strip, ledger | ✅ done — the screen draws in full |
 | 12 · open/close, all four exits, the dispatch swap | ✅ **done — the screen OPENS** |
 | 13 · staging, auto-settle, keyboard parity | ✅ **done — the screen WORKS** |
-| 14 · committing the offer | ⏭ **NEXT** |
-| 15–20 | not started |
+| 14 · committing the offer | ✅ **done — the loop CLOSES** |
+| 15 · delete the old trade path | ⏭ **NEXT** |
+| 16–20 | not started |
 
 **The draw layer is complete.** `game/offer.js` (251 lines) + `game/disposition-curves.js` (227) are
 pure; `offerLayout()` returns every rect; `renderer.js` has all five `_drawOffer*` methods and they
