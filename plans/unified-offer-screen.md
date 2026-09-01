@@ -1,7 +1,8 @@
 # The Unified Offer Screen — design spec
 
-**Status:** design approved 2026-08-22. Supersedes the trade-window presentation shipped in
-Chapter Two Phase 6. Implementation plan lives in `plans/unified-offer-screen-implementation.md`.
+**Status:** design approved 2026-08-22; decisions 24–27 added 2026-09-01. Supersedes the
+trade-window presentation shipped in Chapter Two Phase 6. Implementation plan lives in
+`plans/unified-offer-screen-implementation.md`.
 
 **Branch:** `feature/unified-offer-screen` off `dev` (`83bb440`).
 
@@ -738,3 +739,7 @@ not rebuild a deleted verb.
 | 21 | The per-NPC ceiling is real, not display-only — it bounds the meter, the curve, and the committed value alike. | Claude |
 | 22 | Goodwill is capped at the headroom to that ceiling, so a projection can never exceed the bar it is drawn on. | Claude |
 | 23 | Goodwill reports its **unspent** surplus, mirroring resentment's `shortfall`, so "he is already as fond of you as he can be" is sayable. | Claude |
+| 24 | **Your satchel is the LEFT column, their goods the RIGHT** — each sits directly above the tray it stages into, so neither staging motion crosses the panel. Trades away the Fallout-3 convention of the vendor's stock on the left; keeps the ledger's GIVING / TAKING reading order. | Caelan |
+| 25 | **The gold ceiling stands** (§4.3), replacing the memo's +30-per-encounter cap. Structural rather than numeric: no new persisted state, and it closes the six-bribes-for-60-GP flip on the Wererat boss. | Caelan |
+| 26 | **The partner whose screen is open holds still.** The rest of the town keeps drifting on the free-roam heartbeat, but prices and the commit button cannot move under the player's hands mid-decision. | Caelan |
+| 27 | **A refused projection is drawn hollow** — outline, no fill. It keeps its extent, so the player still sees how far over the line they went, without the ghost promising a consequence that is not going to happen. | Caelan |

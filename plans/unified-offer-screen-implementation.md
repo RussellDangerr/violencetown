@@ -139,7 +139,32 @@ Task 12. Also still open: the Task 6 quality re-review (does the container-free-
 a surviving mutant; is `stage`'s `max` pinned or only its effect at one value; did rewriting the
 container test to a gold deficit lose the item-deficit coverage).
 
-### Two design questions for Caelan — both need eyes, not a ruling from me
+### ✅ ALL FIVE OPEN DECISIONS ANSWERED (2026-09-01)
+
+Caelan ruled on every one. Three were code changes and are **done**; two were rulings to record.
+
+1. **Tray motion → swap the COLUMNS.** Your satchel left, their goods right, so each column sits
+   directly above the tray it stages into and neither motion crosses the panel. Done in
+   `offerLayout` (`yours: rows(leftX)`, `theirs: rows(rightX)`, tracks with them).
+2. **Gold ceiling → stands.** §4.3 as built. Decision #7 is no longer open; Task 14 can rely on it.
+3. **Decay while browsing → freeze only the open partner.** `_tickDispositionDecay` skips
+   `this._offerNpc`; the rest of the town keeps drifting. Done.
+4. **Refused projection → outline, no fill.** The ghost keeps its extent but loses its fill when a
+   blocker is live. Done in `_drawOfferHeader`. Verified by pixel: an accepted gift reads
+   `116,101,58` (the exact 0.5 alpha blend of gold over the empty track), a refused lowball reads
+   `168,152,120` — pixel-identical to the bar beneath it.
+5. **The stealth commit `821c806` → leave it.** The file is byte-identical to the copy on
+   `feature/stealth-perception`, so it merges either way. No action.
+
+Spec §14 carries these as decisions of record **24–27**.
+
+> **A verification trap, recorded so it is not re-learned.** The Browser pane does not composite
+> frames while it is hidden, so `getImageData` returns a STALE canvas — three probe rounds read a
+> frame from before the state change and gave a confidently wrong answer. Call `game._render()`
+> **synchronously** immediately before sampling. (Playwright screenshots do not have this problem,
+> but the Playwright MCP is not always connected.)
+
+### Superseded — the questions above, as originally posed
 1. **The tray motion.** The give tray sits under THEIR goods and the take tray under YOUR satchel,
    while staging runs `yours → give` and `theirs → take` — so both interactions move an item
    *diagonally* across the panel. Swapping the trays makes both motions vertical, at the cost of the
