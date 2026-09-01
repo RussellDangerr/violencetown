@@ -77,3 +77,36 @@ export function rockClatter(enemies, x, y) {
     e.state = 'chasing';
   }
 }
+
+// ── kitChoice — spend what you carry before you spend gold ───────────────────
+//
+// The decision half of an enemy using its own kit. Pure, and ai.js is a LEAF, so
+// the valuation is INJECTED (`healValueOf`) rather than imported — items.js owns
+// what an item does; this owns only when and which.
+//
+// The floor sits ABOVE HEAL_HP_FLOOR on purpose: an enemy reaches for the
+// supplies it is already carrying before it buys HP at the peg with gold. That
+// ordering is what makes the kit visible in play — the nameplate's pips drop as
+// it eats, and Law 6f's "the unused kit drops on death" finally means something,
+// because some of it gets used.
+export const KIT_HP_FLOOR = 70;   // at or below this, drink before you swing
+
+export function kitChoice(hp, maxHp, defs, healValueOf, alreadyHealing = false) {
+    if (!defs || !defs.length) return null;
+    if (hp >= maxHp) return null;       // nothing to heal
+    if (hp > KIT_HP_FLOOR) return null; // not hurt enough to bother
+    // Do not double-dose. Found in live play: a kitted enemy ate three items on
+    // three consecutive turns, burning a mushroom while the sludge sack it had
+    // just drunk was still regenerating it. Waiting for the dose to finish looks
+    // smarter AND leaves more of the kit on the corpse — which is Law 6f's whole
+    // reward for rushing an enemy down instead of letting it settle in.
+    if (alreadyHealing) return null;
+
+    let best = null;
+    for (let i = 0; i < defs.length; i++) {
+        const heal = healValueOf(defs[i]) || 0;
+        if (heal <= 0) continue;                    // inedible, or poison to this drinker
+        if (!best || heal > best.heal) best = { index: i, def: defs[i], heal };
+    }
+    return best;
+}

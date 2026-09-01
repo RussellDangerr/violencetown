@@ -22,7 +22,9 @@
 import { manhattan, chebyshev } from './utils.js';
 import { getGreedyStep, stepEntity } from './pathing.js';
 import { perceives, nextAwareness, VERDICT } from './perception.js';
-import { healPurchase } from './ai.js';
+import { healPurchase, kitChoice, isSewerDweller } from './ai.js';
+import { ITEMS, kitHealValue, applyKitItem } from './items.js';
+import { WEAPONS } from './weapons.js';
 import { burnGold } from './trade.js';
 
 // ── Leash tuning ─────────────────────────────────────────────────────────────
@@ -278,6 +280,40 @@ export function tickNpcState(game, npc, clock = game.turn) {
             if (npc._spunTurns > 0) {
                 npc._spunTurns--;
                 break;
+            }
+
+            // Law 6f — SPEND WHAT YOU CARRY BEFORE YOU SPEND GOLD. The kits have
+            // been authored and priced onto the nameplate since the gold standard
+            // shipped, but nothing ever consumed them: the systems audit lists
+            // enemy kits among the systems that never execute because "the enemy
+            // is dead before its second turn". With fight length re-roled to
+            // TTK 5-8 there is finally a middle to a fight to spend them in.
+            //
+            // Deliberately ABOVE the heal-purchase block: an enemy reaches into
+            // its own pack before it buys HP at the peg. Eating IS the turn, same
+            // as buying, and the item leaves the loadout — so the nameplate's pips
+            // drop as it eats and Law 6f's "the unused kit drops on death" finally
+            // means something, because some of it got used.
+            //
+            // Weapons-first resolution mirrors Game._resolveItemDef: a loadout may
+            // legally hold a weapon and a bare ITEMS lookup silently drops it.
+            // Collapses onto item-registry.js's resolveItemDef when the offer
+            // screen lands.
+            const kitDefs = (npc.loadout ?? []).map(
+                x => (typeof x === 'string' ? (WEAPONS[x] || ITEMS[x] || null) : x));
+            const dweller = isSewerDweller(npc);
+            const pick = kitChoice(
+                npc.entity.hp, npc.entity.maxHp, kitDefs,
+                (d) => kitHealValue(d, dweller),
+                (npc.buffs ?? []).some(b => (b.dmg ?? 0) < 0));   // already regenerating?
+            if (pick && applyKitItem(pick.def, npc, dweller)) {
+                npc.loadout = (npc.loadout ?? []).filter((_, i) => i !== pick.index);
+                messages.push({
+                    text: `[${npc.name ?? npc.type} digs out ${pick.def.name} and uses it.]`,
+                    sourceEnemy: npc,
+                    category: 'combat',
+                });
+                break;   // eating IS the turn
             }
 
             // Law 6a/6b (plans/gold-standard-design.md): a hurt, solvent enemy
