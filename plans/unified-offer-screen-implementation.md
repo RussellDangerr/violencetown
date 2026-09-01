@@ -79,7 +79,13 @@ this document as advisory and re-grep — every line number the audit checked wa
   through `_resolveItemDef`), so the `content-validate` warning was deleted and its test now pins
   the fix instead of the advisory.
 
-### STILL LIVE (Task 16+)
+### FIXED IN TASK 16
+- Containers are targets with an Open verb; a bare tap walks adjacent and opens them.
+- **`pathing.js` did NOT need changing**, though Task 16 lists it. `findPath` already takes
+  `{ adjacent: true }`, which never walks onto the target tile — so `stepFree` keeps blocking the
+  chest and no second approach helper was needed.
+
+### STILL LIVE (Task 17+)
 - **Task 15 says five `this._tradeSell = this._tradeSellList()` assignments. There are nine**
   (and one fewer now that `_openContainer` lost its). Re-grep before deleting. `_tradeSlots`,
   `_clampTradeCursor`, `_tradeActivate`, `_openTrade` and `_tapTrade` are all dead as of Task 13.
@@ -137,8 +143,9 @@ onward is written directly. Mutation testing stays either way — it is what has
 | 13 · staging, auto-settle, keyboard parity | ✅ **done — the screen WORKS** |
 | 14 · committing the offer | ✅ **done — the loop CLOSES** |
 | 15 · delete the old trade path | ✅ **done — 600 lines out** |
-| 16 · chests reachable by tap | ⏭ **NEXT** |
-| 17–20 | not started |
+| 16 · chests reachable by tap | ✅ done |
+| 17 · hostility trap + stranded stock | ⏭ **NEXT** |
+| 18–20 | not started |
 
 **The draw layer is complete.** `game/offer.js` (251 lines) + `game/disposition-curves.js` (227) are
 pure; `offerLayout()` returns every rect; `renderer.js` has all five `_drawOffer*` methods and they
