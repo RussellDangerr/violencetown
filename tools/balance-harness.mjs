@@ -26,7 +26,26 @@ export const GOLDEN_PATH = path.join(__dirname, 'balance-golden.txt');
 
 // ── Constants (Law 4 / Law 3) ────────────────────────────────────────────────
 export const REFERENCE_DAMAGE = 20; // act-1 geared reference (Ray Gun tier)
-export const ARMOR_CAP = 10;        // half reference; puzzle walls are exempt (Law 3)
+// Law 3 armor ceiling (raised 10 -> 20, Caelan 2026-08-24) so an elite can reach
+// the audit's ttk_informed 5-8. Read the shape of the curve before authoring near
+// the top of it, because flat subtraction is not linear as armor nears the lazy
+// reference damage of 20:
+//
+//   armor |  lazy (20 dmg)  |  informed (40 dmg)
+//       0 |        5        |        3
+//      +6 |        8        |        3
+//     +10 |       10        |        4
+//     +15 |       20        |        4
+//     +20 |      100        |        5     <-- ttk_informed 5 costs a 100-turn lazy fight
+//
+// So [-90, +10] remains the DIFFICULTY band: fights that get harder. Everything
+// above +10 is a GATE band: max(1, hit - armor) floors a lazy loadout to 1 damage,
+// which reads to the player (correctly) as "impossible until I come back with
+// something better." That is the puzzleWall idea from the systems audit's §5.3,
+// and an enemy authored up there should be designed as a lock with a key, never
+// as a tough fight.
+export const ARMOR_CAP = 20;        // puzzle walls are exempt entirely (Law 3)
+export const ARMOR_DIFFICULTY_CAP = 10;   // above this is a gate, not a difficulty step
 
 // The TTD baseline — the unarmored reference player. Nothing grants player armor
 // today; the day a ring does, this is the grep hit.
@@ -172,6 +191,12 @@ export function lintEntity(e) {
     // Armor sanity (Law 3): regular enemies live in [-90, ARMOR_CAP] — the
     // fragility stops bottom out at -80 and the cap is half the reference
     // weapon; only a declared puzzleWall may sit outside that band.
+    // Above the DIFFICULTY cap but inside the band: legal, and loud on purpose.
+    // A lazy loadout does 1 damage up here, so the enemy is a lock, not a fight —
+    // it needs a key the player can find, or it is just a wall with no door.
+    if (!e.puzzleWall && e.armor > ARMOR_DIFFICULTY_CAP && e.armor <= ARMOR_CAP) {
+        flags.push(`${key} Law 3 GATE — armor ${e.armor} is above the difficulty cap ${ARMOR_DIFFICULTY_CAP}: a lazy loadout does 1 damage. Design it as a lock with a key, or mark it puzzleWall.`);
+    }
     if (!e.puzzleWall && (e.armor > ARMOR_CAP || e.armor < ARMOR_FLOOR)) {
         flags.push(`${key} Law 3 — armor ${e.armor} outside [${ARMOR_FLOOR}, ${ARMOR_CAP}]`);
     }

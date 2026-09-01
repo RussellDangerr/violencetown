@@ -53,9 +53,32 @@ before you read the PR.
   player — `max(1, hit − armor)` needed **no code change** to go negative; a negative armor just
   ADDS damage. Standard fragility stops, vs the 20-damage reference: **−80** one-shot
   (vermin/townsfolk), **−30** TTK 2 (fodder fighters), **−15** TTK 3, **−5** TTK 4, **0** TTK 5
-  (standard), **+5…+10** elite. Range: regular enemies live in **[−90, +10]**
-  (`ARMOR_FLOOR`/`ARMOR_CAP`, `tools/balance-harness.mjs:95` / `:28`); `lintEntity` flags any armor
-  outside that band without a declared `puzzleWall` (`tools/balance-harness.mjs:117-119`).
+  (standard), **+5…+10** elite. Range: regular enemies live in **[−90, +20]**
+  (`ARMOR_FLOOR`/`ARMOR_CAP`); `lintEntity` flags any armor outside that band without a declared
+  `puzzleWall`.
+  **Amended 2026-08-24 (Caelan) — the cap rises 10 → 20, and splits in two.** Raised so an elite
+  can reach the systems audit's `ttk_informed` 5–8 target, which was unreachable at +10. But flat
+  subtraction is not linear as armor nears the lazy reference damage of 20, and the curve is the
+  whole story:
+
+  | armor | lazy (20 dmg) | informed (40 dmg) |
+  |---|---|---|
+  | 0 | 5 | 3 |
+  | +6 | 8 | 3 |
+  | **+10** | **10** | **4** |
+  | +15 | 20 | 4 |
+  | +20 | **100** | 5 |
+
+  So `ttk_informed` 5 costs a **100-turn lazy fight**. The band therefore has two halves, and
+  `ARMOR_DIFFICULTY_CAP = 10` marks the seam:
+  - **[−90, +10] — the DIFFICULTY band.** Fights that get harder. Author freely.
+  - **(+10, +20] — the GATE band.** `max(1, hit − armor)` floors a lazy loadout to 1 damage, so the
+    enemy reads to the player (correctly) as *impossible until I come back with something better*.
+    That is the audit's §5.3 `puzzleWall` idea. **An enemy authored here is a lock and needs a key**
+    — fire, the Ray Gun's 22, an element it is weak to — or it is a wall with no door. `lintEntity`
+    emits a loud `Law 3 GATE` flag for anything in this half so it can never be entered by accident.
+
+  Nothing in the roster is above +6 today; this amendment opens the band, it does not populate it.
 - **Law 4 — Roles, not levels.** One flat power band per act; enemies differ by role/archetype, not
   level — and (amended 2026-07-24) the role table keys on **armor**, not HP, since HP is always 100
   now (see the authoring form below for the current table). The band table is design-doc law
