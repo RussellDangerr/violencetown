@@ -20,6 +20,7 @@
 import { isHostile, isSewerDweller } from './ai.js';
 import { poitionBuff } from './items.js';
 import { DISPOSITION_MIN, dispositionCeil } from './disposition-curves.js';   // one ceiling, three writers
+import { BANDS_STEP } from './trade.js';   // paranoia is priced in whole trade bands
 
 // Tuning constant — controls how much disposition each unit of `values`
 // shifts. Currently 5 (so values:{soap:8} means soap gives +40 disposition).
@@ -280,6 +281,44 @@ export function reactToTransaction(npc, type, payload = {}) {
         // it is a betrayal.
         case 'theft': applyHostileFlip(npc); return { flipped: true };
         default:      return null;
+    }
+}
+
+// ── Paranoia ────────────────────────────────────────────────────────────────
+//
+// A search that ends without a culprit does not simply reset. The victim tells
+// people, and the immediate area gets warier of EVERYONE.
+//
+// The delta is one full trade band, so a failed search moves every merchant in
+// earshot down exactly one price tier — legible the instant you try to buy
+// something, with no new UI at all. The existing decay walks it back over a few
+// minutes of free-roam, so a district cools off on its own.
+//
+// Why this is not the goofy CRPG version where the whole map psychically knows:
+// nobody identifies you and nobody points. It is social, not omniscient. And it
+// fires ONLY on a search that FAILS — get caught and it stays between the two of
+// you; get away with it and the chill spreads.
+//
+// On the two floors, which are deliberately different: disposition-curves caps a
+// bad DEAL at RESENT_FLOOR, because haggling badly should never be able to make
+// an enemy. Theft and its paranoia punch straight through that and can stack to
+// DISPOSITION_MIN, because a crime is not a bad deal.
+export const PARANOIA_DELTA  = -BANDS_STEP;
+export const PARANOIA_RADIUS = 6;
+
+export function spreadParanoia(npcs, origin, victim = null) {
+    if (!origin) return;
+    for (const n of npcs || []) {
+        if (!n || n === victim) continue;            // already at the floor; do not double-hit
+        if (!n.entity?.isAlive?.()) continue;
+        if (n._ally) continue;                       // loyalty is locked, same as the decay rule
+        if (Math.max(Math.abs(n.x - origin.x), Math.abs(n.y - origin.y)) > PARANOIA_RADIUS) continue;
+        // applyDispositionDelta, so this inherits the one clamp. Note the clamp is
+        // now per-NPC — [DISPOSITION_MIN, dispositionCeil(npc)] since the offer
+        // screen — but only its CEILING varies, and paranoia only ever moves
+        // downward, so every NPC still bottoms out at the same floor. Verified
+        // rather than assumed, because the spec warned this contract had changed.
+        applyDispositionDelta(n, PARANOIA_DELTA);
     }
 }
 

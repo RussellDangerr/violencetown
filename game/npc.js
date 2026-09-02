@@ -21,11 +21,12 @@
 
 import { manhattan, chebyshev } from './utils.js';
 import { getGreedyStep, stepEntity, findPath } from './pathing.js';
-import { perceives, nextAwareness, VERDICT } from './perception.js';
+import { perceives, nextAwareness, VERDICT, BLIND_SWEEP_BEATS } from './perception.js';
 import { healPurchase, kitChoice, isSewerDweller, bossSpend, BOSS_RALLY_RANGE, isHunting } from './ai.js';
 import { ITEMS, kitHealValue, applyKitItem } from './items.js';
 import { WEAPONS } from './weapons.js';
 import { burnGold } from './trade.js';
+import { spreadParanoia } from './give-action.js';
 
 // ── Leash tuning ─────────────────────────────────────────────────────────────
 // A chasing enemy gives up and walks home when it strays past LEASH_DISTANCE
@@ -254,7 +255,13 @@ export function tickNpcState(game, npc, clock = game.turn) {
             if (!canSeePlayer) {
                 npc._lostSightTurns += 1;
                 const leashDist  = npc.leashDistance ?? LEASH_DISTANCE;
-                const blindBeats = npc.lostSightBeats ?? LOST_SIGHT_BEATS;
+                // (theft) A robbed victim gets a longer budget than an ordinary
+                // chaser who lost you — perception.js: "a robbed victim, with NO
+                // last-seen, casts about longer". Same counter, bigger allowance,
+                // rather than a second timer racing this one.
+                const blindBeats = npc._robbedSweep
+                    ? BLIND_SWEEP_BEATS
+                    : (npc.lostSightBeats ?? LOST_SIGHT_BEATS);
                 const tooFar  = manhattan(npc.x, npc.y, npc.homeX, npc.homeY) > leashDist;
                 const tooLong = npc._lostSightTurns >= blindBeats;
                 if (tooFar || tooLong) {
@@ -265,6 +272,7 @@ export function tickNpcState(game, npc, clock = game.turn) {
                         sourceEnemy: npc,
                         category: 'deaggro',
                     });
+                    for (const m of endRobbedSweep(game, npc)) messages.push(m);
                     break; // spend this beat disengaging; walk-home starts next turn
                 }
             }
@@ -276,6 +284,17 @@ export function tickNpcState(game, npc, clock = game.turn) {
             const chaseTarget = canSeePlayer
                 ? { x: game.playerX, y: game.playerY }
                 : { x: npc._lastSeenX, y: npc._lastSeenY };
+            // (theft) The BLIND sweep. A robbed victim is set searching with NO
+            // last-seen — they know they were robbed, not by whom or from where —
+            // so the give-up test below would fire on beat one and the search
+            // would be over before it started. That is why BLIND_SWEEP_BEATS has
+            // been a dead constant since perception.js shipped: only a theft can
+            // produce a searcher with no lead, and the theft verb did not exist.
+            //
+            // They cast about instead: a real sweep the player has to survive,
+            // and the thing that makes "get out of sight" a decision.
+            if (npc._robbedSweep && chaseTarget.x == null) break;
+
             if (!canSeePlayer &&
                 (chaseTarget.x == null || (npc.x === chaseTarget.x && npc.y === chaseTarget.y))) {
                 npc.state = 'returning';
@@ -285,6 +304,11 @@ export function tickNpcState(game, npc, clock = game.turn) {
                     sourceEnemy: npc,
                     category: 'deaggro',
                 });
+                // (theft) A robbed victim's sweep that found nobody spreads the
+                // chill. Gated on _robbedSweep so an ordinary lost-trail disengage
+                // never fires it — get CAUGHT and it stays between the two of you;
+                // get AWAY with it and the street gets warier of everyone.
+                for (const m of endRobbedSweep(game, npc)) messages.push(m);
                 break;
             }
 
@@ -603,6 +627,25 @@ export function goHomeStep(game, npc) {
     const step = path[0];
     stepEntity(npc, step.x, step.y, game._MOVE_MS);
     return true;
+}
+
+// (theft) A robbed victim's sweep has ended. If it found nobody, the chill
+// spreads — and it fires exactly once, from whichever give-up branch got there
+// first. Gated on _robbedSweep so an ordinary lost-trail disengage never
+// gossips: get CAUGHT and it stays between the two of you, get AWAY with it and
+// the street gets warier of everyone.
+//
+// Returns log lines for the caller to surface, matching how the HOSTILE branch
+// already hands messages back rather than logging directly.
+function endRobbedSweep(game, npc) {
+    if (!npc || !npc._robbedSweep) return [];
+    npc._robbedSweep = false;
+    spreadParanoia(game.enemies, { x: npc.x, y: npc.y }, npc);
+    return [{
+        text: `[${npc.entity.name} gives up looking. People are watching you now.]`,
+        sourceEnemy: npc,
+        category: 'deaggro',
+    }];
 }
 
 function pickWanderTarget(game, npc) {
