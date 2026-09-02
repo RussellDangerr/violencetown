@@ -26,6 +26,7 @@ sewer/e6                          Fungus King                 100       6     12
 sewer/e5                          Ghost Fungus                100       0      8       30              5              3     13
 sewer/e3                          Red Fungus                  100       3     10       65              6              3     10
 sewer/e4                          Red Fungus                  100       3     10       65              6              3     10
+sewer/sludge-bloom                Sludge Bloom                100      15      0        0             20              4      -
 sewer/e1                          Violet Fungus               100       0      9       28              5              3     12
 sewer/e2                          Violet Fungus               100       0      9       28              5              3     12
 sewer/wererat                     Wererat                     100       6     12      150              8              3      9

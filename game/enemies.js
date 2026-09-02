@@ -108,6 +108,12 @@ export class Enemy {
         // heal policy. STATED, never inferred from armor: ruling A4 asks for
         // exactly this rather than deriving a boss from its band.
         boss = false,
+        // Shove-immunity. main.js's _isHeavy reads exactly this field and the
+        // shove comment has described 'captains, the Sewer Merchant, bosses'
+        // as unbudgeable since the shove shipped -- but the ctor dropped the
+        // field, so nothing could ever BE heavy and the branch was dead. A
+        // puzzleWall that can be shoved aside is not a wall, so it needs this.
+        heavy = false,
         // (perception ladder) Runtime counters. Persisted so a save taken mid-hunt
         // reloads mid-hunt instead of resetting the NPC to calm.
         _awareBeats = 0,
@@ -226,6 +232,7 @@ export class Enemy {
         this.equipped      = equipped;
         this.thievable     = thievable;
         this.boss          = !!boss;
+        this.heavy         = !!heavy;
         this._awareBeats   = _awareBeats;
         this._sweepBeats   = _sweepBeats;
         this.vendor        = vendor;
@@ -300,7 +307,7 @@ export class Enemy {
             loadout: this.loadout,
             // (theft) Worn gear and the theft opt-out must survive a reload the
             // same way loadout does, or a robbed enemy would come back armoured.
-            equipped: this.equipped, thievable: this.thievable, boss: this.boss,
+            equipped: this.equipped, thievable: this.thievable, boss: this.boss, heavy: this.heavy,
             ambient: this.ambient,
             // Species marker (ai.js::isSewerDweller) — must survive a reload same
             // as vermin/weak/resist/immune did, or a reloaded Violet Fungus would
