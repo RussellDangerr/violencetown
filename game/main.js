@@ -389,6 +389,13 @@ class Game {
         // (theft) enemyId -> { gold, items, weightTaken, noticed }. Survives a save,
         // and is re-applied by spawnEnemy so a zone re-entry cannot undo a robbery.
         this._robbed = {};
+        // (fence) itemId -> how many you are carrying that the street has heard
+        // about. Written only when a take is NOTICED, so a clean theft leaves
+        // goods worth full price anywhere. Decremented when a fence takes them
+        // off your hands. Per-ID rather than per-object because the bag holds
+        // STACKS, not instances — nobody, the vendor included, can tell your
+        // stolen soap from your own.
+        this._hot = {};
         // Runtime ground-drops per map ("mapUrl" → [{ type, x, y }]), so a drop
         // survives leaving and re-entering a zone. Recorded today for enemy
         // death-drops; the player-drop path routes through here once a drop verb
@@ -3498,6 +3505,7 @@ class Game {
                     // the risk.
                 } else {
                     rec.noticed = true;
+                    if (took) this._hot[took.id] = (this._hot[took.id] ?? 0) + 1;
                     victim._robbedSweep = true;            // arms the blind sweep + paranoia
                     reactToTransaction(victim, 'theft', { item: took, gold: gp });
                     this._log(`[${victim.name ?? victim.type} feels the weight change.]`, 'combat');
@@ -5656,6 +5664,9 @@ class Game {
             playerGold: this.gold ?? 0,
             npcGold: npc.gold ?? 0,
             bagFull: !this._offerTakeFitsBag(this._offer && this._offer.take),
+            // (fence) Two questions offer.js asks and cannot answer itself.
+            stolenFrom: (id) => (this._robbed[npc.id]?.items ?? []).includes(id),
+            isHot: (id) => (this._hot[id] ?? 0) > 0,
         });
     }
 
@@ -5835,6 +5846,11 @@ class Game {
                 // ONE price per call -- the ledger is per-unit LIFO stacks, which
                 // is what closed the gold-dup exploit found in pre-prod review.
                 if (wasPaid && unit != null) this._buybackRecord(npc, e.def.id, 'rebuy', unit);
+                // (fence) Off your hands and off the ledger. Only a fence can get
+                // here with a hot item -- commitBlocker refuses everyone else --
+                // so this is the one place heat is cleared, which is what makes
+                // finding Hooch worth the walk.
+                if (this._hot[e.def.id] > 0) this._hot[e.def.id]--;
                 // Every hand-off is quest-trackable, the same idiom the retired
                 // trade window used. Without this a sanctioned delivery is
                 // consumed and the quest never advances -- a soft-lock.

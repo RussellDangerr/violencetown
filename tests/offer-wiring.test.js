@@ -150,6 +150,12 @@ function stubGame(overrides = {}) {
         _offer: null,
         _offerCursor: null,
         _tradeTimer: null,
+        // (fence) The commit clears heat off items a fence takes. Supplied here
+        // rather than made optional in main.js: _hot is set in the ctor and by
+        // loadInto, so it is never undefined in the real game, and a `?.` would
+        // turn a future forgotten init into a silent no-op instead of a throw.
+        _hot: {},
+        _robbed: {},
         _log(msg, cat) { this.logs.push({ msg, cat }); },
         _render() { this.renders++; },
         _resumeHeldWalk() { this.resumed++; },

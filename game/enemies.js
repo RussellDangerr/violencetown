@@ -132,6 +132,10 @@ export class Enemy {
         // trade.js keyed off this NPC's `disposition`.
         vendor = null,
         stock = null,
+        // (fence) Deals in hot goods and asks no questions. An ordinary vendor
+        // refuses anything the street has heard about; a fence is the only place
+        // a NOTICED theft can be turned back into money.
+        fence = false,
         // (Phase 6d) Special-buyer override: { itemId: fixedPrice }. A vendor with
         // this buys the listed items for the fixed GP even when they're questItems
         // that sellPrice() would refuse — the archetype is Macc paying 500 for the
@@ -244,6 +248,7 @@ export class Enemy {
         this._awareBeats   = _awareBeats;
         this._sweepBeats   = _sweepBeats;
         this.vendor        = vendor;
+        this.fence         = fence === true;
         this.stock         = stock;
         this.specialBuys   = specialBuys;
         // (transaction spine) Vendors carry a funded till so SELL has a source;
@@ -310,6 +315,7 @@ export class Enemy {
             values: this.values, onFlip: this.onFlip,
             name: this.name, dialogueId: this.dialogueId,
             vendor: this.vendor, stock: this.stock, specialBuys: this.specialBuys, gold: this.gold, giftLog: this.giftLog,
+            fence: this.fence,
             // Law 6f: the carried kit must survive a reload the same way gold
             // does, or a boss's Challenge GP would drop on save/load.
             loadout: this.loadout,

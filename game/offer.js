@@ -293,6 +293,34 @@ export function commitBlocker(npc, offer, ctx = {}) {
         return "THEY WON'T TOUCH IT";
     }
 
+    // ── Stolen goods ────────────────────────────────────────────────────────
+    //
+    // (fence) Theft used to create contraband in a world with no concept of it:
+    // you could rob someone blind and sell it straight back to them at market,
+    // and nobody had an opinion. These are the two opinions.
+    //
+    // Both read from ctx rather than reaching into the game, so this file stays
+    // pure — offer.js has never known what a theft is and still does not. It is
+    // handed two answers: "did I take this from THIS person" and "has the street
+    // heard about it".
+    //
+    // The victim first, because it is the more specific refusal AND the better
+    // joke: a clean theft leaves them perfectly willing to trade with you, so
+    // walking back to sell someone their own soap is a thing you can genuinely
+    // try. They know their own property.
+    const given = o.give || [];
+    if (typeof ctx.stolenFrom === 'function' && given.some(g => g.def && ctx.stolenFrom(g.def.id))) {
+        return 'THEY RECOGNISE IT';
+    }
+    // Then the street. Only a NOTICED theft makes goods hot — get away with it
+    // cleanly and your loot is worth full price anywhere, which is the second
+    // time that clean/noticed distinction pays. Once it is hot, only a fence
+    // will touch it, and finding one is the cost rather than a price cut.
+    if (!(npc && npc.fence) && typeof ctx.isHot === 'function'
+        && given.some(g => g.def && ctx.isHot(g.def.id))) {
+        return "IT'S TOO HOT FOR THEM";
+    }
+
     if (offerBalance(npc, o).balance < 0) {
         const noResentment = !npc || npc.disposition == null || npc._container || ctx.isContainer;
         if (noResentment) return "THEY CAN'T BE SHORTCHANGED";
