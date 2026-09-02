@@ -388,6 +388,11 @@ export function targetVerbs(target, game) {
     V.push({ key: 'trade', label: 'Trade', color: '#cba43c', text: '#2a1f06', icon: '⇄', resolver: 'trade', needsAdjacent: true });
     if (e.bribeable !== false) V.push({ key: 'bribe', label: 'Bribe', color: '#cba43c', text: '#2a1f06', icon: '¤', resolver: 'bribe', needsAdjacent: true });
     if (hostile)               V.push({ key: 'hit',   label: 'Hit',   color: '#c8443a', text: '#fff3d0', icon: '⚔', resolver: 'hit',   needsAdjacent: true });
+    // (interact harness) Shove used to BE the bump. Bumping now opens this list,
+    // so the push lives here — still available, no longer the only thing walking
+    // into someone could do. Ranked below talk/trade so it never becomes a
+    // shopkeeper's default.
+    V.push({ key: 'shove', label: 'Shove', color: '#8a6f4a', text: '#f3e9d8', icon: '»', resolver: 'shove', needsAdjacent: true });
     if (hostile && haveThrow)  V.push({ key: 'throw', label: 'Throw', color: '#e08a2a', text: '#2a1400', icon: '➹', resolver: 'throw' });
   }
   // Verbs are offered regardless of range; the adjacency-requiring ones carry
@@ -408,7 +413,7 @@ export function targetVerbs(target, game) {
 // re-ordered by CONVENTION: the natural default action on top, then other verbs,
 // then Examine, then a Cancel row at the bottom. (`Walk here` + path-then-act
 // arrive with the pointer-model slice; not present yet.)
-const TARGET_VERB_RANK = { hit: 0, talk: 0, take: 0, open: 0, trade: 20, bribe: 30, throw: 40, examine: 90 };
+const TARGET_VERB_RANK = { hit: 0, talk: 0, take: 0, open: 0, trade: 20, bribe: 30, shove: 35, throw: 40, examine: 90 };
 
 // The default verb for a target — the top-of-list / bare-tap action, chosen by
 // TYPE independent of range: item→Take, hostile NPC→Hit, friendly-with-dialogue

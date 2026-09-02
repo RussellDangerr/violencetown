@@ -128,3 +128,27 @@ test('a ground item on a chest tile still defaults to Take', () => {
   const t = { x: 6, y: 5, item: rock, container: crate };
   assert.equal(defaultVerb(t, G).key, 'take');
 });
+
+// (interact harness, ruled 2026-09-02) Bumping an NPC opens this list instead of
+// shoving them. The shove is not gone — it moved in here, so barging past
+// someone stays possible and merely becomes deliberate.
+test('Shove is offered on any character, hostile or not', () => {
+  assert.ok(targetVerbs({ x: 6, y: 5, npc: friendly }, G).some(v => v.key === 'shove'));
+  assert.ok(targetVerbs({ x: 6, y: 5, npc: hostile }, G).some(v => v.key === 'shove'));
+});
+
+test('Shove needs adjacency and never outranks talking to a shopkeeper', () => {
+  const verbs = targetVerbs({ x: 6, y: 5, npc: friendly }, G);
+  assert.equal(verbs.find(v => v.key === 'shove').needsAdjacent, true);
+  const list = orderedTargetVerbs({ x: 6, y: 5, npc: friendly }, G).map(v => v.key);
+  assert.ok(list.indexOf('shove') > list.indexOf('talk'), 'a bump must not default to a push');
+  assert.ok(list.indexOf('shove') > list.indexOf('trade'));
+});
+
+test('Shove is not offered on scenery, loot or a crate', () => {
+  for (const t of [{ x: 6, y: 5, item: rock },
+                   { x: 6, y: 5, container: { type: 'Crate', contents: [] } },
+                   { x: 6, y: 5, examinable: { id: 'sign' } }]) {
+    assert.ok(!targetVerbs(t, G).some(v => v.key === 'shove'), JSON.stringify(Object.keys(t)));
+  }
+});

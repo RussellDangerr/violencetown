@@ -53,6 +53,7 @@ import {
 import { canTrade, buyPrice, sellPrice, bribeStepCost, BRIBE_STEP, transferGold, burnGold } from './trade.js'; // pricing + the transaction spine
 import { buildXmbBar, resolveXmbSelection, cycleXmbCategory, cycleXmbItem, xmbCategoryOf, XMB_LABELS } from './xmb.js';
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
+import { contextualUses } from './item-uses.js'; // "use THIS on THAT" — the authored table
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
 import {
     createWheelState, cycle, drill, back, compose, autoAimTile,
@@ -2029,47 +2030,26 @@ class Game {
         const nx = this.playerX + dir.dx;
         const ny = this.playerY + dir.dy;
 
-        // Bump attack?
+        // Bump → the interact list.
+        //
+        // (interact harness, ruled 2026-09-02) Walking into a character opens the
+        // Target List on them instead of shoving them aside. The shove was the
+        // only thing a bump could do, which meant the most natural way to
+        // approach a shopkeeper — walk up to them — pushed them out of the way
+        // and offered nothing. Trading was reachable only by [E], documented on
+        // the seventh line of the help modal's "Other" section.
+        //
+        // Nothing is lost: Shove is now a verb IN that list, so barging past
+        // someone is still possible and merely deliberate. Combat likewise stays
+        // deliberate — bumping opens the menu that HOUSES the fight rather than
+        // starting one.
         const enemy = this.enemies.find(e => e.entity.isAlive() && e.x === nx && e.y === ny);
         if (enemy) {
-            // (shove) Walking into a character no longer walls you off (the old
-            // silent no-op). You barge through: the character is knocked to an
-            // open side tile and you take their spot — or, if they're cornered,
-            // you swap places. Tough "heavy" characters (captains, the Sewer
-            // Merchant, bosses — flagged per type in the shopkeeper pass) can't
-            // be budged: you bounce off with a recoil. Combat stays deliberate
-            // (Space / the wheel) — a shove only displaces, it doesn't attack.
-            // Applies to everyone (hostiles + NPCs); the cast is one unified type.
-            if (this._isHeavy(enemy)) {
-                audio.playSfx('bump-wall');
-                this._bounceOff(dir);
-                return; // immovable — no step, no turn
-            }
-            const dest = this._shoveDestination(enemy, dir);
-            if (!dest) {
-                audio.playSfx('bump-wall');
-                this._bounceOff(dir);
-                return; // boxed in — nowhere to put them
-            }
-            stepEntity(enemy, dest.x, dest.y, this._MOVE_MS); // knock aside / swap (animates)
-            // Law 2 positional (ruled 2026-07-24): a shove spins its victim clean
-            // around, and the recovery turn below (npc.js HOSTILE case) makes that
-            // spin cash out as exactly one backstab window. No extra facing stamp
-            // needed here — stepEntity above already set _lastDx/_lastDy to the
-            // victim's actual displacement (its own step, unit-length since the
-            // shove destination is always one tile away), and the player is about
-            // to fall through into (nx,ny) == the victim's PRE-shove tile. That
-            // makes the player's landing spot exactly the tile stepEntity's stamp
-            // calls "behind" the victim — true for BOTH flavors: knock-aside moves
-            // the victim sideways and the player takes the tile it vacated (behind
-            // its knock direction); swap moves the victim onto the player's old
-            // tile — i.e. backward, toward where the player used to stand — while
-            // the player advances onto the victim's old tile, again landing behind
-            // the victim's new facing. Traced both; neither needs a manual re-stamp.
-            enemy._spunTurns = 1; // burns on the victim's next HOSTILE turn (npc.js)
-            this._log(`[You shove ${enemy.name ?? enemy.type} so hard they spin around!]`, 'combat');
-            // fall through: (nx,ny) is now vacated, so the normal move below
-            // advances the player into it with full hazard/pickup/turn handling.
+            if (this._openTargetList(nx, ny)) return;
+            // No verbs at all (should not happen — Examine is unconditional) —
+            // fall back to the old behaviour rather than eating the input.
+            this._shoveNpc(enemy, dir);
+            return;
         }
 
         // Bump-to-open? Mirrors bump-to-attack — containers are unwalkable
@@ -2152,6 +2132,38 @@ class Game {
     }
 
     // ── Shove (barge through characters) ─────────────────────────────────────
+
+    // Displace `target` one tile, the player pushing in `dir`.
+    //
+    // This used to be what a bump DID, inline in _doMove. It is now a verb on the
+    // interact list (bump opens that list instead), so the same push is reached
+    // deliberately rather than by walking. Two callers: the Shove verb, and
+    // _doMove's fallback if the list somehow has nothing to show.
+    //
+    // Returns true if the shove landed. Heavy characters and boxed-in ones bounce.
+    _shoveNpc(enemy, dir) {
+        if (!enemy || !dir) return false;
+        if (this._isHeavy(enemy)) {
+            audio.playSfx('bump-wall');
+            this._bounceOff(dir);
+            return false;                       // immovable — no step, no turn
+        }
+        const dest = this._shoveDestination(enemy, dir);
+        if (!dest) {
+            audio.playSfx('bump-wall');
+            this._bounceOff(dir);
+            return false;                       // boxed in — nowhere to put them
+        }
+        stepEntity(enemy, dest.x, dest.y, this._MOVE_MS);  // knock aside / swap (animates)
+        // Law 2 positional (ruled 2026-07-24): a shove spins its victim clean
+        // around, and the recovery turn (npc.js HOSTILE case) makes that spin cash
+        // out as exactly one backstab window. No extra facing stamp needed —
+        // stepEntity already set _lastDx/_lastDy to the victim's own displacement,
+        // which is unit-length because the destination is always one tile away.
+        enemy._spunTurns = 1;                   // burns on the victim's next HOSTILE turn
+        this._log(`[You shove ${enemy.name ?? enemy.type} so hard they spin around!]`, 'combat');
+        return true;
+    }
 
     // Tough characters that can't be pushed — you bounce off instead. No types
     // are flagged heavy yet; the shopkeeper-refinement pass populates this
@@ -2498,13 +2510,33 @@ class Game {
         this.overlayOptions = [];
         this.overlayCursor = 0;
 
-        // Primary use (eat/drink/apply/use) — always first.
-        let useLabel = 'Use';
-        if (item.useType === 'self') {
-            if (item.effect === 'heal') useLabel = item.category === 'ambro' ? 'Eat' : 'Drink';
-            else if (item.effect === 'cure_sludge') useLabel = 'Use';
+        // "Use THIS on THAT" — every authored interaction between this item and
+        // something you're facing or standing beside. Read BEFORE the rows are
+        // built because it decides whether a plain Use is worth offering at all.
+        const ctxUses = contextualUses(item, this);
+
+        // Primary use (eat/drink/apply/use) — first, so the ordinary reading of
+        // an item stays the default and no contextual row can steal a tap.
+        //
+        // The exception is an item with no self-use at all: the bottle of alcohol
+        // is useType 'none', so its Use row calls resolveUse, prints a shrug and
+        // still spends the turn via _advanceWorld. Offering that as the default
+        // above a row that actually does something is a trap, so when the item
+        // can't be used on ITSELF and can be used on something HERE, the
+        // contextual rows are the whole list.
+        const selfUseIsReal = item.useType && item.useType !== 'none';
+        if (selfUseIsReal || !ctxUses.length) {
+            let useLabel = 'Use';
+            if (item.useType === 'self') {
+                if (item.effect === 'heal') useLabel = item.category === 'ambro' ? 'Eat' : 'Drink';
+                else if (item.effect === 'cure_sludge') useLabel = 'Use';
+            }
+            this.overlayOptions.push({ label: useLabel, action: 'use' });
         }
-        this.overlayOptions.push({ label: useLabel, action: 'use' });
+
+        for (const u of ctxUses) {
+            this.overlayOptions.push({ label: u.label, action: 'ctx', use: u });
+        }
 
         // (action-wheel overhaul) Throw moved to the action wheel — the hotbar
         // overlay keeps Use / Smash only. (Phase 6a) Giving an item to an NPC is
@@ -2528,7 +2560,8 @@ class Game {
         if (!opt) return; // no option at that row
         audio.playSfx('menu-confirm'); // [audio] picked an overlay option
 
-        const stack = this.inventory[this.selectedSlot];
+        const slot = this.selectedSlot;
+        const stack = this.inventory[slot];
         if (!stack) { this.state = STATE.IDLE; this._render(); return; }
         const item = stack.itemDef;
 
@@ -2536,6 +2569,25 @@ class Game {
             case 'use':
                 this._doItemUse(item);
                 break;
+            case 'ctx': {
+                // An authored use owns its ENTIRE effect — what it spends, whether
+                // it costs a turn, what it logs. The alcohol defers to
+                // _interactCar so the pour has one spelling shared with the bump;
+                // the soap spends itself and advances the world. Leaving that to
+                // the row is what lets a new secret be one entry in item-uses.js
+                // instead of another branch in here.
+                this.state = STATE.IDLE;
+                const u = opt.use;
+                // The world can move between opening the overlay and confirming
+                // (the same reason Smash re-checks its target below) — a
+                // re-resolved target that no longer matches means the moment
+                // passed, so don't spend the item on nothing.
+                const still = contextualUses(item, this).find(o => o.id === u.id);
+                if (!still) { this._log('[Too late.]'); this.state = STATE.ITEM_SELECTED; this._render(); return; }
+                still.apply(this, still.target, { slot });
+                this._render();
+                return;
+            }
             case 'throw':
                 this.state = STATE.ITEM_THROW_DIR;
                 this._log(`[Throw ${item.name} — pick a direction]`);
@@ -2904,6 +2956,16 @@ class Game {
             case 'talk':  if (npc) this._openDialogue(npc); break;
             case 'trade': if (npc) this._openOffer(npc); break;   // (Phase 6a) any adjacent NPC → the offer screen
             case 'bribe': if (npc) this._bribeTarget(npc); break;
+            case 'shove': {
+                // Direction is player → target. The verb carries needsAdjacent, so
+                // _actOnTarget has already walked us next to them and the two
+                // tiles differ by exactly one step.
+                if (!npc) break;
+                const sdir = { dx: Math.sign(t.x - this.playerX), dy: Math.sign(t.y - this.playerY) };
+                if (this._shoveNpc(npc, sdir)) this._advanceWorld();
+                this._render();
+                break;
+            }
             case 'hit':   if (npc) { this.combatAttack(npc, this.equipment.weapon.damage, { type: this.equipment.weapon.damageType }); this._advanceWorld(); this._render(); } break;
             case 'throw': { const th = this._resolveThrowable(); if (th) { const msg = resolveThrow(this, th.itemDef, null, th.count, { x: t.x, y: t.y }); if (msg) this._log(msg); this._rockClatter(th.itemDef, t.x, t.y); th.consume(); this._advanceWorld(); } else this._log('[Nothing to throw.]'); this._render(); break; }
             case 'take':  this._takeItemAt(t.x, t.y); this._render(); break;
