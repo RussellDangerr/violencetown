@@ -3656,3 +3656,69 @@ Per this project's rule, the merge to `dev` is **his call**. Push the branch and
 ```bash
 cd C:/Code/violencetown && git push -u origin feature/unified-offer-screen
 ```
+
+---
+
+## LANDED ON `dev` — 2026-09-02
+
+Caelan made the call. `feature/unified-offer-screen` merged to `dev` as **`43ca3be`**
+(`--no-ff`, so the whole feature has one revert handle), pushed to `origin/dev`.
+
+The merge itself carried no conflicts — `dev` had already been merged *into* the branch earlier the
+same day, so the branch was 118 ahead / 0 behind. `git diff --stat feature/unified-offer-screen HEAD`
+came back empty: the merge commit dropped nothing. Worth stating plainly, because the house rule
+about auto-merge silently eating an import is aimed at the *conflicted* case, and this was not one.
+
+### Gates at the merge
+
+| Gate | Result |
+|---|---|
+| `npm test` | **949 tests / 168 suites / 0 fail** (~740ms) |
+| `npm run balance:check` | balance golden matches — no drift |
+| `npm run balance` | 1 flag, `[skill/coneOfCold]` Law 1 — lives in `spells.js`, predates this work |
+| naming gate | zero lines |
+| tree vs branch tip | identical |
+
+### Driven in the merged game, not inferred
+
+Opened on `dev` at `localhost:3001`, past the splash, against Macc (`disposition: 20`, one
+`chain` in stock). Every step below went through `_tapOffer` with real rects from
+`offerLayout(MODAL_RECT)` — not by assigning to `_offer` from the console, which is the mistake that
+once made a demo look real when it was not.
+
+- **Short of funds.** 64 GP chain against a 50 GP purse → `YOU'RE 14 GP SHORT`, commit refused,
+  nothing moved.
+- **The round trip.** Buy at 64 (200 → 136) · sell back at 20 (→ 156) · the shelf offers it at the
+  locked 20, not market · rebuy at exactly 20 (→ 136) · **the buyback row is then gone**. Net over
+  the whole trip: −64, the original price and nothing more. The duplication exploit is dead.
+- **The gift.** Stage the chain on our side → settles to −20, a sale. Tap the gold chip → 0,
+  `goldPinned` true. Tap again → back to −20. Tap once more and commit: **disposition 19 → 24, no
+  gold moved.** The goodwill system is reachable by a player's own gestures, which was the whole
+  point of finding 3.
+- **The full bag.** 50 slots, all `rock` ×99, nothing the `chain` can stack onto →
+  `_offerTakeFitsBag` false, `YOUR BAG IS FULL`, **0 GP charged**, the chain still in Macc's stock.
+  The screen stays open so the deal can be fixed rather than lost.
+
+One false alarm, recorded because the shape of it will recur: a first full-bag attempt *did* charge
+and *did* deliver. The bag was full by slot count but had been filled from `ALL_ITEM_IDS`, which
+includes `chain` — so the incoming chain legitimately stacked onto an existing count-1 stack. The
+code was right and the fixture was wrong. Fill with a single foreign id at `MAX_STACK` (99) to make
+a bag that is actually full.
+
+A second false alarm was mine too: calling `_closeOffer()` with no offer open, from the console,
+restored a stale stashed state and left `state === 'splash'` with the splash overlay hidden. No
+player path reaches it (every caller is state-gated) — but don't double-close while poking.
+
+### Still owed by Caelan
+
+The two rulings this branch parked are unchanged by the merge and still open:
+
+1. The gold control is **all-or-nothing**. Partial adjustment wants a stepper the panel has no room
+   for — deferred, not rejected.
+2. **`bribeable: false` still means two different things.** `disposition-curves.js` says gold buys
+   nothing but gifts land; `give-action.js` refuses any offering. Both readings are in the shipped
+   code. One ruling settles it.
+
+And the older one: sewer fare in the give tray replaces the offer's disposition.
+
+Nothing is blocked on Claude.
