@@ -1078,18 +1078,47 @@ describe('the disposition ceiling is the NPC own, across all three writers', () 
     });
 });
 
-describe('commitBlocker - a bribery-immune NPC', () => {
+describe('a bribery-immune NPC: the model is the only authority', () => {
+    // TWO READINGS OF `bribeable: false` LIVE IN THE CODEBASE, and reconciling
+    // them is Caelan's call, not Claude's:
+    //   disposition-curves.js — "gold buys no affection at all, but gifts still
+    //     land" (pinned deliberately, "gifts stay the clever path")
+    //   give-action.js:80     — applyGive returns accepted:false for ANY item,
+    //     "bribery-immune NPCs reject all offerings"
+    //
+    // An earlier pass added a commitBlocker refusal on the give-action reading,
+    // which made the METER and the BUTTON disagree: resolveOffer projected +25
+    // and two band changes for an offer the button refused. That rule is gone.
+    // The model now decides alone, so what the player is shown is what happens
+    // — and gold to such a partner is accepted, buys nothing, and _logOffer
+    // says so, which is not the silent +0 decision #13 forbids.
     const immune = { type: 'Ghost Fungus', disposition: 0, bribeable: false, gold: 50 };
     const ctx = { playerGold: 100, npcGold: 50 };
 
-    test('refuses to be BOUGHT rather than pocketing a silent +0', () => {
-        const gift = { give: [{ def: ITEMS.soap, count: 1 }], take: [], gold: 0 };
-        assert.equal(commitBlocker(immune, gift, ctx), "THEY WON'T BE BOUGHT");
+    test('gold buys nothing from them, and is not refused', () => {
+        const bribe = { give: [], take: [], gold: 60 };
+        assert.equal(commitBlocker(immune, bribe, ctx), null);
+        assert.equal(resolveOffer(immune, bribe).fromGold, 0, 'gold bought affection');
     });
 
-    test('still trades evenly - an even trade is not an offering', () => {
-        const even = { give: [{ def: ITEMS.soap, count: 1 }], take: [], gold: -8 };
-        assert.equal(commitBlocker(immune, even, ctx), null);
+    test('a gift still lands, per disposition-curves', () => {
+        const gift = { give: [{ def: ITEMS.soap, count: 1 }], take: [], gold: 0 };
+        assert.equal(commitBlocker(immune, gift, ctx), null);
+        assert.ok(resolveOffer(immune, gift).fromItems > 0, 'the gift bought nothing');
+    });
+
+    test('WHAT THE METER PROJECTS IS WHAT THE BUTTON ALLOWS', () => {
+        // The invariant offer.js's header claims and the removed rule broke.
+        for (const o of [
+            { give: [], take: [], gold: 60 },
+            { give: [{ def: ITEMS.soap, count: 2 }], take: [], gold: 0 },
+            { give: [{ def: ITEMS.soap, count: 1 }], take: [], gold: 30 },
+        ]) {
+            const R = resolveOffer(immune, o);
+            const blocked = commitBlocker(immune, o, ctx);
+            assert.ok(!(R.points > 0 && blocked),
+                `projected +${R.points} while the button said "${blocked}"`);
+        }
     });
 
     test('an ordinary NPC still accepts a gift', () => {

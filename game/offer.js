@@ -273,18 +273,6 @@ export function commitBlocker(npc, offer, ctx = {}) {
     // that fills halfway through would leave the player paid-up and empty.
     if (ctx.bagFull) return 'YOUR BAG IS FULL';
 
-    // A bribery-immune NPC refuses to be BOUGHT. give-action.js has always
-    // refused their gifts outright (`[The X ignores your offering.]`), and
-    // without this the surplus would be accepted and move nothing -- a silent
-    // +0, which decision #13 forbids: every refusal is stated before the item
-    // is spent.
-    //
-    // Gates the SURPLUS, not the staging. An even trade is not an offering, so
-    // they still buy and sell normally; only the deliberate overpay is refused.
-    if (offerBalance(npc, o).balance > 0 && npc && npc.bribeable === false) {
-        return "THEY WON'T BE BOUGHT";
-    }
-
     if (offerBalance(npc, o).balance < 0) {
         const noResentment = !npc || npc.disposition == null || npc._container || ctx.isContainer;
         if (noResentment) return "THEY CAN'T BE SHORTCHANGED";
