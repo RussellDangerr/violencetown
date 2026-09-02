@@ -5216,7 +5216,12 @@ class Game {
         if (npc.vendor) {
             this._buybackList(npc).forEach((e, index) => {
                 const def = this._resolveItemDef(e.itemId);
-                if (def) out.push({ def, count: 1, max: e.count ?? 1, source: 'buyback', index, boughtBack: true });
+                // `price` is the LOCKED one this unit was sold for, and it rides
+                // on the row so offerBalance and the renderer both charge it.
+                // Without it the shelf priced at market, and undoing a sale cost
+                // roughly triple what the sale paid.
+                if (def) out.push({ def, count: 1, max: e.count ?? 1, price: e.price,
+                                    source: 'buyback', index, boughtBack: true });
             });
         }
         return out;
@@ -5414,13 +5419,19 @@ class Game {
         // mutation run proved the sort dead. The TAKE loop below is the one that
         // genuinely needs it: chest.contents really is spliced.)
         const d = npc.disposition ?? 0;
+        // A buyback credit is the receipt for a SALE, so it is only written when
+        // the player was actually paid. Minting one for a gift turned every
+        // present into permanent re-purchasable stock for that vendor; and
+        // sellPrice returns null (not 0) for a quest item, so `|| 0` used to
+        // shelve a sanctioned delivery at a 1 GP buy-back.
+        const wasPaid = gold < 0;
         for (const e of given) {
-            const unit = sellPrice(e.def, d) || 0;
+            const unit = sellPrice(e.def, d);
             for (let n = 0; n < e.count; n++) {
                 this._removeFromSlot(e.slot);
                 // ONE price per call -- the ledger is per-unit LIFO stacks, which
                 // is what closed the gold-dup exploit found in pre-prod review.
-                this._buybackRecord(npc, e.def.id, 'rebuy', unit);
+                if (wasPaid && unit != null) this._buybackRecord(npc, e.def.id, 'rebuy', unit);
                 // Every hand-off is quest-trackable, the same idiom the retired
                 // trade window used. Without this a sanctioned delivery is
                 // consumed and the quest never advances -- a soft-lock.
@@ -5440,8 +5451,13 @@ class Game {
                 // a bag that refused the item, which loses it from the world
                 // with no gold trail and no log.
                 if (!this._addToInventory(e.def)) { this._log('[Your bag is full.]'); break; }
-                if (e.source === 'contents') this._takeFromContainer(npc, e.index);
-                else                         this._buybackRecord(npc, e.def.id, 'refund', unit);
+                if (e.source === 'contents')      this._takeFromContainer(npc, e.index);
+                // Taking a buyback row CONSUMES its credit. The retired
+                // _buyFromVendor popped it (`e.rebuy.pop()`); nothing succeeded
+                // that line, so the shelf never emptied and one sold item could
+                // be re-bought without limit for the whole five-minute window.
+                else if (e.source === 'buyback') this._buybackConsume(npc, e.def.id);
+                else                             this._buybackRecord(npc, e.def.id, 'refund', unit);
             }
         }
 
@@ -5722,6 +5738,13 @@ class Game {
         if (kind === 'rebuy') e.rebuy.push(price);
         else                  e.refund.push(price);
     }
+    // Spend one unit's rebuy credit -- the LIFO counterpart of _buybackRecord's
+    // push, and what makes the shelf a finite undo rather than a duplicator.
+    _buybackConsume(npc, itemId) {
+        const e = npc && npc._buyback && npc._buyback.entries[itemId];
+        if (e && e.rebuy.length) e.rebuy.pop();
+    }
+
     // Sold items still buyable back this window (drives the buyback render row +
     // its tap targets). Returns [{ itemId, price }] — price is the NEXT unit's
     // locked re-buy price (LIFO: the top of the stack), for entries with a credit.

@@ -3142,9 +3142,13 @@ export class Renderer {
         // buyPrice(def, shim.disposition) would put a real number beside every
         // row of loot the model then hands over for nothing: the screen quoting
         // a price the ledger does not charge.
+        // priceOf takes the ENTRY, not just its def, so a row carrying its own
+        // locked price (a buyback) draws what it will actually charge.
         this._drawOfferColumn(game, L.theirs, L.theirsScrollTrack, theirs,
             game._offer.scroll.theirs, 'take',
-            (def) => (npc._container ? 0 : buyPrice(def, d)));
+            (def, entry) => (npc._container ? 0
+                          : entry && entry.price != null ? entry.price
+                          : buyPrice(def, d)));
         this._drawOfferColumn(game, L.yours, L.yoursScrollTrack, yours,
             game._offer.scroll.yours, 'give', (def) => sellPrice(def, d));
     }
@@ -3172,7 +3176,7 @@ export class Renderer {
             this.font.drawText(ctx, tier.name.toLowerCase(), r.x + 42, r.y + 22,
                 { color: tier.color, scale: 1 });
 
-            const price = priceOf(def);
+            const price = priceOf(def, entry);
             this.font.drawText(ctx, price == null ? '-' : String(price),
                 r.x + r.w - 10, r.y + 6, { color: UI.gold, scale: 1, align: 'right' });
             if (staged) {

@@ -99,6 +99,7 @@ const removeFromSlot = liveMethod('_removeFromSlot', 'slot');
 const buybackRecord = liveMethod('_buybackRecord', 'npc, itemId, kind, price');
 const buybackLive = liveMethod('_buybackLive', 'npc', { BUYBACK_MS });
 const buybackList = liveMethod('_buybackList', 'npc');
+const buybackConsume = liveMethod('_buybackConsume', 'npc, itemId');
 const takeFitsBag = liveMethod('_offerTakeFitsBag', 'taken', { INVENTORY_SIZE, MAX_STACK });
 const logOffer = liveMethod('_logOffer', 'npc, R, { given, taken, gold }', { dispositionCeil });
 const commitOfferFull = liveMethod('_commitOffer', '',
@@ -173,6 +174,7 @@ function stubGame(overrides = {}) {
             return ok;
         },
         _offerTakeFitsBag: takeFitsBag,
+        _buybackConsume: buybackConsume,
         _buybackLive: buybackLive,
         _buybackList: buybackList,
         // The REAL one, lifted. A hand-written two-arg stub silently dropped the
@@ -1538,8 +1540,11 @@ describe('the wiring', () => {
         // function is a closure inside a canvas draw; the behaviour it protects
         // is checked by eye in the browser pass.
         const rendererSrc = readFileSync(fileURLToPath(new URL('../game/renderer.js', import.meta.url)), 'utf8');
-        assert.ok(/npc\._container \? 0 : buyPrice\(def, d\)/.test(rendererSrc),
+        assert.ok(/npc\._container \? 0/.test(rendererSrc),
             'the partner column no longer prices a container at zero');
+        // and a row carrying its own locked price still beats the market rate
+        assert.ok(/entry && entry\.price != null \? entry\.price/.test(rendererSrc),
+            'a buyback row no longer draws its locked price');
     });
 
     test('a REFUSED offer gets the ghost outline without the fill', () => {

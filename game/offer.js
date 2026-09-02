@@ -94,7 +94,14 @@ export function offerBalance(npc, offer) {
         // Gold moving out of a container's till is unaffected; only its ITEM
         // stock prices at zero, so give-side pricing into a container (a
         // separate loop above) is untouched.
-        const unit = (npc && npc._container) ? 0 : (buyPrice(t.def, d) || 0);
+        // An explicit `price` on the row wins over the market rate. That is what
+        // makes a buyback an UNDO rather than a fresh purchase: the shelf sells
+        // it back at what the vendor paid, so a sale and its reversal cancel.
+        // A container prices at 0 for the same reason it always has -- loot is
+        // free -- and its rows carry no price of their own.
+        const unit = (npc && npc._container) ? 0
+                   : (t.price != null ? Math.max(0, Math.trunc(t.price))
+                   : (buyPrice(t.def, d) || 0));
         takenValue += unit * n;
     }
     return { givenValue, takenValue, balance: givenValue - takenValue, giftValue, givenItemsValue };
