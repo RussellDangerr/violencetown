@@ -164,15 +164,30 @@ export function migrate(raw) {
     if (typeof r.rngState !== 'number') r.rngState = 0;
     r.player = (r.player && typeof r.player === 'object') ? r.player : {};
     r.world = (r.world && typeof r.world === 'object') ? r.world : {};
-    if (!Array.isArray(r.world.tileDiffs)) r.world.tileDiffs = [];
-    if (!Array.isArray(r.world.enemies)) r.world.enemies = [];
-    if (!Array.isArray(r.world.groundItems)) r.world.groundItems = [];
+    // These four are walked ELEMENT BY ELEMENT, not merely checked for
+    // array-ness. loadInto destructures every entry (Enemy.fromSave destructures
+    // its argument outright), so a single null or primitive in any of them threw
+    // partway through the load — after the splash had already been dismissed.
+    // Array.isArray alone let that straight through.
+    const objects = (a) => (Array.isArray(a) ? a.filter(e => e && typeof e === 'object') : []);
+    r.world.tileDiffs   = objects(r.world.tileDiffs);
+    r.world.enemies     = objects(r.world.enemies);
+    r.world.groundItems = objects(r.world.groundItems);
     if (!Array.isArray(r.world.collectedItems)) r.world.collectedItems = [];
     if (!r.world.droppedItems || typeof r.world.droppedItems !== 'object') r.world.droppedItems = {};
     if (!Array.isArray(r.world.muggedIds)) r.world.muggedIds = [];
     if (!r.world.robbed || typeof r.world.robbed !== 'object' || Array.isArray(r.world.robbed)) r.world.robbed = {};
+    // ...and one level DOWN, too. The theft resolver does
+    // `this._robbed[id] ||= {...}`, which does NOT replace a truthy primitive —
+    // so a corrupted entry survived, and the next `rec.weightTaken +=` threw on
+    // it. The old test fuzzed only the top-level field, which migrate already
+    // handled; the gap was exactly one level deeper.
+    for (const k of Object.keys(r.world.robbed)) {
+        const v = r.world.robbed[k];
+        if (!v || typeof v !== 'object' || Array.isArray(v)) delete r.world.robbed[k];
+    }
     if (!r.world.hot || typeof r.world.hot !== 'object' || Array.isArray(r.world.hot)) r.world.hot = {};
-    if (!Array.isArray(r.world.containers)) r.world.containers = [];
+    r.world.containers = objects(r.world.containers);
     if (r.quest === undefined) r.quest = null;
     if (r.sewerEscape === undefined) r.sewerEscape = null;
     return r;
@@ -181,9 +196,13 @@ export function migrate(raw) {
 // Clamp/sanitize every field. Never trust deserialized data.
 function validate(raw) {
     const p = raw.player;
-    p.maxHp = _num(p.maxHp, 100);
+    // Floored at 1, not merely finite. _num accepts 0, and a maxHp of 0 makes
+    // the renderer's hp/maxHp a NaN — which a canvas fillRect draws as NOTHING
+    // rather than throwing, so the bar silently vanishes with a clean console.
+    // That is worse than a crash: nothing points at the cause.
+    p.maxHp = Math.max(1, _num(p.maxHp, 100));
     p.hp = clamp(_num(p.hp, p.maxHp), 0, p.maxHp);
-    p.maxMp = _num(p.maxMp, 100);
+    p.maxMp = Math.max(1, _num(p.maxMp, 100));
     p.mp = clamp(_num(p.mp, p.maxMp), 0, p.maxMp);
     p.gold = Math.max(0, _num(p.gold, 0));
     p.hasteCharges = Math.max(0, _num(p.hasteCharges, 0));

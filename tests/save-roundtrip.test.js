@@ -687,3 +687,67 @@ describe('_robbed survives and is re-applied', () => {
         assert.equal(e.gold, 30);
     });
 });
+
+// ── Corrupt saves must not blank the screen ─────────────────────────────────
+//
+// Found by a bug-hunting pass, each reproduced against the real modules before
+// being fixed. None of these fire on a fresh boot or in ordinary play — every
+// one needs a save that is ALREADY non-conforming (partial write, sync mangling,
+// a hand edit). They matter anyway because of WHERE they landed: continueGame
+// dismisses the splash and shows the wrapper BEFORE it awaits loadInto, so a
+// throw in there left a blank screen, a half-built world and an error only the
+// console could see.
+//
+// migrate() checked the SHAPE of the top-level fields and stopped there. These
+// are the two levels it was not walking, plus a numeric floor.
+describe('a save corrupted on disk is coerced, not obeyed', () => {
+    const withWorld = (over) => migrate({ world: { ...over } });
+
+    test('a null in any hydrated array is dropped rather than destructured', () => {
+        // loadInto destructures every element — Enemy.fromSave destructures its
+        // argument outright — so one null threw partway through the load.
+        for (const field of ['enemies', 'groundItems', 'containers', 'tileDiffs']) {
+            const m = withWorld({ [field]: [null, { id: 'ok' }, undefined, 'junk', 42] });
+            assert.deepEqual(m.world[field], [{ id: 'ok' }],
+                `${field} should keep only real objects`);
+        }
+    });
+
+    test('a non-array in those fields still becomes an empty array', () => {
+        for (const field of ['enemies', 'groundItems', 'containers', 'tileDiffs']) {
+            assert.deepEqual(withWorld({ [field]: 'nope' }).world[field], []);
+        }
+    });
+
+    test('a corrupted per-NPC theft record is dropped', () => {
+        // `this._robbed[id] ||= {...}` does NOT replace a truthy primitive, so a
+        // corrupted entry survived and the next `rec.weightTaken +=` threw on it.
+        // The old fuzz test only covered the TOP-level field; the gap was one
+        // level down.
+        const m = withWorld({ robbed: {
+            good: { gold: 1, items: [], weightTaken: 1, noticed: false },
+            asString: 'junk', asNumber: 42, asTrue: true, asArray: [], asNull: null,
+        } });
+        assert.deepEqual(Object.keys(m.world.robbed), ['good']);
+    });
+
+    test('maxHp can never load as zero — a NaN bar draws as nothing at all', () => {
+        // finite, so the old check waved it through; hp/maxHp then went NaN and
+        // fillRect silently drew nothing, with a clean console.
+        const m = migrate({ player: { maxHp: 0, hp: 0 } });
+        const v = JSON.parse(JSON.stringify(m));
+        installGlobals();
+        const g = makeBlankGame();
+        return loadIntoReal(g, m).then(() => {
+            assert.ok(g.playerMaxHp >= 1, `playerMaxHp was ${g.playerMaxHp}`);
+            assert.ok(Number.isFinite(g.playerHp / g.playerMaxHp), 'hp fraction must not be NaN');
+            assert.ok(v);
+        });
+    });
+
+    test('an enemy saved with maxHp 0 comes back with a drawable bar', () => {
+        const e = Enemy.fromSave({ id: 'x', type: 'guard', x: 1, y: 1, maxHp: 0, hp: 0 });
+        assert.ok(e.entity.maxHp >= 1);
+        assert.ok(Number.isFinite(e.entity.hp / e.entity.maxHp));
+    });
+});

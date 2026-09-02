@@ -362,7 +362,11 @@ export class Enemy {
     static fromSave(s) {
         const e = new Enemy(s);   // config fields incl. ambient; s.hp → Entity
         const num = (v, d) => (typeof v === 'number' && isFinite(v)) ? v : d;
-        e.entity.maxHp = num(s.maxHp, e.entity.maxHp);
+        // Floored at 1: a saved maxHp of 0 is finite, so `num` waved it through,
+        // and the nameplate's hp/maxHp then became NaN — which a canvas fillRect
+        // draws as nothing at all rather than throwing. A silently missing health
+        // bar with a clean console is worse than a crash.
+        e.entity.maxHp = Math.max(1, num(s.maxHp, e.entity.maxHp));
         e.entity.hp = Math.max(0, Math.min(num(s.hp, e.entity.maxHp), e.entity.maxHp));
         e.entity.alive = s.alive !== false;
         e.state = s.state || 'idle';

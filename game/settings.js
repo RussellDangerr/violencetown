@@ -21,10 +21,16 @@ export const DEFAULTS = Object.freeze({
     musicVolume: 0.7,
     sfxVolume:   0.8,
     reduceMotion: false,   // suppress / dampen screenshake + flash
-    // Default-ON until audio/music is intentionally worked on — keeps dev
-    // instances (and players) silent by default. The options mute toggle
-    // persists an unmute per-device, so turning sound ON sticks.
-    muted:        true,    // hard mute, independent of the two volumes
+    // Was default-ON "until audio/music is intentionally worked on". It has
+    // been: there are procedural SFX for every action and an ambient bed per
+    // zone, none of which a first-time player ever heard, because this muted
+    // them before the splash finished. A visitor got ninety seconds of silence
+    // from a game whose own README sells its audio.
+    //
+    // Web Audio needs a user gesture anyway, and the splash button IS that
+    // gesture (audio.init() runs on the click), so nothing plays before someone
+    // has asked for it.
+    muted:        false,   // hard mute, independent of the two volumes
     firstRunHintSeen: false, // (pointer model) one-time "tap to move" hint shown?
     // (Slice 2) how the action wheel opens: 'tap-toggle' (tap opens + stays —
     // today's behaviour) or 'hold' (press-and-hold opens, release closes).

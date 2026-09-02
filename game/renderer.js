@@ -2765,7 +2765,9 @@ export class Renderer {
     // ── Ending Overlay (End of Chapter One) ──────────────────────────────────
     //
     // The real main-quest ending (fix/critical-path). Driven by game.state
-    // 'ending' (set in Game._endChapterOne from fix_car's onComplete). A clean
+    // 'ending' (set in Game._endChapterOne, which is currently UNREACHABLE —
+    // the bridge calls _playBridgeCutscene into Chapter Two instead. See
+    // plans/demo-readiness.md). A clean
     // canvas card — no DOM — that gives the burger courier his car-running beat
     // and offers a restart. Mirrors the win-overlay drawing vocabulary (glow
     // panel + bitmap font) so it sits inside the established art style.

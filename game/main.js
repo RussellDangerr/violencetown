@@ -902,7 +902,27 @@ class Game {
             if (!raw) { start(); return; }
             splash.classList.add('gone');
             wrapper.classList.remove('hidden');
-            await loadInto(this, raw);
+            // A save that fails to load must not leave a blank screen.
+            //
+            // The splash is already gone and the wrapper already shown by the
+            // time this awaits, so an unhandled throw here strands the player
+            // looking at nothing, with a half-initialised world behind it and an
+            // error only the console can see. migrate() coerces the SHAPE of the
+            // top-level fields but does not walk into every array element, so a
+            // save corrupted in transit or hand-edited can still reach loadInto
+            // and throw partway through.
+            //
+            // Falling back to a fresh run is the honest recovery: start() rebuilds
+            // the world from scratch, and the broken save is left on disk rather
+            // than overwritten, so it can still be recovered by hand.
+            try {
+                await loadInto(this, raw);
+            } catch (e) {
+                console.error('[save] could not be loaded; starting fresh', e);
+                start();
+                this._log('[That save would not open. Starting a new run.]', 'transition');
+                return;
+            }
             this._log('[Save loaded]', 'transition');
             this._maybeShowFirstRunHint();
         };

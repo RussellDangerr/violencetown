@@ -44,7 +44,7 @@
             <button id="splash-go">GAME START</button>
             <button id="splash-continue" class="hidden">CONTINUE</button>
         </div>
-        <div id="splash-hint">press Space</div>
+        <div id="splash-hint">press Space <span class="help-touch">or tap START</span></div>
     </div>
 
     <div id="game-wrapper" class="hidden">
@@ -56,7 +56,7 @@
         <div id="version-badge" aria-label="game version"></div>
         <!-- (pointer model) one-time onboarding line, shown on the first run and
              dismissed by the first tap/keypress (see main._maybeShowFirstRunHint). -->
-        <div id="first-run-hint" class="hidden" aria-hidden="true">Tap to move · tap a target to act · long-press for options · WASD + Space · Tab for your device · ? for help</div>
+        <div id="first-run-hint" class="hidden" aria-hidden="true">Tap to move · tap a target to act · long-press for options · WASD + Space · Space next to someone shows everything you can do to them · Tab for your device · ? for help</div>
 
         <!-- (pointer model) The on-screen d-pad is gone — tap the world to move,
              tap a target to act, long-press for the full options. Only the action-
@@ -116,7 +116,7 @@
                 <ul>
                     <li><kbd>T</kbd> wait one turn · <kbd>P</kbd> pause · <kbd>Esc</kbd> cancel any menu · <kbd>?</kbd> open this help</li>
                     <li><kbd>L</kbd> open the log history · <span class="help-touch">On touch:</span> tap the log strip</li>
-                    <li><kbd>E</kbd> trades with an adjacent shopkeeper, else talks to whoever's next to you, else examines what you face</li>
+                    <li><kbd>E</kbd> acts on whoever you're FACING — trades with a shopkeeper, talks to anyone else, else examines it. Walking into them does the same thing</li>
                     <li><kbd>Tab</kbd> opens the Remoticon (ITEMS · GEAR · QUESTS · MAP · RINGS) and pockets it again · <span class="help-touch">or tap</span> <strong>▤</strong>. Inside: <kbd>[</kbd> <kbd>]</kbd> switch tabs, <kbd>R</kbd> jumps to RINGS. From the world, <kbd>C</kbd> <kbd>J</kbd> <kbd>M</kbd> open it straight on GEAR / QUESTS / MAP.</li>
                     <li>Items, gear and rings are handled by tapping them inside the Remoticon — <span class="help-touch">tap a slot, then an action</span></li>
                     <li><strong>☰</strong> opens the menu (Wait / Cancel / Options / Help / Restart)</li>
