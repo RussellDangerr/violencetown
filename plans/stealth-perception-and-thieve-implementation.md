@@ -37,6 +37,7 @@ Balance golden unchanged throughout.
 | 3 — `npc.js` sight check onto `perceives` | **done**, verified live | `1fd8429` |
 | 5 — `npc.js` ladder wiring | **done**, verified live | `13de300` |
 | 7 — the threat overlay | **done**, verified live | (this branch) |
+| 6 (wiring half) — `emitNoise` replaces `rockClatter` | **done**, verified live | (this branch) |
 
 Verified in the browser on `:3002` (this worktree's own server; the primary checkout owns 3001):
 the 3/2/3 split holds against the real map on a real spawned enemy for all eight facings; a player

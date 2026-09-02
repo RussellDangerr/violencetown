@@ -135,14 +135,23 @@ describe('the gates all read the one predicate', () => {
         }
     });
 
-    test('rockClatter is the one deliberate exception, and is still there', () => {
-        // ai.js keeps a raw check on purpose: a rock SHOULD be able to redirect a
-        // searcher (that is the stealth play), and perception.js's emitNoise —
-        // written, not yet wired — encodes the eventual rule. Left alone rather
-        // than changed as a side effect of a bug fix. If this ever fails, the
-        // decision was revisited and this test should be updated with it.
-        const src = readFileSync(fileURLToPath(new URL('../game/ai.js', import.meta.url)), 'utf8');
-        assert.ok(/rockClatter[\s\S]{0,400}state === 'chasing'/.test(src),
-            "rockClatter's deliberate raw check is gone — was that intended?");
+    test('the rockClatter exception is resolved, not merely removed', () => {
+        // This test used to pin the opposite. ai.js kept a raw `state === 'chasing'`
+        // check on purpose, because changing live stealth behaviour as a side
+        // effect of a bug fix would have been the wrong move — and it said that if
+        // it ever failed, the decision had been revisited deliberately.
+        //
+        // It was: rockClatter is retired into emitNoise (Thieve Task 6). So the
+        // exception is gone, and the rule it was standing in for is now enforced
+        // by emitNoise's own gate — which skips EVERY state above suspicious, so a
+        // searcher keeps its own lead exactly as perception.js always said it should.
+        const ai = readFileSync(fileURLToPath(new URL('../game/ai.js', import.meta.url)), 'utf8');
+        assert.ok(!/rockClatter/.test(ai), 'rockClatter should be gone from ai.js');
+        // The only comparison left in ai.js is isHunting's own definition — which
+        // is the point. It is where that string is ALLOWED to appear.
+        const code = ai.split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
+        assert.equal((code.match(/state\s*[!=]==\s*'chasing'/g) || []).length, 1,
+            'exactly one comparison should survive, inside isHunting itself');
+        assert.match(code, /isHunting[\s\S]{0,200}state === 'chasing' \|\| e\.state === 'searching'/);
     });
 });

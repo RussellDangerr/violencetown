@@ -124,3 +124,200 @@ describe('degenerate input', () => {
         assert.doesNotThrow(() => emitNoise([{ x: 0, y: 0, state: 'idle' }], 0, 0, 5));
     });
 });
+
+// ── Migrated from tests/kits.test.js when rockClatter retired into emitNoise ──
+//
+// These are the rock's own rules, rewritten rather than copied, because the
+// semantics genuinely changed and pretending otherwise would hide it:
+//
+//   rockClatter                        emitNoise
+//   ─────────────────────────────      ─────────────────────────────────────
+//   set state 'chasing'                sets 'suspicious' — they investigate,
+//                                      they do not come straight at you
+//   reach = the hearer's sightRange    reach = loudness + hearingRange
+//   skipped 'chasing' only             skips every state above suspicious, so
+//                                      a searcher keeps its own lead
+//   hostiles-only, INSIDE the function the caller filters (main.js _earshot)
+//
+// The last row is the one that matters most and is tested in main.js's own
+// suite: a neutral has no ladder to walk back down, so a noise would strand it
+// at 'suspicious' for the rest of the run.
+
+describe('the rock, after the retirement', () => {
+    const hostile = (over = {}) => ({
+        x: 5, y: 5, state: 'idle', _lastSeenX: null, _lastSeenY: null,
+        entity: { isAlive: () => true }, ...over,
+    });
+
+    test('an enemy within earshot investigates the landing tile', () => {
+        const near = hostile({ x: 5, y: 5 });
+        const far  = hostile({ x: 40, y: 40 });
+        emitNoise([near, far], 6, 6, NOISE.throwImpact);
+        assert.deepEqual([near._lastSeenX, near._lastSeenY], [6, 6]);
+        assert.equal(near.state, 'suspicious', 'curious, not charging');
+        assert.equal(far._lastSeenX, null);
+    });
+
+    test('a false last-seen — the thrower is never located', () => {
+        // The whole trick: npc.js pursues _lastSeenX/Y rather than the player's
+        // true position, so the rock sends them to the ROCK.
+        const e = hostile();
+        emitNoise([e], 6, 6, NOISE.throwImpact);
+        assert.deepEqual([e._lastSeenX, e._lastSeenY], [6, 6]);
+    });
+
+    test('it does not rescue you from a fight you already started', () => {
+        const busy = hostile({ state: 'chasing', _lastSeenX: 1, _lastSeenY: 1 });
+        emitNoise([busy], 6, 6, NOISE.throwImpact);
+        assert.equal(busy.state, 'chasing');
+        assert.deepEqual([busy._lastSeenX, busy._lastSeenY], [1, 1]);
+    });
+
+    test('nor does it re-aim a searcher that already has a lead', () => {
+        // rockClatter WOULD have redirected this one — it only skipped 'chasing'.
+        // perception.js always said a searcher keeps its lead; now the code agrees.
+        const sweeping = hostile({ state: 'searching', _lastSeenX: 1, _lastSeenY: 1 });
+        emitNoise([sweeping], 6, 6, NOISE.throwImpact);
+        assert.equal(sweeping.state, 'searching');
+        assert.deepEqual([sweeping._lastSeenX, sweeping._lastSeenY], [1, 1]);
+    });
+
+    test('the rock keeps its old reach of 8', () => {
+        const at8 = hostile({ x: 6 + NOISE.throwImpact, y: 6 });
+        const at9 = hostile({ x: 7 + NOISE.throwImpact, y: 6 });
+        emitNoise([at8, at9], 6, 6, NOISE.throwImpact);
+        assert.equal(at8.state, 'suspicious');
+        assert.equal(at9.state, 'idle');
+    });
+
+    test('null-safe', () => {
+        emitNoise(null, 1, 1, NOISE.throwImpact);
+        emitNoise([null, undefined], 1, 1, NOISE.throwImpact);
+    });
+});
+
+// ── The wiring rule: who a noise is allowed to move ──────────────────────────
+//
+// emitNoise is a general primitive and rightly does not ask about allegiance.
+// The filter lives at the call site, in main.js's _earshot(), and it is NOT
+// cosmetic — it is the thing standing between a thrown rock and every
+// townsperson in earshot being branded '?' for the rest of the run.
+//
+// Why: a noise sets 'suspicious', and the awareness ladder that walks that back
+// down to idle lives inside npc.js's HOSTILE branch, which never runs for a
+// neutral. Verified in the live game before this was written: a neutral held
+// 'suspicious' across twelve world turns while a hostile went
+// suspicious -> returning -> idle over the same span.
+
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { isHostile } from '../game/ai.js';
+
+const mainSrc = readFileSync(fileURLToPath(new URL('../game/main.js', import.meta.url)), 'utf8');
+
+function liveMethod(name, params, freeVars = {}) {
+    const sig = `${name}(${params}) {`;
+    const at = mainSrc.indexOf(sig);
+    assert.ok(at > 0, `${name}(${params}) not found in main.js`);
+    const closeAt = mainSrc.indexOf('\n    }', at);
+    const body = mainSrc.slice(at + name.length, closeAt + '\n    }'.length);
+    const names = Object.keys(freeVars);
+    return new Function(...names, `'use strict'; return function ${body}`)(...names.map(n => freeVars[n]));
+}
+
+describe('_earshot — a noise only moves those who can recover from it', () => {
+    const earshot = liveMethod('_earshot', '', { isHostile });
+
+    test('hostiles are in earshot', () => {
+        const h = { allegiance: 'hostile' };
+        assert.deepEqual(earshot.call({ enemies: [h] }), [h]);
+    });
+
+    test('a neutral townsperson is not — they have no ladder to climb back down', () => {
+        assert.deepEqual(earshot.call({ enemies: [{ allegiance: 'neutral' }] }), []);
+    });
+
+    test('nor is a bribed ally', () => {
+        assert.deepEqual(earshot.call({ enemies: [{ allegiance: 'ally', _ally: true }] }), []);
+    });
+
+    test('a mixed crowd yields only the hostiles', () => {
+        const h1 = { allegiance: 'hostile' }, h2 = { allegiance: 'hostile' };
+        const crowd = [{ allegiance: 'neutral' }, h1, { allegiance: 'ally' }, h2];
+        assert.deepEqual(earshot.call({ enemies: crowd }), [h1, h2]);
+    });
+
+    test('no enemies at all is empty, not a throw', () => {
+        assert.deepEqual(earshot.call({ enemies: [] }), []);
+        assert.deepEqual(earshot.call({}), []);
+    });
+});
+
+// ── The call sites actually fire ─────────────────────────────────────────────
+//
+// Added after a mutation run: deleting the emitNoise call from _rockClatter and
+// from combatAttack failed NOTHING. Every rule about who hears what was pinned,
+// and whether anything ever made a sound was not.
+
+describe('the sites that make the noise', () => {
+    test('a pullsAggro item throws a sound at the landing tile', () => {
+        const rock = liveMethod('_rockClatter', 'itemDef, x, y', { emitNoise, NOISE });
+        const calls = [];
+        const self = {
+            _earshot: () => 'THE_HOSTILES',
+            _log: () => {},
+            // shadow the real emitNoise so we see the arguments, not the effect
+        };
+        const spy = (watchers, x, y, loudness) => calls.push({ watchers, x, y, loudness });
+        const rockSpy = liveMethod('_rockClatter', 'itemDef, x, y', { emitNoise: spy, NOISE });
+        rockSpy.call(self, { pullsAggro: true }, 6, 7);
+        assert.equal(calls.length, 1, 'a thrown rock must make a sound');
+        assert.deepEqual([calls[0].x, calls[0].y], [6, 7], 'at the LANDING tile, not the thrower');
+        assert.equal(calls[0].loudness, NOISE.throwImpact);
+        assert.equal(calls[0].watchers, 'THE_HOSTILES', 'through _earshot, not the raw list');
+        assert.ok(rock);
+    });
+
+    test('an item that does not pull aggro is silent', () => {
+        const calls = [];
+        const rockSpy = liveMethod('_rockClatter', 'itemDef, x, y',
+            { emitNoise: (...a) => calls.push(a), NOISE });
+        rockSpy.call({ _earshot: () => [], _log: () => {} }, { pullsAggro: false }, 6, 7);
+        rockSpy.call({ _earshot: () => [], _log: () => {} }, null, 6, 7);
+        assert.equal(calls.length, 0);
+    });
+
+    test('swinging is loud — combatAttack emits at the player', () => {
+        // combatAttack is far too entangled to lift and run (rings, poitions,
+        // computeHit, hit-splats, death hooks), so this is a SHAPE guard on the
+        // real source rather than a behavioural one. It can still fail, and it
+        // does the job the mutation run showed was undone: it catches the call
+        // being deleted. The behaviour itself was driven in the live game — a
+        // swing turned a second idle hostile suspicious at the player's tile.
+        const at = mainSrc.indexOf('combatAttack(enemyObj, damage, opts = {}) {');
+        assert.ok(at > 0, 'combatAttack not found');
+        const body = mainSrc.slice(at, mainSrc.indexOf('\n    }', at));
+        assert.match(body, /emitNoise\(this\._earshot\(\), this\.playerX, this\.playerY, NOISE\.melee\)/,
+            'combatAttack no longer makes a sound');
+    });
+});
+
+describe('point blank silence', () => {
+    test('loudness 0 is silent even on the very tile', () => {
+        // The `loudness > 0` early-out only bites at distance ZERO — at any range
+        // the radius check already rejects. Without this case, deleting the guard
+        // changed nothing any test could see.
+        const onTop = { x: 6, y: 6, state: 'idle', _lastSeenX: null,
+                        entity: { isAlive: () => true } };
+        emitNoise([onTop], 6, 6, NOISE.theft);
+        assert.equal(onTop.state, 'idle', 'theft is silent BY DEFINITION');
+        assert.equal(onTop._lastSeenX, null);
+    });
+
+    test('but a real sound on your own tile is heard', () => {
+        const onTop = { x: 6, y: 6, state: 'idle', _lastSeenX: null,
+                        entity: { isAlive: () => true } };
+        emitNoise([onTop], 6, 6, NOISE.melee);
+        assert.equal(onTop.state, 'suspicious');
+    });
+});

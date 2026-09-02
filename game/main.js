@@ -24,7 +24,7 @@ import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
 import { attack, formatDamageNumber, computeHit, elementalMult, isBackstab } from './combat.js';
 import { Enemy, spawnEnemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
-import { isHostile, isHunting, rockClatter } from './ai.js';
+import { isHostile, isHunting } from './ai.js';
 import { getGreedyStep, stepEntity, findPath } from './pathing.js'; // pathfinding (greedy chase + BFS click-to-move); stepEntity = shove a character aside
 import { applyDispositionDelta, reactToTransaction } from './give-action.js';
 import { getDialogue } from './dialogue.js';
@@ -54,6 +54,7 @@ import { canTrade, buyPrice, sellPrice, transferGold, burnGold } from './trade.j
 import { buildXmbBar, resolveXmbSelection, cycleXmbCategory, cycleXmbItem, xmbCategoryOf, XMB_LABELS } from './xmb.js';
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
 import { contextualUses } from './item-uses.js'; // "use THIS on THAT" — the authored table
+import { emitNoise, NOISE } from './perception.js'; // sound: the rock's clatter, generalised
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
 import {
     createWheelState, cycle, drill, back, compose, autoAimTile,
@@ -2672,7 +2673,7 @@ class Game {
     // so the affordance is uniform regardless of how the throw was aimed.
     _rockClatter(itemDef, x, y) {
         if (!itemDef || !itemDef.pullsAggro) return;
-        rockClatter(this.enemies, x, y);
+        emitNoise(this._earshot(), x, y, NOISE.throwImpact);
         this._log('[The rock clatters off down the tunnel.]');
     }
 
@@ -3343,6 +3344,7 @@ class Game {
                 if (!spell) { this._log("[You don't know any spells.]"); break; }
                 if ((this.playerMp || 0) < spell.mpCost) { this._log(`[Not enough MP — ${spell.name} needs ${spell.mpCost}.]`); break; }
                 this.playerMp = Math.max(0, this.playerMp - spell.mpCost);
+                emitNoise(this._earshot(), this.playerX, this.playerY, NOISE.cast);
                 const hit = this._aoeStrike(affectedTiles(w, this), spell.damage, { type: spell.damageType });
                 if (hit) this._log(`[${spell.name}! ${spell.damage} ${spell.damageType} to ${hit}.]`, 'combat');
                 else this._log(`[${spell.name} fizzles — nothing caught.]`);
@@ -3388,6 +3390,7 @@ class Game {
                 if (!spell) { this._log("[You don't know that spell.]"); break; }
                 if ((this.playerMp || 0) < spell.mpCost) { this._log(`[Not enough MP — ${spell.name} needs ${spell.mpCost}.]`); break; }
                 this.playerMp = Math.max(0, this.playerMp - spell.mpCost);
+                emitNoise(this._earshot(), this.playerX, this.playerY, NOISE.cast);
                 const tiles = affectedTiles(w, this);
                 let feared = 0;
                 for (const e of this.enemies) {
@@ -3644,6 +3647,25 @@ class Game {
     // The world locks (turn-based combat) whenever a non-ambient enemy is chasing.
     // Shared with the wheel's §12.5 combat re-skin via the pure wheel-model helper.
     _inCombat() { return isCombatActive(this); }
+
+    // Who a sound can move — hostiles only, for now.
+    //
+    // emitNoise is a general primitive and rightly does not ask about
+    // allegiance; the filter belongs here, at the call. It is NOT cosmetic. A
+    // noise sets state to 'suspicious', and the awareness ladder that walks that
+    // back down to idle lives inside npc.js's HOSTILE branch — which never runs
+    // for a neutral. So a townsperson nudged to 'suspicious' is stuck there for
+    // the rest of the run, wearing a permanent '?' on the threat overlay.
+    // Verified in play rather than assumed: twelve world turns, still suspicious,
+    // while a hostile went suspicious -> returning -> idle over the same span.
+    //
+    // rockClatter carried this same guard for a different symptom — it set
+    // 'chasing', which blooms the combat arena around a shopkeeper. Lift it when
+    // neutrals get their ladder ticked, which is Thieve's business: a neutral who
+    // notices you is a WITNESS, and that is the whole theft rule.
+    _earshot() {
+        return (this.enemies || []).filter(isHostile);
+    }
 
     // Stand everyone down. Called on a zone change, on the retry after a defeat,
     // and on respawn -- each of which promises the player a breather.
@@ -3941,6 +3963,11 @@ class Game {
         if (backstab) this._log('[Backstab!]', 'combat');
 
         const result = attack(playerEntity, enemyObj.entity, finalDmg);
+
+        // Fighting is loud. Anyone idle within earshot turns to look — which is
+        // how a brawl draws a crowd, and how killing a lone sentry quietly is
+        // suddenly a thing you can fail at.
+        emitNoise(this._earshot(), this.playerX, this.playerY, NOISE.melee);
 
         // (AGGRO behavior bands) Friendly fire — hitting your own bribed ally
         // re-flips them to hostile. The blow still lands (below); they just turn
