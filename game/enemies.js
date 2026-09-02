@@ -118,6 +118,13 @@ export class Enemy {
         // reloads mid-hunt instead of resetting the NPC to calm.
         _awareBeats = 0,
         _sweepBeats = 0,
+        // Where this character belongs: its spawn tile, and the anchor for both
+        // the chase leash (npc.js) and the walk home after a shove. Defaults to
+        // (x, y) so ordinary spawns need not state it, and is a real ctor param so
+        // a save restores the ORIGINAL post rather than re-deriving it from
+        // wherever the character happened to be standing when you saved.
+        homeX = null,
+        homeY = null,
         // Vendor fields (trade Slice 1). `vendor:true` makes the NPC a shopkeep —
         // pressing [E] adjacent opens their trade window. `stock` is the list of
         // item ids they sell (infinite supply for now); buy/sell prices come from
@@ -165,8 +172,8 @@ export class Enemy {
         // walks back here, then resumes idle. Runtime-only; NOT persisted (save.js
         // re-derives it from the spawn entry on load). See the leash block in
         // resolveEnemyTurns for the tunable thresholds.
-        this.homeX = x;
-        this.homeY = y;
+        this.homeX = homeX ?? x;
+        this.homeY = homeY ?? y;
         this._lostSightTurns = 0; // consecutive chase-beats with no LOS on the player
         this._lastSeenX = null;   // (PD-1) last tile the player was SEEN on — a blind
         this._lastSeenY = null;   // chaser pursues THIS, not the player's true position
@@ -287,7 +294,7 @@ export class Enemy {
     // null) AND the allegiance runtime — an ally/summon whose _ally isn't restored
     // reloads as an INERT ALLIED-labelled NPC that neither fights (resolveEnemyTurns
     // gates the ally turn on _ally) nor is hostile. Deliberately NOT persisted
-    // (re-derived / RAM-only): homeX/homeY, _lostSightTurns, _buyback, render/emote
+    // (re-derived / RAM-only): _lostSightTurns, _buyback, render/emote
     // transients.
     toSave() {
         return {
@@ -317,6 +324,10 @@ export class Enemy {
             state: this.state, fsmState: this.fsmState, lastWanderTurn: this._lastWanderTurn,
             // (perception ladder) so a save taken mid-hunt reloads mid-hunt.
             _awareBeats: this._awareBeats, _sweepBeats: this._sweepBeats,
+            // Persisted since the walk-home landed. It used to be re-derived from
+            // the save's x/y, which silently moved the anchor: save while a chaser
+            // was mid-leash and "home" became wherever it happened to stand.
+            homeX: this.homeX, homeY: this.homeY,
             carrying: this.carrying, barkIndex: this._barkIndex, barkOffset: this._barkOffset,
             wasAdjacent: this._wasAdjacent, buffs: (this.buffs || []).map(b => ({ ...b })),
             // allegiance runtime (see note above)

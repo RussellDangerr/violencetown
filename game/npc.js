@@ -20,7 +20,7 @@
 // the HOSTILE (chase), ALLIED, or ambient states.
 
 import { manhattan, chebyshev } from './utils.js';
-import { getGreedyStep, stepEntity } from './pathing.js';
+import { getGreedyStep, stepEntity, findPath } from './pathing.js';
 import { perceives, nextAwareness, VERDICT } from './perception.js';
 import { healPurchase, kitChoice, isSewerDweller, bossSpend, BOSS_RALLY_RANGE } from './ai.js';
 import { ITEMS, kitHealValue, applyKitItem } from './items.js';
@@ -76,6 +76,22 @@ export function tickNpcState(game, npc, clock = game.turn) {
 
     switch (npc.fsmState) {
         case STATE.IDLE: {
+            // Priority 0: go back to your post.
+            //
+            // (go home, ruled 2026-09-02) A bump shoves whoever is in the way,
+            // shopkeepers included — that is deliberate, and it is meant to be
+            // funny. It stops being funny if it is permanent: without this, every
+            // walk through town leaves the cast a little further from where they
+            // belong, and after a while the market is a scatter of people standing
+            // in the road. So anyone who was displaced walks back.
+            //
+            // Only characters who HOLD a post do this. A wanderer's whole design is
+            // to drift — pickWanderTarget steps from wherever it currently stands,
+            // not from an anchor — so giving one a post would have it wander off
+            // and trudge back forever, fighting itself. Shoving a wanderer just
+            // changes where it drifts from, which is fine.
+            if (goHomeStep(game, npc)) break;      // one step per turn, same as a wander
+
             // Priority 1: WORKING if there's work and the whitelist allows.
             // No cadence throttle on the WORKING transition — workers should
             // start working as soon as work exists.
@@ -561,6 +577,33 @@ function findNearestWantedItem(game, npc) {
 // Pulls from the seeded RNG (game.rng) so wander targets are deterministic
 // and resumable across saves — the save persists the live RNG stream and
 // restores it on load.
+
+// One step back toward this character's post, or false if it is already there,
+// has no post, or is the sort that roams by design.
+//
+// Returns true when a step was taken so the caller can spend the turn on it —
+// walking home is what you are doing this turn, the same way wandering is.
+export function goHomeStep(game, npc) {
+    if (!npc || npc.homeX == null || npc.homeY == null) return false;
+    // A wanderer has no post to keep; see the note at the IDLE case.
+    if (npc.behavior && npc.behavior.includes(STATE.WANDER)) return false;
+    if (npc.x === npc.homeX && npc.y === npc.homeY) return false;
+
+    // A real route, not a greedy nudge. getGreedyStep only ever moves to a
+    // neighbour that reduces straight-line distance, so it strands anyone whose
+    // post is back around a corner — it cannot even leave a spot where every
+    // improving neighbour is a wall. "If possible" was meant literally, so this
+    // asks whether a way home EXISTS and takes its first step.
+    const path = findPath(game, { x: npc.x, y: npc.y }, { x: npc.homeX, y: npc.homeY },
+                          { self: npc, avoidPlayer: true });
+    // No path means genuinely cut off — someone standing in the doorway, most
+    // likely. Wait and try again next turn rather than shoving back; being
+    // politely stuck beside your own stall is the funnier failure anyway.
+    if (!path || !path.length) return false;
+    const step = path[0];
+    stepEntity(npc, step.x, step.y, game._MOVE_MS);
+    return true;
+}
 
 function pickWanderTarget(game, npc) {
     const radius = npc.wanderRadius ?? 3;
