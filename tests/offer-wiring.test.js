@@ -1204,6 +1204,39 @@ describe('a bribery-immune NPC: the model is the only authority', () => {
         }
     });
 
+    test('SEWER FARE IS REFUSED BEFORE IT IS SPENT', () => {
+        // applyGive returns accepted:false for a bribery-immune NPC, and
+        // _commitOffer runs that reaction after the item has gone and the gold
+        // has settled, without reading the return -- so the sack was destroyed
+        // AND she paid for refusing it. commitBlocker stops it first now.
+        const f = Object.values(ITEMS).find(d => d.sewerFare);
+        const o = { give: [{ def: f, count: 1 }], take: [], gold: 0 };
+        assert.equal(commitBlocker(immune, o, ctx), "THEY WON'T TOUCH IT");
+    });
+
+    test('and a partner who CAN be bribed still eats it', () => {
+        const f = Object.values(ITEMS).find(d => d.sewerFare);
+        const ok = { type: 'gus', disposition: 10, bribeable: true, gold: 50 };
+        const o = { give: [{ def: f, count: 1 }], take: [], gold: 0 };
+        assert.equal(commitBlocker(ok, o, ctx), null);
+    });
+
+    test('nothing is spent on the refusal', () => {
+        const f = Object.values(ITEMS).find(d => d.sewerFare);
+        const inv = new Array(INVENTORY_SIZE).fill(null);
+        inv[0] = { itemDef: f, count: 1 };
+        const g = stubGame({ gold: 100, inventory: inv });
+        const npc = { id: 'gf', type: 'Ghost Fungus', disposition: 0, flipThreshold: 30,
+                      bribeable: false, gold: 50, values: {}, giftLog: [], entity: alive };
+        openOffer.call(g, npc);
+        offerActivate.call(g, 'yours', 0);
+        g._offer.gold = 0;
+        commitOfferFull.call(g);
+        assert.equal(g.inventory[0] && g.inventory[0].count, 1, 'the sack was consumed anyway');
+        assert.equal(g.gold, 100, 'gold moved on a refused offering');
+        assert.equal(npc.gold, 50, 'she paid for refusing it');
+    });
+
     test('an ordinary NPC still accepts a gift', () => {
         const ok = { type: 'puck', disposition: 40, bribeable: true, gold: 50 };
         const gift = { give: [{ def: ITEMS.soap, count: 1 }], take: [], gold: 0 };

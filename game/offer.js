@@ -277,6 +277,22 @@ export function commitBlocker(npc, offer, ctx = {}) {
     // that fills halfway through would leave the player paid-up and empty.
     if (ctx.bagFull) return 'YOUR BAG IS FULL';
 
+    // Sewer fare is the one item that still routes through applyGive, and
+    // applyGive refuses ALL offerings from a bribery-immune NPC
+    // (`accepted: false`, "[The X ignores your offering.]"). _commitOffer runs
+    // that reaction AFTER the item has left the bag and the gold has settled,
+    // and does not read the return -- so handing the Ghost Fungus a sludge sack
+    // destroyed it AND had her pay for the privilege of refusing it.
+    //
+    // Refused here instead, before anything is spent. Narrow on purpose: it
+    // names the one path where applyGive actually runs, and takes no position
+    // on the wider question of whether a bribery-immune NPC accepts ordinary
+    // gifts -- disposition-curves says yes, give-action says no, and that is
+    // Caelan's to settle.
+    if (npc && npc.bribeable === false && (o.give || []).some(g => g.def && g.def.sewerFare)) {
+        return "THEY WON'T TOUCH IT";
+    }
+
     if (offerBalance(npc, o).balance < 0) {
         const noResentment = !npc || npc.disposition == null || npc._container || ctx.isContainer;
         if (noResentment) return "THEY CAN'T BE SHORTCHANGED";
