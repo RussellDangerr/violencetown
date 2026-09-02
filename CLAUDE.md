@@ -46,6 +46,24 @@ Together this cascades fresh module URLs through the browser on every server res
 
 The `.claude/launch.json` already points at this script via absolute path.
 
+Note the dev server's document root is **`game/`, not the repo root** — a file at `game/foo.html` is
+served at `http://localhost:3001/foo.html`.
+
+## Tests (corrected 2026-08-23)
+
+**Node is installed here** — `node v24.18.0`, `npm 11.16.0`. `npm test` runs the whole suite locally
+via `node --test`; a single file is `node --test tests/<name>.test.js`. Baseline as of 2026-08-23:
+**404 tests, 87 suites, 0 failures, ~400ms.**
+
+Several older docs — `plans/defeat-scenarios*.md`, `plans/remembrance-rings*.md`,
+`plans/pd3-ai-consolidation*.md`, `plans/ring-builds-ability-axis.md`,
+`plans/interaction-ui-polish.md` — say "no local Node" and mark their node tests UNRUN. That was true
+when written and is **stale**: those tests have since been run and all pass. Don't inherit the claim,
+and don't plan around it.
+
+(`npx --no-install node --test …` fails here — npx tries to fetch a different node. Call `node`
+directly.)
+
 ## Naming
 
 The game's name is always one word: **Violencetown**. Never "Violence Town", "violence-town", or "violence_town". Casing varies by context (Title in prose, ALLCAPS for the splash, lowercase for identifiers / URLs / branch names); spacing does not.

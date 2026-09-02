@@ -18,14 +18,13 @@ import {
     THROW_RECTS,
     QUESTLOG_RECT, LOG_MODAL_RECT, TARGET_LIST_RECT, TARGET_LIST_ROW_H,
     ITEM_OVERLAY_RECT, ITEM_OVERLAY_ROW_H,
-    TRADE_MODAL_RECT, TRADE_BUY_ORIGIN, TRADE_SELL_ORIGIN, TRADE_BUYBACK_ORIGIN, TRADE_BRIBE_RECT,
-    TRADE_CELL_W, TRADE_CELL_H, TRADE_COLS, tradeCellRect,
     RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
     EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, closeButtonRect,
     DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceEquipLayout, deviceRingsLayout,
     inspectorPanelRect, inspectorActionRects,                               // (C1) tap-to-inspect panel + action-row geometry
     gearOptionRects,                                                        // (C2) GEAR chooser option-row geometry
     xmbBarLayout,                                                            // (XMB) usable-bar geometry
+    MODAL_RECT, offerLayout,                                                 // (offer screen) the one panel + its geometry
 } from './layout.js';
 import { itemStatLine, itemActions, equipOptions } from './inspector.js';    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
 import { zoneOf } from './inventory.js';                                     // (C1) safe/pack label for the inspector
@@ -36,9 +35,11 @@ import { findFusion } from './rings.js';                                     // 
 import { WORLD_ZONES, overworldZone, connectorPairs } from './world-map.js'; // (Phase 4) rudimentary world map
 import { hasLineOfSight } from './pathing.js';                               // (aggro overlay) READ-ONLY: same Bresenham the chase AI uses
 import { isSafe } from './defeat-scenarios.js';   // (defeat legibility) mark safe-floor items
-import { buyPrice, sellPrice, bribeStepCost, mood, canTrade, BRIBE_STEP } from './trade.js'; // (trade slice 1) pricing + mood smiley
+import { buyPrice, sellPrice, bribeStepCost, mood, canTrade, band, BRIBE_STEP } from './trade.js'; // (trade slice 1) pricing + mood smiley; band feeds the offer meter's multiplier readout
 import * as Settings from './settings.js'; // (combat-feel-pass) reduce-motion for hit-splats (namespace import — see main.js)
 import { challengeGp } from './enemies.js'; // (Law 6f) nameplate pips read the composite kit, not raw gold
+import { resolveOffer } from './offer.js';                                  // (offer screen) pure basket→projection
+import { dispositionCeil, DISPOSITION_MIN } from './disposition-curves.js'; // (offer screen) meter ceiling + floor — offer.js does not re-export these
 
 // (combat-feel-pass) Hit-splat fill colors by damage type. Crit keeps the
 // physical fill but takes a gold border (handled in _drawHitSplat). New types
@@ -409,35 +410,45 @@ export class Renderer {
         // Subtle vignette border
         this._drawVignette();
 
-        // Modals
-        if (game.state === 'item_overlay')    this._drawItemOverlay(game);
-        if (game.state === 'radial_menu')     this._drawRadialMenu(game);
-        if (game.state === 'target_list')     this._drawTargetList(game);
-        if (game.state === 'item_throw_dir')  this._drawThrowPrompt(game);
-        if (game.state === 'ending') this._drawEndingOverlay(game);
-        if (game.state === 'log_modal') this._drawLogModal(game);
-        if (game.state === 'trade') this._drawTradeModal(game);
-        if (game.state === 'dialogue') this._drawDialogueModal(game);
-        if (game.state === 'inspect') this._drawInspectPanel(game);
-        if (game.state === 'device') this._drawDevice(game);
-
-        // (menu grammar) Universal ✕ / Back affordance — after the current Menu is
-        // drawn, stash its panel rect + draw a tappable close chip at the top-right.
-        // main hit-tests renderer._closeBtnRect / _menuPanelRect, kept here in ONE
-        // place so the chip and its hit-zone can't drift. Prompts (inspect) + the
-        // wheel are excluded (any-tap / native ▼CLOSE); target_list uses the rect
-        // _drawTargetList stashed this frame (its height is per-verb-count).
-        const CLOSE_PANEL = {
-            item_overlay: this._itemOverlayRect,
-            target_list: this._targetListRect,
-            log_modal:   LOG_MODAL_RECT,
-            trade:       TRADE_MODAL_RECT,
-            dialogue:    this._dialogueRect,
-            device:      DEVICE_RECT,
-        }[game.state] || null;
-        this._menuPanelRect = CLOSE_PANEL;
-        this._closeBtnRect = CLOSE_PANEL ? closeButtonRect(CLOSE_PANEL) : null;
-        if (this._closeBtnRect) this._drawCloseButton(this.ctx, this._closeBtnRect);
+        // Modals. Wrapped so that a throw inside ANY modal draw still reaches the
+        // ✕ stash below: that block is what publishes _menuPanelRect and
+        // _closeBtnRect, so without the `finally` a mid-draw exception takes the
+        // chip AND tap-outside down with it and the only way out of the menu left
+        // is the keyboard. A `finally` rather than hoisting the stash above the
+        // dispatch, because target_list and dialogue stash their own rects DURING
+        // it — their height is content-sized — and hoisting would read last
+        // frame's.
+        try {
+            if (game.state === 'item_overlay')    this._drawItemOverlay(game);
+            if (game.state === 'radial_menu')     this._drawRadialMenu(game);
+            if (game.state === 'target_list')     this._drawTargetList(game);
+            if (game.state === 'item_throw_dir')  this._drawThrowPrompt(game);
+            if (game.state === 'ending') this._drawEndingOverlay(game);
+            if (game.state === 'log_modal') this._drawLogModal(game);
+            if (game.state === 'trade') this._drawOfferScreen(game);
+            if (game.state === 'dialogue') this._drawDialogueModal(game);
+            if (game.state === 'inspect') this._drawInspectPanel(game);
+            if (game.state === 'device') this._drawDevice(game);
+        } finally {
+            // (menu grammar) Universal ✕ / Back affordance — after the current Menu is
+            // drawn, stash its panel rect + draw a tappable close chip at the top-right.
+            // main hit-tests renderer._closeBtnRect / _menuPanelRect, kept here in ONE
+            // place so the chip and its hit-zone can't drift. Prompts (inspect) + the
+            // wheel are excluded (any-tap / native ▼CLOSE); target_list uses the rect
+            // _drawTargetList stashed this frame (its height is per-verb-count).
+            const CLOSE_PANEL = {
+                item_overlay: this._itemOverlayRect,
+                target_list: this._targetListRect,
+                log_modal:   LOG_MODAL_RECT,
+                trade:       MODAL_RECT,   // STATE.TRADE is also the offer screen's state —
+                                           // one panel rect serves both.
+                dialogue:    this._dialogueRect,
+                device:      DEVICE_RECT,
+            }[game.state] || null;
+            this._menuPanelRect = CLOSE_PANEL;
+            this._closeBtnRect = CLOSE_PANEL ? closeButtonRect(CLOSE_PANEL) : null;
+            if (this._closeBtnRect) this._drawCloseButton(this.ctx, this._closeBtnRect);
+        }
     }
 
     // (menu grammar) The ✕ / Back chip — a small dark rounded plate with a gold X,
@@ -2764,190 +2775,6 @@ export class Renderer {
         });
     }
 
-    // ── Trade window (Puck's shop — trade slice 1) ──────────────────────────
-    // Two 3-wide grids on one parchment panel: BUY (the vendor's stock) and SELL
-    // (the player's bag). A mood smiley + GP readout sit up top; a bribe button
-    // and hint sit at the bottom. Cell rects come from layout.tradeCellRect, the
-    // same source main._tapTrade hit-tests against, so taps land on what's drawn.
-    _drawTradeModal(game) {
-        const { ctx } = this;
-        const ui = this.uiSheet;
-        const npc = game._tradeNpc;
-        if (!npc) return;
-
-        ctx.fillStyle = 'rgba(0,0,0,0.72)';
-        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
-
-        const R = TRADE_MODAL_RECT;
-        if (ui?.loaded) drawPanelBig(ctx, ui, R.x, R.y, R.w, R.h, 'base');
-        else            drawPanelSmall(ctx, R.x, R.y, R.w, R.h);
-        if (!this.font) return;
-
-        const disp = npc.disposition ?? 0;
-        const dealing = canTrade(disp);
-        const m = mood(disp);
-        // Three modes share this one modal:
-        //  • shop  (a vendor)      — BUY (priced) + SELL columns + bribe.
-        //  • offer (a non-vendor)  — one satchel→NPC give column (Phase 6a).
-        //  • loot  (a chest shim)  — a zero-cost TAKE column, no mood/bribe/sell
-        //                            (Phase 6b: chests route through this window).
-        const container = !!npc._container;
-        const offerMode = !container && !npc.vendor;
-
-        // Title
-        const title = container ? `THE ${(npc.type || 'CHEST').toUpperCase()}`
-                    : offerMode ? `OFFER TO ${(npc.type || 'SOMEONE').toUpperCase()}`
-                                : `${(npc.type || 'TRADER').toUpperCase()}'S TILL`;
-        this.font.drawText(ctx, title, CANVAS_PX / 2, R.y + 14, { color: UI.gold, scale: 2, align: 'center' });
-
-        // Mood row — smiley + label on the left, GP on the right. A chest has no
-        // mood, so it only shows the player's GP.
-        const moodY = R.y + 48;
-        if (!container) {
-            this._drawMoodFace(R.x + 26, moodY, m.face);
-            this.font.drawText(ctx, m.mood.toUpperCase(), R.x + 44, moodY - 3, { color: (dealing || offerMode) ? UI.textLight : UI.hpRed, scale: 1 });
-        }
-        this.font.drawText(ctx, `GP ${game.gold ?? 0}`, R.x + R.w - 24, moodY - 6, { color: UI.gold, scale: 2, align: 'right' });
-
-        // Left-column header: TAKE (chest) / BUY (vendor) / — (offer has none).
-        if (container)       this.font.drawText(ctx, 'TAKE', TRADE_BUY_ORIGIN.x, TRADE_BUY_ORIGIN.y - 18, { color: UI.gold, scale: 1 });
-        else if (!offerMode) this.font.drawText(ctx, 'BUY',  TRADE_BUY_ORIGIN.x, TRADE_BUY_ORIGIN.y - 18, { color: UI.gold, scale: 1 });
-        if (!container) this.font.drawText(ctx, offerMode ? 'OFFER' : 'SELL', TRADE_SELL_ORIGIN.x, TRADE_SELL_ORIGIN.y - 18, { color: UI.gold, scale: 1 });
-
-        // LEFT grid — chest TAKE cells (0 GP) or vendor BUY cells (priced).
-        if (container || !offerMode) {
-            const stock = npc.stock || [];
-            for (let i = 0; i < stock.length; i++) {
-                const itemDef = ITEMS[stock[i]];
-                if (!itemDef) continue;
-                if (container) {
-                    this._drawTradeCell(itemDef, tradeCellRect(TRADE_BUY_ORIGIN, i), 0, true);   // free
-                } else {
-                    const price = dealing ? buyPrice(itemDef, disp) : null;
-                    this._drawTradeCell(itemDef, tradeCellRect(TRADE_BUY_ORIGIN, i), price, dealing && price != null);
-                }
-            }
-            if (container && stock.length === 0) {
-                this.font.drawText(ctx, 'EMPTY', TRADE_BUY_ORIGIN.x, TRADE_BUY_ORIGIN.y + 8, { color: UI.dim, scale: 1 });
-            }
-        }
-
-        // RIGHT grid — shop SELL / offer give column. A chest has no right column.
-        if (!container) {
-            const sell = game._tradeSell || [];
-            for (let i = 0; i < sell.length; i++) {
-                const itemDef = sell[i].itemDef;
-                if (offerMode) {
-                    // Quest items can't be handed away (pre-prod review): draw them
-                    // DIMMED + non-tappable with the ◆ marker; regular items are a
-                    // lit ♥ give cell.
-                    const q = itemDef.questItem;
-                    this._drawTradeCell(itemDef, tradeCellRect(TRADE_SELL_ORIGIN, i), null, !q, q ? '◆' : '♥');
-                } else {
-                    // (Phase 6d) A special-buyer pays a fixed price for an oddment
-                    // sellPrice() refuses. Quest items are EXCLUDED (pre-prod review:
-                    // the car-fix Converter must not be sellable), so they fall
-                    // through to the dimmed "—" like any unsellable item.
-                    const special = (!itemDef.questItem && npc.specialBuys) ? npc.specialBuys[itemDef.id] : null;
-                    if (special != null) {
-                        this._drawTradeCell(itemDef, tradeCellRect(TRADE_SELL_ORIGIN, i), special, true);
-                    } else {
-                        const price = dealing ? sellPrice(itemDef, disp) : null;
-                        this._drawTradeCell(itemDef, tradeCellRect(TRADE_SELL_ORIGIN, i), price, dealing && price != null);
-                    }
-                }
-            }
-            if (sell.length === 0) {
-                this.font.drawText(ctx, 'BAG EMPTY', TRADE_SELL_ORIGIN.x, TRADE_SELL_ORIGIN.y + 8, { color: UI.dim, scale: 1 });
-            }
-        }
-
-        // (Phase 6c) BUYBACK row — vendor only. Items you sold this window, still
-        // re-buyable at the LOCKED price, with a live countdown to the window's
-        // close. Refunds (buy→sell-back) ride the SELL column, so only re-buyable
-        // sold items need their own row here. Capped at TRADE_COLS for one row.
-        if (!container && !offerMode && npc._buyback && game._buybackList) {
-            const remaining = game._buybackRemainingMs(npc);
-            const bb = game._buybackList(npc);
-            if (bb.length > 0) {
-                const secs = Math.ceil(remaining / 1000);
-                const clock = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
-                this.font.drawText(ctx, `BUYBACK  ${clock}`, TRADE_BUYBACK_ORIGIN.x, TRADE_BUYBACK_ORIGIN.y - 18, { color: UI.gold, scale: 1 });
-                for (let i = 0; i < bb.length && i < TRADE_COLS; i++) {
-                    const def = ITEMS[bb[i].itemId];
-                    if (!def) continue;
-                    this._drawTradeCell(def, tradeCellRect(TRADE_BUYBACK_ORIGIN, i), bb[i].price, true);
-                }
-            }
-        }
-
-        // Bribe button — shop/offer only (a chest can't be bribed).
-        if (!container) {
-            const B = TRADE_BRIBE_RECT;
-            const cost = bribeStepCost(disp);
-            const maxed = disp >= 100;
-            const canBribe = !maxed && (game.gold ?? 0) >= cost;
-            drawInset(ctx, B.x, B.y, B.w, B.h);
-            ctx.fillStyle = canBribe ? 'rgba(212,185,106,0.18)' : 'rgba(0,0,0,0.15)';
-            ctx.fillRect(B.x + 1, B.y + 1, B.w - 2, B.h - 2);
-            const bribeLabel = maxed ? 'MOOD MAXED' : `BRIBE +${BRIBE_STEP}  ${cost} GP`;
-            this.font.drawText(ctx, bribeLabel, B.x + B.w / 2, B.y + B.h / 2 - 3, {
-                color: canBribe ? UI.gold : UI.dim, scale: 1, align: 'center',
-            });
-        }
-
-        // (menu grammar) keyboard / d-pad cursor highlight over the active cell.
-        const cur = game._tradeCursor;
-        if (cur && game._tradeSlots && game._tradeSlots().some(s => s.zone === cur.zone && s.index === cur.index)) {
-            const cr = cur.zone === 'bribe'   ? TRADE_BRIBE_RECT
-                     : cur.zone === 'sell'    ? tradeCellRect(TRADE_SELL_ORIGIN, cur.index)
-                     : cur.zone === 'buyback' ? tradeCellRect(TRADE_BUYBACK_ORIGIN, cur.index)
-                     :                          tradeCellRect(TRADE_BUY_ORIGIN, cur.index);
-            ctx.save();
-            ctx.strokeStyle = '#fff3c0'; ctx.lineWidth = 2.5;
-            ctx.strokeRect(cr.x - 2, cr.y - 2, cr.w + 4, cr.h + 4);
-            ctx.restore();
-        }
-
-        // Footer hint.
-        const footer = container ? 'TAP OR ↑↓←→ + SPACE · TAKE    E / ESC CLOSE'
-                     : offerMode ? 'TAP OR ↑↓←→ + SPACE · GIVE    B BRIBE    E / ESC CLOSE'
-                                 : 'TAP OR ↑↓←→ + SPACE · BUY/SELL    B BRIBE    E / ESC CLOSE';
-        this.font.drawText(ctx, footer, CANVAS_PX / 2, R.y + R.h - 16, {
-            color: UI.textLight, scale: 1, align: 'center',
-        });
-    }
-
-    // One shop cell: inset frame, item icon, price under it. `enabled` false
-    // (won't-deal, or unsellable like a quest item) dims the cell and the price
-    // shows as "—". `marker` (Phase 6a offer mode) replaces the price with a
-    // give/quest glyph drawn in gold, and the cell stays fully lit. (Phase 6d) A
-    // value-tier colour bar rides the cell's top edge for at-a-glance rarity.
-    _drawTradeCell(itemDef, r, price, enabled, marker) {
-        const { ctx } = this;
-        drawInset(ctx, r.x, r.y, r.w, r.h);
-        const prevAlpha = ctx.globalAlpha;
-        // Dim a disabled cell — including a marker cell that's disabled, e.g. a
-        // quest item in offer mode that can't be handed away (pre-prod review).
-        if (!enabled) ctx.globalAlpha = 0.45;
-
-        // (Phase 6d) tier bar — a 3px band of the item's rarity colour at the top.
-        const tier = itemTier(itemDef);
-        ctx.fillStyle = tier.color;
-        ctx.fillRect(r.x + 1, r.y + 1, r.w - 2, 3);
-
-        const iconSize = 32;
-        this._drawItemIcon(itemDef, r.x + (r.w - iconSize) / 2, r.y + 10, iconSize);
-
-        if (this.font) {
-            const label = marker != null ? marker : (price == null ? '—' : `${price}`);
-            this.font.drawText(ctx, label, r.x + r.w / 2, r.y + r.h - 16, {
-                color: (marker != null || price != null) ? UI.gold : UI.dim, scale: 1, align: 'center',
-            });
-        }
-        ctx.globalAlpha = prevAlpha;
-    }
-
     // Draw an item's icon (sprite if loaded, else the ITEM_COLORS bg+letter
     // fallback) into a size×size box. Mirrors the hotbar's item draw.
     _drawItemIcon(itemDef, x, y, size) {
@@ -2993,6 +2820,415 @@ export class Renderer {
         ctx.fillStyle = UI.gold;                         // pommel
         ctx.beginPath(); ctx.arc(0, gl, bw * 0.8, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
+    }
+
+    // ── The unified offer screen ─────────────────────────────────────────────
+    //
+    // One panel for buying, selling, giving and bribing, because they are one
+    // verb: make an offer. Geometry comes from layout.offerLayout, which
+    // main._tapOffer hit-tests against, so nothing can drift.
+    //
+    // Text is measured with this.font.measure — NEVER the /8 idiom, which is a
+    // fossil of the retired 8x8 atlas and wraps ~40% narrower than the space
+    // allows. The real VT323 advance is scale * 4.8.
+    //
+    _drawOfferScreen(game) {
+        const ctx = this.ctx;
+        const npc = game._offerNpc;
+        // Symmetric: _drawOfferLists reads game._offer.scroll.theirs unguarded and
+        // the trays read game._offer.give. Guarding only the npc leaves a
+        // half-cleared close (state back in TRADE with _offer already nulled)
+        // throwing from inside the frame instead of simply not drawing.
+        if (!npc || !game._offer || !game._offer.scroll) return;
+        const L = offerLayout(MODAL_RECT);
+
+        ctx.fillStyle = 'rgba(0,0,0,0.72)';
+        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+        drawPanelSmall(ctx, L.panel.x, L.panel.y, L.panel.w, L.panel.h, this.uiSheet, 'base');
+        if (!this.font) return;
+
+        const R = resolveOffer(npc, game._offer);
+        this._drawOfferHeader(game, L, R);
+        this._drawOfferLists(game, L, R);
+        this._drawOfferTrays(game, L, R);
+        this._drawOfferDescription(game, L, R);
+        this._drawOfferLedger(game, L, R);
+
+        this.font.drawText(ctx, 'TAB SIDE  SPACE STAGE  ENTER OFFER  ESC CLOSE',
+            L.panel.x + 8, L.hintY, { color: UI.dim, scale: 1 });
+    }
+
+    // The staged offer, made unambiguous. Gold rides in whichever tray its sign
+    // puts it in — a coin chip, because gold is just another thing you can offer.
+    _drawOfferTrays(game, L) {
+        const ctx = this.ctx;
+        const offer = game._offer || { give: [], take: [], gold: 0 };
+        const gold = offer.gold || 0;
+        this.font.drawText(ctx, 'YOU GIVE', L.giveTray[0].x, L.trayLabelY, { color: UI.dim, scale: 1 });
+        this.font.drawText(ctx, 'YOU TAKE', L.takeTray[0].x, L.trayLabelY, { color: UI.dim, scale: 1 });
+
+        const slot = (r, filled) => {
+            drawInset(ctx, r.x, r.y, r.w, r.h);
+            ctx.strokeStyle = filled ? UI.gold : '#3a352c';
+            ctx.lineWidth = 1;
+            if (!filled) ctx.setLineDash([3, 3]);
+            ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+            ctx.setLineDash([]);
+        };
+        // The coin is a CONTROL, not a readout: tapping it refuses the settled
+        // amount (a sale becomes a gift, a purchase becomes a lowball) and
+        // tapping it again takes it back. So it must stay drawn when it reads
+        // zero -- otherwise the affordance the player just used vanishes from
+        // under their finger and there is no way to undo the decision.
+        const coin = (r, amount, refused) => {
+            slot(r, true);
+            const col = refused ? UI.dim : UI.gold;
+            ctx.strokeStyle = col; ctx.lineWidth = 1.2;
+            if (refused) ctx.setLineDash([2, 2]);
+            ctx.beginPath(); ctx.arc(r.x + 18, r.y + 13, 7, 0, Math.PI * 2); ctx.stroke();
+            ctx.setLineDash([]);
+            this.font.drawText(ctx, String(amount), r.x + r.w / 2, r.y + 23,
+                { color: col, scale: 1, align: 'center' });
+        };
+        const fill = (rects, entries, goldHere, showCoin, refused) => {
+            rects.forEach(r => slot(r, false));
+            let i = 0;
+            for (const e of entries || []) {
+                const r = rects[i++]; if (!r) break;
+                slot(r, true);
+                this._drawItemIcon(e.def, r.x + 8, r.y + 6, 20);
+                if (e.count > 1) this.font.drawText(ctx, `x${e.count}`, r.x + r.w - 3, r.y + 25,
+                    { color: UI.gold, scale: 1, align: 'right' });
+            }
+            if (showCoin && rects[i]) coin(rects[i], goldHere, refused);
+        };
+        // Which tray holds the coin is the game's decision, not a re-derivation:
+        // main._goldTray owns it, and main._tapOffer hit-tests the same slot.
+        const tray = game._goldTray ? game._goldTray() : (gold > 0 ? 'give' : gold < 0 ? 'take' : null);
+        const refused = !!(offer.goldPinned);
+        fill(L.giveTray, offer.give, Math.max(0, gold), tray === 'give', refused);
+        fill(L.takeTray, offer.take, Math.max(0, -gold), tray === 'take', refused);
+    }
+
+    // Never empty. With a selection it carries name, tier, market value, what
+    // they pay, the written description and the goodwill weight — the three
+    // things the old screen could not show, together. With no selection it
+    // carries the NPC's mood line rather than dead space.
+    _drawOfferDescription(game, L) {
+        const ctx = this.ctx;
+        const npc = game._offerNpc;
+        const d = npc.disposition ?? 0;
+        drawInset(ctx, L.desc.x, L.desc.y, L.desc.w, L.desc.h);
+        const sel = game._offerSelection ? game._offerSelection() : null;
+
+        if (!sel) {
+            const m = mood(d);
+            const who = String(npc.type).toUpperCase();
+            const line = npc._container
+                ? `THE ${who} IS OPEN.`
+                : `${who} IS ${m.mood.toUpperCase()}.`;
+            this.font.drawText(ctx, line, L.desc.x + 10, L.desc.y + 6, { color: UI.gold, scale: 1 });
+            this.font.drawText(ctx, npc._container
+                ? 'PICK SOMETHING TO SEE WHAT IT IS.'
+                : 'PICK SOMETHING TO SEE WHAT IT IS WORTH TO THEM.',
+                L.desc.x + 10, L.desc.y + 24, { color: UI.dim, scale: 1 });
+            return;
+        }
+
+        const def = sel.def;
+        const tier = itemTier(def);          // returns the tier OBJECT, not a key
+        let x = L.desc.x + 10;
+        this.font.drawText(ctx, def.name, x, L.desc.y + 6, { color: UI.gold, scale: 1 });
+        x += this.font.measure(def.name, 1) + 14;
+        this.font.drawText(ctx, tier.name.toUpperCase(), x, L.desc.y + 6, { color: tier.color, scale: 1 });
+        x += this.font.measure(tier.name, 1) + 14;
+        // A chest has no till and buys nothing, so quoting what it "PAYS" invents a
+        // transaction that cannot happen. Its rows are worth their base value to
+        // the player and nothing to the box.
+        const pays = sellPrice(def, d);
+        this.font.drawText(ctx, npc._container
+            ? `${def.baseValue ?? 0} GP BASE - FREE TO TAKE`
+            : `${def.baseValue ?? 0} GP BASE - PAYS ${pays == null ? '-' : pays}`,
+            x, L.desc.y + 6, { color: UI.dim, scale: 1 });
+
+        const weight = npc.values && npc.values[def.id];
+        if (weight > 1) {
+            this.font.drawText(ctx, `VALUES THIS x${weight}`,
+                L.desc.x + L.desc.w - 10, L.desc.y + 6, { color: '#79c46a', scale: 1, align: 'right' });
+        }
+
+        // Measured wrap against the real advance. NOT the /8 idiom, which is a
+        // fossil of the retired 8x8 atlas and wraps ~40% narrow.
+        const maxPx = L.desc.w - 20;
+        const words = String(def.description || '').split(/\s+/);
+        const lines = []; let cur = '';
+        for (const w of words) {
+            const t = cur ? `${cur} ${w}` : w;
+            if (this.font.measure(t, 1) > maxPx && cur) { lines.push(cur); cur = w; } else cur = t;
+        }
+        if (cur) lines.push(cur);
+        lines.slice(0, 2).forEach((ln, i) =>
+            this.font.drawText(ctx, ln, L.desc.x + 10, L.desc.y + 24 + i * 14, { color: UI.text, scale: 1 }));
+    }
+
+    // The ledger. A negative balance does NOT disable the button — it arms it
+    // with a warning, because taking a bad deal is a legitimate move.
+    //
+    // The blocker is resolved FIRST and suppresses the balance figure. Below
+    // TRADE_FLOOR buyPrice returns null and offerBalance coerces it to 0, so a
+    // ten-item theft from a hostile NPC computes balance 0 — and printing that
+    // as "+0 IN THEIR FAVOUR" over a refused offer is the ledger lying about
+    // what is on the table.
+    _drawOfferLedger(game, L, R) {
+        const ctx = this.ctx;
+        const rowH = L.ledgerRowH;
+        ctx.fillStyle = '#3a352c';
+        ctx.fillRect(L.desc.x, L.desc.y + L.desc.h + 8, L.desc.w, 1);
+
+        const offer = game._offer || { give: [], take: [], gold: 0 };
+        const gold = offer.gold || 0;
+        const nameOf = (e) => `${e.count} x ${e.def.name}`;
+        const giving = [...(offer.give || []).map(nameOf), gold > 0 ? `${gold} GP` : null]
+            .filter(Boolean).join('  +  ') || 'NOTHING';
+        const taking = [...(offer.take || []).map(nameOf), gold < 0 ? `${-gold} GP` : null]
+            .filter(Boolean).join('  +  ') || 'NOTHING';
+
+        // Both columns truncate against what actually follows them: the give/take
+        // list against the balance column, the balance column against the button.
+        // Neither bound is a literal -- ledger.x + ledger.w is the button's left
+        // edge less its gutter, so a wider button moves both automatically.
+        const fitTo = (s, maxPx) => {
+            if (this.font.measure(s, 1) <= maxPx) return s;
+            let out = s;
+            while (out.length > 1 && this.font.measure(`${out}...`, 1) > maxPx) out = out.slice(0, -1);
+            return `${out}...`;
+        };
+        const listPx = L.ledgerBalanceX - L.ledgerValueX - 10;
+        const balPx  = L.ledger.x + L.ledger.w - L.ledgerBalanceX;
+
+        this.font.drawText(ctx, 'GIVING', L.ledger.x, L.ledger.y, { color: UI.dim, scale: 1 });
+        this.font.drawText(ctx, fitTo(giving, listPx), L.ledgerValueX, L.ledger.y, { color: UI.text, scale: 1 });
+        this.font.drawText(ctx, 'TAKING', L.ledger.x, L.ledger.y + rowH, { color: UI.dim, scale: 1 });
+        this.font.drawText(ctx, fitTo(taking, listPx), L.ledgerValueX, L.ledger.y + rowH, { color: UI.text, scale: 1 });
+
+        const blocker = game._offerBlocker ? game._offerBlocker() : null;
+        this.font.drawText(ctx, 'BALANCE', L.ledgerBalanceX, L.ledger.y, { color: UI.dim, scale: 1 });
+
+        // An EMPTY basket is not a refusal. `NOTHING STAGED` blocks the commit
+        // like any other blocker, but printing NO DEAL beside GIVING NOTHING /
+        // TAKING NOTHING reads as though they turned the player down, when the
+        // player has not yet put anything on the table. Same staged test as
+        // commitBlocker's first guard, truncation and all.
+        const staged = (offer.give || []).length + (offer.take || []).length
+                     + (Math.trunc(gold) ? 1 : 0);
+        if (!staged) {
+            this.font.drawText(ctx, '-', L.ledgerBalanceX, L.ledger.y + rowH,
+                { color: UI.dim, scale: 1 });
+        } else if (blocker) {
+            this.font.drawText(ctx, 'NO DEAL', L.ledgerBalanceX, L.ledger.y + rowH,
+                { color: UI.dim, scale: 1 });
+        } else {
+            const balTxt = R.balance >= 0 ? `+${R.balance} IN THEIR FAVOUR` : `${-R.balance} GP SHORT`;
+            this.font.drawText(ctx, fitTo(balTxt, balPx), L.ledgerBalanceX, L.ledger.y + rowH,
+                { color: R.balance >= 0 ? '#79c46a' : UI.hpRed, scale: 1 });
+            if (R.points < 0) {
+                this.font.drawText(ctx, fitTo(`${R.points} THEY'LL REMEMBER`, balPx),
+                    L.ledgerBalanceX, L.ledger.y + rowH * 2, { color: UI.hpRed, scale: 1 });
+            }
+        }
+
+        const b = L.button;
+        drawInset(ctx, b.x, b.y, b.w, b.h);
+        ctx.strokeStyle = blocker ? UI.dim : UI.gold;
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(b.x + 1, b.y + 1, b.w - 2, b.h - 2);
+        this.font.drawText(ctx, blocker || 'MAKE THE OFFER', b.x + b.w / 2, b.y + 14,
+            { color: blocker ? UI.dim : UI.gold, scale: 1, align: 'center' });
+    }
+
+    // Header: mood face, name, the disposition meter, and the player's gold.
+    _drawOfferHeader(game, L, R) {
+        const ctx = this.ctx;
+        const npc = game._offerNpc;
+        const d = npc.disposition ?? 0;
+
+        // A container is not a person. Its shim carries `disposition: 100` purely
+        // so mood()/canTrade() have a benign value to read -- it was never meant
+        // to be SEEN, and the old _drawTradeModal branched on `_container` and
+        // skipped the mood row entirely. Drawn as-is it gives a wooden crate a
+        // smiling face, an ADORING label and a full meter.
+        const isContainer = !!npc._container;
+        if (!isContainer) this._drawMoodFace(L.panel.x + 24, L.panel.y + 20, mood(d).face);
+        this.font.drawText(ctx, String(npc.type).toUpperCase(),
+            L.panel.x + (isContainer ? 8 : 44), L.panel.y + 10, { color: UI.gold, scale: 2 });
+        this.font.drawText(ctx, `GP ${game.gold ?? 0}`,
+            L.panel.x + L.panel.w - 44, L.panel.y + 10, { color: UI.gold, scale: 2, align: 'right' });
+
+        if (isContainer) {
+            this.font.drawText(ctx, 'EVERYTHING HERE IS FREE',
+                L.meterBar.x, L.meterBar.y, { color: UI.dim, scale: 1 });
+            return;
+        }
+
+        // An untracked NPC has no meter to draw — see spec 4.5. Say so plainly
+        // rather than inventing a zero they never had.
+        if (npc.disposition == null) {
+            this.font.drawText(ctx, 'NO OPINION OF YOU EITHER WAY',
+                L.meterBar.x, L.meterBar.y, { color: UI.dim, scale: 1 });
+            return;
+        }
+
+        const ceil = dispositionCeil(npc);
+        const mb = L.meterBar;
+        const at = (v) => mb.x + ((Math.max(DISPOSITION_MIN, Math.min(ceil, v)) - DISPOSITION_MIN)
+                                  / (ceil - DISPOSITION_MIN)) * mb.w;
+
+        drawInset(ctx, mb.x, mb.y, mb.w, mb.h);
+        ctx.fillStyle = d >= 50 ? '#79c46a' : d >= 0 ? UI.textLight : UI.hpRed;
+        ctx.fillRect(mb.x, mb.y, at(d) - mb.x, mb.h);
+
+        // The projection: gold rightward for a surplus, red leftward for a bad
+        // deal. Same affordance, mirrored — the player sees the damage BEFORE
+        // committing, never after.
+        if (R.points !== 0) {
+            const lo = Math.min(at(d), at(R.projected)), hi = Math.max(at(d), at(R.projected));
+            const up = R.points > 0;
+            // A REFUSED offer gets the outline without the fill (Caelan's call,
+            // 2026-09-01). Filled, the ghost promises a consequence that is not
+            // going to happen -- drawn identically whether they will take the
+            // bad deal or have just refused it. Hollow, it still shows the size
+            // of what was proposed, which is exactly the reason for the refusal,
+            // without reading as a done thing. The balance figure already blanks
+            // itself when blocked; this is the meter catching up.
+            const blocked = game._offerBlocker ? !!game._offerBlocker() : false;
+            if (!blocked) {
+                ctx.fillStyle = up ? 'rgba(212,185,106,0.5)' : 'rgba(204,68,34,0.45)';
+                ctx.fillRect(lo, mb.y, hi - lo, mb.h);
+            }
+            ctx.strokeStyle = up ? UI.gold : UI.hpRed;
+            ctx.lineWidth = 1; ctx.setLineDash([2, 2]);
+            ctx.strokeRect(lo, mb.y, hi - lo, mb.h);
+            ctx.setLineDash([]);
+        }
+
+        ctx.fillStyle = UI.panelBg;
+        for (const v of [-50, -25, 0, 25, 50, 75]) ctx.fillRect(at(v), mb.y, 1, mb.h);
+
+        const b0 = band(d), b1 = band(R.projected);
+        const sign = (v) => (v > 0 ? `+${v}` : String(v));
+        const dirCol = R.points > 0 ? '#79c46a' : R.points < 0 ? UI.hpRed : UI.text;
+        const label = R.points !== 0
+            ? `${sign(d)} > ${sign(R.projected)} ${(b1 ? b1.mood : "WON'T DEAL").toUpperCase()}`
+            : `${sign(d)} ${(b0 ? b0.mood : "WON'T DEAL").toUpperCase()}`;
+        this.font.drawText(ctx, label, mb.x + mb.w + 12, mb.y + 1, { color: dirCol, scale: 1 });
+
+        // The payoff: the multipliers the player is actually buying or losing.
+        const mulX = mb.x + mb.w + 12 + this.font.measure(label, 1) + 14;
+        const mulCol = (b1 === b0) ? UI.dim : dirCol;
+        const arrow = (a, b, fmt) => (a === b ? fmt(a) : `${fmt(a)} > ${fmt(b)}`);
+        if (b0 && b1) {
+            this.font.drawText(ctx, `BUY x${arrow(b0.buy, b1.buy, v => v.toFixed(1))}`,
+                mulX, L.meterMulTopY, { color: mulCol, scale: 1 });
+            this.font.drawText(ctx, `SELL x${arrow(b0.sell, b1.sell, v => v.toFixed(2))}`,
+                mulX, L.meterMulBotY, { color: mulCol, scale: 1 });
+        }
+    }
+
+    // The two goods columns. Each is a clipped viewport with a proportional
+    // thumb, so all 50 bag slots are reachable — the old grid showed 15 and
+    // silently dropped the rest off the bottom of the canvas.
+    _drawOfferLists(game, L, R) {
+        const ctx = this.ctx;
+        const npc = game._offerNpc;
+        const d = npc.disposition ?? 0;
+
+        this.font.drawText(ctx, `${String(npc.type).toUpperCase()}'S GOODS`,
+            L.theirs[0].x, L.colHeadY, { color: UI.dim, scale: 1 });
+        this.font.drawText(ctx, 'YOUR SATCHEL',
+            L.yours[0].x, L.colHeadY, { color: UI.dim, scale: 1 });
+
+        const theirs = game._offerTheirsList();
+        const yours  = game._offerYoursList();
+        // A container's contents are FREE -- offerBalance charges 0 for them
+        // (offer.js, the `_container` branch). Pricing this column at
+        // buyPrice(def, shim.disposition) would put a real number beside every
+        // row of loot the model then hands over for nothing: the screen quoting
+        // a price the ledger does not charge.
+        // priceOf takes the ENTRY, not just its def, so a row carrying its own
+        // locked price (a buyback) draws what it will actually charge.
+        // `sel` is the row the keyboard cursor / last tap is on, so the column
+        // can draw a focus ring. The retired _drawTradeModal stroked one around
+        // its cursor cell and the port dropped it, which left keyboard players
+        // scrolling blind -- nothing on the panel said what Space would stage.
+        const sel = game._offer.selection;
+        this._drawOfferColumn(game, L.theirs, L.theirsScrollTrack, theirs,
+            game._offer.scroll.theirs, 'take',
+            (def, entry) => (npc._container ? 0
+                          : entry && entry.price != null ? entry.price
+                          : buyPrice(def, d)),
+            sel && sel.side === 'theirs' ? sel.index : -1);
+        this._drawOfferColumn(game, L.yours, L.yoursScrollTrack, yours,
+            game._offer.scroll.yours, 'give', (def) => sellPrice(def, d),
+            sel && sel.side === 'yours' ? sel.index : -1);
+    }
+
+    // One column: `rects` are the visible row slots, `list` is the full backing
+    // list, `scroll` is the index of the first visible row.
+    _drawOfferColumn(game, rects, thumb, list, scroll, side, priceOf, cursorIndex = -1) {
+        const ctx = this.ctx;
+        for (let i = 0; i < rects.length; i++) {
+            const entry = list[scroll + i];
+            if (!entry) continue;
+            const r = rects[i];
+            const def = entry.def;
+            const staged = game._stagedCount(side, entry);
+
+            if (staged) {
+                ctx.fillStyle = 'rgba(212,185,106,0.12)';
+                ctx.fillRect(r.x, r.y, r.w, r.h);
+            }
+            const tier = itemTier(def);
+            this._drawItemIcon(def, r.x + 10, r.y + 8, 24);
+
+            const name = entry.count > 1 ? `${def.name} x${entry.count}` : def.name;
+            this.font.drawText(ctx, name, r.x + 42, r.y + 6, { color: UI.text, scale: 1 });
+            this.font.drawText(ctx, tier.name.toLowerCase(), r.x + 42, r.y + 22,
+                { color: tier.color, scale: 1 });
+
+            const price = priceOf(def, entry);
+            this.font.drawText(ctx, price == null ? '-' : String(price),
+                r.x + r.w - 10, r.y + 6, { color: UI.gold, scale: 1, align: 'right' });
+            if (staged) {
+                this.font.drawText(ctx, `staged x${staged}`, r.x + r.w - 10, r.y + 22,
+                    { color: '#79c46a', scale: 1, align: 'right' });
+                ctx.strokeStyle = UI.gold; ctx.lineWidth = 1.5;
+                ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
+            }
+            // AFTER the staged border, not before: a 1.5px stroke inset 1px
+            // covers x+0.25..x+1.75 of a 3px bar, and staging an item was
+            // repainting its tier stripe solid gold -- losing, on exactly the
+            // rows the player is acting on, the one cue this screen was built
+            // to add.
+            ctx.fillStyle = tier.color; ctx.fillRect(r.x, r.y, 3, r.h);
+
+            // The focus ring, outermost so it reads over both. Dashed and pale
+            // so it is never mistaken for the solid gold STAGED border -- one
+            // says "Space acts here", the other says "this is in the tray".
+            if (scroll + i === cursorIndex) {
+                ctx.strokeStyle = UI.textLight; ctx.lineWidth = 1;
+                ctx.setLineDash([3, 2]);
+                ctx.strokeRect(r.x + 2.5, r.y + 2.5, r.w - 5, r.h - 5);
+                ctx.setLineDash([]);
+            }
+        }
+        // Proportional thumb — an honest read on how deep the list is.
+        if (list.length > rects.length) {
+            const frac = rects.length / list.length;
+            const travel = thumb.h * (1 - frac);
+            const top = thumb.y + travel * (scroll / Math.max(1, list.length - rects.length));
+            ctx.fillStyle = 'rgba(139,115,64,0.5)';
+            ctx.fillRect(thumb.x, top, thumb.w, Math.max(12, thumb.h * frac));
+        }
     }
 
     // ── Dialogue modal (Step 4 — disposition dialogue) ───────────────────────

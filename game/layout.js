@@ -17,6 +17,12 @@ import { unlockedSlots, adjacentPairs, HANDS } from './rings.js';
 export const CANVAS_INTERNAL_PX = 608;   // mirrors data.js CANVAS_PX
 export const HIT_SLOP = 6;               // tap-zone expansion (Apple 44pt min target)
 
+// The one modal bezel. LOG_MODAL_RECT, EQUIPMENT_MODAL_RECT and
+// DEVICE_RECT were four separate literals of this identical rect; they now alias
+// it, so the panel can be retuned in one place. Frozen because that sharing means
+// a stray `.w =` on any one of the five names would silently retune all five.
+export const MODAL_RECT = Object.freeze({ x: 24, y: 44, w: 560, h: 520 });
+
 // Pure rect intersection — true iff a and b share positive area. Edge-touching
 // (a.right === b.left) is NOT overlap, so panels may abut without clipping.
 export function rectsOverlap(a, b) {
@@ -152,7 +158,7 @@ export function wheelRingR(k) { const r0 = WHEEL_RING0_R0 + k * (WHEEL_RING_W + 
 // usable-bar's HIT_SLOP-expanded top (510 - 6 = 504): 436 + 62 + 6 = 504.
 // Enforced by tests/hud-layout.test.js's non-overlap invariant.
 export const QUESTLOG_RECT = { x: 6, y: 436, w: 340, h: 62 };
-export const LOG_MODAL_RECT = { x: 24, y: 44, w: 560, h: 520 };
+export const LOG_MODAL_RECT = MODAL_RECT;
 // (Target List) A compact centred RuneScape-style verb menu. Height is computed
 // per-target in the renderer (44px title band + one ROW_H row per verb).
 export const TARGET_LIST_RECT  = { x: 180, y: 150, w: 248 };
@@ -161,31 +167,20 @@ export function targetListRowRect(i) {
   return { x: TARGET_LIST_RECT.x + 10, y: TARGET_LIST_RECT.y + 44 + i * TARGET_LIST_ROW_H, w: TARGET_LIST_RECT.w - 20, h: TARGET_LIST_ROW_H - 4 };
 }
 
-// ── Trade window (Puck's shop — trade Slice 1) ──
-// (drawn by renderer._drawTradeModal, hit-tested by main._tapTrade). Two 3-wide
-// grids side by side: BUY (the vendor's stock) on the left, SELL (the player's
-// bag) on the right. One cell-rect helper feeds both the draw and the hit-test.
-export const TRADE_MODAL_RECT = { x: 24, y: 44, w: 560, h: 520 };
-// The dialogue window is sized to its content at draw time (bottom-anchored, grows
-// with the option count) — see renderer._drawDialogueModal, which stashes the live
-// rect on this._dialogueRect for the ✕ / tap-outside menu grammar.
-export const TRADE_COLS       = 3;
-export const TRADE_CELL_W     = 64;
-export const TRADE_CELL_H     = 72;
-export const TRADE_COL_STRIDE = 72;
-export const TRADE_ROW_STRIDE = 80;
-export const TRADE_BUY_ORIGIN  = { x: 52,  y: 156 };
-export const TRADE_SELL_ORIGIN = { x: 320, y: 156 };
-// (Phase 6c) BUYBACK row — sold items you can re-buy at the locked price, drawn
-// below the two grids and above the bribe button. One row of up to TRADE_COLS.
-export const TRADE_BUYBACK_ORIGIN = { x: 52, y: 416 };
-export const TRADE_BRIBE_RECT  = { x: 52, y: 506, w: 200, h: 34 };
+// The dialogue window has no constant here on purpose: it is sized to its
+// content at draw time (bottom-anchored, growing with the option count) — see
+// renderer._drawDialogueModal, which stashes the live rect on this._dialogueRect
+// for the ✕ / tap-outside menu grammar.
+//
+// The trade window's two-grid geometry lived here until the offer screen
+// replaced it. TRADE_MODAL_RECT went with it: it was an alias of MODAL_RECT and
+// nothing named it any more.
 
 // ── Equipment screen (Stage 3 — read-only Vitruvian dress-up) ──
 // (drawn by renderer._drawEquipmentModal, hit-tested by main._tapDevice via deviceEquipLayout).
 // One big ornate panel; a centred figure box with the 6 equip slots ringing it.
 // Each slot rect carries its own `label` and the `game.equipment` key it reads.
-export const EQUIPMENT_MODAL_RECT = { x: 24, y: 44, w: 560, h: 520 };
+export const EQUIPMENT_MODAL_RECT = MODAL_RECT;
 
 // Centred ~140×300 figure box inside the modal (the mannequin + Vitruvian
 // circle/square draw relative to this).
@@ -208,18 +203,6 @@ export const EQUIP_SLOT_RECTS = [
     { key: 'weapon', label: 'WEAPON',  x: 256, y: 480, w: 96, h: 48, zone: { fx: 0.5,  fy: 0.55 } }, // bottom-center
 ];
 
-// Rect for the `index`-th cell of a grid anchored at `origin` (BUY or SELL).
-export function tradeCellRect(origin, index) {
-    const col = index % TRADE_COLS;
-    const row = Math.floor(index / TRADE_COLS);
-    return {
-        x: origin.x + col * TRADE_COL_STRIDE,
-        y: origin.y + row * TRADE_ROW_STRIDE,
-        w: TRADE_CELL_W,
-        h: TRADE_CELL_H,
-    };
-}
-
 // (menu grammar) The always-visible ✕ / Back chip — a ~30px tappable target at a
 // panel's top-right inner corner, the device-agnostic exit on every Menu. Drawn by
 // renderer._drawCloseButton and hit-tested in main._onCanvasPointerDown, both off
@@ -234,7 +217,7 @@ export function closeButtonRect(r) {
 // collide with the chip), and the body region below that hosts one of the four
 // existing draw bodies (ITEMS/GEAR/QUESTS/MAP). Geometry lives here so
 // renderer._drawDevice (draw) and main.js (hit-test) share ONE source of truth.
-export const DEVICE_RECT = { x: 24, y: 44, w: 560, h: 520 };
+export const DEVICE_RECT = MODAL_RECT;
 export const DEVICE_TABS = ['items', 'gear', 'quests', 'map', 'rings'];
 export const DEVICE_TAB_H = 30;                        // tab-strip height
 const DEVICE_TAB_TOP = DEVICE_RECT.y + 38;             // below the title/✕ band (the chip ends at y+36)
@@ -399,4 +382,121 @@ export function deviceRingsLayout(bodyRect, game) {
     });
 
     return { hands, sockets, links };
+}
+
+// ── The unified offer screen ─────────────────────────────────────────────────
+//
+// One panel: a header with the disposition meter, two scrolling goods lists, the
+// give/take trays, an always-populated description strip, and the ledger band.
+// renderer._drawOfferScreen (draw) and main._tapOffer (hit-test) read this SAME
+// function, so a row's tap zone can never drift from where it was painted.
+// offerRowIndexAt / offerTraySlotAt do the hit-testing here too, so the slop
+// policy pinned by tests/offer-layout.test.js can't drift out of sync with it.
+//
+// The numbers come from game/_design-offer.html, which renders this at 608x608
+// against real VT323 metrics and prints a fit report. Non-overlap is pinned by
+// tests/offer-layout.test.js.
+//
+// Everything is derived from `P` (both position and size) rather than the fixed
+// canvas, so a same-size panel moved elsewhere on the 608x608 canvas gets a pure
+// translation of this same layout.
+export const OFFER_ROWS_VISIBLE = 6;
+export const OFFER_ROW_H = 40;
+export const OFFER_TRAY_SLOTS = 6;
+
+export function offerLayout(panelRect) {
+    const P = panelRect || MODAL_RECT;
+    const px = P.x + 8, pr = P.x + P.w - 8;
+    const gutter = 16;                       // gutter MUST exceed 2 * HIT_SLOP
+    const colW = (pr - px - gutter) / 2;
+    // YOUR satchel on the LEFT, their goods on the RIGHT -- Caelan's call,
+    // 2026-09-01. It puts each column directly above the tray it stages into
+    // (yours -> YOU GIVE on the left, theirs -> YOU TAKE on the right), so both
+    // staging motions are vertical instead of crossing the panel diagonally,
+    // while the trays keep reading YOU GIVE -> YOU TAKE left-to-right in the
+    // same order as the ledger's GIVING / TAKING. The cost is the Fallout-3
+    // convention of the vendor's stock on the left, which he traded away
+    // knowingly.
+    const leftX = px, rightX = px + colW + gutter;
+
+    const listY = P.y + 102;
+    const rows = (ox) => Array.from({ length: OFFER_ROWS_VISIBLE }, (_, i) => ({
+        x: ox, y: listY + i * OFFER_ROW_H, w: colW, h: OFFER_ROW_H,
+    }));
+    const trayY = P.y + 360;
+    const tray = (ox) => Array.from({ length: OFFER_TRAY_SLOTS }, (_, i) => ({
+        x: ox + i * 42, y: trayY, w: 36, h: 36,
+    }));
+    const listH = OFFER_ROWS_VISIBLE * OFFER_ROW_H;
+
+    // 460, not 464: the band is three rows deep when a bad deal is staged
+    // (GIVING / TAKING on the left, BALANCE / figure / "they'll remember this"
+    // on the right), and at 464 the third row's baseline landed exactly on the
+    // hint line with no gap at all.
+    const ledgerY = P.y + 460;
+    const buttonW = 156, buttonX = pr - buttonW;
+
+    return {
+        panel: P,
+        meterBar:          { x: px, y: P.y + 60, w: 320, h: 12 },
+        // The two multiplier rows the header stacks beside the meter. They used
+        // to be `mb.y - 5` / `mb.y + 8` invented inside the renderer, which put
+        // the band's real bottom (68 + a 12px glyph box = 80) somewhere the
+        // containment suite could not see -- and a colHeadY that cleared the
+        // 12px BAR still landed on top of the SELL row.
+        meterMulTopY:       P.y + 55,
+        meterMulBotY:       P.y + 68,
+        // 86, not 94: drawText's y is the TOP of the glyph box, so a scale-1
+        // header at 94 ran to 106 and bit 4px into the first row at 102 -- the
+        // staged row's border clipped the header's descenders.
+        colHeadY:           P.y + 86,
+        yours:              rows(leftX),
+        theirs:             rows(rightX),
+        yoursScrollTrack:   { x: leftX + colW - 5,  y: listY, w: 3, h: listH },
+        theirsScrollTrack:  { x: rightX + colW - 5, y: listY, w: 3, h: listH },
+        trayLabelY:         P.y + 346,
+        giveTray:           tray(leftX),
+        takeTray:           tray(rightX),
+        desc:               { x: px, y: P.y + 400, w: pr - px, h: 54 },
+        // label at ledger.x, value at ledgerValueX, BALANCE at ledgerBalanceX —
+        // gives the renderer a truncation bound so a long give-list can't run
+        // into the balance figure.
+        // h is the whole band, not one row: 3 rows of 14 plus the last row's
+        // text height. An earlier 20 described only the first row, which made
+        // the containment test pass over a band that actually ran 22px further.
+        ledger:             { x: px, y: ledgerY, w: buttonX - px - 8, h: 42 },
+        ledgerRowH:         14,
+        ledgerValueX:       px + 56,
+        ledgerBalanceX:     px + 268,
+        button:             { x: buttonX, y: ledgerY - 2, w: buttonW, h: 40 },
+        hintY:              P.y + 506,
+    };
+}
+
+function _ptInRect(pt, r) {
+    return pt.x >= r.x && pt.x < r.x + r.w && pt.y >= r.y && pt.y < r.y + r.h;
+}
+
+// Resolve a tap point to a data index within one scrolling list column, or -1.
+// ZERO slop — rows tile with no real gap, so expanding any one of them would
+// overlap its neighbour and make the tap ambiguous (the thing this module
+// exists to prevent). `scroll` is the data index of the first visible row.
+export function offerRowIndexAt(L, pt, side, scroll) {
+    const rows = side === 'yours' ? L.yours : L.theirs;
+    for (let i = 0; i < rows.length; i++) {
+        if (_ptInRect(pt, rows[i])) return i + (scroll || 0);
+    }
+    return -1;
+}
+
+// Resolve a tap point to a slot index within one tray, or -1. ZERO slop here
+// too, though tray slots already have a real 6px gap (36px slots, 42px
+// stride) — a tap landing in that gap is genuinely ambiguous and returns -1
+// rather than guessing which neighbour it meant.
+export function offerTraySlotAt(L, pt, side) {
+    const slots = side === 'take' ? L.takeTray : L.giveTray;
+    for (let i = 0; i < slots.length; i++) {
+        if (_ptInRect(pt, slots[i])) return i;
+    }
+    return -1;
 }

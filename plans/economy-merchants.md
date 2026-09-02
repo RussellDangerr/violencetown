@@ -1,3 +1,9 @@
+> **SUPERSEDED 2026-09-01** by `plans/unified-offer-screen.md`. The schema and UI described below
+> (`shopInventory`, `buyMultiplier`, `tradeThreshold`, `ITEM_GIVE_DIR`, Down-to-Give) were never
+> built and have been abandoned. What actually shipped is the unified offer screen: one verb, *make
+> an offer*, with two trays and signed gold. Kept for the design reasoning, not as a description of
+> the code.
+
 # Feature: Economy & Merchants — Subjective Value Trade
 **Phase:** Phase 2 — Life in the City (extends `feature/give-action-and-disposition`)
 **Priority:** High (economy is the connective tissue between items, NPCs, and zone identity)

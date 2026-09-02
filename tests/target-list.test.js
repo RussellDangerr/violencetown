@@ -62,3 +62,69 @@ test('always ends with a cancel verb carrying the cancel resolver', () => {
   assert.equal(last.key, 'cancel');
   assert.equal(last.resolver, 'cancel');
 });
+
+// ── Containers (Task 16) ─────────────────────────────────────────────────────
+//
+// A container's tile is never walkable (pathing.stepFree blocks it), so before
+// this it resolved to no target at all: _targetAt had no container case, so a
+// tap on a chest did nothing and BUMPING it was the only way in — which needs a
+// keyboard. On touch there was no way to open a chest.
+const crate = { type: 'crate', x: 6, y: 5, contents: ['rock', 'soap'] };
+
+test('a container offers Open, and Open is its default verb', () => {
+  const t = { x: 6, y: 5, container: crate };
+  const keys = targetVerbs(t, G).map(v => v.key);
+  assert.ok(keys.includes('open'), `no Open verb: ${keys.join(', ')}`);
+  assert.equal(defaultVerb(t, G).key, 'open');
+});
+
+test('Open walks the Hero adjacent first — it can never be fired at range', () => {
+  // The whole point: the chest tile is not walkable, so the fire path must stop
+  // beside it. Without needsAdjacent the verb would fire from across the map.
+  const open = targetVerbs({ x: 6, y: 5, container: crate }, G).find(v => v.key === 'open');
+  assert.equal(open.needsAdjacent, true);
+});
+
+test('Open sorts to the top of the list, above Examine, with Cancel last', () => {
+  const list = orderedTargetVerbs({ x: 6, y: 5, container: crate }, G).map(v => v.key);
+  assert.equal(list[0], 'open');
+  assert.equal(list[list.length - 1], 'cancel');
+  assert.ok(list.indexOf('examine') > 0, 'Examine should rank below the default verb');
+});
+
+test('nothing else grows an Open verb', () => {
+  for (const [label, t] of [
+    ['friendly NPC', { x: 6, y: 5, npc: friendly }],
+    ['hostile NPC', { x: 6, y: 5, npc: hostile }],
+    ['ground item', { x: 6, y: 5, item: rock }],
+    ['bare tile', { x: 6, y: 5 }],
+  ]) {
+    const keys = targetVerbs(t, G).map(v => v.key);
+    assert.ok(!keys.includes('open'), `${label} offers Open`);
+  }
+});
+
+test('Open ranks with the other act-on-it verbs, not down with Examine', () => {
+  // orderedTargetVerbs gives the DEFAULT verb rank -1, so a container-only
+  // target puts Open first whatever its rank is. The rank only shows when Open
+  // is NOT the default — an NPC standing on a chest — and there it must still
+  // beat Examine, or the useful verb hides at the bottom of the list.
+  const list = orderedTargetVerbs({ x: 6, y: 5, npc: friendly, container: crate }, G).map(v => v.key);
+  assert.equal(list[0], 'talk', 'the NPC default should still lead');
+  assert.ok(list.indexOf('open') < list.indexOf('examine'),
+    `Open sank below Examine: ${list.join(', ')}`);
+});
+
+test('an NPC standing on a chest is still an NPC — the container does not steal the default', () => {
+  // _targetAt resolves both; the NPC branch must win, or talking to someone
+  // beside a crate opens the crate instead.
+  const t = { x: 6, y: 5, npc: friendly, container: crate };
+  assert.equal(defaultVerb(t, G).key, 'talk');
+  const keys = targetVerbs(t, G).map(v => v.key);
+  assert.ok(keys.includes('open') && keys.includes('talk'), 'both verbs should be offered');
+});
+
+test('a ground item on a chest tile still defaults to Take', () => {
+  const t = { x: 6, y: 5, item: rock, container: crate };
+  assert.equal(defaultVerb(t, G).key, 'take');
+});

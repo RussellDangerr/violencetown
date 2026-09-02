@@ -21,7 +21,7 @@ import { tickNpcState } from './npc.js';
 import { tickBuffList } from './buffs.js';
 import { parseCapabilities, deriveAllegiance } from './ai.js';
 import { FACING_VECTORS } from './perception.js';
-import { ITEMS } from './items.js';
+import { resolveItemDef } from './item-registry.js';
 
 const DEFAULT_SIGHT = 8;
 const DEFAULT_DAMAGE = 8;
@@ -133,7 +133,7 @@ export class Enemy {
         gold = null,
         giftLog = null,
         // Law 6f (plans/gold-standard-design.md): the potions/gear this enemy
-        // carries — an array of ITEMS ids (resolveLoadout below resolves them to
+        // carries — an array of item ids (resolveLoadout below resolves them to
         // real defs; legacy { name, value } literals still count too, for old
         // saves/fixtures). Value counts toward Challenge GP (challengeGp below)
         // but is NOT yet consumed by AI (not USED in a fight); that lands with
@@ -376,7 +376,7 @@ export class Enemy {
 // caught loudly, at author time.
 export function resolveLoadout(loadout) {
     if (!Array.isArray(loadout)) return [];
-    return loadout.map(x => (typeof x === 'string' ? ITEMS[x] : x)).filter(Boolean);
+    return loadout.map(x => (typeof x === 'string' ? resolveItemDef(x) : x)).filter(Boolean);
 }
 
 // Law 6f — the nameplate number is the whole kit: liquid gold + carried item
@@ -384,7 +384,7 @@ export function resolveLoadout(loadout) {
 // saves and fixtures), so both read the same number.
 export function challengeGp(e) {
     const items = (e.loadout ?? []).reduce((s, x) => {
-        const def = (typeof x === 'string') ? ITEMS[x] : x;
+        const def = (typeof x === 'string') ? resolveItemDef(x) : x;
         return s + (def?.value ?? def?.baseValue ?? 0);
     }, 0);
     return (e.gold ?? 0) + items;

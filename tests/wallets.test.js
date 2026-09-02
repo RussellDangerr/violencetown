@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { Enemy, spawnEnemy, challengeGp, resolveLoadout } from '../game/enemies.js';
 import { transferGold, burnGold } from '../game/trade.js';
 import { ITEMS, poitionBuff } from '../game/items.js';
+import { WEAPONS } from '../game/weapons.js';
 
 describe('Law 6 — the wallet is the loot', () => {
     test('transferGold moves an enemy wallet to a receiver and conserves total', () => {
@@ -100,5 +101,22 @@ describe('challengeGp over real item ids (Law 6f)', () => {
         assert.deepEqual(resolveLoadout(null), []);
         assert.deepEqual(resolveLoadout(undefined), []);
         assert.deepEqual(resolveLoadout(['nope']), []);
+    });
+
+    // Sibling of the bare-ITEMS ground-take bug: a boss authored with a weapon
+    // in its loadout used to drop it silently on death (resolveLoadout) and
+    // count 0 toward its nameplate GP (challengeGp) — the ONLY item source
+    // that resolves this without a live Game (no _resolveItemDef to call), so
+    // it inlines the same WEAPONS-then-ITEMS order directly.
+    test('resolveLoadout resolves a weapon id, not just an ITEMS id', () => {
+        const defs = resolveLoadout(['lion_whip', 'bandage']);
+        assert.equal(defs.length, 2);
+        assert.equal(defs[0], WEAPONS.lion_whip);
+        assert.equal(defs[1], ITEMS.bandage);
+    });
+
+    test('a loadout weapon counts toward challengeGp by its baseValue', () => {
+        const e = new Enemy({ id: 'k3', type: 'Boss', x: 0, y: 0, gold: 10, loadout: ['ray_gun'] });
+        assert.equal(challengeGp(e), 10 + WEAPONS.ray_gun.baseValue);
     });
 });

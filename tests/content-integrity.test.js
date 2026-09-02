@@ -10,6 +10,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { resolveItemDef, ALL_ITEM_IDS } from '../game/item-registry.js';
+import { buyPrice } from '../game/trade.js';
 import { join } from 'node:path';
 
 import { validateContent } from '../game/content-validate.js';
@@ -44,4 +46,51 @@ test('a real loadout passes clean', () => {
     // this test actually covers: authoring a real item id raises no unknown-item
     // complaint about it.
     assert.ok(!problems.some(p => p.includes('carries unknown item')), problems.join('\n'));
+});
+
+// A weapon authored into vendor or chest stock used to validate clean while
+// silently failing in play: the old buy path did a bare ITEMS lookup and
+// no-opped on a weapon, so content-validate carried a WARNING about the gap.
+//
+// The gap is CLOSED. The offer screen builds its rows through _resolveItemDef
+// (WEAPONS || ITEMS), so a stocked weapon is a real, priced, buyable row — and
+// the warning that described the gap went with the path that had it. This test
+// now pins the FIX rather than the advisory.
+test('a weapon authored into vendor/chest stock is fully supported — no problem, no warning', () => {
+    // The retired path must stay retired: if _buyFromVendor comes back, the
+    // bare-ITEMS gap may come back with it.
+    const mainSrc = readFileSync(fileURLToPath(new URL('../game/main.js', import.meta.url)), 'utf8');
+    assert.ok(!/_buyFromVendor\(/.test(mainSrc),
+        'the bare-ITEMS vendor buy path is back — the weapon-in-stock gap may be back with it');
+
+    const { problems, warnings } = validateContent([{ file: 'x-map.json', data: { enemies: [
+        { id: 'e1', type: 'Merchant', vendor: true, stock: ['lion_whip'] },
+    ] } }]);
+    assert.ok(!problems.some(p => p.includes('stocks unknown item')), problems.join('\n'));
+    // The assertion that used to sit here COULD NOT FAIL. content-validate
+    // calls its W() helper in exactly one place — the zoneName check — so
+    // `warnings` can never hold an item id, and `!warnings.some(/stocks
+    // weapon/)` was true no matter what the code did. It was written to "pin
+    // the fix" and pinned nothing.
+    //
+    // This is the membership the validator actually consults: drop weapons from
+    // ALL_ITEM_IDS and stock goes back to being flagged unknown.
+    assert.ok(ALL_ITEM_IDS.has('lion_whip'),
+        'a weapon id is no longer a known item — validateContent would flag stock as unknown');
+
+    // And it really does resolve, at a real price — the thing the warning
+    // existed to say was impossible.
+    const def = resolveItemDef('lion_whip');
+    assert.ok(def && def.baseValue > 0, 'lion_whip does not resolve to a priceable def');
+    assert.ok(buyPrice(def, 40) > 0, 'a stocked weapon cannot be bought');
+});
+
+// loadout and examinable.grants ARE fixed (resolveLoadout, _grantFromExaminable
+// both resolve WEAPONS now) — a weapon there gets no such warning.
+test('a weapon in a loadout or an examinable grant raises no stock-style warning', () => {
+    const { warnings } = validateContent([{ file: 'x-map.json', data: {
+        enemies: [{ id: 'e1', type: 'Thug', damage: 5, gold: 3, loadout: ['lion_whip'] }],
+        examinables: [{ id: 'x1', x: 0, y: 0, grants: 'lion_whip' }],
+    } }]);
+    assert.ok(!warnings.some(w => /lion_whip/.test(w)), warnings.join('\n'));
 });

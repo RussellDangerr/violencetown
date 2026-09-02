@@ -18,8 +18,7 @@
 // advisories that can lag intentionally (zone naming) — surfaced, never fatal.
 
 import { QUESTS } from './quests.js';
-import { ITEMS } from './items.js';
-import { WEAPONS } from './weapons.js';
+import { ALL_ITEM_IDS } from './item-registry.js';
 import { DIALOGUES } from './dialogue.js';
 import { zoneByName, overworldZone } from './world-map.js';
 
@@ -46,9 +45,8 @@ export function validateContent(maps) {
     const P = (m) => problems.push(m);
     const W = (m) => warnings.push(m);
 
-    // Id universes. The game resolves an item id via WEAPONS[id] || ITEMS[id]
-    // (main.js _resolveItemDef), so the item closure is the union.
-    const itemIds = new Set([...Object.keys(ITEMS), ...Object.keys(WEAPONS)]);
+    // Id universes — item-registry.js is the one place these are built.
+    const itemIds = ALL_ITEM_IDS;
     const dialogueIds = new Set(Object.keys(DIALOGUES));
     const mapFileSet = new Set(maps.map(m => m.file));
     const npcIds = new Set();
@@ -57,8 +55,9 @@ export function validateContent(maps) {
     // ── Map references ───────────────────────────────────────────────────────
     for (const { file, data } of maps) {
         for (const e of (data.enemies || [])) {
-            for (const id of (e.stock || []))
+            for (const id of (e.stock || [])) {
                 if (!itemIds.has(id)) P(`${file}: enemy ${e.id || '?'} stocks unknown item '${id}'`);
+            }
             for (const id of (e.loadout || []))
                 if (!itemIds.has(id)) P(`${file}: enemy ${e.id || '?'} carries unknown item '${id}'`);
             if (e.dialogueId && !dialogueIds.has(e.dialogueId))

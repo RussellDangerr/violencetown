@@ -4,8 +4,10 @@
 // No game mutation here — main.js does the buying/selling/bribing and calls
 // these to get prices. Gold == value 1:1 (items carry `baseValue`); there is
 // no weight mechanic. Prices key off the trader's `disposition` (-100..+100)
-// bucketed into 8 "AGGRO levels" every 25 points. Below the TRADE_FLOOR a
-// trader simply won't deal — you have to bribe them up first.
+// bucketed into SIX bands every 25 points (adoring / warm / friendly / neutral
+// / wary / hostile). Below the TRADE_FLOOR a trader simply won't deal — you
+// have to bribe them up first. (The header said "8 AGGRO levels" for a long
+// time; the table has always had six, and tests/trade.test.js now pins that.)
 //
 // (Roadmap, later slices: drag-to-swap equipment barter, NPC loadouts +
 // stat-gear, item drop rates, recovery-on-death. Not here.)
