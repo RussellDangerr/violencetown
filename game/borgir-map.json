@@ -24,7 +24,7 @@
         14,14,14,14,14,14,14,14,15,14,14,14,14,14,14,14,14,14
     ],
     "enemies": [
-        {"id": "borgir_boss", "gold": 25, "loadout": ["boardwalk_burger", "boardwalk_burger", "hot_dog", "soap", "cardboard_cuirass", "defence_poition", "foil_hat", "red_cape"], "type": "Boss", "x": 8, "y": 4, "hp": 100, "armor": 6, "damage": 12, "sightRange": 4, "behavior": ["IDLE"], "adjacencyBark": "[Boss: You! Delivery boy! Car still dead? The rat-people down the sewer ripped out your cataclysmic converter. Get it back or you're walking these burgers forever. Go examine the heap out front.]"}
+        {"id": "borgir_boss", "boss": true, "gold": 25, "loadout": ["boardwalk_burger", "boardwalk_burger", "hot_dog", "soap", "cardboard_cuirass", "defence_poition", "foil_hat", "red_cape"], "type": "Boss", "x": 8, "y": 4, "hp": 100, "armor": 6, "damage": 12, "sightRange": 4, "behavior": ["IDLE"], "adjacencyBark": "[Boss: You! Delivery boy! Car still dead? The rat-people down the sewer ripped out your cataclysmic converter. Get it back or you're walking these burgers forever. Go examine the heap out front.]"}
     ],
     "items": [],
     "examinables": [

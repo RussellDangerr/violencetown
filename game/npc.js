@@ -22,7 +22,7 @@
 import { manhattan, chebyshev } from './utils.js';
 import { getGreedyStep, stepEntity } from './pathing.js';
 import { perceives, nextAwareness, VERDICT } from './perception.js';
-import { healPurchase, kitChoice, isSewerDweller } from './ai.js';
+import { healPurchase, kitChoice, isSewerDweller, bossSpend, BOSS_RALLY_RANGE } from './ai.js';
 import { ITEMS, kitHealValue, applyKitItem } from './items.js';
 import { WEAPONS } from './weapons.js';
 import { burnGold } from './trade.js';
@@ -314,6 +314,47 @@ export function tickNpcState(game, npc, clock = game.turn) {
                     category: 'combat',
                 });
                 break;   // eating IS the turn
+            }
+
+            // Law 5 — BOSSES SPEND, NOT POOL. Carried in the bible since the gold
+            // standard and never executed once; the systems audit calls it the most
+            // interesting idea in there and notes it has never run. This is the
+            // first time it does.
+            //
+            // A boss's purse is both its second health bar and its loot, so what
+            // you take off the corpse is exactly what it did not have to spend on
+            // you. Rush it and you get the purse; let it settle in and you fight
+            // the purse. Gold moves through burnGold — the declared sink — the same
+            // way the grunt heal policy does.
+            //
+            // Sits BELOW the kit block (free supplies first) and ABOVE the grunt
+            // policy, which it supersedes for anything flagged `boss`.
+            if (npc.boss) {
+                const allyList = game.enemies.filter(a =>
+                    a !== npc && a.entity?.isAlive?.() && a.allegiance === npc.allegiance
+                    && chebyshev(a.x, a.y, npc.x, npc.y) <= BOSS_RALLY_RANGE);
+                const plan = bossSpend(
+                    npc.entity.hp, npc.entity.maxHp, npc.gold,
+                    allyList.map(a => ({ hp: a.entity.hp, maxHp: a.entity.maxHp })));
+                if (plan && burnGold(npc, plan.spend, 'boss')) {
+                    if (plan.kind === 'heal') {
+                        npc.entity.hp = Math.min(npc.entity.maxHp, npc.entity.hp + plan.heal);
+                        messages.push({
+                            text: `[${npc.name ?? npc.type} spends ${plan.spend} GP on itself. (+${plan.heal} HP)]`,
+                            sourceEnemy: npc,
+                            category: 'combat',
+                        });
+                    } else {
+                        const ward = allyList[plan.index];
+                        ward.entity.hp = Math.min(ward.entity.maxHp, ward.entity.hp + plan.heal);
+                        messages.push({
+                            text: `[${npc.name ?? npc.type} pays ${plan.spend} GP — ${ward.name ?? ward.type} straightens up. (+${plan.heal} HP)]`,
+                            sourceEnemy: npc,
+                            category: 'combat',
+                        });
+                    }
+                    break;   // the purchase IS the turn
+                }
             }
 
             // Law 6a/6b (plans/gold-standard-design.md): a hurt, solvent enemy

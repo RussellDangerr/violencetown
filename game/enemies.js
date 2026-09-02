@@ -104,6 +104,10 @@ export class Enemy {
         // (theft) Theft opt-out, mirroring `bribeable`, for quest-critical NPCs.
         // Bribery-immune and theft-immune are separate concerns on purpose.
         thievable = null,
+        // Law 5 — this NPC runs the boss spending policy instead of the grunt
+        // heal policy. STATED, never inferred from armor: ruling A4 asks for
+        // exactly this rather than deriving a boss from its band.
+        boss = false,
         // (perception ladder) Runtime counters. Persisted so a save taken mid-hunt
         // reloads mid-hunt instead of resetting the NPC to calm.
         _awareBeats = 0,
@@ -221,6 +225,7 @@ export class Enemy {
         this.hearingRange  = hearingRange;
         this.equipped      = equipped;
         this.thievable     = thievable;
+        this.boss          = !!boss;
         this._awareBeats   = _awareBeats;
         this._sweepBeats   = _sweepBeats;
         this.vendor        = vendor;
@@ -295,7 +300,7 @@ export class Enemy {
             loadout: this.loadout,
             // (theft) Worn gear and the theft opt-out must survive a reload the
             // same way loadout does, or a robbed enemy would come back armoured.
-            equipped: this.equipped, thievable: this.thievable,
+            equipped: this.equipped, thievable: this.thievable, boss: this.boss,
             ambient: this.ambient,
             // Species marker (ai.js::isSewerDweller) — must survive a reload same
             // as vermin/weak/resist/immune did, or a reloaded Violet Fungus would
