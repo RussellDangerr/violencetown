@@ -85,7 +85,15 @@ this document as advisory and re-grep — every line number the audit checked wa
   `{ adjacent: true }`, which never walks onto the target tile — so `stepFree` keeps blocking the
   chest and no second approach helper was needed.
 
-### STILL LIVE (Task 17+)
+### FIXED IN TASK 17
+- Both de-vendoring sites clear `stock` with the flag.
+- **The give spine was bypassed and is restored.** `reactToTransaction` had exactly one caller left
+  (the bribe path); Task 15 deleted the give path that used it and `_commitOffer` never inherited
+  it, so **sewer fare was not poison on the new screen** and `giftLog` stopped being written.
+- **NEW RULING for Caelan (§14 candidate):** sewer fare in the give tray REPLACES the offer's
+  disposition for that commit. You cannot buy goodwill and poison someone in the same breath.
+
+### STILL LIVE (Task 18+)
 - **Task 15 says five `this._tradeSell = this._tradeSellList()` assignments. There are nine**
   (and one fewer now that `_openContainer` lost its). Re-grep before deleting. `_tradeSlots`,
   `_clampTradeCursor`, `_tradeActivate`, `_openTrade` and `_tapTrade` are all dead as of Task 13.
@@ -144,8 +152,9 @@ onward is written directly. Mutation testing stays either way — it is what has
 | 14 · committing the offer | ✅ **done — the loop CLOSES** |
 | 15 · delete the old trade path | ✅ **done — 600 lines out** |
 | 16 · chests reachable by tap | ✅ done |
-| 17 · hostility trap + stranded stock | ⏭ **NEXT** |
-| 18–20 | not started |
+| 17 · hostility trap + stranded stock | ✅ done — and it caught a bypassed spine |
+| 18 · backfill the pricing tests | ⏭ **NEXT** |
+| 19–20 | not started |
 
 **The draw layer is complete.** `game/offer.js` (251 lines) + `game/disposition-curves.js` (227) are
 pure; `offerLayout()` returns every rect; `renderer.js` has all five `_drawOffer*` methods and they
