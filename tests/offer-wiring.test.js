@@ -87,7 +87,7 @@ const audio = { played: [], playSfx(n) { this.played.push(n); } };
 const openOffer = liveMethod('_openOffer', 'npc', { STATE, BUYBACK_MS, audio, emptyOffer });
 const closeOffer = liveMethod('_closeOffer', '', { STATE, audio });
 const tapOffer = liveMethod('_tapOffer', 'pt',
-    { MODAL_RECT, HIT_SLOP, offerLayout, offerRowIndexAt, offerTraySlotAt });
+    { MODAL_RECT, HIT_SLOP, offerLayout, offerRowIndexAt, offerTraySlotAt, audio, OFFER_ROWS_VISIBLE });
 const offerActivate = liveMethod('_offerActivate', 'zone, index', { stage, unstage, settledGold, audio });
 const canStageGive = liveMethod('_canStageGive', 'entry');
 const commitOffer = liveMethod('_commitOffer', '');
@@ -103,6 +103,7 @@ const buybackConsume = liveMethod('_buybackConsume', 'npc, itemId');
 const resettle = liveMethod('_resettle', 'npc', { settledGold });
 const goldTray = liveMethod('_goldTray', '', { settledGold });
 const toggleGold = liveMethod('_toggleOfferGold', 'npc', { settledGold });
+const scrollBy = liveMethod('_offerScrollBy', 'side, delta', { OFFER_ROWS_VISIBLE });
 const takeFitsBag = liveMethod('_offerTakeFitsBag', 'taken', { INVENTORY_SIZE, MAX_STACK });
 const logOffer = liveMethod('_logOffer', 'npc, R, { given, taken, gold }', { dispositionCeil });
 const commitOfferFull = liveMethod('_commitOffer', '',
@@ -181,6 +182,7 @@ function stubGame(overrides = {}) {
         _resettle: resettle,
         _goldTray: goldTray,
         _toggleOfferGold: toggleGold,
+        _offerScrollBy: scrollBy,
         _buybackLive: buybackLive,
         _buybackList: buybackList,
         // The REAL one, lifted. A hand-written two-arg stub silently dropped the
@@ -885,17 +887,23 @@ describe('_commitOffer', () => {
         assert.equal(npc2.disposition, 40, 'a settled trade moved disposition');
     });
 
-    test('the basket is emptied but the scroll position survives', () => {
-        const g = stubGame({ gold: 100 });
-        openOffer.call(g, vendor());
+    test('the basket is emptied and a still-valid scroll survives', () => {
+        // A vendor's stock is infinite, so its list does not shrink and the
+        // player's place in it must be kept. (The satchel is the case that CAN
+        // shrink -- see the re-clamp test.)
+        const inv = new Array(INVENTORY_SIZE).fill(null);
+        const g = stubGame({ gold: 500, inventory: inv });
+        const npc = vendor();
+        npc.stock = ['bandage','soap','rock','pipe','hot_dog','bandage','soap','rock','pipe'];
+        openOffer.call(g, npc);
         g._offer.scroll.theirs = 3;
-        offerActivate.call(g, 'theirs', 0);
+        offerActivate.call(g, 'theirs', 3);
         commit.call(g);
         assert.deepEqual(g._offer.give, []);
         assert.deepEqual(g._offer.take, []);
         assert.equal(g._offer.gold, 0);
         assert.equal(g._offer.selection, null);
-        assert.equal(g._offer.scroll.theirs, 3, 'the list jumped back to the top');
+        assert.equal(g._offer.scroll.theirs, 3, 'a valid scroll jumped back to the top');
     });
 
     test('a partner turned hostile by the deal does not keep the screen open', () => {
@@ -1390,6 +1398,119 @@ describe('the player can refuse the settled gold', () => {
         const before = g._offer.give[0].count;
         offerActivate.call(g, 'takeTray', g._offer.take.length);
         assert.equal(g._offer.give[0].count, before, 'tapping the coin unstaged an item');
+    });
+});
+
+// -- the bag is reachable on touch (review finding 4) -----------------------
+//
+// The spec's opening complaint about the OLD screen was "only 15 of 50 bag
+// slots are reachable". The new one drew a proportional scrollbar thumb and
+// gave it no pointer path at all: _tapOffer only READ scroll, the wheel handler
+// was gated to STATE.DIALOGUE, and there was no drag. On touch, rows 7-50 had
+// no way to be reached -- the exact defect the feature was written to fix.
+
+describe('the whole bag is reachable with a pointer', () => {
+    const bigBag = () => {
+        const inv = new Array(INVENTORY_SIZE).fill(null);
+        const ids = ['rock', 'soap', 'bandage', 'hot_dog', 'pipe'];
+        for (let i = 0; i < 40; i++) inv[i] = { itemDef: ITEMS[ids[i % ids.length]], count: 1 };
+        return inv;
+    };
+    const vendor = () => ({ id: 'p', type: 'p', vendor: true, disposition: 40, gold: 400,
+                            entity: alive, stock: [], values: {}, behavior: ['IDLE'] });
+    const open = () => {
+        const g = stubGame({ gold: 100, inventory: bigBag() });
+        openOffer.call(g, vendor());
+        return g;
+    };
+
+    test('the bag really does overflow the visible rows', () => {
+        const g = open();
+        assert.ok(yoursList.call(g).length > OFFER_ROWS_VISIBLE,
+            'setup: the bag must be longer than the viewport');
+    });
+
+    test('A TAP ON THE SCROLL TRACK PAGES THE LIST', () => {
+        const g = open();
+        const L = offerLayout(MODAL_RECT);
+        const tr = L.yoursScrollTrack;
+        assert.equal(g._offer.scroll.yours, 0);
+        tapOffer.call(g, { x: tr.x + 1, y: tr.y + tr.h - 4 });   // low on the track = down
+        assert.ok(g._offer.scroll.yours > 0, 'a tap low on the track did not page down');
+    });
+
+    test('and pages back up', () => {
+        const g = open();
+        const L = offerLayout(MODAL_RECT);
+        const tr = L.yoursScrollTrack;
+        tapOffer.call(g, { x: tr.x + 1, y: tr.y + tr.h - 4 });
+        const down = g._offer.scroll.yours;
+        tapOffer.call(g, { x: tr.x + 1, y: tr.y + 2 });          // high on the track = up
+        assert.ok(g._offer.scroll.yours < down, 'a tap high on the track did not page up');
+    });
+
+    test('paging reaches the last row and stops there', () => {
+        const g = open();
+        const L = offerLayout(MODAL_RECT);
+        const tr = L.yoursScrollTrack;
+        const len = yoursList.call(g).length;
+        for (let i = 0; i < 40; i++) tapOffer.call(g, { x: tr.x + 1, y: tr.y + tr.h - 4 });
+        assert.equal(g._offer.scroll.yours, len - OFFER_ROWS_VISIBLE,
+            'scroll did not stop at the last full page');
+        for (let i = 0; i < 40; i++) tapOffer.call(g, { x: tr.x + 1, y: tr.y + 2 });
+        assert.equal(g._offer.scroll.yours, 0, 'scroll did not stop at the top');
+    });
+
+    test('the partner column scrolls on its own track', () => {
+        const g = stubGame({ gold: 100, inventory: new Array(INVENTORY_SIZE).fill(null) });
+        const npc = vendor();
+        npc.stock = ['rock','soap','bandage','hot_dog','pipe','rock','soap','bandage'];
+        openOffer.call(g, npc);
+        const L = offerLayout(MODAL_RECT);
+        const tr = L.theirsScrollTrack;
+        tapOffer.call(g, { x: tr.x + 1, y: tr.y + tr.h - 4 });
+        assert.ok(g._offer.scroll.theirs > 0, 'their column did not scroll');
+        assert.equal(g._offer.scroll.yours, 0, 'their track scrolled the satchel');
+    });
+
+    test('a track tap never stages or closes', () => {
+        const g = open();
+        const L = offerLayout(MODAL_RECT);
+        const tr = L.yoursScrollTrack;
+        tapOffer.call(g, { x: tr.x + 1, y: tr.y + tr.h - 4 });
+        assert.deepEqual(g._offer.give, [], 'a scroll tap staged an item');
+        assert.equal(g.state, STATE.TRADE, 'a scroll tap closed the screen');
+    });
+
+    test('A COMMIT RE-CLAMPS A COLUMN WHOSE LIST JUST SHRANK', () => {
+        // Sell most of the bag from the bottom of a scrolled list: the list gets
+        // shorter than the scroll offset, and every visible row draws EMPTY over
+        // a bag that still holds items.
+        const inv = new Array(INVENTORY_SIZE).fill(null);
+        for (let i = 0; i < 12; i++) inv[i] = { itemDef: ITEMS.rock, count: 1 };
+        const g = stubGame({ gold: 100, inventory: inv });
+        const npc = { id: 'p', type: 'p', vendor: true, disposition: 40, gold: 900,
+                      entity: alive, stock: [], values: {}, behavior: ['IDLE'] };
+        openOffer.call(g, npc);
+        g._offer.scroll.yours = 6;
+        for (let i = 0; i < 8; i++) offerActivate.call(g, 'yours', 6 + (i % 6));
+        commitOfferFull.call(g);
+        const len = yoursList.call(g).length;
+        assert.ok(g._offer.scroll.yours <= Math.max(0, len - OFFER_ROWS_VISIBLE),
+            `scroll ${g._offer.scroll.yours} is past the end of a ${len}-row list`);
+        const shown = yoursList.call(g).slice(g._offer.scroll.yours, g._offer.scroll.yours + OFFER_ROWS_VISIBLE);
+        assert.ok(len === 0 || shown.length > 0, 'the column drew empty over a bag that still has items');
+    });
+
+    test('a short list has no scroll and the track ignores taps', () => {
+        const inv = new Array(INVENTORY_SIZE).fill(null);
+        inv[0] = { itemDef: ITEMS.rock, count: 1 };
+        const g = stubGame({ gold: 100, inventory: inv });
+        openOffer.call(g, vendor());
+        const L = offerLayout(MODAL_RECT);
+        const tr = L.yoursScrollTrack;
+        tapOffer.call(g, { x: tr.x + 1, y: tr.y + tr.h - 4 });
+        assert.equal(g._offer.scroll.yours, 0, 'a one-row list scrolled');
     });
 });
 

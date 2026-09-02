@@ -1108,12 +1108,14 @@ class Game {
                 const key = c.side === 'theirs' ? 'theirs' : 'yours';
                 if (e.code === 'ArrowUp' || e.code === 'KeyW') {
                     c.index = Math.max(0, c.index - 1);
-                    if (c.index < this._offer.scroll[key]) this._offer.scroll[key] = c.index;
+                    if (c.index < this._offer.scroll[key]) this._offerScrollBy(key, c.index - this._offer.scroll[key]);
                     tick(); return;
                 }
                 if (e.code === 'ArrowDown' || e.code === 'KeyS') {
                     c.index = Math.min(Math.max(0, list.length - 1), c.index + 1);
-                    if (c.index >= this._offer.scroll[key] + rows) this._offer.scroll[key] = c.index - rows + 1;
+                    if (c.index >= this._offer.scroll[key] + rows) {
+                        this._offerScrollBy(key, c.index - rows + 1 - this._offer.scroll[key]);
+                    }
                     tick(); return;
                 }
                 if (e.code === 'Space') { this._offerActivate(c.side, c.index); return; }
@@ -1346,6 +1348,15 @@ class Game {
         // Mouse wheel scrolls the dialogue response list when it overflows its
         // viewport (>6 rows). The renderer clamps + cursor-follows on the next draw.
         canvas.addEventListener('wheel', (e) => {
+            // The offer screen scrolls whichever column the pointer is over.
+            if (this.state === STATE.TRADE && this._offer) {
+                e.preventDefault();
+                const pt = this._screenToCanvas ? this._screenToCanvas(e) : null;
+                const L = offerLayout(MODAL_RECT);
+                const side = (pt && pt.x >= L.theirs[0].x) ? 'theirs' : 'yours';
+                if (this._offerScrollBy(side, Math.sign(e.deltaY))) this._render();
+                return;
+            }
             if (this.state !== STATE.DIALOGUE || !this.renderer._dialogueScrollable) return;
             e.preventDefault();
             this.renderer._dialogueScroll = (this.renderer._dialogueScroll || 0) + Math.sign(e.deltaY) * 26;
@@ -5283,6 +5294,23 @@ class Game {
         return true;
     }
 
+    // Scroll one column by `delta` rows, clamped to the list. The single writer
+    // for _offer.scroll, so the pointer, the wheel and the keyboard cannot
+    // disagree about the bounds.
+    //
+    // The clamp is also what stops a commit leaving a column scrolled past its
+    // own end: the list shrinks, and the next scroll of any kind pulls it back.
+    _offerScrollBy(side, delta) {
+        if (!this._offer) return false;
+        const key = side === 'theirs' ? 'theirs' : 'yours';
+        const list = key === 'theirs' ? this._offerTheirsList() : this._offerYoursList();
+        const max = Math.max(0, list.length - OFFER_ROWS_VISIBLE);
+        const was = this._offer.scroll[key] || 0;
+        const now = Math.max(0, Math.min(max, was + delta));
+        this._offer.scroll[key] = now;
+        return now !== was;
+    }
+
     // Put the gold back on its default, unless the player has said otherwise.
     _resettle(npc) {
         if (!this._offer.goldPinned) this._offer.gold = settledGold(npc, this._offer);
@@ -5432,6 +5460,21 @@ class Game {
 
         if (this._pointInRect(pt, L.button, HIT_SLOP)) { this._offerActivate('commit', 0); return; }
 
+        // The scroll tracks, BEFORE the rows: the thumb is drawn inside the
+        // column's own right edge, so a track tap would otherwise resolve to the
+        // row behind it. Tapping above the midpoint pages up, below pages down.
+        //
+        // Until this existed there was no pointer scroll path at all -- the
+        // wheel handler is gated to STATE.DIALOGUE and there is no drag -- so on
+        // touch only the first six of fifty bag rows could be reached. That is
+        // the exact complaint this whole screen was built to answer.
+        for (const [side, track] of [['theirs', L.theirsScrollTrack], ['yours', L.yoursScrollTrack]]) {
+            if (!this._pointInRect(pt, track, HIT_SLOP)) continue;
+            const dir = pt.y < track.y + track.h / 2 ? -1 : 1;
+            if (this._offerScrollBy(side, dir * OFFER_ROWS_VISIBLE)) audio.playSfx('menu-tick');
+            this._render(); return;
+        }
+
         const sc = this._offer.scroll;
         const t = offerRowIndexAt(L, pt, 'theirs', sc.theirs);
         if (t >= 0) { this._offerActivate('theirs', t); return; }
@@ -5551,6 +5594,12 @@ class Game {
 
         if (!fare) this._logOffer(npc, R, { given, taken, gold });
         this._offer = { ...emptyOffer(), scroll: this._offer.scroll, selection: null, goldPinned: false };
+        // Re-clamp both columns: the lists just shrank under them. Carrying the
+        // old scroll forward unchecked left a column scrolled past its own end,
+        // drawing six EMPTY rows over a bag that still held items -- and, on
+        // touch, with no way back. A zero-delta scroll is the clamp.
+        this._offerScrollBy('theirs', 0);
+        this._offerScrollBy('yours', 0);
 
         // A committed offer can turn the partner hostile -- sewer fare does
         // exactly that. Do not leave the player standing in an offer window
