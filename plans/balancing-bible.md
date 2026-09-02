@@ -79,6 +79,15 @@ before you read the PR.
     emits a loud `Law 3 GATE` flag for anything in this half so it can never be entered by accident.
 
   Nothing in the roster is above +6 today; this amendment opens the band, it does not populate it.
+- **Law 4 — Roles, not levels. Amended 2026-08-24 (Caelan): the  row.** The role table used
+  to jump from  at exactly armor 0 straight to  at 1-10, so every armor value in
+  between derived as elite and demanded a 100 GP wallet — the same no-row-fits hole ruling A1
+  describes at -15.  (armor +1..+5, **60-100 GP**) is the missing step between a zone basic
+  and its named foe. Bands now read: vermin -80 [0,5] - fodder -30 [5,20] - bruiser -15 [15,40] -
+  standard 0 [20,60] - **tough +5 [60,100]** - elite +10 [100,200].
+  **Durability and wallet move together.** Re-roling the roster up the armor ladder without funding
+  the wallets produced 11 Law 4 flags at once; that is the Law working, not noise. A zone faucet
+  rising is the expected consequence of a zone getting harder.
 - **Law 4 — Roles, not levels.** One flat power band per act; enemies differ by role/archetype, not
   level — and (amended 2026-07-24) the role table keys on **armor**, not HP, since HP is always 100
   now (see the authoring form below for the current table). The band table is design-doc law

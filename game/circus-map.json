@@ -28,7 +28,7 @@
         31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,30,30,31,31,31,31
     ],
     "enemies": [
-        {"id": "clown1", "gold": 1, "loadout": ["mystery_meat"], "type": "Carnival Clown", "x": 28, "y": 10, "hp": 100, "armor": 0, "damage": 8, "disposition": -40, "flipThreshold": 30, "bribeable": true, "values": {"bandage": 6, "soap": 4, "rock": 3}, "behavior": ["IDLE", "WANDER"], "wanderRadius": 6, "wanderEveryTurns": 3, "adjacencyBark": "[Carnival Clown: HONK. You wanna play? You wanna PLAY?]"}
+        {"id": "clown1", "gold": 5, "loadout": ["hot_dog", "red_cape", "soap"], "type": "Carnival Clown", "x": 28, "y": 10, "hp": 100, "armor": 0, "damage": 8, "disposition": -40, "flipThreshold": 30, "bribeable": true, "values": {"bandage": 6, "soap": 4, "rock": 3}, "behavior": ["IDLE", "WANDER"], "wanderRadius": 6, "wanderEveryTurns": 3, "adjacencyBark": "[Carnival Clown: HONK. You wanna play? You wanna PLAY?]"}
     ],
     "items": [
         {"type": "hot_dog", "x": 16, "y": 6},

@@ -145,6 +145,13 @@ export const ROLE_BANDS = [
     { role: 'fodder',   maxArmor: -30, min: 5,   max: 20 },
     { role: 'bruiser',  maxArmor: -15, min: 15,  max: 40 },
     { role: 'standard', maxArmor: 0,   min: 20,  max: 60 },
+    // (Caelan 2026-08-24) The tough row. Law 4's table used to jump from
+    // standard at exactly armor 0 straight to elite at 1-10, so every armor
+    // value in between derived as elite and demanded a 100 GP wallet. That is
+    // the same no-row-fits hole ruling A1 describes at -15, and the roster
+    // re-role walked straight into it. This is the missing step between a
+    // zone's basic enemy and its named foe.
+    { role: 'tough',    maxArmor: 5,   min: 60,  max: 100 },
     { role: 'elite',    maxArmor: 10,  min: 100, max: 200 },
 ];
 

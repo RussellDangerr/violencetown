@@ -5,12 +5,12 @@ reference damage 20 | armor cap 20 | peg 1 GP : 1 HP | grunt heal policy: hp <= 
 --- ENEMIES (TTK vs the reference loadout; TTD vs the reference player) ---
 zone/id                           type                         hp   armor    dmg  chal_gp       ttk_lazy   ttk_informed    ttd
 bank/bank-financier               Banker                      100     -80      0        0              1              1      -
-borgir/borgir_boss                Boss                        100       6     12        0              8              3      9
+borgir/borgir_boss                Boss                        100       6     12      129              8              3      9
 canyon/pike                       Pike                        100       5      9        0              7              3     12
 canyon/canyon-rat-1               Rat                         100     -30      6        1              2              2     17
 canyon/canyon-rat-2               Rat                         100     -30      6        1              2              2     17
 casino/casino-pit-boss            Operator                    100     -80      0        0              1              1      -
-circus/clown1                     Carnival Clown              100       0      8        4              5              3     13
+circus/clown1                     Carnival Clown              100       0      8       40              5              3     13
 diner/diner-cook                  Cook                        100     -80      0        0              1              1      -
 downtown/dt-recipient             Stranger                    100     -80      0        0              1              1      -
 downtown/dt-merch1                Vendor                      100     -80      0        0              1              1      -
@@ -18,17 +18,17 @@ downtown/dt-merch2                Vendor                      100     -80      0
 downtown/dt-folk1                 Violencian                  100     -80      0        0              1              1      -
 downtown/dt-folk2                 Violencian                  100     -80      0        0              1              1      -
 downtown/dt-platero               Violencian                  100     -80      0        0              1              1      -
-factory/green1                    Greedy Green                100       3      9       13              6              3     12
+factory/green1                    Greedy Green                100       3      9       65              6              3     12
 factory/puck                      Puck                        100     -30      1        0              2              2    100
-graveyard/skel1                   Rattling Skeleton           100       0      8        4              5              3     13
+graveyard/skel1                   Rattling Skeleton           100       0      8       35              5              3     13
 sewer/carrion                     Carrion                     100     -80      0        0              1              1      -
-sewer/e6                          Fungus King                 100       6     12       43              8              3      9
-sewer/e5                          Ghost Fungus                100       0      8        4              5              3     13
-sewer/e3                          Red Fungus                  100       3     10       11              6              3     10
-sewer/e4                          Red Fungus                  100       3     10       11              6              3     10
-sewer/e1                          Violet Fungus               100       0      9       12              5              3     12
-sewer/e2                          Violet Fungus               100       0      9       12              5              3     12
-sewer/wererat                     Wererat                     100       6     12       43              8              3      9
+sewer/e6                          Fungus King                 100       6     12      115              8              3      9
+sewer/e5                          Ghost Fungus                100       0      8       30              5              3     13
+sewer/e3                          Red Fungus                  100       3     10       65              6              3     10
+sewer/e4                          Red Fungus                  100       3     10       65              6              3     10
+sewer/e1                          Violet Fungus               100       0      9       28              5              3     12
+sewer/e2                          Violet Fungus               100       0      9       28              5              3     12
+sewer/wererat                     Wererat                     100       6     12      150              8              3      9
 town/townie-hooch                 Bootlegger                  100     -80      0        0              1              1      -
 town/townie-e                     Violencian                  100     -80      0        0              1              1      -
 town/townie-glunk                 Violencian                  100     -80      0        0              1              1      -
@@ -65,29 +65,18 @@ ray_blast           6       18     3.00
 --- ECONOMY (per-zone faucet = sum of spawn wallets) ---
 zone               faucet_gp
 bank                       0
-borgir                     0
+borgir                    25
 canyon                     2
 casino                     0
-circus                     1
+circus                     5
 diner                      0
 downtown                   0
-factory                    3
-graveyard                  1
-sewer                     28
+factory                    8
+graveyard                  4
+sewer                    101
 town                       2
 sinks: burnGold('heal'|'trick'), bribes/buyouts via transferGold
 
 --- LINT ---
-[borgir/borgir_boss Boss] Law 4 — challenge 0 GP outside the elite band [100, 200]
-[circus/clown1 Carnival Clown] Law 4 — challenge 4 GP outside the standard band [20, 60]
-[factory/green1 Greedy Green] Law 4 — challenge 13 GP outside the elite band [100, 200]
-[graveyard/skel1 Rattling Skeleton] Law 4 — challenge 4 GP outside the standard band [20, 60]
-[sewer/e6 Fungus King] Law 4 — challenge 43 GP outside the elite band [100, 200]
-[sewer/e5 Ghost Fungus] Law 4 — challenge 4 GP outside the standard band [20, 60]
-[sewer/e3 Red Fungus] Law 4 — challenge 11 GP outside the elite band [100, 200]
-[sewer/e4 Red Fungus] Law 4 — challenge 11 GP outside the elite band [100, 200]
-[sewer/e1 Violet Fungus] Law 4 — challenge 12 GP outside the standard band [20, 60]
-[sewer/e2 Violet Fungus] Law 4 — challenge 12 GP outside the standard band [20, 60]
-[sewer/wererat Wererat] Law 4 — challenge 43 GP outside the elite band [100, 200]
 [skill/coneOfCold] Law 1 — 1.40 dmg/MP, expected [1.50, 2.50]
-total flags: 12
+total flags: 1
