@@ -7,7 +7,7 @@
 import { SPELLS } from './spells.js';
 import { TRICKS } from './tricks.js';
 import { hasItemDef } from './items.js';
-import { isHostile } from './ai.js';
+import { isHostile, isHunting } from './ai.js';
 
 const always = () => true;
 
@@ -348,7 +348,7 @@ export function verbApplies(node, game) {
 // delegates here). Drives the wheel's combat re-skin. Pure — game in, bool out.
 export function isCombatActive(game) {
   return (game && game.enemies || []).some(e =>
-    !e.ambient && e.state === 'chasing' && e.entity && e.entity.isAlive());
+    !e.ambient && isHunting(e) && e.entity && e.entity.isAlive());
 }
 
 // ── Flapper (§12.4) ──────────────────────────────────────────────────────────

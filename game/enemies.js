@@ -19,7 +19,7 @@ import { manhattan } from './utils.js';
 import { stepEntity, fleeStep } from './pathing.js';
 import { tickNpcState } from './npc.js';
 import { tickBuffList } from './buffs.js';
-import { parseCapabilities, deriveAllegiance } from './ai.js';
+import { parseCapabilities, deriveAllegiance, isHunting } from './ai.js';
 import { FACING_VECTORS } from './perception.js';
 import { resolveItemDef } from './item-registry.js';
 
@@ -544,7 +544,7 @@ export function resolveAmbientTurns(game) {
 
     for (const npc of game.enemies) {
         if (!npc.entity.isAlive()) continue;
-        if (npc.state === 'chasing') continue;   // engaged hostile = combat, not ambient
+        if (isHunting(npc)) continue;   // engaged hostile = combat, not ambient
         if (npc._ally) continue;                  // allies resolve on the player-turn loop
         if (npc.hasBuff('feared')) continue;      // (fear) the per-turn loop owns its flee
 

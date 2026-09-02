@@ -36,6 +36,7 @@ import { WORLD_ZONES, overworldZone, connectorPairs } from './world-map.js'; // 
 import { hasLineOfSight } from './pathing.js';                               // (aggro overlay) READ-ONLY: same Bresenham the chase AI uses
 import { isSafe } from './defeat-scenarios.js';   // (defeat legibility) mark safe-floor items
 import { buyPrice, sellPrice, bribeStepCost, mood, canTrade, band, BRIBE_STEP } from './trade.js'; // (trade slice 1) pricing + mood smiley; band feeds the offer meter's multiplier readout
+import { isHunting } from './ai.js'; // one spelling of "actively hunting the player"
 import * as Settings from './settings.js'; // (combat-feel-pass) reduce-motion for hit-splats (namespace import — see main.js)
 import { challengeGp } from './enemies.js'; // (Law 6f) nameplate pips read the composite kit, not raw gold
 import { resolveOffer } from './offer.js';                                  // (offer screen) pure basket→projection
@@ -593,7 +594,7 @@ export class Renderer {
         // Radius: contain the engaged (chasing) enemies + margin, clamped.
         let maxTiles = 2.5;
         for (const e of game.enemies) {
-            if (e.ambient || e.state !== 'chasing' || !e.entity.isAlive()) continue;
+            if (e.ambient || !isHunting(e) || !e.entity.isAlive()) continue;
             const d = Math.max(Math.abs(e.x - game.playerX), Math.abs(e.y - game.playerY));
             if (d > maxTiles) maxTiles = d;
         }
@@ -2502,7 +2503,7 @@ export class Renderer {
         // while a fight is live; drawn in screen space so the wheel's pop can't
         // wobble it. Reuses the crossed-swords glyph the Fight wedge wears.
         if (combat && this.font) {
-            const foes = (game.enemies || []).filter(e => !e.ambient && e.state === 'chasing' && e.entity && e.entity.isAlive());
+            const foes = (game.enemies || []).filter(e => !e.ambient && isHunting(e) && e.entity && e.entity.isAlive());
             if (foes.length) {
                 let near = foes[0], nd = Infinity;
                 for (const e of foes) {
@@ -2596,11 +2597,12 @@ export class Renderer {
         });
 
         for (const e of game.enemies) {
-            // Only relevant enemies: alive AND actively alerted. The legacy chase
-            // path sets e.state='chasing' on sighting (FSM enemies route through it
-            // too), so this is the single "is hunting the player" signal. Anything
-            // idle/wandering/working draws nothing — keeps the screen uncluttered.
-            if (e.state !== 'chasing') continue;
+            // Only relevant enemies: alive AND actively alerted. isHunting is the
+            // single "is hunting the player" signal — 'chasing' from a live sighting
+            // plus 'searching', an enemy that lost you and is sweeping your last-seen
+            // tile. Anything idle/wandering/working/returning draws nothing, which
+            // keeps the screen uncluttered.
+            if (!isHunting(e)) continue;
             if (!e.entity?.isAlive()) continue;
 
             const c = toScreen(e.x + 0.5, e.y + 0.5);          // enemy tile center

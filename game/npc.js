@@ -22,7 +22,7 @@
 import { manhattan, chebyshev } from './utils.js';
 import { getGreedyStep, stepEntity, findPath } from './pathing.js';
 import { perceives, nextAwareness, VERDICT } from './perception.js';
-import { healPurchase, kitChoice, isSewerDweller, bossSpend, BOSS_RALLY_RANGE } from './ai.js';
+import { healPurchase, kitChoice, isSewerDweller, bossSpend, BOSS_RALLY_RANGE, isHunting } from './ai.js';
 import { ITEMS, kitHealValue, applyKitItem } from './items.js';
 import { WEAPONS } from './weapons.js';
 import { burnGold } from './trade.js';
@@ -244,7 +244,7 @@ export function tickNpcState(game, npc, clock = game.turn) {
             // 'searching' runs the same pursuit spine as 'chasing' below — it
             // walks to the last-seen tile and gives up on arrival. That is exactly
             // what the blind-chase branch already did; it just has a name now.
-            if (npc.state !== 'chasing' && npc.state !== 'searching') break;
+            if (!isHunting(npc)) break;
 
             // Leash: a chaser that has broken contact — out of sight — gives up when
             // it has strayed too far from home OR stayed blind for too many beats,

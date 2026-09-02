@@ -36,6 +36,23 @@ export function isHostile(e) {
 // things that live down there, and that must survive a disposition flip — a
 // bribed Violet Fungus is your ally and still eats mushrooms. Deliberately NOT
 // derived from `allegiance`, which answers a different question.
+// Is this character actively hunting the player?
+//
+// The perception ladder (perception.js) added 'searching' — an enemy that has
+// LOST you and is sweeping your last-seen tile — and npc.js pursues on it
+// exactly as it pursues on 'chasing'. But every gate that asked "is this a
+// fight?" was written before that state existed and tested `state === 'chasing'`
+// alone, so a searching enemy hunted you while the game believed you were out of
+// combat. The sharpest consequence was the three de-aggro resets: they clear
+// 'chasing' on death, retry and zone change, so a searcher was never stood down
+// and the promised breather did not arrive.
+//
+// One predicate, so a future state cannot go missing from nine places at once.
+// 'returning' is deliberately NOT hunting — that is a character walking home.
+export function isHunting(e) {
+    return !!e && (e.state === 'chasing' || e.state === 'searching');
+}
+
 export function isSewerDweller(e) {
   return !!(e && e.sewerDweller);
 }

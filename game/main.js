@@ -24,7 +24,7 @@ import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
 import { attack, formatDamageNumber, computeHit, elementalMult, isBackstab } from './combat.js';
 import { Enemy, spawnEnemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
-import { isHostile, rockClatter } from './ai.js';
+import { isHostile, isHunting, rockClatter } from './ai.js';
 import { getGreedyStep, stepEntity, findPath } from './pathing.js'; // pathfinding (greedy chase + BFS click-to-move); stepEntity = shove a character aside
 import { applyDispositionDelta, reactToTransaction } from './give-action.js';
 import { getDialogue } from './dialogue.js';
@@ -657,7 +657,7 @@ class Game {
             if (!e.entity.isAlive() || e._ally) continue;
             const hostile = isHostile(e);
             if (!hostile) continue;
-            const onYourHeels = e.state === 'chasing'
+            const onYourHeels = isHunting(e)
                 || manhattan(e.x, e.y, t.x, t.y) <= FOLLOW_RANGE
                 || manhattan(e.x, e.y, this.playerX, this.playerY) <= FOLLOW_RANGE;
             if (onYourHeels) out.push(e);
@@ -3645,6 +3645,23 @@ class Game {
     // Shared with the wheel's §12.5 combat re-skin via the pure wheel-model helper.
     _inCombat() { return isCombatActive(this); }
 
+    // Stand everyone down. Called on a zone change, on the retry after a defeat,
+    // and on respawn -- each of which promises the player a breather.
+    //
+    // It was three identical loops, which is exactly how the 'searching' bug got
+    // in: the perception ladder added a second hunting state and only the FSM's
+    // pursuit gate learned about it, so all three of these went on clearing
+    // 'chasing' alone and a searcher walked out of your death screen still on your
+    // trail. One loop now, reading the one predicate.
+    _deAggroAll() {
+        for (const e of this.enemies) {
+            if (!e.entity.isAlive() || e._ally) continue;
+            if (isHunting(e)) e.state = 'idle';
+            e._intruder = false;
+            e._emergeDelay = 0;
+        }
+    }
+
     // ── Ambient world heartbeat (Town Clock) ─────────────────────────────────
     //
     // Fired on the free-running world tick (WORLD_TICK_MS) while the player is
@@ -4512,11 +4529,7 @@ class Game {
         if (c.gift && Array.isArray(c.gift.items)) for (const id of c.gift.items) { const gd = this._resolveItemDef(id); if (gd && !this._addToInventory(gd)) this._log('[No room — you leave it behind.]'); } // 6. given (guard unknown ids + full bag)
         if (c.gift && c.gift.heal) this.playerHp = this.playerMaxHp;
         this._pendingTransition = null;                        // 7. de-aggro + resume (mirror _respawn's tail)
-        for (const e of this.enemies) {
-            if (!e.entity.isAlive() || e._ally) continue;
-            if (e.state === 'chasing') e.state = 'idle';
-            e._intruder = false; e._emergeDelay = 0;
-        }
+        this._deAggroAll();
         this.state = STATE.IDLE;
         if (c.log) this._log(c.log, 'transition');
         this._render();
@@ -4601,11 +4614,7 @@ class Game {
         this.buffs = [];                          // clean slate (matches _respawn)
         this._pendingTransition = null;           // don't ghost-load a queued transition after the retry
         this.addBuff('rattled', 'Rattled', 6, 'debuff');
-        for (const e of this.enemies) {                 // de-aggro so the retry starts calm
-            if (!e.entity.isAlive() || e._ally) continue;
-            if (e.state === 'chasing') e.state = 'idle';
-            e._intruder = false; e._emergeDelay = 0;
-        }
+        this._deAggroAll();
         this.state = STATE.IDLE;
         this._log('[Down but not out. Regroup and finish it.]', 'transition');
         this._render();
@@ -4641,12 +4650,7 @@ class Game {
         // player gets a breather instead of dying on repeat. Monsters keep their
         // current positions (no teleport home) and fall back to loitering /
         // wandering via their normal ambient behavior.
-        for (const e of this.enemies) {
-            if (!e.entity.isAlive() || e._ally) continue;
-            if (e.state === 'chasing') e.state = 'idle';
-            e._intruder = false;
-            e._emergeDelay = 0;
-        }
+        this._deAggroAll();
         this.state = STATE.IDLE;
         this._render();
         this._resumeHeldWalk();   // resume walking only if a dir is genuinely still held
