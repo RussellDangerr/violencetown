@@ -1,3 +1,9 @@
+> **SUPERSEDED 2026-09-01** by `plans/unified-offer-screen.md`. The schema and UI described below
+> (`shopInventory`, `buyMultiplier`, `tradeThreshold`, `ITEM_GIVE_DIR`, Down-to-Give) were never
+> built and have been abandoned. What actually shipped is the unified offer screen: one verb, *make
+> an offer*, with two trays and signed gold. Kept for the design reasoning, not as a description of
+> the code.
+
 # Feature: Give Action + Disposition (Phase A)
 **Phase:** Phase 2 — Life in the City (follow-up to `feature/sewer-npc-skeleton`)
 **Priority:** High

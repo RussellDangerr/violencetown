@@ -70,7 +70,8 @@ const STATE = {
     ITEM_SELECTED:   'item_selected',   // 1-9 pressed, slot highlighted
     ITEM_OVERLAY:    'item_overlay',    // Space pressed, showing use/throw/smash
     ITEM_THROW_DIR:  'item_throw_dir',  // chose Throw, waiting for direction
-    // (Phase 6a) ITEM_GIVE_DIR retired — Give folded into the Trade window.
+    // (Phase 6a) ITEM_GIVE_DIR retired — Give folded into the trade window,
+    // and that window is now the unified offer screen.
     RADIAL_MENU:     'radial_menu',     // bumped a hostile enemy — Omnitrix-style wheel
     TARGET_LIST:     'target_list',     // (Target List) tapped/focused a target — RuneScape-style verb menu
     RESOLVING:       'resolving',
