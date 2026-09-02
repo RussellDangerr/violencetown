@@ -90,8 +90,8 @@ test('back pops a level, then closes at the root', () => {
 test('isOffensiveLeaf flags attack verbs, not social ones', () => {
   const hit = ROOT.children[0].children[0].children[0];
   assert.equal(isOffensiveLeaf(hit), true);
-  const bribe = ROOT.children[1].children.find(c => c.key === 'bribe');
-  assert.equal(isOffensiveLeaf(bribe), false);
+  const trade = ROOT.children[1].children.find(c => c.key === 'trade');
+  assert.equal(isOffensiveLeaf(trade), false);
 });
 
 test('verbApplies: a category always applies; an adjacent verb needs a live neighbour', () => {

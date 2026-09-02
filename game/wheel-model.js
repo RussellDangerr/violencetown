@@ -56,7 +56,6 @@ export const ROOT = { key: 'menu', label: 'MENU', children: [
   { key: 'trick', label: 'Trick', color: '#cba43c', text: '#2a1f06', children: [
     { key: 'throw',  label: 'Throw',  needsItem: true,  aimType: 'reticle',  resolver: 'resolveThrow', available: always },
     { key: 'defend', label: 'Defend', aimType: 'none',                       resolver: 'guard',        available: always },
-    { key: 'bribe',  label: 'Bribe',  aimType: 'adjacent',                   resolver: 'bribe',        available: always },
     { key: 'trade',  label: 'Trade',  aimType: 'adjacent',                   resolver: 'trade',        available: always },
     // (Armory reconciliation) GP-costed tricks granted by equipped tech gear —
     // siblings of Bribe/Trade, gated on grantedTricks + gold; castTrick spends GP.
@@ -311,7 +310,7 @@ export function autoAimTile(leaf, game) {
     const distTo = t => alive.length ? Math.min(...alive.map(e => cheb(t.x, t.y, e.x, e.y))) : 99;
     return cands.sort((a, b) => distTo(b) - distTo(a))[0];
   }
-  const social = leaf.resolver === 'trade' || leaf.resolver === 'bribe';
+  const social = leaf.resolver === 'trade';
   const pool = (social
     ? alive
     : alive.filter(e => isHostile(e)))
@@ -338,7 +337,7 @@ export function verbApplies(node, game) {
       game.map && game.map.isWalkable(game.playerX + dx, game.playerY + dy));
   }
   const alive = (game.enemies || []).filter(e => e.entity.isAlive());
-  const social = node.resolver === 'trade' || node.resolver === 'bribe';
+  const social = node.resolver === 'trade';
   const pool = social ? alive : alive.filter(e => isHostile(e));
   return pool.some(e => cheb(game.playerX, game.playerY, e.x, e.y) <= 1);
 }
@@ -385,9 +384,21 @@ export function targetVerbs(target, game) {
     const e = target.npc;
     const hostile = isHostile(e);
     if (e.dialogueId)          V.push({ key: 'talk',  label: 'Talk',  color: '#3f9aa0', text: '#eafafa', resolver: 'talk',  needsAdjacent: true });
+    // (ruled 2026-09-02) Bribe is NOT a separate verb any more. A bribe is gold
+    // in the give tray with nothing taken — the offer screen already does it, and
+    // says so. Two doors onto one fiction was the smell; this is the one door.
     V.push({ key: 'trade', label: 'Trade', color: '#cba43c', text: '#2a1f06', icon: '⇄', resolver: 'trade', needsAdjacent: true });
-    if (e.bribeable !== false) V.push({ key: 'bribe', label: 'Bribe', color: '#cba43c', text: '#2a1f06', icon: '¤', resolver: 'bribe', needsAdjacent: true });
-    if (hostile)               V.push({ key: 'hit',   label: 'Hit',   color: '#c8443a', text: '#fff3d0', icon: '⚔', resolver: 'hit',   needsAdjacent: true });
+    // (ruled 2026-09-02) Hit is offered on EVERYONE, not just the hostile — this
+    // is Violencetown and you may swing at whoever you like. What changes is how
+    // far you have to reach for it: on a hostile it is the default and sits on
+    // top, on anyone else orderedTargetVerbs drops it to the bottom of the list,
+    // so it can never be reached by a bump, an [E], or a bare tap. You have to
+    // open the full list and go looking, and then say yes twice.
+    V.push({ key: 'hit',   label: 'Hit',   color: '#c8443a', text: '#fff3d0', icon: '⚔', resolver: 'hit',   needsAdjacent: true });
+    // (interact harness) Shove used to BE the bump, inline in _doMove. It is a
+    // verb now — and the DEFAULT verb for a plain character, so barging past
+    // someone stays a single press while shopkeepers read Trade instead.
+    V.push({ key: 'shove', label: 'Shove', color: '#8a6f4a', text: '#f3e9d8', icon: '»', resolver: 'shove', needsAdjacent: true });
     if (hostile && haveThrow)  V.push({ key: 'throw', label: 'Throw', color: '#e08a2a', text: '#2a1400', icon: '➹', resolver: 'throw' });
   }
   // Verbs are offered regardless of range; the adjacency-requiring ones carry
@@ -408,18 +419,38 @@ export function targetVerbs(target, game) {
 // re-ordered by CONVENTION: the natural default action on top, then other verbs,
 // then Examine, then a Cancel row at the bottom. (`Walk here` + path-then-act
 // arrive with the pointer-model slice; not present yet.)
-const TARGET_VERB_RANK = { hit: 0, talk: 0, take: 0, open: 0, trade: 20, bribe: 30, throw: 40, examine: 90 };
+const TARGET_VERB_RANK = { hit: 0, talk: 0, take: 0, open: 0, trade: 20, shove: 35, throw: 40, examine: 90 };
 
-// The default verb for a target — the top-of-list / bare-tap action, chosen by
-// TYPE independent of range: item→Take, hostile NPC→Hit, friendly-with-dialogue
-// →Talk, container→Open, else Examine. Returns the full verb object (or null).
+// Hit against someone who is not fighting you sinks to the bottom of the list,
+// below even Shove — present, because you may swing at anyone, but never near
+// the top where a hurried tap could land on it. On a hostile it is the default
+// and this never applies.
+const UNPROVOKED_HIT_RANK = 85;
+
+// The default verb for a target — the top-of-list action, what a bump or [E]
+// fires, and (crucially) what the HUD TELEGRAPHS above their head before you
+// commit. Chosen by type, independent of range.
+//
+// (ruled 2026-09-02) The answer to "how do I know what walking into someone will
+// do" is not to flatten every character to the same verb — it is to show the
+// verb first. So this stays contextual and the renderer names it on the target.
+//
+// The last branch is the one that matters. A plain character with nothing to
+// sell and nothing to say defaults to SHOVE, not Examine — which is what keeps a
+// wandering Violencian stepping into your path from popping a menu you did not
+// ask for. You barge past them, they pick themselves up, and the town is not
+// rearranged. Shopkeepers, who stand still, are the ones you actually walk INTO
+// on purpose, and they read Trade.
 export function defaultVerb(target, game) {
   if (!target) return null;
   const verbs = targetVerbs(target, game);
   const npc = target.npc;
   const hostile = isHostile(npc);
   const key = target.item ? 'take'
-    : npc ? (hostile ? 'hit' : (npc.dialogueId ? 'talk' : 'examine'))
+    : npc ? (hostile ? 'hit'
+           : npc.vendor ? 'trade'            // matches the old [E] precedence: shop first, then talk
+           : npc.dialogueId ? 'talk'
+           : 'shove')
     : target.container ? 'open'
     : 'examine';
   return verbs.find(v => v.key === key) || verbs.find(v => v.key === 'examine') || verbs[0] || null;
@@ -428,7 +459,11 @@ export function defaultVerb(target, game) {
 export function orderedTargetVerbs(target, game) {
   const verbs = targetVerbs(target, game).slice();
   const defaultKey = (defaultVerb(target, game) || {}).key;
-  const rank = (v) => (v.key === defaultKey ? -1 : (TARGET_VERB_RANK[v.key] ?? 50));
+  const rank = (v) => {
+    if (v.key === defaultKey) return -1;
+    if (v.key === 'hit') return UNPROVOKED_HIT_RANK;   // not the default ⇒ they aren't fighting you
+    return TARGET_VERB_RANK[v.key] ?? 50;
+  };
   verbs.sort((a, b) => rank(a) - rank(b) || (a.label < b.label ? -1 : a.label > b.label ? 1 : 0));
   verbs.push({ key: 'cancel', label: 'Cancel', resolver: 'cancel', color: '#4a3c2a', text: '#b0a184' });
   return verbs;

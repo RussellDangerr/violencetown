@@ -13,7 +13,7 @@ import { TILE_PX, VIEW_TILES, CANVAS_PX, SAFE_SLOTS } from './data.js';
 const SS = 2;
 import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES } from './sprites.js';
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
-import { ROOT, selectedNode, activeRing, activeIndex, decisionPath, previewChildren, affectedTiles, verbApplies, isCombatActive, flapperDeflection } from './wheel-model.js'; // (sunburst wheel)
+import { ROOT, selectedNode, activeRing, activeIndex, decisionPath, previewChildren, affectedTiles, verbApplies, isCombatActive, flapperDeflection, defaultVerb } from './wheel-model.js'; // (sunburst wheel) + the bump telegraph
 import {
     THROW_RECTS,
     QUESTLOG_RECT, LOG_MODAL_RECT, TARGET_LIST_RECT, TARGET_LIST_ROW_H,
@@ -1018,6 +1018,16 @@ export class Renderer {
     // _drawActors. The body is unchanged from the old _drawEnemies loop; only the
     // position/cull/slide/stagger math moved up into _drawActors.
 
+    // Is `e` the character the player is looking straight at, one tile away?
+    // That is the condition for the bump telegraph: adjacent AND faced, so
+    // turning on the spot moves the label from one neighbour to the next and the
+    // player can see what each of them would do before committing to any.
+    _isFaced(game, e) {
+        const FACE = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+        const [dx, dy] = FACE[game.facing] || FACE.down;
+        return e.x === game.playerX + dx && e.y === game.playerY + dy;
+    }
+
     _drawEnemySprite(game, e, px, py, now) {
         const { ctx, sprites } = this;
         const isAlive = e.entity.isAlive();
@@ -1143,6 +1153,36 @@ export class Renderer {
                     // visibly distinct from a flat UI.gold pip. No numeral.
                     ctx.fillStyle = '#f4dd9a';
                     ctx.fillRect(bx + 20, gy, 3, gh);
+                }
+            }
+
+            // The bump telegraph — what walking into THIS character will do.
+            //
+            // (ruled 2026-09-02) The player must know what a bump is about to do
+            // before they do it. The answer is not to give every character the
+            // same verb; it is to name the verb on the target, the way a CRPG
+            // changes its cursor on hover. Facing is the hover: stand next to
+            // someone, look at them, and the action appears over their head. Bump
+            // and [E] both fire exactly this.
+            //
+            // Only the ONE character you face is labelled — a row of floating
+            // verbs over a crowd would be noise, and the whole point is that this
+            // reads as "the thing you are about to do".
+            if (this.font && !game._animating && this._isFaced(game, e)) {
+                const verb = defaultVerb({ x: e.x, y: e.y, npc: e }, game);
+                if (verb) {
+                    const who  = String(e.name || e.type || '').replace(/[[\]]/g, '');
+                    const text = `${who} · ${verb.label}`.toUpperCase();
+                    const tw   = this.font.measure ? this.font.measure(text, 1) : text.length * 6;
+                    const tx   = Math.round(px + TILE_PX / 2 - tw / 2);
+                    const ty   = py - 20;               // clear of the HP bar, buffs and pips
+                    ctx.fillStyle = '#000000cc';
+                    ctx.fillRect(tx - 3, ty - 2, tw + 6, 11);
+                    // The verb's own colour carries the warning: Hit is red, Trade
+                    // gold, Shove brown. The player reads the intent before the word.
+                    ctx.fillStyle = verb.color || UI.text;
+                    ctx.fillRect(tx - 3, ty - 2, tw + 6, 1);
+                    this.font.drawText(ctx, text, tx, ty, { color: verb.color || UI.text, scale: 1 });
                 }
             }
 
@@ -3037,12 +3077,20 @@ export class Renderer {
             }
         }
 
+        // (ruled 2026-09-02) Bribe stopped being its own verb — a bribe is just
+        // gold in the give tray with nothing taken. That is only a good trade for
+        // a separate button if the screen SAYS so, so when the offer has that
+        // exact shape the button names it. The player never picks "bribe"; they
+        // discover they are making one, which is the more honest reading anyway.
+        const isBribe = Math.trunc(gold) > 0
+                     && !(offer.give || []).length
+                     && !(offer.take || []).length;
         const b = L.button;
         drawInset(ctx, b.x, b.y, b.w, b.h);
         ctx.strokeStyle = blocker ? UI.dim : UI.gold;
         ctx.lineWidth = 1.5;
         ctx.strokeRect(b.x + 1, b.y + 1, b.w - 2, b.h - 2);
-        this.font.drawText(ctx, blocker || 'MAKE THE OFFER', b.x + b.w / 2, b.y + 14,
+        this.font.drawText(ctx, blocker || (isBribe ? 'OFFER THE BRIBE' : 'MAKE THE OFFER'), b.x + b.w / 2, b.y + 14,
             { color: blocker ? UI.dim : UI.gold, scale: 1, align: 'center' });
     }
 
