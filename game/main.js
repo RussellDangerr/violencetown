@@ -45,9 +45,11 @@ import {
     // (offer screen) the one panel every modal shares, its geometry, and the two
     // hit-test helpers layout.js wrote for _tapOffer. Hit-testing lives THERE so
     // the slop policy cannot drift from the rects the renderer drew.
-    MODAL_RECT, offerLayout, offerRowIndexAt, offerTraySlotAt, OFFER_ROWS_VISIBLE,
+    MODAL_RECT, offerLayout, offerRowIndexAt, offerTraySlotAt, OFFER_ROWS_VISIBLE, OFFER_TRAY_SLOTS,
 } from './layout.js';
-import { emptyOffer, commitBlocker, stage, unstage, settledGold, resolveOffer } from './offer.js';   // (offer screen) the basket model
+import {
+    emptyOffer, commitBlocker, stage, unstage, settledGold, resolveOffer, sameEntry,
+} from './offer.js';   // (offer screen) the basket model
 import { canTrade, buyPrice, sellPrice, bribeStepCost, BRIBE_STEP, transferGold, burnGold } from './trade.js'; // pricing + the transaction spine
 import { buildXmbBar, resolveXmbSelection, cycleXmbCategory, cycleXmbItem, xmbCategoryOf, XMB_LABELS } from './xmb.js';
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
@@ -1097,26 +1099,53 @@ class Game {
                 const c = this._offerCursor || (this._offerCursor = { side: 'yours', index: 0 });
                 const tick = () => { audio.playSfx('menu-tick'); this._render(); };
 
-                if (e.code === 'Tab') { c.side = c.side === 'theirs' ? 'yours' : 'theirs'; c.index = 0; tick(); return; }
+                // Switching side must clamp the SHARED index into the new
+                // list, and pull the viewport to it. Tab reset the index to 0
+                // and the arrows did not, so arrowing to row 11 of the bag and
+                // pressing Right left the cursor at 11 over a 3-row vendor:
+                // Space then resolved list[11] -> undefined and returned before
+                // even re-rendering. No sound, no log, nothing. Nine ArrowUps
+                // to recover.
+                const toSide = (side) => {
+                    c.side = side;
+                    const len = (side === 'theirs' ? this._offerTheirsList() : this._offerYoursList()).length;
+                    c.index = Math.max(0, Math.min(len - 1, c.index));
+                    const key2 = side === 'theirs' ? 'theirs' : 'yours';
+                    const sc = this._offer.scroll[key2] || 0;
+                    if (c.index < sc) this._offerScrollBy(key2, c.index - sc);
+                    else if (c.index >= sc + OFFER_ROWS_VISIBLE) this._offerScrollBy(key2, c.index - OFFER_ROWS_VISIBLE + 1 - sc);
+                    tick();
+                };
+                if (e.code === 'Tab') { toSide(c.side === 'theirs' ? 'yours' : 'theirs'); return; }
                 // The satchel is the LEFT column and their goods the RIGHT, so
                 // left/right map to the sides that way round.
-                if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { c.side = 'yours';  tick(); return; }
-                if (e.code === 'ArrowRight' || e.code === 'KeyD') { c.side = 'theirs'; tick(); return; }
+                if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { toSide('yours');  return; }
+                if (e.code === 'ArrowRight' || e.code === 'KeyD') { toSide('theirs'); return; }
 
                 const list = c.side === 'theirs' ? this._offerTheirsList() : this._offerYoursList();
                 const rows = OFFER_ROWS_VISIBLE;   // NOT offerLayout(...).rowsVisible -- no such key
                 const key = c.side === 'theirs' ? 'theirs' : 'yours';
+                // Moving the cursor also moves the SELECTION, so the description
+                // strip follows the keyboard. Before this only _offerActivate
+                // wrote selection, which the arrows never call -- so a keyboard
+                // player scrolled past rows with no focus ring and no idea what
+                // Space was about to stage.
+                const cursorTo = (i) => {
+                    c.index = i;
+                    this._offer.selection = { side: c.side, index: i };
+                    tick();
+                };
                 if (e.code === 'ArrowUp' || e.code === 'KeyW') {
-                    c.index = Math.max(0, c.index - 1);
-                    if (c.index < this._offer.scroll[key]) this._offerScrollBy(key, c.index - this._offer.scroll[key]);
-                    tick(); return;
+                    const i = Math.max(0, c.index - 1);
+                    if (i < this._offer.scroll[key]) this._offerScrollBy(key, i - this._offer.scroll[key]);
+                    cursorTo(i); return;
                 }
                 if (e.code === 'ArrowDown' || e.code === 'KeyS') {
-                    c.index = Math.min(Math.max(0, list.length - 1), c.index + 1);
-                    if (c.index >= this._offer.scroll[key] + rows) {
-                        this._offerScrollBy(key, c.index - rows + 1 - this._offer.scroll[key]);
+                    const i = Math.min(Math.max(0, list.length - 1), c.index + 1);
+                    if (i >= this._offer.scroll[key] + rows) {
+                        this._offerScrollBy(key, i - rows + 1 - this._offer.scroll[key]);
                     }
-                    tick(); return;
+                    cursorTo(i); return;
                 }
                 if (e.code === 'Space') { this._offerActivate(c.side, c.index); return; }
                 return;
@@ -5387,6 +5416,20 @@ class Game {
                 this._render(); return;
             }
             if (side === 'give' && !this._canStageGive(entry)) { this._render(); return; }
+
+            // A tray shows OFFER_TRAY_SLOTS slots and the gold chip claims one
+            // of them, so a tray holds at most SLOTS-1 distinct entries. Past
+            // that the extra drew nowhere, yet counted in the ledger and in the
+            // commit -- and since a tray-slot tap is the only unstage
+            // affordance, it could not be taken back short of discarding the
+            // whole basket. Topping up an entry already in the tray is always
+            // fine; only a NEW one can overflow.
+            const tray = this._offer[side] || [];
+            const already = tray.some(x => sameEntry(x, entry));
+            if (!already && tray.length >= OFFER_TRAY_SLOTS - 1) {
+                this._log(`[The ${side === 'give' ? 'offer' : 'take'} tray is full.]`);
+                this._render(); return;
+            }
 
             // entry.max is the ceiling: a bag stack's size, a chest row's single
             // unit, a buyback shelf's depth, or Infinity for a vendor's stock.

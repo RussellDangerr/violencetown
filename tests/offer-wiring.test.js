@@ -22,7 +22,7 @@ import { resolveItemDef } from '../game/item-registry.js';
 import { addToInventory } from '../game/inventory.js';
 import { INVENTORY_SIZE, SAFE_SLOTS, MAX_STACK } from '../game/data.js';
 import {
-    emptyOffer, commitBlocker, stage, unstage, settledGold, offerBalance, resolveOffer,
+    emptyOffer, commitBlocker, stage, unstage, settledGold, offerBalance, resolveOffer, sameEntry,
 } from '../game/offer.js';
 import { transferGold, sellPrice, buyPrice } from '../game/trade.js';
 import {
@@ -32,6 +32,7 @@ import { isHostile } from '../game/ai.js';
 import { dispositionCeil } from '../game/disposition-curves.js';
 import {
     MODAL_RECT, HIT_SLOP, offerLayout, offerRowIndexAt, offerTraySlotAt, OFFER_ROWS_VISIBLE,
+    OFFER_TRAY_SLOTS,
 } from '../game/layout.js';
 
 const mainSrc = readFileSync(fileURLToPath(new URL('../game/main.js', import.meta.url)), 'utf8');
@@ -88,7 +89,8 @@ const openOffer = liveMethod('_openOffer', 'npc', { STATE, BUYBACK_MS, audio, em
 const closeOffer = liveMethod('_closeOffer', '', { STATE, audio });
 const tapOffer = liveMethod('_tapOffer', 'pt',
     { MODAL_RECT, HIT_SLOP, offerLayout, offerRowIndexAt, offerTraySlotAt, audio, OFFER_ROWS_VISIBLE });
-const offerActivate = liveMethod('_offerActivate', 'zone, index', { stage, unstage, settledGold, audio });
+const offerActivate = liveMethod('_offerActivate', 'zone, index',
+    { stage, unstage, settledGold, audio, sameEntry, OFFER_TRAY_SLOTS });
 const canStageGive = liveMethod('_canStageGive', 'entry');
 const commitOffer = liveMethod('_commitOffer', '');
 const pointInRect = liveMethod('_pointInRect', 'p, r, slop = 0');
@@ -669,6 +671,36 @@ describe('_offerActivate - staging', () => {
         assert.match(g.logs.at(-1).msg, /isn't interested/);
     });
 
+    test('A TRAY NEVER TAKES MORE ENTRIES THAN IT CAN DRAW', () => {
+        // The tray draws OFFER_TRAY_SLOTS slots and the gold chip claims one, so
+        // it holds at most SLOTS-1 distinct entries. Past that the extra drew
+        // nowhere yet still counted in the ledger and the commit -- and a
+        // tray-slot tap being the only unstage affordance, it could not be taken
+        // back except by discarding the whole basket.
+        const inv = new Array(INVENTORY_SIZE).fill(null);
+        const ids = ['rock','soap','bandage','hot_dog','pipe','fire_bottle','foil_hat','sludge_sack'];
+        ids.forEach((id, i) => { inv[i] = { itemDef: ITEMS[id], count: 1 }; });
+        const g = stubGame({ inventory: inv });
+        openOffer.call(g, puck());
+        for (let i = 0; i < ids.length; i++) offerActivate.call(g, 'yours', i);
+        assert.ok(g._offer.give.length <= OFFER_TRAY_SLOTS - 1,
+            `${g._offer.give.length} entries staged into ${OFFER_TRAY_SLOTS} slots`);
+        assert.match(g.logs.at(-1).msg, /tray is full/i, 'the refusal was silent');
+    });
+
+    test('a full tray still accepts MORE of something already in it', () => {
+        const inv = new Array(INVENTORY_SIZE).fill(null);
+        ['rock','soap','bandage','hot_dog','pipe'].forEach((id, i) => {
+            inv[i] = { itemDef: ITEMS[id], count: 5 };
+        });
+        const g = stubGame({ inventory: inv });
+        openOffer.call(g, puck());
+        for (let i = 0; i < 5; i++) offerActivate.call(g, 'yours', i);
+        assert.equal(g._offer.give.length, OFFER_TRAY_SLOTS - 1, 'setup: tray at capacity');
+        offerActivate.call(g, 'yours', 0);                     // a second rock
+        assert.equal(g._offer.give[0].count, 2, 'topping up an existing row was refused');
+    });
+
     test('a dead activation zone is a no-op, not a throw', () => {
         const g = stubGame();
         openOffer.call(g, puck());
@@ -688,6 +720,57 @@ describe('_offerActivate - staging', () => {
         offerActivate.call(g, 'yours', 0);
         assert.ok(g._offer.scroll, 'staging dropped scroll entirely - the screen would blank');
         assert.equal(g._offer.scroll.yours, 4, 'staging lost the scroll position');
+    });
+});
+
+describe('the keyboard cursor is visible and in range', () => {
+    const many = (n) => {
+        const inv = new Array(INVENTORY_SIZE).fill(null);
+        const ids = ['rock','soap','bandage','hot_dog','pipe'];
+        for (let i = 0; i < n; i++) inv[i] = { itemDef: ITEMS[ids[i % 5]], count: 1 };
+        return inv;
+    };
+
+    test('SWITCHING SIDE CLAMPS THE SHARED INDEX INTO THE NEW LIST', () => {
+        // Arrow to row 11 of the bag, press Right onto a 2-row vendor: the
+        // cursor used to stay at 11, and Space then resolved list[11] to
+        // undefined and returned before even re-rendering -- no sound, no log,
+        // nine ArrowUps to recover. Tab reset the index; the arrows did not.
+        //
+        // A SOURCE PIN: the clamp lives in a closure inside the keydown switch,
+        // which liveMethod cannot lift. It asserts the shape, not the effect.
+        assert.ok(/const toSide = \(side\) => \{/.test(mainSrc),
+            'the side switch no longer goes through one clamping helper');
+        assert.ok(/c\.index = Math\.max\(0, Math\.min\(len - 1, c\.index\)\)/.test(mainSrc),
+            'switching side no longer clamps the shared index');
+        // Scope the search to the offer screen's own keydown block — every one
+        // of these codes is handled several times over in main.js, and an
+        // unscoped indexOf finds the movement handler instead.
+        const from = mainSrc.indexOf('TRADE: the unified offer screen');
+        assert.ok(from > 0, 'the offer screen keydown block is gone');
+        const block = mainSrc.slice(from, mainSrc.indexOf('_offerActivate(c.side, c.index)', from));
+        for (const key of ['ArrowLeft', 'ArrowRight', 'Tab']) {
+            const at = block.indexOf(`e.code === '${key}'`);
+            assert.ok(at > 0, `${key} is not handled in the offer block`);
+            assert.ok(block.slice(at, at + 120).includes('toSide('),
+                `${key} does not route through the clamping helper`);
+        }
+    });
+
+    test('the arrows move the SELECTION, so the description strip follows', () => {
+        const g = stubGame({ inventory: many(10) });
+        openOffer.call(g, puck());
+        assert.equal(g._offer.selection, null);
+        // _offerActivate is what a tap uses; the arrows now write selection too,
+        // which is asserted at the source since the key block is not liftable.
+        assert.ok(/this\._offer\.selection = \{ side: c\.side, index: i \}/.test(mainSrc),
+            'the arrow keys no longer move the selection');
+    });
+
+    test('the column draws a focus ring on the selected row', () => {
+        const rendererSrc = readFileSync(fileURLToPath(new URL('../game/renderer.js', import.meta.url)), 'utf8');
+        assert.ok(/cursorIndex = -1/.test(rendererSrc), 'the column takes no cursor');
+        assert.ok(/scroll \+ i === cursorIndex/.test(rendererSrc), 'nothing draws the cursor row');
     });
 });
 

@@ -3156,18 +3156,25 @@ export class Renderer {
         // a price the ledger does not charge.
         // priceOf takes the ENTRY, not just its def, so a row carrying its own
         // locked price (a buyback) draws what it will actually charge.
+        // `sel` is the row the keyboard cursor / last tap is on, so the column
+        // can draw a focus ring. The retired _drawTradeModal stroked one around
+        // its cursor cell and the port dropped it, which left keyboard players
+        // scrolling blind -- nothing on the panel said what Space would stage.
+        const sel = game._offer.selection;
         this._drawOfferColumn(game, L.theirs, L.theirsScrollTrack, theirs,
             game._offer.scroll.theirs, 'take',
             (def, entry) => (npc._container ? 0
                           : entry && entry.price != null ? entry.price
-                          : buyPrice(def, d)));
+                          : buyPrice(def, d)),
+            sel && sel.side === 'theirs' ? sel.index : -1);
         this._drawOfferColumn(game, L.yours, L.yoursScrollTrack, yours,
-            game._offer.scroll.yours, 'give', (def) => sellPrice(def, d));
+            game._offer.scroll.yours, 'give', (def) => sellPrice(def, d),
+            sel && sel.side === 'yours' ? sel.index : -1);
     }
 
     // One column: `rects` are the visible row slots, `list` is the full backing
     // list, `scroll` is the index of the first visible row.
-    _drawOfferColumn(game, rects, thumb, list, scroll, side, priceOf) {
+    _drawOfferColumn(game, rects, thumb, list, scroll, side, priceOf, cursorIndex = -1) {
         const ctx = this.ctx;
         for (let i = 0; i < rects.length; i++) {
             const entry = list[scroll + i];
@@ -3203,6 +3210,16 @@ export class Renderer {
             // rows the player is acting on, the one cue this screen was built
             // to add.
             ctx.fillStyle = tier.color; ctx.fillRect(r.x, r.y, 3, r.h);
+
+            // The focus ring, outermost so it reads over both. Dashed and pale
+            // so it is never mistaken for the solid gold STAGED border -- one
+            // says "Space acts here", the other says "this is in the tray".
+            if (scroll + i === cursorIndex) {
+                ctx.strokeStyle = UI.textLight; ctx.lineWidth = 1;
+                ctx.setLineDash([3, 2]);
+                ctx.strokeRect(r.x + 2.5, r.y + 2.5, r.w - 5, r.h - 5);
+                ctx.setLineDash([]);
+            }
         }
         // Proportional thumb — an honest read on how deep the list is.
         if (list.length > rects.length) {

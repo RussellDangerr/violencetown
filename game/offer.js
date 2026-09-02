@@ -197,7 +197,11 @@ export function resolveOffer(npc, offer) {
 //
 // Entries key off their SOURCE, not their item id, so the same item sitting in
 // two bag slots stages as two entries and un-staging one leaves the other alone.
-function sameEntry(a, b) {
+// Two rows are the same staged thing. Exported because main.js asks "is this
+// row already in the tray?" before letting a NEW one claim a slot -- and a
+// second copy of this rule in main.js is exactly the four-spellings problem
+// item-registry.js was created to end.
+export function sameEntry(a, b) {
     if (a.def !== b.def) return false;
     if ('slot' in b) return a.slot === b.slot;
     return a.source === b.source && a.index === b.index;
