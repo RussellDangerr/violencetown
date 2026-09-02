@@ -79,15 +79,6 @@ before you read the PR.
     emits a loud `Law 3 GATE` flag for anything in this half so it can never be entered by accident.
 
   Nothing in the roster is above +6 today; this amendment opens the band, it does not populate it.
-- **Law 4 — Roles, not levels. Amended 2026-08-24 (Caelan): the  row.** The role table used
-  to jump from  at exactly armor 0 straight to  at 1-10, so every armor value in
-  between derived as elite and demanded a 100 GP wallet — the same no-row-fits hole ruling A1
-  describes at -15.  (armor +1..+5, **60-100 GP**) is the missing step between a zone basic
-  and its named foe. Bands now read: vermin -80 [0,5] - fodder -30 [5,20] - bruiser -15 [15,40] -
-  standard 0 [20,60] - **tough +5 [60,100]** - elite +10 [100,200].
-  **Durability and wallet move together.** Re-roling the roster up the armor ladder without funding
-  the wallets produced 11 Law 4 flags at once; that is the Law working, not noise. A zone faucet
-  rising is the expected consequence of a zone getting harder.
 - **Law 4 — Roles, not levels.** One flat power band per act; enemies differ by role/archetype, not
   level — and (amended 2026-07-24) the role table keys on **armor**, not HP, since HP is always 100
   now (see the authoring form below for the current table). The band table is design-doc law
@@ -95,6 +86,26 @@ before you read the PR.
   `tools/balance-golden.txt`'s TTK/TTD matrix, computed against `REFERENCE_DAMAGE = 20`
   (`tools/balance-harness.mjs:27`, the act-1 Ray-Gun-tier anchor) via `ttk`
   (`tools/balance-harness.mjs:71-73`).
+  **Amended 2026-08-24 (Caelan) — the `tough` row.** The table jumped from `standard` at exactly
+  armor 0 straight to `elite` at +1…+10, so every armor value in between derived as elite and
+  demanded a 100 GP wallet off a trash mob. That is the same no-row-fits hole ruling A1 describes
+  at −15, and the 2026-08-24 roster re-role walked straight into it. `tough` (armor **+1…+5**,
+  **60–100 GP**) is the missing step between a zone's basic enemy and its named foe. The ladder now
+  reads:
+
+  | role | armor ≤ | challenge GP |
+  |---|---|---|
+  | vermin | −80 | 0–5 |
+  | fodder | −30 | 5–20 |
+  | bruiser | −15 | 15–40 *(still an open question — ruling A1)* |
+  | standard | 0 | 20–60 |
+  | **tough** | **+5** | **60–100** |
+  | elite | +10 | 100–200 |
+
+  **Durability and wallet move together.** Re-roling the roster up the armor ladder without funding
+  the wallets raised 11 Law 4 flags at once — the Law working, not noise. A zone's faucet rising is
+  the expected consequence of that zone getting harder: the 2026-08-24 pass took the sewer from 28
+  to 101 lootable GP, and the whole game from ~37 to ~147.
 - **Law 5 — Bosses spend, not pool.** A boss phase-transitions by *purchasing* a heal or a
   rules-change move, priced at peg like everything else. **Deferred to the first boss build** — the
   only boss in the current roster (`borgir/borgir_boss`) is a 100-HP / −15-armor, 0-damage
