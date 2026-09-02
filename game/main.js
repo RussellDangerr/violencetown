@@ -50,7 +50,7 @@ import {
 import {
     emptyOffer, commitBlocker, stage, unstage, settledGold, resolveOffer, sameEntry,
 } from './offer.js';   // (offer screen) the basket model
-import { canTrade, buyPrice, sellPrice, bribeStepCost, BRIBE_STEP, transferGold, burnGold } from './trade.js'; // pricing + the transaction spine
+import { canTrade, buyPrice, sellPrice, transferGold, burnGold } from './trade.js'; // pricing + the transaction spine
 import { buildXmbBar, resolveXmbSelection, cycleXmbCategory, cycleXmbItem, xmbCategoryOf, XMB_LABELS } from './xmb.js';
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
 import { contextualUses } from './item-uses.js'; // "use THIS on THAT" — the authored table
@@ -1257,10 +1257,16 @@ class Game {
             }
             if (e.code === 'KeyE') {
                 e.preventDefault();
-                const vendor = this._findAdjacentVendor();
-                if (vendor) { this._openOffer(vendor); return; }
-                const talker = this._findAdjacentDialogueNpc();
-                if (talker) { this._openDialogue(talker); return; }
+                // (ruled 2026-09-02) [E] and walking into someone are the SAME
+                // gesture — one for the keyboard, one for the feet — so they run
+                // the same verb. It reads the tile you FACE rather than sweeping
+                // for any adjacent shopkeeper, because facing is what the HUD
+                // telegraphs: the label over their head IS what this key fires.
+                const FACE = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+                const [fdx, fdy] = FACE[this.facing] || FACE.down;
+                const t = this._targetAt(this.playerX + fdx, this.playerY + fdy);
+                const verb = t && defaultVerb(t, this);
+                if (verb) { this._actOnTarget(verb, t); return; }
                 doExamine(this); this._render(); return;
             }
 
@@ -2045,11 +2051,19 @@ class Game {
         // starting one.
         const enemy = this.enemies.find(e => e.entity.isAlive() && e.x === nx && e.y === ny);
         if (enemy) {
-            if (this._openTargetList(nx, ny)) return;
-            // No verbs at all (should not happen — Examine is unconditional) —
-            // fall back to the old behaviour rather than eating the input.
-            this._shoveNpc(enemy, dir);
-            return;
+            const t = this._targetAt(nx, ny);
+            const verb = t && defaultVerb(t, this);
+            // Anything but a shove is an INTERACTION — fire it and stop here. The
+            // renderer has already named this verb over their head, so nothing
+            // that happens now is a surprise.
+            if (verb && verb.key !== 'shove') { this._actOnTarget(verb, t); return; }
+            // Shove is the default for a plain character, and it keeps its old
+            // barge-through: they are knocked aside and you take the tile in the
+            // SAME press. That single-press flow is the whole reason the shove
+            // exists ("ease of movement"), so it must not become two inputs.
+            if (!this._shoveNpc(enemy, dir)) return;   // heavy or boxed in — bounced, no step
+            // fall through: (nx,ny) is vacated, so the normal move below advances
+            // into it with full hazard/pickup/turn handling.
         }
 
         // Bump-to-open? Mirrors bump-to-attack — containers are unwalkable
@@ -2869,8 +2883,31 @@ class Game {
     // adjacent FIRST (path-then-act) — see _actOnTarget.
     _fireTargetVerb(verb) {
         if (verb.resolver === 'cancel') { this._closeTargetList(); return; }
+        const t = this.targetList.target;
+
+        // (ruled 2026-09-02) You may swing at anyone in this town — but swinging
+        // at someone who is not fighting you asks first. Between this and the
+        // bottom-of-the-list rank, an unprovoked attack takes opening the full
+        // list, scrolling past everything, and then saying yes a second time. It
+        // is allowed and it is deliberate, which is the whole ask.
+        //
+        // The confirmation is the LIST ITSELF re-dressed rather than a new modal:
+        // same widget, same keys, and Cancel starts selected so a held Enter
+        // cannot carry through into a punch.
+        if (verb.key === 'hit' && !verb.confirmed && t && t.npc && !isHostile(t.npc)) {
+            const who = String(t.npc.name || t.npc.type || 'them').replace(/[[\]]/g, '');
+            this.targetList.verbs = [
+                { ...verb, label: `Really hit ${who}?`, confirmed: true },
+                { key: 'cancel', label: 'Cancel', resolver: 'cancel', color: '#4a3c2a', text: '#b0a184' },
+            ];
+            this.targetList.sel = 1;                      // Cancel, not the punch
+            audio.playSfx('menu-open');
+            this._render();
+            return;
+        }
+
         this.state = STATE.IDLE;   // the resolvers + click-walk assume IDLE
-        this._actOnTarget(verb, this.targetList.target);
+        this._actOnTarget(verb, t);
     }
 
     // Perform `verb` on `t`, walking the Hero adjacent FIRST when the verb needs
@@ -2955,7 +2992,6 @@ class Game {
             }
             case 'talk':  if (npc) this._openDialogue(npc); break;
             case 'trade': if (npc) this._openOffer(npc); break;   // (Phase 6a) any adjacent NPC → the offer screen
-            case 'bribe': if (npc) this._bribeTarget(npc); break;
             case 'shove': {
                 // Direction is player → target. The verb carries needsAdjacent, so
                 // _actOnTarget has already walked us next to them and the two
@@ -2972,16 +3008,6 @@ class Game {
             case 'open':  if (t.container) this._openContainer(t.container); break;
             default: this._render();
         }
-    }
-
-    _bribeTarget(npc) {
-        if (npc.bribeable === false) { this._log(`[The ${npc.type || 'stranger'} won't take your money.]`); this._render(); return; }
-        const cost = bribeStepCost(npc.disposition ?? 0);
-        if ((this.gold ?? 0) < cost) { this._log(`[Not enough gold to bribe — needs ${cost}g.]`); this._render(); return; }
-        transferGold(this, npc, cost, 'bribe');   // (spine) gold → the NPC's pocket
-        applyDispositionDelta(npc, BRIBE_STEP);
-        this._log(`[You slip the ${npc.type || 'stranger'} ${cost}g. (+${BRIBE_STEP} disposition.)]`);
-        this._advanceWorld(); this._render();
     }
 
     // Take a specific ground item at a tile (not _tryPickup, which is player-tile only).
@@ -3388,18 +3414,6 @@ class Game {
                 // npc.vendor (that would regress the give-into-trade fold).
                 if (npc) { this._openOffer(npc); return; }
                 this._log('[No one to trade with there]');
-                break;
-            }
-            case 'bribe': {
-                const npc = aimTile && this.enemies.find(e => e.entity.isAlive() && e.x === aimTile.x && e.y === aimTile.y);
-                if (!npc) { this._log('[No one to bribe there]'); break; }
-                if (npc.bribeable === false) { this._log(`[The ${npc.type || 'stranger'} won't take your money.]`); break; }
-                const cost = bribeStepCost(npc.disposition ?? 0);
-                if ((this.gold ?? 0) < cost) { this._log(`[Not enough gold to bribe — needs ${cost}g.]`); break; }
-                transferGold(this, npc, cost, 'bribe');                        // gold → the NPC's pocket
-                reactToTransaction(npc, 'bribe', { delta: BRIBE_STEP, gold: cost });
-                this._log(`[You slip the ${npc.type || 'stranger'} ${cost}g. (+${BRIBE_STEP} disposition.)]`);
-                this._advanceWorld();
                 break;
             }
             case 'hide': {

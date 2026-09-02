@@ -51,7 +51,7 @@ test('adjacency-requiring verbs carry needsAdjacent; Examine does not', () => {
   const by = k => verbs.find(v => v.key === k);
   assert.equal(by('talk').needsAdjacent, true);
   assert.equal(by('trade').needsAdjacent, true);
-  assert.equal(by('bribe').needsAdjacent, true);
+  assert.equal(by('shove').needsAdjacent, true);
   assert.ok(!by('examine').needsAdjacent);
   assert.equal(targetVerbs({ x: 6, y: 5, item: rock }, G).find(v => v.key === 'take').needsAdjacent, true);
 });
@@ -129,9 +129,10 @@ test('a ground item on a chest tile still defaults to Take', () => {
   assert.equal(defaultVerb(t, G).key, 'take');
 });
 
-// (interact harness, ruled 2026-09-02) Bumping an NPC opens this list instead of
-// shoving them. The shove is not gone — it moved in here, so barging past
-// someone stays possible and merely becomes deliberate.
+// (interact harness, ruled 2026-09-02) Shove became a verb rather than the thing
+// a bump hardcoded. A bump now fires whatever defaultVerb names — which for a
+// plain character IS shove, so barging past someone is unchanged, while a
+// shopkeeper reads Trade instead of being pushed out of the way.
 test('Shove is offered on any character, hostile or not', () => {
   assert.ok(targetVerbs({ x: 6, y: 5, npc: friendly }, G).some(v => v.key === 'shove'));
   assert.ok(targetVerbs({ x: 6, y: 5, npc: hostile }, G).some(v => v.key === 'shove'));
@@ -151,4 +152,42 @@ test('Shove is not offered on scenery, loot or a crate', () => {
                    { x: 6, y: 5, examinable: { id: 'sign' } }]) {
     assert.ok(!targetVerbs(t, G).some(v => v.key === 'shove'), JSON.stringify(Object.keys(t)));
   }
+});
+
+// (ruled 2026-09-02) Bribe stopped being a verb. A bribe is gold in the give tray
+// with nothing taken, and the offer screen's button names it. It had grown THREE
+// doors — a target-list verb, a wheel node, and the gold tray — onto one fiction.
+test('Bribe is not a verb on anyone', () => {
+  for (const npc of [friendly, hostile]) {
+    assert.ok(!targetVerbs({ x: 6, y: 5, npc }, G).some(v => v.key === 'bribe'));
+  }
+});
+
+// (ruled 2026-09-02) You may swing at anyone in Violencetown. What changes is the
+// reach: on a hostile, Hit is the default and sits on top; on anyone else it sinks
+// below every other verb, so no bump, [E] or bare tap can ever land on it.
+test('Hit is offered on a peaceful NPC, but sits at the bottom', () => {
+  const list = orderedTargetVerbs({ x: 6, y: 5, npc: friendly }, G).map(v => v.key);
+  assert.ok(list.includes('hit'), 'you may always swing');
+  assert.ok(list.indexOf('hit') > list.indexOf('shove'), 'below even Shove');
+  assert.ok(list.indexOf('hit') > list.indexOf('talk'));
+  assert.notEqual(list[0], 'hit', 'never the default on someone peaceful');
+});
+
+test('on a hostile, Hit is still the default and on top', () => {
+  const list = orderedTargetVerbs({ x: 6, y: 5, npc: hostile }, G).map(v => v.key);
+  assert.equal(list[0], 'hit');
+});
+
+// The telegraph reads this, the bump fires it, [E] fires it. One function decides
+// what walking into someone does, so the label and the action cannot disagree.
+test('defaultVerb: vendor→Trade, plain character→Shove, hostile→Hit', () => {
+  const vendor = { x: 6, y: 5, allegiance: 'neutral', vendor: true, stock: ['rock'],
+                   dialogueId: 'x', entity: { isAlive: () => true } };
+  const nobody = { x: 6, y: 5, allegiance: 'neutral', entity: { isAlive: () => true } };
+  assert.equal(defaultVerb({ x: 6, y: 5, npc: vendor }, G).key, 'trade', 'shop beats talk, as [E] always did');
+  assert.equal(defaultVerb({ x: 6, y: 5, npc: nobody }, G).key, 'shove',
+    'a wanderer stepping into your path gets barged past, NOT a popped menu');
+  assert.equal(defaultVerb({ x: 6, y: 5, npc: friendly }, G).key, 'talk');
+  assert.equal(defaultVerb({ x: 6, y: 5, npc: hostile }, G).key, 'hit');
 });

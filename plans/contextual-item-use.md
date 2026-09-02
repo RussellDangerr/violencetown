@@ -145,6 +145,96 @@ Network on a clean load: 61 resources, **zero failures**. (Console 404s seen dur
 my own speculative `import('/verbs.js')`-style probes while hunting for `orderedTargetVerbs`; they
 predate the reload and the tab's console buffer outlives the page.)
 
+---
+
+# Slice 2 — the telegraph (ruled 2026-09-02, same session)
+
+The three questions above came back with answers, and they resolved a tension I had not spotted.
+
+## The question he actually asked
+
+> "I'm trying to think of how games usually solve the whole having a default option on one NPC and
+> a different one on one NPC … On a computer RPG like Baldur's Gate, I wouldn't think that you'd be
+> hunting for a different menu option each time."
+
+The industry answer is that **almost nobody standardises the verb — they telegraph it.** RuneScape
+fires a per-entity default on left-click and hides the rest behind right-click. BG3 keeps the verb
+contextual and changes the *cursor* before you commit. Ultima makes you pick the verb first and is
+slow. Zelda-likes show an on-screen prompt naming the button's job.
+
+So the fix for "what will this do?" is showing the answer, not flattening it — which matters because
+his objection to class-dependent defaults was **unpredictability**, and this game already has facing
+and adjacency barks. The surface to telegraph on already existed.
+
+## The rulings
+
+**1. Telegraph the default.** Facing an adjacent character draws their name and the verb over their
+head — `MACC · TRADE`, `VIOLENCIAN · SHOVE`, `WERERAT · HIT` — in the verb's own colour, so the
+intent reads before the word does. Bump and `[E]` both fire exactly that. Turning on the spot walks
+the label around your neighbours, so you can survey a crowd before touching any of them.
+
+**2. Shove everyone, and they get up again.**
+
+> "Traders will mostly be in stationary positions. Even if you do shove a trader out of the way,
+> they should have simple scripting to get back to their original spot … walking and shoving people
+> out of the way is going to be a source of comedy. Trying to push someone and not being able to,
+> I think, is good physical comedy."
+
+### What that resolves
+
+I had these two filed as opposites and they are not. **A plain character's telegraphed default IS
+Shove.** So a wandering Violencian who steps into your path gets barged past — one press, they move,
+you take the tile — and no menu appears. A shopkeeper, who stands still and is therefore someone you
+walked into *on purpose*, reads Trade. Same rule for everyone, no class-specific branch, and the
+"menu pops when I didn't ask" problem disappears on its own rather than needing a guard.
+
+That also means `defaultVerb` is now load-bearing in three places at once — the label, the bump and
+`[E]` — so the telegraph and the action cannot disagree by construction.
+
+**3. Hit is offered on everyone, and made expensive to reach.** *"I do want the game to feel like it
+allows you to hit whoever you want. I do want it to be more difficult to get to."* On a hostile it
+is the default and sits on top. On anyone else it sinks below every other verb, so no bump, `[E]` or
+bare tap can land on it — you must open the full list, go looking, and then confirm. The
+confirmation re-dresses the list itself rather than adding a modal, and **Cancel starts selected**,
+so a held Enter cannot carry through into a punch.
+
+**4. Bribe folded into the offer screen.** *"I don't know that bribe needs to be explicitly broken
+out … I would want it to be obvious that it's a bribe without having it as a whole other option."*
+It had grown **three** doors onto one fiction: a target-list verb, a wheel node, and the gold tray.
+Now one. When the offer is gold with nothing taken, the commit button reads **OFFER THE BRIBE**
+instead of MAKE THE OFFER — you never pick "bribe", you discover you are making one.
+
+## Slice 2 gates — met
+
+**977 tests / 168 suites / 0 fail.** `balance:check` clean.
+
+| driven in the live game | result |
+|---|---|
+| face Macc | `MACC · TRADE` over his head, in gold |
+| turn right to a plain Violencian | label follows the look — `VIOLENCIAN · SHOVE`, in brown |
+| bump Macc | offer screen opens; **he does not move** |
+| `[E]` facing Macc | identical — offer screen, same NPC |
+| bump a plain Violencian | shoved (16,11)→(15,11), player takes (16,11), **no menu**, one press |
+| Hit on peaceful Bartho | 4th in the list; first pick asks with Cancel preselected, HP untouched |
+| …then confirm | 100 → 10 HP |
+| Bribe | gone from the list and from the wheel |
+
+One environment note for whoever verifies next: **the Browser pane throttles
+`requestAnimationFrame` to zero while hidden** (`document.hidden === true`, 0 frames in 600 ms), so
+`_animating` sticks true and no move ever lands. Barge-through looks broken and is not. Shim
+`requestAnimationFrame` onto `setTimeout` before testing movement.
+
+## Still open
+
+- **NPCs do not walk home yet.** *"They should have simple scripting to get back to their original
+  spot, if possible."* Not built — it is what makes shove-everyone acceptable, and it is the next
+  thing. Needs a home position stamped at spawn and a return step when displaced and idle.
+- **Pushable scenery.** *"That quality would apply to certain things like trains. Most walls would
+  not be pushable, but a boulder might be."* Noted, not built. `heavy` already models the
+  unpushable half.
+- Whether a failed shove should have its own comic beat — he flagged "trying to push someone and
+  not being able to" as the funny part, and right now it is a thud and a recoil with no line.
+
 ## Open, for Caelan
 
 1. **Should `Hit` appear on a peaceful NPC?** Right now it does not — `targetVerbs` gates it on
