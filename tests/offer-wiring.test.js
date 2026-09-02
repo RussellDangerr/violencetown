@@ -1631,6 +1631,47 @@ describe('the give spine survives the unified screen', () => {
         assert.deepEqual(npc.giftLog[0], { type: 'give', itemId: 'soap', gold: null });
     });
 
+    test('EVERY UNIT OF FARE IS ACCOUNTED FOR, not just the first', () => {
+        // The give loop removes e.count units; a single `find` + one reaction
+        // meant two of three sludge sacks vanished with no effect and no log.
+        const f = Object.values(ITEMS).find(d => d.sewerFare);
+        const inv = new Array(INVENTORY_SIZE).fill(null);
+        inv[0] = { itemDef: f, count: 3 };
+        const g = stubGame({ inventory: inv });
+        const npc = townie();
+        npc.disposition = 20;                    // -40 per unit; turns on the first
+        openOffer.call(g, npc);
+        offerActivate.call(g, 'yours', 0);
+        offerActivate.call(g, 'yours', 0);
+        offerActivate.call(g, 'yours', 0);
+        assert.equal(g._offer.give[0].count, 3, 'setup: three staged');
+        g._offer.gold = 0;
+        commit.call(g);
+        // Either they turned partway through (and the rest is moot) or every
+        // unit landed -- what must NOT happen is one reaction for three items.
+        const fareEntries = npc.giftLog.filter(e => e.itemId === f.id).length;
+        assert.ok(isHostile(npc) || fareEntries === 3,
+            `three units handed over, ${fareEntries} accounted for, hostile=${isHostile(npc)}`);
+    });
+
+    test('A MIXED OFFER STILL PRINTS ITS LEDGER LINE', () => {
+        // Suppressing _logOffer whenever any fare was present meant a basket of
+        // gold and goods moved in full and printed only the poisoning.
+        const f = Object.values(ITEMS).find(d => d.sewerFare);
+        const inv = new Array(INVENTORY_SIZE).fill(null);
+        inv[0] = { itemDef: f, count: 1 };
+        inv[1] = { itemDef: ITEMS.soap, count: 1 };
+        const g = stubGame({ gold: 200, inventory: inv });
+        const npc = townie();
+        openOffer.call(g, npc);
+        offerActivate.call(g, 'yours', 0);
+        offerActivate.call(g, 'yours', 1);
+        g._offer.gold = 0;
+        commit.call(g);
+        assert.ok(g.logs.some(l => /You hand/.test(l.msg)),
+            `no ledger line for a mixed offer: ${g.logs.map(l => l.msg).join(' | ')}`);
+    });
+
     test('the fare is logged ONCE, not by both writers', () => {
         // reactToTransaction writes its own giftLog entry, so recording the fare
         // row in _commitOffer too logged one sludge sack twice.

@@ -5554,7 +5554,12 @@ class Game {
             }
         }
 
-        const fare = given.find(e => e.def && e.def.sewerFare);
+        // EVERY fare row, and every unit of it. `find` took one row and reacted
+        // once while the give loop above had already removed all of them, so a
+        // stack of three sludge sacks cost three and poisoned once, and a basket
+        // holding two DIFFERENT fare items only ever resolved the first.
+        const fareRows = given.filter(e => e.def && e.def.sewerFare);
+        const isFare = new Set(fareRows);
 
         // Every hand-off is remembered, the way the retired give path did it.
         // giftLog is the NPC's stub memory of what has passed between you.
@@ -5564,7 +5569,7 @@ class Game {
         // twice.
         if (Array.isArray(npc.giftLog)) {
             for (const e of given) {
-                if (e === fare) continue;
+                if (isFare.has(e)) continue;
                 for (let n = 0; n < e.count; n++) npc.giftLog.push({ type: 'give', itemId: e.def.id, gold: null });
             }
             if (gold) npc.giftLog.push({ type: 'give', itemId: null, gold });
@@ -5585,14 +5590,27 @@ class Game {
         // You cannot be buying someone's goodwill and poisoning them in the same
         // breath; the poisoning is what happened. Everything else still settles
         // through the offer model.
-        if (fare) {
-            const reaction = reactToTransaction(npc, 'give', { item: fare.def });
-            if (reaction && reaction.log) this._log(reaction.log, 'transition');
+        //
+        // The ledger line is written EITHER WAY. Suppressing it whenever any
+        // fare was present meant a mixed offer -- a shortfall, forty gold and
+        // three items alongside one mushroom -- moved everything and printed
+        // only the poisoning, with no record of what changed hands.
+        this._logOffer(npc, R, { given, taken, gold });
+
+        if (fareRows.length) {
+            outer:
+            for (const fr of fareRows) {
+                for (let n = 0; n < fr.count; n++) {
+                    const reaction = reactToTransaction(npc, 'give', { item: fr.def });
+                    if (reaction && reaction.log) this._log(reaction.log, 'transition');
+                    // Once they have turned on you the rest is moot: they are
+                    // not eating anything else you hand them.
+                    if (isHostile(npc)) break outer;
+                }
+            }
         } else if (R.points !== 0 && npc.disposition != null) {
             applyDispositionDelta(npc, R.points);
         }
-
-        if (!fare) this._logOffer(npc, R, { given, taken, gold });
         this._offer = { ...emptyOffer(), scroll: this._offer.scroll, selection: null, goldPinned: false };
         // Re-clamp both columns: the lists just shrank under them. Carrying the
         // old scroll forward unchecked left a column scrolled past its own end,
