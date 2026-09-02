@@ -2875,14 +2875,22 @@ export class Renderer {
             ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
             ctx.setLineDash([]);
         };
-        const coin = (r, amount) => {
+        // The coin is a CONTROL, not a readout: tapping it refuses the settled
+        // amount (a sale becomes a gift, a purchase becomes a lowball) and
+        // tapping it again takes it back. So it must stay drawn when it reads
+        // zero -- otherwise the affordance the player just used vanishes from
+        // under their finger and there is no way to undo the decision.
+        const coin = (r, amount, refused) => {
             slot(r, true);
-            ctx.strokeStyle = UI.gold; ctx.lineWidth = 1.2;
+            const col = refused ? UI.dim : UI.gold;
+            ctx.strokeStyle = col; ctx.lineWidth = 1.2;
+            if (refused) ctx.setLineDash([2, 2]);
             ctx.beginPath(); ctx.arc(r.x + 18, r.y + 13, 7, 0, Math.PI * 2); ctx.stroke();
+            ctx.setLineDash([]);
             this.font.drawText(ctx, String(amount), r.x + r.w / 2, r.y + 23,
-                { color: UI.gold, scale: 1, align: 'center' });
+                { color: col, scale: 1, align: 'center' });
         };
-        const fill = (rects, entries, goldHere) => {
+        const fill = (rects, entries, goldHere, showCoin, refused) => {
             rects.forEach(r => slot(r, false));
             let i = 0;
             for (const e of entries || []) {
@@ -2892,10 +2900,14 @@ export class Renderer {
                 if (e.count > 1) this.font.drawText(ctx, `x${e.count}`, r.x + r.w - 3, r.y + 25,
                     { color: UI.gold, scale: 1, align: 'right' });
             }
-            if (goldHere > 0 && rects[i]) coin(rects[i], goldHere);
+            if (showCoin && rects[i]) coin(rects[i], goldHere, refused);
         };
-        fill(L.giveTray, offer.give, Math.max(0, gold));
-        fill(L.takeTray, offer.take, Math.max(0, -gold));
+        // Which tray holds the coin is the game's decision, not a re-derivation:
+        // main._goldTray owns it, and main._tapOffer hit-tests the same slot.
+        const tray = game._goldTray ? game._goldTray() : (gold > 0 ? 'give' : gold < 0 ? 'take' : null);
+        const refused = !!(offer.goldPinned);
+        fill(L.giveTray, offer.give, Math.max(0, gold), tray === 'give', refused);
+        fill(L.takeTray, offer.take, Math.max(0, -gold), tray === 'take', refused);
     }
 
     // Never empty. With a selection it carries name, tier, market value, what

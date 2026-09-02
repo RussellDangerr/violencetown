@@ -5145,7 +5145,10 @@ class Game {
         if (this.state !== STATE.IDLE) return;
         if (!npc || !npc.entity || !npc.entity.isAlive()) return;
         this._offerNpc = npc;
-        this._offer = { ...emptyOffer(), scroll: { theirs: 0, yours: 0 }, selection: null };
+        // goldPinned: the player has taken the settled gold off its default and
+        // that decision must survive later staging. Settling is the default;
+        // the imbalance is the decision (spec 4.1).
+        this._offer = { ...emptyOffer(), scroll: { theirs: 0, yours: 0 }, selection: null, goldPinned: false };
         this._offerCursor = { side: 'yours', index: 0 };
         // `&& !npc._container` matters: the container shim is vendor:true, so a
         // bare `npc.vendor` would newly spin a 1s interval and a buyback ledger
@@ -5280,6 +5283,43 @@ class Game {
         return true;
     }
 
+    // Put the gold back on its default, unless the player has said otherwise.
+    _resettle(npc) {
+        if (!this._offer.goldPinned) this._offer.gold = settledGold(npc, this._offer);
+    }
+
+    // Which tray the gold chip belongs in: positive gold is the player paying,
+    // so it sits on the GIVE side. When the player has zeroed it the sign is
+    // gone, so fall back to where the settled amount WOULD have put it -- the
+    // chip has to stay in place, or the control the player just used disappears
+    // from under their finger.
+    _goldTray() {
+        const npc = this._offerNpc;
+        if (!npc || !this._offer) return null;
+        const g = this._offer.gold || settledGold(npc, this._offer);
+        if (!g) return null;
+        return g > 0 ? 'give' : 'take';
+    }
+
+    // The one gold control: refuse the settled amount, or take it back.
+    //
+    // Refusing to be PAID turns a sale into a gift; refusing to PAY turns a
+    // purchase into a lowball. One gesture, both directions, because in this
+    // model they are the same move -- an imbalance the player chose. Partial
+    // amounts are deliberately not offered yet: the spec describes dragging the
+    // figure, which needs a stepper this screen has no room for; all-or-nothing
+    // makes the mechanic reachable now and reads unambiguously.
+    _toggleOfferGold(npc) {
+        if (!this._offer) return;
+        if (this._offer.goldPinned) {
+            this._offer.goldPinned = false;
+            this._offer.gold = settledGold(npc, this._offer);
+            return;
+        }
+        this._offer.goldPinned = true;
+        this._offer.gold = 0;
+    }
+
     // Why MAKE THE OFFER is disabled, or null when it is armed.
     _offerBlocker() {
         const npc = this._offerNpc; if (!npc) return 'NOTHING STAGED';
@@ -5331,15 +5371,25 @@ class Game {
                 this._log(`[That's all the ${entry.def.name} you have.]`);
                 this._render(); return;
             }
-            this._offer.gold = settledGold(npc, this._offer);
+            this._resettle(npc);
             audio.playSfx('menu-tick');
             this._render(); return;
         }
 
         if (zone === 'giveTray' || zone === 'takeTray') {
             const side = zone === 'giveTray' ? 'give' : 'take';
+            // The gold chip is drawn in the slot just past the last staged item,
+            // so a tap there is the GOLD control, not an unstage. Without this
+            // the index ran past the list, unstage returned the basket
+            // unchanged, and the tap still played its confirm cue -- a drawn
+            // control that acknowledged an action it had not performed.
+            if (index === (this._offer[side] || []).length && this._goldTray() === side) {
+                this._toggleOfferGold(npc);
+                audio.playSfx('menu-tick');
+                this._render(); return;
+            }
             this._offer = unstage(this._offer, side, index);
-            this._offer.gold = settledGold(npc, this._offer);
+            this._resettle(npc);
             audio.playSfx('menu-tick');
             this._render(); return;
         }
@@ -5500,7 +5550,7 @@ class Game {
         }
 
         if (!fare) this._logOffer(npc, R, { given, taken, gold });
-        this._offer = { ...emptyOffer(), scroll: this._offer.scroll, selection: null };
+        this._offer = { ...emptyOffer(), scroll: this._offer.scroll, selection: null, goldPinned: false };
 
         // A committed offer can turn the partner hostile -- sewer fare does
         // exactly that. Do not leave the player standing in an offer window

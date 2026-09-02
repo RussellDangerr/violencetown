@@ -100,6 +100,9 @@ const buybackRecord = liveMethod('_buybackRecord', 'npc, itemId, kind, price');
 const buybackLive = liveMethod('_buybackLive', 'npc', { BUYBACK_MS });
 const buybackList = liveMethod('_buybackList', 'npc');
 const buybackConsume = liveMethod('_buybackConsume', 'npc, itemId');
+const resettle = liveMethod('_resettle', 'npc', { settledGold });
+const goldTray = liveMethod('_goldTray', '', { settledGold });
+const toggleGold = liveMethod('_toggleOfferGold', 'npc', { settledGold });
 const takeFitsBag = liveMethod('_offerTakeFitsBag', 'taken', { INVENTORY_SIZE, MAX_STACK });
 const logOffer = liveMethod('_logOffer', 'npc, R, { given, taken, gold }', { dispositionCeil });
 const commitOfferFull = liveMethod('_commitOffer', '',
@@ -175,6 +178,9 @@ function stubGame(overrides = {}) {
         },
         _offerTakeFitsBag: takeFitsBag,
         _buybackConsume: buybackConsume,
+        _resettle: resettle,
+        _goldTray: goldTray,
+        _toggleOfferGold: toggleGold,
         _buybackLive: buybackLive,
         _buybackList: buybackList,
         // The REAL one, lifted. A hand-written two-arg stub silently dropped the
@@ -1284,6 +1290,106 @@ describe('the buyback shelf is an undo, not a duplicator', () => {
         const shelf = (npc._buyback && npc._buyback.entries.soap)
             ? npc._buyback.entries.soap.rebuy.length : 0;
         assert.equal(shelf, 0, 'a gift minted a buyback credit — the vendor can now resell it forever');
+    });
+});
+
+// -- generosity is reachable (review finding 3) -----------------------------
+//
+// The balance auto-settles to zero as you stage; the spec's whole model then
+// says "the player DELIBERATELY drags it off zero". That control was never
+// built, so _offer.gold could only ever hold settledGold's answer, every offer
+// committed at balance 0, R.points was always 0, and applyDispositionDelta
+// never fired. Above the trade floor the entire goodwill/resentment system --
+// the centrepiece of the feature -- was unreachable.
+//
+// It was invisible because the browser demo of it set _offer.gold = 0 from the
+// console first, which no player can do.
+
+describe('the player can refuse the settled gold', () => {
+    const commit = commitOfferFull;
+    const puckish = () => ({ id: 'puck', type: 'puck', vendor: true, disposition: 40, gold: 400,
+                             entity: alive, stock: ['bandage'], values: { soap: 4 }, behavior: ['IDLE'] });
+    const withSoap = (n = 2) => {
+        const inv = new Array(INVENTORY_SIZE).fill(null);
+        inv[0] = { itemDef: ITEMS.soap, count: n };
+        return inv;
+    };
+
+    test('staging a sale settles the gold, as before', () => {
+        const g = stubGame({ gold: 100, inventory: withSoap() });
+        openOffer.call(g, puckish());
+        offerActivate.call(g, 'yours', 0);
+        assert.ok(g._offer.gold < 0, 'the vendor should owe the player for a sale');
+    });
+
+    test('TAPPING THE GOLD CHIP REFUSES THE PAYMENT, TURNING A SALE INTO A GIFT', () => {
+        const g = stubGame({ gold: 100, inventory: withSoap() });
+        const npc = puckish();
+        openOffer.call(g, npc);
+        offerActivate.call(g, 'yours', 0);
+        // the chip sits in whichever tray the sign puts it -- for a sale, take.
+        offerActivate.call(g, 'takeTray', g._offer.take.length);
+        assert.equal(g._offer.gold, 0, 'the payment was not refused');
+        const R = resolveOffer(npc, g._offer);
+        assert.ok(R.points > 0, `a refused payment should buy goodwill, got ${R.points}`);
+    });
+
+    test('AND THE GIFT ACTUALLY MOVES DISPOSITION ON COMMIT', () => {
+        const g = stubGame({ gold: 100, inventory: withSoap() });
+        const npc = puckish();
+        const before = npc.disposition;
+        openOffer.call(g, npc);
+        offerActivate.call(g, 'yours', 0);
+        offerActivate.call(g, 'takeTray', g._offer.take.length);
+        commit.call(g);
+        assert.ok(npc.disposition > before,
+            `a gift committed at disposition ${before} -> ${npc.disposition}`);
+    });
+
+    test('a refused payment survives staging another item', () => {
+        // Settling is the default; once the player has decided otherwise, a
+        // later stage must not silently re-settle over their choice.
+        const g = stubGame({ gold: 100, inventory: withSoap(3) });
+        openOffer.call(g, puckish());
+        offerActivate.call(g, 'yours', 0);
+        offerActivate.call(g, 'takeTray', g._offer.take.length);
+        assert.equal(g._offer.gold, 0);
+        offerActivate.call(g, 'yours', 0);           // a second soap
+        assert.equal(g._offer.gold, 0, 'staging re-settled over the player\u2019s decision');
+        assert.equal(g._offer.give[0].count, 2);
+    });
+
+    test('tapping again restores the settled amount', () => {
+        const g = stubGame({ gold: 100, inventory: withSoap() });
+        const npc = puckish();
+        openOffer.call(g, npc);
+        offerActivate.call(g, 'yours', 0);
+        const settled = g._offer.gold;
+        offerActivate.call(g, 'takeTray', g._offer.take.length);
+        assert.equal(g._offer.gold, 0);
+        offerActivate.call(g, 'takeTray', g._offer.take.length);
+        assert.equal(g._offer.gold, settled, 'the toggle does not come back');
+    });
+
+    test('refusing to PAY is the same gesture, and reads as a lowball', () => {
+        const g = stubGame({ gold: 500, inventory: new Array(INVENTORY_SIZE).fill(null) });
+        const npc = puckish();
+        openOffer.call(g, npc);
+        offerActivate.call(g, 'theirs', 0);          // buy a bandage; gold settles positive
+        assert.ok(g._offer.gold > 0);
+        offerActivate.call(g, 'giveTray', g._offer.give.length);
+        assert.equal(g._offer.gold, 0, 'the payment was not withheld');
+        const R = resolveOffer(npc, g._offer);
+        assert.ok(R.points < 0, `taking without paying should cost disposition, got ${R.points}`);
+    });
+
+    test('the chip is not a tray slot — it never unstages an item', () => {
+        const g = stubGame({ gold: 100, inventory: withSoap() });
+        openOffer.call(g, puckish());
+        offerActivate.call(g, 'yours', 0);
+        const before = g._offer.give[0].count;
+        offerActivate.call(g, 'takeTray', g._offer.take.length);
+        assert.equal(g._offer.give[0].count, before, 'tapping the coin unstaged an item');
     });
 });
 
