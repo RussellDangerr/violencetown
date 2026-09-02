@@ -23,7 +23,9 @@ import {
     emptyOffer, commitBlocker, stage, unstage, settledGold, offerBalance, resolveOffer,
 } from '../game/offer.js';
 import { transferGold, sellPrice, buyPrice } from '../game/trade.js';
-import { applyDispositionDelta, previewGive, applyGive } from '../game/give-action.js';
+import {
+    applyDispositionDelta, previewGive, applyGive, reactToTransaction,
+} from '../game/give-action.js';
 import { isHostile } from '../game/ai.js';
 import { dispositionCeil } from '../game/disposition-curves.js';
 import {
@@ -95,7 +97,8 @@ const removeFromSlot = liveMethod('_removeFromSlot', 'slot');
 const buybackRecord = liveMethod('_buybackRecord', 'npc, itemId, kind, price');
 const logOffer = liveMethod('_logOffer', 'npc, R, { given, taken, gold }', { dispositionCeil });
 const commitOfferFull = liveMethod('_commitOffer', '',
-    { resolveOffer, transferGold, sellPrice, buyPrice, applyDispositionDelta, isHostile, emptyOffer, audio });
+    { resolveOffer, transferGold, sellPrice, buyPrice, applyDispositionDelta, isHostile, emptyOffer,
+      audio, reactToTransaction });
 const theirsList = liveMethod('_offerTheirsList', '');
 const yoursList = liveMethod('_offerYoursList', '');
 const stagedCount = liveMethod('_stagedCount', 'side, entry');
@@ -1099,6 +1102,177 @@ describe('disposition decay and the open offer screen', () => {
         g._offerNpc = es[2];
         tickDecay.call(g);
         assert.deepEqual(es.map(e => e.disposition), [40, -29, 40]);
+    });
+});
+
+// -- the give spine (Task 17) -----------------------------------------------
+//
+// The retired give path routed every hand-off through reactToTransaction, which
+// owns the special cases the barter model cannot express. _commitOffer replaced
+// that path and did not inherit it, so these were silently dead on the new
+// screen until Task 17 -- and nothing failed, because nothing tested them.
+
+describe('the give spine survives the unified screen', () => {
+    const commit = commitOfferFull;
+    const fare = () => Object.values(ITEMS).find(d => d.sewerFare);
+    // The penalty is a flat base plus whatever credit the item WOULD have
+    // earned, so the starting disposition decides whether it crosses -threshold.
+    // At 20 a townsperson lands on -20 and stays merely disgusted; the trap
+    // needs them to reach -30.
+    const dweller = () => ({ id: 'e1', type: 'Violet Fungus', sewerDweller: true, vendor: false,
+                             disposition: -30, flipThreshold: 25, bribeable: true,
+                             values: { [fare().id]: 3 }, gold: 10, giftLog: [],
+                             hp: 25, entity: alive });
+    const townie = () => ({ id: 't1', type: 'Violencian', vendor: false, disposition: 0,
+                            flipThreshold: 30, bribeable: true, values: {}, gold: 10,
+                            giftLog: [], hp: 30, entity: alive });
+
+    test('there IS a sewer-fare item to test with', () => {
+        assert.ok(fare(), 'no sewerFare item in ITEMS');
+    });
+
+    test('a townsperson merely disgusted by it does NOT turn - the trap has a threshold', () => {
+        const g = stubGame({ inventory: [{ itemDef: fare(), count: 1 }] });
+        const npc = townie();
+        npc.disposition = 20;                    // -40 lands on -20, short of -30
+        openOffer.call(g, npc);
+        offerActivate.call(g, 'yours', 0);
+        g._offer.gold = 0;
+        commit.call(g);
+        assert.ok(!isHostile(npc), 'the trap fired below its own threshold');
+        assert.equal(npc.disposition, -20, 'the penalty did not land');
+    });
+
+    test('SEWER FARE FED TO A NON-DWELLER TURNS THEM HOSTILE AND CLOSES THE SCREEN', () => {
+        // The trap the spec names, which could not fire at all while the spine
+        // was bypassed: the model priced a tunnel mushroom like any other snack
+        // and converted it to goodwill.
+        const f = fare();
+        const g = stubGame({ inventory: [{ itemDef: f, count: 1 }] });
+        const npc = townie();
+        openOffer.call(g, npc);
+        offerActivate.call(g, 'yours', 0);
+        g._offer.gold = 0;
+        commit.call(g);
+        assert.ok(isHostile(npc), 'feeding a townsperson sewer fare left them friendly');
+        assert.equal(g.state, STATE.IDLE, 'left standing in a hostile partner\u2019s window');
+        assert.equal(g._offerNpc, null, 'the basket survived a partner turning on you');
+    });
+
+    test('the same item is MEDICINE to a dweller, and does not turn them', () => {
+        const f = fare();
+        const g = stubGame({ inventory: [{ itemDef: f, count: 1 }] });
+        const npc = dweller();
+        const before = npc.disposition;
+        openOffer.call(g, npc);
+        offerActivate.call(g, 'yours', 0);
+        g._offer.gold = 0;
+        commit.call(g);
+        assert.ok(!isHostile(npc), 'a sewer dweller turned on you for feeding it its own food');
+        assert.ok(npc.disposition > before, 'medicine bought no goodwill');
+    });
+
+    test('an ordinary gift still settles through the offer model', () => {
+        const g = stubGame({ inventory: [{ itemDef: ITEMS.soap, count: 2 }] });
+        const npc = townie();
+        npc.values = { soap: 4 };
+        const before = npc.disposition;
+        openOffer.call(g, npc);
+        offerActivate.call(g, 'yours', 0);
+        offerActivate.call(g, 'yours', 0);
+        g._offer.gold = 0;
+        commit.call(g);
+        assert.ok(npc.disposition > before,
+            `an ordinary gift moved nothing: ${before} -> ${npc.disposition}`);
+        assert.ok(!isHostile(npc));
+    });
+
+    test('every hand-off is remembered in giftLog', () => {
+        const g = stubGame({ inventory: [{ itemDef: ITEMS.soap, count: 2 }] });
+        const npc = townie();
+        npc.values = { soap: 4 };
+        openOffer.call(g, npc);
+        offerActivate.call(g, 'yours', 0);
+        offerActivate.call(g, 'yours', 0);
+        g._offer.gold = 0;
+        commit.call(g);
+        assert.equal(npc.giftLog.length, 2, `giftLog: ${JSON.stringify(npc.giftLog)}`);
+        assert.deepEqual(npc.giftLog[0], { type: 'give', itemId: 'soap', gold: null });
+    });
+
+    test('the fare is logged ONCE, not by both writers', () => {
+        // reactToTransaction writes its own giftLog entry, so recording the fare
+        // row in _commitOffer too logged one sludge sack twice.
+        const f = Object.values(ITEMS).find(d => d.sewerFare);
+        const g = stubGame({ inventory: [{ itemDef: f, count: 1 }] });
+        const npc = townie();
+        openOffer.call(g, npc);
+        offerActivate.call(g, 'yours', 0);
+        g._offer.gold = 0;
+        commit.call(g);
+        const fareEntries = npc.giftLog.filter(e => e.itemId === f.id);
+        assert.equal(fareEntries.length, 1, `logged twice: ${JSON.stringify(npc.giftLog)}`);
+    });
+
+    test('an ordinary item beside the fare is still logged', () => {
+        const f = Object.values(ITEMS).find(d => d.sewerFare);
+        const g = stubGame({ inventory: [{ itemDef: f, count: 1 }, { itemDef: ITEMS.soap, count: 1 }] });
+        const npc = townie();
+        openOffer.call(g, npc);
+        offerActivate.call(g, 'yours', 0);
+        offerActivate.call(g, 'yours', 1);
+        g._offer.gold = 0;
+        commit.call(g);
+        assert.ok(npc.giftLog.some(e => e.itemId === 'soap'), JSON.stringify(npc.giftLog));
+        assert.equal(npc.giftLog.filter(e => e.itemId === f.id).length, 1);
+    });
+
+    test('gold handed over is remembered too', () => {
+        const g = stubGame({ gold: 100 });
+        const npc = townie();
+        openOffer.call(g, npc);
+        g._offer.gold = 25;
+        commit.call(g);
+        assert.ok(npc.giftLog.some(e => e.gold === 25), `giftLog: ${JSON.stringify(npc.giftLog)}`);
+    });
+});
+
+describe('a de-vendored NPC has no till to browse', () => {
+    test('being struck clears the stock with the flag', () => {
+        // The offer screen lists npc.stock without gating on npc.vendor, so a
+        // de-vendored NPC keeping their stock keeps a browsable till.
+        const harmed = liveMethod('_onEntityHarmed', 'target, { kind = \'attack\' } = {}',
+            { isHostile });
+        const g = stubGame();
+        const npc = { type: 'Merchant', vendor: true, stock: ['soap', 'bandage'],
+                      disposition: 40, entity: alive, allegiance: 'neutral' };
+        harmed.call(g, npc, {});
+        assert.equal(npc.vendor, false);
+        assert.equal(npc.stock, null, 'a struck vendor kept a stock nobody can buy from');
+    });
+
+    test('A VENDOR POISONED INTO HOSTILITY LOSES THEIR TILL TOO', () => {
+        // The other de-vendoring site, in give-action.js. Feeding a shopkeeper
+        // sewer fare turns them on you -- and if their stock survived that, the
+        // offer screen would still list a till they no longer keep.
+        const f = Object.values(ITEMS).find(d => d.sewerFare);
+        const g = stubGame({ inventory: [{ itemDef: f, count: 1 }] });
+        const npc = { id: 'v1', type: 'Merchant', vendor: true, stock: ['soap', 'bandage'],
+                      disposition: 0, flipThreshold: 30, bribeable: true, values: {},
+                      gold: 50, giftLog: [], hp: 30, entity: alive };
+        openOffer.call(g, npc);
+        offerActivate.call(g, 'yours', 0);
+        g._offer.gold = 0;
+        commitOfferFull.call(g);
+        assert.ok(isHostile(npc), 'the poisoned vendor stayed friendly');
+        assert.equal(npc.vendor, false);
+        assert.equal(npc.stock, null, 'a poisoned vendor kept a till nobody can shop at');
+    });
+
+    test('and an emptied stock shows no rows', () => {
+        const g = stubGame();
+        g._offerNpc = { type: 'Merchant', vendor: false, stock: null, disposition: 40, entity: alive };
+        assert.deepEqual(theirsList.call(g), []);
     });
 });
 

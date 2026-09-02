@@ -4061,7 +4061,7 @@ class Game {
         target.allegiance = 'hostile';               // authoritative — routes to the HOSTILE chase (npc.js)
         target.fsmState = 'HOSTILE';
         target.state = 'chasing';                    // aggro now, skip the LOS re-acquire beat
-        if (target.vendor) target.vendor = false;    // a vendor you struck won't keep shop
+        if (target.vendor) { target.vendor = false; target.stock = null; }   // a vendor you struck won't keep shop
         if (target.ambient) target.ambient = false;  // a provoked townsperson fights for real, not as ambient
         if (typeof target.disposition === 'number') target.disposition = Math.min(target.disposition, -50);
         this._log(`[The ${target.type || target.entity.name} turns on you!]`, 'combat');
@@ -5414,10 +5414,45 @@ class Game {
             }
         }
 
-        // Disposition last, so a flip fires against a world that already settled.
-        if (R.points !== 0 && npc.disposition != null) applyDispositionDelta(npc, R.points);
+        const fare = given.find(e => e.def && e.def.sewerFare);
 
-        this._logOffer(npc, R, { given, taken, gold });
+        // Every hand-off is remembered, the way the retired give path did it.
+        // giftLog is the NPC's stub memory of what has passed between you.
+        //
+        // The fare row is skipped here because reactToTransaction below writes
+        // its own entry -- recording it in both places logged one sludge sack
+        // twice.
+        if (Array.isArray(npc.giftLog)) {
+            for (const e of given) {
+                if (e === fare) continue;
+                for (let n = 0; n < e.count; n++) npc.giftLog.push({ type: 'give', itemId: e.def.id, gold: null });
+            }
+            if (gold) npc.giftLog.push({ type: 'give', itemId: null, gold });
+        }
+
+        // SEWER FARE IS NOT A GIFT. It is a poisoning, or a medicine, depending
+        // on who eats it -- and the offer model cannot express that: it prices a
+        // tunnel mushroom like any other 4 GP snack and converts the surplus to
+        // goodwill. Handing one to a non-dweller is supposed to hurt them and
+        // turn them on you.
+        //
+        // The retired give path routed every hand-off through reactToTransaction,
+        // which owns that special case. _commitOffer replaced that path and did
+        // not inherit it, so the mechanic was silently dead on the new screen.
+        //
+        // RULING (Claude, flagged for Caelan): when sewer fare is in the give
+        // tray, its outcome REPLACES the offer's disposition for this commit.
+        // You cannot be buying someone's goodwill and poisoning them in the same
+        // breath; the poisoning is what happened. Everything else still settles
+        // through the offer model.
+        if (fare) {
+            const reaction = reactToTransaction(npc, 'give', { item: fare.def });
+            if (reaction && reaction.log) this._log(reaction.log, 'transition');
+        } else if (R.points !== 0 && npc.disposition != null) {
+            applyDispositionDelta(npc, R.points);
+        }
+
+        if (!fare) this._logOffer(npc, R, { given, taken, gold });
         this._offer = { ...emptyOffer(), scroll: this._offer.scroll, selection: null };
 
         // A committed offer can turn the partner hostile -- sewer fare does

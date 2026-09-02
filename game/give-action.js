@@ -222,7 +222,10 @@ function applySewerFareGive(item, recipient) {
         recipient.fsmState = 'HOSTILE';
         recipient.state = 'chasing';
         recipient._ally = false;
-        if (recipient.vendor) recipient.vendor = false;
+        // Clear the STOCK with the flag. The offer screen lists npc.stock
+        // without gating on npc.vendor, so a de-vendored NPC who keeps their
+        // stock keeps a browsable till they no longer have.
+        if (recipient.vendor) { recipient.vendor = false; recipient.stock = null; }
         if (recipient.ambient) recipient.ambient = false;
         return {
             accepted: true,
