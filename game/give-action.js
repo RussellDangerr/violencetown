@@ -275,8 +275,47 @@ export function reactToTransaction(npc, type, payload = {}) {
     switch (type) {
         case 'give':  return applyGive(payload.item, npc);
         case 'bribe': return applyDispositionDelta(npc, payload.delta ?? 0);
+        // (theft) The only transaction that moves disposition DOWNWARD in one
+        // step rather than by a weighted shift — being robbed is not a bad deal,
+        // it is a betrayal.
+        case 'theft': applyHostileFlip(npc); return { flipped: true };
         default:      return null;
     }
+}
+
+// ── applyHostileFlip ────────────────────────────────────────────────────────
+//
+// The mirror of applyFlip, which handles only the UPWARD becomeAlly /
+// offerDiscount cases. Until now nothing in the codebase turned anyone AGAINST
+// you — every path led up. A noticed theft is the first thing that needs the
+// other direction.
+//
+// Two deliberate omissions, both load-bearing:
+//
+//   `_wasFlipped` is NOT set, so a later bribe crossing their threshold can
+//   still buy them back. From the floor that is expensive, and it should be —
+//   but a permanently unforgiving enemy is a dead end, not a cost.
+//
+//   The last-seen is CLEARED rather than set to the player. They learn they were
+//   robbed, not by whom or from where. Being noticed costs you a permanent
+//   enemy; it does not hand them your position. That empty last-seen is also
+//   what makes the victim the ONLY producer of a searcher with no lead, which is
+//   what BLIND_SWEEP_BEATS in perception.js was written for and has been waiting
+//   on since it shipped.
+export function applyHostileFlip(recipient) {
+    if (!recipient) return;
+    // DISPOSITION_MIN, not a literal -100 — give-action already imports the
+    // constant for clampDisposition, and a fourth spelling of the floor is how
+    // the ceiling ended up disagreeing with itself before the offer screen.
+    recipient.disposition = DISPOSITION_MIN;
+    recipient.allegiance  = 'hostile';
+    recipient.fsmState    = 'HOSTILE';
+    recipient._ally       = false;
+    recipient.state       = 'searching';
+    recipient._lastSeenX  = null;
+    recipient._lastSeenY  = null;
+    recipient._sweepBeats = 0;
+    recipient._awareBeats = 0;
 }
 
 // ── applyFlip ───────────────────────────────────────────────────────────────

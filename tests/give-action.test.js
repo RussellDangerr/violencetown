@@ -18,7 +18,8 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { reactToTransaction, SHIFT_MULTIPLIER } from '../game/give-action.js';
+import { reactToTransaction, SHIFT_MULTIPLIER, applyHostileFlip } from '../game/give-action.js';
+import { DISPOSITION_MIN } from '../game/disposition-curves.js';
 import { ITEMS } from '../game/items.js';
 
 // A faithful-enough NPC stub: every field applyGive/isSewerDweller/isHostile
@@ -166,5 +167,85 @@ describe('poisoning as a social attack (Task 17)', () => {
         const before = npc.disposition;
         reactToTransaction(npc, 'give', { item: ITEMS.soap });
         assert.equal(npc.disposition, before + 8 * SHIFT_MULTIPLIER, 'plain gifts still use the ordinary values-weighted math');
+    });
+});
+
+// ── applyHostileFlip — the missing downward path (Thieve Task 10) ────────────
+//
+// applyFlip only ever handled the UPWARD cases (becomeAlly, offerDiscount).
+// Nothing anywhere in the codebase turned someone against you; a noticed theft
+// is the first thing that needs it.
+describe('applyHostileFlip', () => {
+    test('a noticed theft flips them hostile at the floor', () => {
+        const npc = { disposition: 20, allegiance: 'neutral', fsmState: 'IDLE', state: 'idle' };
+        applyHostileFlip(npc);
+        assert.equal(npc.disposition, DISPOSITION_MIN);
+        assert.equal(npc.allegiance, 'hostile');
+        assert.equal(npc.fsmState, 'HOSTILE');
+    });
+
+    test('the floor is the shared constant, not a fourth spelling of -100', () => {
+        const npc = { disposition: 0 };
+        applyHostileFlip(npc);
+        assert.equal(npc.disposition, DISPOSITION_MIN);
+        assert.equal(DISPOSITION_MIN, -100, 'if this moves, the flip should move with it');
+    });
+
+    test('robbing your own bribed ally turns them', () => {
+        const npc = { disposition: 80, allegiance: 'ally', _ally: true, fsmState: 'ALLIED' };
+        applyHostileFlip(npc);
+        assert.equal(npc._ally, false);
+        assert.equal(npc.allegiance, 'hostile');
+    });
+
+    test('_wasFlipped is left alone so a bribe can still buy them back', () => {
+        // From -100 that is expensive, and it should be. But it must remain
+        // possible — a permanent unforgiving enemy is a dead end, not a cost.
+        const npc = { disposition: 0, _wasFlipped: false };
+        applyHostileFlip(npc);
+        assert.equal(npc._wasFlipped, false);
+    });
+
+    test('the victim is set searching with NO last-seen — robbed, not identified', () => {
+        // They learn they were robbed, not by whom or from where. Being noticed
+        // costs you a permanent enemy; it does not cost you your position.
+        const npc = { disposition: 0, _lastSeenX: 4, _lastSeenY: 4 };
+        applyHostileFlip(npc);
+        assert.equal(npc.state, 'searching');
+        assert.equal(npc._lastSeenX, null);
+        assert.equal(npc._lastSeenY, null);
+    });
+
+    test('the awareness counters are reset so the sweep starts fresh', () => {
+        const npc = { disposition: 0, _sweepBeats: 5, _awareBeats: 3 };
+        applyHostileFlip(npc);
+        assert.equal(npc._sweepBeats, 0);
+        assert.equal(npc._awareBeats, 0);
+    });
+
+    test('a missing victim is survivable', () => {
+        applyHostileFlip(null);
+        applyHostileFlip(undefined);
+    });
+});
+
+describe('reactToTransaction routes a theft', () => {
+    test("'theft' flips the victim and reports it", () => {
+        const npc = { disposition: 40, allegiance: 'neutral' };
+        const r = reactToTransaction(npc, 'theft');
+        assert.deepEqual(r, { flipped: true });
+        assert.equal(npc.allegiance, 'hostile');
+        assert.equal(npc.disposition, DISPOSITION_MIN);
+    });
+
+    test('a theft is written into the gift log like any other transaction', () => {
+        const npc = { disposition: 0, giftLog: [] };
+        reactToTransaction(npc, 'theft');
+        assert.equal(npc.giftLog.length, 1);
+        assert.equal(npc.giftLog[0].type, 'theft');
+    });
+
+    test('an unknown transaction type still returns null', () => {
+        assert.equal(reactToTransaction({ disposition: 0 }, 'nonsense'), null);
     });
 });
