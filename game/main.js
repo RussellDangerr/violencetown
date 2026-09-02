@@ -54,7 +54,9 @@ import { canTrade, buyPrice, sellPrice, transferGold, burnGold } from './trade.j
 import { buildXmbBar, resolveXmbSelection, cycleXmbCategory, cycleXmbItem, xmbCategoryOf, XMB_LABELS } from './xmb.js';
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
 import { contextualUses } from './item-uses.js'; // "use THIS on THAT" — the authored table
-import { emitNoise, NOISE } from './perception.js'; // sound: the rock's clatter, generalised
+import { emitNoise, NOISE, perceives, spotters } from './perception.js'; // sound + sight
+import { coinTake, kitTake, gearTake, coinWeight, itemWeight, gearWeight,
+         noticeBuffer, isClean, stealLimit } from './theft.js';
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
 import {
     createWheelState, cycle, drill, back, compose, autoAimTile,
@@ -384,6 +386,9 @@ class Game {
         // death, so a respawn (zone re-entry re-spawns from map.enemySpawns) comes
         // back broke instead of farmable for gold every time. Persisted.
         this._muggedIds = new Set();
+        // (theft) enemyId -> { gold, items, weightTaken, noticed }. Survives a save,
+        // and is re-applied by spawnEnemy so a zone re-entry cannot undo a robbery.
+        this._robbed = {};
         // Runtime ground-drops per map ("mapUrl" → [{ type, x, y }]), so a drop
         // survives leaving and re-entering a zone. Recorded today for enemy
         // death-drops; the player-drop path routes through here once a drop verb
@@ -599,7 +604,7 @@ class Game {
             if (def) this.groundItems.push({ type: d.type, x: d.x, y: d.y, def });
         }
         this.enemies = [];
-        for (const s of this.map.enemySpawns) this.enemies.push(spawnEnemy(s, this._muggedIds));
+        for (const s of this.map.enemySpawns) this.enemies.push(spawnEnemy(s, this._muggedIds, this._robbed));
 
         // (zone pursuit) Re-inject any hostiles that chased you through the door.
         // They spawn at the door leading back where you came from — visible in
@@ -3407,6 +3412,66 @@ class Game {
             case 'guard':        { this.addBuff('guard', 'Guard', 2, 'buff'); this._log('[Bracing — incoming damage reduced.]'); this._advanceWorld(); break; }
             case 'wait':         { this._log('[Wait]'); this._advanceWorld(); break; }
             case 'run':          { const d = this._aimDir(aimTile); if (d) { this._closeWheel(); this._doMove(d); return; } break; }
+            case 'thieveCoin': case 'thieveKit': case 'thieveGear': {
+                const victim = this._thieveTarget(aimTile);
+                if (!victim) { this._log('[Nobody to lift from there]'); break; }
+
+                const verdict  = perceives(this.map, victim, this.playerX, this.playerY);
+                const passives = this.ringMods ?? {};
+                const rec = (this._robbed[victim.id] ||= { gold: 0, items: [], weightTaken: 0, noticed: false });
+
+                let weight = 0, took = null, gp = 0, restore = null;
+                if (node.resolver === 'thieveCoin') {
+                    gp = coinTake(victim, stealLimit(passives));
+                    if (gp <= 0) { this._log('[Their pockets are empty]'); break; }
+                    weight = coinWeight(gp);
+                } else {
+                    // Through the Game's resolver, not a bare ITEMS[id]: stolen Gear
+                    // is overwhelmingly weapons, and ITEMS alone cannot resolve one.
+                    const resolve = (id) => this._resolveItemDef(id);
+                    const isKit = node.resolver === 'thieveKit';
+                    took = isKit ? kitTake(victim, resolve) : gearTake(victim, resolve);
+                    if (!took) { this._log('[Nothing there to take]'); break; }
+                    weight = isKit ? itemWeight(took) : gearWeight(took);
+                    // kitTake/gearTake have ALREADY removed it. If the bag turns out
+                    // to be full we have to put it back, or a full bag silently
+                    // destroys the item and — for gear — permanently debuffs the
+                    // victim for nothing. Same lesson the offer screen learned.
+                    restore = isKit
+                        ? () => { victim.loadout.push(took.id); }
+                        : () => {
+                            victim.equipped.push(took.id);
+                            if (victim.entity) victim.entity.armor += (took.armor ?? 0);
+                            victim.damage = (victim.damage ?? 0) + (took.damage ?? 0);
+                          };
+                }
+
+                if (took && !this._addToInventory(took)) {
+                    restore();
+                    this._log('[Your bag is full.]');
+                    break;                       // no turn spent, nothing taken, nothing noticed
+                }
+
+                const clean = isClean(rec.weightTaken, weight, noticeBuffer(passives, verdict));
+                rec.weightTaken += weight;
+
+                if (gp > 0) { transferGold(victim, this, gp, 'theft'); rec.gold += gp; this._log(`[Lifted ${gp} GP.]`, 'pickup'); }
+                if (took)   { rec.items.push(took.id); this._log(`[Lifted the ${took.name}.]`, 'pickup'); }
+
+                if (clean) {
+                    // A clean theft is GENUINELY clean — no disposition move, no
+                    // hostility, no search, and no log line about them at all.
+                    // They never know, which is the only reason the verb is worth
+                    // the risk.
+                } else {
+                    rec.noticed = true;
+                    victim._robbedSweep = true;            // arms the blind sweep + paranoia
+                    reactToTransaction(victim, 'theft', { item: took, gold: gp });
+                    this._log(`[${victim.name ?? victim.type} feels the weight change.]`, 'combat');
+                }
+                this._advanceWorld();
+                break;
+            }
             case 'trade': {
                 // (Phase 6a) Trade opens for ANY adjacent NPC now — vendors get
                 // the shop columns, non-vendors get offer mode (hand over items).
@@ -3647,6 +3712,43 @@ class Game {
     // The world locks (turn-based combat) whenever a non-ambient enemy is chasing.
     // Shared with the wheel's §12.5 combat re-skin via the pure wheel-model helper.
     _inCombat() { return isCombatActive(this); }
+
+    // (theft) Are you unseen right now? Nobody — the victim included — holds a
+    // DIRECT verdict on your tile. This is what makes "there are no witnesses"
+    // true by construction rather than by assertion: it asks the same perceives()
+    // the AI uses and the threat overlay draws, so all three agree.
+    //
+    // PERIPHERAL deliberately does not count. Being half-noticed from a flank is
+    // not being seen — it is what makes them turn to look.
+    isHidden() {
+        const watchers = (this.enemies || []).filter(e => e.entity?.isAlive?.() && !e._ally);
+        return spotters(this.map, watchers, this.playerX, this.playerY).length === 0;
+    }
+
+    // (theft) The victim on an aimed tile, or null. Takes the tile as an ARGUMENT
+    // because aimTile is a local destructured from compose() inside the wheel
+    // fire path — it is not readable off `this.wheel`.
+    _thieveTarget(aimTile) {
+        if (!aimTile) return null;
+        const v = (this.enemies || []).find(e => e.entity?.isAlive?.() && e.x === aimTile.x && e.y === aimTile.y);
+        if (!v || v.thievable === false) return null;
+        return v;
+    }
+
+    // (theft) Does any adjacent victim have anything in this branch? The wheel's
+    // `available` predicates run at DRAW time, before an adjacent aim has been
+    // committed, so this asks "is there anyone beside me I could take a `branch`
+    // from" rather than depending on reticle timing.
+    canThieve(branch) {
+        return (this.enemies || []).some(e => {
+            if (!e.entity?.isAlive?.() || e.thievable === false) return false;
+            if (cheb(e.x, e.y, this.playerX, this.playerY) !== 1) return false;
+            if (branch === 'coin') return (e.gold ?? 0) > 0;
+            if (branch === 'kit')  return (e.loadout ?? []).length > 0;
+            if (branch === 'gear') return (e.equipped ?? []).length > 0;
+            return false;
+        });
+    }
 
     // Who a sound can move — hostiles only, for now.
     //

@@ -100,6 +100,10 @@ export function serialize(game) {
             // Law 6: enemies already looted on death, so respawns stay broke
             // across a reload too (twin of collectedItems — a Set of ids).
             muggedIds: game._muggedIds ? [...game._muggedIds] : [],
+            // (theft) enemyId -> { gold, items, weightTaken, noticed }. Without
+            // this a robbery undoes itself on zone re-entry, because enemies
+            // re-hydrate from map JSON every _loadMap.
+            robbed: game._robbed ?? {},
             containers: (game.containers || []).map(c => ({
                 id: c.id, type: c.type, x: c.x, y: c.y, contents: (c.contents || []).slice(),
             })),
@@ -164,6 +168,7 @@ export function migrate(raw) {
     if (!Array.isArray(r.world.collectedItems)) r.world.collectedItems = [];
     if (!r.world.droppedItems || typeof r.world.droppedItems !== 'object') r.world.droppedItems = {};
     if (!Array.isArray(r.world.muggedIds)) r.world.muggedIds = [];
+    if (!r.world.robbed || typeof r.world.robbed !== 'object' || Array.isArray(r.world.robbed)) r.world.robbed = {};
     if (!Array.isArray(r.world.containers)) r.world.containers = [];
     if (r.quest === undefined) r.quest = null;
     if (r.sewerEscape === undefined) r.sewerEscape = null;
@@ -234,6 +239,7 @@ export async function loadInto(game, raw) {
     // Law 6: restore the mugged set BEFORE _loadMap spawns enemies from the map
     // JSON below, or a previously-looted enemy would respawn funded.
     game._muggedIds = new Set(raw.world.muggedIds ?? []);
+    game._robbed = raw.world.robbed ?? {};
 
     // 1. baseline map (spawns JSON enemies/items/containers; sets renderer
     //    zone). Missing coords fall back to the map spawn; clamp to bounds so

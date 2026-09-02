@@ -41,6 +41,7 @@ Balance golden unchanged throughout.
 | 9 — the Thieve subtree on the wheel | **done** | (this branch) |
 | 10 — `applyHostileFlip` | **done** | (this branch) |
 | 11 — paranoia + the blind sweep | **done** | (this branch) |
+| 12 — the Thieve resolver + `_robbed` persistence | **done**, verified live | (this branch) |
 
 Verified in the browser on `:3002` (this worktree's own server; the primary checkout owns 3001):
 the 3/2/3 split holds against the real map on a real spawned enemy for all eight facings; a player

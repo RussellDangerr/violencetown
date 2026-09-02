@@ -20,6 +20,7 @@ import { stepEntity, fleeStep } from './pathing.js';
 import { tickNpcState } from './npc.js';
 import { tickBuffList } from './buffs.js';
 import { parseCapabilities, deriveAllegiance, isHunting } from './ai.js';
+import { makeHostile } from './give-action.js';   // (theft) one spelling of "turned against you"
 import { FACING_VECTORS } from './perception.js';
 import { resolveItemDef } from './item-registry.js';
 
@@ -424,7 +425,7 @@ function defaultKit(armor) {
 // Law 6d: a spawn the player already mugged comes back broke — no gold AND no
 // kit, so re-entering a zone can't farm either half of the wallet. Pure so it
 // stays Node-testable.
-export function spawnEnemy(spawnDef, muggedIds) {
+export function spawnEnemy(spawnDef, muggedIds, robbed = null) {
     const e = new Enemy(spawnDef);
     const fights = (e.damage ?? 0) > 0 && !e.ambient;
     if (fights && spawnDef.gold == null && spawnDef.loadout == null) {
@@ -434,6 +435,22 @@ export function spawnEnemy(spawnDef, muggedIds) {
     }
     if (!Array.isArray(e.loadout)) e.loadout = e.loadout ? [...e.loadout] : [];
     if (muggedIds?.has(e.id)) { e.gold = 0; e.loadout = []; }
+
+    // (theft) A robbed enemy re-hydrates from map JSON on every _loadMap, so
+    // without this the theft — and the hostility that came with being caught —
+    // would quietly undo itself the moment you left the zone and came back.
+    //
+    // SUBTRACTIVE, unlike the mugged case above, which zeroes the whole wallet
+    // and wipes the whole loadout. Lifting 50 GP off a 200 GP enemy must leave
+    // them 150, not nothing.
+    const r = robbed?.[e.id];
+    if (r) {
+        e.gold = Math.max(0, (e.gold ?? 0) - (r.gold ?? 0));
+        if (r.items?.length) e.loadout = (e.loadout ?? []).filter(id => !r.items.includes(id));
+        // Only if they NOTICED. A clean theft leaves no social trace at all —
+        // that is what makes it clean.
+        if (r.noticed) makeHostile(e);
+    }
     return e;
 }
 

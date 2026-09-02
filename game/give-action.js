@@ -341,7 +341,12 @@ export function spreadParanoia(npcs, origin, victim = null) {
 //   what makes the victim the ONLY producer of a searcher with no lead, which is
 //   what BLIND_SWEEP_BEATS in perception.js was written for and has been waiting
 //   on since it shipped.
-export function applyHostileFlip(recipient) {
+// The PERMANENT half of turning against you: the four fields that outlive the
+// moment and have to survive a save. Split out because spawnEnemy re-applies
+// exactly this when a robbed victim re-hydrates from map JSON on zone re-entry —
+// and must NOT re-apply the searching state, since the sweep already happened.
+// One spelling, so the two cannot drift.
+export function makeHostile(recipient) {
     if (!recipient) return;
     // DISPOSITION_MIN, not a literal -100 — give-action already imports the
     // constant for clampDisposition, and a fourth spelling of the floor is how
@@ -350,6 +355,11 @@ export function applyHostileFlip(recipient) {
     recipient.allegiance  = 'hostile';
     recipient.fsmState    = 'HOSTILE';
     recipient._ally       = false;
+}
+
+export function applyHostileFlip(recipient) {
+    if (!recipient) return;
+    makeHostile(recipient);
     recipient.state       = 'searching';
     recipient._lastSeenX  = null;
     recipient._lastSeenY  = null;
