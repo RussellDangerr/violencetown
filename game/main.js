@@ -5251,6 +5251,30 @@ class Game {
         return list[sel.index] || null;
     }
 
+    // Would the whole take side fit in the bag?
+    //
+    // Simulated against a lightweight copy of the stack counts rather than the
+    // real inventory, because this runs from the DRAW path. Mirrors
+    // inventory.addToInventory exactly: top up a matching stack under maxStack
+    // first, else take a free slot.
+    _offerTakeFitsBag(taken) {
+        const stacks = [];
+        for (let i = 0; i < INVENTORY_SIZE; i++) {
+            const st = this.inventory[i];
+            stacks.push(st && st.itemDef ? { id: st.itemDef.id, count: st.count } : null);
+        }
+        for (const e of taken || []) {
+            for (let n = 0; n < e.count; n++) {
+                const top = stacks.findIndex(s => s && s.id === e.def.id && s.count < MAX_STACK);
+                if (top >= 0) { stacks[top].count++; continue; }
+                const free = stacks.findIndex(s => !s);
+                if (free < 0) return false;
+                stacks[free] = { id: e.def.id, count: 1 };
+            }
+        }
+        return true;
+    }
+
     // Why MAKE THE OFFER is disabled, or null when it is armed.
     _offerBlocker() {
         const npc = this._offerNpc; if (!npc) return 'NOTHING STAGED';
@@ -5262,6 +5286,7 @@ class Game {
         return commitBlocker(npc, this._offer, {
             playerGold: this.gold ?? 0,
             npcGold: npc.gold ?? 0,
+            bagFull: !this._offerTakeFitsBag(this._offer && this._offer.take),
         });
     }
 
@@ -5409,7 +5434,12 @@ class Game {
         for (const e of [...taken].sort((a, b) => (b.index ?? 0) - (a.index ?? 0))) {
             const unit = buyPrice(e.def, d) || 0;
             for (let n = 0; n < e.count; n++) {
-                this._addToInventory(e.def);
+                // Last line of defence. _offerBlocker refuses a full bag before
+                // any gold moves, so this should be unreachable -- but taking
+                // the return seriously is what stops a chest being spliced into
+                // a bag that refused the item, which loses it from the world
+                // with no gold trail and no log.
+                if (!this._addToInventory(e.def)) { this._log('[Your bag is full.]'); break; }
                 if (e.source === 'contents') this._takeFromContainer(npc, e.index);
                 else                         this._buybackRecord(npc, e.def.id, 'refund', unit);
             }

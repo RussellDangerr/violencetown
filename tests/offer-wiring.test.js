@@ -19,6 +19,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { ITEMS } from '../game/items.js';
 import { resolveItemDef } from '../game/item-registry.js';
+import { addToInventory } from '../game/inventory.js';
+import { INVENTORY_SIZE, SAFE_SLOTS, MAX_STACK } from '../game/data.js';
 import {
     emptyOffer, commitBlocker, stage, unstage, settledGold, offerBalance, resolveOffer,
 } from '../game/offer.js';
@@ -95,6 +97,9 @@ const containerStock = liveMethod('_containerStock', 'container');
 const takeFromContainer = liveMethod('_takeFromContainer', 'npc, at');
 const removeFromSlot = liveMethod('_removeFromSlot', 'slot');
 const buybackRecord = liveMethod('_buybackRecord', 'npc, itemId, kind, price');
+const buybackLive = liveMethod('_buybackLive', 'npc', { BUYBACK_MS });
+const buybackList = liveMethod('_buybackList', 'npc');
+const takeFitsBag = liveMethod('_offerTakeFitsBag', 'taken', { INVENTORY_SIZE, MAX_STACK });
 const logOffer = liveMethod('_logOffer', 'npc, R, { given, taken, gold }', { dispositionCeil });
 const commitOfferFull = liveMethod('_commitOffer', '',
     { resolveOffer, transferGold, sellPrice, buyPrice, applyDispositionDelta, isHostile, emptyOffer,
@@ -126,7 +131,9 @@ function stubGame(overrides = {}) {
         _commitOffer: commitOffer,
         state: STATE.IDLE,
         gold: 100,
-        inventory: [],
+        // A real bag, not []: addToInventory walks cfg.size slots and needs the
+        // holes to exist. Tests that want specific contents pass `inventory`.
+        inventory: new Array(INVENTORY_SIZE).fill(null),
         logs: [],
         renders: 0,
         resumed: 0,
@@ -150,8 +157,24 @@ function stubGame(overrides = {}) {
         _logOffer: logOffer,
         events: [],
         emitGameEvent(name, payload) { this.events.push({ name, payload }); },
-        _addToInventory(def) { (this.got ||= []).push(def.id); return true; },
-        _buybackList() { return []; },
+        // THE REAL ONES. These were stubbed `return true` and `return []`, and
+        // that is exactly why a green 730-test suite could not see either of the
+        // two economy exploits this file now covers: every commit test ran
+        // against a bag that never fills and a vendor with no buyback shelf.
+        // Same class as the hand-written 2-arg _pointInRect that silently
+        // dropped `slop` and blinded every hit-test assertion.
+        //
+        // `got` is kept as a convenience mirror of what actually landed, but it
+        // is now written only when addToInventory really accepted the item.
+        _addToInventory(def) {
+            const ok = addToInventory(this.inventory, def,
+                { size: INVENTORY_SIZE, safeSlots: SAFE_SLOTS, maxStack: MAX_STACK });
+            if (ok) (this.got ||= []).push(def.id);
+            return ok;
+        },
+        _offerTakeFitsBag: takeFitsBag,
+        _buybackLive: buybackLive,
+        _buybackList: buybackList,
         // The REAL one, lifted. A hand-written two-arg stub silently dropped the
         // `slop` argument, which made every hit-test assertion here blind to slop
         // bugs -- two mutants that reintroduced HIT_SLOP scanning survived the
@@ -1111,6 +1134,156 @@ describe('disposition decay and the open offer screen', () => {
 // owns the special cases the barter model cannot express. _commitOffer replaced
 // that path and did not inherit it, so these were silently dead on the new
 // screen until Task 17 -- and nothing failed, because nothing tested them.
+
+// -- the economy holds (review findings 1-3) --------------------------------
+//
+// Every test here failed when it was written. They are the three ways the
+// commit path could mint or destroy value, all found by a max-effort review
+// after the branch was called done, and all invisible to the suite until the
+// _addToInventory and _buybackList stubs above became the real functions.
+
+describe('a full bag never costs the player anything', () => {
+    const commit = commitOfferFull;
+    const vendor = () => ({ id: 'puck', type: 'puck', vendor: true, disposition: 40, gold: 200,
+                            entity: alive, stock: ['bandage'], values: {}, behavior: ['IDLE'] });
+    // 50 distinct defs would be ideal; 50 full stacks of one is equivalent for
+    // addToInventory, which only merges below maxStack.
+    const fullBag = () => new Array(INVENTORY_SIZE).fill(null)
+        .map(() => ({ itemDef: ITEMS.rock, count: MAX_STACK }));
+
+    test('the bag really is full', () => {
+        const inv = fullBag();
+        assert.equal(addToInventory(inv, ITEMS.bandage,
+            { size: INVENTORY_SIZE, safeSlots: SAFE_SLOTS, maxStack: MAX_STACK }), false);
+    });
+
+    test('BUYING INTO A FULL BAG DOES NOT TAKE THE GOLD', () => {
+        const g = stubGame({ gold: 500, inventory: fullBag() });
+        const npc = vendor();
+        openOffer.call(g, npc);
+        offerActivate.call(g, 'theirs', 0);
+        commit.call(g);
+        assert.equal(g.gold, 500, 'the player paid for goods they never received');
+        assert.equal(npc.gold, 200, 'the vendor was paid for goods they still have');
+    });
+
+    test('TAKING INTO A FULL BAG DOES NOT DESTROY THE CHEST CONTENTS', () => {
+        // The worse half: there is no gold trail, the item just leaves the world.
+        const g = stubGame({ inventory: fullBag() });
+        const shim = chestShim(['rock', 'soap']);
+        openOffer.call(g, shim);
+        offerActivate.call(g, 'theirs', 1);
+        commit.call(g);
+        assert.deepEqual(shim._container.contents, ['rock', 'soap'],
+            'the chest was emptied into a bag that refused the item');
+    });
+
+    test('the refusal is spoken, not silent', () => {
+        const g = stubGame({ gold: 500, inventory: fullBag() });
+        openOffer.call(g, vendor());
+        offerActivate.call(g, 'theirs', 0);
+        commit.call(g);
+        assert.match(g.logs.at(-1).msg, /bag is full/i,
+            `no refusal line: ${g.logs.at(-1).msg}`);
+    });
+
+    test('a partly-full bag still completes normally', () => {
+        const inv = new Array(INVENTORY_SIZE).fill(null);
+        inv[0] = { itemDef: ITEMS.rock, count: 1 };
+        const g = stubGame({ gold: 500, inventory: inv });
+        const npc = vendor();
+        openOffer.call(g, npc);
+        offerActivate.call(g, 'theirs', 0);
+        const price = g._offer.gold;
+        commit.call(g);
+        assert.equal(g.gold, 500 - price);
+        assert.ok(g.inventory.some(sl => sl && sl.itemDef.id === 'bandage'), 'the bandage never landed');
+    });
+});
+
+describe('the buyback shelf is an undo, not a duplicator', () => {
+    const commit = commitOfferFull;
+    const withLedger = (g, npc) => {
+        // Sell one soap the ordinary way, which is what stocks the shelf.
+        openOffer.call(g, npc);
+        offerActivate.call(g, 'yours', 0);
+        commit.call(g);
+    };
+    const vendor = () => ({ id: 'puck', type: 'puck', vendor: true, disposition: 40, gold: 500,
+                            entity: alive, stock: [], values: {}, behavior: ['IDLE'] });
+    const bag = (n = 1) => {
+        const inv = new Array(INVENTORY_SIZE).fill(null);
+        inv[0] = { itemDef: ITEMS.soap, count: n };
+        return inv;
+    };
+
+    test('selling puts one credit on the shelf', () => {
+        const g = stubGame({ gold: 100, inventory: bag() });
+        const npc = vendor();
+        withLedger(g, npc);
+        assert.ok(npc._buyback, 'no ledger');
+        assert.deepEqual(npc._buyback.entries.soap.rebuy.length, 1);
+        assert.equal(theirsList.call(g).filter(e => e.source === 'buyback').length, 1);
+    });
+
+    test('BUYING BACK CONSUMES THE CREDIT — THE SHELF EMPTIES', () => {
+        const g = stubGame({ gold: 100, inventory: bag() });
+        const npc = vendor();
+        withLedger(g, npc);
+        g.state = STATE.IDLE; openOffer.call(g, npc);
+        const row = theirsList.call(g).findIndex(e => e.source === 'buyback');
+        assert.ok(row >= 0, 'setup: no buyback row');
+        offerActivate.call(g, 'theirs', row);
+        commit.call(g);
+        assert.equal(npc._buyback.entries.soap.rebuy.length, 0,
+            'the credit survived the re-buy — the row can be bought again');
+        g.state = STATE.IDLE; openOffer.call(g, npc);
+        assert.equal(theirsList.call(g).filter(e => e.source === 'buyback').length, 0,
+            'the shelf still offers a row whose credit is spent');
+    });
+
+    test('ONE SOLD ITEM CANNOT BECOME FOUR', () => {
+        const g = stubGame({ gold: 1000, inventory: bag() });
+        const npc = vendor();
+        withLedger(g, npc);
+        for (let i = 0; i < 4; i++) {
+            g.state = STATE.IDLE; openOffer.call(g, npc);
+            const row = theirsList.call(g).findIndex(e => e.source === 'buyback');
+            if (row < 0) break;
+            offerActivate.call(g, 'theirs', row);
+            commit.call(g);
+        }
+        const soap = g.inventory.reduce((n, sl) => n + (sl && sl.itemDef.id === 'soap' ? sl.count : 0), 0);
+        assert.equal(soap, 1, `one sold soap came back as ${soap}`);
+    });
+
+    test('AN UNDO COSTS WHAT YOU WERE PAID, NOT THE MARKET RATE', () => {
+        const g = stubGame({ gold: 1000, inventory: bag() });
+        const npc = vendor();
+        withLedger(g, npc);
+        const paidToPlayer = 1000 - g.gold;     // negative: the player GAINED
+        const afterSale = g.gold;
+        g.state = STATE.IDLE; openOffer.call(g, npc);
+        const row = theirsList.call(g).findIndex(e => e.source === 'buyback');
+        offerActivate.call(g, 'theirs', row);
+        commit.call(g);
+        const cost = afterSale - g.gold;
+        assert.equal(cost, -paidToPlayer,
+            `sold for ${-paidToPlayer}, bought back for ${cost} — main.js:101 promises they match`);
+    });
+
+    test('a gift to a vendor does not become permanent re-purchasable stock', () => {
+        const g = stubGame({ gold: 100, inventory: bag() });
+        const npc = vendor();
+        openOffer.call(g, npc);
+        offerActivate.call(g, 'yours', 0);
+        g._offer.gold = 0;                       // an outright gift
+        commit.call(g);
+        const shelf = (npc._buyback && npc._buyback.entries.soap)
+            ? npc._buyback.entries.soap.rebuy.length : 0;
+        assert.equal(shelf, 0, 'a gift minted a buyback credit — the vendor can now resell it forever');
+    });
+});
 
 describe('the give spine survives the unified screen', () => {
     const commit = commitOfferFull;
