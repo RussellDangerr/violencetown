@@ -32,7 +32,6 @@ the page reveals it.
 
 | what | why it mattered |
 |---|---|
-| **The game was muted by default** | `settings.js` shipped `muted: true` "until audio/music is intentionally worked on". It has been — procedural SFX for every action, an ambient bed per zone — and no first-time player ever heard any of it. Ninety seconds of silence from a game whose README sells its audio. |
 | **"Drive out of Violencetown."** | `fix_car.onComplete` told the player to go, with no hint that driving without alcohol triggers a red-flash, screen-shake, take-damage crash cutscene. The warning existed — but only if you bumped the car a *second* time, after being told to just drive. It now says the engine is running too hot to make the ramp. |
 | **`[E]` was documented wrong in two places** | E became **facing-only** on 2026-09-02; `index.html` and `README.md` both still described the old "any adjacent shopkeeper" sweep. A player walking up to the first NPC from the wrong angle got "Nothing here worth examining." |
 | **The splash told phones to press Space** | Static text, never adapted. Now carries a `.help-touch` companion. |
@@ -75,11 +74,25 @@ So there is no clean stopping point. For a portfolio demo that is a real questio
 finishes the car arc is dropped into Chapter Two content rather than given a curtain. Either delete
 the orphaned ending, or give the demo an explicit endpoint. **A product call, not a bug fix.**
 
-### 2.3 Unmuting by default
+### 2.3 Autoplay — RULED, and reverted
 
-The one change here you might want to reverse — it is a single line in `settings.js`. A silent demo
-undersells the audio; an unexpected noise on someone's laptop is its own risk. Web Audio needs a
-gesture and the splash button is that gesture, so nothing plays unprompted.
+Flipped to `muted: false` on the grounds that a silent demo undersells the procedural audio.
+**Overruled by Caelan the same day:** sound firing the instant someone clicks GAME START *"is too
+janky to be auto-playing on click."* Reverted; it ships muted.
+
+Worth recording, because the wrong answer here is seductive. Web Audio genuinely does require a user
+gesture, and the splash button genuinely is one — so unmuting is *technically* well-behaved and the
+code has a tidy justification for it. It is still the wrong default. A stranger opening a link on a
+work laptop, in an open office, next to someone else, should **choose** to make noise rather than
+find out they already are.
+
+Note also what caused the flip: the old comment read *"default-ON until audio/music is intentionally
+worked on"*, which parses as a stale TODO rather than a decision — so it invited exactly this. The
+comment in `settings.js` now states the ruling and says not to flip it again without asking.
+
+**The real problem the flip was aiming at still stands, and is different.** Nobody discovers the
+audio exists. That is a *discoverability* problem and wants a visible sound control — one line on the
+splash, or a speaker glyph in the HUD — not autoplay.
 
 ---
 

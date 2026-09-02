@@ -21,16 +21,25 @@ export const DEFAULTS = Object.freeze({
     musicVolume: 0.7,
     sfxVolume:   0.8,
     reduceMotion: false,   // suppress / dampen screenshake + flash
-    // Was default-ON "until audio/music is intentionally worked on". It has
-    // been: there are procedural SFX for every action and an ambient bed per
-    // zone, none of which a first-time player ever heard, because this muted
-    // them before the splash finished. A visitor got ninety seconds of silence
-    // from a game whose own README sells its audio.
+    // MUTED BY DEFAULT, and this is a RULING rather than a placeholder.
     //
-    // Web Audio needs a user gesture anyway, and the splash button IS that
-    // gesture (audio.init() runs on the click), so nothing plays before someone
-    // has asked for it.
-    muted:        false,   // hard mute, independent of the two volumes
+    // (Caelan, 2026-09-02) The previous comment here said "default-ON until
+    // audio/music is intentionally worked on", which read as a stale TODO — so
+    // it got flipped to false on the grounds that a silent demo undersells the
+    // procedural audio. He overruled it the same day: sound firing the instant
+    // someone clicks GAME START "is too janky to be auto-playing on click".
+    //
+    // He is right, and the reasoning is worth keeping because the alternative is
+    // seductive: yes, Web Audio needs a gesture and the splash button is one, so
+    // unmuting is technically well-behaved. It is still the wrong default. A
+    // stranger opening a link — on a work laptop, in an open office, beside
+    // someone else — should choose to make noise, not discover they already are.
+    //
+    // The real problem the flip was aiming at (nobody knows the audio exists) is
+    // a DISCOVERABILITY problem and wants a visible sound control, not autoplay.
+    //
+    // Do not flip this again without asking him.
+    muted:        true,    // hard mute, independent of the two volumes
     firstRunHintSeen: false, // (pointer model) one-time "tap to move" hint shown?
     // (Slice 2) how the action wheel opens: 'tap-toggle' (tap opens + stays —
     // today's behaviour) or 'hold' (press-and-hold opens, release closes).
