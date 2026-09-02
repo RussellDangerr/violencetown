@@ -42,6 +42,7 @@ Balance golden unchanged throughout.
 | 10 — `applyHostileFlip` | **done** | (this branch) |
 | 11 — paranoia + the blind sweep | **done** | (this branch) |
 | 12 — the Thieve resolver + `_robbed` persistence | **done**, verified live | (this branch) |
+| 13 — Phase 6 polish (steps 1, 3, 4; step 2 still blocked) | **done**, verified live | (this branch) |
 
 Verified in the browser on `:3002` (this worktree's own server; the primary checkout owns 3001):
 the 3/2/3 split holds against the real map on a real spawned enemy for all eight facings; a player

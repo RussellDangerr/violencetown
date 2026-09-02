@@ -35,6 +35,7 @@ export const DEFAULTS = Object.freeze({
     // watched ones instead. Two readings of the same field — some players hunt
     // for cover, some track the threat.
     threatStyle: 'shadow',
+    blindSpotHintSeen: false, // (theft) one-shot: the first time you stand unseen beside someone
 });
 
 // Live, mutable copy of the settings. Seeded with defaults so callers can read
@@ -81,6 +82,7 @@ export function validate(raw) {
         // here is silently discarded on every load — it would read correctly all
         // session and reset on reload.
         threatStyle:      asEnum(o.threatStyle, ['shadow', 'danger'], DEFAULTS.threatStyle),
+        blindSpotHintSeen: asBool(o.blindSpotHintSeen, DEFAULTS.blindSpotHintSeen),
     };
 }
 

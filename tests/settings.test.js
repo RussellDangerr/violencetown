@@ -117,3 +117,17 @@ test('both real treatments survive a round trip', () => {
     assert.equal(validate(validate({ threatStyle: style })).threatStyle, style);
   }
 });
+
+// (theft) The blind-spot hint flag — same drop-unknown-keys trap as threatStyle.
+test('blindSpotHintSeen defaults off and survives validate', () => {
+  assert.equal(DEFAULTS.blindSpotHintSeen, false);
+  assert.equal(validate({}).blindSpotHintSeen, false);
+  assert.equal(validate({ blindSpotHintSeen: true }).blindSpotHintSeen, true,
+    'must not be dropped as an unknown key, or the hint repeats every session');
+});
+
+test('a junk blindSpotHintSeen coerces rather than being trusted', () => {
+  for (const junk of ['yes', 1, null, {}]) {
+    assert.equal(typeof validate({ blindSpotHintSeen: junk }).blindSpotHintSeen, 'boolean');
+  }
+});

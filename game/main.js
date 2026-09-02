@@ -2382,6 +2382,7 @@ class Game {
     // step. (fix/critical-path safety intact)
     _onStepSettled() {
         if (this.state !== STATE.IDLE) return;
+        this._maybeShowBlindSpotHint();
         // Manual input always OVERRIDES a click-to-walk: a held / just-pressed
         // direction cancels the path and takes over (press WASD mid-path to grab
         // the wheel back). Read the intent (folds in the one-deep buffer) first.
@@ -3457,6 +3458,7 @@ class Game {
 
                 if (gp > 0) { transferGold(victim, this, gp, 'theft'); rec.gold += gp; this._log(`[Lifted ${gp} GP.]`, 'pickup'); }
                 if (took)   { rec.items.push(took.id); this._log(`[Lifted the ${took.name}.]`, 'pickup'); }
+                audio.playSfx(clean ? 'theft' : 'theft-noticed');
 
                 if (clean) {
                     // A clean theft is GENUINELY clean — no disposition move, no
@@ -3713,6 +3715,26 @@ class Game {
     // Shared with the wheel's §12.5 combat re-skin via the pure wheel-model helper.
     _inCombat() { return isCombatActive(this); }
 
+    // (theft) The one-shot that teaches the whole stealth layer.
+    //
+    // The rear blind spot is the single rule everything here rests on, and it is
+    // the kind of rule a player either stumbles into or never learns at all. So
+    // the first time they are standing right beside somebody and STILL unseen,
+    // the game says so once, and never again.
+    //
+    // It fires on the situation rather than on entering a zone or picking up an
+    // item, because the situation IS the lesson — you are already in the position
+    // the verb wants, and the line just names what you have done.
+    _maybeShowBlindSpotHint() {
+        if (Settings.get('blindSpotHintSeen')) return;
+        const beside = (this.enemies || []).some(e =>
+            e.entity?.isAlive?.() && !e._ally && (e.sightRange || 0) > 0 &&
+            cheb(e.x, e.y, this.playerX, this.playerY) === 1);
+        if (!beside || !this.isHidden()) return;
+        Settings.set('blindSpotHintSeen', true);
+        this._log("[They haven't seen you. People don't look behind themselves.]", 'quest');
+    }
+
     // (theft) Are you unseen right now? Nobody — the victim included — holds a
     // DIRECT verdict on your tile. This is what makes "there are no witnesses"
     // true by construction rather than by assertion: it asks the same perceives()
@@ -3814,6 +3836,11 @@ class Game {
     // accumulates ms, combat counts turns).
     _worldBeat({ ambient, decayDue }) {
         this._advanceDayClock();
+        // (Phase 6) Hand the lighting grade to everyone who can see, so perception
+        // can shorten their cone after dark. Stamped rather than passed because
+        // perceives() is called from the AI, the overlay and the theft gate, and
+        // threading a level through all three would be three chances to disagree.
+        for (const e of this.enemies) e._nightLevel = this._nightLevel ?? 0;
         if (ambient) this._ambientTick();
         if (decayDue) this._tickDispositionDecay();
     }
