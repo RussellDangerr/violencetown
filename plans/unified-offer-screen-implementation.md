@@ -131,7 +131,51 @@ this document as advisory and re-grep — every line number the audit checked wa
 
 ---
 
-## ▶ RESUME HERE — execution status (2026-08-24, after Task 11)
+## ✅ THE BRANCH IS FEATURE-COMPLETE (2026-09-01)
+
+All 20 tasks are done. **730 tests / 122 suites / 0 fail** (baseline before this work: 404).
+Branch `feature/unified-offer-screen`, tree clean, **LOCAL/UNPUSHED — the merge-to-`dev` call is
+Caelan's.**
+
+### Task 20, the verification gate — every item, with what it actually returned
+
+| Check | Result |
+| --- | --- |
+| The suite | **730 pass, 0 fail** |
+| Naming gate (`violence[ _-]+town`) | zero lines |
+| **Puck** — vendor with authored `values` | gift 2 soap: 60 → 76, `BUY x1.2 → x1.0`, a bandage **30 → 25** |
+| **A plain Violencian** — no vendor, no `values` | take side empty (0 rows); a gift still moved 10 → 12 on GP value alone |
+| **A chest** | take-only, prices 0, reachable by tap (Task 16) |
+| **Below −50** | rows render; taking refused `THEY WON'T DEAL`; gifting allowed; **−70 → −24 unlocked trading in the same sitting**, screen stayed open |
+| **The Fungus King** (`flipThreshold: 200`) | ceiling 200, −80 drawn unclamped |
+| **The Ghost Fungus** (`bribeable: false`) | a surplus is refused `THEY WON'T BE BOUGHT` |
+| **Scroll** | 50 bag rows, cursor reaches index 49, scroll lands at 44 |
+| **A bad deal** | rock for a bandage: balance −29 → **−15, accepted**, Puck 60 → 45, bandage **30 → 35** |
+| **An unabsorbable lowball** | balance −240, `patienceExceeded`, refused `THEY'VE HAD ENOUGH` |
+| **Escape mid-basket** | basket discarded, partner dropped, gold / disposition / bag all untouched |
+| Glyph check | every `drawText` literal in the offer methods is ASCII 32–126 |
+| Save round-trip | `_offer` absent from the save **with a live basket staged**; Puck's 71 persisted |
+| Console | clean throughout |
+
+**The bad deal reproduces spec §4.4's own worked example exactly** — a 1 GP rock for a 30 GP bandage,
+−29 balance, −15 disposition, 60 → 45, and every price worse afterward.
+
+### One correction to Task 20's own checklist
+It expects, for the Ghost Fungus: *"gold in the tray generates no goodwill; gifts still do."* That is
+wrong. `give-action.js:80` refuses **all** offerings from a bribery-immune NPC, not just gold, and
+`commitBlocker` now matches that precedent — a gift is refused too, with the same line. The
+behaviour is right; the checklist's expectation was not.
+
+### Two things the hidden Browser pane breaks (not game bugs)
+Both cost real debugging time; neither is a defect.
+1. **`getImageData` returns a STALE canvas.** Call `game._render()` synchronously before sampling.
+2. **`_animating` sticks true**, because the move slide completes on an animation frame. Once stuck,
+   the keydown handler swallows every key (`main.js:949`) and Escape appears broken. Clear it by hand
+   (`game._animating = false`) or avoid triggering a walk. A multi-tile walk cannot complete at all.
+
+---
+
+## ▶ Superseded — execution status during the run (2026-08-24, after Task 11)
 
 **Branch:** `feature/unified-offer-screen`, tree clean, **600 tests / 102 suites / 0 fail** (baseline was 404).
 **Method:** now **inline development** — Caelan's call. Tasks 1–10 ran through
@@ -153,8 +197,9 @@ onward is written directly. Mutation testing stays either way — it is what has
 | 15 · delete the old trade path | ✅ **done — 600 lines out** |
 | 16 · chests reachable by tap | ✅ done |
 | 17 · hostility trap + stranded stock | ✅ done — and it caught a bypassed spine |
-| 18 · backfill the pricing tests | ⏭ **NEXT** |
-| 19–20 | not started |
+| 18 · backfill the pricing tests | ✅ done |
+| 19 · reconcile the documentation | ✅ done |
+| 20 · the verification pass | ✅ **done — ALL 20 TASKS COMPLETE** |
 
 **The draw layer is complete.** `game/offer.js` (251 lines) + `game/disposition-curves.js` (227) are
 pure; `offerLayout()` returns every rect; `renderer.js` has all five `_drawOffer*` methods and they
