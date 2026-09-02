@@ -257,7 +257,7 @@ test('a heavy character refuses the shove and is not moved', () => {
     const self = {
         _isHeavy: (c) => c.heavy === true,
         _shoveDestination: () => ({ x: 6, y: 4 }),
-        _bounceOff: () => { bounced++; }, _log: () => {}, _MOVE_MS: 100,
+        _bounceOff: () => { bounced++; }, _log: () => {}, _render: () => {}, _MOVE_MS: 100,
     };
     assert.equal(shove.call(self, { x: 6, y: 5, heavy: true }, { dx: 1, dy: 0 }), false);
     assert.equal(bounced, 1);
@@ -272,7 +272,7 @@ test('a boxed-in character bounces rather than being shoved nowhere', () => {
     const self = {
         _isHeavy: () => false,
         _shoveDestination: () => null,          // nowhere to put them
-        _bounceOff: () => { bounced++; }, _log: () => {}, _MOVE_MS: 100,
+        _bounceOff: () => { bounced++; }, _log: () => {}, _render: () => {}, _MOVE_MS: 100,
     };
     assert.equal(shove.call(self, { x: 6, y: 5 }, { dx: 1, dy: 0 }), false);
     assert.equal(bounced, 1);

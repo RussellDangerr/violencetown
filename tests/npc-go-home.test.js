@@ -13,6 +13,8 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { Enemy } from '../game/enemies.js';
 import { tickNpcState, goHomeStep } from '../game/npc.js';
 
@@ -169,5 +171,94 @@ describe('"if possible"', () => {
         for (let i = 0; i < 30 && goHomeStep(g, k); i++) moved++;
         assert.ok(moved > 0, 'never set off');
         assert.deepEqual([k.x, k.y], [1, 0], `stalled at ${k.x},${k.y} after ${moved} steps`);
+    });
+});
+
+// ── The two ways a shove fails ──────────────────────────────────────────────
+//
+// (ruled 2026-09-02) Caelan: "trying to push someone and not being able to, I
+// think, is a good source of physical comedy." It was a thud and a recoil with
+// no line — the joke performed to an empty room. Each failure gets its own beat
+// now, and they are DIFFERENT failures: one of them cannot be moved, the other
+// would move and has nowhere to go.
+describe('a shove that does not land', () => {
+    const mainSrc = readFileSync(fileURLToPath(new URL('../game/main.js', import.meta.url)), 'utf8');
+
+    function liveShove(freeVars) {
+        const sig = '_shoveNpc(enemy, dir) {';
+        const at = mainSrc.indexOf(sig);
+        assert.ok(at > 0);
+        const closeAt = mainSrc.indexOf('\n    }', at);
+        const body = mainSrc.slice(at + '_shoveNpc'.length, closeAt + '\n    }'.length);
+        const names = Object.keys(freeVars);
+        return new Function(...names, `'use strict'; return function ${body}`)(...names.map(n => freeVars[n]));
+    }
+
+    function harness(over = {}) {
+        const logs = [];
+        const self = {
+            _isHeavy: (c) => c.heavy === true || c.boss === true,
+            _bounceOff: () => {}, _render: () => {}, _MOVE_MS: 100,
+            _log: (t) => logs.push(t),
+            _shoveDestination: () => ({ x: 6, y: 4 }),
+            ...over,
+        };
+        return { self, logs };
+    }
+    const shove = liveShove({ audio: { playSfx: () => {} }, stepEntity: () => {} });
+
+    test('an immovable character says so', () => {
+        const { self, logs } = harness();
+        assert.equal(shove.call(self, { x: 6, y: 5, name: 'Hooch', heavy: true }, { dx: 1, dy: 0 }), false);
+        assert.equal(logs.length, 1);
+        assert.match(logs[0], /Hooch/);
+        assert.match(logs[0], /does not appear to notice/);
+    });
+
+    test('a boxed-in character reads as a DIFFERENT failure', () => {
+        const { self, logs } = harness({ _shoveDestination: () => null });
+        assert.equal(shove.call(self, { x: 6, y: 5, name: 'Puck' }, { dx: 1, dy: 0 }), false);
+        assert.equal(logs.length, 1);
+        assert.match(logs[0], /nowhere to go/);
+        assert.doesNotMatch(logs[0], /does not appear to notice/,
+            'the two failures must not share a line — they are not the same joke');
+    });
+
+    test('a shove that WORKS stays quiet about failing', () => {
+        const { self, logs } = harness();
+        assert.equal(shove.call(self, { x: 6, y: 5, name: 'Puck' }, { dx: 1, dy: 0 }), true);
+        assert.ok(!logs.some(l => /nowhere to go|does not appear/.test(l)));
+    });
+
+    test('a nameless character still gets a readable line', () => {
+        const { self, logs } = harness();
+        shove.call(self, { x: 6, y: 5, type: 'Violencian', heavy: true }, { dx: 1, dy: 0 });
+        assert.match(logs[0], /Violencian/);
+    });
+});
+
+describe('bosses are unbudgeable by derivation', () => {
+    const mainSrc = readFileSync(fileURLToPath(new URL('../game/main.js', import.meta.url)), 'utf8');
+    const isHeavy = (() => {
+        const at = mainSrc.indexOf('_isHeavy(ch) {');
+        const body = mainSrc.slice(at + '_isHeavy'.length, mainSrc.indexOf('\n    }', at) + 6);
+        return new Function(`'use strict'; return function ${body}`)();
+    })();
+
+    test('an authored heavy is still heavy', () => {
+        assert.equal(isHeavy({ heavy: true }), true);
+    });
+
+    test('a boss is heavy without being flagged twice', () => {
+        // The shove comment named bosses as immovable from the day it shipped and
+        // nothing was ever flagged, so the branch sat there for months with only a
+        // wall of fungus behind it.
+        assert.equal(isHeavy({ boss: true }), true);
+    });
+
+    test('an ordinary character is not', () => {
+        assert.equal(isHeavy({}), false);
+        assert.equal(isHeavy({ heavy: false, boss: false }), false);
+        assert.equal(isHeavy({ vendor: true }), false, 'traders are shoveable — they walk back');
     });
 });

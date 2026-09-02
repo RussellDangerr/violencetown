@@ -2177,15 +2177,26 @@ class Game {
     // Returns true if the shove landed. Heavy characters and boxed-in ones bounce.
     _shoveNpc(enemy, dir) {
         if (!enemy || !dir) return false;
+        const who = enemy.name ?? enemy.type ?? 'them';
+        // (ruled 2026-09-02) The two ways a shove fails each get their own beat.
+        // Caelan: "trying to push someone and not being able to, I think, is a
+        // good source of physical comedy." It was a thud and a recoil with no
+        // line, so the joke was being performed to an empty room.
         if (this._isHeavy(enemy)) {
             audio.playSfx('bump-wall');
             this._bounceOff(dir);
+            this._log(`[You put your shoulder into ${who}. ${who} does not appear to notice.]`);
+            this._render();
             return false;                       // immovable — no step, no turn
         }
         const dest = this._shoveDestination(enemy, dir);
         if (!dest) {
             audio.playSfx('bump-wall');
             this._bounceOff(dir);
+            // A different failure and it should read as one: they WOULD move,
+            // there is simply nowhere to put them.
+            this._log(`[You lean on ${who}, who has nowhere to go.]`);
+            this._render();
             return false;                       // boxed in — nowhere to put them
         }
         stepEntity(enemy, dest.x, dest.y, this._MOVE_MS);  // knock aside / swap (animates)
@@ -2204,7 +2215,13 @@ class Game {
     // (bandit captains, the Sewer Merchant, bosses) via a `heavy: true` spawn
     // field or a future strength/tier check.
     _isHeavy(ch) {
-        return ch.heavy === true;
+        // A boss is unbudgeable by DERIVATION rather than by being flagged twice.
+        // The shove comment has named "captains, the Sewer Merchant, bosses" as
+        // immovable since the shove shipped, and nothing was ever flagged — so the
+        // branch existed for months with only a wall of fungus behind it. `boss`
+        // already means "this one breaks the rules" (Law 5 spends by it), which is
+        // exactly the class that should not slide sideways when you walk into it.
+        return ch.heavy === true || ch.boss === true;
     }
 
     // Where to knock `target` when the player barges in moving `dir`: a clear
