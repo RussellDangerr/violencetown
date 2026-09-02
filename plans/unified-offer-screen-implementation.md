@@ -131,6 +131,49 @@ this document as advisory and re-grep — every line number the audit checked wa
 
 ---
 
+## ■ POST-REVIEW: 15 FINDINGS, ALL CLOSED (2026-09-02)
+
+After the branch was called complete, a max-effort review (10 parallel angles, adversarial
+verification) found **15 findings — three of them economy exploits.** All fifteen are fixed, each
+driven by a test that failed first. **949 tests / 168 suites / 0 fail**, balance golden clean, one
+pre-existing lint flag.
+
+### The three that mattered
+
+| | was | now |
+| --- | --- | --- |
+| **A full bag** | took the gold and delivered nothing; from a chest, spliced the item out of the world with no log | `YOUR BAG IS FULL` refuses in `commitBlocker`, before any gold moves |
+| **The buyback shelf** | never popped its credit and charged market rate — sell one soap, buy it back four times, get four | one credit per undo, at the locked price; sell for 8, undo for 8, net zero |
+| **Gifts** | unreachable above the trade floor: every offer auto-settled to balance 0, so `applyDispositionDelta` never fired | the gold chip is a control — tap to refuse the settled amount, tap again to take it back |
+
+### Why 730 green tests saw none of it
+
+`tests/offer-wiring.test.js` stubbed `_addToInventory` to `return true` and `_buybackList` to
+`return []`. Every commit test ran against a bag that never fills and a vendor with no shelf. Both
+are the real functions now, and the bag is a real 50-slot array. **This is the third time on this
+branch a stub has hidden a bug** (the first was `_pointInRect` silently dropping its `slop`
+argument) — treat every stub in that file as a suspect.
+
+### And one class of bug the harness CANNOT see
+
+`liveMethod` supplies free variables by hand, so a **missing import** in `main.js` is invisible to
+it. `OFFER_TRAY_SLOTS` was used and never imported: 942 tests green, and the real game threw
+`ReferenceError` on the first stage. Found only by driving the live screen. After any change that
+adds an identifier to `main.js`, grep `layout.js`'s exports against its import block.
+
+### Two rulings recorded for Caelan
+1. **The gold control is all-or-nothing**, not a partial amount. The spec describes dragging the
+   figure, which wants a stepper this panel has no room for. Deferred, not rejected.
+2. **`bribeable: false` has two readings in the codebase** and they disagree:
+   `disposition-curves.js` says gold buys nothing but gifts still land (pinned deliberately,
+   "gifts stay the clever path"); `give-action.js:80` says `accepted: false` for ANY item. A
+   commitBlocker rule written on the second reading made the METER and the BUTTON disagree, and was
+   removed rather than extended — overturning a documented decision is not a bug fix. The seam is
+   still visible: gifting the Ghost Fungus through the screen lands, handing her sewer fare is
+   refused. One ruling settles it.
+
+---
+
 ## ✅ THE BRANCH IS FEATURE-COMPLETE (2026-09-01)
 
 All 20 tasks are done. **730 tests / 122 suites / 0 fail** (baseline before this work: 404).
