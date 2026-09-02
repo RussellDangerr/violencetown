@@ -940,6 +940,20 @@ class Game {
     _bindInput() {
         document.addEventListener('keydown', (e) => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+            // A browser chord is not a game input. Nothing here checked modifiers,
+            // so every shortcut the browser owns ALSO fired a game action behind
+            // it: Ctrl+S walked you south, Ctrl+L opened the log, and Alt+Tab
+            // opened the Remoticon — so you switched windows and came back to a
+            // menu you never asked for. That last one happens constantly.
+            //
+            // Shift is deliberately NOT blocked: the game owns it (Shift+arrows
+            // drive the hotbar, and `?` is Shift+Slash).
+            //
+            // No preventDefault — the point is to let the BROWSER have the chord,
+            // so bailing silently is the whole fix.
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
+
             if (this.state === STATE.SPLASH || this.state === STATE.RESOLVING) return;
             // [settings] While paused, swallow all gameplay keys. P / Escape
             // resume (so the player isn't trapped); everything else is eaten.
