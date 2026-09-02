@@ -33,7 +33,7 @@ import { ITEMS, itemTier } from './items.js';                                // 
 import { RINGS, FUSIONS } from './ring-data.js';                             // (rings Task 5) SKILLS-tab hands: ring names + fusion spark
 import { findFusion } from './rings.js';                                     // (rings Task 5) mark a link fusible when its two rings have an authored fusion
 import { WORLD_ZONES, overworldZone, connectorPairs } from './world-map.js'; // (Phase 4) rudimentary world map
-import { hasLineOfSight } from './pathing.js';                               // (aggro overlay) READ-ONLY: same Bresenham the chase AI uses
+import { perceives, facingOf, VERDICT } from './perception.js';               // (threat overlay) the SAME vision the chase AI uses
 import { isSafe } from './defeat-scenarios.js';   // (defeat legibility) mark safe-floor items
 import { buyPrice, sellPrice, bribeStepCost, mood, canTrade, band, BRIBE_STEP } from './trade.js'; // (trade slice 1) pricing + mood smiley; band feeds the offer meter's multiplier readout
 import { isHunting } from './ai.js'; // one spelling of "actively hunting the player"
@@ -360,7 +360,7 @@ export class Renderer {
 
         // (aggro overlay) Alerted-enemy sight rings + LOS threads — world space,
         // so they sit under the shake translate and track tiles like the reticle.
-        this._drawAggroOverlay(game);
+        this._drawThreatOverlay(game);
 
         // (combat-wheel rework) Aim reticle lives in world space so it tracks the
         // map; the wheel list itself is drawn in screen space after the restore.
@@ -2569,88 +2569,164 @@ export class Renderer {
         ctx.restore();
     }
 
-    // ── Aggro / Line-of-Sight overlay ────────────────────────────────────────
+    // ── Threat overlay ───────────────────────────────────────────────────────
     //
-    // PURELY VISUAL, READ-ONLY. For every enemy that's currently ALERT (chasing,
-    // i.e. the legacy-chase AI flipped e.state to 'chasing') and still alive, we
-    // wash a faint gold sight ring at its true sightRange and — when the path to
-    // the player is clear — thread a thin dashed gold line from the enemy to the
-    // player. It reuses the EXACT Bresenham (`hasLineOfSight`) the chase logic
-    // uses, so the line only shows when the enemy genuinely "sees" you.
+    // Replaces the old aggro overlay, which drew a full CIRCLE at full sightRange
+    // around anyone hunting you. That was not a simplification of enemy vision —
+    // it was a contradiction of it. perceives() gives three zones: a 90° cone at
+    // full range that spots you, a HALF-range peripheral band that only makes
+    // them turn to look, and a rear that is blind at any distance. For the eight
+    // tiles around a watcher that splits 3 cone / 2 peripheral / 3 blind, and
+    // "the three tiles behind them are safe" is the single rule the whole stealth
+    // layer teaches. A ring denies that rule exists, so a player who trusts it
+    // never finds the blind spot, and a player who finds it stops trusting the
+    // overlay.
     //
-    // Aesthetic echoes the aim reticle / arena spotlight: low-alpha gold accent,
-    // a gentle eased breath on the ring so it reads as "alive" without flicker.
-    // Drawn in world space (same `_scrollX/Y` projection + caller's shake
-    // translate) so it tracks tiles. Reduce-motion flattens the breath.
-    _drawAggroOverlay(game) {
+    // So this one is not an approximation: it calls the SAME perceives() the
+    // chase AI calls. What you see is what they see.
+    //
+    // Three channels, so the dither is never the only signal:
+    //   1. the threat field (a Bayer stipple — see below)
+    //   2. a facing chevron on each watcher
+    //   3. an awareness pip: · calm  ? suspicious  ! searching  !! chasing
+    //
+    // A STIPPLE, not a translucent fill. The screen already carries a day/night
+    // multiply pass, a combat-arena dim and the Wilderness blackout; a fourth
+    // smooth alpha layer is how you get mud. An ordered dither composites over
+    // all of them without shifting their tone, and reads as deliberately retro.
+    //
+    // Rebuilt once per world beat — nobody's perception changes between beats,
+    // and the player's render-side slide does not invalidate it.
+    _drawThreatOverlay(game) {
         const { ctx, half } = this;
         const now = performance.now();
         const reduce = (typeof Settings !== 'undefined') && Settings.get && Settings.get('reduceMotion');
+        const style = (typeof Settings !== 'undefined' && Settings.get)
+            ? (Settings.get('threatStyle') || 'shadow') : 'shadow';
 
-        // Gentle 0..1 breath (~2.6s period). Reduce-motion holds it steady so the
-        // ring is a calm static wash instead of a pulse.
+        // Anyone with working eyes who is not on your side. Note this is NOT
+        // gated on isHunting: the whole point is to show where you can be seen
+        // BEFORE you are seen. An overlay that only appears once you are already
+        // caught is a post-mortem, not a stealth tool.
+        const watchers = game.enemies.filter(e =>
+            e.entity?.isAlive?.() && !e._ally && (e.sightRange || 0) > 0);
+
+        // Cache the field on the world beat. Facing changes only on a beat too,
+        // so the turn counter plus the watcher count is a sufficient key.
+        if (this._threatTurn !== game.turn || this._threatCount !== watchers.length) {
+            this._threatTurn = game.turn;
+            this._threatCount = watchers.length;
+            this._threatField = new Map();
+            for (let vy = 0; vy < VIEW_TILES; vy++) {
+                for (let vx = 0; vx < VIEW_TILES; vx++) {
+                    const tx = game.playerX - half + vx;
+                    const ty = game.playerY - half + vy;
+                    let worst = VERDICT.NONE;
+                    for (const w of watchers) {
+                        const v = perceives(game.map, w, tx, ty);
+                        if (v === VERDICT.DIRECT) { worst = v; break; }   // can't get worse
+                        if (v === VERDICT.PERIPHERAL) worst = v;
+                    }
+                    this._threatField.set(`${tx},${ty}`, worst);
+                }
+            }
+        }
+
+        // 4x4 Bayer matrix, normalised 0..15 — the stipple's threshold pattern.
+        const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+
+        ctx.save();
+        for (let vy = 0; vy < VIEW_TILES; vy++) {
+            for (let vx = 0; vx < VIEW_TILES; vx++) {
+                const tx = game.playerX - half + vx;
+                const ty = game.playerY - half + vy;
+
+                // Only ground you could actually stand on. A wall is trivially
+                // "safe" — nobody can see you there because you cannot be there —
+                // so stippling it says nothing and costs a lot: in town the
+                // buildings and the brick surround are most of the screen, and
+                // shading them buries the one thing the field is for, which is
+                // where the sightlines fall on walkable floor.
+                if (!game.map.isWalkable(tx, ty)) continue;
+
+                const v = this._threatField.get(`${tx},${ty}`) ?? VERDICT.NONE;
+
+                // Which tiles get painted, and in what, depends on the treatment.
+                let color = null, density = 0;
+                if (style === 'shadow') {
+                    if (v !== VERDICT.NONE) continue;              // safe tiles are the dark ones
+                    color = '2,2,8'; density = 10;
+                } else {
+                    if (v === VERDICT.NONE) continue;              // watched tiles are the tinted ones
+                    color = v === VERDICT.DIRECT ? '204,68,34' : '212,185,106';
+                    density = v === VERDICT.DIRECT ? 10 : 5;
+                }
+
+                const px = vx * TILE_PX - this._scrollX;
+                const py = vy * TILE_PX - this._scrollY;
+                ctx.fillStyle = `rgba(${color},0.55)`;
+                // One 4x4 Bayer cell tiled across the tile; `density` of the 16
+                // sub-cells are filled, so the pattern is stable and never crawls.
+                const S = TILE_PX / 4;
+                for (let i = 0; i < 16; i++) {
+                    if (BAYER[i] >= density) continue;
+                    ctx.fillRect(px + (i % 4) * S, py + Math.floor(i / 4) * S, S, S);
+                }
+            }
+        }
+        ctx.restore();
+
+        // Channels 2 and 3 — per watcher, so the field is never the only signal.
+        // A colour-blind player, or one who has turned the field off in their head
+        // after an hour, still gets facing and alarm from the sprites themselves.
+        const PIP = { idle: '·', suspicious: '?', searching: '!', chasing: '!!', returning: '·' };
         const breath = reduce ? 0.5 : (0.5 + 0.5 * Math.sin(now / 420));
 
-        const toScreen = (tx, ty) => ({
-            x: (tx - game.playerX + half) * TILE_PX - this._scrollX,
-            y: (ty - game.playerY + half) * TILE_PX - this._scrollY,
-        });
+        for (const w of watchers) {
+            const sx = (w.x - game.playerX + half) * TILE_PX - this._scrollX;
+            const sy = (w.y - game.playerY + half) * TILE_PX - this._scrollY;
+            if (sx < -TILE_PX || sx > CANVAS_PX || sy < -TILE_PX || sy > CANVAS_PX) continue;
 
-        for (const e of game.enemies) {
-            // Only relevant enemies: alive AND actively alerted. isHunting is the
-            // single "is hunting the player" signal — 'chasing' from a live sighting
-            // plus 'searching', an enemy that lost you and is sweeping your last-seen
-            // tile. Anything idle/wandering/working/returning draws nothing, which
-            // keeps the screen uncluttered.
-            if (!isHunting(e)) continue;
-            if (!e.entity?.isAlive()) continue;
-
-            const c = toScreen(e.x + 0.5, e.y + 0.5);          // enemy tile center
-            const radius = (e.sightRange || 0) * TILE_PX;
-            if (radius <= 0) continue;
-
-            // Cull if the whole ring is well off-canvas (cheap bounding test).
-            if (c.x + radius < -TILE_PX || c.x - radius > CANVAS_PX + TILE_PX ||
-                c.y + radius < -TILE_PX || c.y - radius > CANVAS_PX + TILE_PX) continue;
-
+            const { fx, fy } = facingOf(w);
+            const len = Math.hypot(fx, fy) || 1;
             ctx.save();
-
-            // Sight ring — faint gold stroke, breath nudges alpha between ~0.08
-            // and ~0.16 so it's always subtle. A radial gradient fill gives the
-            // very softest interior tint without washing the tiles out.
-            const ringA = 0.08 + 0.08 * breath;
-            const g = ctx.createRadialGradient(c.x, c.y, radius * 0.55, c.x, c.y, radius);
-            g.addColorStop(0,    'rgba(212,185,106,0)');
-            g.addColorStop(0.85, `rgba(212,185,106,${0.05 * breath})`);
-            g.addColorStop(1,    `rgba(212,185,106,${0.10 * breath})`);
-            ctx.fillStyle = g;
+            ctx.strokeStyle = 'rgba(212,185,106,0.75)';
+            ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.arc(c.x, c.y, radius, 0, Math.PI * 2);
-            ctx.fill();
-
-            ctx.strokeStyle = `rgba(212,185,106,${ringA + 0.04})`;
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.arc(c.x, c.y, radius, 0, Math.PI * 2);
+            ctx.moveTo(sx + TILE_PX / 2, sy + TILE_PX / 2);
+            ctx.lineTo(sx + TILE_PX / 2 + (fx / len) * TILE_PX * 0.45,
+                       sy + TILE_PX / 2 + (fy / len) * TILE_PX * 0.45);
             ctx.stroke();
+            ctx.restore();
 
-            // Line-of-sight thread — only when the path is genuinely clear (same
-            // Bresenham the AI uses). A thin dashed red-gold line from the enemy
-            // to the player: red shifts the read from "could see" (ring) to "sees
-            // you now". Low alpha so it never dominates.
-            if (hasLineOfSight(game.map, e.x, e.y, game.playerX, game.playerY)) {
-                const p = toScreen(game.playerX + 0.5, game.playerY + 0.5);
+            // Text goes through the renderer's own loaded font instance, the way
+            // every other label in this file does.
+            const pip = PIP[w.state] || '·';
+            if (pip !== '·' && this.font) {
+                this.font.drawText(ctx, pip, sx + TILE_PX / 2 - 2, sy - 6, { scale: 1 });
+            }
+
+            // Channel 4 — the "sees you NOW" thread, kept from the old overlay
+            // but corrected. It used to fire on bare hasLineOfSight, which knows
+            // nothing about facing: stand in someone's rear blind spot with a
+            // clear line and it drew a red thread saying they had you. It asks
+            // perceives() for a DIRECT verdict now, so it agrees with the field
+            // beneath it and with the AI above it.
+            if (perceives(game.map, w, game.playerX, game.playerY) === VERDICT.DIRECT) {
+                // The player is always the centre tile of the view.
+                const px = half * TILE_PX + TILE_PX / 2 - this._scrollX;
+                const py = half * TILE_PX + TILE_PX / 2 - this._scrollY;
+                ctx.save();
                 ctx.strokeStyle = `rgba(204,68,34,${0.18 + 0.12 * breath})`;
                 ctx.lineWidth = 1.5;
                 ctx.setLineDash([3, 4]);
                 ctx.beginPath();
-                ctx.moveTo(c.x, c.y);
-                ctx.lineTo(p.x, p.y);
+                ctx.moveTo(sx + TILE_PX / 2, sy + TILE_PX / 2);
+                ctx.lineTo(px, py);
                 ctx.stroke();
                 ctx.setLineDash([]);
+                ctx.restore();
             }
-
-            ctx.restore();
         }
     }
 

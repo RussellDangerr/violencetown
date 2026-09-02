@@ -30,6 +30,11 @@ export const DEFAULTS = Object.freeze({
     // today's behaviour) or 'hold' (press-and-hold opens, release closes).
     // Toggled in Options; the opener reads it live via Settings.get().
     wheelOpenMode: 'tap-toggle',
+    // (threat overlay) How enemy vision is drawn. 'shadow' stipples the tiles
+    // NOBODY can see, so the safe ground is what you read; 'danger' tints the
+    // watched ones instead. Two readings of the same field — some players hunt
+    // for cover, some track the threat.
+    threatStyle: 'shadow',
 });
 
 // Live, mutable copy of the settings. Seeded with defaults so callers can read
@@ -72,6 +77,10 @@ export function validate(raw) {
         muted:        asBool(o.muted,        DEFAULTS.muted),
         firstRunHintSeen: asBool(o.firstRunHintSeen, DEFAULTS.firstRunHintSeen),
         wheelOpenMode:    asEnum(o.wheelOpenMode, ['hold', 'tap-toggle'], DEFAULTS.wheelOpenMode),
+        // validate() DROPS unknown keys, so a field added to DEFAULTS and not
+        // here is silently discarded on every load — it would read correctly all
+        // session and reset on reload.
+        threatStyle:      asEnum(o.threatStyle, ['shadow', 'danger'], DEFAULTS.threatStyle),
     };
 }
 
