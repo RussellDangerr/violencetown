@@ -55,8 +55,6 @@ function clampDisposition(recipient, value) {
 }
 
 export function previewGive(item, recipient) {
-
-
     const itemId = item?.id;
     const valueWeight = recipient.values?.[itemId] ?? 0;
     const shift = valueWeight * SHIFT_MULTIPLIER;
@@ -245,7 +243,8 @@ function applySewerFareGive(item, recipient) {
 //
 // Dialogue-side disposition shift: nudge `recipient`'s disposition by a flat
 // `delta` (a conversation choice, not a gift), clamped to the recipient's own
-// the same flip-to-ally threshold logic as applyGive when crossed upward.
+// ceiling. Fires the same flip-to-ally threshold logic as applyGive when
+// crossed upward.
 // Returns { newDisposition, flipped }.
 
 export function applyDispositionDelta(recipient, delta) {

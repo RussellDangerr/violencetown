@@ -10,7 +10,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { resolveItemDef } from '../game/item-registry.js';
+import { resolveItemDef, ALL_ITEM_IDS } from '../game/item-registry.js';
 import { buyPrice } from '../game/trade.js';
 import { join } from 'node:path';
 
@@ -67,8 +67,16 @@ test('a weapon authored into vendor/chest stock is fully supported — no proble
         { id: 'e1', type: 'Merchant', vendor: true, stock: ['lion_whip'] },
     ] } }]);
     assert.ok(!problems.some(p => p.includes('stocks unknown item')), problems.join('\n'));
-    assert.ok(!warnings.some(w => /stocks weapon/.test(w)),
-        'a stocked weapon still warns, but the path that could not resolve it is gone:\n' + warnings.join('\n'));
+    // The assertion that used to sit here COULD NOT FAIL. content-validate
+    // calls its W() helper in exactly one place — the zoneName check — so
+    // `warnings` can never hold an item id, and `!warnings.some(/stocks
+    // weapon/)` was true no matter what the code did. It was written to "pin
+    // the fix" and pinned nothing.
+    //
+    // This is the membership the validator actually consults: drop weapons from
+    // ALL_ITEM_IDS and stock goes back to being flagged unknown.
+    assert.ok(ALL_ITEM_IDS.has('lion_whip'),
+        'a weapon id is no longer a known item — validateContent would flag stock as unknown');
 
     // And it really does resolve, at a real price — the thing the warning
     // existed to say was impossible.

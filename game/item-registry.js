@@ -23,7 +23,12 @@ export function resolveItemDef(id) {
 // Every known item id, from either table.
 export const ALL_ITEM_IDS = new Set([...Object.keys(ITEMS), ...Object.keys(WEAPONS)]);
 
-// Ids that exist ONLY in WEAPONS — content-validate.js uses this to flag a
-// weapon authored somewhere that resolves through ALL_ITEM_IDS but not
-// through a resolver that still does a bare ITEMS-only lookup.
+// Ids that exist ONLY in WEAPONS.
+//
+// NO CONSUMER TODAY. This was exported for a content-validate check that
+// flagged a weapon reachable through ALL_ITEM_IDS but not through a
+// resolver still doing a bare ITEMS lookup — and the last such resolver is
+// gone, so the check was never written and the warning that stood in for it
+// has been deleted. Kept because the distinction is real and cheap, but the
+// comment used to assert a consumer that did not exist. Say so, or cut it.
 export const WEAPON_ONLY_IDS = new Set(Object.keys(WEAPONS).filter(id => !ITEMS[id]));

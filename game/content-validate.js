@@ -18,7 +18,7 @@
 // advisories that can lag intentionally (zone naming) — surfaced, never fatal.
 
 import { QUESTS } from './quests.js';
-import { ALL_ITEM_IDS, WEAPON_ONLY_IDS } from './item-registry.js';
+import { ALL_ITEM_IDS } from './item-registry.js';
 import { DIALOGUES } from './dialogue.js';
 import { zoneByName, overworldZone } from './world-map.js';
 
@@ -47,7 +47,6 @@ export function validateContent(maps) {
 
     // Id universes — item-registry.js is the one place these are built.
     const itemIds = ALL_ITEM_IDS;
-    const weaponOnlyIds = WEAPON_ONLY_IDS;
     const dialogueIds = new Set(Object.keys(DIALOGUES));
     const mapFileSet = new Set(maps.map(m => m.file));
     const npcIds = new Set();
