@@ -53,9 +53,32 @@ before you read the PR.
   player — `max(1, hit − armor)` needed **no code change** to go negative; a negative armor just
   ADDS damage. Standard fragility stops, vs the 20-damage reference: **−80** one-shot
   (vermin/townsfolk), **−30** TTK 2 (fodder fighters), **−15** TTK 3, **−5** TTK 4, **0** TTK 5
-  (standard), **+5…+10** elite. Range: regular enemies live in **[−90, +10]**
-  (`ARMOR_FLOOR`/`ARMOR_CAP`, `tools/balance-harness.mjs:95` / `:28`); `lintEntity` flags any armor
-  outside that band without a declared `puzzleWall` (`tools/balance-harness.mjs:117-119`).
+  (standard), **+5…+10** elite. Range: regular enemies live in **[−90, +20]**
+  (`ARMOR_FLOOR`/`ARMOR_CAP`); `lintEntity` flags any armor outside that band without a declared
+  `puzzleWall`.
+  **Amended 2026-08-24 (Caelan) — the cap rises 10 → 20, and splits in two.** Raised so an elite
+  can reach the systems audit's `ttk_informed` 5–8 target, which was unreachable at +10. But flat
+  subtraction is not linear as armor nears the lazy reference damage of 20, and the curve is the
+  whole story:
+
+  | armor | lazy (20 dmg) | informed (40 dmg) |
+  |---|---|---|
+  | 0 | 5 | 3 |
+  | +6 | 8 | 3 |
+  | **+10** | **10** | **4** |
+  | +15 | 20 | 4 |
+  | +20 | **100** | 5 |
+
+  So `ttk_informed` 5 costs a **100-turn lazy fight**. The band therefore has two halves, and
+  `ARMOR_DIFFICULTY_CAP = 10` marks the seam:
+  - **[−90, +10] — the DIFFICULTY band.** Fights that get harder. Author freely.
+  - **(+10, +20] — the GATE band.** `max(1, hit − armor)` floors a lazy loadout to 1 damage, so the
+    enemy reads to the player (correctly) as *impossible until I come back with something better*.
+    That is the audit's §5.3 `puzzleWall` idea. **An enemy authored here is a lock and needs a key**
+    — fire, the Ray Gun's 22, an element it is weak to — or it is a wall with no door. `lintEntity`
+    emits a loud `Law 3 GATE` flag for anything in this half so it can never be entered by accident.
+
+  Nothing in the roster is above +6 today; this amendment opens the band, it does not populate it.
 - **Law 4 — Roles, not levels.** One flat power band per act; enemies differ by role/archetype, not
   level — and (amended 2026-07-24) the role table keys on **armor**, not HP, since HP is always 100
   now (see the authoring form below for the current table). The band table is design-doc law
@@ -63,6 +86,26 @@ before you read the PR.
   `tools/balance-golden.txt`'s TTK/TTD matrix, computed against `REFERENCE_DAMAGE = 20`
   (`tools/balance-harness.mjs:27`, the act-1 Ray-Gun-tier anchor) via `ttk`
   (`tools/balance-harness.mjs:71-73`).
+  **Amended 2026-08-24 (Caelan) — the `tough` row.** The table jumped from `standard` at exactly
+  armor 0 straight to `elite` at +1…+10, so every armor value in between derived as elite and
+  demanded a 100 GP wallet off a trash mob. That is the same no-row-fits hole ruling A1 describes
+  at −15, and the 2026-08-24 roster re-role walked straight into it. `tough` (armor **+1…+5**,
+  **60–100 GP**) is the missing step between a zone's basic enemy and its named foe. The ladder now
+  reads:
+
+  | role | armor ≤ | challenge GP |
+  |---|---|---|
+  | vermin | −80 | 0–5 |
+  | fodder | −30 | 5–20 |
+  | bruiser | −15 | 15–40 *(still an open question — ruling A1)* |
+  | standard | 0 | 20–60 |
+  | **tough** | **+5** | **60–100** |
+  | elite | +10 | 100–200 |
+
+  **Durability and wallet move together.** Re-roling the roster up the armor ladder without funding
+  the wallets raised 11 Law 4 flags at once — the Law working, not noise. A zone's faucet rising is
+  the expected consequence of that zone getting harder: the 2026-08-24 pass took the sewer from 28
+  to 101 lootable GP, and the whole game from ~37 to ~147.
 - **Law 5 — Bosses spend, not pool.** A boss phase-transitions by *purchasing* a heal or a
   rules-change move, priced at peg like everything else. **Deferred to the first boss build** — the
   only boss in the current roster (`borgir/borgir_boss`) is a 100-HP / −15-armor, 0-damage

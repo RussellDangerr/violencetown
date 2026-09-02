@@ -554,7 +554,7 @@ non-string keys the same way.
 | Watcher with `sightRange = 0` | Peripheral range is 0 too; every tile is `NONE`; always thievable |
 | Facing `(0,0)` (legacy save / never moved) | `facingOf` returns `(0,1)` |
 | `ambient` NPCs (world-heartbeat, not player-turn) | Their ladder ticks on `resolveAmbientTurns`, same transitions |
-| An enemy with the existing `blind` debuff | `sightRange` halves for perception — a real edge for Poke, at one line |
+| An enemy with the existing `blind` debuff | **Deferred, and not for the reason first written.** Checked 2026-08-24: `blind` is *read* at `main.js:4270` (it halves outgoing damage) but **nothing anywhere applies it**, and there is no Poke verb — both live only in comments. Halving sight for it would be authoring an edge to a debuff no verb can produce. Wire it the day something applies `blind`. |
 | A `feared` (fleeing) enemy | Movement override already wins; the ladder does not fight it |
 | `_spunTurns > 0` | Recovery turn already skips the whole HOSTILE branch; awareness does not tick either |
 | Player in Rat Form | Flagged as a v2 detection modifier; no v1 effect |

@@ -1,7 +1,7 @@
 {
   "name": "violencetown",
   "version": "0.20.0",
-  "description": "A browser-based 2D action-RPG of small violences — zero-dependency vanilla JavaScript on HTML5 Canvas, no build step, installable as a PWA.",
+  "description": "A browser-based 2D action-RPG of small violences \u2014 zero-dependency vanilla JavaScript on HTML5 Canvas, no build step, installable as a PWA.",
   "homepage": "https://violencetown.russelldangerr.com",
   "repository": {
     "type": "git",
@@ -30,6 +30,7 @@
     "balance": "node tools/balance-harness.mjs",
     "balance:check": "node tools/balance-harness.mjs --check",
     "balance:write": "node tools/balance-harness.mjs --write",
-    "balance:cards": "node tools/balance-harness.mjs --cards"
+    "balance:cards": "node tools/balance-harness.mjs --cards",
+    "map:audit": "node -e \"for (const f of require('fs').readdirSync('game').filter(n=>n.endsWith('-map.json'))) require('child_process').execSync(`node tools/map-audit.mjs game/${f}`,{stdio:'inherit'})\""
   }
 }

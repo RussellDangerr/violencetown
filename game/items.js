@@ -858,3 +858,64 @@ function resolveMelee(game, itemDef, direction) {
 
     return `[Swung ${itemDef.name} — nothing there]`;
 }
+
+// ── kitHealValue — what a kit item does to its own carrier ───────────────────
+//
+// Law 6f authored enemy kits and put their value on the nameplate, but nothing
+// ever consumed them. This is the valuation half of letting an enemy drink its
+// own supplies: how much HP `def` would restore to a drinker, 0 if it would do
+// nothing or actively hurt them.
+//
+// The sewerFare sign-flip rides poitionBuff and mirrors applySewerFareEffect
+// (give-action.js) exactly, so "medicine to a dweller, poison to everyone else"
+// has ONE implementation and the two paths cannot drift.
+export function kitHealValue(def, sewerDweller) {
+    if (!def) return 0;
+
+    // Ordinary food / bandages: a flat heal, and being a dweller changes nothing.
+    if (def.effect === 'heal') return def.healAmount ?? 0;
+
+    const flip = !!(def.sewerFare && sewerDweller);
+
+    // Tick-stat poitions. A dweller flips the sign; anyone else is poisoning
+    // themselves, which values at 0 so kitChoice never picks it.
+    if (def.poition && def.poition.stat === 'health') {
+        const buff = poitionBuff(def.poition, flip);
+        if (buff && buff.dmg < 0) return -buff.dmg * (def.poition.turns ?? 1);
+        return 0;
+    }
+
+    // Flat-damage sewer fare (mystery_meat) — applySewerFareEffect applies
+    // `+damage` to a dweller and `-damage` to everyone else.
+    if (def.sewerFare && typeof def.damage === 'number') return flip ? def.damage : 0;
+
+    return 0;
+}
+
+// ── applyKitItem — an enemy actually swallows the thing ──────────────────────
+//
+// The application half, kept next to kitHealValue so valuation and effect cannot
+// drift apart. Mirrors give-action.js's applySewerFareEffect branch for branch —
+// a poition rides the buff list (so it heals over its authored turns, exactly as
+// it would for the player), while flat food and flat-damage sewer fare land as an
+// immediate HP delta.
+//
+// `drinker` is an Enemy: it has .entity and .addBuff. Returns the def, or null if
+// it did nothing.
+export function applyKitItem(def, drinker, sewerDweller) {
+    if (!def || !drinker) return null;
+    const ent = drinker.entity;
+    if (!ent) return null;
+    const flip = !!(def.sewerFare && sewerDweller);
+    const gain = (n) => { ent.hp = Math.min(ent.maxHp, ent.hp + n); };
+
+    if (def.poition && def.poition.stat === 'health') {
+        const b = poitionBuff(def.poition, flip);
+        if (!b) return null;
+        drinker.addBuff(b.id, def.name ?? b.id, b.turns, b.dmg < 0 ? 'buff' : 'debuff', { dmg: b.dmg });
+        return def;
+    }
+    if (def.effect === 'heal') { gain(def.healAmount ?? 0); return def; }
+    if (def.sewerFare && typeof def.damage === 'number') { gain(flip ? def.damage : -def.damage); return def; }
+    return null;
+}

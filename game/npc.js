@@ -20,8 +20,11 @@
 // the HOSTILE (chase), ALLIED, or ambient states.
 
 import { manhattan, chebyshev } from './utils.js';
-import { getGreedyStep, stepEntity, hasLineOfSight } from './pathing.js';
-import { healPurchase } from './ai.js';
+import { getGreedyStep, stepEntity } from './pathing.js';
+import { perceives, nextAwareness, VERDICT } from './perception.js';
+import { healPurchase, kitChoice, isSewerDweller, bossSpend, BOSS_RALLY_RANGE } from './ai.js';
+import { ITEMS, kitHealValue, applyKitItem } from './items.js';
+import { WEAPONS } from './weapons.js';
 import { burnGold } from './trade.js';
 
 // ── Leash tuning ─────────────────────────────────────────────────────────────
@@ -136,26 +139,70 @@ export function tickNpcState(game, npc, clock = game.turn) {
         case STATE.HOSTILE: {
             // Legacy chase logic — relocated verbatim from enemies.js (PD-3 step 4),
             // plus the leash (a strayed/blind chaser breaks off and walks home).
-            const dist = manhattan(npc.x, npc.y, game.playerX, game.playerY);
-
-            // Check LOS. Spotting the player (re)acquires aggro from either idle
-            // OR returning — a foe walking home that catches sight of you again
-            // turns and resumes the chase. A live sighting also clears the
-            // lost-sight timer so contact has to actually break to count.
-            const canSeePlayer = dist <= npc.sightRange &&
-                hasLineOfSight(game.map, npc.x, npc.y, game.playerX, game.playerY);
+            // (perception) ONE source of truth, shared with the threat overlay, so
+            // what the player is shown and what the AI acts on can never disagree.
+            // Only DIRECT — the forward cone — counts as "sees you"; PERIPHERAL
+            // feeds the suspicion ladder instead, and the rear three tiles are blind.
+            //
+            // Note this also moves the range metric from Manhattan to Chebyshev.
+            // Manhattan was the stricter of the two on diagonals, so sight widens
+            // very slightly diagonally — correct, since movement is 8-way and the
+            // overlay has always drawn sight as a circle.
+            //
+            // Spotting the player (re)acquires aggro from either idle OR returning —
+            // a foe walking home that catches sight of you again turns and resumes
+            // the chase. A live sighting also clears the lost-sight timer so contact
+            // has to actually break to count.
+            const verdict = perceives(game.map, npc, game.playerX, game.playerY);
+            const canSeePlayer = verdict === VERDICT.DIRECT;
             if (canSeePlayer) {
                 npc._lostSightTurns = 0;
+                npc._awareBeats = 0;             // a real sighting outranks any accrued suspicion
+                npc._sweepBeats = 0;
                 npc._lastSeenX = game.playerX;   // (PD-1) refresh the last-seen mark
                 npc._lastSeenY = game.playerY;   // only while the player is actually in view
-                if (npc.state === 'idle' || npc.state === 'returning') {
-                    const reacquire = npc.state === 'idle';
+                if (npc.state === 'idle' || npc.state === 'suspicious' || npc.state === 'returning') {
+                    const reacquire = npc.state !== 'returning';
                     npc.state = 'chasing';
                     if (reacquire) messages.push({
                         text: `[${npc.entity.name} spotted you!]`,
                         sourceEnemy: npc,
                         category: 'spotted',
                     });
+                }
+            } else if (npc.state === 'idle' || npc.state === 'suspicious') {
+                // (ladder) nextAwareness owns the PRE-CHASE states only — the
+                // idle → suspicious promotion on sustained peripheral contact, and
+                // suspicious → searching. The chasing / returning / leash logic
+                // below is deliberately left exactly as it was: it already
+                // implements "pursue the last-seen tile, give up on arrival",
+                // which IS searching, just under the older name. Renaming it would
+                // risk the leash for no gain until the renderer needs the label.
+                //
+                // Consequence worth knowing: BLIND_SWEEP_BEATS has no runtime
+                // consumer yet. It only applies to a searcher with NO last-seen
+                // mark, which today only a theft can produce — so it wires up with
+                // the Thieve verb, not here.
+                const before = npc.state;
+                const t = nextAwareness(npc, verdict, { x: game.playerX, y: game.playerY });
+                npc.state       = t.state;
+                npc._awareBeats = t.awareBeats;
+                npc._sweepBeats = t.sweepBeats;
+                if (t.faceTo) {
+                    // Turn toward the disturbance, and remember where it was so the
+                    // search that follows has somewhere to walk to.
+                    npc._lastDx = Math.sign(t.faceTo.x - npc.x);
+                    npc._lastDy = Math.sign(t.faceTo.y - npc.y);
+                    npc._lastSeenX = t.faceTo.x;
+                    npc._lastSeenY = t.faceTo.y;
+                }
+                if (npc.state === 'suspicious') {
+                    if (before !== 'suspicious') messages.push({
+                        text: `[${npc.entity.name} looks your way...]`,
+                        sourceEnemy: npc,
+                        category: 'spotted',
+                    });
+                    break;   // turning to look IS the turn — no move, no attack
                 }
             }
 
@@ -178,7 +225,10 @@ export function tickNpcState(game, npc, clock = game.turn) {
                 break;
             }
 
-            if (npc.state !== 'chasing') break;
+            // 'searching' runs the same pursuit spine as 'chasing' below — it
+            // walks to the last-seen tile and gives up on arrival. That is exactly
+            // what the blind-chase branch already did; it just has a name now.
+            if (npc.state !== 'chasing' && npc.state !== 'searching') break;
 
             // Leash: a chaser that has broken contact — out of sight — gives up when
             // it has strayed too far from home OR stayed blind for too many beats,
@@ -230,6 +280,81 @@ export function tickNpcState(game, npc, clock = game.turn) {
             if (npc._spunTurns > 0) {
                 npc._spunTurns--;
                 break;
+            }
+
+            // Law 6f — SPEND WHAT YOU CARRY BEFORE YOU SPEND GOLD. The kits have
+            // been authored and priced onto the nameplate since the gold standard
+            // shipped, but nothing ever consumed them: the systems audit lists
+            // enemy kits among the systems that never execute because "the enemy
+            // is dead before its second turn". With fight length re-roled to
+            // TTK 5-8 there is finally a middle to a fight to spend them in.
+            //
+            // Deliberately ABOVE the heal-purchase block: an enemy reaches into
+            // its own pack before it buys HP at the peg. Eating IS the turn, same
+            // as buying, and the item leaves the loadout — so the nameplate's pips
+            // drop as it eats and Law 6f's "the unused kit drops on death" finally
+            // means something, because some of it got used.
+            //
+            // Weapons-first resolution mirrors Game._resolveItemDef: a loadout may
+            // legally hold a weapon and a bare ITEMS lookup silently drops it.
+            // Collapses onto item-registry.js's resolveItemDef when the offer
+            // screen lands.
+            const kitDefs = (npc.loadout ?? []).map(
+                x => (typeof x === 'string' ? (WEAPONS[x] || ITEMS[x] || null) : x));
+            const dweller = isSewerDweller(npc);
+            const pick = kitChoice(
+                npc.entity.hp, npc.entity.maxHp, kitDefs,
+                (d) => kitHealValue(d, dweller),
+                (npc.buffs ?? []).some(b => (b.dmg ?? 0) < 0));   // already regenerating?
+            if (pick && applyKitItem(pick.def, npc, dweller)) {
+                npc.loadout = (npc.loadout ?? []).filter((_, i) => i !== pick.index);
+                messages.push({
+                    text: `[${npc.name ?? npc.type} digs out ${pick.def.name} and uses it.]`,
+                    sourceEnemy: npc,
+                    category: 'combat',
+                });
+                break;   // eating IS the turn
+            }
+
+            // Law 5 — BOSSES SPEND, NOT POOL. Carried in the bible since the gold
+            // standard and never executed once; the systems audit calls it the most
+            // interesting idea in there and notes it has never run. This is the
+            // first time it does.
+            //
+            // A boss's purse is both its second health bar and its loot, so what
+            // you take off the corpse is exactly what it did not have to spend on
+            // you. Rush it and you get the purse; let it settle in and you fight
+            // the purse. Gold moves through burnGold — the declared sink — the same
+            // way the grunt heal policy does.
+            //
+            // Sits BELOW the kit block (free supplies first) and ABOVE the grunt
+            // policy, which it supersedes for anything flagged `boss`.
+            if (npc.boss) {
+                const allyList = game.enemies.filter(a =>
+                    a !== npc && a.entity?.isAlive?.() && a.allegiance === npc.allegiance
+                    && chebyshev(a.x, a.y, npc.x, npc.y) <= BOSS_RALLY_RANGE);
+                const plan = bossSpend(
+                    npc.entity.hp, npc.entity.maxHp, npc.gold,
+                    allyList.map(a => ({ hp: a.entity.hp, maxHp: a.entity.maxHp })));
+                if (plan && burnGold(npc, plan.spend, 'boss')) {
+                    if (plan.kind === 'heal') {
+                        npc.entity.hp = Math.min(npc.entity.maxHp, npc.entity.hp + plan.heal);
+                        messages.push({
+                            text: `[${npc.name ?? npc.type} spends ${plan.spend} GP on itself. (+${plan.heal} HP)]`,
+                            sourceEnemy: npc,
+                            category: 'combat',
+                        });
+                    } else {
+                        const ward = allyList[plan.index];
+                        ward.entity.hp = Math.min(ward.entity.maxHp, ward.entity.hp + plan.heal);
+                        messages.push({
+                            text: `[${npc.name ?? npc.type} pays ${plan.spend} GP — ${ward.name ?? ward.type} straightens up. (+${plan.heal} HP)]`,
+                            sourceEnemy: npc,
+                            category: 'combat',
+                        });
+                    }
+                    break;   // the purchase IS the turn
+                }
             }
 
             // Law 6a/6b (plans/gold-standard-design.md): a hurt, solvent enemy

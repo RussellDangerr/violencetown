@@ -65,9 +65,95 @@ export function healPurchase(hp, maxHp, gold) {
 export function rockClatter(enemies, x, y) {
   for (const e of enemies || []) {
     if (!e || e.state === 'chasing') continue;
+    // Hostiles only. `state: 'chasing'` is not just the AI's flag — renderer.js
+    // reads it in three places, and _drawArena blooms the lit combat stage around
+    // anything carrying it. A townsperson can never actually chase (their behavior
+    // whitelist excludes HOSTILE, so npc.js's HOSTILE branch never runs for them),
+    // so setting it on one only lights a combat arena around a shopkeeper.
+    if (!isHostile(e)) continue;
     const range = e.sightRange ?? 8;
     if (Math.max(Math.abs(e.x - x), Math.abs(e.y - y)) > range) continue;
     e._lastSeenX = x; e._lastSeenY = y;
     e.state = 'chasing';
   }
+}
+
+// ── kitChoice — spend what you carry before you spend gold ───────────────────
+//
+// The decision half of an enemy using its own kit. Pure, and ai.js is a LEAF, so
+// the valuation is INJECTED (`healValueOf`) rather than imported — items.js owns
+// what an item does; this owns only when and which.
+//
+// The floor sits ABOVE HEAL_HP_FLOOR on purpose: an enemy reaches for the
+// supplies it is already carrying before it buys HP at the peg with gold. That
+// ordering is what makes the kit visible in play — the nameplate's pips drop as
+// it eats, and Law 6f's "the unused kit drops on death" finally means something,
+// because some of it gets used.
+export const KIT_HP_FLOOR = 70;   // at or below this, drink before you swing
+
+export function kitChoice(hp, maxHp, defs, healValueOf, alreadyHealing = false) {
+    if (!defs || !defs.length) return null;
+    if (hp >= maxHp) return null;       // nothing to heal
+    if (hp > KIT_HP_FLOOR) return null; // not hurt enough to bother
+    // Do not double-dose. Found in live play: a kitted enemy ate three items on
+    // three consecutive turns, burning a mushroom while the sludge sack it had
+    // just drunk was still regenerating it. Waiting for the dose to finish looks
+    // smarter AND leaves more of the kit on the corpse — which is Law 6f's whole
+    // reward for rushing an enemy down instead of letting it settle in.
+    if (alreadyHealing) return null;
+
+    let best = null;
+    for (let i = 0; i < defs.length; i++) {
+        const heal = healValueOf(defs[i]) || 0;
+        if (heal <= 0) continue;                    // inedible, or poison to this drinker
+        if (!best || heal > best.heal) best = { index: i, def: defs[i], heal };
+    }
+    return best;
+}
+
+// ── Law 5 — bosses spend, not pool ──────────────────────────────────────────
+//
+// "A boss phase-transitions by PURCHASING a heal or a rules-change move, priced
+// at peg like everything else." Written into the bible at the gold standard and
+// deferred to the first boss build ever since; this is that build.
+//
+// The consequence that makes it a real mechanic rather than a bigger healPurchase:
+// the wallet DRAINS. A boss's purse is both its second health bar and its loot,
+// so what you take off the corpse is exactly what it did not have to spend on
+// you. Rush it and you get the purse; let it settle in and you fight the purse.
+//
+// Ordering, once wired: eat your own kit (free) -> spend as a boss -> fall back
+// to the grunt heal policy. Pure, and ai.js stays a LEAF — `allies` is plain
+// {hp, maxHp} data the caller gathers.
+export const BOSS_HEAL_FLOOR = 60;   // start buying at or below this
+export const BOSS_HEAL_MAX   = 40;   // never dump the whole purse into one heal
+export const BOSS_RALLY_MIN  = 20;   // keep this much in pocket before funding others
+export const BOSS_RALLY_RANGE = 6;   // it can only fund what it can see about it
+
+export function bossSpend(hp, maxHp, gold, allies) {
+    if (!(gold > 0)) return null;
+
+    // 1. Save yourself. At peg, so the spend IS the HP.
+    const missing = maxHp - hp;
+    if (hp <= BOSS_HEAL_FLOOR && missing > 0) {
+        const spend = Math.min(gold, missing, BOSS_HEAL_MAX);
+        if (spend > 0) return { kind: 'heal', spend, heal: spend };
+    }
+
+    // 2. Otherwise fund the worst-off ally — the rules-change move. It turns a
+    //    duel into an attrition fight, which is a phase transition bought rather
+    //    than scripted, and it is visible: their pips move as yours drop.
+    let best = null;
+    for (let i = 0; i < (allies || []).length; i++) {
+        const a = allies[i];
+        if (!a) continue;
+        const need = (a.maxHp ?? 0) - (a.hp ?? 0);
+        if (need <= 0) continue;
+        if (!best || need > best.need) best = { index: i, need };
+    }
+    if (best && gold >= BOSS_RALLY_MIN) {
+        const spend = Math.min(gold - BOSS_RALLY_MIN, best.need, BOSS_HEAL_MAX);
+        if (spend > 0) return { kind: 'rally', index: best.index, spend, heal: spend };
+    }
+    return null;
 }

@@ -20,6 +20,7 @@ import { stepEntity, fleeStep } from './pathing.js';
 import { tickNpcState } from './npc.js';
 import { tickBuffList } from './buffs.js';
 import { parseCapabilities, deriveAllegiance } from './ai.js';
+import { FACING_VECTORS } from './perception.js';
 import { resolveItemDef } from './item-registry.js';
 
 const DEFAULT_SIGHT = 8;
@@ -88,6 +89,35 @@ export class Enemy {
         // same way as _lastDx/_lastDy so a mid-fight reload doesn't erase a
         // still-recovering shove victim.
         _spunTurns = 0,
+        // (perception) Authored spawn facing — 'N'|'NE'|'E'|'SE'|'S'|'SW'|'W'|'NW'.
+        // Seeds _lastDx/_lastDy so an enemy that has never taken a step still has a
+        // front and a back. Not persisted: _lastDx/_lastDy already are, and they are
+        // the live truth the moment the enemy moves.
+        facing = null,
+        // (perception) Optional per-enemy hearing BONUS on top of a sound's own
+        // loudness — 0 means normal ears; a watchdog might carry 3.
+        hearingRange = null,
+        // (theft) Worn gear whose removal actually moves armor/damage — distinct
+        // from `loadout`, which is what this enemy would USE. The wheel's Gear
+        // branch greys out until an enemy declares one.
+        equipped = null,
+        // (theft) Theft opt-out, mirroring `bribeable`, for quest-critical NPCs.
+        // Bribery-immune and theft-immune are separate concerns on purpose.
+        thievable = null,
+        // Law 5 — this NPC runs the boss spending policy instead of the grunt
+        // heal policy. STATED, never inferred from armor: ruling A4 asks for
+        // exactly this rather than deriving a boss from its band.
+        boss = false,
+        // Shove-immunity. main.js's _isHeavy reads exactly this field and the
+        // shove comment has described 'captains, the Sewer Merchant, bosses'
+        // as unbudgeable since the shove shipped -- but the ctor dropped the
+        // field, so nothing could ever BE heavy and the branch was dead. A
+        // puzzleWall that can be shoved aside is not a wall, so it needs this.
+        heavy = false,
+        // (perception ladder) Runtime counters. Persisted so a save taken mid-hunt
+        // reloads mid-hunt instead of resetting the NPC to calm.
+        _awareBeats = 0,
+        _sweepBeats = 0,
         // Vendor fields (trade Slice 1). `vendor:true` makes the NPC a shopkeep —
         // pressing [E] adjacent opens their trade window. `stock` is the list of
         // item ids they sell (infinite supply for now); buy/sell prices come from
@@ -190,6 +220,21 @@ export class Enemy {
         this._lastDy       = _lastDy;
         // (Law 2 positional) restored recovery-turn count; see ctor param note.
         this._spunTurns    = _spunTurns;
+        // (perception) Authored facing seeds the stamp ONLY when there is no live
+        // facing to preserve. fromSave reconstructs via `new Enemy(s)` carrying the
+        // persisted _lastDx/_lastDy, so an unconditional assignment here would
+        // re-point every enemy that had since turned, on every single reload.
+        if (facing && this._lastDx === 0 && this._lastDy === 0) {
+            const v = FACING_VECTORS[facing];
+            if (v) { this._lastDx = v[0]; this._lastDy = v[1]; }
+        }
+        this.hearingRange  = hearingRange;
+        this.equipped      = equipped;
+        this.thievable     = thievable;
+        this.boss          = !!boss;
+        this.heavy         = !!heavy;
+        this._awareBeats   = _awareBeats;
+        this._sweepBeats   = _sweepBeats;
         this.vendor        = vendor;
         this.stock         = stock;
         this.specialBuys   = specialBuys;
@@ -248,7 +293,7 @@ export class Enemy {
         return {
             id: this.id, type: this.type, x: this.x, y: this.y,
             hp: this.entity.hp, maxHp: this.entity.maxHp, alive: this.entity.alive, armor: this.entity.armor,
-            damage: this.damage, sightRange: this.sightRange,
+            damage: this.damage, sightRange: this.sightRange, hearingRange: this.hearingRange,
             behavior: this.behavior, homeRegion: this.homeRegion,
             wanderRadius: this.wanderRadius, wanderEveryTurns: this.wanderEveryTurns,
             wantsItems: this.wantsItems, depositsTo: this.depositsTo,
@@ -260,6 +305,9 @@ export class Enemy {
             // Law 6f: the carried kit must survive a reload the same way gold
             // does, or a boss's Challenge GP would drop on save/load.
             loadout: this.loadout,
+            // (theft) Worn gear and the theft opt-out must survive a reload the
+            // same way loadout does, or a robbed enemy would come back armoured.
+            equipped: this.equipped, thievable: this.thievable, boss: this.boss, heavy: this.heavy,
             ambient: this.ambient,
             // Species marker (ai.js::isSewerDweller) — must survive a reload same
             // as vermin/weak/resist/immune did, or a reloaded Violet Fungus would
@@ -267,6 +315,8 @@ export class Enemy {
             sewerDweller: this.sewerDweller,
             // runtime
             state: this.state, fsmState: this.fsmState, lastWanderTurn: this._lastWanderTurn,
+            // (perception ladder) so a save taken mid-hunt reloads mid-hunt.
+            _awareBeats: this._awareBeats, _sweepBeats: this._sweepBeats,
             carrying: this.carrying, barkIndex: this._barkIndex, barkOffset: this._barkOffset,
             wasAdjacent: this._wasAdjacent, buffs: (this.buffs || []).map(b => ({ ...b })),
             // allegiance runtime (see note above)
