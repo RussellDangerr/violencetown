@@ -2455,9 +2455,22 @@ export class Renderer {
             for (let off = -1; off <= 1; off++) {
                 const j = memIdx + off; if (j < 0 || j >= kids.length) continue;
                 const center = (off === 0);
+                // The preview must not look SELECTED. It used to paint the centre
+                // child at 0.66 alpha with a `{w:2, #e8cf90}` ring — and in this
+                // wheel a bright ring IS the selection signal, so drilling to
+                // Melee showed Melee and Hit both lit, both ringed, and the eye
+                // could not tell which one Space would fire.
+                //
+                // Three changes, all pulling the same way: no selection-weight
+                // ring (a hairline at a third alpha instead), the fill dropped
+                // well under the active slice's 1.0, and dimmer text. The centre
+                // child still reads as "this is the one you'd get next" — by
+                // being brighter than its siblings, not by competing with the
+                // thing you have actually chosen.
                 this._wheelTile(band[0], band[1], TOP + off * SPREAD, HALF,
-                    center ? HUE : '#4a3c2a', center ? 0.66 : 0.4, kids[j].label,
-                    center ? '#fff0cc' : '#b0a184', center ? { w: 2, c: '#e8cf90' } : null);
+                    center ? HUE : '#4a3c2a', center ? 0.34 : 0.22, kids[j].label,
+                    center ? '#cbbb95' : '#8d8069',
+                    center ? { w: 1, c: 'rgba(232,207,144,0.3)' } : null);
             }
         } else if (this.font) {
             this.font.drawText(ctx, '▲ FIRE', cx, cy - activeBand[1] - 16, { color: UI.gold, scale: 1, align: 'center', shadow: '#000' });
