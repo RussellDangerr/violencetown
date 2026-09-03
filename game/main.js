@@ -54,6 +54,22 @@ import { canTrade, buyPrice, sellPrice, transferGold, burnGold } from './trade.j
 import { buildXmbBar, resolveXmbSelection, cycleXmbCategory, cycleXmbItem, xmbCategoryOf, XMB_LABELS } from './xmb.js';
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
 import { contextualUses } from './item-uses.js'; // "use THIS on THAT" — the authored table
+import { nextHint } from './hints.js';           // situational one-shots: the tutorial that is not one
+
+// (hints) Which lessons this player has already been shown, as a Set. Persisted
+// as one comma-joined string so adding a hint is a row in hints.js and nothing
+// else — a boolean per hint would make every new lesson a three-file change.
+function readSeenHints() {
+    const raw = Settings.get('hintsSeen');
+    return new Set(typeof raw === 'string' && raw ? raw.split(',').filter(Boolean) : []);
+}
+// Turns between lessons. Long enough that two systems are never taught back to
+// back, short enough that a player poking at things still learns quickly.
+const HINT_COOLDOWN_TURNS = 8;
+
+function writeSeenHints(set) {
+    Settings.set('hintsSeen', [...set].join(','));
+}
 import { emitNoise, NOISE, perceives, spotters } from './perception.js'; // sound + sight
 import { coinTake, kitTake, gearTake, coinWeight, itemWeight, gearWeight,
          noticeBuffer, isClean, stealLimit } from './theft.js';
@@ -2440,7 +2456,7 @@ class Game {
     // step. (fix/critical-path safety intact)
     _onStepSettled() {
         if (this.state !== STATE.IDLE) return;
-        this._maybeShowBlindSpotHint();
+        this._maybeShowHint();
         // Manual input always OVERRIDES a click-to-walk: a held / just-pressed
         // direction cancels the path and takes over (press WASD mid-path to grab
         // the wheel back). Read the intent (folds in the one-deep buffer) first.
@@ -3784,14 +3800,38 @@ class Game {
     // It fires on the situation rather than on entering a zone or picking up an
     // item, because the situation IS the lesson — you are already in the position
     // the verb wants, and the line just names what you have done.
-    _maybeShowBlindSpotHint() {
-        if (Settings.get('blindSpotHintSeen')) return;
-        const beside = (this.enemies || []).some(e =>
-            e.entity?.isAlive?.() && !e._ally && (e.sightRange || 0) > 0 &&
-            cheb(e.x, e.y, this.playerX, this.playerY) === 1);
-        if (!beside || !this.isHidden()) return;
-        Settings.set('blindSpotHintSeen', true);
-        this._log("[They haven't seen you. People don't look behind themselves.]", 'quest');
+    // The situational one-shot pass — hints.js decides WHAT, this decides WHEN
+    // and remembers. Runs once per settled step, which is the only moment the
+    // player's situation can have changed without them being mid-menu.
+    //
+    // At most ONE line per step, by construction (nextHint returns the first
+    // match). Walking into a busy market should teach one thing, not five.
+    _maybeShowHint() {
+        // Paced, not queued. Without this a player who walks up to a shopkeeper
+        // from behind is taught two different systems on two consecutive steps —
+        // verified in play, and it reads as the game talking over itself rather
+        // than noticing what you are doing. One lesson, then room to try it.
+        //
+        // Deliberately NOT a cap on total hints: everything still gets taught,
+        // just never back-to-back. A curious player who keeps poking still
+        // learns quickly, because each new situation they walk into is a fresh
+        // chance once the gap has passed.
+        const turn = this.turn ?? 0;
+        if (this._lastHintTurn != null && turn - this._lastHintTurn < HINT_COOLDOWN_TURNS) return;
+
+        const seen = readSeenHints();
+        const h = nextHint(this, (id) => seen.has(id));
+        if (!h) return;
+        seen.add(h.id);
+        writeSeenHints(seen);
+        this._lastHintTurn = turn;
+        this._log(h.text, 'quest');
+    }
+
+    // hints.js asks this so a hint can fire on "something in your bag works
+    // here" without the table importing item-uses itself.
+    _contextualUsesFor(itemDef) {
+        return contextualUses(itemDef, this);
     }
 
     // (theft) Are you unseen right now? Nobody — the victim included — holds a

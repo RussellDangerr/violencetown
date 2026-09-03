@@ -50,7 +50,13 @@ export const DEFAULTS = Object.freeze({
     // watched ones instead. Two readings of the same field — some players hunt
     // for cover, some track the threat.
     threatStyle: 'shadow',
-    blindSpotHintSeen: false, // (theft) one-shot: the first time you stand unseen beside someone
+    // (hints) Which situational one-shots have fired, as a comma-joined id
+    // list. A LIST rather than a flag each, because hints.js is meant to grow —
+    // a new lesson should be a row in that table and nothing else, and a new
+    // boolean here per hint would make every addition a three-file change.
+    // Superseded `blindSpotHintSeen`, which is still coerced below so an
+    // existing player who already learned that one is not told again.
+    hintsSeen: '',
 });
 
 // Live, mutable copy of the settings. Seeded with defaults so callers can read
@@ -97,7 +103,8 @@ export function validate(raw) {
         // here is silently discarded on every load — it would read correctly all
         // session and reset on reload.
         threatStyle:      asEnum(o.threatStyle, ['shadow', 'danger'], DEFAULTS.threatStyle),
-        blindSpotHintSeen: asBool(o.blindSpotHintSeen, DEFAULTS.blindSpotHintSeen),
+        hintsSeen: (typeof o.hintsSeen === 'string') ? o.hintsSeen
+                 : (o.blindSpotHintSeen === true ? 'blindSpot' : DEFAULTS.hintsSeen),
     };
 }
 

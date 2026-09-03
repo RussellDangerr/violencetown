@@ -118,16 +118,32 @@ test('both real treatments survive a round trip', () => {
   }
 });
 
-// (theft) The blind-spot hint flag — same drop-unknown-keys trap as threatStyle.
-test('blindSpotHintSeen defaults off and survives validate', () => {
-  assert.equal(DEFAULTS.blindSpotHintSeen, false);
-  assert.equal(validate({}).blindSpotHintSeen, false);
-  assert.equal(validate({ blindSpotHintSeen: true }).blindSpotHintSeen, true,
-    'must not be dropped as an unknown key, or the hint repeats every session');
+// (hints) Which situational one-shots have fired. A LIST, not a boolean each,
+// because hints.js is meant to grow — a new lesson should be one row in that
+// table, not a new settings field plus a validator line plus a test.
+test('hintsSeen defaults empty and survives validate', () => {
+  assert.equal(DEFAULTS.hintsSeen, '');
+  assert.equal(validate({}).hintsSeen, '');
+  assert.equal(validate({ hintsSeen: 'blindSpot,vendorNearby' }).hintsSeen, 'blindSpot,vendorNearby',
+    'must not be dropped as an unknown key, or every hint repeats each session');
 });
 
-test('a junk blindSpotHintSeen coerces rather than being trusted', () => {
-  for (const junk of ['yes', 1, null, {}]) {
-    assert.equal(typeof validate({ blindSpotHintSeen: junk }).blindSpotHintSeen, 'boolean');
+test('a junk hintsSeen coerces to empty rather than being trusted', () => {
+  for (const junk of [1, null, {}, [], true]) {
+    assert.equal(validate({ hintsSeen: junk }).hintsSeen, '',
+      `${JSON.stringify(junk)} should not survive`);
   }
+});
+
+test('an existing player who learned the blind spot is not told again', () => {
+  // hintsSeen supersedes the old blindSpotHintSeen boolean. Someone mid-run when
+  // this shipped has already had that lesson; re-teaching it would be a
+  // regression they would actually notice.
+  assert.equal(validate({ blindSpotHintSeen: true }).hintsSeen, 'blindSpot');
+  assert.equal(validate({ blindSpotHintSeen: false }).hintsSeen, '');
+});
+
+test('a real hintsSeen wins over the legacy flag', () => {
+  const r = validate({ hintsSeen: 'vendorNearby', blindSpotHintSeen: true });
+  assert.equal(r.hintsSeen, 'vendorNearby');
 });
