@@ -36,13 +36,31 @@ Balance golden unchanged throughout.
 | 2 — `enemies.js` ctor fields + save contract | **done**, 8 tests | `6ba4446` |
 | 3 — `npc.js` sight check onto `perceives` | **done**, verified live | `1fd8429` |
 | 5 — `npc.js` ladder wiring | **done**, verified live | `13de300` |
+| 7 — the threat overlay | **done**, verified live | (this branch) |
+| 6 (wiring half) — `emitNoise` replaces `rockClatter` | **done**, verified live | (this branch) |
+| 9 — the Thieve subtree on the wheel | **done** | (this branch) |
+| 10 — `applyHostileFlip` | **done** | (this branch) |
+| 11 — paranoia + the blind sweep | **done** | (this branch) |
+| 12 — the Thieve resolver + `_robbed` persistence | **done**, verified live | (this branch) |
+| 13 — Phase 6 polish (steps 1, 3, 4; step 2 still blocked) | **done**, verified live | (this branch) |
 
 Verified in the browser on `:3002` (this worktree's own server; the primary checkout owns 3001):
 the 3/2/3 split holds against the real map on a real spawned enemy for all eight facings; a player
 in any rear tile leaves the enemy idle across four beats; a player on the flank accrues one beat,
 turns the enemy on the second without moving it, and is spotted on the third.
 
-### Blocked — every remaining task edits a file the offer screen is rewriting
+### UNBLOCKED 2026-09-02 — the offer screen and the interact layer both merged
+
+`feature/unified-offer-screen` landed on `dev` as `43ca3be`, and the interact layer (contextual item
+use + the bump telegraph) as `fb9879e`. The collision this section describes is over. The import-block
+merge note under Task 7 is likewise historical: that hunk was resolved when the offer screen merged,
+and Task 7 simply adds `perception.js` to it.
+
+**Also stale, and settled:** the design note below says every townsperson is authored
+`sightRange: 0`, so a crowded square counts as hidden. On `dev` they are all **`sightRange: 4`** —
+Caelan made that call already ("witnesses, never pursuers"). No ruling is owed at Task 12 for it.
+
+### Historical — the blocker as it stood on 2026-08-24
 
 `feature/unified-offer-screen` is at Task 11 of 20 and **not merged to `dev`**. Its remaining tasks
 touch `main.js` (15 refs), `renderer.js` (10), `layout.js` (7), `trade.js` (3), `pathing.js` (2),

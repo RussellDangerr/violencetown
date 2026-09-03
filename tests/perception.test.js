@@ -186,3 +186,40 @@ describe('the new Enemy fields round-trip through toSave', () => {
         assert.equal(e._sweepBeats, 0);
     });
 });
+
+// ── Night shrinks the cone (Phase 6) ─────────────────────────────────────────
+//
+// The Town Clock's lighting grade is stamped onto each watcher on the world
+// beat, so a guard genuinely sees less after dark rather than merely looking
+// like it — the same number the screen is dimmed by cuts their sight.
+describe('night', () => {
+    const openMap = { isWalkable: () => true };
+    const watcher = (over = {}) => ({ x: 0, y: 0, _lastDx: 0, _lastDy: 1, sightRange: 10, ...over });
+
+    test('a watcher with no _nightLevel sees in full daylight', () => {
+        assert.equal(perceives(openMap, watcher(), 0, 10), VERDICT.DIRECT);
+    });
+
+    test('deep night cuts the cone by 40%', () => {
+        const w = watcher({ _nightLevel: 1 });
+        assert.equal(perceives(openMap, w, 0, 6), VERDICT.DIRECT, '10 -> 6 at full night');
+        assert.equal(perceives(openMap, w, 0, 7), VERDICT.NONE);
+    });
+
+    test('dusk is partial, not all-or-nothing', () => {
+        const w = watcher({ _nightLevel: 0.5 });
+        assert.equal(perceives(openMap, w, 0, 8), VERDICT.DIRECT, '10 -> 8 at half night');
+        assert.equal(perceives(openMap, w, 0, 9), VERDICT.NONE);
+    });
+
+    test('a nonsense night level is clamped rather than inverting sight', () => {
+        assert.equal(perceives(openMap, watcher({ _nightLevel: -5 }), 0, 10), VERDICT.DIRECT);
+        assert.equal(perceives(openMap, watcher({ _nightLevel: 99 }), 0, 7), VERDICT.NONE);
+    });
+
+    test('the rear stays blind at every hour', () => {
+        for (const n of [0, 0.5, 1]) {
+            assert.equal(perceives(openMap, watcher({ _nightLevel: n }), 0, -1), VERDICT.NONE);
+        }
+    });
+});

@@ -24,7 +24,7 @@ import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
 import { attack, formatDamageNumber, computeHit, elementalMult, isBackstab } from './combat.js';
 import { Enemy, spawnEnemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
-import { isHostile, rockClatter } from './ai.js';
+import { isHostile, isHunting } from './ai.js';
 import { getGreedyStep, stepEntity, findPath } from './pathing.js'; // pathfinding (greedy chase + BFS click-to-move); stepEntity = shove a character aside
 import { applyDispositionDelta, reactToTransaction } from './give-action.js';
 import { getDialogue } from './dialogue.js';
@@ -54,6 +54,9 @@ import { canTrade, buyPrice, sellPrice, transferGold, burnGold } from './trade.j
 import { buildXmbBar, resolveXmbSelection, cycleXmbCategory, cycleXmbItem, xmbCategoryOf, XMB_LABELS } from './xmb.js';
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
 import { contextualUses } from './item-uses.js'; // "use THIS on THAT" — the authored table
+import { emitNoise, NOISE, perceives, spotters } from './perception.js'; // sound + sight
+import { coinTake, kitTake, gearTake, coinWeight, itemWeight, gearWeight,
+         noticeBuffer, isClean, stealLimit } from './theft.js';
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
 import {
     createWheelState, cycle, drill, back, compose, autoAimTile,
@@ -383,6 +386,16 @@ class Game {
         // death, so a respawn (zone re-entry re-spawns from map.enemySpawns) comes
         // back broke instead of farmable for gold every time. Persisted.
         this._muggedIds = new Set();
+        // (theft) enemyId -> { gold, items, weightTaken, noticed }. Survives a save,
+        // and is re-applied by spawnEnemy so a zone re-entry cannot undo a robbery.
+        this._robbed = {};
+        // (fence) itemId -> how many you are carrying that the street has heard
+        // about. Written only when a take is NOTICED, so a clean theft leaves
+        // goods worth full price anywhere. Decremented when a fence takes them
+        // off your hands. Per-ID rather than per-object because the bag holds
+        // STACKS, not instances — nobody, the vendor included, can tell your
+        // stolen soap from your own.
+        this._hot = {};
         // Runtime ground-drops per map ("mapUrl" → [{ type, x, y }]), so a drop
         // survives leaving and re-entering a zone. Recorded today for enemy
         // death-drops; the player-drop path routes through here once a drop verb
@@ -598,7 +611,7 @@ class Game {
             if (def) this.groundItems.push({ type: d.type, x: d.x, y: d.y, def });
         }
         this.enemies = [];
-        for (const s of this.map.enemySpawns) this.enemies.push(spawnEnemy(s, this._muggedIds));
+        for (const s of this.map.enemySpawns) this.enemies.push(spawnEnemy(s, this._muggedIds, this._robbed));
 
         // (zone pursuit) Re-inject any hostiles that chased you through the door.
         // They spawn at the door leading back where you came from — visible in
@@ -657,7 +670,7 @@ class Game {
             if (!e.entity.isAlive() || e._ally) continue;
             const hostile = isHostile(e);
             if (!hostile) continue;
-            const onYourHeels = e.state === 'chasing'
+            const onYourHeels = isHunting(e)
                 || manhattan(e.x, e.y, t.x, t.y) <= FOLLOW_RANGE
                 || manhattan(e.x, e.y, this.playerX, this.playerY) <= FOLLOW_RANGE;
             if (onYourHeels) out.push(e);
@@ -889,7 +902,27 @@ class Game {
             if (!raw) { start(); return; }
             splash.classList.add('gone');
             wrapper.classList.remove('hidden');
-            await loadInto(this, raw);
+            // A save that fails to load must not leave a blank screen.
+            //
+            // The splash is already gone and the wrapper already shown by the
+            // time this awaits, so an unhandled throw here strands the player
+            // looking at nothing, with a half-initialised world behind it and an
+            // error only the console can see. migrate() coerces the SHAPE of the
+            // top-level fields but does not walk into every array element, so a
+            // save corrupted in transit or hand-edited can still reach loadInto
+            // and throw partway through.
+            //
+            // Falling back to a fresh run is the honest recovery: start() rebuilds
+            // the world from scratch, and the broken save is left on disk rather
+            // than overwritten, so it can still be recovered by hand.
+            try {
+                await loadInto(this, raw);
+            } catch (e) {
+                console.error('[save] could not be loaded; starting fresh', e);
+                start();
+                this._log('[That save would not open. Starting a new run.]', 'transition');
+                return;
+            }
             this._log('[Save loaded]', 'transition');
             this._maybeShowFirstRunHint();
         };
@@ -934,6 +967,20 @@ class Game {
     _bindInput() {
         document.addEventListener('keydown', (e) => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+            // A browser chord is not a game input. Nothing here checked modifiers,
+            // so every shortcut the browser owns ALSO fired a game action behind
+            // it: Ctrl+S walked you south, Ctrl+L opened the log, and Alt+Tab
+            // opened the Remoticon — so you switched windows and came back to a
+            // menu you never asked for. That last one happens constantly.
+            //
+            // Shift is deliberately NOT blocked: the game owns it (Shift+arrows
+            // drive the hotbar, and `?` is Shift+Slash).
+            //
+            // No preventDefault — the point is to let the BROWSER have the chord,
+            // so bailing silently is the whole fix.
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
+
             if (this.state === STATE.SPLASH || this.state === STATE.RESOLVING) return;
             // [settings] While paused, swallow all gameplay keys. P / Escape
             // resume (so the player isn't trapped); everything else is eaten.
@@ -2157,15 +2204,26 @@ class Game {
     // Returns true if the shove landed. Heavy characters and boxed-in ones bounce.
     _shoveNpc(enemy, dir) {
         if (!enemy || !dir) return false;
+        const who = enemy.name ?? enemy.type ?? 'them';
+        // (ruled 2026-09-02) The two ways a shove fails each get their own beat.
+        // Caelan: "trying to push someone and not being able to, I think, is a
+        // good source of physical comedy." It was a thud and a recoil with no
+        // line, so the joke was being performed to an empty room.
         if (this._isHeavy(enemy)) {
             audio.playSfx('bump-wall');
             this._bounceOff(dir);
+            this._log(`[You put your shoulder into ${who}. ${who} does not appear to notice.]`);
+            this._render();
             return false;                       // immovable — no step, no turn
         }
         const dest = this._shoveDestination(enemy, dir);
         if (!dest) {
             audio.playSfx('bump-wall');
             this._bounceOff(dir);
+            // A different failure and it should read as one: they WOULD move,
+            // there is simply nowhere to put them.
+            this._log(`[You lean on ${who}, who has nowhere to go.]`);
+            this._render();
             return false;                       // boxed in — nowhere to put them
         }
         stepEntity(enemy, dest.x, dest.y, this._MOVE_MS);  // knock aside / swap (animates)
@@ -2184,7 +2242,13 @@ class Game {
     // (bandit captains, the Sewer Merchant, bosses) via a `heavy: true` spawn
     // field or a future strength/tier check.
     _isHeavy(ch) {
-        return ch.heavy === true;
+        // A boss is unbudgeable by DERIVATION rather than by being flagged twice.
+        // The shove comment has named "captains, the Sewer Merchant, bosses" as
+        // immovable since the shove shipped, and nothing was ever flagged — so the
+        // branch existed for months with only a wall of fungus behind it. `boss`
+        // already means "this one breaks the rules" (Law 5 spends by it), which is
+        // exactly the class that should not slide sideways when you walk into it.
+        return ch.heavy === true || ch.boss === true;
     }
 
     // Where to knock `target` when the player barges in moving `dir`: a clear
@@ -2376,6 +2440,7 @@ class Game {
     // step. (fix/critical-path safety intact)
     _onStepSettled() {
         if (this.state !== STATE.IDLE) return;
+        this._maybeShowBlindSpotHint();
         // Manual input always OVERRIDES a click-to-walk: a held / just-pressed
         // direction cancels the path and takes over (press WASD mid-path to grab
         // the wheel back). Read the intent (folds in the one-deep buffer) first.
@@ -2672,7 +2737,7 @@ class Game {
     // so the affordance is uniform regardless of how the throw was aimed.
     _rockClatter(itemDef, x, y) {
         if (!itemDef || !itemDef.pullsAggro) return;
-        rockClatter(this.enemies, x, y);
+        emitNoise(this._earshot(), x, y, NOISE.throwImpact);
         this._log('[The rock clatters off down the tunnel.]');
     }
 
@@ -3343,6 +3408,7 @@ class Game {
                 if (!spell) { this._log("[You don't know any spells.]"); break; }
                 if ((this.playerMp || 0) < spell.mpCost) { this._log(`[Not enough MP — ${spell.name} needs ${spell.mpCost}.]`); break; }
                 this.playerMp = Math.max(0, this.playerMp - spell.mpCost);
+                emitNoise(this._earshot(), this.playerX, this.playerY, NOISE.cast);
                 const hit = this._aoeStrike(affectedTiles(w, this), spell.damage, { type: spell.damageType });
                 if (hit) this._log(`[${spell.name}! ${spell.damage} ${spell.damageType} to ${hit}.]`, 'combat');
                 else this._log(`[${spell.name} fizzles — nothing caught.]`);
@@ -3388,6 +3454,7 @@ class Game {
                 if (!spell) { this._log("[You don't know that spell.]"); break; }
                 if ((this.playerMp || 0) < spell.mpCost) { this._log(`[Not enough MP — ${spell.name} needs ${spell.mpCost}.]`); break; }
                 this.playerMp = Math.max(0, this.playerMp - spell.mpCost);
+                emitNoise(this._earshot(), this.playerX, this.playerY, NOISE.cast);
                 const tiles = affectedTiles(w, this);
                 let feared = 0;
                 for (const e of this.enemies) {
@@ -3404,6 +3471,68 @@ class Game {
             case 'guard':        { this.addBuff('guard', 'Guard', 2, 'buff'); this._log('[Bracing — incoming damage reduced.]'); this._advanceWorld(); break; }
             case 'wait':         { this._log('[Wait]'); this._advanceWorld(); break; }
             case 'run':          { const d = this._aimDir(aimTile); if (d) { this._closeWheel(); this._doMove(d); return; } break; }
+            case 'thieveCoin': case 'thieveKit': case 'thieveGear': {
+                const victim = this._thieveTarget(aimTile);
+                if (!victim) { this._log('[Nobody to lift from there]'); break; }
+
+                const verdict  = perceives(this.map, victim, this.playerX, this.playerY);
+                const passives = this.ringMods ?? {};
+                const rec = (this._robbed[victim.id] ||= { gold: 0, items: [], weightTaken: 0, noticed: false });
+
+                let weight = 0, took = null, gp = 0, restore = null;
+                if (node.resolver === 'thieveCoin') {
+                    gp = coinTake(victim, stealLimit(passives));
+                    if (gp <= 0) { this._log('[Their pockets are empty]'); break; }
+                    weight = coinWeight(gp);
+                } else {
+                    // Through the Game's resolver, not a bare ITEMS[id]: stolen Gear
+                    // is overwhelmingly weapons, and ITEMS alone cannot resolve one.
+                    const resolve = (id) => this._resolveItemDef(id);
+                    const isKit = node.resolver === 'thieveKit';
+                    took = isKit ? kitTake(victim, resolve) : gearTake(victim, resolve);
+                    if (!took) { this._log('[Nothing there to take]'); break; }
+                    weight = isKit ? itemWeight(took) : gearWeight(took);
+                    // kitTake/gearTake have ALREADY removed it. If the bag turns out
+                    // to be full we have to put it back, or a full bag silently
+                    // destroys the item and — for gear — permanently debuffs the
+                    // victim for nothing. Same lesson the offer screen learned.
+                    restore = isKit
+                        ? () => { victim.loadout.push(took.id); }
+                        : () => {
+                            victim.equipped.push(took.id);
+                            if (victim.entity) victim.entity.armor += (took.armor ?? 0);
+                            victim.damage = (victim.damage ?? 0) + (took.damage ?? 0);
+                          };
+                }
+
+                if (took && !this._addToInventory(took)) {
+                    restore();
+                    this._log('[Your bag is full.]');
+                    break;                       // no turn spent, nothing taken, nothing noticed
+                }
+
+                const clean = isClean(rec.weightTaken, weight, noticeBuffer(passives, verdict));
+                rec.weightTaken += weight;
+
+                if (gp > 0) { transferGold(victim, this, gp, 'theft'); rec.gold += gp; this._log(`[Lifted ${gp} GP.]`, 'pickup'); }
+                if (took)   { rec.items.push(took.id); this._log(`[Lifted the ${took.name}.]`, 'pickup'); }
+                audio.playSfx(clean ? 'theft' : 'theft-noticed');
+
+                if (clean) {
+                    // A clean theft is GENUINELY clean — no disposition move, no
+                    // hostility, no search, and no log line about them at all.
+                    // They never know, which is the only reason the verb is worth
+                    // the risk.
+                } else {
+                    rec.noticed = true;
+                    if (took) this._hot[took.id] = (this._hot[took.id] ?? 0) + 1;
+                    victim._robbedSweep = true;            // arms the blind sweep + paranoia
+                    reactToTransaction(victim, 'theft', { item: took, gold: gp });
+                    this._log(`[${victim.name ?? victim.type} feels the weight change.]`, 'combat');
+                }
+                this._advanceWorld();
+                break;
+            }
             case 'trade': {
                 // (Phase 6a) Trade opens for ANY adjacent NPC now — vendors get
                 // the shop columns, non-vendors get offer mode (hand over items).
@@ -3645,6 +3774,99 @@ class Game {
     // Shared with the wheel's §12.5 combat re-skin via the pure wheel-model helper.
     _inCombat() { return isCombatActive(this); }
 
+    // (theft) The one-shot that teaches the whole stealth layer.
+    //
+    // The rear blind spot is the single rule everything here rests on, and it is
+    // the kind of rule a player either stumbles into or never learns at all. So
+    // the first time they are standing right beside somebody and STILL unseen,
+    // the game says so once, and never again.
+    //
+    // It fires on the situation rather than on entering a zone or picking up an
+    // item, because the situation IS the lesson — you are already in the position
+    // the verb wants, and the line just names what you have done.
+    _maybeShowBlindSpotHint() {
+        if (Settings.get('blindSpotHintSeen')) return;
+        const beside = (this.enemies || []).some(e =>
+            e.entity?.isAlive?.() && !e._ally && (e.sightRange || 0) > 0 &&
+            cheb(e.x, e.y, this.playerX, this.playerY) === 1);
+        if (!beside || !this.isHidden()) return;
+        Settings.set('blindSpotHintSeen', true);
+        this._log("[They haven't seen you. People don't look behind themselves.]", 'quest');
+    }
+
+    // (theft) Are you unseen right now? Nobody — the victim included — holds a
+    // DIRECT verdict on your tile. This is what makes "there are no witnesses"
+    // true by construction rather than by assertion: it asks the same perceives()
+    // the AI uses and the threat overlay draws, so all three agree.
+    //
+    // PERIPHERAL deliberately does not count. Being half-noticed from a flank is
+    // not being seen — it is what makes them turn to look.
+    isHidden() {
+        const watchers = (this.enemies || []).filter(e => e.entity?.isAlive?.() && !e._ally);
+        return spotters(this.map, watchers, this.playerX, this.playerY).length === 0;
+    }
+
+    // (theft) The victim on an aimed tile, or null. Takes the tile as an ARGUMENT
+    // because aimTile is a local destructured from compose() inside the wheel
+    // fire path — it is not readable off `this.wheel`.
+    _thieveTarget(aimTile) {
+        if (!aimTile) return null;
+        const v = (this.enemies || []).find(e => e.entity?.isAlive?.() && e.x === aimTile.x && e.y === aimTile.y);
+        if (!v || v.thievable === false) return null;
+        return v;
+    }
+
+    // (theft) Does any adjacent victim have anything in this branch? The wheel's
+    // `available` predicates run at DRAW time, before an adjacent aim has been
+    // committed, so this asks "is there anyone beside me I could take a `branch`
+    // from" rather than depending on reticle timing.
+    canThieve(branch) {
+        return (this.enemies || []).some(e => {
+            if (!e.entity?.isAlive?.() || e.thievable === false) return false;
+            if (cheb(e.x, e.y, this.playerX, this.playerY) !== 1) return false;
+            if (branch === 'coin') return (e.gold ?? 0) > 0;
+            if (branch === 'kit')  return (e.loadout ?? []).length > 0;
+            if (branch === 'gear') return (e.equipped ?? []).length > 0;
+            return false;
+        });
+    }
+
+    // Who a sound can move — hostiles only, for now.
+    //
+    // emitNoise is a general primitive and rightly does not ask about
+    // allegiance; the filter belongs here, at the call. It is NOT cosmetic. A
+    // noise sets state to 'suspicious', and the awareness ladder that walks that
+    // back down to idle lives inside npc.js's HOSTILE branch — which never runs
+    // for a neutral. So a townsperson nudged to 'suspicious' is stuck there for
+    // the rest of the run, wearing a permanent '?' on the threat overlay.
+    // Verified in play rather than assumed: twelve world turns, still suspicious,
+    // while a hostile went suspicious -> returning -> idle over the same span.
+    //
+    // rockClatter carried this same guard for a different symptom — it set
+    // 'chasing', which blooms the combat arena around a shopkeeper. Lift it when
+    // neutrals get their ladder ticked, which is Thieve's business: a neutral who
+    // notices you is a WITNESS, and that is the whole theft rule.
+    _earshot() {
+        return (this.enemies || []).filter(isHostile);
+    }
+
+    // Stand everyone down. Called on a zone change, on the retry after a defeat,
+    // and on respawn -- each of which promises the player a breather.
+    //
+    // It was three identical loops, which is exactly how the 'searching' bug got
+    // in: the perception ladder added a second hunting state and only the FSM's
+    // pursuit gate learned about it, so all three of these went on clearing
+    // 'chasing' alone and a searcher walked out of your death screen still on your
+    // trail. One loop now, reading the one predicate.
+    _deAggroAll() {
+        for (const e of this.enemies) {
+            if (!e.entity.isAlive() || e._ally) continue;
+            if (isHunting(e)) e.state = 'idle';
+            e._intruder = false;
+            e._emergeDelay = 0;
+        }
+    }
+
     // ── Ambient world heartbeat (Town Clock) ─────────────────────────────────
     //
     // Fired on the free-running world tick (WORLD_TICK_MS) while the player is
@@ -3673,6 +3895,11 @@ class Game {
     // accumulates ms, combat counts turns).
     _worldBeat({ ambient, decayDue }) {
         this._advanceDayClock();
+        // (Phase 6) Hand the lighting grade to everyone who can see, so perception
+        // can shorten their cone after dark. Stamped rather than passed because
+        // perceives() is called from the AI, the overlay and the theft gate, and
+        // threading a level through all three would be three chances to disagree.
+        for (const e of this.enemies) e._nightLevel = this._nightLevel ?? 0;
         if (ambient) this._ambientTick();
         if (decayDue) this._tickDispositionDecay();
     }
@@ -3924,6 +4151,11 @@ class Game {
         if (backstab) this._log('[Backstab!]', 'combat');
 
         const result = attack(playerEntity, enemyObj.entity, finalDmg);
+
+        // Fighting is loud. Anyone idle within earshot turns to look — which is
+        // how a brawl draws a crowd, and how killing a lone sentry quietly is
+        // suddenly a thing you can fail at.
+        emitNoise(this._earshot(), this.playerX, this.playerY, NOISE.melee);
 
         // (AGGRO behavior bands) Friendly fire — hitting your own bribed ally
         // re-flips them to hostile. The blow still lands (below); they just turn
@@ -4512,11 +4744,7 @@ class Game {
         if (c.gift && Array.isArray(c.gift.items)) for (const id of c.gift.items) { const gd = this._resolveItemDef(id); if (gd && !this._addToInventory(gd)) this._log('[No room — you leave it behind.]'); } // 6. given (guard unknown ids + full bag)
         if (c.gift && c.gift.heal) this.playerHp = this.playerMaxHp;
         this._pendingTransition = null;                        // 7. de-aggro + resume (mirror _respawn's tail)
-        for (const e of this.enemies) {
-            if (!e.entity.isAlive() || e._ally) continue;
-            if (e.state === 'chasing') e.state = 'idle';
-            e._intruder = false; e._emergeDelay = 0;
-        }
+        this._deAggroAll();
         this.state = STATE.IDLE;
         if (c.log) this._log(c.log, 'transition');
         this._render();
@@ -4601,11 +4829,7 @@ class Game {
         this.buffs = [];                          // clean slate (matches _respawn)
         this._pendingTransition = null;           // don't ghost-load a queued transition after the retry
         this.addBuff('rattled', 'Rattled', 6, 'debuff');
-        for (const e of this.enemies) {                 // de-aggro so the retry starts calm
-            if (!e.entity.isAlive() || e._ally) continue;
-            if (e.state === 'chasing') e.state = 'idle';
-            e._intruder = false; e._emergeDelay = 0;
-        }
+        this._deAggroAll();
         this.state = STATE.IDLE;
         this._log('[Down but not out. Regroup and finish it.]', 'transition');
         this._render();
@@ -4641,12 +4865,7 @@ class Game {
         // player gets a breather instead of dying on repeat. Monsters keep their
         // current positions (no teleport home) and fall back to loitering /
         // wandering via their normal ambient behavior.
-        for (const e of this.enemies) {
-            if (!e.entity.isAlive() || e._ally) continue;
-            if (e.state === 'chasing') e.state = 'idle';
-            e._intruder = false;
-            e._emergeDelay = 0;
-        }
+        this._deAggroAll();
         this.state = STATE.IDLE;
         this._render();
         this._resumeHeldWalk();   // resume walking only if a dir is genuinely still held
@@ -5465,6 +5684,9 @@ class Game {
             playerGold: this.gold ?? 0,
             npcGold: npc.gold ?? 0,
             bagFull: !this._offerTakeFitsBag(this._offer && this._offer.take),
+            // (fence) Two questions offer.js asks and cannot answer itself.
+            stolenFrom: (id) => (this._robbed[npc.id]?.items ?? []).includes(id),
+            isHot: (id) => (this._hot[id] ?? 0) > 0,
         });
     }
 
@@ -5644,6 +5866,11 @@ class Game {
                 // ONE price per call -- the ledger is per-unit LIFO stacks, which
                 // is what closed the gold-dup exploit found in pre-prod review.
                 if (wasPaid && unit != null) this._buybackRecord(npc, e.def.id, 'rebuy', unit);
+                // (fence) Off your hands and off the ledger. Only a fence can get
+                // here with a hot item -- commitBlocker refuses everyone else --
+                // so this is the one place heat is cleared, which is what makes
+                // finding Hooch worth the walk.
+                if (this._hot[e.def.id] > 0) this._hot[e.def.id]--;
                 // Every hand-off is quest-trackable, the same idiom the retired
                 // trade window used. Without this a sanctioned delivery is
                 // consumed and the quest never advances -- a soft-lock.

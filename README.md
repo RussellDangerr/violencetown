@@ -7,7 +7,6 @@ A browser-based 2D action-RPG of small violences, set across a hand-authored, di
 `Vanilla JS (ES modules)` · `HTML5 Canvas` · `zero dependencies` · `no build step` · `installable PWA`
 
 <!-- SCREENSHOT SLOT — replace the blockquote below with a real capture, e.g.  ![Violencetown](docs/hero.gif) -->
-> 📸 _Gameplay screenshot / GIF goes here._
 
 ---
 

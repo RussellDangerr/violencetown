@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   ROOT, createWheelState, cycle, drill, back,
@@ -134,4 +134,59 @@ test('flapperDeflection: rests at 0, kicks in the cycle direction, settles', () 
   // p clamps into [0,1], so p=5 must land exactly on the p=1 result (comparing
   // the two identical computations is exact — no epsilon needed to prove clamping).
   assert.equal(flapperDeflection(5, 1), flapperDeflection(1, 1));
+});
+
+// ── Thieve (perception/theft) ────────────────────────────────────────────────
+//
+// A transaction with the sign flipped, so it belongs beside Trade under Trick
+// rather than under Fight. (The spec said "beside Bribe and Trade"; Bribe was
+// folded into the offer screen on 2026-09-02, so Trade is what is left.)
+//
+// Availability is ASKED OF THE GAME rather than computed here, so wheel-model
+// stays pure and never imports perception.
+describe('Thieve on the wheel', () => {
+  const thieveNode = () => ROOT.children.find(c => c.key === 'trick')
+                               .children.find(c => c.key === 'thieve');
+
+  test('sits under Trick with three children', () => {
+    const thieve = thieveNode();
+    assert.ok(thieve, 'Thieve must exist under Trick');
+    assert.deepEqual(thieve.children.map(c => c.key), ['coin', 'kit', 'gear']);
+  });
+
+  test('greys out entirely unless you are hidden', () => {
+    const thieve = thieveNode();
+    assert.equal(thieve.available({ isHidden: () => false }), false);
+    assert.equal(thieve.available({ isHidden: () => true }), true);
+  });
+
+  test('a game with no isHidden at all refuses rather than throwing', () => {
+    assert.equal(thieveNode().available({}), false);
+  });
+
+  test('each child asks the game what the victim actually carries', () => {
+    const asked = [];
+    const g = { canThieve: (k) => { asked.push(k); return k === 'coin'; } };
+    const kids = thieveNode().children;
+    assert.deepEqual(kids.map(c => c.available(g)), [true, false, false]);
+    assert.deepEqual(asked, ['coin', 'kit', 'gear']);
+  });
+
+  test('a game with no canThieve greys every child rather than throwing', () => {
+    assert.deepEqual(thieveNode().children.map(c => c.available({})), [false, false, false]);
+  });
+
+  test('the three takes carry distinct resolvers and aim at a neighbour', () => {
+    for (const c of thieveNode().children) {
+      assert.equal(c.aimType, 'adjacent', `${c.key} must aim at someone beside you`);
+      assert.match(c.resolver, /^thieve/, `${c.key} needs its own resolver`);
+    }
+    const resolvers = thieveNode().children.map(c => c.resolver);
+    assert.equal(new Set(resolvers).size, 3, 'three takes, three resolvers');
+  });
+
+  test('Thieve is not an offensive leaf — it is a transaction', () => {
+    assert.equal(isOffensiveLeaf(thieveNode()), false);
+    for (const c of thieveNode().children) assert.equal(isOffensiveLeaf(c), false);
+  });
 });

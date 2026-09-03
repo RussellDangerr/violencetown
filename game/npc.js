@@ -20,12 +20,13 @@
 // the HOSTILE (chase), ALLIED, or ambient states.
 
 import { manhattan, chebyshev } from './utils.js';
-import { getGreedyStep, stepEntity } from './pathing.js';
-import { perceives, nextAwareness, VERDICT } from './perception.js';
-import { healPurchase, kitChoice, isSewerDweller, bossSpend, BOSS_RALLY_RANGE } from './ai.js';
+import { getGreedyStep, stepEntity, findPath } from './pathing.js';
+import { perceives, nextAwareness, VERDICT, BLIND_SWEEP_BEATS } from './perception.js';
+import { healPurchase, kitChoice, isSewerDweller, bossSpend, BOSS_RALLY_RANGE, isHunting } from './ai.js';
 import { ITEMS, kitHealValue, applyKitItem } from './items.js';
 import { WEAPONS } from './weapons.js';
 import { burnGold } from './trade.js';
+import { spreadParanoia } from './give-action.js';
 
 // ── Leash tuning ─────────────────────────────────────────────────────────────
 // A chasing enemy gives up and walks home when it strays past LEASH_DISTANCE
@@ -76,6 +77,22 @@ export function tickNpcState(game, npc, clock = game.turn) {
 
     switch (npc.fsmState) {
         case STATE.IDLE: {
+            // Priority 0: go back to your post.
+            //
+            // (go home, ruled 2026-09-02) A bump shoves whoever is in the way,
+            // shopkeepers included — that is deliberate, and it is meant to be
+            // funny. It stops being funny if it is permanent: without this, every
+            // walk through town leaves the cast a little further from where they
+            // belong, and after a while the market is a scatter of people standing
+            // in the road. So anyone who was displaced walks back.
+            //
+            // Only characters who HOLD a post do this. A wanderer's whole design is
+            // to drift — pickWanderTarget steps from wherever it currently stands,
+            // not from an anchor — so giving one a post would have it wander off
+            // and trudge back forever, fighting itself. Shoving a wanderer just
+            // changes where it drifts from, which is fine.
+            if (goHomeStep(game, npc)) break;      // one step per turn, same as a wander
+
             // Priority 1: WORKING if there's work and the whitelist allows.
             // No cadence throttle on the WORKING transition — workers should
             // start working as soon as work exists.
@@ -228,7 +245,7 @@ export function tickNpcState(game, npc, clock = game.turn) {
             // 'searching' runs the same pursuit spine as 'chasing' below — it
             // walks to the last-seen tile and gives up on arrival. That is exactly
             // what the blind-chase branch already did; it just has a name now.
-            if (npc.state !== 'chasing' && npc.state !== 'searching') break;
+            if (!isHunting(npc)) break;
 
             // Leash: a chaser that has broken contact — out of sight — gives up when
             // it has strayed too far from home OR stayed blind for too many beats,
@@ -238,7 +255,13 @@ export function tickNpcState(game, npc, clock = game.turn) {
             if (!canSeePlayer) {
                 npc._lostSightTurns += 1;
                 const leashDist  = npc.leashDistance ?? LEASH_DISTANCE;
-                const blindBeats = npc.lostSightBeats ?? LOST_SIGHT_BEATS;
+                // (theft) A robbed victim gets a longer budget than an ordinary
+                // chaser who lost you — perception.js: "a robbed victim, with NO
+                // last-seen, casts about longer". Same counter, bigger allowance,
+                // rather than a second timer racing this one.
+                const blindBeats = npc._robbedSweep
+                    ? BLIND_SWEEP_BEATS
+                    : (npc.lostSightBeats ?? LOST_SIGHT_BEATS);
                 const tooFar  = manhattan(npc.x, npc.y, npc.homeX, npc.homeY) > leashDist;
                 const tooLong = npc._lostSightTurns >= blindBeats;
                 if (tooFar || tooLong) {
@@ -249,6 +272,7 @@ export function tickNpcState(game, npc, clock = game.turn) {
                         sourceEnemy: npc,
                         category: 'deaggro',
                     });
+                    for (const m of endRobbedSweep(game, npc)) messages.push(m);
                     break; // spend this beat disengaging; walk-home starts next turn
                 }
             }
@@ -260,6 +284,17 @@ export function tickNpcState(game, npc, clock = game.turn) {
             const chaseTarget = canSeePlayer
                 ? { x: game.playerX, y: game.playerY }
                 : { x: npc._lastSeenX, y: npc._lastSeenY };
+            // (theft) The BLIND sweep. A robbed victim is set searching with NO
+            // last-seen — they know they were robbed, not by whom or from where —
+            // so the give-up test below would fire on beat one and the search
+            // would be over before it started. That is why BLIND_SWEEP_BEATS has
+            // been a dead constant since perception.js shipped: only a theft can
+            // produce a searcher with no lead, and the theft verb did not exist.
+            //
+            // They cast about instead: a real sweep the player has to survive,
+            // and the thing that makes "get out of sight" a decision.
+            if (npc._robbedSweep && chaseTarget.x == null) break;
+
             if (!canSeePlayer &&
                 (chaseTarget.x == null || (npc.x === chaseTarget.x && npc.y === chaseTarget.y))) {
                 npc.state = 'returning';
@@ -269,6 +304,11 @@ export function tickNpcState(game, npc, clock = game.turn) {
                     sourceEnemy: npc,
                     category: 'deaggro',
                 });
+                // (theft) A robbed victim's sweep that found nobody spreads the
+                // chill. Gated on _robbedSweep so an ordinary lost-trail disengage
+                // never fires it — get CAUGHT and it stays between the two of you;
+                // get AWAY with it and the street gets warier of everyone.
+                for (const m of endRobbedSweep(game, npc)) messages.push(m);
                 break;
             }
 
@@ -561,6 +601,52 @@ function findNearestWantedItem(game, npc) {
 // Pulls from the seeded RNG (game.rng) so wander targets are deterministic
 // and resumable across saves — the save persists the live RNG stream and
 // restores it on load.
+
+// One step back toward this character's post, or false if it is already there,
+// has no post, or is the sort that roams by design.
+//
+// Returns true when a step was taken so the caller can spend the turn on it —
+// walking home is what you are doing this turn, the same way wandering is.
+export function goHomeStep(game, npc) {
+    if (!npc || npc.homeX == null || npc.homeY == null) return false;
+    // A wanderer has no post to keep; see the note at the IDLE case.
+    if (npc.behavior && npc.behavior.includes(STATE.WANDER)) return false;
+    if (npc.x === npc.homeX && npc.y === npc.homeY) return false;
+
+    // A real route, not a greedy nudge. getGreedyStep only ever moves to a
+    // neighbour that reduces straight-line distance, so it strands anyone whose
+    // post is back around a corner — it cannot even leave a spot where every
+    // improving neighbour is a wall. "If possible" was meant literally, so this
+    // asks whether a way home EXISTS and takes its first step.
+    const path = findPath(game, { x: npc.x, y: npc.y }, { x: npc.homeX, y: npc.homeY },
+                          { self: npc, avoidPlayer: true });
+    // No path means genuinely cut off — someone standing in the doorway, most
+    // likely. Wait and try again next turn rather than shoving back; being
+    // politely stuck beside your own stall is the funnier failure anyway.
+    if (!path || !path.length) return false;
+    const step = path[0];
+    stepEntity(npc, step.x, step.y, game._MOVE_MS);
+    return true;
+}
+
+// (theft) A robbed victim's sweep has ended. If it found nobody, the chill
+// spreads — and it fires exactly once, from whichever give-up branch got there
+// first. Gated on _robbedSweep so an ordinary lost-trail disengage never
+// gossips: get CAUGHT and it stays between the two of you, get AWAY with it and
+// the street gets warier of everyone.
+//
+// Returns log lines for the caller to surface, matching how the HOSTILE branch
+// already hands messages back rather than logging directly.
+function endRobbedSweep(game, npc) {
+    if (!npc || !npc._robbedSweep) return [];
+    npc._robbedSweep = false;
+    spreadParanoia(game.enemies, { x: npc.x, y: npc.y }, npc);
+    return [{
+        text: `[${npc.entity.name} gives up looking. People are watching you now.]`,
+        sourceEnemy: npc,
+        category: 'deaggro',
+    }];
+}
 
 function pickWanderTarget(game, npc) {
     const radius = npc.wanderRadius ?? 3;

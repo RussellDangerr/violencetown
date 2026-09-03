@@ -59,7 +59,15 @@ export function perceives(map, watcher, tx, ty) {
     const dy = ty - watcher.y;
     if (dx === 0 && dy === 0) return VERDICT.DIRECT;   // its own tile, trivially
 
-    const sight = watcher.sightRange ?? 0;
+    // (Phase 6) Night shrinks the cone. The Town Clock's lighting grade is
+    // stamped onto each watcher on the world beat, so a guard genuinely sees less
+    // after dark rather than merely looking like it — the same number the screen
+    // is dimmed by is the number their sight is cut by.
+    //
+    // Read defensively: a watcher built by a test, or by any path that never went
+    // through a world beat, has no _nightLevel and simply sees in full daylight.
+    const night = Math.max(0, Math.min(1, watcher._nightLevel ?? 0));
+    const sight = Math.max(0, Math.round((watcher.sightRange ?? 0) * (1 - 0.4 * night)));
     if (sight <= 0) return VERDICT.NONE;
 
     const dist = chebyshev(watcher.x, watcher.y, tx, ty);

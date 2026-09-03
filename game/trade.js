@@ -31,6 +31,14 @@ const BANDS = [
     { min: -50, mood: 'hostile',  face: 'angry',   buy: 2.4,  sell: 0.40 },
 ];
 
+// The band spacing, exported so consequences elsewhere can be TIED to it rather
+// than coincidentally equal to it — paranoia moves a merchant down exactly one
+// price tier, and that stays true if these bands are ever re-spaced.
+//
+// DERIVED from the table rather than written as 25 a second time. A literal here
+// would be a promise the table could quietly break.
+export const BANDS_STEP = BANDS[0].min - BANDS[1].min;
+
 // The band for a disposition value, or null if below the trade floor.
 export function band(disposition) {
     const d = disposition ?? 0;

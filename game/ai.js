@@ -36,6 +36,23 @@ export function isHostile(e) {
 // things that live down there, and that must survive a disposition flip — a
 // bribed Violet Fungus is your ally and still eats mushrooms. Deliberately NOT
 // derived from `allegiance`, which answers a different question.
+// Is this character actively hunting the player?
+//
+// The perception ladder (perception.js) added 'searching' — an enemy that has
+// LOST you and is sweeping your last-seen tile — and npc.js pursues on it
+// exactly as it pursues on 'chasing'. But every gate that asked "is this a
+// fight?" was written before that state existed and tested `state === 'chasing'`
+// alone, so a searching enemy hunted you while the game believed you were out of
+// combat. The sharpest consequence was the three de-aggro resets: they clear
+// 'chasing' on death, retry and zone change, so a searcher was never stood down
+// and the promised breather did not arrive.
+//
+// One predicate, so a future state cannot go missing from nine places at once.
+// 'returning' is deliberately NOT hunting — that is a character walking home.
+export function isHunting(e) {
+    return !!e && (e.state === 'chasing' || e.state === 'searching');
+}
+
 export function isSewerDweller(e) {
   return !!(e && e.sewerDweller);
 }
@@ -53,29 +70,6 @@ export function healPurchase(hp, maxHp, gold) {
   const spend = Math.min(gold, maxHp - hp);
   if (spend <= 0) return null; // full-HP edge — no zero-GP turns
   return { spend, heal: spend };
-}
-
-// The rock's clatter — the game's first stealth affordance. It reuses PD-1's
-// existing seam: npc.js already pursues _lastSeenX/_lastSeenY rather than the
-// player's true position, so a rock sets a FALSE last-seen without the thrower
-// ever having been seen.
-//
-// An enemy already chasing is NOT redirected — a rock distracts, it does not
-// rescue you from a fight you already started.
-export function rockClatter(enemies, x, y) {
-  for (const e of enemies || []) {
-    if (!e || e.state === 'chasing') continue;
-    // Hostiles only. `state: 'chasing'` is not just the AI's flag — renderer.js
-    // reads it in three places, and _drawArena blooms the lit combat stage around
-    // anything carrying it. A townsperson can never actually chase (their behavior
-    // whitelist excludes HOSTILE, so npc.js's HOSTILE branch never runs for them),
-    // so setting it on one only lights a combat arena around a shopkeeper.
-    if (!isHostile(e)) continue;
-    const range = e.sightRange ?? 8;
-    if (Math.max(Math.abs(e.x - x), Math.abs(e.y - y)) > range) continue;
-    e._lastSeenX = x; e._lastSeenY = y;
-    e.state = 'chasing';
-  }
 }
 
 // ── kitChoice — spend what you carry before you spend gold ───────────────────

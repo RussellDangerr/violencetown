@@ -285,6 +285,23 @@ function clamp01(v) {
 // (15–250ms) so the game stays snappy and overlapping shots don't muddy.
 
 const SFX = {
+    // (theft) A clean lift: a brief high rustle and nothing else. Deliberately
+    // the quietest cue in the table — a theft that announced itself would give
+    // away the one thing the verb is for, and the player's own confirmation is
+    // the item appearing in the bag.
+    theft(am) {
+        am._noise(0.045, { type: 'highpass', freq: 3200, gain: 0.09 });
+    },
+
+    // (theft) Caught: the same rustle, then a short rising two-tone that reads as
+    // an intake of breath. Loud enough to land over a footstep, because this is
+    // the beat the whole risk was about.
+    'theft-noticed'(am) {
+        am._noise(0.05, { type: 'highpass', freq: 3000, gain: 0.10 });
+        am._tone(420, 700, 0.10, { type: 'triangle', gain: 0.24, when: 0.03 });
+        am._tone(700, 620, 0.12, { type: 'triangle', gain: 0.18, when: 0.12 });
+    },
+
     // Soft, low filtered-noise tick with a pitch wobble — a footstep.
     move(am) {
         am._noise(0.05, { type: 'lowpass', freq: 520 + Math.random() * 120, gain: 0.18 });

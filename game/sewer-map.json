@@ -650,7 +650,7 @@
         "soap",
         "cardboard_cuirass"
       ],
-      "type": "Wererat",
+      "equipped": ["wooden_sword"], "type": "Wererat",
       "x": 17,
       "y": 10,
       "hp": 100,

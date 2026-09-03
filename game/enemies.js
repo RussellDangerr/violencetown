@@ -19,7 +19,8 @@ import { manhattan } from './utils.js';
 import { stepEntity, fleeStep } from './pathing.js';
 import { tickNpcState } from './npc.js';
 import { tickBuffList } from './buffs.js';
-import { parseCapabilities, deriveAllegiance } from './ai.js';
+import { parseCapabilities, deriveAllegiance, isHunting } from './ai.js';
+import { makeHostile } from './give-action.js';   // (theft) one spelling of "turned against you"
 import { FACING_VECTORS } from './perception.js';
 import { resolveItemDef } from './item-registry.js';
 
@@ -118,12 +119,23 @@ export class Enemy {
         // reloads mid-hunt instead of resetting the NPC to calm.
         _awareBeats = 0,
         _sweepBeats = 0,
+        // Where this character belongs: its spawn tile, and the anchor for both
+        // the chase leash (npc.js) and the walk home after a shove. Defaults to
+        // (x, y) so ordinary spawns need not state it, and is a real ctor param so
+        // a save restores the ORIGINAL post rather than re-deriving it from
+        // wherever the character happened to be standing when you saved.
+        homeX = null,
+        homeY = null,
         // Vendor fields (trade Slice 1). `vendor:true` makes the NPC a shopkeep —
         // pressing [E] adjacent opens their trade window. `stock` is the list of
         // item ids they sell (infinite supply for now); buy/sell prices come from
         // trade.js keyed off this NPC's `disposition`.
         vendor = null,
         stock = null,
+        // (fence) Deals in hot goods and asks no questions. An ordinary vendor
+        // refuses anything the street has heard about; a fence is the only place
+        // a NOTICED theft can be turned back into money.
+        fence = false,
         // (Phase 6d) Special-buyer override: { itemId: fixedPrice }. A vendor with
         // this buys the listed items for the fixed GP even when they're questItems
         // that sellPrice() would refuse — the archetype is Macc paying 500 for the
@@ -165,8 +177,8 @@ export class Enemy {
         // walks back here, then resumes idle. Runtime-only; NOT persisted (save.js
         // re-derives it from the spawn entry on load). See the leash block in
         // resolveEnemyTurns for the tunable thresholds.
-        this.homeX = x;
-        this.homeY = y;
+        this.homeX = homeX ?? x;
+        this.homeY = homeY ?? y;
         this._lostSightTurns = 0; // consecutive chase-beats with no LOS on the player
         this._lastSeenX = null;   // (PD-1) last tile the player was SEEN on — a blind
         this._lastSeenY = null;   // chaser pursues THIS, not the player's true position
@@ -236,6 +248,7 @@ export class Enemy {
         this._awareBeats   = _awareBeats;
         this._sweepBeats   = _sweepBeats;
         this.vendor        = vendor;
+        this.fence         = fence === true;
         this.stock         = stock;
         this.specialBuys   = specialBuys;
         // (transaction spine) Vendors carry a funded till so SELL has a source;
@@ -287,7 +300,7 @@ export class Enemy {
     // null) AND the allegiance runtime — an ally/summon whose _ally isn't restored
     // reloads as an INERT ALLIED-labelled NPC that neither fights (resolveEnemyTurns
     // gates the ally turn on _ally) nor is hostile. Deliberately NOT persisted
-    // (re-derived / RAM-only): homeX/homeY, _lostSightTurns, _buyback, render/emote
+    // (re-derived / RAM-only): _lostSightTurns, _buyback, render/emote
     // transients.
     toSave() {
         return {
@@ -302,6 +315,7 @@ export class Enemy {
             values: this.values, onFlip: this.onFlip,
             name: this.name, dialogueId: this.dialogueId,
             vendor: this.vendor, stock: this.stock, specialBuys: this.specialBuys, gold: this.gold, giftLog: this.giftLog,
+            fence: this.fence,
             // Law 6f: the carried kit must survive a reload the same way gold
             // does, or a boss's Challenge GP would drop on save/load.
             loadout: this.loadout,
@@ -317,6 +331,10 @@ export class Enemy {
             state: this.state, fsmState: this.fsmState, lastWanderTurn: this._lastWanderTurn,
             // (perception ladder) so a save taken mid-hunt reloads mid-hunt.
             _awareBeats: this._awareBeats, _sweepBeats: this._sweepBeats,
+            // Persisted since the walk-home landed. It used to be re-derived from
+            // the save's x/y, which silently moved the anchor: save while a chaser
+            // was mid-leash and "home" became wherever it happened to stand.
+            homeX: this.homeX, homeY: this.homeY,
             carrying: this.carrying, barkIndex: this._barkIndex, barkOffset: this._barkOffset,
             wasAdjacent: this._wasAdjacent, buffs: (this.buffs || []).map(b => ({ ...b })),
             // allegiance runtime (see note above)
@@ -344,7 +362,11 @@ export class Enemy {
     static fromSave(s) {
         const e = new Enemy(s);   // config fields incl. ambient; s.hp → Entity
         const num = (v, d) => (typeof v === 'number' && isFinite(v)) ? v : d;
-        e.entity.maxHp = num(s.maxHp, e.entity.maxHp);
+        // Floored at 1: a saved maxHp of 0 is finite, so `num` waved it through,
+        // and the nameplate's hp/maxHp then became NaN — which a canvas fillRect
+        // draws as nothing at all rather than throwing. A silently missing health
+        // bar with a clean console is worse than a crash.
+        e.entity.maxHp = Math.max(1, num(s.maxHp, e.entity.maxHp));
         e.entity.hp = Math.max(0, Math.min(num(s.hp, e.entity.maxHp), e.entity.maxHp));
         e.entity.alive = s.alive !== false;
         e.state = s.state || 'idle';
@@ -413,7 +435,7 @@ function defaultKit(armor) {
 // Law 6d: a spawn the player already mugged comes back broke — no gold AND no
 // kit, so re-entering a zone can't farm either half of the wallet. Pure so it
 // stays Node-testable.
-export function spawnEnemy(spawnDef, muggedIds) {
+export function spawnEnemy(spawnDef, muggedIds, robbed = null) {
     const e = new Enemy(spawnDef);
     const fights = (e.damage ?? 0) > 0 && !e.ambient;
     if (fights && spawnDef.gold == null && spawnDef.loadout == null) {
@@ -423,6 +445,22 @@ export function spawnEnemy(spawnDef, muggedIds) {
     }
     if (!Array.isArray(e.loadout)) e.loadout = e.loadout ? [...e.loadout] : [];
     if (muggedIds?.has(e.id)) { e.gold = 0; e.loadout = []; }
+
+    // (theft) A robbed enemy re-hydrates from map JSON on every _loadMap, so
+    // without this the theft — and the hostility that came with being caught —
+    // would quietly undo itself the moment you left the zone and came back.
+    //
+    // SUBTRACTIVE, unlike the mugged case above, which zeroes the whole wallet
+    // and wipes the whole loadout. Lifting 50 GP off a 200 GP enemy must leave
+    // them 150, not nothing.
+    const r = robbed?.[e.id];
+    if (r) {
+        e.gold = Math.max(0, (e.gold ?? 0) - (r.gold ?? 0));
+        if (r.items?.length) e.loadout = (e.loadout ?? []).filter(id => !r.items.includes(id));
+        // Only if they NOTICED. A clean theft leaves no social trace at all —
+        // that is what makes it clean.
+        if (r.noticed) makeHostile(e);
+    }
     return e;
 }
 
@@ -533,7 +571,7 @@ export function resolveAmbientTurns(game) {
 
     for (const npc of game.enemies) {
         if (!npc.entity.isAlive()) continue;
-        if (npc.state === 'chasing') continue;   // engaged hostile = combat, not ambient
+        if (isHunting(npc)) continue;   // engaged hostile = combat, not ambient
         if (npc._ally) continue;                  // allies resolve on the player-turn loop
         if (npc.hasBuff('feared')) continue;      // (fear) the per-turn loop owns its flee
 

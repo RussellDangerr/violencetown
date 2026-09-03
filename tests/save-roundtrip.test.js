@@ -23,7 +23,7 @@ import {
     loadInto as loadIntoReal,
 } from '../game/save.js';
 import { QuestEngine } from '../game/quests.js';
-import { Enemy } from '../game/enemies.js';
+import { Enemy, spawnEnemy } from '../game/enemies.js';
 
 // ── Minimal global stubs (localStorage + document) ───────────────────────────
 // save.js's write/read path uses localStorage; enemies.js's chain never calls
@@ -603,5 +603,151 @@ describe('enemy loadout (Law 6f) round-trip (Task 16)', () => {
         const e = new Enemy({ id: 'fresh', type: 'Rat', x: 1, y: 1 });
         const out = rt(e);
         assert.equal(out.loadout, null);
+    });
+});
+
+// ── The theft ledger (Thieve Task 12) ────────────────────────────────────────
+//
+// Enemies re-hydrate from map JSON on every _loadMap, so without a persisted
+// record a robbery would quietly undo itself the moment you left the zone and
+// came back — the gold restored, the gear back on the victim, the -100 gone.
+describe('_robbed survives and is re-applied', () => {
+    test('the ledger round-trips through a save', async () => {
+        installGlobals();
+        const game = makePopulatedGame();
+        game._robbed = { e7: { gold: 50, items: ['rock'], weightTaken: 2, noticed: false } };
+        const raw = JSON.parse(JSON.stringify(serialize(game)));
+        const restored = makeBlankGame();
+        await loadIntoReal(restored, migrate(raw));
+        assert.deepEqual(restored._robbed.e7,
+            { gold: 50, items: ['rock'], weightTaken: 2, noticed: false });
+    });
+
+    test('an old save with no ledger loads as empty rather than undefined', () => {
+        const raw = { world: { muggedIds: [] } };
+        const m = migrate(JSON.parse(JSON.stringify(raw)));
+        assert.deepEqual(m.world.robbed, {});
+    });
+
+    test('a junk ledger from disk is coerced, not trusted', () => {
+        for (const junk of [null, 'nope', 42, []]) {
+            const m = migrate({ world: { muggedIds: [], robbed: junk } });
+            assert.deepEqual(m.world.robbed, {}, `${JSON.stringify(junk)} should not survive`);
+        }
+    });
+
+    test('a robbed spawn comes back light — only what was taken is gone', () => {
+        // A NEUTRAL victim, deliberately: a bare `guard` has no behavior whitelist
+        // and deriveAllegiance makes that born-hostile, so allegiance could not
+        // tell a theft apart from the enemy's own nature.
+        const clean = spawnEnemy(
+            { id: 'e7', type: 'Violencian', x: 1, y: 1, gold: 200,
+              loadout: ['rock'], behavior: ['IDLE'] },
+            new Set(), { e7: { gold: 50, items: ['rock'], weightTaken: 2, noticed: false } });
+        assert.equal(clean.gold, 150, 'subtractive — not the whole wallet like a mugging');
+        assert.deepEqual(clean.loadout, []);
+        assert.equal(clean.allegiance, 'neutral', 'a CLEAN theft leaves no social trace');
+        assert.notEqual(clean.disposition, -100);
+    });
+
+    test('a NOTICED one comes back hostile at the floor', () => {
+        const caught = spawnEnemy(
+            { id: 'e8', type: 'guard', x: 1, y: 1, gold: 200, damage: 5 },
+            new Set(), { e8: { gold: 50, items: [], weightTaken: 4, noticed: true } });
+        assert.equal(caught.allegiance, 'hostile');
+        assert.equal(caught.disposition, -100);
+        assert.equal(caught.fsmState, 'HOSTILE');
+    });
+
+    test('a re-spawned victim is hostile but NOT still mid-sweep', () => {
+        // applyHostileFlip also sets state 'searching'; a fresh spawn must not
+        // inherit that — the sweep already happened, in another visit.
+        const caught = spawnEnemy(
+            { id: 'e9', type: 'guard', x: 1, y: 1, gold: 10, damage: 5 },
+            new Set(), { e9: { gold: 5, items: [], weightTaken: 4, noticed: true } });
+        assert.notEqual(caught.state, 'searching');
+        assert.ok(!caught._robbedSweep, 'and must not re-arm the paranoia hook');
+    });
+
+    test("an unrobbed bystander is untouched by someone else's entry", () => {
+        const e = spawnEnemy({ id: 'zz', type: 'Violencian', x: 1, y: 1, gold: 200, behavior: ['IDLE'] },
+            new Set(), { other: { gold: 999, items: [], weightTaken: 9, noticed: true } });
+        assert.equal(e.gold, 200);
+        assert.equal(e.allegiance, 'neutral');
+    });
+
+    test('the ledger can never take a wallet negative', () => {
+        const e = spawnEnemy({ id: 'p1', type: 'guard', x: 1, y: 1, gold: 10, damage: 5 },
+            new Set(), { p1: { gold: 999, items: [], weightTaken: 1, noticed: false } });
+        assert.equal(e.gold, 0);
+    });
+
+    test('spawnEnemy still works with no ledger at all', () => {
+        const e = spawnEnemy({ id: 'n1', type: 'guard', x: 1, y: 1, gold: 30, damage: 5 }, new Set());
+        assert.equal(e.gold, 30);
+    });
+});
+
+// ── Corrupt saves must not blank the screen ─────────────────────────────────
+//
+// Found by a bug-hunting pass, each reproduced against the real modules before
+// being fixed. None of these fire on a fresh boot or in ordinary play — every
+// one needs a save that is ALREADY non-conforming (partial write, sync mangling,
+// a hand edit). They matter anyway because of WHERE they landed: continueGame
+// dismisses the splash and shows the wrapper BEFORE it awaits loadInto, so a
+// throw in there left a blank screen, a half-built world and an error only the
+// console could see.
+//
+// migrate() checked the SHAPE of the top-level fields and stopped there. These
+// are the two levels it was not walking, plus a numeric floor.
+describe('a save corrupted on disk is coerced, not obeyed', () => {
+    const withWorld = (over) => migrate({ world: { ...over } });
+
+    test('a null in any hydrated array is dropped rather than destructured', () => {
+        // loadInto destructures every element — Enemy.fromSave destructures its
+        // argument outright — so one null threw partway through the load.
+        for (const field of ['enemies', 'groundItems', 'containers', 'tileDiffs']) {
+            const m = withWorld({ [field]: [null, { id: 'ok' }, undefined, 'junk', 42] });
+            assert.deepEqual(m.world[field], [{ id: 'ok' }],
+                `${field} should keep only real objects`);
+        }
+    });
+
+    test('a non-array in those fields still becomes an empty array', () => {
+        for (const field of ['enemies', 'groundItems', 'containers', 'tileDiffs']) {
+            assert.deepEqual(withWorld({ [field]: 'nope' }).world[field], []);
+        }
+    });
+
+    test('a corrupted per-NPC theft record is dropped', () => {
+        // `this._robbed[id] ||= {...}` does NOT replace a truthy primitive, so a
+        // corrupted entry survived and the next `rec.weightTaken +=` threw on it.
+        // The old fuzz test only covered the TOP-level field; the gap was one
+        // level down.
+        const m = withWorld({ robbed: {
+            good: { gold: 1, items: [], weightTaken: 1, noticed: false },
+            asString: 'junk', asNumber: 42, asTrue: true, asArray: [], asNull: null,
+        } });
+        assert.deepEqual(Object.keys(m.world.robbed), ['good']);
+    });
+
+    test('maxHp can never load as zero — a NaN bar draws as nothing at all', () => {
+        // finite, so the old check waved it through; hp/maxHp then went NaN and
+        // fillRect silently drew nothing, with a clean console.
+        const m = migrate({ player: { maxHp: 0, hp: 0 } });
+        const v = JSON.parse(JSON.stringify(m));
+        installGlobals();
+        const g = makeBlankGame();
+        return loadIntoReal(g, m).then(() => {
+            assert.ok(g.playerMaxHp >= 1, `playerMaxHp was ${g.playerMaxHp}`);
+            assert.ok(Number.isFinite(g.playerHp / g.playerMaxHp), 'hp fraction must not be NaN');
+            assert.ok(v);
+        });
+    });
+
+    test('an enemy saved with maxHp 0 comes back with a drawable bar', () => {
+        const e = Enemy.fromSave({ id: 'x', type: 'guard', x: 1, y: 1, maxHp: 0, hp: 0 });
+        assert.ok(e.entity.maxHp >= 1);
+        assert.ok(Number.isFinite(e.entity.hp / e.entity.maxHp));
     });
 });

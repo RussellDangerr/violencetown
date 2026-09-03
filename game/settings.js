@@ -21,15 +21,36 @@ export const DEFAULTS = Object.freeze({
     musicVolume: 0.7,
     sfxVolume:   0.8,
     reduceMotion: false,   // suppress / dampen screenshake + flash
-    // Default-ON until audio/music is intentionally worked on — keeps dev
-    // instances (and players) silent by default. The options mute toggle
-    // persists an unmute per-device, so turning sound ON sticks.
+    // MUTED BY DEFAULT, and this is a RULING rather than a placeholder.
+    //
+    // (Caelan, 2026-09-02) The previous comment here said "default-ON until
+    // audio/music is intentionally worked on", which read as a stale TODO — so
+    // it got flipped to false on the grounds that a silent demo undersells the
+    // procedural audio. He overruled it the same day: sound firing the instant
+    // someone clicks GAME START "is too janky to be auto-playing on click".
+    //
+    // He is right, and the reasoning is worth keeping because the alternative is
+    // seductive: yes, Web Audio needs a gesture and the splash button is one, so
+    // unmuting is technically well-behaved. It is still the wrong default. A
+    // stranger opening a link — on a work laptop, in an open office, beside
+    // someone else — should choose to make noise, not discover they already are.
+    //
+    // The real problem the flip was aiming at (nobody knows the audio exists) is
+    // a DISCOVERABILITY problem and wants a visible sound control, not autoplay.
+    //
+    // Do not flip this again without asking him.
     muted:        true,    // hard mute, independent of the two volumes
     firstRunHintSeen: false, // (pointer model) one-time "tap to move" hint shown?
     // (Slice 2) how the action wheel opens: 'tap-toggle' (tap opens + stays —
     // today's behaviour) or 'hold' (press-and-hold opens, release closes).
     // Toggled in Options; the opener reads it live via Settings.get().
     wheelOpenMode: 'tap-toggle',
+    // (threat overlay) How enemy vision is drawn. 'shadow' stipples the tiles
+    // NOBODY can see, so the safe ground is what you read; 'danger' tints the
+    // watched ones instead. Two readings of the same field — some players hunt
+    // for cover, some track the threat.
+    threatStyle: 'shadow',
+    blindSpotHintSeen: false, // (theft) one-shot: the first time you stand unseen beside someone
 });
 
 // Live, mutable copy of the settings. Seeded with defaults so callers can read
@@ -72,6 +93,11 @@ export function validate(raw) {
         muted:        asBool(o.muted,        DEFAULTS.muted),
         firstRunHintSeen: asBool(o.firstRunHintSeen, DEFAULTS.firstRunHintSeen),
         wheelOpenMode:    asEnum(o.wheelOpenMode, ['hold', 'tap-toggle'], DEFAULTS.wheelOpenMode),
+        // validate() DROPS unknown keys, so a field added to DEFAULTS and not
+        // here is silently discarded on every load — it would read correctly all
+        // session and reset on reload.
+        threatStyle:      asEnum(o.threatStyle, ['shadow', 'danger'], DEFAULTS.threatStyle),
+        blindSpotHintSeen: asBool(o.blindSpotHintSeen, DEFAULTS.blindSpotHintSeen),
     };
 }
 

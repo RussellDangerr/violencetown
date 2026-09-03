@@ -85,3 +85,49 @@ test('validate returns fresh object (not mutating input)', () => {
   assert.equal(input.wheelOpenMode, 'hold');
   assert.equal(result.wheelOpenMode, 'hold');
 });
+
+// ── threatStyle (threat overlay) ─────────────────────────────────────────────
+//
+// The trap this pins: validate() DROPS unknown keys, so a field added to
+// DEFAULTS but not to validate() reads correctly all session and silently
+// resets on every reload. Easy to add half of, and impossible to notice without
+// quitting the game.
+
+test('DEFAULTS.threatStyle is "shadow"', () => {
+  assert.equal(DEFAULTS.threatStyle, 'shadow');
+});
+
+test('validate() carries threatStyle through — it must not be dropped as unknown', () => {
+  assert.equal(validate({ threatStyle: 'danger' }).threatStyle, 'danger');
+});
+
+test('validate({}) injects the threatStyle default', () => {
+  assert.equal(validate({}).threatStyle, 'shadow');
+});
+
+test('a threatStyle from disk that is not one of the two coerces to the default', () => {
+  for (const junk of ['garbage', '', null, undefined, 0, 42, {}, []]) {
+    assert.equal(validate({ threatStyle: junk }).threatStyle, 'shadow',
+      `${JSON.stringify(junk)} should not survive`);
+  }
+});
+
+test('both real treatments survive a round trip', () => {
+  for (const style of ['shadow', 'danger']) {
+    assert.equal(validate(validate({ threatStyle: style })).threatStyle, style);
+  }
+});
+
+// (theft) The blind-spot hint flag — same drop-unknown-keys trap as threatStyle.
+test('blindSpotHintSeen defaults off and survives validate', () => {
+  assert.equal(DEFAULTS.blindSpotHintSeen, false);
+  assert.equal(validate({}).blindSpotHintSeen, false);
+  assert.equal(validate({ blindSpotHintSeen: true }).blindSpotHintSeen, true,
+    'must not be dropped as an unknown key, or the hint repeats every session');
+});
+
+test('a junk blindSpotHintSeen coerces rather than being trusted', () => {
+  for (const junk of ['yes', 1, null, {}]) {
+    assert.equal(typeof validate({ blindSpotHintSeen: junk }).blindSpotHintSeen, 'boolean');
+  }
+});

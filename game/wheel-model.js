@@ -7,7 +7,7 @@
 import { SPELLS } from './spells.js';
 import { TRICKS } from './tricks.js';
 import { hasItemDef } from './items.js';
-import { isHostile } from './ai.js';
+import { isHostile, isHunting } from './ai.js';
 
 const always = () => true;
 
@@ -57,6 +57,26 @@ export const ROOT = { key: 'menu', label: 'MENU', children: [
     { key: 'throw',  label: 'Throw',  needsItem: true,  aimType: 'reticle',  resolver: 'resolveThrow', available: always },
     { key: 'defend', label: 'Defend', aimType: 'none',                       resolver: 'guard',        available: always },
     { key: 'trade',  label: 'Trade',  aimType: 'adjacent',                   resolver: 'trade',        available: always },
+    // (perception/theft) Thieve — a transaction with the sign flipped, so it
+    // belongs beside Trade rather than under Fight. (The spec said "beside Bribe
+    // and Trade"; Bribe folded into the offer screen, so Trade is what is left.)
+    //
+    // Greys out entirely unless you are hidden; the three takes grey out
+    // individually on what the victim is actually carrying. Both questions are
+    // ASKED OF THE GAME rather than answered here, so wheel-model stays pure and
+    // never imports perception — and a game that cannot answer refuses rather
+    // than throwing, because a wheel that explodes mid-draw is worse than a wheel
+    // with a greyed slice.
+    { key: 'thieve', label: 'Thieve', aimType: 'adjacent', color: '#cba43c', text: '#2a1f06',
+      available: (g) => (g.isHidden ? g.isHidden() : false),
+      children: [
+        { key: 'coin', label: 'Coin', aimType: 'adjacent', resolver: 'thieveCoin',
+          available: (g) => (g.canThieve ? g.canThieve('coin') : false) },
+        { key: 'kit',  label: 'Kit',  aimType: 'adjacent', resolver: 'thieveKit',
+          available: (g) => (g.canThieve ? g.canThieve('kit') : false) },
+        { key: 'gear', label: 'Gear', aimType: 'adjacent', resolver: 'thieveGear',
+          available: (g) => (g.canThieve ? g.canThieve('gear') : false) },
+      ] },
     // (Armory reconciliation) GP-costed tricks granted by equipped tech gear —
     // siblings of Bribe/Trade, gated on grantedTricks + gold; castTrick spends GP.
     { key: 'rayblast', label: 'Ray Blast', trickId: 'ray_blast', aimType: 'reticle', resolver: 'castTrick',
@@ -348,7 +368,7 @@ export function verbApplies(node, game) {
 // delegates here). Drives the wheel's combat re-skin. Pure — game in, bool out.
 export function isCombatActive(game) {
   return (game && game.enemies || []).some(e =>
-    !e.ambient && e.state === 'chasing' && e.entity && e.entity.isAlive());
+    !e.ambient && isHunting(e) && e.entity && e.entity.isAlive());
 }
 
 // ── Flapper (§12.4) ──────────────────────────────────────────────────────────
