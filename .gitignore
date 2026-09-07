@@ -99,3 +99,7 @@ game/_ui-preview*
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# --- roadmap-board scratch (generated seed payloads; never commit) ---
+tools/roadmap-board/dist/seed-*.json
+tools/roadmap-board/dist/db/
