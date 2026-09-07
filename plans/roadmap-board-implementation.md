@@ -23,6 +23,17 @@
 
 **How Caelan views it:** the Artifact tool returns a `claude.ai/code/artifact/<id>` URL on first publish. It is **private** — visible in his gallery (claude.ai/code/artifacts; `/artifacts` in the terminal; ctrl+] reopens the latest) and to nobody else unless he shares the link. Republishing the same source file redeploys to the same URL.
 
+**Stronger than private-by-default:** the `db` contract (0.2.41) states that a `db`-declaring artifact is *organization-internal and cannot be shared publicly* — every reader and writer must be a signed-in member of the owner's organization. So the board is structurally incapable of becoming a public page. The flip side: anyone in the org with the link can *write* the store, which is why every db value is treated as untrusted in the page (Task 3).
+
+**Contract facts the page and the seed rely on** (from `db.d.ts`, read 2026-09-07):
+- `update()` **requires the document to exist** (rejects `invalid_argument` otherwise). The seed uses `set`, so every card exists before the page ever calls `update`.
+- Document paths: `cards/<id>` is 2 segments — a document. Ids may use letters, digits and `_ - . ~ : @ +` only; the extractor's slugs and the ruling codes all comply.
+- Bodies are plain objects ≤ 256 KiB; the store holds ≤ 5,000 documents. ~50 cards is nothing.
+- Without `orderBy`, a query delivers docs in id order; `byLane` sorts by `order` anyway.
+- One subscription per view (cap is 64). A drag is one `update`. Nothing here approaches a rate limit.
+
+**Orchestrator discipline, learned the hard way on Task 1:** never edit the working tree while an implementer agent is running on it — the agent's process reverted two uncommitted plan edits underneath the orchestrator. Commit controller edits *before* dispatching, or wait for the agent to land.
+
 ---
 
 ## File Structure
@@ -714,10 +725,19 @@ async function boot() {
   if (!db) { setStatus('read-only · no store in this view'); render(); return; }
 
   // Live: every change from any view of this page re-renders. Last write wins.
-  unsub = db.collection('cards').onSnapshot(snap => {
-    const rows = snap.docs ? snap.docs.map(d => d.data()) : snap;
-    if (Array.isArray(rows) && rows.length) { cards = rows; render(); setStatus(`live · ${rows.length} cards`); }
-  });
+  // Contract 0.2.41: `next` receives a QuerySnapshot — `.docs` is DocumentSnapshot[],
+  // each with `.id`, `.exists`, `.data()`. Delivered snapshots and their data()
+  // are FROZEN: never mutate them, clone before editing (moveCard spreads a copy).
+  // The first delivery may be `metadata.fromCache`; a definitive one follows.
+  unsub = db.collection('cards').onSnapshot(
+    snap => {
+      if (snap.empty) { setStatus('connected · store is empty — seed it from the roadmap'); return; }
+      cards = snap.docs.map(d => d.data());
+      render();
+      setStatus(`live · ${snap.size} cards${snap.metadata.hasPendingWrites ? ' · saving…' : ''}`);
+    },
+    err => setStatus(`store error: ${err.code} — showing last known state`),   // terminal; listener is dead
+  );
   setStatus('connected');
 }
 function setView(v) {
