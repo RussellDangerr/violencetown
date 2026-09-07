@@ -19,6 +19,8 @@
 | 5 · Design + review pass | **Opus** | Judgment: theme, hierarchy, a11y, "does the graph read" |
 | 6 · Sync-back exporter | **Haiku** | Mechanical; droppable if the session runs long |
 
+**Published (Task 4, 2026-09-07):** https://claude.ai/code/artifact/267dc977-cb87-453f-9ba8-ce6479a79ce7 — contract 0.2.41, `capabilities: {db: {}}`, sharing *owner*. Republish by rebuilding `dist/index.html` and calling `Artifact` with that same file path from a session that published it, or with `url` from any other.
+
 **Where things live:** page source under `tools/roadmap-board/` (it is project tooling, not game code — same home as the generators). Committed on `dev`. The published artifact is a *build output* of that source.
 
 **How Caelan views it:** the Artifact tool returns a `claude.ai/code/artifact/<id>` URL on first publish. It is **private** — visible in his gallery (claude.ai/code/artifacts; `/artifacts` in the terminal; ctrl+] reopens the latest) and to nobody else unless he shares the link. Republishing the same source file redeploys to the same URL.
