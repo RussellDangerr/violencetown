@@ -1,0 +1,321 @@
+<title>Violencetown Board</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&display=swap">
+<style>
+  :root {
+    --bg: #f6f1e7; --panel: #fffaf0; --ink: #2a1f06; --muted: #7a6a4a;
+    --line: #d9c9a8; --accent: #8a5a2c; --gold: #d4b96a;
+    --ruling: #f3d9a4; --build: #cfe8c9; --design: #d9d4ee; --later: #e6e6e6; --done: #dfe9e0;
+    --lift: 0 2px 8px rgba(42,31,6,.12);
+    --on-gold: #2a1f06;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1a1610; --panel: #241f16; --ink: #f3e3c0; --muted: #b9a684;
+      --line: #4a3d28; --accent: #d4b96a; --gold: #d4b96a;
+      --ruling: #4a3a1a; --build: #223a22; --design: #2c2640; --later: #333; --done: #1f2a20;
+      --lift: 0 2px 10px rgba(0,0,0,.5);
+      --on-gold: #2a1f06;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1a1610; --panel: #241f16; --ink: #f3e3c0; --muted: #b9a684;
+    --line: #4a3d28; --accent: #d4b96a; --gold: #d4b96a;
+    --ruling: #4a3a1a; --build: #223a22; --design: #2c2640; --later: #333; --done: #1f2a20;
+    --lift: 0 2px 10px rgba(0,0,0,.5);
+    --on-gold: #2a1f06;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--ink); font: 14px/1.4 ui-monospace, "Cascadia Mono", Consolas, monospace; }
+  h1, h2 { font-family: 'VT323', ui-monospace, "Cascadia Mono", Consolas, monospace; font-weight: 400; text-wrap: balance; margin: 0; }
+  p { margin: 0; }
+  button { font-family: inherit; }
+
+  /* ── Header ─────────────────────────────────────────────────────────── */
+  .bar {
+    display: grid; grid-template-columns: 1fr auto; column-gap: 20px; row-gap: 4px;
+    padding: 14px 20px; border-bottom: 2px solid var(--line); background: var(--panel);
+  }
+  .bar h1 { grid-column: 1; grid-row: 1; font-size: 32px; letter-spacing: .02em; }
+  .bar nav { grid-column: 2; grid-row: 1 / span 3; align-self: center; display: flex; gap: 6px; }
+  .bar #status { grid-column: 1; grid-row: 2; font-size: 12.5px; color: var(--muted); }
+  .bar .hint { grid-column: 1; grid-row: 3; font-size: 11px; color: var(--muted); }
+  .bar nav button {
+    font-size: 13px; padding: 6px 14px; border: 1px solid var(--line); border-radius: 3px;
+    background: var(--bg); color: var(--muted); cursor: pointer;
+    transition: background .12s ease, color .12s ease, border-color .12s ease;
+  }
+  .bar nav button:hover { border-color: var(--accent); color: var(--ink); }
+  .bar nav button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+  .bar nav button[aria-pressed="true"]:hover { color: var(--panel); }
+  .bar nav button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (max-width: 480px) {
+    .bar { grid-template-columns: 1fr; }
+    .bar nav { grid-column: 1; grid-row: 4; justify-self: start; margin-top: 4px; }
+  }
+
+  /* ── Unblocked strip — the one bright moment on the page ───────────── */
+  #unblocked {
+    display: flex; align-items: center; gap: 16px; flex-wrap: nowrap; overflow-x: auto;
+    padding: 10px 20px; background: var(--gold); border-bottom: 1px solid var(--line);
+  }
+  #unblocked h2 { flex: none; font-size: 19px; color: var(--on-gold); white-space: nowrap; }
+  #unblocked .chips { display: flex; gap: 8px; flex-wrap: nowrap; }
+  #unblocked .muted { color: var(--on-gold); opacity: .7; font-style: italic; font-size: 12.5px; white-space: nowrap; }
+
+  /* ── Lane rail ──────────────────────────────────────────────────────── */
+  .rail { display: flex; align-items: flex-start; gap: 14px; padding: 16px 20px; overflow-x: auto; }
+  .lane {
+    flex: 0 0 300px; display: flex; flex-direction: column;
+    background: var(--panel); border: 1px solid var(--line);
+    border-top: 4px solid var(--line); border-radius: 4px;
+  }
+  .lane[data-lane="rulings"] { border-top-color: var(--ruling); }
+  .lane[data-lane="now"], .lane[data-lane="ready"] { border-top-color: var(--build); }
+  .lane[data-lane="design"] { border-top-color: var(--design); }
+  .lane[data-lane="later"] { border-top-color: var(--later); }
+  .lane[data-lane="done"] { border-top-color: var(--done); }
+  .lane h2 {
+    display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px;
+    padding: 10px 12px 8px; border-bottom: 1px solid var(--line);
+    font-size: 21px; text-transform: uppercase; letter-spacing: .06em;
+  }
+  .lane h2 .count {
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 11.5px;
+    text-transform: none; letter-spacing: 0; font-variant-numeric: tabular-nums;
+    background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 1px 7px;
+    color: var(--muted);
+  }
+  .lane h2 small {
+    flex-basis: 100%; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    text-transform: none; letter-spacing: 0; font-size: 11px; font-weight: 400; color: var(--muted);
+  }
+  .cards { display: flex; flex-direction: column; gap: 10px; padding: 12px; min-height: 32px; }
+  .cards:empty::after {
+    content: "— empty —"; display: block; text-align: center; padding: 8px 0;
+    color: var(--muted); font-size: 11px; font-style: italic;
+  }
+
+  /* ── Card ───────────────────────────────────────────────────────────── */
+  .card {
+    position: relative; display: flex; flex-direction: column; gap: 6px;
+    background: var(--bg); border: 1px solid var(--line); border-left: 5px solid var(--muted);
+    border-radius: 2px; padding: 10px 12px 10px 10px; cursor: default;
+    transition: opacity .15s ease, box-shadow .15s ease, transform .1s ease;
+  }
+  .card[draggable="true"] { cursor: grab; }
+  .card.ruling { border-left-color: var(--ruling); }
+  .card.build  { border-left-color: var(--build); }
+  .card.design { border-left-color: var(--design); }
+  .card.later  { border-left-color: var(--later); }
+  .card.done   { border-left-color: var(--done); border-left-style: dashed; opacity: .82; }
+  .card.dim { opacity: .35; }
+  .card.lifting { box-shadow: var(--lift); opacity: .92; transform: scale(1.015); cursor: grabbing; }
+  .card.blocked { padding-right: 16px; }
+  .card.blocked::after {
+    content: ""; position: absolute; top: 6px; right: 0; bottom: 6px; width: 6px;
+    background: repeating-linear-gradient(-45deg, var(--muted) 0 4px, transparent 4px 8px);
+    opacity: .5; border-radius: 3px;
+  }
+  .card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .card header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .card header b { font-size: 13.5px; letter-spacing: .03em; color: var(--accent); }
+  .card header em {
+    font-style: normal; font-size: 11px; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 3px; padding: 0 5px;
+    font-variant-numeric: tabular-nums;
+  }
+  .card .title { color: var(--ink); font-weight: 600; line-height: 1.45; }
+  .card .note  { color: var(--muted); font-size: 12.5px; line-height: 1.45; }
+  .card .doc   {
+    color: var(--muted); font-size: 11.5px; font-style: italic; line-height: 1.4;
+    padding-top: 5px; border-top: 1px dashed var(--line);
+  }
+  .card .row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+  .card .row span { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+
+  /* ── Chips ──────────────────────────────────────────────────────────── */
+  .chip {
+    font: 11px/1 ui-monospace, "Cascadia Mono", Consolas, monospace; white-space: nowrap; flex: none;
+    padding: 3px 9px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--ink);
+  }
+  button.chip { cursor: pointer; transition: border-color .12s ease, box-shadow .12s ease; }
+  button.chip:hover, button.chip:focus-visible { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  button.chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .chip.ruling { background: var(--ruling); }
+  .chip.build  { background: var(--build); }
+  .chip.design { background: var(--design); }
+  .chip.later  { background: var(--later); }
+  .chip.done   { background: var(--done); }
+  .chip.ghost  { background: transparent; color: var(--muted); border-style: dashed; font-style: italic; cursor: default; }
+
+  /* ── Graph view ─────────────────────────────────────────────────────── */
+  #graph { padding: 16px 20px; }
+  #graph pre.mermaid {
+    margin: 0; overflow: auto; max-width: 100%;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 20px;
+    font: 12px/1.6 ui-monospace, "Cascadia Mono", Consolas, monospace; color: var(--ink);
+    white-space: pre;
+  }
+
+  /* ── Scrollbars (Chromium; harmless no-op elsewhere) ───────────────── */
+  .rail::-webkit-scrollbar, #unblocked::-webkit-scrollbar, #graph pre.mermaid::-webkit-scrollbar { height: 10px; width: 10px; }
+  .rail::-webkit-scrollbar-track, #unblocked::-webkit-scrollbar-track, #graph pre.mermaid::-webkit-scrollbar-track { background: transparent; }
+  .rail::-webkit-scrollbar-thumb, #unblocked::-webkit-scrollbar-thumb, #graph pre.mermaid::-webkit-scrollbar-thumb { background: var(--line); border-radius: 6px; }
+
+  /* ── Motion ─────────────────────────────────────────────────────────── */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
+  }
+</style>
+
+<header class="bar">
+  <h1>Violencetown Board</h1>
+  <p class="sub" id="status">loading…</p>
+  <p class="hint">Built for desktop — dragging needs a mouse. Tab, chips, and jump all work without one.</p>
+  <nav>
+    <button id="view-board" aria-pressed="true">Board</button>
+    <button id="view-graph" aria-pressed="false">Graph</button>
+  </nav>
+</header>
+
+<section id="unblocked" aria-label="Unblocked now"></section>
+<main id="board" class="rail" aria-label="Lanes"></main>
+<section id="graph" hidden><pre class="mermaid" id="mermaid-src"></pre></section>
+
+<script>
+/* @@BOARD_MODEL@@ */
+const SEED = /* @@SEED@@ */ [];
+
+// ── State ──────────────────────────────────────────────────────────────────
+let cards = SEED.map(c => ({ ...c }));
+let db = null;                 // resolved capability, or null (read-only)
+let unsub = null;
+let ix = null;                 // blockerIndex, memoised per render (highlight() runs on every mouseover)
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
+
+// ── Render ─────────────────────────────────────────────────────────────────
+function render() {
+  const lanes = byLane(cards);
+  ix = blockerIndex(cards);
+  const byId = Object.fromEntries(cards.map(c => [c.id, c]));
+
+  $('#unblocked').innerHTML = `<h2>Unblocked now</h2><div class="chips">${
+    unblocked(cards).map(c => `<button class="chip build" data-jump="${esc(c.id)}">${esc(c.id)} · ${esc(c.title)}</button>`).join('') || '<span class="muted">nothing — every build is waiting on a ruling</span>'
+  }</div>`;
+
+  $('#board').innerHTML = LANES.map(l => `
+    <section class="lane" data-lane="${esc(l.id)}" aria-label="${esc(l.label)}">
+      <h2>${esc(l.label)} <span class="count">${lanes[l.id].length}</span><small>${esc(l.hint)}</small></h2>
+      <div class="cards" data-lane="${esc(l.id)}">${lanes[l.id].map(c => cardHTML(c, byId)).join('')}</div>
+    </section>`).join('');
+
+  $('#mermaid-src').textContent = mermaidSource(cards);
+  bindDnD();
+}
+
+function cardHTML(c, byId) {
+  const chip = (id, cls) => byId[id]
+    ? `<button class="chip ${cls}" data-jump="${esc(id)}" title="${esc(byId[id].title)}">${esc(id)}</button>`
+    : `<span class="chip ghost">${esc(id)}</span>`;
+  const open = ix.openBlockedBy[c.id] ?? [];
+  return `
+    <article class="card ${esc(c.kind)}${open.length ? ' blocked' : ''}" draggable="${db ? 'true' : 'false'}"
+             data-id="${esc(c.id)}" tabindex="0">
+      <header><b>${esc(c.id)}</b>${c.size ? `<em>${esc(c.size)}</em>` : ''}</header>
+      <p class="title">${esc(c.title)}</p>
+      ${c.note ? `<p class="note">${esc(c.note)}</p>` : ''}
+      ${(ix.blockedBy[c.id] ?? []).length ? `<p class="row"><span>blocked by</span>${ix.blockedBy[c.id].map(id => chip(id, byId[id]?.lane === 'done' ? 'done' : 'ruling')).join('')}</p>` : ''}
+      ${(ix.blocks[c.id] ?? []).length ? `<p class="row"><span>blocks</span>${ix.blocks[c.id].map(id => chip(id, 'build')).join('')}</p>` : ''}
+      ${c.doc ? `<p class="doc">${esc(c.doc)}</p>` : ''}
+    </article>`;
+}
+
+// ── Hover / focus: light up the connected subgraph ─────────────────────────
+document.addEventListener('mouseover', e => highlight(e.target.closest('.card')?.dataset.id));
+document.addEventListener('focusin',   e => highlight(e.target.closest('.card')?.dataset.id));
+document.addEventListener('mouseout',  e => { if (!e.relatedTarget?.closest?.('.card')) highlight(null); });
+function highlight(id) {
+  if (!ix) return;
+  const keep = id ? new Set([id, ...(ix.blockedBy[id] ?? []), ...(ix.blocks[id] ?? [])]) : null;
+  for (const el of document.querySelectorAll('.card')) el.classList.toggle('dim', !!keep && !keep.has(el.dataset.id));
+}
+document.addEventListener('click', e => {
+  const j = e.target.closest('[data-jump]'); if (!j) return;
+  const el = document.querySelector(`.card[data-id="${CSS.escape(j.dataset.jump)}"]`);
+  el?.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' }); el?.focus();
+});
+
+// ── Drag and drop (native; desktop) ────────────────────────────────────────
+function bindDnD() {
+  let dragging = null;
+  for (const el of document.querySelectorAll('.card[draggable="true"]')) {
+    el.addEventListener('dragstart', e => { dragging = el.dataset.id; e.dataTransfer.effectAllowed = 'move'; el.classList.add('lifting'); });
+    el.addEventListener('dragend',   () => { dragging = null; el.classList.remove('lifting'); });
+  }
+  for (const zone of document.querySelectorAll('.cards')) {
+    zone.addEventListener('dragover', e => { if (dragging) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; } });
+    zone.addEventListener('drop', async e => {
+      e.preventDefault(); if (!dragging) return;
+      const lane = zone.dataset.lane;
+      const over = e.target.closest('.card');
+      const before = over && over.dataset.id !== dragging ? over.dataset.id : undefined;
+      const next = moveCard(cards, dragging, { lane, before });
+      const moved = next.find(c => c.id === dragging);
+      cards = next; render();
+      await persist(moved);
+    });
+  }
+}
+
+// ── Persistence: the artifact's own db ─────────────────────────────────────
+async function persist(card) {
+  if (!db) return;
+  try {
+    await db.doc(`cards/${card.id}`).update({ lane: card.lane, order: card.order });
+    setStatus(`saved · ${new Date().toLocaleTimeString()}`);
+  } catch (err) {
+    setStatus(`save failed: ${err.code ?? err.message} — showing local state`);
+  }
+}
+function setStatus(s) { $('#status').textContent = s; }
+
+async function boot() {
+  render();                                    // seed first: the page works with nothing
+  $('#view-board').onclick = () => setView('board');
+  $('#view-graph').onclick = () => setView('graph');
+
+  if (typeof claude === 'undefined') { setStatus('read-only · not inside the artifact viewer'); return; }
+  db = await claude.use('db');                 // resolves later; null = read-only
+  if (!db) { setStatus('read-only · no store in this view'); render(); return; }
+
+  // Contract 0.2.41: `next` receives a QuerySnapshot — `.docs` is DocumentSnapshot[],
+  // each with `.id`, `.exists`, `.data()`. Delivered snapshots and their data()
+  // are FROZEN: never mutate them; moveCard returns fresh objects.
+  // The first delivery may be `metadata.fromCache`; a definitive one follows.
+  unsub = db.collection('cards').onSnapshot(
+    snap => {
+      if (snap.empty) { setStatus('connected · store is empty — seed it from the roadmap'); return; }
+      cards = snap.docs.map(d => d.data());
+      render();
+      setStatus(`live · ${snap.size} cards${snap.metadata.hasPendingWrites ? ' · saving…' : ''}`);
+    },
+    err => setStatus(`store error: ${err.code} — showing last known state`),   // terminal; listener is dead
+  );
+  setStatus('connected');
+}
+function setView(v) {
+  $('#board').hidden = v !== 'board'; $('#unblocked').hidden = v !== 'board';
+  $('#graph').hidden = v !== 'graph';
+  $('#view-board').setAttribute('aria-pressed', v === 'board');
+  $('#view-graph').setAttribute('aria-pressed', v === 'graph');
+}
+boot();
+</script>
