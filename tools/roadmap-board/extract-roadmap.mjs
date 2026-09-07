@@ -80,8 +80,14 @@ export function extractCards(markdown) {
         // NOW/READY/DESIGN/LATER: "item" or "thread". DONE: "item".
         const idCell = col('#');
         const titleCell = col('ruling') || col('item') || col('thread') || cells[0];
-        const m = strip(idCell).match(RULING_ID);
-        const id = m ? m[1] : slug(titleCell);
+        // Rulings carry their code in a `#` column. READY/DESIGN rows carry it
+        // at the head of the title — "B1 — first real boss" — because those
+        // tables have no `#` column. Either way the code is the id, so a
+        // `Blocked by` cell naming "B1" resolves to that card.
+        const TITLE_CODE = /^([A-Z]{1,2}\d?)\s+—\s/;
+        const fromCol   = strip(idCell).match(RULING_ID);
+        const fromTitle = strip(titleCell).match(TITLE_CODE);
+        const id = fromCol ? fromCol[1] : fromTitle ? fromTitle[1] : slug(titleCell);
         if (!id) continue;
 
         orderInLane[lane] = (orderInLane[lane] ?? 0) + 10;

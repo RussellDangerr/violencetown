@@ -28,7 +28,10 @@
     "order": 30,
     "kind": "build",
     "size": "M",
-    "blockedBy": [],
+    "blockedBy": [
+      "Z1",
+      "Z2"
+    ],
     "doc": "`plans/zone-identity.md` §1",
     "note": "Blocked on two rulings (§2). Floors already solved via `rlOutlined_packed.png`. No interior wall exists in any bundled sheet."
   },
@@ -209,7 +212,7 @@
     "note": "Demo polish"
   },
   {
-    "id": "b2-enemies-eat-their-own-kits",
+    "id": "B2",
     "title": "B2 — enemies eat their own kits",
     "lane": "ready",
     "order": 10,
@@ -220,7 +223,7 @@
     "note": ""
   },
   {
-    "id": "b1-first-real-boss-law-5-executes",
+    "id": "B1",
     "title": "B1 — first real boss, Law 5 executes",
     "lane": "ready",
     "order": 20,
@@ -267,8 +270,8 @@
     "note": ""
   },
   {
-    "id": "tag-layer-on-items-enemies-tiles",
-    "title": "Tag layer on items / enemies / tiles",
+    "id": "T1",
+    "title": "T1 — Tag layer on items / enemies / tiles",
     "lane": "ready",
     "order": 60,
     "kind": "build",
@@ -278,7 +281,7 @@
     "note": ""
   },
   {
-    "id": "c1-seven-unreachable-escape-branches-the-dead-it",
+    "id": "C1",
     "title": "C1 — seven unreachable `Escape` branches + the dead `ITEM_THROW_DIR` mode",
     "lane": "ready",
     "order": 70,
@@ -289,7 +292,7 @@
     "note": ""
   },
   {
-    "id": "c3-input-asymmetries",
+    "id": "C3",
     "title": "C3 — input asymmetries",
     "lane": "ready",
     "order": 80,
@@ -300,7 +303,7 @@
     "note": ""
   },
   {
-    "id": "c4-mystery-meat-can-t-heal-on-the-throw-path",
+    "id": "C4",
     "title": "C4 — `mystery_meat` can't heal on the throw path",
     "lane": "ready",
     "order": 90,
@@ -339,7 +342,9 @@
     "order": 10,
     "kind": "design",
     "size": "M",
-    "blockedBy": [],
+    "blockedBy": [
+      "T1"
+    ],
     "doc": "systems-audit §9",
     "note": "The discipline: a blank cell is a decision, not an oversight. Second job is diagnostic — a proposed element with zero edges is caught at design time. Needs the tag layer first."
   },
@@ -416,7 +421,9 @@
     "order": 10,
     "kind": "later",
     "size": "L",
-    "blockedBy": [],
+    "blockedBy": [
+      "B1"
+    ],
     "doc": "",
     "note": "Financier (Street — a literal `dialogue.js` placeholder), Bigfoot (Carnival), Alien Invasion (Factory — where the Ray Gun should ultimately drop), The Deity (Graveyard). Gated on B1."
   },

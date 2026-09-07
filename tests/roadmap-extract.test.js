@@ -28,6 +28,13 @@ const SAMPLE = `
 |---|---|---|---|---|
 | **B1 — first real boss** | L | **A1, A4** | Law 5 never ran. | dev |
 | **B2 — enemies eat kits** | M | nothing | Diegetic. | dev |
+| **T1 — Tag layer** on items / enemies / tiles | M | nothing | Not built. | audit |
+
+## 5. POST-1.0 — big threads
+
+| Thread | One line | Size | Blocked by |
+|---|---|---|---|
+| **Zone deep content / bosses** | Financier, Bigfoot. | L | B1 |
 
 ## 6. DONE — do NOT re-implement
 
@@ -48,8 +55,8 @@ describe('extractCards', () => {
 
     test('one card per table row, in the right lane', () => {
         const cards = extractCards(SAMPLE);
-        assert.equal(cards.length, 6);
-        assert.deepEqual(cards.map(c => c.lane), ['now', 'rulings', 'rulings', 'ready', 'ready', 'done']);
+        assert.equal(cards.length, 8);
+        assert.deepEqual(cards.map(c => c.lane), ['now', 'rulings', 'rulings', 'ready', 'ready', 'ready', 'later', 'done']);
     });
 
     test('ruling ids survive verbatim', () => {
@@ -58,12 +65,31 @@ describe('extractCards', () => {
         assert.ok(ids.includes('Z1'));
     });
 
+    test('a leading code in the title becomes the id, so blockedBy can resolve to it', () => {
+        const ids = extractCards(SAMPLE).map(c => c.id);
+        assert.ok(ids.includes('B1'), `B1 missing from ${ids}`);
+        assert.ok(ids.includes('B2'));
+        assert.ok(ids.includes('T1'));
+    });
+
     test('blockedBy parses the "Blocked by" column into ids, and "nothing" into []', () => {
         const cards = extractCards(SAMPLE);
-        const b1 = cards.find(c => c.title.startsWith('B1'));
-        const b2 = cards.find(c => c.title.startsWith('B2'));
+        const b1 = cards.find(c => c.id === 'B1');
+        const b2 = cards.find(c => c.id === 'B2');
         assert.deepEqual(b1.blockedBy, ['A1', 'A4']);
         assert.deepEqual(b2.blockedBy, []);
+    });
+
+    test('a Blocked-by column in the POST-1.0 table produces an edge to a coded READY row', () => {
+        const cards = extractCards(SAMPLE);
+        const bosses = cards.find(c => c.lane === 'later');
+        assert.deepEqual(bosses.blockedBy, ['B1']);
+        assert.ok(cards.some(c => c.id === 'B1'), 'the edge must resolve');
+    });
+
+    test('a coded title keeps the code in the title text too', () => {
+        const b1 = extractCards(SAMPLE).find(c => c.id === 'B1');
+        assert.ok(b1.title.startsWith('B1 — '), b1.title);
     });
 
     test('titles are stripped of markdown emphasis', () => {
