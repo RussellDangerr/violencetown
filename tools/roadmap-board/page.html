@@ -29,6 +29,11 @@
   }
 
   * { box-sizing: border-box; }
+  /* The artifact host's wrapper normally supplies this; outside it (dist/index.html
+     served or opened standalone) an author rule beats the UA default, so [hidden]
+     needs its own !important or e.g. .rail{display:flex} wins and the graph view
+     leaves the board visible. */
+  [hidden] { display: none !important; }
   body { background: var(--bg); color: var(--ink); font: 14px/1.4 ui-monospace, "Cascadia Mono", Consolas, monospace; }
   h1, h2 { font-family: 'VT323', ui-monospace, "Cascadia Mono", Consolas, monospace; font-weight: 400; text-wrap: balance; margin: 0; }
   p { margin: 0; }
@@ -64,7 +69,7 @@
   }
   #unblocked h2 { flex: none; font-size: 19px; color: var(--on-gold); white-space: nowrap; }
   #unblocked .chips { display: flex; gap: 8px; flex-wrap: nowrap; }
-  #unblocked .muted { color: var(--on-gold); opacity: .7; font-style: italic; font-size: 12.5px; white-space: nowrap; }
+  #unblocked .muted { color: var(--on-gold); opacity: .85; font-style: italic; font-size: 12.5px; white-space: nowrap; }
 
   /* ── Lane rail ──────────────────────────────────────────────────────── */
   .rail { display: flex; align-items: flex-start; gap: 14px; padding: 16px 20px; overflow-x: auto; }
@@ -131,6 +136,9 @@
   }
   .card .title { color: var(--ink); font-weight: 600; line-height: 1.45; }
   .card .note  { color: var(--muted); font-size: 12.5px; line-height: 1.45; }
+  /* .card.done already sits at opacity:.82 — muted-on-muted fails contrast, so
+     done notes get a non-muted colour to clear 4.5:1 in light theme. */
+  .card.done .note { color: var(--ink); }
   .card .doc   {
     color: var(--muted); font-size: 11.5px; font-style: italic; line-height: 1.4;
     padding-top: 5px; border-top: 1px dashed var(--line);
@@ -200,6 +208,13 @@ let ix = null;                 // blockerIndex, memoised per render (highlight()
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
+// A short code (A1, DZ, …) reads fine as "A1 · The -15 armor band…". A slug id
+// doesn't — "5-zone-body-reconciliation · 5-Zone Body reconciliation" just says
+// the same thing twice. Show whichever one is actually the readable half.
+// (Named distinctly from board-model.js's own SHORT_CODE — that file's consts
+// land in this same script's scope once build.py inlines it, and a duplicate
+// top-level `const` of the same name would be a SyntaxError.)
+const isShortCodeId = id => /^[A-Z]{1,2}\d?$/.test(id);
 
 // ── Render ─────────────────────────────────────────────────────────────────
 function render() {
@@ -208,7 +223,7 @@ function render() {
   const byId = Object.fromEntries(cards.map(c => [c.id, c]));
 
   $('#unblocked').innerHTML = `<h2>Unblocked now</h2><div class="chips">${
-    unblocked(cards).map(c => `<button class="chip build" data-jump="${esc(c.id)}">${esc(c.id)} · ${esc(c.title)}</button>`).join('') || '<span class="muted">nothing — every build is waiting on a ruling</span>'
+    unblocked(cards).map(c => `<button class="chip ${esc(c.kind)}" data-jump="${esc(c.id)}">${esc(isShortCodeId(c.id) ? c.id : c.title)}</button>`).join('') || '<span class="muted">nothing — every build is waiting on a ruling</span>'
   }</div>`;
 
   $('#board').innerHTML = LANES.map(l => `
@@ -293,7 +308,12 @@ async function boot() {
   $('#view-graph').onclick = () => setView('graph');
 
   if (typeof claude === 'undefined') { setStatus('read-only · not inside the artifact viewer'); return; }
-  db = await claude.use('db');                 // resolves later; null = read-only
+  try {
+    db = await claude.use('db');               // resolves later; null = read-only
+  } catch (err) {
+    setStatus(`read-only · db unavailable: ${err.code ?? err.message}`);
+    return;
+  }
   if (!db) { setStatus('read-only · no store in this view'); render(); return; }
 
   // Contract 0.2.41: `next` receives a QuerySnapshot — `.docs` is DocumentSnapshot[],

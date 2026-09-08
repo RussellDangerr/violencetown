@@ -3,6 +3,16 @@
 The artifact CSP allows no external modules, so the page must be one file.
 Same pattern as the other tools/ generators: source in, artifact out.
 Run from the repo root:  python tools/roadmap-board/build.py
+
+Local verification: the artifact host normally supplies the <meta charset> for
+this page, so dist/index.html deliberately carries none itself (adding one here
+would be a stray head tag the wrapper doesn't expect). That means a plain
+`python -m http.server` is NOT enough to check it locally — it sends a bare
+`Content-Type: text/html` with no charset, and the em dashes come out as
+mojibake — so use a server that declares one (a `Content-Type: text/html;
+charset=utf-8` response header) if you want to serve it. Simplest option:
+open dist/index.html directly as a file:// URL — with no server header to
+trust, the browser sniffs the bytes as UTF-8 and it renders correctly.
 """
 import json, pathlib, re, sys
 
