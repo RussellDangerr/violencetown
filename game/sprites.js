@@ -212,7 +212,7 @@ export const TILE_SPRITE_MAP = {
     3: { sheet: 'tinyDungeon', col: 4, row: 4 },  // gap — speckled tan floor variant
     4: { sheet: 'tinyDungeon', col: 0, row: 3 },  // grate — horizontal iron bars
     5: { sheet: 'tinyDungeon', col: 6, row: 3 },  // drain — floor with 4-square stone inset
-    6: { sheet: 'tinyDungeon', col: 9, row: 4 },  // boss floor — clean gray stone-brick slab (still shared with Factory's FACTORY_FLOOR; only 2 of this map's 400 cells, not addressed by this pass)
+    6: { sheet: 'tinyDungeon', col: 4, row: 3 },  // boss floor — seamless grey brick, the boss's two-cell dais (was (9,4), Factory's FACTORY_FLOOR; (9-11,4) are wall-run pieces with dark end caps and seam when tiled)
     7: { sheet: 'tinyDungeon', col: 5, row: 2 },  // boss trigger — red banner on stone (accent)
     22: { sheet: 'tinyDungeon', col: 5, row: 3 }, // PORTCULLIS — spiked vertical gate
     23: { sheet: 'tinyDungeon', col: 3, row: 5 }, // BARRICADE — wooden crate front (destructible)
@@ -643,9 +643,9 @@ export const ZONE_TILE_SPRITE_MAP = {
     // than dungeon-brick; CONVEYOR_VIS moves to a tinyDungeon rail-and-
     // crosstie motif. FLOOR and GOO_VISUAL stay put — the defect there was
     // Sewer sharing them (SLUDGE, id 2 in TILE_SPRITE_MAP above, moved off
-    // GOO_VISUAL's cell; BOSS_FLOOR did not move off FACTORY_FLOOR's, see the
-    // note on id 6 above — a much smaller, 2-cell overlap this pass leaves
-    // alone), not the tiles themselves.
+    // GOO_VISUAL's cell, and BOSS_FLOOR, id 6, off FACTORY_FLOOR's), not the
+    // tiles themselves. tests/zone-identity.test.js now fails if any two tile
+    // ids draw the same cell without a written reason.
     //
     // WALL: roguelikeCity (16,17), a continuous chain-link weave. (15,17)
     // alongside it frames each cell with its own post, which tiles as a

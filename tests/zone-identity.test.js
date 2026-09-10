@@ -7,11 +7,53 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { TILES } from '../game/data.js';
+import { TILES, TILE_BY_ID } from '../game/data.js';
 import * as sprites from '../game/sprites.js';
 
 const GAME_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'game');
 const loadMap = file => JSON.parse(readFileSync(join(GAME_DIR, file), 'utf8'));
+
+// ── Item 2's bar: a zone is done when it no longer shares a cell ───────────
+//
+// Two different tile ids that draw the same pixels are either one tile (merge
+// them) or one zone wearing another's look. Sewer and Factory drew from the
+// same cells until Item 2; this keeps any such pair from creeping back. Each
+// accepted share is written down with its reason — adding one should feel
+// expensive.
+
+const KNOWN_SHARED_CELLS = {
+    'tinyTown(9,3)': "FENCE / IRON_FENCE — no iron railing exists in any bundled sheet (verified twice), so the graveyard borrows Town's wood fence",
+    'tinyTown(1,2)': "ROAD / CIRCUS_GROUND — open: the carnival's ground is Town's road, 892 of its 1,276 cells. Awaiting a call on a ground of its own (zone-identity.md, Item 3 findings)",
+};
+
+function tilesByCell() {
+    const all = { ...sprites.TILE_SPRITE_MAP, ...sprites.TOWN_TILE_SPRITE_MAP, ...sprites.ZONE_TILE_SPRITE_MAP };
+    const byCell = new Map();
+    for (const [id, ref] of Object.entries(all)) {
+        if (!ref) continue;                                   // null = deliberate flat fallback
+        for (const r of ref.quad ?? [ref]) {
+            const key = `${r.sheet}(${r.col},${r.row})`;
+            byCell.set(key, [...(byCell.get(key) ?? []), TILE_BY_ID[id]?.name ?? id]);
+        }
+    }
+    return byCell;
+}
+
+describe('no two tiles share a picture', () => {
+    test('every sprite cell draws one tile id, or its share is written down', () => {
+        const shared = [...tilesByCell()]
+            .filter(([key, names]) => names.length > 1 && !KNOWN_SHARED_CELLS[key])
+            .map(([key, names]) => `${key}: ${names.join(' and ')}`);
+        assert.deepEqual(shared, [], `tile ids drawing the same cell:\n  ${shared.join('\n  ')}`);
+    });
+
+    test('the known-shared list has not gone stale', () => {
+        const byCell = tilesByCell();
+        for (const key of Object.keys(KNOWN_SHARED_CELLS)) {
+            assert.ok((byCell.get(key)?.length ?? 0) > 1, `${key} is no longer shared — remove it from KNOWN_SHARED_CELLS`);
+        }
+    });
+});
 
 // ── Item 3: the graveyard ──────────────────────────────────────────────────
 //
