@@ -3,7 +3,7 @@
 **Phase:** Polish, against ROADMAP Phase 1's own bar: *"Walk through all five zones on the static map.
 Each zone looks and feels distinct."*
 **Priority:** High (Caelan, 2026-09-07, after the visual and animation passes merged).
-**Status:** Design (approved 2026-09-07). Item 4 already shipped as `cb8c8e7`.
+**Status:** Items 0, 2, 3, 4 shipped. Item 1 (interiors) waits on two rulings — see Item 1.
 **Companions:** `plans/visual-pass.md` · `plans/animation-pass.md` · ROADMAP.md
 
 > **Decisions (Caelan, 2026-09-07):**
@@ -132,6 +132,50 @@ iron railing" claim is now verified twice and stands.
 **Circus bonus, same sheet:** 2×2 tents at `(46-47, 10-11)` green and `(48-49, 10-11)` tan, which
 directly replace the flagged red-shingle `TENT_STRIPE` compromise.
 
+### ✅ SHIPPED 2026-09-10 — `d1f286c` · `d981bd2` · `3378bb0` · `d044b8e`
+
+(The first attempt, 2026-09-07, died mid-edit and was reverted: 96 grave props in the map, no art
+for any of them. `d1f286c` is the guard that makes that state fail loudly —
+`tests/prop-coverage.test.js`.)
+
+- **Graves** — 96 props, one per former `GRAVESTONE` cell, all twelve silhouettes used. Each 2×2
+  plot is one *family*: dark slabs (8 plots), pale crosses and tablets (13), wooden crosses (3 — a
+  pauper's row). Random-per-stone was mocked side by side and read as noise; dirt under each stone
+  read as highlighted UI cells. `PROP_SPRITES` derives the twelve entries from `OUTLINED_SPRITES`.
+- **Tents are tiles, not props.** A prop is centred on its base tile, so a 2-wide prop straddles
+  three columns and cannot sit on the 2-tile grid the carnival's border band and tent blocks use;
+  and a prop blocks only its base cell. So: two tile ids, `TENT_GREEN` (34) and `TENT_TAN` (35).
+  A tent cell draws the quadrant its parity picks (`tileFrame`) and paints `CIRCUS_GROUND` under
+  itself first (`under`), so the tent's transparent corners show sand. 86 tents, checkerboarded;
+  `tests/zone-identity.test.js` holds every tent cell to a whole, even-aligned 2×2 of one colour.
+- `GRAVESTONE` (51) and `TENT_STRIPE` (31) are **retired**, not allowlisted.
+- Walkability unchanged cell for cell in both zones; densified exits identical (checked against the
+  prior commit through `GameMap`). Verified in the running game.
+- **Not done: the cemetery gate** `(41,18)+(42,18)`. Same geometry problem as the tents — a
+  `wTiles: 2` prop cannot centre on the 2-wide path — plus it would sit on a transition cell and
+  must not block. Needs a prop anchor option (`anchor: 'left'`) and `solid: false`; small, but its
+  own change.
+
+**Found while verifying (fixed, `3378bb0`):** every zone's off-map margin had been drawing Sewer's
+new wall brick since Item 2 — `getTile` reports `WALL` off the map. `_drawTiles` paints the void
+there again.
+
+**Item 2's residual (fixed, `d044b8e`):** `BOSS_FLOOR` moved off Factory's `(9,4)` to `(4,3)`, a
+seamless grey brick. `(9-11,4)` were rejected on measurement — they are wall-run pieces with dark
+end caps, and seam when two sit side by side. (Factory's own 512-cell floor *is* `(9,4)`, and does
+seam. Worth a look in a later pass.)
+
+**Item 2's bar is now a test** (`tests/zone-identity.test.js`): no two tile ids may draw the same
+cell unless the share is written down with a reason, and a stale entry fails. Measuring for it
+found exactly two shares, both in places the original audit did not look:
+- **Carnival's ground is Town's road — OPEN.** `CIRCUS_GROUND` (30) and `ROAD` (12) are both
+  `tinyTown (1,2)`, and ground is 892 of the carnival's 1,276 cells. Needs a call on a ground of
+  its own, from a cell no other tile draws (reusing `SAWDUST`'s would just move the share, and the
+  test would say so). Town places `CIRCUS_GROUND` at its south exit too, so that patch changes
+  with it — arguably a feature: the road starts to look like the carnival as you leave.
+- **Graveyard's fence is Town's fence — accepted.** `IRON_FENCE` (53) and `FENCE` (17), both
+  `tinyTown (9,3)`. No iron railing exists in any bundled sheet (verified twice).
+
 ## Item 4 — Tile placement guard rail ✅ SHIPPED `cb8c8e7`
 
 `tests/tile-coverage.test.js`. Unplaced ids now need a written reason in `KNOWN_UNPLACED`, and the
@@ -146,9 +190,9 @@ Mutation-verified: dropping `GRASS` from the allowlist fails 1 of 5.
 
 | # | Work | Model | Gates |
 |---|---|---|---|
-| 0 | `tools/gen_outlined_sheet.py` + register the output | Sonnet | **blocks 1 and 3** |
-| 1 | Item 2 — Sewer/Factory, and the three stale claims | Sonnet | independent |
-| 2 | Item 3 — gravestones as props, circus tents | Sonnet | needs 0 |
+| 0 | `tools/gen_outlined_sheet.py` + register the output | Sonnet | ✅ `a1ff849` |
+| 1 | Item 2 — Sewer/Factory, and the three stale claims | Sonnet | ✅ `13c61ea`; residual `d044b8e` |
+| 2 | Item 3 — gravestones as props, circus tents | Opus | ✅ `d981bd2` |
 | 3 | Item 1 — interiors | Sonnet | needs 0, plus Caelan on vendoring |
 
 Item 0 first because both 2 and 3 consume its output. Item 2's Factory half needs nothing new and

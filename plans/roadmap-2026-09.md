@@ -15,8 +15,9 @@ pending decisions, and the three passes that landed this week.
 > Both were accurate when written; **seven of their items have since shipped** and are listed in
 > §6 so nobody re-does them. The `plan` branch itself is six weeks stale — see §5.
 
-**State right now:** `dev` @ `13c61ea`, pushed. `main` @ `38a44c2` (v0.21.0), **24 commits behind,
-deliberately** — nothing from this week is on the live site. Suite 1179 / 213 / 0 failures.
+**State right now (updated 2026-09-10):** `main` @ `38a44c2` (v0.21.0), **40 commits behind `dev`,
+deliberately** — nothing since v0.21.0 is on the live site. Suite 1223 / 226 / 0 failures.
+Zone §3 and the §2 residual shipped 2026-09-10; see §6.
 
 ---
 
@@ -31,13 +32,16 @@ flowchart LR
     classDef design fill:#d9d4ee,stroke:#5a4a8a,color:#1f1a33
     classDef later fill:#e6e6e6,stroke:#777,color:#333
     classDef now fill:#f7c8b8,stroke:#a33a1e,color:#3a0f05
+    classDef done fill:#dfe9e0,stroke:#6a8a6e,color:#243326,stroke-dasharray:4 3
 
-    SHIP["Ship v0.22.0 to main<br/>24-commit fast-forward"]:::now
-    GY["Zone §3 graveyard props<br/>(reverted — redo)"]:::now
+    SHIP["Ship v0.22.0 to main<br/>40-commit fast-forward"]:::now
+    GY["Zone §3 graves as props,<br/>tents — DONE"]:::done
     INT["Zone §1 interiors"]:::now
     R_INT["RULING: vendor Interior Pack?<br/>proxy vault + slots?"]:::ruling
     R_INT --> INT
-    GY -->|"proves the prop system"| LAMP["Streetlights as 2-cell props"]:::later
+    GY -->|"proved the prop system"| LAMP["Streetlights as 1x2 props"]:::ready
+    GY --> GATE["Prop anchor +<br/>cemetery gate"]:::ready
+    CG["RULING CG: a carnival<br/>ground of its own"]:::ruling
 
     A1["RULING A1: −15 armor band"]:::ruling
     A4["RULING A4: _boss tag"]:::ruling
@@ -87,7 +91,6 @@ Three things the graph makes visible that the lists did not:
 | Item | State | Size | Doc | Blocked by |
 |---|---|---|---|---|
 | **Ship v0.22.0 to `main`** | Caelan's call; deliberately held. A clean fast-forward + version bump in 3 files + annotated tag. The demo-readiness doc's own headline: *"nothing else is worth as much."* | S | `plans/demo-readiness.md` §0 | nothing |
-| **Zone §3 — graveyard graves as props, circus tents** | **Started and REVERTED** (agent died mid-edit; left 96 props with no `PROP_SPRITES` entries — graveyard would have rendered empty). Art is generated and registered. **Define `PROP_SPRITES` first, then edit the map.** | M | `plans/zone-identity.md` §3 | nothing |
 | **Zone §1 — interiors get a vocabulary** | Blocked on two rulings (§2). Floors already solved via `rlOutlined_packed.png`. **No interior wall exists in any bundled sheet.** | M | `plans/zone-identity.md` §1 | Z1, Z2 |
 
 ---
@@ -104,6 +107,7 @@ Ordered by how much each unblocks.
 | **A2** | **Poison-flip direction.** The downward mirror of the ally-flip was chosen, not derived. Confirm or replace. | Nothing to build; a correctness question | A2 |
 | **Z1** | **Vendor `Roguelike Interior Pack`?** CC0, same pattern as RPG Urban, and *the only source anywhere with a counter.* | Zone §1 interiors | `zone-identity` §1 |
 | **Z2** | **No slot machine or vault door exists in any pack.** Ship a boxy-cabinet proxy, or leave them text-only? (A cabinet-as-vault is the same class of compromise as the hooded-figure-as-rat.) | Zone §1 interiors | `zone-identity` §1 |
+| **CG** | **The carnival's ground is Town's road** — `CIRCUS_GROUND` and `ROAD` draw the same cell, over 892 of the carnival's 1,276 cells. Pick a ground of its own (from a cell no other tile draws), or accept the share in writing. Found 2026-09-10; the new shared-cell test carries it as the one open exception. | Zone identity's bar for the carnival | `zone-identity` §3 findings |
 | **B3** | **Cone of Cold** — 1.40 dmg/MP against a 1.50 floor. **Still the lone balance-lint flag** (re-verified 2026-09-07). Retune or widen the band; a permanent flag trains everyone to ignore the lint. | Lint credibility | B3 |
 | **R** | **Rings: author to ~12, or cut.** Five exist. | Whether the ring system is a feature or a fossil | systems-audit §3.1 |
 | **DZ** | **TheDangerrZone — freeze at a tag or delete.** Eight `*-TheDangerrZone.*` files still ship in `game/`, unreachable from `index.html`. | Repo clarity | systems-audit §3.3 |
@@ -130,7 +134,8 @@ Ordered by how much each unblocks.
 | **C1 — seven unreachable `Escape` branches** + the dead `ITEM_THROW_DIR` mode | S | nothing | Shadowed by an earlier guard in `main.js`. | C1 |
 | **C3 — input asymmetries** | M | nothing | REMOTICON item/gear/ring actions are pointer-only; aiming, turn-in-place and the 1–9 hotbar are keyboard-only. Documented honestly; still gaps. | C3 |
 | **C4 — `mystery_meat` can't heal on the throw path** | S | nothing | `combatAttack`'s `Math.max(1, raw − armor)` clamps a would-be heal to 1 damage. Cheapest fix: make it a 1-turn health poition instead of flat damage. | C4 |
-| **Zone §2 residual** | S | nothing | `BOSS_FLOOR` (6) and `FACTORY_FLOOR` (40) *still* share `tinyDungeon (9,4)` — 2 cells in the sewer boss room. Missed when Sewer moved off that sheet. | `zone-identity.md` §2 |
+| **Streetlights as 1×2 props** | S | nothing | The graveyard proved the prop system at scale (96 props). Town's lamps are one-cell tiles because the tall two-cell `rpgUrban` lamps "don't fit a single tile" — as a 1×2 prop, `tree`'s shape, they do, with walk-behind. | `sprites.js` TOWN_TILE_SPRITE_MAP id 18 |
+| **Prop anchor + cemetery gate** | S | nothing | A 2-wide prop centres on its base tile, so it cannot sit on a 2-wide path. Add an `anchor` option, then place the `roguelikeSheet (41,18)+(42,18)` gate over the graveyard's north path, `solid: false`. | `zone-identity.md` §3 |
 | **Housekeeping** | S | nothing | Prune two stale worktrees (`great-wing`, `objective-volhard`, both clean at v0.19.0); ~60 local branches whose remotes are `gone`. Migrate or archive the 24 `plan`-only docs (§5). | this doc |
 
 ---
@@ -188,6 +193,9 @@ parked document.
 | demo-readiness §2.3 | Autoplay | Ruled: ships muted. Do not flip without asking. |
 | `undeveloped-backlog` §4 | Everything in that section | Still accurate — wheel overhauls, movement-feel, world-structure, road-to-1.0 all built |
 | this week | Threat overlay always-on; canvas fractional resampling; 9 red-box NPCs; rats as hooded figures; townsfolk as the player; ASCII awareness pips; lockstep idle bob; `reduceMotion` ignored by the bob; Sewer/Factory sharing cells; tile placement unguarded | `visual-pass.md`, `animation-pass.md`, `zone-identity.md` §0/§2/§4 |
+| roadmap §1 | Zone §3 — graveyard graves as props, circus tents | 2026-09-10: 96 grave props in family plots, 86 real tents; placed props now guarded (`d1f286c` · `d981bd2`) |
+| roadmap §3 | Zone §2 residual | 2026-09-10: boss floor off Factory's cell; no two tiles may share a cell unwritten (`d044b8e`) |
+| found 2026-09-10 | Every zone's off-map margin drew Sewer's wall brick (since `13c61ea`) | `_drawTiles` paints the void off the map again (`3378bb0`) |
 
 ---
 
@@ -196,11 +204,13 @@ parked document.
 Not a mandate — a reading of the graph.
 
 1. **Rulings session.** Clear A1–A4, Z1–Z2, R, DZ in one sitting. None needs code. Every one of
-   them is cheap and every one of them gates something. Then ship v0.22.0 — the demo is 24 commits
+   them is cheap and every one of them gates something. Then ship v0.22.0 — the demo is 40 commits
    stale and the whole visual pass is invisible until it moves.
 2. **Combat-feel session.** B2 (enemies eat their kits) — unblocked, high-leverage, diegetic. Then
    B1 if A1/A4 are ruled. This is the session where fights start to *read*.
-3. **Zone-identity session.** Redo §3 graveyard (props first, then map). Then §1 interiors once
-   Z1/Z2 are ruled. Then the streetlights-as-props follow-on the graveyard proves out.
+3. **Zone-identity session.** ~~Redo §3 graveyard~~ — done 2026-09-10, with the §2 residual. Left:
+   §1 interiors once Z1/Z2 are ruled, a carnival ground once CG is, and two small unblocked
+   follow-ons — streetlights as 1×2 props, and the prop anchor that lets the cemetery gate sit on
+   its path.
 
 Sessions 2 and 3 are **file-disjoint** and can run as parallel branches without conflict.
