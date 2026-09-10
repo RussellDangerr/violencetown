@@ -32,11 +32,16 @@ export const TILES = {
     PORTCULLIS:   { id: 22, walkable: false, hazard: null, fallbackColor: '#3a3a3a' },             // permanent one-way seal
     BARRICADE:    { id: 23, walkable: false, hazard: null, fallbackColor: '#6a4a2a', destructible: true }, // bump/throw to clear
 
-    // Circus tiles (30-39) — Americana carnival, cryptid menagerie
+    // Circus tiles (30-39) — Americana carnival, cryptid menagerie.
+    // A tent is a 2x2 picture: each cell of an even-aligned 2x2 block of one
+    // tent id draws the quadrant its parity picks (sprites.js tileFrame).
+    // 31 was TENT_STRIPE, red roof shingles standing in for a tent — retired;
+    // don't reuse the id.
     CIRCUS_GROUND: { id: 30, walkable: true,  hazard: null, fallbackColor: '#c4a070' },
-    TENT_STRIPE:   { id: 31, walkable: false, hazard: null, fallbackColor: '#c43030' },
     CONFETTI:      { id: 32, walkable: true,  hazard: null, fallbackColor: '#e8c060' },
     SAWDUST:       { id: 33, walkable: true,  hazard: null, fallbackColor: '#a08050' },
+    TENT_GREEN:    { id: 34, walkable: false, hazard: null, fallbackColor: '#4a9a5e' },
+    TENT_TAN:      { id: 35, walkable: false, hazard: null, fallbackColor: '#d9c9a0' },
 
     // Factory tiles (40-49) — Oddworld-coded industrial, alien-occupied
     FACTORY_FLOOR: { id: 40, walkable: true,  hazard: null, fallbackColor: '#3a3a3e' },
@@ -44,9 +49,10 @@ export const TILES = {
     GOO_VISUAL:    { id: 42, walkable: true,  hazard: null, fallbackColor: '#6abe30' },
     CONVEYOR_VIS:  { id: 43, walkable: true,  hazard: null, fallbackColor: '#4a4a3e' },
 
-    // Graveyard tiles (50-59) — surfer-deity cemetery
+    // Graveyard tiles (50-59) — surfer-deity cemetery. Graves are props, not
+    // tiles (sprites.js PROP_SPRITES). 51 was GRAVESTONE, one cross reused over
+    // every grave — retired; don't reuse the id.
     GRAVE_DIRT:    { id: 50, walkable: true,  hazard: null, fallbackColor: '#3a2a1e' },
-    GRAVESTONE:    { id: 51, walkable: false, hazard: null, fallbackColor: '#7a7a7a' },
     DEAD_GRASS:    { id: 52, walkable: true,  hazard: null, fallbackColor: '#3a3a2a' },
     IRON_FENCE:    { id: 53, walkable: false, hazard: null, fallbackColor: '#1a1a1a' },
 };

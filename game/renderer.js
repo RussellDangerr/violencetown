@@ -11,7 +11,7 @@ import { TILE_PX, VIEW_TILES, CANVAS_PX, SAFE_SLOTS } from './data.js';
 // ctx.setTransform(SS,…) at the top of each frame; tap input maps via
 // CANVAS_INTERNAL_PX (608) independently, so it's unaffected.
 const SS = 2;
-import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES, CONTAINER_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES, MARK_SPRITES, spriteVariant, spriteFrame, idHash } from './sprites.js';
+import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES, CONTAINER_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES, MARK_SPRITES, spriteVariant, spriteFrame, tileFrame, idHash } from './sprites.js';
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
 import { ROOT, selectedNode, activeRing, activeIndex, decisionPath, previewChildren, affectedTiles, verbApplies, isCombatActive, flapperDeflection, defaultVerb } from './wheel-model.js'; // (sunburst wheel) + the bump telegraph
 import {
@@ -42,6 +42,12 @@ import * as Settings from './settings.js'; // (combat-feel-pass) reduce-motion f
 import { challengeGp } from './enemies.js'; // (Law 6f) nameplate pips read the composite kit, not raw gold
 import { resolveOffer } from './offer.js';                                  // (offer screen) pure basket→projection
 import { dispositionCeil, DISPOSITION_MIN } from './disposition-curves.js'; // (offer screen) meter ceiling + floor — offer.js does not re-export these
+
+// Tile id → sprite ref. Sewer ids 0-7 → TILE_SPRITE_MAP, town ids 10-21 →
+// TOWN_TILE_SPRITE_MAP, circus/factory/graveyard ids 30+ →
+// ZONE_TILE_SPRITE_MAP. Disjoint id ranges so order doesn't matter, but the
+// explicit chain keeps the resolution path readable.
+const tileRef = id => TILE_SPRITE_MAP[id] || TOWN_TILE_SPRITE_MAP[id] || ZONE_TILE_SPRITE_MAP[id];
 
 // (combat-feel-pass) Hit-splat fill colors by damage type. Crit keeps the
 // physical fill but takes a gold border (handled in _drawHitSplat). New types
@@ -693,27 +699,13 @@ export class Renderer {
                     carBlocks.push({ px, py });
                 }
 
-                // Lookup chain: sewer ids 0-7 → TILE_SPRITE_MAP,
-                // town ids 10-21 → TOWN_TILE_SPRITE_MAP,
-                // circus/factory/graveyard ids 30+ → ZONE_TILE_SPRITE_MAP.
-                // Disjoint id ranges so order doesn't matter, but explicit
-                // chain keeps the resolution path readable.
-                const ref = TILE_SPRITE_MAP[drawId] || TOWN_TILE_SPRITE_MAP[drawId] || ZONE_TILE_SPRITE_MAP[drawId];
+                const ref = tileRef(drawId);
                 let ok = false;
                 if (ref) {
-                    if (ref.region) {
-                        // Pixel-region based (for large exterior sheets)
-                        const regionSheet = sprites?.[ref.sheet];
-                        if (regionSheet?.loaded) {
-                            ok = regionSheet.drawRegion(ctx, ref.x, ref.y, ref.w, ref.h, px, py, TILE_PX, TILE_PX);
-                        }
-                    } else {
-                        // Grid-based (for sewer tileset)
-                        const tileSheet = sprites?.[ref.sheet];
-                        if (tileSheet?.loaded) {
-                            ok = tileSheet.drawFrame(ctx, ref.col, ref.row, px, py, TILE_PX, TILE_PX);
-                        }
-                    }
+                    // A layered tile (a circus tent) paints its ground first,
+                    // so the picture's transparent edges show that ground.
+                    if (ref.under != null) this._drawTileRef(tileRef(ref.under), px, py);
+                    ok = this._drawTileRef(tileFrame(ref, wx, wy), px, py);
                 }
                 if (!ok) {
                     ctx.fillStyle = def.fallbackColor;
@@ -743,6 +735,17 @@ export class Renderer {
                 ctx.fillRect(b.px, b.py, TILE_PX * 2, TILE_PX * 2);
             }
         }
+    }
+
+    // Draw one tile ref into the TILE_PX cell at (px, py). Returns false when
+    // there's nothing to draw it with, so the caller can fall back to the
+    // tile's flat colour.
+    _drawTileRef(ref, px, py) {
+        const sheet = ref && this.sprites?.[ref.sheet];
+        if (!sheet?.loaded) return false;
+        return ref.region
+            ? sheet.drawRegion(this.ctx, ref.x, ref.y, ref.w, ref.h, px, py, TILE_PX, TILE_PX)  // pixel region (large exterior sheets)
+            : sheet.drawFrame(this.ctx, ref.col, ref.row, px, py, TILE_PX, TILE_PX);            // grid cell
     }
 
     // ── Zone-exit markers ──────────────────────────────────────────────────────
