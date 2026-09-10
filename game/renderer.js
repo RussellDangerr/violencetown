@@ -689,6 +689,16 @@ export class Renderer {
                 const id = game.map.getTile(wx, wy);
                 const def = game.map.getTileDef(wx, wy);
 
+                // Off the map there is nothing: paint the void. getTile reports
+                // WALL (id 0) out there so the edge stays unwalkable, but WALL
+                // has real brick art now (the Sewer's walls) and drawing it
+                // would ring every zone in dungeon brick.
+                if (!game.map.isInBounds(wx, wy)) {
+                    ctx.fillStyle = def.fallbackColor;
+                    ctx.fillRect(px, py, TILE_PX, TILE_PX);
+                    continue;
+                }
+
                 // Car cell: substitute the ground sprite for the per-cell draw,
                 // and remember the block's top-left for the deferred 64×64 pass.
                 // Top-left = a tile-19 cell whose west and north neighbors aren't
