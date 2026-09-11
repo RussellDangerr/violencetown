@@ -153,6 +153,12 @@ export function clearSave() {
 
 // ── Migrate / validate ───────────────────────────────────────────────────────
 
+// old map file -> its current name. The Carnival's file matched its old
+// "Circus" working title until 2026-09-10; every label already said CARNIVAL.
+const RENAMED_MAPS = {
+    'circus-map.json': 'carnival-map.json',
+};
+
 // Bring an older/partial raw save up to the current schema, filling defaults
 // for any missing fields so loading never crashes on an old blob.
 export function migrate(raw) {
@@ -160,6 +166,9 @@ export function migrate(raw) {
     if (typeof r.version !== 'number') r.version = SAVE_VERSION;
     // Future: stepwise upgrades keyed on r.version go here.
     if (typeof r.mapUrl !== 'string') r.mapUrl = 'town-map.json';
+    // Maps renamed since the save was written. A save reloads its map by file
+    // name, so an old name has to follow the file or the load 404s.
+    if (RENAMED_MAPS[r.mapUrl]) r.mapUrl = RENAMED_MAPS[r.mapUrl];
     if (typeof r.turn !== 'number') r.turn = 0;
     if (typeof r.rngState !== 'number') r.rngState = 0;
     r.player = (r.player && typeof r.player === 'object') ? r.player : {};

@@ -125,7 +125,7 @@ describe('town streetlights', () => {
 // one whole 2x2 of a single colour. That is what this pins.
 
 describe('carnival tents', () => {
-    const map = loadMap('circus-map.json');
+    const map = loadMap('carnival-map.json');
     const tentIds = ['TENT_GREEN', 'TENT_TAN'].map(k => TILES[k]?.id);
     const at = (x, y) => (x >= 0 && y >= 0 && x < map.width && y < map.height) ? map.tiles[y * map.width + x] : -1;
 

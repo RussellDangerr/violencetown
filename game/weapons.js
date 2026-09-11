@@ -8,6 +8,7 @@
 export const WEAPONS = {
     wooden_sword: {
         id: 'wooden_sword', name: '[Wooden Sword]', damage: 10, equipSlot: 'weapon', icon: 'sword',
+        useType: 'equip',   // without it, the sword could never be re-equipped once swapped out
         category: 'weapon',
         baseValue: 6,
         description: 'A practice blade, all splinters and optimism. Swings true enough.',

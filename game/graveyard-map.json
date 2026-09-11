@@ -145,7 +145,7 @@
         {"type": "fearmur", "x": 14, "y": 6}
     ],
     "transitions": [
-        {"x": 14, "y": 0, "toMap": "circus-map.json", "toX": 52, "toY": 18, "label": "[North — back up to the Carnival]"},
+        {"x": 14, "y": 0, "toMap": "carnival-map.json", "toX": 52, "toY": 18, "label": "[North — back up to the Carnival]"},
         {"x": 14, "y": 26, "toMap": "wilderness-map.json", "toX": 8, "toY": 2, "label": "[South — toward the WILDERNESS. The dark out there is total.]"}
     ]
 }

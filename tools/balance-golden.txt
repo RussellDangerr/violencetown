@@ -9,8 +9,8 @@ borgir/borgir_boss                Boss                        100       6     12
 canyon/pike                       Pike                        100       5      9        0              7              3     12
 canyon/canyon-rat-1               Rat                         100     -30      6        1              2              2     17
 canyon/canyon-rat-2               Rat                         100     -30      6        1              2              2     17
+carnival/clown1                   Carnival Clown              100       0      8       40              5              3     13
 casino/casino-pit-boss            Operator                    100     -80      0        0              1              1      -
-circus/clown1                     Carnival Clown              100       0      8       40              5              3     13
 diner/diner-cook                  Cook                        100     -80      0        0              1              1      -
 downtown/dt-recipient             Stranger                    100     -80      0        0              1              1      -
 downtown/dt-merch1                Vendor                      100     -80      0        0              1              1      -
@@ -68,8 +68,8 @@ zone               faucet_gp
 bank                       0
 borgir                    25
 canyon                     2
+carnival                   5
 casino                     0
-circus                     5
 diner                      0
 downtown                   0
 factory                    8

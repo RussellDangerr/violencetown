@@ -424,6 +424,13 @@ describe('migrate + load partial/old blobs without throwing (EXPECTED GREEN)', (
         assert.equal(r.turn, 5);
     });
 
+    test('a save made in the Carnival before the rename still loads there', () => {
+        // circus-map.json became carnival-map.json; a save stores the map by
+        // file name and reloads it by file name, so the old name must follow.
+        assert.equal(migrate({ mapUrl: 'circus-map.json' }).mapUrl, 'carnival-map.json');
+        assert.equal(migrate({ mapUrl: 'sewer-map.json' }).mapUrl, 'sewer-map.json', 'other maps are untouched');
+    });
+
     test('loadInto() on a tiny/old blob fills defaults and does not throw', async () => {
         // Minimal blob: just a player hp and a map url. Everything else missing.
         const blob = { player: { hp: 10 }, mapUrl: 'sewer-map.json' };

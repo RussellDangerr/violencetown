@@ -80,9 +80,9 @@
         {"x": 32, "y": 10, "toMap": "sewer-map.json", "toX": 1, "toY": 10, "label": "[East — down into the SEWER]"},
         {"x": 32, "y": 12, "toMap": "sewer-map.json", "toX": 1, "toY": 10, "label": "[East — down into the SEWER]"},
         {"x": 32, "y": 14, "toMap": "sewer-map.json", "toX": 1, "toY": 10, "label": "[East — down into the SEWER]"},
-        {"x": 14, "y": 24, "toMap": "circus-map.json", "toX": 4, "toY": 2, "label": "[South — out to the edge of town: the CARNIVAL]"},
-        {"x": 16, "y": 24, "toMap": "circus-map.json", "toX": 4, "toY": 2, "label": "[South — out to the edge of town: the CARNIVAL]"},
-        {"x": 18, "y": 24, "toMap": "circus-map.json", "toX": 4, "toY": 2, "label": "[South — out to the edge of town: the CARNIVAL]"}
+        {"x": 14, "y": 24, "toMap": "carnival-map.json", "toX": 4, "toY": 2, "label": "[South — out to the edge of town: the CARNIVAL]"},
+        {"x": 16, "y": 24, "toMap": "carnival-map.json", "toX": 4, "toY": 2, "label": "[South — out to the edge of town: the CARNIVAL]"},
+        {"x": 18, "y": 24, "toMap": "carnival-map.json", "toX": 4, "toY": 2, "label": "[South — out to the edge of town: the CARNIVAL]"}
     ],
     "examinables": [
         {"id": "car", "x": 24, "y": 6, "text": "[The hood's popped. Where the cataclysmic converter should sit: a greasy hole and rat-sized claw marks. The tracks skitter off east, toward the sewer.]"},
