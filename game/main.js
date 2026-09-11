@@ -3800,6 +3800,13 @@ class Game {
                 if (m.category === 'adjacency-bark') {
                     this.emitGameEvent('npc_adjacent', { id: m.sourceEnemy.id, type: m.sourceEnemy.type });
                 }
+            } else if (m && m.category === 'combat') {
+                // Combat reports go to the log. One that healed somebody — an enemy
+                // eating its own kit, a boss buying HP for itself or an ally — also
+                // floats a heal splat over whoever it healed (npc.js sets `heal`).
+                const healed = m.heal > 0 ? (m.healTarget ?? m.sourceEnemy) : null;
+                if (healed) this._spawnHitSplat(healed.x, healed.y, `+${m.heal}`, 'heal', { omni: true });
+                this._log(m.text);
             } else {
                 // Unknown tuple shape — fail safe to the log so nothing gets
                 // dropped silently if a future category lands without a route.
