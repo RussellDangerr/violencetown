@@ -2,7 +2,23 @@
 
 **Phase:** Interaction / UI — the Examine verb (Two-Wheels §8 / §12 step 3).
 **Priority:** Medium. Completes the one visibly-missing piece of the shipped wheel/Target-List arc.
-**Status:** Design approved (Caelan, 2026-07-23).
+**Status:** ✅ Shipped 2026-09-10 on `feature/ready-builds` — `resolveExamine` in `examine.js`, both
+entry points routed through it, `tests/examine.test.js`.
+
+> **As built — where it differs from this design, and why:**
+> - **Live strings kept.** The Target List already said `[Wererat. Looks like trouble.]` (not
+>   `It's a Wererat.`); copy is Caelan's, so the resolver speaks the shipped lines.
+> - **Two rungs added.** *Containers* — the Target List already described chests and this ladder had
+>   dropped them. *Props* — since the zone pass, graves, lamps, trees and the cemetery gate are props,
+>   and without a rung a grave examined as the grass under it. A prop's name comes from a short table
+>   in `examine.js`; a test fails if any `PROP_SPRITES` type has none.
+> - **Quest event before a grant**, as the E key always did (the implementation plan's version would
+>   have skipped the event for granting instances). The Target List now grants too.
+> - **Tent keys renamed** `GREEN_TENT` / `TAN_TENT` so the derived name reads "Green tent", not
+>   "Tent green" — the design's rule is derive from the key, so the key was fixed, not special-cased.
+> - **A tap still can't examine bare ground or a prop** — `_targetAt` returns nothing there because a
+>   tap on empty ground is click-to-move. The E key covers them. Changing that is a pointer-model
+>   decision, not part of this.
 **Relates to:** `plans/two-wheels-focus-state-and-color-language.md` §8 (on the `plan` branch) — this is a
 **minimal** realization of that section. Supersedes the `[Nothing here worth examining.]` dead-end.
 

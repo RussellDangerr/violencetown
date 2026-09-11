@@ -82,7 +82,7 @@ describe('_drawTiles', () => {
     });
 
     test('a tent cell paints carnival ground, then its own quadrant on top', () => {
-        const T = TILES.TENT_GREEN.id, G = TILES.CIRCUS_GROUND.id;
+        const T = TILES.GREEN_TENT.id, G = TILES.CIRCUS_GROUND.id;
         const at = paint(4, [T, T, G, G, T, T, G, G], 1, 1);
         const ground = { sheet: 'tinyTown', col: 1, row: 2 };
         const quad = col => ({ sheet: 'outlined', col, row: 0 });

@@ -654,8 +654,8 @@ export const ZONE_TILE_SPRITE_MAP = {
     30: { sheet: 'tinyTown', col: 1, row: 2 },   // CIRCUS_GROUND — packed dirt/sand
     32: { sheet: 'tinyTown', col: 2, row: 0 },   // CONFETTI      — grass dotted with orange flowers
     33: { sheet: 'tinyTown', col: 4, row: 3 },   // SAWDUST       — packed tan dirt
-    34: { sheet: 'outlined', quad: outlinedQuad('tentGreen'), under: 30 }, // TENT_GREEN
-    35: { sheet: 'outlined', quad: outlinedQuad('tentTan'),   under: 30 }, // TENT_TAN
+    34: { sheet: 'outlined', quad: outlinedQuad('tentGreen'), under: 30 }, // GREEN_TENT
+    35: { sheet: 'outlined', quad: outlinedQuad('tentTan'),   under: 30 }, // TAN_TENT
 
     // Factory — needed no new sheet (zone-identity.md Item 2). WALL moves to
     // roguelikeCity's chain-link fencing so Factory reads industrial rather

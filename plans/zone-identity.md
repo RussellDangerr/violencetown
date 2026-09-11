@@ -144,7 +144,7 @@ for any of them. `d1f286c` is the guard that makes that state fail loudly —
   read as highlighted UI cells. `PROP_SPRITES` derives the twelve entries from `OUTLINED_SPRITES`.
 - **Tents are tiles, not props.** A prop is centred on its base tile, so a 2-wide prop straddles
   three columns and cannot sit on the 2-tile grid the carnival's border band and tent blocks use;
-  and a prop blocks only its base cell. So: two tile ids, `TENT_GREEN` (34) and `TENT_TAN` (35).
+  and a prop blocks only its base cell. So: two tile ids, `GREEN_TENT` (34) and `TAN_TENT` (35).
   A tent cell draws the quadrant its parity picks (`tileFrame`) and paints `CIRCUS_GROUND` under
   itself first (`under`), so the tent's transparent corners show sand. 86 tents, checkerboarded;
   `tests/zone-identity.test.js` holds every tent cell to a whole, even-aligned 2×2 of one colour.

@@ -41,8 +41,8 @@ export const TILES = {
     CIRCUS_GROUND: { id: 30, walkable: true,  hazard: null, fallbackColor: '#c4a070' },
     CONFETTI:      { id: 32, walkable: true,  hazard: null, fallbackColor: '#e8c060' },
     SAWDUST:       { id: 33, walkable: true,  hazard: null, fallbackColor: '#a08050' },
-    TENT_GREEN:    { id: 34, walkable: false, hazard: null, fallbackColor: '#4a9a5e' },
-    TENT_TAN:      { id: 35, walkable: false, hazard: null, fallbackColor: '#d9c9a0' },
+    GREEN_TENT:    { id: 34, walkable: false, hazard: null, fallbackColor: '#4a9a5e' },
+    TAN_TENT:      { id: 35, walkable: false, hazard: null, fallbackColor: '#d9c9a0' },
 
     // Factory tiles (40-49) — Oddworld-coded industrial, alien-occupied
     FACTORY_FLOOR: { id: 40, walkable: true,  hazard: null, fallbackColor: '#3a3a3e' },
@@ -63,6 +63,18 @@ export const TILE_BY_ID = {};
 for (const [key, def] of Object.entries(TILES)) {
     def.name = key;
     TILE_BY_ID[def.id] = def;
+}
+
+// A tile's name as Examine reads it, derived from its key — FACTORY_FLOOR →
+// "Factory floor", GOO_VISUAL → "Goo" (render-hint words dropped). No per-tile
+// authoring (plans/layered-examine.md), so a key that reads badly gets renamed
+// rather than special-cased. Null for an id that is not a tile.
+export function tileDisplayName(id) {
+    const key = TILE_BY_ID[id]?.name;
+    if (!key) return null;
+    const words = key.toLowerCase().split('_').filter(w => w && w !== 'visual' && w !== 'vis');
+    const s = words.join(' ');
+    return s ? s.charAt(0).toUpperCase() + s.slice(1) : null;
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────

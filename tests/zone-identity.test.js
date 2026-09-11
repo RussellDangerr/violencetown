@@ -126,11 +126,11 @@ describe('town streetlights', () => {
 
 describe('carnival tents', () => {
     const map = loadMap('carnival-map.json');
-    const tentIds = ['TENT_GREEN', 'TENT_TAN'].map(k => TILES[k]?.id);
+    const tentIds = ['GREEN_TENT', 'TAN_TENT'].map(k => TILES[k]?.id);
     const at = (x, y) => (x >= 0 && y >= 0 && x < map.width && y < map.height) ? map.tiles[y * map.width + x] : -1;
 
     test('both tent colours exist as tiles and the carnival places both', () => {
-        assert.ok(tentIds.every(id => Number.isInteger(id)), 'TILES.TENT_GREEN / TILES.TENT_TAN are not defined');
+        assert.ok(tentIds.every(id => Number.isInteger(id)), 'TILES.GREEN_TENT / TILES.TAN_TENT are not defined');
         for (const id of tentIds) assert.ok(map.tiles.includes(id), `tent id ${id} is placed nowhere in the carnival`);
     });
 
@@ -150,8 +150,8 @@ describe('carnival tents', () => {
 
     test('a tent tile resolves to the quadrant its cell parity picks', () => {
         assert.equal(typeof sprites.tileFrame, 'function', 'sprites.js exports no tileFrame(ref, x, y)');
-        const ref = sprites.ZONE_TILE_SPRITE_MAP[TILES.TENT_GREEN?.id];
-        assert.ok(ref, 'TENT_GREEN has no sprite entry');
+        const ref = sprites.ZONE_TILE_SPRITE_MAP[TILES.GREEN_TENT?.id];
+        assert.ok(ref, 'GREEN_TENT has no sprite entry');
         const O = sprites.OUTLINED_SPRITES;
         assert.equal(sprites.tileFrame(ref, 10, 4).col, O.tentGreenTL);
         assert.equal(sprites.tileFrame(ref, 11, 4).col, O.tentGreenTR);

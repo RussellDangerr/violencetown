@@ -8,7 +8,7 @@ import { loadMap } from './map.js';
 import { loadAllSprites } from './sprites.js';
 import { BitmapFont } from './bitmap-font.js';
 import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, MAX_STACK } from './data.js';
-import { ITEMS, itemTier, resolveUse, resolveThrow, tickTempEquips, unequipItem, ownedItemDefs, hasItemDef } from './items.js';
+import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, ownedItemDefs, hasItemDef } from './items.js';
 import { WEAPONS } from './weapons.js';
 import { resolveItemDef } from './item-registry.js';
 import { tickBuffList, BUFF_DEFS, sumBuffStat, worldBeatPlan } from './buffs.js';
@@ -33,7 +33,7 @@ import { manhattan, clamp } from './utils.js';
 import { RNG } from './rng.js';
 import { hasSave, readSaveRaw, writeSave, loadInto, clearSave } from './save.js';
 import { QuestEngine } from './quests.js';
-import { doExamine } from './examine.js';
+import { doExamine, resolveExamine } from './examine.js';
 import { recordDrop, pendingDrops, dropLoadout } from './drops.js'; // per-zone runtime dropped-items layer (pure, node-tested)
 import {
     CANVAS_INTERNAL_PX, HIT_SLOP, THROW_RECTS,
@@ -3077,27 +3077,18 @@ class Game {
         this.state = STATE.IDLE;
         switch (verb.resolver) {
             case 'examine': {
-                // (Phase 6d) An item's examine names its value tier — the legible
-                // "how good/valuable is this" read (Grey→Orange).
-                const itemDef = t.item && t.item.def;
-                const tier = itemDef ? itemTier(itemDef) : null;
-                const itemTxt = itemDef && `[${itemDef.name || t.item.type} (${tier.name}). ${itemDef.description || ''}]`;
-                const chest = t.container;
-                const txt = (t.examinable && t.examinable.text)
-                    || (npc && `[${(npc.name || npc.type)}. ${isHostile(npc) ? 'Looks like trouble.' : 'Minding their own business.'}]`)
-                    || itemTxt
-                    || (chest && `[A ${chest.type}. ${(chest.contents || []).length ? 'Something rattles inside.' : 'Empty.'}]`)
-                    || '[Nothing worth examining.]';
-                this._log(txt);
-                if (t.examinable) this.emitGameEvent('examine', { targetId: t.examinable.id });
-                // (§12.3) Surface it as a layered inspect panel: an item wears its
-                // value tier + colour; NPC/examinable fall back to a gold title.
-                const desc = itemDef
-                    ? { title: itemDef.name || t.item.type, tierName: tier.name, tierColor: tier.color, body: itemDef.description || txt }
-                    : npc
-                        ? { title: npc.name || npc.type, body: txt }
-                        : { title: (t.examinable && t.examinable.id) ? String(t.examinable.id).replace(/_/g, ' ') : 'Examine', body: txt };
-                this._openInspect(desc);
+                // One ladder for every examine (examine.js resolveExamine — the E key
+                // uses it too, so the two cannot drift): instance → creature →
+                // container → item (with its value tier) → prop → tile. A multi-tile
+                // instance like the car resolves at its own tile, whichever half
+                // was tapped.
+                const ex = t.examinable;
+                const res = resolveExamine(this, ex ? ex.x : t.x, ex ? ex.y : t.y);
+                if (res.instanceId) this.emitGameEvent('examine', { targetId: res.instanceId });
+                if (res.grantsInstance) { this._grantFromExaminable(res.grantsInstance); break; }
+                this._log(res.body);
+                // (§12.3) The layered inspect panel: an item wears its value tier + colour.
+                this._openInspect({ title: res.title, body: res.panelBody, tierName: res.tierName, tierColor: res.tierColor });
                 break;
             }
             case 'talk':  if (npc) this._openDialogue(npc); break;
