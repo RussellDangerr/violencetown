@@ -76,6 +76,27 @@ describe('graveyard', () => {
     });
 });
 
+// ── Town: streetlights stand up ─────────────────────────────────────────────
+//
+// Was: STREETLIGHT, a one-cell tile drawing rpgUrban's squat lamp-with-a-red-
+// lens, which read as a parking meter. rpgUrban's real streetlights are two
+// cells tall and never fit a tile; as a 1x2 prop (the tree's shape) they do,
+// and the player walks behind the lamp head.
+
+describe('town streetlights', () => {
+    const map = loadMap('town-map.json');
+    const lamps = (map.props || []).filter(p => p.type === 'streetlight');
+
+    test('streetlights are tall props', () => {
+        assert.ok(lamps.length > 0, 'no streetlight props in Town');
+        assert.equal(sprites.PROP_SPRITES.streetlight?.hTiles, 2, 'a streetlight should stand two tiles tall');
+    });
+
+    test('the one-cell lamp tile is retired', () => {
+        assert.equal(TILES.STREETLIGHT, undefined);
+    });
+});
+
 // ── Item 3, circus bonus: tents ────────────────────────────────────────────
 //
 // Was: TENT_STRIPE, red roof shingles standing in for a tent, over 344 cells.

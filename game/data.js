@@ -23,7 +23,8 @@ export const TILES = {
     DOOR:         { id: 15, walkable: true,  hazard: null, fallbackColor: '#8b6914' },
     SEWER_ENTRY:  { id: 16, walkable: true,  hazard: null, fallbackColor: '#2a1a0a' },
     FENCE:        { id: 17, walkable: false, hazard: null, fallbackColor: '#5a4a3a' },
-    STREETLIGHT:  { id: 18, walkable: false, hazard: null, fallbackColor: '#4a4a4a' },
+    // 18 was STREETLIGHT, a one-cell lamp tile. Streetlights are two-tile-tall
+    // props now (sprites.js PROP_SPRITES) — retired; don't reuse the id.
     CAR:          { id: 19, walkable: false, hazard: null, fallbackColor: '#884444' },
     BENCH:        { id: 20, walkable: false, hazard: null, fallbackColor: '#6a5a3a' },
     TRASHCAN:     { id: 21, walkable: false, hazard: null, fallbackColor: '#4a5a4a' },

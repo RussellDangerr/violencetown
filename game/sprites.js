@@ -222,10 +222,11 @@ export const TILE_SPRITE_MAP = {
 // Tiny Town has rich terrain/buildings/fences but ships no urban props (cars,
 // streetlights, manholes, trashcans, benches). The packed roguelikeCity atlas
 // supplies the building-wall pick at 14 and the sewer manhole at 16 — it's
-// placed and working, so it stays put. Streetlight/bench/trash-can (18/20/21)
-// come from rpgUrban instead (visual-pass, 2026-09-06): Kenney's RPG Urban
-// Pack is the same gutter-free 16px construction as tinyTown, so the street
-// furniture now matches the terrain it sits on rather than a different series.
+// placed and working, so it stays put. Bench/trash-can (20/21) come from
+// rpgUrban instead (visual-pass, 2026-09-06): Kenney's RPG Urban Pack is the
+// same gutter-free 16px construction as tinyTown, so the street furniture
+// matches the terrain it sits on rather than a different series. Streetlights
+// are props now (PROP_SPRITES.streetlight) — id 18 is retired.
 export const TOWN_TILE_SPRITE_MAP = {
     10: null,                                        // town wall edge — dark fallback (frames the map)
     11: { sheet: 'tinyTown', col: 1, row: 9 },       // sidewalk — light gray stone slab
@@ -235,7 +236,6 @@ export const TOWN_TILE_SPRITE_MAP = {
     15: { sheet: 'tinyTown', col: 1, row: 7 },       // door — brown door in wood facade
     16: { sheet: 'roguelikeCity', col: 9, row: 24 }, // sewer entry — round manhole cover set in the pavement
     17: { sheet: 'tinyTown', col: 9, row: 3 },       // fence — vertical wood plank
-    18: { sheet: 'rpgUrban', col: 1, row: 7 },       // streetlight — lamp fixture with a red signal lens, on a short post (the taller two-cell lamps at (2,6)+(2,7)/(3,6)+(3,7) don't fit a single tile)
     19: { sheet: 'car', col: 0, row: 0 },            // car — Kenney roguelikeCity beater (world-dressing; was the wooden-bucket placeholder)
     20: { sheet: 'rpgUrban', col: 7, row: 9 },       // bench — wooden bench, slatted seat on two legs
     21: { sheet: 'rpgUrban', col: 9, row: 9 },       // trash can — grey bin with a maroon base band
@@ -559,6 +559,14 @@ export const PROP_SPRITES = {
     // tree. The player is occluded only when directly behind it (same column),
     // never when merely passing alongside. shadowRx/Ry size the trunk's pool.
     tree: { sheet: 'tinyTown', sx: 4 * 16, sy: 0, sw: 16, sh: 32, wTiles: 1, hTiles: 2, shadowRx: 12, shadowRy: 4.5 },
+
+    // rpgUrban's double-arm streetlight — 1x2 cells (col 3, rows 6-7), the
+    // tree's shape. It was a one-cell STREETLIGHT tile drawing the squat
+    // lamp-with-a-red-lens at (1,7), which read as a parking meter; the real
+    // streetlights are two cells tall and could never fit a tile. The
+    // double arm is symmetric, so it reads right on any side of any road —
+    // the single-arm (2,6)+(2,7) would point its lamp away from half of them.
+    streetlight: { sheet: 'rpgUrban', sx: 3 * 16, sy: 6 * 16, sw: 16, sh: 32, wTiles: 1, hTiles: 2, shadowRx: 7, shadowRy: 2.5 },
 
     // Gravestones — one prop per silhouette on the outlined strip, keyed by the
     // strip's own names. 1x1: the art is no taller than a cell, so what a prop
