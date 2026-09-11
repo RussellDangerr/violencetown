@@ -2083,7 +2083,8 @@ class Game {
 
     // ── Animation ─────────────────────────────────────────────────────────────
 
-    _animateMove(fromX, fromY, toX, toY, callback) {
+    // `duration` defaults to a walk step; a grapple swing passes a longer one.
+    _animateMove(fromX, fromY, toX, toY, callback, duration = this._animDuration) {
         this._animating = true;
         this._animFromX = fromX;
         this._animFromY = fromY;
@@ -2094,7 +2095,7 @@ class Game {
 
         const tick = (now) => {
             const elapsed = now - this._animStart;
-            const t = Math.min(1, elapsed / this._animDuration);
+            const t = Math.min(1, elapsed / duration);
 
             // Interpolated position for rendering
             this._animProgress = t;
@@ -2180,6 +2181,10 @@ class Game {
             return;
         }
 
+        // Bump a grapple anchor → swing, if the hook is in the bag.
+        const anchor = this.map.getAnchor(nx, ny);
+        if (anchor) { this._interactGrapple(anchor); return; }
+
         // Wall?
         if (!this._canEnter(nx, ny)) { audio.playSfx('bump-wall'); return; } // [audio] thud on wall bump (Rat Form may open a grate)
 
@@ -2235,6 +2240,36 @@ class Game {
             // auto-walk you straight into the new zone. (movement-feel Finding 1)
             if (!transition) this._onStepSettled();
         });
+    }
+
+    // ── Grapple swing (plans/grapple-swing.md) ───────────────────────────────
+    //
+    // Bump an anchor with its required item in the bag and you swing to where it
+    // leads: (toX, toY) on this map, or out through `toMap`, whose transition then
+    // runs exactly as a walked-onto exit's does — zone pursuit, autosave, the
+    // map_entered event and all. Without the item it is sheer rock: its
+    // requiresMsg, no swing and no turn, the same as walking into a gated door.
+    // `_swinging` is what the renderer reads to arc the hero up and over.
+    _interactGrapple(anchor) {
+        if (anchor.requires && !(this.inventory || []).some(s => s && s.itemDef.id === anchor.requires)) {
+            audio.playSfx('bump-wall');
+            this._log(anchor.requiresMsg || '[You need something to get a grip here.]');
+            return;
+        }
+        const SWING_TIME = 2.5;   // × a walk step: a swing should read as flight, not a shuffle
+        const [lx, ly] = anchor.toMap ? [anchor.x, anchor.y] : [anchor.toX, anchor.toY];
+        this._swinging = true;
+        this._animateMove(this.playerX, this.playerY, lx, ly, () => {
+            this._swinging = false;
+            if (anchor.toMap) {
+                this._pendingTransition = anchor;   // the world beat logs its label and loads the map
+            } else {
+                this.playerX = lx;
+                this.playerY = ly;
+                this._log(anchor.label || '[You swing across.]');
+            }
+            this._advanceWorld();
+        }, this._animDuration * SWING_TIME);
     }
 
     // ── Shove (barge through characters) ─────────────────────────────────────

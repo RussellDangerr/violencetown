@@ -21,6 +21,7 @@ const PROP_NAMES = [
     ['cemeteryArch', 'Cemetery gate'],
     ['streetlight', 'Streetlight'],
     ['tree', 'Tree'],
+    ['grappleRock', 'Jutting rock'],
 ];
 const propName = type => PROP_NAMES.find(([prefix]) => type.startsWith(prefix))?.[1] ?? null;
 

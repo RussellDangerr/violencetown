@@ -572,6 +572,13 @@ export const PROP_SPRITES = {
     // the single-arm (2,6)+(2,7) would point its lamp away from half of them.
     streetlight: { sheet: 'rpgUrban', sx: 3 * 16, sy: 6 * 16, sw: 16, sh: 32, wTiles: 1, hTiles: 2, shadowRx: 7, shadowRy: 2.5 },
 
+    // A jutting sandstone spire — roguelikeDungeon (3,0), a gutter sheet, so the
+    // pixel region is at stride 17. It is what a grappling hook bites on: the
+    // canyon's climb-out anchor stands on one (map `anchors`, plans/grapple-swing.md).
+    // A rock rather than the sheet's rope-and-hook hoist at (5,9) — with a rope
+    // already hanging there, you would not need Pike's.
+    grappleRock: { sheet: 'roguelikeDungeon', sx: 3 * 17, sy: 0, sw: 16, sh: 16, wTiles: 1, hTiles: 1, shadowRx: 9, shadowRy: 3 },
+
     // Gravestones — one prop per silhouette on the outlined strip, keyed by the
     // strip's own names. 1x1: the art is no taller than a cell, so what a prop
     // buys over the old GRAVESTONE tile is a different stone per grave, a

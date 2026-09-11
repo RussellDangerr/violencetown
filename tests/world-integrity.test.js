@@ -40,6 +40,32 @@ describe('exits', () => {
     });
 });
 
+describe('grapple anchors', () => {
+    const byFile = Object.fromEntries(maps.map(({ file, data }) => [file, new GameMap(data, file)]));
+    const anchors = maps.flatMap(({ file, data }) => (data.anchors || []).map(a => ({ file, ...a })));
+
+    test('every anchor leads somewhere you can stand', () => {
+        const bad = anchors.filter(a => {
+            const dest = byFile[a.toMap ?? a.file];
+            return !dest || !dest.isWalkable(a.toX, a.toY);
+        }).map(a => `${a.file} (${a.x}, ${a.y}) -> ${a.toMap ?? 'same map'} (${a.toX}, ${a.toY})`);
+        assert.deepEqual(bad, [], `anchors that land nowhere, or in a wall:\n  ${bad.join('\n  ')}`);
+    });
+
+    test('every anchor is something you bump, never open ground you walk onto', () => {
+        const open = anchors.filter(a => byFile[a.file].isWalkable(a.x, a.y)).map(a => `${a.file} (${a.x}, ${a.y})`);
+        assert.deepEqual(open, [], `anchors on walkable ground: ${open.join(', ')}`);
+    });
+
+    test('the canyon climb-out is a grapple anchor, not a gated door', () => {
+        const canyon = maps.find(m => m.file === 'canyon-map.json').data;
+        assert.ok((canyon.anchors || []).some(a => a.requires === 'grappling_hook' && a.toMap === 'downtown-map.json'),
+            'no hook-gated anchor out of the canyon');
+        assert.ok(!(canyon.transitions || []).some(t => t.requires === 'grappling_hook'),
+            'the plain hook-gated exit is still there');
+    });
+});
+
 // Weapons handed out by code rather than placed in data. Each entry names the
 // code path, so a sweep of the maps can still account for every weapon.
 const GRANTED_IN_CODE = {

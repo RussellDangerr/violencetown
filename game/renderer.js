@@ -72,6 +72,7 @@ const SPLAT_COLOR = {
 // All tunable.
 const WALK_BOB_PX   = 2;   // peak vertical bounce per tile (integer pixels)
 const WALK_LEAN_DEG = 5;   // peak waddle rotation, alternates each step; 0 = off
+const SWING_LIFT_PX = Math.round(TILE_PX * 0.75);   // (grapple swing) how high the hero arcs at mid-swing
 
 // Vertical bob + waddle rotation for a walking (or idle) character. `progress`
 // is the 0→1 slide position; `stepIndex` parity picks the waddle side; `idleTick`
@@ -773,8 +774,11 @@ export class Renderer {
     // Called from renderFrame AFTER the day/night + arena + Wilderness dimming,
     // under a re-applied world transform, so the markers stay legible in the dark.
     _drawTransitions(game) {
-        const trans = game.map?.transitions;
-        if (!trans || !trans.length) return;
+        // A grapple anchor that leads off the map is an exit too — the canyon's
+        // climb-out is one — so it wears the same glow, arrow and hint, or the
+        // only way out of a zone would be unmarked.
+        const trans = [...(game.map?.transitions || []), ...(game.map?.anchors || []).filter(a => a.toMap)];
+        if (!trans.length) return;
         const { ctx, half } = this;
         const mw = game.map.width, mh = game.map.height;
 
@@ -1005,8 +1009,10 @@ export class Renderer {
         }
 
         // The player draws at the fixed view center; the world scrolls under it.
-        const { ppx, ppy } = this._playerScreenPos(game, now);
-        actors.push({ kind: 'player', px: ppx, py: ppy, dead: false, feetY: ppy + TILE_PX });
+        // Mid-swing they are drawn lifted, but sort and cast their shadow from the
+        // ground they are swinging over.
+        const { ppx, ppy, groundPy } = this._playerScreenPos(game, now);
+        actors.push({ kind: 'player', px: ppx, py: ppy, groundPy, dead: false, feetY: groundPy + TILE_PX });
 
         // Tall props (trees, posts) join the same sort, keyed on their base tile,
         // so the player passes in front of — and behind — them. Wider cull margin
@@ -1025,7 +1031,7 @@ export class Renderer {
         // Floor layer: lay every shadow down first so none can occlude a sprite
         // standing behind it. Props get a broader pool; corpses a fainter one.
         for (const a of actors) {
-            if (a.kind !== 'prop') this._drawGroundShadow(a.px + TILE_PX / 2, a.py + TILE_PX - 4, a.dead ? 0.2 : 0.35);
+            if (a.kind !== 'prop') this._drawGroundShadow(a.px + TILE_PX / 2, (a.groundPy ?? a.py) + TILE_PX - 4, a.dead ? 0.2 : 0.35);
             else if (a.def.shadow !== false) this._drawGroundShadow(a.px + TILE_PX / 2, a.py + TILE_PX - 3, 0.32, a.def.shadowRx ?? 12, a.def.shadowRy ?? 4.5);
         }
 
@@ -1587,13 +1593,21 @@ export class Renderer {
     // The player's screen position — fixed at the view center, nudged by the
     // Phase-C stagger knockback. The world scrolls under it, so unlike enemies it
     // has no slide term. Shared by the depth pass and the item-overlay backdrop.
+    //
+    // (grapple swing) Mid-swing the hero rises on an arc that peaks halfway, so a
+    // swing reads as flight rather than a flat slide; `groundPy` is where their
+    // feet would be, for the shadow and the depth sort. Reduce Motion flattens it.
     _playerScreenPos(game, now) {
         const { half } = this;
         const staggerRemaining = (game._playerStaggerUntil ?? 0) - now;
         const staggerProgress = staggerRemaining > 0 ? staggerRemaining / 80 : 0;
         const offsetX = staggerProgress > 0 ? (game._playerStaggerDx ?? 0) * staggerProgress : 0;
         const offsetY = staggerProgress > 0 ? (game._playerStaggerDy ?? 0) * staggerProgress : 0;
-        return { ppx: half * TILE_PX + offsetX, ppy: half * TILE_PX + offsetY };
+        const groundPy = half * TILE_PX + offsetY;
+        const lift = game._swinging && !Settings.get('reduceMotion')
+            ? Math.round(Math.sin(Math.PI * (game._animProgress || 0)) * SWING_LIFT_PX)
+            : 0;
+        return { ppx: half * TILE_PX + offsetX, ppy: groundPy - lift, groundPy };
     }
 
     // Standalone player draw — used by the item-overlay backdrop, which dims the
