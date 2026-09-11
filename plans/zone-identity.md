@@ -151,10 +151,12 @@ for any of them. `d1f286c` is the guard that makes that state fail loudly —
 - `GRAVESTONE` (51) and `TENT_STRIPE` (31) are **retired**, not allowlisted.
 - Walkability unchanged cell for cell in both zones; densified exits identical (checked against the
   prior commit through `GameMap`). Verified in the running game.
-- **Not done: the cemetery gate** `(41,18)+(42,18)`. Same geometry problem as the tents — a
-  `wTiles: 2` prop cannot centre on the 2-wide path — plus it would sit on a transition cell and
-  must not block. Needs a prop anchor option (`anchor: 'left'`) and `solid: false`; small, but its
-  own change.
+- **The cemetery gate — done later the same day** (`4a028c9`, `feature/ready-builds`). The
+  coordinates above were wrong: `(41,18)+(42,18)` are **minecart rail curves** at this sheet's
+  stride. The sheet's real arch is its arched wall opening, left and right pieces `(31,17)` and
+  `(33,17)`, outlined as one strip (not inset — the posts meet the fence flush) and placed as two
+  1×1 props, so no prop-anchor option was needed after all — only `shadow: false`, so no ellipse sits
+  in the doorway. One gateway in each fence opening, `solid: false`.
 
 **Found while verifying (fixed, `3378bb0`):** every zone's off-map margin had been drawing Sewer's
 new wall brick since Item 2 — `getTile` reports `WALL` off the map. `_drawTiles` paints the void
