@@ -37,6 +37,32 @@ function paint(width, tiles, px, py) {
     return (x, y) => calls.filter(c => c.cell === `${x},${y}`).map(({ cell, ...rest }) => rest);
 }
 
+describe('_drawActors', () => {
+    // A prop's ground shadow is one ellipse centred under its cell. Right for a
+    // tree trunk or a lamp post; wrong for a gateway, whose posts stand at the
+    // cell's edges — the shadow would sit in the middle of the doorway.
+    function drawOne(type) {
+        const shadows = [], drawn = [];
+        const r = Object.assign(Object.create(Renderer.prototype), {
+            ctx: {}, half: HALF, _scrollX: 0, _scrollY: 0, sprites: {},
+            _playerScreenPos: () => ({ ppx: HALF * TILE_PX, ppy: HALF * TILE_PX }),
+            _drawPlayerSprite() {}, _drawEnemySprite() {},
+            _drawPropSprite(def) { drawn.push(def); },
+            _drawGroundShadow(cx, cy) { shadows.push([cx, cy]); },
+        });
+        r._drawActors({ playerX: 5, playerY: 5, enemies: [], map: { propSpawns: [{ type, x: 4, y: 4 }] } });
+        return { drawn: drawn.length, shadows: shadows.length - 1 };   // minus the player's own
+    }
+
+    test('a prop casts a ground shadow by default', () => {
+        assert.deepEqual(drawOne('tree'), { drawn: 1, shadows: 1 });
+    });
+
+    test('a prop that declares no shadow is drawn, without one', () => {
+        assert.deepEqual(drawOne('cemeteryArchL'), { drawn: 1, shadows: 0 });
+    });
+});
+
 describe('_drawTiles', () => {
     test('an off-map cell paints the void, not WALL\'s brick', () => {
         // getTile reports id 0 (WALL) off the map, which keeps the edge

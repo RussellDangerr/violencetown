@@ -542,6 +542,10 @@ export const OUTLINED_SPRITES = {
     // would draw a grid across the ground instead of a seamless surface.
     floorPlainA: 20, floorPlainB: 21,
     floorRugA: 22, floorRugB: 23,
+
+    // The graveyard's stone gateway — two halves of one arch, outlined as a
+    // single strip so the lintel joins without a seam (see the generator).
+    cemeteryArchL: 24, cemeteryArchR: 25,
 };
 
 // ── Props (tall, ground-anchored overlay objects — depth/verticality) ───────
@@ -575,6 +579,13 @@ export const PROP_SPRITES = {
     ...Object.fromEntries(Object.entries(OUTLINED_SPRITES)
         .filter(([name]) => name.startsWith('gravestone'))
         .map(([name, col]) => [name, { sheet: 'outlined', sx: col * 16, sy: 0, sw: 16, sh: 16, wTiles: 1, hTiles: 1, shadowRx: 10, shadowRy: 3.5 }])),
+
+    // The graveyard's stone gateway, a left and a right piece placed side by
+    // side over a 2-tile path, `solid: false` in the map so you walk through.
+    // No ground shadow: a prop's shadow is one ellipse centred in its cell,
+    // which would sit in the middle of the doorway, not under the posts.
+    cemeteryArchL: { sheet: 'outlined', sx: OUTLINED_SPRITES.cemeteryArchL * 16, sy: 0, sw: 16, sh: 16, wTiles: 1, hTiles: 1, shadow: false },
+    cemeteryArchR: { sheet: 'outlined', sx: OUTLINED_SPRITES.cemeteryArchR * 16, sy: 0, sw: 16, sh: 16, wTiles: 1, hTiles: 1, shadow: false },
 };
 
 // ── Emote balloons (Kenney Emote Pack, Pixel Style 1) ───────────────────────

@@ -74,6 +74,26 @@ describe('graveyard', () => {
         const passable = graves.filter(g => g.solid === false).map(g => `(${g.x}, ${g.y})`);
         assert.deepEqual(passable, []);
     });
+
+    // A stone gateway frames each opening in the fence: roguelikeSheet's arch
+    // pieces (31,17)+(33,17), outlined as one strip and placed as two 1x1 props.
+    // (zone-identity.md named (41,18)+(42,18) — those cells are minecart rails.)
+    const arches = (map.props || []).filter(p => p.type.startsWith('cemeteryArch'));
+
+    test('a gateway stands in the fence', () => {
+        assert.ok(arches.length > 0, 'no cemetery gateway in the graveyard');
+    });
+
+    test('every gateway is whole — a left piece with its right piece beside it', () => {
+        const at = (x, y) => arches.find(a => a.x === x && a.y === y)?.type;
+        const broken = arches.filter(a => a.type === 'cemeteryArchL' ? at(a.x + 1, a.y) !== 'cemeteryArchR'
+                                                                     : at(a.x - 1, a.y) !== 'cemeteryArchL');
+        assert.deepEqual(broken.map(a => `${a.type}@${a.x},${a.y}`), []);
+    });
+
+    test('you walk through a gateway — it never blocks', () => {
+        assert.deepEqual(arches.filter(a => a.solid !== false).map(a => `(${a.x}, ${a.y})`), []);
+    });
 });
 
 // ── Town: streetlights stand up ─────────────────────────────────────────────

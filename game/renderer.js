@@ -1025,8 +1025,8 @@ export class Renderer {
         // Floor layer: lay every shadow down first so none can occlude a sprite
         // standing behind it. Props get a broader pool; corpses a fainter one.
         for (const a of actors) {
-            if (a.kind === 'prop') this._drawGroundShadow(a.px + TILE_PX / 2, a.py + TILE_PX - 3, 0.32, a.def.shadowRx ?? 12, a.def.shadowRy ?? 4.5);
-            else this._drawGroundShadow(a.px + TILE_PX / 2, a.py + TILE_PX - 4, a.dead ? 0.2 : 0.35);
+            if (a.kind !== 'prop') this._drawGroundShadow(a.px + TILE_PX / 2, a.py + TILE_PX - 4, a.dead ? 0.2 : 0.35);
+            else if (a.def.shadow !== false) this._drawGroundShadow(a.px + TILE_PX / 2, a.py + TILE_PX - 3, 0.32, a.def.shadowRx ?? 12, a.def.shadowRy ?? 4.5);
         }
 
         // Painter's order: smaller feet-Y (further back / north) first. On a tie
