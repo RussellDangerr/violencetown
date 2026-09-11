@@ -17,7 +17,7 @@ pending decisions, and the three passes that landed this week.
 
 **State right now (updated 2026-09-10):** `main` @ `38a44c2` (v0.21.0), **40 commits behind `dev`,
 deliberately** — nothing since v0.21.0 is on the live site. Suite 1223 / 226 / 0 failures.
-Zone §3 and the §2 residual shipped 2026-09-10; see §6.
+Zone §3 and the §2 residual shipped 2026-09-10; see §6. **Two branches await merge:** `feature/combat-legibility` and `feature/ready-builds` (five builds, suite 1263 there) — see §1.
 
 > **Audited against the code 2026-09-10 — eight rows were wrong.** The 09-07 compile carried items
 > over from the July backlogs without re-checking them, and some had shipped the week before:
@@ -46,8 +46,8 @@ flowchart LR
     INT["Zone §1 interiors"]:::now
     R_INT["RULING: vendor Interior Pack?<br/>proxy vault + slots?"]:::ruling
     R_INT --> INT
-    GY -->|"proved the prop system"| LAMP["Streetlights as 1x2 props"]:::ready
-    GY --> GATE["Prop anchor +<br/>cemetery gate"]:::ready
+    GY -->|"proved the prop system"| LAMP["Streetlights as 1x2 props<br/>built — awaiting merge"]:::now
+    GY --> GATE["Cemetery gate<br/>built — awaiting merge"]:::now
     CG["RULING CG: a carnival<br/>ground of its own"]:::ruling
 
     BOSS["B1 — Law 5, bosses spend<br/>DONE 09-02"]:::done
@@ -74,9 +74,9 @@ flowchart LR
     WILD["Wilderness explorable"]:::later
     LANT --> WILD
 
-    EX["Layered examine"]:::ready
-    GRAP["Grapple-hook swing"]:::ready
-    RAY["Ray Gun pickup +<br/>carnival rename"]:::ready
+    EX["Layered examine<br/>built — awaiting merge"]:::now
+    GRAP["Grapple-hook swing<br/>built — awaiting merge"]:::now
+    RAY["Ray Gun + carnival rename<br/>built — awaiting merge"]:::now
 ```
 
 Three things the graph makes visible that the lists did not:
@@ -100,6 +100,11 @@ Three things the graph makes visible that the lists did not:
 | **Ship v0.22.0 to `main`** | Caelan's call; deliberately held. A clean fast-forward + version bump in 3 files + annotated tag. The demo-readiness doc's own headline: *"nothing else is worth as much."* | S | `plans/demo-readiness.md` §0 | nothing |
 | **Zone §1 — interiors get a vocabulary** | Blocked on two rulings (§2). Floors already solved via `rlOutlined_packed.png`. **No interior wall exists in any bundled sheet.** | M | `plans/zone-identity.md` §1 | Z1, Z2 |
 | **Combat legibility — merge `feature/combat-legibility`** | Built 2026-09-10, pushed, **awaiting Caelan's merge**. B2 and Law 5 worked but showed only as log lines, and sewer-fare regen logged like damage ("[Violet Fungus - Sludge 3]" for a heal). Now heals say "(+3 HP)", every DoT tick floats its typed splat, and an enemy healing itself floats a green `+N`. Changes how every DoT looks, so play it first. | S | the branch's commit message | nothing |
+| **Layered examine** | Built 2026-09-10 on `feature/ready-builds` (pushed, **awaiting Caelan's merge**). Examine never dead-ends: one resolver behind the E key and the Target List — instance, creature, container, item, prop, tile. Kept the shipped strings; added container and prop rungs. | M | `plans/layered-examine.md` | nothing |
+| **Grapple-hook swing** | Built 2026-09-10 on `feature/ready-builds` (pushed, **awaiting Caelan's merge**). The canyon climb-out is a grapple anchor on a jutting rock: bump it with the hook and you swing up and out, on an arc, into Downtown. Anchors are map data on a prop, not a new tile. | M | `plans/grapple-swing.md` (on the branch) | nothing |
+| **Ray Gun pickup + carnival rename** | Built 2026-09-10 on `feature/ready-builds` (pushed, **awaiting Caelan's merge**). The Ray Gun lies in the Factory's northwest bay; `circus-map.json` is `carnival-map.json`, with old saves migrated. Found on the way: the starting Wooden Sword could never be re-equipped once swapped out — fixed. | S | `plans/ray-gun-and-carnival.md` (on the branch) | nothing |
+| **Streetlights as 1×2 props** | Built 2026-09-10 on `feature/ready-builds` (pushed, **awaiting Caelan's merge**). Town's four lamps are rpgUrban's two-tile double-arm streetlight, walk-behind and all; the parking-meter tile is retired. | S | `sprites.js` PROP_SPRITES | nothing |
+| **Prop anchor + cemetery gate** | Built 2026-09-10 on `feature/ready-builds` (pushed, **awaiting Caelan's merge**). A stone gateway in each opening of the graveyard fence. The spec's coordinates were minecart rails; the real arch is (31,17)+(33,17), and as two 1×1 props it needed no anchor option. | S | `plans/zone-identity.md` §3 | nothing |
 
 ---
 
@@ -132,16 +137,13 @@ Ordered by how much each unblocks.
 
 | Item | Size | Blocked by | Doc | Where the doc lives |
 |---|---|---|---|---|
-| **Layered examine** | M | nothing | Examine never dead-ends: one `resolveExamine` ladder (instance → creature → item → tile → generic). Full brainstorm + 3-task TDD plan. **Not built** (re-verified). | `layered-examine.md` (dev) |
-| **Grapple-hook swing** | M | nothing | The hook is already earned three ways and the canyon exit is gated on it. Replaces the placeholder `requires:grappling_hook` transition with an anchor-to-anchor swing. **Not built.** | `grapple-swing.md` (**plan branch only**) |
-| **Ray Gun pickup + carnival rename** | S | nothing | Ray Gun is fully defined and **unobtainable** — no map places it. `circus-map.json` → `carnival-map.json` to match its zone label. **Neither done.** | `ray-gun-and-carnival.md` (**plan branch only**) |
 | **T1 — Tag layer** on items / enemies / tiles | M | nothing | Not built. Prerequisite for the affordance matrix. | systems-audit §5.4 |
 | **C1 — seven unreachable `Escape` branches** | S | nothing | Shadowed by `_closeCurrentMenu`'s switch, which handles Escape first (`main.js` ~1095–1254 vs ~1837–1850). *(Corrected 2026-09-10: `ITEM_THROW_DIR` is not dead — it is entered at ~2716 and handled for keyboard and tap.)* | C1 |
 | **C3 — input asymmetries** | M | nothing | REMOTICON item/gear/ring actions are pointer-only; aiming, turn-in-place and the 1–9 hotbar are keyboard-only. Documented honestly; still gaps. | C3 |
 | **C4 — `mystery_meat` can't heal on the throw path** | S | nothing | `combatAttack`'s `Math.max(1, raw − armor)` clamps a would-be heal to 1 damage. Cheapest fix: make it a 1-turn health poition instead of flat damage. | C4 |
-| **Streetlights as 1×2 props** | S | nothing | The graveyard proved the prop system at scale (96 props). Town's lamps are one-cell tiles because the tall two-cell `rpgUrban` lamps "don't fit a single tile" — as a 1×2 prop, `tree`'s shape, they do, with walk-behind. | `sprites.js` TOWN_TILE_SPRITE_MAP id 18 |
-| **Prop anchor + cemetery gate** | S | nothing | A 2-wide prop centres on its base tile, so it cannot sit on a 2-wide path. Add an `anchor` option, then place the `roguelikeSheet (41,18)+(42,18)` gate over the graveyard's north path, `solid: false`. | `zone-identity.md` §3 |
 | **Housekeeping** | S | nothing | Prune two stale worktrees (`great-wing`, `objective-volhard`, both clean at v0.19.0); 43 local branches whose remotes are `gone` (counted 2026-09-10). Migrate or archive the 24 `plan`-only docs (§5). | this doc |
+| **RESTART keeps the last run's pickups** | S | nothing | `_fullReset` resets HP, bag, gear, gold, quests and the RNG — but not `_collectedItems` or `_droppedItems`, so after a restart everything the previous run picked up stays gone until the page reloads (verified live 2026-09-10 with the Ray Gun). Audit every per-run field the constructor sets against `_fullReset`, not only these two. | `main.js` `_fullReset` |
+| **Streetlights light up at night** | S | nothing | Town's four lamps are props now, but Town's `lights` list has no entry at any of them — after dusk they are dark posts. One `lights` row each. | `town-map.json` `lights` |
 
 ---
 
@@ -156,6 +158,7 @@ Ordered by how much each unblocks.
 | **Elemental coverage matrix** | `fire` and `poison` joined `sludge` / `cold` / `energy` / `fear` with no weakness table to sit in. | S | E | nothing |
 | **5-Zone Body reconciliation** | Survives as the positional layer (Back = backstab ×1.5), not split HP pools. Needs a ruling before the bible states it as law. | S | E | nothing |
 | **Canvas adaptive backing store** | The real fix for V3: let the backing store follow the window so every size is exact. Touches the renderer's boot path. | M | `visual-pass.md` | nothing |
+| **Weapons have no art** | No weapon has ground or bag art: all five draw as lettered boxes — the Ray Gun a teal Z, the Wooden Sword a grey `?`. tinyDungeon has swords, axes and hammers; nothing bundled looks like a ray gun. Which cells — and what does the Ray Gun look like? | S–M | `sprites.js` `ITEM_SPRITES` | nothing |
 
 ---
 

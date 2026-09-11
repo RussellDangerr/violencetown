@@ -36,6 +36,61 @@
     "note": "Built 2026-09-10, pushed, awaiting Caelan's merge. B2 and Law 5 worked but showed only as log lines, and sewer-fare regen logged like damage (\"[Violet Fungus - Sludge 3]\" for a heal). Now heals say \"(+3 HP)\", every DoT tick floats its typed splat, and an enemy healing itself floats a green `+N`. Changes how every DoT looks, so play it first."
   },
   {
+    "id": "layered-examine",
+    "title": "Layered examine",
+    "lane": "now",
+    "order": 40,
+    "kind": "build",
+    "size": "M",
+    "blockedBy": [],
+    "doc": "`plans/layered-examine.md`",
+    "note": "Built 2026-09-10 on `feature/ready-builds` (pushed, awaiting Caelan's merge). Examine never dead-ends: one resolver behind the E key and the Target List — instance, creature, container, item, prop, tile. Kept the shipped strings; added container and prop rungs."
+  },
+  {
+    "id": "grapple-hook-swing",
+    "title": "Grapple-hook swing",
+    "lane": "now",
+    "order": 50,
+    "kind": "build",
+    "size": "M",
+    "blockedBy": [],
+    "doc": "`plans/grapple-swing.md` (on the branch)",
+    "note": "Built 2026-09-10 on `feature/ready-builds` (pushed, awaiting Caelan's merge). The canyon climb-out is a grapple anchor on a jutting rock: bump it with the hook and you swing up and out, on an arc, into Downtown. Anchors are map data on a prop, not a new tile."
+  },
+  {
+    "id": "ray-gun-pickup-carnival-rename",
+    "title": "Ray Gun pickup + carnival rename",
+    "lane": "now",
+    "order": 60,
+    "kind": "build",
+    "size": "S",
+    "blockedBy": [],
+    "doc": "`plans/ray-gun-and-carnival.md` (on the branch)",
+    "note": "Built 2026-09-10 on `feature/ready-builds` (pushed, awaiting Caelan's merge). The Ray Gun lies in the Factory's northwest bay; `circus-map.json` is `carnival-map.json`, with old saves migrated. Found on the way: the starting Wooden Sword could never be re-equipped once swapped out — fixed."
+  },
+  {
+    "id": "streetlights-as-1-2-props",
+    "title": "Streetlights as 1×2 props",
+    "lane": "now",
+    "order": 70,
+    "kind": "build",
+    "size": "S",
+    "blockedBy": [],
+    "doc": "`sprites.js` PROP_SPRITES",
+    "note": "Built 2026-09-10 on `feature/ready-builds` (pushed, awaiting Caelan's merge). Town's four lamps are rpgUrban's two-tile double-arm streetlight, walk-behind and all; the parking-meter tile is retired."
+  },
+  {
+    "id": "prop-anchor-cemetery-gate",
+    "title": "Prop anchor + cemetery gate",
+    "lane": "now",
+    "order": 80,
+    "kind": "build",
+    "size": "S",
+    "blockedBy": [],
+    "doc": "`plans/zone-identity.md` §3",
+    "note": "Built 2026-09-10 on `feature/ready-builds` (pushed, awaiting Caelan's merge). A stone gateway in each opening of the graveyard fence. The spec's coordinates were minecart rails; the real arch is (31,17)+(33,17), and as two 1×1 props it needed no anchor option."
+  },
+  {
     "id": "A1",
     "title": "Keep the −15 `bruiser` row? It exists — `tools/balance-harness.mjs:146`, 15–40 GP, interpolated between fodder and standard and marked an open question. No enemy in any map sits in its band (armor −30 < a ≤ −15), and Pike is armor 5, which the `tough` row covers. Confirm it, or fold −15 into a neighbour, before anyone authors a −15 enemy. (Corrected 2026-09-10: this row used to say the band had no row and gated \"the entire boss line\".)",
     "lane": "rulings",
@@ -212,43 +267,10 @@
     "note": "Demo polish"
   },
   {
-    "id": "layered-examine",
-    "title": "Layered examine",
-    "lane": "ready",
-    "order": 10,
-    "kind": "build",
-    "size": "M",
-    "blockedBy": [],
-    "doc": "Examine never dead-ends: one `resolveExamine` ladder (instance → creature → item → tile → generic). Full brainstorm + 3-task TDD plan. Not built (re-verified).",
-    "note": ""
-  },
-  {
-    "id": "grapple-hook-swing",
-    "title": "Grapple-hook swing",
-    "lane": "ready",
-    "order": 20,
-    "kind": "build",
-    "size": "M",
-    "blockedBy": [],
-    "doc": "The hook is already earned three ways and the canyon exit is gated on it. Replaces the placeholder `requires:grappling_hook` transition with an anchor-to-anchor swing. Not built.",
-    "note": ""
-  },
-  {
-    "id": "ray-gun-pickup-carnival-rename",
-    "title": "Ray Gun pickup + carnival rename",
-    "lane": "ready",
-    "order": 30,
-    "kind": "build",
-    "size": "S",
-    "blockedBy": [],
-    "doc": "Ray Gun is fully defined and unobtainable — no map places it. `circus-map.json` → `carnival-map.json` to match its zone label. Neither done.",
-    "note": ""
-  },
-  {
     "id": "T1",
     "title": "T1 — Tag layer on items / enemies / tiles",
     "lane": "ready",
-    "order": 40,
+    "order": 10,
     "kind": "build",
     "size": "M",
     "blockedBy": [],
@@ -259,7 +281,7 @@
     "id": "C1",
     "title": "C1 — seven unreachable `Escape` branches",
     "lane": "ready",
-    "order": 50,
+    "order": 20,
     "kind": "build",
     "size": "S",
     "blockedBy": [],
@@ -270,7 +292,7 @@
     "id": "C3",
     "title": "C3 — input asymmetries",
     "lane": "ready",
-    "order": 60,
+    "order": 30,
     "kind": "build",
     "size": "M",
     "blockedBy": [],
@@ -281,7 +303,7 @@
     "id": "C4",
     "title": "C4 — `mystery_meat` can't heal on the throw path",
     "lane": "ready",
-    "order": 70,
+    "order": 40,
     "kind": "build",
     "size": "S",
     "blockedBy": [],
@@ -289,36 +311,36 @@
     "note": ""
   },
   {
-    "id": "streetlights-as-1-2-props",
-    "title": "Streetlights as 1×2 props",
-    "lane": "ready",
-    "order": 80,
-    "kind": "build",
-    "size": "S",
-    "blockedBy": [],
-    "doc": "The graveyard proved the prop system at scale (96 props). Town's lamps are one-cell tiles because the tall two-cell `rpgUrban` lamps \"don't fit a single tile\" — as a 1×2 prop, `tree`'s shape, they do, with walk-behind.",
-    "note": ""
-  },
-  {
-    "id": "prop-anchor-cemetery-gate",
-    "title": "Prop anchor + cemetery gate",
-    "lane": "ready",
-    "order": 90,
-    "kind": "build",
-    "size": "S",
-    "blockedBy": [],
-    "doc": "A 2-wide prop centres on its base tile, so it cannot sit on a 2-wide path. Add an `anchor` option, then place the `roguelikeSheet (41,18)+(42,18)` gate over the graveyard's north path, `solid: false`.",
-    "note": ""
-  },
-  {
     "id": "housekeeping",
     "title": "Housekeeping",
     "lane": "ready",
-    "order": 100,
+    "order": 50,
     "kind": "build",
     "size": "S",
     "blockedBy": [],
     "doc": "Prune two stale worktrees (`great-wing`, `objective-volhard`, both clean at v0.19.0); 43 local branches whose remotes are `gone` (counted 2026-09-10). Migrate or archive the 24 `plan`-only docs (§5).",
+    "note": ""
+  },
+  {
+    "id": "restart-keeps-the-last-run-s-pickups",
+    "title": "RESTART keeps the last run's pickups",
+    "lane": "ready",
+    "order": 60,
+    "kind": "build",
+    "size": "S",
+    "blockedBy": [],
+    "doc": "`_fullReset` resets HP, bag, gear, gold, quests and the RNG — but not `_collectedItems` or `_droppedItems`, so after a restart everything the previous run picked up stays gone until the page reloads (verified live 2026-09-10 with the Ray Gun). Audit every per-run field the constructor sets against `_fullReset`, not only these two.",
+    "note": ""
+  },
+  {
+    "id": "streetlights-light-up-at-night",
+    "title": "Streetlights light up at night",
+    "lane": "ready",
+    "order": 70,
+    "kind": "build",
+    "size": "S",
+    "blockedBy": [],
+    "doc": "Town's four lamps are props now, but Town's `lights` list has no entry at any of them — after dusk they are dark posts. One `lights` row each.",
     "note": ""
   },
   {
@@ -399,6 +421,17 @@
     "blockedBy": [],
     "doc": "`visual-pass.md`",
     "note": "The real fix for V3: let the backing store follow the window so every size is exact. Touches the renderer's boot path."
+  },
+  {
+    "id": "weapons-have-no-art",
+    "title": "Weapons have no art",
+    "lane": "design",
+    "order": 80,
+    "kind": "design",
+    "size": "S–M",
+    "blockedBy": [],
+    "doc": "`sprites.js` `ITEM_SPRITES`",
+    "note": "No weapon has ground or bag art: all five draw as lettered boxes — the Ray Gun a teal Z, the Wooden Sword a grey `?`. tinyDungeon has swords, axes and hammers; nothing bundled looks like a ray gun. Which cells — and what does the Ray Gun look like?"
   },
   {
     "id": "zone-deep-content-bosses",
