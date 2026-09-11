@@ -15,7 +15,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { TILES, TILE_BY_ID } from '../game/data.js';
-import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP } from '../game/sprites.js';
+import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, SHEETS } from '../game/sprites.js';
+import { readAlpha, seeThroughCount } from './helpers/png-alpha.js';
 
 const GAME_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'game');
 
@@ -115,6 +116,32 @@ describe('tile coverage', () => {
         }
 
         assert.deepEqual(unknown, [], `tiles placed nowhere, runtime or allowlisted:\n  ${unknown.join('\n  ')}`);
+    });
+
+    test('no placed tile is see-through with nothing under it', () => {
+        // The canvas is cleared to transparent every frame, and a tile draws only
+        // its own art — so a tile with see-through pixels (a bench's slats, a
+        // fence's gaps, chain-link) left holes in the world. By day a hole showed
+        // the canvas's black background; at dusk the lighting pass multiplies its
+        // near-white lightmap straight into it. The town's furniture flickered
+        // black and white. Such a tile must say what is under it: `under: <tile
+        // id>` for real ground, or `under: 'fill'` for its own flat colour.
+        const DRAWN_OVER_GROUND = {
+            19: 'CAR — renderer draws sidewalk under every car cell, then one 2x2 car over the block',
+        };
+        const placed = new Set(Object.keys(RUNTIME_PLACED).map(Number));
+        for (const file of mapFiles) for (const id of loadMap(file).tiles || []) placed.add(id);
+        const images = {};
+        const holes = [];
+        for (const [id, ref] of Object.entries(allTileMaps)) {
+            if (!ref || !placed.has(Number(id)) || DRAWN_OVER_GROUND[id] || ref.under != null) continue;
+            const sheet = SHEETS[ref.sheet];
+            const pad = sheet.padding ?? 0;
+            const img = images[sheet.src] ??= readAlpha(join(GAME_DIR, sheet.src));
+            const clear = (ref.quad ?? [ref]).reduce((n, r) => n + seeThroughCount(img, r.col * (16 + pad), r.row * (16 + pad)), 0);
+            if (clear) holes.push(`${TILE_BY_ID[id]?.name ?? id} (id ${id}): ${clear} see-through px`);
+        }
+        assert.deepEqual(holes, [], `see-through tiles with nothing under them:\n  ${holes.join('\n  ')}`);
     });
 
     test('the known-unplaced list has not gone stale', () => {

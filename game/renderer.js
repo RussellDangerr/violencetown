@@ -713,9 +713,13 @@ export class Renderer {
                 const ref = tileRef(drawId);
                 let ok = false;
                 if (ref) {
-                    // A layered tile (a circus tent) paints its ground first,
-                    // so the picture's transparent edges show that ground.
-                    if (ref.under != null) this._drawTileRef(tileRef(ref.under), px, py);
+                    // A tile with see-through art paints what is under it first —
+                    // another tile's art (a tent's sand, a bench's sidewalk), or
+                    // 'fill', its own flat colour. Otherwise its see-through pixels
+                    // are holes in the canvas: black by day, then the lighting
+                    // pass's near-white at dusk, flickering between the two.
+                    if (ref.under === 'fill') { ctx.fillStyle = def.fallbackColor; ctx.fillRect(px, py, TILE_PX, TILE_PX); }
+                    else if (ref.under != null) this._drawTileRef(tileRef(ref.under), px, py);
                     ok = this._drawTileRef(tileFrame(ref, wx, wy), px, py);
                 }
                 if (!ok) {

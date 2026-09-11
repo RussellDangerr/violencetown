@@ -9,9 +9,15 @@ import assert from 'node:assert/strict';
 import { Renderer } from '../game/renderer.js';
 import { GameMap } from '../game/map.js';
 import { TILES, TILE_PX } from '../game/data.js';
-import { OUTLINED_SPRITES, TILE_SPRITE_MAP } from '../game/sprites.js';
+import { OUTLINED_SPRITES, TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP } from '../game/sprites.js';
 
 const HALF = 9;
+
+// Which tile a recorded frame draws — matched back through the town sprite map.
+const TILE_BY_ID_NAME = (call) => {
+    const hit = Object.entries(TOWN_TILE_SPRITE_MAP).find(([, r]) => r && r.sheet === call?.sheet && r.col === call?.col && r.row === call?.row);
+    return hit ? Object.entries(TILES).find(([, d]) => d.id === Number(hit[0]))?.[0] : null;
+};
 
 // Paint one frame of `tiles` (a width-wide grid) with the player at (px, py).
 // Returns the draw calls, each tagged with the world cell it landed in.
@@ -75,10 +81,21 @@ describe('_drawTiles', () => {
         assert.deepEqual(at(5, 2), [{ fill: TILES.WALL.fallbackColor }]);
     });
 
-    test('an on-map WALL still draws its brick', () => {
+    test('an on-map WALL draws its brick over its own dark colour, so its corners are never holes', () => {
         const W = TILES.WALL.id;
         const at = paint(3, [W, W, W, W, W, W, W, W, W], 1, 1);
-        assert.deepEqual(at(0, 0), [{ sheet: TILE_SPRITE_MAP[W].sheet, col: TILE_SPRITE_MAP[W].col, row: TILE_SPRITE_MAP[W].row }]);
+        assert.deepEqual(at(0, 0), [
+            { fill: TILES.WALL.fallbackColor },
+            { sheet: TILE_SPRITE_MAP[W].sheet, col: TILE_SPRITE_MAP[W].col, row: TILE_SPRITE_MAP[W].row },
+        ]);
+    });
+
+    test('street furniture stands on sidewalk, not on the void', () => {
+        const B = TILES.BENCH.id;
+        const at = paint(3, [B, B, B, B, B, B, B, B, B], 1, 1);
+        const [ground, bench] = at(0, 0);
+        assert.equal(TILE_BY_ID_NAME(ground), 'SIDEWALK', `under the bench: ${JSON.stringify(ground)}`);
+        assert.ok(bench, 'and then the bench itself');
     });
 
     test('a tent cell paints carnival ground, then its own quadrant on top', () => {
