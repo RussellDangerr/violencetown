@@ -78,7 +78,7 @@ import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (n
 import {
     createWheelState, cycle, drill, back, compose, autoAimTile,
     needsFriendlyConfirm, aimRange, affectedTiles, selectedNode, restoreLastCategory, verbApplies,
-    orderedTargetVerbs, isCombatActive, defaultVerb,
+    orderedTargetVerbs, isCombatActive, defaultVerb, previewChildren,
 } from './wheel-model.js'; // (sunburst wheel) node-tree model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
 
@@ -1893,11 +1893,13 @@ class Game {
             // (Slice 2) Depth-dynamic cull: close on a tap beyond the wheel's real
             // outer extent for the CURRENT depth. The old fixed 230px left the small
             // shallow wheel un-closable by a nearby tap (a 160px tap was neither a
-            // quadrant hit nor an outside-close). Mirrors the far-tap ignore in
-            // _tapRadialMenu (wheelRingR(path.length)[1] + 12), plus HIT_SLOP.
+            // quadrant hit nor an outside-close).
+            // (screen-fill) That extent is the dial the wheel is drawn on (layout.js
+            // dialRadius), plus slop. A tap on the dial's empty rim, beyond the
+            // rings, is ignored by _tapRadialMenu rather than misfired.
             const _wc = this._hud().wheel;
             const _dx = pt.x - _wc.cx, _dy = pt.y - _wc.cy;
-            const _cull = wheelRingR(this.wheel.path.length)[1] + HIT_SLOP + 12;
+            const _cull = this._hud().dialRadius(this.wheel.path.length, previewChildren(this.wheel).length > 0) + HIT_SLOP;
             if (_dx * _dx + _dy * _dy > _cull * _cull) { this._closeWheel(); return; }
         }
 

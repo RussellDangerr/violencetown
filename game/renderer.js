@@ -21,7 +21,7 @@ import {
     DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceEquipLayout, deviceRingsLayout,
     inspectorPanelRect, inspectorActionRects,                               // (C1) tap-to-inspect panel + action-row geometry
     gearOptionRects,                                                        // (C2) GEAR chooser option-row geometry
-    xmbBarLayout, hudLayout, throwRects,                                     // (XMB) usable-bar geometry; (screen-fill) the HUD + throw targets for a viewport
+    xmbBarLayout, hudLayout, throwRects, wheelTopMarks,                      // (XMB) usable-bar geometry; (screen-fill) the HUD, throw targets, the marks above the wheel
     MODAL_RECT, offerLayout,                                                 // (offer screen) the one panel + its geometry
 } from './layout.js';
 import { itemStatLine, itemActions, equipOptions } from './inspector.js';    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
@@ -2563,22 +2563,10 @@ export class Renderer {
         }
 
         // ── Sunburst ──
-        // (§12.5) When a fight is live, re-skin the backdrop: a red-ward wash + a
-        // soft rim vignette. Subtle — wedge colours stay untouched for legibility.
+        // (screen-fill) The wheel sits on its dial, never on the world: there is no
+        // full-screen scrim, so the fight stays visible while you choose. In a
+        // fight the dial's rim goes red (the old red wash, moved onto the dial).
         const combat = isCombatActive(game);
-        ctx.save();
-        // Lighter scrim — the compact corner wheel doesn't need to black out the
-        // scene behind it; keep the world readable while the wheel is open.
-        ctx.fillStyle = combat ? 'rgba(38,4,4,0.4)' : 'rgba(0,0,0,0.32)';
-        ctx.fillRect(0, 0, vp.w, vp.h);
-        if (combat) {
-            const S = Math.max(vp.w, vp.h);
-            const rg = ctx.createRadialGradient(cx, cy, S * 0.34, cx, cy, S * 0.72);
-            rg.addColorStop(0, 'rgba(150,20,20,0)');
-            rg.addColorStop(1, 'rgba(140,12,12,0.30)');
-            ctx.fillStyle = rg; ctx.fillRect(0, 0, vp.w, vp.h);
-        }
-        ctx.restore();
 
         const catNode = ROOT.children[w.path[0]];
         // (Phase 0) `HUE` = the current SECTION's colour — the deepest *ancestor*
@@ -2625,9 +2613,14 @@ export class Renderer {
         }
         this._wheelAnim = { scale, spin, reduce: !!reduce };
 
+        const kids = previewChildren(w);   // the highlight's children, if any: they size the dial and fill the preview arc
+
         // Everything below the wash scales about the centre (the open/drill pop).
         ctx.save();
         if (scale !== 1) { ctx.translate(cx, cy); ctx.scale(scale, scale); ctx.translate(-cx, -cy); }
+
+        // 0) The dial, inside the same transform, so it pops with the wheel.
+        this._drawDial(cx, cy, this._hud().dialRadius(depth, kids.length > 0), combat);
 
         // 1) Greyed decision breadcrumb: each locked parent's chosen tile at TOP,
         //    stacked inward toward the hub (innermost = the earliest choice).
@@ -2674,7 +2667,6 @@ export class Renderer {
 
         // 3) Preview arc (the highlight's children) — a couple of curved tiles above
         //    the pointer, last-used child centred; or a "fire" cue for a leaf.
-        const kids = previewChildren(w);
         let outerMost = activeBand[1];
         if (kids.length) {
             const band = wheelRingR(depth); outerMost = band[1];
@@ -2701,7 +2693,9 @@ export class Renderer {
                     center ? { w: 1, c: 'rgba(232,207,144,0.3)' } : null);
             }
         } else if (this.font) {
-            this.font.drawText(ctx, '▲ FIRE', cx, cy - activeBand[1] - 16, { color: UI.gold, scale: 1, align: 'center', shadow: '#000' });
+            // Above the pointer, which sits just past the ring (wheelTopMarks): drawn
+            // at the old -16 it lay under the pointer and could not be read.
+            this.font.drawText(ctx, '▲ FIRE', cx, cy - wheelTopMarks(outerMost).cueTop, { color: UI.gold, scale: 1, align: 'center', shadow: '#000' });
         }
 
         // 4) Hub disc + breadcrumb tip (MENU / Fight / Melee …).
@@ -2731,7 +2725,7 @@ export class Renderer {
             if (fst >= 0 && fst < 1) flapAngle = flapperDeflection(fst, w._spinDir || 0);
         }
         ctx.save();
-        ctx.translate(cx, cy - outerMost - 14);            // pivot just outside the outermost element
+        ctx.translate(cx, cy - wheelTopMarks(outerMost).pointerTop);   // pivot just outside the outermost element
         ctx.rotate(flapAngle);
         ctx.beginPath(); ctx.moveTo(0, 12); ctx.lineTo(-7, 0); ctx.lineTo(7, 0); ctx.closePath();  // tip points DOWN into the wheel
         ctx.fillStyle = '#fff3c0'; ctx.fill();
@@ -2757,6 +2751,20 @@ export class Renderer {
             }
         }
         ctx.globalAlpha = 1; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    }
+
+    // (screen-fill) The wheel's dial: an opaque disc in the dock's colours for
+    // the wheel to draw on, so it reads the same over any ground. A gold rim,
+    // red in a fight.
+    _drawDial(cx, cy, r, combat) {
+        const { ctx } = this;
+        ctx.save();
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fillStyle = '#1c160e'; ctx.fill();
+        ctx.lineWidth = 3; ctx.strokeStyle = combat ? '#c8443a' : '#8b7340'; ctx.stroke();
+        ctx.beginPath(); ctx.arc(cx, cy, r - 5, 0, Math.PI * 2);
+        ctx.lineWidth = 1; ctx.strokeStyle = combat ? 'rgba(232,70,47,0.45)' : 'rgba(212,185,106,0.35)'; ctx.stroke();
+        ctx.restore();
     }
 
     // (combat-wheel rework) Aim reticle — drawn in WORLD space (call from inside
