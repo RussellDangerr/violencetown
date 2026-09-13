@@ -280,3 +280,12 @@ Both gate scenes are under 16 ms, so stage 3 goes ahead without the fallbacks. T
 the screen's pixels (3.35× here, about 4× the time). A weaker GPU at a big screen would feel this
 first: a laptop at 2880×1800 has more pixels than this monitor. If that bites, the fallbacks above
 are still the plan.
+
+**After stage 3 (the dock and the dial), 2026-09-13 evening.** A re-time read 13–17 ms for the
+same scenes, but the machine had changed underneath: the stage 2 build, served beside it from a
+worktree, read 13–15 ms too, and a GPU yardstick that does not touch the game (40 blurred shadows)
+read 1.94 ms against 0.64 ms that afternoon — something else was loading the GPU about 3×. Timed
+in one page with the dock on and off, alternating (the only per-frame work stage 3 adds while the
+wheel is closed), the dock costs nothing measurable: 12.9 ms with it, 13.1 ms without (median of
+four each, at DPR 1.5). Re-time on a quiet machine before shipping. If a game or a stream shares
+the GPU, the fallbacks above are the lever.
