@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { Renderer } from '../game/renderer.js';
 import { GameMap } from '../game/map.js';
 import { TILES, TILE_PX } from '../game/data.js';
-import { OUTLINED_SPRITES, TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP } from '../game/sprites.js';
+import { OUTLINED_SPRITES, TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, PROP_SPRITES } from '../game/sprites.js';
 
 const HALF = 9;
 
@@ -21,7 +21,7 @@ const TILE_BY_ID_NAME = (call) => {
 
 // Paint one frame of `tiles` (a width-wide grid) with the player at (px, py).
 // Returns the draw calls, each tagged with the world cell it landed in.
-function paint(width, tiles, px, py) {
+function paint(width, tiles, px, py, extra = {}) {
     const calls = [];
     const cellOf = (x, y) => [x / TILE_PX - HALF + px, y / TILE_PX - HALF + py].join(',');
     const ctx = {
@@ -38,7 +38,7 @@ function paint(width, tiles, px, py) {
         ctx, half: HALF, _scrollX: 0, _scrollY: 0,
         sprites: new Proxy({}, { get: (_, name) => sheet(name) }),
     });
-    const map = new GameMap({ width, height: tiles.length / width, spawn: { x: 0, y: 0 }, tiles }, 'test');
+    const map = new GameMap({ width, height: tiles.length / width, spawn: { x: 0, y: 0 }, tiles, ...extra }, 'test');
     r._drawTiles({ playerX: px, playerY: py, map });
     return (x, y) => calls.filter(c => c.cell === `${x},${y}`).map(({ cell, ...rest }) => rest);
 }
@@ -67,6 +67,27 @@ describe('_drawActors', () => {
     test('a prop that declares no shadow is drawn, without one', () => {
         assert.deepEqual(drawOne('cemeteryArchL'), { drawn: 1, shadows: 0 });
     });
+
+    test('off the map, a filler prop stands on every cell within reach, without a shadow', () => {
+        const drawn = [], shadows = [];
+        const r = Object.assign(Object.create(Renderer.prototype), {
+            ctx: {}, _scrollX: 0, _scrollY: 0, sprites: {},
+            _playerScreenPos: () => ({ ppx: 0, ppy: 0, groundPy: 0 }),
+            _drawPlayerSprite() {}, _drawEnemySprite() {},
+            _drawPropSprite(def, px, py) { drawn.push({ def, px, py }); },
+            _drawGroundShadow(cx, cy) { shadows.push([cx, cy]); },
+        });
+        const map = {
+            propSpawns: [], border: { tile: TILES.GRASS.id, prop: 'tree' },
+            isInBounds: (x, y) => x >= 0 && y >= 0 && x < 5 && y < 5,
+        };
+        r._drawActors({ playerX: 2, playerY: 2, enemies: [], map });
+        const { span } = r._view();
+        const reach = (span.iMax - span.iMin + 7) * (span.jMax - span.jMin + 7);   // the span plus props' 3-tile margin
+        assert.equal(drawn.length, reach - 25, 'a tree on every off-map cell in reach, and none on the 5x5 map');
+        assert.ok(drawn.every((d) => d.def === PROP_SPRITES.tree));
+        assert.equal(shadows.length, 1, "only the player's own shadow");
+    });
 });
 
 describe('_drawTiles', () => {
@@ -79,6 +100,23 @@ describe('_drawTiles', () => {
         const at = paint(3, [F, F, F, F, F, F, F, F, F], 1, 1);
         assert.deepEqual(at(-1, -1), [{ fill: TILES.WALL.fallbackColor }]);
         assert.deepEqual(at(5, 2), [{ fill: TILES.WALL.fallbackColor }]);
+    });
+
+    test('off the map, a map that names a filler draws it instead of the void', () => {
+        const F = TILES.FLOOR.id, G = TILES.GRASS.id;
+        const at = paint(3, [F, F, F, F, F, F, F, F, F], 1, 1, { border: { tile: G } });
+        const grass = TOWN_TILE_SPRITE_MAP[G];
+        assert.deepEqual(at(-1, -1), [{ sheet: grass.sheet, col: grass.col, row: grass.row }]);
+        assert.deepEqual(at(5, 2), [{ sheet: grass.sheet, col: grass.col, row: grass.row }]);
+    });
+
+    test('a wall filler paints its own colour under its brick, as a wall on the map does', () => {
+        const F = TILES.FLOOR.id, W = TILES.WALL.id;
+        const at = paint(3, [F, F, F, F, F, F, F, F, F], 1, 1, { border: { tile: W } });
+        assert.deepEqual(at(-1, -1), [
+            { fill: TILES.WALL.fallbackColor },
+            { sheet: TILE_SPRITE_MAP[W].sheet, col: TILE_SPRITE_MAP[W].col, row: TILE_SPRITE_MAP[W].row },
+        ]);
     });
 
     test('an on-map WALL draws its brick over its own dark colour, so its corners are never holes', () => {

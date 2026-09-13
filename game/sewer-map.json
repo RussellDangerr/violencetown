@@ -825,6 +825,7 @@
     }
   ],
   "zoneName": "SEWER",
+  "border": { "tile": 0 },
   "regions": [
     {
       "name": "soap-mine",

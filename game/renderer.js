@@ -3,7 +3,7 @@
 // Small panels: hand-colored parchment fill matching the sprite palette
 // All text: dark brown on parchment for readability (not gold-on-dark)
 
-import { TILE_PX, CANVAS_PX, SAFE_SLOTS } from './data.js';
+import { TILE_PX, CANVAS_PX, SAFE_SLOTS, TILE_BY_ID } from './data.js';
 import { CLASSIC, offView, snapPx } from './viewport.js';   // (screen-fill) the screen's geometry
 
 // The splash canvas's supersample: its 320x220 card is drawn at 2x so the
@@ -739,17 +739,24 @@ export class Renderer {
                 const wy = game.playerY + j;
                 const px = vp.origin.x + i * TILE_PX - this._scrollX;
                 const py = vp.origin.y + j * TILE_PX - this._scrollY;
-                const id = game.map.getTile(wx, wy);
-                const def = game.map.getTileDef(wx, wy);
+                let id = game.map.getTile(wx, wy);
+                let def = game.map.getTileDef(wx, wy);
 
-                // Off the map there is nothing: paint the void. getTile reports
-                // WALL (id 0) out there so the edge stays unwalkable, but WALL
-                // has real brick art now (the Sewer's walls) and drawing it
-                // would ring every zone in dungeon brick.
+                // Off the map: the map's filler if it names one (the Pokémon
+                // trick: past the edge the world carries on, so it never visibly
+                // ends), else the void. getTile reports WALL (id 0) out there so
+                // the edge stays unwalkable either way. Without a filler, WALL's
+                // own brick is not drawn, or every zone would be ringed in
+                // dungeon brick.
                 if (!game.map.isInBounds(wx, wy)) {
-                    ctx.fillStyle = def.fallbackColor;
-                    ctx.fillRect(px, py, TILE_PX, TILE_PX);
-                    continue;
+                    const border = game.map.border;
+                    if (!border) {
+                        ctx.fillStyle = def.fallbackColor;
+                        ctx.fillRect(px, py, TILE_PX, TILE_PX);
+                        continue;
+                    }
+                    id = border.tile;
+                    def = TILE_BY_ID[id] || def;
                 }
 
                 // Car cell: substitute the ground sprite for the per-cell draw,
@@ -1083,11 +1090,27 @@ export class Renderer {
             actors.push({ kind: 'prop', def, px, py, feetY: py + TILE_PX });
         }
 
+        // The map's filler prop (a forest's trees) on every off-map cell within
+        // reach, with the same 3-tile overhang margin as map props. No ground
+        // shadows for these: a forest of them would be hundreds of gradients a
+        // frame, and a wall of trees does not need them.
+        const fillerProp = game.map?.border?.prop ? PROP_SPRITES[game.map.border.prop] : null;
+        if (fillerProp) {
+            for (let j = vp.span.jMin - 3; j <= vp.span.jMax + 3; j++) {
+                for (let i = vp.span.iMin - 3; i <= vp.span.iMax + 3; i++) {
+                    if (game.map.isInBounds(game.playerX + i, game.playerY + j)) continue;
+                    const px = vp.origin.x + i * TILE_PX - this._scrollX;
+                    const py = vp.origin.y + j * TILE_PX - this._scrollY;
+                    actors.push({ kind: 'prop', def: fillerProp, px, py, feetY: py + TILE_PX, filler: true });
+                }
+            }
+        }
+
         // Floor layer: lay every shadow down first so none can occlude a sprite
         // standing behind it. Props get a broader pool; corpses a fainter one.
         for (const a of actors) {
             if (a.kind !== 'prop') this._drawGroundShadow(a.px + TILE_PX / 2, (a.groundPy ?? a.py) + TILE_PX - 4, a.dead ? 0.2 : 0.35);
-            else if (a.def.shadow !== false) this._drawGroundShadow(a.px + TILE_PX / 2, a.py + TILE_PX - 3, 0.32, a.def.shadowRx ?? 12, a.def.shadowRy ?? 4.5);
+            else if (a.def.shadow !== false && !a.filler) this._drawGroundShadow(a.px + TILE_PX / 2, a.py + TILE_PX - 3, 0.32, a.def.shadowRx ?? 12, a.def.shadowRy ?? 4.5);
         }
 
         // Painter's order: smaller feet-Y (further back / north) first. On a tie
