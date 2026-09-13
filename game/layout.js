@@ -13,6 +13,8 @@
 // keeps this module dependency-light while letting the hands geometry derive from
 // the one source of truth for the unlock ladder + adjacency.
 import { unlockedSlots, adjacentPairs, HANDS } from './rings.js';
+import { TILE_PX } from './data.js';
+import { CLASSIC } from './viewport.js';   // (screen-fill) the default viewport for the HUD helpers
 
 export const CANVAS_INTERNAL_PX = 608;   // mirrors data.js CANVAS_PX
 export const HIT_SLOP = 6;               // tap-zone expansion (Apple 44pt min target)
@@ -56,6 +58,16 @@ export const THROW_RECTS = {
     right: { x: 338, y: 288, w: 32, h: 32 },
 };
 
+// The throw prompt's four targets around the player's tile, wherever the
+// viewport puts it. THROW_RECTS are the same targets around the old square's
+// centre (304, 304), so classic returns them unchanged.
+export function throwRects(vp = CLASSIC) {
+    const dx = vp.origin.x + TILE_PX / 2 - CANVAS_INTERNAL_PX / 2;
+    const dy = vp.origin.y + TILE_PX / 2 - CANVAS_INTERNAL_PX / 2;
+    const at = (r) => ({ x: r.x + dx, y: r.y + dy, w: r.w, h: r.h });
+    return { up: at(THROW_RECTS.up), down: at(THROW_RECTS.down), left: at(THROW_RECTS.left), right: at(THROW_RECTS.right) };
+}
+
 // ── Hotbar — 9 inventory slots along the bottom ──
 // Panel origin (OX/OY) + slot positions, all derived from one formula so the
 // drawn slots and the tap zones can't diverge.
@@ -81,10 +93,13 @@ export const XMB_ITEM_H   = 46;   // current-item cell height (icon + name band)
 
 // Geometry for the XMB bar given a built bar ({columns:[{key,label,items}]}).
 // Returns { chips:[{key,label,x,y,w,h}], current:{x,y,w,h}, up, down, bottom }.
-export function xmbBarLayout(bar) {
+// `anchor` is where hudLayout puts the bar: its centre x, and the bottom of
+// its current-item cell. The default is the old square's (304, 588).
+export const XMB_ANCHOR_CLASSIC = Object.freeze({ cx: CANVAS_INTERNAL_PX / 2, bottom: HOTBAR_OY + HOTBAR_SLOT_H });
+export function xmbBarLayout(bar, anchor = XMB_ANCHOR_CLASSIC) {
     const cols = (bar && bar.columns) || [];
-    const cx = CANVAS_INTERNAL_PX / 2;
-    const bottom = HOTBAR_OY + HOTBAR_SLOT_H;                 // 588 — align with old hotbar bottom
+    const cx = anchor.cx;
+    const bottom = anchor.bottom;
     const chipY = bottom - XMB_ITEM_H - XMB_CHIP_H - 6;
     const n = cols.length;
     const totalW = n > 0 ? n * XMB_CHIP_W + (n - 1) * XMB_CHIP_GAP : 0;
@@ -104,12 +119,13 @@ export function xmbBarLayout(bar) {
 // The XMB usable-bar's background PANEL rect for `n` visible category chips
 // (1-3), mirroring renderer.js:1978-1980. n=3 is the worst case (widest). The
 // bar is centered on canvas-center x=304; chip stride is XMB_CHIP_W(96)+6.
-export function xmbBarPanelRect(n = 3) {
+export function xmbBarPanelRect(n = 3, anchor = XMB_ANCHOR_CLASSIC) {
   const chipW = 96, gap = 6, stride = chipW + gap;   // 102
   const totalChips = n * stride - gap;               // n=3 -> 300
-  const left = 304 - totalChips / 2 - 10;            // n=3 -> 144
-  const right = 304 + totalChips / 2 + 10;           // n=3 -> 464
-  const top = 510, bottom = 592;                     // chipY-6 .. current-bottom+10
+  const left = anchor.cx - totalChips / 2 - 10;      // n=3, classic -> 144
+  const right = anchor.cx + totalChips / 2 + 10;     // n=3, classic -> 464
+  const top = anchor.bottom - 78;                    // chipY - 6: classic 510
+  const bottom = anchor.bottom + 4;                  // the panel's bottom edge: classic 592
   return { x: left, y: top, w: right - left, h: bottom - top };
 }
 
@@ -118,11 +134,12 @@ export function xmbBarPanelRect(n = 3) {
 // of these may overlap (under HIT_SLOP), or a tap is ambiguous. 'idle' is the
 // only always-live combination (message log + usable bar); the modal states
 // are exclusive overlays tested separately if they gain persistent siblings.
-export function hudInteractiveRects(state) {
+export function hudInteractiveRects(state, vp = CLASSIC) {
   const rects = [];
   if (state === 'idle') {
-    rects.push({ name: 'questlog', rect: QUESTLOG_RECT });
-    rects.push({ name: 'xmb', rect: xmbBarPanelRect(3) });
+    const hud = hudLayout(vp);
+    rects.push({ name: 'questlog', rect: hud.log });
+    rects.push({ name: 'xmb', rect: xmbBarPanelRect(3, hud.bar) });
   }
   return rects;
 }
@@ -158,6 +175,21 @@ export function wheelRingR(k) { const r0 = WHEEL_RING0_R0 + k * (WHEEL_RING_W + 
 // usable-bar's HIT_SLOP-expanded top (510 - 6 = 504): 436 + 62 + 6 = 504.
 // Enforced by tests/hud-layout.test.js's non-overlap invariant.
 export const QUESTLOG_RECT = { x: 6, y: 436, w: 340, h: 62 };
+
+// ── The HUD, placed for a viewport (plans/screen-fill.md) ──
+// Where every HUD piece sits on a given screen: the renderer draws there and
+// main.js hit-tests there, the same contract as the rects in this file. Stage
+// 1 of the build knows only the classic square, and reproduces it exactly.
+export function hudLayout(vp = CLASSIC) {
+    return {
+        hp: { x: 6, y: 6 },                                   // the HP panel's top-left (170 x 90)
+        buffsRight: CANVAS_INTERNAL_PX - 6, buffsTop: 6,      // the buff bar hangs from its top-right corner
+        log: { ...QUESTLOG_RECT, lines: 2 },                  // the quest log, and how many feed lines it shows
+        bar: XMB_ANCHOR_CLASSIC,                              // the item bar's anchor (xmbBarLayout)
+        wheel: { cx: RADIAL_CENTER_X, cy: RADIAL_CENTER_Y },  // the wheel's hub
+        strip: CANVAS_INTERNAL_PX,                            // the bottom hint strips rest on this y
+    };
+}
 export const LOG_MODAL_RECT = MODAL_RECT;
 // (Target List) A compact centred RuneScape-style verb menu. Height is computed
 // per-target in the renderer (44px title band + one ROW_H row per verb).

@@ -46,3 +46,40 @@ describe('HUD non-overlap invariant', () => {
         }
     });
 });
+
+import { hudLayout, throwRects, THROW_RECTS, RADIAL_CENTER_X, RADIAL_CENTER_Y, xmbBarLayout, XMB_ANCHOR_CLASSIC } from '../game/layout.js';
+import { CLASSIC, computeViewport } from '../game/viewport.js';
+
+describe('hudLayout (classic) is the old square', () => {
+    test('every piece sits where the fixed constants put it', () => {
+        const hud = hudLayout(CLASSIC);
+        assert.deepEqual(hud.hp, { x: 6, y: 6 });
+        assert.equal(hud.buffsRight, 602);
+        assert.equal(hud.buffsTop, 6);
+        assert.deepEqual(hud.log, { ...QUESTLOG_RECT, lines: 2 });
+        assert.deepEqual(hud.bar, { cx: 304, bottom: 588 });
+        assert.deepEqual(hud.wheel, { cx: RADIAL_CENTER_X, cy: RADIAL_CENTER_Y });
+        assert.equal(hud.strip, 608);
+    });
+
+    test('throwRects(classic) are THROW_RECTS', () => {
+        assert.deepEqual(throwRects(CLASSIC), THROW_RECTS);
+    });
+
+    test("throwRects follow the player's tile", () => {
+        const vp = computeViewport({ cssW: 1920, cssH: 1080, dpr: 1 });
+        const r = throwRects(vp);
+        const cx = vp.origin.x + 16, cy = vp.origin.y + 16;
+        assert.equal(r.up.x + r.up.w / 2, cx);
+        assert.equal(r.left.y + r.left.h / 2, cy);
+        assert.ok(r.up.y + r.up.h <= cy - 16 && r.down.y >= cy + 16, 'the targets clear the player tile');
+    });
+
+    test('xmbBarLayout moves with its anchor', () => {
+        const bar = { columns: [{ key: 'throw', label: 'THROW', items: [{ itemDef: { id: 'rock' }, count: 1 }] }] };
+        const a = xmbBarLayout(bar), b = xmbBarLayout(bar, { cx: 1000, bottom: 700 });
+        assert.deepEqual(xmbBarLayout(bar, XMB_ANCHOR_CLASSIC), a);
+        assert.equal(b.chips[0].x - a.chips[0].x, 1000 - 304);
+        assert.equal(b.current.y - a.current.y, 700 - 588);
+    });
+});
