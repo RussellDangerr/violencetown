@@ -908,16 +908,20 @@ class Game {
     // ── Canvas fit ───────────────────────────────────────────────────────────
 
     // Size the canvas for the window through the viewport (game/viewport.js),
-    // and hand the viewport to the renderer, which draws with it. Called on
-    // boot, on resize, and when the window moves between displays of different
-    // DPR (a browser zoom does the same thing).
+    // and hand the viewport to the renderer, which draws with it. The canvas
+    // fills #game-layout: the window, less the touch-control band style.css
+    // reserves on phones. Called on boot, on resize, on a DPR change, and when
+    // the game appears (#game-wrapper is hidden behind the splash until then,
+    // so it measures 0 x 0 before that).
     _fitCanvas() {
         const canvas = this.renderer?.canvas;
-        if (!canvas) return;
-        const vp = computeViewport({ mode: 'classic', cssW: window.innerWidth, cssH: window.innerHeight, dpr: window.devicePixelRatio });
+        const box = document.getElementById('game-layout')?.getBoundingClientRect();
+        if (!canvas || !box || box.width < 1 || box.height < 1) return;
+        const vp = computeViewport({ cssW: box.width, cssH: box.height, dpr: window.devicePixelRatio });
         this.renderer.setViewport(vp);
         canvas.style.width  = `${vp.cssW}px`;
         canvas.style.height = `${vp.cssH}px`;
+        if (this.state !== STATE.SPLASH) this._render();
     }
 
     // ── Splash ───────────────────────────────────────────────────────────────
@@ -931,6 +935,7 @@ class Game {
             audio.playMusic('town');      // [audio] start the ambient bed for the town hub
             splash.classList.add('gone');
             wrapper.classList.remove('hidden');
+            this._fitCanvas();            // (screen-fill) measure the now-visible layout box
             this.state = STATE.IDLE;
             this._startMainQuest();   // deterministic fix_car start (fix/critical-path)
             this._render();
@@ -948,6 +953,7 @@ class Game {
             if (!raw) { start(); return; }
             splash.classList.add('gone');
             wrapper.classList.remove('hidden');
+            this._fitCanvas();            // (screen-fill) measure the now-visible layout box
             // A save that fails to load must not leave a blank screen.
             //
             // The splash is already gone and the wrapper already shown by the

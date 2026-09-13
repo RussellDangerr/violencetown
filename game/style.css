@@ -38,6 +38,7 @@ body {
     font-size: 12px;
     overflow: hidden;
     height: 100vh;
+    height: 100dvh;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -205,14 +206,18 @@ body {
     align-items: center;
     justify-content: center;
     width: 100vw; height: 100vh;
+    height: 100dvh;
 }
 
+/* (screen-fill) The layout box is the whole wrapper; main._fitCanvas measures
+   it and sizes the canvas to fill it (game/viewport.js). */
 #game-layout {
     display: flex;
-    align-items: stretch;
-    gap: 0;
-    height: min(calc(100vh - 16px), calc(100vw - 16px));
-    max-height: 1024px;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
 }
 
 #game-canvas {
@@ -220,11 +225,9 @@ body {
     background: #000;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
-    aspect-ratio: 1;
-    /* Width/height are set from JS (game/canvas-fit.js) so that cssPx * dpr
-       lands on a whole number of art pixels. A CSS-driven fluid size resamples
-       the fixed 1216px backing store at a fractional ratio, which under
-       crisp-edges makes neighbouring art pixels 3 and 4 device px wide. */
+    /* Width/height are set from JS (main._fitCanvas via game/viewport.js): the
+       canvas fills #game-layout, and its backing store matches the screen's
+       real pixels one to one, so art pixels stay whole at every size. */
     /* Block browser gestures (pinch-zoom, double-tap-zoom, panning) so taps
        go straight to our pointer handler. Critical for the in-canvas
        hotbar / radial-menu / item-overlay tap targets. */
@@ -889,8 +892,7 @@ body {
         padding-bottom: calc(184px + env(safe-area-inset-bottom));
     }
     #game-layout {
-        height: min(100vw, calc(100vh - 184px - env(safe-area-inset-bottom)));
-        max-height: 100vw;
+        height: 100%;   /* the wrapper's padding still reserves the touch band (until stage 3) */
     }
 
     /* On touch the version badge previously overlapped the bottom-right
