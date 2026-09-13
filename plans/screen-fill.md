@@ -2,8 +2,7 @@
 
 **Phase:** Design → Development.
 **Priority:** High (Caelan, 2026-09-11: *"I think we're still using the area poorly."*).
-**Status:** Design (approved section by section, 2026-09-12/13). Build waits on two merges — see
-*Prerequisites*.
+**Status:** Built on `feature/screen-fill` (stages 1–3, 2026-09); awaiting Caelan's merge call.
 **Companions:** `plans/visual-pass.md` Part 3 (the whole-pixel canvas; this keeps its rule and
 drops its square) · `plans/roadmap-2026-09.md` (where the follow-on pieces queue).
 **Mockup:** `game/_design-screen.html` — local only (`.gitignore:88`), served by

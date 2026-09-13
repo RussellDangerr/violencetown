@@ -94,6 +94,14 @@ Both exclusions are files that *quote the rule itself* rather than violate it.
   - `tools/gen_font.py` — regenerates the bitmap font atlas.
   - `tools/gen_ui_panel.py` — regenerates the 9-slice panel atlas.
 - **Player resources:** HP (red bar) / MP (cyan bar) / GP (Gold Card pill). All three live on the `_drawHPPanel` surface. GP is the same value as `game.gold`. **MP is live** — spells spend it (fireball 12, coneOfCold 10, boo 8) and a `mana_poition` restores it; an older note here called it inert, which it has not been for some time. See `plans/gold-card.md` for the in-universe lore the Gold Card is intended to grow into.
+- **The screen is a viewport, not a fixed square** (plans/screen-fill.md). `game/viewport.js`
+  (`computeViewport`) sizes the canvas to the window: tile size from one rule (at least 20 tiles on
+  the short side, whole-pixel scales only), the player always centred in the world area above the
+  dock. `layout.js` `hudLayout(vp)` places every HUD piece; the renderer draws and `main.js`
+  hit-tests through both. Menus keep their 608×608 layouts inside the viewport's centred menu box.
+  Never assume a fixed 19×19 view or a 608 screen. A map's optional `"border": { tile, prop? }`
+  names what is drawn past its edge (the table in plans/screen-fill.md; pinned in
+  `tests/tile-coverage.test.js`).
 
 ## Planning surface (corrected 2026-07-25)
 
