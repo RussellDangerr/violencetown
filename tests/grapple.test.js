@@ -95,7 +95,7 @@ describe('GameMap.getAnchor', () => {
 
 describe('the swing arc', () => {
     afterEach(() => Settings.set('reduceMotion', false));
-    const r = Object.assign(Object.create(Renderer.prototype), { half: 9 });
+    const r = Object.create(Renderer.prototype);
     const at = (game) => r._playerScreenPos(game, 0);
 
     test('the hero rises mid-swing, and the ground under them does not', () => {

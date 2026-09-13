@@ -3,7 +3,7 @@
 // Small panels: hand-colored parchment fill matching the sprite palette
 // All text: dark brown on parchment for readability (not gold-on-dark)
 
-import { TILE_PX, VIEW_TILES, CANVAS_PX, SAFE_SLOTS } from './data.js';
+import { TILE_PX, CANVAS_PX, SAFE_SLOTS } from './data.js';
 import { CLASSIC, offView, snapPx } from './viewport.js';   // (screen-fill) the screen's geometry
 
 // The splash canvas's supersample: its 320x220 card is drawn at 2x so the
@@ -14,7 +14,6 @@ import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRI
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
 import { ROOT, selectedNode, activeRing, activeIndex, decisionPath, previewChildren, affectedTiles, verbApplies, isCombatActive, flapperDeflection, defaultVerb } from './wheel-model.js'; // (sunburst wheel) + the bump telegraph
 import {
-    THROW_RECTS,
     QUESTLOG_RECT, LOG_MODAL_RECT, TARGET_LIST_RECT, TARGET_LIST_ROW_H,
     ITEM_OVERLAY_RECT, ITEM_OVERLAY_ROW_H,
     RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
@@ -146,7 +145,6 @@ export class Renderer {
         canvas.height = CLASSIC.backingH;
         this.ctx.imageSmoothingEnabled = false;
 
-        this.half    = (VIEW_TILES - 1) / 2;   // retired in Task 5
         this.sprites = null;
         this.zone    = 'TOWN';
     }
@@ -721,7 +719,8 @@ export class Renderer {
     // ── Tiles ────────────────────────────────────────────────────────────────
 
     _drawTiles(game) {
-        const { ctx, half, sprites } = this;
+        const { ctx, sprites } = this;
+        const vp = this._view();
         const pad = 2;
         // Car (tile 19) is painted as ONE 2×2 sprite, not a 2×2 grid of four
         // 32px cars. The map keeps all four cells as id 19 (so the block stays a
@@ -734,12 +733,12 @@ export class Renderer {
         // cells' ground (painted later in the loop) can't overpaint the
         // overhanging car.
         const carBlocks = [];
-        for (let vy = -pad; vy < VIEW_TILES + pad; vy++) {
-            for (let vx = -pad; vx < VIEW_TILES + pad; vx++) {
-                const wx = game.playerX - half + vx;
-                const wy = game.playerY - half + vy;
-                const px = vx * TILE_PX - this._scrollX;
-                const py = vy * TILE_PX - this._scrollY;
+        for (let j = vp.span.jMin - pad; j <= vp.span.jMax + pad; j++) {
+            for (let i = vp.span.iMin - pad; i <= vp.span.iMax + pad; i++) {
+                const wx = game.playerX + i;
+                const wy = game.playerY + j;
+                const px = vp.origin.x + i * TILE_PX - this._scrollX;
+                const py = vp.origin.y + j * TILE_PX - this._scrollY;
                 const id = game.map.getTile(wx, wy);
                 const def = game.map.getTileDef(wx, wy);
 
@@ -836,7 +835,8 @@ export class Renderer {
         // only way out of a zone would be unmarked.
         const trans = [...(game.map?.transitions || []), ...(game.map?.anchors || []).filter(a => a.toMap)];
         if (!trans.length) return;
-        const { ctx, half } = this;
+        const { ctx } = this;
+        const vp = this._view();
         const mw = game.map.width, mh = game.map.height;
 
         // Pulse 0..1 (gold breathes). performance.now() matches the renderer's
@@ -870,12 +870,11 @@ export class Renderer {
             const md = Math.abs(t.x - game.playerX) + Math.abs(t.y - game.playerY);
             if (md <= 1) hintLabel = t.label || hintLabel;
 
-            const vx = t.x - game.playerX + half;
-            const vy = t.y - game.playerY + half;
+            const dx = t.x - game.playerX, dy = t.y - game.playerY;
             // Cheap off-canvas cull (mirror the container/item pass margins).
-            if (vx < -2 || vx > VIEW_TILES + 1 || vy < -2 || vy > VIEW_TILES + 1) continue;
-            const px = vx * TILE_PX - this._scrollX;
-            const py = vy * TILE_PX - this._scrollY;
+            if (offView(vp, dx, dy, 2)) continue;
+            const px = vp.origin.x + dx * TILE_PX - this._scrollX;
+            const py = vp.origin.y + dy * TILE_PX - this._scrollY;
 
             const cx = px + TILE_PX / 2, cy = py + TILE_PX / 2;
 
@@ -918,12 +917,13 @@ export class Renderer {
         if (hintLabel && this.font) {
             ctx.save();
             ctx.translate(-(this._shakeX || 0), -(this._shakeY || 0));
+            const strip = this._hud().strip;   // the hint strips rest on the HUD's strip line
             ctx.fillStyle = 'rgba(0,0,0,0.55)';
-            ctx.fillRect(0, CANVAS_PX - 24, CANVAS_PX, 24);
+            ctx.fillRect(0, strip - 24, vp.w, 24);
             // Plain ASCII only — the bitmap font (32-126) renders anything else
             // as '?', so use a hyphen separator, not an em dash.
             const hint = `EXIT - ${String(hintLabel).toUpperCase()}`;
-            this.font.drawText(ctx, hint, CANVAS_PX / 2, CANVAS_PX - 16,
+            this.font.drawText(ctx, hint, vp.w / 2, strip - 16,
                 { color: UI.gold, scale: 1, align: 'center', shadow: '#000' });
             ctx.restore();
         }
@@ -943,13 +943,13 @@ export class Renderer {
     // loaded yet, same pattern as _drawEnemySprite.
 
     _drawContainers(game) {
-        const { ctx, half, sprites } = this;
+        const { ctx, sprites } = this;
+        const vp = this._view();
         for (const c of game.containers) {
-            const vx = c.x - game.playerX + half;
-            const vy = c.y - game.playerY + half;
-            if (vx < -2 || vx > VIEW_TILES + 1 || vy < -2 || vy > VIEW_TILES + 1) continue;
-            const px = vx * TILE_PX - this._scrollX;
-            const py = vy * TILE_PX - this._scrollY;
+            const dx = c.x - game.playerX, dy = c.y - game.playerY;
+            if (offView(vp, dx, dy, 2)) continue;
+            const px = vp.origin.x + dx * TILE_PX - this._scrollX;
+            const py = vp.origin.y + dy * TILE_PX - this._scrollY;
 
             const hasContents = c.contents.length > 0;
             const info = hasContents ? CONTAINER_SPRITES.closed : CONTAINER_SPRITES.open;
@@ -995,13 +995,13 @@ export class Renderer {
     // ── Ground Items ─────────────────────────────────────────────────────────
 
     _drawGroundItems(game) {
-        const { ctx, half, sprites } = this;
+        const { ctx, sprites } = this;
+        const vp = this._view();
         for (const item of game.groundItems) {
-            const vx = item.x - game.playerX + half;
-            const vy = item.y - game.playerY + half;
-            if (vx < -2 || vx > VIEW_TILES + 1 || vy < -2 || vy > VIEW_TILES + 1) continue;
-            const px = vx * TILE_PX - this._scrollX;
-            const py = vy * TILE_PX - this._scrollY;
+            const dx = item.x - game.playerX, dy = item.y - game.playerY;
+            if (offView(vp, dx, dy, 2)) continue;
+            const px = vp.origin.x + dx * TILE_PX - this._scrollX;
+            const py = vp.origin.y + dy * TILE_PX - this._scrollY;
 
             // Try sprite from ITEM_SPRITES
             const spr = ITEM_SPRITES[item.type];
@@ -1033,7 +1033,7 @@ export class Renderer {
     // replacing the old "all enemies, then the player always on top" order.
 
     _drawActors(game) {
-        const { half } = this;
+        const vp = this._view();
         const now = performance.now();
         const actors = [];
 
@@ -1049,9 +1049,8 @@ export class Renderer {
                     ey = e._slideFromY + (e.y - e._slideFromY) * st;
                 }
             }
-            const vx = ex - game.playerX + half;
-            const vy = ey - game.playerY + half;
-            if (vx < -2 || vx > VIEW_TILES + 1 || vy < -2 || vy > VIEW_TILES + 1) continue;
+            const dx = ex - game.playerX, dy = ey - game.playerY;
+            if (offView(vp, dx, dy, 2)) continue;
 
             const isAlive = e.entity.isAlive();
             // Stagger (Phase C) knockback offset — only animates while alive.
@@ -1060,8 +1059,8 @@ export class Renderer {
             const offsetX = staggerProgress > 0 ? (e._staggerDx ?? 0) * staggerProgress : 0;
             const offsetY = staggerProgress > 0 ? (e._staggerDy ?? 0) * staggerProgress : 0;
 
-            const px = vx * TILE_PX - this._scrollX + offsetX;
-            const py = vy * TILE_PX - this._scrollY + offsetY;
+            const px = vp.origin.x + dx * TILE_PX - this._scrollX + offsetX;
+            const py = vp.origin.y + dy * TILE_PX - this._scrollY + offsetY;
             actors.push({ kind: 'enemy', e, px, py, dead: !isAlive, feetY: py + TILE_PX });
         }
 
@@ -1077,11 +1076,10 @@ export class Renderer {
         for (const p of (game.map?.propSpawns || [])) {
             const def = PROP_SPRITES[p.type];
             if (!def) continue;
-            const vx = p.x - game.playerX + half;
-            const vy = p.y - game.playerY + half;
-            if (vx < -3 || vx > VIEW_TILES + 2 || vy < -3 || vy > VIEW_TILES + 2) continue;
-            const px = vx * TILE_PX - this._scrollX;
-            const py = vy * TILE_PX - this._scrollY;
+            const dx = p.x - game.playerX, dy = p.y - game.playerY;
+            if (offView(vp, dx, dy, 3)) continue;
+            const px = vp.origin.x + dx * TILE_PX - this._scrollX;
+            const py = vp.origin.y + dy * TILE_PX - this._scrollY;
             actors.push({ kind: 'prop', def, px, py, feetY: py + TILE_PX });
         }
 
@@ -1381,12 +1379,12 @@ export class Renderer {
     _drawJammedDoor(game) {
         const j = game._jammedDoor;
         if (!j) return;
-        const { ctx, half } = this;
-        const vx = j.x - game.playerX + half;
-        const vy = j.y - game.playerY + half;
-        if (vx < -1 || vx > VIEW_TILES || vy < -1 || vy > VIEW_TILES) return;
-        const px = vx * TILE_PX - this._scrollX;
-        const py = vy * TILE_PX - this._scrollY;
+        const { ctx } = this;
+        const vp = this._view();
+        const dx = j.x - game.playerX, dy = j.y - game.playerY;
+        if (offView(vp, dx, dy, 1)) return;
+        const px = vp.origin.x + dx * TILE_PX - this._scrollX;
+        const py = vp.origin.y + dy * TILE_PX - this._scrollY;
 
         ctx.fillStyle = 'rgba(40,30,20,0.85)';
         ctx.fillRect(px + 3, py + 3, TILE_PX - 6, TILE_PX - 6);
@@ -1418,7 +1416,8 @@ export class Renderer {
     // a black drop-shadow so it's readable against any tile background.
 
     _drawDamageNumbers(game) {
-        const { ctx, half } = this;
+        const { ctx } = this;
+        const vp = this._view();
         const now = performance.now();
         for (const dn of game._damageNumbers) {
             const age = now - dn.bornAt;
@@ -1430,16 +1429,15 @@ export class Renderer {
             if (dn.type) { this._drawHitSplat(game, dn, age); continue; }
 
             const t = age / 1000; // seconds
-            const vx = dn.tileX - game.playerX + half;
-            const vy = dn.tileY - game.playerY + half;
+            const dx = dn.tileX - game.playerX, dy = dn.tileY - game.playerY;
             // stackSlot adds a fixed pixel offset per slot so per-source
             // dialogue stacks chat-window-style (newest at speaker, older
             // rising). Particles without stackSlot (damage numbers, event
             // words) get slot 0 = no offset, behavior unchanged.
             const STACK_LINE_PX = 14;
             const slotOffset = (dn.stackSlot ?? 0) * STACK_LINE_PX;
-            const px = vx * TILE_PX + TILE_PX / 2 - this._scrollX + dn.vx * t;
-            const py = vy * TILE_PX + TILE_PX / 4 - this._scrollY + dn.vy * t - slotOffset;
+            const px = vp.origin.x + dx * TILE_PX + TILE_PX / 2 - this._scrollX + dn.vx * t;
+            const py = vp.origin.y + dy * TILE_PX + TILE_PX / 4 - this._scrollY + dn.vy * t - slotOffset;
 
             const alpha = 1 - age / dn.maxAge;
 
@@ -1497,14 +1495,15 @@ export class Renderer {
     // (color = damage type) carrying the number, with a per-type animation and
     // a directional/omni fan. Cheap canvas transforms; deterministic per hit.
     _drawHitSplat(game, dn, age) {
-        const { ctx, half, sprites } = this;
+        const { ctx, sprites } = this;
+        const vp = this._view();
         const m = this._hitSplatMotion(dn, age);
         const a = Math.max(0, Math.min(1, m.alpha));
         if (a <= 0.01) return;
 
         // Tile → screen (camera-tracked), then the per-type motion offset.
-        const bx = (dn.tileX - game.playerX + half) * TILE_PX + TILE_PX / 2 - this._scrollX;
-        const by = (dn.tileY - game.playerY + half) * TILE_PX + TILE_PX / 4 - this._scrollY;
+        const bx = vp.origin.x + (dn.tileX - game.playerX) * TILE_PX + TILE_PX / 2 - this._scrollX;
+        const by = vp.origin.y + (dn.tileY - game.playerY) * TILE_PX + TILE_PX / 4 - this._scrollY;
         const x = bx + m.ox;
         const y = by + m.oy;
 
@@ -1647,24 +1646,25 @@ export class Renderer {
 
     // ── Player ───────────────────────────────────────────────────────────────
 
-    // The player's screen position — fixed at the view center, nudged by the
-    // Phase-C stagger knockback. The world scrolls under it, so unlike enemies it
-    // has no slide term. Shared by the depth pass and the item-overlay backdrop.
+    // The player's screen position — fixed at the viewport's origin (the centre
+    // of the world area), nudged by the Phase-C stagger knockback. The world
+    // scrolls under it, so unlike enemies it has no slide term. Shared by the
+    // depth pass and the item-overlay backdrop.
     //
     // (grapple swing) Mid-swing the hero rises on an arc that peaks halfway, so a
     // swing reads as flight rather than a flat slide; `groundPy` is where their
     // feet would be, for the shadow and the depth sort. Reduce Motion flattens it.
     _playerScreenPos(game, now) {
-        const { half } = this;
+        const { origin } = this._view();
         const staggerRemaining = (game._playerStaggerUntil ?? 0) - now;
         const staggerProgress = staggerRemaining > 0 ? staggerRemaining / 80 : 0;
         const offsetX = staggerProgress > 0 ? (game._playerStaggerDx ?? 0) * staggerProgress : 0;
         const offsetY = staggerProgress > 0 ? (game._playerStaggerDy ?? 0) * staggerProgress : 0;
-        const groundPy = half * TILE_PX + offsetY;
+        const groundPy = origin.y + offsetY;
         const lift = game._swinging && !Settings.get('reduceMotion')
             ? Math.round(Math.sin(Math.PI * (game._animProgress || 0)) * SWING_LIFT_PX)
             : 0;
-        return { ppx: half * TILE_PX + offsetX, ppy: groundPy - lift, groundPy };
+        return { ppx: origin.x + offsetX, ppy: groundPy - lift, groundPy };
     }
 
     // Standalone player draw — used by the item-overlay backdrop, which dims the
@@ -2716,10 +2716,11 @@ export class Renderer {
     _drawReticle(game) {
         const w = game.wheel;
         if (!w || (!w.aiming && !w.confirming) || !w.reticle) return;
-        const { ctx, half } = this;
+        const { ctx } = this;
+        const vp = this._view();
         const toScreen = (tx, ty) => ({
-            x: (tx - game.playerX + half) * TILE_PX - this._scrollX,
-            y: (ty - game.playerY + half) * TILE_PX - this._scrollY,
+            x: vp.origin.x + (tx - game.playerX) * TILE_PX - this._scrollX,
+            y: vp.origin.y + (ty - game.playerY) * TILE_PX - this._scrollY,
         });
         const r = toScreen(w.reticle.x, w.reticle.y);
         const p = toScreen(game.playerX, game.playerY);
@@ -2851,7 +2852,8 @@ export class Renderer {
     // contents depend on which watchers are alert and which polarity of tile
     // gets painted, not just on the raw watcher count.
     _drawThreatOverlay(game) {
-        const { ctx, half, sprites } = this;
+        const { ctx, sprites } = this;
+        const vp = this._view();
         const now = performance.now();
         const reduce = (typeof Settings !== 'undefined') && Settings.get && Settings.get('reduceMotion');
 
@@ -2894,15 +2896,17 @@ export class Renderer {
             // the town square: an idle vendor no longer contributes a tile.
             const field = alertWatchers(watchers, phase, { aimingTheft });
 
-            if (this._threatTurn !== game.turn || this._threatFieldPhase !== phase || this._threatCount !== field.length) {
+            // The viewport is part of the key: a resize changes which tiles are in view.
+            if (this._threatTurn !== game.turn || this._threatFieldPhase !== phase || this._threatCount !== field.length || this._threatVp !== vp) {
                 this._threatTurn = game.turn;
                 this._threatFieldPhase = phase;
                 this._threatCount = field.length;
+                this._threatVp = vp;
                 this._threatField = new Map();
-                for (let vy = 0; vy < VIEW_TILES; vy++) {
-                    for (let vx = 0; vx < VIEW_TILES; vx++) {
-                        const tx = game.playerX - half + vx;
-                        const ty = game.playerY - half + vy;
+                for (let j = vp.span.jMin; j <= vp.span.jMax; j++) {
+                    for (let i = vp.span.iMin; i <= vp.span.iMax; i++) {
+                        const tx = game.playerX + i;
+                        const ty = game.playerY + j;
                         let worst = VERDICT.NONE;
                         for (const w of field) {
                             const v = perceives(game.map, w, tx, ty);
@@ -2931,15 +2935,16 @@ export class Renderer {
             // the stipple would crawl against the art beneath it (confirmed
             // against a live canvas, not assumed). Applying the scroll as a
             // ctx.translate instead, while keeping the fillRect arguments
-            // grid-aligned (a multiple of the tile size, itself a multiple of
-            // the pattern's 8px period), keeps the sampled phase CONSTANT per
+            // grid-aligned (the viewport's fixed origin plus a multiple of the
+            // tile size, which is itself a multiple of the pattern's 8px
+            // period), keeps the sampled phase CONSTANT per
             // tile; the translate alone slides the whole tile+pattern as one
             // rigid unit, exactly like the sprite drawn under it.
             ctx.translate(-this._scrollX, -this._scrollY);
-            for (let vy = 0; vy < VIEW_TILES; vy++) {
-                for (let vx = 0; vx < VIEW_TILES; vx++) {
-                    const tx = game.playerX - half + vx;
-                    const ty = game.playerY - half + vy;
+            for (let j = vp.span.jMin; j <= vp.span.jMax; j++) {
+                for (let i = vp.span.iMin; i <= vp.span.iMax; i++) {
+                    const tx = game.playerX + i;
+                    const ty = game.playerY + j;
 
                     // Only ground you could actually stand on. A wall is trivially
                     // "safe" — nobody can see you there because you cannot be there —
@@ -2953,7 +2958,7 @@ export class Renderer {
                     if (phase === PHASE.HAZE  && v !== VERDICT.NONE) continue; // safe tiles are the dark ones
                     if (phase === PHASE.ALARM && v === VERDICT.NONE) continue; // watched tiles are the hot ones
 
-                    ctx.fillRect(vx * TILE_PX, vy * TILE_PX, TILE_PX, TILE_PX);
+                    ctx.fillRect(vp.origin.x + i * TILE_PX, vp.origin.y + j * TILE_PX, TILE_PX, TILE_PX);
                 }
             }
             ctx.restore();
@@ -2965,15 +2970,15 @@ export class Renderer {
         // to whichever phase applied above, carrying no per-tile data.
         const arenaLevel = this._arenaLevel ?? 0;
         if (arenaLevel > 0.001) {
-            const vcx = half * TILE_PX + TILE_PX / 2;
-            const vcy = half * TILE_PX + TILE_PX / 2;
-            const vr = Math.hypot(CANVAS_PX / 2, CANVAS_PX / 2);   // reaches the corners
+            const vcx = vp.origin.x + TILE_PX / 2;
+            const vcy = vp.origin.y + TILE_PX / 2;
+            const vr = Math.hypot(vp.w / 2, vp.h / 2);   // reaches the corners
             const grd = ctx.createRadialGradient(vcx, vcy, 0, vcx, vcy, vr);
             grd.addColorStop(0, 'rgba(0,0,0,0)');
             grd.addColorStop(1, `rgba(0,0,0,${0.35 * arenaLevel})`);
             ctx.save();
             ctx.fillStyle = grd;
-            ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+            ctx.fillRect(0, 0, vp.w, vp.h);
             ctx.restore();
         }
 
@@ -2986,9 +2991,9 @@ export class Renderer {
         const breath = reduce ? 0.5 : (0.5 + 0.5 * Math.sin(now / 420));
 
         for (const w of watchers) {
-            const sx = (w.x - game.playerX + half) * TILE_PX - this._scrollX;
-            const sy = (w.y - game.playerY + half) * TILE_PX - this._scrollY;
-            if (sx < -TILE_PX || sx > CANVAS_PX || sy < -TILE_PX || sy > CANVAS_PX) continue;
+            const sx = vp.origin.x + (w.x - game.playerX) * TILE_PX - this._scrollX;
+            const sy = vp.origin.y + (w.y - game.playerY) * TILE_PX - this._scrollY;
+            if (sx < -TILE_PX || sx > vp.w || sy < -TILE_PX || sy > vp.h) continue;
 
             const { fx, fy } = facingOf(w);
             const len = Math.hypot(fx, fy) || 1;
@@ -3025,8 +3030,8 @@ export class Renderer {
             // beneath it and with the AI above it.
             if (perceives(game.map, w, game.playerX, game.playerY) === VERDICT.DIRECT) {
                 // The player is always the centre tile of the view.
-                const px = half * TILE_PX + TILE_PX / 2 - this._scrollX;
-                const py = half * TILE_PX + TILE_PX / 2 - this._scrollY;
+                const px = vp.origin.x + TILE_PX / 2 - this._scrollX;
+                const py = vp.origin.y + TILE_PX / 2 - this._scrollY;
                 ctx.save();
                 ctx.strokeStyle = `rgba(204,68,34,${0.18 + 0.12 * breath})`;
                 ctx.lineWidth = 1.5;
@@ -3044,17 +3049,16 @@ export class Renderer {
     // ── Throw Prompt ─────────────────────────────────────────────────────────
 
     _drawThrowPrompt(game) {
-        const { ctx, half } = this;
-        const cx = half * TILE_PX + TILE_PX / 2;
-        const cy = half * TILE_PX + TILE_PX / 2;
+        const { ctx } = this;
+        const R = throwRects(this._view());   // around the player's tile (layout.js)
 
         // ASCII arrows (the bitmap font is plain ASCII). ^ v < > read as
         // direction immediately and stay crisp at scale 2.
         const dirs = [
-            { x: THROW_RECTS.up.x,    y: THROW_RECTS.up.y,    l: '^' },
-            { x: THROW_RECTS.down.x,  y: THROW_RECTS.down.y,  l: 'V' },
-            { x: THROW_RECTS.left.x,  y: THROW_RECTS.left.y,  l: '<' },
-            { x: THROW_RECTS.right.x, y: THROW_RECTS.right.y, l: '>' },
+            { x: R.up.x,    y: R.up.y,    l: '^' },
+            { x: R.down.x,  y: R.down.y,  l: 'V' },
+            { x: R.left.x,  y: R.left.y,  l: '<' },
+            { x: R.right.x, y: R.right.y, l: '>' },
         ];
 
         for (const d of dirs) {
