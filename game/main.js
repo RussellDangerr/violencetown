@@ -36,7 +36,7 @@ import { QuestEngine } from './quests.js';
 import { doExamine, resolveExamine } from './examine.js';
 import { recordDrop, pendingDrops, dropLoadout } from './drops.js'; // per-zone runtime dropped-items layer (pure, node-tested)
 import {
-    HIT_SLOP, throwRects, DOCK,
+    HIT_SLOP, throwRects, DOCK, hitHud,
     HOTBAR_X_START, HOTBAR_Y, HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_STRIDE, HOTBAR_SLOTS,
     WHEEL_HUB_R, wheelRingR, LOG_MODAL_RECT, targetListRowRect, itemOverlayRowRect,
     EQUIPMENT_MODAL_RECT, EQUIP_SLOT_RECTS,
@@ -547,32 +547,16 @@ class Game {
         this._bindOptionsModal(); // [settings] options/accessibility UI
         this._bindPauseOverlay(); // [settings] turn-based pause overlay
 
-        // (sunburst wheel) Touch ACTION button: open the wheel when idle; while
-        // open, drill into the current selection (firing once it's a ready leaf).
-        const actionBtn = document.getElementById('action-btn');
-        if (actionBtn) actionBtn.addEventListener('pointerdown', (e) => {
-            e.preventDefault();
-            if (this.state === STATE.IDLE) { this._wheelOpenerDown(); return; }   // (Slice 2) hold vs tap-toggle
-            if (this.state === STATE.RADIAL_MENU) {
-                const w = this.wheel;
-                if (w.confirming || w.aiming) { this._wheelCommit(); return; }
-                this._wheelDrill();
-            }
-        });
-        // (Slice 2) Release of the touch ACTION button — closes the wheel in
-        // 'hold' mode (mirrors Space keyup); pointercancel covers a lost pointer.
-        if (actionBtn) {
-            const releaseWheel = (e) => { e.preventDefault(); this._wheelOpenerUp(); };
-            actionBtn.addEventListener('pointerup', releaseWheel);
-            actionBtn.addEventListener('pointercancel', releaseWheel);
-        }
+        // (screen-fill) The touch ACTION button retired: the dock's ✦ opens the
+        // wheel on every device (_onCanvasPointerDown), and a tap in the wheel's
+        // top quadrant drills, as it always has.
         // (Slice 3) The on-screen Remoticon opener — pull out / pocket the tabbed
         // device. One symbol (_toggleDevice) so Slice 4's gamepad Back binds to it.
         const remoticonBtn = document.getElementById('remoticon-btn');
         if (remoticonBtn) remoticonBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); this._toggleDevice(); });
 
         // Populate version badge from <meta name="version"> — single source of truth.
-        // Lives in index.html as #version-badge, styled bottom-right in style.css.
+        // Lives in index.html as #version-badge, at the foot of the ☰ menu sheet.
         const versionMeta = document.querySelector('meta[name="version"]');
         const versionBadge = document.getElementById('version-badge');
         if (versionMeta && versionBadge) {
@@ -921,6 +905,8 @@ class Game {
         this.renderer.setViewport(vp);
         canvas.style.width  = `${vp.cssW}px`;
         canvas.style.height = `${vp.cssH}px`;
+        // The first-run hint is a page element: keep it just above the dock.
+        document.documentElement.style.setProperty('--dock-css-h', `${(vp.dockH * vp.scale) / (vp.backingW / vp.cssW)}px`);
         if (this.state !== STATE.SPLASH) this._render();
     }
 
@@ -1447,6 +1433,7 @@ class Game {
         // tap → pick the row; a real drag scrolled the list and picks nothing.
         const endPress = (e) => {
             cancelPress();
+            if (this._openerHeld) { this._openerHeld = false; this._wheelOpenerUp(); }   // (screen-fill) the dock's ✦, released
             if (this._dlgDrag) {
                 const d = this._dlgDrag; this._dlgDrag = null;
                 if (!d.moved && e && e.type === 'pointerup') this._tapDialogue(d.downPt);
@@ -1476,7 +1463,7 @@ class Game {
             e.preventDefault();
             if (this.state !== STATE.IDLE) return;
             const pt = this._canvasLocalCoords(e, canvas);
-            if (!pt) return;
+            if (!pt || hitHud(this._hud(), pt)) return;   // (screen-fill) the HUD and the dock sit over the world
             const tile = this._screenToTile(pt);
             if (this._targetAt(tile.x, tile.y)) this._openTargetList(tile.x, tile.y);
         });
@@ -1945,15 +1932,20 @@ class Game {
         // Tapping the on-canvas Quest Log panel opens the full history modal —
         // the touch equivalent of pressing L. IDLE only; in a menu the tap
         // should drive the menu, not pop the log.
-        if (this.state === STATE.IDLE && this._pointInRect(pt, this._hud().log, HIT_SLOP)) {
-            this._openLogModal();
-            return;
+        // (screen-fill) The dock's pieces, by the rects the renderer drew them at:
+        // the ✦ opens the wheel (in HOLD mode, lifting the finger closes it again),
+        // and the log opens the full history.
+        if (this.state === STATE.IDLE) {
+            const hit = hitHud(this._hud(), pt);
+            if (hit === 'opener') { this._openerHeld = true; this._wheelOpenerDown(); return; }
+            if (hit === 'log') { this._openLogModal(); return; }
         }
 
         // (Target Wheel) An IDLE tap on the world focuses the tapped tile's
         // target; nothing there → fall through to the hotbar.
         if (this.state === STATE.IDLE) {
             if (this._tapXmbBar(pt)) return;   // (XMB) consumed a bottom-bar tap
+            if (hitHud(this._hud(), pt) === 'dock') return;   // (screen-fill) the dock's bare chrome, not the world under it
             const tile = this._screenToTile(pt);
             // Bare tap on a thing → walk adjacent (if needed) → fire its DEFAULT
             // verb (Take/Talk/Hit/Examine). The full Target List is on long-press /

@@ -189,4 +189,17 @@ describe('the dock', () => {
         assert.equal(hitHud(hud, mid(hud.log)), 'log');
         assert.equal(hitHud(hud, { x: 640, y: 300 }), null);
     });
+
+    test("the dock's bare chrome is the dock, not the world drawn under it", () => {
+        // The world's tiles run on under the dock, so a tap on the dock's
+        // empty space must not reach tap-to-move or a target there.
+        for (const vp of Object.values(screens)) {
+            const hud = hudLayout(vp);
+            assert.equal(hitHud(hud, { x: vp.w - 2, y: hud.dock.y + 1 }), 'dock');
+            assert.equal(hitHud(hud, { x: vp.w - 2, y: vp.h - 2 }), 'dock');
+            assert.equal(hitHud(hud, { x: vp.w / 2, y: hud.dock.y - 20 }), null, 'just above the dock is the world');
+        }
+        const corners = hudLayout(computeViewport({ cssW: 1920, cssH: 1080, dpr: 1 }));   // no dock
+        assert.equal(hitHud(corners, { x: 640, y: 715 }), null);
+    });
 });

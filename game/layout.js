@@ -269,13 +269,16 @@ function dockLayout(vp) {
     };
 }
 
-// Which HUD piece an IDLE tap lands on, the opener or the log, or null. One
-// function, so main.js routes taps by the rects the renderer draws. (The item
-// bar keeps its own chip-level test in main._tapXmbBar.)
+// Which HUD piece an IDLE tap lands on: the opener, the log, the dock's bare
+// chrome ('dock'), or null for the world. One function, so main.js routes taps
+// by the rects the renderer draws. The world's tiles run on under the dock, so
+// a 'dock' tap must not reach tap-to-move. (The item bar keeps its own
+// chip-level test in main._tapXmbBar, which runs before the 'dock' check.)
 export function hitHud(hud, pt, slop = HIT_SLOP) {
     const inR = (r) => r && pt.x >= r.x - slop && pt.x <= r.x + r.w + slop && pt.y >= r.y - slop && pt.y <= r.y + r.h + slop;
     if (inR(hud.opener)) return 'opener';
     if (inR(hud.log)) return 'log';
+    if (hud.dock && pt.y >= hud.dock.y) return 'dock';
     return null;
 }
 export const LOG_MODAL_RECT = MODAL_RECT;
