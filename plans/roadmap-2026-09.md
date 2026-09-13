@@ -15,9 +15,12 @@ pending decisions, and the three passes that landed this week.
 > Both were accurate when written; **seven of their items have since shipped** and are listed in
 > §6 so nobody re-does them. The `plan` branch itself is six weeks stale — see §5.
 
-**State right now (updated 2026-09-10):** `main` @ `38a44c2` (v0.21.0), **40 commits behind `dev`,
-deliberately** — nothing since v0.21.0 is on the live site. Suite 1223 / 226 / 0 failures.
-Zone §3 and the §2 residual shipped 2026-09-10; see §6. **Two branches await merge:** `feature/combat-legibility` and `feature/ready-builds` (five builds, suite 1263 there) — see §1.
+**State right now (updated 2026-09-13):** `main` @ `38a44c2` (v0.21.0), **75 commits behind `dev`,
+deliberately** — nothing since v0.21.0 is on the live site. Suite 1333 / 245 / 0 failures.
+**Merged to `dev` on 2026-09-13:** `feature/combat-legibility`, `feature/ready-builds` (five builds
+and the see-through tile fix), and `feature/screen-fill` — the game fills the window, the world
+carries on past every map's edge, and the wheel sits on a dial in a bottom dock. All in §6. Next in
+Caelan's queue: F1–F3 (§4), the three pieces his 09-11 notes opened after the screen.
 
 > **Audited against the code 2026-09-10 — eight rows were wrong.** The 09-07 compile carried items
 > over from the July backlogs without re-checking them, and some had shipped the week before:
@@ -41,22 +44,33 @@ flowchart LR
     classDef now fill:#f7c8b8,stroke:#a33a1e,color:#3a0f05
     classDef done fill:#dfe9e0,stroke:#6a8a6e,color:#243326,stroke-dasharray:4 3
 
-    SHIP["Ship v0.22.0 to main<br/>40-commit fast-forward"]:::now
+    SHIP["Ship v0.22.0 to main<br/>75-commit fast-forward"]:::now
     GY["Zone §3 graves as props,<br/>tents — DONE"]:::done
     INT["Zone §1 interiors"]:::now
     R_INT["RULING: vendor Interior Pack?<br/>proxy vault + slots?"]:::ruling
     R_INT --> INT
-    GY -->|"proved the prop system"| LAMP["Streetlights as 1x2 props<br/>built — awaiting merge"]:::now
-    GY --> GATE["Cemetery gate<br/>built — awaiting merge"]:::now
+    GY -->|"proved the prop system"| LAMP["Streetlights as 1x2 props<br/>DONE 09-13"]:::done
+    GY --> GATE["Cemetery gate<br/>DONE 09-13"]:::done
+    LAMP --> LIT["Streetlights light up<br/>at night"]:::ready
     CG["RULING CG: a carnival<br/>ground of its own"]:::ruling
 
     BOSS["B1 — Law 5, bosses spend<br/>DONE 09-02"]:::done
     B2["B2 — enemies eat their kits<br/>DONE 09-01"]:::done
-    LEG["Combat legibility —<br/>heals + DoTs as splats"]:::now
+    LEG["Combat legibility —<br/>heals + DoTs as splats<br/>DONE 09-13"]:::done
     ZBOSS["Zone bosses: Financier,<br/>Bigfoot, Alien, Deity"]:::later
     BOSS --> ZBOSS
     B2 -->|"made visible by"| LEG
     BOSS --> LEG
+
+    SCREEN["The screen fills the window,<br/>dock + dial — DONE 09-13"]:::done
+    FOG["F1 — the fight area<br/>as fog of war"]:::design
+    SPLAT["F2 — hit-splat art"]:::design
+    PULL["F3 — who gets pulled<br/>into a fight"]:::design
+    SF["RULING SF: fillers,<br/>the forest, the south edge"]:::ruling
+    SCREEN -->|"the spotlight glares on a wide screen"| FOG
+    FOG -->|"the same sight-defined area"| PULL
+    LEG --> SPLAT
+    SCREEN --> SF
 
     A1["RULING A1: keep the −15<br/>bruiser row? (gates nothing yet)"]:::ruling
     A3["RULING A3: does the bag<br/>cost a turn?"]:::ruling
@@ -74,9 +88,9 @@ flowchart LR
     WILD["Wilderness explorable"]:::later
     LANT --> WILD
 
-    EX["Layered examine<br/>built — awaiting merge"]:::now
-    GRAP["Grapple-hook swing<br/>built — awaiting merge"]:::now
-    RAY["Ray Gun + carnival rename<br/>built — awaiting merge"]:::now
+    EX["Layered examine<br/>DONE 09-13"]:::done
+    GRAP["Grapple-hook swing<br/>DONE 09-13"]:::done
+    RAY["Ray Gun + carnival rename<br/>DONE 09-13"]:::done
 ```
 
 Three things the graph makes visible that the lists did not:
@@ -97,14 +111,8 @@ Three things the graph makes visible that the lists did not:
 
 | Item | State | Size | Doc | Blocked by |
 |---|---|---|---|---|
-| **Ship v0.22.0 to `main`** | Caelan's call; deliberately held. A clean fast-forward + version bump in 3 files + annotated tag. The demo-readiness doc's own headline: *"nothing else is worth as much."* | S | `plans/demo-readiness.md` §0 | nothing |
+| **Ship v0.22.0 to `main`** | Caelan's call; deliberately held. A clean fast-forward (75 commits on 2026-09-13) + version bump in 3 files + annotated tag. The demo-readiness doc's own headline: *"nothing else is worth as much."* Before shipping, re-time a frame at 3440×1440 on a quiet machine — the last re-time ran under an outside GPU load (`plans/screen-fill.md`, *Measured*). | S | `plans/demo-readiness.md` §0 | nothing |
 | **Zone §1 — interiors get a vocabulary** | Blocked on two rulings (§2). Floors already solved via `rlOutlined_packed.png`. **No interior wall exists in any bundled sheet.** | M | `plans/zone-identity.md` §1 | Z1, Z2 |
-| **Combat legibility — merge `feature/combat-legibility`** | Built 2026-09-10, pushed, **awaiting Caelan's merge**. B2 and Law 5 worked but showed only as log lines, and sewer-fare regen logged like damage ("[Violet Fungus - Sludge 3]" for a heal). Now heals say "(+3 HP)", every DoT tick floats its typed splat, and an enemy healing itself floats a green `+N`. Changes how every DoT looks, so play it first. | S | the branch's commit message | nothing |
-| **Layered examine** | Built 2026-09-10 on `feature/ready-builds` (pushed, **awaiting Caelan's merge**). Examine never dead-ends: one resolver behind the E key and the Target List — instance, creature, container, item, prop, tile. Kept the shipped strings; added container and prop rungs. | M | `plans/layered-examine.md` | nothing |
-| **Grapple-hook swing** | Built 2026-09-10 on `feature/ready-builds` (pushed, **awaiting Caelan's merge**). The canyon climb-out is a grapple anchor on a jutting rock: bump it with the hook and you swing up and out, on an arc, into Downtown. Anchors are map data on a prop, not a new tile. | M | `plans/grapple-swing.md` (on the branch) | nothing |
-| **Ray Gun pickup + carnival rename** | Built 2026-09-10 on `feature/ready-builds` (pushed, **awaiting Caelan's merge**). The Ray Gun lies in the Factory's northwest bay; `circus-map.json` is `carnival-map.json`, with old saves migrated. Found on the way: the starting Wooden Sword could never be re-equipped once swapped out — fixed. | S | `plans/ray-gun-and-carnival.md` (on the branch) | nothing |
-| **Streetlights as 1×2 props** | Built 2026-09-10 on `feature/ready-builds` (pushed, **awaiting Caelan's merge**). Town's four lamps are rpgUrban's two-tile double-arm streetlight, walk-behind and all; the parking-meter tile is retired. | S | `sprites.js` PROP_SPRITES | nothing |
-| **Prop anchor + cemetery gate** | Built 2026-09-10 on `feature/ready-builds` (pushed, **awaiting Caelan's merge**). A stone gateway in each opening of the graveyard fence. The spec's coordinates were minecart rails; the real arch is (31,17)+(33,17), and as two 1×1 props it needed no anchor option. | S | `plans/zone-identity.md` §3 | nothing |
 
 ---
 
@@ -123,13 +131,13 @@ Ordered by how much each unblocks.
 | **B3** | **Cone of Cold** — 1.40 dmg/MP against a 1.50 floor. **Still the lone balance-lint flag** (re-verified 2026-09-07). Retune or widen the band; a permanent flag trains everyone to ignore the lint. | Lint credibility | B3 |
 | **R** | **Rings: author to ~12, or cut.** **Two exist** (`rat_ring`, `fire_ring`) and one fusion — `game/ring-data.js`, and what systems-audit §3.1 itself says. *(Corrected 2026-09-10: this row said five.)* | Whether the ring system is a feature or a fossil | systems-audit §3.1 |
 | **DZ** | **TheDangerrZone — freeze at a tag or delete.** Eight `*-TheDangerrZone.*` files still ship in `game/`, unreachable from `index.html`. | Repo clarity | systems-audit §3.3 |
-| **D1** | **`feature/diagonal-prototype`** — 533 commits behind dev (2026-09-10, and rising); its diff *deletes* rings, xmb, the balance harness. Delete, or label as archive. | Branch hygiene | D1 |
-| **P1** | **Phone tap targets render at 0.62× designed size** — nothing clears Apple's 44pt. Options: fewer logical px on narrow viewports / a touch layout / accept phone as secondary. *A design decision, not a bug.* | Mobile demo viability | `demo-readiness` §2.1 |
+| **D1** | **`feature/diagonal-prototype`** — 568 commits behind dev (2026-09-13, and rising); its diff *deletes* rings, xmb, the balance harness. Delete, or label as archive. | Branch hygiene | D1 |
+| **P1** | **Phone tap targets render at half their designed size** — nothing on the canvas clears Apple's 44pt. *(Updated 2026-09-13: the screen-fill rule — at least 20 tiles on the short side — draws a phone at 0.5×, down from 0.62×: a tile is 16 CSS px, the dock's ✦ 36 px. The page's ☰ and ▤ are 44 px now.)* Options: fewer tiles on narrow screens / a touch layout / accept phone as secondary. *A design decision, not a bug.* | Mobile demo viability | `demo-readiness` §2.1 |
 | **P2** | **"End of Chapter One" does not exist.** `_endChapterOne()` is called from nowhere; the bridge drops you into Chapter Two. Delete the orphan, or give the demo a curtain. | Demo has a stopping point | `demo-readiness` §2.2 |
 | **V1** | **Theft-aiming volume** — aiming a theft puts all nine town cones back. Correct information, possibly too much. Scope to the theft's range if so. | Feel | `visual-pass.md` |
 | **V2** | **`Lire` has no lion.** Allowlisted unsprited rather than given a bad pick. | One sprite | `visual-pass.md` |
-| **V3** | **Canvas rung spacing — shipped as accepted.** A small window loses up to ~47%. The real fix (adaptive backing store) is its own session. Reversible. | Small-window play | `visual-pass.md` |
 | **AU** | **Audio discoverability.** Ships muted (ruled, correctly). Nobody discovers audio exists. Wants a visible speaker glyph — *not* autoplay. | Demo polish | `demo-readiness` §2.3 |
+| **SF** | **Screen-fill's open calls.** (1) The filler for each zone — the table in `plans/screen-fill.md`, pinned by `tests/tile-coverage.test.js`, so change both. (2) The forest is one tree on every cell: accept it, or vary it (a second prop, a hash). (3) Filler trees are two tiles tall and join the depth sort, so the row past a map's south edge covers its last row: you vanish for the one step onto Town's south exit, and two Carnival corner cells hide what stands on them. Accept, or draw fillers behind everything. | How the world's edge looks | `plans/screen-fill.md` |
 
 ---
 
@@ -151,13 +159,15 @@ Ordered by how much each unblocks.
 
 | Item | Open questions | Size | Doc | Blocked by |
 |---|---|---|---|---|
+| **F1 — the fight area as fog of war** | Next in Caelan's queue (09-11). Today's fight reads as a spotlight: a lit circle of radius ~4 tiles when an enemy is 2 tiles away, the world outside cut to about a third of its brightness, a black vignette on top — and on a filled screen the circle is a small share of the view. Direction: keep HAZE's polarity through the fight — clear where the fight can see, a light dither beyond that thins out rather than going dark. A tile-aligned square is the simpler alternative. Which vision defines the area — the player's, the fighters', both? | M | `plans/screen-fill.md` *Follow-on pieces* 1 | nothing |
+| **F2 — hit-splat art** | Kenney's Emote Pack Style 8 glyphs (heart, drop, cross, star) cover heal, poison, miss and crit; no Kenney pack has a flame, snowflake or skull, so those get drawn. Which glyph per damage type, and on the splat or beside it? | S | `plans/screen-fill.md` *Follow-on pieces* 2 | nothing |
+| **F3 — who gets pulled into a fight** | Possibly F1's sight-defined area as a gameplay rule: whoever can see the fight is in it. Decide F1's area first. | M | `plans/screen-fill.md` *Follow-on pieces* 3 | F1 |
 | **Affordance matrix** — verbs (~20 wheel leaves) × tags | The discipline: *a blank cell is a decision, not an oversight.* Second job is diagnostic — a proposed element with zero edges is caught at design time. Needs the tag layer first. | M | systems-audit §9 | T1 |
 | **Directional frames for every NPC, retire the chevron** | Violencians face their travel now. Extending to guards makes the overlay's facing chevron redundant — the stealth read becomes native to the art. Needs the other rpgUrban rows assigned. | M | `animation-pass.md` §4 | nothing |
 | **"The Crat"** — sewer diplomacy talk-quest | How ambiguous the tell is; father-flip vs. "you are not the mother"; player as arbiter vs. bribeable; reward. Reconcile with the shipped sewer canon first. | M | `sewer-crat-quest.md` (**plan only**) | nothing |
 | **Bestiary** — Cave + Weredigo (invisibility / blind-combat boss), Park + Ruffian (steal-and-flee via `transferGold` + `fleeStep`), Bear (friendly quest-giver), content enemies | Special mechanics? Which Kenney cells? Ruffian cleanly reuses two shipped systems and is the best first piece. | S–M each | `bestiary.md` (**plan only**) | nothing |
 | **Elemental coverage matrix** | `fire` and `poison` joined `sludge` / `cold` / `energy` / `fear` with no weakness table to sit in. | S | E | nothing |
 | **5-Zone Body reconciliation** | Survives as the positional layer (Back = backstab ×1.5), not split HP pools. Needs a ruling before the bible states it as law. | S | E | nothing |
-| **Canvas adaptive backing store** | The real fix for V3: let the backing store follow the window so every size is exact. Touches the renderer's boot path. | M | `visual-pass.md` | nothing |
 | **Weapons have no art** | No weapon has ground or bag art: all five draw as lettered boxes — the Ray Gun a teal Z, the Wooden Sword a grey `?`. tinyDungeon has swords, axes and hammers; nothing bundled looks like a ray gun. Which cells — and what does the Ray Gun look like? | S–M | `sprites.js` `ITEM_SPRITES` | nothing |
 
 ---
@@ -207,6 +217,16 @@ parked document.
 | roadmap §3 (stale) | B2 — enemies eat their own kits | **Already shipped when this roadmap was compiled:** `0922928`, 2026-09-01. A hurt enemy eats before it buys or swings, never double-doses, and the kit leaves the nameplate. Re-verified live 2026-09-10 |
 | roadmap §3 (stale) | B1 — first real boss, Law 5 executes | **Already shipped:** `6bdb7ad`, 2026-09-02 — a boss buys its own HP and funds its worst-off ally; the Wererat and the Borgir boss carry `boss: true` and lint as elite |
 | roadmap §2 (stale) | A4 — boss band derivation | **Answered in code:** `boss` is an authored flag (`6bdb7ad`), and `d7e1cd2` (2026-09-02) added Law 4's `tough` row, so the Wererat no longer lints as standard |
+| roadmap §1 | Combat legibility — merge `feature/combat-legibility` | Merged 2026-09-13 (`7a3312b`): heals log "(+N HP)", every DoT tick floats its typed splat, and an enemy healing itself floats a green `+N` |
+| roadmap §1 | Layered examine | Merged 2026-09-13 with `feature/ready-builds` (`689f26b`): one resolver behind E and the Target List — examine never dead-ends |
+| roadmap §1 | Grapple-hook swing | Merged 2026-09-13 (`689f26b`): the canyon climb-out swings you up and out, on an arc, into Downtown |
+| roadmap §1 | Ray Gun pickup + carnival rename | Merged 2026-09-13 (`689f26b`): the Ray Gun in the Factory's northwest bay; `carnival-map.json` with old saves migrated; the Wooden Sword re-equips |
+| roadmap §1 | Streetlights as 1×2 props | Merged 2026-09-13 (`689f26b`). Still dark at night — §3 |
+| roadmap §1 | Prop anchor + cemetery gate | Merged 2026-09-13 (`689f26b`): a stone gateway in each opening of the graveyard fence |
+| found 2026-09-10 | See-through tiles flickered black and white at dusk | `b72a63a`, merged 2026-09-13: every see-through tile declares what is under it, and a PNG-alpha test keeps it so |
+| Caelan, 2026-09-11 | The screen fills the window | `5278f33`, 2026-09-13 (`plans/screen-fill.md`): one viewport, tile size by one rule, a filler past every map's edge, the bottom dock and the wheel's dial. Fixed on the way: FIRE hidden under the wheel's pointer; the offer screen's mouse wheel |
+| roadmap §2 | V3 — Canvas rung spacing | Resolved by the screen fill (`5278f33`): the backing store follows the window at whole-pixel scales, so no window loses a rung |
+| roadmap §4 | Canvas adaptive backing store | Built as the screen fill (`5278f33`): `game/viewport.js` |
 
 ---
 
@@ -214,15 +234,17 @@ parked document.
 
 Not a mandate — a reading of the graph.
 
-1. **Rulings session.** Z1–Z2 and CG gate builds; A1, A2, A3, R, DZ, D1 are cheap and clear the
-   board. None needs code. Then ship v0.22.0 — the demo is 40 commits stale and the whole visual
-   pass is invisible until it moves.
-2. **Combat-feel session.** ~~B2, then B1~~ — both had shipped (09-01, 09-02). What was missing was
-   legibility, now on `feature/combat-legibility` (§1): play it, merge it. After that the combat
-   lane's open builds are C4 (mystery meat on the throw path) and the zone bosses (§5, content).
-3. **Zone-identity session.** ~~Redo §3 graveyard~~ — done 2026-09-10, with the §2 residual. Left:
-   §1 interiors once Z1/Z2 are ruled, a carnival ground once CG is, and two small unblocked
-   follow-ons — streetlights as 1×2 props, and the prop anchor that lets the cemetery gate sit on
-   its path.
+1. **Rulings session, then ship.** Z1–Z2 and CG gate builds; SF and P1 are the new screen's; A1,
+   A2, A3, R, DZ, D1 are cheap and clear the board. None needs code. Then re-time a frame on a
+   quiet machine and ship v0.22.0 — the demo is 75 commits stale, and the filled screen, the visual
+   pass and this week's builds are all invisible until it moves.
+2. **F1 — the fight area as fog of war** (Caelan's queue, 09-11). A design pass first: which vision
+   defines the area, and dither or square. F3 then builds on F1's area; F2, the splat art, is small
+   and stands alone.
+3. **Small unblocked builds.** Streetlights light up at night, RESTART keeps the last run's pickups,
+   C4 (mystery meat on the throw path). Then §1 interiors once Z1/Z2 are ruled, and a carnival
+   ground once CG is. *(Earlier drafts of this list: B2 and B1 had already shipped; combat
+   legibility and the zone-§3 follow-ons merged 2026-09-13.)*
 
-Sessions 2 and 3 are **file-disjoint** and can run as parallel branches without conflict.
+Sessions 2 and 3 barely overlap: F1 lives in the renderer's fight passes; the small builds live in
+map JSON, `_fullReset` and the item code.
