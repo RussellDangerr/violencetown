@@ -83,3 +83,49 @@ describe('hudLayout (classic) is the old square', () => {
         assert.equal(b.current.y - a.current.y, 700 - 588);
     });
 });
+
+describe('hudLayout (fill): pinned to the corners', () => {
+    const screens = {
+        '1080p': computeViewport({ cssW: 1920, cssH: 1080, dpr: 1 }),
+        "Caelan's ultrawide": computeViewport({ cssW: 3440, cssH: 1440, dpr: 1 }),
+        'phone upright': computeViewport({ cssW: 390, cssH: 844, dpr: 3 }),
+    };
+    const WHEEL_REACH = 126;   // the open wheel's widest reach from its hub
+    const wheelBox = (hud) => ({ x: hud.wheel.cx - WHEEL_REACH, y: hud.wheel.cy - WHEEL_REACH, w: 2 * WHEEL_REACH, h: 2 * WHEEL_REACH });
+    const onScreen = (r, vp) => r.x >= 0 && r.y >= 0 && r.x + r.w <= vp.w && r.y + r.h <= vp.h;
+
+    for (const [name, vp] of Object.entries(screens)) {
+        test(`${name}: no two idle panels overlap under HIT_SLOP`, () => {
+            const rects = hudInteractiveRects('idle', vp);
+            for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++) {
+                assert.ok(!rectsOverlap(expandRect(rects[i].rect, HIT_SLOP), expandRect(rects[j].rect, HIT_SLOP)),
+                    `${rects[i].name} and ${rects[j].name} overlap`);
+            }
+        });
+
+        test(`${name}: every piece is on screen`, () => {
+            const hud = hudLayout(vp);
+            assert.ok(onScreen({ ...hud.hp, w: 170, h: 90 }, vp), 'HP panel');
+            assert.ok(onScreen(hud.log, vp), 'quest log');
+            assert.ok(onScreen(xmbBarPanelRect(3, hud.bar), vp), 'item bar');
+            assert.ok(onScreen(wheelBox(hud), vp), 'the open wheel');
+        });
+
+        test(`${name}: the item bar is centred, and the open wheel stays off it`, () => {
+            const hud = hudLayout(vp);
+            assert.equal(hud.bar.cx, vp.w / 2);
+            assert.ok(!rectsOverlap(wheelBox(hud), xmbBarPanelRect(3, hud.bar)));
+        });
+
+        test(`${name}: the buff bar stops short of the page buttons`, () => {
+            const hud = hudLayout(vp);
+            assert.ok(hud.buffsRight <= vp.w - 6 - 60 * vp.logicalPerCss);
+            assert.equal(hud.strip, vp.h);
+        });
+    }
+
+    test('on a wide screen the log and the item bar share one line', () => {
+        const hud = hudLayout(screens['1080p']);
+        assert.equal(hud.log.y + hud.log.h, xmbBarPanelRect(3, hud.bar).y + xmbBarPanelRect(3, hud.bar).h);
+    });
+});

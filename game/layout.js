@@ -178,16 +178,47 @@ export const QUESTLOG_RECT = { x: 6, y: 436, w: 340, h: 62 };
 
 // ── The HUD, placed for a viewport (plans/screen-fill.md) ──
 // Where every HUD piece sits on a given screen: the renderer draws there and
-// main.js hit-tests there, the same contract as the rects in this file. Stage
-// 1 of the build knows only the classic square, and reproduces it exactly.
+// main.js hit-tests there, the same contract as the rects in this file.
+const HUD_M = 6;               // margin from the screen's edge, logical px
+const HUD_GAP = 12;            // between stacked panels: two HIT_SLOPs, so tap zones never touch
+const PAGE_BUTTONS_CSS = 60;   // the ☰ ▤ page buttons' column, top-right: right 8 + width up to 44 + gap 8 (CSS px)
+const WHEEL_REACH = 126;       // the open wheel's widest reach from its hub, with the open overshoot
+const BAR_HALF = 160;          // the item bar's widest half-width: three chips (300) / 2 + 10
+const BAR_ABOVE = 78;          // the bar's panel runs from 78 above its anchor's bottom …
+const BAR_BELOW = 4;           // … to 4 below it (xmbBarPanelRect)
+
 export function hudLayout(vp = CLASSIC) {
+    if (vp.mode === 'classic') {
+        return {
+            hp: { x: 6, y: 6 },                                   // the HP panel's top-left (170 x 90)
+            buffsRight: CANVAS_INTERNAL_PX - 6, buffsTop: 6,      // the buff bar hangs from its top-right corner
+            log: { ...QUESTLOG_RECT, lines: 2 },                  // the quest log, and how many feed lines it shows
+            bar: XMB_ANCHOR_CLASSIC,                              // the item bar's anchor (xmbBarLayout)
+            wheel: { cx: RADIAL_CENTER_X, cy: RADIAL_CENTER_Y },  // the wheel's hub
+            strip: CANVAS_INTERNAL_PX,                            // the bottom hint strips rest on this y
+        };
+    }
+    return cornersLayout(vp);
+}
+
+// The HUD pinned to the screen's corners and edges: HP top-left, the buffs
+// top-right beside the page buttons, the log bottom-left and the item bar
+// bottom-centre on one line, the wheel opening bottom-right. A narrow screen
+// stacks the log above the bar and lifts the wheel above the bar's row.
+function cornersLayout(vp) {
+    const { w, h } = vp;
+    const cx = w / 2;
+    const barBottom = h - 16 - BAR_BELOW;              // the bar's panel ends 16 px up, as in the old square
+    const barTop = barBottom - BAR_ABOVE;
+    const sideBySide = HUD_M + QUESTLOG_RECT.w + HUD_GAP <= cx - BAR_HALF;
+    const logBottom = sideBySide ? h - 16 : barTop - HUD_GAP;
+    const log = { x: HUD_M, y: logBottom - QUESTLOG_RECT.h, w: QUESTLOG_RECT.w, h: QUESTLOG_RECT.h, lines: 2 };
+    const wheelBeside = w - HUD_M - 2 * WHEEL_REACH >= cx + BAR_HALF + HUD_GAP;
+    const wheel = { cx: w - HUD_M - WHEEL_REACH, cy: (wheelBeside ? h - 16 : barTop - HUD_GAP) - WHEEL_REACH };
     return {
-        hp: { x: 6, y: 6 },                                   // the HP panel's top-left (170 x 90)
-        buffsRight: CANVAS_INTERNAL_PX - 6, buffsTop: 6,      // the buff bar hangs from its top-right corner
-        log: { ...QUESTLOG_RECT, lines: 2 },                  // the quest log, and how many feed lines it shows
-        bar: XMB_ANCHOR_CLASSIC,                              // the item bar's anchor (xmbBarLayout)
-        wheel: { cx: RADIAL_CENTER_X, cy: RADIAL_CENTER_Y },  // the wheel's hub
-        strip: CANVAS_INTERNAL_PX,                            // the bottom hint strips rest on this y
+        hp: { x: HUD_M, y: HUD_M },
+        buffsRight: w - HUD_M - Math.ceil(PAGE_BUTTONS_CSS * vp.logicalPerCss), buffsTop: HUD_M,
+        log, bar: { cx, bottom: barBottom }, wheel, strip: h,
     };
 }
 export const LOG_MODAL_RECT = MODAL_RECT;
