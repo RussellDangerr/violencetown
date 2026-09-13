@@ -144,17 +144,19 @@ for any of them. `d1f286c` is the guard that makes that state fail loudly —
   read as highlighted UI cells. `PROP_SPRITES` derives the twelve entries from `OUTLINED_SPRITES`.
 - **Tents are tiles, not props.** A prop is centred on its base tile, so a 2-wide prop straddles
   three columns and cannot sit on the 2-tile grid the carnival's border band and tent blocks use;
-  and a prop blocks only its base cell. So: two tile ids, `TENT_GREEN` (34) and `TENT_TAN` (35).
+  and a prop blocks only its base cell. So: two tile ids, `GREEN_TENT` (34) and `TAN_TENT` (35).
   A tent cell draws the quadrant its parity picks (`tileFrame`) and paints `CIRCUS_GROUND` under
   itself first (`under`), so the tent's transparent corners show sand. 86 tents, checkerboarded;
   `tests/zone-identity.test.js` holds every tent cell to a whole, even-aligned 2×2 of one colour.
 - `GRAVESTONE` (51) and `TENT_STRIPE` (31) are **retired**, not allowlisted.
 - Walkability unchanged cell for cell in both zones; densified exits identical (checked against the
   prior commit through `GameMap`). Verified in the running game.
-- **Not done: the cemetery gate** `(41,18)+(42,18)`. Same geometry problem as the tents — a
-  `wTiles: 2` prop cannot centre on the 2-wide path — plus it would sit on a transition cell and
-  must not block. Needs a prop anchor option (`anchor: 'left'`) and `solid: false`; small, but its
-  own change.
+- **The cemetery gate — done later the same day** (`4a028c9`, `feature/ready-builds`). The
+  coordinates above were wrong: `(41,18)+(42,18)` are **minecart rail curves** at this sheet's
+  stride. The sheet's real arch is its arched wall opening, left and right pieces `(31,17)` and
+  `(33,17)`, outlined as one strip (not inset — the posts meet the fence flush) and placed as two
+  1×1 props, so no prop-anchor option was needed after all — only `shadow: false`, so no ellipse sits
+  in the doorway. One gateway in each fence opening, `solid: false`.
 
 **Found while verifying (fixed, `3378bb0`):** every zone's off-map margin had been drawing Sewer's
 new wall brick since Item 2 — `getTile` reports `WALL` off the map. `_drawTiles` paints the void

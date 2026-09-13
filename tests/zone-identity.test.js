@@ -74,6 +74,47 @@ describe('graveyard', () => {
         const passable = graves.filter(g => g.solid === false).map(g => `(${g.x}, ${g.y})`);
         assert.deepEqual(passable, []);
     });
+
+    // A stone gateway frames each opening in the fence: roguelikeSheet's arch
+    // pieces (31,17)+(33,17), outlined as one strip and placed as two 1x1 props.
+    // (zone-identity.md named (41,18)+(42,18) — those cells are minecart rails.)
+    const arches = (map.props || []).filter(p => p.type.startsWith('cemeteryArch'));
+
+    test('a gateway stands in the fence', () => {
+        assert.ok(arches.length > 0, 'no cemetery gateway in the graveyard');
+    });
+
+    test('every gateway is whole — a left piece with its right piece beside it', () => {
+        const at = (x, y) => arches.find(a => a.x === x && a.y === y)?.type;
+        const broken = arches.filter(a => a.type === 'cemeteryArchL' ? at(a.x + 1, a.y) !== 'cemeteryArchR'
+                                                                     : at(a.x - 1, a.y) !== 'cemeteryArchL');
+        assert.deepEqual(broken.map(a => `${a.type}@${a.x},${a.y}`), []);
+    });
+
+    test('you walk through a gateway — it never blocks', () => {
+        assert.deepEqual(arches.filter(a => a.solid !== false).map(a => `(${a.x}, ${a.y})`), []);
+    });
+});
+
+// ── Town: streetlights stand up ─────────────────────────────────────────────
+//
+// Was: STREETLIGHT, a one-cell tile drawing rpgUrban's squat lamp-with-a-red-
+// lens, which read as a parking meter. rpgUrban's real streetlights are two
+// cells tall and never fit a tile; as a 1x2 prop (the tree's shape) they do,
+// and the player walks behind the lamp head.
+
+describe('town streetlights', () => {
+    const map = loadMap('town-map.json');
+    const lamps = (map.props || []).filter(p => p.type === 'streetlight');
+
+    test('streetlights are tall props', () => {
+        assert.ok(lamps.length > 0, 'no streetlight props in Town');
+        assert.equal(sprites.PROP_SPRITES.streetlight?.hTiles, 2, 'a streetlight should stand two tiles tall');
+    });
+
+    test('the one-cell lamp tile is retired', () => {
+        assert.equal(TILES.STREETLIGHT, undefined);
+    });
 });
 
 // ── Item 3, circus bonus: tents ────────────────────────────────────────────
@@ -84,12 +125,12 @@ describe('graveyard', () => {
 // one whole 2x2 of a single colour. That is what this pins.
 
 describe('carnival tents', () => {
-    const map = loadMap('circus-map.json');
-    const tentIds = ['TENT_GREEN', 'TENT_TAN'].map(k => TILES[k]?.id);
+    const map = loadMap('carnival-map.json');
+    const tentIds = ['GREEN_TENT', 'TAN_TENT'].map(k => TILES[k]?.id);
     const at = (x, y) => (x >= 0 && y >= 0 && x < map.width && y < map.height) ? map.tiles[y * map.width + x] : -1;
 
     test('both tent colours exist as tiles and the carnival places both', () => {
-        assert.ok(tentIds.every(id => Number.isInteger(id)), 'TILES.TENT_GREEN / TILES.TENT_TAN are not defined');
+        assert.ok(tentIds.every(id => Number.isInteger(id)), 'TILES.GREEN_TENT / TILES.TAN_TENT are not defined');
         for (const id of tentIds) assert.ok(map.tiles.includes(id), `tent id ${id} is placed nowhere in the carnival`);
     });
 
@@ -109,8 +150,8 @@ describe('carnival tents', () => {
 
     test('a tent tile resolves to the quadrant its cell parity picks', () => {
         assert.equal(typeof sprites.tileFrame, 'function', 'sprites.js exports no tileFrame(ref, x, y)');
-        const ref = sprites.ZONE_TILE_SPRITE_MAP[TILES.TENT_GREEN?.id];
-        assert.ok(ref, 'TENT_GREEN has no sprite entry');
+        const ref = sprites.ZONE_TILE_SPRITE_MAP[TILES.GREEN_TENT?.id];
+        assert.ok(ref, 'GREEN_TENT has no sprite entry');
         const O = sprites.OUTLINED_SPRITES;
         assert.equal(sprites.tileFrame(ref, 10, 4).col, O.tentGreenTL);
         assert.equal(sprites.tileFrame(ref, 11, 4).col, O.tentGreenTR);

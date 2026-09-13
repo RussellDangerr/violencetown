@@ -43,6 +43,14 @@ export class GameMap {
             this.propSpawns.filter(p => p.solid !== false).map(p => `${p.x},${p.y}`)
         );
 
+        // Anchors: [{ x, y, toX, toY, toMap?, label?, requires?, requiresMsg? }] —
+        // grapple points (plans/grapple-swing.md). Bump one with the hook in your
+        // bag and you swing to (toX, toY) on this map, or out through `toMap`: the
+        // same shape a transition uses, so a cross-map anchor queues its transition
+        // when the swing lands. An anchor stands on something you bump — a solid
+        // prop or an unwalkable tile — never on open ground.
+        this.anchors = mapData.anchors || [];
+
         // Lights: [{ x, y, radius?, r?, g?, b? }] — emissive points (lamps, lit
         // windows, door spill) the day/night lighting grade adds as warm additive
         // glows after dusk (renderer._drawLighting). Static map data; no effect
@@ -148,6 +156,11 @@ export class GameMap {
     // Check if a position has a map transition
     getTransition(x, y) {
         return this.transitions.find(t => t.x === x && t.y === y) || null;
+    }
+
+    // The grapple anchor at a position, if any.
+    getAnchor(x, y) {
+        return this.anchors.find(a => a.x === x && a.y === y) || null;
     }
 }
 

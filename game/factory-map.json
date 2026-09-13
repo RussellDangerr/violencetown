@@ -41,7 +41,8 @@
     ],
     "items": [
         {"type": "rock", "x": 10, "y": 10},
-        {"type": "rock", "x": 10, "y": 10}
+        {"type": "rock", "x": 10, "y": 10},
+        {"type": "ray_gun", "x": 3, "y": 2}
     ],
     "transitions": [
         {"x": 28, "y": 14, "toMap": "town-map.json", "toX": 4, "toY": 12, "label": "[East — back out to the street]"}

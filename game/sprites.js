@@ -206,7 +206,7 @@ export const SHEETS = {
 // pixels. It's now roguelikeDungeon (6,11), a bordered teal pool, so Sewer's
 // signature hazard tile no longer doubles as Factory's.
 export const TILE_SPRITE_MAP = {
-    0: { sheet: 'roguelikeDungeon', col: 8, row: 0 },  // wall — plain grey brick
+    0: { sheet: 'roguelikeDungeon', col: 8, row: 0, under: 'fill' },  // wall — plain grey brick (10 see-through corner px: its own dark colour under them reads as mortar)
     1: { sheet: 'tinyDungeon', col: 0, row: 4 },  // floor — clean tan dungeon stone
     2: { sheet: 'roguelikeDungeon', col: 6, row: 11 }, // sludge — bordered teal pool
     3: { sheet: 'tinyDungeon', col: 4, row: 4 },  // gap — speckled tan floor variant
@@ -215,17 +215,18 @@ export const TILE_SPRITE_MAP = {
     6: { sheet: 'tinyDungeon', col: 4, row: 3 },  // boss floor — seamless grey brick, the boss's two-cell dais (was (9,4), Factory's FACTORY_FLOOR; (9-11,4) are wall-run pieces with dark end caps and seam when tiled)
     7: { sheet: 'tinyDungeon', col: 5, row: 2 },  // boss trigger — red banner on stone (accent)
     22: { sheet: 'tinyDungeon', col: 5, row: 3 }, // PORTCULLIS — spiked vertical gate
-    23: { sheet: 'tinyDungeon', col: 3, row: 5 }, // BARRICADE — wooden crate front (destructible)
+    23: { sheet: 'tinyDungeon', col: 3, row: 5, under: 1 }, // BARRICADE — wooden crate front (destructible), on sewer floor
 };
 
 // ── Town tile coords (Tiny Town pack) ───────────────────────────────────────
 // Tiny Town has rich terrain/buildings/fences but ships no urban props (cars,
 // streetlights, manholes, trashcans, benches). The packed roguelikeCity atlas
 // supplies the building-wall pick at 14 and the sewer manhole at 16 — it's
-// placed and working, so it stays put. Streetlight/bench/trash-can (18/20/21)
-// come from rpgUrban instead (visual-pass, 2026-09-06): Kenney's RPG Urban
-// Pack is the same gutter-free 16px construction as tinyTown, so the street
-// furniture now matches the terrain it sits on rather than a different series.
+// placed and working, so it stays put. Bench/trash-can (20/21) come from
+// rpgUrban instead (visual-pass, 2026-09-06): Kenney's RPG Urban Pack is the
+// same gutter-free 16px construction as tinyTown, so the street furniture
+// matches the terrain it sits on rather than a different series. Streetlights
+// are props now (PROP_SPRITES.streetlight) — id 18 is retired.
 export const TOWN_TILE_SPRITE_MAP = {
     10: null,                                        // town wall edge — dark fallback (frames the map)
     11: { sheet: 'tinyTown', col: 1, row: 9 },       // sidewalk — light gray stone slab
@@ -234,11 +235,10 @@ export const TOWN_TILE_SPRITE_MAP = {
     14: { sheet: 'roguelikeCity', col: 1, row: 6 },  // building wall — red-brick city facade (world-dressing; was tinyTown tan brick)
     15: { sheet: 'tinyTown', col: 1, row: 7 },       // door — brown door in wood facade
     16: { sheet: 'roguelikeCity', col: 9, row: 24 }, // sewer entry — round manhole cover set in the pavement
-    17: { sheet: 'tinyTown', col: 9, row: 3 },       // fence — vertical wood plank
-    18: { sheet: 'rpgUrban', col: 1, row: 7 },       // streetlight — lamp fixture with a red signal lens, on a short post (the taller two-cell lamps at (2,6)+(2,7)/(3,6)+(3,7) don't fit a single tile)
+    17: { sheet: 'tinyTown', col: 9, row: 3, under: 12 },  // fence — vertical wood plank, gaps showing the road it lines
     19: { sheet: 'car', col: 0, row: 0 },            // car — Kenney roguelikeCity beater (world-dressing; was the wooden-bucket placeholder)
-    20: { sheet: 'rpgUrban', col: 7, row: 9 },       // bench — wooden bench, slatted seat on two legs
-    21: { sheet: 'rpgUrban', col: 9, row: 9 },       // trash can — grey bin with a maroon base band
+    20: { sheet: 'rpgUrban', col: 7, row: 9, under: 11 },  // bench — wooden bench, slatted seat on two legs, on sidewalk
+    21: { sheet: 'rpgUrban', col: 9, row: 9, under: 11 },  // trash can — grey bin with a maroon base band, on sidewalk
 };
 
 // ── Item sprites (Tiny packs) ───────────────────────────────────────────────
@@ -542,6 +542,10 @@ export const OUTLINED_SPRITES = {
     // would draw a grid across the ground instead of a seamless surface.
     floorPlainA: 20, floorPlainB: 21,
     floorRugA: 22, floorRugB: 23,
+
+    // The graveyard's stone gateway — two halves of one arch, outlined as a
+    // single strip so the lintel joins without a seam (see the generator).
+    cemeteryArchL: 24, cemeteryArchR: 25,
 };
 
 // ── Props (tall, ground-anchored overlay objects — depth/verticality) ───────
@@ -560,6 +564,21 @@ export const PROP_SPRITES = {
     // never when merely passing alongside. shadowRx/Ry size the trunk's pool.
     tree: { sheet: 'tinyTown', sx: 4 * 16, sy: 0, sw: 16, sh: 32, wTiles: 1, hTiles: 2, shadowRx: 12, shadowRy: 4.5 },
 
+    // rpgUrban's double-arm streetlight — 1x2 cells (col 3, rows 6-7), the
+    // tree's shape. It was a one-cell STREETLIGHT tile drawing the squat
+    // lamp-with-a-red-lens at (1,7), which read as a parking meter; the real
+    // streetlights are two cells tall and could never fit a tile. The
+    // double arm is symmetric, so it reads right on any side of any road —
+    // the single-arm (2,6)+(2,7) would point its lamp away from half of them.
+    streetlight: { sheet: 'rpgUrban', sx: 3 * 16, sy: 6 * 16, sw: 16, sh: 32, wTiles: 1, hTiles: 2, shadowRx: 7, shadowRy: 2.5 },
+
+    // A jutting sandstone spire — roguelikeDungeon (3,0), a gutter sheet, so the
+    // pixel region is at stride 17. It is what a grappling hook bites on: the
+    // canyon's climb-out anchor stands on one (map `anchors`, plans/grapple-swing.md).
+    // A rock rather than the sheet's rope-and-hook hoist at (5,9) — with a rope
+    // already hanging there, you would not need Pike's.
+    grappleRock: { sheet: 'roguelikeDungeon', sx: 3 * 17, sy: 0, sw: 16, sh: 16, wTiles: 1, hTiles: 1, shadowRx: 9, shadowRy: 3 },
+
     // Gravestones — one prop per silhouette on the outlined strip, keyed by the
     // strip's own names. 1x1: the art is no taller than a cell, so what a prop
     // buys over the old GRAVESTONE tile is a different stone per grave, a
@@ -567,6 +586,13 @@ export const PROP_SPRITES = {
     ...Object.fromEntries(Object.entries(OUTLINED_SPRITES)
         .filter(([name]) => name.startsWith('gravestone'))
         .map(([name, col]) => [name, { sheet: 'outlined', sx: col * 16, sy: 0, sw: 16, sh: 16, wTiles: 1, hTiles: 1, shadowRx: 10, shadowRy: 3.5 }])),
+
+    // The graveyard's stone gateway, a left and a right piece placed side by
+    // side over a 2-tile path, `solid: false` in the map so you walk through.
+    // No ground shadow: a prop's shadow is one ellipse centred in its cell,
+    // which would sit in the middle of the doorway, not under the posts.
+    cemeteryArchL: { sheet: 'outlined', sx: OUTLINED_SPRITES.cemeteryArchL * 16, sy: 0, sw: 16, sh: 16, wTiles: 1, hTiles: 1, shadow: false },
+    cemeteryArchR: { sheet: 'outlined', sx: OUTLINED_SPRITES.cemeteryArchR * 16, sy: 0, sw: 16, sh: 16, wTiles: 1, hTiles: 1, shadow: false },
 };
 
 // ── Emote balloons (Kenney Emote Pack, Pixel Style 1) ───────────────────────
@@ -607,10 +633,14 @@ export const MARK_SPRITES = {
 // `sheet:` names the SpriteSheet key; renderer._drawTiles resolves it
 // against `game.renderer.sprites[sheet]`. Every entry must name a sheet explicitly.
 //
-// Two optional fields, both used only by the circus tents so far:
+// Two optional fields:
 //   quad  — the tile is one quadrant of a 2x2 picture; tileFrame picks which.
-//   under — a tile id painted first, so the picture's transparent edges show
-//           that ground instead of the cleared canvas.
+//   under — what is painted first, so see-through art shows ground rather than
+//           a hole in the cleared canvas: a tile id, or 'fill' for the tile's
+//           own flat colour. Required for any placed tile whose art has a single
+//           see-through pixel — tests/tile-coverage.test.js measures the PNGs.
+//           (Without it the hole was black by day and the lighting pass's
+//           near-white at dusk: the town's benches and fences flickered.)
 
 // The cell of art a tile draws at world (x, y). Nearly every tile is one cell,
 // the same wherever it lies. A `quad` tile's cell comes from the parity of
@@ -635,8 +665,8 @@ export const ZONE_TILE_SPRITE_MAP = {
     30: { sheet: 'tinyTown', col: 1, row: 2 },   // CIRCUS_GROUND — packed dirt/sand
     32: { sheet: 'tinyTown', col: 2, row: 0 },   // CONFETTI      — grass dotted with orange flowers
     33: { sheet: 'tinyTown', col: 4, row: 3 },   // SAWDUST       — packed tan dirt
-    34: { sheet: 'outlined', quad: outlinedQuad('tentGreen'), under: 30 }, // TENT_GREEN
-    35: { sheet: 'outlined', quad: outlinedQuad('tentTan'),   under: 30 }, // TENT_TAN
+    34: { sheet: 'outlined', quad: outlinedQuad('tentGreen'), under: 30 }, // GREEN_TENT
+    35: { sheet: 'outlined', quad: outlinedQuad('tentTan'),   under: 30 }, // TAN_TENT
 
     // Factory — needed no new sheet (zone-identity.md Item 2). WALL moves to
     // roguelikeCity's chain-link fencing so Factory reads industrial rather
@@ -673,16 +703,16 @@ export const ZONE_TILE_SPRITE_MAP = {
     // pipe wrench at (1,7), and hazard barriers at (5,8)/(6,8) — all unused,
     // already loaded (no new SHEETS entry needed to use any of it).
     40: { sheet: 'tinyDungeon', col: 9, row: 4 },     // FACTORY_FLOOR — clean gray stone slab
-    41: { sheet: 'roguelikeCity', col: 16, row: 17 }, // FACTORY_WALL  — chain-link fencing
+    41: { sheet: 'roguelikeCity', col: 16, row: 17, under: 40 }, // FACTORY_WALL  — chain-link fencing, factory floor through the mesh
     42: { sheet: 'tinyDungeon', col: 8, row: 2 },     // GOO_VISUAL    — green ooze hatch
-    43: { sheet: 'tinyDungeon', col: 7, row: 6 },     // CONVEYOR_VIS  — rail-and-crosstie belt motif
+    43: { sheet: 'tinyDungeon', col: 7, row: 6, under: 40 },     // CONVEYOR_VIS  — rail-and-crosstie belt motif, on factory floor
 
     // Graveyard — Tiny Town dirt/foliage. The graves are props (PROP_SPRITES
     // gravestone*), a silhouette per grave; they replaced one tinyDungeon (4,5)
     // cross tiled over all 96 grave cells.
     50: { sheet: 'tinyTown',    col: 1, row: 1 }, // GRAVE_DIRT    — brown dirt patch
     52: { sheet: 'tinyTown',    col: 1, row: 0 }, // DEAD_GRASS    — tufted grass (ground fill; toadstools tiled too busy)
-    53: { sheet: 'tinyTown',    col: 9, row: 3 }, // IRON_FENCE    — wood fence (no iron railing in pack)
+    53: { sheet: 'tinyTown',    col: 9, row: 3, under: 52 }, // IRON_FENCE    — wood fence (no iron railing in pack), dead grass between the planks
 };
 
 // ── Phase B TODO ────────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 {
-    "_scaffold": "PARTIAL (Phase 3 wired the MECHANICS onto a still-placeholder room). Functional now: Pike the prospector (buy the rope / take his deal / kill him for it), 2 canyon critters for the fight-out beat, and the grappling-hook-GATED climb-out to Downtown. The GEOMETRY is Caelan's to hand-author — the real canyon (the wrecked car, Pike's sunken covered wagon, ledges, and the Phase-5 GRAPPLE_ANCHOR that replaces this plain hook-gated exit with an actual swing).",
+    "_scaffold": "PARTIAL (Phase 3 wired the MECHANICS onto a still-placeholder room). Functional now: Pike the prospector (buy the rope / take his deal / kill him for it), 2 canyon critters for the fight-out beat, and the grappling-hook-GATED climb-out to Downtown. The GEOMETRY is Caelan's to hand-author — the real canyon (the wrecked car, Pike's sunken covered wagon, ledges. The climb-out is already a real grapple anchor on a jutting rock — see `anchors`).",
     "width": 14,
     "height": 10,
     "spawn": {"x": 7, "y": 5},
@@ -25,7 +25,11 @@
     "examinables": [
         {"id": "canyon_wreck", "x": 7, "y": 6, "text": "[Your car, folded around a boulder — a total write-off. Half-buried in the old silt beside it: the ribs of a COVERED WAGON, and a grizzled man perched on a rock like he grew there.]"}
     ],
-    "transitions": [
+    "props": [
+        {"type": "grappleRock", "x": 7, "y": 1}
+    ],
+    "anchors": [
         {"x": 7, "y": 1, "toMap": "downtown-map.json", "toX": 8, "toY": 10, "label": "[You sink the hook into the rockface and haul yourself up — out of the canyon, toward Downtown.]", "requires": "grappling_hook", "requiresMsg": "[Sheer rock, straight up. You'd need a good hook and a rope to climb out of this pit — and Pike has one.]"}
-    ]
+    ],
+    "transitions": []
 }

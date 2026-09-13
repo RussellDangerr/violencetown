@@ -23,7 +23,8 @@ export const TILES = {
     DOOR:         { id: 15, walkable: true,  hazard: null, fallbackColor: '#8b6914' },
     SEWER_ENTRY:  { id: 16, walkable: true,  hazard: null, fallbackColor: '#2a1a0a' },
     FENCE:        { id: 17, walkable: false, hazard: null, fallbackColor: '#5a4a3a' },
-    STREETLIGHT:  { id: 18, walkable: false, hazard: null, fallbackColor: '#4a4a4a' },
+    // 18 was STREETLIGHT, a one-cell lamp tile. Streetlights are two-tile-tall
+    // props now (sprites.js PROP_SPRITES) — retired; don't reuse the id.
     CAR:          { id: 19, walkable: false, hazard: null, fallbackColor: '#884444' },
     BENCH:        { id: 20, walkable: false, hazard: null, fallbackColor: '#6a5a3a' },
     TRASHCAN:     { id: 21, walkable: false, hazard: null, fallbackColor: '#4a5a4a' },
@@ -40,8 +41,8 @@ export const TILES = {
     CIRCUS_GROUND: { id: 30, walkable: true,  hazard: null, fallbackColor: '#c4a070' },
     CONFETTI:      { id: 32, walkable: true,  hazard: null, fallbackColor: '#e8c060' },
     SAWDUST:       { id: 33, walkable: true,  hazard: null, fallbackColor: '#a08050' },
-    TENT_GREEN:    { id: 34, walkable: false, hazard: null, fallbackColor: '#4a9a5e' },
-    TENT_TAN:      { id: 35, walkable: false, hazard: null, fallbackColor: '#d9c9a0' },
+    GREEN_TENT:    { id: 34, walkable: false, hazard: null, fallbackColor: '#4a9a5e' },
+    TAN_TENT:      { id: 35, walkable: false, hazard: null, fallbackColor: '#d9c9a0' },
 
     // Factory tiles (40-49) — Oddworld-coded industrial, alien-occupied
     FACTORY_FLOOR: { id: 40, walkable: true,  hazard: null, fallbackColor: '#3a3a3e' },
@@ -62,6 +63,18 @@ export const TILE_BY_ID = {};
 for (const [key, def] of Object.entries(TILES)) {
     def.name = key;
     TILE_BY_ID[def.id] = def;
+}
+
+// A tile's name as Examine reads it, derived from its key — FACTORY_FLOOR →
+// "Factory floor", GOO_VISUAL → "Goo" (render-hint words dropped). No per-tile
+// authoring (plans/layered-examine.md), so a key that reads badly gets renamed
+// rather than special-cased. Null for an id that is not a tile.
+export function tileDisplayName(id) {
+    const key = TILE_BY_ID[id]?.name;
+    if (!key) return null;
+    const words = key.toLowerCase().split('_').filter(w => w && w !== 'visual' && w !== 'vis');
+    const s = words.join(' ');
+    return s ? s.charAt(0).toUpperCase() + s.slice(1) : null;
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────

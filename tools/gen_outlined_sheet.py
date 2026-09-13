@@ -52,6 +52,10 @@ Floors are extracted WITHOUT any outline or inset — deliberately. They are
 tileable ground, drawn edge-to-edge against their neighbors; an outline
 would draw a visible grid across the floor instead of a seamless surface.
 
+The cemetery gateway (added 2026-09-10) is outlined but NOT inset — see the
+note on GATEWAYS below. It is appended after the floors so no existing column
+moves.
+
 Output: game/assets-placeholder/kenney/rlOutlined_packed.png — a single
 packed (gutter-free) row of 16x16 cells, so it registers in sprites.js with
 padding: 0 (unlike its 1px-gutter source). Re-run and copy the printed
@@ -103,6 +107,19 @@ FLOOR = [
     ("floorPlainB", (6, 2)),
     ("floorRugA",   (13, 12)),
     ("floorRugB",   (14, 12)),
+]
+
+# A stone gateway for the graveyard's fence: the left and right pieces of the
+# sheet's arched wall opening, (31,17) and (33,17), placed side by side so they
+# frame a 2-tile path. (zone-identity.md named (41,18)+(42,18) as the gate —
+# at this stride those cells are minecart rails.) Assembled FIRST and outlined
+# ONCE, like the tents, so the join between the pieces stays seamless. Unlike
+# the tents it is NOT inset: its posts are flush with every edge of the strip,
+# the shrink-inset would squash a 32x16 strip unevenly, and flush is right —
+# the posts meet the fence on either side, where an outline would draw a seam.
+# Appended last, so every existing column index above stays where it was.
+GATEWAYS = [
+    ("cemeteryArch", [(31, 17), (33, 17)]),
 ]
 
 
@@ -210,6 +227,16 @@ def build():
         columns.append((name, extract(sheet, col, row)))
         floor_names.append(name)
 
+    gateway_names = []
+    for gate_name, pieces in GATEWAYS:
+        strip = Image.new('RGBA', (CELL * len(pieces), CELL), (0, 0, 0, 0))
+        for i, (col, row) in enumerate(pieces):
+            strip.paste(extract(sheet, col, row), (CELL * i, 0))
+        strip = outline(strip)
+        for suffix, i in zip(("L", "R"), range(len(pieces))):
+            columns.append((gate_name + suffix, strip.crop((CELL * i, 0, CELL * (i + 1), CELL))))
+        gateway_names.append(gate_name)
+
     atlas = Image.new('RGBA', (CELL * len(columns), CELL), (0, 0, 0, 0))
     for i, (_, img) in enumerate(columns):
         atlas.paste(img, (i * CELL, 0))
@@ -226,6 +253,7 @@ def build():
     print(f"shifted 1px, lossless:         {report['shifted']}")
     print(f"shrunk ~1px inset, no crop:    {report['shrunk']}")
     print(f"not outlined, tileable floor:  {floor_names}")
+    print(f"outlined in place, no inset:   {gateway_names}")
 
 
 if __name__ == '__main__':
