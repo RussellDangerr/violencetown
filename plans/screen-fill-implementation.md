@@ -33,7 +33,7 @@
   - the player's tile always sits at logical (288, 288), which is `half * TILE_PX` with `half = 9`.
 - **`game/layout.js`** is the shared geometry module: the renderer draws panels at its rects, and `main.js` hit-tests taps against the same rects.
 - **Menus** — the Remoticon (device), offer screen, dialogue, log history, target list, item overlay, inspect panel and ending card — are laid out in the 608×608 space. They keep those layouts; this plan draws them inside a 608×608 box centred on the screen.
-- **Source pins.** `tests/offer-wiring.test.js` regex-matches two things in `renderer.js`'s `renderFrame`. Keep the line `if (game.state === 'trade') this._drawOfferScreen(game);` exactly, and keep a line beginning `this._menuPanelRect = CLOSE_PANEL` after the dispatch's first `} finally {`.
+- **Source pins.** `tests/offer-wiring.test.js` regex-matches two things in `renderer.js`'s `renderFrame`. Keep the line `if (game.state === 'trade') this._drawOfferScreen(game);` exactly, and keep a line beginning `this._menuPanelRect = CLOSE_PANEL` after the dispatch's first `} finally {`. It also pins `main.js`'s trade routing, `this._tapOffer(pt)`: Task 7 passes `mpt` there, so that regex becomes `this\._tapOffer\(m?pt\)` (found in execution).
 - **Tests that lift code from source.** Several tests extract `main.js` methods by name (`liveMethod`), including `_tapOffer` and `_pointInRect`. This plan converts tap points into menu space *before* calling the menu handlers, so those handlers' bodies do not change.
 - **Other branches.** `feature/diagonal-prototype` (June 2026, 8-way movement) is unmerged and touches `main.js`. It is Caelan's call; do not merge it or rebase onto it.
 

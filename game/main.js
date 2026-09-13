@@ -3,7 +3,7 @@
 // Bump-to-attack. 1-9 select item, Space uses with canvas overlay.
 
 import { Renderer } from './renderer.js';
-import { pickCanvasCss } from './canvas-fit.js';
+import { computeViewport, screenToTile, clientToScreen, toMenu } from './viewport.js';   // (screen-fill) the screen's geometry
 import { loadMap } from './map.js';
 import { loadAllSprites } from './sprites.js';
 import { BitmapFont } from './bitmap-font.js';
@@ -36,9 +36,9 @@ import { QuestEngine } from './quests.js';
 import { doExamine, resolveExamine } from './examine.js';
 import { recordDrop, pendingDrops, dropLoadout } from './drops.js'; // per-zone runtime dropped-items layer (pure, node-tested)
 import {
-    CANVAS_INTERNAL_PX, HIT_SLOP, THROW_RECTS,
+    HIT_SLOP, throwRects,
     HOTBAR_X_START, HOTBAR_Y, HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_STRIDE, HOTBAR_SLOTS,
-    RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, wheelRingR, QUESTLOG_RECT, LOG_MODAL_RECT, targetListRowRect, itemOverlayRowRect,
+    WHEEL_HUB_R, wheelRingR, LOG_MODAL_RECT, targetListRowRect, itemOverlayRowRect,
     EQUIPMENT_MODAL_RECT, EQUIP_SLOT_RECTS,
     DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceBagSlotRects, deviceEquipLayout, deviceRingsLayout,
     inspectorActionRects, gearOptionRects,
@@ -907,16 +907,17 @@ class Game {
 
     // ── Canvas fit ───────────────────────────────────────────────────────────
 
-    // Size the canvas so one art pixel is a whole number of device pixels.
-    // Called on boot, on resize, and when the window moves between displays of
-    // different DPR (a browser zoom does the same thing).
+    // Size the canvas for the window through the viewport (game/viewport.js),
+    // and hand the viewport to the renderer, which draws with it. Called on
+    // boot, on resize, and when the window moves between displays of different
+    // DPR (a browser zoom does the same thing).
     _fitCanvas() {
         const canvas = this.renderer?.canvas;
         if (!canvas) return;
-        const avail = Math.min(window.innerHeight - 16, window.innerWidth - 16, 1024);
-        const css = pickCanvasCss(avail, window.devicePixelRatio);
-        canvas.style.width  = `${css}px`;
-        canvas.style.height = `${css}px`;
+        const vp = computeViewport({ mode: 'classic', cssW: window.innerWidth, cssH: window.innerHeight, dpr: window.devicePixelRatio });
+        this.renderer.setViewport(vp);
+        canvas.style.width  = `${vp.cssW}px`;
+        canvas.style.height = `${vp.cssH}px`;
     }
 
     // ── Splash ───────────────────────────────────────────────────────────────
@@ -1802,19 +1803,17 @@ class Game {
         document.getElementById('pause-options')?.addEventListener('click', () => this._openOptionsModal());
     }
 
-    // Convert a pointer event's clientX/clientY into the canvas's internal
-    // 608×608 coordinate space. The canvas is CSS-scaled to fit the viewport
-    // (aspect-ratio:1, height:100% on desktop, viewport-bounded on mobile),
-    // so we scale by the bounding rect ratio. Returns null if the canvas
-    // hasn't laid out yet (extremely rare; defensive).
+    // A pointer event → the screen's logical coordinates: the canvas's drawn
+    // rect maps onto the viewport's w x h. Null if the canvas hasn't laid out
+    // yet (extremely rare; defensive).
     _canvasLocalCoords(e, canvas) {
-        const rect = canvas.getBoundingClientRect();
-        if (rect.width === 0 || rect.height === 0) return null;
-        return {
-            x: (e.clientX - rect.left) * (CANVAS_INTERNAL_PX / rect.width),
-            y: (e.clientY - rect.top)  * (CANVAS_INTERNAL_PX / rect.height),
-        };
+        return clientToScreen(this._vp(), e.clientX, e.clientY, canvas.getBoundingClientRect());
     }
+
+    // (screen-fill) The viewport in force and the HUD laid out for it: the
+    // renderer's own objects, so a hit-test reads exactly what was drawn.
+    _vp()  { return this.renderer._view(); }
+    _hud() { return this.renderer._hud(); }
 
     // True while a transient UI animation is in flight (overlay slide-in or
     // radial wheel rotation). Mirrors the keyboard input gate at line 313 —
@@ -1871,6 +1870,9 @@ class Game {
         const pt = this._canvasLocalCoords(e, canvas);
         if (!pt) return;
         e.preventDefault();
+        // (screen-fill) Menus are laid out in the 608x608 menu space and drawn in
+        // the viewport's centred menu box: their handlers get points in that space.
+        const mpt = toMenu(this._vp(), pt);
 
         // (menu grammar) Universal ✕ / tap-outside close. The renderer stashed the
         // open Menu's panel rect + ✕ rect; a tap on the ✕ or anywhere OUTSIDE the
@@ -1887,29 +1889,31 @@ class Game {
             // shallow wheel un-closable by a nearby tap (a 160px tap was neither a
             // quadrant hit nor an outside-close). Mirrors the far-tap ignore in
             // _tapRadialMenu (wheelRingR(path.length)[1] + 12), plus HIT_SLOP.
-            const _dx = pt.x - RADIAL_CENTER_X, _dy = pt.y - RADIAL_CENTER_Y;
+            const _wc = this._hud().wheel;
+            const _dx = pt.x - _wc.cx, _dy = pt.y - _wc.cy;
             const _cull = wheelRingR(this.wheel.path.length)[1] + HIT_SLOP + 12;
             if (_dx * _dx + _dy * _dy > _cull * _cull) { this._closeWheel(); return; }
         }
 
         // Log modal is fully modal — route taps to it and nothing behind it.
         if (this.state === STATE.INSPECT) { this._closeInspect(); return; }
-        if (this.state === STATE.LOG_MODAL) { this._tapLogModal(pt); return; }
+        if (this.state === STATE.LOG_MODAL) { this._tapLogModal(mpt); return; }
 
         // The offer screen is fully modal too — route taps to it.
-        if (this.state === STATE.TRADE) { this._tapOffer(pt); return; }
+        if (this.state === STATE.TRADE) { this._tapOffer(mpt); return; }
         if (this.state === STATE.DIALOGUE) {
             // Touch/pointer drag scrolls the response list when it overflows; a press
             // that doesn't drag resolves as a normal row pick on pointerup. Non-
             // scrollable dialogues keep the immediate pick-on-down feel.
             const optsR = this.renderer._dialogueOptsRect;
-            if (this.renderer._dialogueScrollable && optsR && this._pointInRect(pt, optsR)) {
-                this._dlgDrag = { startY: pt.y, lastY: pt.y, downPt: pt, moved: false };
+            if (this.renderer._dialogueScrollable && optsR && this._pointInRect(mpt, optsR)) {
+                // The drag measures screen-y deltas; the pick point is menu space.
+                this._dlgDrag = { startY: pt.y, lastY: pt.y, downPt: mpt, moved: false };
                 return;
             }
-            this._tapDialogue(pt); return;   // click a choice row (✕ + tap-outside handled above)
+            this._tapDialogue(mpt); return;   // click a choice row (✕ + tap-outside handled above)
         }
-        if (this.state === STATE.DEVICE) { this._tapDevice(pt); return; }   // (Slice 3) in-panel tab/body taps (✕ + outside handled above)
+        if (this.state === STATE.DEVICE) { this._tapDevice(mpt); return; }   // (Slice 3) in-panel tab/body taps (✕ + outside handled above)
 
         // Priority order is by modality: the most exclusive overlay wins. A
         // tap while the radial menu is open should drive the radial menu,
@@ -1923,17 +1927,17 @@ class Game {
             return;
         }
         if (this.state === STATE.TARGET_LIST) {
-            this._tapTargetList(pt);
+            this._tapTargetList(mpt);
             return;
         }
         if (this.state === STATE.ITEM_OVERLAY) {
-            this._tapItemOverlay(pt);
+            this._tapItemOverlay(mpt);
             return;
         }
         // Tapping the on-canvas Quest Log panel opens the full history modal —
         // the touch equivalent of pressing L. IDLE only; in a menu the tap
         // should drive the menu, not pop the log.
-        if (this.state === STATE.IDLE && this._pointInRect(pt, QUESTLOG_RECT, HIT_SLOP)) {
+        if (this.state === STATE.IDLE && this._pointInRect(pt, this._hud().log, HIT_SLOP)) {
             this._openLogModal();
             return;
         }
@@ -1961,7 +1965,7 @@ class Game {
         // In IDLE the bottom bar is the XMB (handled above by _tapXmbBar), so we
         // must NOT fall through to the removed flat-hotbar geometry — doing so
         // opened an item overlay for a slot that is no longer drawn.
-        if (this.state === STATE.ITEM_SELECTED) this._tapHotbar(pt);
+        if (this.state === STATE.ITEM_SELECTED) this._tapHotbar(mpt);   // the legacy flat hotbar was laid out in the 608 space
     }
 
     // Touch long-press: a quick tap already fired the default action; if the finger
@@ -2036,8 +2040,9 @@ class Game {
             left:  { dx: -1, dy:  0 },
             right: { dx:  1, dy:  0 },
         };
+        const R = throwRects(this._vp());   // around the player's tile, as drawn
         for (const dir of ['up', 'right', 'down', 'left']) {
-            if (this._pointInRect(pt, THROW_RECTS[dir], HIT_SLOP)) {
+            if (this._pointInRect(pt, R[dir], HIT_SLOP)) {
                 const vec = dirVecs[dir];
                 this._doThrow(vec);   // (Phase 6a) throw-only now — give left this prompt
                 return;
@@ -2055,7 +2060,8 @@ class Game {
         // BOTTOM quadrant (or the hub) goes BACK. AIM/CONFIRM overlays don't draw
         // the compass, so they keep the interim hub-cancels / tap-commits behaviour.
         const w = this.wheel;
-        const dx = pt.x - RADIAL_CENTER_X, dy = pt.y - RADIAL_CENTER_Y;
+        const wc = this._hud().wheel;
+        const dx = pt.x - wc.cx, dy = pt.y - wc.cy;
         const r = Math.hypot(dx, dy);
 
         if (w.confirming || w.aiming) {
@@ -2919,17 +2925,12 @@ class Game {
     // Talk, Trade, Hit, Take…), colour-coded, alphabetical; picks route to the
     // existing resolvers. Only the ACTION wheel is radial, so the two never mix.
 
-    // 608-space canvas point → world tile (camera inverse; tiles are
-    // 608/(2·half+1) px, player centred at 304, scroll ~0 while idle).
+    // Screen point → world tile: the viewport's inverse of where tiles are
+    // drawn, folding in the camera's mid-step scroll.
     _screenToTile(pt) {
-        const half = (this.renderer && this.renderer.half) || 9;
-        const TILE = 608 / (2 * half + 1);
         const sx = (this.renderer && this.renderer._scrollX) || 0;
         const sy = (this.renderer && this.renderer._scrollY) || 0;
-        return {
-            x: Math.floor((pt.x + sx) / TILE - half + this.playerX),
-            y: Math.floor((pt.y + sy) / TILE - half + this.playerY),
-        };
+        return screenToTile(this._vp(), pt, this.playerX, this.playerY, sx, sy);
     }
 
     // What's targetable at a tile: a live entity, else a ground item, else an
@@ -3348,7 +3349,7 @@ class Game {
     _tapXmbBar(pt) {
         const bar = buildXmbBar(this.inventory);
         if (!bar.columns.length) return false;
-        const lay = xmbBarLayout(bar);
+        const lay = xmbBarLayout(bar, this._hud().bar);
         for (const chip of lay.chips) {
             if (this._pointInRect(pt, chip, HIT_SLOP)) {
                 this.xmbCat = chip.key; audio.playSfx('menu-tick'); this._render(); return true;
