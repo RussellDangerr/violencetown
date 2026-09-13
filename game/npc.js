@@ -346,12 +346,16 @@ export function tickNpcState(game, npc, clock = game.turn) {
                 npc.entity.hp, npc.entity.maxHp, kitDefs,
                 (d) => kitHealValue(d, dweller),
                 (npc.buffs ?? []).some(b => (b.dmg ?? 0) < 0));   // already regenerating?
+            // `heal` on a report is the HP it actually gave (0 for a poition, whose
+            // heal arrives tick by tick); main.js floats it over whoever it healed.
+            const hpBeforeKit = npc.entity.hp;
             if (pick && applyKitItem(pick.def, npc, dweller)) {
                 npc.loadout = (npc.loadout ?? []).filter((_, i) => i !== pick.index);
                 messages.push({
                     text: `[${npc.name ?? npc.type} digs out ${pick.def.name} and uses it.]`,
                     sourceEnemy: npc,
                     category: 'combat',
+                    heal: npc.entity.hp - hpBeforeKit,
                 });
                 break;   // eating IS the turn
             }
@@ -378,19 +382,24 @@ export function tickNpcState(game, npc, clock = game.turn) {
                     allyList.map(a => ({ hp: a.entity.hp, maxHp: a.entity.maxHp })));
                 if (plan && burnGold(npc, plan.spend, 'boss')) {
                     if (plan.kind === 'heal') {
+                        const hpBefore = npc.entity.hp;
                         npc.entity.hp = Math.min(npc.entity.maxHp, npc.entity.hp + plan.heal);
                         messages.push({
                             text: `[${npc.name ?? npc.type} spends ${plan.spend} GP on itself. (+${plan.heal} HP)]`,
                             sourceEnemy: npc,
                             category: 'combat',
+                            heal: npc.entity.hp - hpBefore,
                         });
                     } else {
                         const ward = allyList[plan.index];
+                        const hpBefore = ward.entity.hp;
                         ward.entity.hp = Math.min(ward.entity.maxHp, ward.entity.hp + plan.heal);
                         messages.push({
                             text: `[${npc.name ?? npc.type} pays ${plan.spend} GP — ${ward.name ?? ward.type} straightens up. (+${plan.heal} HP)]`,
                             sourceEnemy: npc,
                             category: 'combat',
+                            heal: ward.entity.hp - hpBefore,
+                            healTarget: ward,
                         });
                     }
                     break;   // the purchase IS the turn
@@ -404,11 +413,13 @@ export function tickNpcState(game, npc, clock = game.turn) {
             // offscreen) — intentional, first wallet extra.
             const buy = healPurchase(npc.entity.hp, npc.entity.maxHp, npc.gold);
             if (buy && burnGold(npc, buy.spend, 'heal')) {
+                const hpBefore = npc.entity.hp;
                 npc.entity.hp = Math.min(npc.entity.maxHp, npc.entity.hp + buy.heal);
                 messages.push({
                     text: `[${npc.name ?? npc.type} buys back ${buy.heal} HP! (-${buy.spend} GP)]`,
                     sourceEnemy: npc,
                     category: 'combat',
+                    heal: npc.entity.hp - hpBefore,
                 });
                 break;   // the purchase IS the turn
             }

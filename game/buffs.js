@@ -46,15 +46,23 @@ export const DOT_FLOOR = 1;
 // PLAYER buffs and owner is the Enemy for enemy buffs. This function MUST branch
 // on that: the old sludge def wrote game.playerHp unconditionally, which was safe
 // only because sludge has never been an enemy buff. poison and fire will be.
+// The hit-splat a damaging tick wears; renderer.js animates each differently.
+// A tick that HEALS is a heal splat whatever carried it — sewer fare on a
+// sewer-dweller rides the sludge/poison ids with a negative dmg.
+const SPLAT_FOR_CAUSE = { sludge: 'sludge', poison: 'poison', fire: 'fire', health_poition: 'poison' };
+
 function applyDot(owner, game, buff, label, cause) {
     const dmg = buff.dmg ?? SLUDGE_DOT;
+    let before, after, killed = false;
 
     if (owner === game) {
         // Law 7: a DoT never lands the killing tick on the PLAYER — it floors at
         // 1 and does NOT self-cure, so you stand there at 1 HP still burning.
         // Clamped upward too: sewer fare on a sewer-dweller is a negative dmg
         // (a regeneration) and must never exceed the Hundred.
+        before = game.playerHp;
         game.playerHp = Math.min(game.playerMaxHp, Math.max(DOT_FLOOR, game.playerHp - dmg));
+        after = game.playerHp;
         // It still CLAIMS the defeat, so when something else finishes the player
         // the scenario reads the DoT (defeat-scenarios.js keys on cause 'sludge').
         // Healing never claims a defeat.
@@ -65,10 +73,29 @@ function applyDot(owner, game, buff, label, cause) {
         // bomb absolutely finishes a Violet Fungus.
         const ent = owner.entity;
         if (!ent) return;
+        before = ent.hp;
         ent.hp = Math.min(ent.maxHp, ent.hp - dmg);
-        if (ent.hp <= 0) { ent.hp = 0; ent.alive = false; }
+        if (ent.hp <= 0) { ent.hp = 0; ent.alive = false; killed = before > 0; }
+        after = ent.hp;
     }
-    game._log(`[${owner === game ? 'You' : (owner.name ?? owner.type)} — ${label} ${Math.abs(dmg)}]`);
+
+    // A heal says so, in what it actually gave. This used to print Math.abs(dmg)
+    // either way, and _log flattens the em-dash to a hyphen — so a fungus
+    // regenerating on its own sewer fare read "[Violet Fungus - Sludge 3]", as if
+    // the sludge were hurting it.
+    const who = owner === game ? 'You' : (owner.name ?? owner.type);
+    const change = after - before;
+    game._log(dmg < 0 ? `[${who} — ${label} (+${change} HP)]` : `[${who} — ${label} ${dmg}]`);
+
+    // And the change floats over whoever it touched, like any other hit. A tick
+    // that moved nothing (full HP, or the player held at the floor) shows nothing.
+    if (change !== 0) {
+        const x = owner === game ? game.playerX : owner.x;
+        const y = owner === game ? game.playerY : owner.y;
+        const text = change > 0 ? `+${change}` : `${change}`;
+        const type = change > 0 ? 'heal' : (SPLAT_FOR_CAUSE[cause] ?? 'physical');
+        game._spawnHitSplat?.(x, y, text, type, { omni: true, killed });
+    }
 }
 
 export const BUFF_DEFS = {
