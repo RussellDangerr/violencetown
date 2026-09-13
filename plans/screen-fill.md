@@ -2,8 +2,7 @@
 
 **Phase:** Design → Development.
 **Priority:** High (Caelan, 2026-09-11: *"I think we're still using the area poorly."*).
-**Status:** Design (approved section by section, 2026-09-12/13). Build waits on two merges — see
-*Prerequisites*.
+**Status:** Built on `feature/screen-fill` (stages 1–3, 2026-09); awaiting Caelan's merge call.
 **Companions:** `plans/visual-pass.md` Part 3 (the whole-pixel canvas; this keeps its rule and
 drops its square) · `plans/roadmap-2026-09.md` (where the follow-on pieces queue).
 **Mockup:** `game/_design-screen.html` — local only (`.gitignore:88`), served by
@@ -262,3 +261,31 @@ whether it is parked or folded in first.
    those would be drawn.
 3. **Who gets pulled into a fight** — possibly the same sight-defined area as piece 1, as a
    gameplay rule.
+
+## Measured
+
+The frame-time gate (*Build and check*, stage 2), 2026-09-13, on Caelan's machine (RTX 4080 SUPER)
+in the Browser pane at 3440×1440, DPR 1. **Full frame** is the drawing plus the GPU's raster; *issue*
+is the drawing alone. The implementation plan's Task 10 note says why issue alone understates a
+bigger screen, and how the full frame is timed. Median of three runs, ms per frame:
+
+| Scene | Before: the 1216px square | After: filled, with fillers |
+|---|---|---|
+| Town at night (after: at the east edge, in front of the forest) | 1.38 full · 0.5–1.1 issue | **6.51** full · 1.56 issue |
+| Town at night, north-east corner (forest on two sides) | — | **7.45** full · 1.69 issue |
+| Town by day | 1.38 full | **6.38** full · 1.56 issue |
+| Sewer fight, wheel open | 1.95 full · 0.6–1.4 issue | **5.67** full · 1.09 issue |
+
+Both gate scenes are under 16 ms, so stage 3 goes ahead without the fallbacks. The cost grows with
+the screen's pixels (3.35× here, about 4× the time). A weaker GPU at a big screen would feel this
+first: a laptop at 2880×1800 has more pixels than this monitor. If that bites, the fallbacks above
+are still the plan.
+
+**After stage 3 (the dock and the dial), 2026-09-13 evening.** A re-time read 13–17 ms for the
+same scenes, but the machine had changed underneath: the stage 2 build, served beside it from a
+worktree, read 13–15 ms too, and a GPU yardstick that does not touch the game (40 blurred shadows)
+read 1.94 ms against 0.64 ms that afternoon — something else was loading the GPU about 3×. Timed
+in one page with the dock on and off, alternating (the only per-frame work stage 3 adds while the
+wheel is closed), the dock costs nothing measurable: 12.9 ms with it, 13.1 ms without (median of
+four each, at DPR 1.5). Re-time on a quiet machine before shipping. If a game or a stream shares
+the GPU, the fallbacks above are the lever.

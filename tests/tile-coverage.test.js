@@ -15,7 +15,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { TILES, TILE_BY_ID } from '../game/data.js';
-import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, SHEETS } from '../game/sprites.js';
+import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, SHEETS, PROP_SPRITES } from '../game/sprites.js';
 import { readAlpha, seeThroughCount } from './helpers/png-alpha.js';
 
 const GAME_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'game');
@@ -37,7 +37,7 @@ function loadMap(file) {
 const KNOWN_UNPLACED = {
     3: 'GAP — defined and mapped, placed nowhere',
     7: 'BOSS_TRIGGER — defined and mapped, placed nowhere; the legacy boss-trigger trap it belonged to was removed',
-    13: 'GRASS — defined and mapped, placed nowhere, even though Town has room for it',
+    13: "GRASS — in no map's tiles, even though Town has room for it; drawn past the edge of Town, Carnival and Downtown as their filler",
 };
 
 // Tile ids placed at runtime rather than authored in a map JSON. Each entry
@@ -130,7 +130,11 @@ describe('tile coverage', () => {
             19: 'CAR — renderer draws sidewalk under every car cell, then one 2x2 car over the block',
         };
         const placed = new Set(Object.keys(RUNTIME_PLACED).map(Number));
-        for (const file of mapFiles) for (const id of loadMap(file).tiles || []) placed.add(id);
+        for (const file of mapFiles) {
+            const map = loadMap(file);
+            for (const id of map.tiles || []) placed.add(id);
+            if (map.border) placed.add(map.border.tile);   // a filler is drawn on every off-map cell
+        }
         const images = {};
         const holes = [];
         for (const [id, ref] of Object.entries(allTileMaps)) {
@@ -142,6 +146,31 @@ describe('tile coverage', () => {
             if (clear) holes.push(`${TILE_BY_ID[id]?.name ?? id} (id ${id}): ${clear} see-through px`);
         }
         assert.deepEqual(holes, [], `see-through tiles with nothing under them:\n  ${holes.join('\n  ')}`);
+    });
+
+    test("every map's filler is real art", () => {
+        const bad = [];
+        for (const file of mapFiles) {
+            const b = loadMap(file).border;
+            if (!b) continue;
+            if (!(b.tile in allTileMaps)) bad.push(`${file}: border tile ${b.tile} has no sprite`);
+            if (b.prop && !PROP_SPRITES[b.prop]) bad.push(`${file}: border prop '${b.prop}' has no art`);
+        }
+        assert.deepEqual(bad, [], bad.join('\n'));
+    });
+
+    test('the fillers are the table in plans/screen-fill.md (change the two together)', () => {
+        const want = {
+            'town-map.json':       { tile: 13, prop: 'tree' },
+            'carnival-map.json':   { tile: 13, prop: 'tree' },
+            'downtown-map.json':   { tile: 13, prop: 'tree' },
+            'graveyard-map.json':  { tile: 52, prop: 'tree' },
+            'wilderness-map.json': { tile: 52, prop: 'tree' },
+            'sewer-map.json':      { tile: 0 },
+            'factory-map.json':    { tile: 41 },
+            'canyon-map.json':     { tile: 0 },
+        };
+        for (const file of mapFiles) assert.deepEqual(loadMap(file).border ?? null, want[file] ?? null, file);
     });
 
     test('the known-unplaced list has not gone stale', () => {

@@ -33,7 +33,7 @@
   - the player's tile always sits at logical (288, 288), which is `half * TILE_PX` with `half = 9`.
 - **`game/layout.js`** is the shared geometry module: the renderer draws panels at its rects, and `main.js` hit-tests taps against the same rects.
 - **Menus** — the Remoticon (device), offer screen, dialogue, log history, target list, item overlay, inspect panel and ending card — are laid out in the 608×608 space. They keep those layouts; this plan draws them inside a 608×608 box centred on the screen.
-- **Source pins.** `tests/offer-wiring.test.js` regex-matches two things in `renderer.js`'s `renderFrame`. Keep the line `if (game.state === 'trade') this._drawOfferScreen(game);` exactly, and keep a line beginning `this._menuPanelRect = CLOSE_PANEL` after the dispatch's first `} finally {`.
+- **Source pins.** `tests/offer-wiring.test.js` regex-matches two things in `renderer.js`'s `renderFrame`. Keep the line `if (game.state === 'trade') this._drawOfferScreen(game);` exactly, and keep a line beginning `this._menuPanelRect = CLOSE_PANEL` after the dispatch's first `} finally {`. It also pins `main.js`'s trade routing, `this._tapOffer(pt)`: Task 7 passes `mpt` there, so that regex becomes `this\._tapOffer\(m?pt\)` (found in execution).
 - **Tests that lift code from source.** Several tests extract `main.js` methods by name (`liveMethod`), including `_tapOffer` and `_pointInRect`. This plan converts tap points into menu space *before* calling the menu handlers, so those handlers' bodies do not change.
 - **Other branches.** `feature/diagonal-prototype` (June 2026, 8-way movement) is unmerged and touches `main.js`. It is Caelan's call; do not merge it or rebase onto it.
 
@@ -1031,10 +1031,12 @@ In `renderFrame`, replace the modal dispatch and its `finally` block:
 with:
 
 ```js
+        // The menu box only moves the origin; a translate and its inverse, not a
+        // save/restore, so a menu's paint state carries on exactly as it did.
         const box = vp.menu;
         const inBox = MENU_BOX_STATES.has(game.state);
         try {
-            if (inBox) { ctx.save(); ctx.translate(box.x, box.y); }
+            if (inBox) ctx.translate(box.x, box.y);
             if (game.state === 'item_overlay')    this._drawItemOverlay(game);
             if (game.state === 'radial_menu')     this._drawRadialMenu(game);
             if (game.state === 'target_list')     this._drawTargetList(game);
@@ -1046,8 +1048,10 @@ with:
             if (game.state === 'inspect') this._drawInspectPanel(game);
             if (game.state === 'device') this._drawDevice(game);
         } finally {
-            if (inBox) ctx.restore();
+            if (inBox) ctx.translate(-box.x, -box.y);
 ```
+
+(Found in execution: a `ctx.save()`/`ctx.restore()` pair here stops a menu's paint state — its last `textAlign` — carrying into the next frame, which the frame check catches as a difference in the Remoticon scene. It is invisible in a left-to-right canvas, but stage 1 changes nothing, so the box is a plain translate.)
 
 And in that same `finally`, replace:
 
@@ -2266,6 +2270,42 @@ JSON.stringify({ townNight, sewerFight, canvas: [R.canvas.width, R.canvas.height
 
 Write the two numbers (ms per frame) into this task's commit message in Step 6. Reset the tab with `resize_window {preset: "desktop"}`.
 
+> **Execution fix (2026-09-13): time the full frame too, and gate on it.** The snippet above
+> times only *issuing* the drawing on the main thread. Chrome rasterizes on the GPU afterwards,
+> and skips any frame whose pixels the next frame's full clear covers before anything reads them,
+> so the loop never pays for the pixels — the cost that grows with the screen. Reading the game
+> canvas back each frame is no fix: after a few `getImageData` calls Chrome moves a default canvas
+> to software drawing, and every later number in that page load is wrong (it read 21–54 ms). Nor is
+> a readback per frame on a GPU canvas: that waits for the next 120 Hz tick (8.33 ms whatever the
+> scene). What works: draw on a twin canvas Chrome keeps on the GPU, copy each frame into a small
+> GPU "sink" (the copy forces that frame to be rasterized), and read the sink once after N frames.
+> Run it in a fresh page load, before anything reads the game canvas:
+>
+> ```js
+> const g = __game, R = g.renderer;
+> const M = document.createElement('canvas'); M.width = R.canvas.width; M.height = R.canvas.height;
+> const mctx = M.getContext('2d', { willReadFrequently: false }); mctx.imageSmoothingEnabled = false;
+> const sink = document.createElement('canvas'); sink.width = 512; sink.height = 512;
+> const sctx = sink.getContext('2d', { willReadFrequently: false });
+> const real = { canvas: R.canvas, ctx: R.ctx };
+> const fullFrame = (n = 60) => {
+>     R.canvas = M; R.ctx = mctx; R._vignetteGradient = null;
+>     try {
+>         for (let i = 0; i < 10; i++) { R.renderFrame(g); sctx.drawImage(M, 0, 0, 64, 64); }
+>         sctx.getImageData(0, 0, 1, 1);
+>         const t0 = performance.now();
+>         for (let i = 0; i < n; i++) { R.renderFrame(g); sctx.drawImage(M, (i % 8) * 64, 0, 64, 64); }
+>         sctx.getImageData(0, 0, 1, 1);
+>         return +((performance.now() - t0) / n).toFixed(2);
+>     } finally { R.canvas = real.canvas; R.ctx = real.ctx; R._vignetteGradient = null; }
+> };
+> ```
+>
+> Check it measures the GPU: a frame of 40 big blurred shadows took 0.01 ms to issue and 0.64 ms
+> through `fullFrame`. Baseline at 3440×1440 (today's 1216² square, RTX 4080 SUPER, median of
+> three): **full frame** Town at night 1.38 ms, Town by day 1.38 ms, Sewer fight 1.95 ms;
+> **issue only** 0.5–1.1 ms and 0.6–1.4 ms across two page loads.
+
 - [ ] **Step 2: `_fitCanvas` fills the layout box**
 
 Replace `_fitCanvas` (the Task 7 version) with:
@@ -2703,6 +2743,8 @@ The spec's gate: at 3440×1440, a frame of Town at night and of a Sewer fight mu
 - [ ] **Step 1: Measure**
 
 Restart the dev server. In a test tab, `resize_window {width: 3440, height: 1440}`, reload, stub the autosave, press GAME START, and run the timing snippet from Task 10, Step 1 again. It now measures the filled screen with the fillers. Stand at Town's east edge first (`__game.playerX = 32`), where the forest adds the most props. Reset with `resize_window {preset: "desktop"}`.
+
+(Execution fix: run `fullFrame` from Task 10 Step 1's note on the same scenes, in the same fresh page load and before anything reads the game canvas. The gate below is the full frame; report the issue time beside it.)
 
 - [ ] **Step 2: Decide**
 

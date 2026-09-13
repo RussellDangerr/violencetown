@@ -13,6 +13,8 @@
 // keeps this module dependency-light while letting the hands geometry derive from
 // the one source of truth for the unlock ladder + adjacency.
 import { unlockedSlots, adjacentPairs, HANDS } from './rings.js';
+import { TILE_PX } from './data.js';
+import { DEFAULT_VIEW } from './viewport.js';   // (screen-fill) the default viewport for the HUD helpers
 
 export const CANVAS_INTERNAL_PX = 608;   // mirrors data.js CANVAS_PX
 export const HIT_SLOP = 6;               // tap-zone expansion (Apple 44pt min target)
@@ -56,6 +58,16 @@ export const THROW_RECTS = {
     right: { x: 338, y: 288, w: 32, h: 32 },
 };
 
+// The throw prompt's four targets around the player's tile, wherever the
+// viewport puts it. THROW_RECTS are the same targets around the old square's
+// centre (304, 304).
+export function throwRects(vp = DEFAULT_VIEW) {
+    const dx = vp.origin.x + TILE_PX / 2 - CANVAS_INTERNAL_PX / 2;
+    const dy = vp.origin.y + TILE_PX / 2 - CANVAS_INTERNAL_PX / 2;
+    const at = (r) => ({ x: r.x + dx, y: r.y + dy, w: r.w, h: r.h });
+    return { up: at(THROW_RECTS.up), down: at(THROW_RECTS.down), left: at(THROW_RECTS.left), right: at(THROW_RECTS.right) };
+}
+
 // ── Hotbar — 9 inventory slots along the bottom ──
 // Panel origin (OX/OY) + slot positions, all derived from one formula so the
 // drawn slots and the tap zones can't diverge.
@@ -81,10 +93,13 @@ export const XMB_ITEM_H   = 46;   // current-item cell height (icon + name band)
 
 // Geometry for the XMB bar given a built bar ({columns:[{key,label,items}]}).
 // Returns { chips:[{key,label,x,y,w,h}], current:{x,y,w,h}, up, down, bottom }.
-export function xmbBarLayout(bar) {
+// `anchor` is where hudLayout puts the bar: its centre x, and the bottom of
+// its current-item cell. The default is the old square's (304, 588).
+export const XMB_ANCHOR_CLASSIC = Object.freeze({ cx: CANVAS_INTERNAL_PX / 2, bottom: HOTBAR_OY + HOTBAR_SLOT_H });
+export function xmbBarLayout(bar, anchor = XMB_ANCHOR_CLASSIC) {
     const cols = (bar && bar.columns) || [];
-    const cx = CANVAS_INTERNAL_PX / 2;
-    const bottom = HOTBAR_OY + HOTBAR_SLOT_H;                 // 588 — align with old hotbar bottom
+    const cx = anchor.cx;
+    const bottom = anchor.bottom;
     const chipY = bottom - XMB_ITEM_H - XMB_CHIP_H - 6;
     const n = cols.length;
     const totalW = n > 0 ? n * XMB_CHIP_W + (n - 1) * XMB_CHIP_GAP : 0;
@@ -104,12 +119,13 @@ export function xmbBarLayout(bar) {
 // The XMB usable-bar's background PANEL rect for `n` visible category chips
 // (1-3), mirroring renderer.js:1978-1980. n=3 is the worst case (widest). The
 // bar is centered on canvas-center x=304; chip stride is XMB_CHIP_W(96)+6.
-export function xmbBarPanelRect(n = 3) {
+export function xmbBarPanelRect(n = 3, anchor = XMB_ANCHOR_CLASSIC) {
   const chipW = 96, gap = 6, stride = chipW + gap;   // 102
   const totalChips = n * stride - gap;               // n=3 -> 300
-  const left = 304 - totalChips / 2 - 10;            // n=3 -> 144
-  const right = 304 + totalChips / 2 + 10;           // n=3 -> 464
-  const top = 510, bottom = 592;                     // chipY-6 .. current-bottom+10
+  const left = anchor.cx - totalChips / 2 - 10;      // n=3, classic -> 144
+  const right = anchor.cx + totalChips / 2 + 10;     // n=3, classic -> 464
+  const top = anchor.bottom - 78;                    // chipY - 6: classic 510
+  const bottom = anchor.bottom + 4;                  // the panel's bottom edge: classic 592
   return { x: left, y: top, w: right - left, h: bottom - top };
 }
 
@@ -118,30 +134,28 @@ export function xmbBarPanelRect(n = 3) {
 // of these may overlap (under HIT_SLOP), or a tap is ambiguous. 'idle' is the
 // only always-live combination (message log + usable bar); the modal states
 // are exclusive overlays tested separately if they gain persistent siblings.
-export function hudInteractiveRects(state) {
+export function hudInteractiveRects(state, vp = DEFAULT_VIEW) {
   const rects = [];
   if (state === 'idle') {
-    rects.push({ name: 'questlog', rect: QUESTLOG_RECT });
-    rects.push({ name: 'xmb', rect: xmbBarPanelRect(3) });
+    const hud = hudLayout(vp);
+    rects.push({ name: 'questlog', rect: hud.log });
+    rects.push({ name: 'xmb', rect: xmbBarPanelRect(3, hud.bar) });
+    if (hud.opener) rects.push({ name: 'opener', rect: hud.opener });
   }
   return rects;
 }
 
 // ── Radial "sunburst" combat wheel ──
-// Concentric rings centred on RADIAL_CENTER_*: a hub, the greyed decision-stack
-// rings growing inward, one bright active ring, and a partial preview arc above
-// the top pointer. Shared by renderer._drawWheel (draw) and main._tapRadialMenu
-// (hit-test). The preview-arc band and pointer are derived adaptively in
-// renderer._drawWheel from wheelRingR(depth).
-// (interaction polish) Compact wheel tucked into the BOTTOM-RIGHT corner, so it
-// no longer dominates the screen and sits opposite the bottom-left message log
-// (QUESTLOG_RECT, right edge x=346). Clearance is LOCKED to the wheel's real max
-// span: the deepest ACTIVE ring is wheelRingR(2) (outer 120) at depth 3 (Fight→
-// Melee — no depth-4 ring exists in wheel-model.js), ▲FIRE cue / flapper above the
-// top pointer. At (477,416) with the 1.05 open-overshoot (max radius 126): right
-// 477+126=603 < 608; left 477-126=351 > 346 (clears the log); bottom 416+126=542
-// < HOTBAR_OY 546; top clears 0. Re-measure if wheel-model.js gains a 4th ring.
-export const RADIAL_CENTER_X = 477, RADIAL_CENTER_Y = 416;
+// Concentric rings centred on hudLayout's wheel hub: a hub, the greyed
+// decision-stack rings growing inward, one bright active ring, and a partial
+// preview arc above the top pointer. Shared by renderer._drawWheel (draw) and
+// main._tapRadialMenu (hit-test). The preview-arc band and pointer are derived
+// adaptively in renderer._drawWheel from wheelRingR(depth).
+// hudLayout keeps the open wheel clear of the screen's edges and the item bar
+// using its real max span (WHEEL_REACH, below): the deepest ACTIVE ring is
+// wheelRingR(2) (outer 120) at depth 3 (Fight→Melee — no depth-4 ring exists in
+// wheel-model.js), with the 1.05 open-overshoot 126. Re-measure if
+// wheel-model.js gains a 4th ring.
 export const WHEEL_HUB_R    = 24;            // centre 'MENU' disc radius
 export const WHEEL_RING_W    = 28;           // radial thickness of each full ring
 export const WHEEL_RING_GAP  = 4;            // gap between adjacent rings
@@ -158,6 +172,115 @@ export function wheelRingR(k) { const r0 = WHEEL_RING0_R0 + k * (WHEEL_RING_W + 
 // usable-bar's HIT_SLOP-expanded top (510 - 6 = 504): 436 + 62 + 6 = 504.
 // Enforced by tests/hud-layout.test.js's non-overlap invariant.
 export const QUESTLOG_RECT = { x: 6, y: 436, w: 340, h: 62 };
+
+// ── The HUD, placed for a viewport (plans/screen-fill.md) ──
+// Where every HUD piece sits on a given screen: the renderer draws there and
+// main.js hit-tests there, the same contract as the rects in this file.
+const HUD_M = 6;               // margin from the screen's edge, logical px
+const HUD_GAP = 12;            // between stacked panels: two HIT_SLOPs, so tap zones never touch
+const PAGE_BUTTONS_CSS = 60;   // the ☰ ▤ page buttons' column, top-right: right 8 + width up to 44 + gap 8 (CSS px)
+const WHEEL_REACH = 126;       // the open wheel's widest reach from its hub, with the open overshoot
+const BAR_HALF = 160;          // the item bar's widest half-width: three chips (300) / 2 + 10
+const BAR_ABOVE = 78;          // the bar's panel runs from 78 above its anchor's bottom …
+const BAR_BELOW = 4;           // … to 4 below it (xmbBarPanelRect)
+
+export function hudLayout(vp = DEFAULT_VIEW) {
+    return vp.dockRows ? dockLayout(vp) : cornersLayout(vp);
+}
+
+// The HUD pinned to the screen's corners and edges: HP top-left, the buffs
+// top-right beside the page buttons, the log bottom-left and the item bar
+// bottom-centre on one line, the wheel opening bottom-right. A narrow screen
+// stacks the log above the bar and lifts the wheel above the bar's row.
+function cornersLayout(vp) {
+    const { w, h } = vp;
+    const cx = w / 2;
+    const barBottom = h - 16 - BAR_BELOW;              // the bar's panel ends 16 px up, as in the old square
+    const barTop = barBottom - BAR_ABOVE;
+    const sideBySide = HUD_M + QUESTLOG_RECT.w + HUD_GAP <= cx - BAR_HALF;
+    const logBottom = sideBySide ? h - 16 : barTop - HUD_GAP;
+    const log = { x: HUD_M, y: logBottom - QUESTLOG_RECT.h, w: QUESTLOG_RECT.w, h: QUESTLOG_RECT.h, lines: 2 };
+    const wheelBeside = w - HUD_M - 2 * WHEEL_REACH >= cx + BAR_HALF + HUD_GAP;
+    const wheel = { cx: w - HUD_M - WHEEL_REACH, cy: (wheelBeside ? h - 16 : barTop - HUD_GAP) - WHEEL_REACH };
+    return {
+        hp: { x: HUD_M, y: HUD_M },
+        buffsRight: w - HUD_M - Math.ceil(PAGE_BUTTONS_CSS * vp.logicalPerCss), buffsTop: HUD_M,
+        log, bar: { cx, bottom: barBottom }, wheel, strip: h, dialRadius,
+    };
+}
+
+// ── The dock (stage 3 of plans/screen-fill.md) ──
+// A full-width strip along the bottom: the log on the left, the item bar in
+// the middle, the wheel's ✦ opener on the right. On an upright or narrow
+// screen it has two rows: the log above, the item bar and the opener below.
+// The world stops at its top edge: main passes DOCK to computeViewport.
+export const DOCK = Object.freeze({ oneRow: 100, twoRows: 196, minOneRowW: 1000 });
+const DOCK_PAD = 8;                     // between the dock's edges and its pieces
+const LOG_H3 = 84;                      // header + objective + three 12px message lines + 12px padding top and bottom
+const OPENER = 72;                      // the ✦ button
+const BAR_H = BAR_ABOVE + BAR_BELOW;    // the item bar's panel: 82
+const WHEEL_DOWN_MAX = 120;             // the BACK tile's reach below the hub at the deepest ring, wheelRingR(2)[1]
+const DIAL_MARGIN = 12;
+
+// The two marks above the wheel, as offsets above its hub: the flapper pointer
+// just past the outermost ring, and — at a leaf, which draws no preview ring —
+// the "▲ FIRE" cue above the pointer, so the pointer never covers it. Each
+// mark is about 12px tall.
+export function wheelTopMarks(outerMost) {
+    return { pointerTop: outerMost + 14, cueTop: outerMost + 30 };
+}
+
+// The dial the wheel sits on, sized for the wheel as it is drawn: with
+// children to preview, the outermost ring is the preview ring and the pointer
+// tops it; at a leaf, the FIRE cue tops the active ring.
+export function dialRadius(depth, hasKids) {
+    const marks = wheelTopMarks(wheelRingR(hasKids ? depth : depth - 1)[1]);
+    return (hasKids ? marks.pointerTop : marks.cueTop) + DIAL_MARGIN;
+}
+export const DIAL_MAX_R = dialRadius(3, false);   // a leaf at the deepest ring: 162
+
+function dockLayout(vp) {
+    const { w, h } = vp;
+    const cx = w / 2;
+    const dock = { x: 0, y: h - vp.dockH, w, h: vp.dockH, rows: vp.dockRows };
+    // The wheel's hub never moves as the wheel deepens: far enough in from the
+    // right for the biggest dial, low enough that the deepest BACK tile ends
+    // just inside the dock.
+    const wheel = { cx: w - DOCK_PAD - DIAL_MAX_R, cy: h - DOCK_PAD - WHEEL_DOWN_MAX - 1 };
+    let log, barBottom, openerY;
+    if (dock.rows === 2) {
+        log = { x: DOCK_PAD, y: dock.y + DOCK_PAD, w: w - 2 * DOCK_PAD, h: LOG_H3, lines: 3 };
+        const rowTop = log.y + log.h + HUD_GAP;           // the second row: the item bar and the opener
+        barBottom = rowTop + BAR_ABOVE;
+        openerY = rowTop + (BAR_H - OPENER) / 2;
+    } else {
+        barBottom = dock.y + (dock.h - BAR_H) / 2 + BAR_ABOVE;
+        log = { x: DOCK_PAD, y: dock.y + DOCK_PAD, w: cx - BAR_HALF - HUD_GAP - DOCK_PAD, h: LOG_H3, lines: 3 };
+        openerY = dock.y + (dock.h - OPENER) / 2;
+    }
+    // Under the hub where it fits; otherwise just clear of the item bar.
+    const openerX = Math.min(Math.max(wheel.cx - OPENER / 2, cx + BAR_HALF + HUD_GAP), w - DOCK_PAD - OPENER);
+    return {
+        hp: { x: HUD_M, y: HUD_M },
+        buffsRight: w - HUD_M - Math.ceil(PAGE_BUTTONS_CSS * vp.logicalPerCss), buffsTop: HUD_M,
+        log, bar: { cx, bottom: barBottom }, wheel, strip: dock.y,
+        dock, opener: { x: openerX, y: openerY, w: OPENER, h: OPENER },
+        dialRadius,
+    };
+}
+
+// Which HUD piece an IDLE tap lands on: the opener, the log, the dock's bare
+// chrome ('dock'), or null for the world. One function, so main.js routes taps
+// by the rects the renderer draws. The world's tiles run on under the dock, so
+// a 'dock' tap must not reach tap-to-move. (The item bar keeps its own
+// chip-level test in main._tapXmbBar, which runs before the 'dock' check.)
+export function hitHud(hud, pt, slop = HIT_SLOP) {
+    const inR = (r) => r && pt.x >= r.x - slop && pt.x <= r.x + r.w + slop && pt.y >= r.y - slop && pt.y <= r.y + r.h + slop;
+    if (inR(hud.opener)) return 'opener';
+    if (inR(hud.log)) return 'log';
+    if (hud.dock && pt.y >= hud.dock.y) return 'dock';
+    return null;
+}
 export const LOG_MODAL_RECT = MODAL_RECT;
 // (Target List) A compact centred RuneScape-style verb menu. Height is computed
 // per-target in the renderer (44px title band + one ROW_H row per verb).
