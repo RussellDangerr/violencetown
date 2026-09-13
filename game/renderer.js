@@ -14,9 +14,9 @@ import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRI
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
 import { ROOT, selectedNode, activeRing, activeIndex, decisionPath, previewChildren, affectedTiles, verbApplies, isCombatActive, flapperDeflection, defaultVerb } from './wheel-model.js'; // (sunburst wheel) + the bump telegraph
 import {
-    QUESTLOG_RECT, LOG_MODAL_RECT, TARGET_LIST_RECT, TARGET_LIST_ROW_H,
+    LOG_MODAL_RECT, TARGET_LIST_RECT, TARGET_LIST_ROW_H,
     ITEM_OVERLAY_RECT, ITEM_OVERLAY_ROW_H,
-    RADIAL_CENTER_X, RADIAL_CENTER_Y, WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
+    WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
     EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, closeButtonRect,
     DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceEquipLayout, deviceRingsLayout,
     inspectorPanelRect, inspectorActionRects,                               // (C1) tap-to-inspect panel + action-row geometry
@@ -1727,7 +1727,8 @@ export class Renderer {
 
     _drawHPPanel(game) {
         const { ctx } = this;
-        const x = 6, y = 6, w = 170, h = 90;
+        const { x, y } = this._hud().hp;
+        const w = 170, h = 90;
 
         drawPanelSmall(ctx, x, y, w, h, this.uiSheet);
 
@@ -1822,7 +1823,8 @@ export class Renderer {
         const bw = 52, bh = 26, gap = 3;
         const total = game.buffs.length;
         const totalW = total * (bw + gap) - gap + 12;
-        const px = CANVAS_PX - totalW - 6, py = 6;
+        const hud = this._hud();
+        const px = hud.buffsRight - totalW, py = hud.buffsTop;
 
         drawPanelSmall(ctx, px, py, totalW, bh + 12, this.uiSheet);
 
@@ -1866,7 +1868,7 @@ export class Renderer {
 
     _drawQuestLog(game) {
         const { ctx } = this;
-        const R = QUESTLOG_RECT;
+        const R = this._hud().log;
         const PAD = 12;                      // buffer so text clears the ornate corners
         const LH = 12;                       // line height (8px glyph + 4px lead)
         const innerW = R.w - PAD * 2;
@@ -1904,7 +1906,7 @@ export class Renderer {
         // the panel bottom by ~10px when header+objective+feed all show).
         const messages = game._logStripMessages;
         if (!messages || messages.length === 0) return;
-        const visible = messages.slice(-2);
+        const visible = messages.slice(-(R.lines || 2));   // the dock's log shows three (stage 3)
         const alphas  = [0.5, 0.75, 1.0];    // oldest → newest
         const feedTop = R.y + R.h - PAD - visible.length * LH;
         const startY  = Math.max(y, feedTop);
@@ -2187,7 +2189,7 @@ export class Renderer {
         const bar = buildXmbBar(game.inventory);
         if (!bar.columns.length) return;                 // no usables → no bar
         const sel = resolveXmbSelection(bar, game.xmbCat, game.xmbPick);
-        const lay = xmbBarLayout(bar);
+        const lay = xmbBarLayout(bar, this._hud().bar);
 
         // Parchment strip behind the whole bar.
         const left = lay.chips[0].x - 10;
@@ -2447,7 +2449,7 @@ export class Renderer {
     // One donut-wedge tile (a curved "Simon-Says" segment) + a centered label.
     // Angles in radians: `mid` = the tile's centre angle, `half` = half its width.
     _wheelTile(r0, r1, mid, half, fill, alpha, label, txtColor, outline, icon, dominant = false) {
-        const { ctx } = this, cx = RADIAL_CENTER_X, cy = RADIAL_CENTER_Y;
+        const { ctx } = this, { cx, cy } = this._hud().wheel;
         // (§12.4) the selected wedge "rises" — a touch wider + a longer outer
         // radius so the current choice reads as the hero slice at a glance.
         // Static emphasis (no pulse), so reduce-motion is unaffected.
@@ -2482,33 +2484,35 @@ export class Renderer {
     // fanning above the pointer. AIM/CONFIRM reuse the world reticle (see _render).
     _drawWheel(game) {
         const { ctx } = this;
-        const cx = RADIAL_CENTER_X, cy = RADIAL_CENTER_Y, TOP = -Math.PI / 2;
+        const { cx, cy } = this._hud().wheel, TOP = -Math.PI / 2;
         // (Slice 2) Full-screen AIM/CONFIRM/threat text re-centres on the SCREEN
-        // (CC), not the wheel hub — the wheel moved to a bottom-right anchor, but
-        // these strips are full-width takeovers that must stay screen-centred.
-        const CC = CANVAS_PX / 2;
+        // (CC across, CY down), not the wheel hub — the wheel sits at its own
+        // anchor, but these strips are full-width takeovers that stay screen-centred.
+        const vp = this._view();
+        const CC = vp.w / 2, CY = vp.h / 2;
+        const strip = this._hud().strip;
         const w = game.wheel; if (!w) return;
 
         // ── AIM: bottom hint only; the world + reticle stay readable ──
         if (w.aiming) {
             if (this.font) {
-                ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, CANVAS_PX - 24, CANVAS_PX, 24); ctx.restore();
+                ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, strip - 24, vp.w, 24); ctx.restore();
                 const hint = `${selectedNode(w).label.toUpperCase()}  ·  AIM — MOVE · SPACE FIRE · ↓ BACK`;
-                this.font.drawText(ctx, hint, CC, CANVAS_PX - 16, { color: UI.gold, scale: 1, align: 'center', shadow: '#000' });
+                this.font.drawText(ctx, hint, CC, strip - 16, { color: UI.gold, scale: 1, align: 'center', shadow: '#000' });
             }
             return;
         }
 
         // ── CONFIRM ("Plus Ultra"): about to strike a friendly ──
         if (w.confirming) {
-            ctx.save(); ctx.fillStyle = 'rgba(48,0,0,0.55)'; ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX); ctx.restore();
+            ctx.save(); ctx.fillStyle = 'rgba(48,0,0,0.55)'; ctx.fillRect(0, 0, vp.w, vp.h); ctx.restore();
             const tgt = w.reticle && game.enemies.find(e => e.entity.isAlive() && e.x === w.reticle.x && e.y === w.reticle.y);
             const name = String((tgt && (tgt.type || (tgt.entity && tgt.entity.name))) || 'them').replace(/[\[\]]/g, '').toUpperCase();
             if (this.font) {
-                this.font.drawText(ctx, '!! PLUS ULTRA !!', CC, CC - 42, { color: '#ff5555', scale: 2, align: 'center', shadow: '#000' });
-                this.font.drawText(ctx, `STRIKE ${name}?`, CC, CC - 8, { color: UI.gold, scale: 1, align: 'center', shadow: '#000' });
-                this.font.drawText(ctx, "THEY'RE NOT YOUR ENEMY", CC, CC + 12, { color: UI.text, scale: 1, align: 'center', shadow: '#000' });
-                this.font.drawText(ctx, '↑ AGAIN TO COMMIT  ·  ↓ BACK', CC, CC + 38, { color: '#e8dcc0', scale: 1, align: 'center', shadow: '#000' });
+                this.font.drawText(ctx, '!! PLUS ULTRA !!', CC, CY - 42, { color: '#ff5555', scale: 2, align: 'center', shadow: '#000' });
+                this.font.drawText(ctx, `STRIKE ${name}?`, CC, CY - 8, { color: UI.gold, scale: 1, align: 'center', shadow: '#000' });
+                this.font.drawText(ctx, "THEY'RE NOT YOUR ENEMY", CC, CY + 12, { color: UI.text, scale: 1, align: 'center', shadow: '#000' });
+                this.font.drawText(ctx, '↑ AGAIN TO COMMIT  ·  ↓ BACK', CC, CY + 38, { color: '#e8dcc0', scale: 1, align: 'center', shadow: '#000' });
             }
             ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
             return;
@@ -2522,12 +2526,13 @@ export class Renderer {
         // Lighter scrim — the compact corner wheel doesn't need to black out the
         // scene behind it; keep the world readable while the wheel is open.
         ctx.fillStyle = combat ? 'rgba(38,4,4,0.4)' : 'rgba(0,0,0,0.32)';
-        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+        ctx.fillRect(0, 0, vp.w, vp.h);
         if (combat) {
-            const rg = ctx.createRadialGradient(cx, cy, CANVAS_PX * 0.34, cx, cy, CANVAS_PX * 0.72);
+            const S = Math.max(vp.w, vp.h);
+            const rg = ctx.createRadialGradient(cx, cy, S * 0.34, cx, cy, S * 0.72);
             rg.addColorStop(0, 'rgba(150,20,20,0)');
             rg.addColorStop(1, 'rgba(140,12,12,0.30)');
-            ctx.fillStyle = rg; ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+            ctx.fillStyle = rg; ctx.fillRect(0, 0, vp.w, vp.h);
         }
         ctx.restore();
 
@@ -2703,8 +2708,8 @@ export class Renderer {
                     if (d < nd) { nd = d; near = e; }
                 }
                 const nm = String(near.type || (near.entity && near.entity.name) || 'FOE').replace(/[\[\]]/g, '').toUpperCase().slice(0, 12);
-                ctx.save(); ctx.fillStyle = 'rgba(40,0,0,0.6)'; ctx.fillRect(0, CANVAS_PX - 26, CANVAS_PX, 26); ctx.restore();
-                this.font.drawText(ctx, `⚔ ${foes.length}  ${nm}`, CC, CANVAS_PX - 16, { color: '#e8462f', scale: 1, align: 'center', shadow: '#000' });
+                ctx.save(); ctx.fillStyle = 'rgba(40,0,0,0.6)'; ctx.fillRect(0, strip - 26, vp.w, 26); ctx.restore();
+                this.font.drawText(ctx, `⚔ ${foes.length}  ${nm}`, CC, strip - 16, { color: '#e8462f', scale: 1, align: 'center', shadow: '#000' });
             }
         }
         ctx.globalAlpha = 1; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
