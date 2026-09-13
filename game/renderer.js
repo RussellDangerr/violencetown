@@ -4,12 +4,11 @@
 // All text: dark brown on parchment for readability (not gold-on-dark)
 
 import { TILE_PX, VIEW_TILES, CANVAS_PX, SAFE_SLOTS } from './data.js';
+import { CLASSIC, offView, snapPx } from './viewport.js';   // (screen-fill) the screen's geometry
 
-// Supersample factor: render the canvas at SS x the internal 608 resolution so
-// the (anti-aliased) VT323 text stays sharp under the pixel-art upscale rather
-// than being blown up soft. All drawing stays in 608 coords via a base
-// ctx.setTransform(SS,…) at the top of each frame; tap input maps via
-// CANVAS_INTERNAL_PX (608) independently, so it's unaffected.
+// The splash canvas's supersample: its 320x220 card is drawn at 2x so the
+// VT323 text stays sharp. The game canvas's transform comes from the viewport
+// (setViewport / renderFrame).
 const SS = 2;
 import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES, CONTAINER_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES, MARK_SPRITES, spriteVariant, spriteFrame, tileFrame, idHash } from './sprites.js';
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
@@ -23,7 +22,7 @@ import {
     DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceEquipLayout, deviceRingsLayout,
     inspectorPanelRect, inspectorActionRects,                               // (C1) tap-to-inspect panel + action-row geometry
     gearOptionRects,                                                        // (C2) GEAR chooser option-row geometry
-    xmbBarLayout,                                                            // (XMB) usable-bar geometry
+    xmbBarLayout, hudLayout, throwRects,                                     // (XMB) usable-bar geometry; (screen-fill) the HUD + throw targets for a viewport
     MODAL_RECT, offerLayout,                                                 // (offer screen) the one panel + its geometry
 } from './layout.js';
 import { itemStatLine, itemActions, equipOptions } from './inspector.js';    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
@@ -48,6 +47,11 @@ import { dispositionCeil, DISPOSITION_MIN } from './disposition-curves.js'; // (
 // ZONE_TILE_SPRITE_MAP. Disjoint id ranges so order doesn't matter, but the
 // explicit chain keeps the resolution path readable.
 const tileRef = id => TILE_SPRITE_MAP[id] || TOWN_TILE_SPRITE_MAP[id] || ZONE_TILE_SPRITE_MAP[id];
+
+// (screen-fill) The states whose panels are laid out in the 608x608 menu
+// space. They draw inside the viewport's centred menu box. The wheel and the
+// throw prompt are not menus: they draw at their own screen positions.
+const MENU_BOX_STATES = new Set(['item_overlay', 'target_list', 'ending', 'log_modal', 'trade', 'dialogue', 'inspect', 'device']);
 
 // (combat-feel-pass) Hit-splat fill colors by damage type. Crit keeps the
 // physical fill but takes a gold border (handled in _drawHitSplat). New types
@@ -137,13 +141,47 @@ export class Renderer {
     constructor(canvas) {
         this.canvas = canvas;
         this.ctx    = canvas.getContext('2d');
-        canvas.width  = CANVAS_PX * SS;
-        canvas.height = CANVAS_PX * SS;
+        this.viewport = null;              // main._fitCanvas hands one over via setViewport
+        canvas.width  = CLASSIC.backingW;
+        canvas.height = CLASSIC.backingH;
         this.ctx.imageSmoothingEnabled = false;
 
-        this.half    = (VIEW_TILES - 1) / 2;
+        this.half    = (VIEW_TILES - 1) / 2;   // retired in Task 5
         this.sprites = null;
         this.zone    = 'TOWN';
+    }
+
+    // (screen-fill) The screen's geometry, from game/viewport.js. main._fitCanvas
+    // hands it over on boot, on resize and on a DPR change. Resizing the backing
+    // store clears the canvas and resets its state, so it only happens on a change.
+    setViewport(vp) {
+        this.viewport = vp;
+        if (this.canvas.width !== vp.backingW)  this.canvas.width  = vp.backingW;
+        if (this.canvas.height !== vp.backingH) this.canvas.height = vp.backingH;
+        this._vignetteGradient = null;     // it is sized to the screen
+    }
+
+    // The viewport in force: the one main set, or the classic square for a
+    // renderer that never had one (tests build renderers with Object.create).
+    _view() { return this.viewport || CLASSIC; }
+
+    // Where the HUD pieces sit for the viewport in force (layout.js hudLayout),
+    // recomputed only when the viewport changes.
+    _hud() {
+        const vp = this._view();
+        if (this._hudFor !== vp) { this._hudFor = vp; this._hudCache = hudLayout(vp); }
+        return this._hudCache;
+    }
+
+    // Fill the whole screen with the current fillStyle, whatever translate the
+    // caller is under: menus draw inside the centred menu box, and their scrims
+    // must still cover everything.
+    _fillScreen(ctx) {
+        const vp = this._view();
+        ctx.save();
+        ctx.setTransform(vp.scale, 0, 0, vp.scale, 0, 0);
+        ctx.fillRect(0, 0, vp.w, vp.h);
+        ctx.restore();
     }
 
     // The 9-slice panel atlas. Was a dead-loaded `uiStyle1` reference (no
@@ -350,9 +388,10 @@ export class Renderer {
 
     renderFrame(game) {
         const { ctx } = this;
-        ctx.setTransform(SS, 0, 0, SS, 0, 0);   // supersample: draw in 608 coords at SS density
+        const vp = this._view();
+        ctx.setTransform(vp.scale, 0, 0, vp.scale, 0, 0);   // draw in logical px at the viewport's scale
         ctx.imageSmoothingEnabled = false;
-        ctx.clearRect(0, 0, CANVAS_PX, CANVAS_PX);
+        ctx.clearRect(0, 0, vp.w, vp.h);
 
         this._scrollX = 0;
         this._scrollY = 0;
@@ -363,8 +402,10 @@ export class Renderer {
             // browser rounds adjacent tile edges inconsistently — flashing thin
             // seams ("grid lines") between tiles as you walk. Integer scroll =
             // crisp, seam-free pixel scrolling. (movement-feel feel pass)
-            this._scrollX = Math.round((game._animToX - game._animFromX) * t * TILE_PX);
-            this._scrollY = Math.round((game._animToY - game._animFromY) * t * TILE_PX);
+            // (screen-fill) "Whole pixels" means whole backing px: snapPx rounds to
+            // 1 logical px at integer scales and to one art pixel at k = 3, 5, …
+            this._scrollX = snapPx(vp, (game._animToX - game._animFromX) * t * TILE_PX);
+            this._scrollY = snapPx(vp, (game._animToY - game._animFromY) * t * TILE_PX);
         }
 
         // Screen shake (Phase F) — random offset applied to world rendering
@@ -378,8 +419,8 @@ export class Renderer {
             const duration = shakeRemaining / 150; // rough normalize (0..~1.2)
             const decay = Math.min(1, duration);
             const mag = (game._screenShakeMagnitude ?? 0) * decay;
-            shakeX = Math.round((Math.random() - 0.5) * mag * 2); // whole-pixel shake
-            shakeY = Math.round((Math.random() - 0.5) * mag * 2); // (avoid sub-pixel seams)
+            shakeX = snapPx(vp, (Math.random() - 0.5) * mag * 2); // whole-pixel shake
+            shakeY = snapPx(vp, (Math.random() - 0.5) * mag * 2); // (avoid sub-pixel seams)
         }
         // Stash the shake offset so the zone-exit pass can re-apply the SAME world
         // transform after the lighting/arena dim (see _drawTransitions call below).
@@ -457,7 +498,12 @@ export class Renderer {
         // dispatch, because target_list and dialogue stash their own rects DURING
         // it — their height is content-sized — and hoisting would read last
         // frame's.
+        // The menu box only moves the origin; a translate and its inverse, not a
+        // save/restore, so a menu's paint state carries on exactly as it did.
+        const box = vp.menu;
+        const inBox = MENU_BOX_STATES.has(game.state);
         try {
+            if (inBox) ctx.translate(box.x, box.y);
             if (game.state === 'item_overlay')    this._drawItemOverlay(game);
             if (game.state === 'radial_menu')     this._drawRadialMenu(game);
             if (game.state === 'target_list')     this._drawTargetList(game);
@@ -469,6 +515,7 @@ export class Renderer {
             if (game.state === 'inspect') this._drawInspectPanel(game);
             if (game.state === 'device') this._drawDevice(game);
         } finally {
+            if (inBox) ctx.translate(-box.x, -box.y);
             // (menu grammar) Universal ✕ / Back affordance — after the current Menu is
             // drawn, stash its panel rect + draw a tappable close chip at the top-right.
             // main hit-tests renderer._closeBtnRect / _menuPanelRect, kept here in ONE
@@ -484,8 +531,10 @@ export class Renderer {
                 dialogue:    this._dialogueRect,
                 device:      DEVICE_RECT,
             }[game.state] || null;
-            this._menuPanelRect = CLOSE_PANEL;
-            this._closeBtnRect = CLOSE_PANEL ? closeButtonRect(CLOSE_PANEL) : null;
+            // Stashed in SCREEN px: the panel was drawn inside the menu box, and
+            // main hit-tests the ✕ and tap-outside against the screen.
+            this._menuPanelRect = CLOSE_PANEL && { x: CLOSE_PANEL.x + box.x, y: CLOSE_PANEL.y + box.y, w: CLOSE_PANEL.w, h: CLOSE_PANEL.h };
+            this._closeBtnRect = this._menuPanelRect ? closeButtonRect(this._menuPanelRect) : null;
             if (this._closeBtnRect) this._drawCloseButton(this.ctx, this._closeBtnRect);
         }
     }
@@ -521,14 +570,15 @@ export class Renderer {
     _drawDarkness() {
         if (this.zone !== 'WILDERNESS') return;
         const { ctx } = this;
-        const cx = CANVAS_PX / 2, cy = CANVAS_PX / 2;
+        const vp = this._view();
+        const cx = vp.origin.x + TILE_PX / 2, cy = vp.origin.y + TILE_PX / 2;   // the player's centre
         const g = ctx.createRadialGradient(cx, cy, TILE_PX * 0.8, cx, cy, TILE_PX * 4.5);
         g.addColorStop(0,   'rgba(2,2,6,0)');
         g.addColorStop(0.4, 'rgba(2,2,6,0.6)');
         g.addColorStop(1,   'rgba(2,2,6,0.98)');
         ctx.save();
         ctx.fillStyle = g;
-        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+        ctx.fillRect(0, 0, vp.w, vp.h);
         ctx.restore();
     }
 
@@ -549,15 +599,17 @@ export class Renderer {
         const n = game._nightLevel ?? 0;
         if (n <= 0.001 || this.zone === 'WILDERNESS') return;
 
+        const vp = this._view();
+        const lw = Math.ceil(vp.w), lh = Math.ceil(vp.h);   // the lightmap is screen-sized, in logical px
         const lm = (this._lightCanvas ??= document.createElement('canvas'));
-        if (lm.width !== CANVAS_PX) { lm.width = CANVAS_PX; lm.height = CANVAS_PX; }
+        if (lm.width !== lw || lm.height !== lh) { lm.width = lw; lm.height = lh; }
         const lctx = lm.getContext('2d');
 
         // Ambient base — white (day) lerped toward deep cool night by nightLevel.
         const amb = this._ambientColor(n);
         lctx.globalCompositeOperation = 'source-over';
         lctx.fillStyle = `rgb(${amb.r},${amb.g},${amb.b})`;
-        lctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+        lctx.fillRect(0, 0, lw, lh);
 
         // Additive warm lights punch holes of brightness in the night.
         lctx.globalCompositeOperation = 'lighter';
@@ -581,19 +633,18 @@ export class Renderer {
     // so night stays navigable) plus the map's lights (lamps/windows), converted
     // to screen space with the same scroll the world uses. Radii are in tiles.
     _collectLights(game) {
-        const { half } = this;
+        const vp = this._view();
         const lights = [{
-            x: half * TILE_PX + TILE_PX / 2,
-            y: half * TILE_PX + TILE_PX / 2,
+            x: vp.origin.x + TILE_PX / 2,
+            y: vp.origin.y + TILE_PX / 2,
             radius: TILE_PX * 3.2, r: 255, g: 236, b: 200,
         }];
         for (const L of (game.map?.lights || [])) {
-            const vx = L.x - game.playerX + half;
-            const vy = L.y - game.playerY + half;
-            if (vx < -4 || vx > VIEW_TILES + 3 || vy < -4 || vy > VIEW_TILES + 3) continue;
+            const dx = L.x - game.playerX, dy = L.y - game.playerY;
+            if (offView(vp, dx, dy, 4)) continue;
             lights.push({
-                x: vx * TILE_PX - this._scrollX + TILE_PX / 2,
-                y: vy * TILE_PX - this._scrollY + TILE_PX / 2,
+                x: vp.origin.x + dx * TILE_PX - this._scrollX + TILE_PX / 2,
+                y: vp.origin.y + dy * TILE_PX - this._scrollY + TILE_PX / 2,
                 radius: (L.radius ?? 2.5) * TILE_PX,
                 r: L.r ?? 255, g: L.g ?? 205, b: L.b ?? 130,
             });
@@ -639,24 +690,26 @@ export class Renderer {
         const coreR = Math.min(7, maxTiles + 1.5) * TILE_PX;
         const edgeR = coreR + TILE_PX * 2.6;
 
+        const vp = this._view();
+        const aw = Math.ceil(vp.w), ah = Math.ceil(vp.h);
         const am = (this._arenaCanvas ??= document.createElement('canvas'));
-        if (am.width !== CANVAS_PX) { am.width = CANVAS_PX; am.height = CANVAS_PX; }
+        if (am.width !== aw || am.height !== ah) { am.width = aw; am.height = ah; }
         const actx = am.getContext('2d');
 
         actx.globalCompositeOperation = 'source-over';
         actx.fillStyle = `rgb(${dr},${dg},${db})`;
-        actx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+        actx.fillRect(0, 0, aw, ah);
 
         // Punch the lit stage at the encounter — centred on the player (always at
         // view centre; combat centres on the hero).
-        const cx = this.half * TILE_PX + TILE_PX / 2;
-        const cy = this.half * TILE_PX + TILE_PX / 2;
+        const cx = vp.origin.x + TILE_PX / 2;
+        const cy = vp.origin.y + TILE_PX / 2;
         const grd = actx.createRadialGradient(cx, cy, 0, cx, cy, edgeR);
         grd.addColorStop(0, 'rgba(255,255,255,1)');
         grd.addColorStop(Math.min(0.98, coreR / edgeR), 'rgba(255,255,255,1)');
         grd.addColorStop(1, 'rgba(255,255,255,0)');
         actx.fillStyle = grd;
-        actx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+        actx.fillRect(0, 0, aw, ah);
 
         const { ctx } = this;
         ctx.save();
@@ -1890,7 +1943,7 @@ export class Renderer {
         const ui = this.uiSheet;
         const R = DEVICE_RECT;
         ctx.fillStyle = 'rgba(0,0,0,0.72)';
-        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+        this._fillScreen(ctx);
         if (ui?.loaded) drawPanelBig(ctx, ui, R.x, R.y, R.w, R.h, 'base');
         else            drawPanelSmall(ctx, R.x, R.y, R.w, R.h);
         if (!this.font) return;
@@ -2183,7 +2236,7 @@ export class Renderer {
         const openAt = game._overlayOpenedAt ?? now;
         const t = easeOutCubic(Math.min(1, Math.max(0, (now - openAt) / 80)));
 
-        ctx.save(); ctx.fillStyle = `rgba(0,0,0,${0.5 * t})`; ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX); ctx.restore();
+        ctx.save(); ctx.fillStyle = `rgba(0,0,0,${0.5 * t})`; this._fillScreen(ctx); ctx.restore();
 
         const RH = ITEM_OVERLAY_ROW_H, px = ITEM_OVERLAY_RECT.x, py = ITEM_OVERLAY_RECT.y, w = ITEM_OVERLAY_RECT.w;
         const h = 44 + opts.length * RH + 22;   // title band + rows + exit-cue footer
@@ -2223,7 +2276,7 @@ export class Renderer {
     _drawTargetList(game) {
         const { ctx } = this; const ui = this.uiSheet; if (!this.font) return;
         const tl = game.targetList; if (!tl || !tl.verbs.length) return;
-        ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX); ctx.restore();
+        ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.5)'; this._fillScreen(ctx); ctx.restore();
         const RH = TARGET_LIST_ROW_H, px = TARGET_LIST_RECT.x, py = TARGET_LIST_RECT.y, w = TARGET_LIST_RECT.w;
         const h = 44 + tl.verbs.length * RH + 22;   // +room for the exit-cue footer
         this._targetListRect = { x: px, y: py, w, h };   // stashed for the ✕ / tap-outside hit-test (menu grammar)
@@ -2358,7 +2411,7 @@ export class Renderer {
         if (!insp || !this.font) return;
 
         ctx.fillStyle = 'rgba(0,0,0,0.72)';
-        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+        this._fillScreen(ctx);
 
         const w = 400, padX = 22;
         const maxChars = Math.max(8, Math.floor((w - padX * 2) / 8));
@@ -3036,7 +3089,7 @@ export class Renderer {
         // Full dark wash — the world recedes; this is a "chapter card", not a
         // small toast over live play.
         ctx.fillStyle = 'rgba(0,0,0,0.82)';
-        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+        this._fillScreen(ctx);
 
         const w = 460, h = 300;
         const px = (CANVAS_PX - w) / 2, py = (CANVAS_PX - h) / 2;
@@ -3082,7 +3135,7 @@ export class Renderer {
         const ui = this.uiSheet;
 
         ctx.fillStyle = 'rgba(0,0,0,0.72)';
-        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+        this._fillScreen(ctx);
 
         const px = LOG_MODAL_RECT.x, py = LOG_MODAL_RECT.y, w = LOG_MODAL_RECT.w, h = LOG_MODAL_RECT.h;
         if (ui?.loaded) drawPanelBig(ctx, ui, px, py, w, h, 'base');
@@ -3221,7 +3274,7 @@ export class Renderer {
         const L = offerLayout(MODAL_RECT);
 
         ctx.fillStyle = 'rgba(0,0,0,0.72)';
-        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+        this._fillScreen(ctx);
         drawPanelSmall(ctx, L.panel.x, L.panel.y, L.panel.w, L.panel.h, this.uiSheet, 'base');
         if (!this.font) return;
 
@@ -3671,7 +3724,7 @@ export class Renderer {
 
         // ── draw pass ──
         ctx.fillStyle = 'rgba(0,0,0,0.38)';
-        ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+        this._fillScreen(ctx);
         if (ui?.loaded) drawPanelBig(ctx, ui, R.x, R.y, R.w, R.h, 'base');
         else            drawPanelSmall(ctx, R.x, R.y, R.w, R.h);
 
@@ -3801,7 +3854,7 @@ export class Renderer {
 
         if (!hosted) {
             ctx.fillStyle = 'rgba(0,0,0,0.72)';
-            ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+            this._fillScreen(ctx);
             const R = EQUIPMENT_MODAL_RECT;
             if (ui?.loaded) drawPanelBig(ctx, ui, R.x, R.y, R.w, R.h, 'base');
             else            drawPanelSmall(ctx, R.x, R.y, R.w, R.h);
@@ -4007,24 +4060,25 @@ export class Renderer {
 
     _drawVignette() {
         const { ctx } = this;
-        const s = CANVAS_PX;
-        // Cache the gradient — CANVAS_PX is fixed, so it never changes, and
-        // rebuilding it every frame (60/s in combat) churned the GC.
+        const vp = this._view();
+        const s = Math.max(vp.w, vp.h);
+        // Cache the gradient; setViewport drops it when the screen changes size.
+        // Rebuilding it every frame (60/s in combat) churned the GC.
         if (!this._vignetteGradient) {
-            const g = ctx.createRadialGradient(s/2, s/2, s * 0.35, s/2, s/2, s * 0.55);
+            const g = ctx.createRadialGradient(vp.w / 2, vp.h / 2, s * 0.35, vp.w / 2, vp.h / 2, s * 0.55);
             g.addColorStop(0, 'rgba(0,0,0,0)');
             g.addColorStop(1, 'rgba(0,0,0,0.3)');
             this._vignetteGradient = g;
         }
         ctx.fillStyle = this._vignetteGradient;
-        ctx.fillRect(0, 0, s, s);
+        ctx.fillRect(0, 0, vp.w, vp.h);
     }
 
     // ── Flash ────────────────────────────────────────────────────────────────
 
     flash(color = 'rgba(200,50,20,0.3)') {
         this.ctx.fillStyle = color;
-        this.ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
+        this._fillScreen(this.ctx);
     }
 }
 

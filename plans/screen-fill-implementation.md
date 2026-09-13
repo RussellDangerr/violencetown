@@ -1031,10 +1031,12 @@ In `renderFrame`, replace the modal dispatch and its `finally` block:
 with:
 
 ```js
+        // The menu box only moves the origin; a translate and its inverse, not a
+        // save/restore, so a menu's paint state carries on exactly as it did.
         const box = vp.menu;
         const inBox = MENU_BOX_STATES.has(game.state);
         try {
-            if (inBox) { ctx.save(); ctx.translate(box.x, box.y); }
+            if (inBox) ctx.translate(box.x, box.y);
             if (game.state === 'item_overlay')    this._drawItemOverlay(game);
             if (game.state === 'radial_menu')     this._drawRadialMenu(game);
             if (game.state === 'target_list')     this._drawTargetList(game);
@@ -1046,8 +1048,10 @@ with:
             if (game.state === 'inspect') this._drawInspectPanel(game);
             if (game.state === 'device') this._drawDevice(game);
         } finally {
-            if (inBox) ctx.restore();
+            if (inBox) ctx.translate(-box.x, -box.y);
 ```
+
+(Found in execution: a `ctx.save()`/`ctx.restore()` pair here stops a menu's paint state — its last `textAlign` — carrying into the next frame, which the frame check catches as a difference in the Remoticon scene. It is invisible in a left-to-right canvas, but stage 1 changes nothing, so the box is a plain translate.)
 
 And in that same `finally`, replace:
 
