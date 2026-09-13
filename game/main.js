@@ -36,7 +36,7 @@ import { QuestEngine } from './quests.js';
 import { doExamine, resolveExamine } from './examine.js';
 import { recordDrop, pendingDrops, dropLoadout } from './drops.js'; // per-zone runtime dropped-items layer (pure, node-tested)
 import {
-    HIT_SLOP, throwRects,
+    HIT_SLOP, throwRects, DOCK,
     HOTBAR_X_START, HOTBAR_Y, HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_STRIDE, HOTBAR_SLOTS,
     WHEEL_HUB_R, wheelRingR, LOG_MODAL_RECT, targetListRowRect, itemOverlayRowRect,
     EQUIPMENT_MODAL_RECT, EQUIP_SLOT_RECTS,
@@ -917,7 +917,7 @@ class Game {
         const canvas = this.renderer?.canvas;
         const box = document.getElementById('game-layout')?.getBoundingClientRect();
         if (!canvas || !box || box.width < 1 || box.height < 1) return;
-        const vp = computeViewport({ cssW: box.width, cssH: box.height, dpr: window.devicePixelRatio });
+        const vp = computeViewport({ cssW: box.width, cssH: box.height, dpr: window.devicePixelRatio, dock: DOCK });
         this.renderer.setViewport(vp);
         canvas.style.width  = `${vp.cssW}px`;
         canvas.style.height = `${vp.cssH}px`;

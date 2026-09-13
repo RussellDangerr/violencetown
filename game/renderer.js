@@ -480,10 +480,12 @@ export class Renderer {
         ctx.restore();
 
         // HUD — rendered AFTER restore so screen shake doesn't affect it
+        this._drawDock();
         this._drawHPPanel(game);
         this._drawBuffBar(game);
         this._drawQuestLog(game);
         this._drawXmbBar(game);
+        this._drawOpener(game);
 
         // Subtle vignette border
         this._drawVignette();
@@ -1735,6 +1737,25 @@ export class Renderer {
             ctx.fillStyle = 'rgba(255, 50, 30, 0.5)';
             ctx.fillRect(ppx + 4, ppy + 4, TILE_PX - 8, TILE_PX - 8);
         }
+    }
+
+    // (screen-fill) The dock: the strip along the bottom that the log, the item
+    // bar and the wheel's opener sit in. Drawn a little wider and taller than
+    // the screen, so only its top edge's chrome shows.
+    _drawDock() {
+        const dock = this._hud().dock;
+        if (!dock) return;
+        drawPanelSmall(this.ctx, dock.x - 8, dock.y, dock.w + 16, dock.h + 8, this.uiSheet);
+    }
+
+    // The wheel's opener: a ✦ button in the dock, where the dial will rise from.
+    // Hidden while the wheel is open; the dial takes its place.
+    _drawOpener(game) {
+        const o = this._hud().opener;
+        if (!o || game.state === 'radial_menu') return;
+        drawPanelSmall(this.ctx, o.x, o.y, o.w, o.h, this.uiSheet);
+        // -12 centres the glyph (measured at 1080p and 3440x1440, within half a px).
+        if (this.font) this.font.drawText(this.ctx, '✦', o.x + o.w / 2, o.y + o.h / 2 - 12, { color: UI.gold, scale: 2.4, align: 'center' });
     }
 
     // ── HP Panel (top-left, parchment style) ─────────────────────────────────
