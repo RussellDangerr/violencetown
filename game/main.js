@@ -1486,7 +1486,7 @@ class Game {
             // The offer screen scrolls whichever column the pointer is over.
             if (this.state === STATE.TRADE && this._offer) {
                 e.preventDefault();
-                const pt = this._screenToCanvas ? this._screenToCanvas(e) : null;
+                const pt = toMenu(this._vp(), this._canvasLocalCoords(e, canvas));   // offerLayout is menu space
                 const L = offerLayout(MODAL_RECT);
                 const side = (pt && pt.x >= L.theirs[0].x) ? 'theirs' : 'yours';
                 if (this._offerScrollBy(side, Math.sign(e.deltaY))) this._render();
