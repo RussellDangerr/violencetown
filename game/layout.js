@@ -140,6 +140,7 @@ export function hudInteractiveRects(state, vp = DEFAULT_VIEW) {
     const hud = hudLayout(vp);
     rects.push({ name: 'questlog', rect: hud.log });
     rects.push({ name: 'xmb', rect: xmbBarPanelRect(3, hud.bar) });
+    if (hud.opener) rects.push({ name: 'opener', rect: hud.opener });
   }
   return rects;
 }
@@ -184,7 +185,7 @@ const BAR_ABOVE = 78;          // the bar's panel runs from 78 above its anchor'
 const BAR_BELOW = 4;           // … to 4 below it (xmbBarPanelRect)
 
 export function hudLayout(vp = DEFAULT_VIEW) {
-    return cornersLayout(vp);
+    return vp.dockRows ? dockLayout(vp) : cornersLayout(vp);
 }
 
 // The HUD pinned to the screen's corners and edges: HP top-left, the buffs
@@ -204,8 +205,78 @@ function cornersLayout(vp) {
     return {
         hp: { x: HUD_M, y: HUD_M },
         buffsRight: w - HUD_M - Math.ceil(PAGE_BUTTONS_CSS * vp.logicalPerCss), buffsTop: HUD_M,
-        log, bar: { cx, bottom: barBottom }, wheel, strip: h,
+        log, bar: { cx, bottom: barBottom }, wheel, strip: h, dialRadius,
     };
+}
+
+// ── The dock (stage 3 of plans/screen-fill.md) ──
+// A full-width strip along the bottom: the log on the left, the item bar in
+// the middle, the wheel's ✦ opener on the right. On an upright or narrow
+// screen it has two rows: the log above, the item bar and the opener below.
+// The world stops at its top edge: main passes DOCK to computeViewport.
+export const DOCK = Object.freeze({ oneRow: 100, twoRows: 196, minOneRowW: 1000 });
+const DOCK_PAD = 8;                     // between the dock's edges and its pieces
+const LOG_H3 = 84;                      // header + objective + three 12px message lines + 12px padding top and bottom
+const OPENER = 72;                      // the ✦ button
+const BAR_H = BAR_ABOVE + BAR_BELOW;    // the item bar's panel: 82
+const WHEEL_DOWN_MAX = 120;             // the BACK tile's reach below the hub at the deepest ring, wheelRingR(2)[1]
+const DIAL_MARGIN = 12;
+
+// The two marks above the wheel, as offsets above its hub: the flapper pointer
+// just past the outermost ring, and — at a leaf, which draws no preview ring —
+// the "▲ FIRE" cue above the pointer, so the pointer never covers it. Each
+// mark is about 12px tall.
+export function wheelTopMarks(outerMost) {
+    return { pointerTop: outerMost + 14, cueTop: outerMost + 30 };
+}
+
+// The dial the wheel sits on, sized for the wheel as it is drawn: with
+// children to preview, the outermost ring is the preview ring and the pointer
+// tops it; at a leaf, the FIRE cue tops the active ring.
+export function dialRadius(depth, hasKids) {
+    const marks = wheelTopMarks(wheelRingR(hasKids ? depth : depth - 1)[1]);
+    return (hasKids ? marks.pointerTop : marks.cueTop) + DIAL_MARGIN;
+}
+export const DIAL_MAX_R = dialRadius(3, false);   // a leaf at the deepest ring: 162
+
+function dockLayout(vp) {
+    const { w, h } = vp;
+    const cx = w / 2;
+    const dock = { x: 0, y: h - vp.dockH, w, h: vp.dockH, rows: vp.dockRows };
+    // The wheel's hub never moves as the wheel deepens: far enough in from the
+    // right for the biggest dial, low enough that the deepest BACK tile ends
+    // just inside the dock.
+    const wheel = { cx: w - DOCK_PAD - DIAL_MAX_R, cy: h - DOCK_PAD - WHEEL_DOWN_MAX - 1 };
+    let log, barBottom, openerY;
+    if (dock.rows === 2) {
+        log = { x: DOCK_PAD, y: dock.y + DOCK_PAD, w: w - 2 * DOCK_PAD, h: LOG_H3, lines: 3 };
+        const rowTop = log.y + log.h + HUD_GAP;           // the second row: the item bar and the opener
+        barBottom = rowTop + BAR_ABOVE;
+        openerY = rowTop + (BAR_H - OPENER) / 2;
+    } else {
+        barBottom = dock.y + (dock.h - BAR_H) / 2 + BAR_ABOVE;
+        log = { x: DOCK_PAD, y: dock.y + DOCK_PAD, w: cx - BAR_HALF - HUD_GAP - DOCK_PAD, h: LOG_H3, lines: 3 };
+        openerY = dock.y + (dock.h - OPENER) / 2;
+    }
+    // Under the hub where it fits; otherwise just clear of the item bar.
+    const openerX = Math.min(Math.max(wheel.cx - OPENER / 2, cx + BAR_HALF + HUD_GAP), w - DOCK_PAD - OPENER);
+    return {
+        hp: { x: HUD_M, y: HUD_M },
+        buffsRight: w - HUD_M - Math.ceil(PAGE_BUTTONS_CSS * vp.logicalPerCss), buffsTop: HUD_M,
+        log, bar: { cx, bottom: barBottom }, wheel, strip: dock.y,
+        dock, opener: { x: openerX, y: openerY, w: OPENER, h: OPENER },
+        dialRadius,
+    };
+}
+
+// Which HUD piece an IDLE tap lands on, the opener or the log, or null. One
+// function, so main.js routes taps by the rects the renderer draws. (The item
+// bar keeps its own chip-level test in main._tapXmbBar.)
+export function hitHud(hud, pt, slop = HIT_SLOP) {
+    const inR = (r) => r && pt.x >= r.x - slop && pt.x <= r.x + r.w + slop && pt.y >= r.y - slop && pt.y <= r.y + r.h + slop;
+    if (inR(hud.opener)) return 'opener';
+    if (inR(hud.log)) return 'log';
+    return null;
 }
 export const LOG_MODAL_RECT = MODAL_RECT;
 // (Target List) A compact centred RuneScape-style verb menu. Height is computed

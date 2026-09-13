@@ -114,3 +114,79 @@ describe('hudLayout (fill): pinned to the corners', () => {
         assert.equal(hud.log.y + hud.log.h, xmbBarPanelRect(3, hud.bar).y + xmbBarPanelRect(3, hud.bar).h);
     });
 });
+
+import { DOCK, DIAL_MAX_R, dialRadius, wheelTopMarks, hitHud } from '../game/layout.js';
+
+describe('the dock', () => {
+    const withDock = (cssW, cssH, dpr) => computeViewport({ cssW, cssH, dpr, dock: DOCK });
+    const screens = {
+        '1080p': withDock(1920, 1080, 1),
+        "Caelan's ultrawide": withDock(3440, 1440, 1),
+        'phone upright': withDock(390, 844, 3),
+        'a squarish window': withDock(1100, 1000, 1),
+    };
+
+    for (const [name, vp] of Object.entries(screens)) {
+        test(`${name}: the log, the item bar and the opener never overlap under HIT_SLOP`, () => {
+            const rects = hudInteractiveRects('idle', vp);
+            assert.deepEqual(rects.map((r) => r.name), ['questlog', 'xmb', 'opener']);
+            for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++) {
+                assert.ok(!rectsOverlap(expandRect(rects[i].rect, HIT_SLOP), expandRect(rects[j].rect, HIT_SLOP)),
+                    `${rects[i].name} and ${rects[j].name} overlap`);
+            }
+        });
+
+        test(`${name}: they all sit inside the dock, and the hint strips rest on its top edge`, () => {
+            const hud = hudLayout(vp);
+            const inDock = (r) => r.x >= 0 && r.x + r.w <= vp.w && r.y >= hud.dock.y && r.y + r.h <= vp.h;
+            assert.ok(inDock(hud.log), 'log');
+            assert.ok(inDock(xmbBarPanelRect(3, hud.bar)), 'item bar');
+            assert.ok(inDock(hud.opener), 'opener');
+            assert.equal(hud.dock.y, vp.h - vp.dockH);
+            assert.equal(hud.strip, hud.dock.y);
+        });
+
+        test(`${name}: the biggest dial fits across the screen, and the deepest BACK tile ends in the dock`, () => {
+            const hud = hudLayout(vp);
+            assert.ok(hud.wheel.cx - DIAL_MAX_R >= 0 && hud.wheel.cx + DIAL_MAX_R <= vp.w);
+            assert.ok(hud.wheel.cy + 120 <= vp.h - 8 && hud.wheel.cy + 120 >= hud.dock.y);
+        });
+    }
+
+    test('one row on a wide screen: the log reaches to the item bar', () => {
+        const vp = screens['1080p'], hud = hudLayout(vp);
+        assert.equal(vp.dockRows, 1);
+        assert.equal(hud.log.lines, 3);
+        assert.equal(hud.log.x + hud.log.w + 12, xmbBarPanelRect(3, hud.bar).x);
+    });
+
+    test('two rows on an upright phone: the log spans the screen', () => {
+        const vp = screens['phone upright'], hud = hudLayout(vp);
+        assert.equal(vp.dockRows, 2);
+        assert.equal(hud.log.w, vp.w - 16);
+    });
+
+    test('the dial covers the wheel at every depth, with room for FIRE at a leaf', () => {
+        // The real wheel's measured reach above its hub (plans/screen-fill.md): 103, 135, 135.
+        assert.equal(dialRadius(1, true), 88 + 14 + 12);
+        assert.equal(dialRadius(2, true), 120 + 14 + 12);
+        assert.equal(dialRadius(3, false), 120 + 30 + 12);
+        assert.ok(dialRadius(1, true) > 103 && dialRadius(2, true) > 135 && dialRadius(3, false) > 135);
+        assert.equal(DIAL_MAX_R, dialRadius(3, false));
+    });
+
+    test('the FIRE cue never sits under the pointer', () => {
+        for (let r = 50; r <= 160; r++) {
+            const m = wheelTopMarks(r);
+            assert.ok(m.cueTop - 12 >= m.pointerTop, `outermost ring ${r}`);
+        }
+    });
+
+    test('hitHud finds the opener and the log, and nothing in the world', () => {
+        const hud = hudLayout(screens['1080p']);
+        const mid = (r) => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 });
+        assert.equal(hitHud(hud, mid(hud.opener)), 'opener');
+        assert.equal(hitHud(hud, mid(hud.log)), 'log');
+        assert.equal(hitHud(hud, { x: 640, y: 300 }), null);
+    });
+});
