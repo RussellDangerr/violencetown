@@ -10,8 +10,7 @@ import { Renderer } from '../game/renderer.js';
 import { GameMap } from '../game/map.js';
 import { TILES, TILE_PX } from '../game/data.js';
 import { OUTLINED_SPRITES, TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, PROP_SPRITES } from '../game/sprites.js';
-
-const HALF = 9;
+import { DEFAULT_VIEW } from '../game/viewport.js';
 
 // Which tile a recorded frame draws — matched back through the town sprite map.
 const TILE_BY_ID_NAME = (call) => {
@@ -23,7 +22,9 @@ const TILE_BY_ID_NAME = (call) => {
 // Returns the draw calls, each tagged with the world cell it landed in.
 function paint(width, tiles, px, py, extra = {}) {
     const calls = [];
-    const cellOf = (x, y) => [x / TILE_PX - HALF + px, y / TILE_PX - HALF + py].join(',');
+    // A renderer with no viewport draws on DEFAULT_VIEW: your tile's top-left is its origin.
+    const { origin } = DEFAULT_VIEW;
+    const cellOf = (x, y) => [(x - origin.x) / TILE_PX + px, (y - origin.y) / TILE_PX + py].join(',');
     const ctx = {
         fillStyle: null,
         fillRect(x, y) { calls.push({ cell: cellOf(x, y), fill: this.fillStyle }); },
@@ -35,7 +36,7 @@ function paint(width, tiles, px, py, extra = {}) {
         drawRegion(_, sx, sy, sw, sh, x, y) { calls.push({ cell: cellOf(x, y), sheet: name, sx, sy }); return true; },
     });
     const r = Object.assign(Object.create(Renderer.prototype), {
-        ctx, half: HALF, _scrollX: 0, _scrollY: 0,
+        ctx, _scrollX: 0, _scrollY: 0,
         sprites: new Proxy({}, { get: (_, name) => sheet(name) }),
     });
     const map = new GameMap({ width, height: tiles.length / width, spawn: { x: 0, y: 0 }, tiles, ...extra }, 'test');
@@ -50,8 +51,8 @@ describe('_drawActors', () => {
     function drawOne(type) {
         const shadows = [], drawn = [];
         const r = Object.assign(Object.create(Renderer.prototype), {
-            ctx: {}, half: HALF, _scrollX: 0, _scrollY: 0, sprites: {},
-            _playerScreenPos: () => ({ ppx: HALF * TILE_PX, ppy: HALF * TILE_PX }),
+            ctx: {}, _scrollX: 0, _scrollY: 0, sprites: {},
+            _playerScreenPos: () => ({ ppx: 0, ppy: 0, groundPy: 0 }),
             _drawPlayerSprite() {}, _drawEnemySprite() {},
             _drawPropSprite(def) { drawn.push(def); },
             _drawGroundShadow(cx, cy) { shadows.push([cx, cy]); },

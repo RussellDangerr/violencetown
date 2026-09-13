@@ -14,7 +14,7 @@
 // the one source of truth for the unlock ladder + adjacency.
 import { unlockedSlots, adjacentPairs, HANDS } from './rings.js';
 import { TILE_PX } from './data.js';
-import { CLASSIC } from './viewport.js';   // (screen-fill) the default viewport for the HUD helpers
+import { DEFAULT_VIEW } from './viewport.js';   // (screen-fill) the default viewport for the HUD helpers
 
 export const CANVAS_INTERNAL_PX = 608;   // mirrors data.js CANVAS_PX
 export const HIT_SLOP = 6;               // tap-zone expansion (Apple 44pt min target)
@@ -60,8 +60,8 @@ export const THROW_RECTS = {
 
 // The throw prompt's four targets around the player's tile, wherever the
 // viewport puts it. THROW_RECTS are the same targets around the old square's
-// centre (304, 304), so classic returns them unchanged.
-export function throwRects(vp = CLASSIC) {
+// centre (304, 304).
+export function throwRects(vp = DEFAULT_VIEW) {
     const dx = vp.origin.x + TILE_PX / 2 - CANVAS_INTERNAL_PX / 2;
     const dy = vp.origin.y + TILE_PX / 2 - CANVAS_INTERNAL_PX / 2;
     const at = (r) => ({ x: r.x + dx, y: r.y + dy, w: r.w, h: r.h });
@@ -134,7 +134,7 @@ export function xmbBarPanelRect(n = 3, anchor = XMB_ANCHOR_CLASSIC) {
 // of these may overlap (under HIT_SLOP), or a tap is ambiguous. 'idle' is the
 // only always-live combination (message log + usable bar); the modal states
 // are exclusive overlays tested separately if they gain persistent siblings.
-export function hudInteractiveRects(state, vp = CLASSIC) {
+export function hudInteractiveRects(state, vp = DEFAULT_VIEW) {
   const rects = [];
   if (state === 'idle') {
     const hud = hudLayout(vp);
@@ -145,20 +145,16 @@ export function hudInteractiveRects(state, vp = CLASSIC) {
 }
 
 // ── Radial "sunburst" combat wheel ──
-// Concentric rings centred on RADIAL_CENTER_*: a hub, the greyed decision-stack
-// rings growing inward, one bright active ring, and a partial preview arc above
-// the top pointer. Shared by renderer._drawWheel (draw) and main._tapRadialMenu
-// (hit-test). The preview-arc band and pointer are derived adaptively in
-// renderer._drawWheel from wheelRingR(depth).
-// (interaction polish) Compact wheel tucked into the BOTTOM-RIGHT corner, so it
-// no longer dominates the screen and sits opposite the bottom-left message log
-// (QUESTLOG_RECT, right edge x=346). Clearance is LOCKED to the wheel's real max
-// span: the deepest ACTIVE ring is wheelRingR(2) (outer 120) at depth 3 (Fight→
-// Melee — no depth-4 ring exists in wheel-model.js), ▲FIRE cue / flapper above the
-// top pointer. At (477,416) with the 1.05 open-overshoot (max radius 126): right
-// 477+126=603 < 608; left 477-126=351 > 346 (clears the log); bottom 416+126=542
-// < HOTBAR_OY 546; top clears 0. Re-measure if wheel-model.js gains a 4th ring.
-export const RADIAL_CENTER_X = 477, RADIAL_CENTER_Y = 416;
+// Concentric rings centred on hudLayout's wheel hub: a hub, the greyed
+// decision-stack rings growing inward, one bright active ring, and a partial
+// preview arc above the top pointer. Shared by renderer._drawWheel (draw) and
+// main._tapRadialMenu (hit-test). The preview-arc band and pointer are derived
+// adaptively in renderer._drawWheel from wheelRingR(depth).
+// hudLayout keeps the open wheel clear of the screen's edges and the item bar
+// using its real max span (WHEEL_REACH, below): the deepest ACTIVE ring is
+// wheelRingR(2) (outer 120) at depth 3 (Fight→Melee — no depth-4 ring exists in
+// wheel-model.js), with the 1.05 open-overshoot 126. Re-measure if
+// wheel-model.js gains a 4th ring.
 export const WHEEL_HUB_R    = 24;            // centre 'MENU' disc radius
 export const WHEEL_RING_W    = 28;           // radial thickness of each full ring
 export const WHEEL_RING_GAP  = 4;            // gap between adjacent rings
@@ -187,17 +183,7 @@ const BAR_HALF = 160;          // the item bar's widest half-width: three chips 
 const BAR_ABOVE = 78;          // the bar's panel runs from 78 above its anchor's bottom …
 const BAR_BELOW = 4;           // … to 4 below it (xmbBarPanelRect)
 
-export function hudLayout(vp = CLASSIC) {
-    if (vp.mode === 'classic') {
-        return {
-            hp: { x: 6, y: 6 },                                   // the HP panel's top-left (170 x 90)
-            buffsRight: CANVAS_INTERNAL_PX - 6, buffsTop: 6,      // the buff bar hangs from its top-right corner
-            log: { ...QUESTLOG_RECT, lines: 2 },                  // the quest log, and how many feed lines it shows
-            bar: XMB_ANCHOR_CLASSIC,                              // the item bar's anchor (xmbBarLayout)
-            wheel: { cx: RADIAL_CENTER_X, cy: RADIAL_CENTER_Y },  // the wheel's hub
-            strip: CANVAS_INTERNAL_PX,                            // the bottom hint strips rest on this y
-        };
-    }
+export function hudLayout(vp = DEFAULT_VIEW) {
     return cornersLayout(vp);
 }
 

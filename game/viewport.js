@@ -12,43 +12,30 @@
 // pixel; pixel art stays crisp only while k is a whole number.
 
 import { TILE_PX, CANVAS_PX } from './data.js';
-import { pickCanvasCss } from './canvas-fit.js';
 
 export const ART_PX = TILE_PX / 16;    // logical px per art pixel: 2
 export const MIN_TILES = 20;           // the rule: at least this many tiles along the short side
 export const MENU_SIZE = CANVAS_PX;    // menus keep their 608x608 layouts, in a centred box
 
-const CLASSIC_SS = 2;                  // the old fixed supersample: 1216 backing px for 608 logical
-const CLASSIC_CAP = 1024;              // the old CSS cap on the square
-
 // Round a logical coordinate to whole art pixels, which land on whole
 // backing-store px at every k.
 const toArt = (v) => ART_PX * Math.round(v / ART_PX);
 
-// `mode: 'classic'` reproduces the pre-viewport 19x19 square exactly (stage 1
-// of the build; removed in stage 2). `mode: 'fill'` fills cssW x cssH with as
-// many tiles as fit at the largest whole scale that still shows MIN_TILES
-// along the short side. `dock` ({ oneRow, twoRows, minOneRowW }, logical px)
-// is the strip along the bottom the world does not show through: one row on
-// a wide screen, two rows on an upright one or one narrower than minOneRowW.
-export function computeViewport({ mode = 'fill', cssW, cssH, dpr = 1, dock = null } = {}) {
+// Fill cssW x cssH with as many tiles as fit, at the largest whole scale that
+// still shows MIN_TILES along the short side. `dock` ({ oneRow, twoRows,
+// minOneRowW }, logical px) is the strip along the bottom the world does not
+// show through: one row on a wide screen, two rows on an upright one or one
+// narrower than minOneRowW.
+export function computeViewport({ cssW, cssH, dpr = 1, dock = null } = {}) {
     const d = (Number.isFinite(dpr) && dpr > 0) ? dpr : 1;
-    let cssOut, backingW, backingH, scale;
-    if (mode === 'classic') {
-        const side = pickCanvasCss(Math.min(cssH - 16, cssW - 16, CLASSIC_CAP), d);
-        cssOut = { w: side, h: side };
-        backingW = backingH = CANVAS_PX * CLASSIC_SS;
-        scale = CLASSIC_SS;
-    } else {
-        backingW = Math.max(1, Math.floor(cssW * d));
-        backingH = Math.max(1, Math.floor(cssH * d));
-        cssOut = { w: backingW / d, h: backingH / d };
-        const k = Math.max(1, Math.floor(Math.min(backingW, backingH) / (16 * MIN_TILES)));
-        scale = k / ART_PX;
-    }
+    const backingW = Math.max(1, Math.floor(cssW * d));
+    const backingH = Math.max(1, Math.floor(cssH * d));
+    const cssOut = { w: backingW / d, h: backingH / d };
+    const k = Math.max(1, Math.floor(Math.min(backingW, backingH) / (16 * MIN_TILES)));
+    const scale = k / ART_PX;
     const w = backingW / scale, h = backingH / scale;
     const portrait = h > w;
-    const dockRows = (mode === 'classic' || !dock) ? 0 : (portrait || w < dock.minOneRowW) ? 2 : 1;
+    const dockRows = !dock ? 0 : (portrait || w < dock.minOneRowW) ? 2 : 1;
     const dockH = dockRows === 2 ? dock.twoRows : dockRows === 1 ? dock.oneRow : 0;
     const world = { x: 0, y: 0, w, h: h - dockH };
     const origin = {
@@ -56,7 +43,7 @@ export function computeViewport({ mode = 'fill', cssW, cssH, dpr = 1, dock = nul
         y: toArt(world.y + world.h / 2 - TILE_PX / 2),
     };
     return Object.freeze({
-        mode, cssW: cssOut.w, cssH: cssOut.h, backingW, backingH,
+        cssW: cssOut.w, cssH: cssOut.h, backingW, backingH,
         scale, k: scale * ART_PX, w, h, cols: w / TILE_PX, rows: h / TILE_PX,
         world, origin, dockH, dockRows, portrait,
         // The tiles, relative to yours, that are at least partly on screen.
@@ -76,9 +63,9 @@ export function computeViewport({ mode = 'fill', cssW, cssH, dpr = 1, dock = nul
     });
 }
 
-// The classic square, for anything that draws before main hands the renderer
-// a viewport (and for tests that build renderers by hand).
-export const CLASSIC = computeViewport({ mode: 'classic', cssW: 1040, cssH: 1040, dpr: 1 });
+// The screen a renderer draws on before main hands it a viewport, and in
+// tests that build renderers by hand: a 1080p monitor.
+export const DEFAULT_VIEW = computeViewport({ cssW: 1920, cssH: 1080, dpr: 1 });
 
 // Where tile (tx, ty) lands on screen, logical px, for a camera on (px, py)
 // that has scrolled (sx, sy) logical px partway through a step.

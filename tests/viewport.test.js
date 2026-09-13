@@ -2,10 +2,9 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    computeViewport, CLASSIC, MIN_TILES, ART_PX, MENU_SIZE,
+    computeViewport, DEFAULT_VIEW, MIN_TILES, ART_PX, MENU_SIZE,
     tileToScreen, screenToTile, offView, clientToScreen, toMenu, snapPx,
 } from '../game/viewport.js';
-import { pickCanvasCss } from '../game/canvas-fit.js';
 
 // The six screens the spec's table is measured on: CSS size and DPR, then the
 // tile size in screen px and the tiles on screen the rule must give.
@@ -18,35 +17,6 @@ const SCREENS = {
     'phone sideways':   { cssW: 844,  cssH: 390,  dpr: 3, tile: 48, cols: 52.75,  rows: 24.375 },
 };
 const at = (s, extra = {}) => computeViewport({ cssW: s.cssW, cssH: s.cssH, dpr: s.dpr, ...extra });
-
-describe('classic: the square the game draws today', () => {
-    test('is 608 logical px and 19x19 tiles, drawn at 2x into a 1216 backing store', () => {
-        assert.equal(CLASSIC.w, 608); assert.equal(CLASSIC.h, 608);
-        assert.equal(CLASSIC.cols, 19); assert.equal(CLASSIC.rows, 19);
-        assert.equal(CLASSIC.backingW, 1216); assert.equal(CLASSIC.backingH, 1216);
-        assert.equal(CLASSIC.scale, 2);
-    });
-
-    test("puts the player's tile at (288, 288) and sees nine tiles each way", () => {
-        assert.deepEqual(CLASSIC.origin, { x: 288, y: 288 });
-        assert.deepEqual(CLASSIC.span, { iMin: -9, iMax: 9, jMin: -9, jMax: 9 });
-    });
-
-    test('draws menus where they have always been, with no dock and a 1px scroll step', () => {
-        assert.deepEqual(CLASSIC.menu, { x: 0, y: 0, w: 608, h: 608 });
-        assert.equal(CLASSIC.dockH, 0);
-        assert.equal(CLASSIC.snap, 1);
-    });
-
-    test('sizes the square exactly as _fitCanvas did', () => {
-        for (const [w, h, dpr] of [[1920, 1080, 1], [3440, 1440, 1], [1400, 900, 1.5], [390, 844, 3]]) {
-            const vp = computeViewport({ mode: 'classic', cssW: w, cssH: h, dpr });
-            const want = pickCanvasCss(Math.min(h - 16, w - 16, 1024), dpr);
-            assert.equal(vp.cssW, want);
-            assert.equal(vp.cssH, want);
-        }
-    });
-});
 
 describe('fill: one rule picks the tile size', () => {
     for (const [name, s] of Object.entries(SCREENS)) {
@@ -113,7 +83,6 @@ describe('fill: one rule picks the tile size', () => {
         const squarish = computeViewport({ cssW: 1100, cssH: 1000, dpr: 1, dock });
         assert.equal(squarish.portrait, false);
         assert.equal(squarish.dockRows, 2);
-        assert.equal(CLASSIC.dockRows, 0);
     });
 
     test('the menu box is centred and fully on screen', () => {
@@ -135,7 +104,7 @@ describe('fill: one rule picks the tile size', () => {
 });
 
 describe('conversions', () => {
-    const views = [CLASSIC, at(SCREENS['1080p']), at(SCREENS['phone upright'])];
+    const views = [DEFAULT_VIEW, at(SCREENS["Caelan's monitor"]), at(SCREENS['phone upright'])];
 
     test('screenToTile inverts tileToScreen, mid-scroll too', () => {
         for (const vp of views) {
@@ -145,25 +114,6 @@ describe('conversions', () => {
                     const back = screenToTile(vp, { x: p.x + 5, y: p.y + 27 }, 50, 40, sx, sy);
                     assert.deepEqual(back, { x: 50 + dx, y: 40 + dy });
                 }
-            }
-        }
-    });
-
-    test('classic screenToTile is the old _screenToTile arithmetic', () => {
-        const old = (pt, px, py, sx, sy) => ({ x: Math.floor((pt.x + sx) / 32 - 9 + px), y: Math.floor((pt.y + sy) / 32 - 9 + py) });
-        for (let x = 0; x < 608; x += 7) for (let y = 0; y < 608; y += 11) {
-            assert.deepEqual(screenToTile(CLASSIC, { x, y }, 16, 12, 3, -4), old({ x, y }, 16, 12, 3, -4));
-        }
-    });
-
-    test("classic offView is the old passes' culls", () => {
-        // renderer.js culled with `vx < -m || vx > VIEW_TILES + m - 1`, vx = dx + 9.
-        for (const m of [1, 2, 3, 4]) {
-            for (let d = -16; d <= 16; d++) {
-                const vx = d + 9;
-                const old = vx < -m || vx > 19 + m - 1;
-                assert.equal(offView(CLASSIC, d, 0, m), old, `m=${m} dx=${d}`);
-                assert.equal(offView(CLASSIC, 0, d, m), old, `m=${m} dy=${d}`);
             }
         }
     });
@@ -179,15 +129,28 @@ describe('conversions', () => {
     test("toMenu moves a screen point into the menu box's own space", () => {
         const vp = at(SCREENS['1080p']);
         assert.deepEqual(toMenu(vp, { x: vp.menu.x + 10, y: vp.menu.y + 20 }), { x: 10, y: 20 });
-        assert.deepEqual(toMenu(CLASSIC, { x: 10, y: 20 }), { x: 10, y: 20 });
+        assert.deepEqual(toMenu(DEFAULT_VIEW, { x: DEFAULT_VIEW.menu.x, y: DEFAULT_VIEW.menu.y }), { x: 0, y: 0 });
         assert.equal(toMenu(vp, null), null);
     });
 
     test("snapPx rounds to the viewport's step", () => {
-        assert.equal(snapPx(CLASSIC, 3.4), 3);
+        const even = at(SCREENS["Caelan's monitor"]);   // k = 4, so scale is 2
+        assert.equal(even.snap, 1);
+        assert.equal(snapPx(even, 3.4), 3);
         const odd = at(SCREENS['1080p']);          // k = 3, so scale is 1.5
         assert.equal(odd.snap, 2);
         assert.equal(snapPx(odd, 3.4), 4);
         assert.equal(snapPx(odd, 2.9), 2);
+    });
+
+    test('offView keeps a margin of m tiles past the span on every side', () => {
+        const vp = at(SCREENS['1080p']);
+        for (const m of [1, 2, 3, 4]) {
+            assert.equal(offView(vp, vp.span.iMin - m, 0, m), false);
+            assert.equal(offView(vp, vp.span.iMin - m - 1, 0, m), true);
+            assert.equal(offView(vp, vp.span.iMax + m, 0, m), false);
+            assert.equal(offView(vp, vp.span.iMax + m + 1, 0, m), true);
+            assert.equal(offView(vp, 0, vp.span.jMax + m + 1, m), true);
+        }
     });
 });

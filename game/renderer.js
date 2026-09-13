@@ -4,7 +4,7 @@
 // All text: dark brown on parchment for readability (not gold-on-dark)
 
 import { TILE_PX, CANVAS_PX, SAFE_SLOTS, TILE_BY_ID } from './data.js';
-import { CLASSIC, offView, snapPx } from './viewport.js';   // (screen-fill) the screen's geometry
+import { DEFAULT_VIEW, offView, snapPx } from './viewport.js';   // (screen-fill) the screen's geometry
 
 // The splash canvas's supersample: its 320x220 card is drawn at 2x so the
 // VT323 text stays sharp. The game canvas's transform comes from the viewport
@@ -141,8 +141,8 @@ export class Renderer {
         this.canvas = canvas;
         this.ctx    = canvas.getContext('2d');
         this.viewport = null;              // main._fitCanvas hands one over via setViewport
-        canvas.width  = CLASSIC.backingW;
-        canvas.height = CLASSIC.backingH;
+        canvas.width  = DEFAULT_VIEW.backingW;
+        canvas.height = DEFAULT_VIEW.backingH;
         this.ctx.imageSmoothingEnabled = false;
 
         this.sprites = null;
@@ -159,9 +159,9 @@ export class Renderer {
         this._vignetteGradient = null;     // it is sized to the screen
     }
 
-    // The viewport in force: the one main set, or the classic square for a
+    // The viewport in force: the one main set, or the default screen for a
     // renderer that never had one (tests build renderers with Object.create).
-    _view() { return this.viewport || CLASSIC; }
+    _view() { return this.viewport || DEFAULT_VIEW; }
 
     // Where the HUD pieces sit for the viewport in force (layout.js hudLayout),
     // recomputed only when the viewport changes.

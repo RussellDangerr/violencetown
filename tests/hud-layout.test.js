@@ -2,7 +2,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { rectsOverlap, expandRect } from '../game/layout.js';
-import { QUESTLOG_RECT, HIT_SLOP, xmbBarPanelRect, hudInteractiveRects } from '../game/layout.js';
+import { HIT_SLOP, xmbBarPanelRect, hudInteractiveRects } from '../game/layout.js';
 
 describe('rectsOverlap', () => {
     test('true when rects share area', () => {
@@ -47,25 +47,10 @@ describe('HUD non-overlap invariant', () => {
     });
 });
 
-import { hudLayout, throwRects, THROW_RECTS, RADIAL_CENTER_X, RADIAL_CENTER_Y, xmbBarLayout, XMB_ANCHOR_CLASSIC } from '../game/layout.js';
-import { CLASSIC, computeViewport } from '../game/viewport.js';
+import { hudLayout, throwRects, xmbBarLayout, XMB_ANCHOR_CLASSIC } from '../game/layout.js';
+import { computeViewport } from '../game/viewport.js';
 
-describe('hudLayout (classic) is the old square', () => {
-    test('every piece sits where the fixed constants put it', () => {
-        const hud = hudLayout(CLASSIC);
-        assert.deepEqual(hud.hp, { x: 6, y: 6 });
-        assert.equal(hud.buffsRight, 602);
-        assert.equal(hud.buffsTop, 6);
-        assert.deepEqual(hud.log, { ...QUESTLOG_RECT, lines: 2 });
-        assert.deepEqual(hud.bar, { cx: 304, bottom: 588 });
-        assert.deepEqual(hud.wheel, { cx: RADIAL_CENTER_X, cy: RADIAL_CENTER_Y });
-        assert.equal(hud.strip, 608);
-    });
-
-    test('throwRects(classic) are THROW_RECTS', () => {
-        assert.deepEqual(throwRects(CLASSIC), THROW_RECTS);
-    });
-
+describe('throw targets and the item bar anchor', () => {
     test("throwRects follow the player's tile", () => {
         const vp = computeViewport({ cssW: 1920, cssH: 1080, dpr: 1 });
         const r = throwRects(vp);

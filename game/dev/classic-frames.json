@@ -1,6 +1,0 @@
-{
-  "base": "a61c658",
-  "town":   { "calls": 862,  "hash": "2c1f529ceb578dc868f47bd096622a4a9f056326f5c669bb7bd7b7cf58e4d1c0", "chunks": ["cd2b0220099231bf", "44c0a7af83debff4", "3cf7e5de1418916e", "55370c523a375e27", "1c2eddb26f8d5b0c"] },
-  "sewer":  { "calls": 1140, "hash": "2acc211fd6d57bc2400da413f230dc8971410199a79525865b12b83bc9c83d6a", "chunks": ["c89abf7bfd9d03bd", "14c0fb773fdd1ddc", "3c3ddefe4d8e9e2c", "4841ff5bd384e3d6", "56c9531439c36709", "6f8ad57ca88c028a"] },
-  "device": { "calls": 1018, "hash": "0d8383e23ceda3204726ffdf618f35ff3c9c314e861464be776017ba233df2b9", "chunks": ["9f91a739e8dfef5e", "e3288f247e4d2e59", "ce381b3b6b611a2d", "beb28a3c6bf61cc6", "6d119e16480193e4", "160ee727d6bc0952"] }
-}
