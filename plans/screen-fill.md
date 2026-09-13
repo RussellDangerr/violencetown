@@ -262,3 +262,22 @@ whether it is parked or folded in first.
    those would be drawn.
 3. **Who gets pulled into a fight** — possibly the same sight-defined area as piece 1, as a
    gameplay rule.
+
+## Measured
+
+The frame-time gate (*Build and check*, stage 2), 2026-09-13, on Caelan's machine (RTX 4080 SUPER)
+in the Browser pane at 3440×1440, DPR 1. **Full frame** is the drawing plus the GPU's raster; *issue*
+is the drawing alone. The implementation plan's Task 10 note says why issue alone understates a
+bigger screen, and how the full frame is timed. Median of three runs, ms per frame:
+
+| Scene | Before: the 1216px square | After: filled, with fillers |
+|---|---|---|
+| Town at night (after: at the east edge, in front of the forest) | 1.38 full · 0.5–1.1 issue | **6.51** full · 1.56 issue |
+| Town at night, north-east corner (forest on two sides) | — | **7.45** full · 1.69 issue |
+| Town by day | 1.38 full | **6.38** full · 1.56 issue |
+| Sewer fight, wheel open | 1.95 full · 0.6–1.4 issue | **5.67** full · 1.09 issue |
+
+Both gate scenes are under 16 ms, so stage 3 goes ahead without the fallbacks. The cost grows with
+the screen's pixels (3.35× here, about 4× the time). A weaker GPU at a big screen would feel this
+first: a laptop at 2880×1800 has more pixels than this monitor. If that bites, the fallbacks above
+are still the plan.
