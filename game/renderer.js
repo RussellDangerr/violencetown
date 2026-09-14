@@ -1245,7 +1245,7 @@ export class Renderer {
         return e.x === game.playerX + dx && e.y === game.playerY + dy;
     }
 
-    _drawEnemySprite(game, e, px, py, now) {
+    _drawEnemySprite(game, e, px, py, now, { bodyOnly = false } = {}) {
         const { ctx, sprites } = this;
         const isAlive = e.entity.isAlive();
         // Hit-flash only animates while alive — corpses are static after death.
@@ -1290,6 +1290,10 @@ export class Renderer {
                 ctx.fillRect(px + 6, py + 6, TILE_PX - 12, TILE_PX - 12);
             }
         });
+
+        // (fight-fog) The entrance's silhouettes want the body alone: every
+        // overlay below is a filled shape that would silhouette as a box.
+        if (bodyOnly) return;
 
         if (isAlive) {
             // Hit-flash overlay — alpha fades as the flash ages so it pops on the
@@ -1770,7 +1774,7 @@ export class Renderer {
         this._drawPlayerSprite(game, ppx, ppy, now);
     }
 
-    _drawPlayerSprite(game, ppx, ppy, now) {
+    _drawPlayerSprite(game, ppx, ppy, now, { bodyOnly = false } = {}) {
         const { ctx, sprites } = this;
         const flashing = (game._playerHitFlashUntil ?? 0) > now;
 
@@ -1798,6 +1802,8 @@ export class Renderer {
                 ctx.fillRect(ppx + 6, ppy + 6, TILE_PX - 12, TILE_PX - 12);
             }
         });
+
+        if (bodyOnly) return;   // (fight-fog) the silhouettes' body-only draw
 
         // Hit-flash overlay — red tint when the player just took damage.
         // Sharper alpha than the enemy flash since the player sprite tends

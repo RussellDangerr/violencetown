@@ -204,3 +204,30 @@ describe('the threat overlay in a fight', () => {
         assert.ok(stippled(calls).every(c => c.fill === 'stipple rgb(2,2,8)'), 'HAZE: the dark stipple on safe ground');
     });
 });
+
+describe('body-only sprites, for the silhouettes', () => {
+    function drawn(who, bodyOnly) {
+        const frames = [];
+        const { r, main } = rig({ sprites: new Proxy({}, { get: () => ({ loaded: true, drawFrame: (...a) => { frames.push(a); return true; } }) }) });
+        const now = performance.now();
+        const game = fightGame({ _playerHitFlashUntil: now + 500 });
+        if (who === 'enemy') {
+            const e = fighter({ entity: { isAlive: () => true, hp: 5, maxHp: 10 }, _hitFlashUntil: now + 500,
+                buffs: [{ name: 'Blind', type: 'debuff' }], disposition: -10, gold: 150 });
+            r._drawEnemySprite(game, e, 64, 32, now, { bodyOnly });
+        } else {
+            r._drawPlayerSprite(game, 0, 0, now, { bodyOnly });
+        }
+        return { frames: frames.length, fills: main.calls.filter(c => c.fn === 'fillRect' || c.fn === 'fill').length };
+    }
+
+    test('an enemy drawn body-only is the sprite alone: no flash, bar, badges, face or pips', () => {
+        assert.deepEqual(drawn('enemy', true), { frames: 1, fills: 0 });
+        assert.ok(drawn('enemy', false).fills > 0, 'the full draw has them');
+    });
+
+    test('so is the player', () => {
+        assert.deepEqual(drawn('player', true), { frames: 1, fills: 0 });
+        assert.ok(drawn('player', false).fills > 0, 'the full draw has the hit flash');
+    });
+});
