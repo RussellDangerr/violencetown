@@ -37,8 +37,8 @@ import { isSafe } from './defeat-scenarios.js';   // (defeat legibility) mark sa
 import { buyPrice, sellPrice, bribeStepCost, mood, canTrade, band, BRIBE_STEP } from './trade.js'; // (trade slice 1) pricing + mood smiley; band feeds the offer meter's multiplier readout
 import { isHunting } from './ai.js'; // one spelling of "actively hunting the player"
 import { fighters, fightArea, FIGHT_MARGIN } from './fight-area.js';        // (fight-fog) who is in the fight, and what they can see
-import { fogReveal, fogDepth, fogOut, tileJitter, FOG_TINT, FOG_DENSITY, FOG_BLUR_TILES,
-         FOG_FAR_TILES, FOG_IN_MS, FOG_OUT_MS } from './fight-entrance.js'; // (fight-fog) the fog's timeline and look
+import { entranceAt, fogReveal, fogDepth, fogOut, tileJitter, FOG_TINT, FOG_DENSITY, FOG_BLUR_TILES,
+         FOG_FAR_TILES, FOG_IN_MS, FOG_OUT_MS } from './fight-entrance.js'; // (fight-fog) the entrance, and the fog's timeline and look
 import * as Settings from './settings.js'; // (combat-feel-pass) reduce-motion for hit-splats (namespace import — see main.js)
 import { challengeGp } from './enemies.js'; // (Law 6f) nameplate pips read the composite kit, not raw gold
 import { resolveOffer } from './offer.js';                                  // (offer screen) pure basket→projection
@@ -537,6 +537,11 @@ export class Renderer {
             this._closeBtnRect = this._menuPanelRect ? closeButtonRect(this._menuPanelRect) : null;
             if (this._closeBtnRect) this._drawCloseButton(this.ctx, this._closeBtnRect);
         }
+
+        // (fight-fog) A fight's entrance — the impact frame, then the zoom
+        // punch — over the whole finished frame, HUD and menus included
+        // (plans/fight-fog.md §2).
+        this._drawEntrance(game);
     }
 
     // (menu grammar) The ✕ / Back chip — a small dark rounded plate with a gold X,
@@ -785,6 +790,100 @@ export class Renderer {
         sctx.fillRect(0, 0, soft.width, soft.height);
         sctx.globalCompositeOperation = 'source-over';
         fog.soft = soft;
+    }
+
+    // ── The fight's entrance (plans/fight-fog.md §2) ─────────────────────────
+    //
+    // For IMPACT_MS the screen goes to an impact frame: a cream close-up or a
+    // red slash with you and the fighters as black silhouettes, or a plain
+    // white flash. Meanwhile the whole frame punches in about you and settles.
+    // Presentation only: input is never held for it.
+    _drawEntrance(game) {
+        const start = game._fightStart;
+        if (!game._fightOn || !start?.entrance) return;
+        const now = performance.now();
+        const at = entranceAt(start.entrance, now - start.at, { reduceMotion: !!Settings.get('reduceMotion') });
+        if (!at.impact && at.zoom === 1) return;
+        const { ctx, canvas } = this;
+        const vp = this._view();
+        const W = canvas.width, H = canvas.height;
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);   // backing px from here
+        if (at.impact) this._drawImpact(game, start.entrance, at.impactT, vp, W, H, now);
+        if (at.zoom > 1) {
+            const snap = this._offscreen('entranceSnap', W, H);
+            const sctx = snap.getContext('2d');
+            sctx.setTransform(1, 0, 0, 1, 0, 0);
+            sctx.clearRect(0, 0, W, H);
+            sctx.drawImage(canvas, 0, 0);
+            const cx = (vp.origin.x + TILE_PX / 2) * vp.scale, cy = (vp.origin.y + TILE_PX / 2) * vp.scale;
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(snap, cx - cx * at.zoom, cy - cy * at.zoom, W * at.zoom, H * at.zoom);
+        }
+        ctx.restore();
+    }
+
+    // The impact frame, in backing px. `t` is how far through it we are, 0..1.
+    _drawImpact(game, entrance, t, vp, W, H, now) {
+        const { ctx } = this;
+        if (entrance.impact === 'flash') {
+            ctx.globalAlpha = 1 - t;
+            ctx.fillStyle = '#fff8e8';
+            ctx.fillRect(0, 0, W, H);
+            ctx.globalAlpha = 1;
+            return;
+        }
+        const fs = fighters(game.enemies);
+        const sil = this._silhouettes(game, fs, vp, W, H, now);
+        ctx.fillStyle = entrance.impact === 'bw' ? '#efe6d2' : '#c8242b';
+        ctx.fillRect(0, 0, W, H);
+        // The fight's middle: you and everyone in it.
+        const pts = [[game.playerX, game.playerY], ...fs.map(f => [f.x, f.y])];
+        const mean = (i) => pts.reduce((s, p) => s + p[i], 0) / pts.length;
+        const mx = (vp.origin.x + TILE_PX / 2 + (mean(0) - game.playerX) * TILE_PX) * vp.scale;
+        const my = (vp.origin.y + TILE_PX / 2 + (mean(1) - game.playerY) * TILE_PX) * vp.scale;
+        if (entrance.impact === 'redblack') {   // a white slash through the fight
+            ctx.fillStyle = '#fff4e0';
+            ctx.beginPath();
+            ctx.moveTo(0, my + H * 0.20); ctx.lineTo(W, my - H * 0.34);
+            ctx.lineTo(W, my - H * 0.25); ctx.lineTo(0, my + H * 0.29);
+            ctx.closePath();
+            ctx.fill();
+        }
+        const F = entrance.silhouette;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(sil, mx - mx * F, my - my * F, W * F, H * F);
+    }
+
+    // You and the fighters as solid black shapes on a clear canvas, from the
+    // real sprites drawn body-only.
+    _silhouettes(game, fs, vp, W, H, now) {
+        const sil = this._offscreen('entranceSil', W, H);
+        const sctx = sil.getContext('2d');
+        sctx.setTransform(1, 0, 0, 1, 0, 0);
+        sctx.globalCompositeOperation = 'source-over';
+        sctx.clearRect(0, 0, W, H);
+        sctx.setTransform(vp.scale, 0, 0, vp.scale, 0, 0);
+        sctx.imageSmoothingEnabled = false;
+        const screen = this.ctx;
+        this.ctx = sctx;
+        try {
+            for (const f of fs) {
+                const px = vp.origin.x + (f.x - game.playerX) * TILE_PX - this._scrollX;
+                const py = vp.origin.y + (f.y - game.playerY) * TILE_PX - this._scrollY;
+                this._drawEnemySprite(game, f, px, py, now, { bodyOnly: true });
+            }
+            const { ppx, ppy } = this._playerScreenPos(game, now);
+            this._drawPlayerSprite(game, ppx, ppy, now, { bodyOnly: true });
+        } finally {
+            this.ctx = screen;
+        }
+        sctx.setTransform(1, 0, 0, 1, 0, 0);
+        sctx.globalCompositeOperation = 'source-in';
+        sctx.fillStyle = '#120e0a';
+        sctx.fillRect(0, 0, W, H);
+        sctx.globalCompositeOperation = 'source-over';
+        return sil;
     }
 
     // ── Tiles ────────────────────────────────────────────────────────────────

@@ -231,3 +231,76 @@ describe('body-only sprites, for the silhouettes', () => {
         assert.ok(drawn('player', false).fills > 0, 'the full draw has the hit flash');
     });
 });
+
+describe('the entrance', () => {
+    const at = (entrance, ms, over = {}) => fightGame({ _fightStart: { kind: entrance.kind, at: performance.now() - ms, entrance }, ...over });
+    const filled = (rec, colour) => rec.calls.some(c => (c.fn === 'fillRect' || c.fn === 'fill') && c.fill === colour);
+
+    test('struck: a cream close-up, you and them in black', () => {
+        const { r, main, off } = rig();
+        r._drawEntrance(at(ENTRANCES.struck, 30));
+        assert.ok(filled(main, '#efe6d2'), 'the cream screen');
+        assert.ok(off.entranceSil.rec.calls.some(c => c.fn === 'fillRect' && c.op === 'source-in'), 'the silhouettes, filled solid');
+        assert.ok(draws(main).some(c => c.a[0] === off.entranceSil), 'blown up over the cream');
+    });
+
+    test('spotted: a red screen and a white slash', () => {
+        const { r, main } = rig();
+        r._drawEntrance(at(ENTRANCES.spotted, 30));
+        assert.ok(filled(main, '#c8242b'), 'the red screen');
+        assert.ok(filled(main, '#fff4e0'), 'the slash');
+    });
+
+    test('search: a white flash, no silhouettes, no zoom', () => {
+        const { r, main, off } = rig();
+        r._drawEntrance(at(ENTRANCES.search, 30));
+        assert.ok(filled(main, '#fff8e8'));
+        assert.equal(off.entranceSil, undefined);
+        assert.equal(off.entranceSnap, undefined);
+    });
+
+    test('after the impact the frame punches in about you', () => {
+        const { r, main, off } = rig();
+        r._drawEntrance(at(ENTRANCES.spotted, IMPACT_MS + 20));
+        const punch = draws(main).find(c => c.a[0] === off.entranceSnap);
+        assert.ok(punch, 'the zoomed copy of the frame');
+        assert.ok(punch.a[3] > 1920, `wider than the screen: ${punch.a[3]}`);
+        assert.ok(!filled(main, '#c8242b'), 'the impact frame is over');
+    });
+
+    test('it is all over by 360 ms', () => {
+        const { r, main } = rig();
+        r._drawEntrance(at(ENTRANCES.spotted, ZOOM_IN_MS + ZOOM_OUT_MS + 1));
+        assert.equal(main.calls.length, 0);
+    });
+
+    test('no entrance, or no fight, draws nothing', () => {
+        const { r, main } = rig();
+        r._drawEntrance(fightGame({ _fightStart: { kind: 'spotted', at: performance.now() - 30, entrance: null } }));
+        r._drawEntrance(at(ENTRANCES.spotted, 30, { _fightOn: false }));
+        assert.equal(main.calls.length, 0);
+    });
+
+    test('reduce motion draws nothing', () => {
+        Settings.set('reduceMotion', true);
+        try {
+            const { r, main } = rig();
+            r._drawEntrance(at(ENTRANCES.spotted, 30));
+            assert.equal(main.calls.length, 0);
+        } finally {
+            Settings.set('reduceMotion', false);
+        }
+    });
+
+    test('the Wilderness still gets its entrance; only the fog is skipped there', () => {
+        const { r, main } = rig({ zone: 'WILDERNESS' });
+        r._drawEntrance(at(ENTRANCES.spotted, 30));
+        assert.ok(filled(main, '#c8242b'));
+    });
+
+    test('renderFrame draws it last, over the HUD and any menu', () => {
+        const last = renderFrameBody.lastIndexOf('this._drawEntrance(game);');
+        assert.ok(last > renderFrameBody.indexOf('this._drawDock();'));
+        assert.ok(last > renderFrameBody.indexOf('this._drawCloseButton('));
+    });
+});
