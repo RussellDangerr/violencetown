@@ -54,3 +54,56 @@ export function entranceFor(kind, lastEndedAt, now) {
     if (lastEndedAt != null && now - lastEndedAt < NO_REPLAY_MS) return null;
     return ENTRANCES[kind] ?? null;
 }
+
+const clamp01 = (v) => Math.max(0, Math.min(1, v));
+const easeOut = (t) => 1 - Math.pow(1 - clamp01(t), 3);
+const easeInOut = (t) => { t = clamp01(t); return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; };
+
+// What `ms` into an entrance draws: whether the impact frame is up (and how
+// far through it), and the zoom factor. Reduce motion drops both.
+export function entranceAt(entrance, ms, { reduceMotion = false } = {}) {
+    if (!entrance || reduceMotion || !(ms >= 0)) return { impact: false, impactT: 1, zoom: 1 };
+    const lift = entrance.zoom - 1;
+    let zoom = 1;
+    if (lift > 0 && ms < ZOOM_IN_MS) zoom = 1 + lift * easeOut(ms / ZOOM_IN_MS);
+    else if (lift > 0 && ms < ZOOM_IN_MS + ZOOM_OUT_MS) zoom = 1 + lift * (1 - easeInOut((ms - ZOOM_IN_MS) / ZOOM_OUT_MS));
+    return { impact: ms < IMPACT_MS, impactT: clamp01(ms / IMPACT_MS), zoom };
+}
+
+// How far one fogged tile has faded in, 0..1, `ms` into the fight. `order` is
+// its place in the roll (steps from their sight when rolling out, from the
+// screen's edge when closing in), `maxOrder` the largest in play, `jitter` its
+// own 0..1 scatter. Quiet (reduce motion, or no entrance) fades every tile
+// together.
+export function fogReveal(order, maxOrder, ms, jitter, { quiet = false } = {}) {
+    if (quiet) return clamp01(ms / QUIET_FADE_MS);
+    const room = ROLL_LAST_START_MS - IMPACT_MS - ROLL_JITTER_MS;
+    const step = maxOrder > 0 ? Math.min(ROLL_STEP_MS, room / maxOrder) : ROLL_STEP_MS;
+    const start = IMPACT_MS + order * step + jitter * ROLL_JITTER_MS;
+    return clamp01((ms - start) / TILE_FADE_MS);
+}
+
+// How deep the fog lies on a tile `dist` steps from their sight (0 = seen).
+export function fogDepth(dist) {
+    if (!(dist > 0)) return 0;
+    return FOG_NEAR + (1 - FOG_NEAR) * Math.min(1, (dist - 1) / FOG_FAR_TILES);
+}
+
+// The fog's strength `ms` after the fight ended: 1, easing to 0 by FOG_OUT_MS.
+export function fogOut(ms) {
+    return 1 - easeInOut(ms / FOG_OUT_MS);
+}
+
+// Whether the fight's fog or entrance is still moving. main.js keeps the
+// render loop alive while it is.
+export function fightFxActive(on, start, endedAt, now) {
+    if (on) return !!start && now - start.at < FOG_IN_MS;
+    return endedAt != null && now - endedAt < FOG_OUT_MS;
+}
+
+// A tile's own 0..1 scatter, the same every frame.
+export function tileJitter(x, y) {
+    let h = (Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263)) | 0;
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
