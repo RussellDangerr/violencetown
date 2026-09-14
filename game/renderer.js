@@ -2966,7 +2966,7 @@ export class Renderer {
     //   4. the DIRECT thread — a dashed line while a watcher currently sees you
     //
     // A STIPPLE, not a translucent fill. The screen already carries a day/night
-    // multiply pass, a combat-arena dim and the Wilderness blackout; a fourth
+    // multiply pass, the fight fog and the Wilderness blackout; a fourth
     // smooth alpha layer is how you get mud. An ordered dither composites over
     // all of them without shifting their tone, and reads as deliberately retro —
     // now a single cached CanvasPattern fill per tile instead of sixteen
@@ -3016,7 +3016,10 @@ export class Renderer {
         }
         const phaseT = reduce ? 1 : easeOutCubic(Math.min(1, (now - (this._threatPhaseAt ?? now)) / 120));
 
-        if (phase !== PHASE.QUIET) {
+        // (fight-fog) In a fight the fog shows what they can't see, so the
+        // field's stipple stands down; the chevrons, marks and thread below
+        // still draw (plans/fight-fog.md §1).
+        if (phase !== PHASE.QUIET && !game._fightOn) {
             // Scope the field to the watchers who actually justify this phase —
             // not to every watcher with eyes. This is the one change that empties
             // the town square: an idle vendor no longer contributes a tile.

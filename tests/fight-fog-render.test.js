@@ -175,3 +175,32 @@ describe('the fight fog', () => {
         assert.ok(!rendererSrc.includes('_arenaLevel'), '_arenaLevel');
     });
 });
+
+describe('the threat overlay in a fight', () => {
+    function overlay(game) {
+        const { r, main } = rig({ sprites: {}, _ditherPattern: (colour) => `stipple ${colour}` });
+        r._drawThreatOverlay({ map: openMap(), playerX: 10, playerY: 10, turn: 1, wheel: null,
+            _inCombat: () => !!game._fightOn, ...game });
+        return main.calls;
+    }
+    const stippled = (calls) => calls.filter(c => c.fn === 'fillRect' && String(c.fill).startsWith('stipple'));
+
+    test('a fight draws no stipple and no vignette', () => {
+        const calls = overlay({ enemies: [fighter()], _fightOn: true });
+        assert.equal(stippled(calls).length, 0);
+        assert.equal(calls.filter(c => c.fn === 'createRadialGradient').length, 0);
+    });
+
+    test('and keeps the facing chevron and the "sees you" thread', () => {
+        const calls = overlay({ enemies: [fighter()], _fightOn: true });
+        assert.ok(calls.filter(c => c.fn === 'stroke').length >= 2, 'the chevron and the thread');
+        assert.ok(calls.some(c => c.fn === 'setLineDash'), 'the thread is dashed');
+    });
+
+    test('outside a fight the stipple draws as it always did', () => {
+        // Suspicious and facing away: it has no sight of you, so the phase is HAZE.
+        const calls = overlay({ enemies: [fighter({ state: 'suspicious', _lastDx: 1 })], _fightOn: false });
+        assert.ok(stippled(calls).length > 0);
+        assert.ok(stippled(calls).every(c => c.fill === 'stipple rgb(2,2,8)'), 'HAZE: the dark stipple on safe ground');
+    });
+});
