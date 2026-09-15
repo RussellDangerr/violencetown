@@ -15,12 +15,13 @@ pending decisions, and the three passes that landed this week.
 > Both were accurate when written; **seven of their items have since shipped** and are listed in
 > §6 so nobody re-does them. The `plan` branch itself is six weeks stale — see §5.
 
-**State right now (updated 2026-09-14):** `main` @ `56efc17` — **v0.22.0, tagged and live.** The
-screen fill, the fight fog, the visual pass and everything else since v0.21.0 are on the live site.
-Suite 1409 / 262 / 0 failures. **Shipped 2026-09-14:** F1, the fight as fog of war (merged
-`23fffd2`), then v0.22.0 with `game/_headers` — which reaches the custom domain only once Caelan
-changes one Cloudflare setting (ruling **CD**, §2). Next in Caelan's queue: **Q1**, the quest-1
-autoplay, then **H1**, the combat HUD (§4).
+**State right now (updated 2026-09-15):** `main` = `dev`, **v0.22.1, tagged and live** — v0.22.0's
+game (the screen fill, the fight fog, the visual pass and everything since v0.21.0) plus this
+document's updates. Suite 1409 / 262 / 0 failures. **Shipped 2026-09-14:** F1, the fight as fog
+of war (merged `23fffd2`), then v0.22.0 with `game/_headers` — which reaches the custom domain only
+once Caelan changes one Cloudflare setting (ruling **CD**, §2). **Tabled 2026-09-15:** Q1, the
+quest-1 autoplay, parked on the `plan` branch as `plans/quest1-autoplay.md`. Next: **H1**, the
+combat HUD (§4).
 
 > **Audited against the code 2026-09-10 — eight rows were wrong.** The 09-07 compile carried items
 > over from the July backlogs without re-checking them, and some had shipped the week before:
@@ -69,7 +70,7 @@ flowchart LR
     SPLAT["F2 — hit-splat art"]:::design
     PULL["F3 — who gets pulled<br/>into a fight"]:::design
     SF["RULING SF: fillers,<br/>the forest, the south edge"]:::ruling
-    AUTO["Q1 — the quest-1 autoplay<br/>(an eval harness)"]:::design
+    AUTO["Q1 — the quest-1 autoplay<br/>TABLED 09-15, parked on plan"]:::later
     HUD["H1 — the combat HUD<br/>(log, gear panels, item bar)"]:::design
     SCREEN -->|"the spotlight glares on a wide screen"| FOG
     FOG -->|"fight-area.js, the same sight"| PULL
@@ -166,8 +167,7 @@ Ordered by how much each unblocks.
 
 | Item | Open questions | Size | Doc | Blocked by |
 |---|---|---|---|---|
-| **Q1 — the quest-1 autoplay** | Next in Caelan's order (09-14). A standard player profile completes quest 1 step by step on autoplay: watchable for him, and an eval and balance harness for Claude (*"for me to be able to see things, and for you to be able to test things and balance things"*). Which route and profile; seeded so a failed run replays; what it measures (turns, damage taken, gold spent); an LLM player later? | M | `plans/fight-fog.md` *Follow-on pieces* 1 | nothing |
-| **H1 — the combat HUD** | On a tall window the wheel's dial sat over the message log (his 09-14 screenshot). Collapse the wheel left, or show gear panels for you and the enemy — what you could steal or buy; a combat log; an item bar that does more than one item (*"that menu has been strange for a little while"*). | M | `plans/fight-fog.md` *Follow-on pieces* 2 | nothing |
+| **H1 — the combat HUD** | Next in Caelan's order. On a tall window the wheel's dial sat over the message log (his 09-14 screenshot). Collapse the wheel left, or show gear panels for you and the enemy — what you could steal or buy; a combat log; an item bar that does more than one item (*"that menu has been strange for a little while"*). | M | `plans/fight-fog.md` *Follow-on pieces* 2 | nothing |
 | **F2 — hit-splat art** | Kenney's Emote Pack Style 8 glyphs (heart, drop, cross, star) cover heal, poison, miss and crit; no Kenney pack has a flame, snowflake or skull, so those get drawn. Which glyph per damage type, and on the splat or beside it? Carries Caelan's entrances by hit type (09-14: *"slashing versus crushing"*). | S | `plans/screen-fill.md` *Follow-on pieces* 2 | nothing |
 | **F3 — who gets pulled into a fight** | F1 shipped its area as `game/fight-area.js` — every tile a fighter perceives. As a gameplay rule: whoever can see the fight is in it? | M | `plans/screen-fill.md` *Follow-on pieces* 3 | nothing |
 | **Affordance matrix** — verbs (~20 wheel leaves) × tags | The discipline: *a blank cell is a decision, not an oversight.* Second job is diagnostic — a proposed element with zero edges is caught at design time. Needs the tag layer first. | M | systems-audit §9 | T1 |
@@ -177,6 +177,7 @@ Ordered by how much each unblocks.
 | **Elemental coverage matrix** | `fire` and `poison` joined `sludge` / `cold` / `energy` / `fear` with no weakness table to sit in. | S | E | nothing |
 | **5-Zone Body reconciliation** | Survives as the positional layer (Back = backstab ×1.5), not split HP pools. Needs a ruling before the bible states it as law. | S | E | nothing |
 | **Weapons have no art** | No weapon has ground or bag art: all five draw as lettered boxes — the Ray Gun a teal Z, the Wooden Sword a grey `?`. tinyDungeon has swords, axes and hammers; nothing bundled looks like a ray gun. Which cells — and what does the Ray Gun look like? | S–M | `sprites.js` `ITEM_SPRITES` | nothing |
+| **Q1 — the quest-1 autoplay** | **Tabled 2026-09-15** (Caelan's call, after v0.22.0) — parked on the `plan` branch as `plans/quest1-autoplay.md`, with his framing and the open questions. A standard player profile completes quest 1 step by step on autoplay: watchable for him, and an eval and balance harness for Claude (*"for me to be able to see things, and for you to be able to test things and balance things"*). When it returns: route and profile; seeded so a failed run replays; what a run measures; an LLM player later. | M | `plan:plans/quest1-autoplay.md` | nothing |
 
 ---
 
@@ -244,15 +245,15 @@ parked document.
 
 Not a mandate — a reading of the graph.
 
-1. **Q1 — the quest-1 autoplay** (Caelan's order, 09-14). A design pass first: the route, the
-   player profile, what a run measures. Once it exists it is how every later review is watched —
-   Caelan's eval framing, and Claude's balance check.
-2. **H1 — the combat HUD**, then **F2** (the splat art, carrying entrances by hit type) and **F3**
-   (who gets pulled in, built on `game/fight-area.js`).
+1. **H1 — the combat HUD** (Caelan's order). A design pass first: where the wheel goes on a tall
+   window, the gear panels for you and the enemy, a combat log, an item bar that does more.
+2. **F2** (the splat art, carrying entrances by hit type) and **F3** (who gets pulled in, built on
+   `game/fight-area.js`).
 3. **Rulings and small builds.** CD is one Cloudflare setting and makes every release land at once;
    SF and P1 are the new screen's; Z1–Z2 and CG gate builds; A1, A2, A3, R, DZ, D1 clear the board.
    Then streetlights at night, RESTART keeps the last run's pickups, C4. *(Earlier drafts of this
-   list: F1 shipped 2026-09-14, and v0.22.0 with it.)*
+   list: F1 shipped 2026-09-14, and v0.22.0 with it; Q1, the quest-1 autoplay, was tabled on
+   2026-09-15 and parked on `plan`.)*
 
-Sessions 1 and 2 barely overlap: the autoplay drives the game from outside, as a harness; the HUD
-lives in `layout.js`, the renderer's dock and `main.js`'s taps.
+Sessions 1 and 2 overlap only in the combat HUD's splat layer; the small builds live in map JSON,
+`_fullReset` and the item code.

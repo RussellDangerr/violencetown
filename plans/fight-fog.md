@@ -258,9 +258,10 @@ is under the 8.3 ms of a 120 Hz frame.
 
 ## Follow-on pieces (raised by Caelan, 2026-09-14)
 
-1. **The quest-1 autoplay** — next, by Caelan's order. A standard player profile completing quest
-   1 step by step, on autoplay: *"for me to be able to see things (and for you to be able to test
-   things and balance things)"* — his eval framing. Its own spec.
+1. **The quest-1 autoplay** — **tabled 2026-09-15**, parked on the `plan` branch as
+   `plans/quest1-autoplay.md`. A standard player profile completing quest 1 step by step, on
+   autoplay: *"for me to be able to see things (and for you to be able to test things and balance
+   things)"* — his eval framing. Its own spec, when it returns.
 2. **The combat HUD.** In his 09-14 screenshot the wheel's dial sat over the message log. Caelan:
    the wheel should not overlap the message menus — collapse it left, or show an equipment panel
    for you and the enemy (what you could steal or buy); the log could become a combat log; the item
