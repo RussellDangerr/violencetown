@@ -1,0 +1,14 @@
+# Cloudflare Pages response headers (plans/demo-readiness.md §2.5).
+#
+# JavaScript and CSS are served at unchanging URLs, and Cloudflare's default
+# lets a browser keep them for four hours without asking, while index.html is
+# always fresh. After a deploy, a returning player got the new page with the
+# old code and styles. max-age=0 with must-revalidate makes the browser ask on
+# every load; the ETags Cloudflare already sends make an unchanged file a 304,
+# not a download.
+
+/*.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+/*.css
+  Cache-Control: public, max-age=0, must-revalidate

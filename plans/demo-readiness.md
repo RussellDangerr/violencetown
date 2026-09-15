@@ -151,6 +151,11 @@ revalidating costs a 304 rather than a re-download:
 
 Not applied — it changes production caching, which is Caelan's call.
 
+**Applied in v0.22.0 at Caelan's call (2026-09-14)** as `game/_headers`, for `/*.js` and `/*.css`:
+CSS carried the same four-hour cache (measured that day), and v0.22.0 rewrote both `index.html` and
+`style.css`. Images and fonts keep Cloudflare's default; that release changed no image in place,
+only added new files. A future release that edits an image in place needs a line here too.
+
 ---
 
 ## 3. Known and left

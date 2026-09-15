@@ -289,3 +289,12 @@ in one page with the dock on and off, alternating (the only per-frame work stage
 wheel is closed), the dock costs nothing measurable: 12.9 ms with it, 13.1 ms without (median of
 four each, at DPR 1.5). Re-time on a quiet machine before shipping. If a game or a stream shares
 the GPU, the fallbacks above are the lever.
+
+**The pre-ship re-time, 2026-09-14 (v0.22.0, dev at `23fffd2`, the fight fog included).** Two fresh
+page loads at 3440×1440, DPR 1, the yardstick quiet (0.41–0.92 ms): the north-east corner at night
+8.74 and 8.26 ms (7.45 on 09-13), Town at night from the spawn 8.12 and 7.73, Town by day 7.37 and
+6.59, the Sewer fight with its fog settled 6.15 and 6.19. That is about a millisecond above the
+09-13 afternoon, but the same session read the same Sewer frame at 3.3 ms in other page loads
+(`plans/fight-fog.md`, *Measured*), so the level moves by more than that between loads and neither
+figure is the code's alone. Everything is under the 16.7 ms of a 60 Hz frame; the corner sits at
+the 8.3 ms of a 120 Hz one. Shipped.
