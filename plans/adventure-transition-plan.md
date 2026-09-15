@@ -1,3 +1,10 @@
+> **SUPERSEDED 2026-09-15** by `plans/species-adventures.md`. The linear adventure with a
+> beginning, middle and end, creatures as party members rather than playable identities, and
+> "no origins, you're Human" are all overturned there (rulings SA-2, SA-4, SA-5). The LOCKED
+> combat math below still stands; the checkpoint death rule was already superseded by
+> `plans/defeat-scenarios.md`. Kept for the reasoning against roguelike *runs*, which the new
+> plan agrees with.
+
 # Violencetown — Adventure Transition Plan
 **Date:** 2026-04-05
 **Status:** ACTIVE — Supersedes roguelike design direction

@@ -23,6 +23,14 @@ once Caelan changes one Cloudflare setting (ruling **CD**, §2). **Tabled 2026-0
 quest-1 autoplay, parked on the `plan` branch as `plans/quest1-autoplay.md`. Next: **H1**, the
 combat HUD (§4).
 
+> **Direction ruled 2026-09-15 — `plans/species-adventures.md`.** Fixed maps stay; enemies
+> come from a registry with spawn tables, drops and a respawn clock; quest flags apply *world
+> layers* over the base map; an account holds a stash and unlocked *species*, each character one
+> species on its own adventure. It supersedes `adventure-transition-plan.md` and amends a dozen
+> others (its §7 is the record). It does **not** change this roadmap's next session; whether its
+> piece 1 (living zones) goes before or after H1 is Caelan's call, and five recommendations in
+> its §3 await his ruling.
+
 > **Audited against the code 2026-09-10 — eight rows were wrong.** The 09-07 compile carried items
 > over from the July backlogs without re-checking them, and some had shipped the week before:
 > **B2 and B1 were already built** (`0922928`, `6bdb7ad`), **A4 was already answered**, **A1 gates
