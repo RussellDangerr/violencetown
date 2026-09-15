@@ -1584,12 +1584,19 @@ for (let i = 0; i < 40 && g.state === 'splash'; i++) { document.querySelector('#
 const kind = new URLSearchParams(location.search).get('kind') || 'spotted';
 await g._loadMap('sewer-map.json');
 g._deAggroAll();
-// A hostile with open ground three tiles west of it and two tiles east.
+// A hostile with the open ground this start needs, counted in steps along
+// the way it will face: three ahead to be spotted from, one behind to strike
+// from, two behind to hide in while it searches. Either facing will do.
 const free = (x, y) => g.map.isWalkable(x, y) && !g._targetAt(x, y);
-const e = g.enemies.find((x) => x.entity.isAlive() && !x.ambient && x.allegiance === 'hostile' && (x.sightRange || 0) > 0
-    && [-3, -2, -1, 1, 2].every((dx) => free(x.x + dx, x.y)));
-e._lastDx = -1; e._lastDy = 0;                                  // it faces west
-g.playerX = e.x + { spotted: -3, struck: 1, search: 2 }[kind];  // in front of it, or behind it
+const needs = { spotted: [1, 2, 3], struck: [-1], search: [-1, -2] }[kind];
+let e = null, dir = -1;
+for (const x of g.enemies) {
+    if (!(x.entity.isAlive() && !x.ambient && x.allegiance === 'hostile' && (x.sightRange || 0) > 0)) continue;
+    const d = [-1, 1].find((d) => needs.every((n) => free(x.x + d * n, x.y)));
+    if (d) { e = x; dir = d; break; }
+}
+e._lastDx = dir; e._lastDy = 0;                                 // it faces along dir
+g.playerX = e.x + dir * { spotted: 3, struck: -1, search: -2 }[kind];   // in front of it, or behind it
 g.playerY = e.y;
 
 const realNow = performance.now.bind(performance);
@@ -1673,6 +1680,12 @@ The dev server must be running on 3001.
 ```bash
 SP="<scratchpad>"; mkdir -p "$SP/fight-capture" && cd "$SP/fight-capture" && for k in spotted struck search; do timeout 150 "/c/Program Files/Google/Chrome/Application/chrome.exe" --headless=new --disable-gpu --hide-scrollbars --no-first-run --no-default-browser-check --user-data-dir="$SP/fight-capture/chrome-profile" --window-size=1300,800 --force-device-scale-factor=1 --virtual-time-budget=60000 --dump-dom "http://localhost:3001/_design-fight-capture.html?kind=$k" > "dump-$k.html" 2>/dev/null; python "$SP/make_fight_gif.py" "dump-$k.html" "fight-$k.gif"; done
 ```
+
+> **Execution fix (2026-09-14):** the first draft of Step 1's picker asked for five open tiles
+> in a row (three west, two east) around one enemy. No Sewer hostile has that; the corridors are
+> too narrow, so the page threw on `e._lastDx`. The picker above asks only for the ground each
+> start needs, in either facing. Chrome's `--enable-logging=stderr --v=0` prints the page's
+> console, which is how to see a capture that dumps no frames.
 
 Expected, three lines:
 - `fight-spotted.gif spotted started as spotted 30 frames …`
@@ -2096,16 +2109,24 @@ Restart the dev server and open `tab-1`. Run `resize_window {width: 3440, height
     let T = realNow();
     performance.now = () => T;                     // one exact moment per still
     const free = (x, y) => g.map.isWalkable(x, y) && !g._targetAt(x, y);
-    const hostile = () => g.enemies.find((x) => x.entity.isAlive() && !x.ambient && x.allegiance === 'hostile'
-        && (x.sightRange || 0) > 0 && [-3, -2, -1, 1, 2].every((dx) => free(x.x + dx, x.y)));
+    // As the capture page picks: only the ground this start needs, either facing.
+    const pick = (kind) => {
+        const needs = { spotted: [1, 2, 3], struck: [-1], search: [-1, -2] }[kind];
+        for (const x of g.enemies) {
+            if (!(x.entity.isAlive() && !x.ambient && x.allegiance === 'hostile' && (x.sightRange || 0) > 0)) continue;
+            const d = [-1, 1].find((d) => needs.every((n) => free(x.x + d * n, x.y)));
+            if (d) return { e: x, dir: d };
+        }
+        return null;
+    };
     window.__fx = {
         async scene(kind) {
             if (g.map.zoneName !== 'SEWER') await g._loadMap('sewer-map.json');
             g._deAggroAll(); g._render();
             g._fightEndedAt = null;
-            const e = hostile();
-            e._lastDx = -1; e._lastDy = 0;
-            g.playerX = e.x + { spotted: -3, struck: 1, search: 2 }[kind]; g.playerY = e.y;
+            const { e, dir } = pick(kind);
+            e._lastDx = dir; e._lastDy = 0;
+            g.playerX = e.x + dir * { spotted: 3, struck: -1, search: -2 }[kind]; g.playerY = e.y;
             g._render();
             if (kind === 'struck') g.combatAttack(e, 1);
             if (kind === 'search') { e.state = 'suspicious'; e._lastSeenX = g.playerX; e._lastSeenY = g.playerY; }
@@ -2216,6 +2237,11 @@ At 1920×1080, with real time restored (reload the tab, no helper), load the Sew
 
 Expected: the black-and-white close-up plays. If a start ever reads as the wrong kind, stop and debug `fightStartKind`'s inputs (`_struckAt`, `turn`) before going on.
 
+> **Execution note (2026-09-14):** with the Browser pane hidden, `computer {action: "key"}` never
+> reached the page (the turn stayed 0). The same key sent as page events went through the game's
+> real input handler, and the bump fired Hit, the turn advanced and the fight opened on `struck`:
+> `for (const t of ['keydown', 'keyup']) document.dispatchEvent(new KeyboardEvent(t, { code, key: code, bubbles: true }))`.
+
 - [ ] **Step 10: A clean console, then reset**
 
 Run `read_console_messages {onlyErrors: true}`. Expected: empty.
@@ -2313,6 +2339,14 @@ Then, on the branch only:
 ```
 
 Write down every number. The yardstick shows how busy the GPU is; only the comparison between the tabs, taken close together, means anything. If the yardstick reads more than half again its earlier value, the machine is busy. Say so in the write-up and trust the in-page on/off pair over the cross-tab pair.
+
+> **Execution notes (2026-09-14):** a tab in the background did not lay out at the emulated size:
+> its canvas stayed 1920×1080 until the tab was brought to the front with `tabs_select`, resized
+> and reloaded. Time each tab while it is in front. The pane's DPR also flipped between 1 and 1.5
+> across reloads, so check `devicePixelRatio` after each load and reload until it reads 1. And the
+> absolute level moved between page loads (about 3.4 ms in one, 6.5 in the next, for both builds
+> and with the fog skipped, the yardstick quiet throughout), so compare only numbers taken close
+> together, and lean on the in-page on/off pairs.
 
 - [ ] **Step 4: Tear down**
 

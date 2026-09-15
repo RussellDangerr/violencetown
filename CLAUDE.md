@@ -102,6 +102,11 @@ Both exclusions are files that *quote the rule itself* rather than violate it.
   Never assume a fixed 19×19 view or a 608 screen. A map's optional `"border": { tile, prop? }`
   names what is drawn past its edge (the table in plans/screen-fill.md; pinned in
   `tests/tile-coverage.test.js`).
+- **A fight is fog of war, not a spotlight** (plans/fight-fog.md). `game/fight-area.js` says who
+  is in the fight and what they can see; `main.js _trackFight` stamps `game._fightOn`,
+  `_fightStart` (how it began, and its entrance) and `_fightEndedAt` before every frame; the
+  renderer draws the fog (`_drawFightFog`) and the entrance (`_drawEntrance`) from those alone,
+  timed by `game/fight-entrance.js`. `_drawArena` and `_arenaLevel` are gone.
 
 ## Planning surface (corrected 2026-07-25)
 

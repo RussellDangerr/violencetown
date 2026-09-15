@@ -81,6 +81,8 @@ import {
     orderedTargetVerbs, isCombatActive, defaultVerb, previewChildren,
 } from './wheel-model.js'; // (sunburst wheel) node-tree model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
+import { fighters } from './fight-area.js';                                      // (fight-fog) who is in the fight
+import { fightStartKind, entranceFor, fightFxActive } from './fight-entrance.js'; // (fight-fog) how it began, and how long its fog moves
 
 // Chebyshev (king-move) distance — used by the wheel reticle's range clamp.
 const cheb = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
@@ -665,6 +667,8 @@ class Game {
         // (ending) If the car's already fixed, re-open the North bridge — derives
         // from the persistent flag so it's open again on every town re-entry.
         this._openBridgeIfCarFixed();
+        // (fight-fog) Whatever fog was up belongs to the map you left.
+        this.renderer.dropFightFog();
         this._render();
     }
 
@@ -4255,6 +4259,10 @@ class Game {
 
         const result = attack(playerEntity, enemyObj.entity, finalDmg);
 
+        // (fight-fog) Note the turn of the blow: a fight that begins this turn
+        // or the next opens on "you struck first" (fight-entrance.js).
+        enemyObj._struckAt = this.turn;
+
         // Fighting is loud. Anyone idle within earshot turns to look — which is
         // how a brawl draws a crowd, and how killing a lone sentry quietly is
         // suddenly a thing you can fail at.
@@ -5099,7 +5107,29 @@ class Game {
     // ── Render ───────────────────────────────────────────────────────────────
 
     _render() {
+        this._trackFight();
         this.renderer.renderFrame(this);
+    }
+
+    // (fight-fog) A fight's two edges, checked before every frame is drawn
+    // (plans/fight-fog.md). The first fighter stamps how the fight began, and
+    // so which entrance it gets; the last one leaving notes when, for the
+    // fog's fade and the 3-second no-replay rule. Dying ends it without the
+    // fade.
+    _trackFight() {
+        const fs = this.state === STATE.DEAD ? [] : fighters(this.enemies);
+        const on = fs.length > 0;
+        if (on === !!this._fightOn) return;
+        this._fightOn = on;
+        const now = performance.now();
+        if (on) {
+            const kind = fightStartKind(fs, this.turn);
+            this._fightStart = { kind, at: now, entrance: entranceFor(kind, this._fightEndedAt ?? null, now) };
+        } else {
+            this._fightEndedAt = now;
+            if (this.state === STATE.DEAD) this.renderer.dropFightFog();
+        }
+        this._ensureParticleLoop();
     }
 
     // ── Floating damage numbers ──────────────────────────────────────────────
@@ -5297,14 +5327,8 @@ class Game {
             // when the player is standing still. (plans/movement-feel.md #6)
             if (e._slideStart != null && now < e._slideStart + (e._slideMs || 0)) return true;
         }
-        // Combat arena bloom/release is mid-ease — keep the loop alive so the
-        // lit-stage transition animates smoothly instead of stepping on the idle
-        // tick. (renderer owns _arenaLevel; target is 1 in combat, 0 otherwise.)
-        const r = this.renderer;
-        if (r && r._arenaLevel != null) {
-            const target = this._inCombat() ? 1 : 0;
-            if (Math.abs(r._arenaLevel - target) > 0.01) return true;
-        }
+        // (fight-fog) The fight's fog rolling in or clearing, and its entrance.
+        if (fightFxActive(this._fightOn, this._fightStart, this._fightEndedAt, now)) return true;
         return false;
     }
 

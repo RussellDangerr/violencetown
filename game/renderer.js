@@ -36,6 +36,9 @@ import { PHASE, threatPhase, alertWatchers } from './threat-phase.js';        //
 import { isSafe } from './defeat-scenarios.js';   // (defeat legibility) mark safe-floor items
 import { buyPrice, sellPrice, bribeStepCost, mood, canTrade, band, BRIBE_STEP } from './trade.js'; // (trade slice 1) pricing + mood smiley; band feeds the offer meter's multiplier readout
 import { isHunting } from './ai.js'; // one spelling of "actively hunting the player"
+import { fighters, fightArea, FIGHT_MARGIN } from './fight-area.js';        // (fight-fog) who is in the fight, and what they can see
+import { entranceAt, fogReveal, fogDepth, fogOut, tileJitter, FOG_TINT, FOG_DENSITY, FOG_BLUR_TILES,
+         FOG_FAR_TILES, FOG_IN_MS, FOG_OUT_MS } from './fight-entrance.js'; // (fight-fog) the entrance, and the fog's timeline and look
 import * as Settings from './settings.js'; // (combat-feel-pass) reduce-motion for hit-splats (namespace import — see main.js)
 import { challengeGp } from './enemies.js'; // (Law 6f) nameplate pips read the composite kit, not raw gold
 import { resolveOffer } from './offer.js';                                  // (offer screen) pure basket→projection
@@ -421,7 +424,7 @@ export class Renderer {
             shakeY = snapPx(vp, (Math.random() - 0.5) * mag * 2); // (avoid sub-pixel seams)
         }
         // Stash the shake offset so the zone-exit pass can re-apply the SAME world
-        // transform after the lighting/arena dim (see _drawTransitions call below).
+        // transform after the lighting/fog dim (see _drawTransitions call below).
         this._shakeX = shakeX; this._shakeY = shakeY;
 
         ctx.save();
@@ -460,16 +463,13 @@ export class Renderer {
         // in full day; the Wilderness opts out (it owns _drawDarkness).
         this._drawLighting(game);
 
-        // Combat arena (lit aggro-radius). Eased in/out so the fight blooms a lit
-        // stage with the world dimming/cooling around it, releasing when the
-        // encounter clears. Drawn after day/night so it composes (the player aura
-        // still lights the arena at night), before the HUD so HP/clock stay legible.
-        const arenaTarget = (game._inCombat && game._inCombat()) ? 1 : 0;
-        const aCur = this._arenaLevel ?? 0;
-        this._arenaLevel = Math.abs(arenaTarget - aCur) < 0.01 ? arenaTarget : aCur + (arenaTarget - aCur) * 0.15;
-        this._drawArena(game);
+        // (fight-fog) The fight as fog of war: a soft shadow over what the
+        // fighters can't see, in the slot the spotlight arena held — after the
+        // day/night grade so the two compose, before the zone-exit markers and
+        // the HUD so both stay legible (plans/fight-fog.md §1).
+        this._drawFightFog(game);
 
-        // Visible zone-exit markers. Drawn AFTER the day/night + arena + Wilderness
+        // Visible zone-exit markers. Drawn AFTER the day/night + fight fog + Wilderness
         // dimming so the glow/arrows aren't sunk by a night multiply or the
         // Wilderness blackout — the markers MUST stay legible. World-space, so we
         // re-apply the same shake translate the world used; the projection inside
@@ -537,6 +537,11 @@ export class Renderer {
             this._closeBtnRect = this._menuPanelRect ? closeButtonRect(this._menuPanelRect) : null;
             if (this._closeBtnRect) this._drawCloseButton(this.ctx, this._closeBtnRect);
         }
+
+        // (fight-fog) A fight's entrance — the impact frame, then the zoom
+        // punch — over the whole finished frame, HUD and menus included
+        // (plans/fight-fog.md §2).
+        this._drawEntrance(game);
     }
 
     // (menu grammar) The ✕ / Back chip — a small dark rounded plate with a gold X,
@@ -659,63 +664,226 @@ export class Renderer {
         return { r: lerp(255, 48), g: lerp(255, 54), b: lerp(255, 92) };
     }
 
-    // ── Combat arena (lit aggro-radius) ──────────────────────────────────────
+    // ── The fight as fog of war (plans/fight-fog.md §1) ─────────────────────
     //
-    // While a fight is engaged, the viewport blooms a lit "stage" around the
-    // encounter and the world beyond dims + cools, so the combat boundary is
-    // VISIBLE (no JRPG teleport-to-a-forest) and the eye is pulled to the fight.
-    // Same multiply-overlay trick as the day/night lightmap, inverted: a dim fill
-    // with a bright spotlight hole at the encounter centre. Eased by _arenaLevel
-    // (set in renderFrame) so it blooms in and releases out; the radius sizes to
-    // contain the engaged enemies. Purely visual — combat geometry stays
-    // grid-clean. The dim tone is tunable.
-    _drawArena(game) {
-        const lvl = this._arenaLevel ?? 0;
-        if (lvl <= 0.001 || this.zone === 'WILDERNESS') return;   // Wilderness owns its blackout
+    // While a fight is on (main.js _trackFight sets game._fightOn), every tile
+    // none of the fighters can see takes a soft cool shadow that deepens with
+    // distance from their sight: fight-area.js's field, written into a
+    // one-pixel-per-tile mask, blown up with smoothing, blurred by about a
+    // tile, tinted and multiplied over the world. It arrives the way the
+    // fight's entrance says — rolling out from their sight, or closing in from
+    // the screen's edges — and fades when the fight ends, holding the last area
+    // in world tiles so it stays on the ground while you walk away. The
+    // Wilderness keeps its own blackout.
 
-        // Cool desaturated dark the periphery multiplies toward; lerp white →
-        // tone by level so the stage blooms in smoothly (white = no-op at lvl 0).
-        const tone = { r: 82, g: 84, b: 94 };
-        const dr = Math.round(255 + (tone.r - 255) * lvl);
-        const dg = Math.round(255 + (tone.g - 255) * lvl);
-        const db = Math.round(255 + (tone.b - 255) * lvl);
+    // Forget the fight's fog at once: a zone change, a death or a restart.
+    dropFightFog() { this._fog = null; }
 
-        // Radius: contain the engaged (chasing) enemies + margin, clamped.
-        let maxTiles = 2.5;
-        for (const e of game.enemies) {
-            if (e.ambient || !isHunting(e) || !e.entity.isAlive()) continue;
-            const d = Math.max(Math.abs(e.x - game.playerX), Math.abs(e.y - game.playerY));
-            if (d > maxTiles) maxTiles = d;
-        }
-        const coreR = Math.min(7, maxTiles + 1.5) * TILE_PX;
-        const edgeR = coreR + TILE_PX * 2.6;
+    // A reusable offscreen canvas of the given size (the seam tests stub).
+    _offscreen(name, w, h) {
+        const key = `_off_${name}`;
+        const c = (this[key] ??= document.createElement('canvas'));
+        if (c.width !== w) c.width = w;
+        if (c.height !== h) c.height = h;
+        return c;
+    }
 
+    // The fight area for this frame. Recomputed only when something it reads
+    // has changed: the zone, the turn, where you stand, the view, and each
+    // fighter's tile, facing and night level.
+    _fightAreaFor(game, vp) {
+        const fs = fighters(game.enemies);
+        const key = [game.map?.zoneName, game.turn, game.playerX, game.playerY,
+            vp.span.iMin, vp.span.iMax, vp.span.jMin, vp.span.jMax,
+            ...fs.map(f => `${f.x},${f.y},${f._lastDx ?? 0},${f._lastDy ?? 0},${f._nightLevel ?? 0}`)].join('|');
+        if (this._fog?.key === key) return this._fog;
+        const m = FIGHT_MARGIN;
+        const area = fightArea(game.map, fs, {
+            x0: game.playerX + vp.span.iMin - m, y0: game.playerY + vp.span.jMin - m,
+            x1: game.playerX + vp.span.iMax + m, y1: game.playerY + vp.span.jMax + m,
+        });
+        return { key, area, soft: null, settled: false };
+    }
+
+    _drawFightFog(game) {
+        if (this.zone === 'WILDERNESS') return;
+        const now = performance.now();
         const vp = this._view();
-        const aw = Math.ceil(vp.w), ah = Math.ceil(vp.h);
-        const am = (this._arenaCanvas ??= document.createElement('canvas'));
-        if (am.width !== aw || am.height !== ah) { am.width = aw; am.height = ah; }
-        const actx = am.getContext('2d');
+        let exit = 1;
+        if (game._fightOn) {
+            this._fog = this._fightAreaFor(game, vp);
+        } else {
+            const since = now - (game._fightEndedAt ?? -Infinity);
+            if (!this._fog || !(since < FOG_OUT_MS)) { this._fog = null; return; }
+            exit = fogOut(since);
+        }
+        const fog = this._fog;
 
-        actx.globalCompositeOperation = 'source-over';
-        actx.fillStyle = `rgb(${dr},${dg},${db})`;
-        actx.fillRect(0, 0, aw, ah);
+        // The mask changes every frame only while the fog rolls in; after that
+        // it is rebuilt once per new area.
+        const sinceStart = game._fightStart ? now - game._fightStart.at : Infinity;
+        const rolling = !!game._fightOn && sinceStart < FOG_IN_MS;
+        if (rolling || !fog.settled) {
+            this._buildFogMask(game, fog, vp, sinceStart);
+            fog.settled = !rolling;
+        }
 
-        // Punch the lit stage at the encounter — centred on the player (always at
-        // view centre; combat centres on the hero).
-        const cx = vp.origin.x + TILE_PX / 2;
-        const cy = vp.origin.y + TILE_PX / 2;
-        const grd = actx.createRadialGradient(cx, cy, 0, cx, cy, edgeR);
-        grd.addColorStop(0, 'rgba(255,255,255,1)');
-        grd.addColorStop(Math.min(0.98, coreR / edgeR), 'rgba(255,255,255,1)');
-        grd.addColorStop(1, 'rgba(255,255,255,0)');
-        actx.fillStyle = grd;
-        actx.fillRect(0, 0, aw, ah);
-
+        const { area } = fog;
         const { ctx } = this;
         ctx.save();
+        ctx.translate((this._shakeX || 0) - this._scrollX, (this._shakeY || 0) - this._scrollY);
         ctx.globalCompositeOperation = 'multiply';
-        ctx.drawImage(am, 0, 0);
+        ctx.globalAlpha = FOG_DENSITY * exit;
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(fog.soft,
+            vp.origin.x + (area.x0 - game.playerX) * TILE_PX,
+            vp.origin.y + (area.y0 - game.playerY) * TILE_PX,
+            area.w * TILE_PX, area.h * TILE_PX);
         ctx.restore();
+    }
+
+    // Each fogged tile's strength (its depth, times how far it has faded in)
+    // into the one-pixel-per-tile mask; then the mask blown up, blurred and
+    // tinted into fog.soft, the shadow _drawFightFog lays down.
+    _buildFogMask(game, fog, vp, sinceStart) {
+        const { area } = fog;
+        const entrance = game._fightStart?.entrance ?? null;
+        const quiet = !entrance || !!Settings.get('reduceMotion');
+        const closing = entrance?.roll === 'in';
+        // Steps from the screen's edge, for fog that closes in from it.
+        const edge = (tx, ty) => {
+            const i = tx - game.playerX, j = ty - game.playerY;
+            return Math.max(0, Math.min(i - vp.span.iMin, vp.span.iMax - i, j - vp.span.jMin, vp.span.jMax - j));
+        };
+        const distAt = (k) => (area.dist[k] < 0 ? FOG_FAR_TILES + 1 : area.dist[k]);
+        const orderAt = (k) => {
+            const x = k % area.w, y = (k - x) / area.w;
+            return closing ? edge(area.x0 + x, area.y0 + y) : distAt(k);
+        };
+        let maxOrder = 0;
+        if (!quiet) for (let k = 0; k < area.seen.length; k++) if (!area.seen[k]) maxOrder = Math.max(maxOrder, orderAt(k));
+
+        const mask = this._offscreen('fogMask', area.w, area.h);
+        const mctx = mask.getContext('2d');
+        const img = mctx.createImageData(area.w, area.h);
+        for (let k = 0; k < area.seen.length; k++) {
+            if (area.seen[k]) continue;
+            const x = k % area.w, y = (k - x) / area.w;
+            const reveal = fogReveal(orderAt(k), maxOrder, sinceStart, tileJitter(area.x0 + x, area.y0 + y), { quiet });
+            img.data[k * 4 + 3] = Math.round(255 * fogDepth(distAt(k)) * reveal);
+        }
+        mctx.putImageData(img, 0, 0);
+
+        const PX = 8;   // the blur's working resolution, in px per tile
+        const soft = this._offscreen('fogSoft', area.w * PX, area.h * PX);
+        const sctx = soft.getContext('2d');
+        sctx.setTransform(1, 0, 0, 1, 0, 0);
+        sctx.globalCompositeOperation = 'source-over';
+        sctx.clearRect(0, 0, soft.width, soft.height);
+        sctx.imageSmoothingEnabled = true;
+        sctx.imageSmoothingQuality = 'high';
+        sctx.filter = `blur(${FOG_BLUR_TILES * PX}px)`;
+        sctx.drawImage(mask, 0, 0, soft.width, soft.height);
+        sctx.filter = 'none';
+        sctx.globalCompositeOperation = 'source-in';   // tint what the mask kept
+        sctx.fillStyle = FOG_TINT;
+        sctx.fillRect(0, 0, soft.width, soft.height);
+        sctx.globalCompositeOperation = 'source-over';
+        fog.soft = soft;
+    }
+
+    // ── The fight's entrance (plans/fight-fog.md §2) ─────────────────────────
+    //
+    // For IMPACT_MS the screen goes to an impact frame: a cream close-up or a
+    // red slash with you and the fighters as black silhouettes, or a plain
+    // white flash. Meanwhile the whole frame punches in about you and settles.
+    // Presentation only: input is never held for it.
+    _drawEntrance(game) {
+        const start = game._fightStart;
+        if (!game._fightOn || !start?.entrance) return;
+        const now = performance.now();
+        const at = entranceAt(start.entrance, now - start.at, { reduceMotion: !!Settings.get('reduceMotion') });
+        if (!at.impact && at.zoom === 1) return;
+        const { ctx, canvas } = this;
+        const vp = this._view();
+        const W = canvas.width, H = canvas.height;
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);   // backing px from here
+        if (at.impact) this._drawImpact(game, start.entrance, at.impactT, vp, W, H, now);
+        if (at.zoom > 1) {
+            const snap = this._offscreen('entranceSnap', W, H);
+            const sctx = snap.getContext('2d');
+            sctx.setTransform(1, 0, 0, 1, 0, 0);
+            sctx.clearRect(0, 0, W, H);
+            sctx.drawImage(canvas, 0, 0);
+            const cx = (vp.origin.x + TILE_PX / 2) * vp.scale, cy = (vp.origin.y + TILE_PX / 2) * vp.scale;
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(snap, cx - cx * at.zoom, cy - cy * at.zoom, W * at.zoom, H * at.zoom);
+        }
+        ctx.restore();
+    }
+
+    // The impact frame, in backing px. `t` is how far through it we are, 0..1.
+    _drawImpact(game, entrance, t, vp, W, H, now) {
+        const { ctx } = this;
+        if (entrance.impact === 'flash') {
+            ctx.globalAlpha = 1 - t;
+            ctx.fillStyle = '#fff8e8';
+            ctx.fillRect(0, 0, W, H);
+            ctx.globalAlpha = 1;
+            return;
+        }
+        const fs = fighters(game.enemies);
+        const sil = this._silhouettes(game, fs, vp, W, H, now);
+        ctx.fillStyle = entrance.impact === 'bw' ? '#efe6d2' : '#c8242b';
+        ctx.fillRect(0, 0, W, H);
+        // The fight's middle: you and everyone in it.
+        const pts = [[game.playerX, game.playerY], ...fs.map(f => [f.x, f.y])];
+        const mean = (i) => pts.reduce((s, p) => s + p[i], 0) / pts.length;
+        const mx = (vp.origin.x + TILE_PX / 2 + (mean(0) - game.playerX) * TILE_PX) * vp.scale;
+        const my = (vp.origin.y + TILE_PX / 2 + (mean(1) - game.playerY) * TILE_PX) * vp.scale;
+        if (entrance.impact === 'redblack') {   // a white slash through the fight
+            ctx.fillStyle = '#fff4e0';
+            ctx.beginPath();
+            ctx.moveTo(0, my + H * 0.20); ctx.lineTo(W, my - H * 0.34);
+            ctx.lineTo(W, my - H * 0.25); ctx.lineTo(0, my + H * 0.29);
+            ctx.closePath();
+            ctx.fill();
+        }
+        const F = entrance.silhouette;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(sil, mx - mx * F, my - my * F, W * F, H * F);
+    }
+
+    // You and the fighters as solid black shapes on a clear canvas, from the
+    // real sprites drawn body-only.
+    _silhouettes(game, fs, vp, W, H, now) {
+        const sil = this._offscreen('entranceSil', W, H);
+        const sctx = sil.getContext('2d');
+        sctx.setTransform(1, 0, 0, 1, 0, 0);
+        sctx.globalCompositeOperation = 'source-over';
+        sctx.clearRect(0, 0, W, H);
+        sctx.setTransform(vp.scale, 0, 0, vp.scale, 0, 0);
+        sctx.imageSmoothingEnabled = false;
+        const screen = this.ctx;
+        this.ctx = sctx;
+        try {
+            for (const f of fs) {
+                const px = vp.origin.x + (f.x - game.playerX) * TILE_PX - this._scrollX;
+                const py = vp.origin.y + (f.y - game.playerY) * TILE_PX - this._scrollY;
+                this._drawEnemySprite(game, f, px, py, now, { bodyOnly: true });
+            }
+            const { ppx, ppy } = this._playerScreenPos(game, now);
+            this._drawPlayerSprite(game, ppx, ppy, now, { bodyOnly: true });
+        } finally {
+            this.ctx = screen;
+        }
+        sctx.setTransform(1, 0, 0, 1, 0, 0);
+        sctx.globalCompositeOperation = 'source-in';
+        sctx.fillStyle = '#120e0a';
+        sctx.fillRect(0, 0, W, H);
+        sctx.globalCompositeOperation = 'source-over';
+        return sil;
     }
 
     // ── Tiles ────────────────────────────────────────────────────────────────
@@ -836,7 +1004,7 @@ export class Renderer {
     // beside a transition, its `label` shows as a bottom-of-screen hint (mirrors
     // the AIM hint in _drawWheel). Touches NO map data or trigger logic.
     //
-    // Called from renderFrame AFTER the day/night + arena + Wilderness dimming,
+    // Called from renderFrame AFTER the day/night + fight fog + Wilderness dimming,
     // under a re-applied world transform, so the markers stay legible in the dark.
     _drawTransitions(game) {
         // A grapple anchor that leads off the map is an exit too — the canyon's
@@ -1176,7 +1344,7 @@ export class Renderer {
         return e.x === game.playerX + dx && e.y === game.playerY + dy;
     }
 
-    _drawEnemySprite(game, e, px, py, now) {
+    _drawEnemySprite(game, e, px, py, now, { bodyOnly = false } = {}) {
         const { ctx, sprites } = this;
         const isAlive = e.entity.isAlive();
         // Hit-flash only animates while alive — corpses are static after death.
@@ -1221,6 +1389,10 @@ export class Renderer {
                 ctx.fillRect(px + 6, py + 6, TILE_PX - 12, TILE_PX - 12);
             }
         });
+
+        // (fight-fog) The entrance's silhouettes want the body alone: every
+        // overlay below is a filled shape that would silhouette as a box.
+        if (bodyOnly) return;
 
         if (isAlive) {
             // Hit-flash overlay — alpha fades as the flash ages so it pops on the
@@ -1701,7 +1873,7 @@ export class Renderer {
         this._drawPlayerSprite(game, ppx, ppy, now);
     }
 
-    _drawPlayerSprite(game, ppx, ppy, now) {
+    _drawPlayerSprite(game, ppx, ppy, now, { bodyOnly = false } = {}) {
         const { ctx, sprites } = this;
         const flashing = (game._playerHitFlashUntil ?? 0) > now;
 
@@ -1729,6 +1901,8 @@ export class Renderer {
                 ctx.fillRect(ppx + 6, ppy + 6, TILE_PX - 12, TILE_PX - 12);
             }
         });
+
+        if (bodyOnly) return;   // (fight-fog) the silhouettes' body-only draw
 
         // Hit-flash overlay — red tint when the player just took damage.
         // Sharper alpha than the enemy flash since the player sprite tends
@@ -2897,7 +3071,7 @@ export class Renderer {
     //   4. the DIRECT thread — a dashed line while a watcher currently sees you
     //
     // A STIPPLE, not a translucent fill. The screen already carries a day/night
-    // multiply pass, a combat-arena dim and the Wilderness blackout; a fourth
+    // multiply pass, the fight fog and the Wilderness blackout; a fourth
     // smooth alpha layer is how you get mud. An ordered dither composites over
     // all of them without shifting their tone, and reads as deliberately retro —
     // now a single cached CanvasPattern fill per tile instead of sixteen
@@ -2947,7 +3121,10 @@ export class Renderer {
         }
         const phaseT = reduce ? 1 : easeOutCubic(Math.min(1, (now - (this._threatPhaseAt ?? now)) / 120));
 
-        if (phase !== PHASE.QUIET) {
+        // (fight-fog) In a fight the fog shows what they can't see, so the
+        // field's stipple stands down; the chevrons, marks and thread below
+        // still draw (plans/fight-fog.md §1).
+        if (phase !== PHASE.QUIET && !game._fightOn) {
             // Scope the field to the watchers who actually justify this phase —
             // not to every watcher with eyes. This is the one change that empties
             // the town square: an idle vendor no longer contributes a tile.
@@ -3021,23 +3198,8 @@ export class Renderer {
             ctx.restore();
         }
 
-        // Combat vignette — rides the SAME _arenaLevel ramp _drawArena uses
-        // (main.js drives it toward 1 in combat and 0 otherwise; no second timer
-        // here). Framing, not information: a plain radial edge-darken, additive
-        // to whichever phase applied above, carrying no per-tile data.
-        const arenaLevel = this._arenaLevel ?? 0;
-        if (arenaLevel > 0.001) {
-            const vcx = vp.origin.x + TILE_PX / 2;
-            const vcy = vp.origin.y + TILE_PX / 2;
-            const vr = Math.hypot(vp.w / 2, vp.h / 2);   // reaches the corners
-            const grd = ctx.createRadialGradient(vcx, vcy, 0, vcx, vcy, vr);
-            grd.addColorStop(0, 'rgba(0,0,0,0)');
-            grd.addColorStop(1, `rgba(0,0,0,${0.35 * arenaLevel})`);
-            ctx.save();
-            ctx.fillStyle = grd;
-            ctx.fillRect(0, 0, vp.w, vp.h);
-            ctx.restore();
-        }
+        // (fight-fog) The combat vignette that used to frame a fight here is
+        // retired: the fight's fog is the frame now (plans/fight-fog.md §1).
 
         // Channels 2 and 3 — per watcher, so the field is never the only signal.
         // A colour-blind player, or one who has turned the field off in their head
