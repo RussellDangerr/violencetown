@@ -2237,6 +2237,11 @@ At 1920×1080, with real time restored (reload the tab, no helper), load the Sew
 
 Expected: the black-and-white close-up plays. If a start ever reads as the wrong kind, stop and debug `fightStartKind`'s inputs (`_struckAt`, `turn`) before going on.
 
+> **Execution note (2026-09-14):** with the Browser pane hidden, `computer {action: "key"}` never
+> reached the page (the turn stayed 0). The same key sent as page events went through the game's
+> real input handler, and the bump fired Hit, the turn advanced and the fight opened on `struck`:
+> `for (const t of ['keydown', 'keyup']) document.dispatchEvent(new KeyboardEvent(t, { code, key: code, bubbles: true }))`.
+
 - [ ] **Step 10: A clean console, then reset**
 
 Run `read_console_messages {onlyErrors: true}`. Expected: empty.
@@ -2334,6 +2339,14 @@ Then, on the branch only:
 ```
 
 Write down every number. The yardstick shows how busy the GPU is; only the comparison between the tabs, taken close together, means anything. If the yardstick reads more than half again its earlier value, the machine is busy. Say so in the write-up and trust the in-page on/off pair over the cross-tab pair.
+
+> **Execution notes (2026-09-14):** a tab in the background did not lay out at the emulated size:
+> its canvas stayed 1920×1080 until the tab was brought to the front with `tabs_select`, resized
+> and reloaded. Time each tab while it is in front. The pane's DPR also flipped between 1 and 1.5
+> across reloads, so check `devicePixelRatio` after each load and reload until it reads 1. And the
+> absolute level moved between page loads (about 3.4 ms in one, 6.5 in the next, for both builds
+> and with the fog skipped, the yardstick quiet throughout), so compare only numbers taken close
+> together, and lean on the in-page on/off pairs.
 
 - [ ] **Step 4: Tear down**
 

@@ -3,7 +3,8 @@
 **Phase:** Design → Development.
 **Priority:** High — F1, first of the three pieces Caelan's 2026-09-11 notes queued after the screen
 (`plans/roadmap-2026-09.md` §4).
-**Status:** Design (approved section by section, 2026-09-14).
+**Status:** Built on `feature/fight-fog` (2026-09-14), awaiting Caelan's merge call. Plan:
+`plans/fight-fog-implementation.md`.
 **Companions:** `plans/visual-pass.md` (the threat overlay's phases and its 09-06 rulings, two of
 which this revisits for fights) · `plans/stealth-perception-and-thieve.md` (`perceives()`, the one
 sight rule this reuses) · `plans/screen-fill.md` (*Follow-on pieces* 1, where this began).
@@ -213,6 +214,29 @@ The fight stays where it is: the entrance borrows the JRPG snap, not the JRPG ba
 - **The lab** stays local as the visual reference until this merges.
 
 ---
+
+## Measured
+
+A Sewer fight frame at 3440×1440, DPR 1, 2026-09-14, on Caelan's machine (RTX 4080 SUPER) in the
+Browser pane: the twin-canvas method (`plans/screen-fill-implementation.md`, Task 10's note), median
+of three runs of 60 frames, ms per frame. Before is `dev` served from a worktree beside the branch;
+the two tabs were timed alternately, each in front while it was timed.
+
+| | Before: the spotlight | After: the fog |
+|---|---|---|
+| GPU yardstick (40 blurred shadows, no game), two rounds | 0.55 · 0.52 | 0.72 · 0.57 |
+| The fight, settled, two rounds | 3.59 · 3.30 | 3.33 · 3.43 |
+
+In a fresh page of the branch, the fog drawn and then skipped, alternating four times: 6.94 / 6.42,
+5.80 / 6.33, 6.53 / 6.54, 6.25 / 6.78 — no measurable cost. In the same page the fog rolling in (its
+mask rebuilt every frame) read 6.89, and the entrance's heaviest frame (impact and zoom) 6.61,
+against 6.80 settled.
+
+The absolute level moved between page loads: about 3.4 ms in one load and about 6.5 in the next,
+for both builds and with the fog skipped, while the yardstick stayed quiet (0.36–0.72). So the
+shift is the machine or the browser, not the fog, and only the comparisons made close together are
+reported above. The pane's DPR also flipped to 1.5 on some loads; those are left out. Every number
+is under the 8.3 ms of a 120 Hz frame.
 
 ## Out of scope
 
