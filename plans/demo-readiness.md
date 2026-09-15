@@ -156,6 +156,20 @@ CSS carried the same four-hour cache (measured that day), and v0.22.0 rewrote bo
 `style.css`. Images and fonts keep Cloudflare's default; that release changed no image in place,
 only added new files. A future release that edits an image in place needs a line here too.
 
+**Half done — measured after the v0.22.0 deploy, 2026-09-14.** The file works: Cloudflare's own
+address, `violencetown.pages.dev/main.js`, answers `Cache-Control: public, max-age=0,
+must-revalidate`. The custom domain does not: `violencetown.russelldangerr.com/main.js` and
+`style.css` still answer `max-age=14400`. That is the `russelldangerr.com` zone's **Browser Cache
+TTL**, whose default is exactly four hours. For the extensions Cloudflare caches (`.js`, `.css`,
+images, but not `.html` or `.json` — which is why those two were always fresh), it replaces any
+shorter origin `max-age` with its own. (Pages also answers every unknown path, `/_headers`
+included, with `index.html` and a 200; that is its SPA fallback, not the file being served.)
+
+The remaining step is Caelan's, in the Cloudflare dashboard: on the `russelldangerr.com` zone set
+Caching → Configuration → Browser Cache TTL to **Respect Existing Headers**, or add a Cache Rule
+for `violencetown.russelldangerr.com` whose browser TTL respects the origin. Then
+`curl -sI https://violencetown.russelldangerr.com/main.js` should read `max-age=0`.
+
 ---
 
 ## 3. Known and left
