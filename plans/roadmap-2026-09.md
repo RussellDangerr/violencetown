@@ -15,12 +15,12 @@ pending decisions, and the three passes that landed this week.
 > Both were accurate when written; **seven of their items have since shipped** and are listed in
 > §6 so nobody re-does them. The `plan` branch itself is six weeks stale — see §5.
 
-**State right now (updated 2026-09-13):** `main` @ `38a44c2` (v0.21.0), **75 commits behind `dev`,
-deliberately** — nothing since v0.21.0 is on the live site. Suite 1333 / 245 / 0 failures.
-**Merged to `dev` on 2026-09-13:** `feature/combat-legibility`, `feature/ready-builds` (five builds
-and the see-through tile fix), and `feature/screen-fill` — the game fills the window, the world
-carries on past every map's edge, and the wheel sits on a dial in a bottom dock. All in §6. Next in
-Caelan's queue: F1–F3 (§4), the three pieces his 09-11 notes opened after the screen.
+**State right now (updated 2026-09-14):** `main` @ `56efc17` — **v0.22.0, tagged and live.** The
+screen fill, the fight fog, the visual pass and everything else since v0.21.0 are on the live site.
+Suite 1409 / 262 / 0 failures. **Shipped 2026-09-14:** F1, the fight as fog of war (merged
+`23fffd2`), then v0.22.0 with `game/_headers` — which reaches the custom domain only once Caelan
+changes one Cloudflare setting (ruling **CD**, §2). Next in Caelan's queue: **Q1**, the quest-1
+autoplay, then **H1**, the combat HUD (§4).
 
 > **Audited against the code 2026-09-10 — eight rows were wrong.** The 09-07 compile carried items
 > over from the July backlogs without re-checking them, and some had shipped the week before:
@@ -44,7 +44,9 @@ flowchart LR
     classDef now fill:#f7c8b8,stroke:#a33a1e,color:#3a0f05
     classDef done fill:#dfe9e0,stroke:#6a8a6e,color:#243326,stroke-dasharray:4 3
 
-    SHIP["Ship v0.22.0 to main<br/>75-commit fast-forward"]:::now
+    SHIP["v0.22.0 shipped<br/>DONE 09-14"]:::done
+    CD["RULING CD: the custom domain's<br/>4-hour browser cache"]:::ruling
+    SHIP --> CD
     GY["Zone §3 graves as props,<br/>tents — DONE"]:::done
     INT["Zone §1 interiors"]:::now
     R_INT["RULING: vendor Interior Pack?<br/>proxy vault + slots?"]:::ruling
@@ -63,14 +65,19 @@ flowchart LR
     BOSS --> LEG
 
     SCREEN["The screen fills the window,<br/>dock + dial — DONE 09-13"]:::done
-    FOG["F1 — the fight area<br/>as fog of war"]:::design
+    FOG["F1 — the fight as fog of war<br/>DONE 09-14"]:::done
     SPLAT["F2 — hit-splat art"]:::design
     PULL["F3 — who gets pulled<br/>into a fight"]:::design
     SF["RULING SF: fillers,<br/>the forest, the south edge"]:::ruling
+    AUTO["Q1 — the quest-1 autoplay<br/>(an eval harness)"]:::design
+    HUD["H1 — the combat HUD<br/>(log, gear panels, item bar)"]:::design
     SCREEN -->|"the spotlight glares on a wide screen"| FOG
-    FOG -->|"the same sight-defined area"| PULL
+    FOG -->|"fight-area.js, the same sight"| PULL
+    FOG -.->|"entrances by hit type"| SPLAT
     LEG --> SPLAT
     SCREEN --> SF
+    SCREEN -->|"the dock it rearranges"| HUD
+    AUTO -.->|"how later reviews are watched"| HUD
 
     A1["RULING A1: keep the −15<br/>bruiser row? (gates nothing yet)"]:::ruling
     A3["RULING A3: does the bag<br/>cost a turn?"]:::ruling
@@ -111,7 +118,6 @@ Three things the graph makes visible that the lists did not:
 
 | Item | State | Size | Doc | Blocked by |
 |---|---|---|---|---|
-| **Ship v0.22.0 to `main`** | Caelan's call; deliberately held. A clean fast-forward (75 commits on 2026-09-13) + version bump in 3 files + annotated tag. The demo-readiness doc's own headline: *"nothing else is worth as much."* Before shipping, re-time a frame at 3440×1440 on a quiet machine — the last re-time ran under an outside GPU load (`plans/screen-fill.md`, *Measured*). | S | `plans/demo-readiness.md` §0 | nothing |
 | **Zone §1 — interiors get a vocabulary** | Blocked on two rulings (§2). Floors already solved via `rlOutlined_packed.png`. **No interior wall exists in any bundled sheet.** | M | `plans/zone-identity.md` §1 | Z1, Z2 |
 
 ---
@@ -122,6 +128,7 @@ Ordered by how much each unblocks.
 
 | # | Ruling | What it gates | Source |
 |---|---|---|---|
+| **CD** | **The custom domain still caches JS and CSS for four hours.** `game/_headers` (v0.22.0) asks for `max-age=0`, and `violencetown.pages.dev` obeys it, but the `russelldangerr.com` zone's Browser Cache TTL — Cloudflare's default, four hours — replaces any shorter origin value on `.js`, `.css` and images. Set it to *Respect Existing Headers*, or add a Cache Rule for `violencetown.russelldangerr.com`. A dashboard step, not code; `curl -sI …/main.js` then reads `max-age=0`. | Whether a release reaches a returning player at once | `demo-readiness` §2.5 |
 | **A1** | **Keep the −15 `bruiser` row?** It exists — `tools/balance-harness.mjs:146`, 15–40 GP, interpolated between fodder and standard and marked an open question. **No enemy in any map sits in its band** (armor −30 < a ≤ −15), and Pike is armor 5, which the `tough` row covers. Confirm it, or fold −15 into a neighbour, before anyone authors a −15 enemy. *(Corrected 2026-09-10: this row used to say the band had no row and gated "the entire boss line".)* | Nothing today | `next-session-open-work` A1 |
 | **A3** | **Does opening the REMOTICON cost a world turn?** Load-bearing now DoTs are live — a bag-open would cost a poison tick, undoing Law 7's "reading your bag is free." Proposed (systems-audit §6): *free out of combat, costed in combat.* Still open: `_openDevice` advances no turn. | Whether Law 7 is true | A3 |
 | **A2** | **Poison-flip direction.** The downward mirror of the ally-flip was chosen, not derived. Confirm or replace. | Nothing to build; a correctness question | A2 |
@@ -159,9 +166,10 @@ Ordered by how much each unblocks.
 
 | Item | Open questions | Size | Doc | Blocked by |
 |---|---|---|---|---|
-| **F1 — the fight area as fog of war** | Next in Caelan's queue (09-11). Today's fight reads as a spotlight: a lit circle of radius ~4 tiles when an enemy is 2 tiles away, the world outside cut to about a third of its brightness, a black vignette on top — and on a filled screen the circle is a small share of the view. Direction: keep HAZE's polarity through the fight — clear where the fight can see, a light dither beyond that thins out rather than going dark. A tile-aligned square is the simpler alternative. Which vision defines the area — the player's, the fighters', both? | M | `plans/screen-fill.md` *Follow-on pieces* 1 | nothing |
-| **F2 — hit-splat art** | Kenney's Emote Pack Style 8 glyphs (heart, drop, cross, star) cover heal, poison, miss and crit; no Kenney pack has a flame, snowflake or skull, so those get drawn. Which glyph per damage type, and on the splat or beside it? | S | `plans/screen-fill.md` *Follow-on pieces* 2 | nothing |
-| **F3 — who gets pulled into a fight** | Possibly F1's sight-defined area as a gameplay rule: whoever can see the fight is in it. Decide F1's area first. | M | `plans/screen-fill.md` *Follow-on pieces* 3 | F1 |
+| **Q1 — the quest-1 autoplay** | Next in Caelan's order (09-14). A standard player profile completes quest 1 step by step on autoplay: watchable for him, and an eval and balance harness for Claude (*"for me to be able to see things, and for you to be able to test things and balance things"*). Which route and profile; seeded so a failed run replays; what it measures (turns, damage taken, gold spent); an LLM player later? | M | `plans/fight-fog.md` *Follow-on pieces* 1 | nothing |
+| **H1 — the combat HUD** | On a tall window the wheel's dial sat over the message log (his 09-14 screenshot). Collapse the wheel left, or show gear panels for you and the enemy — what you could steal or buy; a combat log; an item bar that does more than one item (*"that menu has been strange for a little while"*). | M | `plans/fight-fog.md` *Follow-on pieces* 2 | nothing |
+| **F2 — hit-splat art** | Kenney's Emote Pack Style 8 glyphs (heart, drop, cross, star) cover heal, poison, miss and crit; no Kenney pack has a flame, snowflake or skull, so those get drawn. Which glyph per damage type, and on the splat or beside it? Carries Caelan's entrances by hit type (09-14: *"slashing versus crushing"*). | S | `plans/screen-fill.md` *Follow-on pieces* 2 | nothing |
+| **F3 — who gets pulled into a fight** | F1 shipped its area as `game/fight-area.js` — every tile a fighter perceives. As a gameplay rule: whoever can see the fight is in it? | M | `plans/screen-fill.md` *Follow-on pieces* 3 | nothing |
 | **Affordance matrix** — verbs (~20 wheel leaves) × tags | The discipline: *a blank cell is a decision, not an oversight.* Second job is diagnostic — a proposed element with zero edges is caught at design time. Needs the tag layer first. | M | systems-audit §9 | T1 |
 | **Directional frames for every NPC, retire the chevron** | Violencians face their travel now. Extending to guards makes the overlay's facing chevron redundant — the stealth read becomes native to the art. Needs the other rpgUrban rows assigned. | M | `animation-pass.md` §4 | nothing |
 | **"The Crat"** — sewer diplomacy talk-quest | How ambiguous the tell is; father-flip vs. "you are not the mother"; player as arbiter vs. bribeable; reward. Reconcile with the shipped sewer canon first. | M | `sewer-crat-quest.md` (**plan only**) | nothing |
@@ -227,6 +235,8 @@ parked document.
 | Caelan, 2026-09-11 | The screen fills the window | `5278f33`, 2026-09-13 (`plans/screen-fill.md`): one viewport, tile size by one rule, a filler past every map's edge, the bottom dock and the wheel's dial. Fixed on the way: FIRE hidden under the wheel's pointer; the offer screen's mouse wheel |
 | roadmap §2 | V3 — Canvas rung spacing | Resolved by the screen fill (`5278f33`): the backing store follows the window at whole-pixel scales, so no window loses a rung |
 | roadmap §4 | Canvas adaptive backing store | Built as the screen fill (`5278f33`): `game/viewport.js` |
+| roadmap §4 | F1 — the fight area as fog of war | Merged 2026-09-14 (`23fffd2`, `plans/fight-fog.md`): fog over every tile the fighters can't perceive, and an entrance by how the fight began — a black and white close-up, a red slash, a white flash. Timed beside the spotlight at 3440×1440: no measurable cost |
+| roadmap §1 | Ship v0.22.0 to `main` | `56efc17`, tagged `v0.22.0`, live 2026-09-14: 85 commits, re-timed at 3440×1440 on a quiet machine first (`plans/screen-fill.md`, *Measured*). `game/_headers` shipped with it; the custom domain still needs ruling CD |
 
 ---
 
@@ -234,17 +244,15 @@ parked document.
 
 Not a mandate — a reading of the graph.
 
-1. **Rulings session, then ship.** Z1–Z2 and CG gate builds; SF and P1 are the new screen's; A1,
-   A2, A3, R, DZ, D1 are cheap and clear the board. None needs code. Then re-time a frame on a
-   quiet machine and ship v0.22.0 — the demo is 75 commits stale, and the filled screen, the visual
-   pass and this week's builds are all invisible until it moves.
-2. **F1 — the fight area as fog of war** (Caelan's queue, 09-11). A design pass first: which vision
-   defines the area, and dither or square. F3 then builds on F1's area; F2, the splat art, is small
-   and stands alone.
-3. **Small unblocked builds.** Streetlights light up at night, RESTART keeps the last run's pickups,
-   C4 (mystery meat on the throw path). Then §1 interiors once Z1/Z2 are ruled, and a carnival
-   ground once CG is. *(Earlier drafts of this list: B2 and B1 had already shipped; combat
-   legibility and the zone-§3 follow-ons merged 2026-09-13.)*
+1. **Q1 — the quest-1 autoplay** (Caelan's order, 09-14). A design pass first: the route, the
+   player profile, what a run measures. Once it exists it is how every later review is watched —
+   Caelan's eval framing, and Claude's balance check.
+2. **H1 — the combat HUD**, then **F2** (the splat art, carrying entrances by hit type) and **F3**
+   (who gets pulled in, built on `game/fight-area.js`).
+3. **Rulings and small builds.** CD is one Cloudflare setting and makes every release land at once;
+   SF and P1 are the new screen's; Z1–Z2 and CG gate builds; A1, A2, A3, R, DZ, D1 clear the board.
+   Then streetlights at night, RESTART keeps the last run's pickups, C4. *(Earlier drafts of this
+   list: F1 shipped 2026-09-14, and v0.22.0 with it.)*
 
-Sessions 2 and 3 barely overlap: F1 lives in the renderer's fight passes; the small builds live in
-map JSON, `_fullReset` and the item code.
+Sessions 1 and 2 barely overlap: the autoplay drives the game from outside, as a harness; the HUD
+lives in `layout.js`, the renderer's dock and `main.js`'s taps.
