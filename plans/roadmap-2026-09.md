@@ -20,8 +20,9 @@ game (the screen fill, the fight fog, the visual pass and everything since v0.21
 document's updates. Suite 1409 / 262 / 0 failures. **Shipped 2026-09-14:** F1, the fight as fog
 of war (merged `23fffd2`), then v0.22.0 with `game/_headers` — which reaches the custom domain only
 once Caelan changes one Cloudflare setting (ruling **CD**, §2). **Tabled 2026-09-15:** Q1, the
-quest-1 autoplay, parked on the `plan` branch as `plans/quest1-autoplay.md`. Next: **H1**, the
-combat HUD (§4).
+quest-1 autoplay, parked on the `plan` branch as `plans/quest1-autoplay.md`. **Designed
+2026-09-19:** H1, the combat HUD — `plans/combat-hud.md`, six rulings pending. Next: **H1**, the
+combat HUD (§4), once those are ruled.
 
 > **Direction ruled 2026-09-15 — `plans/species-adventures.md`.** Fixed maps stay; enemies
 > come from a registry with spawn tables, drops and a respawn clock; quest flags apply *world
@@ -175,7 +176,7 @@ Ordered by how much each unblocks.
 
 | Item | Open questions | Size | Doc | Blocked by |
 |---|---|---|---|---|
-| **H1 — the combat HUD** | Next in Caelan's order. On a tall window the wheel's dial sat over the message log (his 09-14 screenshot). Collapse the wheel left, or show gear panels for you and the enemy — what you could steal or buy; a combat log; an item bar that does more than one item (*"that menu has been strange for a little while"*). | M | `plans/fight-fog.md` *Follow-on pieces* 2 | nothing |
+| **H1 — the combat HUD** | **Design pass done 2026-09-19** — `plans/combat-hud.md`: the dock gets two faces and the dial gets a reserved cell. Six rulings (H1-1..H1-6) await Caelan; no code until he makes them. The pass turned up two live bugs it fixes on the way — the wheel throws bag slot 0 instead of the bar's selection, and the HUD non-overlap invariant tests `cornersLayout` while the game runs `dockLayout`. | M | `plans/combat-hud.md` | nothing |
 | **F2 — hit-splat art** | Kenney's Emote Pack Style 8 glyphs (heart, drop, cross, star) cover heal, poison, miss and crit; no Kenney pack has a flame, snowflake or skull, so those get drawn. Which glyph per damage type, and on the splat or beside it? Carries Caelan's entrances by hit type (09-14: *"slashing versus crushing"*). | S | `plans/screen-fill.md` *Follow-on pieces* 2 | nothing |
 | **F3 — who gets pulled into a fight** | F1 shipped its area as `game/fight-area.js` — every tile a fighter perceives. As a gameplay rule: whoever can see the fight is in it? | M | `plans/screen-fill.md` *Follow-on pieces* 3 | nothing |
 | **Affordance matrix** — verbs (~20 wheel leaves) × tags | The discipline: *a blank cell is a decision, not an oversight.* Second job is diagnostic — a proposed element with zero edges is caught at design time. Needs the tag layer first. | M | systems-audit §9 | T1 |
@@ -253,8 +254,8 @@ parked document.
 
 Not a mandate — a reading of the graph.
 
-1. **H1 — the combat HUD** (Caelan's order). A design pass first: where the wheel goes on a tall
-   window, the gear panels for you and the enemy, a combat log, an item bar that does more.
+1. **H1 — the combat HUD** (Caelan's order). **The design pass is written** —
+   `plans/combat-hud.md`, awaiting rulings H1-1..H1-6. Stages 1-2 are bug fixes worth having alone.
 2. **F2** (the splat art, carrying entrances by hit type) and **F3** (who gets pulled in, built on
    `game/fight-area.js`).
 3. **Rulings and small builds.** CD is one Cloudflare setting and makes every release land at once;
