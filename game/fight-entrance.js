@@ -8,8 +8,8 @@
 
 // ── The timeline, in ms from the moment the fight began ─────────────────────
 export const IMPACT_MS          = 110;    // the impact frame
-export const ZOOM_IN_MS         = 80;     // the punch lands...
-export const ZOOM_OUT_MS        = 280;    // ...and has settled by 360
+export const ZOOM_IN_MS         = 180;    // the punch lands...
+export const ZOOM_OUT_MS        = 160;    // ...and has settled by 340
 export const ROLL_STEP_MS       = 34;     // per step of order, as the smoke rolls
 export const ROLL_JITTER_MS     = 70;     // each tile's own scatter, so the edge reads as smoke
 export const TILE_FADE_MS       = 150;    // each tile's own fade-in
@@ -56,7 +56,6 @@ export function entranceFor(kind, lastEndedAt, now) {
 }
 
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
-const easeOut = (t) => 1 - Math.pow(1 - clamp01(t), 3);
 const easeInOut = (t) => { t = clamp01(t); return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; };
 
 // What `ms` into an entrance draws: whether the impact frame is up (and how
@@ -65,7 +64,7 @@ export function entranceAt(entrance, ms, { reduceMotion = false } = {}) {
     if (!entrance || reduceMotion || !(ms >= 0)) return { impact: false, impactT: 1, zoom: 1 };
     const lift = entrance.zoom - 1;
     let zoom = 1;
-    if (lift > 0 && ms < ZOOM_IN_MS) zoom = 1 + lift * easeOut(ms / ZOOM_IN_MS);
+    if (lift > 0 && ms < ZOOM_IN_MS) zoom = 1 + lift * easeInOut(ms / ZOOM_IN_MS);
     else if (lift > 0 && ms < ZOOM_IN_MS + ZOOM_OUT_MS) zoom = 1 + lift * (1 - easeInOut((ms - ZOOM_IN_MS) / ZOOM_OUT_MS));
     return { impact: ms < IMPACT_MS, impactT: clamp01(ms / IMPACT_MS), zoom };
 }
