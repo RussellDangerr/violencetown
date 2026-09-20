@@ -7,6 +7,7 @@ import { computeViewport, screenToTile, clientToScreen, toMenu } from './viewpor
 import { loadMap } from './map.js';
 import { loadAllSprites } from './sprites.js';
 import { BitmapFont } from './bitmap-font.js';
+import { pickHitMark, HEAVY_HIT_DAMAGE } from './hit-splat.js';   // (manga-impact-marks) the mark rule + the heavy threshold
 import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, MAX_STACK } from './data.js';
 import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, ownedItemDefs, hasItemDef } from './items.js';
 import { WEAPONS } from './weapons.js';
@@ -176,10 +177,10 @@ const RING_THUMB_DISPOSITION = 70;   // above EVERY authored NPC baseline (the f
 const RING_PINKY_GP          = 500;
 const RING_IGNITE_DAMAGE     = 6;
 
-// (manga-impact-marks) Damage at/above which a physical hit-splat is "heavy"
-// — shared by combatAttack's screenshake trigger AND _spawnHitSplat's mark
-// pick (star vs stars), so the two can't drift into disagreeing thresholds.
-const HEAVY_HIT_DAMAGE = 15;
+// (manga-impact-marks) HEAVY_HIT_DAMAGE and the mark pick moved to
+// hit-splat.js — the same threshold still feeds combatAttack's screenshake
+// trigger AND _spawnHitSplat's mark, it is just importable (and so testable)
+// now. See plans/hit-splat-art.md.
 
 // ── Radial menu (Omnitrix-style combat wheel) ───────────────────────────────
 
@@ -5174,21 +5175,11 @@ class Game {
     // moves mid-particle (rare but possible during animation overlap).
 
     // (manga-impact-marks) Which bare-symbol MARK_SPRITES key (if any) pops
-    // beside a hit-splat's badge. A kill outranks the type-based pick — the
-    // same "milestone beat" precedence _triggerScreenShake already gives
-    // kills above — so a poisoned killing blow still reads as a KO, not a
-    // drip. Heals, and any damage type not listed, get no mark at all: a
-    // star over a heal reads as damage, and an unmapped element (cold,
-    // energy, fear) hasn't been asked for one.
+    // beside a hit-splat's badge. The rule itself lives in hit-splat.js —
+    // this stays as the method the splat path calls, so the one decision is
+    // unit-testable instead of only greppable.
     _pickHitMark(type, amount, killed) {
-        if (killed) return 'swirl';
-        switch (type) {
-            case 'physical': return amount >= HEAVY_HIT_DAMAGE ? 'stars' : 'star';
-            case 'poison':
-            case 'sludge':   return 'drops';
-            case 'fire':     return 'anger';
-            default:         return null;
-        }
+        return pickHitMark(type, amount, killed);
     }
 
     // (combat-feel-pass) RuneScape-style typed hit-splat. `type` picks the

@@ -616,10 +616,12 @@ export const EMOTE_SPRITES = {
 // (main.js) and Renderer._drawHitSplat (renderer.js). KEEP IN SYNC with
 // gen_emote_sheet.py's MARKS_ORDER list.
 //
-// Not every column has a call site: `drop`, `cross` and `exclamation` are
-// unused today (parity with the full mark set the sheet ships, same dormant-
-// but-correct status as SPLAT_COLOR.miss in renderer.js — no code path
-// produces a miss, or these three, and that's fine).
+// Seven of the eight columns have a call site (see pickHitMark in
+// hit-splat.js). `cross` is the one that does not: it reads as a negation,
+// and the only beat that would want it — a blow that lands for nothing —
+// never reaches a splat, because combatAttack returns on an immune target
+// before spawning one and logs instead. Wiring it would mean spawning a
+// 0-damage splat first, which is a design call, not a mapping one.
 export const MARK_SPRITES = {
     star: 0, stars: 1, anger: 2, drop: 3, drops: 4, cross: 5, swirl: 6, exclamation: 7,
 };
