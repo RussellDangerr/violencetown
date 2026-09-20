@@ -15,14 +15,15 @@ pending decisions, and the three passes that landed this week.
 > Both were accurate when written; **seven of their items have since shipped** and are listed in
 > §6 so nobody re-does them. The `plan` branch itself is six weeks stale — see §5.
 
-**State right now (updated 2026-09-15):** `main` = `dev`, **v0.22.1, tagged and live** — v0.22.0's
-game (the screen fill, the fight fog, the visual pass and everything since v0.21.0) plus this
-document's updates. Suite 1409 / 262 / 0 failures. **Shipped 2026-09-14:** F1, the fight as fog
-of war (merged `23fffd2`), then v0.22.0 with `game/_headers` — which reaches the custom domain only
-once Caelan changes one Cloudflare setting (ruling **CD**, §2). **Tabled 2026-09-15:** Q1, the
-quest-1 autoplay, parked on the `plan` branch as `plans/quest1-autoplay.md`. **Designed
-2026-09-19:** H1, the combat HUD — `plans/combat-hud.md`, six rulings pending. Next: **H1**, the
-combat HUD (§4), once those are ruled.
+**State right now (updated 2026-09-20):** `main` = `dev` = `9f4158f`, **v0.23.0, tagged and live**
+— H1, the combat HUD, in full, plus the combat-log tagging fix. Suite 1512 / 278 / 0 failures;
+balance golden, no drift. Verified live: the deployed `<meta name="version">` reads 0.23.0 and nine
+files byte-match `main`. **Shipped 2026-09-20:** H1's five stages (§4) and the tagging fix that
+made its combat log actually show anything. **Shipped 2026-09-14:** F1, the fight as fog of war,
+then v0.22.0. **Ruling CD is DONE** (2026-09-15, re-verified live 2026-09-20 — see §2).
+**Tabled 2026-09-15:** Q1, the quest-1 autoplay, parked on the `plan` branch as
+`plans/quest1-autoplay.md`. Next: **F2** / **F3** (§4), or living zones — piece 1 of
+`plans/species-adventures.md`, whose §3 recommendations are still unruled and gate pieces 1–3.
 
 > **Direction ruled 2026-09-15 — `plans/species-adventures.md`.** Fixed maps stay; enemies
 > come from a registry with spawn tables, drops and a respawn clock; quest flags apply *world
@@ -55,7 +56,7 @@ flowchart LR
     classDef done fill:#dfe9e0,stroke:#6a8a6e,color:#243326,stroke-dasharray:4 3
 
     SHIP["v0.22.0 shipped<br/>DONE 09-14"]:::done
-    CD["RULING CD: the custom domain's<br/>4-hour browser cache"]:::ruling
+    CD["CD: the custom domain's cache<br/>DONE 2026-09-15"]:::done
     SHIP --> CD
     GY["Zone §3 graves as props,<br/>tents — DONE"]:::done
     INT["Zone §1 interiors"]:::now
@@ -80,7 +81,7 @@ flowchart LR
     PULL["F3 — who gets pulled<br/>into a fight"]:::design
     SF["RULING SF: fillers,<br/>the forest, the south edge"]:::ruling
     AUTO["Q1 — the quest-1 autoplay<br/>TABLED 09-15, parked on plan"]:::later
-    HUD["H1 — the combat HUD<br/>(log, gear panels, item bar)"]:::design
+    HUD["H1 — the combat HUD<br/>SHIPPED v0.23.0"]:::done
     SCREEN -->|"the spotlight glares on a wide screen"| FOG
     FOG -->|"fight-area.js, the same sight"| PULL
     FOG -.->|"entrances by hit type"| SPLAT
@@ -176,7 +177,7 @@ Ordered by how much each unblocks.
 
 | Item | Open questions | Size | Doc | Blocked by |
 |---|---|---|---|---|
-| **H1 — the combat HUD** | **Design pass done 2026-09-19** — `plans/combat-hud.md`: the dock gets two faces and the dial gets a reserved cell. Six rulings (H1-1..H1-6) await Caelan; no code until he makes them. The pass turned up two live bugs it fixes on the way — the wheel throws bag slot 0 instead of the bar's selection, and the HUD non-overlap invariant tests `cornersLayout` while the game runs `dockLayout`. | M | `plans/combat-hud.md` | nothing |
+| **H1 — the combat HUD** | **SHIPPED in v0.23.0, 2026-09-20.** All five stages of `plans/combat-hud.md`: the wheel fires the bar's item (it fired bag slot 0), the dial gets a reserved dock column and joins the non-overlap invariant, the dock swaps its quest log for a combat log in a fight, two read-only gear panels sit in the fogged margins, and the bar shows its whole column. The combat log then shipped **empty** — every fight message was filed `system` — fixed in the same release, with a source-reading guard so it cannot rot back. | M | `plans/combat-hud.md` | — |
 | **F2 — hit-splat art** | Kenney's Emote Pack Style 8 glyphs (heart, drop, cross, star) cover heal, poison, miss and crit; no Kenney pack has a flame, snowflake or skull, so those get drawn. Which glyph per damage type, and on the splat or beside it? Carries Caelan's entrances by hit type (09-14: *"slashing versus crushing"*). | S | `plans/screen-fill.md` *Follow-on pieces* 2 | nothing |
 | **F3 — who gets pulled into a fight** | F1 shipped its area as `game/fight-area.js` — every tile a fighter perceives. As a gameplay rule: whoever can see the fight is in it? | M | `plans/screen-fill.md` *Follow-on pieces* 3 | nothing |
 | **Affordance matrix** — verbs (~20 wheel leaves) × tags | The discipline: *a blank cell is a decision, not an oversight.* Second job is diagnostic — a proposed element with zero edges is caught at design time. Needs the tag layer first. | M | systems-audit §9 | T1 |
@@ -246,7 +247,7 @@ parked document.
 | roadmap §2 | V3 — Canvas rung spacing | Resolved by the screen fill (`5278f33`): the backing store follows the window at whole-pixel scales, so no window loses a rung |
 | roadmap §4 | Canvas adaptive backing store | Built as the screen fill (`5278f33`): `game/viewport.js` |
 | roadmap §4 | F1 — the fight area as fog of war | Merged 2026-09-14 (`23fffd2`, `plans/fight-fog.md`): fog over every tile the fighters can't perceive, and an entrance by how the fight began — a black and white close-up, a red slash, a white flash. Timed beside the spotlight at 3440×1440: no measurable cost |
-| roadmap §1 | Ship v0.22.0 to `main` | `56efc17`, tagged `v0.22.0`, live 2026-09-14: 85 commits, re-timed at 3440×1440 on a quiet machine first (`plans/screen-fill.md`, *Measured*). `game/_headers` shipped with it; the custom domain still needs ruling CD |
+| roadmap §1 | Ship v0.22.0 to `main` | `56efc17`, tagged `v0.22.0`, live 2026-09-14: 85 commits, re-timed at 3440×1440 on a quiet machine first (`plans/screen-fill.md`, *Measured*). `game/_headers` shipped with it; ruling CD settled it on the custom domain 2026-09-15 |
 
 ---
 
@@ -254,8 +255,8 @@ parked document.
 
 Not a mandate — a reading of the graph.
 
-1. **H1 — the combat HUD** (Caelan's order). **The design pass is written** —
-   `plans/combat-hud.md`, awaiting rulings H1-1..H1-6. Stages 1-2 are bug fixes worth having alone.
+1. ~~**H1 — the combat HUD**~~ — **done and shipped in v0.23.0 on 2026-09-20**, all five stages.
+   The next session starts at item 2.
 2. **F2** (the splat art, carrying entrances by hit type) and **F3** (who gets pulled in, built on
    `game/fight-area.js`).
 3. **Rulings and small builds.** CD is one Cloudflare setting and makes every release land at once;

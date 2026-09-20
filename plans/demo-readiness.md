@@ -115,7 +115,7 @@ game talking over itself. There is an 8-turn gap now — a gap, not a cap.
 `hintsSeen` is a comma-joined id list rather than a boolean per hint, so a new lesson stays a
 one-file change. The old `blindSpotHintSeen` migrates, so a player mid-run is not re-taught.
 
-### 2.5 A deploy takes up to FOUR HOURS to reach a returning visitor
+### 2.5 A deploy takes up to FOUR HOURS to reach a returning visitor — **CLOSED 2026-09-15**
 
 Found while verifying the second ship. The origin serves the new build immediately — verified
 byte-for-byte — but a browser that loaded the site earlier keeps running the old one.
@@ -149,14 +149,14 @@ revalidating costs a 304 rather than a re-download:
   Cache-Control: public, max-age=0, must-revalidate
 ```
 
-Not applied — it changes production caching, which is Caelan's call.
+Not applied *when written* — it changed production caching, which was Caelan's call. He made it; see below.
 
 **Applied in v0.22.0 at Caelan's call (2026-09-14)** as `game/_headers`, for `/*.js` and `/*.css`:
 CSS carried the same four-hour cache (measured that day), and v0.22.0 rewrote both `index.html` and
 `style.css`. Images and fonts keep Cloudflare's default; that release changed no image in place,
 only added new files. A future release that edits an image in place needs a line here too.
 
-**Half done — measured after the v0.22.0 deploy, 2026-09-14.** The file works: Cloudflare's own
+**Half done *at the time* — measured after the v0.22.0 deploy, 2026-09-14; superseded by the DONE note below.** The file works: Cloudflare's own
 address, `violencetown.pages.dev/main.js`, answers `Cache-Control: public, max-age=0,
 must-revalidate`. The custom domain does not: `violencetown.russelldangerr.com/main.js` and
 `style.css` still answer `max-age=14400`. That is the `russelldangerr.com` zone's **Browser Cache
@@ -165,10 +165,22 @@ images, but not `.html` or `.json` — which is why those two were always fresh)
 shorter origin `max-age` with its own. (Pages also answers every unknown path, `/_headers`
 included, with `index.html` and a 200; that is its SPA fallback, not the file being served.)
 
-The remaining step is Caelan's, in the Cloudflare dashboard: on the `russelldangerr.com` zone set
-Caching → Configuration → Browser Cache TTL to **Respect Existing Headers**, or add a Cache Rule
-for `violencetown.russelldangerr.com` whose browser TTL respects the origin. Then
-`curl -sI https://violencetown.russelldangerr.com/main.js` should read `max-age=0`.
+**DONE — Caelan set it 2026-09-15, and it is still holding.** On the `russelldangerr.com` zone,
+Caching → Configuration → **Browser Cache TTL → Respect Existing Headers**. The four hours were
+entirely the zone setting; Pages' own default was already `max-age=0`.
+
+Re-verified against the live site on 2026-09-20, shipping v0.23.0:
+
+```
+Cache-Control: public, max-age=0, must-revalidate
+```
+
+A release now reaches a returning visitor on their next load. Everything above this line is kept as
+the record of how it was found and what was measured — the four-hour figure was true when written.
+
+*One live-site wrinkle worth knowing when you verify a deploy:* Cloudflare Pages **308-redirects
+`/index.html` to `/`**, so `curl` without `-L` returns an empty body and a version poll or a
+byte-compare will look like it failed when nothing is wrong. Fetch `/`, or use `curl -sSL`.
 
 ---
 
