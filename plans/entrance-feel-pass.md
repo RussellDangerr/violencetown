@@ -188,3 +188,40 @@ Recorded so the next session does not mistake these for oversights.
    twice under it. It auto-merges, but CLAUDE.md warns auto-merge silently drops things — it wants a
    RUN-the-game check, not a marker count. Merge it before this pass compounds the drift, or
    explicitly park it.
+
+---
+
+## 7. Built and measured (2026-09-20)
+
+Both agents delivered; merged into `feature/entrance-feel-pass`. Gates: **1624 tests / 287 suites /
+0 failures**, balance clean, naming clean. Verified in the running game, at 1920x1080.
+
+| | before | after |
+| --- | --- | --- |
+| **D3** `struck` card lift | **2.26x** luminance drop in one frame | **1.28x**, spread over a ~40 ms ramp |
+| **D3** `spotted` card lift | 1.79x rise | 1.46x |
+| **D1** visible pixel jumps, ~0.75 px move | **3.03%** of screen | **0.76%** |
+| **D1** at the zoom peak (0.43 px move) | — | **0.01%** |
+| **D1** mean delta when a pixel changes | 79.6 | **17.3** |
+| **D2** zoom when the world appears | 1.1592 of a 1.16 peak (99.9% done) | **1.1224**, still rising |
+
+The crawl signature inverted exactly as predicted: many more pixels now change (30-39% vs 9%) but
+by small amounts instead of few pixels snapping hard. That is what smooth resampling looks like and
+it is imperceptible; the old pattern was not.
+
+**C1 confirmed live in the browser, not just in source** — instrumenting `ctx.drawImage` caught the
+punch draw (destW 2223 on a 1920 canvas) executing with `imageSmoothingEnabled: true`.
+
+**The C2 x C4 interaction predicted in §2 is real and is what makes C4 work.** C4 alone would not
+have been enough: with `easeInOut` over 180 ms the zoom's peak velocity lands at ms~90, but the card
+lifts at 110, so the punchiest frames are still behind it. C2's taper starts fading the card at
+t=0.65 (ms 71.5), so those frames are seen *through* a translucent card. Captured frames confirm it:
+at 70 ms the card is solid (z=1.019), at 90 ms the world shows through while the zoom is still
+climbing (z=1.040), at 110 ms it is clear (z=1.061) and still rising toward the 1.08 `struck` peak.
+
+**If it still reads soft, the lever is `IMPACT_MS` down toward 90 — not `ZOOM_IN_MS` up.** That
+moves the card lift in front of peak velocity instead of behind it.
+
+Both agents re-measured the test baseline rather than quoting the stale figure in this document, and
+both reported it. Agent B additionally removed `easeOut`, dead after the in-phase switch, and
+flagged the liberty; verified unreferenced (the remaining hits are `easeOutCubic`, unrelated).
