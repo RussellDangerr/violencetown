@@ -196,11 +196,17 @@ A compact panel for **the current target**: name, HP as a number and a bar, the 
 which of Coin / Kit / Gear is takeable. It is the thing that makes `Thieve` legible — the wheel
 already computes those three answers and shows you three grey slices without saying why.
 
-**Recommendation:** the enemy card first, and **your** gear panel behind a toggle rather than always
-on. Your HP / MP / GP are already on screen and the Remoticon has GEAR; the enemy's kit is the only
-genuinely new information in a fight. This is a recommendation against half of what he asked for, so
-it is ruling H1-4 — if he wants both panels always-on, the dock loses the room and the symmetric
-layout becomes the design instead.
+**Ruled (H1-4, 2026-09-19): both panels, player side read-only.** My recommendation was the enemy
+card alone, with yours behind a toggle, on the grounds that your HP/MP/GP are already on screen and
+the Remoticon has GEAR. Overridden, correctly: having to *open* the Remoticon mid-fight is the
+friction the panel exists to remove, and a read-only panel removes it without inviting the
+equipment-swapping that the design specifically does not want.
+
+**Consequence for stage 4, not yet designed.** Two always-on panels do not fit the dock strip
+beside a combat log, an item bar and the dial's reserved column. The likely home is the world's
+**fogged margins** — left for you, right for the target — which the fight fog already dims, so
+panels there cost nothing readable and are literally "in view at the same time". That is a sketch,
+not a ruling; stage 4 needs its own pass before anything is built.
 
 ### 5. The bar shows its column
 
@@ -260,10 +266,19 @@ failures at v0.22.1.
 ## Rulings (Caelan's)
 
 > **Ruled 2026-09-19, on waking:** **H1-6 — stages 1 and 2 only** (the two bug fixes), then re-rule
-> the rest once he has felt the dial in a cell. **H1-4 — the enemy target card only**; no symmetric
-> player panel, not even behind a toggle, until there is a fight face to put one in. H1-1 and H1-2
-> are ruled *yes* implicitly, being exactly what stages 1-2 are. **H1-3 and H1-5 are not yet
-> ruled** — they belong to stages 3 and 4, which are not being built yet.
+> the rest once he has felt the dial in a cell. H1-1 and H1-2 are ruled *yes* implicitly, being
+> exactly what stages 1-2 are. **H1-3 and H1-5 are not yet ruled** — they belong to stages 3 and 4,
+> which are not being built yet.
+>
+> **H1-4 — re-ruled the same day: BOTH panels, and the player's side is READ-ONLY.** The
+> recommendation above (enemy card only) was put to him and overridden, with the reasoning that
+> makes it right: the panel exists so you never feel the need to go and check, not so you can
+> swap. *"Everything is so nebulous that you would always want to see your inventory in there at
+> the same time, so that you're not swapping out weapons and things. Even in the deepest RPGs
+> you're not swapping out equipment per fight. D&D specifically guards against that."* Donning
+> armour takes minutes in 5e and drawing or stowing a weapon spends your object interaction —
+> mid-fight swapping is disincentivised by design, and the answer is to show the gear, not to
+> speed up changing it. **So: no equip affordance anywhere in the fight HUD.**
 
 ### The full list
 
