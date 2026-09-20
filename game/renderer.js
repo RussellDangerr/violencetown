@@ -21,7 +21,7 @@ import {
     DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceEquipLayout, deviceRingsLayout,
     inspectorPanelRect, inspectorActionRects,                               // (C1) tap-to-inspect panel + action-row geometry
     gearOptionRects,                                                        // (C2) GEAR chooser option-row geometry
-    xmbBarLayout, hudLayout, throwRects, wheelTopMarks, fightPanelRects,                      // (XMB) usable-bar geometry; (screen-fill) the HUD, throw targets, the marks above the wheel
+    xmbBarLayout, hudLayout, throwRects, wheelTopMarks, fightPanelRects, XMB_CELL,                      // (XMB) usable-bar geometry; (screen-fill) the HUD, throw targets, the marks above the wheel
     MODAL_RECT, offerLayout,                                                 // (offer screen) the one panel + its geometry
 } from './layout.js';
 import { itemStatLine, itemActions, equipOptions } from './inspector.js';    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
@@ -2512,7 +2512,7 @@ export class Renderer {
         const bar = buildXmbBar(game.inventory);
         if (!bar.columns.length) return;                 // no usables → no bar
         const sel = resolveXmbSelection(bar, game.xmbCat, game.xmbPick);
-        const lay = xmbBarLayout(bar, this._hud().bar);
+        const lay = xmbBarLayout(bar, this._hud().bar, sel);
 
         // Parchment strip behind the whole bar.
         const left = lay.chips[0].x - 10;
@@ -2527,16 +2527,38 @@ export class Renderer {
             this.font.drawText(ctx, chip.label, chip.x + chip.w / 2, chip.y + chip.h / 2 - 4, { color: on ? UI.gold : UI.dim, scale: 1, align: 'center' });
         }
 
-        // Current item cell (icon + name + count), with ▲/▼ affordance when the
-        // column holds more than one item.
+        // (combat-hud stage 5) The active column as a ROW of cells — the bar used
+        // to show one item and ask you to scroll blind. The selected cell is
+        // ringed in gold; the rest are there so you can see what else you have.
+        // The name moved BELOW the row, because the row took the width it used
+        // to sit in.
         if (sel) {
-            const c = lay.current;
-            drawInset(ctx, c.x, c.y, c.w, c.h);
-            this._drawItemIcon(sel.item.itemDef, c.x + 3, c.y + 3, c.w - 6);
-            const name = (sel.item.itemDef.name || sel.item.itemDef.id || '').replace(/[\[\]]/g, '');
-            this.font.drawText(ctx, name.toUpperCase(), c.x + c.w + 14, c.y + 4, { color: UI.textLight, scale: 1 });
-            if (sel.item.count > 1) this.font.drawText(ctx, '×' + sel.item.count, c.x + c.w + 14, c.y + 18, { color: UI.gold, scale: 1 });
-            if (sel.column.items.length > 1) {
+            const items = sel.column.items;
+            for (const c of lay.items) {
+                const it = items[c.index];
+                if (!it) continue;
+                drawInset(ctx, c.x, c.y, c.w, c.h);
+                this._drawItemIcon(it.itemDef, c.x + 3, c.y + 3, c.w - 6);
+                if (c.selected) {
+                    ctx.strokeStyle = UI.gold; ctx.lineWidth = 2;
+                    ctx.strokeRect(c.x + 1, c.y + 1, c.w - 2, c.h - 2);
+                }
+                if (it.count > 1) {
+                    this.font.drawText(ctx, '×' + it.count, c.x + c.w - 2, c.y + c.h - 10,
+                        { color: c.selected ? UI.gold : UI.dim, scale: 1, align: 'right' });
+                }
+            }
+            // The selected item, named, under the row.
+            const chosen = lay.items.find((c) => c.selected);
+            if (chosen) {
+                const def = items[chosen.index] && items[chosen.index].itemDef;
+                const name = ((def && (def.name || def.id)) || '').replace(/[\[\]]/g, '');
+                const mid = lay.items[0].x + (lay.items[lay.items.length - 1].x + XMB_CELL - lay.items[0].x) / 2;
+                this.font.drawText(ctx, name.toUpperCase(), mid, chosen.y + chosen.h + 2,
+                    { color: UI.textLight, scale: 1, align: 'center' });
+            }
+            // ▲/▼ only when the column is longer than the row can show.
+            if (lay.overflow) {
                 this.font.drawText(ctx, '▲', lay.up.x, lay.up.y, { color: UI.dim, scale: 1 });
                 this.font.drawText(ctx, '▼', lay.down.x, lay.down.y, { color: UI.dim, scale: 1 });
             }

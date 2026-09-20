@@ -3354,18 +3354,31 @@ class Game {
     _tapXmbBar(pt) {
         const bar = buildXmbBar(this.inventory);
         if (!bar.columns.length) return false;
-        const lay = xmbBarLayout(bar, this._hud().bar);
+        const sel = resolveXmbSelection(bar, this.xmbCat, this.xmbPick);
+        const lay = xmbBarLayout(bar, this._hud().bar, sel);
         for (const chip of lay.chips) {
             if (this._pointInRect(pt, chip, HIT_SLOP)) {
                 this.xmbCat = chip.key; audio.playSfx('menu-tick'); this._render(); return true;
             }
         }
-        const sel = resolveXmbSelection(bar, this.xmbCat, this.xmbPick);
-        if (sel && sel.column.items.length > 1) {
+        // (combat-hud stage 5) ▲/▼ only exist when the column is longer than the
+        // row can show; otherwise every item is already on the bar to tap.
+        if (lay.overflow) {
             if (this._pointInRect(pt, lay.up, HIT_SLOP))   { this._xmbNav('itemPrev'); return true; }
             if (this._pointInRect(pt, lay.down, HIT_SLOP)) { this._xmbNav('itemNext'); return true; }
         }
-        if (this._pointInRect(pt, lay.current, HIT_SLOP)) { this._useXmbCurrent(); return true; }
+        // Tap an item to pick it; tap the picked one to use it. This is the
+        // grammar plans/item-hotbar-xmb.md set out for touch — "tap a category,
+        // tap an item, tap to fire" — which the single-cell bar could not offer,
+        // because there was never another item on screen to tap.
+        if (sel) {
+            for (const cell of lay.items) {
+                if (!this._pointInRect(pt, cell, HIT_SLOP)) continue;
+                if (cell.selected) { this._useXmbCurrent(); return true; }
+                this.xmbPick = { ...this.xmbPick, [sel.column.key]: cell.id };
+                audio.playSfx('menu-tick'); this._render(); return true;
+            }
+        }
         return false;
     }
 

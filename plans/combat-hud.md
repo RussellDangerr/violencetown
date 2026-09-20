@@ -232,6 +232,31 @@ arrows stay for overflow past N. This is the smallest change that makes the bar 
 than just a single item"*, and it is the last stage because it is the only one that is purely
 cosmetic once fault 2 is fixed.
 
+**Built 2026-09-19, as a horizontal row.** `plans/item-hotbar-xmb.md` specifies a *vertical* item
+column, and that is not what this is. That document was written 2026-07-21, for the old 608 square,
+before the dock existed; the dock's bar panel is 82 px tall, which one cell already fills, so a
+vertical column could only exist by growing over the world or over the message log — the collision
+stage 2 had just finished fixing for the dial. The alternatives (grow the dock permanently, or
+expand upward while browsing) were put to Caelan with that cost stated, and he ruled the row.
+
+Two things the build settled:
+
+- **Touch finally gets the grammar the XMB doc described.** *"Tap a category, tap an item, tap to
+  fire"* was unimplementable on a one-cell bar, because there was never a second item on screen to
+  tap. Now: tapping an unselected cell picks it, tapping the picked one uses it.
+- **The cell gap is 12, not 6, and that is structural.** `HIT_SLOP` grows every cell by 6 a side, so
+  at a 6 px gap two neighbours both claim the same pixels and which one fires depends on iteration
+  order. At 12 the expanded cells merely touch. Pinned by a test rather than fixed with a
+  nearest-centre tie-break — the geometry should not be ambiguous in the first place.
+
+The item's name moved *below* the row, because the row took the width the name used to sit in.
+
+*Not unit-tested:* `main._tapXmbBar` itself. No test in this repo imports `main.js` — it is
+DOM-coupled — so the tap grammar was verified in the browser instead: first tap selected the fire
+bottle without consuming it, second tap threw it (burst, one caught, Burning 5), the bar reflowed to
+three cells and the selection fell back to the rock. Worth a harness one day; not worth inventing
+one here.
+
 ---
 
 ## Stages
@@ -245,7 +270,7 @@ at. The first two are the bug fixes; the last three are the feature.
 | 2 | **The dial gets a cell** — teach the invariant the `'radial_menu'` state (fault 1b), then reserve the column | S–M | `layout.js`, `renderer.js`, `tests/hud-layout.test.js` | Fixes the measured overlap, and makes the guard real before leaning on it. |
 | 3 | **The two faces** — the dock reads `_fightOn`; the combat-log filter | M | `layout.js`, `renderer.js`, `combat-log.js` | **Built 2026-09-19.** The structure the rest hangs on. |
 | 4 | **The two gear panels** — yours and theirs, read-only, in the fogged margins | M | `fight-panels.js`, `layout.js`, `renderer.js` | **Built 2026-09-19.** Needed the fight face to live beside. |
-| 5 | **The bar shows its column** | S | `layout.js`, `renderer.js`, `main.js` hit-test | Cosmetic once 1 has landed. |
+| 5 | **The bar shows its column** | S | `layout.js`, `renderer.js`, `main.js` hit-test | **Built 2026-09-19.** Cosmetic once 1 had landed. |
 
 Stages 1 and 2 are independently shippable and fix bugs that exist right now. If the session runs
 short, **1 and 2 are the ones worth having.**
