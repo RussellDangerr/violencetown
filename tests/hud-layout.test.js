@@ -115,7 +115,7 @@ describe('hudLayout (fill): pinned to the corners', () => {
     });
 });
 
-import { DOCK, DIAL_MAX_R, dialRadius, wheelTopMarks, hitHud, dialColumnLeft } from '../game/layout.js';
+import { DOCK, DIAL_MAX_R, dialRadius, wheelTopMarks, hitHud, dialColumnLeft, dialRect } from '../game/layout.js';
 import { ROOT } from '../game/wheel-model.js';
 
 describe('the dock', () => {
@@ -267,5 +267,59 @@ describe('the open wheel is in the non-overlap invariant', () => {
             kids.forEach((c) => walk(c, d + 1, trail ? `${trail} > ${c.label}` : c.label));
         })(ROOT, 0, '');
         assert.ok(worst <= DIAL_MAX_R, `${where} needs a dial of ${worst}, but only ${DIAL_MAX_R} is reserved`);
+    });
+});
+
+// ── The dock's two faces (plans/combat-hud.md stage 3) ───────────────────────
+//
+// A fight swaps what the dock CONTAINS, never where its pieces sit. The dock
+// reflowing as a fight starts would move the log under the player's eye at the
+// worst possible moment, so every rect is pinned identical across the faces and
+// only the log's contents change.
+describe("the dock's two faces", () => {
+    const withDock = (cssW, cssH, dpr) => computeViewport({ cssW, cssH, dpr, dock: DOCK });
+    const screens = {
+        '1080p':              withDock(1920, 1080, 1),
+        "Caelan's ultrawide": withDock(3440, 1440, 1),
+        'phone upright':      withDock(390, 844, 3),
+        'narrow and tall':    withDock(900, 1200, 1),
+    };
+
+    for (const [name, vp] of Object.entries(screens)) {
+        test(`${name}: a fight does not move a single dock rect`, () => {
+            const town = hudLayout(vp, { fight: false });
+            const fight = hudLayout(vp, { fight: true });
+            assert.deepEqual(fight.dock, town.dock, 'the dock itself');
+            assert.deepEqual(fight.wheel, town.wheel, 'the dial hub');
+            assert.deepEqual(fight.opener, town.opener, 'the opener');
+            assert.equal(fight.bar.cx, town.bar.cx, 'the item bar');
+            assert.equal(fight.bar.bottom, town.bar.bottom, 'the item bar');
+            assert.equal(fight.strip, town.strip, 'the strip line the hints rest on');
+            const box = (r) => ({ x: r.x, y: r.y, w: r.w, h: r.h });
+            assert.deepEqual(box(fight.log), box(town.log), 'the log panel');
+        });
+
+        test(`${name}: the faces differ only in what the log shows`, () => {
+            const town = hudLayout(vp, { fight: false });
+            const fight = hudLayout(vp, { fight: true });
+            assert.equal(town.log.face, 'quest');
+            assert.equal(fight.log.face, 'combat');
+            assert.ok(fight.log.lines > town.log.lines,
+                `the fight face drops the objective, so it fits more feed: ${fight.log.lines} vs ${town.log.lines}`);
+        });
+    }
+
+    test('no options means the town face, so every existing caller is unchanged', () => {
+        const vp = screens['1080p'];
+        assert.deepEqual(hudLayout(vp), hudLayout(vp, { fight: false }));
+        assert.equal(hudLayout(vp).log.face, 'quest');
+    });
+
+    test('the dial keeps its column on the fight face too', () => {
+        for (const vp of Object.values(screens)) {
+            const fight = hudLayout(vp, { fight: true });
+            assert.ok(fight.log.x + fight.log.w <= dialColumnLeft(vp.w));
+            assert.ok(!rectsOverlap(expandRect(dialRect(fight), HIT_SLOP), expandRect(fight.log, HIT_SLOP)));
+        }
     });
 });
