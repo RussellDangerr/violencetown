@@ -129,18 +129,25 @@ export function xmbBarPanelRect(n = 3, anchor = XMB_ANCHOR_CLASSIC) {
   return { x: left, y: top, w: right - left, h: bottom - top };
 }
 
-// The set of INTERACTIVE HUD panels visible+tappable in a given game-state
-// name. Each entry { name, rect } is what a tap can hit. The invariant: no two
-// of these may overlap (under HIT_SLOP), or a tap is ambiguous. 'idle' is the
+// The set of HUD panels on screen in a given game-state name. Each entry
+// { name, rect } is a surface the player is meant to read or hit. The
+// invariant: no two of these may overlap (under HIT_SLOP), or a tap is
+// ambiguous and — as the dial over the log showed — a panel is unreadable.
+// 'radial_menu' is here because the open dial is DRAWN over the dock even
+// though only the wheel takes taps then: the collision that mattered was
+// visual, not a stolen tap. 'idle' is the
 // only always-live combination (message log + usable bar); the modal states
 // are exclusive overlays tested separately if they gain persistent siblings.
 export function hudInteractiveRects(state, vp = DEFAULT_VIEW) {
   const rects = [];
-  if (state === 'idle') {
+  if (state === 'idle' || state === 'radial_menu') {
     const hud = hudLayout(vp);
     rects.push({ name: 'questlog', rect: hud.log });
     rects.push({ name: 'xmb', rect: xmbBarPanelRect(3, hud.bar) });
-    if (hud.opener) rects.push({ name: 'opener', rect: hud.opener });
+    // The open wheel replaces its own opener: the dial is drawn over where the
+    // ✦ sits, and the ✦ is not tappable while the wheel is up.
+    if (state === 'radial_menu') rects.push({ name: 'dial', rect: dialRect(hud) });
+    else if (hud.opener) rects.push({ name: 'opener', rect: hud.opener });
   }
   return rects;
 }
@@ -239,9 +246,25 @@ export function dialRadius(depth, hasKids) {
 }
 export const DIAL_MAX_R = dialRadius(3, false);   // a leaf at the deepest ring: 162
 
+// (combat-hud stage 2) The open wheel's dial as a rect: the disc's bounding box
+// around the hub. The dial is a circle, so this is conservative — which is what
+// we want from a "nothing may land here" reservation.
+export function dialRect(hud, r = DIAL_MAX_R) {
+    return { x: hud.wheel.cx - r, y: hud.wheel.cy - r, w: 2 * r, h: 2 * r };
+}
+
+// The x at which the dial's reserved column begins. Nothing else in the dock
+// may start at or past it. Before this the dial was drawn, not laid out, and on
+// a two-row dock it covered the right-hand third of the full-width log.
+export function dialColumnLeft(w) { return w - DOCK_PAD - 2 * DIAL_MAX_R; }
+
 function dockLayout(vp) {
     const { w, h } = vp;
-    const cx = w / 2;
+    const dialLeft = dialColumnLeft(w);
+    // The item bar centres in the dock MINUS the dial's column, so a narrow
+    // dock slides it left rather than letting it run under the wheel. On a wide
+    // dock there is room to spare and this is the screen's centre as before.
+    const cx = Math.min(w / 2, dialLeft - HUD_GAP - BAR_HALF);
     const dock = { x: 0, y: h - vp.dockH, w, h: vp.dockH, rows: vp.dockRows };
     // The wheel's hub never moves as the wheel deepens: far enough in from the
     // right for the biggest dial, low enough that the deepest BACK tile ends
@@ -249,13 +272,14 @@ function dockLayout(vp) {
     const wheel = { cx: w - DOCK_PAD - DIAL_MAX_R, cy: h - DOCK_PAD - WHEEL_DOWN_MAX - 1 };
     let log, barBottom, openerY;
     if (dock.rows === 2) {
-        log = { x: DOCK_PAD, y: dock.y + DOCK_PAD, w: w - 2 * DOCK_PAD, h: LOG_H3, lines: 3 };
+        // The log stops at the dial's column instead of spanning the dock.
+        log = { x: DOCK_PAD, y: dock.y + DOCK_PAD, w: dialLeft - HUD_GAP - DOCK_PAD, h: LOG_H3, lines: 3 };
         const rowTop = log.y + log.h + HUD_GAP;           // the second row: the item bar and the opener
         barBottom = rowTop + BAR_ABOVE;
         openerY = rowTop + (BAR_H - OPENER) / 2;
     } else {
         barBottom = dock.y + (dock.h - BAR_H) / 2 + BAR_ABOVE;
-        log = { x: DOCK_PAD, y: dock.y + DOCK_PAD, w: cx - BAR_HALF - HUD_GAP - DOCK_PAD, h: LOG_H3, lines: 3 };
+        log = { x: DOCK_PAD, y: dock.y + DOCK_PAD, w: Math.min(cx - BAR_HALF, dialLeft) - HUD_GAP - DOCK_PAD, h: LOG_H3, lines: 3 };
         openerY = dock.y + (dock.h - OPENER) / 2;
     }
     // Under the hub where it fits; otherwise just clear of the item bar.

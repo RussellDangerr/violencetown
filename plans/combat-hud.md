@@ -40,33 +40,30 @@ On a two-row dock the log is full-width, so the dial covers its entire right-han
 screenshot. On a one-row dock the log is short enough to clear, but the dial still climbs 191 px
 into the play area. Both are the same root cause: **the dial is drawn, not laid out.**
 
-### 1b. The invariant that should have caught it is testing a dead branch
+### 1b. The dial was never in the non-overlap invariant
 
-This is the root cause of fault 1, and it is worse than a missing case.
+> **Corrected 2026-09-19, mid-build.** This section first claimed the invariant tested a dead
+> branch and that the dock had no non-overlap coverage at all. **That was wrong** — see below. The
+> fix stage 2 makes is unchanged, but the diagnosis was overstated and the original wording is not
+> worth inheriting. The commit that introduced it (`8e24978`) and the roadmap row from `df2e9ea`
+> repeat the wrong claim; this is the correction of record.
 
-`tests/hud-layout.test.js` does pin a non-overlap invariant, and it already runs it across a table
-of three viewports — 1080p, Caelan's ultrawide, phone upright. But it builds each one with
-`computeViewport({ cssW, cssH, dpr })` and **no `dock:` argument**, while the game builds its
-viewport with `dock: DOCK` (`main.js:908`). No dock means `dockRows === 0`, which means `hudLayout`
-returns `cornersLayout` — the fallback for before main hands over a viewport. Driving both:
+What is actually true is narrower, and is still the reason the overlap shipped.
 
-```
-1080p                test: rows=0 branch=cornersLayout | shipped: rows=1 branch=dockLayout
-Caelan's ultrawide   test: rows=0 branch=cornersLayout | shipped: rows=1 branch=dockLayout
-phone upright        test: rows=0 branch=cornersLayout | shipped: rows=2 branch=dockLayout
-                     log differs: true   wheel differs: true   (all three)
-```
+`hudInteractiveRects(state, vp)` answers for **`'idle'` only**, and returns exactly three panels —
+the quest log, the item bar and the ✦ opener. The open wheel lives in state `'radial_menu'`, so the
+dial is never one of the rects the invariant compares. It has never been checked against the log it
+lands on, at any size. `tests/hud-layout.test.js` even pins the three names explicitly, so adding a
+fourth panel was always going to be a deliberate act rather than something that happened by itself.
 
-**Every screen in the invariant's table exercises a layout the shipped game never takes.** The log
-and the wheel sit somewhere different in all three. The dock — the thing that actually ships, and
-the thing the dial overlaps — has no non-overlap coverage at all.
+What I got wrong: the file has **two** describe blocks. `describe('the dock')` builds four viewports
+with `dock: DOCK` and does run the non-overlap invariant against the real `dockLayout` — so the
+dock's log, bar and opener *are* covered. The other block, `describe('hudLayout (fill): pinned to
+the corners')`, builds its viewports without a dock on purpose: it is the `cornersLayout` block, and
+testing the corners layout is its whole job. Its private `WHEEL_REACH = 126` is likewise the correct
+constant for that layout, not a stale copy of the dial's 162.
 
-Two smaller problems in the same file: the invariant covers `'idle'` only, so the open wheel
-(state `'radial_menu'`) is outside it either way; and the test's own `wheelBox` helper hard-codes
-`WHEEL_REACH = 126`, a private copy of a `layout.js` constant, which is the *closed* wheel's reach —
-36 px short of the open dial's `DIAL_MAX_R` of 162.
-
-Fixing the table is a prerequisite for trusting any geometry work here, and it belongs in stage 2.
+So: the guard was pointed at the right layouts. It simply never knew about the dial.
 
 **Latent, related:** `DIAL_MAX_R` is `dialRadius(3, false)` = 162, and the deepest node in the tree
 today (`Fight > Melee > Hit`) needs exactly 162. Zero headroom. Give any depth-3 leaf a child and
@@ -222,7 +219,7 @@ at. The first two are the bug fixes; the last three are the feature.
 | # | Stage | Size | Touches | Why here |
 |---|---|---|---|---|
 | 1 | **One item selection** — `compose` asks the game; category-aware; empty columns grey | S | `wheel-model.js`, `main.js` | Pure model, node-testable, no art. Fixes a live bug on its own. |
-| 2 | **The dial gets a cell** — fix the invariant's table first (fault 1b), then reserve the column and extend the invariant to the open wheel | S–M | `layout.js`, `renderer.js`, `tests/hud-layout.test.js` | Fixes the measured overlap, and makes the guard real before leaning on it. |
+| 2 | **The dial gets a cell** — teach the invariant the `'radial_menu'` state (fault 1b), then reserve the column | S–M | `layout.js`, `renderer.js`, `tests/hud-layout.test.js` | Fixes the measured overlap, and makes the guard real before leaning on it. |
 | 3 | **The two faces** — the dock reads `_fightOn`; the combat-log filter | M | `layout.js`, `renderer.js` | The structure the rest hangs on. |
 | 4 | **The target card** | M | `renderer.js`, a small pure module for what it reads | Needs the fight face to live in. |
 | 5 | **The bar shows its column** | S | `layout.js`, `renderer.js`, `main.js` hit-test | Cosmetic once 1 has landed. |
@@ -241,22 +238,18 @@ to reconcile before starting.
 
 The invariant that would have caught fault 1, and the ones that keep it caught:
 
-1. **The invariant's table builds the viewport the game builds.** Pass `dock: DOCK` to every
-   `computeViewport` in `tests/hud-layout.test.js`, so the three screens exercise `dockLayout`
-   instead of `cornersLayout`. Expect existing assertions to move; that movement is the bug
-   surfacing, not a regression. Keep one explicitly-named no-dock case for the `cornersLayout`
-   fallback, so it stays covered on purpose rather than by accident.
-2. **The open wheel is in the non-overlap invariant.** Extend `hudInteractiveRects` to take the
-   wheel's depth, or add a sibling that returns the dial's rect, and assert no overlap across a
-   table of viewports including the three that fail today (980×800, 900×1200, 430×932). Drop the
-   test's private `WHEEL_REACH = 126` and read the dial's real radius from `layout.js`.
-3. **The dial fits its reservation.** Assert `max(dialRadius(d, hasKids))` over every node actually
+1. **The open wheel is in the non-overlap invariant.** Teach `hudInteractiveRects` the
+   `'radial_menu'` state so the dial is one of the rects it returns, and assert no overlap across a
+   dock-built table of viewports including the three that fail today (980×800, 900×1200, 430×932).
+   Leave the two existing describe blocks alone: `describe('the dock')` already builds its
+   viewports with `dock: DOCK`, and the corners block is meant to be dock-free.
+2. **The dial fits its reservation.** Assert `max(dialRadius(d, hasKids))` over every node actually
    in `ROOT` is `<= DIAL_MAX_R`. Today that is 162 ≤ 162 — it passes with zero headroom, and fails
    the moment someone gives a depth-3 leaf a child. That is the point.
-4. **One selection.** Given a bag and a bar selection, `compose()` on Throw / Ranged / Eat /
+3. **One selection.** Given a bag and a bar selection, `compose()` on Throw / Ranged / Eat /
    Cleanse returns the bar's slot for the node's category — the test the §2 proof becomes.
-5. **Empty column greys.** `verbApplies(Eat)` is false with no food.
-6. **The faces.** `hudLayout` with `_fightOn` true vs. false returns the same dial cell and the same
+4. **Empty column greys.** `verbApplies(Eat)` is false with no food.
+5. **The faces.** `hudLayout` with `_fightOn` true vs. false returns the same dial cell and the same
    overall dock height (the no-reflow rule).
 
 Baseline to re-measure before starting, not to quote: `npm test` was 1409 tests / 262 suites / 0
