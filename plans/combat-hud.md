@@ -2,7 +2,8 @@
 
 **Phase:** Design (Gate 2). No code written; every choice below is still Caelan's to rule.
 **Priority:** High — H1, next in Caelan's order after Q1 was tabled (`plans/roadmap-2026-09.md` §4).
-**Status:** Design pass, written 2026-09-19 while Caelan slept. Awaiting rulings H1-1 … H1-6 (§7).
+**Status:** Stages 1-2 in build on `feature/combat-hud` (2026-09-19), ruled by Caelan — see §7.
+Stages 3-5 designed, not ruled, not built.
 **Companions:** `plans/fight-fog.md` (*Follow-on pieces* 2, where this was raised — it changes the
 world when a fight starts, and this changes the dock) · `plans/screen-fill.md` (the dock and
 `hudLayout`, which this extends) · `plans/item-hotbar-xmb.md` (the bar's original design, whose
@@ -258,7 +259,15 @@ failures at v0.22.1.
 
 ---
 
-## Rulings needed (Caelan's)
+## Rulings (Caelan's)
+
+> **Ruled 2026-09-19, on waking:** **H1-6 — stages 1 and 2 only** (the two bug fixes), then re-rule
+> the rest once he has felt the dial in a cell. **H1-4 — the enemy target card only**; no symmetric
+> player panel, not even behind a toggle, until there is a fight face to put one in. H1-1 and H1-2
+> are ruled *yes* implicitly, being exactly what stages 1-2 are. **H1-3 and H1-5 are not yet
+> ruled** — they belong to stages 3 and 4, which are not being built yet.
+
+### The full list
 
 - **H1-1 — the dial's cell.** Reserve a dock column for the dial, on both faces? (Recommended.) The
   alternative he raised was collapsing the wheel left on a tall window only, which fixes the
