@@ -12,6 +12,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { logCategory } from '../game/combat-log.js';
 import { tickBuffList } from '../game/buffs.js';
 import { Enemy } from '../game/enemies.js';
 import { tickNpcState } from '../game/npc.js';
@@ -171,17 +172,22 @@ describe('an enemy that heals itself says how much', () => {
 // ── …and main.js shows it ───────────────────────────────────────────────────
 
 const mainSrc = readFileSync(fileURLToPath(new URL('../game/main.js', import.meta.url)), 'utf8');
-function liveMethod(name, params) {
+// freeVars: the module-scope names the extracted method closes over, which
+// the eval'd copy cannot see. Every other liveMethod in tests/ already takes
+// them; this one did not, so the first module-level helper that
+// _routeWorldMessages reached for (combat-log.logCategory) broke it.
+function liveMethod(name, params, freeVars = {}) {
     const signature = `${name}(${params}) {`;
     const at = mainSrc.indexOf(signature);
     assert.ok(at > 0, `${name}(${params}) not found in main.js`);
     const closeAt = mainSrc.indexOf('\n    }', at);
     const body = mainSrc.slice(at + name.length, closeAt + '\n    }'.length);
-    return new Function(`'use strict'; return function ${body}`)();
+    const names = Object.keys(freeVars);
+    return new Function(...names, `'use strict'; return function ${body}`)(...names.map((n) => freeVars[n]));
 }
 
 describe('_routeWorldMessages shows a heal where it landed', () => {
-    const route = liveMethod('_routeWorldMessages', 'msgs');
+    const route = liveMethod('_routeWorldMessages', 'msgs', { logCategory });
     const view = () => ({
         logs: [], splats: [],
         _log(t) { this.logs.push(t); },

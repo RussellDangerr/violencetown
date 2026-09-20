@@ -25,3 +25,20 @@ export function combatLines(history, n = 4) {
     }
     return out.reverse();
 }
+
+// The log category a world message should be filed under. npc.js and ai.js
+// already tag their reports — a combat report says so — and this is the ONE
+// place that answer becomes a log category.
+//
+// It exists because the answer used to be dropped: _routeWorldMessages branched
+// on m.category === 'combat' and then called _log(m.text) without it, so the
+// combat log filtered a history in which no fight was ever tagged and came up
+// empty in real play. A rule with one home cannot be half-applied.
+//
+// An unknown category passes THROUGH rather than being flattened to 'system',
+// so a category added later reaches the log strip intact and can be styled;
+// _logStripColor already falls back for anything it does not recognise.
+export function logCategory(m, fallback = 'system') {
+    if (m && typeof m === 'object' && typeof m.category === 'string' && m.category) return m.category;
+    return fallback;
+}

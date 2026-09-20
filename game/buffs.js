@@ -85,7 +85,7 @@ function applyDot(owner, game, buff, label, cause) {
     // the sludge were hurting it.
     const who = owner === game ? 'You' : (owner.name ?? owner.type);
     const change = after - before;
-    game._log(dmg < 0 ? `[${who} — ${label} (+${change} HP)]` : `[${who} — ${label} ${dmg}]`);
+    game._log(dmg < 0 ? `[${who} — ${label} (+${change} HP)]` : `[${who} — ${label} ${dmg}]`, 'combat');
 
     // And the change floats over whoever it touched, like any other hit. A tick
     // that moved nothing (full HP, or the player held at the floor) shows nothing.
@@ -140,7 +140,7 @@ export const BUFF_DEFS = {
             const before = game.playerMp;
             game.playerMp = Math.min(game.playerMaxMp, Math.max(0, game.playerMp - dmg));
             const delta = game.playerMp - before;
-            game._log(`[Mana ${delta >= 0 ? 'restored' : 'drained'} ${Math.abs(delta)}]`);
+            game._log(`[Mana ${delta >= 0 ? 'restored' : 'drained'} ${Math.abs(delta)}]`, 'combat');
         },
     },
 
@@ -150,7 +150,7 @@ export const BUFF_DEFS = {
             if (!buff || !buff.pendingHeal) return;
             const before = game.playerHp;
             game.playerHp = Math.max(0, Math.min(game.playerHp + buff.pendingHeal, game.playerMaxHp));
-            game._log(`[Recover — healed ${game.playerHp - before} HP]`);
+            game._log(`[Recover — healed ${game.playerHp - before} HP]`, 'combat');
         },
     },
 
