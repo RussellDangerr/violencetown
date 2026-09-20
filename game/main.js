@@ -52,6 +52,7 @@ import {
     emptyOffer, commitBlocker, stage, unstage, settledGold, resolveOffer, sameEntry,
 } from './offer.js';   // (offer screen) the basket model
 import { canTrade, buyPrice, sellPrice, transferGold, burnGold } from './trade.js'; // pricing + the transaction spine
+import { logCategory } from './combat-log.js';   // (log tagging) one rule for a message's category
 import { takeable } from './fight-panels.js';   // (combat-hud stage 4) the one answer to "what could I take"
 import { buildXmbBar, resolveXmbSelection, cycleXmbCategory, cycleXmbItem, xmbCategoryOf, XMB_LABELS } from './xmb.js';
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
@@ -2843,7 +2844,7 @@ class Game {
         // bandage, soap) would heal/apply and be consumed while the throw
         // direction was discarded. (fix/critical-path)
         const msg = resolveThrow(this, stack.itemDef, { dx: dir.dx, dy: dir.dy }, stackCount);
-        if (msg) this._log(msg);
+        if (msg) this._log(msg, 'combat');
         // Legacy direction-throw has no computed impact tile at this call site
         // (resolveThrow resolves it internally and doesn't return it) — the
         // player's own tile is the best available origin for the clatter.
@@ -3145,7 +3146,7 @@ class Game {
                 break;
             }
             case 'hit':   if (npc) { this.combatAttack(npc, this.equipment.weapon.damage, { type: this.equipment.weapon.damageType }); this._advanceWorld(); this._render(); } break;
-            case 'throw': { const th = this._resolveThrowable(); if (th) { const msg = resolveThrow(this, th.itemDef, null, th.count, { x: t.x, y: t.y }); if (msg) this._log(msg); this._rockClatter(th.itemDef, t.x, t.y); th.consume(); this._advanceWorld(); } else this._log('[Nothing to throw.]'); this._render(); break; }
+            case 'throw': { const th = this._resolveThrowable(); if (th) { const msg = resolveThrow(this, th.itemDef, null, th.count, { x: t.x, y: t.y }); if (msg) this._log(msg, 'combat'); this._rockClatter(th.itemDef, t.x, t.y); th.consume(); this._advanceWorld(); } else this._log('[Nothing to throw.]'); this._render(); break; }
             case 'take':  this._takeItemAt(t.x, t.y); this._render(); break;
             case 'open':  if (t.container) this._openContainer(t.container); break;
             default: this._render();
@@ -3293,7 +3294,7 @@ class Game {
         if (!stack) { this.state = STATE.IDLE; this._render(); return; }
         audio.playSfx('throw');
         const msg = resolveThrow(this, stack.itemDef, null, stack.count, tile);
-        if (msg) this._log(msg);
+        if (msg) this._log(msg, 'combat');
         this._rockClatter(stack.itemDef, tile.x, tile.y);
         if (stack.itemDef.consumable) this._removeFromSlot(this.selectedSlot);
         this.selectedSlot = -1;
@@ -3461,7 +3462,7 @@ class Game {
                     }
                     this._advanceWorld();
                 }
-                else { this._log('[Nothing to hit there]'); }
+                else { this._log('[Nothing to hit there]', 'combat'); }
                 break;
             }
             case 'cleaveAttack': {
@@ -3475,7 +3476,7 @@ class Game {
                 const hit = this._aoeStrike(tiles, dmg, { type: this.equipment.weapon.damageType });
                 if (hit) { this._log(`[Cleave! ${hit} caught.]`, 'combat'); this._advanceWorld(); }
                 else if (this._enemiesPresent(tiles) > 0) { this._log('[Cleave connects — shrugged off, immune.]', 'combat'); this._advanceWorld(); }
-                else this._log('[Cleave hits only air]');
+                else this._log('[Cleave hits only air]', 'combat');
                 break;
             }
             case 'spinAttack': {
@@ -3487,7 +3488,7 @@ class Game {
                 const hit = this._aoeStrike(tiles, dmg, { type: this.equipment.weapon.damageType });
                 if (hit) { this._log(`[Spin! ${hit} caught.]`, 'combat'); this._advanceWorld(); }
                 else if (this._enemiesPresent(tiles) > 0) { this._log('[Spin connects — shrugged off, immune.]', 'combat'); this._advanceWorld(); }
-                else this._log('[You spin, hitting nothing]');
+                else this._log('[You spin, hitting nothing]', 'combat');
                 break;
             }
             case 'castSpell': {
@@ -3500,7 +3501,7 @@ class Game {
                 emitNoise(this._earshot(), this.playerX, this.playerY, NOISE.cast);
                 const hit = this._aoeStrike(affectedTiles(w, this), spell.damage, { type: spell.damageType });
                 if (hit) this._log(`[${spell.name}! ${spell.damage} ${spell.damageType} to ${hit}.]`, 'combat');
-                else this._log(`[${spell.name} fizzles — nothing caught.]`);
+                else this._log(`[${spell.name} fizzles — nothing caught.]`, 'combat');
                 this._advanceWorld();
                 break;
             }
@@ -3531,7 +3532,7 @@ class Game {
                 }
                 const hit = this._aoeStrike(affectedTiles(w, this), trick.damage, { type: trick.damageType });
                 if (hit) this._log(`[${trick.name}! ${trick.damage} ${trick.damageType} to ${hit}. (-${trick.gpCost}g)]`, 'combat');
-                else this._log(`[${trick.name} fizzles — nothing caught. (-${trick.gpCost}g)]`);
+                else this._log(`[${trick.name} fizzles — nothing caught. (-${trick.gpCost}g)]`, 'combat');
                 this._advanceWorld();
                 break;
             }
@@ -3557,7 +3558,7 @@ class Game {
             }
             case 'resolveThrow': { if (itemSlot >= 0 && aimTile) { this._throwAt(itemSlot, aimTile); } break; }
             case 'resolveUse':   { const stack = itemSlot >= 0 ? this.inventory[itemSlot] : null; if (stack) { this.selectedSlot = itemSlot; this._doItemUse(stack.itemDef); } else this._log('[Nothing to use]'); break; }
-            case 'guard':        { this.addBuff('guard', 'Guard', 2, 'buff'); this._log('[Bracing — incoming damage reduced.]'); this._advanceWorld(); break; }
+            case 'guard':        { this.addBuff('guard', 'Guard', 2, 'buff'); this._log('[Bracing — incoming damage reduced.]', 'combat'); this._advanceWorld(); break; }
             case 'wait':         { this._log('[Wait]'); this._advanceWorld(); break; }
             case 'run':          { const d = this._aimDir(aimTile); if (d) { this._closeWheel(); this._doMove(d); return; } break; }
             case 'thieveCoin': case 'thieveKit': case 'thieveGear': {
@@ -3836,7 +3837,7 @@ class Game {
     _routeWorldMessages(msgs) {
         for (const m of msgs) {
             if (typeof m === 'string') {
-                this._log(m);
+                this._log(m, logCategory(m));
             } else if (m && (m.category === 'bark' || m.category === 'adjacency-bark' || m.category === 'spotted')) {
                 this._spawnOverheadDialogue(m.sourceEnemy.x, m.sourceEnemy.y, m.text, {
                     sourceRef: m.sourceEnemy,   // groups per-speaker for the stack
@@ -3850,11 +3851,11 @@ class Game {
                 // floats a heal splat over whoever it healed (npc.js sets `heal`).
                 const healed = m.heal > 0 ? (m.healTarget ?? m.sourceEnemy) : null;
                 if (healed) this._spawnHitSplat(healed.x, healed.y, `+${m.heal}`, 'heal', { omni: true });
-                this._log(m.text);
+                this._log(m.text, logCategory(m, 'combat'));
             } else {
                 // Unknown tuple shape — fail safe to the log so nothing gets
                 // dropped silently if a future category lands without a route.
-                this._log(m.text ?? String(m));
+                this._log(m.text ?? String(m), logCategory(m));
             }
         }
     }
@@ -4283,7 +4284,7 @@ class Game {
             elemental: elementalMult(opts.type, enemyObj),
             positional: backstab ? 1.5 : 1,
         });
-        if (finalDmg === 0) { this._log(`[${enemyObj.type} is immune!]`); return null; }
+        if (finalDmg === 0) { this._log(`[${enemyObj.type} is immune!]`, 'combat'); return null; }
         if (backstab) this._log('[Backstab!]', 'combat');
 
         const result = attack(playerEntity, enemyObj.entity, finalDmg);
