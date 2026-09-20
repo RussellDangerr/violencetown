@@ -52,6 +52,7 @@ import {
     emptyOffer, commitBlocker, stage, unstage, settledGold, resolveOffer, sameEntry,
 } from './offer.js';   // (offer screen) the basket model
 import { canTrade, buyPrice, sellPrice, transferGold, burnGold } from './trade.js'; // pricing + the transaction spine
+import { playerPanel, targetPanel, panelTarget, takeable } from './fight-panels.js';   // (combat-hud stage 4)
 import { buildXmbBar, resolveXmbSelection, cycleXmbCategory, cycleXmbItem, xmbCategoryOf, XMB_LABELS } from './xmb.js';
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
 import { contextualUses } from './item-uses.js'; // "use THIS on THAT" — the authored table
@@ -3942,15 +3943,15 @@ class Game {
     // `available` predicates run at DRAW time, before an adjacent aim has been
     // committed, so this asks "is there anyone beside me I could take a `branch`
     // from" rather than depending on reticle timing.
+    // (combat-hud stage 4) The three "what could I take" questions now live in
+    // ONE place — fight-panels.takeable — so the wheel's grey Thieve slices and
+    // the target panel's steal markers cannot drift apart. This keeps the
+    // adjacency and alive checks, which are about reach rather than pockets.
     canThieve(branch) {
-        return (this.enemies || []).some(e => {
-            if (!e.entity?.isAlive?.() || e.thievable === false) return false;
-            if (cheb(e.x, e.y, this.playerX, this.playerY) !== 1) return false;
-            if (branch === 'coin') return (e.gold ?? 0) > 0;
-            if (branch === 'kit')  return (e.loadout ?? []).length > 0;
-            if (branch === 'gear') return (e.equipped ?? []).length > 0;
-            return false;
-        });
+        return (this.enemies || []).some(e =>
+            !!e.entity?.isAlive?.()
+            && cheb(e.x, e.y, this.playerX, this.playerY) === 1
+            && takeable(e)[branch] === true);
     }
 
     // Who a sound can move — hostiles only, for now.

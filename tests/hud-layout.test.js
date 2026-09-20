@@ -115,7 +115,8 @@ describe('hudLayout (fill): pinned to the corners', () => {
     });
 });
 
-import { DOCK, DIAL_MAX_R, dialRadius, wheelTopMarks, hitHud, dialColumnLeft, dialRect } from '../game/layout.js';
+import { DOCK, DIAL_MAX_R, dialRadius, wheelTopMarks, hitHud, dialColumnLeft, dialRect, fightPanelRects, FIGHT_PANEL_CLEAR, FIGHT_PANEL_MIN_W } from '../game/layout.js';
+import { TILE_PX } from '../game/data.js';
 import { ROOT } from '../game/wheel-model.js';
 
 describe('the dock', () => {
@@ -322,4 +323,51 @@ describe("the dock's two faces", () => {
             assert.ok(!rectsOverlap(expandRect(dialRect(fight), HIT_SLOP), expandRect(fight.log, HIT_SLOP)));
         }
     });
+});
+
+// ── The two fight panels (plans/combat-hud.md stage 4) ───────────────────────
+//
+// They live in the world's margins, which the fight fog already dims, so they
+// sit on darkness rather than on the play area. Left is you, right is the
+// target. They must clear the HP panel and the buffs in the top corners, stop
+// above the dock, and leave the tile rule's 20 tiles of world between them.
+describe('the fight panels', () => {
+    const withDock = (cssW, cssH, dpr) => computeViewport({ cssW, cssH, dpr, dock: DOCK });
+    const screens = {
+        '1080p':              withDock(1920, 1080, 1),
+        "Caelan's ultrawide": withDock(3440, 1440, 1),
+        'phone upright':      withDock(390, 844, 3),
+        'narrow and tall':    withDock(900, 1200, 1),
+    };
+    const HP_BOX = (hud) => ({ ...hud.hp, w: 170, h: 90 });
+
+    for (const [name, vp] of Object.entries(screens)) {
+        test(`${name}: both panels sit in the world, above the dock`, () => {
+            const p = fightPanelRects(vp);
+            for (const [side, r] of Object.entries({ left: p.left, right: p.right })) {
+                assert.ok(r.x >= 0 && r.x + r.w <= vp.w, `${side} runs off the screen`);
+                assert.ok(r.y >= 0, `${side} starts above the screen`);
+                assert.ok(r.y + r.h <= vp.h - vp.dockH, `${side} reaches into the dock`);
+            }
+        });
+
+        test(`${name}: they clear the HP panel and the buff bar in the top corners`, () => {
+            const hud = hudLayout(vp), p = fightPanelRects(vp);
+            assert.ok(!rectsOverlap(p.left, HP_BOX(hud)), 'left panel over the HP panel');
+            const buffs = { x: hud.buffsRight, y: hud.buffsTop, w: vp.w - hud.buffsRight, h: 40 };
+            assert.ok(!rectsOverlap(p.right, buffs), 'right panel over the buff bar');
+        });
+
+        test(`${name}: symmetric, and they keep the fight unobstructed between them`, () => {
+            // They overlay the world's fogged edges rather than shrinking the
+            // viewport, so the guarantee is clear tiles between them, not MIN_TILES.
+            const p = fightPanelRects(vp);
+            assert.equal(p.left.x, vp.w - p.right.x - p.right.w, 'not mirrored about the centre');
+            assert.equal(p.left.w, p.right.w);
+            const between = p.right.x - (p.left.x + p.left.w);
+            assert.ok(between / TILE_PX >= FIGHT_PANEL_CLEAR,
+                `only ${(between / TILE_PX).toFixed(1)} tiles left between them`);
+            assert.ok(p.left.w >= FIGHT_PANEL_MIN_W, `panel shrank to ${p.left.w}, past readable`);
+        });
+    }
 });

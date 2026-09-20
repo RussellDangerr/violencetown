@@ -270,6 +270,38 @@ export function dialRect(hud, r = DIAL_MAX_R) {
 // a two-row dock it covered the right-hand third of the full-width log.
 export function dialColumnLeft(w) { return w - DOCK_PAD - 2 * DIAL_MAX_R; }
 
+// ── The two fight panels (plans/combat-hud.md stage 4) ──────────────────────
+// Left is you, right is the target. They sit in the world's MARGINS, which the
+// fight fog already dims, so they cost nothing readable — and they are where
+// "in view at the same time" actually means in view. Vertically centred in the
+// world, which keeps them clear of the HP panel and the buff bar without
+// needing to know either one's size.
+// 124 = 14 glyphs at 8px plus the 6px pad each side: enough for HEALTH POITION
+// and for COIN KIT GEAR on one line. At 96 both clipped, which is how it was found.
+export const FIGHT_PANEL_W = 124;   // the width they want, where there is room
+export const FIGHT_PANEL_MIN_W = 56; // below this the text stops being readable
+export const FIGHT_PANEL_H = 176;   // header + six two-line slot rows; the target side fits inside it
+export const FIGHT_PANEL_CLEAR = 16; // tiles of unobstructed world kept between the two
+const FIGHT_PANEL_M = 8;            // from the screen's edge
+
+// The panels OVERLAY the world's fogged edge tiles; they do not shrink the
+// viewport, so MIN_TILES (20, the tile rule computeViewport honours) is not the
+// constraint here. What matters is that the fight itself stays unobstructed, so
+// they give up width to keep FIGHT_PANEL_CLEAR tiles clear between them, down
+// to the point where the text would stop being readable.
+export function fightPanelRects(vp = DEFAULT_VIEW) {
+    const worldH = vp.h - (vp.dockH || 0);
+    const h = Math.min(FIGHT_PANEL_H, Math.max(0, worldH - 2 * FIGHT_PANEL_M));
+    const y = Math.max(FIGHT_PANEL_M, Math.round((worldH - h) / 2));
+    const room = Math.floor((vp.w - FIGHT_PANEL_CLEAR * TILE_PX - 2 * FIGHT_PANEL_M) / 2);
+    const w = Math.max(FIGHT_PANEL_MIN_W, Math.min(FIGHT_PANEL_W, room));
+    return {
+        w, h,
+        left:  { x: FIGHT_PANEL_M, y, w, h },
+        right: { x: vp.w - FIGHT_PANEL_M - w, y, w, h },
+    };
+}
+
 function dockLayout(vp, fight = false) {
     const { w, h } = vp;
     const dialLeft = dialColumnLeft(w);
