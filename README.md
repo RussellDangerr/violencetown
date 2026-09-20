@@ -56,6 +56,14 @@ The reasoning: "social" and "economic" behaviour are usually separate systems. H
 ### 3. Throw-resolution — respect the target, share the geometry
 Thrown consumables (`resolveThrow` in [`game/items.js`](game/items.js)) fly straight or land on a reticle-chosen tile, then **burst over a 3×3 area at half effect** — damage hits hostiles only, heals touch friendlies only, with an explicit exception when you deliberately aim a heal at a friendly through the confirm gate. Crucially, the burst tiles come from the *same* `affectedTiles` geometry the wheel's highlight uses, so the preview you see is exactly what resolves.
 
+### 4. The fight HUD — the dock has two faces, and the dial has a cell
+
+A fight already changes the world: one flag (`game._fightOn`) drives the **fog of war** over everything the fighters can't see. The HUD reads that same flag. The bottom dock keeps its geometry to the pixel and swaps only its *contents* — the quest log becomes a **combat log**, and two read-only panels fade in over the fogged margins: your six equipment slots on the left, on the right the enemy's HP, gold, carried kit, and which of Coin / Kit / Gear you could actually steal. Nothing in the fight HUD can equip anything; it exists so you never feel the need to go and check, which is the same reason tabletop RPGs make swapping armour mid-fight expensive.
+
+Two details that are the interesting part. The two panels are deliberately **not** mirror images — you have six named body slots, an enemy has a flat loadout and a gold number, so faking symmetry would invent structure the game doesn't have. And the "what could I steal" question is answered in exactly one function, read by both the wheel (which greys the branches you can't use) and the panel (which says why) — so they can't drift apart.
+
+The wheel's dial is **laid out, not just drawn**: `hudLayout` reserves it a column of the dock that nothing else may enter, and the HUD's non-overlap invariant covers the open wheel across a table of viewports — which is how the dial stopped landing on the message log on tall screens.
+
 More system write-ups (combat feel, the unified world clock, zone pursuit) live in [`plans/`](plans/).
 
 ## How it works (mechanics)
@@ -63,6 +71,7 @@ More system write-ups (combat feel, the unified world clock, zone pursuit) live 
 - **Turn-based:** one input = one action = the world advances a turn. Firing a wheel action is your turn; waiting (`T`) and item use cost a turn too.
 - **Hand-authored, directional world:** the Street (hub) sits at the center, its only way out — a **bridge north** — blocked until your car runs. The **Sewer** lies east, the **Factory** (home to Puck, a friendly trader) west, and a southern chain runs **Carnival → Graveyard → Wilderness** (a pitch-black, too-dangerous border). You travel by walking into a zone's edge.
 - **Combat:** the wheel's verbs resolve over flat HP, flat damage, and flat armor reduction — no dice, no misses. Hits pop **typed hit-splats** whose colour and motion read the damage type at a glance.
+- **The HUD knows you're fighting:** the dock swaps its quest log for a **combat log** and two read-only gear panels appear over the fogged edges of the world — yours and the target's — and go again when the fight does.
 - **NPCs & the disposition economy:** every NPC runs a finite-state machine (idle / wander / work) over the disposition value above. **Puck**, in the Factory, runs a **shop** (`E` to open) with disposition-driven prices.
 - **Zone pursuit:** flee a fight through a door and the hostiles on your heels **follow you into the next zone**. Wedge the **[pipe]** into the door to jam it and buy a reprieve.
 - **Seeded RNG & save:** all gameplay randomness comes from one Mulberry32 generator (deterministic, resumable), with a versioned localStorage save (atomic write + one backup slot). `CONTINUE` on the splash resumes your last session. No accounts.
