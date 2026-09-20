@@ -109,3 +109,33 @@ describe('a crit is an intensity, not a type', () => {
         assert.match(src('renderer.js'), /dn\.crit \? hexToRgba\('#f0d782'/);
     });
 });
+
+// ── The miss that never was ─────────────────────────────────────────────────
+//
+// SPLAT_COLOR carried a 'miss' blue and _hitSplatMotion carried a "whiff
+// sideways on the wind" case for it, but nothing ever spawned that type and
+// nothing ever could: combat.js resolves over flat damage with no roll, and
+// README.md promises "no dice, no misses". The colour and the motion were a
+// feature the design rules out, sitting in the splat's two hottest switches
+// and inviting the next reader to wire it up.
+
+describe('there is no miss, and no code pretending there might be', () => {
+    const GAME_FILES = ['main.js', 'combat.js', 'buffs.js', 'items.js', 'renderer.js', 'hit-splat.js'];
+
+    test('nothing spawns a splat typed miss', () => {
+        for (const f of GAME_FILES) {
+            assert.doesNotMatch(src(f), /_spawnHitSplat\([^)]*['"]miss['"]/,
+                `${f} spawns a 'miss' splat`);
+        }
+    });
+    test('the splat palette has no miss colour', () => {
+        assert.doesNotMatch(src('renderer.js'), /^\s*miss:\s*'#/m);
+    });
+    test('the splat motion has no miss case', () => {
+        assert.doesNotMatch(src('renderer.js'), /case 'miss':/);
+    });
+    test('the rule it would have broken is still written down', () => {
+        const readme = readFileSync(fileURLToPath(new URL('../README.md', import.meta.url)), 'utf8');
+        assert.match(readme, /no dice, no misses/);
+    });
+});

@@ -58,8 +58,16 @@ const tileRef = id => TILE_SPRITE_MAP[id] || TOWN_TILE_SPRITE_MAP[id] || ZONE_TI
 const MENU_BOX_STATES = new Set(['item_overlay', 'target_list', 'ending', 'log_modal', 'trade', 'dialogue', 'inspect', 'device']);
 
 // (combat-feel-pass) Hit-splat fill colors by damage type. Crit keeps the
-// physical fill but takes a gold border (handled in _drawHitSplat). New types
-// (poison/fire) are wired but unused until something produces that damage.
+// physical fill but takes a gold border (handled in _drawHitSplat).
+//
+// There is no 'miss' entry and there must not be one: combat.js resolves over
+// flat damage with no roll, so a miss is not a thing this game can produce
+// (README: "no dice, no misses"). It carried a blue here for a while anyway.
+//
+// 'energy' has no entry yet either, but that one IS a gap rather than a rule —
+// a Ray Blast currently falls back to the physical red. See
+// plans/hit-splat-art.md; it wants a colour picked by eye, which is why it
+// wasn't picked here.
 const SPLAT_COLOR = {
     physical: '#d23f2f',
     sludge:   '#9a52c8',
@@ -67,7 +75,6 @@ const SPLAT_COLOR = {
     fire:     '#f0833a',
     cold:     '#5ec3e8',
     heal:     '#3fb56a',
-    miss:     '#3a6ea5',
 };
 
 // ── Procedural character walk/idle animation (plans/movement-feel.md) ─────────
@@ -1829,11 +1836,6 @@ export class Renderer {
                 scale = p < 0.2 ? 0.85 + 0.15 * (p / 0.2) : 1;
                 oy = -22 * e * k;
                 glow = (0.5 + 0.5 * Math.sin(age * 0.012)) * (1 - p);
-                break;
-            case 'miss':                                  // whiff sideways on the wind
-                scale = p < 0.14 ? 0.7 + 0.3 * (p / 0.14) : 1;
-                ox = (tx * 8 + 34 * e) * k;
-                oy = (-10 * e - 4 * Math.sin(age * 0.01)) * k;
                 break;
             case 'physical':
             default: {                                    // hard snappy pop (crit = bigger + further)
