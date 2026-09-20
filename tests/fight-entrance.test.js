@@ -63,6 +63,15 @@ describe('the entrance timeline', () => {
     test('the white flash has no zoom', () => {
         for (const ms of [0, 40, 80, 200]) assert.equal(entranceAt(ENTRANCES.search, ms).zoom, 1);
     });
+    test('the card lifts while the punch is still rising, not after it settles', () => {
+        // The whole point of C4: IMPACT_MS < ZOOM_IN_MS, so the impact card is gone
+        // before the zoom finishes its push. Get this backwards and the punch goes
+        // invisible again, exactly as it was before this fix.
+        assert.ok(IMPACT_MS < ZOOM_IN_MS);
+        const atCardLift = entranceAt(ENTRANCES.spotted, IMPACT_MS);
+        assert.ok(atCardLift.zoom < ENTRANCES.spotted.zoom);
+        assert.equal(atCardLift.impact, false);
+    });
     test('reduce motion drops the impact and the zoom', () => {
         const at = entranceAt(ENTRANCES.spotted, 50, { reduceMotion: true });
         assert.equal(at.impact, false);
