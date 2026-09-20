@@ -52,6 +52,10 @@ import { dispositionCeil, DISPOSITION_MIN } from './disposition-curves.js'; // (
 // explicit chain keeps the resolution path readable.
 const tileRef = id => TILE_SPRITE_MAP[id] || TOWN_TILE_SPRITE_MAP[id] || ZONE_TILE_SPRITE_MAP[id];
 
+// fight-entrance.js keeps its own copy of this (module-local, not exported);
+// renderer.js needs one too for the impact-card taper (C2).
+const clamp01 = (v) => Math.max(0, Math.min(1, v));
+
 // (screen-fill) The states whose panels are laid out in the 608x608 menu
 // space. They draw inside the viewport's centred menu box. The wheel and the
 // throw prompt are not menus: they draw at their own screen positions.
@@ -835,7 +839,15 @@ export class Renderer {
             sctx.clearRect(0, 0, W, H);
             sctx.drawImage(canvas, 0, 0);
             const cx = (vp.origin.x + TILE_PX / 2) * vp.scale, cy = (vp.origin.y + TILE_PX / 2) * vp.scale;
-            ctx.imageSmoothingEnabled = false;
+            // Smoothing ON for this one draw (plans/entrance-feel-pass.md C1): the
+            // punch re-scales a raster snapshot by a continuously-varying non-integer
+            // factor, and nearest-neighbour makes source pixel rows change block size
+            // every frame — measured 15% of screen columns per frame, visibly. The
+            // snapshot is already 4x upscaled, so bilinear only softens the seam
+            // between existing blocks; it doesn't turn the 16x16 art mushy. No reset
+            // needed after: ctx.restore() below pops back to the false this context
+            // carries the rest of the frame (see the save() above the impact draw).
+            ctx.imageSmoothingEnabled = true;
             ctx.drawImage(snap, cx - cx * at.zoom, cy - cy * at.zoom, W * at.zoom, H * at.zoom);
         }
         ctx.restore();
@@ -853,6 +865,17 @@ export class Renderer {
         }
         const fs = fighters(game.enemies);
         const sil = this._silhouettes(game, fs, vp, W, H, now);
+        // Taper the whole card out over its last 35% (plans/entrance-feel-pass.md
+        // C2), same shape `flash` already uses above. `t` is impactT, already
+        // normalised 0..1 across the card's life, so this keeps working unchanged
+        // if IMPACT_MS moves. One globalAlpha for the fill, the slash AND the
+        // silhouettes below: it's one card and should leave as one — a background
+        // that faded while the fighters stayed opaque would read as two things
+        // breaking apart instead of a single card dismissing itself. The
+        // silhouette drawImage composites this alpha against `sil`'s own per-pixel
+        // alpha (painted via source-in in _silhouettes), so it fades the shapes
+        // themselves rather than fighting that mask.
+        ctx.globalAlpha = 1 - clamp01((t - 0.65) / 0.35);
         ctx.fillStyle = entrance.impact === 'bw' ? '#efe6d2' : '#c8242b';
         ctx.fillRect(0, 0, W, H);
         // The fight's middle: you and everyone in it.
@@ -871,6 +894,7 @@ export class Renderer {
         const F = entrance.silhouette;
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(sil, mx - mx * F, my - my * F, W * F, H * F);
+        ctx.globalAlpha = 1;
     }
 
     // You and the fighters as solid black shapes on a clear canvas, from the
