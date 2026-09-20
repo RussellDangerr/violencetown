@@ -28,8 +28,15 @@ const toArt = (v) => ART_PX * Math.round(v / ART_PX);
 // narrower than minOneRowW.
 export function computeViewport({ cssW, cssH, dpr = 1, dock = null } = {}) {
     const d = (Number.isFinite(dpr) && dpr > 0) ? dpr : 1;
-    const backingW = Math.max(1, Math.floor(cssW * d));
-    const backingH = Math.max(1, Math.floor(cssH * d));
+    // A screen we cannot measure has to fall back the way a bad dpr does. Every
+    // radial gradient the renderer builds is placed from origin/w/h, and
+    // createRadialGradient THROWS on a non-finite argument — so one NaN reaching
+    // here takes down the whole frame (and the effects loop drawing it) rather
+    // than drawing something slightly wrong. Unmeasurable gets the same 1px
+    // floor a 0px screen already gets.
+    const px = (v) => (Number.isFinite(v) ? v : 0);
+    const backingW = Math.max(1, Math.floor(px(cssW) * d));
+    const backingH = Math.max(1, Math.floor(px(cssH) * d));
     const cssOut = { w: backingW / d, h: backingH / d };
     const k = Math.max(1, Math.floor(Math.min(backingW, backingH) / (16 * MIN_TILES)));
     const scale = k / ART_PX;
@@ -84,6 +91,10 @@ export function screenToTile(vp, pt, px, py, sx = 0, sy = 0) {
 // Is the tile (dx, dy) from yours more than `m` tiles off screen? The
 // renderer's per-pass cull; `m` is the margin a pass leaves for overhang.
 export function offView(vp, dx, dy, m) {
+    // A tile we cannot place is not on screen. Every comparison below is false
+    // for NaN, so without this the cull would wave a NaN offset through as
+    // "visible" and the draw that follows would throw.
+    if (!Number.isFinite(dx) || !Number.isFinite(dy)) return true;
     return dx < vp.span.iMin - m || dx > vp.span.iMax + m || dy < vp.span.jMin - m || dy > vp.span.jMax + m;
 }
 

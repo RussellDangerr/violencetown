@@ -154,3 +154,54 @@ describe('conversions', () => {
         }
     });
 });
+
+// Every radial gradient the renderer builds is placed from vp.origin, vp.w or
+// vp.h, and createRadialGradient THROWS on a non-finite argument — so a single
+// NaN reaching the viewport takes the whole frame down, and with it the effects
+// loop that was drawing it. dpr already falls back when it measures badly; the
+// CSS size and the cull have to be just as unwilling to pass NaN along.
+describe('a screen that measures badly still yields a drawable viewport', () => {
+    const nonFiniteFields = (vp) => {
+        const out = [];
+        const walk = (o, path) => {
+            for (const [k, v] of Object.entries(o)) {
+                if (typeof v === 'number') { if (!Number.isFinite(v)) out.push(`${path}${k}=${v}`); }
+                else if (v && typeof v === 'object') walk(v, `${path}${k}.`);
+            }
+        };
+        walk(vp, '');
+        return out;
+    };
+
+    test('a CSS size that measures non-finite clamps like a 0px one', () => {
+        const floor = computeViewport({ cssW: 0, cssH: 0, dpr: 1 });
+        for (const bad of [NaN, Infinity, -Infinity, undefined, null]) {
+            assert.deepEqual(computeViewport({ cssW: bad, cssH: bad, dpr: 1 }), floor, `both = ${String(bad)}`);
+            assert.deepEqual(
+                computeViewport({ cssW: bad, cssH: 1080, dpr: 1 }),
+                computeViewport({ cssW: 0, cssH: 1080, dpr: 1 }),
+                `cssW = ${String(bad)}`,
+            );
+        }
+    });
+
+    test('called with nothing at all, it still measures a screen', () => {
+        assert.deepEqual(nonFiniteFields(computeViewport()), []);
+    });
+
+    test('no field is ever non-finite, whatever it is handed', () => {
+        const junk = [0, 0.4, 1, 1920, 1e9, NaN, Infinity, -Infinity, -5, undefined, null];
+        for (const cssW of junk) for (const cssH of junk) for (const dpr of [1, 1.5, 2, 0, NaN, undefined]) {
+            const vp = computeViewport({ cssW, cssH, dpr, dock: { oneRow: 100, twoRows: 196, minOneRowW: 1000 } });
+            assert.deepEqual(nonFiniteFields(vp), [], `cssW=${String(cssW)} cssH=${String(cssH)} dpr=${String(dpr)}`);
+        }
+    });
+
+    test('offView culls an offset that is not a real number, instead of drawing it', () => {
+        const vp = at(SCREENS['1080p']);
+        for (const bad of [NaN, Infinity, -Infinity]) {
+            assert.equal(offView(vp, bad, 0, 2), true, `dx = ${bad}`);
+            assert.equal(offView(vp, 0, bad, 2), true, `dy = ${bad}`);
+        }
+    });
+});

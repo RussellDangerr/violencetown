@@ -8,6 +8,7 @@ import { loadMap } from './map.js';
 import { loadAllSprites } from './sprites.js';
 import { BitmapFont } from './bitmap-font.js';
 import { pickHitMark, HEAVY_HIT_DAMAGE } from './hit-splat.js';   // (manga-impact-marks) the mark rule + the heavy threshold
+import { makeEffectLoop } from './effect-loop.js';                 // one tick of the transient-effects loop, and its refusal to die on a bad frame
 import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, MAX_STACK } from './data.js';
 import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, ownedItemDefs, hasItemDef } from './items.js';
 import { WEAPONS } from './weapons.js';
@@ -907,7 +908,16 @@ class Game {
     _fitCanvas() {
         const canvas = this.renderer?.canvas;
         const box = document.getElementById('game-layout')?.getBoundingClientRect();
-        if (!canvas || !box || box.width < 1 || box.height < 1) return;
+        // Written as `>= 1` rather than `< 1` on purpose: a NaN fails BOTH
+        // comparisons, so the old spelling waved an unmeasurable box straight
+        // through into the viewport — and a non-finite viewport throws out of
+        // every radial gradient the renderer builds.
+        if (!canvas || !box || !(box.width >= 1) || !(box.height >= 1)) {
+            if (box && (!Number.isFinite(box.width) || !Number.isFinite(box.height))) {
+                console.warn('[screen] the layout box did not measure; keeping the last viewport', box.width, box.height);
+            }
+            return;
+        }
         const vp = computeViewport({ cssW: box.width, cssH: box.height, dpr: window.devicePixelRatio, dock: DOCK });
         this.renderer.setViewport(vp);
         canvas.style.width  = `${vp.cssW}px`;
@@ -5301,19 +5311,31 @@ class Game {
     _ensureParticleLoop() {
         if (this._particleLoopRunning) return;
         this._particleLoopRunning = true;
+        // The frame's fragile half lives in effect-loop.js, where it is tested:
+        // the re-arm used to sit on the line AFTER the render, so a frame that
+        // threw skipped it AND left _particleLoopRunning set — no later effect
+        // could ever restart the loop, and every hit-splat, halo and glow for
+        // the rest of the session quietly stopped moving. One bad frame is
+        // allowed to cost one frame, and nothing more.
+        const frame = makeEffectLoop({
+            render: () => this._render(),
+            hasMore: () => this._hasActiveEffects(),
+            // Released before the last frame draws, because that render can
+            // legitimately start a fresh loop (_trackFight, for the fog's fade).
+            onSettled: () => { this._particleLoopRunning = false; },
+            // Said once, not sixty times a second: a frame that throws usually
+            // keeps throwing, and a flooded console buries the first one.
+            onFrameError: (e, n) => {
+                if (n === 1) console.error('[effects] a frame threw; the loop carries on', e);
+            },
+        });
         const loop = () => {
             // Drop expired particles up front so the renderer never sees them.
             const now = performance.now();
             this._damageNumbers = this._damageNumbers.filter(
                 dn => now - dn.bornAt < dn.maxAge
             );
-            if (!this._hasActiveEffects()) {
-                this._particleLoopRunning = false;
-                this._render(); // final clean frame with no effects
-                return;
-            }
-            this._render();
-            requestAnimationFrame(loop);
+            if (frame.tick()) requestAnimationFrame(loop);
         };
         requestAnimationFrame(loop);
     }
