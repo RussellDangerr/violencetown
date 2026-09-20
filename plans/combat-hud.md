@@ -2,7 +2,8 @@
 
 **Phase:** Design (Gate 2). No code written; every choice below is still Caelan's to rule.
 **Priority:** High — H1, next in Caelan's order after Q1 was tabled (`plans/roadmap-2026-09.md` §4).
-**Status:** Design pass, written 2026-09-19 while Caelan slept. Awaiting rulings H1-1 … H1-6 (§7).
+**Status:** Stages 1-2 in build on `feature/combat-hud` (2026-09-19), ruled by Caelan — see §7.
+Stages 3-5 designed, not ruled, not built.
 **Companions:** `plans/fight-fog.md` (*Follow-on pieces* 2, where this was raised — it changes the
 world when a fight starts, and this changes the dock) · `plans/screen-fill.md` (the dock and
 `hudLayout`, which this extends) · `plans/item-hotbar-xmb.md` (the bar's original design, whose
@@ -39,33 +40,30 @@ On a two-row dock the log is full-width, so the dial covers its entire right-han
 screenshot. On a one-row dock the log is short enough to clear, but the dial still climbs 191 px
 into the play area. Both are the same root cause: **the dial is drawn, not laid out.**
 
-### 1b. The invariant that should have caught it is testing a dead branch
+### 1b. The dial was never in the non-overlap invariant
 
-This is the root cause of fault 1, and it is worse than a missing case.
+> **Corrected 2026-09-19, mid-build.** This section first claimed the invariant tested a dead
+> branch and that the dock had no non-overlap coverage at all. **That was wrong** — see below. The
+> fix stage 2 makes is unchanged, but the diagnosis was overstated and the original wording is not
+> worth inheriting. The commit that introduced it (`8e24978`) and the roadmap row from `df2e9ea`
+> repeat the wrong claim; this is the correction of record.
 
-`tests/hud-layout.test.js` does pin a non-overlap invariant, and it already runs it across a table
-of three viewports — 1080p, Caelan's ultrawide, phone upright. But it builds each one with
-`computeViewport({ cssW, cssH, dpr })` and **no `dock:` argument**, while the game builds its
-viewport with `dock: DOCK` (`main.js:908`). No dock means `dockRows === 0`, which means `hudLayout`
-returns `cornersLayout` — the fallback for before main hands over a viewport. Driving both:
+What is actually true is narrower, and is still the reason the overlap shipped.
 
-```
-1080p                test: rows=0 branch=cornersLayout | shipped: rows=1 branch=dockLayout
-Caelan's ultrawide   test: rows=0 branch=cornersLayout | shipped: rows=1 branch=dockLayout
-phone upright        test: rows=0 branch=cornersLayout | shipped: rows=2 branch=dockLayout
-                     log differs: true   wheel differs: true   (all three)
-```
+`hudInteractiveRects(state, vp)` answers for **`'idle'` only**, and returns exactly three panels —
+the quest log, the item bar and the ✦ opener. The open wheel lives in state `'radial_menu'`, so the
+dial is never one of the rects the invariant compares. It has never been checked against the log it
+lands on, at any size. `tests/hud-layout.test.js` even pins the three names explicitly, so adding a
+fourth panel was always going to be a deliberate act rather than something that happened by itself.
 
-**Every screen in the invariant's table exercises a layout the shipped game never takes.** The log
-and the wheel sit somewhere different in all three. The dock — the thing that actually ships, and
-the thing the dial overlaps — has no non-overlap coverage at all.
+What I got wrong: the file has **two** describe blocks. `describe('the dock')` builds four viewports
+with `dock: DOCK` and does run the non-overlap invariant against the real `dockLayout` — so the
+dock's log, bar and opener *are* covered. The other block, `describe('hudLayout (fill): pinned to
+the corners')`, builds its viewports without a dock on purpose: it is the `cornersLayout` block, and
+testing the corners layout is its whole job. Its private `WHEEL_REACH = 126` is likewise the correct
+constant for that layout, not a stale copy of the dial's 162.
 
-Two smaller problems in the same file: the invariant covers `'idle'` only, so the open wheel
-(state `'radial_menu'`) is outside it either way; and the test's own `wheelBox` helper hard-codes
-`WHEEL_REACH = 126`, a private copy of a `layout.js` constant, which is the *closed* wheel's reach —
-36 px short of the open dial's `DIAL_MAX_R` of 162.
-
-Fixing the table is a prerequisite for trusting any geometry work here, and it belongs in stage 2.
+So: the guard was pointed at the right layouts. It simply never knew about the dial.
 
 **Latent, related:** `DIAL_MAX_R` is `dialRadius(3, false)` = 162, and the deepest node in the tree
 today (`Fight > Melee > Hit`) needs exactly 162. Zero headroom. Give any depth-3 leaf a child and
@@ -173,9 +171,14 @@ the same discipline `Thieve` already uses for `canThieve` (`wheel-model.js:70-80
 
 Two consequences worth naming:
 
-- **`Treat > Eat` must respect the category.** Eat should fire the EAT column's selection, Cleanse
-  the DRINK column's, Throw/Ranged the THROW column's — not "whatever the bar last showed". The
-  wheel node says which column it wants; the bar says which item in it.
+- **`Treat > Eat` must respect the category.** Eat fires the EAT column's selection, Cleanse the
+  DRINK column's, Throw/Ranged the THROW column's — not "whatever the bar last showed". The wheel
+  node says which column it wants; the bar says which item in it. **Built 2026-09-19** as
+  `needsItem: 'throw'|'drink'|'eat'` on the node, resolved through a new `game.barSlot(cat)`.
+  *Wart inherited, not introduced:* `soap` (`cure_sludge`) is the only cleanse-ish item in the game
+  and `xmbCategoryOf` files it under DRINK beside the poitions, so `Cleanse` fires the DRINK column
+  — usually a poition, not a cleanse. Strictly better than firing bag slot 0, but the verb and the
+  column are not really the same idea. Worth revisiting when Cleanse gets content of its own.
 - **A verb with an empty column greys out.** `Treat > Eat` with no food is currently `available:
   always` and would compose nothing. It should grey like Magic does on empty MP.
 
@@ -193,11 +196,17 @@ A compact panel for **the current target**: name, HP as a number and a bar, the 
 which of Coin / Kit / Gear is takeable. It is the thing that makes `Thieve` legible — the wheel
 already computes those three answers and shows you three grey slices without saying why.
 
-**Recommendation:** the enemy card first, and **your** gear panel behind a toggle rather than always
-on. Your HP / MP / GP are already on screen and the Remoticon has GEAR; the enemy's kit is the only
-genuinely new information in a fight. This is a recommendation against half of what he asked for, so
-it is ruling H1-4 — if he wants both panels always-on, the dock loses the room and the symmetric
-layout becomes the design instead.
+**Ruled (H1-4, 2026-09-19): both panels, player side read-only.** My recommendation was the enemy
+card alone, with yours behind a toggle, on the grounds that your HP/MP/GP are already on screen and
+the Remoticon has GEAR. Overridden, correctly: having to *open* the Remoticon mid-fight is the
+friction the panel exists to remove, and a read-only panel removes it without inviting the
+equipment-swapping that the design specifically does not want.
+
+**Consequence for stage 4, not yet designed.** Two always-on panels do not fit the dock strip
+beside a combat log, an item bar and the dial's reserved column. The likely home is the world's
+**fogged margins** — left for you, right for the target — which the fight fog already dims, so
+panels there cost nothing readable and are literally "in view at the same time". That is a sketch,
+not a ruling; stage 4 needs its own pass before anything is built.
 
 ### 5. The bar shows its column
 
@@ -216,7 +225,7 @@ at. The first two are the bug fixes; the last three are the feature.
 | # | Stage | Size | Touches | Why here |
 |---|---|---|---|---|
 | 1 | **One item selection** — `compose` asks the game; category-aware; empty columns grey | S | `wheel-model.js`, `main.js` | Pure model, node-testable, no art. Fixes a live bug on its own. |
-| 2 | **The dial gets a cell** — fix the invariant's table first (fault 1b), then reserve the column and extend the invariant to the open wheel | S–M | `layout.js`, `renderer.js`, `tests/hud-layout.test.js` | Fixes the measured overlap, and makes the guard real before leaning on it. |
+| 2 | **The dial gets a cell** — teach the invariant the `'radial_menu'` state (fault 1b), then reserve the column | S–M | `layout.js`, `renderer.js`, `tests/hud-layout.test.js` | Fixes the measured overlap, and makes the guard real before leaning on it. |
 | 3 | **The two faces** — the dock reads `_fightOn`; the combat-log filter | M | `layout.js`, `renderer.js` | The structure the rest hangs on. |
 | 4 | **The target card** | M | `renderer.js`, a small pure module for what it reads | Needs the fight face to live in. |
 | 5 | **The bar shows its column** | S | `layout.js`, `renderer.js`, `main.js` hit-test | Cosmetic once 1 has landed. |
@@ -235,22 +244,18 @@ to reconcile before starting.
 
 The invariant that would have caught fault 1, and the ones that keep it caught:
 
-1. **The invariant's table builds the viewport the game builds.** Pass `dock: DOCK` to every
-   `computeViewport` in `tests/hud-layout.test.js`, so the three screens exercise `dockLayout`
-   instead of `cornersLayout`. Expect existing assertions to move; that movement is the bug
-   surfacing, not a regression. Keep one explicitly-named no-dock case for the `cornersLayout`
-   fallback, so it stays covered on purpose rather than by accident.
-2. **The open wheel is in the non-overlap invariant.** Extend `hudInteractiveRects` to take the
-   wheel's depth, or add a sibling that returns the dial's rect, and assert no overlap across a
-   table of viewports including the three that fail today (980×800, 900×1200, 430×932). Drop the
-   test's private `WHEEL_REACH = 126` and read the dial's real radius from `layout.js`.
-3. **The dial fits its reservation.** Assert `max(dialRadius(d, hasKids))` over every node actually
+1. **The open wheel is in the non-overlap invariant.** Teach `hudInteractiveRects` the
+   `'radial_menu'` state so the dial is one of the rects it returns, and assert no overlap across a
+   dock-built table of viewports including the three that fail today (980×800, 900×1200, 430×932).
+   Leave the two existing describe blocks alone: `describe('the dock')` already builds its
+   viewports with `dock: DOCK`, and the corners block is meant to be dock-free.
+2. **The dial fits its reservation.** Assert `max(dialRadius(d, hasKids))` over every node actually
    in `ROOT` is `<= DIAL_MAX_R`. Today that is 162 ≤ 162 — it passes with zero headroom, and fails
    the moment someone gives a depth-3 leaf a child. That is the point.
-4. **One selection.** Given a bag and a bar selection, `compose()` on Throw / Ranged / Eat /
+3. **One selection.** Given a bag and a bar selection, `compose()` on Throw / Ranged / Eat /
    Cleanse returns the bar's slot for the node's category — the test the §2 proof becomes.
-5. **Empty column greys.** `verbApplies(Eat)` is false with no food.
-6. **The faces.** `hudLayout` with `_fightOn` true vs. false returns the same dial cell and the same
+4. **Empty column greys.** `verbApplies(Eat)` is false with no food.
+5. **The faces.** `hudLayout` with `_fightOn` true vs. false returns the same dial cell and the same
    overall dock height (the no-reflow rule).
 
 Baseline to re-measure before starting, not to quote: `npm test` was 1409 tests / 262 suites / 0
@@ -258,7 +263,24 @@ failures at v0.22.1.
 
 ---
 
-## Rulings needed (Caelan's)
+## Rulings (Caelan's)
+
+> **Ruled 2026-09-19, on waking:** **H1-6 — stages 1 and 2 only** (the two bug fixes), then re-rule
+> the rest once he has felt the dial in a cell. H1-1 and H1-2 are ruled *yes* implicitly, being
+> exactly what stages 1-2 are. **H1-3 and H1-5 are not yet ruled** — they belong to stages 3 and 4,
+> which are not being built yet.
+>
+> **H1-4 — re-ruled the same day: BOTH panels, and the player's side is READ-ONLY.** The
+> recommendation above (enemy card only) was put to him and overridden, with the reasoning that
+> makes it right: the panel exists so you never feel the need to go and check, not so you can
+> swap. *"Everything is so nebulous that you would always want to see your inventory in there at
+> the same time, so that you're not swapping out weapons and things. Even in the deepest RPGs
+> you're not swapping out equipment per fight. D&D specifically guards against that."* Donning
+> armour takes minutes in 5e and drawing or stowing a weapon spends your object interaction —
+> mid-fight swapping is disincentivised by design, and the answer is to show the gear, not to
+> speed up changing it. **So: no equip affordance anywhere in the fight HUD.**
+
+### The full list
 
 - **H1-1 — the dial's cell.** Reserve a dock column for the dial, on both faces? (Recommended.) The
   alternative he raised was collapsing the wheel left on a tall window only, which fixes the

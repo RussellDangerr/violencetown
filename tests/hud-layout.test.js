@@ -115,7 +115,8 @@ describe('hudLayout (fill): pinned to the corners', () => {
     });
 });
 
-import { DOCK, DIAL_MAX_R, dialRadius, wheelTopMarks, hitHud } from '../game/layout.js';
+import { DOCK, DIAL_MAX_R, dialRadius, wheelTopMarks, hitHud, dialColumnLeft } from '../game/layout.js';
+import { ROOT } from '../game/wheel-model.js';
 
 describe('the dock', () => {
     const withDock = (cssW, cssH, dpr) => computeViewport({ cssW, cssH, dpr, dock: DOCK });
@@ -160,10 +161,14 @@ describe('the dock', () => {
         assert.equal(hud.log.x + hud.log.w + 12, xmbBarPanelRect(3, hud.bar).x);
     });
 
-    test('two rows on an upright phone: the log spans the screen', () => {
+    test("two rows on an upright phone: the log runs up to the dial's column", () => {
+        // It spanned the whole dock until the dial was given a reserved column
+        // (plans/combat-hud.md stage 2) — which is what it used to be drawn over.
         const vp = screens['phone upright'], hud = hudLayout(vp);
         assert.equal(vp.dockRows, 2);
-        assert.equal(hud.log.w, vp.w - 16);
+        assert.equal(hud.log.x, 8);
+        assert.equal(hud.log.x + hud.log.w + 12, dialColumnLeft(vp.w));
+        assert.ok(hud.log.w < vp.w - 16, 'no longer the full width of the dock');
     });
 
     test('the dial covers the wheel at every depth, with room for FIRE at a leaf', () => {
@@ -201,5 +206,66 @@ describe('the dock', () => {
         }
         const corners = hudLayout(computeViewport({ cssW: 1920, cssH: 1080, dpr: 1 }));   // no dock
         assert.equal(hitHud(corners, { x: 640, y: 715 }), null);
+    });
+});
+
+// ── The open wheel's dial belongs to the invariant (plans/combat-hud.md stage 2) ──
+//
+// hudInteractiveRects only ever knew 'idle', so the dial — drawn in
+// 'radial_menu' — was never checked against the log it lands on. On a two-row
+// dock the log is full-width and the dial covered its right-hand third.
+describe('the open wheel is in the non-overlap invariant', () => {
+    const withDock = (cssW, cssH, dpr) => computeViewport({ cssW, cssH, dpr, dock: DOCK });
+    const screens = {
+        '1080p':               withDock(1920, 1080, 1),
+        "Caelan's ultrawide":  withDock(3440, 1440, 1),
+        'phone upright':       withDock(390, 844, 3),
+        'a squarish window':   withDock(1100, 1000, 1),
+        'narrow and tall':     withDock(900, 1200, 1),
+        'just under one row':  withDock(980, 800, 1),
+    };
+
+    for (const [name, vp] of Object.entries(screens)) {
+        test(`${name}: the open dial is one of the panels the invariant knows`, () => {
+            const names = hudInteractiveRects('radial_menu', vp).map((r) => r.name);
+            assert.ok(names.includes('dial'), `radial_menu panels were ${JSON.stringify(names)}`);
+        });
+
+        test(`${name}: nothing overlaps the open dial under HIT_SLOP`, () => {
+            const rects = hudInteractiveRects('radial_menu', vp);
+            assert.ok(rects.length >= 2, 'need the dial and at least one neighbour to compare');
+            for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++) {
+                assert.ok(!rectsOverlap(expandRect(rects[i].rect, HIT_SLOP), expandRect(rects[j].rect, HIT_SLOP)),
+                    `${rects[i].name} and ${rects[j].name} overlap`);
+            }
+        });
+    }
+
+    test('the log survives the narrowest viewport the tile rule allows', () => {
+        // MIN_TILES keeps the short side at >= 20 tiles (640 logical px), so the
+        // dial's column can never eat the whole dock. Pinned because reserving
+        // that column is subtraction, and subtraction can go negative.
+        for (const [name, vp] of Object.entries(screens)) {
+            const hud = hudLayout(vp);
+            assert.ok(hud.log.w > 0, `${name}: log width ${hud.log.w}`);
+            assert.ok(hud.log.x + hud.log.w <= dialColumnLeft(vp.w), `${name}: log runs into the dial column`);
+            assert.ok(vp.w >= 640, `${name}: viewport narrower than the tile rule allows`);
+        }
+    });
+
+    test('the dial fits the space reserved for it at every node actually in the wheel', () => {
+        // DIAL_MAX_R reserves dialRadius(3,false)=162 and the deepest live node
+        // needs exactly that — zero headroom. Give any depth-3 leaf a child and
+        // the dial silently needs 178. This is the tripwire for that.
+        let worst = 0, where = '';
+        (function walk(n, d, trail) {
+            const kids = n.children || [];
+            if (d > 0) {
+                const r = dialRadius(d, kids.length > 0);
+                if (r > worst) { worst = r; where = trail; }
+            }
+            kids.forEach((c) => walk(c, d + 1, trail ? `${trail} > ${c.label}` : c.label));
+        })(ROOT, 0, '');
+        assert.ok(worst <= DIAL_MAX_R, `${where} needs a dial of ${worst}, but only ${DIAL_MAX_R} is reserved`);
     });
 });

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   ROOT, createWheelState, cycle, drill, back,
   selectedNode, isOffensiveLeaf, verbApplies,
-  isCombatActive, flapperDeflection,
+  isCombatActive, flapperDeflection, compose, aimRange,
 } from '../game/wheel-model.js';
 
 const catKeys = () => ROOT.children.map(c => c.key);
@@ -188,5 +188,79 @@ describe('Thieve on the wheel', () => {
   test('Thieve is not an offensive leaf — it is a transaction', () => {
     assert.equal(isOffensiveLeaf(thieveNode()), false);
     for (const c of thieveNode().children) assert.equal(isOffensiveLeaf(c), false);
+  });
+});
+
+// ── One item selection (plans/combat-hud.md stage 1) ─────────────────────────
+//
+// The wheel used to keep its own item cursor (`wheel.itemIndex`, initialised to
+// 0 and never synced from the bar), so Throw/Ranged/Eat/Cleanse all fired bag
+// slot 0 whatever sat there — you scrolled the bar to a Bomb and threw a Rock.
+// The bar is now the single source of truth: each item node declares WHICH
+// column it wants (`needsItem: 'throw'|'drink'|'eat'`) and asks the game for
+// that column's selected bag slot, the same way Thieve asks canThieve().
+
+describe('one item selection: the wheel fires what the bar shows', () => {
+  // A bag where slot 0 is deliberately NOT what any bar column would show.
+  const BAG = [
+    { itemDef: { id: 'rock',           name: 'Rock',           useType: 'throw', range: 5 }, count: 9 },
+    { itemDef: { id: 'health_poition', name: 'Health Poition', useType: 'self', consumeKind: 'drink' }, count: 2 },
+    { itemDef: { id: 'hot_dog',        name: 'Hot Dog',        useType: 'self', category: 'ambro' }, count: 1 },
+    { itemDef: { id: 'fire_bottle',    name: 'Fire Bottle',    useType: 'throw', range: 4 }, count: 1 },
+  ];
+  // The player has scrolled THROW to the Fire Bottle (slot 3); the other
+  // columns sit on their only item.
+  const barred = (over = {}) => stubGame({
+    inventory: BAG,
+    barSlot: (cat) => ({ throw: 3, drink: 1, eat: 2 })[cat] ?? -1,
+    ...over,
+  });
+
+  const nodeAtLabels = (labels) => {
+    let n = ROOT, path = [];
+    for (const l of labels) { const i = n.children.findIndex(c => c.label === l); path.push(i); n = n.children[i]; }
+    const w = createWheelState(); w.path = path; return w;
+  };
+
+  for (const [labels, want, wantName] of [
+    [['Trick', 'Throw'],   3, 'Fire Bottle'],
+    [['Fight', 'Ranged'],  3, 'Fire Bottle'],
+    [['Treat', 'Eat'],     2, 'Hot Dog'],
+    [['Treat', 'Cleanse'], 1, 'Health Poition'],
+  ]) {
+    test(`${labels.join(' > ')} composes the bar's slot (${wantName}), not bag slot 0`, () => {
+      const game = barred();
+      const { itemSlot } = compose(nodeAtLabels(labels), game);
+      assert.equal(itemSlot, want);
+      assert.equal(game.inventory[itemSlot].itemDef.name, wantName);
+    });
+  }
+
+  test('an item node declares its column rather than a bare true', () => {
+    const byLabel = (n, l) => n.children.find(c => c.label === l);
+    const fight = ROOT.children[0], trick = ROOT.children[1], treat = ROOT.children[2];
+    assert.equal(byLabel(fight, 'Ranged').needsItem, 'throw');
+    assert.equal(byLabel(trick, 'Throw').needsItem, 'throw');
+    assert.equal(byLabel(treat, 'Eat').needsItem, 'eat');
+    assert.equal(byLabel(treat, 'Cleanse').needsItem, 'drink');
+  });
+
+  test('a verb whose column is empty does not apply', () => {
+    const empty = stubGame({ inventory: BAG, barSlot: () => -1 });
+    const byLabel = (n, l) => n.children.find(c => c.label === l);
+    assert.equal(verbApplies(byLabel(ROOT.children[2], 'Eat'), empty), false, 'Eat with no food');
+    assert.equal(verbApplies(byLabel(ROOT.children[1], 'Throw'), empty), false, 'Throw with nothing throwable');
+  });
+
+  test('a verb whose column has an item still applies', () => {
+    const byLabel = (n, l) => n.children.find(c => c.label === l);
+    assert.equal(verbApplies(byLabel(ROOT.children[2], 'Eat'), barred()), true);
+    assert.equal(verbApplies(byLabel(ROOT.children[1], 'Throw'), barred()), true);
+  });
+
+  test("Throw's reach comes from the bar's item, not bag slot 0", () => {
+    // Rock (slot 0) has range 5; the Fire Bottle the bar is showing has range 4.
+    const byLabel = (n, l) => n.children.find(c => c.label === l);
+    assert.equal(aimRange(byLabel(ROOT.children[1], 'Throw'), barred()), 4);
   });
 });
