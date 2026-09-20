@@ -129,7 +129,9 @@ diagnosed — no exploration required, which is exactly the shape Sonnet handles
 
 ### Per-agent verification gate (both must clear before reporting done)
 
-- `npm test` — baseline **1611 tests / 286 suites / 0 failures**. Re-measure; do not quote.
+- `npm test` — baseline on `dev` @ `5867818` is **1621 tests / 287 suites / 0 failures**.
+  (An earlier draft said 1611/286 — that was measured at `a6ae14d`, before the effects-loop fix
+  added `tests/effect-loop.test.js` and the viewport guards. **Re-measure; never quote.**)
 - `npm run -s balance:check` — must say *balance golden matches*.
 - `git grep -iE 'violence[ _-]+town' -- ':!CLAUDE.md' ':!plans/item-hotbar-xmb-implementation.md'`
   — must return zero lines.
