@@ -202,11 +202,28 @@ the Remoticon has GEAR. Overridden, correctly: having to *open* the Remoticon mi
 friction the panel exists to remove, and a read-only panel removes it without inviting the
 equipment-swapping that the design specifically does not want.
 
-**Consequence for stage 4, not yet designed.** Two always-on panels do not fit the dock strip
-beside a combat log, an item bar and the dial's reserved column. The likely home is the world's
-**fogged margins** — left for you, right for the target — which the fight fog already dims, so
-panels there cost nothing readable and are literally "in view at the same time". That is a sketch,
-not a ruling; stage 4 needs its own pass before anything is built.
+**Built 2026-09-19, in the fogged margins.** Two always-on panels do not fit the dock strip beside a
+combat log, an item bar and the dial's column, so they live in the world's margins — left for you,
+right for the target — which the fight fog already dims. They cost nothing readable and are
+literally "in view at the same time".
+
+**They are deliberately not mirror images**, and that was the design's real finding: *you* have six
+named body slots, an enemy has a flat `loadout` array and a `gold` number. There is no HEAD/TORSO
+breakdown on their side to show. Caelan ruled the honest version — a flat kit list — over forced
+slot parity, which would have invented structure the game does not have and read as mostly-empty
+slots on most enemies.
+
+**Width came from the content, not from taste.** 96 px gives ten glyphs, which clipped
+`WOODEN SWORD` to `WOODEN SW~` and dropped the third steal marker; 124 px gives fourteen, which
+fits `HEALTH POITION` and `COIN KIT GEAR` on one line. Both clips were caught by the render tests,
+not by looking. The panels give up width before they give up the fight: they shrink to keep
+`FIGHT_PANEL_CLEAR` (16) tiles of unobstructed world between them, down to a 56 px legibility floor.
+`MIN_TILES` is *not* the constraint here — the panels overlay the world's fogged edge tiles rather
+than shrinking the viewport, and a first draft of the test asserted the wrong rule.
+
+**One duplication removed on the way.** `main.canThieve` had the three "what could I take" questions
+inline; they now live once in `fight-panels.takeable`, which both the wheel's grey Thieve slices and
+the panel's TAKE markers read. They cannot drift apart.
 
 ### 5. The bar shows its column
 
@@ -227,7 +244,7 @@ at. The first two are the bug fixes; the last three are the feature.
 | 1 | **One item selection** — `compose` asks the game; category-aware; empty columns grey | S | `wheel-model.js`, `main.js` | Pure model, node-testable, no art. Fixes a live bug on its own. |
 | 2 | **The dial gets a cell** — teach the invariant the `'radial_menu'` state (fault 1b), then reserve the column | S–M | `layout.js`, `renderer.js`, `tests/hud-layout.test.js` | Fixes the measured overlap, and makes the guard real before leaning on it. |
 | 3 | **The two faces** — the dock reads `_fightOn`; the combat-log filter | M | `layout.js`, `renderer.js`, `combat-log.js` | **Built 2026-09-19.** The structure the rest hangs on. |
-| 4 | **The target card** | M | `renderer.js`, a small pure module for what it reads | Needs the fight face to live in. |
+| 4 | **The two gear panels** — yours and theirs, read-only, in the fogged margins | M | `fight-panels.js`, `layout.js`, `renderer.js` | **Built 2026-09-19.** Needed the fight face to live beside. |
 | 5 | **The bar shows its column** | S | `layout.js`, `renderer.js`, `main.js` hit-test | Cosmetic once 1 has landed. |
 
 Stages 1 and 2 are independently shippable and fix bugs that exist right now. If the session runs
@@ -304,9 +321,9 @@ failures at v0.22.1.
 - **H1-4 — one panel or two.** Enemy target card only, with yours behind a toggle (recommended), or
   the symmetric you-and-them panels he asked for? Two always-on panels change the dock's layout, so
   this decides §3 above rather than decorating it.
-- **H1-5 — what the card shows.** HP as a number, or only a bar? Naming the exact kit items, or just
-  which of Coin / Kit / Gear is takeable? The stealth spec's instinct is that precision is what the
-  player is planning against, which argues for naming them.
+- **H1-5 — what the card shows.** **Ruled 2026-09-19: name the items, HP as digits.** Precision is
+  what the player plans against; "3 items" does not tell you whether robbing them is worth it. Built
+  as name · HP n/max · GP n · the kit by name · the live takes.
 - **H1-6 — scope.** All five stages, or land 1–2 (the bug fixes) and re-rule the rest once he has
   played with the dial in a cell?
 

@@ -21,7 +21,7 @@ import {
     DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceEquipLayout, deviceRingsLayout,
     inspectorPanelRect, inspectorActionRects,                               // (C1) tap-to-inspect panel + action-row geometry
     gearOptionRects,                                                        // (C2) GEAR chooser option-row geometry
-    xmbBarLayout, hudLayout, throwRects, wheelTopMarks,                      // (XMB) usable-bar geometry; (screen-fill) the HUD, throw targets, the marks above the wheel
+    xmbBarLayout, hudLayout, throwRects, wheelTopMarks, fightPanelRects,                      // (XMB) usable-bar geometry; (screen-fill) the HUD, throw targets, the marks above the wheel
     MODAL_RECT, offerLayout,                                                 // (offer screen) the one panel + its geometry
 } from './layout.js';
 import { itemStatLine, itemActions, equipOptions } from './inspector.js';    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
@@ -40,6 +40,7 @@ import { fighters, fightArea, FIGHT_MARGIN } from './fight-area.js';        // (
 import { entranceAt, fogReveal, fogDepth, fogOut, tileJitter, FOG_TINT, FOG_DENSITY, FOG_BLUR_TILES,
          FOG_FAR_TILES, FOG_IN_MS, FOG_OUT_MS } from './fight-entrance.js'; // (fight-fog) the entrance, and the fog's timeline and look
 import { combatLines } from './combat-log.js';   // (combat-hud stage 3) the fight face's feed
+import { playerPanel, targetPanel, panelTarget } from './fight-panels.js';   // (combat-hud stage 4)
 import * as Settings from './settings.js'; // (combat-feel-pass) reduce-motion for hit-splats (namespace import — see main.js)
 import { challengeGp } from './enemies.js'; // (Law 6f) nameplate pips read the composite kit, not raw gold
 import { resolveOffer } from './offer.js';                                  // (offer screen) pure basket→projection
@@ -493,6 +494,7 @@ export class Renderer {
         this._drawHPPanel(game);
         this._drawBuffBar(game);
         this._drawQuestLog(game);
+        this._drawFightPanels(game);
         this._drawXmbBar(game);
         this._drawOpener(game);
 
@@ -2422,6 +2424,88 @@ export class Renderer {
     // category chips (only non-empty ones) over the selected category's current
     // item. A projection over game.inventory — see game/xmb.js. Drawn nothing
     // when the player holds no usables (pure browse state).
+    // ── The two fight panels (plans/combat-hud.md stage 4) ──────────────────
+    // Left: what you are wearing. Right: who you are fighting and what they
+    // carry. Both READ-ONLY — ruling H1-4 is that the fight HUD never equips,
+    // because the panel exists so you never feel the need to go and check, not
+    // so you can swap. They are deliberately NOT mirror images: you have six
+    // named body slots, an enemy has a flat loadout and a gold number, and
+    // faking slot parity would invent structure the game does not have.
+    _drawFightPanels(game) {
+        if (!game || !game._fightOn || !this.font) return;
+        const p = fightPanelRects(this._view());
+        this._drawGearPanel(p.left, playerPanel(game));
+        const t = panelTarget(game);
+        if (t) this._drawTargetPanel(p.right, targetPanel(t));
+    }
+
+    // Your six slots, two lines each: the label, then what is in it. An empty
+    // slot keeps its row and reads "-", so the panel's shape never changes
+    // mid-fight — a panel that reflows as you lose a hat cannot be read at a
+    // glance, which is the only thing this panel is for.
+    _drawGearPanel(R, data) {
+        const { ctx } = this;
+        const PAD = 6, LH = 12;
+        drawPanelSmall(ctx, R.x, R.y, R.w, R.h, this.uiSheet);
+        const tx = R.x + PAD;
+        const maxChars = Math.max(3, Math.floor((R.w - PAD * 2) / 8));
+        const clip = (s) => (s.length > maxChars ? s.slice(0, maxChars - 1) + '~' : s);
+        let y = R.y + PAD;
+        this.font.drawText(ctx, 'YOU', tx, y, { color: UI.gold, scale: 1 });
+        y += LH + 2;
+        for (const slot of data.slots) {
+            this.font.drawText(ctx, clip(slot.label), tx, y, { color: UI.dim, scale: 1 });
+            y += LH - 2;
+            const worn = slot.name ? clip(slot.name.replace(/[\[\]]/g, '').toUpperCase()) : '-';
+            this.font.drawText(ctx, worn, tx, y, { color: slot.name ? UI.text : UI.dim, scale: 1 });
+            y += LH;
+        }
+    }
+
+    // Them: name, HP as digits, gold, kit by name, and which of the three
+    // takes is live. The wheel already greys Thieve's branches on exactly these
+    // answers (both read fight-panels.takeable) and never says why; this is the
+    // why.
+    _drawTargetPanel(R, t) {
+        const { ctx } = this;
+        const PAD = 6, LH = 12;
+        drawPanelSmall(ctx, R.x, R.y, R.w, R.h, this.uiSheet);
+        const tx = R.x + PAD;
+        const maxChars = Math.max(3, Math.floor((R.w - PAD * 2) / 8));
+        const clip = (s) => (s.length > maxChars ? s.slice(0, maxChars - 1) + '~' : s);
+        let y = R.y + PAD;
+        this.font.drawText(ctx, clip(t.name.toUpperCase()), tx, y, { color: UI.hpRed, scale: 1 });
+        y += LH + 2;
+        this.font.drawText(ctx, clip(`HP ${t.hp}/${t.maxHp}`), tx, y, { color: UI.text, scale: 1 });
+        y += LH;
+        this.font.drawText(ctx, clip(`GP ${t.gold}`), tx, y, { color: UI.gold, scale: 1 });
+        y += LH + 2;
+        this.font.drawText(ctx, 'KIT', tx, y, { color: UI.dim, scale: 1 });
+        y += LH - 2;
+        if (!t.kit.length) {
+            this.font.drawText(ctx, '-', tx, y, { color: UI.dim, scale: 1 });
+            y += LH;
+        } else {
+            // Room is finite; the rest is honest about being cut off.
+            const room = Math.max(1, Math.floor((R.y + R.h - PAD - y - LH * 2) / LH));
+            for (const k of t.kit.slice(0, room)) {
+                this.font.drawText(ctx, clip(k.name.replace(/[\[\]]/g, '').toUpperCase()), tx, y, { color: UI.text, scale: 1 });
+                y += LH;
+            }
+            if (t.kit.length > room) {
+                this.font.drawText(ctx, `+${t.kit.length - room}`, tx, y, { color: UI.dim, scale: 1 });
+                y += LH;
+            }
+        }
+        // TAKE: the three branches, lit when they are actually takeable.
+        this.font.drawText(ctx, 'TAKE', tx, y, { color: UI.dim, scale: 1 });
+        y += LH - 2;
+        const marks = [['COIN', t.takeable.coin], ['KIT', t.takeable.kit], ['GEAR', t.takeable.gear]];
+        const live = marks.filter(([, on]) => on).map(([n]) => n);
+        this.font.drawText(ctx, clip(live.length ? live.join(' ') : 'COIN KIT GEAR'), tx, y,
+            { color: live.length ? UI.hpGreen : UI.dim, scale: 1 });
+    }
+
     _drawXmbBar(game) {
         const { ctx } = this;
         if (!this.font) return;
