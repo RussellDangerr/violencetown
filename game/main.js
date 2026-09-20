@@ -3382,7 +3382,6 @@ class Game {
     _repeatLastAction() {
         const lf = this.wheel.lastFired; if (!lf || !lf.path) { this._openWheel(); return; }
         this.wheel.path = lf.path.slice();
-        this.wheel.itemIndex = lf.itemSlot >= 0 ? lf.itemSlot : this.wheel.itemIndex;
         this.wheel.aiming = false;
         this.wheel.confirming = false;
         this.wheel.reticle = lf.aimTile || autoAimTile(selectedNode(this.wheel), this);
@@ -3911,6 +3910,22 @@ class Game {
     isHidden() {
         const watchers = (this.enemies || []).filter(e => e.entity?.isAlive?.() && !e._ally);
         return spotters(this.map, watchers, this.playerX, this.playerY).length === 0;
+    }
+
+    // (combat-hud stage 1) Which bag slot the XMB bar is showing in `cat`
+    // ('throw'|'drink'|'eat'), or -1 when that column is empty. This is the ONE
+    // item selection: the wheel's Throw/Ranged/Eat/Cleanse ask it through
+    // wheel-model's barSlot(), so firing from the wheel and tapping the bar's
+    // cell always use the same item. Before this, the wheel carried its own
+    // cursor (wheel.itemIndex, stuck at 0) and threw bag slot 0 whatever the bar
+    // was showing.
+    barSlot(cat) {
+        const bar = buildXmbBar(this.inventory);
+        const col = bar.columns.find(c => c.key === cat);
+        if (!col || !col.items.length) return -1;
+        const wantId = this.xmbPick ? this.xmbPick[cat] : null;
+        const item = col.items.find(it => it.itemDef.id === wantId) || col.items[0];
+        return item.slot;
     }
 
     // (theft) The victim on an aimed tile, or null. Takes the tile as an ARGUMENT

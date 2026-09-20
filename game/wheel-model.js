@@ -14,8 +14,9 @@ const always = () => true;
 // A node is { key, label, available?, children?, resolver?, aimType?, needsItem?, needsSpell? }.
 //   children → sub-wheel; no children → leaf.
 //   aimType: 'reticle' (free placement) | 'adjacent' (range-1 direction) | 'none' (self)
-//   needsItem → the action uses inventory slot 0 (a throwable-item sub-wheel is a
-//   later pass). Magic is a sub-wheel whose children are the castable spells.
+//   needsItem: 'throw'|'drink'|'eat' → the action uses whatever the XMB bar has
+//   selected in THAT column, asked of the game via barSlot() so this module stays
+//   pure. Magic is a sub-wheel whose children are the castable spells.
 // Ranged is a leaf that throws slot 0; Magic drills a spell ring (each child
 // carries its own spellId + castSpell resolver).
 // (Phase 0 colour language) Category + Fight-method nodes carry their own
@@ -35,7 +36,7 @@ export const ROOT = { key: 'menu', label: 'MENU', children: [
     ]},
     // Ranged: throw a rock/potion at range (duplicate of TRICK → Throw, by design
     // — you throw things, so it lives under both).
-    { key: 'ranged', label: 'Ranged', color: '#e08a2a', text: '#2a1400', needsItem: true, aimType: 'reticle', resolver: 'resolveThrow', available: always },
+    { key: 'ranged', label: 'Ranged', color: '#e08a2a', text: '#2a1400', needsItem: 'throw', aimType: 'reticle', resolver: 'resolveThrow', available: always },
     { key: 'magic',  label: 'Magic',  color: '#8250c4', text: '#f0e6ff',
       available: (g) => (g.playerMp || 0) > 0 && ((g.knownSpells && g.knownSpells.length) || 0) > 0,
       children: [
@@ -54,7 +55,7 @@ export const ROOT = { key: 'menu', label: 'MENU', children: [
   // happens inside the widened Trade window (offer mode). The give-action.js math
   // (applyGive/applyDispositionDelta/applyFlip) stays; only the verb/node died.
   { key: 'trick', label: 'Trick', color: '#cba43c', text: '#2a1f06', children: [
-    { key: 'throw',  label: 'Throw',  needsItem: true,  aimType: 'reticle',  resolver: 'resolveThrow', available: always },
+    { key: 'throw',  label: 'Throw',  needsItem: 'throw',  aimType: 'reticle',  resolver: 'resolveThrow', available: always },
     { key: 'defend', label: 'Defend', aimType: 'none',                       resolver: 'guard',        available: always },
     { key: 'trade',  label: 'Trade',  aimType: 'adjacent',                   resolver: 'trade',        available: always },
     // (perception/theft) Thieve — a transaction with the sign flipped, so it
@@ -102,8 +103,8 @@ export const ROOT = { key: 'menu', label: 'MENU', children: [
     ]},
   ]},
   { key: 'treat', label: 'Treat', color: '#4f9b4a', text: '#effbe9', children: [
-    { key: 'eat',     label: 'Eat',     needsItem: true, aimType: 'none', resolver: 'resolveUse', available: always },
-    { key: 'cleanse', label: 'Cleanse', needsItem: true, aimType: 'none', resolver: 'resolveUse', available: always },
+    { key: 'eat',     label: 'Eat',     needsItem: 'eat', aimType: 'none', resolver: 'resolveUse', available: always },
+    { key: 'cleanse', label: 'Cleanse', needsItem: 'drink', aimType: 'none', resolver: 'resolveUse', available: always },
   ]},
 ]};
 
@@ -195,7 +196,6 @@ export function needsFriendlyConfirm(w, game) {
 export function createWheelState() {
   return {
     path: [0],       // indices into ROOT.children; path[last] = selection in the active ring
-    itemIndex: 0,
     reticle: null,   // {x,y} when aiming
     lastFired: null, // {path, nodeKey, itemSlot, spellId, aimTile} — written by main.js on fire
     aiming: false,
@@ -274,11 +274,21 @@ export function back(w) {
   w.aiming = false;
 }
 
+// Which bag slot the XMB bar is showing in `cat` ('throw'|'drink'|'eat'), or -1.
+// ASKED OF THE GAME rather than answered here, so wheel-model keeps its purity
+// and never imports xmb.js — the same contract Thieve uses for canThieve(). A
+// game that cannot answer reports "nothing there" rather than throwing.
+function barSlot(game, cat) {
+  if (!cat || !game || typeof game.barSlot !== 'function') return -1;
+  const slot = game.barSlot(cat);
+  return Number.isInteger(slot) && slot >= 0 ? slot : -1;
+}
+
 export function compose(w, game) {
   const node = selectedNode(w);
   return {
     node,
-    itemSlot: node.needsItem ? w.itemIndex : -1,
+    itemSlot: barSlot(game, node.needsItem),
     spellId:  node.spellId || null,
     aimTile:  node.aimType === 'none' ? null : (w.reticle || null),
   };
@@ -302,7 +312,7 @@ export function aimRange(leaf, game) {
   }
   if (leaf.aimType === 'adjacent') return 1;
   if (leaf.resolver === 'resolveThrow') {
-    const s = (game.inventory || [])[game.wheel ? game.wheel.itemIndex : -1];
+    const s = (game.inventory || [])[barSlot(game, leaf.needsItem || 'throw')];
     return (s && s.itemDef && s.itemDef.range) || 5;
   }
   if (leaf.resolver === 'castSpell') {
@@ -350,6 +360,7 @@ export function autoAimTile(leaf, game) {
 export function verbApplies(node, game) {
   if (!node || node.placeholder) return false;
   if (node.children && node.children.length) return true;   // a category — always navigable
+  if (node.needsItem && barSlot(game, node.needsItem) < 0) return false;  // nothing on that bar column
   if (node.aimType === 'none') return true;                 // self verb — no target
   if (node.aimType === 'reticle') return true;              // free tile placement — always aimable
   if (node.resolver === 'run') {

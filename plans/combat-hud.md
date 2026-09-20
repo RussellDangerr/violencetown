@@ -174,9 +174,14 @@ the same discipline `Thieve` already uses for `canThieve` (`wheel-model.js:70-80
 
 Two consequences worth naming:
 
-- **`Treat > Eat` must respect the category.** Eat should fire the EAT column's selection, Cleanse
-  the DRINK column's, Throw/Ranged the THROW column's — not "whatever the bar last showed". The
-  wheel node says which column it wants; the bar says which item in it.
+- **`Treat > Eat` must respect the category.** Eat fires the EAT column's selection, Cleanse the
+  DRINK column's, Throw/Ranged the THROW column's — not "whatever the bar last showed". The wheel
+  node says which column it wants; the bar says which item in it. **Built 2026-09-19** as
+  `needsItem: 'throw'|'drink'|'eat'` on the node, resolved through a new `game.barSlot(cat)`.
+  *Wart inherited, not introduced:* `soap` (`cure_sludge`) is the only cleanse-ish item in the game
+  and `xmbCategoryOf` files it under DRINK beside the poitions, so `Cleanse` fires the DRINK column
+  — usually a poition, not a cleanse. Strictly better than firing bag slot 0, but the verb and the
+  column are not really the same idea. Worth revisiting when Cleanse gets content of its own.
 - **A verb with an empty column greys out.** `Treat > Eat` with no food is currently `available:
   always` and would compose nothing. It should grey like Magic does on empty MP.
 
