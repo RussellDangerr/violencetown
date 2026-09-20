@@ -191,22 +191,34 @@ const BAR_HALF = 160;          // the item bar's widest half-width: three chips 
 const BAR_ABOVE = 78;          // the bar's panel runs from 78 above its anchor's bottom …
 const BAR_BELOW = 4;           // … to 4 below it (xmbBarPanelRect)
 
-export function hudLayout(vp = DEFAULT_VIEW) {
-    return vp.dockRows ? dockLayout(vp) : cornersLayout(vp);
+// `opts.fight` picks the dock's FIGHT face (plans/combat-hud.md stage 3): the
+// same geometry down to the pixel, with the log showing the combat feed instead
+// of the quest objective. Nothing moves when a fight starts — a dock that
+// reflowed would shift the log under the player's eye at the worst moment — so
+// the face only ever changes `log.face` and `log.lines`.
+export function hudLayout(vp = DEFAULT_VIEW, opts = {}) {
+    const fight = !!opts.fight;
+    return vp.dockRows ? dockLayout(vp, fight) : cornersLayout(vp, fight);
+}
+
+// How many feed lines a log cell shows. The fight face spends the objective's
+// line on one more message: a quest objective is not actionable mid-fight.
+function logFace(fight, base) {
+    return { face: fight ? 'combat' : 'quest', lines: fight ? base + 1 : base };
 }
 
 // The HUD pinned to the screen's corners and edges: HP top-left, the buffs
 // top-right beside the page buttons, the log bottom-left and the item bar
 // bottom-centre on one line, the wheel opening bottom-right. A narrow screen
 // stacks the log above the bar and lifts the wheel above the bar's row.
-function cornersLayout(vp) {
+function cornersLayout(vp, fight = false) {
     const { w, h } = vp;
     const cx = w / 2;
     const barBottom = h - 16 - BAR_BELOW;              // the bar's panel ends 16 px up, as in the old square
     const barTop = barBottom - BAR_ABOVE;
     const sideBySide = HUD_M + QUESTLOG_RECT.w + HUD_GAP <= cx - BAR_HALF;
     const logBottom = sideBySide ? h - 16 : barTop - HUD_GAP;
-    const log = { x: HUD_M, y: logBottom - QUESTLOG_RECT.h, w: QUESTLOG_RECT.w, h: QUESTLOG_RECT.h, lines: 2 };
+    const log = { x: HUD_M, y: logBottom - QUESTLOG_RECT.h, w: QUESTLOG_RECT.w, h: QUESTLOG_RECT.h, ...logFace(fight, 2) };
     const wheelBeside = w - HUD_M - 2 * WHEEL_REACH >= cx + BAR_HALF + HUD_GAP;
     const wheel = { cx: w - HUD_M - WHEEL_REACH, cy: (wheelBeside ? h - 16 : barTop - HUD_GAP) - WHEEL_REACH };
     return {
@@ -258,7 +270,7 @@ export function dialRect(hud, r = DIAL_MAX_R) {
 // a two-row dock it covered the right-hand third of the full-width log.
 export function dialColumnLeft(w) { return w - DOCK_PAD - 2 * DIAL_MAX_R; }
 
-function dockLayout(vp) {
+function dockLayout(vp, fight = false) {
     const { w, h } = vp;
     const dialLeft = dialColumnLeft(w);
     // The item bar centres in the dock MINUS the dial's column, so a narrow
@@ -273,13 +285,13 @@ function dockLayout(vp) {
     let log, barBottom, openerY;
     if (dock.rows === 2) {
         // The log stops at the dial's column instead of spanning the dock.
-        log = { x: DOCK_PAD, y: dock.y + DOCK_PAD, w: dialLeft - HUD_GAP - DOCK_PAD, h: LOG_H3, lines: 3 };
+        log = { x: DOCK_PAD, y: dock.y + DOCK_PAD, w: dialLeft - HUD_GAP - DOCK_PAD, h: LOG_H3, ...logFace(fight, 3) };
         const rowTop = log.y + log.h + HUD_GAP;           // the second row: the item bar and the opener
         barBottom = rowTop + BAR_ABOVE;
         openerY = rowTop + (BAR_H - OPENER) / 2;
     } else {
         barBottom = dock.y + (dock.h - BAR_H) / 2 + BAR_ABOVE;
-        log = { x: DOCK_PAD, y: dock.y + DOCK_PAD, w: Math.min(cx - BAR_HALF, dialLeft) - HUD_GAP - DOCK_PAD, h: LOG_H3, lines: 3 };
+        log = { x: DOCK_PAD, y: dock.y + DOCK_PAD, w: Math.min(cx - BAR_HALF, dialLeft) - HUD_GAP - DOCK_PAD, h: LOG_H3, ...logFace(fight, 3) };
         openerY = dock.y + (dock.h - OPENER) / 2;
     }
     // Under the hub where it fits; otherwise just clear of the item bar.

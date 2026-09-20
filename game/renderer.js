@@ -39,6 +39,7 @@ import { isHunting } from './ai.js'; // one spelling of "actively hunting the pl
 import { fighters, fightArea, FIGHT_MARGIN } from './fight-area.js';        // (fight-fog) who is in the fight, and what they can see
 import { entranceAt, fogReveal, fogDepth, fogOut, tileJitter, FOG_TINT, FOG_DENSITY, FOG_BLUR_TILES,
          FOG_FAR_TILES, FOG_IN_MS, FOG_OUT_MS } from './fight-entrance.js'; // (fight-fog) the entrance, and the fog's timeline and look
+import { combatLines } from './combat-log.js';   // (combat-hud stage 3) the fight face's feed
 import * as Settings from './settings.js'; // (combat-feel-pass) reduce-motion for hit-splats (namespace import — see main.js)
 import { challengeGp } from './enemies.js'; // (Law 6f) nameplate pips read the composite kit, not raw gold
 import { resolveOffer } from './offer.js';                                  // (offer screen) pure basket→projection
@@ -170,7 +171,11 @@ export class Renderer {
     // recomputed only when the viewport changes.
     _hud() {
         const vp = this._view();
-        if (this._hudFor !== vp) { this._hudFor = vp; this._hudCache = hudLayout(vp); }
+        const fight = !!this._fightFace;
+        if (this._hudFor !== vp || this._hudFaceFor !== fight) {
+            this._hudFor = vp; this._hudFaceFor = fight;
+            this._hudCache = hudLayout(vp, { fight });
+        }
         return this._hudCache;
     }
 
@@ -390,6 +395,10 @@ export class Renderer {
     renderFrame(game) {
         const { ctx } = this;
         const vp = this._view();
+        // (combat-hud stage 3) Which face the dock wears this frame. Stamped
+        // here, once, from the same game._fightOn the fog reads, so every
+        // _hud() call inside the frame agrees about it.
+        this._fightFace = !!game._fightOn;
         ctx.setTransform(vp.scale, 0, 0, vp.scale, 0, 0);   // draw in logical px at the viewport's scale
         ctx.imageSmoothingEnabled = false;
         ctx.clearRect(0, 0, vp.w, vp.h);
@@ -2098,10 +2107,15 @@ export class Renderer {
         const tx = R.x + PAD;
         let y = R.y + PAD;
 
+        // Which face this panel is wearing. Declared before the header, which
+        // reads it: it used to be declared at the objective below, which put
+        // the header's use inside its temporal dead zone and threw every frame.
+        const fightFace = R.face === 'combat';
+
         // (a) HEADER — LOCATION left-aligned, TIME right-aligned. (Turn counter
         // dropped for now per playtest; the two ends read like a title bar.)
-        const zone = (game.map?.zoneName || '').toUpperCase();
-        this.font.drawText(ctx, zone, tx, y, { color: UI.gold, scale: 1 });
+        const zone = fightFace ? 'COMBAT' : (game.map?.zoneName || '').toUpperCase();
+        this.font.drawText(ctx, zone, tx, y, { color: fightFace ? UI.hpRed : UI.gold, scale: 1 });
         const timeStr = (typeof game._timeOfDay === 'function') ? game._timeOfDay() : '';
         if (timeStr) {
             this.font.drawText(ctx, timeStr, R.x + R.w - PAD, y, { color: UI.dim, scale: 1, align: 'right' });
@@ -2109,8 +2123,10 @@ export class Renderer {
         y += LH;
 
         // (b) OBJECTIVE — active quest text (gold). Skip the line if none, so
-        // the feed shifts up to fill the space.
-        const objective = game.questEngine ? game.questEngine.getHudText() : null;
+        // the feed shifts up to fill the space. The FIGHT face always skips it:
+        // a quest objective is not actionable mid-fight, and its line buys one
+        // more combat message (plans/combat-hud.md stage 3).
+        const objective = fightFace ? null : (game.questEngine ? game.questEngine.getHudText() : null);
         if (objective) {
             let t = objective.toUpperCase();
             if (t.length > maxChars) t = t.slice(0, maxChars - 1) + '~';
@@ -2122,16 +2138,21 @@ export class Renderer {
         // panel's bottom so a missing objective grows the visible feed upward.
         // shorter panel (h 62) — 2 feed lines (A3 shrink; 3 lines overflowed
         // the panel bottom by ~10px when header+objective+feed all show).
-        const messages = game._logStripMessages;
-        if (!messages || messages.length === 0) return;
-        const visible = messages.slice(-(R.lines || 2));   // the dock's log shows three (stage 3)
-        const alphas  = [0.5, 0.75, 1.0];    // oldest → newest
+        // The fight face reads the 300-deep history filtered to combat, not the
+        // 3-entry mixed ring: filtering three mixed messages down to the combat
+        // ones usually leaves one or none, which is not a log.
+        const visible = fightFace
+            ? combatLines(game._logHistory, R.lines || 3)
+            : (game._logStripMessages || []).slice(-(R.lines || 2));
+        if (!visible.length) return;
+        // Oldest → newest, fading in. Computed rather than a fixed table: the
+        // fight face shows one line more than the table ever had entries for.
+        const alphaAt = (i, n) => (n <= 1 ? 1 : 0.5 + 0.5 * (i / (n - 1)));
         const feedTop = R.y + R.h - PAD - visible.length * LH;
         const startY  = Math.max(y, feedTop);
         for (let i = 0; i < visible.length; i++) {
             const m = visible[i];
-            const alpha = alphas[alphas.length - visible.length + i];
-            const tinted = hexToRgba(this._logStripColor(m.category), alpha);
+            const tinted = hexToRgba(this._logStripColor(m.category), alphaAt(i, visible.length));
             let text = m.text;
             if (text.length > maxChars) text = text.slice(0, maxChars - 1) + '~';
             this.font.drawText(ctx, text, tx, startY + i * LH, { color: tinted, scale: 1 });

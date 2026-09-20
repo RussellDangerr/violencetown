@@ -226,7 +226,7 @@ at. The first two are the bug fixes; the last three are the feature.
 |---|---|---|---|---|
 | 1 | **One item selection** — `compose` asks the game; category-aware; empty columns grey | S | `wheel-model.js`, `main.js` | Pure model, node-testable, no art. Fixes a live bug on its own. |
 | 2 | **The dial gets a cell** — teach the invariant the `'radial_menu'` state (fault 1b), then reserve the column | S–M | `layout.js`, `renderer.js`, `tests/hud-layout.test.js` | Fixes the measured overlap, and makes the guard real before leaning on it. |
-| 3 | **The two faces** — the dock reads `_fightOn`; the combat-log filter | M | `layout.js`, `renderer.js` | The structure the rest hangs on. |
+| 3 | **The two faces** — the dock reads `_fightOn`; the combat-log filter | M | `layout.js`, `renderer.js`, `combat-log.js` | **Built 2026-09-19.** The structure the rest hangs on. |
 | 4 | **The target card** | M | `renderer.js`, a small pure module for what it reads | Needs the fight face to live in. |
 | 5 | **The bar shows its column** | S | `layout.js`, `renderer.js`, `main.js` hit-test | Cosmetic once 1 has landed. |
 
@@ -256,7 +256,14 @@ The invariant that would have caught fault 1, and the ones that keep it caught:
    Cleanse returns the bar's slot for the node's category — the test the §2 proof becomes.
 4. **Empty column greys.** `verbApplies(Eat)` is false with no food.
 5. **The faces.** `hudLayout` with `_fightOn` true vs. false returns the same dial cell and the same
-   overall dock height (the no-reflow rule).
+   overall dock height (the no-reflow rule). **Built, and pinned per viewport:** every dock rect is
+   asserted identical across the faces, so only `log.face` and `log.lines` may differ.
+6. **Something has to actually DRAW.** Stage 3 shipped a `ReferenceError` past a green suite — the
+   log's header read `fightFace` before its `const` was initialised, so `_drawQuestLog` threw on
+   every frame while 1446 tests passed, because nothing in the suite called a draw method.
+   `tests/dock-faces-render.test.js` now drives the real `_drawQuestLog` through the recording
+   canvas that `fight-fog-render.test.js` already established. Mutation-checked: reintroducing the
+   bug fails those five tests and **no others**.
 
 Baseline to re-measure before starting, not to quote: `npm test` was 1409 tests / 262 suites / 0
 failures at v0.22.1.
@@ -288,8 +295,12 @@ failures at v0.22.1.
 - **H1-2 — one item selection.** Make the bar the single source of truth and delete `wheel.itemIndex`?
   (Recommended — it is a bug either way.) The only reason to say no is if the wheel is *meant* to
   have its own item cursor, in which case the bar should show that cursor instead.
-- **H1-3 — the combat log.** Filter the existing strip by category on the fight face (recommended),
-  or keep a separate combat feed?
+- **H1-3 — the combat log.** ~~Filter or separate feed?~~ **Built 2026-09-19 as the filter**, on
+  the spec's recommendation, flagged to Caelan as unruled before building rather than after. One
+  ring buffer, one `[L]` modal, one thing to cap. `game/combat-log.js` `combatLines(history, n)` is
+  the whole of it — it reads the 300-deep `_logHistory` rather than the 3-entry strip, because
+  filtering three mixed messages down to the combat ones usually leaves one or none. Overturn here
+  if he wants a separate feed after all.
 - **H1-4 — one panel or two.** Enemy target card only, with yours behind a toggle (recommended), or
   the symmetric you-and-them panels he asked for? Two always-on panels change the dock's layout, so
   this decides §3 above rather than decorating it.
