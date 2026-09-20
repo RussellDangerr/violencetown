@@ -188,6 +188,52 @@ world, not as markers.
   L209, mooks vs anchors). Respawns keep the `_muggedIds` wallet rule (rec. 3). Ruling A3 (does
   the REMOTICON cost a turn?) becomes load-bearing: a turn now also ticks respawns.
 
+### 4.7 Population vs. threat — why this is Digimon and not GTA
+
+> **Raised by Caelan, 2026-09-20**, thinking about how many NPCs should be alive at once and
+> whether the game needs a crowd manager that spawns near the player the way Grand Theft Auto
+> does. Recorded here because it is piece 1's question and it will be cold by the time piece 1
+> is built.
+
+**The split already exists in the code.** `ambient` is the line. Measured in the shipped town on
+2026-09-20: **9 NPCs — 7 ambient, 2 not.** `fight-area.js fighters()` excludes ambient entirely,
+which is why setting an enemy `chasing` does nothing until `ambient` is also cleared. Ambient
+Violencians are the crowd; non-ambient enemies are the content. The registry and spawn tables
+above belong to the second group only.
+
+**A crowd manager solves a problem this game does not have.** GTA spawns in a ring around the
+player because its world is too large to hold at once and the player may be anywhere in it. SA-1
+fixed hand-authored maps, each small enough to hold whole. There is nothing to stream, so there is
+no ring to manage.
+
+**And near-player spawning would cost two things this game has already paid for:**
+
+1. **"There are no witnesses" is true by construction.** `perceives()` is shared by the chase AI,
+   the threat overlay and the fight fog (`plans/fight-fog.md`), so standing unseen genuinely means
+   unseen. An enemy that can materialise beside you breaks that: you could be spotted by something
+   that did not exist last turn, and the stealth planning surface becomes a guess.
+2. **Turn-based cannot hide pop-in.** GTA gets away with despawning behind you because the camera
+   is moving at speed. Here the player is looking at a static screen where one tile changing *is*
+   the whole event.
+
+**So: the Digimon model, which §4.6 already describes.** A zone's hostile roster is re-rolled from
+its spawn table on entry, plus the respawn clock. The field feels alive because it differs each
+time you walk in, never because it changes while you are watching it.
+
+**What is worth taking from GTA is behaviour, not density.** What makes that world feel populated
+is that its people are visibly doing something. The scaffolding for this already exists on every
+NPC — `behavior`, `homeRegion`, `wanderRadius`, `wanderEveryTurns`, `wantsItems`, `depositsTo`,
+`carrying`, `barks`, `fsmState`; the shipped town's ambient Violencians run `["IDLE","WANDER"]` at
+`wanderRadius` 4–6. That, plus the deferred living-world chatter thread, is the GTA feeling.
+Density is the cheap lever and purpose is the one that reads.
+
+**Recommendation (Caelan endorsed the shape 2026-09-20; the detail below is still open):** keep
+**ambient population authored and fixed per map** — the town's Violencians are characters with
+homes and names, not extras — and put the re-roll on the **hostile roster only**. The open question
+is whether *any* ambient population should vary by layer or time of day; that is a content
+question, not a spawning one, and it does not block piece 1.
+
+
 ## 5. The pieces, in dependency order
 
 | # | Piece | Size | Core files touched | Depends on |
