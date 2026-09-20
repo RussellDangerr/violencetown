@@ -96,7 +96,30 @@ export const XMB_ITEM_H   = 46;   // current-item cell height (icon + name band)
 // `anchor` is where hudLayout puts the bar: its centre x, and the bottom of
 // its current-item cell. The default is the old square's (304, 588).
 export const XMB_ANCHOR_CLASSIC = Object.freeze({ cx: CANVAS_INTERNAL_PX / 2, bottom: HOTBAR_OY + HOTBAR_SLOT_H });
-export function xmbBarLayout(bar, anchor = XMB_ANCHOR_CLASSIC) {
+export const XMB_CELL = 32;        // one item cell in the row; 32 leaves the
+                                   // selected item's NAME a line beneath the row,
+                                   // which is where it went when the row took the
+                                   // width the name used to sit in
+// 12, not 6: HIT_SLOP grows every cell by 6 a side, so a narrower gap makes
+// two neighbours claim the same pixels and which one fires depends on iteration
+// order. At 12 the expanded cells merely touch, which rectsOverlap calls clear.
+export const XMB_CELL_GAP = 12;
+
+// `sel` is { colIndex, itemIndex } — which column is active and which of its
+// items is picked (xmb.js resolveXmbSelection produces exactly that shape).
+// Omitted, it means the first item of the first column.
+//
+// (combat-hud stage 5) The active column is laid out as a ROW of cells rather
+// than the single "current" cell this returned before — Caelan: the bar "needs
+// to be more functional than just a single item". `current` is kept as an alias
+// of the selected cell, because main hit-tests it to fire.
+//
+// The row is horizontal where plans/item-hotbar-xmb.md says vertical. That doc
+// predates the dock and was written for the old 608 square; the dock's bar panel
+// is 82px tall, which one cell already fills, so a vertical column could only
+// exist by growing over the world or the message log — the collision stage 2
+// fixed for the dial. Caelan ruled the row (2026-09-19).
+export function xmbBarLayout(bar, anchor = XMB_ANCHOR_CLASSIC, sel = null) {
     const cols = (bar && bar.columns) || [];
     const cx = anchor.cx;
     const bottom = anchor.bottom;
@@ -110,10 +133,41 @@ export function xmbBarLayout(bar, anchor = XMB_ANCHOR_CLASSIC) {
     }));
     const iconSize = XMB_ITEM_H - 6;                          // 40
     const itemY = chipY + XMB_CHIP_H + 6;
-    const current = { x: Math.round(cx - iconSize / 2), y: itemY, w: iconSize, h: iconSize };
-    const up   = { x: current.x + current.w + 10, y: itemY - 4,               w: 18, h: 14 };
-    const down = { x: current.x + current.w + 10, y: itemY + current.h - 10,  w: 18, h: 14 };
-    return { chips, current, up, down, bottom };
+
+    const colIndex = Math.max(0, Math.min(sel ? (sel.colIndex | 0) : 0, n - 1));
+    const items = (cols[colIndex] && cols[colIndex].items) || [];
+    const pick = Math.max(0, Math.min(sel ? (sel.itemIndex | 0) : 0, items.length - 1));
+
+    // The row never grows wider than the chips above it, so the bar's panel —
+    // which is sized from the chips — always contains it.
+    const stride = XMB_CELL + XMB_CELL_GAP;
+    const fit = totalW > 0 ? Math.max(1, Math.floor((totalW + XMB_CELL_GAP) / stride)) : 1;
+    const shown = Math.min(items.length, fit);
+    const overflow = items.length > shown;
+
+    // Window the row around the selection so the picked item is always on it.
+    const first = overflow ? Math.max(0, Math.min(pick - (shown >> 1), items.length - shown)) : 0;
+    const rowW = shown > 0 ? shown * stride - XMB_CELL_GAP : 0;
+    const rowX = Math.round(cx - rowW / 2);
+    const cells = [];
+    for (let k = 0; k < shown; k++) {
+        const index = first + k;
+        const it = items[index];
+        cells.push({
+            index, id: it && it.itemDef ? it.itemDef.id : null, slot: it ? it.slot : -1,
+            count: it ? it.count : 0, selected: index === pick,
+            x: rowX + k * stride, y: itemY, w: XMB_CELL, h: XMB_CELL,
+        });
+    }
+
+    const chosen = cells.find((c) => c.selected) || null;
+    const current = chosen
+        ? { x: chosen.x, y: chosen.y, w: chosen.w, h: chosen.h }
+        : { x: Math.round(cx - iconSize / 2), y: itemY, w: iconSize, h: iconSize };
+    const rowRight = cells.length ? cells[cells.length - 1].x + XMB_CELL : current.x + current.w;
+    const up   = { x: rowRight + 10, y: itemY - 4,              w: 18, h: 14 };
+    const down = { x: rowRight + 10, y: itemY + XMB_CELL - 10,  w: 18, h: 14 };
+    return { chips, items: cells, current, up, down, bottom, overflow };
 }
 
 // The XMB usable-bar's background PANEL rect for `n` visible category chips
