@@ -203,3 +203,64 @@ Stated plainly, because this ran with no eyes on it.
 - `npm run -s balance:check` — *balance golden matches — no drift*.
 - The one-word-name grep returns zero lines.
 - `dev` and `main` untouched; this branch is off `dev` at `b53228e`.
+
+---
+
+## 9. Seen on screen (added at merge, 2026-09-20)
+
+§7 above was written without eyes on it. The branch was merged to `dev` on 2026-09-20 and the
+open visual questions were answered first, by rendering the real `_drawHitSplat` geometry against
+the real `emotes_marks.png` at 1× and magnifying the resulting pixels, then by spawning each type
+through the live `Game._spawnHitSplat` in the running game. Contrast figures below are WCAG
+relative-luminance ratios between a mark's mean opaque pixel colour and the badge fill it sits on.
+
+**Answered, and the change stands:**
+
+- **`drop` vs `drops` are distinguishable.** The single droplet against the three-droplet cluster
+  separates cleanly at 14px — the cluster is visibly wider and busier. The poison/sludge split is
+  not invisible churn and does not need reverting.
+- **The mark clears the digits on a one-digit badge.** On a 3-damage splat (r=10) the mark sits at
+  the upper-right rim and overhangs it; the centred number stays fully legible. No crowding.
+- **Unadvertised benefit:** heal `#3fb56a` and poison `#57a23e` are both mid-greens and read
+  similarly as bare fills. Poison now carrying a mark, and heal deliberately carrying none, is a
+  second axis separating the two — which strengthens the §3 case for leaving heal unmarked.
+
+**One §7 claim did not survive being looked at:**
+
+- §7 says *"the mark added here is the only thing now telling [energy and a punch] apart."*
+  **It is not.** `exclamation` is `#ff4b1d` — a red-orange — and energy falls back to the physical
+  red `#d23f2f`. That pairing measures **1.40**, the weakest of any mark-on-fill in the set
+  (`star` on physical is 2.49, `stars` 2.82, `swirl` 2.55, `drop` 1.73). At 26/256 opaque pixels in
+  a 14px tile it is a faint smudge on the rim, not a signal. The mapping is still correct and still
+  an improvement — it costs nothing and pays off the moment a colour lands — but
+  **`SPLAT_COLOR.energy` is a prerequisite for the energy mark to do any work, not a nice-to-have.**
+
+**Picking that colour — measured, so it need not be guessed:**
+
+| Candidate | `!` mark on it | white digits on it | vs physical | vs sludge |
+| --- | --- | --- | --- | --- |
+| *(today: physical red fallback)* | **1.40** | 4.67 | — | — |
+| indigo `#3b2f8f` | **3.16** | 10.56 | 2.26 | 2.22 |
+| deep blue `#263a8c` | 3.04 | 10.16 | 2.17 | 2.14 |
+| near-black violet `#2a1f4d` | **4.48** | 14.98 | 3.21 | 3.15 |
+| magenta `#c8339a` | 1.43 | 4.78 | 1.02 | 1.00 |
+| yellow-white `#f2e86b` | 2.63 | **1.27** | 3.68 | 3.74 |
+
+§7 floated *"yellow-white and magenta as the open lanes"*. Both are now ruled out on measurement:
+**magenta** is 1.02 against physical red and 1.00 against sludge — it would be indistinguishable
+from two fills already in play — and **yellow-white** drops the white digits to 1.27, which would
+cost more legibility than the mark buys. The dark-cool lane is the one that works: it is unoccupied
+in a palette of red/purple/green/orange/cyan/green, it lifts the red-orange `!` off the fill, and it
+is the only direction that improves the digits at the same time. **`#3b2f8f` is the recommendation**
+(near-black violet scores better on every axis but is dark enough to read as a hole in the world
+rather than a splat). Caelan's call.
+
+**Also observed, pre-existing, not this branch's doing:** `anger` on the fire fill measures **1.11**
+— worse than energy's. Fire has carried `anger` since the feel-pass, so this is not a regression and
+was not introduced here, but if the energy colour gets picked by eye it is worth looking at fire in
+the same pass. Fire at least still has a unique orange fill doing the work; energy has nothing.
+
+**Not re-verified, still open:** whether `exclamation` *reads as* "energy zap" rather than merely
+"!" — that is a taste question a contrast number cannot settle, and it cannot be settled at all
+until the fill behind it stops being red. `cold` still has no motion case and still moves like a
+punch (§7).
