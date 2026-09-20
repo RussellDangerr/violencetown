@@ -24,7 +24,12 @@ const renderFrameBody = (() => {
 })();
 
 // A 2D context that records: each method call lands in `calls` with the alpha,
-// composite op and fill style it was made under.
+// composite op, fill style and imageSmoothingEnabled it was made under. This is
+// a flat state bag, not a real save()/restore() stack — save/restore land in
+// `calls` like any other method but don't push/pop state — so a call's recorded
+// `smoothing`/`alpha` reflects whatever the code most recently set, not what a
+// real canvas would have after a restore(). That's enough to check "was this
+// draw made under smoothing/alpha X", which is what C1/C2 need.
 function recorder() {
     const calls = [];
     const state = { globalAlpha: 1, globalCompositeOperation: 'source-over', fillStyle: null, strokeStyle: null, filter: 'none' };
@@ -33,7 +38,7 @@ function recorder() {
             if (k in t) return t[k];
             if (k === 'createImageData') return (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) });
             return (...a) => {
-                calls.push({ fn: k, a, alpha: t.globalAlpha, op: t.globalCompositeOperation, fill: t.fillStyle });
+                calls.push({ fn: k, a, alpha: t.globalAlpha, op: t.globalCompositeOperation, fill: t.fillStyle, smoothing: t.imageSmoothingEnabled });
                 if (k === 'createRadialGradient' || k === 'createLinearGradient') return { addColorStop() {} };
             };
         },
@@ -249,6 +254,47 @@ describe('the entrance', () => {
         r._drawEntrance(at(ENTRANCES.spotted, 30));
         assert.ok(filled(main, '#c8242b'), 'the red screen');
         assert.ok(filled(main, '#fff4e0'), 'the slash');
+    });
+
+    test('the punch is smoothed; the impact card under it is not (C1)', () => {
+        // struck lifts from ms=0 (zoom peaks at 1.08), so at ms=30 the impact
+        // card and the punch are both on screen in the same _drawEntrance call —
+        // exactly the frame C1 is about (plans/entrance-feel-pass.md C1).
+        const { r, main, off } = rig();
+        r._drawEntrance(at(ENTRANCES.struck, 30));
+        const sil = draws(main).find(c => c.a[0] === off.entranceSil);
+        const punch = draws(main).find(c => c.a[0] === off.entranceSnap);
+        assert.equal(sil.smoothing, false, 'the silhouettes stay crisp');
+        assert.equal(punch.smoothing, true, 'the re-scaled snapshot is filtered, not nearest-neighbour');
+    });
+
+    test('the bw/redblack card tapers out over its last 35%, silhouettes included (C2)', () => {
+        // Same shape as flash's `1 - t` fade, just delayed to the last third so
+        // the card holds solid before it goes (plans/entrance-feel-pass.md C2).
+        const taperAt = (ms) => 1 - Math.min(1, Math.max(0, (ms / IMPACT_MS - 0.65) / 0.35));
+
+        const early = rig();
+        early.r._drawEntrance(at(ENTRANCES.spotted, 20));
+        const earlyFill = early.main.calls.find(c => c.fn === 'fillRect' && c.fill === '#c8242b');
+        assert.equal(earlyFill.alpha, 1, 'holds solid before the last 35%');
+
+        const late = rig();
+        const lateMs = IMPACT_MS - 10;   // t ~= 0.909, well into the taper window
+        late.r._drawEntrance(at(ENTRANCES.spotted, lateMs));
+        const expected = taperAt(lateMs);
+        // `at()` stamps _fightStart.at from performance.now() and _drawEntrance
+        // reads performance.now() again a moment later, so the real elapsed ms
+        // (and so `t`) runs a hair over `lateMs` — hence a tolerance, not an
+        // exact match. 0.01 is ~100x the jitter actually observed and still two
+        // orders of magnitude tighter than "taper missing entirely" (alpha 1).
+        const EPS = 0.01;
+        const lateFill = late.main.calls.find(c => c.fn === 'fillRect' && c.fill === '#c8242b');
+        const lateSlash = late.main.calls.find(c => c.fn === 'fill' && c.fill === '#fff4e0');
+        const lateSil = draws(late.main).find(c => c.a[0] === late.off.entranceSil);
+        assert.ok(Math.abs(lateFill.alpha - expected) < EPS, `background alpha ${lateFill.alpha} vs ${expected}`);
+        assert.ok(Math.abs(lateSlash.alpha - expected) < EPS, 'the slash fades with the background');
+        assert.ok(Math.abs(lateSil.alpha - expected) < EPS, 'the silhouettes leave with the rest of the card, not stuck opaque');
+        assert.equal(late.main.ctx.globalAlpha, 1, 'reset when the card is done, like flash does');
     });
 
     test('search: a white flash, no silhouettes, no zoom', () => {
