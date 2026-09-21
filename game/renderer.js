@@ -2942,6 +2942,30 @@ export class Renderer {
 
         const kids = previewChildren(w);   // the highlight's children, if any: they size the dial and fill the preview arc
 
+        // ── The wheel has your keys ──
+        // While the wheel is open the movement keys steer IT, not you: A/D cycle,
+        // W drills in, S backs out. That grammar is deliberate and stays. What was
+        // missing is any sign of it. A player who opened the wheel and then tried
+        // to walk stood still while their W silently drilled into a submenu. With
+        // nothing on screen saying the wheel held the keys, it looked broken, not modal.
+        // The dial's own ▼ CLOSE speaks the wheel's vocabulary; this says it in
+        // the player's. Same band and type as the AIM hint above, so the two read
+        // as one family.
+        //
+        // Drawn here, not above, because only here is the dial's size known. On a
+        // phone the dial reaches far enough left that a screen-centred line ran
+        // under it and lost ESC TO CLOSE — the words that say how to leave. So it
+        // centres on the screen when that clears the dial, and in the room left of
+        // the dial when it doesn't. Outside the pop transform so it doesn't bounce.
+        if (this.font) {
+            const msg = 'WHEEL OPEN  ·  MOVE KEYS STEER IT  ·  ESC TO CLOSE';
+            const tw = this.font.measure(msg, 1);
+            const dialLeft = cx - this._hud().dialRadius(depth, kids.length > 0) - 8;
+            const tx = (CC + tw / 2 <= dialLeft) ? CC : Math.max(tw / 2 + 4, dialLeft / 2);
+            ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, strip - 24, vp.w, 24); ctx.restore();
+            this.font.drawText(ctx, msg, tx, strip - 16, { color: UI.gold, scale: 1, align: 'center', shadow: '#000' });
+        }
+
         // Everything below the wash scales about the centre (the open/drill pop).
         ctx.save();
         if (scale !== 1) { ctx.translate(cx, cy); ctx.scale(scale, scale); ctx.translate(-cx, -cy); }
