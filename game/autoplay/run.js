@@ -147,14 +147,21 @@ function driver(ap, g) {
         return die(...args);
     };
 
-    // Game time never moves while a request is in flight. Watching, each
-    // frame of game time also takes FRAME_MS / speed of real time.
+    // Game time never moves while a request is in flight. Watching, game time
+    // is held to `speed` times real time — measured against the real clock, not
+    // slept per frame: a browser timer cannot sleep 4 ms reliably, and sleeping
+    // every frame ran a 4x watch at under 1x.
     const quiesce = async () => { do { await macrotask(); } while (ap.inflight() > 0); };
+    let paceReal = null, paceVirtual = null;
     const tick = async () => {
         if (!ap.clock) await realSleep(FRAME_MS);
         else {
-            if (ap.opts.speed > 0) await realSleep(FRAME_MS / ap.opts.speed);
             ap.clock.advance(FRAME_MS);
+            if (ap.opts.speed > 0) {
+                if (paceReal === null) { paceReal = ap.real.now(); paceVirtual = ap.clock.now(); }
+                const ahead = (ap.clock.now() - paceVirtual) / ap.opts.speed - (ap.real.now() - paceReal);
+                if (ahead > 0) await realSleep(ahead);
+            }
         }
         await quiesce();
     };
