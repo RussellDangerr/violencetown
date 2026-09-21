@@ -1,7 +1,7 @@
 # Q1 — the quest-1 autoplay: a player who finishes quest 1 on their own
 
-**Status: DESIGN DRAFT, 2026-09-21. No code until Caelan rules Q1-1..Q1-7 (§7).** Each ruling
-carries a recommendation; none is decided. Un-tabled at his word on 2026-09-21, while he was at work
+**Status: RULED 2026-09-21 — Caelan took every recommendation in §7 ("all recommended"). Build
+order §6; implementation plan `plans/quest1-autoplay-implementation.md`.** Un-tabled at his word on 2026-09-21, while he was at work
 and could not play, which is the situation this tool exists for. Moved to `dev` from
 `plan:plans/quest1-autoplay.md` (parked 2026-09-15), whose framing and open questions it keeps.
 
@@ -145,9 +145,9 @@ committed golden, where any drift is shown and a failure to finish is an error.
 Stages 1-3 carry the engineering risk; 4 is where the game gets learned. Stop after 3 and the
 repo already has replayable, headless runs of anything scripted.
 
-## 7. Rulings for Caelan
+## 7. Rulings — all ruled as recommended, 2026-09-21
 
-| # | Question | Recommendation | Why |
+| # | Question | Ruled | Why |
 |---|---|---|---|
 | **Q1-1** | How does the player find the route? | **B, goals + skills** (§4) | Survives map edits and wheel reorders; a stuck goal names the problem. A tape went stale the day Defend moved. |
 | **Q1-2** | One profile or several? | **One standard fighter first**, its behaviour set by a few named knobs (heal below 40% HP; fight what blocks the path, walk past what doesn't). A sneak and a talker later, as knob settings where possible. | You asked for "a standard profile". Knobs make the next profiles cheap without designing them now. |
