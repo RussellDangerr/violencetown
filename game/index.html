@@ -194,12 +194,15 @@
         </div>
     </div>
 
+    <!-- The autoplay's hook (plans/quest1-autoplay.md). Does nothing without
+         ?autoplay; with it, it must run before main.js starts the clock. -->
+    <script type="module" src="autoplay/boot.js"></script>
     <script type="module" src="main.js"></script>
 
     <!-- PWA offline shell. Network-first (see sw.js), so it never serves stale
          code while online — it only takes over when there's no network. -->
     <script>
-        if ('serviceWorker' in navigator) {
+        if ('serviceWorker' in navigator && !new URLSearchParams(location.search).has('autoplay')) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('sw.js').catch((err) => {
                     console.warn('[pwa] service worker registration failed:', err);

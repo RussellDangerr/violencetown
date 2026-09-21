@@ -41,7 +41,7 @@ Or just open `game/index.html` directly in a browser. The dev server is only nee
 
 ## Design notes
 
-The three systems most worth reading, and the reasoning behind each.
+The systems most worth reading, and the reasoning behind each.
 
 ### 1. The radial action wheel — one grammar, one source of truth
 [`game/wheel-model.js`](game/wheel-model.js) is a **pure state model** (no DOM, no canvas): a node tree `MENU → categories → verbs → leaves`, walked by exactly one grammar — *cycle* (rotate the active ring), *drill* (push into a child / aim / fire), *back* (pop). Per-ring cursor memory means re-entering a ring lands where you left it.
@@ -63,6 +63,14 @@ A fight already changes the world: one flag (`game._fightOn`) drives the **fog o
 Two details that are the interesting part. The two panels are deliberately **not** mirror images — you have six named body slots, an enemy has a flat loadout and a gold number, so faking symmetry would invent structure the game doesn't have. And the "what could I steal" question is answered in exactly one function, read by both the wheel (which greys the branches you can't use) and the panel (which says why) — so they can't drift apart.
 
 The wheel's dial is **laid out, not just drawn**: `hudLayout` reserves it a column of the dock that nothing else may enter, and the HUD's non-overlap invariant covers the open wheel across a table of viewports — which is how the dial stopped landing on the message log on tall screens.
+
+### 5. The autoplay — an eval that owns the clock
+
+`npm run autoplay` plays quest 1 by itself in headless Chrome: a scripted "standard player" walks to the car, goes down into the sewer, fights, and either finishes or says exactly why it didn't. Every run is scored per quest stage (turns, HP lost, hits, deaths) against a committed golden, so a balance change shows up as numbers moving rather than as a bug found weeks later. No dependencies: Node's built-in `WebSocket` drives the Chrome DevTools protocol directly.
+
+The interesting part is why it needed its own clock. Every random roll already went through one seeded generator, so a seed *should* have replayed a run — and it didn't. The town's ambient life runs on a wall-clock heartbeat and spends that generator on where people wander, so how long the page took changed the outcome: same seed, no input, a different end state depending on how long you waited. The fix is a virtual clock installed before the game boots (`performance.now`, timers, animation frames), which the autoplay advances and freezes while a map loads. With it, three runs with random real-world pauses end in one identical state; a control run on the real clock ends in three. The same timeline plays headless at about 3× real time or paced for watching, so the run you watch is the run the check scored.
+
+Its first findings were real ones. The standard player — wooden sword, heal when low, fight what's beside you — cannot get past the Fungus King, which is by design: the King is meant to be snuck past. So a second player sneaks, routing by the enemies' own vision rules (a tile in someone's sight cone costs forty steps of detour) — and it proved there is no unseen route through the sewer as built: from the entrance, hidden ground reaches two tiles. A level-design question, found by a test rather than a playtester.
 
 More system write-ups (combat feel, the unified world clock, zone pursuit) live in [`plans/`](plans/).
 
@@ -168,7 +176,7 @@ GAME_STUDIO_PLAN.md # The four-gate development pipeline
 
 ## Development
 
-Feature work follows the four-gate pipeline in [`GAME_STUDIO_PLAN.md`](GAME_STUDIO_PLAN.md); phase goals live in [`ROADMAP.md`](ROADMAP.md) and per-feature briefs in [`plans/`](plans/). There's a zero-dependency Node test suite under [`tests/`](tests/) (`node --test`) covering the core logic (combat, pathing, wheel model, save round-trip, quests).
+Feature work follows the four-gate pipeline in [`GAME_STUDIO_PLAN.md`](GAME_STUDIO_PLAN.md); phase goals live in [`ROADMAP.md`](ROADMAP.md) and per-feature briefs in [`plans/`](plans/). There's a zero-dependency Node test suite under [`tests/`](tests/) (`node --test`) covering the core logic (combat, pathing, wheel model, save round-trip, quests), and a headless autoplay (`npm run autoplay:check`) that plays quest 1 end to end against a scored golden.
 
 ## License
 

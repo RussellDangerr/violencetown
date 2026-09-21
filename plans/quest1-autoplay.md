@@ -145,6 +145,45 @@ committed golden, where any drift is shown and a failure to finish is an error.
 Stages 1-3 carry the engineering risk; 4 is where the game gets learned. Stop after 3 and the
 repo already has replayable, headless runs of anything scripted.
 
+**Stages 1-3 BUILT 2026-09-21** on `feature/quest1-autoplay` (`plans/quest1-autoplay-implementation.md`).
+`npm run autoplay` plays quest 1's first stage headless. Measured, seed 1, script `car`:
+
+| Run | Clock | Real time | End states |
+|---|---|---|---|
+| 3 runs, random real pauses (`--repeat=3 --jitter`) | virtual | 1.86 / 2.01 / 1.89 s | **one** — `68ed5a69` |
+| the control, same (`--clock=real`) | wall | 8.4 / 8.7 / 8.7 s | **three** — `a1243c6f`, `687be416`, `ec8c3e50` |
+| seed 2 | virtual | 0.84 s | `1e0b8131` |
+
+The same seed also ended on `68ed5a69` in two Browser-pane runs — a second browser, and a hidden
+pane whose own animation frames were frozen. The control is what makes the first row mean
+something: the check demonstrably fails when time is not owned.
+
+**Stages 4-6 BUILT 2026-09-21** (`plans/quest1-autoplay-player.md`). `npm run autoplay:check`
+plays quest 1 with the standard fighter and scores it against `tools/autoplay-golden.json`;
+`--speed=N` paces it for watching; `--gif=out.gif` records it. **The verdict, seeds 1-5:**
+
+| Seed | examine_car | recover_converter | Ended |
+|---|---|---|---|
+| 1 | 12 turns | 75 turns · 22 hits · -150 HP · 3 deaths | died 3 times, last to the Fungus King |
+| 2 | 12 | 104 · 24 hits · 3 deaths | same |
+| 3 | 12 | 84 · 24 hits · 3 deaths | same |
+| 4 | 12 | 84 · 24 hits · 3 deaths | same |
+| 5 | 12 | 67 · 27 hits · 3 deaths | same |
+
+**The standard fighter as ruled cannot finish quest 1.** It never carries food (its route never
+crosses any, and the ruled profile does not go looking), fights the Ghost Fungus on the way in,
+and meets the Fungus King in the hall. The wooden sword does 4 a hit through the King's armour 6,
+the King does 12 a turn, and after each defeat the Wererat's Law-5 gold heals the King
+("Wererat pays 16 GP — Fungus King straightens up"). The check records this honestly: it exits 1,
+NOT FINISHED, with no drift. A balance change is visible: the sword at 12 instead of 10 moved the
+stage from 75 turns to 53 and 22 hits to 19, flagged field by field — and the King still won.
+
+Found while building, all fixed with the fix recorded in its commit: deaths on a step went
+uncounted (a step's world turn runs after its slide); a turn-in-place gave a passer-by time to walk
+into the next tile, and stepping into them opened their trade; walking into a chest opens it.
+Watch pacing had to be measured against the real clock, not slept per frame. The stop key was proved
+with trusted input from the DevTools protocol, because the hidden Browser pane could not send one.
+
 ## 7. Rulings — all ruled as recommended, 2026-09-21
 
 | # | Question | Ruled | Why |
@@ -159,14 +198,31 @@ repo already has replayable, headless runs of anything scripted.
 
 ## 8. Unknowns to settle while building, not before
 
-- **Can the standard fighter beat the Wererat?** Unknown. If a plain Hit-and-heal player loses,
-  that is the autoplay's first balance finding, and the ruling is Caelan's (tune the fight, or
-  give the profile a smarter skill).
-- **Overriding `localStorage` in the page.** Planned as a property override in `boot.js`, before
-  `main.js` runs; to be proven in stage 2, with the fallback of routing the three writers through
-  one guarded helper.
-- **Headless frame cost.** Every frame still renders (a render bug should fail the run, as a green
-  suite hid one before). Estimated seconds per run; measured in stage 3.
+- ~~**Can the standard fighter beat the Wererat?**~~ **Answered, 2026-09-21: it never reaches
+  it.** It dies to the Fungus King on every seed tried (§6). One more measured fact for that
+  ruling: hit from the side, the Wererat stays `suspicious` — 12 hits, no attack back, no heal.
+  Whether that is stealth working or a loophole is Caelan's call too. **Ruling Q1-8 (Caelan,
+  2026-09-21): "Sneaking."** The fight stays; the King is meant to be got past by sneaking. The
+  autoplay gained a sneak profile that routes by the enemies' own `perceives()`
+  (`plans/quest1-autoplay-player.md`, addendum) — and found there is **no unseen route**: from
+  the entrance, hidden tiles reach 2 tiles, flank tiles 4; the Ghost Fungus's cone covers every
+  way east and the Red Fungus's covers every tile beside the Wererat. The sneak dies three times
+  too. **Open ruling Q1-9, in two parts** (the measured what-if table is in the player plan's
+  addendum):
+  1. **The route.** Turning ONE fungus does nothing; turning **both** the Ghost Fungus (5,7) and
+     the sentry Red Fungus (16,7) to face north (`"facing": "N"` on each spawn — `enemies.js`
+     already reads it) opens a hidden route to (17,9), behind the Wererat. Or move / re-sight them.
+  2. **The boss fight once you're there.** From behind, the Wererat fights back and wins (sword 4
+     a hit, it 12 a turn, and it pays its allies to heal). From the side it never reacts at all —
+     12 hits, measured, still `suspicious`. Is that the intended stealth kill, or a hole in the
+     awareness ladder (a suspicious enemy seen from the flank never escalates)?
+  Whatever is ruled, the golden will show it: the sneak's `finished` flipping is drift.
+- ~~**Overriding `localStorage` in the page.**~~ **Settled:** `boot.js` overrides
+  `Storage.prototype`'s methods with a memory store. Proved both ways in the running game: a run
+  autosaved (turn 11) into memory, and the port's real `localStorage` held no save afterwards.
+- ~~**Headless frame cost.**~~ **Measured:** every frame still renders, and 5.2 s of game time
+  (12 turns plus a 3 s idle) plays in about 0.85 s of real time, page load included — roughly 6x
+  real time. A whole quest of a few hundred turns should take seconds.
 - **Local only.** The eval needs a Chrome, so it runs on this machine, not in cloud routines.
 - **Coupling.** The autoplay reads `window.__game` internals. Mitigated by acting through named entry
   points (key codes, wheel keys) and a source-derived test that those entry points exist.

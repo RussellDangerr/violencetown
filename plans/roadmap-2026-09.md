@@ -22,8 +22,9 @@ Suite 1656 / 293 / 0 failures; balance golden, no drift. Verified live: the depl
 `<meta name="version">` reads 0.24.0 and all 14 changed game files byte-match `main`. **Every
 feature branch is merged**; `plan` is the only branch off `dev`, correctly. **Shipped 2026-09-20:**
 v0.23.0, H1 the combat HUD (§4). **Ruling CD is DONE** (2026-09-15, re-verified live 2026-09-20).
-**Un-tabled 2026-09-21:** Q1, the quest-1 autoplay — design draft `plans/quest1-autoplay.md`,
-seven rulings open. Next: **F2b** / **F3** (§4), the rulings in §2, or living zones —
+**Built 2026-09-21:** Q1, the quest-1 autoplay (`plans/quest1-autoplay.md`), on
+`feature/quest1-autoplay` awaiting the merge call — its first finding is that the standard
+fighter cannot finish quest 1 (ruling Q1-8). Next: **F2b** / **F3** (§4), the rulings in §2, or living zones —
 piece 1 of `plans/species-adventures.md`, whose §3 recommendations are still unruled.
 
 > **Direction ruled 2026-09-15 — `plans/species-adventures.md`.** Fixed maps stay; enemies
@@ -82,7 +83,7 @@ flowchart LR
     ENTRY["F2b — entrances<br/>by hit type"]:::design
     PULL["F3 — who gets pulled<br/>into a fight"]:::design
     SF["RULING SF: fillers,<br/>the forest, the south edge"]:::ruling
-    AUTO["Q1 — the quest-1 autoplay<br/>design draft 09-21, rulings open"]:::design
+    AUTO["Q1 — the quest-1 autoplay<br/>BUILT 09-21, awaiting merge"]:::now
     HUD["H1 — the combat HUD<br/>SHIPPED v0.23.0"]:::done
     SCREEN -->|"the spotlight glares on a wide screen"| FOG
     FOG -->|"fight-area.js, the same sight"| PULL
@@ -192,7 +193,7 @@ C1, C4, RESTART and the streetlights were built and shipped in v0.24.0 — §6.
 | **Elemental coverage matrix** | `fire` and `poison` joined `sludge` / `cold` / `energy` / `fear` with no weakness table to sit in. | S | E | nothing |
 | **5-Zone Body reconciliation** | Survives as the positional layer (Back = backstab ×1.5), not split HP pools. Needs a ruling before the bible states it as law. | S | E | nothing |
 | **Weapons have no art** | No weapon has ground or bag art: all five draw as lettered boxes — the Ray Gun a teal Z, the Wooden Sword a grey `?`. tinyDungeon has swords, axes and hammers; nothing bundled looks like a ray gun. Which cells — and what does the Ray Gun look like? | S–M | `sprites.js` `ITEM_SPRITES` | nothing |
-| **Q1 — the quest-1 autoplay** | **Un-tabled 2026-09-21; design draft on `dev`, rulings Q1-1..Q1-7 open.** A standard player completes quest 1 on its own: watchable for him, an eval and balance harness for Claude. The draft's central finding, measured: a seed alone does not replay a run, because the free-roam heartbeat spends `game.rng` on wall-clock time — so the design owns the clock, and the run you watch is the run the eval scored. | M | `plans/quest1-autoplay.md` | Q1-1..Q1-7 |
+| **Q1 — the quest-1 autoplay** | **BUILT 2026-09-21 on `feature/quest1-autoplay`, awaiting the merge call.** All six stages: virtual clock, seed seam, headless Chrome runner, the standard fighter, a scored golden (`npm run autoplay:check`), watch mode and `--gif`. Deterministic (three jittered runs, one end state; the wall-clock control, three). **Its findings: the standard fighter cannot finish quest 1** (dies to the Fungus King, seeds 1-5) — ruled Q1-8 "sneaking", the King is meant to be snuck past — **and there is no unseen route** (measured with `perceives()`: hidden ground from the entrance reaches 2 tiles; the Ghost and Red Fungus cones seal it). The sneak profile dies too. Needs ruling Q1-9: open a sneak route, or rule stealth out. | M | `plans/quest1-autoplay.md` | merge; Q1-9 |
 
 ---
 
@@ -275,10 +276,10 @@ Not a mandate — a reading of the graph.
    Z1–Z2 and CG gate zone builds; A1, A2, A3, R, DZ and P2 clear the board.
 2. **F2b** (entrances by hit type, on `game/fight-entrance.js`) and **F3** (who gets pulled in, on
    `game/fight-area.js`). Both want a short design pass first; both touch the fight's opening.
-3. **Q1, once ruled.** Un-tabled 2026-09-21; the design draft (`plans/quest1-autoplay.md`) waits
-   on Q1-1..Q1-7. Every item above that needs Caelan's eyes is a case for it: a seeded player that
-   finishes quest 1 on its own is how a change gets watched without him at the screen, and how
-   balance gets measured rather than guessed. Its build stages 1-3 carry the engineering risk.
+3. **Q1-9 — open a sneak route through the sewer.** Q1-8 ruled the Fungus King is snuck past,
+   and the autoplay proved no unseen route exists. Turn or move the Ghost Fungus (5,7), cut its
+   sight, add cover, or turn the Red Fungus (16,7) — then `npm run autoplay:check` shows whether
+   the sneak finishes, and `autoplay:write` records it.
 
 *(Earlier drafts of this list: H1 shipped in v0.23.0 on 2026-09-20; F2, the streetlights, C1, C4
 and RESTART in v0.24.0 on 2026-09-21; F1 and v0.22.0 on 2026-09-14; Q1 tabled 2026-09-15.)*

@@ -2012,7 +2012,7 @@ describe('the wiring', () => {
         // `mpt`: since plans/screen-fill.md the offer screen gets its tap in menu-box space.
         assert.ok(/state === STATE\.TRADE\) \{ this\._tapOffer\(m?pt\); return; \}/.test(mainSrc),
             'pointer events in TRADE still route to _tapTrade');
-        assert.ok(/_fullReset\(\) \{[\s\S]{0,600}?this\._closeOffer\(\);/.test(mainSrc),
+        assert.ok(/_fullReset\([^)]*\) \{[\s\S]{0,600}?this\._closeOffer\(\);/.test(mainSrc),
             'RESTART leaves the offer screen open and the basket alive');
     });
 

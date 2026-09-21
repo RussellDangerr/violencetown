@@ -5052,16 +5052,17 @@ class Game {
         return { x: sx, y: sy }; // degenerate map — nothing walkable; spawn anyway
     }
 
-    async _fullReset() {
+    async _fullReset({ seed } = {}) {
         // RESTART is reachable from the DOM ☰ sheet in ANY state, including with
         // the offer screen open — the one path out of STATE.TRADE that goes
         // through no closer at all. Discard the basket first, or _offerNpc keeps
         // a reference to an NPC from a run that no longer exists.
         this._closeOffer();
         // RESTART begins a brand-new game: drop the save and reseed the RNG so
-        // the new run is independent of the old one.
+        // the new run is independent of the old one. The autoplay passes a seed
+        // so a run replays exactly (plans/quest1-autoplay.md §5.3).
         clearSave();
-        this.rng = new RNG();
+        this.rng = new RNG(seed);
         this.questEngine = new QuestEngine(this);
         this._lastAutosaveTurn = -999;
         this.turn = 0;
