@@ -6,8 +6,8 @@
       "seed": 1,
       "finished": false,
       "reason": "recover_converter: died 3 times, last to Fungus King",
-      "fingerprint": "57a9cdd8",
-      "turn": 87,
+      "fingerprint": "732848f0",
+      "turn": 80,
       "deaths": 3,
       "stages": [
         {
@@ -22,13 +22,13 @@
         },
         {
           "id": "recover_converter",
-          "turns": 75,
+          "turns": 68,
           "hpLost": 150,
           "healed": 0,
           "eats": 0,
-          "attacks": 22,
+          "attacks": 15,
           "deaths": 3,
-          "gold": 5
+          "gold": 0
         }
       ]
     },
@@ -36,9 +36,9 @@
       "script": "sneak",
       "seed": 1,
       "finished": false,
-      "reason": "recover_converter: died 3 times, last to Fungus King",
-      "fingerprint": "d61d2a0d",
-      "turn": 114,
+      "reason": "recover_converter: died 3 times, last to Wererat",
+      "fingerprint": "058338d6",
+      "turn": 79,
       "deaths": 3,
       "stages": [
         {
@@ -53,13 +53,13 @@
         },
         {
           "id": "recover_converter",
-          "turns": 102,
-          "hpLost": 150,
+          "turns": 67,
+          "hpLost": 200,
           "healed": 0,
           "eats": 0,
-          "attacks": 18,
+          "attacks": 9,
           "deaths": 3,
-          "gold": 5
+          "gold": 0
         }
       ]
     }
