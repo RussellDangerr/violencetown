@@ -193,7 +193,7 @@ C1, C4, RESTART and the streetlights were built and shipped in v0.24.0 — §6.
 | **Elemental coverage matrix** | `fire` and `poison` joined `sludge` / `cold` / `energy` / `fear` with no weakness table to sit in. | S | E | nothing |
 | **5-Zone Body reconciliation** | Survives as the positional layer (Back = backstab ×1.5), not split HP pools. Needs a ruling before the bible states it as law. | S | E | nothing |
 | **Weapons have no art** | No weapon has ground or bag art: all five draw as lettered boxes — the Ray Gun a teal Z, the Wooden Sword a grey `?`. tinyDungeon has swords, axes and hammers; nothing bundled looks like a ray gun. Which cells — and what does the Ray Gun look like? | S–M | `sprites.js` `ITEM_SPRITES` | nothing |
-| **Q1 — the quest-1 autoplay** | **BUILT 2026-09-21 on `feature/quest1-autoplay`, awaiting the merge call.** All six stages: virtual clock, seed seam, headless Chrome runner, the standard fighter, a scored golden (`npm run autoplay:check`), watch mode and `--gif`. Deterministic (three jittered runs, one end state; the wall-clock control, three). **Its first finding: the standard fighter cannot finish quest 1** — it dies to the Fungus King on seeds 1-5. That needs ruling Q1-8 (tune the fight, smarten the profile, or keep it). | M | `plans/quest1-autoplay.md` | merge; Q1-8 |
+| **Q1 — the quest-1 autoplay** | **BUILT 2026-09-21 on `feature/quest1-autoplay`, awaiting the merge call.** All six stages: virtual clock, seed seam, headless Chrome runner, the standard fighter, a scored golden (`npm run autoplay:check`), watch mode and `--gif`. Deterministic (three jittered runs, one end state; the wall-clock control, three). **Its findings: the standard fighter cannot finish quest 1** (dies to the Fungus King, seeds 1-5) — ruled Q1-8 "sneaking", the King is meant to be snuck past — **and there is no unseen route** (measured with `perceives()`: hidden ground from the entrance reaches 2 tiles; the Ghost and Red Fungus cones seal it). The sneak profile dies too. Needs ruling Q1-9: open a sneak route, or rule stealth out. | M | `plans/quest1-autoplay.md` | merge; Q1-9 |
 
 ---
 
@@ -276,10 +276,10 @@ Not a mandate — a reading of the graph.
    Z1–Z2 and CG gate zone builds; A1, A2, A3, R, DZ and P2 clear the board.
 2. **F2b** (entrances by hit type, on `game/fight-entrance.js`) and **F3** (who gets pulled in, on
    `game/fight-area.js`). Both want a short design pass first; both touch the fight's opening.
-3. **Q1-8 — what to do about the Fungus King.** The autoplay is built; its first verdict is that
-   the ruled standard fighter cannot finish quest 1. Tune the fight, smarten the profile, or keep
-   it as intended — then `npm run autoplay:write` records the new baseline and every later change
-   is checked against it.
+3. **Q1-9 — open a sneak route through the sewer.** Q1-8 ruled the Fungus King is snuck past,
+   and the autoplay proved no unseen route exists. Turn or move the Ghost Fungus (5,7), cut its
+   sight, add cover, or turn the Red Fungus (16,7) — then `npm run autoplay:check` shows whether
+   the sneak finishes, and `autoplay:write` records it.
 
 *(Earlier drafts of this list: H1 shipped in v0.23.0 on 2026-09-20; F2, the streetlights, C1, C4
 and RESTART in v0.24.0 on 2026-09-21; F1 and v0.22.0 on 2026-09-14; Q1 tabled 2026-09-15.)*

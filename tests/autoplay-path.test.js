@@ -2,7 +2,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { pathTo, DIR_CODES } from '../game/autoplay/path.js';
+import { pathTo, cheapestPath, DIR_CODES } from '../game/autoplay/path.js';
 
 const grid = (rows) => (x, y) => rows[y] !== undefined && rows[y][x] === '.';
 const STEP = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
@@ -41,6 +41,31 @@ describe('the autoplay path', () => {
 
     test('ties break the same way every time: up, down, left, right', () => {
         assert.deepEqual(pathTo(grid(['..', '..']), { x: 0, y: 0 }, { x: 1, y: 1 }), ['down', 'right']);
+    });
+
+    test('the cheapest path, with every tile costing 1, is the shortest one', () => {
+        const cost = (x, y) => (grid(['....'])(x, y) ? 1 : Infinity);
+        assert.deepEqual(cheapestPath(cost, { x: 0, y: 0 }, { x: 3, y: 0 }).dirs, ['right', 'right', 'right']);
+    });
+
+    test('it goes the long way round a costly tile, and says what the route cost', () => {
+        const rows = ['.....', '.###.', '.....'];
+        const cost = (x, y) => (!grid(rows)(x, y) ? Infinity : x === 2 && y === 0 ? 40 : 1);
+        const p = cheapestPath(cost, { x: 0, y: 0 }, { x: 4, y: 0 });
+        assert.equal(p.dirs[0], 'down');
+        assert.equal(p.cost, 8);
+        assert.deepEqual(p.tiles.at(-1), { x: 4, y: 0 });
+    });
+
+    test('it takes a costly tile when there is no other way', () => {
+        const cost = (x, y) => (!grid(['.....'])(x, y) ? Infinity : x === 2 ? 40 : 1);
+        assert.equal(cheapestPath(cost, { x: 0, y: 0 }, { x: 4, y: 0 }).cost, 43);
+    });
+
+    test('unreachable is null, already there is empty', () => {
+        const cost = (x, y) => (grid(['.#.'])(x, y) ? 1 : Infinity);
+        assert.equal(cheapestPath(cost, { x: 0, y: 0 }, { x: 2, y: 0 }), null);
+        assert.deepEqual(cheapestPath(cost, { x: 0, y: 0 }, { x: 0, y: 0 }), { dirs: [], tiles: [], cost: 0 });
     });
 
     test('every direction is a key the game walks on', () => {

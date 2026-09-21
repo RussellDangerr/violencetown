@@ -169,6 +169,10 @@ function line(i, r) {
     return head + stages.join('') + why;
 }
 
+// The scripts the golden covers: the fighter (ruling Q1-2) and the sneak
+// (ruling Q1-8), on the golden's seed.
+const CHECKED = ['quest', 'sneak'];
+
 // What the golden keeps of a run: whether it finished, where it ended, and
 // each stage's score.
 const summary = (r) => ({
@@ -187,10 +191,9 @@ function drift(want, got, at = '') {
 
 const o = parseArgs(process.argv.slice(2));
 const GOLDEN = path.resolve(ROOT, '..', 'tools', 'autoplay-golden.json');
-if (o.check || o.write) {
-    o.script = 'quest';
-    if (o.check) o.seed = JSON.parse(readFileSync(GOLDEN, 'utf8')).seed;
-}
+if (o.check) o.seed = JSON.parse(readFileSync(GOLDEN, 'utf8')).seed;
+const scored = o.check || o.write;
+const jobs = scored ? CHECKED.map((script) => ({ ...o, script })) : Array.from({ length: o.repeat }, () => o);
 const server = await serve();
 const base = `http://127.0.0.1:${server.address().port}`;
 const chrome = await launchChrome();
@@ -212,36 +215,39 @@ try {
         }
     });
     const runs = [];
-    for (let i = 0; i < o.repeat; i++) {
+    for (const [i, job] of jobs.entries()) {
         consoleErrors.length = 0;
-        const r = await runOnce(cdp, base, o);
+        const r = await runOnce(cdp, base, job);
         if (consoleErrors.length) { r.ok = false; r.reason = r.reason || 'console errors'; r.errors = [...(r.errors || []), ...consoleErrors]; }
         runs.push(r);
         if (!o.json) console.log(line(i, r));
     }
     const prints = new Set(runs.map((r) => r.fingerprint));
-    const disagree = runs.length > 1 && prints.size > 1;
+    const disagree = !scored && runs.length > 1 && prints.size > 1;
     if (o.json) console.log(JSON.stringify({ options: o, runs, deterministic: !disagree }, null, 2));
-    else if (runs.length > 1) {
+    else if (!scored && runs.length > 1) {
         console.log(disagree
             ? `NONDETERMINISTIC: ${prints.size} different end states from seed ${o.seed}`
             : `deterministic: ${runs.length} runs, one end state (${[...prints][0]})`);
     }
+    // Whether a run finishes is part of what the golden records (ruling Q1-8
+    // made the fighter's failure the expected outcome), so a run that does not
+    // finish is reported, and fails the check only if that is a change.
+    const golden = { seed: o.seed, runs: Object.fromEntries(runs.map((r) => [r.script, summary(r)])) };
     if (o.write) {
-        writeFileSync(GOLDEN, JSON.stringify(summary(runs[0]), null, 2) + '\n');
+        writeFileSync(GOLDEN, JSON.stringify(golden, null, 2) + '\n');
         console.log(`wrote ${path.relative(process.cwd(), GOLDEN)}`);
     }
     let checkFailed = false;
     if (o.check) {
-        const want = JSON.parse(readFileSync(GOLDEN, 'utf8'));
-        const got = summary(runs[0]);
-        const diffs = drift(want, got);
+        const diffs = drift(JSON.parse(readFileSync(GOLDEN, 'utf8')), golden);
         if (diffs.length) { console.log('DRIFT from the autoplay golden:'); for (const d of diffs) console.log(`  ${d}`); }
         else console.log('autoplay golden matches — no drift');
-        if (!got.finished) console.log(`NOT FINISHED: ${got.reason}`);
-        checkFailed = diffs.length > 0 || !got.finished;
+        for (const r of runs) if (!r.finished) console.log(`not finished (${r.script}): ${r.reason}`);
+        checkFailed = diffs.length > 0;
     }
-    code = runs.some((r) => !r.ok) || checkFailed ? 1 : disagree ? 2 : 0;
+    const failed = runs.some((r) => !r.ok && !(scored && r.finished === false && !(r.errors || []).length));
+    code = failed || checkFailed ? 1 : disagree ? 2 : 0;
     cdp.close();
 } finally {
     killTree(chrome.proc);

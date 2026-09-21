@@ -7,11 +7,12 @@
 import { FRAME_MS } from './clock.js';
 import { pathTo, DIR_CODES } from './path.js';
 import { fingerprint } from './fingerprint.js';
-import { decide, KNOBS } from './player.js';
+import { decide, FIGHTER, SNEAK } from './player.js';
 import { ROUTES } from './route.js';
 import { QUESTS } from '../quests.js';
 import { isHostile } from '../ai.js';
 import { selectedNode, activeRing } from '../wheel-model.js';
+import { perceives, VERDICT } from '../perception.js';
 
 export const SCRIPTS = {
     // Quest 1's first stage. The car sits in a wall block with no open tile
@@ -23,8 +24,10 @@ export const SCRIPTS = {
         expect: (g) => (g.questEngine.state.activeId === 'fix_car' && g.questEngine.state.stageIndex >= 1)
             ? null : 'quest 1 is still waiting on examine_car',
     },
-    // All of quest 1, played by the standard fighter.
-    quest: { route: 'fix_car' },
+    // All of quest 1, played by the standard fighter (ruling Q1-2)...
+    quest: { route: 'fix_car', knobs: FIGHTER },
+    // ...and by the sneak, the way ruling Q1-8 says the Fungus King is passed.
+    sneak: { route: 'fix_car', knobs: SNEAK },
 };
 
 const KEY = { KeyE: 'e', KeyT: 't', KeyD: 'd', Space: ' ' };
@@ -58,7 +61,7 @@ export async function run(ap) {
         await d.settle();
         await g._fullReset({ seed: ap.opts.seed });
         await d.settle();
-        outcome = script.route ? await d.playRoute(script.route) : await d.playOps(script);
+        outcome = script.route ? await d.playRoute(script.route, script.knobs) : await d.playOps(script);
     } catch (e) {
         outcome = { ...outcome, failure: String((e && e.stack) || e) };
     }
@@ -106,10 +109,17 @@ async function waitForGame(ap) {
 }
 
 // The game as the player sees it — plain data and lookups, so player.js
-// stays pure.
+// stays pure. seenAt asks the enemies' own question (perception.js), so the
+// sneak hides from exactly what the AI would see.
+const RANK = { [VERDICT.NONE]: 0, [VERDICT.PERIPHERAL]: 1, [VERDICT.DIRECT]: 2 };
 function view(g) {
     const m = g.map;
+    const watchers = g.enemies.filter((e) => e.entity.isAlive() && isHostile(e));
     return {
+        seenAt: (x, y) => watchers.reduce((worst, w) => {
+            const v = perceives(m, w, x, y);
+            return RANK[v] > RANK[worst] ? v : worst;
+        }, VERDICT.NONE),
         mapUrl: g._mapUrl, width: m.width, height: m.height,
         player: { x: g.playerX, y: g.playerY },
         hp: g.playerHp, maxHp: g.playerMaxHp,
@@ -118,7 +128,8 @@ function view(g) {
         tileAt: (x, y) => m.getTile(x, y),
         transitions: (m.transitions || []).map((t) => ({ x: t.x, y: t.y, toMap: t.toMap })),
         enemies: g.enemies.filter((e) => e.entity.isAlive())
-            .map((e) => ({ x: e.x, y: e.y, hp: e.entity.hp, hostile: isHostile(e), tag: e.tag || null })),
+            .map((e) => ({ x: e.x, y: e.y, hp: e.entity.hp, hostile: isHostile(e), tag: e.tag || null,
+                           aware: e.state === 'chasing' || e.state === 'searching' })),
         items: g.groundItems.map((i) => ({ type: i.type, x: i.x, y: i.y })),
         containers: (g.containers || []).map((c) => ({ x: c.x, y: c.y })),
         inventory: g.inventory.filter(Boolean).map((s) => s.itemDef.id),
@@ -247,7 +258,7 @@ function driver(ap, g) {
     // The standard fighter plays `name` until the quest completes, a stage runs
     // out of turns, the player dies MAX_DEATHS times, or it is stopped. Each
     // stage is scored as it is played.
-    async function playRoute(name) {
+    async function playRoute(name, knobs = FIGHTER) {
         const quest = QUESTS[name], route = ROUTES[name], q = g.questEngine;
         const stages = [];
         let cur = null, waits = 0;
@@ -273,12 +284,13 @@ function driver(ap, g) {
             const goals = route[stageId];
             if (!goals) return result(`no route for stage ${stageId}`);
 
-            const a = decide(view(g), goals, KNOBS);
+            const a = decide(view(g), goals, knobs);
             if (a.kind === 'wait' && ++waits > MAX_WAITS) return result(`${stageId}: stuck — ${a.why}`);
             if (a.kind !== 'wait') waits = 0;
             const hp = g.playerHp, died = deaths;
             trace.push(`t${g.turn} ${g._mapUrl.replace('-map.json', '')} ${g.playerX},${g.playerY} hp${hp} ${a.kind}`
-                + (a.dir ? ` ${a.dir}` : '') + (a.at ? ` @${a.at.x},${a.at.y}` : '') + (a.why ? ` (${a.why})` : ''));
+                + (a.dir ? ` ${a.dir}` : '') + (a.at ? ` @${a.at.x},${a.at.y}` : '')
+                + (a.exposure && a.exposure !== 'unseen' ? ` [${a.exposure}]` : '') + (a.why ? ` (${a.why})` : ''));
             const failure = await act(a);
             if (failure) return result(`${stageId}: ${failure}`);
             if (deaths > died) { cur.deaths += deaths - died; cur.hpLost += hp; }

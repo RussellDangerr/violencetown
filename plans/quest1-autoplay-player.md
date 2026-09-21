@@ -1,5 +1,63 @@
 # Quest-1 Autoplay — Stages 4-6 Implementation Plan (the player, the record, watch mode)
 
+> **Addendum, 2026-09-21 — ruling Q1-8: "Sneaking."** Stages 4-6 below were built as written, and
+> the standard fighter cannot finish quest 1 (it dies to the Fungus King on seeds 1-5). Caelan
+> ruled the fight stays: the King is meant to be got past by sneaking. So a second profile, **the
+> sneak**, joins the fighter, and the golden covers both. The design:
+>
+> - **One knob, `sneak`.** `FIGHTER = { healBelow: 0.4, sneak: false }` (unchanged),
+>   `SNEAK = { healBelow: 0.4, sneak: true }`. Scripts `quest` (fighter) and `sneak`.
+> - **It sees what the enemies see.** The view gains `seenAt(x, y)`: the worst verdict any living
+>   hostile holds on that tile, from the game's own `perception.js perceives()` — DIRECT (cone),
+>   PERIPHERAL (flank; two beats of it turn them), NONE (behind). And each enemy's `aware`
+>   (`state` chasing or searching).
+> - **It walks the least-seen route.** A weighted path (`path.js cheapestPath`): a hidden tile
+>   costs 1 step, a flank tile 4, a tile in someone's cone 40. The step records the worst sight
+>   on its route (`exposure`: unseen / glimpsed / seen). *As first built this was three
+>   all-or-nothing passes — only hidden tiles, then no cones, then anything — and it made exactly
+>   the fighter's moves: the tiles beside the boss are always watched, so the first two passes
+>   never arrived and every route fell through to "anything". Weighting fixed it.*
+> - **It picks no fights.** Beside an unaware hostile it walks on; it fights back only once seen
+>   (`aware`), and always hits the quarry.
+> - **The golden covers both profiles.** `--write` / `--check` run `quest` and `sneak` on the
+>   golden's seed. Whether a run finishes is part of what the golden records — the fighter's
+>   failure is now the expected, ruled outcome — so drift in anything, `finished` included, fails
+>   the check; a run that did not finish is reported but is not by itself an error.
+> - **Unknown until it runs:** whether an unseen route to the Wererat exists at all. Read from the
+>   map, the Red Fungus at (16,7) overlooks the tiles north of the boss, and the boss's own cone
+>   covers the south. If the sneak cannot finish either, that is the next finding, not something
+>   to engineer around.
+>
+> Tests first for every rule above, in `tests/autoplay-player.test.js`.
+>
+> **Result, 2026-09-21: the sneak cannot finish either — and the map says why.** It takes a new
+> route (the northern loop, behind the Red Fungus, down on the Wererat's blind side), but the Ghost
+> Fungus spots it at the entrance, the fight costs ~80 HP, and it dies three times, last to the
+> Fungus King. Measured with the game's own `perceives()` on the sewer as it loads, from the
+> entrance (1,10): moving only through hidden tiles reaches **2** tiles; allowing flank tiles,
+> **4**. The Ghost Fungus (5,7; sight 12, facing south) holds a cone over every way east,
+> including column 5 of the south corridor (rows 13-17); every open tile beside the Wererat is in
+> the Red Fungus's (16,7) cone. **There is no unseen route through quest 1 as the map is built.**
+> That is ruling Q1-9 (spec §7), not something for the autoplay to route around.
+>
+> **What-if, measured, map not changed** (facings set in memory for the static analysis, then as
+> a temporary `"facing": "N"` edit for real runs, restored from git after):
+>
+> | Change | Hidden tiles from the entrance | Beside the Wererat |
+> |---|---|---|
+> | as built | 2 | none |
+> | Ghost Fungus (5,7) faces N | 133 | none — the sentry at (16,7) still covers it |
+> | sentry Red Fungus (16,7) faces N | 2 | none — the Ghost still seals the entrance |
+> | **both face N** | 130 | (17,9) hidden; (16,10), (18,10) by the flank |
+>
+> With both turned, the sneak reaches the Wererat unseen on seeds 1-3 — and loses the fight: it
+> strikes the moment the boss is adjacent, which on its route is the diagonal (16,9), behind it.
+> From behind the boss fights back (12 a turn), funds its allies ("Wererat pays 7 GP — Red Fungus
+> straightens up"), and the sword does 4. Three deaths each, last to the Wererat. The sneak was
+> deliberately not taught to strike only from the flank: from the side the boss never reacts at
+> all (12 hits, measured), which looks like a loophole in the awareness ladder rather than a
+> tactic to build a player around. Both are Caelan's calls (Q1-9).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** The standard fighter plays quest 1 end to end on its own — or fails in a way that names why — and every run is scored against a committed golden, watchable at a chosen speed, and capturable as a GIF.

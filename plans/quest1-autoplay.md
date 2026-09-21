@@ -201,9 +201,22 @@ with trusted input from the DevTools protocol, because the hidden Browser pane c
 - ~~**Can the standard fighter beat the Wererat?**~~ **Answered, 2026-09-21: it never reaches
   it.** It dies to the Fungus King on every seed tried (§6). One more measured fact for that
   ruling: hit from the side, the Wererat stays `suspicious` — 12 hits, no attack back, no heal.
-  Whether that is stealth working or a loophole is Caelan's call too. **Open ruling Q1-8:** tune
-  the fight, give the standard profile a smarter skill (pick up food, wear the sewer armour, use
-  Fireball), or keep the finding as the game's intent.
+  Whether that is stealth working or a loophole is Caelan's call too. **Ruling Q1-8 (Caelan,
+  2026-09-21): "Sneaking."** The fight stays; the King is meant to be got past by sneaking. The
+  autoplay gained a sneak profile that routes by the enemies' own `perceives()`
+  (`plans/quest1-autoplay-player.md`, addendum) — and found there is **no unseen route**: from
+  the entrance, hidden tiles reach 2 tiles, flank tiles 4; the Ghost Fungus's cone covers every
+  way east and the Red Fungus's covers every tile beside the Wererat. The sneak dies three times
+  too. **Open ruling Q1-9, in two parts** (the measured what-if table is in the player plan's
+  addendum):
+  1. **The route.** Turning ONE fungus does nothing; turning **both** the Ghost Fungus (5,7) and
+     the sentry Red Fungus (16,7) to face north (`"facing": "N"` on each spawn — `enemies.js`
+     already reads it) opens a hidden route to (17,9), behind the Wererat. Or move / re-sight them.
+  2. **The boss fight once you're there.** From behind, the Wererat fights back and wins (sword 4
+     a hit, it 12 a turn, and it pays its allies to heal). From the side it never reacts at all —
+     12 hits, measured, still `suspicious`. Is that the intended stealth kill, or a hole in the
+     awareness ladder (a suspicious enemy seen from the flank never escalates)?
+  Whatever is ruled, the golden will show it: the sneak's `finished` flipping is drift.
 - ~~**Overriding `localStorage` in the page.**~~ **Settled:** `boot.js` overrides
   `Storage.prototype`'s methods with a memory store. Proved both ways in the running game: a run
   autosaved (turn 11) into memory, and the port's real `localStorage` held no save afterwards.
