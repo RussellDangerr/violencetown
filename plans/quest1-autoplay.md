@@ -158,6 +158,32 @@ The same seed also ended on `68ed5a69` in two Browser-pane runs — a second bro
 pane whose own animation frames were frozen. The control is what makes the first row mean
 something: the check demonstrably fails when time is not owned.
 
+**Stages 4-6 BUILT 2026-09-21** (`plans/quest1-autoplay-player.md`). `npm run autoplay:check`
+plays quest 1 with the standard fighter and scores it against `tools/autoplay-golden.json`;
+`--speed=N` paces it for watching; `--gif=out.gif` records it. **The verdict, seeds 1-5:**
+
+| Seed | examine_car | recover_converter | Ended |
+|---|---|---|---|
+| 1 | 12 turns | 75 turns · 22 hits · -150 HP · 3 deaths | died 3 times, last to the Fungus King |
+| 2 | 12 | 104 · 24 hits · 3 deaths | same |
+| 3 | 12 | 84 · 24 hits · 3 deaths | same |
+| 4 | 12 | 84 · 24 hits · 3 deaths | same |
+| 5 | 12 | 67 · 27 hits · 3 deaths | same |
+
+**The standard fighter as ruled cannot finish quest 1.** It never carries food (its route never
+crosses any, and the ruled profile does not go looking), fights the Ghost Fungus on the way in,
+and meets the Fungus King in the hall. The wooden sword does 4 a hit through the King's armour 6,
+the King does 12 a turn, and after each defeat the Wererat's Law-5 gold heals the King
+("Wererat pays 16 GP — Fungus King straightens up"). The check records this honestly: it exits 1,
+NOT FINISHED, with no drift. A balance change is visible: the sword at 12 instead of 10 moved the
+stage from 75 turns to 53 and 22 hits to 19, flagged field by field — and the King still won.
+
+Found while building, all fixed with the fix recorded in its commit: deaths on a step went
+uncounted (a step's world turn runs after its slide); a turn-in-place gave a passer-by time to walk
+into the next tile, and stepping into them opened their trade; walking into a chest opens it.
+Watch pacing had to be measured against the real clock, not slept per frame. The stop key was proved
+with trusted input from the DevTools protocol, because the hidden Browser pane could not send one.
+
 ## 7. Rulings — all ruled as recommended, 2026-09-21
 
 | # | Question | Ruled | Why |
@@ -172,9 +198,12 @@ something: the check demonstrably fails when time is not owned.
 
 ## 8. Unknowns to settle while building, not before
 
-- **Can the standard fighter beat the Wererat?** Unknown. If a plain Hit-and-heal player loses,
-  that is the autoplay's first balance finding, and the ruling is Caelan's (tune the fight, or
-  give the profile a smarter skill).
+- ~~**Can the standard fighter beat the Wererat?**~~ **Answered, 2026-09-21: it never reaches
+  it.** It dies to the Fungus King on every seed tried (§6). One more measured fact for that
+  ruling: hit from the side, the Wererat stays `suspicious` — 12 hits, no attack back, no heal.
+  Whether that is stealth working or a loophole is Caelan's call too. **Open ruling Q1-8:** tune
+  the fight, give the standard profile a smarter skill (pick up food, wear the sewer armour, use
+  Fireball), or keep the finding as the game's intent.
 - ~~**Overriding `localStorage` in the page.**~~ **Settled:** `boot.js` overrides
   `Storage.prototype`'s methods with a memory store. Proved both ways in the running game: a run
   autosaved (turn 11) into memory, and the port's real `localStorage` held no save afterwards.
