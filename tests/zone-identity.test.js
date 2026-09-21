@@ -115,6 +115,33 @@ describe('town streetlights', () => {
     test('the one-cell lamp tile is retired', () => {
         assert.equal(TILES.STREETLIGHT, undefined);
     });
+
+    // A lamp that does not light anything is a post. Town's `lights` list used to
+    // carry five authored pools at the map's corners and NONE at any of the four
+    // streetlights, so after dusk the lamps stood dark while the corners glowed.
+    //
+    // Pinned as a rule, not as coordinates, so moving a lamp moves its light: a
+    // streetlight is a 1x2 prop anchored at its base, and its light must sit
+    // somewhere in the two cells it occupies. Shipped at base - 0.5 (the post's
+    // midpoint) because base put the lamp on the top rim of its own pool, as if
+    // the glow rose from the ground, and the head threw most of the light onto
+    // the wall behind instead of the road you walk on.
+    test('every streetlight actually lights something', () => {
+        const lights = map.lights || [];
+        for (const lamp of lamps) {
+            const lit = lights.some(L => L.x === lamp.x && L.y > lamp.y - 1.01 && L.y <= lamp.y);
+            assert.ok(lit, `the streetlight at (${lamp.x}, ${lamp.y}) has no light on it`);
+        }
+    });
+
+    test('a lamp light is warm and reaches past its own tile', () => {
+        const lights = (map.lights || []).filter(L => lamps.some(p => p.x === L.x && L.y > p.y - 1.01 && L.y <= p.y));
+        assert.equal(lights.length, lamps.length, 'expected one light per lamp');
+        for (const L of lights) {
+            assert.ok(L.radius >= 2, `a lamp light with radius ${L.radius} would not reach the road`);
+            assert.ok(L.r > L.b, 'a streetlight is warm — red should lead blue');
+        }
+    });
 });
 
 // ── Item 3, circus bonus: tents ────────────────────────────────────────────
