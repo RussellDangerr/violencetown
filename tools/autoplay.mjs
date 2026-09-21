@@ -1,0 +1,189 @@
+#!/usr/bin/env node
+// autoplay.mjs — run the autoplay headless (plans/quest1-autoplay.md §5.1).
+//
+//   node tools/autoplay.mjs [--seed=1] [--script=car] [--repeat=1] [--jitter] [--clock=real] [--json] [--timeout=120000]
+//
+// Serves game/ itself, drives the installed Chrome over the DevTools protocol
+// (Node's built-in WebSocket — no dependencies), and prints one line per run.
+// With --repeat, every run of the seed must end in the same state.
+// Exit: 0 ok · 1 a run failed · 2 runs of one seed disagreed · 3 no Chrome.
+
+import http from 'node:http';
+import { spawn, spawnSync } from 'node:child_process';
+import { readFile, mkdtemp, rm } from 'node:fs/promises';
+import { existsSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'game');
+const MIME = {
+    '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.css': 'text/css',
+    '.png': 'image/png', '.svg': 'image/svg+xml', '.ttf': 'font/ttf', '.webmanifest': 'application/manifest+json',
+    '.ico': 'image/x-icon', '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg',
+};
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function parseArgs(argv) {
+    const o = { seed: 1, script: 'car', repeat: 1, jitter: false, clock: 'virtual', json: false, timeout: 120000 };
+    for (const a of argv) {
+        const [k, v] = a.replace(/^--/, '').split('=');
+        if (k === 'seed' || k === 'repeat' || k === 'timeout') o[k] = Number(v);
+        else if (k === 'script' || k === 'clock') o[k] = v;
+        else if (k === 'jitter' || k === 'json') o[k] = true;
+        else throw new Error(`unknown option ${a}`);
+    }
+    return o;
+}
+
+function serve() {
+    const server = http.createServer(async (req, res) => {
+        let rel = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+        if (rel.endsWith('/')) rel += 'index.html';
+        const file = path.join(ROOT, rel);
+        if (!file.startsWith(ROOT)) { res.writeHead(403).end(); return; }
+        try {
+            const body = await readFile(file);
+            res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-store' });
+            res.end(body);
+        } catch {
+            res.writeHead(404).end();
+        }
+    });
+    return new Promise((r) => server.listen(0, '127.0.0.1', () => r(server)));
+}
+
+const CHROMES = [
+    process.env.CHROME_PATH,
+    'C:/Program Files/Google/Chrome/Application/chrome.exe',
+    'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
+    process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'Google/Chrome/Application/chrome.exe'),
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser',
+].filter(Boolean);
+
+async function launchChrome() {
+    const exe = CHROMES.find((p) => existsSync(p));
+    if (!exe) return null;
+    const profile = await mkdtemp(path.join(tmpdir(), 'vt-autoplay-'));
+    const proc = spawn(exe, [
+        '--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`,
+        '--no-first-run', '--no-default-browser-check', '--mute-audio', '--window-size=1280,900', 'about:blank',
+    ], { stdio: 'ignore' });
+    const portFile = path.join(profile, 'DevToolsActivePort');
+    for (let i = 0; i < 300; i++) {
+        const port = existsSync(portFile) ? Number(readFileSync(portFile, 'utf8').split('\n')[0]) : 0;
+        if (port > 0) return { proc, profile, port };
+        await sleep(50);
+    }
+    killTree(proc);
+    throw new Error('Chrome never opened its DevTools port');
+}
+
+// Chrome is a process tree; on Windows, killing the parent leaves children
+// holding the profile directory open.
+function killTree(proc) {
+    if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { stdio: 'ignore' });
+    else proc.kill('SIGKILL');
+}
+
+async function connect(port) {
+    const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
+    const page = targets.find((t) => t.type === 'page');
+    if (!page) throw new Error('Chrome has no page to drive');
+    const ws = new WebSocket(page.webSocketDebuggerUrl);
+    await new Promise((resolve, reject) => { ws.onopen = resolve; ws.onerror = reject; });
+    let id = 0;
+    const waiting = new Map();
+    const listeners = new Set();
+    ws.onmessage = (m) => {
+        const msg = JSON.parse(m.data);
+        if (msg.id && waiting.has(msg.id)) {
+            const { resolve, reject } = waiting.get(msg.id);
+            waiting.delete(msg.id);
+            if (msg.error) reject(new Error(msg.error.message)); else resolve(msg.result);
+        } else {
+            for (const l of listeners) l(msg);
+        }
+    };
+    const send = (method, params = {}) => new Promise((resolve, reject) => {
+        const i = ++id;
+        waiting.set(i, { resolve, reject });
+        ws.send(JSON.stringify({ id: i, method, params }));
+    });
+    const once = (method) => new Promise((resolve) => {
+        const l = (m) => { if (m.method === method) { listeners.delete(l); resolve(m.params); } };
+        listeners.add(l);
+    });
+    return { send, once, on: (l) => listeners.add(l), close: () => ws.close() };
+}
+
+async function runOnce(cdp, base, o) {
+    const q = new URLSearchParams({ autoplay: '1', seed: String(o.seed), script: o.script });
+    if (o.clock === 'real') q.set('clock', 'real');
+    if (o.jitter) q.set('jitter', '1');
+    const loaded = cdp.once('Page.loadEventFired');
+    await cdp.send('Page.navigate', { url: `${base}/?${q}` });
+    await loaded;
+    const evaluation = cdp.send('Runtime.evaluate', {
+        expression: 'window.__autoplay ? window.__autoplay.done : { ok: false, reason: "boot.js never installed" }',
+        awaitPromise: true, returnByValue: true,
+    });
+    const out = await Promise.race([evaluation, sleep(o.timeout).then(() => null)]);
+    if (!out) return { ok: false, reason: `no result in ${o.timeout} ms` };
+    if (out.exceptionDetails) return { ok: false, reason: out.exceptionDetails.text };
+    return out.result.value;
+}
+
+function line(i, r) {
+    const where = r.quest ? `quest ${r.quest.id}#${r.quest.stage} at ${r.at.map} ${r.at.x},${r.at.y}` : '';
+    const time = r.virtualMs != null ? `virtual ${r.virtualMs} ms, real ${r.realMs} ms` : `real ${r.realMs} ms`;
+    return `run ${i + 1}: ${r.ok ? 'ok  ' : 'FAIL'} seed ${r.seed} ${r.script} · ${where} · turn ${r.turn} · ${time} · ${r.fingerprint}`
+        + (r.ok ? '' : `\n  ${r.reason}${(r.errors || []).length ? '\n  ' + r.errors.join('\n  ') : ''}`);
+}
+
+const o = parseArgs(process.argv.slice(2));
+const server = await serve();
+const base = `http://127.0.0.1:${server.address().port}`;
+const chrome = await launchChrome();
+if (!chrome) {
+    console.error('autoplay: no Chrome found — set CHROME_PATH');
+    server.close();
+    process.exit(3);
+}
+
+let code = 0;
+try {
+    const cdp = await connect(chrome.port);
+    await cdp.send('Page.enable');
+    await cdp.send('Runtime.enable');
+    const consoleErrors = [];
+    cdp.on((m) => {
+        if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') {
+            consoleErrors.push(m.params.args.map((a) => a.value ?? a.description).join(' '));
+        }
+    });
+    const runs = [];
+    for (let i = 0; i < o.repeat; i++) {
+        consoleErrors.length = 0;
+        const r = await runOnce(cdp, base, o);
+        if (consoleErrors.length) { r.ok = false; r.reason = r.reason || 'console errors'; r.errors = [...(r.errors || []), ...consoleErrors]; }
+        runs.push(r);
+        if (!o.json) console.log(line(i, r));
+    }
+    const prints = new Set(runs.map((r) => r.fingerprint));
+    const disagree = runs.length > 1 && prints.size > 1;
+    if (o.json) console.log(JSON.stringify({ options: o, runs, deterministic: !disagree }, null, 2));
+    else if (runs.length > 1) {
+        console.log(disagree
+            ? `NONDETERMINISTIC: ${prints.size} different end states from seed ${o.seed}`
+            : `deterministic: ${runs.length} runs, one end state (${[...prints][0]})`);
+    }
+    code = runs.some((r) => !r.ok) ? 1 : disagree ? 2 : 0;
+    cdp.close();
+} finally {
+    killTree(chrome.proc);
+    server.close();
+    await rm(chrome.profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }).catch(() => {});
+}
+process.exit(code);
