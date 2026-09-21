@@ -59,6 +59,36 @@ export const STATE = {
 // every non-ambient Enemy from enemies.js::resolveEnemyTurns, dispatched by
 // allegiance; also for neutrals on the world heartbeat (resolveAmbientTurns).
 
+// Law 6f: reach into its own pack for what its hurt calls for, use it, report
+// it. Returns true if it used something — which is the whole turn. Shared by
+// the chase and by a struck enemy's reaction.
+//
+// Weapons-first resolution mirrors Game._resolveItemDef: a loadout may
+// legally hold a weapon and a bare ITEMS lookup silently drops it.
+// Collapses onto item-registry.js's resolveItemDef when the offer
+// screen lands.
+function useKit(npc, messages) {
+    const kitDefs = (npc.loadout ?? []).map(
+        x => (typeof x === 'string' ? (WEAPONS[x] || ITEMS[x] || null) : x));
+    const dweller = isSewerDweller(npc);
+    const pick = kitChoice(
+        npc.entity.hp, npc.entity.maxHp, kitDefs,
+        (d) => kitHealValue(d, dweller),
+        (npc.buffs ?? []).some(b => (b.dmg ?? 0) < 0));   // already regenerating?
+    // `heal` on a report is the HP it actually gave (0 for a poition, whose
+    // heal arrives tick by tick); main.js floats it over whoever it healed.
+    const hpBeforeKit = npc.entity.hp;
+    if (!pick || !applyKitItem(pick.def, npc, dweller)) return false;
+    npc.loadout = (npc.loadout ?? []).filter((_, i) => i !== pick.index);
+    messages.push({
+        text: `[${npc.name ?? npc.type} digs out ${pick.def.name} and uses it.]`,
+        sourceEnemy: npc,
+        category: 'combat',
+        heal: npc.entity.hp - hpBeforeKit,
+    });
+    return true;
+}
+
 export function tickNpcState(game, npc, clock = game.turn) {
     // Lazy initialization — pick a starting state. Allegiance decides first
     // (a born-hostile with null `behavior` has no whitelist to read); otherwise
@@ -173,6 +203,7 @@ export function tickNpcState(game, npc, clock = game.turn) {
             const verdict = perceives(game.map, npc, game.playerX, game.playerY);
             const canSeePlayer = verdict === VERDICT.DIRECT;
             if (canSeePlayer) {
+                npc._struckBy = null;            // seeing you settles where the blow came from
                 npc._lostSightTurns = 0;
                 npc._awareBeats = 0;             // a real sighting outranks any accrued suspicion
                 npc._sweepBeats = 0;
@@ -200,6 +231,26 @@ export function tickNpcState(game, npc, clock = game.turn) {
                 // consumer yet. It only applies to a searcher with NO last-seen
                 // mark, which today only a theft can produce — so it wires up with
                 // the Thieve verb, not here.
+                // Struck (perception.js struck): it knows where the blow came
+                // from. Hurt, it may use its kit first and remember the blow; then
+                // it turns to face it, and turning is the turn.
+                if (npc._struckBy) {
+                    if (useKit(npc, messages)) break;
+                    const blow = npc._struckBy;
+                    npc._struckBy = null;
+                    npc._lastDx = Math.sign(blow.x - npc.x);
+                    npc._lastDy = Math.sign(blow.y - npc.y);
+                    npc._lastSeenX = blow.x;
+                    npc._lastSeenY = blow.y;
+                    npc.state = 'suspicious';
+                    npc._awareBeats = 0;
+                    messages.push({
+                        text: `[${npc.entity.name} turns to face you!]`,
+                        sourceEnemy: npc,
+                        category: 'spotted',
+                    });
+                    break;
+                }
                 const before = npc.state;
                 const t = nextAwareness(npc, verdict, { x: game.playerX, y: game.playerY });
                 npc.state       = t.state;
@@ -335,30 +386,7 @@ export function tickNpcState(game, npc, clock = game.turn) {
             // drop as it eats and Law 6f's "the unused kit drops on death" finally
             // means something, because some of it got used.
             //
-            // Weapons-first resolution mirrors Game._resolveItemDef: a loadout may
-            // legally hold a weapon and a bare ITEMS lookup silently drops it.
-            // Collapses onto item-registry.js's resolveItemDef when the offer
-            // screen lands.
-            const kitDefs = (npc.loadout ?? []).map(
-                x => (typeof x === 'string' ? (WEAPONS[x] || ITEMS[x] || null) : x));
-            const dweller = isSewerDweller(npc);
-            const pick = kitChoice(
-                npc.entity.hp, npc.entity.maxHp, kitDefs,
-                (d) => kitHealValue(d, dweller),
-                (npc.buffs ?? []).some(b => (b.dmg ?? 0) < 0));   // already regenerating?
-            // `heal` on a report is the HP it actually gave (0 for a poition, whose
-            // heal arrives tick by tick); main.js floats it over whoever it healed.
-            const hpBeforeKit = npc.entity.hp;
-            if (pick && applyKitItem(pick.def, npc, dweller)) {
-                npc.loadout = (npc.loadout ?? []).filter((_, i) => i !== pick.index);
-                messages.push({
-                    text: `[${npc.name ?? npc.type} digs out ${pick.def.name} and uses it.]`,
-                    sourceEnemy: npc,
-                    category: 'combat',
-                    heal: npc.entity.hp - hpBeforeKit,
-                });
-                break;   // eating IS the turn
-            }
+            if (useKit(npc, messages)) break;   // eating IS the turn
 
             // Law 5 — BOSSES SPEND, NOT POOL. Carried in the bible since the gold
             // standard and never executed once; the systems audit calls it the most

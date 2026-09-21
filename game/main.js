@@ -75,7 +75,7 @@ const HINT_COOLDOWN_TURNS = 8;
 function writeSeenHints(set) {
     Settings.set('hintsSeen', [...set].join(','));
 }
-import { emitNoise, NOISE, perceives, spotters } from './perception.js'; // sound + sight
+import { emitNoise, NOISE, perceives, spotters, struck } from './perception.js'; // sound + sight
 import { coinTake, kitTake, gearTake, coinWeight, itemWeight, gearWeight,
          noticeBuffer, isClean, stealLimit } from './theft.js';
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
@@ -4559,7 +4559,10 @@ class Game {
     // wheel's offensive verbs actually land on the people around you.
     _onEntityHarmed(target, { kind = 'attack' } = {}) {
         if (!target || !target.entity || !target.entity.isAlive() || target._ally) return;
-        if (isHostile(target)) return;               // already after you — nothing to provoke
+        if (isHostile(target)) {                     // already hostile — nothing to provoke,
+            struck(target, { x: this.playerX, y: this.playerY });   // but it turns to face the blow
+            return;
+        }
         target.allegiance = 'hostile';               // authoritative — routes to the HOSTILE chase (npc.js)
         target.fsmState = 'HOSTILE';
         target.state = 'chasing';                    // aggro now, skip the LOS re-acquire beat

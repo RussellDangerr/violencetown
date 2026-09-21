@@ -37,8 +37,8 @@
       "seed": 1,
       "finished": false,
       "reason": "recover_converter: died 3 times, last to Wererat",
-      "fingerprint": "058338d6",
-      "turn": 79,
+      "fingerprint": "707ace1d",
+      "turn": 65,
       "deaths": 3,
       "stages": [
         {
@@ -53,11 +53,11 @@
         },
         {
           "id": "recover_converter",
-          "turns": 67,
-          "hpLost": 200,
+          "turns": 53,
+          "hpLost": 150,
           "healed": 0,
           "eats": 0,
-          "attacks": 9,
+          "attacks": 8,
           "deaths": 3,
           "gold": 0
         }
