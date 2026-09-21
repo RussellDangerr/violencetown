@@ -1,12 +1,16 @@
 #!/usr/bin/env node
 // autoplay.mjs — run the autoplay headless (plans/quest1-autoplay.md §5.1).
 //
-//   node tools/autoplay.mjs [--seed=1] [--script=car] [--repeat=1] [--jitter] [--clock=real] [--json] [--timeout=120000]
+//   node tools/autoplay.mjs [--seed=1] [--script=car|quest] [--repeat=1] [--jitter] [--clock=real] [--json] [--timeout=120000]
+//   node tools/autoplay.mjs --check | --write          quest 1 against tools/autoplay-golden.json
+//   node tools/autoplay.mjs --script=quest --speed=3 --gif=run.gif [--frameMs=250]
 //
 // Serves game/ itself, drives the installed Chrome over the DevTools protocol
 // (Node's built-in WebSocket — no dependencies), and prints one line per run.
-// With --repeat, every run of the seed must end in the same state.
-// Exit: 0 ok · 1 a run failed · 2 runs of one seed disagreed · 3 no Chrome.
+// With --repeat, every run of the seed must end in the same state. --speed
+// paces game time to N x real time (0, the default, is as fast as it goes);
+// a --gif needs a watchable speed or the frames skip the story.
+// Exit: 0 ok · 1 a run failed, drifted or did not finish · 2 runs of one seed disagreed · 3 no Chrome.
 
 import http from 'node:http';
 import { spawn, spawnSync } from 'node:child_process';
@@ -131,7 +135,25 @@ async function runOnce(cdp, base, o) {
         expression: 'window.__autoplay ? window.__autoplay.done : { ok: false, reason: "boot.js never installed" }',
         awaitPromise: true, returnByValue: true,
     });
+    const frames = [];
+    let capturing = !!o.gif;
+    const capture = (async () => {
+        while (capturing) {
+            const shot = await cdp.send('Page.captureScreenshot', { format: 'png' }).catch(() => null);
+            if (shot) frames.push(Buffer.from(shot.data, 'base64'));
+            await sleep(o.frameMs);
+        }
+    })();
     const out = await Promise.race([evaluation, sleep(o.timeout).then(() => null)]);
+    capturing = false;
+    await capture;
+    if (o.gif && frames.length) {
+        const dir = await mkdtemp(path.join(tmpdir(), 'vt-frames-'));
+        frames.forEach((f, i) => writeFileSync(path.join(dir, `f${String(i).padStart(5, '0')}.png`), f));
+        const py = spawnSync('python', [path.resolve(ROOT, '..', 'tools', 'frames_to_gif.py'), dir, o.gif, String(o.frameMs)], { encoding: 'utf8' });
+        process.stderr.write(py.stdout || py.stderr || '');
+        await rm(dir, { recursive: true, force: true });
+    }
     if (!out) return { ok: false, reason: `no result in ${o.timeout} ms` };
     if (out.exceptionDetails) return { ok: false, reason: out.exceptionDetails.text };
     return out.result.value;
