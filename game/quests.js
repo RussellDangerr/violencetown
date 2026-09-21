@@ -87,7 +87,13 @@ export const QUESTS = {
         stages: [
             {
                 id: 'examine_car',
-                objective: "Your car won't start - examine it (E)",
+                // Says GO, not just "examine it": the car is eight tiles from spawn and E
+                // reads the tile you face, so the old wording could not be followed from
+                // where you stand. Kept short on purpose — the HUD truncates at
+                // floor(innerW / 8) chars, and "walk to it and examine it (E)" cut to
+                // "...AND EXAMINE~" on a phone, losing the very (E) this line is about.
+                // examine.js points the way when E lands on anything else.
+                objective: "Your car won't start - go examine it (E)",
                 on: { type: 'examine', match: { targetId: 'car' } },
                 // Tolerant: if the player already examined the car before this
                 // stage went active, the 'examine' event was dropped — so
@@ -269,6 +275,15 @@ export class QuestEngine {
         if (!id) return null;
         const stage = QUESTS[id].stages[this.state.stageIndex];
         return stage ? stage.id : null;
+    }
+
+    // The active quest's current stage OBJECT (null if none) — for callers that
+    // need its trigger, not just its id. examine.js reads `on` to point a player
+    // at the thing an 'examine X' stage is waiting for.
+    currentStage() {
+        const id = this.state.activeId;
+        if (!id) return null;
+        return QUESTS[id].stages[this.state.stageIndex] || null;
     }
 
     isActive(id) { return this.state.activeId === id; }
