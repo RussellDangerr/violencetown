@@ -32,6 +32,8 @@
     "balance:write": "node tools/balance-harness.mjs --write",
     "balance:cards": "node tools/balance-harness.mjs --cards",
     "autoplay": "node tools/autoplay.mjs",
+    "autoplay:check": "node tools/autoplay.mjs --check",
+    "autoplay:write": "node tools/autoplay.mjs --write",
     "map:audit": "node -e \"for (const f of require('fs').readdirSync('game').filter(n=>n.endsWith('-map.json'))) require('child_process').execSync(`node tools/map-audit.mjs game/${f}`,{stdio:'inherit'})\""
   }
 }

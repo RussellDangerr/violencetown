@@ -1,0 +1,31 @@
+{
+  "script": "quest",
+  "seed": 1,
+  "finished": false,
+  "reason": "recover_converter: died 3 times, last to Fungus King",
+  "fingerprint": "57a9cdd8",
+  "turn": 87,
+  "deaths": 3,
+  "stages": [
+    {
+      "id": "examine_car",
+      "turns": 12,
+      "hpLost": 0,
+      "healed": 0,
+      "eats": 0,
+      "attacks": 0,
+      "deaths": 0,
+      "gold": 0
+    },
+    {
+      "id": "recover_converter",
+      "turns": 75,
+      "hpLost": 150,
+      "healed": 0,
+      "eats": 0,
+      "attacks": 22,
+      "deaths": 3,
+      "gold": 5
+    }
+  ]
+}

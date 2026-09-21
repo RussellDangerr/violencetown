@@ -11,7 +11,7 @@
 import http from 'node:http';
 import { spawn, spawnSync } from 'node:child_process';
 import { readFile, mkdtemp, rm } from 'node:fs/promises';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,12 +25,13 @@ const MIME = {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function parseArgs(argv) {
-    const o = { seed: 1, script: 'car', repeat: 1, jitter: false, clock: 'virtual', json: false, timeout: 120000 };
+    const o = { seed: 1, script: 'car', repeat: 1, jitter: false, clock: 'virtual', json: false, timeout: 120000,
+                speed: 0, check: false, write: false, gif: null, frameMs: 250 };
     for (const a of argv) {
         const [k, v] = a.replace(/^--/, '').split('=');
-        if (k === 'seed' || k === 'repeat' || k === 'timeout') o[k] = Number(v);
-        else if (k === 'script' || k === 'clock') o[k] = v;
-        else if (k === 'jitter' || k === 'json') o[k] = true;
+        if (['seed', 'repeat', 'timeout', 'speed', 'frameMs'].includes(k)) o[k] = Number(v);
+        else if (k === 'script' || k === 'clock' || k === 'gif') o[k] = v;
+        else if (k === 'jitter' || k === 'json' || k === 'check' || k === 'write') o[k] = true;
         else throw new Error(`unknown option ${a}`);
     }
     return o;
@@ -122,7 +123,7 @@ async function runOnce(cdp, base, o) {
     const q = new URLSearchParams({ autoplay: '1', seed: String(o.seed), script: o.script });
     if (o.clock === 'real') q.set('clock', 'real');
     if (o.jitter) q.set('jitter', '1');
-    q.set('speed', '0');
+    q.set('speed', String(o.speed));
     const loaded = cdp.once('Page.loadEventFired');
     await cdp.send('Page.navigate', { url: `${base}/?${q}` });
     await loaded;
@@ -139,11 +140,35 @@ async function runOnce(cdp, base, o) {
 function line(i, r) {
     const where = r.quest ? `quest ${r.quest.id}#${r.quest.stage} at ${r.at.map} ${r.at.x},${r.at.y}` : '';
     const time = r.virtualMs != null ? `virtual ${r.virtualMs} ms, real ${r.realMs} ms` : `real ${r.realMs} ms`;
-    return `run ${i + 1}: ${r.ok ? 'ok  ' : 'FAIL'} seed ${r.seed} ${r.script} · ${where} · turn ${r.turn} · ${time} · ${r.fingerprint}`
-        + (r.ok ? '' : `\n  ${r.reason}${(r.errors || []).length ? '\n  ' + r.errors.join('\n  ') : ''}`);
+    const head = `run ${i + 1}: ${r.ok ? 'ok  ' : 'FAIL'} seed ${r.seed} ${r.script} · ${where} · turn ${r.turn} · ${time} · ${r.fingerprint}`;
+    const stages = (r.stages || []).map((s) =>
+        `\n  ${s.id.padEnd(18)} ${String(s.turns).padStart(4)} turns · -${s.hpLost} hp · +${s.healed} hp · ${s.eats} eats · ${s.attacks} hits · ${s.deaths} deaths · ${s.gold >= 0 ? '+' : ''}${s.gold} gp`);
+    const why = r.ok ? '' : `\n  ${r.reason}${(r.errors || []).length ? '\n  ' + r.errors.join('\n  ') : ''}`;
+    return head + stages.join('') + why;
+}
+
+// What the golden keeps of a run: whether it finished, where it ended, and
+// each stage's score.
+const summary = (r) => ({
+    script: r.script, seed: r.seed, finished: !!r.finished, reason: r.finished ? null : r.reason,
+    fingerprint: r.fingerprint, turn: r.turn, deaths: r.deaths, stages: r.stages || [],
+});
+
+// Every leaf that differs, as "path: was -> now".
+function drift(want, got, at = '') {
+    if (typeof want !== 'object' || want === null || typeof got !== 'object' || got === null) {
+        return JSON.stringify(want) === JSON.stringify(got) ? [] : [`${at || '(root)'}: ${JSON.stringify(want)} -> ${JSON.stringify(got)}`];
+    }
+    const keys = new Set([...Object.keys(want), ...Object.keys(got)]);
+    return [...keys].flatMap((k) => drift(want[k], got[k], at ? `${at}.${k}` : k));
 }
 
 const o = parseArgs(process.argv.slice(2));
+const GOLDEN = path.resolve(ROOT, '..', 'tools', 'autoplay-golden.json');
+if (o.check || o.write) {
+    o.script = 'quest';
+    if (o.check) o.seed = JSON.parse(readFileSync(GOLDEN, 'utf8')).seed;
+}
 const server = await serve();
 const base = `http://127.0.0.1:${server.address().port}`;
 const chrome = await launchChrome();
@@ -180,7 +205,21 @@ try {
             ? `NONDETERMINISTIC: ${prints.size} different end states from seed ${o.seed}`
             : `deterministic: ${runs.length} runs, one end state (${[...prints][0]})`);
     }
-    code = runs.some((r) => !r.ok) ? 1 : disagree ? 2 : 0;
+    if (o.write) {
+        writeFileSync(GOLDEN, JSON.stringify(summary(runs[0]), null, 2) + '\n');
+        console.log(`wrote ${path.relative(process.cwd(), GOLDEN)}`);
+    }
+    let checkFailed = false;
+    if (o.check) {
+        const want = JSON.parse(readFileSync(GOLDEN, 'utf8'));
+        const got = summary(runs[0]);
+        const diffs = drift(want, got);
+        if (diffs.length) { console.log('DRIFT from the autoplay golden:'); for (const d of diffs) console.log(`  ${d}`); }
+        else console.log('autoplay golden matches — no drift');
+        if (!got.finished) console.log(`NOT FINISHED: ${got.reason}`);
+        checkFailed = diffs.length > 0 || !got.finished;
+    }
+    code = runs.some((r) => !r.ok) || checkFailed ? 1 : disagree ? 2 : 0;
     cdp.close();
 } finally {
     killTree(chrome.proc);
