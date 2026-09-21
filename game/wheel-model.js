@@ -49,6 +49,15 @@ export const ROOT = { key: 'menu', label: 'MENU', children: [
         { key: 'boo', label: 'Boo!', spellId: 'boo', aimType: 'none', resolver: 'castBoo',
           available: (g) => (g.hasSpell ? g.hasSpell('boo') : (g.knownSpells || []).includes('boo')) && (g.playerMp || 0) >= (SPELLS.boo ? SPELLS.boo.mpCost : 0) },
       ] },
+    // Defend: brace for 2 turns, halving incoming damage. It lived under Trick
+    // from the wheel's first commit and was never re-examined — Trick had
+    // become the bucket for everything that isn't hitting or healing. A player
+    // looking for how to protect themselves looks under Fight, so it lives
+    // here now. Appended LAST so Melee / Ranged / Magic keep indices 0 / 1 / 2
+    // and the paths pinned against them (Fight > Melee > Hit) don't move.
+    // Steel rather than a shade of red: it is the one Fight method that is
+    // not an attack, and its wedge should say so at a glance.
+    { key: 'defend', label: 'Defend', color: '#5f7389', text: '#eef3f8', aimType: 'none', resolver: 'guard', available: always },
   ]},
   // Trick — the gold "situational GP" category. Flight (evasion) nests here now (spec §6).
   // (Phase 6a) GIVE was removed from the wheel — handing an item to any NPC now
@@ -56,7 +65,6 @@ export const ROOT = { key: 'menu', label: 'MENU', children: [
   // (applyGive/applyDispositionDelta/applyFlip) stays; only the verb/node died.
   { key: 'trick', label: 'Trick', color: '#cba43c', text: '#2a1f06', children: [
     { key: 'throw',  label: 'Throw',  needsItem: 'throw',  aimType: 'reticle',  resolver: 'resolveThrow', available: always },
-    { key: 'defend', label: 'Defend', aimType: 'none',                       resolver: 'guard',        available: always },
     { key: 'trade',  label: 'Trade',  aimType: 'adjacent',                   resolver: 'trade',        available: always },
     // (perception/theft) Thieve — a transaction with the sign flipped, so it
     // belongs beside Trade rather than under Fight. (The spec said "beside Bribe

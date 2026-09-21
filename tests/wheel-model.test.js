@@ -22,10 +22,21 @@ test('ROOT is Fight / Trick / Treat, in order', () => {
   assert.deepEqual(catKeys(), ['fight', 'trick', 'treat']);
 });
 
-test('Fight → Melee/Ranged/Magic; Melee → Hit/Cleave/Spin', () => {
+test('Fight → Melee/Ranged/Magic/Defend; Melee → Hit/Cleave/Spin', () => {
   const fight = ROOT.children[0];
-  assert.deepEqual(kidKeys(fight), ['melee', 'ranged', 'magic']);
+  assert.deepEqual(kidKeys(fight), ['melee', 'ranged', 'magic', 'defend']);
   assert.deepEqual(kidKeys(fight.children[0]), ['hit', 'cleave', 'spin']);
+});
+
+// (ruled 2026-09-20) Defend sat under Trick from the wheel's first commit, and a
+// nobody hunting for a way to protect themselves thinks to open Trick. It is a
+// Fight method now. Pinned both ways so it cannot drift back into Trick unnoticed,
+// and kept LAST in Fight so the Fight > Melee > Hit paths pinned below don't move.
+test('Defend lives under Fight, not Trick, and last so the Fight indices hold', () => {
+  const [fight, trick] = ROOT.children;
+  assert.ok(!kidKeys(trick).includes('defend'), 'Defend drifted back under Trick');
+  assert.equal(kidKeys(fight).at(-1), 'defend', 'Defend should be the last Fight method');
+  assert.equal(fight.children.at(-1).resolver, 'guard', 'Defend must still brace');
 });
 
 test('Flight nests under Trick (not a top-level category); Armory tricks are Trick siblings', () => {
