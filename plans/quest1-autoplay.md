@@ -145,6 +145,19 @@ committed golden, where any drift is shown and a failure to finish is an error.
 Stages 1-3 carry the engineering risk; 4 is where the game gets learned. Stop after 3 and the
 repo already has replayable, headless runs of anything scripted.
 
+**Stages 1-3 BUILT 2026-09-21** on `feature/quest1-autoplay` (`plans/quest1-autoplay-implementation.md`).
+`npm run autoplay` plays quest 1's first stage headless. Measured, seed 1, script `car`:
+
+| Run | Clock | Real time | End states |
+|---|---|---|---|
+| 3 runs, random real pauses (`--repeat=3 --jitter`) | virtual | 1.86 / 2.01 / 1.89 s | **one** — `68ed5a69` |
+| the control, same (`--clock=real`) | wall | 8.4 / 8.7 / 8.7 s | **three** — `a1243c6f`, `687be416`, `ec8c3e50` |
+| seed 2 | virtual | 0.84 s | `1e0b8131` |
+
+The same seed also ended on `68ed5a69` in two Browser-pane runs — a second browser, and a hidden
+pane whose own animation frames were frozen. The control is what makes the first row mean
+something: the check demonstrably fails when time is not owned.
+
 ## 7. Rulings — all ruled as recommended, 2026-09-21
 
 | # | Question | Ruled | Why |
@@ -162,11 +175,12 @@ repo already has replayable, headless runs of anything scripted.
 - **Can the standard fighter beat the Wererat?** Unknown. If a plain Hit-and-heal player loses,
   that is the autoplay's first balance finding, and the ruling is Caelan's (tune the fight, or
   give the profile a smarter skill).
-- **Overriding `localStorage` in the page.** Planned as a property override in `boot.js`, before
-  `main.js` runs; to be proven in stage 2, with the fallback of routing the three writers through
-  one guarded helper.
-- **Headless frame cost.** Every frame still renders (a render bug should fail the run, as a green
-  suite hid one before). Estimated seconds per run; measured in stage 3.
+- ~~**Overriding `localStorage` in the page.**~~ **Settled:** `boot.js` overrides
+  `Storage.prototype`'s methods with a memory store. Proved both ways in the running game: a run
+  autosaved (turn 11) into memory, and the port's real `localStorage` held no save afterwards.
+- ~~**Headless frame cost.**~~ **Measured:** every frame still renders, and 5.2 s of game time
+  (12 turns plus a 3 s idle) plays in about 0.85 s of real time, page load included — roughly 6x
+  real time. A whole quest of a few hundred turns should take seconds.
 - **Local only.** The eval needs a Chrome, so it runs on this machine, not in cloud routines.
 - **Coupling.** The autoplay reads `window.__game` internals. Mitigated by acting through named entry
   points (key codes, wheel keys) and a source-derived test that those entry points exist.
