@@ -1,6 +1,7 @@
 # The fight entrance — the feel pass
 
-Status: **planned, not built.** Base: `dev` @ `5867818`.
+Status: **BUILT AND MERGED** to `dev` (`bd3140c`, 2026-09-20). Base was `dev` @ `5867818`.
+Results and measured before/after are in §7.
 Research is done (two independent audits, below). This document is the design gate and the
 execution plan. Caelan makes the merge call.
 
