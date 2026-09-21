@@ -74,10 +74,12 @@ function standsFor(view, id) {
     return out;
 }
 
-// One step along the shortest open path to any of `tiles`. Characters block;
-// barricades do not — walking into one is how it breaks.
+// One step along the shortest open path to any of `tiles`. Characters and
+// chests block — walking into either starts a verb, not a step. Barricades do
+// not — walking into one is how it breaks.
 function toward(view, tiles, what) {
-    const occupied = (x, y) => view.enemies.some((e) => e.x === x && e.y === y);
+    const occupied = (x, y) => view.enemies.some((e) => e.x === x && e.y === y)
+        || (view.containers || []).some((c) => c.x === x && c.y === y);
     const isOpen = (x, y) => (view.isWalkable(x, y) || view.tileAt(x, y) === BARRICADE) && !occupied(x, y);
     let best = null;
     for (const t of tiles) {

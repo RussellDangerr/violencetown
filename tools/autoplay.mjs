@@ -122,6 +122,7 @@ async function runOnce(cdp, base, o) {
     const q = new URLSearchParams({ autoplay: '1', seed: String(o.seed), script: o.script });
     if (o.clock === 'real') q.set('clock', 'real');
     if (o.jitter) q.set('jitter', '1');
+    q.set('speed', '0');
     const loaded = cdp.once('Page.loadEventFired');
     await cdp.send('Page.navigate', { url: `${base}/?${q}` });
     await loaded;

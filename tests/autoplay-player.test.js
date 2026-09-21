@@ -5,12 +5,12 @@ import { decide, goalDone, BARRICADE } from '../game/autoplay/player.js';
 
 // A game as the player sees it. Rows: '.' open, '#' wall, 'B' barricade.
 function view({ rows, player, enemies = [], items = [], hp = 100, maxHp = 100, canEat = false,
-                mapUrl = 'town-map.json', transitions = [], inventory = [], targets = {} }) {
+                mapUrl = 'town-map.json', transitions = [], inventory = [], targets = {}, containers = [] }) {
     return {
         mapUrl, width: rows[0].length, height: rows.length, player, hp, maxHp, canEat,
         isWalkable: (x, y) => rows[y]?.[x] === '.',
         tileAt: (x, y) => (rows[y]?.[x] === 'B' ? BARRICADE : rows[y]?.[x] === '.' ? 1 : 0),
-        transitions, enemies, items, inventory,
+        transitions, enemies, items, inventory, containers,
         targetIdAt: (x, y) => targets[`${x},${y}`] ?? null,
     };
 }
@@ -80,6 +80,11 @@ describe('the standard fighter', () => {
         const a = decide(view({ rows: ['.B.'], player: { x: 0, y: 0 }, mapUrl: 'sewer-map.json',
             transitions: [{ x: 2, y: 0, toMap: 'town-map.json' }] }), [{ reach: 'town-map.json' }]);
         assert.deepEqual(a, { kind: 'step', dir: 'right' });
+    });
+    test('it walks around a chest, never into it — walking into one opens it', () => {
+        const a = decide(view({ rows: ['...', '...'], player: { x: 0, y: 0 }, mapUrl: 'sewer-map.json',
+            containers: [{ x: 1, y: 0 }], transitions: [{ x: 2, y: 0, toMap: 'town-map.json' }] }), [{ reach: 'town-map.json' }]);
+        assert.deepEqual(a, { kind: 'step', dir: 'down' });
     });
     test('boxed in, it waits and says why', () => {
         const a = decide(view({ rows: ['...'], player: { x: 0, y: 0 }, mapUrl: 'sewer-map.json',

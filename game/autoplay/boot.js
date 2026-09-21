@@ -8,6 +8,9 @@
 //                                 why the virtual one is needed
 //   &jitter                       random REAL pauses between actions; must not
 //                                 change a virtual-clock run at all
+//   &speed=4                      watch at 4x; speed=0 is as fast as the machine
+//                                 allows (the runner's default). A person opening
+//                                 ?autoplay gets 1x.
 
 import { createClock } from './clock.js';
 import { memoryStorage, fencedFetch } from './isolate.js';
@@ -21,6 +24,7 @@ function install(params) {
         script: params.get('script') || 'car',
         clock: params.get('clock') === 'real' ? 'real' : 'virtual',
         jitter: params.has('jitter'),
+        speed: params.has('speed') ? Math.max(0, Number(params.get('speed')) || 0) : 1,
     };
     const real = { now: performance.now.bind(performance), setTimeout: window.setTimeout.bind(window) };
 
