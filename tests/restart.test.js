@@ -46,7 +46,7 @@ const refreshGrantedSkills = liveMethod('_refreshGrantedSkills() {', {
 const construct = liveMethod('constructor() {', {
     STATE, PLAYER_MAX_HP, PLAYER_MAX_MP, BASE_SPELLS, WEAPONS, INVENTORY_SIZE, RNG, QuestEngine, createWheelState,
 });
-const fullReset = liveMethod('_fullReset() {', {
+const fullReset = liveMethod('_fullReset({ seed } = {}) {', {
     STATE, PLAYER_MAX_HP, PLAYER_MAX_MP, WEAPONS, RNG, QuestEngine, clearSave: () => {},
 }, { async: true });
 
@@ -213,6 +213,19 @@ describe('RESTART begins a brand-new game', () => {
         assert.deepEqual(g.knownSpells, fresh.knownSpells);
         assert.deepEqual(g.grantedTricks, fresh.grantedTricks);
         assert.deepEqual(g.ringMods, fresh.ringMods);
+    });
+
+    test('a seeded RESTART starts the RNG at that seed', async () => {
+        const g = await lateRun();
+        await g._fullReset({ seed: 42 });
+        assert.equal(g.rng.getState(), 42);
+    });
+
+    test('an unseeded RESTART still reseeds at random', async () => {
+        const a = await lateRun(), b = await lateRun();
+        await a._fullReset();
+        await b._fullReset();
+        assert.notEqual(a.rng.getState(), b.rng.getState());
     });
 
     test('nothing the old run was in the middle of carries over', async () => {
