@@ -796,23 +796,41 @@ export function resolveThrow(game, itemDef, direction, _stackCount = 1, targetTi
         // spared (hostile-only); the deliberately-aimed centre tile's occupant is
         // hit even if friendly (real-placement / Plus Ultra path only).
         //
-        // KNOWN LIMITATION (Task 16): mystery_meat carries sewerFare:true but its
-        // flat `damage` is NOT sign-flipped for a sewer-dweller the way `dot` is
-        // above — it always harms, human or not. combatAttack's pipeline (and
-        // Entity.takeDamage's `Math.max(1, rawDamage - armor)` floor underneath
-        // it) is built for positive damage only; a negative `damage` would still
-        // clamp to "at least 1 damage" instead of healing, and forcing negative
-        // numbers through the elemental/backstab/hit-splat/kill-event machinery
-        // built for harm risks corrupting all of it for a single sewer item. Left
-        // as-is rather than butchering the combat pipeline for one edge case.
+        // (C4) Flat-damage sewer fare inverts for the things that live down here,
+        // the same as every other sewerFare item — but it cannot do it THROUGH
+        // combatAttack. That pipeline (and Entity.takeDamage's
+        // `Math.max(1, rawDamage - armor)` floor under it) is built for positive
+        // damage only: a negative number clamps back to "at least 1 damage"
+        // instead of healing, and pushing negatives through the elemental /
+        // backstab / hit-splat / kill-event machinery to fix one sewer item would
+        // risk all of it. So the dweller case does what the hand-fed path already
+        // does — a direct HP delta, never touching combatAttack — and everyone
+        // else goes through combat unchanged. Species decides, not hostility,
+        // exactly as give-action.js's applySewerFareGive reads it.
         for (const foe of game._entitiesInRadius(ix, iy, 1)) {
             const hostile = isHostile(foe);
             const isCentre = foe.x === ix && foe.y === iy;
-            if (hostile || (allowCenterFriendly && isCentre)) {
-                // combatAttack returns null on immune (0-contract) — an immune foe
-                // wasn't "caught in the splash", so don't count it.
-                if (game.combatAttack(foe, Math.max(1, Math.round(itemDef.damage / 2)), { type: dtype, omni: true })) affected++;
+            if (!(hostile || (allowCenterFriendly && isCentre))) continue;
+            // Half effect at the burst's reach, harm or mend alike — the same
+            // discount the damage case has always taken.
+            const mag = Math.max(1, Math.round(itemDef.damage / 2));
+            if (itemDef.sewerFare && isSewerDweller(foe)) {
+                const ent = foe.entity;
+                if (!ent) continue;
+                const before = ent.hp;
+                ent.hp = Math.min(ent.maxHp, ent.hp + mag);
+                const healed = ent.hp - before;
+                // A dweller already at full health wasn't "caught in the splash"
+                // any more than an immune foe was — don't count it.
+                if (healed > 0) {
+                    if (game._spawnHitSplat) game._spawnHitSplat(foe.x, foe.y, `+${healed}`, 'heal', { omni: true });
+                    affected++;
+                }
+                continue;
             }
+            // combatAttack returns null on immune (0-contract) — an immune foe
+            // wasn't "caught in the splash", so don't count it.
+            if (game.combatAttack(foe, mag, { type: dtype, omni: true })) affected++;
         }
     } else if (isHeal) {
         // Friendlies only — currently just the player (no allies in 1.0). Catches
