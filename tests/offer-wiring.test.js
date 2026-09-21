@@ -2000,8 +2000,13 @@ describe('the wiring', () => {
     test('every close path out of the offer screen is _closeOffer', () => {
         // Four exits, not one: the TRADE keyboard block, the universal Cancel
         // hook, the pointer router, and RESTART.
-        assert.ok(/KeyE' \|\| e\.code === 'Escape'\) \{ this\._closeOffer\(\)/.test(mainSrc),
-            'the E / Escape key inside the trade block still calls _closeTrade');
+        //
+        // (C1) Escape left the TRADE block — it was unreachable there, shadowed
+        // by the _closeCurrentMenu gate at the top of the keydown handler. It
+        // still closes the offer screen, via the Cancel hook the next assertion
+        // pins. E is the key this block still owns.
+        assert.ok(/KeyE'\) \{ this\._closeOffer\(\)/.test(mainSrc),
+            'the E key inside the trade block no longer calls _closeOffer');
         assert.ok(/case STATE\.TRADE:\s+this\._closeOffer\(\); return true;/.test(mainSrc),
             '_closeCurrentMenu still routes TRADE to _closeTrade');
         // `mpt`: since plans/screen-fill.md the offer screen gets its tap in menu-box space.

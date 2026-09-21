@@ -1102,7 +1102,7 @@ class Game {
             if (this.state === STATE.ITEM_THROW_DIR) {
                 const dir = DIRS[e.code];
                 if (dir) { e.preventDefault(); this._doThrow(dir); return; }
-                if (e.code === 'Escape') { e.preventDefault(); this.state = STATE.IDLE; this.selectedSlot = -1; this._render(); return; }
+                // (C1) No Escape here — the gate above closed this state already.
                 return;
             }
 
@@ -1138,7 +1138,7 @@ class Game {
                 if (e.code === 'ArrowUp'   || e.code === 'KeyW') { this.targetList.sel = (this.targetList.sel - 1 + n) % n; audio.playSfx('menu-tick'); this._render(); return; }
                 if (e.code === 'ArrowDown' || e.code === 'KeyS') { this.targetList.sel = (this.targetList.sel + 1) % n; audio.playSfx('menu-tick'); this._render(); return; }
                 if (e.code === 'Space' || e.code === 'Enter' || e.code === 'KeyE') { this._fireTargetVerb(this.targetList.verbs[this.targetList.sel]); return; }
-                if (e.code === 'Escape' || e.code === 'KeyF') { this._closeTargetList(); return; }
+                if (e.code === 'KeyF') { this._closeTargetList(); return; }   // (C1) Escape handled by the gate
                 return;
             }
 
@@ -1149,7 +1149,7 @@ class Game {
                 if (n && (e.code === 'ArrowUp' || e.code === 'KeyW'))   { this.overlayCursor = (this.overlayCursor - 1 + n) % n; audio.playSfx('menu-tick'); this._render(); return; }
                 if (n && (e.code === 'ArrowDown' || e.code === 'KeyS')) { this.overlayCursor = (this.overlayCursor + 1) % n;     audio.playSfx('menu-tick'); this._render(); return; }
                 if (e.code === 'Space' || e.code === 'Enter' || e.code === 'NumpadEnter') { this._pickOverlay(this.overlayCursor); return; }
-                if (e.code === 'Escape') { this._closeCurrentMenu(); return; }
+                // (C1) No Escape here — the gate above already called _closeCurrentMenu.
                 return;
             }
 
@@ -1160,8 +1160,9 @@ class Game {
                 // 1-9 = switch selection
                 const slot = this._digitToSlot(e.code);
                 if (slot >= 0) { e.preventDefault(); this._selectItem(slot); return; }
-                // Esc = deselect
-                if (e.code === 'Escape') { e.preventDefault(); this.selectedSlot = -1; this.state = STATE.IDLE; this._render(); return; }
+                // (C1) Esc deselects — but via the gate above, not here. The gate
+                // routes through _closeCurrentMenu, which ALSO resumes a held walk;
+                // this copy never did, and never ran.
                 // Arrow = deselect and move
                 const dir = DIRS[e.code];
                 if (dir) { e.preventDefault(); this.selectedSlot = -1; this.state = STATE.IDLE; this._doMove(dir); return; }
@@ -1174,7 +1175,7 @@ class Game {
             // renderer clamps the upper bound to the history length.
             if (this.state === STATE.LOG_MODAL) {
                 e.preventDefault();
-                if (e.code === 'KeyL' || e.code === 'Escape')    { this._closeLogModal(); return; }
+                if (e.code === 'KeyL')                           { this._closeLogModal(); return; }   // (C1) Escape: the gate
                 if (e.code === 'ArrowUp'   || e.code === 'KeyW')  { this._scrollLogModal(1);   return; }
                 if (e.code === 'ArrowDown' || e.code === 'KeyS')  { this._scrollLogModal(-1);  return; }
                 if (e.code === 'PageUp')                          { this._scrollLogModal(10);  return; }
@@ -1195,7 +1196,7 @@ class Game {
             // taken. Bribery is not lost, it just stopped being a special case.
             if (this.state === STATE.TRADE) {
                 e.preventDefault();     // before Tab, or focus escapes to browser chrome
-                if (e.code === 'KeyE' || e.code === 'Escape') { this._closeOffer(); return; }
+                if (e.code === 'KeyE') { this._closeOffer(); return; }   // (C1) Escape handled by the gate
                 if (e.code === 'Enter') { this._offerActivate('commit', 0); return; }
                 if (!this._offer) return;
 
@@ -1261,7 +1262,7 @@ class Game {
                 e.preventDefault();
                 const choices = this._dialogueChoices();
                 const rows = choices.length + 1; // +1 for the Leave row
-                if (e.code === 'KeyE' || e.code === 'Escape') { this._closeDialogue(); return; }
+                if (e.code === 'KeyE') { this._closeDialogue(); return; }   // (C1) Escape handled by the gate
                 if (e.code === 'ArrowUp'   || e.code === 'KeyW') { this._dialogueCursor = (this._dialogueCursor - 1 + rows) % rows; audio.playSfx('menu-tick'); this._render(); return; }
                 if (e.code === 'ArrowDown' || e.code === 'KeyS') { this._dialogueCursor = (this._dialogueCursor + 1) % rows; audio.playSfx('menu-tick'); this._render(); return; }
                 if (e.code === 'Space' || e.code === 'Enter') {
