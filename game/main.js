@@ -5065,14 +5065,41 @@ class Game {
         this.questEngine = new QuestEngine(this);
         this._lastAutosaveTurn = -999;
         this.turn = 0;
+        this._dayClockMs = 0;
+        this._nightLevel = 0;
+        // The world's memory of the old run. Cleared BEFORE _loadMap, which reads
+        // it to decide what the town spawns (collected items stay gone, looted
+        // enemies come back broke, pursuers follow you in).
+        this._collectedItems = new Set();
+        this._droppedItems = {};
+        this._muggedIds = new Set();
+        this._robbed = {};
+        this._hot = {};
+        this._pendingFollowers = null;
+        this._pendingFollowersFrom = null;
+        this._cameFrom = null;
+        this._sewerEscape = null;
+        this.playerMaxHp = PLAYER_MAX_HP;
         this.playerHp = this.playerMaxHp;
+        this.playerMaxMp = PLAYER_MAX_MP;
         this.playerMp = this.playerMaxMp;
+        this.facing = 'down';
         this.buffs = [];
+        this._hasteCharges = 0;
+        this._slowCharges = 0;
+        this._ratFormTurns = 0;
+        this._lastHitTarget = null;
+        this._lastDefeatedBy = null;
         this.inventory.fill(null);
         this.tempEquips = [];
         this.selectedSlot = -1;
         this.equipment = { weapon: WEAPONS.wooden_sword, top: null, bottom: null, front: null, back: null, sides: null };
-        this._refreshGrantedSkills();   // fresh weapon → no granted skills
+        this.ownedRings = new Set();
+        this.ringSlots = {};
+        this.ringTier = 0;
+        this.discoveredFusions = new Set();
+        this._peakDisposition = 0;       // it gates the ring tier, so it goes with the rings
+        this._refreshGrantedSkills();   // fresh weapon, no rings → no granted skills
         this._pendingTransition = null;
         this.gold = 0;
         this.carFuel = 'raw';
