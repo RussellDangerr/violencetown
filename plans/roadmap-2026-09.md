@@ -15,15 +15,16 @@ pending decisions, and the three passes that landed this week.
 > Both were accurate when written; **seven of their items have since shipped** and are listed in
 > §6 so nobody re-does them. The `plan` branch itself is six weeks stale — see §5.
 
-**State right now (updated 2026-09-20):** `main` = `dev` = `9f4158f`, **v0.23.0, tagged and live**
-— H1, the combat HUD, in full, plus the combat-log tagging fix. Suite 1512 / 278 / 0 failures;
-balance golden, no drift. Verified live: the deployed `<meta name="version">` reads 0.23.0 and nine
-files byte-match `main`. **Shipped 2026-09-20:** H1's five stages (§4) and the tagging fix that
-made its combat log actually show anything. **Shipped 2026-09-14:** F1, the fight as fog of war,
-then v0.22.0. **Ruling CD is DONE** (2026-09-15, re-verified live 2026-09-20 — see §2).
+**State right now (updated 2026-09-21):** `main` = `dev` = `77e4784`, **v0.24.0, tagged and live**
+— the fight entrance's feel pass, F2's impact marks, the one-bad-frame fix, the first-minute UX
+pass, the streetlights at night, thrown mystery meat (C4), RESTART and the Escape cleanup (C1).
+Suite 1656 / 293 / 0 failures; balance golden, no drift. Verified live: the deployed
+`<meta name="version">` reads 0.24.0 and all 14 changed game files byte-match `main`. **Every
+feature branch is merged**; `plan` is the only branch off `dev`, correctly. **Shipped 2026-09-20:**
+v0.23.0, H1 the combat HUD (§4). **Ruling CD is DONE** (2026-09-15, re-verified live 2026-09-20).
 **Tabled 2026-09-15:** Q1, the quest-1 autoplay, parked on the `plan` branch as
-`plans/quest1-autoplay.md`. Next: **F2** / **F3** (§4), or living zones — piece 1 of
-`plans/species-adventures.md`, whose §3 recommendations are still unruled and gate pieces 1–3.
+`plans/quest1-autoplay.md`. Next: **F2b** / **F3** (§4), the rulings in §2, or living zones —
+piece 1 of `plans/species-adventures.md`, whose §3 recommendations are still unruled.
 
 > **Direction ruled 2026-09-15 — `plans/species-adventures.md`.** Fixed maps stay; enemies
 > come from a registry with spawn tables, drops and a respawn clock; quest flags apply *world
@@ -64,7 +65,7 @@ flowchart LR
     R_INT --> INT
     GY -->|"proved the prop system"| LAMP["Streetlights as 1x2 props<br/>DONE 09-13"]:::done
     GY --> GATE["Cemetery gate<br/>DONE 09-13"]:::done
-    LAMP --> LIT["Streetlights light up<br/>at night"]:::ready
+    LAMP --> LIT["Streetlights light up<br/>at night — DONE v0.24.0"]:::done
     CG["RULING CG: a carnival<br/>ground of its own"]:::ruling
 
     BOSS["B1 — Law 5, bosses spend<br/>DONE 09-02"]:::done
@@ -77,14 +78,16 @@ flowchart LR
 
     SCREEN["The screen fills the window,<br/>dock + dial — DONE 09-13"]:::done
     FOG["F1 — the fight as fog of war<br/>DONE 09-14"]:::done
-    SPLAT["F2 — hit-splat art"]:::design
+    SPLAT["F2 — hit-splat marks<br/>DONE v0.24.0"]:::done
+    ENTRY["F2b — entrances<br/>by hit type"]:::design
     PULL["F3 — who gets pulled<br/>into a fight"]:::design
     SF["RULING SF: fillers,<br/>the forest, the south edge"]:::ruling
     AUTO["Q1 — the quest-1 autoplay<br/>TABLED 09-15, parked on plan"]:::later
     HUD["H1 — the combat HUD<br/>SHIPPED v0.23.0"]:::done
     SCREEN -->|"the spotlight glares on a wide screen"| FOG
     FOG -->|"fight-area.js, the same sight"| PULL
-    FOG -.->|"entrances by hit type"| SPLAT
+    FOG -->|"fight-entrance.js, _fightStart"| ENTRY
+    SPLAT -.->|"the hit types it names"| ENTRY
     LEG --> SPLAT
     SCREEN --> SF
     SCREEN -->|"the dock it rearranges"| HUD
@@ -139,7 +142,7 @@ Ordered by how much each unblocks.
 
 | # | Ruling | What it gates | Source |
 |---|---|---|---|
-| **CD** | **The custom domain still caches JS and CSS for four hours.** `game/_headers` (v0.22.0) asks for `max-age=0`, and `violencetown.pages.dev` obeys it, but the `russelldangerr.com` zone's Browser Cache TTL — Cloudflare's default, four hours — replaces any shorter origin value on `.js`, `.css` and images. Set it to *Respect Existing Headers*, or add a Cache Rule for `violencetown.russelldangerr.com`. A dashboard step, not code; `curl -sI …/main.js` then reads `max-age=0`. | Whether a release reaches a returning player at once | `demo-readiness` §2.5 |
+| ~~**CD**~~ | **DONE 2026-09-15** — Browser Cache TTL set to *Respect Existing Headers*; live headers read `max-age=0, must-revalidate`, re-verified at every release since. *Was:* **The custom domain still caches JS and CSS for four hours.** `game/_headers` (v0.22.0) asks for `max-age=0`, and `violencetown.pages.dev` obeys it, but the `russelldangerr.com` zone's Browser Cache TTL — Cloudflare's default, four hours — replaces any shorter origin value on `.js`, `.css` and images. Set it to *Respect Existing Headers*, or add a Cache Rule for `violencetown.russelldangerr.com`. A dashboard step, not code; `curl -sI …/main.js` then reads `max-age=0`. | Whether a release reaches a returning player at once | `demo-readiness` §2.5 |
 | **A1** | **Keep the −15 `bruiser` row?** It exists — `tools/balance-harness.mjs:146`, 15–40 GP, interpolated between fodder and standard and marked an open question. **No enemy in any map sits in its band** (armor −30 < a ≤ −15), and Pike is armor 5, which the `tough` row covers. Confirm it, or fold −15 into a neighbour, before anyone authors a −15 enemy. *(Corrected 2026-09-10: this row used to say the band had no row and gated "the entire boss line".)* | Nothing today | `next-session-open-work` A1 |
 | **A3** | **Does opening the REMOTICON cost a world turn?** Load-bearing now DoTs are live — a bag-open would cost a poison tick, undoing Law 7's "reading your bag is free." Proposed (systems-audit §6): *free out of combat, costed in combat.* Still open: `_openDevice` advances no turn. | Whether Law 7 is true | A3 |
 | **A2** | **Poison-flip direction.** The downward mirror of the ally-flip was chosen, not derived. Confirm or replace. | Nothing to build; a correctness question | A2 |
@@ -149,9 +152,12 @@ Ordered by how much each unblocks.
 | **B3** | **Cone of Cold** — 1.40 dmg/MP against a 1.50 floor. **Still the lone balance-lint flag** (re-verified 2026-09-07). Retune or widen the band; a permanent flag trains everyone to ignore the lint. | Lint credibility | B3 |
 | **R** | **Rings: author to ~12, or cut.** **Two exist** (`rat_ring`, `fire_ring`) and one fusion — `game/ring-data.js`, and what systems-audit §3.1 itself says. *(Corrected 2026-09-10: this row said five.)* | Whether the ring system is a feature or a fossil | systems-audit §3.1 |
 | **DZ** | **TheDangerrZone — freeze at a tag or delete.** Eight `*-TheDangerrZone.*` files still ship in `game/`, unreachable from `index.html`. | Repo clarity | systems-audit §3.3 |
-| **D1** | **`feature/diagonal-prototype`** — 568 commits behind dev (2026-09-13, and rising); its diff *deletes* rings, xmb, the balance harness. Delete, or label as archive. | Branch hygiene | D1 |
+| ~~**D1**~~ | **DONE 2026-09-20** — archived as tag `archive/diagonal-prototype-2026-06-14` and the branch deleted. Audited first: nothing unreleased in it; dev's versions of its diagonal movement were further along. | Branch hygiene | D1 |
 | **P1** | **Phone tap targets render at half their designed size** — nothing on the canvas clears Apple's 44pt. *(Updated 2026-09-13: the screen-fill rule — at least 20 tiles on the short side — draws a phone at 0.5×, down from 0.62×: a tile is 16 CSS px, the dock's ✦ 36 px. The page's ☰ and ▤ are 44 px now.)* Options: fewer tiles on narrow screens / a touch layout / accept phone as secondary. *A design decision, not a bug.* | Mobile demo viability | `demo-readiness` §2.1 |
-| **P2** | **"End of Chapter One" does not exist.** `_endChapterOne()` is called from nowhere; the bridge drops you into Chapter Two. Delete the orphan, or give the demo a curtain. | Demo has a stopping point | `demo-readiness` §2.2 |
+| **P2** | **"End of Chapter One" does not exist.** `_endChapterOne()` is called from nowhere; the bridge drops you into Chapter Two. Delete the orphan, or give the demo a curtain. *(Re-verified 2026-09-21: still no caller. Its PLAY AGAIN runs the fixed `_fullReset`, so a curtain would restart cleanly — but the RESTART fix's commit and the v0.24.0 notes speak of PLAY AGAIN as if a player could reach it. No player can.)* | Demo has a stopping point | `demo-readiness` §2.2 |
+| **ENT** | **Does the fight entrance's punch read soft?** Shipped in v0.24.0 on measurements alone — nobody has looked at it with eyes. If it does, the lever is `IMPACT_MS` *down* toward 90, not `ZOOM_IN_MS` up (that softens it further). | Feel | `plans/entrance-feel-pass.md` |
+| **OBJ** | **Two quest objectives truncate on a phone.** `canyon_escape/find_way_out` (64 chars) and `deliver_burger/handoff` (51) exceed the 46-character budget at 375 px. `tests/first-minute.test.js` carries both as `KNOWN_OVERFLOW`; shortening one fails that test until it leaves the list. The copy is Caelan's. | Phone legibility | `tests/first-minute.test.js` |
+| **EC** | **Energy's splat colour.** Energy now carries the `exclamation` mark but still falls back to physical red `#d23f2f`, and the mark's red-orange `#ff4b1d` on it is the weakest contrast in the set (1.40). Indigo `#3b2f8f` recommended; magenta and yellow-white both measured out. | F2's last gap | `plans/hit-splat-art.md` §9 |
 | **V1** | **Theft-aiming volume** — aiming a theft puts all nine town cones back. Correct information, possibly too much. Scope to the theft's range if so. | Feel | `visual-pass.md` |
 | **V2** | **`Lire` has no lion.** Allowlisted unsprited rather than given a bad pick. | One sprite | `visual-pass.md` |
 | **AU** | **Audio discoverability.** Ships muted (ruled, correctly). Nobody discovers audio exists. Wants a visible speaker glyph — *not* autoplay. | Demo polish | `demo-readiness` §2.3 |
@@ -164,12 +170,10 @@ Ordered by how much each unblocks.
 | Item | Size | Blocked by | Doc | Where the doc lives |
 |---|---|---|---|---|
 | **T1 — Tag layer** on items / enemies / tiles | M | nothing | Not built. Prerequisite for the affordance matrix. | systems-audit §5.4 |
-| **C1 — seven unreachable `Escape` branches** | S | nothing | Shadowed by `_closeCurrentMenu`'s switch, which handles Escape first (`main.js` ~1095–1254 vs ~1837–1850). *(Corrected 2026-09-10: `ITEM_THROW_DIR` is not dead — it is entered at ~2716 and handled for keyboard and tap.)* | C1 |
 | **C3 — input asymmetries** | M | nothing | REMOTICON item/gear/ring actions are pointer-only; aiming, turn-in-place and the 1–9 hotbar are keyboard-only. Documented honestly; still gaps. | C3 |
-| **C4 — `mystery_meat` can't heal on the throw path** | S | nothing | `combatAttack`'s `Math.max(1, raw − armor)` clamps a would-be heal to 1 damage. Cheapest fix: make it a 1-turn health poition instead of flat damage. | C4 |
-| **Housekeeping** | S | nothing | Prune two stale worktrees (`great-wing`, `objective-volhard`, both clean at v0.19.0); 43 local branches whose remotes are `gone` (counted 2026-09-10). Migrate or archive the 24 `plan`-only docs (§5). | this doc |
-| **RESTART keeps the last run's pickups** | S | nothing | `_fullReset` resets HP, bag, gear, gold, quests and the RNG — but not `_collectedItems` or `_droppedItems`, so after a restart everything the previous run picked up stays gone until the page reloads (verified live 2026-09-10 with the Ray Gun). Audit every per-run field the constructor sets against `_fullReset`, not only these two. | `main.js` `_fullReset` |
-| **Streetlights light up at night** | S | nothing | Town's four lamps are props now, but Town's `lights` list has no entry at any of them — after dusk they are dark posts. One `lights` row each. | `town-map.json` `lights` |
+| **Housekeeping** | S | nothing | Prune two stale worktrees (`great-wing` detached, `objective-volhard` on the merged `fix/radial-gradient-nonfinite`); 43 local branches whose remotes are `gone` (re-counted 2026-09-21). Migrate or archive the 24 `plan`-only docs (§5). | this doc |
+
+C1, C4, RESTART and the streetlights were built and shipped in v0.24.0 — §6.
 
 ---
 
@@ -178,7 +182,7 @@ Ordered by how much each unblocks.
 | Item | Open questions | Size | Doc | Blocked by |
 |---|---|---|---|---|
 | **H1 — the combat HUD** | **SHIPPED in v0.23.0, 2026-09-20.** All five stages of `plans/combat-hud.md`: the wheel fires the bar's item (it fired bag slot 0), the dial gets a reserved dock column and joins the non-overlap invariant, the dock swaps its quest log for a combat log in a fight, two read-only gear panels sit in the fogged margins, and the bar shows its whole column. The combat log then shipped **empty** — every fight message was filed `system` — fixed in the same release, with a source-reading guard so it cannot rot back. | M | `plans/combat-hud.md` | — |
-| **F2 — hit-splat art** | **Shipped on `feature/hit-splat-art`, unmerged — `plans/hit-splat-art.md`.** This row was stale in four ways and is corrected there: there is no heart in `MARK_SPRITES`, heal and crit deliberately take no glyph, `miss` was dead code and is deleted, fire is already covered by `anger`, and "on the splat or beside it" was long since answered (beside it). Remaining gaps, both needing an eye: a snowflake for `cold`, and a `SPLAT_COLOR` entry for `energy`, which still falls back to physical red. | S | `plans/screen-fill.md` *Follow-on pieces* 2 | nothing |
+| **F2 — hit-splat art** | **SHIPPED in v0.24.0** (merged `fe44bd9`, 2026-09-20) — `plans/hit-splat-art.md`. Energy takes `exclamation`; poison and sludge split one drop / drops on the heavy threshold; `miss` was dead and is deleted; the pick rule is a tested module. Remaining gaps, both needing an eye: a snowflake for `cold` (no glyph exists — new art), and energy's colour — ruling **EC** (§2). | S | `plans/hit-splat-art.md` | EC |
 | **F2b — entrances by hit type** | Split out of F2, which bundled it wrongly. Caelan's 09-14 note (*"slashing versus crushing"*) rides `game/fight-entrance.js` and `_trackFight`'s `_fightStart` stamp, not the splat: an entrance plays once when a fight opens, a splat plays on every blow. Different system, different timer. | S | F1 (shipped) | nothing |
 | **F3 — who gets pulled into a fight** | F1 shipped its area as `game/fight-area.js` — every tile a fighter perceives. As a gameplay rule: whoever can see the fight is in it? | M | `plans/screen-fill.md` *Follow-on pieces* 3 | nothing |
 | **Affordance matrix** — verbs (~20 wheel leaves) × tags | The discipline: *a blank cell is a decision, not an oversight.* Second job is diagnostic — a proposed element with zero edges is caught at design time. Needs the tag layer first. | M | systems-audit §9 | T1 |
@@ -241,7 +245,7 @@ parked document.
 | roadmap §1 | Layered examine | Merged 2026-09-13 with `feature/ready-builds` (`689f26b`): one resolver behind E and the Target List — examine never dead-ends |
 | roadmap §1 | Grapple-hook swing | Merged 2026-09-13 (`689f26b`): the canyon climb-out swings you up and out, on an arc, into Downtown |
 | roadmap §1 | Ray Gun pickup + carnival rename | Merged 2026-09-13 (`689f26b`): the Ray Gun in the Factory's northwest bay; `carnival-map.json` with old saves migrated; the Wooden Sword re-equips |
-| roadmap §1 | Streetlights as 1×2 props | Merged 2026-09-13 (`689f26b`). Still dark at night — §3 |
+| roadmap §1 | Streetlights as 1×2 props | Merged 2026-09-13 (`689f26b`). Lit at night since v0.24.0 — below |
 | roadmap §1 | Prop anchor + cemetery gate | Merged 2026-09-13 (`689f26b`): a stone gateway in each opening of the graveyard fence |
 | found 2026-09-10 | See-through tiles flickered black and white at dusk | `b72a63a`, merged 2026-09-13: every see-through tile declares what is under it, and a PNG-alpha test keeps it so |
 | Caelan, 2026-09-11 | The screen fills the window | `5278f33`, 2026-09-13 (`plans/screen-fill.md`): one viewport, tile size by one rule, a filler past every map's edge, the bottom dock and the wheel's dial. Fixed on the way: FIRE hidden under the wheel's pointer; the offer screen's mouse wheel |
@@ -249,6 +253,16 @@ parked document.
 | roadmap §4 | Canvas adaptive backing store | Built as the screen fill (`5278f33`): `game/viewport.js` |
 | roadmap §4 | F1 — the fight area as fog of war | Merged 2026-09-14 (`23fffd2`, `plans/fight-fog.md`): fog over every tile the fighters can't perceive, and an entrance by how the fight began — a black and white close-up, a red slash, a white flash. Timed beside the spotlight at 3440×1440: no measurable cost |
 | roadmap §1 | Ship v0.22.0 to `main` | `56efc17`, tagged `v0.22.0`, live 2026-09-14: 85 commits, re-timed at 3440×1440 on a quiet machine first (`plans/screen-fill.md`, *Measured*). `game/_headers` shipped with it; ruling CD settled it on the custom domain 2026-09-15 |
+| roadmap §4 | H1 — the combat HUD | `9f4158f`, tagged `v0.23.0`, live 2026-09-20 — all five stages of `plans/combat-hud.md`, plus the combat-log tagging fix |
+| roadmap §4 | F2 — hit-splat marks | Merged `fe44bd9` 2026-09-20, shipped v0.24.0. Its colour gap is ruling EC |
+| found 2026-09-20 | Uncaught `createRadialGradient` TypeError stopped the effects loop for good | `5867818`, shipped v0.24.0: a throwing frame costs one frame (`game/effect-loop.js`). The non-finite value itself was never reproduced — `plans/one-bad-frame.md` records what was ruled out |
+| Caelan, 2026-09-20 | The fight entrance is jittery | `bd3140c`, shipped v0.24.0 (`plans/entrance-feel-pass.md`): the pixel crawl, the hard cut and the hidden punch, measured before and after. Whether the punch reads soft is ruling ENT |
+| roadmap §3 | C1 — seven unreachable Escape branches | `4408a9a`, shipped v0.24.0; `tests/escape-shadowing.test.js` derives the invariant from source |
+| roadmap §3 | Streetlights light up at night | `81250b8`, shipped v0.24.0: one warm `lights` row per lamp at the post's midpoint, pinned as a rule, not coordinates |
+| roadmap §3 | C4 — thrown mystery meat can't heal | `6f0d589`, shipped v0.24.0: a dweller takes the direct HP delta hand-feeding always used. The poition conversion this row proposed was tried and cost the give path its immediacy (5 tests) |
+| found 2026-09-21 | The first minute works against a new player | `57ef56c`, shipped v0.24.0: the opening objective says *go*, E names the car's direction, a banner says the wheel holds the movement keys, Defend moved from Trick to Fight |
+| roadmap §3 | RESTART keeps the last run's pickups | `936f471`, shipped v0.24.0 — far wider than pickups: rings and their skills, haste/slow, the sewer escape, the theft ledgers and the time of day all carried over, and the world memory was still set when the town reloaded. `tests/restart.test.js` checks a restarted run against main.js's own constructor, and covers any field added to the save later |
+| roadmap §1 | Ship v0.24.0 to `main` | `77e4784`, tagged `v0.24.0`, live 2026-09-21: 29 commits, 14 changed game files byte-matched live |
 
 ---
 
@@ -256,15 +270,14 @@ parked document.
 
 Not a mandate — a reading of the graph.
 
-1. ~~**H1 — the combat HUD**~~ — **done and shipped in v0.23.0 on 2026-09-20**, all five stages.
-   The next session starts at item 2.
-2. **F2** (the splat art, carrying entrances by hit type) and **F3** (who gets pulled in, built on
-   `game/fight-area.js`).
-3. **Rulings and small builds.** CD is one Cloudflare setting and makes every release land at once;
-   SF and P1 are the new screen's; Z1–Z2 and CG gate builds; A1, A2, A3, R, DZ, D1 clear the board.
-   Then streetlights at night, RESTART keeps the last run's pickups, C4. *(Earlier drafts of this
-   list: F1 shipped 2026-09-14, and v0.22.0 with it; Q1, the quest-1 autoplay, was tabled on
-   2026-09-15 and parked on `plan`.)*
+1. **Rulings — the cheapest progress on the board.** ENT, OBJ and EC each close a shipped
+   feature's last gap and need a look or a line of copy, not a build. B3 clears the balance lint.
+   Z1–Z2 and CG gate zone builds; A1, A2, A3, R, DZ and P2 clear the board.
+2. **F2b** (entrances by hit type, on `game/fight-entrance.js`) and **F3** (who gets pulled in, on
+   `game/fight-area.js`). Both want a short design pass first; both touch the fight's opening.
+3. **Q1, if it is un-tabled.** Every item above that needs Caelan's eyes is a case for it: a
+   seeded player that finishes quest 1 on its own is how a change gets watched without him at the
+   screen, and how balance gets measured rather than guessed. Its open questions are his.
 
-Sessions 1 and 2 overlap only in the combat HUD's splat layer; the small builds live in map JSON,
-`_fullReset` and the item code.
+*(Earlier drafts of this list: H1 shipped in v0.23.0 on 2026-09-20; F2, the streetlights, C1, C4
+and RESTART in v0.24.0 on 2026-09-21; F1 and v0.22.0 on 2026-09-14; Q1 tabled 2026-09-15.)*
