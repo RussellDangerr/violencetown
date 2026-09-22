@@ -217,6 +217,18 @@ with trusted input from the DevTools protocol, because the hidden Browser pane c
      12 hits, measured, still `suspicious`. Is that the intended stealth kill, or a hole in the
      awareness ladder (a suspicious enemy seen from the flank never escalates)?
   Whatever is ruled, the golden will show it: the sneak's `finished` flipping is drift.
+  **Both parts ruled and built 2026-09-21.** (1) Caelan: "1" — both sentries face north
+  (`2f1a2de`; `tests/sewer-sneak-route.test.js` pins the hidden route). (2) The side hit is a bug:
+  "they would turn to face you as soon as they're able but it might take them a second or they
+  might want to drink a potion first" — `perception.js struck()`, a blow turns the victim on its
+  next turn, or its kit first (`fix/struck-turns-to-face`, `tests/struck-reaction.test.js`).
+- **Open, Q1-10: how is the Wererat meant to be beaten?** With the route open and the loophole
+  closed, the sneak reaches the boss unseen, lands a free blow, and loses: a wooden sword does 4
+  through its armour 6, it does 12 a turn, heals from its kit and gold, and pays its allies. Neither
+  profile can finish quest 1. Candidates the map already holds: the sewer armour (to 10 armour,
+  which takes the boss to 2 a hit), the gator tail (16 damage), Fireball (14 a cast, 8 casts of MP),
+  the rock-stack Smash (10 x the stack for one rock — likely a bug), or a backstab (x1.5, only once
+  it has moved). Tuning the boss is the other lever.
 - ~~**Overriding `localStorage` in the page.**~~ **Settled:** `boot.js` overrides
   `Storage.prototype`'s methods with a memory store. Proved both ways in the running game: a run
   autosaved (turn 11) into memory, and the port's real `localStorage` held no save afterwards.

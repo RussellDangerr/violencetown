@@ -183,6 +183,22 @@ export function nextAwareness(npc, verdict, playerPos) {
     }
 }
 
+// ── A blow ──────────────────────────────────────────────────────────────────
+//
+// A blow is not a glimpse: whoever lands one is located exactly. The victim
+// turns to face it on its next turn, or first uses its kit if it is hurt
+// (npc.js), and the ordinary ladder takes over from there. Without this an
+// enemy struck from its flank stayed suspicious forever — melee noise resets
+// the glimpse count on every blow, and only an IDLE enemy turns on glimpses.
+// Ruling Q1-9, Caelan 2026-09-21: "they would turn to face you as soon as
+// they're able but it might take them a second or they might want to drink a
+// potion first." An enemy already chasing or searching has its lead; a blow
+// does not redirect it.
+export function struck(npc, from) {
+    if (!npc || (npc.state !== 'idle' && npc.state !== 'suspicious')) return;
+    npc._struckBy = { x: from.x, y: from.y };
+}
+
 // ── Noise ───────────────────────────────────────────────────────────────────
 //
 // Generalises ai.js's rockClatter, which its own comment called "the game's first
