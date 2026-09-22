@@ -193,7 +193,7 @@ C1, C4, RESTART and the streetlights were built and shipped in v0.24.0 — §6.
 | **Elemental coverage matrix** | `fire` and `poison` joined `sludge` / `cold` / `energy` / `fear` with no weakness table to sit in. | S | E | nothing |
 | **5-Zone Body reconciliation** | Survives as the positional layer (Back = backstab ×1.5), not split HP pools. Needs a ruling before the bible states it as law. | S | E | nothing |
 | **Weapons have no art** | No weapon has ground or bag art: all five draw as lettered boxes — the Ray Gun a teal Z, the Wooden Sword a grey `?`. tinyDungeon has swords, axes and hammers; nothing bundled looks like a ray gun. Which cells — and what does the Ray Gun look like? | S–M | `sprites.js` `ITEM_SPRITES` | nothing |
-| **Q1 — the quest-1 autoplay** | **BUILT 2026-09-21 on `feature/quest1-autoplay`, awaiting the merge call.** All six stages: virtual clock, seed seam, headless Chrome runner, the standard fighter, a scored golden (`npm run autoplay:check`), watch mode and `--gif`. Deterministic (three jittered runs, one end state; the wall-clock control, three). **Its findings: the standard fighter cannot finish quest 1** (dies to the Fungus King, seeds 1-5) — ruled Q1-8 "sneaking", the King is meant to be snuck past — **and there is no unseen route** (measured with `perceives()`: hidden ground from the entrance reaches 2 tiles; the Ghost and Red Fungus cones seal it). The sneak profile dies too. **Q1-9 ruled and built:** both sentries face north (a hidden route now exists, pinned by a test), and a struck enemy turns to face you (the side-hit loophole, fixed on `fix/struck-turns-to-face`). **Open Q1-10:** how is the Wererat meant to be beaten — neither profile can finish with a wooden sword. | M | `plans/quest1-autoplay.md` | Q1-10 |
+| **Q1 — the quest-1 autoplay** | **BUILT 2026-09-21 on `feature/quest1-autoplay`, awaiting the merge call.** All six stages: virtual clock, seed seam, headless Chrome runner, the standard fighter, a scored golden (`npm run autoplay:check`), watch mode and `--gif`. Deterministic (three jittered runs, one end state; the wall-clock control, three). **Its findings: the standard fighter cannot finish quest 1** (dies to the Fungus King, seeds 1-5) — ruled Q1-8 "sneaking", the King is meant to be snuck past — **and there is no unseen route** (measured with `perceives()`: hidden ground from the entrance reaches 2 tiles; the Ghost and Red Fungus cones seal it). The sneak profile dies too. **Q1-9 ruled and built:** both sentries face north (a hidden route now exists, pinned by a test), and a struck enemy turns to face you (the side-hit loophole, fixed on `fix/struck-turns-to-face`). **Q1-10 ruled, not yet built:** spells and every item, and retry after a boss defeat — the retry refills your HP and MP but not the boss's kit or gold, so each attempt strips its heals. Next: teach the standard player to cast, throw and retry, and let the autoplay say whether it wins. | M | `plans/quest1-autoplay.md` | — |
 
 ---
 
@@ -276,10 +276,12 @@ Not a mandate — a reading of the graph.
    Z1–Z2 and CG gate zone builds; A1, A2, A3, R, DZ and P2 clear the board.
 2. **F2b** (entrances by hit type, on `game/fight-entrance.js`) and **F3** (who gets pulled in, on
    `game/fight-area.js`). Both want a short design pass first; both touch the fight's opening.
-3. **Q1-9 — open a sneak route through the sewer.** Q1-8 ruled the Fungus King is snuck past,
-   and the autoplay proved no unseen route exists. Turn or move the Ghost Fungus (5,7), cut its
-   sight, add cover, or turn the Red Fungus (16,7) — then `npm run autoplay:check` shows whether
-   the sneak finishes, and `autoplay:write` records it.
+3. **Q1-10 — the Wererat by spells, items and retries.** Ruled 2026-09-21: the standard player
+   burns its MP on spells, uses every item it carries, and after a boss defeat goes back and tries
+   again (a retry refills the player's HP and MP but not the boss's kit or gold). Teach the
+   autoplay's player to cast, throw and retry; `npm run autoplay:check` then says whether quest 1
+   can be finished, and `autoplay:write` records the first complete playthrough as the baseline.
+   *(Q1-9 — the sneak route and the side-hit loophole — shipped in v0.25.0.)*
 
 *(Earlier drafts of this list: H1 shipped in v0.23.0 on 2026-09-20; F2, the streetlights, C1, C4
 and RESTART in v0.24.0 on 2026-09-21; F1 and v0.22.0 on 2026-09-14; Q1 tabled 2026-09-15.)*

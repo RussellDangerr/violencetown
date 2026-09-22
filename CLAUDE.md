@@ -52,10 +52,15 @@ served at `http://localhost:3001/foo.html`.
 ## Tests (corrected 2026-08-23)
 
 **Node is installed here** — `node v24.18.0`, `npm 11.16.0`. `npm test` runs the whole suite locally
-via `node --test`; a single file is `node --test tests/<name>.test.js`. Baseline as of 2026-08-23:
-**1131 tests, 204 suites, 0 failures, ~900ms** (re-measured 2026-09-06; the line here said
-404/87 as of 2026-08-23 and was badly stale — the suite has nearly tripled since. Re-measure
-rather than quoting this number in a plan.)
+via `node --test`; a single file is `node --test tests/<name>.test.js`. Baseline as of 2026-09-21:
+**1735 tests, 305 suites, 0 failures, ~1s** (it was 1131/204 on 2026-09-06 and 404/87 on
+2026-08-23 — it grows every session. Re-measure rather than quoting this number in a plan.)
+
+**The autoplay** (`plans/quest1-autoplay.md`): `npm run autoplay:check` plays quest 1 headless in
+the installed Chrome — a fighter and a sneak, on a virtual clock so a seed replays exactly — and
+compares each stage's score with `tools/autoplay-golden.json`. Drift fails it; `npm run
+autoplay:write` records an intended change. It needs Chrome, so it is not part of `npm test` and
+cannot run in cloud routines. `?autoplay&speed=2` on the page watches a run; any key stops it.
 
 Several older docs — `plans/defeat-scenarios*.md`, `plans/remembrance-rings*.md`,
 `plans/pd3-ai-consolidation*.md`, `plans/ring-builds-ability-axis.md`,

@@ -222,13 +222,20 @@ with trusted input from the DevTools protocol, because the hidden Browser pane c
   "they would turn to face you as soon as they're able but it might take them a second or they
   might want to drink a potion first" — `perception.js struck()`, a blow turns the victim on its
   next turn, or its kit first (`fix/struck-turns-to-face`, `tests/struck-reaction.test.js`).
-- **Open, Q1-10: how is the Wererat meant to be beaten?** With the route open and the loophole
-  closed, the sneak reaches the boss unseen, lands a free blow, and loses: a wooden sword does 4
-  through its armour 6, it does 12 a turn, heals from its kit and gold, and pays its allies. Neither
-  profile can finish quest 1. Candidates the map already holds: the sewer armour (to 10 armour,
-  which takes the boss to 2 a hit), the gator tail (16 damage), Fireball (14 a cast, 8 casts of MP),
-  the rock-stack Smash (10 x the stack for one rock — likely a bug), or a backstab (x1.5, only once
-  it has moved). Tuning the boss is the other lever.
+- **Q1-10 — how the Wererat is beaten. RULED 2026-09-21, not yet built.** With the route open and
+  the loophole closed, the sneak reaches the boss unseen, lands a free blow, and loses (a wooden
+  sword does 4 through its armour 6; it does 12 a turn, heals from its kit and gold, and pays its
+  allies). Neither profile can finish quest 1. **Caelan:** *"the players should burn their MP and
+  use spells to beat them. If they encounter a defeat scenario, they would go back to the sewer,
+  try again, and use every single item in their inventory and all their spells to try and beat
+  it."* Why that works, read from the code: a boss defeat runs `_runBossRetry`, which refills the
+  **boss's HP only** — not its kit, not its gold — and refills the player's HP **and MP**, items
+  kept. Each attempt strips the boss's heals for good (50 from its kit, 44 from its gold), so by the
+  second or third it is 100 HP with no heals left, and eight Fireballs at 14 through its armour are
+  112. **To build next session:** the standard player spends MP (Fight > Magic > Fireball through
+  the wheel, aimed with its reticle), throws and drinks what it carries, and after a boss defeat
+  goes back and tries again — the death cap becomes "stop when an attempt makes no progress". The
+  autoplay then says whether it wins, in how many attempts, and the golden records it.
 - ~~**Overriding `localStorage` in the page.**~~ **Settled:** `boot.js` overrides
   `Storage.prototype`'s methods with a memory store. Proved both ways in the running game: a run
   autosaved (turn 11) into memory, and the port's real `localStorage` held no save afterwards.

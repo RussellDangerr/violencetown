@@ -70,7 +70,13 @@ The wheel's dial is **laid out, not just drawn**: `hudLayout` reserves it a colu
 
 The interesting part is why it needed its own clock. Every random roll already went through one seeded generator, so a seed *should* have replayed a run — and it didn't. The town's ambient life runs on a wall-clock heartbeat and spends that generator on where people wander, so how long the page took changed the outcome: same seed, no input, a different end state depending on how long you waited. The fix is a virtual clock installed before the game boots (`performance.now`, timers, animation frames), which the autoplay advances and freezes while a map loads. With it, three runs with random real-world pauses end in one identical state; a control run on the real clock ends in three. The same timeline plays headless at about 3× real time or paced for watching, so the run you watch is the run the check scored.
 
-Its first findings were real ones. The standard player — wooden sword, heal when low, fight what's beside you — cannot get past the Fungus King, which is by design: the King is meant to be snuck past. So a second player sneaks, routing by the enemies' own vision rules (a tile in someone's sight cone costs forty steps of detour) — and it proved there is no unseen route through the sewer as built: from the entrance, hidden ground reaches two tiles. A level-design question, found by a test rather than a playtester.
+Its first findings were real ones, and each became a fix:
+
+- **The fight was a wall.** The standard player — wooden sword, heal when low, fight what's beside you — cannot get past the Fungus King. That is by design: the King is meant to be snuck past.
+- **But nothing could be snuck past.** A second player sneaks, routing by the enemies' own vision rules (a tile in someone's sight cone costs forty steps of detour), and it proved the sewer as built had no unseen route: from the entrance, hidden ground reached two tiles. Turning two sentries to face away opened one, and a test now pins that it stays open.
+- **A boss hit from the side never fought back.** Noise from each blow reset the enemy's alertness, so a flanked boss sat frozen through twelve hits. Now a blow tells its victim where you are, and it turns to face you.
+
+A level-design question and an AI bug, found by a test rather than a playtester — and every fix showed up in the check as numbers moving, before it was recorded as the new baseline.
 
 More system write-ups (combat feel, the unified world clock, zone pursuit) live in [`plans/`](plans/).
 
