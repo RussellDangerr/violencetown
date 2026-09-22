@@ -15,16 +15,15 @@ pending decisions, and the three passes that landed this week.
 > Both were accurate when written; **seven of their items have since shipped** and are listed in
 > §6 so nobody re-does them. The `plan` branch itself is six weeks stale — see §5.
 
-**State right now (updated 2026-09-21):** `main` = `dev` = `77e4784`, **v0.24.0, tagged and live**
-— the fight entrance's feel pass, F2's impact marks, the one-bad-frame fix, the first-minute UX
-pass, the streetlights at night, thrown mystery meat (C4), RESTART and the Escape cleanup (C1).
-Suite 1656 / 293 / 0 failures; balance golden, no drift. Verified live: the deployed
-`<meta name="version">` reads 0.24.0 and all 14 changed game files byte-match `main`. **Every
-feature branch is merged**; `plan` is the only branch off `dev`, correctly. **Shipped 2026-09-20:**
-v0.23.0, H1 the combat HUD (§4). **Ruling CD is DONE** (2026-09-15, re-verified live 2026-09-20).
-**Built 2026-09-21:** Q1, the quest-1 autoplay (`plans/quest1-autoplay.md`), on
-`feature/quest1-autoplay` awaiting the merge call — its first finding is that the standard
-fighter cannot finish quest 1 (ruling Q1-8). Next: **F2b** / **F3** (§4), the rulings in §2, or living zones —
+**State right now (updated 2026-09-21, close):** `main` = `dev` = `72ed8d5`, **v0.25.0, tagged and
+live** — Q1, the quest-1 autoplay (`plans/quest1-autoplay.md`), and what it found: the sewer's two
+sentries turned so quest 1 can be snuck through, and a struck enemy turning to face you. v0.24.0
+(`77e4784`) shipped earlier the same day. Suite 1735 / 305 / 0 failures; balance golden, no drift;
+`npm run autoplay:check` matches its golden. Verified live: the deployed `<meta name="version">`
+reads 0.25.0 and all 14 changed game files byte-match `main`. **Branches: `dev`, `main`, `plan` —
+nothing else, locally or on GitHub** (124 merged branches and 2 stale worktrees removed at the
+close). **Ruling CD is DONE** (2026-09-15). **Ruled, not built:** Q1-10, the Wererat by spells,
+items and retries (§7 item 3). Next: **F2b** / **F3** (§4), the rulings in §2, or living zones —
 piece 1 of `plans/species-adventures.md`, whose §3 recommendations are still unruled.
 
 > **Direction ruled 2026-09-15 — `plans/species-adventures.md`.** Fixed maps stay; enemies
@@ -83,7 +82,7 @@ flowchart LR
     ENTRY["F2b — entrances<br/>by hit type"]:::design
     PULL["F3 — who gets pulled<br/>into a fight"]:::design
     SF["RULING SF: fillers,<br/>the forest, the south edge"]:::ruling
-    AUTO["Q1 — the quest-1 autoplay<br/>BUILT 09-21, awaiting merge"]:::now
+    AUTO["Q1 — the quest-1 autoplay<br/>SHIPPED v0.25.0"]:::done
     HUD["H1 — the combat HUD<br/>SHIPPED v0.23.0"]:::done
     SCREEN -->|"the spotlight glares on a wide screen"| FOG
     FOG -->|"fight-area.js, the same sight"| PULL
@@ -172,7 +171,7 @@ Ordered by how much each unblocks.
 |---|---|---|---|---|
 | **T1 — Tag layer** on items / enemies / tiles | M | nothing | Not built. Prerequisite for the affordance matrix. | systems-audit §5.4 |
 | **C3 — input asymmetries** | M | nothing | REMOTICON item/gear/ring actions are pointer-only; aiming, turn-in-place and the 1–9 hotbar are keyboard-only. Documented honestly; still gaps. | C3 |
-| **Housekeeping** | S | nothing | Prune two stale worktrees (`great-wing` detached, `objective-volhard` on the merged `fix/radial-gradient-nonfinite`); 43 local branches whose remotes are `gone` (re-counted 2026-09-21). Migrate or archive the 24 `plan`-only docs (§5). | this doc |
+| **Housekeeping** | S | nothing | *Branches and worktrees DONE 2026-09-21:* both stale worktrees removed (clean, fully merged), 97 merged local branches and 27 merged GitHub branches deleted — only `dev`, `main` and `plan` remain. **Still open:** migrate or archive the 24 `plan`-only docs (§5). | this doc |
 
 C1, C4, RESTART and the streetlights were built and shipped in v0.24.0 — §6.
 
@@ -264,6 +263,10 @@ parked document.
 | found 2026-09-21 | The first minute works against a new player | `57ef56c`, shipped v0.24.0: the opening objective says *go*, E names the car's direction, a banner says the wheel holds the movement keys, Defend moved from Trick to Fight |
 | roadmap §3 | RESTART keeps the last run's pickups | `936f471`, shipped v0.24.0 — far wider than pickups: rings and their skills, haste/slow, the sewer escape, the theft ledgers and the time of day all carried over, and the world memory was still set when the town reloaded. `tests/restart.test.js` checks a restarted run against main.js's own constructor, and covers any field added to the save later |
 | roadmap §1 | Ship v0.24.0 to `main` | `77e4784`, tagged `v0.24.0`, live 2026-09-21: 29 commits, 14 changed game files byte-matched live |
+| roadmap §4 | Q1 — the quest-1 autoplay | Shipped v0.25.0: virtual clock, headless Chrome runner, the fighter and the sneak, a scored golden (`npm run autoplay:check`), watch mode (`?autoplay`), `--gif`. Deterministic: three jittered runs, one end state; the wall-clock control, three |
+| autoplay finding, Q1-9 | No unseen route through the sewer | `2f1a2de`, shipped v0.25.0: the Ghost Fungus and the Red Fungus sentry face north; `tests/sewer-sneak-route.test.js` pins the hidden route |
+| autoplay finding, Q1-9 | A boss struck from the side never fought back | `f2f0c14`, shipped v0.25.0: `perception.js struck()` — the victim turns to face the blow next turn, or uses its kit first |
+| roadmap §1 | Ship v0.25.0 to `main` | `72ed8d5`, tagged `v0.25.0`, live 2026-09-21: 27 commits, 14 changed game files byte-matched live |
 
 ---
 
