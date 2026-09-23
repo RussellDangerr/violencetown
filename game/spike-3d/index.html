@@ -111,30 +111,39 @@ const PRESETS = [
   { name: 'Smooth 3D — raw Kenney',         px: 1, raw: true },
   { name: 'Graded — colour + haze, no pixels', px: 1, grade: 1, fog: 0.6 },
   { name: 'Soft pixel — 2px, graded, outlined', px: 2, grade: 1, fog: 0.5, outline: 0.55 },
-  { name: 'Fine pixel — 2px, 32 colours',   px: 2, grade: 1, fog: 0.4, outline: 0.55, pal: 32, dither: 0.035 },
+  { name: 'Fine pixel — 2px, palette-locked', px: 2, grade: 1, fog: 0.4, outline: 0.55, pal: 3 },
   { name: 'Haze — 2px, graded, heavy dust', px: 2, grade: 1.25, fog: 1, outline: 0.35 },
   { name: 'Painted — 3px, graded, outlined', px: 3, grade: 1, fog: 0.5, outline: 0.7 },
-  { name: 'Chunky — 3px, 16 colours (first try)', px: 3, grade: 1, pal: 16, dither: 0.06 },
+  { name: 'Chunky — 3px, palette-locked (first try)', px: 3, grade: 1, pal: 2 },
 ];
 let preset = 2, pixelSize = PRESETS[preset].px;
 const rt = new THREE.WebGLRenderTarget(1, 1, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
 rt.depthTexture = new THREE.DepthTexture(1, 1);
-const hexes = [
-  0x1a1410, 0x2e241b, 0x4a3a2a, 0x6b5439, 0x8c6f47, 0xb08d57, 0xd4b27a, 0xefd9a7,   // the first 16: the chunky palette
-  0x3b3f2a, 0x5c613b, 0x858a52, 0x7a2e1d, 0xa8492a, 0x2f4a4f, 0x56777a, 0x9fb3a8,
-  0x241c16, 0x3a2e22, 0x5a4632, 0x7b6143, 0x9c7d52, 0xc19f69, 0xe2c690, 0xf6ead0,   // +16 in-betweens for the 32
-  0x3b3b3e, 0x5d5c5c, 0x86837c, 0x5a2418, 0xc2653a, 0x3d5c60, 0x72918e, 0xb4afa4,   // …including neutral greys, so concrete stays concrete
-];
-const PAL = hexes.map(h => new THREE.Color().setHex(h, THREE.LinearSRGBColorSpace));
+// Palettes, P cycles them. Three kinds: designed-for-something-else (PICO-8, Endesga), hand-picked
+// for this street (Wasteland), and derived from the rendered street itself (by area vs by coverage).
+const PALETTES = [
+  { name: 'PICO-8 · 16 (designed, for other art)', hex: [0x000000, 0x1d2b53, 0x7e2553, 0x008751, 0xab5236, 0x5f574f, 0xc2c3c7, 0xfff1e8, 0xff004d, 0xffa300, 0xffec27, 0x00e436, 0x29adff, 0x83769c, 0xff77a8, 0xffccaa] },
+  { name: 'Wasteland · 8', hex: [0x1a1410, 0x4a3a2a, 0x8c6f47, 0xd4b27a, 0xefd9a7, 0x5c613b, 0xa8492a, 0x56777a] },
+  { name: 'Wasteland · 16', hex: [0x1a1410, 0x2e241b, 0x4a3a2a, 0x6b5439, 0x8c6f47, 0xb08d57, 0xd4b27a, 0xefd9a7, 0x3b3f2a, 0x5c613b, 0x858a52, 0x7a2e1d, 0xa8492a, 0x2f4a4f, 0x56777a, 0x9fb3a8] },
+  { name: 'Wasteland · 32', hex: [0x1a1410, 0x2e241b, 0x4a3a2a, 0x6b5439, 0x8c6f47, 0xb08d57, 0xd4b27a, 0xefd9a7, 0x3b3f2a, 0x5c613b, 0x858a52, 0x7a2e1d, 0xa8492a, 0x2f4a4f, 0x56777a, 0x9fb3a8, 0x241c16, 0x3a2e22, 0x5a4632, 0x7b6143, 0x9c7d52, 0xc19f69, 0xe2c690, 0xf6ead0, 0x3b3b3e, 0x5d5c5c, 0x86837c, 0x5a2418, 0xc2653a, 0x3d5c60, 0x72918e, 0xb4afa4] },
+  { name: 'Endesga · 32 (designed, for other art)', hex: [0xbe4a2f, 0xd77643, 0xead4aa, 0xe4a672, 0xb86f50, 0x733e39, 0x3e2731, 0xa22633, 0xe43b44, 0xf77622, 0xfeae34, 0xfee761, 0x63c74d, 0x3e8948, 0x265c42, 0x193c3e, 0x124e89, 0x0099db, 0x2ce8f5, 0xffffff, 0xc0cbdc, 0x8b9bb4, 0x5a6988, 0x3a4466, 0x262b44, 0x181425, 0xff0044, 0x68386c, 0xb55088, 0xf6757a, 0xe8b796, 0xc28569] },
+  { name: 'From the street, by area · 32', hex: [0x0e1319, 0x171f26, 0x2f221c, 0x232b30, 0x2d363e, 0x49382b, 0x3c444c, 0x454e55, 0x505153, 0x68573d, 0x5a5d58, 0x6c5b40, 0x994731, 0x6e5c41, 0x6f5d41, 0x715e41, 0x736043, 0x786343, 0x726258, 0x666966, 0x717876, 0xa06e4f, 0x827c6e, 0x9a8c79, 0xc7804c, 0xb99e7e, 0xceb68d, 0xdac399, 0xe3cca2, 0xead2a8, 0xefd7ac, 0xfbe5b2] },
+  { name: 'From the street, by coverage · 16', hex: [0x090c12, 0x1d2836, 0x33241e, 0x193c31, 0x574034, 0x414953, 0x47664f, 0x8a4b36, 0x6c5b40, 0x757c7a, 0xb3744e, 0xa38265, 0xa19d81, 0xcc9665, 0xd8be93, 0xfeefb7] },
+  { name: 'From the street, by coverage · 32', hex: [0x090c12, 0x0e2b24, 0x1d2836, 0x33241e, 0x2c2a2b, 0x1c3337, 0x193c31, 0x313640, 0x403c35, 0x334f44, 0x574034, 0x414953, 0x47664f, 0x8a4b36, 0x605b57, 0x6c5b40, 0x725f52, 0x5e7666, 0x847563, 0x757c7a, 0xb3744e, 0x848976, 0xa38265, 0x9b8a75, 0xa19d81, 0xb29b7f, 0xcc9665, 0xc5ab86, 0xdcb177, 0xd8be93, 0xf0d9ae, 0xfeefb7] },
+  { name: 'From the street, by coverage · 64', hex: [0x090c12, 0x141a25, 0x1b1c1f, 0x231d1d, 0x0e2b24, 0x22262e, 0x1d2836, 0x33241e, 0x2c2a2b, 0x1c3337, 0x282e39, 0x372e2a, 0x193c31, 0x323438, 0x313640, 0x3e352d, 0x403c35, 0x3b4048, 0x38414f, 0x434344, 0x334f44, 0x574034, 0x414953, 0x524e4b, 0x495359, 0x525457, 0x47664f, 0x67564e, 0x8a4b36, 0x605b57, 0x6c5b40, 0x6f6039, 0x725f52, 0x6b645d, 0x7b6544, 0x666968, 0x5e7666, 0x756e5f, 0x7c6e56, 0x72726c, 0x847563, 0x7b796d, 0x757c7a, 0xb3744e, 0x888277, 0x908272, 0x848976, 0xa38265, 0x9b8a75, 0xa78c76, 0x9c937b, 0xa19d81, 0xb29b7f, 0xcc9665, 0xb6a98c, 0xc5ab86, 0xdcb177, 0xccb792, 0xd8be93, 0xe0caa3, 0xeccfa2, 0xf0d9ae, 0xfce0b1, 0xfeefb7] },
+].map(p => ({ ...p, cols: p.hex.map(h => new THREE.Color().setHex(h, THREE.LinearSRGBColorSpace)),
+  dither: { 8: 0.1, 16: 0.06, 32: 0.035, 64: 0.02 }[p.hex.length] }));
+let palIdx = 3;
+const palSlots = Array.from({ length: 64 }, () => new THREE.Color());
 const post = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
   uniforms: {
     tDiffuse: { value: rt.texture }, tDepth: { value: rt.depthTexture }, texel: { value: new THREE.Vector2() },
-    pal: { value: PAL }, palN: { value: 0 }, px: { value: 2 }, dither: { value: 0 }, grade: { value: 0 },
+    pal: { value: palSlots }, palN: { value: 0 }, px: { value: 2 }, dither: { value: 0 }, grade: { value: 0 },
     fog: { value: 0 }, fogCol: { value: new THREE.Color(0xc9b48f) }, outline: { value: 0 }, posterize: { value: 0 },
   },
   vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
   fragmentShader: `
-    uniform sampler2D tDiffuse, tDepth; uniform vec2 texel; uniform vec3 pal[32]; uniform int palN;
+    uniform sampler2D tDiffuse, tDepth; uniform vec2 texel; uniform vec3 pal[64]; uniform int palN;
     uniform float px, dither, grade, fog, outline, posterize; uniform vec3 fogCol; varying vec2 vUv;
     const float B[16] = float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
     vec3 toSRGB(vec3 c){ return mix(c*12.92, 1.055*pow(c, vec3(1.0/2.4)) - 0.055, step(0.0031308, c)); }
@@ -166,7 +175,7 @@ const post = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMater
         ivec2 p = ivec2(mod(gl_FragCoord.xy / px, 4.0));
         c += (B[p.x + p.y * 4] / 16.0 - 0.5) * dither;
         float best = 1e9; vec3 pick = c;
-        for (int i = 0; i < 32; i++) { if (i >= palN) break; vec3 e = c - pal[i]; float k = dot(e, e); if (k < best) { best = k; pick = pal[i]; } }
+        for (int i = 0; i < 64; i++) { if (i >= palN) break; vec3 e = c - pal[i]; float k = dot(e, e); if (k < best) { best = k; pick = pal[i]; } }
         c = pick;
       }
       vec2 v = vUv - 0.5; c *= 1.0 - dot(v, v) * 0.35 * min(grade, 1.0);   // a faint vignette
@@ -179,11 +188,19 @@ function applyPreset(i) {
   preset = i;
   const p = PRESETS[i], u = post.material.uniforms;
   pixelSize = p.px;
-  u.palN.value = p.pal || 0; u.dither.value = p.dither || 0; u.grade.value = p.grade || 0;
+  if (p.pal !== undefined && p.palDefault === undefined) p.palDefault = p.pal;
+  if (p.pal !== undefined) setPalette(palIdx = p.palDefault); else u.palN.value = 0;
+  u.grade.value = p.grade || 0;
   u.fog.value = p.fog || 0; u.outline.value = p.outline || 0; u.posterize.value = p.posterize || 0;
   scene.background.set(p.fog ? 0xc9b48f : 0x1c1712);
   dirt.material.color.set(p.grade ? 0x9a8462 : 0x4f4030);   // graded looks: the ground past the map reads as dust, not a hole
   resize();
+}
+function setPalette(i) {
+  palIdx = i;
+  const pal = PALETTES[i], u = post.material.uniforms;
+  pal.cols.forEach((c, k) => palSlots[k].copy(c));
+  u.palN.value = pal.cols.length; u.dither.value = pal.dither;
 }
 function setPixelSize(px) { pixelSize = px; resize(); }
 
@@ -306,6 +323,11 @@ addEventListener('keydown', e => {
   if (k === 'e') cam.yawTarget += 90;
   if (k === 'v') { cam.iso = !cam.iso; cam.yawTarget += cam.iso ? 45 : -45; }
   if (k >= '1' && k <= String(PRESETS.length)) applyPreset(+k - 1);
+  if (k === 'p') {
+    if (PRESETS[preset].pal === undefined) applyPreset(3);
+    setPalette((palIdx + (e.shiftKey ? PALETTES.length - 1 : 1)) % PALETTES.length);
+    PRESETS[preset].palDefault = palIdx;
+  }
   if (k === '[') setPixelSize(Math.max(1, pixelSize - 1));
   if (k === ']') setPixelSize(Math.min(8, pixelSize + 1));
   if (k === '-' || k === '_') cam.zoomTarget = Math.min(16, cam.zoomTarget + 1.5);
@@ -328,6 +350,7 @@ function hud() {
   document.getElementById('hud').innerHTML =
     `<b>VIOLENCETOWN</b> · 3D spike<br>` +
     `look <span class="mode">[${preset + 1}] ${PRESETS[preset].name}</span>${pixelSize !== PRESETS[preset].px ? ` · pixel ${pixelSize}` : ''}<br>` +
+    (PRESETS[preset].pal !== undefined ? `palette <span class="mode">${PALETTES[palIdx].name}</span> · P / shift+P<br>` : '') +
     `view <span class="mode">${cam.iso ? 'isometric 45°' : 'straight 3/4'}</span><br>` +
     `WASD/arrows walk · Q/E turn camera · wheel or +/- zoom<br>` +
     `1–${PRESETS.length} look · [ ] pixel size · V iso ↔ straight`;
