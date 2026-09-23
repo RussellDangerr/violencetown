@@ -105,51 +105,97 @@ scene.add(dirt);
 const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 200);
 const cam = { yaw: 45, yawTarget: 45, iso: true, zoom: 6, zoomTarget: 6, pitch: 35.264, target: new THREE.Vector3() };
 
-// ── Pixel pass: draw small, scale up with hard pixels, optionally lock to a palette ──
-const LOOKS = ['Smooth 3D (raw Kenney)', 'Pixel (Kenney colours)', 'Pixel + Wasteland palette'];
-let look = 2, pixelSize = 3;
+// ── The look: render small (or not), grade the colour, haze the distance, outline, quantize ──
+// Each preset is a recipe of the same few knobs; 1–7 switch between them.
+const PRESETS = [
+  { name: 'Smooth 3D — raw Kenney',         px: 1, raw: true },
+  { name: 'Graded — colour + haze, no pixels', px: 1, grade: 1, fog: 0.6 },
+  { name: 'Soft pixel — 2px, graded, outlined', px: 2, grade: 1, fog: 0.5, outline: 0.55 },
+  { name: 'Fine pixel — 2px, 32 colours',   px: 2, grade: 1, fog: 0.4, outline: 0.55, pal: 32, dither: 0.035 },
+  { name: 'Haze — 2px, graded, heavy dust', px: 2, grade: 1.25, fog: 1, outline: 0.35 },
+  { name: 'Painted — 3px, graded, outlined', px: 3, grade: 1, fog: 0.5, outline: 0.7 },
+  { name: 'Chunky — 3px, 16 colours (first try)', px: 3, grade: 1, pal: 16, dither: 0.06 },
+];
+let preset = 2, pixelSize = PRESETS[preset].px;
 const rt = new THREE.WebGLRenderTarget(1, 1, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
-const WASTELAND = [
-  0x1a1410, 0x2e241b, 0x4a3a2a, 0x6b5439, 0x8c6f47, 0xb08d57, 0xd4b27a, 0xefd9a7,
+rt.depthTexture = new THREE.DepthTexture(1, 1);
+const hexes = [
+  0x1a1410, 0x2e241b, 0x4a3a2a, 0x6b5439, 0x8c6f47, 0xb08d57, 0xd4b27a, 0xefd9a7,   // the first 16: the chunky palette
   0x3b3f2a, 0x5c613b, 0x858a52, 0x7a2e1d, 0xa8492a, 0x2f4a4f, 0x56777a, 0x9fb3a8,
-].map(h => new THREE.Color().setHex(h, THREE.LinearSRGBColorSpace));
+  0x241c16, 0x3a2e22, 0x5a4632, 0x7b6143, 0x9c7d52, 0xc19f69, 0xe2c690, 0xf6ead0,   // +16 in-betweens for the 32
+  0x3b3b3e, 0x5d5c5c, 0x86837c, 0x5a2418, 0xc2653a, 0x3d5c60, 0x72918e, 0xb4afa4,   // …including neutral greys, so concrete stays concrete
+];
+const PAL = hexes.map(h => new THREE.Color().setHex(h, THREE.LinearSRGBColorSpace));
 const post = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
-  uniforms: { tDiffuse: { value: rt.texture }, pal: { value: WASTELAND }, usePal: { value: 1 } },
+  uniforms: {
+    tDiffuse: { value: rt.texture }, tDepth: { value: rt.depthTexture }, texel: { value: new THREE.Vector2() },
+    pal: { value: PAL }, palN: { value: 0 }, px: { value: 2 }, dither: { value: 0 }, grade: { value: 0 },
+    fog: { value: 0 }, fogCol: { value: new THREE.Color(0xc9b48f) }, outline: { value: 0 }, posterize: { value: 0 },
+  },
   vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
   fragmentShader: `
-    uniform sampler2D tDiffuse; uniform vec3 pal[16]; uniform int usePal; varying vec2 vUv;
+    uniform sampler2D tDiffuse, tDepth; uniform vec2 texel; uniform vec3 pal[32]; uniform int palN;
+    uniform float px, dither, grade, fog, outline, posterize; uniform vec3 fogCol; varying vec2 vUv;
     const float B[16] = float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
     vec3 toSRGB(vec3 c){ return mix(c*12.92, 1.055*pow(c, vec3(1.0/2.4)) - 0.055, step(0.0031308, c)); }
     void main(){
       vec3 c = toSRGB(texture2D(tDiffuse, vUv).rgb);
-      if (usePal == 1) {
+      float d = texture2D(tDepth, vUv).r;
+      // Outline: darken a pixel whose neighbour is clearly nearer the camera (silhouettes, roof edges).
+      if (outline > 0.0) {
+        float n = min(min(texture2D(tDepth, vUv + vec2(texel.x, 0.)).r, texture2D(tDepth, vUv - vec2(texel.x, 0.)).r),
+                      min(texture2D(tDepth, vUv + vec2(0., texel.y)).r, texture2D(tDepth, vUv - vec2(0., texel.y)).r));
+        if (d - n > 0.0012) c *= 1.0 - outline;
+      }
+      // Grade: dust the colour down, warm the lights, cool the shadows, a gentle S-curve.
+      if (grade > 0.0) {
         float l = dot(c, vec3(0.299, 0.587, 0.114));
-        c = mix(vec3(l), c, 0.75) * vec3(1.04, 0.98, 0.9);           // dust it down: less saturated, warmer
-        ivec2 p = ivec2(mod(gl_FragCoord.xy / ${'${PX}'}, 4.0));
-        c += (B[p.x + p.y * 4] / 16.0 - 0.5) * 0.06;                   // ordered dither between palette steps
+        vec3 g = mix(vec3(l), c, 0.72);
+        g *= mix(vec3(0.82, 0.92, 1.02), vec3(1.06, 0.98, 0.86), smoothstep(0.15, 0.75, l));
+        g = mix(g, g * g * (3.0 - 2.0 * g), 0.35);
+        c = mix(c, g, clamp(grade, 0.0, 1.0));
+        if (grade > 1.0) c = mix(c, g * vec3(1.02, 0.97, 0.9), grade - 1.0);
+      }
+      // Haze: the far side of the scene (and the void past the map) fades into dusty air.
+      if (fog > 0.0) {
+        float f = smoothstep(0.29, 0.35, d) * fog;
+        c = mix(c, fogCol, f);
+      }
+      if (posterize > 0.0) c = floor(c * posterize + 0.5) / posterize;
+      if (palN > 0) {
+        ivec2 p = ivec2(mod(gl_FragCoord.xy / px, 4.0));
+        c += (B[p.x + p.y * 4] / 16.0 - 0.5) * dither;
         float best = 1e9; vec3 pick = c;
-        for (int i = 0; i < 16; i++) { vec3 d = c - pal[i]; float e = dot(d, d); if (e < best) { best = e; pick = pal[i]; } }
+        for (int i = 0; i < 32; i++) { if (i >= palN) break; vec3 e = c - pal[i]; float k = dot(e, e); if (k < best) { best = k; pick = pal[i]; } }
         c = pick;
       }
+      vec2 v = vUv - 0.5; c *= 1.0 - dot(v, v) * 0.35 * min(grade, 1.0);   // a faint vignette
       gl_FragColor = vec4(c, 1.0);
     }`,
 }));
 const postScene = new THREE.Scene(); postScene.add(post);
 const postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-function setPixelSize(px) {
-  pixelSize = px;
-  post.material.fragmentShader = post.material.fragmentShader.replace(/gl_FragCoord\.xy \/ [\d.]+/, `gl_FragCoord.xy / ${px.toFixed(1)}`);
-  post.material.needsUpdate = true;
+function applyPreset(i) {
+  preset = i;
+  const p = PRESETS[i], u = post.material.uniforms;
+  pixelSize = p.px;
+  u.palN.value = p.pal || 0; u.dither.value = p.dither || 0; u.grade.value = p.grade || 0;
+  u.fog.value = p.fog || 0; u.outline.value = p.outline || 0; u.posterize.value = p.posterize || 0;
+  scene.background.set(p.fog ? 0xc9b48f : 0x1c1712);
+  dirt.material.color.set(p.grade ? 0x9a8462 : 0x4f4030);   // graded looks: the ground past the map reads as dust, not a hole
   resize();
 }
-post.material.fragmentShader = post.material.fragmentShader.replace('${PX}', '3.0');
+function setPixelSize(px) { pixelSize = px; resize(); }
 
 function resize() {
   const w = innerWidth, h = innerHeight;
   renderer.setSize(w, h);
-  rt.setSize(Math.ceil(w / pixelSize), Math.ceil(h / pixelSize));
+  const rw = Math.ceil(w / pixelSize), rh = Math.ceil(h / pixelSize);
+  rt.setSize(rw, rh);
+  post.material.uniforms.texel.value.set(1 / rw, 1 / rh);
+  post.material.uniforms.px.value = pixelSize;
 }
-addEventListener('resize', resize); resize();
+addEventListener('resize', resize); applyPreset(preset);
 
 // ── Load models ──
 const loader = new GLTFLoader();
@@ -259,7 +305,7 @@ addEventListener('keydown', e => {
   if (k === 'q') cam.yawTarget -= 90;
   if (k === 'e') cam.yawTarget += 90;
   if (k === 'v') { cam.iso = !cam.iso; cam.yawTarget += cam.iso ? 45 : -45; }
-  if (k === '1' || k === '2' || k === '3') { look = +k - 1; post.material.uniforms.usePal.value = look === 2 ? 1 : 0; }
+  if (k >= '1' && k <= String(PRESETS.length)) applyPreset(+k - 1);
   if (k === '[') setPixelSize(Math.max(1, pixelSize - 1));
   if (k === ']') setPixelSize(Math.min(8, pixelSize + 1));
   if (k === '-' || k === '_') cam.zoomTarget = Math.min(16, cam.zoomTarget + 1.5);
@@ -281,10 +327,10 @@ function screenDirs() {
 function hud() {
   document.getElementById('hud').innerHTML =
     `<b>VIOLENCETOWN</b> · 3D spike<br>` +
-    `look <span class="mode">[${look + 1}] ${LOOKS[look]}</span>${look ? ` · pixel ${pixelSize}` : ''}<br>` +
+    `look <span class="mode">[${preset + 1}] ${PRESETS[preset].name}</span>${pixelSize !== PRESETS[preset].px ? ` · pixel ${pixelSize}` : ''}<br>` +
     `view <span class="mode">${cam.iso ? 'isometric 45°' : 'straight 3/4'}</span><br>` +
     `WASD/arrows walk · Q/E turn camera · wheel or +/- zoom<br>` +
-    `1/2/3 look · [ ] pixel size · V iso ↔ straight`;
+    `1–${PRESETS.length} look · [ ] pixel size · V iso ↔ straight`;
 }
 
 // ── Loop ──
@@ -348,7 +394,7 @@ function frame() {
     g.traverse(o => { if (o.isMesh) { const m = o.material; m.transparent = true; m.opacity += (target - m.opacity) * Math.min(1, dt * 10); m.depthWrite = m.opacity > 0.95; } });
   }
 
-  if (look === 0) { renderer.setRenderTarget(null); renderer.render(scene, camera); }
+  if (PRESETS[preset].raw) { renderer.setRenderTarget(null); renderer.render(scene, camera); }
   else { renderer.setRenderTarget(rt); renderer.render(scene, camera); renderer.setRenderTarget(null); renderer.render(postScene, postCam); }
   requestAnimationFrame(frame);
 }
