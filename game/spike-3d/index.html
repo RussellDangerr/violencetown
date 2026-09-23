@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Violencetown 3D Spike</title>
+<style>
+  @font-face { font-family: 'VT323'; src: url('../assets/fonts/VT323.ttf') format('truetype'); }
+  html, body { margin: 0; height: 100%; background: #1c1712; overflow: hidden; }
+  canvas { display: block; }
+  .hud {
+    position: fixed; left: 12px; top: 12px; max-width: calc(100vw - 24px);
+    font: 22px/1.05 'VT323', monospace; color: #efd9a7;
+    background: rgba(26, 20, 16, 0.82); border: 2px solid #6b5439; padding: 8px 12px;
+    pointer-events: none; user-select: none;
+  }
+  .hud b { color: #d4b27a; font-weight: normal; }
+  .hud .mode { color: #a8d0c4; }
+  .credit {
+    position: fixed; right: 12px; bottom: 10px; font: 18px 'VT323', monospace;
+    color: #b08d57; background: rgba(26, 20, 16, 0.7); padding: 2px 8px; pointer-events: none;
+  }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div class="hud" id="hud">loading models…</div>
+<div class="credit">Models: Kenney (kenney.nl), CC0 · Violencetown 3D spike</div>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+// ── The street, as a grid — the same shape of data the real game's maps are ──
+const W = 18, H = 14;
+const ROAD_Z = 7, ROAD_X = 9;
+
+// Buildings: 2×2 footprints, anchor = min corner. face: 's' fronts the road from the north.
+const BUILDINGS = [
+  ['building-a', 1, 4, 's'], ['building-c', 3, 4, 's'], ['building-e', 5, 4, 's'],
+  ['building-b', 11, 4, 's'], ['building-g', 13, 4, 's'], ['building-d', 15, 4, 's'],
+  ['building-f', 1, 9, 'n'], ['building-h', 3, 9, 'n'], ['building-b', 5, 9, 'n'],
+  ['building-e', 11, 9, 'n'], ['building-a', 13, 9, 'n'], ['building-c', 15, 9, 'n'],
+];
+
+// Props: [kit, model, x, z, rotY°, sizing, blocks, cellsW, cellsD]
+// sizing: {h} = target height in tiles, {fit} = longest horizontal side in tiles
+const PROPS = [
+  ['roads', 'light-square', 2, 6, 90, { h: 1.6 }, true],
+  ['roads', 'light-square', 6, 6, 90, { h: 1.6 }, true],
+  ['roads', 'light-square', 12, 8, -90, { h: 1.6 }, true],
+  ['roads', 'light-square', 16, 8, -90, { h: 1.6 }, true],
+  ['graveyard', 'fire-basket', 7, 2, 0, { fit: 0.55 }, true],
+  ['survival', 'barrel', 4, 2, 0, { h: 0.55 }, true],
+  ['survival', 'barrel', 5, 2, 30, { h: 0.55 }, true],
+  ['survival', 'barrel', 16, 8, 0, { h: 0.55 }, true],
+  ['survival', 'box-large', 12, 2, 10, { h: 0.8 }, true],
+  ['survival', 'box', 13, 2, -20, { h: 0.45 }, true],
+  ['survival', 'box-large', 14, 12, 0, { h: 0.8 }, true],
+  ['survival', 'metal-panel', 0, 3, 90, { h: 1.0 }, true],
+  ['graveyard', 'bench-damaged', 4, 8, 180, { fit: 0.9 }, true],
+  ['graveyard', 'lightpost-single', 7, 8, 0, { h: 1.7 }, true],
+  ['graveyard', 'debris', 11, 12, 0, { fit: 0.8 }, false],
+  ['cars', 'police', 5, 7, 75, { fit: 1.9 }, true, 2, 1],
+  ['cars', 'sedan', 13, 7, 90, { fit: 1.9 }, true, 2, 1],
+  ['cars', 'taxi', 9, 2, 0, { fit: 1.9 }, true, 1, 2],
+  ['cars', 'debris-tire', 3, 7, 40, { h: 0.25 }, false],
+  ['roads', 'construction-cone', 8, 6, 0, { h: 0.35 }, false],
+  ['roads', 'construction-cone', 10, 8, 0, { h: 0.35 }, false],
+  ['roads', 'construction-barrier', 9, 11, 0, { fit: 0.9 }, true],
+  ['suburban', 'tree-small', 1, 1, 0, { h: 1.8 }, true],
+  ['suburban', 'tree-small', 15, 1, 40, { h: 1.8 }, true],
+  ['suburban', 'tree-small', 3, 12, 80, { h: 1.8 }, true],
+  ['suburban', 'tree-small', 16, 12, 10, { h: 1.8 }, true],
+];
+for (let x = 0; x < W; x++) if (x !== ROAD_X) PROPS.push(['graveyard', 'iron-fence', x, 0, 0, { fit: 1 }, true]);
+for (let x = 0; x < W; x++) if (x !== ROAD_X) PROPS.push(['suburban', 'fence-low', x, 13, 0, { fit: 1 }, true]);
+
+// ── Renderer, scene, light ──
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(1);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFShadowMap;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1c1712);
+scene.add(new THREE.HemisphereLight(0xbfd4e0, 0x5a4a38, 1.1));
+const sun = new THREE.DirectionalLight(0xffe2b0, 2.4);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -14, right: 14, top: 14, bottom: -14, near: 1, far: 60 });
+sun.shadow.bias = -0.0008;
+scene.add(sun, sun.target);
+
+const dirt = new THREE.Mesh(new THREE.PlaneGeometry(90, 90), new THREE.MeshLambertMaterial({ color: 0x4f4030 }));
+dirt.rotation.x = -Math.PI / 2; dirt.position.set(W / 2, -0.02, H / 2); dirt.receiveShadow = true;
+scene.add(dirt);
+
+// ── Camera: orthographic, turns in 90° steps, zooms ──
+const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 200);
+const cam = { yaw: 45, yawTarget: 45, iso: true, zoom: 6, zoomTarget: 6, pitch: 35.264, target: new THREE.Vector3() };
+
+// ── Pixel pass: draw small, scale up with hard pixels, optionally lock to a palette ──
+const LOOKS = ['Smooth 3D (raw Kenney)', 'Pixel (Kenney colours)', 'Pixel + Wasteland palette'];
+let look = 2, pixelSize = 3;
+const rt = new THREE.WebGLRenderTarget(1, 1, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
+const WASTELAND = [
+  0x1a1410, 0x2e241b, 0x4a3a2a, 0x6b5439, 0x8c6f47, 0xb08d57, 0xd4b27a, 0xefd9a7,
+  0x3b3f2a, 0x5c613b, 0x858a52, 0x7a2e1d, 0xa8492a, 0x2f4a4f, 0x56777a, 0x9fb3a8,
+].map(h => new THREE.Color().setHex(h, THREE.LinearSRGBColorSpace));
+const post = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
+  uniforms: { tDiffuse: { value: rt.texture }, pal: { value: WASTELAND }, usePal: { value: 1 } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+  fragmentShader: `
+    uniform sampler2D tDiffuse; uniform vec3 pal[16]; uniform int usePal; varying vec2 vUv;
+    const float B[16] = float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
+    vec3 toSRGB(vec3 c){ return mix(c*12.92, 1.055*pow(c, vec3(1.0/2.4)) - 0.055, step(0.0031308, c)); }
+    void main(){
+      vec3 c = toSRGB(texture2D(tDiffuse, vUv).rgb);
+      if (usePal == 1) {
+        float l = dot(c, vec3(0.299, 0.587, 0.114));
+        c = mix(vec3(l), c, 0.75) * vec3(1.04, 0.98, 0.9);           // dust it down: less saturated, warmer
+        ivec2 p = ivec2(mod(gl_FragCoord.xy / ${'${PX}'}, 4.0));
+        c += (B[p.x + p.y * 4] / 16.0 - 0.5) * 0.06;                   // ordered dither between palette steps
+        float best = 1e9; vec3 pick = c;
+        for (int i = 0; i < 16; i++) { vec3 d = c - pal[i]; float e = dot(d, d); if (e < best) { best = e; pick = pal[i]; } }
+        c = pick;
+      }
+      gl_FragColor = vec4(c, 1.0);
+    }`,
+}));
+const postScene = new THREE.Scene(); postScene.add(post);
+const postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+function setPixelSize(px) {
+  pixelSize = px;
+  post.material.fragmentShader = post.material.fragmentShader.replace(/gl_FragCoord\.xy \/ [\d.]+/, `gl_FragCoord.xy / ${px.toFixed(1)}`);
+  post.material.needsUpdate = true;
+  resize();
+}
+post.material.fragmentShader = post.material.fragmentShader.replace('${PX}', '3.0');
+
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h);
+  rt.setSize(Math.ceil(w / pixelSize), Math.ceil(h / pixelSize));
+}
+addEventListener('resize', resize); resize();
+
+// ── Load models ──
+const loader = new GLTFLoader();
+const cache = new Map();
+const load = (kit, name) => {
+  const key = `${kit}/${name}`;
+  if (!cache.has(key)) cache.set(key, loader.loadAsync(`models/${key}.glb`));
+  return cache.get(key);
+};
+
+const blocked = new Set();
+const key = (x, z) => `${x},${z}`;
+const buildingGroups = [];
+
+// Wrap a model so it stands on the ground, centred on its footprint, sized to spec.
+function place(src, { x, z, w = 1, d = 1, ry = 0, sizing, own = false }) {
+  const model = own ? src : src.clone(true);   // animated characters keep their own scene so the mixer drives what's drawn
+  const box = new THREE.Box3().setFromObject(model);
+  const size = box.getSize(new THREE.Vector3()), ctr = box.getCenter(new THREE.Vector3());
+  const s = sizing.h ? sizing.h / size.y : sizing.fit / Math.max(size.x, size.z);
+  model.position.set(-ctr.x, -box.min.y, -ctr.z);
+  const inner = new THREE.Group(); inner.add(model); inner.scale.setScalar(s);
+  const g = new THREE.Group(); g.add(inner);
+  g.rotation.y = THREE.MathUtils.degToRad(ry);
+  g.position.set(x + w / 2, 0, z + d / 2);
+  g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  scene.add(g);
+  return g;
+}
+
+async function build() {
+  const [roadStraight, roadCross, sidewalk] = await Promise.all([
+    load('roads', 'road-straight'), load('roads', 'road-crossroad'), load('roads', 'tile-low')]);
+  for (let z = 0; z < H; z++) for (let x = 0; x < W; x++) {
+    let src = sidewalk.scene, ry = 0;
+    if (x === ROAD_X && z === ROAD_Z) src = roadCross.scene;
+    else if (z === ROAD_Z) src = roadStraight.scene;                    // Kenney's straight road runs along x
+    else if (x === ROAD_X) { src = roadStraight.scene; ry = 90; }
+    const t = place(src, { x, z, ry, sizing: { fit: 1 } });
+    t.position.y = 0;
+  }
+  await Promise.all(BUILDINGS.map(async ([name, x, z, face]) => {
+    const g = place((await load('commercial', name)).scene, { x, z, w: 2, d: 2, ry: face === 's' ? 0 : 180, sizing: { fit: 2 } });
+    g.traverse(o => { if (o.isMesh) o.material = o.material.clone(); });
+    buildingGroups.push(g);
+    for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) blocked.add(key(x + i, z + j));
+  }));
+  await Promise.all(PROPS.map(async ([kit, name, x, z, ry, sizing, blocks, w = 1, d = 1]) => {
+    place((await load(kit, name)).scene, { x, z, w, d, ry, sizing });
+    if (blocks) for (let i = 0; i < w; i++) for (let j = 0; j < d; j++) blocked.add(key(x + i, z + j));
+    if (name === 'fire-basket') {
+      const fire = new THREE.PointLight(0xff8a3a, 6, 6, 1.4);
+      fire.position.set(x + 0.5, 0.9, z + 0.5); scene.add(fire);
+    }
+  }));
+}
+
+// ── Characters: grid-stepping, turning to face where they go ──
+class Walker {
+  constructor(gltf, x, z, height) {
+    this.x = x; this.z = z; this.from = null; this.t = 1; this.facing = 0; this.faceTarget = 0;
+    this.root = place(gltf.scene, { x, z, sizing: { h: height }, own: true });
+    this.mixer = new THREE.AnimationMixer(gltf.scene);
+    this.clips = Object.fromEntries(gltf.animations.map(c => [c.name, this.mixer.clipAction(c)]));
+    this.play('idle');
+  }
+  play(name) {
+    const next = this.clips[name];
+    if (!next || next === this.current) return;
+    next.reset().fadeIn(0.15).play();
+    if (this.current) this.current.fadeOut(0.15);
+    this.current = next;
+  }
+  get moving() { return this.t < 1; }
+  step(dx, dz) {
+    this.faceToward(dx, dz);
+    const nx = this.x + dx, nz = this.z + dz;
+    if (!free(nx, nz, this)) return false;
+    this.from = [this.x, this.z]; this.x = nx; this.z = nz; this.t = 0;
+    return true;
+  }
+  faceToward(dx, dz) { this.faceTarget = Math.atan2(dx, dz); }
+  update(dt, speed = 4.5) {
+    this.mixer.update(dt);
+    if (this.t < 1) {
+      this.t = Math.min(1, this.t + dt * speed);
+      const [fx, fz] = this.from;
+      this.root.position.x = THREE.MathUtils.lerp(fx, this.x, this.t) + 0.5;
+      this.root.position.z = THREE.MathUtils.lerp(fz, this.z, this.t) + 0.5;
+    }
+    let diff = this.faceTarget - this.facing;
+    diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+    this.facing += diff * Math.min(1, dt * 14);
+    this.root.rotation.y = this.facing;
+  }
+}
+
+const walkers = [];
+const free = (x, z, self) => x >= 0 && z >= 0 && x < W && z < H && !blocked.has(key(x, z))
+  && !walkers.some(w => w !== self && w.x === x && w.z === z);
+
+// ── Input ──
+const held = new Set();
+addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  held.add(k);
+  if (k === 'q') cam.yawTarget -= 90;
+  if (k === 'e') cam.yawTarget += 90;
+  if (k === 'v') { cam.iso = !cam.iso; cam.yawTarget += cam.iso ? 45 : -45; }
+  if (k === '1' || k === '2' || k === '3') { look = +k - 1; post.material.uniforms.usePal.value = look === 2 ? 1 : 0; }
+  if (k === '[') setPixelSize(Math.max(1, pixelSize - 1));
+  if (k === ']') setPixelSize(Math.min(8, pixelSize + 1));
+  if (k === '-' || k === '_') cam.zoomTarget = Math.min(16, cam.zoomTarget + 1.5);
+  if (k === '=' || k === '+') cam.zoomTarget = Math.max(3, cam.zoomTarget - 1.5);
+  if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
+  hud();
+});
+addEventListener('keyup', e => held.delete(e.key.toLowerCase()));
+addEventListener('blur', () => held.clear());
+addEventListener('wheel', e => { cam.zoomTarget = THREE.MathUtils.clamp(cam.zoomTarget + Math.sign(e.deltaY) * 1.2, 3, 16); }, { passive: true });
+
+// Screen-up in grid terms, for the camera's current quarter-turn.
+function screenDirs() {
+  const q = ((Math.round((cam.yawTarget - (cam.iso ? 45 : 0)) / 90) % 4) + 4) % 4;
+  const up = [[0, -1], [-1, 0], [0, 1], [1, 0]][q];
+  return { up, right: [-up[1], up[0]] };
+}
+
+function hud() {
+  document.getElementById('hud').innerHTML =
+    `<b>VIOLENCETOWN</b> · 3D spike<br>` +
+    `look <span class="mode">[${look + 1}] ${LOOKS[look]}</span>${look ? ` · pixel ${pixelSize}` : ''}<br>` +
+    `view <span class="mode">${cam.iso ? 'isometric 45°' : 'straight 3/4'}</span><br>` +
+    `WASD/arrows walk · Q/E turn camera · wheel or +/- zoom<br>` +
+    `1/2/3 look · [ ] pixel size · V iso ↔ straight`;
+}
+
+// ── Loop ──
+let player, ghost, npc, ghostClock = 0;
+const clock = new THREE.Clock();
+const ray = new THREE.Raycaster();
+
+function frame() {
+  const dt = Math.min(0.05, clock.getDelta());
+
+  // Player
+  if (!player.moving) {
+    const { up, right } = screenDirs();
+    let d = null;
+    if (held.has('w') || held.has('arrowup')) d = up;
+    else if (held.has('s') || held.has('arrowdown')) d = [-up[0], -up[1]];
+    else if (held.has('a') || held.has('arrowleft')) d = [-right[0], -right[1]];
+    else if (held.has('d') || held.has('arrowright')) d = right;
+    if (d) player.step(d[0], d[1]);
+  }
+  player.play(player.moving || [...held].some(k => 'wasd'.includes(k) || k.startsWith('arrow')) ? 'walk' : 'idle');
+  player.update(dt);
+
+  // Ghost: drifts around the back lot; if you're beside it, it stops and turns to face you.
+  const near = (a, dist) => Math.abs(a.x - player.x) + Math.abs(a.z - player.z) <= dist;
+  ghostClock -= dt;
+  if (near(ghost, 1)) { ghost.faceToward(player.x - ghost.x, player.z - ghost.z); ghost.play('idle'); }
+  else if (!ghost.moving && ghostClock <= 0) {
+    ghostClock = 0.9 + Math.random();
+    const opts = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dz]) => ghost.z + dz <= 3 && free(ghost.x + dx, ghost.z + dz, ghost));
+    if (opts.length) ghost.step(...opts[Math.floor(Math.random() * opts.length)]);
+  }
+  if (!near(ghost, 1)) ghost.play(ghost.moving ? 'walk' : 'idle');
+  ghost.update(dt, 2.5);
+
+  // The Violencian on the corner watches you once you're close.
+  if (near(npc, 3)) npc.faceToward(player.x - npc.x, player.z - npc.z); else npc.faceToward(0, 1);
+  npc.update(dt);
+
+  // Camera
+  cam.yaw += (cam.yawTarget - cam.yaw) * Math.min(1, dt * 9);
+  cam.zoom += (cam.zoomTarget - cam.zoom) * Math.min(1, dt * 9);
+  cam.target.lerp(player.root.position, Math.min(1, dt * 8));
+  const yaw = THREE.MathUtils.degToRad(cam.yaw), pitch = THREE.MathUtils.degToRad(cam.pitch);
+  const dir = new THREE.Vector3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
+  camera.position.copy(cam.target).addScaledVector(dir, 60);
+  camera.lookAt(cam.target);
+  const aspect = innerWidth / innerHeight;
+  Object.assign(camera, { left: -cam.zoom * aspect, right: cam.zoom * aspect, top: cam.zoom, bottom: -cam.zoom });
+  camera.updateProjectionMatrix();
+  sun.position.copy(cam.target).add(new THREE.Vector3(-9, 12, 6));
+  sun.target.position.copy(cam.target);
+
+  // Buildings between the camera and the player fade out.
+  const head = player.root.position.clone().add(new THREE.Vector3(0, 0.4, 0));
+  ray.set(head.clone().addScaledVector(dir, 60), dir.clone().negate());
+  ray.far = 60;
+  const hit = new Set(ray.intersectObjects(buildingGroups, true).map(h => { let o = h.object; while (!buildingGroups.includes(o)) o = o.parent; return o; }));
+  for (const g of buildingGroups) {
+    const target = hit.has(g) ? 0.28 : 1;
+    g.traverse(o => { if (o.isMesh) { const m = o.material; m.transparent = true; m.opacity += (target - m.opacity) * Math.min(1, dt * 10); m.depthWrite = m.opacity > 0.95; } });
+  }
+
+  if (look === 0) { renderer.setRenderTarget(null); renderer.render(scene, camera); }
+  else { renderer.setRenderTarget(rt); renderer.render(scene, camera); renderer.setRenderTarget(null); renderer.render(postScene, postCam); }
+  requestAnimationFrame(frame);
+}
+
+await build();
+const [pm, gm, nm] = await Promise.all([load('chars', 'character-male-a'), load('graveyard', 'character-ghost'), load('chars', 'character-female-b')]);
+player = new Walker(pm, 8, 8, 0.8);
+ghost = new Walker(gm, 3, 2, 0.8);
+npc = new Walker(nm, 14, 6, 0.78);
+walkers.push(player, ghost, npc);
+window.__spike = { player, ghost, npc, cam, blocked, scene, renderer };
+hud();
+frame();
+</script>
+</body>
+</html>
