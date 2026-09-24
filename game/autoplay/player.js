@@ -52,12 +52,13 @@ export function decide(view, goals, knobs = KNOBS) {
     if (view.hp < knobs.healBelow * view.maxHp && view.canEat) return { kind: 'eat' };
 
     const goal = currentGoal(view, goals);
-    // The quarry is what the goal is about: the enemy to kill, or a hostile
-    // standing on the item to take — the drop lands under whoever is there,
-    // and an enemy that walks onto it blocks the path as surely as a wall
-    // (measured, seed 3: the Fungus King stood on the converter and the
-    // fighter waited sixty turns beside nothing).
-    const onTake = (e) => goal && goal.take && e.hostile
+    // The quarry is what the goal is about: the enemy to kill, or whoever
+    // stands on the item to take — the drop lands under whoever is there, and
+    // a fungus never moves off it, so waiting does not work. Measured: seed 3,
+    // the Fungus King stood on the converter and the fighter waited sixty
+    // turns; seed 5, a Violet Fungus that had stopped being hostile did the
+    // same to the sneak. Hostile or not, it is in the way.
+    const onTake = (e) => goal && goal.take
         && view.items.some((i) => i.type === goal.take && i.x === e.x && i.y === e.y);
     const quarry = (e) => !!goal && ((goal.kill && e.tag === goal.kill) || onTake(e));
     const fights = (e) => quarry(e) || (e.hostile && (!knobs.sneak || e.aware));

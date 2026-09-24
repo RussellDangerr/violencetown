@@ -77,6 +77,13 @@ describe('the standard fighter', () => {
             { kind: 'step', dir: 'right' });
         assert.equal(decide(view({ rows: open, player: { x: 2, y: 1 }, mapUrl: 'sewer-map.json', enemies: [king], items }), take).kind, 'attack');
     });
+    test('take: so is one that is not hostile — a fungus never moves off it', () => {
+        const take = [{ take: 'catalytic_converter', map: 'sewer-map.json' }];
+        const fungus = { x: 3, y: 1, hp: 100, hostile: false, aware: false, tag: null };
+        const items = [{ type: 'catalytic_converter', x: 3, y: 1 }];
+        assert.deepEqual(decide(view({ rows: open, player: { x: 2, y: 1 }, mapUrl: 'sewer-map.json', enemies: [fungus], items }), take),
+            { kind: 'attack', at: { x: 3, y: 1 }, dir: 'right' });
+    });
     test('take: walks onto the item', () => {
         const a = decide(view({ rows: open, player: { x: 1, y: 0 }, mapUrl: 'sewer-map.json',
             items: [{ type: 'catalytic_converter', x: 1, y: 2 }] }), [{ take: 'catalytic_converter', map: 'sewer-map.json' }]);

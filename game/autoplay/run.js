@@ -287,7 +287,14 @@ function driver(ap, g) {
             await press('Space');   // drill in; on a leaf this fires, or starts aiming
             if (g.state !== 'radial_menu') return null;
         }
-        if (g.wheel.aiming && at) {
+        // An adjacent verb (Hit) commits on the direction press itself
+        // (main.js _reticleKey), so pointing is the whole aim.
+        const leaf = selectedNode(g.wheel);
+        if (g.wheel.aiming && at && leaf.aimType === 'adjacent') {
+            const dir = Object.keys(STEP).find((d) => g.playerX + STEP[d][0] === at.x && g.playerY + STEP[d][1] === at.y);
+            if (!dir) { await closeWheel(); return `cannot point ${keys.join(' > ')} at ${at.x},${at.y}`; }
+            await press(DIR_CODES[dir]);
+        } else if (g.wheel.aiming && at) {
             const missed = await aim(at);
             if (missed) { await closeWheel(); return missed; }
         }
@@ -317,6 +324,10 @@ function driver(ap, g) {
         if (a.kind === 'cast') return wheel(['fight', 'magic', a.spell], a.at);
         if (a.kind === 'throw') return wheel(['fight', 'ranged'], a.at);
         if (a.kind === 'attack') {
+            // E on someone who is not hostile talks to them rather than
+            // hitting them; the wheel's Hit, pointed at them, is the swing.
+            const t = a.at && g.enemies.find((e) => e.entity.isAlive() && e.x === a.at.x && e.y === a.at.y);
+            if (t && !isHostile(t) && a.dir) return wheel(['fight', 'melee', 'hit'], a.at);
             if (!a.dir) return wheel(['fight', 'melee', 'hit']);
             const turned = await face(a.dir);
             if (turned) return turned;
