@@ -59,8 +59,10 @@ via `node --test`; a single file is `node --test tests/<name>.test.js`. Baseline
 **The autoplay** (`plans/quest1-autoplay.md`): `npm run autoplay:check` plays quest 1 headless in
 the installed Chrome — a fighter and a sneak, on a virtual clock so a seed replays exactly — and
 compares each stage's score with `tools/autoplay-golden.json`. Drift fails it; `npm run
-autoplay:write` records an intended change. It needs Chrome, so it is not part of `npm test` and
-cannot run in cloud routines. `?autoplay&speed=2` on the page watches a run; any key stops it.
+autoplay:write` records an intended change. It needs Chrome, so it is not part of `npm test`. It
+**does** run in a Claude Code cloud container (since 2026-09-24): it finds the Playwright Chromium
+under `PLAYWRIGHT_BROWSERS_PATH` and passes `--no-sandbox` when running as root. A routine with no
+browser at all still cannot run it. `?autoplay&speed=2` on the page watches a run; any key stops it.
 
 Several older docs — `plans/defeat-scenarios*.md`, `plans/remembrance-rings*.md`,
 `plans/pd3-ai-consolidation*.md`, `plans/ring-builds-ability-axis.md`,

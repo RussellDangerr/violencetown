@@ -1,8 +1,9 @@
 // player.js — the autoplay's players (plans/quest1-autoplay.md §7). One
 // decision per call, from a plain view of the game:
 //   1. below the heal threshold, with food: eat
-//   2. a hostile beside you (or the quarry): hit it — the quarry first,
-//      otherwise the weakest
+//   2. something to fight within reach: spend what you carry on it (ruling
+//      Q1-10) — drink, then a spell while the MP lasts, then a throw, then the
+//      sword. The quarry first, otherwise the weakest
 //   3. otherwise work the current goal: get to its map, then use / kill / take
 //      / reach it
 // The fighter (ruling Q1-2) does exactly that. The sneak (ruling Q1-8) walks
@@ -12,8 +13,13 @@
 
 import { pathTo, cheapestPath } from './path.js';
 
-export const FIGHTER = { healBelow: 0.4, sneak: false };
-export const SNEAK = { healBelow: 0.4, sneak: true };
+// `spells` is the order a player reaches for its spells: the first one known,
+// affordable and in range is cast. Fireball first — 20 through a 3x3 burst for
+// 12 MP beats Cone of Cold's 14 for 10 against armour (plans/quest1-autoplay.md
+// Q1-10). An empty list is a player who only swings.
+const ARSENAL = ['fireball', 'coneofcold'];
+export const FIGHTER = { healBelow: 0.4, sneak: false, spells: ARSENAL, items: true };
+export const SNEAK = { healBelow: 0.4, sneak: true, spells: ARSENAL, items: true };
 export const KNOBS = FIGHTER;
 
 // What a tile costs the sneak, in steps. `seenAt` is the worst verdict any
@@ -46,11 +52,20 @@ export function decide(view, goals, knobs = KNOBS) {
     if (view.hp < knobs.healBelow * view.maxHp && view.canEat) return { kind: 'eat' };
 
     const goal = currentGoal(view, goals);
-    const quarry = goal && goal.kill;
-    const fights = (e) => (quarry && e.tag === quarry) || (e.hostile && (!knobs.sneak || e.aware));
+    // The quarry is what the goal is about: the enemy to kill, or a hostile
+    // standing on the item to take — the drop lands under whoever is there,
+    // and an enemy that walks onto it blocks the path as surely as a wall
+    // (measured, seed 3: the Fungus King stood on the converter and the
+    // fighter waited sixty turns beside nothing).
+    const onTake = (e) => goal && goal.take && e.hostile
+        && view.items.some((i) => i.type === goal.take && i.x === e.x && i.y === e.y);
+    const quarry = (e) => !!goal && ((goal.kill && e.tag === goal.kill) || onTake(e));
+    const fights = (e) => quarry(e) || (e.hostile && (!knobs.sneak || e.aware));
     const beside = view.enemies.filter((e) => cheb(e, view.player) === 1 && fights(e));
+    const spent = spend(view, fights, quarry, knobs);
+    if (spent) return spent;
     if (beside.length) {
-        const t = beside.find((e) => quarry && e.tag === quarry) || beside.reduce((a, b) => (b.hp < a.hp ? b : a));
+        const t = pick(beside, quarry);
         return { kind: 'attack', at: { x: t.x, y: t.y }, dir: dirTo(view.player, t) };
     }
     if (!goal) return { kind: 'wait', why: 'every goal of this stage is met, and the quest has not moved on' };
@@ -64,6 +79,8 @@ export function decide(view, goals, knobs = KNOBS) {
         return toward(view, around(t), `the ${goal.kill}`, knobs);
     }
     if (goal.take) {
+        const blocker = view.enemies.find(onTake);
+        if (blocker) return toward(view, around(blocker), `the ${goal.take}, past what stands on it`, knobs);
         return toward(view, view.items.filter((i) => i.type === goal.take), goal.take, knobs);
     }
     if (goal.use) {
@@ -73,6 +90,46 @@ export function decide(view, goals, knobs = KNOBS) {
         return toward(view, stands, goal.use, knobs);
     }
     return { kind: 'wait', why: `a goal this player does not know: ${JSON.stringify(goal)}` };
+}
+
+const pick = (enemies, quarry) =>
+    enemies.find(quarry) || enemies.reduce((a, b) => (b.hp < a.hp ? b : a));
+
+// Ruling Q1-10: burn the MP, use every item. What is worth spending on: the
+// quarry, anything hunting you, and anything beside you that this player
+// fights. The sneak spends on the quarry only once it is beside it or has
+// been seen — a fireball from the dark gives the approach away.
+function spend(view, fights, quarry, knobs) {
+    const d = (e) => cheb(e, view.player);
+    const worth = view.enemies.filter((e) => fights(e) && (d(e) === 1 || e.aware || (quarry(e) && !knobs.sneak)));
+    if (!worth.length) return null;
+    // In range, and somewhere the reticle can actually be walked to — a wall
+    // between can cut a tile in range off from where it starts (measured,
+    // seed 2: "no way to aim at 8,4").
+    const within = (range, what) => worth.filter((e) => d(e) <= range && (!view.canAim || view.canAim(what, e)));
+
+    if (knobs.items && view.canDrink) return { kind: 'drink' };
+    for (const key of knobs.spells || []) {
+        const sp = (view.spells || []).find((s) => s.key === key);
+        if (!sp || (view.mp ?? 0) < sp.cost) continue;
+        const inReach = within(sp.range, key).filter((e) => catches(sp, view.player, e));
+        if (inReach.length) { const t = pick(inReach, quarry); return { kind: 'cast', spell: key, at: { x: t.x, y: t.y } }; }
+    }
+    if (knobs.items && view.throwRange) {
+        const inReach = within(view.throwRange, 'throw');
+        if (inReach.length) { const t = pick(inReach, quarry); return { kind: 'throw', at: { x: t.x, y: t.y } }; }
+    }
+    return null;
+}
+
+// Does a spell aimed at `t` hit it? A burst centres on its reticle, so always.
+// A cone is cardinalised to the dominant axis and widens one tile a side per
+// step (wheel-model coneTiles), so an exact diagonal falls just outside it —
+// measured: two Cones of Cold fizzled on diagonals before this.
+function catches(sp, p, t) {
+    if (sp.shape !== 'cone') return true;
+    const a = Math.abs(t.x - p.x), b = Math.abs(t.y - p.y);
+    return Math.min(a, b) < Math.max(a, b);
 }
 
 // Open tiles with a side neighbour that is `id` — where E reaches it.

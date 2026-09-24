@@ -15,7 +15,7 @@
 import http from 'node:http';
 import { spawn, spawnSync } from 'node:child_process';
 import { readFile, mkdtemp, rm } from 'node:fs/promises';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -65,7 +65,15 @@ const CHROMES = [
     process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'Google/Chrome/Application/chrome.exe'),
     '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser',
+    // A cloud container's Playwright Chromium (PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers).
+    ...playwrightChromes(process.env.PLAYWRIGHT_BROWSERS_PATH),
 ].filter(Boolean);
+
+function playwrightChromes(root) {
+    if (!root || !existsSync(root)) return [];
+    return readdirSync(root).filter((d) => /^chromium-\d+$/.test(d)).sort().reverse()
+        .map((d) => path.join(root, d, 'chrome-linux', 'chrome'));
+}
 
 async function launchChrome() {
     const exe = CHROMES.find((p) => existsSync(p));
@@ -73,7 +81,10 @@ async function launchChrome() {
     const profile = await mkdtemp(path.join(tmpdir(), 'vt-autoplay-'));
     const proc = spawn(exe, [
         '--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`,
-        '--no-first-run', '--no-default-browser-check', '--mute-audio', '--window-size=1280,900', 'about:blank',
+        '--no-first-run', '--no-default-browser-check', '--mute-audio', '--window-size=1280,900',
+        // Chrome will not start as root with its sandbox on — the case in a cloud container.
+        ...(process.getuid?.() === 0 ? ['--no-sandbox'] : []),
+        'about:blank',
     ], { stdio: 'ignore' });
     const portFile = path.join(profile, 'DevToolsActivePort');
     for (let i = 0; i < 300; i++) {
@@ -164,7 +175,7 @@ function line(i, r) {
     const time = r.virtualMs != null ? `virtual ${r.virtualMs} ms, real ${r.realMs} ms` : `real ${r.realMs} ms`;
     const head = `run ${i + 1}: ${r.ok ? 'ok  ' : 'FAIL'} seed ${r.seed} ${r.script} · ${where} · turn ${r.turn} · ${time} · ${r.fingerprint}`;
     const stages = (r.stages || []).map((s) =>
-        `\n  ${s.id.padEnd(18)} ${String(s.turns).padStart(4)} turns · -${s.hpLost} hp · +${s.healed} hp · ${s.eats} eats · ${s.attacks} hits · ${s.deaths} deaths · ${s.gold >= 0 ? '+' : ''}${s.gold} gp`);
+        `\n  ${s.id.padEnd(18)} ${String(s.turns).padStart(4)} turns · -${s.hpLost} hp · +${s.healed} hp · ${s.eats} eats · ${s.drinks ?? 0} drinks · ${s.attacks} hits · ${s.casts ?? 0} casts (${s.mpSpent ?? 0} mp) · ${s.throws ?? 0} throws · ${s.deaths} deaths · ${s.gold >= 0 ? '+' : ''}${s.gold} gp`);
     const why = r.ok ? '' : `\n  ${r.reason}${(r.errors || []).length ? '\n  ' + r.errors.join('\n  ') : ''}`;
     return head + stages.join('') + why;
 }

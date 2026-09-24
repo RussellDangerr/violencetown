@@ -11,7 +11,9 @@ import { decide, FIGHTER, SNEAK } from './player.js';
 import { ROUTES } from './route.js';
 import { QUESTS } from '../quests.js';
 import { isHostile } from '../ai.js';
-import { selectedNode, activeRing } from '../wheel-model.js';
+import { isBoss } from '../defeat-scenarios.js';
+import { selectedNode, activeRing, ROOT, aimRange, autoAimTile } from '../wheel-model.js';
+import { SPELLS } from '../spells.js';
 import { perceives, VERDICT } from '../perception.js';
 
 export const SCRIPTS = {
@@ -34,9 +36,12 @@ const KEY = { KeyE: 'e', KeyT: 't', KeyD: 'd', Space: ' ' };
 const STEP = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
 const REPEAT_GAP_MS = 260;      // a Space within 250 ms of the last one repeats the last action (main.js ~1329)
 const BEAT_MS = 200;            // game time after every action — identical watched or headless
-const STAGE_TURN_BUDGET = 400;
+const STAGE_TURN_BUDGET = 1500;   // room for a dozen attempts at a boss, each a walk back from the spawn
 const MAX_WAITS = 60;
-const MAX_DEATHS = 3;
+// Ruling Q1-10: after a defeat the player goes back and tries again, and stops
+// only when an attempt changed nothing — see `standing` below. The cap is a
+// backstop against a slow bleed that never ends, not the rule.
+const MAX_ATTEMPTS = 12;
 
 export async function run(ap) {
     const t0 = ap.real.now();
@@ -83,6 +88,13 @@ export async function run(ap) {
         errors,
         trace: d.trace(),
         log: (g._logHistory || []).slice(-40).map((l) => l.text),
+        // Where everything stood when an unfinished run gave up — what a
+        // "no way to …" needs to be read.
+        scene: outcome.finished ? null : {
+            items: g.groundItems.map((i) => `${i.type}@${i.x},${i.y}${g.map.isWalkable(i.x, i.y) ? '' : ' (not walkable)'}`),
+            enemies: g.enemies.filter((e) => e.entity.isAlive()).map((e) => `${e.type}@${e.x},${e.y} hp${e.entity.hp}${isHostile(e) ? '' : ' (not hostile)'}`),
+            containers: (g.containers || []).map((c) => `${c.type || 'container'}@${c.x},${c.y}`),
+        },
     };
     if (watching) {
         window.removeEventListener('keydown', stop, true);
@@ -112,6 +124,21 @@ async function waitForGame(ap) {
 // stays pure. seenAt asks the enemies' own question (perception.js), so the
 // sneak hides from exactly what the AI would see.
 const RANK = { [VERDICT.NONE]: 0, [VERDICT.PERIPHERAL]: 1, [VERDICT.DIRECT]: 2 };
+// The Magic ring's spells, read off the wheel itself, so a spell added there
+// is one the autoplay can cast.
+const FIGHT = ROOT.children.find((c) => c.key === 'fight').children;
+const MAGIC = FIGHT.find((c) => c.key === 'magic').children;
+const RANGED = FIGHT.find((c) => c.key === 'ranged');
+
+// The reticle moves one tile a press, only onto open tiles within the leaf's
+// reach (main.js _reticleKey). The presses that walk it from `from` to `at`,
+// or null when a wall cuts `at` off. The player asks (canAim) and the driver
+// walks (aim) through this one function, so they cannot disagree.
+function aimPath(g, leaf, from, at) {
+    const reach = aimRange(leaf, g);
+    const open = (x, y) => g.map.isWalkable(x, y) && Math.max(Math.abs(x - g.playerX), Math.abs(y - g.playerY)) <= reach;
+    return pathTo(open, from, at);
+}
 function view(g) {
     const m = g.map;
     const watchers = g.enemies.filter((e) => e.entity.isAlive() && isHostile(e));
@@ -124,6 +151,19 @@ function view(g) {
         player: { x: g.playerX, y: g.playerY },
         hp: g.playerHp, maxHp: g.playerMaxHp,
         canEat: g.barSlot('eat') >= 0,
+        canDrink: g.barSlot('drink') >= 0,
+        mp: g.playerMp,
+        spells: MAGIC.filter((n) => SPELLS[n.spellId] && g.hasSpell(n.spellId) && !SPELLS[n.spellId].fear)
+            .map((n) => ({ key: n.key, cost: SPELLS[n.spellId].mpCost, range: SPELLS[n.spellId].range, shape: SPELLS[n.spellId].aoe?.shape })),
+        throwRange: throwRange(g),
+        // Could the reticle be walked onto `t` for a spell (by key) or 'throw'?
+        // From where the game seeds it, as main.js does on entering the aim.
+        canAim: (what, t) => {
+            const leaf = what === 'throw' ? RANGED : MAGIC.find((n) => n.key === what);
+            if (!leaf) return false;
+            const seed = autoAimTile(leaf, g) || { x: g.playerX, y: g.playerY };
+            return !!aimPath(g, leaf, seed, { x: t.x, y: t.y });
+        },
         isWalkable: (x, y) => m.isWalkable(x, y),
         tileAt: (x, y) => m.getTile(x, y),
         transitions: (m.transitions || []).map((t) => ({ x: t.x, y: t.y, toMap: t.toMap })),
@@ -137,6 +177,29 @@ function view(g) {
     };
 }
 
+// How far the bar's throwable reaches (wheel-model aimRange: the item's own
+// range, else 5), or 0 with nothing to throw.
+function throwRange(g) {
+    const slot = g.barSlot('throw');
+    if (slot < 0) return 0;
+    return g.inventory[slot]?.itemDef?.range || 5;
+}
+
+// What the enemies still have: every live hostile's HP, kit and gold. A boss
+// defeat refills the boss's HP and nothing else, so an attempt that burned a
+// heal, spent gold or killed anything leaves this lower than it found it.
+function standing(g) {
+    const live = g.enemies.filter((e) => e.entity.isAlive() && isHostile(e));
+    return {
+        map: g._mapUrl,
+        alive: live.length,
+        hp: live.reduce((n, e) => n + e.entity.hp, 0),
+        kit: live.reduce((n, e) => n + (e.loadout || []).length, 0),
+        gold: live.reduce((n, e) => n + (e.gold || 0), 0),
+    };
+}
+const sameStanding = (a, b) => a.map === b.map && a.alive === b.alive && a.hp === b.hp && a.kit === b.kit && a.gold === b.gold;
+
 function driver(ap, g) {
     // A real macrotask with no 4 ms clamp: long enough for every promise the
     // last callback started to settle, short enough to run thousands a second.
@@ -147,15 +210,21 @@ function driver(ap, g) {
     let lastKiller = null;
     const trace = [];   // the flight recorder: every action the fighter took, newest last
 
-    // Deaths are counted where they happen. A step's world turn runs after its
-    // slide — inside settle(), not at the key press — so a death on a step was
-    // invisible to the press. This only observes: the original still runs.
-    const die = g._die.bind(g);
-    g._die = (...args) => {
+    // Deaths are counted where they are resolved. A step's world turn runs
+    // after its slide — inside settle(), not at the key press — so a death on a
+    // step was invisible to the press. And not in _die: a second blow landing
+    // while you are already down calls _die again (its guard returns early),
+    // which counted one death twice. _resolveDefeat runs once per death, and
+    // reads the same last blow the game does to choose a boss retry or a
+    // defeat scenario. This only observes: the original still runs.
+    const resolveDefeat = g._resolveDefeat.bind(g);
+    g._resolveDefeat = (...args) => {
         deaths++;
         const k = g._lastDefeatedBy;   // read now: the defeat clears it
         lastKiller = (k && (k.type || k.name || k.cause)) || 'something';
-        return die(...args);
+        trace.push(`t${g.turn} ${g._mapUrl.replace('-map.json', '')} ${g.playerX},${g.playerY} DIED to ${lastKiller}`
+            + ` (${isBoss(k) ? 'a boss: retry' : 'a defeat scenario'})`);
+        return resolveDefeat(...args);
     };
 
     // Game time never moves while a request is in flight. Watching, game time
@@ -205,7 +274,9 @@ function driver(ap, g) {
     // Open the wheel and fire the leaf at `keys` (e.g. ['treat', 'eat']),
     // choosing each ring's slice by name — the ring reopens wherever it was
     // last left, and can be padded, so positions mean nothing.
-    async function wheel(keys) {
+    // A reticle leaf is aimed at `at` when given — walked there with the arrow
+    // keys, the way a player nudges it — and otherwise fired where it seeded.
+    async function wheel(keys, at = null) {
         await idle(REPEAT_GAP_MS);
         await press('Space');
         if (g.state !== 'radial_menu') return 'the wheel did not open';
@@ -216,9 +287,25 @@ function driver(ap, g) {
             await press('Space');   // drill in; on a leaf this fires, or starts aiming
             if (g.state !== 'radial_menu') return null;
         }
-        if (g.wheel.aiming) await press('Space');   // commit the auto-aimed reticle
+        if (g.wheel.aiming && at) {
+            const missed = await aim(at);
+            if (missed) { await closeWheel(); return missed; }
+        }
+        if (g.wheel.aiming) await press('Space');   // commit the reticle
+        // Plus Ultra: the blast would clip a friendly. The ruling is to use
+        // everything, so the player says yes.
+        if (g.state === 'radial_menu' && g.wheel.confirming) await press('Space');
         if (g.state === 'radial_menu') { await closeWheel(); return `${keys.join(' > ')} would not fire`; }
         return null;
+    }
+    // Walk the reticle to `at`, a press a tile (aimPath).
+    async function aim(at) {
+        const from = g.wheel.reticle || { x: g.playerX, y: g.playerY };
+        const path = aimPath(g, selectedNode(g.wheel), from, at);
+        if (!path) return `no way to aim at ${at.x},${at.y}`;
+        for (const dir of path) await press(DIR_CODES[dir]);
+        const r = g.wheel.reticle;
+        return r && r.x === at.x && r.y === at.y ? null : `the reticle stopped short of ${at.x},${at.y}`;
     }
     async function closeWheel() { for (let n = 0; n < 6 && g.state === 'radial_menu'; n++) await press('Escape'); }
 
@@ -226,6 +313,9 @@ function driver(ap, g) {
 
     async function act(a) {
         if (a.kind === 'eat') return wheel(['treat', 'eat']);
+        if (a.kind === 'drink') return wheel(['treat', 'cleanse']);
+        if (a.kind === 'cast') return wheel(['fight', 'magic', a.spell], a.at);
+        if (a.kind === 'throw') return wheel(['fight', 'ranged'], a.at);
         if (a.kind === 'attack') {
             if (!a.dir) return wheel(['fight', 'melee', 'hit']);
             const turned = await face(a.dir);
@@ -256,12 +346,14 @@ function driver(ap, g) {
     }
 
     // The standard fighter plays `name` until the quest completes, a stage runs
-    // out of turns, the player dies MAX_DEATHS times, or it is stopped. Each
-    // stage is scored as it is played.
+    // out of turns, an attempt ends in a defeat that changed nothing (or the
+    // MAX_ATTEMPTS backstop), or it is stopped. Each stage is scored as it is
+    // played.
     async function playRoute(name, knobs = FIGHTER) {
         const quest = QUESTS[name], route = ROUTES[name], q = g.questEngine;
         const stages = [];
         let cur = null, waits = 0;
+        let before = standing(g);   // the enemies' standing when this attempt began
         const close = () => { if (cur) { cur.turns = g.turn - cur.startTurn; cur.gold = g.gold - cur.startGold; } };
         const result = (failure) => {
             close();
@@ -275,19 +367,21 @@ function driver(ap, g) {
             const stageId = quest.stages[q.state.stageIndex]?.id;
             if (!cur || cur.id !== stageId) {
                 close();
-                cur = { id: stageId, turns: 0, hpLost: 0, healed: 0, eats: 0, attacks: 0, deaths: 0, gold: 0, startTurn: g.turn, startGold: g.gold };
+                cur = { id: stageId, turns: 0, hpLost: 0, healed: 0, eats: 0, drinks: 0, attacks: 0, casts: 0, mpSpent: 0, throws: 0,
+                        deaths: 0, gold: 0, startTurn: g.turn, startGold: g.gold };
                 stages.push(cur);
                 waits = 0;
             }
             if (g.turn - cur.startTurn > STAGE_TURN_BUDGET) return result(`${stageId}: unfinished after ${STAGE_TURN_BUDGET} turns`);
-            if (deaths >= MAX_DEATHS) return result(`${stageId}: died ${deaths} times, last to ${killer()}`);
+            if (deaths >= MAX_ATTEMPTS) return result(`${stageId}: died ${deaths} times, last to ${killer()}`);
             const goals = route[stageId];
             if (!goals) return result(`no route for stage ${stageId}`);
+            if (before.map !== g._mapUrl) before = standing(g);   // a new map: its first attempt starts here
 
             const a = decide(view(g), goals, knobs);
             if (a.kind === 'wait' && ++waits > MAX_WAITS) return result(`${stageId}: stuck — ${a.why}`);
             if (a.kind !== 'wait') waits = 0;
-            const hp = g.playerHp, died = deaths;
+            const hp = g.playerHp, mp = g.playerMp, died = deaths;
             trace.push(`t${g.turn} ${g._mapUrl.replace('-map.json', '')} ${g.playerX},${g.playerY} hp${hp} ${a.kind}`
                 + (a.dir ? ` ${a.dir}` : '') + (a.at ? ` @${a.at.x},${a.at.y}` : '')
                 + (a.exposure && a.exposure !== 'unseen' ? ` [${a.exposure}]` : '') + (a.why ? ` (${a.why})` : ''));
@@ -297,8 +391,19 @@ function driver(ap, g) {
             else if (g.playerHp < hp) cur.hpLost += hp - g.playerHp;
             else cur.healed += g.playerHp - hp;
             if (a.kind === 'eat') cur.eats++;
+            if (a.kind === 'drink') cur.drinks++;
             if (a.kind === 'attack') cur.attacks++;
+            if (a.kind === 'throw') cur.throws++;
+            if (a.kind === 'cast') { cur.casts++; if (deaths === died) cur.mpSpent += Math.max(0, mp - g.playerMp); }
             await idle(BEAT_MS);
+            if (deaths > died) {
+                // Back on your feet: did that attempt cost the enemies anything?
+                const now = standing(g);
+                if (sameStanding(now, before)) {
+                    return result(`${stageId}: attempt ${deaths} changed nothing — died to ${killer()}, the enemies as they were`);
+                }
+                before = now;
+            }
         }
     }
     const killer = () => lastKiller || 'something';
@@ -335,7 +440,7 @@ function driver(ap, g) {
         return { finished: !miss, failure: miss, stages: [] };
     }
 
-    return { settle, playRoute, playOps, deaths: () => deaths, trace: () => trace.slice(-80) };
+    return { settle, playRoute, playOps, deaths: () => deaths, trace: () => trace.slice(-300) };
 }
 
 function showLabel(text) {

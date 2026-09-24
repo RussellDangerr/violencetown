@@ -5,10 +5,16 @@ import { decide, goalDone, BARRICADE, SNEAK } from '../game/autoplay/player.js';
 
 // A game as the player sees it. Rows: '.' open, '#' wall, 'B' barricade.
 // `seen` marks tiles a hostile perceives: { 'x,y': 'DIRECT' | 'PERIPHERAL' }.
+// Q1-10's arsenal: `mp`, the `spells` known ({ key, cost, range, shape }), the
+// reach of the bar's throwable (0 = none) and whether it holds a drink. The
+// defaults are a player with nothing to spend, so the older rules read alone.
 function view({ rows, player, enemies = [], items = [], hp = 100, maxHp = 100, canEat = false,
-                mapUrl = 'town-map.json', transitions = [], inventory = [], targets = {}, containers = [], seen = {} }) {
+                mapUrl = 'town-map.json', transitions = [], inventory = [], targets = {}, containers = [], seen = {},
+                mp = 0, spells = [], throwRange = 0, canDrink = false, unaimable = [] }) {
     return {
         mapUrl, width: rows[0].length, height: rows.length, player, hp, maxHp, canEat,
+        mp, spells, throwRange, canDrink,
+        canAim: (_what, t) => !unaimable.includes(`${t.x},${t.y}`),
         isWalkable: (x, y) => rows[y]?.[x] === '.',
         tileAt: (x, y) => (rows[y]?.[x] === 'B' ? BARRICADE : rows[y]?.[x] === '.' ? 1 : 0),
         transitions, enemies, items, inventory, containers,
@@ -63,6 +69,14 @@ describe('the standard fighter', () => {
             enemies: [{ x: 4, y: 1, hp: 100, hostile: false, tag: 'wererat_boss' }] }), [{ kill: 'wererat_boss', map: 'sewer-map.json' }]);
         assert.deepEqual(a, { kind: 'step', dir: 'right' });
     });
+    test('take: a hostile standing on the item is fought, not waited out', () => {
+        const take = [{ take: 'catalytic_converter', map: 'sewer-map.json' }];
+        const king = { x: 3, y: 1, hp: 10, hostile: true, aware: false, tag: null };
+        const items = [{ type: 'catalytic_converter', x: 3, y: 1 }];
+        assert.deepEqual(decide(view({ rows: open, player: { x: 0, y: 1 }, mapUrl: 'sewer-map.json', enemies: [king], items }), take),
+            { kind: 'step', dir: 'right' });
+        assert.equal(decide(view({ rows: open, player: { x: 2, y: 1 }, mapUrl: 'sewer-map.json', enemies: [king], items }), take).kind, 'attack');
+    });
     test('take: walks onto the item', () => {
         const a = decide(view({ rows: open, player: { x: 1, y: 0 }, mapUrl: 'sewer-map.json',
             items: [{ type: 'catalytic_converter', x: 1, y: 2 }] }), [{ take: 'catalytic_converter', map: 'sewer-map.json' }]);
@@ -94,6 +108,68 @@ describe('the standard fighter', () => {
             transitions: [{ x: 2, y: 0, toMap: 'town-map.json' }] }), [{ reach: 'town-map.json' }]);
         assert.equal(a.kind, 'wait');
         assert.match(a.why, /town-map\.json/);
+    });
+});
+
+describe('spending what it carries (ruling Q1-10)', () => {
+    const FIREBALL = { key: 'fireball', cost: 12, range: 6, shape: 'burst' };
+    const CONE = { key: 'coneofcold', cost: 10, range: 3, shape: 'cone' };
+    const wide = ['.........', '.........', '.........', '.........'];
+    const boss = (x, y, more = {}) => ({ x, y, hp: 100, hostile: true, tag: 'wererat_boss', ...more });
+    const kill = [{ kill: 'wererat_boss', map: 'sewer-map.json' }];
+    const at = (o) => view({ rows: wide, mapUrl: 'sewer-map.json', ...o });
+
+    test('with the MP, it fireballs the quarry from range instead of walking up to it', () => {
+        const a = decide(at({ player: { x: 0, y: 1 }, enemies: [boss(5, 1)], mp: 100, spells: [FIREBALL, CONE] }), kill);
+        assert.deepEqual(a, { kind: 'cast', spell: 'fireball', at: { x: 5, y: 1 } });
+    });
+    test('a spell beats the sword beside a hostile', () => {
+        const a = decide(at({ player: { x: 1, y: 1 }, enemies: [{ x: 2, y: 1, hp: 50, hostile: true, tag: null }],
+            mp: 12, spells: [FIREBALL] }), far);
+        assert.equal(a.kind, 'cast');
+    });
+    test('out of MP, it swings', () => {
+        const a = decide(at({ player: { x: 1, y: 1 }, enemies: [{ x: 2, y: 1, hp: 50, hostile: true, tag: null }],
+            mp: 11, spells: [FIREBALL] }), far);
+        assert.equal(a.kind, 'attack');
+    });
+    test('falls back to a cheaper spell the MP still covers', () => {
+        const a = decide(at({ player: { x: 1, y: 1 }, enemies: [boss(3, 1)], mp: 10, spells: [FIREBALL, CONE] }), kill);
+        assert.deepEqual(a, { kind: 'cast', spell: 'coneofcold', at: { x: 3, y: 1 } });
+    });
+    test('never casts a cone at an exact diagonal — the cone misses it', () => {
+        const a = decide(at({ player: { x: 1, y: 1 }, enemies: [boss(3, 3)], mp: 10, spells: [FIREBALL, CONE] }), kill);
+        assert.notEqual(a.kind, 'cast');
+    });
+    test('with no MP left, it throws what it carries at what it can reach', () => {
+        const a = decide(at({ player: { x: 0, y: 1 }, enemies: [boss(4, 1)], throwRange: 5 }), kill);
+        assert.deepEqual(a, { kind: 'throw', at: { x: 4, y: 1 } });
+    });
+    test('drinks what it carries once there is a fight to drink for', () => {
+        assert.equal(decide(at({ player: { x: 0, y: 1 }, enemies: [boss(4, 1)], canDrink: true, mp: 100, spells: [FIREBALL] }), kill).kind, 'drink');
+        assert.notEqual(decide(at({ player: { x: 0, y: 1 }, canDrink: true }), far).kind, 'drink');
+    });
+    test('the fighter spends nothing on a hostile that is neither hunting it nor in its way', () => {
+        const a = decide(at({ player: { x: 0, y: 1 }, enemies: [{ x: 4, y: 1, hp: 50, hostile: true, aware: false, tag: null }],
+            mp: 100, spells: [FIREBALL], throwRange: 5, transitions: [{ x: 8, y: 3, toMap: 'town-map.json' }] }), [{ reach: 'town-map.json' }]);
+        assert.equal(a.kind, 'step');
+    });
+    test('...but does on one that is hunting it', () => {
+        const a = decide(at({ player: { x: 0, y: 1 }, enemies: [{ x: 4, y: 1, hp: 50, hostile: true, aware: true, tag: null }],
+            mp: 100, spells: [FIREBALL], transitions: [{ x: 8, y: 3, toMap: 'town-map.json' }] }), [{ reach: 'town-map.json' }]);
+        assert.equal(a.kind, 'cast');
+    });
+    test('never picks a target the reticle cannot be walked to', () => {
+        const a = decide(at({ player: { x: 0, y: 1 }, enemies: [boss(4, 1)], mp: 100, spells: [FIREBALL], unaimable: ['4,1'] }), kill);
+        assert.notEqual(a.kind, 'cast');
+    });
+    test('the sneak does not give itself away with a fireball from the dark', () => {
+        const a = decide(at({ player: { x: 0, y: 1 }, enemies: [boss(4, 1, { aware: false })], mp: 100, spells: [FIREBALL] }), kill, SNEAK);
+        assert.equal(a.kind, 'step');
+    });
+    test('...but spends it all once it is beside the quarry', () => {
+        const a = decide(at({ player: { x: 3, y: 1 }, enemies: [boss(4, 1, { aware: false })], mp: 100, spells: [FIREBALL] }), kill, SNEAK);
+        assert.equal(a.kind, 'cast');
     });
 });
 
