@@ -14,8 +14,8 @@
     "note": "Blocked on two rulings (§2). Floors already solved via `rlOutlined_packed.png`. No interior wall exists in any bundled sheet."
   },
   {
-    "id": "CD",
-    "title": "The custom domain still caches JS and CSS for four hours. `game/_headers` (v0.22.0) asks for `max-age=0`, and `violencetown.pages.dev` obeys it, but the `russelldangerr.com` zone's Browser Cache TTL — Cloudflare's default, four hours — replaces any shorter origin value on `.js`, `.css` and images. Set it to Respect Existing Headers, or add a Cache Rule for `violencetown.russelldangerr.com`. A dashboard step, not code; `curl -sI …/main.js` then reads `max-age=0`",
+    "id": "done-2026-09-15-browser-cache-ttl-set-to-respect",
+    "title": "DONE 2026-09-15 — Browser Cache TTL set to Respect Existing Headers; live headers read `max-age=0, must-revalidate`, re-verified at every release since. Was: The custom domain still caches JS and CSS for four hours. `game/_headers` (v0.22.0) asks for `max-age=0`, and `violencetown.pages.dev` obeys it, but the `russelldangerr.com` zone's Browser Cache TTL — Cloudflare's default, four hours — replaces any shorter origin value on `.js`, `.css` and images. Set it to Respect Existing Headers, or add a Cache Rule for `violencetown.russelldangerr.com`. A dashboard step, not code; `curl -sI …/main.js` then reads `max-age=0`",
     "lane": "rulings",
     "order": 10,
     "kind": "ruling",
@@ -124,8 +124,8 @@
     "note": "Repo clarity"
   },
   {
-    "id": "D1",
-    "title": "`feature/diagonal-prototype` — 568 commits behind dev (2026-09-13, and rising); its diff deletes rings, xmb, the balance harness. Delete, or label as archive",
+    "id": "done-2026-09-20-archived-as-tag-archive-diagonal",
+    "title": "DONE 2026-09-20 — archived as tag `archive/diagonal-prototype-2026-06-14` and the branch deleted. Audited first: nothing unreleased in it; dev's versions of its diagonal movement were further along",
     "lane": "rulings",
     "order": 110,
     "kind": "ruling",
@@ -147,7 +147,7 @@
   },
   {
     "id": "P2",
-    "title": "\"End of Chapter One\" does not exist. `_endChapterOne()` is called from nowhere; the bridge drops you into Chapter Two. Delete the orphan, or give the demo a curtain",
+    "title": "\"End of Chapter One\" does not exist. `_endChapterOne()` is called from nowhere; the bridge drops you into Chapter Two. Delete the orphan, or give the demo a curtain. (Re-verified 2026-09-21: still no caller. Its PLAY AGAIN runs the fixed `_fullReset`, so a curtain would restart cleanly — but the RESTART fix's commit and the v0.24.0 notes speak of PLAY AGAIN as if a player could reach it. No player can.)",
     "lane": "rulings",
     "order": 130,
     "kind": "ruling",
@@ -157,10 +157,43 @@
     "note": "Demo has a stopping point"
   },
   {
+    "id": "does-the-fight-entrance-s-punch-read-soft-shippe",
+    "title": "Does the fight entrance's punch read soft? Shipped in v0.24.0 on measurements alone — nobody has looked at it with eyes. If it does, the lever is `IMPACT_MS` down toward 90, not `ZOOM_IN_MS` up (that softens it further)",
+    "lane": "rulings",
+    "order": 140,
+    "kind": "ruling",
+    "size": "",
+    "blockedBy": [],
+    "doc": "`plans/entrance-feel-pass.md`",
+    "note": "Feel"
+  },
+  {
+    "id": "two-quest-objectives-truncate-on-a-phone-canyon-",
+    "title": "Two quest objectives truncate on a phone. `canyon_escape/find_way_out` (64 chars) and `deliver_burger/handoff` (51) exceed the 46-character budget at 375 px. `tests/first-minute.test.js` carries both as `KNOWN_OVERFLOW`; shortening one fails that test until it leaves the list. The copy is Caelan's",
+    "lane": "rulings",
+    "order": 150,
+    "kind": "ruling",
+    "size": "",
+    "blockedBy": [],
+    "doc": "`tests/first-minute.test.js`",
+    "note": "Phone legibility"
+  },
+  {
+    "id": "EC",
+    "title": "Energy's splat colour. Energy now carries the `exclamation` mark but still falls back to physical red `#d23f2f`, and the mark's red-orange `#ff4b1d` on it is the weakest contrast in the set (1.40). Indigo `#3b2f8f` recommended; magenta and yellow-white both measured out",
+    "lane": "rulings",
+    "order": 160,
+    "kind": "ruling",
+    "size": "",
+    "blockedBy": [],
+    "doc": "`plans/hit-splat-art.md` §9",
+    "note": "F2's last gap"
+  },
+  {
     "id": "V1",
     "title": "Theft-aiming volume — aiming a theft puts all nine town cones back. Correct information, possibly too much. Scope to the theft's range if so",
     "lane": "rulings",
-    "order": 140,
+    "order": 170,
     "kind": "ruling",
     "size": "",
     "blockedBy": [],
@@ -171,7 +204,7 @@
     "id": "V2",
     "title": "`Lire` has no lion. Allowlisted unsprited rather than given a bad pick",
     "lane": "rulings",
-    "order": 150,
+    "order": 180,
     "kind": "ruling",
     "size": "",
     "blockedBy": [],
@@ -182,7 +215,7 @@
     "id": "AU",
     "title": "Audio discoverability. Ships muted (ruled, correctly). Nobody discovers audio exists. Wants a visible speaker glyph — not autoplay",
     "lane": "rulings",
-    "order": 160,
+    "order": 190,
     "kind": "ruling",
     "size": "",
     "blockedBy": [],
@@ -193,12 +226,23 @@
     "id": "SF",
     "title": "Screen-fill's open calls. (1) The filler for each zone — the table in `plans/screen-fill.md`, pinned by `tests/tile-coverage.test.js`, so change both. (2) The forest is one tree on every cell: accept it, or vary it (a second prop, a hash). (3) Filler trees are two tiles tall and join the depth sort, so the row past a map's south edge covers its last row: you vanish for the one step onto Town's south exit, and two Carnival corner cells hide what stands on them. Accept, or draw fillers behind everything",
     "lane": "rulings",
-    "order": 170,
+    "order": 200,
     "kind": "ruling",
     "size": "",
     "blockedBy": [],
     "doc": "`plans/screen-fill.md`",
     "note": "How the world's edge looks"
+  },
+  {
+    "id": "PB",
+    "title": "Retire the `plan` branch, or keep it for parked work? Since 2026-09-24 it holds nothing `dev` lacks except the moved docs' commit history (§5). Parked docs could live on `dev` with a clear status line instead, as `bestiary.md` and `sewer-crat-quest.md` now do. If it is retired, archive it as a tag, as was done for D1, and drop CLAUDE.md's Planning surface paragraph",
+    "lane": "rulings",
+    "order": 210,
+    "kind": "ruling",
+    "size": "",
+    "blockedBy": [],
+    "doc": "§5",
+    "note": "Where parked work lives"
   },
   {
     "id": "T1",
@@ -212,69 +256,14 @@
     "note": ""
   },
   {
-    "id": "C1",
-    "title": "C1 — seven unreachable `Escape` branches",
-    "lane": "ready",
-    "order": 20,
-    "kind": "build",
-    "size": "S",
-    "blockedBy": [],
-    "doc": "Shadowed by `_closeCurrentMenu`'s switch, which handles Escape first (`main.js` ~1095–1254 vs ~1837–1850). (Corrected 2026-09-10: `ITEM_THROW_DIR` is not dead — it is entered at ~2716 and handled for keyboard and tap.)",
-    "note": ""
-  },
-  {
     "id": "C3",
     "title": "C3 — input asymmetries",
     "lane": "ready",
-    "order": 30,
+    "order": 20,
     "kind": "build",
     "size": "M",
     "blockedBy": [],
     "doc": "REMOTICON item/gear/ring actions are pointer-only; aiming, turn-in-place and the 1–9 hotbar are keyboard-only. Documented honestly; still gaps.",
-    "note": ""
-  },
-  {
-    "id": "C4",
-    "title": "C4 — `mystery_meat` can't heal on the throw path",
-    "lane": "ready",
-    "order": 40,
-    "kind": "build",
-    "size": "S",
-    "blockedBy": [],
-    "doc": "`combatAttack`'s `Math.max(1, raw − armor)` clamps a would-be heal to 1 damage. Cheapest fix: make it a 1-turn health poition instead of flat damage.",
-    "note": ""
-  },
-  {
-    "id": "housekeeping",
-    "title": "Housekeeping",
-    "lane": "ready",
-    "order": 50,
-    "kind": "build",
-    "size": "S",
-    "blockedBy": [],
-    "doc": "Prune two stale worktrees (`great-wing`, `objective-volhard`, both clean at v0.19.0); 43 local branches whose remotes are `gone` (counted 2026-09-10). Migrate or archive the 24 `plan`-only docs (§5).",
-    "note": ""
-  },
-  {
-    "id": "restart-keeps-the-last-run-s-pickups",
-    "title": "RESTART keeps the last run's pickups",
-    "lane": "ready",
-    "order": 60,
-    "kind": "build",
-    "size": "S",
-    "blockedBy": [],
-    "doc": "`_fullReset` resets HP, bag, gear, gold, quests and the RNG — but not `_collectedItems` or `_droppedItems`, so after a restart everything the previous run picked up stays gone until the page reloads (verified live 2026-09-10 with the Ray Gun). Audit every per-run field the constructor sets against `_fullReset`, not only these two.",
-    "note": ""
-  },
-  {
-    "id": "streetlights-light-up-at-night",
-    "title": "Streetlights light up at night",
-    "lane": "ready",
-    "order": 70,
-    "kind": "build",
-    "size": "S",
-    "blockedBy": [],
-    "doc": "Town's four lamps are props now, but Town's `lights` list has no entry at any of them — after dusk they are dark posts. One `lights` row each.",
     "note": ""
   },
   {
@@ -285,8 +274,8 @@
     "kind": "design",
     "size": "M",
     "blockedBy": [],
-    "doc": "`plans/fight-fog.md` Follow-on pieces 2",
-    "note": "Next in Caelan's order. On a tall window the wheel's dial sat over the message log (his 09-14 screenshot). Collapse the wheel left, or show gear panels for you and the enemy — what you could steal or buy; a combat log; an item bar that does more than one item (\"that menu has been strange for a little while\")."
+    "doc": "`plans/combat-hud.md`",
+    "note": "SHIPPED in v0.23.0, 2026-09-20. All five stages of `plans/combat-hud.md`: the wheel fires the bar's item (it fired bag slot 0), the dial gets a reserved dock column and joins the non-overlap invariant, the dock swaps its quest log for a combat log in a fight, two read-only gear panels sit in the fogged margins, and the bar shows its whole column. The combat log then shipped empty — every fight message was filed `system` — fixed in the same release, with a source-reading guard so it cannot rot back."
   },
   {
     "id": "F2",
@@ -295,15 +284,28 @@
     "order": 20,
     "kind": "design",
     "size": "S",
+    "blockedBy": [
+      "EC"
+    ],
+    "doc": "`plans/hit-splat-art.md`",
+    "note": "SHIPPED in v0.24.0 (merged `fe44bd9`, 2026-09-20) — `plans/hit-splat-art.md`. Energy takes `exclamation`; poison and sludge split one drop / drops on the heavy threshold; `miss` was dead and is deleted; the pick rule is a tested module. Remaining gaps, both needing an eye: a snowflake for `cold` (no glyph exists — new art), and energy's colour — ruling EC (§2)."
+  },
+  {
+    "id": "f2b-entrances-by-hit-type",
+    "title": "F2b — entrances by hit type",
+    "lane": "design",
+    "order": 30,
+    "kind": "design",
+    "size": "S",
     "blockedBy": [],
-    "doc": "`plans/screen-fill.md` Follow-on pieces 2",
-    "note": "Kenney's Emote Pack Style 8 glyphs (heart, drop, cross, star) cover heal, poison, miss and crit; no Kenney pack has a flame, snowflake or skull, so those get drawn. Which glyph per damage type, and on the splat or beside it? Carries Caelan's entrances by hit type (09-14: \"slashing versus crushing\")."
+    "doc": "F1 (shipped)",
+    "note": "Split out of F2, which bundled it wrongly. Caelan's 09-14 note (\"slashing versus crushing\") rides `game/fight-entrance.js` and `_trackFight`'s `_fightStart` stamp, not the splat: an entrance plays once when a fight opens, a splat plays on every blow. Different system, different timer."
   },
   {
     "id": "F3",
     "title": "F3 — who gets pulled into a fight",
     "lane": "design",
-    "order": 30,
+    "order": 40,
     "kind": "design",
     "size": "M",
     "blockedBy": [],
@@ -314,7 +316,7 @@
     "id": "affordance-matrix-verbs-20-wheel-leaves-tags",
     "title": "Affordance matrix — verbs (~20 wheel leaves) × tags",
     "lane": "design",
-    "order": 40,
+    "order": 50,
     "kind": "design",
     "size": "M",
     "blockedBy": [
@@ -327,7 +329,7 @@
     "id": "directional-frames-for-every-npc-retire-the-chev",
     "title": "Directional frames for every NPC, retire the chevron",
     "lane": "design",
-    "order": 50,
+    "order": 60,
     "kind": "design",
     "size": "M",
     "blockedBy": [],
@@ -338,29 +340,29 @@
     "id": "the-crat-sewer-diplomacy-talk-quest",
     "title": "\"The Crat\" — sewer diplomacy talk-quest",
     "lane": "design",
-    "order": 60,
+    "order": 70,
     "kind": "design",
     "size": "M",
     "blockedBy": [],
-    "doc": "`sewer-crat-quest.md` (plan only)",
+    "doc": "`sewer-crat-quest.md`",
     "note": "How ambiguous the tell is; father-flip vs. \"you are not the mother\"; player as arbiter vs. bribeable; reward. Reconcile with the shipped sewer canon first."
   },
   {
     "id": "bestiary-cave-weredigo-invisibility-blind-combat",
     "title": "Bestiary — Cave + Weredigo (invisibility / blind-combat boss), Park + Ruffian (steal-and-flee via `transferGold` + `fleeStep`), Bear (friendly quest-giver), content enemies",
     "lane": "design",
-    "order": 70,
+    "order": 80,
     "kind": "design",
     "size": "S–M",
     "blockedBy": [],
-    "doc": "`bestiary.md` (plan only)",
+    "doc": "`bestiary.md`",
     "note": "Special mechanics? Which Kenney cells? Ruffian cleanly reuses two shipped systems and is the best first piece."
   },
   {
     "id": "elemental-coverage-matrix",
     "title": "Elemental coverage matrix",
     "lane": "design",
-    "order": 80,
+    "order": 90,
     "kind": "design",
     "size": "S",
     "blockedBy": [],
@@ -371,7 +373,7 @@
     "id": "5-zone-body-reconciliation",
     "title": "5-Zone Body reconciliation",
     "lane": "design",
-    "order": 90,
+    "order": 100,
     "kind": "design",
     "size": "S",
     "blockedBy": [],
@@ -382,7 +384,7 @@
     "id": "weapons-have-no-art",
     "title": "Weapons have no art",
     "lane": "design",
-    "order": 100,
+    "order": 110,
     "kind": "design",
     "size": "S–M",
     "blockedBy": [],
@@ -393,12 +395,12 @@
     "id": "Q1",
     "title": "Q1 — the quest-1 autoplay",
     "lane": "design",
-    "order": 110,
+    "order": 120,
     "kind": "design",
     "size": "M",
     "blockedBy": [],
-    "doc": "`plan:plans/quest1-autoplay.md`",
-    "note": "Tabled 2026-09-15 (Caelan's call, after v0.22.0) — parked on the `plan` branch as `plans/quest1-autoplay.md`, with his framing and the open questions. A standard player profile completes quest 1 step by step on autoplay: watchable for him, and an eval and balance harness for Claude (\"for me to be able to see things, and for you to be able to test things and balance things\"). When it returns: route and profile; seeded so a failed run replays; what a run measures; an LLM player later."
+    "doc": "`plans/quest1-autoplay.md`",
+    "note": "BUILT 2026-09-21 on `feature/quest1-autoplay`, awaiting the merge call. All six stages: virtual clock, seed seam, headless Chrome runner, the standard fighter, a scored golden (`npm run autoplay:check`), watch mode and `--gif`. Deterministic (three jittered runs, one end state; the wall-clock control, three). Its findings: the standard fighter cannot finish quest 1 (dies to the Fungus King, seeds 1-5) — ruled Q1-8 \"sneaking\", the King is meant to be snuck past — and there is no unseen route (measured with `perceives()`: hidden ground from the entrance reaches 2 tiles; the Ghost and Red Fungus cones seal it). The sneak profile dies too. Q1-9 ruled and built: both sentries face north (a hidden route now exists, pinned by a test), and a struck enemy turns to face you (the side-hit loophole, fixed on `fix/struck-turns-to-face`). Q1-10 ruled, not yet built: spells and every item, and retry after a boss defeat — the retry refills your HP and MP but not the boss's kit or gold, so each attempt strips its heals. Next: teach the standard player to cast, throw and retry, and let the autoplay say whether it wins."
   },
   {
     "id": "zone-deep-content-bosses",
@@ -696,8 +698,8 @@
     "kind": "done",
     "size": "",
     "blockedBy": [],
-    "doc": "Merged 2026-09-13 (`689f26b`). Still dark at night — §3",
-    "note": "Merged 2026-09-13 (`689f26b`). Still dark at night — §3"
+    "doc": "Merged 2026-09-13 (`689f26b`). Lit at night since v0.24.0 — below",
+    "note": "Merged 2026-09-13 (`689f26b`). Lit at night since v0.24.0 — below"
   },
   {
     "id": "prop-anchor-cemetery-gate",
@@ -773,7 +775,172 @@
     "kind": "done",
     "size": "",
     "blockedBy": [],
-    "doc": "`56efc17`, tagged `v0.22.0`, live 2026-09-14: 85 commits, re-timed at 3440×1440 on a quiet machine first (`plans/screen-fill.md`, Measured). `game/_headers` shipped with it; the custom domain still needs ruling CD",
-    "note": "`56efc17`, tagged `v0.22.0`, live 2026-09-14: 85 commits, re-timed at 3440×1440 on a quiet machine first (`plans/screen-fill.md`, Measured). `game/_headers` shipped with it; the custom domain still needs ruling CD"
+    "doc": "`56efc17`, tagged `v0.22.0`, live 2026-09-14: 85 commits, re-timed at 3440×1440 on a quiet machine first (`plans/screen-fill.md`, Measured). `game/_headers` shipped with it; ruling CD settled it on the custom domain 2026-09-15",
+    "note": "`56efc17`, tagged `v0.22.0`, live 2026-09-14: 85 commits, re-timed at 3440×1440 on a quiet machine first (`plans/screen-fill.md`, Measured). `game/_headers` shipped with it; ruling CD settled it on the custom domain 2026-09-15"
+  },
+  {
+    "id": "H1",
+    "title": "H1 — the combat HUD",
+    "lane": "done",
+    "order": 280,
+    "kind": "done",
+    "size": "",
+    "blockedBy": [],
+    "doc": "`9f4158f`, tagged `v0.23.0`, live 2026-09-20 — all five stages of `plans/combat-hud.md`, plus the combat-log tagging fix",
+    "note": "`9f4158f`, tagged `v0.23.0`, live 2026-09-20 — all five stages of `plans/combat-hud.md`, plus the combat-log tagging fix"
+  },
+  {
+    "id": "F2",
+    "title": "F2 — hit-splat marks",
+    "lane": "done",
+    "order": 290,
+    "kind": "done",
+    "size": "",
+    "blockedBy": [],
+    "doc": "Merged `fe44bd9` 2026-09-20, shipped v0.24.0. Its colour gap is ruling EC",
+    "note": "Merged `fe44bd9` 2026-09-20, shipped v0.24.0. Its colour gap is ruling EC"
+  },
+  {
+    "id": "uncaught-createradialgradient-typeerror-stopped-",
+    "title": "Uncaught `createRadialGradient` TypeError stopped the effects loop for good",
+    "lane": "done",
+    "order": 300,
+    "kind": "done",
+    "size": "",
+    "blockedBy": [],
+    "doc": "`5867818`, shipped v0.24.0: a throwing frame costs one frame (`game/effect-loop.js`). The non-finite value itself was never reproduced — `plans/one-bad-frame.md` records what was ruled out",
+    "note": "`5867818`, shipped v0.24.0: a throwing frame costs one frame (`game/effect-loop.js`). The non-finite value itself was never reproduced — `plans/one-bad-frame.md` records what was ruled out"
+  },
+  {
+    "id": "the-fight-entrance-is-jittery",
+    "title": "The fight entrance is jittery",
+    "lane": "done",
+    "order": 310,
+    "kind": "done",
+    "size": "",
+    "blockedBy": [],
+    "doc": "`bd3140c`, shipped v0.24.0 (`plans/entrance-feel-pass.md`): the pixel crawl, the hard cut and the hidden punch, measured before and after. Whether the punch reads soft is ruling ENT",
+    "note": "`bd3140c`, shipped v0.24.0 (`plans/entrance-feel-pass.md`): the pixel crawl, the hard cut and the hidden punch, measured before and after. Whether the punch reads soft is ruling ENT"
+  },
+  {
+    "id": "C1",
+    "title": "C1 — seven unreachable Escape branches",
+    "lane": "done",
+    "order": 320,
+    "kind": "done",
+    "size": "",
+    "blockedBy": [],
+    "doc": "`4408a9a`, shipped v0.24.0; `tests/escape-shadowing.test.js` derives the invariant from source",
+    "note": "`4408a9a`, shipped v0.24.0; `tests/escape-shadowing.test.js` derives the invariant from source"
+  },
+  {
+    "id": "streetlights-light-up-at-night",
+    "title": "Streetlights light up at night",
+    "lane": "done",
+    "order": 330,
+    "kind": "done",
+    "size": "",
+    "blockedBy": [],
+    "doc": "`81250b8`, shipped v0.24.0: one warm `lights` row per lamp at the post's midpoint, pinned as a rule, not coordinates",
+    "note": "`81250b8`, shipped v0.24.0: one warm `lights` row per lamp at the post's midpoint, pinned as a rule, not coordinates"
+  },
+  {
+    "id": "C4",
+    "title": "C4 — thrown mystery meat can't heal",
+    "lane": "done",
+    "order": 340,
+    "kind": "done",
+    "size": "",
+    "blockedBy": [],
+    "doc": "`6f0d589`, shipped v0.24.0: a dweller takes the direct HP delta hand-feeding always used. The poition conversion this row proposed was tried and cost the give path its immediacy (5 tests)",
+    "note": "`6f0d589`, shipped v0.24.0: a dweller takes the direct HP delta hand-feeding always used. The poition conversion this row proposed was tried and cost the give path its immediacy (5 tests)"
+  },
+  {
+    "id": "the-first-minute-works-against-a-new-player",
+    "title": "The first minute works against a new player",
+    "lane": "done",
+    "order": 350,
+    "kind": "done",
+    "size": "",
+    "blockedBy": [],
+    "doc": "`57ef56c`, shipped v0.24.0: the opening objective says go, E names the car's direction, a banner says the wheel holds the movement keys, Defend moved from Trick to Fight",
+    "note": "`57ef56c`, shipped v0.24.0: the opening objective says go, E names the car's direction, a banner says the wheel holds the movement keys, Defend moved from Trick to Fight"
+  },
+  {
+    "id": "restart-keeps-the-last-run-s-pickups",
+    "title": "RESTART keeps the last run's pickups",
+    "lane": "done",
+    "order": 360,
+    "kind": "done",
+    "size": "",
+    "blockedBy": [],
+    "doc": "`936f471`, shipped v0.24.0 — far wider than pickups: rings and their skills, haste/slow, the sewer escape, the theft ledgers and the time of day all carried over, and the world memory was still set when the town reloaded. `tests/restart.test.js` checks a restarted run against main.js's own constructor, and covers any field added to the save later",
+    "note": "`936f471`, shipped v0.24.0 — far wider than pickups: rings and their skills, haste/slow, the sewer escape, the theft ledgers and the time of day all carried over, and the world memory was still set when the town reloaded. `tests/restart.test.js` checks a restarted run against main.js's own constructor, and covers any field added to the save later"
+  },
+  {
+    "id": "ship-v0-24-0-to-main",
+    "title": "Ship v0.24.0 to `main`",
+    "lane": "done",
+    "order": 370,
+    "kind": "done",
+    "size": "",
+    "blockedBy": [],
+    "doc": "`77e4784`, tagged `v0.24.0`, live 2026-09-21: 29 commits, 14 changed game files byte-matched live",
+    "note": "`77e4784`, tagged `v0.24.0`, live 2026-09-21: 29 commits, 14 changed game files byte-matched live"
+  },
+  {
+    "id": "Q1",
+    "title": "Q1 — the quest-1 autoplay",
+    "lane": "done",
+    "order": 380,
+    "kind": "done",
+    "size": "",
+    "blockedBy": [],
+    "doc": "Shipped v0.25.0: virtual clock, headless Chrome runner, the fighter and the sneak, a scored golden (`npm run autoplay:check`), watch mode (`?autoplay`), `--gif`. Deterministic: three jittered runs, one end state; the wall-clock control, three",
+    "note": "Shipped v0.25.0: virtual clock, headless Chrome runner, the fighter and the sneak, a scored golden (`npm run autoplay:check`), watch mode (`?autoplay`), `--gif`. Deterministic: three jittered runs, one end state; the wall-clock control, three"
+  },
+  {
+    "id": "no-unseen-route-through-the-sewer",
+    "title": "No unseen route through the sewer",
+    "lane": "done",
+    "order": 390,
+    "kind": "done",
+    "size": "",
+    "blockedBy": [],
+    "doc": "`2f1a2de`, shipped v0.25.0: the Ghost Fungus and the Red Fungus sentry face north; `tests/sewer-sneak-route.test.js` pins the hidden route",
+    "note": "`2f1a2de`, shipped v0.25.0: the Ghost Fungus and the Red Fungus sentry face north; `tests/sewer-sneak-route.test.js` pins the hidden route"
+  },
+  {
+    "id": "a-boss-struck-from-the-side-never-fought-back",
+    "title": "A boss struck from the side never fought back",
+    "lane": "done",
+    "order": 400,
+    "kind": "done",
+    "size": "",
+    "blockedBy": [],
+    "doc": "`f2f0c14`, shipped v0.25.0: `perception.js struck()` — the victim turns to face the blow next turn, or uses its kit first",
+    "note": "`f2f0c14`, shipped v0.25.0: `perception.js struck()` — the victim turns to face the blow next turn, or uses its kit first"
+  },
+  {
+    "id": "ship-v0-25-0-to-main",
+    "title": "Ship v0.25.0 to `main`",
+    "lane": "done",
+    "order": 410,
+    "kind": "done",
+    "size": "",
+    "blockedBy": [],
+    "doc": "`72ed8d5`, tagged `v0.25.0`, live 2026-09-21: 27 commits, 14 changed game files byte-matched live",
+    "note": "`72ed8d5`, tagged `v0.25.0`, live 2026-09-21: 27 commits, 14 changed game files byte-matched live"
+  },
+  {
+    "id": "housekeeping-branches-worktrees-and-the-plan-onl",
+    "title": "Housekeeping — branches, worktrees and the `plan`-only docs",
+    "lane": "done",
+    "order": 420,
+    "kind": "done",
+    "size": "",
+    "blockedBy": [],
+    "doc": "Branches and worktrees 2026-09-21: 2 stale worktrees, 97 local and 27 GitHub merged branches removed. Docs 2026-09-24: all 22 `plan`-only docs moved to `dev`, 8 to `plans/` and 14 to `plans/_archive/` (§5)",
+    "note": "Branches and worktrees 2026-09-21: 2 stale worktrees, 97 local and 27 GitHub merged branches removed. Docs 2026-09-24: all 22 `plan`-only docs moved to `dev`, 8 to `plans/` and 14 to `plans/_archive/` (§5)"
   }
 ]

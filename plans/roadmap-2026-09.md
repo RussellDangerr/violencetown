@@ -13,7 +13,8 @@ pending decisions, and the three passes that landed this week.
 
 > **Supersedes** `next-session-open-work.md` and `undeveloped-backlog.md` as the starting point.
 > Both were accurate when written; **seven of their items have since shipped** and are listed in
-> §6 so nobody re-does them. The `plan` branch itself is six weeks stale — see §5.
+> §6 so nobody re-does them. Both now sit in `plans/_archive/`: every `plan`-only doc moved to `dev`
+> on 2026-09-24 (§5).
 
 **State right now (updated 2026-09-21, close):** `main` = `dev` = `72ed8d5`, **v0.25.0, tagged and
 live** — Q1, the quest-1 autoplay (`plans/quest1-autoplay.md`), and what it found: the sewer's two
@@ -162,6 +163,7 @@ Ordered by how much each unblocks.
 | **V2** | **`Lire` has no lion.** Allowlisted unsprited rather than given a bad pick. | One sprite | `visual-pass.md` |
 | **AU** | **Audio discoverability.** Ships muted (ruled, correctly). Nobody discovers audio exists. Wants a visible speaker glyph — *not* autoplay. | Demo polish | `demo-readiness` §2.3 |
 | **SF** | **Screen-fill's open calls.** (1) The filler for each zone — the table in `plans/screen-fill.md`, pinned by `tests/tile-coverage.test.js`, so change both. (2) The forest is one tree on every cell: accept it, or vary it (a second prop, a hash). (3) Filler trees are two tiles tall and join the depth sort, so the row past a map's south edge covers its last row: you vanish for the one step onto Town's south exit, and two Carnival corner cells hide what stands on them. Accept, or draw fillers behind everything. | How the world's edge looks | `plans/screen-fill.md` |
+| **PB** | **Retire the `plan` branch, or keep it for parked work?** Since 2026-09-24 it holds nothing `dev` lacks except the moved docs' commit history (§5). Parked docs could live on `dev` with a clear status line instead, as `bestiary.md` and `sewer-crat-quest.md` now do. If it is retired, archive it as a tag, as was done for D1, and drop CLAUDE.md's *Planning surface* paragraph. | Where parked work lives | §5 |
 
 ---
 
@@ -171,7 +173,6 @@ Ordered by how much each unblocks.
 |---|---|---|---|---|
 | **T1 — Tag layer** on items / enemies / tiles | M | nothing | Not built. Prerequisite for the affordance matrix. | systems-audit §5.4 |
 | **C3 — input asymmetries** | M | nothing | REMOTICON item/gear/ring actions are pointer-only; aiming, turn-in-place and the 1–9 hotbar are keyboard-only. Documented honestly; still gaps. | C3 |
-| **Housekeeping** | S | nothing | *Branches and worktrees DONE 2026-09-21:* both stale worktrees removed (clean, fully merged), 97 merged local branches and 27 merged GitHub branches deleted — only `dev`, `main` and `plan` remain. **Still open:** migrate or archive the 24 `plan`-only docs (§5). | this doc |
 
 C1, C4, RESTART and the streetlights were built and shipped in v0.24.0 — §6.
 
@@ -187,8 +188,8 @@ C1, C4, RESTART and the streetlights were built and shipped in v0.24.0 — §6.
 | **F3 — who gets pulled into a fight** | F1 shipped its area as `game/fight-area.js` — every tile a fighter perceives. As a gameplay rule: whoever can see the fight is in it? | M | `plans/screen-fill.md` *Follow-on pieces* 3 | nothing |
 | **Affordance matrix** — verbs (~20 wheel leaves) × tags | The discipline: *a blank cell is a decision, not an oversight.* Second job is diagnostic — a proposed element with zero edges is caught at design time. Needs the tag layer first. | M | systems-audit §9 | T1 |
 | **Directional frames for every NPC, retire the chevron** | Violencians face their travel now. Extending to guards makes the overlay's facing chevron redundant — the stealth read becomes native to the art. Needs the other rpgUrban rows assigned. | M | `animation-pass.md` §4 | nothing |
-| **"The Crat"** — sewer diplomacy talk-quest | How ambiguous the tell is; father-flip vs. "you are not the mother"; player as arbiter vs. bribeable; reward. Reconcile with the shipped sewer canon first. | M | `sewer-crat-quest.md` (**plan only**) | nothing |
-| **Bestiary** — Cave + Weredigo (invisibility / blind-combat boss), Park + Ruffian (steal-and-flee via `transferGold` + `fleeStep`), Bear (friendly quest-giver), content enemies | Special mechanics? Which Kenney cells? Ruffian cleanly reuses two shipped systems and is the best first piece. | S–M each | `bestiary.md` (**plan only**) | nothing |
+| **"The Crat"** — sewer diplomacy talk-quest | How ambiguous the tell is; father-flip vs. "you are not the mother"; player as arbiter vs. bribeable; reward. Reconcile with the shipped sewer canon first. | M | `sewer-crat-quest.md` | nothing |
+| **Bestiary** — Cave + Weredigo (invisibility / blind-combat boss), Park + Ruffian (steal-and-flee via `transferGold` + `fleeStep`), Bear (friendly quest-giver), content enemies | Special mechanics? Which Kenney cells? Ruffian cleanly reuses two shipped systems and is the best first piece. | S–M each | `bestiary.md` | nothing |
 | **Elemental coverage matrix** | `fire` and `poison` joined `sludge` / `cold` / `energy` / `fear` with no weakness table to sit in. | S | E | nothing |
 | **5-Zone Body reconciliation** | Survives as the positional layer (Back = backstab ×1.5), not split HP pools. Needs a ruling before the bible states it as law. | S | E | nothing |
 | **Weapons have no art** | No weapon has ground or bag art: all five draw as lettered boxes — the Ray Gun a teal Z, the Wooden Sword a grey `?`. tinyDungeon has swords, axes and hammers; nothing bundled looks like a ray gun. Which cells — and what does the Ray Gun look like? | S–M | `sprites.js` `ITEM_SPRITES` | nothing |
@@ -208,10 +209,15 @@ C1, C4, RESTART and the streetlights were built and shipped in v0.24.0 — §6.
 | **Trade Slice 2** | Drag-to-swap barter, NPC loadouts, NPC gold. | M | nothing |
 | **Enemy buys YOUR gear** / **AI reads your wallet** | Law 6 open hook; bribe demands scaling to visible wealth. *Very Violencetown.* Deferred, not rejected. | M | nothing |
 
-**The `plan` branch problem.** 24 plan docs exist *only* on `plan`, which is six weeks stale and
-badly diverged from `dev`. Three of the "ready to build" items above have their only spec there.
-CLAUDE.md's rule is that active work lives on `dev`; parked work on `plan`. **Anything in §3 or §4
-should have its doc migrated to `dev` before work starts** — `git show plan:plans/<file>` and commit.
+**The `plan` branch problem — resolved 2026-09-24.** The docs that existed only on `plan` (22 by
+then, not 24) are all on `dev` now. Eight are still open work or are cited from code, and went to
+`plans/`: `bestiary.md`, `sewer-crat-quest.md`, `wild-ideas.md`, `movement-feel.md`,
+`world-structure.md`, `chapter-two-downtown-canyon-and-cohesion.md`,
+`sewer-armor-weapons-and-carnival.md` and `two-wheels-focus-state-and-color-language.md`. The other
+14 were built or superseded, and went to `plans/_archive/`, whose README gives the verdict for each.
+The 11 docs on both branches were all newer on `dev`, so nothing on `plan` is lost. `plan` has no
+history in common with `dev`. It still holds the moved docs' commit history, and nothing else that
+`dev` lacks. Whether to keep it is ruling **PB** (§2).
 
 **ROADMAP.md's seven ABC decisions** are listed as pending and are mostly *de facto settled by
 shipped code* (turn-based movement, REMOTICON inventory, 32px scale). ROADMAP.md itself has not been
@@ -267,6 +273,7 @@ parked document.
 | autoplay finding, Q1-9 | No unseen route through the sewer | `2f1a2de`, shipped v0.25.0: the Ghost Fungus and the Red Fungus sentry face north; `tests/sewer-sneak-route.test.js` pins the hidden route |
 | autoplay finding, Q1-9 | A boss struck from the side never fought back | `f2f0c14`, shipped v0.25.0: `perception.js struck()` — the victim turns to face the blow next turn, or uses its kit first |
 | roadmap §1 | Ship v0.25.0 to `main` | `72ed8d5`, tagged `v0.25.0`, live 2026-09-21: 27 commits, 14 changed game files byte-matched live |
+| roadmap §3 | Housekeeping — branches, worktrees and the `plan`-only docs | Branches and worktrees 2026-09-21: 2 stale worktrees, 97 local and 27 GitHub merged branches removed. Docs 2026-09-24: all 22 `plan`-only docs moved to `dev`, 8 to `plans/` and 14 to `plans/_archive/` (§5) |
 
 ---
 
@@ -276,7 +283,7 @@ Not a mandate — a reading of the graph.
 
 1. **Rulings — the cheapest progress on the board.** ENT, OBJ and EC each close a shipped
    feature's last gap and need a look or a line of copy, not a build. B3 clears the balance lint.
-   Z1–Z2 and CG gate zone builds; A1, A2, A3, R, DZ and P2 clear the board.
+   Z1–Z2 and CG gate zone builds; A1, A2, A3, R, DZ, P2 and PB clear the board.
 2. **F2b** (entrances by hit type, on `game/fight-entrance.js`) and **F3** (who gets pulled in, on
    `game/fight-area.js`). Both want a short design pass first; both touch the fight's opening.
 3. **Q1-10 — the Wererat by spells, items and retries.** Ruled 2026-09-21: the standard player

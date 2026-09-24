@@ -115,6 +115,13 @@ Both exclusions are files that *quote the rule itself* rather than violate it.
 
 ## Planning surface (corrected 2026-07-25)
 
-Specs and plans for work being *done* live in `plans/*.md` on `dev`, beside the code. The **`plan` branch is still used** — for parking work that is *not* being done: backlogs, open rulings, ideas deliberately deferred. Its latest is `plans/next-session-open-work.md`. Read it with `git show plan:plans/next-session-open-work.md` rather than checking the branch out; it is badly diverged from `dev`, so use `git worktree add` if you need to write to it.
+Specs and plans for work being *done* live in `plans/*.md` on `dev`, beside the code. The **`plan` branch is still used** — for parking work that is *not* being done: backlogs, open rulings, ideas deliberately deferred. It shares no history with `dev`, so use `git worktree add` if you need to write to it.
 
 (An earlier note here said not to write new plans on `plan` at all. That over-corrected — the distinction is active-work vs parked-work, not "never".)
+
+**Updated 2026-09-24:** every doc that existed only on `plan` now lives on `dev`. Open ones, and ones
+code cites, are in `plans/`. Shipped or superseded ones are in `plans/_archive/`, whose README gives
+the verdict for each. The entry point for open work is `plans/roadmap-2026-09.md`, not
+`next-session-open-work.md`, which is archived. Whether `plan` stays in use at all is ruling **PB** in
+that roadmap. Until Caelan rules on it, check `git ls-tree plan plans/` for anything newer than
+`dev`'s copy before trusting either branch.

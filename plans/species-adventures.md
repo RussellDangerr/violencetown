@@ -288,10 +288,10 @@ Verified 2026-09-15 by reading each file against this direction.
 | `game-feel.md` | AMENDED | §1B/§1C beats become data (piece 4). |
 | `sewer-npc-skeleton.md` | AMENDED | `sealed` rooms are layer precedent; edge case 7's "spawn fresh items on a timer" is the respawn clock, enemies only. |
 | `economy-merchants.md` | already SUPERSEDED | Its Q6 (creature-specific prices) is a species-table concern for later. |
-| `zone-identity.md`, `zone-room-sketches.md`, `plan:plans/world-structure.md` | UNTOUCHED | Layers place only registered tiles and props; the map graph is the base. |
+| `zone-identity.md`, `zone-room-sketches.md`, `world-structure.md` | UNTOUCHED | Layers place only registered tiles and props; the map graph is the base. |
 | `demo-readiness.md` | AMENDED | P2's orphaned `_endChapterOne()` is where the quest graph replaces the chapter seam. |
-| `plan:plans/bestiary.md` | AMENDED | Design source for the registry; migrate to `dev` before piece 1. |
-| `plan:plans/next-session-open-work.md` | AMENDED | A3 load-bearing; A4/B1 tiering answered by the registry. |
+| `bestiary.md` | AMENDED | Design source for the registry. Migrated to `dev` 2026-09-24. |
+| `_archive/next-session-open-work.md` | AMENDED | A3 load-bearing; A4/B1 tiering answered by the registry. |
 | `roadmap-2026-09.md` | AMENDED | Points here as a lane; next session unchanged. |
 | `ROADMAP.md` (root) | stale | Phase 4 "creature hopping" was this idea's ancestor. Already marked REWRITE by the adventure plan; still owed. |
 | `GAME_STUDIO_PLAN.md`, `architecture-and-game-feel.md` | UNTOUCHED | Process and vanilla-JS rulings bind as ever. |
