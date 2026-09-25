@@ -2903,7 +2903,17 @@ class Game {
     }
 
     _closeWheel() {
-        this.state = STATE.IDLE;
+        // A wheel action's own world turn can kill you: _die has already set
+        // DEAD and queued the defeat. _fireWheel closes the wheel after the
+        // action, and closing it used to stand the dead player back up —
+        // IDLE at 0 HP for the half second before the defeat resolved, taking
+        // input. Act in that window, get hit again, and _die (no longer
+        // guarded) queued a SECOND defeat: one death, resolved twice — a boss
+        // retry, then a defeat scenario on top. Found by the quest-1 autoplay
+        // (plans/quest1-autoplay.md, Q1-10), which acts the moment the game
+        // reads idle.
+        const dead = this.state === STATE.DEAD;
+        if (!dead) this.state = STATE.IDLE;
         this.wheel.reticle = null;
         this.wheel.aiming = false;
         this.wheel.confirming = false;
@@ -2914,7 +2924,7 @@ class Game {
         this._wheelOpenedByHold = false;
         audio.playSfx('menu-cancel');
         this._render();
-        this._resumeHeldWalk();   // resume walking if a dir was held through the wheel
+        if (!dead) this._resumeHeldWalk();   // resume walking if a dir was held through the wheel
     }
 
     // (Slice 2) The ONE opener seam for the wheel — Space, the touch ACTION

@@ -1,6 +1,6 @@
 # Q1 — the quest-1 autoplay: a player who finishes quest 1 on their own
 
-**Status: RULED 2026-09-21 — Caelan took every recommendation in §7 ("all recommended"). Build
+**Status: RULED 2026-09-21; Q1-10 BUILT 2026-09-24 (§8) — Caelan took every recommendation in §7 ("all recommended"). Build
 order §6; implementation plan `plans/quest1-autoplay-implementation.md`.** Un-tabled at his word on 2026-09-21, while he was at work
 and could not play, which is the situation this tool exists for. Moved to `dev` from
 `plan:plans/quest1-autoplay.md` (parked 2026-09-15), whose framing and open questions it keeps.
@@ -222,7 +222,7 @@ with trusted input from the DevTools protocol, because the hidden Browser pane c
   "they would turn to face you as soon as they're able but it might take them a second or they
   might want to drink a potion first" — `perception.js struck()`, a blow turns the victim on its
   next turn, or its kit first (`fix/struck-turns-to-face`, `tests/struck-reaction.test.js`).
-- **Q1-10 — how the Wererat is beaten. RULED 2026-09-21, not yet built.** With the route open and
+- **Q1-10 — how the Wererat is beaten. RULED 2026-09-21, BUILT 2026-09-24** (below). With the route open and
   the loophole closed, the sneak reaches the boss unseen, lands a free blow, and loses (a wooden
   sword does 4 through its armour 6; it does 12 a turn, heals from its kit and gold, and pays its
   allies). Neither profile can finish quest 1. **Caelan:** *"the players should burn their MP and
@@ -236,13 +236,63 @@ with trusted input from the DevTools protocol, because the hidden Browser pane c
   the wheel, aimed with its reticle), throws and drinks what it carries, and after a boss defeat
   goes back and tries again — the death cap becomes "stop when an attempt makes no progress". The
   autoplay then says whether it wins, in how many attempts, and the golden records it.
+
+  **Built 2026-09-24 on `feature/q1-10-wererat-autoplay`. Both profiles finish quest 1 — on every
+  seed tried.** The player (`player.js`) spends on anything worth it (the quarry, anything hunting
+  it, anything beside it): a drink, then Fireball or Cone of Cold while the MP lasts, then a throw,
+  then the sword. The sneak spends nothing on the quarry until it is beside it or seen. The driver
+  aims by walking the reticle onto the chosen tile, the way a player nudges it. The death cap is
+  gone: after a defeat it goes back in, and stops only when an attempt left the enemies exactly as
+  it found them (every live hostile's HP, kit and gold, and how many), with a 12-attempt backstop.
+
+  | Seed | Fighter | Sneak |
+  |---|---|---|
+  | 1 | finished · 167 turns · 5 deaths · 32 casts | finished · 213 · 5 · 40 |
+  | 2 | finished · 111 · 2 · 33 | finished · 171 · 4 · 36 |
+  | 3 | finished · 118 · 3 · 33 | finished · 157 · 3 · 28 |
+  | 4 | finished · 137 · 2 · 38 | finished · 210 · 6 · 42 |
+  | 5 | finished · 181 · 5 · 40 | finished · 202 · 6 · 46 |
+
+  Seed 1 is the golden (`tools/autoplay-golden.json`, `npm run autoplay:check`). Three replays of
+  the fighter with jittered real time end in one state.
+
+  **What it measured — a balance reading for Caelan, not a bug.** The ruling expected the Wererat
+  to be the wall and `_runBossRetry` to be how it falls. It is neither. Of 41 deaths across the ten
+  runs, **three** were to the Wererat (the only boss retries) and **23 to the Fungus King**; the
+  rest were the Ghost Fungus (5), the Violet Fungi (2) and the escape's rats (8). The King is not a boss, so each of those
+  is a defeat scenario, not a retry — and a scenario leaves the enemies' HP and spent kits where
+  they were, so the fight is won by attrition across scenarios. The Wererat itself usually dies to
+  Fireballs landed over the King's shoulder (a 3x3 burst on the boss's tile) from six tiles out.
+  Whether the King should be the quest's real gate, or whether retrying against it should work the
+  way it does against the boss, is Caelan's call.
+
+  **Found on the way, fixed:**
+  - *A game bug.* `_closeWheel` set `IDLE` unconditionally. A wheel action whose world turn killed
+    you — a spell, a throw — stood you back up at 0 HP for the half second before the defeat
+    resolved, taking input. Act in that window, get hit, and a second defeat was queued: one death
+    resolved twice (seen: a boss retry, then a defeat scenario on top). A person rarely acts inside
+    half a second; the autoplay acts the moment the game reads idle. `tests/wheel-death.test.js`.
+  - *The driver counted a death twice* when a second blow landed while you were down (it counted in
+    `_die`, whose guard returns early). It counts in `_resolveDefeat` now — once per death, with the
+    same last blow the game reads. The old golden's "died 3 times" was two deaths.
+  - *A drop lands under whoever stands there.* The Fungus King (seed 3), and a Violet Fungus that
+    had stopped being hostile (seed 5), stood on the converter, and fungi never move. Whoever stands
+    on the item to take is now the quarry, hostile or not; a non-hostile is struck through the
+    wheel's Hit, since E on one talks.
+  - *A Cone of Cold misses an exact diagonal* (it cardinalises and widens a tile a step), and a
+    tile in range can be walled off from where the reticle starts. The player skips both; the
+    reticle path is one function the player asks and the driver walks.
+  - An unfinished run now reports its scene (ground items, enemies, containers), and the trace
+    records each death and whether it was a boss retry or a scenario.
 - ~~**Overriding `localStorage` in the page.**~~ **Settled:** `boot.js` overrides
   `Storage.prototype`'s methods with a memory store. Proved both ways in the running game: a run
   autosaved (turn 11) into memory, and the port's real `localStorage` held no save afterwards.
 - ~~**Headless frame cost.**~~ **Measured:** every frame still renders, and 5.2 s of game time
   (12 turns plus a 3 s idle) plays in about 0.85 s of real time, page load included — roughly 6x
   real time. A whole quest of a few hundred turns should take seconds.
-- **Local only.** The eval needs a Chrome, so it runs on this machine, not in cloud routines.
+- ~~**Local only.**~~ **Runs in a cloud container too (2026-09-24):** the runner finds the
+  Playwright Chromium under `PLAYWRIGHT_BROWSERS_PATH` and passes `--no-sandbox` as root. A routine
+  with no browser still cannot run it.
 - **Coupling.** The autoplay reads `window.__game` internals. Mitigated by acting through named entry
   points (key codes, wheel keys) and a source-derived test that those entry points exist.
 
