@@ -2,13 +2,17 @@ Feature work is *guided* by the 4-gate pipeline in GAME_STUDIO_PLAN.md (Research
 Development → Polish). Treat it as a checklist that catches real mistakes, not a ceremony to
 perform — scale it to the size of the change. It exists to facilitate development, not hinder it.
 
-**Branches:** develop on `dev`. Specs and plans live in `plans/*.md` on `dev` as well, committed
-beside the code they describe — that is where every recent spec actually lives. (The legacy `plan`
-branch is badly diverged and is no longer the planning surface; don't write new plans there.)
-Feature branches remain the norm for substantial work, and Caelan makes the merge-to-`dev` call.
+**Branches:** one idea, one feature branch, cut from `dev`. The branch is where its research and
+design happen: its first commit is a short `plans/<name>.md` spec, and the code follows on the same
+branch. Keep it short-lived — days, not weeks — and Caelan makes the merge-to-`dev` call.
 
-**What survives the session is what got committed.** Any decision worth keeping goes into a file
-before the conversation ends — the repo is the source of truth, not the chat history.
+**The repo is public, so it carries only work being built.** Ideas, backlogs and open questions
+live outside it until one is picked; "start a feature branch for X" is the moment it enters. A
+branch is not a parking spot: parked branches rot against `dev` and every pushed branch is public.
+
+**What survives the session is what got committed.** Any decision about work in progress goes
+into its branch's files before the conversation ends — the repo is the source of truth, not the
+chat history.
 
 ## Branch & merge hygiene — keep merge conflicts small
 
@@ -113,8 +117,9 @@ Both exclusions are files that *quote the rule itself* rather than violate it.
   renderer draws the fog (`_drawFightFog`) and the entrance (`_drawEntrance`) from those alone,
   timed by `game/fight-entrance.js`. `_drawArena` and `_arenaLevel` are gone.
 
-## Planning surface (corrected 2026-07-25)
+## Planning surface (corrected 2026-09-24)
 
-Specs and plans for work being *done* live in `plans/*.md` on `dev`, beside the code. The **`plan` branch is still used** — for parking work that is *not* being done: backlogs, open rulings, ideas deliberately deferred. Its latest is `plans/next-session-open-work.md`. Read it with `git show plan:plans/next-session-open-work.md` rather than checking the branch out; it is badly diverged from `dev`, so use `git worktree add` if you need to write to it.
-
-(An earlier note here said not to write new plans on `plan` at all. That over-corrected — the distinction is active-work vs parked-work, not "never".)
+The `plan` branch is **retired** (deleted 2026-09-24). Specs live in `plans/*.md` on the feature
+branch that builds them, and reach `dev` when it merges. Parked work does not go in the repo — see
+*Branches* above. Older docs that say `git show plan:plans/...` are pointing at a branch that no
+longer exists.
