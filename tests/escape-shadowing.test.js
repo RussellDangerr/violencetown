@@ -10,8 +10,8 @@
 //
 // That is worse than merely dead: it reads as live. A reader wanting to change
 // what Escape does in DIALOGUE would naturally edit the DIALOGUE branch, and
-// their edit would do nothing — the gate already closed the menu. Ruling C1 in
-// plan:plans/next-session-open-work.md counted seven such branches.
+// their edit would do nothing — the gate already closed the menu. Roadmap item C1
+// (plans/roadmap-2026-09.md) counted seven such branches.
 //
 // This test derives both halves from the source rather than listing line
 // numbers, so it keeps holding as main.js moves. RADIAL_MENU is the control:

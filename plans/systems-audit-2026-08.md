@@ -7,8 +7,9 @@ outrunning the play, and proposes an order of operations. Nothing here overrides
 (`plans/balancing-bible.md`) or settles the open rulings — several of the findings *sharpen*
 those rulings, and they are still Caelan's to make.
 
-Companion docs: `plans/balancing-bible.md` (the Laws), `git show plan:plans/next-session-open-work.md`
-(parked work, referenced below by its A1–E item ids), `plans/gold-standard-design.md`.
+Companion docs: `plans/balancing-bible.md` (the Laws), `plans/roadmap-2026-09.md`
+(whose rows carry the A1–E item ids used below; they began in `next-session-open-work.md`, retired
+with the `plan` branch), `plans/gold-standard-design.md`.
 
 ---
 

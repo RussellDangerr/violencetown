@@ -1,9 +1,9 @@
 # Equipment, Weapons & the Carnival — Plan
 
-> **Moved from the retired `plan` branch 2026-09-25**, unchanged below this note, because code or
-> docs on `dev` cite it. Where it says "the `plan` branch", read `dev`. Docs it names that are not
-> on `dev` were left behind as superseded or idea-stage. Current status of anything here:
-> `plans/roadmap-2026-09.md`.
+> **Moved from the retired `plan` branch 2026-09-25**, unchanged below this note (bar one dead
+> `plan:` pointer, fixed 2026-09-26), because code or docs on `dev` cite it. Where it says "the
+> `plan` branch", read `dev`. Docs it names that are not on `dev` were left behind as superseded or
+> idea-stage. Current status of anything here: `plans/roadmap-2026-09.md`.
 
 > **STATUS (2026-07-23):** Armor set + Fear system + 3 of 4 weapons BUILT/SHIPPED. The loose ends (Ray Gun world source, `circus`→`carnival` rename) now have an actionable plan at `plans/ray-gun-and-carnival.md`. See `plans/undeveloped-backlog.md`.
 
@@ -142,7 +142,7 @@ The requirement ("MUST be shown STUCK IN A GRATE") is best served by an **examin
    ```
 3. **Grant hook (~5 new lines)** — `doExamine` logs + emits `examine {targetId:'cape_grate'}` but does not grant. Wire a one-time listener where game events are consumed (`main.js`): on `examine` with `targetId==='cape_grate'`, `this._addToInventory(ITEMS.red_cape)`, log `[+ Red Cape]`, and add a synthetic key like `sewer|11|5|red_cape` to the `_collectedItems` Set so it fires once and survives reload. **This one-time flag is the only save-state consideration the whole feature introduces** beyond the free-riding ground items.
 
-_Future-real-estate note:_ the north wall is shared with the (draft, unbuilt) Crat quest room (`plan:plans/sewer-crat-quest.md`), which would attach north behind its own transition. Keep that transition off a different north-wall tile than `(11,5)`, or shift the cape-grate a column — trivial. No collision today.
+_Future-real-estate note:_ the north wall is shared with the (draft, unbuilt) Crat quest room (`sewer-crat-quest.md`, idea stage, not in the repo), which would attach north behind its own transition. Keep that transition off a different north-wall tile than `(11,5)`, or shift the cape-grate a column — trivial. No collision today.
 
 ---
 
