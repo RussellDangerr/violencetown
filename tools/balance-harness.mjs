@@ -55,8 +55,13 @@ export const PLAYER_ARMOR = 0;
 // Skill peg bands (Law 1). GP is non-renewable, so gated tricks must beat spells'
 // raw rate; MP regenerates, so spells price in opportunity-turns.
 const TRICK_MIN_RATE = 2.5;
-const SPELL_MIN_RATE = 1.5;
+export const SPELL_MIN_RATE = 1.5;
 const SPELL_MAX_RATE = 2.5;
+// An area spell's damage lands in full on every enemy it covers, so its dmg/MP is
+// a per-target rate and pays Law 1's AoE discount (ruling B3). The floor comes down
+// by Cleave's 2/3 — the lightest per-target discount the game applies. The ceiling
+// stays: an area spell may not out-earn a single-target one per target.
+export const SPELL_AREA_MIN_RATE = SPELL_MIN_RATE * 2 / 3;
 
 // The peg keys on AUTONOMY, not gating (Law 1 as amended — every trick in TRICKS is
 // gated behind gear, so a gate distinguishes nothing). A summon fights on its own
@@ -248,9 +253,18 @@ export function trickDamage(t) {
     return null;
 }
 
+// An area spell covers more than the tile it is aimed at: a burst with a radius, or
+// a cone deeper than one step (a depth-1 cone is one tile wide). Read from the
+// spell's `aoe` (spells.js documents the shapes), never from its id.
+export function isAreaSpell(s) {
+    const a = s?.aoe;
+    if (!a) return false;
+    return (a.radius ?? 0) > 0 || (a.depth ?? 0) > 1;
+}
+
 // Skill lint (Law 1 — the peg ladder). A free damage source is the one thing a rate
 // check can't catch (x/0 is Infinity, which passes) — flag it by name.
-export function lintSkills() {
+export function lintSkills({ spells = SPELLS } = {}) {
     const flags = [];
     for (const t of Object.values(TRICKS)) {
         if (typeof t.damage === 'number' && t.summon) {
@@ -278,15 +292,17 @@ export function lintSkills() {
             flags.push(`[skill/${t.id}] Law 1 — ${rate.toFixed(2)} dmg/GP, expected >= ${TRICK_MIN_RATE.toFixed(2)}`);
         }
     }
-    for (const s of Object.values(SPELLS)) {
+    for (const s of Object.values(spells)) {
         if (!(s.damage > 0)) continue;
         if (!(s.mpCost > 0)) {
             flags.push(`[skill/${s.id}] Law 1 — free damage source: ${s.damage} dmg for ${s.mpCost} MP`);
             continue;
         }
         const rate = pegRate(s.damage, s.mpCost);
-        if (rate < SPELL_MIN_RATE || rate > SPELL_MAX_RATE) {
-            flags.push(`[skill/${s.id}] Law 1 — ${rate.toFixed(2)} dmg/MP, expected [${SPELL_MIN_RATE.toFixed(2)}, ${SPELL_MAX_RATE.toFixed(2)}]`);
+        const area = isAreaSpell(s);
+        const floor = area ? SPELL_AREA_MIN_RATE : SPELL_MIN_RATE;
+        if (rate < floor || rate > SPELL_MAX_RATE) {
+            flags.push(`[skill/${s.id}] Law 1 — ${rate.toFixed(2)} dmg/MP, expected [${floor.toFixed(2)}, ${SPELL_MAX_RATE.toFixed(2)}]${area ? ' (area)' : ''}`);
         }
     }
     return flags;

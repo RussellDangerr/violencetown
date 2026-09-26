@@ -29,7 +29,10 @@ before you read the PR.
   (`tools/balance-harness.mjs:105-107`): ANY `hp !== 100` flags — vermin included, no exemptions.
 - **Law 1 — The Peg.** 1 GP ≈ 1 HP is the rate for autonomous violence; per-cast skill buys rates
   above peg. Bands enforced by `lintSkills` (`tools/balance-harness.mjs:147-187`): spells
-  `[1.5, 2.5]` dmg/MP (`SPELL_MIN_RATE`/`SPELL_MAX_RATE`, lines 38-39), per-cast tricks
+  `[1.5, 2.5]` dmg/MP (`SPELL_MIN_RATE`/`SPELL_MAX_RATE`, lines 38-39) — area spells
+  `[1.0, 2.5]`, per target (`SPELL_AREA_MIN_RATE`, ruling B3: an `aoe` covering more than the
+  aimed tile lands its full damage on every enemy in it, so its floor takes Cleave's ⅔; see
+  `isAreaSpell`), per-cast tricks
   `>= 2.5` dmg/GP (`TRICK_MIN_RATE`, line 37), autonomous summons `[0.5, 1.0]` dmg/GP
   (`AUTONOMOUS_MIN_RATE`/`AUTONOMOUS_MAX_RATE`, lines 46-47).
 - **Law 2 — Earned multipliers, no dice.** One pipeline, everything routes through it:
@@ -205,13 +208,13 @@ From `tools/balance-golden.txt`, read fresh:
 | ray_gun      | 22     | energy |
 | wooden_sword | 10     | —      |
 
-**SPELLS (dmg/MP, band 1.5–2.5)**
+**SPELLS (dmg/MP, band 1.5–2.5; area spells 1.0–2.5 per target, ruling B3)**
 
 | id         | mpCost | damage | dmg/mp | note |
 |------------|--------|--------|--------|------|
 | boo        | 8      | 0      | —      | utility (fears, doesn't damage) — not rate-priced |
-| coneOfCold | 10     | 14     | 1.40   | **BELOW the spell floor — flagged, needs retune** |
-| fireball   | 12     | 20     | 1.67   | in-band |
+| coneOfCold | 10     | 14     | 1.40   | area (cone, depth 3) — in the area band. *Was the lone lint flag until ruling B3 (2026-09-25) kept its stats and gave area spells their own floor.* |
+| fireball   | 12     | 20     | 1.67   | area (burst, radius 1) — in-band |
 
 **TRICKS (dmg/GP, per-cast floor 2.5 / autonomous band 0.5–1.0)**
 
@@ -265,7 +268,8 @@ always 100 (Law 0), armor is the durability axis (Law 3), `chal_gp` is Challenge
 **The Law 0 worklist is CLOSED.** The retune (Task 14) took every roster entry above to hp 100 /
 negative armor per the fragility stops (Law 3); the golden's `LINT` section dropped from 34 Law 0
 flags + 1 Law 1 flag (35 total) to **1 flag total** — `coneOfCold`, still below the spell floor (see
-SPELLS above), unrelated to Round 2. The sewer rat spawned by the set-piece script
+SPELLS above), unrelated to Round 2. *(2026-09-25: ruling B3 cleared that last flag — the golden
+reads `total flags: 0`.)* The sewer rat spawned by the set-piece script
 (`game/sewer-setpiece.js:32`, `hp: 100, armor: -80, vermin: true`) is dynamic (not part of the
 static map roster the harness scans) and was already retuned alongside it; the two static
 `canyon-rat` entries above got the same `-80` in the same pass (`game/canyon-map.json`). Every

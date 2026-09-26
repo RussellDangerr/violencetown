@@ -2,7 +2,8 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ttk, ttdOf, pegRate, lintEntity, lintSkills, loadMapRoster, report, trickDamage, normEol, GOLDEN_PATH, REFERENCE_DAMAGE, ARMOR_CAP, statBlock, applyStatBlock, dotValue, DOT_DISCOUNT, lintItems, itemPegValue, poitionPegValue, bandForArmor, ROLE_BANDS } from '../tools/balance-harness.mjs';
+import { ttk, ttdOf, pegRate, lintEntity, lintSkills, loadMapRoster, report, trickDamage, normEol, GOLDEN_PATH, REFERENCE_DAMAGE, ARMOR_CAP, statBlock, applyStatBlock, dotValue, DOT_DISCOUNT, lintItems, itemPegValue, poitionPegValue, bandForArmor, ROLE_BANDS, isAreaSpell, SPELL_MIN_RATE, SPELL_AREA_MIN_RATE } from '../tools/balance-harness.mjs';
+import { SPELLS } from '../game/spells.js';
 import { TRICKS } from '../game/tricks.js';
 import { ITEMS } from '../game/items.js';
 
@@ -98,11 +99,35 @@ describe('harness math', () => {
         assert.equal(trickDamage({ summon: 'goon', summonTurns: 3 }), 24);
         assert.equal(trickDamage({ summon: 'goon', summonDamage: 25 }), 50);
     });
-    test('lintSkills flags Cone of Cold in the keyed format', () => {
-        const flags = lintSkills();
-        const cold = flags.find(f => f.startsWith('[skill/coneOfCold]'));
-        assert.ok(cold, `expected a coneOfCold flag, got: ${JSON.stringify(flags)}`);
-        assert.equal(cold, '[skill/coneOfCold] Law 1 — 1.40 dmg/MP, expected [1.50, 2.50]');
+    // Ruling B3: an area spell prices per target, so its floor sits lower. "Area" is
+    // read from the spell's own `aoe`, never its id — the same rate flags on one tile.
+    test('isAreaSpell reads the aoe: more than the aimed tile is area, one tile is not', () => {
+        assert.equal(isAreaSpell(SPELLS.fireball), true);
+        assert.equal(isAreaSpell(SPELLS.coneOfCold), true);
+        assert.equal(isAreaSpell({ damage: 14, mpCost: 10 }), false);
+        assert.equal(isAreaSpell({ aoe: { shape: 'burst', radius: 0 } }), false);
+        assert.equal(isAreaSpell({ aoe: { shape: 'cone', depth: 1 } }), false);
+    });
+    test('Cone of Cold (1.40 dmg/MP) lints clean as an area spell — the B3 exemption', () => {
+        const cold = SPELLS.coneOfCold;
+        assert.equal(pegRate(cold.damage, cold.mpCost), 1.4);   // B3 kept the stats: 14 dmg / 10 MP
+        assert.ok(pegRate(cold.damage, cold.mpCost) < SPELL_MIN_RATE, 'the exemption must be what clears it');
+        assert.deepEqual(lintSkills().filter(f => f.startsWith('[skill/coneOfCold]')), []);
+    });
+    test('the lower floor is for area spells only: a one-tile spell at the same rate still flags', () => {
+        const spells = {
+            bolt:  { id: 'bolt',  mpCost: 10, damage: 14 },
+            cone:  { id: 'cone',  mpCost: 10, damage: 14, aoe: { shape: 'cone', depth: 3 } },
+            fizz:  { id: 'fizz',  mpCost: 10, damage: 9,  aoe: { shape: 'burst', radius: 1 } },
+        };
+        assert.deepEqual(lintSkills({ spells }).filter(f => f.startsWith('[skill/bolt]')),
+            ['[skill/bolt] Law 1 — 1.40 dmg/MP, expected [1.50, 2.50]']);
+        assert.deepEqual(lintSkills({ spells }).filter(f => f.startsWith('[skill/cone]')), []);
+        assert.deepEqual(lintSkills({ spells }).filter(f => f.startsWith('[skill/fizz]')),
+            [`[skill/fizz] Law 1 — 0.90 dmg/MP, expected [${SPELL_AREA_MIN_RATE.toFixed(2)}, 2.50] (area)`]);
+    });
+    test('the lint ends with zero flags', () => {
+        assert.deepEqual(lintSkills(), []);
     });
 });
 
