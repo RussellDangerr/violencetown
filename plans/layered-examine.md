@@ -19,7 +19,7 @@ entry points routed through it, `tests/examine.test.js`.
 > - **A tap still can't examine bare ground or a prop** — `_targetAt` returns nothing there because a
 >   tap on empty ground is click-to-move. The E key covers them. Changing that is a pointer-model
 >   decision, not part of this.
-**Relates to:** `plans/two-wheels-focus-state-and-color-language.md` §8 (on the `plan` branch) — this is a
+**Relates to:** `plans/two-wheels-focus-state-and-color-language.md` §8 — this is a
 **minimal** realization of that section. Supersedes the `[Nothing here worth examining.]` dead-end.
 
 > **Decisions (Caelan, 2026-07-23):**
