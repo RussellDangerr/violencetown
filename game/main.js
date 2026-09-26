@@ -106,7 +106,8 @@ const STATE = {
     RESOLVING:       'resolving',
     DEAD:            'dead',
     // (Legacy WIN state retired with the tile-7 boss-trigger trap — fix/critical-path.)
-    ENDING:          'ending',          // End of Chapter One — main-quest outro + credits (fix/critical-path)
+    // (ENDING retired with the orphaned _endChapterOne — ruling P2. The bridge runs
+    //  _playBridgeCutscene into Chapter Two; nothing ever set it.)
     LOG_MODAL:       'log_modal',       // [L] — full scrollable message history
     TRADE:           'trade',           // (trade slice 1) Puck's shop window — buy/sell/bribe
     DIALOGUE:        'dialogue',        // (Step 4) disposition dialogue with an NPC
@@ -668,7 +669,7 @@ class Game {
         // [audio] swap the ambient bed to match the zone (no-op pre-init / if
         // the same track is already playing). SEWER gets the darker loop.
         audio.playMusic(this.map.zoneName === 'SEWER' ? 'sewer' : 'town');
-        // (ending) If the car's already fixed, re-open the North bridge — derives
+        // If the car's already fixed, re-open the North bridge — derives
         // from the persistent flag so it's open again on every town re-entry.
         this._openBridgeIfCarFixed();
         // (fight-fog) Whatever fog was up belongs to the map you left.
@@ -832,9 +833,9 @@ class Game {
         else this._tileDiffs.push({ x, y, id });
     }
 
-    // (ending) Once the car's fixed, the North-bridge barricade is clear — and
-    // driving across the bridge ends Chapter One (the win-trigger lives in
-    // _doMove). Derived from the PERSISTENT `carFixed` flag rather than the
+    // Once the car's fixed, the North-bridge barricade is clear — and driving
+    // across the bridge plays the bridge cutscene into Chapter Two (the trigger
+    // lives in _doMove). Derived from the PERSISTENT `carFixed` flag rather than the
     // per-map `_tileDiffs` (which reset on every _loadMap), so the bridge re-opens
     // whenever the town reloads — surviving leaving + returning, and CONTINUE.
     // Safe to call anytime: no-ops unless we're in town with the car fixed.
@@ -1276,18 +1277,6 @@ class Game {
 
             // ── EQUIPMENT: read-only Vitruvian screen (Stage 3) ──
             // (Slice 3) EQUIPMENT in-state keydown retired — the DEVICE block above owns GEAR.
-
-            // ── ENDING (End of Chapter One): N / Space / Enter restarts ──
-            // (fix/critical-path) Matches the on-screen "PRESS N TO PLAY AGAIN"
-            // prompt; Space/Enter accepted too since the player's hands are
-            // likely on those after the outro.
-            if (this.state === STATE.ENDING) {
-                if (e.code === 'KeyN' || e.code === 'Space' || e.code === 'Enter') {
-                    e.preventDefault();
-                    this._fullReset();
-                }
-                return;
-            }
 
             // ── IDLE: main input ──
             if (this.state !== STATE.IDLE) return;
@@ -1868,13 +1857,9 @@ class Game {
         if (e.button >= 1) return;
         // Mirror the keyboard gate: don't process taps during the move
         // animation or while the world is resolving. Splash has its own
-        // handler (DOM button). Dead is a non-interactive end state; Ending
-        // is handled just below (tap to restart).
+        // handler (DOM button). Dead is a non-interactive end state.
         if (this.state === STATE.SPLASH || this.state === STATE.RESOLVING) return;
         if (this.state === STATE.DEAD) return;   // non-interactive end state
-        // ENDING (End of Chapter One): a tap anywhere restarts — touch parity
-        // with the keyboard "play again" prompt. (fix/critical-path)
-        if (this.state === STATE.ENDING) { e.preventDefault(); this._fullReset(); return; }
         if (this._animating || this._uiAnimating()) return;
 
         const canvas = e.currentTarget;
@@ -2219,9 +2204,9 @@ class Game {
             this.playerX = nx;
             this.playerY = ny;
             this._stepIndex++;   // alternates the walk-anim foot/weight-shift
-            // (ending) Drive north across the now-open bridge → End of Chapter One.
-            // The bridge mouth (row 0, x7-9) is only walkable once the car's fixed
-            // (_openBridgeIfCarFixed), so reaching it here is the deliberate finale,
+            // Drive north across the now-open bridge → the bridge cutscene.
+            // The bridge mouth (row 0, x14-19) is only walkable once the car's fixed
+            // (_openBridgeIfCarFixed), so reaching it here is the deliberate beat,
             // not the instant-on-fix cut that used to happen.
             if (ny === 0 && nx >= 14 && nx <= 19 && this.questEngine.getFlag('carFixed')) {
                 this._playBridgeCutscene();   // (Phase 2) fuel decides: crash → Canyon, or ramp → Downtown
@@ -2255,7 +2240,7 @@ class Game {
 
             // (Legacy tile-7 "BOSS ROOM REACHED" win hook removed — fix/critical-path.
             // Tile 7 was a stale wrong-win trap one cell east of the Wererat; it's
-            // gone from sewer-map.json and the real ending is fix_car's onComplete.)
+            // gone from sewer-map.json; fix_car's onComplete opens the bridge.)
 
             this._advanceWorld();
 
@@ -2651,7 +2636,7 @@ class Game {
         // (_resumeHeldWalk) so you keep going in the new zone with no re-press. The
         // old halt made you stop one tile short of every exit and re-tap. Removing
         // it loosens a deliberate safety (the movement-feel plan flagged this as an
-        // explicit decision) — accepted for the feel. The Chapter-One bridge ending
+        // explicit decision) — accepted for the feel. The Chapter-One bridge cutscene
         // is a separate hardcoded tile check (gated on carFixed), not a
         // getTransition, so it is unaffected.
         // NOTE: ground items also deliberately do NOT stop held-walk (auto-pickup
@@ -5123,20 +5108,6 @@ class Game {
         this._log('[New game]');
     }
 
-    // End of Chapter One — the real ending for the main quest (fix/critical-path).
-    // Driven from fix_car's onComplete: the burger courier finally gets his car
-    // running. Freezes input into a tasteful canvas outro (renderer
-    // ._drawEndingOverlay) that offers a restart. Persist first so a reload after
-    // the ending resumes a completed-quest world rather than replaying it.
-    _endChapterOne() {
-        this._stopAutoRepeat();
-        this._heldDirKeys = [];
-        this._endingTurns = this.turn;     // shown on the credits card
-        this.state = STATE.ENDING;
-        this.autosave({ force: true });
-        this._render();
-    }
-
     // (Phase 2) Crossing the North bridge with the car fixed. The Cataclysmic
     // Converter runs the car TOO fast — you punch straight through the wooden
     // bridge into the Canyon — UNLESS you've poured alcohol in the tank to slow
@@ -5712,8 +5683,7 @@ class Game {
     _openOffer(npc) {
         // KEEP this gate. Three of the four callers already force IDLE
         // themselves, which makes it look redundant — it is not: the [E] branch
-        // reaches here with no such assignment, and is live in STATE.DEAD and
-        // STATE.ENDING.
+        // reaches here with no such assignment, and is live in STATE.DEAD.
         if (this.state !== STATE.IDLE) return;
         if (!npc || !npc.entity || !npc.entity.isAlive()) return;
         this._offerNpc = npc;

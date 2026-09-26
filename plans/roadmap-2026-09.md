@@ -155,7 +155,7 @@ Ordered by how much each unblocks.
 | **DZ** | **TheDangerrZone — freeze at a tag or delete.** Eight `*-TheDangerrZone.*` files still ship in `game/`, unreachable from `index.html`. | Repo clarity | systems-audit §3.3 |
 | ~~**D1**~~ | **DONE 2026-09-20** — archived as tag `archive/diagonal-prototype-2026-06-14` and the branch deleted. Audited first: nothing unreleased in it; dev's versions of its diagonal movement were further along. | Branch hygiene | D1 |
 | **P1** | **Phone tap targets render at half their designed size** — nothing on the canvas clears Apple's 44pt. *(Updated 2026-09-13: the screen-fill rule — at least 20 tiles on the short side — draws a phone at 0.5×, down from 0.62×: a tile is 16 CSS px, the dock's ✦ 36 px. The page's ☰ and ▤ are 44 px now.)* Options: fewer tiles on narrow screens / a touch layout / accept phone as secondary. *A design decision, not a bug.* | Mobile demo viability | `demo-readiness` §2.1 |
-| **P2** | **"End of Chapter One" does not exist.** `_endChapterOne()` is called from nowhere; the bridge drops you into Chapter Two. Delete the orphan, or give the demo a curtain. *(Re-verified 2026-09-21: still no caller. Its PLAY AGAIN runs the fixed `_fullReset`, so a curtain would restart cleanly — but the RESTART fix's commit and the v0.24.0 notes speak of PLAY AGAIN as if a player could reach it. No player can.)* | Demo has a stopping point | `demo-readiness` §2.2 |
+| ~~**P2**~~ | **DONE 2026-09-25 — ruled: delete the orphan.** `_endChapterOne()`, the `ending` state and its card (`_drawEndingOverlay`, PRESS N TO PLAY AGAIN) are gone; they had no caller. The bridge plays its cutscene into Chapter Two, as it has since `a83cdd4`. `_fullReset` stays: RESTART uses it. | Demo has a stopping point | `demo-readiness` §2.2 |
 | **ENT** | **Does the fight entrance's punch read soft?** Shipped in v0.24.0 on measurements alone — nobody has looked at it with eyes. If it does, the lever is `IMPACT_MS` *down* toward 90, not `ZOOM_IN_MS` up (that softens it further). | Feel | `plans/entrance-feel-pass.md` |
 | **OBJ** | **Two quest objectives truncate on a phone.** `canyon_escape/find_way_out` (64 chars) and `deliver_burger/handoff` (51) exceed the 46-character budget at 375 px. `tests/first-minute.test.js` carries both as `KNOWN_OVERFLOW`; shortening one fails that test until it leaves the list. The copy is Caelan's. | Phone legibility | `tests/first-minute.test.js` |
 | **EC** | **Energy's splat colour.** Energy now carries the `exclamation` mark but still falls back to physical red `#d23f2f`, and the mark's red-orange `#ff4b1d` on it is the weakest contrast in the set (1.40). Indigo `#3b2f8f` recommended; magenta and yellow-white both measured out. | F2's last gap | `plans/hit-splat-art.md` §9 |
@@ -277,7 +277,7 @@ Not a mandate — a reading of the graph.
 
 1. **Rulings — the cheapest progress on the board.** ENT, OBJ and EC each close a shipped
    feature's last gap and need a look or a line of copy, not a build. B3 clears the balance lint.
-   Z1–Z2 and CG gate zone builds; A1, A2, A3, R, DZ and P2 clear the board.
+   Z1–Z2 and CG gate zone builds; A1, A2, A3, R and DZ clear the board.
 2. **F2b** (entrances by hit type, on `game/fight-entrance.js`) and **F3** (who gets pulled in, on
    `game/fight-area.js`). Both want a short design pass first; both touch the fight's opening.
 3. ~~**Q1-10 — the Wererat by spells, items and retries.**~~ **BUILT 2026-09-24**, awaiting the
