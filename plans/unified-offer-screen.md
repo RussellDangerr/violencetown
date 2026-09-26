@@ -703,9 +703,9 @@ Named explicitly so the next reader does not assume they were forgotten:
 
 `plans/economy-merchants.md` and `plans/give-action-feature.md` on `dev` describe schemas and UI
 (`shopInventory`, `buyMultiplier`, `tradeThreshold`, `ITEM_GIVE_DIR`, Down-to-Give) that **do not
-exist and were abandoned**, with no supersede notes. The spec for what actually shipped lives only on
-the `plan` branch, at `git show plan:plans/chapter-two-downtown-canyon-and-cohesion.md` (§Trade-window
-decisions at :77, §Phase 6a–6e at :295–413).
+exist and were abandoned**, with no supersede notes. The spec for what actually shipped is
+`plans/chapter-two-downtown-canyon-and-cohesion.md` (§Trade-window decisions at :82, §Phase 6a–6e at
+:300–418).
 
 Both dev-side docs get a supersede header pointing here as part of this work, so the next reader does
 not rebuild a deleted verb.

@@ -6,7 +6,7 @@ sprites as well as any animations whatsoever, such as idle animations, bobbing, 
 impact frames"* and *"I'm thinking in manga with animatopes and comic book sweat marks and asterisks
 and stars"*).
 **Status:** Design (approved 2026-09-06).
-**Companions:** `plans/visual-pass.md` (the pass this builds on) · `plan:plans/movement-feel.md` (the
+**Companions:** `plans/visual-pass.md` (the pass this builds on) · `plans/movement-feel.md` (the
 original bob/waddle spec — note it called for squash/stretch, which was tried and **backed out**).
 
 > **Decisions (Caelan, 2026-09-06):** all four workstreams below, in this order.
