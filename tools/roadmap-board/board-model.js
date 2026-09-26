@@ -60,10 +60,11 @@ export function unblocked(cards) {
 }
 
 const mmId = id => id.replace(/[^A-Za-z0-9_]/g, '_');
-// A short code (A1, DZ, B12-style ids up to 2 letters + 1 digit) IS its own label.
+// A short code (A1, DZ, ENT, F2b: up to 3 letters, a digit, a lower-case suffix —
+// the extractor's CODE) IS its own label.
 // Anything else is a slug or a sentence — use the title, truncated, so a node
 // never carries both an id AND a long title.
-const SHORT_CODE = /^[A-Z]{1,2}\d?$/;
+const SHORT_CODE = /^[A-Z]{1,3}\d?[a-z]?$/;
 const truncate = (s, n) => s.length > n ? `${s.slice(0, n)}…` : s;
 const mmLabel = c => (SHORT_CODE.test(c.id) ? c.id : truncate(c.title, 40)).replace(/"/g, "'").replace(/[<>]/g, '');
 const mmNode = c => `${mmId(c.id)}["${mmLabel(c)}"]:::${c.kind}`;

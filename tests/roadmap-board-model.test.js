@@ -113,6 +113,17 @@ describe('mermaidSource', () => {
         assert.ok(!/.{60,}\]/.test(src), 'no node label runs long');
     });
 
+    // The extractor makes ids of three-letter codes and a lower-case suffix
+    // (ENT, OBJ, F2b); the graph must label them the same way it labels A1.
+    test('a three-letter code and a suffixed code label as just the code', () => {
+        const src = mermaidSource([
+            { id: 'ENT', title: 'x'.repeat(80), lane: 'rulings', order: 1, kind: 'ruling', blockedBy: [] },
+            { id: 'F2b', title: 'y'.repeat(80), lane: 'design', order: 1, kind: 'design', blockedBy: ['ENT'] },
+        ]);
+        assert.match(src, /ENT\["ENT"\]/);
+        assert.match(src, /F2b\["F2b"\]/);
+    });
+
     test('cards that are free to start appear even with no edges', () => {
         const src = mermaidSource(cards);
         assert.match(src, /subgraph free/);
