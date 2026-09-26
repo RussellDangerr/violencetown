@@ -79,5 +79,4 @@ town                       2
 sinks: burnGold('heal'|'trick'), bribes/buyouts via transferGold
 
 --- LINT ---
-[skill/coneOfCold] Law 1 — 1.40 dmg/MP, expected [1.50, 2.50]
-total flags: 1
+total flags: 0
