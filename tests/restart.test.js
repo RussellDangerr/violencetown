@@ -1,4 +1,4 @@
-// restart.test.js — RESTART (and the ending's PLAY AGAIN) begins a brand-new game.
+// restart.test.js — RESTART begins a brand-new game.
 //
 // _fullReset clears the save and reseeds, so the run it leaves you in is what a
 // reload would give you — except that it never cleared the world's memory. The

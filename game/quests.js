@@ -127,10 +127,10 @@ export const QUESTS = {
         ],
         onComplete: (game) => {
             // The car runs: set the persistent flag (read by _interactCar's flavor
-            // line) and clear the North-bridge barricade. The ending no longer
-            // fires the instant the car's fixed — it fires when the player DRIVES
-            // NORTH ACROSS the now-open bridge (main.js _doMove), so the bridge
-            // that's been the visible objective all game finally pays off.
+            // line) and clear the North-bridge barricade. The bridge cutscene
+            // fires when the player DRIVES NORTH ACROSS the now-open bridge
+            // (main.js _doMove), so the bridge that's been the visible
+            // objective all game finally pays off.
             game.questEngine.state.flags.carFixed = true;
             game._log('[The car coughs, sputters, then ROARS to life — and up north the bridge barricade rattles loose. It is revving way past redline, though. Nothing that hot is making the ramp.]', 'transition');
             if (game._openBridgeIfCarFixed) game._openBridgeIfCarFixed();

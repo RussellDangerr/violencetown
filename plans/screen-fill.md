@@ -107,7 +107,7 @@ the wheel at each depth, and the dial/tower backing.
   - *The world* — the tile grid above, sized by the viewport.
   - *The HUD* — pinned to the screen's edges and corners.
   - *Menus* — the Remoticon, the offer screen, dialogue, log history, the target list, the item
-    overlay, inspect and the ending screen keep their current 608×608 layouts, drawn in a box of
+    overlay and inspect keep their current 608×608 layouts, drawn in a box of
     that size centred on the screen and kept on it. (It fits on any screen whose short side is at
     least 320 screen px: the rule then guarantees 640 logical px along it.) Their layout code does not change shape. The throw-direction
     prompt, which belongs to where you stand, is drawn around your screen position instead.

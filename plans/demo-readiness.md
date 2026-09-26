@@ -74,6 +74,9 @@ So there is no clean stopping point. For a portfolio demo that is a real questio
 finishes the car arc is dropped into Chapter Two content rather than given a curtain. Either delete
 the orphaned ending, or give the demo an explicit endpoint. **A product call, not a bug fix.**
 
+**RULED 2026-09-25 (P2): deleted.** `_endChapterOne()`, the `ending` state and its card went
+together. The car arc runs on into Chapter Two, and the demo has no curtain.
+
 ### 2.3 Autoplay — RULED, and reverted
 
 Flipped to `muted: false` on the grounds that a silent demo undersells the procedural audio.

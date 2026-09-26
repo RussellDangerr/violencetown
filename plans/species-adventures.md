@@ -289,7 +289,7 @@ Verified 2026-09-15 by reading each file against this direction.
 | `sewer-npc-skeleton.md` | AMENDED | `sealed` rooms are layer precedent; edge case 7's "spawn fresh items on a timer" is the respawn clock, enemies only. |
 | `economy-merchants.md` | already SUPERSEDED | Its Q6 (creature-specific prices) is a species-table concern for later. |
 | `zone-identity.md`, `zone-room-sketches.md`, `plan:plans/world-structure.md` | UNTOUCHED | Layers place only registered tiles and props; the map graph is the base. |
-| `demo-readiness.md` | AMENDED | P2's orphaned `_endChapterOne()` is where the quest graph replaces the chapter seam. |
+| `demo-readiness.md` | AMENDED | The chapter seam is where the quest graph takes over. (P2 deleted the orphaned `_endChapterOne()` on 2026-09-25; the bridge cutscene is the seam.) |
 | `plan:plans/bestiary.md` | AMENDED | Design source for the registry; migrate to `dev` before piece 1. |
 | `plan:plans/next-session-open-work.md` | AMENDED | A3 load-bearing; A4/B1 tiering answered by the registry. |
 | `roadmap-2026-09.md` | AMENDED | Points here as a lane; next session unchanged. |

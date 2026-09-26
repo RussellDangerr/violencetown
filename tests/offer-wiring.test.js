@@ -230,8 +230,8 @@ const chestShim = (contents = ['rock', 'soap']) => ({
 describe('_openOffer', () => {
     test('refuses unless the game is IDLE', () => {
         // KEEP the gate: the [E] branch reaches _openOffer with no IDLE
-        // assignment of its own and is live in DEAD and ENDING.
-        for (const s of [STATE.DEAD, STATE.ENDING, STATE.DIALOGUE, STATE.TRADE, STATE.RADIAL_MENU]) {
+        // assignment of its own and is live in DEAD.
+        for (const s of [STATE.DEAD, STATE.DIALOGUE, STATE.TRADE, STATE.RADIAL_MENU]) {
             const g = stubGame({ state: s });
             openOffer.call(g, puck());
             assert.equal(g.state, s, `opened from ${s}`);
