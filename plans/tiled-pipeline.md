@@ -41,3 +41,11 @@ empty `canyon-map.json` (`_scaffold`, 14×10 of wall and dead grass) is that poi
 
 A Tiled JS extension that opens the game JSON directly; new-object authoring from Tiled; any
 runtime change. Nothing under `game/` changes except map JSON the author exports.
+
+## The Canyon's palette (2026-09-27)
+
+Tiles 60–66, picked by Caelan from sheets already loaded (candidates tiled 4×4 and painted into a
+mock canyon first): CANYON_FLOOR, CANYON_WALL, DRY_RIVERBED, SCREE, LEDGE, CHASM (no art — the
+flat near-black is the drop), RIVER. The placeholder Canyon's WALL/DEAD_GRASS became
+CANYON_WALL/CANYON_FLOOR, and its border CANYON_WALL. The five not yet painted are in
+`tile-coverage.test.js` KNOWN_UNPLACED; each line goes when its tile is placed.

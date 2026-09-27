@@ -38,6 +38,14 @@ const KNOWN_UNPLACED = {
     3: 'GAP — defined and mapped, placed nowhere',
     7: 'BOSS_TRIGGER — defined and mapped, placed nowhere; the legacy boss-trigger trap it belonged to was removed',
     13: "GRASS — in no map's tiles, even though Town has room for it; drawn past the edge of Town, Carnival and Downtown as their filler",
+    // The Canyon's palette (2026-09-27), waiting for Caelan to paint the
+    // Canyon in Tiled. Each line goes as its tile is placed — the stale-list
+    // test below says which.
+    62: 'DRY_RIVERBED — canyon palette, not yet painted',
+    63: 'SCREE — canyon palette, not yet painted',
+    64: 'LEDGE — canyon palette, not yet painted',
+    65: 'CHASM — canyon palette, not yet painted',
+    66: 'RIVER — canyon palette, not yet painted',
 };
 
 // Tile ids placed at runtime rather than authored in a map JSON. Each entry
@@ -168,7 +176,7 @@ describe('tile coverage', () => {
             'wilderness-map.json': { tile: 52, prop: 'tree' },
             'sewer-map.json':      { tile: 0 },
             'factory-map.json':    { tile: 41 },
-            'canyon-map.json':     { tile: 0 },
+            'canyon-map.json':     { tile: 61 },
         };
         for (const file of mapFiles) assert.deepEqual(loadMap(file).border ?? null, want[file] ?? null, file);
     });

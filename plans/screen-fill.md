@@ -95,7 +95,7 @@ the wheel at each depth, and the dial/tower backing.
   | Graveyard, Wilderness | `{ "tile": 52, "prop": "tree" }` — dead forest (DEAD_GRASS + tree) |
   | Sewer | `{ "tile": 0 }` — its brick (WALL) |
   | Factory | `{ "tile": 41 }` — FACTORY_WALL |
-  | Canyon | `{ "tile": 0 }` — its wall (WALL) |
+  | Canyon | `{ "tile": 61 }` — its red rock (CANYON_WALL; was WALL until 2026-09-27) |
   | Bank, Casino, Diner, Borgir | none — black, as Pokémon interiors are |
 
 - **A known consequence:** you see much more of each map at once (on Caelan's monitor, all of

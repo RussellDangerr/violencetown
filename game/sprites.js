@@ -194,12 +194,8 @@ export const SHEETS = {
 // contiguous wall cells (checked by tiling both 5x5); plain brick holds up
 // better at the scale Sewer's corridors need.
 //
-// CAUTION: id 0 is not Sewer-exclusive — canyon-map.json also uses it, for
-// its outer border only (31% of that map, not interior walls; renderer.js
-// resolves this table purely by numeric id, with no per-zone override). This
-// brick renders there too. Checked in tools/_zonecheck.png: it reads fine as
-// an outdoor boundary rather than a constructed room, so shipped as-is — but
-// a future change to WALL's art changes Canyon's border along with it.
+// id 0 was Canyon's outer wall and border too, until the Canyon got tiles of
+// its own (60-66, ZONE_TILE_SPRITE_MAP) on 2026-09-27. WALL is Sewer's again.
 //
 // SLUDGE used to be tinyDungeon (8,2), byte-identical to Factory's
 // GOO_VISUAL (id 42 below) — the two zones drew the exact same ooze-hatch
@@ -715,6 +711,18 @@ export const ZONE_TILE_SPRITE_MAP = {
     50: { sheet: 'tinyTown',    col: 1, row: 1 }, // GRAVE_DIRT    — brown dirt patch
     52: { sheet: 'tinyTown',    col: 1, row: 0 }, // DEAD_GRASS    — tufted grass (ground fill; toadstools tiled too busy)
     53: { sheet: 'tinyTown',    col: 9, row: 3, under: 52 }, // IRON_FENCE    — wood fence (no iron railing in pack), dead grass between the planks
+
+    // Canyon — picked 2026-09-27 from sheets already loaded, each tiled 4x4
+    // and in a mock canyon before choosing. The red-boulder cell tinyDungeon
+    // (0,1) was the obvious wall and was passed over: it is the rock item's
+    // sprite, and a dropped rock would vanish into it. All six are opaque.
+    60: { sheet: 'tinyDungeon',      col: 1,  row: 4 },  // CANYON_FLOOR — speckled sand
+    61: { sheet: 'tinyDungeon',      col: 1,  row: 0 },  // CANYON_WALL  — red rock, flecked with stone
+    62: { sheet: 'roguelikeDungeon', col: 10, row: 8 },  // DRY_RIVERBED — cracked earth, the river's old silt
+    63: { sheet: 'tinyDungeon',      col: 0,  row: 2 },  // SCREE        — red rubble at the foot of a wall
+    64: { sheet: 'tinyDungeon',      col: 2,  row: 4 },  // LEDGE        — sand with a darker lip along the top
+    65: null,                                            // CHASM        — no art: the flat near-black is the drop
+    66: { sheet: 'roguelikeDungeon', col: 1,  row: 11 }, // RIVER        — open water
 };
 
 // ── Phase B TODO ────────────────────────────────────────────────────────────
