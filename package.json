@@ -1,7 +1,7 @@
 {
   "name": "violencetown",
   "version": "0.26.0",
-  "description": "A browser-based 2D action-RPG of small violences \u2014 zero-dependency vanilla JavaScript on HTML5 Canvas, no build step, installable as a PWA.",
+  "description": "A browser-based 2D action-RPG of small violences 2014 zero-dependency vanilla JavaScript on HTML5 Canvas, no build step, installable as a PWA.",
   "homepage": "https://violencetown.russelldangerr.com",
   "repository": {
     "type": "git",
@@ -34,6 +34,9 @@
     "autoplay": "node tools/autoplay.mjs",
     "autoplay:check": "node tools/autoplay.mjs --check",
     "autoplay:write": "node tools/autoplay.mjs --write",
-    "map:audit": "node -e \"for (const f of require('fs').readdirSync('game').filter(n=>n.endsWith('-map.json'))) require('child_process').execSync(`node tools/map-audit.mjs game/${f}`,{stdio:'inherit'})\""
+    "map:audit": "node -e \"for (const f of require('fs').readdirSync('game').filter(n=>n.endsWith('-map.json'))) require('child_process').execSync(`node tools/map-audit.mjs game/${f}`,{stdio:'inherit'})\"",
+    "tiled:tileset": "node tools/tiled.mjs tileset",
+    "tiled:import": "node tools/tiled.mjs import",
+    "tiled:export": "node tools/tiled.mjs export"
   }
 }
