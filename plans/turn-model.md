@@ -161,6 +161,42 @@ answers with a quick cascade of committed actions that land on whoever is there.
 Borrowed from A: a round can still carry a move allowance. Borrowed from B: speed can set the
 cascade's order (who goes first), instead of extra actions.
 
+### Pixel Dungeon, from its source (2026-09-28)
+
+Research agent over watabou/pixel-dungeon and 00-Evan/shattered-pixel-dungeon (both **GPLv3** —
+studied for mechanism, no code copied or to be copied into this public repo). The load-bearing
+claims were re-checked against the raw Shattered source (`actors/Actor.java`, `actors/Char.java`,
+`actors/mobs/Mob.java`, master, fetched 2026-09-28):
+
+- **One queue, by time.** Every actor has a `time`; `process()` runs whoever is earliest. A tie goes
+  to the higher `actPriority` — `VFX 100 > HERO 0 > BLOB -10 > MOB -20 > BUFF -30`
+  (`Actor.java:49-53, :267`). Among mobs a tie is arbitrary (set order). *Verified.*
+- **Moves play together, blows play one at a time.** A move starts its tween and returns `true`,
+  so the next actor goes at once (`Char.moveSprite`, `:312-320`). A **visible** attack starts the
+  swing and returns `false`, which parks the queue (`Mob.doAttack`, `:761-763`); the damage lands
+  when the swing ends (`Mob.onAttackComplete`, `:774-778`), and only then does the next actor
+  decide. *Verified.* Three goons hitting you = three swings in a row, each seeing the world the
+  last one left. That is the cascade — Pixel Dungeon already has it, for blows only.
+- **Speed is frequency, not order.** A speed-2 mob steps twice per hero turn; attacks keep their own
+  delay. Nothing sorts by speed within a moment. (Agent-reported; not re-checked.)
+- **Input waits for the blows.** The hero takes input only when `ready`, i.e. after every blocking
+  swing ahead has played. No buffering, no skip-animations setting. (Agent-reported.)
+- **Hidden actors resolve instantly** — the playback costs only what you can see.
+- **Bombs hit everyone** in the radius, hero and allies included, and chain through heaps.
+  (Agent-reported.)
+
+**What this changes for C:**
+
+1. Take Pixel Dungeon's split as the default: **moves together, blows in sequence.** Walking stays
+   snappy; the joke — who hit whom, in what order — gets its own beat.
+2. **His JRPG initiative is a different mechanic from Pixel Dungeon's speed.** Pixel Dungeon's fast
+   monster acts *more often*; a JRPG's fast character acts *earlier*. He asked for earlier (TM-7).
+   Neither game sorts by a speed stat, so the sort key (speed, then the per-fight shuffle) is ours.
+3. **The snap vs the sequence.** Pixel Dungeon makes you wait for the blows. `combat-ui-layers.md:183`
+   already rules the answer for Violencetown: a key pressed during an animation finishes it
+   instantly and the input is processed. So a press during the cascade fast-forwards it — you
+   never wait, and a player who watches sees the whole Stooges routine.
+
 ### Neither reading needs a queue or a confirm
 
 In both, a press does its thing now. The one confirm left in the game is the reticle's Space on
@@ -185,9 +221,12 @@ Cleave, Fireball and Throw, which places a target; it is a separate question (TM
 **Updated 2026-09-28 for C.** Build C in two playable steps, each behind a flag, each for him to
 play before the next:
 
-1. **The cascade, logic untouched** (`?turns=cascade`): enemy beats play back staggered in the order
-   they already resolve. Visual only, so the suite and both goldens stay put. It answers "does
-   seeing the order read as comedy, or just as slower" — cheaply.
+1. **The cascade, logic untouched** (`?turns=cascade`): moves still play together; each enemy's
+   **blow** (swing, splat, knockback) plays one after another, in the order they already resolve, and
+   any key press fast-forwards the rest. The logic already runs in sequence — each enemy sees what
+   the one before it did — so this is playback only: the suite and both goldens stay put. It answers
+   "does seeing the order read as comedy, or just as slower" — cheaply. Speed ordering (TM-7/9)
+   comes after, once there is something to order.
 2. **One slapstick blow:** a single enemy type swings at a tile it winds up on (telegraphed), landing
    next beat on whoever stands there, goon or player. In one room (the sewer fungus fight).
    Barrels come after, if the blow is funny.
