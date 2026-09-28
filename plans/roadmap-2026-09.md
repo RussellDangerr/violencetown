@@ -95,7 +95,7 @@ flowchart LR
     AUTO -.->|"how later reviews are watched"| HUD
 
     A1["RULING A1: keep the −15<br/>bruiser row? (gates nothing yet)"]:::ruling
-    A3["RULING A3: does the bag<br/>cost a turn?"]:::ruling
+    A3["A3 — the bag is free to read<br/>DONE 2026-09-24"]:::done
     A3 -.->|"Law 7 stays true"| B2
 
     TAG["Tag layer on items /<br/>enemies / tiles"]:::ready
@@ -122,7 +122,7 @@ Three things the graph makes visible that the lists did not:
    zone bosses are unblocked authoring work, not engineering. *(This bullet said the opposite on
    09-07 — "two rulings gate the entire boss line." Both rulings' premises had already shipped.)*
 2. **The rulings that still gate a build are the zone ones:** Z1/Z2 → interiors, CG → a carnival
-   ground. A1 and A3 gate nothing buildable today.
+   ground. A1 gates nothing buildable today.
 3. **The zone-identity work and the combat work do not touch each other.** They can proceed in
    parallel sessions without file collisions — zone work lives in `sprites.js` / map JSON, combat
    work in `npc.js` / `combat.js` / `enemies.js`.
@@ -145,7 +145,7 @@ Ordered by how much each unblocks.
 |---|---|---|---|
 | ~~**CD**~~ | **DONE 2026-09-15** — Browser Cache TTL set to *Respect Existing Headers*; live headers read `max-age=0, must-revalidate`, re-verified at every release since. *Was:* **The custom domain still caches JS and CSS for four hours.** `game/_headers` (v0.22.0) asks for `max-age=0`, and `violencetown.pages.dev` obeys it, but the `russelldangerr.com` zone's Browser Cache TTL — Cloudflare's default, four hours — replaces any shorter origin value on `.js`, `.css` and images. Set it to *Respect Existing Headers*, or add a Cache Rule for `violencetown.russelldangerr.com`. A dashboard step, not code; `curl -sI …/main.js` then reads `max-age=0`. | Whether a release reaches a returning player at once | `demo-readiness` §2.5 |
 | **A1** | **Keep the −15 `bruiser` row?** It exists — `tools/balance-harness.mjs:146`, 15–40 GP, interpolated between fodder and standard and marked an open question. **No enemy in any map sits in its band** (armor −30 < a ≤ −15), and Pike is armor 5, which the `tough` row covers. Confirm it, or fold −15 into a neighbour, before anyone authors a −15 enemy. *(Corrected 2026-09-10: this row used to say the band had no row and gated "the entire boss line".)* | Nothing today | this row |
-| **A3** | **Does opening the REMOTICON cost a world turn?** Load-bearing now DoTs are live — a bag-open would cost a poison tick, undoing Law 7's "reading your bag is free." Proposed (systems-audit §6): *free out of combat, costed in combat.* Still open: `_openDevice` advances no turn. | Whether Law 7 is true | this row |
+| ~~**A3**~~ | **DONE 2026-09-24 — ruled: the bag stays free, in and out of combat.** No code change: opening the REMOTICON, flipping its tabs and closing it already advanced no turn. Using or equipping from it costs one turn, as any action does. `tests/free-bag.test.js` pins the free part, in and out of a fight. *Was:* **Does opening the REMOTICON cost a world turn?** The proposal (systems-audit §6) was *free out of combat, costed in combat*; it was not taken. | Law 7 stays true | this row |
 | **A2** | **Poison-flip direction.** The downward mirror of the ally-flip was chosen, not derived. Confirm or replace. | Nothing to build; a correctness question | this row |
 | **Z1** | **Vendor `Roguelike Interior Pack`?** CC0, same pattern as RPG Urban, and *the only source anywhere with a counter.* | Zone §1 interiors | `zone-identity` §1 |
 | **Z2** | **No slot machine or vault door exists in any pack.** Ship a boxy-cabinet proxy, or leave them text-only? (A cabinet-as-vault is the same class of compromise as the hooded-figure-as-rat.) | Zone §1 interiors | `zone-identity` §1 |
@@ -277,7 +277,7 @@ Not a mandate — a reading of the graph.
 
 1. **Rulings — the cheapest progress on the board.** ENT, OBJ and EC each close a shipped
    feature's last gap and need a look or a line of copy, not a build.
-   Z1–Z2 and CG gate zone builds; A1, A2, A3, R and DZ clear the board.
+   Z1–Z2 and CG gate zone builds; A1, A2, R and DZ clear the board.
 2. **F2b** (entrances by hit type, on `game/fight-entrance.js`) and **F3** (who gets pulled in, on
    `game/fight-area.js`). Both want a short design pass first; both touch the fight's opening.
 3. ~~**Q1-10 — the Wererat by spells, items and retries.**~~ **Shipped in v0.26.0** — both profiles finish quest 1, and the golden records the first complete

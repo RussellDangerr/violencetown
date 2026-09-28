@@ -212,8 +212,8 @@ export class Enemy {
         this.adjacencyBark    = adjacencyBark;
         this._wasAdjacent     = false;
 
-        // Disposition data — stored but not yet read. See plans/give-action-
-        // and-disposition.md for the feature that consumes these fields.
+        // Disposition data — read by give-action.js, offer.js and trade pricing.
+        // Design: plans/give-action-and-disposition.md.
         this.disposition   = disposition;
         this.flipThreshold = flipThreshold;
         this.bribeable     = bribeable;
