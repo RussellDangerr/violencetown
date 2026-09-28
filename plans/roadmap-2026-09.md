@@ -2,8 +2,8 @@
 
 **Compiled 2026-09-07, at the close of the visual/animation/zone-identity sessions.** This is the
 **entry point** for picking up work. It consolidates and *verifies against `dev`* every open item
-from: `plan:plans/next-session-open-work.md` (2026-07-25), `plan:plans/undeveloped-backlog.md`
-(2026-07-23), `plans/systems-audit-2026-08.md` §7, `plans/demo-readiness.md` §2, ROADMAP.md's
+from: `next-session-open-work.md` (2026-07-25) and `undeveloped-backlog.md` (2026-07-23), two July
+backlogs on the since-retired `plan` branch that were not carried to `dev`; `plans/systems-audit-2026-08.md` §7, `plans/demo-readiness.md` §2, ROADMAP.md's
 pending decisions, and the three passes that landed this week.
 
 > **Why this exists (Caelan, 2026-09-07):** *"my lack of visibility into what we're working on next
@@ -11,21 +11,21 @@ pending decisions, and the three passes that landed this week.
 > my head."* So this document's job is the **dependency graph**, not the list. The lanes below are
 > ordered by what unblocks what.
 
-> **Supersedes** `next-session-open-work.md` and `undeveloped-backlog.md` as the starting point.
-> Both were accurate when written; **seven of their items have since shipped** and are listed in
-> §6 so nobody re-does them. The `plan` branch itself is six weeks stale — see §5.
+> **Supersedes** both July backlogs. Neither is in the repo: they lived on the `plan` branch,
+> retired 2026-09-24. Their item codes (A1–A4, B1–B3, C1–C4, D1–D3, E) live on as this doc's row
+> ids, and **the row is now the record** — a Source cell that reads "this row" is one of them.
+> Items of theirs that had already shipped are listed in §6 so nobody re-does them.
 
-**State right now (updated 2026-09-21, close):** `main` = `dev` = `72ed8d5`, **v0.25.0, tagged and
-live** — Q1, the quest-1 autoplay (`plans/quest1-autoplay.md`), and what it found: the sewer's two
-sentries turned so quest 1 can be snuck through, and a struck enemy turning to face you. v0.24.0
-(`77e4784`) shipped earlier the same day. Suite 1735 / 305 / 0 failures; balance golden, no drift;
-`npm run autoplay:check` matches its golden. Verified live: the deployed `<meta name="version">`
-reads 0.25.0 and all 14 changed game files byte-match `main`. **Branches: `dev`, `main`, `plan` —
-nothing else, locally or on GitHub** (124 merged branches and 2 stale worktrees removed at the
-close). **Ruling CD is DONE** (2026-09-15). **Q1-10 BUILT 2026-09-24** on `feature/q1-10-wererat-autoplay`,
-awaiting the merge call: the autoplay's players cast, throw, drink and retry, and **quest 1 is
-finished end to end for the first time** (`plans/quest1-autoplay.md` §8). Next: **F2b** / **F3** (§4), the rulings in §2, or living zones —
-piece 1 of `plans/species-adventures.md`, whose §3 recommendations are still unruled.
+**State right now (updated 2026-09-26):** `main` = `1f1e6e5`, **v0.26.0, tagged and live** —
+Q1-10 (the autoplay's players cast, throw, drink and retry, and **both finish quest 1**), the
+`_closeWheel` double-death fix it found, ruling P2 (the unreachable End of Chapter One deleted) and
+ruling B3 (area spells get their own dmg/MP floor; the balance lint reads zero). Suite 1763 / 308 / 0
+failures; balance golden, no flags; `npm run autoplay:check` matches its golden. Verified live: the
+deployed `<meta name="version">` reads 0.26.0 and all 7 changed files byte-match `main` on both
+hosts. **Branches: `dev`, `main`, `spike/3d-view`.** The `plan` branch is retired (2026-09-24); the
+five specs of its that `dev` cites moved to `plans/` (2026-09-25). Next: **F2b** / **F3** (§4), the
+rulings in §2, or living zones — piece 1 of `plans/species-adventures.md`, whose §3
+recommendations are still unruled.
 
 > **Direction ruled 2026-09-15 — `plans/species-adventures.md`.** Fixed maps stay; enemies
 > come from a registry with spawn tables, drops and a respawn clock; quest flags apply *world
@@ -144,16 +144,16 @@ Ordered by how much each unblocks.
 | # | Ruling | What it gates | Source |
 |---|---|---|---|
 | ~~**CD**~~ | **DONE 2026-09-15** — Browser Cache TTL set to *Respect Existing Headers*; live headers read `max-age=0, must-revalidate`, re-verified at every release since. *Was:* **The custom domain still caches JS and CSS for four hours.** `game/_headers` (v0.22.0) asks for `max-age=0`, and `violencetown.pages.dev` obeys it, but the `russelldangerr.com` zone's Browser Cache TTL — Cloudflare's default, four hours — replaces any shorter origin value on `.js`, `.css` and images. Set it to *Respect Existing Headers*, or add a Cache Rule for `violencetown.russelldangerr.com`. A dashboard step, not code; `curl -sI …/main.js` then reads `max-age=0`. | Whether a release reaches a returning player at once | `demo-readiness` §2.5 |
-| **A1** | **Keep the −15 `bruiser` row?** It exists — `tools/balance-harness.mjs:146`, 15–40 GP, interpolated between fodder and standard and marked an open question. **No enemy in any map sits in its band** (armor −30 < a ≤ −15), and Pike is armor 5, which the `tough` row covers. Confirm it, or fold −15 into a neighbour, before anyone authors a −15 enemy. *(Corrected 2026-09-10: this row used to say the band had no row and gated "the entire boss line".)* | Nothing today | `next-session-open-work` A1 |
-| **A3** | **Does opening the REMOTICON cost a world turn?** Load-bearing now DoTs are live — a bag-open would cost a poison tick, undoing Law 7's "reading your bag is free." Proposed (systems-audit §6): *free out of combat, costed in combat.* Still open: `_openDevice` advances no turn. | Whether Law 7 is true | A3 |
-| **A2** | **Poison-flip direction.** The downward mirror of the ally-flip was chosen, not derived. Confirm or replace. | Nothing to build; a correctness question | A2 |
+| **A1** | **Keep the −15 `bruiser` row?** It exists — `tools/balance-harness.mjs:146`, 15–40 GP, interpolated between fodder and standard and marked an open question. **No enemy in any map sits in its band** (armor −30 < a ≤ −15), and Pike is armor 5, which the `tough` row covers. Confirm it, or fold −15 into a neighbour, before anyone authors a −15 enemy. *(Corrected 2026-09-10: this row used to say the band had no row and gated "the entire boss line".)* | Nothing today | this row |
+| **A3** | **Does opening the REMOTICON cost a world turn?** Load-bearing now DoTs are live — a bag-open would cost a poison tick, undoing Law 7's "reading your bag is free." Proposed (systems-audit §6): *free out of combat, costed in combat.* Still open: `_openDevice` advances no turn. | Whether Law 7 is true | this row |
+| **A2** | **Poison-flip direction.** The downward mirror of the ally-flip was chosen, not derived. Confirm or replace. | Nothing to build; a correctness question | this row |
 | **Z1** | **Vendor `Roguelike Interior Pack`?** CC0, same pattern as RPG Urban, and *the only source anywhere with a counter.* | Zone §1 interiors | `zone-identity` §1 |
 | **Z2** | **No slot machine or vault door exists in any pack.** Ship a boxy-cabinet proxy, or leave them text-only? (A cabinet-as-vault is the same class of compromise as the hooded-figure-as-rat.) | Zone §1 interiors | `zone-identity` §1 |
 | **CG** | **The carnival's ground is Town's road** — `CIRCUS_GROUND` and `ROAD` draw the same cell, over 892 of the carnival's 1,276 cells. Pick a ground of its own (from a cell no other tile draws), or accept the share in writing. Found 2026-09-10; the new shared-cell test carries it as the one open exception. | Zone identity's bar for the carnival | `zone-identity` §3 findings |
-| ~~**B3**~~ | **DONE 2026-09-25 — ruled: Cone of Cold stays at 14 dmg / 10 MP; area spells get their own floor.** `lintSkills` reads area from a spell's `aoe` (`isAreaSpell`) and holds it to `SPELL_AREA_MIN_RATE` = 1.0 dmg/MP per target (Cleave's ⅔ of the 1.5 floor). The balance lint is at zero flags; `tests/balance-harness.test.js` pins the exemption. | Lint credibility | B3 |
+| ~~**B3**~~ | **DONE 2026-09-25 — ruled: Cone of Cold stays at 14 dmg / 10 MP; area spells get their own floor.** `lintSkills` reads area from a spell's `aoe` (`isAreaSpell`) and holds it to `SPELL_AREA_MIN_RATE` = 1.0 dmg/MP per target (Cleave's ⅔ of the 1.5 floor). The balance lint is at zero flags; `tests/balance-harness.test.js` pins the exemption. | Lint credibility | this row |
 | **R** | **Rings: author to ~12, or cut.** **Two exist** (`rat_ring`, `fire_ring`) and one fusion — `game/ring-data.js`, and what systems-audit §3.1 itself says. *(Corrected 2026-09-10: this row said five.)* | Whether the ring system is a feature or a fossil | systems-audit §3.1 |
 | **DZ** | **TheDangerrZone — freeze at a tag or delete.** Eight `*-TheDangerrZone.*` files still ship in `game/`, unreachable from `index.html`. | Repo clarity | systems-audit §3.3 |
-| ~~**D1**~~ | **DONE 2026-09-20** — archived as tag `archive/diagonal-prototype-2026-06-14` and the branch deleted. Audited first: nothing unreleased in it; dev's versions of its diagonal movement were further along. | Branch hygiene | D1 |
+| ~~**D1**~~ | **DONE 2026-09-20** — archived as tag `archive/diagonal-prototype-2026-06-14` and the branch deleted. Audited first: nothing unreleased in it; dev's versions of its diagonal movement were further along. | Branch hygiene | this row |
 | **P1** | **Phone tap targets render at half their designed size** — nothing on the canvas clears Apple's 44pt. *(Updated 2026-09-13: the screen-fill rule — at least 20 tiles on the short side — draws a phone at 0.5×, down from 0.62×: a tile is 16 CSS px, the dock's ✦ 36 px. The page's ☰ and ▤ are 44 px now.)* Options: fewer tiles on narrow screens / a touch layout / accept phone as secondary. *A design decision, not a bug.* | Mobile demo viability | `demo-readiness` §2.1 |
 | ~~**P2**~~ | **DONE 2026-09-25 — ruled: delete the orphan.** `_endChapterOne()`, the `ending` state and its card (`_drawEndingOverlay`, PRESS N TO PLAY AGAIN) are gone; they had no caller. The bridge plays its cutscene into Chapter Two, as it has since `a83cdd4`. `_fullReset` stays: RESTART uses it. | Demo has a stopping point | `demo-readiness` §2.2 |
 | **ENT** | **Does the fight entrance's punch read soft?** Shipped in v0.24.0 on measurements alone — nobody has looked at it with eyes. If it does, the lever is `IMPACT_MS` *down* toward 90, not `ZOOM_IN_MS` up (that softens it further). | Feel | `plans/entrance-feel-pass.md` |
@@ -171,10 +171,10 @@ Ordered by how much each unblocks.
 | Item | Size | Blocked by | Doc | Where the doc lives |
 |---|---|---|---|---|
 | **T1 — Tag layer** on items / enemies / tiles | M | nothing | Not built. Prerequisite for the affordance matrix. | systems-audit §5.4 |
-| **C3 — input asymmetries** | M | nothing | REMOTICON item/gear/ring actions are pointer-only; aiming, turn-in-place and the 1–9 hotbar are keyboard-only. Documented honestly; still gaps. | C3 |
-| **Housekeeping** | S | nothing | *Branches and worktrees DONE 2026-09-21:* both stale worktrees removed (clean, fully merged), 97 merged local branches and 27 merged GitHub branches deleted — only `dev`, `main` and `plan` remain. **Still open:** migrate or archive the 24 `plan`-only docs (§5). | this doc |
+| **C3 — input asymmetries** | M | nothing | REMOTICON item/gear/ring actions are pointer-only; aiming, turn-in-place and the 1–9 hotbar are keyboard-only. Documented honestly; still gaps. | this row |
 
-C1, C4, RESTART and the streetlights were built and shipped in v0.24.0 — §6.
+C1, C4, RESTART and the streetlights were built and shipped in v0.24.0; Housekeeping finished
+2026-09-25 — §6.
 
 ---
 
@@ -182,18 +182,15 @@ C1, C4, RESTART and the streetlights were built and shipped in v0.24.0 — §6.
 
 | Item | Open questions | Size | Doc | Blocked by |
 |---|---|---|---|---|
-| **H1 — the combat HUD** | **SHIPPED in v0.23.0, 2026-09-20.** All five stages of `plans/combat-hud.md`: the wheel fires the bar's item (it fired bag slot 0), the dial gets a reserved dock column and joins the non-overlap invariant, the dock swaps its quest log for a combat log in a fight, two read-only gear panels sit in the fogged margins, and the bar shows its whole column. The combat log then shipped **empty** — every fight message was filed `system` — fixed in the same release, with a source-reading guard so it cannot rot back. | M | `plans/combat-hud.md` | — |
-| **F2 — hit-splat art** | **SHIPPED in v0.24.0** (merged `fe44bd9`, 2026-09-20) — `plans/hit-splat-art.md`. Energy takes `exclamation`; poison and sludge split one drop / drops on the heavy threshold; `miss` was dead and is deleted; the pick rule is a tested module. Remaining gaps, both needing an eye: a snowflake for `cold` (no glyph exists — new art), and energy's colour — ruling **EC** (§2). | S | `plans/hit-splat-art.md` | EC |
 | **F2b — entrances by hit type** | Split out of F2, which bundled it wrongly. Caelan's 09-14 note (*"slashing versus crushing"*) rides `game/fight-entrance.js` and `_trackFight`'s `_fightStart` stamp, not the splat: an entrance plays once when a fight opens, a splat plays on every blow. Different system, different timer. | S | F1 (shipped) | nothing |
 | **F3 — who gets pulled into a fight** | F1 shipped its area as `game/fight-area.js` — every tile a fighter perceives. As a gameplay rule: whoever can see the fight is in it? | M | `plans/screen-fill.md` *Follow-on pieces* 3 | nothing |
 | **Affordance matrix** — verbs (~20 wheel leaves) × tags | The discipline: *a blank cell is a decision, not an oversight.* Second job is diagnostic — a proposed element with zero edges is caught at design time. Needs the tag layer first. | M | systems-audit §9 | T1 |
 | **Directional frames for every NPC, retire the chevron** | Violencians face their travel now. Extending to guards makes the overlay's facing chevron redundant — the stealth read becomes native to the art. Needs the other rpgUrban rows assigned. | M | `animation-pass.md` §4 | nothing |
-| **"The Crat"** — sewer diplomacy talk-quest | How ambiguous the tell is; father-flip vs. "you are not the mother"; player as arbiter vs. bribeable; reward. Reconcile with the shipped sewer canon first. | M | `sewer-crat-quest.md` (**plan only**) | nothing |
-| **Bestiary** — Cave + Weredigo (invisibility / blind-combat boss), Park + Ruffian (steal-and-flee via `transferGold` + `fleeStep`), Bear (friendly quest-giver), content enemies | Special mechanics? Which Kenney cells? Ruffian cleanly reuses two shipped systems and is the best first piece. | S–M each | `bestiary.md` (**plan only**) | nothing |
-| **Elemental coverage matrix** | `fire` and `poison` joined `sludge` / `cold` / `energy` / `fear` with no weakness table to sit in. | S | E | nothing |
-| **5-Zone Body reconciliation** | Survives as the positional layer (Back = backstab ×1.5), not split HP pools. Needs a ruling before the bible states it as law. | S | E | nothing |
+| **"The Crat"** — sewer diplomacy talk-quest | How ambiguous the tell is; father-flip vs. "you are not the mother"; player as arbiter vs. bribeable; reward. Reconcile with the shipped sewer canon first. | M | not in the repo (idea stage) | nothing |
+| **Bestiary** — Cave + Weredigo (invisibility / blind-combat boss), Park + Ruffian (steal-and-flee via `transferGold` + `fleeStep`), Bear (friendly quest-giver), content enemies | Special mechanics? Which Kenney cells? Ruffian cleanly reuses two shipped systems and is the best first piece. | S–M each | not in the repo (idea stage) | nothing |
+| **Elemental coverage matrix** | `fire` and `poison` joined `sludge` / `cold` / `energy` / `fear` with no weakness table to sit in. | S | this row | nothing |
+| **5-Zone Body reconciliation** | Survives as the positional layer (Back = backstab ×1.5), not split HP pools. Needs a ruling before the bible states it as law. | S | this row | nothing |
 | **Weapons have no art** | No weapon has ground or bag art: all five draw as lettered boxes — the Ray Gun a teal Z, the Wooden Sword a grey `?`. tinyDungeon has swords, axes and hammers; nothing bundled looks like a ray gun. Which cells — and what does the Ray Gun look like? | S–M | `sprites.js` `ITEM_SPRITES` | nothing |
-| **Q1 — the quest-1 autoplay** | **BUILT 2026-09-21 on `feature/quest1-autoplay`, awaiting the merge call.** All six stages: virtual clock, seed seam, headless Chrome runner, the standard fighter, a scored golden (`npm run autoplay:check`), watch mode and `--gif`. Deterministic (three jittered runs, one end state; the wall-clock control, three). **Its findings: the standard fighter cannot finish quest 1** (dies to the Fungus King, seeds 1-5) — ruled Q1-8 "sneaking", the King is meant to be snuck past — **and there is no unseen route** (measured with `perceives()`: hidden ground from the entrance reaches 2 tiles; the Ghost and Red Fungus cones seal it). The sneak profile dies too. **Q1-9 ruled and built:** both sentries face north (a hidden route now exists, pinned by a test), and a struck enemy turns to face you (the side-hit loophole, fixed on `fix/struck-turns-to-face`). **Q1-10 BUILT 2026-09-24** (`feature/q1-10-wererat-autoplay`): the players spend MP, throw and drink what they carry, and retry until an attempt changes nothing — both now finish quest 1. It found a game bug on the way: a wheel action whose world turn killed you stood you back up at 0 HP (`_closeWheel`), and one death could resolve twice. | M | `plans/quest1-autoplay.md` | — |
 
 ---
 
@@ -209,10 +206,10 @@ C1, C4, RESTART and the streetlights were built and shipped in v0.24.0 — §6.
 | **Trade Slice 2** | Drag-to-swap barter, NPC loadouts, NPC gold. | M | nothing |
 | **Enemy buys YOUR gear** / **AI reads your wallet** | Law 6 open hook; bribe demands scaling to visible wealth. *Very Violencetown.* Deferred, not rejected. | M | nothing |
 
-**The `plan` branch problem.** 24 plan docs exist *only* on `plan`, which is six weeks stale and
-badly diverged from `dev`. Three of the "ready to build" items above have their only spec there.
-CLAUDE.md's rule is that active work lives on `dev`; parked work on `plan`. **Anything in §3 or §4
-should have its doc migrated to `dev` before work starts** — `git show plan:plans/<file>` and commit.
+**The `plan` branch — resolved.** It was retired 2026-09-24. The five of its specs that code or
+live docs on `dev` cite moved to `plans/` on 2026-09-25; the rest were superseded or idea-stage and
+stay out of the public repo. A spec now starts life as the first commit of the feature branch that
+builds it (CLAUDE.md).
 
 **ROADMAP.md's seven ABC decisions** are listed as pending and are mostly *de facto settled by
 shipped code* (turn-based movement, REMOTICON inventory, 32px scale). ROADMAP.md itself has not been
@@ -255,7 +252,7 @@ parked document.
 | roadmap §4 | F1 — the fight area as fog of war | Merged 2026-09-14 (`23fffd2`, `plans/fight-fog.md`): fog over every tile the fighters can't perceive, and an entrance by how the fight began — a black and white close-up, a red slash, a white flash. Timed beside the spotlight at 3440×1440: no measurable cost |
 | roadmap §1 | Ship v0.22.0 to `main` | `56efc17`, tagged `v0.22.0`, live 2026-09-14: 85 commits, re-timed at 3440×1440 on a quiet machine first (`plans/screen-fill.md`, *Measured*). `game/_headers` shipped with it; ruling CD settled it on the custom domain 2026-09-15 |
 | roadmap §4 | H1 — the combat HUD | `9f4158f`, tagged `v0.23.0`, live 2026-09-20 — all five stages of `plans/combat-hud.md`, plus the combat-log tagging fix |
-| roadmap §4 | F2 — hit-splat marks | Merged `fe44bd9` 2026-09-20, shipped v0.24.0. Its colour gap is ruling EC |
+| roadmap §4 | F2 — hit-splat marks | Merged `fe44bd9` 2026-09-20, shipped v0.24.0 (`plans/hit-splat-art.md`). Its colour gap is ruling EC; `cold` still wants a snowflake, which is new art |
 | found 2026-09-20 | Uncaught `createRadialGradient` TypeError stopped the effects loop for good | `5867818`, shipped v0.24.0: a throwing frame costs one frame (`game/effect-loop.js`). The non-finite value itself was never reproduced — `plans/one-bad-frame.md` records what was ruled out |
 | Caelan, 2026-09-20 | The fight entrance is jittery | `bd3140c`, shipped v0.24.0 (`plans/entrance-feel-pass.md`): the pixel crawl, the hard cut and the hidden punch, measured before and after. Whether the punch reads soft is ruling ENT |
 | roadmap §3 | C1 — seven unreachable Escape branches | `4408a9a`, shipped v0.24.0; `tests/escape-shadowing.test.js` derives the invariant from source |
@@ -264,10 +261,13 @@ parked document.
 | found 2026-09-21 | The first minute works against a new player | `57ef56c`, shipped v0.24.0: the opening objective says *go*, E names the car's direction, a banner says the wheel holds the movement keys, Defend moved from Trick to Fight |
 | roadmap §3 | RESTART keeps the last run's pickups | `936f471`, shipped v0.24.0 — far wider than pickups: rings and their skills, haste/slow, the sewer escape, the theft ledgers and the time of day all carried over, and the world memory was still set when the town reloaded. `tests/restart.test.js` checks a restarted run against main.js's own constructor, and covers any field added to the save later |
 | roadmap §1 | Ship v0.24.0 to `main` | `77e4784`, tagged `v0.24.0`, live 2026-09-21: 29 commits, 14 changed game files byte-matched live |
-| roadmap §4 | Q1 — the quest-1 autoplay | Shipped v0.25.0: virtual clock, headless Chrome runner, the fighter and the sneak, a scored golden (`npm run autoplay:check`), watch mode (`?autoplay`), `--gif`. Deterministic: three jittered runs, one end state; the wall-clock control, three |
+| roadmap §4 | Q1 — the quest-1 autoplay | Shipped v0.25.0: virtual clock, headless Chrome runner, the fighter and the sneak, a scored golden (`npm run autoplay:check`), watch mode (`?autoplay`), `--gif`. Deterministic: three jittered runs, one end state; the wall-clock control, three. **Q1-10 shipped v0.26.0** (`b7f1869`): the players spend MP, throw and drink what they carry, and retry until an attempt changes nothing — both finish quest 1, seeds 1-5 |
 | autoplay finding, Q1-9 | No unseen route through the sewer | `2f1a2de`, shipped v0.25.0: the Ghost Fungus and the Red Fungus sentry face north; `tests/sewer-sneak-route.test.js` pins the hidden route |
 | autoplay finding, Q1-9 | A boss struck from the side never fought back | `f2f0c14`, shipped v0.25.0: `perception.js struck()` — the victim turns to face the blow next turn, or uses its kit first |
 | roadmap §1 | Ship v0.25.0 to `main` | `72ed8d5`, tagged `v0.25.0`, live 2026-09-21: 27 commits, 14 changed game files byte-matched live |
+| autoplay finding, Q1-10 | A wheel action that killed you stood you back up at 0 HP | `b7f1869`, shipped v0.26.0: `_closeWheel` no longer sets IDLE over DEAD, so one defeat resolves once instead of a boss retry and a defeat scenario; `tests/wheel-death.test.js` |
+| roadmap §3 | Housekeeping | 2026-09-21: both stale worktrees and 124 merged branches removed. 2026-09-24: the `plan` branch retired. 2026-09-25: the five plan-only specs that `dev` cites moved to `plans/`; the rest stayed out as superseded or idea-stage, and `claude/plan-branch-work-edcqlm` was deleted. Branches: `dev`, `main`, `spike/3d-view` |
+| roadmap §1 | Ship v0.26.0 to `main` | `1f1e6e5`, tagged `v0.26.0`, live 2026-09-25: 8 commits (Q1-10, the double-death fix, P2, B3), 7 changed files byte-matched live on both hosts |
 
 ---
 
@@ -276,12 +276,11 @@ parked document.
 Not a mandate — a reading of the graph.
 
 1. **Rulings — the cheapest progress on the board.** ENT, OBJ and EC each close a shipped
-   feature's last gap and need a look or a line of copy, not a build. B3 clears the balance lint.
+   feature's last gap and need a look or a line of copy, not a build.
    Z1–Z2 and CG gate zone builds; A1, A2, A3, R and DZ clear the board.
 2. **F2b** (entrances by hit type, on `game/fight-entrance.js`) and **F3** (who gets pulled in, on
    `game/fight-area.js`). Both want a short design pass first; both touch the fight's opening.
-3. ~~**Q1-10 — the Wererat by spells, items and retries.**~~ **BUILT 2026-09-24**, awaiting the
-   merge call — both profiles finish quest 1, and the golden records the first complete
+3. ~~**Q1-10 — the Wererat by spells, items and retries.**~~ **Shipped in v0.26.0** — both profiles finish quest 1, and the golden records the first complete
    playthrough. What it measured is a balance question for Caelan, not a bug: the gate is the
    **Fungus King**, not the Wererat (`plans/quest1-autoplay.md` §8, Q1-10). *(Q1-9 — the sneak
    route and the side-hit loophole — shipped in v0.25.0.)*

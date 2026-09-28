@@ -178,8 +178,8 @@ world, not as markers.
 ### 4.6 Living zones
 - **Registry:** one dict (`cross-game-study` G-14 — never per-type files) pulled out of the
   ~20 type strings now inlined across 14 map files; balance bands, tiers and variants live here
-  and round-trip through `tools/balance-harness.mjs`. The parked `plan:plans/bestiary.md` is the
-  design source for what goes in it, already grouped by zone.
+  and round-trip through `tools/balance-harness.mjs`. The idea-stage `bestiary.md` (kept outside
+  the public repo) is the design source for what goes in it, already grouped by zone.
 - **Spawn tables:** per zone, weighted, tiered; a layer can swap a zone's table. A non-boss
   "wererat gang" variant is the first entry (defeat-scenarios-delivery #1 needs it).
 - **Drop tables:** weighted item rows on a type (rec. 3: items, never gold). Kits stay 1–3 items
@@ -288,10 +288,10 @@ Verified 2026-09-15 by reading each file against this direction.
 | `game-feel.md` | AMENDED | §1B/§1C beats become data (piece 4). |
 | `sewer-npc-skeleton.md` | AMENDED | `sealed` rooms are layer precedent; edge case 7's "spawn fresh items on a timer" is the respawn clock, enemies only. |
 | `economy-merchants.md` | already SUPERSEDED | Its Q6 (creature-specific prices) is a species-table concern for later. |
-| `zone-identity.md`, `zone-room-sketches.md`, `plan:plans/world-structure.md` | UNTOUCHED | Layers place only registered tiles and props; the map graph is the base. |
+| `zone-identity.md`, `zone-room-sketches.md`, `world-structure.md` | UNTOUCHED | Layers place only registered tiles and props; the map graph is the base. |
 | `demo-readiness.md` | AMENDED | The chapter seam is where the quest graph takes over. (P2 deleted the orphaned `_endChapterOne()` on 2026-09-25; the bridge cutscene is the seam.) |
-| `plan:plans/bestiary.md` | AMENDED | Design source for the registry; migrate to `dev` before piece 1. |
-| `plan:plans/next-session-open-work.md` | AMENDED | A3 load-bearing; A4/B1 tiering answered by the registry. |
+| `bestiary.md` (idea stage, not in the repo) | AMENDED | Design source for the registry; it enters the repo as the spec on piece 1's feature branch. |
+| `next-session-open-work.md` (retired with `plan`; its rows live on in `roadmap-2026-09.md`) | AMENDED | A3 load-bearing; A4/B1 tiering answered by the registry. |
 | `roadmap-2026-09.md` | AMENDED | Points here as a lane; next session unchanged. |
 | `ROADMAP.md` (root) | stale | Phase 4 "creature hopping" was this idea's ancestor. Already marked REWRITE by the adventure plan; still owed. |
 | `GAME_STUDIO_PLAN.md`, `architecture-and-game-feel.md` | UNTOUCHED | Process and vanilla-JS rulings bind as ever. |

@@ -5,7 +5,7 @@
 > on `dev` were left behind as superseded or idea-stage. Current status of anything here:
 > `plans/roadmap-2026-09.md`.
 
-> **STATUS (2026-07-23):** Mostly BUILT (colour language, `appliesTo`, the Target List, dominant-slice + flapper, combat re-skin). The one gap — §8 **layered examine** — is now designed + planned at `plans/layered-examine.md` + `plans/layered-examine-implementation.md`. See `plans/undeveloped-backlog.md`.
+> **STATUS (2026-07-23):** Mostly BUILT (colour language, `appliesTo`, the Target List, dominant-slice + flapper, combat re-skin). The one gap — §8 **layered examine** — is now designed + planned at `plans/layered-examine.md` + `plans/layered-examine-implementation.md`. Its July audit, `undeveloped-backlog.md`, was retired with the `plan` branch; `plans/roadmap-2026-09.md` carries its open rows.
 
 **Date:** 2026-07-03 · **Status:** design — awaiting Caelan's review before an implementation plan.
 **Author:** brainstormed with Caelan (2026-07-02→03). This is an **evolution of the existing radial

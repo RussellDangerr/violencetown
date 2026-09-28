@@ -558,7 +558,8 @@ same function to hit-test; neither side stores geometry.
 
 `_bribeTarget` (`main.js:2910`) and the wheel bribe resolver (`main.js:3319`) are the two surviving
 duplicate bribe implementations. They keep working and are **out of scope** for this spec; the
-duplication is noted in `plans/next-session-open-work.md` rather than fixed here.
+duplication was noted in `next-session-open-work.md` (since retired with the `plan` branch) rather
+than fixed here.
 
 ---
 

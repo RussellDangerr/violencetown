@@ -258,7 +258,7 @@ is under the 8.3 ms of a 120 Hz frame.
 
 ## Follow-on pieces (raised by Caelan, 2026-09-14)
 
-1. **The quest-1 autoplay** — **tabled 2026-09-15**, parked on the `plan` branch as
+1. **The quest-1 autoplay** — **tabled 2026-09-15**, then built and shipped in v0.25.0–v0.26.0:
    `plans/quest1-autoplay.md`. A standard player profile completing quest 1 step by step, on
    autoplay: *"for me to be able to see things (and for you to be able to test things and balance
    things)"* — his eval framing. Its own spec, when it returns.

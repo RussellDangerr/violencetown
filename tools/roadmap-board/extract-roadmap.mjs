@@ -20,6 +20,7 @@ const KIND_FOR_LANE = {
 };
 
 const strip = s => s
+    .replace(/~~/g, '')            // strikethrough (a closed ruling)
     .replace(/\*\*/g, '')          // bold
     .replace(/(^|[^`])\*(?!\*)/g, '$1')  // stray single asterisks
     .replace(/<br\s*\/?>/g, ' ')
@@ -32,8 +33,11 @@ const slug = s => strip(s)
     .replace(/^-+|-+$/g, '')
     .slice(0, 48);
 
-// A ruling row leads with a short code in bold: "**A1**", "**Z2**", "**AU**".
-const RULING_ID = /^\*{0,2}([A-Z]{1,2}\d?)\*{0,2}$/;
+// A ruling row leads with a short code in bold: "**A1**", "**Z2**", "**ENT**",
+// "**F2b**". A closed ruling keeps its row, struck through: "~~**P2**~~".
+const CODE = String.raw`[A-Z]{1,3}\d?[a-z]?`;
+const RULING_ID = new RegExp(String.raw`^(?:~~)?\*{0,2}(${CODE})\*{0,2}(?:~~)?$`);
+const STRUCK = /^~~.*~~$/;
 
 function parseBlockedBy(cell) {
     const s = strip(cell);
@@ -84,19 +88,22 @@ export function extractCards(markdown) {
         // at the head of the title — "B1 — first real boss" — because those
         // tables have no `#` column. Either way the code is the id, so a
         // `Blocked by` cell naming "B1" resolves to that card.
-        const TITLE_CODE = /^([A-Z]{1,2}\d?)\s+—\s/;
+        const TITLE_CODE = new RegExp(String.raw`^(${CODE})\s+—\s`);
         const fromCol   = strip(idCell).match(RULING_ID);
         const fromTitle = strip(titleCell).match(TITLE_CODE);
         const id = fromCol ? fromCol[1] : fromTitle ? fromTitle[1] : slug(titleCell);
         if (!id) continue;
 
-        orderInLane[lane] = (orderInLane[lane] ?? 0) + 10;
+        // A struck-through code is a closed ruling. board-model counts only the
+        // done lane as done, so it goes there, or it would still read as open.
+        const rowLane = STRUCK.test(idCell.trim()) ? 'done' : lane;
+        orderInLane[rowLane] = (orderInLane[rowLane] ?? 0) + 10;
         cards.push({
             id,
             title: strip(titleCell).replace(/\.$/, ''),
-            lane,
-            order: orderInLane[lane],
-            kind: KIND_FOR_LANE[lane],
+            lane: rowLane,
+            order: orderInLane[rowLane],
+            kind: KIND_FOR_LANE[rowLane],
             size: strip(col('size')).replace(/[^SML–\-]/g, '').slice(0, 3),
             blockedBy: parseBlockedBy(col('blocked by')),
             doc: strip(col('doc') || col('source') || col('where') || col('shipped as')),

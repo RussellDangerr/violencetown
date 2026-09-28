@@ -51,7 +51,7 @@ The game already has a functional core from the original codebase:
 ### Phase 2: Height & Visibility System
 **Goal:** Add vertical dimension — climbing on furniture, height-based fog of war.
 
-*Based on [PLAN-height-visibility.md](./PLAN-height-visibility.md) research.*
+*Based on `PLAN-height-visibility.md` research — removed in the 2026-04-01 clean-up; read it with `git show 8d7bf40:game/PLAN-height-visibility.md`.*
 
 - [ ] Define height tiers: Ground (0) → Furniture (1) → Counter (2) → Tall (3) → Ceiling (4)
 - [ ] Add `heightPlane` property to tile definitions in `data.js`

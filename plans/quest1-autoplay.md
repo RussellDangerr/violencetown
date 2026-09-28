@@ -3,7 +3,7 @@
 **Status: RULED 2026-09-21; Q1-10 BUILT 2026-09-24 (§8) — Caelan took every recommendation in §7 ("all recommended"). Build
 order §6; implementation plan `plans/quest1-autoplay-implementation.md`.** Un-tabled at his word on 2026-09-21, while he was at work
 and could not play, which is the situation this tool exists for. Moved to `dev` from
-`plan:plans/quest1-autoplay.md` (parked 2026-09-15), whose framing and open questions it keeps.
+the `plan` branch (parked there 2026-09-15; the branch is retired), keeping its framing and open questions.
 
 > **Caelan, 2026-09-14:** *"I really like the idea of this lab, but it's kind of hard to tell what's
 > going on or what's happening without an auto fight mode. Maybe a simulated mode of what the player

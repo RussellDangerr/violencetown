@@ -106,6 +106,57 @@ describe('extractCards', () => {
         }
     });
 
+    // A ruling the roadmap has closed stays in its table, struck through
+    // ("~~**P2**~~ | **DONE …**"). Its code must stay its id, so a re-seed
+    // updates the card in place, and it belongs in Done: board-model counts
+    // only the done lane as done, so a struck ruling left in Rulings would
+    // still read as open and still block whatever names it.
+    const CLOSED = `
+## 2. RULINGS CAELAN OWES — cheap
+
+| # | Ruling | What it gates | Source |
+|---|---|---|---|
+| ~~**P2**~~ | **DONE 2026-09-25 — ruled: delete the orphan.** | Demo has a stopping point | this row |
+| **ENT** | **Does the punch read soft?** | Feel | entrance-feel-pass |
+| **A1** | **Open still.** | Nothing today | this row |
+
+## 4. NEEDS A DESIGN PASS
+
+| Item | Open questions | Size | Doc | Blocked by |
+|---|---|---|---|---|
+| **F2b — entrances by hit type** | Slashing versus crushing. | S | F1 | ENT |
+
+## 6. DONE — do NOT re-implement
+
+| Parked as open in | Item | Shipped as |
+|---|---|---|
+| C2 | No modifier-key guard | checked in game/ |
+`;
+
+    test('a struck-through ruling keeps its code as its id and moves to Done', () => {
+        const p2 = extractCards(CLOSED).find(c => c.id === 'P2');
+        assert.ok(p2, `P2 missing from ${extractCards(CLOSED).map(c => c.id)}`);
+        assert.equal(p2.lane, 'done');
+        assert.equal(p2.kind, 'done');
+        assert.ok(p2.title.startsWith('DONE 2026-09-25'), p2.title);
+        assert.ok(!p2.title.includes('~'), p2.title);
+    });
+
+    test('an open ruling stays in Rulings beside a struck one', () => {
+        const a1 = extractCards(CLOSED).find(c => c.id === 'A1');
+        assert.equal(a1.lane, 'rulings');
+        assert.equal(a1.kind, 'ruling');
+    });
+
+    test('three-letter codes and a lower-case suffix are ids too, and blockedBy resolves to them', () => {
+        const cards = extractCards(CLOSED);
+        const ids = cards.map(c => c.id);
+        assert.ok(ids.includes('ENT'), `ENT missing from ${ids}`);
+        const f2b = cards.find(c => c.id === 'F2b');
+        assert.ok(f2b, `F2b missing from ${ids}`);
+        assert.deepEqual(f2b.blockedBy, ['ENT']);
+    });
+
     test('order is unique within a lane and increases in document order', () => {
         const cards = extractCards(SAMPLE);
         const ready = cards.filter(c => c.lane === 'ready');

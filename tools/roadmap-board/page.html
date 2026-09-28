@@ -214,7 +214,7 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt
 // (Named distinctly from board-model.js's own SHORT_CODE — that file's consts
 // land in this same script's scope once build.py inlines it, and a duplicate
 // top-level `const` of the same name would be a SyntaxError.)
-const isShortCodeId = id => /^[A-Z]{1,2}\d?$/.test(id);
+const isShortCodeId = id => /^[A-Z]{1,3}\d?[a-z]?$/.test(id);
 
 // ── Render ─────────────────────────────────────────────────────────────────
 function render() {
