@@ -5,7 +5,7 @@
 > `plan` branch", read `dev`. Docs it names that are not on `dev` were left behind as superseded or
 > idea-stage. Current status of anything here: `plans/roadmap-2026-09.md`.
 
-> **STATUS (2026-07-23):** Armor set + Fear system + 3 of 4 weapons BUILT/SHIPPED. The loose ends (Ray Gun world source, `circus`→`carnival` rename) now have an actionable plan at `plans/ray-gun-and-carnival.md`. See `plans/undeveloped-backlog.md`.
+> **STATUS (2026-07-23):** Armor set + Fear system + 3 of 4 weapons BUILT/SHIPPED. The loose ends (Ray Gun world source, `circus`→`carnival` rename) now have an actionable plan at `plans/ray-gun-and-carnival.md`. Its July audit, `undeveloped-backlog.md`, was retired with the `plan` branch; `plans/roadmap-2026-09.md` carries its open rows.
 
 _Branch target: `plan` branch (planning only). Date: 2026-07-02. Author: lead design pass off five research reports, grounded against the `feature/equipment-armor` / `feature/hud-overhaul` working tree._
 

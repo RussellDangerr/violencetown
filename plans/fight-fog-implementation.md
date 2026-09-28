@@ -2425,7 +2425,7 @@ git push -u origin feature/fight-fog
 
 - [ ] **Step 5: Update the memory's resume note**
 
-Update `violencetown-current-work.md`: F1 is built on `feature/fight-fog` and pushed, awaiting Caelan's merge call; Task 12's headline numbers; next in his order is the quest-1 autoplay spec.
+Update the session's resume note (Claude's memory, outside the repo): F1 is built on `feature/fight-fog` and pushed, awaiting Caelan's merge call; Task 12's headline numbers; next in his order is the quest-1 autoplay spec.
 
 - [ ] **Step 6: Hand over**
 

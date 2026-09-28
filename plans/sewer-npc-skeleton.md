@@ -181,7 +181,7 @@ A fresh page-load drops the player at sewer spawn. Without the player taking any
 6. `feat: Carrion + sewer room expansion` — Add Carrion entry, redraw sewer-map.json tiles to include north/east/south rooms with sealed doors. Cold-boot test.
 7. `polish: sewer scene readability` — Log message tone pass, chest visual states, bark cadence feel.
 
-**Quality checklist:** Per `GAME_STUDIO_PLAN.md` Gate 3. Cold-boot test after every commit (per `feedback_cold_boot_testing.md`).
+**Quality checklist:** Per `GAME_STUDIO_PLAN.md` Gate 3. Cold-boot test after every commit.
 
 ---
 

@@ -7,7 +7,7 @@
 
 > **Connects to:** `plans/economy-merchants.md` (ambro/necta are trade goods), `plans/give-action-and-disposition.md` (Charisma stat modifies disposition shifts), `plans/combat-health-system.md` (Attack/Defense replace flat damage/armor), `plans/cosmology-and-arc.md` (Behest joins the cast as a knowledge broker), `plans/ground-items-inventory.md` (inventory model is now infinite-with-stacking).
 
-> **Supersedes:** The "No stat growth" clause in `VIOLENCETOWN_DESIGN_MEMORY.md`. The spirit — no grinding — survives. The letter changes: stats CAN grow, through placed items only.
+> **Supersedes:** The "No stat growth" clause of the original design pillar (quoted under *Origin* above). The spirit — no grinding — survives. The letter changes: stats CAN grow, through placed items only.
 
 > **Terminology:** Citizens of Violencetown are called **Violencians**. Food items are **ambro** (from ambrosia — food of the gods). Drink items are **necta** (from nectar — drink of the gods). These are Violencian street slang, not formal names.
 
