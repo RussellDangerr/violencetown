@@ -29,6 +29,19 @@ In the same answer he named Baldur's Gate 3's model — items costing points or 
 
 That is reading **C** below; A and B stay as the parts it can borrow from.
 
+**2026-09-28, later — the order is the design:**
+
+> "I'm thinking about high-level RuneScape PVP and the fact that they have to think about whose
+> player identification number is currently giving which player an advantage. … even though
+> things are all happening at once, on the tick, things do still have to get resolved
+> sequentially. I guess the only thing my difference would be would be to expand out the
+> animations to have it show which happens in a row. I like the idea of the speed stat
+> determining this: what order you are in the round-robin as a callback to old JRPGs."
+
+So C is settled in outline: resolve in sequence (as the engine already does), **play it back in
+that sequence**, and let **speed set the order**. Today the order is the `enemies` array — the
+order the map JSON lists them — which nobody chose (TM-7).
+
 ## What a turn is today
 
 Read from `dev` at `97ea7e1`, not from the older docs.
@@ -202,3 +215,6 @@ express, so it could ride along for comparison.
 | **TM-4** | "Slim down the game" — what goes? | His to say; nothing here assumes an answer |
 | **TM-5** | The reticle's Space on Cleave/Fireball/Throw — keep, or commit on the nudge the way Hit commits on a direction? | Keep for now: it places a target, it does not confirm a choice |
 | **TM-6** | The one-deep step buffer vs "no input buffering" | Keep it: it smooths a held walk; it is not the planning-ahead queue he rejected |
+| **TM-7** | ~~Who decides the order?~~ **Answered 2026-09-28: speed, a JRPG round-robin.** Ties? | Ties by a stable per-fight shuffle — his RuneScape PID, where the advantage is real but not permanent |
+| **TM-8** | Where does the player sit in the order? A press resolves at once (the snap), so a faster enemy cannot go "before" it — unless a fast enemy may interrupt | Player always first, on the press; the room follows by speed. Interrupts later, as a rare enemy trait |
+| **TM-9** | Where speed comes from. No character has a speed stat today; the only speed is the Speed Poition's haste/slow charges (`items.js:422`, `worldBeatPlan`) | A `speed` on every character (default 0), set per enemy type; the poition raises yours for N turns |
