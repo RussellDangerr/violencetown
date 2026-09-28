@@ -17,6 +17,18 @@ Caelan, answering ruling A3 on 2026-09-24:
 In the same answer he named Baldur's Gate 3's model — items costing points or actions — as
 "close to what we're looking at". Opening the bag stays free either way (A3, ruled).
 
+**2026-09-28, answering TM-0 — a hybrid, and the goal is comedy:**
+
+> "I like the way that Pixel Dungeon executes everything the moment it happens, but I am also
+> trying to create chaotic situations in which multiple things happen at once. Your plans that you
+> are trying to carefully lay might get ruined by enemies moving out of the way or barrels getting
+> smashed. … I think the funniest version of it is some sort of Three Stooges. Everyone is messing
+> each other up all the time. I think a lot of the comedy will be lost if everything happens at the
+> exact same time … It's almost like I want the rounds to execute sequentially yet basically
+> simultaneously."
+
+That is reading **C** below; A and B stay as the parts it can borrow from.
+
 ## What a turn is today
 
 Read from `dev` at `97ea7e1`, not from the older docs.
@@ -104,6 +116,38 @@ slow/haste charges are its first, integer-only form.
 - *Costs:* fractional costs need G-1's energy accumulator, for the player too, not only enemies.
   Nothing gets cheaper to reach; the wheel's press count is unchanged.
 
+### C — The cascade: you act at once, the room answers in sequence (his hybrid)
+
+**Correcting a premise first.** Pixel Dungeon does not resolve everything at the same time: its
+actors act one after another (as its source is written — not re-read this session), and it only
+*looks* simultaneous because the moves animate together. Violencetown is already the same:
+`resolveEnemyTurns` (`enemies.js:475`) is a plain loop in list order, each enemy deciding and
+acting in one instant, and every slide starts on the same frame for the same 150 ms. So
+"sequential yet basically simultaneous" is the engine today. What it lacks is the joke.
+
+**Where slapstick comes from in a turn-based fight** — three ingredients, and today has none:
+
+1. **A gap between intent and result.** Moe swings where Curly *was*. Today an enemy decides and
+   lands in the same instant, so it can never whiff, never hit the wrong man. The fix is a
+   committed, tile-aimed action: an enemy winds up at a *tile* (shown), and it lands a beat later
+   on whoever is standing there by then. Your dodge is what makes it hit his friend. (Into the
+   Breach's telegraphs are the reference, played fast instead of planned.)
+2. **Blows that land on everyone.** Swings, shoves, cleaves, bombs and barrels act on the tile,
+   not on a chosen target — goon hits goon, a shove pushes a man into another, a smashed barrel
+   takes the room with it. Today enemies cannot hurt each other at all; the only friendly fire is
+   the player's own (a bribed ally snaps back; Cleave's Plus-Ultra confirm). No barrels exist.
+3. **You can see the order.** Resolve in sequence, play it back as a fast cascade — each actor's
+   beat offset ~60-100 ms — so the dominoes fall one by one and the cause reads before the
+   effect. Today every enemy's beat plays in the same 150 ms, which is exactly the flattening he
+   is worried about.
+
+**The shape:** you act the moment you press (Pixel Dungeon's snap, no queue, no confirm); the room
+answers with a quick cascade of committed actions that land on whoever is there. Your careful plan
+— the barrel you were saving, the goon you lined up — is at the mercy of that cascade.
+
+Borrowed from A: a round can still carry a move allowance. Borrowed from B: speed can set the
+cascade's order (who goes first), instead of extra actions.
+
 ### Neither reading needs a queue or a confirm
 
 In both, a press does its thing now. The one confirm left in the game is the reticle's Space on
@@ -112,7 +156,10 @@ Cleave, Fireball and Throw, which places a target; it is a separate question (TM
 ## What either one touches
 
 - `_advanceWorld` and its 29 callers: each would say what it costs (B) or whether it ends the round (A).
-- `resolveEnemyTurns` (`npc.js`): enemies get a round (A) or an energy meter (B).
+- `resolveEnemyTurns` (`enemies.js:475`): enemies get a round (A), an energy meter (B), or a
+  committed tile-aimed action that lands a beat later (C).
+- C only: `stepEntity` and the hit splats would take a per-actor start offset, so a turn plays as
+  a cascade instead of a single 150 ms beat.
 - `worldBeatPlan`: haste and slow become "extra moves / an extra action" (A) or speed (B).
 - The balance harness counts `ttk`/`ttd` in turns, so its unit changes and the golden is rewritten.
 - The autoplay golden will drift, on purpose; `npm run autoplay:write` records it once the change is ruled.
@@ -121,6 +168,18 @@ Cleave, Fireball and Throw, which places a target; it is a separate question (TM
 - Law 7 (a DoT never lands the killing tick on the player) is unaffected by either reading.
 
 ## Recommendation
+
+**Updated 2026-09-28 for C.** Build C in two playable steps, each behind a flag, each for him to
+play before the next:
+
+1. **The cascade, logic untouched** (`?turns=cascade`): enemy beats play back staggered in the order
+   they already resolve. Visual only, so the suite and both goldens stay put. It answers "does
+   seeing the order read as comedy, or just as slower" — cheaply.
+2. **One slapstick blow:** a single enemy type swings at a tile it winds up on (telegraphed), landing
+   next beat on whoever stands there, goon or player. In one room (the sewer fungus fight).
+   Barrels come after, if the blow is funny.
+
+The A and B first cuts below are kept for reference.
 
 **Don't rule this in the abstract — play it.** Reading A has a small first cut: in a fight, a step
 inside the round's allowance winds the town beat but not the fighters, and an action (or T, or the
@@ -136,7 +195,7 @@ express, so it could ride along for comparison.
 
 | Code | Question | Recommended |
 | --- | --- | --- |
-| **TM-0** | Which did you mean: several moves in one combat turn (A), or actions costing different amounts of time (B), or both? | A first — it is the sentence and the BG3 reference |
+| **TM-0** | ~~Which reading?~~ **Answered 2026-09-28: a hybrid, for comedy — reading C.** | — |
 | **TM-1** | A round's budget: how many tiles (M), and one action? Is an item a separate "bonus" action, as BG3 has? | M = 2, one action; items spend the action until it is played |
 | **TM-2** | Do enemies get the same round — move and act? | Yes, eventually; the first cut leaves them as they are, to measure |
 | **TM-3** | Per round or per step: DoTs, buffs, MP regen, summons, disposition decay | All per round; ambient and the day per step |
