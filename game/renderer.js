@@ -45,6 +45,7 @@ import * as Settings from './settings.js'; // (combat-feel-pass) reduce-motion f
 import { challengeGp } from './enemies.js'; // (Law 6f) nameplate pips read the composite kit, not raw gold
 import { resolveOffer } from './offer.js';                                  // (offer screen) pure basket→projection
 import { dispositionCeil, DISPOSITION_MIN } from './disposition-curves.js'; // (offer screen) meter ceiling + floor — offer.js does not re-export these
+import { lungeOffset } from './cascade.js';                                  // (turn-model C1) an attacker lunges on its beat
 
 // Tile id → sprite ref. Sewer ids 0-7 → TILE_SPRITE_MAP, town ids 10-21 →
 // TOWN_TILE_SPRITE_MAP, circus/factory/graveyard ids 30+ →
@@ -1267,6 +1268,9 @@ export class Renderer {
                     ey = e._slideFromY + (e.y - e._slideFromY) * st;
                 }
             }
+            // (turn-model C1) A cascaded attacker lunges at whoever it hit, on its beat.
+            const lunge = lungeOffset(e._lungeAt, now);
+            if (lunge) { ex += (e._lungeDx || 0) * lunge; ey += (e._lungeDy || 0) * lunge; }
             const dx = ex - game.playerX, dy = ey - game.playerY;
             if (offView(vp, dx, dy, 2)) continue;
 
@@ -1991,7 +1995,10 @@ export class Renderer {
 
         // — HP bar — always red per the violencetown palette (blood, not
         //   "danger" — the old green→red threshold was retired here).
-        const hpFrac = game.playerHp / game.playerMaxHp;
+        // (turn-model C1) In a cascade, damage already dealt but not yet shown is
+        // added back, so the bar drops blow by blow as each one plays.
+        const hpShown = Math.min(game.playerMaxHp, game.playerHp + (game._cascade?.heldPlayerHp() ?? 0));
+        const hpFrac = hpShown / game.playerMaxHp;
         drawInset(ctx, bx, by, bw, bh);
         const hpW = (bw - 2) * hpFrac;
         ctx.fillStyle = UI.hpRed;
@@ -1999,7 +2006,7 @@ export class Renderer {
         ctx.fillStyle = '#e8674a';                       // glossy top highlight
         ctx.fillRect(bx + 1, by + 1, hpW, 1);
         if (this.font) {
-            this.font.drawText(ctx, `HP ${game.playerHp}/${game.playerMaxHp}`, bx + 3, by + 2, {
+            this.font.drawText(ctx, `HP ${hpShown}/${game.playerMaxHp}`, bx + 3, by + 2, {
                 color: '#fff', scale: 1,
             });
         }

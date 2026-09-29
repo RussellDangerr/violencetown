@@ -231,6 +231,29 @@ play before the next:
    next beat on whoever stands there, goon or player. In one room (the sewer fungus fight).
    Barrels come after, if the blow is funny.
 
+**Step 1 — BUILT 2026-09-29** (`game/cascade.js`; hooks in `main.js`, `enemies.js`, `renderer.js`).
+Play it at `?turns=cascade`; `&beat=<ms>` sets the gap (default 130). What it does:
+
+- Each enemy's effects during the enemy phase — hit splat, flash, stagger, shake, event word, heal
+  splat, its own DoT tick — are held and played on that enemy's beat, in the order the enemies went.
+  Moves are not held. An enemy that shows nothing takes no beat.
+- The attacker **lunges** 0.3 tile at you on its beat (`LUNGE_TILES`, `LUNGE_MS` in `cascade.js`), so
+  you can see who landed it. Cascade only.
+- The HP bar drops blow by blow: damage dealt but not yet shown is added back until it plays.
+- Any key or tap plays everything still held, before the input is handled. A death plays it all at once.
+- **The cascade changes when, never what.** Every seeded-RNG roll (the stagger direction, an event
+  word's scatter) still happens at the hit, so a run spends the RNG identically with the flag on or off
+  — `tests/cascade.test.js` pins it against the real `applyDamageToPlayer`, and four mutations
+  (late rolls, one beat for all) each fail it.
+
+Measured in headless Chrome, three goons adjacent, one turn: flag off, all three splats at 1 ms;
+cascade, at 7 / 136 / 263 ms, lunges on the same beats, HP bar 88 → 84 → 80 → 76; a key at ~50 ms
+played the last two at 50 ms. No console errors. Flag off: suite 1781 / 0, balance and autoplay
+goldens no drift.
+
+Open for his eyes: is 130 ms the beat; is a 0.3-tile lunge readable at his 3440×1440; does the order
+read as comedy or as slower (the question step 1 exists to answer).
+
 The A and B first cuts below are kept for reference.
 
 **Don't rule this in the abstract — play it.** Reading A has a small first cut: in a fight, a step

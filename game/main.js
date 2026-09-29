@@ -87,6 +87,7 @@ import {
 import * as Settings from './settings.js'; // [settings] options/accessibility store
 import { fighters } from './fight-area.js';                                      // (fight-fog) who is in the fight
 import { fightStartKind, entranceFor, fightFxActive } from './fight-entrance.js'; // (fight-fog) how it began, and how long its fog moves
+import { createCascade, CASCADE_BEAT_MS, LUNGE_MS } from './cascade.js';           // (turn-model C1) the enemy phase, one actor at a time
 
 // Chebyshev (king-move) distance — used by the wheel reticle's range clamp.
 const cheb = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
@@ -243,6 +244,24 @@ class Game {
         // §4). Canon datapoint: 100ms felt brisk-but-OK once the auto-repeat
         // dead-frame was removed; 150 is a touch more grounded. Dial freely.
         this._MOVE_MS = 150;
+        // (turn-model C1, plans/turn-model.md) `?turns=cascade` plays the enemy
+        // phase back one actor at a time; `&beat=<ms>` sets the gap. Off by
+        // default: without the flag nothing below runs and nothing changes.
+        this._cascade = null;
+        this._cascadeActor = null;
+        try {
+            const q = new URLSearchParams(location.search);
+            if (q.get('turns') === 'cascade') {
+                const beat = Number(q.get('beat'));
+                this._cascade = createCascade({ beatMs: beat > 0 ? beat : CASCADE_BEAT_MS });
+                // Any key or tap plays whatever is still held, before the input is
+                // handled — the cascade never makes you wait. Capture phase, so it
+                // runs ahead of every other listener.
+                const flush = () => { if (this._cascade.pending()) this._cascade.flush(); };
+                document.addEventListener('keydown', flush, true);
+                document.addEventListener('pointerdown', flush, true);
+            }
+        } catch { /* non-browser env — stay off */ }
         this._TURN_MS = 70;  // tap-to-face vs hold-to-walk threshold (standstill).
                              // 110 felt like a hitch on every direction change;
                              // 70 keeps a deliberate quick-tap-to-turn but lets a
@@ -3733,8 +3752,16 @@ class Game {
         // v1: barks, adjacency-barks, "spotted you!"). Tuples carry their
         // source enemy and a category — spoken lines float above the speaker;
         // strings fall through to the side log.
+        this._cascade?.begin();
         const msgs = resolveEnemyTurns(this);
         this._routeWorldMessages(msgs);
+        if (this._cascade) {
+            this._cascadeActor = null;
+            this._cascade.commit(performance.now());
+            // A death plays everything at once: the death flow takes the screen next.
+            if (this.playerHp <= 0) this._cascade.flush();
+            this._ensureParticleLoop();
+        }
 
         // (summon) Temporary summoned allies (the hired lion) act above in
         // resolveEnemyTurns, THEN their timer ticks — so a fresh summon still
@@ -3857,6 +3884,7 @@ class Game {
                 // eating its own kit, a boss buying HP for itself or an ally — also
                 // floats a heal splat over whoever it healed (npc.js sets `heal`).
                 const healed = m.heal > 0 ? (m.healTarget ?? m.sourceEnemy) : null;
+                if (this._cascade?.recording()) this._cascadeActor = m.sourceEnemy;   // (C1) the heal shows on its healer's beat
                 if (healed) this._spawnHitSplat(healed.x, healed.y, `+${m.heal}`, 'heal', { omni: true });
                 this._log(m.text, logCategory(m, 'combat'));
             } else {
@@ -4768,6 +4796,14 @@ class Game {
         return true;
     }
 
+    // (turn-model C1) An enemy's turn is starting (enemies.js resolveEnemyTurns).
+    // In a cascade its effects are held for its own beat; otherwise a no-op.
+    _cascadeMark(actor) {
+        if (!this._cascade?.recording()) return;
+        this._cascadeActor = actor;
+        this._cascade.mark(actor);
+    }
+
     applyDamageToPlayer(rawDamage, attacker = null) {
         if (attacker) this._lastDefeatedBy = attacker;
         // Blind (outgoing, attacker) and guard (incoming, defender) compose in
@@ -4780,40 +4816,57 @@ class Game {
         if (dmg === 0) return 0;   // 0-contract: hit doesn't happen, never floor back via armor
         dmg = Math.max(1, dmg - this._playerArmor());   // worn armor soaks the hit (min 1 always lands)
         this.playerHp = Math.max(0, this.playerHp - dmg);
-        audio.playSfx('take-damage'); // [audio] player got hit
+        const killed = this.playerHp <= 0;
 
-        // (combat-feel-pass) Typed hit-splat, omni burst — the player's attacker
-        // isn't tracked (any adjacent enemy may have landed it), so the splat
-        // sprays around the player rather than from a single direction.
-        this._spawnHitSplat(this.playerX, this.playerY, `-${dmg}`, 'physical', { omni: true, killed: this.playerHp <= 0 });
-
-        // Hit flash + stagger on the player — Phase C. Stagger direction
-        // is randomized for the player (any adjacent enemy might have
-        // landed the hit; we don't track which), making the player jolt
-        // slightly without committing to a specific source.
-        const now = performance.now();
-        this._playerHitFlashUntil = now + 100;
-        this._playerStaggerUntil  = now + 80;
+        // Every seeded-RNG roll happens here, at the hit, in the order it always
+        // has — the stagger direction, then (on a kill) the event word's scatter —
+        // so the (C1) cascade can hold the effects without changing what the RNG
+        // hands out next. Only the drawing below may wait.
         const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
         const [sdx, sdy] = this.rng.pick(dirs);
-        this._playerStaggerDx = sdx * 3;
-        this._playerStaggerDy = sdy * 3;
-        this._ensureParticleLoop(); // keep rendering through the 100ms window
+        const wordVx = killed ? (this.rng.float() - 0.5) * 30 : null;
+        const px = this.playerX, py = this.playerY;
 
-        // Screen shake when the player takes a meaningful hit — Phase F.
-        // Slightly more aggressive than the enemy version because the
-        // player's own pain should disrupt more of their perception. A
-        // killing blow shakes with full magnitude.
-        if (dmg >= 10 || this.playerHp <= 0) {
-            const mag = this.playerHp <= 0 ? 6 : 3 + Math.min(4, (dmg - 10) / 4);
-            this._triggerScreenShake(180, mag);
-        }
+        const fx = () => {
+            audio.playSfx('take-damage'); // [audio] player got hit
 
-        // (combat-feel-pass) Routine "OUCH!" word-spam is retired — the splat is
-        // the feedback. Keep only the near-death gasp as a milestone beat.
-        if (this.playerHp <= 0) {
-            this._spawnEventWord(this.playerX, this.playerY, '...!', '#ff5544', 20);
-        }
+            // (combat-feel-pass) Typed hit-splat, omni burst around the player.
+            this._spawnHitSplat(px, py, `-${dmg}`, 'physical', { omni: true, killed });
+
+            // Hit flash + stagger on the player — Phase C. Stagger direction
+            // is randomized for the player (rolled above), making the player jolt
+            // slightly without committing to a specific source.
+            const now = performance.now();
+            this._playerHitFlashUntil = now + 100;
+            this._playerStaggerUntil  = now + 80;
+            this._playerStaggerDx = sdx * 3;
+            this._playerStaggerDy = sdy * 3;
+
+            // (C1) In a cascade the attacker lunges at you on its beat, so you can
+            // see who landed it. Cascade only — without the flag nothing changes.
+            if (this._cascade && attacker) {
+                attacker._lungeAt = now;
+                attacker._lungeDx = Math.sign(px - attacker.x);
+                attacker._lungeDy = Math.sign(py - attacker.y);
+            }
+            this._ensureParticleLoop(); // keep rendering through the 100ms window
+
+            // Screen shake when the player takes a meaningful hit — Phase F.
+            // Slightly more aggressive than the enemy version because the
+            // player's own pain should disrupt more of their perception. A
+            // killing blow shakes with full magnitude.
+            if (dmg >= 10 || killed) {
+                const mag = killed ? 6 : 3 + Math.min(4, (dmg - 10) / 4);
+                this._triggerScreenShake(180, mag);
+            }
+
+            // (combat-feel-pass) Routine "OUCH!" word-spam is retired — the splat is
+            // the feedback. Keep only the near-death gasp as a milestone beat.
+            if (killed) this._spawnEventWord(px, py, '...!', '#ff5544', 20, wordVx);
+        };
+        // (C1) Cascaded: the effects wait for the attacker's beat, and the HP bar
+        // holds this damage back until they play. Otherwise they play now.
+        if (!this._cascade?.defer(attacker ?? this._cascadeActor, fx, { hp: dmg })) fx();
 
         return dmg;
     }
@@ -5217,6 +5270,8 @@ class Game {
     // dies with the number it's attached to and needs no render loop or
     // scheduling of its own (see _hasActiveEffects / _ensureParticleLoop).
     _spawnHitSplat(tileX, tileY, text, type = 'physical', opts = {}) {
+        // (C1) During a cascaded enemy phase the splat waits for its actor's beat.
+        if (this._cascadeActor && this._cascade?.defer(this._cascadeActor, () => this._spawnHitSplat(tileX, tileY, text, type, opts))) return;
         const born = performance.now();
         let slot = 0;
         for (const p of this._damageNumbers) {
@@ -5243,7 +5298,11 @@ class Game {
     // emphasis text that pops out alongside the damage number. Larger, bolder,
     // with a brief horizontal scatter so multiple words don't stack vertically
     // when several hits land in the same beat.
-    _spawnEventWord(tileX, tileY, text, color, size = 18) {
+    _spawnEventWord(tileX, tileY, text, color, size = 18, vxRolled = null) {
+        // The scatter is rolled NOW, even when the word waits for a cascade beat,
+        // so the seeded RNG is spent in the same order with the cascade on or off.
+        const vx = vxRolled ?? (this.rng.float() - 0.5) * 30;
+        if (this._cascadeActor && this._cascade?.defer(this._cascadeActor, () => this._spawnEventWord(tileX, tileY, text, color, size, vx))) return;
         this._damageNumbers.push({
             tileX, tileY, text, color, size,
             // Seeded RNG (not Math.random) so the scatter is deterministic and
@@ -5251,7 +5310,7 @@ class Game {
             // renderer's per-frame screen-shake jitter deliberately stays on
             // Math.random (see rng.js) — it's frame-rate-bound and never touches
             // game state. (fix/critical-path)
-            vx: (this.rng.float() - 0.5) * 30, // px/sec horizontal scatter
+            vx,                               // px/sec horizontal scatter
             vy: -28,                          // slightly slower than damage numbers
             bornAt: performance.now(),
             maxAge: 700,
@@ -5348,6 +5407,7 @@ class Game {
             this._damageNumbers = this._damageNumbers.filter(
                 dn => now - dn.bornAt < dn.maxAge
             );
+            this._cascade?.tick(now);   // (C1) play the blows whose beat has come
             if (frame.tick()) requestAnimationFrame(loop);
         };
         requestAnimationFrame(loop);
@@ -5358,6 +5418,7 @@ class Game {
     // because the enemy count is small (single digits typically).
     _hasActiveEffects() {
         if (this._damageNumbers.length > 0) return true;
+        if (this._cascade?.pending()) return true;   // (C1) blows still waiting for their beat
         const now = performance.now();
         if ((this._playerHitFlashUntil ?? 0) > now) return true;
         if ((this._playerStaggerUntil  ?? 0) > now) return true;
@@ -5382,6 +5443,7 @@ class Game {
             // Mid-step glide — keep rendering so enemy/NPC slides animate even
             // when the player is standing still. (plans/movement-feel.md #6)
             if (e._slideStart != null && now < e._slideStart + (e._slideMs || 0)) return true;
+            if (e._lungeAt != null && now < e._lungeAt + LUNGE_MS) return true;   // (C1)
         }
         // (fight-fog) The fight's fog rolling in or clearing, and its entrance.
         if (fightFxActive(this._fightOn, this._fightStart, this._fightEndedAt, now)) return true;

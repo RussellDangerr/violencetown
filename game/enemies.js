@@ -493,6 +493,10 @@ export function resolveEnemyTurns(game) {
         // effect of an active buff reads later in the turn (e.g., Blind
         // folds into applyDamageToPlayer's single computeHit call and
         // halves the enemy's outgoing damage there).
+        // (turn-model C1) This enemy's turn starts: in a cascade, its effects
+        // from here on play on its own beat. No-op without ?turns=cascade.
+        game._cascadeMark?.(enemy);
+
         enemy.tickBuffs(game);
 
         // (fear) A feared enemy flees this turn — one step directly away from
