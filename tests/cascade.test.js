@@ -136,7 +136,9 @@ describe('applyDamageToPlayer — the cascade changes when, never what', () => {
             on._cascade.commit(0);
             on._cascade.flush();
             assert.equal(on.rng.float(), off.rng.float(), 'RNG spent in the same order');
-            assert.deepEqual(on.splats, off.splats, 'the same splat');
+            // Only its flight differs (away from the attacker, in a cascade) — tested below.
+            const what = (sp) => sp.map(([x, y, text, type, opts]) => ({ x, y, text, type, killed: opts.killed }));
+            assert.deepEqual(what(on.splats), what(off.splats), 'the same splat: where, how much, what, whether it killed');
             assert.deepEqual(on.words(), off.words(), 'the same event word, scatter included');
             if (hp === 5) assert.equal(off.words().length, 1, 'the kill fixture really exercises the word');
         });
@@ -169,9 +171,55 @@ describe('applyDamageToPlayer — the cascade changes when, never what', () => {
         assert.equal(goon._lungeDy, 0);
     });
 
+    test('in a cascade your hit number flies away from whoever landed it; without, it bursts around you', () => {
+        const goon = { x: 6, y: 5 };
+        const on = hitGame({ cascade: createCascade(), hp: 100 });
+        on._cascade.begin(); on.hit(12, goon); on._cascade.commit(0); on._cascade.flush();
+        assert.deepEqual(on.splats[0][4].dir, { dx: -1, dy: 0 }, 'hit from the east, flies west');
+        assert.ok(!on.splats[0][4].omni);
+        const off = hitGame({ cascade: null, hp: 100 });
+        off.hit(12, goon);
+        assert.equal(off.splats[0][4].omni, true);
+        assert.equal(off.splats[0][4].dir, undefined);
+    });
+
     test('without the cascade, nobody lunges', () => {
         const goon = { x: 6, y: 5 };
         hitGame({ cascade: null, hp: 100 }).hit(12, goon);
         assert.equal(goon._lungeAt, undefined);
+    });
+});
+
+// ── Splats on one tile spread out while they are on screen ───────────────────
+
+describe('_spawnHitSplat — every splat still up on the tile pushes the next one aside', () => {
+    let clock = 0;
+    const spawn = liveMethod('    _spawnHitSplat(', { performance: { now: () => clock } });
+    const game = () => {
+        const g = { _damageNumbers: [], _cascade: null, _cascadeActor: null,
+            _pickHitMark: () => null, _ensureParticleLoop() {} };
+        g.spawn = (x, y) => spawn.call(g, x, y, '-4', 'physical', { omni: true });
+        g.slots = () => g._damageNumbers.map(d => d.slot);
+        return g;
+    };
+
+    test('blows a cascade beat apart fan out instead of stacking', () => {
+        const g = game();
+        for (const t of [0, 130, 260, 390]) { clock = t; g.spawn(5, 5); }
+        assert.deepEqual(g.slots(), [0, 1, 2, 3]);
+    });
+
+    test('blows in the same instant fan out as they always did', () => {
+        const g = game();
+        clock = 0; g.spawn(5, 5); g.spawn(5, 5); g.spawn(5, 5);
+        assert.deepEqual(g.slots(), [0, 1, 2]);
+    });
+
+    test('a splat that has faded no longer counts, and other tiles never do', () => {
+        const g = game();
+        clock = 0; g.spawn(5, 5);
+        clock = 10; g.spawn(6, 5);
+        clock = 700; g.spawn(5, 5);
+        assert.deepEqual(g.slots(), [0, 0, 0]);
     });
 });

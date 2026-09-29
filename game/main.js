@@ -4830,8 +4830,11 @@ class Game {
         const fx = () => {
             audio.playSfx('take-damage'); // [audio] player got hit
 
-            // (combat-feel-pass) Typed hit-splat, omni burst around the player.
-            this._spawnHitSplat(px, py, `-${dmg}`, 'physical', { omni: true, killed });
+            // (combat-feel-pass) Typed hit-splat, omni burst around the player. In a
+            // (C1) cascade it flies away from whoever landed it instead, so the
+            // number says who hit you.
+            const away = (this._cascade && attacker) ? { dx: px - attacker.x, dy: py - attacker.y } : null;
+            this._spawnHitSplat(px, py, `-${dmg}`, 'physical', away ? { dir: away, killed } : { omni: true, killed });
 
             // Hit flash + stagger on the player — Phase C. Stagger direction
             // is randomized for the player (rolled above), making the player jolt
@@ -5275,7 +5278,10 @@ class Game {
         const born = performance.now();
         let slot = 0;
         for (const p of this._damageNumbers) {
-            if (p.type && p.tileX === tileX && p.tileY === tileY && born - p.bornAt < 130) slot++;
+            // Every splat still on screen on this tile, not just ones born in the same
+            // instant: a (C1) cascade lands blows ~130 ms apart, and a 130 ms window
+            // sent the next one along the last one's path while it was still up.
+            if (p.type && p.tileX === tileX && p.tileY === tileY && born - p.bornAt < p.maxAge) slot++;
         }
         let dir = null;
         if (!opts.omni && opts.dir && (opts.dir.dx || opts.dir.dy)) {
