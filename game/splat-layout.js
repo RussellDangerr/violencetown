@@ -13,7 +13,9 @@
 export const SPLAT_H = 12;          // pill height, px — the 12px VT323 line
 export const SPLAT_PAD_X = 3;       // px between the number and the pill's ends
 
-// Spots by how many splats are showing, in the order they arrived. Spaced so no
+// Spots by how many splats are showing, in the order they arrived. Every layout's
+// lowest spot sits on the anchor line (y 0), which the renderer puts above the
+// target's head, so a group grows UPWARD and never covers the face. Spaced so no
 // two resting pills touch, crits included, up to four characters ("-999") — the
 // invariant tests/cascade.test.js pins — with a few px to spare, because each
 // type's silhouette (flames, drips, bubbles, spikes) reaches past its body. (The
@@ -22,9 +24,9 @@ export const SPLAT_PAD_X = 3;       // px between the number and the pill's ends
 export const SPLAT_LAYOUTS = [
     [],
     [{ x: 0, y: 0 }],                                                    // centre
-    [{ x: 0, y: -10 }, { x: 0, y: 10 }],                                 // stacked
-    [{ x: 0, y: -11 }, { x: -18, y: 10 }, { x: 18, y: 10 }],             // triangle
-    [{ x: 0, y: -19 }, { x: 19, y: 0 }, { x: 0, y: 19 }, { x: -19, y: 0 }], // N, E, S, W
+    [{ x: 0, y: -20 }, { x: 0, y: 0 }],                                  // stacked
+    [{ x: 0, y: -21 }, { x: -18, y: 0 }, { x: 18, y: 0 }],               // triangle
+    [{ x: 0, y: -38 }, { x: 19, y: -19 }, { x: 0, y: 0 }, { x: -19, y: -19 }], // N, E, S, W
 ];
 
 // The spot for the `index`-th of `count` splats showing on one target.
@@ -75,7 +77,7 @@ export function glideToward(current, target, dtMs, tau = SPLAT_GLIDE_MS) {
 // tests/splat-sheet.test.js pins them.
 export const SPLAT_ROWS = { physical: 0, sludge: 1, poison: 2, fire: 3, cold: 4, energy: 5, heal: 6 };
 export const SPLAT_CELL_W = 40;
-export const SPLAT_CELL_H = 30;
+export const SPLAT_CELL_H = 32;
 export const SPLAT_BODY_W = [12, 16, 20, 26];   // the digit-holding body, by length 1..4
 
 // Which cell draws a splat of `type` whose text is `len` characters long.

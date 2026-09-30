@@ -49,6 +49,24 @@ describe('the splat atlas matches the code that reads it', () => {
         for (const t of coloured) assert.ok(t in SPLAT_ROWS, `${t} has a colour but no splat row`);
     });
 
+    test('a fill too light to carry white digits gets dark ones', () => {
+        // White on energy's yellow measured 1.27-1.9:1 (hit-splat-art.md §9-10) —
+        // unreadable. The other fills sit at ~2-5:1, where the dark shadow carries
+        // white. So any fill under 1.8:1 against white must be in SPLAT_TEXT.
+        const lum = (hex) => {
+            const c = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+                .map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+            return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+        };
+        const vsWhite = (hex) => 1.05 / (lum(hex) + 0.05);
+        const colors = Object.fromEntries([.../const SPLAT_COLOR = \{(.*?)\};/s.exec(renderer)[1]
+            .matchAll(/(\w+):\s*'#([0-9a-fA-F]{6})'/g)].map((m) => [m[1], m[2]]));
+        const darkText = /const SPLAT_TEXT = \{(.*?)\};/s.exec(renderer)?.[1] ?? '';
+        const tooLight = Object.keys(colors).filter((t) => vsWhite(colors[t]) < 1.8);
+        assert.ok(tooLight.includes('energy'), 'the fixture really finds the yellow');
+        for (const t of tooLight) assert.match(darkText, new RegExp(`\\b${t}:`), `${t} is too light for white digits`);
+    });
+
     test('the body the digits sit in is the pill the layout keeps apart', () => {
         // The no-overlap invariant (cascade.test.js) is measured on splatPill; the
         // atlas body must be that pill, to the pixel it rounds to.

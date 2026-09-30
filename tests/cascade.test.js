@@ -190,8 +190,18 @@ describe('layoutSplats — one sits centred; more spread out, in the order they 
     test('two stack, the first on top; four take the compass points N, E, S, W', () => {
         const [a, b] = spotsOf([at(5, 5, 0), at(5, 5, 130)]);
         assert.ok(a.y < b.y && a.x === 0 && b.x === 0);
-        const four = spotsOf([at(5, 5, 0), at(5, 5, 1), at(5, 5, 2), at(5, 5, 3)]);
-        assert.deepEqual(four.map(p => [Math.sign(p.x), Math.sign(p.y)]), [[0, -1], [1, 0], [0, 1], [-1, 0]]);
+        const [n, e, s, w] = spotsOf([at(5, 5, 0), at(5, 5, 1), at(5, 5, 2), at(5, 5, 3)]);
+        assert.ok(n.y < e.y && e.y === w.y && w.y < s.y, 'north on top, east and west level, south lowest');
+        assert.ok(w.x < n.x && n.x === s.x && s.x < e.x, 'west left, north and south centred, east right');
+    });
+
+    test('every group grows upward from the anchor: its lowest spot on it, nothing below', () => {
+        // The renderer puts the anchor above the target's head, so this is what
+        // keeps a splat — or a whole group — off the face.
+        for (let count = 1; count <= 4; count++) {
+            const ys = SPLAT_LAYOUTS[count].map(p => p.y);
+            assert.equal(Math.max(...ys), 0, `${count}: lowest spot on the anchor`);
+        }
     });
 
     test('arrival order decides the spot, not list order', () => {

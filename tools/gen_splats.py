@@ -17,16 +17,19 @@ renderer draws every cell the same way.
 
     physical  a jagged burst        fire    flames licking up off the top
     sludge    drips hanging below   cold    a pointed ice crystal
-    poison    bubbles rising        energy  a sharp-cornered zap with a bolt
+    poison    bubbles rising        energy  a spark: four thin rays off the corners
     heal      a heart
+
+A crit is the same shape with a gold ring OUTSIDE its dark outline, so it reads
+on any fill — a gold outline in its place vanished on energy's yellow.
 
 All our own art — nothing from a pack. (The Kenney 1-Bit heart the plan named
 is a fixed 16px and cannot hold a three-character heal, so the heart is drawn
 here, sized to the number like the rest.)
 
 Fill colours are read from game/renderer.js SPLAT_COLOR, the one place they
-are defined; a type with no colour there (energy, until ruling EC) takes
-physical's, exactly as the renderer's own fallback does.
+are defined; a type with no colour there takes physical's, exactly as the
+renderer's own fallback does.
 
 Run (needs Pillow):
     python tools/gen_splats.py
@@ -43,9 +46,10 @@ OUT = os.path.join(ROOT, "game", "assets", "ui_splats.png")
 TYPES = ["physical", "sludge", "poison", "fire", "cold", "energy", "heal"]
 BODY_W = [12, 16, 20, 26]      # by character count 1..4: round(n * 4.8) + 6, never under BODY_H
 BODY_H = 12
-CELL_W, CELL_H = 40, 30
+CELL_W, CELL_H = 40, 32
 CX, CY = CELL_W // 2, CELL_H // 2
-GOLD = (240, 215, 130)         # the crit outline — renderer's old gold border, #f0d782
+GOLD = (240, 215, 130)         # the crit ring, outside the dark outline — #f0d782
+OUTLINE = {"fire": 0.30}       # outline shade by type (default 0.45): fire needs more to hold on sand
 
 
 def splat_colors():
@@ -129,14 +133,12 @@ def cold(d, box, bw):
 
 
 def energy(d, box, bw):
+    # A spark: four long thin rays off the corners, like a crackle of static.
+    # (Ruled 2026-09-30 over a torn-flag zap, a bolt and a saw-toothed edge.)
     x0, y0, x1, y1 = box
-    d.rectangle(box, fill=255)                                   # hard corners, no rounding
-    d.polygon([(x1 - 5, y0), (x1 + 4, y0 - 5), (x1, y0 + 3)], fill=255)   # a bolt up and out...
-    d.polygon([(x0 + 5, y1), (x0 - 4, y1 + 5), (x0, y1 - 3)], fill=255)   # ...and down and out
-    for k in range(3):                                           # saw-toothed ends
-        y = y0 + 1 + k * 4
-        d.polygon([(x1, y), (x1 + 2, y + 1), (x1, y + 3)], fill=255)
-        d.polygon([(x0, y), (x0 - 2, y + 1), (x0, y + 3)], fill=255)
+    pill(d, box)
+    for (sx, sy, dx, dy) in [(x0 + 2, y0 + 2, -1, -1), (x1 - 2, y0 + 2, 1, -1), (x0 + 2, y1 - 2, -1, 1), (x1 - 2, y1 - 2, 1, 1)]:
+        d.polygon([(sx - dx * 2, sy), (sx + dx * 6, sy + dy * 6), (sx, sy - dy * 2)], fill=255)
 
 
 def heal(d, box, bw):
@@ -158,15 +160,19 @@ def cell(kind, bw, fill, crit):
     inside = lambda x, y: 0 <= x < CELL_W and 0 <= y < CELL_H and m[x, y] > 0
     out = Image.new("RGBA", (CELL_W, CELL_H), (0, 0, 0, 0))
     px = out.load()
-    edge = GOLD if crit else shade(fill, 0.45)
+    edge = shade(fill, OUTLINE.get(kind, 0.45))
     light = shade(fill, 1.22)
+    near = lambda x, y, test: any(test(x + dx, y + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1))
+    outline = lambda x, y: not inside(x, y) and near(x, y, inside)
     for y in range(CELL_H):
         for x in range(CELL_W):
             if inside(x, y):
                 # A one-pixel highlight along the top edge, as the HP bar has.
                 px[x, y] = (light if not inside(x, y - 1) else fill) + (255,)
-            elif any(inside(x + dx, y + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1)):
+            elif outline(x, y):
                 px[x, y] = edge + (255,)            # the outline, outside the shape
+            elif crit and near(x, y, outline):
+                px[x, y] = GOLD + (255,)            # a crit: a gold ring outside that
     return out
 
 

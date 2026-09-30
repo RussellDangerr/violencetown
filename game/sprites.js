@@ -137,7 +137,7 @@ export const SHEETS = {
 
     // Hit-splat badges — our own art, one silhouette per damage type, drawn by
     // tools/gen_splats.py. Rows/columns: splat-layout.js (SPLAT_ROWS, splatCell).
-    splats:       { src: './assets/ui_splats.png', frameW: 40, frameH: 30 },
+    splats:       { src: './assets/ui_splats.png', frameW: 40, frameH: 32 },
 
     // Alias for the hardcoded renderer reference:
     //   • renderer._drawPlayer reads `sprites.player` directly.

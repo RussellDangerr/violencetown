@@ -316,5 +316,20 @@ scaling would smear pixel art. The spots were opened a few px (compass ±19) bec
 past their bodies. `tests/splat-sheet.test.js` pins generator and game to the same rows, widths and
 cell size.
 
-**For his eyes:** the zap reads a little like a flag; fire's flicker makes it faint on some frames; and
-`cold` finally has a shape, though still no motion of its own (§7).
+**Finalized 2026-09-30,** from exact-frame screenshots at his 3440×1440 (a tile is 64 px there):
+
+- **Energy is a spark** — four thin rays off the corners — chosen over the torn-flag zap, a bolt (it
+  read as a pipe) and a saw-toothed edge (it read as a cog).
+- **Energy is yellow, `#f5d02a` — ruling EC closed.** His pick over the indigo recommendation. White
+  digits on any yellow measured 1.4-1.9:1, so energy's digits are dark (`#2a1f06`, 10.75:1) —
+  `SPLAT_TEXT` in `renderer.js`; `tests/splat-sheet.test.js` requires dark digits on any fill under
+  1.8:1 against white. `#f5d02a` is the candidate furthest from fire's orange (hue 49° vs 24°).
+- **A crit is a gold ring outside the dark outline,** on every type. The gold outline it replaced
+  measured 1.0-1.3:1 against yellow and vanished.
+- **Fire flickers between 75% and full,** no longer down to 20%, and has a darker outline to hold on
+  the desert ground. Seen at 75% it still visibly dims — a pulse, not a steady flame.
+- **Splats sit above the head,** and every group grows upward from there (each layout's lowest spot on
+  the anchor), so a face is never covered. On the player that is clean. **On enemies it lands on
+  their HP bar and emote balloon** — open question, asked 2026-09-30.
+
+`cold` has a shape now, though still no motion of its own (§7).

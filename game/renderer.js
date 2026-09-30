@@ -63,25 +63,29 @@ const clamp01 = (v) => Math.max(0, Math.min(1, v));
 // throw prompt are not menus: they draw at their own screen positions.
 const MENU_BOX_STATES = new Set(['item_overlay', 'target_list', 'log_modal', 'trade', 'dialogue', 'inspect', 'device']);
 
-// (combat-feel-pass) Hit-splat fill colors by damage type. Crit keeps the
-// physical fill but takes a gold border (handled in _drawHitSplat).
+// (combat-feel-pass) Hit-splat fill colors by damage type. A crit keeps its
+// type's fill and takes a gold ring outside its outline (tools/gen_splats.py
+// bakes these into the splat atlas, reading this table).
 //
 // There is no 'miss' entry and there must not be one: combat.js resolves over
 // flat damage with no roll, so a miss is not a thing this game can produce
 // (README: "no dice, no misses"). It carried a blue here for a while anyway.
 //
-// 'energy' has no entry yet either, but that one IS a gap rather than a rule —
-// a Ray Blast currently falls back to the physical red. See
-// plans/hit-splat-art.md; it wants a colour picked by eye, which is why it
-// wasn't picked here.
+// 'energy' is yellow — ruling EC, 2026-09-30 (plans/hit-splat-art.md §10).
 const SPLAT_COLOR = {
     physical: '#d23f2f',
     sludge:   '#9a52c8',
     poison:   '#57a23e',
     fire:     '#f0833a',
     cold:     '#5ec3e8',
+    energy:   '#f5d02a',
     heal:     '#3fb56a',
 };
+
+// Digits are white on every splat but the ones too light to carry white: on
+// energy's yellow, white measured 1.27-1.9:1 (hit-splat-art.md §9-10), so its
+// digits are dark, with a light shadow.
+const SPLAT_TEXT = { energy: { color: '#2a1f06', shadow: '255,240,200' } };
 
 // ── Procedural character walk/idle animation (plans/movement-feel.md) ─────────
 // The Tiny Dungeon / Kenney sheets have ONE static front-facing pose per
@@ -1753,7 +1757,9 @@ export class Renderer {
 
         // Tile → screen (camera-tracked), then the per-type motion offset.
         const bx = vp.origin.x + (dn.tileX - game.playerX) * TILE_PX + TILE_PX / 2 - this._scrollX;
-        const by = vp.origin.y + (dn.tileY - game.playerY) * TILE_PX + TILE_PX / 4 - this._scrollY;
+        // Anchored above the head, not over the face: groups grow upward from here
+        // (splat-layout.js keeps every layout's lowest spot on this line).
+        const by = vp.origin.y + (dn.tileY - game.playerY) * TILE_PX - TILE_PX / 4 - this._scrollY;
         // Its spot among the splats on this target (laid out in _drawDamageNumbers),
         // then the small per-type wiggle — splats no longer fly, so they never
         // land on each other.
@@ -1813,13 +1819,15 @@ export class Renderer {
             ctx.stroke();
         }
 
-        // Number — white, centered, with a soft shadow for contrast.
+        // Number — white (dark on a fill too light for white), centered, with a
+        // soft shadow for contrast.
         if (this.font) {
+            const tc = SPLAT_TEXT[dn.type];
             this.font.drawText(ctx, dn.text, 0, -4, {
-                color: hexToRgba('#ffffff', a),
+                color: hexToRgba(tc ? tc.color : '#ffffff', a),
                 scale,
                 align: 'center',
-                shadow: `rgba(0,0,0,${a * 0.7})`,
+                shadow: tc ? `rgba(${tc.shadow},${a * 0.6})` : `rgba(0,0,0,${a * 0.7})`,
             });
         }
 
@@ -1877,7 +1885,8 @@ export class Renderer {
                 ox = Math.sin(age * 0.05) * 1.5 * k;
                 break;
             case 'fire':                                  // flicker + burn down
-                alpha *= 0.6 + 0.4 * Math.sin(age * 0.045);
+                // Flickers between 75% and full — never fades out mid-fight.
+                alpha *= 0.875 + 0.125 * Math.sin(age * 0.045);
                 scale = (p < 0.14 ? 0.7 + 0.3 * (p / 0.14) : 1) * (1 - 0.25 * p * k);
                 oy = -2 * e * k;
                 break;
