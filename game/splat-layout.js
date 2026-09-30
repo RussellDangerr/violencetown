@@ -15,15 +15,16 @@ export const SPLAT_PAD_X = 3;       // px between the number and the pill's ends
 
 // Spots by how many splats are showing, in the order they arrived. Spaced so no
 // two resting pills touch, crits included, up to four characters ("-999") — the
-// invariant tests/cascade.test.js pins. (The brief pop on impact may still
-// brush a neighbour; it settles in a few frames.) Past four, they cycle the
+// invariant tests/cascade.test.js pins — with a few px to spare, because each
+// type's silhouette (flames, drips, bubbles, spikes) reaches past its body. (The
+// brief pop on impact may still brush a neighbour; it settles in a few frames.) Past four, they cycle the
 // four-splat spots.
 export const SPLAT_LAYOUTS = [
     [],
     [{ x: 0, y: 0 }],                                                    // centre
-    [{ x: 0, y: -8 }, { x: 0, y: 8 }],                                   // stacked
-    [{ x: 0, y: -9 }, { x: -16, y: 8 }, { x: 16, y: 8 }],                // triangle
-    [{ x: 0, y: -15 }, { x: 16, y: 0 }, { x: 0, y: 15 }, { x: -16, y: 0 }], // N, E, S, W
+    [{ x: 0, y: -10 }, { x: 0, y: 10 }],                                 // stacked
+    [{ x: 0, y: -11 }, { x: -18, y: 10 }, { x: 18, y: 10 }],             // triangle
+    [{ x: 0, y: -19 }, { x: 19, y: 0 }, { x: 0, y: 19 }, { x: -19, y: 0 }], // N, E, S, W
 ];
 
 // The spot for the `index`-th of `count` splats showing on one target.
@@ -65,4 +66,24 @@ export function glideToward(current, target, dtMs, tau = SPLAT_GLIDE_MS) {
     if (!current) return { x: target.x, y: target.y };
     const k = 1 - Math.exp(-Math.max(0, dtMs) / tau);
     return { x: current.x + (target.x - current.x) * k, y: current.y + (target.y - current.y) * k };
+}
+
+// ── The badge atlas (game/assets/ui_splats.png, tools/gen_splats.py) ──────────
+// One silhouette per damage type, so the type reads from the shape. Rows are
+// types; columns are the number's length 1..4, then the same four with a gold
+// outline for a crit. The generator's TYPES / BODY_W / CELL must match these —
+// tests/splat-sheet.test.js pins them.
+export const SPLAT_ROWS = { physical: 0, sludge: 1, poison: 2, fire: 3, cold: 4, energy: 5, heal: 6 };
+export const SPLAT_CELL_W = 40;
+export const SPLAT_CELL_H = 30;
+export const SPLAT_BODY_W = [12, 16, 20, 26];   // the digit-holding body, by length 1..4
+
+// Which cell draws a splat of `type` whose text is `len` characters long.
+export function splatCell(type, len, crit = false) {
+    const n = Math.min(Math.max(len, 1), SPLAT_BODY_W.length);
+    return {
+        col: (n - 1) + (crit ? SPLAT_BODY_W.length : 0),
+        row: SPLAT_ROWS[type] ?? SPLAT_ROWS.physical,
+        bodyW: SPLAT_BODY_W[n - 1],
+    };
 }

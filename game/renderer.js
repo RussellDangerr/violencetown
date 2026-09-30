@@ -46,7 +46,7 @@ import { challengeGp } from './enemies.js'; // (Law 6f) nameplate pips read the 
 import { resolveOffer } from './offer.js';                                  // (offer screen) pure basket→projection
 import { dispositionCeil, DISPOSITION_MIN } from './disposition-curves.js'; // (offer screen) meter ceiling + floor — offer.js does not re-export these
 import { lungeOffset } from './cascade.js';                                  // (turn-model C1) an attacker lunges on its beat
-import { splatPill, layoutSplats, glideToward } from './splat-layout.js';     // hit splats: pill size, spots by count
+import { splatPill, layoutSplats, glideToward, splatCell, SPLAT_CELL_W, SPLAT_CELL_H } from './splat-layout.js'; // hit splats: size, spots, atlas cell
 
 // Tile id → sprite ref. Sewer ids 0-7 → TILE_SPRITE_MAP, town ids 10-21 →
 // TOWN_TILE_SPRITE_MAP, circus/factory/graveyard ids 30+ →
@@ -1772,7 +1772,7 @@ export class Renderer {
         const h = pill.h * (m.sy || 1);
 
         ctx.save();
-        ctx.translate(x, y);
+        ctx.translate(Math.round(x), Math.round(y));   // whole pixels: the glide is fractional, the badge is pixel art
 
         // Heal halo — a soft radiant glow that pulses, then fades.
         if (m.glow > 0) {
@@ -1786,20 +1786,32 @@ export class Renderer {
 
         ctx.scale(m.scale, m.scale);
 
-        // Badge — a pill, filled by type, with a border (gold = crit).
-        ctx.beginPath();
-        const pr = h / 2;
-        ctx.moveTo(-w / 2 + pr, -h / 2);
-        ctx.lineTo(w / 2 - pr, -h / 2);
-        ctx.arc(w / 2 - pr, 0, pr, -Math.PI / 2, Math.PI / 2);
-        ctx.lineTo(-w / 2 + pr, h / 2);
-        ctx.arc(-w / 2 + pr, 0, pr, Math.PI / 2, Math.PI * 1.5);
-        ctx.closePath();
-        ctx.fillStyle = hexToRgba(color, a);
-        ctx.fill();
-        ctx.lineWidth = dn.crit ? 2 : 1.25;
-        ctx.strokeStyle = dn.crit ? hexToRgba('#f0d782', a) : `rgba(255,255,255,${a * 0.55})`;
-        ctx.stroke();
+        // Badge — the type's own silhouette from the splat atlas (a burst, drips,
+        // flames, a crystal, a heart…; gold-outlined on a crit), so the type reads
+        // from the shape. Until the sheet has loaded, a plain pill stands in.
+        const splatSheet = sprites?.splats;
+        const cell = splatCell(dn.type, dn.text.length, !!dn.crit);
+        if (splatSheet?.loaded) {
+            ctx.save();
+            ctx.scale(m.sx || 1, m.sy || 1);
+            ctx.globalAlpha = a;
+            splatSheet.drawFrame(ctx, cell.col, cell.row, -SPLAT_CELL_W / 2, -SPLAT_CELL_H / 2, SPLAT_CELL_W, SPLAT_CELL_H);
+            ctx.restore();
+        } else {
+            ctx.beginPath();
+            const pr = h / 2;
+            ctx.moveTo(-w / 2 + pr, -h / 2);
+            ctx.lineTo(w / 2 - pr, -h / 2);
+            ctx.arc(w / 2 - pr, 0, pr, -Math.PI / 2, Math.PI / 2);
+            ctx.lineTo(-w / 2 + pr, h / 2);
+            ctx.arc(-w / 2 + pr, 0, pr, Math.PI / 2, Math.PI * 1.5);
+            ctx.closePath();
+            ctx.fillStyle = hexToRgba(color, a);
+            ctx.fill();
+            ctx.lineWidth = dn.crit ? 2 : 1.25;
+            ctx.strokeStyle = dn.crit ? hexToRgba('#f0d782', a) : `rgba(255,255,255,${a * 0.55})`;
+            ctx.stroke();
+        }
 
         // Number — white, centered, with a soft shadow for contrast.
         if (this.font) {

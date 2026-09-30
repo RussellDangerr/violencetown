@@ -292,3 +292,29 @@ than a badge's width, so neighbours overlapped whatever the fan.
    outline, and neither holds two digits cleanly).
 
 The flight direction (`opts.dir`) is still recorded on the particle but no longer drawn.
+
+**Item 2 — BUILT 2026-09-30.** `tools/gen_splats.py` draws `game/assets/ui_splats.png` (320×210): one
+silhouette per type, by the number's length 1–4, and again gold-outlined for a crit.
+
+| Type | Silhouette |
+| --- | --- |
+| physical | a jagged burst |
+| sludge | drips hanging below |
+| poison | bubbles rising |
+| fire | flames licking up off the top |
+| cold | a pointed ice crystal |
+| energy | a sharp-cornered zap with a bolt (still physical's red until ruling EC — the shape now tells it apart) |
+| heal | a heart |
+
+Every shape is the layout's pill (the body the digits sit in) plus a decoration, a dark outline and a
+one-pixel top highlight. Fill colours are read from `SPLAT_COLOR` in `renderer.js`, so they have one
+home. All our own art: the Kenney 1-Bit heart named above is a fixed 16 px and cannot hold "+25", so
+the heart is drawn here, sized to the number like the rest. The renderer draws the cell through
+`splat-layout.js` `splatCell` and falls back to the plain pill until the sheet loads; the badge sits on
+whole pixels. A crit is the gold outline (and the bigger pop), no longer a 1.2× badge — non-integer
+scaling would smear pixel art. The spots were opened a few px (compass ±19) because silhouettes reach
+past their bodies. `tests/splat-sheet.test.js` pins generator and game to the same rows, widths and
+cell size.
+
+**For his eyes:** the zap reads a little like a flag; fire's flicker makes it faint on some frames; and
+`cold` finally has a shape, though still no motion of its own (§7).
