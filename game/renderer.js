@@ -1476,10 +1476,10 @@ export class Renderer {
             }
 
             // Debuff / buff badges — one-letter colored markers stacked
-            // horizontally above the HP bar. Buffs green, debuffs red; the letter
+            // horizontally above the head. Buffs green, debuffs red; the letter
             // is the first character of the buff name uppercased.
             if (e.buffs && e.buffs.length > 0 && !splatUp) {
-                const badgeY = py - 20;
+                const badgeY = py - 15;                 // (was py-20, above the bar that moved under the feet)
                 let badgeX = px + 2;
                 for (const b of e.buffs) {
                     ctx.fillStyle = '#000000cc';
@@ -1497,12 +1497,12 @@ export class Renderer {
 
             // (AGGRO meter) Mood smiley over the head — the same disposition face
             // the shop uses, floating above any NPC that HAS a disposition.
-            // Mindless things show nothing. Sits above the HP bar; nudged higher
+            // Mindless things show nothing. Sits on the head; nudged higher
             // when buff badges occupy that row.
             if (e.disposition != null && !splatUp) {
                 const faceR  = 6.5;
                 const faceCX = px + TILE_PX / 2;
-                const faceCY = (e.buffs && e.buffs.length > 0) ? py - 28 : py - 15;
+                const faceCY = (e.buffs && e.buffs.length > 0) ? py - 23 : py - 10;   // 5px lower: the bar left
                 ctx.fillStyle = 'rgba(0,0,0,0.35)';   // soft backing for readability over busy sprites
                 ctx.beginPath(); ctx.arc(faceCX, faceCY, faceR + 1.5, 0, Math.PI * 2); ctx.fill();
                 this._drawMoodFace(faceCX, faceCY, mood(e.disposition).face, faceR);
@@ -1514,8 +1514,8 @@ export class Renderer {
             // potion/gear value) — loot is liquid gold only, this is a challenge
             // rating, not a promise of lootable coins. Suppressed for ambient
             // townsfolk (same reasoning as the HP bar) via its own !e.ambient
-            // guard, and drawn AFTER the mood-face disc above so that disc
-            // (py-23..py-7, centered) can't soft-dim the gold.
+            // guard. It rides under the HP bar, under the feet, since both moved
+            // out of the splats' way (2026-09-30).
             // Broke (chal GP <= 0) draws nothing — an empty row is itself the tell
             // that he's out of tricks. The 24px row fits 6 slots at a 4px stride
             // (3px pip + 1px gap): 5 pips + an overflow cap = 24px = bw exactly.
@@ -1566,7 +1566,7 @@ export class Renderer {
                     const text = `${who} · ${verb.label}`.toUpperCase();
                     const tw   = this.font.measure ? this.font.measure(text, 1) : text.length * 6;
                     const tx   = Math.round(px + TILE_PX / 2 - tw / 2);
-                    const ty   = py - 20;               // clear of the HP bar, buffs and pips
+                    const ty   = py - 15;               // clear of the head and buffs (the bar is under the feet)
                     ctx.fillStyle = '#000000cc';
                     ctx.fillRect(tx - 3, ty - 2, tw + 6, 11);
                     // The verb's own colour carries the warning: Hit is red, Trade
@@ -1600,7 +1600,7 @@ export class Renderer {
                     const rise = 4 * t;                              // gentle float up
                     const sz   = 20 * pop;
                     const ex   = px + TILE_PX / 2 - sz / 2;
-                    const ey   = (py - 6) - sz - rise;               // tail just above the head
+                    const ey   = (py - 1) - sz - rise;               // tail resting on the head
                     ctx.save();
                     ctx.globalAlpha = Math.max(0, fade);
                     sheet.drawFrame(ctx, col, 0, ex, ey, sz, sz);
@@ -3455,7 +3455,7 @@ export class Renderer {
             const emoteCol = emoteKey ? EMOTE_SPRITES[emoteKey] : null;
             if (emoteCol != null && sprites?.emotes?.loaded) {
                 const sz = 16;
-                sprites.emotes.drawFrame(ctx, emoteCol, 0, sx + TILE_PX / 2 - sz / 2, sy - 6 - sz, sz, sz);
+                sprites.emotes.drawFrame(ctx, emoteCol, 0, sx + TILE_PX / 2 - sz / 2, sy - 1 - sz, sz, sz);   // on the head: the HP bar is under the feet now
             }
 
             // Channel 4 — the "sees you NOW" thread, kept from the old overlay
