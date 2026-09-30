@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { createCascade, lungeOffset, LUNGE_MS, LUNGE_TILES } from '../game/cascade.js';
 import { computeHit } from '../game/combat.js';
 import { RNG } from '../game/rng.js';
-import { splatPill, splatSlotOffset, freeSplatSlot } from '../game/splat-layout.js';
+import { splatPill, splatSpot, layoutSplats, glideToward, SPLAT_LAYOUTS } from '../game/splat-layout.js';
 
 describe('the cascade plays each actor on its own beat', () => {
     test('actors play in the order they went, a beat apart; one with nothing takes no beat', () => {
@@ -177,61 +177,55 @@ describe('applyDamageToPlayer — the cascade changes when, never what', () => {
     });
 });
 
-// ── Splats on one tile spread out while they are on screen ───────────────────
+// ── Hit splats: laid out by how many share a target ──────────────────────────
 
-describe('_spawnHitSplat — each splat takes the lowest spot free on its tile', () => {
-    let clock = 0;
-    const spawn = liveMethod('    _spawnHitSplat(', { performance: { now: () => clock }, freeSplatSlot });
-    const game = () => {
-        const g = { _damageNumbers: [], _cascade: null, _cascadeActor: null,
-            _pickHitMark: () => null, _ensureParticleLoop() {} };
-        g.spawn = (x, y) => spawn.call(g, x, y, '-4', 'physical', { omni: true });
-        g.slots = () => g._damageNumbers.map(d => d.slot);
-        return g;
-    };
+describe('layoutSplats — one sits centred; more spread out, in the order they came', () => {
+    const at = (tileX, tileY, bornAt) => ({ tileX, tileY, bornAt });
+    const spotsOf = (list) => { const m = layoutSplats(list); return list.map(d => m.get(d)); };
 
-    test('blows a cascade beat apart fan out instead of stacking', () => {
-        const g = game();
-        for (const t of [0, 130, 260, 390]) { clock = t; g.spawn(5, 5); }
-        assert.deepEqual(g.slots(), [0, 1, 2, 3]);
+    test('a lone splat sits in the centre', () => {
+        assert.deepEqual(spotsOf([at(5, 5, 0)]), [{ x: 0, y: 0 }]);
     });
 
-    test('blows in the same instant fan out as they always did', () => {
-        const g = game();
-        clock = 0; g.spawn(5, 5); g.spawn(5, 5); g.spawn(5, 5);
-        assert.deepEqual(g.slots(), [0, 1, 2]);
+    test('two stack, the first on top; four take the compass points N, E, S, W', () => {
+        const [a, b] = spotsOf([at(5, 5, 0), at(5, 5, 130)]);
+        assert.ok(a.y < b.y && a.x === 0 && b.x === 0);
+        const four = spotsOf([at(5, 5, 0), at(5, 5, 1), at(5, 5, 2), at(5, 5, 3)]);
+        assert.deepEqual(four.map(p => [Math.sign(p.x), Math.sign(p.y)]), [[0, -1], [1, 0], [0, 1], [-1, 0]]);
     });
 
-    test('a spot frees up when its splat fades, and the next splat takes it', () => {
-        const g = game();
-        clock = 0; g.spawn(5, 5);       // spot 0
-        clock = 300; g.spawn(5, 5);     // spot 1
-        clock = 700; g.spawn(5, 5);     // spot 0 has faded (620 ms); spot 1 is still up
-        assert.deepEqual(g.slots(), [0, 1, 0]);
+    test('arrival order decides the spot, not list order', () => {
+        const early = at(5, 5, 0), late = at(5, 5, 200);
+        const m = layoutSplats([late, early]);
+        assert.ok(m.get(early).y < m.get(late).y);
     });
 
-    test('a splat that has faded no longer counts, and other tiles never do', () => {
-        const g = game();
-        clock = 0; g.spawn(5, 5);
-        clock = 10; g.spawn(6, 5);
-        clock = 700; g.spawn(5, 5);
-        assert.deepEqual(g.slots(), [0, 0, 0]);
+    test('a splat on another tile is a different target', () => {
+        const m = layoutSplats([at(5, 5, 0), at(6, 5, 10)]);
+        for (const p of m.values()) assert.deepEqual(p, { x: 0, y: 0 });
+    });
+
+    test('past four, the four-splat spots cycle', () => {
+        assert.deepEqual(splatSpot(4, 5), splatSpot(0, 5));
     });
 });
 
-describe('splat-layout — resting pills at the four spots never touch', () => {
-    const box = (slot, text, crit) => {
+describe('splat-layout — resting pills never touch, at any count', () => {
+    const box = (spot, text, crit) => {
         const { w, h } = splatPill(text.length * 4.8, crit);   // VT323 at the 12px line: 0.4 x 12 per char
-        const o = splatSlotOffset(slot);
-        return { l: o.x - w / 2, r: o.x + w / 2, t: o.y - h / 2, b: o.y + h / 2 };
+        return { l: spot.x - w / 2, r: spot.x + w / 2, t: spot.y - h / 2, b: spot.y + h / 2 };
     };
     const touch = (p, q) => p.l < q.r && q.l < p.r && p.t < q.b && q.t < p.b;
     for (const crit of [false, true]) {
-        test(`up to four characters${crit ? ', crits' : ''}`, () => {
+        test(`one to four splats, up to four characters${crit ? ', crits' : ''}`, () => {
             const texts = ['-1', '+3', '-10', '-24', '-100', '-999'];
-            for (const ta of texts) for (const tb of texts) {
-                for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++) {
-                    assert.ok(!touch(box(i, ta, crit), box(j, tb, crit)), `spot ${i} "${ta}" touches spot ${j} "${tb}"`);
+            for (let count = 2; count <= 4; count++) {
+                const layout = SPLAT_LAYOUTS[count];
+                for (const ta of texts) for (const tb of texts) {
+                    for (let i = 0; i < count; i++) for (let j = i + 1; j < count; j++) {
+                        assert.ok(!touch(box(layout[i], ta, crit), box(layout[j], tb, crit)),
+                            `${count} splats: spot ${i} "${ta}" touches spot ${j} "${tb}"`);
+                    }
                 }
             }
         });
@@ -242,14 +236,19 @@ describe('splat-layout — resting pills at the four spots never touch', () => {
         assert.equal(tiny.w, tiny.h, 'a lone digit is a round dot');
         assert.ok(two.w > tiny.w && four.w > two.w);
     });
+});
 
-    test('past the fourth splat the spots cycle', () => {
-        assert.deepEqual(splatSlotOffset(4), splatSlotOffset(0));
+describe('glideToward — splats slide to a new spot instead of jumping', () => {
+    test('a new splat starts on its spot', () => {
+        assert.deepEqual(glideToward(undefined, { x: 4, y: -8 }, 16), { x: 4, y: -8 });
     });
-
-    test('the lowest free spot', () => {
-        assert.equal(freeSplatSlot(new Set()), 0);
-        assert.equal(freeSplatSlot(new Set([0, 2])), 1);
-        assert.equal(freeSplatSlot(new Set([0, 1, 2, 3])), 4);
+    test('it eases, most of the way in about 100 ms, whatever the frame rate', () => {
+        const from = { x: 0, y: 0 }, to = { x: 0, y: -16 };
+        const oneFrame = glideToward(from, to, 16);
+        assert.ok(oneFrame.y < 0 && oneFrame.y > -16, 'part of the way in one frame');
+        let p = from; for (let i = 0; i < 6; i++) p = glideToward(p, to, 1000 / 60);
+        const big = glideToward(from, to, 100);
+        assert.ok(Math.abs(p.y - big.y) < 1e-9, 'six 60 fps frames = one 100 ms step');
+        assert.ok(big.y < -14, 'about 90% there after 100 ms');
     });
 });

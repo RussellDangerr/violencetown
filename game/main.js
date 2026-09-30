@@ -88,7 +88,6 @@ import * as Settings from './settings.js'; // [settings] options/accessibility s
 import { fighters } from './fight-area.js';                                      // (fight-fog) who is in the fight
 import { fightStartKind, entranceFor, fightFxActive } from './fight-entrance.js'; // (fight-fog) how it began, and how long its fog moves
 import { createCascade, CASCADE_BEAT_MS, LUNGE_MS } from './cascade.js';           // (turn-model C1) the enemy phase, one actor at a time
-import { freeSplatSlot } from './splat-layout.js';                               // hit splats take fixed spots, never stack
 
 // Chebyshev (king-move) distance — used by the wheel reticle's range clamp.
 const cheb = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
@@ -5260,9 +5259,9 @@ class Game {
     }
 
     // (combat-feel-pass) RuneScape-style typed hit-splat. `type` picks the
-    // color + per-type animation in the renderer. Splats on one tile take fixed
-    // `slot`s (splat-layout.js: centre, above, lower-left, lower-right) so they
-    // never stack — deterministic, so the same hit always looks the same.
+    // color + per-type animation in the renderer. Where it sits is the renderer's
+    // call (splat-layout.js): by how many splats share the tile — one centred,
+    // more spread out — so they never stack, and the same hits always look the same.
     // `opts.dir` is still recorded on the particle but no longer drawn: splats
     // stopped flying along the blow when they took fixed spots. `opts.killed`
     // (manga-impact-marks) additionally picks a bare-symbol mark to pop
@@ -5273,15 +5272,6 @@ class Game {
         // (C1) During a cascaded enemy phase the splat waits for its actor's beat.
         if (this._cascadeActor && this._cascade?.defer(this._cascadeActor, () => this._spawnHitSplat(tileX, tileY, text, type, opts))) return;
         const born = performance.now();
-        // The lowest fixed spot (splat-layout.js) not held by a splat still on screen
-        // on this tile, so splats never land on top of each other — whatever their
-        // type, and however far apart in time (a (C1) cascade lands them ~130 ms
-        // apart; the old 130 ms window stacked exactly those).
-        const taken = new Set();
-        for (const p of this._damageNumbers) {
-            if (p.type && p.tileX === tileX && p.tileY === tileY && born - p.bornAt < p.maxAge) taken.add(p.slot);
-        }
-        const slot = freeSplatSlot(taken);
         let dir = null;
         if (!opts.omni && opts.dir && (opts.dir.dx || opts.dir.dy)) {
             const len = Math.hypot(opts.dir.dx, opts.dir.dy) || 1;
@@ -5292,7 +5282,7 @@ class Game {
             tileX, tileY, text, type,
             crit: !!opts.crit,
             mark: this._pickHitMark(type, amount, !!opts.killed),
-            dir, slot,
+            dir,
             bornAt: born,
             maxAge: 620,
         });

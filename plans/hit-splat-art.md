@@ -276,11 +276,14 @@ splats *flew*: a physical splat travelled 16 px (a heal 22 px straight up, ignor
 than a badge's width, so neighbours overlapped whatever the fan.
 
 **Ruled 2026-09-30:**
-1. **Now:** a pill sized to the number (3 px each end, never narrower than tall), in **fixed spots**
-   RuneScape-style — centre, above, lower-left, lower-right (`game/splat-layout.js`). Each splat takes
-   the lowest spot free on its tile; types keep their character in place (pop, sag, shudder, flicker,
-   glow) but move a few px at most. Resting pills never touch, crits and four characters included —
-   pinned in `tests/cascade.test.js`.
+1. **Now:** a pill sized to the number (3 px each end, never narrower than tall), laid out by **how
+   many share the target** (`game/splat-layout.js`): one sits centred; two stack; three make a
+   triangle; four take the compass points N, E, S, W — in arrival order, gliding (~100 ms) to a new
+   spot when the count changes. (First built as fixed slots filled in order — a lone second hit went
+   "above" — and corrected the same day at his note that RuneScape centres a lone splat and spreads
+   out only when there are enough to fill the spots.) Types keep their character in place (pop, sag,
+   shudder, flicker, glow) but move a few px at most. Resting pills never touch at any count, crits
+   and four characters included — pinned in `tests/cascade.test.js`.
 2. **Later:** our own small pixel silhouette per damage type — splat, drop, flame, snowflake — drawn
    by a generator script like the other `tools/gen_*.py`, with the Kenney 1-Bit Pack heart (sheet
    column 39, row 10) for heals. The survey found no ready-made damage splat in the packs: the Emote

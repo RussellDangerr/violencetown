@@ -46,7 +46,7 @@ import { challengeGp } from './enemies.js'; // (Law 6f) nameplate pips read the 
 import { resolveOffer } from './offer.js';                                  // (offer screen) pure basket→projection
 import { dispositionCeil, DISPOSITION_MIN } from './disposition-curves.js'; // (offer screen) meter ceiling + floor — offer.js does not re-export these
 import { lungeOffset } from './cascade.js';                                  // (turn-model C1) an attacker lunges on its beat
-import { splatPill, splatSlotOffset } from './splat-layout.js';               // hit splats: pill size, fixed spots
+import { splatPill, layoutSplats, glideToward } from './splat-layout.js';     // hit splats: pill size, spots by count
 
 // Tile id → sprite ref. Sewer ids 0-7 → TILE_SPRITE_MAP, town ids 10-21 →
 // TOWN_TILE_SPRITE_MAP, circus/factory/graveyard ids 30+ →
@@ -1662,6 +1662,13 @@ export class Renderer {
         const { ctx } = this;
         const vp = this._view();
         const now = performance.now();
+        // Hit splats are laid out by how many share a target (splat-layout.js):
+        // one sits centred, more spread out. Worked out once per frame, from the
+        // splats still up; each glides to its spot when the count changes.
+        const dt = now - (this._splatLastFrame ?? now);
+        this._splatLastFrame = now;
+        const spots = layoutSplats(game._damageNumbers.filter(d => d.type && now - d.bornAt < d.maxAge));
+        for (const [dn, spot] of spots) dn._spot = glideToward(dn._spot, spot, dt);
         for (const dn of game._damageNumbers) {
             const age = now - dn.bornAt;
             if (age >= dn.maxAge) continue; // expired (filtered next loop tick)
@@ -1747,9 +1754,10 @@ export class Renderer {
         // Tile → screen (camera-tracked), then the per-type motion offset.
         const bx = vp.origin.x + (dn.tileX - game.playerX) * TILE_PX + TILE_PX / 2 - this._scrollX;
         const by = vp.origin.y + (dn.tileY - game.playerY) * TILE_PX + TILE_PX / 4 - this._scrollY;
-        // Its fixed spot around the target (splat-layout.js), then the small
-        // per-type wiggle — splats no longer fly, so they never land on each other.
-        const spot = splatSlotOffset(dn.slot || 0);
+        // Its spot among the splats on this target (laid out in _drawDamageNumbers),
+        // then the small per-type wiggle — splats no longer fly, so they never
+        // land on each other.
+        const spot = dn._spot || { x: 0, y: 0 };
         const x = bx + spot.x + m.ox;
         const y = by + spot.y + m.oy;
 
