@@ -274,6 +274,34 @@ fights get — which is the evidence TM-2 needs.
 Reading B's first cut is a single weapon that costs 2 beats, which the slow charge can already
 express, so it could ride along for comparison.
 
+## QA pass (2026-09-30)
+
+Four Sonnet agents played the branch headlessly (read-only; each claim reproduced twice, the key
+ones re-checked in code). **Nothing changes what happens:** flag off, every map, fight, spell, throw,
+drink, trade, bribe, menu and save/reload matched `dev` step for step (RNG state compared), plus 12
+extra autoplay seeds; flag on, the quest-1 autoplay matches the golden exactly for both profiles and at
+`beat` 0 / 1 / 2000, `speed=8`, `jitter` — the cascade is playback only.
+
+Clear bugs (to fix on this branch):
+1. A held effect that throws kills the effects loop for the session — `_cascade.tick` runs outside
+   `makeEffectLoop`'s one-bad-frame guard (`main.js` `_ensureParticleLoop`). Injected throw only.
+2. A held key's auto-repeat fast-forwards the cascade (the flush listener ignores `e.repeat`).
+3. The player's own DoT tick plays before the enemies' beats, though it resolves after them.
+4. The lunge ignores Reduce Motion.
+5. `&beat=Infinity` freezes playback (0 × Infinity is NaN).
+6. A zone change mid-cascade carries the HP-bar catch-up into the new zone; a stray splat survives a
+   zone change (the latter pre-existing: `_loadMap` never clears `_damageNumbers`).
+
+Design calls (his): the under-feet HP bar collides (draws across the head of whoever stands south, is
+covered by them — ~70% of the pips — and by props, and falls under the dock on the bottom row); splat
+pixels are half the world's art pixel (uneven at odd `k` like 1080p, smeared at `k` 1); 5+ splats on one
+target overlap and a group near the top of the view clips; a splat stays on the hit tile after its target
+moves; night lighting dims splats (pre-existing draw order); crits are never passed in play, so the
+crit art is unreachable; a slow charge collapses its first world beat.
+
+Found in passing, pre-existing, out of scope: an enemy killed by its own DoT at the start of its turn
+still swings (offered as a separate task).
+
 ## Rulings owed
 
 | Code | Question | Recommended |
