@@ -46,6 +46,7 @@ import { challengeGp } from './enemies.js'; // (Law 6f) nameplate pips read the 
 import { resolveOffer } from './offer.js';                                  // (offer screen) pure basket→projection
 import { dispositionCeil, DISPOSITION_MIN } from './disposition-curves.js'; // (offer screen) meter ceiling + floor — offer.js does not re-export these
 import { lungeOffset } from './cascade.js';                                  // (turn-model C1) an attacker lunges on its beat
+import { splatPill, splatSlotOffset } from './splat-layout.js';               // hit splats: pill size, fixed spots
 
 // Tile id → sprite ref. Sewer ids 0-7 → TILE_SPRITE_MAP, town ids 10-21 →
 // TOWN_TILE_SPRITE_MAP, circus/factory/graveyard ids 30+ →
@@ -1746,18 +1747,21 @@ export class Renderer {
         // Tile → screen (camera-tracked), then the per-type motion offset.
         const bx = vp.origin.x + (dn.tileX - game.playerX) * TILE_PX + TILE_PX / 2 - this._scrollX;
         const by = vp.origin.y + (dn.tileY - game.playerY) * TILE_PX + TILE_PX / 4 - this._scrollY;
-        const x = bx + m.ox;
-        const y = by + m.oy;
+        // Its fixed spot around the target (splat-layout.js), then the small
+        // per-type wiggle — splats no longer fly, so they never land on each other.
+        const spot = splatSlotOffset(dn.slot || 0);
+        const x = bx + spot.x + m.ox;
+        const y = by + spot.y + m.oy;
 
         const color = SPLAT_COLOR[dn.type] || SPLAT_COLOR.physical;
-        const scale = 1;                          // bitmap font scale (8px glyphs — small)
+        const scale = 1;                          // font scale (the 12px VT323 line)
         const big = dn.crit ? 1.2 : 1;
-        const textW = dn.text.length * 8 * scale;
-        // Round badge — radius fits the number plus a little pad, so short hits
-        // read as a small circle rather than a wide oval.
-        const r = (Math.max(textW, 8) / 2 + 6) * big;
-        const w = r * 2 * (m.sx || 1);
-        const h = r * 2 * (m.sy || 1);
+        // A pill sized to the number's real width — the old round badge was sized
+        // for the retired 8px bitmap glyphs and was mostly padding.
+        const textW = this.font ? this.font.measure(dn.text, scale) : dn.text.length * 4.8 * scale;
+        const pill = splatPill(textW, !!dn.crit);
+        const w = pill.w * (m.sx || 1);
+        const h = pill.h * (m.sy || 1);
 
         ctx.save();
         ctx.translate(x, y);
@@ -1774,9 +1778,15 @@ export class Renderer {
 
         ctx.scale(m.scale, m.scale);
 
-        // Badge — a round "splat", filled by type, with a border (gold = crit).
+        // Badge — a pill, filled by type, with a border (gold = crit).
         ctx.beginPath();
-        ctx.ellipse(0, 0, w / 2, h / 2, 0, 0, Math.PI * 2);
+        const pr = h / 2;
+        ctx.moveTo(-w / 2 + pr, -h / 2);
+        ctx.lineTo(w / 2 - pr, -h / 2);
+        ctx.arc(w / 2 - pr, 0, pr, -Math.PI / 2, Math.PI / 2);
+        ctx.lineTo(-w / 2 + pr, h / 2);
+        ctx.arc(-w / 2 + pr, 0, pr, Math.PI / 2, Math.PI * 1.5);
+        ctx.closePath();
         ctx.fillStyle = hexToRgba(color, a);
         ctx.fill();
         ctx.lineWidth = dn.crit ? 2 : 1.25;
@@ -1804,9 +1814,9 @@ export class Renderer {
         const markSheet = sprites?.marks;
         const markCol = dn.mark ? MARK_SPRITES[dn.mark] : null;
         if (markSheet?.loaded && markCol != null) {
-            const msz = 14 * big;
-            const mcx = r * 0.75;
-            const mcy = -r * 0.75;
+            const msz = 12 * big;
+            const mcx = w / 2;
+            const mcy = -h / 2;
             ctx.globalAlpha = a;
             markSheet.drawFrame(ctx, markCol, 0, mcx - msz / 2, mcy - msz / 2, msz, msz);
             ctx.globalAlpha = 1;
@@ -1815,23 +1825,20 @@ export class Renderer {
         ctx.restore();
     }
 
-    // (combat-feel-pass) Per-type motion for a hit-splat. Returns pixel offsets,
-    // a uniform scale, axis stretch (sx/sy), alpha, and a heal-glow factor,
-    // driven by `age` and the splat's launch direction / fan slot. Reduce-motion
-    // dampens the amplitude. Pure math — no allocations beyond the small object.
+    // (combat-feel-pass) Per-type motion for a hit-splat. Returns small pixel
+    // offsets, a uniform scale, axis stretch (sx/sy), alpha, and a heal-glow
+    // factor, driven by `age`. Where the splat sits is its slot's job
+    // (splat-layout.js), not the motion's. Reduce-motion dampens the amplitude.
+    // Pure math — no allocations beyond the small object.
     _hitSplatMotion(dn, age) {
         const reduce = Settings.get('reduceMotion');
         const k = reduce ? 0.45 : 1;
         const p = Math.min(1, age / dn.maxAge);
         const e = 1 - (1 - p) * (1 - p);                 // easeOut
 
-        // Travel heading: along the blow (directional, fanned per slot) or fanned
-        // around the target (omni). Directional also drifts up a touch.
-        let ang;
-        if (dn.dir) ang = Math.atan2(dn.dir.y, dn.dir.x) + dn.slot * 0.20;
-        else ang = -Math.PI / 2 + dn.slot * (Math.PI * 2 / 6);
-        const tx = Math.cos(ang), ty = Math.sin(ang);
-
+        // Splats hold a fixed spot now (splat-layout.js), so each type keeps its
+        // character in place — a few px at most — instead of flying off along a
+        // heading: the old travel sent neighbours into each other.
         let alpha = 1;
         if (p < 0.12) alpha = p / 0.12;
         else if (p > 0.72) alpha = Math.max(0, 1 - (p - 0.72) / 0.28);
@@ -1839,41 +1846,32 @@ export class Renderer {
         let ox = 0, oy = 0, scale = 1, sx = 1, sy = 1, glow = 0;
 
         switch (dn.type) {
-            case 'sludge':                                // oozes + drips DOWN
+            case 'sludge':                                // oozes, sagging down
                 scale = p < 0.18 ? 0.6 + 0.5 * (p / 0.18) : 1.1 - 0.1 * e;
-                sy = 1 + 0.5 * e * k;
-                sx = 1 - 0.12 * e * k;
-                ox = tx * 6 * k;
-                oy = 30 * e * k;
+                sy = 1 + 0.35 * e * k;
+                sx = 1 - 0.1 * e * k;
+                oy = 3 * e * k;
                 break;
-            case 'poison': {                              // rising rattle
-                const shud = Math.sin(age * 0.05) * 4 * k;
+            case 'poison':                                // a sick rattle in place
                 scale = p < 0.14 ? 0.6 + 0.4 * (p / 0.14) : 1;
-                ox = tx * 10 * e * k + shud;
-                oy = ty * 10 * e * k - 20 * e * k;
+                ox = Math.sin(age * 0.05) * 1.5 * k;
                 break;
-            }
-            case 'fire':                                  // flicker + burn up
+            case 'fire':                                  // flicker + burn down
                 alpha *= 0.6 + 0.4 * Math.sin(age * 0.045);
                 scale = (p < 0.14 ? 0.7 + 0.3 * (p / 0.14) : 1) * (1 - 0.25 * p * k);
-                ox = tx * 8 * e * k;
-                oy = -26 * e * k;
+                oy = -2 * e * k;
                 break;
-            case 'heal':                                  // gentle float + holy glow
+            case 'heal':                                  // gentle lift + holy glow
                 scale = p < 0.2 ? 0.85 + 0.15 * (p / 0.2) : 1;
-                oy = -22 * e * k;
+                oy = -2 * e * k;
                 glow = (0.5 + 0.5 * Math.sin(age * 0.012)) * (1 - p);
                 break;
             case 'physical':
-            default: {                                    // hard snappy pop (crit = bigger + further)
+            default: {                                    // hard snappy pop (crit = bigger)
                 const pop = dn.crit ? 1.6 : 1.3;
-                const travel = dn.crit ? 26 : 16;
-                const up = dn.crit ? 42 : 14;
                 scale = p < 0.13 ? 0.5 + (pop - 0.5) * (p / 0.13)
                       : p < 0.30 ? pop - (pop - 1) * ((p - 0.13) / 0.17)
                       : 1;
-                ox = tx * travel * e * k;
-                oy = ty * travel * e * k - up * e * k;
                 break;
             }
         }

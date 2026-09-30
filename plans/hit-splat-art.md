@@ -264,3 +264,28 @@ the same pass. Fire at least still has a unique orange fill doing the work; ener
 "!" — that is a taste question a contrast number cannot settle, and it cannot be settled at all
 until the fill behind it stops being red. `cold` still has no motion case and still moves like a
 punch (§7).
+
+## 10. The badge: a pill in a fixed spot (2026-09-30)
+
+Caelan, looking at splats in a cascaded fight (`feature/turn-model`): they "are appearing on top of
+one another", and he pictured "less space in between the outside of the circle and the number".
+
+**What was wrong, measured.** The round badge was sized for the retired 8px bitmap font (8 px a
+character plus 6 px pad): about 36 px across for "-10", where VT323 at the 12px line needs ~14 px. And
+splats *flew*: a physical splat travelled 16 px (a heal 22 px straight up, ignoring the fan) — less
+than a badge's width, so neighbours overlapped whatever the fan.
+
+**Ruled 2026-09-30:**
+1. **Now:** a pill sized to the number (3 px each end, never narrower than tall), in **fixed spots**
+   RuneScape-style — centre, above, lower-left, lower-right (`game/splat-layout.js`). Each splat takes
+   the lowest spot free on its tile; types keep their character in place (pop, sag, shudder, flicker,
+   glow) but move a few px at most. Resting pills never touch, crits and four characters included —
+   pinned in `tests/cascade.test.js`.
+2. **Later:** our own small pixel silhouette per damage type — splat, drop, flame, snowflake — drawn
+   by a generator script like the other `tools/gen_*.py`, with the Kenney 1-Bit Pack heart (sheet
+   column 39, row 10) for heals. The survey found no ready-made damage splat in the packs: the Emote
+   Pack shapes are speech balloons with tails; the 1-Bit burst is a hollow outline; the Particle Pack
+   is soft 512 px textures that break up at badge size (only `star_09` and `scorch_03` keep an
+   outline, and neither holds two digits cleanly).
+
+The flight direction (`opts.dir`) is still recorded on the particle but no longer drawn.

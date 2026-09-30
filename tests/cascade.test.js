@@ -10,6 +10,7 @@ import { readFileSync } from 'node:fs';
 import { createCascade, lungeOffset, LUNGE_MS, LUNGE_TILES } from '../game/cascade.js';
 import { computeHit } from '../game/combat.js';
 import { RNG } from '../game/rng.js';
+import { splatPill, splatSlotOffset, freeSplatSlot } from '../game/splat-layout.js';
 
 describe('the cascade plays each actor on its own beat', () => {
     test('actors play in the order they went, a beat apart; one with nothing takes no beat', () => {
@@ -136,9 +137,7 @@ describe('applyDamageToPlayer — the cascade changes when, never what', () => {
             on._cascade.commit(0);
             on._cascade.flush();
             assert.equal(on.rng.float(), off.rng.float(), 'RNG spent in the same order');
-            // Only its flight differs (away from the attacker, in a cascade) — tested below.
-            const what = (sp) => sp.map(([x, y, text, type, opts]) => ({ x, y, text, type, killed: opts.killed }));
-            assert.deepEqual(what(on.splats), what(off.splats), 'the same splat: where, how much, what, whether it killed');
+            assert.deepEqual(on.splats, off.splats, 'the same splat');
             assert.deepEqual(on.words(), off.words(), 'the same event word, scatter included');
             if (hp === 5) assert.equal(off.words().length, 1, 'the kill fixture really exercises the word');
         });
@@ -171,18 +170,6 @@ describe('applyDamageToPlayer — the cascade changes when, never what', () => {
         assert.equal(goon._lungeDy, 0);
     });
 
-    test('in a cascade your hit number flies away from whoever landed it; without, it bursts around you', () => {
-        const goon = { x: 6, y: 5 };
-        const on = hitGame({ cascade: createCascade(), hp: 100 });
-        on._cascade.begin(); on.hit(12, goon); on._cascade.commit(0); on._cascade.flush();
-        assert.deepEqual(on.splats[0][4].dir, { dx: -1, dy: 0 }, 'hit from the east, flies west');
-        assert.ok(!on.splats[0][4].omni);
-        const off = hitGame({ cascade: null, hp: 100 });
-        off.hit(12, goon);
-        assert.equal(off.splats[0][4].omni, true);
-        assert.equal(off.splats[0][4].dir, undefined);
-    });
-
     test('without the cascade, nobody lunges', () => {
         const goon = { x: 6, y: 5 };
         hitGame({ cascade: null, hp: 100 }).hit(12, goon);
@@ -192,9 +179,9 @@ describe('applyDamageToPlayer — the cascade changes when, never what', () => {
 
 // ── Splats on one tile spread out while they are on screen ───────────────────
 
-describe('_spawnHitSplat — every splat still up on the tile pushes the next one aside', () => {
+describe('_spawnHitSplat — each splat takes the lowest spot free on its tile', () => {
     let clock = 0;
-    const spawn = liveMethod('    _spawnHitSplat(', { performance: { now: () => clock } });
+    const spawn = liveMethod('    _spawnHitSplat(', { performance: { now: () => clock }, freeSplatSlot });
     const game = () => {
         const g = { _damageNumbers: [], _cascade: null, _cascadeActor: null,
             _pickHitMark: () => null, _ensureParticleLoop() {} };
@@ -215,11 +202,54 @@ describe('_spawnHitSplat — every splat still up on the tile pushes the next on
         assert.deepEqual(g.slots(), [0, 1, 2]);
     });
 
+    test('a spot frees up when its splat fades, and the next splat takes it', () => {
+        const g = game();
+        clock = 0; g.spawn(5, 5);       // spot 0
+        clock = 300; g.spawn(5, 5);     // spot 1
+        clock = 700; g.spawn(5, 5);     // spot 0 has faded (620 ms); spot 1 is still up
+        assert.deepEqual(g.slots(), [0, 1, 0]);
+    });
+
     test('a splat that has faded no longer counts, and other tiles never do', () => {
         const g = game();
         clock = 0; g.spawn(5, 5);
         clock = 10; g.spawn(6, 5);
         clock = 700; g.spawn(5, 5);
         assert.deepEqual(g.slots(), [0, 0, 0]);
+    });
+});
+
+describe('splat-layout — resting pills at the four spots never touch', () => {
+    const box = (slot, text, crit) => {
+        const { w, h } = splatPill(text.length * 4.8, crit);   // VT323 at the 12px line: 0.4 x 12 per char
+        const o = splatSlotOffset(slot);
+        return { l: o.x - w / 2, r: o.x + w / 2, t: o.y - h / 2, b: o.y + h / 2 };
+    };
+    const touch = (p, q) => p.l < q.r && q.l < p.r && p.t < q.b && q.t < p.b;
+    for (const crit of [false, true]) {
+        test(`up to four characters${crit ? ', crits' : ''}`, () => {
+            const texts = ['-1', '+3', '-10', '-24', '-100', '-999'];
+            for (const ta of texts) for (const tb of texts) {
+                for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++) {
+                    assert.ok(!touch(box(i, ta, crit), box(j, tb, crit)), `spot ${i} "${ta}" touches spot ${j} "${tb}"`);
+                }
+            }
+        });
+    }
+
+    test('a pill is never narrower than it is tall, and grows with the number', () => {
+        const tiny = splatPill(1 * 4.8), two = splatPill(2 * 4.8), four = splatPill(4 * 4.8);
+        assert.equal(tiny.w, tiny.h, 'a lone digit is a round dot');
+        assert.ok(two.w > tiny.w && four.w > two.w);
+    });
+
+    test('past the fourth splat the spots cycle', () => {
+        assert.deepEqual(splatSlotOffset(4), splatSlotOffset(0));
+    });
+
+    test('the lowest free spot', () => {
+        assert.equal(freeSplatSlot(new Set()), 0);
+        assert.equal(freeSplatSlot(new Set([0, 2])), 1);
+        assert.equal(freeSplatSlot(new Set([0, 1, 2, 3])), 4);
     });
 });

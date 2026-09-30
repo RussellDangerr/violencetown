@@ -254,10 +254,10 @@ goldens no drift.
 **Hit splats, 2026-09-29.** The cascade exposed two splat faults. (1) Splats on one tile fanned out
 only if born within 130 ms of each other — exactly the beat — so cascaded blows stacked, or not,
 by frame timing (measured slots 0/1/1). Now every splat still on screen counts (0/1/2 measured); this
-applies with the flag off too, where it only matters for splats less than 620 ms apart. (2) In a
-cascade your hit number now flies away from whoever landed it (the attacker was already known;
-the "isn't tracked" comment was stale). Off: still an omni burst. Seen in frames: it works but
-reads as a nudge, and the fight's entrance card can hide the first beat of a fight's first cascade.
+applies with the flag off too, where it only matters for splats less than 620 ms apart. (2) Flying
+away from the attacker was tried and dropped the next day: splats now take fixed spots and do not
+fly at all — see `hit-splat-art.md` §10 (the pill, the spots, and the custom-splat plan). The
+fight's entrance card can still hide the first beat of a fight's first cascade.
 
 Open for his eyes: is 130 ms the beat; is a 0.3-tile lunge readable at his 3440×1440; does the order
 read as comedy or as slower (the question step 1 exists to answer).

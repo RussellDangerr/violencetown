@@ -88,6 +88,7 @@ import * as Settings from './settings.js'; // [settings] options/accessibility s
 import { fighters } from './fight-area.js';                                      // (fight-fog) who is in the fight
 import { fightStartKind, entranceFor, fightFxActive } from './fight-entrance.js'; // (fight-fog) how it began, and how long its fog moves
 import { createCascade, CASCADE_BEAT_MS, LUNGE_MS } from './cascade.js';           // (turn-model C1) the enemy phase, one actor at a time
+import { freeSplatSlot } from './splat-layout.js';                               // hit splats take fixed spots, never stack
 
 // Chebyshev (king-move) distance — used by the wheel reticle's range clamp.
 const cheb = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
@@ -4830,11 +4831,8 @@ class Game {
         const fx = () => {
             audio.playSfx('take-damage'); // [audio] player got hit
 
-            // (combat-feel-pass) Typed hit-splat, omni burst around the player. In a
-            // (C1) cascade it flies away from whoever landed it instead, so the
-            // number says who hit you.
-            const away = (this._cascade && attacker) ? { dx: px - attacker.x, dy: py - attacker.y } : null;
-            this._spawnHitSplat(px, py, `-${dmg}`, 'physical', away ? { dir: away, killed } : { omni: true, killed });
+            // (combat-feel-pass) Typed hit-splat on the player.
+            this._spawnHitSplat(px, py, `-${dmg}`, 'physical', { omni: true, killed });
 
             // Hit flash + stagger on the player — Phase C. Stagger direction
             // is randomized for the player (rolled above), making the player jolt
@@ -5262,12 +5260,11 @@ class Game {
     }
 
     // (combat-feel-pass) RuneScape-style typed hit-splat. `type` picks the
-    // color + per-type animation in the renderer; `opts.dir` ({dx,dy}) makes the
-    // splat fan in the direction of the blow (a swing / a throw came from
-    // somewhere), while omitting it (or opts.omni) bursts it around the target
-    // (an AoE, or a hit with no tracked source). Simultaneous bits on one tile
-    // get incrementing `slot`s so they pre-separate instead of stacking —
-    // deterministic, so the same hit always looks the same. `opts.killed`
+    // color + per-type animation in the renderer. Splats on one tile take fixed
+    // `slot`s (splat-layout.js: centre, above, lower-left, lower-right) so they
+    // never stack — deterministic, so the same hit always looks the same.
+    // `opts.dir` is still recorded on the particle but no longer drawn: splats
+    // stopped flying along the blow when they took fixed spots. `opts.killed`
     // (manga-impact-marks) additionally picks a bare-symbol mark to pop
     // alongside the number — it rides this SAME particle, so it lives and
     // dies with the number it's attached to and needs no render loop or
@@ -5276,13 +5273,15 @@ class Game {
         // (C1) During a cascaded enemy phase the splat waits for its actor's beat.
         if (this._cascadeActor && this._cascade?.defer(this._cascadeActor, () => this._spawnHitSplat(tileX, tileY, text, type, opts))) return;
         const born = performance.now();
-        let slot = 0;
+        // The lowest fixed spot (splat-layout.js) not held by a splat still on screen
+        // on this tile, so splats never land on top of each other — whatever their
+        // type, and however far apart in time (a (C1) cascade lands them ~130 ms
+        // apart; the old 130 ms window stacked exactly those).
+        const taken = new Set();
         for (const p of this._damageNumbers) {
-            // Every splat still on screen on this tile, not just ones born in the same
-            // instant: a (C1) cascade lands blows ~130 ms apart, and a 130 ms window
-            // sent the next one along the last one's path while it was still up.
-            if (p.type && p.tileX === tileX && p.tileY === tileY && born - p.bornAt < p.maxAge) slot++;
+            if (p.type && p.tileX === tileX && p.tileY === tileY && born - p.bornAt < p.maxAge) taken.add(p.slot);
         }
+        const slot = freeSplatSlot(taken);
         let dir = null;
         if (!opts.omni && opts.dir && (opts.dir.dx || opts.dir.dy)) {
             const len = Math.hypot(opts.dir.dx, opts.dir.dy) || 1;
