@@ -329,7 +329,13 @@ cell size.
 - **Fire flickers between 75% and full,** no longer down to 20%, and has a darker outline to hold on
   the desert ground. Seen at 75% it still visibly dims — a pulse, not a steady flame.
 - **Splats sit above the head,** and every group grows upward from there (each layout's lowest spot on
-  the anchor), so a face is never covered. On the player that is clean. **On enemies it lands on
-  their HP bar and emote balloon** — open question, asked 2026-09-30.
+  the anchor), so a face is never covered.
+- **Enemy HP bars live under the feet** (with the wallet pips under the bar), because above the head
+  they collided with the raised splats. Chosen from five mockups built from real game pieces (bar
+  under the feet / splats beside / splats on the body, RuneScape's / splats above the bar / as it
+  was). **While a splat is up on a character, the space above its head is the splats':** its emote
+  balloon, awareness marker, mood face, buff badges and bump label step aside for that ~0.6 s
+  (`splat-layout.js` `splatShowingAt`). He ruled the balloon; the other four follow the same rule
+  and were my call — easy to change.
 
 `cold` has a shape now, though still no motion of its own (§7).

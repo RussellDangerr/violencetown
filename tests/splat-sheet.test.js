@@ -8,7 +8,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { SPLAT_ROWS, SPLAT_CELL_W, SPLAT_CELL_H, SPLAT_BODY_W, splatCell, splatPill } from '../game/splat-layout.js';
+import { SPLAT_ROWS, SPLAT_CELL_W, SPLAT_CELL_H, SPLAT_BODY_W, splatCell, splatPill, splatShowingAt } from '../game/splat-layout.js';
 
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 const gen = read('../tools/gen_splats.py');
@@ -88,5 +88,19 @@ describe('splatCell — which cell a splat draws', () => {
         assert.equal(splatCell('fire', 9).col, 3);
         assert.equal(splatCell('fire', 9, true).col, 7);
         assert.equal(splatCell('mystery', 2).row, SPLAT_ROWS.physical);
+    });
+});
+
+describe('splatShowingAt — while a splat is up, the head space is the splats\'', () => {
+    const d = (tileX, tileY, bornAt, type = 'physical') => ({ tileX, tileY, bornAt, maxAge: 620, type });
+
+    test('a live splat on the tile counts; one on another tile does not', () => {
+        assert.equal(splatShowingAt([d(3, 4, 1000)], 3, 4, 1200), true);
+        assert.equal(splatShowingAt([d(3, 4, 1000)], 4, 4, 1200), false);
+    });
+
+    test('a faded splat, or an untyped particle (a bark, an event word), does not', () => {
+        assert.equal(splatShowingAt([d(3, 4, 1000)], 3, 4, 1700), false);
+        assert.equal(splatShowingAt([d(3, 4, 1000, null)], 3, 4, 1200), false);
     });
 });

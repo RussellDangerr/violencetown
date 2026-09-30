@@ -46,7 +46,7 @@ import { challengeGp } from './enemies.js'; // (Law 6f) nameplate pips read the 
 import { resolveOffer } from './offer.js';                                  // (offer screen) pure basket→projection
 import { dispositionCeil, DISPOSITION_MIN } from './disposition-curves.js'; // (offer screen) meter ceiling + floor — offer.js does not re-export these
 import { lungeOffset } from './cascade.js';                                  // (turn-model C1) an attacker lunges on its beat
-import { splatPill, layoutSplats, glideToward, splatCell, SPLAT_CELL_W, SPLAT_CELL_H } from './splat-layout.js'; // hit splats: size, spots, atlas cell
+import { splatPill, layoutSplats, glideToward, splatCell, splatShowingAt, SPLAT_CELL_W, SPLAT_CELL_H } from './splat-layout.js'; // hit splats: size, spots, atlas cell
 
 // Tile id → sprite ref. Sewer ids 0-7 → TILE_SPRITE_MAP, town ids 10-21 →
 // TOWN_TILE_SPRITE_MAP, circus/factory/graveyard ids 30+ →
@@ -1455,11 +1455,17 @@ export class Renderer {
                 ctx.fillRect(px + 4, py + 4, TILE_PX - 8, TILE_PX - 8);
             }
 
-            // HP bar above living enemy (with border). Suppressed for ambient
-            // townsfolk (Town Clock) — a floating health bar over a peaceful
+            // While a hit splat is up on this character, the space above its head
+            // is the splats': the balloon, awareness marker, mood face, buff badges
+            // and bump label all step aside (splat-layout.js, ruled 2026-09-30).
+            const splatUp = splatShowingAt(game._damageNumbers, e.x, e.y, now);
+
+            // HP bar UNDER the living enemy's feet (with border) — the space above
+            // the head is where hit splats land (ruled 2026-09-30). Suppressed for
+            // ambient townsfolk (Town Clock) — a health bar on a peaceful
             // Violencian reads as a combat target.
             const frac = e.entity.hp / e.entity.maxHp;
-            const bx = px + 4, by = py - 6, bw = TILE_PX - 8, bh = 5;
+            const bx = px + 4, by = py + TILE_PX + 1, bw = TILE_PX - 8, bh = 5;
             if (!e.ambient) {
                 ctx.fillStyle = '#000000cc';
                 ctx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
@@ -1472,7 +1478,7 @@ export class Renderer {
             // Debuff / buff badges — one-letter colored markers stacked
             // horizontally above the HP bar. Buffs green, debuffs red; the letter
             // is the first character of the buff name uppercased.
-            if (e.buffs && e.buffs.length > 0) {
+            if (e.buffs && e.buffs.length > 0 && !splatUp) {
                 const badgeY = py - 20;
                 let badgeX = px + 2;
                 for (const b of e.buffs) {
@@ -1493,7 +1499,7 @@ export class Renderer {
             // the shop uses, floating above any NPC that HAS a disposition.
             // Mindless things show nothing. Sits above the HP bar; nudged higher
             // when buff badges occupy that row.
-            if (e.disposition != null) {
+            if (e.disposition != null && !splatUp) {
                 const faceR  = 6.5;
                 const faceCX = px + TILE_PX / 2;
                 const faceCY = (e.buffs && e.buffs.length > 0) ? py - 28 : py - 15;
@@ -1519,7 +1525,7 @@ export class Renderer {
             // boss frame, deferred to the first boss build — not a 24px nameplate.
             const gold = challengeGp(e);
             if (!e.ambient && gold > 0) {
-                const gh = 2, gy = by - 4; // 2px row above the HP bar's own backing plate
+                const gh = 2, gy = by + bh + 3; // 2px row under the HP bar's own backing plate
                 ctx.fillStyle = '#000000cc';
                 ctx.fillRect(bx - 1, gy - 1, bw + 2, gh + 2);
                 const pips = Math.floor(gold / 100);
@@ -1553,7 +1559,7 @@ export class Renderer {
             // Only the ONE character you face is labelled — a row of floating
             // verbs over a crowd would be noise, and the whole point is that this
             // reads as "the thing you are about to do".
-            if (this.font && !game._animating && this._isFaced(game, e)) {
+            if (this.font && !game._animating && !splatUp && this._isFaced(game, e)) {
                 const verb = defaultVerb({ x: e.x, y: e.y, npc: e }, game);
                 if (verb) {
                     const who  = String(e.name || e.type || '').replace(/[[\]]/g, '');
@@ -1582,7 +1588,7 @@ export class Renderer {
             // this gate, a watcher who is both chattering and alert would stack
             // the Town Clock balloon on top of the overlay's own marker, and
             // someone who has just noticed you should not be humming a music note.
-            if (e._emote != null && AWARENESS_EMOTE[e.state] == null) {
+            if (e._emote != null && AWARENESS_EMOTE[e.state] == null && !splatUp) {
                 const col = EMOTE_SPRITES[e._emote];
                 const sheet = sprites?.emotes;
                 const age = now - (e._emoteStart || 0);
@@ -3444,7 +3450,8 @@ export class Renderer {
             // upscales to) and anchored so its bottom edge sits where the
             // old pip's top edge did — clearing the head instead of resting
             // on it.
-            const emoteKey = AWARENESS_EMOTE[w.state];
+            // Stepping aside while a hit splat is up on this watcher (its head is the splats').
+            const emoteKey = splatShowingAt(game._damageNumbers, w.x, w.y, performance.now()) ? null : AWARENESS_EMOTE[w.state];
             const emoteCol = emoteKey ? EMOTE_SPRITES[emoteKey] : null;
             if (emoteCol != null && sprites?.emotes?.loaded) {
                 const sz = 16;

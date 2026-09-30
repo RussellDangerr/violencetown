@@ -89,3 +89,10 @@ export function splatCell(type, len, crit = false) {
         bodyW: SPLAT_BODY_W[n - 1],
     };
 }
+
+// Is a hit splat still up on tile (x, y)? While one is, the space above that
+// character's head belongs to the splats: its balloon, awareness marker, mood
+// face, buff badges and bump label all step aside (ruled 2026-09-30).
+export function splatShowingAt(splats, x, y, now) {
+    return (splats || []).some((d) => d.type && d.tileX === x && d.tileY === y && now - d.bornAt < d.maxAge);
+}
