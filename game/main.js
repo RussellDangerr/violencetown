@@ -253,12 +253,18 @@ class Game {
             const q = new URLSearchParams(location.search);
             if (q.get('turns') === 'cascade') {
                 const beat = Number(q.get('beat'));
-                this._cascade = createCascade({ beatMs: beat > 0 ? beat : CASCADE_BEAT_MS });
+                this._cascade = createCascade({
+                    beatMs: Number.isFinite(beat) && beat > 0 ? Math.min(beat, 5000) : CASCADE_BEAT_MS,
+                    // A held effect that throws costs that effect, never the loop.
+                    onError: (e, n) => { if (n === 1) console.error('[cascade] a held effect threw; the rest still play', e); },
+                });
                 // Any key or tap plays whatever is still held, before the input is
                 // handled — the cascade never makes you wait. Capture phase, so it
                 // runs ahead of every other listener.
                 const flush = () => { if (this._cascade.pending()) this._cascade.flush(); };
-                document.addEventListener('keydown', flush, true);
+                // A held key's auto-repeat is not a new input: walking with a key
+                // held must not fast-forward every cascade.
+                document.addEventListener('keydown', (e) => { if (!e.repeat) flush(); }, true);
                 document.addEventListener('pointerdown', flush, true);
             }
         } catch { /* non-browser env — stay off */ }
@@ -629,6 +635,11 @@ class Game {
         this.map = await loadMap(url);
         this._mapUrl = url;
         this._jammedDoor = null;   // per-zone: any wedged door is left behind when you leave
+        // Splats, words and barks belong to the map they were spawned on: a new
+        // zone starts clear, with anything a (C1) cascade still held played first
+        // so the HP bar has caught up before you arrive.
+        this._cascade?.flush();
+        this._damageNumbers = [];
         this.playerX = spawnX ?? this.map.spawn.x;
         this.playerY = spawnY ?? this.map.spawn.y;
 
@@ -3755,13 +3766,9 @@ class Game {
         this._cascade?.begin();
         const msgs = resolveEnemyTurns(this);
         this._routeWorldMessages(msgs);
-        if (this._cascade) {
-            this._cascadeActor = null;
-            this._cascade.commit(performance.now());
-            // A death plays everything at once: the death flow takes the screen next.
-            if (this.playerHp <= 0) this._cascade.flush();
-            this._ensureParticleLoop();
-        }
+        // (C1) Effects outside an enemy's turn spawn at once; the phase stays open
+        // until the player's own tick below, which plays as the last beat.
+        this._cascadeActor = null;
 
         // (summon) Temporary summoned allies (the hired lion) act above in
         // resolveEnemyTurns, THEN their timer ticks — so a fresh summon still
@@ -3785,7 +3792,7 @@ class Game {
         // single step and stopped. Idempotent + self-stopping via
         // _hasActiveEffects. (plans/movement-feel.md #6)
         this._ensureParticleLoop();
-        if (this.playerHp <= 0) { this.playerHp = 0; this._die(); return; }
+        if (this.playerHp <= 0) { this._endCascadePhase(); this.playerHp = 0; this._die(); return; }
 
         // Combat DRIVER (CD-5): the free-roam timer lets go so the player gets
         // unhurried turn-based thinking time, so each committed combat turn hand-
@@ -3819,7 +3826,9 @@ class Game {
         // Tick buffs — the sludge DoT now lives in its buff def's onTick (buffs.js).
         // Its death check moves right after the tick so a sludge death still skips
         // the rest of the beat (MP regen, etc.), exactly as the inline block did.
+        this._cascadeMark(this);     // (C1) the player's own DoTs resolve last, so they play last
         this._tickBuffs();
+        this._endCascadePhase();
         if (this.playerHp <= 0) { this.playerHp = 0; this._die(); return; }
 
         // MP trickles back each turn — FIGHT → Magic spells spend it, this refills.
@@ -4796,6 +4805,17 @@ class Game {
         return true;
     }
 
+    // (turn-model C1) The enemy phase is over (the player's own tick included):
+    // lay its held effects out on the clock. A death plays them all at once —
+    // the death flow takes the screen next.
+    _endCascadePhase() {
+        if (!this._cascade?.recording()) return;
+        this._cascadeActor = null;
+        this._cascade.commit(performance.now());
+        if (this.playerHp <= 0) this._cascade.flush();
+        this._ensureParticleLoop();
+    }
+
     // (turn-model C1) An enemy's turn is starting (enemies.js resolveEnemyTurns).
     // In a cascade its effects are held for its own beat; otherwise a no-op.
     _cascadeMark(actor) {
@@ -5270,7 +5290,8 @@ class Game {
     // scheduling of its own (see _hasActiveEffects / _ensureParticleLoop).
     _spawnHitSplat(tileX, tileY, text, type = 'physical', opts = {}) {
         // (C1) During a cascaded enemy phase the splat waits for its actor's beat.
-        if (this._cascadeActor && this._cascade?.defer(this._cascadeActor, () => this._spawnHitSplat(tileX, tileY, text, type, opts))) return;
+        if (this._cascadeActor && this._cascade?.defer(this._cascadeActor, () => this._spawnHitSplat(tileX, tileY, text, type, opts),
+            { hp: -(opts.playerHpDelta || 0) })) return;   // a held tick on the player holds its HP change too
         const born = performance.now();
         let dir = null;
         if (!opts.omni && opts.dir && (opts.dir.dx || opts.dir.dy)) {

@@ -46,7 +46,7 @@ import { challengeGp } from './enemies.js'; // (Law 6f) nameplate pips read the 
 import { resolveOffer } from './offer.js';                                  // (offer screen) pure basket→projection
 import { dispositionCeil, DISPOSITION_MIN } from './disposition-curves.js'; // (offer screen) meter ceiling + floor — offer.js does not re-export these
 import { lungeOffset } from './cascade.js';                                  // (turn-model C1) an attacker lunges on its beat
-import { splatPill, layoutSplats, glideToward, splatCell, splatShowingAt, SPLAT_CELL_W, SPLAT_CELL_H } from './splat-layout.js'; // hit splats: size, spots, atlas cell
+import { splatPill, layoutSplats, glideToward, splatCell, splatShowingAt, splatPixelFactor, splatClampDown, SPLAT_CELL_W, SPLAT_CELL_H } from './splat-layout.js'; // hit splats
 
 // Tile id → sprite ref. Sewer ids 0-7 → TILE_SPRITE_MAP, town ids 10-21 →
 // TOWN_TILE_SPRITE_MAP, circus/factory/graveyard ids 30+ →
@@ -1274,7 +1274,7 @@ export class Renderer {
                 }
             }
             // (turn-model C1) A cascaded attacker lunges at whoever it hit, on its beat.
-            const lunge = lungeOffset(e._lungeAt, now);
+            const lunge = lungeOffset(e._lungeAt, now) * (Settings.get('reduceMotion') ? 0.45 : 1);
             if (lunge) { ex += (e._lungeDx || 0) * lunge; ey += (e._lungeDy || 0) * lunge; }
             const dx = ex - game.playerX, dy = ey - game.playerY;
             if (offView(vp, dx, dy, 2)) continue;
@@ -1456,17 +1456,20 @@ export class Renderer {
             }
 
             // While a hit splat is up on this character, the space above its head
-            // is the splats': the balloon, awareness marker, mood face, buff badges
-            // and bump label all step aside (splat-layout.js, ruled 2026-09-30).
+            // is the splats': the HP bar and pips, balloon, awareness marker, mood
+            // face, buff badges and bump label all step aside (splat-layout.js,
+            // ruled 2026-09-30).
             const splatUp = splatShowingAt(game._damageNumbers, e.x, e.y, now);
 
-            // HP bar UNDER the living enemy's feet (with border) — the space above
-            // the head is where hit splats land (ruled 2026-09-30). Suppressed for
-            // ambient townsfolk (Town Clock) — a health bar on a peaceful
-            // Violencian reads as a combat target.
+            // HP bar above the living enemy's head (with border). While a hit splat
+            // is up it steps aside with the rest of the head space, and comes back
+            // showing the new HP (ruled 2026-09-30, after the under-the-feet try
+            // drew across the head of whoever stood south). Suppressed for ambient
+            // townsfolk (Town Clock) — a health bar on a peaceful Violencian reads
+            // as a combat target.
             const frac = e.entity.hp / e.entity.maxHp;
-            const bx = px + 4, by = py + TILE_PX + 1, bw = TILE_PX - 8, bh = 5;
-            if (!e.ambient) {
+            const bx = px + 4, by = py - 6, bw = TILE_PX - 8, bh = 5;
+            if (!e.ambient && !splatUp) {
                 ctx.fillStyle = '#000000cc';
                 ctx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
                 ctx.fillStyle = UI.hpBg;
@@ -1476,10 +1479,10 @@ export class Renderer {
             }
 
             // Debuff / buff badges — one-letter colored markers stacked
-            // horizontally above the head. Buffs green, debuffs red; the letter
+            // horizontally above the HP bar. Buffs green, debuffs red; the letter
             // is the first character of the buff name uppercased.
             if (e.buffs && e.buffs.length > 0 && !splatUp) {
-                const badgeY = py - 15;                 // (was py-20, above the bar that moved under the feet)
+                const badgeY = py - 20;
                 let badgeX = px + 2;
                 for (const b of e.buffs) {
                     ctx.fillStyle = '#000000cc';
@@ -1497,12 +1500,12 @@ export class Renderer {
 
             // (AGGRO meter) Mood smiley over the head — the same disposition face
             // the shop uses, floating above any NPC that HAS a disposition.
-            // Mindless things show nothing. Sits on the head; nudged higher
+            // Mindless things show nothing. Sits above the HP bar; nudged higher
             // when buff badges occupy that row.
             if (e.disposition != null && !splatUp) {
                 const faceR  = 6.5;
                 const faceCX = px + TILE_PX / 2;
-                const faceCY = (e.buffs && e.buffs.length > 0) ? py - 23 : py - 10;   // 5px lower: the bar left
+                const faceCY = (e.buffs && e.buffs.length > 0) ? py - 28 : py - 15;
                 ctx.fillStyle = 'rgba(0,0,0,0.35)';   // soft backing for readability over busy sprites
                 ctx.beginPath(); ctx.arc(faceCX, faceCY, faceR + 1.5, 0, Math.PI * 2); ctx.fill();
                 this._drawMoodFace(faceCX, faceCY, mood(e.disposition).face, faceR);
@@ -1514,8 +1517,9 @@ export class Renderer {
             // potion/gear value) — loot is liquid gold only, this is a challenge
             // rating, not a promise of lootable coins. Suppressed for ambient
             // townsfolk (same reasoning as the HP bar) via its own !e.ambient
-            // guard. It rides under the HP bar, under the feet, since both moved
-            // out of the splats' way (2026-09-30).
+            // guard, and drawn AFTER the mood-face disc above so that disc
+            // (py-23..py-7, centered) can't soft-dim the gold. Like the bar, it
+            // steps aside while a hit splat is up.
             // Broke (chal GP <= 0) draws nothing — an empty row is itself the tell
             // that he's out of tricks. The 24px row fits 6 slots at a 4px stride
             // (3px pip + 1px gap): 5 pips + an overflow cap = 24px = bw exactly.
@@ -1524,8 +1528,8 @@ export class Renderer {
             // boss-wallet dread (Law 6e's KH multi-bar) belongs on the dedicated
             // boss frame, deferred to the first boss build — not a 24px nameplate.
             const gold = challengeGp(e);
-            if (!e.ambient && gold > 0) {
-                const gh = 2, gy = by + bh + 3; // 2px row under the HP bar's own backing plate
+            if (!e.ambient && gold > 0 && !splatUp) {
+                const gh = 2, gy = by - 4; // 2px row above the HP bar's own backing plate
                 ctx.fillStyle = '#000000cc';
                 ctx.fillRect(bx - 1, gy - 1, bw + 2, gh + 2);
                 const pips = Math.floor(gold / 100);
@@ -1566,7 +1570,7 @@ export class Renderer {
                     const text = `${who} · ${verb.label}`.toUpperCase();
                     const tw   = this.font.measure ? this.font.measure(text, 1) : text.length * 6;
                     const tx   = Math.round(px + TILE_PX / 2 - tw / 2);
-                    const ty   = py - 15;               // clear of the head and buffs (the bar is under the feet)
+                    const ty   = py - 20;               // clear of the HP bar, buffs and pips
                     ctx.fillStyle = '#000000cc';
                     ctx.fillRect(tx - 3, ty - 2, tw + 6, 11);
                     // The verb's own colour carries the warning: Hit is red, Trade
@@ -1600,7 +1604,7 @@ export class Renderer {
                     const rise = 4 * t;                              // gentle float up
                     const sz   = 20 * pop;
                     const ex   = px + TILE_PX / 2 - sz / 2;
-                    const ey   = (py - 1) - sz - rise;               // tail resting on the head
+                    const ey   = (py - 6) - sz - rise;               // tail just above the head
                     ctx.save();
                     ctx.globalAlpha = Math.max(0, fade);
                     sheet.drawFrame(ctx, col, 0, ex, ey, sz, sz);
@@ -1677,8 +1681,22 @@ export class Renderer {
         // splats still up; each glides to its spot when the count changes.
         const dt = now - (this._splatLastFrame ?? now);
         this._splatLastFrame = now;
-        const spots = layoutSplats(game._damageNumbers.filter(d => d.type && now - d.bornAt < d.maxAge));
-        for (const [dn, spot] of spots) dn._spot = glideToward(dn._spot, spot, dt);
+        const live = game._damageNumbers.filter(d => d.type && now - d.bornAt < d.maxAge);
+        const spots = layoutSplats(live);
+        // A group whose target stands near the top of the view is pushed down just
+        // enough to stay on screen (ruled 2026-09-30).
+        const f = splatPixelFactor(vp.k);
+        const groupTop = new Map();
+        for (const [dn, spot] of spots) {
+            const key = `${dn.tileX},${dn.tileY}`;
+            groupTop.set(key, Math.min(groupTop.get(key) ?? Infinity, spot.y));
+        }
+        for (const [dn, spot] of spots) {
+            const anchorY = this._splatAnchor(game, dn).y;
+            const top = groupTop.get(`${dn.tileX},${dn.tileY}`);
+            const push = splatClampDown(anchorY, top, f, vp.world.y);
+            dn._spot = glideToward(dn._spot, { x: spot.x, y: spot.y + push / f }, dt);
+        }
         for (const dn of game._damageNumbers) {
             const age = now - dn.bornAt;
             if (age >= dn.maxAge) continue; // expired (filtered next loop tick)
@@ -1754,6 +1772,16 @@ export class Renderer {
     // (combat-feel-pass) Draw one RuneScape-style hit-splat: a colored badge
     // (color = damage type) carrying the number, with a per-type animation and
     // a directional/omni fan. Cheap canvas transforms; deterministic per hit.
+    // Where a splat's group is anchored on screen: centred on its tile, a
+    // quarter tile above the head, so groups grow upward and never cover a face.
+    _splatAnchor(game, dn) {
+        const vp = this._view();
+        return {
+            x: vp.origin.x + (dn.tileX - game.playerX) * TILE_PX + TILE_PX / 2 - this._scrollX,
+            y: vp.origin.y + (dn.tileY - game.playerY) * TILE_PX - TILE_PX / 4 - this._scrollY,
+        };
+    }
+
     _drawHitSplat(game, dn, age) {
         const { ctx, sprites } = this;
         const vp = this._view();
@@ -1762,16 +1790,17 @@ export class Renderer {
         if (a <= 0.01) return;
 
         // Tile → screen (camera-tracked), then the per-type motion offset.
-        const bx = vp.origin.x + (dn.tileX - game.playerX) * TILE_PX + TILE_PX / 2 - this._scrollX;
-        // Anchored above the head, not over the face: groups grow upward from here
-        // (splat-layout.js keeps every layout's lowest spot on this line).
-        const by = vp.origin.y + (dn.tileY - game.playerY) * TILE_PX - TILE_PX / 4 - this._scrollY;
+        const { x: bx, y: by } = this._splatAnchor(game, dn);
+        // At an odd art scale (k 3, 5…) a sheet pixel would land on 1.5 backing
+        // px and step unevenly; the whole splat is drawn a touch larger so each
+        // sheet pixel is a whole number of backing px (splatPixelFactor).
+        const f = splatPixelFactor(vp.k);
         // Its spot among the splats on this target (laid out in _drawDamageNumbers),
         // then the small per-type wiggle — splats no longer fly, so they never
         // land on each other.
         const spot = dn._spot || { x: 0, y: 0 };
-        const x = bx + spot.x + m.ox;
-        const y = by + spot.y + m.oy;
+        const x = bx + (spot.x + m.ox) * f;
+        const y = by + (spot.y + m.oy) * f;
 
         const color = SPLAT_COLOR[dn.type] || SPLAT_COLOR.physical;
         const scale = 1;                          // font scale (the 12px VT323 line)
@@ -1784,7 +1813,9 @@ export class Renderer {
         const h = pill.h * (m.sy || 1);
 
         ctx.save();
-        ctx.translate(Math.round(x), Math.round(y));   // whole pixels: the glide is fractional, the badge is pixel art
+        // Whole BACKING pixels: the glide is fractional, the badge is pixel art.
+        ctx.translate(Math.round(x * vp.scale) / vp.scale, Math.round(y * vp.scale) / vp.scale);
+        ctx.scale(f, f);
 
         // Heal halo — a soft radiant glow that pulses, then fades.
         if (m.glow > 0) {
@@ -3455,7 +3486,7 @@ export class Renderer {
             const emoteCol = emoteKey ? EMOTE_SPRITES[emoteKey] : null;
             if (emoteCol != null && sprites?.emotes?.loaded) {
                 const sz = 16;
-                sprites.emotes.drawFrame(ctx, emoteCol, 0, sx + TILE_PX / 2 - sz / 2, sy - 1 - sz, sz, sz);   // on the head: the HP bar is under the feet now
+                sprites.emotes.drawFrame(ctx, emoteCol, 0, sx + TILE_PX / 2 - sz / 2, sy - 6 - sz, sz, sz);
             }
 
             // Channel 4 — the "sees you NOW" thread, kept from the old overlay

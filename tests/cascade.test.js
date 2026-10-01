@@ -262,3 +262,21 @@ describe('glideToward — splats slide to a new spot instead of jumping', () => 
         assert.ok(big.y < -14, 'about 90% there after 100 ms');
     });
 });
+
+describe('a held effect that throws costs only itself', () => {
+    test('the rest still play, the HP bar settles, and the error is reported once', () => {
+        const errors = [];
+        const c = createCascade({ beatMs: 100, onError: (e, n) => errors.push(n) });
+        const seen = [];
+        c.begin();
+        c.mark('a'); c.defer('a', () => { throw new Error('boom'); }, { hp: 5 });
+        c.mark('b'); c.defer('b', () => seen.push('b'), { hp: 3 });
+        c.commit(0);
+        assert.doesNotThrow(() => c.tick(0));
+        assert.doesNotThrow(() => c.flush());
+        assert.deepEqual(seen, ['b']);
+        assert.equal(c.heldPlayerHp(), 0);
+        assert.deepEqual(errors, [1]);
+        assert.equal(c.pending(), false);
+    });
+});

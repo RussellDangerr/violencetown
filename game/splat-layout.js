@@ -96,3 +96,23 @@ export function splatCell(type, len, crit = false) {
 export function splatShowingAt(splats, x, y, now) {
     return (splats || []).some((d) => d.type && d.tileX === x && d.tileY === y && now - d.bornAt < d.maxAge);
 }
+
+// How much larger to draw a splat so each sheet pixel covers a WHOLE number of
+// backing pixels. A sheet pixel is one logical px = k/2 backing px (k = backing
+// px per art pixel); at an odd k that is 1.5, 2.5…, and the pixel art steps
+// unevenly. Rounding up to whole backing px draws the splat a touch larger
+// there (k 3: 4/3; k 5: 6/5). Even k, and k 1 (too small to help), draw 1:1.
+export function splatPixelFactor(k) {
+    const perSheetPx = k / 2;
+    if (k < 2 || k % 2 === 0) return 1;
+    return Math.round(perSheetPx) / perSheetPx;
+}
+
+// How far (logical px) to push a group down so its top stays inside the view:
+// `anchorY` is the group's anchor, `topSpotY` its highest spot (spot units, so
+// times `f`), a cell reaching half its height above its spot.
+export const SPLAT_VIEW_MARGIN = 2;
+export function splatClampDown(anchorY, topSpotY, f, viewTop) {
+    const topEdge = anchorY + (topSpotY - SPLAT_CELL_H / 2) * f;
+    return Math.max(0, viewTop + SPLAT_VIEW_MARGIN - topEdge);
+}

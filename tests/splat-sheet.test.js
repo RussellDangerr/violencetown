@@ -8,7 +8,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { SPLAT_ROWS, SPLAT_CELL_W, SPLAT_CELL_H, SPLAT_BODY_W, splatCell, splatPill, splatShowingAt } from '../game/splat-layout.js';
+import { SPLAT_ROWS, SPLAT_CELL_W, SPLAT_CELL_H, SPLAT_BODY_W, SPLAT_VIEW_MARGIN, splatCell, splatPill, splatShowingAt, splatPixelFactor, splatClampDown } from '../game/splat-layout.js';
 
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 const gen = read('../tools/gen_splats.py');
@@ -102,5 +102,30 @@ describe('splatShowingAt — while a splat is up, the head space is the splats\'
     test('a faded splat, or an untyped particle (a bark, an event word), does not', () => {
         assert.equal(splatShowingAt([d(3, 4, 1000)], 3, 4, 1700), false);
         assert.equal(splatShowingAt([d(3, 4, 1000, null)], 3, 4, 1200), false);
+    });
+});
+
+describe('splatPixelFactor — each sheet pixel lands on whole backing pixels', () => {
+    test('at every scale from 2 up, sheet px x factor = a whole number of backing px', () => {
+        for (let k = 2; k <= 12; k++) {
+            const backingPerSheetPx = (k / 2) * splatPixelFactor(k);
+            assert.equal(backingPerSheetPx, Math.round(backingPerSheetPx), `k ${k}`);
+        }
+    });
+    test('even scales, and k 1, draw 1:1; odd scales draw a touch larger, never smaller', () => {
+        for (const k of [1, 2, 4, 6, 8]) assert.equal(splatPixelFactor(k), 1);
+        for (const k of [3, 5, 7, 9]) assert.ok(splatPixelFactor(k) > 1 && splatPixelFactor(k) < 1.5);
+    });
+});
+
+describe('splatClampDown — a group near the top of the view is pushed just inside it', () => {
+    test('a group well inside the view is not moved', () => {
+        assert.equal(splatClampDown(300, -38, 1, 0), 0);
+    });
+    test('a group poking above the view is pushed down exactly enough', () => {
+        // Anchor at y 20, four-splat top spot at -38: top edge = 20 - 38 - 16 = -34.
+        const push = splatClampDown(20, -38, 1, 0);
+        assert.equal(push, 0 + SPLAT_VIEW_MARGIN + 34);
+        assert.equal(20 + (-38 - SPLAT_CELL_H / 2) + push, SPLAT_VIEW_MARGIN, 'its top lands on the margin');
     });
 });

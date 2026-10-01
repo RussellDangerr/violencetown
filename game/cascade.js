@@ -30,14 +30,22 @@ export function lungeOffset(lungeAt, now, ms = LUNGE_MS, tiles = LUNGE_TILES) {
     return Math.sin(Math.PI * t) * tiles;
 }
 
-export function createCascade({ beatMs = CASCADE_BEAT_MS } = {}) {
+export function createCascade({ beatMs = CASCADE_BEAT_MS, onError = null } = {}) {
     let recording = false;
     let order = [];            // actors, in the order they went this phase
     let groups = new Map();    // actor -> [{ fn, hp }]
     let queue = [];            // committed: [{ at, fn, hp }], sorted by `at`
     let heldHp = 0;            // damage already dealt to the player, not yet shown
 
-    const runAll = (items) => { for (const it of items) { heldHp -= it.hp; it.fn(); } };
+    // One effect that throws costs that effect — never the others, never the
+    // caller (the effects loop re-arms after this), and never the HP bookkeeping.
+    let failures = 0;
+    const runAll = (items) => {
+        for (const it of items) {
+            heldHp -= it.hp;
+            try { it.fn(); } catch (e) { if (onError) onError(e, ++failures); }
+        }
+    };
 
     return {
         beatMs,

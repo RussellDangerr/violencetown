@@ -330,12 +330,19 @@ cell size.
   the desert ground. Seen at 75% it still visibly dims — a pulse, not a steady flame.
 - **Splats sit above the head,** and every group grows upward from there (each layout's lowest spot on
   the anchor), so a face is never covered.
-- **Enemy HP bars live under the feet** (with the wallet pips under the bar), because above the head
-  they collided with the raised splats. Chosen from five mockups built from real game pieces (bar
-  under the feet / splats beside / splats on the body, RuneScape's / splats above the bar / as it
-  was). **While a splat is up on a character, the space above its head is the splats':** its emote
-  balloon, awareness marker, mood face, buff badges and bump label step aside for that ~0.6 s
-  (`splat-layout.js` `splatShowingAt`). He ruled the balloon; the other four follow the same rule
-  and were my call — easy to change.
+- **While a splat is up on a character, the space above its head is the splats':** its HP bar and
+  wallet pips, emote balloon, awareness marker, mood face, buff badges and bump label all step aside
+  for that ~0.6 s and come back after (`splat-layout.js` `splatShowingAt`), the bar showing the new HP.
+  History: the bar first moved UNDER the feet (chosen from five real-piece mockups), but a QA pass
+  found it drew across the head of whoever stood south, was covered by them (~70% of the pips) and
+  by props, and fell under the dock on the bottom row — so it went back above the head, hidden
+  during splats (ruled 2026-09-30).
+- **At an odd art scale** (`k` 3, 5…: 1920×1080 is `k` 3) a sheet pixel would land on 1.5 backing px
+  and step unevenly, so the whole splat draws a touch larger there (`splatPixelFactor`: ×4/3 at `k` 3)
+  and on whole backing pixels. Splat pixels stay half the world's art pixel — the grain of the text on
+  top of them. At `k` 1 (windows under ~640 px tall) digits still smear, as the old pills did.
+- **A group near the top of the view is pushed down** just enough to stay on screen
+  (`splatClampDown`), even if that puts it over its target.
+- **Crit art is kept,** though nothing in the game passes `crit` yet.
 
 `cold` has a shape now, though still no motion of its own (§7).

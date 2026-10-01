@@ -282,7 +282,7 @@ drink, trade, bribe, menu and save/reload matched `dev` step for step (RNG state
 extra autoplay seeds; flag on, the quest-1 autoplay matches the golden exactly for both profiles and at
 `beat` 0 / 1 / 2000, `speed=8`, `jitter` — the cascade is playback only.
 
-Clear bugs (to fix on this branch):
+Clear bugs — **all six fixed 2026-09-30**, each re-verified with the agent's own repro script:
 1. A held effect that throws kills the effects loop for the session — `_cascade.tick` runs outside
    `makeEffectLoop`'s one-bad-frame guard (`main.js` `_ensureParticleLoop`). Injected throw only.
 2. A held key's auto-repeat fast-forwards the cascade (the flush listener ignores `e.repeat`).
@@ -292,7 +292,10 @@ Clear bugs (to fix on this branch):
 6. A zone change mid-cascade carries the HP-bar catch-up into the new zone; a stray splat survives a
    zone change (the latter pre-existing: `_loadMap` never clears `_damageNumbers`).
 
-Design calls (his): the under-feet HP bar collides (draws across the head of whoever stands south, is
+Design calls — **ruled 2026-09-30:** HP bar back above the head, hidden during splats; splats on
+whole backing pixels at odd scales; groups kept inside the view; crit art kept. Not taken: two
+more spots for 5-6 splats, splats following their target, drawing splats after the night grade.
+As found: the under-feet HP bar collides (draws across the head of whoever stands south, is
 covered by them — ~70% of the pips — and by props, and falls under the dock on the bottom row); splat
 pixels are half the world's art pixel (uneven at odd `k` like 1080p, smeared at `k` 1); 5+ splats on one
 target overlap and a group near the top of the view clips; a splat stays on the hit tile after its target
