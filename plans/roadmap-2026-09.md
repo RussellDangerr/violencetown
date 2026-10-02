@@ -16,16 +16,16 @@ pending decisions, and the three passes that landed this week.
 > ids, and **the row is now the record** — a Source cell that reads "this row" is one of them.
 > Items of theirs that had already shipped are listed in §6 so nobody re-does them.
 
-**State right now (updated 2026-09-26):** `main` = `1f1e6e5`, **v0.26.0, tagged and live** —
-Q1-10 (the autoplay's players cast, throw, drink and retry, and **both finish quest 1**), the
-`_closeWheel` double-death fix it found, ruling P2 (the unreachable End of Chapter One deleted) and
-ruling B3 (area spells get their own dmg/MP floor; the balance lint reads zero). Suite 1763 / 308 / 0
-failures; balance golden, no flags; `npm run autoplay:check` matches its golden. Verified live: the
-deployed `<meta name="version">` reads 0.26.0 and all 7 changed files byte-match `main` on both
-hosts. **Branches: `dev`, `main`, `spike/3d-view`.** The `plan` branch is retired (2026-09-24); the
-five specs of its that `dev` cites moved to `plans/` (2026-09-25). Next: **F2b** / **F3** (§4), the
-rulings in §2, or living zones — piece 1 of `plans/species-adventures.md`, whose §3
-recommendations are still unruled.
+**State right now (updated 2026-10-02):** `main` = `dev` = `479a4b8`, **v0.27.0, tagged and live**
+— the DoT-death fix (an enemy killed by its own DoT now dies properly; a poison finish on the
+Were-Rat had dropped no converter, a quest-1 softlock), the hit-splat overhaul (a silhouette per damage
+type, layout by count above the head; ruling EC closed: energy is yellow) and turn model C1, the
+cascade, behind `?turns=cascade` (`plans/turn-model.md`). Suite 1811 / 322 / 0; balance golden, no
+flags; the autoplay golden matches with the cascade off and on. Verified live: both hosts read 0.27.0
+and all 10 changed game files byte-match `main`. **Branches: `dev`, `main`, `spike/3d-view`, and
+`feature/tiled-pipeline` (local only, waiting on the Canyon being painted in Tiled).** Next: **turn
+model step 2** (§7), F2b / F3 (§4), the rulings in §2, or living zones — piece 1 of
+`plans/species-adventures.md`, whose §3 recommendations are still unruled.
 
 > **Direction ruled 2026-09-15 — `plans/species-adventures.md`.** Fixed maps stay; enemies
 > come from a registry with spawn tables, drops and a respawn clock; quest flags apply *world
@@ -158,7 +158,7 @@ Ordered by how much each unblocks.
 | ~~**P2**~~ | **DONE 2026-09-25 — ruled: delete the orphan.** `_endChapterOne()`, the `ending` state and its card (`_drawEndingOverlay`, PRESS N TO PLAY AGAIN) are gone; they had no caller. The bridge plays its cutscene into Chapter Two, as it has since `a83cdd4`. `_fullReset` stays: RESTART uses it. | Demo has a stopping point | `demo-readiness` §2.2 |
 | **ENT** | **Does the fight entrance's punch read soft?** Shipped in v0.24.0 on measurements alone — nobody has looked at it with eyes. If it does, the lever is `IMPACT_MS` *down* toward 90, not `ZOOM_IN_MS` up (that softens it further). | Feel | `plans/entrance-feel-pass.md` |
 | **OBJ** | **Two quest objectives truncate on a phone.** `canyon_escape/find_way_out` (64 chars) and `deliver_burger/handoff` (51) exceed the 46-character budget at 375 px. `tests/first-minute.test.js` carries both as `KNOWN_OVERFLOW`; shortening one fails that test until it leaves the list. The copy is Caelan's. | Phone legibility | `tests/first-minute.test.js` |
-| **EC** | **Energy's splat colour.** Energy now carries the `exclamation` mark but still falls back to physical red `#d23f2f`, and the mark's red-orange `#ff4b1d` on it is the weakest contrast in the set (1.40). Indigo `#3b2f8f` recommended; magenta and yellow-white both measured out. | F2's last gap | `plans/hit-splat-art.md` §9 |
+| ~~**EC**~~ | **DONE 2026-09-30 — ruled: yellow `#f5d02a`, with dark digits** (white on yellow measured 1.4-1.9:1), and its own spark silhouette; shipped v0.27.0 (`plans/hit-splat-art.md` §10). *Was:* **Energy's splat colour.** Energy now carries the `exclamation` mark but still falls back to physical red `#d23f2f`, and the mark's red-orange `#ff4b1d` on it is the weakest contrast in the set (1.40). Indigo `#3b2f8f` recommended; magenta and yellow-white both measured out. | F2's last gap | `plans/hit-splat-art.md` §9 |
 | **V1** | **Theft-aiming volume** — aiming a theft puts all nine town cones back. Correct information, possibly too much. Scope to the theft's range if so. | Feel | `visual-pass.md` |
 | **V2** | **`Lire` has no lion.** Allowlisted unsprited rather than given a bad pick. | One sprite | `visual-pass.md` |
 | **AU** | **Audio discoverability.** Ships muted (ruled, correctly). Nobody discovers audio exists. Wants a visible speaker glyph — *not* autoplay. | Demo polish | `demo-readiness` §2.3 |
@@ -268,6 +268,10 @@ parked document.
 | autoplay finding, Q1-10 | A wheel action that killed you stood you back up at 0 HP | `b7f1869`, shipped v0.26.0: `_closeWheel` no longer sets IDLE over DEAD, so one defeat resolves once instead of a boss retry and a defeat scenario; `tests/wheel-death.test.js` |
 | roadmap §3 | Housekeeping | 2026-09-21: both stale worktrees and 124 merged branches removed. 2026-09-24: the `plan` branch retired. 2026-09-25: the five plan-only specs that `dev` cites moved to `plans/`; the rest stayed out as superseded or idea-stage, and `claude/plan-branch-work-edcqlm` was deleted. Branches: `dev`, `main`, `spike/3d-view` |
 | roadmap §1 | Ship v0.26.0 to `main` | `1f1e6e5`, tagged `v0.26.0`, live 2026-09-25: 8 commits (Q1-10, the double-death fix, P2, B3), 7 changed files byte-matched live on both hosts |
+| design thread | Turn model C1 — the cascade | Shipped v0.27.0 behind `?turns=cascade`: the enemy phase plays back one actor at a time, ~130 ms apart, attackers lunging; any key flushes it. Playback only — the autoplay golden matches with it on (`plans/turn-model.md`) |
+| F2 follow-up | Hit splats redrawn | Shipped v0.27.0: a silhouette per damage type (`tools/gen_splats.py`), layout by count above the head, the head space theirs while up, whole pixels at odd scales (`plans/hit-splat-art.md` §10) |
+| QA pass finding | A DoT death was not a death | Shipped v0.27.0 (`plans/dot-death.md`): an enemy killed by its own DoT took its turn anyway and its death went unhandled — a poison finish on the Were-Rat dropped no converter, softlocking quest 1 |
+| roadmap §1 | Ship v0.27.0 to `main` | `479a4b8`, tagged `v0.27.0`, live 2026-10-02: 25 commits, 10 changed game files byte-matched live on both hosts |
 
 ---
 
@@ -275,7 +279,11 @@ parked document.
 
 Not a mandate — a reading of the graph.
 
-1. **Rulings — the cheapest progress on the board.** ENT, OBJ and EC each close a shipped
+0. **Turn model step 2 — one slapstick blow** (`plans/turn-model.md`, Recommendation). One enemy type
+   winds up on a TILE (telegraphed) and lands next beat on whoever stands there, goon or player — the
+   first "plans ruined" moment. Wants Caelan's play verdict on C1 first: does the order read as
+   comedy, or only as slower? Rulings TM-7..9 (speed order) follow.
+1. **Rulings — the cheapest progress on the board.** ENT and OBJ each close a shipped
    feature's last gap and need a look or a line of copy, not a build.
    Z1–Z2 and CG gate zone builds; A1, A2, R and DZ clear the board.
 2. **F2b** (entrances by hit type, on `game/fight-entrance.js`) and **F3** (who gets pulled in, on

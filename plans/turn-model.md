@@ -1,7 +1,10 @@
 # What is a turn
 
-**Status:** Gate 1 (research) on `feature/turn-model`, 2026-09-28. No code. Rulings TM-0..TM-6 at
-the end are Caelan's; the build waits on them.
+**Status (2026-10-02):** reading C chosen; **step 1 (the cascade) shipped in v0.27.0** behind
+`?turns=cascade`, with the hit-splat overhaul and the QA fixes (`feature/turn-model` merged as
+`cff9e74`). **Next: step 2, one slapstick blow** (Recommendation below) — after Caelan has played C1
+and said whether the order reads as comedy or only as slower. Open rulings: TM-7..9 (ties, where the
+player sits, where speed comes from), TM-1..6 where still relevant.
 
 ## Why
 
