@@ -25,3 +25,16 @@ kill gets (`game._handleEnemyDeath`), and skip the rest of its turn. Nothing els
 
 Outcome change, intended: DoT kills now loot gold and drop kit like any other kill, and count for
 quests. If the autoplay golden drifts, the drift must be exactly that before it is recorded.
+
+## Done (2026-10-01)
+
+`resolveEnemyTurns` handles the death and skips the turn (`tests/dot-death.test.js`, with a control
+that the same poisoned goon swings when the tick does not kill it; two mutations each fail it).
+In the running game: a poison-killed goon now reads "Defeated", loots its 40 GP, fires
+`enemy_killed`, and takes no turn; a poison-killed Were-Rat drops the converter and its fur.
+
+The death handler also pays out Pike's canyon-critter deal and counts sewer-escape rat kills, so DoT
+kills now count for both. That is the autoplay drift: the fighter's escape had never reached 5
+counted rat kills (its DoT kills went uncounted), so wave 2 never spawned and the stage took 12
+turns. With the fix wave 2 spawns ("More rats boil out of the walls!") and it takes 30 — confirmed
+in both runs' logs before recording the new golden. The sneak is unchanged.
