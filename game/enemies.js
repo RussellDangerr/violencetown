@@ -499,6 +499,14 @@ export function resolveEnemyTurns(game) {
 
         enemy.tickBuffs(game);
 
+        // A DoT tick can kill it right here (buffs.js only sets alive = false).
+        // That is a death like any other: handle it the way a melee, spell or
+        // throw kill is handled — K.O., loot, kit, the enemy_killed event, the
+        // Were-Rat's converter — and it takes no turn. It used to swing (or buy
+        // itself back) as a corpse, and its death went unhandled: a DoT finish
+        // on the Were-Rat dropped no converter (plans/dot-death.md).
+        if (!enemy.entity.isAlive()) { game._handleEnemyDeath?.(enemy); continue; }
+
         // (fear) A feared enemy flees this turn — one step directly away from
         // the player — and does nothing else (no bark, chase, or attack). Its
         // prior state is untouched, so when the buff ticks out it resumes normal

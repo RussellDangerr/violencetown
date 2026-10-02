@@ -6,8 +6,8 @@
       "seed": 1,
       "finished": true,
       "reason": null,
-      "fingerprint": "d7449843",
-      "turn": 167,
+      "fingerprint": "7e52bdbe",
+      "turn": 185,
       "deaths": 5,
       "stages": [
         {
@@ -40,17 +40,17 @@
         },
         {
           "id": "escape_sewer",
-          "turns": 12,
-          "hpLost": 41,
+          "turns": 30,
+          "hpLost": 47,
           "healed": 0,
           "eats": 0,
-          "drinks": 2,
+          "drinks": 5,
           "attacks": 0,
-          "casts": 1,
-          "mpSpent": 8,
+          "casts": 5,
+          "mpSpent": 48,
           "throws": 4,
           "deaths": 1,
-          "gold": 0
+          "gold": -1
         },
         {
           "id": "return_to_car",
