@@ -78,13 +78,23 @@ Its first findings were real ones, and each became a fix:
 
 A level-design question and an AI bug, found by a test rather than a playtester — and every fix showed up in the check as numbers moving, before it was recorded as the new baseline.
 
+### 6. Hit splats and the cascade — the order is the joke
+
+A fight here is meant to be slapstick: everyone messing each other up, plans ruined by whoever moves first. Turn-based games resolve a round in some order even when it looks simultaneous — RuneScape's tick, Pixel Dungeon's actor queue — and Violencetown's enemies already acted one after another; they just all *drew* in the same 150 ms, which flattens the joke. Behind `?turns=cascade`, the enemy phase plays back one actor at a time, ~130 ms apart: each attacker lunges on its own beat, your HP bar drops blow by blow, and any key plays the rest at once, so it never makes you wait.
+
+The interesting part is proving it changes *nothing* but timing. Every random roll the game spends in a blow — which way you stagger, how a word scatters — is rolled at the hit, not when the effect plays, so the seeded generator hands out the same numbers with the cascade on or off. A unit test pins that against the real damage function and fails if any roll moves into the held effect; and the quest-1 autoplay, run with the cascade on, matches its recorded golden exactly.
+
+The splats were rebuilt around legibility: each damage type is its own pixel silhouette (a burst, drips, bubbles, flames, a crystal, a spark, a heart) drawn by a generator script that reads the game's own colour table; the digits sit in a body sized to the number; several on one target are laid out by *how many* there are — one centred, then a stack, a triangle, the compass points — above the head and growing upward; and while a splat is up, the head space is its own, so the HP bar and speech balloons step aside and return with the new value. The layout rules are pure functions with a no-overlap invariant tested across every count, crits and four-digit numbers.
+
+Then four AI agents played the branch headless in parallel — the cascade, the splats, a flag-off regression sweep against `dev`, and odd viewports — each reproducing every finding twice. They confirmed nothing changed an outcome, found six cascade bugs (all fixed), and turned up an older one worth the whole exercise: an enemy killed by its own poison at the start of its turn still took that turn, and its death was never handled — so a poison finish on the Were-Rat dropped no catalytic converter, and quest 1 could not be won.
+
 More system write-ups (combat feel, the unified world clock, zone pursuit) live in [`plans/`](plans/).
 
 ## How it works (mechanics)
 
 - **Turn-based:** one input = one action = the world advances a turn. Firing a wheel action is your turn; waiting (`T`) and item use cost a turn too.
 - **Hand-authored, directional world:** the Street (hub) sits at the center, its only way out — a **bridge north** — blocked until your car runs. The **Sewer** lies east, the **Factory** (home to Puck, a friendly trader) west, and a southern chain runs **Carnival → Graveyard → Wilderness** (a pitch-black, too-dangerous border). You travel by walking into a zone's edge.
-- **Combat:** the wheel's verbs resolve over flat HP, flat damage, and flat armor reduction — no dice, no misses. Hits pop **typed hit-splats** whose colour and motion read the damage type at a glance.
+- **Combat:** the wheel's verbs resolve over flat HP, flat damage, and flat armor reduction — no dice, no misses. Hits pop **typed hit-splats** — a pixel silhouette per damage type — laid out above the target by how many have landed.
 - **The HUD knows you're fighting:** the dock swaps its quest log for a **combat log** and two read-only gear panels appear over the fogged edges of the world — yours and the target's — and go again when the fight does.
 - **NPCs & the disposition economy:** every NPC runs a finite-state machine (idle / wander / work) over the disposition value above. **Puck**, in the Factory, runs a **shop** (`E` to open) with disposition-driven prices.
 - **Zone pursuit:** flee a fight through a door and the hostiles on your heels **follow you into the next zone**. Wedge the **[pipe]** into the door to jam it and buy a reprieve.
