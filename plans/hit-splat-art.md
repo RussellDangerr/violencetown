@@ -264,3 +264,85 @@ the same pass. Fire at least still has a unique orange fill doing the work; ener
 "!" — that is a taste question a contrast number cannot settle, and it cannot be settled at all
 until the fill behind it stops being red. `cold` still has no motion case and still moves like a
 punch (§7).
+
+## 10. The badge: a pill in a fixed spot (2026-09-30)
+
+Caelan, looking at splats in a cascaded fight (`feature/turn-model`): they "are appearing on top of
+one another", and he pictured "less space in between the outside of the circle and the number".
+
+**What was wrong, measured.** The round badge was sized for the retired 8px bitmap font (8 px a
+character plus 6 px pad): about 36 px across for "-10", where VT323 at the 12px line needs ~14 px. And
+splats *flew*: a physical splat travelled 16 px (a heal 22 px straight up, ignoring the fan) — less
+than a badge's width, so neighbours overlapped whatever the fan.
+
+**Ruled 2026-09-30:**
+1. **Now:** a pill sized to the number (3 px each end, never narrower than tall), laid out by **how
+   many share the target** (`game/splat-layout.js`): one sits centred; two stack; three make a
+   triangle; four take the compass points N, E, S, W — in arrival order, gliding (~100 ms) to a new
+   spot when the count changes. (First built as fixed slots filled in order — a lone second hit went
+   "above" — and corrected the same day at his note that RuneScape centres a lone splat and spreads
+   out only when there are enough to fill the spots.) Types keep their character in place (pop, sag,
+   shudder, flicker, glow) but move a few px at most. Resting pills never touch at any count, crits
+   and four characters included — pinned in `tests/cascade.test.js`.
+2. **Later:** our own small pixel silhouette per damage type — splat, drop, flame, snowflake — drawn
+   by a generator script like the other `tools/gen_*.py`, with the Kenney 1-Bit Pack heart (sheet
+   column 39, row 10) for heals. The survey found no ready-made damage splat in the packs: the Emote
+   Pack shapes are speech balloons with tails; the 1-Bit burst is a hollow outline; the Particle Pack
+   is soft 512 px textures that break up at badge size (only `star_09` and `scorch_03` keep an
+   outline, and neither holds two digits cleanly).
+
+The flight direction (`opts.dir`) is still recorded on the particle but no longer drawn.
+
+**Item 2 — BUILT 2026-09-30.** `tools/gen_splats.py` draws `game/assets/ui_splats.png` (320×210): one
+silhouette per type, by the number's length 1–4, and again gold-outlined for a crit.
+
+| Type | Silhouette |
+| --- | --- |
+| physical | a jagged burst |
+| sludge | drips hanging below |
+| poison | bubbles rising |
+| fire | flames licking up off the top |
+| cold | a pointed ice crystal |
+| energy | a sharp-cornered zap with a bolt (still physical's red until ruling EC — the shape now tells it apart) |
+| heal | a heart |
+
+Every shape is the layout's pill (the body the digits sit in) plus a decoration, a dark outline and a
+one-pixel top highlight. Fill colours are read from `SPLAT_COLOR` in `renderer.js`, so they have one
+home. All our own art: the Kenney 1-Bit heart named above is a fixed 16 px and cannot hold "+25", so
+the heart is drawn here, sized to the number like the rest. The renderer draws the cell through
+`splat-layout.js` `splatCell` and falls back to the plain pill until the sheet loads; the badge sits on
+whole pixels. A crit is the gold outline (and the bigger pop), no longer a 1.2× badge — non-integer
+scaling would smear pixel art. The spots were opened a few px (compass ±19) because silhouettes reach
+past their bodies. `tests/splat-sheet.test.js` pins generator and game to the same rows, widths and
+cell size.
+
+**Finalized 2026-09-30,** from exact-frame screenshots at his 3440×1440 (a tile is 64 px there):
+
+- **Energy is a spark** — four thin rays off the corners — chosen over the torn-flag zap, a bolt (it
+  read as a pipe) and a saw-toothed edge (it read as a cog).
+- **Energy is yellow, `#f5d02a` — ruling EC closed.** His pick over the indigo recommendation. White
+  digits on any yellow measured 1.4-1.9:1, so energy's digits are dark (`#2a1f06`, 10.75:1) —
+  `SPLAT_TEXT` in `renderer.js`; `tests/splat-sheet.test.js` requires dark digits on any fill under
+  1.8:1 against white. `#f5d02a` is the candidate furthest from fire's orange (hue 49° vs 24°).
+- **A crit is a gold ring outside the dark outline,** on every type. The gold outline it replaced
+  measured 1.0-1.3:1 against yellow and vanished.
+- **Fire flickers between 75% and full,** no longer down to 20%, and has a darker outline to hold on
+  the desert ground. Seen at 75% it still visibly dims — a pulse, not a steady flame.
+- **Splats sit above the head,** and every group grows upward from there (each layout's lowest spot on
+  the anchor), so a face is never covered.
+- **While a splat is up on a character, the space above its head is the splats':** its HP bar and
+  wallet pips, emote balloon, awareness marker, mood face, buff badges and bump label all step aside
+  for that ~0.6 s and come back after (`splat-layout.js` `splatShowingAt`), the bar showing the new HP.
+  History: the bar first moved UNDER the feet (chosen from five real-piece mockups), but a QA pass
+  found it drew across the head of whoever stood south, was covered by them (~70% of the pips) and
+  by props, and fell under the dock on the bottom row — so it went back above the head, hidden
+  during splats (ruled 2026-09-30).
+- **At an odd art scale** (`k` 3, 5…: 1920×1080 is `k` 3) a sheet pixel would land on 1.5 backing px
+  and step unevenly, so the whole splat draws a touch larger there (`splatPixelFactor`: ×4/3 at `k` 3)
+  and on whole backing pixels. Splat pixels stay half the world's art pixel — the grain of the text on
+  top of them. At `k` 1 (windows under ~640 px tall) digits still smear, as the old pills did.
+- **A group near the top of the view is pushed down** just enough to stay on screen
+  (`splatClampDown`), even if that puts it over its target.
+- **Crit art is kept,** though nothing in the game passes `crit` yet.
+
+`cold` has a shape now, though still no motion of its own (§7).

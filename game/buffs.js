@@ -94,7 +94,8 @@ function applyDot(owner, game, buff, label, cause) {
         const y = owner === game ? game.playerY : owner.y;
         const text = change > 0 ? `+${change}` : `${change}`;
         const type = change > 0 ? 'heal' : (SPLAT_FOR_CAUSE[cause] ?? 'physical');
-        game._spawnHitSplat?.(x, y, text, type, { omni: true, killed });
+        // playerHpDelta lets a held (turn-model C1) tick hold its HP change back too.
+        game._spawnHitSplat?.(x, y, text, type, { omni: true, killed, playerHpDelta: owner === game ? change : 0 });
     }
 }
 

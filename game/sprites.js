@@ -135,6 +135,10 @@ export const SHEETS = {
     // below. Packed (no gutter), padding 0.
     marks:        { src: `${K}/emotes_marks.png`, frameW: 16, frameH: 16 },
 
+    // Hit-splat badges — our own art, one silhouette per damage type, drawn by
+    // tools/gen_splats.py. Rows/columns: splat-layout.js (SPLAT_ROWS, splatCell).
+    splats:       { src: './assets/ui_splats.png', frameW: 40, frameH: 32 },
+
     // Alias for the hardcoded renderer reference:
     //   • renderer._drawPlayer reads `sprites.player` directly.
     player:       { src: TINY_DUNGEON, frameW: 16, frameH: 16 },

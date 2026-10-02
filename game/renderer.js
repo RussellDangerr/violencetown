@@ -45,6 +45,8 @@ import * as Settings from './settings.js'; // (combat-feel-pass) reduce-motion f
 import { challengeGp } from './enemies.js'; // (Law 6f) nameplate pips read the composite kit, not raw gold
 import { resolveOffer } from './offer.js';                                  // (offer screen) pure basket→projection
 import { dispositionCeil, DISPOSITION_MIN } from './disposition-curves.js'; // (offer screen) meter ceiling + floor — offer.js does not re-export these
+import { lungeOffset } from './cascade.js';                                  // (turn-model C1) an attacker lunges on its beat
+import { splatPill, layoutSplats, glideToward, splatCell, splatShowingAt, splatPixelFactor, splatClampDown, SPLAT_CELL_W, SPLAT_CELL_H } from './splat-layout.js'; // hit splats
 
 // Tile id → sprite ref. Sewer ids 0-7 → TILE_SPRITE_MAP, town ids 10-21 →
 // TOWN_TILE_SPRITE_MAP, circus/factory/graveyard ids 30+ →
@@ -61,25 +63,29 @@ const clamp01 = (v) => Math.max(0, Math.min(1, v));
 // throw prompt are not menus: they draw at their own screen positions.
 const MENU_BOX_STATES = new Set(['item_overlay', 'target_list', 'log_modal', 'trade', 'dialogue', 'inspect', 'device']);
 
-// (combat-feel-pass) Hit-splat fill colors by damage type. Crit keeps the
-// physical fill but takes a gold border (handled in _drawHitSplat).
+// (combat-feel-pass) Hit-splat fill colors by damage type. A crit keeps its
+// type's fill and takes a gold ring outside its outline (tools/gen_splats.py
+// bakes these into the splat atlas, reading this table).
 //
 // There is no 'miss' entry and there must not be one: combat.js resolves over
 // flat damage with no roll, so a miss is not a thing this game can produce
 // (README: "no dice, no misses"). It carried a blue here for a while anyway.
 //
-// 'energy' has no entry yet either, but that one IS a gap rather than a rule —
-// a Ray Blast currently falls back to the physical red. See
-// plans/hit-splat-art.md; it wants a colour picked by eye, which is why it
-// wasn't picked here.
+// 'energy' is yellow — ruling EC, 2026-09-30 (plans/hit-splat-art.md §10).
 const SPLAT_COLOR = {
     physical: '#d23f2f',
     sludge:   '#9a52c8',
     poison:   '#57a23e',
     fire:     '#f0833a',
     cold:     '#5ec3e8',
+    energy:   '#f5d02a',
     heal:     '#3fb56a',
 };
+
+// Digits are white on every splat but the ones too light to carry white: on
+// energy's yellow, white measured 1.27-1.9:1 (hit-splat-art.md §9-10), so its
+// digits are dark, with a light shadow.
+const SPLAT_TEXT = { energy: { color: '#2a1f06', shadow: '255,240,200' } };
 
 // ── Procedural character walk/idle animation (plans/movement-feel.md) ─────────
 // The Tiny Dungeon / Kenney sheets have ONE static front-facing pose per
@@ -1267,6 +1273,9 @@ export class Renderer {
                     ey = e._slideFromY + (e.y - e._slideFromY) * st;
                 }
             }
+            // (turn-model C1) A cascaded attacker lunges at whoever it hit, on its beat.
+            const lunge = lungeOffset(e._lungeAt, now) * (Settings.get('reduceMotion') ? 0.45 : 1);
+            if (lunge) { ex += (e._lungeDx || 0) * lunge; ey += (e._lungeDy || 0) * lunge; }
             const dx = ex - game.playerX, dy = ey - game.playerY;
             if (offView(vp, dx, dy, 2)) continue;
 
@@ -1446,12 +1455,21 @@ export class Renderer {
                 ctx.fillRect(px + 4, py + 4, TILE_PX - 8, TILE_PX - 8);
             }
 
-            // HP bar above living enemy (with border). Suppressed for ambient
-            // townsfolk (Town Clock) — a floating health bar over a peaceful
-            // Violencian reads as a combat target.
+            // While a hit splat is up on this character, the space above its head
+            // is the splats': the HP bar and pips, balloon, awareness marker, mood
+            // face, buff badges and bump label all step aside (splat-layout.js,
+            // ruled 2026-09-30).
+            const splatUp = splatShowingAt(game._damageNumbers, e.x, e.y, now);
+
+            // HP bar above the living enemy's head (with border). While a hit splat
+            // is up it steps aside with the rest of the head space, and comes back
+            // showing the new HP (ruled 2026-09-30, after the under-the-feet try
+            // drew across the head of whoever stood south). Suppressed for ambient
+            // townsfolk (Town Clock) — a health bar on a peaceful Violencian reads
+            // as a combat target.
             const frac = e.entity.hp / e.entity.maxHp;
             const bx = px + 4, by = py - 6, bw = TILE_PX - 8, bh = 5;
-            if (!e.ambient) {
+            if (!e.ambient && !splatUp) {
                 ctx.fillStyle = '#000000cc';
                 ctx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
                 ctx.fillStyle = UI.hpBg;
@@ -1463,7 +1481,7 @@ export class Renderer {
             // Debuff / buff badges — one-letter colored markers stacked
             // horizontally above the HP bar. Buffs green, debuffs red; the letter
             // is the first character of the buff name uppercased.
-            if (e.buffs && e.buffs.length > 0) {
+            if (e.buffs && e.buffs.length > 0 && !splatUp) {
                 const badgeY = py - 20;
                 let badgeX = px + 2;
                 for (const b of e.buffs) {
@@ -1484,7 +1502,7 @@ export class Renderer {
             // the shop uses, floating above any NPC that HAS a disposition.
             // Mindless things show nothing. Sits above the HP bar; nudged higher
             // when buff badges occupy that row.
-            if (e.disposition != null) {
+            if (e.disposition != null && !splatUp) {
                 const faceR  = 6.5;
                 const faceCX = px + TILE_PX / 2;
                 const faceCY = (e.buffs && e.buffs.length > 0) ? py - 28 : py - 15;
@@ -1500,7 +1518,8 @@ export class Renderer {
             // rating, not a promise of lootable coins. Suppressed for ambient
             // townsfolk (same reasoning as the HP bar) via its own !e.ambient
             // guard, and drawn AFTER the mood-face disc above so that disc
-            // (py-23..py-7, centered) can't soft-dim the gold.
+            // (py-23..py-7, centered) can't soft-dim the gold. Like the bar, it
+            // steps aside while a hit splat is up.
             // Broke (chal GP <= 0) draws nothing — an empty row is itself the tell
             // that he's out of tricks. The 24px row fits 6 slots at a 4px stride
             // (3px pip + 1px gap): 5 pips + an overflow cap = 24px = bw exactly.
@@ -1509,7 +1528,7 @@ export class Renderer {
             // boss-wallet dread (Law 6e's KH multi-bar) belongs on the dedicated
             // boss frame, deferred to the first boss build — not a 24px nameplate.
             const gold = challengeGp(e);
-            if (!e.ambient && gold > 0) {
+            if (!e.ambient && gold > 0 && !splatUp) {
                 const gh = 2, gy = by - 4; // 2px row above the HP bar's own backing plate
                 ctx.fillStyle = '#000000cc';
                 ctx.fillRect(bx - 1, gy - 1, bw + 2, gh + 2);
@@ -1544,7 +1563,7 @@ export class Renderer {
             // Only the ONE character you face is labelled — a row of floating
             // verbs over a crowd would be noise, and the whole point is that this
             // reads as "the thing you are about to do".
-            if (this.font && !game._animating && this._isFaced(game, e)) {
+            if (this.font && !game._animating && !splatUp && this._isFaced(game, e)) {
                 const verb = defaultVerb({ x: e.x, y: e.y, npc: e }, game);
                 if (verb) {
                     const who  = String(e.name || e.type || '').replace(/[[\]]/g, '');
@@ -1573,7 +1592,7 @@ export class Renderer {
             // this gate, a watcher who is both chattering and alert would stack
             // the Town Clock balloon on top of the overlay's own marker, and
             // someone who has just noticed you should not be humming a music note.
-            if (e._emote != null && AWARENESS_EMOTE[e.state] == null) {
+            if (e._emote != null && AWARENESS_EMOTE[e.state] == null && !splatUp) {
                 const col = EMOTE_SPRITES[e._emote];
                 const sheet = sprites?.emotes;
                 const age = now - (e._emoteStart || 0);
@@ -1657,6 +1676,27 @@ export class Renderer {
         const { ctx } = this;
         const vp = this._view();
         const now = performance.now();
+        // Hit splats are laid out by how many share a target (splat-layout.js):
+        // one sits centred, more spread out. Worked out once per frame, from the
+        // splats still up; each glides to its spot when the count changes.
+        const dt = now - (this._splatLastFrame ?? now);
+        this._splatLastFrame = now;
+        const live = game._damageNumbers.filter(d => d.type && now - d.bornAt < d.maxAge);
+        const spots = layoutSplats(live);
+        // A group whose target stands near the top of the view is pushed down just
+        // enough to stay on screen (ruled 2026-09-30).
+        const f = splatPixelFactor(vp.k);
+        const groupTop = new Map();
+        for (const [dn, spot] of spots) {
+            const key = `${dn.tileX},${dn.tileY}`;
+            groupTop.set(key, Math.min(groupTop.get(key) ?? Infinity, spot.y));
+        }
+        for (const [dn, spot] of spots) {
+            const anchorY = this._splatAnchor(game, dn).y;
+            const top = groupTop.get(`${dn.tileX},${dn.tileY}`);
+            const push = splatClampDown(anchorY, top, f, vp.world.y);
+            dn._spot = glideToward(dn._spot, { x: spot.x, y: spot.y + push / f }, dt);
+        }
         for (const dn of game._damageNumbers) {
             const age = now - dn.bornAt;
             if (age >= dn.maxAge) continue; // expired (filtered next loop tick)
@@ -1732,6 +1772,16 @@ export class Renderer {
     // (combat-feel-pass) Draw one RuneScape-style hit-splat: a colored badge
     // (color = damage type) carrying the number, with a per-type animation and
     // a directional/omni fan. Cheap canvas transforms; deterministic per hit.
+    // Where a splat's group is anchored on screen: centred on its tile, a
+    // quarter tile above the head, so groups grow upward and never cover a face.
+    _splatAnchor(game, dn) {
+        const vp = this._view();
+        return {
+            x: vp.origin.x + (dn.tileX - game.playerX) * TILE_PX + TILE_PX / 2 - this._scrollX,
+            y: vp.origin.y + (dn.tileY - game.playerY) * TILE_PX - TILE_PX / 4 - this._scrollY,
+        };
+    }
+
     _drawHitSplat(game, dn, age) {
         const { ctx, sprites } = this;
         const vp = this._view();
@@ -1740,23 +1790,32 @@ export class Renderer {
         if (a <= 0.01) return;
 
         // Tile → screen (camera-tracked), then the per-type motion offset.
-        const bx = vp.origin.x + (dn.tileX - game.playerX) * TILE_PX + TILE_PX / 2 - this._scrollX;
-        const by = vp.origin.y + (dn.tileY - game.playerY) * TILE_PX + TILE_PX / 4 - this._scrollY;
-        const x = bx + m.ox;
-        const y = by + m.oy;
+        const { x: bx, y: by } = this._splatAnchor(game, dn);
+        // At an odd art scale (k 3, 5…) a sheet pixel would land on 1.5 backing
+        // px and step unevenly; the whole splat is drawn a touch larger so each
+        // sheet pixel is a whole number of backing px (splatPixelFactor).
+        const f = splatPixelFactor(vp.k);
+        // Its spot among the splats on this target (laid out in _drawDamageNumbers),
+        // then the small per-type wiggle — splats no longer fly, so they never
+        // land on each other.
+        const spot = dn._spot || { x: 0, y: 0 };
+        const x = bx + (spot.x + m.ox) * f;
+        const y = by + (spot.y + m.oy) * f;
 
         const color = SPLAT_COLOR[dn.type] || SPLAT_COLOR.physical;
-        const scale = 1;                          // bitmap font scale (8px glyphs — small)
+        const scale = 1;                          // font scale (the 12px VT323 line)
         const big = dn.crit ? 1.2 : 1;
-        const textW = dn.text.length * 8 * scale;
-        // Round badge — radius fits the number plus a little pad, so short hits
-        // read as a small circle rather than a wide oval.
-        const r = (Math.max(textW, 8) / 2 + 6) * big;
-        const w = r * 2 * (m.sx || 1);
-        const h = r * 2 * (m.sy || 1);
+        // A pill sized to the number's real width — the old round badge was sized
+        // for the retired 8px bitmap glyphs and was mostly padding.
+        const textW = this.font ? this.font.measure(dn.text, scale) : dn.text.length * 4.8 * scale;
+        const pill = splatPill(textW, !!dn.crit);
+        const w = pill.w * (m.sx || 1);
+        const h = pill.h * (m.sy || 1);
 
         ctx.save();
-        ctx.translate(x, y);
+        // Whole BACKING pixels: the glide is fractional, the badge is pixel art.
+        ctx.translate(Math.round(x * vp.scale) / vp.scale, Math.round(y * vp.scale) / vp.scale);
+        ctx.scale(f, f);
 
         // Heal halo — a soft radiant glow that pulses, then fades.
         if (m.glow > 0) {
@@ -1770,22 +1829,42 @@ export class Renderer {
 
         ctx.scale(m.scale, m.scale);
 
-        // Badge — a round "splat", filled by type, with a border (gold = crit).
-        ctx.beginPath();
-        ctx.ellipse(0, 0, w / 2, h / 2, 0, 0, Math.PI * 2);
-        ctx.fillStyle = hexToRgba(color, a);
-        ctx.fill();
-        ctx.lineWidth = dn.crit ? 2 : 1.25;
-        ctx.strokeStyle = dn.crit ? hexToRgba('#f0d782', a) : `rgba(255,255,255,${a * 0.55})`;
-        ctx.stroke();
+        // Badge — the type's own silhouette from the splat atlas (a burst, drips,
+        // flames, a crystal, a heart…; gold-outlined on a crit), so the type reads
+        // from the shape. Until the sheet has loaded, a plain pill stands in.
+        const splatSheet = sprites?.splats;
+        const cell = splatCell(dn.type, dn.text.length, !!dn.crit);
+        if (splatSheet?.loaded) {
+            ctx.save();
+            ctx.scale(m.sx || 1, m.sy || 1);
+            ctx.globalAlpha = a;
+            splatSheet.drawFrame(ctx, cell.col, cell.row, -SPLAT_CELL_W / 2, -SPLAT_CELL_H / 2, SPLAT_CELL_W, SPLAT_CELL_H);
+            ctx.restore();
+        } else {
+            ctx.beginPath();
+            const pr = h / 2;
+            ctx.moveTo(-w / 2 + pr, -h / 2);
+            ctx.lineTo(w / 2 - pr, -h / 2);
+            ctx.arc(w / 2 - pr, 0, pr, -Math.PI / 2, Math.PI / 2);
+            ctx.lineTo(-w / 2 + pr, h / 2);
+            ctx.arc(-w / 2 + pr, 0, pr, Math.PI / 2, Math.PI * 1.5);
+            ctx.closePath();
+            ctx.fillStyle = hexToRgba(color, a);
+            ctx.fill();
+            ctx.lineWidth = dn.crit ? 2 : 1.25;
+            ctx.strokeStyle = dn.crit ? hexToRgba('#f0d782', a) : `rgba(255,255,255,${a * 0.55})`;
+            ctx.stroke();
+        }
 
-        // Number — white, centered, with a soft shadow for contrast.
+        // Number — white (dark on a fill too light for white), centered, with a
+        // soft shadow for contrast.
         if (this.font) {
+            const tc = SPLAT_TEXT[dn.type];
             this.font.drawText(ctx, dn.text, 0, -4, {
-                color: hexToRgba('#ffffff', a),
+                color: hexToRgba(tc ? tc.color : '#ffffff', a),
                 scale,
                 align: 'center',
-                shadow: `rgba(0,0,0,${a * 0.7})`,
+                shadow: tc ? `rgba(${tc.shadow},${a * 0.6})` : `rgba(0,0,0,${a * 0.7})`,
             });
         }
 
@@ -1800,9 +1879,9 @@ export class Renderer {
         const markSheet = sprites?.marks;
         const markCol = dn.mark ? MARK_SPRITES[dn.mark] : null;
         if (markSheet?.loaded && markCol != null) {
-            const msz = 14 * big;
-            const mcx = r * 0.75;
-            const mcy = -r * 0.75;
+            const msz = 12 * big;
+            const mcx = w / 2;
+            const mcy = -h / 2;
             ctx.globalAlpha = a;
             markSheet.drawFrame(ctx, markCol, 0, mcx - msz / 2, mcy - msz / 2, msz, msz);
             ctx.globalAlpha = 1;
@@ -1811,23 +1890,20 @@ export class Renderer {
         ctx.restore();
     }
 
-    // (combat-feel-pass) Per-type motion for a hit-splat. Returns pixel offsets,
-    // a uniform scale, axis stretch (sx/sy), alpha, and a heal-glow factor,
-    // driven by `age` and the splat's launch direction / fan slot. Reduce-motion
-    // dampens the amplitude. Pure math — no allocations beyond the small object.
+    // (combat-feel-pass) Per-type motion for a hit-splat. Returns small pixel
+    // offsets, a uniform scale, axis stretch (sx/sy), alpha, and a heal-glow
+    // factor, driven by `age`. Where the splat sits is its slot's job
+    // (splat-layout.js), not the motion's. Reduce-motion dampens the amplitude.
+    // Pure math — no allocations beyond the small object.
     _hitSplatMotion(dn, age) {
         const reduce = Settings.get('reduceMotion');
         const k = reduce ? 0.45 : 1;
         const p = Math.min(1, age / dn.maxAge);
         const e = 1 - (1 - p) * (1 - p);                 // easeOut
 
-        // Travel heading: along the blow (directional, fanned per slot) or fanned
-        // around the target (omni). Directional also drifts up a touch.
-        let ang;
-        if (dn.dir) ang = Math.atan2(dn.dir.y, dn.dir.x) + dn.slot * 0.20;
-        else ang = -Math.PI / 2 + dn.slot * (Math.PI * 2 / 6);
-        const tx = Math.cos(ang), ty = Math.sin(ang);
-
+        // Splats hold a fixed spot now (splat-layout.js), so each type keeps its
+        // character in place — a few px at most — instead of flying off along a
+        // heading: the old travel sent neighbours into each other.
         let alpha = 1;
         if (p < 0.12) alpha = p / 0.12;
         else if (p > 0.72) alpha = Math.max(0, 1 - (p - 0.72) / 0.28);
@@ -1835,41 +1911,33 @@ export class Renderer {
         let ox = 0, oy = 0, scale = 1, sx = 1, sy = 1, glow = 0;
 
         switch (dn.type) {
-            case 'sludge':                                // oozes + drips DOWN
+            case 'sludge':                                // oozes, sagging down
                 scale = p < 0.18 ? 0.6 + 0.5 * (p / 0.18) : 1.1 - 0.1 * e;
-                sy = 1 + 0.5 * e * k;
-                sx = 1 - 0.12 * e * k;
-                ox = tx * 6 * k;
-                oy = 30 * e * k;
+                sy = 1 + 0.35 * e * k;
+                sx = 1 - 0.1 * e * k;
+                oy = 3 * e * k;
                 break;
-            case 'poison': {                              // rising rattle
-                const shud = Math.sin(age * 0.05) * 4 * k;
+            case 'poison':                                // a sick rattle in place
                 scale = p < 0.14 ? 0.6 + 0.4 * (p / 0.14) : 1;
-                ox = tx * 10 * e * k + shud;
-                oy = ty * 10 * e * k - 20 * e * k;
+                ox = Math.sin(age * 0.05) * 1.5 * k;
                 break;
-            }
-            case 'fire':                                  // flicker + burn up
-                alpha *= 0.6 + 0.4 * Math.sin(age * 0.045);
+            case 'fire':                                  // flicker + burn down
+                // Flickers between 75% and full — never fades out mid-fight.
+                alpha *= 0.875 + 0.125 * Math.sin(age * 0.045);
                 scale = (p < 0.14 ? 0.7 + 0.3 * (p / 0.14) : 1) * (1 - 0.25 * p * k);
-                ox = tx * 8 * e * k;
-                oy = -26 * e * k;
+                oy = -2 * e * k;
                 break;
-            case 'heal':                                  // gentle float + holy glow
+            case 'heal':                                  // gentle lift + holy glow
                 scale = p < 0.2 ? 0.85 + 0.15 * (p / 0.2) : 1;
-                oy = -22 * e * k;
+                oy = -2 * e * k;
                 glow = (0.5 + 0.5 * Math.sin(age * 0.012)) * (1 - p);
                 break;
             case 'physical':
-            default: {                                    // hard snappy pop (crit = bigger + further)
+            default: {                                    // hard snappy pop (crit = bigger)
                 const pop = dn.crit ? 1.6 : 1.3;
-                const travel = dn.crit ? 26 : 16;
-                const up = dn.crit ? 42 : 14;
                 scale = p < 0.13 ? 0.5 + (pop - 0.5) * (p / 0.13)
                       : p < 0.30 ? pop - (pop - 1) * ((p - 0.13) / 0.17)
                       : 1;
-                ox = tx * travel * e * k;
-                oy = ty * travel * e * k - up * e * k;
                 break;
             }
         }
@@ -1991,7 +2059,10 @@ export class Renderer {
 
         // — HP bar — always red per the violencetown palette (blood, not
         //   "danger" — the old green→red threshold was retired here).
-        const hpFrac = game.playerHp / game.playerMaxHp;
+        // (turn-model C1) In a cascade, damage already dealt but not yet shown is
+        // added back, so the bar drops blow by blow as each one plays.
+        const hpShown = Math.min(game.playerMaxHp, game.playerHp + (game._cascade?.heldPlayerHp() ?? 0));
+        const hpFrac = hpShown / game.playerMaxHp;
         drawInset(ctx, bx, by, bw, bh);
         const hpW = (bw - 2) * hpFrac;
         ctx.fillStyle = UI.hpRed;
@@ -1999,7 +2070,7 @@ export class Renderer {
         ctx.fillStyle = '#e8674a';                       // glossy top highlight
         ctx.fillRect(bx + 1, by + 1, hpW, 1);
         if (this.font) {
-            this.font.drawText(ctx, `HP ${game.playerHp}/${game.playerMaxHp}`, bx + 3, by + 2, {
+            this.font.drawText(ctx, `HP ${hpShown}/${game.playerMaxHp}`, bx + 3, by + 2, {
                 color: '#fff', scale: 1,
             });
         }
@@ -3410,7 +3481,8 @@ export class Renderer {
             // upscales to) and anchored so its bottom edge sits where the
             // old pip's top edge did — clearing the head instead of resting
             // on it.
-            const emoteKey = AWARENESS_EMOTE[w.state];
+            // Stepping aside while a hit splat is up on this watcher (its head is the splats').
+            const emoteKey = splatShowingAt(game._damageNumbers, w.x, w.y, performance.now()) ? null : AWARENESS_EMOTE[w.state];
             const emoteCol = emoteKey ? EMOTE_SPRITES[emoteKey] : null;
             if (emoteCol != null && sprites?.emotes?.loaded) {
                 const sz = 16;
