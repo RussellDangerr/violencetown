@@ -182,6 +182,7 @@ C1, C4, RESTART and the streetlights were built and shipped in v0.24.0; Housekee
 
 | Item | Open questions | Size | Doc | Blocked by |
 |---|---|---|---|---|
+| **Turn model step 2 — one slapstick blow** | One enemy type winds up on a TILE (telegraphed) and lands next beat on whoever stands there, goon or player — the first "plans ruined" moment. Waits on Caelan's play verdict on C1 (does the order read as comedy, or only as slower?), then rulings TM-7..9: ties, the player's slot, where speed comes from. | M | `plans/turn-model.md` Recommendation | nothing |
 | **F2b — entrances by hit type** | Split out of F2, which bundled it wrongly. Caelan's 09-14 note (*"slashing versus crushing"*) rides `game/fight-entrance.js` and `_trackFight`'s `_fightStart` stamp, not the splat: an entrance plays once when a fight opens, a splat plays on every blow. Different system, different timer. | S | F1 (shipped) | nothing |
 | **F3 — who gets pulled into a fight** | F1 shipped its area as `game/fight-area.js` — every tile a fighter perceives. As a gameplay rule: whoever can see the fight is in it? | M | `plans/screen-fill.md` *Follow-on pieces* 3 | nothing |
 | **Affordance matrix** — verbs (~20 wheel leaves) × tags | The discipline: *a blank cell is a decision, not an oversight.* Second job is diagnostic — a proposed element with zero edges is caught at design time. Needs the tag layer first. | M | systems-audit §9 | T1 |
