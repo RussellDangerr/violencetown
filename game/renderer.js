@@ -158,6 +158,18 @@ function withWalk(ctx, cx, cy, { bob = 0, rot = 0, flipX = 1 }, draw) {
 // as escalation and stands in for it.
 const AWARENESS_EMOTE = { suspicious: 'question', searching: 'exclamation', chasing: 'alert' };
 
+// Painter's order for the actor pass. The map's edge filler (the forest past its
+// edge) draws behind everything, so a two-tile tree south of the map never
+// covers the map's last row (ruling SF, 2026-10-03: you vanished for a step at
+// Town's south exit). Among themselves, and for everyone else: smaller feet-Y
+// (further back / north) first, and on a tie the player last, so it reads on
+// top of a same-row NPC or prop.
+export function actorOrder(a, b) {
+    return ((b.filler ? 1 : 0) - (a.filler ? 1 : 0))
+        || (a.feetY - b.feetY)
+        || (a.kind === 'player' ? 1 : -1);
+}
+
 export class Renderer {
     constructor(canvas) {
         this.canvas = canvas;
@@ -1332,9 +1344,7 @@ export class Renderer {
             else if (a.def.shadow !== false && !a.filler) this._drawGroundShadow(a.px + TILE_PX / 2, a.py + TILE_PX - 3, 0.32, a.def.shadowRx ?? 12, a.def.shadowRy ?? 4.5);
         }
 
-        // Painter's order: smaller feet-Y (further back / north) first. On a tie
-        // the player draws last so it reads on top of a same-row NPC or prop.
-        actors.sort((a, b) => (a.feetY - b.feetY) || (a.kind === 'player' ? 1 : -1));
+        actors.sort(actorOrder);   // edge filler first, then by feet-Y, the player last on a tie
         for (const a of actors) {
             if (a.kind === 'prop') this._drawPropSprite(a.def, a.px, a.py);
             else if (a.kind === 'player') this._drawPlayerSprite(game, a.px, a.py, now);
@@ -3354,7 +3364,8 @@ export class Renderer {
         const aimedNode = game.wheel?.aiming ? selectedNode(game.wheel) : null;
         const aimingTheft = !!aimedNode && (aimedNode.key === 'coin' || aimedNode.key === 'kit' || aimedNode.key === 'gear');
 
-        const phase = threatPhase(watchers, { inCombat: game._inCombat(), aimingTheft, spotted });
+        const theftAt = { x: game.playerX, y: game.playerY };   // a theft is adjacent: it happens where you stand
+        const phase = threatPhase(watchers, { inCombat: game._inCombat(), aimingTheft, spotted, at: theftAt });
 
         // Phase-change ease: hold, swap, then ease the NEW phase's alpha in from
         // 0 over ~120ms. The swap itself is instant (the paint loop below always
@@ -3374,7 +3385,7 @@ export class Renderer {
             // Scope the field to the watchers who actually justify this phase —
             // not to every watcher with eyes. This is the one change that empties
             // the town square: an idle vendor no longer contributes a tile.
-            const field = alertWatchers(watchers, phase, { aimingTheft });
+            const field = alertWatchers(watchers, phase, { aimingTheft, at: theftAt });
 
             // The viewport is part of the key: a resize changes which tiles are in view.
             if (this._threatTurn !== game.turn || this._threatFieldPhase !== phase || this._threatCount !== field.length || this._threatVp !== vp) {

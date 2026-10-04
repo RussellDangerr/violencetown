@@ -857,6 +857,7 @@
       "y": 2,
       "contents": [
         "defence_poition",
+        "gold_poition",
         "bandage",
         "soap"
       ]
