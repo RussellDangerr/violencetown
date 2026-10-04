@@ -47,21 +47,6 @@ export function poitionBuff(p, flip = false) {
 }
 
 export const ITEMS = {
-    // (Ring builds) A learning source: using it adds a skill to the learned pool
-    // (auto-slotting if there's room), then the tome is consumed. The same
-    // useType:'learn' + learns/learnType shape backs any future trainer/quest.
-    tome_ray_blast: {
-        id: 'tome_ray_blast',
-        name: '[Tome of Ray Blast]',
-        description: 'A scorched schematic. Study it and the Ray Blast trick is yours — no gun required.',
-        useType: 'learn',
-        learns: 'ray_blast',
-        learnType: 'trick',
-        equipSlot: 'back',
-        consumable: true,
-        fallbackColor: '#c8a24a',
-        baseValue: 30,
-    },
     rock: {
         id: 'rock',
         name: '[Rock]',
@@ -315,20 +300,7 @@ export const ITEMS = {
     },
 
     // ── Special / mechanic-shop stock (Phase 6d + Chapter Two) ────────────────
-    // Two complementary canyon-traversal items (Caelan's call: keep both):
-    //  • chain — Macc's cheap rappel DOWN into the gorge (an alternate entry).
-    //  • grappling_hook — Pike's expensive way UP/OUT (the mobility unlock).
-    chain: {
-        id: 'chain',
-        name: '[Rappel Chain]',
-        description: 'A coil of greasy tow-chain off Macc\'s wall. "Bolt it to the canyon lip," he says, "and climb down like you got sense." A way into the gorge that isn\'t a crash.',
-        useType: 'none',
-        equipSlot: 'sides',
-        consumable: false,
-        tier: 'blue',
-        fallbackColor: '#7a7a7a',
-        baseValue: 40,
-    },
+    // Pike's grappling_hook is the canyon's way UP/OUT (the mobility unlock).
     // (Phase 2) A bottle of alcohol — NOT for drinking. Poured into the fixed
     // car's tank it burns fast and weak, slowing the too-hot engine just enough
     // to ramp the North bridge instead of punching through it. Bought from Hooch
@@ -557,8 +529,6 @@ export function resolveUse(game, itemDef, direction, stackCount = 1) {
             return resolveMelee(game, itemDef, direction);
         case 'equip':
             return resolveEquip(game, itemDef);
-        case 'learn':
-            return resolveLearn(game, itemDef);
         default:
             return itemDef.useHint || `[Used ${itemDef.name}]`;
     }
@@ -580,15 +550,6 @@ export function* ownedItemDefs(game) {
 export function hasItemDef(game, pred) {
     for (const def of ownedItemDefs(game)) if (pred(def)) return true;
     return false;
-}
-
-// Learning source (tomes now; trainers/quests reuse the same hook). The item is
-// consumed by the caller (main.js: `if (item.consumable) _removeFromSlot`), so a
-// tome for a skill you already know crumbles anyway — learning is idempotent.
-function resolveLearn(game, itemDef) {
-    if (!itemDef.learns || !game._learnSkill) return `[Used ${itemDef.name}]`;
-    const learned = game._learnSkill(itemDef.learns, itemDef.learnType || 'spell');
-    return learned ? null : '[You already knew that — the tome crumbles.]';
 }
 
 function resolveSelfUse(game, itemDef) {

@@ -624,8 +624,7 @@ export class Renderer {
     // screen space (after the shake restore) and beneath the HUD.
     //
     // game._nightLevel drives it: 0 = full day (no-op, normal daytime look); 1 =
-    // deep night. The Town Clock day-phase will animate this; for now it can be
-    // set directly. The Wilderness keeps its own blackout (_drawDarkness) and is
+    // deep night. The day clock (main.js _advanceDayClock) sets it. The Wilderness keeps its own blackout (_drawDarkness) and is
     // skipped here so the two don't stack.
     _drawLighting(game) {
         const n = game._nightLevel ?? 0;

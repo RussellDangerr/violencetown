@@ -19,8 +19,6 @@
 // documented riders at their read sites rather than table entries:
 //   - `guard`  — a passive damage-halve read in applyDamageToPlayer (not a tick).
 //   - `feared` — a movement override in resolveEnemyTurns (flee instead of act).
-//   - `blind`  — folds into applyDamageToPlayer's single computeHit call
-//     (outgoingMult) to halve the attacker's outgoing damage.
 //   - `strength` / `defence` — Poition riders. No onTick at all: the buff just
 //     has to exist and count down. `strength` is read as a computeHit `flats`
 //     bonus in Game.combatAttack (Law 2); `defence` is summed into
@@ -142,16 +140,6 @@ export const BUFF_DEFS = {
             game.playerMp = Math.min(game.playerMaxMp, Math.max(0, game.playerMp - dmg));
             const delta = game.playerMp - before;
             game._log(`[Mana ${delta >= 0 ? 'restored' : 'drained'} ${Math.abs(delta)}]`, 'combat');
-        },
-    },
-
-    // Recover — a delayed heal (pendingHeal) that lands when the buff expires.
-    recover: {
-        onExpire(owner, game, buff) {
-            if (!buff || !buff.pendingHeal) return;
-            const before = game.playerHp;
-            game.playerHp = Math.max(0, Math.min(game.playerHp + buff.pendingHeal, game.playerMaxHp));
-            game._log(`[Recover — healed ${game.playerHp - before} HP]`, 'combat');
         },
     },
 

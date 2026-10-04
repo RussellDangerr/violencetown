@@ -109,7 +109,7 @@ export const DEFEAT_SCENARIOS = [
             hp: 1.0,
             take: { gold: 0.1, recoverable: false },  // a small fee, not a robbery
             gift: { items: ['bandage'] },
-            log: "[Carrion dragged you to his corner and patched you up. 'You owe me,' he grunts.]",
+            log: "[Carrion dragged you to her corner and patched you up. 'You owe me,' she grunts.]",
         },
     },
     {

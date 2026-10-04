@@ -66,17 +66,14 @@ export const DIALOGUES = {
         ],
     },
 
-    // (Phase 6d) Macc the raccoon mechanic — Town's special-buyer + the canyon
-    // rappel-chain vendor. His lines expose both hooks: the Converter has a buyer
-    // (500 GP), and the chain is a non-crash way into the gorge.
+    // (Phase 6d) Macc the raccoon mechanic — Town's special-buyer: the Converter
+    // has a buyer (500 GP).
     macc: {
         name: 'Macc',
         greeting: '"*chittering* ...oh. A customer. Mind the grease. What\'s broke?"',
         choices: [
             { id: 'converter', label: 'Ask if he buys weird car parts', once: true, delta: 5,
               reply: '"That Cataclysmic thing? *eyes gleam* ...five hundred. Cash. Don\'t ask what I do with em."' },
-            { id: 'chain', label: 'Ask about the canyon', once: true,
-              reply: '"The gorge? Bah. Buy my chain, bolt it to the lip, climb down like a person. Beats crashin through the bridge, hey?"' },
             { id: 'flatter', label: '[Praise his workshop]', repeatable: true, delta: 3,
               reply: '"*preens* ...she\'s a mess, but she\'s MY mess."' },
             { id: 'insult', label: '[Call him a trash panda]', repeatable: true, delta: -25,

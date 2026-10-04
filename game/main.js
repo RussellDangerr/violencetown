@@ -1,6 +1,7 @@
 // main.js — Game orchestrator
 // Pixel Dungeon-style: one input = one action = world advances.
-// Bump-to-attack. 1-9 select item, Space uses with canvas overlay.
+// Walking into a character opens its Target List; Space opens the combat wheel;
+// 1-9 pick a bag slot.
 
 import { Renderer } from './renderer.js';
 import { computeViewport, screenToTile, clientToScreen, toMenu } from './viewport.js';   // (screen-fill) the screen's geometry
@@ -10,7 +11,7 @@ import { BitmapFont } from './bitmap-font.js';
 import { pickHitMark, HEAVY_HIT_DAMAGE } from './hit-splat.js';   // (manga-impact-marks) the mark rule + the heavy threshold
 import { makeEffectLoop } from './effect-loop.js';                 // one tick of the transient-effects loop, and its refusal to die on a bad frame
 import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, MAX_STACK } from './data.js';
-import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, ownedItemDefs, hasItemDef } from './items.js';
+import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef } from './items.js';
 import { WEAPONS } from './weapons.js';
 import { resolveItemDef } from './item-registry.js';
 import { tickBuffList, BUFF_DEFS, sumBuffStat, worldBeatPlan } from './buffs.js';
@@ -18,7 +19,7 @@ import { RINGS, FUSIONS } from './ring-data.js';
 import {
     unlockedSlots, resolveAdjacencies, slottedActives, aggregatePassives,
     slotRing, unslotRing, acquireRing, sanitizeSlots,
-    mergeKnown, isActive,   // (ring Task 5) skill-merge helpers, relocated from the retired skills.js
+    mergeKnown,   // (ring Task 5) skill-merge helper, relocated from the retired skills.js
 } from './rings.js';
 import { isBoss, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS } from './defeat-scenarios.js';
 import { addToInventory as addToInv, moveToZone, zoneOf } from './inventory.js';
@@ -228,13 +229,11 @@ class Game {
         this.ringSlots        = {};
         this.ringTier         = 0;
         this.discoveredFusions = new Set();
-        this.suppressedSkills = new Set();   // kept: still gates hasSpell/hasTrick at READ
         this.ringMods         = {};          // aggregate passives, recomputed by _refreshGrantedSkills
         this._peakDisposition = 0;           // (rings) highest disposition any NPC has ever shown — monotonic; gates the hidden thumb tier
         this._lastHitTarget = null;   // (fear) id of the enemy the last Melee-Hit struck
         this._ratFormTurns = 0;        // (Rat Ring) turns left folded into a rat; while >0 the player can enter GRATE tiles
         this._lastDefeatedBy = null;   // the enemy or {cause} that last damaged the player — read by _die
-        this.extraMoves  = 0; // future: Goo, abilities, etc.
         this.facing      = 'down'; // 'down' | 'left' | 'right' | 'up'
 
         // Movement feel (DQM/Pokémon overworld) — see plans/movement-feel.md.
@@ -282,7 +281,6 @@ class Game {
         this._animToY     = 0;
         this._animDuration = this._MOVE_MS; // ms (driven by _MOVE_MS)
         this._animCallback = null;
-        this._animFrame   = null; // requestAnimationFrame ID
         this._stepIndex   = 0;    // ++ per completed step → walk-anim foot parity
 
         // Equipment
@@ -310,7 +308,6 @@ class Game {
         this._queuedMoveDir = null; // one-deep input buffer (Finding 2): a dir
                                     // pressed mid-slide, applied on completion.
         this._turnTimer     = null; // setTimeout id for tap-to-face → hold-to-walk
-        this._pendingWalkDir = null;// dir armed by a turn-in-place pivot
 
         // Held-key stack — direction-key codes currently physically held, in
         // press-order with most-recent at the end. _onStepSettled reads the
@@ -2141,20 +2138,19 @@ class Game {
             this._render();
 
             if (t < 1) {
-                this._animFrame = requestAnimationFrame(tick);
+                requestAnimationFrame(tick);
             } else {
                 // Animation done
                 this._animating = false;
                 this._animProgress = 0;
-                this._animFrame = null;
                 if (this._animCallback) this._animCallback();
             }
         };
 
-        this._animFrame = requestAnimationFrame(tick);
+        requestAnimationFrame(tick);
     }
 
-    // ── Move / Bump Attack ───────────────────────────────────────────────────
+    // ── Move / Bump → interact ──────────────────────────────────────────────
 
     _doMove(dir) {
         if (this._animating) return; // block input during animation
@@ -2480,7 +2476,6 @@ class Game {
 
     _clearTurnTimer() {
         if (this._turnTimer) { clearTimeout(this._turnTimer); this._turnTimer = null; }
-        this._pendingWalkDir = null;
     }
 
     // A direction press from the IDLE state. From a standstill, a tap toward a
@@ -2492,10 +2487,8 @@ class Game {
         if (standing && this.facing !== this._faceOf(dir)) {
             this.facing = this._faceOf(dir);   // pivot only — no step, no _advanceWorld
             this._render();
-            this._pendingWalkDir = dir;
             this._turnTimer = setTimeout(() => {
                 this._turnTimer = null;
-                this._pendingWalkDir = null;
                 // Re-poll the LIVE held-key set rather than trusting the key that
                 // armed this timer. During the 70ms window the player may have
                 // pressed (and released) a second direction; if ANY direction is
@@ -4157,7 +4150,6 @@ class Game {
     // Read-only ownership lens (PD-2). Walks inventory + equipment + temp-equips
     // as one sequence (items.js) — the single "do I own item X" answer, so a
     // check can't miss equipped gear the way an inventory-only scan did.
-    ownedItems() { return ownedItemDefs(this); }
     hasItem(pred) { return hasItemDef(this, pred); }
 
     // Find a throwable the player has ANYWHERE (inventory first, else an equipped
@@ -4654,9 +4646,9 @@ class Game {
     }
 
     // The single gate for "can this skill fire right now" — present in the merged
-    // list AND not suppressed. Cast paths and (the wheel) route through these.
-    hasSpell(id) { return isActive(this.knownSpells   || [], this.suppressedSkills, id); }
-    hasTrick(id) { return isActive(this.grantedTricks || [], this.suppressedSkills, id); }
+    // list. Cast paths and (the wheel) route through these.
+    hasSpell(id) { return (this.knownSpells   || []).includes(id); }
+    hasTrick(id) { return (this.grantedTricks || []).includes(id); }
 
     // Acquire a fashioned ring into the pool (from Platero; auto-slots if room).
     // Idempotent — returns true only if newly acquired.
@@ -4826,11 +4818,10 @@ class Game {
 
     applyDamageToPlayer(rawDamage, attacker = null) {
         if (attacker) this._lastDefeatedBy = attacker;
-        // Blind (outgoing, attacker) and guard (incoming, defender) compose in
-        // one computeHit call — round once, no double-rounding.
+        // Guard (incoming, defender) folds into one computeHit call — round once,
+        // no double-rounding.
         let dmg = computeHit({
             base: rawDamage,
-            outgoingMult: attacker?.hasBuff?.('blind') ? 0.5 : 1,
             incomingMult: this.hasBuff('guard') ? 0.5 : 1,
         });
         if (dmg === 0) return 0;   // 0-contract: hit doesn't happen, never floor back via armor
@@ -5587,10 +5578,10 @@ class Game {
                             // removal the same way — the paused device supplies no throw/melee
                             // DIRECTION, so resolveUse is a no-op for those and the item must
                             // survive (a rock is `consumable:true` yet nothing was thrown; the
-                            // pipe is a non-consumable tool). Only a self-use (heal), an equip
-                            // (moves onto the body), or a learn (tome crumbles) truly consumes
-                            // it here, and only a real use costs a world beat — closing the
-                            // free-heal-while-paused gap without wasting a turn on a no-op.
+                            // pipe is a non-consumable tool). Only a self-use (heal) or an equip
+                            // (moves onto the body) truly consumes it here, and only a real use
+                            // costs a world beat — closing the free-heal-while-paused gap without
+                            // wasting a turn on a no-op.
                             // Soap's cure is deferred: resolveUse only logs intent — the actual
                             // removeBuff('sludge') fires in _advanceWorld gated on this flag, so
                             // it MUST be set before resolveUse, exactly as canonical _doItemUse.
@@ -5598,8 +5589,7 @@ class Game {
                             const msg = resolveUse(this, def, null);   // equip → resolveEquip (re-bags any displaced piece)
                             if (msg) this._log(msg);
                             this._refreshGrantedSkills();
-                            const usedUp = def.useType === 'self' || def.useType === 'equip'
-                                || (def.useType === 'learn' && def.consumable);
+                            const usedUp = def.useType === 'self' || def.useType === 'equip';
                             if (usedUp) { this._removeFromSlot(idx); this._advanceWorld(); }
                             break;
                         }
@@ -6334,18 +6324,6 @@ class Game {
     }
 
     // ── Dialogue (Step 4 — disposition dialogue) ─────────────────────────────
-
-    // The faced / cardinal-adjacent NPC that has a dialogue, or null. Mirrors
-    // _findAdjacentVendor (faced tile wins, else any adjacent one), skipping
-    // current allies.
-    _findAdjacentDialogueNpc() {
-        const FACE = { up: { dx: 0, dy: -1 }, down: { dx: 0, dy: 1 }, left: { dx: -1, dy: 0 }, right: { dx: 1, dy: 0 } };
-        const fd = FACE[this.facing] || { dx: 0, dy: 0 };
-        const has = (e) => e && e.dialogueId && e.entity.isAlive() && !e._ally;
-        const faced = this.enemies.find(e => has(e) && e.x === this.playerX + fd.dx && e.y === this.playerY + fd.dy);
-        if (faced) return faced;
-        return this.enemies.find(e => has(e) && manhattan(e.x, e.y, this.playerX, this.playerY) === 1) || null;
-    }
 
     // Open a conversation with `npc`. A pure menu — the world does NOT advance
     // (talking is paused, like trade / the log modal). Choices move the same

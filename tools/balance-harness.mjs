@@ -142,18 +142,17 @@ const ARMOR_FLOOR = -90;
 // roster, so no new authored field is needed. Ordered most-fragile first;
 // bandForArmor takes the first row the armor reaches.
 //
-// The 'bruiser' row is an OPEN QUESTION, not settled law: Law 3 lists -15 as a
-// fragility stop (TTK 3) but Law 4's role table jumps -30 -> -5, leaving no band
-// for it. 15-40 is interpolated between fodder and standard and awaits a ruling.
+// Law 3's -15 fragility stop (TTK 3) has no row of its own: armor -29..0 is
+// 'standard'. (Ruling A1, 2026-10-03: the interpolated 'bruiser' row was folded
+// into its neighbours; no enemy sat in its band.)
 export const ROLE_BANDS = [
     { role: 'vermin',   maxArmor: -80, min: 0,   max: 5 },
     { role: 'fodder',   maxArmor: -30, min: 5,   max: 20 },
-    { role: 'bruiser',  maxArmor: -15, min: 15,  max: 40 },
     { role: 'standard', maxArmor: 0,   min: 20,  max: 60 },
     // (Caelan 2026-08-24) The tough row. Law 4's table used to jump from
     // standard at exactly armor 0 straight to elite at 1-10, so every armor
     // value in between derived as elite and demanded a 100 GP wallet. That is
-    // the same no-row-fits hole ruling A1 describes at -15, and the roster
+    // the same no-row-fits hole ruling A1 described at -15, and the roster
     // re-role walked straight into it. This is the missing step between a
     // zone's basic enemy and its named foe.
     { role: 'tough',    maxArmor: 5,   min: 60,  max: 100 },
