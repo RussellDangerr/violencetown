@@ -8,10 +8,9 @@
 // the free variables it reads — so these tests exercise the production logic,
 // not a paraphrase of it.
 //
-// STATE and BUYBACK_MS are module-scope consts in main.js and are NOT exported.
-// liveConst() lifts them out of the same source rather than hand-copying them,
-// so a renamed state or a retuned window fails here instead of silently drifting
-// the test away from the code.
+// STATE is a module-scope const in main.js and is NOT exported. liveConst()
+// lifts it out of the same source rather than hand-copying it, so a renamed
+// state fails here instead of silently drifting the test away from the code.
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -71,21 +70,19 @@ function liveConst(name) {
 }
 
 const STATE = liveConst('STATE');
-const BUYBACK_MS = liveConst('BUYBACK_MS');
 
 // Sanity: if these ever stop being what the rest of the file assumes, every
 // assertion below turns into a tautology, so pin them here rather than trusting.
 test('the lifted module constants are the real ones', () => {
     assert.equal(STATE.TRADE, 'trade');
     assert.equal(STATE.IDLE, 'idle');
-    assert.equal(BUYBACK_MS, 5 * 60 * 1000);
 });
 
 // ── stubs ───────────────────────────────────────────────────────────────────
 
 const audio = { played: [], playSfx(n) { this.played.push(n); } };
 
-const openOffer = liveMethod('_openOffer', 'npc', { STATE, BUYBACK_MS, audio, emptyOffer });
+const openOffer = liveMethod('_openOffer', 'npc', { STATE, audio, emptyOffer });
 const closeOffer = liveMethod('_closeOffer', '', { STATE, audio });
 const tapOffer = liveMethod('_tapOffer', 'pt',
     { MODAL_RECT, HIT_SLOP, offerLayout, offerRowIndexAt, offerTraySlotAt, audio, OFFER_ROWS_VISIBLE });
@@ -99,7 +96,8 @@ const containerStock = liveMethod('_containerStock', 'container');
 const takeFromContainer = liveMethod('_takeFromContainer', 'npc, at');
 const removeFromSlot = liveMethod('_removeFromSlot', 'slot');
 const buybackRecord = liveMethod('_buybackRecord', 'npc, itemId, kind, price');
-const buybackLive = liveMethod('_buybackLive', 'npc', { BUYBACK_MS });
+const buybackLive = liveMethod('_buybackLive', 'npc');
+const endBuybacks = liveMethod('_endBuybacks', '');
 const buybackList = liveMethod('_buybackList', 'npc');
 const buybackConsume = liveMethod('_buybackConsume', 'npc, itemId');
 const resettle = liveMethod('_resettle', 'npc', { settledGold });
@@ -144,12 +142,9 @@ function stubGame(overrides = {}) {
         logs: [],
         renders: 0,
         resumed: 0,
-        timerStarts: 0,
-        timerStops: 0,
         _offerNpc: null,
         _offer: null,
         _offerCursor: null,
-        _tradeTimer: null,
         // (fence) The commit clears heat off items a fence takes. Supplied here
         // rather than made optional in main.js: _hot is set in the ctor and by
         // loadInto, so it is never undefined in the real game, and a `?.` would
@@ -159,8 +154,6 @@ function stubGame(overrides = {}) {
         _log(msg, cat) { this.logs.push({ msg, cat }); },
         _render() { this.renders++; },
         _resumeHeldWalk() { this.resumed++; },
-        _startTradeTimer() { this.timerStarts++; },
-        _stopTradeTimer() { this.timerStops++; },
         _resolveItemDef(id) { return resolveItemDef(id); },
         _containerEntries: containerEntries,
         _containerStock: containerStock,
@@ -276,24 +269,22 @@ describe('_openOffer', () => {
         assert.equal(g._offer.gold, 0);
     });
 
-    test('a vendor gets a buyback ledger and the countdown timer', () => {
+    test('a vendor gets a buyback ledger', () => {
         const g = stubGame();
         const npc = puck();
         openOffer.call(g, npc);
         assert.ok(npc._buyback, 'no ledger locked');
         assert.deepEqual(npc._buyback.entries, {});
-        assert.equal(g.timerStarts, 1);
     });
 
     test('a CONTAINER gets neither, even though its shim is vendor:true', () => {
         // The single subtlest line in the method. A bare `if (npc.vendor)` would
-        // newly spin a 1s setInterval and lock a buyback ledger for every wooden
-        // crate — neither of which _openContainer ever did.
+        // newly lock a buyback ledger for every wooden crate — which
+        // _openContainer never did.
         const g = stubGame();
         const shim = chestShim();
         openOffer.call(g, shim);
         assert.equal(shim._buyback, undefined, 'a chest locked a buyback ledger');
-        assert.equal(g.timerStarts, 0, 'a chest started the countdown timer');
         assert.equal(g.state, STATE.TRADE);
     });
 
@@ -302,25 +293,49 @@ describe('_openOffer', () => {
         const npc = friend();
         openOffer.call(g, npc);
         assert.equal(npc._buyback, undefined);
-        assert.equal(g.timerStarts, 0);
     });
 
-    test('a live buyback ledger survives a close and re-open; an expired one is re-locked', () => {
+    test('a buyback ledger survives a close and re-open, however long you take', () => {
         const g = stubGame();
         const npc = puck();
         openOffer.call(g, npc);
         npc._buyback.entries.soap = { rebuy: [9] };
-        const lockedAt = npc._buyback.openedAt;
+        const ledger = npc._buyback;
 
         g.state = STATE.IDLE;
         openOffer.call(g, npc);
-        assert.equal(npc._buyback.openedAt, lockedAt, 'a live ledger was thrown away');
+        assert.equal(npc._buyback, ledger, 'a live ledger was thrown away');
         assert.deepEqual(npc._buyback.entries.soap, { rebuy: [9] });
+        assert.equal(buybackLive.call(g, npc), true);
+    });
 
-        npc._buyback.openedAt = lockedAt - BUYBACK_MS - 1;
+    test('leaving the zone ends every buyback (one clock, 3f)', () => {
+        const g = stubGame();
+        const npc = puck();
+        openOffer.call(g, npc);
+        npc._buyback.entries.soap = { rebuy: [9] };
+        g.enemies = [npc, friend()];
+        endBuybacks.call(g);
+        assert.equal(npc._buyback, null);
+        assert.equal(buybackLive.call(g, npc), false);
+        assert.deepEqual(buybackList.call(g, npc), []);
+        // and the next visit starts a clean ledger
         g.state = STATE.IDLE;
         openOffer.call(g, npc);
-        assert.deepEqual(npc._buyback.entries, {}, 'an expired ledger was not re-locked');
+        assert.deepEqual(npc._buyback.entries, {});
+    });
+
+    test('_loadMap ends the buybacks — the zone boundary is the window', () => {
+        const at = mainSrc.indexOf('async _loadMap(url, spawnX, spawnY) {');
+        const end = mainSrc.indexOf('\n    }', at);
+        assert.ok(at > 0 && end > at);
+        const body = mainSrc.slice(at, end);
+        const ends = body.indexOf('this._endBuybacks()');
+        const respawn = body.indexOf('this.enemies = [];');
+        assert.ok(ends > 0 && respawn > 0, 'the zone load must end the buybacks and respawn the zone');
+        // Before the respawn: afterwards this.enemies holds the NEW zone's people,
+        // and the ledgers of the ones you left would never be closed.
+        assert.ok(ends < respawn, 'the buybacks are ended after the old zone was already replaced');
     });
 
     test('the log line says which of the three shapes opened, and names the container', () => {
@@ -355,7 +370,6 @@ describe('_closeOffer', () => {
         assert.equal(g._offerNpc, null);
         assert.equal(g._offer, null);
         assert.equal(g._offerCursor, null);
-        assert.equal(g.timerStops, 1);
         assert.equal(g.resumed, 1, 'a walk held through the menu must keep going');
     });
 
@@ -373,11 +387,10 @@ describe('_closeOffer', () => {
         assert.equal(g._offerCursor, null);
     });
 
-    test('does not stop a timer or resume walking when it was not the open screen', () => {
+    test('does not resume walking when it was not the open screen', () => {
         const g = stubGame({ state: STATE.DIALOGUE });
         closeOffer.call(g);
         assert.equal(g.state, STATE.DIALOGUE, 'clobbered another menu’s state');
-        assert.equal(g.timerStops, 0);
         assert.equal(g.resumed, 0);
     });
 

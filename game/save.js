@@ -56,6 +56,7 @@ export function serialize(game) {
         savedAt: Date.now(),
         mapUrl: game.map?.url ?? 'town-map.json',
         turn: game.turn,
+        dayClock: game._dayClock ?? 0,   // (one clock) actions into the day; a reload keeps the time
         rngState: game.rng ? game.rng.getState() : 0,
         player: {
             x: game.playerX, y: game.playerY,
@@ -171,6 +172,7 @@ export function migrate(raw) {
     if (RENAMED_MAPS[r.mapUrl]) r.mapUrl = RENAMED_MAPS[r.mapUrl];
     if (typeof r.turn !== 'number') r.turn = 0;
     if (typeof r.rngState !== 'number') r.rngState = 0;
+    if (typeof r.dayClock !== 'number' || !Number.isFinite(r.dayClock)) r.dayClock = 0;   // an older save starts at noon
     r.player = (r.player && typeof r.player === 'object') ? r.player : {};
     r.world = (r.world && typeof r.world === 'object') ? r.world : {};
     // These four are walked ELEMENT BY ELEMENT, not merely checked for
@@ -283,6 +285,8 @@ export async function loadInto(game, raw) {
     // 2. core stats + RNG stream position
     game.turn = raw.turn;
     if (game.rng) game.rng.setState(raw.rngState);
+    game._dayClock = raw.dayClock;
+    if (game._advanceDayClock) game._advanceDayClock(0);   // re-derive the light from the restored time
     game.playerHp = p.hp; game.playerMaxHp = p.maxHp;
     game.playerMp = p.mp; game.playerMaxMp = p.maxMp;
     game.gold = p.gold;

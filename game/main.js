@@ -54,7 +54,7 @@ import {
 import {
     emptyOffer, commitBlocker, stage, unstage, settledGold, resolveOffer, sameEntry,
 } from './offer.js';   // (offer screen) the basket model
-import { canTrade, buyPrice, sellPrice, transferGold, burnGold } from './trade.js'; // pricing + the transaction spine
+import { canTrade, sellPrice, transferGold, burnGold } from './trade.js'; // pricing + the transaction spine
 import { logCategory } from './combat-log.js';   // (log tagging) one rule for a message's category
 import { takeable } from './fight-panels.js';   // (combat-hud stage 4) the one answer to "what could I take"
 import { buildXmbBar, resolveXmbSelection, cycleXmbCategory, cycleXmbItem, xmbCategoryOf, XMB_LABELS } from './xmb.js';
@@ -122,34 +122,36 @@ const STATE = {
 // faster — a reprieve that scales with the threat. Tuning knob.
 const PIPE_JAM_INTEGRITY = 30;
 
-// Town Clock (feature/town-clock): the free-running world heartbeat period, in
-// ms. Ambient NPCs get one step opportunity per beat while the player is idle,
-// so the town lives without waiting for player input. Combat is unaffected — it
-// stays on the per-player-turn loop. ~500ms reads as alive but calm (faster than
-// OSRS's 0.6s tile step); tunable.
+// Town Clock (feature/town-clock): the free-running heartbeat period, in ms.
+// Out of a fight, ambient NPCs get one step opportunity per beat while the
+// player is idle, so the town looks alive without waiting for input. It moves
+// nothing else (plans/trim.md stage 3, one clock): the day and moods count the
+// player's actions, and wander draws its own dice (game.ambientRng). ~500ms
+// reads as alive but calm; tunable.
 const WORLD_TICK_MS = 500;
 
-// (Phase 6c) The reversible economy. A vendor window keeps a BUYBACK ledger for
-// BUYBACK_MS: everything you buy can be sold back for what you paid, and
-// everything you sell can be re-bought for what you got — locked prices, so you
-// can freely test item+gold combos to manage disposition, then undo. The same
-// timer is the disposition "tick clock": moods drift back toward a resting value
-// (0) on a slow cadence, so a bribe is a repeated cost, not a one-time trivialize
-// (gold-weighting research). Decay never un-allies (allies stay bought) and never
-// touches an ally's loyalty — only transient mood. All tunable.
-const BUYBACK_MS               = 5 * 60 * 1000;  // reversible-trade window (~5 min)
-const DISPOSITION_DECAY_MS     = 20000;          // free-roam: nudge one step this often
-const DISPOSITION_DECAY_TURNS  = 40;             // combat: nudge one step every N turns
+// (Phase 6c) The reversible economy. A vendor keeps a BUYBACK ledger until you
+// leave the zone: everything you sell can be re-bought for what you got — a
+// locked price — so you can freely test item+gold combos to manage disposition,
+// then undo. Moods drift back toward a resting value (0) on a slow cadence of
+// actions, so a bribe is a repeated cost, not a one-time trivialize
+// (gold-weighting research). Decay never un-allies (allies stay bought) and
+// never touches an ally's loyalty — only transient mood. All tunable.
+const DISPOSITION_DECAY_TURNS  = 40;             // nudge one step every N committed actions
 const DISPOSITION_DECAY_STEP   = 1;              // points toward resting per nudge
 
-// Town Clock day/night cycle. The overworld eases day → dusk → night → dawn on
-// its own clock, driving the lighting grade (renderer._drawLighting). DAY_LENGTH_MS
-// is a full round trip; the cosine bell below keeps most of it daytime with a
-// dusk/night/dawn stretch around "midnight." NIGHT_MAX < 1 so deep night stays a
-// cool blue rather than pitch black (the player aura + lamps keep it readable).
-// All tunable; set DAY_LENGTH_MS huge (or _nightLevel by hand) to effectively
-// freeze the cycle.
-const DAY_LENGTH_MS = 30 * 60 * 1000;  // 30 min per full day↔night↔day (tunable; relaxed/lore-first, starts at noon)
+// (one clock, 3e) The awareness-ladder rungs (perception.js) at which someone has
+// noticed you: the step that adds one of these ends a held or clicked walk.
+const AWARE_STATES = new Set(['suspicious', 'searching', 'chasing']);
+
+// Town Clock day/night cycle. The day eases day → dusk → night → dawn one step
+// per committed action — standing still never moves it — driving the lighting
+// grade (renderer._drawLighting) and the watchers' night sight.
+// DAY_LENGTH_ACTIONS is a full round trip; the cosine bell below keeps most of
+// it daytime with a dusk/night/dawn stretch around "midnight." NIGHT_MAX < 1 so
+// deep night stays a cool blue rather than pitch black (the player aura + lamps
+// keep it readable). Quest 1 takes ~200 actions, so a first run reaches dusk.
+const DAY_LENGTH_ACTIONS = 600;  // PROVISIONAL (Caelan to confirm): actions per full day, starting at noon
 const NIGHT_MAX     = 0.85;
 
 // ── Directions ───────────────────────────────────────────────────────────────
@@ -201,9 +203,9 @@ class Game {
         this.renderer = null;
         this.map      = null;
         this.turn     = 0;
-        this.worldTick = 0;   // Town Clock — free-running ambient world beat (see WORLD_TICK_MS)
+        this.worldTick = 0;   // Town Clock — ambient wander beats (see WORLD_TICK_MS)
         this._nightLevel = 0; // Town Clock day/night — 0 = full day (lighting off), 1 = deep night
-        this._dayClockMs = 0; // accumulated overworld time driving _nightLevel (see _advanceDayClock)
+        this._dayClock = 0;   // actions into the day, 0..DAY_LENGTH_ACTIONS-1, driving _nightLevel (saved)
 
         // Player
         this.playerX     = 0;
@@ -355,15 +357,13 @@ class Game {
         this._dialogueNpc = null;        // (Step 4) the NPC we're talking to, or null
         this._dialogueReply = '';        // the NPC's current line shown in the dialogue modal
         this._dialogueCursor = 0;        // selected choice row (keyboard)
-        this._tradeTimer = null;         // (Phase 6c) 1s re-render while trading so the buyback countdown ticks
         // (offer screen) The staged offer. RAM only — serialize() is a hand-written
         // allow-list and these are deliberately not on it: an offer in progress is
         // not a fact about the world, and closing always discards it.
         this._offerNpc = null;           // the partner whose offer screen is open, or null
         this._offer = null;              // the staged basket — { give, take, gold, scroll, selection }
         this._offerCursor = null;        // keyboard cursor: { side, index } (Task 13 moves it)
-        this._dispositionDecayAccMs = 0; // (Phase 6c) free-roam decay accumulator (ms)
-        this._dispositionDecayTurns = 0; // (Phase 6c) combat decay turn counter
+        this._dispositionDecayTurns = 0; // (Phase 6c) actions since the last mood nudge
 
         // Inventory: INVENTORY_SIZE slots (SAFE 0..9 + PACK 10..49), each { itemDef, count } or null
         this.inventory = new Array(INVENTORY_SIZE).fill(null);
@@ -477,6 +477,10 @@ class Game {
         // and resumable across saves (see rng.js). Reseeded fresh here; the
         // save restores the live stream position via setState.
         this.rng = new RNG();
+        // (one clock) Ambient wander's own stream, so how long you think between
+        // moves can never shift a fight's or a theft's rolls. Not saved: wander
+        // changes no outcome's dice, so a reload may pick it up anywhere.
+        this.ambientRng = new RNG();
 
         // Runtime tile mutations (portcullis / barricade / cleared cells)
         // recorded as diffs vs the map JSON so a save can re-apply them — the
@@ -601,26 +605,15 @@ class Game {
             }
         }, 250);
 
-        // World heartbeat — the Town Clock (feature/town-clock), now the FREE-ROAM
-        // half of the unified beat. A free-running timer winds the world beat so
-        // the town lives while the player stands still: day/night eases and ambient
-        // NPCs wander/chatter. In COMBAT this timer lets go (gated by _inCombat) so
-        // the player gets unhurried turn-based thinking time — the beat is wound
-        // one-per-committed-turn from _advanceWorld instead, so the world keeps
-        // advancing in lockstep with the fight rather than freezing (supersedes M1).
+        // Town heartbeat (feature/town-clock). Out of a fight, a free-running timer
+        // lets townsfolk wander and chatter while the player stands still — the look
+        // of life, and nothing more: the day and moods count actions (_worldBeat),
+        // and wander draws game.ambientRng, so thinking time changes no roll. It
+        // lets go on the splash, while paused, and in a fight, where each committed
+        // action steps the wander instead (plans/trim.md stage 3).
         setInterval(() => {
-            // Free-roam DRIVER (CD-5): the timer lets go on the splash and in combat
-            // (the per-turn hand-wind in _advanceWorld takes over there). Otherwise
-            // wind exactly one world beat, gating ambient to a settled idle frame and
-            // decaying dispositions on the wall-clock (ms) cadence.
-            if (this.state === STATE.SPLASH || this._inCombat()) return;
-            this._dispositionDecayAccMs += WORLD_TICK_MS;
-            const decayDue = this._dispositionDecayAccMs >= DISPOSITION_DECAY_MS;
-            if (decayDue) this._dispositionDecayAccMs = 0;
-            this._worldBeat({
-                ambient: this.state === STATE.IDLE && !this._animating,
-                decayDue,
-            });
+            if (this.state === STATE.SPLASH || this._paused || this._inCombat()) return;
+            if (this.state === STATE.IDLE && !this._animating) this._ambientTick();
         }, WORLD_TICK_MS);
 
         this._log('[Violencetown loaded — Town hub ready]');
@@ -659,6 +652,7 @@ class Game {
             const def = this._resolveItemDef(d.type);
             if (def) this.groundItems.push({ type: d.type, x: d.x, y: d.y, def });
         }
+        this._endBuybacks();        // (one clock) a buyback lasts until you leave the zone: close the old zone's shelves
         this.enemies = [];
         for (const s of this.map.enemySpawns) this.enemies.push(spawnEnemy(s, this._muggedIds, this._robbed));
 
@@ -671,6 +665,7 @@ class Game {
             this._injectFollowers();
         }
         this._pendingFollowers = null;
+        this._advanceDayClock(0);   // the new zone's watchers see by tonight's light at once
 
         // Live containers — copy from spawn data so opening/depositing mutates
         // the live instance, not the map definition. Map reload re-snapshots
@@ -2154,6 +2149,7 @@ class Game {
 
     _doMove(dir) {
         if (this._animating) return; // block input during animation
+        this._walkAlertBase = this._alertCount();   // (3e) who was aware of you before this step
 
         // Set facing direction
         if (dir.dy < 0) this.facing = 'up';
@@ -2553,6 +2549,13 @@ class Game {
     _onStepSettled() {
         if (this.state !== STATE.IDLE) return;
         this._maybeShowHint();
+        // (one clock, 3e) A walk carries on by itself only while nothing has
+        // started. In a fight every step needs a fresh press — a press made during
+        // the slide (the one-deep buffer) counts; a key merely still held does not
+        // — and the step on which someone became alert to you ends the walk too.
+        // This is also what keeps a held walk from cutting off the cascade's blows.
+        const fresh = !!this._queuedMoveDir;
+        const halted = this._walkHalted();
         // Manual input always OVERRIDES a click-to-walk: a held / just-pressed
         // direction cancels the path and takes over (press WASD mid-path to grab
         // the wheel back). Read the intent (folds in the one-deep buffer) first.
@@ -2561,9 +2564,15 @@ class Game {
         if (intent) {
             this._pathQueue = [];
             this._pathArrive = null;
+            if (halted && !fresh) return;
             const step = this._resolveWalkStep(intent);
             if (this._autoRepeatShouldStop(step)) return;
             this._doMove(step);
+            return;
+        }
+        if (halted && (this._pathQueue.length || this._pathArrive)) {
+            this._pathQueue = [];
+            this._pathArrive = null;
             return;
         }
         // No manual input → advance the click-to-walk path one tile, reusing the
@@ -2578,6 +2587,26 @@ class Game {
         } else if (this._pathArrive) {
             const arrive = this._pathArrive; this._pathArrive = null; arrive();
         }
+    }
+
+    // (one clock, 3e) Should a walk in progress stop before its next automatic
+    // step? Yes in a fight, and yes on the step that raised anyone's awareness of
+    // you (a townsperson turning suspicious, a guard starting to chase). The
+    // baseline is taken before each step in _doMove.
+    _walkHalted() {
+        if (this._inCombat()) return true;
+        return this._alertCount() > (this._walkAlertBase ?? Infinity);
+    }
+
+    // How many living, non-allied characters are aware of you right now —
+    // suspicious, searching or chasing on the awareness ladder (perception.js).
+    _alertCount() {
+        let n = 0;
+        for (const e of (this.enemies || [])) {
+            if (!e || e._ally || !e.entity?.isAlive?.()) continue;
+            if (AWARE_STATES.has(e.state)) n++;
+        }
+        return n;
     }
 
     // Start a click-to-walk along a BFS path (from pathing.findPath). onArrive, if
@@ -3787,17 +3816,11 @@ class Game {
         this._ensureParticleLoop();
         if (this.playerHp <= 0) { this._endCascadePhase(); this.playerHp = 0; this._die(); return; }
 
-        // Combat DRIVER (CD-5): the free-roam timer lets go so the player gets
-        // unhurried turn-based thinking time, so each committed combat turn hand-
-        // winds exactly one world beat here — keeping the town alive (ambient NPCs
-        // step, the day eases one tick) in lockstep with the fight instead of
-        // freezing it. Ambient runs every combat turn; decay counts turns. Same
-        // dual-clock split as free-roam, one shared seam (_worldBeat).
-        if (this._inCombat()) {
-            const decayDue = ++this._dispositionDecayTurns >= DISPOSITION_DECAY_TURNS;
-            if (decayDue) this._dispositionDecayTurns = 0;
-            this._worldBeat({ ambient: true, decayDue });
-        }
+        // (one clock) Every committed action winds one beat of the world, in a
+        // fight or out of one: the day steps and moods count toward their next
+        // fade. In a fight the heartbeat lets go, so the town's wander steps here
+        // too, in lockstep with the fight rather than freezing.
+        this._worldBeat({ ambient: this._inCombat() });
 
         // (zone pursuit) A wedged door takes a pounding from the pursuers trapped
         // behind it; it bursts when their blows break it.
@@ -4059,42 +4082,41 @@ class Game {
         this._ensureParticleLoop();
     }
 
-    // (CD-5) One beat of the living world: ease the day clock, optionally step
-    // ambient life, and (when its cadence is due) decay dispositions. The two
-    // DRIVERS stay separate — the free-roam heartbeat timer and the per-combat-turn
-    // hand-wind (the dual-clock is deliberate) — but this SEQUENCE is the single
-    // place both call, so "works in combat, not free-roam" drift can't creep in.
-    // `ambient` gates the ambient step (free-roam only on a settled idle frame,
-    // combat every turn); `decayDue` is the caller's cadence verdict (free-roam
-    // accumulates ms, combat counts turns).
-    _worldBeat({ ambient, decayDue }) {
+    // (one clock) One beat of the living world, wound once per committed action
+    // from _advanceWorldOnce, in and out of a fight: the day steps, and every
+    // DISPOSITION_DECAY_TURNS actions moods fade a step. `ambient` steps the
+    // town's wander too — only in a fight, where the heartbeat lets go.
+    _worldBeat({ ambient }) {
         this._advanceDayClock();
+        if (ambient) this._ambientTick();
+        if (++this._dispositionDecayTurns >= DISPOSITION_DECAY_TURNS) {
+            this._dispositionDecayTurns = 0;
+            this._tickDispositionDecay();
+        }
+    }
+
+    // Town Clock day/night — step the day clock `steps` actions (0 just re-derives,
+    // after a load or a zone change) and derive the lighting grade's _nightLevel. A
+    // cosine bell peaks at "midnight" and the (raw - 0.6)/0.4 lift keeps most of
+    // the cycle as full day, with a smooth dusk → night → dawn stretch in between.
+    _advanceDayClock(steps = 1) {
+        const n = DAY_LENGTH_ACTIONS;
+        this._dayClock = ((((this._dayClock || 0) + steps) % n) + n) % n;
+        const p   = this._dayClock / n;                       // 0..1 phase of the day
+        const raw = (1 - Math.cos(p * 2 * Math.PI)) / 2;     // 0 → 1 → 0 bell, peak at midnight
+        this._nightLevel = Math.max(0, (raw - 0.6) / 0.4) * NIGHT_MAX;
         // (Phase 6) Hand the lighting grade to everyone who can see, so perception
         // can shorten their cone after dark. Stamped rather than passed because
         // perceives() is called from the AI, the overlay and the theft gate, and
         // threading a level through all three would be three chances to disagree.
-        for (const e of this.enemies) e._nightLevel = this._nightLevel ?? 0;
-        if (ambient) this._ambientTick();
-        if (decayDue) this._tickDispositionDecay();
-    }
-
-    // Town Clock day/night — advance the overworld day clock one beat and derive
-    // the lighting grade's _nightLevel. A cosine bell peaks at "midnight" and the
-    // (raw - 0.6)/0.4 lift keeps most of the cycle as full day, with a smooth
-    // dusk → night → dawn stretch in between. The idle re-render / rAF loops pick
-    // up the new level, so the light shifts even while the player stands still.
-    _advanceDayClock() {
-        this._dayClockMs = (this._dayClockMs + WORLD_TICK_MS) % DAY_LENGTH_MS;
-        const p   = this._dayClockMs / DAY_LENGTH_MS;        // 0..1 phase of the day
-        const raw = (1 - Math.cos(p * 2 * Math.PI)) / 2;     // 0 → 1 → 0 bell, peak at midnight
-        this._nightLevel = Math.max(0, (raw - 0.6) / 0.4) * NIGHT_MAX;
+        for (const e of (this.enemies || [])) e._nightLevel = this._nightLevel;
     }
 
     // (Phase 6c) The disposition tick clock — one nudge of every non-ally NPC's
     // mood toward its resting value (0 = neutral), so bribes/gifts and insults
     // both fade over time (a bribe becomes a repeated cost, not a one-time
-    // trivialize; a slight fades). Wound on the free-roam heartbeat (time) and
-    // per-turn in combat (see the call sites). DELIBERATELY does not route through
+    // trivialize; a slight fades). Wound every DISPOSITION_DECAY_TURNS committed
+    // actions (_worldBeat), never by the clock on the wall. DELIBERATELY does not route through
     // applyDispositionDelta: that fires the upward ally-flip whenever disposition
     // ≥ threshold, which a downward decay must NOT re-trigger — and per the locked
     // decision allies stay bought (decay never un-allies). So it mutates the mood
@@ -4124,10 +4146,9 @@ class Game {
     // Military-time readout (HH:MM) derived from the day-clock phase. The cycle
     // starts at NOON — phase 0 = full day = 12:00 — and the cosine night-peak
     // lands at midnight (phase 0.5 = 00:00): clock = (12:00 + phase·24h) wrapped.
-    // Decoupled from combat turns (a fight only nudges it imperceptibly), so the
-    // sky never lurches mid-fight. Purely derived from _dayClockMs — no state.
+    // One action is 24h / DAY_LENGTH_ACTIONS. Purely derived from _dayClock.
     _timeOfDay() {
-        const p = this._dayClockMs / DAY_LENGTH_MS;            // 0..1 phase of the day
+        const p = (this._dayClock || 0) / DAY_LENGTH_ACTIONS;  // 0..1 phase of the day
         const totalMin = Math.floor(12 * 60 + p * 24 * 60) % (24 * 60);
         const hh = Math.floor(totalMin / 60);
         const mm = totalMin % 60;
@@ -4981,7 +5002,7 @@ class Game {
     // Advance the day/night clock a coarse amount (a scuffle vs. to-morning).
     _skipTime(kind) {
         const beats = kind === 'morning' ? 40 : kind === 'hours' ? 20 : 8;
-        for (let i = 0; i < beats; i++) this._advanceDayClock();
+        this._advanceDayClock(beats);
         this.turn += beats;
     }
 
@@ -5125,11 +5146,15 @@ class Game {
         // so a run replays exactly (plans/quest1-autoplay.md §5.3).
         clearSave();
         this.rng = new RNG(seed);
+        // Wander's own stream, derived from the same seed so a seeded run still
+        // replays exactly (the autoplay), yet never sharing a draw with game.rng.
+        this.ambientRng = new RNG(seed == null ? undefined : (seed ^ 0x9E3779B9) >>> 0);
         this.questEngine = new QuestEngine(this);
         this._lastAutosaveTurn = -999;
         this.turn = 0;
-        this._dayClockMs = 0;
+        this._dayClock = 0;
         this._nightLevel = 0;
+        this._dispositionDecayTurns = 0;
         // The world's memory of the old run. Cleared BEFORE _loadMap, which reads
         // it to decide what the town spawns (collected items stay gone, looted
         // enemies come back broke, pursuers follow you in).
@@ -5761,14 +5786,11 @@ class Game {
         this._offer = { ...emptyOffer(), scroll: { theirs: 0, yours: 0 }, selection: null, goldPinned: false };
         this._offerCursor = { side: 'yours', index: 0 };
         // `&& !npc._container` matters: the container shim is vendor:true, so a
-        // bare `npc.vendor` would newly spin a 1s interval and a buyback ledger
-        // for every wooden crate. _openContainer never did either.
-        if (npc.vendor && !npc._container) {
-            const now = performance.now();
-            if (!npc._buyback || (now - npc._buyback.openedAt) >= BUYBACK_MS) {
-                npc._buyback = { openedAt: now, entries: {} };
-            }
-            this._startTradeTimer();
+        // bare `npc.vendor` would newly lock a buyback ledger for every wooden
+        // crate. _openContainer never did. The ledger lasts until you leave the
+        // zone (_endBuybacks), however long you take.
+        if (npc.vendor && !npc._container && !npc._buyback) {
+            npc._buyback = { entries: {} };
         }
         this.state = STATE.TRADE;
         audio.playSfx('menu-open');
@@ -5790,7 +5812,6 @@ class Game {
         this._offer = null;
         this._offerCursor = null;
         if (this.state !== STATE.TRADE) return;
-        this._stopTradeTimer();
         this.state = STATE.IDLE;
         audio.playSfx('menu-cancel');
         this._render();              // publishes _menuPanelRect / _closeBtnRect, not just paint
@@ -6157,7 +6178,6 @@ class Game {
         // spliced; a vendor's stock is infinite and is not. Splice highest index
         // FIRST, for the same reason the bag does.
         for (const e of [...taken].sort((a, b) => (b.index ?? 0) - (a.index ?? 0))) {
-            const unit = buyPrice(e.def, d) || 0;
             for (let n = 0; n < e.count; n++) {
                 // Last line of defence. _offerBlocker refuses a full bag before
                 // any gold moves, so this should be unreachable -- but taking
@@ -6169,9 +6189,8 @@ class Game {
                 // Taking a buyback row CONSUMES its credit. The retired
                 // _buyFromVendor popped it (`e.rebuy.pop()`); nothing succeeded
                 // that line, so the shelf never emptied and one sold item could
-                // be re-bought without limit for the whole five-minute window.
+                // be re-bought without limit for as long as the ledger lived.
                 else if (e.source === 'buyback') this._buybackConsume(npc, e.def.id);
-                else                             this._buybackRecord(npc, e.def.id, 'refund', unit);
             }
         }
 
@@ -6309,20 +6328,6 @@ class Game {
         }
     }
 
-    // (Phase 6c) A 1s re-render loop while a vendor window is open, so the buyback
-    // countdown visibly ticks down (the modal is otherwise a static paused draw).
-    // Self-stops the instant we leave the trade state; cleared on close.
-    _startTradeTimer() {
-        this._stopTradeTimer();
-        this._tradeTimer = setInterval(() => {
-            if (this.state !== STATE.TRADE) { this._stopTradeTimer(); return; }
-            this._render();
-        }, 1000);
-    }
-    _stopTradeTimer() {
-        if (this._tradeTimer) { clearInterval(this._tradeTimer); this._tradeTimer = null; }
-    }
-
     // ── Dialogue (Step 4 — disposition dialogue) ─────────────────────────────
 
     // Open a conversation with `npc`. A pure menu — the world does NOT advance
@@ -6437,32 +6442,24 @@ class Game {
     }
 
     // ── Buyback ledger (Phase 6c) ─────────────────────────────────────────────
-    // npc._buyback.entries[itemId] = { rebuy: [price…], refund: [price…] } — a
-    // LIFO stack of PER-UNIT locked prices, one per credit. A market BUY pushes a
-    // refund credit (sell it back for what you paid); a market SELL pushes a rebuy
-    // credit (buy it back for what you got). Undo pops the matching unit's own
-    // price and creates no new credit (no ping-pong). Per-unit prices are the
-    // anti-exploit: buying the same item cheap then dear no longer lets you refund
-    // both at the dearer price (a gold-dup fixed in the pre-prod review). Self-
-    // expires after BUYBACK_MS.
+    // npc._buyback.entries[itemId] = { rebuy: [price…] } — a LIFO stack of
+    // PER-UNIT locked prices, one per credit. A market SELL pushes a rebuy credit
+    // (buy it back for what you got); buying it back pops that unit's own price
+    // and creates no new credit (no ping-pong). Per-unit prices are the
+    // anti-exploit: selling the same item cheap then dear no longer lets you buy
+    // both back at the cheaper price (a gold-dup fixed in the pre-prod review).
+    // The ledger lasts until you leave the zone (_endBuybacks on _loadMap).
     _buybackLive(npc) {
-        return !!(npc._buyback && (performance.now() - npc._buyback.openedAt) < BUYBACK_MS);
-    }
-    // Milliseconds left in the buyback window (0 when expired / no ledger). The
-    // renderer reads this for the countdown so BUYBACK_MS stays in this module.
-    _buybackRemainingMs(npc) {
-        if (!npc._buyback) return 0;
-        return Math.max(0, npc._buyback.openedAt + BUYBACK_MS - performance.now());
-    }
-    _buybackEntry(npc, itemId) {
-        return npc._buyback && npc._buyback.entries[itemId];
+        return !!(npc && npc._buyback);
     }
     _buybackRecord(npc, itemId, kind, price) {
-        if (!npc._buyback) return;
-        const e = npc._buyback.entries[itemId] ||
-            (npc._buyback.entries[itemId] = { rebuy: [], refund: [] });
-        if (kind === 'rebuy') e.rebuy.push(price);
-        else                  e.refund.push(price);
+        if (!npc._buyback || kind !== 'rebuy') return;
+        const e = npc._buyback.entries[itemId] || (npc._buyback.entries[itemId] = { rebuy: [] });
+        e.rebuy.push(price);
+    }
+    // Leaving the zone closes every vendor's buyback shelf.
+    _endBuybacks() {
+        for (const e of (this.enemies || [])) if (e) e._buyback = null;
     }
     // Spend one unit's rebuy credit -- the LIFO counterpart of _buybackRecord's
     // push, and what makes the shelf a finite undo rather than a duplicator.

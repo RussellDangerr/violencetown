@@ -594,7 +594,7 @@ export function resolveAmbientTurns(game) {
         // whitelist still gates who actually MOVES inside tickNpcState — IDLE-only
         // NPCs stay put; WANDER/WORKING NPCs roam/labour while the player stands still.
         if (npc.allegiance === 'neutral') {
-            const npcMessages = tickNpcState(game, npc, game.worldTick);
+            const npcMessages = tickNpcState(game, npc, game.worldTick, game.ambientRng || game.rng);
             for (const m of npcMessages) messages.push(m);
         }
     }
