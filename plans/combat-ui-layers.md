@@ -180,6 +180,7 @@ Caelan's directive: "the options tree and the navigation of those keyboard short
 - Target switch (Tab): 0ms transition, instant highlight change
 
 **Input responsiveness:**
+- *(Superseded 2026-10-03 in part: TM-6 kept a one-step buffer for walking, `plans/turn-model.md`. The rest stands.)*
 - Every input registers on keydown, not keyup. No input buffering during animations — if the player presses a key during a 100ms slide-in, the animation completes instantly and the input is processed. Never make the player wait for an animation to finish.
 - Double-tap optimization: pressing Up twice in rapid succession from IDLE should bump + Attack without the player needing to wait for the overlay to fully animate. The overlay appears AND the attack resolves — the player sees the result, not the menu.
 - Escape from any depth to IDLE: if the player mashes Escape 3 times quickly, all layers peel off in rapid succession (50ms each = 150ms total) and they're back to walking. No "are you sure?" prompts. No confirmation dialogs. Escape means escape.

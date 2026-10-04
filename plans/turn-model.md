@@ -6,6 +6,11 @@
 and said whether the order reads as comedy or only as slower. Open rulings: TM-7..9 (ties, where the
 player sits, where speed comes from), TM-1..6 where still relevant.
 
+**Rulings, 2026-10-03 (the trim pass):** TM-1/2 yes, TM-5 fire on pick, TM-6 keep the buffer, TM-8
+player first with rare interrupts, TM-9 a speed number per character; TM-7 (ties) is still open; the
+Speed Poition gets reworked for the speed order. The cascade itself is not played yet, so the C1
+verdict still gates step 2. The table under *Rulings owed* is the record.
+
 ## Why
 
 Caelan, answering ruling A3 on 2026-09-24:
@@ -313,12 +318,12 @@ still swings (offered as a separate task).
 | Code | Question | Recommended |
 | --- | --- | --- |
 | **TM-0** | ~~Which reading?~~ **Answered 2026-09-28: a hybrid, for comedy — reading C.** | — |
-| **TM-1** | A round's budget: how many tiles (M), and one action? Is an item a separate "bonus" action, as BG3 has? | M = 2, one action; items spend the action until it is played |
-| **TM-2** | Do enemies get the same round — move and act? | Yes, eventually; the first cut leaves them as they are, to measure |
+| **TM-1** | ~~A round's budget: how many tiles (M), and one action?~~ **Ruled 2026-10-03: yes — a turn lets you move a little and act**, as BG3 does. M and the item question are step 2's to size | M = 2, one action; items spend the action until it is played |
+| **TM-2** | ~~Do enemies get the same round — move and act?~~ **Ruled 2026-10-03: yes**, enemies get the same round | Yes, eventually; the first cut leaves them as they are, to measure |
 | **TM-3** | Per round or per step: DoTs, buffs, MP regen, summons, disposition decay | All per round; ambient and the day per step |
 | **TM-4** | "Slim down the game" — what goes? | His to say; nothing here assumes an answer |
-| **TM-5** | The reticle's Space on Cleave/Fireball/Throw — keep, or commit on the nudge the way Hit commits on a direction? | Keep for now: it places a target, it does not confirm a choice |
-| **TM-6** | The one-deep step buffer vs "no input buffering" | Keep it: it smooths a held walk; it is not the planning-ahead queue he rejected |
-| **TM-7** | ~~Who decides the order?~~ **Answered 2026-09-28: speed, a JRPG round-robin.** Ties? | Ties by a stable per-fight shuffle — his RuneScape PID, where the advantage is real but not permanent |
-| **TM-8** | Where does the player sit in the order? A press resolves at once (the snap), so a faster enemy cannot go "before" it — unless a fast enemy may interrupt | Player always first, on the press; the room follows by speed. Interrupts later, as a rare enemy trait |
-| **TM-9** | Where speed comes from. No character has a speed stat today; the only speed is the Speed Poition's haste/slow charges (`items.js:422`, `worldBeatPlan`) | A `speed` on every character (default 0), set per enemy type; the poition raises yours for N turns |
+| **TM-5** | ~~The reticle's Space on Cleave/Fireball/Throw — keep, or commit on the nudge?~~ **Ruled 2026-10-03: fire as soon as the target is picked.** Drop the extra Space | Keep for now: it places a target, it does not confirm a choice |
+| **TM-6** | ~~The one-deep step buffer vs "no input buffering"~~ **Ruled 2026-10-03: keep the buffer.** Movement still feels rough, so more small movement smoothing is welcome | Keep it: it smooths a held walk; it is not the planning-ahead queue he rejected |
+| **TM-7** | ~~Who decides the order?~~ **Answered 2026-09-28: speed, a JRPG round-robin.** Ties: **still open** (2026-10-03) | Ties by a stable per-fight shuffle — his RuneScape PID, where the advantage is real but not permanent |
+| **TM-8** | ~~Where does the player sit in the order?~~ **Ruled 2026-10-03: first, on the press; rare fast enemies may interrupt** | Player always first, on the press; the room follows by speed. Interrupts later, as a rare enemy trait |
+| **TM-9** | ~~Where speed comes from.~~ **Ruled 2026-10-03: every character gets a speed number, set per enemy type.** The Speed Poition is reworked for the speed order: today its haste/slow makes you act *more often* (`items.js`, `worldBeatPlan`) | A `speed` on every character (default 0), set per enemy type; the poition raises yours for N turns |

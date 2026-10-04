@@ -1,6 +1,15 @@
 # Trim — batch 1: records, cuts and one clock
 
-**Status:** spec, not built. Branch `chore/trim`, cut from `dev` at `df65952`.
+**Status:** being built (2026-10-04). Branch `chore/trim`, cut from `dev` at `df65952`.
+
+**Order as built:** stages 1, 2 and 4 on `chore/trim`, then stage 3 on `fix/one-clock` cut **from
+`chore/trim`** (not from `dev` after a merge), so the one-clock work sits on top of the trim and
+never has to reconcile with it. Both branches stop pushed; the merge to `dev` is Caelan's call.
+
+**Provisional defaults (PROVISIONAL — Caelan to confirm):**
+- A day is **600 actions** (stage 3b).
+- Poitions (4a): **Puck sells Health and Mana; Gold sits in a sewer chest; Strength in a Factory
+  chest.**
 
 ## Why
 
@@ -20,7 +29,7 @@ gets its own branch, per CLAUDE.md.
 | --- | --- | --- |
 | 1 | Write the rulings into the docs that own them | `chore/trim` |
 | 2 | Cut what he ruled out, and the dead code nobody can see | `chore/trim` |
-| 3 | One clock: game state moves when you act, never on wall time | `fix/one-clock` (after `chore/trim` merges) |
+| 3 | One clock: game state moves when you act, never on wall time | `fix/one-clock` (cut from `chore/trim`) |
 | 4 | Three small wins: placed poitions, scoped theft cones, edge trees behind | `chore/trim` |
 
 Stage 3 gets its own branch because it is the only stage that changes how the game plays and will

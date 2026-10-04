@@ -98,6 +98,10 @@ the wheel at each depth, and the dial/tower backing.
   | Canyon | `{ "tile": 0 }` — its wall (WALL) |
   | Bank, Casino, Diner, Borgir | none — black, as Pokémon interiors are |
 
+  *Ruled 2026-10-03 (SF): the table stands; vary the forest later (an art pick); and draw the
+  filler trees behind everything, so the row past the south edge never covers the map's last row
+  (`plans/trim.md` 4c).*
+
 - **A known consequence:** you see much more of each map at once (on Caelan's monitor, all of
   Town's width), and watchers from further away. Accepted — it is the point.
 
