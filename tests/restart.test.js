@@ -139,7 +139,7 @@ async function lateRun() {
     // Not saved, but a run's all the same.
     g._peakDisposition = 90;
     g._ratFormTurns = 2;
-    g._dayClockMs = 123456;
+    g._dayClock = 123;
     g._nightLevel = 0.8;
     g._lastHitTarget = 'rat_1';
     g._lastDefeatedBy = { cause: 'sludge' };
@@ -232,7 +232,7 @@ describe('RESTART begins a brand-new game', () => {
         const fresh = await freshGame();
         const g = await lateRun();
         await g._fullReset();
-        for (const f of ['_peakDisposition', '_ratFormTurns', '_dayClockMs', '_nightLevel',
+        for (const f of ['_peakDisposition', '_ratFormTurns', '_dayClock', '_nightLevel',
                          '_lastHitTarget', '_lastDefeatedBy', '_cameFrom', '_pendingFollowers']) {
             assert.deepEqual(g[f], fresh[f], `${f} survives RESTART`);
         }

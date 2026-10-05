@@ -1,6 +1,7 @@
 # Trim — batch 1: records, cuts and one clock
 
-**Status:** being built (2026-10-04). Branch `chore/trim`, cut from `dev` at `df65952`.
+**Status:** built, verified, pushed, not merged (2026-10-04). `chore/trim` @ `011c112` (stages 1, 2, 4);
+`fix/one-clock` (stage 3) on top of it. Results in *As built* at the end. The merge to `dev` is Caelan's call.
 
 **Order as built:** stages 1, 2 and 4 on `chore/trim`, then stage 3 on `fix/one-clock` cut **from
 `chore/trim`** (not from `dev` after a merge), so the one-clock work sits on top of the trim and
@@ -181,3 +182,90 @@ Later batches each get their own branch and spec when Caelan picks them. The can
 ground, a varied forest), the robbery loss in the sewer, monsters following you selectively,
 the Forest zone past the Graveyard, critical hits with the weakness chart, goo and conveyor floors,
 Carrion's shop, the Bank and Casino, and turn-model step 2.
+
+---
+
+## As built (2026-10-04)
+
+Built autonomously overnight. Every stage was committed only behind a green `npm test`; each
+branch passed the naming gate (0 lines), `balance:check` (no drift) and `autoplay:check`, then a
+real load in headless Chrome over CDP against `dev-server.py`, with a clean console.
+
+| Stage | Commit | Branch | Tests (tests / suites / fail) |
+| --- | --- | --- | --- |
+| baseline | `5aff276` | `chore/trim` | 1811 / 322 / 0 |
+| 1 records | `6d6522d` | `chore/trim` | 1811 / 322 / 0 |
+| 2 cuts | `405834a` | `chore/trim` | 1809 / 322 / 0 (the two Recover tests went with Recover) |
+| 4 small wins | `011c112` | `chore/trim` | 1820 / 324 / 0 |
+| 3 one clock | `cb6dcc3` | `fix/one-clock` | 1848 / 331 / 0 |
+
+**Stage 1.** Roadmap §2 carries a ruling on every row the trim answered; R (rings) and DZ stay
+open. `turn-model.md` records TM-1/2/5/6/8/9; TM-7 (ties) is written as open. Superseded banners on
+`ROADMAP.md`, `unlimited-moves-item-use.md`, the matrix's 1A/1C and combat-ui-layers' buffering
+line. ENT and SF are noted in `entrance-feel-pass.md` and `screen-fill.md`.
+
+**Stage 2.** Cut: the Rappel Chain (item, icon, Macc's stock, his canyon line), the Tome of Ray
+Blast and the `learn` use, `game/particles.html`, the `bruiser` balance row (`balance:check` no
+drift), and the written-never-read leftovers: `extraMoves`, `_pendingWalkDir`, `_animFrame`,
+`ownedItems()`, `_findAdjacentDialogueNpc`, `suppressedSkills`, the `blind` multiplier, the Recover
+buff, `map.bossRoom` and the sewer's field (map-audit output identical without it). Carrion is she.
+Four stale comments rewritten. Smoke: Macc's offer opens with an empty shelf, keeps his converter
+buy and closes cleanly; Carrion's patched-up loss reads her/she.
+- Kept, and why: `rings.js` `isActive` (rings are open; `tests/rings.test.js` pins it); the −15
+  row of the enemy default-kit table in `enemies.js` (a game kit table, not the balance tier; no
+  enemy sits in that band); `plans/game-plan.md`'s mention of particles.html (a superseded doc).
+- `tests/log-tagging.test.js`'s non-empty guard now counts the two `_log` calls buffs.js has left.
+
+**Stage 4.** Poitions placed (see the provisional defaults below; pinned by
+`tests/poition-placement.test.js`). Theft aim with nobody alert shows only the watchers whose
+sight range reaches the theft's tile; if none does, the field stays quiet (smoke: 3 of 9 cones
+beside a townsperson, none out of reach). `actorOrder` draws the edge filler behind everything
+(smoke: on Town's last row the player draws after all 799 filler trees south of it).
+
+**Stage 3.** 3a-3f as specced, with these details:
+- 3b: `_dayClockMs` is now `_dayClock` (actions) and is saved (`dayClock`, top level); an older
+  save starts at noon. `_skipTime` keeps its counts (8 / 20 / 40), so a defeat now skips more of
+  the shorter day. A zone load re-stamps the new zone's watchers with the light.
+- 3d: `game.ambientRng` is not saved (wander changes no outcome's dice); RESTART seeds it from the
+  run seed so a seeded run still replays exactly.
+- 3e: "spotted" means the step that raised anyone's awareness (suspicious, searching or chasing).
+  A clicked path with an action at its end drops the action too when a fight starts.
+- 3f: the ledgers are closed before `_loadMap` replaces the old zone's people. Selling still
+  writes a rebuy credit; buying no longer writes the refund credit nothing spent.
+- Smoke: paused 3 s, 0 ambient beats and nobody moved (unpaused: 6 beats, people moved, the day
+  did not); 10 trusted presses = 10 actions on the clock; at 200 actions it is 20:00, night level
+  0.32, and the screen measurably darker; a save at 200 reloads through CONTINUE at 20:00; a held
+  walk toward a facing hostile stops on the step it is spotted (control without the foe: 16 steps),
+  and one fresh press then steps once; a buyback row survives a re-open and a wait, and is gone
+  after leaving the zone.
+
+**Autoplay golden.**
+
+| Run | Before (`dev`) | After `chore/trim` | After `fix/one-clock` |
+| --- | --- | --- | --- |
+| fighter | 185 turns, 5 deaths, `7e52bdbe` | same stats, `d660681f` | 113 turns, 3 deaths, `ac7557e6` |
+| sneak | 213 turns, 5 deaths, `615e56c7` | same stats, `9b4da790` | 223 turns, 6 deaths, `7b270cb0` |
+
+- On `chore/trim` only the fingerprints moved. Reverting map data a piece at a time traced them to
+  Macc's saved stock (`["chain"]` → `[]`, the stage 2 cut), not to the poitions: neither run opens
+  the bloom-cache or visits the Factory.
+- On `fix/one-clock` both profiles still finish quest 1. Ablation traces every stat delta to 3d:
+  with wander put back on `game.rng`, every stage matches the old golden exactly (only the
+  fingerprint differs, since the save now carries the day clock). Freezing the day, or turning
+  mood decay off, changes nothing in either run. Wander used to spend `game.rng` draws between
+  actions; now it does not, so every later fight roll is reshuffled.
+
+**Provisional defaults (PROVISIONAL — Caelan to confirm):**
+- A day is 600 actions (`DAY_LENGTH_ACTIONS`). Quest 1 now reaches dusk near its end.
+- Puck sells Health and Mana; Gold sits in the sewer's bloom-cache (with the Defence poition);
+  Strength sits in a new Factory chest, `factory-locker` at (2,27).
+
+**Deferred:**
+- **TheDangerrZone delete** — needs Caelan's yes: the files are untracked, so git cannot bring
+  them back.
+- **The `GAP` / `BOSS_TRIGGER` tile cut** — overlaps the unmerged `feature/tiled-pipeline`
+  (`data.js`, `sprites.js`, `tile-coverage.test.js`); do it after that branch merges.
+- **Reseed the roadmap board** (`tools/roadmap-board/`) after the merge; it still shows the A1
+  row as open.
+- The Speed Poition waits on its rework for the speed order (TM-9).
+

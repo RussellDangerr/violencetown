@@ -758,3 +758,25 @@ describe('a save corrupted on disk is coerced, not obeyed', () => {
         assert.ok(Number.isFinite(e.entity.hp / e.entity.maxHp));
     });
 });
+
+describe('the day clock round-trips (one clock, plans/trim.md 3b)', () => {
+    test('a reload keeps the time of day, and re-derives the light from it', async () => {
+        const src = makePopulatedGame();
+        src._dayClock = 250;
+        const blob = JSON.parse(JSON.stringify(serialize(src)));
+        assert.equal(blob.dayClock, 250);
+
+        const dst = makeBlankGame();
+        let rederived = null;
+        dst._advanceDayClock = function (steps) { rederived = { steps, at: this._dayClock }; };
+        await loadIntoReal(dst, blob);
+        assert.equal(dst._dayClock, 250);
+        assert.deepEqual(rederived, { steps: 0, at: 250 }, 'the light was not re-derived after the clock was restored');
+    });
+
+    test('an older save without a day clock starts at noon', () => {
+        assert.equal(migrate({}).dayClock, 0);
+        assert.equal(migrate({ dayClock: 'dusk' }).dayClock, 0);
+        assert.equal(migrate({ dayClock: 412 }).dayClock, 412);
+    });
+});

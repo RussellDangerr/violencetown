@@ -14,12 +14,12 @@ export function hash32(str) {
     return (h >>> 0).toString(16).padStart(8, '0');
 }
 
-// Everything a save carries except when it was written, plus the two world
-// clocks a save leaves out.
+// Everything a save carries except when it was written (the day clock among
+// it), plus the ambient wander clock a save leaves out.
 export function runState(game) {
     const save = serialize(game);
     delete save.savedAt;
-    return { save, dayClockMs: game._dayClockMs ?? null, worldTick: game.worldTick ?? null };
+    return { save, worldTick: game.worldTick ?? null };
 }
 
 export const fingerprint = (game) => hash32(JSON.stringify(runState(game)));

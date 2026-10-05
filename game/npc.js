@@ -89,7 +89,10 @@ function useKit(npc, messages) {
     return true;
 }
 
-export function tickNpcState(game, npc, clock = game.turn) {
+// `rng` is the stream a wander target is drawn from: game.rng on the per-turn
+// loop, game.ambientRng on the town's heartbeat (resolveAmbientTurns), so the
+// ambient wander never spends a draw a fight or a theft would have used.
+export function tickNpcState(game, npc, clock = game.turn, rng = game.rng) {
     // Lazy initialization — pick a starting state. Allegiance decides first
     // (a born-hostile with null `behavior` has no whitelist to read); otherwise
     // fall back to the ambient whitelist: prefer IDLE, else the first allowed
@@ -146,7 +149,7 @@ export function tickNpcState(game, npc, clock = game.turn) {
         }
 
         case STATE.WANDER: {
-            const target = pickWanderTarget(game, npc);
+            const target = pickWanderTarget(game, npc, rng);
             if (target) {
                 const step = getGreedyStep(
                     game,
@@ -637,9 +640,9 @@ function findNearestWantedItem(game, npc) {
 // region (defined in map JSON's `regions` array). If no valid candidate
 // exists, returns null and the NPC stays put this tick.
 //
-// Pulls from the seeded RNG (game.rng) so wander targets are deterministic
-// and resumable across saves — the save persists the live RNG stream and
-// restores it on load.
+// Pulls from a seeded RNG so wander targets are deterministic: game.rng on the
+// per-turn loop (saved and resumed with the run), game.ambientRng for the town's
+// ambient wander (one clock, plans/trim.md 3d).
 
 // One step back toward this character's post, or false if it is already there,
 // has no post, or is the sort that roams by design.
@@ -687,7 +690,7 @@ function endRobbedSweep(game, npc) {
     }];
 }
 
-function pickWanderTarget(game, npc) {
+function pickWanderTarget(game, npc, rng = game.rng) {
     const radius = npc.wanderRadius ?? 3;
     const region = npc.homeRegion ? game.map.getRegion(npc.homeRegion) : null;
 
@@ -711,5 +714,5 @@ function pickWanderTarget(game, npc) {
     }
 
     if (candidates.length === 0) return null;
-    return game.rng.pick(candidates);
+    return rng.pick(candidates);
 }
