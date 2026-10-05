@@ -100,10 +100,12 @@ before you read the PR.
   |---|---|---|
   | vermin | −80 | 0–5 |
   | fodder | −30 | 5–20 |
-  | bruiser | −15 | 15–40 *(still an open question — ruling A1)* |
   | standard | 0 | 20–60 |
   | **tough** | **+5** | **60–100** |
   | elite | +10 | 100–200 |
+
+  *(Ruling A1, 2026-10-03: the interpolated `bruiser` row at −15 was folded into its neighbours;
+  −29…0 prices as `standard`.)*
 
   **Durability and wallet move together.** Re-roling the roster up the armor ladder without funding
   the wallets raised 11 Law 4 flags at once — the Law working, not noise. A zone's faucet rising is

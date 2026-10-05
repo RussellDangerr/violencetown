@@ -147,10 +147,9 @@ export class Enemy {
         // Law 6f (plans/gold-standard-design.md): the potions/gear this enemy
         // carries — an array of item ids (resolveLoadout below resolves them to
         // real defs; legacy { name, value } literals still count too, for old
-        // saves/fixtures). Value counts toward Challenge GP (challengeGp below)
-        // but is NOT yet consumed by AI (not USED in a fight); that lands with
-        // boss spending policies. Loot stays liquid gold only — a loadout item
-        // never becomes lootable coin on death.
+        // saves/fixtures). Value counts toward Challenge GP (challengeGp below),
+        // and a hurt enemy eats from it in a fight (ai.js kitChoice). Loot stays
+        // liquid gold only — a loadout item never becomes lootable coin on death.
         loadout = null,
         // Town Clock (feature/town-clock): heartbeat-driven ambient NPC. When
         // true, this NPC is advanced by the free-running world tick
@@ -260,11 +259,8 @@ export class Enemy {
         this.ambient       = ambient;
         this.sewerDweller  = !!sewerDweller;
 
-        // Debuffs / buffs — symmetric with Game.buffs[] on the player side.
-        // Used by Poke (applies Blind), Poison (DoT, future), Stun (skip
-        // turn, future), etc. Combat-side effect reads inside
-        // applyDamageToPlayer's single computeHit call (main.js) — e.g.,
-        // enemy.hasBuff('blind') halves its outgoing damage there.
+        // Debuffs / buffs — symmetric with Game.buffs[] on the player side
+        // (DoTs, fear, the poition riders), ticked by the same BUFF_EFFECTS table.
         this.buffs = [];
     }
 
@@ -282,10 +278,8 @@ export class Enemy {
     hasBuff(id)    { return this.buffs.some(b => b.id === id); }
 
     // Runs the shared buff table (buffs.js) — the same helper the player's
-    // _tickBuffs uses, so the two sides can't silently diverge again. Enemy buffs
-    // currently carry no onTick/onExpire (blind is read at attack time, feared is a
-    // movement override), so this just decrements + expires — but any future enemy
-    // status hook lands here for free.
+    // _tickBuffs uses, so the two sides can't silently diverge again: an enemy's
+    // DoTs tick here (feared is a movement override in resolveEnemyTurns).
     tickBuffs(game) {
         tickBuffList(this.buffs, this, game, null);
     }

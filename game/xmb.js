@@ -3,8 +3,8 @@
 // The always-live bottom bar is a VIEW over game.inventory, not a separate
 // container: it filters the bag for "usable" items (throw / self-consumable)
 // and groups them into horizontal categories, each with a vertical item column.
-// Gear (useType:'equip'), quest/inert items (useType:'none'), learn tomes and
-// the melee weapon never appear here — they live in the bag or on the body.
+// Gear (useType:'equip'), quest/inert items (useType:'none') and the melee
+// weapon never appear here — they live in the bag or on the body.
 
 export const XMB_CATEGORIES = ['throw', 'drink', 'eat'];   // left-to-right bar order
 export const XMB_LABELS = { throw: 'THROW', drink: 'DRINK', eat: 'EAT' };

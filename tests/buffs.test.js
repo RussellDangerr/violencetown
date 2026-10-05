@@ -43,21 +43,6 @@ describe('buff table + shared tick (PD-4)', () => {
         assert.equal(g.playerHp, 100, 'an immune player takes no sludge damage');
     });
 
-    test('recover onExpire heals pendingHeal when the buff drops', () => {
-        const g = fakeGame({ playerHp: 40 });
-        const buffs = [{ id: 'recover', name: 'Recover', turns: 1, type: 'buff', pendingHeal: 25 }];
-        tickBuffList(buffs, g, g, null);
-        assert.equal(g.playerHp, 65, 'healed by pendingHeal on expiry');
-        assert.equal(buffs.length, 0);
-    });
-
-    test('recover heal clamps to max HP', () => {
-        const g = fakeGame({ playerHp: 90, playerMaxHp: 100 });
-        const buffs = [{ id: 'recover', name: 'Recover', turns: 1, type: 'buff', pendingHeal: 50 }];
-        tickBuffList(buffs, g, g, null);
-        assert.equal(g.playerHp, 100, 'heal clamps to max HP');
-    });
-
     test('a hook-less buff just decrements + expires, firing the expiry log once', () => {
         const g = fakeGame();
         const buffs = [{ id: 'guard', name: 'Guard', turns: 2, type: 'buff' }];

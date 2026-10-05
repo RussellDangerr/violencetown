@@ -301,7 +301,7 @@ describe('Law 4 role bands derived from armor', () => {
     test('armor already encodes the role ladder', () => {
         assert.equal(bandForArmor(-80).role, 'vermin');
         assert.equal(bandForArmor(-30).role, 'fodder');
-        assert.equal(bandForArmor(-15).role, 'bruiser');
+        assert.equal(bandForArmor(-15).role, 'standard');   // ruling A1: -15 folds into standard
         assert.equal(bandForArmor(-5).role, 'standard');
         assert.equal(bandForArmor(0).role, 'standard');
         assert.equal(bandForArmor(10).role, 'elite');

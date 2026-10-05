@@ -87,7 +87,8 @@ describe('buffs report themselves as combat', () => {
 
     test('every game._log in buffs.js carries a category', () => {
         const calls = buffsSrc.match(/game\._log\(.*?\);/g) || [];
-        assert.ok(calls.length >= 3, `expected several _log calls in buffs.js, found ${calls.length}`);
+        // The DoT line and the mana line (Recover's heal line left with Recover, 2026-10).
+        assert.ok(calls.length >= 2, `expected the _log calls in buffs.js, found ${calls.length}`);
         for (const call of calls) {
             assert.ok(/,\s*'[a-z-]+'\s*\)/.test(call),
                 `untagged buff message — it will file under 'system': ${call}`);

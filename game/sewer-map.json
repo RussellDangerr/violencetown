@@ -5,10 +5,6 @@
     "x": 1,
     "y": 10
   },
-  "bossRoom": {
-    "x": 18,
-    "y": 10
-  },
   "tiles": [
     0,
     0,
@@ -861,6 +857,7 @@
       "y": 2,
       "contents": [
         "defence_poition",
+        "gold_poition",
         "bandage",
         "soap"
       ]
