@@ -64,11 +64,10 @@ describe('harness math', () => {
         const flags = lintEntity({ type: 'Rat', hp: 100, armor: -80, damage: 6, gold: 50, vermin: true });
         assert.ok(flags.some(f => f.includes('vermin')));
     });
-    test('loadMapRoster reads real map JSONs and skips snapshots', () => {
+    test('loadMapRoster reads real map JSONs', () => {
         const roster = loadMapRoster();
         assert.ok(roster.length > 0);
         assert.ok(roster.every(e => e.zone && e.type));
-        assert.ok(!roster.some(e => e.zone.includes('TheDangerrZone')));
     });
     test('REFERENCE_DAMAGE is the act-1 anchor', () => assert.equal(REFERENCE_DAMAGE, 20));
     test('ttd is "-" for a 0-damage entity — 0 means the hit does not happen', () => {

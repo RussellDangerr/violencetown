@@ -141,7 +141,7 @@ Three things the graph makes visible that the lists did not:
 
 Ordered by how much each unblocks. **The trim pass of 2026-10-03 ruled on every row still open;**
 batch 1 (`plans/trim.md`) builds the small ones, and the rest wait for a branch of their own. Still
-open after it: R (rings, with Hide) and DZ (needs his yes).
+open after it: R (rings, with Hide) and DZ (needs his yes) — both ruled 2026-10-06, below.
 
 | # | Ruling | What it gates | Source |
 |---|---|---|---|
@@ -153,8 +153,8 @@ open after it: R (rings, with Hide) and DZ (needs his yes).
 | **Z2** | **RULED 2026-10-03 — later**, with Z1. *Question:* no slot machine or vault door exists in any pack. Ship a boxy-cabinet proxy, or leave them text-only? | Zone §1 interiors | `zone-identity` §1 |
 | **CG** | **RULED 2026-10-03 — the Carnival gets a ground of its own.** An art pick for a later batch: a cell no other tile draws, then drop the shared-cell test's one open exception. *Was:* `CIRCUS_GROUND` and `ROAD` draw the same cell, over 892 of the carnival's 1,276 cells. | Zone identity's bar for the carnival | `zone-identity` §3 findings |
 | ~~**B3**~~ | **DONE 2026-09-25 — ruled: Cone of Cold stays at 14 dmg / 10 MP; area spells get their own floor.** `lintSkills` reads area from a spell's `aoe` (`isAreaSpell`) and holds it to `SPELL_AREA_MIN_RATE` = 1.0 dmg/MP per target (Cleave's ⅔ of the 1.5 floor). The balance lint is at zero flags; `tests/balance-harness.test.js` pins the exemption. | Lint credibility | this row |
-| **R** | **Open — one conversation with Hide and Rat Form.** Two rings exist (`rat_ring`, `fire_ring`) and one fusion (`game/ring-data.js`). Author to ~12, or cut? Kept as they are until that talk. | Whether the ring system is a feature or a fossil | systems-audit §3.1 |
-| **DZ** | **Open — recommendation: delete.** The eight `*-TheDangerrZone.*` files in `game/` are untracked and git-ignored, so they exist only on Caelan's machine; deleting them also drops their `.gitignore` lines and test exclusions. Not done until Caelan says yes: git cannot recover an untracked file. | Repo clarity | `plans/trim.md` stage 2 |
+| ~~**R**~~ | **RULED 2026-10-06 — keep the rings, grow them later.** The two rings (`rat_ring`, `fire_ring`) and the Ember Rat fusion stay as they are; authoring more is its own branch when picked. **Hide is cut**: the wheel's Flight > Hide was a stub that spent the turn and did nothing, and sneaking already works by position and facing. | Whether the ring system is a feature or a fossil | systems-audit §3.1 |
+| ~~**DZ**~~ | **DONE 2026-10-06 — deleted** at Caelan's word. The eight untracked `game/*-TheDangerrZone.*` files are gone, with their `.gitignore` rule and the test and harness exclusions that named them. | Repo clarity | this row |
 | ~~**D1**~~ | **DONE 2026-09-20** — archived as tag `archive/diagonal-prototype-2026-06-14` and the branch deleted. Audited first: nothing unreleased in it; dev's versions of its diagonal movement were further along. | Branch hygiene | this row |
 | **P1** | **RULED 2026-10-03 — build a touch layout.** A later batch. *Was:* phone tap targets render at half their designed size — nothing on the canvas clears Apple's 44pt (a tile is 16 CSS px on a phone, the dock's ✦ 36 px; the page's ☰ and ▤ are 44 px). | Mobile demo viability | `demo-readiness` §2.1 |
 | ~~**P2**~~ | **DONE 2026-09-25 — ruled: delete the orphan.** `_endChapterOne()`, the `ending` state and its card (`_drawEndingOverlay`, PRESS N TO PLAY AGAIN) are gone; they had no caller. The bridge plays its cutscene into Chapter Two, as it has since `a83cdd4`. `_fullReset` stays: RESTART uses it. | Demo has a stopping point | `demo-readiness` §2.2 |

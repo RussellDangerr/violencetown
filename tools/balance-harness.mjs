@@ -374,7 +374,7 @@ export function lintItems() {
     return flags;
 }
 
-// ── Roster: scan game/*-map.json, skip TheDangerrZone snapshots ────────────
+// ── Roster: scan game/*-map.json ───────────────────────────────────────────
 //
 // Real shape found in game/town-map.json (and every other current map): a
 // top-level `enemies` array of spawn objects — `{ id, type, x, y, hp, damage,
@@ -385,7 +385,7 @@ export function lintItems() {
 // (enemies.js): gold 0, loadout null.
 export function loadMapRoster() {
     const files = fs.readdirSync(GAME_DIR)
-        .filter(f => f.endsWith('-map.json') && !f.includes('TheDangerrZone'))
+        .filter(f => f.endsWith('-map.json'))
         .sort(byCodepoint);
 
     const roster = [];

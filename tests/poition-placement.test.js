@@ -1,6 +1,6 @@
 // poition-placement.test.js — four of the five poitions can be found in the
 // world (plans/trim.md 4a). Speed waits on its rework for the speed order.
-// The spots are provisional: Caelan places them for good.
+// Ruled 2026-10-06; he may move the pickups when he paints the maps in Tiled.
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';

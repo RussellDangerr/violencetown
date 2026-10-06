@@ -88,12 +88,9 @@ game/assets-placeholder/**/[qz]_*.png
 game/_design-*.html
 game/_ui-preview*
 
-# --- Local dev config & collaborator files (not for the public repo) ---
+# --- Local dev config (not for the public repo) ---
 # .claude/launch.json is a machine-specific dev-server launch path.
-# *-TheDangerrZone* are a collaborator's parallel variants, maintained
-# locally and not ours to publish.
 .claude/launch.json
-*-TheDangerrZone*
 
 # --- OS / editor housekeeping ---
 .DS_Store

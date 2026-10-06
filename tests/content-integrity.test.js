@@ -16,8 +16,7 @@ import { join } from 'node:path';
 
 import { validateContent } from '../game/content-validate.js';
 
-// `*-map.json` matches the 12 real maps and naturally excludes the stale
-// `*-map-TheDangerrZone.json` snapshots (they end in `-TheDangerrZone.json`).
+// `*-map.json` matches every real map.
 const gameDir = fileURLToPath(new URL('../game/', import.meta.url));
 const mapFiles = readdirSync(gameDir).filter(f => f.endsWith('-map.json')).sort();
 const maps = mapFiles.map(file => ({ file, data: JSON.parse(readFileSync(join(gameDir, file), 'utf8')) }));
