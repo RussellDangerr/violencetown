@@ -94,7 +94,7 @@ describe('3b — the day counts actions', () => {
     test('one world beat steps the day once; the ambient step only when asked', () => {
         let ambient = 0;
         const g = { ...dayGame(), _dispositionDecayTurns: 0, _advanceDayClock: advanceDayClock,
-                    _ambientTick() { ambient++; }, _tickDispositionDecay() {} };
+                    _ambientTick() { ambient++; }, _tickDispositionDecay() {}, _tickPuddles() {} };
         worldBeat.call(g, { ambient: false });
         assert.equal(g._dayClock, 1);
         assert.equal(ambient, 0);
@@ -115,7 +115,7 @@ describe('3c — moods fade per action', () => {
     test('one nudge every DISPOSITION_DECAY_TURNS beats', () => {
         let decays = 0;
         const g = { _dayClock: 0, enemies: [], _dispositionDecayTurns: 0, _advanceDayClock: advanceDayClock,
-                    _ambientTick() {}, _tickDispositionDecay() { decays++; } };
+                    _ambientTick() {}, _tickDispositionDecay() { decays++; }, _tickPuddles() {} };
         for (let i = 0; i < DISPOSITION_DECAY_TURNS - 1; i++) worldBeat.call(g, { ambient: false });
         assert.equal(decays, 0);
         worldBeat.call(g, { ambient: false });

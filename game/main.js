@@ -10,7 +10,8 @@ import { loadAllSprites } from './sprites.js';
 import { BitmapFont } from './bitmap-font.js';
 import { pickHitMark, HEAVY_HIT_DAMAGE } from './hit-splat.js';   // (manga-impact-marks) the mark rule + the heavy threshold
 import { makeEffectLoop } from './effect-loop.js';                 // one tick of the transient-effects loop, and its refusal to die on a bad frame
-import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, MAX_STACK } from './data.js';
+import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, MAX_STACK, SLUDGE_DOT } from './data.js';
+import { puddleTiles, layPuddle, puddleAt, dryPuddles } from './puddles.js';   // (poisons) Sludge Brain's puddles
 import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef } from './items.js';
 import { WEAPONS } from './weapons.js';
 import { resolveItemDef } from './item-registry.js';
@@ -28,7 +29,7 @@ import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
 import { attack, formatDamageNumber, computeHit, elementalMult, isBackstab } from './combat.js';
 import { Enemy, spawnEnemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
-import { isHostile, isHunting } from './ai.js';
+import { isHostile, isHunting, isSewerDweller } from './ai.js';
 import { getGreedyStep, stepEntity, findPath } from './pathing.js'; // pathfinding (greedy chase + BFS click-to-move); stepEntity = shove a character aside
 import { applyDispositionDelta, reactToTransaction } from './give-action.js';
 import { getDialogue } from './dialogue.js';
@@ -490,6 +491,7 @@ class Game {
         // recorded as diffs vs the map JSON so a save can re-apply them — the
         // map is re-snapshotted from JSON on every _loadMap.
         this._tileDiffs = [];
+        this._puddles = [];   // (poisons) { x, y, kind, turnsLeft } — zone state, not saved
 
         // Autosave throttle — write at most every few turns unless forced.
         this._lastAutosaveTurn = -999;
@@ -640,6 +642,7 @@ class Game {
         // Fresh map = no runtime tile mutations yet. loadInto re-applies saved
         // diffs after this returns.
         this._tileDiffs = [];
+        this._puddles = [];   // (poisons) puddles dry up behind you when you leave
 
         this.groundItems = [];
         for (const s of this.map.itemSpawns) {
@@ -2700,6 +2703,7 @@ class Game {
         // is a real consequence you should opt into.
         const td = this.map.getTileDef(nx, ny);
         if (td && td.hazard) return true;                         // sludge / future hazards
+        if (puddleAt(this._puddles, nx, ny)) return true;         // (poisons) a puddle is a hazard too
 
         return false;
     }
@@ -4086,6 +4090,7 @@ class Game {
     // town's wander too — only in a fight, where the heartbeat lets go.
     _worldBeat({ ambient }) {
         this._advanceDayClock();
+        this._tickPuddles();
         if (ambient) this._ambientTick();
         if (++this._dispositionDecayTurns >= DISPOSITION_DECAY_TURNS) {
             this._dispositionDecayTurns = 0;
@@ -4753,6 +4758,36 @@ class Game {
                 if (killed) this._handleEnemyDeath(enemyObj);
             }
         }
+    }
+
+    // ── Puddles (plans/poisons.md) ───────────────────────────────────────────
+    // Lay a puddle fanned away from `from` (the thrower) around `at` (where it
+    // landed). Returns how many tiles it covered.
+    _layPuddle(from, at, kind, turns) {
+        const tiles = puddleTiles(from, at, (x, y) => !!this.map && this.map.isWalkable(x, y));
+        layPuddle(this._puddles, tiles, kind, turns);
+        return tiles.length;
+    }
+    // One committed action: whoever stands in a sludge puddle gets the Sludge
+    // DoT (a sewer dweller is healed instead), then every puddle dries by one.
+    _tickPuddles() {
+        if (!this._puddles || !this._puddles.length) return;
+        if (puddleAt(this._puddles, this.playerX, this.playerY)) {
+            if (this._hasSludgeImmunity()) {
+                // The bagged feet keep you dry; no message every turn.
+            } else {
+                if (!this.hasBuff('sludge')) this._log('[You are standing in sludge.]', 'combat');
+                this.addBuff('sludge', 'Sludge', SLUDGE_DURATION, 'debuff');
+            }
+        }
+        for (const e of this.enemies) {
+            if (!e.entity || !e.entity.isAlive() || !puddleAt(this._puddles, e.x, e.y)) continue;
+            const dmg = isSewerDweller(e) ? -SLUDGE_DOT : SLUDGE_DOT;
+            const b = e.buffs.find(x => x.id === 'sludge');
+            if (b) { b.turns = Math.max(b.turns, SLUDGE_DURATION); b.dmg = dmg; }
+            else e.buffs.push({ id: 'sludge', name: 'Sludge', turns: SLUDGE_DURATION, type: 'debuff', dmg });
+        }
+        this._puddles = dryPuddles(this._puddles);
     }
 
     // ── Fire blood (plans/poisons.md) ────────────────────────────────────────

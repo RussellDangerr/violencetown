@@ -95,6 +95,23 @@ export const ITEMS = {
         fallbackColor: '#e07a2a',
         baseValue: 17,
     },
+    // (poisons) Sludge Brain: no burst of its own. Where it lands it leaves a
+    // 3-tile sludge puddle, the landing tile and the throw's two forward
+    // diagonals (puddles.js); ending a turn in it applies the Sludge DoT.
+    sludge_brain: {
+        id: 'sludge_brain',
+        name: '[Sludge Brain]',
+        description: 'Thrown, it leaves a 3-tile sludge puddle for 8 turns. Ending a turn in it applies Sludge; sewer dwellers are healed instead.',
+        category: 'poition',
+        useType: 'throw',
+        equipSlot: 'sides',
+        range: 5,
+        puddle: { kind: 'sludge', turns: 8 },
+        damageType: 'sludge',
+        consumable: true,
+        fallbackColor: '#5aa84a',
+        baseValue: 12,
+    },
     soap: {
         id: 'soap',
         name: '[Soap]',
@@ -719,6 +736,14 @@ export function resolveThrow(game, itemDef, direction, _stackCount = 1, targetTi
             ix = nx; iy = ny;
             if (game.enemies.some(e => e.entity.isAlive() && e.x === ix && e.y === iy)) break;
         }
+    }
+
+    // (poisons) A puddle item lays its puddle where it lands, fanned away from
+    // the thrower (puddles.js).
+    if (itemDef.puddle && game._layPuddle) {
+        const n = game._layPuddle({ x: game.playerX, y: game.playerY }, { x: ix, y: iy },
+                                  itemDef.puddle.kind, itemDef.puddle.turns);
+        return `[${itemDef.name} leaves a puddle on ${n} tile${n === 1 ? '' : 's'}]`;
     }
 
     const dtype = itemDef.damageType || 'physical';
