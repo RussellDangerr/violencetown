@@ -182,6 +182,10 @@ const MP_REGEN = 2;                // MP recovered per world-turn — FIGHT → 
 const RING_THUMB_DISPOSITION = 70;   // above EVERY authored NPC baseline (the friendliest, Puck, starts at 60) so the thumb reveal must be EARNED by raising someone, not tripped just by walking up to a cheerful vendor
 const RING_PINKY_GP          = 500;
 const RING_IGNITE_DAMAGE     = 6;
+// (poisons) Fire blood's burn: the same 5 a turn as Fire Blood itself; a hit
+// from a fire-blooded attacker sets the target burning this many turns.
+const FIRE_BLOOD_TICK         = 5;
+const FIRE_BLOOD_SPREAD_TURNS = 3;
 
 // (manga-impact-marks) HEAVY_HIT_DAMAGE and the mark pick moved to
 // hit-splat.js — the same threshold still feeds combatAttack's screenshake
@@ -4412,6 +4416,7 @@ class Game {
         // above), using the seeded RNG so the proc is deterministic — never
         // Math.random (determinism rule). A trigger that lands the killing blow
         // routes its own _handleEnemyDeath inside _applyTrigger.
+        if (enemyObj.entity.isAlive()) this._spreadFireBlood(this, enemyObj);   // (poisons)
         if (enemyObj.entity.isAlive()) {
             for (const key of Object.keys(this.ringSlots)) {
                 const r = RINGS[this.ringSlots[key]];
@@ -4558,6 +4563,7 @@ class Game {
                     target._hitFlashUntil = performance.now() + 120;
                     this._ensureParticleLoop();
                     if (result.killed) this._handleEnemyDeath(target);
+                    else this._spreadFireBlood(ally, target);   // (poisons)
                 }
             } else {
                 // stepEntity (not a direct x/y poke) so allies get real facing +
@@ -4749,6 +4755,42 @@ class Game {
         }
     }
 
+    // ── Fire blood (plans/poisons.md) ────────────────────────────────────────
+    // A character that is burning AND has fire blood sets whoever its hit lands
+    // on burning for FIRE_BLOOD_SPREAD_TURNS. The victim never gets fire blood,
+    // so it never chains. `who` is the Game (the player) or an Enemy; both carry
+    // buffs/addBuff/hasBuff.
+    _hasFireBlood(who) {
+        return !!who && typeof who.hasBuff === 'function' && who.hasBuff('fire_blood') && who.hasBuff('fire');
+    }
+    // Set `who` burning for `turns` at FIRE_BLOOD_TICK a turn; a longer burn
+    // already running is kept.
+    _ignite(who, turns) {
+        if (!who || !who.buffs) return;
+        const b = who.buffs.find(x => x.id === 'fire');
+        if (b) { b.turns = Math.max(b.turns, turns); b.dmg = Math.max(b.dmg ?? 0, FIRE_BLOOD_TICK); }
+        else who.buffs.push({ id: 'fire', name: 'Burning', turns, type: 'debuff', dmg: FIRE_BLOOD_TICK });
+    }
+    // The fire-blood rider alone (the thrown burst brings its own burn).
+    _grantFireBlood(who, turns) {
+        if (!who || !who.buffs) return;
+        const b = who.buffs.find(x => x.id === 'fire_blood');
+        if (b) b.turns = Math.max(b.turns, turns);
+        else who.buffs.push({ id: 'fire_blood', name: 'Fire Blood', turns, type: 'buff' });
+    }
+    // Drinking it, or catching an enemy's throw: the burn and the rider together.
+    _applyFireBlood(who, turns) {
+        this._ignite(who, turns);
+        this._grantFireBlood(who, turns);
+    }
+    _spreadFireBlood(attacker, target) {
+        if (!this._hasFireBlood(attacker) || !target) return;
+        if (target !== this && !(target.entity && target.entity.isAlive())) return;
+        this._ignite(target, FIRE_BLOOD_SPREAD_TURNS);
+        const name = target === this ? 'You catch' : `${target.name ?? target.type} catches`;
+        this._log(`[${name} fire.]`, 'combat');
+    }
+
     // (Hire a Lion) Spawn a temporary ally on a free tile beside the player. It
     // fights through the existing ally pipeline (_allyTakeTurn) and melts away
     // when its summon timer runs out (ticked in _advanceWorld). Returns true if
@@ -4840,6 +4882,7 @@ class Game {
             incomingMult: this.hasBuff('guard') ? 0.5 : 1,
         });
         if (dmg === 0) return 0;   // 0-contract: hit doesn't happen, never floor back via armor
+        if (attacker) this._spreadFireBlood(attacker, this);   // (poisons) a fire-blooded foe sets you burning
         dmg = Math.max(1, dmg - this._playerArmor());   // worn armor soaks the hit (min 1 always lands)
         this.playerHp = Math.max(0, this.playerHp - dmg);
         const killed = this.playerHp <= 0;
@@ -5610,6 +5653,17 @@ class Game {
                             this._refreshGrantedSkills();
                             const usedUp = def.useType === 'self' || def.useType === 'equip';
                             if (usedUp) { this._removeFromSlot(idx); this._advanceWorld(); }
+                            break;
+                        }
+                        case 'drink': {
+                            // (poisons) Drinking Fire Blood on purpose: you burn, and your
+                            // hits spread it. Costs the turn like any use.
+                            if (def.fireBlood) {
+                                this._applyFireBlood(this, def.poition?.turns ?? 5);
+                                this._log('[You drink Fire Blood: you burn, and your hits set targets burning.]', 'combat');
+                            }
+                            this._removeFromSlot(idx);
+                            this._advanceWorld();
                             break;
                         }
                         case 'protect':

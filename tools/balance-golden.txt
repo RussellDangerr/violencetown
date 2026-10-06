@@ -22,14 +22,14 @@ factory/green1                    Greedy Green                100       3      9
 factory/puck                      Puck                        100     -30      1        0              2              2    100
 graveyard/skel1                   Rattling Skeleton           100       0      8       35              5              3     13
 sewer/carrion                     Carrion                     100     -80      0        0              1              1      -
-sewer/e6                          Fungus King                 100       6     12      115              8              3      9
+sewer/e6                          Fungus King                 100       6     12      113              8              3      9
 sewer/e5                          Ghost Fungus                100       0      8       30              5              3     13
-sewer/e3                          Red Fungus                  100       3     10       65              6              3     10
-sewer/e4                          Red Fungus                  100       3     10       65              6              3     10
+sewer/e3                          Red Fungus                  100       3     10       70              6              3     10
+sewer/e4                          Red Fungus                  100       3     10       63              6              3     10
 sewer/sludge-bloom                Sludge Bloom                100      15      0        0             20              4      -
 sewer/e1                          Violet Fungus               100       0      9       28              5              3     12
 sewer/e2                          Violet Fungus               100       0      9       28              5              3     12
-sewer/wererat                     Wererat                     100       6     12      150              8              3      9
+sewer/wererat                     Wererat                     100       6     12      148              8              3      9
 town/townie-hooch                 Bootlegger                  100     -80      0        0              1              1      -
 town/townie-e                     Violencian                  100     -80      0        0              1              1      -
 town/townie-glunk                 Violencian                  100     -80      0        0              1              1      -

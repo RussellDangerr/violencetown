@@ -109,7 +109,7 @@ function hitGame({ cascade, hp }) {
     const g = {
         playerHp: hp, playerX: 5, playerY: 5, rng: new RNG(42), _cascade: cascade, _cascadeActor: null,
         splats: [], _damageNumbers: [],
-        hasBuff: () => false, _playerArmor: () => 0,
+        hasBuff: () => false, _playerArmor: () => 0, _spreadFireBlood() {},
         _spawnHitSplat(...a) { g.splats.push(a); },
         _ensureParticleLoop() {}, _triggerScreenShake() {},
     };

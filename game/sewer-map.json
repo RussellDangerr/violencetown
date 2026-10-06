@@ -494,7 +494,7 @@
         "mystery_meat",
         "tunnel_mushroom",
         "sludge_sack",
-        "fire_bottle",
+        "fire_blood",
         "defence_poition"
       ],
       "type": "Red Fungus",
@@ -523,7 +523,7 @@
         "mystery_meat",
         "tunnel_mushroom",
         "sludge_sack",
-        "fire_bottle",
+        "sludge_sack",
         "defence_poition"
       ],
       "type": "Red Fungus",
@@ -581,7 +581,7 @@
         "sludge_sack",
         "sludge_sack",
         "boardwalk_burger",
-        "fire_bottle",
+        "sludge_sack",
         "defence_poition",
         "soap"
       ],
@@ -644,7 +644,7 @@
         "hot_dog",
         "boardwalk_burger",
         "defence_poition",
-        "fire_bottle",
+        "sludge_sack",
         "soap",
         "cardboard_cuirass"
       ],

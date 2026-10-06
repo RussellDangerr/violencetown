@@ -460,14 +460,13 @@ export function tickNpcState(game, npc, clock = game.turn, rng = game.rng) {
             // attack log line. The player-death case is handled by the death-
             // screen flow in main.js, which has its own messaging.
             //
-            // Raw damage only — blind (outgoing) and guard (incoming) both
-            // fold into the single computeHit call inside applyDamageToPlayer,
-            // so they compose in one round instead of double-rounding.
+            // Raw damage only — guard (incoming) folds into the single
+            // computeHit call inside applyDamageToPlayer, which rounds once.
             if (chebyshev(npc.x, npc.y, game.playerX, game.playerY) <= 1) {
                 // Attacking faces the target — a shove buys one backstab window, not a farm.
                 npc._lastDx = Math.sign(game.playerX - npc.x);
                 npc._lastDy = Math.sign(game.playerY - npc.y);
-                game.applyDamageToPlayer(npc.damage, npc);   // blind folds in at the one computeHit call site
+                game.applyDamageToPlayer(npc.damage, npc);
                 break;
             }
 

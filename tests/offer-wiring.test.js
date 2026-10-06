@@ -697,7 +697,7 @@ describe('_offerActivate - staging', () => {
         // tray-slot tap being the only unstage affordance, it could not be taken
         // back except by discarding the whole basket.
         const inv = new Array(INVENTORY_SIZE).fill(null);
-        const ids = ['rock','soap','bandage','hot_dog','pipe','fire_bottle','foil_hat','sludge_sack'];
+        const ids = ['rock','soap','bandage','hot_dog','pipe','fire_blood','foil_hat','sludge_sack'];
         ids.forEach((id, i) => { inv[i] = { itemDef: ITEMS[id], count: 1 }; });
         const g = stubGame({ inventory: inv });
         openOffer.call(g, puck());
