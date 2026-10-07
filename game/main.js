@@ -4790,6 +4790,28 @@ class Game {
         this._puddles = dryPuddles(this._puddles);
     }
 
+    // (poisons) An enemy throws a poison it carries at you; npc.js decides when
+    // and takes it out of the kit. Fire Blood lands on you: you burn, and your
+    // hits spread it. Sludge Brain lays its puddle fanned from the thrower
+    // toward you. Returns the log line.
+    _enemyThrow(npc, def) {
+        if (!npc || !def) return null;
+        npc._lastDx = Math.sign(this.playerX - npc.x);   // it faces what it threw at
+        npc._lastDy = Math.sign(this.playerY - npc.y);
+        const who = npc.name ?? npc.type;
+        const what = String(def.name || def.id).replace(/[[\]]/g, '');
+        if (def.fireBlood) {
+            this._applyFireBlood(this, def.poition?.turns ?? 5);
+            return `[${who} throws ${what} at you: you burn, and your hits set targets burning.]`;
+        }
+        if (def.puddle) {
+            const tiles = this._layPuddle({ x: npc.x, y: npc.y }, { x: this.playerX, y: this.playerY },
+                                          def.puddle.kind, def.puddle.turns);
+            return `[${who} throws ${what}: a sludge puddle covers ${tiles} tile${tiles === 1 ? '' : 's'} around you.]`;
+        }
+        return null;
+    }
+
     // ── Fire blood (plans/poisons.md) ────────────────────────────────────────
     // A character that is burning AND has fire blood sets whoever its hit lands
     // on burning for FIRE_BLOOD_SPREAD_TURNS. The victim never gets fire blood,

@@ -90,6 +90,7 @@ export const ITEMS = {
         range: 5,
         poition: { stat: 'health', amount: -5, turns: 5, as: 'fire' },
         fireBlood: true,
+        enemyThrows: true,   // one of the two poisons an enemy throws at you (npc.js)
         damageType: 'fire',
         consumable: true,
         fallbackColor: '#e07a2a',
@@ -107,6 +108,7 @@ export const ITEMS = {
         equipSlot: 'sides',
         range: 5,
         puddle: { kind: 'sludge', turns: 8 },
+        enemyThrows: true,
         damageType: 'sludge',
         consumable: true,
         fallbackColor: '#5aa84a',

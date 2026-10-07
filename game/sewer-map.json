@@ -523,7 +523,7 @@
         "mystery_meat",
         "tunnel_mushroom",
         "sludge_sack",
-        "sludge_sack",
+        "foil_hat",
         "defence_poition"
       ],
       "type": "Red Fungus",
@@ -551,7 +551,8 @@
         "mystery_meat",
         "mystery_meat",
         "tunnel_mushroom",
-        "sludge_sack"
+        "sludge_sack",
+        "sludge_brain"
       ],
       "type": "Ghost Fungus",
       "x": 5,
@@ -581,7 +582,7 @@
         "sludge_sack",
         "sludge_sack",
         "boardwalk_burger",
-        "sludge_sack",
+        "foil_hat",
         "defence_poition",
         "soap"
       ],
@@ -644,7 +645,7 @@
         "hot_dog",
         "boardwalk_burger",
         "defence_poition",
-        "sludge_sack",
+        "foil_hat",
         "soap",
         "cardboard_cuirass"
       ],
@@ -686,6 +687,11 @@
     }
   ],
   "items": [
+    {
+      "type": "sludge_brain",
+      "x": 5,
+      "y": 5
+    },
     {
       "type": "rock",
       "x": 2,
