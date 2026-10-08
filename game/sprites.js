@@ -278,7 +278,7 @@ export const ITEM_SPRITES = {
 
     // ── Item icons, second pass (visual-pass, 2026-09-06) ───────────────────
     // Shortlist picks verified against the labeled contact sheets (tools/contact_*.png).
-    fire_bottle:    { sheet: 'tinyDungeon', x: 5 * 16,  y: 2 * 16, w: 16, h: 16 },  // red-orange flame emblem (boss-trigger banner art) — took this over tinyTown (11,7)'s red/white canister, which has no actual flame shape
+    fire_blood:     { sheet: 'tinyDungeon', x: 5 * 16,  y: 2 * 16, w: 16, h: 16 },  // red-orange flame emblem (boss-trigger banner art) — took this over tinyTown (11,7)'s red/white canister, which has no actual flame shape
     burger_fries:   { sheet: 'tinyDungeon', x: 5 * 16,  y: 8 * 16, w: 16, h: 16 },  // nested-square box icon — passable fries carton
     wererat_fur:    { sheet: 'tinyTown',    x: 10 * 16, y: 8 * 16, w: 16, h: 16 },  // brown satchel/pouch
 };

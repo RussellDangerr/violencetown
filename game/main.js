@@ -10,7 +10,8 @@ import { loadAllSprites } from './sprites.js';
 import { BitmapFont } from './bitmap-font.js';
 import { pickHitMark, HEAVY_HIT_DAMAGE } from './hit-splat.js';   // (manga-impact-marks) the mark rule + the heavy threshold
 import { makeEffectLoop } from './effect-loop.js';                 // one tick of the transient-effects loop, and its refusal to die on a bad frame
-import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, MAX_STACK } from './data.js';
+import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, MAX_STACK, SLUDGE_DOT } from './data.js';
+import { puddleTiles, layPuddle, puddleAt, dryPuddles } from './puddles.js';   // (poisons) Sludge Brain's puddles
 import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef } from './items.js';
 import { WEAPONS } from './weapons.js';
 import { resolveItemDef } from './item-registry.js';
@@ -28,7 +29,7 @@ import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
 import { attack, formatDamageNumber, computeHit, elementalMult, isBackstab } from './combat.js';
 import { Enemy, spawnEnemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
-import { isHostile, isHunting } from './ai.js';
+import { isHostile, isHunting, isSewerDweller } from './ai.js';
 import { getGreedyStep, stepEntity, findPath } from './pathing.js'; // pathfinding (greedy chase + BFS click-to-move); stepEntity = shove a character aside
 import { applyDispositionDelta, reactToTransaction } from './give-action.js';
 import { getDialogue } from './dialogue.js';
@@ -182,6 +183,10 @@ const MP_REGEN = 2;                // MP recovered per world-turn — FIGHT → 
 const RING_THUMB_DISPOSITION = 70;   // above EVERY authored NPC baseline (the friendliest, Puck, starts at 60) so the thumb reveal must be EARNED by raising someone, not tripped just by walking up to a cheerful vendor
 const RING_PINKY_GP          = 500;
 const RING_IGNITE_DAMAGE     = 6;
+// (poisons) Fire blood's burn: the same 5 a turn as Fire Blood itself; a hit
+// from a fire-blooded attacker sets the target burning this many turns.
+const FIRE_BLOOD_TICK         = 5;
+const FIRE_BLOOD_SPREAD_TURNS = 3;
 
 // (manga-impact-marks) HEAVY_HIT_DAMAGE and the mark pick moved to
 // hit-splat.js — the same threshold still feeds combatAttack's screenshake
@@ -486,6 +491,7 @@ class Game {
         // recorded as diffs vs the map JSON so a save can re-apply them — the
         // map is re-snapshotted from JSON on every _loadMap.
         this._tileDiffs = [];
+        this._puddles = [];   // (poisons) { x, y, kind, turnsLeft } — zone state, not saved
 
         // Autosave throttle — write at most every few turns unless forced.
         this._lastAutosaveTurn = -999;
@@ -636,6 +642,7 @@ class Game {
         // Fresh map = no runtime tile mutations yet. loadInto re-applies saved
         // diffs after this returns.
         this._tileDiffs = [];
+        this._puddles = [];   // (poisons) puddles dry up behind you when you leave
 
         this.groundItems = [];
         for (const s of this.map.itemSpawns) {
@@ -2696,6 +2703,7 @@ class Game {
         // is a real consequence you should opt into.
         const td = this.map.getTileDef(nx, ny);
         if (td && td.hazard) return true;                         // sludge / future hazards
+        if (puddleAt(this._puddles, nx, ny)) return true;         // (poisons) a puddle is a hazard too
 
         return false;
     }
@@ -4082,6 +4090,7 @@ class Game {
     // town's wander too — only in a fight, where the heartbeat lets go.
     _worldBeat({ ambient }) {
         this._advanceDayClock();
+        this._tickPuddles();
         if (ambient) this._ambientTick();
         if (++this._dispositionDecayTurns >= DISPOSITION_DECAY_TURNS) {
             this._dispositionDecayTurns = 0;
@@ -4412,6 +4421,7 @@ class Game {
         // above), using the seeded RNG so the proc is deterministic — never
         // Math.random (determinism rule). A trigger that lands the killing blow
         // routes its own _handleEnemyDeath inside _applyTrigger.
+        if (enemyObj.entity.isAlive()) this._spreadFireBlood(this, enemyObj);   // (poisons)
         if (enemyObj.entity.isAlive()) {
             for (const key of Object.keys(this.ringSlots)) {
                 const r = RINGS[this.ringSlots[key]];
@@ -4558,6 +4568,7 @@ class Game {
                     target._hitFlashUntil = performance.now() + 120;
                     this._ensureParticleLoop();
                     if (result.killed) this._handleEnemyDeath(target);
+                    else this._spreadFireBlood(ally, target);   // (poisons)
                 }
             } else {
                 // stepEntity (not a direct x/y poke) so allies get real facing +
@@ -4749,6 +4760,94 @@ class Game {
         }
     }
 
+    // ── Puddles (plans/poisons.md) ───────────────────────────────────────────
+    // Lay a puddle fanned away from `from` (the thrower) around `at` (where it
+    // landed). Returns how many tiles it covered.
+    _layPuddle(from, at, kind, turns) {
+        const tiles = puddleTiles(from, at, (x, y) => !!this.map && this.map.isWalkable(x, y));
+        layPuddle(this._puddles, tiles, kind, turns);
+        return tiles.length;
+    }
+    // One committed action: whoever stands in a sludge puddle gets the Sludge
+    // DoT (a sewer dweller is healed instead), then every puddle dries by one.
+    _tickPuddles() {
+        if (!this._puddles || !this._puddles.length) return;
+        if (puddleAt(this._puddles, this.playerX, this.playerY)) {
+            if (this._hasSludgeImmunity()) {
+                // The bagged feet keep you dry; no message every turn.
+            } else {
+                if (!this.hasBuff('sludge')) this._log('[You are standing in sludge.]', 'combat');
+                this.addBuff('sludge', 'Sludge', SLUDGE_DURATION, 'debuff');
+            }
+        }
+        for (const e of this.enemies) {
+            if (!e.entity || !e.entity.isAlive() || !puddleAt(this._puddles, e.x, e.y)) continue;
+            const dmg = isSewerDweller(e) ? -SLUDGE_DOT : SLUDGE_DOT;
+            const b = e.buffs.find(x => x.id === 'sludge');
+            if (b) { b.turns = Math.max(b.turns, SLUDGE_DURATION); b.dmg = dmg; }
+            else e.buffs.push({ id: 'sludge', name: 'Sludge', turns: SLUDGE_DURATION, type: 'debuff', dmg });
+        }
+        this._puddles = dryPuddles(this._puddles);
+    }
+
+    // (poisons) An enemy throws a poison it carries at you; npc.js decides when
+    // and takes it out of the kit. Fire Blood lands on you: you burn, and your
+    // hits spread it. Sludge Brain lays its puddle fanned from the thrower
+    // toward you. Returns the log line.
+    _enemyThrow(npc, def) {
+        if (!npc || !def) return null;
+        npc._lastDx = Math.sign(this.playerX - npc.x);   // it faces what it threw at
+        npc._lastDy = Math.sign(this.playerY - npc.y);
+        const who = npc.name ?? npc.type;
+        const what = String(def.name || def.id).replace(/[[\]]/g, '');
+        if (def.fireBlood) {
+            this._applyFireBlood(this, def.poition?.turns ?? 5);
+            return `[${who} throws ${what} at you: you burn, and your hits set targets burning.]`;
+        }
+        if (def.puddle) {
+            const tiles = this._layPuddle({ x: npc.x, y: npc.y }, { x: this.playerX, y: this.playerY },
+                                          def.puddle.kind, def.puddle.turns);
+            return `[${who} throws ${what}: a sludge puddle covers ${tiles} tile${tiles === 1 ? '' : 's'} around you.]`;
+        }
+        return null;
+    }
+
+    // ── Fire blood (plans/poisons.md) ────────────────────────────────────────
+    // A character that is burning AND has fire blood sets whoever its hit lands
+    // on burning for FIRE_BLOOD_SPREAD_TURNS. The victim never gets fire blood,
+    // so it never chains. `who` is the Game (the player) or an Enemy; both carry
+    // buffs/addBuff/hasBuff.
+    _hasFireBlood(who) {
+        return !!who && typeof who.hasBuff === 'function' && who.hasBuff('fire_blood') && who.hasBuff('fire');
+    }
+    // Set `who` burning for `turns` at FIRE_BLOOD_TICK a turn; a longer burn
+    // already running is kept.
+    _ignite(who, turns) {
+        if (!who || !who.buffs) return;
+        const b = who.buffs.find(x => x.id === 'fire');
+        if (b) { b.turns = Math.max(b.turns, turns); b.dmg = Math.max(b.dmg ?? 0, FIRE_BLOOD_TICK); }
+        else who.buffs.push({ id: 'fire', name: 'Burning', turns, type: 'debuff', dmg: FIRE_BLOOD_TICK });
+    }
+    // The fire-blood rider alone (the thrown burst brings its own burn).
+    _grantFireBlood(who, turns) {
+        if (!who || !who.buffs) return;
+        const b = who.buffs.find(x => x.id === 'fire_blood');
+        if (b) b.turns = Math.max(b.turns, turns);
+        else who.buffs.push({ id: 'fire_blood', name: 'Fire Blood', turns, type: 'buff' });
+    }
+    // Drinking it, or catching an enemy's throw: the burn and the rider together.
+    _applyFireBlood(who, turns) {
+        this._ignite(who, turns);
+        this._grantFireBlood(who, turns);
+    }
+    _spreadFireBlood(attacker, target) {
+        if (!this._hasFireBlood(attacker) || !target) return;
+        if (target !== this && !(target.entity && target.entity.isAlive())) return;
+        this._ignite(target, FIRE_BLOOD_SPREAD_TURNS);
+        const name = target === this ? 'You catch' : `${target.name ?? target.type} catches`;
+        this._log(`[${name} fire.]`, 'combat');
+    }
+
     // (Hire a Lion) Spawn a temporary ally on a free tile beside the player. It
     // fights through the existing ally pipeline (_allyTakeTurn) and melts away
     // when its summon timer runs out (ticked in _advanceWorld). Returns true if
@@ -4840,6 +4939,7 @@ class Game {
             incomingMult: this.hasBuff('guard') ? 0.5 : 1,
         });
         if (dmg === 0) return 0;   // 0-contract: hit doesn't happen, never floor back via armor
+        if (attacker) this._spreadFireBlood(attacker, this);   // (poisons) a fire-blooded foe sets you burning
         dmg = Math.max(1, dmg - this._playerArmor());   // worn armor soaks the hit (min 1 always lands)
         this.playerHp = Math.max(0, this.playerHp - dmg);
         const killed = this.playerHp <= 0;
@@ -5610,6 +5710,17 @@ class Game {
                             this._refreshGrantedSkills();
                             const usedUp = def.useType === 'self' || def.useType === 'equip';
                             if (usedUp) { this._removeFromSlot(idx); this._advanceWorld(); }
+                            break;
+                        }
+                        case 'drink': {
+                            // (poisons) Drinking Fire Blood on purpose: you burn, and your
+                            // hits spread it. Costs the turn like any use.
+                            if (def.fireBlood) {
+                                this._applyFireBlood(this, def.poition?.turns ?? 5);
+                                this._log('[You drink Fire Blood: you burn, and your hits set targets burning.]', 'combat');
+                            }
+                            this._removeFromSlot(idx);
+                            this._advanceWorld();
                             break;
                         }
                         case 'protect':

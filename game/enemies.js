@@ -416,9 +416,9 @@ export function challengeGp(e) {
 const KIT_DEFAULTS = [
     { maxArmor: -80, gold: 1, loadout: ['rock'] },                           //  4 GP
     { maxArmor: -30, gold: 3, loadout: ['tunnel_mushroom'] },                // 12 GP
-    { maxArmor: -15, gold: 6, loadout: ['tunnel_mushroom', 'fire_bottle'] }, // 27 GP
-    { maxArmor: 0,   gold: 8, loadout: ['bandage', 'fire_bottle'] },         // 45 GP
-    { maxArmor: 10,  gold: 30, loadout: ['bandage', 'bandage', 'fire_bottle', 'sludge_sack', 'boardwalk_burger'] }, // 117 GP
+    { maxArmor: -15, gold: 6, loadout: ['tunnel_mushroom', 'fire_blood'] }, // 32 GP
+    { maxArmor: 0,   gold: 8, loadout: ['bandage', 'fire_blood'] },         // 50 GP
+    { maxArmor: 10,  gold: 30, loadout: ['bandage', 'bandage', 'fire_blood', 'sludge_sack', 'boardwalk_burger'] }, // 122 GP
 ];
 
 function defaultKit(armor) {

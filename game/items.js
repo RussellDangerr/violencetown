@@ -75,17 +75,43 @@ export const ITEMS = {
         fallbackColor: '#9a52c8',
         baseValue: 10,
     },
-    fire_bottle: {
-        id: 'fire_bottle',
-        name: '[Fire Bottle]',
-        description: 'A bottle, a rag, and somebody else\'s problem. Lights what it lands on and keeps at it.',
+    // (poisons) The poison half of a fire poition (plans/poisons.md); it replaced
+    // the Fire Bottle. Thrown, it bursts like any DoT poition, and whoever it
+    // burns also gets fire blood: while both last, every hit they land sets the
+    // target burning (Game._spreadFireBlood). Drinkable on purpose.
+    fire_blood: {
+        id: 'fire_blood',
+        name: '[Fire Blood]',
+        description: 'Thrown, it sets everyone it splashes burning. Drunk, you burn, and every hit you land sets the target burning too.',
+        category: 'poition',
         useType: 'throw',
+        drinkable: true,
         equipSlot: 'sides',
         range: 5,
-        poition: { stat: 'health', amount: -5, turns: 3, as: 'fire' },
+        poition: { stat: 'health', amount: -5, turns: 5, as: 'fire' },
+        fireBlood: true,
+        enemyThrows: true,   // one of the two poisons an enemy throws at you (npc.js)
         damageType: 'fire',
         consumable: true,
         fallbackColor: '#e07a2a',
+        baseValue: 17,
+    },
+    // (poisons) Sludge Brain: no burst of its own. Where it lands it leaves a
+    // 3-tile sludge puddle, the landing tile and the throw's two forward
+    // diagonals (puddles.js); ending a turn in it applies the Sludge DoT.
+    sludge_brain: {
+        id: 'sludge_brain',
+        name: '[Sludge Brain]',
+        description: 'Thrown, it leaves a 3-tile sludge puddle for 8 turns. Ending a turn in it applies Sludge; sewer dwellers are healed instead.',
+        category: 'poition',
+        useType: 'throw',
+        equipSlot: 'sides',
+        range: 5,
+        puddle: { kind: 'sludge', turns: 8 },
+        enemyThrows: true,
+        damageType: 'sludge',
+        consumable: true,
+        fallbackColor: '#5aa84a',
         baseValue: 12,
     },
     soap: {
@@ -329,7 +355,7 @@ export const ITEMS = {
     // The six below are the beneficial half of the category: a poition moves
     // exactly one of six stats, and here amount is always positive. Their
     // negative-amount siblings are the sludge_sack / tunnel_mushroom /
-    // fire_bottle health-poitions above. All six resolve through
+    // fire_blood health-poitions above. All six resolve through
     // resolveSelfUse's poition branch below when drunk (useType:'self').
     health_poition: {
         id: 'health_poition',
@@ -714,6 +740,14 @@ export function resolveThrow(game, itemDef, direction, _stackCount = 1, targetTi
         }
     }
 
+    // (poisons) A puddle item lays its puddle where it lands, fanned away from
+    // the thrower (puddles.js).
+    if (itemDef.puddle && game._layPuddle) {
+        const n = game._layPuddle({ x: game.playerX, y: game.playerY }, { x: ix, y: iy },
+                                  itemDef.puddle.kind, itemDef.puddle.turns);
+        return `[${itemDef.name} leaves a puddle on ${n} tile${n === 1 ? '' : 's'}]`;
+    }
+
     const dtype = itemDef.damageType || 'physical';
     const isDamage = typeof itemDef.damage === 'number';
     const isHeal = itemDef.effect === 'heal' && typeof itemDef.healAmount === 'number';
@@ -750,6 +784,8 @@ export function resolveThrow(game, itemDef, direction, _stackCount = 1, targetTi
             } else {
                 list.push({ id: buff.id, turns, dmg: buff.dmg });
             }
+            // (poisons) Fire Blood: the burn comes with fire blood for as long.
+            if (itemDef.fireBlood && game._grantFireBlood) game._grantFireBlood(foe, turns);
             affected++;
         }
     } else if (isDamage) {

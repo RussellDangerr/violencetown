@@ -76,9 +76,9 @@ describe('pendingDrops', () => {
 // delegates to for "which ground items does a remaining loadout become".
 describe('dropLoadout — the unused kit drops on death', () => {
     test('every remaining loadout item resolves to a ground item at the enemy tile', () => {
-        const drops = dropLoadout(['tunnel_mushroom', 'fire_bottle'], 4, 9);
+        const drops = dropLoadout(['tunnel_mushroom', 'fire_blood'], 4, 9);
         assert.equal(drops.length, 2);
-        assert.deepEqual(drops.map(d => d.type), ['tunnel_mushroom', 'fire_bottle']);
+        assert.deepEqual(drops.map(d => d.type), ['tunnel_mushroom', 'fire_blood']);
         for (const d of drops) {
             assert.equal(d.x, 4);
             assert.equal(d.y, 9);

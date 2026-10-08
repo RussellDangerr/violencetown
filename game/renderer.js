@@ -470,6 +470,7 @@ export class Renderer {
         ctx.translate(shakeX, shakeY);
 
         this._drawTiles(game);
+        this._drawPuddles(game);
         this._drawContainers(game);
         this._drawGroundItems(game);
         // Depth pass: enemies + player draw in one y-sorted (feet-line) pass so
@@ -1228,6 +1229,29 @@ export class Renderer {
     }
 
     // ── Ground Items ─────────────────────────────────────────────────────────
+
+    // (poisons) A sludge puddle wears the SLUDGE tile's own art, fading out over
+    // its last few turns so you can see it drying.
+    _drawPuddles(game) {
+        const list = game._puddles;
+        if (!list || !list.length) return;
+        const { ctx } = this;
+        const vp = this._view();
+        const ref = tileRef(2);   // SLUDGE
+        for (const p of list) {
+            const dx = p.x - game.playerX, dy = p.y - game.playerY;
+            if (offView(vp, dx, dy, 1)) continue;
+            const px = vp.origin.x + dx * TILE_PX - this._scrollX;
+            const py = vp.origin.y + dy * TILE_PX - this._scrollY;
+            ctx.save();
+            ctx.globalAlpha = Math.min(1, 0.35 + p.turnsLeft * 0.1);
+            if (!(ref && this._drawTileRef(tileFrame(ref, p.x, p.y), px, py))) {
+                ctx.fillStyle = (TILE_BY_ID[2] && TILE_BY_ID[2].fallbackColor) || '#3c145a';
+                ctx.fillRect(px, py, TILE_PX, TILE_PX);
+            }
+            ctx.restore();
+        }
+    }
 
     _drawGroundItems(game) {
         const { ctx, sprites } = this;

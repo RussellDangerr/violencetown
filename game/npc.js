@@ -455,19 +455,35 @@ export function tickNpcState(game, npc, clock = game.turn, rng = game.rng) {
                 break;   // the purchase IS the turn
             }
 
+            // (poisons) Throw a poison it carries — Fire Blood or Sludge Brain, the
+            // only items an enemy throws (`enemyThrows`) — at you, from 2 tiles up
+            // to the item's range, while it sees you. The item leaves its kit.
+            // Deterministic: the first chance it gets (plans/poisons.md).
+            const throwDist = chebyshev(npc.x, npc.y, game.playerX, game.playerY);
+            const throwAt = (canSeePlayer && throwDist >= 2 && game._enemyThrow)
+                ? (npc.loadout ?? []).findIndex(x => typeof x === 'string' && ITEMS[x]?.enemyThrows
+                                                    && throwDist <= (ITEMS[x].range ?? 5))
+                : -1;
+            if (throwAt >= 0) {
+                const def = ITEMS[npc.loadout[throwAt]];
+                npc.loadout = npc.loadout.filter((_, k) => k !== throwAt);
+                const text = game._enemyThrow(npc, def);
+                if (text) messages.push({ text, sourceEnemy: npc, category: 'combat' });
+                break;   // the throw IS the turn
+            }
+
             // Adjacent? Attack. Visual feedback (red damage number, hit-flash,
             // stagger, event word, screen shake on big hits) replaces the
             // attack log line. The player-death case is handled by the death-
             // screen flow in main.js, which has its own messaging.
             //
-            // Raw damage only — blind (outgoing) and guard (incoming) both
-            // fold into the single computeHit call inside applyDamageToPlayer,
-            // so they compose in one round instead of double-rounding.
+            // Raw damage only — guard (incoming) folds into the single
+            // computeHit call inside applyDamageToPlayer, which rounds once.
             if (chebyshev(npc.x, npc.y, game.playerX, game.playerY) <= 1) {
                 // Attacking faces the target — a shove buys one backstab window, not a farm.
                 npc._lastDx = Math.sign(game.playerX - npc.x);
                 npc._lastDy = Math.sign(game.playerY - npc.y);
-                game.applyDamageToPlayer(npc.damage, npc);   // blind folds in at the one computeHit call site
+                game.applyDamageToPlayer(npc.damage, npc);
                 break;
             }
 
