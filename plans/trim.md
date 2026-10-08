@@ -7,7 +7,7 @@
 `chore/trim`** (not from `dev` after a merge), so the one-clock work sits on top of the trim and
 never has to reconcile with it. Both branches stop pushed; the merge to `dev` is Caelan's call.
 
-**Provisional defaults (PROVISIONAL — Caelan to confirm):**
+**Defaults (proposed overnight; confirmed by Caelan 2026-10-06):**
 - A day is **600 actions** (stage 3b).
 - Poitions (4a): **Puck sells Health and Mana; Gold sits in a sewer chest; Strength in a Factory
   chest.**
@@ -255,14 +255,13 @@ beside a townsperson, none out of reach). `actorOrder` draws the edge filler beh
   mood decay off, changes nothing in either run. Wander used to spend `game.rng` draws between
   actions; now it does not, so every later fight roll is reshuffled.
 
-**Provisional defaults (PROVISIONAL — Caelan to confirm):**
+**Defaults (proposed overnight; confirmed by Caelan 2026-10-06):**
 - A day is 600 actions (`DAY_LENGTH_ACTIONS`). Quest 1 now reaches dusk near its end.
 - Puck sells Health and Mana; Gold sits in the sewer's bloom-cache (with the Defence poition);
   Strength sits in a new Factory chest, `factory-locker` at (2,27).
 
 **Deferred:**
-- **TheDangerrZone delete** — needs Caelan's yes: the files are untracked, so git cannot bring
-  them back.
+- ~~**TheDangerrZone delete**~~ — done 2026-10-06 on `chore/trim-followups`, at his word.
 - **The `GAP` / `BOSS_TRIGGER` tile cut** — overlaps the unmerged `feature/tiled-pipeline`
   (`data.js`, `sprites.js`, `tile-coverage.test.js`); do it after that branch merges.
 - **Reseed the roadmap board** (`tools/roadmap-board/`) after the merge; it still shows the A1

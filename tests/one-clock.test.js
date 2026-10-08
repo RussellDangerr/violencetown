@@ -47,7 +47,7 @@ const walkHalted = liveMethod('_walkHalted() {');
 const alertCount = liveMethod('_alertCount() {', { AWARE_STATES });
 
 describe('the constants', () => {
-    test('a day is 600 actions (provisional) and moods fade every 40', () => {
+    test('a day is 600 actions and moods fade every 40', () => {
         assert.equal(DAY_LENGTH_ACTIONS, 600);
         assert.equal(DISPOSITION_DECAY_TURNS, 40);
     });

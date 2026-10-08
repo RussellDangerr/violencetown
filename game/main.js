@@ -151,7 +151,7 @@ const AWARE_STATES = new Set(['suspicious', 'searching', 'chasing']);
 // it daytime with a dusk/night/dawn stretch around "midnight." NIGHT_MAX < 1 so
 // deep night stays a cool blue rather than pitch black (the player aura + lamps
 // keep it readable). Quest 1 takes ~200 actions, so a first run reaches dusk.
-const DAY_LENGTH_ACTIONS = 600;  // PROVISIONAL (Caelan to confirm): actions per full day, starting at noon
+const DAY_LENGTH_ACTIONS = 600;  // actions per full day, starting at noon (ruled 2026-10-06)
 const NIGHT_MAX     = 0.85;
 
 // ── Directions ───────────────────────────────────────────────────────────────
@@ -3692,12 +3692,6 @@ class Game {
                 // npc.vendor (that would regress the give-into-trade fold).
                 if (npc) { this._openOffer(npc); return; }
                 this._log('[No one to trade with there]');
-                break;
-            }
-            case 'hide': {
-                // Stub — no stealth system yet. Graceful no-op that spends the turn.
-                this._log('[You try to keep a low profile... (no effect yet)]');
-                this._advanceWorld();
                 break;
             }
             default: this._log(`[${node.label} isn't ready yet]`); // dep stub — never crash

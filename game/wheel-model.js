@@ -106,7 +106,6 @@ export const ROOT = { key: 'menu', label: 'MENU', children: [
     // Flight (evasion) sub-wheel — kept from dev's two-wheels layout (spec §6).
     { key: 'flight', label: 'Flight', color: '#cba43c', text: '#2a1f06', children: [
       { key: 'run',  label: 'Run',  aimType: 'adjacent', resolver: 'run',  available: always },
-      { key: 'hide', label: 'Hide', aimType: 'none',     resolver: 'hide', available: always },
       { key: 'wait', label: 'Wait', aimType: 'none',     resolver: 'wait', available: always },
     ]},
   ]},

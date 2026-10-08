@@ -19,8 +19,7 @@ import { TILE_BY_ID } from '../game/data.js';
 
 const GAME_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'game');
 
-// `*-map.json` matches the real maps and excludes the stale
-// `*-map-TheDangerrZone.json` snapshots, which end in `-TheDangerrZone.json`.
+// `*-map.json` matches every real map.
 const mapFiles = readdirSync(GAME_DIR)
     .filter(f => f.endsWith('-map.json'))
     .sort();
