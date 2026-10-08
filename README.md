@@ -14,7 +14,7 @@ A browser-based 2D action-RPG of small violences, set across a hand-authored, di
 
 Violencetown is a small game with deliberately deep systems. The interesting part isn't the content (yet) — it's the machinery:
 
-- A **turn-based world on one clock**: one input = one action = one world-tick, so combat, ambient NPC life, and a day/night cycle all advance on the same beat.
+- A **turn-based world on one clock**: one input = one action = one world-tick, so combat, moods, the day/night cycle and every random roll advance only when you act. Townsfolk keep wandering while you stand still, on their own dice, so how long you think can never change an outcome.
 - A **radial action wheel** driven by a pure state machine, where a single function is the source of truth for *"which tiles does this action hit"* — read identically by the highlight, the friendly-fire confirm, and the damage resolver.
 - A **disposition economy**: every NPC carries one mood scalar that gifts, bribes, and dialogue all move through a single seam; cross a threshold and an enemy flips into an ally that fights for you — and that same scalar prices what a merchant charges.
 - **Determinism by construction**: all randomness flows from one seeded generator, so a run is reproducible and resumable.
@@ -88,7 +88,13 @@ The splats were rebuilt around legibility: each damage type is its own pixel sil
 
 Then four AI agents played the branch headless in parallel — the cascade, the splats, a flag-off regression sweep against `dev`, and odd viewports — each reproducing every finding twice. They confirmed nothing changed an outcome, found six cascade bugs (all fixed), and turned up an older one worth the whole exercise: an enemy killed by its own poison at the start of its turn still took that turn, and its death was never handled — so a poison finish on the Were-Rat dropped no catalytic converter, and quest 1 could not be won.
 
-More system write-ups (combat feel, the unified world clock, zone pursuit) live in [`plans/`](plans/).
+### 7. One clock — thinking time changes nothing
+
+The autoplay (§5) exposed a deeper problem than replay: out of a fight, a half-second timer still moved the day, faded every NPC's mood toward neutral, and walked the townsfolk with the same random generator that rolls fights and thefts. Standing still changed the world, and so did the time you spent deciding — a slow thinker met different dice. The fix makes the player's committed action the only clock: the day is 600 actions long and saved with the game, moods fade every 40 actions, and pause really pauses. The town keeps its look of life — people still wander on the timer while you stand there — but wander now draws from a stream of its own, so it can never touch an outcome's roll. A held walk also stops the moment a fight starts or someone notices you, so walking can no longer carry you through enemy blows.
+
+Proving it was the interesting part. The autoplay's numbers moved, and "it changed" is not a result: switching each change off in turn showed that the whole difference came from the dice split — wander had been spending fight rolls between actions — while the new day clock and mood fade moved nothing. Only then was the new baseline recorded.
+
+More system write-ups (combat feel, zone pursuit, the poisons) live in [`plans/`](plans/).
 
 ## How it works (mechanics)
 
