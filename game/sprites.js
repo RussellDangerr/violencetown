@@ -11,6 +11,8 @@
 
 import { dirOf } from './perception.js';
 
+import { ART, TINY_INK, TINY_STYLE_SHEETS } from './art-flags.js';   // SPIKE: the art-style prototype
+
 export class SpriteSheet {
     // `padding` is the gap (in source pixels) between adjacent cells. Kenney's
     // roguelike packs ship with a 1-pixel gutter between every 16×16 cell —
@@ -69,6 +71,45 @@ export class SpriteSheet {
         if (!this.loaded) return false;
         ctx.drawImage(this.img, sx, sy, sw, sh, dx, dy, dw ?? sw, dh ?? sh);
         return true;
+    }
+
+    // SPIKE (art-style): a sprite (never a ground tile) drawn with the Tiny
+    // packs' outline when ?art=outline is on and this sheet is not already in
+    // the Tiny style. The outlined cell is built once: 1 source pixel of ink on
+    // every transparent pixel beside an opaque one, in a cell 1 px wider each side.
+    drawRegionInk(ctx, sx, sy, sw, sh, dx, dy, dw, dh) {
+        if (!this.loaded) return false;
+        dw = dw ?? sw; dh = dh ?? sh;
+        if (!ART.outline || TINY_STYLE_SHEETS.has(this.key)) return this.drawRegion(ctx, sx, sy, sw, sh, dx, dy, dw, dh);
+        const cell = this._inked(sx, sy, sw, sh);
+        const kx = dw / sw, ky = dh / sh;
+        ctx.drawImage(cell, dx - kx, dy - ky, dw + 2 * kx, dh + 2 * ky);
+        return true;
+    }
+    drawFrameInk(ctx, col, row, x, y, destW, destH) {
+        return this.drawRegionInk(ctx, col * (this.frameW + this.padding), row * (this.frameH + this.padding),
+            this.frameW, this.frameH, x, y, destW ?? this.frameW, destH ?? this.frameH);
+    }
+    _inked(sx, sy, sw, sh) {
+        this._inkCache = this._inkCache || new Map();
+        const k = `${sx},${sy},${sw},${sh}`;
+        let c = this._inkCache.get(k);
+        if (c) return c;
+        c = document.createElement('canvas');
+        c.width = sw + 2; c.height = sh + 2;
+        const g = c.getContext('2d');
+        g.drawImage(this.img, sx, sy, sw, sh, 1, 1, sw, sh);
+        const im = g.getImageData(0, 0, c.width, c.height), d = im.data, W = c.width, H = c.height;
+        const solid = (x, y) => x >= 0 && y >= 0 && x < W && y < H && d[(y * W + x) * 4 + 3] > 0;
+        const ink = [];
+        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+            if (solid(x, y)) continue;
+            if (solid(x - 1, y) || solid(x + 1, y) || solid(x, y - 1) || solid(x, y + 1)) ink.push((y * W + x) * 4);
+        }
+        for (const i of ink) { d[i] = TINY_INK[0]; d[i + 1] = TINY_INK[1]; d[i + 2] = TINY_INK[2]; d[i + 3] = 255; }
+        g.putImageData(im, 0, 0);
+        this._inkCache.set(k, c);
+        return c;
     }
 }
 
@@ -764,6 +805,7 @@ export async function loadAllSprites() {
 
     for (const [key, def] of Object.entries(SHEETS)) {
         const sheet = new SpriteSheet(def.src, def.frameW, def.frameH, def.padding ?? 0);
+        sheet.key = key;
         loaded[key] = sheet;
         promises.push(sheet.ready);
     }

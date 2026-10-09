@@ -5,6 +5,7 @@
 
 import { TILE_PX, CANVAS_PX, SAFE_SLOTS, TILE_BY_ID } from './data.js';
 import { DEFAULT_VIEW, offView, snapPx } from './viewport.js';   // (screen-fill) the screen's geometry
+import { ART, spriteInset } from './art-flags.js';               // SPIKE: the art-style prototype
 
 // The splash canvas's supersample: its 320x220 card is drawn at 2x so the
 // VT323 text stays sharp. The game canvas's transform comes from the viewport
@@ -498,6 +499,7 @@ export class Renderer {
         ctx.translate(shakeX, shakeY);
 
         this._drawTiles(game);
+        if (ART.shadow) this._drawWallShadows(game);   // SPIKE: the art-style prototype
         this._drawPuddles(game);
         this._drawContainers(game);
         this._drawGroundItems(game);
@@ -1036,7 +1038,7 @@ export class Renderer {
                     // pass's near-white at dusk, flickering between the two.
                     if (ref.under === 'fill') { ctx.fillStyle = def.fallbackColor; ctx.fillRect(px, py, TILE_PX, TILE_PX); }
                     else if (ref.under != null) this._drawTileRef(tileRef(ref.under), px, py);
-                    ok = this._drawTileRef(tileFrame(ref, wx, wy), px, py);
+                    ok = this._drawTileRef(tileFrame(ref, wx, wy), px, py, typeof ref.under === 'number');
                 }
                 if (!ok) {
                     ctx.fillStyle = def.fallbackColor;
@@ -1056,7 +1058,7 @@ export class Renderer {
         for (const b of carBlocks) {
             let ok = false;
             if (carSheet?.loaded) {
-                ok = carSheet.drawFrame(ctx, 0, 0, b.px, b.py, TILE_PX * 2, TILE_PX * 2);
+                ok = this._inkFrame(carSheet, ctx, 0, 0, b.px, b.py, TILE_PX * 2, TILE_PX * 2);
             }
             if (!ok) {
                 // Car sheet not loaded — flat fill across the whole block in the
@@ -1071,9 +1073,19 @@ export class Renderer {
     // Draw one tile ref into the TILE_PX cell at (px, py). Returns false when
     // there's nothing to draw it with, so the caller can fall back to the
     // tile's flat colour.
-    _drawTileRef(ref, px, py) {
+    // SPIKE (art-style): the outlined draw when the sheet has it (a test's fake
+    // sheet may not), else the plain one.
+    _inkFrame(sheet, ...a) { return (sheet.drawFrameInk || sheet.drawFrame).apply(sheet, a); }
+    _inkRegion(sheet, ...a) { return (sheet.drawRegionInk || sheet.drawRegion).apply(sheet, a); }
+
+    _drawTileRef(ref, px, py, object = false) {
         const sheet = ref && this.sprites?.[ref.sheet];
         if (!sheet?.loaded) return false;
+        // SPIKE (art-style): an object tile (one drawn over ANOTHER tile's art: a
+        // numeric `under`, not 'fill') takes the sprite outline; a ground tile never does.
+        if (object) return ref.region
+            ? this._inkRegion(sheet, this.ctx, ref.x, ref.y, ref.w, ref.h, px, py, TILE_PX, TILE_PX)
+            : this._inkFrame(sheet, this.ctx, ref.col, ref.row, px, py, TILE_PX, TILE_PX);
         return ref.region
             ? sheet.drawRegion(this.ctx, ref.x, ref.y, ref.w, ref.h, px, py, TILE_PX, TILE_PX)  // pixel region (large exterior sheets)
             : sheet.drawFrame(this.ctx, ref.col, ref.row, px, py, TILE_PX, TILE_PX);            // grid cell
@@ -1211,7 +1223,8 @@ export class Renderer {
             const info = hasContents ? CONTAINER_SPRITES.closed : CONTAINER_SPRITES.open;
             let ok = false;
             if (sprites?.[info.sheet]?.loaded) {
-                ok = sprites[info.sheet].drawFrame(ctx, info.col, info.row, px + 4, py + 4, TILE_PX - 8, TILE_PX - 8);
+                const ins = spriteInset();
+                ok = this._inkFrame(sprites[info.sheet], ctx, info.col, info.row, px + ins, py + ins, TILE_PX - 2 * ins, TILE_PX - 2 * ins);
             }
 
             if (!ok) {
@@ -1250,6 +1263,32 @@ export class Renderer {
 
     // ── Ground Items ─────────────────────────────────────────────────────────
 
+    // SPIKE (art-style): banded shadows on the floor along the base of every wall
+    // (a floor tile whose north neighbour is a wall tile), in two hard steps at the
+    // art's own pixel size — so walls read as standing up off the floor.
+    _drawWallShadows(game) {
+        const { ctx } = this;
+        const vp = this._view();
+        const m = game.map, PX = TILE_PX / 16;      // one art pixel
+        ctx.save();
+        for (let j = vp.span.jMin - 1; j <= vp.span.jMax + 1; j++) {
+            for (let i = vp.span.iMin - 1; i <= vp.span.iMax + 1; i++) {
+                const wx = game.playerX + i, wy = game.playerY + j;
+                if (!m.isInBounds(wx, wy) || !m.isInBounds(wx, wy - 1)) continue;
+                // Floor below a WALL: judged on the tiles alone, so a prop (a lamp)
+                // or an object tile (a bench, a bin) casts no wall shadow.
+                const here = m.getTileDef(wx, wy), above = m.getTileDef(wx, wy - 1);
+                if (!here?.walkable || above?.walkable !== false) continue;
+                if (typeof tileRef(m.getTile(wx, wy - 1))?.under === 'number') continue;
+                const px = vp.origin.x + i * TILE_PX - this._scrollX;
+                const py = vp.origin.y + j * TILE_PX - this._scrollY;
+                ctx.fillStyle = 'rgba(30,18,24,0.30)'; ctx.fillRect(px, py, TILE_PX, 3 * PX);
+                ctx.fillStyle = 'rgba(30,18,24,0.14)'; ctx.fillRect(px, py + 3 * PX, TILE_PX, 2 * PX);
+            }
+        }
+        ctx.restore();
+    }
+
     // (poisons) A sludge puddle wears the SLUDGE tile's own art, fading out over
     // its last few turns so you can see it drying.
     _drawPuddles(game) {
@@ -1286,7 +1325,8 @@ export class Renderer {
             const spr = itemSprite(item.type);
             let drawn = false;
             if (spr && sprites?.[spr.sheet]?.loaded) {
-                drawn = sprites[spr.sheet].drawRegion(ctx, spr.x, spr.y, spr.w, spr.h, px + 4, py + 4, 24, 24);
+                const ins = spriteInset();
+                drawn = this._inkRegion(sprites[spr.sheet], ctx, spr.x, spr.y, spr.w, spr.h, px + ins, py + ins, TILE_PX - 2 * ins, TILE_PX - 2 * ins);
             }
 
             if (!drawn) {
@@ -1434,7 +1474,7 @@ export class Renderer {
         const dh = def.hTiles * TILE_PX;
         const dx = px + TILE_PX / 2 - dw / 2;   // center on the base tile
         const dy = py + TILE_PX - dh;           // bottom edge sits on the tile
-        sheet.drawRegion(ctx, def.sx, def.sy, def.sw, def.sh, dx, dy, dw, dh);
+        this._inkRegion(sheet, ctx, def.sx, def.sy, def.sw, def.sh, dx, dy, dw, dh);
     }
 
     // ── Enemies ──────────────────────────────────────────────────────────────
@@ -1492,7 +1532,8 @@ export class Renderer {
         let ok = false;
         withWalk(ctx, ecx, ecy, { bob: ea.bob, rot: ea.rot, flipX: eFlip }, () => {
             if (frame && sprites?.[frame.sheet]?.loaded) {
-                ok = sprites[frame.sheet].drawFrame(ctx, frame.col, frame.row, px + 4, py + 4, TILE_PX - 8, TILE_PX - 8);
+                const ins = spriteInset();
+                ok = this._inkFrame(sprites[frame.sheet], ctx, frame.col, frame.row, px + ins, py + ins, TILE_PX - 2 * ins, TILE_PX - 2 * ins);
             }
             if (!ok) {
                 ctx.fillStyle = isAlive ? '#cc4433' : '#555';
@@ -2057,7 +2098,7 @@ export class Renderer {
             if (sprites?.player?.loaded) {
                 ok = sprites.player.drawFrame(
                     ctx, PLAYER_SPRITE.col, PLAYER_SPRITE.row,
-                    ppx + 4, ppy + 4, TILE_PX - 8, TILE_PX - 8
+                    ppx + spriteInset(), ppy + spriteInset(), TILE_PX - 2 * spriteInset(), TILE_PX - 2 * spriteInset()
                 );
             }
             if (!ok) {
