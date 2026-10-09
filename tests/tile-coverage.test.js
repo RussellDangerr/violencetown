@@ -67,8 +67,9 @@ describe('tile coverage', () => {
 
             for (let index = 0; index < map.tiles.length; index++) {
                 const tileId = map.tiles[index];
-                // Tile ids 0 and 10 are intentional null fallbacks (WALL, TOWN_WALL).
-                if (tileId === 0 || tileId === 10) continue;
+                // Tile id 0 is the intentional null fallback (WALL). TOWN_WALL (10)
+                // used to be one too and drew as a flat brown band; it is a hedge now.
+                if (tileId === 0) continue;
 
                 if (!(tileId in allTileMaps)) {
                     const x = index % map.width;
@@ -84,8 +85,8 @@ describe('tile coverage', () => {
         const missing = [];
         for (const [name, def] of Object.entries(TILES)) {
             const id = def.id;
-            // Intentional dark fallbacks (id 0 WALL, id 10 TOWN_WALL).
-            if (id === 0 || id === 10) continue;
+            // Intentional dark fallback (id 0 WALL).
+            if (id === 0) continue;
 
             if (!(id in allTileMaps)) {
                 missing.push(`${name} (id ${id})`);

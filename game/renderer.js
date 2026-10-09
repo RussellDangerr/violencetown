@@ -10,7 +10,7 @@ import { DEFAULT_VIEW, offView, snapPx } from './viewport.js';   // (screen-fill
 // VT323 text stays sharp. The game canvas's transform comes from the viewport
 // (setViewport / renderFrame).
 const SS = 2;
-import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES, CONTAINER_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES, MARK_SPRITES, spriteVariant, spriteFrame, tileFrame, idHash } from './sprites.js';
+import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, itemSprite, CONTAINER_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES, MARK_SPRITES, spriteVariant, spriteFrame, tileFrame, idHash } from './sprites.js';
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
 import { ROOT, selectedNode, activeRing, activeIndex, decisionPath, previewChildren, affectedTiles, verbApplies, isCombatActive, flapperDeflection, defaultVerb } from './wheel-model.js'; // (sunburst wheel) + the bump telegraph
 import {
@@ -164,6 +164,34 @@ const AWARENESS_EMOTE = { suspicious: 'question', searching: 'exclamation', chas
 // Town's south exit). Among themselves, and for everyone else: smaller feet-Y
 // (further back / north) first, and on a tie the player last, so it reads on
 // top of a same-row NPC or prop.
+// The off-map cells left bare of filler props: a prop `hTiles` tall reaches
+// up into the rows above its feet, so the rows just past the SOUTH edge, under
+// the map's own columns, would paint over the map's last row(s).
+export function fillerSkips(wx, wy, mw, mh, hTiles = 1) {
+    return wx >= 0 && wx < mw && wy >= mh && wy < mh + Math.max(0, hTiles - 1);
+}
+
+// The facing cue's triangle for a watcher whose tile centre is (cx, cy), facing
+// the unit vector (ux, uy): its tip just past the tile's edge, its base just
+// inside it, so it never crosses the body. Whole pixels.
+export function facingCue(cx, cy, ux, uy, tilePx = 32) {
+    const tip = tilePx / 2 + 4, base = tilePx / 2 - 1, half = 3;
+    return [
+        [Math.round(cx + ux * tip), Math.round(cy + uy * tip)],
+        [Math.round(cx + ux * base - uy * half), Math.round(cy + uy * base + ux * half)],
+        [Math.round(cx + ux * base + uy * half), Math.round(cy + uy * base - ux * half)],
+    ];
+}
+
+// Which way an exit's arrow points: toward the map edge the tile is nearest
+// (see _drawTransitions). On a tie the vertical edge wins.
+export function exitDir(t, mw, mh) {
+    const up = t.y, down = mh - 1 - t.y, left = t.x, right = mw - 1 - t.x;
+    const v = Math.min(up, down), h = Math.min(left, right);
+    if (v <= h) return down < up ? 'down' : up < down ? 'up' : 'down';
+    return right < left ? 'right' : 'left';
+}
+
 export function actorOrder(a, b) {
     return ((b.filler ? 1 : 0) - (a.filler ? 1 : 0))
         || (a.feetY - b.feetY)
@@ -1081,21 +1109,13 @@ export class Renderer {
 
         const EXIT = '255,205,90'; // warm gold — clearly not floor
 
-        // Outward arrow direction = the dominant axis from the map CENTRE to the
-        // tile. A door always sits near the edge it leads through, so center→tile
-        // points outward — and this stays correct for doors set one tile INSIDE
-        // the border (e.g. town's SEWER exit at x=32 in a 34-wide map, or the
-        // factory's east exit at x=28 in 30), where a strict on-the-edge test
-        // would wrongly fall through to 'down'. A truly central tile degenerates
-        // gracefully to whichever axis dominates (or 'down' if dead-centre).
-        const E = 0.5;
-        const dirOf = (t) => {
-            const dx = (t.x + 0.5) - mw / 2;
-            const dy = (t.y + 0.5) - mh / 2;
-            if (Math.abs(dx) < E && Math.abs(dy) < E) return 'down';
-            if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? 'right' : 'left';
-            return dy >= 0 ? 'down' : 'up';
-        };
+        // Outward arrow direction = toward the map edge the tile is NEAREST. A door
+        // always sits at or near the edge it leads through, and this stays right
+        // for doors set a tile inside it (town's sewer exit at x=32 of 34, the
+        // factory's at x=28 of 30). It used to be the dominant axis from the map's
+        // centre, which on a wide map (the Carnival, 58x22) sent its bottom-row
+        // exits pointing sideways. On a tie the vertical edge wins.
+        const dirOf = (t) => exitDir(t, mw, mh);
 
         let hintLabel = null; // shown if player is on/adjacent to a transition
 
@@ -1262,8 +1282,8 @@ export class Renderer {
             const px = vp.origin.x + dx * TILE_PX - this._scrollX;
             const py = vp.origin.y + dy * TILE_PX - this._scrollY;
 
-            // Try sprite from ITEM_SPRITES
-            const spr = ITEM_SPRITES[item.type];
+            // The item's icon (or the plain bag every unsprited item shares)
+            const spr = itemSprite(item.type);
             let drawn = false;
             if (spr && sprites?.[spr.sheet]?.loaded) {
                 drawn = sprites[spr.sheet].drawRegion(ctx, spr.x, spr.y, spr.w, spr.h, px + 4, py + 4, 24, 24);
@@ -1349,11 +1369,18 @@ export class Renderer {
         // reach, with the same 3-tile overhang margin as map props. No ground
         // shadows for these: a forest of them would be hundreds of gradients a
         // frame, and a wall of trees does not need them.
+        // A filler sprite taller than a tile reaches up into the row above it, so
+        // the off-map rows just past the south edge are left bare (the canopy of
+        // the row beyond already covers them). Without this the trees painted
+        // over the map's last row and buried every south exit.
         const fillerProp = game.map?.border?.prop ? PROP_SPRITES[game.map.border.prop] : null;
         if (fillerProp) {
+            const mw = game.map.width, mh = game.map.height;
             for (let j = vp.span.jMin - 3; j <= vp.span.jMax + 3; j++) {
                 for (let i = vp.span.iMin - 3; i <= vp.span.iMax + 3; i++) {
-                    if (game.map.isInBounds(game.playerX + i, game.playerY + j)) continue;
+                    const wx = game.playerX + i, wy = game.playerY + j;
+                    if (game.map.isInBounds(wx, wy)) continue;
+                    if (fillerSkips(wx, wy, mw, mh, fillerProp.hTiles)) continue;
                     const px = vp.origin.x + i * TILE_PX - this._scrollX;
                     const py = vp.origin.y + j * TILE_PX - this._scrollY;
                     actors.push({ kind: 'prop', def: fillerProp, px, py, feetY: py + TILE_PX, filler: true });
@@ -2394,8 +2421,8 @@ export class Renderer {
                 if (f.ringId) {
                     ctx.strokeStyle = UI.gold; ctx.lineWidth = 2;
                     ctx.strokeRect(s.x + 1, s.y + 1, s.w - 2, s.h - 2);
-                    const name = strip((RINGS[f.ringId] && RINGS[f.ringId].name) || f.ringId);
-                    this.font.drawText(ctx, name, s.x + s.w / 2, s.y + s.h / 2 - 4, { color: UI.gold, scale: 1, align: 'center' });
+                    const name = this._fitText(strip((RINGS[f.ringId] && RINGS[f.ringId].name) || f.ringId), s.w - 6);
+                    this.font.drawText(ctx, name.text, s.x + s.w / 2, s.y + s.h / 2 - 4, { color: UI.gold, scale: name.scale, align: 'center' });
                 }
             }
         }
@@ -2460,7 +2487,7 @@ export class Renderer {
 
             if (stack) {
                 // Try sprite
-                const spr = ITEM_SPRITES[stack.itemDef.id];
+                const spr = itemSprite(stack.itemDef.id);
                 let drawn = false;
                 if (spr && sprites?.[spr.sheet]?.loaded) {
                     drawn = sprites[spr.sheet].drawRegion(ctx, spr.x, spr.y, spr.w, spr.h, rect.x + 7, rect.y + 9, 24, 24);
@@ -2515,7 +2542,7 @@ export class Renderer {
 
         // Item icon (sprite, else the colored-letter fallback — mirrors _drawHotbar).
         const ix = p.x + 12, iy = p.y + 12;
-        const spr = ITEM_SPRITES[def.id];
+        const spr = itemSprite(def.id);
         let drawn = false;
         if (spr && sprites?.[spr.sheet]?.loaded) {
             drawn = sprites[spr.sheet].drawRegion(ctx, spr.x, spr.y, spr.w, spr.h, ix, iy, 32, 32);
@@ -2531,9 +2558,16 @@ export class Renderer {
         const name = (def.name || def.id || '').replace(/[\[\]]/g, '');
         const zone = zoneOf(sel.index, SAFE_SLOTS).toUpperCase();
         const qty = stack.count > 1 ? ` x${stack.count}` : '';
-        this.font.drawText(ctx, name, tx, p.y + 12, { color: UI.gold, scale: 2 });
-        this.font.drawText(ctx, itemStatLine(def), tx, p.y + 36, { color: UI.text, scale: 1 });
-        this.font.drawText(ctx, `${zone}${qty}`, tx, p.y + 52, { color: UI.dim, scale: 1 });
+        const room = p.x + p.w - 12 - tx;
+        const fitName = this._fitText(name, room, 2, 1);
+        this.font.drawText(ctx, fitName.text, tx, p.y + 12, { color: UI.gold, scale: fitName.scale });
+        // The stat line falls back to the item's description, which is often a
+        // sentence: wrap it to the panel, two lines at most.
+        const perLine = Math.max(8, Math.floor(room / this.font.measure('M', 1)));
+        let statLines = this._wrapText(itemStatLine(def), perLine);
+        if (statLines.length > 2) statLines = [statLines[0], this._fitText(statLines.slice(1).join(' '), room).text];
+        statLines.forEach((line, i) => this.font.drawText(ctx, line, tx, p.y + 34 + i * 12, { color: UI.text, scale: 1 }));
+        this.font.drawText(ctx, `${zone}${qty}`, tx, p.y + 38 + statLines.length * 12, { color: UI.dim, scale: 1 });
 
         // Action buttons — one per action, on the shared action-row rects. Drop is
         // destructive (whole-stack, no confirm) so it wears red, not gold — with
@@ -3495,15 +3529,23 @@ export class Renderer {
             const sy = vp.origin.y + (w.y - game.playerY) * TILE_PX - this._scrollY;
             if (sx < -TILE_PX || sx > vp.w || sy < -TILE_PX || sy > vp.h) continue;
 
+            // The facing cue: a small chevron on the ground just past the tile's
+            // edge, pointing the way the watcher looks. It used to be a line from
+            // the tile's centre, which ran straight through the body of anyone
+            // facing down and read as a stick through every townsperson.
             const { fx, fy } = facingOf(w);
             const len = Math.hypot(fx, fy) || 1;
+            const [a, b, c] = facingCue(sx + TILE_PX / 2, sy + TILE_PX / 2, fx / len, fy / len, TILE_PX);
             ctx.save();
-            ctx.strokeStyle = 'rgba(212,185,106,0.75)';
-            ctx.lineWidth = 2;
+            ctx.fillStyle = 'rgba(212,185,106,0.9)';
+            ctx.strokeStyle = 'rgba(63,38,49,0.9)';      // the Tiny packs' plum outline
+            ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.moveTo(sx + TILE_PX / 2, sy + TILE_PX / 2);
-            ctx.lineTo(sx + TILE_PX / 2 + (fx / len) * TILE_PX * 0.45,
-                       sy + TILE_PX / 2 + (fy / len) * TILE_PX * 0.45);
+            ctx.moveTo(a[0], a[1]);
+            ctx.lineTo(b[0], b[1]);
+            ctx.lineTo(c[0], c[1]);
+            ctx.closePath();
+            ctx.fill();
             ctx.stroke();
             ctx.restore();
 
@@ -3603,7 +3645,8 @@ export class Renderer {
 
         const padX = 24;
         const textX = px + padX;
-        const charsPerLine = Math.max(8, Math.floor((w - padX * 2) / 8)); // 8px glyph @ scale 1
+        // VT323 is monospace: one glyph's real width sets the line length.
+        const charsPerLine = Math.max(8, Math.floor((w - padX * 2) / this.font.measure('M', 1)));
         const contentTop = py + 56;
         const contentBottom = py + h - 30;
         const lineH = 12;
@@ -3621,12 +3664,11 @@ export class Renderer {
         const lines = [];
         for (const m of hist) {
             const color = this._logStripColor(m.category);
-            const t = m.text;
-            if (t.length <= charsPerLine) {
-                lines.push({ text: t, color });
-            } else {
-                for (let i = 0; i < t.length; i += charsPerLine) {
-                    lines.push({ text: t.slice(i, i + charsPerLine), color });
+            // Break between words, so a closing "]" never lands on a line of
+            // its own; a single word longer than the line is cut where it must.
+            for (const line of this._wrapText(m.text, charsPerLine)) {
+                for (let i = 0; i < line.length; i += charsPerLine) {
+                    lines.push({ text: line.slice(i, i + charsPerLine), color });
                 }
             }
         }
@@ -3664,7 +3706,7 @@ export class Renderer {
     // fallback) into a size×size box. Mirrors the hotbar's item draw.
     _drawItemIcon(itemDef, x, y, size) {
         const { ctx, sprites } = this;
-        const spr = ITEM_SPRITES[itemDef.id];
+        const spr = itemSprite(itemDef.id);
         let drawn = false;
         if (spr && sprites?.[spr.sheet]?.loaded) {
             drawn = sprites[spr.sheet].drawRegion(ctx, spr.x, spr.y, spr.w, spr.h, x, y, size, size);
@@ -3739,8 +3781,11 @@ export class Renderer {
         this._drawOfferDescription(game, L, R);
         this._drawOfferLedger(game, L, R);
 
-        this.font.drawText(ctx, 'TAB SIDE  SPACE STAGE  ENTER OFFER  ESC CLOSE',
-            L.panel.x + 8, L.hintY, { color: UI.dim, scale: 1 });
+        // The key legend sits between the ledger and the frame's bottom stroke:
+        // centred, a touch smaller, and clear of the frame on every side.
+        const legend = this._fitText('TAB SIDE  SPACE STAGE  ENTER OFFER  ESC CLOSE', L.panel.w - 32, 0.85, 0.75);
+        this.font.drawText(ctx, legend.text, L.panel.x + L.panel.w / 2, L.hintY - 2,
+            { color: UI.dim, scale: legend.scale, align: 'center' });
     }
 
     // The staged offer, made unambiguous. Gold rides in whichever tray its sign
@@ -4396,7 +4441,8 @@ export class Renderer {
                 const iconSize = 20;
                 this._drawItemIcon(item, s.x + 6, s.y + s.h - iconSize - 4, iconSize);
                 const name = (item.name || item.id || '').replace(/^\[|\]$/g, '');
-                this.font.drawText(ctx, name.toUpperCase(), s.x + iconSize + 12, s.y + s.h - iconSize + 2, { color: UI.text, scale: 1 });
+                const fit = this._fitText(name.toUpperCase(), s.x + s.w - 6 - (s.x + iconSize + 12));
+                this.font.drawText(ctx, fit.text, s.x + iconSize + 12, s.y + s.h - iconSize + 2, { color: UI.text, scale: fit.scale });
                 if (item.armor) this.font.drawText(ctx, '+' + item.armor, s.x + s.w - 6, s.y + 4, { color: UI.gold, scale: 1, align: 'right' });
             } else {
                 this.font.drawText(ctx, 'EMPTY', s.x + s.w / 2, s.y + s.h - 16, { color: UI.dim, scale: 1, align: 'center' });
@@ -4455,6 +4501,20 @@ export class Renderer {
 
     // Word-wrap `text` into lines no longer than `maxChars` characters (the
     // bitmap font is fixed 8px/char at scale 1).
+    // Fit a one-line label into `maxW` px: shrink the scale (VT323 scales
+    // smoothly, never below `minScale`), then cut with "..." if it still runs
+    // over. Returns { text, scale } for drawText.
+    _fitText(text, maxW, scale = 1, minScale = 0.75) {
+        text = String(text);
+        const w = this.font.measure(text, scale);
+        if (w <= maxW) return { text, scale };
+        const s = Math.max(minScale, scale * maxW / w);
+        if (this.font.measure(text, s) <= maxW) return { text, scale: s };
+        let n = text.length;
+        while (n > 1 && this.font.measure(text.slice(0, n) + '...', s) > maxW) n--;
+        return { text: text.slice(0, n).trimEnd() + '...', scale: s };
+    }
+
     _wrapText(text, maxChars) {
         const words = String(text).split(' ');
         const lines = [];

@@ -1,6 +1,7 @@
 # Batch 2 — what reads as broken, then one art style
 
-**Status:** spec (2026-10-08). Branch `fix/visual-breakage`, cut from `dev` at `585ac52` (v0.28.0).
+**Status:** stage 1 built and verified (2026-10-08), pushed, not merged. Branch `fix/visual-breakage`,
+cut from `dev` at `585ac52` (v0.28.0). Results in *Stage 1, as built* below.
 
 ## Why
 
@@ -35,6 +36,29 @@ Code and data only; no art-direction call needed. Each item names the finding it
 
 Verify: `npm test`, balance, naming, autoplay; and a before/after screenshot of every fix with the
 audit's harness, at 1920×1080 and 3440×1440.
+
+### Stage 1, as built (2026-10-08)
+
+| Fix | What it turned out to be, and what changed |
+| --- | --- |
+| Stick through NPCs | Not an item: the stealth overlay's **facing cue**, a tan line drawn from each watcher's tile centre the way it faces, so anyone facing down was run through. It is now a small chevron just past the tile's edge (`facingCue`, plum-outlined), so facing still reads and nothing crosses a body |
+| Lettered item boxes | 11 of the 14 got real cells (tinyDungeon/tinyTown). Three have no fitting cell yet (latex gloves, red cape, shoe bags) and draw as one plain bag (`UNKNOWN_ITEM_SPRITE`) instead of a letter; every draw site asks `itemSprite(id)` |
+| Opaque item squares | `tools/gen_tiny_extra.py` derives a small sheet from Tiny cells (CC0): the rock with its ground keyed out, Sludge Brain and the Sludge Sack recoloured to sludge, an orange Fire Blood bottle (the red one stays the bandage), and the goo vat |
+| Edge trees over the last row | The filler tree is two tiles tall, so the row just past the south edge reached into the map. That row is left bare (`fillerSkips`); the canopy beyond still starts at the edge |
+| Sideways Carnival arrows | The direction was the dominant axis from the map's centre; on the 58x22 Carnival that is sideways. Now toward the nearest edge (`exitDir`); every exit's arrow matches its label's North/South/East/West, pinned by a test |
+| Text past its frame | `_fitText` shrinks then cuts a label to its box (inspector name, gear slots, ring sockets, the offer legend); the inspector's description wraps to two lines; the log wraps between words with VT323's real glyph width, so no lone `]` |
+| Wheel off the screen | The hub sat low enough for the BACK tile (120 below) but the deepest dial is 162 across; the hub now clears the whole disc. The HUD layout test checks the vertical fit too |
+| Hint toast over the device | **Not a bug in play**: the first-run hint hides on the first key or tap, and opening the device takes one. The audit's scripts opened menus with no input. The "clipped inspector" was the same hint; with it gone the inspector fits at 1920x1080 |
+| Doubled doors | Town (8,7) is sidewalk now (the door sits in an alcove); Borgir (8,17) is wall, like the other rooms. Exits unchanged. A test forbids stacked doors |
+| Downtown's brown band | TOWN_WALL (tile 10) is a hedge of Tiny Town bushes on grass; the tile test no longer excuses it |
+| Orange slivers under the goo | The orange was baked into the Tiny cell (its dungeon floor); keyed out in the derived sheet and drawn over factory floor |
+
+Tests 1888 -> 1925 / 347 / 0 (+ `tests/visual-breakage.test.js`, mutation-checked; the HUD dial test now checks
+the vertical fit). Balance, naming and the autoplay golden are unchanged: none of this touches gameplay.
+All 12 maps render by day and night with a clean console; before/after screenshots at 1920x1080 and
+3440x1440.
+
+Noticed, not changed: on an exit tile the exit's gold glow draws over the player, washing them out.
 
 ## Stage 2 — one art style (own branch, after Caelan answers)
 
