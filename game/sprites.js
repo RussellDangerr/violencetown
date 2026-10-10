@@ -11,6 +11,15 @@
 
 import { dirOf } from './perception.js';
 
+// ── The house style (ruled 2026-10-09, plans/batch-2.md stage 2) ─────────────
+// Kenney's Tiny packs are the style everything else conforms to: their plum
+// outline on every sprite, one pixel size with the ground. Sprites from the
+// other packs get that outline when drawn (drawRegionInk); ground tiles never do.
+export const TINY_INK = [63, 38, 49];   // #3F2631, the Tiny packs' outline
+// Sheets already drawn in the Tiny style (or re-outlined by a tool), which the
+// outline pass leaves alone.
+export const TINY_STYLE_SHEETS = new Set(['tinyDungeon', 'tinyTown', 'tinyExtra', 'outlined', 'emotes', 'marks']);
+
 export class SpriteSheet {
     // `padding` is the gap (in source pixels) between adjacent cells. Kenney's
     // roguelike packs ship with a 1-pixel gutter between every 16×16 cell —
@@ -70,6 +79,45 @@ export class SpriteSheet {
         ctx.drawImage(this.img, sx, sy, sw, sh, dx, dy, dw ?? sw, dh ?? sh);
         return true;
     }
+
+    // A sprite (never a ground tile) drawn with the Tiny packs' outline, unless
+    // this sheet is already in the Tiny style. The outlined cell is built once:
+    // 1 source pixel of ink on every transparent pixel beside an opaque one, in a
+    // cell 1 px wider each side.
+    drawRegionInk(ctx, sx, sy, sw, sh, dx, dy, dw, dh) {
+        if (!this.loaded) return false;
+        dw = dw ?? sw; dh = dh ?? sh;
+        if (TINY_STYLE_SHEETS.has(this.key)) return this.drawRegion(ctx, sx, sy, sw, sh, dx, dy, dw, dh);
+        const cell = this._inked(sx, sy, sw, sh);
+        const kx = dw / sw, ky = dh / sh;
+        ctx.drawImage(cell, dx - kx, dy - ky, dw + 2 * kx, dh + 2 * ky);
+        return true;
+    }
+    drawFrameInk(ctx, col, row, x, y, destW, destH) {
+        return this.drawRegionInk(ctx, col * (this.frameW + this.padding), row * (this.frameH + this.padding),
+            this.frameW, this.frameH, x, y, destW ?? this.frameW, destH ?? this.frameH);
+    }
+    _inked(sx, sy, sw, sh) {
+        this._inkCache = this._inkCache || new Map();
+        const k = `${sx},${sy},${sw},${sh}`;
+        let c = this._inkCache.get(k);
+        if (c) return c;
+        c = document.createElement('canvas');
+        c.width = sw + 2; c.height = sh + 2;
+        const g = c.getContext('2d');
+        g.drawImage(this.img, sx, sy, sw, sh, 1, 1, sw, sh);
+        const im = g.getImageData(0, 0, c.width, c.height), d = im.data, W = c.width, H = c.height;
+        const solid = (x, y) => x >= 0 && y >= 0 && x < W && y < H && d[(y * W + x) * 4 + 3] > 0;
+        const ink = [];
+        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+            if (solid(x, y)) continue;
+            if (solid(x - 1, y) || solid(x + 1, y) || solid(x, y - 1) || solid(x, y + 1)) ink.push((y * W + x) * 4);
+        }
+        for (const i of ink) { d[i] = TINY_INK[0]; d[i + 1] = TINY_INK[1]; d[i + 2] = TINY_INK[2]; d[i + 3] = 255; }
+        g.putImageData(im, 0, 0);
+        this._inkCache.set(k, c);
+        return c;
+    }
 }
 
 // ── Kenney sheets ────────────────────────────────────────────────────────────
@@ -121,6 +169,11 @@ export const SHEETS = {
     // by tools/gen_emote_sheet.py; column order = EMOTE_SPRITES below. Packed
     // (no gutter), padding 0.
     emotes:       { src: `${K}/emotes_style1.png`, frameW: 16, frameH: 16 },
+
+    // Cells derived from the Tiny packs by tools/gen_tiny_extra.py: a keyed-out
+    // rock, the sludge vial and sack, the Fire Blood bottle, the goo vat without
+    // its dungeon-floor orange. Packed, padding 0.
+    tinyExtra:    { src: `${K}/tinyExtra_packed.png`, frameW: 16, frameH: 16 },
 
     // Kenney Emote Pack (Pixel, Style 8) — manga impact marks (animation pass
     // §1). A star inside Style 1's white balloon reads as someone SAYING
@@ -232,7 +285,7 @@ export const TILE_SPRITE_MAP = {
 // matches the terrain it sits on rather than a different series. Streetlights
 // are props now (PROP_SPRITES.streetlight) — id 18 is retired.
 export const TOWN_TILE_SPRITE_MAP = {
-    10: null,                                        // town wall edge — dark fallback (frames the map)
+    10: { sheet: 'tinyTown', col: 5, row: 0, under: 13 }, // town wall edge — a hedge of round bushes on grass (was a flat brown fallback band)
     11: { sheet: 'tinyTown', col: 1, row: 9 },       // sidewalk — light gray stone slab
     12: { sheet: 'tinyTown', col: 1, row: 2 },       // road — borderless dirt-field center (edge cells carry grass borders)
     13: { sheet: 'tinyTown', col: 0, row: 0 },       // grass — plain green
@@ -251,7 +304,7 @@ export const TOWN_TILE_SPRITE_MAP = {
 
 export const ITEM_SPRITES = {
     // Equipment / junk — Tiny Dungeon (visual rhymes at the 24×24 inventory size):
-    rock:    { sheet: 'tinyDungeon', x: 0 * 16,  y: 1 * 16,  w: 16, h: 16 },  // brown boulder/rubble
+    rock:    { sheet: 'tinyExtra',   x: 0 * 16,  y: 0,       w: 16, h: 16 },  // grey rubble, ground keyed out (the old cell carried a square of dirt)
     pipe:    { sheet: 'tinyDungeon', x: 10 * 16, y: 8 * 16,  w: 16, h: 16 },  // plain sword = elongated pipe/club
     soap:    { sheet: 'tinyDungeon', x: 5 * 16,  y: 9 * 16,  w: 16, h: 16 },  // white potion = pale bar proxy
     bandage: { sheet: 'tinyDungeon', x: 7 * 16,  y: 9 * 16,  w: 16, h: 16 },  // red potion = healing-red proxy
@@ -278,10 +331,33 @@ export const ITEM_SPRITES = {
 
     // ── Item icons, second pass (visual-pass, 2026-09-06) ───────────────────
     // Shortlist picks verified against the labeled contact sheets (tools/contact_*.png).
-    fire_blood:     { sheet: 'tinyDungeon', x: 5 * 16,  y: 2 * 16, w: 16, h: 16 },  // red-orange flame emblem (boss-trigger banner art) — took this over tinyTown (11,7)'s red/white canister, which has no actual flame shape
+    fire_blood:     { sheet: 'tinyExtra',   x: 3 * 16,  y: 0,      w: 16, h: 16 },  // the red bottle in fire orange: a drinkable poition (the flame banner it used carried a square of stone wall)
     burger_fries:   { sheet: 'tinyDungeon', x: 5 * 16,  y: 8 * 16, w: 16, h: 16 },  // nested-square box icon — passable fries carton
     wererat_fur:    { sheet: 'tinyTown',    x: 10 * 16, y: 8 * 16, w: 16, h: 16 },  // brown satchel/pouch
+
+    // ── Third pass (batch 2, 2026-10-08) — the fourteen that drew as a letter ──
+    sludge_brain:      { sheet: 'tinyExtra',   x: 1 * 16,  y: 0,       w: 16, h: 16 },  // vial, recoloured to sludge
+    sludge_sack:       { sheet: 'tinyExtra',   x: 2 * 16,  y: 0,       w: 16, h: 16 },  // sack, recoloured to sludge
+    wooden_sword:      { sheet: 'tinyDungeon', x: 11 * 16, y: 8 * 16,  w: 16, h: 16 },  // brown-bladed sword
+    ray_gun:           { sheet: 'tinyDungeon', x: 10 * 16, y: 10 * 16, w: 16, h: 16 },  // staff with a blue crystal: an energy weapon
+    lion_whip:         { sheet: 'tinyDungeon', x: 9 * 16,  y: 10 * 16, w: 16, h: 16 },  // purple-tipped staff
+    fearmur:           { sheet: 'tinyDungeon', x: 9 * 16,  y: 9 * 16,  w: 16, h: 16 },  // hammer: a club
+    gator_tail:        { sheet: 'tinyDungeon', x: 11 * 16, y: 10 * 16, w: 16, h: 16 },  // spear
+    foil_hat:          { sheet: 'tinyDungeon', x: 4 * 16,  y: 5 * 16,  w: 16, h: 16 },  // silver dome
+    cardboard_cuirass: { sheet: 'tinyDungeon', x: 6 * 16,  y: 5 * 16,  w: 16, h: 16 },  // brown board
+    grappling_hook:    { sheet: 'tinyTown',    x: 9 * 16,  y: 10 * 16, w: 16, h: 16 },  // hooked blade
+    alcohol:           { sheet: 'tinyTown',    x: 8 * 16,  y: 8 * 16,  w: 16, h: 16 },  // blue jar
+    // latex_gloves, red_cape, shoe_bags: no fitting cell yet; they draw as
+    // UNKNOWN_ITEM_SPRITE until they get art.
 };
+
+// What an item with no ITEM_SPRITES entry draws as: a plain bag, so a missing
+// icon reads as "an item" instead of a letter in a box.
+export const UNKNOWN_ITEM_SPRITE = { sheet: 'tinyTown', x: 11 * 16, y: 8 * 16, w: 16, h: 16 };
+
+export function itemSprite(id) {
+    return ITEM_SPRITES[id] || UNKNOWN_ITEM_SPRITE;
+}
 
 // NOT a source for these: `roguelikeChar_transparent.png` is bundled, and its
 // left two columns DO hold about fourteen finished, fully-dressed characters —
@@ -708,7 +784,7 @@ export const ZONE_TILE_SPRITE_MAP = {
     // already loaded (no new SHEETS entry needed to use any of it).
     40: { sheet: 'tinyDungeon', col: 9, row: 4 },     // FACTORY_FLOOR — clean gray stone slab
     41: { sheet: 'roguelikeCity', col: 16, row: 17, under: 40 }, // FACTORY_WALL  — chain-link fencing, factory floor through the mesh
-    42: { sheet: 'tinyDungeon', col: 8, row: 2 },     // GOO_VISUAL    — green ooze hatch
+    42: { sheet: 'tinyExtra', col: 4, row: 0, under: 40 },  // GOO_VISUAL — green ooze hatch on factory floor (tinyDungeon (8,2) with its orange keyed out)
     43: { sheet: 'tinyDungeon', col: 7, row: 6, under: 40 },     // CONVEYOR_VIS  — rail-and-crosstie belt motif, on factory floor
 
     // Graveyard — Tiny Town dirt/foliage. The graves are props (PROP_SPRITES
@@ -736,6 +812,7 @@ export async function loadAllSprites() {
 
     for (const [key, def] of Object.entries(SHEETS)) {
         const sheet = new SpriteSheet(def.src, def.frameW, def.frameH, def.padding ?? 0);
+        sheet.key = key;
         loaded[key] = sheet;
         promises.push(sheet.ready);
     }

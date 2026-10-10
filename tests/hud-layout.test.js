@@ -148,9 +148,12 @@ describe('the dock', () => {
             assert.equal(hud.strip, hud.dock.y);
         });
 
-        test(`${name}: the biggest dial fits across the screen, and the deepest BACK tile ends in the dock`, () => {
+        test(`${name}: the biggest dial fits on the screen, across AND down, and the deepest BACK tile ends in the dock`, () => {
             const hud = hudLayout(vp);
-            assert.ok(hud.wheel.cx - DIAL_MAX_R >= 0 && hud.wheel.cx + DIAL_MAX_R <= vp.w);
+            assert.ok(hud.wheel.cx - DIAL_MAX_R >= 0 && hud.wheel.cx + DIAL_MAX_R <= vp.w, 'across');
+            // The whole disc, not just the BACK tile: the hub once sat low enough
+            // only for the tile, and the disc ran off the bottom of the screen.
+            assert.ok(hud.wheel.cy - DIAL_MAX_R >= 0 && hud.wheel.cy + DIAL_MAX_R <= vp.h, 'down');
             assert.ok(hud.wheel.cy + 120 <= vp.h - 8 && hud.wheel.cy + 120 >= hud.dock.y);
         });
     }
