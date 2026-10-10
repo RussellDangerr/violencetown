@@ -11,7 +11,14 @@
 
 import { dirOf } from './perception.js';
 
-import { ART, TINY_INK, TINY_STYLE_SHEETS } from './art-flags.js';   // SPIKE: the art-style prototype
+// ── The house style (ruled 2026-10-09, plans/batch-2.md stage 2) ─────────────
+// Kenney's Tiny packs are the style everything else conforms to: their plum
+// outline on every sprite, one pixel size with the ground. Sprites from the
+// other packs get that outline when drawn (drawRegionInk); ground tiles never do.
+export const TINY_INK = [63, 38, 49];   // #3F2631, the Tiny packs' outline
+// Sheets already drawn in the Tiny style (or re-outlined by a tool), which the
+// outline pass leaves alone.
+export const TINY_STYLE_SHEETS = new Set(['tinyDungeon', 'tinyTown', 'tinyExtra', 'outlined', 'emotes', 'marks']);
 
 export class SpriteSheet {
     // `padding` is the gap (in source pixels) between adjacent cells. Kenney's
@@ -73,14 +80,14 @@ export class SpriteSheet {
         return true;
     }
 
-    // SPIKE (art-style): a sprite (never a ground tile) drawn with the Tiny
-    // packs' outline when ?art=outline is on and this sheet is not already in
-    // the Tiny style. The outlined cell is built once: 1 source pixel of ink on
-    // every transparent pixel beside an opaque one, in a cell 1 px wider each side.
+    // A sprite (never a ground tile) drawn with the Tiny packs' outline, unless
+    // this sheet is already in the Tiny style. The outlined cell is built once:
+    // 1 source pixel of ink on every transparent pixel beside an opaque one, in a
+    // cell 1 px wider each side.
     drawRegionInk(ctx, sx, sy, sw, sh, dx, dy, dw, dh) {
         if (!this.loaded) return false;
         dw = dw ?? sw; dh = dh ?? sh;
-        if (!ART.outline || TINY_STYLE_SHEETS.has(this.key)) return this.drawRegion(ctx, sx, sy, sw, sh, dx, dy, dw, dh);
+        if (TINY_STYLE_SHEETS.has(this.key)) return this.drawRegion(ctx, sx, sy, sw, sh, dx, dy, dw, dh);
         const cell = this._inked(sx, sy, sw, sh);
         const kx = dw / sw, ky = dh / sh;
         ctx.drawImage(cell, dx - kx, dy - ky, dw + 2 * kx, dh + 2 * ky);

@@ -1,7 +1,8 @@
 # Batch 2 — what reads as broken, then one art style
 
-**Status:** stage 1 built and verified (2026-10-08), pushed, not merged. Branch `fix/visual-breakage`,
-cut from `dev` at `585ac52` (v0.28.0). Results in *Stage 1, as built* below.
+**Status:** stage 1 (2026-10-08) and stage 2's first three steps (2026-10-09) built and verified,
+pushed, not merged. Stage 1 is on `fix/visual-breakage`; stage 2 is on `feature/art-style`, which is cut
+from it (via `spike/art-style`) and so carries both: merging `feature/art-style` alone lands the batch.
 
 ## Why
 
@@ -60,7 +61,7 @@ All 12 maps render by day and night with a clean console; before/after screensho
 
 Noticed, not changed: on an exit tile the exit's gold glow draws over the player, washing them out.
 
-## Stage 2 — one art style (own branch, after Caelan answers)
+## Stage 2 — one art style (`feature/art-style`)
 
 The research's ranked plan, all cheapest first:
 
@@ -77,6 +78,33 @@ The research's ranked plan, all cheapest first:
 
 It waits on his answers to the audit's questions, chiefly: is Tiny the house style, and may characters
 grow about a third? The first change gets a prototype he looks at before anything is decided.
+
+### Stage 2, ruled and built (2026-10-09)
+
+Caelan asked to see options before ruling on the house style, so `spike/art-style` prototyped four looks
+behind an address-bar switch and a page put the same four scenes side by side at 3440x1440: A today,
+B one pixel size, C + one outline, D + wall shadows. **He picked D.** That also rules the house style:
+**Kenney's Tiny packs are the style everything else conforms to.**
+
+Built on `feature/art-style`, with the switch removed (D is the game):
+- **One pixel size.** Characters, chests and ground items draw at the full tile, so their pixels match
+  the ground's (they were drawn 24 px into a 32 px tile). Bag and bar icons are unchanged.
+- **One outline.** `SpriteSheet.drawRegionInk` / `drawFrameInk` draw a sprite from any non-Tiny sheet
+  with Tiny's plum `#3F2631` outline, built once per cell (1 source pixel, 4-connected). Used for
+  characters, chests, ground items, props, the car, and object tiles (a tile drawn over another tile's
+  art: benches, bins). Ground tiles never get it; `under: 'fill'` marks a ground tile's own fill, not
+  an object. `TINY_STYLE_SHEETS` lists the sheets left alone.
+- **Wall shadows.** Two hard bands of shadow on every floor tile below a wall tile, at the art's pixel
+  size. Judged on tiles alone, so a lamp or a bench casts none.
+
+Tests 1925 -> 1933 / 350 / 0 (+ `tests/house-style.test.js`, mutation-checked). Balance, naming and
+the autoplay golden unchanged. All 12 maps render by day and night with a clean console; a fight's
+splats, bars and faces checked at full size at 3440x1440.
+
+Still to do from the plan: the car is a 48-px side view at 1.33x (needs a 32-px top-down source);
+step 3's edge tiles and ground variants; step 4's foreign surfaces (town brick, sewer wall, factory
+floor and chain-link, the Canyon); step 5's pixel interface and light. The three items with no icon
+(latex gloves, red cape, shoe bags) now get picked or made to match Tiny.
 
 ## Not in this batch
 

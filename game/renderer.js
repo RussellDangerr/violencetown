@@ -5,7 +5,6 @@
 
 import { TILE_PX, CANVAS_PX, SAFE_SLOTS, TILE_BY_ID } from './data.js';
 import { DEFAULT_VIEW, offView, snapPx } from './viewport.js';   // (screen-fill) the screen's geometry
-import { ART, spriteInset } from './art-flags.js';               // SPIKE: the art-style prototype
 
 // The splash canvas's supersample: its 320x220 card is drawn at 2x so the
 // VT323 text stays sharp. The game canvas's transform comes from the viewport
@@ -499,7 +498,7 @@ export class Renderer {
         ctx.translate(shakeX, shakeY);
 
         this._drawTiles(game);
-        if (ART.shadow) this._drawWallShadows(game);   // SPIKE: the art-style prototype
+        this._drawWallShadows(game);   // (house style) walls stand up off the floor
         this._drawPuddles(game);
         this._drawContainers(game);
         this._drawGroundItems(game);
@@ -1073,15 +1072,15 @@ export class Renderer {
     // Draw one tile ref into the TILE_PX cell at (px, py). Returns false when
     // there's nothing to draw it with, so the caller can fall back to the
     // tile's flat colour.
-    // SPIKE (art-style): the outlined draw when the sheet has it (a test's fake
-    // sheet may not), else the plain one.
+    // The outlined draw (house style) when the sheet has it — a test's fake sheet
+    // may not — else the plain one.
     _inkFrame(sheet, ...a) { return (sheet.drawFrameInk || sheet.drawFrame).apply(sheet, a); }
     _inkRegion(sheet, ...a) { return (sheet.drawRegionInk || sheet.drawRegion).apply(sheet, a); }
 
     _drawTileRef(ref, px, py, object = false) {
         const sheet = ref && this.sprites?.[ref.sheet];
         if (!sheet?.loaded) return false;
-        // SPIKE (art-style): an object tile (one drawn over ANOTHER tile's art: a
+        // (house style) An object tile (one drawn over ANOTHER tile's art: a
         // numeric `under`, not 'fill') takes the sprite outline; a ground tile never does.
         if (object) return ref.region
             ? this._inkRegion(sheet, this.ctx, ref.x, ref.y, ref.w, ref.h, px, py, TILE_PX, TILE_PX)
@@ -1223,8 +1222,7 @@ export class Renderer {
             const info = hasContents ? CONTAINER_SPRITES.closed : CONTAINER_SPRITES.open;
             let ok = false;
             if (sprites?.[info.sheet]?.loaded) {
-                const ins = spriteInset();
-                ok = this._inkFrame(sprites[info.sheet], ctx, info.col, info.row, px + ins, py + ins, TILE_PX - 2 * ins, TILE_PX - 2 * ins);
+                ok = this._inkFrame(sprites[info.sheet], ctx, info.col, info.row, px, py, TILE_PX, TILE_PX);
             }
 
             if (!ok) {
@@ -1263,7 +1261,7 @@ export class Renderer {
 
     // ── Ground Items ─────────────────────────────────────────────────────────
 
-    // SPIKE (art-style): banded shadows on the floor along the base of every wall
+    // (house style) Banded shadows on the floor along the base of every wall
     // (a floor tile whose north neighbour is a wall tile), in two hard steps at the
     // art's own pixel size — so walls read as standing up off the floor.
     _drawWallShadows(game) {
@@ -1325,8 +1323,7 @@ export class Renderer {
             const spr = itemSprite(item.type);
             let drawn = false;
             if (spr && sprites?.[spr.sheet]?.loaded) {
-                const ins = spriteInset();
-                drawn = this._inkRegion(sprites[spr.sheet], ctx, spr.x, spr.y, spr.w, spr.h, px + ins, py + ins, TILE_PX - 2 * ins, TILE_PX - 2 * ins);
+                drawn = this._inkRegion(sprites[spr.sheet], ctx, spr.x, spr.y, spr.w, spr.h, px, py, TILE_PX, TILE_PX);
             }
 
             if (!drawn) {
@@ -1532,8 +1529,7 @@ export class Renderer {
         let ok = false;
         withWalk(ctx, ecx, ecy, { bob: ea.bob, rot: ea.rot, flipX: eFlip }, () => {
             if (frame && sprites?.[frame.sheet]?.loaded) {
-                const ins = spriteInset();
-                ok = this._inkFrame(sprites[frame.sheet], ctx, frame.col, frame.row, px + ins, py + ins, TILE_PX - 2 * ins, TILE_PX - 2 * ins);
+                ok = this._inkFrame(sprites[frame.sheet], ctx, frame.col, frame.row, px, py, TILE_PX, TILE_PX);
             }
             if (!ok) {
                 ctx.fillStyle = isAlive ? '#cc4433' : '#555';
@@ -2098,7 +2094,7 @@ export class Renderer {
             if (sprites?.player?.loaded) {
                 ok = sprites.player.drawFrame(
                     ctx, PLAYER_SPRITE.col, PLAYER_SPRITE.row,
-                    ppx + spriteInset(), ppy + spriteInset(), TILE_PX - 2 * spriteInset(), TILE_PX - 2 * spriteInset()
+                    ppx, ppy, TILE_PX, TILE_PX
                 );
             }
             if (!ok) {
