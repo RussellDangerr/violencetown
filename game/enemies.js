@@ -161,6 +161,10 @@ export class Enemy {
         // survive a bribe flip, so it is deliberately NOT derived from behavior/
         // allegiance the way deriveAllegiance's other fields are.
         sewerDweller = false,
+        // (slot registry) The spine slot this enemy fills, e.g. 'sewer.boss' — set
+        // by slots.js resolveSpawn. A required item belongs to the slot, not to the
+        // monster (plans/spine.md SL-4), so the death drop reads this, not the tag.
+        slot = null,
     }) {
         this.id         = id;
         this.type       = type;
@@ -258,6 +262,7 @@ export class Enemy {
         this.loadout       = loadout;
         this.ambient       = ambient;
         this.sewerDweller  = !!sewerDweller;
+        this.slot          = slot;
 
         // Debuffs / buffs — symmetric with Game.buffs[] on the player side
         // (DoTs, fear, the poition riders), ticked by the same BUFF_EFFECTS table.
@@ -321,6 +326,9 @@ export class Enemy {
             // as vermin/weak/resist/immune did, or a reloaded Violet Fungus would
             // start taking poison damage from its own mushrooms.
             sewerDweller: this.sewerDweller,
+            // Written only when set (undefined drops out of JSON), so every enemy
+            // outside a slot saves byte-identically to before slots existed.
+            slot: this.slot || undefined,
             // runtime
             state: this.state, fsmState: this.fsmState, lastWanderTurn: this._lastWanderTurn,
             // (perception ladder) so a save taken mid-hunt reloads mid-hunt.

@@ -29,7 +29,7 @@ describe('the quest-1 route', () => {
     test('every id a goal names exists where it says', () => {
         for (const g of goals) {
             if (g.use) assert.ok(map(g.map).examinables.some((e) => e.id === g.use), `no examinable ${g.use} in ${g.map}`);
-            if (g.kill) assert.ok(map(g.map).enemies.some((e) => e.tag === g.kill), `no enemy tagged ${g.kill} in ${g.map}`);
+            if (g.kill) assert.ok(map(g.map).enemies.some((e) => e.tag === g.kill || e.slot === g.kill), `no enemy tagged or slotted ${g.kill} in ${g.map}`);
             if (g.take) assert.ok(ITEMS[g.take], `no item ${g.take}`);
         }
     });

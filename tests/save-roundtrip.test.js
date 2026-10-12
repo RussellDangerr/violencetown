@@ -780,3 +780,36 @@ describe('the day clock round-trips (one clock, plans/trim.md 3b)', () => {
         assert.equal(migrate({ dayClock: 412 }).dayClock, 412);
     });
 });
+
+// ── The spine's slot picks (plans/slot-registry.md) ─────────────────────────
+describe('slot picks in the save', () => {
+    test('serialize() carries the picks', () => {
+        const g = makePopulatedGame();
+        g.slots = { 'sewer.boss': 'wererat' };
+        assert.deepEqual(serialize(g).slots, { 'sewer.boss': 'wererat' });
+    });
+
+    test("a save from before slots existed loads today's content", () => {
+        const raw = serialize(makePopulatedGame());
+        delete raw.slots;
+        assert.deepEqual(migrate(raw).slots, { 'sewer.boss': 'wererat' });
+        raw.slots = ['not', 'an', 'object'];
+        assert.deepEqual(migrate(raw).slots, { 'sewer.boss': 'wererat' });
+    });
+
+    test('a saved pick stands, even one the pool no longer offers first', () => {
+        const raw = serialize(makePopulatedGame());
+        raw.slots = { 'sewer.boss': 'some_later_boss' };
+        assert.equal(migrate(raw).slots['sewer.boss'], 'some_later_boss');
+    });
+
+    test('loadInto restores the picks BEFORE _loadMap, which is where spawns resolve', async () => {
+        const raw = serialize(Object.assign(makePopulatedGame(), { slots: { 'sewer.boss': 'picked' } }));
+        const g = makeBlankGame();
+        let seenAtLoad = null;
+        const load = g._loadMap;
+        g._loadMap = async function (...a) { seenAtLoad = this.slots && { ...this.slots }; return load.apply(this, a); };
+        await loadIntoReal(g, raw);
+        assert.deepEqual(seenAtLoad, { 'sewer.boss': 'picked' });
+    });
+});

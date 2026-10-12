@@ -4,14 +4,14 @@
 // route with it. The quest engine advancing a stage is what ends its goals.
 //
 //   use    walk to an open tile beside the examinable, face it, press E
-//   kill   hit the enemy with this tag until it is gone
+//   kill   hit the enemy filling this spine slot (or carrying this tag) until it is gone
 //   take   walk onto the item — pickups are automatic
 //   reach  walk into the transition to that map
 
 export const ROUTES = {
     fix_car: {
         examine_car:       [{ use: 'car', map: 'town-map.json' }],
-        recover_converter: [{ kill: 'wererat_boss', map: 'sewer-map.json' }, { take: 'catalytic_converter', map: 'sewer-map.json' }],
+        recover_converter: [{ kill: 'sewer.boss', map: 'sewer-map.json' }, { take: 'catalytic_converter', map: 'sewer-map.json' }],
         escape_sewer:      [{ reach: 'town-map.json' }],
         return_to_car:     [{ use: 'car', map: 'town-map.json' }],
     },

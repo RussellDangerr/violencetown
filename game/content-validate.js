@@ -22,6 +22,7 @@ import { ALL_ITEM_IDS } from './item-registry.js';
 import { DIALOGUES } from './dialogue.js';
 import { zoneByName, overworldZone } from './world-map.js';
 import { ENEMY_SPRITES } from './sprites.js';
+import { SLOTS, ENTRIES } from './slots.js';
 
 // The event vocabulary a quest stage may wait on, and the payload keys each
 // emit site carries — kept in sync with the emitGameEvent call sites
@@ -40,7 +41,7 @@ const ITEM_MATCH_KEYS = new Set(['id', 'item']);  // item_pickup.id, item_given.
 const NPC_MATCH_KEYS  = new Set(['npc']);
 const MAP_MATCH_KEYS  = new Set(['map']);
 
-export function validateContent(maps) {
+export function validateContent(maps, { slots = SLOTS, entries = ENTRIES } = {}) {
     const problems = [];
     const warnings = [];
     const P = (m) => problems.push(m);
@@ -52,6 +53,32 @@ export function validateContent(maps) {
     const mapFileSet = new Set(maps.map(m => m.file));
     const npcIds = new Set();
     for (const { data } of maps) for (const e of (data.enemies || [])) if (e && e.id) npcIds.add(e.id);
+
+    // ── Spine slots (plans/slot-registry.md) ─────────────────────────────────
+    // A registry entry is a spawn that has not been placed yet, so it gets the
+    // same reference checks a map spawn does — or moving the Were-Rat into the
+    // registry would have quietly stopped checking its kit and its art.
+    for (const [id, e] of Object.entries(entries)) {
+        for (const it of [...(e.loadout || []), ...(e.equipped || [])])
+            if (!itemIds.has(it)) P(`registry: entry '${id}' carries unknown item '${it}'`);
+        if (!e.type) P(`registry: entry '${id}' has no type`);
+        else if (!ENEMY_SPRITES[e.type]) P(`registry: entry '${id}' has type '${e.type}' with no ENEMY_SPRITES entry`);
+        if (e.dialogueId && !dialogueIds.has(e.dialogueId)) P(`registry: entry '${id}' has unknown dialogueId '${e.dialogueId}'`);
+    }
+    const placed = {};
+    for (const { file, data } of maps) for (const e of (data.enemies || [])) {
+        if (!e || !e.slot) continue;
+        if (!slots[e.slot]) { P(`${file}: spawn ${e.id || '?'} names unknown slot '${e.slot}'`); continue; }
+        (placed[e.slot] ||= []).push(file);
+    }
+    for (const [id, slot] of Object.entries(slots)) {
+        if (!slot.pool || !slot.pool.length) P(`slot '${id}' has an empty pool`);
+        for (const { entry } of (slot.pool || [])) if (!entries[entry]) P(`slot '${id}' pools unknown entry '${entry}'`);
+        if (slot.requiredDrop && !itemIds.has(slot.requiredDrop)) P(`slot '${id}' requires unknown item '${slot.requiredDrop}'`);
+        const where = placed[id] || [];
+        if (slot.kind === 'boss' && (where.length !== 1 || where[0] !== slot.map))
+            P(`slot '${id}' must stand exactly once, on ${slot.map} — found on [${where.join(', ')}]`);
+    }
 
     // ── Map references ───────────────────────────────────────────────────────
     for (const { file, data } of maps) {
