@@ -12,7 +12,7 @@ export const LANES = [
     { id: 'rulings', label: 'Rulings owed',   hint: 'no code — each one gates something' },
     { id: 'ready',   label: 'Ready to build', hint: 'design settled, a plan exists' },
     { id: 'design',  label: 'Needs design',   hint: 'open questions first' },
-    { id: 'later',   label: 'Post-1.0',       hint: 'scoped, none started' },
+    { id: 'later',   label: 'Later',          hint: 'scoped, none started' },
     { id: 'done',    label: 'Done',           hint: 'do not re-implement' },
 ];
 
