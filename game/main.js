@@ -141,10 +141,6 @@ const WORLD_TICK_MS = 500;
 const DISPOSITION_DECAY_TURNS  = 40;             // nudge one step every N committed actions
 const DISPOSITION_DECAY_STEP   = 1;              // points toward resting per nudge
 
-// (one clock, 3e) The awareness-ladder rungs (perception.js) at which someone has
-// noticed you: the step that adds one of these ends a held or clicked walk.
-const AWARE_STATES = new Set(['suspicious', 'searching', 'chasing']);
-
 // Town Clock day/night cycle. The day eases day → dusk → night → dawn one step
 // per committed action — standing still never moves it — driving the lighting
 // grade (renderer._drawLighting) and the watchers' night sight.
@@ -2156,7 +2152,6 @@ class Game {
 
     _doMove(dir) {
         if (this._animating) return; // block input during animation
-        this._walkAlertBase = this._alertCount();   // (3e) who was aware of you before this step
 
         // Set facing direction
         if (dir.dy < 0) this.facing = 'up';
@@ -2556,13 +2551,6 @@ class Game {
     _onStepSettled() {
         if (this.state !== STATE.IDLE) return;
         this._maybeShowHint();
-        // (one clock, 3e) A walk carries on by itself only while nothing has
-        // started. In a fight every step needs a fresh press — a press made during
-        // the slide (the one-deep buffer) counts; a key merely still held does not
-        // — and the step on which someone became alert to you ends the walk too.
-        // This is also what keeps a held walk from cutting off the cascade's blows.
-        const fresh = !!this._queuedMoveDir;
-        const halted = this._walkHalted();
         // Manual input always OVERRIDES a click-to-walk: a held / just-pressed
         // direction cancels the path and takes over (press WASD mid-path to grab
         // the wheel back). Read the intent (folds in the one-deep buffer) first.
@@ -2571,15 +2559,9 @@ class Game {
         if (intent) {
             this._pathQueue = [];
             this._pathArrive = null;
-            if (halted && !fresh) return;
             const step = this._resolveWalkStep(intent);
             if (this._autoRepeatShouldStop(step)) return;
             this._doMove(step);
-            return;
-        }
-        if (halted && (this._pathQueue.length || this._pathArrive)) {
-            this._pathQueue = [];
-            this._pathArrive = null;
             return;
         }
         // No manual input → advance the click-to-walk path one tile, reusing the
@@ -2594,26 +2576,6 @@ class Game {
         } else if (this._pathArrive) {
             const arrive = this._pathArrive; this._pathArrive = null; arrive();
         }
-    }
-
-    // (one clock, 3e) Should a walk in progress stop before its next automatic
-    // step? Yes in a fight, and yes on the step that raised anyone's awareness of
-    // you (a townsperson turning suspicious, a guard starting to chase). The
-    // baseline is taken before each step in _doMove.
-    _walkHalted() {
-        if (this._inCombat()) return true;
-        return this._alertCount() > (this._walkAlertBase ?? Infinity);
-    }
-
-    // How many living, non-allied characters are aware of you right now —
-    // suspicious, searching or chasing on the awareness ladder (perception.js).
-    _alertCount() {
-        let n = 0;
-        for (const e of (this.enemies || [])) {
-            if (!e || e._ally || !e.entity?.isAlive?.()) continue;
-            if (AWARE_STATES.has(e.state)) n++;
-        }
-        return n;
     }
 
     // Start a click-to-walk along a BFS path (from pathing.findPath). onArrive, if

@@ -134,13 +134,13 @@ export const DIALOGUES = {
         ],
     },
 
-    // Talk-down-a-hostile: Knuckles spawns hostile (legacy chaser, low
-    // disposition). Walk up adjacent and press [E] mid-fight to open this. The
-    // 'standdown' choice lands a big positive delta that crosses flipThreshold
-    // (30), so applyDispositionDelta fires give-action's becomeAlly flip —
-    // clearing the hostile chase and converting him to a fighting ally. The
-    // angry barbs stay repeatable: keep poking him and the disposition craters
-    // back past DIALOGUE_HOSTILE_AT, snapping the fight back on.
+    // Knuckles stands in the plaza near where the game starts, spoiling for a
+    // fight but not starting one (low disposition, neutral since 2026-10-11 —
+    // a game that opened on a chase read as broken). A fight with him starts
+    // only when you start it: hit him, or taunt him past DIALOGUE_HOSTILE_AT.
+    // The 'standdown' choice lands a big positive delta that crosses
+    // flipThreshold (30), so applyDispositionDelta fires give-action's
+    // becomeAlly flip — he becomes a fighting ally, mid-fight or not.
     knuckles: {
         name: 'Knuckles',
         greeting: '"You got a LOT of nerve walkin\' up on me like that."',

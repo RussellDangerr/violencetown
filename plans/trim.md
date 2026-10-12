@@ -123,7 +123,7 @@ still wander on the half-second timer, but that wander can no longer change an o
 | 3b | **Day and night count actions.** `_advanceDayClock` steps once per committed action, in and out of fights, never on the timer. **Save the day clock** (today a reload is always noon) | `main.js` 4088-4098, `_advanceWorld`; `save.js` | switch to turns |
 | 3c | **Moods fade per action.** One nudge every `DISPOSITION_DECAY_TURNS` (40) committed actions, everywhere. Remove `DISPOSITION_DECAY_MS` and its accumulator. The open offer partner stays exempt | `main.js` 140-142, 620-622, 3804 | switch to turns |
 | 3d | **Wander gets its own dice.** Ambient wander stays on the timer but draws from its own seeded stream (`game.ambientRng`), so thinking time can't change a fight's or a theft's rolls | `resolveAmbientTurns` (`enemies.js`), the `npc.js` wander helpers | keep wander, separate the dice |
-| 3e | **A held walk stops at a fight.** Held-key and click-to-walk paths stop when a fight starts or anyone spots you; inside a fight each step needs a fresh press. This also stops walking from cutting off the cascade's blows | `_autoRepeatShouldStop` ~2651, `_onStepSettled` ~2561 | fix |
+| 3e | **Reversed 2026-10-11** (`plans/fight-movement.md`): it read as the game locking up, so walks carry on in a fight again. Was: **A held walk stops at a fight.** Held-key and click-to-walk paths stop when a fight starts or anyone spots you; inside a fight each step needs a fresh press. This also stops walking from cutting off the cascade's blows | `_autoRepeatShouldStop` ~2651, `_onStepSettled` ~2561 | fix |
 | 3f | **Buyback lasts until you leave the zone.** Clear `npc._buyback` on `_loadMap` instead of after 5 minutes. Remove the never-drawn countdown (`_buybackRemainingMs`), `_buybackEntry`, the 1 s `_startTradeTimer` redraw loop, and the refund credits nothing spends | `main.js` 131-139, 5774-5781, 6322-6334, 6461-6510 | until you leave the zone |
 
 **Open tuning for Caelan:** how long is a day, in actions? Today it is 3,600 half-second beats.
@@ -228,7 +228,7 @@ beside a townsperson, none out of reach). `actorOrder` draws the edge filler beh
   the shorter day. A zone load re-stamps the new zone's watchers with the light.
 - 3d: `game.ambientRng` is not saved (wander changes no outcome's dice); RESTART seeds it from the
   run seed so a seeded run still replays exactly.
-- 3e: "spotted" means the step that raised anyone's awareness (suspicious, searching or chasing).
+- 3e (reversed 2026-10-11, see `plans/fight-movement.md`): "spotted" meant the step that raised anyone's awareness (suspicious, searching or chasing).
   A clicked path with an action at its end drops the action too when a fight starts.
 - 3f: the ledgers are closed before `_loadMap` replaces the old zone's people. Selling still
   writes a rebuy credit; buying no longer writes the refund credit nothing spent.
