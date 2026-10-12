@@ -1,6 +1,6 @@
 # Free movement in fights, and a start without one
 
-**Status:** built 2026-10-11 on `fix/fight-movement`, pushed, not merged.
+**Status:** built 2026-10-11 on `fix/fight-movement`, merged to `dev` (`f18ff9c`), not yet released.
 
 ## Why
 

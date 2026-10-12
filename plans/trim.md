@@ -1,6 +1,6 @@
 # Trim — batch 1: records, cuts and one clock
 
-**Status:** built, verified, pushed, not merged (2026-10-04). `chore/trim` @ `011c112` (stages 1, 2, 4);
+**Status:** merged to `dev` and released in v0.28.0 (2026-10-08). Built 2026-10-04: `chore/trim` @ `011c112` (stages 1, 2, 4);
 `fix/one-clock` (stage 3) on top of it. Results in *As built* at the end. The merge to `dev` is Caelan's call.
 
 **Order as built:** stages 1, 2 and 4 on `chore/trim`, then stage 3 on `fix/one-clock` cut **from

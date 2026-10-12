@@ -1,6 +1,6 @@
 # Poisons — Fire Blood and Sludge Brain
 
-**Status:** built and verified (2026-10-07), pushed, not merged. Branch `feature/poisons`, cut from
+**Status:** merged to `dev` and released in v0.28.0 (2026-10-08). Built 2026-10-07 on branch `feature/poisons`, cut from
 `chore/trim-followups` (`c05a36d`). Results in *As built* at the end.
 Built in the stages below; the merge to `dev` is Caelan's call, then v0.28.0 ships trim + one clock
 + poisons together.

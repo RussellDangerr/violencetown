@@ -1,7 +1,7 @@
 # Batch 2 — what reads as broken, then one art style
 
-**Status:** stage 1 (2026-10-08) and stage 2's first three steps (2026-10-09) built and verified,
-pushed, not merged. Stage 1 is on `fix/visual-breakage`; stage 2 is on `feature/art-style`, which is cut
+**Status:** stage 1 (2026-10-08) and stage 2's first three steps (2026-10-09) built, verified and
+merged to `dev` (`8ebdbb3`), not yet released; the rest of stage 2 (edge tiles, foreign surfaces, pixel UI and light) is still to do. Stage 1 is on `fix/visual-breakage`; stage 2 is on `feature/art-style`, which is cut
 from it (via `spike/art-style`) and so carries both: merging `feature/art-style` alone lands the batch.
 
 ## Why
