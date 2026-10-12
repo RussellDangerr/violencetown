@@ -16,24 +16,29 @@ pending decisions, and the three passes that landed this week.
 > ids, and **the row is now the record** — a Source cell that reads "this row" is one of them.
 > Items of theirs that had already shipped are listed in §6 so nobody re-does them.
 
-**State right now (updated 2026-10-02):** `main` = `dev` = `479a4b8`, **v0.27.0, tagged and live**
-— the DoT-death fix (an enemy killed by its own DoT now dies properly; a poison finish on the
-Were-Rat had dropped no converter, a quest-1 softlock), the hit-splat overhaul (a silhouette per damage
-type, layout by count above the head; ruling EC closed: energy is yellow) and turn model C1, the
-cascade, behind `?turns=cascade` (`plans/turn-model.md`). Suite 1811 / 322 / 0; balance golden, no
-flags; the autoplay golden matches with the cascade off and on. Verified live: both hosts read 0.27.0
-and all 10 changed game files byte-match `main`. **Branches: `dev`, `main`, `spike/3d-view`, and
-`feature/tiled-pipeline` (local only, waiting on the Canyon being painted in Tiled).** Next: **turn
-model step 2** (§7), F2b / F3 (§4), the rulings in §2, or living zones — piece 1 of
-`plans/species-adventures.md`, whose §3 recommendations are still unruled.
+**State right now (updated 2026-10-12):** `main` = `585ac52`, **v0.28.0, tagged and live** (one
+clock, two poisons, the trim). `dev` = `9ec34e8`, 8 commits past it: the Tiny house style and
+walking freely in a fight. Suite 1932 / 350 / 0. **Unmerged: `feature/tiled-pipeline` (local only,
+waiting on the Canyon being painted in Tiled), `spike/3d-view`, and `docs/spine` (this update).**
+Next: **SR, the slot registry** (§3, §7) — and the spine's rulings SP1–SP9 (§2), which are cheap.
+
+> **The spine, ruled 2026-10-11 — `plans/spine.md`.** One structure for the whole game, locked:
+> **Act 1** the Town (built: car → Sewer → the Sewer boss's Converter → bridge → Canyon → Downtown
+> → the Financier); **Act 2** the Carnival, Factory and Graveyard in any order, each boss dropping
+> one required item; **Act 3** Bank Street, where the three items open the finale → the Financier →
+> the Final Arc → credits. Its contents are **slots with pools**: a beat binds to "the Sewer's
+> boss", never to the Were-Rat, and a new idea is a pool entry, never a structural change. Changing
+> a locked row needs Caelan's explicit ruling (its lock clause). **No version is attached** — there
+> is no 1.0 target; versions just keep climbing. The four zone bosses move out of "later" into §4
+> (AB, FIN), and nine small rulings join §2 (SP1–SP9).
 
 > **Direction ruled 2026-09-15 — `plans/species-adventures.md`.** Fixed maps stay; enemies
 > come from a registry with spawn tables, drops and a respawn clock; quest flags apply *world
 > layers* over the base map; an account holds a stash and unlocked *species*, each character one
 > species on its own adventure. It supersedes `adventure-transition-plan.md` and amends a dozen
-> others (its §7 is the record). It does **not** change this roadmap's next session; whether its
-> piece 1 (living zones) goes before or after H1 is Caelan's call, and five recommendations in
-> its §3 await his ruling.
+> others (its §7 is the record). **Since the spine:** its piece 1 (living zones) is built as the
+> slot framework (SR); whether the rest becomes later work is ruling SP3, and its §3
+> recommendations are still unruled (rec. 5, New Game+, is SP2).
 
 > **Audited against the code 2026-09-10 — eight rows were wrong.** The 09-07 compile carried items
 > over from the July backlogs without re-checking them, and some had shipped the week before:
@@ -72,8 +77,18 @@ flowchart LR
     BOSS["B1 — Law 5, bosses spend<br/>DONE 09-02"]:::done
     B2["B2 — enemies eat their kits<br/>DONE 09-01"]:::done
     LEG["Combat legibility —<br/>heals + DoTs as splats<br/>DONE 09-13"]:::done
-    ZBOSS["Zone bosses: Financier,<br/>Bigfoot, Alien, Deity"]:::later
+    SPINE["The spine — three acts,<br/>slots not names — RULED 10-11"]:::done
+    SR["SR — slot registry:<br/>pools + seeded picks"]:::ready
+    RC["RC — recolor tool"]:::ready
+    RV["RV — rat variants"]:::design
+    ZBOSS["AB — Act 2 bosses:<br/>Bigfoot, Alien, Deity"]:::design
+    FIN["FIN — the finale: Bank Street,<br/>the Financier, the Final Arc"]:::design
+    SPINE --> SR
+    SR --> RV
+    RC --> RV
+    SR --> ZBOSS
     BOSS --> ZBOSS
+    ZBOSS -->|"the three items"| FIN
     B2 -->|"made visible by"| LEG
     BOSS --> LEG
 
@@ -119,7 +134,9 @@ Three things the graph makes visible that the lists did not:
 
 1. **The boss line's mechanism is built; what is left of it is content.** Law 5 runs (`6bdb7ad`),
    the Wererat and the Borgir boss carry an authored `boss` flag and lint clean as elite. The four
-   zone bosses are unblocked authoring work, not engineering. *(This bullet said the opposite on
+   zone bosses are unblocked authoring work, not engineering. *(Since the spine, 10-11: three of
+   them are Act 2's bosses, AB, and the Financier is Act 3's finale, FIN. They wait on SR so each
+   boss slot is a pool from the start.)* *(This bullet said the opposite on
    09-07 — "two rulings gate the entire boss line." Both rulings' premises had already shipped.)*
 2. **The rulings that still gate a build are the zone ones:** Z1/Z2 → interiors, CG → a carnival
    ground. A1 gates nothing buildable today.
@@ -142,9 +159,19 @@ Three things the graph makes visible that the lists did not:
 Ordered by how much each unblocks. **The trim pass of 2026-10-03 ruled on every row still open;**
 batch 1 (`plans/trim.md`) builds the small ones, and the rest wait for a branch of their own. Still
 open after it: R (rings, with Hide) and DZ (needs his yes) — both ruled 2026-10-06, below.
+**SP1–SP9 are new, from the spine (2026-10-11)**; each answer is recorded, dated, in `plans/spine.md` §8.
 
 | # | Ruling | What it gates | Source |
 |---|---|---|---|
+| **SP1** | **The three required items' names** — what each Act 2 boss drops. One idea: each is proof of the Financier's scheme. They stay *item A, B, C* until named. | AB's drops; FIN's lock | `plans/spine.md` §8 |
+| **SP2** | **Remove New Game+, so the credits end the game?** The cosmology ends playthrough 1 in NG+ as the Sunpyre; species-adventures rec. 5 proposed removing it. | What FIN ends on | `plans/spine.md` §8 |
+| **SP3** | **Does `species-adventures.md` become later work, with the spine as the north star?** Its piece 1 stays either way, as SR. | Whether species, layers and the account are on the board at all | `plans/spine.md` §8 |
+| **SP4** | **The frost rat's zone — and is "the forest" the Wilderness map?** No forest zone exists, and no cold one; the Wilderness is the closest to a forest. | RV (where the frost and pouch rats spawn) | `plans/spine.md` §8 |
+| **SP5** | **Texas Beholdem and Nessie as future Sewer boss-pool cards?** The 10-03 note made **Lonny** the Sewer's own Loch Ness-style serpent (she), with Nessie her long-lost love elsewhere — so the Sewer card may be Lonny. | The private board's pool cards | `plans/spine.md` §8 |
+| **SP6** | **Is the Canyon a detour or a required beat?** At the bridge, a car on raw fuel crashes into the Canyon; one tamed with alcohol drives straight to Downtown. | Whether Act 1 is locked as built | `plans/spine.md` §8 |
+| **SP7** | **Bank Street = Downtown's First Blood Bank?** The cosmology puts Bank Street in the Town; the shipped bank is an interior off Downtown. | FIN's location | `plans/spine.md` §8 |
+| **SP8** | **Make "meet the Financier" a quest stage?** Act 1's quests end with the burger delivery; he is an optional placeholder talk. The 10-03 *blend* ruling (the burger *is* the package) could make him who it's delivered to. | Act 1's last beat | `plans/spine.md` §8 |
+| **SP9** | **What opens Sun Man?** The cosmology gates his first talk and the Final Arc on transformations, which are species work (SP3). | FIN | `plans/spine.md` §8 |
 | ~~**CD**~~ | **DONE 2026-09-15** — Browser Cache TTL set to *Respect Existing Headers*; live headers read `max-age=0, must-revalidate`, re-verified at every release since. *Was:* **The custom domain still caches JS and CSS for four hours.** `game/_headers` (v0.22.0) asks for `max-age=0`, and `violencetown.pages.dev` obeys it, but the `russelldangerr.com` zone's Browser Cache TTL — Cloudflare's default, four hours — replaces any shorter origin value on `.js`, `.css` and images. Set it to *Respect Existing Headers*, or add a Cache Rule for `violencetown.russelldangerr.com`. A dashboard step, not code; `curl -sI …/main.js` then reads `max-age=0`. | Whether a release reaches a returning player at once | `demo-readiness` §2.5 |
 | ~~**A1**~~ | **RULED 2026-10-03 — fold it into its neighbours.** The `bruiser` row is cut (`plans/trim.md` stage 2); armor −29…−15 now prices as `standard`. No enemy sat in that band, so the balance golden does not move. *Was:* keep the −15 `bruiser` row (`tools/balance-harness.mjs:146`, 15–40 GP, interpolated between fodder and standard)? | Nothing today | this row |
 | ~~**A3**~~ | **DONE 2026-09-24 — ruled: the bag stays free, in and out of combat.** No code change: opening the REMOTICON, flipping its tabs and closing it already advanced no turn. Using or equipping from it costs one turn, as any action does. `tests/free-bag.test.js` pins the free part, in and out of a fight. *Was:* **Does opening the REMOTICON cost a world turn?** The proposal (systems-audit §6) was *free out of combat, costed in combat*; it was not taken. | Law 7 stays true | this row |
@@ -172,6 +199,8 @@ open after it: R (rings, with Hide) and DZ (needs his yes) — both ruled 2026-1
 
 | Item | Size | Blocked by | Doc | Where the doc lives |
 |---|---|---|---|---|
+| **SR — the slot registry** — pools + seeded per-new-game picks | M | nothing | The spine's slot framework = species-adventures piece 1 (registry, spawn tables, drop tables, respawn clock). Picks saved and reproducible, from their own stream (never `game.rng`). The Converter rebinds to the `sewer.boss` slot, Were-Rat its only entry; nothing visible changes (suite, autoplay golden, game). Plus a test that every entry in a required-item slot drops it. Own spec first: `plans/slot-registry.md`. | `plans/spine.md` §2, §6 |
+| **RC — the recolor tool** — one base sprite in, tinted variants out | S | nothing | In the style of `tools/gen_outlined_sheet.py` ("generate, don't reject"). Makes enemy variants cheap; the rats are its first use. | `plans/spine.md` §6 |
 | **T1 — Tag layer** on items / enemies / tiles | M | nothing | Not built. Prerequisite for the affordance matrix. | systems-audit §5.4 |
 | **C3 — input asymmetries** | M | nothing | REMOTICON item/gear/ring actions are pointer-only; aiming, turn-in-place and the 1–9 hotbar are keyboard-only. Documented honestly; still gaps. | this row |
 
@@ -189,19 +218,24 @@ C1, C4, RESTART and the streetlights were built and shipped in v0.24.0; Housekee
 | **F3 — who gets pulled into a fight** | F1 shipped its area as `game/fight-area.js` — every tile a fighter perceives. As a gameplay rule: whoever can see the fight is in it? | M | `plans/screen-fill.md` *Follow-on pieces* 3 | nothing |
 | **Affordance matrix** — verbs (~20 wheel leaves) × tags | The discipline: *a blank cell is a decision, not an oversight.* Second job is diagnostic — a proposed element with zero edges is caught at design time. Needs the tag layer first. | M | systems-audit §9 | T1 |
 | **Directional frames for every NPC, retire the chevron** | Violencians face their travel now. Extending to guards makes the overlay's facing chevron redundant — the stealth read becomes native to the art. Needs the other rpgUrban rows assigned. | M | `animation-pass.md` §4 | nothing |
-| **"The Crat"** — sewer diplomacy talk-quest | How ambiguous the tell is; father-flip vs. "you are not the mother"; player as arbiter vs. bribeable; reward. Reconcile with the shipped sewer canon first. | M | not in the repo (idea stage) | nothing |
-| **Bestiary** — Cave + Weredigo (invisibility / blind-combat boss), Park + Ruffian (steal-and-flee via `transferGold` + `fleeStep`), Bear (friendly quest-giver), content enemies | Special mechanics? Which Kenney cells? Ruffian cleanly reuses two shipped systems and is the best first piece. | S–M each | not in the repo (idea stage) | nothing |
+| **RV — rat variants** — undead, frost, pouch; the Carnival's birthday, sludge and robot rats | Each a registry entry with its own kit and drops, placed through spawn tables, recolored from the one brown rat (`tinyDungeon` 3,10) and run through `tools/balance-harness.mjs`. Where the frost and pouch rats live is SP4. | M | `plans/spine.md` §7 | SR, RC, SP4 |
+| **AB — Act 2 bosses** — the Carnival, Factory and Graveyard boss slots | First pool entries from the cosmology: Bigfoot, Alien Invasion (where the Ray Gun should ultimately drop), The Deity. Each drops one required item (SP1). Kits, arenas and fights are each boss's own design pass; the mechanism (B1, Law 5) shipped. Was "Zone deep content / bosses" under later work. | L, boss by boss | `plans/spine.md` §1 | SR, SP1 |
+| **FIN — the finale** — Bank Street, the Financier, the Final Arc | The three items open it; the Financier, then the Bite and phase 2 against Monstrous Sun Man; credits. Where it is (SP7), what opens Sun Man (SP9), and whether NG+ follows (SP2). Interior rulings Z1/Z2 (the vault door) now matter here. | L | `plans/spine.md` §1, `plans/cosmology-and-arc.md` | AB, SP2, SP7, SP9 |
+| **"The Crat"** — sewer diplomacy talk-quest | How ambiguous the tell is; father-flip vs. "you are not the mother"; player as arbiter vs. bribeable; reward. Reconcile with the shipped sewer canon first. Under the spine it is a Sewer set-piece or character pool entry. | M | not in the repo (idea stage) | nothing |
+| **Bestiary** — Cave + Weredigo (invisibility / blind-combat boss), Park + Ruffian (steal-and-flee via `transferGold` + `fleeStep`), Bear (friendly quest-giver), content enemies | Special mechanics? Which Kenney cells? Ruffian cleanly reuses two shipped systems and is the best first piece. **Under the spine** the creatures are pool entries, but a Cave or a Park is a new zone: either content inside an existing map, or a lock-clause ruling. | S–M each | not in the repo (idea stage) | nothing |
 | **Elemental coverage matrix** | `fire` and `poison` joined `sludge` / `cold` / `energy` / `fear` with no weakness table to sit in. | S | this row | nothing |
 | **5-Zone Body reconciliation** | Survives as the positional layer (Back = backstab ×1.5), not split HP pools. Needs a ruling before the bible states it as law. | S | this row | nothing |
 | **Weapons have no art** | No weapon has ground or bag art: all five draw as lettered boxes — the Ray Gun a teal Z, the Wooden Sword a grey `?`. tinyDungeon has swords, axes and hammers; nothing bundled looks like a ray gun. Which cells — and what does the Ray Gun look like? | S–M | `sprites.js` `ITEM_SPRITES` | nothing |
 
 ---
 
-## 5. POST-1.0 — big threads, scoped, none started
+## 5. LATER — big threads, scoped, none started
+
+No version number gates these (Caelan, 2026-10-12: there is no 1.0 target). The zone bosses left
+this lane on 2026-10-11: they are the spine's AB and FIN (§4).
 
 | Thread | One line | Size | Blocked by |
 |---|---|---|---|
-| **Zone deep content / bosses** | Financier (Street — a literal `dialogue.js` placeholder), Bigfoot (Carnival), Alien Invasion (Factory — where the Ray Gun should ultimately drop), The Deity (Graveyard). Its dependency, B1's boss mechanism, **shipped 2026-09-02** — so this is authoring work now, not engineering. | L, zone by zone | B1 |
 | **Element meters** | Per-zone accumulating meters (Boredom / Fun / Goo / Death). Only Sludge exists, as a hazard DoT. | M | nothing |
 | **Light + Lantern** | A purchasable light from Puck that makes the dark Wilderness explorable. `_drawDarkness` exists; no item. | S–M | nothing |
 | **Party / creature recruitment** | Wererat / Clown / Robot / Skeleton as party members. Only the ally-flip primitive and the Lire summon exist. | M–L | nothing |
@@ -281,6 +315,10 @@ parked document.
 ## 7. Suggested next three sessions
 
 Not a mandate — a reading of the graph.
+
+**First (2026-10-11): SR, the slot registry** (`feature/slot-registry`), then RC and RV — the
+spine's build order (`plans/spine.md` §6), a stop for Caelan's call between each. The rulings
+SP1–SP9 cost a line each and unblock RV, AB and FIN. The items below still stand behind it.
 
 0. **Turn model step 2 — one slapstick blow** (`plans/turn-model.md`, Recommendation). One enemy type
    winds up on a TILE (telegraphed) and lands next beat on whoever stands there, goon or player — the
