@@ -5,8 +5,9 @@
 // mood fade, so standing still — or thinking — changed the world, and the
 // wander's draws shared game.rng with every fight and theft. After: the day and
 // moods count committed actions, the timer only moves townsfolk (and not while
-// paused or in a fight), wander draws its own stream, a held or clicked walk
-// stops at a fight, and a buyback lasts until you leave the zone.
+// paused or in a fight), wander draws its own stream, and a buyback lasts until
+// you leave the zone. A held or clicked walk carries on in a fight (3e was
+// reversed 2026-10-11: halting it read as the game locking up).
 //
 // main.js touches `document` at import, so the methods are lifted from its
 // source and run for real (the technique of offer-wiring.test.js).
@@ -37,14 +38,11 @@ function liveConst(name) {
 const DAY_LENGTH_ACTIONS = liveConst('DAY_LENGTH_ACTIONS');
 const NIGHT_MAX = liveConst('NIGHT_MAX');
 const DISPOSITION_DECAY_TURNS = liveConst('DISPOSITION_DECAY_TURNS');
-const AWARE_STATES = liveConst('AWARE_STATES');
 const STATE = { SPLASH: 'splash', IDLE: 'idle' };
 
 const advanceDayClock = liveMethod('_advanceDayClock(steps = 1) {', { DAY_LENGTH_ACTIONS, NIGHT_MAX });
 const worldBeat = liveMethod('_worldBeat({ ambient }) {', { DISPOSITION_DECAY_TURNS });
 const timeOfDay = liveMethod('_timeOfDay() {', { DAY_LENGTH_ACTIONS });
-const walkHalted = liveMethod('_walkHalted() {');
-const alertCount = liveMethod('_alertCount() {', { AWARE_STATES });
 
 describe('the constants', () => {
     test('a day is 600 actions and moods fade every 40', () => {
@@ -201,94 +199,56 @@ describe('3d — wander draws its own dice', () => {
     });
 });
 
-describe('3e — a held or clicked walk stops at a fight', () => {
+describe('3e reversed — a held or clicked walk carries on in a fight', () => {
     const onStepSettled = liveMethod('_onStepSettled() {', { STATE });
-    const watcher = (state) => ({ state, _ally: false, entity: { isAlive: () => true } });
-    const walker = (over = {}) => {
-        const g = {
-            state: STATE.IDLE, playerX: 5, playerY: 5, enemies: [], moves: [],
-            _queuedMoveDir: null, _heldDirKeys: ['KeyD'], _pathQueue: [], _pathArrive: null,
-            _walkAlertBase: 0, fight: false,
-            _maybeShowHint() {},
-            _inCombat() { return this.fight; },
-            _walkHalted: walkHalted, _alertCount: alertCount,
-            _intendedWalkDir() {
-                if (this._queuedMoveDir) return this._queuedMoveDir;
-                return this._heldDirKeys.length ? { dx: 1, dy: 0 } : null;
-            },
-            _resolveWalkStep: (d) => d,
-            _autoRepeatShouldStop: () => false,
-            _doMove(step) { this.moves.push(step); this._walkAlertBase = this._alertCount(); },
-            ...over,
-        };
-        return g;
-    };
+    const walker = (over = {}) => ({
+        state: STATE.IDLE, playerX: 5, playerY: 5, enemies: [], moves: [],
+        _queuedMoveDir: null, _heldDirKeys: ['KeyD'], _pathQueue: [], _pathArrive: null,
+        _maybeShowHint() {},
+        _inCombat: () => true,
+        _intendedWalkDir() {
+            if (this._queuedMoveDir) return this._queuedMoveDir;
+            return this._heldDirKeys.length ? { dx: 1, dy: 0 } : null;
+        },
+        _resolveWalkStep: (d) => d,
+        _autoRepeatShouldStop: () => false,
+        _doMove(step) { this.moves.push(step); },
+        ...over,
+    });
 
-    test('out of a fight a held key keeps walking', () => {
+    test('in a fight a held key keeps walking', () => {
         const g = walker();
         onStepSettled.call(g);
-        assert.equal(g.moves.length, 1);
+        assert.deepEqual(g.moves, [{ dx: 1, dy: 0 }]);
     });
 
-    test('in a fight a held key does not take another step', () => {
-        const g = walker({ fight: true });
-        onStepSettled.call(g);
-        assert.equal(g.moves.length, 0);
-    });
-
-    test('in a fight a fresh press made during the slide still steps (the one-deep buffer, TM-6)', () => {
-        const g = walker({ fight: true, _queuedMoveDir: { dx: 0, dy: 1 } });
+    test('in a fight a press made during the slide steps (the one-deep buffer, TM-6)', () => {
+        const g = walker({ _heldDirKeys: [], _queuedMoveDir: { dx: 0, dy: 1 } });
         onStepSettled.call(g);
         assert.deepEqual(g.moves, [{ dx: 0, dy: 1 }]);
         assert.equal(g._queuedMoveDir, null);
     });
 
-    test('the step on which someone noticed you ends the walk', () => {
-        const g = walker();
-        g.enemies = [watcher('idle')];
-        g._walkAlertBase = alertCount.call(g);
-        g.enemies[0].state = 'suspicious';
-        onStepSettled.call(g);
-        assert.equal(g.moves.length, 0);
-    });
-
-    test('someone already aware before the step does not stop it', () => {
-        const g = walker();
-        g.enemies = [watcher('searching')];
-        g._walkAlertBase = alertCount.call(g);
-        assert.equal(g._walkAlertBase, 1);
-        onStepSettled.call(g);
-        assert.equal(g.moves.length, 1);
-    });
-
-    test('allies and the dead are never counted', () => {
-        const g = { enemies: [
-            { state: 'chasing', _ally: true, entity: { isAlive: () => true } },
-            { state: 'chasing', _ally: false, entity: { isAlive: () => false } },
-            watcher('idle'), watcher('chasing'),
-        ] };
-        assert.equal(alertCount.call(g), 1);
-    });
-
-    test('a click-to-walk path is dropped, with its pending action, when a fight starts', () => {
+    test('in a fight a click-to-walk path takes its next step and keeps the rest', () => {
         let arrived = 0;
-        const g = walker({ fight: true, _heldDirKeys: [], _pathQueue: [{ x: 6, y: 5 }, { x: 7, y: 5 }],
+        const g = walker({ _heldDirKeys: [], _pathQueue: [{ x: 6, y: 5 }, { x: 7, y: 5 }],
                            _pathArrive: () => { arrived++; } });
         onStepSettled.call(g);
-        assert.equal(g.moves.length, 0);
-        assert.deepEqual(g._pathQueue, []);
-        assert.equal(g._pathArrive, null);
+        assert.deepEqual(g.moves, [{ dx: 1, dy: 0 }]);
+        assert.deepEqual(g._pathQueue, [{ x: 7, y: 5 }]);
+        assert.equal(typeof g._pathArrive, 'function');
         assert.equal(arrived, 0);
     });
 
-    test('out of a fight the click-to-walk path carries on', () => {
-        const g = walker({ _heldDirKeys: [], _pathQueue: [{ x: 6, y: 5 }] });
+    test('the step still stops before a consequential tile, as out of a fight', () => {
+        const g = walker({ _autoRepeatShouldStop: () => true });
         onStepSettled.call(g);
-        assert.deepEqual(g.moves, [{ dx: 1, dy: 0 }]);
+        assert.equal(g.moves.length, 0);
     });
 
-    test('_doMove takes the awareness baseline before each step', () => {
-        const at = mainSrc.indexOf('    _doMove(dir) {');
-        assert.match(mainSrc.slice(at, at + 300), /this\._walkAlertBase = this\._alertCount\(\);/);
+    test('the halt and its awareness count are gone', () => {
+        for (const gone of ['_walkHalted', '_alertCount', '_walkAlertBase', 'AWARE_STATES']) {
+            assert.equal(mainSrc.includes(gone), false, `${gone} is still in main.js`);
+        }
     });
 });
