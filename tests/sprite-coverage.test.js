@@ -14,6 +14,14 @@ import { dirname, join } from 'node:path';
 import { ENEMY_SPRITES, ITEM_SPRITES, spriteFrame } from '../game/sprites.js';
 import { ALL_ITEM_IDS } from '../game/item-registry.js';
 import { dirOf } from '../game/perception.js';
+import { SLOTS, ENTRIES } from '../game/slots.js';
+
+// A spine slot's spawn may hold ANY entry of its pool (plans/slot-registry.md),
+// so every entry needs art and must not share a cell with its map's other types.
+const everyPick = (spawns) => (spawns || []).flatMap((s) => s && s.slot && SLOTS[s.slot]
+    ? SLOTS[s.slot].pool.map((p) => ({ ...s, type: ENTRIES[p.entry].type }))
+    : [s]);
+
 
 const GAME_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'game');
 
@@ -47,7 +55,7 @@ describe('sprite coverage', () => {
     test('every type spawned in a map JSON has an ENEMY_SPRITES entry', () => {
         const missing = [];
         for (const file of mapFiles) {
-            for (const e of loadMap(file).enemies || []) {
+            for (const e of everyPick(loadMap(file).enemies)) {
                 if (e.type && !ENEMY_SPRITES[e.type] && !KNOWN_UNSPRITED[e.type]) {
                     missing.push(`${file}: ${e.type} (id ${e.id ?? '?'})`);
                 }
@@ -93,7 +101,7 @@ describe('sprite coverage', () => {
         const collisions = [];
         for (const file of mapFiles) {
             const seen = new Map();   // "sheet:col,row" -> first type using it
-            for (const e of loadMap(file).enemies || []) {
+            for (const e of everyPick(loadMap(file).enemies)) {
                 const s = ENEMY_SPRITES[e.type];
                 if (!s) continue;     // covered by the test above
                 for (const key of cellsFor(s)) {
@@ -112,7 +120,7 @@ describe('sprite coverage', () => {
     test('no ENEMY_SPRITES entry is orphaned', () => {
         const spawned = new Set(DYNAMIC_SPAWNS.map(d => d.type));
         for (const file of mapFiles) {
-            for (const e of loadMap(file).enemies || []) if (e.type) spawned.add(e.type);
+            for (const e of everyPick(loadMap(file).enemies)) if (e.type) spawned.add(e.type);
         }
         const orphans = Object.keys(ENEMY_SPRITES).filter(t => !spawned.has(t));
         assert.deepEqual(orphans, [], `sprites for types nothing spawns: ${orphans.join(', ')}`);

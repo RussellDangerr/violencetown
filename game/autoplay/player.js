@@ -39,8 +39,12 @@ const dirTo = (from, to) =>
     Object.keys(STEP).find((d) => from.x + STEP[d][0] === to.x && from.y + STEP[d][1] === to.y) || null;
 const around = (p) => Object.entries(STEP).map(([dir, [dx, dy]]) => ({ x: p.x + dx, y: p.y + dy, dir }));
 
+// A kill goal names a spine slot ('sewer.boss') or a tag. By slot, it hunts
+// whoever this game picked for it, so a new pool entry needs no new route.
+const isQuarry = (e, kill) => e.tag === kill || (!!e.slot && e.slot === kill);
+
 export function goalDone(view, goal) {
-    if (goal.kill) return view.mapUrl === goal.map && !view.enemies.some((e) => e.tag === goal.kill);
+    if (goal.kill) return view.mapUrl === goal.map && !view.enemies.some((e) => isQuarry(e, goal.kill));
     if (goal.take) return view.inventory.includes(goal.take);
     if (goal.reach) return view.mapUrl === goal.reach;
     return false;   // `use` ends when the quest engine moves on
@@ -60,7 +64,7 @@ export function decide(view, goals, knobs = KNOBS) {
     // same to the sneak. Hostile or not, it is in the way.
     const onTake = (e) => goal && goal.take
         && view.items.some((i) => i.type === goal.take && i.x === e.x && i.y === e.y);
-    const quarry = (e) => !!goal && ((goal.kill && e.tag === goal.kill) || onTake(e));
+    const quarry = (e) => !!goal && ((goal.kill && isQuarry(e, goal.kill)) || onTake(e));
     const fights = (e) => quarry(e) || (e.hostile && (!knobs.sneak || e.aware));
     const beside = view.enemies.filter((e) => cheb(e, view.player) === 1 && fights(e));
     const spent = spend(view, fights, quarry, knobs);
@@ -76,7 +80,7 @@ export function decide(view, goals, knobs = KNOBS) {
         return toward(view, view.transitions.filter((t) => t.toMap === where), `the way to ${where}`, knobs);
     }
     if (goal.kill) {
-        const t = view.enemies.find((e) => e.tag === goal.kill);
+        const t = view.enemies.find((e) => isQuarry(e, goal.kill));
         return toward(view, around(t), `the ${goal.kill}`, knobs);
     }
     if (goal.take) {

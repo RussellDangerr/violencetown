@@ -34,7 +34,8 @@ import { getGreedyStep, stepEntity, findPath } from './pathing.js'; // pathfindi
 import { applyDispositionDelta, reactToTransaction } from './give-action.js';
 import { getDialogue } from './dialogue.js';
 import { manhattan, clamp } from './utils.js';
-import { RNG } from './rng.js';
+import { RNG, randomSeed } from './rng.js';
+import { pickSlots, defaultPicks, resolveSpawn, requiredDropFor, dropLineFor } from './slots.js';
 import { hasSave, readSaveRaw, writeSave, loadInto, clearSave } from './save.js';
 import { QuestEngine } from './quests.js';
 import { doExamine, resolveExamine } from './examine.js';
@@ -477,7 +478,13 @@ class Game {
         // Seeded RNG — the single source of gameplay randomness, deterministic
         // and resumable across saves (see rng.js). Reseeded fresh here; the
         // save restores the live stream position via setState.
-        this.rng = new RNG();
+        // The game's seed: one draw at a new game, kept so the spine's slot picks
+        // (plans/slot-registry.md) come from it. game.rng starts exactly as before.
+        const newSeed = randomSeed();
+        this.rng = new RNG(newSeed);
+        // (slot registry) One entry per spine slot, from the seed's own stream —
+        // never game.rng (SL-2). A save restores its own picks over these.
+        this.slots = pickSlots(newSeed);
         // (one clock) Ambient wander's own stream, so how long you think between
         // moves can never shift a fight's or a theft's rolls. Not saved: wander
         // changes no outcome's dice, so a reload may pick it up anywhere.
@@ -657,7 +664,8 @@ class Game {
         }
         this._endBuybacks();        // (one clock) a buyback lasts until you leave the zone: close the old zone's shelves
         this.enemies = [];
-        for (const s of this.map.enemySpawns) this.enemies.push(spawnEnemy(s, this._muggedIds, this._robbed));
+        // (slot registry) A spawn carrying a `slot` becomes this game's pick for it.
+        for (const s of this.map.enemySpawns) this.enemies.push(spawnEnemy(resolveSpawn(s, this.slots), this._muggedIds, this._robbed));
 
         // (zone pursuit) Re-inject any hostiles that chased you through the door.
         // They spawn at the door leading back where you came from — visible in
@@ -4432,11 +4440,13 @@ class Game {
             this._muggedIds.add(enemyObj.id);
         }
         enemyObj.loadout = [];
-        // The Were-Rat drops the converter; rat kills feed the escape waves.
-        if (enemyObj.tag === 'wererat_boss' && ITEMS.catalytic_converter) {
-            this._recordDrop('catalytic_converter', enemyObj.x, enemyObj.y);
-            this.groundItems.push({ type: 'catalytic_converter', x: enemyObj.x, y: enemyObj.y, def: ITEMS.catalytic_converter });
-            this._log('[The Were-Rat drops your cataclysmic converter!]', 'pickup');
+        // A spine slot's required item drops from whoever filled the slot (the
+        // Sewer's boss drops the converter); rat kills feed the escape waves.
+        const required = requiredDropFor(enemyObj, this.map?.enemySpawns);
+        if (required && ITEMS[required]) {
+            this._recordDrop(required, enemyObj.x, enemyObj.y);
+            this.groundItems.push({ type: required, x: enemyObj.x, y: enemyObj.y, def: ITEMS[required] });
+            this._log(dropLineFor(enemyObj, this.map?.enemySpawns) || `[${ITEMS[required].name} dropped.]`, 'pickup');
         }
         // (Remembrance Rings) The Were-Rat also leaves a remembrance — a braided
         // tuft of fur → the Rat Ring (fashioned at Platero). Drop it on a free
@@ -5201,7 +5211,9 @@ class Game {
         // the new run is independent of the old one. The autoplay passes a seed
         // so a run replays exactly (plans/quest1-autoplay.md §5.3).
         clearSave();
-        this.rng = new RNG(seed);
+        const newSeed = seed ?? randomSeed();
+        this.rng = new RNG(newSeed);
+        this.slots = pickSlots(newSeed);   // (slot registry) a new game, new picks
         // Wander's own stream, derived from the same seed so a seeded run still
         // replays exactly (the autoplay), yet never sharing a draw with game.rng.
         this.ambientRng = new RNG(seed == null ? undefined : (seed ^ 0x9E3779B9) >>> 0);

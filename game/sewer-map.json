@@ -635,33 +635,7 @@
       "onFlip": "offerDiscount",
       "adjacencyBark": "[Carrion: Road's blocked, friend. Sewer river's swollen with sludge. Come back later.]"
     },
-    {
-      "id": "wererat",
-      "boss": true,
-      "sewerDweller": true,
-      "gold": 44,
-      "loadout": [
-        "bandage",
-        "hot_dog",
-        "boardwalk_burger",
-        "defence_poition",
-        "foil_hat",
-        "soap",
-        "cardboard_cuirass"
-      ],
-      "equipped": ["wooden_sword"], "type": "Wererat",
-      "x": 17,
-      "y": 10,
-      "hp": 100,
-      "armor": 6,
-      "damage": 12,
-      "tag": "wererat_boss",
-      "barks": [
-        "[Were-Rat: The converter's OURS now, grease-boy.]",
-        "[Were-Rat: You smell like a dead-end job.]"
-      ],
-      "barkEveryTurns": 6
-    },
+    { "id": "wererat", "slot": "sewer.boss", "x": 17, "y": 10 },
     {
       "id": "sludge-bloom",
       "type": "Sludge Bloom",

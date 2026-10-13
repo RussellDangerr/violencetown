@@ -168,7 +168,7 @@ function view(g) {
         tileAt: (x, y) => m.getTile(x, y),
         transitions: (m.transitions || []).map((t) => ({ x: t.x, y: t.y, toMap: t.toMap })),
         enemies: g.enemies.filter((e) => e.entity.isAlive())
-            .map((e) => ({ x: e.x, y: e.y, hp: e.entity.hp, hostile: isHostile(e), tag: e.tag || null,
+            .map((e) => ({ x: e.x, y: e.y, hp: e.entity.hp, hostile: isHostile(e), tag: e.tag || null, slot: e.slot || null,
                            aware: e.state === 'chasing' || e.state === 'searching' })),
         items: g.groundItems.map((i) => ({ type: i.type, x: i.x, y: i.y })),
         containers: (g.containers || []).map((c) => ({ x: c.x, y: c.y })),

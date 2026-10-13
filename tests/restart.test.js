@@ -16,7 +16,8 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { serialize } from '../game/save.js';
-import { RNG } from '../game/rng.js';
+import { RNG, randomSeed } from '../game/rng.js';
+import { pickSlots } from '../game/slots.js';
 import { QuestEngine } from '../game/quests.js';
 import { WEAPONS } from '../game/weapons.js';
 import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE } from '../game/data.js';
@@ -45,9 +46,11 @@ const refreshGrantedSkills = liveMethod('_refreshGrantedSkills() {', {
 });
 const construct = liveMethod('constructor() {', {
     STATE, PLAYER_MAX_HP, PLAYER_MAX_MP, BASE_SPELLS, WEAPONS, INVENTORY_SIZE, RNG, QuestEngine, createWheelState,
+    randomSeed, pickSlots,
 });
 const fullReset = liveMethod('_fullReset({ seed } = {}) {', {
     STATE, PLAYER_MAX_HP, PLAYER_MAX_MP, WEAPONS, RNG, QuestEngine, clearSave: () => {},
+    randomSeed, pickSlots,
 }, { async: true });
 
 // What the town is built FROM: _loadMap consults these while it spawns (skips
@@ -148,12 +151,14 @@ async function lateRun() {
     return g;
 }
 
-// A save, minus what cannot compare: when it was written, and the RNG stream
-// (RESTART reseeds on purpose, so the new run is independent of the old one).
+// A save, minus what cannot compare: when it was written, the RNG stream and
+// the slot picks drawn from the same seed (RESTART reseeds on purpose, so the
+// new run is independent of the old one).
 function runState(g) {
     const s = serialize(g);
     delete s.savedAt;
     delete s.rngState;
+    delete s.slots;
     return s;
 }
 
@@ -219,6 +224,14 @@ describe('RESTART begins a brand-new game', () => {
         const g = await lateRun();
         await g._fullReset({ seed: 42 });
         assert.equal(g.rng.getState(), 42);
+    });
+
+    test('a seeded RESTART picks the spine slots from that seed, and only from it', async () => {
+        const g = await lateRun();
+        g.slots = { 'sewer.boss': 'an-old-pick' };
+        await g._fullReset({ seed: 42 });
+        assert.deepEqual(g.slots, pickSlots(42));
+        assert.equal(g.rng.getState(), 42, 'picking drew from game.rng (SL-2)');
     });
 
     test('an unseeded RESTART still reseeds at random', async () => {
