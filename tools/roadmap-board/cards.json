@@ -333,21 +333,10 @@
     "note": "How the world's edge looks"
   },
   {
-    "id": "SR",
-    "title": "SR — the slot registry — pools + seeded per-new-game picks",
-    "lane": "ready",
-    "order": 10,
-    "kind": "build",
-    "size": "M",
-    "blockedBy": [],
-    "doc": "The spine's slot framework = species-adventures piece 1 (registry, spawn tables, drop tables, respawn clock). Picks saved and reproducible, from their own stream (never `game.rng`). The Converter rebinds to the `sewer.boss` slot, Were-Rat its only entry; nothing visible changes (suite, autoplay golden, game). Plus a test that every entry in a required-item slot drops it. Own spec first: `plans/slot-registry.md`.",
-    "note": ""
-  },
-  {
     "id": "RC",
     "title": "RC — the recolor tool — one base sprite in, tinted variants out",
     "lane": "ready",
-    "order": 20,
+    "order": 10,
     "kind": "build",
     "size": "S",
     "blockedBy": [],
@@ -358,7 +347,7 @@
     "id": "T1",
     "title": "T1 — Tag layer on items / enemies / tiles",
     "lane": "ready",
-    "order": 30,
+    "order": 20,
     "kind": "build",
     "size": "M",
     "blockedBy": [],
@@ -369,7 +358,7 @@
     "id": "C3",
     "title": "C3 — input asymmetries",
     "lane": "ready",
-    "order": 40,
+    "order": 30,
     "kind": "build",
     "size": "M",
     "blockedBy": [],
@@ -1126,5 +1115,16 @@
     "blockedBy": [],
     "doc": "`479a4b8`, tagged `v0.27.0`, live 2026-10-02: 25 commits, 10 changed game files byte-matched live on both hosts",
     "note": "`479a4b8`, tagged `v0.27.0`, live 2026-10-02: 25 commits, 10 changed game files byte-matched live on both hosts"
+  },
+  {
+    "id": "SR",
+    "title": "SR — the slot registry",
+    "lane": "done",
+    "order": 620,
+    "kind": "done",
+    "size": "",
+    "blockedBy": [],
+    "doc": "Merged to `dev` 2026-10-13 (`809c692`, `plans/slot-registry.md`): `game/slots.js` — a registry, slots with pools, one pick per slot per new game from the seed (never `game.rng`), saved. The Were-Rat is `sewer.boss`'s only entry and the Converter drops by slot. Nothing visible changed: the autoplay with the new save field stripped matched the old golden exactly; browser smoke 9/9, old saves included. Not yet released",
+    "note": "Merged to `dev` 2026-10-13 (`809c692`, `plans/slot-registry.md`): `game/slots.js` — a registry, slots with pools, one pick per slot per new game from the seed (never `game.rng`), saved. The Were-Rat is `sewer.boss`'s only entry and the Converter drops by slot. Nothing visible changed: the autoplay with the new save field stripped matched the old golden exactly; browser smoke 9/9, old saves included. Not yet released"
   }
 ]

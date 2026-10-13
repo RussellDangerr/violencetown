@@ -1,7 +1,7 @@
 # SR — the slot registry
 
 **Date:** 2026-10-12
-**Status:** SPEC — building on `feature/slot-registry`
+**Status:** MERGED 2026-10-13 (`809c692`)
 **Parent:** `plans/spine.md` §2 (the slot rules SL-1…SL-7) and §6 step 2. Roadmap row `SR`.
 
 ## Goal

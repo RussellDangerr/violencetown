@@ -16,11 +16,13 @@ pending decisions, and the three passes that landed this week.
 > ids, and **the row is now the record** — a Source cell that reads "this row" is one of them.
 > Items of theirs that had already shipped are listed in §6 so nobody re-does them.
 
-**State right now (updated 2026-10-12):** `main` = `585ac52`, **v0.28.0, tagged and live** (one
-clock, two poisons, the trim). `dev` = `9ec34e8`, 8 commits past it: the Tiny house style and
-walking freely in a fight. Suite 1932 / 350 / 0. **Unmerged: `feature/tiled-pipeline` (local only,
-waiting on the Canyon being painted in Tiled), `spike/3d-view`, and `docs/spine` (this update).**
-Next: **SR, the slot registry** (§3, §7) — and the spine's rulings SP1–SP9 (§2), which are cheap.
+**State right now (updated 2026-10-13):** `main` = `585ac52`, **v0.28.0, tagged and live** (one
+clock, two poisons, the trim). `dev` = `809c692`, past it: the Tiny house style, walking freely in a
+fight, the spine (`plans/spine.md`) and **SR, the slot registry** — all unreleased; **v0.29.0** is
+next (versions go up .01 a release, ruled 2026-10-12). Suite 1954 / 356 / 0; balance and autoplay
+goldens match. **Unmerged: `feature/tiled-pipeline` (local only, waiting on the Canyon being painted
+in Tiled) and `spike/3d-view`.** Next: one Act 2 boss end to end (AB, §4), which wants SP1 — and the
+spine's rulings SP1–SP9 (§2), which are cheap.
 
 > **The spine, ruled 2026-10-11 — `plans/spine.md`.** One structure for the whole game, locked:
 > **Act 1** the Town (built: car → Sewer → the Sewer boss's Converter → bridge → Canyon → Downtown
@@ -78,7 +80,7 @@ flowchart LR
     B2["B2 — enemies eat their kits<br/>DONE 09-01"]:::done
     LEG["Combat legibility —<br/>heals + DoTs as splats<br/>DONE 09-13"]:::done
     SPINE["The spine — three acts,<br/>slots not names — RULED 10-11"]:::done
-    SR["SR — slot registry:<br/>pools + seeded picks"]:::ready
+    SR["SR — slot registry<br/>DONE 10-13"]:::done
     RC["RC — recolor tool"]:::ready
     RV["RV — rat variants"]:::design
     ZBOSS["AB — Act 2 bosses:<br/>Bigfoot, Alien, Deity"]:::design
@@ -199,7 +201,6 @@ open after it: R (rings, with Hide) and DZ (needs his yes) — both ruled 2026-1
 
 | Item | Size | Blocked by | Doc | Where the doc lives |
 |---|---|---|---|---|
-| **SR — the slot registry** — pools + seeded per-new-game picks | M | nothing | The spine's slot framework = species-adventures piece 1 (registry, spawn tables, drop tables, respawn clock). Picks saved and reproducible, from their own stream (never `game.rng`). The Converter rebinds to the `sewer.boss` slot, Were-Rat its only entry; nothing visible changes (suite, autoplay golden, game). Plus a test that every entry in a required-item slot drops it. Own spec first: `plans/slot-registry.md`. | `plans/spine.md` §2, §6 |
 | **RC — the recolor tool** — one base sprite in, tinted variants out | S | nothing | In the style of `tools/gen_outlined_sheet.py` ("generate, don't reject"). Makes enemy variants cheap; the rats are its first use. | `plans/spine.md` §6 |
 | **T1 — Tag layer** on items / enemies / tiles | M | nothing | Not built. Prerequisite for the affordance matrix. | systems-audit §5.4 |
 | **C3 — input asymmetries** | M | nothing | REMOTICON item/gear/ring actions are pointer-only; aiming, turn-in-place and the 1–9 hotbar are keyboard-only. Documented honestly; still gaps. | this row |
@@ -309,6 +310,7 @@ parked document.
 | F2 follow-up | Hit splats redrawn | Shipped v0.27.0: a silhouette per damage type (`tools/gen_splats.py`), layout by count above the head, the head space theirs while up, whole pixels at odd scales (`plans/hit-splat-art.md` §10) |
 | QA pass finding | A DoT death was not a death | Shipped v0.27.0 (`plans/dot-death.md`): an enemy killed by its own DoT took its turn anyway and its death went unhandled — a poison finish on the Were-Rat dropped no converter, softlocking quest 1 |
 | roadmap §1 | Ship v0.27.0 to `main` | `479a4b8`, tagged `v0.27.0`, live 2026-10-02: 25 commits, 10 changed game files byte-matched live on both hosts |
+| roadmap §3 | SR — the slot registry | Merged to `dev` 2026-10-13 (`809c692`, `plans/slot-registry.md`): `game/slots.js` — a registry, slots with pools, one pick per slot per new game from the seed (never `game.rng`), saved. The Were-Rat is `sewer.boss`'s only entry and the Converter drops by slot. Nothing visible changed: the autoplay with the new save field stripped matched the old golden exactly; browser smoke 9/9, old saves included. Not yet released |
 
 ---
 
@@ -316,8 +318,9 @@ parked document.
 
 Not a mandate — a reading of the graph.
 
-**First (2026-10-11): SR, the slot registry** (`feature/slot-registry`), then RC and RV — the
-spine's build order (`plans/spine.md` §6), a stop for Caelan's call between each. The rulings
+**First (2026-10-11): SR, the slot registry — merged 2026-10-13.** Next on the path to the credits:
+**one Act 2 boss end to end** (AB), before RC and RV — Claude's lean, not yet ruled; it needs SP1 for
+its item's name and a pick of which zone goes first. RC and RV follow as a breather. The rulings
 SP1–SP9 cost a line each and unblock RV, AB and FIN. The items below still stand behind it.
 
 0. **Turn model step 2 — one slapstick blow** (`plans/turn-model.md`, Recommendation). One enemy type
