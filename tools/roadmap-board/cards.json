@@ -1124,7 +1124,18 @@
     "kind": "done",
     "size": "",
     "blockedBy": [],
-    "doc": "Merged to `dev` 2026-10-13 (`809c692`, `plans/slot-registry.md`): `game/slots.js` — a registry, slots with pools, one pick per slot per new game from the seed (never `game.rng`), saved. The Were-Rat is `sewer.boss`'s only entry and the Converter drops by slot. Nothing visible changed: the autoplay with the new save field stripped matched the old golden exactly; browser smoke 9/9, old saves included. Not yet released",
-    "note": "Merged to `dev` 2026-10-13 (`809c692`, `plans/slot-registry.md`): `game/slots.js` — a registry, slots with pools, one pick per slot per new game from the seed (never `game.rng`), saved. The Were-Rat is `sewer.boss`'s only entry and the Converter drops by slot. Nothing visible changed: the autoplay with the new save field stripped matched the old golden exactly; browser smoke 9/9, old saves included. Not yet released"
+    "doc": "Merged to `dev` 2026-10-13 (`809c692`, `plans/slot-registry.md`): `game/slots.js` — a registry, slots with pools, one pick per slot per new game from the seed (never `game.rng`), saved. The Were-Rat is `sewer.boss`'s only entry and the Converter drops by slot. Nothing visible changed: the autoplay with the new save field stripped matched the old golden exactly; browser smoke 9/9, old saves included. Shipped v0.29.0",
+    "note": "Merged to `dev` 2026-10-13 (`809c692`, `plans/slot-registry.md`): `game/slots.js` — a registry, slots with pools, one pick per slot per new game from the seed (never `game.rng`), saved. The Were-Rat is `sewer.boss`'s only entry and the Converter drops by slot. Nothing visible changed: the autoplay with the new save field stripped matched the old golden exactly; browser smoke 9/9, old saves included. Shipped v0.29.0"
+  },
+  {
+    "id": "ship-v0-29-0-to-main",
+    "title": "Ship v0.29.0 to `main`",
+    "lane": "done",
+    "order": 630,
+    "kind": "done",
+    "size": "",
+    "blockedBy": [],
+    "doc": "`2ad4e9e`, tagged `v0.29.0`, live 2026-10-14: 15 commits (the house style, walking freely in a fight, the spine, SR); 18 changed game files byte-matched live on both hosts",
+    "note": "`2ad4e9e`, tagged `v0.29.0`, live 2026-10-14: 15 commits (the house style, walking freely in a fight, the spine, SR); 18 changed game files byte-matched live on both hosts"
   }
 ]

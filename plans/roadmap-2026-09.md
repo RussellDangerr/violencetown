@@ -16,13 +16,12 @@ pending decisions, and the three passes that landed this week.
 > ids, and **the row is now the record** — a Source cell that reads "this row" is one of them.
 > Items of theirs that had already shipped are listed in §6 so nobody re-does them.
 
-**State right now (updated 2026-10-13):** `main` = `585ac52`, **v0.28.0, tagged and live** (one
-clock, two poisons, the trim). `dev` = `809c692`, past it: the Tiny house style, walking freely in a
-fight, the spine (`plans/spine.md`) and **SR, the slot registry** — all unreleased; **v0.29.0** is
-next (versions go up .01 a release, ruled 2026-10-12). Suite 1954 / 356 / 0; balance and autoplay
-goldens match. **Unmerged: `feature/tiled-pipeline` (local only, waiting on the Canyon being painted
-in Tiled) and `spike/3d-view`.** Next: one Act 2 boss end to end (AB, §4), which wants SP1 — and the
-spine's rulings SP1–SP9 (§2), which are cheap.
+**State right now (updated 2026-10-14):** `main` = `dev` = `2ad4e9e`, **v0.29.0, tagged and live**
+— the Tiny house style and what read as broken, walking freely in a fight (Knuckles neutral), the
+spine (`plans/spine.md`) and SR, the slot registry. Suite 1954 / 356 / 0; balance and autoplay goldens
+match; all 18 changed game files byte-match `main` on both hosts. **Unmerged: `feature/tiled-pipeline`
+(local only, waiting on the Canyon being painted in Tiled) and `spike/3d-view`.** Next: one Act 2 boss
+end to end (AB, §4), which wants SP1 — and the spine's rulings SP1–SP9 (§2), which are cheap.
 
 > **The spine, ruled 2026-10-11 — `plans/spine.md`.** One structure for the whole game, locked:
 > **Act 1** the Town (built: car → Sewer → the Sewer boss's Converter → bridge → Canyon → Downtown
@@ -310,7 +309,8 @@ parked document.
 | F2 follow-up | Hit splats redrawn | Shipped v0.27.0: a silhouette per damage type (`tools/gen_splats.py`), layout by count above the head, the head space theirs while up, whole pixels at odd scales (`plans/hit-splat-art.md` §10) |
 | QA pass finding | A DoT death was not a death | Shipped v0.27.0 (`plans/dot-death.md`): an enemy killed by its own DoT took its turn anyway and its death went unhandled — a poison finish on the Were-Rat dropped no converter, softlocking quest 1 |
 | roadmap §1 | Ship v0.27.0 to `main` | `479a4b8`, tagged `v0.27.0`, live 2026-10-02: 25 commits, 10 changed game files byte-matched live on both hosts |
-| roadmap §3 | SR — the slot registry | Merged to `dev` 2026-10-13 (`809c692`, `plans/slot-registry.md`): `game/slots.js` — a registry, slots with pools, one pick per slot per new game from the seed (never `game.rng`), saved. The Were-Rat is `sewer.boss`'s only entry and the Converter drops by slot. Nothing visible changed: the autoplay with the new save field stripped matched the old golden exactly; browser smoke 9/9, old saves included. Not yet released |
+| roadmap §3 | SR — the slot registry | Merged to `dev` 2026-10-13 (`809c692`, `plans/slot-registry.md`): `game/slots.js` — a registry, slots with pools, one pick per slot per new game from the seed (never `game.rng`), saved. The Were-Rat is `sewer.boss`'s only entry and the Converter drops by slot. Nothing visible changed: the autoplay with the new save field stripped matched the old golden exactly; browser smoke 9/9, old saves included. Shipped v0.29.0 |
+| roadmap §1 | Ship v0.29.0 to `main` | `2ad4e9e`, tagged `v0.29.0`, live 2026-10-14: 15 commits (the house style, walking freely in a fight, the spine, SR); 18 changed game files byte-matched live on both hosts |
 
 ---
 
