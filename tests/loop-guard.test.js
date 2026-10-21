@@ -58,6 +58,10 @@ describe('checkTestIntegrity', () => {
         assert.equal(checkTestIntegrity("+  describe.only('x', () => {});").length, 1);
         assert.equal(checkTestIntegrity("+    test('x', { skip: true }, () => {});").length, 1);
     });
+    test('a quoted "test.skip(" inside a string is not a skipped test', () => {
+        assert.deepEqual(checkTestIntegrity(`+        assert.equal(check("+    test.skip('x', () => {});").length, 1);`), []);
+        assert.deepEqual(checkTestIntegrity(`+        assert.equal(check("+    test('x', { skip: true }, () => {});").length, 1);`), []);
+    });
     test('the diff header lines are not mistaken for tests', () => {
         assert.deepEqual(checkTestIntegrity('--- a/tests/test(weird).js\n+++ b/tests/test(weird).js'), []);
     });

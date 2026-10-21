@@ -59,8 +59,10 @@ export function checkTestIntegrity(diffText) {
     const problems = [];
     for (const line of String(diffText ?? '').split(/\r?\n/)) {
         if (/^-(?!--)\s*(test|it|describe)\s*\(/.test(line)) problems.push(`a test was removed: ${line.slice(1).trim().slice(0, 80)}`);
-        if (/^\+(?!\+\+).*\b(test|it|describe)\.(skip|only|todo)\s*\(/.test(line)) problems.push(`a test was switched off or narrowed: ${line.slice(1).trim().slice(0, 80)}`);
-        if (/^\+(?!\+\+).*\{\s*(skip|only|todo)\s*:\s*true/.test(line)) problems.push(`a test was switched off or narrowed: ${line.slice(1).trim().slice(0, 80)}`);
+        // Only a real call at the start of a line counts — a test file that quotes
+        // "test.skip(" inside a string (this guard's own tests do) is not a skipped test.
+        if (/^\+(?!\+\+)\s*(test|it|describe)\.(skip|only|todo)\s*\(/.test(line)) problems.push(`a test was switched off or narrowed: ${line.slice(1).trim().slice(0, 80)}`);
+        if (/^\+(?!\+\+)\s*(test|it|describe)\s*\([^\n]*\{\s*(skip|only|todo)\s*:\s*true/.test(line)) problems.push(`a test was switched off or narrowed: ${line.slice(1).trim().slice(0, 80)}`);
     }
     return problems;
 }
