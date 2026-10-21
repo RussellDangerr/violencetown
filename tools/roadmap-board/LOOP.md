@@ -12,13 +12,13 @@ This is what a `/loop` run does. Point the loop at this file, e.g.
    His gestures come before new building:
    - **Feedback with no reply:** answer on the card. Append `{from: "claude", text, at}` to its
      `feedback`. Add `ask: true` when the reply is a question back to him.
-   - **An idea marked Groom it:**
+   - **An idea marked Tweak it:**
      1. Recon it.
      2. Write `ruling` cards with 2–4 `options` and a `recommended` one.
      3. Write `slice` cards with `touches`, `acceptance` and `blockedBy`.
      4. Move the idea to `done` with a note naming what it became.
    - **A ruling with no options:** write its options.
-   - **A Ready slice with no acceptance:** groom it.
+   - **A Ready slice with no acceptance:** tweak it.
    - **Merge it on a review card:** merge exactly as `CLAUDE.md` says (`--no-ff --no-commit`, all
      gates, the game runs, then commit and push `dev`). Move the card to `done`. Clicking it is
      his merge call.

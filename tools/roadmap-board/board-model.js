@@ -12,9 +12,9 @@
 // the loop builds next.
 
 export const LANES = [
-    { id: 'idea',    label: 'Ideas',        hint: 'his words — not groomed yet' },
+    { id: 'idea',    label: 'Ideas',        hint: 'his words — not tweaked yet' },
     { id: 'ruling',  label: 'Needs ruling', hint: 'your call — pick an option' },
-    { id: 'ready',   label: 'Ready',        hint: 'groomed slices the loop can take' },
+    { id: 'ready',   label: 'Ready',        hint: 'tweaked slices the loop can take' },
     { id: 'doing',   label: 'In progress',  hint: 'claimed by a loop run' },
     { id: 'review',  label: 'Review',       hint: 'branch pushed — your merge call' },
     { id: 'done',    label: 'Done',         hint: 'do not re-implement' },
@@ -32,7 +32,7 @@ const isDone = c => c.lane === 'done';
 // collide with the prototype chain and crash a `.push()`, and a lane outside
 // the known ids falls back to Ideas instead of being dropped — a card you can
 // see is better than one that silently disappears, and an unknown card most
-// likely needs grooming.
+// likely needs tweaking.
 const LANE_IDS = new Set(LANES.map(l => l.id));
 const KIND_IDS = new Set(KINDS);
 const FALLBACK_LANE = 'idea';
@@ -90,9 +90,9 @@ export function nextSlice(cards, { wipCap = WIP_CAP } = {}) {
     for (const c of lanes.ready) {
         if (kindOf(c) !== 'slice') { skipped.push({ id: c.id, why: 'not a slice' }); continue; }
         if (c.claim) { skipped.push({ id: c.id, why: 'already claimed' }); continue; }
-        // A slice with no acceptance checks has not been groomed — the roadmap's old
+        // A slice with no acceptance checks has not been tweaked — the roadmap's old
         // rows arrive like this. A run must never guess what "done" means.
-        if (!Array.isArray(c.acceptance) || !c.acceptance.length) { skipped.push({ id: c.id, why: 'not groomed (no acceptance)' }); continue; }
+        if (!Array.isArray(c.acceptance) || !c.acceptance.length) { skipped.push({ id: c.id, why: 'not tweaked (no acceptance)' }); continue; }
         if (!c.approved) { skipped.push({ id: c.id, why: 'waiting for your approval' }); continue; }
         const open = ix.openBlockedBy[c.id];
         if (open.length) { skipped.push({ id: c.id, why: `blocked by ${open.join(', ')}` }); continue; }
@@ -119,23 +119,23 @@ export function answerRuling(cards, id, { option, note = '', at }) {
 // ── His gestures (plans/ticket-board.md §8) ──────────────────────────────────
 // Each returns a NEW array with only that card changed, or the input unchanged
 // when the gesture does not apply to that card — a stale click is a no-op.
-const isGroomed = c => Array.isArray(c.acceptance) && c.acceptance.length > 0;
+const isTweaked = c => Array.isArray(c.acceptance) && c.acceptance.length > 0;
 const swap = (cards, id, fn) => cards.map(c => c.id === id ? fn(c) : c);
 const findCard = (cards, id) => cards.find(c => c.id === id);
 
-// Idea triage: 'groom' asks Claude to groom it; 'someday' parks it.
+// Idea triage: 'tweak' asks Claude to tweak it; 'someday' parks it.
 export function triageIdea(cards, id, choice, at) {
     const c = findCard(cards, id);
-    if (!c || kindOf(c) !== 'idea' || !['groom', 'someday'].includes(choice)) return cards;
+    if (!c || kindOf(c) !== 'idea' || !['tweak', 'someday'].includes(choice)) return cards;
     const someday = choice === 'someday';
     const order = someday ? (byLane(cards).someday.at(-1)?.order ?? 0) + 10 : c.order;
     return swap(cards, id, x => ({ ...x, triage: { choice, at }, ...(someday ? { lane: 'someday', order } : {}) }));
 }
 
-// A groomed Ready slice may be built once he approves it.
+// A tweaked Ready slice may be built once he approves it.
 export function approveSlice(cards, id, at) {
     const c = findCard(cards, id);
-    if (!c || kindOf(c) !== 'slice' || laneOf(c) !== 'ready' || !isGroomed(c)) return cards;
+    if (!c || kindOf(c) !== 'slice' || laneOf(c) !== 'ready' || !isTweaked(c)) return cards;
     return swap(cards, id, x => ({ ...x, approved: { at } }));
 }
 
@@ -160,8 +160,8 @@ export function yourTurn(cards) {
     for (const c of cards) {
         const k = kindOf(c), l = laneOf(c);
         if (k === 'ruling' && l === 'ruling' && Array.isArray(c.options) && c.options.length && !c.pick) out.push({ id: c.id, why: 'pick an option' });
-        else if (k === 'idea' && l === 'idea' && !c.triage) out.push({ id: c.id, why: 'groom it or park it' });
-        else if (k === 'slice' && l === 'ready' && isGroomed(c) && !c.approved) out.push({ id: c.id, why: 'approve it' });
+        else if (k === 'idea' && l === 'idea' && !c.triage) out.push({ id: c.id, why: 'tweak it or park it' });
+        else if (k === 'slice' && l === 'ready' && isTweaked(c) && !c.approved) out.push({ id: c.id, why: 'approve it' });
         else if (l === 'review' && !c.verdict) out.push({ id: c.id, why: 'merge it or ask for changes' });
         else if (lastFrom(c) === 'claude' && c.feedback.at(-1).ask) out.push({ id: c.id, why: 'Claude asked you something' });
     }
@@ -171,10 +171,10 @@ export function claudesTurn(cards) {
     const out = [];
     for (const c of cards) {
         if (lastFrom(c) === 'you') out.push({ id: c.id, why: 'reply to your feedback' });
-        else if (kindOf(c) === 'idea' && c.triage?.choice === 'groom' && laneOf(c) === 'idea') out.push({ id: c.id, why: 'groom it' });
+        else if (kindOf(c) === 'idea' && c.triage?.choice === 'tweak' && laneOf(c) === 'idea') out.push({ id: c.id, why: 'tweak it' });
         else if (laneOf(c) === 'review' && c.verdict) out.push({ id: c.id, why: c.verdict.verdict === 'merge' ? 'merge it' : 'make the changes' });
         else if (kindOf(c) === 'ruling' && laneOf(c) === 'ruling' && !(Array.isArray(c.options) && c.options.length)) out.push({ id: c.id, why: 'write its options' });
-        else if (kindOf(c) === 'slice' && laneOf(c) === 'ready' && !isGroomed(c)) out.push({ id: c.id, why: 'groom it (no acceptance checks yet)' });
+        else if (kindOf(c) === 'slice' && laneOf(c) === 'ready' && !isTweaked(c)) out.push({ id: c.id, why: 'tweak it (no acceptance checks yet)' });
     }
     return out;
 }
