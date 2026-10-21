@@ -1,3 +1,6 @@
+// RETIRED 2026-10-20 (plans/ticket-board.md §3): the board's db is the record now. Running this
+// and re-seeding would overwrite rulings, picks and slices written on the board.
+//
 // extract-roadmap.mjs — plans/roadmap-2026-09.md tables -> cards.json
 //
 // The board is seeded from this output, so the markdown stays the committed

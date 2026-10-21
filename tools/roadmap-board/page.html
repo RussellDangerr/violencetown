@@ -78,10 +78,10 @@
     background: var(--panel); border: 1px solid var(--line);
     border-top: 4px solid var(--line); border-radius: 4px;
   }
-  .lane[data-lane="rulings"] { border-top-color: var(--ruling); }
-  .lane[data-lane="now"], .lane[data-lane="ready"] { border-top-color: var(--build); }
-  .lane[data-lane="design"] { border-top-color: var(--design); }
-  .lane[data-lane="later"] { border-top-color: var(--later); }
+  .lane[data-lane="ruling"] { border-top-color: var(--ruling); }
+  .lane[data-lane="ready"], .lane[data-lane="doing"], .lane[data-lane="review"] { border-top-color: var(--build); }
+  .lane[data-lane="idea"] { border-top-color: var(--design); }
+  .lane[data-lane="someday"] { border-top-color: var(--later); }
   .lane[data-lane="done"] { border-top-color: var(--done); }
   .lane h2 {
     display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px;
@@ -113,10 +113,45 @@
   }
   .card[draggable="true"] { cursor: grab; }
   .card.ruling { border-left-color: var(--ruling); }
-  .card.build  { border-left-color: var(--build); }
-  .card.design { border-left-color: var(--design); }
-  .card.later  { border-left-color: var(--later); }
+  .card.slice  { border-left-color: var(--build); }
+  .card.idea   { border-left-color: var(--design); }
+  .card.someday { border-left-color: var(--later); }
   .card.done   { border-left-color: var(--done); border-left-style: dashed; opacity: .82; }
+  .card .kind { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-right: auto; padding-left: 8px; }
+  .card ul { margin: 0; padding-left: 16px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+  .card .label { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .card code { font-size: 11.5px; }
+
+  /* ── Ruling options ─────────────────────────────────────────────────── */
+  .options { display: flex; flex-direction: column; gap: 6px; }
+  .opt {
+    text-align: left; font-size: 12.5px; line-height: 1.4; padding: 7px 9px; cursor: pointer;
+    background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 3px;
+    transition: border-color .12s ease, box-shadow .12s ease;
+  }
+  .opt small { display: block; color: var(--muted); font-size: 11.5px; }
+  .opt:hover:not(:disabled), .opt:focus-visible { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .opt:disabled { cursor: default; opacity: .75; }
+  .opt.rec { border-color: var(--gold); }
+  .opt.picked { background: var(--ruling); border-color: var(--accent); }
+  .pick-note {
+    width: 100%; font: inherit; font-size: 12px; padding: 5px 7px; resize: vertical; min-height: 30px;
+    background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 3px;
+  }
+
+  /* ── Idea box ───────────────────────────────────────────────────────── */
+  #ideabox { display: flex; gap: 8px; align-items: flex-start; padding: 10px 20px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  #ideabox textarea {
+    flex: 1; min-width: 0; font: inherit; font-size: 13px; padding: 7px 9px; min-height: 38px; resize: vertical;
+    background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 3px;
+  }
+  #ideabox textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  #ideabox button {
+    font-size: 13px; padding: 8px 14px; border: 1px solid var(--accent); border-radius: 3px;
+    background: var(--accent); color: var(--panel); cursor: pointer;
+  }
+  #ideabox button:disabled { opacity: .5; cursor: default; }
   .card.dim { opacity: .35; }
   .card.lifting { box-shadow: var(--lift); opacity: .92; transform: scale(1.015); cursor: grabbing; }
   .card.blocked { padding-right: 16px; }
@@ -156,10 +191,12 @@
   button.chip:hover, button.chip:focus-visible { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
   button.chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .chip.ruling { background: var(--ruling); }
-  .chip.build  { background: var(--build); }
-  .chip.design { background: var(--design); }
-  .chip.later  { background: var(--later); }
+  .chip.slice  { background: var(--build); }
+  .chip.idea   { background: var(--design); }
+  .chip.someday { background: var(--later); }
   .chip.done   { background: var(--done); }
+  #unblocked .next { font-size: 13px; color: var(--on-gold); white-space: nowrap; }
+  #unblocked .next b { font-weight: 700; }
   .chip.ghost  { background: transparent; color: var(--muted); border-style: dashed; font-style: italic; cursor: default; }
 
   /* ── Graph view ─────────────────────────────────────────────────────── */
@@ -185,14 +222,18 @@
 <header class="bar">
   <h1>Violencetown Board</h1>
   <p class="sub" id="status">loading…</p>
-  <p class="hint">Built for desktop — dragging needs a mouse. Tab, chips, and jump all work without one.</p>
+  <p class="hint">Ideas → rulings → ready slices → the loop → your merge. Dragging needs a mouse; Tab, chips and the ruling buttons work without one.</p>
   <nav>
     <button id="view-board" aria-pressed="true">Board</button>
     <button id="view-graph" aria-pressed="false">Graph</button>
   </nav>
 </header>
 
-<section id="unblocked" aria-label="Unblocked now"></section>
+<form id="ideabox" hidden>
+  <textarea id="idea-words" rows="1" aria-label="A new idea, in your words" placeholder="Drop an idea — your words, as many lines as you like. Claude grooms it later."></textarea>
+  <button type="submit" id="idea-add">Add idea</button>
+</form>
+<section id="unblocked" aria-label="Pickable now"></section>
 <main id="board" class="rail" aria-label="Lanes"></main>
 <section id="graph" hidden><pre class="mermaid" id="mermaid-src"></pre></section>
 
@@ -222,8 +263,14 @@ function render() {
   ix = blockerIndex(cards);
   const byId = Object.fromEntries(cards.map(c => [c.id, c]));
 
-  $('#unblocked').innerHTML = `<h2>Unblocked now</h2><div class="chips">${
-    unblocked(cards).map(c => `<button class="chip ${esc(c.kind)}" data-jump="${esc(c.id)}">${esc(isShortCodeId(c.id) ? c.id : c.title)}</button>`).join('') || '<span class="muted">nothing — every build is waiting on a ruling</span>'
+  const nx = nextSlice(cards);
+  const nextLine = nx.reason === 'ok'
+    ? `<span class="next">Loop takes next: <b>${esc(isShortCodeId(nx.pick.id) ? nx.pick.id : nx.pick.title)}</b></span>`
+    : nx.reason === 'wip-cap'
+      ? `<span class="next">Loop is paused — ${nx.wip} of ${WIP_CAP} branches wait on your merge</span>`
+      : '';
+  $('#unblocked').innerHTML = `<h2>Pickable now</h2>${nextLine}<div class="chips">${
+    unblocked(cards).map(c => `<button class="chip slice" data-jump="${esc(c.id)}">${esc(isShortCodeId(c.id) ? c.id : c.title)}</button>`).join('') || '<span class="muted">nothing — every slice is waiting on a ruling or a blocker</span>'
   }</div>`;
 
   $('#board').innerHTML = LANES.map(l => `
@@ -241,16 +288,71 @@ function cardHTML(c, byId) {
     ? `<button class="chip ${cls}" data-jump="${esc(id)}" title="${esc(byId[id].title)}">${esc(id)}</button>`
     : `<span class="chip ghost">${esc(id)}</span>`;
   const open = ix.openBlockedBy[c.id] ?? [];
+  const kind = kindOf(c), lane = laneOf(c);
+  const cls = lane === 'done' ? 'done' : lane === 'someday' ? 'someday' : kind;
+  const list = (label, xs) => Array.isArray(xs) && xs.length
+    ? `<p class="label">${esc(label)}</p><ul>${xs.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '';
   return `
-    <article class="card ${esc(c.kind)}${open.length ? ' blocked' : ''}" draggable="${db ? 'true' : 'false'}"
+    <article class="card ${cls}${open.length && lane !== 'done' ? ' blocked' : ''}" draggable="${db ? 'true' : 'false'}"
              data-id="${esc(c.id)}" tabindex="0">
-      <header><b>${esc(c.id)}</b>${c.size ? `<em>${esc(c.size)}</em>` : ''}</header>
+      <header><b>${esc(c.id)}</b><span class="kind">${lane === 'done' ? '' : esc(kind)}</span>${c.size ? `<em>${esc(c.size)}</em>` : ''}</header>
       <p class="title">${esc(c.title)}</p>
-      ${c.note ? `<p class="note">${esc(c.note)}</p>` : ''}
+      ${c.note ? `<p class="note">${esc(c.note).replace(/\n/g, '<br>')}</p>` : ''}
+      ${kind === 'ruling' ? optionsHTML(c) : ''}
+      ${kind === 'slice' ? list('touches', c.touches) + list('done when', c.acceptance) : ''}
+      ${c.branch ? `<p class="note"><span class="label">branch</span> <code>${esc(c.branch)}</code></p>` : ''}
+      ${c.summary ? `<p class="note"><span class="label">run summary</span> ${esc(c.summary)}</p>` : ''}
       ${(ix.blockedBy[c.id] ?? []).length ? `<p class="row"><span>blocked by</span>${ix.blockedBy[c.id].map(id => chip(id, byId[id]?.lane === 'done' ? 'done' : 'ruling')).join('')}</p>` : ''}
       ${(ix.blocks[c.id] ?? []).length ? `<p class="row"><span>blocks</span>${ix.blocks[c.id].map(id => chip(id, 'build')).join('')}</p>` : ''}
       ${c.doc ? `<p class="doc">${esc(c.doc)}</p>` : ''}
     </article>`;
+}
+
+// A ruling's options are buttons while it is open and the store is writable;
+// once answered, the pick stays visible and the buttons lock.
+function optionsHTML(c) {
+  const opts = Array.isArray(c.options) ? c.options : [];
+  if (!opts.length) return '';
+  const picked = c.pick?.option;
+  const live = !!db && !picked;
+  return `<div class="options" role="group" aria-label="Options">${opts.map(o => `
+      <button class="opt${o.id === c.recommended ? ' rec' : ''}${o.id === picked ? ' picked' : ''}"
+              data-answer="${esc(c.id)}" data-option="${esc(o.id)}" ${live ? '' : 'disabled'}>
+        ${esc(o.label)}${o.id === c.recommended ? ' (recommended)' : ''}${o.id === picked ? ' ✓' : ''}
+        ${o.detail ? `<small>${esc(o.detail)}</small>` : ''}
+      </button>`).join('')}
+    ${live ? `<textarea class="pick-note" data-note-for="${esc(c.id)}" rows="1" placeholder="optional note with your pick"></textarea>` : ''}
+    ${picked && c.pick?.note ? `<p class="note">“${esc(c.pick.note)}”</p>` : ''}
+  </div>`;
+}
+
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-answer]'); if (!b || b.disabled || !db) return;
+  const id = b.dataset.answer;
+  const note = document.querySelector(`[data-note-for="${CSS.escape(id)}"]`)?.value ?? '';
+  const next = answerRuling(cards, id, { option: b.dataset.option, note, at: Date.now() });
+  if (next === cards) return;
+  cards = next; render();
+  const c = cards.find(x => x.id === id);
+  await persist(c, { lane: c.lane, order: c.order, pick: c.pick });
+});
+
+async function addIdea(e) {
+  e.preventDefault();
+  if (!db) return;
+  const box = $('#idea-words');
+  const card = newIdea(box.value, Date.now(), cards);
+  if (!card) return;
+  $('#idea-add').disabled = true;
+  try {
+    await db.doc(`cards/${card.id}`).set(card);
+    box.value = '';
+    setStatus(`idea added · ${new Date().toLocaleTimeString()}`);
+  } catch (err) {
+    setStatus(`idea not saved: ${err.code ?? err.message} — your words are still in the box`);
+  } finally {
+    $('#idea-add').disabled = false;
+  }
 }
 
 // ── Hover / focus: light up the connected subgraph ─────────────────────────
@@ -285,16 +387,16 @@ function bindDnD() {
       const next = moveCard(cards, dragging, { lane, before });
       const moved = next.find(c => c.id === dragging);
       cards = next; render();
-      await persist(moved);
+      await persist(moved, { lane: moved.lane, order: moved.order });
     });
   }
 }
 
 // ── Persistence: the artifact's own db ─────────────────────────────────────
-async function persist(card) {
+async function persist(card, fields) {
   if (!db) return;
   try {
-    await db.doc(`cards/${card.id}`).update({ lane: card.lane, order: card.order });
+    await db.doc(`cards/${card.id}`).update(fields);
     setStatus(`saved · ${new Date().toLocaleTimeString()}`);
   } catch (err) {
     setStatus(`save failed: ${err.code ?? err.message} — showing local state`);
@@ -315,6 +417,9 @@ async function boot() {
     return;
   }
   if (!db) { setStatus('read-only · no store in this view'); render(); return; }
+  $('#ideabox').hidden = false;
+  $('#ideabox').addEventListener('submit', addIdea);
+  render();                                    // the ruling buttons unlock now that writes can land
 
   // Contract 0.2.41: `next` receives a QuerySnapshot — `.docs` is DocumentSnapshot[],
   // each with `.id`, `.exists`, `.data()`. Delivered snapshots and their data()
@@ -322,7 +427,7 @@ async function boot() {
   // The first delivery may be `metadata.fromCache`; a definitive one follows.
   unsub = db.collection('cards').onSnapshot(
     snap => {
-      if (snap.empty) { setStatus('connected · store is empty — seed it from the roadmap'); return; }
+      if (snap.empty) { setStatus('connected · the store is empty'); return; }
       cards = snap.docs.map(d => d.data());
       render();
       setStatus(`live · ${snap.size} cards${snap.metadata.hasPendingWrites ? ' · saving…' : ''}`);
