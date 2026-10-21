@@ -8,13 +8,31 @@ This is what a `/loop` run does. Point the loop at this file, e.g.
 
 ## Each run
 
+0. **Clear Claude's turn first** (the board's second strip, `claudesTurn()` in `board-model.js`).
+   His gestures come before new building:
+   - **Feedback with no reply:** answer on the card. Append `{from: "claude", text, at}` to its
+     `feedback`. Add `ask: true` when the reply is a question back to him.
+   - **An idea marked Groom it:**
+     1. Recon it.
+     2. Write `ruling` cards with 2–4 `options` and a `recommended` one.
+     3. Write `slice` cards with `touches`, `acceptance` and `blockedBy`.
+     4. Move the idea to `done` with a note naming what it became.
+   - **A ruling with no options:** write its options.
+   - **A Ready slice with no acceptance:** groom it.
+   - **Merge it on a review card:** merge exactly as `CLAUDE.md` says (`--no-ff --no-commit`, all
+     gates, the game runs, then commit and push `dev`). Move the card to `done`. Clicking it is
+     his merge call.
+   - **Changes on a review card:** make the change on the same branch, then put the card back in
+     `review` with `verdict` cleared.
+
+   Then carry on to step 1. A run that cleared Claude's turn may still build one slice.
 1. **Read the board.** Run `ArtifactData list` on `cards` with `out_dir` set to a **fresh**
    scratchpad directory, plus `query.limit: 1000`. Note the `version` of every card from the
    listing; writes are pinned to it.
 2. **Ask what's next.** Run `node tools/roadmap-board/next-slice.mjs <that dir>`.
    - `wip-cap`: two branches are waiting on Caelan's merge. Do nothing else and end the run.
    - `nothing-pickable`: report the `skipped` reasons in one short list and end the run.
-   - `ok`: carry on with `pick`.
+   - `ok`: carry on with `pick`. A slice is only ever picked once he has pressed Approve on it.
 3. **Recon first.** Check `git fetch`, `git branch --no-merged dev`, and `git log -S` for the
    slice's key names. If the slice already shipped or overlaps an unmerged branch, write that
    in the card's `note`, move the card to `someday`, and end the run.
