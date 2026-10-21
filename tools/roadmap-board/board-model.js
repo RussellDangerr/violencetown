@@ -93,6 +93,7 @@ export function nextSlice(cards, { wipCap = WIP_CAP } = {}) {
         // A slice with no acceptance checks has not been groomed — the roadmap's old
         // rows arrive like this. A run must never guess what "done" means.
         if (!Array.isArray(c.acceptance) || !c.acceptance.length) { skipped.push({ id: c.id, why: 'not groomed (no acceptance)' }); continue; }
+        if (!c.approved) { skipped.push({ id: c.id, why: 'waiting for your approval' }); continue; }
         const open = ix.openBlockedBy[c.id];
         if (open.length) { skipped.push({ id: c.id, why: `blocked by ${open.join(', ')}` }); continue; }
         const clash = (c.touches ?? []).map(normPath).filter(p => busy.has(p));
@@ -113,6 +114,69 @@ export function answerRuling(cards, id, { option, note = '', at }) {
     return cards.map(c => c.id === id
         ? { ...c, lane: 'done', order: doneOrder, pick: { option, note: String(note), at } }
         : c);
+}
+
+// ── His gestures (plans/ticket-board.md §8) ──────────────────────────────────
+// Each returns a NEW array with only that card changed, or the input unchanged
+// when the gesture does not apply to that card — a stale click is a no-op.
+const isGroomed = c => Array.isArray(c.acceptance) && c.acceptance.length > 0;
+const swap = (cards, id, fn) => cards.map(c => c.id === id ? fn(c) : c);
+const findCard = (cards, id) => cards.find(c => c.id === id);
+
+// Idea triage: 'groom' asks Claude to groom it; 'someday' parks it.
+export function triageIdea(cards, id, choice, at) {
+    const c = findCard(cards, id);
+    if (!c || kindOf(c) !== 'idea' || !['groom', 'someday'].includes(choice)) return cards;
+    const someday = choice === 'someday';
+    const order = someday ? (byLane(cards).someday.at(-1)?.order ?? 0) + 10 : c.order;
+    return swap(cards, id, x => ({ ...x, triage: { choice, at }, ...(someday ? { lane: 'someday', order } : {}) }));
+}
+
+// A groomed Ready slice may be built once he approves it.
+export function approveSlice(cards, id, at) {
+    const c = findCard(cards, id);
+    if (!c || kindOf(c) !== 'slice' || laneOf(c) !== 'ready' || !isGroomed(c)) return cards;
+    return swap(cards, id, x => ({ ...x, approved: { at } }));
+}
+
+// His call on a pushed branch: 'merge' or 'changes' (a note says which).
+export function reviewVerdict(cards, id, verdict, note, at) {
+    const c = findCard(cards, id);
+    if (!c || laneOf(c) !== 'review' || !['merge', 'changes'].includes(verdict)) return cards;
+    return swap(cards, id, x => ({ ...x, verdict: { verdict, note: String(note ?? ''), at } }));
+}
+
+// The thread on a card. `from` is 'you' (the page) or 'claude' (a run).
+export function addFeedback(cards, id, text, at, from = 'you') {
+    const t = String(text ?? '').trim();
+    if (!t || !findCard(cards, id)) return cards;
+    return swap(cards, id, x => ({ ...x, feedback: [...(Array.isArray(x.feedback) ? x.feedback : []), { from, text: t, at }] }));
+}
+const lastFrom = c => (Array.isArray(c.feedback) && c.feedback.length ? c.feedback.at(-1).from : null);
+
+// What waits on him, and what waits on Claude. Each item: { id, why }.
+export function yourTurn(cards) {
+    const out = [];
+    for (const c of cards) {
+        const k = kindOf(c), l = laneOf(c);
+        if (k === 'ruling' && l === 'ruling' && Array.isArray(c.options) && c.options.length && !c.pick) out.push({ id: c.id, why: 'pick an option' });
+        else if (k === 'idea' && l === 'idea' && !c.triage) out.push({ id: c.id, why: 'groom it or park it' });
+        else if (k === 'slice' && l === 'ready' && isGroomed(c) && !c.approved) out.push({ id: c.id, why: 'approve it' });
+        else if (l === 'review' && !c.verdict) out.push({ id: c.id, why: 'merge it or ask for changes' });
+        else if (lastFrom(c) === 'claude' && c.feedback.at(-1).ask) out.push({ id: c.id, why: 'Claude asked you something' });
+    }
+    return out;
+}
+export function claudesTurn(cards) {
+    const out = [];
+    for (const c of cards) {
+        if (lastFrom(c) === 'you') out.push({ id: c.id, why: 'reply to your feedback' });
+        else if (kindOf(c) === 'idea' && c.triage?.choice === 'groom' && laneOf(c) === 'idea') out.push({ id: c.id, why: 'groom it' });
+        else if (laneOf(c) === 'review' && c.verdict) out.push({ id: c.id, why: c.verdict.verdict === 'merge' ? 'merge it' : 'make the changes' });
+        else if (kindOf(c) === 'ruling' && laneOf(c) === 'ruling' && !(Array.isArray(c.options) && c.options.length)) out.push({ id: c.id, why: 'write its options' });
+        else if (kindOf(c) === 'slice' && laneOf(c) === 'ready' && !isGroomed(c)) out.push({ id: c.id, why: 'groom it (no acceptance checks yet)' });
+    }
+    return out;
 }
 
 // A thought dropped in the idea box. `now` is a millisecond timestamp, passed in

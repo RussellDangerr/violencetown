@@ -197,6 +197,32 @@
   .chip.done   { background: var(--done); }
   #unblocked .next { font-size: 13px; color: var(--on-gold); white-space: nowrap; }
   #unblocked .next b { font-weight: 700; }
+  #unblocked.turns { flex-direction: column; align-items: stretch; gap: 8px; overflow-x: visible; }
+  .turnrow { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; }
+  .turnrow h2 { min-width: 150px; }
+  .turnrow .chips { flex-wrap: wrap !important; }
+
+  /* ── Card gestures + feedback ───────────────────────────────────────── */
+  .acts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .act {
+    font-size: 12.5px; padding: 6px 12px; cursor: pointer; border-radius: 3px;
+    background: var(--panel); color: var(--ink); border: 1px solid var(--line);
+  }
+  .act.go { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+  .act:hover:not(:disabled), .act:focus-visible { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .act:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .act:disabled { opacity: .5; cursor: default; }
+  .state { font-size: 11.5px; color: var(--accent); font-weight: 600; }
+  details.fb { border-top: 1px dashed var(--line); padding-top: 5px; }
+  details.fb summary { cursor: pointer; font-size: 11.5px; color: var(--muted); }
+  details.fb summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  details.fb[data-waiting="claude"] summary { color: var(--accent); }
+  .thread { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; }
+  .thread p { font-size: 12px; line-height: 1.4; padding: 4px 7px; border-radius: 3px; background: var(--panel); border: 1px solid var(--line); }
+  .thread p.claude { border-left: 3px solid var(--ruling); }
+  .thread p b { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-right: 4px; }
+  .fb-row { display: flex; gap: 6px; align-items: flex-start; }
+  .fb-row textarea { flex: 1; min-width: 0; }
   .chip.ghost  { background: transparent; color: var(--muted); border-style: dashed; font-style: italic; cursor: default; }
 
   /* ── Graph view ─────────────────────────────────────────────────────── */
@@ -233,7 +259,7 @@
   <textarea id="idea-words" rows="1" aria-label="A new idea, in your words" placeholder="Drop an idea — your words, as many lines as you like. Claude grooms it later."></textarea>
   <button type="submit" id="idea-add">Add idea</button>
 </form>
-<section id="unblocked" aria-label="Pickable now"></section>
+<section id="unblocked" class="turns" aria-label="Whose turn"></section>
 <main id="board" class="rail" aria-label="Lanes"></main>
 <section id="graph" hidden><pre class="mermaid" id="mermaid-src"></pre></section>
 
@@ -333,6 +359,7 @@ function nextSlice(cards, { wipCap = WIP_CAP } = {}) {
         // A slice with no acceptance checks has not been groomed — the roadmap's old
         // rows arrive like this. A run must never guess what "done" means.
         if (!Array.isArray(c.acceptance) || !c.acceptance.length) { skipped.push({ id: c.id, why: 'not groomed (no acceptance)' }); continue; }
+        if (!c.approved) { skipped.push({ id: c.id, why: 'waiting for your approval' }); continue; }
         const open = ix.openBlockedBy[c.id];
         if (open.length) { skipped.push({ id: c.id, why: `blocked by ${open.join(', ')}` }); continue; }
         const clash = (c.touches ?? []).map(normPath).filter(p => busy.has(p));
@@ -353,6 +380,69 @@ function answerRuling(cards, id, { option, note = '', at }) {
     return cards.map(c => c.id === id
         ? { ...c, lane: 'done', order: doneOrder, pick: { option, note: String(note), at } }
         : c);
+}
+
+// ── His gestures (plans/ticket-board.md §8) ──────────────────────────────────
+// Each returns a NEW array with only that card changed, or the input unchanged
+// when the gesture does not apply to that card — a stale click is a no-op.
+const isGroomed = c => Array.isArray(c.acceptance) && c.acceptance.length > 0;
+const swap = (cards, id, fn) => cards.map(c => c.id === id ? fn(c) : c);
+const findCard = (cards, id) => cards.find(c => c.id === id);
+
+// Idea triage: 'groom' asks Claude to groom it; 'someday' parks it.
+function triageIdea(cards, id, choice, at) {
+    const c = findCard(cards, id);
+    if (!c || kindOf(c) !== 'idea' || !['groom', 'someday'].includes(choice)) return cards;
+    const someday = choice === 'someday';
+    const order = someday ? (byLane(cards).someday.at(-1)?.order ?? 0) + 10 : c.order;
+    return swap(cards, id, x => ({ ...x, triage: { choice, at }, ...(someday ? { lane: 'someday', order } : {}) }));
+}
+
+// A groomed Ready slice may be built once he approves it.
+function approveSlice(cards, id, at) {
+    const c = findCard(cards, id);
+    if (!c || kindOf(c) !== 'slice' || laneOf(c) !== 'ready' || !isGroomed(c)) return cards;
+    return swap(cards, id, x => ({ ...x, approved: { at } }));
+}
+
+// His call on a pushed branch: 'merge' or 'changes' (a note says which).
+function reviewVerdict(cards, id, verdict, note, at) {
+    const c = findCard(cards, id);
+    if (!c || laneOf(c) !== 'review' || !['merge', 'changes'].includes(verdict)) return cards;
+    return swap(cards, id, x => ({ ...x, verdict: { verdict, note: String(note ?? ''), at } }));
+}
+
+// The thread on a card. `from` is 'you' (the page) or 'claude' (a run).
+function addFeedback(cards, id, text, at, from = 'you') {
+    const t = String(text ?? '').trim();
+    if (!t || !findCard(cards, id)) return cards;
+    return swap(cards, id, x => ({ ...x, feedback: [...(Array.isArray(x.feedback) ? x.feedback : []), { from, text: t, at }] }));
+}
+const lastFrom = c => (Array.isArray(c.feedback) && c.feedback.length ? c.feedback.at(-1).from : null);
+
+// What waits on him, and what waits on Claude. Each item: { id, why }.
+function yourTurn(cards) {
+    const out = [];
+    for (const c of cards) {
+        const k = kindOf(c), l = laneOf(c);
+        if (k === 'ruling' && l === 'ruling' && Array.isArray(c.options) && c.options.length && !c.pick) out.push({ id: c.id, why: 'pick an option' });
+        else if (k === 'idea' && l === 'idea' && !c.triage) out.push({ id: c.id, why: 'groom it or park it' });
+        else if (k === 'slice' && l === 'ready' && isGroomed(c) && !c.approved) out.push({ id: c.id, why: 'approve it' });
+        else if (l === 'review' && !c.verdict) out.push({ id: c.id, why: 'merge it or ask for changes' });
+        else if (lastFrom(c) === 'claude' && c.feedback.at(-1).ask) out.push({ id: c.id, why: 'Claude asked you something' });
+    }
+    return out;
+}
+function claudesTurn(cards) {
+    const out = [];
+    for (const c of cards) {
+        if (lastFrom(c) === 'you') out.push({ id: c.id, why: 'reply to your feedback' });
+        else if (kindOf(c) === 'idea' && c.triage?.choice === 'groom' && laneOf(c) === 'idea') out.push({ id: c.id, why: 'groom it' });
+        else if (laneOf(c) === 'review' && c.verdict) out.push({ id: c.id, why: c.verdict.verdict === 'merge' ? 'merge it' : 'make the changes' });
+        else if (kindOf(c) === 'ruling' && laneOf(c) === 'ruling' && !(Array.isArray(c.options) && c.options.length)) out.push({ id: c.id, why: 'write its options' });
+        else if (kindOf(c) === 'slice' && laneOf(c) === 'ready' && !isGroomed(c)) out.push({ id: c.id, why: 'groom it (no acceptance checks yet)' });
+    }
+    return out;
 }
 
 // A thought dropped in the idea box. `now` is a millisecond timestamp, passed in
@@ -453,6 +543,10 @@ let cards = SEED.map(c => ({ ...c }));
 let db = null;                 // resolved capability, or null (read-only)
 let unsub = null;
 let ix = null;                 // blockerIndex, memoised per render (highlight() runs on every mouseover)
+// Every db snapshot re-renders the whole board, so anything he is typing lives
+// here, not in the DOM: a draft survives a re-render, and so does an open thread.
+const drafts = Object.create(null);   // 'fb:<id>' | 'note:<id>' -> text
+const openFb = new Set();             // card ids whose feedback thread is open
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
@@ -465,20 +559,33 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt
 const isShortCodeId = id => /^[A-Z]{1,3}\d?[a-z]?$/.test(id);
 
 // ── Render ─────────────────────────────────────────────────────────────────
+const TURN_ORDER = { ruling: 0, review: 1, ready: 2, idea: 3 };
+const label = c => isShortCodeId(c.id) ? c.id : (c.title.length > 34 ? `${c.title.slice(0, 34)}…` : c.title);
+
 function render() {
+  // Hold on to the focused text box so a re-render does not steal it mid-word.
+  const focusKey = document.activeElement?.dataset?.draft ?? null;
+  const caret = focusKey ? document.activeElement.selectionStart : null;
+
   const lanes = byLane(cards);
   ix = blockerIndex(cards);
   const byId = Object.fromEntries(cards.map(c => [c.id, c]));
 
   const nx = nextSlice(cards);
   const nextLine = nx.reason === 'ok'
-    ? `<span class="next">Loop takes next: <b>${esc(isShortCodeId(nx.pick.id) ? nx.pick.id : nx.pick.title)}</b></span>`
+    ? `<span class="next">Loop takes next: <b>${esc(label(nx.pick))}</b></span>`
     : nx.reason === 'wip-cap'
       ? `<span class="next">Loop is paused — ${nx.wip} of ${WIP_CAP} branches wait on your merge</span>`
-      : '';
-  $('#unblocked').innerHTML = `<h2>Pickable now</h2>${nextLine}<div class="chips">${
-    unblocked(cards).map(c => `<button class="chip slice" data-jump="${esc(c.id)}">${esc(isShortCodeId(c.id) ? c.id : c.title)}</button>`).join('') || '<span class="muted">nothing — every slice is waiting on a ruling or a blocker</span>'
-  }</div>`;
+      : `<span class="next">Loop has nothing to build yet</span>`;
+  const turnChips = (list, empty) => list.length
+    ? list.map(t => byId[t.id]).filter(Boolean)
+        .sort((a, b) => (TURN_ORDER[laneOf(a)] ?? 9) - (TURN_ORDER[laneOf(b)] ?? 9) || a.order - b.order)
+        .map(c => `<button class="chip ${laneOf(c) === 'ruling' ? 'ruling' : kindOf(c)}" data-jump="${esc(c.id)}" title="${esc(list.find(t => t.id === c.id).why)}">${esc(label(c))}</button>`).join('')
+    : `<span class="muted">${empty}</span>`;
+  const yours = yourTurn(cards), claudes = claudesTurn(cards);
+  $('#unblocked').innerHTML = `
+    <div class="turnrow"><h2>Your turn · ${yours.length}</h2><div class="chips">${turnChips(yours, 'nothing waits on you')}</div></div>
+    <div class="turnrow"><h2>Claude's turn · ${claudes.length}</h2><div class="chips">${turnChips(claudes, 'Claude is caught up')}</div>${nextLine}</div>`;
 
   $('#board').innerHTML = LANES.map(l => `
     <section class="lane" data-lane="${esc(l.id)}" aria-label="${esc(l.label)}">
@@ -488,6 +595,10 @@ function render() {
 
   $('#mermaid-src').textContent = mermaidSource(cards);
   bindDnD();
+  if (focusKey) {
+    const el = document.querySelector(`[data-draft="${CSS.escape(focusKey)}"]`);
+    if (el) { el.focus({ preventScroll: true }); if (caret != null) el.setSelectionRange(caret, caret); }
+  }
 }
 
 function cardHTML(c, byId) {
@@ -506,13 +617,50 @@ function cardHTML(c, byId) {
       <p class="title">${esc(c.title)}</p>
       ${c.note ? `<p class="note">${esc(c.note).replace(/\n/g, '<br>')}</p>` : ''}
       ${kind === 'ruling' ? optionsHTML(c) : ''}
+      ${actsHTML(c)}
       ${kind === 'slice' ? list('touches', c.touches) + list('done when', c.acceptance) : ''}
       ${c.branch ? `<p class="note"><span class="label">branch</span> <code>${esc(c.branch)}</code></p>` : ''}
       ${c.summary ? `<p class="note"><span class="label">run summary</span> ${esc(c.summary)}</p>` : ''}
       ${(ix.blockedBy[c.id] ?? []).length ? `<p class="row"><span>blocked by</span>${ix.blockedBy[c.id].map(id => chip(id, byId[id]?.lane === 'done' ? 'done' : 'ruling')).join('')}</p>` : ''}
       ${(ix.blocks[c.id] ?? []).length ? `<p class="row"><span>blocks</span>${ix.blocks[c.id].map(id => chip(id, 'build')).join('')}</p>` : ''}
       ${c.doc ? `<p class="doc">${esc(c.doc)}</p>` : ''}
+      ${feedbackHTML(c)}
     </article>`;
+}
+
+// The one gesture each card is waiting for (plans/ticket-board.md §8).
+function actsHTML(c) {
+  const kind = kindOf(c), lane = laneOf(c), off = db ? '' : 'disabled';
+  const btn = (act, text, go) => `<button class="act${go ? ' go' : ''}" data-act="${act}" data-id="${esc(c.id)}" ${off}>${text}</button>`;
+  if (kind === 'ruling' && lane === 'ruling' && !(Array.isArray(c.options) && c.options.length))
+    return `<p class="state">Claude writes this one's options next</p>`;
+  if (kind === 'idea' && lane === 'idea')
+    return c.triage?.choice === 'groom'
+      ? `<p class="state">Waiting on Claude to groom it</p>`
+      : `<div class="acts">${btn('groom', 'Groom it', true)}${btn('someday', 'Someday')}</div>`;
+  if (kind === 'slice' && lane === 'ready' && Array.isArray(c.acceptance) && c.acceptance.length)
+    return c.approved ? `<p class="state">Approved ✓ — the loop may build it</p>` : `<div class="acts">${btn('approve', 'Approve', true)}</div>`;
+  if (lane === 'review')
+    return c.verdict
+      ? `<p class="state">${c.verdict.verdict === 'merge' ? 'Merge it ✓ — Claude merges next' : 'Changes asked ✓'}${c.verdict.note ? ` — “${esc(c.verdict.note)}”` : ''}</p>`
+      : `<div class="acts">${btn('merge', 'Merge it', true)}${btn('changes', 'Changes (say what below)')}</div>`;
+  return '';
+}
+
+// A short thread on the card: his lines and Claude's replies. Open by choice;
+// it stays open across re-renders.
+function feedbackHTML(c) {
+  const thread = Array.isArray(c.feedback) ? c.feedback : [];
+  const waiting = thread.length ? thread.at(-1).from : '';
+  const key = `fb:${c.id}`;
+  return `<details class="fb" data-fb="${esc(c.id)}" data-waiting="${waiting === 'you' ? 'claude' : ''}" ${openFb.has(c.id) ? 'open' : ''}>
+    <summary>${thread.length ? `Feedback (${thread.length})${waiting === 'you' ? ' — waiting on Claude' : ''}` : 'Feedback'}</summary>
+    ${thread.length ? `<div class="thread">${thread.map(f => `<p class="${f.from === 'claude' ? 'claude' : 'you'}"><b>${f.from === 'claude' ? 'Claude' : 'You'}</b>${esc(f.text).replace(/\n/g, '<br>')}</p>`).join('')}</div>` : ''}
+    <div class="fb-row">
+      <textarea class="pick-note" rows="1" data-draft="${esc(key)}" placeholder="Tell Claude anything about this card" ${db ? '' : 'disabled'}>${esc(drafts[key] ?? '')}</textarea>
+      <button class="act" data-send="${esc(c.id)}" ${db ? '' : 'disabled'}>Send</button>
+    </div>
+  </details>`;
 }
 
 // A ruling's options are buttons while it is open and the store is writable;
@@ -528,7 +676,7 @@ function optionsHTML(c) {
         ${esc(o.label)}${o.id === c.recommended ? ' (recommended)' : ''}${o.id === picked ? ' ✓' : ''}
         ${o.detail ? `<small>${esc(o.detail)}</small>` : ''}
       </button>`).join('')}
-    ${live ? `<textarea class="pick-note" data-note-for="${esc(c.id)}" rows="1" placeholder="optional note with your pick"></textarea>` : ''}
+    ${live ? `<textarea class="pick-note" data-note-for="${esc(c.id)}" data-draft="note:${esc(c.id)}" rows="1" placeholder="optional note with your pick">${esc(drafts[`note:${c.id}`] ?? '')}</textarea>` : ''}
     ${picked && c.pick?.note ? `<p class="note">“${esc(c.pick.note)}”</p>` : ''}
   </div>`;
 }
@@ -539,9 +687,52 @@ document.addEventListener('click', async e => {
   const note = document.querySelector(`[data-note-for="${CSS.escape(id)}"]`)?.value ?? '';
   const next = answerRuling(cards, id, { option: b.dataset.option, note, at: Date.now() });
   if (next === cards) return;
+  delete drafts[`note:${id}`];
   cards = next; render();
   const c = cards.find(x => x.id === id);
   await persist(c, { lane: c.lane, order: c.order, pick: c.pick });
+});
+
+// Typing goes to `drafts`, so a snapshot re-render never eats it.
+document.addEventListener('input', e => { const k = e.target.dataset?.draft; if (k) drafts[k] = e.target.value; });
+document.addEventListener('toggle', e => {
+  const id = e.target.dataset?.fb; if (!id) return;
+  e.target.open ? openFb.add(id) : openFb.delete(id);
+}, true);
+
+// Card gestures: Groom it / Someday / Approve / Merge it / Changes / Send.
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-act], [data-send]'); if (!b || b.disabled || !db) return;
+  const at = Date.now();
+  if (b.dataset.send) {
+    const id = b.dataset.send, key = `fb:${id}`;
+    const next = addFeedback(cards, id, drafts[key], at);
+    if (next === cards) return;
+    delete drafts[key];
+    cards = next; render();
+    await persist(cards.find(x => x.id === id), { feedback: cards.find(x => x.id === id).feedback });
+    return;
+  }
+  const id = b.dataset.id, act = b.dataset.act;
+  let next = cards, fields = c => ({});
+  if (act === 'groom' || act === 'someday') { next = triageIdea(cards, id, act, at); fields = c => ({ triage: c.triage, lane: c.lane, order: c.order }); }
+  else if (act === 'approve') { next = approveSlice(cards, id, at); fields = c => ({ approved: c.approved }); }
+  else if (act === 'merge' || act === 'changes') {
+    const key = `fb:${id}`, note = (drafts[key] ?? '').trim();
+    if (act === 'changes' && !note) {         // a change request needs words: open the box and wait
+      openFb.add(id); render();
+      document.querySelector(`[data-draft="${CSS.escape(key)}"]`)?.focus();
+      setStatus('say what to change in the feedback box, then press Changes again');
+      return;
+    }
+    next = reviewVerdict(cards, id, act, note, at);
+    if (note) { next = addFeedback(next, id, note, at); delete drafts[key]; }
+    fields = c => ({ verdict: c.verdict, ...(c.feedback ? { feedback: c.feedback } : {}) });
+  }
+  if (next === cards) return;
+  cards = next; render();
+  const c = cards.find(x => x.id === id);
+  await persist(c, fields(c));
 });
 
 async function addIdea(e) {

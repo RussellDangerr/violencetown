@@ -4,6 +4,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     LANES, KINDS, WIP_CAP, byLane, blockerIndex, unblocked, nextSlice, answerRuling, newIdea,
+    triageIdea, approveSlice, reviewVerdict, addFeedback, yourTurn, claudesTurn,
     migrateCard, mermaidSource, moveCard,
 } from '../tools/roadmap-board/board-model.js';
 
@@ -11,8 +12,8 @@ const cards = [
     { id: 'A1', title: 'The -15 band', lane: 'ruling', order: 10, kind: 'ruling', blockedBy: [],
       options: [{ id: 'a', label: 'Yes' }, { id: 'b', label: 'No' }] },
     { id: 'A4', title: 'Boss tag',     lane: 'ruling', order: 20, kind: 'ruling', blockedBy: [] },
-    { id: 'B1', title: 'First boss',   lane: 'ready',  order: 10, kind: 'slice',  blockedBy: ['A1', 'A4'], acceptance: ['boss fights'] },
-    { id: 'B2', title: 'Eat kits',     lane: 'ready',  order: 20, kind: 'slice',  blockedBy: [], touches: ['game/npc.js'], acceptance: ['enemies eat'] },
+    { id: 'B1', title: 'First boss',   lane: 'ready',  order: 10, kind: 'slice',  blockedBy: ['A1', 'A4'], acceptance: ['boss fights'], approved: { at: 1 } },
+    { id: 'B2', title: 'Eat kits',     lane: 'ready',  order: 20, kind: 'slice',  blockedBy: [], touches: ['game/npc.js'], acceptance: ['enemies eat'], approved: { at: 1 } },
     { id: 'C2', title: 'Modifier keys',lane: 'done',   order: 10, kind: 'slice',  blockedBy: [] },
 ];
 
@@ -143,6 +144,81 @@ describe('nextSlice — what the loop builds next', () => {
     test('works on frozen input', () => {
         const frozen = Object.freeze(cards.map(c => Object.freeze({ ...c })));
         assert.equal(nextSlice(frozen).pick.id, 'B2');
+    });
+});
+
+describe('his gestures — §8, a gesture on every card', () => {
+    const idea = { id: 'I1', title: 'masks', lane: 'idea', order: 10, kind: 'idea', blockedBy: [] };
+    const raw = { id: 'S1', title: 'groomed', lane: 'ready', order: 30, kind: 'slice', blockedBy: [], acceptance: ['works'] };
+    const rev = { id: 'V1', title: 'pushed', lane: 'review', order: 10, kind: 'slice', blockedBy: [], acceptance: ['works'], branch: 'feature/x' };
+    const deck = [...cards, idea, raw, rev];
+
+    test('a groomed slice is not built until he approves it', () => {
+        const r = nextSlice([raw]);
+        assert.equal(r.pick, null);
+        assert.match(r.skipped[0].why, /waiting for your approval/);
+        assert.equal(nextSlice(approveSlice([raw], 'S1', 5)).pick.id, 'S1');
+    });
+
+    test('approve only applies to a groomed Ready slice', () => {
+        assert.equal(approveSlice(deck, 'I1', 1), deck, 'not an idea');
+        assert.equal(approveSlice(deck, 'V1', 1), deck, 'not a review card');
+        const ungroomed = [{ ...raw, acceptance: [] }];
+        assert.equal(approveSlice(ungroomed, 'S1', 1), ungroomed, 'not an ungroomed slice');
+    });
+
+    test('triage: Groom it keeps the idea in place, Someday parks it', () => {
+        const g = triageIdea(deck, 'I1', 'groom', 7).find(c => c.id === 'I1');
+        assert.deepEqual([g.lane, g.triage], ['idea', { choice: 'groom', at: 7 }]);
+        const s = triageIdea(deck, 'I1', 'someday', 8).find(c => c.id === 'I1');
+        assert.equal(s.lane, 'someday');
+        assert.equal(triageIdea(deck, 'I1', 'banana', 9), deck, 'an unknown choice is refused');
+        assert.equal(triageIdea(deck, 'S1', 'groom', 9), deck, 'only ideas are triaged');
+    });
+
+    test('a verdict lands only on a review card', () => {
+        const v = reviewVerdict(deck, 'V1', 'changes', 'rename it', 3).find(c => c.id === 'V1');
+        assert.deepEqual(v.verdict, { verdict: 'changes', note: 'rename it', at: 3 });
+        assert.equal(reviewVerdict(deck, 'S1', 'merge', '', 3), deck);
+        assert.equal(reviewVerdict(deck, 'V1', 'ship', '', 3), deck);
+    });
+
+    test('feedback threads on the card, and an empty box sends nothing', () => {
+        let d = addFeedback(deck, 'I1', '  make it a hat  ', 1);
+        d = addFeedback(d, 'I1', 'Which hat?', 2, 'claude');
+        assert.deepEqual(d.find(c => c.id === 'I1').feedback.map(f => f.from), ['you', 'claude']);
+        assert.equal(d.find(c => c.id === 'I1').feedback[0].text, 'make it a hat');
+        assert.equal(addFeedback(deck, 'I1', '   ', 1), deck);
+        assert.equal(addFeedback(deck, 'nope', 'hi', 1), deck);
+    });
+
+    test('Your turn lists what waits on him; Claude\'s turn what he handed back', () => {
+        const yours = Object.fromEntries(yourTurn(deck).map(t => [t.id, t.why]));
+        assert.equal(yours.A1, 'pick an option', 'a ruling with options and no pick');
+        assert.ok(!('A4' in yours), 'a ruling with no options waits on Claude, not him');
+        assert.equal(yours.I1, 'groom it or park it');
+        assert.equal(yours.S1, 'approve it');
+        assert.equal(yours.V1, 'merge it or ask for changes');
+        assert.ok(!('B2' in yours), 'an approved slice is not his turn');
+
+        let d = triageIdea(deck, 'I1', 'groom', 1);
+        d = reviewVerdict(d, 'V1', 'merge', '', 1);
+        d = addFeedback(d, 'B2', 'smaller please', 1);
+        const claude = Object.fromEntries(claudesTurn(d).map(t => [t.id, t.why]));
+        assert.equal(claude.I1, 'groom it');
+        assert.equal(claude.V1, 'merge it');
+        assert.equal(claude.B2, 'reply to your feedback');
+        assert.equal(claude.A4, 'write its options');
+        const old = claudesTurn([{ id: 'RC', title: 'old row', lane: 'ready', order: 1, kind: 'slice', blockedBy: [] }]);
+        assert.match(old[0]?.why ?? '', /groom it/, 'an old Ready slice with no acceptance waits on Claude');
+        assert.ok(!yourTurn(d).some(t => t.id === 'I1' || t.id === 'V1'), 'once he acts, it leaves his turn');
+    });
+
+    test('a hostile card cannot break the turn lists', () => {
+        const hostile = [{ id: 'H', lane: '__proto__', kind: 'ruling', options: 'nope', feedback: 'nope' }];
+        assert.doesNotThrow(() => yourTurn(hostile));
+        assert.doesNotThrow(() => claudesTurn(hostile));
+        assert.doesNotThrow(() => addFeedback(hostile, 'H', 'x', 1));
     });
 });
 

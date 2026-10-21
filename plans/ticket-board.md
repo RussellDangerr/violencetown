@@ -116,3 +116,26 @@ every write. That is the first thing to check if a run stalls.
 - A groomer loop that turns ideas into ruling stacks on its own.
 - Cloud runs, which may not reach the board.
 - Rewriting `roadmap-2026-09.md`. It stays the public record of shipped work.
+
+## 8. Your turn on every card (added 2026-10-21)
+
+**Why (Caelan, 2026-10-21):** he opened the board and found nothing to press: no approve, no
+feedback, and multiple choice on only the newest rulings, which sat under 16 rulings with none.
+The board is where he decides, so every card needs a gesture.
+
+| Card | Gestures |
+|---|---|
+| ruling | option buttons, plus a note (already built) |
+| idea | **Groom it**: Claude turns it into rulings and slices. **Someday**: parked |
+| ready slice | **Approve**: the loop may build it. A groomed slice waits for this |
+| review slice | **Merge it**: his merge call, made on the card. **Changes**: with a note |
+| every card | a **feedback box**: a short thread on the card, his lines and Claude's replies |
+
+- **Your turn** strip at the top: every card waiting on him (an open ruling with options, an
+  untriaged idea, an unapproved ready slice, a review card with no verdict).
+- **Claude's turn** strip: every card he has acted on that Claude has not handled yet (feedback
+  with no reply, an idea marked Groom it, a verdict on a review card).
+- `nextSlice()` now also requires `approved`. The skip reason is "waiting for your approval".
+- `LOOP.md` gains a step before building: clear Claude's turn first.
+- The 7 rulings already decided on 2026-10-03 (CG, OBJ, P1, SF, V2, Z1, Z2) move to Done.
+  OBJ (his copy) stays a ruling with options. SP1–SP9 get options, written to the db only.
