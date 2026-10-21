@@ -9,11 +9,11 @@ development runs at work, without Jira and without writing tickets himself.
 
 ## 1. The flow
 
-**He talks → Claude grooms → he rules → the loop builds → he merges.**
+**He talks → Claude tweaks → he rules → the loop builds → he merges.**
 
 1. **Idea.** Anything he says becomes an `idea` card in his own words. Nothing is decided at
    this stage, and capture is cheap on purpose.
-2. **Grooming** (Claude, in any session) turns an idea into three things:
+2. **Tweaking** (Claude, in any session) turns an idea into three things:
    - recon: what already exists in the code;
    - `ruling` cards with multiple-choice options for every judgment call;
    - `slice` cards, each sized for one branch in about a day.
@@ -27,9 +27,9 @@ Three **kinds**: `idea`, `ruling`, `slice`. Seven **lanes**, in board order:
 
 | Lane | Holds |
 |---|---|
-| `idea` | his words, not groomed yet |
+| `idea` | his words, not tweaked yet |
 | `ruling` | a question only he can answer |
-| `ready` | groomed slices; some may still be blocked |
+| `ready` | tweaked slices; some may still be blocked |
 | `doing` | a slice a loop run has claimed |
 | `review` | branch pushed, waiting on his merge call |
 | `done` | finished. Do not re-implement |
@@ -113,7 +113,7 @@ every write. That is the first thing to check if a run stalls.
 
 ## 7. Out of scope
 
-- A groomer loop that turns ideas into ruling stacks on its own.
+- A loop that tweaks ideas into ruling stacks on its own.
 - Cloud runs, which may not reach the board.
 - Rewriting `roadmap-2026-09.md`. It stays the public record of shipped work.
 
@@ -126,15 +126,15 @@ The board is where he decides, so every card needs a gesture.
 | Card | Gestures |
 |---|---|
 | ruling | option buttons, plus a note (already built) |
-| idea | **Groom it**: Claude turns it into rulings and slices. **Someday**: parked |
-| ready slice | **Approve**: the loop may build it. A groomed slice waits for this |
+| idea | **Tweak it**: Claude turns it into rulings and slices. **Someday**: parked |
+| ready slice | **Approve**: the loop may build it. A tweaked slice waits for this |
 | review slice | **Merge it**: his merge call, made on the card. **Changes**: with a note |
 | every card | a **feedback box**: a short thread on the card, his lines and Claude's replies |
 
 - **Your turn** strip at the top: every card waiting on him (an open ruling with options, an
   untriaged idea, an unapproved ready slice, a review card with no verdict).
 - **Claude's turn** strip: every card he has acted on that Claude has not handled yet (feedback
-  with no reply, an idea marked Groom it, a verdict on a review card).
+  with no reply, an idea marked Tweak it, a verdict on a review card).
 - `nextSlice()` now also requires `approved`. The skip reason is "waiting for your approval".
 - `LOOP.md` gains a step before building: clear Claude's turn first.
 - The 7 rulings already decided on 2026-10-03 (CG, OBJ, P1, SF, V2, Z1, Z2) move to Done.

@@ -256,7 +256,7 @@
 </header>
 
 <form id="ideabox" hidden>
-  <textarea id="idea-words" rows="1" aria-label="A new idea, in your words" placeholder="Drop an idea — your words, as many lines as you like. Claude grooms it later."></textarea>
+  <textarea id="idea-words" rows="1" aria-label="A new idea, in your words" placeholder="Drop an idea — your words, as many lines as you like. Claude tweaks it later."></textarea>
   <button type="submit" id="idea-add">Add idea</button>
 </form>
 <section id="unblocked" class="turns" aria-label="Whose turn"></section>
@@ -364,9 +364,9 @@ function actsHTML(c) {
   if (kind === 'ruling' && lane === 'ruling' && !(Array.isArray(c.options) && c.options.length))
     return `<p class="state">Claude writes this one's options next</p>`;
   if (kind === 'idea' && lane === 'idea')
-    return c.triage?.choice === 'groom'
-      ? `<p class="state">Waiting on Claude to groom it</p>`
-      : `<div class="acts">${btn('groom', 'Groom it', true)}${btn('someday', 'Someday')}</div>`;
+    return c.triage?.choice === 'tweak'
+      ? `<p class="state">Waiting on Claude to tweak it</p>`
+      : `<div class="acts">${btn('tweak', 'Tweak it', true)}${btn('someday', 'Someday')}</div>`;
   if (kind === 'slice' && lane === 'ready' && Array.isArray(c.acceptance) && c.acceptance.length)
     return c.approved ? `<p class="state">Approved ✓ — the loop may build it</p>` : `<div class="acts">${btn('approve', 'Approve', true)}</div>`;
   if (lane === 'review')
@@ -429,7 +429,7 @@ document.addEventListener('toggle', e => {
   e.target.open ? openFb.add(id) : openFb.delete(id);
 }, true);
 
-// Card gestures: Groom it / Someday / Approve / Merge it / Changes / Send.
+// Card gestures: Tweak it / Someday / Approve / Merge it / Changes / Send.
 document.addEventListener('click', async e => {
   const b = e.target.closest('[data-act], [data-send]'); if (!b || b.disabled || !db) return;
   const at = Date.now();
@@ -444,7 +444,7 @@ document.addEventListener('click', async e => {
   }
   const id = b.dataset.id, act = b.dataset.act;
   let next = cards, fields = c => ({});
-  if (act === 'groom' || act === 'someday') { next = triageIdea(cards, id, act, at); fields = c => ({ triage: c.triage, lane: c.lane, order: c.order }); }
+  if (act === 'tweak' || act === 'someday') { next = triageIdea(cards, id, act, at); fields = c => ({ triage: c.triage, lane: c.lane, order: c.order }); }
   else if (act === 'approve') { next = approveSlice(cards, id, at); fields = c => ({ approved: c.approved }); }
   else if (act === 'merge' || act === 'changes') {
     const key = `fb:${id}`, note = (drafts[key] ?? '').trim();

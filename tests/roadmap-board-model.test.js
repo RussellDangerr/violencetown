@@ -128,12 +128,12 @@ describe('nextSlice — what the loop builds next', () => {
         assert.match(r.skipped.find(s => s.id === 'B2').why, /touches unmerged game\/npc\.js/, 'paths compare normalised');
     });
 
-    test('never picks a slice with no acceptance checks — it is not groomed', () => {
+    test('never picks a slice with no acceptance checks — it is not tweaked', () => {
         const raw = [{ id: 'RC', title: 'old roadmap row', lane: 'ready', order: 1, kind: 'slice', blockedBy: [] }];
         const r = nextSlice(raw);
         assert.equal(r.pick, null);
-        assert.match(r.skipped[0].why, /not groomed/);
-        assert.equal(nextSlice([{ ...raw[0], acceptance: [] }]).pick, null, 'an empty list is not groomed either');
+        assert.match(r.skipped[0].why, /not tweaked/);
+        assert.equal(nextSlice([{ ...raw[0], acceptance: [] }]).pick, null, 'an empty list is not tweaked either');
     });
 
     test('skips a claimed slice', () => {
@@ -149,31 +149,31 @@ describe('nextSlice — what the loop builds next', () => {
 
 describe('his gestures — §8, a gesture on every card', () => {
     const idea = { id: 'I1', title: 'masks', lane: 'idea', order: 10, kind: 'idea', blockedBy: [] };
-    const raw = { id: 'S1', title: 'groomed', lane: 'ready', order: 30, kind: 'slice', blockedBy: [], acceptance: ['works'] };
+    const raw = { id: 'S1', title: 'tweaked', lane: 'ready', order: 30, kind: 'slice', blockedBy: [], acceptance: ['works'] };
     const rev = { id: 'V1', title: 'pushed', lane: 'review', order: 10, kind: 'slice', blockedBy: [], acceptance: ['works'], branch: 'feature/x' };
     const deck = [...cards, idea, raw, rev];
 
-    test('a groomed slice is not built until he approves it', () => {
+    test('a tweaked slice is not built until he approves it', () => {
         const r = nextSlice([raw]);
         assert.equal(r.pick, null);
         assert.match(r.skipped[0].why, /waiting for your approval/);
         assert.equal(nextSlice(approveSlice([raw], 'S1', 5)).pick.id, 'S1');
     });
 
-    test('approve only applies to a groomed Ready slice', () => {
+    test('approve only applies to a tweaked Ready slice', () => {
         assert.equal(approveSlice(deck, 'I1', 1), deck, 'not an idea');
         assert.equal(approveSlice(deck, 'V1', 1), deck, 'not a review card');
-        const ungroomed = [{ ...raw, acceptance: [] }];
-        assert.equal(approveSlice(ungroomed, 'S1', 1), ungroomed, 'not an ungroomed slice');
+        const untweaked = [{ ...raw, acceptance: [] }];
+        assert.equal(approveSlice(untweaked, 'S1', 1), untweaked, 'not an untweaked slice');
     });
 
-    test('triage: Groom it keeps the idea in place, Someday parks it', () => {
-        const g = triageIdea(deck, 'I1', 'groom', 7).find(c => c.id === 'I1');
-        assert.deepEqual([g.lane, g.triage], ['idea', { choice: 'groom', at: 7 }]);
+    test('triage: Tweak it keeps the idea in place, Someday parks it', () => {
+        const g = triageIdea(deck, 'I1', 'tweak', 7).find(c => c.id === 'I1');
+        assert.deepEqual([g.lane, g.triage], ['idea', { choice: 'tweak', at: 7 }]);
         const s = triageIdea(deck, 'I1', 'someday', 8).find(c => c.id === 'I1');
         assert.equal(s.lane, 'someday');
         assert.equal(triageIdea(deck, 'I1', 'banana', 9), deck, 'an unknown choice is refused');
-        assert.equal(triageIdea(deck, 'S1', 'groom', 9), deck, 'only ideas are triaged');
+        assert.equal(triageIdea(deck, 'S1', 'tweak', 9), deck, 'only ideas are triaged');
     });
 
     test('a verdict lands only on a review card', () => {
@@ -196,21 +196,21 @@ describe('his gestures — §8, a gesture on every card', () => {
         const yours = Object.fromEntries(yourTurn(deck).map(t => [t.id, t.why]));
         assert.equal(yours.A1, 'pick an option', 'a ruling with options and no pick');
         assert.ok(!('A4' in yours), 'a ruling with no options waits on Claude, not him');
-        assert.equal(yours.I1, 'groom it or park it');
+        assert.equal(yours.I1, 'tweak it or park it');
         assert.equal(yours.S1, 'approve it');
         assert.equal(yours.V1, 'merge it or ask for changes');
         assert.ok(!('B2' in yours), 'an approved slice is not his turn');
 
-        let d = triageIdea(deck, 'I1', 'groom', 1);
+        let d = triageIdea(deck, 'I1', 'tweak', 1);
         d = reviewVerdict(d, 'V1', 'merge', '', 1);
         d = addFeedback(d, 'B2', 'smaller please', 1);
         const claude = Object.fromEntries(claudesTurn(d).map(t => [t.id, t.why]));
-        assert.equal(claude.I1, 'groom it');
+        assert.equal(claude.I1, 'tweak it');
         assert.equal(claude.V1, 'merge it');
         assert.equal(claude.B2, 'reply to your feedback');
         assert.equal(claude.A4, 'write its options');
         const old = claudesTurn([{ id: 'RC', title: 'old row', lane: 'ready', order: 1, kind: 'slice', blockedBy: [] }]);
-        assert.match(old[0]?.why ?? '', /groom it/, 'an old Ready slice with no acceptance waits on Claude');
+        assert.match(old[0]?.why ?? '', /tweak it/, 'an old Ready slice with no acceptance waits on Claude');
         assert.ok(!yourTurn(d).some(t => t.id === 'I1' || t.id === 'V1'), 'once he acts, it leaves his turn');
     });
 
