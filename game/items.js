@@ -132,6 +132,7 @@ export const ITEMS = {
         name: '[Pipe]',
         description: 'Rusty copper pipe, wrenched free from the wall. Swings like it means it.',
         equipSlot: 'weapon',
+        weaponClass: 'hammer',   // the class table is WEAPON_CLASSES in weapons.js
         useType: 'melee',
         range: 1,
         damage: 12,
