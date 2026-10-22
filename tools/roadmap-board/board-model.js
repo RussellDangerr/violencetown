@@ -106,10 +106,11 @@ export function nextSlice(cards, { wipCap = WIP_CAP } = {}) {
 // His answer to a ruling: the pick is stored on the card and the card moves to
 // Done, which unblocks whatever it gated. An option the card does not offer is
 // refused (returns the input unchanged) rather than stored.
+// `option: 'other'` is his own answer in his own words; it needs the words.
 export function answerRuling(cards, id, { option, note = '', at }) {
     const card = cards.find(c => c.id === id);
     if (!card || kindOf(card) !== 'ruling') return cards;
-    if (!(card.options ?? []).some(o => o.id === option)) return cards;
+    if (option === 'other' ? !String(note).trim() : !(card.options ?? []).some(o => o.id === option)) return cards;
     const doneOrder = (byLane(cards).done.at(-1)?.order ?? 0) + 10;
     return cards.map(c => c.id === id
         ? { ...c, lane: 'done', order: doneOrder, pick: { option, note: String(note), at } }
@@ -151,6 +152,18 @@ export function addFeedback(cards, id, text, at, from = 'you') {
     const t = String(text ?? '').trim();
     if (!t || !findCard(cards, id)) return cards;
     return swap(cards, id, x => ({ ...x, feedback: [...(Array.isArray(x.feedback) ? x.feedback : []), { from, text: t, at }] }));
+}
+// The one box on every card (plans/ticket-board.md §8): whatever he types goes to
+// Claude. On an open ruling it is also his answer — "Other", in his own words —
+// so the card moves to Done; anywhere else it is feedback on the card.
+export const isOpenRuling = c => kindOf(c) === 'ruling' && laneOf(c) === 'ruling'
+    && Array.isArray(c.options) && c.options.length > 0 && !c.pick;
+export function sendWords(cards, id, text, at) {
+    const t = String(text ?? '').trim();
+    const c = findCard(cards, id);
+    if (!t || !c) return cards;
+    const answered = isOpenRuling(c) ? answerRuling(cards, id, { option: 'other', note: t, at }) : cards;
+    return addFeedback(answered, id, t, at);
 }
 const lastFrom = c => (Array.isArray(c.feedback) && c.feedback.length ? c.feedback.at(-1).from : null);
 

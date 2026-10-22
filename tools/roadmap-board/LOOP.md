@@ -28,6 +28,12 @@ Caelan dislikes the other word for it; never use it.
       the card to `review` and clear `verdict`.
    3. **Feedback with no reply:** answer on the card by appending `{from: "claude", text, at}` to
       `feedback`. Add `ask: true` only when the reply needs his answer.
+      - **His own answer to a ruling** (`pick.option: "other"`, typed in the card's box) comes in
+        the same way. If it settles the question, reply in one line saying how it will be used.
+        It then counts as his pick, and builders get his words.
+      - If it doesn't settle the question, reply with `ask: true`. Move the ruling back to the
+        `ruling` lane and drop `pick`, so it returns to Your turn. Offer new options if his words
+        suggest them.
    4. **Tweak it** (§5).
    5. **A ruling with no options:** write 2–4 options and a recommended one (§6).
    6. **A Ready slice with no acceptance:** tweak it (§5).

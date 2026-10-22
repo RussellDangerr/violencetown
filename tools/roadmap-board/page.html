@@ -213,10 +213,10 @@
   .act:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .act:disabled { opacity: .5; cursor: default; }
   .state { font-size: 11.5px; color: var(--accent); font-weight: 600; }
-  details.fb { border-top: 1px dashed var(--line); padding-top: 5px; }
-  details.fb summary { cursor: pointer; font-size: 11.5px; color: var(--muted); }
-  details.fb summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  details.fb[data-waiting="claude"] summary { color: var(--accent); }
+  .fb { display: flex; flex-direction: column; gap: 5px; border-top: 1px dashed var(--line); padding-top: 6px; }
+  .fb summary { cursor: pointer; font-size: 11.5px; color: var(--muted); }
+  .fb summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .fb details[data-waiting="claude"] summary { color: var(--accent); }
   .thread { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; }
   .thread p { font-size: 12px; line-height: 1.4; padding: 4px 7px; border-radius: 3px; background: var(--panel); border: 1px solid var(--line); }
   .thread p.claude { border-left: 3px solid var(--ruling); }
@@ -256,7 +256,7 @@
 </header>
 
 <form id="ideabox" hidden>
-  <textarea id="idea-words" rows="1" aria-label="A new idea, in your words" placeholder="Drop an idea — your words, as many lines as you like. Claude tweaks it later."></textarea>
+  <textarea id="idea-words" rows="1" aria-label="A new idea, in your words" placeholder="Drop an idea, in your words. Enter adds it (Shift+Enter for a new line). Claude tweaks it later."></textarea>
   <button type="submit" id="idea-add">Add idea</button>
 </form>
 <section id="unblocked" class="turns" aria-label="Whose turn"></section>
@@ -274,7 +274,7 @@ let unsub = null;
 let ix = null;                 // blockerIndex, memoised per render (highlight() runs on every mouseover)
 // Every db snapshot re-renders the whole board, so anything he is typing lives
 // here, not in the DOM: a draft survives a re-render, and so does an open thread.
-const drafts = Object.create(null);   // 'fb:<id>' | 'note:<id>' -> text
+const drafts = Object.create(null);   // 'fb:<id>' -> text in that card's box
 const openFb = new Set();             // card ids whose feedback thread is open
 
 const $ = s => document.querySelector(s);
@@ -376,20 +376,26 @@ function actsHTML(c) {
   return '';
 }
 
-// A short thread on the card: his lines and Claude's replies. Open by choice;
-// it stays open across re-renders.
+// The one box on every card: whatever he types goes to Claude, and Enter sends
+// it. On an open ruling it is also his own answer (Other). The thread above it
+// folds away once it has history; the box itself is always there.
 function feedbackHTML(c) {
   const thread = Array.isArray(c.feedback) ? c.feedback : [];
   const waiting = thread.length ? thread.at(-1).from : '';
   const key = `fb:${c.id}`;
-  return `<details class="fb" data-fb="${esc(c.id)}" data-waiting="${waiting === 'you' ? 'claude' : ''}" ${openFb.has(c.id) ? 'open' : ''}>
-    <summary>${thread.length ? `Feedback (${thread.length})${waiting === 'you' ? ' — waiting on Claude' : ''}` : 'Feedback'}</summary>
-    ${thread.length ? `<div class="thread">${thread.map(f => `<p class="${f.from === 'claude' ? 'claude' : 'you'}"><b>${f.from === 'claude' ? 'Claude' : 'You'}</b>${esc(f.text).replace(/\n/g, '<br>')}</p>`).join('')}</div>` : ''}
+  const hint = isOpenRuling(c)
+    ? 'Your own answer (Other), or a note, then click an option. Enter sends.'
+    : 'Tell Claude anything about this card. Enter sends.';
+  return `<div class="fb">
+    ${thread.length ? `<details data-fb="${esc(c.id)}" data-waiting="${waiting === 'you' ? 'claude' : ''}" ${openFb.has(c.id) ? 'open' : ''}>
+      <summary>Thread (${thread.length})${waiting === 'you' ? ' — waiting on Claude' : ''}</summary>
+      <div class="thread">${thread.map(f => `<p class="${f.from === 'claude' ? 'claude' : 'you'}"><b>${f.from === 'claude' ? 'Claude' : 'You'}</b>${esc(f.text).replace(/\n/g, '<br>')}</p>`).join('')}</div>
+    </details>` : ''}
     <div class="fb-row">
-      <textarea class="pick-note" rows="1" data-draft="${esc(key)}" placeholder="Tell Claude anything about this card" ${db ? '' : 'disabled'}>${esc(drafts[key] ?? '')}</textarea>
-      <button class="act" data-send="${esc(c.id)}" ${db ? '' : 'disabled'}>Send</button>
+      <textarea class="pick-note" rows="2" data-draft="${esc(key)}" data-sendbox="${esc(c.id)}" placeholder="${esc(hint)}" aria-label="${esc(hint)}" ${db ? '' : 'disabled'}>${esc(drafts[key] ?? '')}</textarea>
+      <button class="act" data-send="${esc(c.id)}" ${db ? '' : 'disabled'}>Send ↵</button>
     </div>
-  </details>`;
+  </div>`;
 }
 
 // A ruling's options are buttons while it is open and the store is writable;
@@ -405,21 +411,45 @@ function optionsHTML(c) {
         ${esc(o.label)}${o.id === c.recommended ? ' (recommended)' : ''}${o.id === picked ? ' ✓' : ''}
         ${o.detail ? `<small>${esc(o.detail)}</small>` : ''}
       </button>`).join('')}
-    ${live ? `<textarea class="pick-note" data-note-for="${esc(c.id)}" data-draft="note:${esc(c.id)}" rows="1" placeholder="optional note with your pick">${esc(drafts[`note:${c.id}`] ?? '')}</textarea>` : ''}
+    ${picked === 'other' ? `<p class="state">Your own answer ✓ — Claude reads it next</p>` : ''}
     ${picked && c.pick?.note ? `<p class="note">“${esc(c.pick.note)}”</p>` : ''}
   </div>`;
 }
 
+// Clicking an option answers; anything already typed in the card's box rides
+// along as the note with that pick.
 document.addEventListener('click', async e => {
   const b = e.target.closest('[data-answer]'); if (!b || b.disabled || !db) return;
-  const id = b.dataset.answer;
-  const note = document.querySelector(`[data-note-for="${CSS.escape(id)}"]`)?.value ?? '';
+  const id = b.dataset.answer, key = `fb:${id}`;
+  const note = (drafts[key] ?? '').trim();
   const next = answerRuling(cards, id, { option: b.dataset.option, note, at: Date.now() });
   if (next === cards) return;
-  delete drafts[`note:${id}`];
+  delete drafts[key];
   cards = next; render();
   const c = cards.find(x => x.id === id);
   await persist(c, { lane: c.lane, order: c.order, pick: c.pick });
+});
+
+// Send what's in a card's box: an Other answer on an open ruling, feedback
+// anywhere else. The Send button and Enter both land here.
+async function sendBox(id) {
+  const key = `fb:${id}`;
+  const next = sendWords(cards, id, drafts[key], Date.now());
+  if (next === cards) return;
+  const answered = isOpenRuling(cards.find(x => x.id === id));
+  delete drafts[key];
+  cards = next; render();
+  const c = cards.find(x => x.id === id);
+  await persist(c, answered ? { lane: c.lane, order: c.order, pick: c.pick, feedback: c.feedback } : { feedback: c.feedback });
+  setStatus(answered ? `your answer to ${id} is saved` : `sent to Claude · ${new Date().toLocaleTimeString()}`);
+}
+
+// Enter sends, Shift+Enter is a new line — in a card's box and in the idea box.
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
+  const box = e.target.closest?.('[data-sendbox]');
+  if (box) { e.preventDefault(); if (!box.disabled) sendBox(box.dataset.sendbox); return; }
+  if (e.target.id === 'idea-words') { e.preventDefault(); $('#ideabox').requestSubmit(); }
 });
 
 // Typing goes to `drafts`, so a snapshot re-render never eats it.
@@ -433,15 +463,7 @@ document.addEventListener('toggle', e => {
 document.addEventListener('click', async e => {
   const b = e.target.closest('[data-act], [data-send]'); if (!b || b.disabled || !db) return;
   const at = Date.now();
-  if (b.dataset.send) {
-    const id = b.dataset.send, key = `fb:${id}`;
-    const next = addFeedback(cards, id, drafts[key], at);
-    if (next === cards) return;
-    delete drafts[key];
-    cards = next; render();
-    await persist(cards.find(x => x.id === id), { feedback: cards.find(x => x.id === id).feedback });
-    return;
-  }
+  if (b.dataset.send) { await sendBox(b.dataset.send); return; }
   const id = b.dataset.id, act = b.dataset.act;
   let next = cards, fields = c => ({});
   if (act === 'tweak' || act === 'someday') { next = triageIdea(cards, id, act, at); fields = c => ({ triage: c.triage, lane: c.lane, order: c.order }); }
@@ -451,7 +473,7 @@ document.addEventListener('click', async e => {
     if (act === 'changes' && !note) {         // a change request needs words: open the box and wait
       openFb.add(id); render();
       document.querySelector(`[data-draft="${CSS.escape(key)}"]`)?.focus();
-      setStatus('say what to change in the feedback box, then press Changes again');
+      setStatus('say what to change in the box on the card, then press Changes again');
       return;
     }
     next = reviewVerdict(cards, id, act, note, at);
