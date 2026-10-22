@@ -4,7 +4,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     LANES, KINDS, WIP_CAP, byLane, blockerIndex, unblocked, nextSlice, answerRuling, newIdea,
-    triageIdea, approveSlice, reviewVerdict, addFeedback, yourTurn, claudesTurn,
+    triageIdea, approveSlice, reviewVerdict, addFeedback, yourTurn, claudesTurn, sendWords,
     migrateCard, mermaidSource, moveCard,
 } from '../tools/roadmap-board/board-model.js';
 
@@ -219,6 +219,37 @@ describe('his gestures — §8, a gesture on every card', () => {
         assert.doesNotThrow(() => yourTurn(hostile));
         assert.doesNotThrow(() => claudesTurn(hostile));
         assert.doesNotThrow(() => addFeedback(hostile, 'H', 'x', 1));
+    });
+});
+
+describe('sendWords — one box, Enter sends', () => {
+    test('on an open ruling, his words are his answer (Other) and the card goes to Done', () => {
+        const next = sendWords(cards, 'A1', '  neither — fold it into the tough row  ', 9);
+        const a1 = next.find(c => c.id === 'A1');
+        assert.equal(a1.lane, 'done');
+        assert.deepEqual(a1.pick, { option: 'other', note: 'neither — fold it into the tough row', at: 9 });
+        assert.deepEqual(a1.feedback, [{ from: 'you', text: 'neither — fold it into the tough row', at: 9 }]);
+        assert.ok(claudesTurn(next).some(t => t.id === 'A1'), 'Claude reads his answer next');
+    });
+    test('anywhere else, it is feedback and the card stays put', () => {
+        const next = sendWords(cards, 'B2', 'smaller please', 3);
+        const b2 = next.find(c => c.id === 'B2');
+        assert.equal(b2.lane, 'ready');
+        assert.equal(b2.pick, undefined);
+        assert.equal(b2.feedback.length, 1);
+    });
+    test('a ruling with no options, or one already answered, takes it as feedback', () => {
+        assert.equal(sendWords(cards, 'A4', 'hm', 1).find(c => c.id === 'A4').lane, 'ruling', 'A4 has no options');
+        const answered = answerRuling(cards, 'A1', { option: 'a', at: 1 });
+        const again = sendWords(answered, 'A1', 'second thoughts', 2).find(c => c.id === 'A1');
+        assert.equal(again.pick.option, 'a', 'a later line never overwrites his pick');
+        assert.equal(again.feedback.length, 1);
+    });
+    test('an empty box sends nothing', () => {
+        assert.equal(sendWords(cards, 'A1', '   ', 1), cards);
+    });
+    test('"other" needs words; answerRuling refuses it empty', () => {
+        assert.equal(answerRuling(cards, 'A1', { option: 'other', note: ' ', at: 1 }), cards);
     });
 });
 
