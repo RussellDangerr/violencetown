@@ -2,6 +2,8 @@
 // Sewer demo prototype
 
 // ── Tile Types ───────────────────────────────────────────────────────────────
+// A tile may carry `tags: [...]` from the one vocabulary in tags.js (read by
+// tags.js tileTags); the content check fails on any other tag.
 
 export const TILES = {
     // Sewer tiles (0-7)
