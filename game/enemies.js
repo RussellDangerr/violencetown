@@ -165,6 +165,9 @@ export class Enemy {
         // by slots.js resolveSpawn. A required item belongs to the slot, not to the
         // monster (plans/spine.md SL-4), so the death drop reads this, not the tag.
         slot = null,
+        // (plans/t1-tag-layer.md) Shared-vocabulary tags (tags.js). Not the
+        // free-form `tag` above. Nothing reads them for an effect yet.
+        tags = null,
     }) {
         this.id         = id;
         this.type       = type;
@@ -263,6 +266,7 @@ export class Enemy {
         this.ambient       = ambient;
         this.sewerDweller  = !!sewerDweller;
         this.slot          = slot;
+        this.tags          = Array.isArray(tags) ? [...tags] : [];
 
         // Debuffs / buffs — symmetric with Game.buffs[] on the player side
         // (DoTs, fear, the poition riders), ticked by the same BUFF_EFFECTS table.
@@ -329,6 +333,8 @@ export class Enemy {
             // Written only when set (undefined drops out of JSON), so every enemy
             // outside a slot saves byte-identically to before slots existed.
             slot: this.slot || undefined,
+            // Same rule: an untagged enemy saves byte-identically to before tags.
+            tags: this.tags.length ? [...this.tags] : undefined,
             // runtime
             state: this.state, fsmState: this.fsmState, lastWanderTurn: this._lastWanderTurn,
             // (perception ladder) so a save taken mid-hunt reloads mid-hunt.

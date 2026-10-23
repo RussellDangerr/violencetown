@@ -7,6 +7,9 @@
 // Thrown consumables burst over a 3×3 area at half effect (resolveThrow); the
 // affected tiles come from wheel-model.js `affectedTiles`, so the on-screen
 // highlight and the damage resolution use the exact same geometry.
+//
+// An item may carry `tags: [...]` from the one vocabulary in tags.js; the
+// content check fails on any other tag.
 
 import { isHostile, isSewerDweller } from './ai.js';
 import { burnGold } from './trade.js';

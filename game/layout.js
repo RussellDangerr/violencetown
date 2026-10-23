@@ -519,6 +519,30 @@ export function inspectorActionRects(bodyRect) {
   return rects;
 }
 
+// (C3) The Remoticon's keyboard cursor moves by GEOMETRY: from rects[from],
+// the nearest rect whose centre lies ahead in direction (dx, dy), ranked by
+// distance along the direction plus twice the sideways offset. No wrap: at an
+// edge it returns `from`. The bag grid, the gear plates and the button rows
+// navigate through this one rule, over the same rects the renderer draws. (The
+// ring fingertips are a staggered ROW, which no one weighting serves alongside
+// the plates, so main steps them by order instead.)
+export function nearestRectInDir(rects, from, dx, dy) {
+    const a = rects[from];
+    if (!a) return from;
+    const ax = a.x + a.w / 2, ay = a.y + a.h / 2;
+    let best = -1, bestScore = Infinity;
+    for (let i = 0; i < rects.length; i++) {
+        if (i === from || !rects[i]) continue;
+        const r = rects[i];
+        const vx = r.x + r.w / 2 - ax, vy = r.y + r.h / 2 - ay;
+        const along = vx * dx + vy * dy;
+        if (along <= 0.5) continue;
+        const score = along + 2 * Math.abs(vx * dy - vy * dx);
+        if (score < bestScore - 1e-6) { best = i; bestScore = score; }   // a tie keeps the earlier rect
+    }
+    return best < 0 ? from : best;
+}
+
 // Pure tab cycle (wraps both ways); an unknown current tab resets to the first.
 export function cycleDeviceTab(current, dir) {
     const i = DEVICE_TABS.indexOf(current);

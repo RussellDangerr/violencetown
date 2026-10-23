@@ -24,7 +24,7 @@ import {
     xmbBarLayout, hudLayout, throwRects, wheelTopMarks, fightPanelRects, XMB_CELL,                      // (XMB) usable-bar geometry; (screen-fill) the HUD, throw targets, the marks above the wheel
     MODAL_RECT, offerLayout,                                                 // (offer screen) the one panel + its geometry
 } from './layout.js';
-import { itemStatLine, itemActions, equipOptions } from './inspector.js';    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
+import { itemStatLine, itemActions, equipOptions, USES_ACTION } from './inspector.js';    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
 import { zoneOf } from './inventory.js';                                     // (C1) safe/pack label for the inspector
 import { buildXmbBar, resolveXmbSelection } from './xmb.js';                 // (XMB) usable-bar model
 import { ITEMS, itemTier } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
@@ -2475,6 +2475,8 @@ export class Renderer {
                     const name = this._fitText(strip((RINGS[f.ringId] && RINGS[f.ringId].name) || f.ringId), s.w - 6);
                     this.font.drawText(ctx, name.text, s.x + s.w / 2, s.y + s.h / 2 - 4, { color: UI.gold, scale: name.scale, align: 'center' });
                 }
+                const cur = game._deviceSel;
+                if (cur && cur.tab === 'rings' && cur.key === s.key) this._drawCursorHalo(ctx, s);   // (C3) keyboard cursor
             }
         }
 
@@ -2631,6 +2633,17 @@ export class Renderer {
             drawInset(ctx, r.x, r.y, r.w, r.h);
             ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
             this.font.drawText(ctx, actions[i].label, r.x + r.w / 2, r.y + r.h / 2 - 4, { color: col, scale: 1, align: 'center' });
+            if (sel.action === i) this._drawCursorHalo(ctx, r);   // (C3) keyboard cursor
+        }
+        // (C3c) The uses button, only when the item has a "use this on that"
+        // here; main decides, and hands back the rect it hit-tests. It follows
+        // the action buttons in the cursor's order, so its index is theirs + 1.
+        const uses = actions.length ? game._deviceUsesRect?.(sel.index) : null;
+        if (uses) {
+            drawInset(ctx, uses.x, uses.y, uses.w, uses.h);
+            ctx.strokeStyle = UI.gold; ctx.lineWidth = 1; ctx.strokeRect(uses.x + 1, uses.y + 1, uses.w - 2, uses.h - 2);
+            this.font.drawText(ctx, USES_ACTION.label, uses.x + uses.w / 2, uses.y + uses.h / 2 - 4, { color: UI.gold, scale: 1, align: 'center' });
+            if (sel.action === actions.length) this._drawCursorHalo(ctx, uses);
         }
     }
 
@@ -4504,7 +4517,7 @@ export class Renderer {
         if (!hosted) this.font.drawText(ctx, 'TAP A PLATE TO REMOVE   ·   C / ESC  CLOSE', CANVAS_PX / 2, EQUIPMENT_MODAL_RECT.y + EQUIPMENT_MODAL_RECT.h - 16, { color: UI.textLight, scale: 1, align: 'center' });
 
         // (C2) An open GEAR chooser overlays the plates with an options list.
-        if (hosted && game._deviceSel && game._deviceSel.tab === 'gear') this._drawGearPicker(game, bodyRect);
+        if (hosted && game._deviceSel && game._deviceSel.tab === 'gear' && game._deviceSel.open) this._drawGearPicker(game, bodyRect);
     }
 
     // (C2) The GEAR chooser — over a selected armor slot, list every bag item that
@@ -4547,7 +4560,16 @@ export class Renderer {
             const dTxt = d > 0 ? `+${d}` : d < 0 ? `-${-d}` : '0';
             const dCol = d > 0 ? UI.buff : d < 0 ? UI.hpRed : UI.dim;
             this.font.drawText(ctx, dTxt, r.x + r.w - 8, r.y + r.h / 2 - 4, { color: dCol, scale: 1, align: 'right' });
+            if (game._deviceSel.option === i) this._drawCursorHalo(ctx, r);   // (C3) keyboard cursor
         }
+    }
+
+    // (C3) The Remoticon keyboard cursor on a button-like target (an action
+    // button, a chooser row, a ring socket): the selection's gold 2px stroke,
+    // drawn just OUTSIDE the rect, because these already wear an inner stroke.
+    _drawCursorHalo(ctx, r) {
+        ctx.strokeStyle = UI.gold; ctx.lineWidth = 2;
+        ctx.strokeRect(r.x - 3, r.y - 3, r.w + 6, r.h + 6);
     }
 
     // Word-wrap `text` into lines no longer than `maxChars` characters (the
