@@ -24,7 +24,7 @@ import {
 } from './rings.js';
 import { isBoss, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS } from './defeat-scenarios.js';
 import { addToInventory as addToInv, moveToZone, zoneOf } from './inventory.js';
-import { itemActions, equipOptions } from './inspector.js';   // (C1) tap-to-inspect: context actions; (C2) GEAR chooser options
+import { itemActions, equipOptions, inspectorUsesRect } from './inspector.js';   // (C1) tap-to-inspect: context actions; (C2) GEAR chooser options
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
 import { attack, formatDamageNumber, computeHit, elementalMult, isBackstab } from './combat.js';
@@ -5709,6 +5709,9 @@ class Game {
                 for (let a = 0; a < actions.length; a++) {
                     if (this._pointInRect(pt, rows[a], HIT_SLOP)) { this._deviceActivate('action', a); return; }
                 }
+                // (C3c) The uses button, when the item has a use here.
+                const uses = this._deviceUsesRect?.(sel.index);
+                if (uses && this._pointInRect(pt, uses, HIT_SLOP)) { this._deviceActivate('action', 'uses'); return; }
             }
             // 2) Otherwise a slot tap: SELECT a filled slot, clear on an empty one.
             const rects = deviceBagSlotRects(body);
@@ -5771,6 +5774,7 @@ class Game {
         if (zone === 'action') {
             const sel = this._deviceSel;
             if (!sel || sel.tab !== 'items' || !this.inventory[sel.index]) return;
+            if (index === 'uses') { this._deviceOpenUses(sel.index); return; }
             const def = this.inventory[sel.index].itemDef;
             const action = itemActions(def, zoneOf(sel.index, SAFE_SLOTS))[index];
             if (!action) return;
@@ -5870,6 +5874,25 @@ class Game {
         }
     }
 
+    // (C3c) The inspector's uses button: its rect when the bag item at `index`
+    // has a "use this on that" here, else null. The same test the overlay uses
+    // (contextualUses), and no button on a quest item, which the overlay refuses.
+    _deviceUsesRect(index) {
+        const stack = this.inventory[index];
+        if (!stack || stack.itemDef.questItem) return null;
+        if (!contextualUses(stack.itemDef, this).length) return null;
+        return inspectorUsesRect(deviceBodyRect());
+    }
+
+    // (C3c) Leave the Remoticon holding that item, as its digit key would, and
+    // open the list Space opens. The keyboard and touch then share one list.
+    _deviceOpenUses(index) {
+        this._deviceSel = null;
+        this.selectedSlot = index;
+        this.state = STATE.ITEM_SELECTED;
+        this._openItemOverlay();
+    }
+
     // (C3) What the keyboard cursor can stand on right now, on the active tab:
     // the zone _deviceActivate will be handed, the rects the renderer draws for
     // it (so the cursor moves over exactly what is on screen), the id each rect
@@ -5886,7 +5909,10 @@ class Game {
                 const n = itemActions(stack.itemDef, zoneOf(sel.index, SAFE_SLOTS)).length;
                 if (n) {
                     const rects = inspectorActionRects(body).slice(0, n);
-                    return { zone: 'action', rects, ids: rects.map((_, i) => i), cur: Math.min(sel.action, n - 1) };
+                    const ids = rects.map((_, i) => i);
+                    const uses = this._deviceUsesRect?.(sel.index);   // (C3c) the uses button joins the row
+                    if (uses) { rects.push(uses); ids.push('uses'); }
+                    return { zone: 'action', rects, ids, cur: Math.min(sel.action, rects.length - 1) };
                 }
             }
             const rects = deviceBagSlotRects(body);

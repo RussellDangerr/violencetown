@@ -24,7 +24,7 @@ import {
     xmbBarLayout, hudLayout, throwRects, wheelTopMarks, fightPanelRects, XMB_CELL,                      // (XMB) usable-bar geometry; (screen-fill) the HUD, throw targets, the marks above the wheel
     MODAL_RECT, offerLayout,                                                 // (offer screen) the one panel + its geometry
 } from './layout.js';
-import { itemStatLine, itemActions, equipOptions } from './inspector.js';    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
+import { itemStatLine, itemActions, equipOptions, USES_ACTION } from './inspector.js';    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
 import { zoneOf } from './inventory.js';                                     // (C1) safe/pack label for the inspector
 import { buildXmbBar, resolveXmbSelection } from './xmb.js';                 // (XMB) usable-bar model
 import { ITEMS, itemTier } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
@@ -2620,6 +2620,16 @@ export class Renderer {
             ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
             this.font.drawText(ctx, actions[i].label, r.x + r.w / 2, r.y + r.h / 2 - 4, { color: col, scale: 1, align: 'center' });
             if (sel.action === i) this._drawCursorHalo(ctx, r);   // (C3) keyboard cursor
+        }
+        // (C3c) The uses button, only when the item has a "use this on that"
+        // here; main decides, and hands back the rect it hit-tests. It follows
+        // the action buttons in the cursor's order, so its index is theirs + 1.
+        const uses = actions.length ? game._deviceUsesRect?.(sel.index) : null;
+        if (uses) {
+            drawInset(ctx, uses.x, uses.y, uses.w, uses.h);
+            ctx.strokeStyle = UI.gold; ctx.lineWidth = 1; ctx.strokeRect(uses.x + 1, uses.y + 1, uses.w - 2, uses.h - 2);
+            this.font.drawText(ctx, USES_ACTION.label, uses.x + uses.w / 2, uses.y + uses.h / 2 - 4, { color: UI.gold, scale: 1, align: 'center' });
+            if (sel.action === actions.length) this._drawCursorHalo(ctx, uses);
         }
     }
 
