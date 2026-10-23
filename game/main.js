@@ -13,7 +13,7 @@ import { makeEffectLoop } from './effect-loop.js';                 // one tick o
 import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, MAX_STACK, SLUDGE_DOT } from './data.js';
 import { puddleTiles, layPuddle, puddleAt, dryPuddles } from './puddles.js';   // (poisons) Sludge Brain's puddles
 import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef } from './items.js';
-import { WEAPONS } from './weapons.js';
+import { WEAPONS, weaponClassOf } from './weapons.js';
 import { resolveItemDef } from './item-registry.js';
 import { tickBuffList, BUFF_DEFS, sumBuffStat, worldBeatPlan } from './buffs.js';
 import { RINGS, FUSIONS } from './ring-data.js';
@@ -288,9 +288,10 @@ class Game {
         this._animCallback = null;
         this._stepIndex   = 0;    // ++ per completed step → walk-anim foot parity
 
-        // Equipment
+        // Equipment. Two hands (plans/ws3-two-hands-left-right.md): `weapon` is
+        // the right hand, `left` the other; a two-hander is the same def in both.
         this.equipment = {
-            weapon: WEAPONS.wooden_sword,
+            weapon: WEAPONS.wooden_sword, left: null,
             top: null, bottom: null, front: null, back: null, sides: null,
         };
         this._refreshGrantedSkills();   // derive Magic/Trick grants from the equipped weapon
@@ -4679,6 +4680,10 @@ class Game {
     // ring) vs tricks (Trick ring) by which registry defines them. Also recomputes
     // the aggregate passive modifiers and records any newly-seen fusions. Call after
     // any change to weapon OR rings (acquire, slot, unslot, unlock, new game, load).
+    // How many hands a weapon takes, from its class (weapons.js). No class, or
+    // not a weapon, is one hand. items.js and save.js ask through this.
+    _handsOf(def) { return (weaponClassOf(def) || {}).hands || 1; }
+
     _refreshGrantedSkills() {
         const w  = this.equipment && this.equipment.weapon;
         const gs = (w && w.grantsSpells) || [];
@@ -5214,7 +5219,7 @@ class Game {
         }
         this.tempEquips = [];
         this.selectedSlot = -1;
-        this.equipment = { weapon: WEAPONS.wooden_sword, top: null, bottom: null, front: null, back: null, sides: null };
+        this.equipment = { weapon: WEAPONS.wooden_sword, left: null, top: null, bottom: null, front: null, back: null, sides: null };
         this._refreshGrantedSkills();   // reset weapon → no granted skills
         // Clear any transition queued before death so the first post-respawn
         // action doesn't ghost-load a map.
@@ -5304,7 +5309,7 @@ class Game {
         this.inventory.fill(null);
         this.tempEquips = [];
         this.selectedSlot = -1;
-        this.equipment = { weapon: WEAPONS.wooden_sword, top: null, bottom: null, front: null, back: null, sides: null };
+        this.equipment = { weapon: WEAPONS.wooden_sword, left: null, top: null, bottom: null, front: null, back: null, sides: null };
         this.ownedRings = new Set();
         this.ringSlots = {};
         this.ringTier = 0;
