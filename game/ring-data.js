@@ -2,7 +2,8 @@
 //
 // This is the long tail Caelan authors: each boss/notable foe → a remembrance
 // material → a ring here; each interesting adjacency → a FUSIONS entry. Fusions
-// key on TAGS not ids, so one recipe covers a whole family. Effects conjure
+// key on TAGS not ids, so one recipe covers a whole family. Ring tags and
+// fusion pairs must be in the one vocabulary (tags.js). Effects conjure
 // ghosts/elementals — never gore or animal cruelty (see plans/remembrance-rings.md).
 
 export const RINGS = {

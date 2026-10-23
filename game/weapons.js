@@ -9,6 +9,9 @@
 // Every weapon names a class (weaponClass). A class says how many hands it
 // takes and which kinds of hit it lands (plans/ws1-weapon-class-table.md).
 // Nothing reads hands or attackKinds in play yet; class ids are internal.
+//
+// A weapon may carry `tags: [...]` from the one vocabulary in tags.js; the
+// content check fails on any other tag. weaponTiers copies a base's tags.
 
 import { VALUE_TIERS } from './items.js';
 
