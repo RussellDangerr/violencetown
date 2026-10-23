@@ -47,6 +47,25 @@ touched.
   the spine records it. Until the quest wrapper is built, the boss drops the item directly.
 - **Which boss is built first** is a later slice. The Ray Gun stays where it is.
 
+## Status: stopped for rulings (2026-10-22)
+
+The build was written and run, then held back from the branch, because it turns five checks red
+that live outside this slice's files:
+
+- **The Factory boss looks like Puck.** Puck already wears the `Boss` cell, and
+  `tests/sprite-coverage.test.js` forbids two types sharing a cell on one map.
+- **The three items have no picture**, so they draw the plain bag, and
+  `tests/visual-breakage.test.js` pins the list of items allowed to.
+- **Two save tests pin today's picks** (`tests/save-roundtrip.test.js`), which now carry four
+  slots, not one.
+- **The balance golden** gains the three boss rows, and each zone's coin total rises by 44.
+- **The autoplay golden's fingerprints** move, because the save now carries four picks. Every
+  stage's turns, damage and deaths are unchanged; with the three new picks left out of the
+  fingerprint, the run matches the golden exactly.
+
+Everything else passed: the new tests, the slot tests, content validation, the naming grep, and
+the game ran headless at 3440×1440 with each boss standing and dropping its item.
+
 ## Out of scope
 
 - Real names, art, barks, stats or item names.
