@@ -22,7 +22,10 @@ Your car won't start → the Sewer → **the Sewer boss drops the Converter** �
 runs → the bridge → the Canyon → Pike's grappling hook → Downtown → meet the Financier.
 
 **Act 2 — Carnival, Factory, Graveyard, in any order.**
-Each zone's boss drops one **required item** (names open, SP1 — until then: *item A, B, C*).
+Each zone gives one **required item** (names open, SP1 — until then: *item A, B, C*), earned
+through that zone's quest: one is given, one taken, one earned, and the zone's boss fight is a
+step inside it (ruled 2026-10-23, §9). *Interim:* until the quests are built, the boss drops the
+item directly.
 
 **Act 3 — Bank Street.**
 The three items open the finale → the Financier → the Final Arc (`cosmology-and-arc.md`: the
@@ -36,9 +39,9 @@ Bite, Sun Man's coaching, phase 2 against Monstrous Sun Man) → credits. **The 
 | The bridge | — | — | `_openBridgeIfCarFixed`, the bridge cutscene |
 | Out of the Canyon | `canyon.npc` | the grappling hook | `canyon_escape`; Pike (SP6: the Canyon is a branch today) |
 | Meet the Financier | — | — | not a quest stage today (SP8) |
-| Carnival boss | `carnival.boss` | item A | not built (cosmology: Bigfoot) |
-| Factory boss | `factory.boss` | item B | not built (cosmology: Alien Invasion) |
-| Graveyard boss | `graveyard.boss` | item C | not built (cosmology: The Deity) |
+| Carnival quest, its boss a step | `carnival.boss` | item A | placeholder boss (first entry: Bigfoot) drops it directly — interim |
+| Factory quest, its boss a step | `factory.boss` | item B | placeholder boss (first entry: Alien Invasion) drops it directly — interim |
+| Graveyard quest, its boss a step | `graveyard.boss` | item C | placeholder boss (first entry: The Deity) drops it directly — interim |
 | The finale | — | A + B + C | not built (`bank-map.json` holds a placeholder Financier) |
 
 It keeps two standing rulings from `species-adventures.md`:
@@ -82,7 +85,7 @@ framework rather than beside it.
 | The three acts, and their order | **Locked** | — |
 | The zones on the spine: Town, Sewer, Canyon, Downtown, Carnival, Factory, Graveyard, Bank Street | **Locked** | all eight maps exist (Bank Street = `bank-map.json`, SP7) |
 | The Converter (Act 1's required item) | **Locked**, name and id | `catalytic_converter` |
-| Three Act 2 required items, one per boss | **Locked** as three slots; names open | SP1 |
+| Three Act 2 required items, one per zone quest, its boss fight a step inside it | **Locked** as three slots; names open (ruled 2026-10-23, §9) | SP1; interim: the boss drops it |
 | Which slot holds which required item | **Locked** (a randomizer mode may shuffle it later) | — |
 | The ending: Financier → Final Arc → credits | **Locked** | SP2 (New Game+) |
 | Night Kid, the Financier, Sun Man | **Locked** characters (the cosmology's cast spine) | — |
@@ -163,3 +166,15 @@ Each is a row in `roadmap-2026-09.md` §2. Answers land here, dated, and strike 
   said delivering the burger *is* delivering the package, so he could be who it's delivered to.
 - **SP9 — What opens Sun Man?** The cosmology gates his first conversation, and the Final Arc, on
   transformations. If species work is later (SP3), those need another trigger.
+
+## 9. Rulings recorded here
+
+- **2026-10-23 — The Act 2 items come from three quests.** Caelan: *"The boss fights will become
+  part of the three quests."* Each Act 2 zone's required item comes from a quest that is given,
+  taken or earned, and the zone's boss fight is a step inside that quest.
+  - **Replaces** the Locked row *"each zone's boss drops one required item"* (§1 Act 2, the §1
+    beat table, and the §3 row for the three Act 2 items).
+  - The items still belong to slots: `carnival.boss`, `factory.boss`, `graveyard.boss` hold them
+    (SL-4), so any boss in a pool still guarantees the item.
+  - **Interim:** until the quests are built, each placeholder boss drops its item directly
+    (`plans/ab1-act2-placeholder-bosses.md`).
