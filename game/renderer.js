@@ -47,6 +47,7 @@ import { resolveOffer } from './offer.js';                                  // (
 import { dispositionCeil, DISPOSITION_MIN } from './disposition-curves.js'; // (offer screen) meter ceiling + floor — offer.js does not re-export these
 import { lungeOffset } from './cascade.js';                                  // (turn-model C1) an attacker lunges on its beat
 import { splatPill, layoutSplats, glideToward, splatCell, splatShowingAt, splatPixelFactor, splatClampDown, SPLAT_CELL_W, SPLAT_CELL_H } from './splat-layout.js'; // hit splats
+import { hitKindTag } from './hit-splat.js';                                  // (WS4) a physical hit's slash/stab/crush tag
 
 // Tile id → sprite ref. Sewer ids 0-7 → TILE_SPRITE_MAP, town ids 10-21 →
 // TOWN_TILE_SPRITE_MAP, circus/factory/graveyard ids 30+ →
@@ -1962,6 +1963,19 @@ export class Renderer {
                 scale,
                 align: 'center',
                 shadow: tc ? `rgba(${tc.shadow},${a * 0.6})` : `rgba(0,0,0,${a * 0.7})`,
+            });
+        }
+
+        // (WS4) A physical hit's kind — slash, stab or crush — as its placeholder
+        // tag just under the badge (hit-splat.js hitKindTag), inside the same
+        // transform so it pops and fades with the number.
+        const kindTag = hitKindTag(dn.kind);
+        if (kindTag && this.font) {
+            this.font.drawText(ctx, kindTag, 0, h / 2, {
+                color: hexToRgba('#ffffff', a),
+                scale,
+                align: 'center',
+                shadow: `rgba(0,0,0,${a * 0.85})`,
             });
         }
 

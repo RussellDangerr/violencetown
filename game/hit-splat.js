@@ -47,3 +47,17 @@ export function pickHitMark(type, amount, killed) {
         default:         return null;
     }
 }
+
+// (WS4) The tag a physical hit-splat wears for its hit kind — slash, stab or
+// crush (combat.js weaponHitKind picks the kind). The tag is a placeholder
+// until the art for each kind is ruled (plans/ws4-hit-kind-splats.md).
+export const HIT_KIND_TAG = Object.freeze({
+    slash: '[slash]',
+    stab:  '[stab]',
+    crush: '[crush]',
+});
+
+// The tag for `kind`, or null when the hit has no kind (or an unknown one).
+export function hitKindTag(kind) {
+    return (kind && HIT_KIND_TAG[kind]) || null;
+}
