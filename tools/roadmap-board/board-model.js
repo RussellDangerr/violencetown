@@ -192,6 +192,52 @@ export function claudesTurn(cards) {
     return out;
 }
 
+// What a card is really waiting on (plans/ticket-board.md §9): its open blockers
+// walked all the way down, sorted by who has to act.
+//   rulings   — open rulings he can answer now
+//   approvals — tweaked Ready slices he has not approved
+//   merges    — branches in Review waiting on his merge call
+//   claude    — rulings with no options yet, ideas, untweaked slices
+//   build     — approved work the loop has yet to build (nothing for him to do)
+//   unknown   — blocker ids with no card (fail closed, as blockerIndex does)
+// A blocker that is itself blocked is walked through, so a slice behind a slice
+// behind a ruling lists that ruling.
+export function waitingOn(cards, id, ix = blockerIndex(cards)) {
+    const byId = Object.create(null);
+    for (const c of cards) byId[c.id] = c;
+    const out = { rulings: [], approvals: [], merges: [], claude: [], build: [], unknown: [] };
+    const seen = new Set([id]);
+    const walk = cid => {
+        for (const b of ix.openBlockedBy[cid] ?? []) {
+            if (seen.has(b)) continue;
+            seen.add(b);
+            const c = byId[b];
+            if (!c) { out.unknown.push(b); continue; }
+            const k = kindOf(c), l = laneOf(c);
+            if (isOpenRuling(c)) out.rulings.push(b);
+            else if (k === 'slice' && l === 'ready' && isTweaked(c) && !c.approved) out.approvals.push(b);
+            else if (l === 'review') out.merges.push(b);
+            else if (k === 'ruling' || k === 'idea' || (k === 'slice' && !isTweaked(c))) out.claude.push(b);
+            else if ((ix.openBlockedBy[b] ?? []).length === 0) out.build.push(b);
+            walk(b);
+        }
+    };
+    walk(id);
+    return out;
+}
+
+// For every open ruling, the approved Ready slices its answer helps free —
+// directly or down the chain. Sorted by board order.
+export function freesIndex(cards) {
+    const ix = blockerIndex(cards);
+    const out = Object.create(null);
+    for (const s of byLane(cards).ready) {
+        if (kindOf(s) !== 'slice' || !s.approved) continue;
+        for (const r of waitingOn(cards, s.id, ix).rulings) (out[r] ??= []).push(s.id);
+    }
+    return out;
+}
+
 // A thought dropped in the idea box. `now` is a millisecond timestamp, passed in
 // so this stays pure. The title is the first line, cut short; his full words
 // are the note.
