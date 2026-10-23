@@ -46,7 +46,7 @@ import {
     WHEEL_HUB_R, wheelRingR, LOG_MODAL_RECT, targetListRowRect, itemOverlayRowRect,
     EQUIPMENT_MODAL_RECT, EQUIP_SLOT_RECTS,
     DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceBagSlotRects, deviceEquipLayout, deviceRingsLayout,
-    inspectorActionRects, gearOptionRects,
+    inspectorActionRects, gearOptionRects, nearestRectInDir,
     xmbBarLayout,
     // (offer screen) the one panel every modal shares, its geometry, and the two
     // hit-test helpers layout.js wrote for _tapOffer. Hit-testing lives THERE so
@@ -1114,21 +1114,13 @@ class Game {
             if (this.state === STATE.INSPECT) { e.preventDefault(); this._closeInspect(); return; }
 
             // ── DEVICE (Remoticon): modal tabbed device; world is soft-paused ──
-            // Esc already closed it via the universal Cancel above. Here: Tab pockets
-            // it, [ ] cycle tabs, C/J/M/R jump to a tab; everything else is swallowed.
+            // Esc steps back a level, then closes it, via the universal Cancel above
+            // (_closeCurrentMenu -> _deviceBack). Every other key is _deviceKey's:
+            // Tab pockets it, [ ] cycle tabs, C/J/M/R jump to a tab, arrows/WASD move
+            // the cursor, Space/Enter confirm. Everything else is swallowed.
             if (this.state === STATE.DEVICE) {
                 e.preventDefault();
-                if (e.code === 'Tab')          { this._closeDevice();   return; }
-                if (e.code === 'BracketLeft')  { this._deviceCycleTab(-1); return; }
-                if (e.code === 'BracketRight') { this._deviceCycleTab(1);  return; }
-                if (e.code === 'KeyC') { this._deviceTab = 'gear';   this._deviceSel = null; this._render(); return; }
-                if (e.code === 'KeyJ') { this._deviceTab = 'quests'; this._deviceSel = null; this._render(); return; }
-                if (e.code === 'KeyM') { this._deviceTab = 'map';    this._deviceSel = null; this._render(); return; }
-                if (e.code === 'KeyR') { this._deviceTab = 'rings'; this._deviceSel = null; this._render(); return; }
-                if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { this._deviceCycleTab(-1); return; }
-                if (e.code === 'ArrowRight' || e.code === 'KeyD') { this._deviceCycleTab(1);  return; }
-                if (this._deviceTab === 'quests' && (e.code === 'ArrowUp'   || e.code === 'KeyW')) { this._scrollJournal(1);  return; }
-                if (this._deviceTab === 'quests' && (e.code === 'ArrowDown' || e.code === 'KeyS')) { this._scrollJournal(-1); return; }
+                this._deviceKey(e.code);
                 return;
             }
 
@@ -1873,7 +1865,7 @@ class Game {
             case STATE.LOG_MODAL:      this._closeLogModal(); return true;
             case STATE.TRADE:          this._closeOffer(); return true;
             case STATE.DIALOGUE:       this._closeDialogue(); return true;
-            case STATE.DEVICE:         this._closeDevice(); return true;
+            case STATE.DEVICE:         if (!this._deviceBack()) this._closeDevice(); return true;   // (C3) back one level, then close
             case STATE.ITEM_OVERLAY:   this.state = STATE.ITEM_SELECTED; this._render(); return true;
             case STATE.ITEM_SELECTED:  this.selectedSlot = -1; this.state = STATE.IDLE; this._render(); this._resumeHeldWalk(); return true;
             case STATE.ITEM_THROW_DIR: this.selectedSlot = -1; this.state = STATE.IDLE; this._render(); this._resumeHeldWalk(); return true;
@@ -1910,8 +1902,11 @@ class Game {
         // outside the ring closes it.
         const _mpr = this.renderer._menuPanelRect, _cbr = this.renderer._closeBtnRect;
         if (_mpr) {
-            if (_cbr && this._pointInRect(pt, _cbr, HIT_SLOP)) { this._closeCurrentMenu(); return; }
-            if (!this._pointInRect(pt, _mpr)) { this._closeCurrentMenu(); return; }
+            // (C3) Cancel steps the Remoticon back one level first; the ✕ and a tap
+            // outside still close it outright, as they always have.
+            const _cancel = () => (this.state === STATE.DEVICE ? this._closeDevice() : this._closeCurrentMenu());
+            if (_cbr && this._pointInRect(pt, _cbr, HIT_SLOP)) { _cancel(); return; }
+            if (!this._pointInRect(pt, _mpr)) { _cancel(); return; }
         } else if (this.state === STATE.RADIAL_MENU) {
             // (Slice 2) Depth-dynamic cull: close on a tap beyond the wheel's real
             // outer extent for the CURRENT depth. The old fixed 230px left the small
@@ -5633,168 +5628,313 @@ class Game {
         this._render();
     }
 
-    // Tap inside the open device: a tab-strip tap switches tabs. (Body taps — e.g.
-    // GEAR unequip — arrive in S3-T2.) The ✕ chip + tap-outside close are handled
-    // earlier by the CLOSE_PANEL block, so only IN-PANEL taps reach here.
+    // Tap inside the open device. A tap only RESOLVES a point into a (zone,
+    // index) — which tab, slot, action button, plate, chooser row or ring socket
+    // it landed on — and hands it to _deviceActivate, the same step the keyboard
+    // cursor's confirm calls (C3), so taps and keys cannot drift apart. The ✕
+    // chip + tap-outside close are handled earlier by the CLOSE_PANEL block, so
+    // only IN-PANEL taps reach here. Every rect is the one the renderer drew.
     _tapDevice(pt) {
         // Tab strip → switch tabs.
         for (let i = 0; i < DEVICE_TABS.length; i++) {
-            if (this._pointInRect(pt, deviceTabRect(i), HIT_SLOP)) {
-                this._deviceTab = DEVICE_TABS[i];
-                this._deviceSel = null;   // (C1) switching tabs drops any inspector selection
-                audio.playSfx('menu-tick');
-                this._render();
-                return;
-            }
+            if (this._pointInRect(pt, deviceTabRect(i), HIT_SLOP)) { this._deviceActivate('tab', i); return; }
         }
+        const body = deviceBodyRect();
         // ITEMS (Bag) tab — tap-to-inspect. A tap SELECTS a filled slot; the
         // inspector panel then shows the item's stats + action buttons. A second
         // tap on an action row dispatches (Use/Equip · Protect/Unprotect · Drop).
-        // Reads the SAME rects the renderer draws (deviceBagSlotRects /
-        // inspectorActionRects), so the taps can't drift from the drawn surfaces.
         if (this._deviceTab === 'items') {
             const sel = this._deviceSel;
             // 1) Inspector action rows — only when a slot is selected + still filled.
             if (sel && sel.tab === 'items' && this.inventory[sel.index]) {
-                const def = this.inventory[sel.index].itemDef;
-                const actions = itemActions(def, zoneOf(sel.index, SAFE_SLOTS));
-                const rows = inspectorActionRects(deviceBodyRect());
+                const actions = itemActions(this.inventory[sel.index].itemDef, zoneOf(sel.index, SAFE_SLOTS));
+                const rows = inspectorActionRects(body);
                 for (let a = 0; a < actions.length; a++) {
-                    if (!this._pointInRect(pt, rows[a], HIT_SLOP)) continue;
-                    const cfg = { size: INVENTORY_SIZE, safeSlots: SAFE_SLOTS, maxStack: MAX_STACK };
-                    const idx = sel.index;
-                    this._deviceSel = null;   // selection resolves this frame; the panel drops
-                    switch (actions[a].id) {
-                        case 'use':
-                        case 'equip': {
-                            // Route through resolveUse like canonical _doItemUse, but GATE the
-                            // removal the same way — the paused device supplies no throw/melee
-                            // DIRECTION, so resolveUse is a no-op for those and the item must
-                            // survive (a rock is `consumable:true` yet nothing was thrown; the
-                            // pipe is a non-consumable tool). Only a self-use (heal) or an equip
-                            // (moves onto the body) truly consumes it here, and only a real use
-                            // costs a world beat — closing the free-heal-while-paused gap without
-                            // wasting a turn on a no-op.
-                            // Soap's cure is deferred: resolveUse only logs intent — the actual
-                            // removeBuff('sludge') fires in _advanceWorld gated on this flag, so
-                            // it MUST be set before resolveUse, exactly as canonical _doItemUse.
-                            if (def.effect === 'cure_sludge') this._soapUsedThisTurn = true;
-                            const msg = resolveUse(this, def, null);   // equip → resolveEquip (re-bags any displaced piece)
-                            if (msg) this._log(msg);
-                            this._refreshGrantedSkills();
-                            const usedUp = def.useType === 'self' || def.useType === 'equip';
-                            if (usedUp) { this._removeFromSlot(idx); this._advanceWorld(); }
-                            break;
-                        }
-                        case 'drink': {
-                            // (poisons) Drinking Fire Blood on purpose: you burn, and your
-                            // hits spread it. Costs the turn like any use.
-                            if (def.fireBlood) {
-                                this._applyFireBlood(this, def.poition?.turns ?? 5);
-                                this._log('[You drink Fire Blood: you burn, and your hits set targets burning.]', 'combat');
-                            }
-                            this._removeFromSlot(idx);
-                            this._advanceWorld();
-                            break;
-                        }
-                        case 'protect':
-                            if (!moveToZone(this.inventory, idx, 'safe', cfg)) this._log('[Safe slots full.]');
-                            break;
-                        case 'unprotect':
-                            if (!moveToZone(this.inventory, idx, 'pack', cfg)) this._log('[Pack is full.]');
-                            break;
-                        case 'drop':
-                            this.inventory[idx] = null;
-                            break;
-                    }
-                    audio.playSfx('menu-confirm');
-                    this._render();
-                    return;
+                    if (this._pointInRect(pt, rows[a], HIT_SLOP)) { this._deviceActivate('action', a); return; }
                 }
             }
             // 2) Otherwise a slot tap: SELECT a filled slot, clear on an empty one.
-            const rects = deviceBagSlotRects(deviceBodyRect());
+            const rects = deviceBagSlotRects(body);
             for (let i = 0; i < rects.length; i++) {
-                if (!this._pointInRect(pt, rects[i], HIT_SLOP)) continue;
-                if (this.inventory[i]) {
-                    this._deviceSel = { tab: 'items', index: i };
-                    audio.playSfx('menu-tick');
-                } else {
-                    this._deviceSel = null;
-                }
-                this._render();
-                return;
+                if (this._pointInRect(pt, rects[i], HIT_SLOP)) { this._deviceActivate('slot', i); return; }
             }
             return;
         }
-        // SKILLS body → the two-hands ring loadout. Tapping a FILLED socket
-        // unslots that ring; tapping an EMPTY unlocked socket cycles the next
-        // owned-but-unslotted ring into it. Reads the SAME sockets deviceRingsLayout
-        // hands the renderer, so the tap can't drift from the drawn well.
+        // RINGS body → the two-hands ring loadout: a socket tap slots/unslots.
         if (this._deviceTab === 'rings') {
-            const { sockets } = deviceRingsLayout(deviceBodyRect(), this);
-            for (const s of sockets) {
-                if (!this._pointInRect(pt, s, HIT_SLOP)) continue;
-                if (s.ringId) {
-                    this._unslotRing(s.key);
-                } else {
-                    const slotted = new Set(Object.values(this.ringSlots || {}).filter(Boolean));
-                    const next = [...this.ownedRings].find(id => !slotted.has(id));
-                    if (next) this._slotRing(s.key, next);
-                }
-                audio.playSfx('menu-tick');
-                this._render();
-                return;
+            for (const s of deviceRingsLayout(body, this).sockets) {
+                if (this._pointInRect(pt, s, HIT_SLOP)) { this._deviceActivate('socket', s.key); return; }
             }
             return;
         }
-        // GEAR body → tap a slot plate to open its CHOOSER: a list of every bag
-        // item that fits, each with its armor delta vs the worn piece, plus a Bare
-        // (unequip) row. Tapping a row equips (or bares) that slot. Reads the SAME
-        // rects the renderer draws (deviceEquipLayout / gearOptionRects), so the
-        // taps can't drift. The weapon plate stays out of scope — weapon swap lives
-        // on the ITEMS tap.
+        // GEAR body → a plate tap opens that armor slot's CHOOSER; a row tap equips
+        // (or bares) it; a tap outside every row dismisses it (picker convention).
+        // The weapon plate stays out of scope — weapon swap lives on the ITEMS tap.
         if (this._deviceTab === 'gear') {
-            // 1) An open chooser: its option rows take priority over the plates.
             const sel = this._deviceSel;
-            if (sel && sel.tab === 'gear') {
-                const opts = equipOptions(sel.slotKey, this.equipment[sel.slotKey], this.inventory);
-                const rows = gearOptionRects(deviceBodyRect(), opts.length);
-                for (let i = 0; i < opts.length; i++) {
-                    if (!this._pointInRect(pt, rows[i], HIT_SLOP)) continue;
-                    const opt = opts[i];
-                    if (opt.bagIndex >= 0) {
-                        const def = this.inventory[opt.bagIndex].itemDef;
-                        const msg = resolveUse(this, def, null);   // equip → resolveEquip (re-bags any displaced piece)
-                        this._removeFromSlot(opt.bagIndex);
-                        this._refreshGrantedSkills();
-                        if (msg) this._log(msg);
-                    } else if (opt.id === '__bare__') {
-                        const msg = unequipItem(this, sel.slotKey);
-                        if (msg) this._log(msg);
-                    }
-                    this._deviceSel = null;
-                    audio.playSfx('menu-confirm');
-                    this._render();
-                    return;
+            if (sel && sel.tab === 'gear' && sel.open) {
+                const n = equipOptions(sel.slotKey, this.equipment[sel.slotKey], this.inventory).length;
+                const rows = gearOptionRects(body, n);
+                for (let i = 0; i < n; i++) {
+                    if (this._pointInRect(pt, rows[i], HIT_SLOP)) { this._deviceActivate('option', i); return; }
                 }
-                // A tap outside every row closes the chooser (picker convention).
-                this._deviceSel = null;
-                this._render();
+                this._deviceActivate('dismiss', 0);
                 return;
             }
-            // 2) No chooser open: a plate tap opens one for that armor slot. Only
-            //    the 5 armor slots open a chooser — the weapon plate is inert here.
-            const { slots } = deviceEquipLayout(deviceBodyRect());
-            for (const s of slots) {
+            for (const s of deviceEquipLayout(body).slots) {
                 if (s.key === 'weapon') continue;
-                if (!this._pointInRect(pt, s)) continue;
-                this._deviceSel = { tab: 'gear', slotKey: s.key };
-                audio.playSfx('menu-tick');
-                this._render();
-                return;
+                if (this._pointInRect(pt, s)) { this._deviceActivate('plate', s.key); return; }
             }
         }
+    }
+
+    // (C3) The ONE Remoticon activate step — taps (_tapDevice) and the keyboard
+    // cursor's confirm (_deviceKey) both land here, the way _offerActivate serves
+    // the offer screen. `zone` names what was hit; `index` is its position (a tab
+    // index, a bag slot, an action-row index, a chooser-row index) or key (a gear
+    // plate's slotKey, a ring socket's key).
+    _deviceActivate(zone, index) {
+        if (zone === 'tab') {
+            this._deviceTab = DEVICE_TABS[index];
+            this._deviceSel = null;   // (C1) switching tabs drops any inspector selection
+            audio.playSfx('menu-tick');
+            this._render();
+            return;
+        }
+        if (zone === 'slot') {
+            if (this.inventory[index]) {
+                this._deviceSel = { tab: 'items', index };
+                audio.playSfx('menu-tick');
+            } else {
+                this._deviceSel = null;
+            }
+            this._render();
+            return;
+        }
+        if (zone === 'action') {
+            const sel = this._deviceSel;
+            if (!sel || sel.tab !== 'items' || !this.inventory[sel.index]) return;
+            const def = this.inventory[sel.index].itemDef;
+            const action = itemActions(def, zoneOf(sel.index, SAFE_SLOTS))[index];
+            if (!action) return;
+            const cfg = { size: INVENTORY_SIZE, safeSlots: SAFE_SLOTS, maxStack: MAX_STACK };
+            const idx = sel.index;
+            this._deviceSel = null;   // selection resolves this frame; the panel drops
+            switch (action.id) {
+                case 'use':
+                case 'equip': {
+                    // Route through resolveUse like canonical _doItemUse, but GATE the
+                    // removal the same way — the paused device supplies no throw/melee
+                    // DIRECTION, so resolveUse is a no-op for those and the item must
+                    // survive (a rock is `consumable:true` yet nothing was thrown; the
+                    // pipe is a non-consumable tool). Only a self-use (heal) or an equip
+                    // (moves onto the body) truly consumes it here, and only a real use
+                    // costs a world beat — closing the free-heal-while-paused gap without
+                    // wasting a turn on a no-op.
+                    // Soap's cure is deferred: resolveUse only logs intent — the actual
+                    // removeBuff('sludge') fires in _advanceWorld gated on this flag, so
+                    // it MUST be set before resolveUse, exactly as canonical _doItemUse.
+                    if (def.effect === 'cure_sludge') this._soapUsedThisTurn = true;
+                    const msg = resolveUse(this, def, null);   // equip → resolveEquip (re-bags any displaced piece)
+                    if (msg) this._log(msg);
+                    this._refreshGrantedSkills();
+                    const usedUp = def.useType === 'self' || def.useType === 'equip';
+                    if (usedUp) { this._removeFromSlot(idx); this._advanceWorld(); }
+                    break;
+                }
+                case 'drink': {
+                    // (poisons) Drinking Fire Blood on purpose: you burn, and your
+                    // hits spread it. Costs the turn like any use.
+                    if (def.fireBlood) {
+                        this._applyFireBlood(this, def.poition?.turns ?? 5);
+                        this._log('[You drink Fire Blood: you burn, and your hits set targets burning.]', 'combat');
+                    }
+                    this._removeFromSlot(idx);
+                    this._advanceWorld();
+                    break;
+                }
+                case 'protect':
+                    if (!moveToZone(this.inventory, idx, 'safe', cfg)) this._log('[Safe slots full.]');
+                    break;
+                case 'unprotect':
+                    if (!moveToZone(this.inventory, idx, 'pack', cfg)) this._log('[Pack is full.]');
+                    break;
+                case 'drop':
+                    this.inventory[idx] = null;
+                    break;
+            }
+            audio.playSfx('menu-confirm');
+            this._render();
+            return;
+        }
+        if (zone === 'socket') {
+            // A FILLED socket unslots its ring; an EMPTY unlocked socket cycles the
+            // next owned-but-unslotted ring into it.
+            if ((this.ringSlots || {})[index]) {
+                this._unslotRing(index);
+            } else {
+                const slotted = new Set(Object.values(this.ringSlots || {}).filter(Boolean));
+                const next = [...this.ownedRings].find(id => !slotted.has(id));
+                if (next) this._slotRing(index, next);
+            }
+            audio.playSfx('menu-tick');
+            this._render();
+            return;
+        }
+        if (zone === 'plate') {
+            this._deviceSel = { tab: 'gear', slotKey: index, open: true };
+            audio.playSfx('menu-tick');
+            this._render();
+            return;
+        }
+        if (zone === 'option') {
+            const sel = this._deviceSel;
+            if (!sel || sel.tab !== 'gear' || !sel.open) return;
+            const opt = equipOptions(sel.slotKey, this.equipment[sel.slotKey], this.inventory)[index];
+            if (!opt) return;
+            if (opt.bagIndex >= 0) {
+                const def = this.inventory[opt.bagIndex].itemDef;
+                const msg = resolveUse(this, def, null);   // equip → resolveEquip (re-bags any displaced piece)
+                this._removeFromSlot(opt.bagIndex);
+                this._refreshGrantedSkills();
+                if (msg) this._log(msg);
+            } else if (opt.id === '__bare__') {
+                const msg = unequipItem(this, sel.slotKey);
+                if (msg) this._log(msg);
+            }
+            this._deviceSel = null;
+            audio.playSfx('menu-confirm');
+            this._render();
+            return;
+        }
+        if (zone === 'dismiss') {
+            this._deviceSel = null;
+            this._render();
+        }
+    }
+
+    // (C3) What the keyboard cursor can stand on right now, on the active tab:
+    // the zone _deviceActivate will be handed, the rects the renderer draws for
+    // it (so the cursor moves over exactly what is on screen), the id each rect
+    // activates with, and where the cursor is (-1 = not shown yet). The inner
+    // levels (an item's action buttons, an open gear chooser) take over from the
+    // outer ones (the bag, the plates) while they are open.
+    _deviceTargets() {
+        const body = deviceBodyRect();
+        const sel = this._deviceSel;
+        const tab = this._deviceTab;
+        if (tab === 'items') {
+            const stack = sel && sel.tab === 'items' ? this.inventory[sel.index] : null;
+            if (stack && sel.action != null) {
+                const n = itemActions(stack.itemDef, zoneOf(sel.index, SAFE_SLOTS)).length;
+                if (n) {
+                    const rects = inspectorActionRects(body).slice(0, n);
+                    return { zone: 'action', rects, ids: rects.map((_, i) => i), cur: Math.min(sel.action, n - 1) };
+                }
+            }
+            const rects = deviceBagSlotRects(body);
+            return { zone: 'slot', rects, ids: rects.map((_, i) => i), cur: sel && sel.tab === 'items' ? sel.index : -1 };
+        }
+        if (tab === 'gear') {
+            if (sel && sel.tab === 'gear' && sel.open) {
+                const n = equipOptions(sel.slotKey, this.equipment[sel.slotKey], this.inventory).length;
+                const rects = gearOptionRects(body, n);
+                return { zone: 'option', rects, ids: rects.map((_, i) => i), cur: sel.option != null ? Math.min(sel.option, n - 1) : -1 };
+            }
+            const plates = deviceEquipLayout(body).slots.filter(s => s.key !== 'weapon');
+            const ids = plates.map(s => s.key);
+            return { zone: 'plate', rects: plates, ids, cur: sel && sel.tab === 'gear' ? ids.indexOf(sel.slotKey) : -1 };
+        }
+        if (tab === 'rings') {
+            const sockets = deviceRingsLayout(body, this).sockets;
+            const ids = sockets.map(s => s.key);
+            // `row`: the fingertips are staggered, so left/right step them in the
+            // order deviceRingsLayout returns them (left to right across both hands).
+            return { zone: 'socket', rects: sockets, ids, row: true, cur: sel && sel.tab === 'rings' ? ids.indexOf(sel.key) : -1 };
+        }
+        return null;
+    }
+
+    // (C3) Put the cursor on target `i` of the current level. The cursor IS
+    // _deviceSel — the same selection a tap makes, so it wears the same gold
+    // halo (and on the bag, opens the same inspector).
+    _deviceFocus(t, i) {
+        const sel = this._deviceSel;
+        if (t.zone === 'slot')   this._deviceSel = { tab: 'items', index: t.ids[i] };
+        if (t.zone === 'action') this._deviceSel = { tab: 'items', index: sel.index, action: i };
+        if (t.zone === 'plate')  this._deviceSel = { tab: 'gear', slotKey: t.ids[i] };
+        if (t.zone === 'option') this._deviceSel = { tab: 'gear', slotKey: sel.slotKey, open: true, option: i };
+        if (t.zone === 'socket') this._deviceSel = { tab: 'rings', key: t.ids[i] };
+        audio.playSfx('menu-tick');
+        this._render();
+    }
+
+    // (C3) Every Remoticon key but Esc (ruling C3R1). Arrows/WASD move the cursor
+    // by geometry; [ ] cycle tabs; Space/Enter confirm; Tab pockets it; C/J/M/R
+    // jump to a tab; on QUESTS up/down scroll the list. The first move or confirm
+    // on a tab only SHOWS the cursor, on the first entry. Confirm calls the same
+    // _deviceActivate a tap does; the keyboard then keeps its cursor on the slot
+    // or plate it acted on, where a tap's selection clears.
+    _deviceKey(code) {
+        if (code === 'Tab')          { this._closeDevice();   return; }
+        if (code === 'BracketLeft')  { this._deviceCycleTab(-1); return; }
+        if (code === 'BracketRight') { this._deviceCycleTab(1);  return; }
+        if (code === 'KeyC') { this._deviceTab = 'gear';   this._deviceSel = null; this._render(); return; }
+        if (code === 'KeyJ') { this._deviceTab = 'quests'; this._deviceSel = null; this._render(); return; }
+        if (code === 'KeyM') { this._deviceTab = 'map';    this._deviceSel = null; this._render(); return; }
+        if (code === 'KeyR') { this._deviceTab = 'rings';  this._deviceSel = null; this._render(); return; }
+        const dir = DIRS[code];
+        if (this._deviceTab === 'quests') {
+            if (dir && dir.dy) this._scrollJournal(-dir.dy);
+            return;
+        }
+        const confirm = code === 'Space' || code === 'Enter' || code === 'NumpadEnter';
+        if (!dir && !confirm) return;
+        const t = this._deviceTargets();
+        if (!t || !t.rects.length) return;
+        if (t.cur < 0) { this._deviceFocus(t, 0); return; }
+        if (dir) {
+            const next = t.row
+                ? Math.max(0, Math.min(t.rects.length - 1, t.cur + dir.dx))
+                : nearestRectInDir(t.rects, t.cur, dir.dx, dir.dy);
+            if (next !== t.cur) this._deviceFocus(t, next);
+            return;
+        }
+        const sel = this._deviceSel;
+        if (t.zone === 'slot') {
+            const stack = this.inventory[sel.index];
+            if (!stack || !itemActions(stack.itemDef, zoneOf(sel.index, SAFE_SLOTS)).length) return;
+            this._deviceSel = { tab: 'items', index: sel.index, action: 0 };
+            audio.playSfx('menu-tick');
+            this._render();
+            return;
+        }
+        if (t.zone === 'plate') {
+            const key = t.ids[t.cur];
+            this._deviceActivate('plate', key);
+            if (equipOptions(key, this.equipment[key], this.inventory).length) this._deviceSel.option = 0;
+            this._render();
+            return;
+        }
+        if (t.zone === 'socket') { this._deviceActivate('socket', t.ids[t.cur]); return; }
+        // An action button or a chooser row: do it, then leave the cursor where it was.
+        const keep = t.zone === 'action' ? { tab: 'items', index: sel.index } : { tab: 'gear', slotKey: sel.slotKey };
+        this._deviceActivate(t.zone, t.ids[t.cur]);
+        if (this.state === STATE.DEVICE && !this._deviceSel) { this._deviceSel = keep; this._render(); }
+    }
+
+    // (C3) Esc's first job in the Remoticon: step back out of an inner level — an
+    // item's action buttons to its slot, an open gear chooser to its plate. True
+    // if it stepped back; false means there was nothing to step out of, so the
+    // Cancel hook closes the device instead.
+    _deviceBack() {
+        const sel = this._deviceSel;
+        if (sel && sel.tab === 'items' && sel.action != null) this._deviceSel = { tab: 'items', index: sel.index };
+        else if (sel && sel.tab === 'gear' && sel.open) this._deviceSel = { tab: 'gear', slotKey: sel.slotKey };
+        else return false;
+        audio.playSfx('menu-cancel');
+        this._render();
+        return true;
     }
 
     // (Slice 3) The old [J] / [M] openers now route into the Remoticon device on the

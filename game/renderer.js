@@ -2461,6 +2461,8 @@ export class Renderer {
                     const name = this._fitText(strip((RINGS[f.ringId] && RINGS[f.ringId].name) || f.ringId), s.w - 6);
                     this.font.drawText(ctx, name.text, s.x + s.w / 2, s.y + s.h / 2 - 4, { color: UI.gold, scale: name.scale, align: 'center' });
                 }
+                const cur = game._deviceSel;
+                if (cur && cur.tab === 'rings' && cur.key === s.key) this._drawCursorHalo(ctx, s);   // (C3) keyboard cursor
             }
         }
 
@@ -2617,6 +2619,7 @@ export class Renderer {
             drawInset(ctx, r.x, r.y, r.w, r.h);
             ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
             this.font.drawText(ctx, actions[i].label, r.x + r.w / 2, r.y + r.h / 2 - 4, { color: col, scale: 1, align: 'center' });
+            if (sel.action === i) this._drawCursorHalo(ctx, r);   // (C3) keyboard cursor
         }
     }
 
@@ -4490,7 +4493,7 @@ export class Renderer {
         if (!hosted) this.font.drawText(ctx, 'TAP A PLATE TO REMOVE   ·   C / ESC  CLOSE', CANVAS_PX / 2, EQUIPMENT_MODAL_RECT.y + EQUIPMENT_MODAL_RECT.h - 16, { color: UI.textLight, scale: 1, align: 'center' });
 
         // (C2) An open GEAR chooser overlays the plates with an options list.
-        if (hosted && game._deviceSel && game._deviceSel.tab === 'gear') this._drawGearPicker(game, bodyRect);
+        if (hosted && game._deviceSel && game._deviceSel.tab === 'gear' && game._deviceSel.open) this._drawGearPicker(game, bodyRect);
     }
 
     // (C2) The GEAR chooser — over a selected armor slot, list every bag item that
@@ -4533,7 +4536,16 @@ export class Renderer {
             const dTxt = d > 0 ? `+${d}` : d < 0 ? `-${-d}` : '0';
             const dCol = d > 0 ? UI.buff : d < 0 ? UI.hpRed : UI.dim;
             this.font.drawText(ctx, dTxt, r.x + r.w - 8, r.y + r.h / 2 - 4, { color: dCol, scale: 1, align: 'right' });
+            if (game._deviceSel.option === i) this._drawCursorHalo(ctx, r);   // (C3) keyboard cursor
         }
+    }
+
+    // (C3) The Remoticon keyboard cursor on a button-like target (an action
+    // button, a chooser row, a ring socket): the selection's gold 2px stroke,
+    // drawn just OUTSIDE the rect, because these already wear an inner stroke.
+    _drawCursorHalo(ctx, r) {
+        ctx.strokeStyle = UI.gold; ctx.lineWidth = 2;
+        ctx.strokeRect(r.x - 3, r.y - 3, r.w + 6, r.h + 6);
     }
 
     // Word-wrap `text` into lines no longer than `maxChars` characters (the
