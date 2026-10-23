@@ -18,7 +18,7 @@ import { dirOf } from './perception.js';
 export const TINY_INK = [63, 38, 49];   // #3F2631, the Tiny packs' outline
 // Sheets already drawn in the Tiny style (or re-outlined by a tool), which the
 // outline pass leaves alone.
-export const TINY_STYLE_SHEETS = new Set(['tinyDungeon', 'tinyTown', 'tinyExtra', 'outlined', 'emotes', 'marks']);
+export const TINY_STYLE_SHEETS = new Set(['tinyDungeon', 'tinyTown', 'tinyExtra', 'outlined', 'emotes', 'marks', 'ratVariants']);
 
 export class SpriteSheet {
     // `padding` is the gap (in source pixels) between adjacent cells. Kenney's
@@ -174,6 +174,12 @@ export const SHEETS = {
     // rock, the sludge vial and sack, the Fire Blood bottle, the goo vat without
     // its dungeon-floor orange. Packed, padding 0.
     tinyExtra:    { src: `${K}/tinyExtra_packed.png`, frameW: 16, frameH: 16 },
+
+    // The Tiny Dungeon rat, (3,10), recoloured by tools/gen_recolor.py: one cell per
+    // variant, exact swaps of its body and eye colours, so the outline and the
+    // silhouette are the rat's own. Column order is the tool's VARIANTS list.
+    // Packed, padding 0. Nothing draws from it yet.
+    ratVariants:  { src: `${K}/ratVariants_packed.png`, frameW: 16, frameH: 16 },
 
     // Kenney Emote Pack (Pixel, Style 8) — manga impact marks (animation pass
     // §1). A star inside Style 1's white balloon reads as someone SAYING
