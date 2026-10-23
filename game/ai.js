@@ -32,6 +32,14 @@ export function isHostile(e) {
   return !!e && e.allegiance === 'hostile';
 }
 
+// Would these two side with each other in a fight? (plans/f3a-hostiles-join-fights.md)
+// Only the same disposition gangs up on you, so for now it is allegiance
+// equality: every hostile is friendly with every other. A faction or species
+// tag replaces this body later; callers ask the question, never the field.
+export function isFriendlyWith(a, b) {
+  return !!a && !!b && a.allegiance != null && a.allegiance === b.allegiance;
+}
+
 // SPECIES, not allegiance. Sewer fare is poison to humans and medicine to the
 // things that live down there, and that must survive a disposition flip — a
 // bribed Violet Fungus is your ally and still eats mushrooms. Deliberately NOT
