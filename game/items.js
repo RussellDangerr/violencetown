@@ -429,6 +429,18 @@ export const ITEMS = {
     },
 };
 
+// ── Armor pieces (plans/ws5-armor-tiers-same-generator.md) ───────────────────
+// A piece you wear until you take it off, in a body slot that is not the
+// weapon. Duration equips (soap, bandage) are not armor. Each piece yields its
+// five tiers from weaponTiers in weapons.js; this file can't import it
+// (weapons.js imports VALUE_TIERS from here, and the cycle breaks loading).
+export function isArmorPiece(def) {
+    return !!def && def.useType === 'equip' && !!def.equipSlot
+        && def.equipSlot !== 'weapon' && !def.equipDuration;
+}
+
+export const ARMOR_IDS = Object.freeze(Object.keys(ITEMS).filter(id => isArmorPiece(ITEMS[id])));
+
 // ── Value tiers (Phase 6d) ────────────────────────────────────────────────────
 // A Borderlands-style rarity ladder that makes worth legible at a glance —
 // examine text names the tier, the trade cell wears its colour. By default the
