@@ -27,7 +27,7 @@ import { addToInventory as addToInv, moveToZone, zoneOf } from './inventory.js';
 import { itemActions, equipOptions, inspectorUsesRect } from './inspector.js';   // (C1) tap-to-inspect: context actions; (C2) GEAR chooser options
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
-import { attack, formatDamageNumber, computeHit, elementalMult, isBackstab } from './combat.js';
+import { attack, formatDamageNumber, computeHit, elementalMult, weaponHitKind, isBackstab } from './combat.js';
 import { Enemy, spawnEnemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
 import { isHostile, isHunting, isSewerDweller } from './ai.js';
 import { getGreedyStep, stepEntity, findPath } from './pathing.js'; // pathfinding (greedy chase + BFS click-to-move); stepEntity = shove a character aside
@@ -3234,7 +3234,7 @@ class Game {
                 this._render();
                 break;
             }
-            case 'hit':   if (npc) { this.combatAttack(npc, this.equipment.weapon.damage, { type: this.equipment.weapon.damageType }); this._advanceWorld(); this._render(); } break;
+            case 'hit':   if (npc) { this.combatAttack(npc, this.equipment.weapon.damage, { type: this.equipment.weapon.damageType, weapon: this.equipment.weapon }); this._advanceWorld(); this._render(); } break;
             case 'throw': { const th = this._resolveThrowable(); if (th) { const msg = resolveThrow(this, th.itemDef, null, th.count, { x: t.x, y: t.y }); if (msg) this._log(msg, 'combat'); this._rockClatter(th.itemDef, t.x, t.y); th.consume(); this._advanceWorld(); } else this._log('[Nothing to throw.]'); this._render(); break; }
             case 'take':  this._takeItemAt(t.x, t.y); this._render(); break;
             case 'open':  if (t.container) this._openContainer(t.container); break;
@@ -3541,7 +3541,7 @@ class Game {
                     // (fear) Fearmur fears an enemy struck twice in a row — check
                     // BEFORE the hit (which may kill it and reset the tracker).
                     const repeat = wpn && wpn.onHit === 'fearOnRepeat' && this._lastHitTarget === enemy.id;
-                    this.combatAttack(enemy, wpn.damage, { type: wpn && wpn.damageType });
+                    this.combatAttack(enemy, wpn.damage, { type: wpn && wpn.damageType, weapon: wpn });
                     if (enemy.entity.isAlive()) {
                         if (repeat) { this._applyFear(enemy, 3); this._log('[The Fearmur cracks bone — it recoils in terror!]', 'combat'); }
                         if (wpn && wpn.pullDistance) this._pullEnemyToward(enemy, wpn.pullDistance);   // (Lion Whip) yank it closer
@@ -3562,7 +3562,7 @@ class Game {
                 // single hit — the weapon-AoE case the basic-hit typing pass missed.
                 const dmg = this.equipment.weapon.damage * 2 / 3;
                 const tiles = affectedTiles(w, this);
-                const hit = this._aoeStrike(tiles, dmg, { type: this.equipment.weapon.damageType });
+                const hit = this._aoeStrike(tiles, dmg, { type: this.equipment.weapon.damageType, weapon: this.equipment.weapon });
                 if (hit) { this._log(`[Cleave! ${hit} caught.]`, 'combat'); this._advanceWorld(); }
                 else if (this._enemiesPresent(tiles) > 0) { this._log('[Cleave connects — shrugged off, immune.]', 'combat'); this._advanceWorld(); }
                 else this._log('[Cleave hits only air]', 'combat');
@@ -3574,7 +3574,7 @@ class Game {
                 // Raw fraction + weapon type, as Cleave above — round once, type applies.
                 const dmg = this.equipment.weapon.damage * 2 / 5;
                 const tiles = affectedTiles(w, this);
-                const hit = this._aoeStrike(tiles, dmg, { type: this.equipment.weapon.damageType });
+                const hit = this._aoeStrike(tiles, dmg, { type: this.equipment.weapon.damageType, weapon: this.equipment.weapon });
                 if (hit) { this._log(`[Spin! ${hit} caught.]`, 'combat'); this._advanceWorld(); }
                 else if (this._enemiesPresent(tiles) > 0) { this._log('[Spin connects — shrugged off, immune.]', 'combat'); this._advanceWorld(); }
                 else this._log('[You spin, hitting nothing]', 'combat');
@@ -4354,6 +4354,9 @@ class Game {
         // entirely (0-contract). Backstab: standing on the tile directly behind
         // the target's last step (5-Zone Body's "Back" zone as a rule).
         const backstab = isBackstab(this.playerX, this.playerY, enemyObj);
+        // (WS4) A weapon hit with no damageType of its own lands its best kind —
+        // slash, stab or crush — on this target (WR1 b); the splat shows it.
+        const kind = opts.type ? null : weaponHitKind(opts.weapon, enemyObj);
         const finalDmg = computeHit({
             base: dmg,
             // (Poition) An active Strength Poition adds flat damage here — Law
@@ -4363,7 +4366,7 @@ class Game {
             // (weapon swing, Cleave/Spin, item Smash, spells, tricks, thrown
             // splash) since they all funnel through this single computeHit call.
             flats: this._poitionMod('strength'),
-            elemental: elementalMult(opts.type, enemyObj),
+            elemental: elementalMult(opts.type || kind, enemyObj),
             positional: backstab ? 1.5 : 1,
         });
         if (finalDmg === 0) { this._log(`[${enemyObj.type} is immune!]`, 'combat'); return null; }
@@ -4396,7 +4399,7 @@ class Game {
         // 3×3 burst) pass opts.omni so it bursts around the target instead.
         const splatDir = { dx: enemyObj.x - this.playerX, dy: enemyObj.y - this.playerY };
         this._spawnHitSplat(enemyObj.x, enemyObj.y, `-${result.dealt}`, opts.type || 'physical',
-            { dir: splatDir, omni: !!opts.omni, crit: !!opts.crit, killed: !!result.killed });
+            { dir: splatDir, omni: !!opts.omni, crit: !!opts.crit, killed: !!result.killed, kind });
 
         // Hit flash + stagger — Phase C, polished in B6. Flash duration
         // and stagger distance now scale with damage so light taps feel
@@ -5438,6 +5441,7 @@ class Game {
         this._damageNumbers.push({
             tileX, tileY, text, type,
             crit: !!opts.crit,
+            kind: opts.kind || null,
             mark: this._pickHitMark(type, amount, !!opts.killed),
             dir,
             bornAt: born,
