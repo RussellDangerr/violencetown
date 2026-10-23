@@ -27,7 +27,7 @@ This applies to:
 **File locations:**
 - `GAME_STUDIO_PLAN.md` — This process document
 - `ROADMAP.md` — Phase-level goals and milestones
-- `plans/` — Individual feature plans (one file per feature, e.g., `plans/npc-combat.md`)
+- `plans/` — Individual feature plans (one file per feature, e.g., `plans/fight-fog.md`)
 
 ---
 

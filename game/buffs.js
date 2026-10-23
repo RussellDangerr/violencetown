@@ -19,8 +19,6 @@
 // documented riders at their read sites rather than table entries:
 //   - `guard`  — a passive damage-halve read in applyDamageToPlayer (not a tick).
 //   - `feared` — a movement override in resolveEnemyTurns (flee instead of act).
-//   - `blind`  — folds into applyDamageToPlayer's single computeHit call
-//     (outgoingMult) to halve the attacker's outgoing damage.
 //   - `strength` / `defence` — Poition riders. No onTick at all: the buff just
 //     has to exist and count down. `strength` is read as a computeHit `flats`
 //     bonus in Game.combatAttack (Law 2); `defence` is summed into
@@ -94,7 +92,8 @@ function applyDot(owner, game, buff, label, cause) {
         const y = owner === game ? game.playerY : owner.y;
         const text = change > 0 ? `+${change}` : `${change}`;
         const type = change > 0 ? 'heal' : (SPLAT_FOR_CAUSE[cause] ?? 'physical');
-        game._spawnHitSplat?.(x, y, text, type, { omni: true, killed });
+        // playerHpDelta lets a held (turn-model C1) tick hold its HP change back too.
+        game._spawnHitSplat?.(x, y, text, type, { omni: true, killed, playerHpDelta: owner === game ? change : 0 });
     }
 }
 
@@ -144,19 +143,13 @@ export const BUFF_DEFS = {
         },
     },
 
-    // Recover — a delayed heal (pendingHeal) that lands when the buff expires.
-    recover: {
-        onExpire(owner, game, buff) {
-            if (!buff || !buff.pendingHeal) return;
-            const before = game.playerHp;
-            game.playerHp = Math.max(0, Math.min(game.playerHp + buff.pendingHeal, game.playerMaxHp));
-            game._log(`[Recover — healed ${game.playerHp - before} HP]`, 'combat');
-        },
-    },
-
     // Post-defeat flavor statuses (Outward-style). Temporary + cosmetic — no
     // per-turn effect; tickBuffList decrements + drops them like any buff. They
     // read the defeat on the HUD, never a permanent stat cut.
+    // (poisons) Fire blood — a rider with no tick. While it AND `fire` last, the
+    // bearer's hits set their target burning (Game._spreadFireBlood).
+    fire_blood: { name: 'Fire Blood' },
+
     rattled: { name: 'Rattled' },
     hunched: { name: 'Hunched' },
     sludged: { name: 'Sludged' },

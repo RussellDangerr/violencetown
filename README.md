@@ -14,7 +14,7 @@ A browser-based 2D action-RPG of small violences, set across a hand-authored, di
 
 Violencetown is a small game with deliberately deep systems. The interesting part isn't the content (yet) — it's the machinery:
 
-- A **turn-based world on one clock**: one input = one action = one world-tick, so combat, ambient NPC life, and a day/night cycle all advance on the same beat.
+- A **turn-based world on one clock**: one input = one action = one world-tick, so combat, moods, the day/night cycle and every random roll advance only when you act. Townsfolk keep wandering while you stand still, on their own dice, so how long you think can never change an outcome.
 - A **radial action wheel** driven by a pure state machine, where a single function is the source of truth for *"which tiles does this action hit"* — read identically by the highlight, the friendly-fire confirm, and the damage resolver.
 - A **disposition economy**: every NPC carries one mood scalar that gifts, bribes, and dialogue all move through a single seam; cross a threshold and an enemy flips into an ally that fights for you — and that same scalar prices what a merchant charges.
 - **Determinism by construction**: all randomness flows from one seeded generator, so a run is reproducible and resumable.
@@ -78,13 +78,35 @@ Its first findings were real ones, and each became a fix:
 
 A level-design question and an AI bug, found by a test rather than a playtester — and every fix showed up in the check as numbers moving, before it was recorded as the new baseline.
 
-More system write-ups (combat feel, the unified world clock, zone pursuit) live in [`plans/`](plans/).
+### 6. Hit splats and the cascade — the order is the joke
+
+A fight here is meant to be slapstick: everyone messing each other up, plans ruined by whoever moves first. Turn-based games resolve a round in some order even when it looks simultaneous — RuneScape's tick, Pixel Dungeon's actor queue — and Violencetown's enemies already acted one after another; they just all *drew* in the same 150 ms, which flattens the joke. Behind `?turns=cascade`, the enemy phase plays back one actor at a time, ~130 ms apart: each attacker lunges on its own beat, your HP bar drops blow by blow, and any key plays the rest at once, so it never makes you wait.
+
+The interesting part is proving it changes *nothing* but timing. Every random roll the game spends in a blow — which way you stagger, how a word scatters — is rolled at the hit, not when the effect plays, so the seeded generator hands out the same numbers with the cascade on or off. A unit test pins that against the real damage function and fails if any roll moves into the held effect; and the quest-1 autoplay, run with the cascade on, matches its recorded golden exactly.
+
+The splats were rebuilt around legibility: each damage type is its own pixel silhouette (a burst, drips, bubbles, flames, a crystal, a spark, a heart) drawn by a generator script that reads the game's own colour table; the digits sit in a body sized to the number; several on one target are laid out by *how many* there are — one centred, then a stack, a triangle, the compass points — above the head and growing upward; and while a splat is up, the head space is its own, so the HP bar and speech balloons step aside and return with the new value. The layout rules are pure functions with a no-overlap invariant tested across every count, crits and four-digit numbers.
+
+Then four AI agents played the branch headless in parallel — the cascade, the splats, a flag-off regression sweep against `dev`, and odd viewports — each reproducing every finding twice. They confirmed nothing changed an outcome, found six cascade bugs (all fixed), and turned up an older one worth the whole exercise: an enemy killed by its own poison at the start of its turn still took that turn, and its death was never handled — so a poison finish on the Were-Rat dropped no catalytic converter, and quest 1 could not be won.
+
+### 7. One clock — thinking time changes nothing
+
+The autoplay (§5) exposed a deeper problem than replay: out of a fight, a half-second timer still moved the day, faded every NPC's mood toward neutral, and walked the townsfolk with the same random generator that rolls fights and thefts. Standing still changed the world, and so did the time you spent deciding — a slow thinker met different dice. The fix makes the player's committed action the only clock: the day is 600 actions long and saved with the game, moods fade every 40 actions, and pause really pauses. The town keeps its look of life — people still wander on the timer while you stand there — but wander now draws from a stream of its own, so it can never touch an outcome's roll. (A rule shipped alongside it — a held walk stopping the moment a fight started — was reversed in v0.29.0: being locked in place read as the game breaking, so you now walk the same in a fight as out of one.)
+
+Proving it was the interesting part. The autoplay's numbers moved, and "it changed" is not a result: switching each change off in turn showed that the whole difference came from the dice split — wander had been spending fight rolls between actions — while the new day clock and mood fade moved nothing. Only then was the new baseline recorded.
+
+### 8. Slots, not names — the structure stops moving
+
+The game's shape had been re-decided four times, and every new idea threatened a fifth. So the structure is now written down once and locked ([`plans/spine.md`](plans/spine.md)): three acts, the zones on them, the items that open the finale, and one ending. What stays open is *who* fills each part. A story beat binds to a **slot** — "the Sewer's boss drops the Converter" — never to a named monster, and each slot holds a **pool** of candidates. A new game picks one entry per slot from its seed and saves the pick, so a new idea is a pool entry, never a rewrite. The map says *where* a boss stands; a registry says *who* it is.
+
+The picks draw from a random stream of their own, derived from the seed, so adding a slot or a candidate can never move a combat roll. Proving the first slot changed nothing used the autoplay (§5): its fingerprint hashes the whole save, so the new field moves it — but with that one field stripped, both runs matched the recorded golden exactly, and only then was the new baseline written. A test checks that every candidate in a slot drops the slot's item, so no future boss can strand the quest.
+
+More system write-ups (combat feel, zone pursuit, the poisons) live in [`plans/`](plans/).
 
 ## How it works (mechanics)
 
 - **Turn-based:** one input = one action = the world advances a turn. Firing a wheel action is your turn; waiting (`T`) and item use cost a turn too.
 - **Hand-authored, directional world:** the Street (hub) sits at the center, its only way out — a **bridge north** — blocked until your car runs. The **Sewer** lies east, the **Factory** (home to Puck, a friendly trader) west, and a southern chain runs **Carnival → Graveyard → Wilderness** (a pitch-black, too-dangerous border). You travel by walking into a zone's edge.
-- **Combat:** the wheel's verbs resolve over flat HP, flat damage, and flat armor reduction — no dice, no misses. Hits pop **typed hit-splats** whose colour and motion read the damage type at a glance.
+- **Combat:** the wheel's verbs resolve over flat HP, flat damage, and flat armor reduction — no dice, no misses. Hits pop **typed hit-splats** — a pixel silhouette per damage type — laid out above the target by how many have landed.
 - **The HUD knows you're fighting:** the dock swaps its quest log for a **combat log** and two read-only gear panels appear over the fogged edges of the world — yours and the target's — and go again when the fight does.
 - **NPCs & the disposition economy:** every NPC runs a finite-state machine (idle / wander / work) over the disposition value above. **Puck**, in the Factory, runs a **shop** (`E` to open) with disposition-driven prices.
 - **Zone pursuit:** flee a fight through a door and the hostiles on your heels **follow you into the next zone**. Wedge the **[pipe]** into the door to jam it and buy a reprieve.

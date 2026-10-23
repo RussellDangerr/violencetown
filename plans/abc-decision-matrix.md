@@ -25,6 +25,9 @@ Each decision you make narrows the remaining options. By Category 5 or 6, many c
 
 ### CATEGORY 1: MOVEMENT & TIME MODEL — Decide First
 
+> **Superseded (2026-10-03): options 1A and 1C.** The game took 1B, and the turn model
+> (`plans/turn-model.md`) builds on it. 1A's timer and 1C's real time are not coming back.
+
 **Option A: Evolved Tick (Keep 10s timer, modernize the Action Preview)**
 The current 10-second tick stays. The Action Preview System ("Sherlock Holmes moments") remains the core differentiator. Space executes early. The timer creates urgency. Combat is chess-like deliberation. Modernize by adding variable tick lengths (5s in combat, 10s exploring) and make the preview tree prettier and more responsive.
 

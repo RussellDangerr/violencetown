@@ -1,4 +1,8 @@
 # Feature: Unlimited Moves for Throwing & Item Use
+
+> **Superseded (2026-10-03).** Not built, and the turn model replaced its premise: a turn is a move
+> plus an action (`plans/turn-model.md`, TM-1). Whether item use is free stays an open question.
+
 **Phase:** Phase 2 — Life in the City (Combat Integration)
 **Priority:** High
 **Status:** Research

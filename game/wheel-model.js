@@ -106,7 +106,6 @@ export const ROOT = { key: 'menu', label: 'MENU', children: [
     // Flight (evasion) sub-wheel — kept from dev's two-wheels layout (spec §6).
     { key: 'flight', label: 'Flight', color: '#cba43c', text: '#2a1f06', children: [
       { key: 'run',  label: 'Run',  aimType: 'adjacent', resolver: 'run',  available: always },
-      { key: 'hide', label: 'Hide', aimType: 'none',     resolver: 'hide', available: always },
       { key: 'wait', label: 'Wait', aimType: 'none',     resolver: 'wait', available: always },
     ]},
   ]},
@@ -358,6 +357,69 @@ export function autoAimTile(leaf, game) {
     .map(e => ({ x: e.x, y: e.y, d: cheb(game.playerX, game.playerY, e.x, e.y) }))
     .sort((a, b) => a.d - b.d)
     .map(({ x, y }) => ({ x, y }))[0];
+}
+
+// ── Pointer aiming (C3b, ruling C3R3) ────────────────────────────────────────
+// Tap to place the reticle, tap it again to fire; a tap on an illegal tile snaps
+// to the nearest legal one. "Legal" is the rule the keys already use in
+// main._reticleKey: an adjacent verb (Hit/Cleave/Trade/Run/Thieve) may point at
+// any tile beside you, walkable or not; a placed reticle (throw, spells, a reach
+// weapon's Hit) must sit on a walkable tile within aimRange.
+function placedAim(leaf, range) {
+  const reachyHit = leaf.resolver === 'combatAttack' && range > 1;
+  return leaf.aimType !== 'adjacent' || reachyHit;
+}
+
+export function isLegalAimTile(leaf, game, t) {
+  if (!leaf || !t || leaf.aimType === 'none') return false;
+  const range = aimRange(leaf, game);
+  const d = cheb(game.playerX, game.playerY, t.x, t.y);
+  if (d > range) return false;
+  if (!placedAim(leaf, range)) return d >= 1;
+  return !!(game.map && game.map.isWalkable(t.x, t.y));
+}
+
+// The legal tile nearest `tile` (straight-line distance, ties in reading order),
+// or null when there is none. A tap on your own tile with an adjacent verb is
+// not a request for a neighbour, so it answers null too.
+export function clampReticle(leaf, game, tile) {
+  if (!leaf || !tile || leaf.aimType === 'none') return null;
+  if (isLegalAimTile(leaf, game, tile)) return { x: tile.x, y: tile.y };
+  const range = aimRange(leaf, game);
+  const px = game.playerX, py = game.playerY;
+  if (!placedAim(leaf, range) && tile.x === px && tile.y === py) return null;
+  let best = null, bestD = Infinity;
+  for (let y = py - range; y <= py + range; y++) {
+    for (let x = px - range; x <= px + range; x++) {
+      const t = { x, y };
+      if (!isLegalAimTile(leaf, game, t)) continue;
+      const d = (x - tile.x) ** 2 + (y - tile.y) ** 2;
+      if (d < bestD) { bestD = d; best = t; }
+    }
+  }
+  return best;
+}
+
+// What a world tap does while aiming: 'fire' when it lands on the reticle,
+// 'place' (with the new reticle) when it moves it, 'none' when nothing changes.
+// Pure: the caller writes w.reticle and commits.
+export function aimTap(w, game, tile) {
+  const leaf = selectedNode(w);
+  const ret = w.reticle;
+  if (ret && tile && ret.x === tile.x && ret.y === tile.y) return { action: 'fire' };
+  const t = clampReticle(leaf, game, tile);
+  if (!t || (ret && ret.x === t.x && ret.y === t.y)) return { action: 'none' };
+  return { action: 'place', reticle: t };
+}
+
+// ── Pointer turn-in-place (C3b, ruling C3R2) ────────────────────────────────
+// The facing a long-press on `tile` asks for: one of the four tiles straight
+// beside the player (facing has no diagonals), else null.
+export function adjacentFacing(px, py, tile) {
+  if (!tile) return null;
+  const dx = tile.x - px, dy = tile.y - py;
+  for (const [face, [fx, fy]] of Object.entries(FACING_DELTA)) if (fx === dx && fy === dy) return face;
+  return null;
 }
 
 // (Phase 1 — appliesTo) Does this verb have a valid TARGET in range right now?

@@ -5,9 +5,101 @@
 //
 // Several weapons GRANT a skill while worn (grantsTricks / grantsSpells) — the
 // gear-derived ability wiring reads these in _refreshGrantedSkills.
+//
+// Every weapon names a class (weaponClass). A class says how many hands it
+// takes and which kinds of hit it lands (plans/ws1-weapon-class-table.md).
+// Nothing reads hands or attackKinds in play yet; class ids are internal.
+//
+// A weapon may carry `tags: [...]` from the one vocabulary in tags.js; the
+// content check fails on any other tag. weaponTiers copies a base's tags.
+
+import { VALUE_TIERS } from './items.js';
+
+// The hit kinds a weapon can land.
+export const ATTACK_KINDS = Object.freeze(['slash', 'stab', 'crush']);
+
+const cls = (id, hands, attackKinds) =>
+    Object.freeze({ id, hands, attackKinds: Object.freeze(attackKinds), kit: Object.freeze([]) });
+
+// kit: the class's base kit. Empty on every class until it is ruled.
+export const WEAPON_CLASSES = Object.freeze({
+    shield:       cls('shield',       1, ['crush']),
+    axe:          cls('axe',          1, ['slash']),
+    sword:        cls('sword',        1, ['slash', 'stab']),
+    dagger:       cls('dagger',       1, ['stab', 'slash']),
+    hammer:       cls('hammer',       1, ['crush']),
+    great_sword:  cls('great_sword',  2, ['slash', 'stab']),
+    battle_axe:   cls('battle_axe',   2, ['slash']),
+    war_hammer:   cls('war_hammer',   2, ['crush']),
+    book:         cls('book',         1, ['crush']),    // book and grimoire are one class
+    bell:         cls('bell',         1, ['crush']),
+    whip:         cls('whip',         1, ['slash']),
+    knuckles:     cls('knuckles',     1, ['crush']),    // the fist that crushes
+    claws:        cls('claws',        1, ['slash']),    // the fist that slashes
+    doll:         cls('doll',         1, ['stab']),     // a voodoo doll: hit the doll, the target feels it
+    wand:         cls('wand',         1, ['stab']),
+    staff:        cls('staff',        1, ['crush']),
+    throwing_axe: cls('throwing_axe', 1, ['slash']),
+    frying_pan:   cls('frying_pan',   1, ['crush']),
+});
+
+// The class a weapon def belongs to, or null when it names none.
+export function weaponClassOf(def) {
+    return (def && WEAPON_CLASSES[def.weaponClass]) || null;
+}
+
+// ── Tiers (plans/ws2-tier-generator.md) ──────────────────────────────────────
+// One base weapon makes five tiered copies, grey to orange, on the VALUE_TIERS
+// ladder. A tier adds perks, never bigger numbers: every number on a copy is
+// the base's own. Each tier up adds one perk slot. Which perk fills a slot is
+// not ruled, so every added slot is PERK_PLACEHOLDER.
+export const PERK_PLACEHOLDER = '[PERK]';
+export const WEAPON_TIER_KEYS = Object.freeze(VALUE_TIERS.map(t => t.key));
+
+const unbracket = s => String(s ?? '').replace(/^\[(.*)\]$/, '$1');
+const titleCase = s => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+function deepFreeze(o) {
+    if (o && typeof o === 'object' && !Object.isFrozen(o)) {
+        Object.freeze(o);
+        for (const v of Object.values(o)) deepFreeze(v);
+    }
+    return o;
+}
+
+// Five frozen defs from one base, in ladder order. The base is not changed.
+export function weaponTiers(base) {
+    const basePerks = Array.isArray(base.perks) ? base.perks : [];
+    return WEAPON_TIER_KEYS.map((key, step) => {
+        const def = structuredClone(base);
+        def.id = `${base.id}_${key}`;
+        def.name = `[${titleCase(key)} ${unbracket(base.name)}]`;
+        def.tier = key;
+        def.baseId = base.id;
+        def.perks = [...basePerks, ...Array(step).fill(PERK_PLACEHOLDER)];
+        return deepFreeze(def);
+    });
+}
+
+// The one base definition per class. No damage number: that is tuning.
+export function classBase(classId) {
+    const c = WEAPON_CLASSES[classId];
+    if (!c) return null;
+    return {
+        id: c.id, name: `[${titleCase(c.id)}]`, weaponClass: c.id,
+        equipSlot: 'weapon', useType: 'equip', category: 'weapon',
+    };
+}
+
+// Every class's five tiers. Kept out of WEAPONS and ITEMS: none is in the world.
+export const WEAPON_TIERS = Object.freeze(Object.fromEntries(
+    Object.keys(WEAPON_CLASSES).map(id => [id, Object.freeze(weaponTiers(classBase(id)))]),
+));
+
 export const WEAPONS = {
     wooden_sword: {
         id: 'wooden_sword', name: '[Wooden Sword]', damage: 10, equipSlot: 'weapon', icon: 'sword',
+        weaponClass: 'sword',
         useType: 'equip',   // without it, the sword could never be re-equipped once swapped out
         category: 'weapon',
         baseValue: 6,
@@ -19,6 +111,7 @@ export const WEAPONS = {
     ray_gun: {
         id: 'ray_gun', name: '[Ray Gun]', damage: 22, damageType: 'energy', equipSlot: 'weapon',
         useType: 'equip', grantsTricks: ['ray_blast'],
+        weaponClass: 'wand',
         category: 'weapon',
         baseValue: 45,
         description: 'Dented brass housing around a coil of glass that hums when charged. Nobody has explained how it works, least of all it.',
@@ -29,6 +122,7 @@ export const WEAPONS = {
     fearmur: {
         id: 'fearmur', name: '[Fearmur]', damage: 14, equipSlot: 'weapon',
         useType: 'equip', grantsSpells: ['boo'], onHit: 'fearOnRepeat',
+        weaponClass: 'hammer',
         category: 'weapon',
         baseValue: 28,
         description: "A single femur, gripped at the joint and colder than it has any right to be. It hasn't warmed up once.",
@@ -37,6 +131,7 @@ export const WEAPONS = {
     // where it came from (Lonny, the Sewer's own alligator, has a theory).
     gator_tail: {
         id: 'gator_tail', name: '[Gator Tail]', damage: 16, equipSlot: 'weapon', useType: 'equip',
+        weaponClass: 'hammer',
         category: 'weapon',
         baseValue: 18,
         description: "A stiff, leathery tail, heavier than it looks and reeking faintly of swamp water. You've carried worse for less reason.",
@@ -46,6 +141,7 @@ export const WEAPONS = {
     lion_whip: {
         id: 'lion_whip', name: '[Lion Whip]', damage: 12, equipSlot: 'weapon', useType: 'equip',
         reach: 3, pullDistance: 1, grantsTricks: ['hire_lion'],
+        weaponClass: 'whip',
         category: 'weapon',
         baseValue: 26,
         description: "A tamer's whip, braided leather gone shiny at the grip. Crack it right and something always comes closer.",

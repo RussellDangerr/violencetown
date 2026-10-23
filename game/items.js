@@ -7,6 +7,9 @@
 // Thrown consumables burst over a 3×3 area at half effect (resolveThrow); the
 // affected tiles come from wheel-model.js `affectedTiles`, so the on-screen
 // highlight and the damage resolution use the exact same geometry.
+//
+// An item may carry `tags: [...]` from the one vocabulary in tags.js; the
+// content check fails on any other tag.
 
 import { isHostile, isSewerDweller } from './ai.js';
 import { burnGold } from './trade.js';
@@ -47,21 +50,6 @@ export function poitionBuff(p, flip = false) {
 }
 
 export const ITEMS = {
-    // (Ring builds) A learning source: using it adds a skill to the learned pool
-    // (auto-slotting if there's room), then the tome is consumed. The same
-    // useType:'learn' + learns/learnType shape backs any future trainer/quest.
-    tome_ray_blast: {
-        id: 'tome_ray_blast',
-        name: '[Tome of Ray Blast]',
-        description: 'A scorched schematic. Study it and the Ray Blast trick is yours — no gun required.',
-        useType: 'learn',
-        learns: 'ray_blast',
-        learnType: 'trick',
-        equipSlot: 'back',
-        consumable: true,
-        fallbackColor: '#c8a24a',
-        baseValue: 30,
-    },
     rock: {
         id: 'rock',
         name: '[Rock]',
@@ -90,17 +78,43 @@ export const ITEMS = {
         fallbackColor: '#9a52c8',
         baseValue: 10,
     },
-    fire_bottle: {
-        id: 'fire_bottle',
-        name: '[Fire Bottle]',
-        description: 'A bottle, a rag, and somebody else\'s problem. Lights what it lands on and keeps at it.',
+    // (poisons) The poison half of a fire poition (plans/poisons.md); it replaced
+    // the Fire Bottle. Thrown, it bursts like any DoT poition, and whoever it
+    // burns also gets fire blood: while both last, every hit they land sets the
+    // target burning (Game._spreadFireBlood). Drinkable on purpose.
+    fire_blood: {
+        id: 'fire_blood',
+        name: '[Fire Blood]',
+        description: 'Thrown, it sets everyone it splashes burning. Drunk, you burn, and every hit you land sets the target burning too.',
+        category: 'poition',
         useType: 'throw',
+        drinkable: true,
         equipSlot: 'sides',
         range: 5,
-        poition: { stat: 'health', amount: -5, turns: 3, as: 'fire' },
+        poition: { stat: 'health', amount: -5, turns: 5, as: 'fire' },
+        fireBlood: true,
+        enemyThrows: true,   // one of the two poisons an enemy throws at you (npc.js)
         damageType: 'fire',
         consumable: true,
         fallbackColor: '#e07a2a',
+        baseValue: 17,
+    },
+    // (poisons) Sludge Brain: no burst of its own. Where it lands it leaves a
+    // 3-tile sludge puddle, the landing tile and the throw's two forward
+    // diagonals (puddles.js); ending a turn in it applies the Sludge DoT.
+    sludge_brain: {
+        id: 'sludge_brain',
+        name: '[Sludge Brain]',
+        description: 'Thrown, it leaves a 3-tile sludge puddle for 8 turns. Ending a turn in it applies Sludge; sewer dwellers are healed instead.',
+        category: 'poition',
+        useType: 'throw',
+        equipSlot: 'sides',
+        range: 5,
+        puddle: { kind: 'sludge', turns: 8 },
+        enemyThrows: true,
+        damageType: 'sludge',
+        consumable: true,
+        fallbackColor: '#5aa84a',
         baseValue: 12,
     },
     soap: {
@@ -121,6 +135,7 @@ export const ITEMS = {
         name: '[Pipe]',
         description: 'Rusty copper pipe, wrenched free from the wall. Swings like it means it.',
         equipSlot: 'weapon',
+        weaponClass: 'hammer',   // the class table is WEAPON_CLASSES in weapons.js
         useType: 'melee',
         range: 1,
         damage: 12,
@@ -315,20 +330,7 @@ export const ITEMS = {
     },
 
     // ── Special / mechanic-shop stock (Phase 6d + Chapter Two) ────────────────
-    // Two complementary canyon-traversal items (Caelan's call: keep both):
-    //  • chain — Macc's cheap rappel DOWN into the gorge (an alternate entry).
-    //  • grappling_hook — Pike's expensive way UP/OUT (the mobility unlock).
-    chain: {
-        id: 'chain',
-        name: '[Rappel Chain]',
-        description: 'A coil of greasy tow-chain off Macc\'s wall. "Bolt it to the canyon lip," he says, "and climb down like you got sense." A way into the gorge that isn\'t a crash.',
-        useType: 'none',
-        equipSlot: 'sides',
-        consumable: false,
-        tier: 'blue',
-        fallbackColor: '#7a7a7a',
-        baseValue: 40,
-    },
+    // Pike's grappling_hook is the canyon's way UP/OUT (the mobility unlock).
     // (Phase 2) A bottle of alcohol — NOT for drinking. Poured into the fixed
     // car's tank it burns fast and weak, slowing the too-hot engine just enough
     // to ramp the North bridge instead of punching through it. Bought from Hooch
@@ -357,7 +359,7 @@ export const ITEMS = {
     // The six below are the beneficial half of the category: a poition moves
     // exactly one of six stats, and here amount is always positive. Their
     // negative-amount siblings are the sludge_sack / tunnel_mushroom /
-    // fire_bottle health-poitions above. All six resolve through
+    // fire_blood health-poitions above. All six resolve through
     // resolveSelfUse's poition branch below when drunk (useType:'self').
     health_poition: {
         id: 'health_poition',
@@ -557,8 +559,6 @@ export function resolveUse(game, itemDef, direction, stackCount = 1) {
             return resolveMelee(game, itemDef, direction);
         case 'equip':
             return resolveEquip(game, itemDef);
-        case 'learn':
-            return resolveLearn(game, itemDef);
         default:
             return itemDef.useHint || `[Used ${itemDef.name}]`;
     }
@@ -580,15 +580,6 @@ export function* ownedItemDefs(game) {
 export function hasItemDef(game, pred) {
     for (const def of ownedItemDefs(game)) if (pred(def)) return true;
     return false;
-}
-
-// Learning source (tomes now; trainers/quests reuse the same hook). The item is
-// consumed by the caller (main.js: `if (item.consumable) _removeFromSlot`), so a
-// tome for a skill you already know crumbles anyway — learning is idempotent.
-function resolveLearn(game, itemDef) {
-    if (!itemDef.learns || !game._learnSkill) return `[Used ${itemDef.name}]`;
-    const learned = game._learnSkill(itemDef.learns, itemDef.learnType || 'spell');
-    return learned ? null : '[You already knew that — the tome crumbles.]';
 }
 
 function resolveSelfUse(game, itemDef) {
@@ -753,6 +744,14 @@ export function resolveThrow(game, itemDef, direction, _stackCount = 1, targetTi
         }
     }
 
+    // (poisons) A puddle item lays its puddle where it lands, fanned away from
+    // the thrower (puddles.js).
+    if (itemDef.puddle && game._layPuddle) {
+        const n = game._layPuddle({ x: game.playerX, y: game.playerY }, { x: ix, y: iy },
+                                  itemDef.puddle.kind, itemDef.puddle.turns);
+        return `[${itemDef.name} leaves a puddle on ${n} tile${n === 1 ? '' : 's'}]`;
+    }
+
     const dtype = itemDef.damageType || 'physical';
     const isDamage = typeof itemDef.damage === 'number';
     const isHeal = itemDef.effect === 'heal' && typeof itemDef.healAmount === 'number';
@@ -789,6 +788,8 @@ export function resolveThrow(game, itemDef, direction, _stackCount = 1, targetTi
             } else {
                 list.push({ id: buff.id, turns, dmg: buff.dmg });
             }
+            // (poisons) Fire Blood: the burn comes with fire blood for as long.
+            if (itemDef.fireBlood && game._grantFireBlood) game._grantFireBlood(foe, turns);
             affected++;
         }
     } else if (isDamage) {

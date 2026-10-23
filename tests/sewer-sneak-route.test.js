@@ -14,12 +14,14 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { GameMap } from '../game/map.js';
 import { spawnEnemy } from '../game/enemies.js';
+import { resolveSpawn, defaultPicks } from '../game/slots.js';
 import { perceives, VERDICT } from '../game/perception.js';
 import { isHostile } from '../game/ai.js';
 
 const data = JSON.parse(readFileSync(new URL('../game/sewer-map.json', import.meta.url), 'utf8'));
 const map = new GameMap(data, 'sewer-map.json');
-const enemies = data.enemies.map((s) => spawnEnemy(s));
+// The Sewer's boss is a slot (plans/slot-registry.md); today's pick stands there.
+const enemies = data.enemies.map((s) => spawnEnemy(resolveSpawn(s, defaultPicks())));
 const watchers = enemies.filter((e) => isHostile(e));
 const entrance = data.transitions.find((t) => t.toMap === 'town-map.json');
 const start = { x: entrance.x + 1, y: entrance.y };   // the first open tile inside

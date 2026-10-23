@@ -46,6 +46,14 @@ describe('threatPhase', () => {
         assert.equal(threatPhase([idle(), idle()], { inCombat: false, aimingTheft: true }), PHASE.HAZE);
     });
 
+    test('aiming a theft nobody can see from where they stand stays quiet (V1)', () => {
+        const at = { x: 0, y: 0 };
+        const far = watcher('idle', { x: 9, y: 9 });
+        assert.equal(threatPhase([far], { inCombat: false, aimingTheft: true, at }), PHASE.QUIET);
+        const near = watcher('idle', { x: 2, y: 1 });
+        assert.equal(threatPhase([far, near], { inCombat: false, aimingTheft: true, at }), PHASE.HAZE);
+    });
+
     test('dead, allied and blind watchers never raise a phase', () => {
         const dead  = watcher('chasing', { entity: { isAlive: () => false } });
         const ally  = watcher('chasing', { _ally: true });
@@ -68,6 +76,22 @@ describe('alertWatchers', () => {
 
     test('aiming a theft with nobody alert shows every live watcher, so a theft can be planned', () => {
         assert.equal(alertWatchers([idle(), idle(), idle()], PHASE.HAZE, { aimingTheft: true }).length, 3);
+    });
+
+    test('aiming a theft shows only the watchers whose sight reaches the theft (V1)', () => {
+        const at = { x: 10, y: 10 };
+        const near = watcher('idle', { x: 13, y: 8 });            // Chebyshev 3, sight 4
+        const edge = watcher('idle', { x: 6, y: 10 });            // exactly 4
+        const far  = watcher('idle', { x: 20, y: 10 });           // 10, out of reach
+        const longSight = watcher('idle', { x: 20, y: 10, sightRange: 12 });
+        const picked = alertWatchers([near, edge, far, longSight], PHASE.HAZE, { aimingTheft: true, at });
+        assert.deepEqual(picked, [near, edge, longSight]);
+    });
+
+    test('an alert watcher still counts at any range — scoping applies only to the theft fallback', () => {
+        const at = { x: 0, y: 0 };
+        const far = watcher('searching', { x: 30, y: 0 });
+        assert.deepEqual(alertWatchers([far], PHASE.HAZE, { aimingTheft: true, at }), [far]);
     });
 
     test('quiet picks nobody', () => {

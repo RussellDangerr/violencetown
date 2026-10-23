@@ -1,0 +1,116 @@
+// slots.js — the slot registry (plans/slot-registry.md, plans/spine.md §2).
+//
+// A beat binds to a SLOT, never to a named monster: "the Sewer's boss drops the
+// Converter", not "the Were-Rat does". A slot holds a POOL of registry entries;
+// a new game picks one per slot from its seed, and the save keeps the picks.
+//
+// The map says WHERE (a spawn carrying `slot`); the registry says WHO (the entry's
+// stat block). A new boss is one ENTRIES row plus one pool row — the quest, the
+// map and the death handler never learn its name.
+
+import { RNG } from './rng.js';
+
+// The registry: the stat block a map spawn used to carry, minus its id and place.
+export const ENTRIES = {
+    wererat: {
+        type: 'Wererat',
+        boss: true,
+        sewerDweller: true,
+        gold: 44,
+        loadout: ['bandage', 'hot_dog', 'boardwalk_burger', 'defence_poition', 'foil_hat', 'soap', 'cardboard_cuirass'],
+        equipped: ['wooden_sword'],
+        hp: 100,
+        armor: 6,
+        damage: 12,
+        tag: 'wererat_boss',
+        barks: [
+            "[Were-Rat: The converter's OURS now, grease-boy.]",
+            '[Were-Rat: You smell like a dead-end job.]',
+        ],
+        barkEveryTurns: 6,
+    },
+};
+
+// A required item belongs to the slot, not the entry (SL-4): every entry in the
+// pool drops it, so a new boss can never strand the quest.
+export const SLOTS = {
+    'sewer.boss': {
+        kind: 'boss',
+        map: 'sewer-map.json',
+        requiredDrop: 'catalytic_converter',
+        // The slot owns its item, so it owns the line; {who} is whoever filled it.
+        dropLine: '[The {who} drops your cataclysmic converter!]',
+        pool: [{ entry: 'wererat', weight: 1 }],
+    },
+};
+
+// What the log calls an entry that has no `name` of its own (keyed by type).
+const LABELS = { Wererat: 'Were-Rat' };
+export const labelOf = (enemy) => enemy?.name || LABELS[enemy?.type] || enemy?.type || 'enemy';
+
+// The line a required drop logs, with {who} filled in.
+export function dropLineFor(enemy, mapSpawns = [], slots = SLOTS) {
+    const slotId = slotIdOf(enemy, mapSpawns);
+    const t = slotId && slots[slotId]?.dropLine;
+    return t ? t.replace('{who}', labelOf(enemy)) : null;
+}
+
+// The picks' own stream (SL-2): derived from the game seed, never game.rng, so
+// adding a slot or an entry cannot move a single combat roll.
+const SLOT_SALT = 0x51077ED5;
+
+function pickFrom(pool, rng) {
+    const total = pool.reduce((s, p) => s + (p.weight ?? 1), 0);
+    let roll = rng.float() * total;
+    for (const p of pool) {
+        roll -= (p.weight ?? 1);
+        if (roll < 0) return p.entry;
+    }
+    return pool[pool.length - 1].entry;
+}
+
+// One entry per slot, the same for the same seed. Slots are walked in a fixed
+// (sorted) order so adding one slot cannot reshuffle the picks of another
+// declared before it in the object.
+export function pickSlots(seed, slots = SLOTS) {
+    const rng = new RNG((seed ^ SLOT_SALT) >>> 0);
+    const picks = {};
+    for (const id of Object.keys(slots).sort()) picks[id] = pickFrom(slots[id].pool, rng);
+    return picks;
+}
+
+// Today's content: the first entry of every pool. What a save written before
+// slots existed loads, and what a slot with no saved pick falls back to.
+export function defaultPicks(slots = SLOTS) {
+    const picks = {};
+    for (const id of Object.keys(slots)) picks[id] = slots[id].pool[0].entry;
+    return picks;
+}
+
+// A spawn with a `slot` becomes its picked entry, with the spawn's own id, place
+// and facing on top. Any other spawn passes through untouched.
+export function resolveSpawn(spawn, picks, slots = SLOTS, entries = ENTRIES) {
+    if (!spawn || !spawn.slot) return spawn;
+    const slot = slots[spawn.slot];
+    if (!slot) return spawn;
+    const entryId = (picks && slot.pool.some(p => p.entry === picks[spawn.slot])) ? picks[spawn.slot] : slot.pool[0].entry;
+    const entry = entries[entryId];
+    if (!entry) return spawn;
+    const out = { ...structuredClone(entry), id: spawn.id, x: spawn.x, y: spawn.y, slot: spawn.slot };
+    if (spawn.facing) out.facing = spawn.facing;
+    return out;
+}
+
+// Which slot this enemy fills. Falls back to the map spawn with the same id, so
+// a save written before slots existed (its Were-Rat carries no `slot`) still
+// knows it is the Sewer's boss.
+export function slotIdOf(enemy, mapSpawns = []) {
+    if (!enemy) return null;
+    return enemy.slot ?? ((mapSpawns || []).find(s => s && s.id === enemy.id)?.slot ?? null);
+}
+
+// The item a slot guarantees for this enemy, or null.
+export function requiredDropFor(enemy, mapSpawns = [], slots = SLOTS) {
+    const slotId = slotIdOf(enemy, mapSpawns);
+    return (slotId && slots[slotId]?.requiredDrop) || null;
+}

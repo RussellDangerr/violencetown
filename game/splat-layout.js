@@ -1,0 +1,118 @@
+// splat-layout.js — where hit splats sit, and how big their badge is.
+//
+// A splat is a pill sized to its number (the old round badge was sized for the
+// retired 8px bitmap font and was mostly padding). Splats on one target are
+// laid out by HOW MANY are showing, RuneScape-style: a lone splat sits in the
+// centre, and the spots spread only as more arrive — two stack, three make a
+// triangle, four take the compass points. They never fly: a flying badge
+// ~36px wide that travelled 14-22px overlapped its neighbours whatever the fan.
+// When the count changes, the renderer glides each splat to its new spot.
+//
+// Pure: no DOM. Tested in tests/cascade.test.js (the no-overlap invariant).
+
+export const SPLAT_H = 12;          // pill height, px — the 12px VT323 line
+export const SPLAT_PAD_X = 3;       // px between the number and the pill's ends
+
+// Spots by how many splats are showing, in the order they arrived. Every layout's
+// lowest spot sits on the anchor line (y 0), which the renderer puts above the
+// target's head, so a group grows UPWARD and never covers the face. Spaced so no
+// two resting pills touch, crits included, up to four characters ("-999") — the
+// invariant tests/cascade.test.js pins — with a few px to spare, because each
+// type's silhouette (flames, drips, bubbles, spikes) reaches past its body. (The
+// brief pop on impact may still brush a neighbour; it settles in a few frames.) Past four, they cycle the
+// four-splat spots.
+export const SPLAT_LAYOUTS = [
+    [],
+    [{ x: 0, y: 0 }],                                                    // centre
+    [{ x: 0, y: -20 }, { x: 0, y: 0 }],                                  // stacked
+    [{ x: 0, y: -21 }, { x: -18, y: 0 }, { x: 18, y: 0 }],               // triangle
+    [{ x: 0, y: -38 }, { x: 19, y: -19 }, { x: 0, y: 0 }, { x: -19, y: -19 }], // N, E, S, W
+];
+
+// The spot for the `index`-th of `count` splats showing on one target.
+export function splatSpot(index, count) {
+    const layout = SPLAT_LAYOUTS[Math.min(Math.max(count, 1), 4)];
+    return layout[index % layout.length];
+}
+
+// The pill for a number `textW` px wide: never narrower than it is tall, so a
+// one-digit hit is a round dot rather than a sliver. A crit is 1.2x.
+export function splatPill(textW, crit = false) {
+    const k = crit ? 1.2 : 1;
+    const h = SPLAT_H * k;
+    const w = Math.max(textW + SPLAT_PAD_X * 2, SPLAT_H) * k;
+    return { w, h };
+}
+
+// Assign every splat its spot: group by tile, order each group by arrival, and
+// look the spot up by the group's size. Returns a Map splat -> { x, y }.
+export function layoutSplats(splats) {
+    const groups = new Map();
+    for (const s of splats) {
+        const key = `${s.tileX},${s.tileY}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(s);
+    }
+    const spots = new Map();
+    for (const group of groups.values()) {
+        group.sort((a, b) => a.bornAt - b.bornAt);
+        group.forEach((s, i) => spots.set(s, splatSpot(i, group.length)));
+    }
+    return spots;
+}
+
+// Glide a splat's drawn position toward its spot. Exponential ease, so it is
+// frame-rate independent; a new splat (no position yet) starts on its spot.
+export const SPLAT_GLIDE_MS = 45;   // time constant: ~90% of the way in ~100 ms
+export function glideToward(current, target, dtMs, tau = SPLAT_GLIDE_MS) {
+    if (!current) return { x: target.x, y: target.y };
+    const k = 1 - Math.exp(-Math.max(0, dtMs) / tau);
+    return { x: current.x + (target.x - current.x) * k, y: current.y + (target.y - current.y) * k };
+}
+
+// ── The badge atlas (game/assets/ui_splats.png, tools/gen_splats.py) ──────────
+// One silhouette per damage type, so the type reads from the shape. Rows are
+// types; columns are the number's length 1..4, then the same four with a gold
+// outline for a crit. The generator's TYPES / BODY_W / CELL must match these —
+// tests/splat-sheet.test.js pins them.
+export const SPLAT_ROWS = { physical: 0, sludge: 1, poison: 2, fire: 3, cold: 4, energy: 5, heal: 6 };
+export const SPLAT_CELL_W = 40;
+export const SPLAT_CELL_H = 32;
+export const SPLAT_BODY_W = [12, 16, 20, 26];   // the digit-holding body, by length 1..4
+
+// Which cell draws a splat of `type` whose text is `len` characters long.
+export function splatCell(type, len, crit = false) {
+    const n = Math.min(Math.max(len, 1), SPLAT_BODY_W.length);
+    return {
+        col: (n - 1) + (crit ? SPLAT_BODY_W.length : 0),
+        row: SPLAT_ROWS[type] ?? SPLAT_ROWS.physical,
+        bodyW: SPLAT_BODY_W[n - 1],
+    };
+}
+
+// Is a hit splat still up on tile (x, y)? While one is, the space above that
+// character's head belongs to the splats: its balloon, awareness marker, mood
+// face, buff badges and bump label all step aside (ruled 2026-09-30).
+export function splatShowingAt(splats, x, y, now) {
+    return (splats || []).some((d) => d.type && d.tileX === x && d.tileY === y && now - d.bornAt < d.maxAge);
+}
+
+// How much larger to draw a splat so each sheet pixel covers a WHOLE number of
+// backing pixels. A sheet pixel is one logical px = k/2 backing px (k = backing
+// px per art pixel); at an odd k that is 1.5, 2.5…, and the pixel art steps
+// unevenly. Rounding up to whole backing px draws the splat a touch larger
+// there (k 3: 4/3; k 5: 6/5). Even k, and k 1 (too small to help), draw 1:1.
+export function splatPixelFactor(k) {
+    const perSheetPx = k / 2;
+    if (k < 2 || k % 2 === 0) return 1;
+    return Math.round(perSheetPx) / perSheetPx;
+}
+
+// How far (logical px) to push a group down so its top stays inside the view:
+// `anchorY` is the group's anchor, `topSpotY` its highest spot (spot units, so
+// times `f`), a cell reaching half its height above its spot.
+export const SPLAT_VIEW_MARGIN = 2;
+export function splatClampDown(anchorY, topSpotY, f, viewTop) {
+    const topEdge = anchorY + (topSpotY - SPLAT_CELL_H / 2) * f;
+    return Math.max(0, viewTop + SPLAT_VIEW_MARGIN - topEdge);
+}

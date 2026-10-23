@@ -147,10 +147,9 @@ export class Enemy {
         // Law 6f (plans/gold-standard-design.md): the potions/gear this enemy
         // carries — an array of item ids (resolveLoadout below resolves them to
         // real defs; legacy { name, value } literals still count too, for old
-        // saves/fixtures). Value counts toward Challenge GP (challengeGp below)
-        // but is NOT yet consumed by AI (not USED in a fight); that lands with
-        // boss spending policies. Loot stays liquid gold only — a loadout item
-        // never becomes lootable coin on death.
+        // saves/fixtures). Value counts toward Challenge GP (challengeGp below),
+        // and a hurt enemy eats from it in a fight (ai.js kitChoice). Loot stays
+        // liquid gold only — a loadout item never becomes lootable coin on death.
         loadout = null,
         // Town Clock (feature/town-clock): heartbeat-driven ambient NPC. When
         // true, this NPC is advanced by the free-running world tick
@@ -162,6 +161,13 @@ export class Enemy {
         // survive a bribe flip, so it is deliberately NOT derived from behavior/
         // allegiance the way deriveAllegiance's other fields are.
         sewerDweller = false,
+        // (slot registry) The spine slot this enemy fills, e.g. 'sewer.boss' — set
+        // by slots.js resolveSpawn. A required item belongs to the slot, not to the
+        // monster (plans/spine.md SL-4), so the death drop reads this, not the tag.
+        slot = null,
+        // (plans/t1-tag-layer.md) Shared-vocabulary tags (tags.js). Not the
+        // free-form `tag` above. Nothing reads them for an effect yet.
+        tags = null,
     }) {
         this.id         = id;
         this.type       = type;
@@ -212,8 +218,8 @@ export class Enemy {
         this.adjacencyBark    = adjacencyBark;
         this._wasAdjacent     = false;
 
-        // Disposition data — stored but not yet read. See plans/give-action-
-        // and-disposition.md for the feature that consumes these fields.
+        // Disposition data — read by give-action.js, offer.js and trade pricing.
+        // Design: plans/give-action-and-disposition.md.
         this.disposition   = disposition;
         this.flipThreshold = flipThreshold;
         this.bribeable     = bribeable;
@@ -259,12 +265,11 @@ export class Enemy {
         this.loadout       = loadout;
         this.ambient       = ambient;
         this.sewerDweller  = !!sewerDweller;
+        this.slot          = slot;
+        this.tags          = Array.isArray(tags) ? [...tags] : [];
 
-        // Debuffs / buffs — symmetric with Game.buffs[] on the player side.
-        // Used by Poke (applies Blind), Poison (DoT, future), Stun (skip
-        // turn, future), etc. Combat-side effect reads inside
-        // applyDamageToPlayer's single computeHit call (main.js) — e.g.,
-        // enemy.hasBuff('blind') halves its outgoing damage there.
+        // Debuffs / buffs — symmetric with Game.buffs[] on the player side
+        // (DoTs, fear, the poition riders), ticked by the same BUFF_EFFECTS table.
         this.buffs = [];
     }
 
@@ -282,10 +287,8 @@ export class Enemy {
     hasBuff(id)    { return this.buffs.some(b => b.id === id); }
 
     // Runs the shared buff table (buffs.js) — the same helper the player's
-    // _tickBuffs uses, so the two sides can't silently diverge again. Enemy buffs
-    // currently carry no onTick/onExpire (blind is read at attack time, feared is a
-    // movement override), so this just decrements + expires — but any future enemy
-    // status hook lands here for free.
+    // _tickBuffs uses, so the two sides can't silently diverge again: an enemy's
+    // DoTs tick here (feared is a movement override in resolveEnemyTurns).
     tickBuffs(game) {
         tickBuffList(this.buffs, this, game, null);
     }
@@ -327,6 +330,11 @@ export class Enemy {
             // as vermin/weak/resist/immune did, or a reloaded Violet Fungus would
             // start taking poison damage from its own mushrooms.
             sewerDweller: this.sewerDweller,
+            // Written only when set (undefined drops out of JSON), so every enemy
+            // outside a slot saves byte-identically to before slots existed.
+            slot: this.slot || undefined,
+            // Same rule: an untagged enemy saves byte-identically to before tags.
+            tags: this.tags.length ? [...this.tags] : undefined,
             // runtime
             state: this.state, fsmState: this.fsmState, lastWanderTurn: this._lastWanderTurn,
             // (perception ladder) so a save taken mid-hunt reloads mid-hunt.
@@ -422,9 +430,9 @@ export function challengeGp(e) {
 const KIT_DEFAULTS = [
     { maxArmor: -80, gold: 1, loadout: ['rock'] },                           //  4 GP
     { maxArmor: -30, gold: 3, loadout: ['tunnel_mushroom'] },                // 12 GP
-    { maxArmor: -15, gold: 6, loadout: ['tunnel_mushroom', 'fire_bottle'] }, // 27 GP
-    { maxArmor: 0,   gold: 8, loadout: ['bandage', 'fire_bottle'] },         // 45 GP
-    { maxArmor: 10,  gold: 30, loadout: ['bandage', 'bandage', 'fire_bottle', 'sludge_sack', 'boardwalk_burger'] }, // 117 GP
+    { maxArmor: -15, gold: 6, loadout: ['tunnel_mushroom', 'fire_blood'] }, // 32 GP
+    { maxArmor: 0,   gold: 8, loadout: ['bandage', 'fire_blood'] },         // 50 GP
+    { maxArmor: 10,  gold: 30, loadout: ['bandage', 'bandage', 'fire_blood', 'sludge_sack', 'boardwalk_burger'] }, // 122 GP
 ];
 
 function defaultKit(armor) {
@@ -493,7 +501,19 @@ export function resolveEnemyTurns(game) {
         // effect of an active buff reads later in the turn (e.g., Blind
         // folds into applyDamageToPlayer's single computeHit call and
         // halves the enemy's outgoing damage there).
+        // (turn-model C1) This enemy's turn starts: in a cascade, its effects
+        // from here on play on its own beat. No-op without ?turns=cascade.
+        game._cascadeMark?.(enemy);
+
         enemy.tickBuffs(game);
+
+        // A DoT tick can kill it right here (buffs.js only sets alive = false).
+        // That is a death like any other: handle it the way a melee, spell or
+        // throw kill is handled — K.O., loot, kit, the enemy_killed event, the
+        // Were-Rat's converter — and it takes no turn. It used to swing (or buy
+        // itself back) as a corpse, and its death went unhandled: a DoT finish
+        // on the Were-Rat dropped no converter (plans/dot-death.md).
+        if (!enemy.entity.isAlive()) { game._handleEnemyDeath?.(enemy); continue; }
 
         // (fear) A feared enemy flees this turn — one step directly away from
         // the player — and does nothing else (no bark, chase, or attack). Its
@@ -588,7 +608,7 @@ export function resolveAmbientTurns(game) {
         // whitelist still gates who actually MOVES inside tickNpcState — IDLE-only
         // NPCs stay put; WANDER/WORKING NPCs roam/labour while the player stands still.
         if (npc.allegiance === 'neutral') {
-            const npcMessages = tickNpcState(game, npc, game.worldTick);
+            const npcMessages = tickNpcState(game, npc, game.worldTick, game.ambientRng || game.rng);
             for (const m of npcMessages) messages.push(m);
         }
     }

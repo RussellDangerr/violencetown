@@ -3,8 +3,28 @@
 // takes an itemDef + its zone ('safe'|'pack') and returns plain data the
 // renderer draws and main.js dispatches.
 
+import { inspectorPanelRect, inspectorActionRects } from './layout.js';
+
+// (C3c) The button that opens an item's "use this on that" list (the overlay
+// Space opens). main.js decides whether it shows; this only names it.
+export const USES_ACTION = Object.freeze({ id: 'uses', label: '[TEXT]' });
+
+// Where that button sits: on the action row, right of the last action button,
+// with the row's own gap before it and as a margin after it.
+export function inspectorUsesRect(bodyRect) {
+    const p = inspectorPanelRect(bodyRect);
+    const row = inspectorActionRects(bodyRect);
+    const last = row[row.length - 1];
+    const gap = row.length > 1 ? row[1].x - (row[0].x + row[0].w) : 12;
+    const x = last.x + last.w + gap;
+    return { x, y: last.y, w: p.x + p.w - gap - x, h: last.h };
+}
+
 function primaryAction(itemDef) {
     if (itemDef.useType === 'equip' && itemDef.equipSlot) return { id: 'equip', label: 'Equip' };
+    // A drinkable throw item (Fire Blood): throwing needs the bar or the wheel,
+    // so the device's one primary row is the drink.
+    if (itemDef.drinkable) return { id: 'drink', label: 'Drink' };
     return { id: 'use', label: 'Use' };
 }
 

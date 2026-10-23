@@ -1,5 +1,8 @@
 # Violencetown Roadmap
 
+> **Superseded (2026-10-03).** This is April's vision, kept for history. The live roadmap is
+> `plans/roadmap-2026-09.md`; the 2026-10 trim (`plans/trim.md`) records what was cut.
+
 > **Updated 2026-04-01** — Major design pivot. No longer a roguelike. Static hand-crafted map with defined zones.
 > Zone definitions: `plans/game-zones.md`
 > Open design decisions: `plans/abc-decision-matrix.md`

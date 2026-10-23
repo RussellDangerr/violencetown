@@ -60,7 +60,6 @@ for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (map.getTile(x, y) ==
 const opened = [...ratly].filter(k => !base.has(k) && !grates.includes(k));
 
 const must = new Set();
-if (data.bossRoom) must.add(`${data.bossRoom.x},${data.bossRoom.y}`);
 for (const t of data.transitions || []) must.add(`${t.x},${t.y}`);
 for (const e of data.enemies || []) if (e && typeof e === 'object') must.add(`${e.x},${e.y}`);
 for (const c of data.containers || []) for (const [dx,dy] of NB) must.add(`${c.x+dx},${c.y+dy}`);

@@ -22,6 +22,23 @@ import { ALL_ITEM_IDS } from './item-registry.js';
 import { DIALOGUES } from './dialogue.js';
 import { zoneByName, overworldZone } from './world-map.js';
 import { ENEMY_SPRITES } from './sprites.js';
+import { SLOTS, ENTRIES } from './slots.js';
+import { ITEMS } from './items.js';
+import { WEAPONS, WEAPON_TIERS } from './weapons.js';
+import { RINGS, FUSIONS } from './ring-data.js';
+import { TILES } from './data.js';
+import { unknownTags } from './tags.js';
+
+// The map lists whose entries are spawns that may carry `tags`.
+export const TAGGED_SPAWN_LISTS = ['enemies', 'items', 'examinables', 'props', 'containers'];
+
+// Problems for one carrier's `tags`: absent is fine; anything else must be an
+// array of known tags (tags.js TAGS).
+function tagProblems(where, tags) {
+    if (tags === undefined || tags === null) return [];
+    if (!Array.isArray(tags)) return [`${where}: tags must be an array`];
+    return unknownTags(tags).map(t => `${where}: unknown tag '${t}'`);
+}
 
 // The event vocabulary a quest stage may wait on, and the payload keys each
 // emit site carries — kept in sync with the emitGameEvent call sites
@@ -40,7 +57,11 @@ const ITEM_MATCH_KEYS = new Set(['id', 'item']);  // item_pickup.id, item_given.
 const NPC_MATCH_KEYS  = new Set(['npc']);
 const MAP_MATCH_KEYS  = new Set(['map']);
 
-export function validateContent(maps) {
+export function validateContent(maps, {
+    slots = SLOTS, entries = ENTRIES,
+    items = ITEMS, weapons = WEAPONS, weaponTiers = WEAPON_TIERS,
+    rings = RINGS, fusions = FUSIONS, tiles = TILES,
+} = {}) {
     const problems = [];
     const warnings = [];
     const P = (m) => problems.push(m);
@@ -52,6 +73,32 @@ export function validateContent(maps) {
     const mapFileSet = new Set(maps.map(m => m.file));
     const npcIds = new Set();
     for (const { data } of maps) for (const e of (data.enemies || [])) if (e && e.id) npcIds.add(e.id);
+
+    // ── Spine slots (plans/slot-registry.md) ─────────────────────────────────
+    // A registry entry is a spawn that has not been placed yet, so it gets the
+    // same reference checks a map spawn does — or moving the Were-Rat into the
+    // registry would have quietly stopped checking its kit and its art.
+    for (const [id, e] of Object.entries(entries)) {
+        for (const it of [...(e.loadout || []), ...(e.equipped || [])])
+            if (!itemIds.has(it)) P(`registry: entry '${id}' carries unknown item '${it}'`);
+        if (!e.type) P(`registry: entry '${id}' has no type`);
+        else if (!ENEMY_SPRITES[e.type]) P(`registry: entry '${id}' has type '${e.type}' with no ENEMY_SPRITES entry`);
+        if (e.dialogueId && !dialogueIds.has(e.dialogueId)) P(`registry: entry '${id}' has unknown dialogueId '${e.dialogueId}'`);
+    }
+    const placed = {};
+    for (const { file, data } of maps) for (const e of (data.enemies || [])) {
+        if (!e || !e.slot) continue;
+        if (!slots[e.slot]) { P(`${file}: spawn ${e.id || '?'} names unknown slot '${e.slot}'`); continue; }
+        (placed[e.slot] ||= []).push(file);
+    }
+    for (const [id, slot] of Object.entries(slots)) {
+        if (!slot.pool || !slot.pool.length) P(`slot '${id}' has an empty pool`);
+        for (const { entry } of (slot.pool || [])) if (!entries[entry]) P(`slot '${id}' pools unknown entry '${entry}'`);
+        if (slot.requiredDrop && !itemIds.has(slot.requiredDrop)) P(`slot '${id}' requires unknown item '${slot.requiredDrop}'`);
+        const where = placed[id] || [];
+        if (slot.kind === 'boss' && (where.length !== 1 || where[0] !== slot.map))
+            P(`slot '${id}' must stand exactly once, on ${slot.map} — found on [${where.join(', ')}]`);
+    }
 
     // ── Map references ───────────────────────────────────────────────────────
     for (const { file, data } of maps) {
@@ -115,6 +162,27 @@ export function validateContent(maps) {
                 let m;
                 while ((m = grantRe.exec(src))) if (!itemIds.has(m[1])) P(`${did}/${c.id}: _grantItem('${m[1]}') references unknown item`);
             }
+        }
+    }
+
+    // ── Tags (plans/t1-tag-layer.md) ─────────────────────────────────────────
+    // Every tag in content must be in the one vocabulary (tags.js).
+    const TP = (where, tags) => { for (const m of tagProblems(where, tags)) P(m); };
+    for (const [id, d] of Object.entries(items))   TP(`item '${id}'`, d?.tags);
+    for (const [id, d] of Object.entries(weapons)) TP(`weapon '${id}'`, d?.tags);
+    for (const [cls, tiers] of Object.entries(weaponTiers))
+        for (const d of (tiers || [])) TP(`weapon tier '${d?.id || cls}'`, d?.tags);
+    for (const [id, d] of Object.entries(rings))   TP(`ring '${id}'`, d?.tags);
+    for (const fz of (fusions || [])) {
+        if (fz && Array.isArray(fz.pair)) TP(`fusion '${fz.id || '?'}' pair`, fz.pair);
+    }
+    for (const [key, d] of Object.entries(tiles))  TP(`tile ${key}`, d?.tags);
+    for (const [id, e] of Object.entries(entries)) TP(`registry: entry '${id}'`, e?.tags);
+    for (const { file, data } of maps) {
+        for (const list of TAGGED_SPAWN_LISTS) {
+            (data[list] || []).forEach((s, i) => {
+                if (s) TP(`${file}: ${list}[${i}]${s.id ? ` (${s.id})` : ''}`, s.tags);
+            });
         }
     }
 

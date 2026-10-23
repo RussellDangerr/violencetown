@@ -12,6 +12,7 @@
 // survive a round-trip too.
 
 import { Enemy } from './enemies.js';
+import { defaultPicks } from './slots.js';
 import { clamp } from './utils.js';
 import { INVENTORY_SIZE } from './data.js';
 import { sanitizeSlots } from './rings.js';
@@ -56,7 +57,11 @@ export function serialize(game) {
         savedAt: Date.now(),
         mapUrl: game.map?.url ?? 'town-map.json',
         turn: game.turn,
+        dayClock: game._dayClock ?? 0,   // (one clock) actions into the day; a reload keeps the time
         rngState: game.rng ? game.rng.getState() : 0,
+        // (slot registry) This game's spine picks. Kept, not re-derived, so a save
+        // keeps its Sewer boss even after a pool grows.
+        slots: { ...(game.slots || {}) },
         player: {
             x: game.playerX, y: game.playerY,
             hp: game.playerHp, maxHp: game.playerMaxHp,
@@ -171,6 +176,10 @@ export function migrate(raw) {
     if (RENAMED_MAPS[r.mapUrl]) r.mapUrl = RENAMED_MAPS[r.mapUrl];
     if (typeof r.turn !== 'number') r.turn = 0;
     if (typeof r.rngState !== 'number') r.rngState = 0;
+    // A save from before slots existed plays today's content: every pool's first
+    // entry. A slot added since gets its default too; a saved pick stands.
+    r.slots = { ...defaultPicks(), ...((r.slots && typeof r.slots === 'object' && !Array.isArray(r.slots)) ? r.slots : {}) };
+    if (typeof r.dayClock !== 'number' || !Number.isFinite(r.dayClock)) r.dayClock = 0;   // an older save starts at noon
     r.player = (r.player && typeof r.player === 'object') ? r.player : {};
     r.world = (r.world && typeof r.world === 'object') ? r.world : {};
     // These four are walked ELEMENT BY ELEMENT, not merely checked for
@@ -267,6 +276,9 @@ export async function loadInto(game, raw) {
     const p = raw.player;
     const R = (id) => game._resolveItemDef(id);
 
+    // (slot registry) The picks BEFORE _loadMap, which is where spawns resolve.
+    game.slots = { ...raw.slots };
+
     // Law 6: restore the mugged set BEFORE _loadMap spawns enemies from the map
     // JSON below, or a previously-looted enemy would respawn funded.
     game._muggedIds = new Set(raw.world.muggedIds ?? []);
@@ -283,6 +295,8 @@ export async function loadInto(game, raw) {
     // 2. core stats + RNG stream position
     game.turn = raw.turn;
     if (game.rng) game.rng.setState(raw.rngState);
+    game._dayClock = raw.dayClock;
+    if (game._advanceDayClock) game._advanceDayClock(0);   // re-derive the light from the restored time
     game.playerHp = p.hp; game.playerMaxHp = p.maxHp;
     game.playerMp = p.mp; game.playerMaxMp = p.maxMp;
     game.gold = p.gold;

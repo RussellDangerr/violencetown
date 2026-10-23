@@ -10,7 +10,7 @@ import { DEFAULT_VIEW, offView, snapPx } from './viewport.js';   // (screen-fill
 // VT323 text stays sharp. The game canvas's transform comes from the viewport
 // (setViewport / renderFrame).
 const SS = 2;
-import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, ITEM_SPRITES, CONTAINER_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES, MARK_SPRITES, spriteVariant, spriteFrame, tileFrame, idHash } from './sprites.js';
+import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, itemSprite, CONTAINER_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES, MARK_SPRITES, spriteVariant, spriteFrame, tileFrame, idHash } from './sprites.js';
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
 import { ROOT, selectedNode, activeRing, activeIndex, decisionPath, previewChildren, affectedTiles, verbApplies, isCombatActive, flapperDeflection, defaultVerb } from './wheel-model.js'; // (sunburst wheel) + the bump telegraph
 import {
@@ -24,7 +24,7 @@ import {
     xmbBarLayout, hudLayout, throwRects, wheelTopMarks, fightPanelRects, XMB_CELL,                      // (XMB) usable-bar geometry; (screen-fill) the HUD, throw targets, the marks above the wheel
     MODAL_RECT, offerLayout,                                                 // (offer screen) the one panel + its geometry
 } from './layout.js';
-import { itemStatLine, itemActions, equipOptions } from './inspector.js';    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
+import { itemStatLine, itemActions, equipOptions, USES_ACTION } from './inspector.js';    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
 import { zoneOf } from './inventory.js';                                     // (C1) safe/pack label for the inspector
 import { buildXmbBar, resolveXmbSelection } from './xmb.js';                 // (XMB) usable-bar model
 import { ITEMS, itemTier } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
@@ -45,6 +45,8 @@ import * as Settings from './settings.js'; // (combat-feel-pass) reduce-motion f
 import { challengeGp } from './enemies.js'; // (Law 6f) nameplate pips read the composite kit, not raw gold
 import { resolveOffer } from './offer.js';                                  // (offer screen) pure basket→projection
 import { dispositionCeil, DISPOSITION_MIN } from './disposition-curves.js'; // (offer screen) meter ceiling + floor — offer.js does not re-export these
+import { lungeOffset } from './cascade.js';                                  // (turn-model C1) an attacker lunges on its beat
+import { splatPill, layoutSplats, glideToward, splatCell, splatShowingAt, splatPixelFactor, splatClampDown, SPLAT_CELL_W, SPLAT_CELL_H } from './splat-layout.js'; // hit splats
 
 // Tile id → sprite ref. Sewer ids 0-7 → TILE_SPRITE_MAP, town ids 10-21 →
 // TOWN_TILE_SPRITE_MAP, circus/factory/graveyard ids 30+ →
@@ -61,25 +63,29 @@ const clamp01 = (v) => Math.max(0, Math.min(1, v));
 // throw prompt are not menus: they draw at their own screen positions.
 const MENU_BOX_STATES = new Set(['item_overlay', 'target_list', 'log_modal', 'trade', 'dialogue', 'inspect', 'device']);
 
-// (combat-feel-pass) Hit-splat fill colors by damage type. Crit keeps the
-// physical fill but takes a gold border (handled in _drawHitSplat).
+// (combat-feel-pass) Hit-splat fill colors by damage type. A crit keeps its
+// type's fill and takes a gold ring outside its outline (tools/gen_splats.py
+// bakes these into the splat atlas, reading this table).
 //
 // There is no 'miss' entry and there must not be one: combat.js resolves over
 // flat damage with no roll, so a miss is not a thing this game can produce
 // (README: "no dice, no misses"). It carried a blue here for a while anyway.
 //
-// 'energy' has no entry yet either, but that one IS a gap rather than a rule —
-// a Ray Blast currently falls back to the physical red. See
-// plans/hit-splat-art.md; it wants a colour picked by eye, which is why it
-// wasn't picked here.
+// 'energy' is yellow — ruling EC, 2026-09-30 (plans/hit-splat-art.md §10).
 const SPLAT_COLOR = {
     physical: '#d23f2f',
     sludge:   '#9a52c8',
     poison:   '#57a23e',
     fire:     '#f0833a',
     cold:     '#5ec3e8',
+    energy:   '#f5d02a',
     heal:     '#3fb56a',
 };
+
+// Digits are white on every splat but the ones too light to carry white: on
+// energy's yellow, white measured 1.27-1.9:1 (hit-splat-art.md §9-10), so its
+// digits are dark, with a light shadow.
+const SPLAT_TEXT = { energy: { color: '#2a1f06', shadow: '255,240,200' } };
 
 // ── Procedural character walk/idle animation (plans/movement-feel.md) ─────────
 // The Tiny Dungeon / Kenney sheets have ONE static front-facing pose per
@@ -151,6 +157,46 @@ function withWalk(ctx, cx, cy, { bob = 0, rot = 0, flipX = 1 }, draw) {
 // (!!) has no sprite in the shipped emotes_style1.png strip — `alert` reads
 // as escalation and stands in for it.
 const AWARENESS_EMOTE = { suspicious: 'question', searching: 'exclamation', chasing: 'alert' };
+
+// Painter's order for the actor pass. The map's edge filler (the forest past its
+// edge) draws behind everything, so a two-tile tree south of the map never
+// covers the map's last row (ruling SF, 2026-10-03: you vanished for a step at
+// Town's south exit). Among themselves, and for everyone else: smaller feet-Y
+// (further back / north) first, and on a tie the player last, so it reads on
+// top of a same-row NPC or prop.
+// The off-map cells left bare of filler props: a prop `hTiles` tall reaches
+// up into the rows above its feet, so the rows just past the SOUTH edge, under
+// the map's own columns, would paint over the map's last row(s).
+export function fillerSkips(wx, wy, mw, mh, hTiles = 1) {
+    return wx >= 0 && wx < mw && wy >= mh && wy < mh + Math.max(0, hTiles - 1);
+}
+
+// The facing cue's triangle for a watcher whose tile centre is (cx, cy), facing
+// the unit vector (ux, uy): its tip just past the tile's edge, its base just
+// inside it, so it never crosses the body. Whole pixels.
+export function facingCue(cx, cy, ux, uy, tilePx = 32) {
+    const tip = tilePx / 2 + 4, base = tilePx / 2 - 1, half = 3;
+    return [
+        [Math.round(cx + ux * tip), Math.round(cy + uy * tip)],
+        [Math.round(cx + ux * base - uy * half), Math.round(cy + uy * base + ux * half)],
+        [Math.round(cx + ux * base + uy * half), Math.round(cy + uy * base - ux * half)],
+    ];
+}
+
+// Which way an exit's arrow points: toward the map edge the tile is nearest
+// (see _drawTransitions). On a tie the vertical edge wins.
+export function exitDir(t, mw, mh) {
+    const up = t.y, down = mh - 1 - t.y, left = t.x, right = mw - 1 - t.x;
+    const v = Math.min(up, down), h = Math.min(left, right);
+    if (v <= h) return down < up ? 'down' : up < down ? 'up' : 'down';
+    return right < left ? 'right' : 'left';
+}
+
+export function actorOrder(a, b) {
+    return ((b.filler ? 1 : 0) - (a.filler ? 1 : 0))
+        || (a.feetY - b.feetY)
+        || (a.kind === 'player' ? 1 : -1);
+}
 
 export class Renderer {
     constructor(canvas) {
@@ -452,6 +498,8 @@ export class Renderer {
         ctx.translate(shakeX, shakeY);
 
         this._drawTiles(game);
+        this._drawWallShadows(game);   // (house style) walls stand up off the floor
+        this._drawPuddles(game);
         this._drawContainers(game);
         this._drawGroundItems(game);
         // Depth pass: enemies + player draw in one y-sorted (feet-line) pass so
@@ -618,8 +666,7 @@ export class Renderer {
     // screen space (after the shake restore) and beneath the HUD.
     //
     // game._nightLevel drives it: 0 = full day (no-op, normal daytime look); 1 =
-    // deep night. The Town Clock day-phase will animate this; for now it can be
-    // set directly. The Wilderness keeps its own blackout (_drawDarkness) and is
+    // deep night. The day clock (main.js _advanceDayClock) sets it. The Wilderness keeps its own blackout (_drawDarkness) and is
     // skipped here so the two don't stack.
     _drawLighting(game) {
         const n = game._nightLevel ?? 0;
@@ -990,7 +1037,7 @@ export class Renderer {
                     // pass's near-white at dusk, flickering between the two.
                     if (ref.under === 'fill') { ctx.fillStyle = def.fallbackColor; ctx.fillRect(px, py, TILE_PX, TILE_PX); }
                     else if (ref.under != null) this._drawTileRef(tileRef(ref.under), px, py);
-                    ok = this._drawTileRef(tileFrame(ref, wx, wy), px, py);
+                    ok = this._drawTileRef(tileFrame(ref, wx, wy), px, py, typeof ref.under === 'number');
                 }
                 if (!ok) {
                     ctx.fillStyle = def.fallbackColor;
@@ -1010,7 +1057,7 @@ export class Renderer {
         for (const b of carBlocks) {
             let ok = false;
             if (carSheet?.loaded) {
-                ok = carSheet.drawFrame(ctx, 0, 0, b.px, b.py, TILE_PX * 2, TILE_PX * 2);
+                ok = this._inkFrame(carSheet, ctx, 0, 0, b.px, b.py, TILE_PX * 2, TILE_PX * 2);
             }
             if (!ok) {
                 // Car sheet not loaded — flat fill across the whole block in the
@@ -1025,9 +1072,19 @@ export class Renderer {
     // Draw one tile ref into the TILE_PX cell at (px, py). Returns false when
     // there's nothing to draw it with, so the caller can fall back to the
     // tile's flat colour.
-    _drawTileRef(ref, px, py) {
+    // The outlined draw (house style) when the sheet has it — a test's fake sheet
+    // may not — else the plain one.
+    _inkFrame(sheet, ...a) { return (sheet.drawFrameInk || sheet.drawFrame).apply(sheet, a); }
+    _inkRegion(sheet, ...a) { return (sheet.drawRegionInk || sheet.drawRegion).apply(sheet, a); }
+
+    _drawTileRef(ref, px, py, object = false) {
         const sheet = ref && this.sprites?.[ref.sheet];
         if (!sheet?.loaded) return false;
+        // (house style) An object tile (one drawn over ANOTHER tile's art: a
+        // numeric `under`, not 'fill') takes the sprite outline; a ground tile never does.
+        if (object) return ref.region
+            ? this._inkRegion(sheet, this.ctx, ref.x, ref.y, ref.w, ref.h, px, py, TILE_PX, TILE_PX)
+            : this._inkFrame(sheet, this.ctx, ref.col, ref.row, px, py, TILE_PX, TILE_PX);
         return ref.region
             ? sheet.drawRegion(this.ctx, ref.x, ref.y, ref.w, ref.h, px, py, TILE_PX, TILE_PX)  // pixel region (large exterior sheets)
             : sheet.drawFrame(this.ctx, ref.col, ref.row, px, py, TILE_PX, TILE_PX);            // grid cell
@@ -1063,21 +1120,13 @@ export class Renderer {
 
         const EXIT = '255,205,90'; // warm gold — clearly not floor
 
-        // Outward arrow direction = the dominant axis from the map CENTRE to the
-        // tile. A door always sits near the edge it leads through, so center→tile
-        // points outward — and this stays correct for doors set one tile INSIDE
-        // the border (e.g. town's SEWER exit at x=32 in a 34-wide map, or the
-        // factory's east exit at x=28 in 30), where a strict on-the-edge test
-        // would wrongly fall through to 'down'. A truly central tile degenerates
-        // gracefully to whichever axis dominates (or 'down' if dead-centre).
-        const E = 0.5;
-        const dirOf = (t) => {
-            const dx = (t.x + 0.5) - mw / 2;
-            const dy = (t.y + 0.5) - mh / 2;
-            if (Math.abs(dx) < E && Math.abs(dy) < E) return 'down';
-            if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? 'right' : 'left';
-            return dy >= 0 ? 'down' : 'up';
-        };
+        // Outward arrow direction = toward the map edge the tile is NEAREST. A door
+        // always sits at or near the edge it leads through, and this stays right
+        // for doors set a tile inside it (town's sewer exit at x=32 of 34, the
+        // factory's at x=28 of 30). It used to be the dominant axis from the map's
+        // centre, which on a wide map (the Carnival, 58x22) sent its bottom-row
+        // exits pointing sideways. On a tie the vertical edge wins.
+        const dirOf = (t) => exitDir(t, mw, mh);
 
         let hintLabel = null; // shown if player is on/adjacent to a transition
 
@@ -1173,7 +1222,7 @@ export class Renderer {
             const info = hasContents ? CONTAINER_SPRITES.closed : CONTAINER_SPRITES.open;
             let ok = false;
             if (sprites?.[info.sheet]?.loaded) {
-                ok = sprites[info.sheet].drawFrame(ctx, info.col, info.row, px + 4, py + 4, TILE_PX - 8, TILE_PX - 8);
+                ok = this._inkFrame(sprites[info.sheet], ctx, info.col, info.row, px, py, TILE_PX, TILE_PX);
             }
 
             if (!ok) {
@@ -1212,6 +1261,55 @@ export class Renderer {
 
     // ── Ground Items ─────────────────────────────────────────────────────────
 
+    // (house style) Banded shadows on the floor along the base of every wall
+    // (a floor tile whose north neighbour is a wall tile), in two hard steps at the
+    // art's own pixel size — so walls read as standing up off the floor.
+    _drawWallShadows(game) {
+        const { ctx } = this;
+        const vp = this._view();
+        const m = game.map, PX = TILE_PX / 16;      // one art pixel
+        ctx.save();
+        for (let j = vp.span.jMin - 1; j <= vp.span.jMax + 1; j++) {
+            for (let i = vp.span.iMin - 1; i <= vp.span.iMax + 1; i++) {
+                const wx = game.playerX + i, wy = game.playerY + j;
+                if (!m.isInBounds(wx, wy) || !m.isInBounds(wx, wy - 1)) continue;
+                // Floor below a WALL: judged on the tiles alone, so a prop (a lamp)
+                // or an object tile (a bench, a bin) casts no wall shadow.
+                const here = m.getTileDef(wx, wy), above = m.getTileDef(wx, wy - 1);
+                if (!here?.walkable || above?.walkable !== false) continue;
+                if (typeof tileRef(m.getTile(wx, wy - 1))?.under === 'number') continue;
+                const px = vp.origin.x + i * TILE_PX - this._scrollX;
+                const py = vp.origin.y + j * TILE_PX - this._scrollY;
+                ctx.fillStyle = 'rgba(30,18,24,0.30)'; ctx.fillRect(px, py, TILE_PX, 3 * PX);
+                ctx.fillStyle = 'rgba(30,18,24,0.14)'; ctx.fillRect(px, py + 3 * PX, TILE_PX, 2 * PX);
+            }
+        }
+        ctx.restore();
+    }
+
+    // (poisons) A sludge puddle wears the SLUDGE tile's own art, fading out over
+    // its last few turns so you can see it drying.
+    _drawPuddles(game) {
+        const list = game._puddles;
+        if (!list || !list.length) return;
+        const { ctx } = this;
+        const vp = this._view();
+        const ref = tileRef(2);   // SLUDGE
+        for (const p of list) {
+            const dx = p.x - game.playerX, dy = p.y - game.playerY;
+            if (offView(vp, dx, dy, 1)) continue;
+            const px = vp.origin.x + dx * TILE_PX - this._scrollX;
+            const py = vp.origin.y + dy * TILE_PX - this._scrollY;
+            ctx.save();
+            ctx.globalAlpha = Math.min(1, 0.35 + p.turnsLeft * 0.1);
+            if (!(ref && this._drawTileRef(tileFrame(ref, p.x, p.y), px, py))) {
+                ctx.fillStyle = (TILE_BY_ID[2] && TILE_BY_ID[2].fallbackColor) || '#3c145a';
+                ctx.fillRect(px, py, TILE_PX, TILE_PX);
+            }
+            ctx.restore();
+        }
+    }
+
     _drawGroundItems(game) {
         const { ctx, sprites } = this;
         const vp = this._view();
@@ -1221,11 +1319,11 @@ export class Renderer {
             const px = vp.origin.x + dx * TILE_PX - this._scrollX;
             const py = vp.origin.y + dy * TILE_PX - this._scrollY;
 
-            // Try sprite from ITEM_SPRITES
-            const spr = ITEM_SPRITES[item.type];
+            // The item's icon (or the plain bag every unsprited item shares)
+            const spr = itemSprite(item.type);
             let drawn = false;
             if (spr && sprites?.[spr.sheet]?.loaded) {
-                drawn = sprites[spr.sheet].drawRegion(ctx, spr.x, spr.y, spr.w, spr.h, px + 4, py + 4, 24, 24);
+                drawn = this._inkRegion(sprites[spr.sheet], ctx, spr.x, spr.y, spr.w, spr.h, px, py, TILE_PX, TILE_PX);
             }
 
             if (!drawn) {
@@ -1267,6 +1365,9 @@ export class Renderer {
                     ey = e._slideFromY + (e.y - e._slideFromY) * st;
                 }
             }
+            // (turn-model C1) A cascaded attacker lunges at whoever it hit, on its beat.
+            const lunge = lungeOffset(e._lungeAt, now) * (Settings.get('reduceMotion') ? 0.45 : 1);
+            if (lunge) { ex += (e._lungeDx || 0) * lunge; ey += (e._lungeDy || 0) * lunge; }
             const dx = ex - game.playerX, dy = ey - game.playerY;
             if (offView(vp, dx, dy, 2)) continue;
 
@@ -1305,11 +1406,18 @@ export class Renderer {
         // reach, with the same 3-tile overhang margin as map props. No ground
         // shadows for these: a forest of them would be hundreds of gradients a
         // frame, and a wall of trees does not need them.
+        // A filler sprite taller than a tile reaches up into the row above it, so
+        // the off-map rows just past the south edge are left bare (the canopy of
+        // the row beyond already covers them). Without this the trees painted
+        // over the map's last row and buried every south exit.
         const fillerProp = game.map?.border?.prop ? PROP_SPRITES[game.map.border.prop] : null;
         if (fillerProp) {
+            const mw = game.map.width, mh = game.map.height;
             for (let j = vp.span.jMin - 3; j <= vp.span.jMax + 3; j++) {
                 for (let i = vp.span.iMin - 3; i <= vp.span.iMax + 3; i++) {
-                    if (game.map.isInBounds(game.playerX + i, game.playerY + j)) continue;
+                    const wx = game.playerX + i, wy = game.playerY + j;
+                    if (game.map.isInBounds(wx, wy)) continue;
+                    if (fillerSkips(wx, wy, mw, mh, fillerProp.hTiles)) continue;
                     const px = vp.origin.x + i * TILE_PX - this._scrollX;
                     const py = vp.origin.y + j * TILE_PX - this._scrollY;
                     actors.push({ kind: 'prop', def: fillerProp, px, py, feetY: py + TILE_PX, filler: true });
@@ -1324,9 +1432,7 @@ export class Renderer {
             else if (a.def.shadow !== false && !a.filler) this._drawGroundShadow(a.px + TILE_PX / 2, a.py + TILE_PX - 3, 0.32, a.def.shadowRx ?? 12, a.def.shadowRy ?? 4.5);
         }
 
-        // Painter's order: smaller feet-Y (further back / north) first. On a tie
-        // the player draws last so it reads on top of a same-row NPC or prop.
-        actors.sort((a, b) => (a.feetY - b.feetY) || (a.kind === 'player' ? 1 : -1));
+        actors.sort(actorOrder);   // edge filler first, then by feet-Y, the player last on a tie
         for (const a of actors) {
             if (a.kind === 'prop') this._drawPropSprite(a.def, a.px, a.py);
             else if (a.kind === 'player') this._drawPlayerSprite(game, a.px, a.py, now);
@@ -1365,7 +1471,7 @@ export class Renderer {
         const dh = def.hTiles * TILE_PX;
         const dx = px + TILE_PX / 2 - dw / 2;   // center on the base tile
         const dy = py + TILE_PX - dh;           // bottom edge sits on the tile
-        sheet.drawRegion(ctx, def.sx, def.sy, def.sw, def.sh, dx, dy, dw, dh);
+        this._inkRegion(sheet, ctx, def.sx, def.sy, def.sw, def.sh, dx, dy, dw, dh);
     }
 
     // ── Enemies ──────────────────────────────────────────────────────────────
@@ -1423,7 +1529,7 @@ export class Renderer {
         let ok = false;
         withWalk(ctx, ecx, ecy, { bob: ea.bob, rot: ea.rot, flipX: eFlip }, () => {
             if (frame && sprites?.[frame.sheet]?.loaded) {
-                ok = sprites[frame.sheet].drawFrame(ctx, frame.col, frame.row, px + 4, py + 4, TILE_PX - 8, TILE_PX - 8);
+                ok = this._inkFrame(sprites[frame.sheet], ctx, frame.col, frame.row, px, py, TILE_PX, TILE_PX);
             }
             if (!ok) {
                 ctx.fillStyle = isAlive ? '#cc4433' : '#555';
@@ -1446,12 +1552,21 @@ export class Renderer {
                 ctx.fillRect(px + 4, py + 4, TILE_PX - 8, TILE_PX - 8);
             }
 
-            // HP bar above living enemy (with border). Suppressed for ambient
-            // townsfolk (Town Clock) — a floating health bar over a peaceful
-            // Violencian reads as a combat target.
+            // While a hit splat is up on this character, the space above its head
+            // is the splats': the HP bar and pips, balloon, awareness marker, mood
+            // face, buff badges and bump label all step aside (splat-layout.js,
+            // ruled 2026-09-30).
+            const splatUp = splatShowingAt(game._damageNumbers, e.x, e.y, now);
+
+            // HP bar above the living enemy's head (with border). While a hit splat
+            // is up it steps aside with the rest of the head space, and comes back
+            // showing the new HP (ruled 2026-09-30, after the under-the-feet try
+            // drew across the head of whoever stood south). Suppressed for ambient
+            // townsfolk (Town Clock) — a health bar on a peaceful Violencian reads
+            // as a combat target.
             const frac = e.entity.hp / e.entity.maxHp;
             const bx = px + 4, by = py - 6, bw = TILE_PX - 8, bh = 5;
-            if (!e.ambient) {
+            if (!e.ambient && !splatUp) {
                 ctx.fillStyle = '#000000cc';
                 ctx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
                 ctx.fillStyle = UI.hpBg;
@@ -1463,7 +1578,7 @@ export class Renderer {
             // Debuff / buff badges — one-letter colored markers stacked
             // horizontally above the HP bar. Buffs green, debuffs red; the letter
             // is the first character of the buff name uppercased.
-            if (e.buffs && e.buffs.length > 0) {
+            if (e.buffs && e.buffs.length > 0 && !splatUp) {
                 const badgeY = py - 20;
                 let badgeX = px + 2;
                 for (const b of e.buffs) {
@@ -1484,7 +1599,7 @@ export class Renderer {
             // the shop uses, floating above any NPC that HAS a disposition.
             // Mindless things show nothing. Sits above the HP bar; nudged higher
             // when buff badges occupy that row.
-            if (e.disposition != null) {
+            if (e.disposition != null && !splatUp) {
                 const faceR  = 6.5;
                 const faceCX = px + TILE_PX / 2;
                 const faceCY = (e.buffs && e.buffs.length > 0) ? py - 28 : py - 15;
@@ -1500,7 +1615,8 @@ export class Renderer {
             // rating, not a promise of lootable coins. Suppressed for ambient
             // townsfolk (same reasoning as the HP bar) via its own !e.ambient
             // guard, and drawn AFTER the mood-face disc above so that disc
-            // (py-23..py-7, centered) can't soft-dim the gold.
+            // (py-23..py-7, centered) can't soft-dim the gold. Like the bar, it
+            // steps aside while a hit splat is up.
             // Broke (chal GP <= 0) draws nothing — an empty row is itself the tell
             // that he's out of tricks. The 24px row fits 6 slots at a 4px stride
             // (3px pip + 1px gap): 5 pips + an overflow cap = 24px = bw exactly.
@@ -1509,7 +1625,7 @@ export class Renderer {
             // boss-wallet dread (Law 6e's KH multi-bar) belongs on the dedicated
             // boss frame, deferred to the first boss build — not a 24px nameplate.
             const gold = challengeGp(e);
-            if (!e.ambient && gold > 0) {
+            if (!e.ambient && gold > 0 && !splatUp) {
                 const gh = 2, gy = by - 4; // 2px row above the HP bar's own backing plate
                 ctx.fillStyle = '#000000cc';
                 ctx.fillRect(bx - 1, gy - 1, bw + 2, gh + 2);
@@ -1544,7 +1660,7 @@ export class Renderer {
             // Only the ONE character you face is labelled — a row of floating
             // verbs over a crowd would be noise, and the whole point is that this
             // reads as "the thing you are about to do".
-            if (this.font && !game._animating && this._isFaced(game, e)) {
+            if (this.font && !game._animating && !splatUp && this._isFaced(game, e)) {
                 const verb = defaultVerb({ x: e.x, y: e.y, npc: e }, game);
                 if (verb) {
                     const who  = String(e.name || e.type || '').replace(/[[\]]/g, '');
@@ -1573,7 +1689,7 @@ export class Renderer {
             // this gate, a watcher who is both chattering and alert would stack
             // the Town Clock balloon on top of the overlay's own marker, and
             // someone who has just noticed you should not be humming a music note.
-            if (e._emote != null && AWARENESS_EMOTE[e.state] == null) {
+            if (e._emote != null && AWARENESS_EMOTE[e.state] == null && !splatUp) {
                 const col = EMOTE_SPRITES[e._emote];
                 const sheet = sprites?.emotes;
                 const age = now - (e._emoteStart || 0);
@@ -1657,6 +1773,27 @@ export class Renderer {
         const { ctx } = this;
         const vp = this._view();
         const now = performance.now();
+        // Hit splats are laid out by how many share a target (splat-layout.js):
+        // one sits centred, more spread out. Worked out once per frame, from the
+        // splats still up; each glides to its spot when the count changes.
+        const dt = now - (this._splatLastFrame ?? now);
+        this._splatLastFrame = now;
+        const live = game._damageNumbers.filter(d => d.type && now - d.bornAt < d.maxAge);
+        const spots = layoutSplats(live);
+        // A group whose target stands near the top of the view is pushed down just
+        // enough to stay on screen (ruled 2026-09-30).
+        const f = splatPixelFactor(vp.k);
+        const groupTop = new Map();
+        for (const [dn, spot] of spots) {
+            const key = `${dn.tileX},${dn.tileY}`;
+            groupTop.set(key, Math.min(groupTop.get(key) ?? Infinity, spot.y));
+        }
+        for (const [dn, spot] of spots) {
+            const anchorY = this._splatAnchor(game, dn).y;
+            const top = groupTop.get(`${dn.tileX},${dn.tileY}`);
+            const push = splatClampDown(anchorY, top, f, vp.world.y);
+            dn._spot = glideToward(dn._spot, { x: spot.x, y: spot.y + push / f }, dt);
+        }
         for (const dn of game._damageNumbers) {
             const age = now - dn.bornAt;
             if (age >= dn.maxAge) continue; // expired (filtered next loop tick)
@@ -1732,6 +1869,16 @@ export class Renderer {
     // (combat-feel-pass) Draw one RuneScape-style hit-splat: a colored badge
     // (color = damage type) carrying the number, with a per-type animation and
     // a directional/omni fan. Cheap canvas transforms; deterministic per hit.
+    // Where a splat's group is anchored on screen: centred on its tile, a
+    // quarter tile above the head, so groups grow upward and never cover a face.
+    _splatAnchor(game, dn) {
+        const vp = this._view();
+        return {
+            x: vp.origin.x + (dn.tileX - game.playerX) * TILE_PX + TILE_PX / 2 - this._scrollX,
+            y: vp.origin.y + (dn.tileY - game.playerY) * TILE_PX - TILE_PX / 4 - this._scrollY,
+        };
+    }
+
     _drawHitSplat(game, dn, age) {
         const { ctx, sprites } = this;
         const vp = this._view();
@@ -1740,23 +1887,32 @@ export class Renderer {
         if (a <= 0.01) return;
 
         // Tile → screen (camera-tracked), then the per-type motion offset.
-        const bx = vp.origin.x + (dn.tileX - game.playerX) * TILE_PX + TILE_PX / 2 - this._scrollX;
-        const by = vp.origin.y + (dn.tileY - game.playerY) * TILE_PX + TILE_PX / 4 - this._scrollY;
-        const x = bx + m.ox;
-        const y = by + m.oy;
+        const { x: bx, y: by } = this._splatAnchor(game, dn);
+        // At an odd art scale (k 3, 5…) a sheet pixel would land on 1.5 backing
+        // px and step unevenly; the whole splat is drawn a touch larger so each
+        // sheet pixel is a whole number of backing px (splatPixelFactor).
+        const f = splatPixelFactor(vp.k);
+        // Its spot among the splats on this target (laid out in _drawDamageNumbers),
+        // then the small per-type wiggle — splats no longer fly, so they never
+        // land on each other.
+        const spot = dn._spot || { x: 0, y: 0 };
+        const x = bx + (spot.x + m.ox) * f;
+        const y = by + (spot.y + m.oy) * f;
 
         const color = SPLAT_COLOR[dn.type] || SPLAT_COLOR.physical;
-        const scale = 1;                          // bitmap font scale (8px glyphs — small)
+        const scale = 1;                          // font scale (the 12px VT323 line)
         const big = dn.crit ? 1.2 : 1;
-        const textW = dn.text.length * 8 * scale;
-        // Round badge — radius fits the number plus a little pad, so short hits
-        // read as a small circle rather than a wide oval.
-        const r = (Math.max(textW, 8) / 2 + 6) * big;
-        const w = r * 2 * (m.sx || 1);
-        const h = r * 2 * (m.sy || 1);
+        // A pill sized to the number's real width — the old round badge was sized
+        // for the retired 8px bitmap glyphs and was mostly padding.
+        const textW = this.font ? this.font.measure(dn.text, scale) : dn.text.length * 4.8 * scale;
+        const pill = splatPill(textW, !!dn.crit);
+        const w = pill.w * (m.sx || 1);
+        const h = pill.h * (m.sy || 1);
 
         ctx.save();
-        ctx.translate(x, y);
+        // Whole BACKING pixels: the glide is fractional, the badge is pixel art.
+        ctx.translate(Math.round(x * vp.scale) / vp.scale, Math.round(y * vp.scale) / vp.scale);
+        ctx.scale(f, f);
 
         // Heal halo — a soft radiant glow that pulses, then fades.
         if (m.glow > 0) {
@@ -1770,22 +1926,42 @@ export class Renderer {
 
         ctx.scale(m.scale, m.scale);
 
-        // Badge — a round "splat", filled by type, with a border (gold = crit).
-        ctx.beginPath();
-        ctx.ellipse(0, 0, w / 2, h / 2, 0, 0, Math.PI * 2);
-        ctx.fillStyle = hexToRgba(color, a);
-        ctx.fill();
-        ctx.lineWidth = dn.crit ? 2 : 1.25;
-        ctx.strokeStyle = dn.crit ? hexToRgba('#f0d782', a) : `rgba(255,255,255,${a * 0.55})`;
-        ctx.stroke();
+        // Badge — the type's own silhouette from the splat atlas (a burst, drips,
+        // flames, a crystal, a heart…; gold-outlined on a crit), so the type reads
+        // from the shape. Until the sheet has loaded, a plain pill stands in.
+        const splatSheet = sprites?.splats;
+        const cell = splatCell(dn.type, dn.text.length, !!dn.crit);
+        if (splatSheet?.loaded) {
+            ctx.save();
+            ctx.scale(m.sx || 1, m.sy || 1);
+            ctx.globalAlpha = a;
+            splatSheet.drawFrame(ctx, cell.col, cell.row, -SPLAT_CELL_W / 2, -SPLAT_CELL_H / 2, SPLAT_CELL_W, SPLAT_CELL_H);
+            ctx.restore();
+        } else {
+            ctx.beginPath();
+            const pr = h / 2;
+            ctx.moveTo(-w / 2 + pr, -h / 2);
+            ctx.lineTo(w / 2 - pr, -h / 2);
+            ctx.arc(w / 2 - pr, 0, pr, -Math.PI / 2, Math.PI / 2);
+            ctx.lineTo(-w / 2 + pr, h / 2);
+            ctx.arc(-w / 2 + pr, 0, pr, Math.PI / 2, Math.PI * 1.5);
+            ctx.closePath();
+            ctx.fillStyle = hexToRgba(color, a);
+            ctx.fill();
+            ctx.lineWidth = dn.crit ? 2 : 1.25;
+            ctx.strokeStyle = dn.crit ? hexToRgba('#f0d782', a) : `rgba(255,255,255,${a * 0.55})`;
+            ctx.stroke();
+        }
 
-        // Number — white, centered, with a soft shadow for contrast.
+        // Number — white (dark on a fill too light for white), centered, with a
+        // soft shadow for contrast.
         if (this.font) {
+            const tc = SPLAT_TEXT[dn.type];
             this.font.drawText(ctx, dn.text, 0, -4, {
-                color: hexToRgba('#ffffff', a),
+                color: hexToRgba(tc ? tc.color : '#ffffff', a),
                 scale,
                 align: 'center',
-                shadow: `rgba(0,0,0,${a * 0.7})`,
+                shadow: tc ? `rgba(${tc.shadow},${a * 0.6})` : `rgba(0,0,0,${a * 0.7})`,
             });
         }
 
@@ -1800,9 +1976,9 @@ export class Renderer {
         const markSheet = sprites?.marks;
         const markCol = dn.mark ? MARK_SPRITES[dn.mark] : null;
         if (markSheet?.loaded && markCol != null) {
-            const msz = 14 * big;
-            const mcx = r * 0.75;
-            const mcy = -r * 0.75;
+            const msz = 12 * big;
+            const mcx = w / 2;
+            const mcy = -h / 2;
             ctx.globalAlpha = a;
             markSheet.drawFrame(ctx, markCol, 0, mcx - msz / 2, mcy - msz / 2, msz, msz);
             ctx.globalAlpha = 1;
@@ -1811,23 +1987,20 @@ export class Renderer {
         ctx.restore();
     }
 
-    // (combat-feel-pass) Per-type motion for a hit-splat. Returns pixel offsets,
-    // a uniform scale, axis stretch (sx/sy), alpha, and a heal-glow factor,
-    // driven by `age` and the splat's launch direction / fan slot. Reduce-motion
-    // dampens the amplitude. Pure math — no allocations beyond the small object.
+    // (combat-feel-pass) Per-type motion for a hit-splat. Returns small pixel
+    // offsets, a uniform scale, axis stretch (sx/sy), alpha, and a heal-glow
+    // factor, driven by `age`. Where the splat sits is its slot's job
+    // (splat-layout.js), not the motion's. Reduce-motion dampens the amplitude.
+    // Pure math — no allocations beyond the small object.
     _hitSplatMotion(dn, age) {
         const reduce = Settings.get('reduceMotion');
         const k = reduce ? 0.45 : 1;
         const p = Math.min(1, age / dn.maxAge);
         const e = 1 - (1 - p) * (1 - p);                 // easeOut
 
-        // Travel heading: along the blow (directional, fanned per slot) or fanned
-        // around the target (omni). Directional also drifts up a touch.
-        let ang;
-        if (dn.dir) ang = Math.atan2(dn.dir.y, dn.dir.x) + dn.slot * 0.20;
-        else ang = -Math.PI / 2 + dn.slot * (Math.PI * 2 / 6);
-        const tx = Math.cos(ang), ty = Math.sin(ang);
-
+        // Splats hold a fixed spot now (splat-layout.js), so each type keeps its
+        // character in place — a few px at most — instead of flying off along a
+        // heading: the old travel sent neighbours into each other.
         let alpha = 1;
         if (p < 0.12) alpha = p / 0.12;
         else if (p > 0.72) alpha = Math.max(0, 1 - (p - 0.72) / 0.28);
@@ -1835,41 +2008,33 @@ export class Renderer {
         let ox = 0, oy = 0, scale = 1, sx = 1, sy = 1, glow = 0;
 
         switch (dn.type) {
-            case 'sludge':                                // oozes + drips DOWN
+            case 'sludge':                                // oozes, sagging down
                 scale = p < 0.18 ? 0.6 + 0.5 * (p / 0.18) : 1.1 - 0.1 * e;
-                sy = 1 + 0.5 * e * k;
-                sx = 1 - 0.12 * e * k;
-                ox = tx * 6 * k;
-                oy = 30 * e * k;
+                sy = 1 + 0.35 * e * k;
+                sx = 1 - 0.1 * e * k;
+                oy = 3 * e * k;
                 break;
-            case 'poison': {                              // rising rattle
-                const shud = Math.sin(age * 0.05) * 4 * k;
+            case 'poison':                                // a sick rattle in place
                 scale = p < 0.14 ? 0.6 + 0.4 * (p / 0.14) : 1;
-                ox = tx * 10 * e * k + shud;
-                oy = ty * 10 * e * k - 20 * e * k;
+                ox = Math.sin(age * 0.05) * 1.5 * k;
                 break;
-            }
-            case 'fire':                                  // flicker + burn up
-                alpha *= 0.6 + 0.4 * Math.sin(age * 0.045);
+            case 'fire':                                  // flicker + burn down
+                // Flickers between 75% and full — never fades out mid-fight.
+                alpha *= 0.875 + 0.125 * Math.sin(age * 0.045);
                 scale = (p < 0.14 ? 0.7 + 0.3 * (p / 0.14) : 1) * (1 - 0.25 * p * k);
-                ox = tx * 8 * e * k;
-                oy = -26 * e * k;
+                oy = -2 * e * k;
                 break;
-            case 'heal':                                  // gentle float + holy glow
+            case 'heal':                                  // gentle lift + holy glow
                 scale = p < 0.2 ? 0.85 + 0.15 * (p / 0.2) : 1;
-                oy = -22 * e * k;
+                oy = -2 * e * k;
                 glow = (0.5 + 0.5 * Math.sin(age * 0.012)) * (1 - p);
                 break;
             case 'physical':
-            default: {                                    // hard snappy pop (crit = bigger + further)
+            default: {                                    // hard snappy pop (crit = bigger)
                 const pop = dn.crit ? 1.6 : 1.3;
-                const travel = dn.crit ? 26 : 16;
-                const up = dn.crit ? 42 : 14;
                 scale = p < 0.13 ? 0.5 + (pop - 0.5) * (p / 0.13)
                       : p < 0.30 ? pop - (pop - 1) * ((p - 0.13) / 0.17)
                       : 1;
-                ox = tx * travel * e * k;
-                oy = ty * travel * e * k - up * e * k;
                 break;
             }
         }
@@ -1929,7 +2094,7 @@ export class Renderer {
             if (sprites?.player?.loaded) {
                 ok = sprites.player.drawFrame(
                     ctx, PLAYER_SPRITE.col, PLAYER_SPRITE.row,
-                    ppx + 4, ppy + 4, TILE_PX - 8, TILE_PX - 8
+                    ppx, ppy, TILE_PX, TILE_PX
                 );
             }
             if (!ok) {
@@ -1991,7 +2156,10 @@ export class Renderer {
 
         // — HP bar — always red per the violencetown palette (blood, not
         //   "danger" — the old green→red threshold was retired here).
-        const hpFrac = game.playerHp / game.playerMaxHp;
+        // (turn-model C1) In a cascade, damage already dealt but not yet shown is
+        // added back, so the bar drops blow by blow as each one plays.
+        const hpShown = Math.min(game.playerMaxHp, game.playerHp + (game._cascade?.heldPlayerHp() ?? 0));
+        const hpFrac = hpShown / game.playerMaxHp;
         drawInset(ctx, bx, by, bw, bh);
         const hpW = (bw - 2) * hpFrac;
         ctx.fillStyle = UI.hpRed;
@@ -1999,7 +2167,7 @@ export class Renderer {
         ctx.fillStyle = '#e8674a';                       // glossy top highlight
         ctx.fillRect(bx + 1, by + 1, hpW, 1);
         if (this.font) {
-            this.font.drawText(ctx, `HP ${game.playerHp}/${game.playerMaxHp}`, bx + 3, by + 2, {
+            this.font.drawText(ctx, `HP ${hpShown}/${game.playerMaxHp}`, bx + 3, by + 2, {
                 color: '#fff', scale: 1,
             });
         }
@@ -2290,9 +2458,11 @@ export class Renderer {
                 if (f.ringId) {
                     ctx.strokeStyle = UI.gold; ctx.lineWidth = 2;
                     ctx.strokeRect(s.x + 1, s.y + 1, s.w - 2, s.h - 2);
-                    const name = strip((RINGS[f.ringId] && RINGS[f.ringId].name) || f.ringId);
-                    this.font.drawText(ctx, name, s.x + s.w / 2, s.y + s.h / 2 - 4, { color: UI.gold, scale: 1, align: 'center' });
+                    const name = this._fitText(strip((RINGS[f.ringId] && RINGS[f.ringId].name) || f.ringId), s.w - 6);
+                    this.font.drawText(ctx, name.text, s.x + s.w / 2, s.y + s.h / 2 - 4, { color: UI.gold, scale: name.scale, align: 'center' });
                 }
+                const cur = game._deviceSel;
+                if (cur && cur.tab === 'rings' && cur.key === s.key) this._drawCursorHalo(ctx, s);   // (C3) keyboard cursor
             }
         }
 
@@ -2356,7 +2526,7 @@ export class Renderer {
 
             if (stack) {
                 // Try sprite
-                const spr = ITEM_SPRITES[stack.itemDef.id];
+                const spr = itemSprite(stack.itemDef.id);
                 let drawn = false;
                 if (spr && sprites?.[spr.sheet]?.loaded) {
                     drawn = sprites[spr.sheet].drawRegion(ctx, spr.x, spr.y, spr.w, spr.h, rect.x + 7, rect.y + 9, 24, 24);
@@ -2411,7 +2581,7 @@ export class Renderer {
 
         // Item icon (sprite, else the colored-letter fallback — mirrors _drawHotbar).
         const ix = p.x + 12, iy = p.y + 12;
-        const spr = ITEM_SPRITES[def.id];
+        const spr = itemSprite(def.id);
         let drawn = false;
         if (spr && sprites?.[spr.sheet]?.loaded) {
             drawn = sprites[spr.sheet].drawRegion(ctx, spr.x, spr.y, spr.w, spr.h, ix, iy, 32, 32);
@@ -2427,9 +2597,16 @@ export class Renderer {
         const name = (def.name || def.id || '').replace(/[\[\]]/g, '');
         const zone = zoneOf(sel.index, SAFE_SLOTS).toUpperCase();
         const qty = stack.count > 1 ? ` x${stack.count}` : '';
-        this.font.drawText(ctx, name, tx, p.y + 12, { color: UI.gold, scale: 2 });
-        this.font.drawText(ctx, itemStatLine(def), tx, p.y + 36, { color: UI.text, scale: 1 });
-        this.font.drawText(ctx, `${zone}${qty}`, tx, p.y + 52, { color: UI.dim, scale: 1 });
+        const room = p.x + p.w - 12 - tx;
+        const fitName = this._fitText(name, room, 2, 1);
+        this.font.drawText(ctx, fitName.text, tx, p.y + 12, { color: UI.gold, scale: fitName.scale });
+        // The stat line falls back to the item's description, which is often a
+        // sentence: wrap it to the panel, two lines at most.
+        const perLine = Math.max(8, Math.floor(room / this.font.measure('M', 1)));
+        let statLines = this._wrapText(itemStatLine(def), perLine);
+        if (statLines.length > 2) statLines = [statLines[0], this._fitText(statLines.slice(1).join(' '), room).text];
+        statLines.forEach((line, i) => this.font.drawText(ctx, line, tx, p.y + 34 + i * 12, { color: UI.text, scale: 1 }));
+        this.font.drawText(ctx, `${zone}${qty}`, tx, p.y + 38 + statLines.length * 12, { color: UI.dim, scale: 1 });
 
         // Action buttons — one per action, on the shared action-row rects. Drop is
         // destructive (whole-stack, no confirm) so it wears red, not gold — with
@@ -2442,6 +2619,17 @@ export class Renderer {
             drawInset(ctx, r.x, r.y, r.w, r.h);
             ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
             this.font.drawText(ctx, actions[i].label, r.x + r.w / 2, r.y + r.h / 2 - 4, { color: col, scale: 1, align: 'center' });
+            if (sel.action === i) this._drawCursorHalo(ctx, r);   // (C3) keyboard cursor
+        }
+        // (C3c) The uses button, only when the item has a "use this on that"
+        // here; main decides, and hands back the rect it hit-tests. It follows
+        // the action buttons in the cursor's order, so its index is theirs + 1.
+        const uses = actions.length ? game._deviceUsesRect?.(sel.index) : null;
+        if (uses) {
+            drawInset(ctx, uses.x, uses.y, uses.w, uses.h);
+            ctx.strokeStyle = UI.gold; ctx.lineWidth = 1; ctx.strokeRect(uses.x + 1, uses.y + 1, uses.w - 2, uses.h - 2);
+            this.font.drawText(ctx, USES_ACTION.label, uses.x + uses.w / 2, uses.y + uses.h / 2 - 4, { color: UI.gold, scale: 1, align: 'center' });
+            if (sel.action === actions.length) this._drawCursorHalo(ctx, uses);
         }
     }
 
@@ -3284,7 +3472,8 @@ export class Renderer {
         const aimedNode = game.wheel?.aiming ? selectedNode(game.wheel) : null;
         const aimingTheft = !!aimedNode && (aimedNode.key === 'coin' || aimedNode.key === 'kit' || aimedNode.key === 'gear');
 
-        const phase = threatPhase(watchers, { inCombat: game._inCombat(), aimingTheft, spotted });
+        const theftAt = { x: game.playerX, y: game.playerY };   // a theft is adjacent: it happens where you stand
+        const phase = threatPhase(watchers, { inCombat: game._inCombat(), aimingTheft, spotted, at: theftAt });
 
         // Phase-change ease: hold, swap, then ease the NEW phase's alpha in from
         // 0 over ~120ms. The swap itself is instant (the paint loop below always
@@ -3304,7 +3493,7 @@ export class Renderer {
             // Scope the field to the watchers who actually justify this phase —
             // not to every watcher with eyes. This is the one change that empties
             // the town square: an idle vendor no longer contributes a tile.
-            const field = alertWatchers(watchers, phase, { aimingTheft });
+            const field = alertWatchers(watchers, phase, { aimingTheft, at: theftAt });
 
             // The viewport is part of the key: a resize changes which tiles are in view.
             if (this._threatTurn !== game.turn || this._threatFieldPhase !== phase || this._threatCount !== field.length || this._threatVp !== vp) {
@@ -3390,15 +3579,23 @@ export class Renderer {
             const sy = vp.origin.y + (w.y - game.playerY) * TILE_PX - this._scrollY;
             if (sx < -TILE_PX || sx > vp.w || sy < -TILE_PX || sy > vp.h) continue;
 
+            // The facing cue: a small chevron on the ground just past the tile's
+            // edge, pointing the way the watcher looks. It used to be a line from
+            // the tile's centre, which ran straight through the body of anyone
+            // facing down and read as a stick through every townsperson.
             const { fx, fy } = facingOf(w);
             const len = Math.hypot(fx, fy) || 1;
+            const [a, b, c] = facingCue(sx + TILE_PX / 2, sy + TILE_PX / 2, fx / len, fy / len, TILE_PX);
             ctx.save();
-            ctx.strokeStyle = 'rgba(212,185,106,0.75)';
-            ctx.lineWidth = 2;
+            ctx.fillStyle = 'rgba(212,185,106,0.9)';
+            ctx.strokeStyle = 'rgba(63,38,49,0.9)';      // the Tiny packs' plum outline
+            ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.moveTo(sx + TILE_PX / 2, sy + TILE_PX / 2);
-            ctx.lineTo(sx + TILE_PX / 2 + (fx / len) * TILE_PX * 0.45,
-                       sy + TILE_PX / 2 + (fy / len) * TILE_PX * 0.45);
+            ctx.moveTo(a[0], a[1]);
+            ctx.lineTo(b[0], b[1]);
+            ctx.lineTo(c[0], c[1]);
+            ctx.closePath();
+            ctx.fill();
             ctx.stroke();
             ctx.restore();
 
@@ -3410,7 +3607,8 @@ export class Renderer {
             // upscales to) and anchored so its bottom edge sits where the
             // old pip's top edge did — clearing the head instead of resting
             // on it.
-            const emoteKey = AWARENESS_EMOTE[w.state];
+            // Stepping aside while a hit splat is up on this watcher (its head is the splats').
+            const emoteKey = splatShowingAt(game._damageNumbers, w.x, w.y, performance.now()) ? null : AWARENESS_EMOTE[w.state];
             const emoteCol = emoteKey ? EMOTE_SPRITES[emoteKey] : null;
             if (emoteCol != null && sprites?.emotes?.loaded) {
                 const sz = 16;
@@ -3497,7 +3695,8 @@ export class Renderer {
 
         const padX = 24;
         const textX = px + padX;
-        const charsPerLine = Math.max(8, Math.floor((w - padX * 2) / 8)); // 8px glyph @ scale 1
+        // VT323 is monospace: one glyph's real width sets the line length.
+        const charsPerLine = Math.max(8, Math.floor((w - padX * 2) / this.font.measure('M', 1)));
         const contentTop = py + 56;
         const contentBottom = py + h - 30;
         const lineH = 12;
@@ -3515,12 +3714,11 @@ export class Renderer {
         const lines = [];
         for (const m of hist) {
             const color = this._logStripColor(m.category);
-            const t = m.text;
-            if (t.length <= charsPerLine) {
-                lines.push({ text: t, color });
-            } else {
-                for (let i = 0; i < t.length; i += charsPerLine) {
-                    lines.push({ text: t.slice(i, i + charsPerLine), color });
+            // Break between words, so a closing "]" never lands on a line of
+            // its own; a single word longer than the line is cut where it must.
+            for (const line of this._wrapText(m.text, charsPerLine)) {
+                for (let i = 0; i < line.length; i += charsPerLine) {
+                    lines.push({ text: line.slice(i, i + charsPerLine), color });
                 }
             }
         }
@@ -3558,7 +3756,7 @@ export class Renderer {
     // fallback) into a size×size box. Mirrors the hotbar's item draw.
     _drawItemIcon(itemDef, x, y, size) {
         const { ctx, sprites } = this;
-        const spr = ITEM_SPRITES[itemDef.id];
+        const spr = itemSprite(itemDef.id);
         let drawn = false;
         if (spr && sprites?.[spr.sheet]?.loaded) {
             drawn = sprites[spr.sheet].drawRegion(ctx, spr.x, spr.y, spr.w, spr.h, x, y, size, size);
@@ -3633,8 +3831,11 @@ export class Renderer {
         this._drawOfferDescription(game, L, R);
         this._drawOfferLedger(game, L, R);
 
-        this.font.drawText(ctx, 'TAB SIDE  SPACE STAGE  ENTER OFFER  ESC CLOSE',
-            L.panel.x + 8, L.hintY, { color: UI.dim, scale: 1 });
+        // The key legend sits between the ledger and the frame's bottom stroke:
+        // centred, a touch smaller, and clear of the frame on every side.
+        const legend = this._fitText('TAB SIDE  SPACE STAGE  ENTER OFFER  ESC CLOSE', L.panel.w - 32, 0.85, 0.75);
+        this.font.drawText(ctx, legend.text, L.panel.x + L.panel.w / 2, L.hintY - 2,
+            { color: UI.dim, scale: legend.scale, align: 'center' });
     }
 
     // The staged offer, made unambiguous. Gold rides in whichever tray its sign
@@ -4290,7 +4491,8 @@ export class Renderer {
                 const iconSize = 20;
                 this._drawItemIcon(item, s.x + 6, s.y + s.h - iconSize - 4, iconSize);
                 const name = (item.name || item.id || '').replace(/^\[|\]$/g, '');
-                this.font.drawText(ctx, name.toUpperCase(), s.x + iconSize + 12, s.y + s.h - iconSize + 2, { color: UI.text, scale: 1 });
+                const fit = this._fitText(name.toUpperCase(), s.x + s.w - 6 - (s.x + iconSize + 12));
+                this.font.drawText(ctx, fit.text, s.x + iconSize + 12, s.y + s.h - iconSize + 2, { color: UI.text, scale: fit.scale });
                 if (item.armor) this.font.drawText(ctx, '+' + item.armor, s.x + s.w - 6, s.y + 4, { color: UI.gold, scale: 1, align: 'right' });
             } else {
                 this.font.drawText(ctx, 'EMPTY', s.x + s.w / 2, s.y + s.h - 16, { color: UI.dim, scale: 1, align: 'center' });
@@ -4301,7 +4503,7 @@ export class Renderer {
         if (!hosted) this.font.drawText(ctx, 'TAP A PLATE TO REMOVE   ·   C / ESC  CLOSE', CANVAS_PX / 2, EQUIPMENT_MODAL_RECT.y + EQUIPMENT_MODAL_RECT.h - 16, { color: UI.textLight, scale: 1, align: 'center' });
 
         // (C2) An open GEAR chooser overlays the plates with an options list.
-        if (hosted && game._deviceSel && game._deviceSel.tab === 'gear') this._drawGearPicker(game, bodyRect);
+        if (hosted && game._deviceSel && game._deviceSel.tab === 'gear' && game._deviceSel.open) this._drawGearPicker(game, bodyRect);
     }
 
     // (C2) The GEAR chooser — over a selected armor slot, list every bag item that
@@ -4344,11 +4546,34 @@ export class Renderer {
             const dTxt = d > 0 ? `+${d}` : d < 0 ? `-${-d}` : '0';
             const dCol = d > 0 ? UI.buff : d < 0 ? UI.hpRed : UI.dim;
             this.font.drawText(ctx, dTxt, r.x + r.w - 8, r.y + r.h / 2 - 4, { color: dCol, scale: 1, align: 'right' });
+            if (game._deviceSel.option === i) this._drawCursorHalo(ctx, r);   // (C3) keyboard cursor
         }
+    }
+
+    // (C3) The Remoticon keyboard cursor on a button-like target (an action
+    // button, a chooser row, a ring socket): the selection's gold 2px stroke,
+    // drawn just OUTSIDE the rect, because these already wear an inner stroke.
+    _drawCursorHalo(ctx, r) {
+        ctx.strokeStyle = UI.gold; ctx.lineWidth = 2;
+        ctx.strokeRect(r.x - 3, r.y - 3, r.w + 6, r.h + 6);
     }
 
     // Word-wrap `text` into lines no longer than `maxChars` characters (the
     // bitmap font is fixed 8px/char at scale 1).
+    // Fit a one-line label into `maxW` px: shrink the scale (VT323 scales
+    // smoothly, never below `minScale`), then cut with "..." if it still runs
+    // over. Returns { text, scale } for drawText.
+    _fitText(text, maxW, scale = 1, minScale = 0.75) {
+        text = String(text);
+        const w = this.font.measure(text, scale);
+        if (w <= maxW) return { text, scale };
+        const s = Math.max(minScale, scale * maxW / w);
+        if (this.font.measure(text, s) <= maxW) return { text, scale: s };
+        let n = text.length;
+        while (n > 1 && this.font.measure(text.slice(0, n) + '...', s) > maxW) n--;
+        return { text: text.slice(0, n).trimEnd() + '...', scale: s };
+    }
+
     _wrapText(text, maxChars) {
         const words = String(text).split(' ');
         const lines = [];

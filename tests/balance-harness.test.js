@@ -10,12 +10,12 @@ import { ITEMS } from '../game/items.js';
 // A minimal roster entry — spread over to vary one field at a time.
 // A COMPLIANT baseline spawn — every lint must pass on this, so it has to satisfy
 // Law 4's kit band too, not just Law 0/3. At armor 0 that is the standard band
-// (20-60 GP): bandage 25 + fire_bottle 12 + 8 liquid = 45 GP, 18% liquid.
+// (20-60 GP): bandage 25 + fire_blood 17 + 8 liquid = 50 GP, 16% liquid.
 // Before the kit lint existed a bare `gold: 0` counted as compliant; it no longer
 // does, and a fixture that lies about compliance makes every test using it weaker.
 const spawn = (over = {}) => ({
     zone: 'sewer', id: 'e1', type: 'Red Fungus',
-    hp: 100, armor: 0, damage: 8, gold: 8, loadout: ['bandage', 'fire_bottle'],
+    hp: 100, armor: 0, damage: 8, gold: 8, loadout: ['bandage', 'fire_blood'],
     vermin: false, puzzleWall: false, ...over,
 });
 
@@ -64,11 +64,10 @@ describe('harness math', () => {
         const flags = lintEntity({ type: 'Rat', hp: 100, armor: -80, damage: 6, gold: 50, vermin: true });
         assert.ok(flags.some(f => f.includes('vermin')));
     });
-    test('loadMapRoster reads real map JSONs and skips snapshots', () => {
+    test('loadMapRoster reads real map JSONs', () => {
         const roster = loadMapRoster();
         assert.ok(roster.length > 0);
         assert.ok(roster.every(e => e.zone && e.type));
-        assert.ok(!roster.some(e => e.zone.includes('TheDangerrZone')));
     });
     test('REFERENCE_DAMAGE is the act-1 anchor', () => assert.equal(REFERENCE_DAMAGE, 20));
     test('ttd is "-" for a 0-damage entity — 0 means the hit does not happen', () => {
@@ -208,7 +207,7 @@ describe('dotValue — Law 1 time value of damage', () => {
     test('sludge_sack 3x5 discounts 15 nominal to 10', () => {
         assert.equal(dotValue(3, 5), 10);   // 3*(1+.8+.64+.512+.4096) = 10.0848
     });
-    test('fire_bottle 5x3 discounts 15 nominal to 12', () => {
+    test('a 5x3 dot discounts 15 nominal to 12', () => {
         assert.equal(dotValue(5, 3), 12);   // 5*(1+.8+.64) = 12.2
     });
     test('same nominal total, faster delivery is worth more', () => {
@@ -244,10 +243,13 @@ describe('lintItems — Law 1 peg for consumables', () => {
     test('every consumable in ITEMS is at peg', () => {
         assert.deepEqual(lintItems(), []);
     });
-    test('fire_bottle exists and is at peg', () => {
-        assert.ok(ITEMS.fire_bottle, 'fire_bottle should exist');
-        assert.equal(ITEMS.fire_bottle.baseValue, 12);
-        assert.equal(itemPegValue(ITEMS.fire_bottle), 12);
+    test('fire_blood exists and is at peg (5x5 discounts 25 nominal to 17)', () => {
+        assert.ok(ITEMS.fire_blood, 'fire_blood should exist');
+        assert.equal(ITEMS.fire_blood.baseValue, 17);
+        assert.equal(itemPegValue(ITEMS.fire_blood), 17);
+    });
+    test('the Fire Bottle is gone: Fire Blood replaced it', () => {
+        assert.equal(ITEMS.fire_bottle, undefined);
     });
 });
 
@@ -301,7 +303,7 @@ describe('Law 4 role bands derived from armor', () => {
     test('armor already encodes the role ladder', () => {
         assert.equal(bandForArmor(-80).role, 'vermin');
         assert.equal(bandForArmor(-30).role, 'fodder');
-        assert.equal(bandForArmor(-15).role, 'bruiser');
+        assert.equal(bandForArmor(-15).role, 'standard');   // ruling A1: -15 folds into standard
         assert.equal(bandForArmor(-5).role, 'standard');
         assert.equal(bandForArmor(0).role, 'standard');
         assert.equal(bandForArmor(10).role, 'elite');
@@ -313,7 +315,7 @@ describe('Law 4 role bands derived from armor', () => {
         assert.deepEqual([bandForArmor(10).min, bandForArmor(10).max], [100, 200]);
     });
     test('an over-budget kit is flagged', () => {
-        const flags = lintEntity({ zone: 'sewer', id: 'e1', type: 'Violet Fungus', hp: 100, armor: -30, damage: 5, gold: 2, loadout: ['bandage', 'fire_bottle'] });
+        const flags = lintEntity({ zone: 'sewer', id: 'e1', type: 'Violet Fungus', hp: 100, armor: -30, damage: 5, gold: 2, loadout: ['bandage', 'fire_blood'] });
         assert.ok(flags.some(f => /Law 4/.test(f)), `expected a band flag, got ${JSON.stringify(flags)}`);
     });
     test('a kit inside its band with sane liquidity is clean', () => {

@@ -16,6 +16,7 @@ import { HEAL_HP_FLOOR, HEAL_MIN_GOLD } from '../game/ai.js';
 // roundtrip.test.js already import Enemy from here under bare `node --test`),
 // so this pure helper is safe to pull into a headless Node tool too.
 import { challengeGp } from '../game/enemies.js';
+import { SLOTS, ENTRIES, resolveSpawn, defaultPicks } from '../game/slots.js';
 import { ITEMS } from '../game/items.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -142,18 +143,17 @@ const ARMOR_FLOOR = -90;
 // roster, so no new authored field is needed. Ordered most-fragile first;
 // bandForArmor takes the first row the armor reaches.
 //
-// The 'bruiser' row is an OPEN QUESTION, not settled law: Law 3 lists -15 as a
-// fragility stop (TTK 3) but Law 4's role table jumps -30 -> -5, leaving no band
-// for it. 15-40 is interpolated between fodder and standard and awaits a ruling.
+// Law 3's -15 fragility stop (TTK 3) has no row of its own: armor -29..0 is
+// 'standard'. (Ruling A1, 2026-10-03: the interpolated 'bruiser' row was folded
+// into its neighbours; no enemy sat in its band.)
 export const ROLE_BANDS = [
     { role: 'vermin',   maxArmor: -80, min: 0,   max: 5 },
     { role: 'fodder',   maxArmor: -30, min: 5,   max: 20 },
-    { role: 'bruiser',  maxArmor: -15, min: 15,  max: 40 },
     { role: 'standard', maxArmor: 0,   min: 20,  max: 60 },
     // (Caelan 2026-08-24) The tough row. Law 4's table used to jump from
     // standard at exactly armor 0 straight to elite at 1-10, so every armor
     // value in between derived as elite and demanded a 100 GP wallet. That is
-    // the same no-row-fits hole ruling A1 describes at -15, and the roster
+    // the same no-row-fits hole ruling A1 described at -15, and the roster
     // re-role walked straight into it. This is the missing step between a
     // zone's basic enemy and its named foe.
     { role: 'tough',    maxArmor: 5,   min: 60,  max: 100 },
@@ -375,7 +375,7 @@ export function lintItems() {
     return flags;
 }
 
-// ── Roster: scan game/*-map.json, skip TheDangerrZone snapshots ────────────
+// ── Roster: scan game/*-map.json ───────────────────────────────────────────
 //
 // Real shape found in game/town-map.json (and every other current map): a
 // top-level `enemies` array of spawn objects — `{ id, type, x, y, hp, damage,
@@ -384,9 +384,34 @@ export function lintItems() {
 // dynamic sewer spawn outside this static roster). No map authors `gold` or
 // `loadout` yet, so those default exactly like the Enemy ctor defaults
 // (enemies.js): gold 0, loadout null.
+// One roster row from a spawn (or a registry entry), with the Enemy ctor's
+// defaults for anything it leaves out.
+function rosterRow(zone, id, s) {
+    return {
+        zone,
+        id,
+        type: s.type,
+        hp: s.hp ?? 100,
+        armor: s.armor ?? 0,
+        damage: s.damage ?? ENEMY_DEFAULT_DAMAGE,
+        gold: s.gold ?? 0,
+        vermin: s.vermin ?? false,
+        puzzleWall: s.puzzleWall ?? false,
+        // Needed by the Law 4 kit lint: a vendor's gold is a till, not a
+        // kit (see isFighter). Without this every shopkeep with a damage
+        // value lints as an under-equipped fighter.
+        vendor: s.vendor ?? false,
+        ambient: s.ambient ?? false,
+        // Law 6f: pass through an authored loadout (potions/gear this
+        // enemy carries) so challengeGp sees the whole kit; no map
+        // authors one yet, so this is a no-op today.
+        loadout: s.loadout ?? null,
+    };
+}
+
 export function loadMapRoster() {
     const files = fs.readdirSync(GAME_DIR)
-        .filter(f => f.endsWith('-map.json') && !f.includes('TheDangerrZone'))
+        .filter(f => f.endsWith('-map.json'))
         .sort(byCodepoint);
 
     const roster = [];
@@ -395,28 +420,22 @@ export function loadMapRoster() {
         const raw = fs.readFileSync(path.join(GAME_DIR, file), 'utf8');
         let doc;
         try { doc = JSON.parse(raw); } catch { continue; }
-        const spawns = Array.isArray(doc.enemies) ? doc.enemies : [];
+        // A spine slot's spawn holds today's pick (plans/slot-registry.md); the
+        // pool's other entries are linted below, so none can dodge the bands.
+        const spawns = (Array.isArray(doc.enemies) ? doc.enemies : []).map(s => resolveSpawn(s, defaultPicks()));
         for (const s of spawns) {
-            roster.push({
-                zone,
-                id: s.id,
-                type: s.type,
-                hp: s.hp ?? 100,
-                armor: s.armor ?? 0,
-                damage: s.damage ?? ENEMY_DEFAULT_DAMAGE,
-                gold: s.gold ?? 0,
-                vermin: s.vermin ?? false,
-                puzzleWall: s.puzzleWall ?? false,
-                // Needed by the Law 4 kit lint: a vendor's gold is a till, not a
-                // kit (see isFighter). Without this every shopkeep with a damage
-                // value lints as an under-equipped fighter.
-                vendor: s.vendor ?? false,
-                ambient: s.ambient ?? false,
-                // Law 6f: pass through an authored loadout (potions/gear this
-                // enemy carries) so challengeGp sees the whole kit; no map
-                // authors one yet, so this is a no-op today.
-                loadout: s.loadout ?? null,
-            });
+            roster.push(rosterRow(zone, s.id, s));
+        }
+    }
+    // Every pool entry no map is showing today (a slot's later picks): linted as
+    // if it stood in its slot's place, so a new boss cannot dodge the bands.
+    // No rows today — every pool holds only its default.
+    const picked = defaultPicks();
+    for (const [slotId, slot] of Object.entries(SLOTS)) {
+        const zone = slot.map.slice(0, -'-map.json'.length);
+        for (const { entry } of slot.pool) {
+            if (entry === picked[slotId]) continue;
+            roster.push(rosterRow(zone, `${slotId}:${entry}`, ENTRIES[entry]));
         }
     }
     return roster;

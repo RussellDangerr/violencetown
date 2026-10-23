@@ -5,7 +5,7 @@
 > on `dev` were left behind as superseded or idea-stage. Current status of anything here:
 > `plans/roadmap-2026-09.md`.
 
-> **STATUS (2026-07-23):** BUILT except **Phase 5** (the grappling-hook swing) and Phase 0 (Park/Cave zones). The Phase-5 swing now has its own actionable plan at `plans/grapple-swing.md`. See `plans/undeveloped-backlog.md` for the full audit.
+> **STATUS (2026-07-23):** BUILT except **Phase 5** (the grappling-hook swing) and Phase 0 (Park/Cave zones). The Phase-5 swing now has its own actionable plan at `plans/grapple-swing.md`. The full audit was `undeveloped-backlog.md`, a July backlog retired with the `plan` branch; `plans/roadmap-2026-09.md` carries its open rows.
 
 ## ✅ BUILT / SHIPPED STATUS (updated 2026-07-04) — read this first
 
@@ -136,7 +136,7 @@ east, Carnival = south (→ Graveyard → Wilderness), Borgir = interior.
 - **Factory tile overhaul:** `FACTORY_FLOOR/WALL/CONVEYOR_VIS` (data.js ids 40–43) currently proxy
   with generic Tiny Dungeon stone/wood; re-pick sprite cells in `sprites.js ZONE_TILE_SPRITE_MAP`
   toward metallic/machinery reads. Claude can prep candidate cells; Caelan picks.
-- **Bestiary:** the creatures for Cave / Carnival / Park / Factory live in `plans/bestiary.md` (started
+- **Bestiary:** the creatures for Cave / Carnival / Park / Factory live in `bestiary.md` (idea stage, not in the repo; started
   this session). Several need new mechanics (Weredigo invisibility + blind combat; the Ruffian's
   steal-and-flee; the friendly Bear NPC) — flagged there.
 

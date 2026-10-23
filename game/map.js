@@ -9,7 +9,6 @@ export class GameMap {
         this.width   = mapData.width;
         this.height  = mapData.height;
         this.spawn   = mapData.spawn;
-        this.bossRoom = mapData.bossRoom || null;
         this.zoneName = mapData.zoneName || 'UNKNOWN';
         // (screen-fill) What the world shows past the map's edge: { tile, prop? },
         // or null for the void. Drawing only — off the map is never walkable.

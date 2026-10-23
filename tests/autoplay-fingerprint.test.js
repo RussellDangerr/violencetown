@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { hash32, runState, fingerprint } from '../game/autoplay/fingerprint.js';
 
 // Enough of a Game for save.js serialize() to read.
-const game = (over = {}) => ({ equipment: {}, turn: 3, rng: { getState: () => 42 }, _dayClockMs: 1500, worldTick: 3, ...over });
+const game = (over = {}) => ({ equipment: {}, turn: 3, rng: { getState: () => 42 }, _dayClock: 15, worldTick: 3, ...over });
 
 describe('the run fingerprint', () => {
     test('hash32 is 32-bit FNV-1a', () => {
@@ -21,8 +21,11 @@ describe('the run fingerprint', () => {
     test('one RNG step apart is a different run', () => {
         assert.notEqual(fingerprint(game()), fingerprint(game({ rng: { getState: () => 43 } })));
     });
-    test('the world clocks a save leaves out are part of the run', () => {
-        assert.notEqual(fingerprint(game()), fingerprint(game({ _dayClockMs: 2000 })));
+    test('the day clock is in the save, so it is part of the run', () => {
+        assert.equal(runState(game()).save.dayClock, 15);
+        assert.notEqual(fingerprint(game()), fingerprint(game({ _dayClock: 20 })));
+    });
+    test('the ambient wander clock a save leaves out is part of the run', () => {
         assert.notEqual(fingerprint(game()), fingerprint(game({ worldTick: 4 })));
     });
 });

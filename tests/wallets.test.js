@@ -92,7 +92,7 @@ describe('challengeGp over real item ids (Law 6f)', () => {
         assert.equal(challengeGp({ gold: 10, loadout: [{ name: 'Big Potion', value: 60 }] }), 70);
     });
     test('resolveLoadout hands back real defs an enemy can USE', () => {
-        const defs = resolveLoadout(['bandage', 'fire_bottle']);
+        const defs = resolveLoadout(['bandage', 'fire_blood']);
         assert.equal(defs.length, 2);
         assert.equal(defs[0], ITEMS.bandage);
         assert.equal(poitionBuff(defs[1].poition).id, 'fire');

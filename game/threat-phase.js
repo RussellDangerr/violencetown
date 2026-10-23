@@ -32,6 +32,15 @@ function canSee(w) {
     return !!w && w.entity?.isAlive?.() && !w._ally && (w.sightRange || 0) > 0;
 }
 
+// Within reach of a theft at `at` (the player's tile): the theft's spot lies
+// inside the watcher's sight range, so its cone can decide whether the theft is
+// seen. Distance only (Chebyshev, as perceives() measures); facing and walls are
+// the field's job. No `at` keeps every watcher, as before.
+function inReach(w, at) {
+    if (!at || w.x == null || w.y == null) return true;
+    return Math.max(Math.abs(w.x - at.x), Math.abs(w.y - at.y)) <= (w.sightRange || 0);
+}
+
 // `opts.spotted` is the caller's perceives() === DIRECT result against the
 // player, passed in rather than computed here so this module stays free of map
 // and geometry dependencies.
@@ -44,8 +53,9 @@ export function threatPhase(watchers, opts = {}) {
     // Aiming a theft brings the field back even in a calm room. This is
     // load-bearing: plans/stealth-perception-and-thieve.md rules that "the room
     // stays legible so a theft is something you can plan", and gating purely on
-    // enemy state would take that away.
-    if (opts.aimingTheft && live.length) return PHASE.HAZE;
+    // enemy state would take that away. Only watchers within reach of the theft
+    // count: if nobody's sight reaches it, there is nothing to plan around.
+    if (opts.aimingTheft && live.some(w => inReach(w, opts.at))) return PHASE.HAZE;
 
     return PHASE.QUIET;
 }
@@ -57,18 +67,14 @@ export function alertWatchers(watchers, phase, opts = {}) {
     if (phase === PHASE.QUIET) return [];
 
     const alert = live.filter(w => HAZE_STATES.has(w.state) || ALARM_STATES.has(w.state));
-    // Aiming a theft with nobody alert falls back to EVERY watcher, not just
-    // the mark — deliberately. "Seen means refused" is checked against all
-    // spotters (perception.js spotters()), so a bystander's cone decides
+    // Aiming a theft with nobody alert falls back to every watcher within reach
+    // of the theft, not just the mark. "Seen means refused" is checked against
+    // all spotters (perception.js spotters()), so a bystander's cone decides
     // whether the verb is even offered; showing only the mark would hide half
-    // of what the decision turns on.
-    //
-    // The cost is real and worth knowing: in the opening town square this puts
-    // all nine cones back on screen, which is the density this whole change set
-    // out to remove — now transient and player-initiated rather than permanent,
-    // and at 0.20 alpha on a one-art-pixel grain rather than 0.55 on a coarse
-    // one. If it still reads as too much while aiming, the fix is to scope this
-    // to watchers within the theft's own range, not to drop the fallback.
-    if (!alert.length && opts.aimingTheft) return live;
+    // of what the decision turns on. A watcher whose sight cannot reach the
+    // theft's tile can never refuse it, so its cone is left off (ruling V1,
+    // 2026-10-03: in the opening town square the fallback had put all nine
+    // cones back on screen).
+    if (!alert.length && opts.aimingTheft) return live.filter(w => inReach(w, opts.at));
     return alert;
 }

@@ -217,9 +217,9 @@ describe('one item selection: the wheel fires what the bar shows', () => {
     { itemDef: { id: 'rock',           name: 'Rock',           useType: 'throw', range: 5 }, count: 9 },
     { itemDef: { id: 'health_poition', name: 'Health Poition', useType: 'self', consumeKind: 'drink' }, count: 2 },
     { itemDef: { id: 'hot_dog',        name: 'Hot Dog',        useType: 'self', category: 'ambro' }, count: 1 },
-    { itemDef: { id: 'fire_bottle',    name: 'Fire Bottle',    useType: 'throw', range: 4 }, count: 1 },
+    { itemDef: { id: 'fire_blood',     name: 'Fire Blood',     useType: 'throw', range: 4 }, count: 1 },
   ];
-  // The player has scrolled THROW to the Fire Bottle (slot 3); the other
+  // The player has scrolled THROW to the Fire Blood (slot 3); the other
   // columns sit on their only item.
   const barred = (over = {}) => stubGame({
     inventory: BAG,
@@ -234,8 +234,8 @@ describe('one item selection: the wheel fires what the bar shows', () => {
   };
 
   for (const [labels, want, wantName] of [
-    [['Trick', 'Throw'],   3, 'Fire Bottle'],
-    [['Fight', 'Ranged'],  3, 'Fire Bottle'],
+    [['Trick', 'Throw'],   3, 'Fire Blood'],
+    [['Fight', 'Ranged'],  3, 'Fire Blood'],
     [['Treat', 'Eat'],     2, 'Hot Dog'],
     [['Treat', 'Cleanse'], 1, 'Health Poition'],
   ]) {
@@ -270,7 +270,7 @@ describe('one item selection: the wheel fires what the bar shows', () => {
   });
 
   test("Throw's reach comes from the bar's item, not bag slot 0", () => {
-    // Rock (slot 0) has range 5; the Fire Bottle the bar is showing has range 4.
+    // Rock (slot 0) has range 5; the Fire Blood the bar is showing has range 4.
     const byLabel = (n, l) => n.children.find(c => c.label === l);
     assert.equal(aimRange(byLabel(ROOT.children[1], 'Throw'), barred()), 4);
   });

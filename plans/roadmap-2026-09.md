@@ -2,8 +2,8 @@
 
 **Compiled 2026-09-07, at the close of the visual/animation/zone-identity sessions.** This is the
 **entry point** for picking up work. It consolidates and *verifies against `dev`* every open item
-from: `plan:plans/next-session-open-work.md` (2026-07-25), `plan:plans/undeveloped-backlog.md`
-(2026-07-23), `plans/systems-audit-2026-08.md` §7, `plans/demo-readiness.md` §2, ROADMAP.md's
+from: `next-session-open-work.md` (2026-07-25) and `undeveloped-backlog.md` (2026-07-23), two July
+backlogs on the since-retired `plan` branch that were not carried to `dev`; `plans/systems-audit-2026-08.md` §7, `plans/demo-readiness.md` §2, ROADMAP.md's
 pending decisions, and the three passes that landed this week.
 
 > **Why this exists (Caelan, 2026-09-07):** *"my lack of visibility into what we're working on next
@@ -11,29 +11,35 @@ pending decisions, and the three passes that landed this week.
 > my head."* So this document's job is the **dependency graph**, not the list. The lanes below are
 > ordered by what unblocks what.
 
-> **Supersedes** `next-session-open-work.md` and `undeveloped-backlog.md` as the starting point.
-> Both were accurate when written; **seven of their items have since shipped** and are listed in
-> §6 so nobody re-does them. The `plan` branch itself is six weeks stale — see §5.
+> **Supersedes** both July backlogs. Neither is in the repo: they lived on the `plan` branch,
+> retired 2026-09-24. Their item codes (A1–A4, B1–B3, C1–C4, D1–D3, E) live on as this doc's row
+> ids, and **the row is now the record** — a Source cell that reads "this row" is one of them.
+> Items of theirs that had already shipped are listed in §6 so nobody re-does them.
 
-**State right now (updated 2026-09-21, close):** `main` = `dev` = `72ed8d5`, **v0.25.0, tagged and
-live** — Q1, the quest-1 autoplay (`plans/quest1-autoplay.md`), and what it found: the sewer's two
-sentries turned so quest 1 can be snuck through, and a struck enemy turning to face you. v0.24.0
-(`77e4784`) shipped earlier the same day. Suite 1735 / 305 / 0 failures; balance golden, no drift;
-`npm run autoplay:check` matches its golden. Verified live: the deployed `<meta name="version">`
-reads 0.25.0 and all 14 changed game files byte-match `main`. **Branches: `dev`, `main`, `plan` —
-nothing else, locally or on GitHub** (124 merged branches and 2 stale worktrees removed at the
-close). **Ruling CD is DONE** (2026-09-15). **Q1-10 BUILT 2026-09-24** on `feature/q1-10-wererat-autoplay`,
-awaiting the merge call: the autoplay's players cast, throw, drink and retry, and **quest 1 is
-finished end to end for the first time** (`plans/quest1-autoplay.md` §8). Next: **F2b** / **F3** (§4), the rulings in §2, or living zones —
-piece 1 of `plans/species-adventures.md`, whose §3 recommendations are still unruled.
+**State right now (updated 2026-10-14):** `main` = `dev` = `2ad4e9e`, **v0.29.0, tagged and live**
+— the Tiny house style and what read as broken, walking freely in a fight (Knuckles neutral), the
+spine (`plans/spine.md`) and SR, the slot registry. Suite 1954 / 356 / 0; balance and autoplay goldens
+match; all 18 changed game files byte-match `main` on both hosts. **Unmerged: `feature/tiled-pipeline`
+(local only, waiting on the Canyon being painted in Tiled) and `spike/3d-view`.** Next: one Act 2 boss
+end to end (AB, §4), which wants SP1 — and the spine's rulings SP1–SP9 (§2), which are cheap.
+
+> **The spine, ruled 2026-10-11 — `plans/spine.md`.** One structure for the whole game, locked:
+> **Act 1** the Town (built: car → Sewer → the Sewer boss's Converter → bridge → Canyon → Downtown
+> → the Financier); **Act 2** the Carnival, Factory and Graveyard in any order, each boss dropping
+> one required item; **Act 3** Bank Street, where the three items open the finale → the Financier →
+> the Final Arc → credits. Its contents are **slots with pools**: a beat binds to "the Sewer's
+> boss", never to the Were-Rat, and a new idea is a pool entry, never a structural change. Changing
+> a locked row needs Caelan's explicit ruling (its lock clause). **No version is attached** — there
+> is no 1.0 target; versions just keep climbing. The four zone bosses move out of "later" into §4
+> (AB, FIN), and nine small rulings join §2 (SP1–SP9).
 
 > **Direction ruled 2026-09-15 — `plans/species-adventures.md`.** Fixed maps stay; enemies
 > come from a registry with spawn tables, drops and a respawn clock; quest flags apply *world
 > layers* over the base map; an account holds a stash and unlocked *species*, each character one
 > species on its own adventure. It supersedes `adventure-transition-plan.md` and amends a dozen
-> others (its §7 is the record). It does **not** change this roadmap's next session; whether its
-> piece 1 (living zones) goes before or after H1 is Caelan's call, and five recommendations in
-> its §3 await his ruling.
+> others (its §7 is the record). **Since the spine:** its piece 1 (living zones) is built as the
+> slot framework (SR); whether the rest becomes later work is ruling SP3, and its §3
+> recommendations are still unruled (rec. 5, New Game+, is SP2).
 
 > **Audited against the code 2026-09-10 — eight rows were wrong.** The 09-07 compile carried items
 > over from the July backlogs without re-checking them, and some had shipped the week before:
@@ -72,8 +78,18 @@ flowchart LR
     BOSS["B1 — Law 5, bosses spend<br/>DONE 09-02"]:::done
     B2["B2 — enemies eat their kits<br/>DONE 09-01"]:::done
     LEG["Combat legibility —<br/>heals + DoTs as splats<br/>DONE 09-13"]:::done
-    ZBOSS["Zone bosses: Financier,<br/>Bigfoot, Alien, Deity"]:::later
+    SPINE["The spine — three acts,<br/>slots not names — RULED 10-11"]:::done
+    SR["SR — slot registry<br/>DONE 10-13"]:::done
+    RC["RC — recolor tool"]:::ready
+    RV["RV — rat variants"]:::design
+    ZBOSS["AB — Act 2 bosses:<br/>Bigfoot, Alien, Deity"]:::design
+    FIN["FIN — the finale: Bank Street,<br/>the Financier, the Final Arc"]:::design
+    SPINE --> SR
+    SR --> RV
+    RC --> RV
+    SR --> ZBOSS
     BOSS --> ZBOSS
+    ZBOSS -->|"the three items"| FIN
     B2 -->|"made visible by"| LEG
     BOSS --> LEG
 
@@ -95,7 +111,7 @@ flowchart LR
     AUTO -.->|"how later reviews are watched"| HUD
 
     A1["RULING A1: keep the −15<br/>bruiser row? (gates nothing yet)"]:::ruling
-    A3["RULING A3: does the bag<br/>cost a turn?"]:::ruling
+    A3["A3 — the bag is free to read<br/>DONE 2026-09-24"]:::done
     A3 -.->|"Law 7 stays true"| B2
 
     TAG["Tag layer on items /<br/>enemies / tiles"]:::ready
@@ -119,10 +135,12 @@ Three things the graph makes visible that the lists did not:
 
 1. **The boss line's mechanism is built; what is left of it is content.** Law 5 runs (`6bdb7ad`),
    the Wererat and the Borgir boss carry an authored `boss` flag and lint clean as elite. The four
-   zone bosses are unblocked authoring work, not engineering. *(This bullet said the opposite on
+   zone bosses are unblocked authoring work, not engineering. *(Since the spine, 10-11: three of
+   them are Act 2's bosses, AB, and the Financier is Act 3's finale, FIN. They wait on SR so each
+   boss slot is a pool from the start.)* *(This bullet said the opposite on
    09-07 — "two rulings gate the entire boss line." Both rulings' premises had already shipped.)*
 2. **The rulings that still gate a build are the zone ones:** Z1/Z2 → interiors, CG → a carnival
-   ground. A1 and A3 gate nothing buildable today.
+   ground. A1 gates nothing buildable today.
 3. **The zone-identity work and the combat work do not touch each other.** They can proceed in
    parallel sessions without file collisions — zone work lives in `sprites.js` / map JSON, combat
    work in `npc.js` / `combat.js` / `enemies.js`.
@@ -139,30 +157,42 @@ Three things the graph makes visible that the lists did not:
 
 ## 2. RULINGS CAELAN OWES — cheap, and each one gates something
 
-Ordered by how much each unblocks.
+Ordered by how much each unblocks. **The trim pass of 2026-10-03 ruled on every row still open;**
+batch 1 (`plans/trim.md`) builds the small ones, and the rest wait for a branch of their own. Still
+open after it: R (rings, with Hide) and DZ (needs his yes) — both ruled 2026-10-06, below.
+**SP1–SP9 are new, from the spine (2026-10-11)**; each answer is recorded, dated, in `plans/spine.md` §8.
 
 | # | Ruling | What it gates | Source |
 |---|---|---|---|
+| **SP1** | **The three required items' names** — what each Act 2 boss drops. One idea: each is proof of the Financier's scheme. They stay *item A, B, C* until named. | AB's drops; FIN's lock | `plans/spine.md` §8 |
+| **SP2** | **Remove New Game+, so the credits end the game?** The cosmology ends playthrough 1 in NG+ as the Sunpyre; species-adventures rec. 5 proposed removing it. | What FIN ends on | `plans/spine.md` §8 |
+| **SP3** | **Does `species-adventures.md` become later work, with the spine as the north star?** Its piece 1 stays either way, as SR. | Whether species, layers and the account are on the board at all | `plans/spine.md` §8 |
+| **SP4** | **The frost rat's zone — and is "the forest" the Wilderness map?** No forest zone exists, and no cold one; the Wilderness is the closest to a forest. | RV (where the frost and pouch rats spawn) | `plans/spine.md` §8 |
+| **SP5** | **Texas Beholdem and Nessie as future Sewer boss-pool cards?** The 10-03 note made **Lonny** the Sewer's own Loch Ness-style serpent (she), with Nessie her long-lost love elsewhere — so the Sewer card may be Lonny. | The private board's pool cards | `plans/spine.md` §8 |
+| **SP6** | **Is the Canyon a detour or a required beat?** At the bridge, a car on raw fuel crashes into the Canyon; one tamed with alcohol drives straight to Downtown. | Whether Act 1 is locked as built | `plans/spine.md` §8 |
+| **SP7** | **Bank Street = Downtown's First Blood Bank?** The cosmology puts Bank Street in the Town; the shipped bank is an interior off Downtown. | FIN's location | `plans/spine.md` §8 |
+| **SP8** | **Make "meet the Financier" a quest stage?** Act 1's quests end with the burger delivery; he is an optional placeholder talk. The 10-03 *blend* ruling (the burger *is* the package) could make him who it's delivered to. | Act 1's last beat | `plans/spine.md` §8 |
+| **SP9** | **What opens Sun Man?** The cosmology gates his first talk and the Final Arc on transformations, which are species work (SP3). | FIN | `plans/spine.md` §8 |
 | ~~**CD**~~ | **DONE 2026-09-15** — Browser Cache TTL set to *Respect Existing Headers*; live headers read `max-age=0, must-revalidate`, re-verified at every release since. *Was:* **The custom domain still caches JS and CSS for four hours.** `game/_headers` (v0.22.0) asks for `max-age=0`, and `violencetown.pages.dev` obeys it, but the `russelldangerr.com` zone's Browser Cache TTL — Cloudflare's default, four hours — replaces any shorter origin value on `.js`, `.css` and images. Set it to *Respect Existing Headers*, or add a Cache Rule for `violencetown.russelldangerr.com`. A dashboard step, not code; `curl -sI …/main.js` then reads `max-age=0`. | Whether a release reaches a returning player at once | `demo-readiness` §2.5 |
-| **A1** | **Keep the −15 `bruiser` row?** It exists — `tools/balance-harness.mjs:146`, 15–40 GP, interpolated between fodder and standard and marked an open question. **No enemy in any map sits in its band** (armor −30 < a ≤ −15), and Pike is armor 5, which the `tough` row covers. Confirm it, or fold −15 into a neighbour, before anyone authors a −15 enemy. *(Corrected 2026-09-10: this row used to say the band had no row and gated "the entire boss line".)* | Nothing today | `next-session-open-work` A1 |
-| **A3** | **Does opening the REMOTICON cost a world turn?** Load-bearing now DoTs are live — a bag-open would cost a poison tick, undoing Law 7's "reading your bag is free." Proposed (systems-audit §6): *free out of combat, costed in combat.* Still open: `_openDevice` advances no turn. | Whether Law 7 is true | A3 |
-| **A2** | **Poison-flip direction.** The downward mirror of the ally-flip was chosen, not derived. Confirm or replace. | Nothing to build; a correctness question | A2 |
-| **Z1** | **Vendor `Roguelike Interior Pack`?** CC0, same pattern as RPG Urban, and *the only source anywhere with a counter.* | Zone §1 interiors | `zone-identity` §1 |
-| **Z2** | **No slot machine or vault door exists in any pack.** Ship a boxy-cabinet proxy, or leave them text-only? (A cabinet-as-vault is the same class of compromise as the hooded-figure-as-rat.) | Zone §1 interiors | `zone-identity` §1 |
-| **CG** | **The carnival's ground is Town's road** — `CIRCUS_GROUND` and `ROAD` draw the same cell, over 892 of the carnival's 1,276 cells. Pick a ground of its own (from a cell no other tile draws), or accept the share in writing. Found 2026-09-10; the new shared-cell test carries it as the one open exception. | Zone identity's bar for the carnival | `zone-identity` §3 findings |
-| ~~**B3**~~ | **DONE 2026-09-25 — ruled: Cone of Cold stays at 14 dmg / 10 MP; area spells get their own floor.** `lintSkills` reads area from a spell's `aoe` (`isAreaSpell`) and holds it to `SPELL_AREA_MIN_RATE` = 1.0 dmg/MP per target (Cleave's ⅔ of the 1.5 floor). The balance lint is at zero flags; `tests/balance-harness.test.js` pins the exemption. | Lint credibility | B3 |
-| **R** | **Rings: author to ~12, or cut.** **Two exist** (`rat_ring`, `fire_ring`) and one fusion — `game/ring-data.js`, and what systems-audit §3.1 itself says. *(Corrected 2026-09-10: this row said five.)* | Whether the ring system is a feature or a fossil | systems-audit §3.1 |
-| **DZ** | **TheDangerrZone — freeze at a tag or delete.** Eight `*-TheDangerrZone.*` files still ship in `game/`, unreachable from `index.html`. | Repo clarity | systems-audit §3.3 |
-| ~~**D1**~~ | **DONE 2026-09-20** — archived as tag `archive/diagonal-prototype-2026-06-14` and the branch deleted. Audited first: nothing unreleased in it; dev's versions of its diagonal movement were further along. | Branch hygiene | D1 |
-| **P1** | **Phone tap targets render at half their designed size** — nothing on the canvas clears Apple's 44pt. *(Updated 2026-09-13: the screen-fill rule — at least 20 tiles on the short side — draws a phone at 0.5×, down from 0.62×: a tile is 16 CSS px, the dock's ✦ 36 px. The page's ☰ and ▤ are 44 px now.)* Options: fewer tiles on narrow screens / a touch layout / accept phone as secondary. *A design decision, not a bug.* | Mobile demo viability | `demo-readiness` §2.1 |
+| ~~**A1**~~ | **RULED 2026-10-03 — fold it into its neighbours.** The `bruiser` row is cut (`plans/trim.md` stage 2); armor −29…−15 now prices as `standard`. No enemy sat in that band, so the balance golden does not move. *Was:* keep the −15 `bruiser` row (`tools/balance-harness.mjs:146`, 15–40 GP, interpolated between fodder and standard)? | Nothing today | this row |
+| ~~**A3**~~ | **DONE 2026-09-24 — ruled: the bag stays free, in and out of combat.** No code change: opening the REMOTICON, flipping its tabs and closing it already advanced no turn. Using or equipping from it costs one turn, as any action does. `tests/free-bag.test.js` pins the free part, in and out of a fight. *Was:* **Does opening the REMOTICON cost a world turn?** The proposal (systems-audit §6) was *free out of combat, costed in combat*; it was not taken. | Law 7 stays true | this row |
+| ~~**A2**~~ | **RULED 2026-10-03 — fine as is.** The poison-flip stays the downward mirror of the ally-flip. *Was:* the direction was chosen, not derived; confirm or replace. | Nothing to build | this row |
+| **Z1** | **RULED 2026-10-03 — later.** Interior furniture waits; it is not in the trim batch. *Question:* vendor `Roguelike Interior Pack`? CC0, same pattern as RPG Urban, and *the only source anywhere with a counter.* | Zone §1 interiors | `zone-identity` §1 |
+| **Z2** | **RULED 2026-10-03 — later**, with Z1. *Question:* no slot machine or vault door exists in any pack. Ship a boxy-cabinet proxy, or leave them text-only? | Zone §1 interiors | `zone-identity` §1 |
+| **CG** | **RULED 2026-10-03 — the Carnival gets a ground of its own.** An art pick for a later batch: a cell no other tile draws, then drop the shared-cell test's one open exception. *Was:* `CIRCUS_GROUND` and `ROAD` draw the same cell, over 892 of the carnival's 1,276 cells. | Zone identity's bar for the carnival | `zone-identity` §3 findings |
+| ~~**B3**~~ | **DONE 2026-09-25 — ruled: Cone of Cold stays at 14 dmg / 10 MP; area spells get their own floor.** `lintSkills` reads area from a spell's `aoe` (`isAreaSpell`) and holds it to `SPELL_AREA_MIN_RATE` = 1.0 dmg/MP per target (Cleave's ⅔ of the 1.5 floor). The balance lint is at zero flags; `tests/balance-harness.test.js` pins the exemption. | Lint credibility | this row |
+| ~~**R**~~ | **RULED 2026-10-06 — keep the rings, grow them later.** The two rings (`rat_ring`, `fire_ring`) and the Ember Rat fusion stay as they are; authoring more is its own branch when picked. **Hide is cut**: the wheel's Flight > Hide was a stub that spent the turn and did nothing, and sneaking already works by position and facing. | Whether the ring system is a feature or a fossil | systems-audit §3.1 |
+| ~~**DZ**~~ | **DONE 2026-10-06 — deleted** at Caelan's word. The eight untracked `game/*-TheDangerrZone.*` files are gone, with their `.gitignore` rule and the test and harness exclusions that named them. | Repo clarity | this row |
+| ~~**D1**~~ | **DONE 2026-09-20** — archived as tag `archive/diagonal-prototype-2026-06-14` and the branch deleted. Audited first: nothing unreleased in it; dev's versions of its diagonal movement were further along. | Branch hygiene | this row |
+| **P1** | **RULED 2026-10-03 — build a touch layout.** A later batch. *Was:* phone tap targets render at half their designed size — nothing on the canvas clears Apple's 44pt (a tile is 16 CSS px on a phone, the dock's ✦ 36 px; the page's ☰ and ▤ are 44 px). | Mobile demo viability | `demo-readiness` §2.1 |
 | ~~**P2**~~ | **DONE 2026-09-25 — ruled: delete the orphan.** `_endChapterOne()`, the `ending` state and its card (`_drawEndingOverlay`, PRESS N TO PLAY AGAIN) are gone; they had no caller. The bridge plays its cutscene into Chapter Two, as it has since `a83cdd4`. `_fullReset` stays: RESTART uses it. | Demo has a stopping point | `demo-readiness` §2.2 |
-| **ENT** | **Does the fight entrance's punch read soft?** Shipped in v0.24.0 on measurements alone — nobody has looked at it with eyes. If it does, the lever is `IMPACT_MS` *down* toward 90, not `ZOOM_IN_MS` up (that softens it further). | Feel | `plans/entrance-feel-pass.md` |
-| **OBJ** | **Two quest objectives truncate on a phone.** `canyon_escape/find_way_out` (64 chars) and `deliver_burger/handoff` (51) exceed the 46-character budget at 375 px. `tests/first-minute.test.js` carries both as `KNOWN_OVERFLOW`; shortening one fails that test until it leaves the list. The copy is Caelan's. | Phone legibility | `tests/first-minute.test.js` |
-| **EC** | **Energy's splat colour.** Energy now carries the `exclamation` mark but still falls back to physical red `#d23f2f`, and the mark's red-orange `#ff4b1d` on it is the weakest contrast in the set (1.40). Indigo `#3b2f8f` recommended; magenta and yellow-white both measured out. | F2's last gap | `plans/hit-splat-art.md` §9 |
-| **V1** | **Theft-aiming volume** — aiming a theft puts all nine town cones back. Correct information, possibly too much. Scope to the theft's range if so. | Feel | `visual-pass.md` |
-| **V2** | **`Lire` has no lion.** Allowlisted unsprited rather than given a bad pick. | One sprite | `visual-pass.md` |
-| **AU** | **Audio discoverability.** Ships muted (ruled, correctly). Nobody discovers audio exists. Wants a visible speaker glyph — *not* autoplay. | Demo polish | `demo-readiness` §2.3 |
-| **SF** | **Screen-fill's open calls.** (1) The filler for each zone — the table in `plans/screen-fill.md`, pinned by `tests/tile-coverage.test.js`, so change both. (2) The forest is one tree on every cell: accept it, or vary it (a second prop, a hash). (3) Filler trees are two tiles tall and join the depth sort, so the row past a map's south edge covers its last row: you vanish for the one step onto Town's south exit, and two Carnival corner cells hide what stands on them. Accept, or draw fillers behind everything. | How the world's edge looks | `plans/screen-fill.md` |
+| ~~**ENT**~~ | **RULED 2026-10-03 — fine as is; closed.** The entrance's punch stays as shipped in v0.24.0. *Was:* does it read soft? The lever, if it ever does, is `IMPACT_MS` *down* toward 90. | Feel | `plans/entrance-feel-pass.md` |
+| **OBJ** | **RULED 2026-10-03 — Caelan shortens the two objectives himself.** `canyon_escape/find_way_out` (64 chars) and `deliver_burger/handoff` (51) exceed the 46-character budget at 375 px; `tests/first-minute.test.js` carries both as `KNOWN_OVERFLOW` until his copy lands. | Phone legibility | `tests/first-minute.test.js` |
+| ~~**EC**~~ | **DONE 2026-09-30 — ruled: yellow `#f5d02a`, with dark digits** (white on yellow measured 1.4-1.9:1), and its own spark silhouette; shipped v0.27.0 (`plans/hit-splat-art.md` §10). *Was:* **Energy's splat colour.** Energy now carries the `exclamation` mark but still falls back to physical red `#d23f2f`, and the mark's red-orange `#ff4b1d` on it is the weakest contrast in the set (1.40). Indigo `#3b2f8f` recommended; magenta and yellow-white both measured out. | F2's last gap | `plans/hit-splat-art.md` §9 |
+| ~~**V1**~~ | **RULED 2026-10-03 — only the cones within the theft's range.** Built in `plans/trim.md` 4b. *Was:* aiming a theft put all nine town cones back. | Feel | `visual-pass.md` |
+| **V2** | **RULED 2026-10-03 — give Lire a stand-in picture.** An art pick for a later batch. *Was:* `Lire` has no lion; allowlisted unsprited. | One sprite | `visual-pass.md` |
+| ~~**AU**~~ | **RULED 2026-10-03 — no speaker icon.** Sound stays off by default and lives in Options, as experimental: the game goes to family, friends and recruiters, nothing should blare when they open it, and the sounds are early placeholders. *Was:* a visible speaker glyph so people discover audio. | Demo polish | `demo-readiness` §2.3 |
+| **SF** | **RULED 2026-10-03 — (3) draw edge trees behind everything; (2) vary the forest, later.** (3) is built in `plans/trim.md` 4c: the filler row past a map's south edge no longer covers its last row. (2) is an art pick for a later batch. (1) The filler table stands as in `plans/screen-fill.md`, pinned by `tests/tile-coverage.test.js`. | How the world's edge looks | `plans/screen-fill.md` |
 
 ---
 
@@ -170,11 +200,12 @@ Ordered by how much each unblocks.
 
 | Item | Size | Blocked by | Doc | Where the doc lives |
 |---|---|---|---|---|
+| **RC — the recolor tool** — one base sprite in, tinted variants out | S | nothing | In the style of `tools/gen_outlined_sheet.py` ("generate, don't reject"). Makes enemy variants cheap; the rats are its first use. | `plans/spine.md` §6 |
 | **T1 — Tag layer** on items / enemies / tiles | M | nothing | Not built. Prerequisite for the affordance matrix. | systems-audit §5.4 |
-| **C3 — input asymmetries** | M | nothing | REMOTICON item/gear/ring actions are pointer-only; aiming, turn-in-place and the 1–9 hotbar are keyboard-only. Documented honestly; still gaps. | C3 |
-| **Housekeeping** | S | nothing | *Branches and worktrees DONE 2026-09-21:* both stale worktrees removed (clean, fully merged), 97 merged local branches and 27 merged GitHub branches deleted — only `dev`, `main` and `plan` remain. **Still open:** migrate or archive the 24 `plan`-only docs (§5). | this doc |
+| **C3 — input asymmetries** | M | nothing | REMOTICON item/gear/ring actions are pointer-only; aiming, turn-in-place and the 1–9 hotbar are keyboard-only. Documented honestly; still gaps. | this row |
 
-C1, C4, RESTART and the streetlights were built and shipped in v0.24.0 — §6.
+C1, C4, RESTART and the streetlights were built and shipped in v0.24.0; Housekeeping finished
+2026-09-25 — §6.
 
 ---
 
@@ -182,26 +213,29 @@ C1, C4, RESTART and the streetlights were built and shipped in v0.24.0 — §6.
 
 | Item | Open questions | Size | Doc | Blocked by |
 |---|---|---|---|---|
-| **H1 — the combat HUD** | **SHIPPED in v0.23.0, 2026-09-20.** All five stages of `plans/combat-hud.md`: the wheel fires the bar's item (it fired bag slot 0), the dial gets a reserved dock column and joins the non-overlap invariant, the dock swaps its quest log for a combat log in a fight, two read-only gear panels sit in the fogged margins, and the bar shows its whole column. The combat log then shipped **empty** — every fight message was filed `system` — fixed in the same release, with a source-reading guard so it cannot rot back. | M | `plans/combat-hud.md` | — |
-| **F2 — hit-splat art** | **SHIPPED in v0.24.0** (merged `fe44bd9`, 2026-09-20) — `plans/hit-splat-art.md`. Energy takes `exclamation`; poison and sludge split one drop / drops on the heavy threshold; `miss` was dead and is deleted; the pick rule is a tested module. Remaining gaps, both needing an eye: a snowflake for `cold` (no glyph exists — new art), and energy's colour — ruling **EC** (§2). | S | `plans/hit-splat-art.md` | EC |
+| **Turn model step 2 — one slapstick blow** | One enemy type winds up on a TILE (telegraphed) and lands next beat on whoever stands there, goon or player — the first "plans ruined" moment. Waits on Caelan's play verdict on C1 (does the order read as comedy, or only as slower?), then rulings TM-7..9: ties, the player's slot, where speed comes from. | M | `plans/turn-model.md` Recommendation | nothing |
 | **F2b — entrances by hit type** | Split out of F2, which bundled it wrongly. Caelan's 09-14 note (*"slashing versus crushing"*) rides `game/fight-entrance.js` and `_trackFight`'s `_fightStart` stamp, not the splat: an entrance plays once when a fight opens, a splat plays on every blow. Different system, different timer. | S | F1 (shipped) | nothing |
 | **F3 — who gets pulled into a fight** | F1 shipped its area as `game/fight-area.js` — every tile a fighter perceives. As a gameplay rule: whoever can see the fight is in it? | M | `plans/screen-fill.md` *Follow-on pieces* 3 | nothing |
 | **Affordance matrix** — verbs (~20 wheel leaves) × tags | The discipline: *a blank cell is a decision, not an oversight.* Second job is diagnostic — a proposed element with zero edges is caught at design time. Needs the tag layer first. | M | systems-audit §9 | T1 |
 | **Directional frames for every NPC, retire the chevron** | Violencians face their travel now. Extending to guards makes the overlay's facing chevron redundant — the stealth read becomes native to the art. Needs the other rpgUrban rows assigned. | M | `animation-pass.md` §4 | nothing |
-| **"The Crat"** — sewer diplomacy talk-quest | How ambiguous the tell is; father-flip vs. "you are not the mother"; player as arbiter vs. bribeable; reward. Reconcile with the shipped sewer canon first. | M | `sewer-crat-quest.md` (**plan only**) | nothing |
-| **Bestiary** — Cave + Weredigo (invisibility / blind-combat boss), Park + Ruffian (steal-and-flee via `transferGold` + `fleeStep`), Bear (friendly quest-giver), content enemies | Special mechanics? Which Kenney cells? Ruffian cleanly reuses two shipped systems and is the best first piece. | S–M each | `bestiary.md` (**plan only**) | nothing |
-| **Elemental coverage matrix** | `fire` and `poison` joined `sludge` / `cold` / `energy` / `fear` with no weakness table to sit in. | S | E | nothing |
-| **5-Zone Body reconciliation** | Survives as the positional layer (Back = backstab ×1.5), not split HP pools. Needs a ruling before the bible states it as law. | S | E | nothing |
+| **RV — rat variants** — undead, frost, pouch; the Carnival's birthday, sludge and robot rats | Each a registry entry with its own kit and drops, placed through spawn tables, recolored from the one brown rat (`tinyDungeon` 3,10) and run through `tools/balance-harness.mjs`. Where the frost and pouch rats live is SP4. | M | `plans/spine.md` §7 | SR, RC, SP4 |
+| **AB — Act 2 bosses** — the Carnival, Factory and Graveyard boss slots | First pool entries from the cosmology: Bigfoot, Alien Invasion (where the Ray Gun should ultimately drop), The Deity. Each drops one required item (SP1). Kits, arenas and fights are each boss's own design pass; the mechanism (B1, Law 5) shipped. Was "Zone deep content / bosses" under later work. | L, boss by boss | `plans/spine.md` §1 | SR, SP1 |
+| **FIN — the finale** — Bank Street, the Financier, the Final Arc | The three items open it; the Financier, then the Bite and phase 2 against Monstrous Sun Man; credits. Where it is (SP7), what opens Sun Man (SP9), and whether NG+ follows (SP2). Interior rulings Z1/Z2 (the vault door) now matter here. | L | `plans/spine.md` §1, `plans/cosmology-and-arc.md` | AB, SP2, SP7, SP9 |
+| **"The Crat"** — sewer diplomacy talk-quest | How ambiguous the tell is; father-flip vs. "you are not the mother"; player as arbiter vs. bribeable; reward. Reconcile with the shipped sewer canon first. Under the spine it is a Sewer set-piece or character pool entry. | M | not in the repo (idea stage) | nothing |
+| **Bestiary** — Cave + Weredigo (invisibility / blind-combat boss), Park + Ruffian (steal-and-flee via `transferGold` + `fleeStep`), Bear (friendly quest-giver), content enemies | Special mechanics? Which Kenney cells? Ruffian cleanly reuses two shipped systems and is the best first piece. **Under the spine** the creatures are pool entries, but a Cave or a Park is a new zone: either content inside an existing map, or a lock-clause ruling. | S–M each | not in the repo (idea stage) | nothing |
+| **Elemental coverage matrix** | `fire` and `poison` joined `sludge` / `cold` / `energy` / `fear` with no weakness table to sit in. | S | this row | nothing |
+| **5-Zone Body reconciliation** | Survives as the positional layer (Back = backstab ×1.5), not split HP pools. Needs a ruling before the bible states it as law. | S | this row | nothing |
 | **Weapons have no art** | No weapon has ground or bag art: all five draw as lettered boxes — the Ray Gun a teal Z, the Wooden Sword a grey `?`. tinyDungeon has swords, axes and hammers; nothing bundled looks like a ray gun. Which cells — and what does the Ray Gun look like? | S–M | `sprites.js` `ITEM_SPRITES` | nothing |
-| **Q1 — the quest-1 autoplay** | **BUILT 2026-09-21 on `feature/quest1-autoplay`, awaiting the merge call.** All six stages: virtual clock, seed seam, headless Chrome runner, the standard fighter, a scored golden (`npm run autoplay:check`), watch mode and `--gif`. Deterministic (three jittered runs, one end state; the wall-clock control, three). **Its findings: the standard fighter cannot finish quest 1** (dies to the Fungus King, seeds 1-5) — ruled Q1-8 "sneaking", the King is meant to be snuck past — **and there is no unseen route** (measured with `perceives()`: hidden ground from the entrance reaches 2 tiles; the Ghost and Red Fungus cones seal it). The sneak profile dies too. **Q1-9 ruled and built:** both sentries face north (a hidden route now exists, pinned by a test), and a struck enemy turns to face you (the side-hit loophole, fixed on `fix/struck-turns-to-face`). **Q1-10 BUILT 2026-09-24** (`feature/q1-10-wererat-autoplay`): the players spend MP, throw and drink what they carry, and retry until an attempt changes nothing — both now finish quest 1. It found a game bug on the way: a wheel action whose world turn killed you stood you back up at 0 HP (`_closeWheel`), and one death could resolve twice. | M | `plans/quest1-autoplay.md` | — |
 
 ---
 
-## 5. POST-1.0 — big threads, scoped, none started
+## 5. LATER — big threads, scoped, none started
+
+No version number gates these (Caelan, 2026-10-12: there is no 1.0 target). The zone bosses left
+this lane on 2026-10-11: they are the spine's AB and FIN (§4).
 
 | Thread | One line | Size | Blocked by |
 |---|---|---|---|
-| **Zone deep content / bosses** | Financier (Street — a literal `dialogue.js` placeholder), Bigfoot (Carnival), Alien Invasion (Factory — where the Ray Gun should ultimately drop), The Deity (Graveyard). Its dependency, B1's boss mechanism, **shipped 2026-09-02** — so this is authoring work now, not engineering. | L, zone by zone | B1 |
 | **Element meters** | Per-zone accumulating meters (Boredom / Fun / Goo / Death). Only Sludge exists, as a hazard DoT. | M | nothing |
 | **Light + Lantern** | A purchasable light from Puck that makes the dark Wilderness explorable. `_drawDarkness` exists; no item. | S–M | nothing |
 | **Party / creature recruitment** | Wererat / Clown / Robot / Skeleton as party members. Only the ally-flip primitive and the Lire summon exist. | M–L | nothing |
@@ -209,10 +243,10 @@ C1, C4, RESTART and the streetlights were built and shipped in v0.24.0 — §6.
 | **Trade Slice 2** | Drag-to-swap barter, NPC loadouts, NPC gold. | M | nothing |
 | **Enemy buys YOUR gear** / **AI reads your wallet** | Law 6 open hook; bribe demands scaling to visible wealth. *Very Violencetown.* Deferred, not rejected. | M | nothing |
 
-**The `plan` branch problem.** 24 plan docs exist *only* on `plan`, which is six weeks stale and
-badly diverged from `dev`. Three of the "ready to build" items above have their only spec there.
-CLAUDE.md's rule is that active work lives on `dev`; parked work on `plan`. **Anything in §3 or §4
-should have its doc migrated to `dev` before work starts** — `git show plan:plans/<file>` and commit.
+**The `plan` branch — resolved.** It was retired 2026-09-24. The five of its specs that code or
+live docs on `dev` cite moved to `plans/` on 2026-09-25; the rest were superseded or idea-stage and
+stay out of the public repo. A spec now starts life as the first commit of the feature branch that
+builds it (CLAUDE.md).
 
 **ROADMAP.md's seven ABC decisions** are listed as pending and are mostly *de facto settled by
 shipped code* (turn-based movement, REMOTICON inventory, 32px scale). ROADMAP.md itself has not been
@@ -255,7 +289,7 @@ parked document.
 | roadmap §4 | F1 — the fight area as fog of war | Merged 2026-09-14 (`23fffd2`, `plans/fight-fog.md`): fog over every tile the fighters can't perceive, and an entrance by how the fight began — a black and white close-up, a red slash, a white flash. Timed beside the spotlight at 3440×1440: no measurable cost |
 | roadmap §1 | Ship v0.22.0 to `main` | `56efc17`, tagged `v0.22.0`, live 2026-09-14: 85 commits, re-timed at 3440×1440 on a quiet machine first (`plans/screen-fill.md`, *Measured*). `game/_headers` shipped with it; ruling CD settled it on the custom domain 2026-09-15 |
 | roadmap §4 | H1 — the combat HUD | `9f4158f`, tagged `v0.23.0`, live 2026-09-20 — all five stages of `plans/combat-hud.md`, plus the combat-log tagging fix |
-| roadmap §4 | F2 — hit-splat marks | Merged `fe44bd9` 2026-09-20, shipped v0.24.0. Its colour gap is ruling EC |
+| roadmap §4 | F2 — hit-splat marks | Merged `fe44bd9` 2026-09-20, shipped v0.24.0 (`plans/hit-splat-art.md`). Its colour gap is ruling EC; `cold` still wants a snowflake, which is new art |
 | found 2026-09-20 | Uncaught `createRadialGradient` TypeError stopped the effects loop for good | `5867818`, shipped v0.24.0: a throwing frame costs one frame (`game/effect-loop.js`). The non-finite value itself was never reproduced — `plans/one-bad-frame.md` records what was ruled out |
 | Caelan, 2026-09-20 | The fight entrance is jittery | `bd3140c`, shipped v0.24.0 (`plans/entrance-feel-pass.md`): the pixel crawl, the hard cut and the hidden punch, measured before and after. Whether the punch reads soft is ruling ENT |
 | roadmap §3 | C1 — seven unreachable Escape branches | `4408a9a`, shipped v0.24.0; `tests/escape-shadowing.test.js` derives the invariant from source |
@@ -264,10 +298,19 @@ parked document.
 | found 2026-09-21 | The first minute works against a new player | `57ef56c`, shipped v0.24.0: the opening objective says *go*, E names the car's direction, a banner says the wheel holds the movement keys, Defend moved from Trick to Fight |
 | roadmap §3 | RESTART keeps the last run's pickups | `936f471`, shipped v0.24.0 — far wider than pickups: rings and their skills, haste/slow, the sewer escape, the theft ledgers and the time of day all carried over, and the world memory was still set when the town reloaded. `tests/restart.test.js` checks a restarted run against main.js's own constructor, and covers any field added to the save later |
 | roadmap §1 | Ship v0.24.0 to `main` | `77e4784`, tagged `v0.24.0`, live 2026-09-21: 29 commits, 14 changed game files byte-matched live |
-| roadmap §4 | Q1 — the quest-1 autoplay | Shipped v0.25.0: virtual clock, headless Chrome runner, the fighter and the sneak, a scored golden (`npm run autoplay:check`), watch mode (`?autoplay`), `--gif`. Deterministic: three jittered runs, one end state; the wall-clock control, three |
+| roadmap §4 | Q1 — the quest-1 autoplay | Shipped v0.25.0: virtual clock, headless Chrome runner, the fighter and the sneak, a scored golden (`npm run autoplay:check`), watch mode (`?autoplay`), `--gif`. Deterministic: three jittered runs, one end state; the wall-clock control, three. **Q1-10 shipped v0.26.0** (`b7f1869`): the players spend MP, throw and drink what they carry, and retry until an attempt changes nothing — both finish quest 1, seeds 1-5 |
 | autoplay finding, Q1-9 | No unseen route through the sewer | `2f1a2de`, shipped v0.25.0: the Ghost Fungus and the Red Fungus sentry face north; `tests/sewer-sneak-route.test.js` pins the hidden route |
 | autoplay finding, Q1-9 | A boss struck from the side never fought back | `f2f0c14`, shipped v0.25.0: `perception.js struck()` — the victim turns to face the blow next turn, or uses its kit first |
 | roadmap §1 | Ship v0.25.0 to `main` | `72ed8d5`, tagged `v0.25.0`, live 2026-09-21: 27 commits, 14 changed game files byte-matched live |
+| autoplay finding, Q1-10 | A wheel action that killed you stood you back up at 0 HP | `b7f1869`, shipped v0.26.0: `_closeWheel` no longer sets IDLE over DEAD, so one defeat resolves once instead of a boss retry and a defeat scenario; `tests/wheel-death.test.js` |
+| roadmap §3 | Housekeeping | 2026-09-21: both stale worktrees and 124 merged branches removed. 2026-09-24: the `plan` branch retired. 2026-09-25: the five plan-only specs that `dev` cites moved to `plans/`; the rest stayed out as superseded or idea-stage, and `claude/plan-branch-work-edcqlm` was deleted. Branches: `dev`, `main`, `spike/3d-view` |
+| roadmap §1 | Ship v0.26.0 to `main` | `1f1e6e5`, tagged `v0.26.0`, live 2026-09-25: 8 commits (Q1-10, the double-death fix, P2, B3), 7 changed files byte-matched live on both hosts |
+| design thread | Turn model C1 — the cascade | Shipped v0.27.0 behind `?turns=cascade`: the enemy phase plays back one actor at a time, ~130 ms apart, attackers lunging; any key flushes it. Playback only — the autoplay golden matches with it on (`plans/turn-model.md`) |
+| F2 follow-up | Hit splats redrawn | Shipped v0.27.0: a silhouette per damage type (`tools/gen_splats.py`), layout by count above the head, the head space theirs while up, whole pixels at odd scales (`plans/hit-splat-art.md` §10) |
+| QA pass finding | A DoT death was not a death | Shipped v0.27.0 (`plans/dot-death.md`): an enemy killed by its own DoT took its turn anyway and its death went unhandled — a poison finish on the Were-Rat dropped no converter, softlocking quest 1 |
+| roadmap §1 | Ship v0.27.0 to `main` | `479a4b8`, tagged `v0.27.0`, live 2026-10-02: 25 commits, 10 changed game files byte-matched live on both hosts |
+| roadmap §3 | SR — the slot registry | Merged to `dev` 2026-10-13 (`809c692`, `plans/slot-registry.md`): `game/slots.js` — a registry, slots with pools, one pick per slot per new game from the seed (never `game.rng`), saved. The Were-Rat is `sewer.boss`'s only entry and the Converter drops by slot. Nothing visible changed: the autoplay with the new save field stripped matched the old golden exactly; browser smoke 9/9, old saves included. Shipped v0.29.0 |
+| roadmap §1 | Ship v0.29.0 to `main` | `2ad4e9e`, tagged `v0.29.0`, live 2026-10-14: 15 commits (the house style, walking freely in a fight, the spine, SR); 18 changed game files byte-matched live on both hosts |
 
 ---
 
@@ -275,13 +318,21 @@ parked document.
 
 Not a mandate — a reading of the graph.
 
-1. **Rulings — the cheapest progress on the board.** ENT, OBJ and EC each close a shipped
-   feature's last gap and need a look or a line of copy, not a build. B3 clears the balance lint.
-   Z1–Z2 and CG gate zone builds; A1, A2, A3, R and DZ clear the board.
+**First (2026-10-11): SR, the slot registry — merged 2026-10-13.** Next on the path to the credits:
+**one Act 2 boss end to end** (AB), before RC and RV — Claude's lean, not yet ruled; it needs SP1 for
+its item's name and a pick of which zone goes first. RC and RV follow as a breather. The rulings
+SP1–SP9 cost a line each and unblock RV, AB and FIN. The items below still stand behind it.
+
+0. **Turn model step 2 — one slapstick blow** (`plans/turn-model.md`, Recommendation). One enemy type
+   winds up on a TILE (telegraphed) and lands next beat on whoever stands there, goon or player — the
+   first "plans ruined" moment. Wants Caelan's play verdict on C1 first: does the order read as
+   comedy, or only as slower? Rulings TM-7..9 (speed order) follow.
+1. **Rulings — the cheapest progress on the board.** ENT and OBJ each close a shipped
+   feature's last gap and need a look or a line of copy, not a build.
+   Z1–Z2 and CG gate zone builds; A1, A2, R and DZ clear the board.
 2. **F2b** (entrances by hit type, on `game/fight-entrance.js`) and **F3** (who gets pulled in, on
    `game/fight-area.js`). Both want a short design pass first; both touch the fight's opening.
-3. ~~**Q1-10 — the Wererat by spells, items and retries.**~~ **BUILT 2026-09-24**, awaiting the
-   merge call — both profiles finish quest 1, and the golden records the first complete
+3. ~~**Q1-10 — the Wererat by spells, items and retries.**~~ **Shipped in v0.26.0** — both profiles finish quest 1, and the golden records the first complete
    playthrough. What it measured is a balance question for Caelan, not a bug: the gate is the
    **Fungus King**, not the Wererat (`plans/quest1-autoplay.md` §8, Q1-10). *(Q1-9 — the sneak
    route and the side-hit loophole — shipped in v0.25.0.)*

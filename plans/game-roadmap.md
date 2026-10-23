@@ -112,7 +112,7 @@ These systems exist and are working in the codebase:
 
 ## 5. Height & Visibility System
 
-**Concept:** Vertical dimension with camera-driven fog of war. See [PLAN-height-visibility.md](./PLAN-height-visibility.md) for full research.
+**Concept:** Vertical dimension with camera-driven fog of war. The full research, `PLAN-height-visibility.md`, was removed in the 2026-04-01 clean-up; read it with `git show 8d7bf40:game/PLAN-height-visibility.md`.
 
 - Height tiers: Ground → Furniture → Counter → Tall → Ceiling
 - Alpha-dimming to show reachable vs unreachable items

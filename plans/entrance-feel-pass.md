@@ -2,6 +2,7 @@
 
 Status: **BUILT AND MERGED** to `dev` (`bd3140c`, 2026-09-20). Base was `dev` @ `5867818`.
 Results and measured before/after are in §7.
+**Ruled 2026-10-03 (ENT): fine as is.** Caelan looked; the punch stays as shipped. Closed.
 Research is done (two independent audits, below). This document is the design gate and the
 execution plan. Caelan makes the merge call.
 

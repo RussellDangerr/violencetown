@@ -211,8 +211,8 @@ export function struck(npc, from) {
 // the forgiving direction for the AI: noise cannot see through a wall to find
 // you, it can only mislocate attention.
 //
-// NOTE: rockClatter is NOT yet retired into this — that happens with the main.js
-// call-site wiring, which is deferred until feature/unified-offer-screen lands.
+// A thrown item's clatter (main.js _rockClatter) goes through emitNoise like any
+// other sound.
 
 export const NOISE = {
     step:         1,   // effectively silent; present so it is tunable

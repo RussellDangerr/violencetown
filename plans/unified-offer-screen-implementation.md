@@ -3557,7 +3557,8 @@ git commit -m "test: backfill the pricing coverage that never existed"
 
 Spec §13. Both dev-side docs describe schemas and UI — `shopInventory`, `buyMultiplier`,
 `tradeThreshold`, `ITEM_GIVE_DIR`, Down-to-Give — that **do not exist and were abandoned**, with no
-supersede notes. The spec for what actually shipped lives only on the `plan` branch. Left alone, the
+supersede notes. The spec for what actually shipped lived only on the `plan` branch (it is
+`plans/chapter-two-downtown-canyon-and-cohesion.md` since 2026-09-25). Left alone, the
 next reader rebuilds a deleted verb.
 
 - [ ] **Step 1: Add a supersede header to each**

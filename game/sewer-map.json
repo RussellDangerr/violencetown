@@ -5,10 +5,6 @@
     "x": 1,
     "y": 10
   },
-  "bossRoom": {
-    "x": 18,
-    "y": 10
-  },
   "tiles": [
     0,
     0,
@@ -498,7 +494,7 @@
         "mystery_meat",
         "tunnel_mushroom",
         "sludge_sack",
-        "fire_bottle",
+        "fire_blood",
         "defence_poition"
       ],
       "type": "Red Fungus",
@@ -527,7 +523,7 @@
         "mystery_meat",
         "tunnel_mushroom",
         "sludge_sack",
-        "fire_bottle",
+        "foil_hat",
         "defence_poition"
       ],
       "type": "Red Fungus",
@@ -555,7 +551,8 @@
         "mystery_meat",
         "mystery_meat",
         "tunnel_mushroom",
-        "sludge_sack"
+        "sludge_sack",
+        "sludge_brain"
       ],
       "type": "Ghost Fungus",
       "x": 5,
@@ -585,7 +582,7 @@
         "sludge_sack",
         "sludge_sack",
         "boardwalk_burger",
-        "fire_bottle",
+        "foil_hat",
         "defence_poition",
         "soap"
       ],
@@ -638,33 +635,7 @@
       "onFlip": "offerDiscount",
       "adjacencyBark": "[Carrion: Road's blocked, friend. Sewer river's swollen with sludge. Come back later.]"
     },
-    {
-      "id": "wererat",
-      "boss": true,
-      "sewerDweller": true,
-      "gold": 44,
-      "loadout": [
-        "bandage",
-        "hot_dog",
-        "boardwalk_burger",
-        "defence_poition",
-        "fire_bottle",
-        "soap",
-        "cardboard_cuirass"
-      ],
-      "equipped": ["wooden_sword"], "type": "Wererat",
-      "x": 17,
-      "y": 10,
-      "hp": 100,
-      "armor": 6,
-      "damage": 12,
-      "tag": "wererat_boss",
-      "barks": [
-        "[Were-Rat: The converter's OURS now, grease-boy.]",
-        "[Were-Rat: You smell like a dead-end job.]"
-      ],
-      "barkEveryTurns": 6
-    },
+    { "id": "wererat", "slot": "sewer.boss", "x": 17, "y": 10 },
     {
       "id": "sludge-bloom",
       "type": "Sludge Bloom",
@@ -690,6 +661,11 @@
     }
   ],
   "items": [
+    {
+      "type": "sludge_brain",
+      "x": 5,
+      "y": 5
+    },
     {
       "type": "rock",
       "x": 2,
@@ -861,6 +837,7 @@
       "y": 2,
       "contents": [
         "defence_poition",
+        "gold_poition",
         "bandage",
         "soap"
       ]

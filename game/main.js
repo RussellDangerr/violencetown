@@ -1,6 +1,7 @@
 // main.js — Game orchestrator
 // Pixel Dungeon-style: one input = one action = world advances.
-// Bump-to-attack. 1-9 select item, Space uses with canvas overlay.
+// Walking into a character opens its Target List; Space opens the combat wheel;
+// 1-9 pick a bag slot.
 
 import { Renderer } from './renderer.js';
 import { computeViewport, screenToTile, clientToScreen, toMenu } from './viewport.js';   // (screen-fill) the screen's geometry
@@ -9,8 +10,9 @@ import { loadAllSprites } from './sprites.js';
 import { BitmapFont } from './bitmap-font.js';
 import { pickHitMark, HEAVY_HIT_DAMAGE } from './hit-splat.js';   // (manga-impact-marks) the mark rule + the heavy threshold
 import { makeEffectLoop } from './effect-loop.js';                 // one tick of the transient-effects loop, and its refusal to die on a bad frame
-import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, MAX_STACK } from './data.js';
-import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, ownedItemDefs, hasItemDef } from './items.js';
+import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, MAX_STACK, SLUDGE_DOT } from './data.js';
+import { puddleTiles, layPuddle, puddleAt, dryPuddles } from './puddles.js';   // (poisons) Sludge Brain's puddles
+import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef } from './items.js';
 import { WEAPONS } from './weapons.js';
 import { resolveItemDef } from './item-registry.js';
 import { tickBuffList, BUFF_DEFS, sumBuffStat, worldBeatPlan } from './buffs.js';
@@ -18,21 +20,22 @@ import { RINGS, FUSIONS } from './ring-data.js';
 import {
     unlockedSlots, resolveAdjacencies, slottedActives, aggregatePassives,
     slotRing, unslotRing, acquireRing, sanitizeSlots,
-    mergeKnown, isActive,   // (ring Task 5) skill-merge helpers, relocated from the retired skills.js
+    mergeKnown,   // (ring Task 5) skill-merge helper, relocated from the retired skills.js
 } from './rings.js';
 import { isBoss, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS } from './defeat-scenarios.js';
 import { addToInventory as addToInv, moveToZone, zoneOf } from './inventory.js';
-import { itemActions, equipOptions } from './inspector.js';   // (C1) tap-to-inspect: context actions; (C2) GEAR chooser options
+import { itemActions, equipOptions, inspectorUsesRect } from './inspector.js';   // (C1) tap-to-inspect: context actions; (C2) GEAR chooser options
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
 import { attack, formatDamageNumber, computeHit, elementalMult, isBackstab } from './combat.js';
 import { Enemy, spawnEnemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
-import { isHostile, isHunting } from './ai.js';
+import { isHostile, isHunting, isSewerDweller } from './ai.js';
 import { getGreedyStep, stepEntity, findPath } from './pathing.js'; // pathfinding (greedy chase + BFS click-to-move); stepEntity = shove a character aside
 import { applyDispositionDelta, reactToTransaction } from './give-action.js';
 import { getDialogue } from './dialogue.js';
 import { manhattan, clamp } from './utils.js';
-import { RNG } from './rng.js';
+import { RNG, randomSeed } from './rng.js';
+import { pickSlots, defaultPicks, resolveSpawn, requiredDropFor, dropLineFor } from './slots.js';
 import { hasSave, readSaveRaw, writeSave, loadInto, clearSave } from './save.js';
 import { QuestEngine } from './quests.js';
 import { doExamine, resolveExamine } from './examine.js';
@@ -43,7 +46,7 @@ import {
     WHEEL_HUB_R, wheelRingR, LOG_MODAL_RECT, targetListRowRect, itemOverlayRowRect,
     EQUIPMENT_MODAL_RECT, EQUIP_SLOT_RECTS,
     DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceBagSlotRects, deviceEquipLayout, deviceRingsLayout,
-    inspectorActionRects, gearOptionRects,
+    inspectorActionRects, gearOptionRects, nearestRectInDir,
     xmbBarLayout,
     // (offer screen) the one panel every modal shares, its geometry, and the two
     // hit-test helpers layout.js wrote for _tapOffer. Hit-testing lives THERE so
@@ -53,7 +56,7 @@ import {
 import {
     emptyOffer, commitBlocker, stage, unstage, settledGold, resolveOffer, sameEntry,
 } from './offer.js';   // (offer screen) the basket model
-import { canTrade, buyPrice, sellPrice, transferGold, burnGold } from './trade.js'; // pricing + the transaction spine
+import { canTrade, sellPrice, transferGold, burnGold } from './trade.js'; // pricing + the transaction spine
 import { logCategory } from './combat-log.js';   // (log tagging) one rule for a message's category
 import { takeable } from './fight-panels.js';   // (combat-hud stage 4) the one answer to "what could I take"
 import { buildXmbBar, resolveXmbSelection, cycleXmbCategory, cycleXmbItem, xmbCategoryOf, XMB_LABELS } from './xmb.js';
@@ -83,10 +86,12 @@ import {
     createWheelState, cycle, drill, back, compose, autoAimTile,
     needsFriendlyConfirm, aimRange, affectedTiles, selectedNode, restoreLastCategory, verbApplies,
     orderedTargetVerbs, isCombatActive, defaultVerb, previewChildren,
+    aimTap, adjacentFacing,
 } from './wheel-model.js'; // (sunburst wheel) node-tree model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
 import { fighters } from './fight-area.js';                                      // (fight-fog) who is in the fight
 import { fightStartKind, entranceFor, fightFxActive } from './fight-entrance.js'; // (fight-fog) how it began, and how long its fog moves
+import { createCascade, CASCADE_BEAT_MS, LUNGE_MS } from './cascade.js';           // (turn-model C1) the enemy phase, one actor at a time
 
 // Chebyshev (king-move) distance — used by the wheel reticle's range clamp.
 const cheb = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
@@ -120,34 +125,32 @@ const STATE = {
 // faster — a reprieve that scales with the threat. Tuning knob.
 const PIPE_JAM_INTEGRITY = 30;
 
-// Town Clock (feature/town-clock): the free-running world heartbeat period, in
-// ms. Ambient NPCs get one step opportunity per beat while the player is idle,
-// so the town lives without waiting for player input. Combat is unaffected — it
-// stays on the per-player-turn loop. ~500ms reads as alive but calm (faster than
-// OSRS's 0.6s tile step); tunable.
+// Town Clock (feature/town-clock): the free-running heartbeat period, in ms.
+// Out of a fight, ambient NPCs get one step opportunity per beat while the
+// player is idle, so the town looks alive without waiting for input. It moves
+// nothing else (plans/trim.md stage 3, one clock): the day and moods count the
+// player's actions, and wander draws its own dice (game.ambientRng). ~500ms
+// reads as alive but calm; tunable.
 const WORLD_TICK_MS = 500;
 
-// (Phase 6c) The reversible economy. A vendor window keeps a BUYBACK ledger for
-// BUYBACK_MS: everything you buy can be sold back for what you paid, and
-// everything you sell can be re-bought for what you got — locked prices, so you
-// can freely test item+gold combos to manage disposition, then undo. The same
-// timer is the disposition "tick clock": moods drift back toward a resting value
-// (0) on a slow cadence, so a bribe is a repeated cost, not a one-time trivialize
-// (gold-weighting research). Decay never un-allies (allies stay bought) and never
-// touches an ally's loyalty — only transient mood. All tunable.
-const BUYBACK_MS               = 5 * 60 * 1000;  // reversible-trade window (~5 min)
-const DISPOSITION_DECAY_MS     = 20000;          // free-roam: nudge one step this often
-const DISPOSITION_DECAY_TURNS  = 40;             // combat: nudge one step every N turns
+// (Phase 6c) The reversible economy. A vendor keeps a BUYBACK ledger until you
+// leave the zone: everything you sell can be re-bought for what you got — a
+// locked price — so you can freely test item+gold combos to manage disposition,
+// then undo. Moods drift back toward a resting value (0) on a slow cadence of
+// actions, so a bribe is a repeated cost, not a one-time trivialize
+// (gold-weighting research). Decay never un-allies (allies stay bought) and
+// never touches an ally's loyalty — only transient mood. All tunable.
+const DISPOSITION_DECAY_TURNS  = 40;             // nudge one step every N committed actions
 const DISPOSITION_DECAY_STEP   = 1;              // points toward resting per nudge
 
-// Town Clock day/night cycle. The overworld eases day → dusk → night → dawn on
-// its own clock, driving the lighting grade (renderer._drawLighting). DAY_LENGTH_MS
-// is a full round trip; the cosine bell below keeps most of it daytime with a
-// dusk/night/dawn stretch around "midnight." NIGHT_MAX < 1 so deep night stays a
-// cool blue rather than pitch black (the player aura + lamps keep it readable).
-// All tunable; set DAY_LENGTH_MS huge (or _nightLevel by hand) to effectively
-// freeze the cycle.
-const DAY_LENGTH_MS = 30 * 60 * 1000;  // 30 min per full day↔night↔day (tunable; relaxed/lore-first, starts at noon)
+// Town Clock day/night cycle. The day eases day → dusk → night → dawn one step
+// per committed action — standing still never moves it — driving the lighting
+// grade (renderer._drawLighting) and the watchers' night sight.
+// DAY_LENGTH_ACTIONS is a full round trip; the cosine bell below keeps most of
+// it daytime with a dusk/night/dawn stretch around "midnight." NIGHT_MAX < 1 so
+// deep night stays a cool blue rather than pitch black (the player aura + lamps
+// keep it readable). Quest 1 takes ~200 actions, so a first run reaches dusk.
+const DAY_LENGTH_ACTIONS = 600;  // actions per full day, starting at noon (ruled 2026-10-06)
 const NIGHT_MAX     = 0.85;
 
 // ── Directions ───────────────────────────────────────────────────────────────
@@ -178,6 +181,10 @@ const MP_REGEN = 2;                // MP recovered per world-turn — FIGHT → 
 const RING_THUMB_DISPOSITION = 70;   // above EVERY authored NPC baseline (the friendliest, Puck, starts at 60) so the thumb reveal must be EARNED by raising someone, not tripped just by walking up to a cheerful vendor
 const RING_PINKY_GP          = 500;
 const RING_IGNITE_DAMAGE     = 6;
+// (poisons) Fire blood's burn: the same 5 a turn as Fire Blood itself; a hit
+// from a fire-blooded attacker sets the target burning this many turns.
+const FIRE_BLOOD_TICK         = 5;
+const FIRE_BLOOD_SPREAD_TURNS = 3;
 
 // (manga-impact-marks) HEAVY_HIT_DAMAGE and the mark pick moved to
 // hit-splat.js — the same threshold still feeds combatAttack's screenshake
@@ -199,9 +206,9 @@ class Game {
         this.renderer = null;
         this.map      = null;
         this.turn     = 0;
-        this.worldTick = 0;   // Town Clock — free-running ambient world beat (see WORLD_TICK_MS)
+        this.worldTick = 0;   // Town Clock — ambient wander beats (see WORLD_TICK_MS)
         this._nightLevel = 0; // Town Clock day/night — 0 = full day (lighting off), 1 = deep night
-        this._dayClockMs = 0; // accumulated overworld time driving _nightLevel (see _advanceDayClock)
+        this._dayClock = 0;   // actions into the day, 0..DAY_LENGTH_ACTIONS-1, driving _nightLevel (saved)
 
         // Player
         this.playerX     = 0;
@@ -227,13 +234,11 @@ class Game {
         this.ringSlots        = {};
         this.ringTier         = 0;
         this.discoveredFusions = new Set();
-        this.suppressedSkills = new Set();   // kept: still gates hasSpell/hasTrick at READ
         this.ringMods         = {};          // aggregate passives, recomputed by _refreshGrantedSkills
         this._peakDisposition = 0;           // (rings) highest disposition any NPC has ever shown — monotonic; gates the hidden thumb tier
         this._lastHitTarget = null;   // (fear) id of the enemy the last Melee-Hit struck
         this._ratFormTurns = 0;        // (Rat Ring) turns left folded into a rat; while >0 the player can enter GRATE tiles
         this._lastDefeatedBy = null;   // the enemy or {cause} that last damaged the player — read by _die
-        this.extraMoves  = 0; // future: Goo, abilities, etc.
         this.facing      = 'down'; // 'down' | 'left' | 'right' | 'up'
 
         // Movement feel (DQM/Pokémon overworld) — see plans/movement-feel.md.
@@ -243,6 +248,30 @@ class Game {
         // §4). Canon datapoint: 100ms felt brisk-but-OK once the auto-repeat
         // dead-frame was removed; 150 is a touch more grounded. Dial freely.
         this._MOVE_MS = 150;
+        // (turn-model C1, plans/turn-model.md) `?turns=cascade` plays the enemy
+        // phase back one actor at a time; `&beat=<ms>` sets the gap. Off by
+        // default: without the flag nothing below runs and nothing changes.
+        this._cascade = null;
+        this._cascadeActor = null;
+        try {
+            const q = new URLSearchParams(location.search);
+            if (q.get('turns') === 'cascade') {
+                const beat = Number(q.get('beat'));
+                this._cascade = createCascade({
+                    beatMs: Number.isFinite(beat) && beat > 0 ? Math.min(beat, 5000) : CASCADE_BEAT_MS,
+                    // A held effect that throws costs that effect, never the loop.
+                    onError: (e, n) => { if (n === 1) console.error('[cascade] a held effect threw; the rest still play', e); },
+                });
+                // Any key or tap plays whatever is still held, before the input is
+                // handled — the cascade never makes you wait. Capture phase, so it
+                // runs ahead of every other listener.
+                const flush = () => { if (this._cascade.pending()) this._cascade.flush(); };
+                // A held key's auto-repeat is not a new input: walking with a key
+                // held must not fast-forward every cascade.
+                document.addEventListener('keydown', (e) => { if (!e.repeat) flush(); }, true);
+                document.addEventListener('pointerdown', flush, true);
+            }
+        } catch { /* non-browser env — stay off */ }
         this._TURN_MS = 70;  // tap-to-face vs hold-to-walk threshold (standstill).
                              // 110 felt like a hitch on every direction change;
                              // 70 keeps a deliberate quick-tap-to-turn but lets a
@@ -257,7 +286,6 @@ class Game {
         this._animToY     = 0;
         this._animDuration = this._MOVE_MS; // ms (driven by _MOVE_MS)
         this._animCallback = null;
-        this._animFrame   = null; // requestAnimationFrame ID
         this._stepIndex   = 0;    // ++ per completed step → walk-anim foot parity
 
         // Equipment
@@ -285,7 +313,6 @@ class Game {
         this._queuedMoveDir = null; // one-deep input buffer (Finding 2): a dir
                                     // pressed mid-slide, applied on completion.
         this._turnTimer     = null; // setTimeout id for tap-to-face → hold-to-walk
-        this._pendingWalkDir = null;// dir armed by a turn-in-place pivot
 
         // Held-key stack — direction-key codes currently physically held, in
         // press-order with most-recent at the end. _onStepSettled reads the
@@ -312,6 +339,7 @@ class Game {
         this._pathArrive = null;
         this._pressTimer = null;    // touch long-press timer → full Target List
         this._pressStart = null;    // pointerdown client pos, to cancel the press on drag
+        this._turnPress = null;     // (C3b) { tile } — a press beside you: walks on release, turns on long-press
 
         // In-canvas log strip (Phase 1B of overhead-dialogue plan). Mirrors
         // every _log() call into a fixed-size ring buffer that the renderer
@@ -333,15 +361,13 @@ class Game {
         this._dialogueNpc = null;        // (Step 4) the NPC we're talking to, or null
         this._dialogueReply = '';        // the NPC's current line shown in the dialogue modal
         this._dialogueCursor = 0;        // selected choice row (keyboard)
-        this._tradeTimer = null;         // (Phase 6c) 1s re-render while trading so the buyback countdown ticks
         // (offer screen) The staged offer. RAM only — serialize() is a hand-written
         // allow-list and these are deliberately not on it: an offer in progress is
         // not a fact about the world, and closing always discards it.
         this._offerNpc = null;           // the partner whose offer screen is open, or null
         this._offer = null;              // the staged basket — { give, take, gold, scroll, selection }
         this._offerCursor = null;        // keyboard cursor: { side, index } (Task 13 moves it)
-        this._dispositionDecayAccMs = 0; // (Phase 6c) free-roam decay accumulator (ms)
-        this._dispositionDecayTurns = 0; // (Phase 6c) combat decay turn counter
+        this._dispositionDecayTurns = 0; // (Phase 6c) actions since the last mood nudge
 
         // Inventory: INVENTORY_SIZE slots (SAFE 0..9 + PACK 10..49), each { itemDef, count } or null
         this.inventory = new Array(INVENTORY_SIZE).fill(null);
@@ -454,12 +480,23 @@ class Game {
         // Seeded RNG — the single source of gameplay randomness, deterministic
         // and resumable across saves (see rng.js). Reseeded fresh here; the
         // save restores the live stream position via setState.
-        this.rng = new RNG();
+        // The game's seed: one draw at a new game, kept so the spine's slot picks
+        // (plans/slot-registry.md) come from it. game.rng starts exactly as before.
+        const newSeed = randomSeed();
+        this.rng = new RNG(newSeed);
+        // (slot registry) One entry per spine slot, from the seed's own stream —
+        // never game.rng (SL-2). A save restores its own picks over these.
+        this.slots = pickSlots(newSeed);
+        // (one clock) Ambient wander's own stream, so how long you think between
+        // moves can never shift a fight's or a theft's rolls. Not saved: wander
+        // changes no outcome's dice, so a reload may pick it up anywhere.
+        this.ambientRng = new RNG();
 
         // Runtime tile mutations (portcullis / barricade / cleared cells)
         // recorded as diffs vs the map JSON so a save can re-apply them — the
         // map is re-snapshotted from JSON on every _loadMap.
         this._tileDiffs = [];
+        this._puddles = [];   // (poisons) { x, y, kind, turnsLeft } — zone state, not saved
 
         // Autosave throttle — write at most every few turns unless forced.
         this._lastAutosaveTurn = -999;
@@ -579,26 +616,15 @@ class Game {
             }
         }, 250);
 
-        // World heartbeat — the Town Clock (feature/town-clock), now the FREE-ROAM
-        // half of the unified beat. A free-running timer winds the world beat so
-        // the town lives while the player stands still: day/night eases and ambient
-        // NPCs wander/chatter. In COMBAT this timer lets go (gated by _inCombat) so
-        // the player gets unhurried turn-based thinking time — the beat is wound
-        // one-per-committed-turn from _advanceWorld instead, so the world keeps
-        // advancing in lockstep with the fight rather than freezing (supersedes M1).
+        // Town heartbeat (feature/town-clock). Out of a fight, a free-running timer
+        // lets townsfolk wander and chatter while the player stands still — the look
+        // of life, and nothing more: the day and moods count actions (_worldBeat),
+        // and wander draws game.ambientRng, so thinking time changes no roll. It
+        // lets go on the splash, while paused, and in a fight, where each committed
+        // action steps the wander instead (plans/trim.md stage 3).
         setInterval(() => {
-            // Free-roam DRIVER (CD-5): the timer lets go on the splash and in combat
-            // (the per-turn hand-wind in _advanceWorld takes over there). Otherwise
-            // wind exactly one world beat, gating ambient to a settled idle frame and
-            // decaying dispositions on the wall-clock (ms) cadence.
-            if (this.state === STATE.SPLASH || this._inCombat()) return;
-            this._dispositionDecayAccMs += WORLD_TICK_MS;
-            const decayDue = this._dispositionDecayAccMs >= DISPOSITION_DECAY_MS;
-            if (decayDue) this._dispositionDecayAccMs = 0;
-            this._worldBeat({
-                ambient: this.state === STATE.IDLE && !this._animating,
-                decayDue,
-            });
+            if (this.state === STATE.SPLASH || this._paused || this._inCombat()) return;
+            if (this.state === STATE.IDLE && !this._animating) this._ambientTick();
         }, WORLD_TICK_MS);
 
         this._log('[Violencetown loaded — Town hub ready]');
@@ -610,12 +636,18 @@ class Game {
         this.map = await loadMap(url);
         this._mapUrl = url;
         this._jammedDoor = null;   // per-zone: any wedged door is left behind when you leave
+        // Splats, words and barks belong to the map they were spawned on: a new
+        // zone starts clear, with anything a (C1) cascade still held played first
+        // so the HP bar has caught up before you arrive.
+        this._cascade?.flush();
+        this._damageNumbers = [];
         this.playerX = spawnX ?? this.map.spawn.x;
         this.playerY = spawnY ?? this.map.spawn.y;
 
         // Fresh map = no runtime tile mutations yet. loadInto re-applies saved
         // diffs after this returns.
         this._tileDiffs = [];
+        this._puddles = [];   // (poisons) puddles dry up behind you when you leave
 
         this.groundItems = [];
         for (const s of this.map.itemSpawns) {
@@ -632,8 +664,10 @@ class Game {
             const def = this._resolveItemDef(d.type);
             if (def) this.groundItems.push({ type: d.type, x: d.x, y: d.y, def });
         }
+        this._endBuybacks();        // (one clock) a buyback lasts until you leave the zone: close the old zone's shelves
         this.enemies = [];
-        for (const s of this.map.enemySpawns) this.enemies.push(spawnEnemy(s, this._muggedIds, this._robbed));
+        // (slot registry) A spawn carrying a `slot` becomes this game's pick for it.
+        for (const s of this.map.enemySpawns) this.enemies.push(spawnEnemy(resolveSpawn(s, this.slots), this._muggedIds, this._robbed));
 
         // (zone pursuit) Re-inject any hostiles that chased you through the door.
         // They spawn at the door leading back where you came from — visible in
@@ -644,6 +678,7 @@ class Game {
             this._injectFollowers();
         }
         this._pendingFollowers = null;
+        this._advanceDayClock(0);   // the new zone's watchers see by tonight's light at once
 
         // Live containers — copy from spawn data so opening/depositing mutates
         // the live instance, not the map definition. Map reload re-snapshots
@@ -1081,21 +1116,13 @@ class Game {
             if (this.state === STATE.INSPECT) { e.preventDefault(); this._closeInspect(); return; }
 
             // ── DEVICE (Remoticon): modal tabbed device; world is soft-paused ──
-            // Esc already closed it via the universal Cancel above. Here: Tab pockets
-            // it, [ ] cycle tabs, C/J/M/R jump to a tab; everything else is swallowed.
+            // Esc steps back a level, then closes it, via the universal Cancel above
+            // (_closeCurrentMenu -> _deviceBack). Every other key is _deviceKey's:
+            // Tab pockets it, [ ] cycle tabs, C/J/M/R jump to a tab, arrows/WASD move
+            // the cursor, Space/Enter confirm. Everything else is swallowed.
             if (this.state === STATE.DEVICE) {
                 e.preventDefault();
-                if (e.code === 'Tab')          { this._closeDevice();   return; }
-                if (e.code === 'BracketLeft')  { this._deviceCycleTab(-1); return; }
-                if (e.code === 'BracketRight') { this._deviceCycleTab(1);  return; }
-                if (e.code === 'KeyC') { this._deviceTab = 'gear';   this._deviceSel = null; this._render(); return; }
-                if (e.code === 'KeyJ') { this._deviceTab = 'quests'; this._deviceSel = null; this._render(); return; }
-                if (e.code === 'KeyM') { this._deviceTab = 'map';    this._deviceSel = null; this._render(); return; }
-                if (e.code === 'KeyR') { this._deviceTab = 'rings'; this._deviceSel = null; this._render(); return; }
-                if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { this._deviceCycleTab(-1); return; }
-                if (e.code === 'ArrowRight' || e.code === 'KeyD') { this._deviceCycleTab(1);  return; }
-                if (this._deviceTab === 'quests' && (e.code === 'ArrowUp'   || e.code === 'KeyW')) { this._scrollJournal(1);  return; }
-                if (this._deviceTab === 'quests' && (e.code === 'ArrowDown' || e.code === 'KeyS')) { this._scrollJournal(-1); return; }
+                this._deviceKey(e.code);
                 return;
             }
 
@@ -1440,6 +1467,7 @@ class Game {
         // tap → pick the row; a real drag scrolled the list and picks nothing.
         const endPress = (e) => {
             cancelPress();
+            this._releaseTurnPress(e);   // (C3b) a quick tap beside you walks the step on release
             if (this._openerHeld) { this._openerHeld = false; this._wheelOpenerUp(); }   // (screen-fill) the dock's ✦, released
             if (this._dlgDrag) {
                 const d = this._dlgDrag; this._dlgDrag = null;
@@ -1840,7 +1868,7 @@ class Game {
             case STATE.LOG_MODAL:      this._closeLogModal(); return true;
             case STATE.TRADE:          this._closeOffer(); return true;
             case STATE.DIALOGUE:       this._closeDialogue(); return true;
-            case STATE.DEVICE:         this._closeDevice(); return true;
+            case STATE.DEVICE:         if (!this._deviceBack()) this._closeDevice(); return true;   // (C3) back one level, then close
             case STATE.ITEM_OVERLAY:   this.state = STATE.ITEM_SELECTED; this._render(); return true;
             case STATE.ITEM_SELECTED:  this.selectedSlot = -1; this.state = STATE.IDLE; this._render(); this._resumeHeldWalk(); return true;
             case STATE.ITEM_THROW_DIR: this.selectedSlot = -1; this.state = STATE.IDLE; this._render(); this._resumeHeldWalk(); return true;
@@ -1855,6 +1883,7 @@ class Game {
         // _bindCanvasTap. Letting it through here would fire the default action
         // first, then the menu would bail because the state left IDLE.
         if (e.button >= 1) return;
+        this._turnPress = null;   // (C3b) a new press never inherits an old one's pending step
         // Mirror the keyboard gate: don't process taps during the move
         // animation or while the world is resolving. Splash has its own
         // handler (DOM button). Dead is a non-interactive end state.
@@ -1877,9 +1906,14 @@ class Game {
         // outside the ring closes it.
         const _mpr = this.renderer._menuPanelRect, _cbr = this.renderer._closeBtnRect;
         if (_mpr) {
-            if (_cbr && this._pointInRect(pt, _cbr, HIT_SLOP)) { this._closeCurrentMenu(); return; }
-            if (!this._pointInRect(pt, _mpr)) { this._closeCurrentMenu(); return; }
-        } else if (this.state === STATE.RADIAL_MENU) {
+            // (C3) Cancel steps the Remoticon back one level first; the ✕ and a tap
+            // outside still close it outright, as they always have.
+            const _cancel = () => (this.state === STATE.DEVICE ? this._closeDevice() : this._closeCurrentMenu());
+            if (_cbr && this._pointInRect(pt, _cbr, HIT_SLOP)) { _cancel(); return; }
+            if (!this._pointInRect(pt, _mpr)) { _cancel(); return; }
+        } else if (this.state === STATE.RADIAL_MENU && !this.wheel.aiming) {
+            // (C3b) Not while aiming: the dial isn't drawn then, and a tap on the
+            // world places the reticle (_tapRadialMenu → _aimTapAt) instead.
             // (Slice 2) Depth-dynamic cull: close on a tap beyond the wheel's real
             // outer extent for the CURRENT depth. The old fixed 230px left the small
             // shallow wheel un-closable by a nearby tap (a 160px tap was neither a
@@ -1958,11 +1992,12 @@ class Game {
                 const v = defaultVerb(target, this);
                 if (v) { this._actOnTarget(v, target); this._armLongPress(tile, e); return; }
             }
+            // (C3b, ruling C3R2) An empty tile straight beside you: a long-press
+            // faces it without stepping, so the step waits for the release.
+            const face = !target && adjacentFacing(this.playerX, this.playerY, tile);
+            if (face) { this._armTurnPress(tile, face, e); return; }
             // Click-to-move: empty walkable ground → BFS-path the Hero there.
-            if (this.map.isWalkable(tile.x, tile.y) && !(tile.x === this.playerX && tile.y === this.playerY)) {
-                const path = findPath(this, { x: this.playerX, y: this.playerY }, tile);
-                if (path && path.length) { this._walkPath(path); return; }
-            }
+            if (this._tapWalkTo(tile)) return;
         }
         // ITEM_SELECTED → legacy hotbar tap (slot re-select / tap-outside cancel).
         // In IDLE the bottom bar is the XMB (handled above by _tapXmbBar), so we
@@ -1982,6 +2017,40 @@ class Game {
             this._pressTimer = null;
             if (this.state === STATE.IDLE) this._openTargetList(tile.x, tile.y);
         }, 450);
+    }
+
+    // Click-to-move: empty walkable ground (not your own tile) → BFS-path the
+    // Hero there. True when a walk started.
+    _tapWalkTo(tile) {
+        if (!this.map.isWalkable(tile.x, tile.y) || (tile.x === this.playerX && tile.y === this.playerY)) return false;
+        const path = findPath(this, { x: this.playerX, y: this.playerY }, tile);
+        if (path && path.length) { this._walkPath(path); return true; }
+        return false;
+    }
+
+    // (C3b, ruling C3R2) Press on an empty tile straight beside you. Held to the
+    // long-press time (the Target List's, so the two feel alike) you turn to face
+    // it: no step, no turn spent, the arrow keys' free pivot. Released sooner it
+    // is a tap and walks the step (endPress in _bindCanvasTap). A drag drops the
+    // turn but keeps the step; a cancelled pointer drops both.
+    _armTurnPress(tile, face, e) {
+        if (this._pressTimer) clearTimeout(this._pressTimer);
+        this._pressStart = e ? { x: e.clientX, y: e.clientY } : null;
+        this._turnPress = { tile };
+        this._pressTimer = setTimeout(() => {
+            this._pressTimer = null;
+            this._turnPress = null;
+            if (this.state !== STATE.IDLE || this._animating) return;
+            this.facing = face;
+            this._render();
+        }, 450);
+    }
+
+    // The release of a turn-press that never reached the long-press time.
+    _releaseTurnPress(e) {
+        const tp = this._turnPress; this._turnPress = null;
+        if (!tp || !e || e.type !== 'pointerup') return;
+        if (this.state === STATE.IDLE && !this._animating) this._tapWalkTo(tp.tile);
     }
 
     _pointInRect(p, r, slop = 0) {
@@ -2072,6 +2141,7 @@ class Game {
                 if (w.confirming) w.confirming = false; else { w.aiming = false; w.reticle = null; }
                 audio.playSfx('menu-cancel'); this._render(); return;
             }
+            if (w.aiming) { this._aimTapAt(pt); return; }
             this._wheelCommit(); return;
         }
 
@@ -2088,6 +2158,20 @@ class Game {
         else if (a >= Math.PI * 0.75 && a < Math.PI * 1.25) this._wheelCycle(-1);  // LEFT → prev
         else if (a >= Math.PI * 1.25 && a < Math.PI * 1.75) this._wheelDrill();    // TOP → drill
         else                                                this._wheelCycle(+1);  // RIGHT → next
+    }
+
+    // (C3b, ruling C3R3) A tap on the world while aiming: on the reticle it fires
+    // (through _wheelCommit, so the Plus-Ultra confirm still guards a friendly);
+    // anywhere else it places the reticle, snapped to the nearest legal tile.
+    // The dock's chrome sits over the world's last rows, so a tap there is ignored.
+    _aimTapAt(pt) {
+        if (hitHud(this._hud(), pt)) return;
+        const w = this.wheel;
+        const r = aimTap(w, this, this._screenToTile(pt));
+        if (r.action === 'fire') { this._wheelCommit(); return; }
+        if (r.action !== 'place') { audio.playSfx('bump-wall'); return; }
+        w.reticle = r.reticle;
+        audio.playSfx('menu-tick'); this._render();
     }
 
     // ── Animation ─────────────────────────────────────────────────────────────
@@ -2111,20 +2195,19 @@ class Game {
             this._render();
 
             if (t < 1) {
-                this._animFrame = requestAnimationFrame(tick);
+                requestAnimationFrame(tick);
             } else {
                 // Animation done
                 this._animating = false;
                 this._animProgress = 0;
-                this._animFrame = null;
                 if (this._animCallback) this._animCallback();
             }
         };
 
-        this._animFrame = requestAnimationFrame(tick);
+        requestAnimationFrame(tick);
     }
 
-    // ── Move / Bump Attack ───────────────────────────────────────────────────
+    // ── Move / Bump → interact ──────────────────────────────────────────────
 
     _doMove(dir) {
         if (this._animating) return; // block input during animation
@@ -2450,7 +2533,6 @@ class Game {
 
     _clearTurnTimer() {
         if (this._turnTimer) { clearTimeout(this._turnTimer); this._turnTimer = null; }
-        this._pendingWalkDir = null;
     }
 
     // A direction press from the IDLE state. From a standstill, a tap toward a
@@ -2462,10 +2544,8 @@ class Game {
         if (standing && this.facing !== this._faceOf(dir)) {
             this.facing = this._faceOf(dir);   // pivot only — no step, no _advanceWorld
             this._render();
-            this._pendingWalkDir = dir;
             this._turnTimer = setTimeout(() => {
                 this._turnTimer = null;
-                this._pendingWalkDir = null;
                 // Re-poll the LIVE held-key set rather than trusting the key that
                 // armed this timer. During the 70ms window the player may have
                 // pressed (and released) a second direction; if ANY direction is
@@ -2609,6 +2689,7 @@ class Game {
         this._pathQueue = [];       // cancel any click-to-walk in progress
         this._pathArrive = null;
         if (this._pressTimer) { clearTimeout(this._pressTimer); this._pressTimer = null; }
+        this._turnPress = null;     // (C3b) a pending tap-beside-you step
     }
 
     // True when held-key auto-walking should HALT before stepping in `dir` —
@@ -2644,6 +2725,7 @@ class Game {
         // is a real consequence you should opt into.
         const td = this.map.getTileDef(nx, ny);
         if (td && td.hazard) return true;                         // sludge / future hazards
+        if (puddleAt(this._puddles, nx, ny)) return true;         // (poisons) a puddle is a hazard too
 
         return false;
     }
@@ -3642,12 +3724,6 @@ class Game {
                 this._log('[No one to trade with there]');
                 break;
             }
-            case 'hide': {
-                // Stub — no stealth system yet. Graceful no-op that spends the turn.
-                this._log('[You try to keep a low profile... (no effect yet)]');
-                this._advanceWorld();
-                break;
-            }
             default: this._log(`[${node.label} isn't ready yet]`); // dep stub — never crash
         }
         this._closeWheel();
@@ -3733,8 +3809,12 @@ class Game {
         // v1: barks, adjacency-barks, "spotted you!"). Tuples carry their
         // source enemy and a category — spoken lines float above the speaker;
         // strings fall through to the side log.
+        this._cascade?.begin();
         const msgs = resolveEnemyTurns(this);
         this._routeWorldMessages(msgs);
+        // (C1) Effects outside an enemy's turn spawn at once; the phase stays open
+        // until the player's own tick below, which plays as the last beat.
+        this._cascadeActor = null;
 
         // (summon) Temporary summoned allies (the hired lion) act above in
         // resolveEnemyTurns, THEN their timer ticks — so a fresh summon still
@@ -3758,19 +3838,13 @@ class Game {
         // single step and stopped. Idempotent + self-stopping via
         // _hasActiveEffects. (plans/movement-feel.md #6)
         this._ensureParticleLoop();
-        if (this.playerHp <= 0) { this.playerHp = 0; this._die(); return; }
+        if (this.playerHp <= 0) { this._endCascadePhase(); this.playerHp = 0; this._die(); return; }
 
-        // Combat DRIVER (CD-5): the free-roam timer lets go so the player gets
-        // unhurried turn-based thinking time, so each committed combat turn hand-
-        // winds exactly one world beat here — keeping the town alive (ambient NPCs
-        // step, the day eases one tick) in lockstep with the fight instead of
-        // freezing it. Ambient runs every combat turn; decay counts turns. Same
-        // dual-clock split as free-roam, one shared seam (_worldBeat).
-        if (this._inCombat()) {
-            const decayDue = ++this._dispositionDecayTurns >= DISPOSITION_DECAY_TURNS;
-            if (decayDue) this._dispositionDecayTurns = 0;
-            this._worldBeat({ ambient: true, decayDue });
-        }
+        // (one clock) Every committed action winds one beat of the world, in a
+        // fight or out of one: the day steps and moods count toward their next
+        // fade. In a fight the heartbeat lets go, so the town's wander steps here
+        // too, in lockstep with the fight rather than freezing.
+        this._worldBeat({ ambient: this._inCombat() });
 
         // (zone pursuit) A wedged door takes a pounding from the pursuers trapped
         // behind it; it bursts when their blows break it.
@@ -3792,7 +3866,9 @@ class Game {
         // Tick buffs — the sludge DoT now lives in its buff def's onTick (buffs.js).
         // Its death check moves right after the tick so a sludge death still skips
         // the rest of the beat (MP regen, etc.), exactly as the inline block did.
+        this._cascadeMark(this);     // (C1) the player's own DoTs resolve last, so they play last
         this._tickBuffs();
+        this._endCascadePhase();
         if (this.playerHp <= 0) { this.playerHp = 0; this._die(); return; }
 
         // MP trickles back each turn — FIGHT → Magic spells spend it, this refills.
@@ -3857,6 +3933,7 @@ class Game {
                 // eating its own kit, a boss buying HP for itself or an ally — also
                 // floats a heal splat over whoever it healed (npc.js sets `heal`).
                 const healed = m.heal > 0 ? (m.healTarget ?? m.sourceEnemy) : null;
+                if (this._cascade?.recording()) this._cascadeActor = m.sourceEnemy;   // (C1) the heal shows on its healer's beat
                 if (healed) this._spawnHitSplat(healed.x, healed.y, `+${m.heal}`, 'heal', { omni: true });
                 this._log(m.text, logCategory(m, 'combat'));
             } else {
@@ -4029,42 +4106,42 @@ class Game {
         this._ensureParticleLoop();
     }
 
-    // (CD-5) One beat of the living world: ease the day clock, optionally step
-    // ambient life, and (when its cadence is due) decay dispositions. The two
-    // DRIVERS stay separate — the free-roam heartbeat timer and the per-combat-turn
-    // hand-wind (the dual-clock is deliberate) — but this SEQUENCE is the single
-    // place both call, so "works in combat, not free-roam" drift can't creep in.
-    // `ambient` gates the ambient step (free-roam only on a settled idle frame,
-    // combat every turn); `decayDue` is the caller's cadence verdict (free-roam
-    // accumulates ms, combat counts turns).
-    _worldBeat({ ambient, decayDue }) {
+    // (one clock) One beat of the living world, wound once per committed action
+    // from _advanceWorldOnce, in and out of a fight: the day steps, and every
+    // DISPOSITION_DECAY_TURNS actions moods fade a step. `ambient` steps the
+    // town's wander too — only in a fight, where the heartbeat lets go.
+    _worldBeat({ ambient }) {
         this._advanceDayClock();
+        this._tickPuddles();
+        if (ambient) this._ambientTick();
+        if (++this._dispositionDecayTurns >= DISPOSITION_DECAY_TURNS) {
+            this._dispositionDecayTurns = 0;
+            this._tickDispositionDecay();
+        }
+    }
+
+    // Town Clock day/night — step the day clock `steps` actions (0 just re-derives,
+    // after a load or a zone change) and derive the lighting grade's _nightLevel. A
+    // cosine bell peaks at "midnight" and the (raw - 0.6)/0.4 lift keeps most of
+    // the cycle as full day, with a smooth dusk → night → dawn stretch in between.
+    _advanceDayClock(steps = 1) {
+        const n = DAY_LENGTH_ACTIONS;
+        this._dayClock = ((((this._dayClock || 0) + steps) % n) + n) % n;
+        const p   = this._dayClock / n;                       // 0..1 phase of the day
+        const raw = (1 - Math.cos(p * 2 * Math.PI)) / 2;     // 0 → 1 → 0 bell, peak at midnight
+        this._nightLevel = Math.max(0, (raw - 0.6) / 0.4) * NIGHT_MAX;
         // (Phase 6) Hand the lighting grade to everyone who can see, so perception
         // can shorten their cone after dark. Stamped rather than passed because
         // perceives() is called from the AI, the overlay and the theft gate, and
         // threading a level through all three would be three chances to disagree.
-        for (const e of this.enemies) e._nightLevel = this._nightLevel ?? 0;
-        if (ambient) this._ambientTick();
-        if (decayDue) this._tickDispositionDecay();
-    }
-
-    // Town Clock day/night — advance the overworld day clock one beat and derive
-    // the lighting grade's _nightLevel. A cosine bell peaks at "midnight" and the
-    // (raw - 0.6)/0.4 lift keeps most of the cycle as full day, with a smooth
-    // dusk → night → dawn stretch in between. The idle re-render / rAF loops pick
-    // up the new level, so the light shifts even while the player stands still.
-    _advanceDayClock() {
-        this._dayClockMs = (this._dayClockMs + WORLD_TICK_MS) % DAY_LENGTH_MS;
-        const p   = this._dayClockMs / DAY_LENGTH_MS;        // 0..1 phase of the day
-        const raw = (1 - Math.cos(p * 2 * Math.PI)) / 2;     // 0 → 1 → 0 bell, peak at midnight
-        this._nightLevel = Math.max(0, (raw - 0.6) / 0.4) * NIGHT_MAX;
+        for (const e of (this.enemies || [])) e._nightLevel = this._nightLevel;
     }
 
     // (Phase 6c) The disposition tick clock — one nudge of every non-ally NPC's
     // mood toward its resting value (0 = neutral), so bribes/gifts and insults
     // both fade over time (a bribe becomes a repeated cost, not a one-time
-    // trivialize; a slight fades). Wound on the free-roam heartbeat (time) and
-    // per-turn in combat (see the call sites). DELIBERATELY does not route through
+    // trivialize; a slight fades). Wound every DISPOSITION_DECAY_TURNS committed
+    // actions (_worldBeat), never by the clock on the wall. DELIBERATELY does not route through
     // applyDispositionDelta: that fires the upward ally-flip whenever disposition
     // ≥ threshold, which a downward decay must NOT re-trigger — and per the locked
     // decision allies stay bought (decay never un-allies). So it mutates the mood
@@ -4094,10 +4171,9 @@ class Game {
     // Military-time readout (HH:MM) derived from the day-clock phase. The cycle
     // starts at NOON — phase 0 = full day = 12:00 — and the cosine night-peak
     // lands at midnight (phase 0.5 = 00:00): clock = (12:00 + phase·24h) wrapped.
-    // Decoupled from combat turns (a fight only nudges it imperceptibly), so the
-    // sky never lurches mid-fight. Purely derived from _dayClockMs — no state.
+    // One action is 24h / DAY_LENGTH_ACTIONS. Purely derived from _dayClock.
     _timeOfDay() {
-        const p = this._dayClockMs / DAY_LENGTH_MS;            // 0..1 phase of the day
+        const p = (this._dayClock || 0) / DAY_LENGTH_ACTIONS;  // 0..1 phase of the day
         const totalMin = Math.floor(12 * 60 + p * 24 * 60) % (24 * 60);
         const hh = Math.floor(totalMin / 60);
         const mm = totalMin % 60;
@@ -4120,7 +4196,6 @@ class Game {
     // Read-only ownership lens (PD-2). Walks inventory + equipment + temp-equips
     // as one sequence (items.js) — the single "do I own item X" answer, so a
     // check can't miss equipped gear the way an inventory-only scan did.
-    ownedItems() { return ownedItemDefs(this); }
     hasItem(pred) { return hasItemDef(this, pred); }
 
     // Find a throwable the player has ANYWHERE (inventory first, else an equipped
@@ -4368,6 +4443,7 @@ class Game {
         // above), using the seeded RNG so the proc is deterministic — never
         // Math.random (determinism rule). A trigger that lands the killing blow
         // routes its own _handleEnemyDeath inside _applyTrigger.
+        if (enemyObj.entity.isAlive()) this._spreadFireBlood(this, enemyObj);   // (poisons)
         if (enemyObj.entity.isAlive()) {
             for (const key of Object.keys(this.ringSlots)) {
                 const r = RINGS[this.ringSlots[key]];
@@ -4416,11 +4492,13 @@ class Game {
             this._muggedIds.add(enemyObj.id);
         }
         enemyObj.loadout = [];
-        // The Were-Rat drops the converter; rat kills feed the escape waves.
-        if (enemyObj.tag === 'wererat_boss' && ITEMS.catalytic_converter) {
-            this._recordDrop('catalytic_converter', enemyObj.x, enemyObj.y);
-            this.groundItems.push({ type: 'catalytic_converter', x: enemyObj.x, y: enemyObj.y, def: ITEMS.catalytic_converter });
-            this._log('[The Were-Rat drops your cataclysmic converter!]', 'pickup');
+        // A spine slot's required item drops from whoever filled the slot (the
+        // Sewer's boss drops the converter); rat kills feed the escape waves.
+        const required = requiredDropFor(enemyObj, this.map?.enemySpawns);
+        if (required && ITEMS[required]) {
+            this._recordDrop(required, enemyObj.x, enemyObj.y);
+            this.groundItems.push({ type: required, x: enemyObj.x, y: enemyObj.y, def: ITEMS[required] });
+            this._log(dropLineFor(enemyObj, this.map?.enemySpawns) || `[${ITEMS[required].name} dropped.]`, 'pickup');
         }
         // (Remembrance Rings) The Were-Rat also leaves a remembrance — a braided
         // tuft of fur → the Rat Ring (fashioned at Platero). Drop it on a free
@@ -4514,6 +4592,7 @@ class Game {
                     target._hitFlashUntil = performance.now() + 120;
                     this._ensureParticleLoop();
                     if (result.killed) this._handleEnemyDeath(target);
+                    else this._spreadFireBlood(ally, target);   // (poisons)
                 }
             } else {
                 // stepEntity (not a direct x/y poke) so allies get real facing +
@@ -4617,9 +4696,9 @@ class Game {
     }
 
     // The single gate for "can this skill fire right now" — present in the merged
-    // list AND not suppressed. Cast paths and (the wheel) route through these.
-    hasSpell(id) { return isActive(this.knownSpells   || [], this.suppressedSkills, id); }
-    hasTrick(id) { return isActive(this.grantedTricks || [], this.suppressedSkills, id); }
+    // list. Cast paths and (the wheel) route through these.
+    hasSpell(id) { return (this.knownSpells   || []).includes(id); }
+    hasTrick(id) { return (this.grantedTricks || []).includes(id); }
 
     // Acquire a fashioned ring into the pool (from Platero; auto-slots if room).
     // Idempotent — returns true only if newly acquired.
@@ -4705,6 +4784,94 @@ class Game {
         }
     }
 
+    // ── Puddles (plans/poisons.md) ───────────────────────────────────────────
+    // Lay a puddle fanned away from `from` (the thrower) around `at` (where it
+    // landed). Returns how many tiles it covered.
+    _layPuddle(from, at, kind, turns) {
+        const tiles = puddleTiles(from, at, (x, y) => !!this.map && this.map.isWalkable(x, y));
+        layPuddle(this._puddles, tiles, kind, turns);
+        return tiles.length;
+    }
+    // One committed action: whoever stands in a sludge puddle gets the Sludge
+    // DoT (a sewer dweller is healed instead), then every puddle dries by one.
+    _tickPuddles() {
+        if (!this._puddles || !this._puddles.length) return;
+        if (puddleAt(this._puddles, this.playerX, this.playerY)) {
+            if (this._hasSludgeImmunity()) {
+                // The bagged feet keep you dry; no message every turn.
+            } else {
+                if (!this.hasBuff('sludge')) this._log('[You are standing in sludge.]', 'combat');
+                this.addBuff('sludge', 'Sludge', SLUDGE_DURATION, 'debuff');
+            }
+        }
+        for (const e of this.enemies) {
+            if (!e.entity || !e.entity.isAlive() || !puddleAt(this._puddles, e.x, e.y)) continue;
+            const dmg = isSewerDweller(e) ? -SLUDGE_DOT : SLUDGE_DOT;
+            const b = e.buffs.find(x => x.id === 'sludge');
+            if (b) { b.turns = Math.max(b.turns, SLUDGE_DURATION); b.dmg = dmg; }
+            else e.buffs.push({ id: 'sludge', name: 'Sludge', turns: SLUDGE_DURATION, type: 'debuff', dmg });
+        }
+        this._puddles = dryPuddles(this._puddles);
+    }
+
+    // (poisons) An enemy throws a poison it carries at you; npc.js decides when
+    // and takes it out of the kit. Fire Blood lands on you: you burn, and your
+    // hits spread it. Sludge Brain lays its puddle fanned from the thrower
+    // toward you. Returns the log line.
+    _enemyThrow(npc, def) {
+        if (!npc || !def) return null;
+        npc._lastDx = Math.sign(this.playerX - npc.x);   // it faces what it threw at
+        npc._lastDy = Math.sign(this.playerY - npc.y);
+        const who = npc.name ?? npc.type;
+        const what = String(def.name || def.id).replace(/[[\]]/g, '');
+        if (def.fireBlood) {
+            this._applyFireBlood(this, def.poition?.turns ?? 5);
+            return `[${who} throws ${what} at you: you burn, and your hits set targets burning.]`;
+        }
+        if (def.puddle) {
+            const tiles = this._layPuddle({ x: npc.x, y: npc.y }, { x: this.playerX, y: this.playerY },
+                                          def.puddle.kind, def.puddle.turns);
+            return `[${who} throws ${what}: a sludge puddle covers ${tiles} tile${tiles === 1 ? '' : 's'} around you.]`;
+        }
+        return null;
+    }
+
+    // ── Fire blood (plans/poisons.md) ────────────────────────────────────────
+    // A character that is burning AND has fire blood sets whoever its hit lands
+    // on burning for FIRE_BLOOD_SPREAD_TURNS. The victim never gets fire blood,
+    // so it never chains. `who` is the Game (the player) or an Enemy; both carry
+    // buffs/addBuff/hasBuff.
+    _hasFireBlood(who) {
+        return !!who && typeof who.hasBuff === 'function' && who.hasBuff('fire_blood') && who.hasBuff('fire');
+    }
+    // Set `who` burning for `turns` at FIRE_BLOOD_TICK a turn; a longer burn
+    // already running is kept.
+    _ignite(who, turns) {
+        if (!who || !who.buffs) return;
+        const b = who.buffs.find(x => x.id === 'fire');
+        if (b) { b.turns = Math.max(b.turns, turns); b.dmg = Math.max(b.dmg ?? 0, FIRE_BLOOD_TICK); }
+        else who.buffs.push({ id: 'fire', name: 'Burning', turns, type: 'debuff', dmg: FIRE_BLOOD_TICK });
+    }
+    // The fire-blood rider alone (the thrown burst brings its own burn).
+    _grantFireBlood(who, turns) {
+        if (!who || !who.buffs) return;
+        const b = who.buffs.find(x => x.id === 'fire_blood');
+        if (b) b.turns = Math.max(b.turns, turns);
+        else who.buffs.push({ id: 'fire_blood', name: 'Fire Blood', turns, type: 'buff' });
+    }
+    // Drinking it, or catching an enemy's throw: the burn and the rider together.
+    _applyFireBlood(who, turns) {
+        this._ignite(who, turns);
+        this._grantFireBlood(who, turns);
+    }
+    _spreadFireBlood(attacker, target) {
+        if (!this._hasFireBlood(attacker) || !target) return;
+        if (target !== this && !(target.entity && target.entity.isAlive())) return;
+        this._ignite(target, FIRE_BLOOD_SPREAD_TURNS);
+        const name = target === this ? 'You catch' : `${target.name ?? target.type} catches`;
+        this._log(`[${name} fire.]`, 'combat');
+    }
+
     // (Hire a Lion) Spawn a temporary ally on a free tile beside the player. It
     // fights through the existing ally pipeline (_allyTakeTurn) and melts away
     // when its summon timer runs out (ticked in _advanceWorld). Returns true if
@@ -4768,52 +4935,88 @@ class Game {
         return true;
     }
 
+    // (turn-model C1) The enemy phase is over (the player's own tick included):
+    // lay its held effects out on the clock. A death plays them all at once —
+    // the death flow takes the screen next.
+    _endCascadePhase() {
+        if (!this._cascade?.recording()) return;
+        this._cascadeActor = null;
+        this._cascade.commit(performance.now());
+        if (this.playerHp <= 0) this._cascade.flush();
+        this._ensureParticleLoop();
+    }
+
+    // (turn-model C1) An enemy's turn is starting (enemies.js resolveEnemyTurns).
+    // In a cascade its effects are held for its own beat; otherwise a no-op.
+    _cascadeMark(actor) {
+        if (!this._cascade?.recording()) return;
+        this._cascadeActor = actor;
+        this._cascade.mark(actor);
+    }
+
     applyDamageToPlayer(rawDamage, attacker = null) {
         if (attacker) this._lastDefeatedBy = attacker;
-        // Blind (outgoing, attacker) and guard (incoming, defender) compose in
-        // one computeHit call — round once, no double-rounding.
+        // Guard (incoming, defender) folds into one computeHit call — round once,
+        // no double-rounding.
         let dmg = computeHit({
             base: rawDamage,
-            outgoingMult: attacker?.hasBuff?.('blind') ? 0.5 : 1,
             incomingMult: this.hasBuff('guard') ? 0.5 : 1,
         });
         if (dmg === 0) return 0;   // 0-contract: hit doesn't happen, never floor back via armor
+        if (attacker) this._spreadFireBlood(attacker, this);   // (poisons) a fire-blooded foe sets you burning
         dmg = Math.max(1, dmg - this._playerArmor());   // worn armor soaks the hit (min 1 always lands)
         this.playerHp = Math.max(0, this.playerHp - dmg);
-        audio.playSfx('take-damage'); // [audio] player got hit
+        const killed = this.playerHp <= 0;
 
-        // (combat-feel-pass) Typed hit-splat, omni burst — the player's attacker
-        // isn't tracked (any adjacent enemy may have landed it), so the splat
-        // sprays around the player rather than from a single direction.
-        this._spawnHitSplat(this.playerX, this.playerY, `-${dmg}`, 'physical', { omni: true, killed: this.playerHp <= 0 });
-
-        // Hit flash + stagger on the player — Phase C. Stagger direction
-        // is randomized for the player (any adjacent enemy might have
-        // landed the hit; we don't track which), making the player jolt
-        // slightly without committing to a specific source.
-        const now = performance.now();
-        this._playerHitFlashUntil = now + 100;
-        this._playerStaggerUntil  = now + 80;
+        // Every seeded-RNG roll happens here, at the hit, in the order it always
+        // has — the stagger direction, then (on a kill) the event word's scatter —
+        // so the (C1) cascade can hold the effects without changing what the RNG
+        // hands out next. Only the drawing below may wait.
         const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
         const [sdx, sdy] = this.rng.pick(dirs);
-        this._playerStaggerDx = sdx * 3;
-        this._playerStaggerDy = sdy * 3;
-        this._ensureParticleLoop(); // keep rendering through the 100ms window
+        const wordVx = killed ? (this.rng.float() - 0.5) * 30 : null;
+        const px = this.playerX, py = this.playerY;
 
-        // Screen shake when the player takes a meaningful hit — Phase F.
-        // Slightly more aggressive than the enemy version because the
-        // player's own pain should disrupt more of their perception. A
-        // killing blow shakes with full magnitude.
-        if (dmg >= 10 || this.playerHp <= 0) {
-            const mag = this.playerHp <= 0 ? 6 : 3 + Math.min(4, (dmg - 10) / 4);
-            this._triggerScreenShake(180, mag);
-        }
+        const fx = () => {
+            audio.playSfx('take-damage'); // [audio] player got hit
 
-        // (combat-feel-pass) Routine "OUCH!" word-spam is retired — the splat is
-        // the feedback. Keep only the near-death gasp as a milestone beat.
-        if (this.playerHp <= 0) {
-            this._spawnEventWord(this.playerX, this.playerY, '...!', '#ff5544', 20);
-        }
+            // (combat-feel-pass) Typed hit-splat on the player.
+            this._spawnHitSplat(px, py, `-${dmg}`, 'physical', { omni: true, killed });
+
+            // Hit flash + stagger on the player — Phase C. Stagger direction
+            // is randomized for the player (rolled above), making the player jolt
+            // slightly without committing to a specific source.
+            const now = performance.now();
+            this._playerHitFlashUntil = now + 100;
+            this._playerStaggerUntil  = now + 80;
+            this._playerStaggerDx = sdx * 3;
+            this._playerStaggerDy = sdy * 3;
+
+            // (C1) In a cascade the attacker lunges at you on its beat, so you can
+            // see who landed it. Cascade only — without the flag nothing changes.
+            if (this._cascade && attacker) {
+                attacker._lungeAt = now;
+                attacker._lungeDx = Math.sign(px - attacker.x);
+                attacker._lungeDy = Math.sign(py - attacker.y);
+            }
+            this._ensureParticleLoop(); // keep rendering through the 100ms window
+
+            // Screen shake when the player takes a meaningful hit — Phase F.
+            // Slightly more aggressive than the enemy version because the
+            // player's own pain should disrupt more of their perception. A
+            // killing blow shakes with full magnitude.
+            if (dmg >= 10 || killed) {
+                const mag = killed ? 6 : 3 + Math.min(4, (dmg - 10) / 4);
+                this._triggerScreenShake(180, mag);
+            }
+
+            // (combat-feel-pass) Routine "OUCH!" word-spam is retired — the splat is
+            // the feedback. Keep only the near-death gasp as a milestone beat.
+            if (killed) this._spawnEventWord(px, py, '...!', '#ff5544', 20, wordVx);
+        };
+        // (C1) Cascaded: the effects wait for the attacker's beat, and the HP bar
+        // holds this damage back until they play. Otherwise they play now.
+        if (!this._cascade?.defer(attacker ?? this._cascadeActor, fx, { hp: dmg })) fx();
 
         return dmg;
     }
@@ -4917,7 +5120,7 @@ class Game {
     // Advance the day/night clock a coarse amount (a scuffle vs. to-morning).
     _skipTime(kind) {
         const beats = kind === 'morning' ? 40 : kind === 'hours' ? 20 : 8;
-        for (let i = 0; i < beats; i++) this._advanceDayClock();
+        this._advanceDayClock(beats);
         this.turn += beats;
     }
 
@@ -5060,12 +5263,18 @@ class Game {
         // the new run is independent of the old one. The autoplay passes a seed
         // so a run replays exactly (plans/quest1-autoplay.md §5.3).
         clearSave();
-        this.rng = new RNG(seed);
+        const newSeed = seed ?? randomSeed();
+        this.rng = new RNG(newSeed);
+        this.slots = pickSlots(newSeed);   // (slot registry) a new game, new picks
+        // Wander's own stream, derived from the same seed so a seeded run still
+        // replays exactly (the autoplay), yet never sharing a draw with game.rng.
+        this.ambientRng = new RNG(seed == null ? undefined : (seed ^ 0x9E3779B9) >>> 0);
         this.questEngine = new QuestEngine(this);
         this._lastAutosaveTurn = -999;
         this.turn = 0;
-        this._dayClockMs = 0;
+        this._dayClock = 0;
         this._nightLevel = 0;
+        this._dispositionDecayTurns = 0;
         // The world's memory of the old run. Cleared BEFORE _loadMap, which reads
         // it to decide what the town spawns (collected items stay gone, looted
         // enemies come back broke, pursuers follow you in).
@@ -5206,22 +5415,20 @@ class Game {
     }
 
     // (combat-feel-pass) RuneScape-style typed hit-splat. `type` picks the
-    // color + per-type animation in the renderer; `opts.dir` ({dx,dy}) makes the
-    // splat fan in the direction of the blow (a swing / a throw came from
-    // somewhere), while omitting it (or opts.omni) bursts it around the target
-    // (an AoE, or a hit with no tracked source). Simultaneous bits on one tile
-    // get incrementing `slot`s so they pre-separate instead of stacking —
-    // deterministic, so the same hit always looks the same. `opts.killed`
+    // color + per-type animation in the renderer. Where it sits is the renderer's
+    // call (splat-layout.js): by how many splats share the tile — one centred,
+    // more spread out — so they never stack, and the same hits always look the same.
+    // `opts.dir` is still recorded on the particle but no longer drawn: splats
+    // stopped flying along the blow when they took fixed spots. `opts.killed`
     // (manga-impact-marks) additionally picks a bare-symbol mark to pop
     // alongside the number — it rides this SAME particle, so it lives and
     // dies with the number it's attached to and needs no render loop or
     // scheduling of its own (see _hasActiveEffects / _ensureParticleLoop).
     _spawnHitSplat(tileX, tileY, text, type = 'physical', opts = {}) {
+        // (C1) During a cascaded enemy phase the splat waits for its actor's beat.
+        if (this._cascadeActor && this._cascade?.defer(this._cascadeActor, () => this._spawnHitSplat(tileX, tileY, text, type, opts),
+            { hp: -(opts.playerHpDelta || 0) })) return;   // a held tick on the player holds its HP change too
         const born = performance.now();
-        let slot = 0;
-        for (const p of this._damageNumbers) {
-            if (p.type && p.tileX === tileX && p.tileY === tileY && born - p.bornAt < 130) slot++;
-        }
         let dir = null;
         if (!opts.omni && opts.dir && (opts.dir.dx || opts.dir.dy)) {
             const len = Math.hypot(opts.dir.dx, opts.dir.dy) || 1;
@@ -5232,7 +5439,7 @@ class Game {
             tileX, tileY, text, type,
             crit: !!opts.crit,
             mark: this._pickHitMark(type, amount, !!opts.killed),
-            dir, slot,
+            dir,
             bornAt: born,
             maxAge: 620,
         });
@@ -5243,7 +5450,11 @@ class Game {
     // emphasis text that pops out alongside the damage number. Larger, bolder,
     // with a brief horizontal scatter so multiple words don't stack vertically
     // when several hits land in the same beat.
-    _spawnEventWord(tileX, tileY, text, color, size = 18) {
+    _spawnEventWord(tileX, tileY, text, color, size = 18, vxRolled = null) {
+        // The scatter is rolled NOW, even when the word waits for a cascade beat,
+        // so the seeded RNG is spent in the same order with the cascade on or off.
+        const vx = vxRolled ?? (this.rng.float() - 0.5) * 30;
+        if (this._cascadeActor && this._cascade?.defer(this._cascadeActor, () => this._spawnEventWord(tileX, tileY, text, color, size, vx))) return;
         this._damageNumbers.push({
             tileX, tileY, text, color, size,
             // Seeded RNG (not Math.random) so the scatter is deterministic and
@@ -5251,7 +5462,7 @@ class Game {
             // renderer's per-frame screen-shake jitter deliberately stays on
             // Math.random (see rng.js) — it's frame-rate-bound and never touches
             // game state. (fix/critical-path)
-            vx: (this.rng.float() - 0.5) * 30, // px/sec horizontal scatter
+            vx,                               // px/sec horizontal scatter
             vy: -28,                          // slightly slower than damage numbers
             bornAt: performance.now(),
             maxAge: 700,
@@ -5348,6 +5559,7 @@ class Game {
             this._damageNumbers = this._damageNumbers.filter(
                 dn => now - dn.bornAt < dn.maxAge
             );
+            this._cascade?.tick(now);   // (C1) play the blows whose beat has come
             if (frame.tick()) requestAnimationFrame(loop);
         };
         requestAnimationFrame(loop);
@@ -5358,6 +5570,7 @@ class Game {
     // because the enemy count is small (single digits typically).
     _hasActiveEffects() {
         if (this._damageNumbers.length > 0) return true;
+        if (this._cascade?.pending()) return true;   // (C1) blows still waiting for their beat
         const now = performance.now();
         if ((this._playerHitFlashUntil ?? 0) > now) return true;
         if ((this._playerStaggerUntil  ?? 0) > now) return true;
@@ -5382,6 +5595,7 @@ class Game {
             // Mid-step glide — keep rendering so enemy/NPC slides animate even
             // when the player is standing still. (plans/movement-feel.md #6)
             if (e._slideStart != null && now < e._slideStart + (e._slideMs || 0)) return true;
+            if (e._lungeAt != null && now < e._lungeAt + LUNGE_MS) return true;   // (C1)
         }
         // (fight-fog) The fight's fog rolling in or clearing, and its entrance.
         if (fightFxActive(this._fightOn, this._fightStart, this._fightEndedAt, now)) return true;
@@ -5471,158 +5685,339 @@ class Game {
         this._render();
     }
 
-    // Tap inside the open device: a tab-strip tap switches tabs. (Body taps — e.g.
-    // GEAR unequip — arrive in S3-T2.) The ✕ chip + tap-outside close are handled
-    // earlier by the CLOSE_PANEL block, so only IN-PANEL taps reach here.
+    // Tap inside the open device. A tap only RESOLVES a point into a (zone,
+    // index) — which tab, slot, action button, plate, chooser row or ring socket
+    // it landed on — and hands it to _deviceActivate, the same step the keyboard
+    // cursor's confirm calls (C3), so taps and keys cannot drift apart. The ✕
+    // chip + tap-outside close are handled earlier by the CLOSE_PANEL block, so
+    // only IN-PANEL taps reach here. Every rect is the one the renderer drew.
     _tapDevice(pt) {
         // Tab strip → switch tabs.
         for (let i = 0; i < DEVICE_TABS.length; i++) {
-            if (this._pointInRect(pt, deviceTabRect(i), HIT_SLOP)) {
-                this._deviceTab = DEVICE_TABS[i];
-                this._deviceSel = null;   // (C1) switching tabs drops any inspector selection
-                audio.playSfx('menu-tick');
-                this._render();
-                return;
-            }
+            if (this._pointInRect(pt, deviceTabRect(i), HIT_SLOP)) { this._deviceActivate('tab', i); return; }
         }
+        const body = deviceBodyRect();
         // ITEMS (Bag) tab — tap-to-inspect. A tap SELECTS a filled slot; the
         // inspector panel then shows the item's stats + action buttons. A second
         // tap on an action row dispatches (Use/Equip · Protect/Unprotect · Drop).
-        // Reads the SAME rects the renderer draws (deviceBagSlotRects /
-        // inspectorActionRects), so the taps can't drift from the drawn surfaces.
         if (this._deviceTab === 'items') {
             const sel = this._deviceSel;
             // 1) Inspector action rows — only when a slot is selected + still filled.
             if (sel && sel.tab === 'items' && this.inventory[sel.index]) {
-                const def = this.inventory[sel.index].itemDef;
-                const actions = itemActions(def, zoneOf(sel.index, SAFE_SLOTS));
-                const rows = inspectorActionRects(deviceBodyRect());
+                const actions = itemActions(this.inventory[sel.index].itemDef, zoneOf(sel.index, SAFE_SLOTS));
+                const rows = inspectorActionRects(body);
                 for (let a = 0; a < actions.length; a++) {
-                    if (!this._pointInRect(pt, rows[a], HIT_SLOP)) continue;
-                    const cfg = { size: INVENTORY_SIZE, safeSlots: SAFE_SLOTS, maxStack: MAX_STACK };
-                    const idx = sel.index;
-                    this._deviceSel = null;   // selection resolves this frame; the panel drops
-                    switch (actions[a].id) {
-                        case 'use':
-                        case 'equip': {
-                            // Route through resolveUse like canonical _doItemUse, but GATE the
-                            // removal the same way — the paused device supplies no throw/melee
-                            // DIRECTION, so resolveUse is a no-op for those and the item must
-                            // survive (a rock is `consumable:true` yet nothing was thrown; the
-                            // pipe is a non-consumable tool). Only a self-use (heal), an equip
-                            // (moves onto the body), or a learn (tome crumbles) truly consumes
-                            // it here, and only a real use costs a world beat — closing the
-                            // free-heal-while-paused gap without wasting a turn on a no-op.
-                            // Soap's cure is deferred: resolveUse only logs intent — the actual
-                            // removeBuff('sludge') fires in _advanceWorld gated on this flag, so
-                            // it MUST be set before resolveUse, exactly as canonical _doItemUse.
-                            if (def.effect === 'cure_sludge') this._soapUsedThisTurn = true;
-                            const msg = resolveUse(this, def, null);   // equip → resolveEquip (re-bags any displaced piece)
-                            if (msg) this._log(msg);
-                            this._refreshGrantedSkills();
-                            const usedUp = def.useType === 'self' || def.useType === 'equip'
-                                || (def.useType === 'learn' && def.consumable);
-                            if (usedUp) { this._removeFromSlot(idx); this._advanceWorld(); }
-                            break;
-                        }
-                        case 'protect':
-                            if (!moveToZone(this.inventory, idx, 'safe', cfg)) this._log('[Safe slots full.]');
-                            break;
-                        case 'unprotect':
-                            if (!moveToZone(this.inventory, idx, 'pack', cfg)) this._log('[Pack is full.]');
-                            break;
-                        case 'drop':
-                            this.inventory[idx] = null;
-                            break;
-                    }
-                    audio.playSfx('menu-confirm');
-                    this._render();
-                    return;
+                    if (this._pointInRect(pt, rows[a], HIT_SLOP)) { this._deviceActivate('action', a); return; }
                 }
+                // (C3c) The uses button, when the item has a use here.
+                const uses = this._deviceUsesRect?.(sel.index);
+                if (uses && this._pointInRect(pt, uses, HIT_SLOP)) { this._deviceActivate('action', 'uses'); return; }
             }
             // 2) Otherwise a slot tap: SELECT a filled slot, clear on an empty one.
-            const rects = deviceBagSlotRects(deviceBodyRect());
+            const rects = deviceBagSlotRects(body);
             for (let i = 0; i < rects.length; i++) {
-                if (!this._pointInRect(pt, rects[i], HIT_SLOP)) continue;
-                if (this.inventory[i]) {
-                    this._deviceSel = { tab: 'items', index: i };
-                    audio.playSfx('menu-tick');
-                } else {
-                    this._deviceSel = null;
-                }
-                this._render();
-                return;
+                if (this._pointInRect(pt, rects[i], HIT_SLOP)) { this._deviceActivate('slot', i); return; }
             }
             return;
         }
-        // SKILLS body → the two-hands ring loadout. Tapping a FILLED socket
-        // unslots that ring; tapping an EMPTY unlocked socket cycles the next
-        // owned-but-unslotted ring into it. Reads the SAME sockets deviceRingsLayout
-        // hands the renderer, so the tap can't drift from the drawn well.
+        // RINGS body → the two-hands ring loadout: a socket tap slots/unslots.
         if (this._deviceTab === 'rings') {
-            const { sockets } = deviceRingsLayout(deviceBodyRect(), this);
-            for (const s of sockets) {
-                if (!this._pointInRect(pt, s, HIT_SLOP)) continue;
-                if (s.ringId) {
-                    this._unslotRing(s.key);
-                } else {
-                    const slotted = new Set(Object.values(this.ringSlots || {}).filter(Boolean));
-                    const next = [...this.ownedRings].find(id => !slotted.has(id));
-                    if (next) this._slotRing(s.key, next);
-                }
-                audio.playSfx('menu-tick');
-                this._render();
-                return;
+            for (const s of deviceRingsLayout(body, this).sockets) {
+                if (this._pointInRect(pt, s, HIT_SLOP)) { this._deviceActivate('socket', s.key); return; }
             }
             return;
         }
-        // GEAR body → tap a slot plate to open its CHOOSER: a list of every bag
-        // item that fits, each with its armor delta vs the worn piece, plus a Bare
-        // (unequip) row. Tapping a row equips (or bares) that slot. Reads the SAME
-        // rects the renderer draws (deviceEquipLayout / gearOptionRects), so the
-        // taps can't drift. The weapon plate stays out of scope — weapon swap lives
-        // on the ITEMS tap.
+        // GEAR body → a plate tap opens that armor slot's CHOOSER; a row tap equips
+        // (or bares) it; a tap outside every row dismisses it (picker convention).
+        // The weapon plate stays out of scope — weapon swap lives on the ITEMS tap.
         if (this._deviceTab === 'gear') {
-            // 1) An open chooser: its option rows take priority over the plates.
             const sel = this._deviceSel;
-            if (sel && sel.tab === 'gear') {
-                const opts = equipOptions(sel.slotKey, this.equipment[sel.slotKey], this.inventory);
-                const rows = gearOptionRects(deviceBodyRect(), opts.length);
-                for (let i = 0; i < opts.length; i++) {
-                    if (!this._pointInRect(pt, rows[i], HIT_SLOP)) continue;
-                    const opt = opts[i];
-                    if (opt.bagIndex >= 0) {
-                        const def = this.inventory[opt.bagIndex].itemDef;
-                        const msg = resolveUse(this, def, null);   // equip → resolveEquip (re-bags any displaced piece)
-                        this._removeFromSlot(opt.bagIndex);
-                        this._refreshGrantedSkills();
-                        if (msg) this._log(msg);
-                    } else if (opt.id === '__bare__') {
-                        const msg = unequipItem(this, sel.slotKey);
-                        if (msg) this._log(msg);
-                    }
-                    this._deviceSel = null;
-                    audio.playSfx('menu-confirm');
-                    this._render();
-                    return;
+            if (sel && sel.tab === 'gear' && sel.open) {
+                const n = equipOptions(sel.slotKey, this.equipment[sel.slotKey], this.inventory).length;
+                const rows = gearOptionRects(body, n);
+                for (let i = 0; i < n; i++) {
+                    if (this._pointInRect(pt, rows[i], HIT_SLOP)) { this._deviceActivate('option', i); return; }
                 }
-                // A tap outside every row closes the chooser (picker convention).
-                this._deviceSel = null;
-                this._render();
+                this._deviceActivate('dismiss', 0);
                 return;
             }
-            // 2) No chooser open: a plate tap opens one for that armor slot. Only
-            //    the 5 armor slots open a chooser — the weapon plate is inert here.
-            const { slots } = deviceEquipLayout(deviceBodyRect());
-            for (const s of slots) {
+            for (const s of deviceEquipLayout(body).slots) {
                 if (s.key === 'weapon') continue;
-                if (!this._pointInRect(pt, s)) continue;
-                this._deviceSel = { tab: 'gear', slotKey: s.key };
-                audio.playSfx('menu-tick');
-                this._render();
-                return;
+                if (this._pointInRect(pt, s)) { this._deviceActivate('plate', s.key); return; }
             }
         }
+    }
+
+    // (C3) The ONE Remoticon activate step — taps (_tapDevice) and the keyboard
+    // cursor's confirm (_deviceKey) both land here, the way _offerActivate serves
+    // the offer screen. `zone` names what was hit; `index` is its position (a tab
+    // index, a bag slot, an action-row index, a chooser-row index) or key (a gear
+    // plate's slotKey, a ring socket's key).
+    _deviceActivate(zone, index) {
+        if (zone === 'tab') {
+            this._deviceTab = DEVICE_TABS[index];
+            this._deviceSel = null;   // (C1) switching tabs drops any inspector selection
+            audio.playSfx('menu-tick');
+            this._render();
+            return;
+        }
+        if (zone === 'slot') {
+            if (this.inventory[index]) {
+                this._deviceSel = { tab: 'items', index };
+                audio.playSfx('menu-tick');
+            } else {
+                this._deviceSel = null;
+            }
+            this._render();
+            return;
+        }
+        if (zone === 'action') {
+            const sel = this._deviceSel;
+            if (!sel || sel.tab !== 'items' || !this.inventory[sel.index]) return;
+            if (index === 'uses') { this._deviceOpenUses(sel.index); return; }
+            const def = this.inventory[sel.index].itemDef;
+            const action = itemActions(def, zoneOf(sel.index, SAFE_SLOTS))[index];
+            if (!action) return;
+            const cfg = { size: INVENTORY_SIZE, safeSlots: SAFE_SLOTS, maxStack: MAX_STACK };
+            const idx = sel.index;
+            this._deviceSel = null;   // selection resolves this frame; the panel drops
+            switch (action.id) {
+                case 'use':
+                case 'equip': {
+                    // Route through resolveUse like canonical _doItemUse, but GATE the
+                    // removal the same way — the paused device supplies no throw/melee
+                    // DIRECTION, so resolveUse is a no-op for those and the item must
+                    // survive (a rock is `consumable:true` yet nothing was thrown; the
+                    // pipe is a non-consumable tool). Only a self-use (heal) or an equip
+                    // (moves onto the body) truly consumes it here, and only a real use
+                    // costs a world beat — closing the free-heal-while-paused gap without
+                    // wasting a turn on a no-op.
+                    // Soap's cure is deferred: resolveUse only logs intent — the actual
+                    // removeBuff('sludge') fires in _advanceWorld gated on this flag, so
+                    // it MUST be set before resolveUse, exactly as canonical _doItemUse.
+                    if (def.effect === 'cure_sludge') this._soapUsedThisTurn = true;
+                    const msg = resolveUse(this, def, null);   // equip → resolveEquip (re-bags any displaced piece)
+                    if (msg) this._log(msg);
+                    this._refreshGrantedSkills();
+                    const usedUp = def.useType === 'self' || def.useType === 'equip';
+                    if (usedUp) { this._removeFromSlot(idx); this._advanceWorld(); }
+                    break;
+                }
+                case 'drink': {
+                    // (poisons) Drinking Fire Blood on purpose: you burn, and your
+                    // hits spread it. Costs the turn like any use.
+                    if (def.fireBlood) {
+                        this._applyFireBlood(this, def.poition?.turns ?? 5);
+                        this._log('[You drink Fire Blood: you burn, and your hits set targets burning.]', 'combat');
+                    }
+                    this._removeFromSlot(idx);
+                    this._advanceWorld();
+                    break;
+                }
+                case 'protect':
+                    if (!moveToZone(this.inventory, idx, 'safe', cfg)) this._log('[Safe slots full.]');
+                    break;
+                case 'unprotect':
+                    if (!moveToZone(this.inventory, idx, 'pack', cfg)) this._log('[Pack is full.]');
+                    break;
+                case 'drop':
+                    this.inventory[idx] = null;
+                    break;
+            }
+            audio.playSfx('menu-confirm');
+            this._render();
+            return;
+        }
+        if (zone === 'socket') {
+            // A FILLED socket unslots its ring; an EMPTY unlocked socket cycles the
+            // next owned-but-unslotted ring into it.
+            if ((this.ringSlots || {})[index]) {
+                this._unslotRing(index);
+            } else {
+                const slotted = new Set(Object.values(this.ringSlots || {}).filter(Boolean));
+                const next = [...this.ownedRings].find(id => !slotted.has(id));
+                if (next) this._slotRing(index, next);
+            }
+            audio.playSfx('menu-tick');
+            this._render();
+            return;
+        }
+        if (zone === 'plate') {
+            this._deviceSel = { tab: 'gear', slotKey: index, open: true };
+            audio.playSfx('menu-tick');
+            this._render();
+            return;
+        }
+        if (zone === 'option') {
+            const sel = this._deviceSel;
+            if (!sel || sel.tab !== 'gear' || !sel.open) return;
+            const opt = equipOptions(sel.slotKey, this.equipment[sel.slotKey], this.inventory)[index];
+            if (!opt) return;
+            if (opt.bagIndex >= 0) {
+                const def = this.inventory[opt.bagIndex].itemDef;
+                const msg = resolveUse(this, def, null);   // equip → resolveEquip (re-bags any displaced piece)
+                this._removeFromSlot(opt.bagIndex);
+                this._refreshGrantedSkills();
+                if (msg) this._log(msg);
+            } else if (opt.id === '__bare__') {
+                const msg = unequipItem(this, sel.slotKey);
+                if (msg) this._log(msg);
+            }
+            this._deviceSel = null;
+            audio.playSfx('menu-confirm');
+            this._render();
+            return;
+        }
+        if (zone === 'dismiss') {
+            this._deviceSel = null;
+            this._render();
+        }
+    }
+
+    // (C3c) The inspector's uses button: its rect when the bag item at `index`
+    // has a "use this on that" here, else null. The same test the overlay uses
+    // (contextualUses), and no button on a quest item, which the overlay refuses.
+    _deviceUsesRect(index) {
+        const stack = this.inventory[index];
+        if (!stack || stack.itemDef.questItem) return null;
+        if (!contextualUses(stack.itemDef, this).length) return null;
+        return inspectorUsesRect(deviceBodyRect());
+    }
+
+    // (C3c) Leave the Remoticon holding that item, as its digit key would, and
+    // open the list Space opens. The keyboard and touch then share one list.
+    _deviceOpenUses(index) {
+        this._deviceSel = null;
+        this.selectedSlot = index;
+        this.state = STATE.ITEM_SELECTED;
+        this._openItemOverlay();
+    }
+
+    // (C3) What the keyboard cursor can stand on right now, on the active tab:
+    // the zone _deviceActivate will be handed, the rects the renderer draws for
+    // it (so the cursor moves over exactly what is on screen), the id each rect
+    // activates with, and where the cursor is (-1 = not shown yet). The inner
+    // levels (an item's action buttons, an open gear chooser) take over from the
+    // outer ones (the bag, the plates) while they are open.
+    _deviceTargets() {
+        const body = deviceBodyRect();
+        const sel = this._deviceSel;
+        const tab = this._deviceTab;
+        if (tab === 'items') {
+            const stack = sel && sel.tab === 'items' ? this.inventory[sel.index] : null;
+            if (stack && sel.action != null) {
+                const n = itemActions(stack.itemDef, zoneOf(sel.index, SAFE_SLOTS)).length;
+                if (n) {
+                    const rects = inspectorActionRects(body).slice(0, n);
+                    const ids = rects.map((_, i) => i);
+                    const uses = this._deviceUsesRect?.(sel.index);   // (C3c) the uses button joins the row
+                    if (uses) { rects.push(uses); ids.push('uses'); }
+                    return { zone: 'action', rects, ids, cur: Math.min(sel.action, rects.length - 1) };
+                }
+            }
+            const rects = deviceBagSlotRects(body);
+            return { zone: 'slot', rects, ids: rects.map((_, i) => i), cur: sel && sel.tab === 'items' ? sel.index : -1 };
+        }
+        if (tab === 'gear') {
+            if (sel && sel.tab === 'gear' && sel.open) {
+                const n = equipOptions(sel.slotKey, this.equipment[sel.slotKey], this.inventory).length;
+                const rects = gearOptionRects(body, n);
+                return { zone: 'option', rects, ids: rects.map((_, i) => i), cur: sel.option != null ? Math.min(sel.option, n - 1) : -1 };
+            }
+            const plates = deviceEquipLayout(body).slots.filter(s => s.key !== 'weapon');
+            const ids = plates.map(s => s.key);
+            return { zone: 'plate', rects: plates, ids, cur: sel && sel.tab === 'gear' ? ids.indexOf(sel.slotKey) : -1 };
+        }
+        if (tab === 'rings') {
+            const sockets = deviceRingsLayout(body, this).sockets;
+            const ids = sockets.map(s => s.key);
+            // `row`: the fingertips are staggered, so left/right step them in the
+            // order deviceRingsLayout returns them (left to right across both hands).
+            return { zone: 'socket', rects: sockets, ids, row: true, cur: sel && sel.tab === 'rings' ? ids.indexOf(sel.key) : -1 };
+        }
+        return null;
+    }
+
+    // (C3) Put the cursor on target `i` of the current level. The cursor IS
+    // _deviceSel — the same selection a tap makes, so it wears the same gold
+    // halo (and on the bag, opens the same inspector).
+    _deviceFocus(t, i) {
+        const sel = this._deviceSel;
+        if (t.zone === 'slot')   this._deviceSel = { tab: 'items', index: t.ids[i] };
+        if (t.zone === 'action') this._deviceSel = { tab: 'items', index: sel.index, action: i };
+        if (t.zone === 'plate')  this._deviceSel = { tab: 'gear', slotKey: t.ids[i] };
+        if (t.zone === 'option') this._deviceSel = { tab: 'gear', slotKey: sel.slotKey, open: true, option: i };
+        if (t.zone === 'socket') this._deviceSel = { tab: 'rings', key: t.ids[i] };
+        audio.playSfx('menu-tick');
+        this._render();
+    }
+
+    // (C3) Every Remoticon key but Esc (ruling C3R1). Arrows/WASD move the cursor
+    // by geometry; [ ] cycle tabs; Space/Enter confirm; Tab pockets it; C/J/M/R
+    // jump to a tab; on QUESTS up/down scroll the list. The first move or confirm
+    // on a tab only SHOWS the cursor, on the first entry. Confirm calls the same
+    // _deviceActivate a tap does; the keyboard then keeps its cursor on the slot
+    // or plate it acted on, where a tap's selection clears.
+    _deviceKey(code) {
+        if (code === 'Tab')          { this._closeDevice();   return; }
+        if (code === 'BracketLeft')  { this._deviceCycleTab(-1); return; }
+        if (code === 'BracketRight') { this._deviceCycleTab(1);  return; }
+        if (code === 'KeyC') { this._deviceTab = 'gear';   this._deviceSel = null; this._render(); return; }
+        if (code === 'KeyJ') { this._deviceTab = 'quests'; this._deviceSel = null; this._render(); return; }
+        if (code === 'KeyM') { this._deviceTab = 'map';    this._deviceSel = null; this._render(); return; }
+        if (code === 'KeyR') { this._deviceTab = 'rings';  this._deviceSel = null; this._render(); return; }
+        const dir = DIRS[code];
+        if (this._deviceTab === 'quests') {
+            if (dir && dir.dy) this._scrollJournal(-dir.dy);
+            return;
+        }
+        const confirm = code === 'Space' || code === 'Enter' || code === 'NumpadEnter';
+        if (!dir && !confirm) return;
+        const t = this._deviceTargets();
+        if (!t || !t.rects.length) return;
+        if (t.cur < 0) { this._deviceFocus(t, 0); return; }
+        if (dir) {
+            const next = t.row
+                ? Math.max(0, Math.min(t.rects.length - 1, t.cur + dir.dx))
+                : nearestRectInDir(t.rects, t.cur, dir.dx, dir.dy);
+            if (next !== t.cur) this._deviceFocus(t, next);
+            return;
+        }
+        const sel = this._deviceSel;
+        if (t.zone === 'slot') {
+            const stack = this.inventory[sel.index];
+            if (!stack || !itemActions(stack.itemDef, zoneOf(sel.index, SAFE_SLOTS)).length) return;
+            this._deviceSel = { tab: 'items', index: sel.index, action: 0 };
+            audio.playSfx('menu-tick');
+            this._render();
+            return;
+        }
+        if (t.zone === 'plate') {
+            const key = t.ids[t.cur];
+            this._deviceActivate('plate', key);
+            if (equipOptions(key, this.equipment[key], this.inventory).length) this._deviceSel.option = 0;
+            this._render();
+            return;
+        }
+        if (t.zone === 'socket') { this._deviceActivate('socket', t.ids[t.cur]); return; }
+        // An action button or a chooser row: do it, then leave the cursor where it was.
+        const keep = t.zone === 'action' ? { tab: 'items', index: sel.index } : { tab: 'gear', slotKey: sel.slotKey };
+        this._deviceActivate(t.zone, t.ids[t.cur]);
+        if (this.state === STATE.DEVICE && !this._deviceSel) { this._deviceSel = keep; this._render(); }
+    }
+
+    // (C3) Esc's first job in the Remoticon: step back out of an inner level — an
+    // item's action buttons to its slot, an open gear chooser to its plate. True
+    // if it stepped back; false means there was nothing to step out of, so the
+    // Cancel hook closes the device instead.
+    _deviceBack() {
+        const sel = this._deviceSel;
+        if (sel && sel.tab === 'items' && sel.action != null) this._deviceSel = { tab: 'items', index: sel.index };
+        else if (sel && sel.tab === 'gear' && sel.open) this._deviceSel = { tab: 'gear', slotKey: sel.slotKey };
+        else return false;
+        audio.playSfx('menu-cancel');
+        this._render();
+        return true;
     }
 
     // (Slice 3) The old [J] / [M] openers now route into the Remoticon device on the
@@ -5693,14 +6088,11 @@ class Game {
         this._offer = { ...emptyOffer(), scroll: { theirs: 0, yours: 0 }, selection: null, goldPinned: false };
         this._offerCursor = { side: 'yours', index: 0 };
         // `&& !npc._container` matters: the container shim is vendor:true, so a
-        // bare `npc.vendor` would newly spin a 1s interval and a buyback ledger
-        // for every wooden crate. _openContainer never did either.
-        if (npc.vendor && !npc._container) {
-            const now = performance.now();
-            if (!npc._buyback || (now - npc._buyback.openedAt) >= BUYBACK_MS) {
-                npc._buyback = { openedAt: now, entries: {} };
-            }
-            this._startTradeTimer();
+        // bare `npc.vendor` would newly lock a buyback ledger for every wooden
+        // crate. _openContainer never did. The ledger lasts until you leave the
+        // zone (_endBuybacks), however long you take.
+        if (npc.vendor && !npc._container && !npc._buyback) {
+            npc._buyback = { entries: {} };
         }
         this.state = STATE.TRADE;
         audio.playSfx('menu-open');
@@ -5722,7 +6114,6 @@ class Game {
         this._offer = null;
         this._offerCursor = null;
         if (this.state !== STATE.TRADE) return;
-        this._stopTradeTimer();
         this.state = STATE.IDLE;
         audio.playSfx('menu-cancel');
         this._render();              // publishes _menuPanelRect / _closeBtnRect, not just paint
@@ -6089,7 +6480,6 @@ class Game {
         // spliced; a vendor's stock is infinite and is not. Splice highest index
         // FIRST, for the same reason the bag does.
         for (const e of [...taken].sort((a, b) => (b.index ?? 0) - (a.index ?? 0))) {
-            const unit = buyPrice(e.def, d) || 0;
             for (let n = 0; n < e.count; n++) {
                 // Last line of defence. _offerBlocker refuses a full bag before
                 // any gold moves, so this should be unreachable -- but taking
@@ -6101,9 +6491,8 @@ class Game {
                 // Taking a buyback row CONSUMES its credit. The retired
                 // _buyFromVendor popped it (`e.rebuy.pop()`); nothing succeeded
                 // that line, so the shelf never emptied and one sold item could
-                // be re-bought without limit for the whole five-minute window.
+                // be re-bought without limit for as long as the ledger lived.
                 else if (e.source === 'buyback') this._buybackConsume(npc, e.def.id);
-                else                             this._buybackRecord(npc, e.def.id, 'refund', unit);
             }
         }
 
@@ -6241,33 +6630,7 @@ class Game {
         }
     }
 
-    // (Phase 6c) A 1s re-render loop while a vendor window is open, so the buyback
-    // countdown visibly ticks down (the modal is otherwise a static paused draw).
-    // Self-stops the instant we leave the trade state; cleared on close.
-    _startTradeTimer() {
-        this._stopTradeTimer();
-        this._tradeTimer = setInterval(() => {
-            if (this.state !== STATE.TRADE) { this._stopTradeTimer(); return; }
-            this._render();
-        }, 1000);
-    }
-    _stopTradeTimer() {
-        if (this._tradeTimer) { clearInterval(this._tradeTimer); this._tradeTimer = null; }
-    }
-
     // ── Dialogue (Step 4 — disposition dialogue) ─────────────────────────────
-
-    // The faced / cardinal-adjacent NPC that has a dialogue, or null. Mirrors
-    // _findAdjacentVendor (faced tile wins, else any adjacent one), skipping
-    // current allies.
-    _findAdjacentDialogueNpc() {
-        const FACE = { up: { dx: 0, dy: -1 }, down: { dx: 0, dy: 1 }, left: { dx: -1, dy: 0 }, right: { dx: 1, dy: 0 } };
-        const fd = FACE[this.facing] || { dx: 0, dy: 0 };
-        const has = (e) => e && e.dialogueId && e.entity.isAlive() && !e._ally;
-        const faced = this.enemies.find(e => has(e) && e.x === this.playerX + fd.dx && e.y === this.playerY + fd.dy);
-        if (faced) return faced;
-        return this.enemies.find(e => has(e) && manhattan(e.x, e.y, this.playerX, this.playerY) === 1) || null;
-    }
 
     // Open a conversation with `npc`. A pure menu — the world does NOT advance
     // (talking is paused, like trade / the log modal). Choices move the same
@@ -6381,32 +6744,24 @@ class Game {
     }
 
     // ── Buyback ledger (Phase 6c) ─────────────────────────────────────────────
-    // npc._buyback.entries[itemId] = { rebuy: [price…], refund: [price…] } — a
-    // LIFO stack of PER-UNIT locked prices, one per credit. A market BUY pushes a
-    // refund credit (sell it back for what you paid); a market SELL pushes a rebuy
-    // credit (buy it back for what you got). Undo pops the matching unit's own
-    // price and creates no new credit (no ping-pong). Per-unit prices are the
-    // anti-exploit: buying the same item cheap then dear no longer lets you refund
-    // both at the dearer price (a gold-dup fixed in the pre-prod review). Self-
-    // expires after BUYBACK_MS.
+    // npc._buyback.entries[itemId] = { rebuy: [price…] } — a LIFO stack of
+    // PER-UNIT locked prices, one per credit. A market SELL pushes a rebuy credit
+    // (buy it back for what you got); buying it back pops that unit's own price
+    // and creates no new credit (no ping-pong). Per-unit prices are the
+    // anti-exploit: selling the same item cheap then dear no longer lets you buy
+    // both back at the cheaper price (a gold-dup fixed in the pre-prod review).
+    // The ledger lasts until you leave the zone (_endBuybacks on _loadMap).
     _buybackLive(npc) {
-        return !!(npc._buyback && (performance.now() - npc._buyback.openedAt) < BUYBACK_MS);
-    }
-    // Milliseconds left in the buyback window (0 when expired / no ledger). The
-    // renderer reads this for the countdown so BUYBACK_MS stays in this module.
-    _buybackRemainingMs(npc) {
-        if (!npc._buyback) return 0;
-        return Math.max(0, npc._buyback.openedAt + BUYBACK_MS - performance.now());
-    }
-    _buybackEntry(npc, itemId) {
-        return npc._buyback && npc._buyback.entries[itemId];
+        return !!(npc && npc._buyback);
     }
     _buybackRecord(npc, itemId, kind, price) {
-        if (!npc._buyback) return;
-        const e = npc._buyback.entries[itemId] ||
-            (npc._buyback.entries[itemId] = { rebuy: [], refund: [] });
-        if (kind === 'rebuy') e.rebuy.push(price);
-        else                  e.refund.push(price);
+        if (!npc._buyback || kind !== 'rebuy') return;
+        const e = npc._buyback.entries[itemId] || (npc._buyback.entries[itemId] = { rebuy: [] });
+        e.rebuy.push(price);
+    }
+    // Leaving the zone closes every vendor's buyback shelf.
+    _endBuybacks() {
+        for (const e of (this.enemies || [])) if (e) e._buyback = null;
     }
     // Spend one unit's rebuy credit -- the LIFO counterpart of _buybackRecord's
     // push, and what makes the shelf a finite undo rather than a duplicator.
