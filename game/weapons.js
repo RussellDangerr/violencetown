@@ -10,6 +10,8 @@
 // takes and which kinds of hit it lands (plans/ws1-weapon-class-table.md).
 // Nothing reads hands or attackKinds in play yet; class ids are internal.
 
+import { VALUE_TIERS } from './items.js';
+
 // The hit kinds a weapon can land.
 export const ATTACK_KINDS = Object.freeze(['slash', 'stab', 'crush']);
 
@@ -42,6 +44,54 @@ export const WEAPON_CLASSES = Object.freeze({
 export function weaponClassOf(def) {
     return (def && WEAPON_CLASSES[def.weaponClass]) || null;
 }
+
+// ── Tiers (plans/ws2-tier-generator.md) ──────────────────────────────────────
+// One base weapon makes five tiered copies, grey to orange, on the VALUE_TIERS
+// ladder. A tier adds perks, never bigger numbers: every number on a copy is
+// the base's own. Each tier up adds one perk slot. Which perk fills a slot is
+// not ruled, so every added slot is PERK_PLACEHOLDER.
+export const PERK_PLACEHOLDER = '[PERK]';
+export const WEAPON_TIER_KEYS = Object.freeze(VALUE_TIERS.map(t => t.key));
+
+const unbracket = s => String(s ?? '').replace(/^\[(.*)\]$/, '$1');
+const titleCase = s => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+function deepFreeze(o) {
+    if (o && typeof o === 'object' && !Object.isFrozen(o)) {
+        Object.freeze(o);
+        for (const v of Object.values(o)) deepFreeze(v);
+    }
+    return o;
+}
+
+// Five frozen defs from one base, in ladder order. The base is not changed.
+export function weaponTiers(base) {
+    const basePerks = Array.isArray(base.perks) ? base.perks : [];
+    return WEAPON_TIER_KEYS.map((key, step) => {
+        const def = structuredClone(base);
+        def.id = `${base.id}_${key}`;
+        def.name = `[${titleCase(key)} ${unbracket(base.name)}]`;
+        def.tier = key;
+        def.baseId = base.id;
+        def.perks = [...basePerks, ...Array(step).fill(PERK_PLACEHOLDER)];
+        return deepFreeze(def);
+    });
+}
+
+// The one base definition per class. No damage number: that is tuning.
+export function classBase(classId) {
+    const c = WEAPON_CLASSES[classId];
+    if (!c) return null;
+    return {
+        id: c.id, name: `[${titleCase(c.id)}]`, weaponClass: c.id,
+        equipSlot: 'weapon', useType: 'equip', category: 'weapon',
+    };
+}
+
+// Every class's five tiers. Kept out of WEAPONS and ITEMS: none is in the world.
+export const WEAPON_TIERS = Object.freeze(Object.fromEntries(
+    Object.keys(WEAPON_CLASSES).map(id => [id, Object.freeze(weaponTiers(classBase(id)))]),
+));
 
 export const WEAPONS = {
     wooden_sword: {
