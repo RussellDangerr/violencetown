@@ -86,6 +86,7 @@ import {
     createWheelState, cycle, drill, back, compose, autoAimTile,
     needsFriendlyConfirm, aimRange, affectedTiles, selectedNode, restoreLastCategory, verbApplies,
     orderedTargetVerbs, isCombatActive, defaultVerb, previewChildren,
+    aimTap, adjacentFacing,
 } from './wheel-model.js'; // (sunburst wheel) node-tree model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
 import { fighters } from './fight-area.js';                                      // (fight-fog) who is in the fight
@@ -338,6 +339,7 @@ class Game {
         this._pathArrive = null;
         this._pressTimer = null;    // touch long-press timer → full Target List
         this._pressStart = null;    // pointerdown client pos, to cancel the press on drag
+        this._turnPress = null;     // (C3b) { tile } — a press beside you: walks on release, turns on long-press
 
         // In-canvas log strip (Phase 1B of overhead-dialogue plan). Mirrors
         // every _log() call into a fixed-size ring buffer that the renderer
@@ -1465,6 +1467,7 @@ class Game {
         // tap → pick the row; a real drag scrolled the list and picks nothing.
         const endPress = (e) => {
             cancelPress();
+            this._releaseTurnPress(e);   // (C3b) a quick tap beside you walks the step on release
             if (this._openerHeld) { this._openerHeld = false; this._wheelOpenerUp(); }   // (screen-fill) the dock's ✦, released
             if (this._dlgDrag) {
                 const d = this._dlgDrag; this._dlgDrag = null;
@@ -1880,6 +1883,7 @@ class Game {
         // _bindCanvasTap. Letting it through here would fire the default action
         // first, then the menu would bail because the state left IDLE.
         if (e.button >= 1) return;
+        this._turnPress = null;   // (C3b) a new press never inherits an old one's pending step
         // Mirror the keyboard gate: don't process taps during the move
         // animation or while the world is resolving. Splash has its own
         // handler (DOM button). Dead is a non-interactive end state.
@@ -1907,7 +1911,9 @@ class Game {
             const _cancel = () => (this.state === STATE.DEVICE ? this._closeDevice() : this._closeCurrentMenu());
             if (_cbr && this._pointInRect(pt, _cbr, HIT_SLOP)) { _cancel(); return; }
             if (!this._pointInRect(pt, _mpr)) { _cancel(); return; }
-        } else if (this.state === STATE.RADIAL_MENU) {
+        } else if (this.state === STATE.RADIAL_MENU && !this.wheel.aiming) {
+            // (C3b) Not while aiming: the dial isn't drawn then, and a tap on the
+            // world places the reticle (_tapRadialMenu → _aimTapAt) instead.
             // (Slice 2) Depth-dynamic cull: close on a tap beyond the wheel's real
             // outer extent for the CURRENT depth. The old fixed 230px left the small
             // shallow wheel un-closable by a nearby tap (a 160px tap was neither a
@@ -1986,11 +1992,12 @@ class Game {
                 const v = defaultVerb(target, this);
                 if (v) { this._actOnTarget(v, target); this._armLongPress(tile, e); return; }
             }
+            // (C3b, ruling C3R2) An empty tile straight beside you: a long-press
+            // faces it without stepping, so the step waits for the release.
+            const face = !target && adjacentFacing(this.playerX, this.playerY, tile);
+            if (face) { this._armTurnPress(tile, face, e); return; }
             // Click-to-move: empty walkable ground → BFS-path the Hero there.
-            if (this.map.isWalkable(tile.x, tile.y) && !(tile.x === this.playerX && tile.y === this.playerY)) {
-                const path = findPath(this, { x: this.playerX, y: this.playerY }, tile);
-                if (path && path.length) { this._walkPath(path); return; }
-            }
+            if (this._tapWalkTo(tile)) return;
         }
         // ITEM_SELECTED → legacy hotbar tap (slot re-select / tap-outside cancel).
         // In IDLE the bottom bar is the XMB (handled above by _tapXmbBar), so we
@@ -2010,6 +2017,40 @@ class Game {
             this._pressTimer = null;
             if (this.state === STATE.IDLE) this._openTargetList(tile.x, tile.y);
         }, 450);
+    }
+
+    // Click-to-move: empty walkable ground (not your own tile) → BFS-path the
+    // Hero there. True when a walk started.
+    _tapWalkTo(tile) {
+        if (!this.map.isWalkable(tile.x, tile.y) || (tile.x === this.playerX && tile.y === this.playerY)) return false;
+        const path = findPath(this, { x: this.playerX, y: this.playerY }, tile);
+        if (path && path.length) { this._walkPath(path); return true; }
+        return false;
+    }
+
+    // (C3b, ruling C3R2) Press on an empty tile straight beside you. Held to the
+    // long-press time (the Target List's, so the two feel alike) you turn to face
+    // it: no step, no turn spent, the arrow keys' free pivot. Released sooner it
+    // is a tap and walks the step (endPress in _bindCanvasTap). A drag drops the
+    // turn but keeps the step; a cancelled pointer drops both.
+    _armTurnPress(tile, face, e) {
+        if (this._pressTimer) clearTimeout(this._pressTimer);
+        this._pressStart = e ? { x: e.clientX, y: e.clientY } : null;
+        this._turnPress = { tile };
+        this._pressTimer = setTimeout(() => {
+            this._pressTimer = null;
+            this._turnPress = null;
+            if (this.state !== STATE.IDLE || this._animating) return;
+            this.facing = face;
+            this._render();
+        }, 450);
+    }
+
+    // The release of a turn-press that never reached the long-press time.
+    _releaseTurnPress(e) {
+        const tp = this._turnPress; this._turnPress = null;
+        if (!tp || !e || e.type !== 'pointerup') return;
+        if (this.state === STATE.IDLE && !this._animating) this._tapWalkTo(tp.tile);
     }
 
     _pointInRect(p, r, slop = 0) {
@@ -2100,6 +2141,7 @@ class Game {
                 if (w.confirming) w.confirming = false; else { w.aiming = false; w.reticle = null; }
                 audio.playSfx('menu-cancel'); this._render(); return;
             }
+            if (w.aiming) { this._aimTapAt(pt); return; }
             this._wheelCommit(); return;
         }
 
@@ -2116,6 +2158,20 @@ class Game {
         else if (a >= Math.PI * 0.75 && a < Math.PI * 1.25) this._wheelCycle(-1);  // LEFT → prev
         else if (a >= Math.PI * 1.25 && a < Math.PI * 1.75) this._wheelDrill();    // TOP → drill
         else                                                this._wheelCycle(+1);  // RIGHT → next
+    }
+
+    // (C3b, ruling C3R3) A tap on the world while aiming: on the reticle it fires
+    // (through _wheelCommit, so the Plus-Ultra confirm still guards a friendly);
+    // anywhere else it places the reticle, snapped to the nearest legal tile.
+    // The dock's chrome sits over the world's last rows, so a tap there is ignored.
+    _aimTapAt(pt) {
+        if (hitHud(this._hud(), pt)) return;
+        const w = this.wheel;
+        const r = aimTap(w, this, this._screenToTile(pt));
+        if (r.action === 'fire') { this._wheelCommit(); return; }
+        if (r.action !== 'place') { audio.playSfx('bump-wall'); return; }
+        w.reticle = r.reticle;
+        audio.playSfx('menu-tick'); this._render();
     }
 
     // ── Animation ─────────────────────────────────────────────────────────────
@@ -2633,6 +2689,7 @@ class Game {
         this._pathQueue = [];       // cancel any click-to-walk in progress
         this._pathArrive = null;
         if (this._pressTimer) { clearTimeout(this._pressTimer); this._pressTimer = null; }
+        this._turnPress = null;     // (C3b) a pending tap-beside-you step
     }
 
     // True when held-key auto-walking should HALT before stepping in `dir` —
