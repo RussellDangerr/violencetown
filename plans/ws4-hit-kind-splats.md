@@ -24,6 +24,18 @@ and when a class has more than one kind the game picks the best one against that
 - The kind rides the splat particle as `kind`. The splat keeps its physical fill, motion and
   mark; the kind adds its own placeholder tag beside it, so the three read differently.
 - `hit-splat.js` holds the kind-to-tag table, so the pick is unit-tested, not grepped.
+- **WS4R1, pick a:** `main.js` is touched only to carry the weapon through. The inspector's
+  hit, the wheel swing, Cleave and Spin hand `combatAttack` the weapon; `combatAttack` asks
+  `weaponHitKind` for the kind when the swing has no type of its own, feeds it to the
+  multiplier (`opts.type || kind`) and passes it to `_spawnHitSplat`, which stores it on the
+  particle. Nothing else in `main.js` reads weapons differently; WS3 (two hands) reworks those
+  reads later.
+
+## Status
+
+Done. Real swings show `[slash]` (sword), `[crush]` (Fearmur, Gator Tail) under the number.
+No shipped weapon is a pure stab today (the wand-class Ray Gun deals energy), so the stab
+splat was checked with a stand-in dagger-class weapon placed through the game state.
 
 ## Acceptance
 

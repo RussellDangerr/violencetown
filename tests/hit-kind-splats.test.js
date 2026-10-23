@@ -155,3 +155,41 @@ describe('the splat draws its kind', () => {
         assert.deepEqual(draw({}), ['-10']);
     });
 });
+
+// main.js needs a DOM to import, so (like noise.test.js) these pin the
+// pass-through by its source: every weapon swing hands combatAttack the weapon,
+// and combatAttack turns that into a kind for the multiplier and the splat.
+describe('main.js carries the kind from the weapon to the splat', () => {
+    const mainSrc = readFileSync(fileURLToPath(new URL('../game/main.js', import.meta.url)), 'utf8')
+        .replace(/\r\n/g, '\n');
+    const body = (head) => {
+        const at = mainSrc.indexOf(head);
+        assert.ok(at > 0, `${head} not found`);
+        return mainSrc.slice(at, mainSrc.indexOf('\n    }\n', at));
+    };
+
+    test('the inspector hit, the wheel swing, Cleave and Spin all pass the weapon', () => {
+        assert.match(mainSrc, /case 'hit':[^\n]*this\.combatAttack\(npc, [^\n]*weapon: this\.equipment\.weapon \}/);
+        assert.match(mainSrc, /this\.combatAttack\(enemy, wpn\.damage, \{ type: wpn && wpn\.damageType, weapon: wpn \}\)/);
+        const aoe = mainSrc.match(/this\._aoeStrike\(tiles, dmg, \{ type: this\.equipment\.weapon\.damageType, weapon: this\.equipment\.weapon \}\)/g) || [];
+        assert.equal(aoe.length, 2, 'Cleave and Spin');
+    });
+
+    test('combatAttack picks the kind only when the swing has no type of its own', () => {
+        const b = body('    combatAttack(enemyObj, damage, opts = {}) {');
+        assert.match(b, /const kind = opts\.type \? null : weaponHitKind\(opts\.weapon, enemyObj\);/);
+        assert.match(b, /elemental: elementalMult\(opts\.type \|\| kind, enemyObj\)/);
+        assert.match(b, /this\._spawnHitSplat\([^;]*killed: !!result\.killed, kind \}\);/);
+    });
+
+    test('the splat particle keeps the kind for the renderer', () => {
+        const b = body("    _spawnHitSplat(tileX, tileY, text, type = 'physical', opts = {}) {");
+        assert.match(b, /kind: opts\.kind \|\| null,/);
+    });
+
+    test('what the shipped weapons land when swung', () => {
+        assert.equal(weaponHitKind(WEAPONS.wooden_sword, {}), 'slash');
+        assert.equal(weaponHitKind(WEAPONS.fearmur, {}), 'crush');
+        assert.equal(weaponHitKind(WEAPONS.ray_gun, {}), null, 'an energy weapon has no physical kind');
+    });
+});
