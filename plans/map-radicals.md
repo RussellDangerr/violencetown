@@ -1,6 +1,8 @@
 # Map radicals — build maps out of hand-made pieces
 
-**Status:** spec on `feature/map-radicals` (2026-10-24). First map: the Canyon.
+**Status:** built on `feature/map-radicals` (2026-10-24): the placer, Tiled support, four draft
+Canyon radicals, and the Canyon rebuilt from them at 30×20. What changed from the first draft of
+this spec is under *As built* at the end.
 
 ## Why
 
@@ -32,7 +34,7 @@ geometry is the author's, and five of its seven palette tiles (62–66) are on `
     the climb-out. `slot` names a `game/slots.js` slot id when the thing belongs to one
     (`canyon.npc`). Marks are written down so a generator can bind slots to them later. Today the
     placer only reports them.
-  - `sockets`: the openings on its edges, `{ side: 'n'|'s'|'e'|'w', at, width }`, where a path is
+  - `sockets`: the openings on its edges, `{ x, y, w, h }`, a strip one cell thick along one edge, where a path is
     meant to go in or out.
   - `note`: one line on what the piece is, in the plain voice of the game's copy.
 - **`tools/radicals.mjs`** (also `npm run radical:…`):
@@ -43,7 +45,7 @@ geometry is the author's, and five of its seven palette tiles (62–66) are on `
     map coordinates. The write is surgical, like `tools/tiled.mjs export`: only `tiles`, the two
     lists and `_radicals` change.
   - It **refuses**, naming the cells, when the piece runs off the map; when a non-walkable cell
-    would land on an enemy, item, anchor, transition, container or the spawn; or when a socket
+    would land on an enemy, item, transition, container or the spawn (not an anchor; see As built); or when a socket
     opens onto a non-walkable map tile that the piece doesn't cover. `--dry-run` prints what it
     would do.
 - **Tiled paints radicals the same way it paints maps.** `tools/tiled.mjs import` / `export` take
@@ -97,3 +99,31 @@ any zone but the Canyon; Town and Downtown are next once these four earn it.
    paint by hand.
 2. Should Claude's first drafts of the four be painted from scratch in Tiled by him instead, so
    there is no draft to argue with?
+
+## As built (2026-10-24)
+
+- **Sockets are rectangles**, `{ x, y, w, h }`, one cell thick along exactly one edge; the side is
+  read from where the strip sits. That lets Tiled move and resize them like `regions`, with no
+  special case for a `side`/`at` pair.
+- **Anchors may sit under a wall.** An anchor stands on the thing you climb, which is solid, so the
+  placer doesn't count anchors as things a wall can bury. Enemies, items, containers, transitions
+  and the spawn still count. For the same reason a mark may sit on a prop the piece carries (the
+  climb's mark is on the jutting rock).
+- **Placing a piece where it already is changes nothing**, and placing it again after the piece was
+  edited updates the map: its tiles are re-stamped, a prop it gained is added, and the `_radicals`
+  record and an examinable already in place are left alone. An examinable id already on the map
+  *somewhere else* is refused.
+- **`align`.** 2×2 tiles (the tents) pick their quarter by absolute position, so a piece carrying
+  one says `"align": 2` and the placer refuses odd coordinates.
+- **The wreck is a prop, not the CAR tile.** Bumping tile 19 runs `main.js _interactCar`, which is
+  the Town car's engine and fuel, wherever the tile is. A new 1×1 prop, `wreckedCar`, draws the same
+  car art (`sprites.js`, named "Wrecked car" in `examine.js`), and the checker refuses tile 19 in a
+  radical. The CAR tile also draws a sidewalk under itself, which is why it looked wrong out here.
+- **The wreck's description changed** from "half-buried in the old silt beside it" to "off across
+  the dry riverbed", since the wagon now sits across the canyon. Caelan's call if it should read
+  differently.
+- **The Canyon now:** spawn beside the wreck in the north-east, the climb in the middle of the north
+  wall, Pike on his rock at the wagon in the west, the riverbed placed twice across the middle, a
+  chasm in the south-east and two cells of river left in the bed. Every walkable cell is reachable
+  from the spawn. Tiles 62–66 came off `KNOWN_UNPLACED`.
+- **Checks:** `npm run radical:check` / `npm run radical:place -- canyon/wreck canyon 23 3`.
