@@ -659,6 +659,11 @@ export const PROP_SPRITES = {
     // already hanging there, you would not need Pike's.
     grappleRock: { sheet: 'roguelikeDungeon', sx: 3 * 17, sy: 0, sw: 16, sh: 16, wTiles: 1, hTiles: 1, shadowRx: 9, shadowRy: 3 },
 
+    // Your car at the bottom of the canyon, a write-off — the same beater as the
+    // CAR tile, but a prop: tile 19 bumps into main.js _interactCar, which is the
+    // Town car's engine and fuel. One cell, the radical canyon/wreck carries it.
+    wreckedCar: { sheet: 'car', sx: 0, sy: 0, sw: 48, sh: 48, wTiles: 1, hTiles: 1, shadowRx: 11, shadowRy: 3 },
+
     // Gravestones — one prop per silhouette on the outlined strip, keyed by the
     // strip's own names. 1x1: the art is no taller than a cell, so what a prop
     // buys over the old GRAVESTONE tile is a different stone per grave, a
