@@ -5,13 +5,17 @@
 //   node tools/tiled.mjs import <map> [--force]  game/<map>-map.json -> tiled/<map>.tmj
 //   node tools/tiled.mjs export <map>            tiled/<map>.tmj -> game/<map>-map.json
 //
+// <map> may also be radical:<zone>/<name> (plans/map-radicals.md): a piece in
+// game/radicals/, painted the same way. Its empty cells are null — "keep the
+// map's tile" — so export keeps them instead of refusing.
+//
 // Tiled tile N is game tile id N (gid N+1). Export is surgical: it rewrites only
 // the tiles array, width/height, and the coordinates of objects that moved, so
 // every other byte of the map file survives (the maps use three JSON styles).
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { dirname, join, resolve, basename } from 'node:path';
+import { dirname, join, resolve, basename, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TILE_BY_ID } from '../game/data.js';
 import { SHEETS, TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP } from '../game/sprites.js';
@@ -19,6 +23,7 @@ import { SHEETS, TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP } f
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const GAME = join(ROOT, 'game');
 const OUT = join(ROOT, 'tiled');
+const relPath = p => relative(ROOT, p).replace(/\\/g, '/');
 const PX = 16;
 const TILESET = 'violencetown';
 const COLUMNS = 10;
@@ -27,8 +32,10 @@ const COLUMNS = 10;
 export const LIST_LAYERS = {
     enemies: '#e05050', items: '#e0c040', containers: '#c08040', examinables: '#40c0e0',
     props: '#a0a0a0', anchors: '#40e080', transitions: '#40e080', lights: '#ff9030',
-    regions: '#a060e0',
+    regions: '#a060e0', marks: '#ffe040', sockets: '#40a0ff',
 };
+// Lists drawn as rectangles, whose size Tiled can change.
+const SIZED = new Set(['regions', 'sockets']);
 export const SINGLE_LAYERS = { spawn: '#ffffff', bossRoom: '#ff40ff' };
 
 // Same lookup as renderer.js tileRef.
@@ -101,7 +108,7 @@ export function toTiled(mapText) {
     });
     const layers = [{
         id: nextLayer++, name: 'tiles', type: 'tilelayer', width: m.width, height: m.height,
-        data: m.tiles.map(t => t + 1), opacity: 1, visible: true, x: 0, y: 0,
+        data: m.tiles.map(t => t === null ? 0 : t + 1), opacity: 1, visible: true, x: 0, y: 0,
     }];
     const group = (key, color, objects) => layers.push({
         id: nextLayer++, name: key, type: 'objectgroup', color, draworder: 'topdown',
@@ -136,7 +143,7 @@ function cellOf(px, orig) {
     return Number.isInteger(orig) ? Math.round(v) : Math.round(v * 2) / 2;
 }
 
-export function fromTiled(mapText, tmj) {
+export function fromTiled(mapText, tmj, { radical = false } = {}) {
     const m = JSON.parse(mapText);
     const root = parseSpans(mapText);
     const errors = [], warnings = [], changes = [], edits = [];
@@ -156,7 +163,7 @@ export function fromTiled(mapText, tmj) {
     const bad = { empty: [], flipped: [], unknown: [] };
     layer.data.forEach((gid, n) => {
         const at = `(${n % W},${Math.floor(n / W)})`;
-        if (gid === 0) { bad.empty.push(at); return ids.push(0); }
+        if (gid === 0) { if (!radical) bad.empty.push(at); return ids.push(radical ? null : 0); }
         if (gid >= FLIP_BITS) { bad.flipped.push(at); return ids.push(0); }
         const id = gid - firstgid;
         if (!TILE_BY_ID[id]) bad.unknown.push(`${at}=${id}`);
@@ -180,7 +187,7 @@ export function fromTiled(mapText, tmj) {
         const lineStart = mapText.lastIndexOf('\n', node.start) + 1;
         const indent = mapText.slice(lineStart).match(/^[ \t]*/)[0];
         const rows = [];
-        for (let y = 0; y < H; y++) rows.push(indent + indent + ids.slice(y * W, (y + 1) * W).join(','));
+        for (let y = 0; y < H; y++) rows.push(indent + indent + ids.slice(y * W, (y + 1) * W).map(String).join(','));
         edits.push([node, `[${eol}${rows.join(',' + eol)}${eol}${indent}]`]);
         changes.push(resized ? `tiles rewritten at ${W}x${H}` : `${diff} tile${diff === 1 ? '' : 's'} changed`);
     }
@@ -208,7 +215,7 @@ export function fromTiled(mapText, tmj) {
             };
             set('x', cellOf(o.x, orig.x));
             set('y', cellOf(o.y, orig.y));
-            if (key === 'regions') { set('w', cellOf(o.width, orig.w)); set('h', cellOf(o.height, orig.h)); }
+            if (SIZED.has(key)) { set('w', cellOf(o.width, orig.w)); set('h', cellOf(o.height, orig.h)); }
             if (moved.length) changes.push(`${single ? key : `${key}[${index}]`} ${labelOf(key, orig)}: ${moved.join(', ')}`);
             const nx = cellOf(o.x, orig.x), ny = cellOf(o.y, orig.y);
             if (nx < 0 || ny < 0 || nx >= W || ny >= H) warnings.push(`${key} ${labelOf(key, orig)} is outside the map at (${nx},${ny}).`);
@@ -291,6 +298,12 @@ function writeTileset() {
 
 function mapName(arg) {
     if (!arg) throw new Error('Name a map, e.g. canyon');
+    if (arg.startsWith('radical:')) {
+        const name = arg.slice('radical:'.length).replace(/\.json$/, '');
+        const json = join(GAME, 'radicals', `${name}.json`);
+        if (!existsSync(json)) throw new Error(`No radical at game/radicals/${name}.json`);
+        return { name: arg, json, tmj: join(OUT, `radical-${name.replace(/\//g, '-')}.tmj`), radical: true };
+    }
     const name = basename(arg).replace(/\.(json|tmj)$/, '').replace(/-map$/, '');
     const json = join(GAME, `${name}-map.json`);
     if (!existsSync(json)) throw new Error(`No map at game/${name}-map.json`);
@@ -300,20 +313,20 @@ function mapName(arg) {
 function main([cmd, arg, ...flags]) {
     if (cmd === 'tileset') return writeTileset();
     if (cmd === 'import') {
-        const { name, json, tmj } = mapName(arg);
+        const { json, tmj } = mapName(arg);
         if (existsSync(tmj) && !flags.includes('--force')) {
-            throw new Error(`tiled/${name}.tmj already exists — export it first, or re-import with --force to throw its edits away.`);
+            throw new Error(`tiled/${basename(tmj)} already exists — export it first, or re-import with --force to throw its edits away.`);
         }
         writeTileset();
         writeFileSync(tmj, JSON.stringify(toTiled(readFileSync(json, 'utf8')), null, 1));
-        console.log(`import: game/${name}-map.json -> tiled/${name}.tmj — open that in Tiled.`);
+        console.log(`import: ${relPath(json)} -> tiled/${basename(tmj)} — open that in Tiled.`);
         return;
     }
     if (cmd === 'export') {
-        const { name, json, tmj } = mapName(arg);
-        if (!existsSync(tmj)) throw new Error(`No tiled/${name}.tmj — run: npm run tiled:import -- ${name}`);
+        const { name, json, tmj, radical } = mapName(arg);
+        if (!existsSync(tmj)) throw new Error(`No tiled/${basename(tmj)} — run: npm run tiled:import -- ${name}`);
         const before = readFileSync(json, 'utf8');
-        const { errors, warnings, changes, text } = fromTiled(before, JSON.parse(readFileSync(tmj, 'utf8')));
+        const { errors, warnings, changes, text } = fromTiled(before, JSON.parse(readFileSync(tmj, 'utf8')), { radical });
         for (const w of warnings) console.log(`warning: ${w}`);
         if (errors.length) {
             for (const e of errors) console.error(`error: ${e}`);
@@ -321,10 +334,10 @@ function main([cmd, arg, ...flags]) {
             process.exitCode = 1;
             return;
         }
-        if (text === before) return console.log(`export: no changes to game/${name}-map.json.`);
+        if (text === before) return console.log(`export: no changes to ${relPath(json)}.`);
         writeFileSync(json, text);
         for (const c of changes) console.log(`  ${c}`);
-        console.log(`export: wrote game/${name}-map.json — now run npm test.`);
+        console.log(`export: wrote ${relPath(json)} — now run npm test.`);
         return;
     }
     console.log('usage: node tools/tiled.mjs tileset | import <map> [--force] | export <map>');

@@ -37,6 +37,8 @@
     "map:audit": "node -e \"for (const f of require('fs').readdirSync('game').filter(n=>n.endsWith('-map.json'))) require('child_process').execSync(`node tools/map-audit.mjs game/${f}`,{stdio:'inherit'})\"",
     "tiled:tileset": "node tools/tiled.mjs tileset",
     "tiled:import": "node tools/tiled.mjs import",
-    "tiled:export": "node tools/tiled.mjs export"
+    "tiled:export": "node tools/tiled.mjs export",
+    "radical:check": "node tools/radicals.mjs check",
+    "radical:place": "node tools/radicals.mjs place"
   }
 }
