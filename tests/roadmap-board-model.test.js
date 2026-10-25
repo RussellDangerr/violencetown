@@ -21,9 +21,9 @@ describe('LANES and KINDS', () => {
     test('seven lanes in board order', () => {
         assert.deepEqual(LANES.map(l => l.id), ['idea', 'ruling', 'ready', 'doing', 'review', 'done', 'someday']);
     });
-    test('three kinds and a WIP cap of two', () => {
+    test('three kinds and a WIP cap of ten', () => {
         assert.deepEqual(KINDS, ['idea', 'ruling', 'slice']);
-        assert.equal(WIP_CAP, 2);
+        assert.equal(WIP_CAP, 10);
     });
 });
 
@@ -107,12 +107,13 @@ describe('nextSlice — what the loop builds next', () => {
         assert.equal(nextSlice(next).pick.id, 'B1', 'B1 comes first in Ready order once free');
     });
 
-    test('stops at the WIP cap: doing + review hold two slices', () => {
+    test('stops at the WIP cap: doing + review hold as many slices as the cap', () => {
         const full = [...cards,
             { id: 'D1', title: 'd', lane: 'doing',  order: 10, kind: 'slice', blockedBy: [] },
             { id: 'V1', title: 'v', lane: 'review', order: 10, kind: 'slice', blockedBy: [] },
         ];
-        const r = nextSlice(full);
+        assert.equal(nextSlice(full).pick.id, 'B2', 'two in flight is well under the default cap of ten');
+        const r = nextSlice(full, { wipCap: 2 });
         assert.equal(r.reason, 'wip-cap');
         assert.equal(r.pick, null);
         assert.equal(r.wip, 2);
