@@ -40,6 +40,19 @@ export function isFriendlyWith(a, b) {
   return !!a && !!b && a.allegiance != null && a.allegiance === b.allegiance;
 }
 
+// Does this ally come to the player's aid? (plans/f3b-allies-join-by-sight.md)
+// Only while a fight is on (`fs`, fight-area.js fighters()), and only once it
+// has seen it: the player's tile or a fighter's, through `sees(x, y)` — the
+// caller's DIRECT-view test, the same notice rule F3a pulls hostiles in by,
+// passed in so this module stays a leaf. One that already joined (`_aiding`)
+// stays in until the fight ends.
+export function allyAids(ally, fs, player, sees) {
+  if (!ally || !fs || fs.length === 0) return false;
+  if (ally._aiding) return true;
+  if (player && sees(player.x, player.y)) return true;
+  return fs.some(f => f !== ally && sees(f.x, f.y));
+}
+
 // SPECIES, not allegiance. Sewer fare is poison to humans and medicine to the
 // things that live down there, and that must survive a disposition flip — a
 // bribed Violet Fungus is your ally and still eats mushrooms. Deliberately NOT

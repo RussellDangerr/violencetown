@@ -29,7 +29,7 @@ import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
 import { attack, formatDamageNumber, computeHit, elementalMult, weaponHitKind, isBackstab } from './combat.js';
 import { Enemy, spawnEnemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
-import { isHostile, isHunting, isSewerDweller } from './ai.js';
+import { isHostile, isHunting, isSewerDweller, allyAids } from './ai.js';
 import { getGreedyStep, stepEntity, findPath } from './pathing.js'; // pathfinding (greedy chase + BFS click-to-move); stepEntity = shove a character aside
 import { applyDispositionDelta, reactToTransaction } from './give-action.js';
 import { getDialogue } from './dialogue.js';
@@ -78,7 +78,7 @@ const HINT_COOLDOWN_TURNS = 8;
 function writeSeenHints(set) {
     Settings.set('hintsSeen', [...set].join(','));
 }
-import { emitNoise, NOISE, perceives, spotters, struck } from './perception.js'; // sound + sight
+import { emitNoise, NOISE, perceives, spotters, struck, VERDICT } from './perception.js'; // sound + sight
 import { coinTake, kitTake, gearTake, coinWeight, itemWeight, gearWeight,
          noticeBuffer, isClean, stealLimit } from './theft.js';
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
@@ -4573,15 +4573,20 @@ class Game {
         return e.entity.isAlive() && isHostile(e);
     }
 
-    // One turn for a bribed ALLY (dispatched from npc.js's ALLIED state). Hunt
-    // the nearest hostile within SEEK tiles — attack if adjacent, else step
-    // toward it. With no hostile in range, leash-follow the player (close in only
-    // when more than LEASH tiles away) so allies neither wander off nor crowd you.
+    // One turn for a bribed ALLY (dispatched from npc.js's ALLIED state). Once it
+    // has seen the fight (F3b: you or a fighter in direct view; it stays in until
+    // the fight ends), hunt the nearest fighter within SEEK tiles — attack if
+    // adjacent, else step toward it. Otherwise leash-follow the player (close in
+    // only when more than LEASH tiles away) so allies neither wander off nor crowd you.
     _allyTakeTurn(ally) {
         const SEEK = 8, LEASH = 3;
 
+        const fs = fighters(this.enemies);
+        ally._aiding = allyAids(ally, fs, { x: this.playerX, y: this.playerY },
+            (x, y) => perceives(this.map, ally, x, y) === VERDICT.DIRECT);
+
         let target = null, bestDist = Infinity;
-        for (const e of this.enemies) {
+        for (const e of ally._aiding ? fs : []) {
             if (!this._isHostileToPlayer(e)) continue;
             const d = manhattan(ally.x, ally.y, e.x, e.y);
             if (d <= SEEK && d < bestDist) { bestDist = d; target = e; }
