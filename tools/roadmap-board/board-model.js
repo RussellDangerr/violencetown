@@ -22,7 +22,8 @@ export const LANES = [
 ];
 
 export const KINDS = ['idea', 'ruling', 'slice'];
-export const WIP_CAP = 2;
+export const WIP_CAP = 10;
+export const PICKS_PER_PASS = 10;
 
 const isDone = c => c.lane === 'done';
 
@@ -75,19 +76,24 @@ export function unblocked(cards) {
 const normPath = p => String(p ?? '').trim().replace(/\\/g, '/').replace(/^\.\//, '');
 
 // What the loop builds next (plans/ticket-board.md §2). Returns
-//   { pick, reason, wip, skipped }
-// reason: 'ok' | 'wip-cap' | 'nothing-pickable'. `skipped` lists every Ready
-// slice that was passed over, with why, so a run can report it.
-export function nextSlice(cards, { wipCap = WIP_CAP } = {}) {
+//   { picks, reason, wip, skipped }
+// reason: 'ok' | 'wip-cap' | 'nothing-pickable'. `picks` holds up to `max`
+// slices, never more than the cap leaves room for, and no two share a file —
+// each one's touches join the busy set, so the next pick can't clash with it
+// (plans/loop-limits-ten.md). `skipped` lists every Ready slice that was passed
+// over, with why, so a run can report it.
+export function nextSlices(cards, { wipCap = WIP_CAP, max = PICKS_PER_PASS } = {}) {
     const lanes = byLane(cards);
     const inFlight = [...lanes.doing, ...lanes.review].filter(c => kindOf(c) === 'slice');
     const wip = inFlight.length;
-    if (wip >= wipCap) return { pick: null, reason: 'wip-cap', wip, skipped: [] };
+    if (wip >= wipCap) return { picks: [], reason: 'wip-cap', wip, skipped: [] };
+    const room = Math.min(max, wipCap - wip);
 
     const busy = new Set(inFlight.flatMap(c => (c.touches ?? []).map(normPath)));
     const ix = blockerIndex(cards);
-    const skipped = [];
+    const picks = [], skipped = [];
     for (const c of lanes.ready) {
+        if (picks.length >= room) break;
         if (kindOf(c) !== 'slice') { skipped.push({ id: c.id, why: 'not a slice' }); continue; }
         if (c.claim) { skipped.push({ id: c.id, why: 'already claimed' }); continue; }
         // A slice with no acceptance checks has not been tweaked — the roadmap's old
@@ -98,9 +104,16 @@ export function nextSlice(cards, { wipCap = WIP_CAP } = {}) {
         if (open.length) { skipped.push({ id: c.id, why: `blocked by ${open.join(', ')}` }); continue; }
         const clash = (c.touches ?? []).map(normPath).filter(p => busy.has(p));
         if (clash.length) { skipped.push({ id: c.id, why: `touches unmerged ${clash.join(', ')}` }); continue; }
-        return { pick: c, reason: 'ok', wip, skipped };
+        picks.push(c);
+        for (const p of c.touches ?? []) busy.add(normPath(p));
     }
-    return { pick: null, reason: 'nothing-pickable', wip, skipped };
+    return { picks, reason: picks.length ? 'ok' : 'nothing-pickable', wip, skipped };
+}
+
+// The first of nextSlices(): { pick, reason, wip, skipped }.
+export function nextSlice(cards, { wipCap = WIP_CAP } = {}) {
+    const { picks, ...r } = nextSlices(cards, { wipCap, max: 1 });
+    return { pick: picks[0] ?? null, ...r };
 }
 
 // His answer to a ruling: the pick is stored on the card and the card moves to

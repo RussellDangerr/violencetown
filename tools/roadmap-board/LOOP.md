@@ -22,7 +22,7 @@ Caelan dislikes the other word for it; never use it.
    - Leave its branch alone.
    - Move the card to `ready` and drop `claim`.
    - Note "resume from `<branch>`".
-3. **Clear Claude's turn**, in this order. Do at most one merge and two tweaks per pass:
+3. **Clear Claude's turn**, in this order. Do at most 10 merges and 10 tweaks per pass:
    1. **Merge it** (§4).
    2. **Changes:** hand the slice back to a builder on its existing branch. When it is done, move
       the card to `review` and clear `verdict`.
@@ -39,7 +39,8 @@ Caelan dislikes the other word for it; never use it.
    6. **A Ready slice with no acceptance:** tweak it (§5).
 4. **Ask what's next:** `node tools/roadmap-board/next-slice.mjs <that folder>`.
    - `wip-cap` or `nothing-pickable`: no build this pass. Go to step 8.
-   - `ok`: carry on with `pick`. Only an approved, tweaked, unblocked slice is ever picked.
+   - `ok`: carry on with `picks` (up to 10). Only an approved, tweaked, unblocked slice is ever
+     picked, and no two picks share a file. Steps 5 to 7 run for each pick.
 5. **Recon.** Run `git fetch`, `git branch -r --no-merged origin/dev`, and `git log -S` on the
    slice's key names. If it already shipped, or it overlaps a branch still in review:
    - note it on the card;
@@ -62,7 +63,9 @@ Caelan dislikes the other word for it; never use it.
        sha in `note`.
 8. **Post the update and pick the wait** (§7).
 
-**One slice per pass.** A pass that cleared Claude's turn may still build one.
+**Up to 10 slices per pass**, one builder each, all spawned in the same message so they run at
+once. `next-slice.mjs` never hands out two that share a file, so their branches can't collide. A
+pass that cleared Claude's turn may still build.
 
 ## 2. What a slice must prove (the builder's definition of done)
 
@@ -157,10 +160,10 @@ Never touch `main`, never tag, never release. Those are his.
    - **it would change a Locked row:** a single ruling naming the row it replaces. Recommend the
      pool unless it truly can't fit.
 3. **Write the cards.**
-   - At most 3 rulings and 3 slices per tweak (LP3).
+   - At most 10 rulings and 10 slices per tweak.
    - Slices: about a day each, with `touches`, `acceptance` and `blockedBy`.
    - Each slice must be something he can see on screen, or have a stated reason why it can't.
-4. **Pause when he's busy.** When Your turn holds 7 or more items, tweak nothing new (LP3). Say so
+4. **Pause when he's busy.** When Your turn holds 10 or more items, tweak nothing new. Say so
    in the update.
 5. **Close the idea.** Move it to `done` with a note naming the cards it became.
 
