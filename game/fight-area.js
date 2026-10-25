@@ -7,7 +7,7 @@
 //
 // Pure: game data in, numbers out. Node-testable like perception.js.
 
-import { isHunting } from './ai.js';
+import { isHostile, isHunting, isFriendlyWith } from './ai.js';
 import { perceives, VERDICT } from './perception.js';
 
 // How many tiles past the view's edge the area reaches, so the fog's blur and
@@ -21,6 +21,23 @@ export function fighters(enemies) {
     return (enemies || []).filter(e =>
         !!e && !e.ambient && !e._ally && isHunting(e)
         && !!e.entity?.isAlive?.() && (e.sightRange || 0) > 0);
+}
+
+// The hostiles a fight pulls in this beat (plans/f3a-hostiles-join-fights.md):
+// every one not already hunting that directly sees the player, or the tile of
+// a fighter it is friendly with. DIRECT only — the same cone that spots you in
+// npc.js; a half-noticed flank is not seeing. One pass against `fs` as given:
+// whoever joins now can pull the next one in on the following beat.
+export function joiners(map, npcs, fs, player) {
+    if (!fs || fs.length === 0) return [];
+    const fighting = new Set(fs);
+    return (npcs || []).filter(n => {
+        if (!n || fighting.has(n) || n.ambient || n._ally || !isHostile(n)) return false;
+        if (isHunting(n) || !n.entity?.isAlive?.() || (n.sightRange || 0) <= 0) return false;
+        if (player && perceives(map, n, player.x, player.y) === VERDICT.DIRECT) return true;
+        return fs.some(f => f !== n && isFriendlyWith(n, f)
+            && perceives(map, n, f.x, f.y) === VERDICT.DIRECT);
+    });
 }
 
 // The area over `bounds` ({ x0, y0, x1, y1 }, inclusive, world tiles). Returns

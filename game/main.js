@@ -89,7 +89,7 @@ import {
     aimTap, adjacentFacing,
 } from './wheel-model.js'; // (sunburst wheel) node-tree model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
-import { fighters } from './fight-area.js';                                      // (fight-fog) who is in the fight
+import { fighters, joiners } from './fight-area.js';                                     // (fight-fog) who is in the fight
 import { fightStartKind, entranceFor, fightFxActive } from './fight-entrance.js'; // (fight-fog) how it began, and how long its fog moves
 import { createCascade, CASCADE_BEAT_MS, LUNGE_MS } from './cascade.js';           // (turn-model C1) the enemy phase, one actor at a time
 
@@ -3840,6 +3840,9 @@ class Game {
         this._ensureParticleLoop();
         if (this.playerHp <= 0) { this._endCascadePhase(); this.playerHp = 0; this._die(); return; }
 
+        // (F3a) Hostiles who see the fight join it, once the enemies have moved.
+        this._joinFight();
+
         // (one clock) Every committed action winds one beat of the world, in a
         // fight or out of one: the day steps and moods count toward their next
         // fade. In a fight the heartbeat lets go, so the town's wander steps here
@@ -5396,6 +5399,24 @@ class Game {
             if (this.state === STATE.DEAD) this.renderer.dropFightFog();
         }
         this._ensureParticleLoop();
+    }
+
+    // (F3a) A turn-boundary step, never the render path: every hostile that
+    // directly sees you or a friend already fighting you starts chasing now,
+    // with the fields a sighting sets in npc.js (plans/f3a-hostiles-join-fights.md).
+    _joinFight() {
+        const fs = fighters(this.enemies);
+        if (fs.length === 0) return;
+        for (const n of joiners(this.map, this.enemies, fs, { x: this.playerX, y: this.playerY })) {
+            n.state = 'chasing';
+            n._struckBy = null;
+            n._lostSightTurns = 0;
+            n._awareBeats = 0;
+            n._sweepBeats = 0;
+            n._lastSeenX = this.playerX;
+            n._lastSeenY = this.playerY;
+            this._log('[TEXT]', 'combat');
+        }
     }
 
     // ── Floating damage numbers ──────────────────────────────────────────────
