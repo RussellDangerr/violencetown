@@ -55,8 +55,9 @@ also in the `touches` of a slice in `doing` or `review`. Those are the unmerged 
 the repo's hygiene rules say not to stack core-file work on them. An unknown blocker id still
 blocks, as before.
 
-**WIP cap:** a run does nothing while `doing` + `review` hold 2 or more slices. His merges are
-the bottleneck, so the queue waits on him.
+**WIP cap:** a run builds nothing while `doing` + `review` hold 10 or more slices (2 until
+2026-10-25, `plans/loop-limits-ten.md`). Below that, `nextSlices()` hands out up to 10 picks a
+pass, no two sharing a file.
 
 `nextSlice(cards, { wipCap })` in `board-model.js` is the one place this is decided. It is pure
 and node-tested, and `next-slice.mjs` prints its answer from a db dump.
