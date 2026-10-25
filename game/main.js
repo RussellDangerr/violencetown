@@ -29,7 +29,7 @@ import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
 import { attack, formatDamageNumber, computeHit, elementalMult, weaponHitKind, isBackstab } from './combat.js';
 import { Enemy, spawnEnemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
-import { isHostile, isHunting, isSewerDweller } from './ai.js';
+import { isHostile, isHunting, isSewerDweller, allyAids } from './ai.js';
 import { getGreedyStep, stepEntity, findPath } from './pathing.js'; // pathfinding (greedy chase + BFS click-to-move); stepEntity = shove a character aside
 import { applyDispositionDelta, reactToTransaction } from './give-action.js';
 import { getDialogue } from './dialogue.js';
@@ -78,7 +78,7 @@ const HINT_COOLDOWN_TURNS = 8;
 function writeSeenHints(set) {
     Settings.set('hintsSeen', [...set].join(','));
 }
-import { emitNoise, NOISE, perceives, spotters, struck } from './perception.js'; // sound + sight
+import { emitNoise, NOISE, perceives, spotters, struck, VERDICT } from './perception.js'; // sound + sight
 import { coinTake, kitTake, gearTake, coinWeight, itemWeight, gearWeight,
          noticeBuffer, isClean, stealLimit } from './theft.js';
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
@@ -89,7 +89,7 @@ import {
     aimTap, adjacentFacing,
 } from './wheel-model.js'; // (sunburst wheel) node-tree model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
-import { fighters } from './fight-area.js';                                      // (fight-fog) who is in the fight
+import { fighters, joiners } from './fight-area.js';                                     // (fight-fog) who is in the fight
 import { fightStartKind, entranceFor, fightFxActive } from './fight-entrance.js'; // (fight-fog) how it began, and how long its fog moves
 import { createCascade, CASCADE_BEAT_MS, LUNGE_MS } from './cascade.js';           // (turn-model C1) the enemy phase, one actor at a time
 
@@ -3841,6 +3841,9 @@ class Game {
         this._ensureParticleLoop();
         if (this.playerHp <= 0) { this._endCascadePhase(); this.playerHp = 0; this._die(); return; }
 
+        // (F3a) Hostiles who see the fight join it, once the enemies have moved.
+        this._joinFight();
+
         // (one clock) Every committed action winds one beat of the world, in a
         // fight or out of one: the day steps and moods count toward their next
         // fade. In a fight the heartbeat lets go, so the town's wander steps here
@@ -4571,15 +4574,20 @@ class Game {
         return e.entity.isAlive() && isHostile(e);
     }
 
-    // One turn for a bribed ALLY (dispatched from npc.js's ALLIED state). Hunt
-    // the nearest hostile within SEEK tiles — attack if adjacent, else step
-    // toward it. With no hostile in range, leash-follow the player (close in only
-    // when more than LEASH tiles away) so allies neither wander off nor crowd you.
+    // One turn for a bribed ALLY (dispatched from npc.js's ALLIED state). Once it
+    // has seen the fight (F3b: you or a fighter in direct view; it stays in until
+    // the fight ends), hunt the nearest fighter within SEEK tiles — attack if
+    // adjacent, else step toward it. Otherwise leash-follow the player (close in
+    // only when more than LEASH tiles away) so allies neither wander off nor crowd you.
     _allyTakeTurn(ally) {
         const SEEK = 8, LEASH = 3;
 
+        const fs = fighters(this.enemies);
+        ally._aiding = allyAids(ally, fs, { x: this.playerX, y: this.playerY },
+            (x, y) => perceives(this.map, ally, x, y) === VERDICT.DIRECT);
+
         let target = null, bestDist = Infinity;
-        for (const e of this.enemies) {
+        for (const e of ally._aiding ? fs : []) {
             if (!this._isHostileToPlayer(e)) continue;
             const d = manhattan(ally.x, ally.y, e.x, e.y);
             if (d <= SEEK && d < bestDist) { bestDist = d; target = e; }
@@ -5401,6 +5409,24 @@ class Game {
             if (this.state === STATE.DEAD) this.renderer.dropFightFog();
         }
         this._ensureParticleLoop();
+    }
+
+    // (F3a) A turn-boundary step, never the render path: every hostile that
+    // directly sees you or a friend already fighting you starts chasing now,
+    // with the fields a sighting sets in npc.js (plans/f3a-hostiles-join-fights.md).
+    _joinFight() {
+        const fs = fighters(this.enemies);
+        if (fs.length === 0) return;
+        for (const n of joiners(this.map, this.enemies, fs, { x: this.playerX, y: this.playerY })) {
+            n.state = 'chasing';
+            n._struckBy = null;
+            n._lostSightTurns = 0;
+            n._awareBeats = 0;
+            n._sweepBeats = 0;
+            n._lastSeenX = this.playerX;
+            n._lastSeenY = this.playerY;
+            this._log('[TEXT]', 'combat');
+        }
     }
 
     // ── Floating damage numbers ──────────────────────────────────────────────

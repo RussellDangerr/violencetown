@@ -55,8 +55,9 @@ also in the `touches` of a slice in `doing` or `review`. Those are the unmerged 
 the repo's hygiene rules say not to stack core-file work on them. An unknown blocker id still
 blocks, as before.
 
-**WIP cap:** a run does nothing while `doing` + `review` hold 2 or more slices. His merges are
-the bottleneck, so the queue waits on him.
+**WIP cap:** a run builds nothing while `doing` + `review` hold 10 or more slices (2 until
+2026-10-25, `plans/loop-limits-ten.md`). Below that, `nextSlices()` hands out up to 10 picks a
+pass, no two sharing a file.
 
 `nextSlice(cards, { wipCap })` in `board-model.js` is the one place this is decided. It is pure
 and node-tested, and `next-slice.mjs` prints its answer from a db dump.
@@ -139,3 +140,23 @@ The board is where he decides, so every card needs a gesture.
 - `LOOP.md` gains a step before building: clear Claude's turn first.
 - The 7 rulings already decided on 2026-10-03 (CG, OBJ, P1, SF, V2, Z1, Z2) move to Done.
   OBJ (his copy) stays a ruling with options. SP1–SP9 get options, written to the db only.
+
+## 9. What a blocked card waits on (added 2026-10-23)
+
+**Why (Caelan, 2026-10-23):** 15 approved slices sat in Ready and none could start. Each waited
+on a ruling, or on an earlier slice that waited on one, and nothing on the card said so. He wants
+to see on the card itself what it needs from him, answer there, and press send.
+
+- **`waitingOn(cards, id)`** walks a card's open blockers all the way down and returns the leaves:
+  open rulings he can answer, slices he hasn't approved yet, and rulings waiting on Claude for their
+  options. A slice blocked by a slice that is blocked by a ruling waits on that ruling.
+- **A blocked Ready slice shows "Waiting on you"** with each of those rulings inline: its
+  question, its option buttons and its own box (Enter sends). Answering there is the same answer
+  as on the ruling's own card. A slice he hasn't approved shows an Approve button inline.
+  An approved slice with nothing open still reads "the loop may build it". One with an open
+  blocker says how many answers it needs instead.
+- **`frees(cards, id)`**: the approved slices a ruling's answer would let start (directly or
+  down the chain). An open ruling shows "Answering this frees …", and the Your turn strip puts
+  the rulings that free the most work first, with the count on the chip.
+- **A question Claude asked** (`feedback` ending in `ask: true`) shows on the card unfolded, just
+  above the box, instead of inside the folded thread.
