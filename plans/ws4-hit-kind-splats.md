@@ -1,0 +1,53 @@
+# WS4 — the hit splat shows slash, stab or crush
+
+## Goal
+
+When you hit something with a physical weapon, the hit splat says what kind of hit it was:
+a slash, a stab or a crush. The kind comes from the weapon's class (the class table from WS1),
+and when a class has more than one kind the game picks the best one against that target.
+
+## Rests on
+
+- **WS1 (merged):** every weapon names a class, and every class lists the hit kinds it lands,
+  drawn from slash, stab and crush (`game/weapons.js` `WEAPON_CLASSES`, `weaponClassOf`).
+- **WR1, pick b:** slash, stab and crush are real damage subtypes. Each meets weakness and
+  resistance like any other type, and the game uses your best one against each target
+  ("swords stab and slash, auto-picked").
+
+## How it works
+
+- `combat.js` gains `bestAttackKind(kinds, target)`: of a class's kinds, the one with the
+  highest weak/resist/immune multiplier against the target (`elementalMult`). A tie goes to the
+  class's first kind, so a sword is a slash unless a stab would do more.
+- A hit only has a kind when it is physical: a weapon with its own `damageType` (the energy
+  Ray Gun) keeps that type and shows no kind.
+- The kind rides the splat particle as `kind`. The splat keeps its physical fill, motion and
+  mark; the kind adds its own placeholder tag beside it, so the three read differently.
+- `hit-splat.js` holds the kind-to-tag table, so the pick is unit-tested, not grepped.
+- **WS4R1, pick a:** `main.js` is touched only to carry the weapon through. The inspector's
+  hit, the wheel swing, Cleave and Spin hand `combatAttack` the weapon; `combatAttack` asks
+  `weaponHitKind` for the kind when the swing has no type of its own, feeds it to the
+  multiplier (`opts.type || kind`) and passes it to `_spawnHitSplat`, which stores it on the
+  particle. Nothing else in `main.js` reads weapons differently; WS3 (two hands) reworks those
+  reads later.
+
+## Status
+
+Done. Real swings show `[slash]` (sword), `[crush]` (Fearmur, Gator Tail) under the number.
+No shipped weapon is a pure stab today (the wand-class Ray Gun deals energy), so the stab
+splat was checked with a stand-in dagger-class weapon placed through the game state.
+
+## Acceptance
+
+1. A hit of each kind draws a visibly different splat.
+2. Damage numbers do not change: no enemy lists slash, stab or crush in its weak or resist
+   lists today, so the best kind always multiplies by 1. The autoplay and balance goldens do
+   not move.
+3. Every gate passes and the splats are checked in the running game.
+
+## Out of scope
+
+- Giving any enemy a slash/stab/crush weakness or resistance (a tuning ruling).
+- The final art for each kind: the tag is an obviously fake placeholder until it is ruled.
+- Entrances by hit kind (F2b).
+- Regenerating the splat atlas.

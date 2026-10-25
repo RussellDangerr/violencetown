@@ -24,7 +24,7 @@ import {
     xmbBarLayout, hudLayout, throwRects, wheelTopMarks, fightPanelRects, XMB_CELL,                      // (XMB) usable-bar geometry; (screen-fill) the HUD, throw targets, the marks above the wheel
     MODAL_RECT, offerLayout,                                                 // (offer screen) the one panel + its geometry
 } from './layout.js';
-import { itemStatLine, itemActions, equipOptions } from './inspector.js';    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
+import { itemStatLine, itemActions, equipOptions, USES_ACTION } from './inspector.js';    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
 import { zoneOf } from './inventory.js';                                     // (C1) safe/pack label for the inspector
 import { buildXmbBar, resolveXmbSelection } from './xmb.js';                 // (XMB) usable-bar model
 import { ITEMS, itemTier } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
@@ -47,6 +47,7 @@ import { resolveOffer } from './offer.js';                                  // (
 import { dispositionCeil, DISPOSITION_MIN } from './disposition-curves.js'; // (offer screen) meter ceiling + floor — offer.js does not re-export these
 import { lungeOffset } from './cascade.js';                                  // (turn-model C1) an attacker lunges on its beat
 import { splatPill, layoutSplats, glideToward, splatCell, splatShowingAt, splatPixelFactor, splatClampDown, SPLAT_CELL_W, SPLAT_CELL_H } from './splat-layout.js'; // hit splats
+import { hitKindTag } from './hit-splat.js';                                  // (WS4) a physical hit's slash/stab/crush tag
 
 // Tile id → sprite ref. Sewer ids 0-7 → TILE_SPRITE_MAP, town ids 10-21 →
 // TOWN_TILE_SPRITE_MAP, circus/factory/graveyard ids 30+ →
@@ -1965,6 +1966,19 @@ export class Renderer {
             });
         }
 
+        // (WS4) A physical hit's kind — slash, stab or crush — as its placeholder
+        // tag just under the badge (hit-splat.js hitKindTag), inside the same
+        // transform so it pops and fades with the number.
+        const kindTag = hitKindTag(dn.kind);
+        if (kindTag && this.font) {
+            this.font.drawText(ctx, kindTag, 0, h / 2, {
+                color: hexToRgba('#ffffff', a),
+                scale,
+                align: 'center',
+                shadow: `rgba(0,0,0,${a * 0.85})`,
+            });
+        }
+
         // (manga-impact-marks) Bare-symbol impact mark — star/stars/drops/anger/
         // swirl per Game._pickHitMark. Drawn last (on top, like the ambient
         // emote balloon) just outside the badge's upper-right edge so it never
@@ -2620,6 +2634,16 @@ export class Renderer {
             ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
             this.font.drawText(ctx, actions[i].label, r.x + r.w / 2, r.y + r.h / 2 - 4, { color: col, scale: 1, align: 'center' });
             if (sel.action === i) this._drawCursorHalo(ctx, r);   // (C3) keyboard cursor
+        }
+        // (C3c) The uses button, only when the item has a "use this on that"
+        // here; main decides, and hands back the rect it hit-tests. It follows
+        // the action buttons in the cursor's order, so its index is theirs + 1.
+        const uses = actions.length ? game._deviceUsesRect?.(sel.index) : null;
+        if (uses) {
+            drawInset(ctx, uses.x, uses.y, uses.w, uses.h);
+            ctx.strokeStyle = UI.gold; ctx.lineWidth = 1; ctx.strokeRect(uses.x + 1, uses.y + 1, uses.w - 2, uses.h - 2);
+            this.font.drawText(ctx, USES_ACTION.label, uses.x + uses.w / 2, uses.y + uses.h / 2 - 4, { color: UI.gold, scale: 1, align: 'center' });
+            if (sel.action === actions.length) this._drawCursorHalo(ctx, uses);
         }
     }
 

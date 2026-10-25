@@ -58,6 +58,17 @@ export const TILES = {
     GRAVE_DIRT:    { id: 50, walkable: true,  hazard: null, fallbackColor: '#3a2a1e' },
     DEAD_GRASS:    { id: 52, walkable: true,  hazard: null, fallbackColor: '#3a3a2a' },
     IRON_FENCE:    { id: 53, walkable: false, hazard: null, fallbackColor: '#1a1a1a' },
+
+    // Canyon tiles (60-69) — red-rock canyon under the bridge, a dry river the
+    // years took (plans/tiled-pipeline.md). CHASM has no art on purpose: its
+    // flat near-black is the drop.
+    CANYON_FLOOR:  { id: 60, walkable: true,  hazard: null, fallbackColor: '#e8a468' },
+    CANYON_WALL:   { id: 61, walkable: false, hazard: null, fallbackColor: '#6e3434' },
+    DRY_RIVERBED:  { id: 62, walkable: true,  hazard: null, fallbackColor: '#b08658' },
+    SCREE:         { id: 63, walkable: true,  hazard: null, fallbackColor: '#6e3434' },
+    LEDGE:         { id: 64, walkable: true,  hazard: null, fallbackColor: '#e8a468' },
+    CHASM:         { id: 65, walkable: false, hazard: null, fallbackColor: '#120c0a' },
+    RIVER:         { id: 66, walkable: false, hazard: null, fallbackColor: '#5ac8d0' },
 };
 
 // Reverse lookup: id → tile def

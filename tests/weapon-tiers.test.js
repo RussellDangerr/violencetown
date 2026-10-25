@@ -13,7 +13,7 @@ import {
     WEAPONS, WEAPON_CLASSES, WEAPON_TIERS, WEAPON_TIER_KEYS, PERK_PLACEHOLDER,
     weaponTiers, classBase,
 } from '../game/weapons.js';
-import { ITEMS, VALUE_TIERS, itemTier } from '../game/items.js';
+import { ITEMS, VALUE_TIERS, itemTier, ARMOR_IDS, isArmorPiece } from '../game/items.js';
 import { resolveItemDef, ALL_ITEM_IDS } from '../game/item-registry.js';
 
 const GAME = join(dirname(fileURLToPath(import.meta.url)), '..', 'game');
@@ -180,6 +180,101 @@ describe('no existing item changes', () => {
             for (const id of generated) {
                 assert.equal(text.includes(`"${id}"`), false, `${f} places ${id}`);
             }
+        }
+    });
+});
+
+// ── Armor (plans/ws5-armor-tiers-same-generator.md) ──────────────────────────
+// The same generator, run over every armor piece. No second generator.
+
+describe('every armor piece yields five tiers from one base', () => {
+    test('the armor set is the five Sewer pieces', () => {
+        // A check that finds nothing would pass on nothing.
+        assert.deepEqual([...ARMOR_IDS].sort(),
+            ['cardboard_cuirass', 'foil_hat', 'latex_gloves', 'red_cape', 'shoe_bags']);
+        assert.ok(Object.isFrozen(ARMOR_IDS));
+    });
+
+    test('weapons, duration equips and throwables are not armor', () => {
+        for (const id of ['pipe', 'soap', 'bandage', 'rock', 'boardwalk_burger']) {
+            assert.equal(isArmorPiece(ITEMS[id]), false, id);
+        }
+        for (const w of Object.values(WEAPONS)) assert.equal(isArmorPiece(w), false, w.id);
+        assert.equal(isArmorPiece(null), false);
+        assert.equal(isArmorPiece(undefined), false);
+    });
+
+    for (const id of ARMOR_IDS) {
+        const base = ITEMS[id];
+
+        test(`${id}: five tiers, in order, from its base`, () => {
+            const tiers = weaponTiers(base);
+            assert.equal(tiers.length, 5);
+            tiers.forEach((t, i) => {
+                assert.equal(t.tier, WEAPON_TIER_KEYS[i]);
+                assert.equal(t.id, `${id}_${WEAPON_TIER_KEYS[i]}`);
+                assert.equal(t.baseId, id);
+                assert.equal(t.equipSlot, base.equipSlot);
+                assert.equal(t.useType, 'equip');
+                assert.ok(isArmorPiece(t), `${t.id} is no longer armor`);
+                assert.equal(itemTier(t).key, WEAPON_TIER_KEYS[i], `${t.id} shows the wrong colour`);
+                assert.match(t.name, /^\[.+\]$/, `${t.id} name is not a bracketed placeholder`);
+                assert.ok(Object.isFrozen(t) && Object.isFrozen(t.perks), `${t.id} is not frozen`);
+            });
+            assert.equal(new Set(tiers.map(t => t.id)).size, 5);
+        });
+
+        test(`${id}: every number on every tier is the base's own`, () => {
+            const want = numbers(base);
+            assert.ok('armor' in want, `${id} has no armor number to compare`);
+            for (const t of weaponTiers(base)) assert.deepEqual(numbers(t), want, `${t.id} changed a number`);
+        });
+
+        test(`${id}: a tier changes nothing but its id, name, tier and perks`, () => {
+            const strip = d => Object.fromEntries(Object.entries(d).filter(([k]) => !ADDED.includes(k)));
+            for (const t of weaponTiers(base)) assert.deepEqual(strip(t), strip(base), `${t.id} changed a field`);
+        });
+
+        test(`${id}: each tier up has one more perk slot`, () => {
+            weaponTiers(base).forEach((t, step) => {
+                assert.equal(t.perks.length, step, `${t.id} perk count`);
+                for (const p of t.perks) assert.equal(p, PERK_PLACEHOLDER);
+            });
+        });
+    }
+
+    test('the armor pieces keep their numbers, and gain no tier or perks', () => {
+        const pinned = {
+            foil_hat: [2, 10], cardboard_cuirass: [4, 14], latex_gloves: [1, 8],
+            red_cape: [1, 10], shoe_bags: [2, 10],
+        };
+        for (const [id, [armor, baseValue]] of Object.entries(pinned)) {
+            const before = structuredClone(ITEMS[id]);
+            weaponTiers(ITEMS[id]);
+            assert.deepEqual(ITEMS[id], before, `generating changed ${id}`);
+            assert.equal(Object.isFrozen(ITEMS[id]), false);
+            assert.equal(ITEMS[id].armor, armor, `${id} armor`);
+            assert.equal(ITEMS[id].baseValue, baseValue, `${id} baseValue`);
+            assert.equal(ITEMS[id].tier, undefined, `${id} gained a tier`);
+            assert.equal(ITEMS[id].perks, undefined, `${id} gained perks`);
+        }
+        assert.equal(ITEMS.shoe_bags.sludgeImmune, true);
+        assert.equal(weaponTiers(ITEMS.shoe_bags)[4].sludgeImmune, true, 'a tier lost the shoe bags flag');
+    });
+
+    const generated = ARMOR_IDS.flatMap(id => weaponTiers(ITEMS[id]).map(t => t.id));
+
+    test('no generated armor is a world item, and no map places one', () => {
+        assert.equal(generated.length, ARMOR_IDS.length * 5);
+        for (const id of generated) {
+            assert.equal(resolveItemDef(id), null, `${id} resolves as a world item`);
+            assert.equal(ALL_ITEM_IDS.has(id), false, `${id} is in ALL_ITEM_IDS`);
+        }
+        const maps = readdirSync(GAME).filter(f => f.endsWith('-map.json'));
+        assert.ok(maps.length > 0, 'found no maps to check');
+        for (const f of maps) {
+            const text = readFileSync(join(GAME, f), 'utf8');
+            for (const id of generated) assert.equal(text.includes(`"${id}"`), false, `${f} places ${id}`);
         }
     });
 });

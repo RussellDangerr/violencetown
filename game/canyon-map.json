@@ -1,36 +1,54 @@
 {
-    "_scaffold": "PARTIAL (Phase 3 wired the MECHANICS onto a still-placeholder room). Functional now: Pike the prospector (buy the rope / take his deal / kill him for it), 2 canyon critters for the fight-out beat, and the grappling-hook-GATED climb-out to Downtown. The GEOMETRY is Caelan's to hand-author — the real canyon (the wrecked car, Pike's sunken covered wagon, ledges. The climb-out is already a real grapple anchor on a jutting rock — see `anchors`).",
-    "width": 14,
-    "height": 10,
-    "spawn": {"x": 7, "y": 5},
+    "_scaffold": "DRAFT GEOMETRY (plans/map-radicals.md). Built at 30x20 from four radicals in game/radicals/canyon/ (wreck, wagon, climb, riverbed twice; see _radicals), with a chasm and the last of the river painted by hand. The pieces are Claude's first drafts: Caelan repaints them in Tiled, and his version is the one that ships. Mechanics unchanged: Pike sells the rope, two critters for the fight out, the grappling-hook-gated climb to Downtown.",
+    "width": 30,
+    "height": 20,
+    "spawn": {"x": 27, "y": 6},
     "zoneName": "CANYON",
-    "border": { "tile": 0 },
+    "border": { "tile": 61 },
     "tiles": [
-        0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-        0,52,52,52,52,52,52,52,52,52,52,52,52,0,
-        0,52,52,52,52,52,52,52,52,52,52,52,52,0,
-        0,52,52,52,52,52,52,52,52,52,52,52,52,0,
-        0,52,52,52,52,52,52,52,52,52,52,52,52,0,
-        0,52,52,52,52,52,52,52,52,52,52,52,52,0,
-        0,52,52,52,52,52,52,52,52,52,52,52,52,0,
-        0,52,52,52,52,52,52,52,52,52,52,52,52,0,
-        0,52,52,52,52,52,52,52,52,52,52,52,52,0,
-        0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,
+        61,60,60,60,60,60,60,60,60,60,60,60,61,63,61,60,61,63,61,60,60,60,60,60,60,60,60,60,60,61,
+        61,60,60,60,60,60,60,60,60,60,60,60,63,63,60,60,60,63,63,60,60,60,60,60,60,60,60,60,60,61,
+        61,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,63,63,60,60,60,61,
+        61,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,63,61,61,63,60,60,61,
+        61,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,63,61,61,60,63,60,61,
+        61,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,63,63,60,60,60,61,
+        61,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,63,60,60,61,
+        61,60,60,60,62,62,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,61,
+        61,60,60,62,62,62,62,60,64,64,64,64,64,64,64,64,64,64,64,64,64,64,64,64,64,64,64,64,60,61,
+        61,60,62,62,35,35,62,62,63,63,62,62,62,63,63,63,63,63,63,63,62,62,62,63,63,63,63,63,60,61,
+        61,60,62,62,35,35,62,62,62,62,62,62,62,62,62,62,62,62,62,62,62,62,62,62,62,62,62,62,60,61,
+        61,60,60,62,62,63,62,60,62,62,62,62,66,66,62,62,62,62,62,62,62,62,62,62,62,62,62,62,60,61,
+        61,60,60,60,62,62,60,60,63,63,63,63,62,62,62,63,63,63,63,63,63,63,62,62,62,63,63,63,60,61,
+        61,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,61,
+        61,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,61,
+        61,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,63,65,65,65,63,60,60,60,61,
+        61,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,63,65,65,65,65,65,63,60,60,61,
+        61,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,63,65,65,65,65,65,63,60,61,
+        61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61
     ],
     "enemies": [
-        {"id": "pike", "type": "Pike", "name": "Pike", "dialogueId": "pike", "x": 3, "y": 5, "hp": 100, "armor": 5, "damage": 9, "disposition": 30, "bribeable": true, "vendor": true, "stock": ["grappling_hook"], "tag": "pike_boss", "behavior": ["IDLE"], "sightRange": 4, "barks": ["[Pike: Careful near the wagon.]", "[Pike: Rope ain't cheap, friend.]", "[Pike: The river took my years. Left me all this patience.]"], "barkEveryTurns": 6, "adjacencyBark": "[Pike: Buyin' the rope, or just gawkin'? Press E.]"},
-        {"id": "canyon-rat-1", "sewerDweller": true, "gold": 1, "loadout": [], "type": "Rat", "name": "Canyon Rat", "x": 9, "y": 4, "hp": 100, "armor": -30, "damage": 6, "tag": "canyon_critter", "sightRange": 6, "vermin": true, "barks": ["[skreee!]", "[hiss]"], "barkEveryTurns": 5},
-        {"id": "canyon-rat-2", "sewerDweller": true, "gold": 1, "loadout": [], "type": "Rat", "name": "Canyon Rat", "x": 10, "y": 6, "hp": 100, "armor": -30, "damage": 6, "tag": "canyon_critter", "sightRange": 6, "vermin": true, "barks": ["[chitter]", "[skree]"], "barkEveryTurns": 5}
+        {"id": "pike", "type": "Pike", "name": "Pike", "dialogueId": "pike", "x": 5, "y": 12, "hp": 100, "armor": 5, "damage": 9, "disposition": 30, "bribeable": true, "vendor": true, "stock": ["grappling_hook"], "tag": "pike_boss", "behavior": ["IDLE"], "sightRange": 4, "barks": ["[Pike: Careful near the wagon.]", "[Pike: Rope ain't cheap, friend.]", "[Pike: The river took my years. Left me all this patience.]"], "barkEveryTurns": 6, "adjacencyBark": "[Pike: Buyin' the rope, or just gawkin'? Press E.]"},
+        {"id": "canyon-rat-1", "sewerDweller": true, "gold": 1, "loadout": [], "type": "Rat", "name": "Canyon Rat", "x": 13, "y": 6, "hp": 100, "armor": -30, "damage": 6, "tag": "canyon_critter", "sightRange": 6, "vermin": true, "barks": ["[skreee!]", "[hiss]"], "barkEveryTurns": 5},
+        {"id": "canyon-rat-2", "sewerDweller": true, "gold": 1, "loadout": [], "type": "Rat", "name": "Canyon Rat", "x": 18, "y": 16, "hp": 100, "armor": -30, "damage": 6, "tag": "canyon_critter", "sightRange": 6, "vermin": true, "barks": ["[chitter]", "[skree]"], "barkEveryTurns": 5}
     ],
     "items": [],
     "examinables": [
-        {"id": "canyon_wreck", "x": 7, "y": 6, "text": "[Your car, folded around a boulder — a total write-off. Half-buried in the old silt beside it: the ribs of a COVERED WAGON, and a grizzled man perched on a rock like he grew there.]"}
+        {"id": "canyon_wreck", "x": 26, "y": 5, "text": "[Your car, folded around a boulder — a total write-off. Off across the dry riverbed: the ribs of a COVERED WAGON, and a grizzled man perched on a rock like he grew there.]"}
     ],
     "props": [
-        {"type": "grappleRock", "x": 7, "y": 1}
+        {"type": "grappleRock", "x": 15, "y": 1},
+        {"type": "wreckedCar", "x": 26, "y": 5}
     ],
     "anchors": [
-        {"x": 7, "y": 1, "toMap": "downtown-map.json", "toX": 8, "toY": 10, "label": "[You sink the hook into the rockface and haul yourself up — out of the canyon, toward Downtown.]", "requires": "grappling_hook", "requiresMsg": "[Sheer rock, straight up. You'd need a good hook and a rope to climb out of this pit — and Pike has one.]"}
+        {"x": 15, "y": 1, "toMap": "downtown-map.json", "toX": 8, "toY": 10, "label": "[You sink the hook into the rockface and haul yourself up — out of the canyon, toward Downtown.]", "requires": "grappling_hook", "requiresMsg": "[Sheer rock, straight up. You'd need a good hook and a rope to climb out of this pit — and Pike has one.]"}
     ],
-    "transitions": []
+    "transitions": [],
+    "_radicals": [
+        {"name": "canyon/climb", "x": 12, "y": 0},
+        {"name": "canyon/wagon", "x": 2, "y": 8},
+        {"name": "canyon/riverbed", "x": 8, "y": 9},
+        {"name": "canyon/riverbed", "x": 18, "y": 9},
+        {"name": "canyon/wreck", "x": 23, "y": 3}
+    ]
 }

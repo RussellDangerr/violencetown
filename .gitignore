@@ -100,3 +100,6 @@ desktop.ini
 # --- roadmap-board scratch (generated seed payloads; never commit) ---
 tools/roadmap-board/dist/seed-*.json
 tools/roadmap-board/dist/db/
+
+# --- Tiled working copies (tools/tiled.mjs) — generated; game/*-map.json is the truth ---
+/tiled/
