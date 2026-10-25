@@ -100,6 +100,12 @@ The game's shape had been re-decided four times, and every new idea threatened a
 
 The picks draw from a random stream of their own, derived from the seed, so adding a slot or a candidate can never move a combat roll. Proving the first slot changed nothing used the autoplay (§5): its fingerprint hashes the whole save, so the new field moves it — but with that one field stripped, both runs matched the recorded golden exactly, and only then was the new baseline written. A test checks that every candidate in a slot drops the slot's item, so no future boss can strand the quest.
 
+### 9. Map radicals — hand-made pieces, placed by a tool
+
+A Chinese character is built from radicals, and a map can be built the same way ([`plans/map-radicals.md`](plans/map-radicals.md)). A **radical** is a small hand-painted piece of map — a wrecked car against a boulder, a sunken wagon, a stretch of dry riverbed — saved in the map format, with empty cells that keep whatever the map has underneath, named marks ("the NPC sits here") and sockets where a path goes in or out. A placer stamps a piece into a map's JSON and refuses, naming the cells, when the piece would run off the map, wall in an enemy or the spawn, or open a path onto rock. Placing a piece where it already is changes nothing. The pieces stay handmade; only their arrangement is a tool's job, which is how one person can build more map than they could paint cell by cell. There is deliberately no generator yet: a generator with nothing good to place only makes empty space.
+
+The Canyon was the first map rebuilt this way, at 30×20 from four pieces with the riverbed placed twice. Building it surfaced one hidden assumption worth recording: the car tile's bump runs the Town car's engine-and-fuel script wherever the tile is, so the canyon's wreck is a prop instead, and the checker now refuses that tile in a piece. Tiled paints a piece the same way it paints a map, and both round-trip byte-identically.
+
 More system write-ups (combat feel, zone pursuit, the poisons) live in [`plans/`](plans/).
 
 ## How it works (mechanics)
