@@ -1,0 +1,24 @@
+{
+    "_note": "The First Blood Bank's vault, behind the door in the bank's back wall (plans/fin1-vault-door.md). Empty for now: the finale's beats are later slices. Placeholder geometry/text. Tiles: 14 wall, 11 floor, 15 door.",
+    "width": 9,
+    "height": 8,
+    "spawn": {"x": 4, "y": 5},
+    "zoneName": "FIRST BLOOD BANK",
+    "tiles": [
+        14,14,14,14,14,14,14,14,14,
+        14,11,11,11,11,11,11,11,14,
+        14,11,11,11,11,11,11,11,14,
+        14,11,11,11,11,11,11,11,14,
+        14,11,11,11,11,11,11,11,14,
+        14,11,11,11,11,11,11,11,14,
+        14,14,14,14,15,14,14,14,14,
+        14,14,14,14,14,14,14,14,14
+    ],
+    "enemies": [],
+    "items": [],
+    "examinables": [],
+    "props": [],
+    "transitions": [
+        {"x": 4, "y": 6, "toMap": "bank-map.json", "toX": 6, "toY": 2, "label": "[TEXT]"}
+    ]
+}

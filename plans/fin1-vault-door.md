@@ -25,8 +25,9 @@ into a new room, the vault.
 - **`game/map.js`** — `carriesAll(requires, inventory)`, the one rule for an item gate. A gate's
   `requires` may be one item id, as every gate is today, or a list of ids, all of which must be
   in the bag. A missing or empty `requires` is open.
-- **`game/main.js`** — the walked-onto transition gate and the grapple anchor gate both ask
-  `carriesAll` instead of checking a single id. That is the whole change to the core file.
+- **`game/main.js`** — the walked-onto transition gate asks `carriesAll` instead of checking a
+  single id. That is the whole change to the core file. The grapple anchor's gate keeps its
+  single-item check: only one anchor exists and it wants one item.
 
 ## The door's look
 
