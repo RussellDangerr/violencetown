@@ -81,8 +81,33 @@ export function getGreedyStep(game, from, to, options = {}) {
 // and no-corner-cutting rules as the chase step. Returns {x,y}, or null when
 // boxed in / already as far as it can get (nowhere strictly better → cower).
 export function fleeStep(game, enemy) {
-    const fx = enemy.x, fy = enemy.y;
-    const px = game.playerX, py = game.playerY;
+    return fleeFrom(game, enemy, [{ x: game.playerX, y: game.playerY }]);
+}
+
+// ── Flee: one step AWAY from several threats ────────────────────────────────
+//
+// The general form of fleeStep: the 8-way neighbour that most increases the
+// Chebyshev distance to the NEAREST of `threats` ({x,y} list). A bystander
+// clearing out of a fight runs from the player and every fighter at once
+// (plans/f3c-bystanders-clear-out.md).
+//
+// options:
+//   - safe(x, y): optional. A neighbour it returns true for beats any it does
+//                 not, whatever the distance — stepping round a corner out of
+//                 a fighter's view is better than a longer straight run. Among
+//                 safe tiles the further one still wins.
+//
+// Same occupancy and no-corner-cutting rules as the chase step. Deterministic:
+// ties go to the first neighbour in the fixed order. Returns {x,y}, or null
+// when nothing is strictly better than standing still.
+export function fleeFrom(game, mover, threats, options = {}) {
+    const { safe = null } = options;
+    const fx = mover.x, fy = mover.y;
+    const nearest = (x, y) => {
+        let d = Infinity;
+        for (const t of threats) d = Math.min(d, chebyshev(x, y, t.x, t.y));
+        return d;
+    };
 
     const ortho = [
         { x: fx - 1, y: fy }, { x: fx + 1, y: fy },
@@ -93,14 +118,18 @@ export function fleeStep(game, enemy) {
         { x: fx - 1, y: fy + 1 }, { x: fx + 1, y: fy + 1 },
     ];
 
-    let bestDist = chebyshev(fx, fy, px, py);
+    let bestSafe = safe ? !!safe(fx, fy) : false;
+    let bestDist = nearest(fx, fy);
     let best = null;
 
-    const free = (x, y) => stepFree(game, x, y, { self: enemy });   // avoidPlayer defaults true
+    const free = (x, y) => stepFree(game, x, y, { self: mover });   // avoidPlayer defaults true
     const consider = (c) => {
         if (!free(c.x, c.y)) return;
-        const d = chebyshev(c.x, c.y, px, py);
-        if (d > bestDist) { bestDist = d; best = c; }
+        const s = safe ? !!safe(c.x, c.y) : false;
+        const d = nearest(c.x, c.y);
+        if ((s && !bestSafe) || (s === bestSafe && d > bestDist)) {
+            bestSafe = s; bestDist = d; best = c;
+        }
     };
 
     for (const c of ortho) consider(c);
