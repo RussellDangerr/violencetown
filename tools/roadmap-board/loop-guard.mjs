@@ -14,9 +14,11 @@ import { fileURLToPath } from 'node:url';
 
 const norm = p => String(p ?? '').trim().replace(/\\/g, '/').replace(/^\.\//, '');
 
-// A golden file: any file whose name contains "golden", whatever its extension
-// (tools/autoplay-golden.json, tools/balance-golden.txt).
-const GOLDEN = /golden[^/]*$/i;
+// A golden file: a name whose last word is "golden", whatever its extension
+// (tools/autoplay-golden.json, tools/balance-golden.txt, golden.json). A name
+// that only mentions it, such as plans/fx19-guard-golden-files.md or an
+// item's golden-crown.png, is not one.
+const GOLDEN = /(?:^|[/_.-])golden(?:\.[^/.]+)?$/i;
 export const isGolden = path => GOLDEN.test(norm(path));
 
 // Paths a slice never edits, whatever its card says. A golden file is refused

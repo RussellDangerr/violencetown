@@ -10,8 +10,10 @@ so a slice that rightly moves the golden can never pass.
 
 The fix:
 
-- A golden file is any file whose name contains `golden`, whatever its extension. A rename
-  counts on either side, so renaming a golden away from its name is still a golden change.
+- A golden file is one whose name ends in the word `golden`, whatever its extension
+  (`autoplay-golden.json`, `balance-golden.txt`, `golden.json`). A name that only mentions it,
+  like this spec's own `fx19-guard-golden-files.md`, is not one. A rename counts on either side,
+  so renaming a golden away from its name is still a golden change.
 - A golden change passes only when every commit on the branch that touched that file cites an
   accept ruling in its message, and at least one such commit exists.
 - "Cites an accept ruling" follows the rename fix (FX9): the guard reads the commit message, as it

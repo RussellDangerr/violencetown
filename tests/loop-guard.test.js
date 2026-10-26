@@ -193,8 +193,8 @@ describe('golden files: refused unless a commit cites an accept ruling', () => {
         changed: [{ status: 'A', path: 'plans/s.md' }, { status: 'M', path }], commits,
     });
     test('a golden of any extension is a golden', () => {
-        for (const p of ['tools/balance-golden.txt', 'tools/autoplay-golden.json', 'tools\\balance-golden.txt', 'x/GOLDEN.md']) assert.equal(isGolden(p), true, p);
-        for (const p of ['game/main.js', 'tools/golden/readme.md', '']) assert.equal(isGolden(p), false, p);
+        for (const p of ['tools/balance-golden.txt', 'tools/autoplay-golden.json', 'tools\\balance-golden.txt', 'x/GOLDEN.md', 'golden.json', 'tools/x_golden.csv']) assert.equal(isGolden(p), true, p);
+        for (const p of ['game/main.js', 'tools/golden/readme.md', 'plans/fx19-guard-golden-files.md', 'game/assets/golden-crown.png', 'tests/golden.test.js', 'tools/ungolden.txt', '']) assert.equal(isGolden(p), false, p);
     });
     test('tools/balance-golden.txt fails with no ruling, even when the card lists it', () => {
         const p = checkScope([{ status: 'M', path: 'tools/balance-golden.txt' }], ['tools/balance-golden.txt'], 's',
