@@ -29,7 +29,29 @@ export const ENTRIES = {
         ],
         barkEveryTurns: 6,
     },
+    // Act 2's bosses (plans/ab1-act2-placeholder-bosses.md): each is its zone's
+    // first pool entry from the spine, standing in with placeholderBoss() below.
+    bigfoot:        { ...placeholderBoss(), name: 'Bigfoot' },
+    alien_invasion: { ...placeholderBoss(), name: 'Alien Invasion' },
+    the_deity:      { ...placeholderBoss(), name: 'The Deity' },
 };
+
+// One stand-in stat block for every Act 2 boss until each is designed: the
+// Were-Rat's numbers as they stand, the existing Boss cell, and [TEXT] barks.
+function placeholderBoss() {
+    return {
+        type: 'Boss',
+        boss: true,
+        gold: 44,
+        loadout: ['bandage', 'hot_dog', 'boardwalk_burger', 'defence_poition', 'foil_hat', 'soap', 'cardboard_cuirass'],
+        equipped: ['wooden_sword'],
+        hp: 100,
+        armor: 6,
+        damage: 12,
+        barks: ['[TEXT]', '[TEXT]'],
+        barkEveryTurns: 6,
+    };
+}
 
 // A required item belongs to the slot, not the entry (SL-4): every entry in the
 // pool drops it, so a new boss can never strand the quest.
@@ -41,6 +63,27 @@ export const SLOTS = {
         // The slot owns its item, so it owns the line; {who} is whoever filled it.
         dropLine: '[The {who} drops your cataclysmic converter!]',
         pool: [{ entry: 'wererat', weight: 1 }],
+    },
+    // Act 2 (plans/spine.md §9, 2026-10-23): each item will come from its zone's
+    // quest with the boss a step inside it. Interim: the boss drops it directly.
+    // No dropLine, so the drop logs the death handler's generic line.
+    'carnival.boss': {
+        kind: 'boss',
+        map: 'carnival-map.json',
+        requiredDrop: 'act2_item_a',
+        pool: [{ entry: 'bigfoot', weight: 1 }],
+    },
+    'factory.boss': {
+        kind: 'boss',
+        map: 'factory-map.json',
+        requiredDrop: 'act2_item_b',
+        pool: [{ entry: 'alien_invasion', weight: 1 }],
+    },
+    'graveyard.boss': {
+        kind: 'boss',
+        map: 'graveyard-map.json',
+        requiredDrop: 'act2_item_c',
+        pool: [{ entry: 'the_deity', weight: 1 }],
     },
 };
 
