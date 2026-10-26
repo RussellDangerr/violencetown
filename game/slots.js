@@ -69,6 +69,21 @@ export const ENTRIES = {
         damage: 6,
         sightRange: 6,
     },
+    // The Sewer's character (plans/cs1-crat-talk-both-sides.md): the Crat, who
+    // asks you to settle a dispute in the side room north of the Sewer. A
+    // townsperson's numbers; borrowed Violencian art until it is designed.
+    crat: {
+        type: 'Violencian',
+        name: 'The Crat',
+        sewerDweller: true,
+        hp: 100,
+        armor: -80,
+        damage: 0,
+        sightRange: 4,
+        disposition: 0,
+        behavior: ['IDLE'],
+        dialogueId: 'crat',
+    },
     // Act 2's bosses (plans/ab1-act2-placeholder-bosses.md): each is its zone's
     // first pool entry from the spine, standing in with placeholderBoss() below.
     bigfoot:        { ...placeholderBoss(), name: 'Bigfoot' },
@@ -126,6 +141,12 @@ export const SLOTS = {
         // The slot owns its item, so it owns the line; {who} is whoever filled it.
         dropLine: '[The {who} drops your cataclysmic converter!]',
         pool: [{ entry: 'wererat', weight: 1 }],
+    },
+    // A character slot (spine SL-5): no required item, so it guarantees no drop.
+    'sewer.character': {
+        kind: 'character',
+        map: 'sewer-north-map.json',
+        pool: [{ entry: 'crat', weight: 1 }],
     },
     // Act 2 (plans/spine.md §9, 2026-10-23): each item will come from its zone's
     // quest with the boss a step inside it. Interim: the boss drops it directly.

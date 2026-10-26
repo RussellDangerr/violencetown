@@ -12,6 +12,8 @@
 // applyDispositionDelta (which also handles the flip-to-ally threshold); a
 // disposition that craters past the hostile threshold turns the speaker on you.
 
+import { transferGold } from './trade.js';
+
 export const DIALOGUES = {
     pike: {
         name: 'Pike',
@@ -240,6 +242,100 @@ export const DIALOGUES = {
         ],
     },
 };
+
+// ── The Crat's dispute (plans/cs1-crat-talk-both-sides.md) ───────────────────
+// A side room north of the Sewer. Two sides claim the same thing; the Crat asks
+// you to rule. Hear both, rule for one; either side will pay you to rule its
+// way. Every line is a placeholder for Caelan to write.
+//
+// State lives in the quest flags, which the save keeps (an NPC's spent `once`
+// choices do not survive a reload, so none of these use `once`):
+//   cratHeardA / cratHeardB  you heard that side out
+//   cratBribe                'a' | 'b' — whose money you took (one offer only)
+//   cratRuling               'a' | 'b' — who you ruled for
+export const CRAT = {
+    trueSide: 'a',                         // the side in the right; the clues point here
+    sides: ['a', 'b'],
+    heardFlag: (s) => (s === 'a' ? 'cratHeardA' : 'cratHeardB'),
+};
+// Left at the 5 GP every other bribe in the game uses.
+export const CRAT_BRIBE_GP = 5;
+
+const cratFlags = (g) => (g && g.questEngine && g.questEngine.state && g.questEngine.state.flags) || null;
+const cratFlag = (g, k) => { const f = cratFlags(g); return f ? f[k] : undefined; };
+const setCratFlag = (g, k, v) => { const f = cratFlags(g); if (f) f[k] = v; };
+const heardBoth = (g) => CRAT.sides.every(s => !!cratFlag(g, CRAT.heardFlag(s)));
+const ruled = (g) => !!cratFlag(g, 'cratRuling');
+
+// Six ways to rule: for either side, times whose money you took (none, the side
+// you ruled for, the other side). Exactly two are on offer at a time.
+function cratRulingChoices() {
+    const out = [];
+    for (const side of CRAT.sides) {
+        const verdict = side === CRAT.trueSide ? 'the side in the right' : 'the side in the wrong';
+        for (const bribe of ['none', 'same', 'other']) {
+            const paidBy = bribe === 'none' ? null : (bribe === 'same' ? side : CRAT.sides.find(s => s !== side));
+            out.push({
+                id: `rule_${side}${paidBy ? '_paid_' + paidBy : ''}`,
+                label: `[TEXT: rule for side ${side.toUpperCase()}]`,
+                repeatable: true,
+                available: (g) => heardBoth(g) && !ruled(g) && (cratFlag(g, 'cratBribe') ?? null) === paidBy,
+                onPick: (g) => setCratFlag(g, 'cratRuling', side),
+                reply: `[TEXT: the reveal, "you are not the mother" — you ruled for ${verdict}`
+                    + (bribe === 'none' ? ', unbought' : bribe === 'same' ? ', paid by that side' : ', paid by the other side') + ']',
+            });
+        }
+    }
+    return out;
+}
+
+function cratSide(side) {
+    const flag = CRAT.heardFlag(side);
+    const S = side.toUpperCase();
+    return {
+        name: `[NAME: side ${S}]`,
+        greeting: `[TEXT: side ${S} greets you]`,
+        choices: [
+            { id: 'testify', label: `[TEXT: hear side ${S} out]`, repeatable: true,
+              available: (g) => !cratFlag(g, flag),
+              onPick: (g) => setCratFlag(g, flag, true),
+              reply: `[TEXT: side ${S}'s side of it]` },
+            { id: 'again', label: `[TEXT: ask side ${S} again]`, repeatable: true,
+              available: (g) => !!cratFlag(g, flag) && !ruled(g),
+              reply: `[TEXT: side ${S} repeats itself]` },
+            // The bribe runs the other way to every other in the game: they pay you.
+            { id: 'offer', label: `[TEXT: take side ${S}'s money - ${CRAT_BRIBE_GP} GP]`, repeatable: true,
+              available: (g, npc) => !!cratFlag(g, flag) && !ruled(g) && !cratFlag(g, 'cratBribe')
+                  && (npc ? (npc.gold ?? 0) >= CRAT_BRIBE_GP : true),
+              onPick: (g, npc) => {
+                  if (transferGold(npc, g, CRAT_BRIBE_GP, 'dialogue')) setCratFlag(g, 'cratBribe', side);
+              },
+              reply: `[TEXT: side ${S} pays you to rule its way]` },
+            { id: 'after', label: `[TEXT: ask side ${S} about the ruling]`, repeatable: true,
+              available: (g) => ruled(g),
+              reply: `[TEXT: side ${S} on the ruling]` },
+        ],
+    };
+}
+
+DIALOGUES.crat = {
+    name: 'The Crat',
+    greeting: '[TEXT: the Crat greets you]',
+    choices: [
+        { id: 'dispute', label: '[TEXT: ask what the dispute is]', repeatable: true,
+          available: (g) => !ruled(g),
+          reply: '[TEXT: the Crat lays out the dispute and asks you to hear both sides]' },
+        { id: 'waiting', label: '[TEXT: ask what happens now]', repeatable: true,
+          available: (g) => !heardBoth(g) && !ruled(g),
+          reply: '[TEXT: the Crat says to hear both sides first]' },
+        ...cratRulingChoices(),
+        { id: 'after', label: '[TEXT: ask the Crat about the ruling]', repeatable: true,
+          available: (g) => ruled(g),
+          reply: '[TEXT: the Crat on the ruling]' },
+    ],
+};
+DIALOGUES.crat_side_a = cratSide('a');
+DIALOGUES.crat_side_b = cratSide('b');
 
 export function getDialogue(id) {
     return DIALOGUES[id] || null;

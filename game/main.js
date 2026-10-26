@@ -987,9 +987,10 @@ class Game {
             this._log('[Entered the town]');
             this._maybeShowFirstRunHint();
         };
-        // CONTINUE loads the autosave into the live game. GAME START / Space
-        // begins fresh (the existing save survives until the fresh run's first
-        // autosave overwrites it, so a stray reload can still resume).
+        // CONTINUE loads the autosave into the live game. GAME START begins
+        // fresh (the existing save survives until the fresh run's first
+        // autosave overwrites it, so a stray reload can still resume). Space
+        // does what CONTINUE does when there is a save, and GAME START when not.
         const continueGame = async () => {
             audio.init();                 // [audio] first user gesture — unlock Web Audio
             this._applyAudioSettings();   // [settings] apply persisted volume/mute on boot
@@ -1030,8 +1031,17 @@ class Game {
             continueBtn.classList.remove('hidden');
             continueBtn.addEventListener('click', continueGame);
         }
+        // (FX23) The Space that leaves the title is spent here. _bindInput's
+        // listener sits on the same document and runs after this one; by then the
+        // state is IDLE, so without stopImmediatePropagation it opened the wheel.
+        // A save loads asynchronously and the state stays SPLASH until it lands,
+        // so once the splash is gone a second Space must not start another run.
         document.addEventListener('keydown', (e) => {
-            if (this.state === STATE.SPLASH && e.code === 'Space') { e.preventDefault(); start(); }
+            if (this.state !== STATE.SPLASH || e.code !== 'Space') return;
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            if (splash.classList.contains('gone')) return;
+            if (hasSave()) continueGame(); else start();
         });
     }
 
@@ -4435,7 +4445,7 @@ class Game {
             elemental: elementalMult(opts.type || kind, enemyObj),
             positional: backstab ? 1.5 : 1,
         });
-        if (finalDmg === 0) { this._log(`[${enemyObj.type} is immune!]`, 'combat'); return null; }
+        if (finalDmg === 0) { this._log(`[${enemyObj.shownName || enemyObj.type} is immune!]`, 'combat'); return null; }
         if (backstab) this._log('[Backstab!]', 'combat');
 
         const result = attack(playerEntity, enemyObj.entity, finalDmg);
@@ -4695,7 +4705,7 @@ class Game {
         enemyObj.state = 'chasing';     // immediately hostile, no re-acquire delay
         enemyObj.disposition = -50;     // betrayed: head-meter goes angry + re-bribing costs more
         enemyObj._wasFlipped = false;   // ...but they CAN be won back if you make amends
-        this._log(`[The ${enemyObj.type} turns on you!]`, 'combat');
+        this._log(`[The ${enemyObj.shownName || enemyObj.type} turns on you!]`, 'combat');
     }
 
     // ── Reaction bus ──────────────────────────────────────────────────────────
@@ -4717,7 +4727,7 @@ class Game {
         if (target.vendor) { target.vendor = false; target.stock = null; }   // a vendor you struck won't keep shop
         if (target.ambient) target.ambient = false;  // a provoked townsperson fights for real, not as ambient
         if (typeof target.disposition === 'number') target.disposition = Math.min(target.disposition, -50);
-        this._log(`[The ${target.type || target.entity.name} turns on you!]`, 'combat');
+        this._log(`[The ${target.shownName || target.type || target.entity.name} turns on you!]`, 'combat');
     }
 
     // Total damage-reduction from worn armor: every equipped body-zone piece's

@@ -11,6 +11,16 @@ Icons and tiles the Kenney Tiny packs almost have, derived from their cells
                      (the red bottle itself stays the bandage)
     4  goo vat       tinyDungeon (8,2) with the dungeon-floor orange keyed out, so
                      the factory floor shows around it instead of orange strips
+    5  lion_whip     tinyDungeon (10,10), the wavy shaft, in leather
+    6  gator_tail    tinyDungeon (9,8), the tapered blade, in gator green
+    7  fearmur       tinyDungeon (9,10), the staff, in bone
+    8  pipe          tinyDungeon (9,10), the staff, in copper
+    9  ray_gun       hand-pixeled: a brass pistol side-on, with a teal glass
+                     coil and a tip in the energy splat's yellow (WA2)
+
+The four weapons are palette swaps: each source colour maps to one new
+colour and the dark Tiny outline is never in the map, so it survives.
+The Ray Gun is drawn from a character grid, one letter per colour.
 
 Run from the repo root:  python tools/gen_tiny_extra.py
 """
@@ -65,6 +75,27 @@ def recolour(im, pick, hue):
     return out
 
 
+def swap(im, mapping):
+    """Replace each colour in `mapping` (rgb -> rgb) exactly, leaving every
+    other pixel, the outline included, as it was."""
+    assert OUTLINE not in mapping, 'the Tiny outline stays'
+    out = im.copy()
+    px = out.load()
+    for y in range(16):
+        for x in range(16):
+            r, g, b, a = px[x, y]
+            if a and (r, g, b) in mapping:
+                px[x, y] = (*mapping[(r, g, b)], a)
+    return out
+
+
+OUTLINE = (63, 38, 49)          # the dark outline every Tiny cell carries
+
+# The Tiny Dungeon colours the weapon cells are drawn in.
+WOOD, WOOD_LIGHT, WOOD_DARK = (189, 108, 74), (234, 165, 108), (118, 59, 54)
+STEEL, STEEL_LIGHT, STEEL_DARK = (139, 155, 180), (192, 203, 220), (82, 96, 124)
+GEM_PURPLE, GEM_CYAN = (209, 118, 208), (117, 227, 255)
+
 SLUDGE_HUE = 0.78   # the sludge purple of the damage type (#9a52c8)
 
 rock_src = cell(TD, 0, 2)
@@ -76,8 +107,77 @@ fire = recolour(cell(TD, 7, 9), lambda h, s, v: (h < 0.06 or h > 0.94) and s > 0
 
 goo = key_out(cell(TD, 8, 2), (234, 165, 108))
 
-strip = Image.new('RGBA', (16 * 5, 16), (0, 0, 0, 0))
-for i, im in enumerate([rock, brain, sack, fire, goo]):
+# Leather: the wood goes a shade darker and the crystal becomes the lighter fall.
+whip = swap(cell(TD, 10, 10), {
+    WOOD: (118, 59, 54), WOOD_LIGHT: (207, 130, 84), WOOD_DARK: (118, 59, 54),
+    GEM_CYAN: (207, 130, 84),
+})
+# Gator green: the blade's three steels become three Tiny Town greens.
+gator = swap(cell(TD, 9, 8), {
+    STEEL_LIGHT: (132, 198, 105), STEEL: (71, 159, 74), STEEL_DARK: (37, 149, 106),
+})
+# Bone: the shaft goes ivory, and the purple knob becomes the paler joint.
+bone = swap(cell(TD, 9, 10), {
+    WOOD: (226, 214, 178), WOOD_LIGHT: (250, 244, 222), WOOD_DARK: (176, 160, 124),
+    GEM_PURPLE: (250, 244, 222),
+})
+# Copper: the shaft goes red-brown metal, and the knob becomes a brighter fitting.
+copper = swap(cell(TD, 9, 10), {
+    WOOD: (195, 75, 53), WOOD_LIGHT: (227, 134, 40), WOOD_DARK: (118, 59, 54),
+    GEM_PURPLE: (227, 134, 40),
+})
+
+
+def draw(rows, palette):
+    """A 16x16 cell from 16 strings of 16 letters ('.' is transparent), wrapped
+    in the Tiny outline: a full ring, then a ring with its corners cut, as every
+    Tiny Dungeon item cell has. The letters keep to the middle 12x12 so the
+    outline fits."""
+    assert len(rows) == 16 and all(len(r) == 16 for r in rows), 'a cell is 16x16'
+    filled = {(x, y) for y, r in enumerate(rows) for x, ch in enumerate(r) if ch != '.'}
+    assert all(2 <= x <= 13 and 2 <= y <= 13 for x, y in filled), 'room for the outline'
+    inner = {(x + dx, y + dy) for x, y in filled for dx in (-1, 0, 1) for dy in (-1, 0, 1)}
+    outer = {(x + dx, y + dy) for x, y in inner for dx, dy in ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1))}
+    im = Image.new('RGBA', (16, 16), (0, 0, 0, 0))
+    px = im.load()
+    for x, y in outer:
+        px[x, y] = (*OUTLINE, 255)
+    for x, y in filled:
+        ch = rows[y][x]
+        px[x, y] = (*(OUTLINE if ch == 'O' else palette[ch]), 255)
+    return im
+
+
+ENERGY_YELLOW = (245, 208, 42)   # the energy hit-splat, #f5d02a in renderer.js
+
+# The Ray Gun, side-on: a dented brass housing, a glass coil up to a
+# flange, a short barrel with the glowing tip, and the grip below the housing.
+ray_gun = draw([
+    '................',
+    '................',
+    '................',
+    '..LLLL..........',
+    '..LBDBttttO.....',
+    '..BBBBTdTdOBBY..',
+    '..BBBBdTdTOBBY..',
+    '..DBBD..........',
+    '..DBBD..........',
+    '...BBD..........',
+    '...BBD..........',
+    '...BBD..........',
+    '...DDD..........',
+    '................',
+    '................',
+    '................',
+], {
+    'L': (253, 190, 83), 'B': (227, 134, 40), 'D': (189, 108, 74),   # brass, Tiny Town golds
+    't': (105, 255, 212), 'T': (67, 225, 179), 'd': (37, 149, 106),  # teal glass, Tiny Dungeon
+    'Y': ENERGY_YELLOW,
+})
+
+CELLS = [rock, brain, sack, fire, goo, whip, gator, bone, copper, ray_gun]
+strip = Image.new('RGBA', (16 * len(CELLS), 16), (0, 0, 0, 0))
+for i, im in enumerate(CELLS):
     strip.alpha_composite(im, (i * 16, 0))
 out = K / 'tinyExtra_packed.png'
 strip.save(out)
