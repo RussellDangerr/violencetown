@@ -81,6 +81,7 @@ function writeSeenHints(set) {
 import { emitNoise, NOISE, perceives, spotters, struck, VERDICT } from './perception.js'; // sound + sight
 import { coinTake, kitTake, gearTake, coinWeight, itemWeight, gearWeight,
          noticeBuffer, isClean, stealLimit } from './theft.js';
+import { recordUse, skillPerks, mergePassives } from './skills.js'; // (skills) use-ranks: clean lifts rank up light fingers
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
 import {
     createWheelState, cycle, drill, back, compose, autoAimTile,
@@ -235,6 +236,10 @@ class Game {
         this.ringTier         = 0;
         this.discoveredFusions = new Set();
         this.ringMods         = {};          // aggregate passives, recomputed by _refreshGrantedSkills
+        // (skills) { skillId: cleanUses } — on the player, not on anything worn, so no
+        // swap touches it. Persisted. Its perks join ringMods only where an action
+        // reads them (see _theftPassives).
+        this.skills           = {};
         this._peakDisposition = 0;           // (rings) highest disposition any NPC has ever shown — monotonic; gates the hidden thumb tier
         this._lastHitTarget = null;   // (fear) id of the enemy the last Melee-Hit struck
         this._ratFormTurns = 0;        // (Rat Ring) turns left folded into a rat; while >0 the player can enter GRATE tiles
@@ -3656,7 +3661,7 @@ class Game {
                 if (!victim) { this._log('[Nobody to lift from there]'); break; }
 
                 const verdict  = perceives(this.map, victim, this.playerX, this.playerY);
-                const passives = this.ringMods ?? {};
+                const passives = this._theftPassives();
                 const rec = (this._robbed[victim.id] ||= { gold: 0, items: [], weightTaken: 0, noticed: false });
 
                 let weight = 0, took = null, gp = 0, restore = null;
@@ -3702,7 +3707,9 @@ class Game {
                     // A clean theft is GENUINELY clean — no disposition move, no
                     // hostility, no search, and no log line about them at all.
                     // They never know, which is the only reason the verb is worth
-                    // the risk.
+                    // the risk. It is also the only lift that counts toward
+                    // light fingers.
+                    this._countCleanLift();
                 } else {
                     rec.noticed = true;
                     if (took) this._hot[took.id] = (this._hot[took.id] ?? 0) + 1;
@@ -4029,6 +4036,20 @@ class Game {
         const wantId = this.xmbPick ? this.xmbPick[cat] : null;
         const item = col.items.find(it => it.itemDef.id === wantId) || col.items[0];
         return item.slot;
+    }
+
+    // (skills) What the Thieve verb reads: the slotted rings' passives plus every
+    // skill perk reached. Built per call, so a ring swap can never drop a rank.
+    _theftPassives() {
+        return mergePassives(this.ringMods ?? {}, skillPerks(this.skills));
+    }
+
+    // (skills) One clean lift counts toward light fingers. Its perk applies from
+    // the next lift on, since this one's passives were already read.
+    _countCleanLift() {
+        const { skills, rankedUp } = recordUse(this.skills, 'light_fingers');
+        this.skills = skills;
+        if (rankedUp) this._log('[TEXT]', 'pickup');
     }
 
     // (theft) The victim on an aimed tile, or null. Takes the tile as an ARGUMENT
@@ -5323,6 +5344,7 @@ class Game {
         this.ringTier = 0;
         this.discoveredFusions = new Set();
         this._peakDisposition = 0;       // it gates the ring tier, so it goes with the rings
+        this.skills = {};                // a new run starts every skill from nothing
         this._refreshGrantedSkills();   // fresh weapon, no rings → no granted skills
         this._pendingTransition = null;
         this.gold = 0;
