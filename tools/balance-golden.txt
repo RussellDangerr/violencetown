@@ -40,14 +40,14 @@ sewer/e1                          Violet Fungus               100       0      9
 sewer/e2                          Violet Fungus               100       0      9       28              5              3     12
 sewer/wererat                     Wererat                     100       6     12      148              8              3      9
 town/townie-hooch                 Bootlegger                  100     -80      0        0              1              1      -
-town/townie-e                     Violencian                  100     -80      0        0              1              1      -
-town/townie-glunk                 Violencian                  100     -80      0        0              1              1      -
+town/townie-e                     Violencian                  100     -80      0        5              1              1      -
+town/townie-glunk                 Violencian                  100     -80      0        2              1              1      -
 town/townie-knuckles              Violencian                  100     -30      4       13              2              2     25
 town/townie-macc                  Violencian                  100     -80      0        0              1              1      -
-town/townie-mince                 Violencian                  100     -80      0        0              1              1      -
-town/townie-praline               Violencian                  100     -80      0        0              1              1      -
-town/townie-s                     Violencian                  100     -80      0        0              1              1      -
-town/townie-w                     Violencian                  100     -80      0        0              1              1      -
+town/townie-mince                 Violencian                  100     -80      0        2              1              1      -
+town/townie-praline               Violencian                  100     -80      0        6              1              1      -
+town/townie-s                     Violencian                  100     -80      0        5              1              1      -
+town/townie-w                     Violencian                  100     -80      0        2              1              1      -
 
 --- WEAPONS (raw damage) ---
 id               damage  type
@@ -84,7 +84,7 @@ downtown                   0
 factory                   76
 graveyard                 48
 sewer                    101
-town                       2
+town                      24
 sinks: burnGold('heal'|'trick'), bribes/buyouts via transferGold
 
 --- LINT ---
