@@ -6,7 +6,7 @@
 // or out of it, where the landing queues the anchor's transition exactly as a
 // walked-onto exit does.
 
-import { test, describe, afterEach } from 'node:test';
+import { test, describe, before, after, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -94,6 +94,16 @@ describe('GameMap.getAnchor', () => {
 });
 
 describe('the swing arc', () => {
+    // Settings.set persists to localStorage, which node lacks.
+    const hadStorage = Object.hasOwn(globalThis, 'localStorage');
+    const priorStorage = globalThis.localStorage;
+    before(() => {
+        globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
+    });
+    after(() => {
+        if (hadStorage) globalThis.localStorage = priorStorage;
+        else delete globalThis.localStorage;
+    });
     afterEach(() => Settings.set('reduceMotion', false));
     const r = Object.create(Renderer.prototype);
     const at = (game) => r._playerScreenPos(game, 0);
