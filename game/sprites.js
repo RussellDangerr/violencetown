@@ -247,6 +247,12 @@ export const SHEETS = {
     // causes. Coordinates below were checked against a labeled contact sheet
     // generated at this stride, not eyeballed at a packed one.
     roguelikeDungeon: { src: `${K}/roguelikeDungeon_transparent.png`, frameW: 16, frameH: 16, padding: 1 },
+
+    // Kenney roguelikeSheet, raw (the `outlined` sheet above is a re-packed
+    // subset of it). Registered for its flat ground cells — the frozen area's
+    // snow. It carries the native 1px gutter like roguelikeDungeon, so
+    // padding: 1; coordinates are picked at stride 17.
+    roguelikeSheet: { src: `${K}/roguelikeSheet_transparent.png`, frameW: 16, frameH: 16, padding: 1 },
 };
 
 // ── Sewer/dungeon tile coords (Tiny Dungeon + roguelikeDungeon packs) ──────
@@ -869,6 +875,12 @@ export const ZONE_TILE_SPRITE_MAP = {
     64: { sheet: 'tinyDungeon',      col: 2,  row: 4 },  // LEDGE        — sand with a darker lip along the top
     65: null,                                            // CHASM        — no art: the flat near-black is the drop
     66: { sheet: 'roguelikeDungeon', col: 1,  row: 11 }, // RIVER        — open water
+
+    // Frozen area — picked 2026-10-26 from sheets already bundled; no pack has
+    // real snow or ice. The open-water cells were passed over for ICE: they are
+    // RIVER's colour, and RIVER is water you cannot walk on. Both opaque.
+    70: { sheet: 'roguelikeSheet', col: 45, row: 26 },   // SNOW — flat white ground
+    71: { sheet: 'roguelikeCity',  col: 14, row: 9 },    // ICE  — pale glass with a diagonal sheen, seamless
 };
 
 // ── Phase B TODO ────────────────────────────────────────────────────────────

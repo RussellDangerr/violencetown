@@ -11,8 +11,8 @@
         53,53,52,52,52,52,52,52,52,52,52,52,52,52,52,52,53,53,
         53,53,52,52,52,52,52,52,52,52,52,52,52,52,52,52,53,53,
         53,53,52,52,52,52,52,52,52,52,52,52,52,52,52,52,53,53,
-        53,53,52,52,52,52,52,52,52,52,52,52,52,52,52,52,53,53,
-        53,53,52,52,52,52,52,52,52,52,52,52,52,52,52,52,53,53,
+        52,52,52,52,52,52,52,52,52,52,52,52,52,52,52,52,53,53,
+        52,52,52,52,52,52,52,52,52,52,52,52,52,52,52,52,53,53,
         53,53,52,52,52,52,52,52,52,52,52,52,52,52,52,52,53,53,
         53,53,52,52,52,52,52,52,52,52,52,52,52,52,52,52,53,53,
         53,53,52,52,52,52,52,52,52,52,52,52,52,52,52,52,53,53,
@@ -26,6 +26,8 @@
         {"id": "dark", "x": 8, "y": 12, "text": "[Total black. The wilderness breathes somewhere out past the fence. Without a light — or the car — going further is just a slower way to die. Turn back.]"}
     ],
     "transitions": [
-        {"x": 8, "y": 0, "toMap": "graveyard-map.json", "toX": 14, "toY": 24, "label": "[North — back to the graveyard's edge, and the light.]"}
+        {"x": 8, "y": 0, "toMap": "graveyard-map.json", "toX": 14, "toY": 24, "label": "[North — back to the graveyard's edge, and the light.]"},
+        {"x": 0, "y": 6, "toMap": "frozen-map.json", "toX": 17, "toY": 6, "label": "[TEXT]"},
+        {"x": 0, "y": 7, "toMap": "frozen-map.json", "toX": 17, "toY": 6, "label": "[TEXT]"}
     ]
 }
