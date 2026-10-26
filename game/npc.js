@@ -27,7 +27,7 @@ import { ITEMS, kitHealValue, applyKitItem } from './items.js';
 import { WEAPONS } from './weapons.js';
 import { burnGold } from './trade.js';
 import { spreadParanoia } from './give-action.js';
-import { fighters } from './fight-area.js';
+import { fighters, inFightView } from './fight-area.js';
 
 // ── Leash tuning ─────────────────────────────────────────────────────────────
 // A chasing enemy gives up and walks home when it strays past LEASH_DISTANCE
@@ -718,10 +718,10 @@ export function holdsGround(npc) {
 //
 // While a fight is on (fight-area.js fighters()), a neutral who directly sees
 // the player or a fighter — the notice rule F3a and F3b use — is scared
-// (`_fleeing`) until the fight ends, even once it has turned its back. Inside
-// the fight area (any tile a fighter perceives) it steps away from all of them,
-// preferring a tile none can see; outside it, it stands still so it does not
-// wander back in. Fleeing is a flag, never `state`, so it can never count as a
+// (`_fleeing`) until the fight ends, even once it has turned its back. While
+// the fight can see it (a fighter perceives its tile, or the player does —
+// fight-area.js inFightView, FX15) it steps away from all of them, preferring a
+// tile none can see; out of view, it stands still so it does not wander back in. Fleeing is a flag, never `state`, so it can never count as a
 // fighter. No random draw is spent.
 //
 // When the fight is over the scare drops on the next turn and it walks home,
@@ -743,7 +743,7 @@ export function bystanderTurn(game, npc) {
             npc._fleeing = true;
             npc._headingHome = false;
         }
-        const inArea = (x, y) => fs.some(f => perceives(game.map, f, x, y) !== VERDICT.NONE);
+        const inArea = (x, y) => inFightView(game.map, fs, player, x, y);
         if (inArea(npc.x, npc.y)) {
             const step = fleeFrom(game, npc, [player, ...fs], { safe: (x, y) => !inArea(x, y) });
             if (step) stepEntity(npc, step.x, step.y, game._MOVE_MS);
