@@ -46,6 +46,10 @@ export function itemActions(itemDef, zone) {
 export function itemStatLine(itemDef) {
     if (!itemDef) return '';
     if (itemDef.questItem) return 'Always kept';
+    // (FX35) Poitions, Soap and Alcohol: what it does, then the description,
+    // in the panel's one wrapped text block.
+    const effect = effectLine(itemDef);
+    if (effect) return itemDef.description ? `${effect}. ${itemDef.description}` : effect;
     if (itemDef.healAmount) return `Heals ${itemDef.healAmount} HP`;
     if (itemDef.armor) return `+${itemDef.armor} armor${itemDef.sludgeImmune ? ', sludge-proof' : ''}`;
     if (itemDef.damage) {
@@ -54,6 +58,50 @@ export function itemStatLine(itemDef) {
         return dt && dt !== 'physical' ? `${dt} ${itemDef.damage} dmg` : `${itemDef.damage} dmg`;
     }
     return itemDef.description || '';
+}
+
+// (FX35) The mechanical half of a poition / Soap / Alcohol line, or '' for
+// any other item. Tick stats (HP, MP, GP) read per turn when they last;
+// rider stats (strength, defence) read the turns they hold; speed is the
+// action charges it buys (buffs.js worldBeatPlan), not a stat.
+const POITION_UNIT = { health: 'HP', mana: 'MP', gold: 'GP', strength: 'strength', defence: 'defence' };
+const signed = n => (n >= 0 ? `+${n}` : `${n}`);
+const turnsWord = n => `${n} turn${n === 1 ? '' : 's'}`;
+
+export function poitionLine(p) {
+    if (!p || typeof p.amount !== 'number') return '';
+    const turns = p.turns ?? 1;
+    if (p.stat === 'speed') {
+        return p.amount >= 0
+            ? `${p.amount} free action${p.amount === 1 ? '' : 's'}`
+            : `${-p.amount} doubled turn${p.amount === -1 ? '' : 's'}`;
+    }
+    const unit = POITION_UNIT[p.stat];
+    if (!unit) return '';
+    if (turns <= 1) return `${signed(p.amount)} ${unit}`;
+    const tick = p.stat === 'health' || p.stat === 'mana' || p.stat === 'gold';
+    return tick
+        ? `${signed(p.amount)} ${unit}/turn, ${turnsWord(turns)}`
+        : `${signed(p.amount)} ${unit}, ${turnsWord(turns)}`;
+}
+
+function effectLine(d) {
+    const verb = d.useType === 'throw' ? 'Throw ' : '';
+    if (d.poition) {
+        const line = poitionLine(d.poition);
+        if (line) return verb + line;
+    }
+    if (d.category === 'poition' && d.puddle) {
+        return `${verb}${d.puddle.kind} puddle, ${turnsWord(d.puddle.turns)}`;
+    }
+    if (d.effect === 'cure_sludge') {
+        const armor = d.armor
+            ? `, +${d.armor} armor${d.equipDuration ? ` for ${turnsWord(d.equipDuration)}` : ''}`
+            : '';
+        return `Cures sludge${armor}`;
+    }
+    if (d.id === 'alcohol') return 'Car fuel: slows the car';
+    return '';
 }
 
 // equipOptions — the GEAR chooser: every bag item that fits `slotKey`, each
