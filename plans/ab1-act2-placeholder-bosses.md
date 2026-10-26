@@ -47,7 +47,19 @@ touched.
   the spine records it. Until the quest wrapper is built, the boss drops the item directly.
 - **Which boss is built first** is a later slice. The Ray Gun stays where it is.
 
-## Status: stopped for rulings (2026-10-22)
+## The rulings that unblocked it (2026-10-25)
+
+- **AB1R1 — c, move Puck off the helm.** The bosses keep the `Boss` knight-helm cell; Puck takes
+  the free grey-haired cell (4,8) in `game/sprites.js`.
+- **AB1R2 — a, the bag until they're named.** The three items join the bag allowlist in
+  `tests/visual-breakage.test.js`, in their own commit.
+- **AB1R3 — a, accept the goldens moving.** The two save pins in `tests/save-roundtrip.test.js`
+  and `tools/balance-golden.txt` are updated, each in its own commit. The autoplay golden's
+  fingerprints move too (below); that file is rewritten only by the loop under this ruling.
+- **Which zone's quest is which (2026-10-25):** Graveyard given, Factory taken, Carnival earned.
+  Recorded in `plans/spine.md` §9; nothing in this slice builds the quests.
+
+## Status before the rulings (2026-10-22)
 
 The build was written and run, then held back from the branch, because it turns five checks red
 that live outside this slice's files:

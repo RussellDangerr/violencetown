@@ -178,3 +178,5 @@ Each is a row in `roadmap-2026-09.md` §2. Answers land here, dated, and strike 
     (SL-4), so any boss in a pool still guarantees the item.
   - **Interim:** until the quests are built, each placeholder boss drops its item directly
     (`plans/ab1-act2-placeholder-bosses.md`).
+- **2026-10-25 — Which zone's quest is which.** The Graveyard's item is given, the Factory's is
+  taken, and the Carnival's is earned.
