@@ -2924,7 +2924,8 @@ export class Renderer {
         const done = qe ? qe.getCompletedTitles() : [];
         if (done.length) {
             y += 6;
-            this.font.drawText(ctx, 'COMPLETED', innerX, y, { color: UI.textLight, scale: 1 }); y += 14;
+            const count = qe.getCompletedCount();
+            this.font.drawText(ctx, `COMPLETED  ${count.done} / ${count.total}`, innerX, y, { color: UI.textLight, scale: 1 }); y += 14;
             for (const t of done) { this.font.drawText(ctx, `✓ ${t}`, innerX + 6, y, { color: UI.dim, scale: 1 }); y += 12; }
         }
 
