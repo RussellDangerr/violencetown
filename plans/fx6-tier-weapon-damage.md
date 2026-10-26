@@ -32,15 +32,17 @@ goldens must not move.
 - **What damage the tier weapons hit for:** the class's existing base weapon damage, scaled by
   the tier the same way armour tiers scale. Armour tiers keep every number the piece's own (WS5),
   so a tier keeps its base's damage at every tier.
+- **What the classes with no weapon yet hit for:** the four classes with a weapon in the game
+  copy it (sword 10 from the wooden sword, wand 22 from the ray gun, whip 12 from the lion whip,
+  hammer 12 from the pipe); the other 14 classes take 10. Same number at every tier.
 - **WS2 / WS5, the tier generator (merged):** a tier adds perks, not bigger numbers.
 
-## Open
+## How it lands
 
-Only four of the 18 classes have a weapon in the game today (sword, wand, whip, hammer), and the
-hammer has three with different numbers. The other 14 classes have no existing damage to copy.
-Which number each class's tiers carry is a tuning call, so it waits on a ruling. Until then the
-NaN guard and the content check over today's weapons land first; the tier numbers, and the
-content check over the tiers, follow the ruling.
+`WEAPON_CLASS_DAMAGE` in `game/weapons.js` holds one number per class, using only the values
+above. `classBase` puts it on the class base, and the generator copies it to all five tiers. The
+content check then also walks `WEAPON_TIERS`. The tier-generator test that pinned "a class base
+carries no damage number" changes in its own commit, because the ruling changed that behaviour.
 
 ## Out of scope
 

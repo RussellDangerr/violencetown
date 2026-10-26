@@ -3,7 +3,9 @@
 // A weapon with no damage number swung for NaN, and NaN hp never reaches 0,
 // so the enemy could not die. takeDamage now treats a non-number hit as 0
 // (the minimum 1 still lands), and the content check fails on any holdable
-// weapon with no damage number.
+// weapon with no damage number. Every tier weapon carries its class's damage:
+// the four classes with a weapon in the game copy it, the rest take 10, the
+// same at every tier.
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -12,7 +14,9 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Entity, attack, computeHit } from '../game/combat.js';
 import { validateContent, isHoldableWeapon } from '../game/content-validate.js';
-import { WEAPONS } from '../game/weapons.js';
+import {
+    WEAPONS, WEAPON_CLASSES, WEAPON_TIERS, WEAPON_CLASS_DAMAGE, WEAPON_TIER_KEYS, classBase,
+} from '../game/weapons.js';
 import { ITEMS } from '../game/items.js';
 
 const NOT_NUMBERS = [undefined, null, NaN, '12', {}];
@@ -101,5 +105,84 @@ describe('the content check: every holdable weapon has a damage number', () => {
         assert.equal(isHoldableWeapon(ITEMS.pipe), true);
         for (const id of ['rock', 'soap', 'foil_hat', 'bandage']) assert.equal(isHoldableWeapon(ITEMS[id]), false, id);
         assert.equal(isHoldableWeapon(null), false);
+    });
+});
+
+describe("every tier weapon hits for its class's number", () => {
+    // The ruled numbers: the four classes with a weapon copy it, the rest take 10.
+    const RULED = { sword: 10, wand: 22, whip: 12, hammer: 12 };
+    const classIds = Object.keys(WEAPON_CLASSES);
+
+    test('the table names every class, and only the classes', () => {
+        assert.ok(classIds.length >= 18, `only ${classIds.length} classes`);
+        assert.deepEqual(Object.keys(WEAPON_CLASS_DAMAGE).sort(), [...classIds].sort());
+        assert.ok(Object.isFrozen(WEAPON_CLASS_DAMAGE));
+    });
+
+    test('each class takes the ruled number', () => {
+        for (const id of classIds) assert.equal(WEAPON_CLASS_DAMAGE[id], RULED[id] ?? 10, id);
+    });
+
+    test('the four classes with a weapon copy that weapon', () => {
+        assert.equal(WEAPON_CLASS_DAMAGE.sword, WEAPONS.wooden_sword.damage);
+        assert.equal(WEAPON_CLASS_DAMAGE.wand, WEAPONS.ray_gun.damage);
+        assert.equal(WEAPON_CLASS_DAMAGE.whip, WEAPONS.lion_whip.damage);
+        assert.equal(WEAPON_CLASS_DAMAGE.hammer, ITEMS.pipe.damage, 'the hammer copies the pipe');
+    });
+
+    test("a class base carries its class's damage", () => {
+        for (const id of classIds) assert.equal(classBase(id).damage, WEAPON_CLASS_DAMAGE[id], id);
+    });
+
+    test('every tier of every class carries the same real damage', () => {
+        const all = Object.values(WEAPON_TIERS).flat();
+        assert.equal(all.length, classIds.length * WEAPON_TIER_KEYS.length);
+        for (const [id, tiers] of Object.entries(WEAPON_TIERS)) {
+            for (const t of tiers) {
+                assert.ok(Number.isFinite(t.damage) && t.damage > 0, `${t.id} damage is ${t.damage}`);
+                assert.equal(t.damage, WEAPON_CLASS_DAMAGE[id], `${t.id} damage`);
+            }
+        }
+    });
+
+    test('a tier weapon, through the hit math, kills an enemy', () => {
+        for (const tiers of Object.values(WEAPON_TIERS)) {
+            const t = tiers.at(-1);
+            const swing = computeHit({ base: t.damage });
+            assert.equal(swing, t.damage, t.id);
+            const enemy = new Entity({ name: 'enemy', hp: 25 });
+            let r;
+            for (let i = 0; i < 25 && enemy.isAlive(); i++) r = attack({ name: 'p' }, enemy, swing);
+            assert.equal(r.killed, true, `${t.id} never killed`);
+            assert.equal(enemy.hp, 0);
+        }
+    });
+});
+
+describe('the content check covers the tier weapons', () => {
+    const gameDir = fileURLToPath(new URL('../game/', import.meta.url));
+    const maps = readdirSync(gameDir).filter(f => f.endsWith('-map.json')).sort()
+        .map(file => ({ file, data: JSON.parse(readFileSync(join(gameDir, file), 'utf8')) }));
+    const damageProblems = r => r.problems.filter(p => /no damage number/.test(p));
+
+    test("today's tiers all pass", () => {
+        assert.ok(Object.values(WEAPON_TIERS).flat().length >= 90);
+        assert.deepEqual(damageProblems(validateContent(maps)), []);
+    });
+
+    for (const bad of [undefined, NaN, '10']) {
+        test(`a tier whose damage is ${String(bad)} fails`, () => {
+            const axe = WEAPON_TIERS.axe.map((t, i) => (i === 2 ? { ...t, damage: bad } : t));
+            const got = damageProblems(validateContent(maps, { weaponTiers: { ...WEAPON_TIERS, axe } }));
+            assert.deepEqual(got, ["weapon tier 'axe_blue': has no damage number"]);
+        });
+    }
+
+    test('a whole class built from a base with no damage fails at every tier', () => {
+        const { damage, ...bare } = classBase('bell');
+        assert.equal(damage, 10);
+        const bell = WEAPON_TIERS.bell.map(t => ({ ...bare, id: t.id, tier: t.tier }));
+        const got = damageProblems(validateContent(maps, { weaponTiers: { ...WEAPON_TIERS, bell } }));
+        assert.deepEqual(got, WEAPON_TIER_KEYS.map(k => `weapon tier 'bell_${k}': has no damage number`));
     });
 });

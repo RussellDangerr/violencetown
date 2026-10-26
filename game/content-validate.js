@@ -194,12 +194,14 @@ export function validateContent(maps, {
 
     // ── Weapon damage (plans/fx6-tier-weapon-damage.md) ──────────────────────
     // A holdable weapon with no damage number swings for NaN. Every weapon,
-    // and every item held in the weapon slot, must carry a real one.
+    // every item held in the weapon slot, and every tier weapon must carry a real one.
     const DP = (where, d) => {
         if (typeof d?.damage !== 'number' || !Number.isFinite(d.damage)) P(`${where}: has no damage number`);
     };
     for (const [id, d] of Object.entries(weapons)) DP(`weapon '${id}'`, d);
     for (const [id, d] of Object.entries(items)) if (isHoldableWeapon(d)) DP(`item '${id}'`, d);
+    for (const [cls, tiers] of Object.entries(weaponTiers))
+        for (const d of (tiers || [])) DP(`weapon tier '${d?.id || cls}'`, d);
 
     return { problems, warnings };
 }
