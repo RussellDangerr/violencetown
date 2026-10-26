@@ -216,6 +216,34 @@ export function actorOrder(a, b) {
         || (a.kind === 'player' ? 1 : -1);
 }
 
+// Fitting text by its measured width. `measure(s)` is the pixel width of `s`
+// (Renderer._measurer hands one over). Never by a fixed px per letter: the 8 px
+// idiom was a fossil of the retired 8x8 atlas and fit ~40% less than the room.
+//
+// One line, cut with a trailing '~' when it runs over: the longest head that,
+// with the mark, still fits. Text that fits comes back whole.
+export function cutToWidth(text, maxPx, measure) {
+    const s = String(text);
+    if (measure(s) <= maxPx) return s;
+    let n = s.length - 1;
+    while (n > 0 && measure(s.slice(0, n) + '~') > maxPx) n--;
+    return s.slice(0, n) + '~';
+}
+
+// Word wrap: break at spaces, never inside a word (a word wider than the room
+// keeps a line to itself), each line as long as the room allows.
+export function wrapToWidth(text, maxPx, measure) {
+    const words = String(text).split(' ');
+    const lines = [];
+    let line = '';
+    for (const w of words) {
+        if (line && measure(line + ' ' + w) > maxPx) { lines.push(line); line = w; }
+        else line = line ? line + ' ' + w : w;
+    }
+    if (line) lines.push(line);
+    return lines;
+}
+
 // (US2) The label each skill shows in the Remoticon's skills readout, keyed by
 // its id in game/skills.js. Not written yet.
 export const SKILL_LABELS = {
@@ -2320,7 +2348,8 @@ export class Renderer {
     //   (c) FEED     : last 3 log messages, category-tinted, age-faded, newest
     //                  at the bottom — chat-window convention.
     //
-    // The bitmap font is 8px/char at scale 1 and lines advance 12px. With the
+    // Lines are cut to the panel by measured width (cutToWidth) and advance
+    // 12px. With the
     // panel 104px tall the interior (after 8px top + bottom padding) is 88px =
     // room for header (12) + objective (12) + a 12px gap + three feed lines
     // (36) with margin to spare, so nothing spills past QUESTLOG_RECT.
@@ -2331,7 +2360,7 @@ export class Renderer {
         const PAD = 12;                      // buffer so text clears the ornate corners
         const LH = 12;                       // line height (8px glyph + 4px lead)
         const innerW = R.w - PAD * 2;
-        const maxChars = Math.max(4, Math.floor(innerW / 8));
+        const cut = (s) => cutToWidth(s, innerW, this._measurer(1));
 
         drawPanelSmall(ctx, R.x, R.y, R.w, R.h, this.uiSheet);
         if (!this.font) return;
@@ -2360,9 +2389,7 @@ export class Renderer {
         // more combat message (plans/combat-hud.md stage 3).
         const objective = fightFace ? null : (game.questEngine ? game.questEngine.getHudText() : null);
         if (objective) {
-            let t = objective.toUpperCase();
-            if (t.length > maxChars) t = t.slice(0, maxChars - 1) + '~';
-            this.font.drawText(ctx, t, tx, y, { color: UI.gold, scale: 1 });
+            this.font.drawText(ctx, cut(objective.toUpperCase()), tx, y, { color: UI.gold, scale: 1 });
             y += LH;
         }
 
@@ -2385,9 +2412,7 @@ export class Renderer {
         for (let i = 0; i < visible.length; i++) {
             const m = visible[i];
             const tinted = hexToRgba(this._logStripColor(m.category), alphaAt(i, visible.length));
-            let text = m.text;
-            if (text.length > maxChars) text = text.slice(0, maxChars - 1) + '~';
-            this.font.drawText(ctx, text, tx, startY + i * LH, { color: tinted, scale: 1 });
+            this.font.drawText(ctx, cut(m.text), tx, startY + i * LH, { color: tinted, scale: 1 });
         }
     }
 
@@ -2714,8 +2739,7 @@ export class Renderer {
         const PAD = 6, LH = 12;
         drawPanelSmall(ctx, R.x, R.y, R.w, R.h, this.uiSheet);
         const tx = R.x + PAD;
-        const maxChars = Math.max(3, Math.floor((R.w - PAD * 2) / 8));
-        const clip = (s) => (s.length > maxChars ? s.slice(0, maxChars - 1) + '~' : s);
+        const clip = (s) => cutToWidth(s, R.w - PAD * 2, this._measurer(1));
         let y = R.y + PAD;
         this.font.drawText(ctx, 'YOU', tx, y, { color: UI.gold, scale: 1 });
         y += LH + 2;
@@ -2737,8 +2761,7 @@ export class Renderer {
         const PAD = 6, LH = 12;
         drawPanelSmall(ctx, R.x, R.y, R.w, R.h, this.uiSheet);
         const tx = R.x + PAD;
-        const maxChars = Math.max(3, Math.floor((R.w - PAD * 2) / 8));
-        const clip = (s) => (s.length > maxChars ? s.slice(0, maxChars - 1) + '~' : s);
+        const clip = (s) => cutToWidth(s, R.w - PAD * 2, this._measurer(1));
         let y = R.y + PAD;
         this.font.drawText(ctx, clip(t.name.toUpperCase()), tx, y, { color: UI.hpRed, scale: 1 });
         y += LH + 2;
@@ -2923,7 +2946,7 @@ export class Renderer {
 
         const qe = game.questEngine;
         const innerX = R.x + 22;
-        const maxChars = Math.max(8, Math.floor((R.w - 56) / 8));
+        const wrap = (s) => wrapToWidth(s, R.w - 56, this._measurer(1));
         let y = R.y + 6;
 
         // Active quest — the stage checklist.
@@ -2933,11 +2956,11 @@ export class Renderer {
             for (const st of view.stages) {
                 const mark = st.done ? '✓' : st.current ? '▸' : '·';
                 const col = st.done ? UI.dim : st.current ? UI.textLight : UI.text;
-                for (const line of this._wrapText(`${mark} ${st.objective}`, maxChars)) {
+                for (const line of wrap(`${mark} ${st.objective}`)) {
                     this.font.drawText(ctx, line, innerX + 6, y, { color: col, scale: 1 }); y += 12;
                 }
                 if (st.current && st.location) { this.font.drawText(ctx, `   @ ${st.location}`, innerX + 6, y, { color: UI.gold, scale: 1 }); y += 12; }
-                if (st.current && st.description) for (const line of this._wrapText(`   ${st.description}`, maxChars)) { this.font.drawText(ctx, line, innerX + 6, y, { color: UI.dim, scale: 1 }); y += 12; }
+                if (st.current && st.description) for (const line of wrap(`   ${st.description}`)) { this.font.drawText(ctx, line, innerX + 6, y, { color: UI.dim, scale: 1 }); y += 12; }
             }
         } else {
             this.font.drawText(ctx, 'No active quest.', innerX, y, { color: UI.dim, scale: 1 }); y += 15;
@@ -2956,7 +2979,7 @@ export class Renderer {
         y += 8;
         this.font.drawText(ctx, 'WITNESS LOG', innerX, y, { color: UI.textLight, scale: 1 }); y += 14;
         const lines = [];
-        for (const e of (qe ? qe.getJournalLines() : [])) for (const w of this._wrapText(e.text, maxChars)) lines.push(w);
+        for (const e of (qe ? qe.getJournalLines() : [])) for (const w of wrap(e.text)) lines.push(w);
         const bottom = R.y + R.h - 26;
         const rows = Math.max(1, Math.floor((bottom - y) / 12));
         const scroll = Math.max(0, Math.min(game._journalScroll || 0, Math.max(0, lines.length - rows)));
@@ -3028,8 +3051,7 @@ export class Renderer {
         this._fillScreen(ctx);
 
         const w = 400, padX = 22;
-        const maxChars = Math.max(8, Math.floor((w - padX * 2) / 8));
-        const bodyLines = this._wrapText(insp.body || '', maxChars);
+        const bodyLines = wrapToWidth(insp.body || '', w - padX * 2, this._measurer(1));
         const hasTier = !!insp.tierName;
         const h = (hasTier ? 60 : 44) + bodyLines.length * 12 + 24;
         const px = Math.round((CANVAS_PX - w) / 2);
@@ -4617,8 +4639,13 @@ export class Renderer {
         ctx.strokeRect(r.x - 3, r.y - 3, r.w + 6, r.h + 6);
     }
 
-    // Word-wrap `text` into lines no longer than `maxChars` characters (the
-    // bitmap font is fixed 8px/char at scale 1).
+    // Pixel width of a string at `scale`, for cutToWidth / wrapToWidth. A font
+    // without measure (a test's recording font) falls back to VT323's advance.
+    _measurer(scale = 1) {
+        const f = this.font;
+        return f && f.measure ? (s) => f.measure(s, scale) : (s) => String(s).length * 4.8 * scale;
+    }
+
     // Fit a one-line label into `maxW` px: shrink the scale (VT323 scales
     // smoothly, never below `minScale`), then cut with "..." if it still runs
     // over. Returns { text, scale } for drawText.
@@ -4633,6 +4660,9 @@ export class Renderer {
         return { text: text.slice(0, n).trimEnd() + '...', scale: s };
     }
 
+    // Word-wrap `text` into lines of at most `maxChars` characters. Callers
+    // derive maxChars from the font's measured advance; wrapping to a pixel
+    // width is wrapToWidth.
     _wrapText(text, maxChars) {
         const words = String(text).split(' ');
         const lines = [];
