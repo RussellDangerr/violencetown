@@ -31,7 +31,7 @@ import { ITEMS, itemTier } from './items.js';                                // 
 import { RINGS, FUSIONS } from './ring-data.js';                             // (rings Task 5) SKILLS-tab hands: ring names + fusion spark
 import { findFusion } from './rings.js';                                     // (rings Task 5) mark a link fusible when its two rings have an authored fusion
 import { WORLD_ZONES, overworldZone, connectorPairs } from './world-map.js'; // (Phase 4) rudimentary world map
-import { perceives, facingOf, VERDICT } from './perception.js';               // (threat overlay) the SAME vision the chase AI uses
+import { perceives, facingOf, dirOf as spriteDirOf, VERDICT } from './perception.js';              // (threat overlay) the SAME vision the chase AI uses
 import { PHASE, threatPhase, alertWatchers } from './threat-phase.js';        // (threat overlay) attention as a state
 import { isSafe } from './defeat-scenarios.js';   // (defeat legibility) mark safe-floor items
 import { buyPrice, sellPrice, bribeStepCost, mood, canTrade, band, BRIBE_STEP } from './trade.js'; // (trade slice 1) pricing + mood smiley; band feeds the offer meter's multiplier readout
@@ -182,6 +182,22 @@ export function facingCue(cx, cy, ux, uy, tilePx = 32) {
         [Math.round(cx + ux * base - uy * half), Math.round(cy + uy * base + ux * half)],
         [Math.round(cx + ux * base + uy * half), Math.round(cy + uy * base - ux * half)],
     ];
+}
+
+// Does this watcher get the facing chevron? Only where its art can't show the
+// way it looks (plans/ds2-chevron-follows-ruling.md). A sprite with four-way
+// frames (dirCols) facing straight up, down, left or right already shows it,
+// so the chevron would say it twice. Creatures (one drawn facing) and any
+// diagonal (four frames can't show eight ways) keep it. The cone's direction
+// (facingOf) must also be the frame the art picks (dirOf): a never-moved
+// watcher's cone faces down while _faceLeft may turn its frame left.
+const STRAIGHT = { '0,-1': 'up', '0,1': 'down', '-1,0': 'left', '1,0': 'right' };
+export function showsFacingChevron(watcher) {
+    const info = spriteVariant(ENEMY_SPRITES[watcher?.type], watcher);
+    if (!info?.dirCols) return true;
+    const { fx, fy } = facingOf(watcher);
+    const straight = STRAIGHT[`${Math.sign(fx)},${Math.sign(fy)}`];
+    return !straight || straight !== spriteDirOf(watcher);
 }
 
 // Which way an exit's arrow points: toward the map edge the tile is nearest
@@ -3443,7 +3459,8 @@ export class Renderer {
     //
     // Four channels, so the field is never the only signal:
     //   1. the threat field — a cached dither pattern, see _ditherPattern above
-    //   2. a facing chevron on each watcher
+    //   2. a facing chevron on each watcher whose art can't show its facing
+    //      (creatures, and anyone facing a diagonal)
     //   3. an awareness marker (AWARENESS_EMOTE): nothing calm, else question/
     //      exclamation/alert for suspicious/searching/chasing
     //   4. the DIRECT thread — a dashed line while a watcher currently sees you
@@ -3582,8 +3599,9 @@ export class Renderer {
 
         // Channels 2 and 3 — per watcher, so the field is never the only signal.
         // A colour-blind player, or one who has turned the field off in their head
-        // after an hour, still gets facing and alarm from the sprites themselves.
-        // Unchanged: still tied to every watcher with eyes, not just the alert
+        // after an hour, still gets facing and alarm from the sprites themselves:
+        // from the four-way art where a sprite has it, from the chevron where it
+        // doesn't. Still tied to every watcher with eyes, not just the alert
         // ones — and it matters more now that the field itself is absent more
         // often.
         const breath = reduce ? 0.5 : (0.5 + 0.5 * Math.sin(now / 420));
@@ -3597,21 +3615,24 @@ export class Renderer {
             // edge, pointing the way the watcher looks. It used to be a line from
             // the tile's centre, which ran straight through the body of anyone
             // facing down and read as a stick through every townsperson.
-            const { fx, fy } = facingOf(w);
-            const len = Math.hypot(fx, fy) || 1;
-            const [a, b, c] = facingCue(sx + TILE_PX / 2, sy + TILE_PX / 2, fx / len, fy / len, TILE_PX);
-            ctx.save();
-            ctx.fillStyle = 'rgba(212,185,106,0.9)';
-            ctx.strokeStyle = 'rgba(63,38,49,0.9)';      // the Tiny packs' plum outline
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(a[0], a[1]);
-            ctx.lineTo(b[0], b[1]);
-            ctx.lineTo(c[0], c[1]);
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
-            ctx.restore();
+            // Drawn only where the art can't show facing (showsFacingChevron).
+            if (showsFacingChevron(w)) {
+                const { fx, fy } = facingOf(w);
+                const len = Math.hypot(fx, fy) || 1;
+                const [a, b, c] = facingCue(sx + TILE_PX / 2, sy + TILE_PX / 2, fx / len, fy / len, TILE_PX);
+                ctx.save();
+                ctx.fillStyle = 'rgba(212,185,106,0.9)';
+                ctx.strokeStyle = 'rgba(63,38,49,0.9)';      // the Tiny packs' plum outline
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(a[0], a[1]);
+                ctx.lineTo(b[0], b[1]);
+                ctx.lineTo(c[0], c[1]);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+                ctx.restore();
+            }
 
             // Awareness marker — a real emote sprite in place of the old
             // bitmap-ASCII pip (· ? ! !!). AWARENESS_EMOTE has no idle/

@@ -13,7 +13,7 @@
 // check — so it carries NO action. Nothing here may equip, and the tests assert
 // the data has no verb in it.
 //
-// Why the two sides look different: you have six named body slots; an enemy has
+// Why the two sides look different: you have named body slots; an enemy has
 // a flat `loadout` array and a `gold` number. There is no HEAD/TORSO breakdown
 // on their side to show. Faking one would invent structure the game does not
 // have and would read as mostly-empty slots on most enemies, so their panel is
@@ -24,9 +24,11 @@ import { ITEMS } from './items.js';
 // The player's body slots, in the order the panel lists them. Fixed so the
 // panel's shape never changes mid-fight — an empty slot is still a row, because
 // a panel that reflows as you lose a hat is a panel you cannot read at a glance.
-export const SLOT_ORDER = ['weapon', 'top', 'sides', 'front', 'back', 'bottom'];
+// Both hands lead (plans/ws3-two-hands-left-right.md): `weapon` is the right
+// hand, `left` the other, and a two-hander shows in both rows.
+export const SLOT_ORDER = ['weapon', 'left', 'top', 'sides', 'front', 'back', 'bottom'];
 const SLOT_LABEL = {
-    weapon: 'WEAPON', top: 'HEAD', sides: 'ARMS',
+    weapon: 'WEAPON [RIGHT]', left: 'WEAPON [LEFT]', top: 'HEAD', sides: 'ARMS',
     front: 'TORSO', back: 'BACK', bottom: 'FEET',
 };
 
