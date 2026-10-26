@@ -1,5 +1,5 @@
 {
-    "_note": "Sewer side room north of the cape grate's room (plans/cs1-crat-talk-both-sides.md). The Crat's dispute: a clue in the wall beside where each side will stand. The three talkers wait on a ruling (see the plan). Placeholder geometry and text; the drain at the bottom leads back into the Sewer. Tiles: 0 wall, 1 floor, 5 drain.",
+    "_note": "Sewer side room north of the cape grate's room (plans/cs1-crat-talk-both-sides.md). The Crat's dispute: a clue in the wall beside where each side will stand. The Crat fills the Sewer's character slot; the two sides stand on its flanks. Placeholder geometry and text; the drain at the bottom leads back into the Sewer. Tiles: 0 wall, 1 floor, 5 drain.",
     "width": 12,
     "height": 10,
     "spawn": {"x": 6, "y": 8},
@@ -16,7 +16,11 @@
         0,1,1,1,1,1,1,1,1,1,1,0,
         0,0,0,0,0,0,5,0,0,0,0,0
     ],
-    "enemies": [],
+    "enemies": [
+        {"id": "crat", "slot": "sewer.character", "x": 6, "y": 2, "facing": "S"},
+        {"id": "crat-a", "type": "Violencian", "name": "[NAME: side A]", "x": 2, "y": 5, "facing": "E", "hp": 100, "armor": -80, "damage": 0, "gold": 5, "sightRange": 4, "disposition": 0, "behavior": ["IDLE"], "sewerDweller": true, "dialogueId": "crat_side_a"},
+        {"id": "crat-b", "type": "Violencian", "name": "[NAME: side B]", "x": 9, "y": 5, "facing": "W", "hp": 100, "armor": -80, "damage": 0, "gold": 5, "sightRange": 4, "disposition": 0, "behavior": ["IDLE"], "sewerDweller": true, "dialogueId": "crat_side_b"}
+    ],
     "items": [],
     "examinables": [
         {"id": "crat_clue_a", "x": 0, "y": 3, "text": "[TEXT: side A's clue]"},

@@ -14,6 +14,8 @@ import { transferGold } from '../game/trade.js';
 import { applyDispositionDelta } from '../game/give-action.js';
 import { QuestEngine } from '../game/quests.js';
 import { TILE_BY_ID } from '../game/data.js';
+import { SLOTS, ENTRIES, resolveSpawn, defaultPicks, requiredDropFor } from '../game/slots.js';
+import { spawnEnemy } from '../game/enemies.js';
 
 const GAME = new URL('../game/', import.meta.url);
 const mapData = (file) => JSON.parse(readFileSync(new URL(file, GAME), 'utf8'));
@@ -38,14 +40,16 @@ const pickDialogueChoice = liveMethod('_pickDialogueChoice(choice) {', {
     audio: { playSfx() {} },
 });
 
-// The three talkers. They stand in the room once the balance baseline that
-// their rows move is accepted (plans/cs1-crat-talk-both-sides.md, Open); until
-// then the dialogue is played against these.
-const TALKERS = [
-    { id: 'crat', dialogueId: 'crat', gold: 0, disposition: 0 },
-    { id: 'crat-a', dialogueId: 'crat_side_a', gold: CRAT_BRIBE_GP, disposition: 0 },
-    { id: 'crat-b', dialogueId: 'crat_side_b', gold: CRAT_BRIBE_GP, disposition: 0 },
-];
+// The three talkers, as the game spawns them from the room: the Crat from the
+// Sewer's character slot, the two sides as placed. The dialogue is played
+// against copies of these.
+const spawned = () => (room.enemies || []).map(s => spawnEnemy(resolveSpawn(s, defaultPicks())));
+const TALKER_IDS = ['crat', 'crat-a', 'crat-b'];
+const TALKERS = TALKER_IDS.map(id => {
+    const e = spawned().find(x => x.id === id);
+    assert.ok(e, `${id} does not stand in the room`);
+    return { id, dialogueId: e.dialogueId, gold: e.gold ?? 0, disposition: e.disposition ?? 0 };
+});
 
 // A stand-in game in the room, with the three talkers in it.
 function inRoom({ gold = 0 } = {}) {
@@ -118,6 +122,56 @@ describe('the side room north of the Sewer', () => {
             assert.ok(clue, `no clue for side ${side}`);
             const near = [[0, 1], [0, -1], [1, 0], [-1, 0]].some(([dx, dy]) => walkable(room, clue.x + dx, clue.y + dy));
             assert.ok(near, `side ${side}'s clue cannot be faced from anywhere`);
+        }
+    });
+});
+
+// ── The three stand in the room ─────────────────────────────────────────────
+describe("the Crat fills the Sewer's character slot, and both sides stand beside it", () => {
+    test('the slot is a character slot of one, the Crat, on the side room', () => {
+        const slot = SLOTS['sewer.character'];
+        assert.ok(slot, 'no Sewer character slot');
+        assert.equal(slot.kind, 'character');
+        assert.equal(slot.map, 'sewer-north-map.json');
+        assert.deepEqual(slot.pool.map(p => p.entry), ['crat']);
+        assert.equal(defaultPicks()['sewer.character'], 'crat');
+        assert.equal(slot.requiredDrop, undefined, 'a character slot guarantees no drop');
+    });
+
+    test('the room names the slot once, and the Crat comes from the registry', () => {
+        const bySlot = room.enemies.filter(s => s.slot === 'sewer.character');
+        assert.equal(bySlot.length, 1);
+        assert.equal(bySlot[0].type, undefined, "the registry owns the Crat's stat block");
+        const crat = spawned().find(e => e.id === 'crat');
+        assert.equal(crat.slot, 'sewer.character');
+        assert.equal(crat.name, ENTRIES.crat.name);
+        assert.equal(crat.dialogueId, 'crat');
+        assert.equal(requiredDropFor(crat, room.enemies), null);
+    });
+
+    test('all three stand on floor in the room, and none of them fights', () => {
+        const all = spawned();
+        assert.deepEqual(all.map(e => e.id).sort(), [...TALKER_IDS].sort());
+        for (const e of all) {
+            assert.ok(walkable(room, e.x, e.y), `${e.id} stands on no floor at (${e.x},${e.y})`);
+            assert.equal(e.damage, 0, `${e.id} hits`);
+            assert.ok(getDialogue(e.dialogueId), `${e.id} has nothing to say`);
+        }
+        const at = all.map(e => `${e.x},${e.y}`);
+        assert.equal(new Set(at).size, at.length, 'two talkers share a tile');
+    });
+
+    test('each side carries exactly the bribe it can offer, and the Crat carries nothing', () => {
+        const all = spawned();
+        for (const id of ['crat-a', 'crat-b']) assert.equal(all.find(e => e.id === id).gold, CRAT_BRIBE_GP, id);
+        assert.equal(all.find(e => e.id === 'crat').gold ?? 0, 0);
+    });
+
+    test('each side stands beside its own clue', () => {
+        for (const side of CRAT.sides) {
+            const clue = room.examinables.find(x => x.id === `crat_clue_${side}`);
+            const e = spawned().find(x => x.id === `crat-${side}`);
+            assert.ok(Math.abs(e.x - clue.x) <= 2 && Math.abs(e.y - clue.y) <= 2, `side ${side} stands far from its clue`);
         }
     });
 });
