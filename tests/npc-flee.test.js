@@ -6,6 +6,7 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { Enemy, resolveAmbientTurns } from '../game/enemies.js';
 import { tickNpcState, bystanderTurn, holdsGround, HOLD_GROUND_IDS } from '../game/npc.js';
 import { fleeFrom, fleeStep } from '../game/pathing.js';
@@ -73,6 +74,16 @@ describe('who holds their ground', () => {
         assert.equal(holdsGround({ id: 'x', heavy: true }), true);
         assert.equal(holdsGround({ id: 'x', boss: true }), true);
     });
+    test('sewer dwellers hold: only surface townsfolk scatter', () => {
+        assert.equal(holdsGround({ id: 'e1', sewerDweller: true }), true);
+        assert.equal(holdsGround({ id: 'dt-folk1', sewerDweller: false }), false);
+    });
+    test('the Violet Fungi as the sewer map spawns them hold', () => {
+        const sewer = JSON.parse(readFileSync(new URL('../game/sewer-map.json', import.meta.url), 'utf8'));
+        const fungi = sewer.enemies.filter(e => e.type === 'Violet Fungus');
+        assert.ok(fungi.length > 0);
+        for (const e of fungi) assert.equal(holdsGround(new Enemy(e)), true, e.id);
+    });
     test('a plain townsperson runs', () => {
         assert.equal(holdsGround({ id: 'dt-folk1' }), false);
         assert.equal(holdsGround(null), false);
@@ -117,6 +128,13 @@ describe('a bystander who sees the fight', () => {
         const { g, n } = scene({ folk: { id: 'dt-merch2', vendor: true, behavior: ['IDLE'] } });
         beats(g, 6);
         assert.deepEqual([n.x, n.y], [12, 7]);
+    });
+
+    test('a sewer dweller sees the same fight and stays where it is', () => {
+        const { g, n } = scene({ folk: { id: 'e1', type: 'Violet Fungus', sewerDweller: true, behavior: ['IDLE'] } });
+        beats(g, 6);
+        assert.deepEqual([n.x, n.y], [12, 7]);
+        assert.ok(!n._fleeing);
     });
 });
 

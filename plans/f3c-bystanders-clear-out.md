@@ -40,7 +40,11 @@ From the ruling, vendors and quest givers hold. In code (`holdsGround()` in `gam
   (`diner-cook`), the Pit Boss (`casino-pit-boss`), Pike (`pike`), Carrion (`carrion`), Platero
   (`dt-platero`) and the Financier (`bank-financier`);
 - anyone else marked a vendor (`vendor: true`), since the ruling says vendors hold;
-- anyone `heavy` (the Sludge Bloom, which is a puzzle wall and must not move) and bosses.
+- anyone `heavy` (the Sludge Bloom, which is a puzzle wall and must not move) and bosses;
+- sewer dwellers (`sewerDweller: true`, read through `isSewerDweller()` in `game/ai.js`): the
+  sewer's Violet Fungi and the rats. A second ruling settled this: only surface townsfolk
+  scatter. Without it the two Violet Fungi were the only neutrals that ran during quest 1, and
+  that changed the autoplay.
 
 Everyone else runs.
 
@@ -61,6 +65,7 @@ Tests live in `tests/npc-flee.test.js`.
   gangs up on you; allies come to your aid; most neutral characters run out of the way.
 - His pick on who stands their ground: vendors and quest givers hold, everyone else runs, with
   the seven named above.
+- His pick on the sewer: sewer dwellers hold their ground; only surface townsfolk scatter.
 - F3a and F3b, merged: the notice rule and `fighters()`.
 - If the autoplay golden moves, the slice stops and asks.
 

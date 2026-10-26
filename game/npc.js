@@ -706,10 +706,12 @@ export const HOLD_GROUND_IDS = new Set([
 ]);
 
 // Does this character stay put when a fight breaks out nearby? The named ones,
-// any other vendor, and anything that cannot be moved or is a set piece (a
-// heavy puzzle wall, a boss).
+// any other vendor, anything that cannot be moved or is a set piece (a heavy
+// puzzle wall, a boss), and sewer dwellers (the Violet Fungi, the rats): only
+// surface townsfolk scatter (Caelan's pick).
 export function holdsGround(npc) {
-    return !!npc && (HOLD_GROUND_IDS.has(npc.id) || !!npc.vendor || !!npc.heavy || !!npc.boss);
+    return !!npc && (HOLD_GROUND_IDS.has(npc.id) || !!npc.vendor || !!npc.heavy || !!npc.boss
+        || isSewerDweller(npc));
 }
 
 // One bystander turn. Returns true when it took the turn.
