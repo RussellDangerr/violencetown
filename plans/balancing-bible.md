@@ -39,17 +39,34 @@ before you read the PR.
   `computeHit`, `elementalMult`, `isBackstab`, all exported `game/combat.js:121`. Bucket law: flats
   add, categories (elemental/positional/outgoing/incoming) multiply, round once
   (`computeHit`, `game/combat.js:28-32`). Immune is a true ×0 — call sites skip the hit entirely
-  (`game/main.js:3733`, the immune-check before `attack()` at line 3736), never floor it back to 1.
+  (the immune check before `attack()` in `combatAttack`, `game/main.js`), never floor it back to 1.
   Guard (incoming ×0.5) and Blind (outgoing ×0.5) compose in the same call as everything else:
-  `applyDamageToPlayer` (`game/main.js:4180-4188`); the player's own swing folds elemental +
-  backstab into one `computeHit` the same way (`combatAttack`, `game/main.js:3728-3732`).
+  `applyDamageToPlayer` (`game/main.js`); the player's own swing folds elemental +
+  backstab into one `computeHit` the same way (`combatAttack`, `game/main.js`).
   **Shove spins its victim (ruled 2026-07-24).** A successful shove sets `victim._spunTurns = 1` and
-  logs exactly `[You shove ${name} so hard they spin around!]` (`game/main.js:1988-1989`); the
+  logs exactly `[You shove ${name} so hard they spin around!]` (`_shoveNpc`, `game/main.js`); the
   victim's next HOSTILE turn is spent recovering — no attack, no re-face, no move
-  (`game/npc.js:230-233`, checked *before* the heal-purchase block) — so the window survives exactly
+  (the `STATE.HOSTILE` case of `tickNpcState`, `game/npc.js`, checked *before* the heal-purchase
+  block) — so the window survives exactly
   one follow-up hit. `_spunTurns` round-trips through `toSave`/`fromSave` the same way `_lastDx`
-  does (`game/enemies.js:89, 184, 277`). Feared-and-fleeing enemies remain backstabbable; that
-  emergent synergy is canon, not a bug.
+  does (the `Enemy` constructor, `toSave` and `fromSave`, `game/enemies.js`). Feared-and-fleeing
+  enemies remain backstabbable; that emergent synergy is canon, not a bug.
+  **The positional table (ruled 2026-10-23).** Where a hit comes from has one rule: the single tile
+  opposite the target's last step (its facing) is its back, and a hit from there is a backstab,
+  ×1.5 in the positional bucket (`isBackstab`, `game/combat.js`). Every other tile is ×1: no
+  flanks, no top or bottom hits, no per-zone health or armour.
+
+  | Target's facing | ×1.5 | ×1 |
+  |---|---|---|
+  | straight (say it stepped east) | the one tile straight behind (west) | the other seven, the two diagonals behind included |
+  | diagonal (say it stepped south-east) | the one diagonal tile behind (north-west) | the other seven, the two straight tiles beside it included |
+  | none (never stepped, no seeded facing) | nothing | all eight |
+
+  The gear slots keep their body-part names and carry perks, but armour stays one flat total
+  (`_playerArmor`, Law 3). Pinned neighbour by neighbour, on `isBackstab` and on the multiplier
+  `combatAttack` passes, in `tests/positional-table.test.js`. **Enemies backstab you by the same
+  rule (ruled 2026-10-23, not built yet):** today only the player's swing reads `isBackstab`;
+  `applyDamageToPlayer` takes no positional bucket.
 - **Law 3 — Armor is the wall, and negative armor is the fragility axis (amended 2026-07-24).** Flat
   subtraction, minimum 1: `Entity.takeDamage` (`game/combat.js:72-77`) for enemies,
   `this._playerArmor()` subtracted last in `applyDamageToPlayer` (`game/main.js:4190`) for the
@@ -294,6 +311,17 @@ below).
   1133`) already reads the composite (`challengeGp`) and explicitly punts the multi-bar to that
   future frame.
 
+## Ruled 2026-10-23
+
+- **5-Zone Body — RESOLVED: the back tile only.** The March zone system survives only as Law 2's
+  positional table: the one tile behind a target is ×1.5, every other tile ×1. Per-zone health,
+  per-zone armour, prosthetics, flanks and top or bottom hits are dropped; the gear slots keep
+  their body-part names and carry perks, and armour stays one flat total. See Law 2 above. The old
+  zone docs (`plans/combat-health-system.md`, `plans/game-research-findings.md`,
+  `plans/fists-fallback-weapon.md`) carry a superseded banner.
+- **Enemies backstab you — RESOLVED: yes, by the same rule.** Not built yet; until it is, only the
+  player's swing reads the table.
+
 ## Open rulings (awaiting Caelan)
 
 - **Wallet/loadout population.** The economy faucet is 0 in every zone right now — no map spawn
@@ -317,6 +345,3 @@ below).
 - **Per-zone faucet/sink economy lint** — the harness already prints a per-zone faucet total
   (currently all zeros); the sink side and the "affordable for 10–20% of encounters" target aren't
   linted yet.
-- **5-Zone Body ruling** — whether the March zone system survives purely as the positional layer
-  (Back zone = backstab ×1.5, per Law 2) or gets any further reconciliation; needs Caelan's ruling
-  before this bible states it as law.

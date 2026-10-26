@@ -327,6 +327,13 @@ export class QuestEngine {
     getCompletedTitles() { return this.state.completed.map(id => (QUESTS[id] && QUESTS[id].title) || id); }
     getJournalLines() { return (this.state.journal || []).slice(); }
 
+    // Finished quests out of every quest the game defines. Derived from the
+    // completed list (already saved), so it needs no saved field of its own.
+    getCompletedCount() {
+        const done = new Set(this.state.completed.filter(id => !!QUESTS[id])).size;
+        return { done, total: Object.keys(QUESTS).length };
+    }
+
     // (Phase 4 map) The active stage's targetZone — a zoneName the world map
     // highlights as "go here next" — or null.
     getTargetZone() {

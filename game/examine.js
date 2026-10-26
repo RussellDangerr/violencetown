@@ -23,6 +23,16 @@ const PROP_NAMES = [
     ['tree', 'Tree'],
     ['grappleRock', 'Jutting rock'],
     ['wreckedCar', 'Wrecked car'],
+    // Interior furniture: each piece by its plain name. The bank's service
+    // counter (`desk*`) is a counter, the casino's felt table a table.
+    ['counter', 'Counter'],
+    ['desk', 'Counter'],
+    ['feltTable', 'Table'],
+    ['table', 'Table'],
+    ['chair', 'Chair'],
+    ['shelf', 'Shelf'],
+    ['plant', 'Plant'],
+    ['stove', 'Stove'],
 ];
 const propName = type => PROP_NAMES.find(([prefix]) => type.startsWith(prefix))?.[1] ?? null;
 

@@ -25,6 +25,24 @@
     "examinables": [
         {"id": "diner_counter", "x": 6, "y": 2, "text": "[A greasy diner counter. The specials board is half wiped clean. A paper bag waits under the heat lamp.]"}
     ],
+    "props": [
+        {"type": "plantA", "x": 2, "y": 2},
+        {"type": "counterL", "x": 3, "y": 2},
+        {"type": "counterGrill", "x": 4, "y": 2},
+        {"type": "counterDrawers", "x": 5, "y": 2},
+        {"type": "counterDoors", "x": 6, "y": 2},
+        {"type": "counterSink", "x": 7, "y": 2},
+        {"type": "counterR", "x": 8, "y": 2},
+        {"type": "stove", "x": 9, "y": 2},
+        {"type": "chairRight", "x": 2, "y": 6},
+        {"type": "tableRound", "x": 3, "y": 6},
+        {"type": "chairLeft", "x": 4, "y": 6},
+        {"type": "chairRight", "x": 7, "y": 6},
+        {"type": "tableRound", "x": 8, "y": 6},
+        {"type": "chairLeft", "x": 9, "y": 6},
+        {"type": "plantB", "x": 2, "y": 9},
+        {"type": "plantA", "x": 9, "y": 9}
+    ],
     "transitions": [
         {"x": 6, "y": 10, "toMap": "downtown-map.json", "toX": 5, "toY": 4, "label": "[Back out to the street]"}
     ]

@@ -20,6 +20,11 @@ describe('SL-4: a required item belongs to the slot, so every entry drops it', (
         assert.ok(required.some(([id]) => id === 'sewer.boss'));
     });
 
+    test('all four boss slots on the spine carry a required item', () => {
+        const ids = required.map(([id]) => id).sort();
+        assert.deepEqual(ids, ['carnival.boss', 'factory.boss', 'graveyard.boss', 'sewer.boss']);
+    });
+
     for (const [slotId, slot] of required) {
         for (const { entry } of slot.pool) {
             test(`${slotId} filled by '${entry}' drops ${slot.requiredDrop}`, () => {
@@ -77,7 +82,12 @@ describe('the picks', () => {
 
     test('a pool of one always picks its one (SL-3): today the Sewer boss is the Were-Rat', () => {
         for (let seed = 0; seed < 50; seed++) assert.equal(pickSlots(seed)['sewer.boss'], 'wererat');
-        assert.deepEqual(defaultPicks(), { 'sewer.boss': 'wererat' });
+        assert.deepEqual(defaultPicks(), {
+            'sewer.boss': 'wererat',
+            'carnival.boss': 'bigfoot',
+            'factory.boss': 'alien_invasion',
+            'graveyard.boss': 'the_deity',
+        });
     });
 });
 

@@ -328,6 +328,44 @@ export const ITEMS = {
         fallbackColor: '#9a8a6a',
         baseValue: 0,
     },
+    // Act 2's three required items (plans/spine.md §1, SP1: names open). Shaped
+    // like the Converter; each belongs to its zone's boss slot (slots.js).
+    act2_item_a: {
+        id: 'act2_item_a',
+        name: '[ITEM A]',
+        description: '[TEXT]',
+        category: 'quest',
+        useType: 'none',
+        consumable: false,
+        questItem: true,
+        tier: 'orange',
+        fallbackColor: '#ff00ff',
+        baseValue: 0,
+    },
+    act2_item_b: {
+        id: 'act2_item_b',
+        name: '[ITEM B]',
+        description: '[TEXT]',
+        category: 'quest',
+        useType: 'none',
+        consumable: false,
+        questItem: true,
+        tier: 'orange',
+        fallbackColor: '#ff00ff',
+        baseValue: 0,
+    },
+    act2_item_c: {
+        id: 'act2_item_c',
+        name: '[ITEM C]',
+        description: '[TEXT]',
+        category: 'quest',
+        useType: 'none',
+        consumable: false,
+        questItem: true,
+        tier: 'orange',
+        fallbackColor: '#ff00ff',
+        baseValue: 0,
+    },
 
     // ── Special / mechanic-shop stock (Phase 6d + Chapter Two) ────────────────
     // Pike's grappling_hook is the canyon's way UP/OUT (the mobility unlock).
