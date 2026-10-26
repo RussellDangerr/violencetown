@@ -35,6 +35,9 @@ describe('the facing cue no longer runs through the body', () => {
         assert.match(rendererSrc, /facingCue\(sx \+ TILE_PX \/ 2, sy \+ TILE_PX \/ 2,/);
         assert.doesNotMatch(rendererSrc, /rgba\(212,185,106,0\.75\)/);   // the old line's stroke
     });
+    test('the cue is drawn only where the art cannot show facing (DS2, tests/chevron-rule.test.js)', () => {
+        assert.match(rendererSrc, /if \(showsFacingChevron\(w\)\) \{\s*const \{ fx, fy \} = facingOf\(w\);/);
+    });
 });
 
 describe('no item draws as a letter in a box', () => {
