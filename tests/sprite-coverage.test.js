@@ -18,9 +18,12 @@ import { SLOTS, ENTRIES } from '../game/slots.js';
 
 // A spine slot's spawn may hold ANY entry of its pool (plans/slot-registry.md),
 // so every entry needs art and must not share a cell with its map's other types.
-const everyPick = (spawns) => (spawns || []).flatMap((s) => s && s.slot && SLOTS[s.slot]
-    ? SLOTS[s.slot].pool.map((p) => ({ ...s, type: ENTRIES[p.entry].type }))
-    : [s]);
+// A spawn naming an `entry` is placed by hand and holds just that entry.
+const everyPick = (spawns) => (spawns || []).flatMap((s) => {
+    if (s && s.slot && SLOTS[s.slot]) return SLOTS[s.slot].pool.map((p) => ({ ...s, type: ENTRIES[p.entry].type }));
+    if (s && s.entry && ENTRIES[s.entry]) return [{ ...s, type: ENTRIES[s.entry].type }];
+    return [s];
+});
 
 
 const GAME_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'game');

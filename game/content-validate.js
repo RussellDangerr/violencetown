@@ -87,6 +87,12 @@ export function validateContent(maps, {
     }
     const placed = {};
     for (const { file, data } of maps) for (const e of (data.enemies || [])) {
+        // A spawn placed by hand names its entry (plans/rv1-carnival-rats.md).
+        if (e && e.entry !== undefined) {
+            if (e.slot) P(`${file}: spawn ${e.id || '?'} names both slot '${e.slot}' and entry '${e.entry}'`);
+            else if (!entries[e.entry]) P(`${file}: spawn ${e.id || '?'} names unknown entry '${e.entry}'`);
+            if (e.type) P(`${file}: spawn ${e.id || '?'} names entry '${e.entry}' and also a type; the entry owns the type`);
+        }
         if (!e || !e.slot) continue;
         if (!slots[e.slot]) { P(`${file}: spawn ${e.id || '?'} names unknown slot '${e.slot}'`); continue; }
         (placed[e.slot] ||= []).push(file);
