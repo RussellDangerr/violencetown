@@ -87,7 +87,12 @@ describe('the picks', () => {
             'carnival.boss': 'bigfoot',
             'factory.boss': 'alien_invasion',
             'graveyard.boss': 'the_deity',
+            'sewer.character': 'crat',
         });
+    });
+
+    test('a pool of one always picks its one: today the Sewer character is the Crat', () => {
+        for (let seed = 0; seed < 50; seed++) assert.equal(pickSlots(seed)['sewer.character'], 'crat');
     });
 });
 

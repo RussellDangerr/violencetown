@@ -347,7 +347,7 @@ export const ITEM_SPRITES = {
     sludge_brain:      { sheet: 'tinyExtra',   x: 1 * 16,  y: 0,       w: 16, h: 16 },  // vial, recoloured to sludge
     sludge_sack:       { sheet: 'tinyExtra',   x: 2 * 16,  y: 0,       w: 16, h: 16 },  // sack, recoloured to sludge
     wooden_sword:      { sheet: 'tinyDungeon', x: 11 * 16, y: 8 * 16,  w: 16, h: 16 },  // brown-bladed sword
-    ray_gun:           { sheet: 'tinyDungeon', x: 10 * 16, y: 10 * 16, w: 16, h: 16 },  // staff with a blue crystal: an energy weapon
+    ray_gun:           { sheet: 'tinyExtra',   x: 9 * 16,  y: 0,       w: 16, h: 16 },  // a brass pistol with a teal glass coil (WA2; it drew as a crystal staff)
     lion_whip:         { sheet: 'tinyExtra',   x: 5 * 16,  y: 0,       w: 16, h: 16 },  // the wavy shaft in leather (WA1; it drew as a staff)
     fearmur:           { sheet: 'tinyExtra',   x: 7 * 16,  y: 0,       w: 16, h: 16 },  // the staff in bone (WA1; it drew as a hammer)
     gator_tail:        { sheet: 'tinyExtra',   x: 6 * 16,  y: 0,       w: 16, h: 16 },  // the tapered blade in gator green (WA1; it drew as a spear)
