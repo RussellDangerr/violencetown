@@ -24,22 +24,29 @@ name is `[Frozen Area]` until Caelan names it.
 
 ## The build
 
-- `game/frozen-map.json`: a small fenced map, `zoneName` `[Frozen Area]`, with a door on its
-  south edge back to the Factory, a door on its west edge out to the Wilderness, and a pond in
-  the middle that is walkable ground.
-- `game/factory-map.json`: the small north-east alcove becomes the cold room. Its back wall
-  opens north into the frozen area.
-- `game/wilderness-map.json`: a gap in the east fence leads into the frozen area.
-- `tests/frozen-area.test.js`: every door lands on walkable ground next to a door back, and the
-  pond is walkable. `tests/tile-coverage.test.js` pins the new map's border.
+- `game/frozen-map.json`: a small map of snow ringed by trees, `zoneName` `[Frozen Area]`, with a
+  door on its north edge back to the Factory, a door on its east edge out to the Wilderness, and
+  an iced-over pond in the middle (a `pond` region) that you can walk across. Its edge border is
+  snow with trees.
+- `game/factory-map.json`: the small south-east alcove becomes the cold room. Its back wall opens
+  south into the frozen area.
+- `game/wilderness-map.json`: a gap in the west fence leads into the frozen area.
+- `game/data.js`: two walkable tile kinds, SNOW (70) and ICE (71).
+- `game/sprites.js`: their pictures, from sheets already bundled (Caelan's eye on both picks).
+  The raw `roguelikeSheet_transparent.png` is registered as a sheet (1px gutter, `padding: 1`).
+  The open-water cells are not used for ice, because they are the river's colour and the river
+  is water you cannot walk on.
+- `game/world-map.js`: a box for the frozen area below the Factory and left of the Wilderness,
+  joined to both, so "you are here" lands while you are in it.
+- `plans/screen-fill.md` and `tests/tile-coverage.test.js`: the new border, changed together.
+- `tests/frozen-area.test.js`: every door lands on open ground and can reach the door back, the
+  map is one walkable piece, the pond is ice you can walk on, and the world map joins it up.
 
-## Found while building
+## A ruling taken while building
 
-The game has no ice or snow tile. A tile kind lives in `game/data.js` (`TILES`) and its picture
-in `game/sprites.js` (`ZONE_TILE_SPRITE_MAP`), and neither file is in this slice's scope. Until
-a ruling widens the scope, the map uses existing ground tiles as stand-ins and the pond is
-marked but not yet drawn as ice. The world-map subscreen (`game/world-map.js`) also has no box
-for the new map, so "you are here" does not land while you are in it.
+The first pass found no ice or snow tile, and the slice could not add one inside its first scope.
+That was asked as a ruling; the pick was to widen the scope to the tile, sprite and world-map
+files and build the frozen look now.
 
 ## Out of scope
 

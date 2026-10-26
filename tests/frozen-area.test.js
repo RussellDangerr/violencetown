@@ -8,6 +8,9 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { GameMap } from '../game/map.js';
+import { TILES } from '../game/data.js';
+import { TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP } from '../game/sprites.js';
+import { WORLD_ZONES, zoneByName, overworldZone, connectorPairs } from '../game/world-map.js';
 
 const GAME = join(dirname(fileURLToPath(import.meta.url)), '..', 'game');
 const load = (f) => new GameMap(JSON.parse(readFileSync(join(GAME, f), 'utf8')), f);
@@ -95,7 +98,39 @@ describe('the frozen area', () => {
         assert.ok(reach(frozen, frozen.spawn.x, frozen.spawn.y).has(`${cx},${cy}`), 'the pond cannot be reached on foot');
     });
 
+    test('the pond is iced over: ICE, and the ground around it SNOW', () => {
+        const frozen = maps[FROZEN];
+        const pond = frozen.getRegion('pond');
+        const cx = pond.x + (pond.w >> 1), cy = pond.y + (pond.h >> 1);
+        assert.equal(frozen.getTile(cx, cy), TILES.ICE.id);
+        assert.equal(frozen.getTile(frozen.spawn.x, frozen.spawn.y), TILES.SNOW.id);
+        assert.ok(TILES.ICE.walkable && !TILES.ICE.hazard, 'ice is ground you walk on, with no hazard');
+        assert.ok(TILES.SNOW.walkable && !TILES.SNOW.hazard, 'snow is ground you walk on, with no hazard');
+        const used = new Set(frozen.tiles);
+        assert.deepEqual([...used].sort((a, b) => a - b), [TILES.SNOW.id, TILES.ICE.id], 'the frozen area is all snow and ice');
+    });
+
+    test('ice is not drawn like water, which you cannot walk on', () => {
+        const all = { ...TILE_SPRITE_MAP, ...ZONE_TILE_SPRITE_MAP };
+        const cell = (id) => all[id] && `${all[id].sheet}:${all[id].col},${all[id].row}`;
+        assert.ok(cell(TILES.ICE.id) && cell(TILES.SNOW.id), 'snow and ice both have art');
+        assert.notEqual(cell(TILES.ICE.id), cell(TILES.RIVER.id));
+        assert.notEqual(TILES.ICE.fallbackColor, TILES.RIVER.fallbackColor);
+    });
+
     test('its name is a placeholder until Caelan names it', () => {
         assert.match(maps[FROZEN].zoneName, /^\[.*\]$/);
+    });
+
+    test('the world map has it, joined to the Factory and the Wilderness, so "you are here" lands', () => {
+        const here = overworldZone(maps[FROZEN].zoneName);
+        assert.ok(here, 'the frozen area is not on the world map');
+        const z = zoneByName(here);
+        assert.deepEqual([...z.connects].sort(), ['FACTORY', 'WILDERNESS']);
+        for (const other of ['FACTORY', 'WILDERNESS']) assert.ok(zoneByName(other).connects.includes(here), `${other} does not connect back`);
+        const taken = WORLD_ZONES.filter(o => o !== z && o.col === z.col && o.row === z.row);
+        assert.deepEqual(taken, [], 'its box sits on top of another zone');
+        const pairs = connectorPairs().map(p => p.join('|'));
+        assert.ok(pairs.includes(['FACTORY', here].sort().join('|')) && pairs.includes([here, 'WILDERNESS'].sort().join('|')));
     });
 });

@@ -69,6 +69,12 @@ export const TILES = {
     LEDGE:         { id: 64, walkable: true,  hazard: null, fallbackColor: '#e8a468' },
     CHASM:         { id: 65, walkable: false, hazard: null, fallbackColor: '#120c0a' },
     RIVER:         { id: 66, walkable: false, hazard: null, fallbackColor: '#5ac8d0' },
+
+    // Frozen tiles (70-79) — the frozen area between the Factory and the
+    // Wilderness (plans/ic3-frozen-area.md). The pond is iced over, so ICE is
+    // ground you walk on, not water.
+    SNOW:          { id: 70, walkable: true,  hazard: null, fallbackColor: '#e3e3e3' },
+    ICE:           { id: 71, walkable: true,  hazard: null, fallbackColor: '#d9dde6' },
 };
 
 // Reverse lookup: id → tile def
