@@ -1,5 +1,11 @@
 # Game Research Findings — Violencetown Design Session
 
+> **Superseded in part (2026-10-23): the Five-Zone Body System (§4) is not built and will not be.**
+> Every combatant has one 100 HP pool and one flat armour total. Where a hit comes from has one
+> rule: the tile behind a target hits for ×1.5 (backstab), every other tile for ×1. No per-zone
+> health or armour, no prosthetics, no flanks, no top or bottom hits. The live rule is
+> `plans/balancing-bible.md` Law 2. Every "ADOPTED" mark on the zone body below is history.
+
 **Session date:** 2026-03-24 (updated 2026-03-30)
 **Games studied:** Pixel Dungeon, Minions of Mirth, Dwarf Fortress, Kenshi, RimWorld
 

@@ -69,8 +69,10 @@ function weaponHitKind(def, target) {
 // Backstab (Law 2 positional, ×1.5): the attacker stands on the tile DIRECTLY
 // behind the target's last step direction. Strict — only the single tile
 // directly opposite the last step counts (a diagonal step yields a diagonal
-// back tile); a target that has never moved has no back. The 5-Zone Body's
-// "Back" zone, as a rule instead of an HP pool.
+// back tile); a target with no facing (never stepped, none seeded) has no
+// back. Every other tile is ×1: no flanks, no top or bottom hits, no per-zone
+// health or armour (Law 2's positional table, ruled 2026-10-23; pinned in
+// tests/positional-table.test.js).
 function isBackstab(attackerX, attackerY, target) {
     if (!target._lastDx && !target._lastDy) return false;
     return attackerX === target.x - target._lastDx

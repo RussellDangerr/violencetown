@@ -4377,7 +4377,7 @@ class Game {
         // Law 2: elemental matchup + positional (backstab) fold in here — the one
         // computeHit call for this swing (round-once). Immune skips attack()
         // entirely (0-contract). Backstab: standing on the tile directly behind
-        // the target's last step (5-Zone Body's "Back" zone as a rule).
+        // the target's last step, ×1.5; every other tile ×1 (Law 2's table).
         const backstab = isBackstab(this.playerX, this.playerY, enemyObj);
         // (WS4) A weapon hit with no damageType of its own lands its best kind —
         // slash, stab or crush — on this target (WR1 b); the splat shows it.
@@ -4679,8 +4679,9 @@ class Game {
         this._log(`[The ${target.type || target.entity.name} turns on you!]`, 'combat');
     }
 
-    // Total damage-reduction from worn armor. Flat MVP: every equipped body-zone
-    // piece's `armor` sums into one number (per-zone hit-location comes later).
+    // Total damage-reduction from worn armor: every equipped body-zone piece's
+    // `armor` sums into one number. It stays one flat total (ruled 2026-10-23):
+    // there is no per-zone hit location, only Law 2's back tile.
     // The weapon slot is excluded — a sword isn't armor.
     _playerArmor() {
         const eq = this.equipment || {};
