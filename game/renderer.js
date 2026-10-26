@@ -230,6 +230,17 @@ export function cutToWidth(text, maxPx, measure) {
     return s.slice(0, n) + '~';
 }
 
+// (FX8) A buff chip's name: the longest head of the upper-cased name that fits
+// `maxPx`, with no cut mark (a trailing space is dropped). BUFF_CHIP is the
+// chip's size and the inset its name is drawn at, on both sides.
+export const BUFF_CHIP = Object.freeze({ w: 52, h: 26, gap: 3, padX: 3 });
+export function buffChipLabel(name, maxPx, measure) {
+    const s = String(name).toUpperCase();
+    let n = s.length;
+    while (n > 0 && measure(s.slice(0, n)) > maxPx) n--;
+    return s.slice(0, n).trimEnd();
+}
+
 // Word wrap: break at spaces, never inside a word (a word wider than the room
 // keeps a line to itself), each line as long as the room allows.
 export function wrapToWidth(text, maxPx, measure) {
@@ -2349,7 +2360,7 @@ export class Renderer {
     _drawBuffBar(game) {
         if (game.buffs.length === 0) return;
         const { ctx } = this;
-        const bw = 52, bh = 26, gap = 3;
+        const { w: bw, h: bh, gap, padX } = BUFF_CHIP;
         const total = game.buffs.length;
         const totalW = total * (bw + gap) - gap + 12;
         const hud = this._hud();
@@ -2367,7 +2378,8 @@ export class Renderer {
             // Name + turns
             if (this.font) {
                 const nameColor = buff.type === 'debuff' ? UI.hpRed : UI.hpGreen;
-                this.font.drawText(ctx, buff.name.toUpperCase().slice(0, 5), bx + 3, by + 3, {
+                const label = buffChipLabel(buff.name, bw - padX * 2, this._measurer(1));
+                this.font.drawText(ctx, label, bx + padX, by + 3, {
                     color: nameColor, scale: 1,
                 });
                 this.font.drawText(ctx, `${buff.turns}`, bx + bw - 4, by + 14, {
