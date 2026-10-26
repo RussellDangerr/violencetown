@@ -497,7 +497,9 @@ export const ENEMY_SPRITES = {
     // ── One-offs (visual-pass, 2026-09-06) ──────────────────────────────────
     // Reuses a cell from a zone the holder cannot co-occur with
     // (tests/sprite-coverage.test.js enforces that).
-    'Puck':       { sheet: 'tinyDungeon', col: 0, row: 8, static: true }, // Boss's knight helm; Boss is Borgir, this is the factory
+    // Puck gave the knight helm (0,8) back to Boss, which now stands in the
+    // Factory too (the Act 2 placeholder boss); (4,8) was free.
+    'Puck':       { sheet: 'tinyDungeon', col: 4, row: 8, static: true }, // grey-haired elder
 
     // Not a person: a puzzleWall growth blocking a sewer pipe.
     'Sludge Bloom': { sheet: 'tinyDungeon', col: 8, row: 2, static: true }, // stone hatch leaking green ooze
