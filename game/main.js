@@ -27,7 +27,7 @@ import { addToInventory as addToInv, moveToZone, zoneOf } from './inventory.js';
 import { itemActions, equipOptions, inspectorUsesRect } from './inspector.js';   // (C1) tap-to-inspect: context actions; (C2) GEAR chooser options
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
-import { attack, formatDamageNumber, computeHit, elementalMult, weaponHitKind, isBackstab } from './combat.js';
+import { attack, formatDamageNumber, computeHit, elementalMult, weaponHitKind, isBackstab, WEAKNESS_MULT, weaknessKinds, critOf, knockoutDamage } from './combat.js';
 import { Enemy, spawnEnemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
 import { isHostile, isHunting, isSewerDweller, allyAids } from './ai.js';
 import { getGreedyStep, stepEntity, findPath } from './pathing.js'; // pathfinding (greedy chase + BFS click-to-move); stepEntity = shove a character aside
@@ -4382,7 +4382,12 @@ class Game {
         // (WS4) A weapon hit with no damageType of its own lands its best kind —
         // slash, stab or crush — on this target (WR1 b); the splat shows it.
         const kind = opts.type ? null : weaponHitKind(opts.weapon, enemyObj);
-        const finalDmg = computeHit({
+        // (EL2) Each weakness KIND the hit meets — element, back, state (feared
+        // or poisoned) — is ×1.5, and they multiply. Two kinds is a crit (the
+        // gold-ring splat); three knock out a non-boss (combat.js critOf).
+        const kinds = weaknessKinds({ elemental: elementalMult(opts.type || kind, enemyObj), backstab, target: enemyObj });
+        const weakHit = critOf(kinds, { boss: enemyObj.boss === true || isBoss(enemyObj) });
+        let finalDmg = computeHit({
             base: dmg,
             // (Poition) An active Strength Poition adds flat damage here — Law
             // 2's flats bucket ("same-family flat bonuses add"), read at the
@@ -4392,9 +4397,11 @@ class Game {
             // splash) since they all funnel through this single computeHit call.
             flats: this._poitionMod('strength'),
             elemental: elementalMult(opts.type || kind, enemyObj),
-            positional: backstab ? 1.5 : 1,
+            positional: backstab ? WEAKNESS_MULT : 1,
+            state: kinds.includes('state') ? WEAKNESS_MULT : 1,
         });
         if (finalDmg === 0) { this._log(`[${enemyObj.type} is immune!]`, 'combat'); return null; }
+        if (weakHit.knockout) finalDmg = knockoutDamage(finalDmg, enemyObj.entity);
         if (backstab) this._log('[Backstab!]', 'combat');
 
         const result = attack(playerEntity, enemyObj.entity, finalDmg);
@@ -4424,7 +4431,7 @@ class Game {
         // 3×3 burst) pass opts.omni so it bursts around the target instead.
         const splatDir = { dx: enemyObj.x - this.playerX, dy: enemyObj.y - this.playerY };
         this._spawnHitSplat(enemyObj.x, enemyObj.y, `-${result.dealt}`, opts.type || 'physical',
-            { dir: splatDir, omni: !!opts.omni, crit: !!opts.crit, killed: !!result.killed, kind });
+            { dir: splatDir, omni: !!opts.omni, crit: !!opts.crit || weakHit.crit, killed: !!result.killed, kind });
 
         // Hit flash + stagger — Phase C, polished in B6. Flash duration
         // and stagger distance now scale with damage so light taps feel
