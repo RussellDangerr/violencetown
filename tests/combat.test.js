@@ -166,7 +166,8 @@ describe('computeHit — the bucket law (Gold Standard Law 2)', () => {
         assert.equal(computeHit({ base: 10, flats: 5, elemental: 2 }), 30);
     });
     test('multipliers from different categories multiply', () => {
-        // 20 × 2 (weakness) × 1.5 (backstab) = 60 — the "above 50" worked example
+        // 20 × 2 × 1.5 = 60 — bucket math only; a real weakness is ×1.5 since
+        // EL2, and its worked examples live in tests/crit-kinds.test.js
         assert.equal(computeHit({ base: 20, elemental: 2, positional: 1.5 }), 60);
     });
     test('outgoing and incoming status buckets fold in', () => {
@@ -193,7 +194,7 @@ describe('computeHit — the bucket law (Gold Standard Law 2)', () => {
 
 describe('elementalMult — Law 2 elemental family', () => {
     const gasbag = { weak: ['fire'], resist: ['cold'], immune: ['fear'] };
-    test('weakness doubles', () => assert.equal(elementalMult('fire', gasbag), 2));
+    test('a weakness is x1.5 (EL2; it doubled before)', () => assert.equal(elementalMult('fire', gasbag), 1.5));
     test('resistance halves', () => assert.equal(elementalMult('cold', gasbag), 0.5));
     test('immunity zeroes', () => assert.equal(elementalMult('fear', gasbag), 0));
     test('untyped damage or unlisted type is neutral', () => {
