@@ -43,7 +43,7 @@ import { entranceAt, fogReveal, fogDepth, fogOut, tileJitter, FOG_TINT, FOG_DENS
 import { combatLines } from './combat-log.js';   // (combat-hud stage 3) the fight face's feed
 import { playerPanel, targetPanel, panelTarget } from './fight-panels.js';   // (combat-hud stage 4)
 import * as Settings from './settings.js'; // (combat-feel-pass) reduce-motion for hit-splats (namespace import — see main.js)
-import { challengeGp } from './enemies.js'; // (Law 6f) nameplate pips read the composite kit, not raw gold
+import { challengeGp, shownName } from './enemies.js'; // (Law 6f) nameplate pips read the composite kit, not raw gold; (FX4) a boss's one name
 import { resolveOffer } from './offer.js';                                  // (offer screen) pure basket→projection
 import { dispositionCeil, DISPOSITION_MIN } from './disposition-curves.js'; // (offer screen) meter ceiling + floor — offer.js does not re-export these
 import { lungeOffset } from './cascade.js';                                  // (turn-model C1) an attacker lunges on its beat
@@ -1715,7 +1715,7 @@ export class Renderer {
             if (this.font && !game._animating && !splatUp && this._isFaced(game, e)) {
                 const verb = defaultVerb({ x: e.x, y: e.y, npc: e }, game);
                 if (verb) {
-                    const who  = String(e.name || e.type || '').replace(/[[\]]/g, '');
+                    const who  = String((e.boss ? shownName(e) : e.name || e.type) || '').replace(/[[\]]/g, '');
                     const text = `${who} · ${verb.label}`.toUpperCase();
                     const tw   = this.font.measure ? this.font.measure(text, 1) : text.length * 6;
                     const tx   = Math.round(px + TILE_PX / 2 - tw / 2);
@@ -1769,7 +1769,7 @@ export class Renderer {
             // K.O. tag below — the player's permanent record of "you fought this
             // person here."
             if (this.font) {
-                this.font.drawText(ctx, `[KO] ${e.type.toUpperCase()}`, px + TILE_PX / 2, py + TILE_PX - 2, {
+                this.font.drawText(ctx, `[KO] ${String(shownName(e)).toUpperCase()}`, px + TILE_PX / 2, py + TILE_PX - 2, {
                     color: '#9a8a78', scale: 1, align: 'center',
                 });
             }
@@ -2727,7 +2727,11 @@ export class Renderer {
         const p = fightPanelRects(this._view());
         this._drawGearPanel(p.left, playerPanel(game));
         const t = panelTarget(game);
-        if (t) this._drawTargetPanel(p.right, targetPanel(t));
+        if (!t) return;
+        // (FX4) A boss goes by its one name here too; fight-panels reads the type.
+        const panel = targetPanel(t);
+        panel.name = shownName(t) || panel.name;
+        this._drawTargetPanel(p.right, panel);
     }
 
     // Your six slots, two lines each: the label, then what is in it. An empty
@@ -3141,7 +3145,7 @@ export class Renderer {
         if (w.confirming) {
             ctx.save(); ctx.fillStyle = 'rgba(48,0,0,0.55)'; ctx.fillRect(0, 0, vp.w, vp.h); ctx.restore();
             const tgt = w.reticle && game.enemies.find(e => e.entity.isAlive() && e.x === w.reticle.x && e.y === w.reticle.y);
-            const name = String((tgt && (tgt.type || (tgt.entity && tgt.entity.name))) || 'them').replace(/[\[\]]/g, '').toUpperCase();
+            const name = String((tgt && (shownName(tgt) || (tgt.entity && tgt.entity.name))) || 'them').replace(/[\[\]]/g, '').toUpperCase();
             if (this.font) {
                 this.font.drawText(ctx, '!! PLUS ULTRA !!', CC, CY - 42, { color: '#ff5555', scale: 2, align: 'center', shadow: '#000' });
                 this.font.drawText(ctx, `STRIKE ${name}?`, CC, CY - 8, { color: UI.gold, scale: 1, align: 'center', shadow: '#000' });
@@ -3359,7 +3363,7 @@ export class Renderer {
                     const d = Math.max(Math.abs(e.x - game.playerX), Math.abs(e.y - game.playerY));
                     if (d < nd) { nd = d; near = e; }
                 }
-                const nm = String(near.type || (near.entity && near.entity.name) || 'FOE').replace(/[\[\]]/g, '').toUpperCase().slice(0, 12);
+                const nm = String(shownName(near) || (near.entity && near.entity.name) || 'FOE').replace(/[\[\]]/g, '').toUpperCase().slice(0, 12);
                 ctx.save(); ctx.fillStyle = 'rgba(40,0,0,0.6)'; ctx.fillRect(0, strip - 26, vp.w, 26); ctx.restore();
                 this.font.drawText(ctx, `⚔ ${foes.length}  ${nm}`, CC, strip - 16, { color: '#e8462f', scale: 1, align: 'center', shadow: '#000' });
             }

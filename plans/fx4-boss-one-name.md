@@ -25,6 +25,8 @@ The surfaces:
 - `game/enemies.js` exports one helper, `shownName(enemy)`. It returns `labelOf(enemy)` for a
   boss and the enemy's `type` for anyone else. A boss's `entity.name` is built from it, so every
   log line that reads `entity.name` follows without touching each one.
+- Enemies also carry it as a getter, `enemy.shownName`. The log lines in `main.js` read the
+  getter, so the tests that lift those methods out of `main.js` need no new import.
 - The other surfaces call `shownName` in place of `type`. Where a surface preferred `name` for
   ordinary characters, it keeps doing that.
 - `game/fight-panels.js` is outside this slice's reach, so the renderer overrides the target
