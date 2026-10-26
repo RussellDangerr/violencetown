@@ -159,3 +159,48 @@ describe('the four recoloured weapons', () => {
         }
     });
 });
+
+describe('the Ray Gun\'s own picture (plans/wa2-ray-gun-picture.md)', () => {
+    const png = readPng(EXTRA);
+    const COL = 9;
+    const s = ITEM_SPRITES.ray_gun;
+    const px = cellPixels(png, { x: COL * 16, y: 0, w: 16, h: 16 }).filter(p => p[3] === 255);
+    const rgb = p => `${p[0]},${p[1]},${p[2]}`;
+    const colours = new Set(px.map(rgb));
+    const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)).join(',');
+
+    test('it draws from cell 9 of the Tiny extra sheet, inside the sheet', () => {
+        assert.deepEqual([s.sheet, s.x, s.y, s.w, s.h], ['tinyExtra', COL * 16, 0, 16, 16]);
+        assert.ok(s.x + s.w <= png.width, 'the cell is past the sheet\'s edge');
+    });
+
+    test('it no longer borrows the crystal staff, and the Lion Whip keeps its cell', () => {
+        assert.notDeepEqual([s.sheet, s.x, s.y], ['tinyDungeon', 10 * 16, 10 * 16]);
+        const w = ITEM_SPRITES.lion_whip;
+        assert.deepEqual([w.sheet, w.x, w.y], ['tinyExtra', 5 * 16, 0]);
+    });
+
+    test('the cell is drawn in the Tiny outline', () => {
+        assert.ok(px.length >= 60, `only ${px.length} pixels drawn`);
+        const outline = px.filter(p => rgb(p) === '63,38,49');
+        assert.ok(outline.length >= 30, 'the outline is gone');
+        assert.ok(px.length - outline.length >= 30, 'too little inside the outline');
+        // Only fully drawn or empty pixels: no soft edges.
+        const all = cellPixels(png, { x: COL * 16, y: 0, w: 16, h: 16 });
+        assert.ok(all.every(p => p[3] === 0 || p[3] === 255));
+    });
+
+    test('it carries brass, a teal coil, and the energy splat\'s yellow', () => {
+        const rendererSrc = readFileSync(join(ROOT, 'game', 'renderer.js'), 'utf8');
+        const energy = rendererSrc.match(/energy:\s*'(#[0-9a-f]{6})'/i);
+        assert.ok(energy, 'the energy splat colour is in renderer.js');
+        assert.ok(colours.has(hex(energy[1])), `the tip is not ${energy[1]}`);
+        assert.ok(colours.has('227,134,40') && colours.has('253,190,83'), 'no brass');
+        assert.ok(colours.has('67,225,179') && colours.has('37,149,106'), 'no teal coil');
+    });
+
+    test('its picture is unlike every other weapon cell on the sheet', () => {
+        const sig = col => JSON.stringify(cellPixels(png, { x: col * 16, y: 0, w: 16, h: 16 }));
+        for (const col of [5, 6, 7, 8]) assert.notEqual(sig(COL), sig(col), `cell ${col}`);
+    });
+});
