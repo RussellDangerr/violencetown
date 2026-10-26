@@ -257,12 +257,8 @@ export const SHEETS = {
 // contiguous wall cells (checked by tiling both 5x5); plain brick holds up
 // better at the scale Sewer's corridors need.
 //
-// CAUTION: id 0 is not Sewer-exclusive — canyon-map.json also uses it, for
-// its outer border only (31% of that map, not interior walls; renderer.js
-// resolves this table purely by numeric id, with no per-zone override). This
-// brick renders there too. Checked in tools/_zonecheck.png: it reads fine as
-// an outdoor boundary rather than a constructed room, so shipped as-is — but
-// a future change to WALL's art changes Canyon's border along with it.
+// id 0 was Canyon's outer wall and border too, until the Canyon got tiles of
+// its own (60-66, ZONE_TILE_SPRITE_MAP) on 2026-09-27. WALL is Sewer's again.
 //
 // SLUDGE used to be tinyDungeon (8,2), byte-identical to Factory's
 // GOO_VISUAL (id 42 below) — the two zones drew the exact same ooze-hatch
@@ -387,7 +383,9 @@ export function itemSprite(id) {
 // carries `static: true`. As of the animation pass (visual-pass §4) that field
 // is no longer read by the renderer — _drawEnemySprite resolves the draw cell
 // through spriteFrame() (below) now, which returns col/row untouched for any
-// entry with no `dirCols`, i.e. every entry in this table except Violencian.
+// entry with no `dirCols`, i.e. every Tiny Dungeon entry in this table. The
+// RPG Urban people (the Violencian crowd and the named town NPCs) carry
+// URBAN_FRAMES and face their travel.
 // `static` stays put on each entry as inert historical data; there is no live
 // branch left that flipping it would change.
 //
@@ -402,6 +400,13 @@ export function itemSprite(id) {
 // read since they can't co-occur with the sewer set. Tiny Dungeon ships no
 // literal mushroom / clown / skeleton sprite —
 // those are flagged compromises (see the overhaul notes / verify in-browser).
+
+// The RPG Urban sheet's six people each own a 4-column x 3-row block: cols
+// 23-26 are [left, down, up, right] and each person's base row (0, 3, 6, 9, 12,
+// 15) is the standing pose, +1/+2 the two stride frames. Measured against
+// tools/contact_rpgUrban.png; see Violencian below for the full note.
+// [up, down, left, right], the order spriteFrame reads.
+const URBAN_FRAMES = { dirCols: [25, 24, 23, 26], walkRows: 3 };
 
 export const ENEMY_SPRITES = {
     // Sewer set — six distinct creatures:
@@ -452,15 +457,16 @@ export const ENEMY_SPRITES = {
         // spriteFrame() at draw time, not by enumerating more variant cells —
         // every variants[] entry still only ever names its down-facing (col 24)
         // identity cell, same as before this pass.
-        dirCols: [25, 24, 23, 26], // [up, down, left, right]
-        walkRows: 3,
+        ...URBAN_FRAMES,
+        // Three of the six looks, not six (DS1): the named town NPCs below
+        // borrow the sheet's people, and the three who stand among the crowd
+        // (Vendor, Stranger, Bootlegger) take their looks out of this pool so
+        // no one on downtown or town draws the same base cell. The three kept
+        // here belong to named NPCs who each have an interior to themselves.
         variants: [
-            { col: 24, row: 0 },  // auburn hair, green shirt
-            { col: 24, row: 3 },  // auburn hair, red shirt, blue jeans
-            { col: 24, row: 6 },  // pale blue hair, blue-grey top
-            { col: 24, row: 9 },  // blonde hair, dark skin, blue-grey top
-            { col: 24, row: 12 }, // light hair, pale blue top
-            { col: 24, row: 15 }, // black hair with a red headband
+            { col: 24, row: 0 },  // auburn hair, green shirt (also Cook, diner only)
+            { col: 24, row: 6 },  // pale blue hair, blue-grey top (also Banker, bank only)
+            { col: 24, row: 12 }, // light hair, pale blue top (also Operator, casino only)
         ],
     },
 
@@ -473,19 +479,24 @@ export const ENEMY_SPRITES = {
     'Carnival Clown':   { sheet: 'tinyDungeon', col: 0, row: 7,  static: true }, // purple mage — most colorful humanoid
     'Rattling Skeleton':{ sheet: 'tinyDungeon', col: 1, row: 10, static: true }, // white ghost — pale/bony proxy
 
-    // ── Interior counter-NPCs and one-offs (visual-pass, 2026-09-06) ─────────
-    // These types had NO entry, so each rendered as the flat #cc4433 fallback
-    // box in _drawEnemySprite on every normal run. Five take the last unused
-    // Tiny Dungeon humanoid cells; the rest reuse a cell from a zone they can
-    // never share (tests/sprite-coverage.test.js will enforce that).
-    'Banker':   { sheet: 'tinyDungeon', col: 4, row: 8, static: true }, // white-haired elder in a cloak — old money
-    'Operator': { sheet: 'tinyDungeon', col: 1, row: 8, static: true }, // visored full plate — casino pit boss as bouncer
-    'Cook':     { sheet: 'tinyDungeon', col: 2, row: 8, static: true }, // young figure in an apron-ish smock
-    'Vendor':   { sheet: 'tinyDungeon', col: 3, row: 8, static: true }, // long hair, purple dress
+    // ── Named town NPCs (DS1) ───────────────────────────────────────────────
+    // Each borrows one of the six RPG Urban people, so it walks with real
+    // four-way frames instead of one mirrored Tiny cell (the ruling: no free
+    // four-facing pack exists, so lend townsfolk looks to named NPCs). One look
+    // per named NPC, so no two of them look alike. Each base cell is the
+    // person's down-facing standing pose (col 24); spriteFrame does the rest.
+    // Vendor, Stranger and Bootlegger share downtown/town with the crowd, so
+    // Violencian's pool above no longer carries their looks.
+    'Vendor':     { sheet: 'rpgUrban', col: 24, row: 3,  static: true, ...URBAN_FRAMES }, // long auburn hair, red shirt (downtown)
+    'Stranger':   { sheet: 'rpgUrban', col: 24, row: 15, static: true, ...URBAN_FRAMES }, // black hair, red headband (downtown)
+    'Bootlegger': { sheet: 'rpgUrban', col: 24, row: 9,  static: true, ...URBAN_FRAMES }, // hard hat, work clothes (town)
+    'Banker':     { sheet: 'rpgUrban', col: 24, row: 6,  static: true, ...URBAN_FRAMES }, // grey-blue hair and beard: the elder (bank)
+    'Operator':   { sheet: 'rpgUrban', col: 24, row: 12, static: true, ...URBAN_FRAMES }, // bald and heavy-set: the bouncer (casino)
+    'Cook':       { sheet: 'rpgUrban', col: 24, row: 0,  static: true, ...URBAN_FRAMES }, // the young one in green (diner)
 
-    // Reuses, each from a zone the holder cannot co-occur with:
-    'Stranger':   { sheet: 'tinyDungeon', col: 2, row: 7, static: true }, // Pike's gaunt skull-faced figure; Pike is canyon, this is downtown
-    'Bootlegger': { sheet: 'tinyDungeon', col: 3, row: 7, static: true }, // Wererat's horned brute; Wererat is sewer-only, this is town
+    // ── One-offs (visual-pass, 2026-09-06) ──────────────────────────────────
+    // Reuses a cell from a zone the holder cannot co-occur with
+    // (tests/sprite-coverage.test.js enforces that).
     'Puck':       { sheet: 'tinyDungeon', col: 0, row: 8, static: true }, // Boss's knight helm; Boss is Borgir, this is the factory
 
     // Not a person: a puzzleWall growth blocking a sewer pipe.
@@ -528,7 +539,8 @@ export function spriteVariant(info, entity) {
 // these separate is deliberate, not an oversight — don't fold one into the
 // other.
 //
-// Entries opt in with two fields, present only on the rpgUrban civilians:
+// Entries opt in with two fields, present only on the rpgUrban people (the
+// Violencian crowd and the named town NPCs, via URBAN_FRAMES):
 //   dirCols:  [up, down, left, right] sheet columns for each facing.
 //   walkRows: how many rows, starting at the entry's own `row`, form a walk
 //             cycle. row+0 is the standing pose already in use before this
@@ -662,6 +674,11 @@ export const PROP_SPRITES = {
     // A rock rather than the sheet's rope-and-hook hoist at (5,9) — with a rope
     // already hanging there, you would not need Pike's.
     grappleRock: { sheet: 'roguelikeDungeon', sx: 3 * 17, sy: 0, sw: 16, sh: 16, wTiles: 1, hTiles: 1, shadowRx: 9, shadowRy: 3 },
+
+    // Your car at the bottom of the canyon, a write-off — the same beater as the
+    // CAR tile, but a prop: tile 19 bumps into main.js _interactCar, which is the
+    // Town car's engine and fuel. One cell, the radical canyon/wreck carries it.
+    wreckedCar: { sheet: 'car', sx: 0, sy: 0, sw: 48, sh: 48, wTiles: 1, hTiles: 1, shadowRx: 11, shadowRy: 3 },
 
     // Gravestones — one prop per silhouette on the outlined strip, keyed by the
     // strip's own names. 1x1: the art is no taller than a cell, so what a prop
@@ -799,6 +816,18 @@ export const ZONE_TILE_SPRITE_MAP = {
     50: { sheet: 'tinyTown',    col: 1, row: 1 }, // GRAVE_DIRT    — brown dirt patch
     52: { sheet: 'tinyTown',    col: 1, row: 0 }, // DEAD_GRASS    — tufted grass (ground fill; toadstools tiled too busy)
     53: { sheet: 'tinyTown',    col: 9, row: 3, under: 52 }, // IRON_FENCE    — wood fence (no iron railing in pack), dead grass between the planks
+
+    // Canyon — picked 2026-09-27 from sheets already loaded, each tiled 4x4
+    // and in a mock canyon before choosing. The red-boulder cell tinyDungeon
+    // (0,1) was the obvious wall and was passed over: it is the rock item's
+    // sprite, and a dropped rock would vanish into it. All six are opaque.
+    60: { sheet: 'tinyDungeon',      col: 1,  row: 4 },  // CANYON_FLOOR — speckled sand
+    61: { sheet: 'tinyDungeon',      col: 1,  row: 0 },  // CANYON_WALL  — red rock, flecked with stone
+    62: { sheet: 'roguelikeDungeon', col: 10, row: 8 },  // DRY_RIVERBED — cracked earth, the river's old silt
+    63: { sheet: 'tinyDungeon',      col: 0,  row: 2 },  // SCREE        — red rubble at the foot of a wall
+    64: { sheet: 'tinyDungeon',      col: 2,  row: 4 },  // LEDGE        — sand with a darker lip along the top
+    65: null,                                            // CHASM        — no art: the flat near-black is the drop
+    66: { sheet: 'roguelikeDungeon', col: 1,  row: 11 }, // RIVER        — open water
 };
 
 // ── Phase B TODO ────────────────────────────────────────────────────────────

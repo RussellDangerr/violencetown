@@ -1,6 +1,6 @@
 ---
 name: board-loop
-description: One pass of Violencetown's ticket-board loop. Reads the board, clears Claude's turn (Merge it, Changes, replies, Tweak it), builds at most one approved slice through the slice-builder agent, writes the cards back, posts a short update and schedules the next pass. Use when the /loop fires, or when Caelan says to run the board loop or work the board.
+description: One pass of Violencetown's ticket-board loop. Reads the board, clears Claude's turn (Merge it, Changes, replies, Tweak it), builds up to 10 approved slices through the slice-builder agent, writes the cards back, posts a short update and schedules the next pass. Use when the /loop fires, or when Caelan says to run the board loop or work the board.
 ---
 
 # Board loop: one pass
@@ -16,13 +16,13 @@ The board's word for turning an idea into rulings and slices is **tweak**. Use n
    `<scratchpad>/board-loop/<yyyy-mm-dd-hhmm>/`.
 2. **Recover stale `doing` cards** (§1 step 2).
 3. **Clear Claude's turn** in the §1 step 3 order. Merges follow §4, tweaks §5, ruling options
-   §6. At most one merge and two tweaks.
+   §6. At most 10 merges and 10 tweaks.
 4. **Ask what's next:** `node tools/roadmap-board/next-slice.mjs <folder>`.
-5. **If there's a pick:**
+5. **For each pick** (up to 10, none sharing a file):
    1. Recon it (§1 step 5).
    2. Claim it (§1 step 6).
    3. Spawn the `slice-builder` agent with the card JSON, the picks of the rulings it rests on,
-      `slug` and `touches`.
+      `slug` and `touches`. Spawn every pick's builder in the same message so they run at once.
    4. Write its report back to the card (§1 step 7). Board writes stay here, never in the
       builder.
 6. **Post the update** (§7): six lines at most, in plain words, no card codes without their
@@ -37,7 +37,7 @@ The board's word for turning an idea into rulings and slices is **tweak**. Use n
 | Card | Until he picks |
 |---|---|
 | LP2 | one loop |
-| LP3 | caps on: 3 rulings + 3 slices per tweak, no new tweaks while Your turn ≥ 7 |
+| LP3 | caps of 10: 10 rulings + 10 slices per tweak, no new tweaks while Your turn ≥ 10 (his 10-25 call, over his LP3 "no cap") |
 | LP4 | ideas stay put; the update names the 3 oldest |
 | LP5 | per-pass update, no digest |
 | LP1 | no settings change |

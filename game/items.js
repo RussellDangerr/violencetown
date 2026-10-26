@@ -429,6 +429,18 @@ export const ITEMS = {
     },
 };
 
+// ── Armor pieces (plans/ws5-armor-tiers-same-generator.md) ───────────────────
+// A piece you wear until you take it off, in a body slot that is not the
+// weapon. Duration equips (soap, bandage) are not armor. Each piece yields its
+// five tiers from weaponTiers in weapons.js; this file can't import it
+// (weapons.js imports VALUE_TIERS from here, and the cycle breaks loading).
+export function isArmorPiece(def) {
+    return !!def && def.useType === 'equip' && !!def.equipSlot
+        && def.equipSlot !== 'weapon' && !def.equipDuration;
+}
+
+export const ARMOR_IDS = Object.freeze(Object.keys(ITEMS).filter(id => isArmorPiece(ITEMS[id])));
+
 // ── Value tiers (Phase 6d) ────────────────────────────────────────────────────
 // A Borderlands-style rarity ladder that makes worth legible at a glance —
 // examine text names the tier, the trade cell wears its colour. By default the
@@ -449,6 +461,49 @@ export function itemTier(itemDef) {
     if (itemDef.tier) return VALUE_TIERS.find(t => t.key === itemDef.tier) || VALUE_TIERS[0];
     const v = itemDef.baseValue ?? 0;
     return VALUE_TIERS.find(t => v <= t.max) || VALUE_TIERS[VALUE_TIERS.length - 1];
+}
+
+// ── Two hands (plans/ws3-two-hands-left-right.md) ────────────────────────────
+// Every body has two hands. The right hand keeps the key `weapon`, so whatever
+// reads "the weapon" (attacks, reach, granted skills) reads the hand that
+// swings; `left` is the other hand. A two-hander is the same def in both keys.
+// handsOf(def) -> 1 | 2 comes from the caller: this file can't import
+// weapons.js (see isArmorPiece below), so the game supplies it as _handsOf.
+export const HANDS = Object.freeze(['weapon', 'left']);
+
+const oneHanded = () => 1;
+const handsRule = (game) => (game && typeof game._handsOf === 'function')
+    ? (def) => game._handsOf(def) : oneHanded;
+
+// Put `def` in `hand` (right by default). A two-hander takes both hands; a
+// one-hander put into a held two-hander frees both. Returns what was pushed
+// out, each def once, for the caller to bag or drop.
+export function holdInHands(eq, def, handsOf = oneHanded, hand = 'weapon') {
+    const out = [];
+    const push = (d) => { if (d && !out.includes(d)) out.push(d); };
+    const twoHeld = !!eq.weapon && handsOf(eq.weapon) >= 2;
+    if (handsOf(def) >= 2) {
+        push(eq.weapon); push(eq.left);
+        eq.weapon = def; eq.left = def;
+    } else if (twoHeld) {
+        push(eq.weapon);
+        eq.weapon = null; eq.left = null;
+        eq[hand] = def;
+    } else {
+        push(eq[hand]);
+        eq[hand] = def;
+    }
+    return out;
+}
+
+// Make a loaded pair of hands obey the rule: a two-hander in the right hand
+// fills the left too, and a two-hander only in the left (a pair no equip makes)
+// leaves it, so the right hand's weapon is the one that stays.
+export function settleHands(eq, handsOf = oneHanded) {
+    if (eq.weapon && handsOf(eq.weapon) >= 2) eq.left = eq.weapon;
+    else if (eq.left && handsOf(eq.left) >= 2) eq.left = null;
+    if (eq.left === undefined) eq.left = null;
+    return eq;
 }
 
 // Equip an item into its slot. Returns a log message.
@@ -485,7 +540,8 @@ export function equipItem(game, itemDef) {
     }
 
     // Permanent equip (like pipe → weapon slot)
-    game.equipment[slot] = itemDef;
+    if (slot === 'weapon') holdInHands(game.equipment, itemDef, handsRule(game));
+    else game.equipment[slot] = itemDef;
     return old
         ? `[${itemDef.name} equipped to ${slot} — replaced ${old.name}]`
         : `[${itemDef.name} equipped to ${slot}]`;
@@ -498,6 +554,16 @@ export function equipItem(game, itemDef) {
 function resolveEquip(game, itemDef) {
     const slot = itemDef.equipSlot;
     if (!slot) return `[${itemDef.name} can't be worn]`;
+    if (slot === 'weapon') {
+        // Into the right hand, as the one weapon slot did; a two-hander takes
+        // both, and whatever it pushes out goes back in the bag.
+        const out = holdInHands(game.equipment, itemDef, handsRule(game))
+            .filter(d => d.id !== itemDef.id);
+        for (const d of out) game._addToInventory(d);
+        return out.length
+            ? `[Equipped ${itemDef.name} — ${out.map(d => d.name).join(', ')} back in your bag]`
+            : `[Equipped ${itemDef.name}]`;
+    }
     const old = game.equipment[slot];
     game.equipment[slot] = itemDef;
     if (old && old.id !== itemDef.id) game._addToInventory(old);
@@ -514,6 +580,8 @@ export function unequipItem(game, slot) {
     if (slot === 'weapon') return null;
     const item = game.equipment[slot];
     if (!item) return null;
+    // A two-hander's left hand is the weapon itself, which never comes off.
+    if (slot === 'left' && handsRule(game)(item) >= 2) return null;
     if ((game.tempEquips || []).some(te => te.slot === slot)) {
         return `[${item.name} will wear off on its own]`;
     }

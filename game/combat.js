@@ -6,6 +6,8 @@
 //   - Armor is a flat reduction applied before damage lands
 //   - You always hit; armor just means you hit softer
 
+import { weaponClassOf } from './weapons.js';
+
 const DEFAULT_HP    = 100;
 const DEFAULT_MP    = 100;   // Skill / mana — every creature starts at 100
 const DEFAULT_ARMOR = 0;
@@ -39,6 +41,29 @@ function elementalMult(damageType, target) {
     if (target.weak?.includes(damageType))   return 2;
     if (target.resist?.includes(damageType)) return 0.5;
     return 1;
+}
+
+// Physical hit kinds (WR1, pick b): slash, stab and crush are real damage
+// subtypes that meet weak/resist/immune like any other type, and a weapon lands
+// its best kind against each target. Best = the highest elementalMult; a tie
+// goes to the class's first kind, so a sword slashes unless a stab does more.
+// null when there are no kinds to pick from.
+function bestAttackKind(kinds, target) {
+    if (!kinds || kinds.length === 0) return null;
+    let best = kinds[0];
+    let bestMult = elementalMult(best, target);
+    for (let i = 1; i < kinds.length; i++) {
+        const m = elementalMult(kinds[i], target);
+        if (m > bestMult) { best = kinds[i]; bestMult = m; }
+    }
+    return best;
+}
+
+// The kind a weapon's hit lands on `target`, or null. Only a physical hit has a
+// kind: a weapon with its own damageType (the energy Ray Gun) keeps that type.
+function weaponHitKind(def, target) {
+    if (!def || def.damageType) return null;
+    return bestAttackKind(weaponClassOf(def)?.attackKinds, target);
 }
 
 // Backstab (Law 2 positional, ×1.5): the attacker stands on the tile DIRECTLY
@@ -118,4 +143,4 @@ function formatDamageNumber(result) {
 
 // ── Exports ───────────────────────────────────────────────────────────────────
 
-export { Entity, attack, formatDamageNumber, computeHit, elementalMult, isBackstab, DEFAULT_HP, DEFAULT_MP, DEFAULT_ARMOR };
+export { Entity, attack, formatDamageNumber, computeHit, elementalMult, bestAttackKind, weaponHitKind, isBackstab, DEFAULT_HP, DEFAULT_MP, DEFAULT_ARMOR };

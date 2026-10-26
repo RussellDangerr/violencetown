@@ -1,0 +1,20 @@
+{
+    "note": "The rockface out of the canyon: a notch in the wall with a jutting rock a hook can catch.",
+    "width": 7,
+    "height": 4,
+    "tiles": [
+        61,61,61,61,61,61,61,
+        61,63,61,60,61,63,61,
+        63,63,60,60,60,63,63,
+        null,60,60,60,60,60,null
+    ],
+    "props": [
+        {"type": "grappleRock", "x": 3, "y": 1}
+    ],
+    "marks": [
+        {"id": "climb", "x": 3, "y": 1}
+    ],
+    "sockets": [
+        {"x": 1, "y": 3, "w": 5, "h": 1}
+    ]
+}

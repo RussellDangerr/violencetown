@@ -86,7 +86,8 @@ describe('sprite coverage', () => {
         // variant cell counts toward the collision check. A clash on any one
         // of them is a real clash, same as for a plain single-cell entry.
         //
-        // BASE cells only (animation pass §4). Violencian additionally carries
+        // BASE cells only (animation pass §4). Violencian (and, since DS1, the
+        // named town NPCs) additionally carries
         // `dirCols`/`walkRows` (spriteFrame, sprites.js) so it also renders
         // across 3 more columns and 2 more rows per variant at draw time — but
         // a facing frame is not a distinct identity, so those cells deliberately
@@ -131,6 +132,21 @@ describe('sprite coverage', () => {
             assert.ok(typeof s.sheet === 'string' && s.sheet, `${type}: no sheet`);
             assert.ok(Number.isInteger(s.col) && s.col >= 0, `${type}: bad col ${s.col}`);
             assert.ok(Number.isInteger(s.row) && s.row >= 0, `${type}: bad row ${s.row}`);
+        }
+    });
+
+    test('every four-way entry names four distinct facings and a base cell among them', () => {
+        // Since DS1 more than the crowd carries dirCols; a typo in one entry's
+        // columns would turn a person sideways, so check every one of them.
+        const fourWay = Object.entries(ENEMY_SPRITES).filter(([, s]) => s.dirCols);
+        assert.ok(fourWay.length >= 7, `only ${fourWay.length} four-way entries (crowd + six named town NPCs)`);
+        for (const [type, s] of fourWay) {
+            assert.equal(s.dirCols.length, 4, `${type}: dirCols needs [up, down, left, right]`);
+            assert.equal(new Set(s.dirCols).size, 4, `${type}: two facings share a column`);
+            assert.ok(Number.isInteger(s.walkRows) && s.walkRows >= 1, `${type}: bad walkRows ${s.walkRows}`);
+            for (const v of (s.variants?.length ? s.variants : [s])) {
+                assert.equal(v.col, s.dirCols[1], `${type}: base cell ${v.col},${v.row} is not the down-facing column`);
+            }
         }
     });
 });
@@ -226,7 +242,8 @@ describe('dirOf', () => {
 });
 
 describe('spriteFrame', () => {
-    // Violencian is the one entry carrying dirCols/walkRows; Pike is a plain
+    // Violencian carries dirCols/walkRows (so, since DS1, do the named town
+    // NPCs; tests/npc-facing.test.js covers them); Pike is a plain
     // {sheet,col,row,static} entry with neither — the fixture the analogous
     // spriteVariant test ("an entry with no variants is returned unchanged")
     // uses for the same reason.

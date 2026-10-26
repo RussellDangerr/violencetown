@@ -22,7 +22,8 @@ export const LANES = [
 ];
 
 export const KINDS = ['idea', 'ruling', 'slice'];
-export const WIP_CAP = 2;
+export const WIP_CAP = 10;
+export const PICKS_PER_PASS = 10;
 
 const isDone = c => c.lane === 'done';
 
@@ -75,19 +76,24 @@ export function unblocked(cards) {
 const normPath = p => String(p ?? '').trim().replace(/\\/g, '/').replace(/^\.\//, '');
 
 // What the loop builds next (plans/ticket-board.md §2). Returns
-//   { pick, reason, wip, skipped }
-// reason: 'ok' | 'wip-cap' | 'nothing-pickable'. `skipped` lists every Ready
-// slice that was passed over, with why, so a run can report it.
-export function nextSlice(cards, { wipCap = WIP_CAP } = {}) {
+//   { picks, reason, wip, skipped }
+// reason: 'ok' | 'wip-cap' | 'nothing-pickable'. `picks` holds up to `max`
+// slices, never more than the cap leaves room for, and no two share a file —
+// each one's touches join the busy set, so the next pick can't clash with it
+// (plans/loop-limits-ten.md). `skipped` lists every Ready slice that was passed
+// over, with why, so a run can report it.
+export function nextSlices(cards, { wipCap = WIP_CAP, max = PICKS_PER_PASS } = {}) {
     const lanes = byLane(cards);
     const inFlight = [...lanes.doing, ...lanes.review].filter(c => kindOf(c) === 'slice');
     const wip = inFlight.length;
-    if (wip >= wipCap) return { pick: null, reason: 'wip-cap', wip, skipped: [] };
+    if (wip >= wipCap) return { picks: [], reason: 'wip-cap', wip, skipped: [] };
+    const room = Math.min(max, wipCap - wip);
 
     const busy = new Set(inFlight.flatMap(c => (c.touches ?? []).map(normPath)));
     const ix = blockerIndex(cards);
-    const skipped = [];
+    const picks = [], skipped = [];
     for (const c of lanes.ready) {
+        if (picks.length >= room) break;
         if (kindOf(c) !== 'slice') { skipped.push({ id: c.id, why: 'not a slice' }); continue; }
         if (c.claim) { skipped.push({ id: c.id, why: 'already claimed' }); continue; }
         // A slice with no acceptance checks has not been tweaked — the roadmap's old
@@ -98,9 +104,16 @@ export function nextSlice(cards, { wipCap = WIP_CAP } = {}) {
         if (open.length) { skipped.push({ id: c.id, why: `blocked by ${open.join(', ')}` }); continue; }
         const clash = (c.touches ?? []).map(normPath).filter(p => busy.has(p));
         if (clash.length) { skipped.push({ id: c.id, why: `touches unmerged ${clash.join(', ')}` }); continue; }
-        return { pick: c, reason: 'ok', wip, skipped };
+        picks.push(c);
+        for (const p of c.touches ?? []) busy.add(normPath(p));
     }
-    return { pick: null, reason: 'nothing-pickable', wip, skipped };
+    return { picks, reason: picks.length ? 'ok' : 'nothing-pickable', wip, skipped };
+}
+
+// The first of nextSlices(): { pick, reason, wip, skipped }.
+export function nextSlice(cards, { wipCap = WIP_CAP } = {}) {
+    const { picks, ...r } = nextSlices(cards, { wipCap, max: 1 });
+    return { pick: picks[0] ?? null, ...r };
 }
 
 // His answer to a ruling: the pick is stored on the card and the card moves to
@@ -188,6 +201,52 @@ export function claudesTurn(cards) {
         else if (laneOf(c) === 'review' && c.verdict) out.push({ id: c.id, why: c.verdict.verdict === 'merge' ? 'merge it' : 'make the changes' });
         else if (kindOf(c) === 'ruling' && laneOf(c) === 'ruling' && !(Array.isArray(c.options) && c.options.length)) out.push({ id: c.id, why: 'write its options' });
         else if (kindOf(c) === 'slice' && laneOf(c) === 'ready' && !isTweaked(c)) out.push({ id: c.id, why: 'tweak it (no acceptance checks yet)' });
+    }
+    return out;
+}
+
+// What a card is really waiting on (plans/ticket-board.md §9): its open blockers
+// walked all the way down, sorted by who has to act.
+//   rulings   — open rulings he can answer now
+//   approvals — tweaked Ready slices he has not approved
+//   merges    — branches in Review waiting on his merge call
+//   claude    — rulings with no options yet, ideas, untweaked slices
+//   build     — approved work the loop has yet to build (nothing for him to do)
+//   unknown   — blocker ids with no card (fail closed, as blockerIndex does)
+// A blocker that is itself blocked is walked through, so a slice behind a slice
+// behind a ruling lists that ruling.
+export function waitingOn(cards, id, ix = blockerIndex(cards)) {
+    const byId = Object.create(null);
+    for (const c of cards) byId[c.id] = c;
+    const out = { rulings: [], approvals: [], merges: [], claude: [], build: [], unknown: [] };
+    const seen = new Set([id]);
+    const walk = cid => {
+        for (const b of ix.openBlockedBy[cid] ?? []) {
+            if (seen.has(b)) continue;
+            seen.add(b);
+            const c = byId[b];
+            if (!c) { out.unknown.push(b); continue; }
+            const k = kindOf(c), l = laneOf(c);
+            if (isOpenRuling(c)) out.rulings.push(b);
+            else if (k === 'slice' && l === 'ready' && isTweaked(c) && !c.approved) out.approvals.push(b);
+            else if (l === 'review') out.merges.push(b);
+            else if (k === 'ruling' || k === 'idea' || (k === 'slice' && !isTweaked(c))) out.claude.push(b);
+            else if ((ix.openBlockedBy[b] ?? []).length === 0) out.build.push(b);
+            walk(b);
+        }
+    };
+    walk(id);
+    return out;
+}
+
+// For every open ruling, the approved Ready slices its answer helps free —
+// directly or down the chain. Sorted by board order.
+export function freesIndex(cards) {
+    const ix = blockerIndex(cards);
+    const out = Object.create(null);
+    for (const s of byLane(cards).ready) {
+        if (kindOf(s) !== 'slice' || !s.approved) continue;
+        for (const r of waitingOn(cards, s.id, ix).rulings) (out[r] ??= []).push(s.id);
     }
     return out;
 }

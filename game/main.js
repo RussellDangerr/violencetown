@@ -13,7 +13,7 @@ import { makeEffectLoop } from './effect-loop.js';                 // one tick o
 import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, MAX_STACK, SLUDGE_DOT } from './data.js';
 import { puddleTiles, layPuddle, puddleAt, dryPuddles } from './puddles.js';   // (poisons) Sludge Brain's puddles
 import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef } from './items.js';
-import { WEAPONS } from './weapons.js';
+import { WEAPONS, weaponClassOf } from './weapons.js';
 import { resolveItemDef } from './item-registry.js';
 import { tickBuffList, BUFF_DEFS, sumBuffStat, worldBeatPlan } from './buffs.js';
 import { RINGS, FUSIONS } from './ring-data.js';
@@ -24,12 +24,12 @@ import {
 } from './rings.js';
 import { isBoss, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS } from './defeat-scenarios.js';
 import { addToInventory as addToInv, moveToZone, zoneOf } from './inventory.js';
-import { itemActions, equipOptions } from './inspector.js';   // (C1) tap-to-inspect: context actions; (C2) GEAR chooser options
+import { itemActions, equipOptions, inspectorUsesRect } from './inspector.js';   // (C1) tap-to-inspect: context actions; (C2) GEAR chooser options
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
-import { attack, formatDamageNumber, computeHit, elementalMult, isBackstab } from './combat.js';
+import { attack, formatDamageNumber, computeHit, elementalMult, weaponHitKind, isBackstab } from './combat.js';
 import { Enemy, spawnEnemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
-import { isHostile, isHunting, isSewerDweller } from './ai.js';
+import { isHostile, isHunting, isSewerDweller, allyAids } from './ai.js';
 import { getGreedyStep, stepEntity, findPath } from './pathing.js'; // pathfinding (greedy chase + BFS click-to-move); stepEntity = shove a character aside
 import { applyDispositionDelta, reactToTransaction } from './give-action.js';
 import { getDialogue } from './dialogue.js';
@@ -78,7 +78,7 @@ const HINT_COOLDOWN_TURNS = 8;
 function writeSeenHints(set) {
     Settings.set('hintsSeen', [...set].join(','));
 }
-import { emitNoise, NOISE, perceives, spotters, struck } from './perception.js'; // sound + sight
+import { emitNoise, NOISE, perceives, spotters, struck, VERDICT } from './perception.js'; // sound + sight
 import { coinTake, kitTake, gearTake, coinWeight, itemWeight, gearWeight,
          noticeBuffer, isClean, stealLimit } from './theft.js';
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
@@ -86,9 +86,10 @@ import {
     createWheelState, cycle, drill, back, compose, autoAimTile,
     needsFriendlyConfirm, aimRange, affectedTiles, selectedNode, restoreLastCategory, verbApplies,
     orderedTargetVerbs, isCombatActive, defaultVerb, previewChildren,
+    aimTap, adjacentFacing,
 } from './wheel-model.js'; // (sunburst wheel) node-tree model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
-import { fighters } from './fight-area.js';                                      // (fight-fog) who is in the fight
+import { fighters, joiners } from './fight-area.js';                                     // (fight-fog) who is in the fight
 import { fightStartKind, entranceFor, fightFxActive } from './fight-entrance.js'; // (fight-fog) how it began, and how long its fog moves
 import { createCascade, CASCADE_BEAT_MS, LUNGE_MS } from './cascade.js';           // (turn-model C1) the enemy phase, one actor at a time
 
@@ -287,9 +288,10 @@ class Game {
         this._animCallback = null;
         this._stepIndex   = 0;    // ++ per completed step → walk-anim foot parity
 
-        // Equipment
+        // Equipment. Two hands (plans/ws3-two-hands-left-right.md): `weapon` is
+        // the right hand, `left` the other; a two-hander is the same def in both.
         this.equipment = {
-            weapon: WEAPONS.wooden_sword,
+            weapon: WEAPONS.wooden_sword, left: null,
             top: null, bottom: null, front: null, back: null, sides: null,
         };
         this._refreshGrantedSkills();   // derive Magic/Trick grants from the equipped weapon
@@ -338,6 +340,7 @@ class Game {
         this._pathArrive = null;
         this._pressTimer = null;    // touch long-press timer → full Target List
         this._pressStart = null;    // pointerdown client pos, to cancel the press on drag
+        this._turnPress = null;     // (C3b) { tile } — a press beside you: walks on release, turns on long-press
 
         // In-canvas log strip (Phase 1B of overhead-dialogue plan). Mirrors
         // every _log() call into a fixed-size ring buffer that the renderer
@@ -1465,6 +1468,7 @@ class Game {
         // tap → pick the row; a real drag scrolled the list and picks nothing.
         const endPress = (e) => {
             cancelPress();
+            this._releaseTurnPress(e);   // (C3b) a quick tap beside you walks the step on release
             if (this._openerHeld) { this._openerHeld = false; this._wheelOpenerUp(); }   // (screen-fill) the dock's ✦, released
             if (this._dlgDrag) {
                 const d = this._dlgDrag; this._dlgDrag = null;
@@ -1880,6 +1884,7 @@ class Game {
         // _bindCanvasTap. Letting it through here would fire the default action
         // first, then the menu would bail because the state left IDLE.
         if (e.button >= 1) return;
+        this._turnPress = null;   // (C3b) a new press never inherits an old one's pending step
         // Mirror the keyboard gate: don't process taps during the move
         // animation or while the world is resolving. Splash has its own
         // handler (DOM button). Dead is a non-interactive end state.
@@ -1907,7 +1912,9 @@ class Game {
             const _cancel = () => (this.state === STATE.DEVICE ? this._closeDevice() : this._closeCurrentMenu());
             if (_cbr && this._pointInRect(pt, _cbr, HIT_SLOP)) { _cancel(); return; }
             if (!this._pointInRect(pt, _mpr)) { _cancel(); return; }
-        } else if (this.state === STATE.RADIAL_MENU) {
+        } else if (this.state === STATE.RADIAL_MENU && !this.wheel.aiming) {
+            // (C3b) Not while aiming: the dial isn't drawn then, and a tap on the
+            // world places the reticle (_tapRadialMenu → _aimTapAt) instead.
             // (Slice 2) Depth-dynamic cull: close on a tap beyond the wheel's real
             // outer extent for the CURRENT depth. The old fixed 230px left the small
             // shallow wheel un-closable by a nearby tap (a 160px tap was neither a
@@ -1986,11 +1993,12 @@ class Game {
                 const v = defaultVerb(target, this);
                 if (v) { this._actOnTarget(v, target); this._armLongPress(tile, e); return; }
             }
+            // (C3b, ruling C3R2) An empty tile straight beside you: a long-press
+            // faces it without stepping, so the step waits for the release.
+            const face = !target && adjacentFacing(this.playerX, this.playerY, tile);
+            if (face) { this._armTurnPress(tile, face, e); return; }
             // Click-to-move: empty walkable ground → BFS-path the Hero there.
-            if (this.map.isWalkable(tile.x, tile.y) && !(tile.x === this.playerX && tile.y === this.playerY)) {
-                const path = findPath(this, { x: this.playerX, y: this.playerY }, tile);
-                if (path && path.length) { this._walkPath(path); return; }
-            }
+            if (this._tapWalkTo(tile)) return;
         }
         // ITEM_SELECTED → legacy hotbar tap (slot re-select / tap-outside cancel).
         // In IDLE the bottom bar is the XMB (handled above by _tapXmbBar), so we
@@ -2010,6 +2018,40 @@ class Game {
             this._pressTimer = null;
             if (this.state === STATE.IDLE) this._openTargetList(tile.x, tile.y);
         }, 450);
+    }
+
+    // Click-to-move: empty walkable ground (not your own tile) → BFS-path the
+    // Hero there. True when a walk started.
+    _tapWalkTo(tile) {
+        if (!this.map.isWalkable(tile.x, tile.y) || (tile.x === this.playerX && tile.y === this.playerY)) return false;
+        const path = findPath(this, { x: this.playerX, y: this.playerY }, tile);
+        if (path && path.length) { this._walkPath(path); return true; }
+        return false;
+    }
+
+    // (C3b, ruling C3R2) Press on an empty tile straight beside you. Held to the
+    // long-press time (the Target List's, so the two feel alike) you turn to face
+    // it: no step, no turn spent, the arrow keys' free pivot. Released sooner it
+    // is a tap and walks the step (endPress in _bindCanvasTap). A drag drops the
+    // turn but keeps the step; a cancelled pointer drops both.
+    _armTurnPress(tile, face, e) {
+        if (this._pressTimer) clearTimeout(this._pressTimer);
+        this._pressStart = e ? { x: e.clientX, y: e.clientY } : null;
+        this._turnPress = { tile };
+        this._pressTimer = setTimeout(() => {
+            this._pressTimer = null;
+            this._turnPress = null;
+            if (this.state !== STATE.IDLE || this._animating) return;
+            this.facing = face;
+            this._render();
+        }, 450);
+    }
+
+    // The release of a turn-press that never reached the long-press time.
+    _releaseTurnPress(e) {
+        const tp = this._turnPress; this._turnPress = null;
+        if (!tp || !e || e.type !== 'pointerup') return;
+        if (this.state === STATE.IDLE && !this._animating) this._tapWalkTo(tp.tile);
     }
 
     _pointInRect(p, r, slop = 0) {
@@ -2100,6 +2142,7 @@ class Game {
                 if (w.confirming) w.confirming = false; else { w.aiming = false; w.reticle = null; }
                 audio.playSfx('menu-cancel'); this._render(); return;
             }
+            if (w.aiming) { this._aimTapAt(pt); return; }
             this._wheelCommit(); return;
         }
 
@@ -2116,6 +2159,20 @@ class Game {
         else if (a >= Math.PI * 0.75 && a < Math.PI * 1.25) this._wheelCycle(-1);  // LEFT → prev
         else if (a >= Math.PI * 1.25 && a < Math.PI * 1.75) this._wheelDrill();    // TOP → drill
         else                                                this._wheelCycle(+1);  // RIGHT → next
+    }
+
+    // (C3b, ruling C3R3) A tap on the world while aiming: on the reticle it fires
+    // (through _wheelCommit, so the Plus-Ultra confirm still guards a friendly);
+    // anywhere else it places the reticle, snapped to the nearest legal tile.
+    // The dock's chrome sits over the world's last rows, so a tap there is ignored.
+    _aimTapAt(pt) {
+        if (hitHud(this._hud(), pt)) return;
+        const w = this.wheel;
+        const r = aimTap(w, this, this._screenToTile(pt));
+        if (r.action === 'fire') { this._wheelCommit(); return; }
+        if (r.action !== 'place') { audio.playSfx('bump-wall'); return; }
+        w.reticle = r.reticle;
+        audio.playSfx('menu-tick'); this._render();
     }
 
     // ── Animation ─────────────────────────────────────────────────────────────
@@ -2633,6 +2690,7 @@ class Game {
         this._pathQueue = [];       // cancel any click-to-walk in progress
         this._pathArrive = null;
         if (this._pressTimer) { clearTimeout(this._pressTimer); this._pressTimer = null; }
+        this._turnPress = null;     // (C3b) a pending tap-beside-you step
     }
 
     // True when held-key auto-walking should HALT before stepping in `dir` —
@@ -3177,7 +3235,7 @@ class Game {
                 this._render();
                 break;
             }
-            case 'hit':   if (npc) { this.combatAttack(npc, this.equipment.weapon.damage, { type: this.equipment.weapon.damageType }); this._advanceWorld(); this._render(); } break;
+            case 'hit':   if (npc) { this.combatAttack(npc, this.equipment.weapon.damage, { type: this.equipment.weapon.damageType, weapon: this.equipment.weapon }); this._advanceWorld(); this._render(); } break;
             case 'throw': { const th = this._resolveThrowable(); if (th) { const msg = resolveThrow(this, th.itemDef, null, th.count, { x: t.x, y: t.y }); if (msg) this._log(msg, 'combat'); this._rockClatter(th.itemDef, t.x, t.y); th.consume(); this._advanceWorld(); } else this._log('[Nothing to throw.]'); this._render(); break; }
             case 'take':  this._takeItemAt(t.x, t.y); this._render(); break;
             case 'open':  if (t.container) this._openContainer(t.container); break;
@@ -3484,7 +3542,7 @@ class Game {
                     // (fear) Fearmur fears an enemy struck twice in a row — check
                     // BEFORE the hit (which may kill it and reset the tracker).
                     const repeat = wpn && wpn.onHit === 'fearOnRepeat' && this._lastHitTarget === enemy.id;
-                    this.combatAttack(enemy, wpn.damage, { type: wpn && wpn.damageType });
+                    this.combatAttack(enemy, wpn.damage, { type: wpn && wpn.damageType, weapon: wpn });
                     if (enemy.entity.isAlive()) {
                         if (repeat) { this._applyFear(enemy, 3); this._log('[The Fearmur cracks bone — it recoils in terror!]', 'combat'); }
                         if (wpn && wpn.pullDistance) this._pullEnemyToward(enemy, wpn.pullDistance);   // (Lion Whip) yank it closer
@@ -3505,7 +3563,7 @@ class Game {
                 // single hit — the weapon-AoE case the basic-hit typing pass missed.
                 const dmg = this.equipment.weapon.damage * 2 / 3;
                 const tiles = affectedTiles(w, this);
-                const hit = this._aoeStrike(tiles, dmg, { type: this.equipment.weapon.damageType });
+                const hit = this._aoeStrike(tiles, dmg, { type: this.equipment.weapon.damageType, weapon: this.equipment.weapon });
                 if (hit) { this._log(`[Cleave! ${hit} caught.]`, 'combat'); this._advanceWorld(); }
                 else if (this._enemiesPresent(tiles) > 0) { this._log('[Cleave connects — shrugged off, immune.]', 'combat'); this._advanceWorld(); }
                 else this._log('[Cleave hits only air]', 'combat');
@@ -3517,7 +3575,7 @@ class Game {
                 // Raw fraction + weapon type, as Cleave above — round once, type applies.
                 const dmg = this.equipment.weapon.damage * 2 / 5;
                 const tiles = affectedTiles(w, this);
-                const hit = this._aoeStrike(tiles, dmg, { type: this.equipment.weapon.damageType });
+                const hit = this._aoeStrike(tiles, dmg, { type: this.equipment.weapon.damageType, weapon: this.equipment.weapon });
                 if (hit) { this._log(`[Spin! ${hit} caught.]`, 'combat'); this._advanceWorld(); }
                 else if (this._enemiesPresent(tiles) > 0) { this._log('[Spin connects — shrugged off, immune.]', 'combat'); this._advanceWorld(); }
                 else this._log('[You spin, hitting nothing]', 'combat');
@@ -3782,6 +3840,9 @@ class Game {
         // _hasActiveEffects. (plans/movement-feel.md #6)
         this._ensureParticleLoop();
         if (this.playerHp <= 0) { this._endCascadePhase(); this.playerHp = 0; this._die(); return; }
+
+        // (F3a) Hostiles who see the fight join it, once the enemies have moved.
+        this._joinFight();
 
         // (one clock) Every committed action winds one beat of the world, in a
         // fight or out of one: the day steps and moods count toward their next
@@ -4297,6 +4358,9 @@ class Game {
         // entirely (0-contract). Backstab: standing on the tile directly behind
         // the target's last step (5-Zone Body's "Back" zone as a rule).
         const backstab = isBackstab(this.playerX, this.playerY, enemyObj);
+        // (WS4) A weapon hit with no damageType of its own lands its best kind —
+        // slash, stab or crush — on this target (WR1 b); the splat shows it.
+        const kind = opts.type ? null : weaponHitKind(opts.weapon, enemyObj);
         const finalDmg = computeHit({
             base: dmg,
             // (Poition) An active Strength Poition adds flat damage here — Law
@@ -4306,7 +4370,7 @@ class Game {
             // (weapon swing, Cleave/Spin, item Smash, spells, tricks, thrown
             // splash) since they all funnel through this single computeHit call.
             flats: this._poitionMod('strength'),
-            elemental: elementalMult(opts.type, enemyObj),
+            elemental: elementalMult(opts.type || kind, enemyObj),
             positional: backstab ? 1.5 : 1,
         });
         if (finalDmg === 0) { this._log(`[${enemyObj.type} is immune!]`, 'combat'); return null; }
@@ -4339,7 +4403,7 @@ class Game {
         // 3×3 burst) pass opts.omni so it bursts around the target instead.
         const splatDir = { dx: enemyObj.x - this.playerX, dy: enemyObj.y - this.playerY };
         this._spawnHitSplat(enemyObj.x, enemyObj.y, `-${result.dealt}`, opts.type || 'physical',
-            { dir: splatDir, omni: !!opts.omni, crit: !!opts.crit, killed: !!result.killed });
+            { dir: splatDir, omni: !!opts.omni, crit: !!opts.crit, killed: !!result.killed, kind });
 
         // Hit flash + stagger — Phase C, polished in B6. Flash duration
         // and stagger distance now scale with damage so light taps feel
@@ -4510,15 +4574,20 @@ class Game {
         return e.entity.isAlive() && isHostile(e);
     }
 
-    // One turn for a bribed ALLY (dispatched from npc.js's ALLIED state). Hunt
-    // the nearest hostile within SEEK tiles — attack if adjacent, else step
-    // toward it. With no hostile in range, leash-follow the player (close in only
-    // when more than LEASH tiles away) so allies neither wander off nor crowd you.
+    // One turn for a bribed ALLY (dispatched from npc.js's ALLIED state). Once it
+    // has seen the fight (F3b: you or a fighter in direct view; it stays in until
+    // the fight ends), hunt the nearest fighter within SEEK tiles — attack if
+    // adjacent, else step toward it. Otherwise leash-follow the player (close in
+    // only when more than LEASH tiles away) so allies neither wander off nor crowd you.
     _allyTakeTurn(ally) {
         const SEEK = 8, LEASH = 3;
 
+        const fs = fighters(this.enemies);
+        ally._aiding = allyAids(ally, fs, { x: this.playerX, y: this.playerY },
+            (x, y) => perceives(this.map, ally, x, y) === VERDICT.DIRECT);
+
         let target = null, bestDist = Infinity;
-        for (const e of this.enemies) {
+        for (const e of ally._aiding ? fs : []) {
             if (!this._isHostileToPlayer(e)) continue;
             const d = manhattan(ally.x, ally.y, e.x, e.y);
             if (d <= SEEK && d < bestDist) { bestDist = d; target = e; }
@@ -4619,6 +4688,10 @@ class Game {
     // ring) vs tricks (Trick ring) by which registry defines them. Also recomputes
     // the aggregate passive modifiers and records any newly-seen fusions. Call after
     // any change to weapon OR rings (acquire, slot, unslot, unlock, new game, load).
+    // How many hands a weapon takes, from its class (weapons.js). No class, or
+    // not a weapon, is one hand. items.js and save.js ask through this.
+    _handsOf(def) { return (weaponClassOf(def) || {}).hands || 1; }
+
     _refreshGrantedSkills() {
         const w  = this.equipment && this.equipment.weapon;
         const gs = (w && w.grantsSpells) || [];
@@ -5154,7 +5227,7 @@ class Game {
         }
         this.tempEquips = [];
         this.selectedSlot = -1;
-        this.equipment = { weapon: WEAPONS.wooden_sword, top: null, bottom: null, front: null, back: null, sides: null };
+        this.equipment = { weapon: WEAPONS.wooden_sword, left: null, top: null, bottom: null, front: null, back: null, sides: null };
         this._refreshGrantedSkills();   // reset weapon → no granted skills
         // Clear any transition queued before death so the first post-respawn
         // action doesn't ghost-load a map.
@@ -5244,7 +5317,7 @@ class Game {
         this.inventory.fill(null);
         this.tempEquips = [];
         this.selectedSlot = -1;
-        this.equipment = { weapon: WEAPONS.wooden_sword, top: null, bottom: null, front: null, back: null, sides: null };
+        this.equipment = { weapon: WEAPONS.wooden_sword, left: null, top: null, bottom: null, front: null, back: null, sides: null };
         this.ownedRings = new Set();
         this.ringSlots = {};
         this.ringTier = 0;
@@ -5338,6 +5411,24 @@ class Game {
         this._ensureParticleLoop();
     }
 
+    // (F3a) A turn-boundary step, never the render path: every hostile that
+    // directly sees you or a friend already fighting you starts chasing now,
+    // with the fields a sighting sets in npc.js (plans/f3a-hostiles-join-fights.md).
+    _joinFight() {
+        const fs = fighters(this.enemies);
+        if (fs.length === 0) return;
+        for (const n of joiners(this.map, this.enemies, fs, { x: this.playerX, y: this.playerY })) {
+            n.state = 'chasing';
+            n._struckBy = null;
+            n._lostSightTurns = 0;
+            n._awareBeats = 0;
+            n._sweepBeats = 0;
+            n._lastSeenX = this.playerX;
+            n._lastSeenY = this.playerY;
+            this._log('[TEXT]', 'combat');
+        }
+    }
+
     // ── Floating damage numbers ──────────────────────────────────────────────
     //
     // Spawn a particle at a tile coordinate that floats upward and fades
@@ -5381,6 +5472,7 @@ class Game {
         this._damageNumbers.push({
             tileX, tileY, text, type,
             crit: !!opts.crit,
+            kind: opts.kind || null,
             mark: this._pickHitMark(type, amount, !!opts.killed),
             dir,
             bornAt: born,
@@ -5652,6 +5744,9 @@ class Game {
                 for (let a = 0; a < actions.length; a++) {
                     if (this._pointInRect(pt, rows[a], HIT_SLOP)) { this._deviceActivate('action', a); return; }
                 }
+                // (C3c) The uses button, when the item has a use here.
+                const uses = this._deviceUsesRect?.(sel.index);
+                if (uses && this._pointInRect(pt, uses, HIT_SLOP)) { this._deviceActivate('action', 'uses'); return; }
             }
             // 2) Otherwise a slot tap: SELECT a filled slot, clear on an empty one.
             const rects = deviceBagSlotRects(body);
@@ -5714,6 +5809,7 @@ class Game {
         if (zone === 'action') {
             const sel = this._deviceSel;
             if (!sel || sel.tab !== 'items' || !this.inventory[sel.index]) return;
+            if (index === 'uses') { this._deviceOpenUses(sel.index); return; }
             const def = this.inventory[sel.index].itemDef;
             const action = itemActions(def, zoneOf(sel.index, SAFE_SLOTS))[index];
             if (!action) return;
@@ -5813,6 +5909,25 @@ class Game {
         }
     }
 
+    // (C3c) The inspector's uses button: its rect when the bag item at `index`
+    // has a "use this on that" here, else null. The same test the overlay uses
+    // (contextualUses), and no button on a quest item, which the overlay refuses.
+    _deviceUsesRect(index) {
+        const stack = this.inventory[index];
+        if (!stack || stack.itemDef.questItem) return null;
+        if (!contextualUses(stack.itemDef, this).length) return null;
+        return inspectorUsesRect(deviceBodyRect());
+    }
+
+    // (C3c) Leave the Remoticon holding that item, as its digit key would, and
+    // open the list Space opens. The keyboard and touch then share one list.
+    _deviceOpenUses(index) {
+        this._deviceSel = null;
+        this.selectedSlot = index;
+        this.state = STATE.ITEM_SELECTED;
+        this._openItemOverlay();
+    }
+
     // (C3) What the keyboard cursor can stand on right now, on the active tab:
     // the zone _deviceActivate will be handed, the rects the renderer draws for
     // it (so the cursor moves over exactly what is on screen), the id each rect
@@ -5829,7 +5944,10 @@ class Game {
                 const n = itemActions(stack.itemDef, zoneOf(sel.index, SAFE_SLOTS)).length;
                 if (n) {
                     const rects = inspectorActionRects(body).slice(0, n);
-                    return { zone: 'action', rects, ids: rects.map((_, i) => i), cur: Math.min(sel.action, n - 1) };
+                    const ids = rects.map((_, i) => i);
+                    const uses = this._deviceUsesRect?.(sel.index);   // (C3c) the uses button joins the row
+                    if (uses) { rects.push(uses); ids.push('uses'); }
+                    return { zone: 'action', rects, ids, cur: Math.min(sel.action, rects.length - 1) };
                 }
             }
             const rects = deviceBagSlotRects(body);

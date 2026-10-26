@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {
     LANES, KINDS, WIP_CAP, byLane, blockerIndex, unblocked, nextSlice, answerRuling, newIdea,
     triageIdea, approveSlice, reviewVerdict, addFeedback, yourTurn, claudesTurn, sendWords,
-    migrateCard, mermaidSource, moveCard,
+    migrateCard, mermaidSource, moveCard, waitingOn, freesIndex,
 } from '../tools/roadmap-board/board-model.js';
 
 const cards = [
@@ -21,9 +21,9 @@ describe('LANES and KINDS', () => {
     test('seven lanes in board order', () => {
         assert.deepEqual(LANES.map(l => l.id), ['idea', 'ruling', 'ready', 'doing', 'review', 'done', 'someday']);
     });
-    test('three kinds and a WIP cap of two', () => {
+    test('three kinds and a WIP cap of ten', () => {
         assert.deepEqual(KINDS, ['idea', 'ruling', 'slice']);
-        assert.equal(WIP_CAP, 2);
+        assert.equal(WIP_CAP, 10);
     });
 });
 
@@ -107,12 +107,13 @@ describe('nextSlice — what the loop builds next', () => {
         assert.equal(nextSlice(next).pick.id, 'B1', 'B1 comes first in Ready order once free');
     });
 
-    test('stops at the WIP cap: doing + review hold two slices', () => {
+    test('stops at the WIP cap: doing + review hold as many slices as the cap', () => {
         const full = [...cards,
             { id: 'D1', title: 'd', lane: 'doing',  order: 10, kind: 'slice', blockedBy: [] },
             { id: 'V1', title: 'v', lane: 'review', order: 10, kind: 'slice', blockedBy: [] },
         ];
-        const r = nextSlice(full);
+        assert.equal(nextSlice(full).pick.id, 'B2', 'two in flight is well under the default cap of ten');
+        const r = nextSlice(full, { wipCap: 2 });
         assert.equal(r.reason, 'wip-cap');
         assert.equal(r.pick, null);
         assert.equal(r.wip, 2);
@@ -401,5 +402,59 @@ describe('moveCard', () => {
         const next = moveCard(cards, 'B1', { lane: 'ready', before: 'B2' });
         const g = byLane(next);
         assert.deepEqual(g.ready.map(c => c.id), ['B2', 'B1'], 'B1 moved past B2');
+    });
+});
+
+describe('waitingOn and freesIndex — what a blocked card waits on (§9)', () => {
+    const chain = [
+        { id: 'R1', title: 'Accept golden?', lane: 'ruling', order: 10, kind: 'ruling', blockedBy: [],
+          options: [{ id: 'a', label: 'Yes' }] },
+        { id: 'R2', title: 'No options yet', lane: 'ruling', order: 20, kind: 'ruling', blockedBy: [] },
+        { id: 'R3', title: 'Answered',       lane: 'done',   order: 10, kind: 'ruling', blockedBy: [], pick: { option: 'a' } },
+        { id: 'S1', title: 'Join fights',    lane: 'ready',  order: 10, kind: 'slice', blockedBy: ['R1', 'R3'], acceptance: ['x'], approved: { at: 1 } },
+        { id: 'S2', title: 'Allies',         lane: 'ready',  order: 20, kind: 'slice', blockedBy: ['S1'], acceptance: ['x'], approved: { at: 1 } },
+        { id: 'S3', title: 'Bystanders',     lane: 'ready',  order: 30, kind: 'slice', blockedBy: ['S2', 'R2', 'U9'], acceptance: ['x'], approved: { at: 1 } },
+        { id: 'S4', title: 'Rats',           lane: 'ready',  order: 40, kind: 'slice', blockedBy: ['R1'], acceptance: ['x'] },
+        { id: 'S5', title: 'Rat drops',      lane: 'ready',  order: 50, kind: 'slice', blockedBy: ['S4'], acceptance: ['x'], approved: { at: 1 } },
+        { id: 'S6', title: 'In review',      lane: 'review', order: 10, kind: 'slice', blockedBy: [], acceptance: ['x'] },
+        { id: 'S7', title: 'After review',   lane: 'ready',  order: 60, kind: 'slice', blockedBy: ['S6'], acceptance: ['x'], approved: { at: 1 } },
+    ];
+    test('a direct open ruling is listed; an answered one is not', () => {
+        assert.deepEqual(waitingOn(chain, 'S1').rulings, ['R1']);
+    });
+    test('a ruling behind a blocking slice is found down the chain', () => {
+        const w = waitingOn(chain, 'S3');
+        assert.deepEqual(w.rulings, ['R1']);
+        assert.deepEqual(w.claude, ['R2']);
+        assert.deepEqual(w.unknown, ['U9']);
+        assert.deepEqual(w.approvals, []);
+    });
+    test('an unapproved slice in the way is an approval, and its own ruling is listed too', () => {
+        const w = waitingOn(chain, 'S5');
+        assert.deepEqual(w.approvals, ['S4']);
+        assert.deepEqual(w.rulings, ['R1']);
+    });
+    test('a branch in Review is a merge', () => {
+        assert.deepEqual(waitingOn(chain, 'S7').merges, ['S6']);
+    });
+    test('an unblocked card waits on nothing', () => {
+        const w = waitingOn(chain, 'R1');
+        assert.equal(Object.values(w).flat().length, 0);
+    });
+    test('a blocker cycle ends instead of looping', () => {
+        const loop = [
+            { id: 'X', lane: 'ready', order: 1, kind: 'slice', blockedBy: ['Y'], acceptance: ['x'], approved: { at: 1 } },
+            { id: 'Y', lane: 'ready', order: 2, kind: 'slice', blockedBy: ['X'], acceptance: ['x'], approved: { at: 1 } },
+        ];
+        assert.deepEqual(waitingOn(loop, 'X').build, []);
+    });
+    test('freesIndex: a ruling frees every approved slice it holds, unapproved ones excluded', () => {
+        const f = freesIndex(chain);
+        assert.deepEqual(f.R1, ['S1', 'S2', 'S3', 'S5']);
+        assert.equal(f.R2, undefined);
+    });
+    test('works on frozen input', () => {
+        const frozen = Object.freeze(chain.map(c => Object.freeze({ ...c })));
+        assert.deepEqual(waitingOn(frozen, 'S3').rulings, ['R1']);
     });
 });
