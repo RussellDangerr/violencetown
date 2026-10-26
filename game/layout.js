@@ -333,7 +333,7 @@ export function dialColumnLeft(w) { return w - DOCK_PAD - 2 * DIAL_MAX_R; }
 // and for COIN KIT GEAR on one line. At 96 both clipped, which is how it was found.
 export const FIGHT_PANEL_W = 124;   // the width they want, where there is room
 export const FIGHT_PANEL_MIN_W = 56; // below this the text stops being readable
-export const FIGHT_PANEL_H = 176;   // header + six two-line slot rows; the target side fits inside it
+export const FIGHT_PANEL_H = 198;   // header + seven two-line slot rows (both hands, WS3); the target side fits inside it
 export const FIGHT_PANEL_CLEAR = 16; // tiles of unobstructed world kept between the two
 const FIGHT_PANEL_M = 8;            // from the screen's edge
 

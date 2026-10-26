@@ -20,7 +20,10 @@ the quest-1 autoplay must play exactly as before.
    back to the bag and the new weapon takes the hand it was put in.
 3. The fight's gear panel ("YOU") has a row for each hand. A two-hander shows in
    both rows.
-4. `npm run autoplay:check` is unchanged and every gate in LOOP.md §2 passes.
+4. `npm run autoplay:check` plays exactly as before (only the save
+   fingerprints move, see below) and every gate in LOOP.md §2 passes.
+5. Both fight panels are one row taller, and every line of the YOU panel,
+   with the panel's padding, lands inside its frame.
 
 ## What it rests on
 
@@ -29,6 +32,11 @@ the quest-1 autoplay must play exactly as before.
   weapon with no class, or an item that is not a weapon, counts as one-handed.
 - **WS4 (merged):** attacks pass the weapon they swing. That weapon is the right
   hand's, which is also where a two-hander sits.
+- **Ruled: accept the new autoplay golden.** The save format change moves the
+  autoplay's save fingerprints and nothing else; play is unchanged. The golden
+  is rewritten for that one cause only.
+- **Ruled: grow the fight panels one row** so both hands fit, rather than
+  clipping the last row or folding both hands into one row.
 - **His leaning (not a ruling):** two hands per body, each holds anything, or
   both hold one two-hander. No dual-wield combat in this slice.
 
@@ -49,6 +57,8 @@ the quest-1 autoplay must play exactly as before.
 - `game/save.js` writes `left`, bumps the version to 2, fills `left` on older
   saves, and settles the hands after load (a saved two-hander fills both).
 - `game/fight-panels.js` lists both hands.
+- `game/layout.js`: both fight panels grow one row (`FIGHT_PANEL_H` 176 to
+  198), so the seventh row fits inside the frame.
 
 ## Placeholders
 

@@ -284,3 +284,33 @@ describe('the fight gear panel shows both hands', () => {
         assert.equal(p.left.name, GREAT.name);
     });
 });
+
+// The YOU panel has a row per hand now, so it is one row taller than the six
+// it was sized for (WS3R2: grow the panels one row). Drawn through the real
+// renderer on a recording font: every line, with its own height and the
+// panel's padding below it, has to land inside the panel's frame.
+describe('the fight gear panel fits both hands', () => {
+    globalThis.localStorage ??= { getItem: () => null, setItem() {}, removeItem() {} };
+    const LH = 12, PAD = 6;   // _drawGearPanel's line height and padding
+    const ctx = new Proxy({}, { get: (t, k) => (k in t ? t[k] : () => ({ addColorStop() {} })), set: (t, k, v) => { t[k] = v; return true; } });
+
+    for (const [name, size] of [['3440x1440', [3440, 1440]], ['1920x1080', [1920, 1080]]]) {
+        test(`${name}: the last row clears the bottom of the frame`, async () => {
+            const { Renderer } = await import('../game/renderer.js');
+            const { DOCK, fightPanelRects } = await import('../game/layout.js');
+            const { computeViewport } = await import('../game/viewport.js');
+            const vp = computeViewport({ cssW: size[0], cssH: size[1], dpr: 1, dock: DOCK });
+            const drawn = [];
+            const r = Object.assign(Object.create(Renderer.prototype), {
+                ctx, viewport: vp, sprites: { uiPanel: null },
+                font: { drawText: (c, text, x, y) => drawn.push({ text, x, y }) },
+            });
+            const R = fightPanelRects(vp).left;
+            r._drawGearPanel(R, playerPanel({ equipment: hands(GREAT, GREAT) }));
+            assert.equal(drawn.length, 1 + 2 * SLOT_ORDER.length, 'a header and two lines per slot');
+            const last = Math.max(...drawn.map(d => d.y));
+            assert.ok(last + LH + PAD <= R.y + R.h,
+                `last line ends at ${last + LH + PAD}, frame ends at ${R.y + R.h}`);
+        });
+    }
+});
