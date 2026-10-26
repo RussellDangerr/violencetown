@@ -506,6 +506,20 @@ export function settleHands(eq, handsOf = oneHanded) {
     return eq;
 }
 
+// What each hand holds, as [{ hand, def }], right hand first. A two-hander
+// fills both keys but is held once, so it lists once, under the right hand.
+// Two of the same one-hander are the same def in both keys too, so identity
+// can't tell them apart: handsOf can.
+export function heldInHands(eq, handsOf = oneHanded) {
+    const held = [];
+    if (!eq) return held;
+    if (eq.weapon) held.push({ hand: 'weapon', def: eq.weapon });
+    if (eq.left && !(eq.left === eq.weapon && handsOf(eq.left) >= 2)) {
+        held.push({ hand: 'left', def: eq.left });
+    }
+    return held;
+}
+
 // Equip an item into its slot. Returns a log message.
 // If the slot is occupied, the old item is stored as a pending restore.
 export function equipItem(game, itemDef) {

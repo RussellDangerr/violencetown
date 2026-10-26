@@ -7,6 +7,7 @@
 //   - You always hit; armor just means you hit softer
 
 import { weaponClassOf } from './weapons.js';
+import { heldInHands } from './items.js';
 
 const DEFAULT_HP    = 100;
 const DEFAULT_MP    = 100;   // Skill / mana — every creature starts at 100
@@ -77,6 +78,50 @@ function isBackstab(attackerX, attackerY, target) {
         && attackerY === target.y - target._lastDy;
 }
 
+// ── Shields in a hand (plans/ws6-shields-in-hand.md) ─────────────────────────
+// Ruled "both": a held shield bashes (its class lands crush), adds armour while
+// held, and cuts the next hit you take. Two shields stack: each hand's shield
+// adds its own armour and cuts a hit of its own.
+//
+// Placeholders, no ruling gives them: armour is the smallest any worn piece has
+// today, the cut is the Defend action's halving, and a spent block is ready
+// again after one turn. A shield def's own `armor` wins over the default.
+const SHIELD_DEFAULTS = Object.freeze({ armor: 1, blockMult: 0.5, blockCooldown: 1 });
+
+const handsOfClass = (def) => weaponClassOf(def)?.hands || 1;
+
+function isShield(def) {
+    return weaponClassOf(def)?.id === 'shield';
+}
+
+// The hands holding a shield, right hand first: ['weapon'], ['left'], both, or [].
+function shieldHands(eq) {
+    return heldInHands(eq, handsOfClass).filter(h => isShield(h.def)).map(h => h.hand);
+}
+
+// Armour the held shields add, one shield per hand.
+function shieldArmor(eq) {
+    let total = 0;
+    for (const hand of shieldHands(eq)) total += eq[hand].armor ?? SHIELD_DEFAULTS.armor;
+    return total;
+}
+
+// Raise a shield against a hit landing on `turn`. `blocks` maps a hand to the
+// turn its block is ready again (missing = ready). The first ready shield, right
+// hand first, spends its block and the hit's incoming multiplier is the cut;
+// with none ready it is 1. The caller folds `mult` into the hit's one
+// computeHit call, alongside guard, so the hit still rounds once.
+//   -> { mult, hand }   hand is null when nothing blocked
+function raiseShield(eq, blocks, turn) {
+    for (const hand of shieldHands(eq)) {
+        if ((blocks[hand] ?? -Infinity) <= turn) {
+            blocks[hand] = turn + SHIELD_DEFAULTS.blockCooldown;
+            return { mult: SHIELD_DEFAULTS.blockMult, hand };
+        }
+    }
+    return { mult: 1, hand: null };
+}
+
 // ── Entity ────────────────────────────────────────────────────────────────────
 
 class Entity {
@@ -143,4 +188,4 @@ function formatDamageNumber(result) {
 
 // ── Exports ───────────────────────────────────────────────────────────────────
 
-export { Entity, attack, formatDamageNumber, computeHit, elementalMult, bestAttackKind, weaponHitKind, isBackstab, DEFAULT_HP, DEFAULT_MP, DEFAULT_ARMOR };
+export { Entity, attack, formatDamageNumber, computeHit, elementalMult, bestAttackKind, weaponHitKind, isBackstab, isShield, shieldHands, shieldArmor, raiseShield, SHIELD_DEFAULTS, DEFAULT_HP, DEFAULT_MP, DEFAULT_ARMOR };
