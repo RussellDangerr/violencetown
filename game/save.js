@@ -18,6 +18,7 @@ import { INVENTORY_SIZE } from './data.js';
 import { sanitizeSlots } from './rings.js';
 import { settleHands } from './items.js';
 import { sanitizeSkills } from './skills.js';
+import { sanitizeRespawnLists } from './drops.js';
 
 // 2: two hands (plans/ws3-two-hands-left-right.md) — equipment.left joins
 // equipment.weapon, which is now the right hand.
@@ -111,6 +112,10 @@ export function serialize(game) {
             collectedItems: game._collectedItems ? [...game._collectedItems] : [],
             // Runtime ground-drops per map, so dropped items survive zone changes.
             droppedItems: game._droppedItems || {},
+            // (plans/ks1-respawn-list.md) Kills waiting to come back, and bosses
+            // whose items already dropped. Each is left out while empty, so a
+            // run that never killed anything saves exactly as before.
+            ...respawnEntries(game),
             // Law 6: enemies already looted on death, so respawns stay broke
             // across a reload too (twin of collectedItems — a Set of ids).
             muggedIds: game._muggedIds ? [...game._muggedIds] : [],
@@ -136,6 +141,17 @@ export function serialize(game) {
 function skillsEntry(game) {
     const skills = sanitizeSkills(game.skills);
     return Object.keys(skills).length ? { skills } : {};
+}
+
+// (plans/ks1-respawn-list.md) The respawn lists and the boss-items-given set as
+// save fields, each left out while empty.
+function respawnEntries(game) {
+    const out = {};
+    const lists = sanitizeRespawnLists(game._respawnLists);
+    if (Object.keys(lists).length) out.respawnLists = lists;
+    const given = game._bossDropsGiven ? [...game._bossDropsGiven] : [];
+    if (given.length) out.bossDropsGiven = given;
+    return out;
 }
 
 // The enemy save shape lives WITH the Enemy class (enemies.js toSave/fromSave) so
@@ -217,6 +233,11 @@ export function migrate(raw) {
     if (!Array.isArray(r.world.collectedItems)) r.world.collectedItems = [];
     if (!r.world.droppedItems || typeof r.world.droppedItems !== 'object') r.world.droppedItems = {};
     if (!Array.isArray(r.world.muggedIds)) r.world.muggedIds = [];
+    // (plans/ks1-respawn-list.md) An older save has neither: nothing is waiting
+    // to come back, and no boss has dropped its items yet.
+    r.world.respawnLists = sanitizeRespawnLists(r.world.respawnLists);
+    r.world.bossDropsGiven = Array.isArray(r.world.bossDropsGiven)
+        ? r.world.bossDropsGiven.filter(k => typeof k === 'string') : [];
     if (!r.world.robbed || typeof r.world.robbed !== 'object' || Array.isArray(r.world.robbed)) r.world.robbed = {};
     // ...and one level DOWN, too. The theft resolver does
     // `this._robbed[id] ||= {...}`, which does NOT replace a truthy primitive —
@@ -310,6 +331,9 @@ export async function loadInto(game, raw) {
     game._muggedIds = new Set(raw.world.muggedIds ?? []);
     game._robbed = raw.world.robbed ?? {};
     game._hot = raw.world.hot ?? {};
+    // ...and the respawn lists, or a kill still waiting would spawn back alive.
+    game._respawnLists = sanitizeRespawnLists(raw.world.respawnLists);
+    game._bossDropsGiven = new Set(raw.world.bossDropsGiven ?? []);
 
     // 1. baseline map (spawns JSON enemies/items/containers; sets renderer
     //    zone). Missing coords fall back to the map spawn; clamp to bounds so
