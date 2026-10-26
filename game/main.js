@@ -596,6 +596,7 @@ class Game {
         this._bindHelpModal();
         this._bindOptionsModal(); // [settings] options/accessibility UI
         this._bindPauseOverlay(); // [settings] turn-based pause overlay
+        this._bindLeaveSave();    // (FX24) hiding or closing the tab saves
 
         // (screen-fill) The touch ACTION button retired: the dock's ✦ opens the
         // wheel on every device (_onCanvasPointerDown), and a tap in the wheel's
@@ -898,6 +899,31 @@ class Game {
         if (!opts.force && (this.turn - (this._lastAutosaveTurn ?? -999)) < 5) return;
         this._lastAutosaveTurn = this.turn;
         writeSave(this);
+    }
+
+    // (FX24) A moment a reload must not lose — gear put on, something picked
+    // up, a trade made, a drink drunk — saves now instead of waiting on the
+    // five-turn timer. A map load in flight is left alone: the zone change
+    // saves itself once the new map is in. The flows call it as
+    // `_saveMoment?.()`, so the stand-in games tests lift them onto need not carry it.
+    _saveMoment() {
+        if (this.state === STATE.RESOLVING) return;
+        this.autosave({ force: true });
+    }
+
+    // (FX24) Hiding or closing the tab saves. A fresh run that has not yet
+    // taken a turn or saved leaves the old save on disk, so GAME START pressed
+    // by mistake and a reload can still CONTINUE (see _bindSplash).
+    _saveOnLeave() {
+        if (this.turn === 0 && this._lastAutosaveTurn === -999) return;
+        this._saveMoment();
+    }
+
+    _bindLeaveSave() {
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') this._saveOnLeave();
+        });
+        window.addEventListener('pagehide', () => this._saveOnLeave());
     }
 
     // Forward a game event to the quest engine (and future subscribers, e.g.
@@ -2955,6 +2981,7 @@ class Game {
         this.selectedSlot = -1;
         this.state = STATE.IDLE;
         this._advanceWorld();
+        this._saveMoment?.();   // (FX24) gear on, or eaten / drunk: a reload keeps it
     }
 
     // (Task 9) After a throw resolves, a pullsAggro item (the rock) sends any
@@ -3326,6 +3353,7 @@ class Game {
             this.equipment[def.equipSlot] = def;
             markTaken();
             this._log(`[Equipped ${def.name}.]`, 'pickup');
+            this._saveMoment?.();   // (FX24)
             return;
         }
 
@@ -3335,6 +3363,7 @@ class Game {
         if (cat)                          this._log(`[Took ${def.name} → ${XMB_LABELS[cat]}.]`, 'pickup');
         else if (def.useType === 'equip') this._log(`[Stashed ${def.name} in your bag.]`, 'pickup');
         else                              this._log(`[Took ${def.name}.]`, 'pickup');
+        this._saveMoment?.();   // (FX24)
     }
 
     // Spin the active ring one slot and stamp the spin so the renderer sweeps it.
@@ -4296,7 +4325,7 @@ class Game {
     }
 
     _tryPickup() {
-        let go = true;
+        let go = true, took = false;
         while (go) {
             go = false;
             const idx = this.groundItems.findIndex(gi => gi.x === this.playerX && gi.y === this.playerY);
@@ -4310,8 +4339,10 @@ class Game {
                 this._collectedItems.add(`${this._mapUrl}|${gi.x}|${gi.y}|${gi.type}`);
                 this.groundItems.splice(idx, 1);
                 go = true;
+                took = true;
             } else { this._log('[Inventory full]'); break; }
         }
+        if (took) this._saveMoment?.();   // (FX24) a reload keeps what you picked up
     }
 
     // An examinable that yields a one-time item (the Red Cape wedged in a grate).
@@ -4331,6 +4362,7 @@ class Game {
         this._log(target.text || `[You take the ${def.name}.]`);
         this._log(`[+ ${def.name}]`, 'pickup');
         audio.playSfx('pickup');
+        this._saveMoment?.();   // (FX24)
         return true;
     }
 
@@ -5910,7 +5942,7 @@ class Game {
                     if (msg) this._log(msg);
                     this._refreshGrantedSkills();
                     const usedUp = def.useType === 'self' || def.useType === 'equip';
-                    if (usedUp) { this._removeFromSlot(idx); this._advanceWorld(); }
+                    if (usedUp) { this._removeFromSlot(idx); this._advanceWorld(); this._saveMoment?.(); }
                     break;
                 }
                 case 'drink': {
@@ -5922,6 +5954,7 @@ class Game {
                     }
                     this._removeFromSlot(idx);
                     this._advanceWorld();
+                    this._saveMoment?.();   // (FX24)
                     break;
                 }
                 case 'protect':
@@ -5973,6 +6006,7 @@ class Game {
                 const msg = unequipItem(this, sel.slotKey);
                 if (msg) this._log(msg);
             }
+            this._saveMoment?.();   // (FX24) the GEAR tab's swap survives a reload
             this._deviceSel = null;
             audio.playSfx('menu-confirm');
             this._render();
@@ -6670,6 +6704,8 @@ class Game {
         // touch, with no way back. A zero-delta scroll is the clamp.
         this._offerScrollBy('theirs', 0);
         this._offerScrollBy('yours', 0);
+
+        this._saveMoment?.();   // (FX24) a finished trade survives a reload
 
         // A committed offer can turn the partner hostile -- sewer fare does
         // exactly that. Do not leave the player standing in an offer window
