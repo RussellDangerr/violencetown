@@ -72,9 +72,32 @@ export const ENTRIES = {
     // Act 2's bosses (plans/ab1-act2-placeholder-bosses.md): each is its zone's
     // first pool entry from the spine, standing in with placeholderBoss() below.
     bigfoot:        { ...placeholderBoss(), name: 'Bigfoot' },
-    alien_invasion: { ...placeholderBoss(), name: 'Alien Invasion' },
+    // The first built out (plans/ab2-alien-boss-fight.md). He carries the Ray
+    // Gun, so his death drop hands it over (ABR3: it left the Factory floor);
+    // it heals nothing, so his kit never spends it.
+    alien_invasion: alienInvasion(),
     the_deity:      { ...placeholderBoss(), name: 'The Deity' },
+    // The Alien's allies (ABR2: a few he funds). Law 5's rally pays for any
+    // hurt fighter on his side near him; these are on his side because they
+    // carry no behaviour list, so they are born hostile. Placed by hand beside
+    // him in the Factory. The Factory's Greedy Green, look and numbers, until
+    // they are designed.
+    alien_ally: {
+        type: 'Greedy Green',
+        name: '[NAME]',
+        gold: 8,
+        loadout: ['hot_dog', 'foil_hat', 'latex_gloves', 'cardboard_cuirass', 'soap'],
+        hp: 100,
+        armor: 3,
+        damage: 9,
+    },
 };
+
+function alienInvasion() {
+    const e = { ...placeholderBoss(), name: 'Alien Invasion' };
+    e.loadout = [...e.loadout, 'ray_gun'];
+    return e;
+}
 
 // One stand-in stat block for every Act 2 boss until each is designed: the
 // Were-Rat's numbers as they stand, the existing Boss cell, and [TEXT] barks.
