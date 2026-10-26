@@ -18,7 +18,7 @@ import { dirOf } from './perception.js';
 export const TINY_INK = [63, 38, 49];   // #3F2631, the Tiny packs' outline
 // Sheets already drawn in the Tiny style (or re-outlined by a tool), which the
 // outline pass leaves alone.
-export const TINY_STYLE_SHEETS = new Set(['tinyDungeon', 'tinyTown', 'tinyExtra', 'outlined', 'emotes', 'marks', 'ratVariants']);
+export const TINY_STYLE_SHEETS = new Set(['tinyDungeon', 'tinyTown', 'tinyExtra', 'outlined', 'interior', 'emotes', 'marks', 'ratVariants']);
 
 export class SpriteSheet {
     // `padding` is the gap (in source pixels) between adjacent cells. Kenney's
@@ -224,6 +224,12 @@ export const SHEETS = {
     // every other packed sheet. Don't "fix" this to padding: 1 by analogy
     // with the raw source's gutter; this is a separate, already-packed file.
     outlined:     { src: `${K}/rlOutlined_packed.png`, frameW: 16, frameH: 16 },
+
+    // Furniture from Kenney's Roguelike Interior Pack (CC0), outlined in the
+    // Tiny plum by tools/gen_outlined_sheet.py (plans/zone-1-interiors-get-a-
+    // vocabulary.md). Packed, padding 0, like `outlined` above; the column
+    // order is INTERIOR_SPRITES below.
+    interior:     { src: `${K}/rlInterior_outlined.png`, frameW: 16, frameH: 16 },
 
     // Kenney roguelikeDungeon pack (zone-identity.md Item 2) — bundled since
     // early in the project (game/assets-placeholder/kenney/
@@ -646,6 +652,23 @@ export const OUTLINED_SPRITES = {
     cemeteryArchL: 24, cemeteryArchR: 25,
 };
 
+// ── Interior furniture (Roguelike Interior Pack, outlined) ──────────────────
+// Column index into the `interior` strip (game/assets-placeholder/kenney/
+// rlInterior_outlined.png). KEEP IN SYNC with tools/gen_outlined_sheet.py's
+// INTERIOR_RUNS then INTERIOR_SINGLES. A run's cells were outlined as one strip,
+// so its middles carry no side stroke: lay a run as its L, any middles, its R.
+export const INTERIOR_SPRITES = {
+    counterL: 0, counterDrawers: 1, counterDoors: 2, counterGrill: 3,
+    counterBottles: 4, counterDishes: 5, counterSink: 6, counterR: 7,
+    deskL: 8, deskMid: 9, deskR: 10,
+    feltTableL: 11, feltTableR: 12,
+    stove: 13,
+    chairDown: 14, chairUp: 15, chairRight: 16, chairLeft: 17,
+    tableSquare: 18, tableRound: 19,
+    shelfA: 20, shelfB: 21,
+    plantA: 22, plantB: 23,
+};
+
 // ── Props (tall, ground-anchored overlay objects — depth/verticality) ───────
 // Unlike tiles (always one cell, drawn flat), props render TALLER than a single
 // tile, anchored at their base tile, and depth-sort with the cast so the player
@@ -696,6 +719,14 @@ export const PROP_SPRITES = {
     // which would sit in the middle of the doorway, not under the posts.
     cemeteryArchL: { sheet: 'outlined', sx: OUTLINED_SPRITES.cemeteryArchL * 16, sy: 0, sw: 16, sh: 16, wTiles: 1, hTiles: 1, shadow: false },
     cemeteryArchR: { sheet: 'outlined', sx: OUTLINED_SPRITES.cemeteryArchR * 16, sy: 0, sw: 16, sh: 16, wTiles: 1, hTiles: 1, shadow: false },
+
+    // Interior furniture — one prop per piece on the `interior` strip, keyed by
+    // the strip's own names, placed in the Borgir, the diner, the bank and the
+    // casino. 1x1 and solid. No ground shadow: most pieces fill their cell, and
+    // a counter is a run of cells, which one centred ellipse per cell would
+    // dot with blobs.
+    ...Object.fromEntries(Object.entries(INTERIOR_SPRITES)
+        .map(([name, col]) => [name, { sheet: 'interior', sx: col * 16, sy: 0, sw: 16, sh: 16, wTiles: 1, hTiles: 1, shadow: false }])),
 };
 
 // ── Emote balloons (Kenney Emote Pack, Pixel Style 1) ───────────────────────
