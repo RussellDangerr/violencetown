@@ -17,6 +17,7 @@ import { clamp } from './utils.js';
 import { INVENTORY_SIZE } from './data.js';
 import { sanitizeSlots } from './rings.js';
 import { settleHands } from './items.js';
+import { sanitizeSkills } from './skills.js';
 
 // 2: two hands (plans/ws3-two-hands-left-right.md) — equipment.left joins
 // equipment.weapon, which is now the right hand.
@@ -76,6 +77,10 @@ export function serialize(game) {
             ringSlots:        { ...(game.ringSlots || {}) },
             ringTier:         game.ringTier || 0,
             discoveredFusions:[...(game.discoveredFusions || [])],
+            // (skills) { skillId: cleanUses }. Left out while empty, so a run that
+            // never ranked anything saves byte-for-byte as it did before skills
+            // existed (the autoplay fingerprint hashes this object).
+            ...skillsEntry(game),
             equipment: {
                 weapon: idOf(game.equipment.weapon),   // the right hand
                 left: idOf(game.equipment.left),
@@ -125,6 +130,12 @@ export function serialize(game) {
         quest: game.questEngine ? game.questEngine.serialize() : null,
         sewerEscape: game._sewerEscape || null,
     };
+}
+
+// (skills) The player's skill record as a save field, or nothing while it is empty.
+function skillsEntry(game) {
+    const skills = sanitizeSkills(game.skills);
+    return Object.keys(skills).length ? { skills } : {};
 }
 
 // The enemy save shape lives WITH the Enemy class (enemies.js toSave/fromSave) so
@@ -264,6 +275,9 @@ function validate(raw) {
     p.ringTier   = Number.isInteger(p.ringTier) ? Math.max(0, Math.min(4, p.ringTier)) : 0;
     p.ringSlots  = sanitizeSlots(p.ringSlots, new Set(p.ownedRings), p.ringTier);
     p.discoveredFusions = asIds(p.discoveredFusions);
+    // (skills) Known skills, whole counts, never below zero; a save from before
+    // skills existed loads with none.
+    p.skills = sanitizeSkills(p.skills);
     // collectedItems is a Set of string keys on the live game; drop anything
     // non-string so a malformed save can't poison the lookup.
     const ci = Array.isArray(raw.world?.collectedItems) ? raw.world.collectedItems : [];
@@ -332,6 +346,7 @@ export async function loadInto(game, raw) {
     game.ringSlots         = { ...(p.ringSlots || {}) };
     game.ringTier          = p.ringTier || 0;
     game.discoveredFusions = new Set(p.discoveredFusions || []);
+    game.skills            = { ...p.skills };
     // knownSpells/grantedTricks are derived, not stored — rebuild from the
     // restored weapon + rings (a slotted Rat Ring grants Rat Form, etc.).
     if (game._refreshGrantedSkills) game._refreshGrantedSkills();
