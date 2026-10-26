@@ -61,7 +61,8 @@ Caelan dislikes the other word for it; never use it.
        `blockedBy`. Move the slice to `ready` and drop `claim`.
      - **FAILED:** move the slice to `ready`, drop `claim`, and put the failure plus the branch
        sha in `note`.
-8. **Post the update and pick the wait** (§7).
+8. **Scout** (§10), when it's due: alongside the builders, never instead of them.
+9. **Post the update and pick the wait** (§7).
 
 **Up to 10 slices per pass**, one builder each, all spawned in the same message so they run at
 once. `next-slice.mjs` never hands out two that share a file, so their branches can't collide. A
@@ -234,3 +235,22 @@ refactors that leave the autoplay golden untouched, tooling, commit order.
 - **The PC slept or the app closed:** a self-paced loop doesn't survive that. Start it again
   with `/loop /board-loop`. It also expires after 7 days.
 - **A card is stuck in `doing`:** step 2 of the next pass recovers it.
+
+## 10. The scout
+
+Nothing feeds the board fixes and tweaks Caelan hasn't thought of, so the loop also runs a
+read-only scout (`plans/board-scout.md`, agent `board-scout`).
+
+1. **When.** Read `meta/scout` from the board database (`lastSha`, `lastAt`). Run a scout when
+   `lastAt` is more than 2 hours ago and either `origin/dev` has moved past `lastSha` or the pass
+   has nothing to build. Never two at once.
+2. **Spawn it** with the pass's card folder, `since: <lastSha>`, and a scratch folder for its
+   evidence. Spawn it in the same message as the builders.
+3. **Land its proposals.** For each one, build the card with `newScoutIdea(proposal, now,
+   cards)` from `board-model.js`; it returns null for a key the board already has, in any lane.
+   Write the cards in one batch, then set `meta/scout` to `{ lastSha: <origin/dev>, lastAt:
+   <now> }`.
+4. **Say so in the update:** how many scout cards landed, and the best one's title.
+
+Scout cards are ideas in his Ideas lane, marked "idea · scout". They wait on his Tweak it or
+Someday like any idea; the loop never builds one he hasn't triaged.
