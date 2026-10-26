@@ -57,7 +57,7 @@ slice builds none of it.
   departure note. A test fails on a missing citation or a bend with no note.
 - The edges form the overcoming cycle: each element overcomes exactly one other and is overcome
   by exactly one.
-- Nothing in play changes: no game file imports the chart, and the autoplay golden does not
+- Nothing in play changes: no game file reads the chart yet, and the autoplay golden does not
   move.
 - `npm test`, `balance:check`, the naming grep and `autoplay:check` all pass.
 
