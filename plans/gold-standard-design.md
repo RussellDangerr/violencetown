@@ -10,7 +10,7 @@ Round 3 (consumable repricing / kits / **Law 7 DoT floor**) implemented 2026-07-
 **Date:** 2026-07-23
 **Supersedes:** the combat-math sections of `plans/combat-health-system.md` (its genre research and
 "chess, not slot machines" goal carry forward unchanged; its 2026-03-30 "flat 100 HP is superseded"
-note is REVERSED by this spec — see Open Hooks for how the 5-Zone Body survives).
+note is REVERSED by this spec — see Open Hooks for how the 5-Zone Body survives, as the back tile only).
 **Source research:** reverse-engineering study of SimulationCraft + wowsims (the two open-source WoW
 combat simulators) — full report in the session artifact "The Sim Is the Spec." The transferable
 findings (budget systems, additive-vs-multiplicative buckets, one-pipeline discipline, golden-diff
@@ -311,9 +311,11 @@ Removing the death is what buys permission to raise the pressure.
 
 ## Open hooks (noted, not designed)
 
-- **5-Zone Body reconciliation:** the March note's zone system survives as the *positional layer* —
-  Back zone = backstab ×1.5, zones as where armor lives — NOT as split HP pools. Needs Caelan's
-  ruling before the bible states it as law.
+- **5-Zone Body reconciliation — ruled 2026-10-23, closed.** The March note's zone system survives
+  only as the *positional layer*: the one tile behind a target is ×1.5 (backstab), every other tile
+  ×1. No split HP pools, no per-zone armour (armour stays one flat total), no flanks, no top or
+  bottom hits. Enemies backstab the player by the same rule once that is built. The table is
+  `plans/balancing-bible.md` Law 2.
 - **Enemy buys YOUR gear:** the symmetric-peg logic permits a thief archetype who throws gold at
   you and takes your sword (you're compensated; you're also disarmed). Funny. Deferred.
 - **AI reads the player's wallet:** bribe demands and shop prices scaling to visible player wealth.

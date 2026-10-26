@@ -1,4 +1,9 @@
 # Feature: Fists as Viable Fallback Weapon
+
+> **Superseded in part (2026-10-23): "Fists and the 5-Zone Body System" below no longer applies.**
+> There is no Sides zone, no arm health and no prosthetics: every combatant has one 100 HP pool and
+> one flat armour total, and the only positional rule is the back tile at ×1.5
+> (`plans/balancing-bible.md` Law 2).
 **Phase:** Phase 2 — Combat Integration
 **Priority:** High
 **Status:** Research

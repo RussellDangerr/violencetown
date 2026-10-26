@@ -1,4 +1,10 @@
 # Feature: Combat & Health System
+
+> **Superseded (2026-10-23): the 5-Zone Body is not built and will not be.** Every combatant has one
+> 100 HP pool and one flat armour total. Where a hit comes from has one rule: the tile behind a
+> target hits for ×1.5 (backstab), every other tile for ×1. No per-zone health or armour, no
+> prosthetics, no flanks, no top or bottom hits. The live rules are `plans/balancing-bible.md`
+> (Law 2) and `plans/gold-standard-design.md`; the zone sections below are history.
 **Phase:** Phase 2 — Life in the City
 **Priority:** Critical
 **Status:** Research — PARTIALLY SUPERSEDED (2026-03-30)
