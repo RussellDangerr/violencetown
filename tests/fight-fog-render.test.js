@@ -196,9 +196,17 @@ describe('the threat overlay in a fight', () => {
         assert.equal(calls.filter(c => c.fn === 'createRadialGradient').length, 0);
     });
 
+    // The fighter is a Rat: a creature, whose art can't show facing (DS2).
     test('and keeps the facing chevron and the "sees you" thread', () => {
         const calls = overlay({ enemies: [fighter()], _fightOn: true });
         assert.ok(calls.filter(c => c.fn === 'stroke').length >= 2, 'the chevron and the thread');
+        assert.ok(calls.some(c => c.fn === 'setLineDash'), 'the thread is dashed');
+    });
+
+    test('a person whose art faces you keeps the thread but draws no chevron (DS2)', () => {
+        // Facing west, straight at you: the four-way art already shows it.
+        const calls = overlay({ enemies: [fighter({ type: 'Vendor' })], _fightOn: true });
+        assert.equal(calls.filter(c => c.fn === 'stroke').length, 1, 'the thread alone');
         assert.ok(calls.some(c => c.fn === 'setLineDash'), 'the thread is dashed');
     });
 
