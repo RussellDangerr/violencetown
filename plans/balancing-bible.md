@@ -40,7 +40,7 @@ before you read the PR.
   add, categories (elemental/positional/outgoing/incoming) multiply, round once
   (`computeHit`, `game/combat.js:28-32`). Immune is a true ×0 — call sites skip the hit entirely
   (the immune check before `attack()` in `combatAttack`, `game/main.js`), never floor it back to 1.
-  Guard (incoming ×0.5) and Blind (outgoing ×0.5) compose in the same call as everything else:
+  Guard (incoming ×0.5) composes in the same call as everything else:
   `applyDamageToPlayer` (`game/main.js`); the player's own swing folds elemental +
   backstab into one `computeHit` the same way (`combatAttack`, `game/main.js`).
   **Shove spins its victim (ruled 2026-07-24).** A successful shove sets `victim._spunTurns = 1` and
