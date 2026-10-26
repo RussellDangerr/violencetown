@@ -30,9 +30,10 @@ for. Caelan writes the words.
 
 ## How it works
 
-- `game/sewer-north-map.json` (new): a small walled room in the Sewer's tiles. The Crat stands
-  at the top, one side on each flank, a clue beside each side, and a drain at the bottom leads
-  back. Its exit lands you inside the Sewer below the new door.
+- `game/sewer-north-map.json` (new): a small walled room in the Sewer's tiles, 12 by 10. The
+  Crat stands at the top, one side on each flank, a clue in the wall beside each side, and a
+  drain at the bottom leads back. Its exit lands you inside the Sewer below the new door. (The
+  talkers wait on a ruling; see Open.)
 - `game/sewer-map.json`: the north wall cell at (11,0) becomes a drain (the same tile as the
   Sewer's west exit) with a transition into the new room. Nothing else in the Sewer changes.
 - `game/dialogue.js`: three dialogues, `crat`, `crat_side_a`, `crat_side_b`, built from one
@@ -68,8 +69,23 @@ Tests: `tests/crat.test.js`. They walk the room's maps and doors, and play the d
   changes the save's slot picks, which three existing assertions outside this branch's files pin,
   and it moves the autoplay fingerprint. Until that is ruled, the Crat is a plain map NPC, the
   way Carrion is.
-- **The balance baseline.** Any new NPC on a map adds rows to `tools/balance-golden.txt`, so the
-  three talkers move it. Only a ruling may re-record it.
+- **The balance baseline.** Any new NPC on a map adds rows to `tools/balance-golden.txt`, and
+  the balance golden is checked by `npm test` itself. The three talkers add three roster rows
+  (`sewer-north/crat`, `crat-a`, `crat-b`: hp 100, armor -80, damage 0, challenge 0 / 5 / 5)
+  and a `sewer-north 10` line to the gold faucets (the two sides' purses). Only a ruling may
+  re-record it, so the talkers are not on the map yet: the room, its door, its clues and all
+  three dialogues are, and `tests/crat.test.js` plays the dialogue against stand-ins.
+
+  When the ruling lands, these three go into the room's `enemies`, and a test pins them there
+  (on floor, damage 0, each side's `gold` equal to `CRAT_BRIBE_GP`):
+
+  ```json
+  {"id": "crat", "type": "Violencian", "name": "The Crat", "x": 6, "y": 2, "facing": "S", "hp": 100, "armor": -80, "damage": 0, "sightRange": 4, "disposition": 0, "behavior": ["IDLE"], "sewerDweller": true, "dialogueId": "crat"},
+  {"id": "crat-a", "type": "Violencian", "name": "[NAME: side A]", "x": 2, "y": 5, "facing": "E", "hp": 100, "armor": -80, "damage": 0, "gold": 5, "sightRange": 4, "disposition": 0, "behavior": ["IDLE"], "sewerDweller": true, "dialogueId": "crat_side_a"},
+  {"id": "crat-b", "type": "Violencian", "name": "[NAME: side B]", "x": 9, "y": 5, "facing": "W", "hp": 100, "armor": -80, "damage": 0, "gold": 5, "sightRange": 4, "disposition": 0, "behavior": ["IDLE"], "sewerDweller": true, "dialogueId": "crat_side_b"}
+  ```
+
+  The ids are picked so the three draw three different Violencian looks.
 
 ## Out of scope
 

@@ -1,0 +1,28 @@
+{
+    "_note": "Sewer side room north of the cape grate's room (plans/cs1-crat-talk-both-sides.md). The Crat's dispute: a clue in the wall beside where each side will stand. The three talkers wait on a ruling (see the plan). Placeholder geometry and text; the drain at the bottom leads back into the Sewer. Tiles: 0 wall, 1 floor, 5 drain.",
+    "width": 12,
+    "height": 10,
+    "spawn": {"x": 6, "y": 8},
+    "zoneName": "SEWER",
+    "tiles": [
+        0,0,0,0,0,0,0,0,0,0,0,0,
+        0,1,1,1,1,1,1,1,1,1,1,0,
+        0,1,1,1,1,1,1,1,1,1,1,0,
+        0,1,1,1,1,1,1,1,1,1,1,0,
+        0,1,1,1,1,1,1,1,1,1,1,0,
+        0,1,1,1,1,1,1,1,1,1,1,0,
+        0,1,1,1,1,1,1,1,1,1,1,0,
+        0,1,1,1,1,1,1,1,1,1,1,0,
+        0,1,1,1,1,1,1,1,1,1,1,0,
+        0,0,0,0,0,0,5,0,0,0,0,0
+    ],
+    "enemies": [],
+    "items": [],
+    "examinables": [
+        {"id": "crat_clue_a", "x": 0, "y": 3, "text": "[TEXT: side A's clue]"},
+        {"id": "crat_clue_b", "x": 11, "y": 3, "text": "[TEXT: side B's clue]"}
+    ],
+    "transitions": [
+        {"x": 6, "y": 9, "toMap": "sewer-map.json", "toX": 11, "toY": 1, "label": "[South \u2014 TEXT: back into the Sewer]"}
+    ]
+}
