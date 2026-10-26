@@ -81,12 +81,23 @@ export function weaponTiers(base) {
     });
 }
 
-// The one base definition per class. No damage number: that is tuning.
+// What each class's tiers hit for (plans/fx6-tier-weapon-damage.md). A class
+// with a weapon in the game copies it: the sword the wooden sword, the wand the
+// ray gun, the whip the lion whip, the hammer the pipe. The rest take 10. A tier
+// keeps its base's number, so every tier of a class hits the same.
+export const WEAPON_CLASS_DAMAGE = Object.freeze({
+    shield: 10, axe: 10, sword: 10, dagger: 10, hammer: 12,
+    great_sword: 10, battle_axe: 10, war_hammer: 10, book: 10, bell: 10,
+    whip: 12, knuckles: 10, claws: 10, doll: 10, wand: 22,
+    staff: 10, throwing_axe: 10, frying_pan: 10,
+});
+
+// The one base definition per class, carrying its class's damage.
 export function classBase(classId) {
     const c = WEAPON_CLASSES[classId];
     if (!c) return null;
     return {
-        id: c.id, name: `[${titleCase(c.id)}]`, weaponClass: c.id,
+        id: c.id, name: `[${titleCase(c.id)}]`, weaponClass: c.id, damage: WEAPON_CLASS_DAMAGE[c.id],
         equipSlot: 'weapon', useType: 'equip', category: 'weapon',
     };
 }

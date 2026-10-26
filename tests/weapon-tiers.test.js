@@ -11,7 +11,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
     WEAPONS, WEAPON_CLASSES, WEAPON_TIERS, WEAPON_TIER_KEYS, PERK_PLACEHOLDER,
-    weaponTiers, classBase,
+    weaponTiers, classBase, WEAPON_CLASS_DAMAGE,
 } from '../game/weapons.js';
 import { ITEMS, VALUE_TIERS, itemTier, ARMOR_IDS, isArmorPiece } from '../game/items.js';
 import { resolveItemDef, ALL_ITEM_IDS } from '../game/item-registry.js';
@@ -68,13 +68,13 @@ describe('every class yields five tiers from one base', () => {
         assert.equal(classBase('not_a_class'), null);
     });
 
-    test('a class base carries no damage number: that is not ruled', () => {
-        for (const id of classIds) assert.equal(classBase(id).damage, undefined, id);
+    test("a class base carries its class's ruled damage number", () => {
+        for (const id of classIds) assert.equal(classBase(id).damage, WEAPON_CLASS_DAMAGE[id], id);
     });
 });
 
 describe('a tier adds perks, not bigger numbers', () => {
-    // The class bases carry no numbers, so also run the generator on real weapons.
+    // The class bases carry only a damage number, so also run the generator on real weapons.
     const bases = [
         ...Object.keys(WEAPON_CLASSES).map(classBase),
         ...Object.values(WEAPONS),
