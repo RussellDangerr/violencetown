@@ -267,6 +267,17 @@ const setCratFlag = (g, k, v) => { const f = cratFlags(g); if (f) f[k] = v; };
 const heardBoth = (g) => CRAT.sides.every(s => !!cratFlag(g, CRAT.heardFlag(s)));
 const ruled = (g) => !!cratFlag(g, 'cratRuling');
 
+// The reward for settling it (plans/cs2-crat-reward.md): Carrion's blocked road
+// opens. One saved flag, set once, only by a ruling; whatever opens the road
+// reads it. Where the road leads is not decided yet.
+export const CRAT_REWARD_FLAG = 'carrionRoadOpen';
+function grantCratReward(g) {
+    if (!ruled(g) || cratFlag(g, CRAT_REWARD_FLAG)) return false;
+    setCratFlag(g, CRAT_REWARD_FLAG, true);
+    return true;
+}
+export const carrionRoadOpen = (g) => !!cratFlag(g, CRAT_REWARD_FLAG);
+
 // Six ways to rule: for either side, times whose money you took (none, the side
 // you ruled for, the other side). Exactly two are on offer at a time.
 function cratRulingChoices() {
@@ -280,7 +291,7 @@ function cratRulingChoices() {
                 label: `[TEXT: rule for side ${side.toUpperCase()}]`,
                 repeatable: true,
                 available: (g) => heardBoth(g) && !ruled(g) && (cratFlag(g, 'cratBribe') ?? null) === paidBy,
-                onPick: (g) => setCratFlag(g, 'cratRuling', side),
+                onPick: (g) => { setCratFlag(g, 'cratRuling', side); grantCratReward(g); },
                 reply: `[TEXT: the reveal, "you are not the mother" — you ruled for ${verdict}`
                     + (bribe === 'none' ? ', unbought' : bribe === 'same' ? ', paid by that side' : ', paid by the other side') + ']',
             });
