@@ -32,8 +32,10 @@ for. Caelan writes the words.
 
 - `game/sewer-north-map.json` (new): a small walled room in the Sewer's tiles, 12 by 10. The
   Crat stands at the top, one side on each flank, a clue in the wall beside each side, and a
-  drain at the bottom leads back. Its exit lands you inside the Sewer below the new door. (The
-  talkers wait on a ruling; see Open.)
+  drain at the bottom leads back. Its exit lands you inside the Sewer below the new door.
+- `game/slots.js`: the Crat is the Sewer's character slot, `sewer.character` (spine SL-5, kind
+  `character`), a pool of one: the registry entry `crat`. The room's spawn names the slot and
+  says where; the entry says who. The two sides are plain map NPCs beside it.
 - `game/sewer-map.json`: the north wall cell at (11,0) becomes a drain (the same tile as the
   Sewer's west exit) with a transition into the new room. Nothing else in the Sewer changes.
 - `game/dialogue.js`: three dialogues, `crat`, `crat_side_a`, `crat_side_b`, built from one
@@ -63,29 +65,21 @@ for. Caelan writes the words.
 Tests: `tests/crat.test.js`. They walk the room's maps and doors, and play the dialogue through
 `main.js`'s own `_dialogueChoices` and `_pickDialogueChoice` against a stand-in game.
 
-## Open
+## The slot and the recorded numbers (ruled: a real slot now)
 
-- **The slot.** The Crat should fill a Sewer character slot in `game/slots.js`. Registering one
-  changes the save's slot picks, which three existing assertions outside this branch's files pin,
-  and it moves the autoplay fingerprint. Until that is ruled, the Crat is a plain map NPC, the
-  way Carrion is.
-- **The balance baseline.** Any new NPC on a map adds rows to `tools/balance-golden.txt`, and
-  the balance golden is checked by `npm test` itself. The three talkers add three roster rows
-  (`sewer-north/crat`, `crat-a`, `crat-b`: hp 100, armor -80, damage 0, challenge 0 / 5 / 5)
-  and a `sewer-north 10` line to the gold faucets (the two sides' purses). Only a ruling may
-  re-record it, so the talkers are not on the map yet: the room, its door, its clues and all
-  three dialogues are, and `tests/crat.test.js` plays the dialogue against stand-ins.
-
-  When the ruling lands, these three go into the room's `enemies`, and a test pins them there
-  (on floor, damage 0, each side's `gold` equal to `CRAT_BRIBE_GP`):
-
-  ```json
-  {"id": "crat", "type": "Violencian", "name": "The Crat", "x": 6, "y": 2, "facing": "S", "hp": 100, "armor": -80, "damage": 0, "sightRange": 4, "disposition": 0, "behavior": ["IDLE"], "sewerDweller": true, "dialogueId": "crat"},
-  {"id": "crat-a", "type": "Violencian", "name": "[NAME: side A]", "x": 2, "y": 5, "facing": "E", "hp": 100, "armor": -80, "damage": 0, "gold": 5, "sightRange": 4, "disposition": 0, "behavior": ["IDLE"], "sewerDweller": true, "dialogueId": "crat_side_a"},
-  {"id": "crat-b", "type": "Violencian", "name": "[NAME: side B]", "x": 9, "y": 5, "facing": "W", "hp": 100, "armor": -80, "damage": 0, "gold": 5, "sightRange": 4, "disposition": 0, "behavior": ["IDLE"], "sewerDweller": true, "dialogueId": "crat_side_b"}
-  ```
-
-  The ids are picked so the three draw three different Violencian looks.
+- **The slot.** A new slot changes the save's slot picks: a new game and an old save both carry
+  `sewer.character: crat` now. The assertions in `tests/slots.test.js` and
+  `tests/save-roundtrip.test.js` that list today's picks gain that one pick, in a commit that
+  says the behaviour changed. The slot's picks come from their own stream, so no combat roll
+  moves.
+- **The balance baseline.** The three talkers add three roster rows (`sewer-north/crat`,
+  `crat-a`, `crat-b`) and a `sewer-north` line to the gold faucets (the two sides' purses).
+  `tools/balance-golden.txt` is re-recorded in its own commit, under the ruling.
+- **The autoplay baseline.** The save fingerprint moves with the extra pick; play must not.
+  Before `tools/autoplay-golden.json` is re-recorded, every stage's turns, damage, deaths and gold
+  are checked equal to the old golden. If any of them moves, the slice stops and asks.
+- `tests/crat.test.js` pins the three in the room: on floor, damage 0, the Crat filled from its
+  slot, and each side carrying exactly `CRAT_BRIBE_GP`.
 
 ## Out of scope
 
