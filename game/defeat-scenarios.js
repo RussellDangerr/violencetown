@@ -13,9 +13,11 @@ export function isSafe(itemDef, equippedWeapon) {
     return !!itemDef.questItem || itemDef === equippedWeapon || !!itemDef.essential;
 }
 
-// A defeater is a "boss" iff its tag ends in _boss (only the Wererat, for now).
+// A defeater is a "boss" iff it carries the boss flag or its tag ends in _boss.
+// The Act 2 stand-ins (slots.js placeholderBoss) have the flag and no tag.
 export function isBoss(enemy) {
-    return !!(enemy && typeof enemy.tag === 'string' && enemy.tag.endsWith('_boss'));
+    if (!enemy) return false;
+    return enemy.boss === true || (typeof enemy.tag === 'string' && enemy.tag.endsWith('_boss'));
 }
 
 // Split inventory into { safe, atRisk } — entries carry the slot index so the
