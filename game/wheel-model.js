@@ -333,8 +333,16 @@ export function aimRange(leaf, game) {
   return 1;
 }
 
+// Social verbs target any living neighbour, not just a hostile: Trade, and the
+// three Thieve takes — you rob townsfolk, shopkeepers and allies too
+// (plans/stealth-perception-and-thieve.md). Who may actually be robbed is still
+// main's call (_thieveTarget / canThieve / isHidden). One list, read by both the
+// reticle seed and the target gate, so the two cannot disagree.
+const SOCIAL_RESOLVERS = new Set(['trade', 'thieveCoin', 'thieveKit', 'thieveGear']);
+const isSocial = (node) => SOCIAL_RESOLVERS.has(node.resolver);
+
 // Reticle seed: nearest IN-RANGE hostile for offence, adjacent character for
-// Trade, safest walkable adjacent for Run, else a safe facing tile.
+// a social verb, safest walkable adjacent for Run, else a safe facing tile.
 export function autoAimTile(leaf, game) {
   if (leaf.aimType === 'none') return null;
   const alive = (game.enemies || []).filter(e => e.entity.isAlive());
@@ -347,7 +355,7 @@ export function autoAimTile(leaf, game) {
     const distTo = t => alive.length ? Math.min(...alive.map(e => cheb(t.x, t.y, e.x, e.y))) : 99;
     return cands.sort((a, b) => distTo(b) - distTo(a))[0];
   }
-  const social = leaf.resolver === 'trade';
+  const social = isSocial(leaf);
   const pool = (social
     ? alive
     : alive.filter(e => isHostile(e)))
@@ -424,7 +432,7 @@ export function adjacentFacing(px, py, tile) {
 
 // (Phase 1 — appliesTo) Does this verb have a valid TARGET in range right now?
 // Categories + self-verbs + free-placement (reticle) verbs always apply; only an
-// ADJACENT-target verb (Hit/Cleave/Bribe/Trade) or Run needs a real neighbour.
+// ADJACENT-target verb (Hit/Cleave/Trade/Thieve) or Run needs a real neighbour.
 // Drives the wheel's gray-out (tileEnabled) + the fire-gate (_wheelDrill).
 // Item/MP presence is a separate axis, handled by `available`.
 export function verbApplies(node, game) {
@@ -438,7 +446,7 @@ export function verbApplies(node, game) {
       game.map && game.map.isWalkable(game.playerX + dx, game.playerY + dy));
   }
   const alive = (game.enemies || []).filter(e => e.entity.isAlive());
-  const social = node.resolver === 'trade';
+  const social = isSocial(node);
   const pool = social ? alive : alive.filter(e => isHostile(e));
   return pool.some(e => cheb(game.playerX, game.playerY, e.x, e.y) <= 1);
 }
