@@ -791,10 +791,12 @@ describe('slot picks in the save', () => {
 
     test("a save from before slots existed loads today's content", () => {
         const raw = serialize(makePopulatedGame());
+        // Today's picks: the Sewer plus the three Act 2 boss slots (AB1R3).
+        const today = { 'sewer.boss': 'wererat', 'carnival.boss': 'bigfoot', 'factory.boss': 'alien_invasion', 'graveyard.boss': 'the_deity' };
         delete raw.slots;
-        assert.deepEqual(migrate(raw).slots, { 'sewer.boss': 'wererat' });
+        assert.deepEqual(migrate(raw).slots, today);
         raw.slots = ['not', 'an', 'object'];
-        assert.deepEqual(migrate(raw).slots, { 'sewer.boss': 'wererat' });
+        assert.deepEqual(migrate(raw).slots, today);
     });
 
     test('a saved pick stands, even one the pool no longer offers first', () => {
@@ -810,6 +812,7 @@ describe('slot picks in the save', () => {
         const load = g._loadMap;
         g._loadMap = async function (...a) { seenAtLoad = this.slots && { ...this.slots }; return load.apply(this, a); };
         await loadIntoReal(g, raw);
-        assert.deepEqual(seenAtLoad, { 'sewer.boss': 'picked' });
+        // The saved pick stands; the slots it predates fill from today's picks (AB1R3).
+        assert.deepEqual(seenAtLoad, { 'sewer.boss': 'picked', 'carnival.boss': 'bigfoot', 'factory.boss': 'alien_invasion', 'graveyard.boss': 'the_deity' });
     });
 });

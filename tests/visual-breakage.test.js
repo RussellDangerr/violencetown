@@ -35,6 +35,9 @@ describe('the facing cue no longer runs through the body', () => {
         assert.match(rendererSrc, /facingCue\(sx \+ TILE_PX \/ 2, sy \+ TILE_PX \/ 2,/);
         assert.doesNotMatch(rendererSrc, /rgba\(212,185,106,0\.75\)/);   // the old line's stroke
     });
+    test('the cue is drawn only where the art cannot show facing (DS2, tests/chevron-rule.test.js)', () => {
+        assert.match(rendererSrc, /if \(showsFacingChevron\(w\)\) \{\s*const \{ fx, fy \} = facingOf\(w\);/);
+    });
 });
 
 describe('no item draws as a letter in a box', () => {
@@ -47,7 +50,9 @@ describe('no item draws as a letter in a box', () => {
     });
     test('only the three with no fitting cell yet fall back to the bag', () => {
         const bare = Object.keys(all).filter(id => !ITEM_SPRITES[id]).sort();
-        assert.deepEqual(bare, ['latex_gloves', 'red_cape', 'shoe_bags']);
+        // The three Act 2 required items draw as the bag until they are named
+        // (AB1R2, plans/ab1-act2-placeholder-bosses.md).
+        assert.deepEqual(bare, ['act2_item_a', 'act2_item_b', 'act2_item_c', 'latex_gloves', 'red_cape', 'shoe_bags']);
         assert.ok(bare.length > 0 && bare.every(id => itemSprite(id) === UNKNOWN_ITEM_SPRITE));
     });
     test('no fallback still draws ITEM_COLORS letters unless a sheet failed to load', () => {
@@ -55,9 +60,10 @@ describe('no item draws as a letter in a box', () => {
         assert.equal((rendererSrc.match(/ITEM_SPRITES\[/g) || []).length, 0);
         assert.equal((rendererSrc.match(/itemSprite\(/g) || []).length, 4);
     });
-    test('the derived sheet exists and is five 16-px cells wide', () => {
+    test('the derived sheet exists and is nine 16-px cells wide', () => {
+        // Five, plus the four weapon recolours of WA1 (plans/wa1-weapon-pictures-match.md).
         const png = readFileSync(join(GAME, 'assets-placeholder', 'kenney', 'tinyExtra_packed.png'));
-        assert.equal(png.readUInt32BE(16), 80);   // IHDR width
+        assert.equal(png.readUInt32BE(16), 144);  // IHDR width
         assert.equal(png.readUInt32BE(20), 16);   // IHDR height
     });
     test('the rock and Fire Blood no longer use cells that carry a square of ground', () => {

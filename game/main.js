@@ -5,7 +5,7 @@
 
 import { Renderer } from './renderer.js';
 import { computeViewport, screenToTile, clientToScreen, toMenu } from './viewport.js';   // (screen-fill) the screen's geometry
-import { loadMap } from './map.js';
+import { loadMap, carriesAll } from './map.js';
 import { loadAllSprites } from './sprites.js';
 import { BitmapFont } from './bitmap-font.js';
 import { pickHitMark, HEAVY_HIT_DAMAGE } from './hit-splat.js';   // (manga-impact-marks) the mark rule + the heavy threshold
@@ -13,7 +13,7 @@ import { makeEffectLoop } from './effect-loop.js';                 // one tick o
 import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, MAX_STACK, SLUDGE_DOT } from './data.js';
 import { puddleTiles, layPuddle, puddleAt, dryPuddles } from './puddles.js';   // (poisons) Sludge Brain's puddles
 import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef } from './items.js';
-import { WEAPONS } from './weapons.js';
+import { WEAPONS, weaponClassOf } from './weapons.js';
 import { resolveItemDef } from './item-registry.js';
 import { tickBuffList, BUFF_DEFS, sumBuffStat, worldBeatPlan } from './buffs.js';
 import { RINGS, FUSIONS } from './ring-data.js';
@@ -81,6 +81,7 @@ function writeSeenHints(set) {
 import { emitNoise, NOISE, perceives, spotters, struck, VERDICT } from './perception.js'; // sound + sight
 import { coinTake, kitTake, gearTake, coinWeight, itemWeight, gearWeight,
          noticeBuffer, isClean, stealLimit } from './theft.js';
+import { recordUse, skillPerks, mergePassives } from './skills.js'; // (skills) use-ranks: clean lifts rank up light fingers
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
 import {
     createWheelState, cycle, drill, back, compose, autoAimTile,
@@ -235,6 +236,10 @@ class Game {
         this.ringTier         = 0;
         this.discoveredFusions = new Set();
         this.ringMods         = {};          // aggregate passives, recomputed by _refreshGrantedSkills
+        // (skills) { skillId: cleanUses } — on the player, not on anything worn, so no
+        // swap touches it. Persisted. Its perks join ringMods only where an action
+        // reads them (see _theftPassives).
+        this.skills           = {};
         this._peakDisposition = 0;           // (rings) highest disposition any NPC has ever shown — monotonic; gates the hidden thumb tier
         this._lastHitTarget = null;   // (fear) id of the enemy the last Melee-Hit struck
         this._ratFormTurns = 0;        // (Rat Ring) turns left folded into a rat; while >0 the player can enter GRATE tiles
@@ -288,9 +293,10 @@ class Game {
         this._animCallback = null;
         this._stepIndex   = 0;    // ++ per completed step → walk-anim foot parity
 
-        // Equipment
+        // Equipment. Two hands (plans/ws3-two-hands-left-right.md): `weapon` is
+        // the right hand, `left` the other; a two-hander is the same def in both.
         this.equipment = {
-            weapon: WEAPONS.wooden_sword,
+            weapon: WEAPONS.wooden_sword, left: null,
             top: null, bottom: null, front: null, back: null, sides: null,
         };
         this._refreshGrantedSkills();   // derive Magic/Trick grants from the equipped weapon
@@ -1031,26 +1037,65 @@ class Game {
 
     // (pointer model) One-time onboarding line, shown on the first ever run and
     // dismissed by the first tap/keypress (which still flows through to the game)
-    // or after ~6s. Gated by a persisted Settings flag so it never repeats.
+    // or after ~6s on screen. Gated by a persisted Settings flag so it never repeats.
+    // (FX12) It is a page element over the canvas, so it steps aside while a menu
+    // is open (_syncFirstRunHint, run on every _render). Input that lands while it
+    // is aside does not dismiss it, and its clock only runs while it is shown.
     _maybeShowFirstRunHint() {
         if (Settings.get('firstRunHintSeen')) return;
         const el = document.getElementById('first-run-hint');
         if (!el) return;
         Settings.set('firstRunHintSeen', true);
-        el.classList.remove('hidden');
-        let done = false;
-        const hide = () => {
-            if (done) return; done = true;
+        const hint = { el, aside: null, timer: 0, done: false, dismiss: null };
+        const onInput = () => { if (!hint.aside) hint.dismiss(); };
+        hint.dismiss = () => {
+            if (hint.done) return; hint.done = true;
             el.classList.add('hidden');
-            clearTimeout(timer);
-            document.removeEventListener('pointerdown', hide, true);
-            document.removeEventListener('keydown', hide, true);
+            el.classList.remove('aside');
+            clearTimeout(hint.timer);
+            document.removeEventListener('pointerdown', onInput, true);
+            document.removeEventListener('keydown', onInput, true);
         };
-        const timer = setTimeout(hide, 6000);
+        this._firstRunHint = hint;
+        el.classList.remove('hidden');
+        this._syncFirstRunHint();
         // Capture so the hint clears on the FIRST input; we never preventDefault,
         // so that same tap/key still reaches the game (moves the player, etc.).
-        document.addEventListener('pointerdown', hide, true);
-        document.addEventListener('keydown', hide, true);
+        document.addEventListener('pointerdown', onInput, true);
+        document.addEventListener('keydown', onInput, true);
+    }
+
+    // (FX12) True while a menu covers the world: the hint would draw over it.
+    _firstRunHintAside() {
+        if (this._paused) return true;
+        switch (this.state) {
+            case STATE.RADIAL_MENU:
+            case STATE.TARGET_LIST:
+            case STATE.ITEM_OVERLAY:
+            case STATE.ITEM_THROW_DIR:
+            case STATE.LOG_MODAL:
+            case STATE.TRADE:
+            case STATE.DIALOGUE:
+            case STATE.INSPECT:
+            case STATE.DEVICE:
+            case STATE.DEAD:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    // (FX12) Hide the hint while a menu is open and show it again when the menu
+    // closes. Its 6s clock restarts each time it comes back on screen.
+    _syncFirstRunHint() {
+        const hint = this._firstRunHint;
+        if (!hint || hint.done) return;
+        const aside = this._firstRunHintAside();
+        if (aside === hint.aside) return;
+        hint.aside = aside;
+        hint.el.classList.toggle('aside', aside);
+        clearTimeout(hint.timer);
+        if (!aside) hint.timer = setTimeout(hint.dismiss, 6000);
     }
 
     // ── Input ────────────────────────────────────────────────────────────────
@@ -1807,6 +1852,7 @@ class Game {
         this._paused = !!paused;
         const overlay = document.getElementById('pause-overlay');
         if (overlay) overlay.classList.toggle('hidden', !this._paused);
+        this._syncFirstRunHint();   // (FX12) the pause scrim is a menu too
         // Stop any auto-repeat walk in flight so releasing keys post-resume
         // doesn't leave a phantom held direction.
         if (this._paused) {
@@ -2310,11 +2356,12 @@ class Game {
             // Pickup
             this._tryPickup();
 
-            // Transition? A transition may `require` an item (e.g. the canyon
-            // escape needs the grappling hook) — data-driven so any door can gate.
+            // Transition? A transition may `require` an item, or a list of them
+            // (the bank's vault door wants all three Act 2 items) — data-driven
+            // so any door can gate.
             const transition = this.map.getTransition(nx, ny);
             if (transition) {
-                if (transition.requires && !(this.inventory || []).some(s => s && s.itemDef.id === transition.requires)) {
+                if (!carriesAll(transition.requires, this.inventory)) {
                     this._log(transition.requiresMsg || '[You need something to get through here.]');
                 } else {
                     this._pendingTransition = transition;
@@ -3655,7 +3702,7 @@ class Game {
                 if (!victim) { this._log('[Nobody to lift from there]'); break; }
 
                 const verdict  = perceives(this.map, victim, this.playerX, this.playerY);
-                const passives = this.ringMods ?? {};
+                const passives = this._theftPassives();
                 const rec = (this._robbed[victim.id] ||= { gold: 0, items: [], weightTaken: 0, noticed: false });
 
                 let weight = 0, took = null, gp = 0, restore = null;
@@ -3701,7 +3748,9 @@ class Game {
                     // A clean theft is GENUINELY clean — no disposition move, no
                     // hostility, no search, and no log line about them at all.
                     // They never know, which is the only reason the verb is worth
-                    // the risk.
+                    // the risk. It is also the only lift that counts toward
+                    // light fingers.
+                    this._countCleanLift();
                 } else {
                     rec.noticed = true;
                     if (took) this._hot[took.id] = (this._hot[took.id] ?? 0) + 1;
@@ -4030,6 +4079,20 @@ class Game {
         return item.slot;
     }
 
+    // (skills) What the Thieve verb reads: the slotted rings' passives plus every
+    // skill perk reached. Built per call, so a ring swap can never drop a rank.
+    _theftPassives() {
+        return mergePassives(this.ringMods ?? {}, skillPerks(this.skills));
+    }
+
+    // (skills) One clean lift counts toward light fingers. Its perk applies from
+    // the next lift on, since this one's passives were already read.
+    _countCleanLift() {
+        const { skills, rankedUp } = recordUse(this.skills, 'light_fingers');
+        this.skills = skills;
+        if (rankedUp) this._log('[TEXT]', 'pickup');
+    }
+
     // (theft) The victim on an aimed tile, or null. Takes the tile as an ARGUMENT
     // because aimTile is a local destructured from compose() inside the wheel
     // fire path — it is not readable off `this.wheel`.
@@ -4355,7 +4418,7 @@ class Game {
         // Law 2: elemental matchup + positional (backstab) fold in here — the one
         // computeHit call for this swing (round-once). Immune skips attack()
         // entirely (0-contract). Backstab: standing on the tile directly behind
-        // the target's last step (5-Zone Body's "Back" zone as a rule).
+        // the target's last step, ×1.5; every other tile ×1 (Law 2's table).
         const backstab = isBackstab(this.playerX, this.playerY, enemyObj);
         // (WS4) A weapon hit with no damageType of its own lands its best kind —
         // slash, stab or crush — on this target (WR1 b); the splat shows it.
@@ -4372,7 +4435,7 @@ class Game {
             elemental: elementalMult(opts.type || kind, enemyObj),
             positional: backstab ? 1.5 : 1,
         });
-        if (finalDmg === 0) { this._log(`[${enemyObj.type} is immune!]`, 'combat'); return null; }
+        if (finalDmg === 0) { this._log(`[${enemyObj.shownName || enemyObj.type} is immune!]`, 'combat'); return null; }
         if (backstab) this._log('[Backstab!]', 'combat');
 
         const result = attack(playerEntity, enemyObj.entity, finalDmg);
@@ -4632,7 +4695,7 @@ class Game {
         enemyObj.state = 'chasing';     // immediately hostile, no re-acquire delay
         enemyObj.disposition = -50;     // betrayed: head-meter goes angry + re-bribing costs more
         enemyObj._wasFlipped = false;   // ...but they CAN be won back if you make amends
-        this._log(`[The ${enemyObj.type} turns on you!]`, 'combat');
+        this._log(`[The ${enemyObj.shownName || enemyObj.type} turns on you!]`, 'combat');
     }
 
     // ── Reaction bus ──────────────────────────────────────────────────────────
@@ -4654,11 +4717,12 @@ class Game {
         if (target.vendor) { target.vendor = false; target.stock = null; }   // a vendor you struck won't keep shop
         if (target.ambient) target.ambient = false;  // a provoked townsperson fights for real, not as ambient
         if (typeof target.disposition === 'number') target.disposition = Math.min(target.disposition, -50);
-        this._log(`[The ${target.type || target.entity.name} turns on you!]`, 'combat');
+        this._log(`[The ${target.shownName || target.type || target.entity.name} turns on you!]`, 'combat');
     }
 
-    // Total damage-reduction from worn armor. Flat MVP: every equipped body-zone
-    // piece's `armor` sums into one number (per-zone hit-location comes later).
+    // Total damage-reduction from worn armor: every equipped body-zone piece's
+    // `armor` sums into one number. It stays one flat total (ruled 2026-10-23):
+    // there is no per-zone hit location, only Law 2's back tile.
     // The weapon slot is excluded — a sword isn't armor.
     _playerArmor() {
         const eq = this.equipment || {};
@@ -4687,6 +4751,10 @@ class Game {
     // ring) vs tricks (Trick ring) by which registry defines them. Also recomputes
     // the aggregate passive modifiers and records any newly-seen fusions. Call after
     // any change to weapon OR rings (acquire, slot, unslot, unlock, new game, load).
+    // How many hands a weapon takes, from its class (weapons.js). No class, or
+    // not a weapon, is one hand. items.js and save.js ask through this.
+    _handsOf(def) { return (weaponClassOf(def) || {}).hands || 1; }
+
     _refreshGrantedSkills() {
         const w  = this.equipment && this.equipment.weapon;
         const gs = (w && w.grantsSpells) || [];
@@ -5222,7 +5290,7 @@ class Game {
         }
         this.tempEquips = [];
         this.selectedSlot = -1;
-        this.equipment = { weapon: WEAPONS.wooden_sword, top: null, bottom: null, front: null, back: null, sides: null };
+        this.equipment = { weapon: WEAPONS.wooden_sword, left: null, top: null, bottom: null, front: null, back: null, sides: null };
         this._refreshGrantedSkills();   // reset weapon → no granted skills
         // Clear any transition queued before death so the first post-respawn
         // action doesn't ghost-load a map.
@@ -5312,12 +5380,13 @@ class Game {
         this.inventory.fill(null);
         this.tempEquips = [];
         this.selectedSlot = -1;
-        this.equipment = { weapon: WEAPONS.wooden_sword, top: null, bottom: null, front: null, back: null, sides: null };
+        this.equipment = { weapon: WEAPONS.wooden_sword, left: null, top: null, bottom: null, front: null, back: null, sides: null };
         this.ownedRings = new Set();
         this.ringSlots = {};
         this.ringTier = 0;
         this.discoveredFusions = new Set();
         this._peakDisposition = 0;       // it gates the ring tier, so it goes with the rings
+        this.skills = {};                // a new run starts every skill from nothing
         this._refreshGrantedSkills();   // fresh weapon, no rings → no granted skills
         this._pendingTransition = null;
         this.gold = 0;
@@ -5382,6 +5451,7 @@ class Game {
 
     _render() {
         this._trackFight();
+        this._syncFirstRunHint();
         this.renderer.renderFrame(this);
     }
 

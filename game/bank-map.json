@@ -6,7 +6,7 @@
     "zoneName": "FIRST BLOOD BANK",
     "tiles": [
         14,14,14,14,14,14,14,14,14,14,14,14,
-        14,14,14,14,14,14,14,14,14,14,14,14,
+        14,14,14,14,14,14,15,14,14,14,14,14,
         14,14,11,11,11,11,11,11,11,11,14,14,
         14,14,11,11,11,11,11,11,11,11,14,14,
         14,14,11,11,11,11,11,11,11,11,14,14,
@@ -25,7 +25,26 @@
     "examinables": [
         {"id": "bank_vault", "x": 6, "y": 2, "text": "[A vault door, cold to the touch even from here. The air in the bank is wrong — too clean, too quiet, and it smells faintly of copper.]"}
     ],
+    "props": [
+        {"type": "shelfA", "x": 3, "y": 2},
+        {"type": "shelfB", "x": 4, "y": 2},
+        {"type": "shelfB", "x": 8, "y": 2},
+        {"type": "shelfA", "x": 9, "y": 2},
+        {"type": "deskL", "x": 3, "y": 4},
+        {"type": "deskMid", "x": 4, "y": 4},
+        {"type": "deskR", "x": 5, "y": 4},
+        {"type": "deskL", "x": 7, "y": 4},
+        {"type": "deskMid", "x": 8, "y": 4},
+        {"type": "deskR", "x": 9, "y": 4},
+        {"type": "chairRight", "x": 2, "y": 6},
+        {"type": "chairRight", "x": 2, "y": 7},
+        {"type": "chairLeft", "x": 9, "y": 6},
+        {"type": "chairLeft", "x": 9, "y": 7},
+        {"type": "plantA", "x": 2, "y": 9},
+        {"type": "plantB", "x": 9, "y": 9}
+    ],
     "transitions": [
-        {"x": 6, "y": 10, "toMap": "downtown-map.json", "toX": 12, "toY": 4, "label": "[Back out to the street]"}
+        {"x": 6, "y": 10, "toMap": "downtown-map.json", "toX": 12, "toY": 4, "label": "[Back out to the street]"},
+        {"x": 6, "y": 1, "toMap": "vault-map.json", "toX": 4, "toY": 5, "label": "[TEXT]", "requires": ["act2_item_a", "act2_item_b", "act2_item_c"], "requiresMsg": "[TEXT]"}
     ]
 }

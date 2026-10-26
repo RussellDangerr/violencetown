@@ -19,6 +19,7 @@ import {
     WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
     EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, closeButtonRect,
     DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceEquipLayout, deviceRingsLayout,
+    deviceSkillsLayout,                                                      // (US2) the skills readout in the RINGS tab
     inspectorPanelRect, inspectorActionRects,                               // (C1) tap-to-inspect panel + action-row geometry
     gearOptionRects,                                                        // (C2) GEAR chooser option-row geometry
     xmbBarLayout, hudLayout, throwRects, wheelTopMarks, fightPanelRects, XMB_CELL,                      // (XMB) usable-bar geometry; (screen-fill) the HUD, throw targets, the marks above the wheel
@@ -31,7 +32,7 @@ import { ITEMS, itemTier } from './items.js';                                // 
 import { RINGS, FUSIONS } from './ring-data.js';                             // (rings Task 5) SKILLS-tab hands: ring names + fusion spark
 import { findFusion } from './rings.js';                                     // (rings Task 5) mark a link fusible when its two rings have an authored fusion
 import { WORLD_ZONES, overworldZone, connectorPairs } from './world-map.js'; // (Phase 4) rudimentary world map
-import { perceives, facingOf, VERDICT } from './perception.js';               // (threat overlay) the SAME vision the chase AI uses
+import { perceives, facingOf, dirOf as spriteDirOf, VERDICT } from './perception.js';              // (threat overlay) the SAME vision the chase AI uses
 import { PHASE, threatPhase, alertWatchers } from './threat-phase.js';        // (threat overlay) attention as a state
 import { isSafe } from './defeat-scenarios.js';   // (defeat legibility) mark safe-floor items
 import { buyPrice, sellPrice, bribeStepCost, mood, canTrade, band, BRIBE_STEP } from './trade.js'; // (trade slice 1) pricing + mood smiley; band feeds the offer meter's multiplier readout
@@ -42,7 +43,7 @@ import { entranceAt, fogReveal, fogDepth, fogOut, tileJitter, FOG_TINT, FOG_DENS
 import { combatLines } from './combat-log.js';   // (combat-hud stage 3) the fight face's feed
 import { playerPanel, targetPanel, panelTarget } from './fight-panels.js';   // (combat-hud stage 4)
 import * as Settings from './settings.js'; // (combat-feel-pass) reduce-motion for hit-splats (namespace import — see main.js)
-import { challengeGp } from './enemies.js'; // (Law 6f) nameplate pips read the composite kit, not raw gold
+import { challengeGp, shownName } from './enemies.js'; // (Law 6f) nameplate pips read the composite kit, not raw gold; (FX4) a boss's one name
 import { resolveOffer } from './offer.js';                                  // (offer screen) pure basket→projection
 import { dispositionCeil, DISPOSITION_MIN } from './disposition-curves.js'; // (offer screen) meter ceiling + floor — offer.js does not re-export these
 import { lungeOffset } from './cascade.js';                                  // (turn-model C1) an attacker lunges on its beat
@@ -184,6 +185,22 @@ export function facingCue(cx, cy, ux, uy, tilePx = 32) {
     ];
 }
 
+// Does this watcher get the facing chevron? Only where its art can't show the
+// way it looks (plans/ds2-chevron-follows-ruling.md). A sprite with four-way
+// frames (dirCols) facing straight up, down, left or right already shows it,
+// so the chevron would say it twice. Creatures (one drawn facing) and any
+// diagonal (four frames can't show eight ways) keep it. The cone's direction
+// (facingOf) must also be the frame the art picks (dirOf): a never-moved
+// watcher's cone faces down while _faceLeft may turn its frame left.
+const STRAIGHT = { '0,-1': 'up', '0,1': 'down', '-1,0': 'left', '1,0': 'right' };
+export function showsFacingChevron(watcher) {
+    const info = spriteVariant(ENEMY_SPRITES[watcher?.type], watcher);
+    if (!info?.dirCols) return true;
+    const { fx, fy } = facingOf(watcher);
+    const straight = STRAIGHT[`${Math.sign(fx)},${Math.sign(fy)}`];
+    return !straight || straight !== spriteDirOf(watcher);
+}
+
 // Which way an exit's arrow points: toward the map edge the tile is nearest
 // (see _drawTransitions). On a tie the vertical edge wins.
 export function exitDir(t, mw, mh) {
@@ -198,6 +215,40 @@ export function actorOrder(a, b) {
         || (a.feetY - b.feetY)
         || (a.kind === 'player' ? 1 : -1);
 }
+
+// Fitting text by its measured width. `measure(s)` is the pixel width of `s`
+// (Renderer._measurer hands one over). Never by a fixed px per letter: the 8 px
+// idiom was a fossil of the retired 8x8 atlas and fit ~40% less than the room.
+//
+// One line, cut with a trailing '~' when it runs over: the longest head that,
+// with the mark, still fits. Text that fits comes back whole.
+export function cutToWidth(text, maxPx, measure) {
+    const s = String(text);
+    if (measure(s) <= maxPx) return s;
+    let n = s.length - 1;
+    while (n > 0 && measure(s.slice(0, n) + '~') > maxPx) n--;
+    return s.slice(0, n) + '~';
+}
+
+// Word wrap: break at spaces, never inside a word (a word wider than the room
+// keeps a line to itself), each line as long as the room allows.
+export function wrapToWidth(text, maxPx, measure) {
+    const words = String(text).split(' ');
+    const lines = [];
+    let line = '';
+    for (const w of words) {
+        if (line && measure(line + ' ' + w) > maxPx) { lines.push(line); line = w; }
+        else line = line ? line + ' ' + w : w;
+    }
+    if (line) lines.push(line);
+    return lines;
+}
+
+// (US2) The label each skill shows in the Remoticon's skills readout, keyed by
+// its id in game/skills.js. Not written yet.
+export const SKILL_LABELS = {
+    light_fingers: '[TEXT]',
+};
 
 export class Renderer {
     constructor(canvas) {
@@ -1664,7 +1715,7 @@ export class Renderer {
             if (this.font && !game._animating && !splatUp && this._isFaced(game, e)) {
                 const verb = defaultVerb({ x: e.x, y: e.y, npc: e }, game);
                 if (verb) {
-                    const who  = String(e.name || e.type || '').replace(/[[\]]/g, '');
+                    const who  = String((e.boss ? shownName(e) : e.name || e.type) || '').replace(/[[\]]/g, '');
                     const text = `${who} · ${verb.label}`.toUpperCase();
                     const tw   = this.font.measure ? this.font.measure(text, 1) : text.length * 6;
                     const tx   = Math.round(px + TILE_PX / 2 - tw / 2);
@@ -1718,7 +1769,7 @@ export class Renderer {
             // K.O. tag below — the player's permanent record of "you fought this
             // person here."
             if (this.font) {
-                this.font.drawText(ctx, `[KO] ${e.type.toUpperCase()}`, px + TILE_PX / 2, py + TILE_PX - 2, {
+                this.font.drawText(ctx, `[KO] ${String(shownName(e)).toUpperCase()}`, px + TILE_PX / 2, py + TILE_PX - 2, {
                     color: '#9a8a78', scale: 1, align: 'center',
                 });
             }
@@ -2297,7 +2348,8 @@ export class Renderer {
     //   (c) FEED     : last 3 log messages, category-tinted, age-faded, newest
     //                  at the bottom — chat-window convention.
     //
-    // The bitmap font is 8px/char at scale 1 and lines advance 12px. With the
+    // Lines are cut to the panel by measured width (cutToWidth) and advance
+    // 12px. With the
     // panel 104px tall the interior (after 8px top + bottom padding) is 88px =
     // room for header (12) + objective (12) + a 12px gap + three feed lines
     // (36) with margin to spare, so nothing spills past QUESTLOG_RECT.
@@ -2308,7 +2360,7 @@ export class Renderer {
         const PAD = 12;                      // buffer so text clears the ornate corners
         const LH = 12;                       // line height (8px glyph + 4px lead)
         const innerW = R.w - PAD * 2;
-        const maxChars = Math.max(4, Math.floor(innerW / 8));
+        const cut = (s) => cutToWidth(s, innerW, this._measurer(1));
 
         drawPanelSmall(ctx, R.x, R.y, R.w, R.h, this.uiSheet);
         if (!this.font) return;
@@ -2337,9 +2389,7 @@ export class Renderer {
         // more combat message (plans/combat-hud.md stage 3).
         const objective = fightFace ? null : (game.questEngine ? game.questEngine.getHudText() : null);
         if (objective) {
-            let t = objective.toUpperCase();
-            if (t.length > maxChars) t = t.slice(0, maxChars - 1) + '~';
-            this.font.drawText(ctx, t, tx, y, { color: UI.gold, scale: 1 });
+            this.font.drawText(ctx, cut(objective.toUpperCase()), tx, y, { color: UI.gold, scale: 1 });
             y += LH;
         }
 
@@ -2362,9 +2412,7 @@ export class Renderer {
         for (let i = 0; i < visible.length; i++) {
             const m = visible[i];
             const tinted = hexToRgba(this._logStripColor(m.category), alphaAt(i, visible.length));
-            let text = m.text;
-            if (text.length > maxChars) text = text.slice(0, maxChars - 1) + '~';
-            this.font.drawText(ctx, text, tx, startY + i * LH, { color: tinted, scale: 1 });
+            this.font.drawText(ctx, cut(m.text), tx, startY + i * LH, { color: tinted, scale: 1 });
         }
     }
 
@@ -2440,6 +2488,7 @@ export class Renderer {
         const strip = (s) => (s || '').replace(/[\[\]]/g, '');
 
         this.font.drawText(ctx, 'THE HANDS', bodyRect.x + bodyRect.w / 2, bodyRect.y - 2, { color: UI.gold, scale: 1, align: 'center' });
+        this._drawDeviceSkills(game, bodyRect);   // (US2) your skills and their ranks, above the fingertips
 
         // Links first (behind the sockets) — a dim seam between adjacent rings;
         // gold + a spark where an authored fusion is possible.
@@ -2488,6 +2537,21 @@ export class Renderer {
                 return strip((fz && fz.name) || id);
             }).join('   ');
             this.font.drawText(ctx, `THE RINGS AGREE:  ${names}`, bodyRect.x + bodyRect.w / 2, bodyRect.y + bodyRect.h - 14, { color: UI.dim, scale: 1, align: 'center' });
+        }
+    }
+
+    // (US2) The skills readout: one row per skill you have used cleanly, its
+    // label on the left and one pip per rank on the right, lit up to the rank
+    // reached. Geometry from deviceSkillsLayout; no skills draws nothing.
+    _drawDeviceSkills(game, bodyRect) {
+        const { ctx } = this;
+        for (const row of deviceSkillsLayout(bodyRect, game.skills).rows) {
+            const label = this._fitText(SKILL_LABELS[row.id] ?? '[TEXT]', row.labelW);
+            this.font.drawText(ctx, label.text, row.x, row.y + row.h / 2 - 4, { color: row.rank > 0 ? UI.gold : UI.dim, scale: label.scale });
+            for (const p of row.pips) {
+                if (p.lit) { ctx.fillStyle = UI.gold; ctx.fillRect(p.x, p.y, p.w, p.h); }
+                else       { ctx.strokeStyle = UI.dim; ctx.lineWidth = 1; ctx.strokeRect(p.x + 0.5, p.y + 0.5, p.w - 1, p.h - 1); }
+            }
         }
     }
 
@@ -2663,7 +2727,11 @@ export class Renderer {
         const p = fightPanelRects(this._view());
         this._drawGearPanel(p.left, playerPanel(game));
         const t = panelTarget(game);
-        if (t) this._drawTargetPanel(p.right, targetPanel(t));
+        if (!t) return;
+        // (FX4) A boss goes by its one name here too; fight-panels reads the type.
+        const panel = targetPanel(t);
+        panel.name = shownName(t) || panel.name;
+        this._drawTargetPanel(p.right, panel);
     }
 
     // Your six slots, two lines each: the label, then what is in it. An empty
@@ -2675,8 +2743,7 @@ export class Renderer {
         const PAD = 6, LH = 12;
         drawPanelSmall(ctx, R.x, R.y, R.w, R.h, this.uiSheet);
         const tx = R.x + PAD;
-        const maxChars = Math.max(3, Math.floor((R.w - PAD * 2) / 8));
-        const clip = (s) => (s.length > maxChars ? s.slice(0, maxChars - 1) + '~' : s);
+        const clip = (s) => cutToWidth(s, R.w - PAD * 2, this._measurer(1));
         let y = R.y + PAD;
         this.font.drawText(ctx, 'YOU', tx, y, { color: UI.gold, scale: 1 });
         y += LH + 2;
@@ -2698,8 +2765,7 @@ export class Renderer {
         const PAD = 6, LH = 12;
         drawPanelSmall(ctx, R.x, R.y, R.w, R.h, this.uiSheet);
         const tx = R.x + PAD;
-        const maxChars = Math.max(3, Math.floor((R.w - PAD * 2) / 8));
-        const clip = (s) => (s.length > maxChars ? s.slice(0, maxChars - 1) + '~' : s);
+        const clip = (s) => cutToWidth(s, R.w - PAD * 2, this._measurer(1));
         let y = R.y + PAD;
         this.font.drawText(ctx, clip(t.name.toUpperCase()), tx, y, { color: UI.hpRed, scale: 1 });
         y += LH + 2;
@@ -2884,7 +2950,7 @@ export class Renderer {
 
         const qe = game.questEngine;
         const innerX = R.x + 22;
-        const maxChars = Math.max(8, Math.floor((R.w - 56) / 8));
+        const wrap = (s) => wrapToWidth(s, R.w - 56, this._measurer(1));
         let y = R.y + 6;
 
         // Active quest — the stage checklist.
@@ -2894,11 +2960,11 @@ export class Renderer {
             for (const st of view.stages) {
                 const mark = st.done ? '✓' : st.current ? '▸' : '·';
                 const col = st.done ? UI.dim : st.current ? UI.textLight : UI.text;
-                for (const line of this._wrapText(`${mark} ${st.objective}`, maxChars)) {
+                for (const line of wrap(`${mark} ${st.objective}`)) {
                     this.font.drawText(ctx, line, innerX + 6, y, { color: col, scale: 1 }); y += 12;
                 }
                 if (st.current && st.location) { this.font.drawText(ctx, `   @ ${st.location}`, innerX + 6, y, { color: UI.gold, scale: 1 }); y += 12; }
-                if (st.current && st.description) for (const line of this._wrapText(`   ${st.description}`, maxChars)) { this.font.drawText(ctx, line, innerX + 6, y, { color: UI.dim, scale: 1 }); y += 12; }
+                if (st.current && st.description) for (const line of wrap(`   ${st.description}`)) { this.font.drawText(ctx, line, innerX + 6, y, { color: UI.dim, scale: 1 }); y += 12; }
             }
         } else {
             this.font.drawText(ctx, 'No active quest.', innerX, y, { color: UI.dim, scale: 1 }); y += 15;
@@ -2908,7 +2974,8 @@ export class Renderer {
         const done = qe ? qe.getCompletedTitles() : [];
         if (done.length) {
             y += 6;
-            this.font.drawText(ctx, 'COMPLETED', innerX, y, { color: UI.textLight, scale: 1 }); y += 14;
+            const count = qe.getCompletedCount();
+            this.font.drawText(ctx, `COMPLETED  ${count.done} / ${count.total}`, innerX, y, { color: UI.textLight, scale: 1 }); y += 14;
             for (const t of done) { this.font.drawText(ctx, `✓ ${t}`, innerX + 6, y, { color: UI.dim, scale: 1 }); y += 12; }
         }
 
@@ -2916,7 +2983,7 @@ export class Renderer {
         y += 8;
         this.font.drawText(ctx, 'WITNESS LOG', innerX, y, { color: UI.textLight, scale: 1 }); y += 14;
         const lines = [];
-        for (const e of (qe ? qe.getJournalLines() : [])) for (const w of this._wrapText(e.text, maxChars)) lines.push(w);
+        for (const e of (qe ? qe.getJournalLines() : [])) for (const w of wrap(e.text)) lines.push(w);
         const bottom = R.y + R.h - 26;
         const rows = Math.max(1, Math.floor((bottom - y) / 12));
         const scroll = Math.max(0, Math.min(game._journalScroll || 0, Math.max(0, lines.length - rows)));
@@ -2988,8 +3055,7 @@ export class Renderer {
         this._fillScreen(ctx);
 
         const w = 400, padX = 22;
-        const maxChars = Math.max(8, Math.floor((w - padX * 2) / 8));
-        const bodyLines = this._wrapText(insp.body || '', maxChars);
+        const bodyLines = wrapToWidth(insp.body || '', w - padX * 2, this._measurer(1));
         const hasTier = !!insp.tierName;
         const h = (hasTier ? 60 : 44) + bodyLines.length * 12 + 24;
         const px = Math.round((CANVAS_PX - w) / 2);
@@ -3079,7 +3145,7 @@ export class Renderer {
         if (w.confirming) {
             ctx.save(); ctx.fillStyle = 'rgba(48,0,0,0.55)'; ctx.fillRect(0, 0, vp.w, vp.h); ctx.restore();
             const tgt = w.reticle && game.enemies.find(e => e.entity.isAlive() && e.x === w.reticle.x && e.y === w.reticle.y);
-            const name = String((tgt && (tgt.type || (tgt.entity && tgt.entity.name))) || 'them').replace(/[\[\]]/g, '').toUpperCase();
+            const name = String((tgt && (shownName(tgt) || (tgt.entity && tgt.entity.name))) || 'them').replace(/[\[\]]/g, '').toUpperCase();
             if (this.font) {
                 this.font.drawText(ctx, '!! PLUS ULTRA !!', CC, CY - 42, { color: '#ff5555', scale: 2, align: 'center', shadow: '#000' });
                 this.font.drawText(ctx, `STRIKE ${name}?`, CC, CY - 8, { color: UI.gold, scale: 1, align: 'center', shadow: '#000' });
@@ -3297,7 +3363,7 @@ export class Renderer {
                     const d = Math.max(Math.abs(e.x - game.playerX), Math.abs(e.y - game.playerY));
                     if (d < nd) { nd = d; near = e; }
                 }
-                const nm = String(near.type || (near.entity && near.entity.name) || 'FOE').replace(/[\[\]]/g, '').toUpperCase().slice(0, 12);
+                const nm = String(shownName(near) || (near.entity && near.entity.name) || 'FOE').replace(/[\[\]]/g, '').toUpperCase().slice(0, 12);
                 ctx.save(); ctx.fillStyle = 'rgba(40,0,0,0.6)'; ctx.fillRect(0, strip - 26, vp.w, 26); ctx.restore();
                 this.font.drawText(ctx, `⚔ ${foes.length}  ${nm}`, CC, strip - 16, { color: '#e8462f', scale: 1, align: 'center', shadow: '#000' });
             }
@@ -3443,7 +3509,8 @@ export class Renderer {
     //
     // Four channels, so the field is never the only signal:
     //   1. the threat field — a cached dither pattern, see _ditherPattern above
-    //   2. a facing chevron on each watcher
+    //   2. a facing chevron on each watcher whose art can't show its facing
+    //      (creatures, and anyone facing a diagonal)
     //   3. an awareness marker (AWARENESS_EMOTE): nothing calm, else question/
     //      exclamation/alert for suspicious/searching/chasing
     //   4. the DIRECT thread — a dashed line while a watcher currently sees you
@@ -3582,8 +3649,9 @@ export class Renderer {
 
         // Channels 2 and 3 — per watcher, so the field is never the only signal.
         // A colour-blind player, or one who has turned the field off in their head
-        // after an hour, still gets facing and alarm from the sprites themselves.
-        // Unchanged: still tied to every watcher with eyes, not just the alert
+        // after an hour, still gets facing and alarm from the sprites themselves:
+        // from the four-way art where a sprite has it, from the chevron where it
+        // doesn't. Still tied to every watcher with eyes, not just the alert
         // ones — and it matters more now that the field itself is absent more
         // often.
         const breath = reduce ? 0.5 : (0.5 + 0.5 * Math.sin(now / 420));
@@ -3597,21 +3665,24 @@ export class Renderer {
             // edge, pointing the way the watcher looks. It used to be a line from
             // the tile's centre, which ran straight through the body of anyone
             // facing down and read as a stick through every townsperson.
-            const { fx, fy } = facingOf(w);
-            const len = Math.hypot(fx, fy) || 1;
-            const [a, b, c] = facingCue(sx + TILE_PX / 2, sy + TILE_PX / 2, fx / len, fy / len, TILE_PX);
-            ctx.save();
-            ctx.fillStyle = 'rgba(212,185,106,0.9)';
-            ctx.strokeStyle = 'rgba(63,38,49,0.9)';      // the Tiny packs' plum outline
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(a[0], a[1]);
-            ctx.lineTo(b[0], b[1]);
-            ctx.lineTo(c[0], c[1]);
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
-            ctx.restore();
+            // Drawn only where the art can't show facing (showsFacingChevron).
+            if (showsFacingChevron(w)) {
+                const { fx, fy } = facingOf(w);
+                const len = Math.hypot(fx, fy) || 1;
+                const [a, b, c] = facingCue(sx + TILE_PX / 2, sy + TILE_PX / 2, fx / len, fy / len, TILE_PX);
+                ctx.save();
+                ctx.fillStyle = 'rgba(212,185,106,0.9)';
+                ctx.strokeStyle = 'rgba(63,38,49,0.9)';      // the Tiny packs' plum outline
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(a[0], a[1]);
+                ctx.lineTo(b[0], b[1]);
+                ctx.lineTo(c[0], c[1]);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+                ctx.restore();
+            }
 
             // Awareness marker — a real emote sprite in place of the old
             // bitmap-ASCII pip (· ? ! !!). AWARENESS_EMOTE has no idle/
@@ -4572,8 +4643,13 @@ export class Renderer {
         ctx.strokeRect(r.x - 3, r.y - 3, r.w + 6, r.h + 6);
     }
 
-    // Word-wrap `text` into lines no longer than `maxChars` characters (the
-    // bitmap font is fixed 8px/char at scale 1).
+    // Pixel width of a string at `scale`, for cutToWidth / wrapToWidth. A font
+    // without measure (a test's recording font) falls back to VT323's advance.
+    _measurer(scale = 1) {
+        const f = this.font;
+        return f && f.measure ? (s) => f.measure(s, scale) : (s) => String(s).length * 4.8 * scale;
+    }
+
     // Fit a one-line label into `maxW` px: shrink the scale (VT323 scales
     // smoothly, never below `minScale`), then cut with "..." if it still runs
     // over. Returns { text, scale } for drawText.
@@ -4588,6 +4664,9 @@ export class Renderer {
         return { text: text.slice(0, n).trimEnd() + '...', scale: s };
     }
 
+    // Word-wrap `text` into lines of at most `maxChars` characters. Callers
+    // derive maxChars from the font's measured advance; wrapping to a pixel
+    // width is wrapToWidth.
     _wrapText(text, maxChars) {
         const words = String(text).split(' ');
         const lines = [];

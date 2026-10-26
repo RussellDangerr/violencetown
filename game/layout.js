@@ -13,6 +13,7 @@
 // keeps this module dependency-light while letting the hands geometry derive from
 // the one source of truth for the unlock ladder + adjacency.
 import { unlockedSlots, adjacentPairs, HANDS } from './rings.js';
+import { SKILLS, rankOf } from './skills.js';   // (US2) pure too: which skills show in the RINGS tab, and their rank
 import { TILE_PX } from './data.js';
 import { DEFAULT_VIEW } from './viewport.js';   // (screen-fill) the default viewport for the HUD helpers
 
@@ -333,7 +334,7 @@ export function dialColumnLeft(w) { return w - DOCK_PAD - 2 * DIAL_MAX_R; }
 // and for COIN KIT GEAR on one line. At 96 both clipped, which is how it was found.
 export const FIGHT_PANEL_W = 124;   // the width they want, where there is room
 export const FIGHT_PANEL_MIN_W = 56; // below this the text stops being readable
-export const FIGHT_PANEL_H = 176;   // header + six two-line slot rows; the target side fits inside it
+export const FIGHT_PANEL_H = 198;   // header + seven two-line slot rows (both hands, WS3); the target side fits inside it
 export const FIGHT_PANEL_CLEAR = 16; // tiles of unobstructed world kept between the two
 const FIGHT_PANEL_M = 8;            // from the screen's edge
 
@@ -651,6 +652,44 @@ export function deviceRingsLayout(bodyRect, game) {
     });
 
     return { hands, sockets, links };
+}
+
+// (US2) The skills readout — a band at the top of the RINGS tab, under its
+// title and above the tallest fingertip (empty at every ring tier). One row
+// per skill with at least one clean use (an unused skill shows nothing, the way
+// an unrevealed finger shows no socket), in SKILLS order. Each row carries one
+// pip per rank the skill has, lit up to the rank reached. Rows that would run
+// past the band are left off rather than drawn over the hands. Display only:
+// nothing here is tappable. Clearance is pinned by tests/skills-readout.test.js.
+export const SKILL_ROW_H = 18;
+const SKILL_ROW_GAP = 4;
+const SKILL_BAND_TOP = 16;     // below the "THE HANDS" title (drawn at body.y - 2)
+const SKILL_BAND_H = 64;       // three rows; the tallest socket starts ~body.y + 100
+const SKILL_ROW_W = 240;
+const SKILL_PIP = 10, SKILL_PIP_GAP = 4;
+
+export function deviceSkillsBand(bodyRect) {
+    return { x: bodyRect.x + (bodyRect.w - SKILL_ROW_W) / 2, y: bodyRect.y + SKILL_BAND_TOP, w: SKILL_ROW_W, h: SKILL_BAND_H };
+}
+
+export function deviceSkillsLayout(bodyRect, skills) {
+    const band = deviceSkillsBand(bodyRect);
+    const rows = [];
+    for (const id of Object.keys(SKILLS)) {
+        if (!((skills?.[id] ?? 0) > 0)) continue;
+        const y = band.y + rows.length * (SKILL_ROW_H + SKILL_ROW_GAP);
+        if (y + SKILL_ROW_H > band.y + band.h) break;
+        const of = SKILLS[id].ranks.length;
+        const rank = rankOf(skills, id);
+        const pipsW = of * SKILL_PIP + (of - 1) * SKILL_PIP_GAP;
+        const px = band.x + band.w - pipsW;
+        const py = y + (SKILL_ROW_H - SKILL_PIP) / 2;
+        const pips = Array.from({ length: of }, (_, i) => ({
+            x: px + i * (SKILL_PIP + SKILL_PIP_GAP), y: py, w: SKILL_PIP, h: SKILL_PIP, lit: i < rank,
+        }));
+        rows.push({ id, rank, of, x: band.x, y, w: band.w, h: SKILL_ROW_H, labelW: px - band.x - 8, pips });
+    }
+    return { band, rows };
 }
 
 // ── The unified offer screen ─────────────────────────────────────────────────

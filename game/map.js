@@ -28,7 +28,8 @@ export class GameMap {
         // Pure metadata; no behavior at the map level.
         this.regions = mapData.regions || [];
 
-        // Transitions: [{ x, y, toMap, toX, toY, label }]
+        // Transitions: [{ x, y, toMap, toX, toY, label, requires?, requiresMsg? }]
+        // — `requires` is one item id or a list of them (carriesAll, below).
         this.transitions = mapData.transitions || [];
 
         // Examinables: [{ id, x, y, text }] — points of interest the Examine
@@ -164,6 +165,18 @@ export class GameMap {
     getAnchor(x, y) {
         return this.anchors.find(a => a.x === x && a.y === y) || null;
     }
+}
+
+// ── Item gates ───────────────────────────────────────────────────────────────
+
+// Whether the bag holds what a gate (a transition or an anchor) `requires`: one
+// item id, or a list of ids that must ALL be carried (the bank's vault door
+// wants the three Act 2 items, plans/fin1-vault-door.md). No `requires`, or an
+// empty list, is an open gate.
+export function carriesAll(requires, inventory) {
+    const ids = Array.isArray(requires) ? requires : (requires ? [requires] : []);
+    const held = new Set((inventory || []).map(s => s && s.itemDef && s.itemDef.id));
+    return ids.every(id => held.has(id));
 }
 
 // ── Loader ───────────────────────────────────────────────────────────────────

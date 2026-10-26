@@ -364,7 +364,7 @@ function cardHTML(c, byId) {
   return `
     <article class="card ${cls}${open.length && lane !== 'done' ? ' blocked' : ''}" draggable="${db ? 'true' : 'false'}"
              data-id="${esc(c.id)}" tabindex="0">
-      <header><b>${esc(c.id)}</b><span class="kind">${lane === 'done' ? '' : esc(kind)}</span>${c.size ? `<em>${esc(c.size)}</em>` : ''}</header>
+      <header><b>${esc(c.id)}</b><span class="kind">${lane === 'done' ? '' : esc(kind)}${c.source === 'scout' && lane !== 'done' ? ' · scout' : ''}</span>${c.size ? `<em>${esc(c.size)}</em>` : ''}</header>
       <p class="title">${esc(c.title)}</p>
       ${kind === 'slice' && lane === 'ready' && open.length ? actsHTML(c) + waitHTML(c, byId, chip) : ''}
       ${c.note ? `<p class="note">${esc(c.note).replace(/\n/g, '<br>')}</p>` : ''}
