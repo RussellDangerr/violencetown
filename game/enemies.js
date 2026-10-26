@@ -24,6 +24,7 @@ import { makeHostile } from './give-action.js';   // (theft) one spelling of "tu
 import { FACING_VECTORS } from './perception.js';
 import { resolveItemDef } from './item-registry.js';
 import { labelOf } from './slots.js';
+import { RNG } from './rng.js';
 
 // (FX4, plans/fx4-boss-one-name.md) The name a character goes by on the
 // surfaces that used to print its type: the log, the target panel, the KO tag.
@@ -454,6 +455,36 @@ function defaultKit(armor) {
     return KIT_DEFAULTS[KIT_DEFAULTS.length - 1];
 }
 
+// (FX13, plans/fx13-townsfolk-purse.md) A townsperson's purse: a few GP, varying
+// by person, so Thieve has something to lift. Ruling FX13R1 pick a.
+export const TOWNSFOLK_PURSE_MIN = 2;
+export const TOWNSFOLK_PURSE_MAX = 6;
+const PURSE_SALT = 0x5A17C0DE;
+
+// An ambient, non-fighting, non-vendor NPC whose spawn states no wallet.
+export function isTownsperson(spawnDef) {
+    return !!spawnDef?.ambient && !spawnDef.vendor && !((spawnDef.damage ?? 0) > 0)
+        && spawnDef.gold == null;
+}
+
+// FNV-1a over the id, so the purse is keyed on the person, not on load order.
+function idHash(id) {
+    let h = 0x811C9DC5;
+    for (const ch of String(id ?? '')) {
+        h ^= ch.charCodeAt(0);
+        h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return h >>> 0;
+}
+
+// Its own Mulberry32 stream per person — never game.rng, so no fight or theft
+// roll moves — and the same purse on every load of the zone, so leaving and
+// coming back cannot re-roll it.
+export function townsfolkPurse(id, seed = 0) {
+    const rng = new RNG((idHash(id) ^ PURSE_SALT ^ (seed >>> 0)) >>> 0);
+    return rng.range(TOWNSFOLK_PURSE_MIN, TOWNSFOLK_PURSE_MAX);
+}
+
 // Law 6d: a spawn the player already mugged comes back broke — no gold AND no
 // kit, so re-entering a zone can't farm either half of the wallet. Pure so it
 // stays Node-testable.
@@ -465,6 +496,7 @@ export function spawnEnemy(spawnDef, muggedIds, robbed = null) {
         e.gold = kit.gold;
         e.loadout = [...kit.loadout];
     }
+    if (isTownsperson(spawnDef)) e.gold = townsfolkPurse(e.id);
     if (!Array.isArray(e.loadout)) e.loadout = e.loadout ? [...e.loadout] : [];
     if (muggedIds?.has(e.id)) { e.gold = 0; e.loadout = []; }
 

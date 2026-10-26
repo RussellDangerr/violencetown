@@ -15,7 +15,7 @@ import { HEAL_HP_FLOOR, HEAL_MIN_GOLD } from '../game/ai.js';
 // the DOM at module-evaluation time (tests/wallets.test.js and tests/save-
 // roundtrip.test.js already import Enemy from here under bare `node --test`),
 // so this pure helper is safe to pull into a headless Node tool too.
-import { challengeGp } from '../game/enemies.js';
+import { challengeGp, isTownsperson, townsfolkPurse } from '../game/enemies.js';
 import { SLOTS, ENTRIES, resolveSpawn, defaultPicks } from '../game/slots.js';
 import { ITEMS } from '../game/items.js';
 
@@ -394,7 +394,9 @@ function rosterRow(zone, id, s) {
         hp: s.hp ?? 100,
         armor: s.armor ?? 0,
         damage: s.damage ?? ENEMY_DEFAULT_DAMAGE,
-        gold: s.gold ?? 0,
+        // (FX13) A townsperson's purse comes from spawnEnemy, not the map, so the
+        // bench draws the same one the game does, keyed on the same id.
+        gold: isTownsperson(s) ? townsfolkPurse(s.id ?? id) : (s.gold ?? 0),
         vermin: s.vermin ?? false,
         puzzleWall: s.puzzleWall ?? false,
         // Needed by the Law 4 kit lint: a vendor's gold is a till, not a
