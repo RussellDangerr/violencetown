@@ -4435,7 +4435,7 @@ class Game {
             elemental: elementalMult(opts.type || kind, enemyObj),
             positional: backstab ? 1.5 : 1,
         });
-        if (finalDmg === 0) { this._log(`[${enemyObj.type} is immune!]`, 'combat'); return null; }
+        if (finalDmg === 0) { this._log(`[${enemyObj.shownName || enemyObj.type} is immune!]`, 'combat'); return null; }
         if (backstab) this._log('[Backstab!]', 'combat');
 
         const result = attack(playerEntity, enemyObj.entity, finalDmg);
@@ -4695,7 +4695,7 @@ class Game {
         enemyObj.state = 'chasing';     // immediately hostile, no re-acquire delay
         enemyObj.disposition = -50;     // betrayed: head-meter goes angry + re-bribing costs more
         enemyObj._wasFlipped = false;   // ...but they CAN be won back if you make amends
-        this._log(`[The ${enemyObj.type} turns on you!]`, 'combat');
+        this._log(`[The ${enemyObj.shownName || enemyObj.type} turns on you!]`, 'combat');
     }
 
     // ── Reaction bus ──────────────────────────────────────────────────────────
@@ -4717,7 +4717,7 @@ class Game {
         if (target.vendor) { target.vendor = false; target.stock = null; }   // a vendor you struck won't keep shop
         if (target.ambient) target.ambient = false;  // a provoked townsperson fights for real, not as ambient
         if (typeof target.disposition === 'number') target.disposition = Math.min(target.disposition, -50);
-        this._log(`[The ${target.type || target.entity.name} turns on you!]`, 'combat');
+        this._log(`[The ${target.shownName || target.type || target.entity.name} turns on you!]`, 'combat');
     }
 
     // Total damage-reduction from worn armor: every equipped body-zone piece's
