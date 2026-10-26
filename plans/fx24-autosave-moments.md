@@ -16,7 +16,7 @@ The save is written straight away after:
 - picking something up (walking over it, taking it from a nearby tile, taking it out of a spot you
   examine);
 - finishing a trade (the offer screen's commit, which is also how a chest is emptied);
-- eating or drinking (any use of a bag item, the device's USE and DRINK).
+- eating or drinking (a use from the bar, the hotbar or the wheel, and the device's USE and DRINK).
 
 It is also written when the page is hidden or closed (`visibilitychange` to hidden, and
 `pagehide`).
