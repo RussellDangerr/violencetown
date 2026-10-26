@@ -244,6 +244,29 @@ export function wrapToWidth(text, maxPx, measure) {
     return lines;
 }
 
+// (FX7) The KO tag under a fallen enemy, and the box it covers on screen. The
+// tag is centred under the body at scale 1 (12 px tall) and is wider than a
+// tile, so bodies side by side would print their tags over each other.
+export const KO_LABEL_H = 12;
+export function koLabelText(e) {
+    return `[KO] ${String(shownName(e)).toUpperCase()}`;
+}
+
+// Which KO tags to draw this frame. `labels` are { key, cx, y, w, h, dist }:
+// centre x, top y, width, height, distance to the player. Nearest first (a tie
+// keeps the order given); a tag whose box overlaps one already kept is left
+// out. Returns the kept keys as a Set.
+export function koLabelsShown(labels) {
+    const kept = [];
+    const order = labels.map((l, i) => [l, i]).sort((a, b) => (a[0].dist - b[0].dist) || (a[1] - b[1]));
+    for (const [l] of order) {
+        const x0 = l.cx - l.w / 2, x1 = l.cx + l.w / 2, y0 = l.y, y1 = l.y + l.h;
+        const hit = kept.some(k => x0 < k.x1 && k.x0 < x1 && y0 < k.y1 && k.y0 < y1);
+        if (!hit) kept.push({ key: l.key, x0, x1, y0, y1 });
+    }
+    return new Set(kept.map(k => k.key));
+}
+
 // (US2) The label each skill shows in the Remoticon's skills readout, keyed by
 // its id in game/skills.js. Not written yet.
 export const SKILL_LABELS = {
@@ -1484,11 +1507,29 @@ export class Renderer {
             else if (a.def.shadow !== false && !a.filler) this._drawGroundShadow(a.px + TILE_PX / 2, a.py + TILE_PX - 3, 0.32, a.def.shadowRx ?? 12, a.def.shadowRy ?? 4.5);
         }
 
-        actors.sort(actorOrder);   // edge filler first, then by feet-Y, the player last on a tie
+        // (FX7) Settle which KO tags show before anything draws: nearest the
+        // player first, none overlapping. Each tag still draws with its body,
+        // so its layering in the depth sort is unchanged.
+        const measure = (t) => (this.font?.measure ? this.font.measure(t, 1) : t.length * 6);
+        const pcx = ppx + TILE_PX / 2, pcy = groundPy + TILE_PX / 2;
+        const koLabels = [];
         for (const a of actors) {
-            if (a.kind === 'prop') this._drawPropSprite(a.def, a.px, a.py);
-            else if (a.kind === 'player') this._drawPlayerSprite(game, a.px, a.py, now);
-            else this._drawEnemySprite(game, a.e, a.px, a.py, now);
+            if (a.kind !== 'enemy' || !a.dead) continue;
+            const cx = a.px + TILE_PX / 2;
+            koLabels.push({ key: a.e, cx, y: a.py + TILE_PX - 2, w: measure(koLabelText(a.e)), h: KO_LABEL_H,
+                dist: Math.hypot(cx - pcx, a.py + TILE_PX / 2 - pcy) });
+        }
+
+        actors.sort(actorOrder);   // edge filler first, then by feet-Y, the player last on a tie
+        this._koShown = koLabelsShown(koLabels);
+        try {
+            for (const a of actors) {
+                if (a.kind === 'prop') this._drawPropSprite(a.def, a.px, a.py);
+                else if (a.kind === 'player') this._drawPlayerSprite(game, a.px, a.py, now);
+                else this._drawEnemySprite(game, a.e, a.px, a.py, now);
+            }
+        } finally {
+            this._koShown = null;
         }
     }
 
@@ -1767,9 +1808,10 @@ export class Renderer {
             ctx.fillRect(px + 4, py + 4, TILE_PX - 8, TILE_PX - 8);
 
             // K.O. tag below — the player's permanent record of "you fought this
-            // person here."
-            if (this.font) {
-                this.font.drawText(ctx, `[KO] ${String(shownName(e)).toUpperCase()}`, px + TILE_PX / 2, py + TILE_PX - 2, {
+            // person here." (FX7) Inside _drawActors only the tags it kept draw,
+            // so none overlap; called on its own, the tag always draws.
+            if (this.font && (!this._koShown || this._koShown.has(e))) {
+                this.font.drawText(ctx, koLabelText(e), px + TILE_PX / 2, py + TILE_PX - 2, {
                     color: '#9a8a78', scale: 1, align: 'center',
                 });
             }
