@@ -43,6 +43,7 @@ The board's word for turning an idea into rulings and slices is **tweak**. Use n
 | LP4 | ideas stay put; the update names the 3 oldest |
 | LP5 | per-pass update, no digest |
 | LP1 | no settings change |
+| LP6 | standing delegation (LOOP.md §11): approve, pick and tweak what the loop is confident about |
 
 Read the cards each pass. Once he picks, his pick wins.
 
@@ -50,7 +51,8 @@ Read the cards each pass. Once he picks, his pick wins.
 
 - Never merge without his Merge it.
 - Never push `main`, tag, or force-push.
-- Never answer a ruling or press his buttons.
+- Never answer a ruling or press his buttons, except as LOOP.md §11 (the standing delegation)
+  allows. Never press Merge it.
 - Never put board content in a committed file.
 - Never work in his checkout.
 
