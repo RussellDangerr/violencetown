@@ -26,7 +26,9 @@ before you read the PR.
   (Law 6f) — it no longer licenses sub-100 HP; the sewer rat is `hp: 100, armor: -80, vermin: true`
   (`game/sewer-setpiece.js:32`). Enforced by the `Enemy` ctor default `hp = 100`
   (`game/enemies.js:41`), `DEFAULT_HP = 100` (`game/combat.js:9`), and `lintEntity`
-  (`tools/balance-harness.mjs:105-107`): ANY `hp !== 100` flags — vermin included, no exemptions.
+  (`tools/balance-harness.mjs`): ANY `hp !== 100` flags — vermin included. **Amended 2026-10-25
+  (EL2):** a declared `puzzleWall` is exempt, as it is from the armor cap, because it is a lock, not
+  a combatant; the Sludge Bloom is 60 by ruling, so its keys still open it at ×1.5.
 - **Law 1 — The Peg.** 1 GP ≈ 1 HP is the rate for autonomous violence; per-cast skill buys rates
   above peg. Bands enforced by `lintSkills` (`tools/balance-harness.mjs:147-187`): spells
   `[1.5, 2.5]` dmg/MP (`SPELL_MIN_RATE`/`SPELL_MAX_RATE`, lines 38-39) — area spells
@@ -36,8 +38,14 @@ before you read the PR.
   `>= 2.5` dmg/GP (`TRICK_MIN_RATE`, line 37), autonomous summons `[0.5, 1.0]` dmg/GP
   (`AUTONOMOUS_MIN_RATE`/`AUTONOMOUS_MAX_RATE`, lines 46-47).
 - **Law 2 — Earned multipliers, no dice.** One pipeline, everything routes through it:
-  `computeHit`, `elementalMult`, `isBackstab`, all exported `game/combat.js:121`. Bucket law: flats
-  add, categories (elemental/positional/outgoing/incoming) multiply, round once
+  `computeHit`, `elementalMult`, `isBackstab`, `weaknessKinds`, `critOf`, all exported from
+  `game/combat.js`. **Every weakness is ×1.5 (`WEAKNESS_MULT`), one per kind, and the kinds
+  multiply (EL2, Caelan's 2026-10-06 ruling):** element (a type in the target's `weak` list),
+  direction (backstab), and state (the target has the `feared` or `poison` buff; both is still one
+  kind). Two kinds is a crit (×2.25, the gold-ring splat); three knock out a non-boss
+  (`knockoutDamage` takes all its health through its armor), while a boss takes ×3.375. Before EL2
+  an elemental weakness was ×2. Bucket law: flats
+  add, categories (elemental/positional/state/outgoing/incoming) multiply, round once
   (`computeHit`, `game/combat.js:28-32`). Immune is a true ×0 — call sites skip the hit entirely
   (`game/main.js:3733`, the immune-check before `attack()` at line 3736), never floor it back to 1.
   Guard (incoming ×0.5) and Blind (outgoing ×0.5) compose in the same call as everything else:
@@ -72,7 +80,9 @@ before you read the PR.
   | +15 | 20 | 4 |
   | +20 | **100** | 5 |
 
-  So `ttk_informed` 5 costs a **100-turn lazy fight**. The band therefore has two halves, and
+  So `ttk_informed` 5 costs a **100-turn lazy fight**. *(That table was cut when a weakness was ×2.
+  Since EL2 "informed" is one ×1.5 weakness, 30 damage: armor 0 → 4, +6 → 5, +10 → 5, +15 → 7,
+  +20 → 10, and `ttk_informed` 5 now sits at +6…+10. Lazy is unchanged.)* The band therefore has two halves, and
   `ARMOR_DIFFICULTY_CAP = 10` marks the seam:
   - **[−90, +10] — the DIFFICULTY band.** Fights that get harder. Author freely.
   - **(+10, +20] — the GATE band.** `max(1, hit − armor)` floors a lazy loadout to 1 damage, so the
@@ -163,7 +173,8 @@ before you read the PR.
    marker capping its Challenge GP at 5 (Law 6f), NOT an HP exemption anymore. Armor outside
    `[-90, +10]` needs `puzzleWall: true` declared or the lint flags it (Law 3).
 4. **Add `weak`/`resist`/`immune`** arrays of damage-type strings matching the zone's palette
-   (`elementalMult`, `game/combat.js:36-42`).
+   (`elementalMult`, `game/combat.js`). Each one is ×1.5, and it is the element kind toward a crit
+   (Law 2). Read the matchup off the weakness chart, `game/elements.js`, rather than guessing.
 5. **Give it a wallet** — `gold: <role band>` and, optionally, a `loadout: [{ name, value }, ...]`
    for carried potions/gear (Law 6f; its value counts toward Challenge GP but isn't lootable). No
    map spawn authors either field yet — see §6, "wallet/loadout population" — so any new enemy you

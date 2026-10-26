@@ -18,6 +18,7 @@ import { HEAL_HP_FLOOR, HEAL_MIN_GOLD } from '../game/ai.js';
 import { challengeGp } from '../game/enemies.js';
 import { SLOTS, ENTRIES, resolveSpawn, defaultPicks } from '../game/slots.js';
 import { ITEMS } from '../game/items.js';
+import { WEAKNESS_MULT } from '../game/combat.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const GAME_DIR  = path.join(__dirname, '..', 'game');
@@ -27,17 +28,20 @@ export const GOLDEN_PATH = path.join(__dirname, 'balance-golden.txt');
 
 // ── Constants (Law 4 / Law 3) ────────────────────────────────────────────────
 export const REFERENCE_DAMAGE = 20; // act-1 geared reference (Ray Gun tier)
+// "Informed" = the reference hit on one weakness: x WEAKNESS_MULT (x1.5 since EL2,
+// x2 before), read from combat.js so the bench and the game can never disagree.
+export const INFORMED_DAMAGE = REFERENCE_DAMAGE * WEAKNESS_MULT;
 // Law 3 armor ceiling (raised 10 -> 20, Caelan 2026-08-24) so an elite can reach
 // the audit's ttk_informed 5-8. Read the shape of the curve before authoring near
 // the top of it, because flat subtraction is not linear as armor nears the lazy
 // reference damage of 20:
 //
-//   armor |  lazy (20 dmg)  |  informed (40 dmg)
-//       0 |        5        |        3
-//      +6 |        8        |        3
-//     +10 |       10        |        4
-//     +15 |       20        |        4
-//     +20 |      100        |        5     <-- ttk_informed 5 costs a 100-turn lazy fight
+//   armor |  lazy (20 dmg)  |  informed (30 dmg, one x1.5 weakness)
+//       0 |        5        |        4
+//      +6 |        8        |        5
+//     +10 |       10        |        5
+//     +15 |       20        |        7
+//     +20 |      100        |       10     <-- the top of the gate band: a 100-turn lazy fight
 //
 // So [-90, +10] remains the DIFFICULTY band: fights that get harder. Everything
 // above +10 is a GATE band: max(1, hit - armor) floors a lazy loadout to 1 damage,
@@ -191,7 +195,10 @@ export function lintEntity(e) {
     // Law 0 amended 2026-07-24 (repeals the vermin exception): every combatant
     // has exactly 100 HP, no exemptions — softness is negative armor now, so a
     // sub-Hundred hp of ANY kind (vermin included) is a flat data error.
-    if (e.hp !== 100) {
+    // A declared puzzleWall is exempt, as it is from the armor cap (Law 3): it is
+    // a lock, not a combatant, and its health is tuned to its keys (the Sludge
+    // Bloom's 60, by ruling, so energy and soap still open it at x1.5).
+    if (e.hp !== 100 && !e.puzzleWall) {
         flags.push(`${key} Law 0 — hp ${e.hp}, expected 100`);
     }
     // Law 6f: the vermin cap reads the COMPOSITE Challenge GP (gold + any
@@ -454,7 +461,7 @@ export const STATBLOCK_END = '<!-- statblock:end -->';
 // reads them if present.
 export function statBlock(e) {
     const lazy = ttk(e.hp, REFERENCE_DAMAGE, e.armor ?? 0);
-    const informed = ttk(e.hp, REFERENCE_DAMAGE * 2, e.armor ?? 0);
+    const informed = ttk(e.hp, INFORMED_DAMAGE, e.armor ?? 0);
     const list = a => (a && a.length ? a.join(', ') : '—');
     const armor = e.armor ?? 0;
     // Ties the block to ARMOR_CAP the same way lintEntity does (Law 3) — a
@@ -567,7 +574,7 @@ export function report(roster = loadMapRoster()) {
     lines.push(...table(ENEMY_COLS, sorted.map(e => [
         `${e.zone}/${e.id}`, e.type, e.hp, e.armor, e.damage, challengeGp(e),
         ttk(e.hp, REFERENCE_DAMAGE, e.armor),
-        ttk(e.hp, REFERENCE_DAMAGE * 2, e.armor),
+        ttk(e.hp, INFORMED_DAMAGE, e.armor),
         ttdOf(e.damage),
     ])));
     lines.push('');
