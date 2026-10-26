@@ -987,9 +987,10 @@ class Game {
             this._log('[Entered the town]');
             this._maybeShowFirstRunHint();
         };
-        // CONTINUE loads the autosave into the live game. GAME START / Space
-        // begins fresh (the existing save survives until the fresh run's first
-        // autosave overwrites it, so a stray reload can still resume).
+        // CONTINUE loads the autosave into the live game. GAME START begins
+        // fresh (the existing save survives until the fresh run's first
+        // autosave overwrites it, so a stray reload can still resume). Space
+        // does what CONTINUE does when there is a save, and GAME START when not.
         const continueGame = async () => {
             audio.init();                 // [audio] first user gesture — unlock Web Audio
             this._applyAudioSettings();   // [settings] apply persisted volume/mute on boot
@@ -1030,8 +1031,17 @@ class Game {
             continueBtn.classList.remove('hidden');
             continueBtn.addEventListener('click', continueGame);
         }
+        // (FX23) The Space that leaves the title is spent here. _bindInput's
+        // listener sits on the same document and runs after this one; by then the
+        // state is IDLE, so without stopImmediatePropagation it opened the wheel.
+        // A save loads asynchronously and the state stays SPLASH until it lands,
+        // so once the splash is gone a second Space must not start another run.
         document.addEventListener('keydown', (e) => {
-            if (this.state === STATE.SPLASH && e.code === 'Space') { e.preventDefault(); start(); }
+            if (this.state !== STATE.SPLASH || e.code !== 'Space') return;
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            if (splash.classList.contains('gone')) return;
+            if (hasSave()) continueGame(); else start();
         });
     }
 
