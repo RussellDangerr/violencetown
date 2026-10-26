@@ -6,7 +6,7 @@
     "zoneName": "FIRST BLOOD BANK",
     "tiles": [
         14,14,14,14,14,14,14,14,14,14,14,14,
-        14,14,14,14,14,14,14,14,14,14,14,14,
+        14,14,14,14,14,14,15,14,14,14,14,14,
         14,14,11,11,11,11,11,11,11,11,14,14,
         14,14,11,11,11,11,11,11,11,11,14,14,
         14,14,11,11,11,11,11,11,11,11,14,14,
@@ -44,6 +44,7 @@
         {"type": "plantB", "x": 9, "y": 9}
     ],
     "transitions": [
-        {"x": 6, "y": 10, "toMap": "downtown-map.json", "toX": 12, "toY": 4, "label": "[Back out to the street]"}
+        {"x": 6, "y": 10, "toMap": "downtown-map.json", "toX": 12, "toY": 4, "label": "[Back out to the street]"},
+        {"x": 6, "y": 1, "toMap": "vault-map.json", "toX": 4, "toY": 5, "label": "[TEXT]", "requires": ["act2_item_a", "act2_item_b", "act2_item_c"], "requiresMsg": "[TEXT]"}
     ]
 }

@@ -5,7 +5,7 @@
 
 import { Renderer } from './renderer.js';
 import { computeViewport, screenToTile, clientToScreen, toMenu } from './viewport.js';   // (screen-fill) the screen's geometry
-import { loadMap } from './map.js';
+import { loadMap, carriesAll } from './map.js';
 import { loadAllSprites } from './sprites.js';
 import { BitmapFont } from './bitmap-font.js';
 import { pickHitMark, HEAVY_HIT_DAMAGE } from './hit-splat.js';   // (manga-impact-marks) the mark rule + the heavy threshold
@@ -2316,11 +2316,12 @@ class Game {
             // Pickup
             this._tryPickup();
 
-            // Transition? A transition may `require` an item (e.g. the canyon
-            // escape needs the grappling hook) — data-driven so any door can gate.
+            // Transition? A transition may `require` an item, or a list of them
+            // (the bank's vault door wants all three Act 2 items) — data-driven
+            // so any door can gate.
             const transition = this.map.getTransition(nx, ny);
             if (transition) {
-                if (transition.requires && !(this.inventory || []).some(s => s && s.itemDef.id === transition.requires)) {
+                if (!carriesAll(transition.requires, this.inventory)) {
                     this._log(transition.requiresMsg || '[You need something to get through here.]');
                 } else {
                     this._pendingTransition = transition;
