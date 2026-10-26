@@ -642,7 +642,7 @@
       "name": "Sludge Bloom",
       "x": 3,
       "y": 3,
-      "hp": 100,
+      "hp": 60,
       "armor": 15,
       "damage": 0,
       "sightRange": 0,
@@ -652,7 +652,8 @@
       "puzzleWall": true,
       "heavy": true,
       "weak": [
-        "fire"
+        "energy",
+        "clean"
       ],
       "bribeable": false,
       "thievable": false,
