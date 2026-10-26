@@ -1037,26 +1037,65 @@ class Game {
 
     // (pointer model) One-time onboarding line, shown on the first ever run and
     // dismissed by the first tap/keypress (which still flows through to the game)
-    // or after ~6s. Gated by a persisted Settings flag so it never repeats.
+    // or after ~6s on screen. Gated by a persisted Settings flag so it never repeats.
+    // (FX12) It is a page element over the canvas, so it steps aside while a menu
+    // is open (_syncFirstRunHint, run on every _render). Input that lands while it
+    // is aside does not dismiss it, and its clock only runs while it is shown.
     _maybeShowFirstRunHint() {
         if (Settings.get('firstRunHintSeen')) return;
         const el = document.getElementById('first-run-hint');
         if (!el) return;
         Settings.set('firstRunHintSeen', true);
-        el.classList.remove('hidden');
-        let done = false;
-        const hide = () => {
-            if (done) return; done = true;
+        const hint = { el, aside: null, timer: 0, done: false, dismiss: null };
+        const onInput = () => { if (!hint.aside) hint.dismiss(); };
+        hint.dismiss = () => {
+            if (hint.done) return; hint.done = true;
             el.classList.add('hidden');
-            clearTimeout(timer);
-            document.removeEventListener('pointerdown', hide, true);
-            document.removeEventListener('keydown', hide, true);
+            el.classList.remove('aside');
+            clearTimeout(hint.timer);
+            document.removeEventListener('pointerdown', onInput, true);
+            document.removeEventListener('keydown', onInput, true);
         };
-        const timer = setTimeout(hide, 6000);
+        this._firstRunHint = hint;
+        el.classList.remove('hidden');
+        this._syncFirstRunHint();
         // Capture so the hint clears on the FIRST input; we never preventDefault,
         // so that same tap/key still reaches the game (moves the player, etc.).
-        document.addEventListener('pointerdown', hide, true);
-        document.addEventListener('keydown', hide, true);
+        document.addEventListener('pointerdown', onInput, true);
+        document.addEventListener('keydown', onInput, true);
+    }
+
+    // (FX12) True while a menu covers the world: the hint would draw over it.
+    _firstRunHintAside() {
+        if (this._paused) return true;
+        switch (this.state) {
+            case STATE.RADIAL_MENU:
+            case STATE.TARGET_LIST:
+            case STATE.ITEM_OVERLAY:
+            case STATE.ITEM_THROW_DIR:
+            case STATE.LOG_MODAL:
+            case STATE.TRADE:
+            case STATE.DIALOGUE:
+            case STATE.INSPECT:
+            case STATE.DEVICE:
+            case STATE.DEAD:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    // (FX12) Hide the hint while a menu is open and show it again when the menu
+    // closes. Its 6s clock restarts each time it comes back on screen.
+    _syncFirstRunHint() {
+        const hint = this._firstRunHint;
+        if (!hint || hint.done) return;
+        const aside = this._firstRunHintAside();
+        if (aside === hint.aside) return;
+        hint.aside = aside;
+        hint.el.classList.toggle('aside', aside);
+        clearTimeout(hint.timer);
+        if (!aside) hint.timer = setTimeout(hint.dismiss, 6000);
     }
 
     // ── Input ────────────────────────────────────────────────────────────────
@@ -1813,6 +1852,7 @@ class Game {
         this._paused = !!paused;
         const overlay = document.getElementById('pause-overlay');
         if (overlay) overlay.classList.toggle('hidden', !this._paused);
+        this._syncFirstRunHint();   // (FX12) the pause scrim is a menu too
         // Stop any auto-repeat walk in flight so releasing keys post-resume
         // doesn't leave a phantom held direction.
         if (this._paused) {
@@ -5411,6 +5451,7 @@ class Game {
 
     _render() {
         this._trackFight();
+        this._syncFirstRunHint();
         this.renderer.renderFrame(this);
     }
 
