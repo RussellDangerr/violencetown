@@ -717,6 +717,14 @@ export const PROP_SPRITES = {
     // which would sit in the middle of the doorway, not under the posts.
     cemeteryArchL: { sheet: 'outlined', sx: OUTLINED_SPRITES.cemeteryArchL * 16, sy: 0, sw: 16, sh: 16, wTiles: 1, hTiles: 1, shadow: false },
     cemeteryArchR: { sheet: 'outlined', sx: OUTLINED_SPRITES.cemeteryArchR * 16, sy: 0, sw: 16, sh: 16, wTiles: 1, hTiles: 1, shadow: false },
+
+    // Interior furniture — one prop per piece on the `interior` strip, keyed by
+    // the strip's own names, placed in the Borgir, the diner, the bank and the
+    // casino. 1x1 and solid. No ground shadow: most pieces fill their cell, and
+    // a counter is a run of cells, which one centred ellipse per cell would
+    // dot with blobs.
+    ...Object.fromEntries(Object.entries(INTERIOR_SPRITES)
+        .map(([name, col]) => [name, { sheet: 'interior', sx: col * 16, sy: 0, sw: 16, sh: 16, wTiles: 1, hTiles: 1, shadow: false }])),
 };
 
 // ── Emote balloons (Kenney Emote Pack, Pixel Style 1) ───────────────────────

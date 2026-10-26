@@ -13,7 +13,8 @@ import { readFileSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { SHEETS, TINY_STYLE_SHEETS, TINY_INK, INTERIOR_SPRITES } from '../game/sprites.js';
+import { SHEETS, TINY_STYLE_SHEETS, TINY_INK, INTERIOR_SPRITES, PROP_SPRITES } from '../game/sprites.js';
+import { resolveExamine } from '../game/examine.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const GAME = join(ROOT, 'game');
@@ -188,4 +189,102 @@ describe('what the furniture leaves alone', () => {
             assert.ok(!(m.props || []).some(p => p.x === ex.x && p.y === ex.y), `a prop covers ${id}`);
         });
     }
+});
+
+describe('the furniture in the four rooms', () => {
+    const map = (f) => JSON.parse(readFileSync(join(GAME, f), 'utf8'));
+    const ROOMS = ['borgir-map.json', 'diner-map.json', 'bank-map.json', 'casino-map.json'];
+    const interior = (m) => (m.props || []).filter(p => p.type in INTERIOR_SPRITES);
+
+    test('every room has furniture from the sheet, and every piece is used somewhere', () => {
+        const used = new Set();
+        for (const f of ROOMS) {
+            const pieces = interior(map(f));
+            assert.ok(pieces.length > 0, `${f} has no furniture`);
+            for (const p of pieces) {
+                used.add(p.type);
+                assert.equal(PROP_SPRITES[p.type]?.sheet, 'interior', `${p.type} draws from the interior strip`);
+            }
+        }
+        assert.deepEqual(Object.keys(INTERIOR_SPRITES).filter(n => !used.has(n)), []);
+    });
+
+    test('furniture stands on the floor, never on a wall or the door', () => {
+        for (const f of ROOMS) {
+            const m = map(f);
+            for (const p of interior(m)) assert.equal(m.tiles[p.y * m.width + p.x], 11, `${f}: ${p.type} at (${p.x}, ${p.y})`);
+        }
+    });
+
+    for (const [file, id] of [['borgir-map.json', 'borgir_counter'], ['diner-map.json', 'diner_counter']]) {
+        test(`${id} is a real counter`, () => {
+            const m = map(file);
+            const ex = m.examinables.find(e => e.id === id);
+            const p = (m.props || []).find(q => q.x === ex.x && q.y === ex.y);
+            assert.ok(p && p.type.startsWith('counter'), `no counter piece under ${id}`);
+        });
+    }
+
+    test('a run is laid as its left end, its middles, then its right end', () => {
+        const { runs } = generatorLists();
+        const problems = [];
+        let checked = 0;
+        for (const f of ROOMS) {
+            const m = map(f);
+            const at = new Map((m.props || []).map(p => [`${p.x},${p.y}`, p.type]));
+            for (const run of runs) {
+                const [L, R] = [run[0], run[run.length - 1]];
+                const member = new Set(run);
+                for (const p of m.props || []) {
+                    if (!member.has(p.type)) continue;
+                    checked++;
+                    const left = at.get(`${p.x - 1},${p.y}`), right = at.get(`${p.x + 1},${p.y}`);
+                    const wantLeft = p.type !== L, wantRight = p.type !== R;
+                    if (wantLeft !== (member.has(left) && left !== R)) problems.push(`${f}: ${p.type} at (${p.x}, ${p.y}) has ${left ?? 'nothing'} on its left`);
+                    if (wantRight !== (member.has(right) && right !== L)) problems.push(`${f}: ${p.type} at (${p.x}, ${p.y}) has ${right ?? 'nothing'} on its right`);
+                }
+            }
+        }
+        assert.ok(checked > 0, 'no run pieces placed');
+        assert.deepEqual(problems, []);
+    });
+
+    test('from the door you can still reach every host, examinable and the way out', () => {
+        const problems = [];
+        for (const f of ROOMS) {
+            const m = map(f);
+            const blocked = new Set([
+                ...(m.props || []).filter(p => p.solid !== false).map(p => `${p.x},${p.y}`),
+                ...(m.enemies || []).map(e => `${e.x},${e.y}`),
+            ]);
+            const open = (x, y) => x >= 0 && y >= 0 && x < m.width && y < m.height
+                && [11, 15].includes(m.tiles[y * m.width + x]) && !blocked.has(`${x},${y}`);
+            const seen = new Set([`${m.spawn.x},${m.spawn.y}`]);
+            const queue = [[m.spawn.x, m.spawn.y]];
+            while (queue.length) {
+                const [x, y] = queue.shift();
+                for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+                    const k = `${x + dx},${y + dy}`;
+                    if (!seen.has(k) && open(x + dx, y + dy)) { seen.add(k); queue.push([x + dx, y + dy]); }
+                }
+            }
+            const beside = (t) => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => seen.has(`${t.x + dx},${t.y + dy}`));
+            assert.ok((m.enemies || []).length > 0 && (m.examinables || []).length > 0, `${f}: nothing to reach`);
+            for (const e of m.enemies || []) if (!beside(e)) problems.push(`${f}: ${e.name || e.type} is walled off`);
+            for (const e of m.examinables || []) if (!beside(e) && !seen.has(`${e.x},${e.y}`)) problems.push(`${f}: ${e.id} is walled off`);
+            for (const t of m.transitions || []) if (!seen.has(`${t.x},${t.y}`)) problems.push(`${f}: the way out is walled off`);
+        }
+        assert.deepEqual(problems, []);
+    });
+
+    test('examining a piece says its plain name', () => {
+        const NOUNS = ['Counter', 'Table', 'Chair', 'Shelf', 'Plant', 'Stove'];
+        for (const type of Object.keys(INTERIOR_SPRITES)) {
+            const g = { examinables: [], enemies: [], containers: [], groundItems: [],
+                map: { getTile: () => 11, isInBounds: () => true, propSpawns: [{ type, x: 0, y: 0 }] } };
+            const r = resolveExamine(g, 0, 0);
+            assert.ok(NOUNS.includes(r.title), `${type} examines as "${r.title}"`);
+            assert.equal(r.body, `[${r.title}.]`);
+        }
+    });
 });

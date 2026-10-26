@@ -54,14 +54,27 @@ same outline tool as the floors and gravestones before the game uses it.
 ## Rooms (planned placement)
 
 Paths stay open: the column from each spawn to its host (Borgir boss, cook, Financier, Pit Boss)
-and the tiles beside each examinable stay clear, so nothing you talk to or examine is walled off.
+stays clear, and every host, examinable and the way out can still be reached from the door
+(a test walks it), so nothing you talk to or examine is walled off.
 
-- **Borgir:** a kitchen counter along the back wall that takes in the `borgir_counter` examinable,
-  so the counter is a counter; four tables with chairs; plants in the corners.
-- **Diner:** a counter along the back wall over `diner_counter`, a stove beside it, two tables
-  with chairs.
-- **Bank:** bookshelves along the back wall either side of the vault, waiting chairs, plants.
-- **Casino:** two felt card tables with chairs, plants.
+- **Borgir:** a kitchen counter along the back wall, x4-12, that takes in the `borgir_counter`
+  examinable (8,2), so the counter is a counter; the stove beside it; four square tables with a
+  chair either side, clear of the middle three columns; plants in the four corners.
+- **Diner:** a counter along the back wall, x3-8, over `diner_counter` (6,2), the stove beside it,
+  a plant; two round tables with a chair either side; plants by the door.
+- **Bank:** bookshelves along the back wall either side of the vault, a tile clear beside it; the
+  service counter either side of the Financier, who stands in its gap; waiting chairs along the
+  side walls; plants by the door.
+- **Casino:** two felt card tables, two chairs above and two below each; plants in the corners.
+
+An authored examinable answers before a prop, so the two counters still read their own text.
+
+## Examining furniture
+
+Furniture goes in as props, and every prop needs an examine name. Caelan ruled (2026-10-25)
+that a piece says its plain name, in the same bracket style as graves and trees: `[Counter.]`,
+`[Table.]`, `[Chair.]`, `[Shelf.]`, `[Plant.]`, `[Stove.]`. The bank's service counter reads as a
+counter and the casino's felt table as a table.
 
 ## Acceptance
 
@@ -72,7 +85,11 @@ and the tiles beside each examinable stay clear, so nothing you talk to or exami
 - Screenshots of all four rooms at 3440x1440, before and after.
 - `npm test`, `balance:check`, the naming grep and `autoplay:check` all pass.
 - `tests/interior-furniture.test.js` holds the sheet to its column map, the generator's order,
-  the packed size, an outline on every piece and no seam inside a run.
+  the packed size, an outline on every piece and no seam inside a run; and the rooms to their
+  furniture: every piece placed on the floor, runs laid end to end, the two counters under their
+  examinables, nothing walled off, and every piece examining as one of the six plain names.
+- The pack's sheet and licence are bundled beside the other Kenney sheets, so the generator
+  reruns from the repo and reproduces the committed strip byte for byte.
 
 ## Out of scope
 

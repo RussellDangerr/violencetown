@@ -28,6 +28,24 @@
     "lights": [
         {"x": 6, "y": 5, "radius": 4.0, "r": 200, "g": 90, "b": 230}
     ],
+    "props": [
+        {"type": "plantA", "x": 2, "y": 2},
+        {"type": "plantB", "x": 9, "y": 2},
+        {"type": "chairDown", "x": 2, "y": 5},
+        {"type": "chairDown", "x": 3, "y": 5},
+        {"type": "feltTableL", "x": 2, "y": 6},
+        {"type": "feltTableR", "x": 3, "y": 6},
+        {"type": "chairUp", "x": 2, "y": 7},
+        {"type": "chairUp", "x": 3, "y": 7},
+        {"type": "chairDown", "x": 8, "y": 5},
+        {"type": "chairDown", "x": 9, "y": 5},
+        {"type": "feltTableL", "x": 8, "y": 6},
+        {"type": "feltTableR", "x": 9, "y": 6},
+        {"type": "chairUp", "x": 8, "y": 7},
+        {"type": "chairUp", "x": 9, "y": 7},
+        {"type": "plantB", "x": 2, "y": 9},
+        {"type": "plantA", "x": 9, "y": 9}
+    ],
     "transitions": [
         {"x": 6, "y": 10, "toMap": "downtown-map.json", "toX": 18, "toY": 4, "label": "[Back out to the street]"}
     ]
