@@ -166,7 +166,8 @@ describe('tile coverage', () => {
             'downtown-map.json':   { tile: 13, prop: 'tree' },
             'graveyard-map.json':  { tile: 52, prop: 'tree' },
             'wilderness-map.json': { tile: 52, prop: 'tree' },
-            'sewer-map.json':      { tile: 0 },
+            'frozen-map.json':     { tile: 52, prop: 'tree' },
+            'sewer-map.json':     { tile: 0 },
             'factory-map.json':    { tile: 41 },
             'canyon-map.json':     { tile: 61 },
         };
