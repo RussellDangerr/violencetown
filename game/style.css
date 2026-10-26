@@ -858,6 +858,8 @@ body {
     pointer-events: none;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
 }
+/* (FX12) Stepped aside while a menu is open; main.js _syncFirstRunHint. */
+#first-run-hint.aside { display: none; }
 
 @media (pointer: coarse), (max-width: 700px) {
     /* Splash: keep the title-card stack clear of the notch / home indicator and
