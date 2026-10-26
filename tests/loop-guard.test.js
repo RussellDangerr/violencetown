@@ -2,7 +2,7 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkBranch, checkScope, checkSpecFirst, checkTestIntegrity, testNameChanges, saysBehaviourChanged, runGuard } from '../tools/roadmap-board/loop-guard.mjs';
+import { checkBranch, checkScope, checkSpecFirst, checkTestIntegrity, testNameChanges, saysBehaviourChanged, runGuard, isGolden, checkGolden, citesAcceptRuling } from '../tools/roadmap-board/loop-guard.mjs';
 
 describe('checkBranch', () => {
     test('only feature/<lower-case-slug>', () => {
@@ -183,5 +183,70 @@ describe('runGuard', () => {
         });
         assert.equal(dirty.ok, false);
         assert.equal(dirty.problems.length, 4);
+    });
+});
+
+describe('golden files: refused unless a commit cites an accept ruling', () => {
+    const ruled = 'chore(balance): accept the new rows (ruling AB1R3, pick a)';
+    const slice = (path, commits) => runGuard({
+        branch: 'feature/s', slug: 's', touches: [], firstCommitFiles: ['plans/s.md'], testsDiff: '',
+        changed: [{ status: 'A', path: 'plans/s.md' }, { status: 'M', path }], commits,
+    });
+    test('a golden of any extension is a golden', () => {
+        for (const p of ['tools/balance-golden.txt', 'tools/autoplay-golden.json', 'tools\\balance-golden.txt', 'x/GOLDEN.md', 'golden.json', 'tools/x_golden.csv']) assert.equal(isGolden(p), true, p);
+        for (const p of ['game/main.js', 'tools/golden/readme.md', 'plans/fx19-guard-golden-files.md', 'game/assets/golden-crown.png', 'tests/golden.test.js', 'tools/ungolden.txt', '']) assert.equal(isGolden(p), false, p);
+    });
+    test('tools/balance-golden.txt fails with no ruling, even when the card lists it', () => {
+        const p = checkScope([{ status: 'M', path: 'tools/balance-golden.txt' }], ['tools/balance-golden.txt'], 's',
+            [{ sha: 'aaaaaaa1', message: 'feat: tweak the rats', files: ['tools/balance-golden.txt'] }]);
+        assert.equal(p.length, 1);
+        assert.match(p[0], /tools\/balance-golden\.txt: a golden file moves only on his ruling/);
+        assert.match(p[0], /aaaaaaa does not cite an accept ruling/);
+        assert.equal(slice('tools/balance-golden.txt', [{ sha: 'a', message: 'feat: tweak the rats', files: ['tools/balance-golden.txt'] }]).ok, false);
+    });
+    test('a ruled golden change passes, outside touches too', () => {
+        for (const path of ['tools/balance-golden.txt', 'tools/autoplay-golden.json']) {
+            const r = slice(path, [{ sha: 'b', message: 'spec', files: ['plans/s.md'] }, { sha: 'c', message: ruled, files: [path] }]);
+            assert.deepEqual(r, { ok: true, problems: [] }, path);
+        }
+    });
+    test('every commit that touched the golden must cite the ruling', () => {
+        const path = 'tools/balance-golden.txt';
+        const r = slice(path, [{ sha: 'd1', message: ruled, files: [path] }, { sha: 'd2', message: 'feat: more rows', files: ['game/a.js', path] }]);
+        assert.equal(r.ok, false);
+        assert.equal(r.problems.length, 1);
+        assert.match(r.problems[0], /d2 does not cite/);
+    });
+    test('a golden with no commit to show for it fails', () => {
+        assert.equal(checkGolden('tools/balance-golden.txt').length, 1);
+        assert.equal(checkGolden('tools/balance-golden.txt', [{ sha: 'e', message: ruled, files: ['game/a.js'] }]).length, 1);
+    });
+    test('a golden renamed away from its name still needs the ruling', () => {
+        const changed = [{ status: 'R', from: 'tools/balance-golden.txt', path: 'tools/balance.txt' }];
+        const files = ['tools/balance-golden.txt', 'tools/balance.txt'];
+        assert.equal(checkScope(changed, ['tools/balance.txt'], 's', [{ sha: 'f', message: 'chore: rename', files }]).length, 1);
+        assert.deepEqual(checkScope(changed, ['tools/balance.txt'], 's', [{ sha: 'f', message: ruled, files }]), []);
+        const p = checkScope(changed, [], 's', [{ sha: 'f', message: ruled, files }]);
+        assert.equal(p.length, 1, 'its new name is still checked against touches');
+        assert.match(p[0], /tools\/balance\.txt: outside the card's touches/);
+    });
+    test('a ruling does not open the other forbidden paths', () => {
+        for (const path of ['tiled/town.tmj', 'package.json', '.claude/settings.json', 'CLAUDE.md', 'game/_headers']) {
+            assert.equal(checkScope([{ status: 'M', path }], [path], 's', [{ sha: 'g', message: ruled, files: [path] }]).length, 1, path);
+        }
+    });
+});
+
+describe('citesAcceptRuling', () => {
+    test('says accept and names a ruling card by its id', () => {
+        for (const m of [
+            'chore(autoplay): accept new golden, hostiles join sewer fights (ruling F3aR1)',
+            'balance: record the Carnival rats (RV1R1, pick a)\n\nAccepted under RV1R1 a.',
+            'chore(autoplay): accept the two-hands save fingerprints (ruled WS3R1 = a)',
+            'ACCEPTS the golden per AB1R3',
+        ]) assert.equal(citesAcceptRuling(m), true, m);
+        for (const m of ['', undefined, 'feat: tweak the rats', 'accept the new golden', 'golden moved under F3aR1', 'accept FX19 golden', 'acceptance under F3aR1']) {
+            assert.equal(citesAcceptRuling(m), false, String(m));
+        }
     });
 });
