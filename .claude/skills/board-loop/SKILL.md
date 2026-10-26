@@ -25,9 +25,11 @@ The board's word for turning an idea into rulings and slices is **tweak**. Use n
       `slug` and `touches`. Spawn every pick's builder in the same message so they run at once.
    4. Write its report back to the card (§1 step 7). Board writes stay here, never in the
       builder.
-6. **Post the update** (§7): six lines at most, in plain words, no card codes without their
+6. **Scout** if it's due (LOOP.md §10): spawn `board-scout` with the builders, land its proposals
+   with `newScoutIdea()`, and update `meta/scout`.
+7. **Post the update** (§7): six lines at most, in plain words, no card codes without their
    title.
-7. **Schedule the next pass** with ScheduleWakeup, prompt `/board-loop`:
+8. **Schedule the next pass** with ScheduleWakeup, prompt `/board-loop`:
    - **60 s** after real work;
    - **3600 s** when idle, with `noop: true`;
    - **`stop: true`** only per §7.

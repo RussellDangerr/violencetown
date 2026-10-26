@@ -263,6 +263,27 @@ export function newIdea(words, now, cards = []) {
     return { id: `idea-${now.toString(36)}`, title, kind: 'idea', lane: 'idea', order, blockedBy: [], note: text, doc: '', size: '' };
 }
 
+// A scout proposal as an idea card (plans/board-scout.md). `key` names the
+// problem; a key any card already carries, in any lane, returns null, so a
+// proposal he parked in Someday stays parked. The id is built from the key so a
+// second write of the same proposal can't make a twin.
+const SCOUT_KINDS = ['defect', 'tweak', 'idea'];
+export function newScoutIdea(p, now, cards = []) {
+    const key = String(p?.key ?? '').trim(), title = String(p?.title ?? '').trim();
+    if (!key || !title) return null;
+    if (cards.some(c => c.scoutKey === key)) return null;
+    const scoutKind = SCOUT_KINDS.includes(p.kind) ? p.kind : 'idea';
+    const slug = key.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+    const id = `scout-${slug}`;
+    if (cards.some(c => c.id === id)) return null;
+    const order = (byLane(cards).idea.at(-1)?.order ?? 0) + 10;
+    return {
+        id, title: title.length > 90 ? `${title.slice(0, 90)}…` : title,
+        kind: 'idea', lane: 'idea', order, blockedBy: [], doc: '', size: '',
+        note: String(p.note ?? '').trim(), source: 'scout', scoutKey: key, scoutKind, at: now,
+    };
+}
+
 // The one-time move from the roadmap-seeded board (plans/ticket-board.md §3).
 // Idempotent: a card already in the new model passes through unchanged.
 const LANE_MAP = { now: 'ready', rulings: 'ruling', ready: 'ready', design: 'idea', later: 'someday', done: 'done' };
