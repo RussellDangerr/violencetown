@@ -160,6 +160,31 @@ function withWalk(ctx, cx, cy, { bob = 0, rot = 0, flipX = 1 }, draw) {
 // as escalation and stands in for it.
 const AWARENESS_EMOTE = { suspicious: 'question', searching: 'exclamation', chasing: 'alert' };
 
+// (FX10) Where the awareness marker sits, and whether one is up. The threat
+// overlay draws it at the sheet's native 16px, its bottom edge 6px above the
+// tile top. `showsAwarenessMark` is the overlay's own test for drawing one
+// (a watcher with eyes, not an ally, in a state with a marker), so the bump
+// label can ask it and step out of the way.
+export const AWARENESS_MARK_PX = 16;
+export function awarenessMarkRect(sx, sy, tilePx = TILE_PX) {
+    const sz = AWARENESS_MARK_PX;
+    return { x: sx + tilePx / 2 - sz / 2, y: sy - 6 - sz, w: sz, h: sz };
+}
+export function showsAwarenessMark(e) {
+    return !!e && !e._ally && (e.sightRange || 0) > 0 && AWARENESS_EMOTE[e.state] != null;
+}
+
+// (FX10) The bump label's backing box and its text origin, for a label `tw`
+// pixels wide over the tile at (px, py). Normally the text sits 20px above the
+// tile top. `raised` (an awareness marker is up on the same head) lifts it so
+// the box's bottom edge clears the marker's top edge by 1px.
+export const INTENT_LABEL_H = 11;
+export function intentLabelRect(px, py, tw, raised = false, tilePx = TILE_PX) {
+    const tx = Math.round(px + tilePx / 2 - tw / 2);
+    const ty = raised ? awarenessMarkRect(px, py, tilePx).y - 1 - (INTENT_LABEL_H - 2) : py - 20;
+    return { tx, ty, x: tx - 3, y: ty - 2, w: tw + 6, h: INTENT_LABEL_H };
+}
+
 // Painter's order for the actor pass. The map's edge filler (the forest past its
 // edge) draws behind everything, so a two-tile tree south of the map never
 // covers the map's last row (ruling SF, 2026-10-03: you vanished for a step at
@@ -1770,14 +1795,17 @@ export class Renderer {
                     const who  = String((e.boss ? shownName(e) : e.name || e.type) || '').replace(/[[\]]/g, '');
                     const text = `${who} · ${verb.label}`.toUpperCase();
                     const tw   = this.font.measure ? this.font.measure(text, 1) : text.length * 6;
-                    const tx   = Math.round(px + TILE_PX / 2 - tw / 2);
-                    const ty   = py - 20;               // clear of the HP bar, buffs and pips
+                    // Clear of the HP bar, buffs and pips; and when an awareness
+                    // marker is up on this head (FX10), lifted above it, since the
+                    // threat overlay draws after this and would cover the words.
+                    const box  = intentLabelRect(px, py, tw, showsAwarenessMark(e));
+                    const { tx, ty } = box;
                     ctx.fillStyle = '#000000cc';
-                    ctx.fillRect(tx - 3, ty - 2, tw + 6, 11);
+                    ctx.fillRect(box.x, box.y, box.w, box.h);
                     // The verb's own colour carries the warning: Hit is red, Trade
                     // gold, Shove brown. The player reads the intent before the word.
                     ctx.fillStyle = verb.color || UI.text;
-                    ctx.fillRect(tx - 3, ty - 2, tw + 6, 1);
+                    ctx.fillRect(box.x, box.y, box.w, 1);
                     this.font.drawText(ctx, text, tx, ty, { color: verb.color || UI.text, scale: 1 });
                 }
             }
@@ -3750,8 +3778,8 @@ export class Renderer {
             const emoteKey = splatShowingAt(game._damageNumbers, w.x, w.y, performance.now()) ? null : AWARENESS_EMOTE[w.state];
             const emoteCol = emoteKey ? EMOTE_SPRITES[emoteKey] : null;
             if (emoteCol != null && sprites?.emotes?.loaded) {
-                const sz = 16;
-                sprites.emotes.drawFrame(ctx, emoteCol, 0, sx + TILE_PX / 2 - sz / 2, sy - 6 - sz, sz, sz);
+                const m = awarenessMarkRect(sx, sy);
+                sprites.emotes.drawFrame(ctx, emoteCol, 0, m.x, m.y, m.w, m.h);
             }
 
             // Channel 4 — the "sees you NOW" thread, kept from the old overlay
