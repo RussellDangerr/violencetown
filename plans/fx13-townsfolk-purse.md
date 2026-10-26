@@ -11,6 +11,13 @@ person to person.
 Caelan's pick on "how much gold should a townsperson carry?": **a small purse each, a few GP,
 varying by person**. Its cost: a tuning range, and the town's economy grows by a few dozen GP.
 
+Two follow-up picks, made by the loop under Caelan's standing delegation:
+
+- **Quest 1's autoplay golden:** accept the new save fingerprints. The saved state now holds the
+  purses; no stage score moves.
+- **The balance bench:** counts the purses. It draws them the same way the game does, so the town
+  faucet and the townsfolk rows show the gold actually spawned.
+
 ## What counts as a townsperson
 
 An ambient, non-fighting (damage 0), non-vendor NPC with no gold written into its spawn. Vendors
@@ -22,6 +29,8 @@ keep their till; fighters keep their kit; any spawn that states its own `gold` k
   goes to Caelan for a look.
 - Drawn from its own seeded stream keyed on the person's id (Mulberry32 from `game/rng.js`), never
   `Math.random` and never `game.rng`, so no fight or theft roll moves.
+- Keyed on the person, not the game's seed: the same townsperson carries the same purse in every
+  game. The game keeps no seed after it starts, so a per-game purse would need it kept and saved.
 - The same person carries the same purse every time their zone loads, so leaving and coming back
   cannot re-roll it. A mugged person still comes back broke, and a robbed one still comes back
   short by what was lifted.
