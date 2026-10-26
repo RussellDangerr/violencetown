@@ -13,7 +13,7 @@
 // A weapon may carry `tags: [...]` from the one vocabulary in tags.js; the
 // content check fails on any other tag. weaponTiers copies a base's tags.
 
-import { VALUE_TIERS } from './items.js';
+import { VALUE_TIERS, ITEMS, ARMOR_IDS } from './items.js';
 
 // The hit kinds a weapon can land.
 export const ATTACK_KINDS = Object.freeze(['slash', 'stab', 'crush']);
@@ -94,6 +94,12 @@ export function classBase(classId) {
 // Every class's five tiers. Kept out of WEAPONS and ITEMS: none is in the world.
 export const WEAPON_TIERS = Object.freeze(Object.fromEntries(
     Object.keys(WEAPON_CLASSES).map(id => [id, Object.freeze(weaponTiers(classBase(id)))]),
+));
+
+// Every armor piece's five tiers, from the same generator (plans/fx22-armor-tier-table.md).
+// Built here because items.js can't import weaponTiers. Kept out of ITEMS: none is in the world.
+export const ARMOR_TIERS = Object.freeze(Object.fromEntries(
+    ARMOR_IDS.map(id => [id, Object.freeze(weaponTiers(ITEMS[id]))]),
 ));
 
 export const WEAPONS = {
