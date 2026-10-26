@@ -19,7 +19,7 @@
 // have and would read as mostly-empty slots on most enemies, so their panel is
 // an honest list of what they carry.
 
-import { ITEMS } from './items.js';
+import { resolveItemDef } from './item-registry.js';
 
 // The player's body slots, in the order the panel lists them. Fixed so the
 // panel's shape never changes mid-fight — an empty slot is still a row, because
@@ -32,7 +32,9 @@ const SLOT_LABEL = {
     front: 'TORSO', back: 'BACK', bottom: 'FEET',
 };
 
-const itemName = (id) => (ITEMS[id] && ITEMS[id].name) || id;
+// Weapons first, then items: the same resolution the rest of the game uses, so
+// a weapon in a loadout (the Alien's Ray Gun) shows its name, not its id.
+const itemName = (id) => resolveItemDef(id)?.name || id;
 
 // The left panel: what you are wearing and wielding. Read-only by construction.
 export function playerPanel(game) {
