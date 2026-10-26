@@ -16,8 +16,11 @@ import { defaultPicks } from './slots.js';
 import { clamp } from './utils.js';
 import { INVENTORY_SIZE } from './data.js';
 import { sanitizeSlots } from './rings.js';
+import { settleHands } from './items.js';
 
-export const SAVE_VERSION = 1;
+// 2: two hands (plans/ws3-two-hands-left-right.md) — equipment.left joins
+// equipment.weapon, which is now the right hand.
+export const SAVE_VERSION = 2;
 const KEY = 'violencetown.save';
 const BACKUP_KEY = 'violencetown.save.bak';
 const TMP_KEY = 'violencetown.save.tmp';
@@ -74,7 +77,8 @@ export function serialize(game) {
             ringTier:         game.ringTier || 0,
             discoveredFusions:[...(game.discoveredFusions || [])],
             equipment: {
-                weapon: idOf(game.equipment.weapon),
+                weapon: idOf(game.equipment.weapon),   // the right hand
+                left: idOf(game.equipment.left),
                 top: idOf(game.equipment.top),
                 bottom: idOf(game.equipment.bottom),
                 front: idOf(game.equipment.front),
@@ -169,7 +173,8 @@ const RENAMED_MAPS = {
 export function migrate(raw) {
     const r = { ...raw };
     if (typeof r.version !== 'number') r.version = SAVE_VERSION;
-    // Future: stepwise upgrades keyed on r.version go here.
+    // Stepwise upgrades keyed on r.version. The version itself is left as
+    // saved; the next write stamps the current one.
     if (typeof r.mapUrl !== 'string') r.mapUrl = 'town-map.json';
     // Maps renamed since the save was written. A save reloads its map by file
     // name, so an old name has to follow the file or the load 404s.
@@ -182,6 +187,13 @@ export function migrate(raw) {
     if (typeof r.dayClock !== 'number' || !Number.isFinite(r.dayClock)) r.dayClock = 0;   // an older save starts at noon
     r.player = (r.player && typeof r.player === 'object') ? r.player : {};
     r.world = (r.world && typeof r.world === 'object') ? r.world : {};
+    // 1 -> 2: one weapon slot became two hands. The old weapon is already in
+    // the right hand (the key stayed); the left starts empty. A two-hander
+    // fills it on load, where ids resolve to defs (loadInto).
+    if (r.version < 2 && r.player.equipment && typeof r.player.equipment === 'object'
+        && !('left' in r.player.equipment)) {
+        r.player.equipment = { ...r.player.equipment, left: null };
+    }
     // These four are walked ELEMENT BY ELEMENT, not merely checked for
     // array-ness. loadInto destructures every entry (Enemy.fromSave destructures
     // its argument outright), so a single null or primitive in any of them threw
@@ -308,9 +320,12 @@ export async function loadInto(game, raw) {
     // 3. equipment / inventory / temp-equips / buffs (rehydrate defs by id)
     game.equipment = {
         weapon: R(p.equipment.weapon) || game.equipment.weapon,
+        left: R(p.equipment.left),
         top: R(p.equipment.top), bottom: R(p.equipment.bottom),
         front: R(p.equipment.front), back: R(p.equipment.back), sides: R(p.equipment.sides),
     };
+    // A saved two-hander fills both hands; a pair no equip could make is repaired.
+    settleHands(game.equipment, (d) => (game._handsOf ? game._handsOf(d) : 1));
     // Remembrance Rings: restore the owned pool + slot assignments BEFORE refreshing
     // grants, so the merge (base ∪ slotted-ring actives ∪ fusion ∪ gear) is complete.
     game.ownedRings        = new Set(p.ownedRings || []);
