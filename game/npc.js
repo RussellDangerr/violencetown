@@ -20,13 +20,14 @@
 // the HOSTILE (chase), ALLIED, or ambient states.
 
 import { manhattan, chebyshev } from './utils.js';
-import { getGreedyStep, stepEntity, findPath } from './pathing.js';
+import { getGreedyStep, stepEntity, findPath, fleeFrom } from './pathing.js';
 import { perceives, nextAwareness, VERDICT, BLIND_SWEEP_BEATS } from './perception.js';
 import { healPurchase, kitChoice, isSewerDweller, bossSpend, BOSS_RALLY_RANGE, isHunting } from './ai.js';
 import { ITEMS, kitHealValue, applyKitItem } from './items.js';
 import { WEAPONS } from './weapons.js';
 import { burnGold } from './trade.js';
 import { spreadParanoia } from './give-action.js';
+import { fighters } from './fight-area.js';
 
 // ── Leash tuning ─────────────────────────────────────────────────────────────
 // A chasing enemy gives up and walks home when it strays past LEASH_DISTANCE
@@ -107,6 +108,10 @@ export function tickNpcState(game, npc, clock = game.turn, rng = game.rng) {
     }
 
     const messages = [];
+
+    // (F3c) A neutral who has seen a fight spends its turn getting out of it,
+    // and the turns after it walking home.
+    if (bystanderTurn(game, npc)) return messages;
 
     switch (npc.fsmState) {
         case STATE.IDLE: {
@@ -665,10 +670,13 @@ function findNearestWantedItem(game, npc) {
 //
 // Returns true when a step was taken so the caller can spend the turn on it —
 // walking home is what you are doing this turn, the same way wandering is.
-export function goHomeStep(game, npc) {
+//
+// `anyone` lifts the wanderer exemption: a bystander walking back after a fight
+// (bystanderTurn) heads for where it spawned even if it normally roams.
+export function goHomeStep(game, npc, { anyone = false } = {}) {
     if (!npc || npc.homeX == null || npc.homeY == null) return false;
     // A wanderer has no post to keep; see the note at the IDLE case.
-    if (npc.behavior && npc.behavior.includes(STATE.WANDER)) return false;
+    if (!anyone && npc.behavior && npc.behavior.includes(STATE.WANDER)) return false;
     if (npc.x === npc.homeX && npc.y === npc.homeY) return false;
 
     // A real route, not a greedy nudge. getGreedyStep only ever moves to a
@@ -685,6 +693,72 @@ export function goHomeStep(game, npc) {
     const step = path[0];
     stepEntity(npc, step.x, step.y, game._MOVE_MS);
     return true;
+}
+
+// ── Bystanders (F3c, plans/f3c-bystanders-clear-out.md) ─────────────────────
+//
+// Most neutral characters run out of the way of a fight; vendors and quest
+// givers hold their ground (Caelan's pick). The ones he named, by spawn id:
+// the Corner Merchant, the Cook, the Pit Boss, Pike, Carrion, Platero and the
+// Financier.
+export const HOLD_GROUND_IDS = new Set([
+    'dt-merch1', 'diner-cook', 'casino-pit-boss', 'pike', 'carrion', 'dt-platero', 'bank-financier',
+]);
+
+// Does this character stay put when a fight breaks out nearby? The named ones,
+// any other vendor, anything that cannot be moved or is a set piece (a heavy
+// puzzle wall, a boss), and sewer dwellers (the Violet Fungi, the rats): only
+// surface townsfolk scatter (Caelan's pick).
+export function holdsGround(npc) {
+    return !!npc && (HOLD_GROUND_IDS.has(npc.id) || !!npc.vendor || !!npc.heavy || !!npc.boss
+        || isSewerDweller(npc));
+}
+
+// One bystander turn. Returns true when it took the turn.
+//
+// While a fight is on (fight-area.js fighters()), a neutral who directly sees
+// the player or a fighter — the notice rule F3a and F3b use — is scared
+// (`_fleeing`) until the fight ends, even once it has turned its back. Inside
+// the fight area (any tile a fighter perceives) it steps away from all of them,
+// preferring a tile none can see; outside it, it stands still so it does not
+// wander back in. Fleeing is a flag, never `state`, so it can never count as a
+// fighter. No random draw is spent.
+//
+// When the fight is over the scare drops on the next turn and it walks home,
+// one step a turn; a blocked way home ends the walk where it stands.
+export function bystanderTurn(game, npc) {
+    if (!npc) return false;
+    if (npc.allegiance !== 'neutral') {
+        npc._fleeing = false;
+        npc._headingHome = false;
+        return false;
+    }
+    const fs = fighters(game.enemies);
+    if (fs.length > 0) {
+        if (holdsGround(npc)) return false;
+        const player = { x: game.playerX, y: game.playerY };
+        if (!npc._fleeing) {
+            const sees = (x, y) => perceives(game.map, npc, x, y) === VERDICT.DIRECT;
+            if (!sees(player.x, player.y) && !fs.some(f => f !== npc && sees(f.x, f.y))) return false;
+            npc._fleeing = true;
+            npc._headingHome = false;
+        }
+        const inArea = (x, y) => fs.some(f => perceives(game.map, f, x, y) !== VERDICT.NONE);
+        if (inArea(npc.x, npc.y)) {
+            const step = fleeFrom(game, npc, [player, ...fs], { safe: (x, y) => !inArea(x, y) });
+            if (step) stepEntity(npc, step.x, step.y, game._MOVE_MS);
+        }
+        return true;
+    }
+    if (npc._fleeing) {
+        npc._fleeing = false;
+        npc._headingHome = true;
+    }
+    if (npc._headingHome) {
+        if (goHomeStep(game, npc, { anyone: true })) return true;
+        npc._headingHome = false;   // home, or no way there: carry on from here
+    }
+    return false;
 }
 
 // (theft) A robbed victim's sweep has ended. If it found nobody, the chill
