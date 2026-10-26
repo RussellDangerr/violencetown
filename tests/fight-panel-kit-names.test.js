@@ -74,11 +74,18 @@ describe('FX28: the target panel names every piece of an enemy\'s kit', () => {
 
     test('every slot registry entry\'s kit resolves to a name, placed or not', () => {
         const bad = [];
+        let carriers = 0;
         for (const [id, entry] of Object.entries(ENTRIES)) {
             const e = spawnEnemy({ ...structuredClone(entry), id, x: 0, y: 0 });
-            assert.ok(e.loadout.length > 0, `${id} carries something`);
+            // A harmless talker (the Crat) carries nothing; anything that fights must.
+            if (e.loadout.length === 0) {
+                assert.equal(entry.damage ?? 0, 0, `${id} fights, so it carries something`);
+                continue;
+            }
+            carriers++;
             for (const k of rawRows(targetPanel(e))) bad.push(`${id}: ${k.id}`);
         }
+        assert.ok(carriers > 0, 'at least one registry entry carries a kit');
         assert.deepEqual(bad, []);
     });
 

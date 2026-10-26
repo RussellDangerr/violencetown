@@ -17,7 +17,7 @@
     0,
     0,
     0,
-    0,
+    5,
     0,
     0,
     0,
@@ -851,6 +851,14 @@
       "toX": 28,
       "toY": 12,
       "label": "[West \u2014 climb out, back to the street]"
+    },
+    {
+      "x": 11,
+      "y": 0,
+      "toMap": "sewer-north-map.json",
+      "toX": 6,
+      "toY": 8,
+      "label": "[North \u2014 TEXT: into the side room]"
     }
   ],
   "examinables": [
