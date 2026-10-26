@@ -178,7 +178,7 @@ export const SHEETS = {
     // The Tiny Dungeon rat, (3,10), recoloured by tools/gen_recolor.py: one cell per
     // variant, exact swaps of its body and eye colours, so the outline and the
     // silhouette are the rat's own. Column order is the tool's VARIANTS list.
-    // Packed, padding 0. Nothing draws from it yet.
+    // Packed, padding 0. The Carnival's rats draw from it (ENEMY_SPRITES).
     ratVariants:  { src: `${K}/ratVariants_packed.png`, frameW: 16, frameH: 16 },
 
     // Kenney Emote Pack (Pixel, Style 8) — manga impact marks (animation pass
@@ -418,6 +418,11 @@ export const ENEMY_SPRITES = {
     // robe front a "bib". The pack's actual rats are on the bottom row, beside
     // the vials. Canyon rats have been rendering as robed people all along.
     'Rat': { sheet: 'tinyDungeon', col: 3, row: 10, static: true }, // brown rat, curved body and tail
+    // The Carnival's rats: the brown rat recoloured, columns in gen_recolor.py's
+    // VARIANTS order (birthday 0, sludge 1, robot 2).
+    'Birthday Rat': { sheet: 'ratVariants', col: 0, row: 0, static: true },
+    'Sludge Rat':   { sheet: 'ratVariants', col: 1, row: 0, static: true },
+    'Robot Rat':    { sheet: 'ratVariants', col: 2, row: 0, static: true },
 
     // Merchant / bosses — humanoid cells:
     // Carrion: was (2,7), shared with Pike. (3,9) is freed by the Rat move and

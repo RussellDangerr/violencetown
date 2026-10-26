@@ -29,6 +29,46 @@ export const ENTRIES = {
         ],
         barkEveryTurns: 6,
     },
+    // The Carnival's rats (plans/rv1-carnival-rats.md): the canyon rat's stats,
+    // vermin, one drop each inside the vermin cap. Each is the brown rat
+    // recoloured (ratVariants in sprites.js). Placed by hand: a map spawn names
+    // the entry, `{ id, entry, x, y }`. No `tag`: canyon_critter is Pike's deal.
+    birthday_rat: {
+        type: 'Birthday Rat',
+        name: 'Birthday Rat',
+        sewerDweller: true,
+        vermin: true,
+        gold: 1,
+        loadout: ['mystery_meat'],
+        hp: 100,
+        armor: -30,
+        damage: 6,
+        sightRange: 6,
+    },
+    sludge_rat: {
+        type: 'Sludge Rat',
+        name: 'Sludge Rat',
+        sewerDweller: true,
+        vermin: true,
+        gold: 1,
+        loadout: ['mystery_meat'],
+        hp: 100,
+        armor: -30,
+        damage: 6,
+        sightRange: 6,
+    },
+    robot_rat: {
+        type: 'Robot Rat',
+        name: 'Robot Rat',
+        sewerDweller: true,
+        vermin: true,
+        gold: 1,
+        loadout: ['rock'],
+        hp: 100,
+        armor: -30,
+        damage: 6,
+        sightRange: 6,
+    },
 };
 
 // A required item belongs to the slot, not the entry (SL-4): every entry in the
@@ -88,8 +128,16 @@ export function defaultPicks(slots = SLOTS) {
 }
 
 // A spawn with a `slot` becomes its picked entry, with the spawn's own id, place
-// and facing on top. Any other spawn passes through untouched.
+// and facing on top. A spawn naming an `entry` is placed by hand: it becomes
+// that entry the same way. Any other spawn passes through untouched.
 export function resolveSpawn(spawn, picks, slots = SLOTS, entries = ENTRIES) {
+    if (spawn && !spawn.slot && spawn.entry) {
+        const entry = entries[spawn.entry];
+        if (!entry) return spawn;
+        const out = { ...structuredClone(entry), id: spawn.id, x: spawn.x, y: spawn.y };
+        if (spawn.facing) out.facing = spawn.facing;
+        return out;
+    }
     if (!spawn || !spawn.slot) return spawn;
     const slot = slots[spawn.slot];
     if (!slot) return spawn;

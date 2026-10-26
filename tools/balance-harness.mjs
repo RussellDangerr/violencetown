@@ -415,6 +415,7 @@ export function loadMapRoster() {
         .sort(byCodepoint);
 
     const roster = [];
+    const placed = new Set();   // registry entries a map places by hand
     for (const file of files) {
         const zone = file.slice(0, -'-map.json'.length);
         const raw = fs.readFileSync(path.join(GAME_DIR, file), 'utf8');
@@ -422,7 +423,9 @@ export function loadMapRoster() {
         try { doc = JSON.parse(raw); } catch { continue; }
         // A spine slot's spawn holds today's pick (plans/slot-registry.md); the
         // pool's other entries are linted below, so none can dodge the bands.
-        const spawns = (Array.isArray(doc.enemies) ? doc.enemies : []).map(s => resolveSpawn(s, defaultPicks()));
+        const authored = Array.isArray(doc.enemies) ? doc.enemies : [];
+        for (const s of authored) if (s && !s.slot && s.entry) placed.add(s.entry);
+        const spawns = authored.map(s => resolveSpawn(s, defaultPicks()));
         for (const s of spawns) {
             roster.push(rosterRow(zone, s.id, s));
         }
@@ -437,6 +440,14 @@ export function loadMapRoster() {
             if (entry === picked[slotId]) continue;
             roster.push(rosterRow(zone, `${slotId}:${entry}`, ENTRIES[entry]));
         }
+    }
+    // A registry entry no map places and no slot pools is linted too, under
+    // 'registry', so a new entry cannot dodge the bands by standing nowhere yet.
+    // No rows today: every entry is placed or pooled.
+    const pooled = new Set(Object.values(SLOTS).flatMap(s => s.pool.map(p => p.entry)));
+    for (const id of Object.keys(ENTRIES).sort(byCodepoint)) {
+        if (pooled.has(id) || placed.has(id)) continue;
+        roster.push(rosterRow('registry', id, ENTRIES[id]));
     }
     return roster;
 }
