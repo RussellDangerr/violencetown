@@ -60,10 +60,9 @@ describe('no item draws as a letter in a box', () => {
         assert.equal((rendererSrc.match(/ITEM_SPRITES\[/g) || []).length, 0);
         assert.equal((rendererSrc.match(/itemSprite\(/g) || []).length, 4);
     });
-    test('the derived sheet exists and is nine 16-px cells wide', () => {
-        // Five, plus the four weapon recolours of WA1 (plans/wa1-weapon-pictures-match.md).
+    test('the derived sheet exists and is five 16-px cells wide', () => {
         const png = readFileSync(join(GAME, 'assets-placeholder', 'kenney', 'tinyExtra_packed.png'));
-        assert.equal(png.readUInt32BE(16), 144);  // IHDR width
+        assert.equal(png.readUInt32BE(16), 80);   // IHDR width
         assert.equal(png.readUInt32BE(20), 16);   // IHDR height
     });
     test('the rock and Fire Blood no longer use cells that carry a square of ground', () => {
