@@ -4507,45 +4507,37 @@ class Game {
             this._log(`[Looted ${loot} GP.]`, 'pickup');
             this._muggedIds.add(enemyObj.id);
         }
+        // A spine slot's required item drops from whoever filled the slot (the
+        // Sewer's boss drops the converter); rat kills feed the escape waves.
+        // Every death drop goes on its own free tile around the body — the
+        // corpse is drawn over its own tile, so a drop there is never seen —
+        // and the required item is placed first: nearest tile, first in line.
+        const required = requiredDropFor(enemyObj, this.map?.enemySpawns);
+        const requiredDef = required ? ITEMS[required] : null;
+        if (requiredDef) this._placeDeathDrop(enemyObj, required, requiredDef);
         // Law 6f AS AMENDED: the unused kit drops. He spent his tricks or he
         // didn't — what's left is the reward for rushing him. Farming stays
         // closed because spawnEnemy clears the loadout for a mugged id, exactly
         // as it clears the gold.
         const kit = dropLoadout(enemyObj.loadout, enemyObj.x, enemyObj.y);
-        for (const item of kit) {
-            this._recordDrop(item.type, item.x, item.y);
-            this.groundItems.push(item);
-        }
+        for (const item of kit) this._placeDeathDrop(enemyObj, item.type, item.def);
         if (kit.length) {
             this._log(`[They drop what they didn't get to use.]`, 'pickup');
             this._muggedIds.add(enemyObj.id);
         }
         enemyObj.loadout = [];
-        // A spine slot's required item drops from whoever filled the slot (the
-        // Sewer's boss drops the converter); rat kills feed the escape waves.
-        const required = requiredDropFor(enemyObj, this.map?.enemySpawns);
-        if (required && ITEMS[required]) {
-            this._recordDrop(required, enemyObj.x, enemyObj.y);
-            this.groundItems.push({ type: required, x: enemyObj.x, y: enemyObj.y, def: ITEMS[required] });
-            this._log(dropLineFor(enemyObj, this.map?.enemySpawns) || `[${ITEMS[required].name} dropped.]`, 'pickup');
+        if (requiredDef) {
+            this._log(dropLineFor(enemyObj, this.map?.enemySpawns) || `[${requiredDef.name} dropped.]`, 'pickup');
         }
         // (Remembrance Rings) The Were-Rat also leaves a remembrance — a braided
-        // tuft of fur → the Rat Ring (fashioned at Platero). Drop it on a free
-        // adjacent tile so it doesn't stack on the converter; persist it (Task 2).
+        // tuft of fur → the Rat Ring (fashioned at Platero). Persist it (Task 2).
         if (enemyObj.tag === 'wererat_boss' && ITEMS.wererat_fur) {
-            let fx = enemyObj.x, fy = enemyObj.y;
-            for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
-                const tx = enemyObj.x + dx, ty = enemyObj.y + dy;
-                if (this.map.isWalkable(tx, ty) && !this.groundItems.some(gi => gi.x === tx && gi.y === ty)) { fx = tx; fy = ty; break; }
-            }
-            this._recordDrop('wererat_fur', fx, fy);
-            this.groundItems.push({ type: 'wererat_fur', x: fx, y: fy, def: ITEMS.wererat_fur });
+            this._placeDeathDrop(enemyObj, 'wererat_fur', ITEMS.wererat_fur);
             this._log('[Among the matted fur, one coarse braided tuft stays warm — a remembrance.]', 'pickup');
         }
         // Pike guards his climbing rope with his life — take it off his body.
         if (enemyObj.tag === 'pike_boss' && ITEMS.grappling_hook) {
-            this._recordDrop('grappling_hook', enemyObj.x, enemyObj.y);
-            this.groundItems.push({ type: 'grappling_hook', x: enemyObj.x, y: enemyObj.y, def: ITEMS.grappling_hook });
+            this._placeDeathDrop(enemyObj, 'grappling_hook', ITEMS.grappling_hook);
             this._log('[Pike crumples. His big coil of rope — the grappling hook — thuds to the stone.]', 'pickup');
         }
         // Pike's deal (his dialogue onPick set the flag): clearing the LAST canyon
@@ -4557,6 +4549,52 @@ class Game {
             this._grantItem('grappling_hook', '["Deal\'s a deal." Pike coils the big rope into your pack — the grappling hook is yours.]');
         }
         onSewerEnemyKilled(this, enemyObj);
+    }
+
+    // Put one death drop on the ground beside `enemyObj` and record it so it
+    // survives zone changes.
+    _placeDeathDrop(enemyObj, type, def) {
+        const { x, y } = this._deathDropTile(enemyObj, type);
+        this._recordDrop(type, x, y);
+        this.groundItems.push({ type, x, y, def });
+    }
+
+    // Where a death drop lands: the nearest free tile reachable from the body,
+    // searched breadth-first over walkable ground (south, north, east, west at
+    // each step), at most DEATH_DROP_REACH steps out and never through an exit.
+    // Free = walkable, not the body, not the player, not a container, an exit
+    // or any enemy (corpses included: they draw over the tile), and no ground
+    // item — except one of the same type, so a respawned boss killed again on
+    // the same spot drops back onto its earlier copy and the record dedup holds.
+    // Nothing free → the body's own tile, as before.
+    _deathDropTile(enemyObj, type) {
+        const DEATH_DROP_REACH = 3;
+        const map = this.map;
+        const inMap = (x, y) => !map.isInBounds || map.isInBounds(x, y);
+        const exitAt = (x, y) => !!map.getTransition?.(x, y);
+        const free = (x, y) =>
+            !(x === this.playerX && y === this.playerY) &&
+            !exitAt(x, y) &&
+            !(this.containers || []).some(c => c.x === x && c.y === y) &&
+            !this.enemies.some(e => e.x === x && e.y === y) &&
+            !this.groundItems.some(g => g.x === x && g.y === y && g.type !== type);
+        const seen = new Set([`${enemyObj.x},${enemyObj.y}`]);
+        let ring = [{ x: enemyObj.x, y: enemyObj.y }];
+        for (let step = 1; step <= DEATH_DROP_REACH && ring.length; step++) {
+            const next = [];
+            for (const at of ring) {
+                for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+                    const x = at.x + dx, y = at.y + dy, key = `${x},${y}`;
+                    if (seen.has(key)) continue;
+                    seen.add(key);
+                    if (!inMap(x, y) || !map.isWalkable(x, y)) continue;
+                    if (free(x, y)) return { x, y };
+                    if (!exitAt(x, y)) next.push({ x, y });
+                }
+            }
+            ring = next;
+        }
+        return { x: enemyObj.x, y: enemyObj.y };
     }
 
     // (Remembrance Rings) Platero's craft: consume a remembrance material from
