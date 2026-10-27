@@ -23,7 +23,6 @@ const loadMap = file => JSON.parse(readFileSync(join(GAME_DIR, file), 'utf8'));
 
 const KNOWN_SHARED_CELLS = {
     'tinyTown(9,3)': "FENCE / IRON_FENCE — no iron railing exists in any bundled sheet (verified twice), so the graveyard borrows Town's wood fence",
-    'tinyTown(1,2)': "ROAD / CIRCUS_GROUND — open: the carnival's ground is Town's road, 892 of its 1,276 cells. Awaiting a call on a ground of its own (zone-identity.md, Item 3 findings)",
 };
 
 function tilesByCell() {
@@ -190,5 +189,24 @@ describe('carnival tents', () => {
         for (const id of tentIds) {
             assert.equal(sprites.ZONE_TILE_SPRITE_MAP[id]?.under, TILES.CIRCUS_GROUND.id, `tent id ${id} draws nothing beneath it`);
         }
+    });
+});
+
+// ── AP1: the carnival's own ground ─────────────────────────────────────────
+//
+// Was: CIRCUS_GROUND drew Town's road cell, so 892 of the carnival's 1,276
+// cells looked like street. Ruled: stone pavers on grass, Tiny Town (7,3).
+
+describe('carnival ground', () => {
+    const ground = sprites.ZONE_TILE_SPRITE_MAP[TILES.CIRCUS_GROUND.id];
+    const cell = r => `${r.sheet}(${r.col},${r.row})`;
+
+    test('the carnival ground is the ruled stone pavers, not the road', () => {
+        assert.deepEqual(ground, { sheet: 'tinyTown', col: 7, row: 3 });
+        assert.notEqual(cell(ground), cell(sprites.TOWN_TILE_SPRITE_MAP[TILES.ROAD.id]));
+    });
+
+    test('no other tile draws the carnival ground', () => {
+        assert.deepEqual(tilesByCell().get(cell(ground)), ['CIRCUS_GROUND']);
     });
 });
