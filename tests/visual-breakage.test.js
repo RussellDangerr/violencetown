@@ -52,7 +52,9 @@ describe('no item draws as a letter in a box', () => {
         const bare = Object.keys(all).filter(id => !ITEM_SPRITES[id]).sort();
         // The three Act 2 required items draw as the bag until they are named
         // (AB1R2, plans/ab1-act2-placeholder-bosses.md).
-        assert.deepEqual(bare, ['act2_item_a', 'act2_item_b', 'act2_item_c', 'latex_gloves', 'red_cape', 'shoe_bags']);
+        // The ice cone machine part draws as the bag until it has a picture
+        // (IC6R1, plans/ic6-factory-bill-ice-cone-machine.md).
+        assert.deepEqual(bare, ['act2_item_a', 'act2_item_b', 'act2_item_c', 'ice_cone_machine_part', 'latex_gloves', 'red_cape', 'shoe_bags']);
         assert.ok(bare.length > 0 && bare.every(id => itemSprite(id) === UNKNOWN_ITEM_SPRITE));
     });
     test('no fallback still draws ITEM_COLORS letters unless a sheet failed to load', () => {
