@@ -420,14 +420,20 @@ describe('pickups: a reload keeps what you picked up', () => {
         assert.ok(r._collectedItems.has('town-map.json|2|3|soap'));
     });
 
-    test('a full bag picks nothing up and writes nothing', () => {
+    test('a full bag grows a page, picks it up, and a reload keeps the page', async () => {
+        // (BG1) The bag never refuses: a full PACK opens page 2 for the rock.
         const { g } = playing();
         for (let i = 0; i < INVENTORY_SIZE; i++) put(g, i, 'foil_hat');
-        const before = localStorage.getItem(SAVE_KEY);
         g.groundItems.push({ type: 'rock', x: 5, y: 5, def: ITEMS.rock });
         g._tryPickup();
-        assert.equal(g.groundItems.length, 1);
-        assert.equal(localStorage.getItem(SAVE_KEY), before);
+        assert.equal(g.groundItems.length, 0, 'the rock stayed on the ground');
+        assert.equal(g.inventory.length, INVENTORY_SIZE + PACK_PAGE, 'the bag did not grow a page');
+        assert.equal(g.inventory[INVENTORY_SIZE].itemDef.id, 'rock');
+
+        const r = await reload(g);
+        assert.equal(r.inventory.length, INVENTORY_SIZE + PACK_PAGE, 'page 2 was lost on reload');
+        assert.equal(r.inventory[INVENTORY_SIZE]?.itemDef.id, 'rock');
+        assert.equal(count(r, 'foil_hat'), INVENTORY_SIZE);
     });
 });
 

@@ -1331,6 +1331,14 @@ describe('a full bag never costs the player anything', () => {
     // addToInventory, which only merges below maxStack.
     const fullBag = () => new Array(INVENTORY_SIZE).fill(null)
         .map(() => ({ itemDef: ITEMS.rock, count: MAX_STACK }));
+    // (BG1) The bag grows a page instead of refusing. The two loop-guard tests
+    // below still need a bag that refuses, so they put back a fixed-size one.
+    const cannotGrow = function (def) {
+        const ok = addToInventory(this.inventory, def,
+            { size: INVENTORY_SIZE, safeSlots: SAFE_SLOTS, maxStack: MAX_STACK });
+        if (ok) (this.got ||= []).push(def.id);
+        return ok;
+    };
 
     test('the bag really is full', () => {
         const inv = fullBag();
@@ -1338,34 +1346,37 @@ describe('a full bag never costs the player anything', () => {
             { size: INVENTORY_SIZE, safeSlots: SAFE_SLOTS, maxStack: MAX_STACK }), false);
     });
 
-    test('BUYING INTO A FULL BAG DOES NOT TAKE THE GOLD', () => {
+    test('buying into a full bag pays for an item that lands on a new page', () => {
         const g = stubGame({ gold: 500, inventory: fullBag() });
         const npc = vendor();
         openOffer.call(g, npc);
         offerActivate.call(g, 'theirs', 0);
+        const price = g._offer.gold;
         commit.call(g);
-        assert.equal(g.gold, 500, 'the player paid for goods they never received');
-        assert.equal(npc.gold, 200, 'the vendor was paid for goods they still have');
+        assert.equal(g.gold, 500 - price, 'the player did not pay');
+        assert.equal(npc.gold, 200 + price, 'the vendor was not paid');
+        assert.equal(g.inventory.length, INVENTORY_SIZE + PACK_PAGE, 'the bag did not grow a page');
+        assert.equal(g.inventory[INVENTORY_SIZE].itemDef.id, 'bandage', 'the bandage is not first on page 2');
     });
 
-    test('TAKING INTO A FULL BAG DOES NOT DESTROY THE CHEST CONTENTS', () => {
-        // The worse half: there is no gold trail, the item just leaves the world.
+    test('taking from a chest into a full bag moves the item onto a new page', () => {
         const g = stubGame({ inventory: fullBag() });
         const shim = chestShim(['rock', 'soap']);
         openOffer.call(g, shim);
         offerActivate.call(g, 'theirs', 1);
         commit.call(g);
-        assert.deepEqual(shim._container.contents, ['rock', 'soap'],
-            'the chest was emptied into a bag that refused the item');
+        assert.deepEqual(shim._container.contents, ['rock'], 'the soap stayed in the chest');
+        assert.equal(g.inventory[INVENTORY_SIZE].itemDef.id, 'soap', 'the soap never reached the bag');
     });
 
-    test('the refusal is spoken, not silent', () => {
+    test('nothing is refused: a full bag blocks no offer and says no "bag is full"', () => {
         const g = stubGame({ gold: 500, inventory: fullBag() });
         openOffer.call(g, vendor());
         offerActivate.call(g, 'theirs', 0);
+        assert.equal(g._offerBlocker(), null, 'a full bag still blocked the offer');
         commit.call(g);
-        assert.match(g.logs.at(-1).msg, /bag is full/i,
-            `no refusal line: ${g.logs.at(-1).msg}`);
+        assert.ok(!g.logs.some(l => /bag is full/i.test(l.msg)),
+            `a refusal line: ${g.logs.map(l => l.msg).join(' | ')}`);
     });
 
     test('ROOM IN AN EXISTING STACK COUNTS AS ROOM', () => {
@@ -1387,10 +1398,9 @@ describe('a full bag never costs the player anything', () => {
         assert.equal(g.gold, 500 - price);
     });
 
-    test('A FULL STACK IS NOT ROOM', () => {
-        // Every slot is a MAX_STACK stack of the very item being bought. A
-        // fits-check that looked for a matching stack without checking it has
-        // headroom would merge into a full one and wave the purchase through.
+    test('a bag of full stacks takes one more of the same on a new page', () => {
+        // Every slot is a MAX_STACK stack of the very item being bought. A full
+        // stack is not room, so the one more starts a fresh stack -- on page 2.
         const inv = new Array(INVENTORY_SIZE).fill(null)
             .map(() => ({ itemDef: ITEMS.rock, count: MAX_STACK }));
         const g = stubGame({ gold: 500, inventory: inv });
@@ -1398,31 +1408,36 @@ describe('a full bag never costs the player anything', () => {
         npc.stock = ['rock'];
         openOffer.call(g, npc);
         offerActivate.call(g, 'theirs', 0);
-        assert.equal(g._offerBlocker(), 'YOUR BAG IS FULL',
-            'a bag of full stacks accepted one more');
+        assert.equal(g._offerBlocker(), null, 'a bag of full stacks refused one more');
+        const price = g._offer.gold;
         commit.call(g);
-        assert.equal(g.gold, 500, 'gold moved into a bag that cannot hold it');
+        assert.equal(g.gold, 500 - price);
+        assert.ok(g.inventory.slice(0, INVENTORY_SIZE).every(s => s.count === MAX_STACK), 'a full stack took more');
+        assert.deepEqual(g.inventory[INVENTORY_SIZE], { itemDef: ITEMS.rock, count: 1 });
     });
 
-    test('the loop still refuses if the blocker is ever wrong', () => {
-        // Defence in depth: _offerBlocker stops a full bag before any gold
-        // moves, so the guard inside the take loop is unreachable in normal
-        // play -- and therefore unpinned. Force it by silencing the blocker,
-        // which is exactly the failure it exists for.
+    test('the loop still refuses if the bag ever refuses', () => {
+        // Defence in depth: the bag grows rather than refuse, so the guard
+        // inside the take loop is unreachable in normal play -- and therefore
+        // unpinned. Force it with a bag that cannot grow, which is exactly the
+        // failure it exists for.
         const g = stubGame({ gold: 500, inventory: fullBag() });
+        g._addToInventory = cannotGrow;
         const npc = vendor();
         openOffer.call(g, npc);
         offerActivate.call(g, 'theirs', 0);
-        g._offerBlocker = () => null;                       // pretend the blocker missed it
+        g._offerBlocker = () => null;                       // nothing else stops it
         commit.call(g);
         // the ledger line is written after the loop, so this is not the LAST log
         assert.ok(g.logs.some(l => /bag is full/i.test(l.msg)),
             `the loop guard is gone: ${g.logs.map(l => l.msg).join(' | ')}`);
         assert.ok(!g.got || !g.got.length, 'an item landed in a full bag');
+        assert.equal(g.inventory.length, INVENTORY_SIZE, 'the bag grew anyway');
     });
 
     test('and the chest keeps its contents when the loop refuses', () => {
         const g = stubGame({ inventory: fullBag() });
+        g._addToInventory = cannotGrow;
         const shim = chestShim(['rock', 'soap']);
         openOffer.call(g, shim);
         offerActivate.call(g, 'theirs', 0);
@@ -1443,6 +1458,7 @@ describe('a full bag never costs the player anything', () => {
         commit.call(g);
         assert.equal(g.gold, 500 - price);
         assert.ok(g.inventory.some(sl => sl && sl.itemDef.id === 'bandage'), 'the bandage never landed');
+        assert.equal(g.inventory.length, INVENTORY_SIZE, 'a bag with room grew a page');
     });
 });
 
