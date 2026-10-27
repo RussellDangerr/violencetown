@@ -86,7 +86,11 @@ export const DEFEAT_SCENARIOS = [
     },
     {
         id: 'robbed_by_wererats',
-        when: c => c.zone && /sewer/i.test(c.zone) && c.by && (c.by.type || '') === 'Wererat',
+        // The sewer's ordinary rats (the escape gauntlet's, tagged sewer_rat) rob
+        // you (ruling WRR1). The real Were-Rat is a boss, so its defeats take the
+        // boss retry before this table is read; its match here is never reached.
+        when: c => c.zone && /sewer/i.test(c.zone) && c.by
+            && ((c.by.type || '') === 'Wererat' || c.by.tag === 'sewer_rat'),
         weight: 3,
         consequence: {
             wakeAt: null,                            // dumped at the sewer mouth (spawn)

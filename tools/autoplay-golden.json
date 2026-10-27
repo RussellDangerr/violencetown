@@ -6,8 +6,8 @@
       "seed": 1,
       "finished": true,
       "reason": null,
-      "fingerprint": "c34d4010",
-      "turn": 110,
+      "fingerprint": "efb68d2d",
+      "turn": 99,
       "deaths": 2,
       "stages": [
         {
@@ -40,14 +40,14 @@
         },
         {
           "id": "escape_sewer",
-          "turns": 36,
+          "turns": 25,
           "hpLost": 79,
           "healed": 0,
           "eats": 0,
-          "drinks": 5,
+          "drinks": 2,
           "attacks": 1,
-          "casts": 11,
-          "mpSpent": 110,
+          "casts": 14,
+          "mpSpent": 140,
           "throws": 3,
           "deaths": 1,
           "gold": 0
@@ -73,8 +73,8 @@
       "seed": 1,
       "finished": true,
       "reason": null,
-      "fingerprint": "e23247cf",
-      "turn": 259,
+      "fingerprint": "381dd40f",
+      "turn": 221,
       "deaths": 5,
       "stages": [
         {
@@ -107,17 +107,17 @@
         },
         {
           "id": "escape_sewer",
-          "turns": 58,
-          "hpLost": 106,
+          "turns": 20,
+          "hpLost": 83,
           "healed": 0,
           "eats": 0,
-          "drinks": 6,
+          "drinks": 2,
           "attacks": 0,
-          "casts": 15,
-          "mpSpent": 148,
+          "casts": 10,
+          "mpSpent": 98,
           "throws": 1,
           "deaths": 1,
-          "gold": -1
+          "gold": 0
         },
         {
           "id": "return_to_car",
