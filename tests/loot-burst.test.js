@@ -229,14 +229,13 @@ describe('the renderer draws each item in the air', () => {
         const you = { x: origin.x + TILE_PX / 2, y: origin.y + TILE_PX / 2 };
         const frames = burstFrame(g._lootBursts[0], 300, body, you, TILE_PX);
         assert.equal(frames.length, 2);
-        // No sheet is loaded here, so each item draws its colour plate (shadow + plate).
-        const plates = rects.filter((_, i) => i % 2 === 1);
-        assert.equal(plates.length, 2);
+        // No sheet is loaded here, so each item draws the bag's colour plate.
+        assert.equal(rects.length, 2);
         for (const [i, f] of frames.entries()) {
             const size = Math.max(4, Math.round(TILE_PX * f.scale));
-            const s = Math.round(size / 2);
-            const p = plates[i];
-            assert.ok(Math.abs(p.x + s / 2 - f.x) <= 1 && Math.abs(p.y + s / 2 - f.y) <= 1, `item ${i} is drawn at its spot`);
+            const p = rects[i];
+            assert.equal(p.w, size, `item ${i} is drawn at its scale`);
+            assert.ok(Math.abs(p.x + size / 2 - f.x) <= 1 && Math.abs(p.y + size / 2 - f.y) <= 1, `item ${i} is drawn at its spot`);
         }
     });
 

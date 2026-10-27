@@ -1455,12 +1455,11 @@ export class Renderer {
     }
 
     // (FX3b) Each item of a kill's loot, at its spot in the burst (loot-burst.js):
-    // out of the body's tile centre, into the player's. Drawn the way the item
-    // would lie on the floor, scaled. Reduce Motion flattens the hop.
+    // out of the body's tile centre, into the player's. Each draws through
+    // _drawItemIcon, the bag's own icon path, scaled. Reduce Motion flattens the hop.
     _drawLootBursts(game) {
         const bursts = game._lootBursts;
         if (!bursts || !bursts.length) return;
-        const { ctx, sprites } = this;
         const vp = this._view();
         const now = performance.now();
         const { ppx, ppy } = this._playerScreenPos(game, now);
@@ -1473,20 +1472,7 @@ export class Renderer {
             };
             for (const f of burstFrame(b, now, body, player, TILE_PX, { flat })) {
                 const size = Math.max(4, Math.round(TILE_PX * f.scale));
-                const x = Math.round(f.x - size / 2), y = Math.round(f.y - size / 2);
-                const spr = itemSprite(f.item.id);
-                let drawn = false;
-                if (spr && sprites?.[spr.sheet]?.loaded) {
-                    drawn = this._inkRegion(sprites[spr.sheet], ctx, spr.x, spr.y, spr.w, spr.h, x, y, size, size);
-                }
-                if (!drawn) {
-                    const info = ITEM_COLORS[f.item.id] || { bg: '#aaa', letter: '?' };
-                    const s = Math.round(size / 2), o = Math.round(size / 4);
-                    ctx.fillStyle = '#000000aa';
-                    ctx.fillRect(x + o + 1, y + o + 1, s, s);
-                    ctx.fillStyle = info.bg;
-                    ctx.fillRect(x + o, y + o, s, s);
-                }
+                this._drawItemIcon(f.item, Math.round(f.x - size / 2), Math.round(f.y - size / 2), size);
             }
         }
     }
