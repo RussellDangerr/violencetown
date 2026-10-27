@@ -382,6 +382,17 @@ export const ITEMS = {
         fallbackColor: '#8a5a2a',
         baseValue: 20,
     },
+    // Carried, it does nothing yet: once ants exist they come for it, except
+    // where it is too cold (plans/ic1-tigers-blood-ice-cone.md).
+    tigers_blood_ice_cone: {
+        id: 'tigers_blood_ice_cone',
+        name: "[Tiger's Blood Ice Cone]",
+        description: '[TEXT]',
+        useType: 'none',
+        consumable: false,
+        fallbackColor: '#e84537',
+        baseValue: 0,
+    },
     grappling_hook: {
         id: 'grappling_hook',
         name: '[Grappling Hook]',
