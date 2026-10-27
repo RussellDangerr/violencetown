@@ -18,12 +18,14 @@ describe('recordDrop', () => {
         assert.deepEqual(dropped.sewer, [{ type: 'converter', x: 4, y: 9 }]);
     });
 
-    test('dedups an identical {type,x,y} — a re-killed respawning boss cannot farm records', () => {
+    test('a repeat {type,x,y} raises the one record\'s count; farming is closed by the boss-items-once rule', () => {
         const dropped = {};
         recordDrop(dropped, 'sewer', 'converter', 4, 9);
-        // Re-enter, boss respawns, dies again on the same tile: no new record.
+        // A second drop of the same item on the same tile: no new record, the
+        // existing one counts two. (A respawned boss never gets here for its own
+        // items: they drop only on its first death — bossDropOnce.)
         assert.equal(recordDrop(dropped, 'sewer', 'converter', 4, 9), false);
-        assert.equal(dropped.sewer.length, 1);   // no accumulation across re-kills
+        assert.equal(dropped.sewer.length, 1);   // still one record for the tile
     });
 
     test('the same type at a different tile is a distinct drop', () => {

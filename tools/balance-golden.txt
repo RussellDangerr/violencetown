@@ -16,6 +16,7 @@ carnival/robot-rat-1              Robot Rat                   100     -30      6
 carnival/sludge-rat-1             Sludge Rat                  100     -30      6        4              2              2     17
 casino/casino-pit-boss            Operator                    100     -80      0        0              1              1      -
 diner/diner-cook                  Cook                        100     -80      0        0              1              1      -
+downtown/dt-ruffian               Ruffian                     100       3      9       65              6              3     12
 downtown/dt-recipient             Stranger                    100     -80      0        0              1              1      -
 downtown/dt-merch1                Vendor                      100     -80      0        0              1              1      -
 downtown/dt-merch2                Vendor                      100     -80      0        0              1              1      -
@@ -83,7 +84,7 @@ canyon                     2
 carnival                  54
 casino                     0
 diner                      0
-downtown                   0
+downtown                   8
 factory                   76
 graveyard                 48
 sewer                    101

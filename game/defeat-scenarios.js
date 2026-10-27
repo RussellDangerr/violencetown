@@ -74,7 +74,9 @@ export const DEFEAT_SCENARIOS = [
         when: c => c.zone && /sewer/i.test(c.zone) && c.by && /Fungus/.test(c.by.type || ''),
         weight: 3,
         consequence: {
-            wakeAt: { spot: { x: 10, y: 10 } },      // a spore-cell by the soap-mine
+            // A spore-cell by the soap-mine: the walled pocket south of it, the
+            // nearest tile no sewer enemy can see (pinned in tests/fungus-wake-spot.test.js).
+            wakeAt: { spot: { x: 12, y: 17 } },
             hp: 0.5, timeSkip: 'hours', status: 'hunched',
             take: { categories: ['ambro'], recoverable: false },   // they feast on your food/mushrooms — gone
             log: '[You wake in a spore-cell. Your provisions are gone; the Fungus fed well.]',

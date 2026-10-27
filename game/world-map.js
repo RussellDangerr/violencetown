@@ -10,21 +10,24 @@
 //        [DOWNTOWN]—[CANYON]
 //            |  (bridge / grapple)
 //  [FACTORY]—[TOWN]—[SEWER]
-//            |
-//        [CARNIVAL]
-//            |
-//        [GRAVEYARD]
-//            |
-//        [WILDERNESS]
+//    |       |
+//    |   [CARNIVAL]
+//    |       |
+//    |   [GRAVEYARD]
+//    |       |
+//  [FROZEN]—[WILDERNESS]
 export const WORLD_ZONES = [
     { zoneName: 'DOWNTOWN',   label: 'DOWNTOWN',   col: 2, row: 0, connects: ['TOWN', 'CANYON'] },
     { zoneName: 'CANYON',     label: 'CANYON',     col: 3, row: 0, connects: ['DOWNTOWN'] },
-    { zoneName: 'FACTORY',    label: 'FACTORY',    col: 1, row: 1, connects: ['TOWN'] },
+    { zoneName: 'FACTORY',    label: 'FACTORY',    col: 1, row: 1, connects: ['TOWN', '[FROZEN AREA]'] },
     { zoneName: 'TOWN',       label: 'TOWN',       col: 2, row: 1, connects: ['DOWNTOWN', 'FACTORY', 'SEWER', 'CARNIVAL'] },
     { zoneName: 'SEWER',      label: 'SEWER',      col: 3, row: 1, connects: ['TOWN'] },
     { zoneName: 'CARNIVAL',   label: 'CARNIVAL',   col: 2, row: 2, connects: ['TOWN', 'GRAVEYARD'] },
     { zoneName: 'GRAVEYARD',  label: 'GRAVEYARD',  col: 2, row: 3, connects: ['CARNIVAL', 'WILDERNESS'] },
-    { zoneName: 'WILDERNESS', label: 'WILDERNESS', col: 2, row: 4, connects: ['GRAVEYARD'] },
+    { zoneName: 'WILDERNESS', label: 'WILDERNESS', col: 2, row: 4, connects: ['GRAVEYARD', '[FROZEN AREA]'] },
+    // The frozen area (plans/ic3-frozen-area.md): its name is a placeholder
+    // until Caelan names it; zoneByName upper-cases the map's zoneName.
+    { zoneName: '[FROZEN AREA]', label: '[FROZEN AREA]', col: 1, row: 4, connects: ['FACTORY', 'WILDERNESS'] },
 ];
 
 // Case-insensitive lookup by a map's `zoneName`. Interiors (BORGIR, DINER,

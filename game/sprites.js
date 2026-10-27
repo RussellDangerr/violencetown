@@ -247,6 +247,12 @@ export const SHEETS = {
     // causes. Coordinates below were checked against a labeled contact sheet
     // generated at this stride, not eyeballed at a packed one.
     roguelikeDungeon: { src: `${K}/roguelikeDungeon_transparent.png`, frameW: 16, frameH: 16, padding: 1 },
+
+    // Kenney roguelikeSheet, raw (the `outlined` sheet above is a re-packed
+    // subset of it). Registered for its flat ground cells — the frozen area's
+    // snow. It carries the native 1px gutter like roguelikeDungeon, so
+    // padding: 1; coordinates are picked at stride 17.
+    roguelikeSheet: { src: `${K}/roguelikeSheet_transparent.png`, frameW: 16, frameH: 16, padding: 1 },
 };
 
 // ── Sewer/dungeon tile coords (Tiny Dungeon + roguelikeDungeon packs) ──────
@@ -487,6 +493,9 @@ export const ENEMY_SPRITES = {
 
     // Zone-exclusive enemies (compromise picks — no clown/skeleton art exists):
     'Greedy Green':     { sheet: 'tinyDungeon', col: 4, row: 9,  static: true }, // green-bandana goblin
+    // Downtown's mugger wears the same goblin (ruled: the two read as kin). Safe
+    // to share: Greedy Green never stands in Downtown.
+    'Ruffian':          { sheet: 'tinyDungeon', col: 4, row: 9,  static: true }, // green-bandana goblin
     'Carnival Clown':   { sheet: 'tinyDungeon', col: 0, row: 7,  static: true }, // purple mage — most colorful humanoid
     'Rattling Skeleton':{ sheet: 'tinyDungeon', col: 1, row: 10, static: true }, // white ghost — pale/bony proxy
 
@@ -803,9 +812,12 @@ export const ZONE_TILE_SPRITE_MAP = {
     // replace TENT_STRIPE, red roof shingles that stood in for a tent over all
     // 344 of the carnival's tent cells. (Striped awnings exist too, green/white
     // and orange/white in roguelikeCity_packed.png — still unused.)
-    30: { sheet: 'tinyTown', col: 1, row: 2 },   // CIRCUS_GROUND — packed dirt/sand
+    30: { sheet: 'tinyTown', col: 7, row: 3 },   // CIRCUS_GROUND — stone pavers on grass, a fairground path (its own cell, not the road's)
     32: { sheet: 'tinyTown', col: 2, row: 0 },   // CONFETTI      — grass dotted with orange flowers
-    33: { sheet: 'tinyTown', col: 4, row: 3 },   // SAWDUST       — packed tan dirt
+    // SAWDUST — a rounded dirt patch with a grass rim, Tiny Town's four corner
+    // cells as one 2x2 picture; every sawdust patch on the map is 2x2 from an
+    // even tile, so each one draws whole.
+    33: { sheet: 'tinyTown', quad: [[0, 1], [2, 1], [0, 3], [2, 3]].map(([col, row]) => ({ sheet: 'tinyTown', col, row })) },
     34: { sheet: 'outlined', quad: outlinedQuad('tentGreen'), under: 30 }, // GREEN_TENT
     35: { sheet: 'outlined', quad: outlinedQuad('tentTan'),   under: 30 }, // TAN_TENT
 
@@ -866,6 +878,12 @@ export const ZONE_TILE_SPRITE_MAP = {
     64: { sheet: 'tinyDungeon',      col: 2,  row: 4 },  // LEDGE        — sand with a darker lip along the top
     65: null,                                            // CHASM        — no art: the flat near-black is the drop
     66: { sheet: 'roguelikeDungeon', col: 1,  row: 11 }, // RIVER        — open water
+
+    // Frozen area — picked 2026-10-26 from sheets already bundled; no pack has
+    // real snow or ice. The open-water cells were passed over for ICE: they are
+    // RIVER's colour, and RIVER is water you cannot walk on. Both opaque.
+    70: { sheet: 'roguelikeSheet', col: 45, row: 26 },   // SNOW — flat white ground
+    71: { sheet: 'roguelikeCity',  col: 14, row: 9 },    // ICE  — pale glass with a diagonal sheen, seamless
 };
 
 // ── Phase B TODO ────────────────────────────────────────────────────────────

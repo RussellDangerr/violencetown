@@ -20,12 +20,12 @@
 // the HOSTILE (chase), ALLIED, or ambient states.
 
 import { manhattan, chebyshev } from './utils.js';
-import { getGreedyStep, stepEntity, findPath, fleeFrom } from './pathing.js';
+import { getGreedyStep, stepEntity, findPath, fleeFrom, fleeStep } from './pathing.js';
 import { perceives, nextAwareness, VERDICT, BLIND_SWEEP_BEATS } from './perception.js';
 import { healPurchase, kitChoice, isSewerDweller, bossSpend, BOSS_RALLY_RANGE, isHunting } from './ai.js';
 import { ITEMS, kitHealValue, applyKitItem } from './items.js';
 import { WEAPONS } from './weapons.js';
-import { burnGold } from './trade.js';
+import { burnGold, transferGold } from './trade.js';
 import { spreadParanoia } from './give-action.js';
 import { fighters, inFightView } from './fight-area.js';
 
@@ -192,6 +192,9 @@ export function tickNpcState(game, npc, clock = game.turn, rng = game.rng) {
         }
 
         case STATE.HOSTILE: {
+            // (BS1) A mugger who already has your gold only runs.
+            if (isMugger(npc) && npc._tookGold > 0) { runOff(game, npc); break; }
+
             // Legacy chase logic — relocated verbatim from enemies.js (PD-3 step 4),
             // plus the leash (a strayed/blind chaser breaks off and walks home).
             // (perception) ONE source of truth, shared with the threat overlay, so
@@ -488,6 +491,10 @@ export function tickNpcState(game, npc, clock = game.turn, rng = game.rng) {
                 // Attacking faces the target — a shove buys one backstab window, not a farm.
                 npc._lastDx = Math.sign(game.playerX - npc.x);
                 npc._lastDy = Math.sign(game.playerY - npc.y);
+                // (BS1) A mugger takes gold instead of swinging. An empty purse
+                // has nothing to take, so then he swings like anyone else.
+                const took = mug(game, npc);
+                if (took) { messages.push(took); break; }
                 game.applyDamageToPlayer(npc.damage, npc);
                 break;
             }
@@ -511,6 +518,47 @@ export function tickNpcState(game, npc, clock = game.turn, rng = game.rng) {
     }
 
     return messages;
+}
+
+// ── The mugger (BS1, plans/bs1-ruffian-steals-gold.md) ─────────────────────
+//
+// A hostile spawned with `tag: "mugger"` takes gold instead of dealing damage,
+// once, then runs. The gold moves through transferGold, so your loss is exactly
+// his gain; killing him (the death loot) or thieving him (Thieve Coin) are the
+// existing ways to get it back.
+
+// Placeholder: how much he takes in one go (all you have, if less).
+export const MUG_GP = 10;
+
+export function isMugger(npc) {
+    return !!npc && npc.tag === 'mugger';
+}
+
+// Take gold from the player, if he has not already and there is any to take.
+// Returns the log message, or null when nothing was taken (his turn is then an
+// ordinary attack).
+export function mug(game, npc) {
+    if (!isMugger(npc) || npc._tookGold > 0) return null;
+    const amount = Math.min(MUG_GP, game.gold ?? 0);
+    if (!(amount > 0) || !transferGold(game, npc, amount, 'mugging')) return null;
+    npc._tookGold = amount;
+    return { text: '[TEXT]', sourceEnemy: npc, category: 'combat' };
+}
+
+// One turn on the run. In reach of you (his sight range, all the way round: he
+// is looking over his shoulder) he takes the shipped flee step and stays in the
+// fight. Boxed in, the step is null and he stands still, which is how he is
+// caught. Out of reach he stops and drops out of the fight. Running is the
+// whole turn: no kit, no bought-back HP, so the stolen gold is never burned.
+export function runOff(game, npc) {
+    const reach = npc.sightRange ?? 0;
+    if (chebyshev(npc.x, npc.y, game.playerX, game.playerY) > reach) {
+        npc.state = 'idle';
+        return;
+    }
+    npc.state = 'chasing';
+    const step = fleeStep(game, npc);
+    if (step) stepEntity(npc, step.x, step.y, game._MOVE_MS);
 }
 
 // ── WORKING state ───────────────────────────────────────────────────────────

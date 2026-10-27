@@ -39,7 +39,7 @@ import { pickSlots, defaultPicks, resolveSpawn, requiredDropFor, dropLineFor } f
 import { hasSave, readSaveRaw, writeSave, loadInto, clearSave } from './save.js';
 import { QuestEngine } from './quests.js';
 import { doExamine, resolveExamine } from './examine.js';
-import { recordDrop, pendingDrops, dropLoadout } from './drops.js'; // per-zone runtime dropped-items layer (pure, node-tested)
+import { recordDrop, pendingDrops, takeDrop, dropLoadout, recordKill, stepRespawns, deadIds, bossDropOnce } from './drops.js'; // per-zone runtime dropped-items layer + respawn list (pure, node-tested)
 import {
     HIT_SLOP, throwRects, DOCK, hitHud,
     HOTBAR_X_START, HOTBAR_Y, HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_STRIDE, HOTBAR_SLOTS,
@@ -465,6 +465,13 @@ class Game {
         // (drops.js dedups records so a re-killed respawning boss can't farm it).
         // Persisted.
         this._droppedItems = {};
+        // (plans/ks1-respawn-list.md) Map-placed enemies you killed, per zone
+        // ("mapUrl" → [{ id, age }]). _loadMap leaves them out; each zone change
+        // (_zoneChange) brings a share back. Persisted (left out while empty).
+        this._respawnLists = {};
+        // "url|id" of bosses whose own items already dropped, so a respawned boss
+        // dies with nothing. Persisted (left out while empty).
+        this._bossDropsGiven = new Set();
         this._mapUrl = null;                 // url of the currently-loaded map
         this._cameFrom = null;               // url of the zone you ENTERED this one from (for the pipe-jam)
         this._jammedDoor = null;             // {x,y,toMap,integrity,max,intruders[]} while a door is wedged shut
@@ -596,6 +603,7 @@ class Game {
         this._bindHelpModal();
         this._bindOptionsModal(); // [settings] options/accessibility UI
         this._bindPauseOverlay(); // [settings] turn-based pause overlay
+        this._bindLeaveSave();    // (FX24) hiding or closing the tab saves
 
         // (screen-fill) The touch ACTION button retired: the dock's ✦ opens the
         // wheel on every device (_onCanvasPointerDown), and a tap in the wheel's
@@ -673,7 +681,12 @@ class Game {
         this._endBuybacks();        // (one clock) a buyback lasts until you leave the zone: close the old zone's shelves
         this.enemies = [];
         // (slot registry) A spawn carrying a `slot` becomes this game's pick for it.
-        for (const s of this.map.enemySpawns) this.enemies.push(spawnEnemy(resolveSpawn(s, this.slots), this._muggedIds, this._robbed));
+        // A kill still on this zone's respawn list stays dead (plans/ks1-respawn-list.md).
+        const dead = deadIds(this._respawnLists, url);
+        for (const s of this.map.enemySpawns) {
+            if (dead.has(s.id)) continue;
+            this.enemies.push(spawnEnemy(resolveSpawn(s, this.slots), this._muggedIds, this._robbed));
+        }
 
         // (zone pursuit) Re-inject any hostiles that chased you through the door.
         // They spawn at the door leading back where you came from — visible in
@@ -864,6 +877,41 @@ class Game {
         recordDrop(this._droppedItems, this._mapUrl, type, x, y);
     }
 
+    // A ground item was just taken: if it was a runtime drop, take ONE off its
+    // record (so the rest of a stack on that tile still comes back) and return
+    // true. False means it was an authored spawn, which the caller marks
+    // collected. The pickup paths call it as `_takeDropRecord?.()`, so the
+    // stand-in games tests lift them onto need not carry it.
+    _takeDropRecord(type, x, y) {
+        return takeDrop(this._droppedItems, this._mapUrl, type, x, y);
+    }
+
+    // (plans/ks1-respawn-list.md) One zone change: every remembered kill ages a
+    // step and each zone's list sends a share back. Called just before _loadMap
+    // on a real move between zones — never on a save restore or a new game.
+    _zoneChange() {
+        stepRespawns(this._respawnLists);
+    }
+
+    // (plans/ks1-respawn-list.md) A map-placed enemy died: put it on this zone's
+    // respawn list. Enemies the game spawned on the fly aren't rebuilt from the
+    // map anyway, so they are left off.
+    _rememberKill(enemyObj) {
+        if (!this._mapUrl || !(this.map?.enemySpawns || []).some(s => s && s.id === enemyObj.id)) return;
+        recordKill(this._respawnLists, this._mapUrl, enemyObj.id);
+    }
+
+    // True the first time a boss with its own items (a slot's required item, the
+    // Were-Rat's fur, Pike's rope) dies, false on every later kill of that same
+    // enemy. An enemy with no such items is never written down.
+    _bossFirstFall(enemyObj, required) {
+        const hasItems = (required && ITEMS[required])
+            || (enemyObj.tag === 'wererat_boss' && ITEMS.wererat_fur)
+            || (enemyObj.tag === 'pike_boss' && ITEMS.grappling_hook);
+        if (!hasItems) return true;
+        return bossDropOnce(this._bossDropsGiven, this._mapUrl, enemyObj.id);
+    }
+
     // Mutate a map tile at runtime AND record the change as a diff so the save
     // can re-apply it (the map JSON is re-snapshotted on every _loadMap).
     setTile(x, y, id) {
@@ -898,6 +946,31 @@ class Game {
         if (!opts.force && (this.turn - (this._lastAutosaveTurn ?? -999)) < 5) return;
         this._lastAutosaveTurn = this.turn;
         writeSave(this);
+    }
+
+    // (FX24) A moment a reload must not lose — gear put on, something picked
+    // up, a trade made, a drink drunk — saves now instead of waiting on the
+    // five-turn timer. A map load in flight is left alone: the zone change
+    // saves itself once the new map is in. The flows call it as
+    // `_saveMoment?.()`, so the stand-in games tests lift them onto need not carry it.
+    _saveMoment() {
+        if (this.state === STATE.RESOLVING) return;
+        this.autosave({ force: true });
+    }
+
+    // (FX24) Hiding or closing the tab saves. A fresh run that has not yet
+    // taken a turn or saved leaves the old save on disk, so GAME START pressed
+    // by mistake and a reload can still CONTINUE (see _bindSplash).
+    _saveOnLeave() {
+        if (this.turn === 0 && this._lastAutosaveTurn === -999) return;
+        this._saveMoment();
+    }
+
+    _bindLeaveSave() {
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') this._saveOnLeave();
+        });
+        window.addEventListener('pagehide', () => this._saveOnLeave());
     }
 
     // Forward a game event to the quest engine (and future subscribers, e.g.
@@ -2955,6 +3028,7 @@ class Game {
         this.selectedSlot = -1;
         this.state = STATE.IDLE;
         this._advanceWorld();
+        this._saveMoment?.();   // (FX24) gear on, or eaten / drunk: a reload keeps it
     }
 
     // (Task 9) After a throw resolves, a pullsAggro item (the rock) sends any
@@ -3317,7 +3391,7 @@ class Game {
         // in the bag as spare (swap it in from the GEAR tab). Usables land in the
         // bag and surface on the XMB bar. The log names where the item went.
         const markTaken = () => {
-            this._collectedItems.add(`${this._mapUrl}|${x}|${y}|${gi.type}`);
+            if (!this._takeDropRecord?.(gi.type, x, y)) this._collectedItems.add(`${this._mapUrl}|${x}|${y}|${gi.type}`);
             this.groundItems.splice(idx, 1);
             audio.playSfx('pickup');
         };
@@ -3326,6 +3400,7 @@ class Game {
             this.equipment[def.equipSlot] = def;
             markTaken();
             this._log(`[Equipped ${def.name}.]`, 'pickup');
+            this._saveMoment?.();   // (FX24)
             return;
         }
 
@@ -3335,6 +3410,7 @@ class Game {
         if (cat)                          this._log(`[Took ${def.name} → ${XMB_LABELS[cat]}.]`, 'pickup');
         else if (def.useType === 'equip') this._log(`[Stashed ${def.name} in your bag.]`, 'pickup');
         else                              this._log(`[Took ${def.name}.]`, 'pickup');
+        this._saveMoment?.();   // (FX24)
     }
 
     // Spin the active ring one slot and stamp the spin so the renderer sweeps it.
@@ -3957,6 +4033,7 @@ class Game {
             // new map is in place (the .then() restores IDLE). Prevents acting
             // against the old map mid-fetch.
             this.state = STATE.RESOLVING;
+            this._zoneChange();   // (plans/ks1-respawn-list.md) the respawn lists take a step
             this._loadMap(t.toMap, t.toX, t.toY).then(() => {
                 this._log(`[Entered ${this.map.zoneName}]`);
                 this.state = STATE.IDLE;
@@ -4296,7 +4373,7 @@ class Game {
     }
 
     _tryPickup() {
-        let go = true;
+        let go = true, took = false;
         while (go) {
             go = false;
             const idx = this.groundItems.findIndex(gi => gi.x === this.playerX && gi.y === this.playerY);
@@ -4307,11 +4384,13 @@ class Game {
                 this._log(`[Picked up ${gi.def.name}]`);
                 this.emitGameEvent('item_pickup', { id: gi.def.id });
                 // Remember it so re-entering this zone doesn't respawn it.
-                this._collectedItems.add(`${this._mapUrl}|${gi.x}|${gi.y}|${gi.type}`);
+                if (!this._takeDropRecord?.(gi.type, gi.x, gi.y)) this._collectedItems.add(`${this._mapUrl}|${gi.x}|${gi.y}|${gi.type}`);
                 this.groundItems.splice(idx, 1);
                 go = true;
+                took = true;
             } else { this._log('[Inventory full]'); break; }
         }
+        if (took) this._saveMoment?.();   // (FX24) a reload keeps what you picked up
     }
 
     // An examinable that yields a one-time item (the Red Cape wedged in a grate).
@@ -4331,6 +4410,7 @@ class Game {
         this._log(target.text || `[You take the ${def.name}.]`);
         this._log(`[+ ${def.name}]`, 'pickup');
         audio.playSfx('pickup');
+        this._saveMoment?.();   // (FX24)
         return true;
     }
 
@@ -4571,10 +4651,18 @@ class Game {
             this._muggedIds.add(enemyObj.id);
         }
         enemyObj.loadout = [];
+        // (plans/ks1-respawn-list.md) It stays dead until the zone's respawn list
+        // sends it back.
+        // (Optional-called, like _saveMoment, so the stand-in games tests lift
+        // this method onto need not carry them.)
+        this._rememberKill?.(enemyObj);
         // A spine slot's required item drops from whoever filled the slot (the
         // Sewer's boss drops the converter); rat kills feed the escape waves.
+        // A boss's own items drop only the first time it dies: once it respawns
+        // off the list, beating it again gives nothing new.
         const required = requiredDropFor(enemyObj, this.map?.enemySpawns);
-        if (required && ITEMS[required]) {
+        const firstFall = this._bossFirstFall?.(enemyObj, required) ?? true;
+        if (firstFall && required && ITEMS[required]) {
             this._recordDrop(required, enemyObj.x, enemyObj.y);
             this.groundItems.push({ type: required, x: enemyObj.x, y: enemyObj.y, def: ITEMS[required] });
             this._log(dropLineFor(enemyObj, this.map?.enemySpawns) || `[${ITEMS[required].name} dropped.]`, 'pickup');
@@ -4582,7 +4670,7 @@ class Game {
         // (Remembrance Rings) The Were-Rat also leaves a remembrance — a braided
         // tuft of fur → the Rat Ring (fashioned at Platero). Drop it on a free
         // adjacent tile so it doesn't stack on the converter; persist it (Task 2).
-        if (enemyObj.tag === 'wererat_boss' && ITEMS.wererat_fur) {
+        if (firstFall && enemyObj.tag === 'wererat_boss' && ITEMS.wererat_fur) {
             let fx = enemyObj.x, fy = enemyObj.y;
             for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
                 const tx = enemyObj.x + dx, ty = enemyObj.y + dy;
@@ -4593,7 +4681,7 @@ class Game {
             this._log('[Among the matted fur, one coarse braided tuft stays warm — a remembrance.]', 'pickup');
         }
         // Pike guards his climbing rope with his life — take it off his body.
-        if (enemyObj.tag === 'pike_boss' && ITEMS.grappling_hook) {
+        if (firstFall && enemyObj.tag === 'pike_boss' && ITEMS.grappling_hook) {
             this._recordDrop('grappling_hook', enemyObj.x, enemyObj.y);
             this.groundItems.push({ type: 'grappling_hook', x: enemyObj.x, y: enemyObj.y, def: ITEMS.grappling_hook });
             this._log('[Pike crumples. His big coil of rope — the grappling hook — thuds to the stone.]', 'pickup');
@@ -5369,6 +5457,8 @@ class Game {
         // enemies come back broke, pursuers follow you in).
         this._collectedItems = new Set();
         this._droppedItems = {};
+        this._respawnLists = {};
+        this._bossDropsGiven = new Set();
         this._muggedIds = new Set();
         this._robbed = {};
         this._hot = {};
@@ -5440,6 +5530,7 @@ class Game {
     // with Pike + the grappling hook + the fight out; for now it's a scaffold room
     // with a placeholder scramble-out exit.)
     async _crashToCanyon() {
+        this._zoneChange();
         await this._loadMap('canyon-map.json');
         this.state = STATE.IDLE;
         this._log('[You come to at the bottom of the canyon, ears ringing and the car a write-off. No climbing back up the way you fell.]', 'transition');
@@ -5450,6 +5541,7 @@ class Game {
     // Bridge SUCCESS (alcohol) → ramp over into Downtown. (Phase 4 builds Downtown
     // out + starts Main Quest 2; for now it's a scaffold street.)
     async _rampToDowntown() {
+        this._zoneChange();
         await this._loadMap('downtown-map.json');
         this.state = STATE.IDLE;
         this._log('[You skid to a stop on a Downtown street, the engine ticking as it cools. The real part of town. Now — that delivery.]', 'transition');
@@ -5910,7 +6002,7 @@ class Game {
                     if (msg) this._log(msg);
                     this._refreshGrantedSkills();
                     const usedUp = def.useType === 'self' || def.useType === 'equip';
-                    if (usedUp) { this._removeFromSlot(idx); this._advanceWorld(); }
+                    if (usedUp) { this._removeFromSlot(idx); this._advanceWorld(); this._saveMoment?.(); }
                     break;
                 }
                 case 'drink': {
@@ -5922,6 +6014,7 @@ class Game {
                     }
                     this._removeFromSlot(idx);
                     this._advanceWorld();
+                    this._saveMoment?.();   // (FX24)
                     break;
                 }
                 case 'protect':
@@ -5973,6 +6066,7 @@ class Game {
                 const msg = unequipItem(this, sel.slotKey);
                 if (msg) this._log(msg);
             }
+            this._saveMoment?.();   // (FX24) the GEAR tab's swap survives a reload
             this._deviceSel = null;
             audio.playSfx('menu-confirm');
             this._render();
@@ -6670,6 +6764,8 @@ class Game {
         // touch, with no way back. A zero-delta scroll is the clamp.
         this._offerScrollBy('theirs', 0);
         this._offerScrollBy('yours', 0);
+
+        this._saveMoment?.();   // (FX24) a finished trade survives a reload
 
         // A committed offer can turn the partner hostile -- sewer fare does
         // exactly that. Do not leave the player standing in an offer window
