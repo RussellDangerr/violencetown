@@ -112,10 +112,12 @@ describe('the Tiger\'s Blood Ice Cone — the item', () => {
     });
 
     test('no game code reads it beyond the item and sprite tables', () => {
+        // Plus the one place that hands it out: the diner's ice cone machine,
+        // a row in item-uses.js (plans/ic6-factory-bill-ice-cone-machine.md).
         const dir = url('../game/');
         const readers = readdirSync(dir).filter(f => /\.(js|json)$/.test(f))
             .filter(f => readFileSync(new URL(f, dir), 'utf8').includes(ID));
-        assert.deepEqual(readers.sort(), ['items.js', 'sprites.js']);
+        assert.deepEqual(readers.sort(), ['item-uses.js', 'items.js', 'sprites.js']);
     });
 
     test('examining it on the ground names it and shows [TEXT]', () => {
