@@ -134,6 +134,82 @@
           "gold": 0
         }
       ]
+    },
+    "loops": {
+      "script": "loops",
+      "seed": 2,
+      "finished": true,
+      "reason": null,
+      "fingerprint": "08363eba",
+      "turn": 83,
+      "deaths": 0,
+      "stages": [
+        {
+          "id": "to_carnival",
+          "turns": 14,
+          "deaths": 0,
+          "gold": 0
+        },
+        {
+          "id": "pick_up",
+          "turns": 12,
+          "deaths": 0,
+          "gold": 0
+        },
+        {
+          "id": "equip",
+          "turns": 1,
+          "deaths": 0,
+          "gold": 0
+        },
+        {
+          "id": "drop",
+          "turns": 0,
+          "deaths": 0,
+          "gold": 0
+        },
+        {
+          "id": "to_town",
+          "turns": 9,
+          "deaths": 0,
+          "gold": 0
+        },
+        {
+          "id": "to_factory",
+          "turns": 23,
+          "deaths": 0,
+          "gold": 0
+        },
+        {
+          "id": "fight_green",
+          "turns": 13,
+          "deaths": 0,
+          "gold": 8
+        },
+        {
+          "id": "to_puck",
+          "turns": 11,
+          "deaths": 0,
+          "gold": 0
+        },
+        {
+          "id": "sell_buy",
+          "turns": 0,
+          "deaths": 0,
+          "gold": -1
+        }
+      ],
+      "end": {
+        "bag": [
+          "foil_hat",
+          "latex_gloves",
+          "rock",
+          "cardboard_cuirass",
+          "soap"
+        ],
+        "weapon": "lion_whip",
+        "gold": 7
+      }
     }
   }
 }
