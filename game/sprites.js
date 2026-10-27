@@ -18,7 +18,7 @@ import { dirOf } from './perception.js';
 export const TINY_INK = [63, 38, 49];   // #3F2631, the Tiny packs' outline
 // Sheets already drawn in the Tiny style (or re-outlined by a tool), which the
 // outline pass leaves alone.
-export const TINY_STYLE_SHEETS = new Set(['tinyDungeon', 'tinyTown', 'tinyExtra', 'outlined', 'interior', 'emotes', 'marks', 'ratVariants']);
+export const TINY_STYLE_SHEETS = new Set(['tinyDungeon', 'tinyTown', 'tinyExtra', 'outlined', 'interior', 'emotes', 'marks', 'ratVariants', 'beastVariants']);
 
 export class SpriteSheet {
     // `padding` is the gap (in source pixels) between adjacent cells. Kenney's
@@ -180,6 +180,11 @@ export const SHEETS = {
     // silhouette are the rat's own. Column order is the tool's VARIANTS list.
     // Packed, padding 0. The Carnival's rats draw from it (ENEMY_SPRITES).
     ratVariants:  { src: `${K}/ratVariants_packed.png`, frameW: 16, frameH: 16 },
+
+    // The Tiny Dungeon (Kenney, CC0) grey beast, (4,10), recoloured by the same tool: only its
+    // two greys swapped, the outline and orange tail kept. Column order is the
+    // tool's BEAST_VARIANTS list. Packed, padding 0. Lire draws from it.
+    beastVariants: { src: `${K}/beastVariants_packed.png`, frameW: 16, frameH: 16 },
 
     // Kenney Emote Pack (Pixel, Style 8) — manga impact marks (animation pass
     // §1). A star inside Style 1's white balloon reads as someone SAYING
@@ -520,6 +525,11 @@ export const ENEMY_SPRITES = {
     // Puck gave the knight helm (0,8) back to Boss, which now stands in the
     // Factory too (the Act 2 placeholder boss); (4,8) was free.
     'Puck':       { sheet: 'tinyDungeon', col: 4, row: 8, static: true }, // grey-haired elder
+
+    // Lire, the lion the Lion Whip's "Hire Lire" trick summons (main.js
+    // _spawnSummon). No lion in Tiny Dungeon: the grey beast, (4,10), recoloured
+    // tawny by tools/gen_recolor.py (BEAST_VARIANTS column 0).
+    'Lire': { sheet: 'beastVariants', col: 0, row: 0, static: true },
 
     // Not a person: a puzzleWall growth blocking a sewer pipe.
     'Sludge Bloom': { sheet: 'tinyDungeon', col: 8, row: 2, static: true }, // stone hatch leaking green ooze
