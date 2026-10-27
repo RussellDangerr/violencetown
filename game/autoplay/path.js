@@ -29,6 +29,32 @@ export function pathTo(isOpen, from, to, { maxNodes = 20000 } = {}) {
     return null;
 }
 
+// The arrow presses that walk a menu cursor from rects[from] to rects[to],
+// where `nearest(rects, i, dx, dy)` is the menu's own rule for where one press
+// lands (layout.js nearestRectInDir for the bag). Fewest presses first; null
+// when `to` cannot be reached. The menu decides every hop, so the plan cannot
+// disagree with what the keys do.
+export function cursorPath(rects, from, to, nearest) {
+    if (from === to) return [];
+    const prev = new Map([[from, null]]);
+    const queue = [from];
+    for (let head = 0; head < queue.length; head++) {
+        const cur = queue[head];
+        for (const [dir, dx, dy] of STEPS) {
+            const next = nearest(rects, cur, dx, dy);
+            if (next === cur || next < 0 || prev.has(next)) continue;
+            prev.set(next, { from: cur, dir });
+            if (next === to) {
+                const dirs = [];
+                for (let s = prev.get(next); s; s = prev.get(s.from)) dirs.push(s.dir);
+                return dirs.reverse();
+            }
+            queue.push(next);
+        }
+    }
+    return null;
+}
+
 // The cheapest 4-way route when tiles cost different amounts — the sneak's
 // path, where a tile in someone's sight costs many steps. `costAt(x, y)` is a
 // tile's price, Infinity for closed. Returns { dirs, tiles, cost } (tiles
