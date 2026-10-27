@@ -812,9 +812,12 @@ export const ZONE_TILE_SPRITE_MAP = {
     // replace TENT_STRIPE, red roof shingles that stood in for a tent over all
     // 344 of the carnival's tent cells. (Striped awnings exist too, green/white
     // and orange/white in roguelikeCity_packed.png — still unused.)
-    30: { sheet: 'tinyTown', col: 1, row: 2 },   // CIRCUS_GROUND — packed dirt/sand
+    30: { sheet: 'tinyTown', col: 7, row: 3 },   // CIRCUS_GROUND — stone pavers on grass, a fairground path (its own cell, not the road's)
     32: { sheet: 'tinyTown', col: 2, row: 0 },   // CONFETTI      — grass dotted with orange flowers
-    33: { sheet: 'tinyTown', col: 4, row: 3 },   // SAWDUST       — packed tan dirt
+    // SAWDUST — a rounded dirt patch with a grass rim, Tiny Town's four corner
+    // cells as one 2x2 picture; every sawdust patch on the map is 2x2 from an
+    // even tile, so each one draws whole.
+    33: { sheet: 'tinyTown', quad: [[0, 1], [2, 1], [0, 3], [2, 3]].map(([col, row]) => ({ sheet: 'tinyTown', col, row })) },
     34: { sheet: 'outlined', quad: outlinedQuad('tentGreen'), under: 30 }, // GREEN_TENT
     35: { sheet: 'outlined', quad: outlinedQuad('tentTan'),   under: 30 }, // TAN_TENT
 
