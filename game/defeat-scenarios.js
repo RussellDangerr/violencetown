@@ -68,6 +68,8 @@ export function pickScenario(ctx, scenarios, rand) {
 
 // The scenario table. Consequences are DECLARATIVE data; Game._runScenario
 // interprets them. Seeded with the generic fallback; sewer flavor added in Task 5.
+// No scenario adds a status: the post-defeat debuffs did nothing and were dropped
+// (ruling DFR1); the log's cost line says what a defeat cost instead.
 export const DEFEAT_SCENARIOS = [
     {
         id: 'processed_by_fungus',
@@ -77,7 +79,7 @@ export const DEFEAT_SCENARIOS = [
             // A spore-cell by the soap-mine: the walled pocket south of it, the
             // nearest tile no sewer enemy can see (pinned in tests/fungus-wake-spot.test.js).
             wakeAt: { spot: { x: 12, y: 17 } },
-            hp: 0.5, timeSkip: 'hours', status: 'hunched',
+            hp: 0.5, timeSkip: 'hours',
             take: { categories: ['ambro'], recoverable: false },   // they feast on your food/mushrooms — gone
             log: '[You wake in a spore-cell. Your provisions are gone; the Fungus fed well.]',
         },
@@ -88,7 +90,7 @@ export const DEFEAT_SCENARIOS = [
         weight: 3,
         consequence: {
             wakeAt: null,                            // dumped at the sewer mouth (spawn)
-            hp: 0.6, status: 'rattled',
+            hp: 0.6,
             take: { loot: 'all', recoverable: true, stashAt: { spot: { x: 17, y: 10 } } },
             log: "[The rats rolled you and scampered off with your haul. You'll want it back.]",
         },
@@ -99,7 +101,7 @@ export const DEFEAT_SCENARIOS = [
         weight: 2,
         consequence: {
             wakeAt: { spot: { x: 3, y: 10 } },       // washed downstream
-            hp: 0.5, status: 'sludged',
+            hp: 0.5,
             take: { breakables: true, recoverable: false },
             log: '[The sludge river took you downstream. Your kit is soaked and cracked.]',
         },
@@ -123,9 +125,8 @@ export const DEFEAT_SCENARIOS = [
         consequence: {
             wakeAt: null,             // → _safeRespawnCell (zone entrance/spawn)
             hp: 0.5,
-            status: 'rattled',
             take: { loot: 0.5, recoverable: false },
-            log: '[You come to, beaten and dumped. Some of your things are gone.]',
+            log: '[You come to, beaten and dumped.]',   // the cost line after it says what was taken
         },
     },
 ];

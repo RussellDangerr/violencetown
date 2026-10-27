@@ -15,7 +15,7 @@ import { puddleTiles, layPuddle, puddleAt, dryPuddles } from './puddles.js';   /
 import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef } from './items.js';
 import { WEAPONS, weaponClassOf } from './weapons.js';
 import { resolveItemDef } from './item-registry.js';
-import { tickBuffList, BUFF_DEFS, sumBuffStat, worldBeatPlan } from './buffs.js';
+import { tickBuffList, sumBuffStat, worldBeatPlan } from './buffs.js';
 import { RINGS, FUSIONS } from './ring-data.js';
 import {
     unlockedSlots, resolveAdjacencies, slottedActives, aggregatePassives,
@@ -5271,14 +5271,23 @@ class Game {
         this.playerMp = this.playerMaxMp;
         this.buffs = [];                                       // clean slate (matches _respawn) — no DoT carries past the defeat
         if (c.timeSkip) this._skipTime(c.timeSkip);            // 3. time
-        if (c.status) this.addBuff(c.status, (BUFF_DEFS[c.status] && BUFF_DEFS[c.status].name) || c.status, 6, 'debuff'); // 4. status
-        if (c.take) this._applyTake(c.take);                   // 5. taken
+        // 4. no status: the post-defeat debuffs did nothing and were dropped (ruling DFR1)
+        const cost = c.take ? this._applyTake(c.take) : null;  // 5. taken
         if (c.gift && Array.isArray(c.gift.items)) for (const id of c.gift.items) { const gd = this._resolveItemDef(id); if (gd && !this._addToInventory(gd)) this._log('[No room — you leave it behind.]'); } // 6. given (guard unknown ids + full bag)
         if (c.gift && c.gift.heal) this.playerHp = this.playerMaxHp;
         this._pendingTransition = null;                        // 7. de-aggro + resume (mirror _respawn's tail)
         this._deAggroAll();
         this.state = STATE.IDLE;
         if (c.log) this._log(c.log, 'transition');
+        // The cost line: every item taken and the GP, or that nothing was (DFR1).
+        const lost = ((cost && cost.taken) || []).map(e => {
+            const name = e.itemDef.name || e.itemDef.id;
+            return (e.count | 0) > 1 ? `${name} x${e.count}` : name;
+        });
+        const gp = (cost && cost.takenGold) || 0;
+        this._log(lost.length || gp
+            ? `[Taken: ${lost.length ? lost.join(', ') : 'no items'}. GP taken: ${gp}.]`
+            : '[Nothing was taken.]', 'transition');
         this._render();
         this._resumeHeldWalk();
         this.autosave({ force: true });
@@ -5315,6 +5324,7 @@ class Game {
         if (take.recoverable && taken.length) {
             this._spawnStash(take.stashAt, taken.flatMap(e => Array(Math.max(1, e.count | 0)).fill(e.itemDef.id)), takenGold);
         }
+        return { taken, takenGold };
     }
 
     // Spawn a stash chest of recoverable loot at a reachable tile near `stashAt`.
@@ -5360,7 +5370,6 @@ class Game {
         this.playerHp = this.playerMaxHp; this.playerMp = this.playerMaxMp;
         this.buffs = [];                          // clean slate (matches _respawn)
         this._pendingTransition = null;           // don't ghost-load a queued transition after the retry
-        this.addBuff('rattled', 'Rattled', 6, 'debuff');
         this._deAggroAll();
         this.state = STATE.IDLE;
         this._log('[Down but not out. Regroup and finish it.]', 'transition');

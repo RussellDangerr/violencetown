@@ -143,16 +143,9 @@ export const BUFF_DEFS = {
         },
     },
 
-    // Post-defeat flavor statuses (Outward-style). Temporary + cosmetic — no
-    // per-turn effect; tickBuffList decrements + drops them like any buff. They
-    // read the defeat on the HUD, never a permanent stat cut.
     // (poisons) Fire blood — a rider with no tick. While it AND `fire` last, the
     // bearer's hits set their target burning (Game._spreadFireBlood).
     fire_blood: { name: 'Fire Blood' },
-
-    rattled: { name: 'Rattled' },
-    hunched: { name: 'Hunched' },
-    sludged: { name: 'Sludged' },
 };
 
 // Advance a buff list one turn: fire each still-active buff's onTick, decrement,
