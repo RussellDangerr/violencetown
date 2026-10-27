@@ -30,6 +30,9 @@ export const QUESTS = {
     canyon_escape: {
         id: 'canyon_escape',
         title: 'Out of the Canyon',
+        // (CY1) A branch: only the crash route ever starts it, so the ramp route
+        // leaves it out of the Quests tab's count (getCompletedCount).
+        branch: 'canyon',
         stages: [
             {
                 id: 'find_way_out',
@@ -327,11 +330,29 @@ export class QuestEngine {
     getCompletedTitles() { return this.state.completed.map(id => (QUESTS[id] && QUESTS[id].title) || id); }
     getJournalLines() { return (this.state.journal || []).slice(); }
 
+    // (CY1) Which way you crossed the North bridge: 'canyon' (crashed through),
+    // 'ramp' (sailed over into Downtown), or null (not yet). The arrival code
+    // sets the `bridgeRoute` flag; a save from before that flag existed reads it
+    // from the quests the crossing starts: the Canyon quest only on a crash, the
+    // delivery quest on arriving in Downtown.
+    bridgeRoute() {
+        const f = this.state.flags.bridgeRoute;
+        if (f === 'canyon' || f === 'ramp') return f;
+        const began = (id) => this.isActive(id) || this.isComplete(id);
+        if (began('canyon_escape')) return 'canyon';
+        if (began('deliver_burger')) return 'ramp';
+        return null;
+    }
+
     // Finished quests out of every quest the game defines. Derived from the
     // completed list (already saved), so it needs no saved field of its own.
+    // (CY1) A branch quest on the route you did NOT take is left out of both
+    // numbers; before the bridge is crossed every quest still counts.
     getCompletedCount() {
-        const done = new Set(this.state.completed.filter(id => !!QUESTS[id])).size;
-        return { done, total: Object.keys(QUESTS).length };
+        const route = this.bridgeRoute();
+        const ids = Object.keys(QUESTS).filter(id => !(route && QUESTS[id].branch && QUESTS[id].branch !== route));
+        const done = new Set(this.state.completed.filter(id => ids.includes(id))).size;
+        return { done, total: ids.length };
     }
 
     // (Phase 4 map) The active stage's targetZone — a zoneName the world map
