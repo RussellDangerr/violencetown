@@ -111,6 +111,9 @@ export const SLUDGE_DOT = 5;
 // The bag is two zones: SAFE (indices 0..SAFE_SLOTS-1, kept on defeat) + PACK
 // (SAFE_SLOTS..INVENTORY_SIZE-1, at-risk). Rendered as a grid in the REMOTICON
 // ITEMS tab, no longer coupled to the 9-slot XMB usable-bar. (remoticon-overhaul)
+// (BG1) INVENTORY_SIZE is the STARTING size: a full PACK grows another page of
+// PACK_PAGE slots (one more PACK grid's worth), so the bag never refuses.
 export const INVENTORY_SIZE = 50;
 export const SAFE_SLOTS = 10;
+export const PACK_PAGE = INVENTORY_SIZE - SAFE_SLOTS;
 export const MAX_STACK = 99;

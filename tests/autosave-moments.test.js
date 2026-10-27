@@ -24,8 +24,8 @@ import { writeSave, readSaveRaw, hasSave, loadInto } from '../game/save.js';
 import { ITEMS, resolveUse, unequipItem } from '../game/items.js';
 import { WEAPONS } from '../game/weapons.js';
 import { resolveItemDef } from '../game/item-registry.js';
-import { addToInventory, moveToZone, zoneOf } from '../game/inventory.js';
-import { INVENTORY_SIZE, SAFE_SLOTS, MAX_STACK } from '../game/data.js';
+import { addToInventory, moveToZone, zoneOf, pageCount, slotOnPage, pageOfSlot } from '../game/inventory.js';
+import { INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK } from '../game/data.js';
 import { itemActions, equipOptions } from '../game/inspector.js';
 import { slotRing, unslotRing } from '../game/rings.js';
 import { buildXmbBar, resolveXmbSelection, xmbCategoryOf, XMB_LABELS } from '../game/xmb.js';
@@ -37,7 +37,7 @@ import { applyDispositionDelta, reactToTransaction } from '../game/give-action.j
 import { isHostile } from '../game/ai.js';
 import { dispositionCeil } from '../game/disposition-curves.js';
 import {
-    HIT_SLOP, DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceBagSlotRects,
+    HIT_SLOP, DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceBagSlotRects, deviceBagPagerRects,
     deviceEquipLayout, deviceRingsLayout, inspectorActionRects, gearOptionRects, nearestRectInDir,
     OFFER_ROWS_VISIBLE, OFFER_TRAY_SLOTS,
 } from '../game/layout.js';
@@ -120,9 +120,9 @@ const onDisk = () => JSON.parse(localStorage.getItem(SAVE_KEY));
 
 const FREE = {
     STATE, DIRS, audio, writeSave, hasSave, readSaveRaw, loadInto,
-    resolveUse, unequipItem, addToInv: addToInventory, INVENTORY_SIZE, SAFE_SLOTS, MAX_STACK,
+    resolveUse, unequipItem, addToInv: addToInventory, INVENTORY_SIZE, SAFE_SLOTS, MAX_STACK, PACK_PAGE, pageCount, slotOnPage, pageOfSlot,
     xmbCategoryOf, XMB_LABELS, buildXmbBar, resolveXmbSelection,
-    HIT_SLOP, DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceBagSlotRects,
+    HIT_SLOP, DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceBagSlotRects, deviceBagPagerRects,
     deviceEquipLayout, deviceRingsLayout, inspectorActionRects, gearOptionRects, nearestRectInDir,
     itemActions, equipOptions, zoneOf, moveToZone, slotRing, unslotRing,
     emptyOffer, commitBlocker, stage, unstage, settledGold, resolveOffer, sameEntry,
@@ -150,7 +150,7 @@ const LIVE = [
     ['_buybackRecord', 'npc, itemId, kind, price'], ['_buybackLive', 'npc'], ['_endBuybacks', ''],
     ['_buybackList', 'npc'], ['_buybackConsume', 'npc, itemId'], ['_resettle', 'npc'],
     ['_goldTray', ''], ['_toggleOfferGold', 'npc'], ['_offerScrollBy', 'side, delta'],
-    ['_offerTakeFitsBag', 'taken'], ['_logOffer', 'npc, R, { given, taken, gold }'],
+    ['_logOffer', 'npc, R, { given, taken, gold }'],
     ['_offerTheirsList', ''], ['_offerYoursList', ''], ['_stagedCount', 'side, entry'],
     ['_offerSelection', ''], ['_offerBlocker', ''],
 ].map(([n, p]) => [n, liveMethod(n, p, FREE)]);
@@ -420,14 +420,20 @@ describe('pickups: a reload keeps what you picked up', () => {
         assert.ok(r._collectedItems.has('town-map.json|2|3|soap'));
     });
 
-    test('a full bag picks nothing up and writes nothing', () => {
+    test('a full bag grows a page, picks it up, and a reload keeps the page', async () => {
+        // (BG1) The bag never refuses: a full PACK opens page 2 for the rock.
         const { g } = playing();
         for (let i = 0; i < INVENTORY_SIZE; i++) put(g, i, 'foil_hat');
-        const before = localStorage.getItem(SAVE_KEY);
         g.groundItems.push({ type: 'rock', x: 5, y: 5, def: ITEMS.rock });
         g._tryPickup();
-        assert.equal(g.groundItems.length, 1);
-        assert.equal(localStorage.getItem(SAVE_KEY), before);
+        assert.equal(g.groundItems.length, 0, 'the rock stayed on the ground');
+        assert.equal(g.inventory.length, INVENTORY_SIZE + PACK_PAGE, 'the bag did not grow a page');
+        assert.equal(g.inventory[INVENTORY_SIZE].itemDef.id, 'rock');
+
+        const r = await reload(g);
+        assert.equal(r.inventory.length, INVENTORY_SIZE + PACK_PAGE, 'page 2 was lost on reload');
+        assert.equal(r.inventory[INVENTORY_SIZE]?.itemDef.id, 'rock');
+        assert.equal(count(r, 'foil_hat'), INVENTORY_SIZE);
     });
 });
 

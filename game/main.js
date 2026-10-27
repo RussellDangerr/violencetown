@@ -10,7 +10,7 @@ import { loadAllSprites } from './sprites.js';
 import { BitmapFont } from './bitmap-font.js';
 import { pickHitMark, HEAVY_HIT_DAMAGE } from './hit-splat.js';   // (manga-impact-marks) the mark rule + the heavy threshold
 import { makeEffectLoop } from './effect-loop.js';                 // one tick of the transient-effects loop, and its refusal to die on a bad frame
-import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, MAX_STACK, SLUDGE_DOT } from './data.js';
+import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK, SLUDGE_DOT } from './data.js';
 import { puddleTiles, layPuddle, puddleAt, dryPuddles } from './puddles.js';   // (poisons) Sludge Brain's puddles
 import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef } from './items.js';
 import { WEAPONS, weaponClassOf } from './weapons.js';
@@ -23,7 +23,7 @@ import {
     mergeKnown,   // (ring Task 5) skill-merge helper, relocated from the retired skills.js
 } from './rings.js';
 import { isBoss, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS } from './defeat-scenarios.js';
-import { addToInventory as addToInv, moveToZone, zoneOf } from './inventory.js';
+import { addToInventory as addToInv, moveToZone, zoneOf, pageCount, slotOnPage, pageOfSlot } from './inventory.js';
 import { itemActions, equipOptions, inspectorUsesRect } from './inspector.js';   // (C1) tap-to-inspect: context actions; (C2) GEAR chooser options
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
@@ -45,7 +45,7 @@ import {
     HOTBAR_X_START, HOTBAR_Y, HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_STRIDE, HOTBAR_SLOTS,
     WHEEL_HUB_R, wheelRingR, LOG_MODAL_RECT, targetListRowRect, itemOverlayRowRect,
     EQUIPMENT_MODAL_RECT, EQUIP_SLOT_RECTS,
-    DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceBagSlotRects, deviceEquipLayout, deviceRingsLayout,
+    DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceBagSlotRects, deviceBagPagerRects, deviceEquipLayout, deviceRingsLayout,
     inspectorActionRects, gearOptionRects, nearestRectInDir,
     xmbBarLayout,
     // (offer screen) the one panel every modal shares, its geometry, and the two
@@ -375,8 +375,11 @@ class Game {
         this._offerCursor = null;        // keyboard cursor: { side, index } (Task 13 moves it)
         this._dispositionDecayTurns = 0; // (Phase 6c) actions since the last mood nudge
 
-        // Inventory: INVENTORY_SIZE slots (SAFE 0..9 + PACK 10..49), each { itemDef, count } or null
+        // Inventory: INVENTORY_SIZE slots (SAFE 0..9 + PACK 10..49), each { itemDef, count } or null.
+        // (BG1) A full PACK grows another page of PACK_PAGE slots; _bagPage is
+        // the PACK page the bag screen shows (0-based).
         this.inventory = new Array(INVENTORY_SIZE).fill(null);
+        this._bagPage = 0;
         this.selectedSlot = -1; // -1 = none selected
 
         // Item overlay options (populated when overlay shows)
@@ -4345,7 +4348,8 @@ class Game {
     // ── Inventory ────────────────────────────────────────────────────────────
 
     _addToInventory(itemDef) {
-        return addToInv(this.inventory, itemDef, { size: INVENTORY_SIZE, safeSlots: SAFE_SLOTS, maxStack: MAX_STACK });
+        // (BG1) The bag grows: a full PACK adds a page, so this never refuses.
+        return addToInv(this.inventory, itemDef, { size: this.inventory.length, safeSlots: SAFE_SLOTS, maxStack: MAX_STACK, pageSize: PACK_PAGE });
     }
 
     _removeFromSlot(slot) {
@@ -5495,7 +5499,8 @@ class Game {
         this._ratFormTurns = 0;
         this._lastHitTarget = null;
         this._lastDefeatedBy = null;
-        this.inventory.fill(null);
+        this.inventory = new Array(INVENTORY_SIZE).fill(null);   // (BG1) a new game starts on one page
+        this._bagPage = 0;
         this.tempEquips = [];
         this.selectedSlot = -1;
         this.equipment = { weapon: WEAPONS.wooden_sword, left: null, top: null, bottom: null, front: null, back: null, sides: null };
@@ -5882,6 +5887,7 @@ class Game {
         if (this.state !== STATE.IDLE && this.state !== STATE.DEVICE) return;
         this._deviceTab = DEVICE_TABS.includes(tab) ? tab : 'items';
         this._deviceSel = null;   // (C1) a fresh open starts with no inspector selection
+        this._bagPage = 0;        // (BG1) the bag opens on its first page
         this.state = STATE.DEVICE;
         audio.playSfx('menu-open');
         this._render();
@@ -5935,10 +5941,20 @@ class Game {
                 const uses = this._deviceUsesRect?.(sel.index);
                 if (uses && this._pointInRect(pt, uses, HIT_SLOP)) { this._deviceActivate('action', 'uses'); return; }
             }
-            // 2) Otherwise a slot tap: SELECT a filled slot, clear on an empty one.
+            // 2) (BG1) The page arrows either side of the PACK, once it has grown.
+            if (pageCount(this.inventory.length, { safeSlots: SAFE_SLOTS, pageSize: PACK_PAGE }) > 1) {
+                const pager = deviceBagPagerRects(body);
+                if (this._pointInRect(pt, pager.prev, HIT_SLOP)) { this._deviceActivate('page', -1); return; }
+                if (this._pointInRect(pt, pager.next, HIT_SLOP)) { this._deviceActivate('page', 1); return; }
+            }
+            // 3) Otherwise a slot tap: SELECT a filled slot, clear on an empty one.
+            // A screen position maps to the slot it shows on the current page.
             const rects = deviceBagSlotRects(body);
             for (let i = 0; i < rects.length; i++) {
-                if (this._pointInRect(pt, rects[i], HIT_SLOP)) { this._deviceActivate('slot', i); return; }
+                if (this._pointInRect(pt, rects[i], HIT_SLOP)) {
+                    this._deviceActivate('slot', slotOnPage(i, this._bagPage || 0, { safeSlots: SAFE_SLOTS, pageSize: PACK_PAGE }));
+                    return;
+                }
             }
             return;
         }
@@ -5983,6 +5999,23 @@ class Game {
             this._render();
             return;
         }
+        if (zone === 'page') {
+            // (BG1) Step the bag's PACK page by `index` (-1 / +1), clamped. A
+            // cursor standing on a PACK slot keeps its spot on the screen; one
+            // on the SAFE row stays put, since SAFE shows on every page.
+            const pc = { safeSlots: SAFE_SLOTS, pageSize: PACK_PAGE };
+            const was = this._bagPage || 0;
+            const page = Math.max(0, Math.min(pageCount(this.inventory.length, pc) - 1, was + index));
+            if (page === was) return;
+            this._bagPage = page;
+            const sel = this._deviceSel;
+            if (sel && sel.tab === 'items' && pageOfSlot(sel.index, pc) >= 0) {
+                this._deviceSel = { tab: 'items', index: sel.index + (page - was) * PACK_PAGE };
+            }
+            audio.playSfx('menu-tick');
+            this._render();
+            return;
+        }
         if (zone === 'slot') {
             if (this.inventory[index]) {
                 this._deviceSel = { tab: 'items', index };
@@ -6000,7 +6033,7 @@ class Game {
             const def = this.inventory[sel.index].itemDef;
             const action = itemActions(def, zoneOf(sel.index, SAFE_SLOTS))[index];
             if (!action) return;
-            const cfg = { size: INVENTORY_SIZE, safeSlots: SAFE_SLOTS, maxStack: MAX_STACK };
+            const cfg = { size: this.inventory.length, safeSlots: SAFE_SLOTS, maxStack: MAX_STACK, pageSize: PACK_PAGE };
             const idx = sel.index;
             this._deviceSel = null;   // selection resolves this frame; the panel drops
             switch (action.id) {
@@ -6139,8 +6172,10 @@ class Game {
                     return { zone: 'action', rects, ids, cur: Math.min(sel.action, rects.length - 1) };
                 }
             }
+            // (BG1) The cursor walks the slots of the page on screen.
             const rects = deviceBagSlotRects(body);
-            return { zone: 'slot', rects, ids: rects.map((_, i) => i), cur: sel && sel.tab === 'items' ? sel.index : -1 };
+            const ids = rects.map((_, i) => slotOnPage(i, this._bagPage || 0, { safeSlots: SAFE_SLOTS, pageSize: PACK_PAGE }));
+            return { zone: 'slot', rects, ids, cur: sel && sel.tab === 'items' ? ids.indexOf(sel.index) : -1 };
         }
         if (tab === 'gear') {
             if (sel && sel.tab === 'gear' && sel.open) {
@@ -6190,6 +6225,11 @@ class Game {
         if (code === 'KeyJ') { this._deviceTab = 'quests'; this._deviceSel = null; this._render(); return; }
         if (code === 'KeyM') { this._deviceTab = 'map';    this._deviceSel = null; this._render(); return; }
         if (code === 'KeyR') { this._deviceTab = 'rings';  this._deviceSel = null; this._render(); return; }
+        // (BG1) , / . and PageUp / PageDown turn the bag's PACK page.
+        if (this._deviceTab === 'items') {
+            const step = { Comma: -1, PageUp: -1, Period: 1, PageDown: 1 }[code];
+            if (step) { this._deviceActivate('page', step); return; }
+        }
         const dir = DIRS[code];
         if (this._deviceTab === 'quests') {
             if (dir && dir.dy) this._scrollJournal(-dir.dy);
@@ -6416,30 +6456,6 @@ class Game {
         return list[sel.index] || null;
     }
 
-    // Would the whole take side fit in the bag?
-    //
-    // Simulated against a lightweight copy of the stack counts rather than the
-    // real inventory, because this runs from the DRAW path. Mirrors
-    // inventory.addToInventory exactly: top up a matching stack under maxStack
-    // first, else take a free slot.
-    _offerTakeFitsBag(taken) {
-        const stacks = [];
-        for (let i = 0; i < INVENTORY_SIZE; i++) {
-            const st = this.inventory[i];
-            stacks.push(st && st.itemDef ? { id: st.itemDef.id, count: st.count } : null);
-        }
-        for (const e of taken || []) {
-            for (let n = 0; n < e.count; n++) {
-                const top = stacks.findIndex(s => s && s.id === e.def.id && s.count < MAX_STACK);
-                if (top >= 0) { stacks[top].count++; continue; }
-                const free = stacks.findIndex(s => !s);
-                if (free < 0) return false;
-                stacks[free] = { id: e.def.id, count: 1 };
-            }
-        }
-        return true;
-    }
-
     // Scroll one column by `delta` rows, clamped to the list. The single writer
     // for _offer.scroll, so the pointer, the wheel and the keyboard cannot
     // disagree about the bounds.
@@ -6505,7 +6521,8 @@ class Game {
         return commitBlocker(npc, this._offer, {
             playerGold: this.gold ?? 0,
             npcGold: npc.gold ?? 0,
-            bagFull: !this._offerTakeFitsBag(this._offer && this._offer.take),
+            // (BG1) There is no bag-full blocker: the bag grows a page instead
+            // of refusing, so whatever is staged on the take side always fits.
             // (fence) Two questions offer.js asks and cannot answer itself.
             stolenFrom: (id) => (this._robbed[npc.id]?.items ?? []).includes(id),
             isHot: (id) => (this._hot[id] ?? 0) > 0,
@@ -6705,11 +6722,11 @@ class Game {
         // FIRST, for the same reason the bag does.
         for (const e of [...taken].sort((a, b) => (b.index ?? 0) - (a.index ?? 0))) {
             for (let n = 0; n < e.count; n++) {
-                // Last line of defence. _offerBlocker refuses a full bag before
-                // any gold moves, so this should be unreachable -- but taking
-                // the return seriously is what stops a chest being spliced into
-                // a bag that refused the item, which loses it from the world
-                // with no gold trail and no log.
+                // Last line of defence. The bag grows a page rather than refuse
+                // (BG1), so this should be unreachable -- but taking the return
+                // seriously is what stops a chest being spliced into a bag that
+                // refused the item, which loses it from the world with no gold
+                // trail and no log.
                 if (!this._addToInventory(e.def)) { this._log('[Your bag is full.]'); break; }
                 if (e.source === 'contents')      this._takeFromContainer(npc, e.index);
                 // Taking a buyback row CONSUMES its credit. The retired

@@ -504,6 +504,25 @@ export function deviceBagSlotRects(bodyRect) {
     return rects;
 }
 
+// (BG1) Once the bag has grown past one PACK page: a page arrow either side of
+// the PACK grid (prev on the left, next on the right), vertically centred on
+// it, and the "page/pages" label's anchor at the right end of the PACK label
+// line. The arrows sit PAGER_GAP clear of the grid, which is more than
+// 2*HIT_SLOP, so an arrow's tap zone and a slot's can never overlap. Drawn by
+// renderer._drawHotbar and hit-tested by main._tapDevice from this one helper.
+const PAGER_W = 28, PAGER_H = 48, PAGER_GAP = 14;
+export function deviceBagPagerRects(bodyRect) {
+    const rects = deviceBagSlotRects(bodyRect);
+    const left = rects[10].x, right = rects[19].x + rects[19].w;
+    const top = rects[10].y, bottom = rects[49].y + rects[49].h;
+    const y = Math.round(top + (bottom - top - PAGER_H) / 2);
+    return {
+        prev:  { x: left - PAGER_GAP - PAGER_W, y, w: PAGER_W, h: PAGER_H },
+        next:  { x: right + PAGER_GAP,          y, w: PAGER_W, h: PAGER_H },
+        label: { x: right, y: top - 12 },
+    };
+}
+
 // The inspector panel sits below the bag grid (which ends ~y382) in the lower
 // band of the device body — it MUST NOT overlap the bag slots. Enforced by
 // tests/device-layout.test.js.
