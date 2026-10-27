@@ -579,13 +579,32 @@ export function deviceEquipLayout(bodyRect) {
 // current catalog gives ≤2 (one equip item + Bare); a slot that ever gained many
 // items would need this uncapped column capped or scrolled. Pinned by
 // tests/device-layout.test.js.
+//
+// (FX11) The rows live inside gearChooserRect, whose top edge sits below the
+// HEAD plate's bottom edge — the panel and its title band, not just the rows,
+// clear the plate. Pinned by tests/gear-chooser.test.js.
+const GEAR_ROW_W = 200, GEAR_ROW_H = 26, GEAR_ROW_GAP = 12;
+const GEAR_PANEL_PAD = 8, GEAR_PANEL_HEAD = 30, GEAR_PANEL_FOOT = 12, GEAR_PANEL_CLEAR = 6;
 export function gearOptionRects(bodyRect, n) {
-  const w = 200, x = bodyRect.x + (bodyRect.w - w) / 2;
-  const rowH = 26, gap = 12;
-  const y0 = bodyRect.y + 60;
+  const p = gearChooserRect(bodyRect, n);
+  const x = p.x + GEAR_PANEL_PAD, y0 = p.y + GEAR_PANEL_HEAD;
   const rects = [];
-  for (let i = 0; i < n; i++) rects.push({ x, y: y0 + i * (rowH + gap), w, h: rowH });
+  for (let i = 0; i < n; i++) rects.push({ x, y: y0 + i * (GEAR_ROW_H + GEAR_ROW_GAP), w: GEAR_ROW_W, h: GEAR_ROW_H });
   return rects;
+}
+
+// The GEAR chooser's titled panel: a centred column starting just below the
+// HEAD plate (the plate above it), tall enough for a title band and `n` rows.
+// renderer._drawGearPicker draws it; gearOptionRects lays the rows inside it.
+export function gearChooserRect(bodyRect, n) {
+  const w = GEAR_ROW_W + 2 * GEAR_PANEL_PAD;
+  const head = deviceEquipLayout(bodyRect).slots.find(s => s.key === 'top');
+  const y = head ? Math.ceil(head.y + head.h) + GEAR_PANEL_CLEAR : bodyRect.y + 30;   // whole px, so the edges stay crisp
+  // No rows: the title band and one line for the empty note.
+  const h = n > 0
+    ? GEAR_PANEL_HEAD + n * GEAR_ROW_H + (n - 1) * GEAR_ROW_GAP + GEAR_PANEL_FOOT
+    : GEAR_ROW_H + GEAR_PANEL_FOOT;
+  return { x: bodyRect.x + (bodyRect.w - w) / 2, y, w, h };
 }
 
 // (Remembrance Rings, Task 5) The SKILLS tab body IS THE HANDS — two hands split
