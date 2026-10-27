@@ -45,22 +45,28 @@ so all three stand in the area. The names are placeholders until Caelan names th
 - `game/enemies.js`: an enemy carries its `examine` text and keeps it through a save.
 - `game/sprites.js`: three `ENEMY_SPRITES` rows, picked from the Tiny Dungeon sheet (no new
   art files, no recolour tool).
+- `game/examine.js`: a creature with examine text of its own says it, on E and on the Target
+  List / tap alike; any other creature keeps the generic line.
+- `tools/balance-harness.mjs`: a slot's unpicked pool entry is not listed again when its map
+  already shows it, so each frozen creature is one bench row and the frozen faucet is their
+  three wallets.
 - `game/frozen-map.json`: three spawns in the `frozen.mob` slot, seats 0 to 2, on open snow
   away from both doors.
 - `tests/frozen-creatures.test.js`: the slot and its deal, the spawns, the art, the weakness
-  rows, the copied numbers, and the bench rows.
+  rows, the copied numbers, examine on both paths, and the bench rows.
+- `tests/balance-harness.test.js`: a mob slot's creatures are listed once, and no pool entry
+  dodges the bench.
 
 ## Out of scope
 
 - Real names, examine copy, barks, lore and loot beyond the copied kit.
 - New art or recolours (no tint mechanism exists in `sprites.js`; a recolour needs a new sheet
   file).
-- Showing the examine text: the examine ladder lives in `game/examine.js`, outside this
-  slice's files. See below.
 - Respawn tuning and any quest beat in the frozen area.
 
-## Open while building
+## A ruling taken while building
 
-- Examine shows one generic line for every creature today, from `game/examine.js`. Showing a
-  creature's own `[TEXT]` needs that file, which is outside this slice's files, so it is asked
-  as a ruling.
+The first pass found two gaps outside its files: examine printed one generic line for every
+creature (`game/examine.js`), and the bench listed each frozen creature twice, doubling the
+area's faucet, because it assumed every slot has one pick per game (`tools/balance-harness.mjs`).
+The pick was to widen the slice to both files and fix both here.

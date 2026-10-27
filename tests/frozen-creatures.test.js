@@ -15,7 +15,9 @@ import { ENEMY_SPRITES } from '../game/sprites.js';
 import { weaknessesOf, resistancesOf } from '../game/elements.js';
 import { elementalMult } from '../game/combat.js';
 import { GameMap } from '../game/map.js';
-import { loadMapRoster } from '../tools/balance-harness.mjs';
+import { loadMapRoster, report } from '../tools/balance-harness.mjs';
+import { resolveExamine, doExamine } from '../game/examine.js';
+import { TILES } from '../game/data.js';
 
 const GAME = join(dirname(fileURLToPath(import.meta.url)), '..', 'game');
 const raw = (f) => JSON.parse(readFileSync(join(GAME, f), 'utf8'));
@@ -173,6 +175,64 @@ describe('the examine text in a save', () => {
     });
 });
 
+describe('examining a creature', () => {
+    // main.js boots on DOMContentLoaded and cannot be imported under node, so the
+    // live _fireResolver (the Target List / tap path) is lifted out of its source
+    // and run against a recording stand-in for the Game (the tests/examine.test.js
+    // pattern).
+    const mainSrc = readFileSync(join(GAME, 'main.js'), 'utf8');
+    const at = mainSrc.indexOf('_fireResolver(verb, t) {');
+    const end = '\n    }';
+    const body = mainSrc.slice(at + '_fireResolver'.length, mainSrc.indexOf(end, at) + end.length);
+    const fire = new Function('STATE', 'resolveExamine', `'use strict'; return function ${body}`)({ IDLE: 'idle' }, resolveExamine);
+
+    const view = (enemies) => {
+        const g = {
+            examinables: [], enemies, containers: [], groundItems: [],
+            playerX: 0, playerY: 0, facing: 'down',
+            map: { getTile: () => TILES.FLOOR.id, isInBounds: () => true, propSpawns: [] },
+            logs: [], panels: [],
+        };
+        g._log = (t) => g.logs.push(t);
+        g.emitGameEvent = () => {};
+        g._openInspect = (d) => g.panels.push(d);
+        return g;
+    };
+    const tap = (g, npc) => fire.call(g, { resolver: 'examine' }, { npc, item: null, examinable: null, container: null, x: npc.x, y: npc.y });
+
+    test('tapping a hostile frozen creature (Target List) shows its own text', () => {
+        for (const e of spawnedWith(defaultPicks())) {
+            assert.equal(e.allegiance, 'hostile');
+            const g = view([e]);
+            tap(g, e);
+            assert.deepEqual(g.logs, ['[TEXT]'], e.type);
+            assert.equal(g.panels[0].body, '[TEXT]');
+            assert.equal(g.panels[0].title, e.name);
+        }
+    });
+
+    test('E on a non-hostile creature with its own text shows that text', () => {
+        const [e] = spawnedWith(defaultPicks());
+        e.allegiance = 'neutral';
+        e.x = 0; e.y = 1;                      // the tile the player faces
+        const g = view([e]);
+        doExamine(g);
+        assert.deepEqual(g.logs, ['[TEXT]']);
+    });
+
+    test('a creature with no text of its own keeps the generic line, hostile or not', () => {
+        const rat = spawnEnemy({ id: 'r', type: 'Rat', x: 0, y: 1, hp: 100 });
+        assert.equal(rat.examine, null);
+        const g = view([rat]);
+        tap(g, rat);
+        assert.deepEqual(g.logs, ['[Rat. Looks like trouble.]']);
+        rat.allegiance = 'neutral';
+        const g2 = view([rat]);
+        doExamine(g2);
+        assert.deepEqual(g2.logs, ['[Rat. Minding their own business.]']);
+    });
+});
+
 describe('the balance bench', () => {
     test('lists all three in the frozen area, with their copied numbers', () => {
         const rows = loadMapRoster().filter(r => r.zone === 'frozen');
@@ -182,5 +242,13 @@ describe('the balance bench', () => {
             const entry = Object.values(ENTRIES).find(e => e.type === t);
             assert.deepEqual([row.hp, row.armor, row.damage, row.gold], [entry.hp, entry.armor, entry.damage, entry.gold]);
         }
+    });
+
+    test('lists each once, and the frozen faucet is their three wallets', () => {
+        const rows = loadMapRoster().filter(r => r.zone === 'frozen');
+        assert.deepEqual(rows.map(r => r.type).sort(), [...TYPES].sort());
+        const wallets = POOL.reduce((s, id) => s + ENTRIES[id].gold, 0);
+        assert.equal(wallets, 34);
+        assert.match(report(), /^frozen +34$/m);
     });
 });
