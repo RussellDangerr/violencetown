@@ -337,6 +337,30 @@ DIALOGUES.crat = {
 DIALOGUES.crat_side_a = cratSide('a');
 DIALOGUES.crat_side_b = cratSide('b');
 
+// ── The Factory's unpaid bill (plans/ic6-factory-bill-ice-cone-machine.md) ──
+// The manager holds the diner's ice cone machine part until the bill is paid.
+// The dialogue `cost` refuses the choice when you hold less and otherwise moves
+// exactly this much to him. Paid is a quest flag, which the save keeps.
+export const FACTORY_BILL_GP = 100;   // ICR5
+const billPaid = (g) => !!(g && g.questEngine && g.questEngine.state && g.questEngine.state.flags.factoryBillPaid);
+
+DIALOGUES.factory_manager = {
+    name: '[Factory Manager]',
+    greeting: '[TEXT]',
+    choices: [
+        { id: 'bill', label: '[TEXT]', repeatable: true,
+          available: (g) => !billPaid(g),
+          reply: '[TEXT]' },
+        { id: 'pay', label: `[TEXT - ${FACTORY_BILL_GP} GP]`, repeatable: true, cost: FACTORY_BILL_GP,
+          available: (g) => !billPaid(g),
+          onPick: (g) => { if (g.questEngine) g.questEngine.state.flags.factoryBillPaid = true; },
+          reply: '[TEXT]' },
+        { id: 'paid', label: '[TEXT]', repeatable: true,
+          available: (g) => billPaid(g),
+          reply: '[TEXT]' },
+    ],
+};
+
 export function getDialogue(id) {
     return DIALOGUES[id] || null;
 }

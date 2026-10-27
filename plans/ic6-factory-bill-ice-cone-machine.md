@@ -23,7 +23,7 @@ to the diner, and the machine makes you a Tiger's Blood Ice Cone (the item from 
 
 ## How it works
 
-- **The manager** stands in the Factory, placed in `game/factory-map.json`. He reuses the
+- **The manager** stands in the Factory, placed in `game/factory-map.json`. He uses the
   crowd's look (`Violencian`), so no new art. His name is the placeholder `[Factory Manager]`
   and every line he says is `[TEXT]`.
 - **The bill** is a dialogue choice whose `cost` is `FACTORY_BILL_GP` (100), exported from
@@ -32,15 +32,23 @@ to the diner, and the machine makes you a Tiger's Blood Ice Cone (the item from 
   while the bill is unpaid, and paying sets the quest flag `factoryBillPaid`. The quest flags
   are saved, so a reload keeps the paid bill. (A `once` choice would not survive a reload.)
 - **The part** is a new item, `[Ice Cone Machine Part]`, with the placeholder description
-  `[TEXT]`. It is not for sale, so its value is the 0 every unsellable item uses.
+  `[TEXT]`. It is not for sale, so its value is the 0 every unsellable item uses. It is a quest
+  item, so it can't be sold, given away or lost. Paying hands it over; if your bag is full, a
+  follow-up choice hands it over later, so a paid bill never loses the part.
 - **The machine** is an examinable on the diner counter, `[TEXT]` when examined. Holding the
   part, you use it on the machine; the part is spent and the cone goes in your bag.
 
-## Status: blocked on three files the card does not list
+## Status: blocked on files the card does not list
 
-Built so far (inside the card's files): the manager, his dialogue, and paying the bill.
+Built so far (inside the card's files): the manager's dialogue and paying the bill, tested in
+`tests/ice-cone-machine.test.js` against main.js's own dialogue code.
 
-Not built, because each needs a file outside the card's list:
+Not built, because each needs something outside the card's list:
+
+0. **The manager standing in the Factory.** Placing him (planned at tile 24,8, the open floor
+   north-east of the Factory's east door) adds one row to the balance harness's enemy table,
+   so `tools/balance-golden.txt` drifts by exactly that row and `npm test` fails until the
+   golden is accepted. A golden moves only on a ruling.
 
 1. **The part item.** `tests/visual-breakage.test.js` pins the exact list of items that draw as
    the plain bag, so a new item without a picture fails it. Either that list grows by the part,
