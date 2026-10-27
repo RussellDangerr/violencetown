@@ -3,7 +3,7 @@
     "width": 9,
     "height": 8,
     "spawn": {"x": 4, "y": 5},
-    "zoneName": "FIRST BLOOD BANK",
+    "zoneName": "[TEXT]",
     "tiles": [
         14,14,14,14,14,14,14,14,14,
         14,11,11,11,11,11,11,11,14,
