@@ -142,6 +142,7 @@ async function connect(port) {
 // over the protocol, as a player presses F5, and waits on the next page's
 // answer. The cap stops a run that keeps asking.
 const MAX_RELOADS = 3;
+const SHOT_WAIT_MS = 2000;
 
 async function runOnce(cdp, base, o) {
     const q = new URLSearchParams({ autoplay: '1', seed: String(o.seed), script: o.script, driver: 'cdp' });
@@ -170,7 +171,12 @@ async function runOnce(cdp, base, o) {
     let capturing = !!o.gif;
     const capture = (async () => {
         while (capturing) {
-            const shot = await cdp.send('Page.captureScreenshot', { format: 'png' }).catch(() => null);
+            // A screenshot asked for while the page reloads can go unanswered;
+            // give up on that frame rather than wait on it for ever.
+            const shot = await Promise.race([
+                cdp.send('Page.captureScreenshot', { format: 'png' }).catch(() => null),
+                sleep(SHOT_WAIT_MS).then(() => null),
+            ]);
             if (shot) frames.push(Buffer.from(shot.data, 'base64'));
             await sleep(o.frameMs);
         }
