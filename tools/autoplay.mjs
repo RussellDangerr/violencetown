@@ -4,6 +4,8 @@
 //   node tools/autoplay.mjs [--seed=1] [--script=car|quest|sneak|loops] [--repeat=1] [--jitter] [--clock=real] [--json] [--timeout=120000]
 //   node tools/autoplay.mjs --check | --write          quest, sneak and loops against tools/autoplay-golden.json
 //   node tools/autoplay.mjs --script=quest --speed=3 --gif=run.gif [--frameMs=250]
+//   node tools/autoplay.mjs --script=loops --break=player.gold    spoil a save field across the
+//                                                                  reload: the run must fail
 //
 // Serves game/ itself, drives the installed Chrome over the DevTools protocol
 // (Node's built-in WebSocket — no dependencies), and prints one line per run.
@@ -30,12 +32,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function parseArgs(argv) {
     const o = { seed: 1, script: 'car', repeat: 1, jitter: false, clock: 'virtual', json: false, timeout: 120000,
-                speed: 0, check: false, write: false, gif: null, frameMs: 250 };
+                speed: 0, check: false, write: false, gif: null, frameMs: 250, break: null };
     for (const a of argv) {
         const [k, v] = a.replace(/^--/, '').split('=');
         if (k === 'seed') o.seedGiven = true;
         if (['seed', 'repeat', 'timeout', 'speed', 'frameMs'].includes(k)) o[k] = Number(v);
-        else if (k === 'script' || k === 'clock' || k === 'gif') o[k] = v;
+        else if (k === 'script' || k === 'clock' || k === 'gif' || k === 'break') o[k] = v;
         else if (k === 'jitter' || k === 'json' || k === 'check' || k === 'write') o[k] = true;
         else throw new Error(`unknown option ${a}`);
     }
@@ -135,18 +137,35 @@ async function connect(port) {
     return { send, once, on: (l) => listeners.add(l), close: () => ws.close() };
 }
 
+// A run whose script reloads the page (the loops run, plans/al2-loops-reload-continue.md)
+// answers { reload: true } instead of a report. The driver reloads the page
+// over the protocol, as a player presses F5, and waits on the next page's
+// answer. The cap stops a run that keeps asking.
+const MAX_RELOADS = 3;
+
 async function runOnce(cdp, base, o) {
-    const q = new URLSearchParams({ autoplay: '1', seed: String(o.seed), script: o.script });
+    const q = new URLSearchParams({ autoplay: '1', seed: String(o.seed), script: o.script, driver: 'cdp' });
     if (o.clock === 'real') q.set('clock', 'real');
     if (o.jitter) q.set('jitter', '1');
+    if (o.break) q.set('break', o.break);
     q.set('speed', String(o.speed));
     const loaded = cdp.once('Page.loadEventFired');
     await cdp.send('Page.navigate', { url: `${base}/?${q}` });
     await loaded;
-    const evaluation = cdp.send('Runtime.evaluate', {
+    const answer = () => cdp.send('Runtime.evaluate', {
         expression: 'window.__autoplay ? window.__autoplay.done : { ok: false, reason: "boot.js never installed" }',
         awaitPromise: true, returnByValue: true,
     });
+    const evaluation = (async () => {
+        for (let reloads = 0; ; reloads++) {
+            const out = await answer();
+            if (!out.result?.value?.reload) return out;
+            if (reloads >= MAX_RELOADS) return { result: { value: { ok: false, reason: `asked to reload more than ${MAX_RELOADS} times` } } };
+            const next = cdp.once('Page.loadEventFired');
+            await cdp.send('Page.reload', { ignoreCache: true });
+            await next;
+        }
+    })();
     const frames = [];
     let capturing = !!o.gif;
     const capture = (async () => {

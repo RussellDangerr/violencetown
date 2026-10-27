@@ -52,6 +52,10 @@ export const SCRIPTS = {
             { label: 'to_puck', meet: 'puck' },
             { label: 'sell_buy', shop: { npc: 'puck', sell: 'wooden_sword', buy: 'rock' } },
         ],
+        // plans/al2-loops-reload-continue.md: after the trading, reload the
+        // page, CONTINUE on the title, and lose nothing. It is scored as a
+        // stage of its own, and the checks below run on the reloaded game.
+        reloadAfter: 'sell_buy',
         expect: (g, deals) => {
             const bag = g.inventory.filter(Boolean).map((s) => s.itemDef.id);
             const miss = [];
@@ -73,6 +77,8 @@ const BEAT_MS = 200;            // game time after every action — identical wa
 const STAGE_TURN_BUDGET = 1500;   // room for a dozen attempts at a boss, each a walk back from the spawn
 const MAX_WAITS = 60;
 const MENU_WATCH_MS = 400;      // real time a watched run holds on each bag / offer key (menuPress)
+const TITLE_WATCH_MS = 1500;    // ...and on the title, before and after CONTINUE
+const RELOAD_STAGE = 'reload_continue';   // the stage a script's reload is scored as
 // Ruling Q1-10: after a defeat the player goes back and tries again, and stops
 // only when an attempt changed nothing — see `standing` below. The cap is a
 // backstop against a slow bleed that never ends, not the rule.
@@ -93,21 +99,44 @@ export async function run(ap) {
     };
     if (watching) { window.addEventListener('keydown', stop, true); window.addEventListener('pointerdown', stop, true); }
 
+    // The run so far, when this page is the one after a reload (boot.js
+    // carried it): the script picks up at its reload step, on the title.
+    const back = ap.resumed || null;
     let outcome = { finished: false, failure: null, stages: [] };
     const script = SCRIPTS[ap.opts.script];
     try {
         if (!script) throw new Error(`no script named "${ap.opts.script}"`);
-        document.getElementById('splash-go').click();
-        await d.settle();
-        await g._fullReset({ seed: ap.opts.seed });
-        await d.settle();
-        outcome = script.route ? await d.playRoute(script.route, script.knobs)
-            : script.steps ? await d.playSteps(script) : await d.playOps(script);
+        if (back) outcome = await d.playSteps(script, back);
+        else {
+            document.getElementById('splash-go').click();
+            await d.settle();
+            await g._fullReset({ seed: ap.opts.seed });
+            await d.settle();
+            outcome = script.route ? await d.playRoute(script.route, script.knobs)
+                : script.steps ? await d.playSteps(script) : await d.playOps(script);
+        }
     } catch (e) {
         outcome = { ...outcome, failure: String((e && e.stack) || e) };
     }
 
-    const errors = [...ap.errors];
+    const virtualMs = ap.clock ? (back?.virtualMs ?? 0) + ap.clock.now() - vt0 : null;
+    const realMs = Math.round((back?.realMs ?? 0) + ap.real.now() - t0);
+    if (outcome.reload) {
+        // The script reloads here. The game saves as the page goes; the next
+        // page reads the carry and plays on from this step. tools/autoplay.mjs
+        // does the reload over the DevTools protocol; a person watching in a
+        // browser has no driver, so the page does it itself.
+        ap.carryOnLeave({ ...outcome.reload, deaths: d.deaths(), trace: d.trace(), errors: [...ap.errors], virtualMs, realMs });
+        if (watching) {
+            window.removeEventListener('keydown', stop, true);
+            window.removeEventListener('pointerdown', stop, true);
+            label.textContent = 'AUTOPLAY · reloading the page';
+        }
+        if (!ap.opts.driven) ap.real.setTimeout(() => location.reload(), 0);
+        return { ok: true, reload: true, seed: ap.opts.seed, script: ap.opts.script };
+    }
+
+    const errors = [...(back?.errors || []), ...ap.errors];
     const report = {
         ok: outcome.finished && !outcome.failure && errors.length === 0,
         finished: outcome.finished,
@@ -115,17 +144,16 @@ export async function run(ap) {
         seed: ap.opts.seed, script: ap.opts.script, clock: ap.opts.clock,
         fingerprint: fingerprint(g),
         turn: g.turn,
-        deaths: d.deaths(),
+        deaths: (back?.deaths ?? 0) + d.deaths(),
         quest: { id: g.questEngine.state.activeId, stage: g.questEngine.state.stageIndex },
         at: { map: g._mapUrl, x: g.playerX, y: g.playerY },
         stages: outcome.stages,
         // What a steps run ends holding; the golden keeps it (ruling AL1R1).
         end: script && script.steps ? endState(g) : null,
-        virtualMs: ap.clock ? ap.clock.now() - vt0 : null,
-        realMs: Math.round(ap.real.now() - t0),
+        virtualMs,
+        realMs,
         errors,
-        trace: d.trace(),
-        log: (g._logHistory || []).slice(-40).map((l) => l.text),
+        trace: [...(back?.trace || []), ...d.trace()].slice(-300),        log: (g._logHistory || []).slice(-40).map((l) => l.text),
         // Where everything stood when an unfinished run gave up — what a
         // "no way to …" needs to be read.
         scene: outcome.finished ? null : {
@@ -224,6 +252,39 @@ function endState(g) {
         weapon: g.equipment.weapon?.id ?? null,
         gold: g.gold,
     };
+}
+
+// What a reload through CONTINUE must give back (plans/al2-loops-reload-continue.md):
+// the bag slot by slot, every worn slot, the gold, the quest and its stage,
+// and where the player stands.
+export function keptState(g) {
+    const worn = {};
+    for (const [slot, def] of Object.entries(g.equipment || {})) worn[slot] = def?.id ?? null;
+    const q = g.questEngine?.state || {};
+    return {
+        bag: (g.inventory || []).flatMap((s, i) => (s ? [`${i}:${s.itemDef.id} x${s.count}`] : [])),
+        worn,
+        gold: g.gold,
+        quest: { id: q.activeId ?? null, stage: q.stageIndex ?? null },
+        at: { map: g._mapUrl ?? null, x: g.playerX, y: g.playerY },
+    };
+}
+
+// Every way `after` differs from `before`, as "field: was -> now". The bag is
+// compared whole, so one moved item reads as one line.
+export function reloadLosses(before, after) {
+    const show = (v) => (v === undefined ? 'missing' : JSON.stringify(v));
+    const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    const out = [];
+    for (const k of Object.keys(before)) {
+        const was = before[k], now = after?.[k];
+        if (was && typeof was === 'object' && !Array.isArray(was)) {
+            for (const f of new Set([...Object.keys(was), ...Object.keys(now || {})])) {
+                if (!same(was[f], now?.[f])) out.push(`${k}.${f}: ${show(was[f])} -> ${show(now?.[f])}`);
+            }
+        } else if (!same(was, now)) out.push(`${k}: ${show(was)} -> ${show(now)}`);
+    }
+    return out;
 }
 
 // How far the bar's throwable reaches (wheel-model aimRange: the item's own
@@ -623,10 +684,41 @@ function driver(ap, g) {
         return null;
     }
 
-    // Each step is scored as it is played: turns, deaths, gold.
-    async function playSteps(script) {
-        const stages = [];
-        for (const s of script.steps) {
+    // The title after a reload: CONTINUE is pressed with Space, the key a
+    // player presses there, and the save loads. Then everything `before`
+    // noted must be as it was.
+    async function continueFromTitle(before) {
+        const button = document.getElementById('splash-continue');
+        if (g.state !== 'splash' || !button || button.classList.contains('hidden')) return `the title offers no CONTINUE (state "${g.state}")`;
+        if (ap.opts.speed > 0) await realSleep(TITLE_WATCH_MS);
+        key('keydown', 'Space');
+        key('keyup', 'Space');
+        for (let t = 0; g.state === 'splash' || busy(); t += FRAME_MS) {
+            if (t > 5000) return `CONTINUE never finished loading (state "${g.state}")`;
+            await tick();
+        }
+        if (ap.opts.speed > 0) { await realSleep(TITLE_WATCH_MS); paceReal = null; }
+        const lost = reloadLosses(before, keptState(g));
+        return lost.length ? `not as it was after CONTINUE: ${lost.join('; ')}` : null;
+    }
+
+    // Each step is scored as it is played: turns, deaths, gold. The step named
+    // by `reloadAfter` ends this page's part: it hands back what to carry, and
+    // the next page calls in again with it (`back`), CONTINUEs, and plays on.
+    async function playSteps(script, back = null) {
+        const stages = back ? [...back.stages] : [];
+        if (back) {
+            deals.push(...back.deals);
+            const rec = { id: RELOAD_STAGE, turns: 0, deaths: 0, gold: 0 };
+            stages.push(rec);
+            const d0 = deaths;
+            const failure = await continueFromTitle(back.before);
+            Object.assign(rec, { turns: g.turn - back.turn, deaths: deaths - d0, gold: g.gold - back.gold });
+            if (failure) return { finished: false, failure: `${RELOAD_STAGE}: ${failure}`, stages };
+            await idle(BEAT_MS);
+        }
+        for (let i = back ? back.at : 0; i < script.steps.length; i++) {
+            const s = script.steps[i];
             const rec = { id: s.label, turns: 0, deaths: 0, gold: 0 };
             stages.push(rec);
             const t0 = g.turn, g0 = g.gold, d0 = deaths;
@@ -638,6 +730,9 @@ function driver(ap, g) {
             Object.assign(rec, { turns: g.turn - t0, deaths: deaths - d0, gold: g.gold - g0 });
             if (failure) return { finished: false, failure: `${s.label}: ${failure}`, stages };
             await idle(BEAT_MS);
+            if (!back && s.label === script.reloadAfter) {
+                return { stages, reload: { at: i + 1, stages, deals: [...deals], before: keptState(g), turn: g.turn, gold: g.gold } };
+            }
         }
         const miss = script.expect(g, deals);
         return { finished: !miss, failure: miss, stages };
