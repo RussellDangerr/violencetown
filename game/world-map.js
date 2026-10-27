@@ -44,6 +44,7 @@ export const INTERIOR_PARENT = {
     BORGIR: 'TOWN',
     DINER: 'DOWNTOWN',
     'FIRST BLOOD BANK': 'DOWNTOWN',
+    '[TEXT]': 'DOWNTOWN',   // the bank's vault (vault-map.json); its name is still a placeholder
     CASINO: 'DOWNTOWN',
 };
 
