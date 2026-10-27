@@ -42,6 +42,7 @@
         {"id": "alien-ally-2", "entry": "alien_ally", "x": 6, "y": 23},
         {"id": "alien-ally-3", "entry": "alien_ally", "x": 3, "y": 24},
         {"id": "green1", "gold": 8, "loadout": ["hot_dog", "foil_hat", "latex_gloves", "cardboard_cuirass", "soap"], "type": "Greedy Green", "x": 14, "y": 14, "hp": 100, "armor": 3, "damage": 9, "disposition": -50, "flipThreshold": 30, "bribeable": true, "values": {"rock": 5, "soap": 3, "bandage": 4}, "behavior": ["IDLE", "WANDER"], "wanderRadius": 4, "wanderEveryTurns": 3, "adjacencyBark": "[Greedy Green: BZZT — UNAUTHORIZED. THE GOO IS MINE.]"},
+        {"id": "factory-manager", "type": "Violencian", "name": "[Factory Manager]", "x": 24, "y": 8, "hp": 100, "armor": -80, "damage": 0, "sightRange": 4, "disposition": 0, "behavior": ["IDLE"], "dialogueId": "factory_manager"},
         {"id": "puck", "type": "Puck", "x": 8, "y": 14, "hp": 100, "armor": -30, "damage": 1, "disposition": 60, "flipThreshold": 0, "bribeable": true, "vendor": true, "stock": ["bandage", "hot_dog", "boardwalk_burger", "soap", "rock", "sludge_sack", "pipe", "health_poition", "mana_poition"], "values": {"rock": 1, "soap": 4, "bandage": 3, "hot_dog": 2}, "behavior": ["IDLE"], "adjacencyBark": "[Puck: Buyin'? Sellin'? Both, I'll bet — smart. Step up to the till — press E.]"}
     ],
     "items": [

@@ -393,6 +393,21 @@ export const ITEMS = {
         fallbackColor: '#e84537',
         baseValue: 0,
     },
+    // The Factory manager hands it over once the bill is paid; used on the
+    // diner's ice cone machine it is spent and the machine makes the cone
+    // (plans/ic6-factory-bill-ice-cone-machine.md). Not `questItem`: the item
+    // overlay refuses quest items, and "use this on that" lives there. Lost
+    // before it is used, the manager hands over another.
+    ice_cone_machine_part: {
+        id: 'ice_cone_machine_part',
+        name: '[Ice Cone Machine Part]',
+        description: '[TEXT]',
+        category: 'quest',
+        useType: 'none',
+        consumable: false,
+        fallbackColor: '#9a9a9a',
+        baseValue: 0,
+    },
     grappling_hook: {
         id: 'grappling_hook',
         name: '[Grappling Hook]',

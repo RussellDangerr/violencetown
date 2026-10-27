@@ -64,6 +64,27 @@ export const ITEM_USES = [
             game._interactCar();
         },
     },
+    {
+        // The diner's ice cone machine, fixed with the part the Factory manager
+        // holds until his bill is paid (plans/ic6-factory-bill-ice-cone-machine.md).
+        // The part is spent and the machine makes one Tiger's Blood Ice Cone.
+        id: 'part-in-ice-cone-machine',
+        item: 'ice_cone_machine_part',
+        match: (t) => !!t.examinable && t.examinable.id === 'diner_ice_cone_machine',
+        label: '[TEXT]',
+        apply: (game, t, ctx) => {
+            // The part comes out first, so a full bag still has room for the cone.
+            game._removeFromSlot(ctx.slot);
+            game.selectedSlot = -1;
+            if (!game._grantItem('tigers_blood_ice_cone', '[TEXT]')) {
+                game._grantItem('ice_cone_machine_part');   // no cone, so the part is not spent
+                return;
+            }
+            const flags = game.questEngine?.state?.flags;
+            if (flags) flags.iceConeMachineFixed = true;
+            game._advanceWorld();
+        },
+    },
 ];
 
 // Every authored use that applies right now, for `itemDef` in the player's hand.

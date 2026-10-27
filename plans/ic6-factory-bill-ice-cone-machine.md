@@ -23,42 +23,38 @@ to the diner, and the machine makes you a Tiger's Blood Ice Cone (the item from 
 
 ## How it works
 
-- **The manager** stands in the Factory, placed in `game/factory-map.json`. He uses the
-  crowd's look (`Violencian`), so no new art. His name is the placeholder `[Factory Manager]`
-  and every line he says is `[TEXT]`.
+- **The manager** stands in the Factory at tile 24,8, the open floor north-east of the east
+  door (`game/factory-map.json`). He uses the crowd's look (`Violencian`), so no new art. His
+  name is the placeholder `[Factory Manager]` and every line he says is `[TEXT]`.
 - **The bill** is a dialogue choice whose `cost` is `FACTORY_BILL_GP` (100), exported from
   `game/dialogue.js`. The existing dialogue code refuses the choice when you hold less, and
   otherwise moves exactly that much gold to him. The choice is repeatable but offered only
   while the bill is unpaid, and paying sets the quest flag `factoryBillPaid`. The quest flags
   are saved, so a reload keeps the paid bill. (A `once` choice would not survive a reload.)
 - **The part** is a new item, `[Ice Cone Machine Part]`, with the placeholder description
-  `[TEXT]`. It is not for sale, so its value is the 0 every unsellable item uses. It is a quest
-  item, so it can't be sold, given away or lost. Paying hands it over; if your bag is full, a
-  follow-up choice hands it over later, so a paid bill never loses the part.
-- **The machine** is an examinable on the diner counter, `[TEXT]` when examined. Holding the
-  part, you use it on the machine; the part is spent and the cone goes in your bag.
+  `[TEXT]`. It is not for sale, so its value is the 0 every unsellable item uses, and it draws
+  as the plain bag until it has a picture. Paying hands it over.
+- **The part is not a `questItem`.** The item overlay refuses quest items outright ("Best hold
+  onto that."), and "use this on that" lives in that overlay, so a quest item could never be
+  used on the machine. In exchange it can be lost like any item (dying, giving it away). So the
+  manager owes you the part while the bill is paid, the machine is still broken, and the part
+  is not in your bag: a `collect` choice hands over another, free. That also covers a bag that
+  was full when you paid.
+- **The machine** is an examinable on the diner counter at tile 5,2 (`[TEXT]` when examined),
+  stood in front of from 5,3. The counter tiles are already solid, so it blocks no path.
+  Holding the part, you use it on the machine through one row in `game/item-uses.js`
+  (`part-in-ice-cone-machine`): the part is spent, the cone goes in your bag, the quest flag
+  `iceConeMachineFixed` is set, and it costs the turn. The part comes out of the bag first,
+  so a full bag still has room for the cone; if the cone can't be handed over, the part is
+  given back and nothing is spent.
 
-## Status: blocked on files the card does not list
+## The second ruling (IC6R1, pick a)
 
-Built so far (inside the card's files): the manager's dialogue and paying the bill, tested in
-`tests/ice-cone-machine.test.js` against main.js's own dialogue code.
-
-Not built, because each needs something outside the card's list:
-
-0. **The manager standing in the Factory.** Placing him (planned at tile 24,8, the open floor
-   north-east of the Factory's east door) adds one row to the balance harness's enemy table,
-   so `tools/balance-golden.txt` drifts by exactly that row and `npm test` fails until the
-   golden is accepted. A golden moves only on a ruling.
-
-1. **The part item.** `tests/visual-breakage.test.js` pins the exact list of items that draw as
-   the plain bag, so a new item without a picture fails it. Either that list grows by the part,
-   or `game/sprites.js` gets a picture for it (an art pick).
-2. **The machine handing you the cone.** `tests/ice-cone.test.js` asserts that no game code
-   names the cone outside the item and sprite tables. Any code that gives you the cone names it,
-   so that test has to change, in its own commit saying the behaviour changed.
-3. **Using the part on the machine.** The game's "use this on that" path is a row in
-   `game/item-uses.js`. The alternative inside the card's files is handing the part to the Cook
-   in conversation.
+The card's files were too narrow. IC6R1 widened them: the balance golden gains exactly the
+manager's row, `tests/visual-breakage.test.js` lists the part among the items that draw as the
+bag, `tests/ice-cone.test.js` allows `item-uses.js` to name the cone, and `game/item-uses.js`
+carries the machine's row. Each test change is its own commit saying the behaviour changed,
+and the golden is its own commit citing the ruling.
 
 ## Out of scope
 

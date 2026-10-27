@@ -341,8 +341,18 @@ DIALOGUES.crat_side_b = cratSide('b');
 // The manager holds the diner's ice cone machine part until the bill is paid.
 // The dialogue `cost` refuses the choice when you hold less and otherwise moves
 // exactly this much to him. Paid is a quest flag, which the save keeps.
+//
+// Paying hands the part over. A paid bill never loses it: while the machine is
+// still broken and the part is not in your bag (a full bag when you paid, or
+// lost since), `collect` hands over another. The machine's flag is set by its
+// row in item-uses.js.
 export const FACTORY_BILL_GP = 100;   // ICR5
-const billPaid = (g) => !!(g && g.questEngine && g.questEngine.state && g.questEngine.state.flags.factoryBillPaid);
+export const MACHINE_PART = 'ice_cone_machine_part';
+const flagsOf = (g) => (g && g.questEngine && g.questEngine.state && g.questEngine.state.flags) || {};
+const billPaid = (g) => !!flagsOf(g).factoryBillPaid;
+const holdsPart = (g) => (g.inventory || []).some(s => s && s.itemDef && s.itemDef.id === MACHINE_PART);
+const partOwed = (g) => billPaid(g) && !flagsOf(g).iceConeMachineFixed && !holdsPart(g);
+const handOverPart = (g) => { if (g._grantItem) g._grantItem(MACHINE_PART, '[TEXT]'); };
 
 DIALOGUES.factory_manager = {
     name: '[Factory Manager]',
@@ -353,10 +363,17 @@ DIALOGUES.factory_manager = {
           reply: '[TEXT]' },
         { id: 'pay', label: `[TEXT - ${FACTORY_BILL_GP} GP]`, repeatable: true, cost: FACTORY_BILL_GP,
           available: (g) => !billPaid(g),
-          onPick: (g) => { if (g.questEngine) g.questEngine.state.flags.factoryBillPaid = true; },
+          onPick: (g) => {
+              if (g.questEngine) g.questEngine.state.flags.factoryBillPaid = true;
+              handOverPart(g);
+          },
+          reply: '[TEXT]' },
+        { id: 'collect', label: '[TEXT]', repeatable: true,
+          available: (g) => partOwed(g),
+          onPick: (g) => handOverPart(g),
           reply: '[TEXT]' },
         { id: 'paid', label: '[TEXT]', repeatable: true,
-          available: (g) => billPaid(g),
+          available: (g) => billPaid(g) && !partOwed(g),
           reply: '[TEXT]' },
     ],
 };
