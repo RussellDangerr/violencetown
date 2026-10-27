@@ -93,6 +93,7 @@ import * as Settings from './settings.js'; // [settings] options/accessibility s
 import { fighters, joiners } from './fight-area.js';                                     // (fight-fog) who is in the fight
 import { fightStartKind, entranceFor, fightFxActive } from './fight-entrance.js'; // (fight-fog) how it began, and how long its fog moves
 import { createCascade, CASCADE_BEAT_MS, LUNGE_MS } from './cascade.js';           // (turn-model C1) the enemy phase, one actor at a time
+import { makeBurst, liveBursts } from './loot-burst.js';                            // (FX3b) a kill's loot bursts out and flies to you
 
 // Chebyshev (king-move) distance — used by the wheel reticle's range clamp.
 const cheb = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
@@ -425,6 +426,8 @@ class Game {
         // array is empty, so the game returns to its idle 4fps redraw cadence.
         this._damageNumbers = [];
         this._particleLoopRunning = false;
+        // (FX3b) Loot bursts in the air: pure show, the items are already bagged.
+        this._lootBursts = [];
 
         // Player hit-flash + stagger — short-lived visual feedback when
         // damage lands on the player. Timestamps are performance.now()
@@ -658,6 +661,7 @@ class Game {
         // so the HP bar has caught up before you arrive.
         this._cascade?.flush();
         this._damageNumbers = [];
+        this._lootBursts = [];
         this.playerX = spawnX ?? this.map.spawn.x;
         this.playerY = spawnY ?? this.map.spawn.y;
 
@@ -4738,6 +4742,15 @@ class Game {
         return left;
     }
 
+    // (FX3b) Start the burst that shows a kill's loot flying from the body at
+    // (x, y) to you, one icon per item. Nothing waits on it. An ally's kill in a
+    // cascaded enemy phase bursts on that ally's beat, like its K.O. word.
+    _startLootBurst(x, y, defs) {
+        if (this._cascadeActor && this._cascade?.defer(this._cascadeActor, () => this._startLootBurst(x, y, defs))) return;
+        this._lootBursts.push(makeBurst(x, y, defs.map(d => ({ id: d.id, icon: d.icon })), performance.now()));
+        this._ensureParticleLoop();
+    }
+
     // (Remembrance Rings) Platero's craft: consume a remembrance material from
     // the bag and grant its ring. Wired from Platero's dialogue choice (onPick).
     // Self-guarding: no material in the bag → nothing is consumed; already own the
@@ -5814,6 +5827,7 @@ class Game {
             this._damageNumbers = this._damageNumbers.filter(
                 dn => now - dn.bornAt < dn.maxAge
             );
+            this._lootBursts = liveBursts(this._lootBursts, now);   // (FX3b) landed bursts go
             this._cascade?.tick(now);   // (C1) play the blows whose beat has come
             if (frame.tick()) requestAnimationFrame(loop);
         };
@@ -5825,6 +5839,7 @@ class Game {
     // because the enemy count is small (single digits typically).
     _hasActiveEffects() {
         if (this._damageNumbers.length > 0) return true;
+        if (this._lootBursts?.length > 0) return true;   // (FX3b) loot still in the air
         if (this._cascade?.pending()) return true;   // (C1) blows still waiting for their beat
         const now = performance.now();
         if ((this._playerHitFlashUntil ?? 0) > now) return true;
