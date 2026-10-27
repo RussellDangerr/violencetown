@@ -16,7 +16,13 @@ and stepping out both log the bank's name and the dock header never changes. Giv
 
 ## Rulings it rests on
 
-None. The name itself is Caelan's to give; this slice only makes room for it.
+- **FX40R1, option a** (picked by the loop under Caelan's standing delegation): widen the slice to
+  `tests/finale-gate.test.js` and `game/world-map.js`. The finale-gate test "it is part of the
+  bank" becomes "the vault has its own name", in a commit of its own that says the behaviour
+  changed. `INTERIOR_PARENT` maps the vault's placeholder name to DOWNTOWN, so the world map's
+  "you are here" still lands Downtown while the player is in the vault.
+
+The name itself is Caelan's to give; this slice only makes room for it.
 
 ## What else reads `zoneName`
 
@@ -30,15 +36,10 @@ None. The name itself is Caelan's to give; this slice only makes room for it.
   bank's.
 - The balance harness does not read `zoneName`.
 
-## Status: blocked
+## Status
 
-Trying the one-line change showed two files outside this slice's `touches` must change with it:
-
-1. `tests/finale-gate.test.js` — "it is part of the bank" pins the old behaviour and goes red.
-2. `game/world-map.js` — without an `INTERIOR_PARENT` entry for the new name, content-integrity
-   warns and the world map loses "you are here" while the player stands in the vault.
-
-The slice waits on a ruling to widen `touches` to those two files.
+Unblocked by FX40R1. Touches: `game/vault-map.json`, `game/world-map.js`,
+`tests/finale-gate.test.js`, and the new `tests/vault-zone-name.test.js`.
 
 ## Out of scope
 
