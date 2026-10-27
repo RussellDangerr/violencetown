@@ -111,8 +111,9 @@ describe('the vault room', () => {
         assert.equal(bank.getTransition(t.toX, t.toY), null);
     });
 
-    test('it is part of the bank', () => {
-        assert.equal(vault.zoneName, bank.zoneName);
+    test('the vault has its own name', () => {
+        assert.ok(vault.zoneName, 'the vault names its zone');
+        assert.notEqual(vault.zoneName, bank.zoneName);
     });
 });
 
