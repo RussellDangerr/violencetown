@@ -179,6 +179,9 @@ export class Enemy {
         // (plans/t1-tag-layer.md) Shared-vocabulary tags (tags.js). Not the
         // free-form `tag` above. Nothing reads them for an effect yet.
         tags = null,
+        // (plans/ic4-frozen-creatures.md) This creature's own examine text, from
+        // its registry entry.
+        examine = null,
     }) {
         this.id         = id;
         this.type       = type;
@@ -278,6 +281,7 @@ export class Enemy {
         this.sewerDweller  = !!sewerDweller;
         this.slot          = slot;
         this.tags          = Array.isArray(tags) ? [...tags] : [];
+        this.examine       = examine;
 
         // Debuffs / buffs — symmetric with Game.buffs[] on the player side
         // (DoTs, fear, the poition riders), ticked by the same BUFF_EFFECTS table.
@@ -350,6 +354,8 @@ export class Enemy {
             slot: this.slot || undefined,
             // Same rule: an untagged enemy saves byte-identically to before tags.
             tags: this.tags.length ? [...this.tags] : undefined,
+            // Same rule: a creature with no examine text of its own saves as before.
+            examine: this.examine || undefined,
             // runtime
             state: this.state, fsmState: this.fsmState, lastWanderTurn: this._lastWanderTurn,
             // (perception ladder) so a save taken mid-hunt reloads mid-hunt.

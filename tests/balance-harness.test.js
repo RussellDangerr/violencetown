@@ -6,6 +6,7 @@ import { ttk, ttdOf, pegRate, lintEntity, lintSkills, loadMapRoster, report, tri
 import { SPELLS } from '../game/spells.js';
 import { TRICKS } from '../game/tricks.js';
 import { ITEMS } from '../game/items.js';
+import { SLOTS, ENTRIES } from '../game/slots.js';
 
 // A minimal roster entry — spread over to vary one field at a time.
 // A COMPLIANT baseline spawn — every lint must pass on this, so it has to satisfy
@@ -68,6 +69,24 @@ describe('harness math', () => {
         const roster = loadMapRoster();
         assert.ok(roster.length > 0);
         assert.ok(roster.every(e => e.zone && e.type));
+    });
+    // (plans/ic4-frozen-creatures.md) A mob slot has no pick, but its map deals
+    // every pool entry to a seat, so each entry is a map row and must not be
+    // listed again as an unpicked pool row (that doubled the zone's faucet).
+    test('a mob slot\'s creatures are listed once each, as the map rows', () => {
+        const frozen = loadMapRoster().filter(e => e.zone === 'frozen');
+        assert.deepEqual(frozen.map(e => e.type).sort(), ['Polar Bear', 'Snowman', 'Yeti']);
+        assert.ok(frozen.every(e => !String(e.id).startsWith('frozen.mob:')), 'a pool row came back');
+    });
+    test('no pool entry dodges the bench: every one is a row in its slot\'s zone', () => {
+        const roster = loadMapRoster();
+        for (const [slotId, slot] of Object.entries(SLOTS)) {
+            const zone = slot.map.slice(0, -'-map.json'.length);
+            for (const { entry } of slot.pool) {
+                assert.ok(roster.some(e => e.zone === zone && e.type === ENTRIES[entry].type),
+                    `${slotId}: ${entry} is not on the bench`);
+            }
+        }
     });
     test('REFERENCE_DAMAGE is the act-1 anchor', () => assert.equal(REFERENCE_DAMAGE, 20));
     test('ttd is "-" for a 0-damage entity — 0 means the hit does not happen', () => {

@@ -9,6 +9,7 @@
 // map and the death handler never learn its name.
 
 import { RNG } from './rng.js';
+import { weaknessesOf, resistancesOf } from './elements.js';
 
 // The registry: the stat block a map spawn used to carry, minus its id and place.
 export const ENTRIES = {
@@ -106,7 +107,39 @@ export const ENTRIES = {
         armor: 3,
         damage: 9,
     },
+    // The frozen area's mooks (plans/ic4-frozen-creatures.md), its `frozen.mob`
+    // pool. Each copies the fight numbers and kit of the nearest existing enemy,
+    // and its weakness row is the chart's `cold` row (elements.js).
+    // Copied from the Graveyard's Rattling Skeleton, whose art it shares.
+    snowman: frozenMob('Snowman', {
+        gold: 4, loadout: ['rock', 'pipe', 'foil_hat', 'shoe_bags'], hp: 100, armor: 0, damage: 8,
+    }),
+    // Copied from the Sewer's Fungus King, whose art it shares.
+    yeti: frozenMob('Yeti', {
+        gold: 20,
+        loadout: ['tunnel_mushroom', 'tunnel_mushroom', 'sludge_sack', 'sludge_sack', 'boardwalk_burger', 'foil_hat', 'defence_poition', 'soap'],
+        hp: 100, armor: 6, damage: 12,
+    }),
+    // Copied from the Sewer's Red Fungus, the tier between the other two.
+    polar_bear: frozenMob('Polar Bear', {
+        gold: 10,
+        loadout: ['mystery_meat', 'mystery_meat', 'mystery_meat', 'tunnel_mushroom', 'sludge_sack', 'fire_blood', 'defence_poition'],
+        hp: 100, armor: 3, damage: 10,
+    }),
 };
+
+// One frozen-area mook: its numbers, the chart's cold row, and placeholder
+// name and examine text.
+function frozenMob(type, numbers) {
+    return {
+        type,
+        name: `[${type}]`,
+        ...numbers,
+        weak: weaknessesOf('cold'),
+        resist: resistancesOf('cold'),
+        examine: '[TEXT]',
+    };
+}
 
 function alienInvasion() {
     const e = { ...placeholderBoss(), name: 'Alien Invasion' };
@@ -169,7 +202,19 @@ export const SLOTS = {
         requiredDrop: 'act2_item_c',
         pool: [{ entry: 'the_deity', weight: 1 }],
     },
+    // A mob slot (spine SL-6) holds mooks, not an anchor: see dealDeck below.
+    'frozen.mob': {
+        kind: 'mob',
+        map: 'frozen-map.json',
+        pool: [
+            { entry: 'snowman', weight: 1 },
+            { entry: 'yeti', weight: 1 },
+            { entry: 'polar_bear', weight: 1 },
+        ],
+    },
 };
+
+const isMob = (slot) => slot?.kind === 'mob';
 
 // What the log calls an entry that has no `name` of its own (keyed by type).
 const LABELS = { Wererat: 'Were-Rat' };
@@ -196,26 +241,68 @@ function pickFrom(pool, rng) {
     return pool[pool.length - 1].entry;
 }
 
-// One entry per slot, the same for the same seed. Slots are walked in a fixed
-// (sorted) order so adding one slot cannot reshuffle the picks of another
-// declared before it in the object.
+// One entry per anchor slot, the same for the same seed. Slots are walked in a
+// fixed (sorted) order so adding one slot cannot reshuffle the picks of another
+// declared before it in the object. A mob slot is not an anchor: it gets a deck
+// instead (dealDeck), on a stream of its own, so adding one moves no anchor.
 export function pickSlots(seed, slots = SLOTS) {
     const rng = new RNG((seed ^ SLOT_SALT) >>> 0);
     const picks = {};
-    for (const id of Object.keys(slots).sort()) picks[id] = pickFrom(slots[id].pool, rng);
+    for (const id of Object.keys(slots).sort()) {
+        if (!isMob(slots[id])) picks[id] = pickFrom(slots[id].pool, rng);
+    }
+    for (const id of Object.keys(slots).sort()) {
+        if (isMob(slots[id])) picks[id] = dealDeck(slots[id].pool, new RNG((seed ^ SLOT_SALT ^ hashId(id)) >>> 0));
+    }
     return picks;
 }
 
-// Today's content: the first entry of every pool. What a save written before
-// slots existed loads, and what a slot with no saved pick falls back to.
+// FNV-1a over a slot id: each mob slot's deck draws from its own stream.
+function hashId(id) {
+    let h = 0x811C9DC5;
+    for (const ch of String(id)) {
+        h ^= ch.charCodeAt(0);
+        h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return h >>> 0;
+}
+
+// A mob slot (spine SL-6) holds mooks, rolled per spawn rather than picked once
+// per game. Its pool is shuffled like a deck, weighted, with no repeats; each
+// mob spawn names a `seat`, its place in the deal (wrapping past the end). So a
+// map with a seat per entry shows every entry, in an order that changes from
+// game to game.
+function dealDeck(pool, rng) {
+    const left = pool.slice();
+    const deck = [];
+    while (left.length) {
+        const entry = pickFrom(left, rng);
+        deck.push(entry);
+        left.splice(left.findIndex(p => p.entry === entry), 1);
+    }
+    return deck;
+}
+
+// The deck a mob slot deals from: this game's, when it is a true shuffle of the
+// pool, else the pool's own order (a save from before the slot, or the bench).
+function deckFor(slot, saved) {
+    const order = slot.pool.map(p => p.entry);
+    const ok = Array.isArray(saved) && saved.length === order.length
+        && order.every(e => saved.includes(e));
+    return ok ? saved : order;
+}
+
+// Today's content: the first entry of every anchor pool. What a save written
+// before slots existed loads, and what a slot with no saved pick falls back to.
+// A mob slot has no pick; its deck falls back to the pool's order (deckFor).
 export function defaultPicks(slots = SLOTS) {
     const picks = {};
-    for (const id of Object.keys(slots)) picks[id] = slots[id].pool[0].entry;
+    for (const id of Object.keys(slots)) if (!isMob(slots[id])) picks[id] = slots[id].pool[0].entry;
     return picks;
 }
 
-// A spawn with a `slot` becomes its picked entry, with the spawn's own id, place
-// and facing on top. A spawn naming an `entry` is placed by hand: it becomes
+// A spawn with a `slot` becomes its picked entry (a mob slot: the entry dealt to
+// its seat), with the spawn's own id, place and facing on top. A spawn naming an `entry` is placed by hand: it becomes
 // that entry the same way. Any other spawn passes through untouched.
 export function resolveSpawn(spawn, picks, slots = SLOTS, entries = ENTRIES) {
     if (spawn && !spawn.slot && spawn.entry) {
@@ -228,7 +315,14 @@ export function resolveSpawn(spawn, picks, slots = SLOTS, entries = ENTRIES) {
     if (!spawn || !spawn.slot) return spawn;
     const slot = slots[spawn.slot];
     if (!slot) return spawn;
-    const entryId = (picks && slot.pool.some(p => p.entry === picks[spawn.slot])) ? picks[spawn.slot] : slot.pool[0].entry;
+    let entryId;
+    if (isMob(slot)) {
+        const deck = deckFor(slot, picks?.[spawn.slot]);
+        const seat = Number.isInteger(spawn.seat) && spawn.seat >= 0 ? spawn.seat : 0;
+        entryId = deck[seat % deck.length];
+    } else {
+        entryId = (picks && slot.pool.some(p => p.entry === picks[spawn.slot])) ? picks[spawn.slot] : slot.pool[0].entry;
+    }
     const entry = entries[entryId];
     if (!entry) return spawn;
     const out = { ...structuredClone(entry), id: spawn.id, x: spawn.x, y: spawn.y, slot: spawn.slot };
