@@ -536,6 +536,14 @@ export const ENEMY_SPRITES = {
     // tawny by tools/gen_recolor.py (BEAST_VARIANTS column 0).
     'Lire': { sheet: 'beastVariants', col: 0, row: 0, static: true },
 
+    // The frozen area's mooks (plans/ic4-frozen-creatures.md). No snow creature
+    // exists in the bundled sheets, so each borrows the closest Tiny Dungeon
+    // cell. The two shared cells belong to types that never stand in the frozen
+    // area (tests/sprite-coverage.test.js enforces that).
+    'Snowman':    { sheet: 'tinyDungeon', col: 1, row: 10, static: true }, // white ghost, shared with Rattling Skeleton
+    'Yeti':       { sheet: 'tinyDungeon', col: 1, row: 9,  static: true }, // the ogre, shared with Fungus King
+    'Polar Bear': { sheet: 'tinyDungeon', col: 4, row: 10, static: true }, // grey beast, Lire's uncoloured source
+
     // Not a person: a puzzleWall growth blocking a sewer pipe.
     'Sludge Bloom': { sheet: 'tinyDungeon', col: 8, row: 2, static: true }, // stone hatch leaking green ooze
 };

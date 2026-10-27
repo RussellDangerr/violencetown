@@ -85,7 +85,11 @@
         {"type": "tree", "x": 18, "y": 13},
         {"type": "tree", "x": 19, "y": 13}
     ],
-    "enemies": [],
+    "enemies": [
+        {"id": "frozen-mob-1", "slot": "frozen.mob", "seat": 0, "x": 4, "y": 10},
+        {"id": "frozen-mob-2", "slot": "frozen.mob", "seat": 1, "x": 10, "y": 11},
+        {"id": "frozen-mob-3", "slot": "frozen.mob", "seat": 2, "x": 15, "y": 10}
+    ],
     "items": [],
     "examinables": [],
     "transitions": [
