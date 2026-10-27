@@ -5,9 +5,9 @@
 // standard fighter plays until the quest completes (`quest`).
 
 import { FRAME_MS } from './clock.js';
-import { pathTo, DIR_CODES } from './path.js';
+import { pathTo, cursorPath, DIR_CODES } from './path.js';
 import { fingerprint } from './fingerprint.js';
-import { decide, FIGHTER, SNEAK } from './player.js';
+import { decide, currentGoal, FIGHTER, SNEAK } from './player.js';
 import { ROUTES } from './route.js';
 import { QUESTS } from '../quests.js';
 import { isHostile } from '../ai.js';
@@ -15,6 +15,10 @@ import { isBoss } from '../defeat-scenarios.js';
 import { selectedNode, activeRing, ROOT, aimRange, autoAimTile } from '../wheel-model.js';
 import { SPELLS } from '../spells.js';
 import { perceives, VERDICT } from '../perception.js';
+import { nearestRectInDir } from '../layout.js';
+import { itemActions } from '../inspector.js';
+import { zoneOf } from '../inventory.js';
+import { SAFE_SLOTS } from '../data.js';
 
 export const SCRIPTS = {
     // Quest 1's first stage. The car sits in a wall block with no open tile
@@ -30,6 +34,36 @@ export const SCRIPTS = {
     quest: { route: 'fix_car', knobs: FIGHTER },
     // ...and by the sneak, the way ruling Q1-8 says the Fungus King is passed.
     sneak: { route: 'fix_car', knobs: SNEAK },
+    // The everyday loops (plans/al1-autoplay-loops.md): pick up, equip
+    // through the bag, drop, sell, buy. Goals steps are walked by the standard
+    // fighter; bag and shop steps press the keys a player presses. The Green is
+    // the one fight: a new game has 0 GP and every till in reach is empty or
+    // near it, so his purse is what the rock is bought with.
+    loops: {
+        knobs: FIGHTER,
+        steps: [
+            { label: 'to_carnival', goals: [{ reach: 'carnival-map.json' }] },
+            { label: 'pick_up', goals: [{ take: 'lion_whip', map: 'carnival-map.json' }, { take: 'fire_blood', map: 'carnival-map.json' }] },
+            { label: 'equip', bag: { item: 'lion_whip', action: 'equip' } },
+            { label: 'drop', bag: { item: 'fire_blood', action: 'drop' } },
+            { label: 'to_town', goals: [{ reach: 'town-map.json' }] },
+            { label: 'to_factory', goals: [{ reach: 'factory-map.json' }] },
+            { label: 'fight_green', goals: [{ kill: 'green1', map: 'factory-map.json' }] },
+            { label: 'to_puck', meet: 'puck' },
+            { label: 'sell_buy', shop: { npc: 'puck', sell: 'wooden_sword', buy: 'rock' } },
+        ],
+        expect: (g, deals) => {
+            const bag = g.inventory.filter(Boolean).map((s) => s.itemDef.id);
+            const miss = [];
+            if (g.equipment.weapon?.id !== 'lion_whip') miss.push(`wielding ${g.equipment.weapon?.id}, not the lion_whip`);
+            for (const gone of ['lion_whip', 'fire_blood', 'wooden_sword']) if (bag.includes(gone)) miss.push(`${gone} is still in the bag`);
+            if (!bag.includes('rock')) miss.push('no rock in the bag');
+            const sold = deals.find((d) => d.side === 'yours'), bought = deals.find((d) => d.side === 'theirs');
+            if (!sold || !(sold.gold > 0)) miss.push('the sale paid nothing');
+            if (!bought || !(bought.gold < 0)) miss.push('the rock cost nothing');
+            return miss.length ? miss.join('; ') : null;
+        },
+    },
 };
 
 const KEY = { KeyE: 'e', KeyT: 't', KeyD: 'd', Space: ' ' };
@@ -38,6 +72,7 @@ const REPEAT_GAP_MS = 260;      // a Space within 250 ms of the last one repeats
 const BEAT_MS = 200;            // game time after every action — identical watched or headless
 const STAGE_TURN_BUDGET = 1500;   // room for a dozen attempts at a boss, each a walk back from the spawn
 const MAX_WAITS = 60;
+const MENU_WATCH_MS = 400;      // real time a watched run holds on each bag / offer key (menuPress)
 // Ruling Q1-10: after a defeat the player goes back and tries again, and stops
 // only when an attempt changed nothing — see `standing` below. The cap is a
 // backstop against a slow bleed that never ends, not the rule.
@@ -66,7 +101,8 @@ export async function run(ap) {
         await d.settle();
         await g._fullReset({ seed: ap.opts.seed });
         await d.settle();
-        outcome = script.route ? await d.playRoute(script.route, script.knobs) : await d.playOps(script);
+        outcome = script.route ? await d.playRoute(script.route, script.knobs)
+            : script.steps ? await d.playSteps(script) : await d.playOps(script);
     } catch (e) {
         outcome = { ...outcome, failure: String((e && e.stack) || e) };
     }
@@ -83,6 +119,8 @@ export async function run(ap) {
         quest: { id: g.questEngine.state.activeId, stage: g.questEngine.state.stageIndex },
         at: { map: g._mapUrl, x: g.playerX, y: g.playerY },
         stages: outcome.stages,
+        // What a steps run ends holding; the golden keeps it (ruling AL1R1).
+        end: script && script.steps ? endState(g) : null,
         virtualMs: ap.clock ? ap.clock.now() - vt0 : null,
         realMs: Math.round(ap.real.now() - t0),
         errors,
@@ -99,7 +137,8 @@ export async function run(ap) {
     if (watching) {
         window.removeEventListener('keydown', stop, true);
         window.removeEventListener('pointerdown', stop, true);
-        label.textContent = report.finished ? `AUTOPLAY · quest 1 done in ${report.turn} turns` : `AUTOPLAY · ${report.reason}`;
+        const what = script && script.steps ? ap.opts.script : 'quest 1';
+        label.textContent = report.finished ? `AUTOPLAY · ${what} done in ${report.turn} turns` : `AUTOPLAY · ${report.reason}`;
         ap.real.setTimeout(() => label.remove(), 6000);
         handBack(ap);
     }
@@ -168,12 +207,22 @@ function view(g) {
         tileAt: (x, y) => m.getTile(x, y),
         transitions: (m.transitions || []).map((t) => ({ x: t.x, y: t.y, toMap: t.toMap })),
         enemies: g.enemies.filter((e) => e.entity.isAlive())
-            .map((e) => ({ x: e.x, y: e.y, hp: e.entity.hp, hostile: isHostile(e), tag: e.tag || null, slot: e.slot || null,
+            .map((e) => ({ x: e.x, y: e.y, hp: e.entity.hp, hostile: isHostile(e), tag: e.tag || null, slot: e.slot || null, id: e.id || null,
                            aware: e.state === 'chasing' || e.state === 'searching' })),
         items: g.groundItems.map((i) => ({ type: i.type, x: i.x, y: i.y })),
         containers: (g.containers || []).map((c) => ({ x: c.x, y: c.y })),
         inventory: g.inventory.filter(Boolean).map((s) => s.itemDef.id),
         targetIdAt: (x, y) => g._targetAt(x, y)?.examinable?.id ?? null,
+    };
+}
+
+// What the player ends a steps script holding: the bag in slot order (a
+// stack as "id xN"), the weapon in hand, the gold.
+function endState(g) {
+    return {
+        bag: g.inventory.filter(Boolean).map((s) => (s.count > 1 ? `${s.itemDef.id} x${s.count}` : s.itemDef.id)),
+        weapon: g.equipment.weapon?.id ?? null,
+        gold: g.gold,
     };
 }
 
@@ -441,6 +490,159 @@ function driver(ap, g) {
         if (o.idle) { await idle(o.idle); return null; }
         return `unknown op ${JSON.stringify(o)}`;
     }
+    // ── The loops run: steps ───────────────────────────────────────────────
+    // A goals step: the standard fighter works `goals` until every one is met.
+    // A death fails it: a defeat empties the bag, and the loops are about the
+    // bag.
+    async function playGoals(goals, knobs) {
+        const t0 = g.turn, died = deaths;
+        let waits = 0;
+        for (;;) {
+            if (ap.stopRequested) return 'stopped by the player';
+            if (deaths > died) return `died to ${killer()}`;
+            const v = view(g);
+            if (!currentGoal(v, goals)) return null;
+            if (g.turn - t0 > STAGE_TURN_BUDGET) return `unfinished after ${STAGE_TURN_BUDGET} turns`;
+            const a = decide(v, goals, knobs);
+            if (a.kind === 'wait' && ++waits > MAX_WAITS) return `stuck — ${a.why}`;
+            if (a.kind !== 'wait') waits = 0;
+            trace.push(`t${g.turn} ${g._mapUrl.replace('-map.json', '')} ${g.playerX},${g.playerY} hp${g.playerHp} ${a.kind}`
+                + (a.dir ? ` ${a.dir}` : '') + (a.at ? ` @${a.at.x},${a.at.y}` : '') + (a.why ? ` (${a.why})` : ''));
+            const failure = await act(a);
+            if (failure) return failure;
+            await idle(BEAT_MS);
+        }
+    }
+
+    // A key press in the bag or the offer screen. Menus take no game time, so a
+    // watched run would flash past them; it lingers on each press in REAL time
+    // only, which leaves game time, and so the headless run, untouched.
+    async function menuPress(code) {
+        await press(code);
+        if (ap.opts.speed > 0) {
+            await realSleep(MENU_WATCH_MS);
+            paceReal = null;   // re-anchor the pace, or the walk after would race to catch up
+        }
+    }
+
+    // The bag, driven as a player drives it, and the one place that knows its
+    // keys, so a change to them (bag pages) is fixed here. Tab opens it on its
+    // items; the arrows walk the cursor slot to slot by the bag's own
+    // nearest-slot rule; Space opens the item's buttons; the arrows walk to the
+    // one wanted; Space presses it; Tab puts the bag away.
+    async function bag(itemId, actionId) {
+        if (g.state !== 'idle') return `the bag wants the game idle, not "${g.state}"`;
+        const away = async (why) => { if (g.state === 'device') await menuPress('Tab'); return why; };
+        await menuPress('Tab');
+        if (g.state !== 'device' || g._deviceTab !== 'items') return away(`Tab opened "${g.state}" / ${g._deviceTab}, not the bag`);
+        const slot = g.inventory.findIndex((s) => s && s.itemDef.id === itemId);
+        if (slot < 0) return away(`no ${itemId} in the bag`);
+        const toSlot = await walkCursor(slot);
+        if (toSlot) return away(toSlot);
+        const def = g.inventory[slot].itemDef;
+        const button = itemActions(def, zoneOf(slot, SAFE_SLOTS)).findIndex((a) => a.id === actionId);
+        if (button < 0) return away(`${itemId} has no ${actionId} button`);
+        await menuPress('Space');
+        if (g._deviceTargets()?.zone !== 'action') return away(`Space on ${itemId} did not open its buttons`);
+        const toButton = await walkCursor(button);
+        if (toButton) return away(toButton);
+        await menuPress('Space');
+        return away(null);
+    }
+    async function walkCursor(to) {
+        let t = g._deviceTargets();
+        if (!t) return 'the bag shows no cursor';
+        if (t.cur < 0) { await menuPress('ArrowRight'); t = g._deviceTargets(); }   // the first press only shows it
+        const dirs = cursorPath(t.rects, t.cur, to, nearestRectInDir);
+        if (!dirs) return `no way to walk the ${t.zone} cursor from ${t.cur} to ${to}`;
+        for (const dir of dirs) await menuPress(DIR_CODES[dir]);
+        const at = g._deviceTargets()?.cur;
+        return at === to ? null : `the ${t.zone} cursor stopped at ${at}, not ${to}`;
+    }
+
+    // Walk to the open tile beside `id` nearest by path, and face them.
+    async function meet(id) {
+        const npc = g.enemies.find((e) => e.id === id && e.entity.isAlive());
+        if (!npc) return `no ${id} here`;
+        let best = null;
+        for (const [dir, [dx, dy]] of Object.entries(STEP)) {
+            const at = { x: npc.x - dx, y: npc.y - dy };
+            const here = at.x === g.playerX && at.y === g.playerY;
+            if (!here && !isOpen(at.x, at.y)) continue;
+            const p = pathTo(isOpen, { x: g.playerX, y: g.playerY }, at);
+            if (p && (!best || p.length < best.p.length)) best = { at, dir, p };
+        }
+        if (!best) return `no open tile beside ${id}`;
+        const walked = await walkTo(best.at);
+        return walked || face(best.dir);
+    }
+
+    // The offer screen, by keys: E opens it on whoever you face; Left/Right
+    // pick the side (yours / theirs); Up/Down the row; Space stages it; Enter
+    // makes the offer; E closes. One trade per offer, so each one's gold is
+    // checked against what the screen settled when the row was staged.
+    const deals = [];
+    async function shop({ npc: id, sell, buy }) {
+        const npc = g.enemies.find((e) => e.id === id && e.entity.isAlive());
+        if (!npc) return `no ${id} here`;
+        const dir = Object.keys(STEP).find((k) => g.playerX + STEP[k][0] === npc.x && g.playerY + STEP[k][1] === npc.y);
+        if (!dir) return `not beside ${id}`;
+        const turned = await face(dir);
+        if (turned) return turned;
+        await menuPress('KeyE');
+        if (g.state !== 'trade' || g._offerNpc !== npc) return `E opened "${g.state}", not ${id}'s offer`;
+        const away = async (why) => { if (g.state === 'trade') await menuPress('KeyE'); return why; };
+        for (const [side, item] of [['yours', sell], ['theirs', buy]]) {
+            if (!item) continue;
+            const failure = await trade(side, item);
+            if (failure) return away(failure);
+        }
+        return away(null);
+    }
+    async function trade(side, itemId) {
+        if (g._offerCursor.side !== side) await menuPress(side === 'theirs' ? 'ArrowRight' : 'ArrowLeft');
+        if (g._offerCursor.side !== side) return `the cursor would not move to ${side}`;
+        const list = side === 'theirs' ? g._offerTheirsList() : g._offerYoursList();
+        const row = list.findIndex((e) => e.def.id === itemId && e.source !== 'buyback');
+        if (row < 0) return `no ${itemId} on the ${side} side`;
+        for (let n = 0; n < list.length && g._offerCursor.index !== row; n++) {
+            await menuPress(g._offerCursor.index < row ? 'ArrowDown' : 'ArrowUp');
+        }
+        if (g._offerCursor.index !== row) return `the cursor stopped at row ${g._offerCursor.index}, not ${row}`;
+        const count = () => g.inventory.reduce((n, s) => n + (s && s.itemDef.id === itemId ? s.count : 0), 0);
+        const gold0 = g.gold, had = count();
+        await menuPress('Space');
+        const tray = side === 'theirs' ? g._offer.take : g._offer.give;
+        if (tray.length !== 1 || tray[0].def.id !== itemId) return `Space did not stage ${itemId}`;
+        const settled = g._offer.gold || 0;   // + the player pays, - they pay
+        await menuPress('Enter');
+        const said = (g._logHistory || []).at(-1)?.text;
+        if (g.gold !== gold0 - settled) return `the offer moved ${g.gold - gold0} GP, not ${-settled} (${said})`;
+        if (count() !== had + (side === 'theirs' ? 1 : -1)) return `the ${itemId} did not change hands (${said})`;
+        deals.push({ side, item: itemId, gold: -settled });
+        return null;
+    }
+
+    // Each step is scored as it is played: turns, deaths, gold.
+    async function playSteps(script) {
+        const stages = [];
+        for (const s of script.steps) {
+            const rec = { id: s.label, turns: 0, deaths: 0, gold: 0 };
+            stages.push(rec);
+            const t0 = g.turn, g0 = g.gold, d0 = deaths;
+            const failure = s.goals ? await playGoals(s.goals, script.knobs || FIGHTER)
+                : s.bag ? await bag(s.bag.item, s.bag.action)
+                : s.meet ? await meet(s.meet)
+                : s.shop ? await shop(s.shop)
+                : `a step this driver does not know: ${JSON.stringify(s)}`;
+            Object.assign(rec, { turns: g.turn - t0, deaths: deaths - d0, gold: g.gold - g0 });
+            if (failure) return { finished: false, failure: `${s.label}: ${failure}`, stages };
+            await idle(BEAT_MS);
+        }
+        const miss = script.expect(g, deals);
+        return { finished: !miss, failure: miss, stages };
+    }
+
     async function playOps(script) {
         for (const o of script.ops) {
             if (ap.opts.jitter) await realSleep(Math.floor(Math.random() * 400));
@@ -451,7 +653,7 @@ function driver(ap, g) {
         return { finished: !miss, failure: miss, stages: [] };
     }
 
-    return { settle, playRoute, playOps, deaths: () => deaths, trace: () => trace.slice(-300) };
+    return { settle, playRoute, playOps, playSteps, deaths: () => deaths, trace: () => trace.slice(-300) };
 }
 
 function showLabel(text) {

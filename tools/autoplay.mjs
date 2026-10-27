@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // autoplay.mjs — run the autoplay headless (plans/quest1-autoplay.md §5.1).
 //
-//   node tools/autoplay.mjs [--seed=1] [--script=car|quest] [--repeat=1] [--jitter] [--clock=real] [--json] [--timeout=120000]
-//   node tools/autoplay.mjs --check | --write          quest 1 against tools/autoplay-golden.json
+//   node tools/autoplay.mjs [--seed=1] [--script=car|quest|sneak|loops] [--repeat=1] [--jitter] [--clock=real] [--json] [--timeout=120000]
+//   node tools/autoplay.mjs --check | --write          quest, sneak and loops against tools/autoplay-golden.json
 //   node tools/autoplay.mjs --script=quest --speed=3 --gif=run.gif [--frameMs=250]
 //
 // Serves game/ itself, drives the installed Chrome over the DevTools protocol
@@ -33,6 +33,7 @@ function parseArgs(argv) {
                 speed: 0, check: false, write: false, gif: null, frameMs: 250 };
     for (const a of argv) {
         const [k, v] = a.replace(/^--/, '').split('=');
+        if (k === 'seed') o.seedGiven = true;
         if (['seed', 'repeat', 'timeout', 'speed', 'frameMs'].includes(k)) o[k] = Number(v);
         else if (k === 'script' || k === 'clock' || k === 'gif') o[k] = v;
         else if (k === 'jitter' || k === 'json' || k === 'check' || k === 'write') o[k] = true;
@@ -174,21 +175,31 @@ function line(i, r) {
     const where = r.quest ? `quest ${r.quest.id}#${r.quest.stage} at ${r.at.map} ${r.at.x},${r.at.y}` : '';
     const time = r.virtualMs != null ? `virtual ${r.virtualMs} ms, real ${r.realMs} ms` : `real ${r.realMs} ms`;
     const head = `run ${i + 1}: ${r.ok ? 'ok  ' : 'FAIL'} seed ${r.seed} ${r.script} · ${where} · turn ${r.turn} · ${time} · ${r.fingerprint}`;
-    const stages = (r.stages || []).map((s) =>
-        `\n  ${s.id.padEnd(18)} ${String(s.turns).padStart(4)} turns · -${s.hpLost} hp · +${s.healed} hp · ${s.eats} eats · ${s.drinks ?? 0} drinks · ${s.attacks} hits · ${s.casts ?? 0} casts (${s.mpSpent ?? 0} mp) · ${s.throws ?? 0} throws · ${s.deaths} deaths · ${s.gold >= 0 ? '+' : ''}${s.gold} gp`);
+    const gp = (n) => `${n >= 0 ? '+' : ''}${n} gp`;
+    // A quest stage carries the fight's whole score; a loops step only turns,
+    // deaths and gold.
+    const stages = (r.stages || []).map((s) => (s.hpLost === undefined
+        ? `\n  ${s.id.padEnd(18)} ${String(s.turns).padStart(4)} turns · ${s.deaths} deaths · ${gp(s.gold)}`
+        : `\n  ${s.id.padEnd(18)} ${String(s.turns).padStart(4)} turns · -${s.hpLost} hp · +${s.healed} hp · ${s.eats} eats · ${s.drinks ?? 0} drinks · ${s.attacks} hits · ${s.casts ?? 0} casts (${s.mpSpent ?? 0} mp) · ${s.throws ?? 0} throws · ${s.deaths} deaths · ${gp(s.gold)}`));
+    const end = r.end ? `\n  end: wielding ${r.end.weapon} · ${r.end.gold} gp · bag [${r.end.bag.join(', ')}]` : '';
     const why = r.ok ? '' : `\n  ${r.reason}${(r.errors || []).length ? '\n  ' + r.errors.join('\n  ') : ''}`;
-    return head + stages.join('') + why;
+    return head + stages.join('') + end + why;
 }
 
 // The scripts the golden covers: the fighter (ruling Q1-2) and the sneak
-// (ruling Q1-8), on the golden's seed.
-const CHECKED = ['quest', 'sneak'];
+// (ruling Q1-8), on the golden's seed, and the everyday loops (ruling AL1R1)
+// on a seed of their own, which --script=loops also uses unless --seed is given.
+const LOOPS_SEED = 2;
+const OWN_SEED = { loops: LOOPS_SEED };
+const CHECKED = [{ script: 'quest' }, { script: 'sneak' }, { script: 'loops', seed: LOOPS_SEED }];
 
 // What the golden keeps of a run: whether it finished, where it ended, and
-// each stage's score.
+// each stage's score. A loops run also keeps what it ended holding; quest
+// and sneak entries have no `end`, so they keep exactly the fields they had.
 const summary = (r) => ({
     script: r.script, seed: r.seed, finished: !!r.finished, reason: r.finished ? null : r.reason,
     fingerprint: r.fingerprint, turn: r.turn, deaths: r.deaths, stages: r.stages || [],
+    ...(r.end ? { end: r.end } : {}),
 });
 
 // Every leaf that differs, as "path: was -> now".
@@ -203,8 +214,10 @@ function drift(want, got, at = '') {
 const o = parseArgs(process.argv.slice(2));
 const GOLDEN = path.resolve(ROOT, '..', 'tools', 'autoplay-golden.json');
 if (o.check) o.seed = JSON.parse(readFileSync(GOLDEN, 'utf8')).seed;
+if (!o.seedGiven && OWN_SEED[o.script] != null) o.seed = OWN_SEED[o.script];
 const scored = o.check || o.write;
-const jobs = scored ? CHECKED.map((script) => ({ ...o, script })) : Array.from({ length: o.repeat }, () => o);
+const jobs = scored ? CHECKED.map(({ script, seed }) => ({ ...o, script, seed: seed ?? o.seed }))
+    : Array.from({ length: o.repeat }, () => o);
 const server = await serve();
 const base = `http://127.0.0.1:${server.address().port}`;
 const chrome = await launchChrome();
