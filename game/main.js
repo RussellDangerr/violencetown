@@ -2420,9 +2420,18 @@ class Game {
             // The bridge mouth (row 0, x14-19) is only walkable once the car's fixed
             // (_openBridgeIfCarFixed), so reaching it here is the deliberate beat,
             // not the instant-on-fix cut that used to happen.
+            // (CY1) The cutscene plays once. After the first crossing, by either
+            // route, the bridge is an ordinary walkway: it queues a plain map
+            // change to Downtown's spawn (where the ramp lands you) and the step
+            // finishes like any other door.
+            let bridgeWalk = false;
             if (ny === 0 && nx >= 14 && nx <= 19 && this.questEngine.getFlag('carFixed')) {
-                this._playBridgeCutscene();   // (Phase 2) fuel decides: crash → Canyon, or ramp → Downtown
-                return;
+                if (!this.questEngine.bridgeRoute()) {
+                    this._playBridgeCutscene();   // (Phase 2) fuel decides: crash → Canyon, or ramp → Downtown
+                    return;
+                }
+                this._pendingTransition = { toMap: 'downtown-map.json' };
+                bridgeWalk = true;
             }
 
             // Hazards
@@ -2460,7 +2469,7 @@ class Game {
             // Chain the next tile if a direction is still held or was buffered
             // mid-slide. Skipped across a map transition so a held key doesn't
             // auto-walk you straight into the new zone. (movement-feel Finding 1)
-            if (!transition) this._onStepSettled();
+            if (!transition && !bridgeWalk) this._onStepSettled();
         });
     }
 
@@ -5541,6 +5550,7 @@ class Game {
     async _crashToCanyon() {
         this._zoneChange();
         await this._loadMap('canyon-map.json');
+        if (this.questEngine) this.questEngine.state.flags.bridgeRoute = 'canyon';   // (CY1) the crash plays once
         this.state = STATE.IDLE;
         this._log('[You come to at the bottom of the canyon, ears ringing and the car a write-off. No climbing back up the way you fell.]', 'transition');
         if (this.questEngine) this.questEngine.start('canyon_escape');
@@ -5552,6 +5562,7 @@ class Game {
     async _rampToDowntown() {
         this._zoneChange();
         await this._loadMap('downtown-map.json');
+        if (this.questEngine) this.questEngine.state.flags.bridgeRoute = 'ramp';     // (CY1) the ramp plays once
         this.state = STATE.IDLE;
         this._log('[You skid to a stop on a Downtown street, the engine ticking as it cools. The real part of town. Now — that delivery.]', 'transition');
         this._startMainQuest2();   // (Phase 4) MQ2 begins on arrival
