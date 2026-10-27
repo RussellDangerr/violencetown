@@ -72,6 +72,7 @@ const REPEAT_GAP_MS = 260;      // a Space within 250 ms of the last one repeats
 const BEAT_MS = 200;            // game time after every action — identical watched or headless
 const STAGE_TURN_BUDGET = 1500;   // room for a dozen attempts at a boss, each a walk back from the spawn
 const MAX_WAITS = 60;
+const MENU_WATCH_MS = 400;      // real time a watched run holds on each bag / offer key (menuPress)
 // Ruling Q1-10: after a defeat the player goes back and tries again, and stops
 // only when an attempt changed nothing — see `standing` below. The cap is a
 // backstop against a slow bleed that never ends, not the rule.
@@ -513,6 +514,17 @@ function driver(ap, g) {
         }
     }
 
+    // A key press in the bag or the offer screen. Menus take no game time, so a
+    // watched run would flash past them; it lingers on each press in REAL time
+    // only, which leaves game time, and so the headless run, untouched.
+    async function menuPress(code) {
+        await press(code);
+        if (ap.opts.speed > 0) {
+            await realSleep(MENU_WATCH_MS);
+            paceReal = null;   // re-anchor the pace, or the walk after would race to catch up
+        }
+    }
+
     // The bag, driven as a player drives it, and the one place that knows its
     // keys, so a change to them (bag pages) is fixed here. Tab opens it on its
     // items; the arrows walk the cursor slot to slot by the bag's own
@@ -520,8 +532,8 @@ function driver(ap, g) {
     // one wanted; Space presses it; Tab puts the bag away.
     async function bag(itemId, actionId) {
         if (g.state !== 'idle') return `the bag wants the game idle, not "${g.state}"`;
-        const away = async (why) => { if (g.state === 'device') await press('Tab'); return why; };
-        await press('Tab');
+        const away = async (why) => { if (g.state === 'device') await menuPress('Tab'); return why; };
+        await menuPress('Tab');
         if (g.state !== 'device' || g._deviceTab !== 'items') return away(`Tab opened "${g.state}" / ${g._deviceTab}, not the bag`);
         const slot = g.inventory.findIndex((s) => s && s.itemDef.id === itemId);
         if (slot < 0) return away(`no ${itemId} in the bag`);
@@ -530,20 +542,20 @@ function driver(ap, g) {
         const def = g.inventory[slot].itemDef;
         const button = itemActions(def, zoneOf(slot, SAFE_SLOTS)).findIndex((a) => a.id === actionId);
         if (button < 0) return away(`${itemId} has no ${actionId} button`);
-        await press('Space');
+        await menuPress('Space');
         if (g._deviceTargets()?.zone !== 'action') return away(`Space on ${itemId} did not open its buttons`);
         const toButton = await walkCursor(button);
         if (toButton) return away(toButton);
-        await press('Space');
+        await menuPress('Space');
         return away(null);
     }
     async function walkCursor(to) {
         let t = g._deviceTargets();
         if (!t) return 'the bag shows no cursor';
-        if (t.cur < 0) { await press('ArrowRight'); t = g._deviceTargets(); }   // the first press only shows it
+        if (t.cur < 0) { await menuPress('ArrowRight'); t = g._deviceTargets(); }   // the first press only shows it
         const dirs = cursorPath(t.rects, t.cur, to, nearestRectInDir);
         if (!dirs) return `no way to walk the ${t.zone} cursor from ${t.cur} to ${to}`;
-        for (const dir of dirs) await press(DIR_CODES[dir]);
+        for (const dir of dirs) await menuPress(DIR_CODES[dir]);
         const at = g._deviceTargets()?.cur;
         return at === to ? null : `the ${t.zone} cursor stopped at ${at}, not ${to}`;
     }
@@ -577,9 +589,9 @@ function driver(ap, g) {
         if (!dir) return `not beside ${id}`;
         const turned = await face(dir);
         if (turned) return turned;
-        await press('KeyE');
+        await menuPress('KeyE');
         if (g.state !== 'trade' || g._offerNpc !== npc) return `E opened "${g.state}", not ${id}'s offer`;
-        const away = async (why) => { if (g.state === 'trade') await press('KeyE'); return why; };
+        const away = async (why) => { if (g.state === 'trade') await menuPress('KeyE'); return why; };
         for (const [side, item] of [['yours', sell], ['theirs', buy]]) {
             if (!item) continue;
             const failure = await trade(side, item);
@@ -588,22 +600,22 @@ function driver(ap, g) {
         return away(null);
     }
     async function trade(side, itemId) {
-        if (g._offerCursor.side !== side) await press(side === 'theirs' ? 'ArrowRight' : 'ArrowLeft');
+        if (g._offerCursor.side !== side) await menuPress(side === 'theirs' ? 'ArrowRight' : 'ArrowLeft');
         if (g._offerCursor.side !== side) return `the cursor would not move to ${side}`;
         const list = side === 'theirs' ? g._offerTheirsList() : g._offerYoursList();
         const row = list.findIndex((e) => e.def.id === itemId && e.source !== 'buyback');
         if (row < 0) return `no ${itemId} on the ${side} side`;
         for (let n = 0; n < list.length && g._offerCursor.index !== row; n++) {
-            await press(g._offerCursor.index < row ? 'ArrowDown' : 'ArrowUp');
+            await menuPress(g._offerCursor.index < row ? 'ArrowDown' : 'ArrowUp');
         }
         if (g._offerCursor.index !== row) return `the cursor stopped at row ${g._offerCursor.index}, not ${row}`;
         const count = () => g.inventory.reduce((n, s) => n + (s && s.itemDef.id === itemId ? s.count : 0), 0);
         const gold0 = g.gold, had = count();
-        await press('Space');
+        await menuPress('Space');
         const tray = side === 'theirs' ? g._offer.take : g._offer.give;
         if (tray.length !== 1 || tray[0].def.id !== itemId) return `Space did not stage ${itemId}`;
         const settled = g._offer.gold || 0;   // + the player pays, - they pay
-        await press('Enter');
+        await menuPress('Enter');
         const said = (g._logHistory || []).at(-1)?.text;
         if (g.gold !== gold0 - settled) return `the offer moved ${g.gold - gold0} GP, not ${-settled} (${said})`;
         if (count() !== had + (side === 'theirs' ? 1 : -1)) return `the ${itemId} did not change hands (${said})`;
