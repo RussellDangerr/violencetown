@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { isSafe, isBoss, partitionInventory, matchTake, pickScenario } from '../game/defeat-scenarios.js';
+import { isSafe, isBoss, partitionInventory, matchTake, pickScenario, DEFEAT_SCENARIOS } from '../game/defeat-scenarios.js';
 
 const weapon = { id: 'sword' };
 const quest  = { id: 'converter', questItem: true };
@@ -93,5 +93,45 @@ describe('pickScenario', () => {
   });
   test('weighted pick is deterministic given rand()', () => {
     assert.equal(pickScenario({ zone: 'town', by: { type: 'Pigeon' } }, S, () => 0).id, 'fallback');
+  });
+});
+
+// RB1 (plans/rb1-rat-robbery-stash.md): the robbery fires for the sewer's own rats.
+describe('the rats rob you in the sewer (RB1)', () => {
+  const eligible = (zone, by, cause = 'unknown') =>
+    DEFEAT_SCENARIOS.filter(s => s.when({ zone, by, cause })).map(s => s.id);
+  const gauntletRat = { type: 'Rat', tag: 'sewer_rat', vermin: true, entity: {} };
+  const robbery = DEFEAT_SCENARIOS.find(s => s.id === 'robbed_by_wererats');
+
+  test('a gauntlet rat that beats you in the sewer can rob you', () => {
+    assert.deepEqual(eligible('SEWER', gauntletRat), ['robbed_by_wererats', 'patched_by_carrion', 'beaten_and_dumped']);
+  });
+  test('the robbery outweighs the rest: a roll under 3/5 robs you, the rest goes as before', () => {
+    const pick = (r) => pickScenario({ zone: 'SEWER', by: gauntletRat, cause: 'unknown' }, DEFEAT_SCENARIOS, () => r).id;
+    assert.equal(pick(0), 'robbed_by_wererats');
+    assert.equal(pick(0.59), 'robbed_by_wererats');
+    assert.equal(pick(0.61), 'patched_by_carrion');
+    assert.equal(pick(0.99), 'beaten_and_dumped');
+  });
+  test('its numbers stay as they were: weight, stash spot, wake spot, the whole haul, recoverable', () => {
+    assert.equal(robbery.weight, 3);
+    assert.equal(robbery.consequence.wakeAt, null);
+    assert.equal(robbery.consequence.hp, 0.6);
+    assert.deepEqual(robbery.consequence.take, { loot: 'all', recoverable: true, stashAt: { spot: { x: 17, y: 10 } } });
+    assert.equal(robbery.consequence.log, "[The rats rolled you and scampered off with your haul. You'll want it back.]");
+  });
+  test('anything else in the sewer picks from the same scenarios as before', () => {
+    assert.deepEqual(eligible('SEWER', { type: 'Violencian', entity: {} }), ['patched_by_carrion', 'beaten_and_dumped']);
+    assert.deepEqual(eligible('SEWER', { type: 'Violet Fungus', entity: {} }), ['processed_by_fungus', 'patched_by_carrion', 'beaten_and_dumped']);
+    assert.deepEqual(eligible('SEWER', null, 'sludge'), ['swept_into_sludge', 'patched_by_carrion', 'beaten_and_dumped']);
+    // A rat-family enemy that is not the gauntlet's does not rob you.
+    assert.deepEqual(eligible('SEWER', { type: 'Sludge Rat', vermin: true, entity: {} }), ['patched_by_carrion', 'beaten_and_dumped']);
+  });
+  test("the Canyon's rats are not in the sewer, so they never rob you", () => {
+    const canyonRat = { type: 'Rat', tag: 'canyon_critter', vermin: true, entity: {} };
+    assert.deepEqual(eligible('CANYON', canyonRat), ['beaten_and_dumped']);
+  });
+  test('a gauntlet rat that chased you out of the sewer does not rob you there', () => {
+    assert.deepEqual(eligible('TOWN', gauntletRat), ['beaten_and_dumped']);
   });
 });
