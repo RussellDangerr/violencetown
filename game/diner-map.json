@@ -23,7 +23,8 @@
     ],
     "items": [],
     "examinables": [
-        {"id": "diner_counter", "x": 6, "y": 2, "text": "[A greasy diner counter. The specials board is half wiped clean. A paper bag waits under the heat lamp.]"}
+        {"id": "diner_counter", "x": 6, "y": 2, "text": "[A greasy diner counter. The specials board is half wiped clean. A paper bag waits under the heat lamp.]"},
+        {"id": "diner_ice_cone_machine", "x": 5, "y": 2, "text": "[TEXT]"}
     ],
     "props": [
         {"type": "plantA", "x": 2, "y": 2},
