@@ -21,7 +21,7 @@ import {
     DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceEquipLayout, deviceRingsLayout,
     deviceSkillsLayout,                                                      // (US2) the skills readout in the RINGS tab
     inspectorPanelRect, inspectorActionRects,                               // (C1) tap-to-inspect panel + action-row geometry
-    gearOptionRects,                                                        // (C2) GEAR chooser option-row geometry
+    gearOptionRects, gearChooserRect,                                       // (C2) GEAR chooser option-row + panel geometry
     xmbBarLayout, hudLayout, throwRects, wheelTopMarks, fightPanelRects, XMB_CELL,                      // (XMB) usable-bar geometry; (screen-fill) the HUD, throw targets, the marks above the wheel
     MODAL_RECT, offerLayout,                                                 // (offer screen) the one panel + its geometry
 } from './layout.js';
@@ -4686,11 +4686,9 @@ export class Renderer {
         const opts = equipOptions(slotKey, worn, game.inventory);
         const rows = gearOptionRects(bodyRect, opts.length);
 
-        // Titled panel enclosing the option column (+ header band above row 0).
-        const px = bodyRect.x + (bodyRect.w - 200) / 2 - 8;
-        const py = bodyRect.y + 30;
-        const pw = 216;
-        const ph = (opts.length ? (rows[opts.length - 1].y + rows[opts.length - 1].h) : (py + 26)) - py + 12;
+        // Titled panel enclosing the option column (+ header band above row 0),
+        // starting below the HEAD plate (FX11) — gearChooserRect owns the geometry.
+        const { x: px, y: py, w: pw, h: ph } = gearChooserRect(bodyRect, opts.length);
         drawPanelSmall(ctx, px, py, pw, ph, this.uiSheet);
         this.font.drawText(ctx, `${label} — CHOOSE`, px + pw / 2, py + 8, { color: UI.gold, scale: 1, align: 'center' });
 
