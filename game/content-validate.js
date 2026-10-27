@@ -60,7 +60,7 @@ const MAP_MATCH_KEYS  = new Set(['map']);
 export function validateContent(maps, {
     slots = SLOTS, entries = ENTRIES,
     items = ITEMS, weapons = WEAPONS, weaponTiers = WEAPON_TIERS,
-    rings = RINGS, fusions = FUSIONS, tiles = TILES,
+    rings = RINGS, fusions = FUSIONS, tiles = TILES, quests = QUESTS,
 } = {}) {
     const problems = [];
     const warnings = [];
@@ -133,7 +133,7 @@ export function validateContent(maps, {
     }
 
     // ── Quest references ─────────────────────────────────────────────────────
-    for (const [qid, q] of Object.entries(QUESTS)) {
+    for (const [qid, q] of Object.entries(quests)) {
         for (const stage of (q.stages || [])) {
             const on = stage.on;
             if (on) {
@@ -149,7 +149,12 @@ export function validateContent(maps, {
                     }
                 }
             }
-            if (stage.targetZone && !zoneByName(stage.targetZone))
+            // Every stage says where the Map should send you: a zone, or null
+            // when it has no place (plans/mp1-map-marks-quest-stages.md). A
+            // stage that leaves it out leaves the Map blank on that step.
+            if (!Object.prototype.hasOwnProperty.call(stage, 'targetZone'))
+                P(`${qid}/${stage.id}: names no targetZone (a zone, or null for none)`);
+            else if (stage.targetZone !== null && !zoneByName(stage.targetZone))
                 P(`${qid}/${stage.id}: unknown targetZone '${stage.targetZone}'`);
         }
     }
