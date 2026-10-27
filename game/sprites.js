@@ -18,7 +18,7 @@ import { dirOf } from './perception.js';
 export const TINY_INK = [63, 38, 49];   // #3F2631, the Tiny packs' outline
 // Sheets already drawn in the Tiny style (or re-outlined by a tool), which the
 // outline pass leaves alone.
-export const TINY_STYLE_SHEETS = new Set(['tinyDungeon', 'tinyTown', 'tinyExtra', 'outlined', 'interior', 'emotes', 'marks', 'ratVariants', 'beastVariants']);
+export const TINY_STYLE_SHEETS = new Set(['tinyDungeon', 'tinyTown', 'tinyExtra', 'outlined', 'interior', 'emotes', 'marks', 'ratVariants', 'beastVariants', 'iceCone']);
 
 export class SpriteSheet {
     // `padding` is the gap (in source pixels) between adjacent cells. Kenney's
@@ -185,6 +185,10 @@ export const SHEETS = {
     // two greys swapped, the outline and orange tail kept. Column order is the
     // tool's BEAST_VARIANTS list. Packed, padding 0. Lire draws from it.
     beastVariants: { src: `${K}/beastVariants_packed.png`, frameW: 16, frameH: 16 },
+
+    // The Tiger's Blood Ice Cone: Tiny Ski's snowy pine (Kenney, CC0) mirrored
+    // and repainted by tools/gen_ice_cone.py, outline included. One cell.
+    iceCone:      { src: './assets-placeholder/ice_cone.png', frameW: 16, frameH: 16 },
 
     // Kenney Emote Pack (Pixel, Style 8) — manga impact marks (animation pass
     // §1). A star inside Style 1's white balloon reads as someone SAYING
@@ -366,6 +370,7 @@ export const ITEM_SPRITES = {
     cardboard_cuirass: { sheet: 'tinyDungeon', x: 6 * 16,  y: 5 * 16,  w: 16, h: 16 },  // brown board
     grappling_hook:    { sheet: 'tinyTown',    x: 9 * 16,  y: 10 * 16, w: 16, h: 16 },  // hooked blade
     alcohol:           { sheet: 'tinyTown',    x: 8 * 16,  y: 8 * 16,  w: 16, h: 16 },  // blue jar
+    tigers_blood_ice_cone: { sheet: 'iceCone', x: 0,     y: 0,       w: 16, h: 16 },  // tools/gen_ice_cone.py (ICR6)
     // latex_gloves, red_cape, shoe_bags: no fitting cell yet; they draw as
     // UNKNOWN_ITEM_SPRITE until they get art.
 };
