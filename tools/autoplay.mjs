@@ -187,7 +187,7 @@ function line(i, r) {
 }
 
 // The scripts the golden covers: the fighter (ruling Q1-2) and the sneak
-// (ruling Q1-8), on the golden's seed, and the everyday loops (ruling ALR1)
+// (ruling Q1-8), on the golden's seed, and the everyday loops (ruling AL1R1)
 // on a seed of their own, which --script=loops also uses unless --seed is given.
 const LOOPS_SEED = 2;
 const OWN_SEED = { loops: LOOPS_SEED };

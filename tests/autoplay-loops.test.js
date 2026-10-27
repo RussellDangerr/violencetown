@@ -1,4 +1,4 @@
-// autoplay-loops.test.js — the everyday-loops run (plans/al1-autoplay-loops-run.md).
+// autoplay-loops.test.js — the everyday-loops run (plans/al1-autoplay-loops.md).
 //
 // The run itself needs Chrome (npm run autoplay:check). What node can check:
 // the bag cursor's planner walks the bag the way its keys do, and every id the

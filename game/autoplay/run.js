@@ -34,7 +34,7 @@ export const SCRIPTS = {
     quest: { route: 'fix_car', knobs: FIGHTER },
     // ...and by the sneak, the way ruling Q1-8 says the Fungus King is passed.
     sneak: { route: 'fix_car', knobs: SNEAK },
-    // The everyday loops (plans/al1-autoplay-loops-run.md): pick up, equip
+    // The everyday loops (plans/al1-autoplay-loops.md): pick up, equip
     // through the bag, drop, sell, buy. Goals steps are walked by the standard
     // fighter; bag and shop steps press the keys a player presses. The Green is
     // the one fight: a new game has 0 GP and every till in reach is empty or
@@ -119,7 +119,7 @@ export async function run(ap) {
         quest: { id: g.questEngine.state.activeId, stage: g.questEngine.state.stageIndex },
         at: { map: g._mapUrl, x: g.playerX, y: g.playerY },
         stages: outcome.stages,
-        // What a steps run ends holding; the golden keeps it (ruling ALR1).
+        // What a steps run ends holding; the golden keeps it (ruling AL1R1).
         end: script && script.steps ? endState(g) : null,
         virtualMs: ap.clock ? ap.clock.now() - vt0 : null,
         realMs: Math.round(ap.real.now() - t0),
