@@ -210,3 +210,32 @@ describe('carnival ground', () => {
         assert.deepEqual(tilesByCell().get(cell(ground)), ['CIRCUS_GROUND']);
     });
 });
+
+// ── AP1: sawdust on the carnival's own ground ──────────────────────────────
+//
+// On the old orange ground a sawdust square vanished; on the pavers it stood
+// out as a hard orange box. Ruled: one rounded dirt patch per 2x2 of sawdust.
+
+describe('carnival sawdust', () => {
+    const map = loadMap('carnival-map.json');
+    const S = TILES.SAWDUST.id;
+    const at = (x, y) => (x >= 0 && x < map.width && y >= 0 && y < map.height) ? map.tiles[y * map.width + x] : undefined;
+
+    test('sawdust draws a rounded patch: the four grass-rimmed corners, in order', () => {
+        const ref = sprites.ZONE_TILE_SPRITE_MAP[S];
+        assert.deepEqual(ref.quad.map(r => `${r.sheet}(${r.col},${r.row})`),
+            ['tinyTown(0,1)', 'tinyTown(2,1)', 'tinyTown(0,3)', 'tinyTown(2,3)']);
+    });
+
+    test('every sawdust patch is a whole 2x2 from an even tile, so no patch draws scrambled', () => {
+        let cells = 0;
+        for (let y = 0; y < map.height; y++) for (let x = 0; x < map.width; x++) {
+            if (at(x, y) !== S) continue;
+            cells++;
+            const x0 = x & ~1, y0 = y & ~1;
+            const whole = [[x0, y0], [x0 + 1, y0], [x0, y0 + 1], [x0 + 1, y0 + 1]].every(([a, b]) => at(a, b) === S);
+            assert.ok(whole, `sawdust at ${x},${y} is not part of a whole even-aligned 2x2`);
+        }
+        assert.ok(cells >= 4, `the carnival has ${cells} sawdust cells — the check found nothing to check`);
+    });
+});
