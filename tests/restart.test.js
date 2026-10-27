@@ -49,7 +49,7 @@ const construct = liveMethod('constructor() {', {
     randomSeed, pickSlots,
 });
 const fullReset = liveMethod('_fullReset({ seed } = {}) {', {
-    STATE, PLAYER_MAX_HP, PLAYER_MAX_MP, WEAPONS, RNG, QuestEngine, clearSave: () => {},
+    STATE, PLAYER_MAX_HP, PLAYER_MAX_MP, WEAPONS, INVENTORY_SIZE, RNG, QuestEngine, clearSave: () => {},
     randomSeed, pickSlots,
 }, { async: true });
 

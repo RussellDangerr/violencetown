@@ -3,7 +3,7 @@
 // Small panels: hand-colored parchment fill matching the sprite palette
 // All text: dark brown on parchment for readability (not gold-on-dark)
 
-import { TILE_PX, CANVAS_PX, SAFE_SLOTS, TILE_BY_ID } from './data.js';
+import { TILE_PX, CANVAS_PX, SAFE_SLOTS, PACK_PAGE, TILE_BY_ID } from './data.js';
 import { DEFAULT_VIEW, offView, snapPx } from './viewport.js';   // (screen-fill) the screen's geometry
 
 // The splash canvas's supersample: its 320x220 card is drawn at 2x so the
@@ -18,7 +18,7 @@ import {
     ITEM_OVERLAY_RECT, ITEM_OVERLAY_ROW_H,
     WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
     EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, closeButtonRect,
-    DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceEquipLayout, deviceRingsLayout,
+    DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceBagPagerRects, deviceEquipLayout, deviceRingsLayout,
     deviceSkillsLayout,                                                      // (US2) the skills readout in the RINGS tab
     inspectorPanelRect, inspectorActionRects,                               // (C1) tap-to-inspect panel + action-row geometry
     gearOptionRects, gearChooserRect,                                       // (C2) GEAR chooser option-row + panel geometry
@@ -26,7 +26,7 @@ import {
     MODAL_RECT, offerLayout,                                                 // (offer screen) the one panel + its geometry
 } from './layout.js';
 import { itemStatLine, itemActions, equipOptions, USES_ACTION } from './inspector.js';    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
-import { zoneOf } from './inventory.js';                                     // (C1) safe/pack label for the inspector
+import { zoneOf, pageCount, slotOnPage } from './inventory.js';                                     // (C1) safe/pack label for the inspector
 import { buildXmbBar, resolveXmbSelection } from './xmb.js';                 // (XMB) usable-bar model
 import { ITEMS, itemTier } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
 import { RINGS, FUSIONS } from './ring-data.js';                             // (rings Task 5) SKILLS-tab hands: ring names + fusion spark
@@ -2675,12 +2675,19 @@ export class Renderer {
         // opens the inspector panel below. The selected slot wears a gold halo (like
         // the active tab) so the eye links it to the panel. No per-slot digit label.
         const selIdx = (game._deviceSel && game._deviceSel.tab === 'items') ? game._deviceSel.index : -1;
+        // (BG1) The PACK grid shows one page of a bag that may have grown; the
+        // SAFE row is the same on every page. Screen position i shows slot `slot`.
+        const pc = { safeSlots: SAFE_SLOTS, pageSize: PACK_PAGE };
+        const pages = pageCount((game.inventory || []).length, pc);
+        const page = Math.max(0, Math.min(pages - 1, game._bagPage || 0));
+        if (pages > 1) this._drawBagPager(ctx, bodyRect, page, pages);
         for (let i = 0; i < rects.length; i++) {
             const rect = rects[i];
-            const stack = game.inventory[i];
+            const slot = slotOnPage(i, page, pc);
+            const stack = game.inventory[slot];
 
             drawInset(ctx, rect.x, rect.y, rect.w, rect.h);
-            if (i === selIdx) {
+            if (slot === selIdx) {
                 ctx.strokeStyle = UI.gold; ctx.lineWidth = 2; ctx.strokeRect(rect.x + 1, rect.y + 1, rect.w - 2, rect.h - 2);
             }
 
@@ -2704,7 +2711,7 @@ export class Renderer {
 
                 // (defeat legibility) gold corner = kept through a defeat: any item
                 // in the SAFE zone OR an intrinsically-safe (quest) item.
-                const kept = i < SAFE_SLOTS || isSafe(stack.itemDef, game.equipment && game.equipment.weapon);
+                const kept = slot < SAFE_SLOTS || isSafe(stack.itemDef, game.equipment && game.equipment.weapon);
                 if (kept) this._drawSafeBadge(ctx, rect.x + rect.w, rect.y);
 
                 // Stack count (bottom-right)
@@ -2721,6 +2728,21 @@ export class Renderer {
         }
         // (defeat legibility) tell the player what survives a defeat.
         if (this.font) this.font.drawText(ctx, 'SAFE zone + quest items = kept if defeated', rects[0].x, rects[49].y + rects[49].h + 8, { color: UI.dim, scale: 1 });
+    }
+
+    // (BG1) The PACK page arrows and the "page/pages" label, on the rects
+    // main._tapDevice hit-tests (deviceBagPagerRects). An arrow with no page
+    // beyond it is drawn dim.
+    _drawBagPager(ctx, bodyRect, page, pages) {
+        const p = deviceBagPagerRects(bodyRect);
+        const arrows = [[p.prev, '<', page > 0], [p.next, '>', page < pages - 1]];
+        for (const [r, glyph, live] of arrows) {
+            const col = live ? UI.gold : UI.dim;
+            drawInset(ctx, r.x, r.y, r.w, r.h);
+            ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
+            if (this.font) this.font.drawText(ctx, glyph, r.x + r.w / 2, r.y + r.h / 2 - 8, { color: col, scale: 2, align: 'center' });
+        }
+        if (this.font) this.font.drawText(ctx, `${page + 1}/${pages}`, p.label.x, p.label.y, { color: UI.dim, scale: 1, align: 'right' });
     }
 
     // (C1) Tap-to-inspect panel. When a bag slot is selected (game._deviceSel),

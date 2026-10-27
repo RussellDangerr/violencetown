@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { ITEMS } from '../game/items.js';
 import { resolveItemDef } from '../game/item-registry.js';
 import { addToInventory } from '../game/inventory.js';
-import { INVENTORY_SIZE, SAFE_SLOTS, MAX_STACK } from '../game/data.js';
+import { INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK } from '../game/data.js';
 import {
     emptyOffer, commitBlocker, stage, unstage, settledGold, offerBalance, resolveOffer, sameEntry,
 } from '../game/offer.js';
@@ -104,7 +104,8 @@ const resettle = liveMethod('_resettle', 'npc', { settledGold });
 const goldTray = liveMethod('_goldTray', '', { settledGold });
 const toggleGold = liveMethod('_toggleOfferGold', 'npc', { settledGold });
 const scrollBy = liveMethod('_offerScrollBy', 'side, delta', { OFFER_ROWS_VISIBLE });
-const takeFitsBag = liveMethod('_offerTakeFitsBag', 'taken', { INVENTORY_SIZE, MAX_STACK });
+const addToInventoryLive = liveMethod('_addToInventory', 'itemDef',
+    { addToInv: addToInventory, SAFE_SLOTS, PACK_PAGE, MAX_STACK });
 const logOffer = liveMethod('_logOffer', 'npc, R, { given, taken, gold }', { dispositionCeil });
 const commitOfferFull = liveMethod('_commitOffer', '',
     { resolveOffer, transferGold, sellPrice, buyPrice, applyDispositionDelta, isHostile, emptyOffer,
@@ -172,13 +173,13 @@ function stubGame(overrides = {}) {
         //
         // `got` is kept as a convenience mirror of what actually landed, but it
         // is now written only when addToInventory really accepted the item.
+        // (BG1) main.js's own _addToInventory, lifted, so this bag grows a page
+        // exactly the way the game's does.
         _addToInventory(def) {
-            const ok = addToInventory(this.inventory, def,
-                { size: INVENTORY_SIZE, safeSlots: SAFE_SLOTS, maxStack: MAX_STACK });
+            const ok = addToInventoryLive.call(this, def);
             if (ok) (this.got ||= []).push(def.id);
             return ok;
         },
-        _offerTakeFitsBag: takeFitsBag,
         _buybackConsume: buybackConsume,
         _resettle: resettle,
         _goldTray: goldTray,

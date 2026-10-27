@@ -14,7 +14,8 @@
 import { Enemy } from './enemies.js';
 import { defaultPicks } from './slots.js';
 import { clamp } from './utils.js';
-import { INVENTORY_SIZE } from './data.js';
+import { INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE } from './data.js';
+import { pagedSize } from './inventory.js';
 import { sanitizeSlots } from './rings.js';
 import { settleHands } from './items.js';
 import { sanitizeSkills } from './skills.js';
@@ -276,12 +277,13 @@ function validate(raw) {
     p.x = (typeof p.x === 'number' && isFinite(p.x)) ? p.x : undefined;
     p.y = (typeof p.y === 'number' && isFinite(p.y)) ? p.y : undefined;
 
-    // Normalize to INVENTORY_SIZE slots. The bag now GROWS (9/10-slot saves
-    // pad with nulls); an old save with more slots than the current size would
-    // still truncate, but that no longer happens in practice. (remoticon-overhaul)
+    // Normalize to at least INVENTORY_SIZE slots (9/10-slot saves pad with
+    // nulls). (BG1) A bag that grew extra PACK pages keeps them: the length
+    // rounds up to whole pages, so every page reloads. (remoticon-overhaul)
     const inv = Array.isArray(p.inventory) ? p.inventory : [];
     p.inventory = [];
-    for (let i = 0; i < INVENTORY_SIZE; i++) {
+    const size = pagedSize(inv.length, INVENTORY_SIZE, { safeSlots: SAFE_SLOTS, pageSize: PACK_PAGE });
+    for (let i = 0; i < size; i++) {
         const s = inv[i];
         p.inventory.push(s && typeof s.id === 'string'
             ? { id: s.id, count: clamp(_num(s.count, 1), 1, 99) }

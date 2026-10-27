@@ -16,12 +16,12 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { ITEMS, resolveUse, unequipItem } from '../game/items.js';
 import { WEAPONS } from '../game/weapons.js';
-import { addToInventory, moveToZone, zoneOf } from '../game/inventory.js';
-import { INVENTORY_SIZE, SAFE_SLOTS, MAX_STACK } from '../game/data.js';
+import { addToInventory, moveToZone, zoneOf, pageCount, slotOnPage, pageOfSlot } from '../game/inventory.js';
+import { INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK } from '../game/data.js';
 import { itemActions, equipOptions } from '../game/inspector.js';
 import { slotRing, unslotRing } from '../game/rings.js';
 import {
-    HIT_SLOP, DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceBagSlotRects,
+    HIT_SLOP, DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceBagSlotRects, deviceBagPagerRects,
     deviceEquipLayout, deviceRingsLayout, inspectorActionRects, gearOptionRects, nearestRectInDir,
 } from '../game/layout.js';
 
@@ -53,7 +53,7 @@ const audio = { playSfx() {} };
 const FREE = {
     STATE, DIRS, audio, HIT_SLOP, DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect,
     deviceBagSlotRects, deviceEquipLayout, deviceRingsLayout, inspectorActionRects, gearOptionRects,
-    nearestRectInDir, itemActions, equipOptions, zoneOf, moveToZone, SAFE_SLOTS, INVENTORY_SIZE,
+    nearestRectInDir, itemActions, equipOptions, zoneOf, moveToZone, SAFE_SLOTS, INVENTORY_SIZE, PACK_PAGE, pageCount, slotOnPage, pageOfSlot, deviceBagPagerRects,
     MAX_STACK, resolveUse, unequipItem, slotRing, unslotRing,
 };
 const LIVE = [
