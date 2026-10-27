@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Generate game/assets-placeholder/kenney/ratVariants_packed.png.
+"""Generate game/assets-placeholder/kenney/ratVariants_packed.png and
+beastVariants_packed.png.
 
 One base cell in, tinted variants out. Enemy variants are a palette, not new
 art: the base sprite's body and eye colours are swapped, exactly, for the ones
@@ -16,16 +17,27 @@ The base is the Tiny Dungeon rat, cell (3,10). It has exactly four colours:
     light    (234, 165, 108)  30 px, the body's lighter tone
     eye      (192, 203, 220)   2 px
 
-The tool refuses to run if the base cell ever has any other colour, or loses
+The second base is the Tiny Dungeon grey beast, cell (4,10): the rat's own
+silhouette in grey, with an orange tail. It also has exactly four colours:
+
+    outline  (63, 38, 49)    123 px, never swapped
+    shade    (139, 155, 180)  37 px, the body's darker grey
+    light    (192, 203, 220)  21 px, the body's lighter grey
+    tail     (234, 165, 108)  11 px, never swapped
+
+Only its two greys are swapped (BEAST_VARIANTS). Lire, the lion the Lion
+Whip's "Hire Lire" trick summons, is its tawny column.
+
+The tool refuses to run if a base cell ever has any other colour, or loses
 one of these, since an exact swap would then silently miss pixels.
 
-Output: one packed (gutter-free) row of 16x16 cells, one per variant, in the
-order of VARIANTS below. The column order is printed on every run. Kenney Tiny
-is CC0, and so are the cells derived from it.
+Output: one packed (gutter-free) row of 16x16 cells per sheet, one per variant,
+in the order of VARIANTS and BEAST_VARIANTS below. The column order is printed
+on every run. Kenney Tiny Dungeon is CC0, and so are the cells derived from it.
 
 Run from the repo root (needs Pillow):
-    python tools/gen_recolor.py           # write the sheet
-    python tools/gen_recolor.py --check   # exit 1 if the sheet on disk differs
+    python tools/gen_recolor.py           # write both sheets
+    python tools/gen_recolor.py --check   # exit 1 if a sheet on disk differs
 """
 import io
 import sys
@@ -57,26 +69,42 @@ VARIANTS = [
     ('pouch',    (184, 153, 106), (230, 206, 161), (192, 203, 220)),
 ]
 
+BEAST_CELL = (4, 10)   # (col, row) in tinyDungeon_packed.png
+BEAST_OUT = K / 'beastVariants_packed.png'
 
-def base_cell():
+BEAST_SHADE = (139, 155, 180)
+BEAST_LIGHT = (192, 203, 220)
+BEAST_TAIL = (234, 165, 108)
+
+# One row per variant: name, then what BEAST_SHADE and BEAST_LIGHT become.
+# tawny is Lire.
+BEAST_VARIANTS = [
+    ('tawny', (193, 154, 107), (232, 203, 150)),
+]
+
+
+def base_cell(at, colours):
+    """The 16x16 cell at (col, row) of the Tiny Dungeon sheet, refused unless
+    its opaque pixels use exactly `colours`."""
     sheet = Image.open(SRC).convert('RGBA')
-    col, row = BASE_CELL
+    col, row = at
     cell = sheet.crop((col * CELL, row * CELL, col * CELL + CELL, row * CELL + CELL))
     seen = {p[:3] for p in cell.get_flattened_data() if p[3]}
-    if seen != {OUTLINE, SHADE, LIGHT, EYE}:
-        sys.exit(f'base cell {BASE_CELL} has colours {sorted(seen)}, not the four this tool swaps')
+    if seen != set(colours):
+        sys.exit(f'base cell {at} has colours {sorted(seen)}, not the four this tool swaps around')
     return cell
 
 
-def recolour(cell, shade, light, eye):
-    """Swap SHADE, LIGHT and EYE for the given colours, exactly. Alpha and
-    every other colour (the outline) are left as they are."""
-    for c in (shade, light, eye):
-        if c == OUTLINE:
-            sys.exit(f'{c} is the outline colour; a variant would lose its outline')
-    if len({shade, light, eye}) != 3:
-        sys.exit(f'{shade} {light} {eye}: a variant needs three different colours')
-    swap = {SHADE: shade, LIGHT: light, EYE: eye}
+def recolour(cell, swap, kept):
+    """Swap each colour in `swap` for its new one, exactly. Alpha and every
+    other colour (the `kept` ones: the outline, the beast's tail) are left as
+    they are."""
+    new = list(swap.values())
+    for c in new:
+        if c in kept:
+            sys.exit(f'{c} is a kept colour; a variant would lose it into its body')
+    if len(set(new)) != len(new):
+        sys.exit(f'{new}: a variant needs {len(new)} different colours')
     out = cell.copy()
     px = out.load()
     for y in range(CELL):
@@ -87,30 +115,46 @@ def recolour(cell, shade, light, eye):
     return out
 
 
-def build():
-    base = base_cell()
-    strip = Image.new('RGBA', (CELL * len(VARIANTS), CELL), (0, 0, 0, 0))
-    for i, (_name, shade, light, eye) in enumerate(VARIANTS):
-        strip.paste(recolour(base, shade, light, eye), (i * CELL, 0))
+def strip_png(cells):
+    strip = Image.new('RGBA', (CELL * len(cells), CELL), (0, 0, 0, 0))
+    for i, cell in enumerate(cells):
+        strip.paste(cell, (i * CELL, 0))
     buf = io.BytesIO()
     strip.save(buf, format='PNG')
     return strip, buf.getvalue()
 
 
+def build():
+    base = base_cell(BASE_CELL, (OUTLINE, SHADE, LIGHT, EYE))
+    return strip_png([recolour(base, {SHADE: shade, LIGHT: light, EYE: eye}, (OUTLINE,))
+                      for _name, shade, light, eye in VARIANTS])
+
+
+def build_beast():
+    base = base_cell(BEAST_CELL, (OUTLINE, BEAST_SHADE, BEAST_LIGHT, BEAST_TAIL))
+    return strip_png([recolour(base, {BEAST_SHADE: shade, BEAST_LIGHT: light}, (OUTLINE, BEAST_TAIL))
+                      for _name, shade, light in BEAST_VARIANTS])
+
+
 def main():
-    strip, data = build()
-    rel = OUT.relative_to(ROOT).as_posix()
-    if '--check' in sys.argv[1:]:
-        if not OUT.exists() or OUT.read_bytes() != data:
-            print(f'{rel} is out of date: run python tools/gen_recolor.py')
-            sys.exit(1)
-        print(f'{rel} matches')
-        return
-    OUT.write_bytes(data)
-    print('wrote', rel, strip.size)
-    print('column order:')
-    for i, (name, *_rest) in enumerate(VARIANTS):
-        print(f'  {i}  {name}')
+    check = '--check' in sys.argv[1:]
+    stale = False
+    for out, (strip, data), variants in ((OUT, build(), VARIANTS), (BEAST_OUT, build_beast(), BEAST_VARIANTS)):
+        rel = out.relative_to(ROOT).as_posix()
+        if check:
+            if not out.exists() or out.read_bytes() != data:
+                print(f'{rel} is out of date: run python tools/gen_recolor.py')
+                stale = True
+            else:
+                print(f'{rel} matches')
+            continue
+        out.write_bytes(data)
+        print('wrote', rel, strip.size)
+        print('column order:')
+        for i, (name, *_rest) in enumerate(variants):
+            print(f'  {i}  {name}')
+    if stale:
+        sys.exit(1)
 
 
 if __name__ == '__main__':
