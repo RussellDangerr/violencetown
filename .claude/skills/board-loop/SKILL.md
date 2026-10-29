@@ -16,36 +16,39 @@ The board's word for turning an idea into rulings and slices is **tweak**. Use n
    `<scratchpad>/board-loop/<yyyy-mm-dd-hhmm>/`.
 2. **Recover stale `doing` cards** (§1 step 2).
 3. **Clear Claude's turn** in the §1 step 3 order. Merges follow §4, tweaks §5, ruling options
-   §6. At most 10 merges and 10 tweaks.
-4. **Ask what's next:** `node tools/roadmap-board/next-slice.mjs <folder>`.
-5. **For each pick** (up to 10, none sharing a file):
-   1. Recon it (§1 step 5).
-   2. Claim it (§1 step 6).
-   3. Spawn the `slice-builder` agent with the card JSON, the picks of the rulings it rests on,
-      `slug` and `touches`. Spawn every pick's builder in the same message so they run at once.
-   4. Write its report back to the card (§1 step 7). Board writes stay here, never in the
-      builder.
-6. **Scout** if it's due (LOOP.md §10): spawn `board-scout` with the builders, land its proposals
-   with `newScoutIdea()`, and update `meta/scout`.
+   §6. At most 10 merges, 10 Changes builders and 10 tweaks.
+4. **Ask what's next:** `node tools/roadmap-board/next-slice.mjs <folder>`. Besides the picks it
+   prints `openRulings` (§5's pause) and `idleWait` (§7's wait).
+5. **Build the picks** (up to 10, none sharing a file):
+   1. Recon every pick (§1 step 5). A hit drops that pick only; carry on with the rest.
+   2. Claim every pick that's left (§1 step 6).
+   3. Spawn every pick's `slice-builder` in one message, plus `board-scout` if it's due (§10).
+      Each builder gets the card JSON, the picks of the rulings it rests on, `slug` and
+      `touches`.
+   4. Write each report back to its card (§1 step 7). FAILED or no report adds 1 to `fails`
+      (§3). Board writes stay here, never in the builder.
+6. **Land the scout's proposals** (§10) with `newScoutIdea()`, and update `meta/scout`.
 7. **Post the update** (§7): six lines at most, in plain words, no card codes without their
    title.
 8. **Schedule the next pass** with ScheduleWakeup, prompt `/board-loop`:
-   - **60 s** after real work;
-   - **3600 s** when idle, with `noop: true`;
-   - **`stop: true`** only per §7.
+   - **60 s** after a pass that changed anything on the board;
+   - otherwise `idleWait` (300, 1200 or 3600 s), with `noop: true`;
+   - **600 s** when the board couldn't be read;
+   - **`stop: true`** only when he asks, or after 3 passes in a row that couldn't read the
+     board (§7).
 
-## Policy defaults until Caelan rules (board cards LP1–LP5)
+## Standing policy (his picks on LP1–LP6)
 
-| Card | Until he picks |
+| Card | His pick |
 |---|---|
 | LP2 | one loop |
-| LP3 | caps of 10: 10 rulings + 10 slices per tweak, no new tweaks while Your turn ≥ 10 (his 10-25 call, over his LP3 "no cap") |
+| LP3 | caps of 10, settled by his "limits of 10" (`plans/loop-limits-ten.md`): 10 rulings + 10 slices per tweak; Doing and Review hold 10 slices each; no tweaks of the loop's own while 10 or more rulings are open |
 | LP4 | ideas stay put; the update names the 3 oldest |
 | LP5 | per-pass update, no digest |
-| LP1 | no settings change |
+| LP1 | yes, lock the dangerous git commands. That is a `.claude/settings.json` change the loop may not make, so the update names it until he applies it |
 | LP6 | standing delegation (LOOP.md §11): approve, pick and tweak what the loop is confident about |
 
-Read the cards each pass. Once he picks, his pick wins.
+If he changes a pick on the board, the board wins.
 
 ## Hard stops
 

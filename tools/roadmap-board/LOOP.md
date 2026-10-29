@@ -17,15 +17,18 @@ Caelan dislikes the other word for it; never use it.
    - `ArtifactData list`, collection `cards`, `query.limit: 1000`, with `out_dir` set to a
      **fresh** scratchpad folder (a list only overwrites the ids it returns).
    - Keep every card's `version`.
+   - **If the read fails**, add 1 to the count in `<scratchpad>/board-loop/unreachable.txt` and go
+     straight to the wait (§7). A good read sets it back to 0.
 2. **Recover stale work.** A card in `doing` whose `claim.at` is over 2 hours old means a pass
    died mid-slice.
    - Leave its branch alone.
    - Move the card to `ready` and drop `claim`.
    - Note "resume from `<branch>`".
-3. **Clear Claude's turn**, in this order. Do at most 10 merges and 10 tweaks per pass:
+3. **Clear Claude's turn**, in this order. Do at most 10 merges, 10 Changes builders and 10
+   tweaks per pass. Items 4, 6 and 7 share the 10 tweaks.
    1. **Merge it** (§4).
-   2. **Changes:** hand the slice back to a builder on its existing branch. When it is done, move
-      the card to `review` and clear `verdict`.
+   2. **Changes:** hand the slice back to a builder on its existing branch. When it reports DONE,
+      move the card to `review` and clear `verdict`. Anything else is a FAILED (§3).
    3. **Feedback with no reply:** answer on the card by appending `{from: "claude", text, at}` to
       `feedback`. Add `ask: true` only when the reply needs his answer.
       - **His own answer to a ruling** (`pick.option: "other"`, typed in the card's box) comes in
@@ -34,18 +37,24 @@ Caelan dislikes the other word for it; never use it.
       - If it doesn't settle the question, reply with `ask: true`. Move the ruling back to the
         `ruling` lane and drop `pick`, so it returns to Your turn. Offer new options if his words
         suggest them.
+      - **A card with `fails`:** set it back to 0 once you act on his reply, so the card can be
+        built again.
    4. **Tweak it** (§5).
    5. **A ruling with no options:** write 2–4 options and a recommended one (§6).
    6. **A Ready slice with no acceptance:** tweak it (§5).
+   7. **Scout defects and tweaks he hasn't triaged** (`source: "scout"`, `scoutKind` `defect` or
+      `tweak`, no `triage`): tweak them under the standing delegation (§11).
 4. **Ask what's next:** `node tools/roadmap-board/next-slice.mjs <that folder>`.
    - `wip-cap` or `nothing-pickable`: no build this pass. Go to step 8.
    - `ok`: carry on with `picks` (up to 10). Only an approved, tweaked, unblocked slice is ever
      picked, and no two picks share a file. Steps 5 to 7 run for each pick.
+   - It also prints `openRulings` (for §5's pause) and `idleWait` (for §7's wait).
 5. **Recon.** Run `git fetch`, `git branch -r --no-merged origin/dev`, and `git log -S` on the
-   slice's key names. If it already shipped, or it overlaps a branch still in review:
-   - note it on the card;
-   - move the card to `someday`;
-   - go to step 8.
+   slice's key names. A hit drops that pick only; carry on with the rest:
+   - **It already shipped:** note where, and move the card to `done`.
+   - **It overlaps a branch still in review:** add that card's id to `blockedBy` and leave the
+     slice in `ready`. It frees itself when that branch merges.
+   - **Anything else that makes it wrong to build:** note why and move the card to `someday`.
 6. **Claim it** with a pinned `update`:
    `{lane: "doing", claim: {by: "loop", at: <now>}, branch: "feature/<slug>"}`.
    - `<slug>` is the card id in lower case, plus 2–4 words of its title, hyphenated.
@@ -59,13 +68,13 @@ Caelan dislikes the other word for it; never use it.
      - **DONE:** `{lane: "review", summary, branch}` and drop `claim`.
      - **BLOCKED:** write the new ruling card it asked for and add its id to the slice's
        `blockedBy`. Move the slice to `ready` and drop `claim`.
-     - **FAILED:** move the slice to `ready`, drop `claim`, and put the failure plus the branch
-       sha in `note`.
+     - **FAILED**, or no report at all: move the slice to `ready`, drop `claim`, add 1 to
+       `fails`, and put the failure plus the branch sha in `note` (§3).
 8. **Scout** (§10), when it's due: alongside the builders, never instead of them.
 9. **Post the update and pick the wait** (§7).
 
-**Up to 10 slices per pass**, one builder each, all spawned in the same message so they run at
-once. `next-slice.mjs` never hands out two that share a file, so their branches can't collide. A
+**Up to 10 slices per pass**, one builder each. Recon and claim every pick first, then spawn all
+the builders (and the scout, if it's due) in the same message so they run at once. `next-slice.mjs` never hands out two that share a file, so their branches can't collide. A
 pass that cleared Claude's turn may still build.
 
 ## 2. What a slice must prove (the builder's definition of done)
@@ -128,6 +137,13 @@ Judge every gate by its exit code; claims don't count. All are fatal:
 - **A judgment call the rulings don't settle** (§6): BLOCKED. Commit only work that passes the
   tests, prefixed `wip:`. Never `git stash`.
 - **A guard failure:** FAILED. Never edit the guard to pass it.
+- **No written outcome:** a step that ends without its DONE is a FAILED for that card. That
+  covers a Changes builder that isn't DONE, a merge push that is rejected or doesn't show in
+  `ls-remote`, and a builder that returns no report.
+- **Counting failures:** every FAILED adds 1 to the card's `fails`. On the second, also append
+  `{from: "claude", text, at, ask: true}` naming what failed. From then on `next-slice.mjs`
+  skips the slice, and a merge clears `verdict`, until his reply sets `fails` back to 0
+  (§1 step 3.3).
 
 ## 4. Merge it
 
@@ -147,6 +163,8 @@ His click on the card is the merge call. Do it away from his checkout:
    `git push origin HEAD:refs/heads/dev`.
 5. Run `git ls-remote origin dev` to check it landed. Then remove the worktree, move the card to
    `done`, and drop `verdict`.
+   - A rejected push or a `ls-remote` that doesn't match: remove the worktree and count a FAILED
+     (§3). The card stays in `review`; its `verdict` stays until the second failure.
 
 Never touch `main`, never tag, never release. Those are his.
 
@@ -164,8 +182,11 @@ Never touch `main`, never tag, never release. Those are his.
    - At most 10 rulings and 10 slices per tweak.
    - Slices: about a day each, with `touches`, `acceptance` and `blockedBy`.
    - Each slice must be something he can see on screen, or have a stated reason why it can't.
-4. **Pause when he's busy.** When Your turn holds 10 or more items, tweak nothing new. Say so
-   in the update.
+4. **Pause when he's busy.** Count only open rulings (`openRulings` from `next-slice.mjs`):
+   ideas, approvals and asks don't count. At 10 or more, start no tweak on the loop's own
+   initiative (§1 step 3.6 and 3.7). His Tweak it is always done: write the slices that need no
+   ruling now, and queue its rulings in the idea's `note` for a pass with room. Say so in the
+   update.
 5. **Close the idea.** Move it to `done` with a note naming the cards it became.
 
 ## 6. What the loop decides, and what becomes a ruling
@@ -208,13 +229,18 @@ refactors that leave the autoplay golden untouched, tooling, commit order.
 
   If nothing changed since the last pass, post one line.
 - **The wait:** call ScheduleWakeup with the same `/board-loop` prompt.
-  - **60 s** after a pass that built, merged or tweaked something, because more may be ready.
-  - **3600 s** (the maximum) when idle on `wip-cap` or `nothing-pickable` with Claude's turn
-    empty.
-  - Set `noop: true` on idle passes.
-- **Stop the loop** (ScheduleWakeup `stop: true`) only when he asks, or when something is broken
-  that a pass can't fix (the board is unreachable, or the repo is dirty in a way that isn't the
-  loop's). Say why in the update.
+  - **60 s** after a pass that changed anything on the board: a lane move, a merge, a build
+    outcome (DONE, BLOCKED or FAILED), a reply, or new cards or ruling options. More may be ready.
+  - **Otherwise the pass is idle**, even if Claude's turn still lists items a cap or §5's pause
+    is holding. Set `noop: true` and wait `idleWait` from `next-slice.mjs`: 300 s if he touched
+    the board in the last 30 minutes, 1200 s if in the last 2 hours, else 3600 s.
+  - **The board couldn't be read:** 600 s.
+- **When builds or merges can't run** (no worktree can be created, `origin` can't be reached),
+  skip them, do everything else, and say why in the update. His own uncommitted edits in his
+  checkout are never a reason to stop: the loop doesn't work there.
+- **Stop the loop** (ScheduleWakeup `stop: true`) only when he asks, or when
+  `unreachable.txt` reaches 3 (three passes in a row that couldn't read the board). Say why in
+  the update.
 
 ## 8. Never
 
@@ -242,19 +268,23 @@ refactors that leave the autoplay golden untouched, tooling, commit order.
 Nothing feeds the board fixes and tweaks Caelan hasn't thought of, so the loop also runs a
 read-only scout (`plans/board-scout.md`, agent `board-scout`).
 
-1. **When.** Read `meta/scout` from the board database (`lastSha`, `lastAt`). Run a scout when
-   `lastAt` is more than 2 hours ago and either `origin/dev` has moved past `lastSha` or the pass
-   has nothing to build. Never two at once.
+1. **When.** Read `meta/scout` from the board database (`lastSha`, `lastAt`, `runningSince`).
+   Run a scout when `lastAt` is more than 2 hours ago and either `origin/dev` has moved past
+   `lastSha` or the pass has nothing to build. Never two at once: skip it while `runningSince`
+   is under 2 hours old.
 2. **Spawn it** with the pass's card folder, `since: <lastSha>`, and a scratch folder for its
-   evidence. Spawn it in the same message as the builders.
+   evidence. First set `meta/scout.runningSince: <now>`. Spawn it in the same message as the
+   builders.
 3. **Land its proposals.** For each one, build the card with `newScoutIdea(proposal, now,
    cards)` from `board-model.js`; it returns null for a key the board already has, in any lane.
    Write the cards in one batch, then set `meta/scout` to `{ lastSha: <origin/dev>, lastAt:
-   <now> }`.
+   <now> }`, which also clears `runningSince`.
 4. **Say so in the update:** how many scout cards landed, and the best one's title.
 
-Scout cards are ideas in his Ideas lane, marked "idea · scout". They wait on his Tweak it or
-Someday like any idea; the loop never builds one he hasn't triaged.
+Scout cards are ideas in his Ideas lane, marked "idea · scout". Scout **ideas** (`scoutKind:
+"idea"`) wait on his Tweak it or Someday like any idea. Scout **defects and tweaks** may be
+tweaked by the loop without waiting (§1 step 3.7, §11); what that tweak makes follows §11's
+approval rule.
 
 ## 11. The standing delegation
 
@@ -272,6 +302,6 @@ the board as LP6.
 
 **Still his:** names, copy, lore, tuning numbers, art picks, the spine's Locked rows, Merge it,
 and any ruling where the loop's lean is a taste call. A pick the loop makes says so in
-`pick.note` ("picked by the loop under the standing delegation"), so he can see and overrule
-it; an approval it gives carries `approved.by: "loop"`.
+`pick.note` ("picked by the loop under the standing delegation") and carries `pick.by: "loop"`,
+so he can see and overrule it; an approval it gives carries `approved.by: "loop"`.
 

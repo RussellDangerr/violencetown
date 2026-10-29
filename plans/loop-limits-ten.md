@@ -18,6 +18,11 @@ Building several slices in one pass keeps the repo's rule of parallelizing only 
 work: `nextSlices()` hands out picks whose `touches` share no file with each other or with any
 slice still in `doing` or `review`. Each pick gets its own builder in its own worktree.
 
+**2026-10-29:** the WIP cap is now per lane: `doing` and `review` hold 10 slices each
+(`DOING_CAP`, `REVIEW_CAP`). One full pass used to fill the shared cap with Review alone, and
+the loop then built nothing until he merged. A slice that fails 2 builds is skipped until he
+replies (`MAX_FAILS`).
+
 ## Unchanged
 
 The limits that are not card counts: at most 5 "Needs your eye" items, 2 fix attempts on red
