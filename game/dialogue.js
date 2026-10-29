@@ -209,11 +209,12 @@ export const DIALOGUES = {
         greeting: '"Hey — hey, you. You didn\'t happen to bring food, did you? I haven\'t eaten since the bridge."',
         choices: [
             // (Phase 4 MQ2) Dialogue delivery: only shown at the handoff stage while
-            // the player holds the bag; consumesItem removes it AND emits item_given
-            // (same event the satchel give fires), so either idiom completes MQ2.
+            // the player holds everything still owed; handOver removes it all AND
+            // emits item_given per item (the event the satchel give fires), so
+            // either idiom completes MQ2 (IC2: the order is more than one item).
             { id: 'deliver', label: "Here's your burger and fries", once: true,
-              requiresItem: 'burger_fries', consumesItem: 'burger_fries',
-              available: (g) => g.questEngine && g.questEngine.currentStageId && g.questEngine.currentStageId() === 'handoff',
+              available: (g) => !!g.questEngine && g.questEngine.currentStageId() === 'handoff' && g.questEngine.holdsOwed(),
+              onPick: (g, npc) => g.questEngine.handOver(npc.id),
               reply: '"...oh, thank god. Thank you — really. Here, take this for your trouble."' },
             { id: 'ask', label: 'Ask what they\'re doing out here', repeatable: true,
               reply: '"Waitin\'. Starvin\'. Same as always."' },
