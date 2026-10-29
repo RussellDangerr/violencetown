@@ -70,6 +70,7 @@ const settle = async () => { for (let i = 0; i < 8; i++) await new Promise(r => 
 const EXPECTED = {
     'canyon_escape/find_way_out':  'CANYON',
     'deliver_burger/get_burger':   'DOWNTOWN',
+    'deliver_burger/get_cone':     'FACTORY',
     'deliver_burger/handoff':      'DOWNTOWN',
     'fix_car/examine_car':         'TOWN',
     'fix_car/recover_converter':   'SEWER',
@@ -111,7 +112,7 @@ describe('every quest stage names where the Map should send you', () => {
         assert.equal(zoneOf('canyon-map.json'), QUESTS.canyon_escape.stages[0].targetZone);
         // The delivery's recipient waits in Downtown.
         assert.ok(readMap('downtown-map.json').enemies.some(e => e.id === 'dt-recipient'));
-        assert.equal(zoneOf('downtown-map.json'), QUESTS.deliver_burger.stages[1].targetZone);
+        assert.equal(zoneOf('downtown-map.json'), QUESTS.deliver_burger.stages.find(s => s.id === 'handoff').targetZone);
     });
 });
 
