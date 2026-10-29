@@ -289,11 +289,9 @@ export const TILE_SPRITE_MAP = {
     0: { sheet: 'roguelikeDungeon', col: 8, row: 0, under: 'fill' },  // wall — plain grey brick (10 see-through corner px: its own dark colour under them reads as mortar)
     1: { sheet: 'tinyDungeon', col: 0, row: 4 },  // floor — clean tan dungeon stone
     2: { sheet: 'roguelikeDungeon', col: 6, row: 11 }, // sludge — bordered teal pool
-    3: { sheet: 'tinyDungeon', col: 4, row: 4 },  // gap — speckled tan floor variant
     4: { sheet: 'tinyDungeon', col: 0, row: 3 },  // grate — horizontal iron bars
     5: { sheet: 'tinyDungeon', col: 6, row: 3 },  // drain — floor with 4-square stone inset
     6: { sheet: 'tinyDungeon', col: 4, row: 3 },  // boss floor — seamless grey brick, the boss's two-cell dais (was (9,4), Factory's FACTORY_FLOOR; (9-11,4) are wall-run pieces with dark end caps and seam when tiled)
-    7: { sheet: 'tinyDungeon', col: 5, row: 2 },  // boss trigger — red banner on stone (accent)
     22: { sheet: 'tinyDungeon', col: 5, row: 3 }, // PORTCULLIS — spiked vertical gate
     23: { sheet: 'tinyDungeon', col: 3, row: 5, under: 1 }, // BARRICADE — wooden crate front (destructible), on sewer floor
 };

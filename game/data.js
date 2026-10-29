@@ -6,15 +6,14 @@
 // tags.js tileTags); the content check fails on any other tag.
 
 export const TILES = {
-    // Sewer tiles (0-7)
+    // Sewer tiles (0-7). 3 was GAP and 7 was BOSS_TRIGGER, both placed in no
+    // map (the boss-trigger trap went long before) — retired; don't reuse the ids.
     WALL:         { id: 0, walkable: false, hazard: null, fallbackColor: '#1c1510' },
     FLOOR:        { id: 1, walkable: true,  hazard: null, fallbackColor: '#2a2a3a' },
     SLUDGE:       { id: 2, walkable: true,  hazard: 'sludge', fallbackColor: '#3c145a' },
-    GAP:          { id: 3, walkable: true,  hazard: null, fallbackColor: '#1e1e30' },
     GRATE:        { id: 4, walkable: false, hazard: null, fallbackColor: '#333340' },
     DRAIN:        { id: 5, walkable: true,  hazard: null, fallbackColor: '#252535' },
     BOSS_FLOOR:   { id: 6, walkable: true,  hazard: null, fallbackColor: '#2e1a3e' },
-    BOSS_TRIGGER: { id: 7, walkable: true,  hazard: null, fallbackColor: '#5a1a6a' },
 
     // Town tiles (10-19)
     TOWN_WALL:    { id: 10, walkable: false, hazard: null, fallbackColor: '#4a3a2a' },
