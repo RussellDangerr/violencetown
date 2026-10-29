@@ -49,11 +49,11 @@ describe('the opening objective', () => {
 });
 
 describe('no objective overflows a phone', () => {
-    // Two objectives ALREADY overflowed when this test was written, and are
+    // Objectives that ALREADY overflowed when this test was written, and are
     // flagged rather than silently rewritten, because they are authored copy.
     // Listed so a NEW long objective still fails loudly. If you shorten one,
     // delete it from this list — the test will tell you to.
-    const KNOWN_OVERFLOW = new Set(['canyon_escape/find_way_out', 'deliver_burger/handoff']);
+    const KNOWN_OVERFLOW = new Set(['canyon_escape/find_way_out']);
 
     for (const [qid, q] of Object.entries(QUESTS)) {
         for (const s of q.stages || []) {
