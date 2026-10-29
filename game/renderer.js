@@ -3126,13 +3126,14 @@ export class Renderer {
 
     // (Phase 4) The rudimentary world map — plain labeled boxes on a grid, one per
     // overworld screen, connector lines between neighbours. The current zone is
-    // filled gold ("YOU"); the active quest's targetZone is ringed red ("» GO").
+    // filled gold ("YOU"); every zone the quest engine points at is ringed red
+    // ("» GO") — one stage's targetZone, or several from a between-quests row.
     // Old-Zelda subscreen style: flat boxes, no interior detail. `top` = the y to
     // start below the tab header.
     _drawWorldMapBody(game, R, top) {
         const { ctx } = this;
         const here = overworldZone(game.map && game.map.zoneName);
-        const target = game.questEngine ? overworldZone(game.questEngine.getTargetZone()) : null;
+        const targets = new Set((game.questEngine?.getTargetZones?.() ?? []).map(overworldZone));
 
         const cols = WORLD_ZONES.map(z => z.col), rows = WORLD_ZONES.map(z => z.row);
         const c0 = Math.min(...cols), c1 = Math.max(...cols), r0 = Math.min(...rows), r1 = Math.max(...rows);
@@ -3157,7 +3158,7 @@ export class Renderer {
         for (const z of WORLD_ZONES) {
             const b = boxOf(z);
             const isHere = z.zoneName === here;
-            const isTarget = z.zoneName === target;
+            const isTarget = targets.has(z.zoneName);
             ctx.fillStyle = isHere ? 'rgba(212,185,106,0.85)' : 'rgba(30,24,16,0.9)';
             ctx.fillRect(b.x, b.y, b.w, b.h);
             ctx.lineWidth = isTarget ? 3 : 2;
