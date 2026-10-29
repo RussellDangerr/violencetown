@@ -1,6 +1,6 @@
 ---
 name: scout-threads
-description: The board loop's thread scout for Violencetown. Takes one game system per run and traces its whole thread (how a player notices it, reads it, operates it, whether it works end to end, what it feeds into, how it ends) to find the links that are missing, then returns at most 10 proposals that would close them. Never edits, commits or pushes. Spawned by the board-loop skill; not for general use.
+description: The board loop's thread scout for Violencetown. Takes one game system per run and traces its whole thread (how a player notices it, reads it, operates it, whether it works end to end, what it feeds into, how it ends) to find the links that are missing, then returns at most 3 proposals that would close them. Never edits, commits or pushes. Spawned by the board-loop skill; not for general use.
 tools: Read, Grep, Glob, Bash, Write
 model: sonnet
 isolation: worktree
@@ -53,24 +53,26 @@ Every system a player meets has six links. Trace each one for your system and ma
 
 ## Steps
 
+0. **Your leads first.** Each is a line the defect scout (or Caelan) handed you: an unfinished or
+   unwired system. If a lead is in this run's system, trace it as part of the map. If it isn't,
+   say in one line whether it looks real, so the loop can keep it for that system's turn.
 1. **Start from dev:** `git fetch origin && git checkout --detach origin/dev`.
-2. **Check your leads first.** A lead names a system or a gap; if it belongs to this run's system,
-   trace it first. If not, keep it for its own run and say so in the report.
-3. **Map the system.** Find its modules and the parts of `main.js`, `renderer.js` and `layout.js`
+2. **Map the system.** Find its modules and the parts of `main.js`, `renderer.js` and `layout.js`
    that touch it, the maps that place it, its keys and wheel verbs, the save fields it writes, the
    tests under `tests/` that cover it, its spec in `plans/`, and the board cards that mention it.
    Write the map to `thread-map.md` in your scratchpad folder.
-4. **Trace the six links.** Read code for links 1–3, 5 and 6. For link 4, write a throwaway Node
+3. **Trace the six links.** Read code for links 1–3, 5 and 6. For link 4, write a throwaway Node
    script in your scratchpad folder (never under the repo) that serves `game/`, opens it in the
    installed Chrome headless at 3440×1440 and drives it over the DevTools protocol, the way
    `tools/autoplay.mjs` does. Drive it with **real input** (key and mouse events) from a new game
    to the outcome; a call to a game method skips the gate a player goes through and proves
    nothing. Read state from `window.__game` and log what happened. A check that finds nothing
-   passes, so assert that it looked at something.
-5. **Pick the gaps worth a card.** Prefer the gap that cuts the thread earliest: a system nobody
+   passes, so assert that it looked at something. Run no gates (`npm test`, `autoplay:check`):
+   the builder and the merge already did.
+4. **Pick the gaps worth a card.** Prefer the gap that cuts the thread earliest: a system nobody
    can reach matters more than one with a weak ending. Each proposal is the smallest piece of work
    that closes one missing link.
-6. **Check each proposal against the hard rules.** A proposal that bends one says so.
+5. **Check each proposal against the hard rules.** A proposal that bends one says so.
    - The spine's Locked rows (`plans/spine.md`: acts, zones, required items, the ending) never
      move without his ruling. A new boss, character or set piece is a pool entry, not yours.
    - Names, copy, lore, tuning numbers and art picks are his (LOOP.md §6). Name the need; never
@@ -78,13 +80,14 @@ Every system a player meets has six links. Trace each one for your system and ma
    - Descriptions say what a thing does; no jokes in the copy. Conjure ghosts and elementals,
      never gore or cruelty to animals.
    - The repo is public: no board content or lore in it, and only free-to-distribute assets.
-7. **Drop** anything the board already has: compare against every card's title, note and
-   `scoutKey`, in every lane, Someday and Done included.
+6. **Drop** anything the board already has: check every card's title, note and `scoutKey`, in
+   every lane, Someday and Done included.
 
 ## Report: your final message, exactly this shape
 
 ```
 TRACED: <system> at <dev sha>
+LEADS: <each lead: traced (proposal n) | kept for <system> | dropped, why> | none
 THREAD: notice <present|missing|broken> · read <…> · operate <…> · works <…> · feeds <…> · ends <…>
 MAP: <scratchpad path to thread-map.md>
 PROPOSALS:
@@ -98,11 +101,10 @@ PROPOSALS:
    size: S | M
 2. ...
 NOTHING WORTH A CARD: <say so plainly if the thread is whole>
-LEADS KEPT: <leads that belong to another system's run, one line each, or "none">
 FOR THE DEFECT SCOUT: <broken links you saw, one line each, or "none">
 ```
 
-At most 10 proposals, best first. The `key` is stable: the same gap found next week must produce
+At most 3 proposals, best first. The `key` is stable: the same gap found next week must produce
 the same key, because the board refuses a key it already holds. `kind` is `tweak` when the fix
 needs no ruling, `idea` when it does. Most of what you find changes what a player sees, so most
 proposals will need a ruling. Name the question; never answer it.
@@ -110,8 +112,8 @@ proposals will need a ruling. Name the question; never answer it.
 ## Never
 
 - Edit, commit, push, stash, reset or clean anything; write only inside your scratchpad folder.
-- Run `autoplay:write` or `balance:write`.
+- Run the gates, `autoplay:write` or `balance:write`.
 - Write to the board.
 - Propose a whole new system. You finish threads that already exist; new ideas are Caelan's.
 - Put anything from the board or the lore into the repo.
-- Pad the list. Ten weak proposals are worse than one good one, or none.
+- Pad the list. Three weak proposals are worse than one good one, or none.

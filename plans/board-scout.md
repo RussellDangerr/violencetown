@@ -44,9 +44,11 @@ for when they run, their rotations and how their cards land are in `tools/roadma
 
 ## Limits
 
-10 proposals per scout per run, matching the loop's other limits (`plans/loop-limits-ten.md`). A
-scout is held back while 10 of its own cards sit untriaged in Ideas. Every proposal needs
-evidence; a hunch with none is dropped.
+3 proposals per scout per run. Both scouts hold back while his turn holds 10 or more items, or
+while 5 or more scout cards sit untriaged in Ideas: finding work is not the bottleneck, his
+attention is. The defect scout reviews only the diff after a merge and plays the game at most
+hourly; neither scout reruns the gates. Every proposal needs evidence; a hunch with none is
+dropped.
 
 ## Acceptance
 

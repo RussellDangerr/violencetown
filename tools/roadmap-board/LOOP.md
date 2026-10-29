@@ -70,7 +70,9 @@ Caelan dislikes the other word for it; never use it.
        `blockedBy`. Move the slice to `ready` and drop `claim`.
      - **FAILED**, or no report at all: move the slice to `ready`, drop `claim`, add 1 to
        `fails`, and put the failure plus the branch sha in `note` (§3).
-8. **Scouts and checks** (§10, §12), when due: alongside the builders, never instead of them.
+8. **Scouts and checks** (§10, §12), when due: in the same message as step 7's builders, never
+   instead of them. A report that arrives after the pass ended is written back when it arrives,
+   or at the start of the next pass.
 9. **Post the update and pick the wait** (§7).
 
 **Up to 10 slices per pass**, one builder each. Recon and claim every pick first, then spawn all
@@ -271,9 +273,9 @@ read-only: they never edit, commit or push, and the loop writes their cards.
 | | **Defect scout** (`.claude/agents/scout-defects.md`) | **Thread scout** (`.claude/agents/scout-threads.md`) |
 |---|---|---|
 | Looks for | things that behave against their own intent: bugs, regressions, UI that collides or overflows, tests that can't fail | systems that stop short: never reachable, never connected, no way for a player to know they're there |
-| Per run | reviews what merged, harvests the build reports, plays headless, sweeps one **code area** | traces one **system's** whole thread: notice, read, operate, works, feeds, ends |
-| Rotation | the first list below | the second list below |
-| Due | after every merge, otherwise at most once an hour | at most once every 2 hours |
+| Per run | `mode: diff` reviews only what merged and the build reports; `mode: full` also plays headless and sweeps one **code area** | traces one **system's** whole thread: notice, read, operate, works, feeds, ends |
+| Rotation | the first list below | the second list below. Skip a system that sits in the code area the defect scout swept last. |
+| Due | `diff` after a merge; `full` at most once an hour | at most once every 2 hours |
 | Card | `scoutKey` starts `defect:`, `scoutKind: "defect"`, note starts "From the defect scout:" | `scoutKey` starts `thread:`, `scoutKind` `tweak` or `idea`, note starts "From the thread scout:" and carries its `THREAD` line |
 
 **The defect scout's code areas**, in order (each takes its share of `main.js` too):
@@ -297,29 +299,35 @@ quests and the objective → the world map and travel → the day clock → a fi
 defeat → weaknesses and elements → townsfolk talk and disposition → examine → saves, the title
 and Continue → the options menu.
 
+- **Hold back both scouts** while his turn holds 10 or more items (`yourTurn` in
+  `board-model.js`), or while 5 or more scout cards (both scouts together, `source: "scout"`, no
+  `triage`) sit in Ideas. Finding work is not the bottleneck; his attention is. Say so in the
+  update.
 - **State:** each scout keeps `meta/<agent name>` in the board database: `lastSha`, `lastAt`,
-  `area` (the last code area or system it took; the next run takes the next one in its list),
-  `leads` and `runningSince`. A scout is running while its `runningSince` is under 2 hours old;
-  never run two of the same scout at once. Set `runningSince: <now>` at spawn.
+  `lastFullAt` (defect scout), `area` (the last code area or system it took; the next run takes
+  the next one in its list), `leads` and `runningSince`. A scout is running while its
+  `runningSince` is under 2 hours old; never run two of the same scout at once. Set
+  `runningSince: <now>` at spawn.
   - **First run:** with no `meta/scout-defects`, the defect scout takes `lastSha` from the retired
-    `meta/scout` and starts at area 1. The thread scout starts at the top of its list. Leave
-    `meta/scout` as it is; nothing reads it any more.
+    `meta/scout`, runs `full` and starts at area 1. The thread scout starts at the top of its
+    list. Leave `meta/scout` as it is; nothing reads it any more.
 - **When:** spawn every scout that is due, in the background, in the same message as the builders,
-  or on its own when there's nothing to build. The two scouts can run at the same time.
-- **Hold back** a scout while 10 or more of its own cards sit untriaged in Ideas: he's not keeping
-  up, so don't bury him. The other scout still runs.
-- **Its prompt:** its `meta` (`lastSha`, or "none"), the current dev sha, the pass's card folder,
-  this run's area or system, its `leads`, Caelan's checkout path, and a scratchpad folder for its
-  logs.
+  or on its own when there's nothing to build. The two scouts can run at the same time. At most 4
+  agents run the game at once: a scout that plays (a `full` defect run, any thread run) waits
+  while 4 or more builders run. Builders themselves keep LP3's limit; a `diff` run plays nothing.
+- **Its prompt:** its mode (defect scout), its `lastSha` (or "none"), the current dev sha, the
+  pass's card folder (every card's title and note), this run's area or system, its `leads`,
+  Caelan's checkout path, and a scratchpad folder for its logs.
 - **Its report:** each proposal becomes an Ideas card through `newScoutIdea({key, kind, title,
   note}, now, cards)` from `board-model.js`, which returns null for a key the board already has,
   in any lane. The defect scout's `kind` is always `defect`; the note holds the rest of the
   proposal under its "From the … scout:" opening. Write the cards in one batch, then set its
-  `meta` to `{lastSha: <origin/dev>, lastAt: <now>, area}` (dropping `runningSince` and `leads`).
+  `meta` to `{lastSha: <origin/dev>, lastAt: <now>, area}` (and `lastFullAt` after a full run),
+  dropping `runningSince` and `leads`.
   - **Hand-offs close the gap between them:** the defect scout's `FOR THE THREAD SCOUT` lines go
     into `meta/scout-threads.leads`, and the thread scout's `FOR THE DEFECT SCOUT` lines into
-    `meta/scout-defects.leads`. The thread scout's `LEADS KEPT` lines go back into its own
-    `leads`. Each scout checks its leads before anything else.
+    `meta/scout-defects.leads`. A lead the thread scout's `LEADS` line marks "kept for
+    <system>" goes back into its own `leads`.
   - **`TOOLING` lines are never cards.** The guard forbids slices from touching
     `tools/roadmap-board/`, so a tooling card could only wait for him. Name them in the update
     instead.
@@ -358,20 +366,24 @@ so he can see and overrule it; an approval it gives carries `approved.by: "loop"
 ## 12. The checker
 
 The `slice-checker` agent (`.claude/agents/slice-checker.md`) takes one slice in Review and does
-the checking Caelan would otherwise do by eye before Merge it. It reruns the guard and the gates
-(§2) on the branch, checks that the branch still merges cleanly onto dev, and marks each
-acceptance line **TEST** (a test covers it and passed), **PICTURE** (only a picture can show it;
-the path is for his eye) or **NOT SHOWN**. It is read-only and never judges looks or feel.
+the reading Caelan would otherwise do before Merge it. It runs no game and no tests: the builder
+already ran the gates, and §4 runs them again on the merged tree. It runs the guard, checks that
+the branch merges cleanly onto dev, and marks each acceptance line **TEST** (a test covers it; the
+mark quotes that line with its `file:line`), **PICTURE** (only a picture can show it; the path is
+for his eye) or **NOT SHOWN**. It never judges looks or feel.
 
-- **When:** a Review slice is due a check when its card has no `checked`, or when
-  `checked.sha` is not its branch's sha, or when `checked.devSha` is not the current dev sha (a
-  merge may have made it conflict). At most 3 checks a pass, oldest first, since each one runs
-  the autoplay in its own Chrome. Spawn them in the background with the builders and scouts.
-- **Its prompt:** the card JSON, the branch sha, and Caelan's checkout path.
-- **Its report:** append `{from: "claude", text, at}` to the card's `feedback`, with the
-  `ACCEPTANCE` count line first and then each line's mark, and set
-  `checked: {sha, devSha, at}`. Add `ask: true` only when the guard or gates failed, or the branch
-  no longer merges onto dev. The card stays in `review` either way: only his Changes sends it back.
+- **When:** once per branch sha. A Review slice is due a check when its card has no `checked`, or
+  `checked.sha` is not its branch's sha. At most 3 checks a pass, oldest first.
+- **Dev moved since:** no agent. The loop itself runs
+  `git merge-tree --write-tree origin/dev origin/<branch>` for each Review slice whose
+  `checked.devSha` is stale, updates `checked.devSha`, and posts only when the answer changed.
+- **Its prompt:** the card JSON, the branch sha, and the current dev sha.
+- **Its report:** first confirm every TEST mark: grep the quoted line at its `file:line` on the
+  branch. A quote that isn't there becomes NOT SHOWN, and the update says the checker got one
+  wrong. Then append `{from: "claude", text, at}` to the card's `feedback`, with the
+  `ACCEPTANCE` count line first and then each line's mark, and set `checked: {sha, devSha, at}`.
+  Add `ask: true` only when the guard failed or the branch no longer merges onto dev. The card
+  stays in `review` either way: only his Changes sends it back.
 - **The update** names what was checked in one line, leading with anything NOT SHOWN or failing.
 - **It runs on Haiku as a trial.** When a report is wrong (a TEST mark its test doesn't support, a
   missed conflict), say so in the update and propose moving it to Sonnet. Its file is committed,

@@ -28,20 +28,25 @@ The board's word for turning an idea into rulings and slices is **tweak**. Use n
       `touches`.
    4. Write each report back to its card (§1 step 7). FAILED or no report adds 1 to `fails`
       (§3). Board writes stay here, never in the builder.
-6. **Scouts** (§10): for each of `scout-defects` and `scout-threads` that is due, not running and
-   not held back, spawn it in the background (with the builders when there are any). Give it its
-   `meta/<name>` (`lastSha`, `leads`), the current dev sha, the pass's card folder, the next area
-   or system in its rotation, Caelan's checkout path and a scratchpad log folder. Set
+6. **Scouts** (§10), spawned in the same message as the builders. **Hold both back** while his
+   turn holds 10+ items or 5+ scout cards sit untriaged. Otherwise spawn each of `scout-defects`
+   (`mode: diff` after a merge, `full` at most hourly) and `scout-threads` (at most every 2 h)
+   that is due and not running; a scout that plays the game waits while 4+ builders run. Give it
+   its mode, `meta/<name>` (`lastSha`, `leads`), the current dev sha, the pass's card folder, the
+   next area or system in its rotation, Caelan's checkout path and a scratchpad log folder. Set
    `meta/<name>.runningSince` at spawn. When it reports, land its proposals as Ideas cards in one
-   batch with `newScoutIdea()`, and pass its hand-off lines to the other scout's `leads` (the
-   thread scout's `LEADS KEPT` go back to its own). Keep `TOOLING` lines for the update, then set
-   `meta/<name>` to `{lastSha, lastAt, area}`.
+   batch with `newScoutIdea()`, and pass its hand-off lines to the other scout's `leads` (a thread
+   lead marked "kept for" goes back to its own). Keep `TOOLING` lines for the update, then set
+   `meta/<name>` to `{lastSha, lastAt, area}` (plus `lastFullAt` after a full run).
    - If the session started before a scout's file existed, its type won't spawn: spawn
      `general-purpose` with worktree isolation and point it at `.claude/agents/<name>.md`.
-   **Checks** (§12): for up to 3 Review slices due a check (no `checked`, or its `sha` or
-   `devSha` is stale), spawn `slice-checker` in the background with the card JSON, the branch sha
-   and Caelan's checkout path. When it reports, append its result to the card's `feedback`
-   (`ask: true` only on a failed guard or gate, or a conflict) and set `checked: {sha, devSha, at}`.
+   **Checks** (§12): for up to 3 Review slices with no `checked` or a stale `checked.sha`, spawn
+   `slice-checker` (it runs no game or tests) with the card JSON, the branch sha and the dev sha.
+   When it reports, grep each TEST quote at its `file:line` on the branch; a quote that isn't
+   there becomes NOT SHOWN, and the update says so. Then append the result to `feedback`
+   (`ask: true` only on a failed guard or a conflict) and set `checked: {sha, devSha, at}`. When
+   only `checked.devSha` is stale, run `git merge-tree --write-tree origin/dev origin/<branch>`
+   yourself and post only if the answer changed.
 7. **Post the update** (§7): six lines at most, in plain words, no card codes without their
    title.
 8. **Schedule the next pass** with ScheduleWakeup, prompt `/board-loop`:
