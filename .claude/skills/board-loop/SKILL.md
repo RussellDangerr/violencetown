@@ -45,7 +45,7 @@ The board's word for turning an idea into rulings and slices is **tweak**. Use n
 | LP3 | caps of 10, settled by his "limits of 10" (`plans/loop-limits-ten.md`): 10 rulings + 10 slices per tweak; Doing and Review hold 10 slices each; no tweaks of the loop's own while 10 or more rulings are open |
 | LP4 | ideas stay put; the update names the 3 oldest |
 | LP5 | per-pass update, no digest |
-| LP1 | yes, lock the dangerous git commands. That is a `.claude/settings.json` change the loop may not make, so the update names it until he applies it |
+| LP1 | permission settings are his; the loop never changes them |
 | LP6 | standing delegation (LOOP.md §11): approve, pick and tweak what the loop is confident about |
 
 If he changes a pick on the board, the board wins.

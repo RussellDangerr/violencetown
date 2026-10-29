@@ -51,8 +51,7 @@ Five loop policies went to the board as ruling cards (LP1–LP5), each with a re
 - **Until he answers, the loop uses the recommended pick for LP2–LP5.** LP4 and LP5 change
   nothing until picked.
 - **LP1 changes nothing until he says yes.** It would add permission deny rules to
-  `.claude/settings.json`, which is his to change. He picked yes; the settings change is still
-  his to apply, and the loop's update names it until he does.
+  `.claude/settings.json`, which is his to change.
 
 | Card | Question | Recommended |
 |---|---|---|
