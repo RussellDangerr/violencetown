@@ -22,7 +22,8 @@ The board's word for turning an idea into rulings and slices is **tweak**. Use n
 5. **Build the picks** (up to 10, none sharing a file):
    1. Recon every pick (§1 step 5). A hit drops that pick only; carry on with the rest.
    2. Claim every pick that's left (§1 step 6).
-   3. Spawn every pick's `slice-builder` in one message, plus every scout that's due (§10).
+   3. Spawn every pick's `slice-builder` in one message, plus every scout and checker that's due
+      (§10, §12).
       Each builder gets the card JSON, the picks of the rulings it rests on, `slug` and
       `touches`.
    4. Write each report back to its card (§1 step 7). FAILED or no report adds 1 to `fails`
@@ -37,6 +38,10 @@ The board's word for turning an idea into rulings and slices is **tweak**. Use n
    `meta/<name>` to `{lastSha, lastAt, area}`.
    - If the session started before a scout's file existed, its type won't spawn: spawn
      `general-purpose` with worktree isolation and point it at `.claude/agents/<name>.md`.
+   **Checks** (§12): for up to 3 Review slices due a check (no `checked`, or its `sha` or
+   `devSha` is stale), spawn `slice-checker` in the background with the card JSON, the branch sha
+   and Caelan's checkout path. When it reports, append its result to the card's `feedback`
+   (`ask: true` only on a failed guard or gate, or a conflict) and set `checked: {sha, devSha, at}`.
 7. **Post the update** (§7): six lines at most, in plain words, no card codes without their
    title.
 8. **Schedule the next pass** with ScheduleWakeup, prompt `/board-loop`:

@@ -70,11 +70,11 @@ Caelan dislikes the other word for it; never use it.
        `blockedBy`. Move the slice to `ready` and drop `claim`.
      - **FAILED**, or no report at all: move the slice to `ready`, drop `claim`, add 1 to
        `fails`, and put the failure plus the branch sha in `note` (§3).
-8. **Scouts** (§10), when due: alongside the builders, never instead of them.
+8. **Scouts and checks** (§10, §12), when due: alongside the builders, never instead of them.
 9. **Post the update and pick the wait** (§7).
 
 **Up to 10 slices per pass**, one builder each. Recon and claim every pick first, then spawn all
-the builders (and every scout that is due) in the same message so they run at once. `next-slice.mjs` never hands out two that share a file, so their branches can't collide. A
+the builders (and every scout and checker that is due) in the same message so they run at once. `next-slice.mjs` never hands out two that share a file, so their branches can't collide. A
 pass that cleared Claude's turn may still build.
 
 ## 2. What a slice must prove (the builder's definition of done)
@@ -355,3 +355,24 @@ and any ruling where the loop's lean is a taste call. A pick the loop makes says
 `pick.note` ("picked by the loop under the standing delegation") and carries `pick.by: "loop"`,
 so he can see and overrule it; an approval it gives carries `approved.by: "loop"`.
 
+## 12. The checker
+
+The `slice-checker` agent (`.claude/agents/slice-checker.md`) takes one slice in Review and does
+the checking Caelan would otherwise do by eye before Merge it. It reruns the guard and the gates
+(§2) on the branch, checks that the branch still merges cleanly onto dev, and marks each
+acceptance line **TEST** (a test covers it and passed), **PICTURE** (only a picture can show it;
+the path is for his eye) or **NOT SHOWN**. It is read-only and never judges looks or feel.
+
+- **When:** a Review slice is due a check when its card has no `checked`, or when
+  `checked.sha` is not its branch's sha, or when `checked.devSha` is not the current dev sha (a
+  merge may have made it conflict). At most 3 checks a pass, oldest first, since each one runs
+  the autoplay in its own Chrome. Spawn them in the background with the builders and scouts.
+- **Its prompt:** the card JSON, the branch sha, and Caelan's checkout path.
+- **Its report:** append `{from: "claude", text, at}` to the card's `feedback`, with the
+  `ACCEPTANCE` count line first and then each line's mark, and set
+  `checked: {sha, devSha, at}`. Add `ask: true` only when the guard or gates failed, or the branch
+  no longer merges onto dev. The card stays in `review` either way: only his Changes sends it back.
+- **The update** names what was checked in one line, leading with anything NOT SHOWN or failing.
+- **It runs on Haiku as a trial.** When a report is wrong (a TEST mark its test doesn't support, a
+  missed conflict), say so in the update and propose moving it to Sonnet. Its file is committed,
+  so that change goes on a branch like any other; he says yes.
