@@ -31,6 +31,14 @@ export const ALARM_NOTICE_MIN = 0.1;        // weakest alarm an ant reacts to
 export const ALARM_TURNS = 3;               // turns an ant stays alarmed after losing the scent
 export const RECRUITS_MIN = 1;              // ants a delivery releases from the nest
 export const RECRUITS_MAX = 2;
+// The swarm (plans/an2-ant-swarm-sweet-food.md).
+export const ANT_HP = 1;                    // ANR3: one hit squashes it
+export const ANT_BITE = 1;                  // ANR3: a 1-damage bite
+export const SWARM_SIZE = 3;                // placeholder: ants a swarm sends at first
+export const REINFORCE_CHANCE = 0.5;        // placeholder: chance a squash sends RECRUITS_MIN..MAX more
+export const BRUSH_LANDING = 2;             // placeholder: tiles from the player a brushed ant lands
+export const COLD_TILE_MIN = 70;            // the frozen tiles in data.js (SNOW 70, ICE 71)…
+export const COLD_TILE_MAX = 79;            // …and the rest of their band
 
 // 8 headings, clockwise from north. A 45° turn is ±1.
 export const DIRS = [
@@ -320,4 +328,271 @@ export function antTurn(ants, world, rng) {
 // Convenience for building a world from a grid.
 export function createWorld(grid, nest, foods = []) {
     return { grid, nest, foods, field: createScentField(grid.width, grid.height), home: createHomeMap(grid, nest) };
+}
+
+// ── The swarm (plans/an2-ant-swarm-sweet-food.md) ───────────────────────────
+//
+// While the player carries sweet food on a warm tile, ants walk in from the
+// map's edge and come for it. Still pure: the caller hands in its live ants
+// (any objects with x, y — the game passes its Enemy objects) and an `env`
+// that owns everything outside this file:
+//
+//   env = {
+//     grid,                    // the static map: { width, height, isWalkable, isCold }
+//     player: { x, y },
+//     sweet,                   // true while sweet food is in the bag
+//     entries: [{ x, y }],     // the map's doors; the open edge is added here
+//     isFree(x, y),            // nothing standing there (player, creature, container)
+//     spawn(x, y) -> ant,      // make a new ant there and return it
+//     move(ant, x, y),         // move an ant (the caller animates it)
+//     bite(ant),               // one bite on the player
+//     remove(ant),             // the ant leaves the map
+//   }
+//
+// Per-ant state rides on the ant under underscore names: _antBrain (AN1's
+// ant), _latched with its _latchDx/_latchDy offset, _brushed, _leaving.
+
+export const ANT_TYPE = 'Ant';
+export const ANT_TAG = 'ant';
+// Nothing in the item table marks food as sweet yet, so this is the list.
+export const SWEET_FOODS = new Set(['tigers_blood_ice_cone']);
+// The swarm's numbers sit with the others at the top of the file.
+
+export const isAnt = e => !!e && e.tag === ANT_TAG;
+export const isColdTile = id => typeof id === 'number' && id >= COLD_TILE_MIN && id <= COLD_TILE_MAX;
+
+// Is there sweet food in the bag? Slots are { itemDef } or empty.
+export function carriesSweet(inventory) {
+    return (inventory || []).some(s => s && s.itemDef && SWEET_FOODS.has(s.itemDef.id));
+}
+
+// Where ants walk in: every ant-open tile on the map's outer edge, then the
+// caller's extra tiles (doors), without repeats, in that order.
+export function entryTiles(grid, extra = []) {
+    const out = [], seen = new Set();
+    const add = (x, y) => {
+        const k = y * grid.width + x;
+        if (seen.has(k) || !antOpen(grid, x, y)) return;
+        seen.add(k);
+        out.push({ x, y });
+    };
+    for (let y = 0; y < grid.height; y++) {
+        for (let x = 0; x < grid.width; x++) {
+            if (x === 0 || y === 0 || x === grid.width - 1 || y === grid.height - 1) add(x, y);
+        }
+    }
+    for (const t of extra) add(t.x, t.y);
+    return out;
+}
+
+// The entry tile `from` reaches in the fewest ant steps (from's own tile
+// counts as open, so it can be the player's). Ties go to the earlier entry.
+export function pickNest(grid, entries, from) {
+    if (!entries.length) return null;
+    const { width, height } = grid;
+    const dist = new Float64Array(width * height).fill(Infinity);
+    dist[from.y * width + from.x] = 0;
+    const queue = [[from.x, from.y]];
+    for (let head = 0; head < queue.length; head++) {
+        const [x, y] = queue[head];
+        for (const n of openNeighbours(grid, x, y)) {
+            const i = n.y * width + n.x;
+            if (dist[i] !== Infinity) continue;
+            dist[i] = dist[y * width + x] + 1;
+            queue.push([n.x, n.y]);
+        }
+    }
+    let best = null, bd = Infinity;
+    for (const e of entries) {
+        const d = dist[e.y * width + e.x];
+        if (d < bd) { bd = d; best = e; }
+    }
+    return best ? { x: best.x, y: best.y } : null;
+}
+
+// The trail a scout lays walking home from `from` (the food) to the nest by
+// the shortest route: AN1's carrier deposit, most by the food, least by the
+// nest. A swarm starts with it, as if a scout had already found the food.
+// Returns the steps it took.
+export function layScoutTrail(world, from, rng) {
+    const { home, field, nest } = world;
+    const start = homeDist(home, from.x, from.y);
+    if (!Number.isFinite(start)) return 0;
+    const scout = createAnt({ x: from.x, y: from.y });
+    scout.carrying = true;
+    scout.pickupDist = start;
+    let steps = 0;
+    while (!(scout.x === nest.x && scout.y === nest.y) && steps <= start) {
+        deposit(field, scout.x, scout.y, trailDeposit(scout, home));
+        const d = homeDist(home, scout.x, scout.y);
+        const next = pickMin(openNeighbours(world.grid, scout.x, scout.y).filter(o => homeDist(home, o.x, o.y) < d),
+            o => homeDist(home, o.x, o.y), rng);
+        if (!next) break;
+        moveTo(scout, next);
+        steps++;
+    }
+    deposit(field, nest.x, nest.y, TRAIL_DEPOSIT_AT_NEST);
+    return steps;
+}
+
+// A swarm: AN1's world around one nest, on or off, and how many ants are
+// still to walk in.
+export function createSwarm(grid, nest) {
+    return { world: createWorld(grid, nest), active: false, toCome: 0 };
+}
+
+// A squashed ant: AN1's alarm on its tile and around it, and while the swarm
+// is on, now and then one or two more ants to walk in. Returns how many.
+export function squashAnt(swarm, x, y, rng) {
+    if (!swarm) return 0;
+    squash(swarm.world.field, x, y);
+    if (!swarm.active || rng.float() >= REINFORCE_CHANCE) return 0;
+    const n = recruitCount(rng);
+    swarm.toCome += n;
+    return n;
+}
+
+const nextTo = (a, p) => cheb(a.x, a.y, p.x, p.y) === 1;
+
+// The grid an ant steps on this turn: the map, less every occupied tile.
+const liveGrid = env => ({
+    width: env.grid.width, height: env.grid.height,
+    isWalkable: (x, y) => env.grid.isWalkable(x, y) && env.isFree(x, y),
+    isCold: (x, y) => env.grid.isCold(x, y),
+});
+
+// Brush every latched ant off (the turn is the caller's to spend). Each lands
+// BRUSH_LANDING tiles from the player, on its own side if it can, else on any
+// open free tile at that distance, else where it is; and it does not bite on
+// the turn it was brushed. Returns the ants brushed.
+export function brushOff(ants, env) {
+    const p = env.player, grid = liveGrid(env);
+    const brushed = [];
+    for (const a of ants) {
+        if (!a._latched) continue;
+        a._latched = false;
+        a._brushed = 1;
+        brushed.push(a);
+        const want = { x: p.x + Math.sign(a.x - p.x) * BRUSH_LANDING, y: p.y + Math.sign(a.y - p.y) * BRUSH_LANDING };
+        let land = antOpen(grid, want.x, want.y) ? want : null;
+        for (let dy = -BRUSH_LANDING; !land && dy <= BRUSH_LANDING; dy++) {
+            for (let dx = -BRUSH_LANDING; !land && dx <= BRUSH_LANDING; dx++) {
+                if (Math.max(Math.abs(dx), Math.abs(dy)) !== BRUSH_LANDING) continue;
+                if (antOpen(grid, p.x + dx, p.y + dy)) land = { x: p.x + dx, y: p.y + dy };
+            }
+        }
+        if (land) env.move(a, land.x, land.y);
+        if (a._antBrain) { a._antBrain.px = null; a._antBrain.py = null; }
+    }
+    return brushed;
+}
+
+// Keep a latched ant beside the player: its old side if open, else the first
+// open free tile around them. False when there is none (it falls off).
+function holdOn(a, env, grid) {
+    const p = env.player;
+    for (const [dx, dy] of [[a._latchDx, a._latchDy], ...DIRS]) {
+        const x = p.x + dx, y = p.y + dy;
+        if (x === a.x && y === a.y) { a._latchDx = dx; a._latchDy = dy; return true; }
+        if (!antOpen(grid, x, y)) continue;
+        env.move(a, x, y);
+        a._latchDx = dx; a._latchDy = dy;
+        return true;
+    }
+    return false;
+}
+
+// A leaving ant heads for the nest by the shortest open route and leaves the
+// map there.
+function walkOut(a, swarm, env, grid, rng) {
+    const { nest, home } = swarm.world;
+    if (a.x === nest.x && a.y === nest.y) { env.remove(a); return 'left'; }
+    const d = homeDist(home, a.x, a.y);
+    const n = pickMin(openNeighbours(grid, a.x, a.y).filter(o => homeDist(home, o.x, o.y) < d),
+        o => homeDist(home, o.x, o.y), rng);
+    if (n) env.move(a, n.x, n.y);
+    return 'leaving';
+}
+
+// One world turn of the swarm. Returns { swarm, results }: the swarm to keep
+// (made here when one is needed) and what each ant did, in order — 'bite' |
+// 'latch' | 'dazed' | 'fell' | 'leaving' | 'left' | one of stepAnt's actions.
+// With no sweet food and no ant it does nothing and draws nothing from the RNG.
+export function swarmTurn(swarm, ants, env, rng) {
+    const p = env.player;
+    const on = !!env.sweet && !env.grid.isCold(p.x, p.y);
+    if (!on && !ants.length) {
+        if (swarm) { swarm.active = false; swarm.toCome = 0; }
+        return { swarm, results: [] };
+    }
+
+    // A swarm needs a nest to walk in from, and out to.
+    if (!swarm) {
+        const nest = pickNest(env.grid, entryTiles(env.grid, env.entries || []), p);
+        if (!nest) {
+            for (const a of ants) env.remove(a);
+            return { swarm: null, results: ants.map(() => 'left') };
+        }
+        swarm = createSwarm(env.grid, nest);
+    }
+    const { world } = swarm;
+
+    // Switching on: the scout's trail, and the ants still to come.
+    if (on && !swarm.active) {
+        swarm.active = true;
+        swarm.toCome = Math.max(0, SWARM_SIZE - ants.length);
+        for (const a of ants) a._leaving = false;
+        layScoutTrail(world, p, rng);
+    }
+    // Switching off: every ant lets go and walks out.
+    if (!on && swarm.active) {
+        swarm.active = false;
+        swarm.toCome = 0;
+    }
+    if (!swarm.active) for (const a of ants) { a._latched = false; a._leaving = true; }
+
+    // The sweet food drips: the player's tile smells like the food end of a trail.
+    if (swarm.active) deposit(world.field, p.x, p.y, TRAIL_DEPOSIT_AT_FOOD);
+
+    const grid = liveGrid(env);
+    const results = [];
+    for (const a of ants) {
+        const brain = a._antBrain || (a._antBrain = createAnt({ x: a.x, y: a.y }));
+        brain.x = a.x; brain.y = a.y;
+        brain.carrying = false;
+
+        if (a._leaving) { results.push(walkOut(a, swarm, env, grid, rng)); continue; }
+
+        // Brushed off this turn: it lies where it landed.
+        if (a._brushed > 0) { a._brushed--; results.push('dazed'); continue; }
+
+        if (a._latched) {
+            if (!holdOn(a, env, grid)) { a._latched = false; results.push('fell'); continue; }
+            env.bite(a);
+            results.push('bite');
+            continue;
+        }
+        if (nextTo(a, p)) {
+            a._latched = true;
+            a._latchDx = a.x - p.x; a._latchDy = a.y - p.y;
+            env.bite(a);
+            results.push('latch');
+            continue;
+        }
+
+        // AN1's rules, with the player as the food.
+        const r = stepAnt(brain, { ...world, grid, foods: [p] }, rng);
+        brain.carrying = false;
+        if (brain.x !== a.x || brain.y !== a.y) env.move(a, brain.x, brain.y);
+        results.push(r.action);
+    }
+
+    // Arrivals: one ant a turn walks in at the nest while any are still to come.
+    if (swarm.active && swarm.toCome > 0 && env.isFree(world.nest.x, world.nest.y)) {
+        const a = env.spawn(world.nest.x, world.nest.y);
+        if (a) { a._antBrain = createAnt({ x: a.x, y: a.y }); swarm.toCome--; }
+    }
+
+    decay(world.field);
+    return { swarm, results };
 }

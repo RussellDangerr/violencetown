@@ -10,7 +10,7 @@ import { DEFAULT_VIEW, offView, snapPx } from './viewport.js';   // (screen-fill
 // VT323 text stays sharp. The game canvas's transform comes from the viewport
 // (setViewport / renderFrame).
 const SS = 2;
-import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, itemSprite, CONTAINER_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES, MARK_SPRITES, spriteVariant, spriteFrame, tileFrame, idHash } from './sprites.js';
+import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, itemSprite, CONTAINER_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES, MARK_SPRITES, spriteVariant, spriteFrame, tileFrame, idHash, TINY_INK } from './sprites.js';
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
 import { ROOT, selectedNode, activeRing, activeIndex, decisionPath, previewChildren, affectedTiles, verbApplies, isCombatActive, flapperDeflection, defaultVerb } from './wheel-model.js'; // (sunburst wheel) + the bump telegraph
 import {
@@ -198,6 +198,11 @@ export function intentLabelRect(px, py, tw, raised = false, tilePx = TILE_PX) {
 export function fillerSkips(wx, wy, mw, mh, hTiles = 1) {
     return wx >= 0 && wx < mw && wy >= mh && wy < mh + Math.max(0, hTiles - 1);
 }
+
+// The facing chevron's colour, fill and outline both: the house plum. A tan fill
+// vanished into the town's tan road (tests/chevron-contrast.test.js measures it
+// against every map's ground).
+export const CHEVRON_COLOR = `rgba(${TINY_INK.join(',')},0.9)`;
 
 // The facing cue's triangle for a watcher whose tile centre is (cx, cy), facing
 // the unit vector (ux, uy): its tip just past the tile's edge, its base just
@@ -3803,8 +3808,8 @@ export class Renderer {
                 const len = Math.hypot(fx, fy) || 1;
                 const [a, b, c] = facingCue(sx + TILE_PX / 2, sy + TILE_PX / 2, fx / len, fy / len, TILE_PX);
                 ctx.save();
-                ctx.fillStyle = 'rgba(212,185,106,0.9)';
-                ctx.strokeStyle = 'rgba(63,38,49,0.9)';      // the Tiny packs' plum outline
+                ctx.fillStyle = CHEVRON_COLOR;
+                ctx.strokeStyle = CHEVRON_COLOR;
                 ctx.lineWidth = 1;
                 ctx.beginPath();
                 ctx.moveTo(a[0], a[1]);

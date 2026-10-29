@@ -94,6 +94,8 @@ import { fighters, joiners } from './fight-area.js';                            
 import { fightStartKind, entranceFor, fightFxActive } from './fight-entrance.js'; // (fight-fog) how it began, and how long its fog moves
 import { createCascade, CASCADE_BEAT_MS, LUNGE_MS } from './cascade.js';           // (turn-model C1) the enemy phase, one actor at a time
 import { makeBurst, liveBursts } from './loot-burst.js';                            // (FX3b) a kill's loot bursts out and flies to you
+import { isAnt, isColdTile, carriesSweet, swarmTurn, squashAnt, brushOff,
+         ANT_TYPE, ANT_TAG, ANT_HP, ANT_BITE } from './ants.js';                    // (AN2) carry sweet food and ants come for it
 
 // Chebyshev (king-move) distance — used by the wheel reticle's range clamp.
 const cheb = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
@@ -1483,7 +1485,7 @@ class Game {
                 return;
             }
             // T = wait a turn (Space used to wait; it now opens the wheel).
-            if (e.code === 'KeyT') { e.preventDefault(); this._log('[Wait]'); this._advanceWorld(); return; }
+            if (e.code === 'KeyT') { e.preventDefault(); this._waitTurn(); return; }
 
             // Tab = pull out the Remoticon device (opens to ITEMS). preventDefault
             // early so focus never leaves the canvas. (Slice 3)
@@ -1699,10 +1701,7 @@ class Game {
                         // Same as pressing Space in IDLE: log a wait line and
                         // advance the world. Mirrors the previous WAIT
                         // button's behavior so muscle memory carries.
-                        if (this.state === STATE.IDLE) {
-                            this._log('[Wait]');
-                            this._advanceWorld();
-                        }
+                        if (this.state === STATE.IDLE) this._waitTurn();
                         break;
                     case 'cancel':
                         // Synthetic Escape — routes through the same paths
@@ -3797,7 +3796,7 @@ class Game {
             case 'resolveThrow': { if (itemSlot >= 0 && aimTile) { this._throwAt(itemSlot, aimTile); } break; }
             case 'resolveUse':   { const stack = itemSlot >= 0 ? this.inventory[itemSlot] : null; if (stack) { this.selectedSlot = itemSlot; this._doItemUse(stack.itemDef); } else this._log('[Nothing to use]'); break; }
             case 'guard':        { this.addBuff('guard', 'Guard', 2, 'buff'); this._log('[Bracing — incoming damage reduced.]', 'combat'); this._advanceWorld(); break; }
-            case 'wait':         { this._log('[Wait]'); this._advanceWorld(); break; }
+            case 'wait':         { this._waitTurn(); break; }
             case 'run':          { const d = this._aimDir(aimTile); if (d) { this._closeWheel(); this._doMove(d); return; } break; }
             case 'thieveCoin': case 'thieveKit': case 'thieveGear': {
                 const victim = this._thieveTarget(aimTile);
@@ -3909,6 +3908,61 @@ class Game {
             && Math.abs(e.x - cx) <= r && Math.abs(e.y - cy) <= r);
     }
 
+    // ── Ants (plans/an2-ant-swarm-sweet-food.md) ─────────────────────────────
+    // ants.js owns the rules; this is the swarm's view of this map and turn.
+    _antEnv() {
+        const m = this.map;
+        return {
+            grid: {
+                width: m.width, height: m.height,
+                isWalkable: (x, y) => m.isWalkable(x, y),
+                isCold: (x, y) => isColdTile(m.getTile(x, y)),
+            },
+            player: { x: this.playerX, y: this.playerY },
+            sweet: carriesSweet(this.inventory),
+            entries: m.transitions || [],
+            isFree: (x, y) => !(x === this.playerX && y === this.playerY) && this._tileFreeForShove(x, y),
+            spawn: (x, y) => this._spawnAnt(x, y),
+            move: (a, x, y) => stepEntity(a, x, y, this._MOVE_MS),
+            bite: (a) => { this._cascadeMark?.(a); this.applyDamageToPlayer(ANT_BITE, a); },
+            remove: (a) => { this.enemies = this.enemies.filter(e => e !== a); },
+        };
+    }
+
+    _spawnAnt(x, y) {
+        this._antSeq = (this._antSeq || 0) + 1;
+        const a = new Enemy({
+            id: `ant_${this.turn}_${this._antSeq}`, type: ANT_TYPE, x, y,
+            hp: ANT_HP, damage: ANT_BITE, sightRange: 0, tag: ANT_TAG,
+        });
+        this.enemies.push(a);
+        return a;
+    }
+
+    // One world turn of ants: squashed ones leave their alarm and go, then the
+    // swarm moves and bites. Draws no RNG with no sweet food and no ants.
+    _antTurn() {
+        if (!this.map) return;
+        if (this._antSwarmMap !== this.map) { this._antSwarm = null; this._antSwarmMap = this.map; }
+        const dead = this.enemies.filter(e => isAnt(e) && !e.entity.isAlive());
+        if (dead.length) {
+            for (const a of dead) squashAnt(this._antSwarm, a.x, a.y, this.rng);
+            this.enemies = this.enemies.filter(e => !dead.includes(e));
+        }
+        const ants = this.enemies.filter(isAnt);
+        this._antSwarm = swarmTurn(this._antSwarm, ants, this._antEnv(), this.rng).swarm;
+        // No eyes, no chase: a noise or a blow never turns an ant into a fighter.
+        for (const a of this.enemies) if (isAnt(a)) a.state = 'idle';
+    }
+
+    // Wait a turn; with ants latched on, the turn goes to brushing them off.
+    _waitTurn() {
+        const latched = this.enemies.filter(e => isAnt(e) && e._latched && e.entity.isAlive());
+        if (latched.length) { brushOff(latched, this._antEnv()); this._log('[TEXT]'); }
+        else this._log('[Wait]');
+        this._advanceWorld();
+    }
+
     // ── World Advance (after any action) ─────────────────────────────────────
 
     // Player-only movement gate. Rings can open tiles that are globally
@@ -3963,6 +4017,9 @@ class Game {
         this._cascade?.begin();
         const msgs = resolveEnemyTurns(this);
         this._routeWorldMessages(msgs);
+        // (AN2) The swarm moves and bites after the other creatures. Optional-called,
+        // like _saveMoment, so the stand-in games tests lift this method onto need not carry it.
+        this._antTurn?.();
         // (C1) Effects outside an enemy's turn spawn at once; the phase stays open
         // until the player's own tick below, which plays as the last beat.
         this._cascadeActor = null;

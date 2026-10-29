@@ -25,6 +25,7 @@ import { FACING_VECTORS } from './perception.js';
 import { resolveItemDef } from './item-registry.js';
 import { labelOf } from './slots.js';
 import { RNG } from './rng.js';
+import { isAnt } from './ants.js';
 
 // (FX4, plans/fx4-boss-one-name.md) The name a character goes by on the
 // surfaces that used to print its type: the log, the target panel, the KO tag.
@@ -543,6 +544,10 @@ export function resolveEnemyTurns(game) {
         // them here so they never double-advance, tick combat buffs, or burn a turn.
         if (enemy.ambient) continue;
 
+        // Ants move by the swarm's rules (ants.js swarmTurn, driven from main.js),
+        // not the chase.
+        if (isAnt(enemy)) continue;
+
         // (zone pursuit) Just came through a door after the player — spend one
         // turn "emerging" (inert, but visible in the threshold) so the player
         // gets a beat to react to the breach before the chase resumes.
@@ -643,6 +648,7 @@ export function resolveAmbientTurns(game) {
 
     for (const npc of game.enemies) {
         if (!npc.entity.isAlive()) continue;
+        if (isAnt(npc)) continue;       // ants have no moods to show; the swarm moves them
         if (isHunting(npc)) continue;   // engaged hostile = combat, not ambient
         if (npc._ally) continue;                  // allies resolve on the player-turn loop
         if (npc.hasBuff('feared')) continue;      // (fear) the per-turn loop owns its flee
