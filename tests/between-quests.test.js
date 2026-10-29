@@ -201,9 +201,12 @@ function ringedOnMap(game) {
 }
 
 describe('the between-quests table', () => {
-    test('every row names a zone on the Map and an objective', () => {
+    test('every row names zones on the Map and an objective', () => {
         for (const row of BETWEEN_QUESTS) {
-            assert.ok(WORLD_ZONES.some(z => z.zoneName === row.targetZone), `${row.id}: '${row.targetZone}' has no box on the Map`);
+            assert.ok(Array.isArray(row.targetZones) && row.targetZones.length, `${row.id} names no zones`);
+            for (const zone of row.targetZones) {
+                assert.ok(WORLD_ZONES.some(z => z.zoneName === zone), `${row.id}: '${zone}' has no box on the Map`);
+            }
             assert.ok(row.objective && typeof row.when === 'function', row.id);
         }
     });

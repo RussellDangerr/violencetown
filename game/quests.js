@@ -149,16 +149,23 @@ export const QUESTS = {
 };
 
 // (NO1) Between quests: while no quest is active, the first row whose `when`
-// holds gives the HUD its objective and the Map its ring, so the gap between one
+// holds gives the HUD its objective and the Map its rings, so the gap between one
 // quest ending and the next starting still says where to go. Rows read only
-// saved state (flags, the bridge route), so a save made in a gap reloads with
-// its row showing (plans/no1-objective-points-at-bridge.md).
+// saved state (flags, the bridge route, the completed list), so a save made in a
+// gap reloads with its row showing (plans/no1-objective-points-at-bridge.md).
+// A row may ring several zones at once (AE2, plans/ae2-act2-zones-objective.md).
 export const BETWEEN_QUESTS = [
     {
         id: 'to_bridge',   // the car runs, the bridge isn't crossed yet: the crash or the ramp is next
         when: (qe) => !!qe.getFlag('carFixed') && !qe.bridgeRoute(),
         objective: 'Drive north across the bridge',
-        targetZone: 'TOWN',
+        targetZones: ['TOWN'],
+    },
+    {
+        id: 'to_act2',     // Act 1 ends with the delivery; Act 2's three zones come in any order (spine §1)
+        when: (qe) => qe.isComplete('deliver_burger'),
+        objective: 'Explore the Carnival, Factory and Graveyard',
+        targetZones: ['CARNIVAL', 'FACTORY', 'GRAVEYARD'],
     },
 ];
 
@@ -384,15 +391,18 @@ export class QuestEngine {
         return { done, total: ids.length };
     }
 
-    // (Phase 4 map) The active stage's targetZone — a zoneName the world map
-    // highlights as "go here next" — or, with no quest active, a between-quests
-    // row's — or null.
-    getTargetZone() {
+    // (Phase 4 map) Every zoneName the world map rings as "go here next": the
+    // active stage's targetZone, or, with no quest active, a between-quests row's
+    // zones, or none.
+    getTargetZones() {
         const id = this.state.activeId;
-        if (!id) return this.betweenQuests()?.targetZone ?? null;
+        if (!id) return (this.betweenQuests()?.targetZones ?? []).slice();
         const s = QUESTS[id].stages[this.state.stageIndex];
-        return (s && s.targetZone) || null;
+        return s && s.targetZone ? [s.targetZone] : [];
     }
+
+    // The first of getTargetZones(), or null.
+    getTargetZone() { return this.getTargetZones()[0] ?? null; }
 
     serialize() {
         return {
