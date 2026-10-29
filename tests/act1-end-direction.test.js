@@ -84,7 +84,8 @@ function makeGame() {
     const recipient = { ...readMap('downtown-map.json').enemies.find(e => e.id === 'dt-recipient') };
     const g = {
         state: STATE.IDLE, facing: 'up', playerX: recipient.x, playerY: recipient.y + 1,
-        inventory: [{ itemDef: { id: 'burger_fries', name: 'Burger + Fries' }, count: 1 }],
+        inventory: [{ itemDef: { id: 'burger_fries', name: 'Burger + Fries' }, count: 1 },
+                    { itemDef: { id: 'tigers_blood_ice_cone', name: 'Cone' }, count: 1 }],
         enemies: [recipient], containers: [], examinables: [], gold: 0,
         _heldDirKeys: [], _physicalHeld: new Set(), _queuedMoveDir: null,
         _animating: false, _paused: false, _deviceTab: 'items', _deviceSel: null, _journalScroll: 0,
@@ -181,7 +182,7 @@ const ringed = (boxes) => Object.keys(boxes).filter(k => boxes[k].stroke === RED
 describe('after Act 1, the objective points at the three Act 2 zones', () => {
     test('handing over the burger (real keys) leaves the HUD on Act 2, and M shows all three zones ringed', async () => {
         const g = makeGame();
-        assert.equal(hudObjective(g), QUESTS.deliver_burger.stages[1].objective.toUpperCase(), 'before: deliver the burger');
+        assert.equal(hudObjective(g), QUESTS.deliver_burger.stages.find(s => s.id === 'handoff').objective.toUpperCase(), 'before: deliver the burger');
 
         await deliver(g);
         assert.equal(g.questEngine.state.activeId, null, 'no quest is active after Act 1');

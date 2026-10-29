@@ -14,6 +14,18 @@
 
 import { transferGold } from './trade.js';
 
+// (IC2) The delivery order's ice cone, and when the diner cook owes another.
+const ORDER_CONE = 'tigers_blood_ice_cone';
+function coneOwed(g) {
+    const qe = g && g.questEngine;
+    if (!qe || !qe.isActive('deliver_burger')) return false;
+    const stage = qe.currentStageId();
+    const needs = stage === 'get_burger' || stage === 'get_cone'
+        || (stage === 'handoff' && qe.owedItems().includes(ORDER_CONE));
+    const held = (g.inventory || []).some(s => s && s.itemDef && s.itemDef.id === ORDER_CONE);
+    return needs && !held && !!qe.state.flags.iceConeMachineFixed;
+}
+
 export const DIALOGUES = {
     pike: {
         name: 'Pike',
@@ -172,6 +184,14 @@ export const DIALOGUES = {
               available: (g) => g.questEngine && g.questEngine.currentStageId && g.questEngine.currentStageId() === 'get_burger',
               onPick: (g) => { if (g._grantItem) g._grantItem('burger_fries', '[The cook slides a warm paper bag across the counter. Burger and fries — for delivery.]'); },
               reply: '"Bag\'s hot. Somebody past the bank\'s waitin\' on it. Don\'t eat it, delivery type."' },
+            // (IC2) The order includes the ice cone. The machine makes only one and a
+            // cone is not a quest item, so a lost one would stall the delivery: while
+            // the order still needs a cone, the machine is fixed and none is in the
+            // bag, the cook hands over another (the Factory manager's `collect` shape).
+            { id: 'another_cone', label: '[TEXT]', repeatable: true,
+              available: (g) => coneOwed(g),
+              onPick: (g) => { if (g._grantItem) g._grantItem(ORDER_CONE, '[TEXT]'); },
+              reply: '[TEXT]' },
             { id: 'burger', label: 'Ask about the burger and fries', repeatable: true,
               reply: '"Bag\'s under the lamp. Somebody out there\'s waitin\' on it."' },
             { id: 'flatter', label: '[Compliment the grease]', repeatable: true, delta: 3,
@@ -209,11 +229,12 @@ export const DIALOGUES = {
         greeting: '"Hey — hey, you. You didn\'t happen to bring food, did you? I haven\'t eaten since the bridge."',
         choices: [
             // (Phase 4 MQ2) Dialogue delivery: only shown at the handoff stage while
-            // the player holds the bag; consumesItem removes it AND emits item_given
-            // (same event the satchel give fires), so either idiom completes MQ2.
-            { id: 'deliver', label: "Here's your burger and fries", once: true,
-              requiresItem: 'burger_fries', consumesItem: 'burger_fries',
-              available: (g) => g.questEngine && g.questEngine.currentStageId && g.questEngine.currentStageId() === 'handoff',
+            // the player holds everything still owed; handOver removes it all AND
+            // emits item_given per item (the event the satchel give fires), so
+            // either idiom completes MQ2 (IC2: the order is more than one item).
+            { id: 'deliver', label: '[TEXT]', once: true,
+              available: (g) => !!g.questEngine && g.questEngine.currentStageId() === 'handoff' && g.questEngine.holdsOwed(),
+              onPick: (g, npc) => g.questEngine.handOver(npc.id),
               reply: '"...oh, thank god. Thank you — really. Here, take this for your trouble."' },
             { id: 'ask', label: 'Ask what they\'re doing out here', repeatable: true,
               reply: '"Waitin\'. Starvin\'. Same as always."' },

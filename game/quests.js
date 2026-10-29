@@ -50,7 +50,7 @@ export const QUESTS = {
     },
 
     // ── Chapter Two: Main Quest 2 — the burger delivery (Phase 4 playground).
-    //    STRUCTURE is real (2 stages; both delivery idioms via item_given; journal
+    //    STRUCTURE is real (3 stages; both delivery idioms via item_given; journal
     //    location + description; world-map targetZone). The TEXT is placeholder for
     //    Caelan to author. Started deterministically on Downtown arrival (both the
     //    canyon-grapple climb-out and the alcohol-ramp → game._startMainQuest2).
@@ -68,12 +68,26 @@ export const QUESTS = {
                 autoSatisfy: (game) => (game.inventory || []).some(s => s && s.itemDef.id === 'burger_fries'),
             },
             {
+                // (IC2) The order includes the Tiger's Blood Ice Cone. It is not a quest
+                // item, so it comes from wherever it drops (the diner's machine today,
+                // the frozen area later): the stage only asks that it is in the bag.
+                // The Factory is where both of its sources begin.
+                id: 'get_cone',
+                objective: '[TEXT]',
+                location: '[TEXT]',
+                description: '[TEXT]',
+                targetZone: 'FACTORY',
+                on: { type: 'item_pickup', match: { id: 'tigers_blood_ice_cone' } },
+                autoSatisfy: (game) => (game.inventory || []).some(s => s && s.itemDef.id === 'tigers_blood_ice_cone'),
+            },
+            {
                 id: 'handoff',
-                objective: 'Deliver the burger + fries to the stranded traveler',
+                objective: '[TEXT]',
                 location: 'Downtown · the street',
-                description: 'The stranded traveler on the Downtown street is waiting on this. Hand it over — talk to them, or offer it from your satchel.',
+                description: '[TEXT]',
                 targetZone: 'DOWNTOWN',
-                on: { type: 'item_given', match: { item: 'burger_fries', npc: 'dt-recipient' } },
+                // Both items, handed over together or one at a time (QuestEngine.owedItems).
+                on: { type: 'item_given', match: { npc: 'dt-recipient' }, items: ['burger_fries', 'tigers_blood_ice_cone'] },
             },
         ],
         onComplete: (game) => {
@@ -222,6 +236,14 @@ export class QuestEngine {
         if (!stage || !stage.on || stage.on.type !== type) return;
         if (!matches(stage.on.match, payload)) return;
 
+        // (IC2) A stage listing `items` needs every one of them handed over:
+        // each is recorded in the saved counters, and only the last advances.
+        if (Array.isArray(stage.on.items)) {
+            if (!stage.on.items.includes(payload.item) || this._given(stage, payload.item)) return;
+            this.state.counters[givenKey(stage, payload.item)] = 1;
+            if (this._owed(stage).length) { this.game._render?.(); return; }
+        }
+
         if (stage.on.count) {
             const key = stage.id;
             this.state.counters[key] = (this.state.counters[key] || 0) + (payload.amount || 1);
@@ -339,7 +361,50 @@ export class QuestEngine {
         const stage = QUESTS[id].stages[this.state.stageIndex];
         if (!stage || !stage.on || stage.on.type !== 'item_given') return false;
         const m = stage.on.match || {};
+        if (Array.isArray(stage.on.items)) {
+            return this._owed(stage).includes(itemId) && (m.npc == null || m.npc === npcId);
+        }
         return (m.item == null || m.item === itemId) && (m.npc == null || m.npc === npcId);
+    }
+
+    // (IC2) The items the active delivery stage still wants handed over: its
+    // `items` minus those already given, or its one `match.item`. [] when the
+    // active stage is not a delivery.
+    owedItems() {
+        const stage = this.currentStage();
+        if (!stage || !stage.on || stage.on.type !== 'item_given') return [];
+        return this._owed(stage);
+    }
+
+    // True when something is owed and every owed item is in the bag.
+    holdsOwed() {
+        const owed = this.owedItems();
+        return owed.length > 0 && owed.every(id => this._slotOf(id) >= 0);
+    }
+
+    // Hand every owed item to `npcId` at once: out of the bag, one `item_given`
+    // per item (the event the satchel give emits too). Returns how many went.
+    handOver(npcId) {
+        const owed = this.owedItems();
+        let n = 0;
+        for (const item of owed) {
+            const slot = this._slotOf(item);
+            if (slot < 0) continue;
+            this.game._removeFromSlot(slot);
+            this.game.emitGameEvent('item_given', { npc: npcId, item });
+            n++;
+        }
+        return n;
+    }
+
+    _given(stage, item) { return !!this.state.counters[givenKey(stage, item)]; }
+    _owed(stage) {
+        if (Array.isArray(stage.on.items)) return stage.on.items.filter(item => !this._given(stage, item));
+        const m = stage.on.match || {};
+        return m.item != null ? [m.item] : [];
+    }
+    _slotOf(itemId) {
+        return (this.game.inventory || []).findIndex(s => s && s.itemDef && s.itemDef.id === itemId);
     }
 
     // (Phase 4 journal) A render-ready view of the active quest for the Journal:
@@ -429,6 +494,9 @@ export class QuestEngine {
         this.state.journal = Array.isArray(obj.journal) ? obj.journal.slice() : [];
     }
 }
+
+// The saved-counter key that records one item of a several-item delivery.
+function givenKey(stage, item) { return `${stage.id}/${item}`; }
 
 // Every key in matchObj must strictly equal the same key in payload.
 function matches(matchObj, payload) {
