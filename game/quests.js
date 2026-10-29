@@ -9,6 +9,8 @@
 // world map, ignored by the event matcher: `location` (a short "where" string,
 // e.g. "Downtown · The Diner"), `description` (a longer journal line), and
 // `targetZone` (a zoneName the world map highlights so "go here next" is clear).
+// Every stage carries `targetZone`: a zone, or `null` for a stage with no place.
+// content-validate.js fails a stage that leaves it out (plans/mp1-map-marks-quest-stages.md).
 // The delivery event type `item_given { npc, item }` is emitted by BOTH the
 // trade-window give and a dialogue `consumesItem` choice.
 //
@@ -37,6 +39,7 @@ export const QUESTS = {
             {
                 id: 'find_way_out',
                 objective: "Escape the canyon — get Pike's rope: buy it, earn it, or take it",
+                targetZone: 'CANYON',
                 on: { type: 'map_entered', match: { map: 'downtown-map.json' } },
             },
         ],
@@ -97,6 +100,7 @@ export const QUESTS = {
                 // "...AND EXAMINE~" on a phone, losing the very (E) this line is about.
                 // examine.js points the way when E lands on anything else.
                 objective: "Your car won't start - go examine it (E)",
+                targetZone: 'TOWN',
                 on: { type: 'examine', match: { targetId: 'car' } },
                 // Tolerant: if the player already examined the car before this
                 // stage went active, the 'examine' event was dropped — so
@@ -106,6 +110,7 @@ export const QUESTS = {
             {
                 id: 'recover_converter',
                 objective: 'Get your converter back from the sewer',
+                targetZone: 'SEWER',
                 on: { type: 'item_pickup', match: { id: 'catalytic_converter' } },
                 // Tolerant: the converter only advances this stage on PICKUP. If
                 // it's already in the bag when this stage is entered (e.g. grabbed
@@ -117,6 +122,7 @@ export const QUESTS = {
             {
                 id: 'escape_sewer',
                 objective: 'Tear down the barricade and escape the sewer!',
+                targetZone: 'SEWER',
                 // Phase D implements the set-piece as a Game method; no-op here.
                 onEnter: (game) => { if (game._sewerEscapeSetpiece) game._sewerEscapeSetpiece(); },
                 on: { type: 'map_entered', match: { map: 'town-map.json' } },
@@ -124,6 +130,7 @@ export const QUESTS = {
             {
                 id: 'return_to_car',
                 objective: 'Install the converter - return to your car',
+                targetZone: 'TOWN',
                 onEnter: (game) => { game._sewerEscape = null; },  // escaped — clear the gauntlet state
                 on: { type: 'interact_car', match: {} },
             },
