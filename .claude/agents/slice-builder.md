@@ -2,6 +2,7 @@
 name: slice-builder
 description: Builds ONE approved Violencetown slice from the ticket board on its own feature branch, in an isolated worktree, and reports back. Spawned by the board-loop skill; not for general use.
 tools: Read, Edit, Write, Grep, Glob, Bash
+model: sonnet
 isolation: worktree
 ---
 

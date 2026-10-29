@@ -22,12 +22,21 @@ The board's word for turning an idea into rulings and slices is **tweak**. Use n
 5. **Build the picks** (up to 10, none sharing a file):
    1. Recon every pick (§1 step 5). A hit drops that pick only; carry on with the rest.
    2. Claim every pick that's left (§1 step 6).
-   3. Spawn every pick's `slice-builder` in one message, plus `board-scout` if it's due (§10).
+   3. Spawn every pick's `slice-builder` in one message, plus every scout that's due (§10).
       Each builder gets the card JSON, the picks of the rulings it rests on, `slug` and
       `touches`.
    4. Write each report back to its card (§1 step 7). FAILED or no report adds 1 to `fails`
       (§3). Board writes stay here, never in the builder.
-6. **Land the scout's proposals** (§10) with `newScoutIdea()`, and update `meta/scout`.
+6. **Scouts** (§10): for each of `scout-defects` and `scout-threads` that is due, not running and
+   not held back, spawn it in the background (with the builders when there are any). Give it its
+   `meta/<name>` (`lastSha`, `leads`), the current dev sha, the pass's card folder, the next area
+   or system in its rotation, Caelan's checkout path and a scratchpad log folder. Set
+   `meta/<name>.runningSince` at spawn. When it reports, land its proposals as Ideas cards in one
+   batch with `newScoutIdea()`, and pass its hand-off lines to the other scout's `leads` (the
+   thread scout's `LEADS KEPT` go back to its own). Keep `TOOLING` lines for the update, then set
+   `meta/<name>` to `{lastSha, lastAt, area}`.
+   - If the session started before a scout's file existed, its type won't spawn: spawn
+     `general-purpose` with worktree isolation and point it at `.claude/agents/<name>.md`.
 7. **Post the update** (§7): six lines at most, in plain words, no card codes without their
    title.
 8. **Schedule the next pass** with ScheduleWakeup, prompt `/board-loop`:

@@ -70,11 +70,11 @@ Caelan dislikes the other word for it; never use it.
        `blockedBy`. Move the slice to `ready` and drop `claim`.
      - **FAILED**, or no report at all: move the slice to `ready`, drop `claim`, add 1 to
        `fails`, and put the failure plus the branch sha in `note` (§3).
-8. **Scout** (§10), when it's due: alongside the builders, never instead of them.
+8. **Scouts** (§10), when due: alongside the builders, never instead of them.
 9. **Post the update and pick the wait** (§7).
 
 **Up to 10 slices per pass**, one builder each. Recon and claim every pick first, then spawn all
-the builders (and the scout, if it's due) in the same message so they run at once. `next-slice.mjs` never hands out two that share a file, so their branches can't collide. A
+the builders (and every scout that is due) in the same message so they run at once. `next-slice.mjs` never hands out two that share a file, so their branches can't collide. A
 pass that cleared Claude's turn may still build.
 
 ## 2. What a slice must prove (the builder's definition of done)
@@ -263,23 +263,73 @@ refactors that leave the autoplay golden untouched, tooling, commit order.
   with `/loop /board-loop`. It also expires after 7 days.
 - **A card is stuck in `doing`:** step 2 of the next pass recovers it.
 
-## 10. The scout
+## 10. The scouts
 
-Nothing feeds the board fixes and tweaks Caelan hasn't thought of, so the loop also runs a
-read-only scout (`plans/board-scout.md`, agent `board-scout`).
+Two agents feed the board work Caelan didn't have to think of (`plans/board-scout.md`). Both are
+read-only: they never edit, commit or push, and the loop writes their cards.
 
-1. **When.** Read `meta/scout` from the board database (`lastSha`, `lastAt`, `runningSince`).
-   Run a scout when `lastAt` is more than 2 hours ago and either `origin/dev` has moved past
-   `lastSha` or the pass has nothing to build. Never two at once: skip it while `runningSince`
-   is under 2 hours old.
-2. **Spawn it** with the pass's card folder, `since: <lastSha>`, and a scratch folder for its
-   evidence. First set `meta/scout.runningSince: <now>`. Spawn it in the same message as the
-   builders.
-3. **Land its proposals.** For each one, build the card with `newScoutIdea(proposal, now,
-   cards)` from `board-model.js`; it returns null for a key the board already has, in any lane.
-   Write the cards in one batch, then set `meta/scout` to `{ lastSha: <origin/dev>, lastAt:
-   <now> }`, which also clears `runningSince`.
-4. **Say so in the update:** how many scout cards landed, and the best one's title.
+| | **Defect scout** (`.claude/agents/scout-defects.md`) | **Thread scout** (`.claude/agents/scout-threads.md`) |
+|---|---|---|
+| Looks for | things that behave against their own intent: bugs, regressions, UI that collides or overflows, tests that can't fail | systems that stop short: never reachable, never connected, no way for a player to know they're there |
+| Per run | reviews what merged, harvests the build reports, plays headless, sweeps one **code area** | traces one **system's** whole thread: notice, read, operate, works, feeds, ends |
+| Rotation | the first list below | the second list below |
+| Due | after every merge, otherwise at most once an hour | at most once every 2 hours |
+| Card | `scoutKey` starts `defect:`, `scoutKind: "defect"`, note starts "From the defect scout:" | `scoutKey` starts `thread:`, `scoutKind` `tweak` or `idea`, note starts "From the thread scout:" and carries its `THREAD` line |
+
+**The defect scout's code areas**, in order (each takes its share of `main.js` too):
+1. fights: `combat.js`, `fight-area.js`, `fight-entrance.js`, `fight-panels.js`, `threat-phase.js`,
+   `cascade.js`, `enemies.js`, `ai.js`, `defeat-scenarios.js`;
+2. the wheel and its verbs: `wheel-model.js`, `give-action.js`, `theft.js`, `tricks.js`,
+   `spells.js`, `skills.js`, `affordances.js`, `elements.js`;
+3. items, gear and the bag: `items.js`, `weapons.js`, `slots.js`, `inventory.js`, `item-uses.js`,
+   `drops.js`, `loot-burst.js`, `rings.js`, `buffs.js`;
+4. townsfolk, trade and talk: `npc.js`, `trade.js`, `offer.js`, `disposition-curves.js`,
+   `dialogue.js`, `perception.js`;
+5. maps, movement and zones: `map.js`, `pathing.js`, `world-map.js`, the `*-map.json` files,
+   `sewer-setpiece.js`, `ants.js`;
+6. quests, saves and the title: `quests.js`, `save.js`, `hints.js`, `settings.js`, `examine.js`;
+7. the screen: `renderer.js`, `layout.js`, `viewport.js`, `ui-sprites.js`, `xmb.js`,
+   `inspector.js`, `combat-log.js`.
+
+**The thread scout's systems**, in order: the Remoticon's gear tab and equipping → rings → trade
+and barter → giving and bribes → stealing → spells and MP → poitions → secret item uses → buffs →
+quests and the objective → the world map and travel → the day clock → a fight's entrance, fog and
+defeat → weaknesses and elements → townsfolk talk and disposition → examine → saves, the title
+and Continue → the options menu.
+
+- **State:** each scout keeps `meta/<agent name>` in the board database: `lastSha`, `lastAt`,
+  `area` (the last code area or system it took; the next run takes the next one in its list),
+  `leads` and `runningSince`. A scout is running while its `runningSince` is under 2 hours old;
+  never run two of the same scout at once. Set `runningSince: <now>` at spawn.
+  - **First run:** with no `meta/scout-defects`, the defect scout takes `lastSha` from the retired
+    `meta/scout` and starts at area 1. The thread scout starts at the top of its list. Leave
+    `meta/scout` as it is; nothing reads it any more.
+- **When:** spawn every scout that is due, in the background, in the same message as the builders,
+  or on its own when there's nothing to build. The two scouts can run at the same time.
+- **Hold back** a scout while 10 or more of its own cards sit untriaged in Ideas: he's not keeping
+  up, so don't bury him. The other scout still runs.
+- **Its prompt:** its `meta` (`lastSha`, or "none"), the current dev sha, the pass's card folder,
+  this run's area or system, its `leads`, Caelan's checkout path, and a scratchpad folder for its
+  logs.
+- **Its report:** each proposal becomes an Ideas card through `newScoutIdea({key, kind, title,
+  note}, now, cards)` from `board-model.js`, which returns null for a key the board already has,
+  in any lane. The defect scout's `kind` is always `defect`; the note holds the rest of the
+  proposal under its "From the … scout:" opening. Write the cards in one batch, then set its
+  `meta` to `{lastSha: <origin/dev>, lastAt: <now>, area}` (dropping `runningSince` and `leads`).
+  - **Hand-offs close the gap between them:** the defect scout's `FOR THE THREAD SCOUT` lines go
+    into `meta/scout-threads.leads`, and the thread scout's `FOR THE DEFECT SCOUT` lines into
+    `meta/scout-defects.leads`. The thread scout's `LEADS KEPT` lines go back into its own
+    `leads`. Each scout checks its leads before anything else.
+  - **`TOOLING` lines are never cards.** The guard forbids slices from touching
+    `tools/roadmap-board/`, so a tooling card could only wait for him. Name them in the update
+    instead.
+- **The update** names what each scout filed, one line for both: how many cards, and the best
+  one's title.
+- **Learning from them:** a card's `scoutKey` prefix and note opening say which scout found it,
+  so each scout's hit rate (tweaked versus Someday) is one board query. When he parks a scout's
+  card with a reason, or a pattern shows (a class of finding he always parks, or always tweaks),
+  say so in the update and propose the change to that scout's file. Those files are committed,
+  so the change goes on a branch like any other; he says yes.
 
 Scout cards are ideas in his Ideas lane, marked "idea · scout". Scout **ideas** (`scoutKind:
 "idea"`) wait on his Tweak it or Someday like any idea. Scout **defects and tweaks** may be
@@ -297,7 +347,7 @@ the board as LP6.
   tuning number or art pick (obvious placeholders are fine) and touches no Locked spine row.
 - **Take its own recommended option on a ruling** about process, code structure, tests,
   tooling, or a golden whose drift is exactly what the slice set out to change.
-- **Tweak the scout's defects and tweaks** without waiting for his Tweak it. The scout's ideas
+- **Tweak the scouts' defects and tweaks** without waiting for his Tweak it. The scouts' ideas
   still wait on him.
 
 **Still his:** names, copy, lore, tuning numbers, art picks, the spine's Locked rows, Merge it,
