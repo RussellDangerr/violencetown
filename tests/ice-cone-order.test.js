@@ -188,3 +188,127 @@ describe("the traveler's hand-off line", () => {
         assert.ok(DIALOGUES.mq2_recipient.choices.some(c => c.id === 'deliver'));
     });
 });
+
+// ── Quest 2's own data ───────────────────────────────────────────────────────
+
+const STAGES = () => QUESTS.deliver_burger.stages.map(s => s.id);
+const cookNpc = { id: 'dt-cook', name: 'Cook', dialogueId: 'diner_cook', disposition: 0 };
+const startOrder = (g, stage) => {
+    g.questEngine.forceComplete('fix_car');
+    g.questEngine.start('deliver_burger');
+    g.questEngine.state.stageIndex = STAGES().indexOf(stage);
+};
+const atCook = (g) => { g._dialogueNpc = { ...cookNpc }; g._dialogueCursor = 0; };
+
+describe('quest 2 sends you for the cone as well as the burger', () => {
+    test('the stages run burger, cone, hand-off, and the cone stage points at the Factory', () => {
+        assert.deepEqual(STAGES(), ['get_burger', 'get_cone', 'handoff']);
+        const cone = QUESTS.deliver_burger.stages[1];
+        assert.equal(cone.targetZone, 'FACTORY');
+        assert.deepEqual(cone.on, { type: 'item_pickup', match: { id: CONE } });
+        for (const k of ['objective', 'location', 'description']) assert.equal(cone[k], '[TEXT]', `${k} is a placeholder`);
+    });
+
+    test('the hand-off needs both items for the traveler', () => {
+        const on = QUESTS.deliver_burger.stages[2].on;
+        assert.equal(on.type, 'item_given');
+        assert.equal(on.match.npc, NPC);
+        assert.deepEqual([...on.items].sort(), [BURGER, CONE].sort());
+    });
+
+    test('picking up the burger, then the cone, walks to the hand-off', () => {
+        const g = makeGame();
+        g.questEngine.forceComplete('fix_car');
+        g.questEngine.start('deliver_burger');
+        assert.equal(g.questEngine.currentStageId(), 'get_burger');
+        g._grantItem(BURGER);
+        assert.equal(g.questEngine.currentStageId(), 'get_cone');
+        g._grantItem(CONE);
+        assert.equal(g.questEngine.currentStageId(), 'handoff');
+    });
+
+    test('a cone already in the bag, picked up before the burger, still counts', () => {
+        const g = makeGame([CONE]);
+        g.questEngine.forceComplete('fix_car');
+        g.questEngine.start('deliver_burger');
+        g._grantItem(BURGER);
+        assert.equal(g.questEngine.currentStageId(), 'handoff', 'the cone stage is already satisfied');
+    });
+
+    test('handing over the burger alone does not finish the order, even by the satchel', () => {
+        const g = makeGame([BURGER]);
+        startOrder(g, 'handoff');
+        satchelGive(g, BURGER);
+        assert.ok(g.questEngine.isActive('deliver_burger'));
+        assert.deepEqual(g.questEngine.owedItems(), [CONE]);
+        g._grantItem(CONE);
+        satchelGive(g, CONE);
+        assert.ok(g.questEngine.isComplete('deliver_burger'));
+    });
+
+    test('a save mid-order keeps the pick-up and what was handed over', () => {
+        const g = makeGame([BURGER, CONE]);
+        startOrder(g, 'handoff');
+        satchelGive(g, CONE);
+        const saved = JSON.parse(JSON.stringify(g.questEngine.serialize()));
+        const h = makeGame([BURGER]);
+        h.questEngine.restore(saved);
+        assert.equal(h.questEngine.currentStageId(), 'handoff');
+        assert.deepEqual(h.questEngine.owedItems(), [BURGER]);
+        satchelGive(h, BURGER);
+        assert.ok(h.questEngine.isComplete('deliver_burger'));
+    });
+
+    test('the hand-off line is not offered with the burger alone', () => {
+        const g = makeGame([BURGER]);
+        startOrder(g, 'handoff');
+        g._dialogueNpc = { id: NPC, name: 'Traveler', dialogueId: 'mq2_recipient', disposition: 0 };
+        g._dialogueCursor = 0;
+        assert.ok(!g._dialogueChoices().some(c => c.id === 'deliver'));
+        g._grantItem(CONE);
+        assert.ok(g._dialogueChoices().some(c => c.id === 'deliver'));
+    });
+});
+
+describe('the diner cook re-issues a lost cone', () => {
+    const offered = (g) => g._dialogueChoices().some(c => c.id === 'another_cone');
+
+    test('only once the machine is fixed, the order needs a cone and none is in the bag', () => {
+        const g = makeGame([BURGER]);
+        startOrder(g, 'get_cone');
+        atCook(g);
+        assert.ok(!offered(g), 'machine still broken: no cone to give');
+        g.questEngine.state.flags.iceConeMachineFixed = true;
+        assert.ok(offered(g));
+        g._grantItem(CONE);
+        assert.ok(!offered(g), 'holding one already');
+    });
+
+    test('picking it grants a cone and moves the order along', () => {
+        const g = makeGame([BURGER]);
+        startOrder(g, 'get_cone');
+        g.questEngine.state.flags.iceConeMachineFixed = true;
+        atCook(g);
+        g._pickDialogueChoice(g._dialogueChoices().find(c => c.id === 'another_cone'));
+        assert.ok(holds(g, CONE));
+        assert.equal(g.questEngine.currentStageId(), 'handoff');
+    });
+
+    test('it is also offered at the hand-off while the cone is still owed, and not once handed over', () => {
+        const g = makeGame([BURGER]);
+        startOrder(g, 'handoff');
+        g.questEngine.state.flags.iceConeMachineFixed = true;
+        atCook(g);
+        assert.ok(offered(g));
+        g._grantItem(CONE);
+        satchelGive(g, CONE);
+        assert.ok(!offered(g), 'the cone is handed over; nothing left to re-issue');
+    });
+
+    test('never offered with no order under way', () => {
+        const g = makeGame();
+        g.questEngine.state.flags.iceConeMachineFixed = true;
+        atCook(g);
+        assert.ok(!offered(g));
+    });
+});

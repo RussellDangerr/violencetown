@@ -50,7 +50,7 @@ export const QUESTS = {
     },
 
     // ── Chapter Two: Main Quest 2 — the burger delivery (Phase 4 playground).
-    //    STRUCTURE is real (2 stages; both delivery idioms via item_given; journal
+    //    STRUCTURE is real (3 stages; both delivery idioms via item_given; journal
     //    location + description; world-map targetZone). The TEXT is placeholder for
     //    Caelan to author. Started deterministically on Downtown arrival (both the
     //    canyon-grapple climb-out and the alcohol-ramp → game._startMainQuest2).
@@ -68,12 +68,26 @@ export const QUESTS = {
                 autoSatisfy: (game) => (game.inventory || []).some(s => s && s.itemDef.id === 'burger_fries'),
             },
             {
+                // (IC2) The order includes the Tiger's Blood Ice Cone. It is not a quest
+                // item, so it comes from wherever it drops (the diner's machine today,
+                // the frozen area later): the stage only asks that it is in the bag.
+                // The Factory is where both of its sources begin.
+                id: 'get_cone',
+                objective: '[TEXT]',
+                location: '[TEXT]',
+                description: '[TEXT]',
+                targetZone: 'FACTORY',
+                on: { type: 'item_pickup', match: { id: 'tigers_blood_ice_cone' } },
+                autoSatisfy: (game) => (game.inventory || []).some(s => s && s.itemDef.id === 'tigers_blood_ice_cone'),
+            },
+            {
                 id: 'handoff',
-                objective: 'Deliver the burger + fries to the stranded traveler',
+                objective: '[TEXT]',
                 location: 'Downtown · the street',
-                description: 'The stranded traveler on the Downtown street is waiting on this. Hand it over — talk to them, or offer it from your satchel.',
+                description: '[TEXT]',
                 targetZone: 'DOWNTOWN',
-                on: { type: 'item_given', match: { item: 'burger_fries', npc: 'dt-recipient' } },
+                // Both items, handed over together or one at a time (QuestEngine.owedItems).
+                on: { type: 'item_given', match: { npc: 'dt-recipient' }, items: ['burger_fries', 'tigers_blood_ice_cone'] },
             },
         ],
         onComplete: (game) => {
