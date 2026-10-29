@@ -31,8 +31,8 @@ food they notice, and alarm scent draws them to a squashed ant.
   with the player, staying beside them, and bites for 1 every turn. If there is no open tile beside
   the player it falls off.
 - **Brush off.** Waiting a turn while ants are latched brushes every latched ant off: each lands a
-  couple of tiles away and does not bite on that turn. Waiting with none latched is an ordinary
-  wait.
+  couple of tiles away and lies there for that turn, neither moving nor biting. Waiting with none
+  latched is an ordinary wait.
 - **Squash.** An ant has 1 HP, so any hit kills it. The squashed ant leaves AN1's alarm scent on
   its tile and around it, and the others head for it. While the swarm is on, a squash sometimes
   sends one or two more ants in from the edge (AN1's recruit count).
