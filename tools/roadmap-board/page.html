@@ -325,7 +325,9 @@ function render() {
   const nextLine = nx.reason === 'ok'
     ? `<span class="next">Loop takes next: <b>${esc(label(nx.pick))}</b></span>`
     : nx.reason === 'wip-cap'
-      ? `<span class="next">Loop is paused — ${nx.wip} of ${WIP_CAP} branches wait on your merge</span>`
+      ? (nx.review >= REVIEW_CAP
+        ? `<span class="next">Loop is paused — ${nx.review} of ${REVIEW_CAP} branches wait on your merge</span>`
+        : `<span class="next">Loop is paused — ${nx.doing} of ${DOING_CAP} slices are being built</span>`)
       : `<span class="next">Loop has nothing to build yet</span>`;
   const turnChips = (list, empty) => list.length
     ? list.map(t => byId[t.id]).filter(Boolean)

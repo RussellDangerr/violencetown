@@ -3,7 +3,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    LANES, KINDS, WIP_CAP, byLane, blockerIndex, unblocked, nextSlice, answerRuling, newIdea,
+    LANES, KINDS, DOING_CAP, REVIEW_CAP, byLane, blockerIndex, unblocked, nextSlice, answerRuling, newIdea,
     triageIdea, approveSlice, reviewVerdict, addFeedback, yourTurn, claudesTurn, sendWords,
     migrateCard, mermaidSource, moveCard, waitingOn, freesIndex,
 } from '../tools/roadmap-board/board-model.js';
@@ -23,7 +23,8 @@ describe('LANES and KINDS', () => {
     });
     test('three kinds and a WIP cap of ten', () => {
         assert.deepEqual(KINDS, ['idea', 'ruling', 'slice']);
-        assert.equal(WIP_CAP, 10);
+        assert.equal(DOING_CAP, 10);
+        assert.equal(REVIEW_CAP, 10);
     });
 });
 
@@ -107,17 +108,18 @@ describe('nextSlice — what the loop builds next', () => {
         assert.equal(nextSlice(next).pick.id, 'B1', 'B1 comes first in Ready order once free');
     });
 
-    test('stops at the WIP cap: doing + review hold as many slices as the cap', () => {
+    test('stops at the WIP cap: doing and review each hold as many slices as their cap', () => {
         const full = [...cards,
             { id: 'D1', title: 'd', lane: 'doing',  order: 10, kind: 'slice', blockedBy: [] },
             { id: 'V1', title: 'v', lane: 'review', order: 10, kind: 'slice', blockedBy: [] },
         ];
         assert.equal(nextSlice(full).pick.id, 'B2', 'two in flight is well under the default cap of ten');
-        const r = nextSlice(full, { wipCap: 2 });
+        const r = nextSlice(full, { reviewCap: 1 });
         assert.equal(r.reason, 'wip-cap');
         assert.equal(r.pick, null);
         assert.equal(r.wip, 2);
-        assert.equal(nextSlice(full, { wipCap: 3 }).pick.id, 'B2', 'the cap is a parameter');
+        assert.equal(nextSlice(full, { doingCap: 1 }).reason, 'wip-cap', 'Doing has its own cap');
+        assert.equal(nextSlice(full, { doingCap: 2, reviewCap: 2 }).pick.id, 'B2', 'the caps are parameters');
     });
 
     test('skips a slice whose files an unmerged branch already touches', () => {

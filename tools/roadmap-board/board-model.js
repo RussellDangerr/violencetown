@@ -22,8 +22,12 @@ export const LANES = [
 ];
 
 export const KINDS = ['idea', 'ruling', 'slice'];
-export const WIP_CAP = 10;
+// Each of `doing` and `review` holds at most this many slices (plans/loop-limits-ten.md).
+export const DOING_CAP = 10;
+export const REVIEW_CAP = 10;
 export const PICKS_PER_PASS = 10;
+// A slice that failed this many builds waits for his reply instead of being rebuilt.
+export const MAX_FAILS = 2;
 
 const isDone = c => c.lane === 'done';
 
@@ -76,20 +80,21 @@ export function unblocked(cards) {
 const normPath = p => String(p ?? '').trim().replace(/\\/g, '/').replace(/^\.\//, '');
 
 // What the loop builds next (plans/ticket-board.md §2). Returns
-//   { picks, reason, wip, skipped }
+//   { picks, reason, wip, doing, review, skipped }
 // reason: 'ok' | 'wip-cap' | 'nothing-pickable'. `picks` holds up to `max`
-// slices, never more than the cap leaves room for, and no two share a file —
-// each one's touches join the busy set, so the next pick can't clash with it
-// (plans/loop-limits-ten.md). `skipped` lists every Ready slice that was passed
-// over, with why, so a run can report it.
-export function nextSlices(cards, { wipCap = WIP_CAP, max = PICKS_PER_PASS } = {}) {
+// slices, never more than either lane's cap leaves room for, and no two share a
+// file — each one's touches join the busy set, so the next pick can't clash with
+// it (plans/loop-limits-ten.md). `skipped` lists every Ready slice that was
+// passed over, with why, so a run can report it.
+export function nextSlices(cards, { doingCap = DOING_CAP, reviewCap = REVIEW_CAP, max = PICKS_PER_PASS } = {}) {
     const lanes = byLane(cards);
-    const inFlight = [...lanes.doing, ...lanes.review].filter(c => kindOf(c) === 'slice');
-    const wip = inFlight.length;
-    if (wip >= wipCap) return { picks: [], reason: 'wip-cap', wip, skipped: [] };
-    const room = Math.min(max, wipCap - wip);
+    const doing = lanes.doing.filter(c => kindOf(c) === 'slice');
+    const review = lanes.review.filter(c => kindOf(c) === 'slice');
+    const counts = { wip: doing.length + review.length, doing: doing.length, review: review.length };
+    if (doing.length >= doingCap || review.length >= reviewCap) return { picks: [], reason: 'wip-cap', ...counts, skipped: [] };
+    const room = Math.min(max, doingCap - doing.length, reviewCap - review.length);
 
-    const busy = new Set(inFlight.flatMap(c => (c.touches ?? []).map(normPath)));
+    const busy = new Set([...doing, ...review].flatMap(c => (c.touches ?? []).map(normPath)));
     const ix = blockerIndex(cards);
     const picks = [], skipped = [];
     for (const c of lanes.ready) {
@@ -100,6 +105,8 @@ export function nextSlices(cards, { wipCap = WIP_CAP, max = PICKS_PER_PASS } = {
         // rows arrive like this. A run must never guess what "done" means.
         if (!Array.isArray(c.acceptance) || !c.acceptance.length) { skipped.push({ id: c.id, why: 'not tweaked (no acceptance)' }); continue; }
         if (!c.approved) { skipped.push({ id: c.id, why: 'waiting for your approval' }); continue; }
+        // A build that keeps failing would otherwise be picked first every pass.
+        if ((Number(c.fails) || 0) >= MAX_FAILS) { skipped.push({ id: c.id, why: `failed ${c.fails} times; waiting for your reply` }); continue; }
         const open = ix.openBlockedBy[c.id];
         if (open.length) { skipped.push({ id: c.id, why: `blocked by ${open.join(', ')}` }); continue; }
         const clash = (c.touches ?? []).map(normPath).filter(p => busy.has(p));
@@ -107,12 +114,12 @@ export function nextSlices(cards, { wipCap = WIP_CAP, max = PICKS_PER_PASS } = {
         picks.push(c);
         for (const p of c.touches ?? []) busy.add(normPath(p));
     }
-    return { picks, reason: picks.length ? 'ok' : 'nothing-pickable', wip, skipped };
+    return { picks, reason: picks.length ? 'ok' : 'nothing-pickable', ...counts, skipped };
 }
 
-// The first of nextSlices(): { pick, reason, wip, skipped }.
-export function nextSlice(cards, { wipCap = WIP_CAP } = {}) {
-    const { picks, ...r } = nextSlices(cards, { wipCap, max: 1 });
+// The first of nextSlices(): { pick, reason, wip, doing, review, skipped }.
+export function nextSlice(cards, { doingCap = DOING_CAP, reviewCap = REVIEW_CAP } = {}) {
+    const { picks, ...r } = nextSlices(cards, { doingCap, reviewCap, max: 1 });
     return { pick: picks[0] ?? null, ...r };
 }
 
@@ -193,6 +200,32 @@ export function yourTurn(cards) {
     }
     return out;
 }
+// Open rulings are what a tweak adds to his pile, so they alone pause the loop's
+// own tweaks (LOOP.md §5); ideas, approvals and asks don't count.
+export const openRulings = cards => cards.filter(isOpenRuling);
+
+// How long an idle pass sleeps (LOOP.md §7), in seconds: short while he is
+// active on the board, so a click soon after an idle pass isn't left for an hour.
+// Only his gestures count — a pick or approval the loop made itself is skipped.
+const HOUR = 3600e3;
+const toMs = at => typeof at === 'number' ? at : Date.parse(at);
+export function lastTouchFromHim(cards) {
+    let last = -Infinity;
+    const see = at => { const t = toMs(at); if (Number.isFinite(t) && t > last) last = t; };
+    for (const c of cards) {
+        see(c.verdict?.at);
+        see(c.triage?.at);
+        if (c.approved && c.approved.by !== 'loop') see(c.approved.at);
+        if (c.pick && c.pick.by !== 'loop' && !/picked by the loop/i.test(c.pick.note ?? '')) see(c.pick.at);
+        for (const f of Array.isArray(c.feedback) ? c.feedback : []) if (f?.from === 'you') see(f.at);
+    }
+    return last;
+}
+export function idleWait(cards, now) {
+    const ago = now - lastTouchFromHim(cards);
+    return ago < HOUR / 2 ? 300 : ago < 2 * HOUR ? 1200 : 3600;
+}
+
 export function claudesTurn(cards) {
     const out = [];
     for (const c of cards) {
