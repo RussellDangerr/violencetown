@@ -148,6 +148,20 @@ export const QUESTS = {
     },
 };
 
+// (NO1) Between quests: while no quest is active, the first row whose `when`
+// holds gives the HUD its objective and the Map its ring, so the gap between one
+// quest ending and the next starting still says where to go. Rows read only
+// saved state (flags, the bridge route), so a save made in a gap reloads with
+// its row showing (plans/no1-objective-points-at-bridge.md).
+export const BETWEEN_QUESTS = [
+    {
+        id: 'to_bridge',   // the car runs, the bridge isn't crossed yet: the crash or the ramp is next
+        when: (qe) => !!qe.getFlag('carFixed') && !qe.bridgeRoute(),
+        objective: 'Drive north across the bridge',
+        targetZone: 'TOWN',
+    },
+];
+
 export class QuestEngine {
     constructor(game) {
         this.game = game;
@@ -265,10 +279,11 @@ export class QuestEngine {
         this._complete();
     }
 
-    // The current objective line for the HUD (null when no quest is active).
+    // The current objective line for the HUD: the active stage's, else a
+    // between-quests row's (null when neither applies).
     getHudText() {
         const id = this.state.activeId;
-        if (!id) return null;
+        if (!id) return this.betweenQuests()?.objective ?? null;
         const stage = QUESTS[id].stages[this.state.stageIndex];
         if (!stage) return null;
         let t = stage.objective;
@@ -294,6 +309,13 @@ export class QuestEngine {
         const id = this.state.activeId;
         if (!id) return null;
         return QUESTS[id].stages[this.state.stageIndex] || null;
+    }
+
+    // (NO1) The BETWEEN_QUESTS row that applies now, or null. Only while no
+    // quest is active: an active quest's own stage always wins.
+    betweenQuests() {
+        if (this.state.activeId) return null;
+        return BETWEEN_QUESTS.find(row => row.when(this)) || null;
     }
 
     isActive(id) { return this.state.activeId === id; }
@@ -363,10 +385,11 @@ export class QuestEngine {
     }
 
     // (Phase 4 map) The active stage's targetZone — a zoneName the world map
-    // highlights as "go here next" — or null.
+    // highlights as "go here next" — or, with no quest active, a between-quests
+    // row's — or null.
     getTargetZone() {
         const id = this.state.activeId;
-        if (!id) return null;
+        if (!id) return this.betweenQuests()?.targetZone ?? null;
         const s = QUESTS[id].stages[this.state.stageIndex];
         return (s && s.targetZone) || null;
     }
