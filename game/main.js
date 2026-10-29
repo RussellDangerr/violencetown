@@ -93,6 +93,7 @@ import * as Settings from './settings.js'; // [settings] options/accessibility s
 import { fighters, joiners } from './fight-area.js';                                     // (fight-fog) who is in the fight
 import { fightStartKind, entranceFor, fightFxActive } from './fight-entrance.js'; // (fight-fog) how it began, and how long its fog moves
 import { createCascade, CASCADE_BEAT_MS, LUNGE_MS } from './cascade.js';           // (turn-model C1) the enemy phase, one actor at a time
+import { makeBurst, liveBursts } from './loot-burst.js';                            // (FX3b) a kill's loot bursts out and flies to you
 
 // Chebyshev (king-move) distance — used by the wheel reticle's range clamp.
 const cheb = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
@@ -425,6 +426,8 @@ class Game {
         // array is empty, so the game returns to its idle 4fps redraw cadence.
         this._damageNumbers = [];
         this._particleLoopRunning = false;
+        // (FX3b) Loot bursts in the air: pure show, the items are already bagged.
+        this._lootBursts = [];
 
         // Player hit-flash + stagger — short-lived visual feedback when
         // damage lands on the player. Timestamps are performance.now()
@@ -658,6 +661,7 @@ class Game {
         // so the HP bar has caught up before you arrive.
         this._cascade?.flush();
         this._damageNumbers = [];
+        this._lootBursts = [];
         this.playerX = spawnX ?? this.map.spawn.x;
         this.playerY = spawnY ?? this.map.spawn.y;
 
@@ -4654,11 +4658,11 @@ class Game {
         // didn't — what's left is the reward for rushing him. Farming stays
         // closed because spawnEnemy clears the loadout for a mugged id, exactly
         // as it clears the gold.
+        // (FX3) What the kill gives is gathered here and handed to the bag at
+        // the end (_takeKillLoot), never left on the floor.
+        const drops = [];
         const kit = dropLoadout(enemyObj.loadout, enemyObj.x, enemyObj.y);
-        for (const item of kit) {
-            this._recordDrop(item.type, item.x, item.y);
-            this.groundItems.push(item);
-        }
+        drops.push(...kit);
         if (kit.length) {
             this._log(`[They drop what they didn't get to use.]`, 'pickup');
             this._muggedIds.add(enemyObj.id);
@@ -4676,8 +4680,7 @@ class Game {
         const required = requiredDropFor(enemyObj, this.map?.enemySpawns);
         const firstFall = this._bossFirstFall?.(enemyObj, required) ?? true;
         if (firstFall && required && ITEMS[required]) {
-            this._recordDrop(required, enemyObj.x, enemyObj.y);
-            this.groundItems.push({ type: required, x: enemyObj.x, y: enemyObj.y, def: ITEMS[required] });
+            drops.push({ type: required, x: enemyObj.x, y: enemyObj.y, def: ITEMS[required] });
             this._log(dropLineFor(enemyObj, this.map?.enemySpawns) || `[${ITEMS[required].name} dropped.]`, 'pickup');
         }
         // (Remembrance Rings) The Were-Rat also leaves a remembrance — a braided
@@ -4687,16 +4690,14 @@ class Game {
             let fx = enemyObj.x, fy = enemyObj.y;
             for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
                 const tx = enemyObj.x + dx, ty = enemyObj.y + dy;
-                if (this.map.isWalkable(tx, ty) && !this.groundItems.some(gi => gi.x === tx && gi.y === ty)) { fx = tx; fy = ty; break; }
+                if (this.map.isWalkable(tx, ty) && ![...this.groundItems, ...drops].some(gi => gi.x === tx && gi.y === ty)) { fx = tx; fy = ty; break; }
             }
-            this._recordDrop('wererat_fur', fx, fy);
-            this.groundItems.push({ type: 'wererat_fur', x: fx, y: fy, def: ITEMS.wererat_fur });
+            drops.push({ type: 'wererat_fur', x: fx, y: fy, def: ITEMS.wererat_fur });
             this._log('[Among the matted fur, one coarse braided tuft stays warm — a remembrance.]', 'pickup');
         }
         // Pike guards his climbing rope with his life — take it off his body.
         if (firstFall && enemyObj.tag === 'pike_boss' && ITEMS.grappling_hook) {
-            this._recordDrop('grappling_hook', enemyObj.x, enemyObj.y);
-            this.groundItems.push({ type: 'grappling_hook', x: enemyObj.x, y: enemyObj.y, def: ITEMS.grappling_hook });
+            drops.push({ type: 'grappling_hook', x: enemyObj.x, y: enemyObj.y, def: ITEMS.grappling_hook });
             this._log('[Pike crumples. His big coil of rope — the grappling hook — thuds to the stone.]', 'pickup');
         }
         // Pike's deal (his dialogue onPick set the flag): clearing the LAST canyon
@@ -4708,6 +4709,46 @@ class Game {
             this._grantItem('grappling_hook', '["Deal\'s a deal." Pike coils the big rope into your pack — the grappling hook is yours.]');
         }
         onSewerEnemyKilled(this, enemyObj);
+        // (FX3) Auto-loot: everything gathered above goes straight into the bag.
+        // Handed over last, so the quest hears item_pickup after the kill, in the
+        // order a walk-over pickup gave it. Whatever the bag can't take (an item
+        // that doesn't resolve) falls to the floor as it always did; a stand-in
+        // game without _takeKillLoot drops everything there.
+        const left = this._takeKillLoot ? this._takeKillLoot(drops, enemyObj) : drops;
+        for (const item of left) {
+            this._recordDrop(item.type, item.x, item.y);
+            this.groundItems.push(item);
+        }
+    }
+
+    // (FX3) A kill's loot goes straight into the bag: each item is logged with the
+    // walk-over pickup's line and fires item_pickup, then (FX3b) the burst shows it
+    // flying from the body to you. The bag never refuses (BG1), so `left` holds
+    // only items with no def. Pure show follows: the items are already yours.
+    _takeKillLoot(drops, enemyObj) {
+        const left = [], got = [];
+        for (const item of drops) {
+            if (item.def && this._addToInventory(item.def)) got.push(item.def);
+            else left.push(item);
+        }
+        if (!got.length) return left;
+        audio.playSfx('pickup');
+        for (const def of got) {
+            this._log(`[Picked up ${def.name}]`, 'pickup');
+            this.emitGameEvent('item_pickup', { id: def.id });
+        }
+        this._saveMoment?.();
+        this._startLootBurst?.(enemyObj.x, enemyObj.y, got);
+        return left;
+    }
+
+    // (FX3b) Start the burst that shows a kill's loot flying from the body at
+    // (x, y) to you, one icon per item. Nothing waits on it. An ally's kill in a
+    // cascaded enemy phase bursts on that ally's beat, like its K.O. word.
+    _startLootBurst(x, y, defs) {
+        if (this._cascadeActor && this._cascade?.defer(this._cascadeActor, () => this._startLootBurst(x, y, defs))) return;
+        this._lootBursts.push(makeBurst(x, y, defs.map(d => ({ id: d.id, icon: d.icon })), performance.now()));
+        this._ensureParticleLoop();
     }
 
     // (Remembrance Rings) Platero's craft: consume a remembrance material from
@@ -5786,6 +5827,7 @@ class Game {
             this._damageNumbers = this._damageNumbers.filter(
                 dn => now - dn.bornAt < dn.maxAge
             );
+            this._lootBursts = liveBursts(this._lootBursts, now);   // (FX3b) landed bursts go
             this._cascade?.tick(now);   // (C1) play the blows whose beat has come
             if (frame.tick()) requestAnimationFrame(loop);
         };
@@ -5797,6 +5839,7 @@ class Game {
     // because the enemy count is small (single digits typically).
     _hasActiveEffects() {
         if (this._damageNumbers.length > 0) return true;
+        if (this._lootBursts?.length > 0) return true;   // (FX3b) loot still in the air
         if (this._cascade?.pending()) return true;   // (C1) blows still waiting for their beat
         const now = performance.now();
         if ((this._playerHitFlashUntil ?? 0) > now) return true;

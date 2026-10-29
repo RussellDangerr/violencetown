@@ -48,6 +48,7 @@ import { resolveOffer } from './offer.js';                                  // (
 import { dispositionCeil, DISPOSITION_MIN } from './disposition-curves.js'; // (offer screen) meter ceiling + floor — offer.js does not re-export these
 import { lungeOffset } from './cascade.js';                                  // (turn-model C1) an attacker lunges on its beat
 import { splatPill, layoutSplats, glideToward, splatCell, splatShowingAt, splatPixelFactor, splatClampDown, SPLAT_CELL_W, SPLAT_CELL_H } from './splat-layout.js'; // hit splats
+import { burstFrame } from './loot-burst.js';                                 // (FX3b) a kill's loot bursts out and flies to you
 import { hitKindTag } from './hit-splat.js';                                  // (WS4) a physical hit's slash/stab/crush tag
 
 // Tile id → sprite ref. Sewer ids 0-7 → TILE_SPRITE_MAP, town ids 10-21 →
@@ -625,6 +626,9 @@ export class Renderer {
         // (combat-wheel rework) Aim reticle lives in world space so it tracks the
         // map; the wheel list itself is drawn in screen space after the restore.
         if (game.wheel && (game.wheel.aiming || game.wheel.confirming)) this._drawReticle(game);
+
+        // (FX3b) A kill's loot flying to you: over the cast, under the numbers.
+        this._drawLootBursts(game);
 
         // Floating damage numbers float above the world but under the HUD
         // so the HP panel + hotbar are never occluded by spammy combat.
@@ -1446,6 +1450,29 @@ export class Renderer {
                 ctx.fillStyle = '#fff';
                 ctx.font = 'bold 10px monospace';
                 ctx.fillText(info.letter, px + 12, py + 20);
+            }
+        }
+    }
+
+    // (FX3b) Each item of a kill's loot, at its spot in the burst (loot-burst.js):
+    // out of the body's tile centre, into the player's. Each draws through
+    // _drawItemIcon, the bag's own icon path, scaled. Reduce Motion flattens the hop.
+    _drawLootBursts(game) {
+        const bursts = game._lootBursts;
+        if (!bursts || !bursts.length) return;
+        const vp = this._view();
+        const now = performance.now();
+        const { ppx, ppy } = this._playerScreenPos(game, now);
+        const player = { x: ppx + TILE_PX / 2, y: ppy + TILE_PX / 2 };
+        const flat = !!Settings.get('reduceMotion');
+        for (const b of bursts) {
+            const body = {
+                x: vp.origin.x + (b.x - game.playerX) * TILE_PX - this._scrollX + TILE_PX / 2,
+                y: vp.origin.y + (b.y - game.playerY) * TILE_PX - this._scrollY + TILE_PX / 2,
+            };
+            for (const f of burstFrame(b, now, body, player, TILE_PX, { flat })) {
+                const size = Math.max(4, Math.round(TILE_PX * f.scale));
+                this._drawItemIcon(f.item, Math.round(f.x - size / 2), Math.round(f.y - size / 2), size);
             }
         }
     }
