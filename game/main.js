@@ -5707,7 +5707,8 @@ class Game {
     _joinFight() {
         const fs = fighters(this.enemies);
         if (fs.length === 0) return;
-        for (const n of joiners(this.map, this.enemies, fs, { x: this.playerX, y: this.playerY })) {
+        const joining = joiners(this.map, this.enemies, fs, { x: this.playerX, y: this.playerY });
+        for (const n of joining) {
             n.state = 'chasing';
             n._struckBy = null;
             n._lostSightTurns = 0;
@@ -5715,8 +5716,9 @@ class Game {
             n._sweepBeats = 0;
             n._lastSeenX = this.playerX;
             n._lastSeenY = this.playerY;
-            this._log('[TEXT]', 'combat');
         }
+        // (fx17) One line per beat, however many joined.
+        if (joining.length > 0) this._log('[TEXT]', 'combat');
     }
 
     // ── Floating damage numbers ──────────────────────────────────────────────
