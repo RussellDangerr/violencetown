@@ -140,7 +140,7 @@
       "seed": 2,
       "finished": true,
       "reason": null,
-      "fingerprint": "f537685e",
+      "fingerprint": "65abe548",
       "turn": 83,
       "deaths": 0,
       "stages": [
@@ -197,6 +197,12 @@
           "turns": 0,
           "deaths": 0,
           "gold": -1
+        },
+        {
+          "id": "reload_continue",
+          "turns": 0,
+          "deaths": 0,
+          "gold": 0
         }
       ],
       "end": {
