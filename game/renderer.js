@@ -186,6 +186,11 @@ export function intentLabelRect(px, py, tw, raised = false, tilePx = TILE_PX) {
     return { tx, ty, x: tx - 3, y: ty - 2, w: tw + 6, h: INTENT_LABEL_H };
 }
 
+// (FX20) How far in from a 9-slice panel's edge text starts so it clears the
+// gold corner ornament (which reaches 10px in). The quest log has always used
+// it; the fight panels' title rows share it.
+export const PANEL_TEXT_INSET = 12;
+
 // Painter's order for the actor pass. The map's edge filler (the forest past its
 // edge) draws behind everything, so a two-tile tree south of the map never
 // covers the map's last row (ruling SF, 2026-10-03: you vanished for a step at
@@ -2471,7 +2476,7 @@ export class Renderer {
     _drawQuestLog(game) {
         const { ctx } = this;
         const R = this._hud().log;
-        const PAD = 12;                      // buffer so text clears the ornate corners
+        const PAD = PANEL_TEXT_INSET;        // buffer so text clears the ornate corners
         const LH = 12;                       // line height (8px glyph + 4px lead)
         const innerW = R.w - PAD * 2;
         const cut = (s) => cutToWidth(s, innerW, this._measurer(1));
@@ -2881,7 +2886,9 @@ export class Renderer {
         const tx = R.x + PAD;
         const clip = (s) => cutToWidth(s, R.w - PAD * 2, this._measurer(1));
         let y = R.y + PAD;
-        this.font.drawText(ctx, 'YOU', tx, y, { color: UI.gold, scale: 1 });
+        // (FX20) The title row sits in the corner's reach, so it takes the
+        // corner-clearing inset; the rows below only run beside the thin edge.
+        this.font.drawText(ctx, 'YOU', R.x + PANEL_TEXT_INSET, y, { color: UI.gold, scale: 1 });
         y += LH + 2;
         for (const slot of data.slots) {
             this.font.drawText(ctx, clip(slot.label), tx, y, { color: UI.dim, scale: 1 });
@@ -2903,7 +2910,10 @@ export class Renderer {
         const tx = R.x + PAD;
         const clip = (s) => cutToWidth(s, R.w - PAD * 2, this._measurer(1));
         let y = R.y + PAD;
-        this.font.drawText(ctx, clip(t.name.toUpperCase()), tx, y, { color: UI.hpRed, scale: 1 });
+        // (FX20) The name clears both top corners: the left one by its start,
+        // the right one by the narrower clip.
+        const name = cutToWidth(t.name.toUpperCase(), R.w - PANEL_TEXT_INSET * 2, this._measurer(1));
+        this.font.drawText(ctx, name, R.x + PANEL_TEXT_INSET, y, { color: UI.hpRed, scale: 1 });
         y += LH + 2;
         this.font.drawText(ctx, clip(`HP ${t.hp}/${t.maxHp}`), tx, y, { color: UI.text, scale: 1 });
         y += LH;
