@@ -1,59 +1,58 @@
-# The board scout: proposals that don't start in Caelan's head
+# The board scouts: proposals that don't start in Caelan's head
 
 Caelan, 2026-10-25: the loop builds what he thinks of, but nothing feeds it fixes and tweaks he
-hasn't thought of. The game can play itself and the loop collects data every pass, so some part
-of the loop should look at the game and the code and propose cards.
+hasn't thought of. So the loop runs a read-only scout that looks at the game and the code and
+proposes cards.
 
-## What it is
+2026-10-29: one scout became two, matching the Grawlix loop, so the two loops keep one shape. One
+scout doing everything found plenty of defects but rarely noticed a system that was never
+finished: a gear tab with no weapon chooser reads as "works as coded". Those are two different
+ways of looking, so each gets its own agent.
 
-A read-only agent, `board-scout` (`.claude/agents/board-scout.md`), that the loop runs alongside
-its builders. It never edits the repo, never pushes and never writes to the board. It hands the
-loop up to 10 proposals, and the loop turns each one into an **idea card** in the Ideas lane,
-marked `source: "scout"`. He triages them like his own ideas: Tweak it, or park it in Someday.
+## The two scouts
 
-## Where it looks
+- **The defect scout** (`.claude/agents/scout-defects.md`) finds things that behave against their
+  own intent: a bug, a regression, a label drawn over another, a test that can't fail. It reviews
+  what merged since its last run, harvests the "Needs your eye" and "Not done" items in the build
+  reports, plays the game headless, and sweeps one code area per run. Every proposal carries an
+  expected, an actual with a measured number, and a repro.
+- **The thread scout** (`.claude/agents/scout-threads.md`) takes one system per run and traces its
+  whole thread: how a player notices it, reads it, operates it, whether it works end to end, what
+  it feeds, and how it ends. It proposes the smallest piece of work that closes a missing link.
+  It never proposes a new system.
 
-1. **What the builders already noticed.** Every build report ends with "Needs your eye" and "Not
-   done". Nobody harvests them. The scout reads the summaries and notes of cards in review and
-   done, and proposes a card for anything left hanging, most of all an issue that shows up in
-   more than one report (two slices have now reported "undefined DMG").
-2. **The game, played.** It runs the quest-1 autoplay for the fighter and the sneak, captures
-   frames along the way, and reads them for defects a player would see: `undefined` or `NaN` on
-   screen, text running out of its panel, overlapping UI, a stage that costs far more turns or
-   deaths than the others.
-3. **What changed.** It reviews the code merged to `dev` since its last run for bugs, dead code
-   and loose ends.
-4. **Cheap sweeps.** Balance-harness lint flags, warnings in the test run, and odd strings the
-   renderer can draw.
+Each hands the other what it isn't for: a defect scout that sees an unwired system writes it under
+`FOR THE THREAD SCOUT`, and the loop stores it as the thread scout's `leads`; the reverse goes
+under `FOR THE DEFECT SCOUT`. Defects in the loop's own tooling go under `TOOLING` and are named
+in the update, never filed, because no slice may touch `tools/roadmap-board/`.
+
+Both are read-only (no edits, commits, pushes or board writes) and both run on Sonnet. The rules
+for when they run, their rotations and how their cards land are in `tools/roadmap-board/LOOP.md`
+§10.
 
 ## What a proposal must carry
 
-- `key`: a short stable id for the problem (`defect:tier-two-hander-undefined-dmg`). The loop
-  never writes a second card with a key any card already has, in any lane, so a parked
-  proposal stays parked.
-- `kind`: `defect`, `tweak` or `idea`.
-- `title`: the problem in plain player words.
-- `note`: what, where (`file:line`), the evidence (a frame path, command output, the cards that
-  reported it), and a suggested fix in one or two sentences.
-- No new names, copy, lore or tuning numbers presented as decided: those stay his. A proposal may
-  say a number looks off and why.
-
-## When it runs
-
-The loop starts a scout in a pass when the last scout ran more than 2 hours ago and either `dev`
-has moved since then or the pass has nothing to build. Its state (`lastSha`, `lastAt`) lives in
-the board database under collection `meta`, document `scout`, not on a card. At most one scout
-runs at a time.
+- `key`: a short stable id, `defect:<id>` or `thread:<id>`. The loop never writes a second card
+  with a key any card already has, in any lane, so a parked proposal stays parked.
+- `kind`: `defect` from the defect scout; `tweak` (no ruling needed) or `idea` from the thread
+  scout.
+- `title`: the problem or gap in plain player words.
+- The rest of the proposal goes in the card's note, opening "From the defect scout:" or "From the
+  thread scout:", so each scout's hit rate is one board query.
+- No new names, copy, lore or tuning numbers presented as decided: those stay his. A proposal
+  names the question; it may say a number looks off and why.
 
 ## Limits
 
-10 proposals per run, matching the loop's other limits (`plans/loop-limits-ten.md`). Every
-proposal needs evidence; a hunch with none is dropped.
+10 proposals per scout per run, matching the loop's other limits (`plans/loop-limits-ten.md`). A
+scout is held back while 10 of its own cards sit untriaged in Ideas. Every proposal needs
+evidence; a hunch with none is dropped.
 
 ## Acceptance
 
 - `newScoutIdea(proposal, now, cards)` in `board-model.js` builds the idea card, and returns null
-  for a key any card already carries or a proposal missing its key or title. Node-tested.
+  for a key any card already carries or a proposal missing its key or title. Node-tested
+  (`tests/board-scout.test.js`); unchanged by the split.
 - The board page labels a scout card "idea · scout".
-- LOOP.md and the board-loop skill say when the scout runs and how its proposals land.
+- LOOP.md §10 and the board-loop skill say when each scout runs and how its proposals land.
 - `npm test` passes.
