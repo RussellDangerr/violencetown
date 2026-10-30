@@ -29,6 +29,7 @@
         {"x": 6, "y": 5, "radius": 4.0, "r": 200, "g": 90, "b": 230}
     ],
     "props": [
+        {"type": "slotMachine", "x": 6, "y": 2},
         {"type": "plantA", "x": 2, "y": 2},
         {"type": "plantB", "x": 9, "y": 2},
         {"type": "chairDown", "x": 2, "y": 5},

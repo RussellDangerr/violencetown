@@ -26,6 +26,7 @@
         {"id": "bank_vault", "x": 6, "y": 2, "text": "[A vault door, cold to the touch even from here. The air in the bank is wrong — too clean, too quiet, and it smells faintly of copper.]"}
     ],
     "props": [
+        {"type": "vaultDoor", "x": 6, "y": 1, "solid": false},
         {"type": "shelfA", "x": 3, "y": 2},
         {"type": "shelfB", "x": 4, "y": 2},
         {"type": "shelfB", "x": 8, "y": 2},

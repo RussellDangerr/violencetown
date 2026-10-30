@@ -18,6 +18,8 @@ Their examine text is not touched.
   the casino floor; the vault door picture goes on the bank's real door tile,
   and you still walk through it into the vault.
 
+- AP4R2 (what the props are called when examined as props), Caelan picked a: "Slot machine" and "Vault door", added to the prop-name list in `game/examine.js`. The authored examine text still wins on the examine spot; the name is the fallback a test demands for every prop.
+
 ## How
 
 - Two new prop types in `game/sprites.js`, `slotMachine` and `vaultDoor`, each a

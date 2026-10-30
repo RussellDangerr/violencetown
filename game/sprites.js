@@ -778,6 +778,17 @@ export const PROP_SPRITES = {
     // dot with blobs.
     ...Object.fromEntries(Object.entries(INTERIOR_SPRITES)
         .map(([name, col]) => [name, { sheet: 'interior', sx: col * 16, sy: 0, sw: 16, sh: 16, wTiles: 1, hTiles: 1, shadow: false }])),
+
+    // The casino's slot machine — Tiny Dungeon's grey cabinet with a dark window,
+    // (6,4) on the packed sheet (no gutter, so stride 16). Solid, standing on the
+    // examine spot at (6,2): you face it from below and examine it.
+    slotMachine: { sheet: 'tinyDungeon', sx: 6 * 16, sy: 4 * 16, sw: 16, sh: 16, wTiles: 1, hTiles: 1, shadowRx: 9, shadowRy: 3 },
+
+    // The bank's vault door — Tiny Town's metal door with a slot, (5,10). It is
+    // drawn on the real door tile in the back wall and placed `solid: false` in
+    // the map, so the walk through it into the vault (and its item gate) is
+    // exactly what it was. No ground shadow: it is a door, not an object.
+    vaultDoor: { sheet: 'tinyTown', sx: 5 * 16, sy: 10 * 16, sw: 16, sh: 16, wTiles: 1, hTiles: 1, shadow: false },
 };
 
 // ── Emote balloons (Kenney Emote Pack, Pixel Style 1) ───────────────────────
