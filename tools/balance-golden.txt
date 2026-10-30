@@ -31,6 +31,7 @@ factory/green1                    Greedy Green                100       3      9
 factory/puck                      Puck                        100     -30      1        0              2              2    100
 factory/factory-manager           Violencian                  100     -80      0        0              1              1      -
 frozen/frozen-mob-3               Polar Bear                  100       3     10       70              6              3     10
+frozen/frozen-boss                Siberia                     100       6     12      148              8              3      9
 frozen/frozen-mob-1               Snowman                     100       0      8       35              5              3     13
 frozen/frozen-mob-2               Yeti                        100       6     12      113              8              3      9
 graveyard/graveyard_boss          Boss                        100       6     12      148              8              3      9
@@ -90,7 +91,7 @@ casino                     0
 diner                      0
 downtown                   8
 factory                   76
-frozen                    34
+frozen                    78
 graveyard                 48
 sewer                    101
 sewer-north               10

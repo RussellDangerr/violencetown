@@ -246,9 +246,11 @@ describe('the balance bench', () => {
 
     test('lists each once, and the frozen faucet is their three wallets', () => {
         const rows = loadMapRoster().filter(r => r.zone === 'frozen');
-        assert.deepEqual(rows.map(r => r.type).sort(), [...TYPES].sort());
+        // The frozen boss (plans/ic5-siberia-frozen-boss.md) stands there too: a row and a wallet of her own.
+        assert.deepEqual(rows.map(r => r.type).sort(), [...TYPES, 'Siberia'].sort());
         const wallets = POOL.reduce((s, id) => s + ENTRIES[id].gold, 0);
         assert.equal(wallets, 34);
-        assert.match(report(), /^frozen +34$/m);
+        assert.equal(wallets + ENTRIES.siberia.gold, 78);
+        assert.match(report(), /^frozen +78$/m);
     });
 });

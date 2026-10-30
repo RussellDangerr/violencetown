@@ -126,6 +126,17 @@ export const ENTRIES = {
         loadout: ['mystery_meat', 'mystery_meat', 'mystery_meat', 'tunnel_mushroom', 'sludge_sack', 'fire_blood', 'defence_poition'],
         hp: 100, armor: 3, damage: 10,
     }),
+    // The frozen area's boss (plans/ic5-siberia-frozen-boss.md): a tigress
+    // snowwoman. The shared placeholder boss numbers and kit until she is
+    // designed, the chart's cold row like the mooks, her one name, [TEXT] copy.
+    siberia: {
+        ...placeholderBoss(),
+        type: 'Siberia',
+        name: 'Siberia',
+        weak: weaknessesOf('cold'),
+        resist: resistancesOf('cold'),
+        examine: '[TEXT]',
+    },
 };
 
 // One frozen-area mook: its numbers, the chart's cold row, and placeholder
@@ -201,6 +212,15 @@ export const SLOTS = {
         map: 'graveyard-map.json',
         requiredDrop: 'act2_item_c',
         pool: [{ entry: 'the_deity', weight: 1 }],
+    },
+    // The frozen area's boss: a map off the spine, so no Locked row moves. Beating
+    // her hands over the Tiger's Blood Ice Cone (IC1). No dropLine yet: the death
+    // handler logs its generic line.
+    'frozen.boss': {
+        kind: 'boss',
+        map: 'frozen-map.json',
+        requiredDrop: 'tigers_blood_ice_cone',
+        pool: [{ entry: 'siberia', weight: 1 }],
     },
     // A mob slot (spine SL-6) holds mooks, not an anchor: see dealDeck below.
     'frozen.mob': {
