@@ -246,6 +246,20 @@ const BAR_HALF = 160;          // the item bar's widest half-width: three chips 
 const BAR_ABOVE = 78;          // the bar's panel runs from 78 above its anchor's bottom …
 const BAR_BELOW = 4;           // … to 4 below it (xmbBarPanelRect)
 
+// ── The loot reel (plans/fx3c-slot-machine-loot-reel.md) ──
+// A panel at the top-centre of the world, `rows` lines tall (loot-ticker.js
+// windowRows), each two text lines high. On a wide screen it sits at the very top,
+// between the HP panel at the left and the buffs at the right. On a narrow one
+// (a phone, under NARROW logical px) those three would touch, so it sits below
+// the HP panel's row instead.
+export const LOOT_REEL = Object.freeze({ W: 280, ROW_H: 32, PAD: 8, TOP: 8, NARROW: 900, HP_H: 90 });
+export function lootReelRect(vp = DEFAULT_VIEW, rows = 1) {
+    const w = Math.min(LOOT_REEL.W, vp.w - 2 * HUD_M);
+    const h = rows * LOOT_REEL.ROW_H + 2 * LOOT_REEL.PAD;
+    const top = vp.w < LOOT_REEL.NARROW ? HUD_M + LOOT_REEL.HP_H + HUD_GAP : LOOT_REEL.TOP;
+    return { x: Math.round((vp.w - w) / 2), y: vp.world.y + top, w, h };
+}
+
 // `opts.fight` picks the dock's FIGHT face (plans/combat-hud.md stage 3): the
 // same geometry down to the pixel, with the log showing the combat feed instead
 // of the quest objective. Nothing moves when a fight starts — a dock that

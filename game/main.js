@@ -93,6 +93,7 @@ import * as Settings from './settings.js'; // [settings] options/accessibility s
 import { fighters, joiners } from './fight-area.js';                                     // (fight-fog) who is in the fight
 import { fightStartKind, entranceFor, fightFxActive } from './fight-entrance.js'; // (fight-fog) how it began, and how long its fog moves
 import { createCascade, CASCADE_BEAT_MS, LUNGE_MS } from './cascade.js';           // (turn-model C1) the enemy phase, one actor at a time
+import { reelEntries, extendReel, liveReel } from './loot-ticker.js';                      // (FX3c) a reel rolls through what a kill gave
 import { makeBurst, liveBursts } from './loot-burst.js';                            // (FX3b) a kill's loot bursts out and flies to you
 import { isAnt, isColdTile, carriesSweet, swarmTurn, squashAnt, brushOff,
          ANT_TYPE, ANT_TAG, ANT_HP, ANT_BITE } from './ants.js';                    // (AN2) carry sweet food and ants come for it
@@ -430,6 +431,8 @@ class Game {
         this._particleLoopRunning = false;
         // (FX3b) Loot bursts in the air: pure show, the items are already bagged.
         this._lootBursts = [];
+        // (FX3c) The reel that rolls through what a kill gave: pure show, never a game state.
+        this._lootReel = null;
 
         // Player hit-flash + stagger — short-lived visual feedback when
         // damage lands on the player. Timestamps are performance.now()
@@ -1210,6 +1213,8 @@ class Game {
             if (e.ctrlKey || e.metaKey || e.altKey) return;
 
             if (this.state === STATE.SPLASH || this.state === STATE.RESOLVING) return;
+            // (FX3c) A fresh key press skips the loot reel, then does its normal job below.
+            if (!e.repeat) this._skipLootReel?.();
             // [settings] While paused, swallow all gameplay keys. P / Escape
             // resume (so the player isn't trapped); everything else is eaten.
             // The pause overlay's own RESUME button also clears the flag.
@@ -2019,6 +2024,7 @@ class Game {
         // first, then the menu would bail because the state left IDLE.
         if (e.button >= 1) return;
         this._turnPress = null;   // (C3b) a new press never inherits an old one's pending step
+        this._skipLootReel?.();   // (FX3c) a tap skips the loot reel, then does its normal job
         // Mirror the keyboard gate: don't process taps during the move
         // animation or while the world is resolving. Splash has its own
         // handler (DOM button). Dead is a non-interactive end state.
@@ -4796,6 +4802,7 @@ class Game {
         }
         this._saveMoment?.();
         this._startLootBurst?.(enemyObj.x, enemyObj.y, got);
+        this._startLootReel?.(got);
         return left;
     }
 
@@ -4806,6 +4813,25 @@ class Game {
         if (this._cascadeActor && this._cascade?.defer(this._cascadeActor, () => this._startLootBurst(x, y, defs))) return;
         this._lootBursts.push(makeBurst(x, y, defs.map(d => ({ id: d.id, icon: d.icon })), performance.now()));
         this._ensureParticleLoop();
+    }
+
+    // (FX3c) Roll the reel through what a kill gave: one line per kind of item, with
+    // its count. A reel still rolling takes the new items in (extendReel). Nothing
+    // waits on it; a fresh key press or a tap clears it (_skipLootReel). An ally's
+    // kill in a cascaded enemy phase rolls on that ally's beat, like its burst.
+    _startLootReel(defs) {
+        if (this._cascadeActor && this._cascade?.defer(this._cascadeActor, () => this._startLootReel(defs))) return;
+        const entries = reelEntries(defs);
+        if (!entries.length) return;
+        const now = performance.now();
+        this._lootReel = extendReel(liveReel(this._lootReel, now), entries, now);
+        this._ensureParticleLoop();
+    }
+
+    // (FX3c) Any fresh key press or tap skips the reel. The key still does its job:
+    // this only clears the show, and runs before the key is read.
+    _skipLootReel() {
+        if (this._lootReel) { this._lootReel = null; this._render?.(); }
     }
 
     // (Remembrance Rings) Platero's craft: consume a remembrance material from
@@ -5887,6 +5913,7 @@ class Game {
                 dn => now - dn.bornAt < dn.maxAge
             );
             this._lootBursts = liveBursts(this._lootBursts, now);   // (FX3b) landed bursts go
+            this._lootReel = liveReel(this._lootReel, now);          // (FX3c) a finished reel goes
             this._cascade?.tick(now);   // (C1) play the blows whose beat has come
             if (frame.tick()) requestAnimationFrame(loop);
         };
@@ -5899,6 +5926,7 @@ class Game {
     _hasActiveEffects() {
         if (this._damageNumbers.length > 0) return true;
         if (this._lootBursts?.length > 0) return true;   // (FX3b) loot still in the air
+        if (this._lootReel) return true;                  // (FX3c) the reel still rolling
         if (this._cascade?.pending()) return true;   // (C1) blows still waiting for their beat
         const now = performance.now();
         if ((this._playerHitFlashUntil ?? 0) > now) return true;

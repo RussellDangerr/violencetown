@@ -23,7 +23,8 @@ import {
     inspectorPanelRect, inspectorActionRects,                               // (C1) tap-to-inspect panel + action-row geometry
     gearOptionRects, gearChooserRect,                                       // (C2) GEAR chooser option-row + panel geometry
     xmbBarLayout, hudLayout, throwRects, wheelTopMarks, fightPanelRects, XMB_CELL,                      // (XMB) usable-bar geometry; (screen-fill) the HUD, throw targets, the marks above the wheel
-    MODAL_RECT, offerLayout,                                                 // (offer screen) the one panel + its geometry
+    LOOT_REEL, lootReelRect,                                                 // (FX3c) the loot reel's panel
+    MODAL_RECT, offerLayout,                                             // (offer screen) the one panel + its geometry
 } from './layout.js';
 import { itemStatLine, itemActions, equipOptions, USES_ACTION } from './inspector.js';    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
 import { zoneOf, pageCount, slotOnPage } from './inventory.js';                                     // (C1) safe/pack label for the inspector
@@ -48,7 +49,8 @@ import { resolveOffer } from './offer.js';                                  // (
 import { dispositionCeil, DISPOSITION_MIN } from './disposition-curves.js'; // (offer screen) meter ceiling + floor — offer.js does not re-export these
 import { lungeOffset } from './cascade.js';                                  // (turn-model C1) an attacker lunges on its beat
 import { splatPill, layoutSplats, glideToward, splatCell, splatShowingAt, splatPixelFactor, splatClampDown, SPLAT_CELL_W, SPLAT_CELL_H } from './splat-layout.js'; // hit splats
-import { burstFrame } from './loot-burst.js';                                 // (FX3b) a kill's loot bursts out and flies to you
+import { reelFrame, windowRows } from './loot-ticker.js';                      // (FX3c) the reel of what a kill gave
+import { burstFrame } from './loot-burst.js';                                // (FX3b) a kill's loot bursts out and flies to you
 import { hitKindTag } from './hit-splat.js';                                  // (WS4) a physical hit's slash/stab/crush tag
 
 // Tile id → sprite ref. Sewer ids 0-7 → TILE_SPRITE_MAP, town ids 10-21 →
@@ -681,6 +683,7 @@ export class Renderer {
         this._drawFightPanels(game);
         this._drawXmbBar(game);
         this._drawOpener(game);
+        this._drawLootReel(game);   // (FX3c) what the kill gave, rolling
 
         // Subtle vignette border
         this._drawVignette();
@@ -1485,6 +1488,47 @@ export class Renderer {
                 this._drawItemIcon(f.item, Math.round(f.x - size / 2), Math.round(f.y - size / 2), size);
             }
         }
+    }
+
+    // (FX3c) The loot reel: a panel at the top-centre with a three-line window onto
+    // the strip of what a kill gave (loot-ticker.js says which line is where). Each
+    // line is two rows of text: the name and the count, then the rarity in its
+    // colour and the gold value. A one-item kill is a one-line panel. Screen space,
+    // after the shake restore, so it holds still.
+    _drawLootReel(game) {
+        const reel = game._lootReel;
+        if (!reel) return;
+        const frame = reelFrame(reel, performance.now());
+        if (!frame || frame.alpha <= 0) return;
+        const { ctx } = this;
+        const n = reel.entries.length, rows = windowRows(n);
+        const R = lootReelRect(this._view(), rows);
+        const PAD = LOOT_REEL.PAD, RH = LOOT_REEL.ROW_H;
+        const inner = { x: R.x + PAD, y: R.y + PAD, w: R.w - 2 * PAD, h: rows * RH };
+        const centre = (rows - 1) / 2;
+        ctx.save();
+        ctx.globalAlpha = frame.alpha;
+        drawPanelSmall(ctx, R.x, R.y, R.w, R.h, this.uiSheet, 'dark');
+        if (rows > 1) {                                  // the slot window's centre line
+            ctx.strokeStyle = UI.gold;
+            ctx.strokeRect(inner.x + 0.5, inner.y + centre * RH + 0.5, inner.w - 1, RH - 1);
+        }
+        ctx.beginPath(); ctx.rect(inner.x, inner.y, inner.w, inner.h); ctx.clip();
+        if (this.font) {
+            const ICON = RH - 8, textX = inner.x + 4 + ICON + 6, textR = inner.x + inner.w - 4;
+            for (const row of frame.rows) {
+                const e = row.entry, top = inner.y + (centre + row.offset) * RH;
+                ctx.globalAlpha = frame.alpha * row.weight;
+                this._drawItemIcon({ id: e.id, icon: e.icon }, inner.x + 4, Math.round(top + 4), ICON);
+                const count = `x${e.count}`, value = `${e.value} GP`;
+                const room = textR - textX - 8 * (count.length + 1);
+                this.font.drawText(ctx, cutToWidth(e.name, room, this._measurer(1)), textX, Math.round(top + 5), { color: UI.white, scale: 1 });
+                this.font.drawText(ctx, count, textR, Math.round(top + 5), { color: UI.gold, scale: 1, align: 'right' });
+                this.font.drawText(ctx, e.tierName, textX, Math.round(top + 18), { color: e.color, scale: 1 });
+                this.font.drawText(ctx, value, textR, Math.round(top + 18), { color: UI.gold, scale: 1, align: 'right' });
+            }
+        }
+        ctx.restore();
     }
 
     // ── Actors (enemies + player), depth-sorted ───────────────────────────────
