@@ -1,6 +1,7 @@
 // player.js — the autoplay's players (plans/quest1-autoplay.md §7). One
 // decision per call, from a plain view of the game:
-//   1. below the heal threshold, with food: eat
+//   1. below the heal threshold, with food, and nothing hunting you or beside
+//      you: eat
 //   2. something to fight within reach: spend what you carry on it (ruling
 //      Q1-10) — drink, then a spell while the MP lasts, then a throw, then the
 //      sword. The quarry first, otherwise the weakest
@@ -54,7 +55,10 @@ export function goalDone(view, goal) {
 export const currentGoal = (view, goals) => goals.find((g) => !goalDone(view, g)) || null;
 
 export function decide(view, goals, knobs = KNOBS) {
-    if (view.hp < knobs.healBelow * view.maxHp && view.canEat) return { kind: 'eat' };
+    // Eat between fights (AH1R2): a hot dog heals 10 and a boss hits for 25+, so
+    // a turn spent eating beside one, or with it hunting you, only dies slower.
+    const pressed = view.enemies.some((e) => e.hostile && (e.aware || cheb(e, view.player) === 1));
+    if (view.hp < knobs.healBelow * view.maxHp && view.canEat && !pressed) return { kind: 'eat' };
 
     const goal = currentGoal(view, goals);
     // The quarry is what the goal is about: the enemy to kill, or whoever

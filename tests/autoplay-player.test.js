@@ -30,6 +30,16 @@ describe('the standard fighter', () => {
     test('eats below the heal threshold when it has food', () => {
         assert.equal(decide(view({ rows: open, player: { x: 0, y: 0 }, hp: 39, canEat: true }), far).kind, 'eat');
     });
+    test('does not eat with a hostile beside it, or one hunting it', () => {
+        const beside = [{ x: 1, y: 0, hp: 50, hostile: true, tag: null, aware: false }];
+        const hunting = [{ x: 4, y: 2, hp: 50, hostile: true, tag: null, aware: true }];
+        assert.notEqual(decide(view({ rows: open, player: { x: 0, y: 0 }, hp: 20, canEat: true, enemies: beside }), far).kind, 'eat');
+        assert.notEqual(decide(view({ rows: open, player: { x: 0, y: 0 }, hp: 20, canEat: true, enemies: hunting }), far).kind, 'eat');
+    });
+    test('eats with only an unaware, distant, or friendly one about', () => {
+        const calm = [{ x: 4, y: 2, hp: 50, hostile: true, tag: null, aware: false }, { x: 1, y: 0, hp: 50, hostile: false, tag: null, aware: true }];
+        assert.equal(decide(view({ rows: open, player: { x: 0, y: 0 }, hp: 20, canEat: true, enemies: calm }), far).kind, 'eat');
+    });
     test('does not try to eat with nothing to eat', () => {
         assert.notEqual(decide(view({ rows: open, player: { x: 0, y: 0 }, hp: 10 }), far).kind, 'eat');
     });
