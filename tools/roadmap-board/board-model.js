@@ -205,6 +205,15 @@ export function claudesTurn(cards) {
     return out;
 }
 
+// What only he can move right now (plans/board-my-turn.md): his turn, minus any card
+// still blocked, and minus any card whose thread is waiting on Claude's reply.
+export function myTurn(cards) {
+    const ix = blockerIndex(cards);
+    const byId = Object.create(null);
+    for (const c of cards) byId[c.id] = c;
+    return yourTurn(cards).filter(t => !ix.openBlockedBy[t.id].length && lastFrom(byId[t.id]) !== 'you');
+}
+
 // What a card is really waiting on (plans/ticket-board.md §9): its open blockers
 // walked all the way down, sorted by who has to act.
 //   rulings   — open rulings he can answer now
