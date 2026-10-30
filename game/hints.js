@@ -20,6 +20,8 @@
 // content, so a throwing predicate is caught and simply does not fire — a
 // broken hint must never take a turn down with it.
 
+import { buildXmbBar } from './xmb.js';
+
 const cheb = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
 
 // Living, not-yours, close enough to touch.
@@ -76,7 +78,10 @@ export const HINTS = [
         // The first time a fight has actually cost something. Fights run 5-8
         // turns now, so there is a middle in which to reach for a kit — which
         // was the entire point of the fight-length re-role.
-        when: (game) => (game.playerHp ?? 100) < (game.playerMaxHp ?? 100) * 0.5,
+        // The bar is only drawn when it has something in it, so the hint waits
+        // for the same check the bar's own drawing uses (renderer _drawXmbBar).
+        when: (game) => (game.playerHp ?? 100) < (game.playerMaxHp ?? 100) * 0.5
+            && buildXmbBar(game.inventory).columns.length > 0,
         text: '[You are hurt. The bar along the bottom is live — Shift+↑↓ picks something to drink.]',
     },
 ];
