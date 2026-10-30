@@ -10,7 +10,9 @@
 
 export const ROUTES = {
     fix_car: {
-        examine_car:       [{ use: 'car', map: 'town-map.json' }],
+        // The Town's hot dogs first (AH1): the heal rule in player.js needs food
+        // in the bag, and the bots otherwise reach the Sewer with none.
+        examine_car:       [{ take: 'hot_dog', map: 'town-map.json' }, { use: 'car', map: 'town-map.json' }],
         recover_converter: [{ kill: 'sewer.boss', map: 'sewer-map.json' }, { take: 'catalytic_converter', map: 'sewer-map.json' }],
         escape_sewer:      [{ reach: 'town-map.json' }],
         return_to_car:     [{ use: 'car', map: 'town-map.json' }],

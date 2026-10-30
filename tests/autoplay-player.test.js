@@ -2,6 +2,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { decide, goalDone, BARRICADE, SNEAK } from '../game/autoplay/player.js';
+import { ROUTES } from '../game/autoplay/route.js';
 
 // A game as the player sees it. Rows: '.' open, '#' wall, 'B' barricade.
 // `seen` marks tiles a hostile perceives: { 'x,y': 'DIRECT' | 'PERIPHERAL' }.
@@ -34,6 +35,35 @@ describe('the standard fighter', () => {
     });
     test('does not eat above the threshold', () => {
         assert.notEqual(decide(view({ rows: open, player: { x: 0, y: 0 }, hp: 41, canEat: true }), far).kind, 'eat');
+    });
+
+    // AH1: the first stage fetches the Town's hot dogs, then the car.
+    describe('the first stage of quest 1 (food, then the car)', () => {
+        const goals = ROUTES.fix_car.examine_car;
+        const rows = ['.......', '.......', '.......'];
+        const dogs = [{ type: 'hot_dog', x: 5, y: 1 }, { type: 'hot_dog', x: 5, y: 1 }];
+        test('with empty hands it walks to the hot dogs, not the car', () => {
+            const v = view({ rows, player: { x: 0, y: 1 }, items: dogs, targets: { '0,0': 'car' } });
+            assert.deepEqual(decide(v, goals), { kind: 'step', dir: 'right' });
+        });
+        test('the take goal is done once a hot dog is carried, and the car is next', () => {
+            const v = view({ rows, player: { x: 0, y: 1 }, inventory: ['hot_dog'], targets: { '0,0': 'car' } });
+            assert.equal(goalDone(v, goals[0]), true);
+            assert.deepEqual(decide(v, goals), { kind: 'use', dir: 'up' });
+        });
+        test('carrying food below the heal threshold, it eats', () => {
+            const v = view({ rows, player: { x: 0, y: 1 }, inventory: ['hot_dog'], canEat: true, hp: 30 });
+            assert.equal(decide(v, goals).kind, 'eat');
+        });
+        test('having eaten them, later stages never send it back for more', () => {
+            for (const stage of ['recover_converter', 'escape_sewer', 'return_to_car']) {
+                assert.ok(!ROUTES.fix_car[stage].some((g) => g.take === 'hot_dog'), stage);
+            }
+            // In the Sewer with hot dogs still lying in Town, the next goal is the Sewer's own.
+            const v = view({ rows, player: { x: 0, y: 1 }, items: dogs, inventory: [], mapUrl: 'sewer-map.json',
+                enemies: [{ x: 4, y: 1, hp: 90, hostile: true, tag: null, slot: 'sewer.boss' }] });
+            assert.equal(decide(v, ROUTES.fix_car.recover_converter).kind, 'step');
+        });
     });
 
     test('hits an adjacent hostile, facing it', () => {

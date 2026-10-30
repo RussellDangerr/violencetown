@@ -26,6 +26,23 @@ describe('the quest-1 route', () => {
         assert.ok(map('sewer-map.json').transitions.some((t) => t.toMap === 'town-map.json'));
     });
 
+    // AH1: the heal rule only fires for a bot carrying food, so the first stage
+    // collects the Town's hot dogs before the car.
+    test('examine_car takes the Town hot dogs before it uses the car', () => {
+        const stage = ROUTES.fix_car.examine_car;
+        const take = stage.findIndex((g) => g.take === 'hot_dog');
+        const use = stage.findIndex((g) => g.use === 'car');
+        assert.ok(take >= 0, 'no take goal for hot_dog');
+        assert.ok(use > take, 'the car is examined before the hot dogs are taken');
+        assert.equal(stage[take].map, 'town-map.json');
+        assert.ok(map('town-map.json').items.some((i) => i.type === 'hot_dog'), 'no hot_dog lies in the Town');
+    });
+
+    test('no later stage walks back for food', () => {
+        const later = Object.entries(ROUTES.fix_car).filter(([id]) => id !== 'examine_car').flatMap(([, gs]) => gs);
+        assert.ok(!later.some((g) => g.take === 'hot_dog'));
+    });
+
     test('every id a goal names exists where it says', () => {
         for (const g of goals) {
             if (g.use) assert.ok(map(g.map).examinables.some((e) => e.id === g.use), `no examinable ${g.use} in ${g.map}`);
