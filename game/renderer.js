@@ -44,6 +44,7 @@ import { entranceAt, fogReveal, fogDepth, fogOut, tileJitter, FOG_TINT, FOG_DENS
 import { combatLines } from './combat-log.js';   // (combat-hud stage 3) the fight face's feed
 import { playerPanel, targetPanel, panelTarget } from './fight-panels.js';   // (combat-hud stage 4)
 import * as Settings from './settings.js'; // (combat-feel-pass) reduce-motion for hit-splats (namespace import — see main.js)
+import { isAnt } from './ants.js';   // (AN4) an ant is a pest, not a fighter: no bar, label or K.O. word
 import { challengeGp, shownName } from './enemies.js'; // (Law 6f) nameplate pips read the composite kit, not raw gold; (FX4) a boss's one name
 import { resolveOffer } from './offer.js';                                  // (offer screen) pure basket→projection
 import { dispositionCeil, DISPOSITION_MIN } from './disposition-curves.js'; // (offer screen) meter ceiling + floor — offer.js does not re-export these
@@ -1631,7 +1632,7 @@ export class Renderer {
         const pcx = ppx + TILE_PX / 2, pcy = groundPy + TILE_PX / 2;
         const koLabels = [];
         for (const a of actors) {
-            if (a.kind !== 'enemy' || !a.dead) continue;
+            if (a.kind !== 'enemy' || !a.dead || isAnt(a.e)) continue;
             const cx = a.px + TILE_PX / 2;
             koLabels.push({ key: a.e, cx, y: a.py + TILE_PX - 2, w: measure(koLabelText(a.e)), h: KO_LABEL_H,
                 dist: Math.hypot(cx - pcx, a.py + TILE_PX / 2 - pcy) });
@@ -1704,6 +1705,9 @@ export class Renderer {
     _drawEnemySprite(game, e, px, py, now, { bodyOnly = false } = {}) {
         const { ctx, sprites } = this;
         const isAlive = e.entity.isAlive();
+        // (AN4) A swarm reads as pests, not a row of enemies: an ant keeps its
+        // body and its hit flash, and none of the overlays that mark a fighter.
+        const pest = isAnt(e);
         // Hit-flash only animates while alive — corpses are static after death.
         const flashing = isAlive && (e._hitFlashUntil ?? 0) > now;
 
@@ -1776,7 +1780,7 @@ export class Renderer {
             // as a combat target.
             const frac = e.entity.hp / e.entity.maxHp;
             const bx = px + 4, by = py - 6, bw = TILE_PX - 8, bh = 5;
-            if (!e.ambient && !splatUp) {
+            if (!e.ambient && !splatUp && !pest) {
                 ctx.fillStyle = '#000000cc';
                 ctx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
                 ctx.fillStyle = UI.hpBg;
@@ -1809,7 +1813,7 @@ export class Renderer {
             // the shop uses, floating above any NPC that HAS a disposition.
             // Mindless things show nothing. Sits above the HP bar; nudged higher
             // when buff badges occupy that row.
-            if (e.disposition != null && !splatUp) {
+            if (e.disposition != null && !splatUp && !pest) {
                 const faceR  = 6.5;
                 const faceCX = px + TILE_PX / 2;
                 const faceCY = (e.buffs && e.buffs.length > 0) ? py - 28 : py - 15;
@@ -1835,7 +1839,7 @@ export class Renderer {
             // boss-wallet dread (Law 6e's KH multi-bar) belongs on the dedicated
             // boss frame, deferred to the first boss build — not a 24px nameplate.
             const gold = challengeGp(e);
-            if (!e.ambient && gold > 0 && !splatUp) {
+            if (!e.ambient && gold > 0 && !splatUp && !pest) {
                 const gh = 2, gy = by - 4; // 2px row above the HP bar's own backing plate
                 ctx.fillStyle = '#000000cc';
                 ctx.fillRect(bx - 1, gy - 1, bw + 2, gh + 2);
@@ -1870,7 +1874,7 @@ export class Renderer {
             // Only the ONE character you face is labelled — a row of floating
             // verbs over a crowd would be noise, and the whole point is that this
             // reads as "the thing you are about to do".
-            if (this.font && !game._animating && !splatUp && this._isFaced(game, e)) {
+            if (this.font && !game._animating && !splatUp && !pest && this._isFaced(game, e)) {
                 const verb = defaultVerb({ x: e.x, y: e.y, npc: e }, game);
                 if (verb) {
                     const who  = String((e.boss ? shownName(e) : e.name || e.type) || '').replace(/[[\]]/g, '');
@@ -1921,7 +1925,7 @@ export class Renderer {
                     ctx.restore();
                 }
             }
-        } else {
+        } else if (!pest) {
             // Corpse — gray tint overlay turns the sprite into a faded version of
             // itself, marking it "defeated" without a separate corpse sprite.
             ctx.fillStyle = 'rgba(60, 60, 60, 0.55)';
