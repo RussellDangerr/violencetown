@@ -240,6 +240,26 @@ export function showsFacingChevron(watcher) {
     return !straight || straight !== spriteDirOf(watcher);
 }
 
+// (FX53) The two banners an open wheel puts above the dock: the gold hint and,
+// in a fight, the red enemy count. They used to share one line (`strip - 16`),
+// so the count covered the middle of the hint. Now the hint keeps its band and
+// the count takes the band right above it. Each centres on the screen when that
+// clears the dial (`dialLeft`, the dial's left edge), and otherwise sits in the
+// room left of the dial. `countW` is null when no count is shown. `y` is the
+// text's top; a band is the dark strip behind it.
+export const WHEEL_HINT_BAND_H = 24;
+export const WHEEL_COUNT_BAND_H = 26;
+export function wheelBannerRows({ strip, vpW, dialLeft, hintW, countW = null }) {
+    const place = (tw) => (vpW / 2 + tw / 2 <= dialLeft) ? vpW / 2 : Math.max(tw / 2 + 4, dialLeft / 2);
+    const hintBandY = strip - WHEEL_HINT_BAND_H;
+    const countBandY = hintBandY - WHEEL_COUNT_BAND_H;
+    return {
+        hint: { x: place(hintW), y: strip - 16, band: { y: hintBandY, h: WHEEL_HINT_BAND_H } },
+        count: countW == null ? null
+            : { x: place(countW), y: countBandY + 10, w: countW, band: { y: countBandY, h: WHEEL_COUNT_BAND_H } },
+    };
+}
+
 // Which way an exit's arrow points: toward the map edge the tile is nearest
 // (see _drawTransitions). On a tie the vertical edge wins.
 export function exitDir(t, mw, mh) {
@@ -3419,13 +3439,37 @@ export class Renderer {
         // under it and lost ESC TO CLOSE — the words that say how to leave. So it
         // centres on the screen when that clears the dial, and in the room left of
         // the dial when it doesn't. Outside the pop transform so it doesn't bounce.
+        //
+        // (FX53) In a fight the red enemy count has its own row just above this
+        // one; both are drawn here, before the dial, so neither band can paint
+        // over it.
         if (this.font) {
             const msg = 'WHEEL OPEN  ·  MOVE KEYS STEER IT  ·  ESC TO CLOSE';
-            const tw = this.font.measure(msg, 1);
             const dialLeft = cx - this._hud().dialRadius(depth, kids.length > 0) - 8;
-            const tx = (CC + tw / 2 <= dialLeft) ? CC : Math.max(tw / 2 + 4, dialLeft / 2);
-            ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, strip - 24, vp.w, 24); ctx.restore();
-            this.font.drawText(ctx, msg, tx, strip - 16, { color: UI.gold, scale: 1, align: 'center', shadow: '#000' });
+            let countMsg = null;
+            if (combat) {
+                const foes = (game.enemies || []).filter(e => !e.ambient && isHunting(e) && e.entity && e.entity.isAlive());
+                if (foes.length) {
+                    let near = foes[0], nd = Infinity;
+                    for (const e of foes) {
+                        const d = Math.max(Math.abs(e.x - game.playerX), Math.abs(e.y - game.playerY));
+                        if (d < nd) { nd = d; near = e; }
+                    }
+                    const nm = String(shownName(near) || (near.entity && near.entity.name) || 'FOE').replace(/[\[\]]/g, '').toUpperCase().slice(0, 12);
+                    countMsg = `⚔ ${foes.length}  ${nm}`;
+                }
+            }
+            const rows = wheelBannerRows({
+                strip, vpW: vp.w, dialLeft,
+                hintW: this.font.measure(msg, 1),
+                countW: countMsg == null ? null : this.font.measure(countMsg, 1),
+            });
+            ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, rows.hint.band.y, vp.w, rows.hint.band.h); ctx.restore();
+            this.font.drawText(ctx, msg, rows.hint.x, rows.hint.y, { color: UI.gold, scale: 1, align: 'center', shadow: '#000' });
+            if (rows.count) {
+                ctx.save(); ctx.fillStyle = 'rgba(40,0,0,0.6)'; ctx.fillRect(0, rows.count.band.y, vp.w, rows.count.band.h); ctx.restore();
+                this.font.drawText(ctx, countMsg, rows.count.x, rows.count.y, { color: '#e8462f', scale: 1, align: 'center', shadow: '#000' });
+            }
         }
 
         // Everything below the wash scales about the centre (the open/drill pop).
@@ -3547,22 +3591,8 @@ export class Renderer {
 
         ctx.restore();   // undo the open/drill scale transform
 
-        // (§12.5) Threat readout — a compact combat banner (count + nearest foe)
-        // while a fight is live; drawn in screen space so the wheel's pop can't
-        // wobble it. Reuses the crossed-swords glyph the Fight wedge wears.
-        if (combat && this.font) {
-            const foes = (game.enemies || []).filter(e => !e.ambient && isHunting(e) && e.entity && e.entity.isAlive());
-            if (foes.length) {
-                let near = foes[0], nd = Infinity;
-                for (const e of foes) {
-                    const d = Math.max(Math.abs(e.x - game.playerX), Math.abs(e.y - game.playerY));
-                    if (d < nd) { nd = d; near = e; }
-                }
-                const nm = String(shownName(near) || (near.entity && near.entity.name) || 'FOE').replace(/[\[\]]/g, '').toUpperCase().slice(0, 12);
-                ctx.save(); ctx.fillStyle = 'rgba(40,0,0,0.6)'; ctx.fillRect(0, strip - 26, vp.w, 26); ctx.restore();
-                this.font.drawText(ctx, `⚔ ${foes.length}  ${nm}`, CC, strip - 16, { color: '#e8462f', scale: 1, align: 'center', shadow: '#000' });
-            }
-        }
+        // (§12.5) The threat readout (count + nearest foe) is drawn with the hint
+        // above, on its own row (FX53).
         ctx.globalAlpha = 1; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     }
 
