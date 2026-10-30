@@ -24,6 +24,8 @@
 // (plans/quest-journal.md), which is retrospective evidence with no objectives.
 // This is active objective tracking, surfaced as a one-line HUD goal.
 
+import { SLOTS } from './slots.js';
+
 export const QUESTS = {
     // ── Chapter Two: the Canyon fail-branch escape (Pike + the grappling hook).
     //    The engine tracks ONE quest, so this is the single canyon objective; Pike's
@@ -176,12 +178,42 @@ export const BETWEEN_QUESTS = [
         targetZones: ['TOWN'],
     },
     {
+        id: 'to_downtown',   // all three Act 2 items are in the bag: the bank's vault in Downtown is next (FX54)
+        when: (qe) => qe.isComplete('deliver_burger') && act2Missing(qe).length === 0,
+        objective: '[TEXT]',
+        targetZones: ['DOWNTOWN'],
+    },
+    {
         id: 'to_act2',     // Act 1 ends with the delivery; Act 2's three zones come in any order (spine §1)
         when: (qe) => qe.isComplete('deliver_burger'),
+        // The full row, as a table read sees it; `narrow` drops each zone whose item is held (FX54).
         objective: 'Explore the Carnival, Factory and Graveyard',
         targetZones: ['CARNIVAL', 'FACTORY', 'GRAVEYARD'],
+        narrow: (qe) => {
+            const zones = act2Missing(qe);
+            return { objective: `Explore the ${joinNames(zones)}`, targetZones: zones };
+        },
     },
 ];
+
+// (FX54) The Act 2 zones, in Map order. A zone's item is its boss slot's required
+// drop, `<zone>.boss` in SLOTS, so no item id is written here. The frozen area's
+// slot is not listed, so its ice cone never counts.
+const ACT2_ZONES = ['CARNIVAL', 'FACTORY', 'GRAVEYARD'];
+
+// The Act 2 zones whose required item is not in the bag.
+function act2Missing(qe) {
+    return ACT2_ZONES.filter(zone => {
+        const item = SLOTS[`${zone.toLowerCase()}.boss`]?.requiredDrop;
+        return !item || qe._slotOf(item) < 0;
+    });
+}
+
+// ['CARNIVAL', 'FACTORY', 'GRAVEYARD'] -> "Carnival, Factory and Graveyard".
+function joinNames(zones) {
+    const names = zones.map(z => z[0] + z.slice(1).toLowerCase());
+    return names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
 
 export class QuestEngine {
     constructor(game) {
@@ -312,7 +344,7 @@ export class QuestEngine {
     // between-quests row's (null when neither applies).
     getHudText() {
         const id = this.state.activeId;
-        if (!id) return this.betweenQuests()?.objective ?? null;
+        if (!id) return this._betweenView()?.objective ?? null;
         const stage = QUESTS[id].stages[this.state.stageIndex];
         if (!stage) return null;
         let t = stage.objective;
@@ -345,6 +377,12 @@ export class QuestEngine {
     betweenQuests() {
         if (this.state.activeId) return null;
         return BETWEEN_QUESTS.find(row => row.when(this)) || null;
+    }
+
+    // (FX54) What the row shows now: a row with `narrow` trims itself to the state.
+    _betweenView() {
+        const row = this.betweenQuests();
+        return row && row.narrow ? row.narrow(this) : row;
     }
 
     isActive(id) { return this.state.activeId === id; }
@@ -461,7 +499,7 @@ export class QuestEngine {
     // zones, or none.
     getTargetZones() {
         const id = this.state.activeId;
-        if (!id) return (this.betweenQuests()?.targetZones ?? []).slice();
+        if (!id) return (this._betweenView()?.targetZones ?? []).slice();
         const s = QUESTS[id].stages[this.state.stageIndex];
         return s && s.targetZone ? [s.targetZone] : [];
     }
