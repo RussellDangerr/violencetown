@@ -889,6 +889,28 @@ class Game {
         recordDrop(this._droppedItems, this._mapUrl, type, x, y);
     }
 
+    // (FX25) The bag's Drop: the whole stack lands on the player's tile, one ground
+    // item per unit, each recorded as a runtime drop so it survives a zone change and
+    // a reload. Nothing is picked up here: pickup runs when you walk onto a tile, so
+    // stepping off and back on takes it, and it never starts a loot reel (that is the
+    // kill burst's). A "collected" marker for this tile and kind (an authored item you
+    // took from here) would hide the dropped copy on reload: lift it, and when an
+    // authored spawn of that kind is really here it stands in for one dropped unit.
+    _dropToGround(stack) {
+        const def = stack && stack.itemDef;
+        if (!def || def.questItem) return;
+        const n = Math.max(1, stack.count | 0), x = this.playerX, y = this.playerY;
+        const key = `${this._mapUrl}|${x}|${y}|${def.id}`;
+        let record = n;
+        if (this._collectedItems.delete(key) && (this.map?.itemSpawns || []).some(s => s.x === x && s.y === y && s.type === def.id)) record--;
+        for (let i = 0; i < n; i++) {
+            if (i < record) this._recordDrop(def.id, x, y);
+            this.groundItems.push({ type: def.id, x, y, def });
+        }
+        this._log(n > 1 ? `[Dropped ${def.name} x${n}]` : `[Dropped ${def.name}]`);
+        this._saveMoment?.();
+    }
+
     // A ground item was just taken: if it was a runtime drop, take ONE off its
     // record (so the rest of a stack on that tile still comes back) and return
     // true. False means it was an authored spawn, which the caller marks
@@ -6212,9 +6234,14 @@ class Game {
                 case 'unprotect':
                     if (!moveToZone(this.inventory, idx, 'pack', cfg)) this._log('[Pack is full.]');
                     break;
-                case 'drop':
+                case 'drop': {
+                    // (FX25) The whole stack lands on your tile, and the log says so.
+                    // (Optional-called, like _saveMoment, so stand-in games need not carry it.)
+                    const stack = this.inventory[idx];
                     this.inventory[idx] = null;
+                    this._dropToGround?.(stack);
                     break;
+                }
             }
             audio.playSfx('menu-confirm');
             this._render();
