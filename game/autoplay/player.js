@@ -19,8 +19,8 @@ import { pathTo, cheapestPath } from './path.js';
 // 12 MP beats Cone of Cold's 14 for 10 against armour (plans/quest1-autoplay.md
 // Q1-10). An empty list is a player who only swings.
 const ARSENAL = ['fireball', 'coneofcold'];
-export const FIGHTER = { healBelow: 0.4, sneak: false, spells: ARSENAL, items: true };
-export const SNEAK = { healBelow: 0.4, sneak: true, spells: ARSENAL, items: true };
+export const FIGHTER = { healBelow: 0.7, sneak: false, spells: ARSENAL, items: true };
+export const SNEAK = { healBelow: 0.7, sneak: true, spells: ARSENAL, items: true };
 export const KNOBS = FIGHTER;
 
 // What a tile costs the sneak, in steps. `seenAt` is the worst verdict any
