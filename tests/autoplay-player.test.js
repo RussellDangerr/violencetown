@@ -30,6 +30,11 @@ describe('the standard fighter', () => {
     test('eats below the heal threshold when it has food', () => {
         assert.equal(decide(view({ rows: open, player: { x: 0, y: 0 }, hp: 39, canEat: true }), far).kind, 'eat');
     });
+    test('the heal threshold is 70% (AH1R3): eats at 69, not at 71', () => {
+        assert.equal(decide(view({ rows: open, player: { x: 0, y: 0 }, hp: 69, canEat: true }), far).kind, 'eat');
+        assert.equal(decide(view({ rows: open, player: { x: 0, y: 0 }, hp: 69, canEat: true }), far, SNEAK).kind, 'eat');
+        assert.notEqual(decide(view({ rows: open, player: { x: 0, y: 0 }, hp: 71, canEat: true }), far, SNEAK).kind, 'eat');
+    });
     test('does not eat with a hostile beside it, or one hunting it', () => {
         const beside = [{ x: 1, y: 0, hp: 50, hostile: true, tag: null, aware: false }];
         const hunting = [{ x: 4, y: 2, hp: 50, hostile: true, tag: null, aware: true }];
@@ -44,7 +49,7 @@ describe('the standard fighter', () => {
         assert.notEqual(decide(view({ rows: open, player: { x: 0, y: 0 }, hp: 10 }), far).kind, 'eat');
     });
     test('does not eat above the threshold', () => {
-        assert.notEqual(decide(view({ rows: open, player: { x: 0, y: 0 }, hp: 41, canEat: true }), far).kind, 'eat');
+        assert.notEqual(decide(view({ rows: open, player: { x: 0, y: 0 }, hp: 71, canEat: true }), far).kind, 'eat');
     });
 
     // AH1: the first stage fetches the Town's hot dogs, then the car.
