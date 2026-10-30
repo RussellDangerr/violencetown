@@ -26,6 +26,6 @@ None. No copy, names or numbers change.
 
 ## Out of scope
 - Any other boss item or any other weapon in a kit.
-- A gun that was picked up, then sold or thrown away, is not given back by the key alone
-  being absent: only the two checks above count.
+- A gun the player once held and then sold or lost is not tracked beyond the key above; if
+  the key is absent and nothing is held, he gives one.
 - Changing the Alien's loadout or the map.
