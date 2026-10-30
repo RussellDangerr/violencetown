@@ -14,8 +14,11 @@ weapon in the left hand.
 - `game/layout.js`: the left-hand plate is a rect of its own, returned beside
   the six plates by `deviceEquipLayout` as `leftHand`. It is kept out of the
   `slots` list so the plate list other code (and the existing tests) read is
-  unchanged. The two weapon plates sit side by side at the bottom, mirrored
-  about the figure, clear of the HEAD plate's chooser and of every other plate.
+  unchanged. The two weapon plates take the bottom corners, mirrored about the
+  figure (right hand bottom-left under BACK, left hand bottom-right under FEET),
+  clear of the HEAD plate's chooser and of every other plate. The keyboard
+  cursor steps FEET down to the left-hand plate, and HEAD still steps down to
+  ARMS.
   Its label is the existing `WEAPON [LEFT]` text; the right-hand plate takes the
   existing `WEAPON [RIGHT]` text so the pair reads as a pair. No new copy.
 - `game/items.js`: `resolveEquip` and `resolveUse` take the hand to fill
