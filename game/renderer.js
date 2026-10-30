@@ -17,7 +17,7 @@ import {
     LOG_MODAL_RECT, TARGET_LIST_RECT, TARGET_LIST_ROW_H,
     ITEM_OVERLAY_RECT, ITEM_OVERLAY_ROW_H,
     WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
-    EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, closeButtonRect,
+    EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, EQUIP_LEFT_HAND_RECT, closeButtonRect,
     DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceBagPagerRects, deviceEquipLayout, deviceRingsLayout,
     deviceSkillsLayout,                                                      // (US2) the skills readout in the RINGS tab
     inspectorPanelRect, inspectorActionRects,                               // (C1) tap-to-inspect panel + action-row geometry
@@ -26,10 +26,10 @@ import {
     LOOT_REEL, lootReelRect,                                                 // (FX3c) the loot reel's panel
     MODAL_RECT, offerLayout,                                             // (offer screen) the one panel + its geometry
 } from './layout.js';
-import { itemStatLine, itemActions, equipOptions, USES_ACTION } from './inspector.js';    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
+import { itemStatLine, itemActions, USES_ACTION } from './inspector.js';    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
 import { zoneOf, pageCount, slotOnPage } from './inventory.js';                                     // (C1) safe/pack label for the inspector
 import { buildXmbBar, resolveXmbSelection } from './xmb.js';                 // (XMB) usable-bar model
-import { ITEMS, itemTier } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
+import { ITEMS, itemTier, gearOptions } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
 import { RINGS, FUSIONS } from './ring-data.js';                             // (rings Task 5) SKILLS-tab hands: ring names + fusion spark
 import { findFusion } from './rings.js';                                     // (rings Task 5) mark a link fusible when its two rings have an authored fusion
 import { WORLD_ZONES, overworldZone, connectorPairs } from './world-map.js'; // (Phase 4) rudimentary world map
@@ -4688,9 +4688,9 @@ export class Renderer {
             this.font.drawText(ctx, 'ARMOR ' + armorTotal, R.x + R.w - 20, R.y + 14, { color: UI.gold, scale: 2, align: 'right' });
         }
 
-        const _eq = hosted ? deviceEquipLayout(bodyRect) : { figure: EQUIP_FIGURE_RECT, slots: EQUIP_SLOT_RECTS };
+        const _eq = hosted ? deviceEquipLayout(bodyRect) : { figure: EQUIP_FIGURE_RECT, slots: EQUIP_SLOT_RECTS, leftHand: EQUIP_LEFT_HAND_RECT };
         const F = _eq.figure;
-        const EQ_SLOTS = _eq.slots;
+        const EQ_SLOTS = [..._eq.slots, _eq.leftHand];   // (FX14) the left-hand plate rides with the six
         const fcx = F.x + F.w / 2, fcy = F.y + F.h / 2;
 
         // Faint Vitruvian circle + square behind the figure.
@@ -4784,15 +4784,14 @@ export class Renderer {
 
     // (C2) The GEAR chooser — over a selected armor slot, list every bag item that
     // fits it (name + armor delta vs the worn piece) plus a Bare (unequip) row.
-    // Reads the SAME equipOptions/gearOptionRects the tap handler does, so the
+    // Reads the SAME gearOptions/gearOptionRects the tap handler does, so the
     // drawn rows and their tap zones can't drift. Mirrors _drawInspector's idioms.
     _drawGearPicker(game, bodyRect) {
         const { ctx } = this;
         if (!this.font) return;
         const slotKey = game._deviceSel.slotKey;
-        const label = (EQUIP_SLOT_RECTS.find(s => s.key === slotKey) || {}).label || slotKey.toUpperCase();
-        const worn = game.equipment[slotKey];
-        const opts = equipOptions(slotKey, worn, game.inventory);
+        const label = ([...EQUIP_SLOT_RECTS, EQUIP_LEFT_HAND_RECT].find(s => s.key === slotKey) || {}).label || slotKey.toUpperCase();
+        const opts = gearOptions(game, slotKey);
         const rows = gearOptionRects(bodyRect, opts.length);
 
         // Titled panel enclosing the option column (+ header band above row 0),

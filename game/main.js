@@ -6097,11 +6097,16 @@ class Game {
         }
         // GEAR body → a plate tap opens that armor slot's CHOOSER; a row tap equips
         // (or bares) it; a tap outside every row dismisses it (picker convention).
-        // The weapon plate stays out of scope — weapon swap lives on the ITEMS tap.
+        // The right-hand weapon plate stays out of scope — weapon swap lives on the
+        // ITEMS tap; the left-hand plate (FX14) chooses a weapon for that hand. Its
+        // rows are the bag's weapons, and no Bare row while the left hand is only
+        // half of a two-hander (nothing to take off on its own) — the same rows
+        // the renderer draws (items.js gearOptions).
         if (this._deviceTab === 'gear') {
             const sel = this._deviceSel;
             if (sel && sel.tab === 'gear' && sel.open) {
-                const n = equipOptions(sel.slotKey, this.equipment[sel.slotKey], this.inventory).length;
+                const lw = sel.slotKey === 'left', w = this.equipment[sel.slotKey];
+                const n = equipOptions(lw ? 'weapon' : sel.slotKey, lw && (this._handsOf?.(w) ?? 1) >= 2 ? null : w, this.inventory).length;
                 const rows = gearOptionRects(body, n);
                 for (let i = 0; i < n; i++) {
                     if (this._pointInRect(pt, rows[i], HIT_SLOP)) { this._deviceActivate('option', i); return; }
@@ -6109,7 +6114,8 @@ class Game {
                 this._deviceActivate('dismiss', 0);
                 return;
             }
-            for (const s of deviceEquipLayout(body).slots) {
+            const layout = deviceEquipLayout(body);
+            for (const s of [...layout.slots, layout.leftHand]) {
                 if (s.key === 'weapon') continue;
                 if (this._pointInRect(pt, s)) { this._deviceActivate('plate', s.key); return; }
             }
@@ -6237,11 +6243,13 @@ class Game {
         if (zone === 'option') {
             const sel = this._deviceSel;
             if (!sel || sel.tab !== 'gear' || !sel.open) return;
-            const opt = equipOptions(sel.slotKey, this.equipment[sel.slotKey], this.inventory)[index];
+            const lw = sel.slotKey === 'left', w = this.equipment[sel.slotKey];
+            const opt = equipOptions(lw ? 'weapon' : sel.slotKey, lw && (this._handsOf?.(w) ?? 1) >= 2 ? null : w, this.inventory)[index];
             if (!opt) return;
             if (opt.bagIndex >= 0) {
                 const def = this.inventory[opt.bagIndex].itemDef;
-                const msg = resolveUse(this, def, null);   // equip → resolveEquip (re-bags any displaced piece)
+                // equip → resolveEquip (re-bags any displaced piece); the left plate fills the left hand
+                const msg = resolveUse(this, def, null, 1, lw ? 'left' : 'weapon');
                 this._removeFromSlot(opt.bagIndex);
                 this._refreshGrantedSkills();
                 if (msg) this._log(msg);
@@ -6309,11 +6317,13 @@ class Game {
         }
         if (tab === 'gear') {
             if (sel && sel.tab === 'gear' && sel.open) {
-                const n = equipOptions(sel.slotKey, this.equipment[sel.slotKey], this.inventory).length;
+                const lw = sel.slotKey === 'left', w = this.equipment[sel.slotKey];
+                const n = equipOptions(lw ? 'weapon' : sel.slotKey, lw && (this._handsOf?.(w) ?? 1) >= 2 ? null : w, this.inventory).length;
                 const rects = gearOptionRects(body, n);
                 return { zone: 'option', rects, ids: rects.map((_, i) => i), cur: sel.option != null ? Math.min(sel.option, n - 1) : -1 };
             }
-            const plates = deviceEquipLayout(body).slots.filter(s => s.key !== 'weapon');
+            const layout = deviceEquipLayout(body);
+            const plates = [...layout.slots.filter(s => s.key !== 'weapon'), layout.leftHand];
             const ids = plates.map(s => s.key);
             return { zone: 'plate', rects: plates, ids, cur: sel && sel.tab === 'gear' ? ids.indexOf(sel.slotKey) : -1 };
         }
@@ -6389,7 +6399,8 @@ class Game {
         if (t.zone === 'plate') {
             const key = t.ids[t.cur];
             this._deviceActivate('plate', key);
-            if (equipOptions(key, this.equipment[key], this.inventory).length) this._deviceSel.option = 0;
+            const lw = key === 'left', w = this.equipment[key];
+            if (equipOptions(lw ? 'weapon' : key, lw && (this._handsOf?.(w) ?? 1) >= 2 ? null : w, this.inventory).length) this._deviceSel.option = 0;
             this._render();
             return;
         }
