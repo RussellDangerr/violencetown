@@ -13,6 +13,7 @@
 
 import { isHostile, isSewerDweller } from './ai.js';
 import { burnGold } from './trade.js';
+import { equipOptions } from './inspector.js';   // (FX14) the GEAR chooser's rows
 
 // ── Poition (all six stats wired) ────────────────────────────────────────────
 // A poition moves exactly one of six stats by a signed amount: positive is a
@@ -615,13 +616,14 @@ export function equipItem(game, itemDef) {
 // the item into its body-zone slot; any piece already worn there goes back into
 // the bag. The caller (main.js _doItemUse) removes the used item from the
 // hotbar so it isn't duplicated.
-function resolveEquip(game, itemDef) {
+function resolveEquip(game, itemDef, hand = 'weapon') {
     const slot = itemDef.equipSlot;
     if (!slot) return `[${itemDef.name} can't be worn]`;
     if (slot === 'weapon') {
-        // Into the right hand, as the one weapon slot did; a two-hander takes
-        // both, and whatever it pushes out goes back in the bag.
-        const out = holdInHands(game.equipment, itemDef, handsRule(game))
+        // Into `hand` (the right, as the one weapon slot did, unless the GEAR
+        // tab's left plate asks for the left); a two-hander takes both, and
+        // whatever it pushes out goes back in the bag.
+        const out = holdInHands(game.equipment, itemDef, handsRule(game), hand)
             .filter(d => d.id !== itemDef.id);
         for (const d of out) game._addToInventory(d);
         return out.length
@@ -634,6 +636,18 @@ function resolveEquip(game, itemDef) {
     return old && old.id !== itemDef.id
         ? `[Equipped ${itemDef.name} — ${old.name} back in your bag]`
         : `[Equipped ${itemDef.name}]`;
+}
+
+// (FX14) The rows the GEAR chooser lists for a plate. An armour plate lists the
+// bag items that fit its slot; the left-hand plate lists the bag's weapons (the
+// right hand's own slot key), measured against what the left hand holds. When
+// the left hand is only half of a two-hander there is nothing to take off on
+// its own, so the Bare row is left out.
+export function gearOptions(game, plateKey) {
+    const worn = game.equipment[plateKey];
+    if (plateKey !== 'left') return equipOptions(plateKey, worn, game.inventory);
+    const opts = equipOptions('weapon', worn, game.inventory);
+    return worn && handsRule(game)(worn) >= 2 ? opts.filter(o => o.id !== '__bare__') : opts;
 }
 
 // Take a worn armor piece off and return it to the bag. Weapon and temp-equips
@@ -679,7 +693,8 @@ export function tickTempEquips(game) {
 
 // Resolve a Use action. Returns a log message string.
 // stackCount: how many items are in the stack (for throw damage calc)
-export function resolveUse(game, itemDef, direction, stackCount = 1) {
+// hand: which hand a weapon equip fills, 'weapon' (right) by default or 'left'.
+export function resolveUse(game, itemDef, direction, stackCount = 1, hand = 'weapon') {
     if (!itemDef) return null;
 
     switch (itemDef.useType) {
@@ -690,7 +705,7 @@ export function resolveUse(game, itemDef, direction, stackCount = 1) {
         case 'melee':
             return resolveMelee(game, itemDef, direction);
         case 'equip':
-            return resolveEquip(game, itemDef);
+            return resolveEquip(game, itemDef, hand);
         default:
             return itemDef.useHint || `[Used ${itemDef.name}]`;
     }
