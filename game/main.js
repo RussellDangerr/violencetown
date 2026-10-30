@@ -22,7 +22,7 @@ import {
     slotRing, unslotRing, acquireRing, sanitizeSlots,
     mergeKnown,   // (ring Task 5) skill-merge helper, relocated from the retired skills.js
 } from './rings.js';
-import { isBoss, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS } from './defeat-scenarios.js';
+import { isBoss, bossInFight, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS } from './defeat-scenarios.js';
 import { addToInventory as addToInv, moveToZone, zoneOf, pageCount, slotOnPage, pageOfSlot } from './inventory.js';
 import { itemActions, equipOptions, inspectorUsesRect } from './inspector.js';   // (C1) tap-to-inspect: context actions; (C2) GEAR chooser options
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
@@ -5400,11 +5400,19 @@ class Game {
         setTimeout(() => this._resolveDefeat(), 500);
     }
 
+    // The boss in the fight you are losing (fight-area.js says who is in it), or null.
+    _bossInFight() {
+        return bossInFight(fighters(this.enemies), null);
+    }
+
     _resolveDefeat() {
         const by = this._lastDefeatedBy;
         this._lastDefeatedBy = null;
-        // Boss (Wererat) → reset the encounter and retry; no scenario, no loss.
-        if (isBoss(by)) { this._runBossRetry(by); return; }
+        // A boss in your fight when you went down (whoever landed the blow, its ally
+        // included) → reset the encounter and retry; no scenario, no loss.
+        // Optional-called, like _antTurn, so the stand-in games tests lift this onto need not carry it.
+        const boss = isBoss(by) ? by : this._bossInFight?.();
+        if (boss) { this._runBossRetry(boss); return; }
         // Otherwise pick a scenario, weighted by (zone × who-beat-you × state).
         // Task 3 swaps the runner stub for the full template; for now the generic
         // fallback delegates to _respawn so ordinary defeats are unchanged.
