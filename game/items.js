@@ -663,7 +663,7 @@ export function unequipItem(game, slot) {
     if ((game.tempEquips || []).some(te => te.slot === slot)) {
         return `[${item.name} will wear off on its own]`;
     }
-    if (!game._addToInventory(item)) return '[Your bag is full — no room to stow it]';
+    game._addToInventory(item);
     game.equipment[slot] = null;
     return `[Unequipped ${item.name}]`;
 }
