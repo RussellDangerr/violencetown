@@ -33,6 +33,9 @@ const PROP_NAMES = [
     ['shelf', 'Shelf'],
     ['plant', 'Plant'],
     ['stove', 'Stove'],
+    // The casino's slot machine and the bank's vault door, by their plain names.
+    ['slotMachine', 'Slot machine'],
+    ['vaultDoor', 'Vault door'],
 ];
 const propName = type => PROP_NAMES.find(([prefix]) => type.startsWith(prefix))?.[1] ?? null;
 
