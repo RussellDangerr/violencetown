@@ -22,7 +22,7 @@ describe('SL-4: a required item belongs to the slot, so every entry drops it', (
 
     test('all four boss slots on the spine carry a required item', () => {
         const ids = required.map(([id]) => id).sort();
-        assert.deepEqual(ids, ['carnival.boss', 'factory.boss', 'graveyard.boss', 'sewer.boss']);
+        assert.deepEqual(ids, ['carnival.boss', 'factory.boss', 'frozen.boss', 'graveyard.boss', 'sewer.boss']);
     });
 
     for (const [slotId, slot] of required) {
@@ -87,6 +87,7 @@ describe('the picks', () => {
             'carnival.boss': 'bigfoot',
             'factory.boss': 'alien_invasion',
             'graveyard.boss': 'the_deity',
+            'frozen.boss': 'siberia',
             'sewer.character': 'crat',
         });
     });

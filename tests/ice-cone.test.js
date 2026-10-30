@@ -117,11 +117,12 @@ describe('the Tiger\'s Blood Ice Cone — the item', () => {
         // And ants.js, which counts it as sweet food: carrying it draws an ant
         // swarm (plans/an2-ant-swarm-sweet-food.md). And quests.js and dialogue.js,
         // where the delivery order asks for it and the diner cook re-issues a lost
-        // one (plans/ic2-vampires-order-ice-cone.md).
+        // one (plans/ic2-vampires-order-ice-cone.md). And slots.js, where the
+        // frozen boss's slot names it as the item she drops (plans/ic5-siberia-frozen-boss.md).
         const dir = url('../game/');
         const readers = readdirSync(dir).filter(f => /\.(js|json)$/.test(f))
             .filter(f => readFileSync(new URL(f, dir), 'utf8').includes(ID));
-        assert.deepEqual(readers.sort(), ['ants.js', 'dialogue.js', 'item-uses.js', 'items.js', 'quests.js', 'sprites.js']);
+        assert.deepEqual(readers.sort(), ['ants.js', 'dialogue.js', 'item-uses.js', 'items.js', 'quests.js', 'slots.js', 'sprites.js']);
     });
 
     test('examining it on the ground names it and shows [TEXT]', () => {

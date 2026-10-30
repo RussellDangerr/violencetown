@@ -75,7 +75,7 @@ describe('harness math', () => {
     // listed again as an unpicked pool row (that doubled the zone's faucet).
     test('a mob slot\'s creatures are listed once each, as the map rows', () => {
         const frozen = loadMapRoster().filter(e => e.zone === 'frozen');
-        assert.deepEqual(frozen.map(e => e.type).sort(), ['Polar Bear', 'Snowman', 'Yeti']);
+        assert.deepEqual(frozen.map(e => e.type).sort(), ['Polar Bear', 'Siberia', 'Snowman', 'Yeti']);
         assert.ok(frozen.every(e => !String(e.id).startsWith('frozen.mob:')), 'a pool row came back');
     });
     test('no pool entry dodges the bench: every one is a row in its slot\'s zone', () => {
