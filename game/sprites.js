@@ -18,7 +18,7 @@ import { dirOf } from './perception.js';
 export const TINY_INK = [63, 38, 49];   // #3F2631, the Tiny packs' outline
 // Sheets already drawn in the Tiny style (or re-outlined by a tool), which the
 // outline pass leaves alone.
-export const TINY_STYLE_SHEETS = new Set(['tinyDungeon', 'tinyTown', 'tinyExtra', 'outlined', 'interior', 'emotes', 'marks', 'ratVariants', 'beastVariants', 'iceCone']);
+export const TINY_STYLE_SHEETS = new Set(['tinyDungeon', 'tinyTown', 'tinyExtra', 'outlined', 'interior', 'emotes', 'marks', 'ratVariants', 'beastVariants', 'iceCone', 'ant']);
 
 export class SpriteSheet {
     // `padding` is the gap (in source pixels) between adjacent cells. Kenney's
@@ -189,6 +189,12 @@ export const SHEETS = {
     // The Tiger's Blood Ice Cone: Tiny Ski's snowy pine (Kenney, CC0) mirrored
     // and repainted by tools/gen_ice_cone.py, outline included. One cell.
     iceCone:      { src: './assets-placeholder/ice_cone.png', frameW: 16, frameH: 16 },
+
+    // The ants (plans/an4-ants-pico-mite-art.md): the Pico-8 Platformer mite (Kenney, CC0)
+    // reshaped and drawn in the Tiny ink by tools/gen_ant.py. One row of four 16x16
+    // cells, each holding two or three mites. Already ink-coloured, so it is a
+    // Tiny-style sheet and the outline pass leaves it alone.
+    ant:          { src: './assets/ant.png', frameW: 16, frameH: 16 },
 
     // Kenney Emote Pack (Pixel, Style 8) — manga impact marks (animation pass
     // §1). A star inside Style 1's white balloon reads as someone SAYING
@@ -544,6 +550,13 @@ export const ENEMY_SPRITES = {
     // Siberia, the frozen area's boss (plans/ic5-siberia-frozen-boss.md): the
     // placeholder boss's knight helm until she is drawn.
     'Siberia':    { sheet: 'tinyDungeon', col: 0, row: 8,  static: true },
+
+    // The swarm's ants (plans/an4-ants-pico-mite-art.md): a cell of two or three mites
+    // each, one of four by the ant's id. tools/gen_ant.py draws the sheet.
+    'Ant': {
+        sheet: 'ant', col: 0, row: 0, static: true,
+        variants: [{ col: 0, row: 0 }, { col: 1, row: 0 }, { col: 2, row: 0 }, { col: 3, row: 0 }],
+    },
 
     // Not a person: a puzzleWall growth blocking a sewer pipe.
     'Sludge Bloom': { sheet: 'tinyDungeon', col: 8, row: 2, static: true }, // stone hatch leaking green ooze

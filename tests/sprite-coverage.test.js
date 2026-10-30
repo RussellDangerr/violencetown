@@ -41,6 +41,7 @@ function loadMap(file) {
 // short and justified — each entry is a spawn site that a map sweep cannot see.
 const DYNAMIC_SPAWNS = [
     { type: 'Lire', why: 'tricks.js "Hire Lire" summon, via main.js _spawnSummon' },
+    { type: 'Ant', why: 'ants.js ANT_TYPE, via main.js _spawnAnt (the sweet-food swarm)' },
 ];
 
 // Types knowingly left on the fallback box, with the reason. This list is the
