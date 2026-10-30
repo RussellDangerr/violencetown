@@ -3447,7 +3447,7 @@ class Game {
             return;
         }
 
-        if (!this._addToInventory(def)) { this._log('[Your bag is full.]'); return; }
+        this._addToInventory(def);
         markTaken();
         const cat = xmbCategoryOf(def);
         if (cat)                          this._log(`[Took ${def.name} → ${XMB_LABELS[cat]}.]`, 'pickup');
@@ -4481,16 +4481,15 @@ class Game {
             const idx = this.groundItems.findIndex(gi => gi.x === this.playerX && gi.y === this.playerY);
             if (idx === -1) break;
             const gi = this.groundItems[idx];
-            if (this._addToInventory(gi.def)) {
-                audio.playSfx('pickup'); // [audio] item picked up off the ground
-                this._log(`[Picked up ${gi.def.name}]`);
-                this.emitGameEvent('item_pickup', { id: gi.def.id });
-                // Remember it so re-entering this zone doesn't respawn it.
-                if (!this._takeDropRecord?.(gi.type, gi.x, gi.y)) this._collectedItems.add(`${this._mapUrl}|${gi.x}|${gi.y}|${gi.type}`);
-                this.groundItems.splice(idx, 1);
-                go = true;
-                took = true;
-            } else { this._log('[Inventory full]'); break; }
+            this._addToInventory(gi.def);
+            audio.playSfx('pickup'); // [audio] item picked up off the ground
+            this._log(`[Picked up ${gi.def.name}]`);
+            this.emitGameEvent('item_pickup', { id: gi.def.id });
+            // Remember it so re-entering this zone doesn't respawn it.
+            if (!this._takeDropRecord?.(gi.type, gi.x, gi.y)) this._collectedItems.add(`${this._mapUrl}|${gi.x}|${gi.y}|${gi.type}`);
+            this.groundItems.splice(idx, 1);
+            go = true;
+            took = true;
         }
         if (took) this._saveMoment?.();   // (FX24) a reload keeps what you picked up
     }
@@ -4507,7 +4506,7 @@ class Game {
         }
         const def = this._resolveItemDef(target.grants);   // WEAPONS too, not just ITEMS
         if (!def) { this._log(target.text || `[You examine the ${target.id}.]`); return true; }
-        if (!this._addToInventory(def)) { this._log('[Your bag is full — leave it for now.]'); return true; }
+        this._addToInventory(def);
         this._collectedItems.add(key);
         this._log(target.text || `[You take the ${def.name}.]`);
         this._log(`[+ ${def.name}]`, 'pickup');
@@ -4520,8 +4519,7 @@ class Game {
     //
     // Open a chest (or other container) the player has bumped into. Empty
     // chests log a one-liner; full ones transfer their contents into the
-    // player's inventory item-by-item (respecting inventory-full case the
-    // same way _tryPickup does).
+    // player's inventory item-by-item.
     //
     // Contents entries may be strings ('rock') OR objects ({ type: 'rock' })
     // for forward-compat — the soap-mine workers in step 4 will deposit
@@ -4813,7 +4811,7 @@ class Game {
     _takeKillLoot(drops, enemyObj) {
         const left = [], got = [];
         for (const item of drops) {
-            if (item.def && this._addToInventory(item.def)) got.push(item.def);
+            if (item.def) { this._addToInventory(item.def); got.push(item.def); }
             else left.push(item);
         }
         if (!got.length) return left;
@@ -4876,7 +4874,7 @@ class Game {
     _grantItem(id, msg) {
         const def = this._resolveItemDef(id);   // WEAPONS too, not just ITEMS
         if (!def) return false;
-        if (!this._addToInventory(def)) { this._log('[Your bag is full — no room for it.]'); return false; }
+        this._addToInventory(def);
         if (msg) this._log(msg, 'pickup');
         this.emitGameEvent('item_pickup', { id });
         this._render();
@@ -5432,7 +5430,7 @@ class Game {
         if (c.timeSkip) this._skipTime(c.timeSkip);            // 3. time
         // 4. no status: the post-defeat debuffs did nothing and were dropped (ruling DFR1)
         const cost = c.take ? this._applyTake(c.take) : null;  // 5. taken
-        if (c.gift && Array.isArray(c.gift.items)) for (const id of c.gift.items) { const gd = this._resolveItemDef(id); if (gd && !this._addToInventory(gd)) this._log('[No room — you leave it behind.]'); } // 6. given (guard unknown ids + full bag)
+        if (c.gift && Array.isArray(c.gift.items)) for (const id of c.gift.items) { const gd = this._resolveItemDef(id); if (gd) this._addToInventory(gd); } // 6. given (guard unknown ids)
         if (c.gift && c.gift.heal) this.playerHp = this.playerMaxHp;
         this._pendingTransition = null;                        // 7. de-aggro + resume (mirror _respawn's tail)
         this._deAggroAll();
