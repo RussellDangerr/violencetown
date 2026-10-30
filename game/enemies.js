@@ -679,21 +679,22 @@ export function resolveAmbientTurns(game) {
 // Edge-triggered: fires only on the turn the player BECOMES adjacent
 // (manhattan distance 1) to this NPC, having been non-adjacent on the
 // previous resolution. Doesn't re-fire while the player remains adjacent,
-// and re-arms once they step away. Used for non-hostile dialogue NPCs
-// like Carrion who deliver a single line per encounter.
+// and re-arms only once they have stopped TOUCHING it — a diagonal step still
+// touches, so walking around the NPC says the line once, not at every corner.
+// Used for non-hostile dialogue NPCs like Carrion who deliver a single line
+// per encounter.
 //
 // One-shot-per-approach is the right cadence for dialogue — repeated
 // barks every turn while standing next to an NPC would be log spam.
 
 function maybeAdjacencyBark(game, enemy) {
     if (!enemy.adjacencyBark) return null;
-    const dist = manhattan(enemy.x, enemy.y, game.playerX, game.playerY);
-    const isAdjacent = dist === 1;
-    if (isAdjacent && !enemy._wasAdjacent) {
+    const dx = Math.abs(enemy.x - game.playerX), dy = Math.abs(enemy.y - game.playerY);
+    if (manhattan(enemy.x, enemy.y, game.playerX, game.playerY) === 1 && !enemy._wasAdjacent) {
         enemy._wasAdjacent = true;
         return { text: enemy.adjacencyBark, sourceEnemy: enemy, category: 'adjacency-bark' };
     }
-    if (!isAdjacent) {
+    if (Math.max(dx, dy) > 1) {
         enemy._wasAdjacent = false;
     }
     return null;
