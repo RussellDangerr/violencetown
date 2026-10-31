@@ -3177,8 +3177,11 @@ export class Renderer {
                 for (const line of wrap(`${mark} ${st.objective}`)) {
                     this.font.drawText(ctx, line, innerX + 6, y, { color: col, scale: 1 }); y += 12;
                 }
-                if (st.current && st.location) { this.font.drawText(ctx, `   @ ${st.location}`, innerX + 6, y, { color: UI.gold, scale: 1 }); y += 12; }
-                if (st.current && st.description) for (const line of wrap(`   ${st.description}`)) { this.font.drawText(ctx, line, innerX + 6, y, { color: UI.dim, scale: 1 }); y += 12; }
+                // The location and the description share one indent, by x offset:
+                // leading spaces would be dropped by the wrap.
+                const indent = this._measurer(1)('   ');
+                if (st.current && st.location) { this.font.drawText(ctx, `@ ${st.location}`, innerX + 6 + indent, y, { color: UI.gold, scale: 1 }); y += 12; }
+                if (st.current && st.description) for (const line of wrapToWidth(st.description, R.w - 56 - indent, this._measurer(1))) { this.font.drawText(ctx, line, innerX + 6 + indent, y, { color: UI.dim, scale: 1 }); y += 12; }
             }
         } else {
             this.font.drawText(ctx, 'No active quest.', innerX, y, { color: UI.dim, scale: 1 }); y += 15;

@@ -4715,6 +4715,14 @@ class Game {
         return formatDamageNumber(result);
     }
 
+    // (FX30) True when the player already has the Ray Gun: the old Factory floor
+    // gun is marked collected in the save, or one is held anywhere (hasItem walks
+    // the bag, the worn gear and temp-equips).
+    _alreadyHasRayGun() {
+        return this._collectedItems.has('factory-map.json|3|2|ray_gun')
+            || this.hasItem(d => d.id === 'ray_gun');
+    }
+
     // Shared "an enemy just died" side-effects — the K.O. beat, the kill event,
     // the Were-Rat converter drop, and the sewer-escape wave counter. Called
     // from combatAttack (player kills) AND _allyTakeTurn (ally kills) so a bribed
@@ -4744,7 +4752,11 @@ class Game {
         // (FX3) What the kill gives is gathered here and handed to the bag at
         // the end (_takeKillLoot), never left on the floor.
         const drops = [];
-        const kit = dropLoadout(enemyObj.loadout, enemyObj.x, enemyObj.y);
+        // (FX30) The Ray Gun comes once: a save that already holds one (or took the
+        // old floor gun) gets no second from the Alien.
+        const haveGun = this._alreadyHasRayGun?.();
+        const kit = dropLoadout(enemyObj.loadout, enemyObj.x, enemyObj.y)
+            .filter(d => !(haveGun && d.type === 'ray_gun'));
         drops.push(...kit);
         if (kit.length) {
             this._log(`[They drop what they didn't get to use.]`, 'pickup');
