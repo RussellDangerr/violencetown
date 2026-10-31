@@ -30,15 +30,20 @@ there is no new notion of "in the fight".
   `resolveEnemyTurns`.
 - A boss elsewhere on the map that is not hunting you, or a dead boss, does not turn an ordinary
   defeat into a retry.
-- Quest 1's autoplay does not move. `npm test`, `balance:check`, the naming grep and
-  `autoplay:check` pass.
+- The autoplay's trace label follows the same rule as the game.
+- Quest 1's autoplay golden moves as the ruling described (fighter 117 to 102 turns, sneak 138 to
+  167); the loop writes it in its own commit citing FX27R1. `npm test`, `balance:check` and the
+  naming grep pass.
 
 ## Rulings it rests on
 
-None.
+FX27R1, pick (a), Caelan's own words: "Yes: any death while a boss is hunting you gives the
+retry." Because the retry now fires in fights it used to miss, quest 1's autoplay plays
+differently, so its golden moves. That drift is the ruling's intended effect.
 
 ## Out of scope
 
 - The Borgir employer question (its own card).
+- Writing the golden (the loop does, citing the ruling).
 - Resetting the boss's allies on retry; the boss refills and everyone de-aggros, as today.
 - Any copy or tuning change. The retry's log line is untouched.

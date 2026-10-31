@@ -325,15 +325,17 @@ function driver(ap, g) {
     // step was invisible to the press. And not in _die: a second blow landing
     // while you are already down calls _die again (its guard returns early),
     // which counted one death twice. _resolveDefeat runs once per death, and
-    // reads the same last blow the game does to choose a boss retry or a
-    // defeat scenario. This only observes: the original still runs.
+    // asks the game's own question (a boss in the fight, or a boss's blow) to
+    // choose a boss retry or a defeat scenario. This only observes: the original still runs.
     const resolveDefeat = g._resolveDefeat.bind(g);
     g._resolveDefeat = (...args) => {
         deaths++;
         const k = g._lastDefeatedBy;   // read now: the defeat clears it
         lastKiller = (k && (k.type || k.name || k.cause)) || 'something';
+        // The same question the game asks: a boss in the fight, whoever landed the blow.
+        const retry = isBoss(k) || !!g._bossInFight?.();
         trace.push(`t${g.turn} ${g._mapUrl.replace('-map.json', '')} ${g.playerX},${g.playerY} DIED to ${lastKiller}`
-            + ` (${isBoss(k) ? 'a boss: retry' : 'a defeat scenario'})`);
+            + ` (${retry ? 'a boss: retry' : 'a defeat scenario'})`);
         return resolveDefeat(...args);
     };
 
