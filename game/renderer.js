@@ -26,7 +26,8 @@ import {
     LOOT_REEL, lootReelRect,                                                 // (FX3c) the loot reel's panel
     MODAL_RECT, offerLayout,                                             // (offer screen) the one panel + its geometry
 } from './layout.js';
-import { itemStatLine, itemActions, USES_ACTION } from './inspector.js';    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
+import { itemStatLine, itemActions, USES_ACTION } from './inspector.js';
+import { weaponCompare, weaponCompareLines } from './examine.js';   // (FX44) the weapon compare block    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
 import { zoneOf, pageCount, slotOnPage } from './inventory.js';                                     // (C1) safe/pack label for the inspector
 import { buildXmbBar, resolveXmbSelection } from './xmb.js';                 // (XMB) usable-bar model
 import { ITEMS, itemTier, gearOptions } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
@@ -2916,8 +2917,13 @@ export class Renderer {
         // The stat line falls back to the item's description, which is often a
         // sentence: wrap it to the panel, two lines at most.
         const perLine = Math.max(8, Math.floor(room / this.font.measure('M', 1)));
-        let statLines = this._wrapText(itemStatLine(def), perLine);
-        if (statLines.length > 2) statLines = [statLines[0], this._fitText(statLines.slice(1).join(' '), room).text];
+        // (FX44) A weapon reads as the compare block instead: what it hits for
+        // against the weapon in your hand, its hands and class, its skills.
+        const block = weaponCompareLines(def, game.equipment && game.equipment.weapon);
+        let statLines = block
+            ? block.map(l => this._fitText(l, room, 1, 1).text)
+            : this._wrapText(itemStatLine(def), perLine);
+        if (!block && statLines.length > 2) statLines = [statLines[0], this._fitText(statLines.slice(1).join(' '), room).text];
         statLines.forEach((line, i) => this.font.drawText(ctx, line, tx, p.y + 34 + i * 12, { color: UI.text, scale: 1 }));
         this.font.drawText(ctx, `${zone}${qty}`, tx, p.y + 38 + statLines.length * 12, { color: UI.dim, scale: 1 });
 
@@ -3299,7 +3305,10 @@ export class Renderer {
         this._fillScreen(ctx);
 
         const w = 400, padX = 22;
-        const bodyLines = wrapToWidth(insp.body || '', w - padX * 2, this._measurer(1));
+        // (FX44) A body may carry newlines (a weapon's compare block, a blank
+        // line, then the description): wrap each paragraph on its own.
+        const bodyLines = String(insp.body || '').split('\n')
+            .flatMap(par => (par ? wrapToWidth(par, w - padX * 2, this._measurer(1)) : ['']));
         const hasTier = !!insp.tierName;
         const h = (hasTier ? 60 : 44) + bodyLines.length * 12 + 24;
         const px = Math.round((CANVAS_PX - w) / 2);
@@ -4276,9 +4285,22 @@ export class Renderer {
                 L.desc.x + L.desc.w - 10, L.desc.y + 6, { color: '#79c46a', scale: 1, align: 'right' });
         }
 
+        // (FX44) A weapon shows its compare block on the next row: damage against
+        // the weapon in your hand, then hands and class. Its granted skills take
+        // the row below; with none, the description does.
+        const cmp = weaponCompare(def, game.equipment && game.equipment.weapon);
+        const maxPx = L.desc.w - 20;
+        if (cmp) {
+            this.font.drawText(ctx, this._fitText(`${cmp.damage}   ${cmp.build}`, maxPx, 1, 1).text,
+                L.desc.x + 10, L.desc.y + 24, { color: UI.text, scale: 1 });
+            const second = cmp.grants || String(def.description || '');
+            this.font.drawText(ctx, this._fitText(second, maxPx, 1, 1).text,
+                L.desc.x + 10, L.desc.y + 38, { color: cmp.grants ? UI.gold : UI.dim, scale: 1 });
+            return;
+        }
+
         // Measured wrap against the real advance. NOT the /8 idiom, which is a
         // fossil of the retired 8x8 atlas and wraps ~40% narrow.
-        const maxPx = L.desc.w - 20;
         const words = String(def.description || '').split(/\s+/);
         const lines = []; let cur = '';
         for (const w of words) {
