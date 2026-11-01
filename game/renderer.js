@@ -33,6 +33,7 @@ import { buildXmbBar, resolveXmbSelection } from './xmb.js';                 // 
 import { ITEMS, itemTier, gearOptions } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
 import { RINGS, FUSIONS } from './ring-data.js';                             // (rings Task 5) SKILLS-tab hands: ring names + fusion spark
 import { findFusion } from './rings.js';                                     // (rings Task 5) mark a link fusible when its two rings have an authored fusion
+import { carriesAll } from './map.js';                                    // (FIN1b) a gated exit shows its markers only once its gate is met
 import { WORLD_ZONES, overworldZone, connectorPairs } from './world-map.js'; // (Phase 4) rudimentary world map
 import { perceives, facingOf, dirOf as spriteDirOf, VERDICT } from './perception.js';              // (threat overlay) the SAME vision the chase AI uses
 import { PHASE, threatPhase, alertWatchers } from './threat-phase.js';        // (threat overlay) attention as a state
@@ -259,6 +260,13 @@ export function wheelBannerRows({ strip, vpW, dialLeft, hintW, countW = null }) 
         count: countW == null ? null
             : { x: place(countW), y: countBandY + 10, w: countW, band: { y: countBandY, h: WHEEL_COUNT_BAND_H } },
     };
+}
+
+// (FIN1b) Whether an exit wears its glow, arrow and hint: a gated door (the
+// bank's vault, wants the three Act 2 items) reads as shut until the bag holds
+// everything it `requires`. An ungated exit always wears them.
+export function exitMarked(t, inventory) {
+    return carriesAll(t.requires, inventory);
 }
 
 // Which way an exit's arrow points: toward the map edge the tile is nearest
@@ -1279,7 +1287,8 @@ export class Renderer {
         // A grapple anchor that leads off the map is an exit too — the canyon's
         // climb-out is one — so it wears the same glow, arrow and hint, or the
         // only way out of a zone would be unmarked.
-        const trans = [...(game.map?.transitions || []), ...(game.map?.anchors || []).filter(a => a.toMap)];
+        const trans = [...(game.map?.transitions || []).filter(t => exitMarked(t, game.inventory)),
+            ...(game.map?.anchors || []).filter(a => a.toMap)];
         if (!trans.length) return;
         const { ctx } = this;
         const vp = this._view();
