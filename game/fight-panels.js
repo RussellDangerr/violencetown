@@ -74,6 +74,9 @@ export function targetPanel(victim) {
         maxHp: ent.maxHp ?? 0,
         armor: ent.armor ?? 0,
         gold: victim.gold ?? 0,
+        // (plans/tg1-enemies-wear-armour.md) What they have on: the pieces Thieve's
+        // Gear can take, by name, apart from the kit they would use.
+        worn: (victim.equipped ?? []).map((id) => ({ id, name: itemName(id) })),
         kit: (victim.loadout ?? []).map((id) => ({ id, name: itemName(id) })),
         takeable: takeable(victim),
     };
