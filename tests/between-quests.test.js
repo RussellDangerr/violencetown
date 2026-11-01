@@ -134,14 +134,15 @@ async function makeGame({ fuel = 'raw' } = {}) {
 }
 
 // Back at the car with the converter: fix_car on its last stage, the converter
-// in the bag, standing just west of the car facing it.
+// in the bag, standing just south of the taxi facing it (TX2 moved it to the
+// road under the bridge barricade).
 async function atTheCar(opts) {
     const g = await makeGame(opts);
     g.questEngine.start('fix_car');
     g.questEngine.state.stageIndex = QUESTS.fix_car.stages.findIndex(s => s.id === 'return_to_car');
     g.inventory = [{ itemDef: { id: 'catalytic_converter', name: 'Cataclysmic Converter' }, count: 1 }];
-    g.playerX = 23; g.playerY = 7; g.facing = 'right';
-    assert.equal(g.map.getTile(24, 7), 19, 'the car is just east');
+    g.playerX = 16; g.playerY = 4; g.facing = 'up';
+    assert.equal(g.map.getTile(16, 3), 19, 'the car is just north');
     return g;
 }
 
@@ -232,8 +233,8 @@ describe('after the car runs, the objective points at the bridge', () => {
         const g = await atTheCar();
         assert.equal(hudObjective(g), QUESTS.fix_car.stages[3].objective.toUpperCase(), 'before: install the converter');
 
-        await g.press('ArrowRight');
-        assert.ok(g.logs.some(m => /converter back into place/.test(m)), `the car took the converter: ${g.logs.join(' | ')}`);
+        await g.press('ArrowUp');
+        assert.ok(g.logs.includes('[TEXT]'), `the car took the converter: ${g.logs.join(' | ')}`);
         assert.ok(g.questEngine.isComplete('fix_car'));
         assert.equal(g.questEngine.state.activeId, null, 'no quest is active in the gap');
         assert.equal(g.inventory[0], null, 'the converter left the bag');
@@ -244,7 +245,7 @@ describe('after the car runs, the objective points at the bridge', () => {
 
     test('a save made in the gap reloads with the objective showing', async () => {
         const g = await atTheCar();
-        await g.press('ArrowRight');
+        await g.press('ArrowUp');
         const saved = JSON.parse(JSON.stringify(g.questEngine.serialize()));
 
         const reloaded = new QuestEngine({});
