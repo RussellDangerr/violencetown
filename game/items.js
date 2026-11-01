@@ -615,24 +615,32 @@ export function equipItem(game, itemDef) {
 // Persistent equip via the Use action (armor pieces — useType: 'equip'). Moves
 // the item into its body-zone slot; any piece already worn there goes back into
 // the bag. The caller (main.js _doItemUse) removes the used item from the
-// hotbar so it isn't duplicated.
-function resolveEquip(game, itemDef, hand = 'weapon') {
+// hotbar so it isn't duplicated. (FX34) The caller takes the item out of its bag
+// slot FIRST and names that slot as `bagSlot`, so the piece swapped out lands in
+// the slot the new one came from. Any further piece, or a slot still occupied (a
+// stack of two), goes to the first free place as before.
+function resolveEquip(game, itemDef, hand = 'weapon', bagSlot = -1) {
     const slot = itemDef.equipSlot;
     if (!slot) return `[${itemDef.name} can't be worn]`;
+    const bagIt = (d) => {
+        const inv = game.inventory;
+        if (bagSlot >= 0 && Array.isArray(inv) && inv[bagSlot] == null) inv[bagSlot] = { itemDef: d, count: 1 };
+        else game._addToInventory(d);
+    };
     if (slot === 'weapon') {
         // Into `hand` (the right, as the one weapon slot did, unless the GEAR
         // tab's left plate asks for the left); a two-hander takes both, and
         // whatever it pushes out goes back in the bag.
         const out = holdInHands(game.equipment, itemDef, handsRule(game), hand)
             .filter(d => d.id !== itemDef.id);
-        for (const d of out) game._addToInventory(d);
+        for (const d of out) bagIt(d);
         return out.length
             ? `[Equipped ${itemDef.name} — ${out.map(d => d.name).join(', ')} back in your bag]`
             : `[Equipped ${itemDef.name}]`;
     }
     const old = game.equipment[slot];
     game.equipment[slot] = itemDef;
-    if (old && old.id !== itemDef.id) game._addToInventory(old);
+    if (old && old.id !== itemDef.id) bagIt(old);
     return old && old.id !== itemDef.id
         ? `[Equipped ${itemDef.name} — ${old.name} back in your bag]`
         : `[Equipped ${itemDef.name}]`;
@@ -694,7 +702,8 @@ export function tickTempEquips(game) {
 // Resolve a Use action. Returns a log message string.
 // stackCount: how many items are in the stack (for throw damage calc)
 // hand: which hand a weapon equip fills, 'weapon' (right) by default or 'left'.
-export function resolveUse(game, itemDef, direction, stackCount = 1, hand = 'weapon') {
+// bagSlot: the (already emptied) bag slot an equip came from; the swapped-out piece takes it.
+export function resolveUse(game, itemDef, direction, stackCount = 1, hand = 'weapon', bagSlot = -1) {
     if (!itemDef) return null;
 
     switch (itemDef.useType) {
@@ -705,7 +714,7 @@ export function resolveUse(game, itemDef, direction, stackCount = 1, hand = 'wea
         case 'melee':
             return resolveMelee(game, itemDef, direction);
         case 'equip':
-            return resolveEquip(game, itemDef, hand);
+            return resolveEquip(game, itemDef, hand, bagSlot);
         default:
             return itemDef.useHint || `[Used ${itemDef.name}]`;
     }
