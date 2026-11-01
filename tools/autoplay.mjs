@@ -137,6 +137,36 @@ async function connect(port) {
     return { send, once, on: (l) => listeners.add(l), close: () => ws.close() };
 }
 
+// What the player carries out of the Sewer (plans/ho2-sewer-haul-record.md). Watching
+// only: this wraps the game's map change to note the bag and the gold the moment
+// before the player leaves a sewer map for any other, and runs the original
+// untouched, so a run plays exactly as it did. The bag is written as the loops
+// run's `end` writes it (a stack as "id xN", slot order).
+const SEWER_WATCH = `(() => {
+    const exits = (window.__sewerExits = []);
+    let game;
+    Object.defineProperty(window, '__game', {
+        configurable: true,
+        get: () => game,
+        set: (g) => {
+            game = g;
+            if (!g || typeof g._loadMap !== 'function') return;
+            const load = g._loadMap;
+            g._loadMap = function (url, ...rest) {
+                const from = this._mapUrl;
+                if (from && /^sewer/.test(from) && !/^sewer/.test(url)) {
+                    exits.push({
+                        from, to: url,
+                        bag: this.inventory.filter(Boolean).map((s) => (s.count > 1 ? s.itemDef.id + ' x' + s.count : s.itemDef.id)),
+                        gold: this.gold,
+                    });
+                }
+                return load.call(this, url, ...rest);
+            };
+        },
+    });
+})();`;
+
 // A run whose script reloads the page (the loops run, plans/al2-loops-reload-continue.md)
 // answers { reload: true } instead of a report. The driver reloads the page
 // over the protocol, as a player presses F5, and waits on the next page's
@@ -193,7 +223,12 @@ async function runOnce(cdp, base, o) {
     }
     if (!out) return { ok: false, reason: `no result in ${o.timeout} ms` };
     if (out.exceptionDetails) return { ok: false, reason: out.exceptionDetails.text };
-    return out.result.value;
+    const report = out.result.value;
+    if (report && !report.reload) {
+        const seen = await cdp.send('Runtime.evaluate', { expression: 'window.__sewerExits || []', returnByValue: true }).catch(() => null);
+        report.sewerExits = seen?.result?.value || [];
+    }
+    return report;
 }
 
 function line(i, r) {
@@ -220,11 +255,14 @@ const CHECKED = [{ script: 'quest' }, { script: 'sneak' }, { script: 'loops', se
 
 // What the golden keeps of a run: whether it finished, where it ended, and
 // each stage's score. A loops run also keeps what it ended holding; quest
-// and sneak entries have no `end`, so they keep exactly the fields they had.
+// and sneak entries have no `end`, but keep what they carried out of the Sewer.
 const summary = (r) => ({
     script: r.script, seed: r.seed, finished: !!r.finished, reason: r.finished ? null : r.reason,
     fingerprint: r.fingerprint, turn: r.turn, deaths: r.deaths, stages: r.stages || [],
     ...(r.end ? { end: r.end } : {}),
+    // The bag and gold at the moment the run first left the Sewer, when it did
+    // (plans/ho2-sewer-haul-record.md). The loops run never enters it.
+    ...(r.sewerExits?.length ? { sewerExit: { bag: r.sewerExits[0].bag, gold: r.sewerExits[0].gold } } : {}),
 });
 
 // Every leaf that differs, as "path: was -> now".
@@ -257,6 +295,7 @@ try {
     const cdp = await connect(chrome.port);
     await cdp.send('Page.enable');
     await cdp.send('Runtime.enable');
+    await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: SEWER_WATCH });
     const consoleErrors = [];
     cdp.on((m) => {
         if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') {
