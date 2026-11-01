@@ -955,7 +955,10 @@ class Game {
         const changed = [];
         for (const c of this.containers) {
             const was = spawned.get(c.id || `${c.x},${c.y}`);
-            const contents = (c.contents || []).slice();
+            // Only what the player (or a robbery) put there is kept. A bar a soap-mine
+            // worker dropped in ({ type, source }) is the day's output, not the
+            // chest's state, and still starts over when the zone loads.
+            const contents = (c.contents || []).filter(e => !(e && typeof e === 'object' && e.source));
             if (was && was.x === c.x && was.y === c.y
                 && JSON.stringify(was.contents || []) === JSON.stringify(contents)) continue;
             changed.push({ id: c.id, type: c.type, x: c.x, y: c.y, contents });

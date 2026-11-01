@@ -261,8 +261,8 @@ describe('a chest you took from stays as you left it (CH1)', () => {
         const g = makeGame();
         await g.load('sewer-map.json', 1, 10);
         // The cache is walled off from the Sewer's open ground, so the part-taken chest is the
-        // soap-mine one, with two bars a worker left in it beside its bandage.
-        chestAt(g, 'soap-mine-chest').contents.push({ type: 'soap', source: 'worker-1' }, 'soap');
+        // soap-mine one, with two bars you put in beside its bandage.
+        chestAt(g, 'soap-mine-chest').contents.push('soap', 'soap');
 
         await bumpInto(g, 10, 9);
         await takeWithKeys(g, 'bandage');
@@ -292,16 +292,25 @@ describe('a chest you took from stays as you left it (CH1)', () => {
     test('a chest something was put into keeps what it holds, and so does a stash the map never had', async () => {
         const g = makeGame();
         await g.load('sewer-map.json', 1, 10);
-        // A worker drops a bar into the chest (npc.js), and a robbery leaves a stash (main.js _spawnStash).
-        chestAt(g, 'soap-mine-chest').contents.push({ type: 'soap', source: 'worker-1' });
+        // You put a bar in the chest, and a robbery leaves a stash (main.js _spawnStash).
+        chestAt(g, 'soap-mine-chest').contents.push('soap');
         g.containers.push({ id: 'stash_9_4_10', type: 'chest', x: 4, y: 10, contents: ['bandage', 'bandage'] });
 
         await roundTrip(g, 'town-map.json');
         assert.deepEqual(idsIn(chestAt(g, 'soap-mine-chest')), ['bandage', 'soap'], 'the chest still holds the deposit');
-        assert.deepEqual(chestAt(g, 'soap-mine-chest').contents[1], { type: 'soap', source: 'worker-1' });
         const stash = chestAt(g, 'stash_9_4_10');
         assert.ok(stash, 'the stash is still where it was left');
         assert.deepEqual([stash.x, stash.y, ...idsIn(stash)], [4, 10, 'bandage', 'bandage']);
+    });
+
+    test('a bar a soap-mine worker dropped in is the workers\' output: it is not written down, as before', async () => {
+        const g = makeGame();
+        await g.load('sewer-map.json', 1, 10);
+        chestAt(g, 'soap-mine-chest').contents.push({ type: 'soap', source: 'worker-1' });
+
+        await roundTrip(g, 'town-map.json');
+        assert.deepEqual(g._chestRecords, {}, 'nothing was written down');
+        assert.deepEqual(idsIn(chestAt(g, 'soap-mine-chest')), ['bandage'], 'the chest starts over');
     });
 
     test('a chest nobody touched leaves no record, so the save is as it was', async () => {

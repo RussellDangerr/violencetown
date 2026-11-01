@@ -17,6 +17,11 @@ should remember what is in them, the way ground items remember being taken (`_co
 - A chest you only partly emptied keeps what you left in it; a chest something was put into keeps
   what it holds.
 
+- A bar a soap-mine worker drops in (`npc.js`, `{ type, source }`) is the day's output rather than
+  the chest's state, so it is not written down and still starts over on a zone load, exactly as
+  today. Keeping it would move the autoplay's fingerprint (the quest and sneak runs pass the
+  workers), and the card is about emptied chests, not about worker output.
+
 ## Acceptance
 - Empty a chest, leave the zone, come back: still empty (Sewer chest, Factory locker).
 - Part-emptied chest keeps the rest; a deposited item is still there after a zone change.
