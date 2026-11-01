@@ -11,6 +11,8 @@ import { dirname, join } from 'node:path';
 
 import { SLOTS, ENTRIES, pickSlots, defaultPicks, resolveSpawn } from '../game/slots.js';
 import { Enemy, spawnEnemy } from '../game/enemies.js';
+import { dressOne } from '../game/theft.js';
+import { resolveItemDef } from '../game/item-registry.js';
 import { ENEMY_SPRITES } from '../game/sprites.js';
 import { weaknessesOf, resistancesOf } from '../game/elements.js';
 import { elementalMult } from '../game/combat.js';
@@ -153,9 +155,12 @@ describe('each creature', () => {
         for (const e of creatures) {
             const s = from[e.type];
             assert.ok(s, `${e.type}: its source enemy moved`);
+            // TGR1 (a): every fighter puts one piece of its kit on, so the copy is
+            // the source's numbers with that piece moved from the kit to the body.
+            const dressed = dressOne(s.armor, s.loadout, resolveItemDef);
             assert.deepEqual(
                 [e.entity.maxHp, e.entity.armor, e.damage, e.gold, e.loadout],
-                [s.hp, s.armor, s.damage, s.gold, s.loadout],
+                [s.hp, dressed.armor, s.damage, s.gold, dressed.loadout],
                 e.type,
             );
         }
