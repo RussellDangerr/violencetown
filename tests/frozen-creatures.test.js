@@ -11,8 +11,6 @@ import { dirname, join } from 'node:path';
 
 import { SLOTS, ENTRIES, pickSlots, defaultPicks, resolveSpawn } from '../game/slots.js';
 import { Enemy, spawnEnemy } from '../game/enemies.js';
-import { dressOne } from '../game/theft.js';
-import { resolveItemDef } from '../game/item-registry.js';
 import { ENEMY_SPRITES } from '../game/sprites.js';
 import { weaknessesOf, resistancesOf } from '../game/elements.js';
 import { elementalMult } from '../game/combat.js';
@@ -155,12 +153,9 @@ describe('each creature', () => {
         for (const e of creatures) {
             const s = from[e.type];
             assert.ok(s, `${e.type}: its source enemy moved`);
-            // TGR1 (a): every fighter puts one piece of its kit on, so the copy is
-            // the source's numbers with that piece moved from the kit to the body.
-            const dressed = dressOne(s.armor, s.loadout, resolveItemDef);
             assert.deepEqual(
                 [e.entity.maxHp, e.entity.armor, e.damage, e.gold, e.loadout],
-                [s.hp, dressed.armor, s.damage, s.gold, dressed.loadout],
+                [s.hp, s.armor, s.damage, s.gold, s.loadout],
                 e.type,
             );
         }
@@ -245,9 +240,7 @@ describe('the balance bench', () => {
             const row = rows.find(r => r.type === t);
             assert.ok(row, `the bench does not list ${t}`);
             const entry = Object.values(ENTRIES).find(e => e.type === t);
-            // TGR1 (a): the bench counts the piece the creature puts on, as the game does.
-            const dressed = dressOne(entry.armor, entry.loadout ?? [], resolveItemDef);
-            assert.deepEqual([row.hp, row.armor, row.damage, row.gold], [entry.hp, dressed.armor, entry.damage, entry.gold]);
+            assert.deepEqual([row.hp, row.armor, row.damage, row.gold], [entry.hp, entry.armor, entry.damage, entry.gold]);
         }
     });
 
