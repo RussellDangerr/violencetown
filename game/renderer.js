@@ -4916,11 +4916,15 @@ export class Renderer {
             this.font.drawText(ctx, isBare ? 'Bare (remove)' : name, r.x + 8, r.y + r.h / 2 - 4, { color: isBare ? UI.textLight : UI.text, scale: 1 });
             if (opt.sludgeImmune) this.font.drawText(ctx, 'sludge-proof', r.x + 8, r.y + r.h - 9, { color: UI.dim, scale: 1 });
 
-            // Armor delta: +N green / −N red / 0 dim, right-aligned.
+            // Armor delta: +N green / −N red / 0 dim, right-aligned. (LC1) On the
+            // left-hand plate the rows are weapons, so a 0 says nothing: it is
+            // left off unless the armour really changes.
             const d = opt.delta;
-            const dTxt = d > 0 ? `+${d}` : d < 0 ? `-${-d}` : '0';
-            const dCol = d > 0 ? UI.buff : d < 0 ? UI.hpRed : UI.dim;
-            this.font.drawText(ctx, dTxt, r.x + r.w - 8, r.y + r.h / 2 - 4, { color: dCol, scale: 1, align: 'right' });
+            if (d !== 0 || slotKey !== 'left') {
+                const dTxt = d > 0 ? `+${d}` : d < 0 ? `-${-d}` : '0';
+                const dCol = d > 0 ? UI.buff : d < 0 ? UI.hpRed : UI.dim;
+                this.font.drawText(ctx, dTxt, r.x + r.w - 8, r.y + r.h / 2 - 4, { color: dCol, scale: 1, align: 'right' });
+            }
             if (game._deviceSel.option === i) this._drawCursorHalo(ctx, r);   // (C3) keyboard cursor
         }
     }
