@@ -21,6 +21,7 @@ import assert from 'node:assert/strict';
 import { reactToTransaction, SHIFT_MULTIPLIER, applyHostileFlip } from '../game/give-action.js';
 import { DISPOSITION_MIN } from '../game/disposition-curves.js';
 import { ITEMS } from '../game/items.js';
+import { buyPrice } from '../game/trade.js';
 
 // A faithful-enough NPC stub: every field applyGive/isSewerDweller/isHostile
 // actually read, nothing more.
@@ -247,5 +248,46 @@ describe('reactToTransaction routes a theft', () => {
 
     test('an unknown transaction type still returns null', () => {
         assert.equal(reactToTransaction({ disposition: 0 }, 'nonsense'), null);
+    });
+});
+
+// ── offerDiscount — the merchant flip (CN1) ──────────────────────────────────
+//
+// The deal a merchant promises lives in her prices (trade.js reads disposition), so the flip
+// has nothing of its own to set: no discount flag, and the shop she already has stays open.
+describe('the offerDiscount flip leaves the deal to her prices', () => {
+    const merchant = () => makeNpc({
+        type: 'Carrion', disposition: 10, flipThreshold: 40, onFlip: 'offerDiscount',
+        vendor: true, stock: ['soap', 'bandage'], values: { soap: 8 },
+    });
+
+    test('crossing the threshold flips her without writing a discount flag', () => {
+        const npc = merchant();
+        const r = reactToTransaction(npc, 'give', { item: ITEMS.soap });
+        assert.equal(r.flipped, true);
+        assert.equal(npc._wasFlipped, true);
+        assert.equal('_discountMode' in npc, false);
+    });
+
+    test('she stays a vendor with the same stock, and no warning for an unknown mode', () => {
+        const npc = merchant();
+        reactToTransaction(npc, 'give', { item: ITEMS.soap });
+        assert.equal(npc.vendor, true);
+        assert.deepEqual(npc.stock, ['soap', 'bandage']);
+        assert.equal(npc._warnedUnknownOnFlip, undefined);
+        assert.notEqual(npc.allegiance, 'hostile');
+    });
+
+    test('the flip log line is the one she always had', () => {
+        const r = reactToTransaction(merchant(), 'give', { item: ITEMS.soap });
+        assert.equal(r.log, `[Carrion accepts the ${ITEMS.soap.name}. "...much obliged. I'll work you a deal next time."]`);
+    });
+
+    test('her stock costs less after the flip, by her disposition alone', () => {
+        const npc = merchant();
+        const before = ['soap', 'bandage'].map(id => buyPrice(ITEMS[id], npc.disposition));
+        reactToTransaction(npc, 'give', { item: ITEMS.soap });
+        const after = ['soap', 'bandage'].map(id => buyPrice(ITEMS[id], npc.disposition));
+        assert.ok(after[0] < before[0] && after[1] < before[1], `${before} -> ${after}`);
     });
 });
