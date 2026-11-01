@@ -164,7 +164,7 @@
       "seed": 2,
       "finished": true,
       "reason": null,
-      "fingerprint": "35c76b63",
+      "fingerprint": "8aefb713",
       "turn": 83,
       "deaths": 0,
       "stages": [
@@ -231,9 +231,9 @@
       ],
       "end": {
         "bag": [
+          "rock",
           "foil_hat",
           "latex_gloves",
-          "rock",
           "cardboard_cuirass",
           "soap"
         ],
