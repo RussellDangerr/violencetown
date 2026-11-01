@@ -289,6 +289,27 @@ export function cutToWidth(text, maxPx, measure) {
     return s.slice(0, n) + '~';
 }
 
+// (FX41) The dock feed's rows. The newest message wraps onto as many lines as the
+// feed's `budget` allows (the last one cut with '~' if it still runs over); what
+// budget is left goes to older messages, one cut line each, newest first. So the
+// rows never outnumber the budget the panel was laid out for. `messages` is
+// oldest -> newest; each row says which message it belongs to (`i`), so a wrapped
+// message fades as one. Returns rows oldest -> newest.
+export function feedRows(messages, budget, maxPx, measure) {
+    if (!messages.length || budget < 1) return [];
+    const newest = messages[messages.length - 1];
+    let lines = wrapToWidth(newest.text, maxPx, measure);
+    if (lines.length > budget) lines = [...lines.slice(0, budget - 1), lines.slice(budget - 1).join(' ')];
+    const rows = lines.map((t) => ({ text: cutToWidth(t, maxPx, measure), category: newest.category, i: messages.length - 1 }));
+    const room = budget - rows.length;                 // lines left for older messages
+    const last = messages.length - 1;
+    const head = [];
+    for (let i = Math.max(0, last - room); i < last; i++) {
+        head.push({ text: cutToWidth(messages[i].text, maxPx, measure), category: messages[i].category, i });
+    }
+    return [...head, ...rows];
+}
+
 // (FX8) A buff chip's name: the longest head of the upper-cased name that fits
 // `maxPx`, with no cut mark (a trailing space is dropped). BUFF_CHIP is the
 // chip's size and the inset its name is drawn at, on both sides.
@@ -2587,19 +2608,24 @@ export class Renderer {
         // The fight face reads the 300-deep history filtered to combat, not the
         // 3-entry mixed ring: filtering three mixed messages down to the combat
         // ones usually leaves one or none, which is not a log.
+        const budget = R.lines || (fightFace ? 3 : 2);
         const visible = fightFace
-            ? combatLines(game._logHistory, R.lines || 3)
-            : (game._logStripMessages || []).slice(-(R.lines || 2));
-        if (!visible.length) return;
+            ? combatLines(game._logHistory, budget)
+            : (game._logStripMessages || []).slice(-budget);
+        // (FX41) The newest message wraps inside the same budget; older ones stay one line.
+        const rows = feedRows(visible, budget, innerW, this._measurer(1));
+        if (!rows.length) return;
         // Oldest → newest, fading in. Computed rather than a fixed table: the
         // fight face shows one line more than the table ever had entries for.
+        // A wrapped message's lines share one fade.
         const alphaAt = (i, n) => (n <= 1 ? 1 : 0.5 + 0.5 * (i / (n - 1)));
-        const feedTop = R.y + R.h - PAD - visible.length * LH;
+        const firstMsg = rows[0].i, msgs = visible.length - firstMsg;
+        const feedTop = R.y + R.h - PAD - rows.length * LH;
         const startY  = Math.max(y, feedTop);
-        for (let i = 0; i < visible.length; i++) {
-            const m = visible[i];
-            const tinted = hexToRgba(this._logStripColor(m.category), alphaAt(i, visible.length));
-            this.font.drawText(ctx, cut(m.text), tx, startY + i * LH, { color: tinted, scale: 1 });
+        for (let k = 0; k < rows.length; k++) {
+            const m = rows[k];
+            const tinted = hexToRgba(this._logStripColor(m.category), alphaAt(m.i - firstMsg, msgs));
+            this.font.drawText(ctx, m.text, tx, startY + k * LH, { color: tinted, scale: 1 });
         }
     }
 
