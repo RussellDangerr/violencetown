@@ -2516,7 +2516,9 @@ class Game {
     // requiresMsg, no swing and no turn, the same as walking into a gated door.
     // `_swinging` is what the renderer reads to arc the hero up and over.
     _interactGrapple(anchor) {
-        if (anchor.requires && !(this.inventory || []).some(s => s && s.itemDef.id === anchor.requires)) {
+        // `requires` is one id or a list that must ALL be carried (carriesAll's rule, map.js).
+        const held = new Set((this.inventory || []).map(s => s && s.itemDef && s.itemDef.id));
+        if (![].concat(anchor.requires || []).every(id => held.has(id))) {
             audio.playSfx('bump-wall');
             this._log(anchor.requiresMsg || '[You need something to get a grip here.]');
             return;
