@@ -1,7 +1,7 @@
 # The Spine — the shape of the whole game
 
 **Date:** 2026-10-11
-**Status:** RULED — the structure is Caelan's, from the 2026-10-11 design session. Nine smaller
+**Status:** RULED — the structure is Caelan's, from the 2026-10-11 design session. Eight smaller
 rulings are still open (§8); each is a ruling row `SP1`–`SP9` in `roadmap-2026-09.md` §2.
 **Why it exists (Caelan):** *"If I don't lock this decision down, I will never finish this game."*
 The structure has been re-decided four times — a static map (04-01), a linear adventure (04-05),
@@ -22,9 +22,10 @@ Your car won't start → the Sewer → **the Sewer boss drops the Converter** �
 runs → the bridge → the Canyon → Pike's grappling hook → Downtown → meet the Financier.
 
 **Act 2 — Carnival, Factory, Graveyard, in any order.**
-Each zone gives one **required item** (names open, SP1 — until then: *item A, B, C*), earned
-through that zone's quest: one is given, one taken, one earned, and the zone's boss fight is a
-step inside it (ruled 2026-10-23, §9). *Interim:* until the quests are built, the boss drops the
+Each zone gives one **required item**, earned through that zone's quest: the Carnival's is a
+stuffed animal you win, the Graveyard's is a soul crystal you take, and the Factory's is the flux
+capacitor you are given. The zone's boss fight is a step inside the quest (ruled 2026-10-23,
+2026-10-30, §9). *Interim:* until the quests are built, the boss drops the
 item directly.
 
 **Act 3 — Bank Street.**
@@ -39,16 +40,18 @@ Bite, Sun Man's coaching, phase 2 against Monstrous Sun Man) → credits. **The 
 | The bridge | — | — | `_openBridgeIfCarFixed`, the bridge cutscene |
 | Out of the Canyon | `canyon.npc` | the grappling hook | `canyon_escape`; Pike (SP6: the Canyon is a branch today) |
 | Meet the Financier | — | — | not a quest stage today (SP8) |
-| Carnival quest, its boss a step | `carnival.boss` | item A | placeholder boss (first entry: Bigfoot) drops it directly — interim |
-| Factory quest, its boss a step | `factory.boss` | item B | placeholder boss (first entry: Alien Invasion) drops it directly — interim |
-| Graveyard quest, its boss a step | `graveyard.boss` | item C | placeholder boss (first entry: The Deity) drops it directly — interim |
-| The finale | — | A + B + C | not built (`bank-map.json` holds a placeholder Financier) |
+| Carnival quest, its boss a step | `carnival.boss` | the stuffed animal (earned) | placeholder boss (first entry: Bigfoot) drops it directly — interim |
+| Factory quest, its boss a step | `factory.boss` | the flux capacitor (given) | placeholder boss (first entry: Alien Invasion) drops it directly — interim |
+| Graveyard quest, its boss a step | `graveyard.boss` | the soul crystal (taken) | placeholder boss (first entry: The Deity) drops it directly — interim |
+| The finale | — | stuffed animal + flux capacitor + soul crystal | not built (`bank-map.json` holds a placeholder Financier) |
 
 It keeps two standing rulings from `species-adventures.md`:
 - **SA-1 Fixed maps.** Every zone is a hand-authored map. No map generation.
-- **SA-6 No "come back later" gates.** The three Act 2 zones stay open (they already are:
-  `world-map.js` joins Town to Factory and Carnival, and Carnival to Graveyard). A boss beaten
-  "early" counts. **The one gate in the game is the finale's**, and it asks only for the three items.
+- **SA-6 No "come back later" gates on the main map.** The main map stays open: the three Act 2
+  zones stay open (they already are: `world-map.js` joins Town to Factory and Carnival, and
+  Carnival to Graveyard). A boss beaten "early" counts. **The finale's gate asks only for the
+  three items.** A new quest may open new areas beyond the main map, RuneScape-style (Caelan,
+  2026-10-30, §9). This replaces the old SA-6 line that the finale's was the one gate in the game.
 
 ## 2. Slots, not names
 
@@ -85,7 +88,7 @@ framework rather than beside it.
 | The three acts, and their order | **Locked** | — |
 | The zones on the spine: Town, Sewer, Canyon, Downtown, Carnival, Factory, Graveyard, Bank Street | **Locked** | all eight maps exist (Bank Street = `bank-map.json`, SP7) |
 | The Converter (Act 1's required item) | **Locked**, name and id | `catalytic_converter` |
-| Three Act 2 required items, one per zone quest, its boss fight a step inside it | **Locked** as three slots; names open (ruled 2026-10-23, §9) | SP1; interim: the boss drops it |
+| Three Act 2 required items, one per zone quest, its boss fight a step inside it | **Locked** as three slots, named: stuffed animal (Carnival), flux capacitor (Factory), soul crystal (Graveyard) (ruled 2026-10-23, 2026-10-30, §9) | interim: the boss drops it |
 | Which slot holds which required item | **Locked** (a randomizer mode may shuffle it later) | — |
 | The ending: Financier → Final Arc → credits | **Locked** | SP2 (New Game+) |
 | Night Kid, the Financier, Sun Man | **Locked** characters (the cosmology's cast spine) | — |
@@ -147,8 +150,7 @@ All from one base sprite (`tinyDungeon` 3,10, the brown rat) through the step-3 
 
 Each is a row in `roadmap-2026-09.md` §2. Answers land here, dated, and strike the row there.
 
-- **SP1 — The three required items' names.** One idea: each is proof of the Financier's scheme.
-  They stay *item A, B, C* until named.
+- **SP1 — The three required items' names.** RULED 2026-10-30, see §9.
 - **SP2 — Remove New Game+, so the credits end the game?** (species-adventures §3 rec. 5)
 - **SP3 — Does `species-adventures.md` become later work, with this file as the north star?** Its
   piece 1 stays, as the slot framework.
@@ -178,5 +180,16 @@ Each is a row in `roadmap-2026-09.md` §2. Answers land here, dated, and strike 
     (SL-4), so any boss in a pool still guarantees the item.
   - **Interim:** until the quests are built, each placeholder boss drops its item directly
     (`plans/ab1-act2-placeholder-bosses.md`).
-- **2026-10-25 — Which zone's quest is which.** The Graveyard's item is given, the Factory's is
+- **2026-10-25 — Which zone's quest is which (superseded 2026-10-30, below).** The Graveyard's item is given, the Factory's is
   taken, and the Carnival's is earned.
+- **2026-10-30 — The Act 2 items are named, and the Factory gives while the Graveyard takes.**
+  Caelan named them: the Carnival's is a stuffed animal you win, the Graveyard's is a soul
+  crystal, the Factory's is the flux capacitor. Ruling SP1R1 (swap them): you are given the flux
+  capacitor at the end of the Factory, and you take the soul crystal in the Graveyard. The
+  Carnival's stays earned. Answers SP1 (§8).
+  - **Replaces** the 2026-10-25 entry above (Graveyard given, Factory taken, Carnival earned).
+- **2026-10-30 — The main map stays open; a new quest may open new areas beyond it.** Caelan's
+  answer on quest gates, RuneScape-style.
+  - **Replaces** the SA-6 line that *"the one gate in the game is the finale's"* (§1). The three
+    Act 2 zones stay open and the finale still asks for the three items; a quest may now gate an
+    area beyond the main map.
