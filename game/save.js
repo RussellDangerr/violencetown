@@ -117,6 +117,9 @@ export function serialize(game) {
             // whose items already dropped. Each is left out while empty, so a
             // run that never killed anything saves exactly as before.
             ...respawnEntries(game),
+            // (plans/ch1-chests-stay-empty.md) Containers changed since the map made
+            // them, per zone. Left out while empty, like the lists above.
+            ...chestEntry(game),
             // Law 6: enemies already looted on death, so respawns stay broke
             // across a reload too (twin of collectedItems — a Set of ids).
             muggedIds: game._muggedIds ? [...game._muggedIds] : [],
@@ -142,6 +145,31 @@ export function serialize(game) {
 function skillsEntry(game) {
     const skills = sanitizeSkills(game.skills);
     return Object.keys(skills).length ? { skills } : {};
+}
+
+// (plans/ch1-chests-stay-empty.md) The chest record as a save field, or nothing while it is empty.
+function chestEntry(game) {
+    const chestRecords = sanitizeChestRecords(game._chestRecords);
+    return Object.keys(chestRecords).length ? { chestRecords } : {};
+}
+
+// A malformed record is dropped, never trusted: { "mapUrl": [{ id, type, x, y, contents }] }.
+function sanitizeChestRecords(raw) {
+    const out = {};
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+    for (const [url, list] of Object.entries(raw)) {
+        if (!Array.isArray(list)) continue;
+        const rows = list
+            .filter(c => c && typeof c === 'object' && typeof c.type === 'string'
+                && Number.isFinite(c.x) && Number.isFinite(c.y))
+            .map(c => ({
+                id: typeof c.id === 'string' ? c.id : undefined, type: c.type, x: c.x, y: c.y,
+                contents: (Array.isArray(c.contents) ? c.contents : [])
+                    .filter(e => typeof e === 'string' || (e && typeof e === 'object' && typeof e.type === 'string')),
+            }));
+        if (rows.length) out[url] = rows;
+    }
+    return out;
 }
 
 // (plans/ks1-respawn-list.md) The respawn lists and the boss-items-given set as
@@ -251,6 +279,8 @@ export function migrate(raw) {
     }
     if (!r.world.hot || typeof r.world.hot !== 'object' || Array.isArray(r.world.hot)) r.world.hot = {};
     r.world.containers = objects(r.world.containers);
+    // An older save has no chest record: every container is as the map made it.
+    r.world.chestRecords = sanitizeChestRecords(r.world.chestRecords);
     if (r.quest === undefined) r.quest = null;
     if (r.sewerEscape === undefined) r.sewerEscape = null;
     return r;
@@ -336,6 +366,7 @@ export async function loadInto(game, raw) {
     // ...and the respawn lists, or a kill still waiting would spawn back alive.
     game._respawnLists = sanitizeRespawnLists(raw.world.respawnLists);
     game._bossDropsGiven = new Set(raw.world.bossDropsGiven ?? []);
+    game._chestRecords = sanitizeChestRecords(raw.world.chestRecords);
 
     // 1. baseline map (spawns JSON enemies/items/containers; sets renderer
     //    zone). Missing coords fall back to the map spawn; clamp to bounds so
