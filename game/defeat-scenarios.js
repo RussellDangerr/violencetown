@@ -20,6 +20,14 @@ export function isBoss(enemy) {
     return enemy.boss === true || (typeof enemy.tag === 'string' && enemy.tag.endsWith('_boss'));
 }
 
+// The boss that ends a fight you lose: whoever landed the blow if it is a boss,
+// else the first boss still in the fight (`fs` is fight-area.js fighters()), else
+// null. A boss's ally can land the last blow; the fight is still the boss's.
+export function bossInFight(fs, by) {
+    if (isBoss(by)) return by;
+    return (fs || []).find(isBoss) || null;
+}
+
 // Split inventory into { safe, atRisk } — entries carry the slot index so the
 // caller can null the taken slots. Skips empty slots. An item is kept if it's
 // in a SAFE-zone slot (index < safeSlots) OR intrinsically safe (isSafe) —
