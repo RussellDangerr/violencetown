@@ -17,7 +17,7 @@
 //
 // Design: plans/stealth-perception-and-thieve.md
 
-import { VERDICT } from './perception.js';
+import { VERDICT, perceives } from './perception.js';
 
 export const STEAL_BASE         = 50;   // GP ceiling on a Coin take, before passives
 export const NOTICE_BASE        = 3;    // weight a victim fails to notice, before passives
@@ -81,7 +81,7 @@ export function coinTake(victim, limit) {
 // random, so the player can predict what a pocket yields and a theft stays a
 // plan rather than a slot machine. Entries that resolve to nothing are skipped
 // rather than stolen as ghosts.
-export function kitTake(victim, resolve) {
+export function pickKit(victim, resolve) {
     const ids = victim?.loadout ?? [];
     let bestIdx = -1, bestDef = null;
     for (let i = 0; i < ids.length; i++) {
@@ -92,9 +92,14 @@ export function kitTake(victim, resolve) {
             bestDef = def;
         }
     }
-    if (bestIdx < 0) return null;
-    victim.loadout = ids.filter((_, i) => i !== bestIdx);
-    return bestDef;
+    return bestIdx < 0 ? null : { index: bestIdx, def: bestDef };
+}
+
+export function kitTake(victim, resolve) {
+    const pick = pickKit(victim, resolve);
+    if (!pick) return null;
+    victim.loadout = victim.loadout.filter((_, i) => i !== pick.index);
+    return pick.def;
 }
 
 // ── Putting a piece on ──────────────────────────────────────────────────────
@@ -146,7 +151,7 @@ export function dressOne(armor, loadout, resolve, stolen = []) {
 // Removing gear moves their real numbers — steal the brute's plate and then
 // fight a softer brute. Armor is clamped into Law 3's band and damage floored at
 // zero so a theft can never author an illegal entity.
-export function gearTake(victim, resolve) {
+export function pickGear(victim, resolve) {
     const ids = victim?.equipped ?? [];
     let bestIdx = -1, bestDef = null;
     for (let i = 0; i < ids.length; i++) {
@@ -157,12 +162,58 @@ export function gearTake(victim, resolve) {
             bestDef = def;
         }
     }
-    if (bestIdx < 0) return null;
-    victim.equipped = ids.filter((_, i) => i !== bestIdx);
+    return bestIdx < 0 ? null : { index: bestIdx, def: bestDef };
+}
+
+export function gearTake(victim, resolve) {
+    const pick = pickGear(victim, resolve);
+    if (!pick) return null;
+    const bestDef = pick.def;
+    victim.equipped = victim.equipped.filter((_, i) => i !== pick.index);
     if (victim.entity) {
         const next = (victim.entity.armor ?? 0) - (bestDef.armor ?? 0);
         victim.entity.armor = Math.max(ARMOR_MIN, Math.min(ARMOR_MAX, next));
     }
     victim.damage = Math.max(0, (victim.damage ?? 0) - (bestDef.damage ?? 0));
     return bestDef;
+}
+
+// ── The preview ─────────────────────────────────────────────────────────────
+//
+// What the aim strip shows while the reticle sits on a person: the take, then the
+// verdict. A pure READ of the same pieces the lift in main.js reads — it removes
+// nothing, moves no gold and does not even open a `_robbed` record for a victim
+// who has none. Returns null when there is nothing to show: no one there, no one
+// who can be lifted from, nothing to take, or any verb but the three lifts.
+//
+// The words are placeholders and live here, in one place, for Caelan to write.
+export const LIFT_WORDS = { clean: '[TEXT]', noticed: '[TEXT]' };
+
+const LIFT_BRANCH = { thieveCoin: 'coin', thieveKit: 'kit', thieveGear: 'gear' };
+
+export function liftPreview(game, resolver, aimTile) {
+    const branch = LIFT_BRANCH[resolver];
+    if (!branch || !aimTile || !game) return null;
+    const victim = game._thieveTarget?.(aimTile);
+    if (!victim) return null;
+
+    const passives = game._theftPassives();
+    let weight = 0, gp = 0, name = null;
+    if (branch === 'coin') {
+        gp = coinTake(victim, stealLimit(passives));
+        if (gp <= 0) return null;
+        weight = coinWeight(gp);
+    } else {
+        const resolve = (id) => game._resolveItemDef(id);
+        const pick = branch === 'kit' ? pickKit(victim, resolve) : pickGear(victim, resolve);
+        if (!pick) return null;
+        weight = branch === 'kit' ? itemWeight(pick.def) : gearWeight(pick.def);
+        name = pick.def.name ?? pick.def.id ?? null;
+    }
+
+    const verdict = perceives(game.map, victim, game.playerX, game.playerY);
+    const taken = game._robbed?.[victim.id]?.weightTaken ?? 0;
+    const buffer = noticeBuffer(passives, verdict);
+    const clean = isClean(taken, weight, buffer);
+    return { branch, gp, name, weight, taken, buffer, clean, words: clean ? LIFT_WORDS.clean : LIFT_WORDS.noticed };
 }

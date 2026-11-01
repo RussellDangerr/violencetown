@@ -36,6 +36,7 @@ import { findFusion } from './rings.js';                                     // 
 import { carriesAll } from './map.js';                                    // (FIN1b) a gated exit shows its markers only once its gate is met
 import { WORLD_ZONES, overworldZone, connectorPairs } from './world-map.js'; // (Phase 4) rudimentary world map
 import { perceives, facingOf, dirOf as spriteDirOf, VERDICT } from './perception.js';              // (threat overlay) the SAME vision the chase AI uses
+import { liftPreview } from './theft.js';                                 // (tw1) the aim strip's lift line: the take, then the verdict
 import { PHASE, threatPhase, alertWatchers } from './threat-phase.js';        // (threat overlay) attention as a state
 import { isSafe } from './defeat-scenarios.js';   // (defeat legibility) mark safe-floor items
 import { buyPrice, sellPrice, bribeStepCost, mood, canTrade, band, BRIBE_STEP } from './trade.js'; // (trade slice 1) pricing + mood smiley; band feeds the offer meter's multiplier readout
@@ -3423,6 +3424,19 @@ export class Renderer {
                 ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, strip - 24, vp.w, 24); ctx.restore();
                 const hint = `${selectedNode(w).label.toUpperCase()}  ·  AIM — MOVE · SPACE FIRE · ↓ BACK`;
                 this.font.drawText(ctx, hint, CC, strip - 16, { color: UI.gold, scale: 1, align: 'center', shadow: '#000' });
+                // (tw1) aiming a lift with the reticle on someone you could rob: a second
+                // line over the hint says what you would take and whether they would notice.
+                // Nothing otherwise. The tint stands in until the verdict words are written.
+                const node = selectedNode(w);
+                const lift = liftPreview(game, node.resolver, w.reticle);
+                if (lift) {
+                    const take = lift.branch === 'coin'
+                        ? `GP ${lift.gp}`
+                        : String(lift.name ?? '').replace(/[\[\]]/g, '').toUpperCase();
+                    ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, strip - 48, vp.w, 24); ctx.restore();
+                    this.font.drawText(ctx, `${node.label.toUpperCase()}  ·  ${take}  ·  ${lift.words}`, CC, strip - 40,
+                        { color: lift.clean ? UI.hpGreen : UI.hpRed, scale: 1, align: 'center', shadow: '#000' });
+                }
             }
             return;
         }
@@ -4932,11 +4946,15 @@ export class Renderer {
             this.font.drawText(ctx, isBare ? 'Bare (remove)' : name, r.x + 8, r.y + r.h / 2 - 4, { color: isBare ? UI.textLight : UI.text, scale: 1 });
             if (opt.sludgeImmune) this.font.drawText(ctx, 'sludge-proof', r.x + 8, r.y + r.h - 9, { color: UI.dim, scale: 1 });
 
-            // Armor delta: +N green / −N red / 0 dim, right-aligned.
+            // Armor delta: +N green / −N red / 0 dim, right-aligned. (LC1) On the
+            // left-hand plate the rows are weapons, so a 0 says nothing: it is
+            // left off unless the armour really changes.
             const d = opt.delta;
-            const dTxt = d > 0 ? `+${d}` : d < 0 ? `-${-d}` : '0';
-            const dCol = d > 0 ? UI.buff : d < 0 ? UI.hpRed : UI.dim;
-            this.font.drawText(ctx, dTxt, r.x + r.w - 8, r.y + r.h / 2 - 4, { color: dCol, scale: 1, align: 'right' });
+            if (d !== 0 || slotKey !== 'left') {
+                const dTxt = d > 0 ? `+${d}` : d < 0 ? `-${-d}` : '0';
+                const dCol = d > 0 ? UI.buff : d < 0 ? UI.hpRed : UI.dim;
+                this.font.drawText(ctx, dTxt, r.x + r.w - 8, r.y + r.h / 2 - 4, { color: dCol, scale: 1, align: 'right' });
+            }
             if (game._deviceSel.option === i) this._drawCursorHalo(ctx, r);   // (C3) keyboard cursor
         }
     }

@@ -99,7 +99,7 @@ export const QUESTS = {
 
     fix_car: {
         id: 'fix_car',
-        title: 'A Working Car',
+        title: '[TEXT]',
         // Started DETERMINISTICALLY (game._startMainQuest, on game start / first
         // town entry) rather than via a fragile once-per-approach adjacency bark
         // off the Borgir boss — the old startOn could be missed entirely if the
@@ -114,7 +114,7 @@ export const QUESTS = {
                 // floor(innerW / 8) chars, and "walk to it and examine it (E)" cut to
                 // "...AND EXAMINE~" on a phone, losing the very (E) this line is about.
                 // examine.js points the way when E lands on anything else.
-                objective: "Your car won't start - go examine it (E)",
+                objective: '[TEXT]',
                 targetZone: 'TOWN',
                 on: { type: 'examine', match: { targetId: 'car' } },
                 // Tolerant: if the player already examined the car before this
@@ -124,7 +124,7 @@ export const QUESTS = {
             },
             {
                 id: 'recover_converter',
-                objective: 'Get your converter back from the sewer',
+                objective: '[TEXT]',
                 targetZone: 'SEWER',
                 on: { type: 'item_pickup', match: { id: 'catalytic_converter' } },
                 // Tolerant: the converter only advances this stage on PICKUP. If
@@ -136,7 +136,7 @@ export const QUESTS = {
             },
             {
                 id: 'escape_sewer',
-                objective: 'Tear down the barricade and escape the sewer!',
+                objective: '[TEXT]',
                 targetZone: 'SEWER',
                 // Phase D implements the set-piece as a Game method; no-op here.
                 onEnter: (game) => { if (game._sewerEscapeSetpiece) game._sewerEscapeSetpiece(); },
@@ -144,7 +144,7 @@ export const QUESTS = {
             },
             {
                 id: 'return_to_car',
-                objective: 'Install the converter - return to your car',
+                objective: '[TEXT]',
                 targetZone: 'TOWN',
                 onEnter: (game) => { game._sewerEscape = null; },  // escaped — clear the gauntlet state
                 on: { type: 'interact_car', match: {} },
@@ -157,7 +157,7 @@ export const QUESTS = {
             // (main.js _doMove), so the bridge that's been the visible
             // objective all game finally pays off.
             game.questEngine.state.flags.carFixed = true;
-            game._log('[The car coughs, sputters, then ROARS to life — and up north the bridge barricade rattles loose. It is revving way past redline, though. Nothing that hot is making the ramp.]', 'transition');
+            game._log('[TEXT]', 'transition');
             if (game._openBridgeIfCarFixed) game._openBridgeIfCarFixed();
         },
     },

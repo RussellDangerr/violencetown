@@ -80,6 +80,17 @@ export const DIALOGUES = {
         ],
     },
 
+    // (TX2) The taxi driver at the bridge: whoever stands there is the driver, and
+    // he is the one who tells you (plans/taxi-driver.md). Every line is a
+    // placeholder until Caelan writes it.
+    taxi_driver: {
+        name: '[TEXT]',
+        greeting: '[TEXT]',
+        choices: [
+            { id: 'ask', label: '[TEXT]', repeatable: true, reply: '[TEXT]' },
+        ],
+    },
+
     // (Phase 6d) Macc the raccoon mechanic — Town's special-buyer: the Converter
     // has a buyer (500 GP).
     macc: {

@@ -21,12 +21,12 @@ import { zoneOf } from '../inventory.js';
 import { SAFE_SLOTS } from '../data.js';
 
 export const SCRIPTS = {
-    // Quest 1's first stage. The car sits in a wall block with no open tile
-    // beside it; (24,8) facing up is where E reaches it (measured 2026-09-21).
+    // Quest 1's first stage. The taxi's 2x2 block stands on the road under the
+    // bridge barricade (16-17, 2-3); (16,4) facing up is where E reaches it.
     // The idle is deliberate: three seconds of the free-roam heartbeat moving
     // the townsfolk is exactly what broke seeded replays.
     car: {
-        ops: [{ walkTo: { x: 24, y: 8 } }, { idle: 3000 }, { face: 'up' }, { press: 'KeyE' }, { press: 'Escape' }],
+        ops: [{ walkTo: { x: 16, y: 4 } }, { idle: 3000 }, { face: 'up' }, { press: 'KeyE' }, { press: 'Escape' }],
         expect: (g) => (g.questEngine.state.activeId === 'fix_car' && g.questEngine.state.stageIndex >= 1)
             ? null : 'quest 1 is still waiting on examine_car',
     },

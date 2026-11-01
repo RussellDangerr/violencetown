@@ -1059,7 +1059,7 @@ class Game {
         // player can drive across.
         for (let x = 14; x <= 19; x++) { this.setTile(x, 0, 12); this.setTile(x, 1, 12); }
         const br = (this.examinables || []).find(e => e.id === 'bridge');
-        if (br) br.text = "[The barricade's down and the engine's warm. North across the bridge, out of Violencetown for good. Drive.]";
+        if (br) br.text = '[TEXT]';
     }
 
     // Persist the game. Debounced to every few turns unless forced (forced on
@@ -2745,13 +2745,13 @@ class Game {
                 this._removeFromSlot(alc);
                 this.carFuel = 'alcohol';
                 audio.playSfx('pickup');
-                this._log('[You empty the whole bottle into the tank. The engine coughs, then drops into a slower, meaner idle. That should tame the jump.]', 'pickup');
+                this._log('[TEXT]', 'pickup');
                 this._render();
                 return;
             }
             this._log(this.carFuel === 'alcohol'
-                ? '[The car idles low and steady now — the alcohol is doing its work. Ready for the bridge.]'
-                : '[The car SNARLS, revving way past redline. At this speed you will never make the ramp — you will go straight through the bridge. There has to be a way to slow it down.]');
+                ? '[TEXT]'
+                : '[TEXT]');
             this._render();
             return;
         }
@@ -2765,13 +2765,13 @@ class Game {
             // (There's only one car, in town, so reaching here means we're home.)
             this._removeFromSlot(idx);
             this._sewerEscape = null;
-            this._log('[You wrench the cataclysmic converter back into place. The engine turns over!]', 'pickup');
+            this._log('[TEXT]', 'pickup');
             this.emitGameEvent('interact_car', {});                       // advances return_to_car if we're there
             if (!this.questEngine.getFlag('carFixed')) this.questEngine.forceComplete('fix_car'); // else force it home
             this._render();
             return;
         }
-        this._log("[The car won't start. Pop the hood and examine it (E).]");
+        this._log('[TEXT]');
         this._render();
     }
 
@@ -3157,13 +3157,17 @@ class Game {
         if (item.effect === 'cure_sludge') this._soapUsedThisTurn = true;
         if (item.effect === 'heal') audio.playSfx('heal'); // [audio] healing item used
 
-        const msg = resolveUse(this, item, null);
+        // (FX34) An equip leaves its bag slot BEFORE it resolves, so the piece it
+        // swaps out lands in that very slot.
+        const equips = item.useType === 'equip';
+        if (equips) this._removeFromSlot(this.selectedSlot);
+        const msg = resolveUse(this, item, null, 1, 'weapon', equips ? this.selectedSlot : -1);
         if (msg) this._log(msg);
         this._refreshGrantedSkills();   // a weapon may have changed → refresh Magic/Trick grants
 
-        // Consumables are spent; a persistent equip (armor) moves out of the bag
-        // and onto the body, so it leaves the hotbar slot too.
-        if (item.consumable || item.useType === 'equip') this._removeFromSlot(this.selectedSlot);
+        // Consumables are spent; a persistent equip (armor) moved out of the bag
+        // and onto the body, so it has left the hotbar slot too.
+        if (item.consumable && !equips) this._removeFromSlot(this.selectedSlot);
         this.selectedSlot = -1;
         this.state = STATE.IDLE;
         this._advanceWorld();
@@ -6331,11 +6335,14 @@ class Game {
                     // removeBuff('sludge') fires in _advanceWorld gated on this flag, so
                     // it MUST be set before resolveUse, exactly as canonical _doItemUse.
                     if (def.effect === 'cure_sludge') this._soapUsedThisTurn = true;
-                    const msg = resolveUse(this, def, null);   // equip → resolveEquip (re-bags any displaced piece)
+                    // (FX34) An equip leaves its slot first, so the piece it swaps out lands there.
+                    const equips = def.useType === 'equip';
+                    if (equips) this._removeFromSlot(idx);
+                    const msg = resolveUse(this, def, null, 1, 'weapon', equips ? idx : -1);   // equip → resolveEquip (re-bags any displaced piece)
                     if (msg) this._log(msg);
                     this._refreshGrantedSkills();
-                    const usedUp = def.useType === 'self' || def.useType === 'equip';
-                    if (usedUp) { this._removeFromSlot(idx); this._advanceWorld(); this._saveMoment?.(); }
+                    const usedUp = def.useType === 'self' || equips;
+                    if (usedUp) { if (!equips) this._removeFromSlot(idx); this._advanceWorld(); this._saveMoment?.(); }
                     break;
                 }
                 case 'drink': {
@@ -6398,8 +6405,9 @@ class Game {
             if (opt.bagIndex >= 0) {
                 const def = this.inventory[opt.bagIndex].itemDef;
                 // equip → resolveEquip (re-bags any displaced piece); the left plate fills the left hand
-                const msg = resolveUse(this, def, null, 1, lw ? 'left' : 'weapon');
+                // (FX34) The piece leaves its bag slot first; what it swaps out lands there.
                 this._removeFromSlot(opt.bagIndex);
+                const msg = resolveUse(this, def, null, 1, lw ? 'left' : 'weapon', opt.bagIndex);
                 this._refreshGrantedSkills();
                 if (msg) this._log(msg);
             } else if (opt.id === '__bare__') {
