@@ -146,6 +146,9 @@
         {"type": "soap", "x": 6, "y": 8},
         {"type": "fearmur", "x": 14, "y": 6}
     ],
+    "containers": [
+        {"id": "graveyard-stash", "type": "chest", "x": 2, "y": 25, "contents": ["speed_poition"]}
+    ],
     "transitions": [
         {"x": 14, "y": 0, "toMap": "carnival-map.json", "toX": 52, "toY": 18, "label": "[North — back up to the Carnival]"},
         {"x": 14, "y": 26, "toMap": "wilderness-map.json", "toX": 8, "toY": 2, "label": "[South — toward the WILDERNESS. The dark out there is total.]"}
