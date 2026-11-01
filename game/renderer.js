@@ -36,6 +36,7 @@ import { findFusion } from './rings.js';                                     // 
 import { carriesAll } from './map.js';                                    // (FIN1b) a gated exit shows its markers only once its gate is met
 import { WORLD_ZONES, overworldZone, connectorPairs } from './world-map.js'; // (Phase 4) rudimentary world map
 import { perceives, facingOf, dirOf as spriteDirOf, VERDICT } from './perception.js';              // (threat overlay) the SAME vision the chase AI uses
+import { liftPreview } from './theft.js';                                 // (tw1) the aim strip's lift line: the take, then the verdict
 import { PHASE, threatPhase, alertWatchers } from './threat-phase.js';        // (threat overlay) attention as a state
 import { isSafe } from './defeat-scenarios.js';   // (defeat legibility) mark safe-floor items
 import { buyPrice, sellPrice, bribeStepCost, mood, canTrade, band, BRIBE_STEP } from './trade.js'; // (trade slice 1) pricing + mood smiley; band feeds the offer meter's multiplier readout
@@ -3407,6 +3408,19 @@ export class Renderer {
                 ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, strip - 24, vp.w, 24); ctx.restore();
                 const hint = `${selectedNode(w).label.toUpperCase()}  ·  AIM — MOVE · SPACE FIRE · ↓ BACK`;
                 this.font.drawText(ctx, hint, CC, strip - 16, { color: UI.gold, scale: 1, align: 'center', shadow: '#000' });
+                // (tw1) aiming a lift with the reticle on someone you could rob: a second
+                // line over the hint says what you would take and whether they would notice.
+                // Nothing otherwise. The tint stands in until the verdict words are written.
+                const node = selectedNode(w);
+                const lift = liftPreview(game, node.resolver, w.reticle);
+                if (lift) {
+                    const take = lift.branch === 'coin'
+                        ? `GP ${lift.gp}`
+                        : String(lift.name ?? '').replace(/[\[\]]/g, '').toUpperCase();
+                    ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, strip - 48, vp.w, 24); ctx.restore();
+                    this.font.drawText(ctx, `${node.label.toUpperCase()}  ·  ${take}  ·  ${lift.words}`, CC, strip - 40,
+                        { color: lift.clean ? UI.hpGreen : UI.hpRed, scale: 1, align: 'center', shadow: '#000' });
+                }
             }
             return;
         }
