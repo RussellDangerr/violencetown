@@ -1,7 +1,7 @@
 // enemy-worn-gear.test.js — TG1 (plans/tg1-enemies-wear-armour.md), TGR1 pick a.
 //
-// A fighter that carries armour puts one piece on at spawn: out of the kit, into
-// `equipped`, onto its armour. That is what lights Thieve's Gear branch on
+// A fighter whose kit lists armour puts one piece on at spawn: out of the kit, into
+// `equipped`, and that piece's number is all the armour it has (TG1R4). That is what lights Thieve's Gear branch on
 // ordinary enemies. The pure rules are tested first; then the spawn on the real
 // maps (a Greedy Green, the Were-Rat, a rival); then Thieve through the real
 // wheel with real keys.
@@ -16,14 +16,15 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { GameMap } from '../game/map.js';
 import { Enemy, spawnEnemy } from '../game/enemies.js';
-import { resolveSpawn, defaultPicks } from '../game/slots.js';
+import { resolveSpawn, defaultPicks, requiredDropFor, dropLineFor } from '../game/slots.js';
+import { dropLoadout } from '../game/drops.js';
 import { resolveItemDef } from '../game/item-registry.js';
 import { ITEMS } from '../game/items.js';
 import { INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK } from '../game/data.js';
 import { addToInventory as addToInv } from '../game/inventory.js';
 import { RNG } from '../game/rng.js';
 import {
-    isWearable, pieceToWear, dressOne, armourAfterPutOn, gearWeight,
+    isWearable, pieceToWear, dressOne, gearWeight,
     coinTake, kitTake, gearTake, coinWeight, itemWeight, noticeBuffer, isClean, stealLimit,
 } from '../game/theft.js';
 import { perceives } from '../game/perception.js';
@@ -80,42 +81,46 @@ describe('which piece goes on', () => {
         assert.equal(pieceToWear(['foil_hat', 'shoe_bags'], resolveItemDef).def.id, 'foil_hat');
     });
 
-    test('no armour in the kit: nothing goes on, and nothing is touched', () => {
+    test('no armour in the kit: nothing goes on, and the number is left as it is', () => {
         const kit = ['hot_dog', 'bandage', 'rock'];
-        const out = dressOne(5, kit, resolveItemDef);
-        assert.deepEqual(out, { armor: 5, loadout: kit, worn: null });
+        assert.deepEqual(dressOne(5, kit, resolveItemDef), { armor: 5, loadout: kit, worn: null });
+    });
+
+    test('a negative softness number is left as it is when the kit has no armour', () => {
+        const kit = ['rock', 'tunnel_mushroom'];
+        assert.deepEqual(dressOne(-40, kit, resolveItemDef), { armor: -40, loadout: kit, worn: null });
+        assert.deepEqual(dressOne(0, [], resolveItemDef), { armor: 0, loadout: [], worn: null });
     });
 
     test('one piece only: the rest of the armour stays in the kit', () => {
         const out = dressOne(3, ['foil_hat', 'latex_gloves', 'cardboard_cuirass'], resolveItemDef);
         assert.equal(out.worn, 'cardboard_cuirass');
         assert.deepEqual(out.loadout, ['foil_hat', 'latex_gloves']);
-        assert.equal(out.armor, 3 + ITEMS.cardboard_cuirass.armor);
+        assert.equal(out.armor, ITEMS.cardboard_cuirass.armor, 'the piece is all the armour it has');
+    });
+
+    test('its own authored number goes: a soft enemy and a hard one both end on the piece', () => {
+        for (const own of [-60, 0, 3, 6]) {
+            assert.equal(dressOne(own, ['foil_hat'], resolveItemDef).armor, ITEMS.foil_hat.armor, `from ${own}`);
+        }
     });
 
     test('a piece you stole stays stolen: the next-heaviest does not go on in its place', () => {
         const out = dressOne(3, ['foil_hat', 'latex_gloves', 'cardboard_cuirass'], resolveItemDef, ['cardboard_cuirass']);
         assert.equal(out.worn, null);
-        assert.equal(out.armor, 3);
+        assert.equal(out.armor, 0, 'it stands where the lift left it: at 0');
         assert.deepEqual(out.loadout, ['foil_hat', 'latex_gloves']);
-    });
-
-    test('Law 3: armour stops at the band ceiling, and an enemy already above it is not pulled down', () => {
-        assert.equal(armourAfterPutOn(9, 4), 10);
-        assert.equal(armourAfterPutOn(3, 4), 7);
-        assert.equal(armourAfterPutOn(-30, 2), -28);
-        assert.equal(armourAfterPutOn(15, 4), 15);
     });
 });
 
 describe('a Greedy Green spawns wearing its heaviest piece', () => {
-    test('the cuirass moves from the kit to the body, and its armour is added to the authored number', () => {
+    test('the cuirass moves from the kit to the body, and its number replaces the authored one', () => {
         const spec = greenSpawn();
         assert.equal(spec.armor, 3);
         assert.ok(spec.loadout.includes('cardboard_cuirass'));
         const e = spawnEnemy(resolveSpawn(spec, defaultPicks()));
         assert.deepEqual(e.equipped, ['cardboard_cuirass']);
-        assert.equal(e.entity.armor, 3 + ITEMS.cardboard_cuirass.armor);
+        assert.equal(e.entity.armor, ITEMS.cardboard_cuirass.armor, 'the piece and nothing else');
         assert.equal(e.loadout.includes('cardboard_cuirass'), false);
         assert.deepEqual(e.loadout, ['hot_dog', 'foil_hat', 'latex_gloves', 'soap'], 'the rest of the kit is as authored');
     });
@@ -124,7 +129,7 @@ describe('a Greedy Green spawns wearing its heaviest piece', () => {
         const e = spawnEnemy(resolveSpawn(greenSpawn(), defaultPicks()));
         assert.equal(takeable(e).gear, true);
         const panel = targetPanel(e);
-        assert.equal(panel.armor, 3 + ITEMS.cardboard_cuirass.armor);
+        assert.equal(panel.armor, ITEMS.cardboard_cuirass.armor);
         assert.deepEqual(panel.worn.map((w) => w.id), ['cardboard_cuirass']);
         assert.equal(panel.worn[0].name, ITEMS.cardboard_cuirass.name);
         assert.equal(panel.kit.some((k) => k.id === 'cardboard_cuirass'), false, 'worn is not also carried');
@@ -147,7 +152,7 @@ describe('a Greedy Green spawns wearing its heaviest piece', () => {
         assert.deepEqual(back.loadout, e.loadout);
     });
 
-    test('a mugged enemy comes back broke and bare: no kit, so nothing to wear', () => {
+    test('a mugged enemy comes back broke and bare: no kit lists armour, so it keeps its number', () => {
         const spec = resolveSpawn(greenSpawn(), defaultPicks());
         const e = spawnEnemy(spec, new Set([spec.id]));
         assert.deepEqual(e.loadout, []);
@@ -161,7 +166,7 @@ describe('a Greedy Green spawns wearing its heaviest piece', () => {
         const robbed = { [spec.id]: { gold: 0, items: ['cardboard_cuirass'], weightTaken: 8, noticed: false } };
         const e = spawnEnemy(spec, null, robbed);
         assert.equal(e.equipped ?? null, null);
-        assert.equal(e.entity.armor, 3, 'back at the authored number, not softened further');
+        assert.equal(e.entity.armor, 0, 'where the lift left it, not back at the authored number');
         assert.equal(e.loadout.includes('cardboard_cuirass'), false);
         assert.equal(e.loadout.includes('foil_hat'), true, 'the foil hat stays in the kit and does not go on');
         assert.equal(takeable(e).gear, false);
@@ -192,7 +197,10 @@ describe('every enemy that can wear something, does', () => {
                 assert.equal(worn.length, 1, `${m}/${s.id} wears one piece`);
                 const left = (e.loadout || []).filter((id) => isWearable(resolveItemDef(id)));
                 assert.equal(left.length, wearable.length - 1, `${m}/${s.id} carries the rest`);
-                assert.ok(e.entity.armor >= (s.armor ?? 0), `${m}/${s.id} is no softer for it`);
+                const piece = resolveItemDef(worn[0]);
+                assert.equal(e.entity.armor, piece.armor, `${m}/${s.id}: its armour is the piece and nothing else`);
+                const heaviest = pieceToWear(kit, resolveItemDef).def;
+                assert.equal(worn[0], heaviest.id, `${m}/${s.id} wears the heaviest`);
             } else {
                 assert.equal(worn.length, 0, `${m}/${s.id} wears nothing`);
                 assert.equal(e.entity.armor, s.armor ?? 0, `${m}/${s.id} keeps its number`);
@@ -200,18 +208,33 @@ describe('every enemy that can wear something, does', () => {
         }
     });
 
-    test('Law 3: no enemy that was inside the band is put outside it', () => {
+    test('Law 3: no enemy is put outside the band', () => {
         for (const { m, s } of spawns) {
             const e = spawnEnemy(s);
-            if ((s.armor ?? 0) <= 10) assert.ok(e.entity.armor <= 10, `${m}/${s.id} is at ${e.entity.armor}`);
+            if ((s.armor ?? 0) <= 10) assert.ok(e.entity.armor <= 10 && e.entity.armor >= -90, `${m}/${s.id} is at ${e.entity.armor}`);
         }
     });
 
-    test('the Were-Rat keeps its sword in worn gear and adds its cuirass', () => {
+    test('bosses wear too: the Were-Rat keeps its sword in worn gear and adds its cuirass', () => {
         const wr = spawns.find(({ s }) => s.tag === 'wererat_boss');
         assert.ok(wr, 'the sewer boss is on the sewer map');
         const e = spawnEnemy(wr.s);
         assert.deepEqual(e.equipped, ['wooden_sword', 'cardboard_cuirass']);
+        assert.equal(e.entity.armor, ITEMS.cardboard_cuirass.armor, 'its authored 6 is gone');
+        assert.equal(wr.s.armor, 6, 'the authored number is untouched in the data (the bench reads it)');
+        const bosses = spawns.filter(({ s }) => s.boss && (s.loadout || []).some((id) => isWearable(resolveItemDef(id))));
+        assert.ok(bosses.length >= 4, `only ${bosses.length} bosses carry armour`);
+        for (const { m, s } of bosses) assert.ok(spawnEnemy(s).equipped.some((id) => isWearable(resolveItemDef(id))), `${m}/${s.id} wears a piece`);
+    });
+
+    test('an enemy whose kit has no armour keeps its number as it is, whatever it is', () => {
+        const bare = spawns.filter(({ s }) => !(s.loadout || []).some((id) => isWearable(resolveItemDef(id))));
+        assert.ok(bare.length >= 10, `only ${bare.length} enemies have no armour in the kit`);
+        for (const { m, s } of bare) {
+            const e = spawnEnemy(s);
+            assert.equal(e.entity.armor, s.armor ?? 0, `${m}/${s.id}`);
+            assert.deepEqual(e.loadout, s.loadout ?? e.loadout, `${m}/${s.id} kit untouched`);
+        }
     });
 });
 
@@ -221,7 +244,7 @@ describe('a rival that took your things (Nemesis)', () => {
         const yours = ['cardboard_cuirass', 'foil_hat'];
         const rival = spawnEnemy(spec, null, null, yours);
         assert.equal(rival.equipped ?? null, null, 'your armour is not put on');
-        assert.equal(rival.entity.armor, 3, 'and it is no harder to fight for having it');
+        assert.equal(rival.entity.armor, 3, 'and it is no harder to fight for having it: no armour of its own, so its number stands');
         assert.deepEqual(rival.loadout, ['hot_dog', ...yours]);
         assert.deepEqual(takeable(rival), { coin: true, kit: true, gear: false });
     });
@@ -229,7 +252,7 @@ describe('a rival that took your things (Nemesis)', () => {
     test('with armour of its own it wears that, and what it took stays in the kit', () => {
         const rival = spawnEnemy(resolveSpawn(greenSpawn(), defaultPicks()), null, null, ['cardboard_cuirass']);
         assert.deepEqual(rival.equipped, ['cardboard_cuirass'], 'its own piece');
-        assert.equal(rival.entity.armor, 7, 'one piece, not two');
+        assert.equal(rival.entity.armor, ITEMS.cardboard_cuirass.armor, 'one piece, not two');
         assert.equal(rival.loadout.filter((id) => id === 'cardboard_cuirass').length, 1, 'yours is still carried');
     });
 
@@ -375,12 +398,12 @@ describe('Thieve Gear off a Greedy Green, through the wheel, with real keys', ()
     test('Space, Trick, Thieve, Gear, then a press toward it: the cuirass is yours and its armour drops', async () => {
         const { g, green } = makeGame();
         const before = green.entity.armor;
-        assert.equal(before, 3 + ITEMS.cardboard_cuirass.armor);
+        assert.equal(before, ITEMS.cardboard_cuirass.armor);
         await toThieveGear(g);
         await g.press('ArrowRight');                            // toward the green: lock and commit
         assert.ok(g.logs.includes(`[Lifted the ${ITEMS.cardboard_cuirass.name}.]`), g.logs.join(' | '));
         assert.deepEqual(green.equipped, [], 'it no longer wears it');
-        assert.equal(green.entity.armor, 3, 'back to the authored number');
+        assert.equal(green.entity.armor, 0, 'the piece was all it had');
         assert.equal(g.advanced, 1, 'one world turn');
         assert.ok(g._robbed[green.id].items.includes('cardboard_cuirass'), 'recorded, so it stays gone');
         assert.ok(g.inventory.some((s) => s && s.itemDef.id === 'cardboard_cuirass'), 'it is in your bag');
@@ -394,9 +417,43 @@ describe('Thieve Gear off a Greedy Green, through the wheel, with real keys', ()
         await g.press('ArrowRight');
         const again = spawnEnemy(resolveSpawn(spawnById('green1'), defaultPicks()), null, g._robbed);
         assert.equal(again.equipped ?? null, null);
-        assert.equal(again.entity.armor, 3);
+        assert.equal(again.entity.armor, 0);
         assert.equal(again.loadout.includes('cardboard_cuirass'), false);
         assert.equal(takeable(again).gear, false);
         assert.ok(green);
+    });
+});
+
+// ── A kill ──────────────────────────────────────────────────────────────────
+
+describe('killing a wearer (TG1R2: worn gear is gone with them)', () => {
+    // The real _handleEnemyDeath on a stand-in game, as drops.test.js does: with
+    // no bag it drops the kit to the floor.
+    const handleDeath = liveMethod('_handleEnemyDeath', 'enemyObj', {
+        audio: { playSfx() {} }, transferGold, dropLoadout, ITEMS, requiredDropFor, dropLineFor,
+        onSewerEnemyKilled() {},
+    });
+    function kill(spec) {
+        const e = spawnEnemy(resolveSpawn(spec, defaultPicks()));
+        const g = {
+            enemies: [e], groundItems: [], logs: [], gold: 0, map: { enemySpawns: [spec] },
+            _muggedIds: new Set(), _log(m) { this.logs.push(m); }, _spawnEventWord() {}, emitGameEvent() {},
+            _recordDrop() {}, _bossFirstFall: () => true, questEngine: null,
+            hasItem: () => false, _alreadyHasRayGun: () => false, _bossDropsGiven: new Set(),
+        };
+        e.entity.hp = 0; e.entity.alive = false;
+        const wore = [...e.equipped];
+        const carried = [...e.loadout];
+        handleDeath.call(g, e);
+        return { g, wore, carried };
+    }
+
+    test('the rest of the kit drops, and the worn piece is not among it', () => {
+        const { g, wore, carried } = kill(greenSpawn());
+        assert.deepEqual(wore, ['cardboard_cuirass']);
+        const dropped = g.groundItems.map((d) => d.type);
+        assert.deepEqual([...dropped].sort(), [...carried].sort(), 'everything it carried');
+        assert.equal(dropped.includes('cardboard_cuirass'), false, 'the piece it wore goes with it');
+        assert.ok(dropped.includes('foil_hat'), 'a spare piece it only carried does drop');
     });
 });

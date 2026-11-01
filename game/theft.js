@@ -105,20 +105,14 @@ export function kitTake(victim, resolve) {
 // ── Putting a piece on ──────────────────────────────────────────────────────
 //
 // (plans/tg1-enemies-wear-armour.md) Gear needs something to take. At spawn an
-// enemy that carries armour puts on ONE piece of it: it leaves the kit, joins
-// `equipped`, and adds its armour. gearTake below is the other half.
+// enemy whose kit lists armour puts on ONE piece of it: it leaves the kit, joins
+// `equipped`, and that piece's number is ALL the armour the enemy has. gearTake
+// below is the other half: lift the piece and they are left at 0.
 
 // Armour turns blows and has no wear timer. Bandage and Soap have armour only
 // while a timer runs: consumables, not clothes. A weapon is never "worn".
 export function isWearable(def) {
     return !!def && (def.armor ?? 0) > 0 && !def.equipDuration && !((def.damage ?? 0) > 0);
-}
-
-// Law 3's band, as gearTake applies it. An enemy already above the ceiling (a
-// puzzle wall) is left where it stands rather than dragged down.
-export function armourAfterPutOn(armor, piece) {
-    const base = armor ?? 0;
-    return Math.max(ARMOR_MIN, Math.min(Math.max(base, ARMOR_MAX), base + (piece ?? 0)));
 }
 
 // Which of `loadout` goes on: the heaviest by gearWeight (the weight Thieve
@@ -137,15 +131,21 @@ export function pieceToWear(loadout, resolve) {
 // Dress one enemy's numbers. Pure: { armor, loadout } in; { armor, loadout, worn }
 // out, `worn` being the id that went on (or null).
 //
+// A kit with no armour in it changes nothing: the enemy keeps its number, a
+// negative softness number included. A kit that lists armour puts the heaviest
+// piece on, and the enemy's own authored armour is replaced by that piece's
+// number alone (TG1R4), so lifting the piece leaves them at 0.
+//
 // `stolen` is the ids Thieve already lifted off this enemy. The choice is made
 // BEFORE the theft is subtracted from the kit, so a piece you stole stays stolen
-// instead of the next-heaviest piece quietly going on in its place.
+// instead of the next-heaviest piece quietly going on in its place; that enemy
+// stands at 0, the same as straight after the lift.
 export function dressOne(armor, loadout, resolve, stolen = []) {
     const pick = pieceToWear(loadout, resolve);
     if (!pick) return { armor, loadout, worn: null };
     const rest = loadout.filter((_, i) => i !== pick.index);
-    if (stolen.includes(pick.def.id)) return { armor, loadout: rest, worn: null };
-    return { armor: armourAfterPutOn(armor, pick.def.armor), loadout: rest, worn: pick.def.id };
+    if (stolen.includes(pick.def.id)) return { armor: 0, loadout: rest, worn: null };
+    return { armor: pick.def.armor, loadout: rest, worn: pick.def.id };
 }
 
 // Removing gear moves their real numbers — steal the brute's plate and then

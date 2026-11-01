@@ -512,20 +512,21 @@ export function spawnEnemy(spawnDef, muggedIds, robbed = null, rivalKit = null) 
     if (!Array.isArray(e.loadout)) e.loadout = e.loadout ? [...e.loadout] : [];
     if (muggedIds?.has(e.id)) { e.gold = 0; e.loadout = []; }
 
-    // (plans/tg1-enemies-wear-armour.md) A fighter that carries armour puts one
-    // piece on: out of the kit, into `equipped`, onto its armour. Decided before
-    // the theft below is subtracted, so a stolen piece stays stolen rather than
-    // the next one going on, and before a rival's kit is added, so a rival never
-    // wears what it took from you. Worn gear the spawn authors (a boss's sword)
-    // stays; one that already wears armour puts nothing more on.
+    // (plans/tg1-enemies-wear-armour.md) A fighter whose kit lists armour puts one
+    // piece on: out of the kit, into `equipped`, and that piece is ALL its armour
+    // (TG1R4; the authored number goes). A kit with no armour leaves the number as
+    // authored. Decided before the theft below is subtracted, so a stolen piece
+    // stays stolen rather than the next one going on, and before a rival's kit is
+    // added, so a rival never wears what it took from you. Worn gear the spawn
+    // authors (a boss's sword) stays; one that already wears armour puts nothing
+    // more on. Worn gear is not dropped on a kill (TG1R2): main.js drops the kit
+    // only, so the piece goes with them.
     const authoredWorn = Array.isArray(e.equipped) ? e.equipped : [];
     if (fights && !e.vendor && !authoredWorn.some(id => isWearable(resolveItemDef(id)))) {
         const dressed = dressOne(e.entity.armor ?? 0, e.loadout, resolveItemDef, robbed?.[e.id]?.items ?? []);
         e.loadout = dressed.loadout;
-        if (dressed.worn) {
-            e.entity.armor = dressed.armor;
-            e.equipped = [...authoredWorn, dressed.worn];
-        }
+        e.entity.armor = dressed.armor;
+        if (dressed.worn) e.equipped = [...authoredWorn, dressed.worn];
     }
 
     // (theft) A robbed enemy re-hydrates from map JSON on every _loadMap, so
