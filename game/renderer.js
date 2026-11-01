@@ -26,7 +26,8 @@ import {
     LOOT_REEL, lootReelRect,                                                 // (FX3c) the loot reel's panel
     MODAL_RECT, offerLayout,                                             // (offer screen) the one panel + its geometry
 } from './layout.js';
-import { itemStatLine, itemActions, USES_ACTION } from './inspector.js';    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
+import { itemStatLine, itemActions, USES_ACTION } from './inspector.js';
+import { weaponCompare, weaponCompareLines } from './examine.js';   // (FX44) the weapon compare block    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
 import { zoneOf, pageCount, slotOnPage } from './inventory.js';                                     // (C1) safe/pack label for the inspector
 import { buildXmbBar, resolveXmbSelection } from './xmb.js';                 // (XMB) usable-bar model
 import { ITEMS, itemTier, gearOptions } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
@@ -1667,8 +1668,9 @@ export class Renderer {
         }
 
         // (FX7) Settle which KO tags show before anything draws: nearest the
-        // player first, none overlapping. Each tag still draws with its body,
-        // so its layering in the depth sort is unchanged.
+        // player first, none overlapping.
+        // (FX48) The kept tags are drawn in one pass after every body, prop and
+        // marker, so nothing standing below or beside a body can cover its tag.
         const measure = (t) => (this.font?.measure ? this.font.measure(t, 1) : t.length * 6);
         const pcx = ppx + TILE_PX / 2, pcy = groundPy + TILE_PX / 2;
         const koLabels = [];
@@ -1676,7 +1678,7 @@ export class Renderer {
             if (a.kind !== 'enemy' || !a.dead || isAnt(a.e)) continue;
             const cx = a.px + TILE_PX / 2;
             koLabels.push({ key: a.e, cx, y: a.py + TILE_PX - 2, w: measure(koLabelText(a.e)), h: KO_LABEL_H,
-                dist: Math.hypot(cx - pcx, a.py + TILE_PX / 2 - pcy) });
+                dist: Math.hypot(cx - pcx, a.py + TILE_PX / 2 - pcy), px: a.px, py: a.py });
         }
 
         actors.sort(actorOrder);   // edge filler first, then by feet-Y, the player last on a tie
@@ -1686,6 +1688,9 @@ export class Renderer {
                 if (a.kind === 'prop') this._drawPropSprite(a.def, a.px, a.py);
                 else if (a.kind === 'player') this._drawPlayerSprite(game, a.px, a.py, now);
                 else this._drawEnemySprite(game, a.e, a.px, a.py, now);
+            }
+            for (const l of koLabels) {
+                if (this._koShown.has(l.key)) this._drawKoTag(l.key, l.px, l.py);
             }
         } finally {
             this._koShown = null;
@@ -1973,14 +1978,18 @@ export class Renderer {
             ctx.fillRect(px + 4, py + 4, TILE_PX - 8, TILE_PX - 8);
 
             // K.O. tag below — the player's permanent record of "you fought this
-            // person here." (FX7) Inside _drawActors only the tags it kept draw,
-            // so none overlap; called on its own, the tag always draws.
-            if (this.font && (!this._koShown || this._koShown.has(e))) {
-                this.font.drawText(ctx, koLabelText(e), px + TILE_PX / 2, py + TILE_PX - 2, {
-                    color: '#9a8a78', scale: 1, align: 'center',
-                });
-            }
+            // person here." (FX48) Inside _drawActors the tags draw afterwards,
+            // in one pass over every body; called on its own, the tag draws here.
+            if (!this._koShown) this._drawKoTag(e, px, py);
         }
+    }
+
+    // (FX7/FX48) The KO tag under a fallen enemy whose tile is at (px, py).
+    _drawKoTag(e, px, py) {
+        if (!this.font) return;
+        this.font.drawText(this.ctx, koLabelText(e), px + TILE_PX / 2, py + TILE_PX - 2, {
+            color: '#9a8a78', scale: 1, align: 'center',
+        });
     }
 
     // ── Wedged door (pipe-jam — zone pursuit) ───────────────────────────────
@@ -2916,8 +2925,13 @@ export class Renderer {
         // The stat line falls back to the item's description, which is often a
         // sentence: wrap it to the panel, two lines at most.
         const perLine = Math.max(8, Math.floor(room / this.font.measure('M', 1)));
-        let statLines = this._wrapText(itemStatLine(def), perLine);
-        if (statLines.length > 2) statLines = [statLines[0], this._fitText(statLines.slice(1).join(' '), room).text];
+        // (FX44) A weapon reads as the compare block instead: what it hits for
+        // against the weapon in your hand, its hands and class, its skills.
+        const block = weaponCompareLines(def, game.equipment && game.equipment.weapon);
+        let statLines = block
+            ? block.map(l => this._fitText(l, room, 1, 1).text)
+            : this._wrapText(itemStatLine(def), perLine);
+        if (!block && statLines.length > 2) statLines = [statLines[0], this._fitText(statLines.slice(1).join(' '), room).text];
         statLines.forEach((line, i) => this.font.drawText(ctx, line, tx, p.y + 34 + i * 12, { color: UI.text, scale: 1 }));
         this.font.drawText(ctx, `${zone}${qty}`, tx, p.y + 38 + statLines.length * 12, { color: UI.dim, scale: 1 });
 
@@ -3299,7 +3313,10 @@ export class Renderer {
         this._fillScreen(ctx);
 
         const w = 400, padX = 22;
-        const bodyLines = wrapToWidth(insp.body || '', w - padX * 2, this._measurer(1));
+        // (FX44) A body may carry newlines (a weapon's compare block, a blank
+        // line, then the description): wrap each paragraph on its own.
+        const bodyLines = String(insp.body || '').split('\n')
+            .flatMap(par => (par ? wrapToWidth(par, w - padX * 2, this._measurer(1)) : ['']));
         const hasTier = !!insp.tierName;
         const h = (hasTier ? 60 : 44) + bodyLines.length * 12 + 24;
         const px = Math.round((CANVAS_PX - w) / 2);
@@ -4172,7 +4189,7 @@ export class Renderer {
 
         // The key legend sits between the ledger and the frame's bottom stroke:
         // centred, a touch smaller, and clear of the frame on every side.
-        const legend = this._fitText('TAB SIDE  SPACE STAGE  ENTER OFFER  ESC CLOSE', L.panel.w - 32, 0.85, 0.75);
+        const legend = this._fitText('TAB SIDE  SPACE STAGE  BKSP UNSTAGE  ENTER OFFER  ESC CLOSE', L.panel.w - 32, 0.85, 0.75);
         this.font.drawText(ctx, legend.text, L.panel.x + L.panel.w / 2, L.hintY - 2,
             { color: UI.dim, scale: legend.scale, align: 'center' });
     }
@@ -4276,9 +4293,22 @@ export class Renderer {
                 L.desc.x + L.desc.w - 10, L.desc.y + 6, { color: '#79c46a', scale: 1, align: 'right' });
         }
 
+        // (FX44) A weapon shows its compare block on the next row: damage against
+        // the weapon in your hand, then hands and class. Its granted skills take
+        // the row below; with none, the description does.
+        const cmp = weaponCompare(def, game.equipment && game.equipment.weapon);
+        const maxPx = L.desc.w - 20;
+        if (cmp) {
+            this.font.drawText(ctx, this._fitText(`${cmp.damage}   ${cmp.build}`, maxPx, 1, 1).text,
+                L.desc.x + 10, L.desc.y + 24, { color: UI.text, scale: 1 });
+            const second = cmp.grants || String(def.description || '');
+            this.font.drawText(ctx, this._fitText(second, maxPx, 1, 1).text,
+                L.desc.x + 10, L.desc.y + 38, { color: cmp.grants ? UI.gold : UI.dim, scale: 1 });
+            return;
+        }
+
         // Measured wrap against the real advance. NOT the /8 idiom, which is a
         // fossil of the retired 8x8 atlas and wraps ~40% narrow.
-        const maxPx = L.desc.w - 20;
         const words = String(def.description || '').split(/\s+/);
         const lines = []; let cur = '';
         for (const w of words) {

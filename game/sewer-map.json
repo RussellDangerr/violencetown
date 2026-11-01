@@ -633,6 +633,11 @@
         "soap": 8
       },
       "onFlip": "offerDiscount",
+      "vendor": true,
+      "stock": [
+        "soap",
+        "bandage"
+      ],
       "adjacencyBark": "[Carrion: Road's blocked, friend. Sewer river's swollen with sludge. Come back later.]"
     },
     { "id": "wererat", "slot": "sewer.boss", "x": 17, "y": 10 },

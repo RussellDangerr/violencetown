@@ -4,7 +4,7 @@
 // disposition by `values[item.id] × SHIFT_MULTIPLIER`. When disposition
 // crosses `flipThreshold`, the recipient's `onFlip` behavior fires —
 // typically removing HOSTILE from their behavior whitelist (becomeAlly) or
-// setting a discount flag (offerDiscount).
+// moving a merchant's prices (offerDiscount).
 //
 // Phase B (future): active ally behavior, hover-preview UI, bribed-ally
 // counter-bribery, etc. See plans/give-action-feature.md for the phased
@@ -371,7 +371,7 @@ export function applyHostileFlip(recipient) {
 //
 // Dispatches on the recipient's `onFlip` value. Each onFlip mode is a
 // different *consequence* of crossing the disposition threshold —
-// becomeAlly turns off hostility, offerDiscount sets the merchant flag,
+// becomeAlly turns off hostility, offerDiscount leaves the merchant's prices to her disposition,
 // etc. New onFlip modes are added here as new gameplay verbs ship.
 
 function applyFlip(recipient) {
@@ -401,9 +401,10 @@ function applyFlip(recipient) {
             break;
 
         case 'offerDiscount':
-            // Merchant-side flip — set the discount flag. Future merchant
-            // UI (when Carrion's trade screen exists) will check this.
-            recipient._discountMode = true;
+            // Merchant-side flip. The deal she promises is already in her
+            // prices: she is a vendor, and a vendor's prices come from her
+            // disposition (trade.js), which the bribe just raised. There is
+            // nothing left to set here, and no separate discount to track.
             // No FSM change — these NPCs were never hostile to begin with.
             break;
 

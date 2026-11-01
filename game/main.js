@@ -483,7 +483,13 @@ class Game {
         // "url|id" of bosses whose own items already dropped, so a respawned boss
         // dies with nothing. Persisted (left out while empty).
         this._bossDropsGiven = new Set();
-        this._mapUrl = null;                 // url of the currently-loaded map
+        // (plans/ch1-chests-stay-empty.md) Containers that are no longer what their
+        // map says, per zone ("mapUrl" → [{ id, type, x, y, contents }]): taken
+        // from, deposited into, or never in the map at all (a robbery stash).
+        // _loadMap lets these win over the map's own contents. Persisted (left out
+        // while empty).
+        this._chestRecords = {};
+        this._mapUrl = null;                // url of the currently-loaded map
         this._cameFrom = null;               // url of the zone you ENTERED this one from (for the pipe-jam)
         this._jammedDoor = null;             // {x,y,toMap,integrity,max,intruders[]} while a door is wedged shut
 
@@ -712,17 +718,26 @@ class Game {
         this._advanceDayClock(0);   // the new zone's watchers see by tonight's light at once
 
         // Live containers — copy from spawn data so opening/depositing mutates
-        // the live instance, not the map definition. Map reload re-snapshots
-        // contents from JSON, mirroring how items/enemies behave today.
+        // the live instance, not the map definition. A container you have changed
+        // comes back as you left it (_chestRecords), not as the map has it.
         this.containers = [];
+        const chestKey = (c) => c.id || `${c.x},${c.y}`;
+        const kept = new Map(((this._chestRecords || {})[url] || []).map(r => [chestKey(r), r]));
         for (const c of this.map.containerSpawns) {
+            const r = kept.get(chestKey(c));
+            kept.delete(chestKey(c));
+            const contents = r ? r.contents : c.contents;
             this.containers.push({
                 id: c.id,
                 type: c.type,
                 x: c.x,
                 y: c.y,
-                contents: Array.isArray(c.contents) ? c.contents.slice() : []
+                contents: Array.isArray(contents) ? contents.slice() : []
             });
+        }
+        // What is left on the record is a container the map never had (a stash).
+        for (const r of kept.values()) {
+            this.containers.push({ id: r.id, type: r.type, x: r.x, y: r.y, contents: r.contents.slice() });
         }
 
         // Examinables for this map (live copy of the spawn data).
@@ -925,6 +940,31 @@ class Game {
     // on a real move between zones — never on a save restore or a new game.
     _zoneChange() {
         stepRespawns(this._respawnLists);
+        this._rememberChests?.();
+    }
+
+    // (plans/ch1-chests-stay-empty.md) Write down every container in this zone that
+    // no longer matches the map, so _loadMap can give it back as you left it.
+    // One that matches the map again drops off the record, which is also what keeps
+    // it out of the save while nothing has been touched.
+    _rememberChests() {
+        const url = this._mapUrl;
+        if (!url || !this.containers) return;
+        this._chestRecords ||= {};
+        const spawned = new Map((this.map?.containerSpawns || []).map(c => [c.id || `${c.x},${c.y}`, c]));
+        const changed = [];
+        for (const c of this.containers) {
+            const was = spawned.get(c.id || `${c.x},${c.y}`);
+            // Only what the player (or a robbery) put there is kept. A bar a soap-mine
+            // worker dropped in ({ type, source }) is the day's output, not the
+            // chest's state, and still starts over when the zone loads.
+            const contents = (c.contents || []).filter(e => !(e && typeof e === 'object' && e.source));
+            if (was && was.x === c.x && was.y === c.y
+                && JSON.stringify(was.contents || []) === JSON.stringify(contents)) continue;
+            changed.push({ id: c.id, type: c.type, x: c.x, y: c.y, contents });
+        }
+        if (changed.length) this._chestRecords[url] = changed;
+        else delete this._chestRecords[url];
     }
 
     // (plans/ks1-respawn-list.md) A map-placed enemy died: put it on this zone's
@@ -1444,6 +1484,11 @@ class Game {
                     cursorTo(i); return;
                 }
                 if (e.code === 'Space') { this._offerActivate(c.side, c.index); return; }
+                // Backspace is Space's undo: it takes ONE unit of the row under the
+                // cursor back out of the tray, the keyboard's way of tapping a tray
+                // slot. Space cannot do both jobs, because pressing it again on a
+                // staged row is how you stage a second unit.
+                if (e.code === 'Backspace') { this._offerUnstageRow(c.side, c.index); return; }
                 return;
             }
 
@@ -2516,7 +2561,9 @@ class Game {
     // requiresMsg, no swing and no turn, the same as walking into a gated door.
     // `_swinging` is what the renderer reads to arc the hero up and over.
     _interactGrapple(anchor) {
-        if (anchor.requires && !(this.inventory || []).some(s => s && s.itemDef.id === anchor.requires)) {
+        // `requires` is one id or a list that must ALL be carried (carriesAll's rule, map.js).
+        const held = new Set((this.inventory || []).map(s => s && s.itemDef && s.itemDef.id));
+        if (![].concat(anchor.requires || []).every(id => held.has(id))) {
             audio.playSfx('bump-wall');
             this._log(anchor.requiresMsg || '[You need something to get a grip here.]');
             return;
@@ -5645,6 +5692,7 @@ class Game {
         this._droppedItems = {};
         this._respawnLists = {};
         this._bossDropsGiven = new Set();
+        this._chestRecords = {};
         this._muggedIds = new Set();
         this._robbed = {};
         this._hot = {};
@@ -6789,6 +6837,20 @@ class Game {
         }
 
         if (zone === 'commit') { this._commitOffer(); return; }
+    }
+
+    // (FX33) The keyboard's way to unstage: take one unit of the row at `index`
+    // back out of its tray. It resolves the row to its tray slot and goes through
+    // _offerActivate, the very path a tap on that slot takes, so the two cannot
+    // drift. A row with nothing staged is simply left alone.
+    _offerUnstageRow(zone, index) {
+        if (!this._offerNpc || !this._offer) return;
+        const list = zone === 'theirs' ? this._offerTheirsList() : this._offerYoursList();
+        const entry = list[index]; if (!entry) return;
+        const side = zone === 'theirs' ? 'take' : 'give';
+        const at = (this._offer[side] || []).findIndex(x => sameEntry(x, entry));
+        if (at < 0) return;
+        this._offerActivate(side === 'give' ? 'giveTray' : 'takeTray', at);
     }
 
     // A quest item may only be staged when the quest actually wants it delivered
