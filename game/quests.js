@@ -46,7 +46,6 @@ export const QUESTS = {
             },
         ],
         onComplete: (game) => {
-            game._log('[You sink the hook into the rock, haul yourself up over the canyon lip, and out onto a Downtown street. Out at last.]', 'transition');
             if (game._startMainQuest2) game._startMainQuest2();   // (Phase 4) chain into MQ2 on arrival
         },
     },
