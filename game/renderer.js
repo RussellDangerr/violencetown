@@ -1668,8 +1668,9 @@ export class Renderer {
         }
 
         // (FX7) Settle which KO tags show before anything draws: nearest the
-        // player first, none overlapping. Each tag still draws with its body,
-        // so its layering in the depth sort is unchanged.
+        // player first, none overlapping.
+        // (FX48) The kept tags are drawn in one pass after every body, prop and
+        // marker, so nothing standing below or beside a body can cover its tag.
         const measure = (t) => (this.font?.measure ? this.font.measure(t, 1) : t.length * 6);
         const pcx = ppx + TILE_PX / 2, pcy = groundPy + TILE_PX / 2;
         const koLabels = [];
@@ -1677,7 +1678,7 @@ export class Renderer {
             if (a.kind !== 'enemy' || !a.dead || isAnt(a.e)) continue;
             const cx = a.px + TILE_PX / 2;
             koLabels.push({ key: a.e, cx, y: a.py + TILE_PX - 2, w: measure(koLabelText(a.e)), h: KO_LABEL_H,
-                dist: Math.hypot(cx - pcx, a.py + TILE_PX / 2 - pcy) });
+                dist: Math.hypot(cx - pcx, a.py + TILE_PX / 2 - pcy), px: a.px, py: a.py });
         }
 
         actors.sort(actorOrder);   // edge filler first, then by feet-Y, the player last on a tie
@@ -1687,6 +1688,9 @@ export class Renderer {
                 if (a.kind === 'prop') this._drawPropSprite(a.def, a.px, a.py);
                 else if (a.kind === 'player') this._drawPlayerSprite(game, a.px, a.py, now);
                 else this._drawEnemySprite(game, a.e, a.px, a.py, now);
+            }
+            for (const l of koLabels) {
+                if (this._koShown.has(l.key)) this._drawKoTag(l.key, l.px, l.py);
             }
         } finally {
             this._koShown = null;
@@ -1974,14 +1978,18 @@ export class Renderer {
             ctx.fillRect(px + 4, py + 4, TILE_PX - 8, TILE_PX - 8);
 
             // K.O. tag below — the player's permanent record of "you fought this
-            // person here." (FX7) Inside _drawActors only the tags it kept draw,
-            // so none overlap; called on its own, the tag always draws.
-            if (this.font && (!this._koShown || this._koShown.has(e))) {
-                this.font.drawText(ctx, koLabelText(e), px + TILE_PX / 2, py + TILE_PX - 2, {
-                    color: '#9a8a78', scale: 1, align: 'center',
-                });
-            }
+            // person here." (FX48) Inside _drawActors the tags draw afterwards,
+            // in one pass over every body; called on its own, the tag draws here.
+            if (!this._koShown) this._drawKoTag(e, px, py);
         }
+    }
+
+    // (FX7/FX48) The KO tag under a fallen enemy whose tile is at (px, py).
+    _drawKoTag(e, px, py) {
+        if (!this.font) return;
+        this.font.drawText(this.ctx, koLabelText(e), px + TILE_PX / 2, py + TILE_PX - 2, {
+            color: '#9a8a78', scale: 1, align: 'center',
+        });
     }
 
     // ── Wedged door (pipe-jam — zone pursuit) ───────────────────────────────
