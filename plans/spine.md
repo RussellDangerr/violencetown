@@ -18,8 +18,9 @@ there (Caelan, 2026-10-12).
 ## 1. The structure (locked)
 
 **Act 1 — Town.** Built and playable.
-Your car won't start → the Sewer → **the Sewer boss drops the Converter** → escape → the car
-runs → the bridge → the Canyon → Pike's grappling hook → Downtown → meet the Financier.
+The taxi driver's taxi won't start → the Sewer → **the Sewer boss drops the Converter** → escape →
+the taxi runs → the driver takes you across the bridge → the Canyon → Pike's grappling hook →
+Downtown → meet the Financier. (Ruled 2026-11-01, §9: the taxi is his, not yours.)
 
 **Act 2 — Carnival, Factory, Graveyard, in any order.**
 Each zone gives one **required item**, earned through that zone's quest: the Carnival's is a
@@ -34,10 +35,10 @@ Bite, Sun Man's coaching, phase 2 against Monstrous Sun Man) → credits. **The 
 
 | Beat | Binds to slot | Required item | In code today |
 |---|---|---|---|
-| The car won't start | — | — | `quests.js` `fix_car`, stage `examine_car` |
+| The taxi driver's taxi won't start | — | — | `quests.js` `fix_car`, stage `examine_car` |
 | Sewer boss | `sewer.boss` | the Converter (`catalytic_converter`) | Were-Rat, `tag: 'wererat_boss'`; the drop is `main.js` `_handleEnemyDeath` |
 | Escape the sewer | `sewer.setpiece` | — | `_sewerEscapeSetpiece` |
-| The bridge | — | — | `_openBridgeIfCarFixed`, the bridge cutscene |
+| The driver takes you across the bridge | — | — | `_openBridgeIfCarFixed`, the bridge cutscene |
 | Out of the Canyon | `canyon.npc` | the grappling hook | `canyon_escape`; Pike (SP6: the Canyon is a branch today) |
 | Meet the Financier | — | — | not a quest stage today (SP8) |
 | Carnival quest, its boss a step | `carnival.boss` | the stuffed animal (earned) | placeholder boss (first entry: Bigfoot) drops it directly — interim |
@@ -97,6 +98,7 @@ framework rather than beside it.
 | Mini-bosses, set pieces, characters, mobs | Pools | Act 1's are pools of one |
 | What is on a map: spawns, props, containers | Pool material | — |
 | Maps off the spine: Wilderness, Borgir, Diner, Casino | Exist, carry no beat | content there is pool material |
+| The oil side area, past the barricade (ruled 2026-11-01, §9) | Optional, carries no beat | name is [TEXT]; content there is pool material |
 
 ## 4. The lock clause
 
@@ -193,3 +195,18 @@ Each is a row in `roadmap-2026-09.md` §2. Answers land here, dated, and strike 
   - **Replaces** the SA-6 line that *"the one gate in the game is the finale's"* (§1). The three
     Act 2 zones stay open and the finale still asks for the three items; a quest may now gate an
     area beyond the main map.
+- **2026-11-01 — The taxi driver's taxi replaces your car, and a side area opens past the
+  barricade.** Rulings HO1R3 (option a: the taxi replaces your car; the Converter fixes his taxi,
+  and he is how you cross) and HO1R4 (option a: a new side area past the barricade, off the spine;
+  oil always unlocks it, and it is optional). Spec: `plans/taxi-driver.md`.
+  - **Replaces** the Locked row in §1 Act 1, which read: *"Your car won't start → the Sewer → the
+    Sewer boss drops the Converter → escape → the car runs → the bridge → the Canyon → Pike's
+    grappling hook → Downtown → meet the Financier."* It now reads: *"The taxi driver's taxi won't
+    start → the Sewer → the Sewer boss drops the Converter → escape → the taxi runs → the driver
+    takes you across the bridge → the Canyon → Pike's grappling hook → Downtown → meet the
+    Financier."* Three links change; nothing else in the row does.
+  - **Stands as it was:** the Sewer, the Converter (still named `catalytic_converter`, still Act 1's
+    required item), the Canyon, Pike's grappling hook and Downtown. The two §1 beat-table rows
+    "The car won't start" and "The bridge" are reworded to match.
+  - **Adds** to §3 (maps off the spine): the oil side area is optional and carries no beat. Its name
+    is [TEXT].
