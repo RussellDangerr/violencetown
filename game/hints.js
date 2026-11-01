@@ -21,6 +21,7 @@
 // broken hint must never take a turn down with it.
 
 import { buildXmbBar } from './xmb.js';
+import { takeable } from './fight-panels.js';
 
 const cheb = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
 
@@ -49,6 +50,16 @@ export const HINTS = [
         // either stumbles into or never learns at all.
         when: (game) => neighbours(game).length > 0 && game.isHidden?.(),
         text: "[They haven't seen you. People don't look behind themselves — and a pocket is easiest to pick from back here.]",
+    },
+    {
+        id: 'thieveHere',
+        // The verb the blind-spot line only hints at. Fires on the same footing
+        // as the wheel's lit Thieve slices (fight-panels.takeable), so the line
+        // never promises a pocket that is empty. Placed after blindSpot so the
+        // pacing gap teaches the stance first and the verb a few turns later.
+        when: (game) => !!game.isHidden?.()
+            && neighbours(game).some(e => Object.values(takeable(e)).some(Boolean)),
+        text: '[TEXT: Thieve hint, placeholder.]',
     },
     {
         id: 'contextualUse',
