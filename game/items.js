@@ -381,7 +381,7 @@ export const ITEMS = {
         useType: 'none',
         consumable: false,
         fallbackColor: '#8a5a2a',
-        baseValue: 20,
+        baseValue: 14,
     },
     // Carried, it does nothing yet: once ants exist they come for it, except
     // where it is too cold (plans/ic1-tigers-blood-ice-cone.md).
