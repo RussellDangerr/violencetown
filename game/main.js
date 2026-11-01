@@ -29,6 +29,7 @@ import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
 import { attack, formatDamageNumber, computeHit, elementalMult, weaponHitKind, isBackstab } from './combat.js';
 import { Enemy, spawnEnemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
+import { canBeRival, itemIdsOf, recordDefeat, kitFor, markCarrying, settleItems, clearRival } from './rivals.js'; // the enemy that beat you is remembered (pure, node-tested)
 import { isHostile, isHunting, isSewerDweller, allyAids } from './ai.js';
 import { getGreedyStep, stepEntity, findPath } from './pathing.js'; // pathfinding (greedy chase + BFS click-to-move); stepEntity = shove a character aside
 import { applyDispositionDelta, reactToTransaction } from './give-action.js';
@@ -480,6 +481,10 @@ class Game {
         // ("mapUrl" → [{ id, age }]). _loadMap leaves them out; each zone change
         // (_zoneChange) brings a share back. Persisted (left out while empty).
         this._respawnLists = {};
+        // (plans/ne1-rival-remembered.md) The enemy that beat you and took your things,
+        // per zone ("mapUrl" → { id, items, carrying? }). _loadMap hands it the items
+        // as kit. Persisted (left out while empty).
+        this._rivals = {};
         // "url|id" of bosses whose own items already dropped, so a respawned boss
         // dies with nothing. Persisted (left out while empty).
         this._bossDropsGiven = new Set();
@@ -703,8 +708,9 @@ class Game {
         const dead = deadIds(this._respawnLists, url);
         for (const s of this.map.enemySpawns) {
             if (dead.has(s.id)) continue;
-            this.enemies.push(spawnEnemy(resolveSpawn(s, this.slots), this._muggedIds, this._robbed));
+            this.enemies.push(spawnEnemy(resolveSpawn(s, this.slots), this._muggedIds, this._robbed, this._rivalKit?.(url, s.id)));
         }
+        this._rivalArrived?.(url);   // (plans/ne1-rival-remembered.md) the rival is at its post, kit and all
 
         // (zone pursuit) Re-inject any hostiles that chased you through the door.
         // They spawn at the door leading back where you came from — visible in
@@ -939,6 +945,7 @@ class Game {
     // step and each zone's list sends a share back. Called just before _loadMap
     // on a real move between zones — never on a save restore or a new game.
     _zoneChange() {
+        this._settleRival?.();
         stepRespawns(this._respawnLists);
         this._rememberChests?.();
     }
@@ -967,12 +974,54 @@ class Game {
         else delete this._chestRecords[url];
     }
 
+    // (plans/ne1-rival-remembered.md) The rival died: its record goes, and the items it
+    // was owed but not yet carrying come back as a list.
+    _clearRival(enemyObj) {
+        return clearRival(this._rivals, this._mapUrl, enemyObj.id);
+    }
+
     // (plans/ks1-respawn-list.md) A map-placed enemy died: put it on this zone's
     // respawn list. Enemies the game spawned on the fly aren't rebuilt from the
     // map anyway, so they are left off.
     _rememberKill(enemyObj) {
         if (!this._mapUrl || !(this.map?.enemySpawns || []).some(s => s && s.id === enemyObj.id)) return;
         recordKill(this._respawnLists, this._mapUrl, enemyObj.id);
+    }
+
+    // (plans/ne1-rival-remembered.md) You went down to `by` and `taken` is what the
+    // defeat took for good. An ordinary map-placed enemy now holds this zone's post
+    // as the rival; the items reach its kit the next time the zone loads.
+    _rememberRival(by, taken) {
+        if (!canBeRival(by, this.map?.enemySpawns)) return;
+        const items = itemIdsOf(taken);
+        // Already carrying (you went down to it a second time this visit): its kit grows now.
+        const how = recordDefeat(this._rivals, this._mapUrl, by.id, items);
+        if (how === 'grew' && this._rivals[this._mapUrl]?.carrying) by.loadout = [...(by.loadout ?? []), ...items];
+    }
+
+    // The kit the rival of `url` takes into the zone, for enemy `id`, or null.
+    _rivalKit(url, id) {
+        return kitFor(this._rivals, url, id);
+    }
+
+    // The zone has loaded: if its rival is there, the record reads carrying.
+    _rivalArrived(url) {
+        const r = this._rivals[url];
+        if (r && this.enemies.some(e => e.id === r.id)) markCarrying(this._rivals, url, r.id);
+    }
+
+    // Leaving a zone: the record keeps only what its rival still carries of your
+    // things, so something it used or Thieve lifted never comes back as a second copy.
+    _settleRival() {
+        const url = this._mapUrl;
+        const r = this._rivals?.[url];
+        if (!r || !r.carrying) return;
+        const live = this.enemies.find(e => e.id === r.id);
+        const spawn = (this.map?.enemySpawns || []).find(s => s && s.id === r.id);
+        if (!live || !spawn) return;
+        const base = spawnEnemy(resolveSpawn(spawn, this.slots), this._muggedIds, this._robbed).loadout;
+        r.items = settleItems(r.items, live.loadout, base);
+        if (!r.items.length) delete this._rivals[url];
     }
 
     // True the first time a boss with its own items (a slot's required item, the
@@ -4802,7 +4851,10 @@ class Game {
         // (FX30) The Ray Gun comes once: a save that already holds one (or took the
         // old floor gun) gets no second from the Alien.
         const haveGun = this._alreadyHasRayGun?.();
-        const kit = dropLoadout(enemyObj.loadout, enemyObj.x, enemyObj.y)
+        // (plans/ne1-rival-remembered.md) A rival's record ends here. What it carries is in
+        // its kit already; what it never got to carry (you beat it first) is owed too.
+        const owed = this._clearRival?.(enemyObj) ?? [];
+        const kit = dropLoadout([...(enemyObj.loadout ?? []), ...owed], enemyObj.x, enemyObj.y)
             .filter(d => !(haveGun && d.type === 'ray_gun'));
         drops.push(...kit);
         if (kit.length) {
@@ -5497,6 +5549,9 @@ class Game {
         if (c.timeSkip) this._skipTime(c.timeSkip);            // 3. time
         // 4. no status: the post-defeat debuffs did nothing and were dropped (ruling DFR1)
         const cost = c.take ? this._applyTake(c.take) : null;  // 5. taken
+        // (plans/ne1-rival-remembered.md) What went for good (not into a stash) is in the hands
+        // of whoever beat you, if that is an ordinary enemy.
+        if (cost && cost.taken.length && !c.take.recoverable) this._rememberRival?.(_ctx && _ctx.by, cost.taken);
         if (c.gift && Array.isArray(c.gift.items)) for (const id of c.gift.items) { const gd = this._resolveItemDef(id); if (gd) this._addToInventory(gd); } // 6. given (guard unknown ids)
         if (c.gift && c.gift.heal) this.playerHp = this.playerMaxHp;
         this._pendingTransition = null;                        // 7. de-aggro + resume (mirror _respawn's tail)
@@ -5691,6 +5746,7 @@ class Game {
         this._collectedItems = new Set();
         this._droppedItems = {};
         this._respawnLists = {};
+        this._rivals = {};
         this._bossDropsGiven = new Set();
         this._chestRecords = {};
         this._muggedIds = new Set();

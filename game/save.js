@@ -20,6 +20,7 @@ import { sanitizeSlots } from './rings.js';
 import { settleHands } from './items.js';
 import { sanitizeSkills } from './skills.js';
 import { sanitizeRespawnLists } from './drops.js';
+import { sanitizeRivals } from './rivals.js';
 
 // 2: two hands (plans/ws3-two-hands-left-right.md) — equipment.left joins
 // equipment.weapon, which is now the right hand.
@@ -180,6 +181,9 @@ function respawnEntries(game) {
     if (Object.keys(lists).length) out.respawnLists = lists;
     const given = game._bossDropsGiven ? [...game._bossDropsGiven] : [];
     if (given.length) out.bossDropsGiven = given;
+    // (plans/ne1-rival-remembered.md) The enemy that beat you and what it took; left out while there is none.
+    const rivals = sanitizeRivals(game._rivals);
+    if (Object.keys(rivals).length) out.rivals = rivals;
     return out;
 }
 
@@ -267,6 +271,8 @@ export function migrate(raw) {
     r.world.respawnLists = sanitizeRespawnLists(r.world.respawnLists);
     r.world.bossDropsGiven = Array.isArray(r.world.bossDropsGiven)
         ? r.world.bossDropsGiven.filter(k => typeof k === 'string') : [];
+    // An older save has no rival: nobody is carrying anything of yours.
+    r.world.rivals = sanitizeRivals(r.world.rivals);
     if (!r.world.robbed || typeof r.world.robbed !== 'object' || Array.isArray(r.world.robbed)) r.world.robbed = {};
     // ...and one level DOWN, too. The theft resolver does
     // `this._robbed[id] ||= {...}`, which does NOT replace a truthy primitive —
@@ -365,6 +371,10 @@ export async function loadInto(game, raw) {
     game._hot = raw.world.hot ?? {};
     // ...and the respawn lists, or a kill still waiting would spawn back alive.
     game._respawnLists = sanitizeRespawnLists(raw.world.respawnLists);
+    // ...but NOT the rivals yet: the map below would hand a fresh spawn the kit, and the
+    // saved enemies (loaded after it) are the ones that say who is carrying. They come back
+    // once those are in.
+    game._rivals = {};
     game._bossDropsGiven = new Set(raw.world.bossDropsGiven ?? []);
     game._chestRecords = sanitizeChestRecords(raw.world.chestRecords);
 
@@ -430,6 +440,7 @@ export async function loadInto(game, raw) {
         id: c.id, type: c.type, x: c.x, y: c.y, contents: (c.contents || []).slice(),
     }));
     game.enemies = raw.world.enemies.map(hydrateEnemy);
+    game._rivals = sanitizeRivals(raw.world.rivals);
 
     // 5. runtime tile mutations — re-applied AFTER spawn so JSON walls don't
     //    clobber them. setTile rebuilds game._tileDiffs as a side effect.

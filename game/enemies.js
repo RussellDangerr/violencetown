@@ -495,7 +495,11 @@ export function townsfolkPurse(id, seed = 0) {
 // Law 6d: a spawn the player already mugged comes back broke — no gold AND no
 // kit, so re-entering a zone can't farm either half of the wallet. Pure so it
 // stays Node-testable.
-export function spawnEnemy(spawnDef, muggedIds, robbed = null) {
+//
+// (plans/ne1-rival-remembered.md) `rivalKit`, when given, is the item ids this
+// enemy took off you. It is added LAST, after the mugged clear and the theft
+// subtraction, so a looted enemy that later beats you still carries your things.
+export function spawnEnemy(spawnDef, muggedIds, robbed = null, rivalKit = null) {
     const e = new Enemy(spawnDef);
     const fights = (e.damage ?? 0) > 0 && !e.ambient;
     if (fights && spawnDef.gold == null && spawnDef.loadout == null) {
@@ -522,6 +526,7 @@ export function spawnEnemy(spawnDef, muggedIds, robbed = null) {
         // that is what makes it clean.
         if (r.noticed) makeHostile(e);
     }
+    if (rivalKit?.length) e.loadout = [...(e.loadout ?? []), ...rivalKit];
     return e;
 }
 
