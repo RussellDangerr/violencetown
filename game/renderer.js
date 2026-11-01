@@ -4181,7 +4181,7 @@ export class Renderer {
 
         // The key legend sits between the ledger and the frame's bottom stroke:
         // centred, a touch smaller, and clear of the frame on every side.
-        const legend = this._fitText('TAB SIDE  SPACE STAGE  ENTER OFFER  ESC CLOSE', L.panel.w - 32, 0.85, 0.75);
+        const legend = this._fitText('TAB SIDE  SPACE STAGE  BKSP UNSTAGE  ENTER OFFER  ESC CLOSE', L.panel.w - 32, 0.85, 0.75);
         this.font.drawText(ctx, legend.text, L.panel.x + L.panel.w / 2, L.hintY - 2,
             { color: UI.dim, scale: legend.scale, align: 'center' });
     }
