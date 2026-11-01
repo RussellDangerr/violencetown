@@ -1444,6 +1444,11 @@ class Game {
                     cursorTo(i); return;
                 }
                 if (e.code === 'Space') { this._offerActivate(c.side, c.index); return; }
+                // Backspace is Space's undo: it takes ONE unit of the row under the
+                // cursor back out of the tray, the keyboard's way of tapping a tray
+                // slot. Space cannot do both jobs, because pressing it again on a
+                // staged row is how you stage a second unit.
+                if (e.code === 'Backspace') { this._offerUnstageRow(c.side, c.index); return; }
                 return;
             }
 
@@ -6791,6 +6796,20 @@ class Game {
         }
 
         if (zone === 'commit') { this._commitOffer(); return; }
+    }
+
+    // (FX33) The keyboard's way to unstage: take one unit of the row at `index`
+    // back out of its tray. It resolves the row to its tray slot and goes through
+    // _offerActivate, the very path a tap on that slot takes, so the two cannot
+    // drift. A row with nothing staged is simply left alone.
+    _offerUnstageRow(zone, index) {
+        if (!this._offerNpc || !this._offer) return;
+        const list = zone === 'theirs' ? this._offerTheirsList() : this._offerYoursList();
+        const entry = list[index]; if (!entry) return;
+        const side = zone === 'theirs' ? 'take' : 'give';
+        const at = (this._offer[side] || []).findIndex(x => sameEntry(x, entry));
+        if (at < 0) return;
+        this._offerActivate(side === 'give' ? 'giveTray' : 'takeTray', at);
     }
 
     // A quest item may only be staged when the quest actually wants it delivered
