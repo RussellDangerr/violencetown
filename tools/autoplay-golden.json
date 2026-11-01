@@ -6,13 +6,13 @@
       "seed": 1,
       "finished": true,
       "reason": null,
-      "fingerprint": "22bbaeb5",
-      "turn": 102,
+      "fingerprint": "e67c2b10",
+      "turn": 107,
       "deaths": 2,
       "stages": [
         {
           "id": "examine_car",
-          "turns": 12,
+          "turns": 9,
           "hpLost": 0,
           "healed": 0,
           "eats": 0,
@@ -26,35 +26,35 @@
         },
         {
           "id": "recover_converter",
-          "turns": 46,
-          "hpLost": 112,
+          "turns": 74,
+          "hpLost": 258,
           "healed": 0,
           "eats": 0,
-          "drinks": 0,
+          "drinks": 4,
           "attacks": 0,
-          "casts": 18,
-          "mpSpent": 178,
-          "throws": 1,
-          "deaths": 1,
-          "gold": 5
+          "casts": 29,
+          "mpSpent": 268,
+          "throws": 4,
+          "deaths": 2,
+          "gold": 6
         },
         {
           "id": "escape_sewer",
-          "turns": 37,
-          "hpLost": 88,
+          "turns": 5,
+          "hpLost": 6,
           "healed": 0,
           "eats": 0,
-          "drinks": 7,
+          "drinks": 2,
           "attacks": 0,
-          "casts": 10,
-          "mpSpent": 98,
-          "throws": 4,
-          "deaths": 1,
+          "casts": 2,
+          "mpSpent": 20,
+          "throws": 0,
+          "deaths": 0,
           "gold": 0
         },
         {
           "id": "return_to_car",
-          "turns": 7,
+          "turns": 19,
           "hpLost": 0,
           "healed": 0,
           "eats": 0,
@@ -69,13 +69,12 @@
       ],
       "sewerExit": {
         "bag": [
-          "mystery_meat x2",
           "foil_hat x2",
           "cardboard_cuirass",
           "catalytic_converter",
           "wererat_fur"
         ],
-        "gold": 5
+        "gold": 6
       }
     },
     "sneak": {
@@ -83,13 +82,13 @@
       "seed": 1,
       "finished": true,
       "reason": null,
-      "fingerprint": "042b0ade",
-      "turn": 167,
+      "fingerprint": "3e072686",
+      "turn": 187,
       "deaths": 2,
       "stages": [
         {
           "id": "examine_car",
-          "turns": 12,
+          "turns": 9,
           "hpLost": 0,
           "healed": 0,
           "eats": 0,
@@ -103,7 +102,7 @@
         },
         {
           "id": "recover_converter",
-          "turns": 90,
+          "turns": 101,
           "hpLost": 212,
           "healed": 0,
           "eats": 0,
@@ -131,7 +130,7 @@
         },
         {
           "id": "return_to_car",
-          "turns": 7,
+          "turns": 19,
           "hpLost": 0,
           "healed": 0,
           "eats": 0,
@@ -164,7 +163,7 @@
       "seed": 2,
       "finished": true,
       "reason": null,
-      "fingerprint": "8aefb713",
+      "fingerprint": "fa7e2be6",
       "turn": 83,
       "deaths": 0,
       "stages": [
