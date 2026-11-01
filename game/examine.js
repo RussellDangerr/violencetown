@@ -11,6 +11,70 @@ import { itemTier } from './items.js';
 import { resolveItemDef } from './item-registry.js';
 import { tileDisplayName } from './data.js';
 import { isHostile } from './ai.js';
+import { weaponClassOf } from './weapons.js';
+import { SPELLS } from './spells.js';
+import { TRICKS } from './tricks.js';
+
+// (FX44) The weapon compare block. One model for the three places a player
+// meets a weapon: the bag's inspector, this examine panel and the shop's
+// description strip (the renderer draws all three). It is built from the
+// weapon's own data and the weapon in the right hand (the hand a plain Equip
+// fills); it names nothing new. It lives here, not in inspector.js, because
+// items.js imports inspector.js and the class table is in weapons.js, which
+// imports items.js.
+export function isComparableWeapon(def) {
+    return !!def && !def.questItem && def.equipSlot === 'weapon' && typeof def.damage === 'number';
+}
+
+const plainName = d => String(d.name || d.id || '').replace(/[\[\]]/g, '');
+
+// A granted skill by the name its table carries, with what it costs.
+function grantedSkills(def) {
+    const out = [];
+    for (const id of def.grantsSpells || []) {
+        const s = SPELLS[id];
+        if (s) out.push(`${s.name} (${s.mpCost} MP)`);
+    }
+    for (const id of def.grantsTricks || []) {
+        const t = TRICKS[id];
+        if (t) out.push(`${t.name} (${t.gpCost} GP)`);
+    }
+    return out;
+}
+
+// { damage, build, grants } as three plain strings (grants is null when the
+// weapon grants nothing), or null for anything that is not a weapon. `held` is
+// the weapon in the right hand, or null/undefined for none: with none there is
+// no difference to show.
+export function weaponCompare(def, held) {
+    if (!isComparableWeapon(def)) return null;
+    const type = def.damageType && def.damageType !== 'physical' ? `${def.damageType} ` : '';
+    let damage = `${type}${def.damage} dmg`;
+    if (isComparableWeapon(held)) {
+        const diff = def.damage - held.damage;
+        damage += diff === 0
+            ? ` (same as ${plainName(held)})`
+            : ` (${diff > 0 ? '+' : ''}${diff} vs ${plainName(held)})`;
+    }
+    const cls = weaponClassOf(def);
+    const hands = cls ? cls.hands : 1;
+    const parts = [`${hands} hand${hands === 1 ? '' : 's'}`];
+    if (cls) parts.push(cls.id.replace(/_/g, ' '));
+    if (def.reach) parts.push(`reach ${def.reach}`);
+    if (def.pullDistance) parts.push(`pulls ${def.pullDistance}`);
+    const skills = grantedSkills(def);
+    return {
+        damage,
+        build: parts.join(', '),
+        grants: skills.length ? `Grants: ${skills.join(', ')}` : null,
+    };
+}
+
+// The block as lines, or null for a non-weapon.
+export function weaponCompareLines(def, held) {
+    const c = weaponCompare(def, held);
+    return c ? [c.damage, c.build, ...(c.grants ? [c.grants] : [])] : null;
+}
 
 const FACE = { up: { dx: 0, dy: -1 }, down: { dx: 0, dy: 1 }, left: { dx: -1, dy: 0 }, right: { dx: 1, dy: 0 } };
 
@@ -85,7 +149,13 @@ export function resolveExamine(game, x, y) {
         const tier = itemTier(def);
         const name = def.name || item.type;
         const body = `[${name} (${tier.name}).${def.description ? ` ${def.description}` : ''}]`;
-        return result(name, body, { panelBody: def.description || body, tierName: tier.name, tierColor: tier.color });
+        // (FX44) A weapon's panel keeps its description and adds the compare
+        // block under it (what it hits for against what you hold, hands, class,
+        // skills). The panel splits its body on newlines; the log line stays as
+        // it was.
+        const block = weaponCompareLines(def, game.equipment?.weapon);
+        const panelBody = block ? [def.description || '', '', ...block].join('\n').trim() : (def.description || body);
+        return result(name, body, { panelBody, tierName: tier.name, tierColor: tier.color });
     }
 
     const prop = (game.map?.propSpawns || []).find(p => p.x === x && p.y === y);
