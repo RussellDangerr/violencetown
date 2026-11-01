@@ -1059,7 +1059,7 @@ class Game {
         // player can drive across.
         for (let x = 14; x <= 19; x++) { this.setTile(x, 0, 12); this.setTile(x, 1, 12); }
         const br = (this.examinables || []).find(e => e.id === 'bridge');
-        if (br) br.text = "[The barricade's down and the engine's warm. North across the bridge, out of Violencetown for good. Drive.]";
+        if (br) br.text = '[TEXT]';
     }
 
     // Persist the game. Debounced to every few turns unless forced (forced on
@@ -2745,13 +2745,13 @@ class Game {
                 this._removeFromSlot(alc);
                 this.carFuel = 'alcohol';
                 audio.playSfx('pickup');
-                this._log('[You empty the whole bottle into the tank. The engine coughs, then drops into a slower, meaner idle. That should tame the jump.]', 'pickup');
+                this._log('[TEXT]', 'pickup');
                 this._render();
                 return;
             }
             this._log(this.carFuel === 'alcohol'
-                ? '[The car idles low and steady now — the alcohol is doing its work. Ready for the bridge.]'
-                : '[The car SNARLS, revving way past redline. At this speed you will never make the ramp — you will go straight through the bridge. There has to be a way to slow it down.]');
+                ? '[TEXT]'
+                : '[TEXT]');
             this._render();
             return;
         }
@@ -2765,13 +2765,13 @@ class Game {
             // (There's only one car, in town, so reaching here means we're home.)
             this._removeFromSlot(idx);
             this._sewerEscape = null;
-            this._log('[You wrench the cataclysmic converter back into place. The engine turns over!]', 'pickup');
+            this._log('[TEXT]', 'pickup');
             this.emitGameEvent('interact_car', {});                       // advances return_to_car if we're there
             if (!this.questEngine.getFlag('carFixed')) this.questEngine.forceComplete('fix_car'); // else force it home
             this._render();
             return;
         }
-        this._log("[The car won't start. Pop the hood and examine it (E).]");
+        this._log('[TEXT]');
         this._render();
     }
 
