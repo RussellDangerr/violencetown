@@ -245,7 +245,9 @@ describe('the balance bench', () => {
             const row = rows.find(r => r.type === t);
             assert.ok(row, `the bench does not list ${t}`);
             const entry = Object.values(ENTRIES).find(e => e.type === t);
-            assert.deepEqual([row.hp, row.armor, row.damage, row.gold], [entry.hp, entry.armor, entry.damage, entry.gold]);
+            // TGR1 (a): the bench counts the piece the creature puts on, as the game does.
+            const dressed = dressOne(entry.armor, entry.loadout ?? [], resolveItemDef);
+            assert.deepEqual([row.hp, row.armor, row.damage, row.gold], [entry.hp, dressed.armor, entry.damage, entry.gold]);
         }
     });
 

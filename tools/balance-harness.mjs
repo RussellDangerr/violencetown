@@ -17,6 +17,8 @@ import { HEAL_HP_FLOOR, HEAL_MIN_GOLD } from '../game/ai.js';
 // so this pure helper is safe to pull into a headless Node tool too.
 import { challengeGp, isTownsperson, townsfolkPurse } from '../game/enemies.js';
 import { SLOTS, ENTRIES, resolveSpawn, defaultPicks } from '../game/slots.js';
+import { dressOne, isWearable } from '../game/theft.js';
+import { resolveItemDef } from '../game/item-registry.js';
 import { ITEMS } from '../game/items.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -387,12 +389,21 @@ export function lintItems() {
 // One roster row from a spawn (or a registry entry), with the Enemy ctor's
 // defaults for anything it leaves out.
 function rosterRow(zone, id, s) {
+    // (plans/tg1-enemies-wear-armour.md, TGR1 a) A fighter puts one piece of its
+    // armour on at spawn, which moves its armour and takes it out of the kit. The
+    // bench asks the same function the game does, so it can never disagree.
+    const fights = (s.damage ?? ENEMY_DEFAULT_DAMAGE) > 0 && !s.ambient && !s.vendor;
+    const wearsArmour = (s.equipped ?? []).some(x => isWearable(resolveItemDef(x)));
+    const dressed = fights && !wearsArmour && Array.isArray(s.loadout)
+        ? dressOne(s.armor ?? 0, s.loadout, resolveItemDef)
+        : { armor: s.armor ?? 0, loadout: s.loadout ?? null, worn: null };
     return {
         zone,
         id,
         type: s.type,
         hp: s.hp ?? 100,
-        armor: s.armor ?? 0,
+        armor: dressed.armor,
+        worn: dressed.worn,
         damage: s.damage ?? ENEMY_DEFAULT_DAMAGE,
         // (FX13) A townsperson's purse comes from spawnEnemy, not the map, so the
         // bench draws the same one the game does, keyed on the same id.
@@ -407,7 +418,7 @@ function rosterRow(zone, id, s) {
         // Law 6f: pass through an authored loadout (potions/gear this
         // enemy carries) so challengeGp sees the whole kit; no map
         // authors one yet, so this is a no-op today.
-        loadout: s.loadout ?? null,
+        loadout: dressed.loadout,
     };
 }
 
