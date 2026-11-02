@@ -79,6 +79,24 @@ describe('the pine art', () => {
 describe('the maps', () => {
     const border = (file) => JSON.parse(readFileSync(new URL(`../game/${file}`, import.meta.url), 'utf8')).border;
 
+    test('Town, the Carnival and Downtown mix the tall tree with the pine', () => {
+        for (const file of ['town', 'carnival', 'downtown']) {
+            const b = border(`${file}-map.json`);
+            assert.deepEqual(b.prop, ['tree', 'pine'], file);
+            const seen = new Set();
+            for (let y = -6; y < 0; y++) for (let x = -6; x < 30; x++) seen.add(borderPropKey(b, x, y));
+            assert.deepEqual([...seen].sort(), ['pine', 'tree'], `${file} past its north edge`);
+        }
+    });
+
+    test('the Graveyard, Wilderness and Frozen Area keep their single tree', () => {
+        for (const file of ['graveyard', 'wilderness', 'frozen']) {
+            const b = border(`${file}-map.json`);
+            assert.equal(b.prop, 'tree', file);
+            for (let y = -6; y < 40; y++) for (let x = -6; x < 60; x++) assert.equal(borderPropKey(b, x, y), 'tree');
+        }
+    });
+
     test('every border prop, single or in a list, has art', () => {
         for (const file of ['town', 'carnival', 'downtown', 'graveyard', 'wilderness', 'frozen']) {
             const keys = borderPropKeys(border(`${file}-map.json`));
