@@ -330,11 +330,11 @@ export const ITEMS = {
         fallbackColor: '#9a8a6a',
         baseValue: 0,
     },
-    // Act 2's three required items (plans/spine.md §1, SP1: names open). Shaped
+    // Act 2's three required items (plans/spine.md §1, §9; named 2026-10-30). Shaped
     // like the Converter; each belongs to its zone's boss slot (slots.js).
     act2_item_a: {
         id: 'act2_item_a',
-        name: '[ITEM A]',
+        name: 'Stuffed Animal',
         description: '[TEXT]',
         category: 'quest',
         useType: 'none',
@@ -346,7 +346,7 @@ export const ITEMS = {
     },
     act2_item_b: {
         id: 'act2_item_b',
-        name: '[ITEM B]',
+        name: 'Flux Capacitor',
         description: '[TEXT]',
         category: 'quest',
         useType: 'none',
@@ -358,7 +358,7 @@ export const ITEMS = {
     },
     act2_item_c: {
         id: 'act2_item_c',
-        name: '[ITEM C]',
+        name: 'Soul Crystal',
         description: '[TEXT]',
         category: 'quest',
         useType: 'none',
