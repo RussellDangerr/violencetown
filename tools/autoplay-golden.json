@@ -6,8 +6,8 @@
       "seed": 1,
       "finished": true,
       "reason": null,
-      "fingerprint": "e67c2b10",
-      "turn": 107,
+      "fingerprint": "264213d9",
+      "turn": 108,
       "deaths": 2,
       "stages": [
         {
@@ -26,30 +26,30 @@
         },
         {
           "id": "recover_converter",
-          "turns": 74,
-          "hpLost": 258,
-          "healed": 0,
-          "eats": 0,
-          "drinks": 4,
-          "attacks": 0,
-          "casts": 29,
-          "mpSpent": 268,
-          "throws": 4,
-          "deaths": 2,
-          "gold": 6
-        },
-        {
-          "id": "escape_sewer",
-          "turns": 5,
-          "hpLost": 6,
+          "turns": 57,
+          "hpLost": 106,
           "healed": 0,
           "eats": 0,
           "drinks": 2,
           "attacks": 0,
-          "casts": 2,
-          "mpSpent": 20,
-          "throws": 0,
-          "deaths": 0,
+          "casts": 17,
+          "mpSpent": 168,
+          "throws": 1,
+          "deaths": 1,
+          "gold": 5
+        },
+        {
+          "id": "escape_sewer",
+          "turns": 23,
+          "hpLost": 109,
+          "healed": 0,
+          "eats": 0,
+          "drinks": 4,
+          "attacks": 0,
+          "casts": 11,
+          "mpSpent": 100,
+          "throws": 3,
+          "deaths": 1,
           "gold": 0
         },
         {
@@ -69,12 +69,10 @@
       ],
       "sewerExit": {
         "bag": [
-          "foil_hat x2",
-          "cardboard_cuirass",
           "catalytic_converter",
           "wererat_fur"
         ],
-        "gold": 6
+        "gold": 5
       }
     },
     "sneak": {
@@ -82,8 +80,8 @@
       "seed": 1,
       "finished": true,
       "reason": null,
-      "fingerprint": "3e072686",
-      "turn": 187,
+      "fingerprint": "165b7a73",
+      "turn": 180,
       "deaths": 2,
       "stages": [
         {
@@ -102,28 +100,28 @@
         },
         {
           "id": "recover_converter",
-          "turns": 101,
-          "hpLost": 212,
+          "turns": 100,
+          "hpLost": 200,
           "healed": 0,
           "eats": 0,
           "drinks": 2,
           "attacks": 0,
-          "casts": 21,
-          "mpSpent": 190,
+          "casts": 20,
+          "mpSpent": 180,
           "throws": 0,
           "deaths": 2,
           "gold": 0
         },
         {
           "id": "escape_sewer",
-          "turns": 58,
-          "hpLost": 68,
-          "healed": 9,
-          "eats": 1,
-          "drinks": 2,
-          "attacks": 5,
-          "casts": 9,
-          "mpSpent": 86,
+          "turns": 52,
+          "hpLost": 29,
+          "healed": 24,
+          "eats": 0,
+          "drinks": 4,
+          "attacks": 1,
+          "casts": 10,
+          "mpSpent": 96,
           "throws": 5,
           "deaths": 0,
           "gold": 0
@@ -147,11 +145,10 @@
         "bag": [
           "mystery_meat",
           "shoe_bags",
-          "gator_tail",
           "soap x2",
-          "foil_hat x2",
+          "boardwalk_burger",
           "rock x3",
-          "cardboard_cuirass x2",
+          "foil_hat",
           "catalytic_converter",
           "wererat_fur"
         ],
@@ -163,7 +160,7 @@
       "seed": 2,
       "finished": true,
       "reason": null,
-      "fingerprint": "fa7e2be6",
+      "fingerprint": "1d001afe",
       "turn": 83,
       "deaths": 0,
       "stages": [
@@ -233,7 +230,6 @@
           "rock",
           "foil_hat",
           "latex_gloves",
-          "cardboard_cuirass",
           "soap"
         ],
         "weapon": "lion_whip",

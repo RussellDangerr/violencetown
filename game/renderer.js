@@ -3036,7 +3036,23 @@ export class Renderer {
         this.font.drawText(ctx, clip(`HP ${t.hp}/${t.maxHp}`), tx, y, { color: UI.text, scale: 1 });
         y += LH;
         this.font.drawText(ctx, clip(`GP ${t.gold}`), tx, y, { color: UI.gold, scale: 1 });
+        y += LH;
+        // (plans/tg1-enemies-wear-armour.md) Their armour and what they have on.
+        // Both labels are placeholders for Caelan to name.
+        this.font.drawText(ctx, clip(`[TEXT] ${t.armor}`), tx, y, { color: UI.text, scale: 1 });
         y += LH + 2;
+        this.font.drawText(ctx, '[TEXT]', tx, y, { color: UI.dim, scale: 1 });
+        y += LH - 2;
+        if (!(t.worn ?? []).length) {
+            this.font.drawText(ctx, '-', tx, y, { color: UI.dim, scale: 1 });
+            y += LH;
+        } else {
+            for (const k of t.worn) {
+                this.font.drawText(ctx, clip(k.name.replace(/[\[\]]/g, '').toUpperCase()), tx, y, { color: UI.text, scale: 1 });
+                y += LH;
+            }
+        }
+        y += 2;
         this.font.drawText(ctx, 'KIT', tx, y, { color: UI.dim, scale: 1 });
         y += LH - 2;
         if (!t.kit.length) {

@@ -102,6 +102,52 @@ export function kitTake(victim, resolve) {
     return pick.def;
 }
 
+// ── Putting a piece on ──────────────────────────────────────────────────────
+//
+// (plans/tg1-enemies-wear-armour.md) Gear needs something to take. At spawn an
+// enemy whose kit lists armour puts on ONE piece of it: it leaves the kit, joins
+// `equipped`, and that piece's number is ALL the armour the enemy has. gearTake
+// below is the other half: lift the piece and they are left at 0.
+
+// Armour turns blows and has no wear timer. Bandage and Soap have armour only
+// while a timer runs: consumables, not clothes. A weapon is never "worn".
+export function isWearable(def) {
+    return !!def && (def.armor ?? 0) > 0 && !def.equipDuration && !((def.damage ?? 0) > 0);
+}
+
+// Which of `loadout` goes on: the heaviest by gearWeight (the weight Thieve
+// ranks a take by), ties broken by authored order. Never random, so the player
+// can predict it. Returns { index, def } or null.
+export function pieceToWear(loadout, resolve) {
+    let best = null;
+    (loadout ?? []).forEach((id, index) => {
+        const def = typeof id === 'string' ? resolve(id) : null;
+        if (!isWearable(def)) return;
+        if (!best || gearWeight(def) > gearWeight(best.def)) best = { index, def };
+    });
+    return best;
+}
+
+// Dress one enemy's numbers. Pure: { armor, loadout } in; { armor, loadout, worn }
+// out, `worn` being the id that went on (or null).
+//
+// A kit with no armour in it changes nothing: the enemy keeps its number, a
+// negative softness number included. A kit that lists armour puts the heaviest
+// piece on, and the enemy's own authored armour is replaced by that piece's
+// number alone (TG1R4), so lifting the piece leaves them at 0.
+//
+// `stolen` is the ids Thieve already lifted off this enemy. The choice is made
+// BEFORE the theft is subtracted from the kit, so a piece you stole stays stolen
+// instead of the next-heaviest piece quietly going on in its place; that enemy
+// stands at 0, the same as straight after the lift.
+export function dressOne(armor, loadout, resolve, stolen = []) {
+    const pick = pieceToWear(loadout, resolve);
+    if (!pick) return { armor, loadout, worn: null };
+    const rest = loadout.filter((_, i) => i !== pick.index);
+    if (stolen.includes(pick.def.id)) return { armor: 0, loadout: rest, worn: null };
+    return { armor: pick.def.armor, loadout: rest, worn: pick.def.id };
+}
+
 // Removing gear moves their real numbers — steal the brute's plate and then
 // fight a softer brute. Armor is clamped into Law 3's band and damage floored at
 // zero so a theft can never author an illegal entity.

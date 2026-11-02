@@ -130,7 +130,12 @@ describe('resolveSpawn: the map says where, the registry says who', () => {
         assert.equal(e.boss, true);
         assert.equal(e.sewerDweller, true);
         assert.equal(e.gold, 44);
-        assert.equal(e.entity.armor, 6);
+        // TGR1 (a), TG1R1 (b), TG1R4 (b): bosses wear too. It puts on the heaviest
+        // armour in its kit, the Cardboard Cuirass, and that piece is all it has;
+        // the authored 6 stays in the registry for the balance check to read.
+        assert.equal(ENTRIES.wererat.armor, 6);
+        assert.deepEqual(e.equipped, ['wooden_sword', 'cardboard_cuirass']);
+        assert.equal(e.entity.armor, ITEMS.cardboard_cuirass.armor);
         assert.equal(e.damage, 12);
         assert.equal(e.slot, 'sewer.boss');
         assert.equal(slotIdOf(e), 'sewer.boss');

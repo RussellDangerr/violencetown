@@ -3,9 +3,9 @@
 //
 // The ramp route buys a bottle of alcohol from Hooch. The autoplay golden keeps
 // what the quest run and the sneak carry out of the Sewer (`sewerExit`: the bag
-// and the gold). Sold to Hooch at his own disposition, that bag plus that gold
-// has to cover the bottle's price, so a change to a price, a drop or a band
-// cannot strand the route unseen.
+// and the gold). Sold to Hooch at his own disposition, the sneak's bag plus its
+// gold has to cover the bottle's price, so a change to a price, a drop or a band
+// cannot strand the route unseen. (TG1R5: the fighter is no longer held to it.)
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -44,7 +44,11 @@ describe('the haul out of the Sewer pays for the alcohol', () => {
     const alcohol = resolveItemDef('alcohol');
     const price = buyPrice(alcohol, hooch.disposition);
 
-    for (const script of ['quest', 'sneak']) {
+    // TG1R5 (a): the fighter's Sewer haul is no longer required to cover it. The
+    // Were-Rat and the Fungus King now wear the armour they used to drop, so the
+    // fighter walks out with less, and the alcohol stays 23 GP: a fighter finds
+    // the rest elsewhere. The sneak, who does not fight for it, is still held to it.
+    for (const script of ['sneak']) {
         test(`the ${script} run's bag and gold cover it at Hooch's disposition`, () => {
             const exit = golden.runs[script].sewerExit;
             assert.ok(exit, `the golden has no sewerExit for the ${script} run`);
