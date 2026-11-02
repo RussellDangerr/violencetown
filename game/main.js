@@ -3154,6 +3154,10 @@ class Game {
             return;
         }
 
+        // (fx37) A throw item's Use (inspector.js armsThrow) arms the throw and waits for a direction; it
+        // is neither spent nor resolved here (that was a "no direction" line).
+        if (item.useType === 'throw' && !item.drinkable) { this._armThrow(this.selectedSlot); return; }
+
         if (item.effect === 'cure_sludge') this._soapUsedThisTurn = true;
         if (item.effect === 'heal') audio.playSfx('heal'); // [audio] healing item used
 
@@ -3184,6 +3188,17 @@ class Game {
         if (!itemDef || !itemDef.pullsAggro) return;
         emitNoise(this._earshot(), x, y, NOISE.throwImpact);
         this._log('[The rock clatters off down the tunnel.]');
+    }
+
+    // (fx37) Arm a throw from the bag slot: whatever menu is open closes, and the
+    // next direction key (or tap on the throw prompt) throws it.
+    _armThrow(slot) {
+        const stack = this.inventory[slot];
+        if (!stack) { this.state = STATE.IDLE; this._render(); return; }
+        this.selectedSlot = slot;
+        this.state = STATE.ITEM_THROW_DIR;
+        this._log(`[Throw ${stack.itemDef.name} — pick a direction]`);
+        this._render();
     }
 
     _doThrow(dir) {
@@ -6323,11 +6338,12 @@ class Game {
             switch (action.id) {
                 case 'use':
                 case 'equip': {
+                    // (fx37) A throw item arms the throw instead: the device closes and
+                    // the next direction throws it (a rock is `consumable:true`, but
+                    // nothing is spent until it is thrown).
+                    if (action.arms) { this._armThrow(idx); audio.playSfx('menu-confirm'); return; }
                     // Route through resolveUse like canonical _doItemUse, but GATE the
-                    // removal the same way — the paused device supplies no throw/melee
-                    // DIRECTION, so resolveUse is a no-op for those and the item must
-                    // survive (a rock is `consumable:true` yet nothing was thrown; the
-                    // pipe is a non-consumable tool). Only a self-use (heal) or an equip
+                    // removal the same way. Only a self-use (heal) or an equip
                     // (moves onto the body) truly consumes it here, and only a real use
                     // costs a world beat — closing the free-heal-while-paused gap without
                     // wasting a turn on a no-op.
