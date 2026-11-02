@@ -418,7 +418,7 @@ export const ITEMS = {
         consumable: false,
         questItem: true,
         fallbackColor: '#9a7b4a',
-        baseValue: 1000,
+        baseValue: 15,
     },
 
     // ── Poition (a potion, a poison — the pun is the point) ──────────────────

@@ -34,7 +34,7 @@ export const DIALOGUES = {
             { id: 'lore', label: "Ask how long he's been down here", once: true, delta: 4,
               reply: '"Floated my wagon across when this was still a RIVER. She sank. I woke on the mud — still here. The water did somethin\' to me. Don\'t age, don\'t die, don\'t leave. Just prospect."' },
             { id: 'buy', label: 'Ask about the rope (the grappling hook)', once: true,
-              reply: '"My climbin\' rope? She\'ll haul you clean out of this pit. Cost you a thousand — give or take how much I like you. Open the till and we\'ll talk. Press E."' },
+              reply: '[TEXT]' },
             { id: 'deal', label: 'Offer to clear the critters for the rope', once: true,
               onPick: (game, npc) => {
                   if (!game.questEngine) return;
