@@ -736,6 +736,11 @@ export const PROP_SPRITES = {
     // never when merely passing alongside. shadowRx/Ry size the trunk's pool.
     tree: { sheet: 'tinyTown', sx: 4 * 16, sy: 0, sw: 16, sh: 32, wTiles: 1, hTiles: 2, shadowRx: 12, shadowRy: 4.5 },
 
+    // Tiny Town's one-cell green pine (col 4, row 2: the small cousin under the tall tree's
+    // two cells; tinyTown is packed, so the stride is 16). It varies the forest past a
+    // map's edge (`border.prop: ["tree", "pine"]`, borderPropKey below).
+    pine: { sheet: 'tinyTown', sx: 4 * 16, sy: 2 * 16, sw: 16, sh: 16, wTiles: 1, hTiles: 1, shadowRx: 8, shadowRy: 3 },
+
     // rpgUrban's double-arm streetlight — 1x2 cells (col 3, rows 6-7), the
     // tree's shape. It was a one-cell STREETLIGHT tile drawing the squat
     // lamp-with-a-red-lens at (1,7), which read as a parking meter; the real
@@ -790,6 +795,28 @@ export const PROP_SPRITES = {
     // exactly what it was. No ground shadow: it is a door, not an object.
     vaultDoor: { sheet: 'tinyTown', sx: 5 * 16, sy: 10 * 16, sw: 16, sh: 16, wTiles: 1, hTiles: 1, shadow: false },
 };
+
+// The props a map's border may draw past its edge, as a list. `border.prop` is one
+// PROP_SPRITES name or a list of them (the forest mix); no prop is an empty list.
+export function borderPropKeys(border) {
+    const p = border?.prop;
+    return p ? (Array.isArray(p) ? p : [p]) : [];
+}
+
+// Which prop the off-map cell (wx, wy) draws. A single name is that name for every
+// cell, as before. A list picks one per cell from a hash of the cell's own position:
+// a pure function of where it is, so the same cell is the same tree every frame and
+// every visit. idHash alone leaves a checkerboard in its low bit (the key is "x,y"),
+// so its result goes through murmur's finalizer before it is split.
+export function borderPropKey(border, wx, wy) {
+    const keys = borderPropKeys(border);
+    if (keys.length < 2) return keys[0] ?? null;
+    let h = idHash({ x: wx, y: wy });
+    h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b);
+    h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35);
+    h ^= h >>> 16;
+    return keys[(h >>> 0) % keys.length];
+}
 
 // ── Emote balloons (Kenney Emote Pack, Pixel Style 1) ───────────────────────
 // Column index into the `emotes` strip (game/assets-placeholder/kenney/
