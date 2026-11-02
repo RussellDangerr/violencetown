@@ -13,7 +13,7 @@ const SS = 2;
 // (fx36) How wide the food line on the wheel's Eat slice may be: the chord of the slice
 // at its second text row, from the ring geometry in layout.js (ring 1, 60 to 88).
 const EAT_SLICE_TEXT_W = 96;
-import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, itemSprite, CONTAINER_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES, MARK_SPRITES, spriteVariant, spriteFrame, tileFrame, idHash, TINY_INK } from './sprites.js';
+import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, itemSprite, CONTAINER_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES, MARK_SPRITES, spriteVariant, spriteFrame, tileFrame, idHash, borderPropKeys, borderPropKey, fillerSprite, TINY_INK } from './sprites.js';
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
 import { ROOT, selectedNode, activeRing, activeIndex, decisionPath, previewChildren, affectedTiles, verbApplies, isCombatActive, flapperDeflection, defaultVerb } from './wheel-model.js'; // (sunburst wheel) + the bump telegraph
 import {
@@ -1658,14 +1658,21 @@ export class Renderer {
         // the off-map rows just past the south edge are left bare (the canopy of
         // the row beyond already covers them). Without this the trees painted
         // over the map's last row and buried every south exit.
-        const fillerProp = game.map?.border?.prop ? PROP_SPRITES[game.map.border.prop] : null;
-        if (fillerProp) {
+        // The prop may be a list (the forest mix): each off-map cell picks one by its
+        // own position, so it is the same tree every frame. The bare rows past the
+        // south edge follow the TALLEST in the list, so they stay one clean strip.
+        const border = game.map?.border;
+        const fillerKeys = borderPropKeys(border).filter(k => fillerSprite(k));
+        if (fillerKeys.length) {
             const mw = game.map.width, mh = game.map.height;
+            const fillerH = Math.max(...fillerKeys.map(k => fillerSprite(k).hTiles));
             for (let j = vp.span.jMin - 3; j <= vp.span.jMax + 3; j++) {
                 for (let i = vp.span.iMin - 3; i <= vp.span.iMax + 3; i++) {
                     const wx = game.playerX + i, wy = game.playerY + j;
                     if (game.map.isInBounds(wx, wy)) continue;
-                    if (fillerSkips(wx, wy, mw, mh, fillerProp.hTiles)) continue;
+                    if (fillerSkips(wx, wy, mw, mh, fillerH)) continue;
+                    const fillerProp = fillerSprite(borderPropKey(border, wx, wy));
+                    if (!fillerProp) continue;
                     const px = vp.origin.x + i * TILE_PX - this._scrollX;
                     const py = vp.origin.y + j * TILE_PX - this._scrollY;
                     actors.push({ kind: 'prop', def: fillerProp, px, py, feetY: py + TILE_PX, filler: true });

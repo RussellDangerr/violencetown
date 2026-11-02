@@ -791,6 +791,43 @@ export const PROP_SPRITES = {
     vaultDoor: { sheet: 'tinyTown', sx: 5 * 16, sy: 10 * 16, sw: 16, sh: 16, wTiles: 1, hTiles: 1, shadow: false },
 };
 
+// Art drawn ONLY past a map's edge, never placed in a map, so it is not a PROP_SPRITES
+// entry (the prop-coverage and examine tests ask of those that a map places them and
+// that they have a name; nothing off the map can be placed or examined).
+//   pine: Tiny Town's one-cell green pine (col 4, row 2: the small cousin under the tall
+//   tree's two cells; tinyTown is packed, so the stride is 16). It varies the forest past
+//   a map's edge (`border.prop: ["tree", "pine"]`, borderPropKey below).
+export const FILLER_SPRITES = {
+    pine: { sheet: 'tinyTown', sx: 4 * 16, sy: 2 * 16, sw: 16, sh: 16, wTiles: 1, hTiles: 1, shadowRx: 8, shadowRy: 3 },
+};
+
+// The art a border prop name draws: a placed prop's, or filler-only art.
+export function fillerSprite(key) {
+    return PROP_SPRITES[key] ?? FILLER_SPRITES[key] ?? null;
+}
+
+// The props a map's border may draw past its edge, as a list. `border.prop` is one
+// PROP_SPRITES name or a list of them (the forest mix); no prop is an empty list.
+export function borderPropKeys(border) {
+    const p = border?.prop;
+    return p ? (Array.isArray(p) ? p : [p]) : [];
+}
+
+// Which prop the off-map cell (wx, wy) draws. A single name is that name for every
+// cell, as before. A list picks one per cell from a hash of the cell's own position:
+// a pure function of where it is, so the same cell is the same tree every frame and
+// every visit. idHash alone leaves a checkerboard in its low bit (the key is "x,y"),
+// so its result goes through murmur's finalizer before it is split.
+export function borderPropKey(border, wx, wy) {
+    const keys = borderPropKeys(border);
+    if (keys.length < 2) return keys[0] ?? null;
+    let h = idHash({ x: wx, y: wy });
+    h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b);
+    h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35);
+    h ^= h >>> 16;
+    return keys[(h >>> 0) % keys.length];
+}
+
 // ── Emote balloons (Kenney Emote Pack, Pixel Style 1) ───────────────────────
 // Column index into the `emotes` strip (game/assets-placeholder/kenney/
 // emotes_style1.png, packed by tools/gen_emote_sheet.py). Drawn above an NPC's

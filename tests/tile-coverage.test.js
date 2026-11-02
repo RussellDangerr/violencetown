@@ -16,7 +16,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { TILES, TILE_BY_ID } from '../game/data.js';
-import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, SHEETS, PROP_SPRITES } from '../game/sprites.js';
+import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, SHEETS, fillerSprite } from '../game/sprites.js';
 import { readAlpha, seeThroughCount } from './helpers/png-alpha.js';
 
 const GAME_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'game');
@@ -159,16 +159,19 @@ describe('tile coverage', () => {
             const b = loadMap(file).border;
             if (!b) continue;
             if (!(b.tile in allTileMaps)) bad.push(`${file}: border tile ${b.tile} has no sprite`);
-            if (b.prop && !PROP_SPRITES[b.prop]) bad.push(`${file}: border prop '${b.prop}' has no art`);
+            for (const k of [].concat(b.prop ?? [])) {   // one name, or a list (the forest mix)
+                if (!fillerSprite(k)) bad.push(`${file}: border prop '${k}' has no art`);
+            }
         }
         assert.deepEqual(bad, [], bad.join('\n'));
     });
 
     test('the fillers are the table in plans/screen-fill.md (change the two together)', () => {
         const want = {
-            'town-map.json':       { tile: 13, prop: 'tree' },
-            'carnival-map.json':   { tile: 13, prop: 'tree' },
-            'downtown-map.json':   { tile: 13, prop: 'tree' },
+            // The forest mixes the tall tree with a one-cell pine (APR2), picked per cell.
+            'town-map.json':       { tile: 13, prop: ['tree', 'pine'] },
+            'carnival-map.json':   { tile: 13, prop: ['tree', 'pine'] },
+            'downtown-map.json':   { tile: 13, prop: ['tree', 'pine'] },
             'graveyard-map.json':  { tile: 52, prop: 'tree' },
             'wilderness-map.json': { tile: 52, prop: 'tree' },
             'frozen-map.json':     { tile: 70, prop: 'tree' },
