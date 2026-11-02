@@ -34,7 +34,38 @@ import { dressOne, isWearable } from './theft.js';
 // "Alien Invasion" never reads as "Boss" anywhere; anyone else keeps its type.
 export function shownName(enemy) {
     if (!enemy) return enemy;
-    return enemy.boss ? labelOf(enemy) : enemy.type;
+    if (enemy.boss) return labelOf(enemy);
+    return townName(enemy) || enemy.type;
+}
+
+// (FX38, plans/fx38-townsfolk-names.md) A named townsperson goes by the name
+// their dialogue uses. Named = a dialogue and a real name: a bracketed
+// placeholder ("[TEXT]") and an unnamed Violencian keep their type.
+export function townName(enemy) {
+    if (!enemy || enemy.boss || !enemy.dialogueId) return null;
+    const n = typeof enemy.name === 'string' ? enemy.name.trim() : '';
+    return n && !/[[\]]/.test(n) ? n : null;
+}
+
+// (FX38) A log line is bracketed, and item and character names carry their own
+// brackets, so lines read "[Dropped [Rock]]". Drop every bracket nested inside
+// another; the outer pair stays. A stray "]" with nothing open is kept.
+export function unnestBrackets(text) {
+    let depth = 0, out = '';
+    for (const ch of String(text)) {
+        if (ch === '[') { if (depth === 0) out += ch; depth++; }
+        else if (ch === ']') {
+            if (depth === 0) out += ch;
+            else { depth--; if (depth === 0) out += ch; }
+        }
+        else out += ch;
+    }
+    return out;
+}
+
+// "The Violencian" but "Knuckles": a name takes no article.
+export function theShown(enemy) {
+    return townName(enemy) || `The ${shownName(enemy)}`;
 }
 
 const DEFAULT_SIGHT = 8;
@@ -192,7 +223,7 @@ export class Enemy {
         this.damage     = damage;
         this.sightRange = sightRange;
         this.state      = 'idle'; // legacy chase state: 'idle' | 'chasing' | 'returning'
-        this.entity     = new Entity({ name: `[${shownName({ boss, name, type })}]`, hp, armor });
+        this.entity     = new Entity({ name: `[${shownName({ boss, name, type, dialogueId })}]`, hp, armor });
         // Its live defence buffs soak every blow its body takes (combat.js takeDamage).
         Object.defineProperty(this.entity, 'guardOf', {
             value: () => sumBuffStat(this.buffs, 'defence'), enumerable: false,
@@ -297,6 +328,8 @@ export class Enemy {
     // (FX4) The name the log, the target panel and the KO tag use (shownName
     // above): a boss's one name, anyone else's type.
     get shownName() { return shownName(this); }
+    // (FX38) "The Violencian" for the unnamed, "Knuckles" for a name.
+    get shownThe() { return theShown(this); }
 
     // Buff management — mirrors Game.addBuff / removeBuff / hasBuff /
     // _tickBuffs at main.js:147-167 so both sides of combat use the same

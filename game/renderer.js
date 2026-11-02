@@ -4337,7 +4337,7 @@ export class Renderer {
 
         if (!sel) {
             const m = mood(d);
-            const who = String(npc.type).toUpperCase();
+            const who = String(shownName(npc)).toUpperCase();
             const line = npc._container
                 ? `THE ${who} IS OPEN.`
                 : `${who} IS ${m.mood.toUpperCase()}.`;
@@ -4494,7 +4494,7 @@ export class Renderer {
         // smiling face, an ADORING label and a full meter.
         const isContainer = !!npc._container;
         if (!isContainer) this._drawMoodFace(L.panel.x + 24, L.panel.y + 20, mood(d).face);
-        this.font.drawText(ctx, String(npc.type).toUpperCase(),
+        this.font.drawText(ctx, String(shownName(npc)).toUpperCase(),
             L.panel.x + (isContainer ? 8 : 44), L.panel.y + 10, { color: UI.gold, scale: 2 });
         this.font.drawText(ctx, `GP ${game.gold ?? 0}`,
             L.panel.x + L.panel.w - 44, L.panel.y + 10, { color: UI.gold, scale: 2, align: 'right' });
@@ -4577,7 +4577,7 @@ export class Renderer {
         const npc = game._offerNpc;
         const d = npc.disposition ?? 0;
 
-        this.font.drawText(ctx, `${String(npc.type).toUpperCase()}'S GOODS`,
+        this.font.drawText(ctx, `${String(shownName(npc)).toUpperCase()}'S GOODS`,
             L.theirs[0].x, L.colHeadY, { color: UI.dim, scale: 1 });
         this.font.drawText(ctx, 'YOUR SATCHEL',
             L.yours[0].x, L.colHeadY, { color: UI.dim, scale: 1 });
