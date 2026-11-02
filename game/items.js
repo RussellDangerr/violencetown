@@ -13,6 +13,7 @@
 
 import { isHostile, isSewerDweller } from './ai.js';
 import { burnGold } from './trade.js';
+import { isWearable, gearWeight } from './theft.js';
 import { equipOptions } from './inspector.js';   // (FX14) the GEAR chooser's rows
 
 // ── Poition (all six stats wired) ────────────────────────────────────────────
@@ -1092,5 +1093,31 @@ export function applyKitItem(def, drinker, sewerDweller) {
     }
     if (def.effect === 'heal') { gain(def.healAmount ?? 0); return def; }
     if (def.sewerFare && typeof def.damage === 'number') { gain(flip ? def.damage : -def.damage); return def; }
+
+    // (plans/ek1-hurt-enemy-uses-kit.md) A Defence Poition rides the buff list
+    // as a rider, exactly as it does for the player; Entity.takeDamage reads it.
+    if (kitDefenceValue(def) > 0) {
+        const b = poitionBuff(def.poition, false);
+        drinker.addBuff(b.id, 'Defence Poition', b.turns, 'buff', { stat: b.stat, amount: b.amount });
+        return def;
+    }
+    // An armour piece goes ON: its number is added to what the enemy has, and it
+    // joins `equipped`, so Thieve's Gear can take it and a kill does not drop it.
+    if (isWearable(def)) {
+        ent.armor = (ent.armor ?? 0) + def.armor;
+        drinker.equipped = [...(Array.isArray(drinker.equipped) ? drinker.equipped : []), def.id];
+        return def;
+    }
     return null;
+}
+
+// What a kit poition gives as DEFENCE, 0 for anything else (a poison, another stat).
+export function kitDefenceValue(def) {
+    if (!def || !def.poition || def.poition.stat !== 'defence') return 0;
+    return def.poition.amount > 0 ? def.poition.amount : 0;
+}
+
+// How heavy a kit armour piece is, by Thieve's own weight; 0 if it is not wearable.
+export function kitGearWeight(def) {
+    return isWearable(def) ? gearWeight(def) : 0;
 }
