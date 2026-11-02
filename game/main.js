@@ -15,7 +15,7 @@ import { puddleTiles, layPuddle, puddleAt, dryPuddles } from './puddles.js';   /
 import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef } from './items.js';
 import { WEAPONS, weaponClassOf } from './weapons.js';
 import { resolveItemDef } from './item-registry.js';
-import { tickBuffList, sumBuffStat, worldBeatPlan } from './buffs.js';
+import { tickBuffList, sumBuffStat, worldBeatPlan, weakenedBuff } from './buffs.js';
 import { RINGS, FUSIONS } from './ring-data.js';
 import {
     unlockedSlots, resolveAdjacencies, slottedActives, aggregatePassives,
@@ -36,7 +36,7 @@ import { applyDispositionDelta, reactToTransaction } from './give-action.js';
 import { getDialogue } from './dialogue.js';
 import { manhattan, clamp } from './utils.js';
 import { RNG, randomSeed } from './rng.js';
-import { pickSlots, defaultPicks, resolveSpawn, requiredDropFor, dropLineFor } from './slots.js';
+import { pickSlots, defaultPicks, resolveSpawn, requiredDropFor, dropLineFor, FINALE_PHASE1 } from './slots.js';
 import { hasSave, readSaveRaw, writeSave, loadInto, clearSave } from './save.js';
 import { QuestEngine } from './quests.js';
 import { doExamine, resolveExamine } from './examine.js';
@@ -4184,7 +4184,10 @@ class Game {
         if (this.enemies.some(e => e._isSummon)) {
             for (const e of this.enemies) if (e._isSummon) e._summonTurnsLeft--;
             const gone = this.enemies.filter(e => e._isSummon && e._summonTurnsLeft <= 0);
-            for (const e of gone) this._log(`[${e.type || 'The summon'} slinks back into the crowd.]`);
+            for (const e of gone) {
+                if (this._finaleSummonLeft?.(e)) continue;   // Sun Man leaves with a line of his own
+                this._log(`[${e.type || 'The summon'} slinks back into the crowd.]`);
+            }
             if (gone.length) this.enemies = this.enemies.filter(e => !(e._isSummon && e._summonTurnsLeft <= 0));
         }
 
@@ -4928,6 +4931,7 @@ class Game {
         // (Optional-called, like _saveMoment, so the stand-in games tests lift
         // this method onto need not carry them.)
         this._rememberKill?.(enemyObj);
+        this._finaleOnDeath?.(enemyObj);   // (FIN2) the Financier falling is phase 1 won
         // A spine slot's required item drops from whoever filled the slot (the
         // Sewer's boss drops the converter); rat kills feed the escape waves.
         // A boss's own items drop only the first time it dies: once it respawns
@@ -5134,6 +5138,8 @@ class Game {
     // wheel's offensive verbs actually land on the people around you.
     _onEntityHarmed(target, { kind = 'attack' } = {}) {
         if (!target || !target.entity || !target.entity.isAlive() || target._ally) return;
+        // (FIN2) Hitting the Financier first starts the same fight talking to him does.
+        if (this._finaleOnHarmed?.(target)) return;
         if (isHostile(target)) {                     // already hostile — nothing to provoke,
             struck(target, { x: this.playerX, y: this.playerY });   // but it turns to face the blow
             return;
@@ -5392,9 +5398,14 @@ class Game {
         if (!spot) { this._log('[No room beside you to summon anything.]'); return false; }
         const name = opts.summonName || (type.charAt(0).toUpperCase() + type.slice(1));
         this._summonSeq = (this._summonSeq || 0) + 1;
+        // (FIN2) An authored ally may wear another type's picture and go by a name of
+        // its own: `summonLook` is the type the sprite is looked up by. The lion
+        // passes none, so its type stays its name exactly as before.
         const ally = new Enemy({
             id: `summon_${type}_${this.turn}_${this._summonSeq}`,
-            type: name, x: spot.x, y: spot.y,
+            type: opts.summonLook || name, x: spot.x, y: spot.y,
+            name: opts.summonLook ? name : undefined,
+            dialogueId: opts.dialogueId, tag: opts.tag,
             // Pass through undefined so the Enemy ctor's own defaults apply — a
             // summon is a combatant, so Law 0's hp 100 is its floor too. The old
             // `|| 30` silently undercut The Hundred for any trick omitting the field
@@ -5409,9 +5420,76 @@ class Game {
         ally.state = 'idle';
         ally._isSummon = true;
         ally._summonTurnsLeft = turns;
+        if (opts.aiding) ally._aiding = true;   // (FIN2) already in the fight, no need to see it first
         this.enemies.push(ally);
-        this._log(`[You whistle sharp — ${name} bounds out of the crowd, all teeth.]`, 'combat');
+        this._log(opts.summonLine ?? `[You whistle sharp — ${name} bounds out of the crowd, all teeth.]`, 'combat');
         return true;
+    }
+
+    // ── The finale, phase 1 (plans/fin2-financier-fight.md) ─────────────────────
+
+    _isFinancier(e) {
+        return !!e && e.tag === FINALE_PHASE1.financierTag;
+    }
+
+    // Start the fight with the Financier: he turns on you and Sun Man comes in at
+    // your side for a few turns (FINR3). Idempotent: a Financier already hostile,
+    // or already down, starts nothing. Returns true when it began a fight.
+    _beginFinalFight(financier) {
+        if (!this._isFinancier(financier) || !financier.entity?.isAlive() || isHostile(financier)) return false;
+        financier.allegiance = 'hostile';       // authoritative: routes him to the chase (npc.js)
+        financier.fsmState = 'HOSTILE';
+        financier.state = 'chasing';
+        financier.ambient = false;
+        this._log(`[${financier.shownThe} turns on you!]`, 'combat');
+        const sun = FINALE_PHASE1.sunMan;
+        this._spawnSummon('sun_man', FINALE_PHASE1.sunManTurns, {
+            summonName: sun.name, summonLook: sun.type, summonHp: sun.hp, summonDamage: sun.damage,
+            tag: FINALE_PHASE1.sunManTag, dialogueId: sun.dialogueId, aiding: true,
+            summonLine: '[TEXT]',
+        });
+        return true;
+    }
+
+    // `_onEntityHarmed` asks first: a blow at the calm Financier starts the same fight.
+    _finaleOnHarmed(target) {
+        return this._isFinancier(target) && this._beginFinalFight(target);
+    }
+
+    // The summon timer ran out. Sun Man leaves with a line of his own, and the
+    // Financier he fought beside you is weakened for the rest of the fight (FINR7 b).
+    // Returns true when `e` was Sun Man, so the lion's slink-away line is skipped.
+    _finaleSummonLeft(e) {
+        if (!e || e.tag !== FINALE_PHASE1.sunManTag) return false;
+        this._log('[TEXT]', 'combat');
+        const fin = this.enemies.find(x => this._isFinancier(x) && x.entity.isAlive());
+        if (fin) {
+            const w = weakenedBuff(FINALE_PHASE1.defenceDrop);
+            fin.addBuff(w.id, w.name, w.turns, w.type, { stat: w.stat, amount: w.amount });   // shows as a red W over him
+        }
+        this.emitGameEvent('sun_man_leaves', { weakened: !!fin });
+        return true;
+    }
+
+    // The Financier fell: phase 1 is won. The flag is saved with the quest state;
+    // the event fires the first time only, so a Financier who comes back (KS1) and
+    // falls again does not re-announce it.
+    _finaleOnDeath(e) {
+        if (!this._isFinancier(e) || !this.questEngine) return;
+        const first = this.questEngine.state.flags[FINALE_PHASE1.flag] !== FINALE_PHASE1.won;
+        this.questEngine.state.flags[FINALE_PHASE1.flag] = FINALE_PHASE1.won;
+        if (first) this.emitGameEvent('finale_phase1_won', { id: e.id });
+    }
+
+    // The Financier beat you: rebuild him at his post (full health, no
+    // weakening, calm until you talk to him) and send Sun Man away, so the whole
+    // fight can start again. Only the Financier's retry comes here.
+    _finaleReset(boss) {
+        if (!this._isFinancier(boss)) return;
+        this.enemies = this.enemies.filter(e => e.tag !== FINALE_PHASE1.sunManTag && !this._isFinancier(e));
+        const spawn = (this.map?.enemySpawns || []).find(s => s.id === boss.id);
+        if (!spawn) return;   // he chased you out of the vault: the vault rebuilds him when you return
+        this.enemies.push(spawnEnemy(resolveSpawn(spawn, this.slots), this._muggedIds, this._robbed));
     }
 
     // (Lion Whip) Yank a struck enemy up to `dist` tiles toward the player, one
@@ -5711,6 +5789,7 @@ class Game {
         this.buffs = [];                          // clean slate (matches _respawn)
         this._pendingTransition = null;           // don't ghost-load a queued transition after the retry
         this._deAggroAll();
+        this._finaleReset?.(boss);                // (FIN2) the Financier starts over, Sun Man and all
         this.state = STATE.IDLE;
         this._log('[Down but not out. Regroup and finish it.]', 'transition');
         this._render();

@@ -93,6 +93,18 @@ export const ENTRIES = {
     // it heals nothing, so his kit never spends it.
     alien_invasion: alienInvasion(),
     the_deity:      { ...placeholderBoss(), name: 'The Deity' },
+    // The finale's phase 1 (plans/fin2-financier-fight.md). The Financier is a
+    // Locked character, so he is a fixed spawn in the vault (`{ id, entry, x, y }`),
+    // not a pool entry. The stand-in boss block, unchanged, wearing the bank's
+    // banker. His `_boss` tag is what runs the boss retry when he beats you.
+    financier: {
+        ...placeholderBoss(),
+        type: 'Banker',
+        name: 'Financier',
+        tag: 'financier_boss',
+        dialogueId: 'financier_vault',
+        behavior: ['IDLE'],
+    },
     // The Alien's allies (ABR2: a few he funds). Law 5's rally pays for any
     // hurt fighter on his side near him; these are on his side because they
     // carry no behaviour list, so they are born hostile. Placed by hand beside
@@ -137,6 +149,28 @@ export const ENTRIES = {
         resist: resistancesOf('cold'),
         examine: '[TEXT]',
     },
+};
+
+// The finale's phase 1 in one place (plans/fin2-financier-fight.md). Both are
+// stand-ins until Caelan tunes them: Sun Man stays three turns (his note), and
+// the Financier then loses `defenceDrop` of defence for the rest of the fight
+// (FINR7 b). 8 is twice the armour he stands up with (his kit dresses him in the
+// cardboard cuirass: 4): with 4 the weakest gear, a wooden sword and nothing worn,
+// loses to his own healing; with 8 it wins (tests/finale-phase1.test.js).
+//
+// Sun Man (FINR3) is the encounter's own ally, summoned when the fight begins
+// (main.js _beginFinalFight), never placed on a map, so he is not a registry
+// entry. His damage is a stand-in, well past the hired lion's 25; his look is a
+// borrowed townsperson (`type` is the picture's key).
+export const FINALE_PHASE1 = {
+    sunManTurns: 3,
+    defenceDrop: 8,
+    sunMan: { type: 'Stranger', name: 'Sun Man', hp: 100, damage: 30, dialogueId: 'sun_man' },
+    sunManTag: 'sun_man',
+    financierTag: 'financier_boss',
+    // The quest flag that says phase 1 was won, and its value.
+    flag: 'finalePhase1',
+    won: 'won',
 };
 
 // One frozen-area mook: its numbers, the chart's cold row, and placeholder

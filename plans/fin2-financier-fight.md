@@ -18,11 +18,10 @@ event the next slices read. Every word the player reads is `[TEXT]` until Caelan
   - `financier`: a copy of the Act 2 stand-in boss block (`placeholderBoss()`), the look of the
     bank's banker, tag `financier_boss` (a `_boss` tag, so losing to him runs the boss retry),
     a `dialogueId` of his own, and a calm `IDLE` stance until you talk to him.
-  - `sun_man`: the ally. A stand-in look borrowed from an existing person, `[TEXT]`-free name
-    "Sun Man" (the canon name), the damage placeholder, tag `sun_man`.
-  - `FINALE_PHASE1`: the three numbers of the encounter in one place: turns Sun Man stays (3,
-    Caelan's note), the damage he does (in his entry), and how much defence the Financier loses
-    when he goes.
+  - `FINALE_PHASE1`: the encounter's numbers in one place: the turns Sun Man stays (3, Caelan's
+    note), the defence the Financier loses when he goes, and Sun Man's own block (the canon name,
+    a look borrowed from an existing person, and the damage placeholder). Sun Man is summoned by
+    the fight and placed on no map, so he is not a registry entry.
 - **`game/vault-map.json`** — one spawn: the Financier, three tiles in front of the door you
   come in by.
 - **`game/dialogue.js`** — the Financier's talk (`[TEXT]`) with one choice that starts the fight,
@@ -69,9 +68,21 @@ the vault one the fight?), so it is flagged, not decided.
 
 ## Placeholders (all listed for Caelan)
 
-- The Financier's numbers are the stand-in boss block, unchanged: 100 HP, armour 6, damage 12.
-- Sun Man's damage (30) and the defence the Financier loses (6, all his armour) are stand-ins.
+- The Financier's numbers are the stand-in boss block, unchanged: 100 HP, damage 12, armour 6 as
+  authored (his kit dresses him in the cardboard cuirass, so he stands up with 4, as the Were-Rat
+  does).
+- Sun Man's damage (30) and the defence the Financier loses (8) are stand-ins. 8 is not a round
+  guess: measured with the real fight, a drop of 4 (all the armour he stands up with) loses to his
+  own healing when you carry only the starting sword and wear nothing; 8 wins. Caelan retunes
+  either.
 - Sun Man's look is a borrowed townsperson. Every line is `[TEXT]`.
+
+## How winnable it is
+
+The test plays the real fight (the game's own turn, enemy AI and boss healing) with the arrow
+keys, for every weapon in the game at 0, 5 and 10 armour (the most the pieces add to is 10), ten
+seeds each. No bandages, poitions or backstabs: only swords and armour, so a player who uses
+anything else does better than the table. Every cell wins.
 
 ## Acceptance
 
