@@ -106,24 +106,49 @@ export function healPurchase(hp, maxHp, gold) {
 // because some of it gets used.
 export const KIT_HP_FLOOR = 70;   // at or below this, drink before you swing
 
-export function kitChoice(hp, maxHp, defs, healValueOf, alreadyHealing = false) {
+// (plans/ek1-hurt-enemy-uses-kit.md) Past the heals, a hurt enemy reaches for what
+// else it carries. `extra` is injected for the same reason `healValueOf` is:
+//   defenceOf(def)    -> the defence a drinkable poition gives, 0 for anything else
+//   gearWeightOf(def) -> how heavy a wearable armour piece is, 0 for anything else
+//   defended          -> a defence buff is already running on it
+// Order: heal, then poition, then armour. A kit that holds ANY heal never falls
+// through, so an enemy with a heal behaves exactly as it did before.
+// Returns { index, def, heal, kind } with kind 'heal' | 'defence' | 'armour'.
+export function kitChoice(hp, maxHp, defs, healValueOf, alreadyHealing = false, extra = null) {
     if (!defs || !defs.length) return null;
     if (hp >= maxHp) return null;       // nothing to heal
     if (hp > KIT_HP_FLOOR) return null; // not hurt enough to bother
-    // Do not double-dose. Found in live play: a kitted enemy ate three items on
-    // three consecutive turns, burning a mushroom while the sludge sack it had
-    // just drunk was still regenerating it. Waiting for the dose to finish looks
-    // smarter AND leaves more of the kit on the corpse — which is Law 6f's whole
-    // reward for rushing an enemy down instead of letting it settle in.
-    if (alreadyHealing) return null;
 
     let best = null;
     for (let i = 0; i < defs.length; i++) {
         const heal = healValueOf(defs[i]) || 0;
         if (heal <= 0) continue;                    // inedible, or poison to this drinker
-        if (!best || heal > best.heal) best = { index: i, def: defs[i], heal };
+        if (!best || heal > best.heal) best = { index: i, def: defs[i], heal, kind: 'heal' };
     }
-    return best;
+    if (best) {
+        // Do not double-dose. Found in live play: a kitted enemy ate three items on
+        // three consecutive turns, burning a mushroom while the sludge sack it had
+        // just drunk was still regenerating it. Waiting for the dose to finish looks
+        // smarter AND leaves more of the kit on the corpse — which is Law 6f's whole
+        // reward for rushing an enemy down instead of letting it settle in.
+        return alreadyHealing ? null : best;
+    }
+    if (!extra) return null;
+
+    if (!extra.defended && extra.defenceOf) {
+        for (let i = 0; i < defs.length; i++) {
+            if ((extra.defenceOf(defs[i]) || 0) > 0) return { index: i, def: defs[i], heal: 0, kind: 'defence' };
+        }
+    }
+    if (extra.gearWeightOf) {
+        let gear = null;
+        for (let i = 0; i < defs.length; i++) {
+            const w = extra.gearWeightOf(defs[i]) || 0;
+            if (w > 0 && (!gear || w > gear.w)) gear = { index: i, def: defs[i], heal: 0, kind: 'armour', w };
+        }
+        if (gear) { delete gear.w; return gear; }
+    }
+    return null;
 }
 
 // ── Law 5 — bosses spend, not pool ──────────────────────────────────────────

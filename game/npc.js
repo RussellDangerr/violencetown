@@ -23,7 +23,7 @@ import { manhattan, chebyshev } from './utils.js';
 import { getGreedyStep, stepEntity, findPath, fleeFrom, fleeStep } from './pathing.js';
 import { perceives, nextAwareness, VERDICT, BLIND_SWEEP_BEATS } from './perception.js';
 import { healPurchase, kitChoice, isSewerDweller, bossSpend, BOSS_RALLY_RANGE, isHunting } from './ai.js';
-import { ITEMS, kitHealValue, applyKitItem } from './items.js';
+import { ITEMS, kitHealValue, applyKitItem, kitDefenceValue, kitGearWeight } from './items.js';
 import { WEAPONS } from './weapons.js';
 import { burnGold, transferGold } from './trade.js';
 import { spreadParanoia } from './give-action.js';
@@ -75,7 +75,10 @@ function useKit(npc, messages) {
     const pick = kitChoice(
         npc.entity.hp, npc.entity.maxHp, kitDefs,
         (d) => kitHealValue(d, dweller),
-        (npc.buffs ?? []).some(b => (b.dmg ?? 0) < 0));   // already regenerating?
+        (npc.buffs ?? []).some(b => (b.dmg ?? 0) < 0),    // already regenerating?
+        // (plans/ek1-hurt-enemy-uses-kit.md) no heal to use: poition, then armour.
+        { defenceOf: kitDefenceValue, gearWeightOf: kitGearWeight,
+          defended: (npc.buffs ?? []).some(b => b.stat === 'defence' && (b.amount ?? 0) > 0) });
     // `heal` on a report is the HP it actually gave (0 for a poition, whose
     // heal arrives tick by tick); main.js floats it over whoever it healed.
     const hpBeforeKit = npc.entity.hp;

@@ -104,7 +104,11 @@ class Entity {
     // A hit that is not a number (a weapon with no damage) counts as 0, so it
     // lands the minimum: NaN through Math.max would leave hp NaN, never 0.
     takeDamage(rawDamage) {
-        const dealt = Math.max(1, hitNumber(rawDamage) - this.armor);
+        // (plans/ek1-hurt-enemy-uses-kit.md) An enemy's live Defence Poition adds to
+        // its armour for as long as it runs. `guardOf` is set by the Enemy that owns
+        // this body (not an own-enumerable field); the player and bare entities have none.
+        const guard = typeof this.guardOf === 'function' ? this.guardOf() : 0;
+        const dealt = Math.max(1, hitNumber(rawDamage) - (this.armor + guard));
         this.hp     = Math.max(0, this.hp - dealt);
         if (this.hp === 0) this.alive = false;
         return dealt;

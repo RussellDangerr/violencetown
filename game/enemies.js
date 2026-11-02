@@ -18,7 +18,7 @@ import { Entity, attack, formatDamageNumber } from './combat.js';
 import { manhattan } from './utils.js';
 import { stepEntity, fleeStep } from './pathing.js';
 import { tickNpcState } from './npc.js';
-import { tickBuffList } from './buffs.js';
+import { tickBuffList, sumBuffStat } from './buffs.js';
 import { parseCapabilities, deriveAllegiance, isHunting } from './ai.js';
 import { makeHostile } from './give-action.js';   // (theft) one spelling of "turned against you"
 import { FACING_VECTORS } from './perception.js';
@@ -193,6 +193,10 @@ export class Enemy {
         this.sightRange = sightRange;
         this.state      = 'idle'; // legacy chase state: 'idle' | 'chasing' | 'returning'
         this.entity     = new Entity({ name: `[${shownName({ boss, name, type })}]`, hp, armor });
+        // Its live defence buffs soak every blow its body takes (combat.js takeDamage).
+        Object.defineProperty(this.entity, 'guardOf', {
+            value: () => sumBuffStat(this.buffs, 'defence'), enumerable: false,
+        });
 
         // Leash anchor — where this enemy spawned. A chaser that strays too far
         // from home (or loses sight of the player for too long) drops aggro and
