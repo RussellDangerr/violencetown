@@ -58,6 +58,7 @@ town/townie-mince                 Violencian                  100     -80      0
 town/townie-praline               Violencian                  100     -80      0        6              1              1      -
 town/townie-s                     Violencian                  100     -80      0        5              1              1      -
 town/townie-w                     Violencian                  100     -80      0        2              1              1      -
+vault/vault-financier             Banker                      100       6     12      148              8              3      9
 
 --- WEAPONS (raw damage) ---
 id               damage  type
@@ -97,6 +98,7 @@ graveyard                 48
 sewer                    101
 sewer-north               10
 town                      30
+vault                     44
 sinks: burnGold('heal'|'trick'), bribes/buyouts via transferGold
 
 --- LINT ---
