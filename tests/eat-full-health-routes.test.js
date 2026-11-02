@@ -63,7 +63,6 @@ const HUD = hudLayout(VP, { fight: false });
 
 const m = {
     _useXmbCurrent:        liveMethod('_useXmbCurrent() {', { buildXmbBar, resolveXmbSelection, STATE }),
-    _refusesFullHealthEat: liveMethod('_refusesFullHealthEat(def) {', { xmbCategoryOf }),
     _tapXmbBar:            liveMethod('_tapXmbBar(pt) {', { buildXmbBar, resolveXmbSelection, xmbBarLayout, HIT_SLOP, audio }),
     _pointInRect:          liveMethod('_pointInRect(p, r, slop = 0) {'),
     _selectItem:           liveMethod('_selectItem(slot) {', { STATE }),
@@ -229,19 +228,21 @@ describe('the bag\'s Eat row', () => {
 });
 
 describe('who the refusal covers', () => {
-    test('only a healing food at full health', () => {
-        const at = (hp) => game({ hp, inventory: [] });
-        assert.equal(at(100)._refusesFullHealthEat(HOT_DOG), true);
-        assert.equal(at(99)._refusesFullHealthEat(HOT_DOG), false);
-        assert.equal(at(100)._refusesFullHealthEat(PLAIN_FOOD), false);
-        assert.equal(at(100)._refusesFullHealthEat(ITEMS.bandage), false);
-        assert.equal(at(100)._refusesFullHealthEat(ITEMS.rock), false);
-        assert.equal(at(100)._refusesFullHealthEat(null), false);
+    test('a healing drink from the bag is not an Eat row, so it is not refused', () => {
+        const g = game({ hp: 100, inventory: [stack(ITEMS.bandage)] });
+        g.selectedSlot = 0;
+        g._selectItem(0);
+        g._openItemOverlay();
+        assert.equal(g.overlayOptions[0].label, 'Drink');
+        g._doItemUse = function (def) { this.used.push(def.id); };
+        g.pressOverlayEnter();
+        assert.deepEqual(g.used, ['bandage']);
+        assert.ok(!g.logs.includes('[TEXT]'));
     });
 
-    test('main.js still leaves _doItemUse itself free of the check (the wheel shares it)', () => {
+    test('main.js leaves _doItemUse itself free of the check (the wheel shares it)', () => {
         const start = mainSrc.indexOf('_doItemUse(item) {', classAt);
         const body = mainSrc.slice(start, mainSrc.indexOf('\n    }', start));
-        assert.ok(!body.includes('_refusesFullHealthEat'));
+        assert.ok(!body.includes('[TEXT]') && !body.includes('playerMaxHp'));
     });
 });

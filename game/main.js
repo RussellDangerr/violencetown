@@ -3086,8 +3086,11 @@ class Game {
 
         switch (opt.action) {
             case 'use':
-                // (fx55) Full health: the food stays in the bag and no turn passes.
-                if (this._refusesFullHealthEat(item)) { this.state = STATE.ITEM_SELECTED; this._render(); return; }
+                // (fx55) The Eat row at full health: the food stays in the bag, no turn passes.
+                // (The row is labelled Eat only for a healing food; see _openItemOverlay.)
+                if (opt.label === 'Eat' && this.playerHp >= this.playerMaxHp) {
+                    this._log('[TEXT]'); this.state = STATE.ITEM_SELECTED; this._render(); return;
+                }
                 this._doItemUse(item);
                 break;
             case 'ctx': {
@@ -3715,20 +3718,14 @@ class Game {
             if (!tile) { this.selectedSlot = -1; this._log(`[No target in range for ${def.name}.]`); this._render(); return; }
             this._doThrowAt(tile);
         } else {
-            if (this._refusesFullHealthEat(def)) { this.selectedSlot = -1; this._render(); return; }
+            // (fx55) Full health: a healing food stays in the bag and no turn passes. Only the
+            // Eat column's healers; drinks and foods that heal nothing go through as before.
+            // The check sits here and in _pickOverlay, not in _doItemUse, which the wheel shares.
+            if (sel.column.key === 'eat' && def.effect === 'heal' && this.playerHp >= this.playerMaxHp) {
+                this.selectedSlot = -1; this._log('[TEXT]'); this._render(); return;
+            }
             this._doItemUse(def);
         }
-    }
-
-    // (fx55) A food that heals is not eaten at full health: the bar's tap / Enter and the
-    // bag's Eat row call this before they spend anything. Logs the refusal and returns
-    // true; no turn passes. Only Eat-column healers count, so throws, drinks, poitions and
-    // foods that heal nothing are never refused, and _doItemUse (the wheel's too) is not touched.
-    _refusesFullHealthEat(def) {
-        if (!def || def.effect !== 'heal' || xmbCategoryOf(def) !== 'eat') return false;
-        if (this.playerHp < this.playerMaxHp) return false;
-        this._log('[TEXT]');
-        return true;
     }
 
     // (XMB) Nearest alive hostile within Chebyshev `range`; else null (never waste

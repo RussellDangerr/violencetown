@@ -9,12 +9,14 @@ the food stays in the bag, no turn passes, and one log line says why.
 
 ## How
 
-- `game/main.js`: one small helper, `_refusesFullHealthEat(def)`, true (and logs the line)
-  only when the item is a food on the bar's Eat column (`xmbCategoryOf(def) === 'eat'`), its
-  effect is `heal`, and the player is at full HP.
-- It is called from the two routes themselves, not from the shared `_doItemUse`:
-  - `_useXmbCurrent` (the bar's tap and Enter both land here), on the non-throw branch;
-  - `_pickOverlay` case `use` (the bag's Eat row).
+- `game/main.js`: a check of two plain conditions, written in each route itself (no shared
+  helper, so the older tests that lift these methods out of `main.js` keep working):
+  - `_useXmbCurrent` (the bar's tap and Enter both land here), non-throw branch: refuses when
+    the bar's column is Eat, the item's effect is `heal`, and HP is full;
+  - `_pickOverlay` case `use`: refuses when the row is labelled Eat (the overlay labels a row
+    Eat only for a healing food) and HP is full.
+- A refusal logs `[TEXT]`, leaves the food in the bag, passes no turn, and (bag) closes the
+  list back to the selected slot.
 - `_doItemUse` stays untouched, so the wheel, throws, drinks, poitions, bandages and the pipe
   behave exactly as before.
 - `tests/eat-full-health-routes.test.js`: lifts the real methods out of `main.js` and drives
