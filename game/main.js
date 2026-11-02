@@ -28,7 +28,7 @@ import { itemActions, equipOptions, inspectorUsesRect } from './inspector.js';  
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
 import { attack, formatDamageNumber, computeHit, elementalMult, weaponHitKind, isBackstab } from './combat.js';
-import { Enemy, spawnEnemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
+import { Enemy, spawnEnemy, resolveEnemyTurns, resolveAmbientTurns, unnestBrackets } from './enemies.js';
 import { canBeRival, itemIdsOf, recordDefeat, kitFor, markCarrying, settleItems, clearRival } from './rivals.js'; // the enemy that beat you is remembered (pure, node-tested)
 import { isHostile, isHunting, isSewerDweller, allyAids } from './ai.js';
 import { getGreedyStep, stepEntity, findPath } from './pathing.js'; // pathfinding (greedy chase + BFS click-to-move); stepEntity = shove a character aside
@@ -5122,7 +5122,7 @@ class Game {
         enemyObj.state = 'chasing';     // immediately hostile, no re-acquire delay
         enemyObj.disposition = -50;     // betrayed: head-meter goes angry + re-bribing costs more
         enemyObj._wasFlipped = false;   // ...but they CAN be won back if you make amends
-        this._log(`[The ${enemyObj.shownName || enemyObj.type} turns on you!]`, 'combat');
+        this._log(`[${enemyObj.shownThe || `The ${enemyObj.shownName || enemyObj.type}`} turns on you!]`, 'combat');
     }
 
     // ── Reaction bus ──────────────────────────────────────────────────────────
@@ -5144,7 +5144,7 @@ class Game {
         if (target.vendor) { target.vendor = false; target.stock = null; }   // a vendor you struck won't keep shop
         if (target.ambient) target.ambient = false;  // a provoked townsperson fights for real, not as ambient
         if (typeof target.disposition === 'number') target.disposition = Math.min(target.disposition, -50);
-        this._log(`[The ${target.shownName || target.type || target.entity.name} turns on you!]`, 'combat');
+        this._log(`[${target.shownThe || `The ${target.shownName || target.type || target.entity.name}`} turns on you!]`, 'combat');
     }
 
     // Total damage-reduction from worn armor: every equipped body-zone piece's
@@ -6717,8 +6717,8 @@ class Game {
         this.state = STATE.TRADE;
         audio.playSfx('menu-open');
         if (npc._container)   this._log(`[You pry open the ${npc.type}.]`, 'transition');
-        else if (npc.vendor)  this._log(`[${npc.type} opens the till. "What'll it be?"]`, 'transition');
-        else                  this._log(`[You open your satchel to ${npc.type}.]`, 'transition');
+        else if (npc.vendor)  this._log(`[${npc.shownName || npc.type} opens the till. "What'll it be?"]`, 'transition');
+        else                  this._log(`[You open your satchel to ${npc.shownName || npc.type}.]`, 'transition');
         this._render();
     }
 
@@ -7208,8 +7208,8 @@ class Game {
         const deal = npc._container
             ? `[You take ${back.join(' and ') || 'nothing'} from the ${npc.type}.`
             : back.length
-                ? `[You hand ${npc.type} ${out.join(' and ') || 'nothing'} for ${back.join(' and ')}.`
-                : `[You hand ${npc.type} ${out.join(' and ')}.`;
+                ? `[You hand ${npc.shownName || npc.type} ${out.join(' and ') || 'nothing'} for ${back.join(' and ')}.`
+                : `[You hand ${npc.shownName || npc.type} ${out.join(' and ')}.`;
         const mood = R.points > 0 ? ` Disposition +${R.points}.]`
                    : R.points < 0 ? ` They take it, and remember. Disposition ${R.points}.]`
                    : `]`;
@@ -7234,12 +7234,12 @@ class Game {
             // Gold reached a threshold it is not allowed to carry them across.
             // Distinct from having no room at all: they would still warm to a
             // GIFT, just not to money.
-            this._log(`[${npc.type} takes the gold, but it buys nothing more. Some things aren't for sale.]`);
+            this._log(`[${npc.shownName || npc.type} takes the gold, but it buys nothing more. Some things aren't for sale.]`);
         } else if (R.goldUnspent > 0 && R.fromGold === 0) {
-            this._log(`[${npc.type} pockets the gold. It buys nothing he wants.]`);
+            this._log(`[${npc.shownName || npc.type} pockets the gold. It buys nothing he wants.]`);
         }
         if (R.itemUnspent > 0 && R.fromItems === 0) {
-            this._log(`[${npc.type} is already as fond of you as he can be.]`);
+            this._log(`[${npc.shownName || npc.type} is already as fond of you as he can be.]`);
         }
     }
 
@@ -7409,15 +7409,17 @@ class Game {
             .replace(/…/g, '...')         // ellipsis → three dots
             .replace(/[‘’]/g, "'")   // smart single quotes
             .replace(/[“”]/g, '"');  // smart double quotes
+        // (FX38) No bracket nested inside a bracketed line: "[Dropped [Rock]]".
+        const flat = unnestBrackets(ascii);
 
         // Mirror into the in-canvas strip (ring buffer, newest at end).
-        this._logStripMessages.push({ text: ascii, category, bornAt: performance.now() });
+        this._logStripMessages.push({ text: flat, category, bornAt: performance.now() });
         if (this._logStripMessages.length > this._STRIP_MAX) {
             this._logStripMessages.shift();
         }
 
         // Full history for the [L] log modal (newest at end, capped).
-        this._logHistory.push({ text: ascii, category });
+        this._logHistory.push({ text: flat, category });
         if (this._logHistory.length > this._LOG_HISTORY_MAX) {
             this._logHistory.shift();
         }
