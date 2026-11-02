@@ -4377,9 +4377,40 @@ class Game {
         const bar = buildXmbBar(this.inventory);
         const col = bar.columns.find(c => c.key === cat);
         if (!col || !col.items.length) return -1;
+        // (fx36) The wheel's Eat is not the bar's pick: it eats the food that best
+        // fills the missing HP, and there is none to eat at full health.
+        if (cat === 'eat') { const pick = this.eatChoice(); return pick ? pick.slot : -1; }
         const wantId = this.xmbPick ? this.xmbPick[cat] : null;
         const item = col.items.find(it => it.itemDef.id === wantId) || col.items[0];
         return item.slot;
+    }
+
+    // (fx36) The food the wheel's Eat would eat now: { slot, itemDef, heal }, or null.
+    // Hurt: the smallest heal that covers the missing HP, else the biggest food there
+    // is (ties go to the earlier bag slot). Full health: null, so no food is wasted.
+    // A food that heals nothing is never picked while there is a healer to pick.
+    eatChoice() {
+        const col = buildXmbBar(this.inventory).columns.find(c => c.key === 'eat');
+        if (!col) return null;
+        const missing = this.playerMaxHp - this.playerHp;
+        const foods = col.items.map(it => ({
+            slot: it.slot, itemDef: it.itemDef,
+            heal: it.itemDef.effect === 'heal' ? (it.itemDef.healAmount ?? 0) : 0,
+        }));
+        if (missing <= 0) return null;
+        const healers = foods.filter(f => f.heal > 0);
+        if (!healers.length) return foods[0] || null;
+        const covers = healers.filter(f => f.heal >= missing).sort((a, b) => a.heal - b.heal || a.slot - b.slot);
+        if (covers.length) return covers[0];
+        return healers.sort((a, b) => b.heal - a.heal || a.slot - b.slot)[0];
+    }
+
+    // (fx36) Why the wheel's Eat is greyed: 'full' (nothing to heal), 'none' (no food
+    // in the bag), or null when it is live. The renderer reads this for the reason line.
+    eatBlockedBy() {
+        if (this.eatChoice()) return null;
+        const col = buildXmbBar(this.inventory).columns.find(c => c.key === 'eat');
+        return col ? 'full' : 'none';
     }
 
     // (skills) What the Thieve verb reads: the slotted rings' passives plus every
