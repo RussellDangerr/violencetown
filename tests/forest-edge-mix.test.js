@@ -6,7 +6,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { borderPropKey, borderPropKeys, PROP_SPRITES, SHEETS } from '../game/sprites.js';
+import { borderPropKey, borderPropKeys, fillerSprite, FILLER_SPRITES, PROP_SPRITES, SHEETS } from '../game/sprites.js';
 
 const MIX = { tile: 13, prop: ['tree', 'pine'] };
 const SINGLE = { tile: 52, prop: 'tree' };
@@ -66,8 +66,14 @@ describe('borderPropKey', () => {
 
 describe('the pine art', () => {
     test('is a one-cell sprite on the tall tree’s own sheet, at Tiny Town (4,2)', () => {
-        const pine = PROP_SPRITES.pine;
-        assert.ok(pine, 'no pine prop');
+        const pine = FILLER_SPRITES.pine;
+        assert.ok(pine, 'no pine art');
+        assert.equal(fillerSprite('pine'), pine);
+        assert.equal(fillerSprite('tree'), PROP_SPRITES.tree);
+        assert.equal(PROP_SPRITES.pine, undefined, 'filler-only art is not a placeable prop');
+        // The region is on the sheet (a PNG's width and height sit at bytes 16 and 20).
+        const png = readFileSync(new URL(`../game/${SHEETS[pine.sheet].src}`, import.meta.url));
+        assert.ok(pine.sx + pine.sw <= png.readUInt32BE(16) && pine.sy + pine.sh <= png.readUInt32BE(20));
         assert.equal(pine.sheet, PROP_SPRITES.tree.sheet);
         assert.equal(SHEETS[pine.sheet].padding ?? 0, 0, 'tinyTown is packed: the stride is 16');
         assert.deepEqual([pine.sx, pine.sy, pine.sw, pine.sh], [4 * 16, 2 * 16, 16, 16]);
@@ -101,7 +107,7 @@ describe('the maps', () => {
         for (const file of ['town', 'carnival', 'downtown', 'graveyard', 'wilderness', 'frozen']) {
             const keys = borderPropKeys(border(`${file}-map.json`));
             assert.ok(keys.length > 0, `${file} names no border prop`);
-            for (const k of keys) assert.ok(PROP_SPRITES[k], `${file}: border prop '${k}' has no art`);
+            for (const k of keys) assert.ok(fillerSprite(k),`${file}: border prop '${k}' has no art`);
         }
     });
 });

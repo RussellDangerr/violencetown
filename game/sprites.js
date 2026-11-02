@@ -736,11 +736,6 @@ export const PROP_SPRITES = {
     // never when merely passing alongside. shadowRx/Ry size the trunk's pool.
     tree: { sheet: 'tinyTown', sx: 4 * 16, sy: 0, sw: 16, sh: 32, wTiles: 1, hTiles: 2, shadowRx: 12, shadowRy: 4.5 },
 
-    // Tiny Town's one-cell green pine (col 4, row 2: the small cousin under the tall tree's
-    // two cells; tinyTown is packed, so the stride is 16). It varies the forest past a
-    // map's edge (`border.prop: ["tree", "pine"]`, borderPropKey below).
-    pine: { sheet: 'tinyTown', sx: 4 * 16, sy: 2 * 16, sw: 16, sh: 16, wTiles: 1, hTiles: 1, shadowRx: 8, shadowRy: 3 },
-
     // rpgUrban's double-arm streetlight — 1x2 cells (col 3, rows 6-7), the
     // tree's shape. It was a one-cell STREETLIGHT tile drawing the squat
     // lamp-with-a-red-lens at (1,7), which read as a parking meter; the real
@@ -795,6 +790,21 @@ export const PROP_SPRITES = {
     // exactly what it was. No ground shadow: it is a door, not an object.
     vaultDoor: { sheet: 'tinyTown', sx: 5 * 16, sy: 10 * 16, sw: 16, sh: 16, wTiles: 1, hTiles: 1, shadow: false },
 };
+
+// Art drawn ONLY past a map's edge, never placed in a map, so it is not a PROP_SPRITES
+// entry (the prop-coverage and examine tests ask of those that a map places them and
+// that they have a name; nothing off the map can be placed or examined).
+//   pine: Tiny Town's one-cell green pine (col 4, row 2: the small cousin under the tall
+//   tree's two cells; tinyTown is packed, so the stride is 16). It varies the forest past
+//   a map's edge (`border.prop: ["tree", "pine"]`, borderPropKey below).
+export const FILLER_SPRITES = {
+    pine: { sheet: 'tinyTown', sx: 4 * 16, sy: 2 * 16, sw: 16, sh: 16, wTiles: 1, hTiles: 1, shadowRx: 8, shadowRy: 3 },
+};
+
+// The art a border prop name draws: a placed prop's, or filler-only art.
+export function fillerSprite(key) {
+    return PROP_SPRITES[key] ?? FILLER_SPRITES[key] ?? null;
+}
 
 // The props a map's border may draw past its edge, as a list. `border.prop` is one
 // PROP_SPRITES name or a list of them (the forest mix); no prop is an empty list.
