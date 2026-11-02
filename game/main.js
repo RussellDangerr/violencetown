@@ -3086,6 +3086,11 @@ class Game {
 
         switch (opt.action) {
             case 'use':
+                // (fx55) The Eat row at full health: the food stays in the bag, no turn passes.
+                // (The row is labelled Eat only for a healing food; see _openItemOverlay.)
+                if (opt.label === 'Eat' && this.playerHp >= this.playerMaxHp) {
+                    this._log('[TEXT]'); this.state = STATE.ITEM_SELECTED; this._render(); return;
+                }
                 this._doItemUse(item);
                 break;
             case 'ctx': {
@@ -3713,6 +3718,12 @@ class Game {
             if (!tile) { this.selectedSlot = -1; this._log(`[No target in range for ${def.name}.]`); this._render(); return; }
             this._doThrowAt(tile);
         } else {
+            // (fx55) Full health: a healing food stays in the bag and no turn passes. Only the
+            // Eat column's healers; drinks and foods that heal nothing go through as before.
+            // The check sits here and in _pickOverlay, not in _doItemUse, which the wheel shares.
+            if (sel.column.key === 'eat' && def.effect === 'heal' && this.playerHp >= this.playerMaxHp) {
+                this.selectedSlot = -1; this._log('[TEXT]'); this._render(); return;
+            }
             this._doItemUse(def);
         }
     }
