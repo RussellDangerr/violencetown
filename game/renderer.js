@@ -10,6 +10,9 @@ import { DEFAULT_VIEW, offView, snapPx } from './viewport.js';   // (screen-fill
 // VT323 text stays sharp. The game canvas's transform comes from the viewport
 // (setViewport / renderFrame).
 const SS = 2;
+// (fx36) How wide the food line on the wheel's Eat slice may be: the chord of the slice
+// at its second text row, from the ring geometry in layout.js (ring 1, 60 to 88).
+const EAT_SLICE_TEXT_W = 96;
 import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, itemSprite, CONTAINER_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES, MARK_SPRITES, spriteVariant, spriteFrame, tileFrame, idHash, TINY_INK } from './sprites.js';
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
 import { ROOT, selectedNode, activeRing, activeIndex, decisionPath, previewChildren, affectedTiles, verbApplies, isCombatActive, flapperDeflection, defaultVerb } from './wheel-model.js'; // (sunburst wheel) + the bump telegraph
@@ -3373,7 +3376,9 @@ export class Renderer {
 
     // One donut-wedge tile (a curved "Simon-Says" segment) + a centered label.
     // Angles in radians: `mid` = the tile's centre angle, `half` = half its width.
-    _wheelTile(r0, r1, mid, half, fill, alpha, label, txtColor, outline, icon, dominant = false) {
+    // `sub` (fx36) is a second line under the label: { text, color }. It replaces the
+    // icon, because the ring is only one line and a half thick.
+    _wheelTile(r0, r1, mid, half, fill, alpha, label, txtColor, outline, icon, dominant = false, sub = null) {
         const { ctx } = this, { cx, cy } = this._hud().wheel;
         // (§12.4) the selected wedge "rises" — a touch wider + a longer outer
         // radius so the current choice reads as the hero slice at a glance.
@@ -3393,7 +3398,10 @@ export class Renderer {
         if (!this.font) return;
         const lr = (r0 + r1d) / 2;
         const lx = cx + Math.cos(mid) * lr, ly = cy + Math.sin(mid) * lr;
-        if (icon) {
+        if (sub && label) {
+            this.font.drawText(ctx, label, lx, ly - 11, { color: txtColor, scale: 1, align: 'center' });
+            this.font.drawText(ctx, sub.text, lx, ly + 2, { color: sub.color, scale: 1, align: 'center' });
+        } else if (icon) {
             // (Phase 4) a monochrome glyph stacked over the label, in the tile's
             // TEXT colour (never a hue) — a colour-independent shape cue.
             this.font.drawText(ctx, icon, lx, ly - 11, { color: txtColor, scale: 1.4, align: 'center' });
@@ -3590,13 +3598,16 @@ export class Renderer {
             // dim via alpha, so opening Fight reads red / amber / purple.
             const col = node.color || HUE;
             const txt = !en ? '#7a6c50' : (node.text || (isSel ? '#fff3d0' : '#e8dcc0'));
+            // (fx36) The selected Eat slice says what it will eat (live) or why it won't (grey).
+            const sub = isSel ? this._eatSliceLine(node, game, en) : null;
             this._wheelTile(activeBand[0], activeBand[1], mid, QHALF,
                 col, en ? (isSel ? 1 : 0.5) : 0.32,
                 node.placeholder ? '…' : node.label,
                 txt,
                 isSel ? { w: 3, c: '#fff3c0' } : null,
                 node.placeholder ? null : WHEEL_ICONS[node.key],
-                isSel && en);   // (§12.4) the live selection rises as the hero slice
+                isSel && en,   // (§12.4) the live selection rises as the hero slice
+                sub);
         };
         // `spin` rotates the whole active ring (options + Back) so a cycle sweeps
         // the new selection up under the fixed pointer.
@@ -3679,6 +3690,27 @@ export class Renderer {
         // (§12.5) The threat readout (count + nearest foe) is drawn with the hint
         // above, on its own row (FX53).
         ctx.globalAlpha = 1; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    }
+
+    // (fx36) The second line on the wheel's Eat slice, or null for every other slice.
+    // Live: the food's own name and its heal ("HOT DOG +10"), trimmed to fit the
+    // slice. Greyed at full health: a reason, which is a [TEXT] placeholder for now.
+    // Greyed with no food in the bag has no line, as before.
+    _eatSliceLine(node, game, enabled) {
+        if (!this.font || node.needsItem !== 'eat' || node.placeholder) return null;
+        if (!enabled) {
+            return game.eatBlockedBy && game.eatBlockedBy() === 'full'
+                ? { text: '[TEXT]', color: '#a89878' } : null;
+        }
+        const pick = game.eatChoice && game.eatChoice();
+        if (!pick) return null;
+        const name = String(pick.itemDef.name || '').replace(/[\[\]]/g, '').toUpperCase();
+        const tail = pick.heal > 0 ? ` +${pick.heal}` : '';
+        const room = EAT_SLICE_TEXT_W;
+        if (this.font.measure(name + tail, 1) <= room) return { text: name + tail, color: '#e8dcc0' };
+        let shown = name;
+        while (shown.length > 1 && this.font.measure(shown.trimEnd() + '.' + tail, 1) > room) shown = shown.slice(0, -1);
+        return { text: shown.trimEnd() + '.' + tail, color: '#e8dcc0' };
     }
 
     // (screen-fill) The wheel's dial: an opaque disc in the dock's colours for
