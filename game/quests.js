@@ -84,16 +84,16 @@ export const QUESTS = {
             {
                 id: 'handoff',
                 objective: '[TEXT]',
-                location: 'Downtown · the street',
+                location: '[TEXT]',
                 description: '[TEXT]',
                 targetZone: 'DOWNTOWN',
-                // Both items, handed over together or one at a time (QuestEngine.owedItems).
-                on: { type: 'item_given', match: { npc: 'dt-recipient' }, items: ['burger_fries', 'tigers_blood_ice_cone'] },
+                // (AE1, SP8) The Financier takes it, in the bank. Both items, handed over together or one at a time (QuestEngine.owedItems).
+                on: { type: 'item_given', match: { npc: 'bank-financier' }, items: ['burger_fries', 'tigers_blood_ice_cone'] },
             },
         ],
         onComplete: (game) => {
             game.gold = (game.gold || 0) + 50;
-            game._log('[Delivered. The traveler presses a little Gold Card credit into your hand. +50 GP.]', 'transition');
+            game._log('[TEXT] +50 GP.', 'transition');
         },
     },
 
