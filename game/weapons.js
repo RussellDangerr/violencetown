@@ -88,7 +88,7 @@ export function weaponTiers(base) {
 export const WEAPON_CLASS_DAMAGE = Object.freeze({
     shield: 10, axe: 10, sword: 10, dagger: 10, hammer: 12,
     great_sword: 10, battle_axe: 10, war_hammer: 10, book: 10, bell: 10,
-    whip: 12, knuckles: 10, claws: 10, doll: 10, wand: 22,
+    whip: 16, knuckles: 10, claws: 10, doll: 10, wand: 22,
     staff: 10, throwing_axe: 10, frying_pan: 10,
 });
 
@@ -137,7 +137,7 @@ export const WEAPONS = {
     // fears an enemy you hit twice in a row (onHit: 'fearOnRepeat'). Source: the
     // Graveyard (world drop deferred; the def lives here for the fear mechanics).
     fearmur: {
-        id: 'fearmur', name: '[Fearmur]', damage: 14, equipSlot: 'weapon',
+        id: 'fearmur', name: '[Fearmur]', damage: 16, equipSlot: 'weapon',
         useType: 'equip', grantsSpells: ['boo'], onHit: 'fearOnRepeat',
         weaponClass: 'hammer',
         category: 'weapon',
@@ -156,7 +156,7 @@ export const WEAPONS = {
     // Lion Whip — a carnival tamer's whip. Reaches 3 tiles and YANKS whatever it
     // strikes one tile closer; grants the "Hire a Lion" trick (GP) while worn.
     lion_whip: {
-        id: 'lion_whip', name: '[Lion Whip]', damage: 12, equipSlot: 'weapon', useType: 'equip',
+        id: 'lion_whip', name: '[Lion Whip]', damage: 16, equipSlot: 'weapon', useType: 'equip',
         reach: 3, pullDistance: 1, grantsTricks: ['hire_lion'],
         weaponClass: 'whip',
         category: 'weapon',
