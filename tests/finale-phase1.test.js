@@ -1,7 +1,7 @@
 // finale-phase1.test.js — FIN2 (plans/fin2-financier-fight.md).
 //
 // The Financier stands in his vault. Talk to him and the fight starts with Sun Man at
-// your side: three turns of heavy blows, then he leaves and the Financier is weakened for
+// your side: three turns of heavy blows, then the Financier bites him (FIN3) and he is weakened for
 // the rest of the fight. Beat him and phase 1 is won (a saved flag, a one-shot event).
 //
 // main.js touches `document` at import, so, as in rat-robbery.test.js, the real methods
@@ -369,7 +369,7 @@ describe('the fight, driven with real keys', () => {
         assert.equal(g.state, STATE.IDLE);
     });
 
-    test('Sun Man hits hard for three turns and leaves; the Financier is weakened for the rest of the fight', async () => {
+    test('Sun Man hits hard for three turns and is bitten; the Financier is weakened for the rest of the fight', async () => {
         const g = makeGame();
         await walkUpAndTalk(g);
         await g.press('Enter');
@@ -392,13 +392,13 @@ describe('the fight, driven with real keys', () => {
             }
             if (weakenedAt !== null) break;
         }
-        assert.equal(weakenedAt, 3, 'he leaves on the third turn, and the Financier is weakened the moment he goes');
-        assert.deepEqual(sunTurns, [true, true, false], 'Sun Man was there for turns 1 and 2 and gone after turn 3\'s blows');
-        assert.equal(sunManOf(g), undefined, 'Sun Man is gone');
+        assert.equal(weakenedAt, 3, 'he is bitten on the third turn, and the Financier is weakened the moment it happens');
+        assert.deepEqual(sunTurns, [true, true, true], 'Sun Man is still in the room after turn 3: cowering, not gone');
+        assert.equal(isCowering(sunManOf(g)), true, 'Sun Man is bitten and cowering');
         assert.equal(fin.entity.armor + sumBuffStat(fin.buffs, 'defence'), 4 - FINALE_PHASE1.defenceDrop, 'his defence has dropped');
         assert.ok(g.logs.filter(l => l === '[TEXT]').length >= 2, 'Sun Man\'s leaving line is the placeholder');
         assert.ok(fin.buffs.some(b => b.id === 'weakened' && b.type === 'debuff'), 'the red W badge the renderer draws over an enemy');
-        assert.equal(g.events.filter(e => e.type === 'sun_man_leaves').length, 1, 'the hook for the Bite fires once');
+        assert.equal(g.events.filter(e => e.type === 'sun_man_bitten').length, 1, 'the hook for the Bite fires once');
         assert.ok(!g.logs.some(l => /slinks back/.test(l)), 'he does not leave like the lion');
 
         // He hit hard: every one of his blows was his 30 less the Financier's 4 (before he was weakened).
@@ -507,8 +507,8 @@ describe('winning phase 1', () => {
 
     test('the save is not soft-locked: the vault door is open to you, nothing left in the room is hostile', async () => {
         const g = await win();
-        assert.ok(!g.enemies.some(e => e.entity.isAlive() && isHostile(e)), 'nobody left to fight');
-        assert.ok(!g.enemies.some(e => e._ally), 'Sun Man is gone');
+        assert.ok(!g.enemies.some(e => e.entity.isAlive() && isHostile(e) && e.tag !== 'monstrous_sun_man_boss'), 'nobody left to fight but Monstrous Sun Man (FIN3)');
+        assert.ok(!g.enemies.some(e => e._ally), 'Sun Man has risen as the beast: no ally is left');
         assert.equal(g.state, STATE.IDLE, 'you can act');
         const door = JSON.parse(vaultJson).transitions[0];
         const path = findPath({ map: g.map, enemies: g.enemies, containers: [], playerX: -1, playerY: -1 },
