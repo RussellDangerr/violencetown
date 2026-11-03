@@ -15,6 +15,11 @@ import { weaknessesOf, resistancesOf } from './elements.js';
 // two above the Were-Rat's 12. Each boss gets its own number when it is designed.
 export const ACT2_BOSS_DAMAGE = 14;
 
+// What the ordinary Act 2 enemies hit for (plans/ep2-act2-mob-damage.md, ruling EP2R1 a): the
+// Clown, the Skeleton and the Greedy Green on their maps, and the two entries that copy them,
+// the Alien's allies (the Green) and the Snowman (the Skeleton).
+export const ACT2_MOB_DAMAGE = 12;
+
 // The registry: the stat block a map spawn used to carry, minus its id and place.
 export const ENTRIES = {
     wererat: {
@@ -124,14 +129,14 @@ export const ENTRIES = {
         loadout: ['hot_dog', 'foil_hat', 'latex_gloves', 'cardboard_cuirass', 'soap'],
         hp: 100,
         armor: 3,
-        damage: 9,
+        damage: ACT2_MOB_DAMAGE,
     },
     // The frozen area's mooks (plans/ic4-frozen-creatures.md), its `frozen.mob`
     // pool. Each copies the fight numbers and kit of the nearest existing enemy,
     // and its weakness row is the chart's `cold` row (elements.js).
     // Copied from the Graveyard's Rattling Skeleton, whose art it shares.
     snowman: frozenMob('Snowman', {
-        gold: 4, loadout: ['rock', 'pipe', 'foil_hat', 'shoe_bags'], hp: 100, armor: 0, damage: 8,
+        gold: 4, loadout: ['rock', 'pipe', 'foil_hat', 'shoe_bags'], hp: 100, armor: 0, damage: ACT2_MOB_DAMAGE,
     }),
     // Copied from the Sewer's Fungus King, whose art it shares.
     yeti: frozenMob('Yeti', {
