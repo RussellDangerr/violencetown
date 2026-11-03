@@ -9,6 +9,7 @@ borgir/borgir_boss                Boss                        100       6     12
 canyon/pike                       Pike                        100       5      9        0              7              3     12
 canyon/canyon-rat-1               Rat                         100     -30      6        1              2              2     17
 canyon/canyon-rat-2               Rat                         100     -30      6        1              2              2     17
+canyon/townie-driver              Violencian                  100     -80      0        6              1              1      -
 carnival/birthday-rat-1           Birthday Rat                100     -30      6        4              2              2     17
 carnival/carnival_boss            Boss                        100       6     14      148              8              3      8
 carnival/clown1                   Carnival Clown              100       0     12       59              5              3      9
@@ -87,7 +88,7 @@ ray_blast           6       18     3.00
 zone               faucet_gp
 bank                       0
 borgir                    25
-canyon                     2
+canyon                     8
 carnival                  54
 casino                     0
 diner                      0
