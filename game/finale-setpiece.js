@@ -33,9 +33,9 @@ export const FINALE_PHASE2 = {
     // His scream: every `screamEvery` turns it opens for `screamTurns` turns. While it is open
     // the sunlight is down, he is `exposedDrop` softer than his own armour, and he swings at
     // nothing. Stand-ins, tuned only so the weakest gear wins (tests/finale-phase2.test.js).
-    screamEvery: 6,
+    screamEvery: 4,
     screamTurns: 3,
-    exposedDrop: 6,
+    exposedDrop: 22,
 };
 
 const SUNLIT = 'sunlit';
@@ -125,7 +125,7 @@ function beastSpawn(x, y) {
     return {
         id: FINALE_PHASE2.beastId, type: FINALE_PHASE2.beastLook, x, y,
         boss: true, name: FINALE_PHASE2.beastName, tag: FINALE_PHASE2.beastTag,
-        hp: f.hp, armor: f.armor, damage: f.damage, gold: f.gold,
+        hp: f.hp, armor: f.armor, damage: f.damage, gold: 0,   // no purse to buy healing with: the scream is his puzzle
         barks: structuredClone(f.barks), barkEveryTurns: f.barkEveryTurns,
         equipped: structuredClone(f.equipped), loadout: [],
     };
@@ -163,6 +163,7 @@ export function riseSunMan(game) {
     beast._lastSeenX = game.playerX;
     beast._lastSeenY = game.playerY;
     syncBeast(beast, game.turn + 1);
+    beast._emergeDelay = 1;                  // he spends the turn rising: inert, but standing there
     game.enemies.push(beast);
     game._log(text, 'combat');                                // he rises
     game._log(text, 'combat');                                // the coaching cue: hit him when he screams
