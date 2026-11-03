@@ -88,6 +88,9 @@ export const ENTRIES = {
     // Act 2's bosses (plans/ab1-act2-placeholder-bosses.md): each is its zone's
     // first pool entry from the spine, standing in with placeholderBoss() below.
     bigfoot:        { ...placeholderBoss(), name: 'Bigfoot' },
+    // The Carnival's second pool entry (plans/rm1-ringmaster-carnival-boss.md):
+    // the same stand-in block, a placeholder name.
+    ringmaster:     { ...placeholderBoss(), name: '[Ringmaster]' },
     // The first built out (plans/ab2-alien-boss-fight.md). He carries the Ray
     // Gun, so his death drop hands it over (ABR3: it left the Factory floor);
     // it heals nothing, so his kit never spends it.
@@ -233,7 +236,7 @@ export const SLOTS = {
         kind: 'boss',
         map: 'carnival-map.json',
         requiredDrop: 'act2_item_a',
-        pool: [{ entry: 'bigfoot', weight: 1 }],
+        pool: [{ entry: 'bigfoot', weight: 1 }, { entry: 'ringmaster', weight: 1 }],
     },
     'factory.boss': {
         kind: 'boss',
