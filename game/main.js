@@ -5965,16 +5965,17 @@ class Game {
         this._heldDirKeys = [];
         this.state = STATE.RESOLVING;                 // block input through the beat
         if (this.carFuel === 'alcohol') {
-            this._log('[You feed it the doctored fuel and floor it — the engine burbles, tamed —]', 'transition');
-            this._log('[— you hit the ramp CLEAN and SAIL over the canyon. Downtown rises up to meet you.]', 'transition');
+            // (TX3) The driver takes the wheel in his taxi. Placeholder lines until Caelan writes them.
+            this._log('[TEXT]', 'transition');
+            this._log('[TEXT]', 'transition');
             audio.playSfx('quest-advance');
             this._flash('rgba(255, 220, 120, 0.35)');
             this._triggerScreenShake(280, 4);
             this._render();
             setTimeout(() => this._rampToDowntown(), 1100);
         } else {
-            this._log('[The Cataclysmic Converter SCREAMS — too fast, WAY too fast —]', 'combat');
-            this._log('[— you punch STRAIGHT THROUGH the wooden bridge and slam the far canyon wall. The world goes end over end.]', 'combat');
+            this._log('[TEXT]', 'combat');
+            this._log('[TEXT]', 'combat');
             audio.playSfx('take-damage');
             this._flash('rgba(200, 40, 40, 0.5)');
             this._triggerScreenShake(520, 9);
@@ -5991,7 +5992,8 @@ class Game {
         await this._loadMap('canyon-map.json');
         if (this.questEngine) this.questEngine.state.flags.bridgeRoute = 'canyon';   // (CY1) the crash plays once
         this.state = STATE.IDLE;
-        this._log('[You come to at the bottom of the canyon, ears ringing and the car a write-off. No climbing back up the way you fell.]', 'transition');
+        // (TX3) The driver is placed beside the landing in canyon-map.json: the crash is the only way in.
+        this._log('[TEXT]', 'transition');
         if (this.questEngine) this.questEngine.start('canyon_escape');
         this._render();
     }
@@ -6003,7 +6005,7 @@ class Game {
         await this._loadMap('downtown-map.json');
         if (this.questEngine) this.questEngine.state.flags.bridgeRoute = 'ramp';     // (CY1) the ramp plays once
         this.state = STATE.IDLE;
-        this._log('[You skid to a stop on a Downtown street, the engine ticking as it cools. The real part of town. Now — that delivery.]', 'transition');
+        this._log('[TEXT]', 'transition');
         this._startMainQuest2();   // (Phase 4) MQ2 begins on arrival
         this._render();
     }
