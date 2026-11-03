@@ -119,6 +119,23 @@ describe('what the first Act 2 boss costs, beside the Were-Rat', () => {
         assert.deepEqual([...new Set(first.blows.map(b => b.dealt))], [4]);
     });
 
+    // The ruling's figure: Carnival first, before the Factory's cuirass, you wear the Sewer's
+    // 5 and the Latex Gloves, 6 in all. Bigfoot lands 13 blows of 8 before he falls, 104 HP.
+    // The fight has no healing on your side, so at 100 HP you lose it.
+    test('Carnival first (armour 6, Lion Whip): his blows add up to 104, past 100 HP, so the unhealed fight is lost', () => {
+        const carnivalFirst = [...SEWER_ARMOUR, 'latex_gloves'];
+        assert.equal(armourOf(carnivalFirst), 6);
+        const r = fightCost({ ...ACT2[0], weapon: ACT2_WEAPON, armour: carnivalFirst });
+        const sum = r.blows.reduce((s, b) => s + b.dealt, 0);
+        assert.equal(r.blows.length, 13);
+        assert.deepEqual([...new Set(r.blows.map(b => b.dealt))], [8], '14 against 6 armour lands 8');
+        assert.equal(sum, 104, 'the ruling\'s figure');
+        assert.ok(sum > 100);
+        assert.equal(r.died, true, 'you are down before he is');
+        assert.equal(r.won, false);
+        assert.equal(r.hpCost, 100, 'the bar cannot go below 0');
+    });
+
     test('every Act 2 boss can be beaten with that gear, and lands only the ruled 14', () => {
         const costs = ACT2.map(z => fightAct2(z));
         for (const r of costs) {
