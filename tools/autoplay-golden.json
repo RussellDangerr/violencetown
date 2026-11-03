@@ -154,8 +154,8 @@
       "seed": 2,
       "finished": true,
       "reason": null,
-      "fingerprint": "e75901ae",
-      "turn": 84,
+      "fingerprint": "64f8e231",
+      "turn": 85,
       "deaths": 0,
       "stages": [
         {
@@ -190,7 +190,7 @@
         },
         {
           "id": "to_factory",
-          "turns": 23,
+          "turns": 24,
           "deaths": 0,
           "gold": 0
         },
