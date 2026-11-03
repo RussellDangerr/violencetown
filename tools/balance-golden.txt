@@ -62,9 +62,9 @@ vault/vault-financier             Banker                      100       6     12
 
 --- WEAPONS (raw damage) ---
 id               damage  type
-fearmur              14  -
+fearmur              16  -
 gator_tail           16  -
-lion_whip            12  -
+lion_whip            16  -
 ray_gun              22  energy
 wooden_sword         10  -
 
