@@ -61,7 +61,7 @@ The beats in code today:
 | Escape the sewer | `sewer.setpiece` | — | `_sewerEscapeSetpiece` |
 | The driver takes you across the bridge | — | — | `_openBridgeIfCarFixed`, the bridge cutscene |
 | Out of the Canyon | `canyon.npc` | the grappling hook | `canyon_escape`; Pike (SP6: the Canyon is a branch today) |
-| Meet the Financier | — | — | not a quest stage today (SP8) |
+| Meet the Financier | — | — | quest 1's last stage: hand the delivery to him in the bank (`quests.js` `deliver_burger`, stage `handoff`; SP8) |
 | Carnival quest, its boss a step | `carnival.boss` | the stuffed animal (earned) | placeholder boss (first entry: Bigfoot) drops it directly — interim |
 | Factory quest, its boss a step | `factory.boss` | the flux capacitor (given) | placeholder boss (first entry: Alien Invasion) drops it directly — interim |
 | Graveyard quest, its boss a step | `graveyard.boss` | the soul crystal (taken) | placeholder boss (first entry: The Deity) drops it directly — interim |
@@ -185,9 +185,8 @@ Each is a row in `roadmap-2026-09.md` §2. Answers land here, dated, and strike 
   crashes into the Canyon at the bridge, and one tamed with alcohol drives straight to Downtown.
 - **SP7 — Bank Street = Downtown's First Blood Bank?** The cosmology puts Bank Street inside the
   Town, but the game's bank, the Financier's home, is an interior off Downtown.
-- **SP8 — Make "meet the Financier" a quest stage?** Today Act 1's quests end with the burger
-  delivery, and the Financier is an optional placeholder conversation. The 10-03 *blend* ruling
-  said delivering the burger *is* delivering the package, so he could be who it's delivered to.
+- **SP8 — Make "meet the Financier" a quest stage?** RULED 2026-11-03, see §9: yes, the burger
+  delivery's last stage is handing it to him.
 - **SP9 — What opens Sun Man?** The cosmology gates his first conversation, and the Final Arc, on
   transformations. If species work is later (SP3), those need another trigger.
 - **SP10 — What does the Act 1 chain become, now the Town is a hub?** RULED 2026-11-03, see §9:
@@ -259,3 +258,13 @@ Each is a row in `roadmap-2026-09.md` §2. Answers land here, dated, and strike 
   - **Replaces** the §1 *Interim* paragraph, which held the Act 1 chain only until SP10, and the §3
     row *"The Converter: open (SP10)"*.
   - **Folds in** SP6 (is the Canyon required): it stays where quest 1 puts it today.
+- **2026-11-03 — The burger is delivered to the Financier (SP8).** Caelan's pick (a): meeting the
+  Financier is a quest stage. The 2026-10-03 blend ruling said delivering the burger *is*
+  delivering the package, so the Financier, in the First Blood Bank, is who it is delivered to.
+  Quest 1's last stage, `handoff`, now takes the order to him instead of the stranded traveler,
+  and the 50 GP stays. This is the last beat of the opening (SP10, above). Spec:
+  `plans/ae1-burger-to-financier.md`. Answers SP8 (§8).
+  - **Replaces** the §1 beat-table cell *"not a quest stage today (SP8)"*, and the delivery going
+    to the stranded traveler. No Locked row changes.
+  - **Open:** what becomes of the traveler is not decided, and nor is whether the bank's Financier
+    and the vault's (the finale's) are one character.

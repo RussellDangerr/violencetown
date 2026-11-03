@@ -81,7 +81,7 @@ function makeGame() {
     const window = new EventTarget();
     const audio = { playSfx() {}, playMusic() {} };
     const map = new GameMap(readMap('downtown-map.json'), 'downtown-map.json');
-    const recipient = { ...readMap('downtown-map.json').enemies.find(e => e.id === 'dt-recipient') };
+    const recipient = { ...readMap('bank-map.json').enemies.find(e => e.id === 'bank-financier') };
     const g = {
         state: STATE.IDLE, facing: 'up', playerX: recipient.x, playerY: recipient.y + 1,
         inventory: [{ itemDef: { id: 'burger_fries', name: 'Burger + Fries' }, count: 1 },

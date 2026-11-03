@@ -215,6 +215,15 @@ export const DIALOGUES = {
         name: 'The Financier',
         greeting: '"Welcome to First Blood. *a smile with too many teeth* ...you look positively FULL of life. How can we serve you?"',
         choices: [
+            // (Phase 4 MQ2, AE1 / SP8) Dialogue delivery: the order is for the Financier. Only
+            // shown at the handoff stage while the player holds everything still owed;
+            // handOver removes it all AND emits item_given per item (the event the satchel
+            // give fires), so either idiom completes the quest (IC2: the order is more than
+            // one item).
+            { id: 'deliver', label: '[TEXT]', once: true,
+              available: (g) => !!g.questEngine && g.questEngine.currentStageId() === 'handoff' && g.questEngine.holdsOwed(),
+              onPick: (g, npc) => g.questEngine.handOver(npc.id),
+              reply: '[TEXT]' },
             { id: 'loan', label: 'Ask what the bank actually does', once: true,
               reply: '"We lend. We collect. We are very, very patient about the collecting. (Placeholder — the Financier\'s arc comes later.)"' },
             { id: 'flatter', label: '[Flatter him]', repeatable: true, delta: 3,
@@ -256,14 +265,6 @@ export const DIALOGUES = {
         name: 'Stranded Traveler',
         greeting: '"Hey — hey, you. You didn\'t happen to bring food, did you? I haven\'t eaten since the bridge."',
         choices: [
-            // (Phase 4 MQ2) Dialogue delivery: only shown at the handoff stage while
-            // the player holds everything still owed; handOver removes it all AND
-            // emits item_given per item (the event the satchel give fires), so
-            // either idiom completes MQ2 (IC2: the order is more than one item).
-            { id: 'deliver', label: '[TEXT]', once: true,
-              available: (g) => !!g.questEngine && g.questEngine.currentStageId() === 'handoff' && g.questEngine.holdsOwed(),
-              onPick: (g, npc) => g.questEngine.handOver(npc.id),
-              reply: '"...oh, thank god. Thank you — really. Here, take this for your trouble."' },
             { id: 'ask', label: 'Ask what they\'re doing out here', repeatable: true,
               reply: '"Waitin\'. Starvin\'. Same as always."' },
             { id: 'flatter', label: '[Reassure them]', repeatable: true, delta: 3,
