@@ -8,6 +8,8 @@ import { SLOTS, ENTRIES, pickSlots, defaultPicks, resolveSpawn, requiredDropFor,
 import { Enemy, spawnEnemy } from '../game/enemies.js';
 import { ITEMS } from '../game/items.js';
 import { validateContent } from '../game/content-validate.js';
+import { shownName } from '../game/enemies.js';
+import { migrate } from '../game/save.js';
 
 const GAME = new URL('../game/', import.meta.url);
 const mapData = (file) => JSON.parse(readFileSync(new URL(file, GAME), 'utf8'));
@@ -58,6 +60,63 @@ describe('SL-4: a required item belongs to the slot, so every entry drops it', (
         const enemy = spawnEnemy(resolveSpawn(spawn, defaultPicks()));
         assert.equal(dropLineFor(enemy), '[The Were-Rat drops your cataclysmic converter!]');
         assert.equal(dropLineFor({ id: 'x', slot: 'sewer.boss', type: 'Bigfoot' }), '[The Bigfoot drops your cataclysmic converter!]');
+    });
+});
+
+describe('RM1: the ringmaster can stand in the Carnival\'s boss spot', () => {
+    const spawn = () => mapData('carnival-map.json').enemies.find(s => s.slot === 'carnival.boss');
+    const drawn = (seed) => pickSlots(seed)['carnival.boss'];
+
+    test('seed 0 still draws Bigfoot; seeds 1 and 2 draw the Ringmaster', () => {
+        assert.equal(drawn(0), 'bigfoot');
+        assert.equal(drawn(1), 'ringmaster');
+        assert.equal(drawn(2), 'ringmaster');
+    });
+
+    test('over many seeds both are drawn, and drawing him moves no other slot', () => {
+        const seen = new Set();
+        const bigfootOnly = { ...SLOTS, 'carnival.boss': { ...SLOTS['carnival.boss'], pool: [{ entry: 'bigfoot' }] } };
+        for (let seed = 0; seed < 200; seed++) {
+            seen.add(drawn(seed));
+            const without = pickSlots(seed, bigfootOnly);
+            const withHim = pickSlots(seed);
+            for (const id of Object.keys(without)) if (id !== 'carnival.boss') assert.deepEqual(withHim[id], without[id], `${id} moved on seed ${seed}`);
+        }
+        assert.deepEqual([...seen].sort(), ['bigfoot', 'ringmaster']);
+    });
+
+    test('the default is still Bigfoot, and a save with no pick plays Bigfoot', () => {
+        assert.equal(defaultPicks()['carnival.boss'], 'bigfoot');
+        assert.equal(migrate({}).slots['carnival.boss'], 'bigfoot');
+    });
+
+    test('a save that holds Bigfoot keeps Bigfoot, even on a seed that would draw the Ringmaster', () => {
+        assert.equal(drawn(1), 'ringmaster');
+        const saved = migrate({ slots: { 'carnival.boss': 'bigfoot' } }).slots;
+        assert.equal(saved['carnival.boss'], 'bigfoot');
+        assert.equal(shownName(spawnEnemy(resolveSpawn(spawn(), saved))), 'Bigfoot');
+        const kept = migrate({ slots: { 'carnival.boss': 'ringmaster' } }).slots;
+        assert.equal(shownName(spawnEnemy(resolveSpawn(spawn(), kept))), '[Ringmaster]');
+    });
+
+    test('he shows his own placeholder name on the target panel, and is a boss', () => {
+        const e = spawnEnemy(resolveSpawn(spawn(), { 'carnival.boss': 'ringmaster' }));
+        assert.equal(shownName(e), '[Ringmaster]');
+        assert.equal(e.boss, true);
+        assert.equal(e.slot, 'carnival.boss');
+    });
+
+    test('he is Bigfoot\'s stand-in block under another name, so balance has nothing new to measure', () => {
+        const { name: _a, ...big } = ENTRIES.bigfoot;
+        const { name: _b, ...ring } = ENTRIES.ringmaster;
+        assert.deepEqual(ring, big);
+    });
+
+    test('whoever stands there gives the Carnival\'s item', () => {
+        for (const entry of ['bigfoot', 'ringmaster']) {
+            const e = spawnEnemy(resolveSpawn(spawn(), { 'carnival.boss': entry }));
+            assert.equal(requiredDropFor(e, []), 'act2_item_a');
+        }
     });
 });
 
