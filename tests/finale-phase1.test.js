@@ -40,6 +40,7 @@ import { dropLoadout } from '../game/drops.js';
 import { ENEMY_SPRITES } from '../game/sprites.js';
 import { validateContent } from '../game/content-validate.js';
 import { WEAPONS } from '../game/weapons.js';
+import { biteSunMan, riseSunMan, beastFell, resetBeast, finaleTick, blocksCowerHit, restoreFinale, isCowering } from '../game/finale-setpiece.js';
 
 globalThis.localStorage ??= { getItem: () => null, setItem() {}, removeItem() {} };
 
@@ -101,6 +102,7 @@ const LIFTED = [
     // the finale, phase 1
     ['_isFinancier', 'e'], ['_beginFinalFight', 'financier'], ['_finaleOnHarmed', 'target'],
     ['_finaleSummonLeft', 'e'], ['_finaleOnDeath', 'e'], ['_finaleReset', 'boss'],
+    ['_finaleTick', ''], ['_finaleBlocksHit', 'target'], ['_finaleCowering', 'e'],
     // the defeat, and the boss retry
     ['_die', ''], ['_resolveDefeat', ''], ['_bossInFight', ''], ['_runBossRetry', 'boss'],
     ['_safeRespawnCell', ''], ['_deAggroAll', ''],
@@ -157,6 +159,7 @@ function makeGame({ seed = 7, weapon = 'wooden_sword', armor = 0, hp = 100 } = {
     g._takeKillLoot = (drops) => { g.loot = drops; return []; };
     const free = {
         STATE, DIRS, audio, document, window, carriesAll, ENTRIES, FINALE_PHASE1, weakenedBuff,
+        biteSunMan, riseSunMan, beastFell, resetBeast, finaleTick, blocksCowerHit, restoreFinale, isCowering,
         requestAnimationFrame: (f) => queueMicrotask(() => f(Infinity)),
         performance: { now: () => 0 },
         setTimeout: (f) => { timers.push(f); return timers.length; },

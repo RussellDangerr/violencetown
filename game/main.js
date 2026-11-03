@@ -5482,12 +5482,23 @@ class Game {
     }
 
     // (FIN3) The world turn ended: Monstrous Sun Man's scream keeps time with it.
-    _finaleTick() { finaleTick(this); }
+    _finaleTick() {
+        finaleTick(this);
+    }
+
     // (FIN3) A map loaded: the vault after phase 1 holds the beast, not the Financier.
-    _finaleOnLoad(url) { restoreFinale(this, url); }
+    _finaleOnLoad(url) {
+        restoreFinale(this, url);
+    }
+
     // (FIN3) Bitten Sun Man cannot be struck, and takes no turns.
-    _finaleBlocksHit(target) { return blocksCowerHit(this, target); }
-    _finaleCowering(e) { return isCowering(e); }
+    _finaleBlocksHit(target) {
+        return blocksCowerHit(this, target);
+    }
+
+    _finaleCowering(e) {
+        return isCowering(e);
+    }
 
     // The Financier beat you: rebuild him at his post (full health, no
     // weakening, calm until you talk to him) and send Sun Man away, so the whole
