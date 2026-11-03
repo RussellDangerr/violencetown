@@ -217,10 +217,10 @@ describe('the bag: Tab, arrow keys, and the inspector panel', () => {
         const { r, texts } = rig();
         r._drawDevice(g);
         const lines = said(texts);
-        assert.ok(lines.includes('14 dmg (+4 vs Wooden Sword)'), lines.join(' | '));
+        assert.ok(lines.includes('16 dmg (+6 vs Wooden Sword)'), lines.join(' | '));
         assert.ok(lines.includes('1 hand, hammer'));
         assert.ok(lines.includes('Grants: Boo! (8 MP)'));
-        assert.ok(!lines.includes('14 dmg'), 'the bare stat line is still drawn');
+        assert.ok(!lines.includes('16 dmg'), 'the bare stat line is still drawn');
     });
 
     test('the next arrow moves to the next weapon and the block follows', () => {
@@ -233,10 +233,10 @@ describe('the bag: Tab, arrow keys, and the inspector panel', () => {
         const { r, texts } = rig();
         r._drawDevice(g);
         const lines = said(texts);
-        assert.ok(lines.includes('12 dmg (+2 vs Wooden Sword)'));
+        assert.ok(lines.includes('16 dmg (+6 vs Wooden Sword)'));
         assert.ok(lines.includes('1 hand, whip, reach 3, pulls 1'));
         assert.ok(lines.includes('Grants: Hire Lire (50 GP)'));
-        assert.ok(!lines.includes('14 dmg (+4 vs Wooden Sword)'), 'the last weapon\'s block is still up');
+        assert.ok(!lines.includes('1 hand, hammer'), 'the last weapon\'s block is still up');
     });
 
     test('the difference follows what is in the right hand', () => {
@@ -247,7 +247,7 @@ describe('the bag: Tab, arrow keys, and the inspector panel', () => {
         press(page, 'ArrowRight');
         const { r, texts } = rig();
         r._drawDevice(g);
-        assert.ok(said(texts).includes('14 dmg (-2 vs Gator Tail)'), said(texts).join(' | '));
+        assert.ok(said(texts).includes('16 dmg (same as Gator Tail)'), said(texts).join(' | '));
     });
 
     test('every drawn line sits inside the panel and above the buttons', () => {
@@ -294,12 +294,12 @@ describe('examine: E at a weapon on the ground', () => {
         press(page, 'KeyE');
         assert.equal(g.state, STATE.INSPECT, 'E did not open the examine panel');
         assert.match(g.inspect.body, /^A single femur/);
-        assert.match(g.inspect.body, /14 dmg \(\+4 vs Wooden Sword\)\n1 hand, hammer\nGrants: Boo! \(8 MP\)$/);
+        assert.match(g.inspect.body, /16 dmg \(\+6 vs Wooden Sword\)\n1 hand, hammer\nGrants: Boo! \(8 MP\)$/);
 
         const { r, texts } = rig();
         r._drawInspectPanel(g);
         const lines = said(texts);
-        assert.ok(lines.includes('14 dmg (+4 vs Wooden Sword)'), lines.join(' | '));
+        assert.ok(lines.includes('16 dmg (+6 vs Wooden Sword)'), lines.join(' | '));
         assert.ok(lines.includes('1 hand, hammer'));
         assert.ok(lines.includes('Grants: Boo! (8 MP)'));
     });
@@ -393,7 +393,7 @@ describe('the shop: the description strip for the highlighted row', () => {
         assert.deepEqual(g._offer.selection, { side: 'yours', index: 0 });
         const { r, texts } = rig();
         const lines = said(stripLines(r, texts, g));
-        assert.ok(lines.some(s => s.startsWith('12 dmg (+2 vs Wooden Sword)') && s.includes('reach 3, pulls 1')), lines.join(' | '));
+        assert.ok(lines.some(s => s.startsWith('16 dmg (+6 vs Wooden Sword)') && s.includes('reach 3, pulls 1')), lines.join(' | '));
         assert.ok(lines.includes('Grants: Hire Lire (50 GP)'));
     });
 

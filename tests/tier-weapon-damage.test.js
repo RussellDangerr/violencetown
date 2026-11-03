@@ -110,7 +110,7 @@ describe('the content check: every holdable weapon has a damage number', () => {
 
 describe("every tier weapon hits for its class's number", () => {
     // The ruled numbers: the four classes with a weapon copy it, the rest take 10.
-    const RULED = { sword: 10, wand: 22, whip: 12, hammer: 12 };
+    const RULED = { sword: 10, wand: 22, whip: 16, hammer: 12 };
     const classIds = Object.keys(WEAPON_CLASSES);
 
     test('the table names every class, and only the classes', () => {

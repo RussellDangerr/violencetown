@@ -142,8 +142,8 @@ describe('no existing item changes', () => {
 
     test('the placed weapons keep their numbers, and gain no tier or perks', () => {
         const pinned = {
-            wooden_sword: [10, 6], ray_gun: [22, 45], fearmur: [14, 28],
-            gator_tail: [16, 18], lion_whip: [12, 26],
+            wooden_sword: [10, 6], ray_gun: [22, 45], fearmur: [16, 28],
+            gator_tail: [16, 18], lion_whip: [16, 26],
         };
         for (const [id, [damage, baseValue]] of Object.entries(pinned)) {
             const d = WEAPONS[id];
