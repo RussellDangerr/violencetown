@@ -223,6 +223,23 @@ export const DIALOGUES = {
               reply: '"*the smile does not move* ...how droll."' },
         ],
     },
+    // (FIN2) The Financier in his vault. Talking to him is how the fight starts
+    // (main.js _beginFinalFight): one choice, every word [TEXT] until Caelan writes it.
+    financier_vault: {
+        name: 'The Financier',
+        greeting: '[TEXT]',
+        choices: [
+            { id: 'begin', label: '[TEXT]', repeatable: true,
+              onPick: (g, npc) => { if (g._beginFinalFight) g._beginFinalFight(npc); },
+              reply: '[TEXT]' },
+        ],
+    },
+    // Sun Man, so the fight's panel and log can name him. His lines are later slices.
+    sun_man: {
+        name: 'Sun Man',
+        greeting: '[TEXT]',
+        choices: [],
+    },
     casino_op: {
         name: 'Pit Boss',
         greeting: '"Table\'s open, the odds are terrible, and the drinks are free. What\'s your poison?"',

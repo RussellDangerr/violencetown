@@ -1,5 +1,5 @@
 {
-    "_note": "The First Blood Bank's vault, behind the door in the bank's back wall (plans/fin1-vault-door.md). Empty for now: the finale's beats are later slices. Placeholder geometry/text. Tiles: 14 wall, 11 floor, 15 door.",
+    "_note": "The First Blood Bank's vault, behind the door in the bank's back wall (plans/fin1-vault-door.md). It holds the Financier, a fixed spawn placed by hand, and talking to him starts the fight (plans/fin2-financier-fight.md). Placeholder geometry/text. Tiles: 14 wall, 11 floor, 15 door.",
     "width": 9,
     "height": 8,
     "spawn": {"x": 4, "y": 5},
@@ -14,7 +14,9 @@
         14,14,14,14,15,14,14,14,14,
         14,14,14,14,14,14,14,14,14
     ],
-    "enemies": [],
+    "enemies": [
+        {"id": "vault-financier", "entry": "financier", "x": 4, "y": 2, "facing": "S"}
+    ],
     "items": [],
     "examinables": [],
     "props": [],
