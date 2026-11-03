@@ -63,6 +63,7 @@ import { takeable } from './fight-panels.js';   // (combat-hud stage 4) the one 
 import { buildXmbBar, resolveXmbSelection, cycleXmbCategory, cycleXmbItem, xmbCategoryOf, XMB_LABELS } from './xmb.js';
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
 import { biteSunMan, riseSunMan, beastFell, resetBeast, finaleTick, blocksCowerHit, restoreFinale, isCowering } from './finale-setpiece.js';
+import { CREDITS, endingDue, markEndingSeen, newRoll, stepRoll } from './credits.js';   // (FIN4) the credits, then the town stays open
 import { contextualUses } from './item-uses.js'; // "use THIS on THAT" — the authored table
 import { nextHint } from './hints.js';           // situational one-shots: the tutorial that is not one
 
@@ -124,6 +125,7 @@ const STATE = {
     TRADE:           'trade',           // (trade slice 1) Puck's shop window — buy/sell/bribe
     DIALOGUE:        'dialogue',        // (Step 4) disposition dialogue with an NPC
     INSPECT:         'inspect',         // (§12.3) Examine → a layered inspect panel
+    CREDITS:         'credits',         // (FIN4) the credits roll after the Final Arc; then back to IDLE, world untouched
     DEVICE:          'device',          // (Slice 3) the Remoticon — one tabbed, soft-pausing device (ITEMS·GEAR·QUESTS·MAP; absorbs the retired EQUIPMENT + JOURNAL states)
 };
 
@@ -1286,6 +1288,7 @@ class Game {
             case STATE.DIALOGUE:
             case STATE.INSPECT:
             case STATE.DEVICE:
+            case STATE.CREDITS:
             case STATE.DEAD:
                 return true;
             default:
@@ -1335,6 +1338,8 @@ class Game {
                 if (e.code === 'KeyP' || e.code === 'Escape') { e.preventDefault(); this._setPaused(false); }
                 return;
             }
+            // (FIN4) The credits own every key while they roll: a key steps the card, Escape skips.
+            if (this.state === STATE.CREDITS) { e.preventDefault(); if (!e.repeat) this._creditsKey(e.code); return; }
             // Record the raw physical key state BEFORE any state-specific early
             // return, so a direction held while a menu/wheel is open (or during a
             // slide, or on OS key-repeat) is remembered and _resumeHeldWalk can
@@ -2148,6 +2153,7 @@ class Game {
         // handler (DOM button). Dead is a non-interactive end state.
         if (this.state === STATE.SPLASH || this.state === STATE.RESOLVING) return;
         if (this.state === STATE.DEAD) return;   // non-interactive end state
+        if (this.state === STATE.CREDITS) { e.preventDefault(); this._creditsStep(); return; }   // (FIN4) a tap steps the credits
         if (this._animating || this._uiAnimating()) return;
 
         const canvas = e.currentTarget;
@@ -6006,8 +6012,70 @@ class Game {
 
     _render() {
         this._trackFight();
+        this._creditsCheck();
         this._syncFirstRunHint();
         this.renderer.renderFrame(this);
+    }
+
+    // ── Credits (FIN4, plans/fin4-credits-town-open.md) ──────────────────────
+
+    // Asked on every frame: once the Final Arc is won and the ending not yet seen, and the
+    // world is quiet (idle, no fight, nothing sliding, not paused), a short beat later the
+    // credits take the screen. The beat is re-checked when it ends, so a menu that opened in
+    // the meantime makes the credits wait for the next frame.
+    _creditsCheck() {
+        if (this._creditsTimer || !this._creditsReady()) return;
+        this._creditsTimer = setTimeout(() => {
+            this._creditsTimer = null;
+            if (this._creditsReady()) this._startCredits();
+        }, CREDITS.beatMs);
+    }
+
+    _creditsReady() {
+        return this.state === STATE.IDLE && !this._animating && !this._paused
+            && !this._inCombat() && endingDue(this);
+    }
+
+    _startCredits() {
+        this.state = STATE.CREDITS;
+        this._credits = newRoll();
+        this._armCreditsCard();
+        this._render();
+    }
+
+    // A card steps on its own after CREDITS.cardMs. The token stops a stale timer from
+    // stepping a card the player already stepped.
+    _armCreditsCard() {
+        clearTimeout(this._creditsCardTimer);
+        const roll = this._credits, at = roll.index;
+        this._creditsCardTimer = setTimeout(() => {
+            if (this.state === STATE.CREDITS && this._credits === roll && roll.index === at) this._creditsStep();
+        }, CREDITS.cardMs);
+    }
+
+    _creditsKey(code) {
+        if (code === 'Escape') { this._endCredits(); return; }
+        if (code === 'Enter' || code === 'NumpadEnter' || code === 'Space' || code === 'KeyE'
+            || code === 'ArrowDown' || code === 'ArrowRight' || code === 'KeyS' || code === 'KeyD') this._creditsStep();
+    }
+
+    _creditsStep() {
+        if (this.state !== STATE.CREDITS) return;
+        if (stepRoll(this._credits)) { this._armCreditsCard(); this._render(); }
+        else this._endCredits();
+    }
+
+    // The credits are over (ended or skipped): the ending is remembered, saved, and the world
+    // is handed back exactly as it was.
+    _endCredits() {
+        if (this.state !== STATE.CREDITS) return;
+        clearTimeout(this._creditsCardTimer);
+        this._credits = null;
+        markEndingSeen(this);
+        this.state = STATE.IDLE;
+        this.autosave({ force: true });
+        this._render();
+        this._resumeHeldWalk();
     }
 
     // (fight-fog) A fight's two edges, checked before every frame is drawn

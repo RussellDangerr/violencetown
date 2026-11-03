@@ -11,6 +11,10 @@
 import { RNG } from './rng.js';
 import { weaknessesOf, resistancesOf } from './elements.js';
 
+// What every Act 2 boss hits for (plans/ep1-act2-boss-damage.md, ruling EP1R1 a),
+// two above the Were-Rat's 12. Each boss gets its own number when it is designed.
+export const ACT2_BOSS_DAMAGE = 14;
+
 // The registry: the stat block a map spawn used to carry, minus its id and place.
 export const ENTRIES = {
     wererat: {
@@ -87,15 +91,15 @@ export const ENTRIES = {
     },
     // Act 2's bosses (plans/ab1-act2-placeholder-bosses.md): each is its zone's
     // first pool entry from the spine, standing in with placeholderBoss() below.
-    bigfoot:        { ...placeholderBoss(), name: 'Bigfoot' },
+    bigfoot:        { ...act2Boss(), name: 'Bigfoot' },
     // The Carnival's second pool entry (plans/rm1-ringmaster-carnival-boss.md):
     // the same stand-in block, a placeholder name.
-    ringmaster:     { ...placeholderBoss(), name: '[Ringmaster]' },
+    ringmaster:     { ...act2Boss(), name: '[Ringmaster]' },
     // The first built out (plans/ab2-alien-boss-fight.md). He carries the Ray
     // Gun, so his death drop hands it over (ABR3: it left the Factory floor);
     // it heals nothing, so his kit never spends it.
     alien_invasion: alienInvasion(),
-    the_deity:      { ...placeholderBoss(), name: 'The Deity' },
+    the_deity:      { ...act2Boss(), name: 'The Deity' },
     // The finale's phase 1 (plans/fin2-financier-fight.md). The Financier is a
     // Locked character, so he is a fixed spawn in the vault (`{ id, entry, x, y }`),
     // not a pool entry. The stand-in boss block, unchanged, wearing the bank's
@@ -145,7 +149,7 @@ export const ENTRIES = {
     // snowwoman. The shared placeholder boss numbers and kit until she is
     // designed, the chart's cold row like the mooks, her one name, [TEXT] copy.
     siberia: {
-        ...placeholderBoss(),
+        ...act2Boss(),
         type: 'Siberia',
         name: 'Siberia',
         weak: weaknessesOf('cold'),
@@ -190,9 +194,15 @@ function frozenMob(type, numbers) {
 }
 
 function alienInvasion() {
-    const e = { ...placeholderBoss(), name: 'Alien Invasion' };
+    const e = { ...act2Boss(), name: 'Alien Invasion' };
     e.loadout = [...e.loadout, 'ray_gun'];
     return e;
+}
+
+// The Act 2 bosses' stand-in: the shared block with the ruled damage. The
+// Financier copies placeholderBoss() directly, so he keeps 12.
+function act2Boss() {
+    return { ...placeholderBoss(), damage: ACT2_BOSS_DAMAGE };
 }
 
 // One stand-in stat block for every Act 2 boss until each is designed: the

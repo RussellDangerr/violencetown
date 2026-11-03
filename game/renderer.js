@@ -15,6 +15,7 @@ const SS = 2;
 const EAT_SLICE_TEXT_W = 96;
 import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, itemSprite, CONTAINER_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES, MARK_SPRITES, spriteVariant, spriteFrame, tileFrame, idHash, borderPropKeys, borderPropKey, fillerSprite, TINY_INK } from './sprites.js';
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
+import { CREDITS, currentCard } from './credits.js';   // (FIN4) the credits screen
 import { ROOT, selectedNode, activeRing, activeIndex, decisionPath, previewChildren, affectedTiles, verbApplies, isCombatActive, flapperDeflection, defaultVerb } from './wheel-model.js'; // (sunburst wheel) + the bump telegraph
 import {
     LOG_MODAL_RECT, TARGET_LIST_RECT, TARGET_LIST_ROW_H,
@@ -74,7 +75,7 @@ const clamp01 = (v) => Math.max(0, Math.min(1, v));
 // (screen-fill) The states whose panels are laid out in the 608x608 menu
 // space. They draw inside the viewport's centred menu box. The wheel and the
 // throw prompt are not menus: they draw at their own screen positions.
-const MENU_BOX_STATES = new Set(['item_overlay', 'target_list', 'log_modal', 'trade', 'dialogue', 'inspect', 'device']);
+const MENU_BOX_STATES = new Set(['item_overlay', 'target_list', 'log_modal', 'trade', 'dialogue', 'inspect', 'device', 'credits']);
 
 // (combat-feel-pass) Hit-splat fill colors by damage type. A crit keeps its
 // type's fill and takes a gold ring outside its outline (tools/gen_splats.py
@@ -767,6 +768,7 @@ export class Renderer {
             if (game.state === 'dialogue') this._drawDialogueModal(game);
             if (game.state === 'inspect') this._drawInspectPanel(game);
             if (game.state === 'device') this._drawDevice(game);
+            if (game.state === 'credits') this._drawCredits(game);
         } finally {
             if (inBox) ctx.translate(-box.x, -box.y);
             // (menu grammar) Universal ✕ / Back affordance — after the current Menu is
@@ -4118,6 +4120,23 @@ export class Renderer {
     // (Legacy _drawWinOverlay removed with the tile-7 boss-trigger trap —
     //  fix/critical-path. Its successor, the End of Chapter One card, was
     //  never reached and went with ruling P2.)
+
+    // ── Credits (FIN4) ───────────────────────────────────────────────────────
+    // A black screen and the current card's lines, centred in the menu box. The lines and the
+    // hint are placeholders; the layout numbers are stand-ins.
+    _drawCredits(game) {
+        const { ctx } = this;
+        ctx.fillStyle = '#000';
+        this._fillScreen(ctx);
+        if (!this.font || !game._credits) return;
+        const card = currentCard(game._credits);
+        if (!card) return;
+        const lineH = 32, top = Math.round(CANVAS_PX / 2 - (card.length * lineH) / 2);
+        card.forEach((line, i) => {
+            this.font.drawText(ctx, line, CANVAS_PX / 2, top + i * lineH, { color: UI.textLight, scale: 2, align: 'center' });
+        });
+        this.font.drawText(ctx, CREDITS.hint, CANVAS_PX / 2, CANVAS_PX - 40, { color: UI.dim, scale: 1, align: 'center' });
+    }
 
     // ── Log Modal ([L]) ──────────────────────────────────────────────────────
     // Full scrollable message history (game._logHistory). Geometry mirrors
