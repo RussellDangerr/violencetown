@@ -14,15 +14,15 @@ branch is not a parking spot: parked branches rot against `dev` and every pushed
 into its branch's files before the conversation ends — the repo is the source of truth, not the
 chat history.
 
-## The spine — the game's structure is locked (2026-10-11)
+## The spine — the game's structure is locked (2026-10-11, restructured 2026-11-03)
 
-`plans/spine.md` is the one structure of the game: three acts, the zones on them, four required
-items and one ending. Its contents are **slots with pools** — a beat binds to "the Sewer's boss",
+`plans/spine.md` is the one structure of the game: the Town as a hub, nine episodes (three per
+required item), three required items and one finale, then New Game+. Its contents are **slots with pools** — a beat binds to "the Sewer's boss",
 never to the Were-Rat. It carries no version number: there is no "1.0" target, versions just keep
 climbing.
 
-- **Flag before you change structure.** A change to a row the spine marks *Locked* (zones, acts,
-  required items, the ending) must name what it replaces and needs Caelan's explicit ruling,
+- **Flag before you change structure.** A change to a row the spine marks *Locked* (the hub, the
+  episodes, required items, the finale and ending) must name what it replaces and needs Caelan's explicit ruling,
   recorded in `plans/spine.md`. Say so before acting, not after.
 - **New ideas are pool entries.** A new boss, character, enemy variant or set piece goes into a
   slot's pool. If it is not being built now, it becomes a card on Caelan's private roadmap board,
