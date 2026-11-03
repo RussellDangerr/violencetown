@@ -34,7 +34,7 @@ function liveMethod(name, params, freeVars = {}) {
 
 const BURGER = 'burger_fries';
 const CONE = 'tigers_blood_ice_cone';
-const NPC = 'dt-recipient';
+const NPC = 'bank-financier';
 
 // A test-only quest: one stage that wants both items handed to the traveler.
 // Added under its own id so the real quests are untouched by the engine tests.
@@ -154,7 +154,7 @@ describe('a delivery stage that needs several items', () => {
 });
 
 describe("the traveler's hand-off line", () => {
-    const recipient = { id: NPC, name: 'Stranded Traveler', dialogueId: 'mq2_recipient', disposition: 0 };
+    const recipient = { id: NPC, name: 'Stranded Traveler', dialogueId: 'banker', disposition: 0 };
     const atHandoff = (g) => {
         g.questEngine.forceComplete('fix_car');
         g.questEngine.start('deliver_burger');
@@ -185,7 +185,7 @@ describe("the traveler's hand-off line", () => {
 
     test('names no item outside the item table', () => {
         for (const s of QUESTS.deliver_burger.stages) for (const id of (s.on.items || [])) assert.ok(ITEMS[id], id);
-        assert.ok(DIALOGUES.mq2_recipient.choices.some(c => c.id === 'deliver'));
+        assert.ok(DIALOGUES.banker.choices.some(c => c.id === 'deliver'));
     });
 });
 
@@ -262,7 +262,7 @@ describe('quest 2 sends you for the cone as well as the burger', () => {
     test('the hand-off line is not offered with the burger alone', () => {
         const g = makeGame([BURGER]);
         startOrder(g, 'handoff');
-        g._dialogueNpc = { id: NPC, name: 'Traveler', dialogueId: 'mq2_recipient', disposition: 0 };
+        g._dialogueNpc = { id: NPC, name: 'Traveler', dialogueId: 'banker', disposition: 0 };
         g._dialogueCursor = 0;
         assert.ok(!g._dialogueChoices().some(c => c.id === 'deliver'));
         g._grantItem(CONE);
