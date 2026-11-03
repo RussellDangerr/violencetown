@@ -91,6 +91,16 @@ export const DIALOGUES = {
         ],
     },
 
+    // (TX3) The same driver, in the Canyon after the taxi went down with him
+    // (plans/tx3-taxi-crash-driver.md). Placeholder lines until Caelan writes them.
+    taxi_driver_canyon: {
+        name: '[TEXT]',
+        greeting: '[TEXT]',
+        choices: [
+            { id: 'ask', label: '[TEXT]', repeatable: true, reply: '[TEXT]' },
+        ],
+    },
+
     // (Phase 6d) Macc the raccoon mechanic — Town's special-buyer: the Converter
     // has a buyer (500 GP).
     macc: {
