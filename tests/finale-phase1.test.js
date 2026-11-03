@@ -369,7 +369,7 @@ describe('the fight, driven with real keys', () => {
         assert.equal(g.state, STATE.IDLE);
     });
 
-    test('Sun Man hits hard for three turns and is bitten; the Financier is weakened for the rest of the fight', async () => {
+    test('Sun Man hits hard for three turns and leaves; the Financier is weakened for the rest of the fight', async () => {
         const g = makeGame();
         await walkUpAndTalk(g);
         await g.press('Enter');
