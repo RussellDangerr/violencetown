@@ -2,8 +2,8 @@
 
 **Date:** 2026-10-11
 **Status:** RULED — the structure is Caelan's, from the 2026-10-11 design session, restructured
-2026-11-03 into a hub and episodes (§9). Ten smaller rulings are still open (§8): `SP3`–`SP9` are
-rows in `roadmap-2026-09.md` §2, and `SP10`–`SP12` are new.
+2026-11-03 into a hub and episodes (§9). `SP3`–`SP9` (§8) are rows in `roadmap-2026-09.md` §2;
+`SP10` is ruled, and `SP11`–`SP12` wait until the first three episodes are built.
 **Why it exists (Caelan):** *"If I don't lock this decision down, I will never finish this game."*
 The structure has been re-decided four times — a static map (04-01), a linear adventure (04-05),
 any-order zones (05-21), species adventures (09-15, which dropped the single ending). Ideas outpace
@@ -45,11 +45,12 @@ credits. New Game+ follows (§9, 2026-11-03).
 **Built first:** the Carnival, Factory and Graveyard, one episode per item, so the game can be won.
 The other six come after.
 
-**Interim.** Until SP10 says what it becomes, the Act 1 chain stays as built: the taxi driver's
-taxi won't start → the Sewer → **the Sewer boss drops the Converter** → escape → the taxi runs →
-the driver takes you across the bridge → the Canyon → Pike's grappling hook → Downtown → meet the
-Financier (ruled 2026-11-01, §9). Until the quests are built, each placeholder boss drops its item
-directly.
+**The opening (SP10, ruled 2026-11-03).** Quest 1 stays as the game's opening, played once as
+built: the taxi driver's taxi won't start → the Sewer → **the Sewer boss drops the Converter** →
+escape → the taxi runs → the driver takes you across the bridge → the Canyon → Pike's grappling
+hook → Downtown → meet the Financier (ruled 2026-11-01, §9). The hub opens when the taxi runs.
+After that every road is open, and the Sewer, the Canyon and Downtown count as episodes when you
+go back. *Interim:* until the quests are built, each placeholder boss drops its item directly.
 
 The beats in code today:
 
@@ -107,7 +108,7 @@ framework rather than beside it.
 | Thing | Locked or pool | Today |
 |---|---|---|
 | The shape: the Town as hub, nine episodes (three per required item), Bank Street as finale | **Locked** (ruled 2026-11-03, §9) | six episodes exist as maps: Sewer, Canyon, Downtown, Carnival, Factory, Graveyard; three are unnamed (SP11). Bank Street = `bank-map.json` (SP7) |
-| The Converter | Open (SP10) | `catalytic_converter`, still the Sewer boss's drop and the taxi's fix |
+| The Converter, quest 1's reward | **Locked**, name and id (SP10, ruled 2026-11-03, §9) | `catalytic_converter`, the Sewer boss's drop and the taxi's fix |
 | Three required items, each from one quest in one of its three episodes, the boss fight a step inside it | **Locked** as three slots, named: stuffed animal (Carnival), flux capacitor (Factory), soul crystal (Graveyard) (ruled 2026-10-23, 2026-10-30, §9) | interim: the boss drops it |
 | Which slot holds which required item | **Locked** (a randomizer mode may shuffle it later) | — |
 | The ending: Financier → Final Arc → credits, then New Game+ | **Locked** (New Game+ ruled 2026-11-03, §9) | New Game+ not built |
@@ -189,14 +190,13 @@ Each is a row in `roadmap-2026-09.md` §2. Answers land here, dated, and strike 
   said delivering the burger *is* delivering the package, so he could be who it's delivered to.
 - **SP9 — What opens Sun Man?** The cosmology gates his first conversation, and the Final Arc, on
   transformations. If species work is later (SP3), those need another trigger.
-- **SP10 — What does the Act 1 chain become, now the Town is a hub?** The taxi, the Converter, the
-  bridge and Pike's grappling hook are a fixed sequence today. Is the Converter one episode's
-  reward, a hub errand, or retired? Does the taxi still carry you to the Canyon and Downtown? This
-  folds in SP6 (is the Canyon required).
+- **SP10 — What does the Act 1 chain become, now the Town is a hub?** RULED 2026-11-03, see §9:
+  quest 1 stays as the opening.
 - **SP11 — The nine episodes.** Which item can each of the Sewer, the Canyon and Downtown give,
-  and what are the three episodes still unnamed?
+  and what are the three episodes still unnamed? Waits until the first three episodes are built
+  (Caelan, 2026-11-03).
 - **SP12 — Which maps are transition zones?** The Wilderness, Borgir, the Diner and the Casino are
-  the candidates, along with the oil side area.
+  the candidates, along with the oil side area. Decided together with SP11 (Caelan, 2026-11-03).
 
 ## 9. Rulings recorded here
 
@@ -251,3 +251,11 @@ Each is a row in `roadmap-2026-09.md` §2. Answers land here, dated, and strike 
     (the Financier → the Final Arc → credits), slots and pools (§2), SA-1, and the open main map.
   - **Opens** SP10 (the Act 1 chain and the Converter), SP11 (the nine episodes) and SP12 (the
     transition zones). Until they are ruled, the shipped game plays as it does now.
+- **2026-11-03 — Quest 1 stays as the opening (SP10).** Caelan's pick: everyone plays the taxi run
+  once, as built, and the hub opens when the taxi runs. After it every road is open, and the
+  Sewer, the Canyon and Downtown count as episodes when you go back. The Converter stays quest 1's
+  reward and the taxi's fix. SP11 (the nine episodes) waits until the Carnival, Factory and
+  Graveyard are built, and SP12 (the transition zones) is decided with it.
+  - **Replaces** the §1 *Interim* paragraph, which held the Act 1 chain only until SP10, and the §3
+    row *"The Converter: open (SP10)"*.
+  - **Folds in** SP6 (is the Canyon required): it stays where quest 1 puts it today.
