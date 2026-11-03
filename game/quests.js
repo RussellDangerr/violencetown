@@ -213,7 +213,7 @@ function act2Missing(qe) {
 // objective above is. The id comes from the boss slot, so no item is named here; the
 // renderer reads the name from the item data.
 export function act2Checklist(qe) {
-    if (!qe || !qe.isComplete('deliver_burger')) return null;
+    if (typeof qe?.isComplete !== 'function' || !qe.isComplete('deliver_burger')) return null;
     return ACT2_ZONES.map(zone => {
         const itemId = SLOTS[`${zone.toLowerCase()}.boss`]?.requiredDrop ?? null;
         return { zone, itemId, held: !!itemId && qe._slotOf(itemId) >= 0 };
