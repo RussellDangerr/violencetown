@@ -13,6 +13,10 @@ canyon/townie-driver              Violencian                  100     -80      0
 carnival/birthday-rat-1           Birthday Rat                100     -30      6        4              2              2     17
 carnival/carnival_boss            Boss                        100       6     14      148              8              3      8
 carnival/clown1                   Carnival Clown              100       0     12       59              5              3      9
+carnival/clown2                   Carnival Clown              100       0     12       59              5              3      9
+carnival/clown3                   Carnival Clown              100       0     12       59              5              3      9
+carnival/clown4                   Carnival Clown              100       0     12       59              5              3      9
+carnival/clown5                   Carnival Clown              100       0     12       59              5              3      9
 carnival/robot-rat-1              Robot Rat                   100     -30      6        4              2              2     17
 carnival/sludge-rat-1             Sludge Rat                  100     -30      6        4              2              2     17
 casino/casino-pit-boss            Operator                    100     -80      0        0              1              1      -
@@ -37,6 +41,10 @@ frozen/frozen-mob-1               Snowman                     100       0     12
 frozen/frozen-mob-2               Yeti                        100       6     12      113              8              3      9
 graveyard/graveyard_boss          Boss                        100       6     14      148              8              3      8
 graveyard/skel1                   Rattling Skeleton           100       0     12       35              5              3      9
+graveyard/skel2                   Rattling Skeleton           100       0     12       35              5              3      9
+graveyard/skel3                   Rattling Skeleton           100       0     12       35              5              3      9
+graveyard/skel4                   Rattling Skeleton           100       0     12       35              5              3      9
+graveyard/skel5                   Rattling Skeleton           100       0     12       35              5              3      9
 sewer/carrion                     Carrion                     100     -80      0        0              1              1      -
 sewer/e6                          Fungus King                 100       6     12      113              8              3      9
 sewer/e5                          Ghost Fungus                100       0      8       42              5              3     13
@@ -89,13 +97,13 @@ zone               faucet_gp
 bank                       0
 borgir                    25
 canyon                     8
-carnival                  54
+carnival                  82
 casino                     0
 diner                      0
 downtown                   8
 factory                   76
 frozen                    78
-graveyard                 48
+graveyard                 64
 sewer                    101
 sewer-north               10
 town                      30
