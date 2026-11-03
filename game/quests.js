@@ -208,6 +208,18 @@ function act2Missing(qe) {
     });
 }
 
+// (NI2) The Quests tab's checklist of the three Act 2 items: one row per zone, in Map order,
+// with the item's id and whether the bag holds it. null until Act 1's delivery is done, as the
+// objective above is. The id comes from the boss slot, so no item is named here; the
+// renderer reads the name from the item data.
+export function act2Checklist(qe) {
+    if (typeof qe?.isComplete !== 'function' || !qe.isComplete('deliver_burger')) return null;
+    return ACT2_ZONES.map(zone => {
+        const itemId = SLOTS[`${zone.toLowerCase()}.boss`]?.requiredDrop ?? null;
+        return { zone, itemId, held: !!itemId && qe._slotOf(itemId) >= 0 };
+    });
+}
+
 // ['CARNIVAL', 'FACTORY', 'GRAVEYARD'] -> "Carnival, Factory and Graveyard".
 function joinNames(zones) {
     const names = zones.map(z => z[0] + z.slice(1).toLowerCase());

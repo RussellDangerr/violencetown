@@ -36,6 +36,7 @@ import { buildXmbBar, resolveXmbSelection } from './xmb.js';                 // 
 import { ITEMS, itemTier, gearOptions } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
 import { RINGS, FUSIONS } from './ring-data.js';                             // (rings Task 5) SKILLS-tab hands: ring names + fusion spark
 import { findFusion } from './rings.js';                                     // (rings Task 5) mark a link fusible when its two rings have an authored fusion
+import { act2Checklist } from './quests.js';                               // (NI2) the Quests tab's three-item checklist
 import { carriesAll } from './map.js';                                    // (FIN1b) a gated exit shows its markers only once its gate is met
 import { WORLD_ZONES, overworldZone, connectorPairs } from './world-map.js'; // (Phase 4) rudimentary world map
 import { perceives, facingOf, dirOf as spriteDirOf, VERDICT } from './perception.js';              // (threat overlay) the SAME vision the chase AI uses
@@ -3261,6 +3262,19 @@ export class Renderer {
             }
         } else {
             this.font.drawText(ctx, 'No active quest.', innerX, y, { color: UI.dim, scale: 1 }); y += 15;
+        }
+
+        // (NI2) The three Act 2 items: name from the item data, the zone, a tick once held.
+        // Nothing is drawn until the delivery is done.
+        const act2 = act2Checklist(qe);
+        if (act2) {
+            y += 6;
+            this.font.drawText(ctx, '[TEXT]', innerX, y, { color: UI.textLight, scale: 1 }); y += 14;
+            for (const row of act2) {
+                const name = ITEMS[row.itemId]?.name ?? row.itemId ?? '?';
+                const zone = row.zone[0] + row.zone.slice(1).toLowerCase();
+                this.font.drawText(ctx, `${row.held ? '✓' : '·'} ${name} @ ${zone}`, innerX + 6, y, { color: row.held ? UI.dim : UI.text, scale: 1 }); y += 12;
+            }
         }
 
         // Completed quests.
