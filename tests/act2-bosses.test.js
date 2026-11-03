@@ -14,9 +14,9 @@ const GAME = new URL('../game/', import.meta.url);
 const mapData = (file) => JSON.parse(readFileSync(new URL(file, GAME), 'utf8'));
 
 const ACT2 = [
-    { slot: 'carnival.boss',  map: 'carnival-map.json',  entry: 'bigfoot',        item: 'act2_item_a', name: '[ITEM A]' },
-    { slot: 'factory.boss',   map: 'factory-map.json',   entry: 'alien_invasion', item: 'act2_item_b', name: '[ITEM B]' },
-    { slot: 'graveyard.boss', map: 'graveyard-map.json', entry: 'the_deity',      item: 'act2_item_c', name: '[ITEM C]' },
+    { slot: 'carnival.boss',  map: 'carnival-map.json',  entry: 'bigfoot',        item: 'act2_item_a', name: 'Stuffed Animal' },
+    { slot: 'factory.boss',   map: 'factory-map.json',   entry: 'alien_invasion', item: 'act2_item_b', name: 'Flux Capacitor' },
+    { slot: 'graveyard.boss', map: 'graveyard-map.json', entry: 'the_deity',      item: 'act2_item_c', name: 'Soul Crystal' },
 ];
 
 describe('Act 2: one boss per zone, each dropping its required item', () => {
