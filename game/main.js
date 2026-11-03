@@ -15,7 +15,7 @@ import { puddleTiles, layPuddle, puddleAt, dryPuddles } from './puddles.js';   /
 import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef } from './items.js';
 import { WEAPONS, weaponClassOf } from './weapons.js';
 import { resolveItemDef } from './item-registry.js';
-import { tickBuffList, sumBuffStat, worldBeatPlan, weakenedBuff } from './buffs.js';
+import { tickBuffList, sumBuffStat, worldBeatPlan } from './buffs.js';
 import { RINGS, FUSIONS } from './ring-data.js';
 import {
     unlockedSlots, resolveAdjacencies, slottedActives, aggregatePassives,
@@ -62,6 +62,7 @@ import { logCategory } from './combat-log.js';   // (log tagging) one rule for a
 import { takeable } from './fight-panels.js';   // (combat-hud stage 4) the one answer to "what could I take"
 import { buildXmbBar, resolveXmbSelection, cycleXmbCategory, cycleXmbItem, xmbCategoryOf, XMB_LABELS } from './xmb.js';
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
+import { biteSunMan, riseSunMan, beastFell, resetBeast, finaleTick, blocksCowerHit, restoreFinale, isCowering } from './finale-setpiece.js';
 import { contextualUses } from './item-uses.js'; // "use THIS on THAT" — the authored table
 import { nextHint } from './hints.js';           // situational one-shots: the tutorial that is not one
 
@@ -711,6 +712,7 @@ class Game {
             this.enemies.push(spawnEnemy(resolveSpawn(s, this.slots), this._muggedIds, this._robbed, this._rivalKit?.(url, s.id)));
         }
         this._rivalArrived?.(url);   // (plans/ne1-rival-remembered.md) the rival is at its post, kit and all
+        this._finaleOnLoad?.(url);   // (FIN3) the vault after phase 1: no Financier, the beast in his corner
 
         // (zone pursuit) Re-inject any hostiles that chased you through the door.
         // They spawn at the door leading back where you came from — visible in
@@ -4185,11 +4187,12 @@ class Game {
             for (const e of this.enemies) if (e._isSummon) e._summonTurnsLeft--;
             const gone = this.enemies.filter(e => e._isSummon && e._summonTurnsLeft <= 0);
             for (const e of gone) {
-                if (this._finaleSummonLeft?.(e)) continue;   // Sun Man leaves with a line of his own
+                if (this._finaleSummonLeft?.(e)) continue;   // Sun Man is bitten, not sent away
                 this._log(`[${e.type || 'The summon'} slinks back into the crowd.]`);
             }
             if (gone.length) this.enemies = this.enemies.filter(e => !(e._isSummon && e._summonTurnsLeft <= 0));
         }
+        this._finaleTick?.();   // (FIN3) Monstrous Sun Man's scream keeps time with the turn
 
         // (Rat Form) the transform lasts a few beats — count it down each world
         // beat and unfold at zero. Ticks once per committed turn, like the summon.
@@ -4752,6 +4755,7 @@ class Game {
     // ── Combat ───────────────────────────────────────────────────────────────
 
     combatAttack(enemyObj, damage, opts = {}) {
+        if (this._finaleBlocksHit?.(enemyObj)) return null;   // (FIN3) no one strikes the cowering Sun Man
         const playerEntity = { name: '[Player]', isDead: () => false };
 
         // (Rings) Passive damage modifiers fold into the swing before it lands.
@@ -5073,6 +5077,7 @@ class Game {
     // adjacent, else step toward it. Otherwise leash-follow the player (close in
     // only when more than LEASH tiles away) so allies neither wander off nor crowd you.
     _allyTakeTurn(ally) {
+        if (this._finaleCowering?.(ally)) return [];   // (FIN3) bitten, under his cloak, changing: no turns
         const SEEK = 8, LEASH = 3;
 
         const fs = fighters(this.enemies);
@@ -5456,35 +5461,50 @@ class Game {
         return this._isFinancier(target) && this._beginFinalFight(target);
     }
 
-    // The summon timer ran out. Sun Man leaves with a line of his own, and the
-    // Financier he fought beside you is weakened for the rest of the fight (FINR7 b).
-    // Returns true when `e` was Sun Man, so the lion's slink-away line is skipped.
+    // The summon timer ran out. Sun Man is not sent away: the Financier bites him, once, and
+    // he goes to a corner to cower while he changes (FIN3, finale-setpiece.js). The Financier
+    // is weakened for the rest of the fight (FINR7 b). Returns true when `e` was Sun Man, so
+    // the lion's slink-away line is skipped.
     _finaleSummonLeft(e) {
-        if (!e || e.tag !== FINALE_PHASE1.sunManTag) return false;
-        this._log('[TEXT]', 'combat');
-        const fin = this.enemies.find(x => this._isFinancier(x) && x.entity.isAlive());
-        if (fin) {
-            const w = weakenedBuff(FINALE_PHASE1.defenceDrop);
-            fin.addBuff(w.id, w.name, w.turns, w.type, { stat: w.stat, amount: w.amount });   // shows as a red W over him
-        }
-        this.emitGameEvent('sun_man_leaves', { weakened: !!fin });
-        return true;
+        return biteSunMan(this, e);
     }
 
     // The Financier fell: phase 1 is won. The flag is saved with the quest state;
-    // the event fires the first time only, so a Financier who comes back (KS1) and
-    // falls again does not re-announce it.
+    // the event fires the first time only. Then Sun Man, cowering, rises as Monstrous Sun Man
+    // (FINR8 a, FIN3). Monstrous Sun Man falling is phase 2 won.
     _finaleOnDeath(e) {
+        if (beastFell(this, e)) return;
         if (!this._isFinancier(e) || !this.questEngine) return;
         const first = this.questEngine.state.flags[FINALE_PHASE1.flag] !== FINALE_PHASE1.won;
         this.questEngine.state.flags[FINALE_PHASE1.flag] = FINALE_PHASE1.won;
         if (first) this.emitGameEvent('finale_phase1_won', { id: e.id });
+        riseSunMan(this);
+    }
+
+    // (FIN3) The world turn ended: Monstrous Sun Man's scream keeps time with it.
+    _finaleTick() {
+        finaleTick(this);
+    }
+
+    // (FIN3) A map loaded: the vault after phase 1 holds the beast, not the Financier.
+    _finaleOnLoad(url) {
+        restoreFinale(this, url);
+    }
+
+    // (FIN3) Bitten Sun Man cannot be struck, and takes no turns.
+    _finaleBlocksHit(target) {
+        return blocksCowerHit(this, target);
+    }
+
+    _finaleCowering(e) {
+        return isCowering(e);
     }
 
     // The Financier beat you: rebuild him at his post (full health, no
     // weakening, calm until you talk to him) and send Sun Man away, so the whole
     // fight can start again. Only the Financier's retry comes here.
     _finaleReset(boss) {
+        if (resetBeast(this, boss)) return;   // (FIN3) Monstrous Sun Man goes back to his corner
         if (!this._isFinancier(boss)) return;
         this.enemies = this.enemies.filter(e => e.tag !== FINALE_PHASE1.sunManTag && !this._isFinancier(e));
         const spawn = (this.map?.enemySpawns || []).find(s => s.id === boss.id);
