@@ -269,7 +269,7 @@ const DIRS = liveConst('DIRS');
 const DEV_FREE = {
     STATE, DIRS, audio, HIT_SLOP, DEVICE_TABS, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceBagPagerRects,
     inspectorActionRects, nearestRectInDir, itemActions, zoneOf, moveToZone, pageCount, slotOnPage, pageOfSlot,
-    SAFE_SLOTS, PACK_PAGE, MAX_STACK, INVENTORY_SIZE, resolveUse, unequipItem, xmbCategoryOf,
+    SAFE_SLOTS, PACK_PAGE, MAX_STACK, INVENTORY_SIZE, resolveUse, unequipItem,
 };
 const dev = {
     _tapDevice:       liveMethod('_tapDevice(pt) {', DEV_FREE),
