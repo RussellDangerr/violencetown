@@ -7,7 +7,7 @@
 // a parent zone, so they don't appear here. Hand-authored from the maps'
 // transition graph; keep it in sync when zones are added/rewired.
 //
-//        [DOWNTOWN]—[CANYON]
+//        [DOWNTOWN]—[CANYON]—[GORGE]
 //            |  (bridge / grapple)
 //  [FACTORY]—[TOWN]—[SEWER]
 //    |       |
@@ -18,7 +18,10 @@
 //  [FROZEN]—[WILDERNESS]
 export const WORLD_ZONES = [
     { zoneName: 'DOWNTOWN',   label: 'DOWNTOWN',   col: 2, row: 0, connects: ['TOWN', 'CANYON'] },
-    { zoneName: 'CANYON',     label: 'CANYON',     col: 3, row: 0, connects: ['DOWNTOWN'] },
+    { zoneName: 'CANYON',     label: 'CANYON',     col: 3, row: 0, connects: ['DOWNTOWN', 'GORGE'] },
+    // The Gorge (plans/gv1-canyon-to-gorge.md): reached by the Canyon's left wall. Downtown holds the
+    // Canyon's left on this grid, so its box sits to the right for now; the place is a stand-in.
+    { zoneName: 'GORGE',      label: 'GORGE',      col: 4, row: 0, connects: ['CANYON'] },
     { zoneName: 'FACTORY',    label: 'FACTORY',    col: 1, row: 1, connects: ['TOWN', '[FROZEN AREA]'] },
     { zoneName: 'TOWN',       label: 'TOWN',       col: 2, row: 1, connects: ['DOWNTOWN', 'FACTORY', 'SEWER', 'CARNIVAL'] },
     { zoneName: 'SEWER',      label: 'SEWER',      col: 3, row: 1, connects: ['TOWN'] },

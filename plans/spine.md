@@ -117,7 +117,7 @@ framework rather than beside it.
 | Carnival / Factory / Graveyard boss | Pool | Bigfoot / Alien Invasion / The Deity, as first entries |
 | Mini-bosses, set pieces, characters, mobs | Pools | Act 1's are pools of one |
 | What is on a map: spawns, props, containers | Pool material | — |
-| Maps off the spine: Wilderness, Borgir, Diner, Casino | Exist, carry no beat; candidate transition zones (SP12) | content there is pool material |
+| Maps off the spine: Wilderness, Borgir, Diner, Casino, the Gorge (walk left out of the Canyon; open any time, empty for now) | Exist, carry no beat; candidate transition zones (SP12) | content there is pool material |
 | The oil side area, past the barricade (ruled 2026-11-01, §9) | Optional, carries no beat | name is [TEXT]; content there is pool material |
 
 ## 4. The lock clause

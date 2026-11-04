@@ -178,6 +178,7 @@ describe('tile coverage', () => {
             'sewer-map.json':     { tile: 0 },
             'factory-map.json':    { tile: 41 },
             'canyon-map.json':     { tile: 61 },
+            'gorge-map.json':      { tile: 61 },
         };
         for (const file of mapFiles) assert.deepEqual(loadMap(file).border ?? null, want[file] ?? null, file);
     });
