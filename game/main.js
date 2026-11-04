@@ -6543,6 +6543,14 @@ class Game {
             const def = this.inventory[sel.index].itemDef;
             const action = itemActions(def, zoneOf(sel.index, SAFE_SLOTS))[index];
             if (!action) return;
+            // (fx56) Use on a healing food at full health: the food stays in the bag, no turn
+            // passes, and you are still looking at it. Drinks and foods that heal nothing go through.
+            // (The Eat column's own test, spelled out: xmb.js xmbCategoryOf. No import, so the
+            // older tests that lift this method out of main.js keep working.)
+            if (action.id === 'use' && def.useType === 'self' && (def.consumeKind ? def.consumeKind === 'eat' : def.category === 'ambro')
+                && def.effect === 'heal' && this.playerHp >= this.playerMaxHp) {
+                this._log('[TEXT]'); this._render(); return;
+            }
             const cfg = { size: this.inventory.length, safeSlots: SAFE_SLOTS, maxStack: MAX_STACK, pageSize: PACK_PAGE };
             const idx = sel.index;
             this._deviceSel = null;   // selection resolves this frame; the panel drops

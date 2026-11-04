@@ -12,8 +12,14 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import { buildXmbBar, resolveXmbSelection, xmbCategoryOf } from '../game/xmb.js';
-import { ITEMS, resolveUse } from '../game/items.js';
-import { xmbBarLayout, hudLayout, HIT_SLOP, DOCK } from '../game/layout.js';
+import { ITEMS, resolveUse, unequipItem } from '../game/items.js';
+import {
+    xmbBarLayout, hudLayout, HIT_SLOP, DOCK, DEVICE_TABS, deviceTabRect, deviceBodyRect, deviceBagSlotRects,
+    deviceBagPagerRects, inspectorActionRects, nearestRectInDir,
+} from '../game/layout.js';
+import { itemActions } from '../game/inspector.js';
+import { zoneOf, moveToZone, pageCount, slotOnPage, pageOfSlot } from '../game/inventory.js';
+import { INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK } from '../game/data.js';
 import { computeViewport } from '../game/viewport.js';
 
 globalThis.localStorage ??= { getItem: () => null, setItem() {}, removeItem() {} };
@@ -244,5 +250,141 @@ describe('who the refusal covers', () => {
         const start = mainSrc.indexOf('_doItemUse(item) {', classAt);
         const body = mainSrc.slice(start, mainSrc.indexOf('\n    }', start));
         assert.ok(!body.includes('[TEXT]') && !body.includes('playerMaxHp'));
+    });
+});
+
+// ── fx56: the Remoticon's Use button on a food ────────────────────────────────────────────
+// The GEAR/ITEMS device: select the food, walk to its Use button, press it. The real
+// _deviceKey, _deviceActivate and _tapDevice are lifted out of main.js and run.
+
+function liveConst(name) {
+    const m = new RegExp(`\\nconst ${name}\\s*=\\s*`).exec(mainSrc);
+    assert.ok(m, `const ${name} not found in main.js`);
+    const from = m.index + m[0].length;
+    const end = mainSrc.indexOf('\n};', from);
+    return new Function(`'use strict'; return ${mainSrc.slice(from, end + 2)}`)();
+}
+
+const DIRS = liveConst('DIRS');
+const DEV_FREE = {
+    STATE, DIRS, audio, HIT_SLOP, DEVICE_TABS, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceBagPagerRects,
+    inspectorActionRects, nearestRectInDir, itemActions, zoneOf, moveToZone, pageCount, slotOnPage, pageOfSlot,
+    SAFE_SLOTS, PACK_PAGE, MAX_STACK, INVENTORY_SIZE, resolveUse, unequipItem,
+};
+const dev = {
+    _tapDevice:       liveMethod('_tapDevice(pt) {', DEV_FREE),
+    _deviceActivate:  liveMethod('_deviceActivate(zone, index) {', DEV_FREE),
+    _deviceTargets:   liveMethod('_deviceTargets() {', DEV_FREE),
+    _deviceFocus:     liveMethod('_deviceFocus(t, i) {', DEV_FREE),
+    _deviceKey:       liveMethod('_deviceKey(code) {', DEV_FREE),
+    _pointInRect:     liveMethod('_pointInRect(p, r, slop = 0) {'),
+};
+
+function deviceGame({ hp, item, count = 1 }) {
+    const inventory = new Array(INVENTORY_SIZE).fill(null);
+    inventory[0] = { itemDef: item, count };
+    return {
+        ...dev,
+        state: STATE.DEVICE, _deviceTab: 'items', _deviceSel: null, _bagPage: 0, selectedSlot: -1,
+        inventory, equipment: {}, tempEquips: [], playerHp: hp, playerMaxHp: 100,
+        logs: [], turns: 0,
+        _log(msg) { this.logs.push(msg); },
+        _render() {}, _saveMoment() {}, _refreshGrantedSkills() {},
+        _advanceWorld() { this.turns++; },
+        _removeFromSlot(i) {
+            const s = this.inventory[i];
+            if (s.count > 1) s.count--; else this.inventory[i] = null;
+        },
+        key(code) { this._deviceKey(code); },
+        // Select slot 0, step into its buttons: the first is Use (or Drink).
+        openButtons() {
+            this.key('ArrowRight');   // the cursor lands on a bag slot
+            const t = this._deviceTargets();
+            assert.equal(t.zone, 'slot');
+            while (this._deviceTargets().ids[this._deviceTargets().cur] !== 0) this.key('ArrowRight');
+            this.key('Enter');         // step into its buttons
+            assert.equal(this._deviceTargets().zone, 'action');
+            assert.equal(this._deviceTargets().ids[this._deviceTargets().cur], 0, 'the cursor is not on the first button');
+        },
+        // A real tap on slot 0, then on the first button.
+        tapUse() {
+            const body = deviceBodyRect();
+            const r = deviceBagSlotRects(body)[0];
+            this._tapDevice({ x: r.x + r.w / 2, y: r.y + r.h / 2 });
+            assert.ok(this._deviceSel, 'the tap did not select the slot');
+            const b = inspectorActionRects(body)[0];
+            this._tapDevice({ x: b.x + b.w / 2, y: b.y + b.h / 2 });
+        },
+    };
+}
+
+describe("the Remoticon's Use button on a food, at full health", () => {
+    test('the key press uses nothing, passes no turn, logs the line, and the food stays', () => {
+        const g = deviceGame({ hp: 100, item: HOT_DOG });
+        g.openButtons();
+        g.key('Enter');
+        assert.deepEqual(g.logs, ['[TEXT]']);
+        assert.equal(g.turns, 0);
+        assert.equal(g.inventory[0]?.itemDef.id, 'hot_dog', 'the Hot Dog was used up');
+        assert.equal(g.playerHp, 100);
+        assert.equal(g.state, STATE.DEVICE);
+        assert.ok(g._deviceSel, 'the player should still be looking at the food');
+    });
+
+    test('a real tap on the Use button does the same', () => {
+        const g = deviceGame({ hp: 100, item: BURGER, count: 2 });
+        g.tapUse();
+        assert.deepEqual(g.logs, ['[TEXT]']);
+        assert.equal(g.turns, 0);
+        assert.equal(g.inventory[0].count, 2);
+        assert.equal(g.playerHp, 100);
+    });
+
+    test('pressing it twice still wastes nothing', () => {
+        const g = deviceGame({ hp: 100, item: HOT_DOG });
+        g.openButtons();
+        g.key('Enter'); g.key('Enter');
+        assert.deepEqual(g.logs, ['[TEXT]', '[TEXT]']);
+        assert.equal(g.inventory[0]?.itemDef.id, 'hot_dog');
+        assert.equal(g.turns, 0);
+    });
+
+    test('a food that heals nothing is still used', () => {
+        const g = deviceGame({ hp: 100, item: PLAIN_FOOD });
+        g.openButtons();
+        g.key('Enter');
+        assert.equal(g.inventory[0], null);
+        assert.equal(g.turns, 1);
+        assert.ok(!g.logs.includes('[TEXT]'));
+    });
+
+    test('a healing drink (bandage) is not refused: it is not in the Eat column', () => {
+        const g = deviceGame({ hp: 100, item: ITEMS.bandage });
+        assert.equal(xmbCategoryOf(ITEMS.bandage), 'drink');
+        g.openButtons();
+        g.key('Enter');
+        assert.ok(!g.logs.includes('[TEXT]'));
+        assert.equal(g.inventory[0], null);
+        assert.equal(g.turns, 1);
+    });
+});
+
+describe("the Remoticon's Use button on a food, hurt", () => {
+    test('the key press eats it as today', () => {
+        const g = deviceGame({ hp: 50, item: HOT_DOG });
+        g.openButtons();
+        g.key('Enter');
+        assert.equal(g.playerHp, 60);
+        assert.equal(g.inventory[0], null);
+        assert.equal(g.turns, 1);
+        assert.ok(!g.logs.includes('[TEXT]'));
+    });
+
+    test('a real tap eats it as today', () => {
+        const g = deviceGame({ hp: 99, item: BURGER });
+        g.tapUse();
+        assert.equal(g.playerHp, 100);
+        assert.equal(g.inventory[0], null);
+        assert.equal(g.turns, 1);
     });
 });
