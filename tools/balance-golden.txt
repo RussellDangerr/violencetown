@@ -17,6 +17,7 @@ carnival/clown2                   Carnival Clown              100       0     12
 carnival/clown3                   Carnival Clown              100       0     12       59              5              3      9
 carnival/clown4                   Carnival Clown              100       0     12       59              5              3      9
 carnival/clown5                   Carnival Clown              100       0     12       59              5              3      9
+carnival/carnival-lion            Carnival Lion               100       6     12      113              8              3      9
 carnival/robot-rat-1              Robot Rat                   100     -30      6        4              2              2     17
 carnival/sludge-rat-1             Sludge Rat                  100     -30      6        4              2              2     17
 casino/casino-pit-boss            Operator                    100     -80      0        0              1              1      -
@@ -97,7 +98,7 @@ zone               faucet_gp
 bank                       0
 borgir                    25
 canyon                     8
-carnival                  82
+carnival                 102
 casino                     0
 diner                      0
 downtown                   8
