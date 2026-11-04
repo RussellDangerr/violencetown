@@ -85,9 +85,9 @@ const baseAt = (x, y) => base.at(baseCol * 16 + x, baseRow * 16 + y);
 const cells = [...Array(16 * 16).keys()].map((i) => [i % 16, Math.floor(i / 16)]);
 
 describe('the recolor tool: the grey beast', () => {
-    test('the tool reads as expected: the grey beast (4,10), one tawny variant', () => {
+    test('the tool reads as expected: the grey beast (4,10), tawny then crimson', () => {
         assert.deepEqual([baseCol, baseRow], [4, 10]);
-        assert.deepEqual(VARIANTS.map((v) => v.name), ['tawny']);
+        assert.deepEqual(VARIANTS.map((v) => v.name), ['tawny', 'crimson']);
         assert.deepEqual(OUTLINE, TINY_INK);
     });
 
@@ -143,14 +143,14 @@ describe('the recolor tool: the grey beast', () => {
         assert.ok(TINY_STYLE_SHEETS.has('beastVariants'));
     });
 
-    test('only Lire draws from it', () => {
+    test('only Lire and the Carnival lion draw from it', () => {
         const dir = url('../game/');
         const users = readdirSync(dir).filter((f) => f.endsWith('.js'))
             .filter((f) => /sheet:\s*'beastVariants'/.test(readFileSync(new URL(f, dir), 'utf8')));
         assert.deepEqual(users, ['sprites.js']);
         const drawn = Object.entries(ENEMY_SPRITES)
             .filter(([, s]) => s.sheet === 'beastVariants').map(([type]) => type);
-        assert.deepEqual(drawn, ['Lire']);
+        assert.deepEqual(drawn, ['Lire', 'Carnival Lion']);
     });
 });
 
@@ -167,6 +167,28 @@ describe('Lire, the summoned lion, has a picture', () => {
         assert.equal(s.sheet, 'beastVariants');
         assert.equal(s.row, 0);
         assert.equal(VARIANTS[s.col]?.name, 'tawny');
+    });
+
+    test('the Carnival lion wears the crimson column, so it is never taken for Lire', () => {
+        const lion = ENEMY_SPRITES['Carnival Lion'];
+        assert.ok(lion, 'the Carnival lion has no ENEMY_SPRITES entry');
+        assert.equal(lion.sheet, 'beastVariants');
+        assert.equal(VARIANTS[lion.col]?.name, 'crimson');
+        assert.notEqual(lion.col, ENEMY_SPRITES.Lire.col);
+    });
+
+    test('the tawny and crimson cells share a silhouette but not a single body pixel', () => {
+        const [tawny, crimson] = ['tawny', 'crimson'].map((n) => VARIANTS.findIndex((v) => v.name === n));
+        let body = 0;
+        for (const [x, y] of cells) {
+            const a = sheet.at(tawny * 16 + x, y), b = sheet.at(crimson * 16 + x, y);
+            assert.equal(a[3], b[3], `(${x},${y}) alpha`);
+            if (!a[3]) continue;
+            if (key(a) === key(b)) {
+                assert.ok([OUTLINE, TAIL].some((c) => key(c) === key(a)), `(${x},${y}) is the same body colour`);
+            } else body++;
+        }
+        assert.equal(body, 37 + 21);
     });
 
     test('the tawny cell is not the brown rat\'s, so the two never read as one', () => {

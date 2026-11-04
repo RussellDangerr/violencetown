@@ -539,6 +539,9 @@ export const ENEMY_SPRITES = {
     // _spawnSummon). No lion in Tiny Dungeon: the grey beast, (4,10), recoloured
     // tawny by tools/gen_recolor.py (BEAST_VARIANTS column 0).
     'Lire': { sheet: 'beastVariants', col: 0, row: 0, static: true },
+    // The Carnival's own lion (plans/ln1-carnival-lion.md): the same beast in
+    // the crimson column (BEAST_VARIANTS column 1), so it is never taken for Lire.
+    'Carnival Lion': { sheet: 'beastVariants', col: 1, row: 0, static: true },
 
     // The frozen area's mooks (plans/ic4-frozen-creatures.md). No snow creature
     // exists in the bundled sheets, so each borrows the closest Tiny Dungeon
