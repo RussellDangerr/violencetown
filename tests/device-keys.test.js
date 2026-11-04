@@ -288,9 +288,9 @@ describe('C3 — the cursor', () => {
         assert.equal(g._deviceSel.slotKey, 'sides');
     });
 
-    test('the weapon plate is not a cursor stop (it is inert to taps too)', () => {
+    test('the right-hand weapon plate is a cursor stop (FX57: it opens a chooser now)', () => {
         const g = makeGame(x => { x._deviceTab = 'gear'; });
-        assert.ok(!g._deviceTargets().ids.includes('weapon'));
+        assert.ok(g._deviceTargets().ids.includes('weapon'));
     });
 
     test('on the Quests tab up and down still scroll', () => {
