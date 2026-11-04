@@ -79,6 +79,21 @@ export const ENTRIES = {
         damage: 6,
         sightRange: 6,
     },
+    // The Carnival's lion (plans/ln1-carnival-lion.md, ruling LN1R1 a): a mini-boss you
+    // always meet, placed by hand (`{ id, entry, x, y }`). Not Lire, the lion the Lion
+    // Whip hires. Stand-ins until designed: the Fungus King's numbers and kit, the name,
+    // the barks, the tint. No `boss`, `tag` or slot, so it drops nothing required.
+    carnival_lion: {
+        type: 'Carnival Lion',
+        name: '[Lion]',
+        gold: 20,
+        loadout: ['tunnel_mushroom', 'tunnel_mushroom', 'sludge_sack', 'sludge_sack', 'boardwalk_burger', 'foil_hat', 'defence_poition', 'soap'],
+        hp: 100,
+        armor: 6,
+        damage: 12,
+        barks: ['[TEXT]'],
+        barkEveryTurns: 6,
+    },
     // The Sewer's character (plans/cs1-crat-talk-both-sides.md): the Crat, who
     // asks you to settle a dispute in the side room north of the Sewer. A
     // townsperson's numbers; borrowed Violencian art until it is designed.
