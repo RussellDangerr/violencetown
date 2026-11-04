@@ -190,7 +190,8 @@ describe('gentle on the eyes', () => {
 describe('the words', () => {
     test('every word but the game name is [TEXT]', () => {
         assert.equal(CARD.name, 'VIOLENCETOWN');
-        for (const line of CARD.lines) assert.match(line, /^\[TEXT\]/);
+        assert.ok(CARD.lines.length > 0);
+        for (const line of CARD.lines) assert.equal(line, '[TEXT]');
     });
 });
 
