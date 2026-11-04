@@ -1402,6 +1402,13 @@ class Game {
             // closes the menu entirely without consuming a turn.
             if (this.state === STATE.RADIAL_MENU) {
                 e.preventDefault();
+                // (FX39) A direction pressed WHILE the wheel is up belongs to the wheel.
+                // The handler above logged it as physically held; if it fires the action
+                // the wheel closes, _closeWheel resumes any held walk, and this very key
+                // would walk into the person it just acted on (a bump, i.e. Talk). Drop
+                // it from the held sets. A direction held BEFORE the wheel opened is not
+                // touched, so that walk still resumes on close.
+                this._wheelTakesKey?.(e.code);
                 const w = this.wheel;
                 const UP   = (e.code === 'ArrowUp'   || e.code === 'KeyW' || e.code === 'Space' || e.code === 'Enter');
                 const DOWN = (e.code === 'ArrowDown' || e.code === 'KeyS' || e.code === 'Escape');
@@ -3585,6 +3592,12 @@ class Game {
     }
 
     // Spin the active ring one slot and stamp the spin so the renderer sweeps it.
+    // (FX39) The wheel owns a direction pressed while it is up: forget it as "held".
+    _wheelTakesKey(code) {
+        this._physicalHeld.delete(code);
+        this._heldDirKeys = this._heldDirKeys.filter(c => c !== code);
+    }
+
     _wheelCycle(dir) {
         const w = this.wheel;
         cycle(w, dir);
