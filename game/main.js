@@ -93,6 +93,7 @@ import {
     aimTap, adjacentFacing,
 } from './wheel-model.js'; // (sunburst wheel) node-tree model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
+import { introAt, isSkipKey } from './tv-intro.js';                                     // (TV1) the TV opening before the title
 import { fighters, joiners } from './fight-area.js';                                     // (fight-fog) who is in the fight
 import { fightStartKind, entranceFor, fightFxActive } from './fight-entrance.js'; // (fight-fog) how it began, and how long its fog moves
 import { createCascade, CASCADE_BEAT_MS, LUNGE_MS } from './cascade.js';           // (turn-model C1) the enemy phase, one actor at a time
@@ -618,7 +619,7 @@ class Game {
 
         // Render splash screen with pixel art
         const splashCanvas = document.getElementById('splash-canvas');
-        if (splashCanvas) this.renderer.renderSplash(splashCanvas);
+        if (splashCanvas) this._startTvIntro(splashCanvas);   // (TV1) the TV opening, then the title as ever
 
         await this._loadMap('town-map.json');
         this._bindSplash();
@@ -1171,10 +1172,51 @@ class Game {
 
     // ── Splash ───────────────────────────────────────────────────────────────
 
+    // (TV1) The game opens like a TV switching on, then the title screen. It
+    // plays every time the game starts; any key or tap skips it to the title
+    // (the key is spent: it does not also press GAME START). reduceMotion shows
+    // the still card at once. The autoplay starts from the title and skips it,
+    // as if a key had already been pressed. Draws on the splash canvas only.
+    _startTvIntro(splashCanvas) {
+        const splash = document.getElementById('splash');
+        if (typeof window !== 'undefined' && window.__autoplay) { this.renderer.renderSplash(splashCanvas); return; }
+        const hidden = ['splash-buttons', 'splash-hint'].map((id) => document.getElementById(id)).filter(Boolean);
+        const reduceMotion = !!Settings.get('reduceMotion');
+        const t0 = performance.now();
+        let raf = 0;
+        const end = () => {
+            window.removeEventListener('keydown', onKey, true);
+            splash?.removeEventListener('pointerdown', onTap, true);
+            cancelAnimationFrame(raf);
+            for (const el of hidden) el.style.visibility = '';
+            this._endTvIntro = null;
+            this.renderer.renderSplash(splashCanvas);
+        };
+        const onKey = (e) => {
+            if (!isSkipKey(e)) return;
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            end();
+        };
+        const onTap = (e) => { e.preventDefault(); end(); };
+        const frame = () => {
+            const f = introAt(performance.now() - t0, { reduceMotion });
+            if (f.done) { end(); return; }
+            this.renderer.renderSplash(splashCanvas, f);
+            raf = requestAnimationFrame(frame);
+        };
+        for (const el of hidden) el.style.visibility = 'hidden';
+        window.addEventListener('keydown', onKey, true);
+        splash?.addEventListener('pointerdown', onTap, true);
+        this._endTvIntro = end;
+        frame();
+    }
+
     _bindSplash() {
         const splash = document.getElementById('splash');
         const wrapper = document.getElementById('game-wrapper');
         const start = () => {
+            this._endTvIntro?.();         // (TV1) a button pressed any other way ends the opening too
             audio.init();                 // [audio] first user gesture — unlock Web Audio
             this._applyAudioSettings();   // [settings] apply persisted volume/mute on boot
             audio.playMusic('town');      // [audio] start the ambient bed for the town hub
@@ -1192,6 +1234,7 @@ class Game {
         // autosave overwrites it, so a stray reload can still resume). Space
         // does what CONTINUE does when there is a save, and GAME START when not.
         const continueGame = async () => {
+            this._endTvIntro?.();         // (TV1)
             audio.init();                 // [audio] first user gesture — unlock Web Audio
             this._applyAudioSettings();   // [settings] apply persisted volume/mute on boot
             audio.playMusic('town');      // [audio] start the ambient bed (zone music re-syncs on map load)

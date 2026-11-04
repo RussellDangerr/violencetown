@@ -49,6 +49,7 @@ import { isHunting } from './ai.js'; // one spelling of "actively hunting the pl
 import { fighters, fightArea, FIGHT_MARGIN } from './fight-area.js';        // (fight-fog) who is in the fight, and what they can see
 import { entranceAt, fogReveal, fogDepth, fogOut, tileJitter, FOG_TINT, FOG_DENSITY, FOG_BLUR_TILES,
          FOG_FAR_TILES, FOG_IN_MS, FOG_OUT_MS } from './fight-entrance.js'; // (fight-fog) the entrance, and the fog's timeline and look
+import { drawTvIntro } from './tv-intro.js';   // (TV1) the TV opening on the splash canvas
 import { combatLines } from './combat-log.js';   // (combat-hud stage 3) the fight face's feed
 import { playerPanel, targetPanel, panelTarget } from './fight-panels.js';   // (combat-hud stage 4)
 import * as Settings from './settings.js'; // (combat-feel-pass) reduce-motion for hit-splats (namespace import — see main.js)
@@ -438,12 +439,17 @@ export class Renderer {
 
     // ── Splash ───────────────────────────────────────────────────────────────
 
-    renderSplash(splashCanvas) {
+    // (TV1) `intro` is a frame of the TV opening (tv-intro.js introAt): while the
+    // card covers the screen only the opening is drawn; as it melts away it is
+    // drawn over the title screen, which is drawn as ever.
+    renderSplash(splashCanvas, intro = null) {
         const ctx = splashCanvas.getContext('2d');
         splashCanvas.width = 320 * SS;
         splashCanvas.height = 220 * SS;
         ctx.setTransform(SS, 0, 0, SS, 0, 0);
         ctx.imageSmoothingEnabled = false;
+        const tv = intro && !intro.done ? intro : null;
+        if (tv && tv.cardAlpha >= 1) { drawTvIntro(ctx, this.font, tv); return; }
 
         ctx.fillStyle = '#0e0c08';
         ctx.fillRect(0, 0, 320, 220);
@@ -520,6 +526,7 @@ export class Renderer {
                 color: UI.textLight, scale: 1, align: 'left',
             });
         }
+        if (tv) drawTvIntro(ctx, this.font, tv);
     }
 
     // ── Splash cityscape ─────────────────────────────────────────────────────
