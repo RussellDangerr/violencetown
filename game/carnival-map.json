@@ -38,7 +38,8 @@
         {"id": "birthday-rat-1", "entry": "birthday_rat", "x": 46, "y": 4},
         {"id": "sludge-rat-1", "entry": "sludge_rat", "x": 36, "y": 17},
         {"id": "robot-rat-1", "entry": "robot_rat", "x": 50, "y": 13},
-        {"id": "carnival-lion", "entry": "carnival_lion", "x": 20, "y": 16}
+        {"id": "carnival-lion", "entry": "carnival_lion", "x": 20, "y": 16},
+        {"id": "the-clown", "entry": "the_clown", "x": 38, "y": 8}
     ],
     "items": [
         {"type": "hot_dog", "x": 16, "y": 6},
