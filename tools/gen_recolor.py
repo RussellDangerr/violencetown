@@ -26,7 +26,8 @@ silhouette in grey, with an orange tail. It also has exactly four colours:
     tail     (234, 165, 108)  11 px, never swapped
 
 Only its two greys are swapped (BEAST_VARIANTS). Lire, the lion the Lion
-Whip's "Hire Lire" trick summons, is its tawny column.
+Whip's "Hire Lire" trick summons, is its tawny column; the Carnival's own lion is
+its crimson one.
 
 The tool refuses to run if a base cell ever has any other colour, or loses
 one of these, since an exact swap would then silently miss pixels.
@@ -77,9 +78,10 @@ BEAST_LIGHT = (192, 203, 220)
 BEAST_TAIL = (234, 165, 108)
 
 # One row per variant: name, then what BEAST_SHADE and BEAST_LIGHT become.
-# tawny is Lire.
+# tawny is Lire; crimson is the Carnival's lion (a stand-in tint).
 BEAST_VARIANTS = [
     ('tawny', (193, 154, 107), (232, 203, 150)),
+    ('crimson', (140, 52, 60), (196, 92, 88)),
 ]
 
 
