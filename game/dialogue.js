@@ -234,6 +234,14 @@ export const DIALOGUES = {
               available: (g) => !!g.questEngine && g.questEngine.currentStageId() === 'handoff' && g.questEngine.holdsOwed(),
               onPick: (g, npc) => g.questEngine.handOver(npc.id),
               reply: '[TEXT]' },
+            // (YC1 / YCR1 a) After the delivery he brings up the Yellow Card, once. The quest
+            // flag keeps it spent across a save (an NPC's spent `once` choices are not saved).
+            // No item, no mechanic; label and reply are placeholders.
+            { id: 'yellowCard', label: '[TEXT]', once: true,
+              available: (g) => !!g.questEngine && g.questEngine.isComplete('deliver_burger')
+                  && !g.questEngine.getFlag('yellowCardRaised'),
+              onPick: (g) => { g.questEngine.state.flags.yellowCardRaised = true; },
+              reply: '[TEXT]' },
             { id: 'loan', label: 'Ask what the bank actually does', once: true,
               reply: '"We lend. We collect. We are very, very patient about the collecting. (Placeholder — the Financier\'s arc comes later.)"' },
             { id: 'flatter', label: '[Flatter him]', repeatable: true, delta: 3,
