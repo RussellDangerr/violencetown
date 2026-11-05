@@ -128,6 +128,20 @@ export function circleStep(centre, from, canStep) {
   return null;
 }
 
+// ── The angel (plans/ca1-crying-angel.md) ──────────────────────────────────
+//
+// A stone figure that moves only on the beats you look at it (npc.js angelTurn). The flag is
+// off unless a registry entry sets it; it rides the free-form `tag` the way the circler's does.
+export const ANGEL_TAG = 'angel';
+
+// How far out you can hold it in your gaze: the sight range handed to perception.js when the
+// player is the watcher.
+export const ANGEL_GAZE_RANGE = 8;
+
+export function isAngel(e) {
+  return !!e && e.tag === ANGEL_TAG;
+}
+
 // Default grunt heal policy — per-enemy policies come later (first boss build).
 export const HEAL_HP_FLOOR  = 40; // buy only at or below this HP
 export const HEAL_MIN_GOLD  = 20; // a sliver below this can never heal

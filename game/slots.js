@@ -143,6 +143,25 @@ export const ENTRIES = {
         barks: ['[TEXT]'],
         barkEveryTurns: 6,
     },
+    // The Graveyard's angel (plans/ca1-crying-angel.md): one stone figure placed by hand at
+    // (21,9). It moves only on the beats you look at it (npc.js angelTurn; the `angel` tag is
+    // the flag, off for every other entry) and has no sight of its own, so it never joins or
+    // starts a fight. Stand-ins until designed: the Graveyard Rattling Skeleton's numbers and
+    // kit, the name, the barks, the examine text, the art. No `boss`, no slot.
+    crying_angel: {
+        type: 'Crying Angel',
+        name: '[Angel]',
+        tag: 'angel',
+        gold: 4,
+        loadout: ['rock', 'pipe', 'foil_hat', 'shoe_bags'],
+        hp: 100,
+        armor: 0,
+        damage: ACT2_MOB_DAMAGE,
+        sightRange: 0,
+        barks: ['[TEXT]'],
+        barkEveryTurns: 6,
+        examine: '[TEXT]',
+    },
     // The Sewer's character (plans/cs1-crat-talk-both-sides.md): the Crat, who
     // asks you to settle a dispute in the side room north of the Sewer. A
     // townsperson's numbers; borrowed Violencian art until it is designed.

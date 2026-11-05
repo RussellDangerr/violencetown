@@ -21,9 +21,9 @@
 
 import { manhattan, chebyshev } from './utils.js';
 import { getGreedyStep, stepEntity, findPath, fleeFrom, fleeStep, stepFree } from './pathing.js';
-import { perceives, nextAwareness, VERDICT, BLIND_SWEEP_BEATS } from './perception.js';
+import { perceives, nextAwareness, VERDICT, BLIND_SWEEP_BEATS, FACING_VECTORS } from './perception.js';
 import { healPurchase, kitChoice, isSewerDweller, bossSpend, BOSS_RALLY_RANGE, isHunting,
-         isCircler, circlesThisBeat, circleStep } from './ai.js';
+         isCircler, circlesThisBeat, circleStep, isAngel, ANGEL_GAZE_RANGE } from './ai.js';
 import { ITEMS, kitHealValue, applyKitItem, kitDefenceValue, kitGearWeight } from './items.js';
 import { WEAPONS } from './weapons.js';
 import { burnGold, transferGold } from './trade.js';
@@ -196,6 +196,9 @@ export function tickNpcState(game, npc, clock = game.turn, rng = game.rng) {
         }
 
         case STATE.HOSTILE: {
+            // (ca1) The angel keeps no ladder of its own: it moves, or not, by whether you look.
+            if (isAngel(npc)) { angelTurn(game, npc); break; }
+
             // (BS1) A mugger who already has your gold only runs.
             if (isMugger(npc) && npc._tookGold > 0) { runOff(game, npc); break; }
 
@@ -536,6 +539,40 @@ export function tickNpcState(game, npc, clock = game.turn, rng = game.rng) {
     }
 
     return messages;
+}
+
+// ── The angel (CA1, plans/ca1-crying-angel.md) ─────────────────────────────
+//
+// It acts on the player's action, and only when it is looked at. "Looked at" is perception.js's
+// own question asked of YOU: the player is the watcher, facing as the game has it, sight out to
+// ANGEL_GAZE_RANGE, so the cone and the line of sight are exactly the ones enemies use on you
+// and a wall between you counts as not looking. A blow from you counts as looking for that beat
+// (a blow does not turn you): perception.js struck() has already marked it. Nothing here touches
+// its `state` (it stays idle, so it is never in a fight) or draws from game.rng.
+//
+// The player's facing is the game's: 'up' | 'down' | 'left' | 'right'.
+const GAZE_FACING = { up: 'N', down: 'S', left: 'W', right: 'E' };
+
+export function isLookedAt(game, npc) {
+    const [fx, fy] = FACING_VECTORS[GAZE_FACING[game.facing] ?? 'S'];
+    const gazer = { x: game.playerX, y: game.playerY, _lastDx: fx, _lastDy: fy, sightRange: ANGEL_GAZE_RANGE };
+    return perceives(game.map, gazer, npc.x, npc.y) === VERDICT.DIRECT;
+}
+
+export function angelTurn(game, npc) {
+    const blow = !!npc._struckBy;
+    npc._struckBy = null;
+    // A noise can nudge it to 'suspicious'; it has no ladder, so it is always plain idle.
+    npc.state = 'idle';
+    if (!blow && !isLookedAt(game, npc)) return;      // not looked at: nothing at all
+    if (chebyshev(npc.x, npc.y, game.playerX, game.playerY) <= 1) {
+        npc._lastDx = Math.sign(game.playerX - npc.x);
+        npc._lastDy = Math.sign(game.playerY - npc.y);
+        game.applyDamageToPlayer(npc.damage, npc);
+        return;
+    }
+    const step = getGreedyStep(game, { x: npc.x, y: npc.y }, { x: game.playerX, y: game.playerY }, { self: npc });
+    if (step) stepEntity(npc, step.x, step.y, game._MOVE_MS);
 }
 
 // ── The mugger (BS1, plans/bs1-ruffian-steals-gold.md) ─────────────────────
