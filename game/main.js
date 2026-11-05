@@ -89,6 +89,7 @@ import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (n
 import {
     createWheelState, cycle, drill, back, compose, autoAimTile,
     needsFriendlyConfirm, aimRange, affectedTiles, selectedNode, restoreLastCategory, verbApplies,
+    greyedReasonLine,
     orderedTargetVerbs, isCombatActive, defaultVerb, previewChildren,
     aimTap, adjacentFacing,
 } from './wheel-model.js'; // (sunburst wheel) node-tree model
@@ -3661,9 +3662,16 @@ class Game {
     _wheelDrill() {
         const w = this.wheel;
         const node = selectedNode(w);
+        // (fx58) A refused press still bumps and passes no turn, but now says why:
+        // one log line from wheel-model's reasons table (greyedReasonLine).
+        const refuse = () => {
+            const line = greyedReasonLine(node, this);
+            if (line) this._log(line);
+            audio.playSfx('bump-wall'); this._render();
+        };
         if (node.placeholder) { audio.playSfx('bump-wall'); return; }
-        if (node.available && !node.available(this)) { audio.playSfx('bump-wall'); return; }
-        if (!verbApplies(node, this)) { audio.playSfx('bump-wall'); return; }   // (Phase 1) no valid target → bump
+        if (node.available && !node.available(this)) { refuse(); return; }
+        if (!verbApplies(node, this)) { refuse(); return; }   // (Phase 1) no valid target → bump
         const r = drill(w, this);
         if (r === 'bump') { audio.playSfx('bump-wall'); return; }
         if (r === 'fire') { this._wheelCommit(); return; }
