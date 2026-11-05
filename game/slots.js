@@ -127,6 +127,22 @@ export const ENTRIES = {
         barks: ['[TEXT]'],
         barkEveryTurns: 6,
     },
+    // The Carnival's dolls (plans/ec1-carnival-doll-pack.md): four combatants placed by hand
+    // around (10,17), which circle you once beside you exactly as the horses do (the `circler`
+    // tag, ai.js circleStep). Stand-ins until designed: the townie Knuckles's armour and
+    // damage with a two-item kit, the purse, the name, the barks, the art. No `boss`, no slot.
+    carnival_doll: {
+        type: 'Carnival Doll',
+        name: '[Doll]',
+        tag: 'circler',
+        gold: 2,
+        loadout: ['rock', 'pipe'],
+        hp: 100,
+        armor: -30,
+        damage: 4,
+        barks: ['[TEXT]'],
+        barkEveryTurns: 6,
+    },
     // The Sewer's character (plans/cs1-crat-talk-both-sides.md): the Crat, who
     // asks you to settle a dispute in the side room north of the Sewer. A
     // townsperson's numbers; borrowed Violencian art until it is designed.
