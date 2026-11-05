@@ -355,6 +355,7 @@ class Game {
         this._pathArrive = null;
         this._pressTimer = null;    // touch long-press timer → full Target List
         this._pressStart = null;    // pointerdown client pos, to cancel the press on drag
+        this._pendingTap = null;    // (FX60) a touch Hit held back until the finger lifts
         this._turnPress = null;     // (C3b) { tile } — a press beside you: walks on release, turns on long-press
 
         // In-canvas log strip (Phase 1B of overhead-dialogue plan). Mirrors
@@ -1778,12 +1779,19 @@ class Game {
         canvas.addEventListener('pointerdown', (e) => this._onCanvasPointerDown(e));
         // Long-press bookkeeping: releasing / dragging / cancelling before the timer
         // fires means it was a normal tap (default action already ran) — drop it.
-        const cancelPress = () => { if (this._pressTimer) { clearTimeout(this._pressTimer); this._pressTimer = null; } };
+        const cancelPress = () => {
+            this._pendingTap = null;   // (FX60) a deferred touch Hit dies with the press
+            if (this._pressTimer) { clearTimeout(this._pressTimer); this._pressTimer = null; }
+        };
         // Resolve a dialogue drag: a press that never moved past the threshold is a
         // tap → pick the row; a real drag scrolled the list and picks nothing.
         const endPress = (e) => {
+            // (FX60) A touch tap on a hostile waited for the finger to lift: the lift
+            // before the long-press timer fired is the tap, so it hits now.
+            const tap = (this._pressTimer && e && e.type === 'pointerup') ? this._pendingTap : null;
             cancelPress();
             this._releaseTurnPress(e);   // (C3b) a quick tap beside you walks the step on release
+            if (tap && this.state === STATE.IDLE && !this._animating) tap();
             if (this._openerHeld) { this._openerHeld = false; this._wheelOpenerUp(); }   // (screen-fill) the dock's ✦, released
             if (this._dlgDrag) {
                 const d = this._dlgDrag; this._dlgDrag = null;
@@ -2198,6 +2206,7 @@ class Game {
         // first, then the menu would bail because the state left IDLE.
         if (e.button >= 1) return;
         this._turnPress = null;   // (C3b) a new press never inherits an old one's pending step
+        this._pendingTap = null;  // (FX60) ...nor an old one's held-back Hit
         this._skipLootReel?.();   // (FX3c) a tap skips the loot reel, then does its normal job
         // Mirror the keyboard gate: don't process taps during the move
         // animation or while the world is resolving. Splash has its own
@@ -2306,7 +2315,15 @@ class Game {
             const target = this._targetAt(tile.x, tile.y);
             if (target) {
                 const v = defaultVerb(target, this);
-                if (v) { this._actOnTarget(v, target); this._armLongPress(tile, e); return; }
+                if (v) {
+                    // (FX60) On touch a Hit waits for the finger to lift, so a long-press
+                    // opens the list without having spent a turn. Mouse hits on press.
+                    if (v.key === 'hit' && e.pointerType === 'touch') {
+                        this._armLongPress(tile, e, () => this._actOnTarget(v, target));
+                        return;
+                    }
+                    this._actOnTarget(v, target); this._armLongPress(tile, e); return;
+                }
             }
             // (C3b, ruling C3R2) An empty tile straight beside you: a long-press
             // faces it without stepping, so the step waits for the release.
@@ -2326,11 +2343,14 @@ class Game {
     // stays put over a thing ~450ms, open the full Target List instead (opening it
     // halts the walk the tap just started). Cancelled on pointerup / drag / cancel
     // (see _bindCanvasTap) and by _stopAutoRepeat. Desktop uses right-click.
-    _armLongPress(tile, e) {
+    // (FX60) `onTap`, when given, is the action held back until the finger lifts.
+    _armLongPress(tile, e, onTap = null) {
         if (this._pressTimer) clearTimeout(this._pressTimer);
         this._pressStart = e ? { x: e.clientX, y: e.clientY } : null;
+        this._pendingTap = onTap;
         this._pressTimer = setTimeout(() => {
             this._pressTimer = null;
+            this._pendingTap = null;
             if (this.state === STATE.IDLE) this._openTargetList(tile.x, tile.y);
         }, 450);
     }
@@ -3017,6 +3037,7 @@ class Game {
         this._pathQueue = [];       // cancel any click-to-walk in progress
         this._pathArrive = null;
         if (this._pressTimer) { clearTimeout(this._pressTimer); this._pressTimer = null; }
+        this._pendingTap = null;    // (FX60) a touch Hit still waiting on the lift
         this._turnPress = null;     // (C3b) a pending tap-beside-you step
     }
 
@@ -7682,7 +7703,12 @@ function boot() {
 // fired (preview-tool reloads, bf-cache restoration, etc.). Check readyState
 // up front and run boot inline if the DOM is already ready; otherwise wait
 // for the event as before.
-if (document.readyState === 'loading') {
+// (FX60) Exported, and booted only where there is a page, so a test can drive the
+// game's own pointer listeners without a browser.
+export { Game };
+if (typeof document === 'undefined') {
+    // no page: imported by a test
+} else if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);
 } else {
     boot();
