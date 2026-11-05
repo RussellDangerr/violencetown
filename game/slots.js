@@ -164,6 +164,7 @@ export const ENTRIES = {
         dialogueId: 'assistant_manager',
         drawScale: 0.5,
         unicycle: true,
+        ownDice: true,   // his wander never draws the shared ambient stream (it moved a replay that never met him)
     },
     // The Graveyard's angel (plans/ca1-crying-angel.md): one stone figure placed by hand at
     // (21,10). It moves only on the beats you look at it (npc.js angelTurn; the `angel` tag is

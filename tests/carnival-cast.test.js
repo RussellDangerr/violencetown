@@ -705,6 +705,34 @@ describe('the assistant manager never fights, wanders, and talks', () => {
         assert.ok(!seen.has('29,3') && !seen.has('29,5'), 'he rolled onto the horses\' ground');
     });
 
+    test('his wander draws on dice of his own, never the shared streams (a replay that never met him must not move)', () => {
+        const enemies = [spawned(manager)];
+        const boom = () => { throw new Error('he drew from a shared stream'); };
+        const game = {
+            playerX: 0, playerY: 20, turn: 0, worldTick: 0, _MOVE_MS: 150, containers: [],
+            map, enemies, rng: { pick: boom, float: boom, int: boom, next: boom },
+            ambientRng: { pick: boom, float: boom, int: boom, next: boom },
+        };
+        const m = enemies.find(e => e.id === manager.id);
+        const seen = new Set();
+        for (let i = 0; i < 100; i++) { game.worldTick++; resolveAmbientTurns(game); seen.add(`${m.x},${m.y}`); }
+        assert.ok(seen.size > 1, 'he never moved: the test checked nothing');
+        assert.equal(ENTRIES.assistant_manager.ownDice, true);
+    });
+
+    test('the same id rolls the same road every time', () => {
+        const run = () => {
+            const enemies = carnival.enemies.map(spawned);
+            const m = enemies.find(e => e.id === manager.id);
+            const game = { playerX: 0, playerY: 20, turn: 0, worldTick: 0, _MOVE_MS: 150, containers: [],
+                           map, enemies, rng: new RNG(1), ambientRng: new RNG(2) };
+            const trail = [];
+            for (let i = 0; i < 60; i++) { game.worldTick++; resolveAmbientTurns(game); trail.push(`${m.x},${m.y}`); }
+            return trail;
+        };
+        assert.deepEqual(run(), run());
+    });
+
     test('talking is his default verb', () => {
         const m = spawned(manager);
         const verb = defaultVerb({ x: m.x, y: m.y, npc: m }, { enemies: [m], playerX: 32, playerY: 4 });
@@ -740,6 +768,7 @@ describe('the assistant manager: how he is drawn is saved, and only his', () => 
         const back = Enemy.fromSave(JSON.parse(JSON.stringify(m.toSave())));
         assert.equal(back.drawScale, m.drawScale);
         assert.equal(back.unicycle, true);
+        assert.equal(back.ownDice, true);
         assert.equal(back.dialogueId, m.dialogueId);
         assert.equal(back.type, 'Carnival Clown');
     });
@@ -753,9 +782,11 @@ describe('the assistant manager: how he is drawn is saved, and only his', () => 
         for (const e of others) {
             assert.equal(e.drawScale, null, `${e.id} has a drawScale`);
             assert.equal(e.unicycle, false, `${e.id} has a unicycle`);
+            assert.equal(e.ownDice, false, `${e.id} has dice of its own`);
             const saved = JSON.parse(JSON.stringify(e.toSave()));
             assert.ok(!('drawScale' in saved), `${e.id} saves a drawScale`);
             assert.ok(!('unicycle' in saved), `${e.id} saves a unicycle`);
+            assert.ok(!('ownDice' in saved), `${e.id} saves ownDice`);
             const back = Enemy.fromSave(saved);
             assert.equal(back.drawScale, null);
             assert.equal(back.unicycle, false);
