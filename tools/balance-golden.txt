@@ -17,6 +17,10 @@ carnival/clown2                   Carnival Clown              100       0     12
 carnival/clown3                   Carnival Clown              100       0     12       59              5              3      9
 carnival/clown4                   Carnival Clown              100       0     12       59              5              3      9
 carnival/clown5                   Carnival Clown              100       0     12       59              5              3      9
+carnival/carnival-doll-1          Carnival Doll               100     -30      4       13              2              2     25
+carnival/carnival-doll-2          Carnival Doll               100     -30      4       13              2              2     25
+carnival/carnival-doll-3          Carnival Doll               100     -30      4       13              2              2     25
+carnival/carnival-doll-4          Carnival Doll               100     -30      4       13              2              2     25
 carnival/carnival-horse-1         Carnival Horse              100       0     12       35              5              3      9
 carnival/carnival-horse-2         Carnival Horse              100       0     12       35              5              3      9
 carnival/carnival-horse-3         Carnival Horse              100       0     12       35              5              3      9
@@ -102,7 +106,7 @@ zone               faucet_gp
 bank                       0
 borgir                    25
 canyon                     8
-carnival                 134
+carnival                 142
 casino                     0
 diner                      0
 downtown                   8
