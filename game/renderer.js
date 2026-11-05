@@ -497,15 +497,17 @@ export class Renderer {
         // Big GAME START prompt — the centerpiece. Scale 3 = 24px tall.
         // Hard 2px black drop-shadow gives the marquee its chunky arcade weight.
         if (this.font) {
-            this.font.drawText(ctx, 'GAME START', 162, 150, {
+            this.font.drawText(ctx, 'GAME START', 162, 148, {
                 color: '#5a4420', scale: 3, align: 'center',
             });
-            this.font.drawText(ctx, 'GAME START', 160, 148, {
+            this.font.drawText(ctx, 'GAME START', 160, 146, {
                 color: UI.gold, scale: 3, align: 'center',
             });
 
-            // Subtitle hint
-            this.font.drawText(ctx, 'PRESS SPACE OR CLICK BELOW', 160, 178, {
+            // Subtitle hint. Measured from VT323's real glyph boxes, y=177 leaves
+            // 2px clear below GAME START's shadow and 2px above BY CAELAN GANDER
+            // (at 178 it left 1.5 and 1); tests/splash-skyline.test.js pins it.
+            this.font.drawText(ctx, 'PRESS SPACE OR CLICK BELOW', 160, 177, {
                 color: UI.textLight, scale: 1, align: 'center',
             });
         }
@@ -554,6 +556,16 @@ export class Renderer {
         const SKY_Y = 56, SKY_H = 76;
         const GROUND_Y = SKY_Y + SKY_H;
 
+        // Every skyline fill goes through here: it keeps only the part that sits
+        // inside the sky (x = 24..296), so the last building of a row is cut off
+        // at the edge instead of poking over the panel's frame. Whole buildings
+        // inside are drawn exactly as before.
+        const SKY_L = PANEL_X, SKY_R = PANEL_X + PANEL_W;
+        const fill = (x, y, w, h) => {
+            const x0 = Math.max(x, SKY_L), x1 = Math.min(x + w, SKY_R);
+            if (x1 > x0) ctx.fillRect(x0, y, x1 - x0, h);
+        };
+
         // Sky — a dusk gradient (deep indigo night above, warm ember at the
         // horizon) so the near-black skyline silhouettes crisply against it on
         // the dark stone panel; lit gold windows + a low moon punch through.
@@ -570,7 +582,7 @@ export class Renderer {
         const moonRects = [[2,0,4,1],[1,1,6,1],[0,2,8,4],[1,6,6,1],[2,7,4,1]];
         ctx.fillStyle = '#d4b96a';
         for (const [dx, dy, w, h] of moonRects) {
-            ctx.fillRect(moonX + dx, moonY + dy, w, h);
+            fill(moonX + dx, moonY + dy, w, h);
         }
 
         // Far-row buildings — short, dim, no windows. Provides depth.
@@ -582,7 +594,7 @@ export class Renderer {
         for (let i = 0; PANEL_X + i * FAR_W < PANEL_X + PANEL_W; i++) {
             const h = FAR_H[i % FAR_H.length];
             const bx = PANEL_X + i * FAR_W;
-            ctx.fillRect(bx, farY0 - h, FAR_W, h + 20);
+            fill(bx, farY0 - h, FAR_W, h + 20);
         }
 
         // Near-row buildings — taller, varied widths, window dots. The
@@ -601,11 +613,11 @@ export class Renderer {
             const [bw, bh, wPerRow, wRows] = NEAR_PATTERN[i % NEAR_PATTERN.length];
             const by = GROUND_Y - bh;
             // Building body
-            ctx.fillRect(bx, by, bw, bh + 8); // +8 lets it run past the ground line
+            fill(bx, by, bw, bh + 8); // +8 lets it run past the ground line
             // Top-edge highlight (one pixel lighter) — gives the silhouette
             // a slight glint that suggests the moon is grazing the rooftops.
             ctx.fillStyle = '#3a2a18';
-            ctx.fillRect(bx, by, bw, 1);
+            fill(bx, by, bw, 1);
             ctx.fillStyle = '#100a08';
             // Window dots — small 1×1 ochre marks, evenly spaced.
             // Skip a deterministic ~20% so the windows look lived-in (some
@@ -621,7 +633,7 @@ export class Renderer {
                     const wy = by + wPadY + r * (1 + wSpaceY);
                     if (wy + 1 > by + bh - 2) continue; // don't draw windows past the bottom
                     ctx.fillStyle = '#d4b96a';
-                    ctx.fillRect(Math.round(wx), Math.round(wy), 1, 1);
+                    fill(Math.round(wx), Math.round(wy), 1, 1);
                     ctx.fillStyle = '#100a08';
                 }
             }
@@ -633,7 +645,7 @@ export class Renderer {
         // parchment band below, so the eye doesn't have to track where the
         // city ends and the GAME START callout begins.
         ctx.fillStyle = '#0a0606';
-        ctx.fillRect(PANEL_X, GROUND_Y - 1, PANEL_W, 2);
+        fill(PANEL_X, GROUND_Y - 1, PANEL_W, 2);
     }
 
     // ── Game Frame ───────────────────────────────────────────────────────────
