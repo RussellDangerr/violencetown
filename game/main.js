@@ -1464,7 +1464,7 @@ class Game {
                     if (DOWN) { w.confirming = false; audio.playSfx('menu-cancel'); this._render(); return; }
                     return;
                 }
-                if (w.aiming && this._arcDigit(e.code)) return;   // (FA1) the same number commits; another switches
+                if (w.aiming && this._arcDigit?.(e.code)) return;   // (FA1) the same number commits; another switches
                 if (w.aiming) { this._reticleKey(e.code); return; }
                 if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { this._wheelCycle(-1); return; }
                 if (e.code === 'ArrowRight' || e.code === 'KeyD') { this._wheelCycle(+1); return; }
@@ -1653,7 +1653,7 @@ class Game {
 
             // 1-9 = select item. (FA1) While a fight is on and the arc shows, 1-8 are the arc's
             // slots instead; 9, and every digit outside a fight, still pick the bag.
-            if (this._arcDigit(e.code)) { e.preventDefault(); return; }
+            if (this._arcDigit?.(e.code)) { e.preventDefault(); return; }
             const slot = this._digitToSlot(e.code);
             if (slot >= 0) { e.preventDefault(); this._selectItem(slot); return; }
 
@@ -2311,7 +2311,7 @@ class Game {
         // target; nothing there → fall through to the hotbar.
         if (this.state === STATE.IDLE) {
             if (this._tapXmbBar(pt)) return;   // (XMB) consumed a bottom-bar tap
-            if (this._arcTap(pt)) return;      // (FA1) a tap on one of the arc's slots runs it
+            if (this._arcTap?.(pt)) return;      // (FA1) a tap on one of the arc's slots runs it
             if (hitHud(this._hud(), pt) === 'dock') return;   // (screen-fill) the dock's bare chrome, not the world under it
             const tile = this._screenToTile(pt);
             // Bare tap on a thing → walk adjacent (if needed) → fire its DEFAULT
@@ -2482,7 +2482,8 @@ class Game {
                 if (w.confirming) w.confirming = false; else { w.aiming = false; w.reticle = null; }
                 audio.playSfx('menu-cancel'); this._render(); return;
             }
-            if (w.aiming) { if (!this._arcTap(pt)) this._aimTapAt(pt); return; }
+            if (w.aiming && !w.confirming && this._arcTap?.(pt)) return;   // (FA1) a slot of the arc, unless it has faded aside
+            if (w.aiming) { this._aimTapAt(pt); return; }
             this._wheelCommit(); return;
         }
 
