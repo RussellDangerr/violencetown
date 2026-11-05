@@ -39,10 +39,12 @@
     ],
     "props": [
         {"type": "grappleRock", "x": 15, "y": 1},
-        {"type": "wreckedCar", "x": 26, "y": 5}
+        {"type": "wreckedCar", "x": 26, "y": 5},
+        {"type": "grappleRock", "x": 26, "y": 1}
     ],
     "anchors": [
-        {"x": 15, "y": 1, "toMap": "downtown-map.json", "toX": 8, "toY": 10, "label": "[You sink the hook into the rockface and haul yourself up — out of the canyon, toward Downtown.]", "requires": "grappling_hook", "requiresMsg": "[Sheer rock, straight up. You'd need a good hook and a rope to climb out of this pit — and Pike has one.]"}
+        {"x": 15, "y": 1, "toMap": "downtown-map.json", "toX": 8, "toY": 10, "label": "[You sink the hook into the rockface and haul yourself up — out of the canyon, toward Downtown.]", "requires": "grappling_hook", "requiresMsg": "[Sheer rock, straight up. You'd need a good hook and a rope to climb out of this pit — and Pike has one.]"},
+        {"x": 26, "y": 1, "toMap": "valley-map.json", "toX": 20, "toY": 2, "label": "[TEXT]", "requires": "grappling_hook", "requiresMsg": "[TEXT]"}
     ],
     "transitions": [
         {"x": 0, "y": 4, "toMap": "gorge-map.json", "toX": 22, "toY": 9, "label": "[TEXT]"}
