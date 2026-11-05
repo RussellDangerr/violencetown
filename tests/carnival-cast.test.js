@@ -356,6 +356,66 @@ describe('The Clown throws his Fire Blood in a fight', () => {
     });
 });
 
+describe('the Carnival horses (plans/cb1-carnival-horses-circle.md): three, placed by hand around (28,4)', () => {
+    const horses = carnival.enemies.filter(e => e.entry === 'carnival_horse');
+    const skeleton = mapData('graveyard-map.json').enemies.find(e => e.type === 'Rattling Skeleton');
+
+    test('three spawns name the entry, at (27,3), (29,3) and (28,5), with no type or slot of their own', () => {
+        assert.deepEqual(horses.map(h => [h.x, h.y]), [[27, 3], [29, 3], [28, 5]]);
+        assert.equal(new Set(horses.map(h => h.id)).size, 3);
+        for (const h of horses) { assert.equal(h.type, undefined); assert.equal(h.slot, undefined); }
+    });
+
+    test('they stand on open ground of their own, around open ground at (28,4)', () => {
+        const map = new GameMap(carnival, 'carnival-map.json');
+        const others = [...carnival.enemies.filter(e => e.entry !== 'carnival_horse'), ...carnival.items, carnival.spawn, ...carnival.transitions];
+        for (const h of horses) {
+            assert.ok(map.isWalkable(h.x, h.y), `${h.id} is in a wall`);
+            assert.ok(!others.some(o => o.x === h.x && o.y === h.y), `${h.id}'s tile is taken`);
+            for (const t of carnival.transitions) assert.ok(dist(h, t) >= 6, `${h.id} by the door at ${t.x},${t.y}`);
+        }
+        for (let y = 3; y <= 5; y++) for (let x = 27; x <= 29; x++) assert.ok(map.isWalkable(x, y), `${x},${y}`);
+    });
+
+    test('they are the Rattling Skeleton\'s numbers and kit, with a placeholder name and bark', () => {
+        const e = ENTRIES.carnival_horse;
+        for (const k of ['hp', 'armor', 'damage', 'gold']) assert.equal(e[k], skeleton[k], k);
+        assert.deepEqual(e.loadout, skeleton.loadout);
+        assert.equal(e.name, '[Horse]');
+        assert.deepEqual(e.barks, ['[TEXT]']);
+        assert.deepEqual(lintEntity({ id: 'carnival-horse-1', ...e }), []);
+    });
+
+    test('they circle; the flag is the entry\'s tag, and no slot pools them or gives a required item', () => {
+        assert.equal(ENTRIES.carnival_horse.tag, 'circler');
+        const pooled = Object.values(SLOTS).flatMap(s => s.pool.map(p => p.entry));
+        assert.ok(!pooled.includes('carnival_horse'));
+        const e = spawnEnemy(resolveSpawn(horses[0], defaultPicks()));
+        assert.equal(e.tag, 'circler');
+        assert.equal(e.boss, false);
+        assert.equal(requiredDropFor(e, carnival.enemies), null);
+        assert.equal(e.allegiance, 'hostile');
+        assert.ok(e.sightRange > 0);
+    });
+
+    test('the content check finds nothing wrong with them, and they have art', () => {
+        const problems = validateContent([{ file: 'carnival-map.json', data: carnival }]).problems
+            .filter(p => p.startsWith('carnival-map.json') && /carnival-horse|carnival_horse/.test(p));
+        assert.deepEqual(problems, []);
+        assert.ok(ENEMY_SPRITES['Carnival Horse']);
+    });
+
+    test('a killed horse goes on the respawn list and comes back like any map-placed enemy', () => {
+        const lists = {};
+        for (const h of horses) assert.ok(recordKill(lists, 'carnival-map.json', h.id), h.id);
+        const dead = deadIds(lists, 'carnival-map.json');
+        for (const h of horses) assert.ok(dead.has(h.id));
+        const back = [];
+        for (let i = 0; i < RESPAWN_STEPS; i++) back.push(...(stepRespawns(lists)['carnival-map.json'] || []));
+        assert.deepEqual(back.sort(), horses.map(h => h.id).sort());
+    });
+});
+
 describe('the Carnival lion is not Lire', () => {
     test('Lire is still the Lion Whip\'s tawny summon, in column 0', () => {
         assert.equal(TRICKS.hire_lion.summonName, 'Lire');

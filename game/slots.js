@@ -111,6 +111,22 @@ export const ENTRIES = {
         barks: ['[TEXT]'],
         barkEveryTurns: 6,
     },
+    // The Carnival's horses (plans/cb1-carnival-horses-circle.md): three combatants placed by
+    // hand around (28,4), which circle you once beside you (ai.js circleStep; the `circler`
+    // tag is the flag, off for every other entry). Stand-ins until designed: the Graveyard
+    // Rattling Skeleton's numbers and kit, the name, the barks, the art. No `boss`, no slot.
+    carnival_horse: {
+        type: 'Carnival Horse',
+        name: '[Horse]',
+        tag: 'circler',
+        gold: 4,
+        loadout: ['rock', 'pipe', 'foil_hat', 'shoe_bags'],
+        hp: 100,
+        armor: 0,
+        damage: ACT2_MOB_DAMAGE,
+        barks: ['[TEXT]'],
+        barkEveryTurns: 6,
+    },
     // The Sewer's character (plans/cs1-crat-talk-both-sides.md): the Crat, who
     // asks you to settle a dispute in the side room north of the Sewer. A
     // townsperson's numbers; borrowed Violencian art until it is designed.
