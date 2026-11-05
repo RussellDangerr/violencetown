@@ -95,6 +95,7 @@ import {
 } from './wheel-model.js'; // (sunburst wheel) node-tree model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
 import { introAt, isSkipKey } from './tv-intro.js';                                     // (TV1) the TV opening before the title
+import { arcSlots, arcVisible, arcSlotAt, arcFaded, ARC_MAX } from './fight-arc.js';                  // (FA1) the arc of attacks under you in a fight
 import { fighters, joiners } from './fight-area.js';                                     // (fight-fog) who is in the fight
 import { fightStartKind, entranceFor, fightFxActive } from './fight-entrance.js'; // (fight-fog) how it began, and how long its fog moves
 import { createCascade, CASCADE_BEAT_MS, LUNGE_MS } from './cascade.js';           // (turn-model C1) the enemy phase, one actor at a time
@@ -1463,6 +1464,7 @@ class Game {
                     if (DOWN) { w.confirming = false; audio.playSfx('menu-cancel'); this._render(); return; }
                     return;
                 }
+                if (w.aiming && this._arcDigit?.(e.code)) return;   // (FA1) the same number commits; another switches
                 if (w.aiming) { this._reticleKey(e.code); return; }
                 if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { this._wheelCycle(-1); return; }
                 if (e.code === 'ArrowRight' || e.code === 'KeyD') { this._wheelCycle(+1); return; }
@@ -1649,7 +1651,9 @@ class Game {
                 return;
             }
 
-            // 1-9 = select item
+            // 1-9 = select item. (FA1) While a fight is on and the arc shows, 1-8 are the arc's
+            // slots instead; 9, and every digit outside a fight, still pick the bag.
+            if (this._arcDigit?.(e.code)) { e.preventDefault(); return; }
             const slot = this._digitToSlot(e.code);
             if (slot >= 0) { e.preventDefault(); this._selectItem(slot); return; }
 
@@ -2307,6 +2311,7 @@ class Game {
         // target; nothing there → fall through to the hotbar.
         if (this.state === STATE.IDLE) {
             if (this._tapXmbBar(pt)) return;   // (XMB) consumed a bottom-bar tap
+            if (this._arcTap?.(pt)) return;      // (FA1) a tap on one of the arc's slots runs it
             if (hitHud(this._hud(), pt) === 'dock') return;   // (screen-fill) the dock's bare chrome, not the world under it
             const tile = this._screenToTile(pt);
             // Bare tap on a thing → walk adjacent (if needed) → fire its DEFAULT
@@ -2477,6 +2482,7 @@ class Game {
                 if (w.confirming) w.confirming = false; else { w.aiming = false; w.reticle = null; }
                 audio.playSfx('menu-cancel'); this._render(); return;
             }
+            if (w.aiming && !w.confirming && this._arcTap?.(pt)) return;   // (FA1) a slot of the arc, unless it has faded aside
             if (w.aiming) { this._aimTapAt(pt); return; }
             this._wheelCommit(); return;
         }
@@ -3703,6 +3709,59 @@ class Game {
 
     // (fx58) The log line for why `node` is greyed, from wheel-model's reasons table.
     wheelGreyedLine(node) { return greyedReasonLine(node, this); }
+
+    // ── The fight arc (FA1, plans/fa1-fight-arc.md) ─────────────────────────────
+    // While a fight is on, a half-ring of numbered slots sits under the player: every attack
+    // owned, each one a node of the wheel's own tree (game/fight-arc.js). A slot runs through
+    // the wheel's own drill, so it does exactly what drilling to that node on the wheel does.
+
+    // Digit1-8 while the arc shows: run that slot. False when the arc is not showing (no fight,
+    // a menu up) or the key is not 1-8, so the caller carries on with the bag as before.
+    _arcDigit(code) {
+        const n = this._digitToSlot(code) + 1;
+        if (n < 1 || n > ARC_MAX || !arcVisible(this)) return false;
+        this._arcPress(n);
+        return true;
+    }
+
+    // A press on one of the arc's slots. False when it landed on none, when the arc has faded
+    // out of the way of an aim, or when a thing you could already click sits under the slot:
+    // that thing wins, so nothing that worked before the arc stops working.
+    _arcTap(pt) {
+        if (!arcVisible(this)) return false;
+        const vp = this._vp();
+        if (arcFaded(vp, this)) return false;
+        const n = arcSlotAt(vp, arcSlots(this), pt);
+        if (!n) return false;
+        const tile = this._screenToTile(pt);
+        if (this._targetAt(tile.x, tile.y)) return false;
+        this._arcPress(n);
+        return true;
+    }
+
+    _arcPress(n) {
+        const slot = arcSlots(this).find(s => s.n === n);
+        if (!slot) { audio.playSfx('bump-wall'); return; }
+        const w = this.wheel;
+        if (this.state === STATE.RADIAL_MENU) {
+            if (!w.aiming || w.confirming) return;
+            if (selectedNode(w) === slot.node) { this._wheelCommit(); return; }   // the same number again fires, as Space does
+            w.aiming = false; w.reticle = null; this.state = STATE.IDLE;          // another number switches to it
+        }
+        if (this.state !== STATE.IDLE || this._animating) return;
+        if (slot.reason) {   // greyed: say why, spend nothing (FX58's reasons, the wheel's refusal)
+            const line = this.wheelGreyedLine(slot.node);
+            if (line) this._log(line);
+            audio.playSfx('bump-wall'); this._render(); return;
+        }
+        this._stopAutoRepeat();
+        this._heldDirKeys = [];
+        this.state = STATE.RADIAL_MENU;
+        w.path = slot.path.slice();
+        w.aiming = false; w.confirming = false; w.reticle = null;
+        this._wheelDrill();   // fire a self action, or enter the aim layer with the reticle seeded
+        if (this.state === STATE.RADIAL_MENU && !w.aiming && !w.confirming) { this.state = STATE.IDLE; w.reticle = null; this._render(); }
+    }
 
     // Commit the composed action — surfacing the Plus-Ultra confirm if it would
     // clip a friendly. _fireWheel (via _closeWheel) clears the confirm flag.
