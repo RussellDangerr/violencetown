@@ -22,6 +22,8 @@ import { recordKill, stepRespawns, deadIds, RESPAWN_STEPS } from '../game/drops.
 import { RNG } from '../game/rng.js';
 import { validateContent } from '../game/content-validate.js';
 import { lintEntity } from '../tools/balance-harness.mjs';
+import { isCircler, CIRCLER_TAG } from '../game/ai.js';
+import { FACING_VECTORS } from '../game/perception.js';
 
 globalThis.localStorage ??= { getItem: () => null, setItem() {}, removeItem() {} };
 
@@ -413,6 +415,182 @@ describe('the Carnival horses (plans/cb1-carnival-horses-circle.md): three, plac
         const back = [];
         for (let i = 0; i < RESPAWN_STEPS; i++) back.push(...(stepRespawns(lists)['carnival-map.json'] || []));
         assert.deepEqual(back.sort(), horses.map(h => h.id).sort());
+    });
+});
+
+describe('the Carnival dolls (plans/ec1-carnival-doll-pack.md): four, placed by hand around (10,17)', () => {
+    const dolls = carnival.enemies.filter(e => e.entry === 'carnival_doll');
+    const knuckles = mapData('town-map.json').enemies.find(e => e.id === 'townie-knuckles');
+    const ROUND = { x: 10, y: 17 };
+    // The road the loops autoplay walks in the Carnival (see act2-enemy-counts.test.js).
+    const LOOPS_WALK = [{ x: 4, y: 0 }, { x: 4, y: 2 }, { x: 10, y: 5 }, { x: 11, y: 3 }];
+
+    test('four spawns name the entry, at (9,16), (11,16), (9,18) and (11,18), with no type or slot of their own', () => {
+        assert.deepEqual(dolls.map(d => [d.x, d.y]), [[9, 16], [11, 16], [9, 18], [11, 18]]);
+        assert.equal(new Set(dolls.map(d => d.id)).size, 4);
+        for (const d of dolls) { assert.equal(d.type, undefined); assert.equal(d.slot, undefined); }
+    });
+
+    test('they stand on open ground of their own, clear of every door, item, other fighter and the loops road', () => {
+        const map = new GameMap(carnival, 'carnival-map.json');
+        const rest = carnival.enemies.filter(e => e.entry !== 'carnival_doll');
+        const others = [...rest, ...carnival.items, carnival.spawn, ...carnival.transitions];
+        for (const d of dolls) {
+            assert.ok(map.isWalkable(d.x, d.y), `${d.id} is in a wall`);
+            assert.ok(!others.some(o => o.x === d.x && o.y === d.y), `${d.id}'s tile is taken`);
+            for (const t of carnival.transitions) assert.ok(dist(d, t) >= 6, `${d.id} by the door at ${t.x},${t.y}`);
+            for (const o of rest) assert.ok(dist(d, o) >= 2, `${d.id} is on ${o.id}`);
+            for (const p of LOOPS_WALK) assert.ok(dist(d, p) >= 10, `${d.id} is within 10 of ${p.x},${p.y}`);
+            // The row above is open too: nothing tall hides a doll from the player's side.
+            assert.ok(!(map.propSpawns || []).some(p => p.x === d.x && p.y === d.y - 1), `a prop sits above ${d.id}`);
+        }
+        assert.ok(map.isWalkable(ROUND.x, ROUND.y), 'the middle is blocked');
+    });
+
+    test('they are the townie Knuckles\'s armour, damage and kit, with a placeholder name and bark', () => {
+        const e = ENTRIES.carnival_doll;
+        for (const k of ['armor', 'damage']) assert.equal(e[k], knuckles[k], k);
+        assert.deepEqual([e.armor, e.damage], [-30, 4]);
+        assert.deepEqual(e.loadout, knuckles.loadout);
+        assert.equal(e.name, '[Doll]');
+        assert.deepEqual(e.barks, ['[TEXT]']);
+        assert.deepEqual(lintEntity({ id: 'carnival-doll-1', ...e }), []);
+    });
+
+    test('they reuse the circling that exists: the flag is the entry\'s tag, and the entry adds no field of its own', () => {
+        assert.equal(CIRCLER_TAG, 'circler');
+        assert.equal(ENTRIES.carnival_doll.tag, CIRCLER_TAG);
+        assert.equal(ENTRIES.carnival_doll.tag, ENTRIES.carnival_horse.tag);
+        const e = spawnEnemy(resolveSpawn(dolls[0], defaultPicks()));
+        assert.ok(isCircler(e));
+        assert.equal(e.boss, false);
+        assert.equal(e.allegiance, 'hostile');
+        assert.ok(e.sightRange > 0);
+        const extra = Object.keys(ENTRIES.carnival_doll).filter(k => !(k in ENTRIES.carnival_horse));
+        assert.deepEqual(extra, [], `the doll adds fields the horse does not have: ${extra}`);
+        assert.ok(!Object.values(SLOTS).flatMap(s => s.pool.map(p => p.entry)).includes('carnival_doll'));
+        assert.equal(requiredDropFor(e, carnival.enemies), null);
+    });
+
+    test('they draw a cell of their own, shared with no other type', () => {
+        const s = ENEMY_SPRITES['Carnival Doll'];
+        assert.ok(s, 'no ENEMY_SPRITES entry: they would draw as the fallback box');
+        for (const [name, o] of Object.entries(ENEMY_SPRITES)) {
+            if (name === 'Carnival Doll') continue;
+            assert.ok(!(o.sheet === s.sheet && o.col === s.col && o.row === s.row), `shares a cell with ${name}`);
+        }
+    });
+
+    test('the content check finds nothing wrong with them', () => {
+        const problems = validateContent([{ file: 'carnival-map.json', data: carnival }]).problems
+            .filter(p => p.startsWith('carnival-map.json') && /carnival-doll|carnival_doll/.test(p));
+        assert.deepEqual(problems, []);
+    });
+
+    // Real enemy turns on the real map: one beat is the enemies' turn after the player's action.
+    function scene(player) {
+        const map = new GameMap(carnival, 'carnival-map.json');
+        const blows = [];
+        const g = {
+            map, containers: [], groundItems: [],
+            playerX: player.x, playerY: player.y, playerHp: 1e6, playerMaxHp: 1e6,
+            turn: 0, _MOVE_MS: 150, rng: new RNG(11), gold: 0, logs: [],
+            _log(m) { this.logs.push(m); },
+            hasBuff: () => false,
+            _spawnHitSplat() {}, _handleEnemyDeath() {}, _cascadeMark() {},
+            applyDamageToPlayer(raw, who) { blows.push({ id: who.id, raw }); return raw; },
+        };
+        // Each stands facing the player, as the horses' tests have them (they see what is ahead).
+        const facingToward = (from) => Object.entries(FACING_VECTORS)
+            .find(([, v]) => v[0] === Math.sign(player.x - from.x) && v[1] === Math.sign(player.y - from.y))?.[0] ?? 'S';
+        g.enemies = dolls.map(d => spawnEnemy({ ...resolveSpawn(d, defaultPicks()), facing: facingToward(d) }));
+        g.beat = () => {
+            g.turn++;
+            const before = new Map(g.enemies.map(e => [e.id, `${e.x},${e.y}`]));
+            const n = blows.length;
+            resolveEnemyTurns(g);
+            const hit = new Set(blows.slice(n).map(b => b.id));
+            const out = {};
+            for (const e of g.enemies) out[e.id] = hit.has(e.id) ? 'hit' : (before.get(e.id) !== `${e.x},${e.y}` ? 'step' : 'still');
+            return out;
+        };
+        g.blows = blows;
+        return g;
+    }
+
+    test('beside you, each takes turns stepping round you and hitting for 4, and never all swing together', () => {
+        // The player stands in the middle of the four, on (10,17): every doll is already beside.
+        const g = scene(ROUND);
+        const log = [];
+        for (let i = 0; i < 12; i++) {
+            const acts = g.beat();
+            log.push(acts);
+            const tiles = g.enemies.map(e => `${e.x},${e.y}`);
+            assert.equal(new Set(tiles).size, 4, `beat ${i + 1}: two on one tile ${tiles}`);
+            for (const e of g.enemies) {
+                assert.equal(dist(e, ROUND), 1, `${e.id} left the ring`);
+                assert.ok(g.map.isWalkable(e.x, e.y), `${e.id} is in a wall`);
+            }
+            assert.ok(Object.values(acts).filter(a => a === 'hit').length < 4, `beat ${i + 1}: all four swung together`);
+        }
+        for (const d of dolls) {
+            const mine = log.map(l => l[d.id]);
+            assert.ok(mine.includes('step') && mine.includes('hit'), `${d.id}: ${mine}`);
+        }
+        assert.ok(g.blows.length >= 12);
+        assert.ok(g.blows.every(b => b.raw === 4), `landed ${g.blows.map(b => b.raw)}`);
+    });
+
+    test('the same four with the flag off never step: it is the entry\'s tag that makes them circle', () => {
+        const e = ENTRIES.carnival_doll;
+        const saved = e.tag;
+        try {
+            delete e.tag;
+            const g = scene(ROUND);
+            for (let i = 0; i < 8; i++) {
+                const acts = g.beat();
+                for (const d of dolls) assert.equal(acts[d.id], 'hit', `beat ${i + 1}: ${d.id} ${acts[d.id]}`);
+            }
+            for (const d of dolls) {
+                const now = g.enemies.find(x => x.id === d.id);
+                assert.deepEqual([now.x, now.y], [d.x, d.y]);
+            }
+        } finally { e.tag = saved; }
+    });
+
+    test('seen from a few tiles off, they close on you, then circle', () => {
+        const player = { x: 10, y: 13 };
+        const g = scene(player);
+        const seen = new Set();
+        for (let i = 0; i < 16; i++) {
+            const acts = g.beat();
+            if (g.enemies.every(e => dist(e, player) <= 1)) for (const a of Object.values(acts)) seen.add(a);
+        }
+        assert.ok(g.enemies.some(e => dist(e, player) <= 1), 'none reached you');
+        assert.ok(seen.has('step') && seen.has('hit'), `once beside you: ${[...seen]}`);
+    });
+
+    test('out of sight they do not come for you', () => {
+        const g = scene({ x: 56, y: 1 });
+        for (let i = 0; i < 8; i++) g.beat();
+        assert.deepEqual(g.enemies.map(e => [e.x, e.y]), dolls.map(d => [d.x, d.y]));
+        assert.deepEqual(g.blows, []);
+    });
+
+    test('a doll falls to blows in two hits, and each goes on the respawn list like any map-placed enemy', () => {
+        const d = spawnEnemy(resolveSpawn(dolls[0], defaultPicks()));
+        const me = new Entity({ name: 'you', hp: 100 });
+        let swings = 0, last;
+        while (d.entity.isAlive() && swings < 100) { last = attack(me, d.entity, 20); swings++; }
+        assert.equal(last.killed, true);
+        assert.equal(swings, 2);
+        const lists = {};
+        for (const x of dolls) assert.ok(recordKill(lists, 'carnival-map.json', x.id), x.id);
+        const dead = deadIds(lists, 'carnival-map.json');
+        assert.ok(dolls.every(x => dead.has(x.id)));
+        const back = [];
+        for (let i = 0; i < RESPAWN_STEPS; i++) back.push(...(stepRespawns(lists)['carnival-map.json'] || []));
+        assert.deepEqual(back.sort(), dolls.map(x => x.id).sort());
     });
 });
 
