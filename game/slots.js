@@ -94,6 +94,23 @@ export const ENTRIES = {
         barks: ['[TEXT]'],
         barkEveryTurns: 6,
     },
+    // The Carnival's named clown (plans/cw1-the-clown-mini-boss.md, ruling LN1R1 a): a
+    // mini-boss you always meet, placed by hand, apart from the five ordinary Carnival
+    // Clowns. Stand-ins until designed: the Fungus King's numbers and kit with one sludge
+    // sack swapped for Fire Blood (he throws it), the name, the barks, the art. He refuses a
+    // bribe. No `boss`, `tag` or slot, so he drops nothing required.
+    the_clown: {
+        type: 'The Clown',
+        name: '[The Clown]',
+        gold: 20,
+        loadout: ['tunnel_mushroom', 'tunnel_mushroom', 'sludge_sack', 'fire_blood', 'boardwalk_burger', 'foil_hat', 'defence_poition', 'soap'],
+        hp: 100,
+        armor: 6,
+        damage: 12,
+        bribeable: false,
+        barks: ['[TEXT]'],
+        barkEveryTurns: 6,
+    },
     // The Sewer's character (plans/cs1-crat-talk-both-sides.md): the Crat, who
     // asks you to settle a dispute in the side room north of the Sewer. A
     // townsperson's numbers; borrowed Violencian art until it is designed.
