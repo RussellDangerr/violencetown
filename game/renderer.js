@@ -1792,6 +1792,33 @@ export class Renderer {
         return e.x === game.playerX + dx && e.y === game.playerY + dy;
     }
 
+    // (plans/as1-unicycle-clown.md) A unicycle as canvas primitives, standing in until the art
+    // pass: a tyre, four spokes that turn a quarter for every tile rolled, a hub, and a post
+    // that rises to the seat. Drawn in the bottom of its tile, centred; `turns` is steps taken.
+    _drawUnicycle(ctx, px, py, r, turns) {
+        const cx = px + TILE_PX / 2, cy = py + TILE_PX - r - 1;
+        const a0 = turns * (Math.PI / 2);
+        ctx.save();
+        ctx.lineCap = 'butt';
+        ctx.strokeStyle = '#1b1b1b';
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = '#d9d2c0';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 4; i++) {
+            const a = a0 + i * (Math.PI / 2);
+            ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a) * (r - 1), cy + Math.sin(a) * (r - 1)); ctx.stroke();
+        }
+        ctx.fillStyle = '#e0b020';
+        ctx.fillRect(cx - 1, cy - 1, 2, 2);
+        ctx.strokeStyle = '#8a8a8a';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx, cy - r - 3); ctx.stroke();
+        ctx.fillStyle = '#7a2a8a';
+        ctx.fillRect(cx - 3, cy - r - 4, 6, 2);
+        ctx.restore();
+    }
+
     _drawEnemySprite(game, e, px, py, now, { bodyOnly = false } = {}) {
         const { ctx, sprites } = this;
         const isAlive = e.entity.isAlive();
@@ -1831,13 +1858,26 @@ export class Renderer {
         const eFlip = (isAlive && e._faceLeft && !info?.dirCols) ? -1 : 1;
         const ecx = px + TILE_PX / 2, ecy = py + TILE_PX / 2;
         let ok = false;
+        // (plans/as1-unicycle-clown.md) A creature with a drawScale is drawn smaller, standing
+        // at the base of its tile; one with a unicycle rolls on a wheel drawn under it. Every
+        // other creature takes the full-tile box it always had.
+        const dscale = e.drawScale || 1;
+        const rider = e.unicycle === true;
+        const wheelR = rider ? Math.round(TILE_PX * 0.16) : 0;
+        const bw0 = TILE_PX * dscale;
+        const bx0 = px + (TILE_PX - bw0) / 2;
+        const by0 = dscale < 1 ? py + TILE_PX - wheelR * 2 - bw0 + 1 : py;
         withWalk(ctx, ecx, ecy, { bob: ea.bob, rot: ea.rot, flipX: eFlip }, () => {
+            if (rider) this._drawUnicycle(ctx, px, py, wheelR, (e._stepIndex || 0) + slideProgress);
             if (frame && sprites?.[frame.sheet]?.loaded) {
-                ok = this._inkFrame(sprites[frame.sheet], ctx, frame.col, frame.row, px, py, TILE_PX, TILE_PX);
+                ok = dscale < 1
+                    ? this._inkFrame(sprites[frame.sheet], ctx, frame.col, frame.row, bx0, by0, bw0, bw0)
+                    : this._inkFrame(sprites[frame.sheet], ctx, frame.col, frame.row, px, py, TILE_PX, TILE_PX);
             }
             if (!ok) {
                 ctx.fillStyle = isAlive ? '#cc4433' : '#555';
-                ctx.fillRect(px + 6, py + 6, TILE_PX - 12, TILE_PX - 12);
+                if (dscale < 1) ctx.fillRect(bx0 + bw0 * 0.2, by0 + bw0 * 0.2, bw0 * 0.6, bw0 * 0.6);
+                else ctx.fillRect(px + 6, py + 6, TILE_PX - 12, TILE_PX - 12);
             }
         });
 

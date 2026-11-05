@@ -446,6 +446,16 @@ DIALOGUES.factory_manager = {
     ],
 };
 
+// (AS1, plans/as1-unicycle-clown.md) The Carnival's assistant manager: he talks and does
+// nothing else. Every word is [TEXT] until Caelan writes it.
+DIALOGUES.assistant_manager = {
+    name: '[Assistant Manager]',
+    greeting: '[TEXT]',
+    choices: [
+        { id: 'chat', label: '[TEXT]', repeatable: true, reply: '[TEXT]' },
+    ],
+};
+
 export function getDialogue(id) {
     return DIALOGUES[id] || null;
 }

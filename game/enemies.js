@@ -215,6 +215,11 @@ export class Enemy {
         // (plans/ic4-frozen-creatures.md) This creature's own examine text, from
         // its registry entry.
         examine = null,
+        // (plans/as1-unicycle-clown.md) How this creature is DRAWN, nothing else: a size
+        // under one tile (null = the full tile every other creature has) and a unicycle
+        // under it. Both come from a registry entry; neither touches a stat.
+        drawScale = null,
+        unicycle = false,
     }) {
         this.id         = id;
         this.type       = type;
@@ -319,6 +324,8 @@ export class Enemy {
         this.slot          = slot;
         this.tags          = Array.isArray(tags) ? [...tags] : [];
         this.examine       = examine;
+        this.drawScale     = (typeof drawScale === 'number' && drawScale > 0 && drawScale < 1) ? drawScale : null;
+        this.unicycle      = unicycle === true;
 
         // Debuffs / buffs — symmetric with Game.buffs[] on the player side
         // (DoTs, fear, the poition riders), ticked by the same BUFF_EFFECTS table.
@@ -395,6 +402,9 @@ export class Enemy {
             tags: this.tags.length ? [...this.tags] : undefined,
             // Same rule: a creature with no examine text of its own saves as before.
             examine: this.examine || undefined,
+            // Same rule for how it is drawn: a full-size creature saves as before.
+            drawScale: this.drawScale || undefined,
+            unicycle: this.unicycle || undefined,
             // runtime
             state: this.state, fsmState: this.fsmState, lastWanderTurn: this._lastWanderTurn,
             // (perception ladder) so a save taken mid-hunt reloads mid-hunt.
