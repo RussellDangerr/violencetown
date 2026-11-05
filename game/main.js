@@ -4,7 +4,7 @@
 // 1-9 pick a bag slot.
 
 import { Renderer } from './renderer.js';
-import { computeViewport, screenToTile, clientToScreen, toMenu } from './viewport.js';   // (screen-fill) the screen's geometry
+import { computeViewport, screenToTile, clientToScreen, toMenu, stepZoom, zoomToSave, readZoom, writeZoom } from './viewport.js';   // (screen-fill) the screen's geometry
 import { loadMap, carriesAll } from './map.js';
 import { loadAllSprites } from './sprites.js';
 import { BitmapFont } from './bitmap-font.js';
@@ -590,6 +590,8 @@ class Game {
         // system reads them (reduceMotion gates screenshake/flash, volumes feed
         // audio after merge). Validated/clamped inside; never throws.
         Settings.load();
+        // (ZM1) The saved zoom step, or null for the automatic one.
+        this._zoom = readZoom(typeof localStorage !== 'undefined' ? localStorage : null);
 
         const canvas = document.getElementById('game-canvas');
         this.renderer = new Renderer(canvas);
@@ -1164,8 +1166,9 @@ class Game {
             }
             return;
         }
-        const vp = computeViewport({ cssW: box.width, cssH: box.height, dpr: window.devicePixelRatio, dock: DOCK });
+        const vp = computeViewport({ cssW: box.width, cssH: box.height, dpr: window.devicePixelRatio, dock: DOCK, zoom: this._zoom });
         this.renderer.setViewport(vp);
+        this._syncZoomUI();
         canvas.style.width  = `${vp.cssW}px`;
         canvas.style.height = `${vp.cssH}px`;
         // The first-run hint is a page element: keep it just above the dock.
@@ -2004,6 +2007,31 @@ class Game {
         // Fullscreen reflects the actual document state, not a stored value.
         this._setToggleUI('opt-fullscreen', !!document.fullscreenElement);
         this._setWheelOpenUI(s.wheelOpenMode);   // (Slice 2) HOLD / TAP
+        this._syncZoomUI();
+    }
+
+    // (ZM1) Zoom: Farther / Closer move one whole pixel step and the view
+    // resizes at once. The automatic step is saved as nothing, so it keeps
+    // following the screen. The readout is the scale in use; [TEXT] marks
+    // that it is the automatic one.
+    _stepZoom(dir) {
+        const vp = this.renderer?.viewport;
+        if (!vp) return;
+        const next = stepZoom(vp.zoom, vp.k, dir);
+        this._zoom = zoomToSave(vp.zoom, next);
+        writeZoom(typeof localStorage !== 'undefined' ? localStorage : null, this._zoom);
+        this._fitCanvas();
+    }
+
+    _syncZoomUI() {
+        const vp = this.renderer?.viewport;
+        const val = document.getElementById('opt-zoom-val');
+        if (!vp || !val) return;
+        val.textContent = `x${vp.k}${vp.k === vp.zoom.auto ? ' [TEXT]' : ''}`;
+        const farther = document.getElementById('opt-zoom-farther');
+        const closer  = document.getElementById('opt-zoom-closer');
+        if (farther) farther.disabled = vp.k <= vp.zoom.min;
+        if (closer)  closer.disabled  = vp.k >= vp.zoom.max;
     }
 
     // Flip an on/off toggle button's label + class + ARIA to match `on`.
@@ -2093,6 +2121,10 @@ class Game {
             Settings.set('wheelOpenMode', next);
             this._setWheelOpenUI(next);
         });
+
+        // (ZM1) Zoom row: Farther / Closer.
+        document.getElementById('opt-zoom-farther')?.addEventListener('click', () => this._stepZoom(-1));
+        document.getElementById('opt-zoom-closer')?.addEventListener('click', () => this._stepZoom(+1));
 
         // Esc closes the modal without falling through to game state. Capture
         // phase beats _bindInput's bubble handler, matching the help modal.
