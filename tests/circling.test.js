@@ -290,14 +290,14 @@ describe('circling draws nothing from game.rng', () => {
 });
 
 describe('only a circler circles', () => {
-    test('the flag is off unless an entry sets it: only the horse entry does', async () => {
+    test('the flag is off unless an entry sets it: only the horse and doll entries do', async () => {
         const { ENTRIES } = await import('../game/slots.js');
         const circlers = Object.entries(ENTRIES).filter(([, e]) => isCircler(e)).map(([k]) => k);
-        assert.deepEqual(circlers, ['carnival_horse']);
+        assert.deepEqual(circlers, ['carnival_horse', 'carnival_doll']);
         for (const file of ['carnival-map.json', 'graveyard-map.json', 'sewer-map.json', 'canyon-map.json']) {
             const d = JSON.parse(readFileSync(new URL(file, GAME), 'utf8'));
             for (const e of d.enemies || []) {
-                if (e.entry === 'carnival_horse') continue;
+                if (e.entry === 'carnival_horse' || e.entry === 'carnival_doll') continue;
                 assert.ok(!isCircler(e), `${file}: ${e.id} circles`);
             }
         }
