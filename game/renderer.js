@@ -22,7 +22,7 @@ import {
     ITEM_OVERLAY_RECT, ITEM_OVERLAY_ROW_H,
     WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
     EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, EQUIP_LEFT_HAND_RECT, closeButtonRect,
-    DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceBagPagerRects, deviceEquipLayout, deviceRingsLayout,
+    DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceBagPagerRects, deviceEquipLayout, gearArmourRect, deviceRingsLayout,
     deviceSkillsLayout,                                                      // (US2) the skills readout in the RINGS tab
     inspectorPanelRect, inspectorActionRects,                               // (C1) tap-to-inspect panel + action-row geometry
     gearOptionRects, gearChooserRect,                                       // (C2) GEAR chooser option-row + panel geometry
@@ -4897,6 +4897,13 @@ export class Renderer {
             this.font.drawText(ctx, 'EQUIPMENT', R.x + 20, R.y + 14, { color: UI.gold, scale: 2, align: 'left' });
             const armorTotal = game._playerArmor ? game._playerArmor() : 0;
             this.font.drawText(ctx, 'ARMOR ' + armorTotal, R.x + R.w - 20, R.y + 14, { color: UI.gold, scale: 2, align: 'right' });
+        }
+
+        // (AT1) Hosted in GEAR, the same "ARMOR n" line sits in the body's top-left corner.
+        if (hosted) {
+            const A = gearArmourRect(bodyRect);
+            const armorTotal = game._playerArmor ? game._playerArmor() : 0;
+            this.font.drawText(ctx, 'ARMOR ' + armorTotal, A.x, A.y, { color: UI.gold, scale: 2, align: 'left' });
         }
 
         const _eq = hosted ? deviceEquipLayout(bodyRect) : { figure: EQUIP_FIGURE_RECT, slots: EQUIP_SLOT_RECTS, leftHand: EQUIP_LEFT_HAND_RECT };
