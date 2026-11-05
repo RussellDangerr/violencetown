@@ -46,6 +46,7 @@ import { PHASE, threatPhase, alertWatchers } from './threat-phase.js';        //
 import { isSafe } from './defeat-scenarios.js';   // (defeat legibility) mark safe-floor items
 import { buyPrice, sellPrice, bribeStepCost, mood, canTrade, band, BRIBE_STEP } from './trade.js'; // (trade slice 1) pricing + mood smiley; band feeds the offer meter's multiplier readout
 import { isHunting } from './ai.js'; // one spelling of "actively hunting the player"
+import { arcSlots, arcVisible, arcLayout, arcFaded, ARC_ALPHA, ARC_FADED_ALPHA } from './fight-arc.js';   // (FA1) the arc of attacks under you in a fight
 import { fighters, fightArea, FIGHT_MARGIN } from './fight-area.js';        // (fight-fog) who is in the fight, and what they can see
 import { entranceAt, fogReveal, fogDepth, fogOut, tileJitter, FOG_TINT, FOG_DENSITY, FOG_BLUR_TILES,
          FOG_FAR_TILES, FOG_IN_MS, FOG_OUT_MS } from './fight-entrance.js'; // (fight-fog) the entrance, and the fog's timeline and look
@@ -757,6 +758,7 @@ export class Renderer {
         this._drawBuffBar(game);
         this._drawQuestLog(game);
         this._drawFightPanels(game);
+        this._drawFightArc(game);
         this._drawXmbBar(game);
         this._drawOpener(game);
         this._drawLootReel(game);   // (FX3c) what the kill gave, rolling
@@ -3023,6 +3025,40 @@ export class Renderer {
         const panel = targetPanel(t);
         panel.name = shownName(t) || panel.name;
         this._drawTargetPanel(p.right, panel);
+    }
+
+    // ── The fight arc (FA1, plans/fa1-fight-arc.md) ─────────────────────────
+    // A half-ring of numbered slots under the player while a fight is on: every attack
+    // owned, each a node of the wheel's own tree. A greyed slot is dimmed, not hidden; the
+    // slot being aimed is ringed in gold; the whole arc drops to a faint alpha while the aim
+    // is on a tile it covers. Every size, colour and alpha here is a stand-in.
+    _drawFightArc(game) {
+        if (!game || !this.font || !arcVisible(game)) return;
+        const { ctx } = this;
+        const vp = this._view();
+        const slots = arcSlots(game);
+        if (!slots.length) return;
+        const rects = arcLayout(vp).slots;
+        const faded = arcFaded(vp, game, { x: this._scrollX || 0, y: this._scrollY || 0 });
+        const w = game.wheel;
+        const aimed = (game.state === 'radial_menu' && w && w.aiming) ? selectedNode(w) : null;
+        const clip = (s, px) => cutToWidth(s, px, this._measurer(1));
+        ctx.save();
+        for (const slot of slots) {
+            const r = rects[slot.n - 1];
+            const grey = !!slot.reason;
+            ctx.globalAlpha = (faded ? ARC_FADED_ALPHA : ARC_ALPHA) * (grey ? 0.55 : 1);
+            ctx.fillStyle = 'rgba(20,14,8,0.82)';
+            ctx.fillRect(r.x, r.y, r.w, r.h);
+            const on = aimed === slot.node;
+            ctx.lineWidth = on ? 2 : 1;
+            ctx.strokeStyle = on ? UI.gold : (grey ? UI.dim : (slot.node.color || UI.panelBorder));
+            ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+            this.font.drawText(ctx, String(slot.n), r.x + 4, r.y + 3, { color: grey ? UI.dim : UI.gold, scale: 1 });
+            this.font.drawText(ctx, clip(slot.label.toUpperCase(), r.w - 6), r.x + r.w / 2, r.y + 15,
+                { color: grey ? UI.dim : UI.text, scale: 1, align: 'center' });
+        }
+        ctx.restore();
     }
 
     // Your six slots, two lines each: the label, then what is in it. An empty
