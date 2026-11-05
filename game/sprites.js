@@ -548,6 +548,9 @@ export const ENEMY_SPRITES = {
     // The Carnival's dolls (plans/ec1-carnival-doll-pack.md): the grey visored figure, an unused Tiny
     // Dungeon cell, a stand-in that reads as a toy soldier and not as a child.
     'Carnival Doll': { sheet: 'tinyDungeon', col: 1, row: 8, static: true },
+    // The Graveyard's angel (plans/ca1-crying-angel.md): the grey stone bust, an unused Tiny
+    // Dungeon cell, a stand-in until it is drawn.
+    'Crying Angel': { sheet: 'tinyDungeon', col: 2, row: 6, static: true },
     // The Carnival's named clown (plans/cw1-the-clown-mini-boss.md): an unused Tiny Dungeon
     // cell, a stand-in, so he is never taken for the ordinary purple-mage clown.
     'The Clown': { sheet: 'tinyDungeon', col: 3, row: 8, static: true },
