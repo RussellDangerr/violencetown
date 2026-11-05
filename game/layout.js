@@ -610,6 +610,14 @@ export function deviceEquipLayout(bodyRect) {
     return { figure: map(EQUIP_FIGURE_RECT), slots: EQUIP_SLOT_RECTS.map(map), leftHand: map(EQUIP_LEFT_HAND_RECT) };
 }
 
+// (AT1) Where the GEAR tab's "ARMOR n" line sits: the body's top-left corner, left
+// of the HEAD plate and above the ARMS plate, clear of the open chooser (which
+// starts below HEAD). renderer._drawEquipmentModal draws it; pinned by
+// tests/gear-armour-total.test.js.
+export function gearArmourRect(bodyRect) {
+  return { x: bodyRect.x + 10, y: bodyRect.y + 8, w: 120, h: 20 };
+}
+
 // The GEAR chooser's option rows — a centered column living in the clear
 // vertical band between the HEAD plate (top) and the WEAPON plate (bottom). A
 // right-side column would collide with the TORSO/FEET plates, which scale to the
