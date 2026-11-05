@@ -143,6 +143,29 @@ export const ENTRIES = {
         barks: ['[TEXT]'],
         barkEveryTurns: 6,
     },
+    // The Carnival's assistant manager (plans/as1-unicycle-clown.md, ruling LN1R1 a): someone
+    // you talk to, never a fight. Placed by hand at (32,3); he rolls about near it. He shares
+    // the Carnival Clown's type (no sprite row of his own) drawn small, on a unicycle. Stand-ins
+    // until designed: the Crat's numbers (a townsperson's), the name, every line, the drawn
+    // size, the unicycle. No `boss`, no slot.
+    assistant_manager: {
+        type: 'Carnival Clown',
+        name: '[Assistant Manager]',
+        ambient: true,
+        hp: 100,
+        armor: -80,
+        damage: 0,
+        sightRange: 4,
+        disposition: 0,
+        behavior: ['IDLE', 'WANDER'],
+        homeRegion: 'assistant-yard',   // the carnival-map region round (32,3): he rolls about in it, no further
+        wanderRadius: 2,
+        wanderEveryTurns: 3,
+        dialogueId: 'assistant_manager',
+        drawScale: 0.5,
+        unicycle: true,
+        ownDice: true,   // his wander never draws the shared ambient stream (it moved a replay that never met him)
+    },
     // The Graveyard's angel (plans/ca1-crying-angel.md): one stone figure placed by hand at
     // (21,10). It moves only on the beats you look at it (npc.js angelTurn; the `angel` tag is
     // the flag, off for every other entry) and has no sight of its own, so it never joins or
