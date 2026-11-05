@@ -408,6 +408,7 @@ class Game {
         this.wheel = createWheelState();
         this.targetList = { x: 0, y: 0, target: null, verbs: [], sel: 0 };   // (Target List) RuneScape-style verb menu
         this._lastActKeyAt = 0; // double-tap-Act window for express-repeat
+        this._spaceOpenedWheelAt = 0;   // when a bare Space tap opened the wheel; a second Space inside the window repeats instead of drilling
         this._wheelOpenedByHold = false; // (Slice 2) true only between a HOLD-mode open and its release; cleared by every wheel close
         this._deviceTab = 'items';       // (Slice 3) the Remoticon's active tab (ITEMS·GEAR·QUESTS·MAP)
         this._deviceSel = null;          // (C1) inspector sub-selection inside ITEMS: { tab:'items', index } or null
@@ -1454,6 +1455,17 @@ class Game {
                 // touched, so that walk still resumes on close.
                 this._wheelTakesKey?.(e.code);
                 const w = this.wheel;
+                // (FX59) Tap mode: the first Space of a double-tap has already opened the
+                // wheel, so the second arrives here, not at IDLE. Inside the same window,
+                // and with nothing else pressed since, it repeats the last action rather
+                // than drilling the freshly opened wheel. Any other key cancels the chance.
+                const openedAt = this._spaceOpenedWheelAt || 0;
+                this._spaceOpenedWheelAt = 0;
+                if (e.code === 'Space' && !e.repeat && openedAt && !w.aiming && !w.confirming
+                    && performance.now() - openedAt < 250 && this._canRepeatLast()) {
+                    this._repeatLastAction();
+                    return;
+                }
                 const UP   = (e.code === 'ArrowUp'   || e.code === 'KeyW' || e.code === 'Space' || e.code === 'Enter');
                 const DOWN = (e.code === 'ArrowDown' || e.code === 'KeyS' || e.code === 'Escape');
                 // "Plus Ultra" friendly-confirm intercept.
@@ -1659,7 +1671,10 @@ class Game {
                 e.preventDefault();
                 const now = performance.now();
                 if (now - (this._lastActKeyAt || 0) < 250 && this._canRepeatLast()) this._repeatLastAction();
-                else this._wheelOpenerDown();   // (Slice 2) hold vs tap-toggle open mode
+                else {
+                    this._wheelOpenerDown();   // (Slice 2) hold vs tap-toggle open mode
+                    if (this.state === STATE.RADIAL_MENU) this._spaceOpenedWheelAt = now;   // (FX59)
+                }
                 this._lastActKeyAt = now;
                 return;
             }
