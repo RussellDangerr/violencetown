@@ -6566,11 +6566,23 @@ class Game {
     // again). Tab / the on-screen button toggle it; [ ] cycle tabs; C/J/M/R jump to a
     // tab. The ✕ chip + tap-outside come from the Slice-1 CLOSE_PANEL machinery
     // (device is registered there), routing Cancel through _closeCurrentMenu.
+    // (FX43) The first filled slot on the bag's first page, in the order the grid shows
+    // them (page 0 shows slots 0 .. SAFE_SLOTS+PACK_PAGE-1). -1 when that page is empty.
+    _bagFirstFilled() {
+        return this.inventory.slice(0, SAFE_SLOTS + PACK_PAGE).findIndex(Boolean);
+    }
+
     _openDevice(tab = 'items') {
         if (this.state !== STATE.IDLE && this.state !== STATE.DEVICE) return;
         this._deviceTab = DEVICE_TABS.includes(tab) ? tab : 'items';
         this._deviceSel = null;   // (C1) a fresh open starts with no inspector selection
         this._bagPage = 0;        // (BG1) the bag opens on its first page
+        if (this._deviceTab === 'items') {
+            // (FX43) The bag's cursor starts on your first item, so the first arrow press
+            // moves from something. An empty bag keeps no selection.
+            const first = this._bagFirstFilled?.() ?? -1;
+            if (first >= 0) this._deviceSel = { tab: 'items', index: first };
+        }
         this.state = STATE.DEVICE;
         audio.playSfx('menu-open');
         this._render();
