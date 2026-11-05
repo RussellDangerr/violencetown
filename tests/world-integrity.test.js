@@ -61,6 +61,9 @@ describe('grapple anchors', () => {
         const canyon = maps.find(m => m.file === 'canyon-map.json').data;
         assert.ok((canyon.anchors || []).some(a => a.requires === 'grappling_hook' && a.toMap === 'downtown-map.json'),
             'no hook-gated anchor out of the canyon');
+        // GV1R1 / GV2R1: the way up to the Valley needs the hook too, and is the same kind of thing.
+        assert.ok((canyon.anchors || []).some(a => a.requires === 'grappling_hook' && a.toMap === 'valley-map.json'),
+            'no hook-gated anchor up to the Valley');
         assert.ok(!(canyon.transitions || []).some(t => t.requires === 'grappling_hook'),
             'the plain hook-gated exit is still there');
     });

@@ -15,10 +15,10 @@
 //    |       |
 //    |   [GRAVEYARD]
 //    |       |
-//  [FROZEN]—[WILDERNESS]
+//  [FROZEN]—[WILDERNESS]—[VALLEY]  (the Valley also hangs off the Canyon, by the hook)
 export const WORLD_ZONES = [
     { zoneName: 'DOWNTOWN',   label: 'DOWNTOWN',   col: 2, row: 0, connects: ['TOWN', 'CANYON'] },
-    { zoneName: 'CANYON',     label: 'CANYON',     col: 3, row: 0, connects: ['DOWNTOWN', 'GORGE'] },
+    { zoneName: 'CANYON',     label: 'CANYON',     col: 3, row: 0, connects: ['DOWNTOWN', 'GORGE', 'VALLEY'] },
     // The Gorge (plans/gv1-canyon-to-gorge.md): reached by the Canyon's left wall. Downtown holds the
     // Canyon's left on this grid, so its box sits to the right for now; the place is a stand-in.
     { zoneName: 'GORGE',      label: 'GORGE',      col: 4, row: 0, connects: ['CANYON'] },
@@ -27,7 +27,11 @@ export const WORLD_ZONES = [
     { zoneName: 'SEWER',      label: 'SEWER',      col: 3, row: 1, connects: ['TOWN'] },
     { zoneName: 'CARNIVAL',   label: 'CARNIVAL',   col: 2, row: 2, connects: ['TOWN', 'GRAVEYARD'] },
     { zoneName: 'GRAVEYARD',  label: 'GRAVEYARD',  col: 2, row: 3, connects: ['CARNIVAL', 'WILDERNESS'] },
-    { zoneName: 'WILDERNESS', label: 'WILDERNESS', col: 2, row: 4, connects: ['GRAVEYARD', '[FROZEN AREA]'] },
+    { zoneName: 'WILDERNESS', label: 'WILDERNESS', col: 2, row: 4, connects: ['GRAVEYARD', '[FROZEN AREA]', 'VALLEY'] },
+    // The Valley (plans/gv2-canyon-to-valley.md): up the hook climb from the Canyon, and out its far
+    // side into the Wilderness. The box sits beside the Wilderness; the place is a stand-in, and the
+    // line from the Canyon runs a long way, behind the boxes between.
+    { zoneName: 'VALLEY',     label: 'VALLEY',     col: 4, row: 4, connects: ['CANYON', 'WILDERNESS'] },
     // The frozen area (plans/ic3-frozen-area.md): its name is a placeholder
     // until Caelan names it; zoneByName upper-cases the map's zoneName.
     { zoneName: '[FROZEN AREA]', label: '[FROZEN AREA]', col: 1, row: 4, connects: ['FACTORY', 'WILDERNESS'] },
