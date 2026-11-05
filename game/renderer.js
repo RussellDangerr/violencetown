@@ -3047,7 +3047,7 @@ export class Renderer {
         for (const slot of slots) {
             const r = rects[slot.n - 1];
             const grey = !!slot.reason;
-            ctx.globalAlpha = (faded ? ARC_FADED_ALPHA : ARC_ALPHA) * (grey ? 0.55 : 1);
+            ctx.globalAlpha = (faded ? ARC_FADED_ALPHA : ARC_ALPHA) * (grey ? 0.75 : 1);
             ctx.fillStyle = 'rgba(20,14,8,0.82)';
             ctx.fillRect(r.x, r.y, r.w, r.h);
             const on = aimed === slot.node;
