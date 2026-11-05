@@ -542,6 +542,9 @@ export const ENEMY_SPRITES = {
     // The Carnival's own lion (plans/ln1-carnival-lion.md): the same beast in
     // the crimson column (BEAST_VARIANTS column 1), so it is never taken for Lire.
     'Carnival Lion': { sheet: 'beastVariants', col: 1, row: 0, static: true },
+    // The Carnival's horses (plans/cb1-carnival-horses-circle.md): the grey beast the Polar Bear
+    // uses, a stand-in (the two never share a map).
+    'Carnival Horse': { sheet: 'tinyDungeon', col: 4, row: 10, static: true },
     // The Carnival's named clown (plans/cw1-the-clown-mini-boss.md): an unused Tiny Dungeon
     // cell, a stand-in, so he is never taken for the ordinary purple-mage clown.
     'The Clown': { sheet: 'tinyDungeon', col: 3, row: 8, static: true },

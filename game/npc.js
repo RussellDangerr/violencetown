@@ -20,9 +20,10 @@
 // the HOSTILE (chase), ALLIED, or ambient states.
 
 import { manhattan, chebyshev } from './utils.js';
-import { getGreedyStep, stepEntity, findPath, fleeFrom, fleeStep } from './pathing.js';
+import { getGreedyStep, stepEntity, findPath, fleeFrom, fleeStep, stepFree } from './pathing.js';
 import { perceives, nextAwareness, VERDICT, BLIND_SWEEP_BEATS } from './perception.js';
-import { healPurchase, kitChoice, isSewerDweller, bossSpend, BOSS_RALLY_RANGE, isHunting } from './ai.js';
+import { healPurchase, kitChoice, isSewerDweller, bossSpend, BOSS_RALLY_RANGE, isHunting,
+         isCircler, circlesThisBeat, circleStep } from './ai.js';
 import { ITEMS, kitHealValue, applyKitItem, kitDefenceValue, kitGearWeight } from './items.js';
 import { WEAPONS } from './weapons.js';
 import { burnGold, transferGold } from './trade.js';
@@ -491,6 +492,20 @@ export function tickNpcState(game, npc, clock = game.turn, rng = game.rng) {
             // Raw damage only — guard (incoming) folds into the single
             // computeHit call inside applyDamageToPlayer, which rounds once.
             if (chebyshev(npc.x, npc.y, game.playerX, game.playerY) <= 1) {
+                // (cb1) A circler beside you takes turns: this beat a step to the next free tile
+                // around you, the next a blow. No free tile, or its hitting beat: it hits below.
+                // The step draws nothing from game.rng and falls on the player's action.
+                if (isCircler(npc) && circlesThisBeat(npc.id, game.turn)) {
+                    const to = circleStep(
+                        { x: game.playerX, y: game.playerY }, { x: npc.x, y: npc.y },
+                        (fx, fy, tx, ty) => stepFree(game, tx, ty, { self: npc })
+                            // No corner-cutting, as the chase step has it.
+                            && game.map.isWalkable(tx, fy) && game.map.isWalkable(fx, ty));
+                    if (to) {
+                        stepEntity(npc, to.x, to.y, game._MOVE_MS);
+                        break;
+                    }
+                }
                 // Attacking faces the target — a shove buys one backstab window, not a farm.
                 npc._lastDx = Math.sign(game.playerX - npc.x);
                 npc._lastDy = Math.sign(game.playerY - npc.y);

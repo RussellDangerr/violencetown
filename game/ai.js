@@ -78,6 +78,56 @@ export function isSewerDweller(e) {
   return !!(e && e.sewerDweller);
 }
 
+// ── Circling (plans/cb1-carnival-horses-circle.md) ─────────────────────────
+//
+// A circler walks up like any chaser. Once beside the player it takes turns: one beat it
+// steps to the next free tile around the player, the next beat it hits. The step draws no
+// dice: it is a function of the creature's id, the turn count and which tiles are free, so
+// every step falls on the player's action and replays exactly.
+//
+// The flag is off unless a registry entry sets it. The Enemy ctor drops unknown fields, so it
+// rides the free-form `tag`, the way the mugger does.
+export const CIRCLER_TAG = 'circler';
+
+export function isCircler(e) {
+  return !!e && e.tag === CIRCLER_TAG;
+}
+
+// The eight tiles around a centre, clockwise from north. Each is an orthogonal neighbour of
+// the next, so walking the ring is a run of single steps.
+export const RING = Object.freeze([
+  [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1],
+]);
+
+// Which of the two beats this creature steps on: 0 or 1, from its id alone. Neighbouring ids
+// (a pack numbered 1, 2, 3) differ in their last character, so a pack never swings in unison.
+export function circlePhase(id) {
+  let sum = 0;
+  for (const ch of String(id ?? '')) sum += ch.charCodeAt(0);
+  return sum % 2;
+}
+
+// Does this creature step (rather than hit) on this turn?
+export function circlesThisBeat(id, turn) {
+  return ((turn | 0) + circlePhase(id)) % 2 === 0;
+}
+
+// The next free tile clockwise around `centre` from the tile `from` stands on, reachable in
+// one step. `canStep(fromX, fromY, toX, toY)` says whether the step is open (a wall, another
+// creature or a container says no). Returns { x, y }, or null when there is none, and the
+// creature just hits.
+export function circleStep(centre, from, canStep) {
+  const at = RING.findIndex(([dx, dy]) => centre.x + dx === from.x && centre.y + dy === from.y);
+  if (at < 0) return null;                       // not beside the centre: nothing to circle
+  for (let k = 1; k < RING.length; k++) {
+    const x = centre.x + RING[(at + k) % RING.length][0];
+    const y = centre.y + RING[(at + k) % RING.length][1];
+    if (Math.max(Math.abs(x - from.x), Math.abs(y - from.y)) !== 1) continue;   // one step only
+    if (canStep(from.x, from.y, x, y)) return { x, y };
+  }
+  return null;
+}
+
 // Default grunt heal policy — per-enemy policies come later (first boss build).
 export const HEAL_HP_FLOOR  = 40; // buy only at or below this HP
 export const HEAL_MIN_GOLD  = 20; // a sliver below this can never heal
