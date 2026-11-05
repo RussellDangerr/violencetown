@@ -1790,8 +1790,8 @@ class Game {
             // before the long-press timer fired is the tap, so it hits now.
             const tap = (this._pressTimer && e && e.type === 'pointerup') ? this._pendingTap : null;
             cancelPress();
-            if (tap && this.state === STATE.IDLE && !this._animating) tap();
             this._releaseTurnPress(e);   // (C3b) a quick tap beside you walks the step on release
+            if (tap && this.state === STATE.IDLE && !this._animating) tap();
             if (this._openerHeld) { this._openerHeld = false; this._wheelOpenerUp(); }   // (screen-fill) the dock's ✦, released
             if (this._dlgDrag) {
                 const d = this._dlgDrag; this._dlgDrag = null;
