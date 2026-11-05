@@ -21,7 +21,8 @@ const GAME = new URL('../game/', import.meta.url);
 const mapData = (file) => JSON.parse(readFileSync(new URL(file, GAME), 'utf8'));
 
 const ZONES = [
-    { file: 'carnival-map.json',  total: 11, original: 'clown1', copies: ['clown2', 'clown3', 'clown4', 'clown5'], boss: 'carnival_boss' },
+    // 14: the three circling horses (plans/cb1-carnival-horses-circle.md) join the 11.
+    { file: 'carnival-map.json',  total: 14, original: 'clown1', copies: ['clown2', 'clown3', 'clown4', 'clown5'], boss: 'carnival_boss' },
     { file: 'graveyard-map.json', total: 6, original: 'skel1',  copies: ['skel2', 'skel3', 'skel4', 'skel5'],     boss: 'graveyard_boss' },
 ];
 
