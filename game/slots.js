@@ -144,7 +144,7 @@ export const ENTRIES = {
         barkEveryTurns: 6,
     },
     // The Graveyard's angel (plans/ca1-crying-angel.md): one stone figure placed by hand at
-    // (21,9). It moves only on the beats you look at it (npc.js angelTurn; the `angel` tag is
+    // (21,10). It moves only on the beats you look at it (npc.js angelTurn; the `angel` tag is
     // the flag, off for every other entry) and has no sight of its own, so it never joins or
     // starts a fight. Stand-ins until designed: the Graveyard Rattling Skeleton's numbers and
     // kit, the name, the barks, the examine text, the art. No `boss`, no slot.

@@ -2,7 +2,7 @@
 
 ## Goal
 
-The Graveyard gets one new hand-placed creature at (21,9), a stone figure. It moves
+The Graveyard gets one new hand-placed creature at (21,10), a stone figure. It moves
 only on the beats where you are looking at it. Look at it and every action you take
 brings it one tile closer, or lands a blow once it is beside you. Look away and it
 does nothing at all, even when it is beside you. The fun is the choice of which way to
@@ -50,7 +50,7 @@ It draws nothing from `game.rng`.
 
 ## Acceptance
 
-- The Graveyard has one angel at (21,9), on open ground.
+- The Graveyard has one angel at (21,10), on open ground.
 - Facing it in line of sight within 8 tiles, each action brings it a tile closer, or a
   blow once beside you (tests drive real enemy turns).
 - Facing away: no step and no blow on any action, even beside you; a wall between you

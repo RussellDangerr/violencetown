@@ -70,36 +70,36 @@ function scene({ player, angel, facing, blockers = [], others = [] }) {
     return g;
 }
 
-const P = { x: 21, y: 15 };      // six tiles south of the angel's spot, on open ground in a clear column
-const A = { x: 21, y: 9 };
+const P = { x: 21, y: 16 };      // six tiles south of the angel's spot, on open ground in a clear column
+const A = { x: 21, y: 10 };
 
-describe('the Graveyard holds one angel at (21,9)', () => {
-    test('exactly one spawn names the entry, at (21,9), on open ground', () => {
+describe('the Graveyard holds one angel at (21,10)', () => {
+    test('exactly one spawn names the entry, at (21,10), on open ground', () => {
         const spawns = graveyard.enemies.filter(e => e.entry === 'crying_angel');
         assert.equal(spawns.length, 1);
         assert.equal(spawns[0].x, 21);
-        assert.equal(spawns[0].y, 9);
+        assert.equal(spawns[0].y, 10);
         const map = new GameMap(graveyard, 'graveyard-map.json');
-        assert.ok(map.isWalkable(21, 9));
+        assert.ok(map.isWalkable(21, 10));
         assert.ok(map.enemySpawns.some(s => s.id === spawns[0].id));
     });
 
     test('only that entry carries the angel flag', () => {
         const flagged = Object.entries(ENTRIES).filter(([, e]) => e.tag === ANGEL_TAG).map(([k]) => k);
         assert.deepEqual(flagged, ['crying_angel']);
-        assert.ok(isAngel(angelAt(21, 9)));
+        assert.ok(isAngel(angelAt(21, 10)));
         assert.ok(!isAngel(spawnEnemy({ id: 's', type: 'Rattling Skeleton', x: 1, y: 1 })));
     });
 
     test('it spawns hostile, in the idle state, with no sight of its own', () => {
-        const a = angelAt(21, 9);
+        const a = angelAt(21, 10);
         assert.equal(a.allegiance, 'hostile');
         assert.equal(a.state, 'idle');
         assert.equal(a.sightRange, 0);
     });
 
     test('its tag and sight survive a save and a load', () => {
-        const back = Enemy.fromSave(angelAt(21, 9).toSave());
+        const back = Enemy.fromSave(angelAt(21, 10).toSave());
         assert.ok(isAngel(back));
         assert.equal(back.sightRange, 0);
     });
@@ -113,7 +113,7 @@ describe('looked at: it comes one tile closer on every action', () => {
             assert.equal(g.beat(), 'step');
             assert.equal(g.dist(), want);
         }
-        assert.deepEqual([g.angel.x, g.angel.y], [21, 12]);
+        assert.deepEqual([g.angel.x, g.angel.y], [21, 13]);
         assert.equal(g.blows.length, 0);
     });
 
@@ -130,26 +130,26 @@ describe('looked at: it comes one tile closer on every action', () => {
     });
 
     test('once beside you it hits for the stand-in 12, on every beat, and stays put', () => {
-        const g = scene({ player: P, angel: { x: 21, y: 14 }, facing: 'up' });
+        const g = scene({ player: P, angel: { x: 21, y: 15 }, facing: 'up' });
         for (let i = 0; i < 4; i++) assert.equal(g.beat(), 'hit');
-        assert.deepEqual([g.angel.x, g.angel.y], [21, 14]);
+        assert.deepEqual([g.angel.x, g.angel.y], [21, 15]);
         assert.ok(g.blows.every(b => b.raw === 12 && b.id === 'angel'));
     });
 
     test('on the cone\'s diagonal front tile it is still looked at', () => {
-        const g = scene({ player: P, angel: { x: 18, y: 12 }, facing: 'up' });   // 45 degrees off
+        const g = scene({ player: P, angel: { x: 25, y: 12 }, facing: 'up' });   // 45 degrees off
         assert.ok(isLookedAt(g, g.angel));
         assert.equal(g.beat(), 'step');
     });
 
     test('it is held out to eight tiles and no further', () => {
-        const near = scene({ player: { x: 21, y: 17 }, angel: A, facing: 'up' });   // 8 away
+        const near = scene({ player: { x: 21, y: 18 }, angel: A, facing: 'up' });   // 8 away
         assert.equal(near.dist(), 8);
         assert.equal(near.beat(), 'step');
-        const far = scene({ player: { x: 21, y: 18 }, angel: A, facing: 'up' });    // 9 away
+        const far = scene({ player: { x: 21, y: 19 }, angel: A, facing: 'up' });    // 9 away
         assert.equal(far.dist(), 9);
         for (let i = 0; i < 4; i++) assert.equal(far.beat(), 'still');
-        assert.deepEqual([far.angel.x, far.angel.y], [21, 9]);
+        assert.deepEqual([far.angel.x, far.angel.y], [21, 10]);
     });
 });
 
@@ -157,20 +157,20 @@ describe('not looked at: it does nothing at all', () => {
     test('facing away, six beats leave it exactly where it was', () => {
         const g = scene({ player: P, angel: A, facing: 'down' });
         for (let i = 0; i < 6; i++) assert.equal(g.beat(), 'still');
-        assert.deepEqual([g.angel.x, g.angel.y], [21, 9]);
+        assert.deepEqual([g.angel.x, g.angel.y], [21, 10]);
         assert.equal(g.blows.length, 0);
     });
 
     test('facing away from it even beside you: no blow, no step, on any beat', () => {
-        const g = scene({ player: P, angel: { x: 21, y: 14 }, facing: 'down' });
+        const g = scene({ player: P, angel: { x: 21, y: 15 }, facing: 'down' });
         for (let i = 0; i < 6; i++) assert.equal(g.beat(), 'still');
         assert.equal(g.blows.length, 0);
-        assert.deepEqual([g.angel.x, g.angel.y], [21, 14]);
+        assert.deepEqual([g.angel.x, g.angel.y], [21, 15]);
     });
 
     test('to your side (the periphery) is not looking', () => {
-        const left = scene({ player: P, angel: { x: 21, y: 14 }, facing: 'left' });
-        const right = scene({ player: P, angel: { x: 21, y: 14 }, facing: 'right' });
+        const left = scene({ player: P, angel: { x: 21, y: 15 }, facing: 'left' });
+        const right = scene({ player: P, angel: { x: 21, y: 15 }, facing: 'right' });
         for (const g of [left, right]) {
             assert.ok(!isLookedAt(g, g.angel));
             for (let i = 0; i < 3; i++) assert.equal(g.beat(), 'still');
@@ -182,7 +182,7 @@ describe('not looked at: it does nothing at all', () => {
         assert.ok(!g.map.isWalkable(21, 12));
         assert.ok(!isLookedAt(g, g.angel));
         for (let i = 0; i < 4; i++) assert.equal(g.beat(), 'still');
-        assert.deepEqual([g.angel.x, g.angel.y], [21, 9]);
+        assert.deepEqual([g.angel.x, g.angel.y], [21, 10]);
         assert.equal(g.blows.length, 0);
     });
 
@@ -200,13 +200,13 @@ describe('turning in place never moves it', () => {
     test('turning back and forth with no committed action leaves it where it was', () => {
         const g = scene({ player: P, angel: A, facing: 'up' });
         for (const f of ['left', 'down', 'right', 'up', 'down', 'up']) g.facing = f;   // pivots only
-        assert.deepEqual([g.angel.x, g.angel.y], [21, 9]);
+        assert.deepEqual([g.angel.x, g.angel.y], [21, 10]);
         assert.equal(g.turn, 0);
         assert.equal(g.blows.length, 0);
     });
 
     test('you can always look away: from beside it, one pivot and the next beat does nothing', () => {
-        const g = scene({ player: P, angel: { x: 21, y: 14 }, facing: 'up' });
+        const g = scene({ player: P, angel: { x: 21, y: 15 }, facing: 'up' });
         assert.equal(g.beat(), 'hit');
         g.facing = 'down';
         assert.equal(g.beat(), 'still');
@@ -224,7 +224,7 @@ describe('a blow from you counts as looking for that beat', () => {
     });
 
     test('struck beside you, facing away: it hits that beat only', () => {
-        const g = scene({ player: P, angel: { x: 21, y: 14 }, facing: 'down' });
+        const g = scene({ player: P, angel: { x: 21, y: 15 }, facing: 'down' });
         struck(g.angel, { x: P.x, y: P.y });
         assert.equal(g.beat(), 'hit');
         assert.equal(g.beat(), 'still');
@@ -232,7 +232,7 @@ describe('a blow from you counts as looking for that beat', () => {
     });
 
     test('a blow leaves no mark behind: not suspicious, not chasing, nothing pending', () => {
-        const g = scene({ player: P, angel: { x: 21, y: 14 }, facing: 'down' });
+        const g = scene({ player: P, angel: { x: 21, y: 15 }, facing: 'down' });
         struck(g.angel, { x: P.x, y: P.y });
         assert.deepEqual(g.angel._struckBy, { x: P.x, y: P.y });
         g.beat();
@@ -276,7 +276,7 @@ describe('it never starts or holds a fight, and a fight does not pull it in', ()
     });
 
     test('a hurt angel does not reach for its kit, and its kit stays on it', () => {
-        const g = scene({ player: P, angel: { x: 21, y: 14 }, facing: 'down' });
+        const g = scene({ player: P, angel: { x: 21, y: 15 }, facing: 'down' });
         const kit = [...g.angel.loadout];
         g.angel.entity.hp = 10;
         for (let i = 0; i < 4; i++) g.beat();
