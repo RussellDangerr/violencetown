@@ -118,7 +118,9 @@ const propName = type => PROP_NAMES.find(([prefix]) => type.startsWith(prefix))?
 // `body` is the bracketed log line; `panelBody` is what the inspect panel shows
 // (the same, except an item's panel shows its description beside the tier chip);
 // `instanceId` is set only for an authored instance — the caller fires the
-// `examine` quest event for those alone, as before.
+// `examine` quest event for those alone, as before. `bare` is true only on the
+// last two rungs (the tile's own name, and off the map): nothing there but the
+// ground, so the E key logs the line and opens no panel (FX42).
 export function resolveExamine(game, x, y) {
     const result = (title, body, extra = {}) => ({
         title, body, panelBody: body, instanceId: null, grantsInstance: null, tierName: null, tierColor: null, ...extra,
@@ -164,9 +166,9 @@ export function resolveExamine(game, x, y) {
 
     const onMap = game.map && (!game.map.isInBounds || game.map.isInBounds(x, y));
     const tName = onMap ? tileDisplayName(game.map.getTile(x, y)) : null;
-    if (tName) return result(tName, `[${tName}.]`);
+    if (tName) return result(tName, `[${tName}.]`, { bare: true });
 
-    return result('Examine', '[Nothing here worth examining.]');
+    return result('Examine', '[Nothing here worth examining.]', { bare: true });
 }
 
 // The examinable the player is facing, then any adjacent (incl. current) one.
@@ -235,7 +237,8 @@ export function doExamine(game) {
         res.panelBody = (res.panelBody ? res.panelBody + ' ' : '') + hint;
     }
     game._log(res.body);
-    // (§12.3) Also surface it as a layered inspect panel.
-    if (game._openInspect) game._openInspect({ title: res.title, body: res.panelBody, tierName: res.tierName, tierColor: res.tierColor });
+    // (§12.3) Also surface it as a layered inspect panel — unless it is bare
+    // ground with nothing added to it (FX42): that is one log line, no panel.
+    if (game._openInspect && !(res.bare && !hint)) game._openInspect({ title: res.title, body: res.panelBody, tierName: res.tierName, tierColor: res.tierColor });
     return true;
 }
