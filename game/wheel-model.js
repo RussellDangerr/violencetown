@@ -495,7 +495,11 @@ export function greyedReason(node, game) {
   }
   if (!verbApplies(node, game)) {
     if (node.needsItem && barSlot(game, node.needsItem) < 0) {
-      if (node.needsItem === 'eat') return (game.playerHp >= game.playerMaxHp) ? 'full-health' : 'no-food';
+      if (node.needsItem === 'eat') {
+        // The game already knows which (eatBlockedBy: 'full' | 'none'); fall back to HP.
+        const why = game.eatBlockedBy ? game.eatBlockedBy() : (game.playerHp >= game.playerMaxHp ? 'full' : 'none');
+        return why === 'full' ? 'full-health' : 'no-food';
+      }
       return NEEDS_ITEM_REASON[node.needsItem] || 'unavailable';
     }
     if (node.resolver === 'run') return 'no-room';

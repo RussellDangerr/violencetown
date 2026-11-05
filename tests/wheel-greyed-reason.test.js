@@ -21,6 +21,7 @@ import {
     greyedReason, greyedReasonLine, GREYED_REASON_TEXT, ROOT,
 } from '../game/wheel-model.js';
 import { buildXmbBar } from '../game/xmb.js';
+import { ITEMS } from '../game/items.js';
 import { Enemy } from '../game/enemies.js';
 
 const mainSrc = readFileSync(fileURLToPath(new URL('../game/main.js', import.meta.url)), 'utf8');
@@ -98,7 +99,9 @@ function makeGame(enemies = [], over = {}) {
         _wheelTakesKey: liveMethod('_wheelTakesKey(code) {'),
         _wheelCycle: liveMethod('_wheelCycle(dir) {', { cycle, audio }),
         _wheelBack: liveMethod('_wheelBack() {', { back, audio }),
-        _wheelDrill: liveMethod('_wheelDrill() {', { selectedNode, verbApplies, drill, autoAimTile, audio, greyedReasonLine }),
+        _wheelDrill: liveMethod('_wheelDrill() {', { selectedNode, verbApplies, drill, autoAimTile, audio }),
+        wheelGreyedLine: liveMethod('wheelGreyedLine(node) {', { greyedReasonLine }),
+        eatBlockedBy: liveMethod('eatBlockedBy() {', { buildXmbBar }),
         _wheelCommit: liveMethod('_wheelCommit() {', { needsFriendlyConfirm }),
         _aimRange: liveMethod('_aimRange(leaf) {', { aimRange }),
         _reticleKey: liveMethod('_reticleKey(code) {', { selectedNode, autoAimTile, cheb, audio }),
@@ -209,7 +212,7 @@ describe('pressing a greyed wheel option logs why, with real keys', () => {
     });
 
     test('Eat, at full health', () => {
-        const g = makeGame([], { playerHp: 20 });
+        const g = makeGame([], { playerHp: 20, inventory: [{ itemDef: ITEMS.hot_dog, count: 1 }] });
         openTo(g, ['treat', 'eat']);
         pressGreyed(g, 'full-health');
     });

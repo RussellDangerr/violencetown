@@ -3665,7 +3665,7 @@ class Game {
         // (fx58) A refused press still bumps and passes no turn, but now says why:
         // one log line from wheel-model's reasons table (greyedReasonLine).
         const refuse = () => {
-            const line = greyedReasonLine(node, this);
+            const line = this.wheelGreyedLine?.(node);
             if (line) this._log(line);
             audio.playSfx('bump-wall'); this._render();
         };
@@ -3679,6 +3679,9 @@ class Game {
         w._drillAt = performance.now(); w._drillDir = +1;
         audio.playSfx('menu-tick'); this._render();   // 'push' / descended into a sub-wheel
     }
+
+    // (fx58) The log line for why `node` is greyed, from wheel-model's reasons table.
+    wheelGreyedLine(node) { return greyedReasonLine(node, this); }
 
     // Commit the composed action — surfacing the Plus-Ultra confirm if it would
     // clip a friendly. _fireWheel (via _closeWheel) clears the confirm flag.
