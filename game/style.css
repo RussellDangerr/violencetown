@@ -661,6 +661,10 @@ body {
     outline: 2px solid #d4b96a;
     outline-offset: 2px;
 }
+/* (ZM1) The zoom row: Farther, the scale in use, Closer. */
+.opt-step { flex: 0 0 40px; }
+.opt-step:disabled { opacity: 0.35; cursor: default; }
+.opt-zoom-val { flex: 0 0 72px; }
 .opt-note {
     margin-top: 12px;
     padding-top: 8px;
