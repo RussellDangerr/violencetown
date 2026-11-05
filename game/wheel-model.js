@@ -451,6 +451,70 @@ export function verbApplies(node, game) {
   return pool.some(e => cheb(game.playerX, game.playerY, e.x, e.y) <= 1);
 }
 
+// ── Why an option is grey (FX58) ─────────────────────────────────────────────
+// ONE place for the reasons, so the wheel's refused press and the later fight
+// arc read the same table. Every line is a placeholder for the owner's words.
+export const GREYED_REASON_TEXT = {
+  'nobody-beside': '[TEXT: nobody beside you]',
+  'not-fighting':  '[TEXT: not fighting you]',
+  'no-rock':       '[TEXT: no rock]',
+  'no-mp':         '[TEXT: not enough MP]',
+  'no-spell':      '[TEXT: no spell known]',
+  'not-hidden':    '[TEXT: not hidden]',
+  'nothing-to-take': '[TEXT: nothing to take]',
+  'no-food':       '[TEXT: no food]',
+  'full-health':   '[TEXT: already at full health]',
+  'no-drink':      '[TEXT: nothing to drink]',
+  'no-room':       '[TEXT: nowhere to run]',
+  'no-gold':       '[TEXT: not enough GP]',
+  'no-trick':      '[TEXT: trick not granted]',
+  'unavailable':   '[TEXT: not now]',
+};
+
+const NEEDS_ITEM_REASON = { throw: 'no-rock', drink: 'no-drink' };
+
+// The reason key for a node the wheel refuses, or null when the node is usable
+// (or a placeholder, which is a pad and not an option). Mirrors the order of the
+// gates in main._wheelDrill: `available` first, then verbApplies. Pure.
+export function greyedReason(node, game) {
+  if (!node || node.placeholder) return null;
+  if (node.available && !node.available(game)) {
+    if (node.spellId || node.key === 'magic') {
+      const known = node.spellId
+        ? (game.hasSpell ? game.hasSpell(node.spellId) : (game.knownSpells || []).includes(node.spellId))
+        : ((game.knownSpells && game.knownSpells.length) || 0) > 0;
+      return known ? 'no-mp' : 'no-spell';
+    }
+    if (node.key === 'thieve') return 'not-hidden';
+    if (node.resolver && node.resolver.startsWith('thieve')) return 'nothing-to-take';
+    if (node.trickId) {
+      const has = game.hasTrick ? game.hasTrick(node.trickId) : (game.grantedTricks || []).includes(node.trickId);
+      return has ? 'no-gold' : 'no-trick';
+    }
+    return 'unavailable';
+  }
+  if (!verbApplies(node, game)) {
+    if (node.needsItem && barSlot(game, node.needsItem) < 0) {
+      if (node.needsItem === 'eat') {
+        // The game already knows which (eatBlockedBy: 'full' | 'none'); fall back to HP.
+        const why = game.eatBlockedBy ? game.eatBlockedBy() : (game.playerHp >= game.playerMaxHp ? 'full' : 'none');
+        return why === 'full' ? 'full-health' : 'no-food';
+      }
+      return NEEDS_ITEM_REASON[node.needsItem] || 'unavailable';
+    }
+    if (node.resolver === 'run') return 'no-room';
+    const near = (game.enemies || []).filter(e => e.entity.isAlive() && cheb(game.playerX, game.playerY, e.x, e.y) <= 1);
+    return near.length ? 'not-fighting' : 'nobody-beside';
+  }
+  return null;
+}
+
+// The log line for a refused node, or null when there is nothing to say.
+export function greyedReasonLine(node, game) {
+  const key = greyedReason(node, game);
+  return key ? GREYED_REASON_TEXT[key] : null;
+}
+
 // ── Combat state (§12.5 aggro re-skin) ───────────────────────────────────────
 // True when the player is in an active fight: any non-ambient, still-alive enemy
 // is CHASING (the same signal that locks the world in main._inCombat, which now
