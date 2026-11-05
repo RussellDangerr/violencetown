@@ -49,6 +49,7 @@ frozen/frozen-boss                Siberia                     100       6     14
 frozen/frozen-mob-1               Snowman                     100       0     12       35              5              3      9
 frozen/frozen-mob-2               Yeti                        100       6     12      113              8              3      9
 graveyard/graveyard_boss          Boss                        100       6     14      148              8              3      8
+graveyard/crying-angel-1          Crying Angel                100       0     12       35              5              3      9
 graveyard/skel1                   Rattling Skeleton           100       0     12       35              5              3      9
 graveyard/skel2                   Rattling Skeleton           100       0     12       35              5              3      9
 graveyard/skel3                   Rattling Skeleton           100       0     12       35              5              3      9
@@ -112,7 +113,7 @@ diner                      0
 downtown                   8
 factory                   76
 frozen                    78
-graveyard                 64
+graveyard                 68
 sewer                    101
 sewer-north               10
 town                      30
