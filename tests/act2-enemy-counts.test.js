@@ -1,5 +1,6 @@
 // act2-enemy-counts.test.js — the Carnival and the Graveyard hold the ruled number of fighters
-// (plans/ep3-act2-enemy-counts.md, ruling EP3R1 a: Carnival 9, Graveyard 6).
+// (plans/ep3-act2-enemy-counts.md, ruling EP3R1 a: Carnival 9, Graveyard 6, since 7: CA1 adds the angel,
+// since 8: AK1 adds the Ankou).
 //
 // A "fighter" is any enemy spawn on the map, boss and rats included. The new Clowns and
 // Skeletons are copies of their zone's own ordinary enemy at placeholder spots.
@@ -21,9 +22,12 @@ const GAME = new URL('../game/', import.meta.url);
 const mapData = (file) => JSON.parse(readFileSync(new URL(file, GAME), 'utf8'));
 
 const ZONES = [
-    // 14: the three circling horses (plans/cb1-carnival-horses-circle.md) join the 11.
-    { file: 'carnival-map.json',  total: 14, original: 'clown1', copies: ['clown2', 'clown3', 'clown4', 'clown5'], boss: 'carnival_boss' },
-    { file: 'graveyard-map.json', total: 6, original: 'skel1',  copies: ['skel2', 'skel3', 'skel4', 'skel5'],     boss: 'graveyard_boss' },
+    // 18: the three circling horses (plans/cb1-carnival-horses-circle.md) join the 11, and the
+    // four circling dolls (plans/ec1-carnival-doll-pack.md) join them. 19: the assistant manager
+    // (plans/as1-unicycle-clown.md) is a spawn on the map but never fights; he is counted so the
+    // one-spawn-per-tile and unique-id checks still cover him.
+    { file: 'carnival-map.json',  total: 19, original: 'clown1', copies: ['clown2', 'clown3', 'clown4', 'clown5'], boss: 'carnival_boss' },
+    { file: 'graveyard-map.json', total: 8, original: 'skel1',  copies: ['skel2', 'skel3', 'skel4', 'skel5'],     boss: 'graveyard_boss' },
 ];
 
 // The road the loops autoplay walks in the Carnival: the north door, then the lion whip and the

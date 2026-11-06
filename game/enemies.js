@@ -215,6 +215,16 @@ export class Enemy {
         // (plans/ic4-frozen-creatures.md) This creature's own examine text, from
         // its registry entry.
         examine = null,
+        // (plans/as1-unicycle-clown.md) How this creature is DRAWN, nothing else: a size
+        // under one tile (null = the full tile every other creature has) and a unicycle
+        // under it. Both come from a registry entry; neither touches a stat.
+        drawScale = null,
+        unicycle = false,
+        // (plans/as1-unicycle-clown.md) Rolls about on a dice stream of his own, seeded from his
+        // id, instead of the shared ambient one. A wanderer drawing from the shared stream
+        // moves every later wander in the run, so a new one anywhere shifts a replay that never
+        // went near him; his own stream touches no one else's.
+        ownDice = false,
     }) {
         this.id         = id;
         this.type       = type;
@@ -319,6 +329,9 @@ export class Enemy {
         this.slot          = slot;
         this.tags          = Array.isArray(tags) ? [...tags] : [];
         this.examine       = examine;
+        this.drawScale     = (typeof drawScale === 'number' && drawScale > 0 && drawScale < 1) ? drawScale : null;
+        this.unicycle      = unicycle === true;
+        this.ownDice       = ownDice === true;
 
         // Debuffs / buffs — symmetric with Game.buffs[] on the player side
         // (DoTs, fear, the poition riders), ticked by the same BUFF_EFFECTS table.
@@ -395,6 +408,13 @@ export class Enemy {
             tags: this.tags.length ? [...this.tags] : undefined,
             // Same rule: a creature with no examine text of its own saves as before.
             examine: this.examine || undefined,
+            // Same rule for how it is drawn: a full-size creature saves as before.
+            drawScale: this.drawScale || undefined,
+            unicycle: this.unicycle || undefined,
+            ownDice: this.ownDice || undefined,
+            // (FX45) The one-time talk choices this NPC has already given. Left out while
+            // none are spent, so an NPC nobody has talked to saves exactly as before.
+            dialogueDone: (this._dialogueDone && this._dialogueDone.size) ? [...this._dialogueDone] : undefined,
             // runtime
             state: this.state, fsmState: this.fsmState, lastWanderTurn: this._lastWanderTurn,
             // (perception ladder) so a save taken mid-hunt reloads mid-hunt.
@@ -456,6 +476,10 @@ export class Enemy {
         if (typeof s.summonTurnsLeft === 'number') e._summonTurnsLeft = s.summonTurnsLeft;
         if (s.isBarricade) e.isBarricade = true;
         if (s.tag != null) e.tag = s.tag;
+        // (FX45) Old saves have no dialogueDone: nothing is spent.
+        if (Array.isArray(s.dialogueDone) && s.dialogueDone.length) {
+            e._dialogueDone = new Set(s.dialogueDone.filter(x => typeof x === 'string'));
+        }
         return e;
     }
 }
@@ -511,6 +535,8 @@ export function isTownsperson(spawnDef) {
     return !!spawnDef?.ambient && !spawnDef.vendor && !((spawnDef.damage ?? 0) > 0)
         && spawnDef.gold == null;
 }
+
+const OWN_DICE_SALT = 0x5A17C0DE;   // keeps an own-dice wanderer's stream apart from his purse's
 
 // FNV-1a over the id, so the purse is keyed on the person, not on load order.
 function idHash(id) {
@@ -726,7 +752,10 @@ export function resolveAmbientTurns(game) {
         // whitelist still gates who actually MOVES inside tickNpcState — IDLE-only
         // NPCs stay put; WANDER/WORKING NPCs roam/labour while the player stands still.
         if (npc.allegiance === 'neutral') {
-            const npcMessages = tickNpcState(game, npc, game.worldTick, game.ambientRng || game.rng);
+            const dice = npc.ownDice
+                ? (npc._dice ??= new RNG((idHash(npc.id) ^ OWN_DICE_SALT) >>> 0))
+                : (game.ambientRng || game.rng);
+            const npcMessages = tickNpcState(game, npc, game.worldTick, dice);
             for (const m of npcMessages) messages.push(m);
         }
     }

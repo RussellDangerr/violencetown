@@ -127,6 +127,80 @@ export const ENTRIES = {
         barks: ['[TEXT]'],
         barkEveryTurns: 6,
     },
+    // The Carnival's dolls (plans/ec1-carnival-doll-pack.md): four combatants placed by hand
+    // around (10,17), which circle you once beside you exactly as the horses do (the `circler`
+    // tag, ai.js circleStep). Stand-ins until designed: the townie Knuckles's armour and
+    // damage with a two-item kit, the purse, the name, the barks, the art. No `boss`, no slot.
+    carnival_doll: {
+        type: 'Carnival Doll',
+        name: '[Doll]',
+        tag: 'circler',
+        gold: 2,
+        loadout: ['rock', 'pipe'],
+        hp: 100,
+        armor: -30,
+        damage: 4,
+        barks: ['[TEXT]'],
+        barkEveryTurns: 6,
+    },
+    // The Carnival's assistant manager (plans/as1-unicycle-clown.md, ruling LN1R1 a): someone
+    // you talk to, never a fight. Placed by hand at (32,3); he rolls about near it. He shares
+    // the Carnival Clown's type (no sprite row of his own) drawn small, on a unicycle. Stand-ins
+    // until designed: the Crat's numbers (a townsperson's), the name, every line, the drawn
+    // size, the unicycle. No `boss`, no slot.
+    assistant_manager: {
+        type: 'Carnival Clown',
+        name: '[Assistant Manager]',
+        ambient: true,
+        hp: 100,
+        armor: -80,
+        damage: 0,
+        sightRange: 4,
+        disposition: 0,
+        behavior: ['IDLE', 'WANDER'],
+        homeRegion: 'assistant-yard',   // the carnival-map region round (32,3): he rolls about in it, no further
+        wanderRadius: 2,
+        wanderEveryTurns: 3,
+        dialogueId: 'assistant_manager',
+        drawScale: 0.5,
+        unicycle: true,
+        ownDice: true,   // his wander never draws the shared ambient stream (it moved a replay that never met him)
+    },
+    // The Graveyard's angel (plans/ca1-crying-angel.md): one stone figure placed by hand at
+    // (21,10). It moves only on the beats you look at it (npc.js angelTurn; the `angel` tag is
+    // the flag, off for every other entry) and has no sight of its own, so it never joins or
+    // starts a fight. Stand-ins until designed: the Graveyard Rattling Skeleton's numbers and
+    // kit, the name, the barks, the examine text, the art. No `boss`, no slot.
+    crying_angel: {
+        type: 'Crying Angel',
+        name: '[Angel]',
+        tag: 'angel',
+        gold: 4,
+        loadout: ['rock', 'pipe', 'foil_hat', 'shoe_bags'],
+        hp: 100,
+        armor: 0,
+        damage: ACT2_MOB_DAMAGE,
+        sightRange: 0,
+        barks: ['[TEXT]'],
+        barkEveryTurns: 6,
+        examine: '[TEXT]',
+    },
+    // The Graveyard's Ankou (plans/ak1-ankou-graveyard.md): one skeleton with a ghost drawn
+    // around it (sprites.js `ghost`, renderer.js), placed by hand at (8,22). It fights as an
+    // ordinary hostile. The name is Caelan's; stand-ins until designed: the Polar Bear's numbers
+    // and kit, the barks, the examine text, the art. No `boss`, no slot, so it is in no pool.
+    ankou: {
+        type: 'Ankou',
+        name: 'Ankou',
+        gold: 10,
+        loadout: ['mystery_meat', 'mystery_meat', 'mystery_meat', 'tunnel_mushroom', 'sludge_sack', 'fire_blood', 'defence_poition'],
+        hp: 100,
+        armor: 3,
+        damage: 10,
+        barks: ['[TEXT]'],
+        barkEveryTurns: 6,
+        examine: '[TEXT]',
+    },
     // The Sewer's character (plans/cs1-crat-talk-both-sides.md): the Crat, who
     // asks you to settle a dispute in the side room north of the Sewer. A
     // townsperson's numbers; borrowed Violencian art until it is designed.

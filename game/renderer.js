@@ -46,6 +46,7 @@ import { PHASE, threatPhase, alertWatchers } from './threat-phase.js';        //
 import { isSafe } from './defeat-scenarios.js';   // (defeat legibility) mark safe-floor items
 import { buyPrice, sellPrice, bribeStepCost, mood, canTrade, band, BRIBE_STEP } from './trade.js'; // (trade slice 1) pricing + mood smiley; band feeds the offer meter's multiplier readout
 import { isHunting } from './ai.js'; // one spelling of "actively hunting the player"
+import { arcSlots, arcVisible, arcLayout, arcFaded, ARC_ALPHA, ARC_FADED_ALPHA } from './fight-arc.js';   // (FA1) the arc of attacks under you in a fight
 import { fighters, fightArea, FIGHT_MARGIN } from './fight-area.js';        // (fight-fog) who is in the fight, and what they can see
 import { entranceAt, fogReveal, fogDepth, fogOut, tileJitter, FOG_TINT, FOG_DENSITY, FOG_BLUR_TILES,
          FOG_FAR_TILES, FOG_IN_MS, FOG_OUT_MS } from './fight-entrance.js'; // (fight-fog) the entrance, and the fog's timeline and look
@@ -497,15 +498,17 @@ export class Renderer {
         // Big GAME START prompt — the centerpiece. Scale 3 = 24px tall.
         // Hard 2px black drop-shadow gives the marquee its chunky arcade weight.
         if (this.font) {
-            this.font.drawText(ctx, 'GAME START', 162, 150, {
+            this.font.drawText(ctx, 'GAME START', 162, 148, {
                 color: '#5a4420', scale: 3, align: 'center',
             });
-            this.font.drawText(ctx, 'GAME START', 160, 148, {
+            this.font.drawText(ctx, 'GAME START', 160, 146, {
                 color: UI.gold, scale: 3, align: 'center',
             });
 
-            // Subtitle hint
-            this.font.drawText(ctx, 'PRESS SPACE OR CLICK BELOW', 160, 178, {
+            // Subtitle hint. Measured from VT323's real glyph boxes, y=177 leaves
+            // 2px clear below GAME START's shadow and 2px above BY CAELAN GANDER
+            // (at 178 it left 1.5 and 1); tests/splash-skyline.test.js pins it.
+            this.font.drawText(ctx, 'PRESS SPACE OR CLICK BELOW', 160, 177, {
                 color: UI.textLight, scale: 1, align: 'center',
             });
         }
@@ -554,6 +557,16 @@ export class Renderer {
         const SKY_Y = 56, SKY_H = 76;
         const GROUND_Y = SKY_Y + SKY_H;
 
+        // Every skyline fill goes through here: it keeps only the part that sits
+        // inside the sky (x = 24..296), so the last building of a row is cut off
+        // at the edge instead of poking over the panel's frame. Whole buildings
+        // inside are drawn exactly as before.
+        const SKY_L = PANEL_X, SKY_R = PANEL_X + PANEL_W;
+        const fill = (x, y, w, h) => {
+            const x0 = Math.max(x, SKY_L), x1 = Math.min(x + w, SKY_R);
+            if (x1 > x0) ctx.fillRect(x0, y, x1 - x0, h);
+        };
+
         // Sky — a dusk gradient (deep indigo night above, warm ember at the
         // horizon) so the near-black skyline silhouettes crisply against it on
         // the dark stone panel; lit gold windows + a low moon punch through.
@@ -570,7 +583,7 @@ export class Renderer {
         const moonRects = [[2,0,4,1],[1,1,6,1],[0,2,8,4],[1,6,6,1],[2,7,4,1]];
         ctx.fillStyle = '#d4b96a';
         for (const [dx, dy, w, h] of moonRects) {
-            ctx.fillRect(moonX + dx, moonY + dy, w, h);
+            fill(moonX + dx, moonY + dy, w, h);
         }
 
         // Far-row buildings — short, dim, no windows. Provides depth.
@@ -582,7 +595,7 @@ export class Renderer {
         for (let i = 0; PANEL_X + i * FAR_W < PANEL_X + PANEL_W; i++) {
             const h = FAR_H[i % FAR_H.length];
             const bx = PANEL_X + i * FAR_W;
-            ctx.fillRect(bx, farY0 - h, FAR_W, h + 20);
+            fill(bx, farY0 - h, FAR_W, h + 20);
         }
 
         // Near-row buildings — taller, varied widths, window dots. The
@@ -601,11 +614,11 @@ export class Renderer {
             const [bw, bh, wPerRow, wRows] = NEAR_PATTERN[i % NEAR_PATTERN.length];
             const by = GROUND_Y - bh;
             // Building body
-            ctx.fillRect(bx, by, bw, bh + 8); // +8 lets it run past the ground line
+            fill(bx, by, bw, bh + 8); // +8 lets it run past the ground line
             // Top-edge highlight (one pixel lighter) — gives the silhouette
             // a slight glint that suggests the moon is grazing the rooftops.
             ctx.fillStyle = '#3a2a18';
-            ctx.fillRect(bx, by, bw, 1);
+            fill(bx, by, bw, 1);
             ctx.fillStyle = '#100a08';
             // Window dots — small 1×1 ochre marks, evenly spaced.
             // Skip a deterministic ~20% so the windows look lived-in (some
@@ -621,7 +634,7 @@ export class Renderer {
                     const wy = by + wPadY + r * (1 + wSpaceY);
                     if (wy + 1 > by + bh - 2) continue; // don't draw windows past the bottom
                     ctx.fillStyle = '#d4b96a';
-                    ctx.fillRect(Math.round(wx), Math.round(wy), 1, 1);
+                    fill(Math.round(wx), Math.round(wy), 1, 1);
                     ctx.fillStyle = '#100a08';
                 }
             }
@@ -633,7 +646,7 @@ export class Renderer {
         // parchment band below, so the eye doesn't have to track where the
         // city ends and the GAME START callout begins.
         ctx.fillStyle = '#0a0606';
-        ctx.fillRect(PANEL_X, GROUND_Y - 1, PANEL_W, 2);
+        fill(PANEL_X, GROUND_Y - 1, PANEL_W, 2);
     }
 
     // ── Game Frame ───────────────────────────────────────────────────────────
@@ -745,6 +758,7 @@ export class Renderer {
         this._drawBuffBar(game);
         this._drawQuestLog(game);
         this._drawFightPanels(game);
+        this._drawFightArc(game);
         this._drawXmbBar(game);
         this._drawOpener(game);
         this._drawLootReel(game);   // (FX3c) what the kill gave, rolling
@@ -1778,6 +1792,43 @@ export class Renderer {
         return e.x === game.playerX + dx && e.y === game.playerY + dy;
     }
 
+    // (plans/as1-unicycle-clown.md) A unicycle as canvas primitives, standing in until the art
+    // pass: a tyre, four spokes that turn a quarter for every tile rolled, a hub, and a post
+    // that rises to the seat. Drawn in the bottom of its tile, centred; `turns` is steps taken.
+    _drawUnicycle(ctx, px, py, r, turns) {
+        const cx = px + TILE_PX / 2, cy = py + TILE_PX - r - 1;
+        const a0 = turns * (Math.PI / 2);
+        ctx.save();
+        ctx.lineCap = 'butt';
+        ctx.strokeStyle = '#1b1b1b';
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = '#d9d2c0';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 4; i++) {
+            const a = a0 + i * (Math.PI / 2);
+            ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a) * (r - 1), cy + Math.sin(a) * (r - 1)); ctx.stroke();
+        }
+        ctx.fillStyle = '#e0b020';
+        ctx.fillRect(cx - 1, cy - 1, 2, 2);
+        ctx.strokeStyle = '#8a8a8a';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx, cy - r - 3); ctx.stroke();
+        ctx.fillStyle = '#7a2a8a';
+        ctx.fillRect(cx - 3, cy - r - 4, 6, 2);
+        ctx.restore();
+    }
+
+    // (plans/ak1-ankou-graveyard.md) The ghost round a creature: one cell, see-through, larger than
+    // the tile and centred on it, drawn under the body. Returns whether it drew.
+    _drawGhost(ctx, sprites, ghost, px, py) {
+        const sheet = sprites?.[ghost.sheet || 'tinyDungeon'];
+        if (!sheet?.loaded || !sheet.drawGhost) return false;
+        const size = TILE_PX * (ghost.scale || 1);
+        const off = (TILE_PX - size) / 2;
+        return sheet.drawGhost(ctx, ghost.col, ghost.row, px + off, py + off, size, size, ghost.alpha ?? 0.5);
+    }
+
     _drawEnemySprite(game, e, px, py, now, { bodyOnly = false } = {}) {
         const { ctx, sprites } = this;
         const isAlive = e.entity.isAlive();
@@ -1817,13 +1868,29 @@ export class Renderer {
         const eFlip = (isAlive && e._faceLeft && !info?.dirCols) ? -1 : 1;
         const ecx = px + TILE_PX / 2, ecy = py + TILE_PX / 2;
         let ok = false;
+        // (plans/as1-unicycle-clown.md) A creature with a drawScale is drawn smaller, standing
+        // at the base of its tile; one with a unicycle rolls on a wheel drawn under it. Every
+        // other creature takes the full-tile box it always had.
+        const dscale = e.drawScale || 1;
+        const rider = e.unicycle === true;
+        const wheelR = rider ? Math.round(TILE_PX * 0.16) : 0;
+        const bw0 = TILE_PX * dscale;
+        const bx0 = px + (TILE_PX - bw0) / 2;
+        const by0 = dscale < 1 ? py + TILE_PX - wheelR * 2 - bw0 + 1 : py;
         withWalk(ctx, ecx, ecy, { bob: ea.bob, rot: ea.rot, flipX: eFlip }, () => {
+            if (rider) this._drawUnicycle(ctx, px, py, wheelR, (e._stepIndex || 0) + slideProgress);
+            // (plans/ak1-ankou-graveyard.md) A living creature whose sprite has a `ghost` has it drawn
+            // first, behind the body: see-through, a little larger, centred on the tile.
+            if (isAlive && info?.ghost) this._drawGhost(ctx, sprites, info.ghost, px, py);
             if (frame && sprites?.[frame.sheet]?.loaded) {
-                ok = this._inkFrame(sprites[frame.sheet], ctx, frame.col, frame.row, px, py, TILE_PX, TILE_PX);
+                ok = dscale < 1
+                    ? this._inkFrame(sprites[frame.sheet], ctx, frame.col, frame.row, bx0, by0, bw0, bw0)
+                    : this._inkFrame(sprites[frame.sheet], ctx, frame.col, frame.row, px, py, TILE_PX, TILE_PX);
             }
             if (!ok) {
                 ctx.fillStyle = isAlive ? '#cc4433' : '#555';
-                ctx.fillRect(px + 6, py + 6, TILE_PX - 12, TILE_PX - 12);
+                if (dscale < 1) ctx.fillRect(bx0 + bw0 * 0.2, by0 + bw0 * 0.2, bw0 * 0.6, bw0 * 0.6);
+                else ctx.fillRect(px + 6, py + 6, TILE_PX - 12, TILE_PX - 12);
             }
         });
 
@@ -2724,7 +2791,11 @@ export class Renderer {
         else if (active === 'map')    this._drawWorldMapBody(game, body, body.y);
         else if (active === 'rings') this._drawDeviceRings(game, body);
 
-        this.font.drawText(ctx, '[ ] TABS   ESC CLOSE', CANVAS_PX / 2, R.y + R.h - 12, { color: UI.dim, scale: 1, align: 'center' });
+        // (FX43) The bag lists the keys that work in it: the phrases the pickers and shop already
+        // use for arrows and Esc, and a placeholder for Space until its verb is chosen.
+        const foot = active === 'items' ? '[ ] TABS   ↑↓ PICK   SPACE [TEXT]   ESC CLOSE' : '[ ] TABS   ESC CLOSE';
+        const fit = this._fitText(foot, R.w - 32, 1, 0.75);
+        this.font.drawText(ctx, fit.text, CANVAS_PX / 2, R.y + R.h - 12, { color: UI.dim, scale: fit.scale, align: 'center' });
         ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     }
 
@@ -3011,6 +3082,40 @@ export class Renderer {
         const panel = targetPanel(t);
         panel.name = shownName(t) || panel.name;
         this._drawTargetPanel(p.right, panel);
+    }
+
+    // ── The fight arc (FA1, plans/fa1-fight-arc.md) ─────────────────────────
+    // A half-ring of numbered slots under the player while a fight is on: every attack
+    // owned, each a node of the wheel's own tree. A greyed slot is dimmed, not hidden; the
+    // slot being aimed is ringed in gold; the whole arc drops to a faint alpha while the aim
+    // is on a tile it covers. Every size, colour and alpha here is a stand-in.
+    _drawFightArc(game) {
+        if (!game || !this.font || !arcVisible(game)) return;
+        const { ctx } = this;
+        const vp = this._view();
+        const slots = arcSlots(game);
+        if (!slots.length) return;
+        const rects = arcLayout(vp).slots;
+        const faded = arcFaded(vp, game, { x: this._scrollX || 0, y: this._scrollY || 0 });
+        const w = game.wheel;
+        const aimed = (game.state === 'radial_menu' && w && w.aiming) ? selectedNode(w) : null;
+        const clip = (s, px) => cutToWidth(s, px, this._measurer(1));
+        ctx.save();
+        for (const slot of slots) {
+            const r = rects[slot.n - 1];
+            const grey = !!slot.reason;
+            ctx.globalAlpha = (faded ? ARC_FADED_ALPHA : ARC_ALPHA) * (grey ? 0.75 : 1);
+            ctx.fillStyle = 'rgba(20,14,8,0.82)';
+            ctx.fillRect(r.x, r.y, r.w, r.h);
+            const on = aimed === slot.node;
+            ctx.lineWidth = on ? 2 : 1;
+            ctx.strokeStyle = on ? UI.gold : (grey ? UI.dim : (slot.node.color || UI.panelBorder));
+            ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+            this.font.drawText(ctx, String(slot.n), r.x + 4, r.y + 3, { color: grey ? UI.dim : UI.gold, scale: 1 });
+            this.font.drawText(ctx, clip(slot.label.toUpperCase(), r.w - 6), r.x + r.w / 2, r.y + 15,
+                { color: grey ? UI.dim : UI.text, scale: 1, align: 'center' });
+        }
+        ctx.restore();
     }
 
     // Your six slots, two lines each: the label, then what is in it. An empty

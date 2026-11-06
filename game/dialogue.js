@@ -235,7 +235,7 @@ export const DIALOGUES = {
               onPick: (g, npc) => g.questEngine.handOver(npc.id),
               reply: '[TEXT]' },
             // (YC1 / YCR1 a) After the delivery he brings up the Yellow Card, once. The quest
-            // flag keeps it spent across a save (an NPC's spent `once` choices are not saved).
+            // flag also gates it (the NPC's spent `once` choices are saved with the NPC).
             // No item, no mechanic; label and reply are placeholders.
             { id: 'yellowCard', label: '[TEXT]', once: true,
               available: (g) => !!g.questEngine && g.questEngine.isComplete('deliver_burger')
@@ -316,8 +316,9 @@ export const DIALOGUES = {
 // you to rule. Hear both, rule for one; either side will pay you to rule its
 // way. Every line is a placeholder for Caelan to write.
 //
-// State lives in the quest flags, which the save keeps (an NPC's spent `once`
-// choices do not survive a reload, so none of these use `once`):
+// State lives in the quest flags, which the save keeps. The story beats (hear a side,
+// take its money, rule) are `once`, which the NPC's save keeps too; the questions
+// you can put again stay `repeatable`:
 //   cratHeardA / cratHeardB  you heard that side out
 //   cratBribe                'a' | 'b' — whose money you took (one offer only)
 //   cratRuling               'a' | 'b' — who you ruled for
@@ -346,7 +347,7 @@ function cratRulingChoices() {
             out.push({
                 id: `rule_${side}${paidBy ? '_paid_' + paidBy : ''}`,
                 label: `[TEXT: rule for side ${side.toUpperCase()}]`,
-                repeatable: true,
+                once: true,
                 available: (g) => heardBoth(g) && !ruled(g) && (cratFlag(g, 'cratBribe') ?? null) === paidBy,
                 onPick: (g) => setCratFlag(g, 'cratRuling', side),
                 reply: `[TEXT: the reveal, "you are not the mother" — you ruled for ${verdict}`
@@ -364,7 +365,7 @@ function cratSide(side) {
         name: `[NAME: side ${S}]`,
         greeting: `[TEXT: side ${S} greets you]`,
         choices: [
-            { id: 'testify', label: `[TEXT: hear side ${S} out]`, repeatable: true,
+            { id: 'testify', label: `[TEXT: hear side ${S} out]`, once: true,
               available: (g) => !cratFlag(g, flag),
               onPick: (g) => setCratFlag(g, flag, true),
               reply: `[TEXT: side ${S}'s side of it]` },
@@ -372,7 +373,7 @@ function cratSide(side) {
               available: (g) => !!cratFlag(g, flag) && !ruled(g),
               reply: `[TEXT: side ${S} repeats itself]` },
             // The bribe runs the other way to every other in the game: they pay you.
-            { id: 'offer', label: `[TEXT: take side ${S}'s money - ${CRAT_BRIBE_GP} GP]`, repeatable: true,
+            { id: 'offer', label: `[TEXT: take side ${S}'s money - ${CRAT_BRIBE_GP} GP]`, once: true,
               available: (g, npc) => !!cratFlag(g, flag) && !ruled(g) && !cratFlag(g, 'cratBribe')
                   && (npc ? (npc.gold ?? 0) >= CRAT_BRIBE_GP : true),
               onPick: (g, npc) => {
@@ -443,6 +444,16 @@ DIALOGUES.factory_manager = {
         { id: 'paid', label: '[TEXT]', repeatable: true,
           available: (g) => billPaid(g) && !partOwed(g),
           reply: '[TEXT]' },
+    ],
+};
+
+// (AS1, plans/as1-unicycle-clown.md) The Carnival's assistant manager: he talks and does
+// nothing else. Every word is [TEXT] until Caelan writes it.
+DIALOGUES.assistant_manager = {
+    name: '[Assistant Manager]',
+    greeting: '[TEXT]',
+    choices: [
+        { id: 'chat', label: '[TEXT]', repeatable: true, reply: '[TEXT]' },
     ],
 };
 

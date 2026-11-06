@@ -117,7 +117,7 @@ framework rather than beside it.
 | Carnival / Factory / Graveyard boss | Pool | Bigfoot / Alien Invasion / The Deity, as first entries |
 | Mini-bosses, set pieces, characters, mobs | Pools | Act 1's are pools of one |
 | What is on a map: spawns, props, containers | Pool material | — |
-| Maps off the spine: Wilderness, Borgir, Diner, Casino, the Gorge (walk left out of the Canyon; open any time, empty for now) | Exist, carry no beat; candidate transition zones (SP12) | content there is pool material |
+| Maps off the spine: Wilderness, Borgir, Diner, Casino, the Gorge (walk left out of the Canyon; open any time, empty for now), the Valley (hook climb up the Canyon's top right; its far side opens into the Wilderness; empty for now) | Exist, carry no beat; candidate transition zones (SP12) | content there is pool material |
 | The oil side area, past the barricade (ruled 2026-11-01, §9) | Optional, carries no beat | name is [TEXT]; content there is pool material |
 
 ## 4. The lock clause
@@ -177,7 +177,8 @@ Each is a row in `roadmap-2026-09.md` §2. Answers land here, dated, and strike 
 - **SP3 — Does `species-adventures.md` become later work, with this file as the north star?** Its
   piece 1 stays, as the slot framework.
 - **SP4 — The frost rat's zone? And is "the forest" the Wilderness map?** No forest zone exists,
-  and the Wilderness is the closest.
+  and the Wilderness is the closest. RULED 2026-11-04 for the second half: the Forest is the
+  Wilderness, and the Valley's far side opens into it. The frost rat's zone stays open.
 - **SP5 — Texas Beholdem and Nessie as future Sewer boss-pool cards?** Caelan's 10-03 note made
   **Lonny** the Sewer's own Loch Ness-style serpent (she), with Nessie her long-lost love who
   lives elsewhere — so the Sewer card may be Lonny.

@@ -4,7 +4,7 @@
 // 1-9 pick a bag slot.
 
 import { Renderer } from './renderer.js';
-import { computeViewport, screenToTile, clientToScreen, toMenu } from './viewport.js';   // (screen-fill) the screen's geometry
+import { computeViewport, screenToTile, clientToScreen, toMenu, stepZoom, zoomToSave, readZoom, writeZoom } from './viewport.js';   // (screen-fill) the screen's geometry
 import { loadMap, carriesAll } from './map.js';
 import { loadAllSprites } from './sprites.js';
 import { BitmapFont } from './bitmap-font.js';
@@ -95,6 +95,7 @@ import {
 } from './wheel-model.js'; // (sunburst wheel) node-tree model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
 import { introAt, isSkipKey } from './tv-intro.js';                                     // (TV1) the TV opening before the title
+import { arcSlots, arcVisible, arcSlotAt, arcFaded, ARC_MAX } from './fight-arc.js';                  // (FA1) the arc of attacks under you in a fight
 import { fighters, joiners } from './fight-area.js';                                     // (fight-fog) who is in the fight
 import { fightStartKind, entranceFor, fightFxActive } from './fight-entrance.js'; // (fight-fog) how it began, and how long its fog moves
 import { createCascade, CASCADE_BEAT_MS, LUNGE_MS } from './cascade.js';           // (turn-model C1) the enemy phase, one actor at a time
@@ -355,6 +356,7 @@ class Game {
         this._pathArrive = null;
         this._pressTimer = null;    // touch long-press timer → full Target List
         this._pressStart = null;    // pointerdown client pos, to cancel the press on drag
+        this._pendingTap = null;    // (FX60) a touch Hit held back until the finger lifts
         this._turnPress = null;     // (C3b) { tile } — a press beside you: walks on release, turns on long-press
 
         // In-canvas log strip (Phase 1B of overhead-dialogue plan). Mirrors
@@ -589,6 +591,8 @@ class Game {
         // system reads them (reduceMotion gates screenshake/flash, volumes feed
         // audio after merge). Validated/clamped inside; never throws.
         Settings.load();
+        // (ZM1) The saved zoom step, or null for the automatic one.
+        this._zoom = readZoom(typeof localStorage !== 'undefined' ? localStorage : null);
 
         const canvas = document.getElementById('game-canvas');
         this.renderer = new Renderer(canvas);
@@ -1163,8 +1167,9 @@ class Game {
             }
             return;
         }
-        const vp = computeViewport({ cssW: box.width, cssH: box.height, dpr: window.devicePixelRatio, dock: DOCK });
+        const vp = computeViewport({ cssW: box.width, cssH: box.height, dpr: window.devicePixelRatio, dock: DOCK, zoom: this._zoom });
         this.renderer.setViewport(vp);
+        this._syncZoomUI();
         canvas.style.width  = `${vp.cssW}px`;
         canvas.style.height = `${vp.cssH}px`;
         // The first-run hint is a page element: keep it just above the dock.
@@ -1474,6 +1479,7 @@ class Game {
                     if (DOWN) { w.confirming = false; audio.playSfx('menu-cancel'); this._render(); return; }
                     return;
                 }
+                if (w.aiming && this._arcDigit?.(e.code)) return;   // (FA1) the same number commits; another switches
                 if (w.aiming) { this._reticleKey(e.code); return; }
                 if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { this._wheelCycle(-1); return; }
                 if (e.code === 'ArrowRight' || e.code === 'KeyD') { this._wheelCycle(+1); return; }
@@ -1660,7 +1666,9 @@ class Game {
                 return;
             }
 
-            // 1-9 = select item
+            // 1-9 = select item. (FA1) While a fight is on and the arc shows, 1-8 are the arc's
+            // slots instead; 9, and every digit outside a fight, still pick the bag.
+            if (this._arcDigit?.(e.code)) { e.preventDefault(); return; }
             const slot = this._digitToSlot(e.code);
             if (slot >= 0) { e.preventDefault(); this._selectItem(slot); return; }
 
@@ -1793,12 +1801,19 @@ class Game {
         canvas.addEventListener('pointerdown', (e) => this._onCanvasPointerDown(e));
         // Long-press bookkeeping: releasing / dragging / cancelling before the timer
         // fires means it was a normal tap (default action already ran) — drop it.
-        const cancelPress = () => { if (this._pressTimer) { clearTimeout(this._pressTimer); this._pressTimer = null; } };
+        const cancelPress = () => {
+            this._pendingTap = null;   // (FX60) a deferred touch Hit dies with the press
+            if (this._pressTimer) { clearTimeout(this._pressTimer); this._pressTimer = null; }
+        };
         // Resolve a dialogue drag: a press that never moved past the threshold is a
         // tap → pick the row; a real drag scrolled the list and picks nothing.
         const endPress = (e) => {
+            // (FX60) A touch tap on a hostile waited for the finger to lift: the lift
+            // before the long-press timer fired is the tap, so it hits now.
+            const tap = (this._pressTimer && e && e.type === 'pointerup') ? this._pendingTap : null;
             cancelPress();
             this._releaseTurnPress(e);   // (C3b) a quick tap beside you walks the step on release
+            if (tap && this.state === STATE.IDLE && !this._animating) tap();
             if (this._openerHeld) { this._openerHeld = false; this._wheelOpenerUp(); }   // (screen-fill) the dock's ✦, released
             if (this._dlgDrag) {
                 const d = this._dlgDrag; this._dlgDrag = null;
@@ -2007,6 +2022,31 @@ class Game {
         // Fullscreen reflects the actual document state, not a stored value.
         this._setToggleUI('opt-fullscreen', !!document.fullscreenElement);
         this._setWheelOpenUI(s.wheelOpenMode);   // (Slice 2) HOLD / TAP
+        this._syncZoomUI();
+    }
+
+    // (ZM1) Zoom: Farther / Closer move one whole pixel step and the view
+    // resizes at once. The automatic step is saved as nothing, so it keeps
+    // following the screen. The readout is the scale in use; [TEXT] marks
+    // that it is the automatic one.
+    _stepZoom(dir) {
+        const vp = this.renderer?.viewport;
+        if (!vp) return;
+        const next = stepZoom(vp.zoom, vp.k, dir);
+        this._zoom = zoomToSave(vp.zoom, next);
+        writeZoom(typeof localStorage !== 'undefined' ? localStorage : null, this._zoom);
+        this._fitCanvas();
+    }
+
+    _syncZoomUI() {
+        const vp = this.renderer?.viewport;
+        const val = document.getElementById('opt-zoom-val');
+        if (!vp || !val) return;
+        val.textContent = `x${vp.k}${vp.k === vp.zoom.auto ? ' [TEXT]' : ''}`;
+        const farther = document.getElementById('opt-zoom-farther');
+        const closer  = document.getElementById('opt-zoom-closer');
+        if (farther) farther.disabled = vp.k <= vp.zoom.min;
+        if (closer)  closer.disabled  = vp.k >= vp.zoom.max;
     }
 
     // Flip an on/off toggle button's label + class + ARIA to match `on`.
@@ -2096,6 +2136,10 @@ class Game {
             Settings.set('wheelOpenMode', next);
             this._setWheelOpenUI(next);
         });
+
+        // (ZM1) Zoom row: Farther / Closer.
+        document.getElementById('opt-zoom-farther')?.addEventListener('click', () => this._stepZoom(-1));
+        document.getElementById('opt-zoom-closer')?.addEventListener('click', () => this._stepZoom(+1));
 
         // Esc closes the modal without falling through to game state. Capture
         // phase beats _bindInput's bubble handler, matching the help modal.
@@ -2213,6 +2257,7 @@ class Game {
         // first, then the menu would bail because the state left IDLE.
         if (e.button >= 1) return;
         this._turnPress = null;   // (C3b) a new press never inherits an old one's pending step
+        this._pendingTap = null;  // (FX60) ...nor an old one's held-back Hit
         this._skipLootReel?.();   // (FX3c) a tap skips the loot reel, then does its normal job
         // Mirror the keyboard gate: don't process taps during the move
         // animation or while the world is resolving. Splash has its own
@@ -2313,6 +2358,7 @@ class Game {
         // target; nothing there → fall through to the hotbar.
         if (this.state === STATE.IDLE) {
             if (this._tapXmbBar(pt)) return;   // (XMB) consumed a bottom-bar tap
+            if (this._arcTap?.(pt)) return;      // (FA1) a tap on one of the arc's slots runs it
             if (hitHud(this._hud(), pt) === 'dock') return;   // (screen-fill) the dock's bare chrome, not the world under it
             const tile = this._screenToTile(pt);
             // Bare tap on a thing → walk adjacent (if needed) → fire its DEFAULT
@@ -2321,7 +2367,15 @@ class Game {
             const target = this._targetAt(tile.x, tile.y);
             if (target) {
                 const v = defaultVerb(target, this);
-                if (v) { this._actOnTarget(v, target); this._armLongPress(tile, e); return; }
+                if (v) {
+                    // (FX60) On touch a Hit waits for the finger to lift, so a long-press
+                    // opens the list without having spent a turn. Mouse hits on press.
+                    if (v.key === 'hit' && e.pointerType === 'touch') {
+                        this._armLongPress(tile, e, () => this._actOnTarget(v, target));
+                        return;
+                    }
+                    this._actOnTarget(v, target); this._armLongPress(tile, e); return;
+                }
             }
             // (C3b, ruling C3R2) An empty tile straight beside you: a long-press
             // faces it without stepping, so the step waits for the release.
@@ -2341,11 +2395,14 @@ class Game {
     // stays put over a thing ~450ms, open the full Target List instead (opening it
     // halts the walk the tap just started). Cancelled on pointerup / drag / cancel
     // (see _bindCanvasTap) and by _stopAutoRepeat. Desktop uses right-click.
-    _armLongPress(tile, e) {
+    // (FX60) `onTap`, when given, is the action held back until the finger lifts.
+    _armLongPress(tile, e, onTap = null) {
         if (this._pressTimer) clearTimeout(this._pressTimer);
         this._pressStart = e ? { x: e.clientX, y: e.clientY } : null;
+        this._pendingTap = onTap;
         this._pressTimer = setTimeout(() => {
             this._pressTimer = null;
+            this._pendingTap = null;
             if (this.state === STATE.IDLE) this._openTargetList(tile.x, tile.y);
         }, 450);
     }
@@ -2472,6 +2529,7 @@ class Game {
                 if (w.confirming) w.confirming = false; else { w.aiming = false; w.reticle = null; }
                 audio.playSfx('menu-cancel'); this._render(); return;
             }
+            if (w.aiming && !w.confirming && this._arcTap?.(pt)) return;   // (FA1) a slot of the arc, unless it has faded aside
             if (w.aiming) { this._aimTapAt(pt); return; }
             this._wheelCommit(); return;
         }
@@ -3032,6 +3090,7 @@ class Game {
         this._pathQueue = [];       // cancel any click-to-walk in progress
         this._pathArrive = null;
         if (this._pressTimer) { clearTimeout(this._pressTimer); this._pressTimer = null; }
+        this._pendingTap = null;    // (FX60) a touch Hit still waiting on the lift
         this._turnPress = null;     // (C3b) a pending tap-beside-you step
     }
 
@@ -3697,6 +3756,59 @@ class Game {
 
     // (fx58) The log line for why `node` is greyed, from wheel-model's reasons table.
     wheelGreyedLine(node) { return greyedReasonLine(node, this); }
+
+    // ── The fight arc (FA1, plans/fa1-fight-arc.md) ─────────────────────────────
+    // While a fight is on, a half-ring of numbered slots sits under the player: every attack
+    // owned, each one a node of the wheel's own tree (game/fight-arc.js). A slot runs through
+    // the wheel's own drill, so it does exactly what drilling to that node on the wheel does.
+
+    // Digit1-8 while the arc shows: run that slot. False when the arc is not showing (no fight,
+    // a menu up) or the key is not 1-8, so the caller carries on with the bag as before.
+    _arcDigit(code) {
+        const n = this._digitToSlot(code) + 1;
+        if (n < 1 || n > ARC_MAX || !arcVisible(this)) return false;
+        this._arcPress(n);
+        return true;
+    }
+
+    // A press on one of the arc's slots. False when it landed on none, when the arc has faded
+    // out of the way of an aim, or when a thing you could already click sits under the slot:
+    // that thing wins, so nothing that worked before the arc stops working.
+    _arcTap(pt) {
+        if (!arcVisible(this)) return false;
+        const vp = this._vp();
+        if (arcFaded(vp, this)) return false;
+        const n = arcSlotAt(vp, arcSlots(this), pt);
+        if (!n) return false;
+        const tile = this._screenToTile(pt);
+        if (this._targetAt(tile.x, tile.y)) return false;
+        this._arcPress(n);
+        return true;
+    }
+
+    _arcPress(n) {
+        const slot = arcSlots(this).find(s => s.n === n);
+        if (!slot) { audio.playSfx('bump-wall'); return; }
+        const w = this.wheel;
+        if (this.state === STATE.RADIAL_MENU) {
+            if (!w.aiming || w.confirming) return;
+            if (selectedNode(w) === slot.node) { this._wheelCommit(); return; }   // the same number again fires, as Space does
+            w.aiming = false; w.reticle = null; this.state = STATE.IDLE;          // another number switches to it
+        }
+        if (this.state !== STATE.IDLE || this._animating) return;
+        if (slot.reason) {   // greyed: say why, spend nothing (FX58's reasons, the wheel's refusal)
+            const line = this.wheelGreyedLine(slot.node);
+            if (line) this._log(line);
+            audio.playSfx('bump-wall'); this._render(); return;
+        }
+        this._stopAutoRepeat();
+        this._heldDirKeys = [];
+        this.state = STATE.RADIAL_MENU;
+        w.path = slot.path.slice();
+        w.aiming = false; w.confirming = false; w.reticle = null;
+        this._wheelDrill();   // fire a self action, or enter the aim layer with the reticle seeded
+        if (this.state === STATE.RADIAL_MENU && !w.aiming && !w.confirming) { this.state = STATE.IDLE; w.reticle = null; this._render(); }
+    }
 
     // Commit the composed action — surfacing the Plus-Ultra confirm if it would
     // clip a friendly. _fireWheel (via _closeWheel) clears the confirm flag.
@@ -6469,11 +6581,23 @@ class Game {
     // again). Tab / the on-screen button toggle it; [ ] cycle tabs; C/J/M/R jump to a
     // tab. The ✕ chip + tap-outside come from the Slice-1 CLOSE_PANEL machinery
     // (device is registered there), routing Cancel through _closeCurrentMenu.
+    // (FX43) The first filled slot on the bag's first page, in the order the grid shows
+    // them (page 0 shows slots 0 .. SAFE_SLOTS+PACK_PAGE-1). -1 when that page is empty.
+    _bagFirstFilled() {
+        return this.inventory.slice(0, SAFE_SLOTS + PACK_PAGE).findIndex(Boolean);
+    }
+
     _openDevice(tab = 'items') {
         if (this.state !== STATE.IDLE && this.state !== STATE.DEVICE) return;
         this._deviceTab = DEVICE_TABS.includes(tab) ? tab : 'items';
         this._deviceSel = null;   // (C1) a fresh open starts with no inspector selection
         this._bagPage = 0;        // (BG1) the bag opens on its first page
+        if (this._deviceTab === 'items') {
+            // (FX43) The bag's cursor starts on your first item, so the first arrow press
+            // moves from something. An empty bag keeps no selection.
+            const first = this._bagFirstFilled?.() ?? -1;
+            if (first >= 0) this._deviceSel = { tab: 'items', index: first };
+        }
         this.state = STATE.DEVICE;
         audio.playSfx('menu-open');
         this._render();
@@ -7697,7 +7821,12 @@ function boot() {
 // fired (preview-tool reloads, bf-cache restoration, etc.). Check readyState
 // up front and run boot inline if the DOM is already ready; otherwise wait
 // for the event as before.
-if (document.readyState === 'loading') {
+// (FX60) Exported, and booted only where there is a page, so a test can drive the
+// game's own pointer listeners without a browser.
+export { Game };
+if (typeof document === 'undefined') {
+    // no page: imported by a test
+} else if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);
 } else {
     boot();
