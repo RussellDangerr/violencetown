@@ -185,6 +185,22 @@ export const ENTRIES = {
         barkEveryTurns: 6,
         examine: '[TEXT]',
     },
+    // The Graveyard's Ankou (plans/ak1-ankou-graveyard.md): one skeleton with a ghost drawn
+    // around it (sprites.js `ghost`, renderer.js), placed by hand at (8,22). It fights as an
+    // ordinary hostile. The name is Caelan's; stand-ins until designed: the Polar Bear's numbers
+    // and kit, the barks, the examine text, the art. No `boss`, no slot, so it is in no pool.
+    ankou: {
+        type: 'Ankou',
+        name: 'Ankou',
+        gold: 10,
+        loadout: ['mystery_meat', 'mystery_meat', 'mystery_meat', 'tunnel_mushroom', 'sludge_sack', 'fire_blood', 'defence_poition'],
+        hp: 100,
+        armor: 3,
+        damage: 10,
+        barks: ['[TEXT]'],
+        barkEveryTurns: 6,
+        examine: '[TEXT]',
+    },
     // The Sewer's character (plans/cs1-crat-talk-both-sides.md): the Crat, who
     // asks you to settle a dispute in the side room north of the Sewer. A
     // townsperson's numbers; borrowed Violencian art until it is designed.
