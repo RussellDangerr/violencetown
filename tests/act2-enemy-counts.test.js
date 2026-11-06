@@ -1,5 +1,6 @@
 // act2-enemy-counts.test.js — the Carnival and the Graveyard hold the ruled number of fighters
-// (plans/ep3-act2-enemy-counts.md, ruling EP3R1 a: Carnival 9, Graveyard 6, since 7: CA1 adds the angel).
+// (plans/ep3-act2-enemy-counts.md, ruling EP3R1 a: Carnival 9, Graveyard 6, since 7: CA1 adds the angel,
+// since 8: AK1 adds the Ankou).
 //
 // A "fighter" is any enemy spawn on the map, boss and rats included. The new Clowns and
 // Skeletons are copies of their zone's own ordinary enemy at placeholder spots.
@@ -26,7 +27,7 @@ const ZONES = [
     // (plans/as1-unicycle-clown.md) is a spawn on the map but never fights; he is counted so the
     // one-spawn-per-tile and unique-id checks still cover him.
     { file: 'carnival-map.json',  total: 19, original: 'clown1', copies: ['clown2', 'clown3', 'clown4', 'clown5'], boss: 'carnival_boss' },
-    { file: 'graveyard-map.json', total: 7, original: 'skel1',  copies: ['skel2', 'skel3', 'skel4', 'skel5'],     boss: 'graveyard_boss' },
+    { file: 'graveyard-map.json', total: 8, original: 'skel1',  copies: ['skel2', 'skel3', 'skel4', 'skel5'],     boss: 'graveyard_boss' },
 ];
 
 // The road the loops autoplay walks in the Carnival: the north door, then the lion whip and the
@@ -65,7 +66,9 @@ for (const z of ZONES) {
 
         test('each copy stands on open ground, clear of the boss, the doors and every item', () => {
             const map = new GameMap(data, z.file);
-            const others = data.enemies.filter(e => !z.copies.includes(e.id));
+            // AK1: the Ankou is hand-placed at (8,21), right beside skel4 on purpose, so it is not one of
+            // the fighters a copy must keep two tiles from (its own spot is pinned in ankou.test.js).
+            const others = data.enemies.filter(e => !z.copies.includes(e.id) && e.entry !== 'ankou');
             const taken = new Set(data.enemies.map(e => `${e.x},${e.y}`));
             assert.equal(taken.size, z.total, 'two fighters share a tile');
             for (const id of z.copies) {
