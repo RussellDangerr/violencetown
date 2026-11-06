@@ -412,6 +412,9 @@ export class Enemy {
             drawScale: this.drawScale || undefined,
             unicycle: this.unicycle || undefined,
             ownDice: this.ownDice || undefined,
+            // (FX45) The one-time talk choices this NPC has already given. Left out while
+            // none are spent, so an NPC nobody has talked to saves exactly as before.
+            dialogueDone: (this._dialogueDone && this._dialogueDone.size) ? [...this._dialogueDone] : undefined,
             // runtime
             state: this.state, fsmState: this.fsmState, lastWanderTurn: this._lastWanderTurn,
             // (perception ladder) so a save taken mid-hunt reloads mid-hunt.
@@ -473,6 +476,10 @@ export class Enemy {
         if (typeof s.summonTurnsLeft === 'number') e._summonTurnsLeft = s.summonTurnsLeft;
         if (s.isBarricade) e.isBarricade = true;
         if (s.tag != null) e.tag = s.tag;
+        // (FX45) Old saves have no dialogueDone: nothing is spent.
+        if (Array.isArray(s.dialogueDone) && s.dialogueDone.length) {
+            e._dialogueDone = new Set(s.dialogueDone.filter(x => typeof x === 'string'));
+        }
         return e;
     }
 }
