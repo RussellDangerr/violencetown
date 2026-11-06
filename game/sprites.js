@@ -97,6 +97,16 @@ export class SpriteSheet {
         return this.drawRegionInk(ctx, col * (this.frameW + this.padding), row * (this.frameH + this.padding),
             this.frameW, this.frameH, x, y, destW ?? this.frameW, destH ?? this.frameH);
     }
+    // (plans/ak1-ankou-graveyard.md) A cell drawn see-through: the surround a creature's sprite
+    // entry names under `ghost`. Same ink as any sprite, at `alpha` of the canvas's own.
+    drawGhost(ctx, col, row, x, y, destW, destH, alpha) {
+        if (!this.loaded) return false;
+        ctx.save();
+        ctx.globalAlpha *= alpha;
+        const ok = this.drawFrameInk(ctx, col, row, x, y, destW, destH);
+        ctx.restore();
+        return ok;
+    }
     _inked(sx, sy, sw, sh) {
         this._inkCache = this._inkCache || new Map();
         const k = `${sx},${sy},${sw},${sh}`;
@@ -551,6 +561,11 @@ export const ENEMY_SPRITES = {
     // The Graveyard's angel (plans/ca1-crying-angel.md): the grey stone bust, an unused Tiny
     // Dungeon cell, a stand-in until it is drawn.
     'Crying Angel': { sheet: 'tinyDungeon', col: 2, row: 6, static: true },
+    // The Graveyard's Ankou (plans/ak1-ankou-graveyard.md): the hooded gaunt cell the Sewer's
+    // Carrion wears (they never share a map), a stand-in, with `ghost`: the white ghost cell
+    // (1,10), drawn behind the body, see-through and a little larger (renderer.js). Only the
+    // Ankou has the field.
+    'Ankou': { sheet: 'tinyDungeon', col: 3, row: 9, static: true, ghost: { col: 1, row: 10, scale: 1.4, alpha: 0.5 } },
     // The Carnival's named clown (plans/cw1-the-clown-mini-boss.md): an unused Tiny Dungeon
     // cell, a stand-in, so he is never taken for the ordinary purple-mage clown.
     'The Clown': { sheet: 'tinyDungeon', col: 3, row: 8, static: true },

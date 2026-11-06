@@ -1819,6 +1819,16 @@ export class Renderer {
         ctx.restore();
     }
 
+    // (plans/ak1-ankou-graveyard.md) The ghost round a creature: one cell, see-through, larger than
+    // the tile and centred on it, drawn under the body. Returns whether it drew.
+    _drawGhost(ctx, sprites, ghost, px, py) {
+        const sheet = sprites?.[ghost.sheet || 'tinyDungeon'];
+        if (!sheet?.loaded || !sheet.drawGhost) return false;
+        const size = TILE_PX * (ghost.scale || 1);
+        const off = (TILE_PX - size) / 2;
+        return sheet.drawGhost(ctx, ghost.col, ghost.row, px + off, py + off, size, size, ghost.alpha ?? 0.5);
+    }
+
     _drawEnemySprite(game, e, px, py, now, { bodyOnly = false } = {}) {
         const { ctx, sprites } = this;
         const isAlive = e.entity.isAlive();
@@ -1869,6 +1879,9 @@ export class Renderer {
         const by0 = dscale < 1 ? py + TILE_PX - wheelR * 2 - bw0 + 1 : py;
         withWalk(ctx, ecx, ecy, { bob: ea.bob, rot: ea.rot, flipX: eFlip }, () => {
             if (rider) this._drawUnicycle(ctx, px, py, wheelR, (e._stepIndex || 0) + slideProgress);
+            // (plans/ak1-ankou-graveyard.md) A living creature whose sprite has a `ghost` has it drawn
+            // first, behind the body: see-through, a little larger, centred on the tile.
+            if (isAlive && info?.ghost) this._drawGhost(ctx, sprites, info.ghost, px, py);
             if (frame && sprites?.[frame.sheet]?.loaded) {
                 ok = dscale < 1
                     ? this._inkFrame(sprites[frame.sheet], ctx, frame.col, frame.row, bx0, by0, bw0, bw0)
