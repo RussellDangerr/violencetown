@@ -1,5 +1,5 @@
 // ankou.test.js — the Ankou: one skeleton with a ghost drawn around it, placed in the Graveyard
-// at (8,21) (plans/ak1-ankou-graveyard.md). The ghost is a field on its sprite entry; the real
+// at (8,22) (plans/ak1-ankou-graveyard.md). The ghost is a field on its sprite entry; the real
 // renderer draws it behind the body on every frame of a living Ankou and for nobody else.
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -23,11 +23,11 @@ const graveyard = JSON.parse(readFileSync(url('../game/graveyard-map.json'), 'ut
 const SPAWN = graveyard.enemies.find((e) => e.entry === 'ankou');
 
 describe('the Ankou on the Graveyard map', () => {
-    test('there is exactly one, at (8,21), placed by its entry and in no slot', () => {
+    test('there is exactly one, at (8,22), placed by its entry and in no slot', () => {
         const all = graveyard.enemies.filter((e) => e.entry === 'ankou');
         assert.equal(all.length, 1);
         assert.equal(SPAWN.x, 8);
-        assert.equal(SPAWN.y, 21);
+        assert.equal(SPAWN.y, 22);
         assert.equal(SPAWN.slot, undefined);
         for (const slot of Object.values(SLOTS)) {
             assert.ok(!slot.pool.some((p) => p.entry === 'ankou'), 'the Ankou is in a slot pool');
@@ -36,9 +36,9 @@ describe('the Ankou on the Graveyard map', () => {
 
     test('it stands on open floor, on no other fighter or item', () => {
         const map = new GameMap(graveyard, 'graveyard-map.json');
-        assert.ok(map.isWalkable(8, 21));
-        for (const e of graveyard.enemies) if (e !== SPAWN) assert.ok(!(e.x === 8 && e.y === 21), `${e.id} is on it`);
-        for (const i of graveyard.items || []) assert.ok(!(i.x === 8 && i.y === 21));
+        assert.ok(map.isWalkable(8, 22));
+        for (const e of graveyard.enemies) if (e !== SPAWN) assert.ok(!(e.x === 8 && e.y === 22), `${e.id} is on it`);
+        for (const i of graveyard.items || []) assert.ok(!(i.x === 8 && i.y === 22));
     });
 
     test('it resolves to the Ankou, named, carrying the stand-in numbers and kit', () => {

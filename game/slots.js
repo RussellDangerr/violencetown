@@ -186,7 +186,7 @@ export const ENTRIES = {
         examine: '[TEXT]',
     },
     // The Graveyard's Ankou (plans/ak1-ankou-graveyard.md): one skeleton with a ghost drawn
-    // around it (sprites.js `ghost`, renderer.js), placed by hand at (8,21). It fights as an
+    // around it (sprites.js `ghost`, renderer.js), placed by hand at (8,22). It fights as an
     // ordinary hostile. The name is Caelan's; stand-ins until designed: the Polar Bear's numbers
     // and kit, the barks, the examine text, the art. No `boss`, no slot, so it is in no pool.
     ankou: {

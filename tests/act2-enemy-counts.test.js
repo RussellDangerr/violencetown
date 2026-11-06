@@ -66,9 +66,7 @@ for (const z of ZONES) {
 
         test('each copy stands on open ground, clear of the boss, the doors and every item', () => {
             const map = new GameMap(data, z.file);
-            // AK1: the Ankou is hand-placed at (8,21), right beside skel4 on purpose, so it is not one of
-            // the fighters a copy must keep two tiles from (its own spot is pinned in ankou.test.js).
-            const others = data.enemies.filter(e => !z.copies.includes(e.id) && e.entry !== 'ankou');
+            const others = data.enemies.filter(e => !z.copies.includes(e.id));
             const taken = new Set(data.enemies.map(e => `${e.x},${e.y}`));
             assert.equal(taken.size, z.total, 'two fighters share a tile');
             for (const id of z.copies) {

@@ -1,7 +1,7 @@
 # AK1: the Ankou walks the Graveyard
 
 ## Goal
-One Ankou, hand-placed in the Graveyard at (8,21): a skeleton with a ghost drawn around it.
+One Ankou, hand-placed in the Graveyard at (8,22): a skeleton with a ghost drawn around it.
 It hunts you when it sees you and can be fought to the end like any ordinary hostile.
 
 ## How
@@ -13,10 +13,10 @@ It hunts you when it sees you and can be fought to the end like any ordinary hos
   `ghost` field: the white ghost cell drawn as a see-through, slightly larger surround.
 - `game/renderer.js`: when the sprite entry has a `ghost`, draw it behind the body on every
   frame of a living creature, walking or in a fight. No other entry has the field.
-- `game/graveyard-map.json`: the one spawn at (8,21).
+- `game/graveyard-map.json`: the one spawn at (8,22).
 
 ## Acceptance
-- The Graveyard has one Ankou at (8,21); it spawns hostile, hunts on sight, and takes a fight
+- The Graveyard has one Ankou at (8,22); it spawns hostile, hunts on sight, and takes a fight
   through to its death.
 - The ghost is a field on the Ankou's sprite entry; a test shows no other sprite entry and no
   registry entry has one, and the renderer draws it before the body.
