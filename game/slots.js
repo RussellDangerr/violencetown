@@ -322,7 +322,10 @@ function frozenMob(type, numbers) {
 
 function alienInvasion() {
     const e = { ...act2Boss(), name: 'Alien Invasion' };
-    e.loadout = [...e.loadout, 'ray_gun'];
+    // GW1R2 (a): he carries the Great Sword. In the kit, so it drops when he falls; in his
+    // worn gear in place of the Wooden Sword, so he swings it at you.
+    e.loadout = [...e.loadout, 'ray_gun', 'great_sword'];
+    e.equipped = ['great_sword'];
     return e;
 }
 
