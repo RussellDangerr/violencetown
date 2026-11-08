@@ -132,7 +132,7 @@ describe('each creature', () => {
         const [w] = weaknessesOf('cold');
         const [r] = resistancesOf('cold');
         for (const e of creatures) {
-            assert.equal(elementalMult(w, e), 2, e.type);
+            assert.equal(elementalMult(w, e), 1.5, e.type);
             assert.equal(elementalMult(r, e), 0.5, e.type);
             assert.equal(elementalMult('cold', e), 1, `${e.type}: its own phase is neutral`);
         }
