@@ -30,6 +30,34 @@
     "examinables": [
         {"id": "borgir_counter", "x": 8, "y": 2, "text": "[The Borgir counter. Grease an inch thick. A hand-lettered sign: NO YELLOW CARD, NO TAXI, NO EXCEPTIONS.]"}
     ],
+    "props": [
+        {"type": "plantA", "x": 2, "y": 2},
+        {"type": "counterL", "x": 4, "y": 2},
+        {"type": "counterGrill", "x": 5, "y": 2},
+        {"type": "counterBottles", "x": 6, "y": 2},
+        {"type": "counterDishes", "x": 7, "y": 2},
+        {"type": "counterDoors", "x": 8, "y": 2},
+        {"type": "counterDrawers", "x": 9, "y": 2},
+        {"type": "counterSink", "x": 10, "y": 2},
+        {"type": "counterDrawers", "x": 11, "y": 2},
+        {"type": "counterR", "x": 12, "y": 2},
+        {"type": "stove", "x": 13, "y": 2},
+        {"type": "plantB", "x": 15, "y": 2},
+        {"type": "chairRight", "x": 3, "y": 7},
+        {"type": "tableSquare", "x": 4, "y": 7},
+        {"type": "chairLeft", "x": 5, "y": 7},
+        {"type": "chairRight", "x": 11, "y": 7},
+        {"type": "tableSquare", "x": 12, "y": 7},
+        {"type": "chairLeft", "x": 13, "y": 7},
+        {"type": "chairRight", "x": 3, "y": 11},
+        {"type": "tableSquare", "x": 4, "y": 11},
+        {"type": "chairLeft", "x": 5, "y": 11},
+        {"type": "chairRight", "x": 11, "y": 11},
+        {"type": "tableSquare", "x": 12, "y": 11},
+        {"type": "chairLeft", "x": 13, "y": 11},
+        {"type": "plantB", "x": 2, "y": 15},
+        {"type": "plantA", "x": 15, "y": 15}
+    ],
     "transitions": [
         {"x": 8, "y": 16, "toMap": "town-map.json", "toX": 8, "toY": 8, "label": "[Back out to the street]"}
     ]

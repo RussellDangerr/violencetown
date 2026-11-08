@@ -3,50 +3,65 @@
 // Small panels: hand-colored parchment fill matching the sprite palette
 // All text: dark brown on parchment for readability (not gold-on-dark)
 
-import { TILE_PX, CANVAS_PX, SAFE_SLOTS, TILE_BY_ID } from './data.js';
+import { TILE_PX, CANVAS_PX, SAFE_SLOTS, PACK_PAGE, TILE_BY_ID } from './data.js';
 import { DEFAULT_VIEW, offView, snapPx } from './viewport.js';   // (screen-fill) the screen's geometry
 
 // The splash canvas's supersample: its 320x220 card is drawn at 2x so the
 // VT323 text stays sharp. The game canvas's transform comes from the viewport
 // (setViewport / renderFrame).
 const SS = 2;
-import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, itemSprite, CONTAINER_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES, MARK_SPRITES, spriteVariant, spriteFrame, tileFrame, idHash } from './sprites.js';
+// (fx36) How wide the food line on the wheel's Eat slice may be: the chord of the slice
+// at its second text row, from the ring geometry in layout.js (ring 1, 60 to 88).
+const EAT_SLICE_TEXT_W = 96;
+import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, itemSprite, CONTAINER_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES, MARK_SPRITES, spriteVariant, spriteFrame, tileFrame, idHash, borderPropKeys, borderPropKey, fillerSprite, TINY_INK } from './sprites.js';
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
+import { CREDITS, currentCard } from './credits.js';   // (FIN4) the credits screen
 import { ROOT, selectedNode, activeRing, activeIndex, decisionPath, previewChildren, affectedTiles, verbApplies, isCombatActive, flapperDeflection, defaultVerb } from './wheel-model.js'; // (sunburst wheel) + the bump telegraph
 import {
     LOG_MODAL_RECT, TARGET_LIST_RECT, TARGET_LIST_ROW_H,
     ITEM_OVERLAY_RECT, ITEM_OVERLAY_ROW_H,
     WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
-    EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, closeButtonRect,
-    DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceEquipLayout, deviceRingsLayout,
+    EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, EQUIP_LEFT_HAND_RECT, closeButtonRect,
+    DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceBagPagerRects, deviceEquipLayout, gearArmourRect, deviceRingsLayout,
+    deviceSkillsLayout,                                                      // (US2) the skills readout in the RINGS tab
     inspectorPanelRect, inspectorActionRects,                               // (C1) tap-to-inspect panel + action-row geometry
-    gearOptionRects,                                                        // (C2) GEAR chooser option-row geometry
+    gearOptionRects, gearChooserRect,                                       // (C2) GEAR chooser option-row + panel geometry
     xmbBarLayout, hudLayout, throwRects, wheelTopMarks, fightPanelRects, XMB_CELL,                      // (XMB) usable-bar geometry; (screen-fill) the HUD, throw targets, the marks above the wheel
-    MODAL_RECT, offerLayout,                                                 // (offer screen) the one panel + its geometry
+    LOOT_REEL, lootReelRect,                                                 // (FX3c) the loot reel's panel
+    MODAL_RECT, offerLayout,                                             // (offer screen) the one panel + its geometry
 } from './layout.js';
-import { itemStatLine, itemActions, equipOptions, USES_ACTION } from './inspector.js';    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
-import { zoneOf } from './inventory.js';                                     // (C1) safe/pack label for the inspector
+import { itemStatLine, itemActions, USES_ACTION } from './inspector.js';
+import { weaponCompare, weaponCompareLines } from './examine.js';   // (FX44) the weapon compare block    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
+import { zoneOf, pageCount, slotOnPage } from './inventory.js';                                     // (C1) safe/pack label for the inspector
 import { buildXmbBar, resolveXmbSelection } from './xmb.js';                 // (XMB) usable-bar model
-import { ITEMS, itemTier } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
+import { ITEMS, itemTier, gearOptions } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
 import { RINGS, FUSIONS } from './ring-data.js';                             // (rings Task 5) SKILLS-tab hands: ring names + fusion spark
 import { findFusion } from './rings.js';                                     // (rings Task 5) mark a link fusible when its two rings have an authored fusion
+import { act2Checklist } from './quests.js';                               // (NI2) the Quests tab's three-item checklist
+import { carriesAll } from './map.js';                                    // (FIN1b) a gated exit shows its markers only once its gate is met
 import { WORLD_ZONES, overworldZone, connectorPairs } from './world-map.js'; // (Phase 4) rudimentary world map
 import { perceives, facingOf, dirOf as spriteDirOf, VERDICT } from './perception.js';              // (threat overlay) the SAME vision the chase AI uses
+import { liftPreview } from './theft.js';                                 // (tw1) the aim strip's lift line: the take, then the verdict
 import { PHASE, threatPhase, alertWatchers } from './threat-phase.js';        // (threat overlay) attention as a state
 import { isSafe } from './defeat-scenarios.js';   // (defeat legibility) mark safe-floor items
 import { buyPrice, sellPrice, bribeStepCost, mood, canTrade, band, BRIBE_STEP } from './trade.js'; // (trade slice 1) pricing + mood smiley; band feeds the offer meter's multiplier readout
 import { isHunting } from './ai.js'; // one spelling of "actively hunting the player"
+import { arcSlots, arcVisible, arcLayout, arcFaded, ARC_ALPHA, ARC_FADED_ALPHA } from './fight-arc.js';   // (FA1) the arc of attacks under you in a fight
 import { fighters, fightArea, FIGHT_MARGIN } from './fight-area.js';        // (fight-fog) who is in the fight, and what they can see
 import { entranceAt, fogReveal, fogDepth, fogOut, tileJitter, FOG_TINT, FOG_DENSITY, FOG_BLUR_TILES,
          FOG_FAR_TILES, FOG_IN_MS, FOG_OUT_MS } from './fight-entrance.js'; // (fight-fog) the entrance, and the fog's timeline and look
+import { drawTvIntro } from './tv-intro.js';   // (TV1) the TV opening on the splash canvas
 import { combatLines } from './combat-log.js';   // (combat-hud stage 3) the fight face's feed
 import { playerPanel, targetPanel, panelTarget } from './fight-panels.js';   // (combat-hud stage 4)
 import * as Settings from './settings.js'; // (combat-feel-pass) reduce-motion for hit-splats (namespace import — see main.js)
-import { challengeGp } from './enemies.js'; // (Law 6f) nameplate pips read the composite kit, not raw gold
+import { isAnt } from './ants.js';   // (AN4) an ant is a pest, not a fighter: no bar, label or K.O. word
+import { challengeGp, shownName } from './enemies.js'; // (Law 6f) nameplate pips read the composite kit, not raw gold; (FX4) a boss's one name
 import { resolveOffer } from './offer.js';                                  // (offer screen) pure basket→projection
 import { dispositionCeil, DISPOSITION_MIN } from './disposition-curves.js'; // (offer screen) meter ceiling + floor — offer.js does not re-export these
 import { lungeOffset } from './cascade.js';                                  // (turn-model C1) an attacker lunges on its beat
 import { splatPill, layoutSplats, glideToward, splatCell, splatShowingAt, splatPixelFactor, splatClampDown, SPLAT_CELL_W, SPLAT_CELL_H } from './splat-layout.js'; // hit splats
+import { reelFrame, windowRows } from './loot-ticker.js';                      // (FX3c) the reel of what a kill gave
+import { burstFrame } from './loot-burst.js';                                // (FX3b) a kill's loot bursts out and flies to you
 import { hitKindTag } from './hit-splat.js';                                  // (WS4) a physical hit's slash/stab/crush tag
 
 // Tile id → sprite ref. Sewer ids 0-7 → TILE_SPRITE_MAP, town ids 10-21 →
@@ -62,7 +77,7 @@ const clamp01 = (v) => Math.max(0, Math.min(1, v));
 // (screen-fill) The states whose panels are laid out in the 608x608 menu
 // space. They draw inside the viewport's centred menu box. The wheel and the
 // throw prompt are not menus: they draw at their own screen positions.
-const MENU_BOX_STATES = new Set(['item_overlay', 'target_list', 'log_modal', 'trade', 'dialogue', 'inspect', 'device']);
+const MENU_BOX_STATES = new Set(['item_overlay', 'target_list', 'log_modal', 'trade', 'dialogue', 'inspect', 'device', 'credits']);
 
 // (combat-feel-pass) Hit-splat fill colors by damage type. A crit keeps its
 // type's fill and takes a gold ring outside its outline (tools/gen_splats.py
@@ -159,6 +174,36 @@ function withWalk(ctx, cx, cy, { bob = 0, rot = 0, flipX = 1 }, draw) {
 // as escalation and stands in for it.
 const AWARENESS_EMOTE = { suspicious: 'question', searching: 'exclamation', chasing: 'alert' };
 
+// (FX10) Where the awareness marker sits, and whether one is up. The threat
+// overlay draws it at the sheet's native 16px, its bottom edge 6px above the
+// tile top. `showsAwarenessMark` is the overlay's own test for drawing one
+// (a watcher with eyes, not an ally, in a state with a marker), so the bump
+// label can ask it and step out of the way.
+export const AWARENESS_MARK_PX = 16;
+export function awarenessMarkRect(sx, sy, tilePx = TILE_PX) {
+    const sz = AWARENESS_MARK_PX;
+    return { x: sx + tilePx / 2 - sz / 2, y: sy - 6 - sz, w: sz, h: sz };
+}
+export function showsAwarenessMark(e) {
+    return !!e && !e._ally && (e.sightRange || 0) > 0 && AWARENESS_EMOTE[e.state] != null;
+}
+
+// (FX10) The bump label's backing box and its text origin, for a label `tw`
+// pixels wide over the tile at (px, py). Normally the text sits 20px above the
+// tile top. `raised` (an awareness marker is up on the same head) lifts it so
+// the box's bottom edge clears the marker's top edge by 1px.
+export const INTENT_LABEL_H = 11;
+export function intentLabelRect(px, py, tw, raised = false, tilePx = TILE_PX) {
+    const tx = Math.round(px + tilePx / 2 - tw / 2);
+    const ty = raised ? awarenessMarkRect(px, py, tilePx).y - 1 - (INTENT_LABEL_H - 2) : py - 20;
+    return { tx, ty, x: tx - 3, y: ty - 2, w: tw + 6, h: INTENT_LABEL_H };
+}
+
+// (FX20) How far in from a 9-slice panel's edge text starts so it clears the
+// gold corner ornament (which reaches 10px in). The quest log has always used
+// it; the fight panels' title rows share it.
+export const PANEL_TEXT_INSET = 12;
+
 // Painter's order for the actor pass. The map's edge filler (the forest past its
 // edge) draws behind everything, so a two-tile tree south of the map never
 // covers the map's last row (ruling SF, 2026-10-03: you vanished for a step at
@@ -171,6 +216,11 @@ const AWARENESS_EMOTE = { suspicious: 'question', searching: 'exclamation', chas
 export function fillerSkips(wx, wy, mw, mh, hTiles = 1) {
     return wx >= 0 && wx < mw && wy >= mh && wy < mh + Math.max(0, hTiles - 1);
 }
+
+// The facing chevron's colour, fill and outline both: the house plum. A tan fill
+// vanished into the town's tan road (tests/chevron-contrast.test.js measures it
+// against every map's ground).
+export const CHEVRON_COLOR = `rgba(${TINY_INK.join(',')},0.9)`;
 
 // The facing cue's triangle for a watcher whose tile centre is (cx, cy), facing
 // the unit vector (ux, uy): its tip just past the tile's edge, its base just
@@ -200,6 +250,33 @@ export function showsFacingChevron(watcher) {
     return !straight || straight !== spriteDirOf(watcher);
 }
 
+// (FX53) The two banners an open wheel puts above the dock: the gold hint and,
+// in a fight, the red enemy count. They used to share one line (`strip - 16`),
+// so the count covered the middle of the hint. Now the hint keeps its band and
+// the count takes the band right above it. Each centres on the screen when that
+// clears the dial (`dialLeft`, the dial's left edge), and otherwise sits in the
+// room left of the dial. `countW` is null when no count is shown. `y` is the
+// text's top; a band is the dark strip behind it.
+export const WHEEL_HINT_BAND_H = 24;
+export const WHEEL_COUNT_BAND_H = 26;
+export function wheelBannerRows({ strip, vpW, dialLeft, hintW, countW = null }) {
+    const place = (tw) => (vpW / 2 + tw / 2 <= dialLeft) ? vpW / 2 : Math.max(tw / 2 + 4, dialLeft / 2);
+    const hintBandY = strip - WHEEL_HINT_BAND_H;
+    const countBandY = hintBandY - WHEEL_COUNT_BAND_H;
+    return {
+        hint: { x: place(hintW), y: strip - 16, band: { y: hintBandY, h: WHEEL_HINT_BAND_H } },
+        count: countW == null ? null
+            : { x: place(countW), y: countBandY + 10, w: countW, band: { y: countBandY, h: WHEEL_COUNT_BAND_H } },
+    };
+}
+
+// (FIN1b) Whether an exit wears its glow, arrow and hint: a gated door (the
+// bank's vault, wants the three Act 2 items) reads as shut until the bag holds
+// everything it `requires`. An ungated exit always wears them.
+export function exitMarked(t, inventory) {
+    return carriesAll(t.requires, inventory);
+}
+
 // Which way an exit's arrow points: toward the map edge the tile is nearest
 // (see _drawTransitions). On a tie the vertical edge wins.
 export function exitDir(t, mw, mh) {
@@ -214,6 +291,106 @@ export function actorOrder(a, b) {
         || (a.feetY - b.feetY)
         || (a.kind === 'player' ? 1 : -1);
 }
+
+// Fitting text by its measured width. `measure(s)` is the pixel width of `s`
+// (Renderer._measurer hands one over). Never by a fixed px per letter: the 8 px
+// idiom was a fossil of the retired 8x8 atlas and fit ~40% less than the room.
+//
+// One line, cut with a trailing '~' when it runs over: the longest head that,
+// with the mark, still fits. Text that fits comes back whole.
+export function cutToWidth(text, maxPx, measure) {
+    const s = String(text);
+    if (measure(s) <= maxPx) return s;
+    let n = s.length - 1;
+    while (n > 0 && measure(s.slice(0, n) + '~') > maxPx) n--;
+    return s.slice(0, n) + '~';
+}
+
+// (FX41) The dock feed's rows. The newest message wraps onto as many lines as the
+// feed's `budget` allows (the last one cut with '~' if it still runs over); what
+// budget is left goes to older messages, one cut line each, newest first. So the
+// rows never outnumber the budget the panel was laid out for. `messages` is
+// oldest -> newest; each row says which message it belongs to (`i`), so a wrapped
+// message fades as one. Returns rows oldest -> newest.
+export function feedRows(messages, budget, maxPx, measure) {
+    if (!messages.length || budget < 1) return [];
+    const newest = messages[messages.length - 1];
+    let lines = wrapToWidth(newest.text, maxPx, measure);
+    if (lines.length > budget) lines = [...lines.slice(0, budget - 1), lines.slice(budget - 1).join(' ')];
+    const rows = lines.map((t) => ({ text: cutToWidth(t, maxPx, measure), category: newest.category, i: messages.length - 1 }));
+    const room = budget - rows.length;                 // lines left for older messages
+    const last = messages.length - 1;
+    const head = [];
+    for (let i = Math.max(0, last - room); i < last; i++) {
+        head.push({ text: cutToWidth(messages[i].text, maxPx, measure), category: messages[i].category, i });
+    }
+    return [...head, ...rows];
+}
+
+// (FX8) A buff chip's name: the longest head of the upper-cased name that fits
+// `maxPx`, with no cut mark (a trailing space is dropped). BUFF_CHIP is the
+// chip's size and the inset its name is drawn at, on both sides.
+export const BUFF_CHIP = Object.freeze({ w: 52, h: 26, gap: 3, padX: 3 });
+// (FX49) The chips the buff bar shows: the buffs, then one for the free
+// actions a Speed Poition left (game._hasteCharges), gone at 0. Haste is not a
+// buff (it is a count the world-beat spends), so it is added here. The label is
+// a placeholder; the number below it is the count of free actions left.
+export const HASTE_CHIP_LABEL = '[TEXT]';
+export function buffBarChips(game) {
+    const chips = [...(game.buffs || [])];
+    const haste = game._hasteCharges || 0;
+    if (haste > 0) chips.push({ id: 'haste', name: HASTE_CHIP_LABEL, turns: haste, type: 'buff' });
+    return chips;
+}
+export function buffChipLabel(name, maxPx, measure) {
+    const s = String(name).toUpperCase();
+    let n = s.length;
+    while (n > 0 && measure(s.slice(0, n)) > maxPx) n--;
+    return s.slice(0, n).trimEnd();
+}
+
+// Word wrap: break at spaces, never inside a word (a word wider than the room
+// keeps a line to itself), each line as long as the room allows.
+export function wrapToWidth(text, maxPx, measure) {
+    const words = String(text).split(' ');
+    const lines = [];
+    let line = '';
+    for (const w of words) {
+        if (line && measure(line + ' ' + w) > maxPx) { lines.push(line); line = w; }
+        else line = line ? line + ' ' + w : w;
+    }
+    if (line) lines.push(line);
+    return lines;
+}
+
+// (FX7) The KO tag under a fallen enemy, and the box it covers on screen. The
+// tag is centred under the body at scale 1 (12 px tall) and is wider than a
+// tile, so bodies side by side would print their tags over each other.
+export const KO_LABEL_H = 12;
+export function koLabelText(e) {
+    return `[KO] ${String(shownName(e)).toUpperCase()}`;
+}
+
+// Which KO tags to draw this frame. `labels` are { key, cx, y, w, h, dist }:
+// centre x, top y, width, height, distance to the player. Nearest first (a tie
+// keeps the order given); a tag whose box overlaps one already kept is left
+// out. Returns the kept keys as a Set.
+export function koLabelsShown(labels) {
+    const kept = [];
+    const order = labels.map((l, i) => [l, i]).sort((a, b) => (a[0].dist - b[0].dist) || (a[1] - b[1]));
+    for (const [l] of order) {
+        const x0 = l.cx - l.w / 2, x1 = l.cx + l.w / 2, y0 = l.y, y1 = l.y + l.h;
+        const hit = kept.some(k => x0 < k.x1 && k.x0 < x1 && y0 < k.y1 && k.y0 < y1);
+        if (!hit) kept.push({ key: l.key, x0, x1, y0, y1 });
+    }
+    return new Set(kept.map(k => k.key));
+}
+
+// (US2) The label each skill shows in the Remoticon's skills readout, keyed by
+// its id in game/skills.js. Not written yet.
+export const SKILL_LABELS = {
+    light_fingers: '[TEXT]',
+};
 
 export class Renderer {
     constructor(canvas) {
@@ -274,12 +451,17 @@ export class Renderer {
 
     // ── Splash ───────────────────────────────────────────────────────────────
 
-    renderSplash(splashCanvas) {
+    // (TV1) `intro` is a frame of the TV opening (tv-intro.js introAt): while the
+    // card covers the screen only the opening is drawn; as it melts away it is
+    // drawn over the title screen, which is drawn as ever.
+    renderSplash(splashCanvas, intro = null) {
         const ctx = splashCanvas.getContext('2d');
         splashCanvas.width = 320 * SS;
         splashCanvas.height = 220 * SS;
         ctx.setTransform(SS, 0, 0, SS, 0, 0);
         ctx.imageSmoothingEnabled = false;
+        const tv = intro && !intro.done ? intro : null;
+        if (tv && tv.cardAlpha >= 1) { drawTvIntro(ctx, this.font, tv); return; }
 
         ctx.fillStyle = '#0e0c08';
         ctx.fillRect(0, 0, 320, 220);
@@ -327,15 +509,17 @@ export class Renderer {
         // Big GAME START prompt — the centerpiece. Scale 3 = 24px tall.
         // Hard 2px black drop-shadow gives the marquee its chunky arcade weight.
         if (this.font) {
-            this.font.drawText(ctx, 'GAME START', 162, 150, {
+            this.font.drawText(ctx, 'GAME START', 162, 148, {
                 color: '#5a4420', scale: 3, align: 'center',
             });
-            this.font.drawText(ctx, 'GAME START', 160, 148, {
+            this.font.drawText(ctx, 'GAME START', 160, 146, {
                 color: UI.gold, scale: 3, align: 'center',
             });
 
-            // Subtitle hint
-            this.font.drawText(ctx, 'PRESS SPACE OR CLICK BELOW', 160, 178, {
+            // Subtitle hint. Measured from VT323's real glyph boxes, y=177 leaves
+            // 2px clear below GAME START's shadow and 2px above BY CAELAN GANDER
+            // (at 178 it left 1.5 and 1); tests/splash-skyline.test.js pins it.
+            this.font.drawText(ctx, 'PRESS SPACE OR CLICK BELOW', 160, 177, {
                 color: UI.textLight, scale: 1, align: 'center',
             });
         }
@@ -356,6 +540,7 @@ export class Renderer {
                 color: UI.textLight, scale: 1, align: 'left',
             });
         }
+        if (tv) drawTvIntro(ctx, this.font, tv);
     }
 
     // ── Splash cityscape ─────────────────────────────────────────────────────
@@ -383,6 +568,16 @@ export class Renderer {
         const SKY_Y = 56, SKY_H = 76;
         const GROUND_Y = SKY_Y + SKY_H;
 
+        // Every skyline fill goes through here: it keeps only the part that sits
+        // inside the sky (x = 24..296), so the last building of a row is cut off
+        // at the edge instead of poking over the panel's frame. Whole buildings
+        // inside are drawn exactly as before.
+        const SKY_L = PANEL_X, SKY_R = PANEL_X + PANEL_W;
+        const fill = (x, y, w, h) => {
+            const x0 = Math.max(x, SKY_L), x1 = Math.min(x + w, SKY_R);
+            if (x1 > x0) ctx.fillRect(x0, y, x1 - x0, h);
+        };
+
         // Sky — a dusk gradient (deep indigo night above, warm ember at the
         // horizon) so the near-black skyline silhouettes crisply against it on
         // the dark stone panel; lit gold windows + a low moon punch through.
@@ -399,7 +594,7 @@ export class Renderer {
         const moonRects = [[2,0,4,1],[1,1,6,1],[0,2,8,4],[1,6,6,1],[2,7,4,1]];
         ctx.fillStyle = '#d4b96a';
         for (const [dx, dy, w, h] of moonRects) {
-            ctx.fillRect(moonX + dx, moonY + dy, w, h);
+            fill(moonX + dx, moonY + dy, w, h);
         }
 
         // Far-row buildings — short, dim, no windows. Provides depth.
@@ -411,7 +606,7 @@ export class Renderer {
         for (let i = 0; PANEL_X + i * FAR_W < PANEL_X + PANEL_W; i++) {
             const h = FAR_H[i % FAR_H.length];
             const bx = PANEL_X + i * FAR_W;
-            ctx.fillRect(bx, farY0 - h, FAR_W, h + 20);
+            fill(bx, farY0 - h, FAR_W, h + 20);
         }
 
         // Near-row buildings — taller, varied widths, window dots. The
@@ -430,11 +625,11 @@ export class Renderer {
             const [bw, bh, wPerRow, wRows] = NEAR_PATTERN[i % NEAR_PATTERN.length];
             const by = GROUND_Y - bh;
             // Building body
-            ctx.fillRect(bx, by, bw, bh + 8); // +8 lets it run past the ground line
+            fill(bx, by, bw, bh + 8); // +8 lets it run past the ground line
             // Top-edge highlight (one pixel lighter) — gives the silhouette
             // a slight glint that suggests the moon is grazing the rooftops.
             ctx.fillStyle = '#3a2a18';
-            ctx.fillRect(bx, by, bw, 1);
+            fill(bx, by, bw, 1);
             ctx.fillStyle = '#100a08';
             // Window dots — small 1×1 ochre marks, evenly spaced.
             // Skip a deterministic ~20% so the windows look lived-in (some
@@ -450,7 +645,7 @@ export class Renderer {
                     const wy = by + wPadY + r * (1 + wSpaceY);
                     if (wy + 1 > by + bh - 2) continue; // don't draw windows past the bottom
                     ctx.fillStyle = '#d4b96a';
-                    ctx.fillRect(Math.round(wx), Math.round(wy), 1, 1);
+                    fill(Math.round(wx), Math.round(wy), 1, 1);
                     ctx.fillStyle = '#100a08';
                 }
             }
@@ -462,7 +657,7 @@ export class Renderer {
         // parchment band below, so the eye doesn't have to track where the
         // city ends and the GAME START callout begins.
         ctx.fillStyle = '#0a0606';
-        ctx.fillRect(PANEL_X, GROUND_Y - 1, PANEL_W, 2);
+        fill(PANEL_X, GROUND_Y - 1, PANEL_W, 2);
     }
 
     // ── Game Frame ───────────────────────────────────────────────────────────
@@ -532,6 +727,9 @@ export class Renderer {
         // map; the wheel list itself is drawn in screen space after the restore.
         if (game.wheel && (game.wheel.aiming || game.wheel.confirming)) this._drawReticle(game);
 
+        // (FX3b) A kill's loot flying to you: over the cast, under the numbers.
+        this._drawLootBursts(game);
+
         // Floating damage numbers float above the world but under the HUD
         // so the HP panel + hotbar are never occluded by spammy combat.
         this._drawDamageNumbers(game);
@@ -571,8 +769,10 @@ export class Renderer {
         this._drawBuffBar(game);
         this._drawQuestLog(game);
         this._drawFightPanels(game);
+        this._drawFightArc(game);
         this._drawXmbBar(game);
         this._drawOpener(game);
+        this._drawLootReel(game);   // (FX3c) what the kill gave, rolling
 
         // Subtle vignette border
         this._drawVignette();
@@ -600,6 +800,7 @@ export class Renderer {
             if (game.state === 'dialogue') this._drawDialogueModal(game);
             if (game.state === 'inspect') this._drawInspectPanel(game);
             if (game.state === 'device') this._drawDevice(game);
+            if (game.state === 'credits') this._drawCredits(game);
         } finally {
             if (inBox) ctx.translate(-box.x, -box.y);
             // (menu grammar) Universal ✕ / Back affordance — after the current Menu is
@@ -1125,7 +1326,8 @@ export class Renderer {
         // A grapple anchor that leads off the map is an exit too — the canyon's
         // climb-out is one — so it wears the same glow, arrow and hint, or the
         // only way out of a zone would be unmarked.
-        const trans = [...(game.map?.transitions || []), ...(game.map?.anchors || []).filter(a => a.toMap)];
+        const trans = [...(game.map?.transitions || []).filter(t => exitMarked(t, game.inventory)),
+            ...(game.map?.anchors || []).filter(a => a.toMap)];
         if (!trans.length) return;
         const { ctx } = this;
         const vp = this._view();
@@ -1356,6 +1558,70 @@ export class Renderer {
         }
     }
 
+    // (FX3b) Each item of a kill's loot, at its spot in the burst (loot-burst.js):
+    // out of the body's tile centre, into the player's. Each draws through
+    // _drawItemIcon, the bag's own icon path, scaled. Reduce Motion flattens the hop.
+    _drawLootBursts(game) {
+        const bursts = game._lootBursts;
+        if (!bursts || !bursts.length) return;
+        const vp = this._view();
+        const now = performance.now();
+        const { ppx, ppy } = this._playerScreenPos(game, now);
+        const player = { x: ppx + TILE_PX / 2, y: ppy + TILE_PX / 2 };
+        const flat = !!Settings.get('reduceMotion');
+        for (const b of bursts) {
+            const body = {
+                x: vp.origin.x + (b.x - game.playerX) * TILE_PX - this._scrollX + TILE_PX / 2,
+                y: vp.origin.y + (b.y - game.playerY) * TILE_PX - this._scrollY + TILE_PX / 2,
+            };
+            for (const f of burstFrame(b, now, body, player, TILE_PX, { flat })) {
+                const size = Math.max(4, Math.round(TILE_PX * f.scale));
+                this._drawItemIcon(f.item, Math.round(f.x - size / 2), Math.round(f.y - size / 2), size);
+            }
+        }
+    }
+
+    // (FX3c) The loot reel: a panel at the top-centre with a three-line window onto
+    // the strip of what a kill gave (loot-ticker.js says which line is where). Each
+    // line is two rows of text: the name and the count, then the rarity in its
+    // colour and the gold value. A one-item kill is a one-line panel. Screen space,
+    // after the shake restore, so it holds still.
+    _drawLootReel(game) {
+        const reel = game._lootReel;
+        if (!reel) return;
+        const frame = reelFrame(reel, performance.now());
+        if (!frame || frame.alpha <= 0) return;
+        const { ctx } = this;
+        const n = reel.entries.length, rows = windowRows(n);
+        const R = lootReelRect(this._view(), rows);
+        const PAD = LOOT_REEL.PAD, RH = LOOT_REEL.ROW_H;
+        const inner = { x: R.x + PAD, y: R.y + PAD, w: R.w - 2 * PAD, h: rows * RH };
+        const centre = (rows - 1) / 2;
+        ctx.save();
+        ctx.globalAlpha = frame.alpha;
+        drawPanelSmall(ctx, R.x, R.y, R.w, R.h, this.uiSheet, 'dark');
+        if (rows > 1) {                                  // the slot window's centre line
+            ctx.strokeStyle = UI.gold;
+            ctx.strokeRect(inner.x + 0.5, inner.y + centre * RH + 0.5, inner.w - 1, RH - 1);
+        }
+        ctx.beginPath(); ctx.rect(inner.x, inner.y, inner.w, inner.h); ctx.clip();
+        if (this.font) {
+            const ICON = RH - 8, textX = inner.x + 4 + ICON + 6, textR = inner.x + inner.w - 4;
+            for (const row of frame.rows) {
+                const e = row.entry, top = inner.y + (centre + row.offset) * RH;
+                ctx.globalAlpha = frame.alpha * row.weight;
+                this._drawItemIcon({ id: e.id, icon: e.icon }, inner.x + 4, Math.round(top + 4), ICON);
+                const count = `x${e.count}`, value = `${e.value} GP`;
+                const room = textR - textX - 8 * (count.length + 1);
+                this.font.drawText(ctx, cutToWidth(e.name, room, this._measurer(1)), textX, Math.round(top + 5), { color: UI.white, scale: 1 });
+                this.font.drawText(ctx, count, textR, Math.round(top + 5), { color: UI.gold, scale: 1, align: 'right' });
+                this.font.drawText(ctx, e.tierName, textX, Math.round(top + 18), { color: e.color, scale: 1 });
+                this.font.drawText(ctx, value, textR, Math.round(top + 18), { color: UI.gold, scale: 1, align: 'right' });
+            }
+        }
+        ctx.restore();
+    }
+
     // ── Actors (enemies + player), depth-sorted ───────────────────────────────
     //
     // (depth/verticality pass) One painter's-algorithm pass over the whole cast.
@@ -1427,14 +1693,21 @@ export class Renderer {
         // the off-map rows just past the south edge are left bare (the canopy of
         // the row beyond already covers them). Without this the trees painted
         // over the map's last row and buried every south exit.
-        const fillerProp = game.map?.border?.prop ? PROP_SPRITES[game.map.border.prop] : null;
-        if (fillerProp) {
+        // The prop may be a list (the forest mix): each off-map cell picks one by its
+        // own position, so it is the same tree every frame. The bare rows past the
+        // south edge follow the TALLEST in the list, so they stay one clean strip.
+        const border = game.map?.border;
+        const fillerKeys = borderPropKeys(border).filter(k => fillerSprite(k));
+        if (fillerKeys.length) {
             const mw = game.map.width, mh = game.map.height;
+            const fillerH = Math.max(...fillerKeys.map(k => fillerSprite(k).hTiles));
             for (let j = vp.span.jMin - 3; j <= vp.span.jMax + 3; j++) {
                 for (let i = vp.span.iMin - 3; i <= vp.span.iMax + 3; i++) {
                     const wx = game.playerX + i, wy = game.playerY + j;
                     if (game.map.isInBounds(wx, wy)) continue;
-                    if (fillerSkips(wx, wy, mw, mh, fillerProp.hTiles)) continue;
+                    if (fillerSkips(wx, wy, mw, mh, fillerH)) continue;
+                    const fillerProp = fillerSprite(borderPropKey(border, wx, wy));
+                    if (!fillerProp) continue;
                     const px = vp.origin.x + i * TILE_PX - this._scrollX;
                     const py = vp.origin.y + j * TILE_PX - this._scrollY;
                     actors.push({ kind: 'prop', def: fillerProp, px, py, feetY: py + TILE_PX, filler: true });
@@ -1449,11 +1722,33 @@ export class Renderer {
             else if (a.def.shadow !== false && !a.filler) this._drawGroundShadow(a.px + TILE_PX / 2, a.py + TILE_PX - 3, 0.32, a.def.shadowRx ?? 12, a.def.shadowRy ?? 4.5);
         }
 
-        actors.sort(actorOrder);   // edge filler first, then by feet-Y, the player last on a tie
+        // (FX7) Settle which KO tags show before anything draws: nearest the
+        // player first, none overlapping.
+        // (FX48) The kept tags are drawn in one pass after every body, prop and
+        // marker, so nothing standing below or beside a body can cover its tag.
+        const measure = (t) => (this.font?.measure ? this.font.measure(t, 1) : t.length * 6);
+        const pcx = ppx + TILE_PX / 2, pcy = groundPy + TILE_PX / 2;
+        const koLabels = [];
         for (const a of actors) {
-            if (a.kind === 'prop') this._drawPropSprite(a.def, a.px, a.py);
-            else if (a.kind === 'player') this._drawPlayerSprite(game, a.px, a.py, now);
-            else this._drawEnemySprite(game, a.e, a.px, a.py, now);
+            if (a.kind !== 'enemy' || !a.dead || isAnt(a.e)) continue;
+            const cx = a.px + TILE_PX / 2;
+            koLabels.push({ key: a.e, cx, y: a.py + TILE_PX - 2, w: measure(koLabelText(a.e)), h: KO_LABEL_H,
+                dist: Math.hypot(cx - pcx, a.py + TILE_PX / 2 - pcy), px: a.px, py: a.py });
+        }
+
+        actors.sort(actorOrder);   // edge filler first, then by feet-Y, the player last on a tie
+        this._koShown = koLabelsShown(koLabels);
+        try {
+            for (const a of actors) {
+                if (a.kind === 'prop') this._drawPropSprite(a.def, a.px, a.py);
+                else if (a.kind === 'player') this._drawPlayerSprite(game, a.px, a.py, now);
+                else this._drawEnemySprite(game, a.e, a.px, a.py, now);
+            }
+            for (const l of koLabels) {
+                if (this._koShown.has(l.key)) this._drawKoTag(l.key, l.px, l.py);
+            }
+        } finally {
+            this._koShown = null;
         }
     }
 
@@ -1508,9 +1803,49 @@ export class Renderer {
         return e.x === game.playerX + dx && e.y === game.playerY + dy;
     }
 
+    // (plans/as1-unicycle-clown.md) A unicycle as canvas primitives, standing in until the art
+    // pass: a tyre, four spokes that turn a quarter for every tile rolled, a hub, and a post
+    // that rises to the seat. Drawn in the bottom of its tile, centred; `turns` is steps taken.
+    _drawUnicycle(ctx, px, py, r, turns) {
+        const cx = px + TILE_PX / 2, cy = py + TILE_PX - r - 1;
+        const a0 = turns * (Math.PI / 2);
+        ctx.save();
+        ctx.lineCap = 'butt';
+        ctx.strokeStyle = '#1b1b1b';
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = '#d9d2c0';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 4; i++) {
+            const a = a0 + i * (Math.PI / 2);
+            ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a) * (r - 1), cy + Math.sin(a) * (r - 1)); ctx.stroke();
+        }
+        ctx.fillStyle = '#e0b020';
+        ctx.fillRect(cx - 1, cy - 1, 2, 2);
+        ctx.strokeStyle = '#8a8a8a';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx, cy - r - 3); ctx.stroke();
+        ctx.fillStyle = '#7a2a8a';
+        ctx.fillRect(cx - 3, cy - r - 4, 6, 2);
+        ctx.restore();
+    }
+
+    // (plans/ak1-ankou-graveyard.md) The ghost round a creature: one cell, see-through, larger than
+    // the tile and centred on it, drawn under the body. Returns whether it drew.
+    _drawGhost(ctx, sprites, ghost, px, py) {
+        const sheet = sprites?.[ghost.sheet || 'tinyDungeon'];
+        if (!sheet?.loaded || !sheet.drawGhost) return false;
+        const size = TILE_PX * (ghost.scale || 1);
+        const off = (TILE_PX - size) / 2;
+        return sheet.drawGhost(ctx, ghost.col, ghost.row, px + off, py + off, size, size, ghost.alpha ?? 0.5);
+    }
+
     _drawEnemySprite(game, e, px, py, now, { bodyOnly = false } = {}) {
         const { ctx, sprites } = this;
         const isAlive = e.entity.isAlive();
+        // (AN4) A swarm reads as pests, not a row of enemies: an ant keeps its
+        // body and its hit flash, and none of the overlays that mark a fighter.
+        const pest = isAnt(e);
         // Hit-flash only animates while alive — corpses are static after death.
         const flashing = isAlive && (e._hitFlashUntil ?? 0) > now;
 
@@ -1544,13 +1879,30 @@ export class Renderer {
         const eFlip = (isAlive && e._faceLeft && !info?.dirCols) ? -1 : 1;
         const ecx = px + TILE_PX / 2, ecy = py + TILE_PX / 2;
         let ok = false;
+        // (plans/as1-unicycle-clown.md) A creature with a drawScale is drawn smaller, standing
+        // at the base of its tile; one with a unicycle rolls on a wheel drawn under it. Every
+        // other creature takes the full-tile box it always had.
+        const dscale = e.drawScale || 1;
+        const rider = e.unicycle === true;
+        const wheelR = rider ? Math.round(TILE_PX * 0.16) : 0;
+        const bw0 = TILE_PX * dscale;
+        const bx0 = px + (TILE_PX - bw0) / 2;
+        const by0 = dscale < 1 ? py + TILE_PX - wheelR * 2 - bw0 + 1 : py;
         withWalk(ctx, ecx, ecy, { bob: ea.bob, rot: ea.rot, flipX: eFlip }, () => {
+            if (rider) this._drawUnicycle(ctx, px, py, wheelR, (e._stepIndex || 0) + slideProgress);
+            // (plans/ak1-ankou-graveyard.md) A living creature whose sprite has a `ghost` has it drawn
+            // first, behind the body: see-through, a little larger, centred on the tile. Not in the
+            // fight entrance's silhouettes (bodyOnly), which are the body alone.
+            if (isAlive && info?.ghost && !bodyOnly) this._drawGhost(ctx, sprites, info.ghost, px, py);
             if (frame && sprites?.[frame.sheet]?.loaded) {
-                ok = this._inkFrame(sprites[frame.sheet], ctx, frame.col, frame.row, px, py, TILE_PX, TILE_PX);
+                ok = dscale < 1
+                    ? this._inkFrame(sprites[frame.sheet], ctx, frame.col, frame.row, bx0, by0, bw0, bw0)
+                    : this._inkFrame(sprites[frame.sheet], ctx, frame.col, frame.row, px, py, TILE_PX, TILE_PX);
             }
             if (!ok) {
                 ctx.fillStyle = isAlive ? '#cc4433' : '#555';
-                ctx.fillRect(px + 6, py + 6, TILE_PX - 12, TILE_PX - 12);
+                if (dscale < 1) ctx.fillRect(bx0 + bw0 * 0.2, by0 + bw0 * 0.2, bw0 * 0.6, bw0 * 0.6);
+                else ctx.fillRect(px + 6, py + 6, TILE_PX - 12, TILE_PX - 12);
             }
         });
 
@@ -1583,7 +1935,7 @@ export class Renderer {
             // as a combat target.
             const frac = e.entity.hp / e.entity.maxHp;
             const bx = px + 4, by = py - 6, bw = TILE_PX - 8, bh = 5;
-            if (!e.ambient && !splatUp) {
+            if (!e.ambient && !splatUp && !pest) {
                 ctx.fillStyle = '#000000cc';
                 ctx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
                 ctx.fillStyle = UI.hpBg;
@@ -1616,7 +1968,7 @@ export class Renderer {
             // the shop uses, floating above any NPC that HAS a disposition.
             // Mindless things show nothing. Sits above the HP bar; nudged higher
             // when buff badges occupy that row.
-            if (e.disposition != null && !splatUp) {
+            if (e.disposition != null && !splatUp && !pest) {
                 const faceR  = 6.5;
                 const faceCX = px + TILE_PX / 2;
                 const faceCY = (e.buffs && e.buffs.length > 0) ? py - 28 : py - 15;
@@ -1642,7 +1994,7 @@ export class Renderer {
             // boss-wallet dread (Law 6e's KH multi-bar) belongs on the dedicated
             // boss frame, deferred to the first boss build — not a 24px nameplate.
             const gold = challengeGp(e);
-            if (!e.ambient && gold > 0 && !splatUp) {
+            if (!e.ambient && gold > 0 && !splatUp && !pest) {
                 const gh = 2, gy = by - 4; // 2px row above the HP bar's own backing plate
                 ctx.fillStyle = '#000000cc';
                 ctx.fillRect(bx - 1, gy - 1, bw + 2, gh + 2);
@@ -1677,20 +2029,23 @@ export class Renderer {
             // Only the ONE character you face is labelled — a row of floating
             // verbs over a crowd would be noise, and the whole point is that this
             // reads as "the thing you are about to do".
-            if (this.font && !game._animating && !splatUp && this._isFaced(game, e)) {
+            if (this.font && !game._animating && !splatUp && !pest && this._isFaced(game, e)) {
                 const verb = defaultVerb({ x: e.x, y: e.y, npc: e }, game);
                 if (verb) {
-                    const who  = String(e.name || e.type || '').replace(/[[\]]/g, '');
+                    const who  = String((e.boss ? shownName(e) : e.name || e.type) || '').replace(/[[\]]/g, '');
                     const text = `${who} · ${verb.label}`.toUpperCase();
                     const tw   = this.font.measure ? this.font.measure(text, 1) : text.length * 6;
-                    const tx   = Math.round(px + TILE_PX / 2 - tw / 2);
-                    const ty   = py - 20;               // clear of the HP bar, buffs and pips
+                    // Clear of the HP bar, buffs and pips; and when an awareness
+                    // marker is up on this head (FX10), lifted above it, since the
+                    // threat overlay draws after this and would cover the words.
+                    const box  = intentLabelRect(px, py, tw, showsAwarenessMark(e));
+                    const { tx, ty } = box;
                     ctx.fillStyle = '#000000cc';
-                    ctx.fillRect(tx - 3, ty - 2, tw + 6, 11);
+                    ctx.fillRect(box.x, box.y, box.w, box.h);
                     // The verb's own colour carries the warning: Hit is red, Trade
                     // gold, Shove brown. The player reads the intent before the word.
                     ctx.fillStyle = verb.color || UI.text;
-                    ctx.fillRect(tx - 3, ty - 2, tw + 6, 1);
+                    ctx.fillRect(box.x, box.y, box.w, 1);
                     this.font.drawText(ctx, text, tx, ty, { color: verb.color || UI.text, scale: 1 });
                 }
             }
@@ -1725,20 +2080,25 @@ export class Renderer {
                     ctx.restore();
                 }
             }
-        } else {
+        } else if (!pest) {
             // Corpse — gray tint overlay turns the sprite into a faded version of
             // itself, marking it "defeated" without a separate corpse sprite.
             ctx.fillStyle = 'rgba(60, 60, 60, 0.55)';
             ctx.fillRect(px + 4, py + 4, TILE_PX - 8, TILE_PX - 8);
 
             // K.O. tag below — the player's permanent record of "you fought this
-            // person here."
-            if (this.font) {
-                this.font.drawText(ctx, `[KO] ${e.type.toUpperCase()}`, px + TILE_PX / 2, py + TILE_PX - 2, {
-                    color: '#9a8a78', scale: 1, align: 'center',
-                });
-            }
+            // person here." (FX48) Inside _drawActors the tags draw afterwards,
+            // in one pass over every body; called on its own, the tag draws here.
+            if (!this._koShown) this._drawKoTag(e, px, py);
         }
+    }
+
+    // (FX7/FX48) The KO tag under a fallen enemy whose tile is at (px, py).
+    _drawKoTag(e, px, py) {
+        if (!this.font) return;
+        this.font.drawText(this.ctx, koLabelText(e), px + TILE_PX / 2, py + TILE_PX - 2, {
+            color: '#9a8a78', scale: 1, align: 'center',
+        });
     }
 
     // ── Wedged door (pipe-jam — zone pursuit) ───────────────────────────────
@@ -2270,10 +2630,11 @@ export class Renderer {
     // ── Buff Bar (top-right) ─────────────────────────────────────────────────
 
     _drawBuffBar(game) {
-        if (game.buffs.length === 0) return;
+        const chips = buffBarChips(game);
+        if (chips.length === 0) return;
         const { ctx } = this;
-        const bw = 52, bh = 26, gap = 3;
-        const total = game.buffs.length;
+        const { w: bw, h: bh, gap, padX } = BUFF_CHIP;
+        const total = chips.length;
         const totalW = total * (bw + gap) - gap + 12;
         const hud = this._hud();
         const px = hud.buffsRight - totalW, py = hud.buffsTop;
@@ -2281,7 +2642,7 @@ export class Renderer {
         drawPanelSmall(ctx, px, py, totalW, bh + 12, this.uiSheet);
 
         for (let i = 0; i < total; i++) {
-            const buff = game.buffs[i];
+            const buff = chips[i];
             const bx = px + 6 + i * (bw + gap), by = py + 6;
 
             // Inset background
@@ -2290,7 +2651,8 @@ export class Renderer {
             // Name + turns
             if (this.font) {
                 const nameColor = buff.type === 'debuff' ? UI.hpRed : UI.hpGreen;
-                this.font.drawText(ctx, buff.name.toUpperCase().slice(0, 5), bx + 3, by + 3, {
+                const label = buffChipLabel(buff.name, bw - padX * 2, this._measurer(1));
+                this.font.drawText(ctx, label, bx + padX, by + 3, {
                     color: nameColor, scale: 1,
                 });
                 this.font.drawText(ctx, `${buff.turns}`, bx + bw - 4, by + 14, {
@@ -2313,7 +2675,8 @@ export class Renderer {
     //   (c) FEED     : last 3 log messages, category-tinted, age-faded, newest
     //                  at the bottom — chat-window convention.
     //
-    // The bitmap font is 8px/char at scale 1 and lines advance 12px. With the
+    // Lines are cut to the panel by measured width (cutToWidth) and advance
+    // 12px. With the
     // panel 104px tall the interior (after 8px top + bottom padding) is 88px =
     // room for header (12) + objective (12) + a 12px gap + three feed lines
     // (36) with margin to spare, so nothing spills past QUESTLOG_RECT.
@@ -2321,10 +2684,10 @@ export class Renderer {
     _drawQuestLog(game) {
         const { ctx } = this;
         const R = this._hud().log;
-        const PAD = 12;                      // buffer so text clears the ornate corners
+        const PAD = PANEL_TEXT_INSET;        // buffer so text clears the ornate corners
         const LH = 12;                       // line height (8px glyph + 4px lead)
         const innerW = R.w - PAD * 2;
-        const maxChars = Math.max(4, Math.floor(innerW / 8));
+        const cut = (s) => cutToWidth(s, innerW, this._measurer(1));
 
         drawPanelSmall(ctx, R.x, R.y, R.w, R.h, this.uiSheet);
         if (!this.font) return;
@@ -2353,9 +2716,7 @@ export class Renderer {
         // more combat message (plans/combat-hud.md stage 3).
         const objective = fightFace ? null : (game.questEngine ? game.questEngine.getHudText() : null);
         if (objective) {
-            let t = objective.toUpperCase();
-            if (t.length > maxChars) t = t.slice(0, maxChars - 1) + '~';
-            this.font.drawText(ctx, t, tx, y, { color: UI.gold, scale: 1 });
+            this.font.drawText(ctx, cut(objective.toUpperCase()), tx, y, { color: UI.gold, scale: 1 });
             y += LH;
         }
 
@@ -2366,21 +2727,24 @@ export class Renderer {
         // The fight face reads the 300-deep history filtered to combat, not the
         // 3-entry mixed ring: filtering three mixed messages down to the combat
         // ones usually leaves one or none, which is not a log.
+        const budget = R.lines || (fightFace ? 3 : 2);
         const visible = fightFace
-            ? combatLines(game._logHistory, R.lines || 3)
-            : (game._logStripMessages || []).slice(-(R.lines || 2));
-        if (!visible.length) return;
+            ? combatLines(game._logHistory, budget)
+            : (game._logStripMessages || []).slice(-budget);
+        // (FX41) The newest message wraps inside the same budget; older ones stay one line.
+        const rows = feedRows(visible, budget, innerW, this._measurer(1));
+        if (!rows.length) return;
         // Oldest → newest, fading in. Computed rather than a fixed table: the
         // fight face shows one line more than the table ever had entries for.
+        // A wrapped message's lines share one fade.
         const alphaAt = (i, n) => (n <= 1 ? 1 : 0.5 + 0.5 * (i / (n - 1)));
-        const feedTop = R.y + R.h - PAD - visible.length * LH;
+        const firstMsg = rows[0].i, msgs = visible.length - firstMsg;
+        const feedTop = R.y + R.h - PAD - rows.length * LH;
         const startY  = Math.max(y, feedTop);
-        for (let i = 0; i < visible.length; i++) {
-            const m = visible[i];
-            const tinted = hexToRgba(this._logStripColor(m.category), alphaAt(i, visible.length));
-            let text = m.text;
-            if (text.length > maxChars) text = text.slice(0, maxChars - 1) + '~';
-            this.font.drawText(ctx, text, tx, startY + i * LH, { color: tinted, scale: 1 });
+        for (let k = 0; k < rows.length; k++) {
+            const m = rows[k];
+            const tinted = hexToRgba(this._logStripColor(m.category), alphaAt(m.i - firstMsg, msgs));
+            this.font.drawText(ctx, m.text, tx, startY + k * LH, { color: tinted, scale: 1 });
         }
     }
 
@@ -2440,7 +2804,11 @@ export class Renderer {
         else if (active === 'map')    this._drawWorldMapBody(game, body, body.y);
         else if (active === 'rings') this._drawDeviceRings(game, body);
 
-        this.font.drawText(ctx, '[ ] TABS   ESC CLOSE', CANVAS_PX / 2, R.y + R.h - 12, { color: UI.dim, scale: 1, align: 'center' });
+        // (FX43) The bag lists the keys that work in it: the phrases the pickers and shop already
+        // use for arrows and Esc, and a placeholder for Space until its verb is chosen.
+        const foot = active === 'items' ? '[ ] TABS   ↑↓ PICK   SPACE [TEXT]   ESC CLOSE' : '[ ] TABS   ESC CLOSE';
+        const fit = this._fitText(foot, R.w - 32, 1, 0.75);
+        this.font.drawText(ctx, fit.text, CANVAS_PX / 2, R.y + R.h - 12, { color: UI.dim, scale: fit.scale, align: 'center' });
         ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     }
 
@@ -2456,6 +2824,7 @@ export class Renderer {
         const strip = (s) => (s || '').replace(/[\[\]]/g, '');
 
         this.font.drawText(ctx, 'THE HANDS', bodyRect.x + bodyRect.w / 2, bodyRect.y - 2, { color: UI.gold, scale: 1, align: 'center' });
+        this._drawDeviceSkills(game, bodyRect);   // (US2) your skills and their ranks, above the fingertips
 
         // Links first (behind the sockets) — a dim seam between adjacent rings;
         // gold + a spark where an authored fusion is possible.
@@ -2507,6 +2876,21 @@ export class Renderer {
         }
     }
 
+    // (US2) The skills readout: one row per skill you have used cleanly, its
+    // label on the left and one pip per rank on the right, lit up to the rank
+    // reached. Geometry from deviceSkillsLayout; no skills draws nothing.
+    _drawDeviceSkills(game, bodyRect) {
+        const { ctx } = this;
+        for (const row of deviceSkillsLayout(bodyRect, game.skills).rows) {
+            const label = this._fitText(SKILL_LABELS[row.id] ?? '[TEXT]', row.labelW);
+            this.font.drawText(ctx, label.text, row.x, row.y + row.h / 2 - 4, { color: row.rank > 0 ? UI.gold : UI.dim, scale: label.scale });
+            for (const p of row.pips) {
+                if (p.lit) { ctx.fillStyle = UI.gold; ctx.fillRect(p.x, p.y, p.w, p.h); }
+                else       { ctx.strokeStyle = UI.dim; ctx.lineWidth = 1; ctx.strokeRect(p.x + 0.5, p.y + 0.5, p.w - 1, p.h - 1); }
+            }
+        }
+    }
+
     // A small four-point gold spark centred on (cx, cy) — the "a fusion is
     // possible here" cue on a link, never naming it (spec: slotting reveals it).
     _drawFusionSpark(ctx, cx, cy) {
@@ -2545,12 +2929,19 @@ export class Renderer {
         // opens the inspector panel below. The selected slot wears a gold halo (like
         // the active tab) so the eye links it to the panel. No per-slot digit label.
         const selIdx = (game._deviceSel && game._deviceSel.tab === 'items') ? game._deviceSel.index : -1;
+        // (BG1) The PACK grid shows one page of a bag that may have grown; the
+        // SAFE row is the same on every page. Screen position i shows slot `slot`.
+        const pc = { safeSlots: SAFE_SLOTS, pageSize: PACK_PAGE };
+        const pages = pageCount((game.inventory || []).length, pc);
+        const page = Math.max(0, Math.min(pages - 1, game._bagPage || 0));
+        if (pages > 1) this._drawBagPager(ctx, bodyRect, page, pages);
         for (let i = 0; i < rects.length; i++) {
             const rect = rects[i];
-            const stack = game.inventory[i];
+            const slot = slotOnPage(i, page, pc);
+            const stack = game.inventory[slot];
 
             drawInset(ctx, rect.x, rect.y, rect.w, rect.h);
-            if (i === selIdx) {
+            if (slot === selIdx) {
                 ctx.strokeStyle = UI.gold; ctx.lineWidth = 2; ctx.strokeRect(rect.x + 1, rect.y + 1, rect.w - 2, rect.h - 2);
             }
 
@@ -2574,7 +2965,7 @@ export class Renderer {
 
                 // (defeat legibility) gold corner = kept through a defeat: any item
                 // in the SAFE zone OR an intrinsically-safe (quest) item.
-                const kept = i < SAFE_SLOTS || isSafe(stack.itemDef, game.equipment && game.equipment.weapon);
+                const kept = slot < SAFE_SLOTS || isSafe(stack.itemDef, game.equipment && game.equipment.weapon);
                 if (kept) this._drawSafeBadge(ctx, rect.x + rect.w, rect.y);
 
                 // Stack count (bottom-right)
@@ -2591,6 +2982,21 @@ export class Renderer {
         }
         // (defeat legibility) tell the player what survives a defeat.
         if (this.font) this.font.drawText(ctx, 'SAFE zone + quest items = kept if defeated', rects[0].x, rects[49].y + rects[49].h + 8, { color: UI.dim, scale: 1 });
+    }
+
+    // (BG1) The PACK page arrows and the "page/pages" label, on the rects
+    // main._tapDevice hit-tests (deviceBagPagerRects). An arrow with no page
+    // beyond it is drawn dim.
+    _drawBagPager(ctx, bodyRect, page, pages) {
+        const p = deviceBagPagerRects(bodyRect);
+        const arrows = [[p.prev, '<', page > 0], [p.next, '>', page < pages - 1]];
+        for (const [r, glyph, live] of arrows) {
+            const col = live ? UI.gold : UI.dim;
+            drawInset(ctx, r.x, r.y, r.w, r.h);
+            ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
+            if (this.font) this.font.drawText(ctx, glyph, r.x + r.w / 2, r.y + r.h / 2 - 8, { color: col, scale: 2, align: 'center' });
+        }
+        if (this.font) this.font.drawText(ctx, `${page + 1}/${pages}`, p.label.x, p.label.y, { color: UI.dim, scale: 1, align: 'right' });
     }
 
     // (C1) Tap-to-inspect panel. When a bag slot is selected (game._deviceSel),
@@ -2633,8 +3039,13 @@ export class Renderer {
         // The stat line falls back to the item's description, which is often a
         // sentence: wrap it to the panel, two lines at most.
         const perLine = Math.max(8, Math.floor(room / this.font.measure('M', 1)));
-        let statLines = this._wrapText(itemStatLine(def), perLine);
-        if (statLines.length > 2) statLines = [statLines[0], this._fitText(statLines.slice(1).join(' '), room).text];
+        // (FX44) A weapon reads as the compare block instead: what it hits for
+        // against the weapon in your hand, its hands and class, its skills.
+        const block = weaponCompareLines(def, game.equipment && game.equipment.weapon);
+        let statLines = block
+            ? block.map(l => this._fitText(l, room, 1, 1).text)
+            : this._wrapText(itemStatLine(def), perLine);
+        if (!block && statLines.length > 2) statLines = [statLines[0], this._fitText(statLines.slice(1).join(' '), room).text];
         statLines.forEach((line, i) => this.font.drawText(ctx, line, tx, p.y + 34 + i * 12, { color: UI.text, scale: 1 }));
         this.font.drawText(ctx, `${zone}${qty}`, tx, p.y + 38 + statLines.length * 12, { color: UI.dim, scale: 1 });
 
@@ -2679,7 +3090,45 @@ export class Renderer {
         const p = fightPanelRects(this._view());
         this._drawGearPanel(p.left, playerPanel(game));
         const t = panelTarget(game);
-        if (t) this._drawTargetPanel(p.right, targetPanel(t));
+        if (!t) return;
+        // (FX4) A boss goes by its one name here too; fight-panels reads the type.
+        const panel = targetPanel(t);
+        panel.name = shownName(t) || panel.name;
+        this._drawTargetPanel(p.right, panel);
+    }
+
+    // ── The fight arc (FA1, plans/fa1-fight-arc.md) ─────────────────────────
+    // A half-ring of numbered slots under the player while a fight is on: every attack
+    // owned, each a node of the wheel's own tree. A greyed slot is dimmed, not hidden; the
+    // slot being aimed is ringed in gold; the whole arc drops to a faint alpha while the aim
+    // is on a tile it covers. Every size, colour and alpha here is a stand-in.
+    _drawFightArc(game) {
+        if (!game || !this.font || !arcVisible(game)) return;
+        const { ctx } = this;
+        const vp = this._view();
+        const slots = arcSlots(game);
+        if (!slots.length) return;
+        const rects = arcLayout(vp).slots;
+        const faded = arcFaded(vp, game, { x: this._scrollX || 0, y: this._scrollY || 0 });
+        const w = game.wheel;
+        const aimed = (game.state === 'radial_menu' && w && w.aiming) ? selectedNode(w) : null;
+        const clip = (s, px) => cutToWidth(s, px, this._measurer(1));
+        ctx.save();
+        for (const slot of slots) {
+            const r = rects[slot.n - 1];
+            const grey = !!slot.reason;
+            ctx.globalAlpha = (faded ? ARC_FADED_ALPHA : ARC_ALPHA) * (grey ? 0.75 : 1);
+            ctx.fillStyle = 'rgba(20,14,8,0.82)';
+            ctx.fillRect(r.x, r.y, r.w, r.h);
+            const on = aimed === slot.node;
+            ctx.lineWidth = on ? 2 : 1;
+            ctx.strokeStyle = on ? UI.gold : (grey ? UI.dim : (slot.node.color || UI.panelBorder));
+            ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+            this.font.drawText(ctx, String(slot.n), r.x + 4, r.y + 3, { color: grey ? UI.dim : UI.gold, scale: 1 });
+            this.font.drawText(ctx, clip(slot.label.toUpperCase(), r.w - 6), r.x + r.w / 2, r.y + 15,
+                { color: grey ? UI.dim : UI.text, scale: 1, align: 'center' });
+        }
+        ctx.restore();
     }
 
     // Your six slots, two lines each: the label, then what is in it. An empty
@@ -2691,10 +3140,11 @@ export class Renderer {
         const PAD = 6, LH = 12;
         drawPanelSmall(ctx, R.x, R.y, R.w, R.h, this.uiSheet);
         const tx = R.x + PAD;
-        const maxChars = Math.max(3, Math.floor((R.w - PAD * 2) / 8));
-        const clip = (s) => (s.length > maxChars ? s.slice(0, maxChars - 1) + '~' : s);
+        const clip = (s) => cutToWidth(s, R.w - PAD * 2, this._measurer(1));
         let y = R.y + PAD;
-        this.font.drawText(ctx, 'YOU', tx, y, { color: UI.gold, scale: 1 });
+        // (FX20) The title row sits in the corner's reach, so it takes the
+        // corner-clearing inset; the rows below only run beside the thin edge.
+        this.font.drawText(ctx, 'YOU', R.x + PANEL_TEXT_INSET, y, { color: UI.gold, scale: 1 });
         y += LH + 2;
         for (const slot of data.slots) {
             this.font.drawText(ctx, clip(slot.label), tx, y, { color: UI.dim, scale: 1 });
@@ -2714,15 +3164,33 @@ export class Renderer {
         const PAD = 6, LH = 12;
         drawPanelSmall(ctx, R.x, R.y, R.w, R.h, this.uiSheet);
         const tx = R.x + PAD;
-        const maxChars = Math.max(3, Math.floor((R.w - PAD * 2) / 8));
-        const clip = (s) => (s.length > maxChars ? s.slice(0, maxChars - 1) + '~' : s);
+        const clip = (s) => cutToWidth(s, R.w - PAD * 2, this._measurer(1));
         let y = R.y + PAD;
-        this.font.drawText(ctx, clip(t.name.toUpperCase()), tx, y, { color: UI.hpRed, scale: 1 });
+        // (FX20) The name clears both top corners: the left one by its start,
+        // the right one by the narrower clip.
+        const name = cutToWidth(t.name.toUpperCase(), R.w - PANEL_TEXT_INSET * 2, this._measurer(1));
+        this.font.drawText(ctx, name, R.x + PANEL_TEXT_INSET, y, { color: UI.hpRed, scale: 1 });
         y += LH + 2;
         this.font.drawText(ctx, clip(`HP ${t.hp}/${t.maxHp}`), tx, y, { color: UI.text, scale: 1 });
         y += LH;
         this.font.drawText(ctx, clip(`GP ${t.gold}`), tx, y, { color: UI.gold, scale: 1 });
+        y += LH;
+        // (plans/tg1-enemies-wear-armour.md) Their armour and what they have on.
+        // Both labels are placeholders for Caelan to name.
+        this.font.drawText(ctx, clip(`[TEXT] ${t.armor}`), tx, y, { color: UI.text, scale: 1 });
         y += LH + 2;
+        this.font.drawText(ctx, '[TEXT]', tx, y, { color: UI.dim, scale: 1 });
+        y += LH - 2;
+        if (!(t.worn ?? []).length) {
+            this.font.drawText(ctx, '-', tx, y, { color: UI.dim, scale: 1 });
+            y += LH;
+        } else {
+            for (const k of t.worn) {
+                this.font.drawText(ctx, clip(k.name.replace(/[\[\]]/g, '').toUpperCase()), tx, y, { color: UI.text, scale: 1 });
+                y += LH;
+            }
+        }
+        y += 2;
         this.font.drawText(ctx, 'KIT', tx, y, { color: UI.dim, scale: 1 });
         y += LH - 2;
         if (!t.kit.length) {
@@ -2900,7 +3368,7 @@ export class Renderer {
 
         const qe = game.questEngine;
         const innerX = R.x + 22;
-        const maxChars = Math.max(8, Math.floor((R.w - 56) / 8));
+        const wrap = (s) => wrapToWidth(s, R.w - 56, this._measurer(1));
         let y = R.y + 6;
 
         // Active quest — the stage checklist.
@@ -2910,21 +3378,38 @@ export class Renderer {
             for (const st of view.stages) {
                 const mark = st.done ? '✓' : st.current ? '▸' : '·';
                 const col = st.done ? UI.dim : st.current ? UI.textLight : UI.text;
-                for (const line of this._wrapText(`${mark} ${st.objective}`, maxChars)) {
+                for (const line of wrap(`${mark} ${st.objective}`)) {
                     this.font.drawText(ctx, line, innerX + 6, y, { color: col, scale: 1 }); y += 12;
                 }
-                if (st.current && st.location) { this.font.drawText(ctx, `   @ ${st.location}`, innerX + 6, y, { color: UI.gold, scale: 1 }); y += 12; }
-                if (st.current && st.description) for (const line of this._wrapText(`   ${st.description}`, maxChars)) { this.font.drawText(ctx, line, innerX + 6, y, { color: UI.dim, scale: 1 }); y += 12; }
+                // The location and the description share one indent, by x offset:
+                // leading spaces would be dropped by the wrap.
+                const indent = this._measurer(1)('   ');
+                if (st.current && st.location) { this.font.drawText(ctx, `@ ${st.location}`, innerX + 6 + indent, y, { color: UI.gold, scale: 1 }); y += 12; }
+                if (st.current && st.description) for (const line of wrapToWidth(st.description, R.w - 56 - indent, this._measurer(1))) { this.font.drawText(ctx, line, innerX + 6 + indent, y, { color: UI.dim, scale: 1 }); y += 12; }
             }
         } else {
             this.font.drawText(ctx, 'No active quest.', innerX, y, { color: UI.dim, scale: 1 }); y += 15;
+        }
+
+        // (NI2) The three Act 2 items: name from the item data, the zone, a tick once held.
+        // Nothing is drawn until the delivery is done.
+        const act2 = act2Checklist(qe);
+        if (act2) {
+            y += 6;
+            this.font.drawText(ctx, '[TEXT]', innerX, y, { color: UI.textLight, scale: 1 }); y += 14;
+            for (const row of act2) {
+                const name = ITEMS[row.itemId]?.name ?? row.itemId ?? '?';
+                const zone = row.zone[0] + row.zone.slice(1).toLowerCase();
+                this.font.drawText(ctx, `${row.held ? '✓' : '·'} ${name} @ ${zone}`, innerX + 6, y, { color: row.held ? UI.dim : UI.text, scale: 1 }); y += 12;
+            }
         }
 
         // Completed quests.
         const done = qe ? qe.getCompletedTitles() : [];
         if (done.length) {
             y += 6;
-            this.font.drawText(ctx, 'COMPLETED', innerX, y, { color: UI.textLight, scale: 1 }); y += 14;
+            const count = qe.getCompletedCount();
+            this.font.drawText(ctx, `COMPLETED  ${count.done} / ${count.total}`, innerX, y, { color: UI.textLight, scale: 1 }); y += 14;
             for (const t of done) { this.font.drawText(ctx, `✓ ${t}`, innerX + 6, y, { color: UI.dim, scale: 1 }); y += 12; }
         }
 
@@ -2932,7 +3417,7 @@ export class Renderer {
         y += 8;
         this.font.drawText(ctx, 'WITNESS LOG', innerX, y, { color: UI.textLight, scale: 1 }); y += 14;
         const lines = [];
-        for (const e of (qe ? qe.getJournalLines() : [])) for (const w of this._wrapText(e.text, maxChars)) lines.push(w);
+        for (const e of (qe ? qe.getJournalLines() : [])) for (const w of wrap(e.text)) lines.push(w);
         const bottom = R.y + R.h - 26;
         const rows = Math.max(1, Math.floor((bottom - y) / 12));
         const scroll = Math.max(0, Math.min(game._journalScroll || 0, Math.max(0, lines.length - rows)));
@@ -2944,13 +3429,14 @@ export class Renderer {
 
     // (Phase 4) The rudimentary world map — plain labeled boxes on a grid, one per
     // overworld screen, connector lines between neighbours. The current zone is
-    // filled gold ("YOU"); the active quest's targetZone is ringed red ("» GO").
+    // filled gold ("YOU"); every zone the quest engine points at is ringed red
+    // ("» GO") — one stage's targetZone, or several from a between-quests row.
     // Old-Zelda subscreen style: flat boxes, no interior detail. `top` = the y to
     // start below the tab header.
     _drawWorldMapBody(game, R, top) {
         const { ctx } = this;
         const here = overworldZone(game.map && game.map.zoneName);
-        const target = game.questEngine ? overworldZone(game.questEngine.getTargetZone()) : null;
+        const targets = new Set((game.questEngine?.getTargetZones?.() ?? []).map(overworldZone));
 
         const cols = WORLD_ZONES.map(z => z.col), rows = WORLD_ZONES.map(z => z.row);
         const c0 = Math.min(...cols), c1 = Math.max(...cols), r0 = Math.min(...rows), r1 = Math.max(...rows);
@@ -2975,7 +3461,7 @@ export class Renderer {
         for (const z of WORLD_ZONES) {
             const b = boxOf(z);
             const isHere = z.zoneName === here;
-            const isTarget = z.zoneName === target;
+            const isTarget = targets.has(z.zoneName);
             ctx.fillStyle = isHere ? 'rgba(212,185,106,0.85)' : 'rgba(30,24,16,0.9)';
             ctx.fillRect(b.x, b.y, b.w, b.h);
             ctx.lineWidth = isTarget ? 3 : 2;
@@ -3004,8 +3490,10 @@ export class Renderer {
         this._fillScreen(ctx);
 
         const w = 400, padX = 22;
-        const maxChars = Math.max(8, Math.floor((w - padX * 2) / 8));
-        const bodyLines = this._wrapText(insp.body || '', maxChars);
+        // (FX44) A body may carry newlines (a weapon's compare block, a blank
+        // line, then the description): wrap each paragraph on its own.
+        const bodyLines = String(insp.body || '').split('\n')
+            .flatMap(par => (par ? wrapToWidth(par, w - padX * 2, this._measurer(1)) : ['']));
         const hasTier = !!insp.tierName;
         const h = (hasTier ? 60 : 44) + bodyLines.length * 12 + 24;
         const px = Math.round((CANVAS_PX - w) / 2);
@@ -3036,7 +3524,9 @@ export class Renderer {
 
     // One donut-wedge tile (a curved "Simon-Says" segment) + a centered label.
     // Angles in radians: `mid` = the tile's centre angle, `half` = half its width.
-    _wheelTile(r0, r1, mid, half, fill, alpha, label, txtColor, outline, icon, dominant = false) {
+    // `sub` (fx36) is a second line under the label: { text, color }. It replaces the
+    // icon, because the ring is only one line and a half thick.
+    _wheelTile(r0, r1, mid, half, fill, alpha, label, txtColor, outline, icon, dominant = false, sub = null) {
         const { ctx } = this, { cx, cy } = this._hud().wheel;
         // (§12.4) the selected wedge "rises" — a touch wider + a longer outer
         // radius so the current choice reads as the hero slice at a glance.
@@ -3056,7 +3546,10 @@ export class Renderer {
         if (!this.font) return;
         const lr = (r0 + r1d) / 2;
         const lx = cx + Math.cos(mid) * lr, ly = cy + Math.sin(mid) * lr;
-        if (icon) {
+        if (sub && label) {
+            this.font.drawText(ctx, label, lx, ly - 11, { color: txtColor, scale: 1, align: 'center' });
+            this.font.drawText(ctx, sub.text, lx, ly + 2, { color: sub.color, scale: 1, align: 'center' });
+        } else if (icon) {
             // (Phase 4) a monochrome glyph stacked over the label, in the tile's
             // TEXT colour (never a hue) — a colour-independent shape cue.
             this.font.drawText(ctx, icon, lx, ly - 11, { color: txtColor, scale: 1.4, align: 'center' });
@@ -3087,6 +3580,19 @@ export class Renderer {
                 ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, strip - 24, vp.w, 24); ctx.restore();
                 const hint = `${selectedNode(w).label.toUpperCase()}  ·  AIM — MOVE · SPACE FIRE · ↓ BACK`;
                 this.font.drawText(ctx, hint, CC, strip - 16, { color: UI.gold, scale: 1, align: 'center', shadow: '#000' });
+                // (tw1) aiming a lift with the reticle on someone you could rob: a second
+                // line over the hint says what you would take and whether they would notice.
+                // Nothing otherwise. The tint stands in until the verdict words are written.
+                const node = selectedNode(w);
+                const lift = liftPreview(game, node.resolver, w.reticle);
+                if (lift) {
+                    const take = lift.branch === 'coin'
+                        ? `GP ${lift.gp}`
+                        : String(lift.name ?? '').replace(/[\[\]]/g, '').toUpperCase();
+                    ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, strip - 48, vp.w, 24); ctx.restore();
+                    this.font.drawText(ctx, `${node.label.toUpperCase()}  ·  ${take}  ·  ${lift.words}`, CC, strip - 40,
+                        { color: lift.clean ? UI.hpGreen : UI.hpRed, scale: 1, align: 'center', shadow: '#000' });
+                }
             }
             return;
         }
@@ -3095,7 +3601,7 @@ export class Renderer {
         if (w.confirming) {
             ctx.save(); ctx.fillStyle = 'rgba(48,0,0,0.55)'; ctx.fillRect(0, 0, vp.w, vp.h); ctx.restore();
             const tgt = w.reticle && game.enemies.find(e => e.entity.isAlive() && e.x === w.reticle.x && e.y === w.reticle.y);
-            const name = String((tgt && (tgt.type || (tgt.entity && tgt.entity.name))) || 'them').replace(/[\[\]]/g, '').toUpperCase();
+            const name = String((tgt && (shownName(tgt) || (tgt.entity && tgt.entity.name))) || 'them').replace(/[\[\]]/g, '').toUpperCase();
             if (this.font) {
                 this.font.drawText(ctx, '!! PLUS ULTRA !!', CC, CY - 42, { color: '#ff5555', scale: 2, align: 'center', shadow: '#000' });
                 this.font.drawText(ctx, `STRIKE ${name}?`, CC, CY - 8, { color: UI.gold, scale: 1, align: 'center', shadow: '#000' });
@@ -3174,13 +3680,37 @@ export class Renderer {
         // under it and lost ESC TO CLOSE — the words that say how to leave. So it
         // centres on the screen when that clears the dial, and in the room left of
         // the dial when it doesn't. Outside the pop transform so it doesn't bounce.
+        //
+        // (FX53) In a fight the red enemy count has its own row just above this
+        // one; both are drawn here, before the dial, so neither band can paint
+        // over it.
         if (this.font) {
             const msg = 'WHEEL OPEN  ·  MOVE KEYS STEER IT  ·  ESC TO CLOSE';
-            const tw = this.font.measure(msg, 1);
             const dialLeft = cx - this._hud().dialRadius(depth, kids.length > 0) - 8;
-            const tx = (CC + tw / 2 <= dialLeft) ? CC : Math.max(tw / 2 + 4, dialLeft / 2);
-            ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, strip - 24, vp.w, 24); ctx.restore();
-            this.font.drawText(ctx, msg, tx, strip - 16, { color: UI.gold, scale: 1, align: 'center', shadow: '#000' });
+            let countMsg = null;
+            if (combat) {
+                const foes = (game.enemies || []).filter(e => !e.ambient && isHunting(e) && e.entity && e.entity.isAlive());
+                if (foes.length) {
+                    let near = foes[0], nd = Infinity;
+                    for (const e of foes) {
+                        const d = Math.max(Math.abs(e.x - game.playerX), Math.abs(e.y - game.playerY));
+                        if (d < nd) { nd = d; near = e; }
+                    }
+                    const nm = String(shownName(near) || (near.entity && near.entity.name) || 'FOE').replace(/[\[\]]/g, '').toUpperCase().slice(0, 12);
+                    countMsg = `⚔ ${foes.length}  ${nm}`;
+                }
+            }
+            const rows = wheelBannerRows({
+                strip, vpW: vp.w, dialLeft,
+                hintW: this.font.measure(msg, 1),
+                countW: countMsg == null ? null : this.font.measure(countMsg, 1),
+            });
+            ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, rows.hint.band.y, vp.w, rows.hint.band.h); ctx.restore();
+            this.font.drawText(ctx, msg, rows.hint.x, rows.hint.y, { color: UI.gold, scale: 1, align: 'center', shadow: '#000' });
+            if (rows.count) {
+                ctx.save(); ctx.fillStyle = 'rgba(40,0,0,0.6)'; ctx.fillRect(0, rows.count.band.y, vp.w, rows.count.band.h); ctx.restore();
+                this.font.drawText(ctx, countMsg, rows.count.x, rows.count.y, { color: '#e8462f', scale: 1, align: 'center', shadow: '#000' });
+            }
         }
 
         // Everything below the wash scales about the centre (the open/drill pop).
@@ -3216,13 +3746,16 @@ export class Renderer {
             // dim via alpha, so opening Fight reads red / amber / purple.
             const col = node.color || HUE;
             const txt = !en ? '#7a6c50' : (node.text || (isSel ? '#fff3d0' : '#e8dcc0'));
+            // (fx36) The selected Eat slice says what it will eat (live) or why it won't (grey).
+            const sub = isSel ? this._eatSliceLine(node, game, en) : null;
             this._wheelTile(activeBand[0], activeBand[1], mid, QHALF,
                 col, en ? (isSel ? 1 : 0.5) : 0.32,
                 node.placeholder ? '…' : node.label,
                 txt,
                 isSel ? { w: 3, c: '#fff3c0' } : null,
                 node.placeholder ? null : WHEEL_ICONS[node.key],
-                isSel && en);   // (§12.4) the live selection rises as the hero slice
+                isSel && en,   // (§12.4) the live selection rises as the hero slice
+                sub);
         };
         // `spin` rotates the whole active ring (options + Back) so a cycle sweeps
         // the new selection up under the fixed pointer.
@@ -3302,23 +3835,30 @@ export class Renderer {
 
         ctx.restore();   // undo the open/drill scale transform
 
-        // (§12.5) Threat readout — a compact combat banner (count + nearest foe)
-        // while a fight is live; drawn in screen space so the wheel's pop can't
-        // wobble it. Reuses the crossed-swords glyph the Fight wedge wears.
-        if (combat && this.font) {
-            const foes = (game.enemies || []).filter(e => !e.ambient && isHunting(e) && e.entity && e.entity.isAlive());
-            if (foes.length) {
-                let near = foes[0], nd = Infinity;
-                for (const e of foes) {
-                    const d = Math.max(Math.abs(e.x - game.playerX), Math.abs(e.y - game.playerY));
-                    if (d < nd) { nd = d; near = e; }
-                }
-                const nm = String(near.type || (near.entity && near.entity.name) || 'FOE').replace(/[\[\]]/g, '').toUpperCase().slice(0, 12);
-                ctx.save(); ctx.fillStyle = 'rgba(40,0,0,0.6)'; ctx.fillRect(0, strip - 26, vp.w, 26); ctx.restore();
-                this.font.drawText(ctx, `⚔ ${foes.length}  ${nm}`, CC, strip - 16, { color: '#e8462f', scale: 1, align: 'center', shadow: '#000' });
-            }
-        }
+        // (§12.5) The threat readout (count + nearest foe) is drawn with the hint
+        // above, on its own row (FX53).
         ctx.globalAlpha = 1; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    }
+
+    // (fx36) The second line on the wheel's Eat slice, or null for every other slice.
+    // Live: the food's own name and its heal ("HOT DOG +10"), trimmed to fit the
+    // slice. Greyed at full health: a reason, which is a [TEXT] placeholder for now.
+    // Greyed with no food in the bag has no line, as before.
+    _eatSliceLine(node, game, enabled) {
+        if (!this.font || node.needsItem !== 'eat' || node.placeholder) return null;
+        if (!enabled) {
+            return game.eatBlockedBy && game.eatBlockedBy() === 'full'
+                ? { text: '[TEXT]', color: '#a89878' } : null;
+        }
+        const pick = game.eatChoice && game.eatChoice();
+        if (!pick) return null;
+        const name = String(pick.itemDef.name || '').replace(/[\[\]]/g, '').toUpperCase();
+        const tail = pick.heal > 0 ? ` +${pick.heal}` : '';
+        const room = EAT_SLICE_TEXT_W;
+        if (this.font.measure(name + tail, 1) <= room) return { text: name + tail, color: '#e8dcc0' };
+        let shown = name;
+        while (shown.length > 1 && this.font.measure(shown.trimEnd() + '.' + tail, 1) > room) shown = shown.slice(0, -1);
+        return { text: shown.trimEnd() + '.' + tail, color: '#e8dcc0' };
     }
 
     // (screen-fill) The wheel's dial: an opaque disc in the dock's colours for
@@ -3621,8 +4161,8 @@ export class Renderer {
                 const len = Math.hypot(fx, fy) || 1;
                 const [a, b, c] = facingCue(sx + TILE_PX / 2, sy + TILE_PX / 2, fx / len, fy / len, TILE_PX);
                 ctx.save();
-                ctx.fillStyle = 'rgba(212,185,106,0.9)';
-                ctx.strokeStyle = 'rgba(63,38,49,0.9)';      // the Tiny packs' plum outline
+                ctx.fillStyle = CHEVRON_COLOR;
+                ctx.strokeStyle = CHEVRON_COLOR;
                 ctx.lineWidth = 1;
                 ctx.beginPath();
                 ctx.moveTo(a[0], a[1]);
@@ -3646,8 +4186,8 @@ export class Renderer {
             const emoteKey = splatShowingAt(game._damageNumbers, w.x, w.y, performance.now()) ? null : AWARENESS_EMOTE[w.state];
             const emoteCol = emoteKey ? EMOTE_SPRITES[emoteKey] : null;
             if (emoteCol != null && sprites?.emotes?.loaded) {
-                const sz = 16;
-                sprites.emotes.drawFrame(ctx, emoteCol, 0, sx + TILE_PX / 2 - sz / 2, sy - 6 - sz, sz, sz);
+                const m = awarenessMarkRect(sx, sy);
+                sprites.emotes.drawFrame(ctx, emoteCol, 0, m.x, m.y, m.w, m.h);
             }
 
             // Channel 4 — the "sees you NOW" thread, kept from the old overlay
@@ -3705,6 +4245,23 @@ export class Renderer {
     // (Legacy _drawWinOverlay removed with the tile-7 boss-trigger trap —
     //  fix/critical-path. Its successor, the End of Chapter One card, was
     //  never reached and went with ruling P2.)
+
+    // ── Credits (FIN4) ───────────────────────────────────────────────────────
+    // A black screen and the current card's lines, centred in the menu box. The lines and the
+    // hint are placeholders; the layout numbers are stand-ins.
+    _drawCredits(game) {
+        const { ctx } = this;
+        ctx.fillStyle = '#000';
+        this._fillScreen(ctx);
+        if (!this.font || !game._credits) return;
+        const card = currentCard(game._credits);
+        if (!card) return;
+        const lineH = 32, top = Math.round(CANVAS_PX / 2 - (card.length * lineH) / 2);
+        card.forEach((line, i) => {
+            this.font.drawText(ctx, line, CANVAS_PX / 2, top + i * lineH, { color: UI.textLight, scale: 2, align: 'center' });
+        });
+        this.font.drawText(ctx, CREDITS.hint, CANVAS_PX / 2, CANVAS_PX - 40, { color: UI.dim, scale: 1, align: 'center' });
+    }
 
     // ── Log Modal ([L]) ──────────────────────────────────────────────────────
     // Full scrollable message history (game._logHistory). Geometry mirrors
@@ -3868,7 +4425,7 @@ export class Renderer {
 
         // The key legend sits between the ledger and the frame's bottom stroke:
         // centred, a touch smaller, and clear of the frame on every side.
-        const legend = this._fitText('TAB SIDE  SPACE STAGE  ENTER OFFER  ESC CLOSE', L.panel.w - 32, 0.85, 0.75);
+        const legend = this._fitText('TAB SIDE  SPACE STAGE  BKSP UNSTAGE  ENTER OFFER  ESC CLOSE', L.panel.w - 32, 0.85, 0.75);
         this.font.drawText(ctx, legend.text, L.panel.x + L.panel.w / 2, L.hintY - 2,
             { color: UI.dim, scale: legend.scale, align: 'center' });
     }
@@ -3938,7 +4495,7 @@ export class Renderer {
 
         if (!sel) {
             const m = mood(d);
-            const who = String(npc.type).toUpperCase();
+            const who = String(shownName(npc)).toUpperCase();
             const line = npc._container
                 ? `THE ${who} IS OPEN.`
                 : `${who} IS ${m.mood.toUpperCase()}.`;
@@ -3972,9 +4529,22 @@ export class Renderer {
                 L.desc.x + L.desc.w - 10, L.desc.y + 6, { color: '#79c46a', scale: 1, align: 'right' });
         }
 
+        // (FX44) A weapon shows its compare block on the next row: damage against
+        // the weapon in your hand, then hands and class. Its granted skills take
+        // the row below; with none, the description does.
+        const cmp = weaponCompare(def, game.equipment && game.equipment.weapon);
+        const maxPx = L.desc.w - 20;
+        if (cmp) {
+            this.font.drawText(ctx, this._fitText(`${cmp.damage}   ${cmp.build}`, maxPx, 1, 1).text,
+                L.desc.x + 10, L.desc.y + 24, { color: UI.text, scale: 1 });
+            const second = cmp.grants || String(def.description || '');
+            this.font.drawText(ctx, this._fitText(second, maxPx, 1, 1).text,
+                L.desc.x + 10, L.desc.y + 38, { color: cmp.grants ? UI.gold : UI.dim, scale: 1 });
+            return;
+        }
+
         // Measured wrap against the real advance. NOT the /8 idiom, which is a
         // fossil of the retired 8x8 atlas and wraps ~40% narrow.
-        const maxPx = L.desc.w - 20;
         const words = String(def.description || '').split(/\s+/);
         const lines = []; let cur = '';
         for (const w of words) {
@@ -4082,7 +4652,7 @@ export class Renderer {
         // smiling face, an ADORING label and a full meter.
         const isContainer = !!npc._container;
         if (!isContainer) this._drawMoodFace(L.panel.x + 24, L.panel.y + 20, mood(d).face);
-        this.font.drawText(ctx, String(npc.type).toUpperCase(),
+        this.font.drawText(ctx, String(shownName(npc)).toUpperCase(),
             L.panel.x + (isContainer ? 8 : 44), L.panel.y + 10, { color: UI.gold, scale: 2 });
         this.font.drawText(ctx, `GP ${game.gold ?? 0}`,
             L.panel.x + L.panel.w - 44, L.panel.y + 10, { color: UI.gold, scale: 2, align: 'right' });
@@ -4165,7 +4735,7 @@ export class Renderer {
         const npc = game._offerNpc;
         const d = npc.disposition ?? 0;
 
-        this.font.drawText(ctx, `${String(npc.type).toUpperCase()}'S GOODS`,
+        this.font.drawText(ctx, `${String(shownName(npc)).toUpperCase()}'S GOODS`,
             L.theirs[0].x, L.colHeadY, { color: UI.dim, scale: 1 });
         this.font.drawText(ctx, 'YOUR SATCHEL',
             L.yours[0].x, L.colHeadY, { color: UI.dim, scale: 1 });
@@ -4447,9 +5017,16 @@ export class Renderer {
             this.font.drawText(ctx, 'ARMOR ' + armorTotal, R.x + R.w - 20, R.y + 14, { color: UI.gold, scale: 2, align: 'right' });
         }
 
-        const _eq = hosted ? deviceEquipLayout(bodyRect) : { figure: EQUIP_FIGURE_RECT, slots: EQUIP_SLOT_RECTS };
+        // (AT1) Hosted in GEAR, the same "ARMOR n" line sits in the body's top-left corner.
+        if (hosted) {
+            const A = gearArmourRect(bodyRect);
+            const armorTotal = game._playerArmor ? game._playerArmor() : 0;
+            this.font.drawText(ctx, 'ARMOR ' + armorTotal, A.x, A.y, { color: UI.gold, scale: 2, align: 'left' });
+        }
+
+        const _eq = hosted ? deviceEquipLayout(bodyRect) : { figure: EQUIP_FIGURE_RECT, slots: EQUIP_SLOT_RECTS, leftHand: EQUIP_LEFT_HAND_RECT };
         const F = _eq.figure;
-        const EQ_SLOTS = _eq.slots;
+        const EQ_SLOTS = [..._eq.slots, _eq.leftHand];   // (FX14) the left-hand plate rides with the six
         const fcx = F.x + F.w / 2, fcy = F.y + F.h / 2;
 
         // Faint Vitruvian circle + square behind the figure.
@@ -4543,22 +5120,20 @@ export class Renderer {
 
     // (C2) The GEAR chooser — over a selected armor slot, list every bag item that
     // fits it (name + armor delta vs the worn piece) plus a Bare (unequip) row.
-    // Reads the SAME equipOptions/gearOptionRects the tap handler does, so the
+    // Reads the SAME gearOptions/gearOptionRects the tap handler does, so the
     // drawn rows and their tap zones can't drift. Mirrors _drawInspector's idioms.
     _drawGearPicker(game, bodyRect) {
         const { ctx } = this;
         if (!this.font) return;
         const slotKey = game._deviceSel.slotKey;
-        const label = (EQUIP_SLOT_RECTS.find(s => s.key === slotKey) || {}).label || slotKey.toUpperCase();
-        const worn = game.equipment[slotKey];
-        const opts = equipOptions(slotKey, worn, game.inventory);
+        const label = ([...EQUIP_SLOT_RECTS, EQUIP_LEFT_HAND_RECT].find(s => s.key === slotKey) || {}).label || slotKey.toUpperCase();
+        // (FX57) The right hand is never emptied from here: no Bare row on its plate.
+        const opts = gearOptions(game, slotKey).filter(o => !(slotKey === 'weapon' && o.id === '__bare__'));
         const rows = gearOptionRects(bodyRect, opts.length);
 
-        // Titled panel enclosing the option column (+ header band above row 0).
-        const px = bodyRect.x + (bodyRect.w - 200) / 2 - 8;
-        const py = bodyRect.y + 30;
-        const pw = 216;
-        const ph = (opts.length ? (rows[opts.length - 1].y + rows[opts.length - 1].h) : (py + 26)) - py + 12;
+        // Titled panel enclosing the option column (+ header band above row 0),
+        // starting below the HEAD plate (FX11) — gearChooserRect owns the geometry.
+        const { x: px, y: py, w: pw, h: ph } = gearChooserRect(bodyRect, opts.length);
         drawPanelSmall(ctx, px, py, pw, ph, this.uiSheet);
         this.font.drawText(ctx, `${label} — CHOOSE`, px + pw / 2, py + 8, { color: UI.gold, scale: 1, align: 'center' });
 
@@ -4576,11 +5151,15 @@ export class Renderer {
             this.font.drawText(ctx, isBare ? 'Bare (remove)' : name, r.x + 8, r.y + r.h / 2 - 4, { color: isBare ? UI.textLight : UI.text, scale: 1 });
             if (opt.sludgeImmune) this.font.drawText(ctx, 'sludge-proof', r.x + 8, r.y + r.h - 9, { color: UI.dim, scale: 1 });
 
-            // Armor delta: +N green / −N red / 0 dim, right-aligned.
+            // Armor delta: +N green / −N red / 0 dim, right-aligned. (LC1) On the
+            // left-hand (and, FX57, right-hand) plate the rows are weapons, so a 0 says nothing: it is
+            // left off unless the armour really changes.
             const d = opt.delta;
-            const dTxt = d > 0 ? `+${d}` : d < 0 ? `-${-d}` : '0';
-            const dCol = d > 0 ? UI.buff : d < 0 ? UI.hpRed : UI.dim;
-            this.font.drawText(ctx, dTxt, r.x + r.w - 8, r.y + r.h / 2 - 4, { color: dCol, scale: 1, align: 'right' });
+            if (d !== 0 || (slotKey !== 'left' && slotKey !== 'weapon')) {
+                const dTxt = d > 0 ? `+${d}` : d < 0 ? `-${-d}` : '0';
+                const dCol = d > 0 ? UI.buff : d < 0 ? UI.hpRed : UI.dim;
+                this.font.drawText(ctx, dTxt, r.x + r.w - 8, r.y + r.h / 2 - 4, { color: dCol, scale: 1, align: 'right' });
+            }
             if (game._deviceSel.option === i) this._drawCursorHalo(ctx, r);   // (C3) keyboard cursor
         }
     }
@@ -4593,8 +5172,13 @@ export class Renderer {
         ctx.strokeRect(r.x - 3, r.y - 3, r.w + 6, r.h + 6);
     }
 
-    // Word-wrap `text` into lines no longer than `maxChars` characters (the
-    // bitmap font is fixed 8px/char at scale 1).
+    // Pixel width of a string at `scale`, for cutToWidth / wrapToWidth. A font
+    // without measure (a test's recording font) falls back to VT323's advance.
+    _measurer(scale = 1) {
+        const f = this.font;
+        return f && f.measure ? (s) => f.measure(s, scale) : (s) => String(s).length * 4.8 * scale;
+    }
+
     // Fit a one-line label into `maxW` px: shrink the scale (VT323 scales
     // smoothly, never below `minScale`), then cut with "..." if it still runs
     // over. Returns { text, scale } for drawText.
@@ -4609,6 +5193,9 @@ export class Renderer {
         return { text: text.slice(0, n).trimEnd() + '...', scale: s };
     }
 
+    // Word-wrap `text` into lines of at most `maxChars` characters. Callers
+    // derive maxChars from the font's measured advance; wrapping to a pixel
+    // width is wrapToWidth.
     _wrapText(text, maxChars) {
         const words = String(text).split(' ');
         const lines = [];

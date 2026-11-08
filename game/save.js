@@ -14,9 +14,13 @@
 import { Enemy } from './enemies.js';
 import { defaultPicks } from './slots.js';
 import { clamp } from './utils.js';
-import { INVENTORY_SIZE } from './data.js';
+import { INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE } from './data.js';
+import { pagedSize } from './inventory.js';
 import { sanitizeSlots } from './rings.js';
 import { settleHands } from './items.js';
+import { sanitizeSkills } from './skills.js';
+import { sanitizeRespawnLists } from './drops.js';
+import { sanitizeRivals } from './rivals.js';
 
 // 2: two hands (plans/ws3-two-hands-left-right.md) — equipment.left joins
 // equipment.weapon, which is now the right hand.
@@ -76,6 +80,10 @@ export function serialize(game) {
             ringSlots:        { ...(game.ringSlots || {}) },
             ringTier:         game.ringTier || 0,
             discoveredFusions:[...(game.discoveredFusions || [])],
+            // (skills) { skillId: cleanUses }. Left out while empty, so a run that
+            // never ranked anything saves byte-for-byte as it did before skills
+            // existed (the autoplay fingerprint hashes this object).
+            ...skillsEntry(game),
             equipment: {
                 weapon: idOf(game.equipment.weapon),   // the right hand
                 left: idOf(game.equipment.left),
@@ -106,6 +114,13 @@ export function serialize(game) {
             collectedItems: game._collectedItems ? [...game._collectedItems] : [],
             // Runtime ground-drops per map, so dropped items survive zone changes.
             droppedItems: game._droppedItems || {},
+            // (plans/ks1-respawn-list.md) Kills waiting to come back, and bosses
+            // whose items already dropped. Each is left out while empty, so a
+            // run that never killed anything saves exactly as before.
+            ...respawnEntries(game),
+            // (plans/ch1-chests-stay-empty.md) Containers changed since the map made
+            // them, per zone. Left out while empty, like the lists above.
+            ...chestEntry(game),
             // Law 6: enemies already looted on death, so respawns stay broke
             // across a reload too (twin of collectedItems — a Set of ids).
             muggedIds: game._muggedIds ? [...game._muggedIds] : [],
@@ -125,6 +140,51 @@ export function serialize(game) {
         quest: game.questEngine ? game.questEngine.serialize() : null,
         sewerEscape: game._sewerEscape || null,
     };
+}
+
+// (skills) The player's skill record as a save field, or nothing while it is empty.
+function skillsEntry(game) {
+    const skills = sanitizeSkills(game.skills);
+    return Object.keys(skills).length ? { skills } : {};
+}
+
+// (plans/ch1-chests-stay-empty.md) The chest record as a save field, or nothing while it is empty.
+function chestEntry(game) {
+    const chestRecords = sanitizeChestRecords(game._chestRecords);
+    return Object.keys(chestRecords).length ? { chestRecords } : {};
+}
+
+// A malformed record is dropped, never trusted: { "mapUrl": [{ id, type, x, y, contents }] }.
+function sanitizeChestRecords(raw) {
+    const out = {};
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+    for (const [url, list] of Object.entries(raw)) {
+        if (!Array.isArray(list)) continue;
+        const rows = list
+            .filter(c => c && typeof c === 'object' && typeof c.type === 'string'
+                && Number.isFinite(c.x) && Number.isFinite(c.y))
+            .map(c => ({
+                id: typeof c.id === 'string' ? c.id : undefined, type: c.type, x: c.x, y: c.y,
+                contents: (Array.isArray(c.contents) ? c.contents : [])
+                    .filter(e => typeof e === 'string' || (e && typeof e === 'object' && typeof e.type === 'string')),
+            }));
+        if (rows.length) out[url] = rows;
+    }
+    return out;
+}
+
+// (plans/ks1-respawn-list.md) The respawn lists and the boss-items-given set as
+// save fields, each left out while empty.
+function respawnEntries(game) {
+    const out = {};
+    const lists = sanitizeRespawnLists(game._respawnLists);
+    if (Object.keys(lists).length) out.respawnLists = lists;
+    const given = game._bossDropsGiven ? [...game._bossDropsGiven] : [];
+    if (given.length) out.bossDropsGiven = given;
+    // (plans/ne1-rival-remembered.md) The enemy that beat you and what it took; left out while there is none.
+    const rivals = sanitizeRivals(game._rivals);
+    if (Object.keys(rivals).length) out.rivals = rivals;
+    return out;
 }
 
 // The enemy save shape lives WITH the Enemy class (enemies.js toSave/fromSave) so
@@ -206,6 +266,13 @@ export function migrate(raw) {
     if (!Array.isArray(r.world.collectedItems)) r.world.collectedItems = [];
     if (!r.world.droppedItems || typeof r.world.droppedItems !== 'object') r.world.droppedItems = {};
     if (!Array.isArray(r.world.muggedIds)) r.world.muggedIds = [];
+    // (plans/ks1-respawn-list.md) An older save has neither: nothing is waiting
+    // to come back, and no boss has dropped its items yet.
+    r.world.respawnLists = sanitizeRespawnLists(r.world.respawnLists);
+    r.world.bossDropsGiven = Array.isArray(r.world.bossDropsGiven)
+        ? r.world.bossDropsGiven.filter(k => typeof k === 'string') : [];
+    // An older save has no rival: nobody is carrying anything of yours.
+    r.world.rivals = sanitizeRivals(r.world.rivals);
     if (!r.world.robbed || typeof r.world.robbed !== 'object' || Array.isArray(r.world.robbed)) r.world.robbed = {};
     // ...and one level DOWN, too. The theft resolver does
     // `this._robbed[id] ||= {...}`, which does NOT replace a truthy primitive —
@@ -218,6 +285,8 @@ export function migrate(raw) {
     }
     if (!r.world.hot || typeof r.world.hot !== 'object' || Array.isArray(r.world.hot)) r.world.hot = {};
     r.world.containers = objects(r.world.containers);
+    // An older save has no chest record: every container is as the map made it.
+    r.world.chestRecords = sanitizeChestRecords(r.world.chestRecords);
     if (r.quest === undefined) r.quest = null;
     if (r.sewerEscape === undefined) r.sewerEscape = null;
     return r;
@@ -244,12 +313,13 @@ function validate(raw) {
     p.x = (typeof p.x === 'number' && isFinite(p.x)) ? p.x : undefined;
     p.y = (typeof p.y === 'number' && isFinite(p.y)) ? p.y : undefined;
 
-    // Normalize to INVENTORY_SIZE slots. The bag now GROWS (9/10-slot saves
-    // pad with nulls); an old save with more slots than the current size would
-    // still truncate, but that no longer happens in practice. (remoticon-overhaul)
+    // Normalize to at least INVENTORY_SIZE slots (9/10-slot saves pad with
+    // nulls). (BG1) A bag that grew extra PACK pages keeps them: the length
+    // rounds up to whole pages, so every page reloads. (remoticon-overhaul)
     const inv = Array.isArray(p.inventory) ? p.inventory : [];
     p.inventory = [];
-    for (let i = 0; i < INVENTORY_SIZE; i++) {
+    const size = pagedSize(inv.length, INVENTORY_SIZE, { safeSlots: SAFE_SLOTS, pageSize: PACK_PAGE });
+    for (let i = 0; i < size; i++) {
         const s = inv[i];
         p.inventory.push(s && typeof s.id === 'string'
             ? { id: s.id, count: clamp(_num(s.count, 1), 1, 99) }
@@ -264,6 +334,9 @@ function validate(raw) {
     p.ringTier   = Number.isInteger(p.ringTier) ? Math.max(0, Math.min(4, p.ringTier)) : 0;
     p.ringSlots  = sanitizeSlots(p.ringSlots, new Set(p.ownedRings), p.ringTier);
     p.discoveredFusions = asIds(p.discoveredFusions);
+    // (skills) Known skills, whole counts, never below zero; a save from before
+    // skills existed loads with none.
+    p.skills = sanitizeSkills(p.skills);
     // collectedItems is a Set of string keys on the live game; drop anything
     // non-string so a malformed save can't poison the lookup.
     const ci = Array.isArray(raw.world?.collectedItems) ? raw.world.collectedItems : [];
@@ -296,6 +369,14 @@ export async function loadInto(game, raw) {
     game._muggedIds = new Set(raw.world.muggedIds ?? []);
     game._robbed = raw.world.robbed ?? {};
     game._hot = raw.world.hot ?? {};
+    // ...and the respawn lists, or a kill still waiting would spawn back alive.
+    game._respawnLists = sanitizeRespawnLists(raw.world.respawnLists);
+    // ...but NOT the rivals yet: the map below would hand a fresh spawn the kit, and the
+    // saved enemies (loaded after it) are the ones that say who is carrying. They come back
+    // once those are in.
+    game._rivals = {};
+    game._bossDropsGiven = new Set(raw.world.bossDropsGiven ?? []);
+    game._chestRecords = sanitizeChestRecords(raw.world.chestRecords);
 
     // 1. baseline map (spawns JSON enemies/items/containers; sets renderer
     //    zone). Missing coords fall back to the map spawn; clamp to bounds so
@@ -332,6 +413,7 @@ export async function loadInto(game, raw) {
     game.ringSlots         = { ...(p.ringSlots || {}) };
     game.ringTier          = p.ringTier || 0;
     game.discoveredFusions = new Set(p.discoveredFusions || []);
+    game.skills            = { ...p.skills };
     // knownSpells/grantedTricks are derived, not stored — rebuild from the
     // restored weapon + rings (a slotted Rat Ring grants Rat Form, etc.).
     if (game._refreshGrantedSkills) game._refreshGrantedSkills();
@@ -358,6 +440,7 @@ export async function loadInto(game, raw) {
         id: c.id, type: c.type, x: c.x, y: c.y, contents: (c.contents || []).slice(),
     }));
     game.enemies = raw.world.enemies.map(hydrateEnemy);
+    game._rivals = sanitizeRivals(raw.world.rivals);
 
     // 5. runtime tile mutations — re-applied AFTER spawn so JSON walls don't
     //    clobber them. setTile rebuilds game._tileDiffs as a side effect.

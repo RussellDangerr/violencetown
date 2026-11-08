@@ -9,6 +9,8 @@
 // world map, ignored by the event matcher: `location` (a short "where" string,
 // e.g. "Downtown · The Diner"), `description` (a longer journal line), and
 // `targetZone` (a zoneName the world map highlights so "go here next" is clear).
+// Every stage carries `targetZone`: a zone, or `null` for a stage with no place.
+// content-validate.js fails a stage that leaves it out (plans/mp1-map-marks-quest-stages.md).
 // The delivery event type `item_given { npc, item }` is emitted by BOTH the
 // trade-window give and a dialogue `consumesItem` choice.
 //
@@ -22,6 +24,8 @@
 // (plans/quest-journal.md), which is retrospective evidence with no objectives.
 // This is active objective tracking, surfaced as a one-line HUD goal.
 
+import { SLOTS } from './slots.js';
+
 export const QUESTS = {
     // ── Chapter Two: the Canyon fail-branch escape (Pike + the grappling hook).
     //    The engine tracks ONE quest, so this is the single canyon objective; Pike's
@@ -30,21 +34,24 @@ export const QUESTS = {
     canyon_escape: {
         id: 'canyon_escape',
         title: 'Out of the Canyon',
+        // (CY1) A branch: only the crash route ever starts it, so the ramp route
+        // leaves it out of the Quests tab's count (getCompletedCount).
+        branch: 'canyon',
         stages: [
             {
                 id: 'find_way_out',
                 objective: "Escape the canyon — get Pike's rope: buy it, earn it, or take it",
+                targetZone: 'CANYON',
                 on: { type: 'map_entered', match: { map: 'downtown-map.json' } },
             },
         ],
         onComplete: (game) => {
-            game._log('[You sink the hook into the rock, haul yourself up over the canyon lip, and out onto a Downtown street. Out at last.]', 'transition');
             if (game._startMainQuest2) game._startMainQuest2();   // (Phase 4) chain into MQ2 on arrival
         },
     },
 
     // ── Chapter Two: Main Quest 2 — the burger delivery (Phase 4 playground).
-    //    STRUCTURE is real (2 stages; both delivery idioms via item_given; journal
+    //    STRUCTURE is real (3 stages; both delivery idioms via item_given; journal
     //    location + description; world-map targetZone). The TEXT is placeholder for
     //    Caelan to author. Started deterministically on Downtown arrival (both the
     //    canyon-grapple climb-out and the alcohol-ramp → game._startMainQuest2).
@@ -62,23 +69,37 @@ export const QUESTS = {
                 autoSatisfy: (game) => (game.inventory || []).some(s => s && s.itemDef.id === 'burger_fries'),
             },
             {
+                // (IC2) The order includes the Tiger's Blood Ice Cone. It is not a quest
+                // item, so it comes from wherever it drops (the diner's machine today,
+                // the frozen area later): the stage only asks that it is in the bag.
+                // The Factory is where both of its sources begin.
+                id: 'get_cone',
+                objective: '[TEXT]',
+                location: '[TEXT]',
+                description: '[TEXT]',
+                targetZone: 'FACTORY',
+                on: { type: 'item_pickup', match: { id: 'tigers_blood_ice_cone' } },
+                autoSatisfy: (game) => (game.inventory || []).some(s => s && s.itemDef.id === 'tigers_blood_ice_cone'),
+            },
+            {
                 id: 'handoff',
-                objective: 'Deliver the burger + fries to the stranded traveler',
-                location: 'Downtown · the street',
-                description: 'The stranded traveler on the Downtown street is waiting on this. Hand it over — talk to them, or offer it from your satchel.',
+                objective: '[TEXT]',
+                location: '[TEXT]',
+                description: '[TEXT]',
                 targetZone: 'DOWNTOWN',
-                on: { type: 'item_given', match: { item: 'burger_fries', npc: 'dt-recipient' } },
+                // (AE1, SP8) The Financier takes it, in the bank. Both items, handed over together or one at a time (QuestEngine.owedItems).
+                on: { type: 'item_given', match: { npc: 'bank-financier' }, items: ['burger_fries', 'tigers_blood_ice_cone'] },
             },
         ],
         onComplete: (game) => {
             game.gold = (game.gold || 0) + 50;
-            game._log('[Delivered. The traveler presses a little Gold Card credit into your hand. +50 GP.]', 'transition');
+            game._log('[TEXT] +50 GP.', 'transition');
         },
     },
 
     fix_car: {
         id: 'fix_car',
-        title: 'A Working Car',
+        title: '[TEXT]',
         // Started DETERMINISTICALLY (game._startMainQuest, on game start / first
         // town entry) rather than via a fragile once-per-approach adjacency bark
         // off the Borgir boss — the old startOn could be missed entirely if the
@@ -93,7 +114,8 @@ export const QUESTS = {
                 // floor(innerW / 8) chars, and "walk to it and examine it (E)" cut to
                 // "...AND EXAMINE~" on a phone, losing the very (E) this line is about.
                 // examine.js points the way when E lands on anything else.
-                objective: "Your car won't start - go examine it (E)",
+                objective: '[TEXT]',
+                targetZone: 'TOWN',
                 on: { type: 'examine', match: { targetId: 'car' } },
                 // Tolerant: if the player already examined the car before this
                 // stage went active, the 'examine' event was dropped — so
@@ -102,7 +124,8 @@ export const QUESTS = {
             },
             {
                 id: 'recover_converter',
-                objective: 'Get your converter back from the sewer',
+                objective: '[TEXT]',
+                targetZone: 'SEWER',
                 on: { type: 'item_pickup', match: { id: 'catalytic_converter' } },
                 // Tolerant: the converter only advances this stage on PICKUP. If
                 // it's already in the bag when this stage is entered (e.g. grabbed
@@ -113,14 +136,16 @@ export const QUESTS = {
             },
             {
                 id: 'escape_sewer',
-                objective: 'Tear down the barricade and escape the sewer!',
+                objective: '[TEXT]',
+                targetZone: 'SEWER',
                 // Phase D implements the set-piece as a Game method; no-op here.
                 onEnter: (game) => { if (game._sewerEscapeSetpiece) game._sewerEscapeSetpiece(); },
                 on: { type: 'map_entered', match: { map: 'town-map.json' } },
             },
             {
                 id: 'return_to_car',
-                objective: 'Install the converter - return to your car',
+                objective: '[TEXT]',
+                targetZone: 'TOWN',
                 onEnter: (game) => { game._sewerEscape = null; },  // escaped — clear the gauntlet state
                 on: { type: 'interact_car', match: {} },
             },
@@ -132,11 +157,74 @@ export const QUESTS = {
             // (main.js _doMove), so the bridge that's been the visible
             // objective all game finally pays off.
             game.questEngine.state.flags.carFixed = true;
-            game._log('[The car coughs, sputters, then ROARS to life — and up north the bridge barricade rattles loose. It is revving way past redline, though. Nothing that hot is making the ramp.]', 'transition');
+            game._log('[TEXT]', 'transition');
             if (game._openBridgeIfCarFixed) game._openBridgeIfCarFixed();
         },
     },
 };
+
+// (NO1) Between quests: while no quest is active, the first row whose `when`
+// holds gives the HUD its objective and the Map its rings, so the gap between one
+// quest ending and the next starting still says where to go. Rows read only
+// saved state (flags, the bridge route, the completed list), so a save made in a
+// gap reloads with its row showing (plans/no1-objective-points-at-bridge.md).
+// A row may ring several zones at once (AE2, plans/ae2-act2-zones-objective.md).
+export const BETWEEN_QUESTS = [
+    {
+        id: 'to_bridge',   // the car runs, the bridge isn't crossed yet: the crash or the ramp is next
+        when: (qe) => !!qe.getFlag('carFixed') && !qe.bridgeRoute(),
+        objective: 'Drive north across the bridge',
+        targetZones: ['TOWN'],
+    },
+    {
+        id: 'to_downtown',   // all three Act 2 items are in the bag: the bank's vault in Downtown is next (FX54)
+        when: (qe) => qe.isComplete('deliver_burger') && act2Missing(qe).length === 0,
+        objective: '[TEXT]',
+        targetZones: ['DOWNTOWN'],
+    },
+    {
+        id: 'to_act2',     // Act 1 ends with the delivery; Act 2's three zones come in any order (spine §1)
+        when: (qe) => qe.isComplete('deliver_burger'),
+        // The full row, as a table read sees it; `narrow` drops each zone whose item is held (FX54).
+        objective: 'Explore the Carnival, Factory and Graveyard',
+        targetZones: ['CARNIVAL', 'FACTORY', 'GRAVEYARD'],
+        narrow: (qe) => {
+            const zones = act2Missing(qe);
+            return { objective: `Explore the ${joinNames(zones)}`, targetZones: zones };
+        },
+    },
+];
+
+// (FX54) The Act 2 zones, in Map order. A zone's item is its boss slot's required
+// drop, `<zone>.boss` in SLOTS, so no item id is written here. The frozen area's
+// slot is not listed, so its ice cone never counts.
+const ACT2_ZONES = ['CARNIVAL', 'FACTORY', 'GRAVEYARD'];
+
+// The Act 2 zones whose required item is not in the bag.
+function act2Missing(qe) {
+    return ACT2_ZONES.filter(zone => {
+        const item = SLOTS[`${zone.toLowerCase()}.boss`]?.requiredDrop;
+        return !item || qe._slotOf(item) < 0;
+    });
+}
+
+// (NI2) The Quests tab's checklist of the three Act 2 items: one row per zone, in Map order,
+// with the item's id and whether the bag holds it. null until Act 1's delivery is done, as the
+// objective above is. The id comes from the boss slot, so no item is named here; the
+// renderer reads the name from the item data.
+export function act2Checklist(qe) {
+    if (typeof qe?.isComplete !== 'function' || !qe.isComplete('deliver_burger')) return null;
+    return ACT2_ZONES.map(zone => {
+        const itemId = SLOTS[`${zone.toLowerCase()}.boss`]?.requiredDrop ?? null;
+        return { zone, itemId, held: !!itemId && qe._slotOf(itemId) >= 0 };
+    });
+}
+
+// ['CARNIVAL', 'FACTORY', 'GRAVEYARD'] -> "Carnival, Factory and Graveyard".
+function joinNames(zones) {
+    const names = zones.map(z => z[0] + z.slice(1).toLowerCase());
+    return names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
 
 export class QuestEngine {
     constructor(game) {
@@ -190,6 +278,14 @@ export class QuestEngine {
         const stage = QUESTS[id].stages[this.state.stageIndex];
         if (!stage || !stage.on || stage.on.type !== type) return;
         if (!matches(stage.on.match, payload)) return;
+
+        // (IC2) A stage listing `items` needs every one of them handed over:
+        // each is recorded in the saved counters, and only the last advances.
+        if (Array.isArray(stage.on.items)) {
+            if (!stage.on.items.includes(payload.item) || this._given(stage, payload.item)) return;
+            this.state.counters[givenKey(stage, payload.item)] = 1;
+            if (this._owed(stage).length) { this.game._render?.(); return; }
+        }
 
         if (stage.on.count) {
             const key = stage.id;
@@ -255,10 +351,11 @@ export class QuestEngine {
         this._complete();
     }
 
-    // The current objective line for the HUD (null when no quest is active).
+    // The current objective line for the HUD: the active stage's, else a
+    // between-quests row's (null when neither applies).
     getHudText() {
         const id = this.state.activeId;
-        if (!id) return null;
+        if (!id) return this._betweenView()?.objective ?? null;
         const stage = QUESTS[id].stages[this.state.stageIndex];
         if (!stage) return null;
         let t = stage.objective;
@@ -286,6 +383,19 @@ export class QuestEngine {
         return QUESTS[id].stages[this.state.stageIndex] || null;
     }
 
+    // (NO1) The BETWEEN_QUESTS row that applies now, or null. Only while no
+    // quest is active: an active quest's own stage always wins.
+    betweenQuests() {
+        if (this.state.activeId) return null;
+        return BETWEEN_QUESTS.find(row => row.when(this)) || null;
+    }
+
+    // (FX54) What the row shows now: a row with `narrow` trims itself to the state.
+    _betweenView() {
+        const row = this.betweenQuests();
+        return row && row.narrow ? row.narrow(this) : row;
+    }
+
     isActive(id) { return this.state.activeId === id; }
     isComplete(id) { return this.state.completed.includes(id); }
     getFlag(k) { return this.state.flags[k]; }
@@ -300,7 +410,50 @@ export class QuestEngine {
         const stage = QUESTS[id].stages[this.state.stageIndex];
         if (!stage || !stage.on || stage.on.type !== 'item_given') return false;
         const m = stage.on.match || {};
+        if (Array.isArray(stage.on.items)) {
+            return this._owed(stage).includes(itemId) && (m.npc == null || m.npc === npcId);
+        }
         return (m.item == null || m.item === itemId) && (m.npc == null || m.npc === npcId);
+    }
+
+    // (IC2) The items the active delivery stage still wants handed over: its
+    // `items` minus those already given, or its one `match.item`. [] when the
+    // active stage is not a delivery.
+    owedItems() {
+        const stage = this.currentStage();
+        if (!stage || !stage.on || stage.on.type !== 'item_given') return [];
+        return this._owed(stage);
+    }
+
+    // True when something is owed and every owed item is in the bag.
+    holdsOwed() {
+        const owed = this.owedItems();
+        return owed.length > 0 && owed.every(id => this._slotOf(id) >= 0);
+    }
+
+    // Hand every owed item to `npcId` at once: out of the bag, one `item_given`
+    // per item (the event the satchel give emits too). Returns how many went.
+    handOver(npcId) {
+        const owed = this.owedItems();
+        let n = 0;
+        for (const item of owed) {
+            const slot = this._slotOf(item);
+            if (slot < 0) continue;
+            this.game._removeFromSlot(slot);
+            this.game.emitGameEvent('item_given', { npc: npcId, item });
+            n++;
+        }
+        return n;
+    }
+
+    _given(stage, item) { return !!this.state.counters[givenKey(stage, item)]; }
+    _owed(stage) {
+        if (Array.isArray(stage.on.items)) return stage.on.items.filter(item => !this._given(stage, item));
+        const m = stage.on.match || {};
+        return m.item != null ? [m.item] : [];
+    }
+    _slotOf(itemId) {
+        return (this.game.inventory || []).findIndex(s => s && s.itemDef && s.itemDef.id === itemId);
     }
 
     // (Phase 4 journal) A render-ready view of the active quest for the Journal:
@@ -327,14 +480,43 @@ export class QuestEngine {
     getCompletedTitles() { return this.state.completed.map(id => (QUESTS[id] && QUESTS[id].title) || id); }
     getJournalLines() { return (this.state.journal || []).slice(); }
 
-    // (Phase 4 map) The active stage's targetZone — a zoneName the world map
-    // highlights as "go here next" — or null.
-    getTargetZone() {
-        const id = this.state.activeId;
-        if (!id) return null;
-        const s = QUESTS[id].stages[this.state.stageIndex];
-        return (s && s.targetZone) || null;
+    // (CY1) Which way you crossed the North bridge: 'canyon' (crashed through),
+    // 'ramp' (sailed over into Downtown), or null (not yet). The arrival code
+    // sets the `bridgeRoute` flag; a save from before that flag existed reads it
+    // from the quests the crossing starts: the Canyon quest only on a crash, the
+    // delivery quest on arriving in Downtown.
+    bridgeRoute() {
+        const f = this.state.flags.bridgeRoute;
+        if (f === 'canyon' || f === 'ramp') return f;
+        const began = (id) => this.isActive(id) || this.isComplete(id);
+        if (began('canyon_escape')) return 'canyon';
+        if (began('deliver_burger')) return 'ramp';
+        return null;
     }
+
+    // Finished quests out of every quest the game defines. Derived from the
+    // completed list (already saved), so it needs no saved field of its own.
+    // (CY1) A branch quest on the route you did NOT take is left out of both
+    // numbers; before the bridge is crossed every quest still counts.
+    getCompletedCount() {
+        const route = this.bridgeRoute();
+        const ids = Object.keys(QUESTS).filter(id => !(route && QUESTS[id].branch && QUESTS[id].branch !== route));
+        const done = new Set(this.state.completed.filter(id => ids.includes(id))).size;
+        return { done, total: ids.length };
+    }
+
+    // (Phase 4 map) Every zoneName the world map rings as "go here next": the
+    // active stage's targetZone, or, with no quest active, a between-quests row's
+    // zones, or none.
+    getTargetZones() {
+        const id = this.state.activeId;
+        if (!id) return (this._betweenView()?.targetZones ?? []).slice();
+        const s = QUESTS[id].stages[this.state.stageIndex];
+        return s && s.targetZone ? [s.targetZone] : [];
+    }
+
+    // The first of getTargetZones(), or null.
+    getTargetZone() { return this.getTargetZones()[0] ?? null; }
 
     serialize() {
         return {
@@ -361,6 +543,9 @@ export class QuestEngine {
         this.state.journal = Array.isArray(obj.journal) ? obj.journal.slice() : [];
     }
 }
+
+// The saved-counter key that records one item of a several-item delivery.
+function givenKey(stage, item) { return `${stage.id}/${item}`; }
 
 // Every key in matchObj must strictly equal the same key in payload.
 function matches(matchObj, payload) {

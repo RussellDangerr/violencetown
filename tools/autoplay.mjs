@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 // autoplay.mjs — run the autoplay headless (plans/quest1-autoplay.md §5.1).
 //
-//   node tools/autoplay.mjs [--seed=1] [--script=car|quest] [--repeat=1] [--jitter] [--clock=real] [--json] [--timeout=120000]
-//   node tools/autoplay.mjs --check | --write          quest 1 against tools/autoplay-golden.json
+//   node tools/autoplay.mjs [--seed=1] [--script=car|quest|sneak|loops] [--repeat=1] [--jitter] [--clock=real] [--json] [--timeout=120000]
+//   node tools/autoplay.mjs --check | --write          quest, sneak and loops against tools/autoplay-golden.json
 //   node tools/autoplay.mjs --script=quest --speed=3 --gif=run.gif [--frameMs=250]
+//   node tools/autoplay.mjs --script=loops --break=player.gold    spoil a save field across the
+//                                                                  reload: the run must fail
 //
 // Serves game/ itself, drives the installed Chrome over the DevTools protocol
 // (Node's built-in WebSocket — no dependencies), and prints one line per run.
@@ -30,11 +32,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function parseArgs(argv) {
     const o = { seed: 1, script: 'car', repeat: 1, jitter: false, clock: 'virtual', json: false, timeout: 120000,
-                speed: 0, check: false, write: false, gif: null, frameMs: 250 };
+                speed: 0, check: false, write: false, gif: null, frameMs: 250, break: null };
     for (const a of argv) {
         const [k, v] = a.replace(/^--/, '').split('=');
+        if (k === 'seed') o.seedGiven = true;
         if (['seed', 'repeat', 'timeout', 'speed', 'frameMs'].includes(k)) o[k] = Number(v);
-        else if (k === 'script' || k === 'clock' || k === 'gif') o[k] = v;
+        else if (k === 'script' || k === 'clock' || k === 'gif' || k === 'break') o[k] = v;
         else if (k === 'jitter' || k === 'json' || k === 'check' || k === 'write') o[k] = true;
         else throw new Error(`unknown option ${a}`);
     }
@@ -134,23 +137,76 @@ async function connect(port) {
     return { send, once, on: (l) => listeners.add(l), close: () => ws.close() };
 }
 
+// What the player carries out of the Sewer (plans/ho2-sewer-haul-record.md). Watching
+// only: this wraps the game's map change to note the bag and the gold the moment
+// before the player leaves a sewer map for any other, and runs the original
+// untouched, so a run plays exactly as it did. The bag is written as the loops
+// run's `end` writes it (a stack as "id xN", slot order).
+const SEWER_WATCH = `(() => {
+    const exits = (window.__sewerExits = []);
+    let game;
+    Object.defineProperty(window, '__game', {
+        configurable: true,
+        get: () => game,
+        set: (g) => {
+            game = g;
+            if (!g || typeof g._loadMap !== 'function') return;
+            const load = g._loadMap;
+            g._loadMap = function (url, ...rest) {
+                const from = this._mapUrl;
+                if (from && /^sewer/.test(from) && !/^sewer/.test(url)) {
+                    exits.push({
+                        from, to: url,
+                        bag: this.inventory.filter(Boolean).map((s) => (s.count > 1 ? s.itemDef.id + ' x' + s.count : s.itemDef.id)),
+                        gold: this.gold,
+                    });
+                }
+                return load.call(this, url, ...rest);
+            };
+        },
+    });
+})();`;
+
+// A run whose script reloads the page (the loops run, plans/al2-loops-reload-continue.md)
+// answers { reload: true } instead of a report. The driver reloads the page
+// over the protocol, as a player presses F5, and waits on the next page's
+// answer. The cap stops a run that keeps asking.
+const MAX_RELOADS = 3;
+const SHOT_WAIT_MS = 2000;
+
 async function runOnce(cdp, base, o) {
-    const q = new URLSearchParams({ autoplay: '1', seed: String(o.seed), script: o.script });
+    const q = new URLSearchParams({ autoplay: '1', seed: String(o.seed), script: o.script, driver: 'cdp' });
     if (o.clock === 'real') q.set('clock', 'real');
     if (o.jitter) q.set('jitter', '1');
+    if (o.break) q.set('break', o.break);
     q.set('speed', String(o.speed));
     const loaded = cdp.once('Page.loadEventFired');
     await cdp.send('Page.navigate', { url: `${base}/?${q}` });
     await loaded;
-    const evaluation = cdp.send('Runtime.evaluate', {
+    const answer = () => cdp.send('Runtime.evaluate', {
         expression: 'window.__autoplay ? window.__autoplay.done : { ok: false, reason: "boot.js never installed" }',
         awaitPromise: true, returnByValue: true,
     });
+    const evaluation = (async () => {
+        for (let reloads = 0; ; reloads++) {
+            const out = await answer();
+            if (!out.result?.value?.reload) return out;
+            if (reloads >= MAX_RELOADS) return { result: { value: { ok: false, reason: `asked to reload more than ${MAX_RELOADS} times` } } };
+            const next = cdp.once('Page.loadEventFired');
+            await cdp.send('Page.reload', { ignoreCache: true });
+            await next;
+        }
+    })();
     const frames = [];
     let capturing = !!o.gif;
     const capture = (async () => {
         while (capturing) {
-            const shot = await cdp.send('Page.captureScreenshot', { format: 'png' }).catch(() => null);
+            // A screenshot asked for while the page reloads can go unanswered;
+            // give up on that frame rather than wait on it for ever.
+            const shot = await Promise.race([
+                cdp.send('Page.captureScreenshot', { format: 'png' }).catch(() => null),
+                sleep(SHOT_WAIT_MS).then(() => null),
+            ]);
             if (shot) frames.push(Buffer.from(shot.data, 'base64'));
             await sleep(o.frameMs);
         }
@@ -167,28 +223,46 @@ async function runOnce(cdp, base, o) {
     }
     if (!out) return { ok: false, reason: `no result in ${o.timeout} ms` };
     if (out.exceptionDetails) return { ok: false, reason: out.exceptionDetails.text };
-    return out.result.value;
+    const report = out.result.value;
+    if (report && !report.reload) {
+        const seen = await cdp.send('Runtime.evaluate', { expression: 'window.__sewerExits || []', returnByValue: true }).catch(() => null);
+        report.sewerExits = seen?.result?.value || [];
+    }
+    return report;
 }
 
 function line(i, r) {
     const where = r.quest ? `quest ${r.quest.id}#${r.quest.stage} at ${r.at.map} ${r.at.x},${r.at.y}` : '';
     const time = r.virtualMs != null ? `virtual ${r.virtualMs} ms, real ${r.realMs} ms` : `real ${r.realMs} ms`;
     const head = `run ${i + 1}: ${r.ok ? 'ok  ' : 'FAIL'} seed ${r.seed} ${r.script} · ${where} · turn ${r.turn} · ${time} · ${r.fingerprint}`;
-    const stages = (r.stages || []).map((s) =>
-        `\n  ${s.id.padEnd(18)} ${String(s.turns).padStart(4)} turns · -${s.hpLost} hp · +${s.healed} hp · ${s.eats} eats · ${s.drinks ?? 0} drinks · ${s.attacks} hits · ${s.casts ?? 0} casts (${s.mpSpent ?? 0} mp) · ${s.throws ?? 0} throws · ${s.deaths} deaths · ${s.gold >= 0 ? '+' : ''}${s.gold} gp`);
+    const gp = (n) => `${n >= 0 ? '+' : ''}${n} gp`;
+    // A quest stage carries the fight's whole score; a loops step only turns,
+    // deaths and gold.
+    const stages = (r.stages || []).map((s) => (s.hpLost === undefined
+        ? `\n  ${s.id.padEnd(18)} ${String(s.turns).padStart(4)} turns · ${s.deaths} deaths · ${gp(s.gold)}`
+        : `\n  ${s.id.padEnd(18)} ${String(s.turns).padStart(4)} turns · -${s.hpLost} hp · +${s.healed} hp · ${s.eats} eats · ${s.drinks ?? 0} drinks · ${s.attacks} hits · ${s.casts ?? 0} casts (${s.mpSpent ?? 0} mp) · ${s.throws ?? 0} throws · ${s.deaths} deaths · ${gp(s.gold)}`));
+    const end = r.end ? `\n  end: wielding ${r.end.weapon} · ${r.end.gold} gp · bag [${r.end.bag.join(', ')}]` : '';
     const why = r.ok ? '' : `\n  ${r.reason}${(r.errors || []).length ? '\n  ' + r.errors.join('\n  ') : ''}`;
-    return head + stages.join('') + why;
+    return head + stages.join('') + end + why;
 }
 
 // The scripts the golden covers: the fighter (ruling Q1-2) and the sneak
-// (ruling Q1-8), on the golden's seed.
-const CHECKED = ['quest', 'sneak'];
+// (ruling Q1-8), on the golden's seed, and the everyday loops (ruling AL1R1)
+// on a seed of their own, which --script=loops also uses unless --seed is given.
+const LOOPS_SEED = 2;
+const OWN_SEED = { loops: LOOPS_SEED };
+const CHECKED = [{ script: 'quest' }, { script: 'sneak' }, { script: 'loops', seed: LOOPS_SEED }];
 
 // What the golden keeps of a run: whether it finished, where it ended, and
-// each stage's score.
+// each stage's score. A loops run also keeps what it ended holding; quest
+// and sneak entries have no `end`, but keep what they carried out of the Sewer.
 const summary = (r) => ({
     script: r.script, seed: r.seed, finished: !!r.finished, reason: r.finished ? null : r.reason,
     fingerprint: r.fingerprint, turn: r.turn, deaths: r.deaths, stages: r.stages || [],
+    ...(r.end ? { end: r.end } : {}),
+    // The bag and gold at the moment the run first left the Sewer, when it did
+    // (plans/ho2-sewer-haul-record.md). The loops run never enters it.
+    ...(r.sewerExits?.length ? { sewerExit: { bag: r.sewerExits[0].bag, gold: r.sewerExits[0].gold } } : {}),
 });
 
 // Every leaf that differs, as "path: was -> now".
@@ -203,8 +277,10 @@ function drift(want, got, at = '') {
 const o = parseArgs(process.argv.slice(2));
 const GOLDEN = path.resolve(ROOT, '..', 'tools', 'autoplay-golden.json');
 if (o.check) o.seed = JSON.parse(readFileSync(GOLDEN, 'utf8')).seed;
+if (!o.seedGiven && OWN_SEED[o.script] != null) o.seed = OWN_SEED[o.script];
 const scored = o.check || o.write;
-const jobs = scored ? CHECKED.map((script) => ({ ...o, script })) : Array.from({ length: o.repeat }, () => o);
+const jobs = scored ? CHECKED.map(({ script, seed }) => ({ ...o, script, seed: seed ?? o.seed }))
+    : Array.from({ length: o.repeat }, () => o);
 const server = await serve();
 const base = `http://127.0.0.1:${server.address().port}`;
 const chrome = await launchChrome();
@@ -219,6 +295,7 @@ try {
     const cdp = await connect(chrome.port);
     await cdp.send('Page.enable');
     await cdp.send('Runtime.enable');
+    await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: SEWER_WATCH });
     const consoleErrors = [];
     cdp.on((m) => {
         if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') {

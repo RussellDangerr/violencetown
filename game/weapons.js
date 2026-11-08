@@ -13,7 +13,7 @@
 // A weapon may carry `tags: [...]` from the one vocabulary in tags.js; the
 // content check fails on any other tag. weaponTiers copies a base's tags.
 
-import { VALUE_TIERS } from './items.js';
+import { VALUE_TIERS, ITEMS, ARMOR_IDS } from './items.js';
 
 // The hit kinds a weapon can land.
 export const ATTACK_KINDS = Object.freeze(['slash', 'stab', 'crush']);
@@ -81,12 +81,23 @@ export function weaponTiers(base) {
     });
 }
 
-// The one base definition per class. No damage number: that is tuning.
+// What each class's tiers hit for (plans/fx6-tier-weapon-damage.md). A class
+// with a weapon in the game copies it: the sword the wooden sword, the wand the
+// ray gun, the whip the lion whip, the hammer the pipe. The rest take 10. A tier
+// keeps its base's number, so every tier of a class hits the same.
+export const WEAPON_CLASS_DAMAGE = Object.freeze({
+    shield: 10, axe: 10, sword: 10, dagger: 10, hammer: 12,
+    great_sword: 10, battle_axe: 10, war_hammer: 10, book: 10, bell: 10,
+    whip: 16, knuckles: 10, claws: 10, doll: 10, wand: 22,
+    staff: 10, throwing_axe: 10, frying_pan: 10,
+});
+
+// The one base definition per class, carrying its class's damage.
 export function classBase(classId) {
     const c = WEAPON_CLASSES[classId];
     if (!c) return null;
     return {
-        id: c.id, name: `[${titleCase(c.id)}]`, weaponClass: c.id,
+        id: c.id, name: `[${titleCase(c.id)}]`, weaponClass: c.id, damage: WEAPON_CLASS_DAMAGE[c.id],
         equipSlot: 'weapon', useType: 'equip', category: 'weapon',
     };
 }
@@ -94,6 +105,12 @@ export function classBase(classId) {
 // Every class's five tiers. Kept out of WEAPONS and ITEMS: none is in the world.
 export const WEAPON_TIERS = Object.freeze(Object.fromEntries(
     Object.keys(WEAPON_CLASSES).map(id => [id, Object.freeze(weaponTiers(classBase(id)))]),
+));
+
+// Every armor piece's five tiers, from the same generator (plans/fx22-armor-tier-table.md).
+// Built here because items.js can't import weaponTiers. Kept out of ITEMS: none is in the world.
+export const ARMOR_TIERS = Object.freeze(Object.fromEntries(
+    ARMOR_IDS.map(id => [id, Object.freeze(weaponTiers(ITEMS[id]))]),
 ));
 
 export const WEAPONS = {
@@ -120,7 +137,7 @@ export const WEAPONS = {
     // fears an enemy you hit twice in a row (onHit: 'fearOnRepeat'). Source: the
     // Graveyard (world drop deferred; the def lives here for the fear mechanics).
     fearmur: {
-        id: 'fearmur', name: '[Fearmur]', damage: 14, equipSlot: 'weapon',
+        id: 'fearmur', name: '[Fearmur]', damage: 16, equipSlot: 'weapon',
         useType: 'equip', grantsSpells: ['boo'], onHit: 'fearOnRepeat',
         weaponClass: 'hammer',
         category: 'weapon',
@@ -139,7 +156,7 @@ export const WEAPONS = {
     // Lion Whip — a carnival tamer's whip. Reaches 3 tiles and YANKS whatever it
     // strikes one tile closer; grants the "Hire a Lion" trick (GP) while worn.
     lion_whip: {
-        id: 'lion_whip', name: '[Lion Whip]', damage: 12, equipSlot: 'weapon', useType: 'equip',
+        id: 'lion_whip', name: '[Lion Whip]', damage: 16, equipSlot: 'weapon', useType: 'equip',
         reach: 3, pullDistance: 1, grantsTricks: ['hire_lion'],
         weaponClass: 'whip',
         category: 'weapon',

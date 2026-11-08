@@ -60,7 +60,7 @@ const MAP_MATCH_KEYS  = new Set(['map']);
 export function validateContent(maps, {
     slots = SLOTS, entries = ENTRIES,
     items = ITEMS, weapons = WEAPONS, weaponTiers = WEAPON_TIERS,
-    rings = RINGS, fusions = FUSIONS, tiles = TILES,
+    rings = RINGS, fusions = FUSIONS, tiles = TILES, quests = QUESTS,
 } = {}) {
     const problems = [];
     const warnings = [];
@@ -87,15 +87,25 @@ export function validateContent(maps, {
     }
     const placed = {};
     for (const { file, data } of maps) for (const e of (data.enemies || [])) {
+        // A spawn placed by hand names its entry (plans/rv1-carnival-rats.md).
+        if (e && e.entry !== undefined) {
+            if (e.slot) P(`${file}: spawn ${e.id || '?'} names both slot '${e.slot}' and entry '${e.entry}'`);
+            else if (!entries[e.entry]) P(`${file}: spawn ${e.id || '?'} names unknown entry '${e.entry}'`);
+            if (e.type) P(`${file}: spawn ${e.id || '?'} names entry '${e.entry}' and also a type; the entry owns the type`);
+        }
         if (!e || !e.slot) continue;
         if (!slots[e.slot]) { P(`${file}: spawn ${e.id || '?'} names unknown slot '${e.slot}'`); continue; }
         (placed[e.slot] ||= []).push(file);
+        if (slots[e.slot].seats && !(Number.isInteger(e.seat) && e.seat >= 0 && e.seat < slots[e.slot].seats))
+            P(`${file}: spawn ${e.id || '?'} in rolled slot '${e.slot}' needs a seat from 0 to ${slots[e.slot].seats - 1}`);
     }
     for (const [id, slot] of Object.entries(slots)) {
         if (!slot.pool || !slot.pool.length) P(`slot '${id}' has an empty pool`);
         for (const { entry } of (slot.pool || [])) if (!entries[entry]) P(`slot '${id}' pools unknown entry '${entry}'`);
         if (slot.requiredDrop && !itemIds.has(slot.requiredDrop)) P(`slot '${id}' requires unknown item '${slot.requiredDrop}'`);
         const where = placed[id] || [];
+        if (slot.seats && where.length !== slot.seats)
+            P(`slot '${id}' rolls ${slot.seats} seats but ${where.length} spawns stand on it`);
         if (slot.kind === 'boss' && (where.length !== 1 || where[0] !== slot.map))
             P(`slot '${id}' must stand exactly once, on ${slot.map} — found on [${where.join(', ')}]`);
     }
@@ -127,7 +137,7 @@ export function validateContent(maps, {
     }
 
     // ── Quest references ─────────────────────────────────────────────────────
-    for (const [qid, q] of Object.entries(QUESTS)) {
+    for (const [qid, q] of Object.entries(quests)) {
         for (const stage of (q.stages || [])) {
             const on = stage.on;
             if (on) {
@@ -143,7 +153,12 @@ export function validateContent(maps, {
                     }
                 }
             }
-            if (stage.targetZone && !zoneByName(stage.targetZone))
+            // Every stage says where the Map should send you: a zone, or null
+            // when it has no place (plans/mp1-map-marks-quest-stages.md). A
+            // stage that leaves it out leaves the Map blank on that step.
+            if (!Object.prototype.hasOwnProperty.call(stage, 'targetZone'))
+                P(`${qid}/${stage.id}: names no targetZone (a zone, or null for none)`);
+            else if (stage.targetZone !== null && !zoneByName(stage.targetZone))
                 P(`${qid}/${stage.id}: unknown targetZone '${stage.targetZone}'`);
         }
     }
@@ -186,5 +201,21 @@ export function validateContent(maps, {
         }
     }
 
+    // ── Weapon damage (plans/fx6-tier-weapon-damage.md) ──────────────────────
+    // A holdable weapon with no damage number swings for NaN. Every weapon,
+    // every item held in the weapon slot, and every tier weapon must carry a real one.
+    const DP = (where, d) => {
+        if (typeof d?.damage !== 'number' || !Number.isFinite(d.damage)) P(`${where}: has no damage number`);
+    };
+    for (const [id, d] of Object.entries(weapons)) DP(`weapon '${id}'`, d);
+    for (const [id, d] of Object.entries(items)) if (isHoldableWeapon(d)) DP(`item '${id}'`, d);
+    for (const [cls, tiers] of Object.entries(weaponTiers))
+        for (const d of (tiers || [])) DP(`weapon tier '${d?.id || cls}'`, d);
+
     return { problems, warnings };
+}
+
+// A def held in the weapon slot (the pipe), as opposed to one only thrown.
+export function isHoldableWeapon(def) {
+    return !!def && def.equipSlot === 'weapon';
 }

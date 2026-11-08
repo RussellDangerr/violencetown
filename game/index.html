@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="version" content="0.30.0">
+    <meta name="version" content="0.32.0">
     <meta name="description" content="Violencetown — a browser-based 2D RPG with tick-based combat, an Omnitrix-style radial menu, and hand-authored zones. Zero dependencies, no build step, just open and play.">
     <meta name="theme-color" content="#0a0a0a">
     <meta name="color-scheme" content="dark">
@@ -95,6 +95,7 @@
                     <li><kbd>Space</kbd> opens the action wheel anywhere — it pre-aims at the nearest enemy. Double-tap <kbd>Space</kbd> to instantly repeat your last action.</li>
                     <li>The wheel is a menu you walk into: <kbd>←</kbd> <kbd>→</kbd> spin the ring · <kbd>↑</kbd> (or <kbd>Space</kbd>) go deeper — <em>firing is just going deeper into an action</em> · <kbd>↓</kbd> (or <kbd>Esc</kbd>) back out, closing at the top</li>
                     <li>While aiming, arrows nudge the reticle. If an action would catch a friendly, the wheel asks first — <kbd>↑</kbd> confirms, <kbd>↓</kbd> cancels.</li>
+                    <li>[TEXT: Thieve help line, placeholder.]</li>
                     <li><span class="help-touch">On touch:</span> tap <strong>✦</strong> to open the wheel. The wheel reads as a compass: tap <strong>above</strong> the hub to go deeper (fire), <strong>left/right</strong> to spin, <strong>below</strong> or on the <strong>hub itself</strong> to back out.</li>
                 </ul>
 
@@ -171,6 +172,15 @@
                     <label for="opt-wheel-open">WHEEL OPEN</label>
                     <button type="button" id="opt-wheel-open" class="opt-toggle"
                             role="switch" aria-checked="false">TAP</button>
+                </div>
+
+                <div class="opt-row opt-row-toggle">
+                    <label for="opt-zoom-closer">[TEXT]</label>
+                    <button type="button" id="opt-zoom-farther" class="opt-toggle opt-step"
+                            aria-label="[TEXT]">-</button>
+                    <span class="opt-val opt-zoom-val" id="opt-zoom-val">x2</span>
+                    <button type="button" id="opt-zoom-closer" class="opt-toggle opt-step"
+                            aria-label="[TEXT]">+</button>
                 </div>
 
                 <p class="opt-note">Reduce motion dampens screenshake and screen flash. WHEEL OPEN: TAP toggles the action wheel; HOLD keeps it open only while pressed.</p>

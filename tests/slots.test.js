@@ -8,6 +8,8 @@ import { SLOTS, ENTRIES, pickSlots, defaultPicks, resolveSpawn, requiredDropFor,
 import { Enemy, spawnEnemy } from '../game/enemies.js';
 import { ITEMS } from '../game/items.js';
 import { validateContent } from '../game/content-validate.js';
+import { shownName } from '../game/enemies.js';
+import { migrate } from '../game/save.js';
 
 const GAME = new URL('../game/', import.meta.url);
 const mapData = (file) => JSON.parse(readFileSync(new URL(file, GAME), 'utf8'));
@@ -18,6 +20,11 @@ describe('SL-4: a required item belongs to the slot, so every entry drops it', (
 
     test('there is at least one required-item slot to check (the Sewer boss)', () => {
         assert.ok(required.some(([id]) => id === 'sewer.boss'));
+    });
+
+    test('all four boss slots on the spine carry a required item', () => {
+        const ids = required.map(([id]) => id).sort();
+        assert.deepEqual(ids, ['carnival.boss', 'factory.boss', 'frozen.boss', 'graveyard.boss', 'sewer.boss']);
     });
 
     for (const [slotId, slot] of required) {
@@ -56,6 +63,63 @@ describe('SL-4: a required item belongs to the slot, so every entry drops it', (
     });
 });
 
+describe('RM1: the ringmaster can stand in the Carnival\'s boss spot', () => {
+    const spawn = () => mapData('carnival-map.json').enemies.find(s => s.slot === 'carnival.boss');
+    const drawn = (seed) => pickSlots(seed)['carnival.boss'];
+
+    test('seed 0 still draws Bigfoot; seeds 1 and 2 draw the Ringmaster', () => {
+        assert.equal(drawn(0), 'bigfoot');
+        assert.equal(drawn(1), 'ringmaster');
+        assert.equal(drawn(2), 'ringmaster');
+    });
+
+    test('over many seeds both are drawn, and drawing him moves no other slot', () => {
+        const seen = new Set();
+        const bigfootOnly = { ...SLOTS, 'carnival.boss': { ...SLOTS['carnival.boss'], pool: [{ entry: 'bigfoot' }] } };
+        for (let seed = 0; seed < 200; seed++) {
+            seen.add(drawn(seed));
+            const without = pickSlots(seed, bigfootOnly);
+            const withHim = pickSlots(seed);
+            for (const id of Object.keys(without)) if (id !== 'carnival.boss') assert.deepEqual(withHim[id], without[id], `${id} moved on seed ${seed}`);
+        }
+        assert.deepEqual([...seen].sort(), ['bigfoot', 'ringmaster']);
+    });
+
+    test('the default is still Bigfoot, and a save with no pick plays Bigfoot', () => {
+        assert.equal(defaultPicks()['carnival.boss'], 'bigfoot');
+        assert.equal(migrate({}).slots['carnival.boss'], 'bigfoot');
+    });
+
+    test('a save that holds Bigfoot keeps Bigfoot, even on a seed that would draw the Ringmaster', () => {
+        assert.equal(drawn(1), 'ringmaster');
+        const saved = migrate({ slots: { 'carnival.boss': 'bigfoot' } }).slots;
+        assert.equal(saved['carnival.boss'], 'bigfoot');
+        assert.equal(shownName(spawnEnemy(resolveSpawn(spawn(), saved))), 'Bigfoot');
+        const kept = migrate({ slots: { 'carnival.boss': 'ringmaster' } }).slots;
+        assert.equal(shownName(spawnEnemy(resolveSpawn(spawn(), kept))), '[Ringmaster]');
+    });
+
+    test('he shows his own placeholder name on the target panel, and is a boss', () => {
+        const e = spawnEnemy(resolveSpawn(spawn(), { 'carnival.boss': 'ringmaster' }));
+        assert.equal(shownName(e), '[Ringmaster]');
+        assert.equal(e.boss, true);
+        assert.equal(e.slot, 'carnival.boss');
+    });
+
+    test('he is Bigfoot\'s stand-in block under another name, so balance has nothing new to measure', () => {
+        const { name: _a, ...big } = ENTRIES.bigfoot;
+        const { name: _b, ...ring } = ENTRIES.ringmaster;
+        assert.deepEqual(ring, big);
+    });
+
+    test('whoever stands there gives the Carnival\'s item', () => {
+        for (const entry of ['bigfoot', 'ringmaster']) {
+            const e = spawnEnemy(resolveSpawn(spawn(), { 'carnival.boss': entry }));
+            assert.equal(requiredDropFor(e, []), 'act2_item_a');
+        }
+    });
+});
+
 describe('the picks', () => {
     const fixture = { 'a.boss': { kind: 'boss', map: 'x', pool: [{ entry: 'one', weight: 3 }, { entry: 'two', weight: 1 }] } };
 
@@ -77,7 +141,18 @@ describe('the picks', () => {
 
     test('a pool of one always picks its one (SL-3): today the Sewer boss is the Were-Rat', () => {
         for (let seed = 0; seed < 50; seed++) assert.equal(pickSlots(seed)['sewer.boss'], 'wererat');
-        assert.deepEqual(defaultPicks(), { 'sewer.boss': 'wererat' });
+        assert.deepEqual(defaultPicks(), {
+            'sewer.boss': 'wererat',
+            'carnival.boss': 'bigfoot',
+            'factory.boss': 'alien_invasion',
+            'graveyard.boss': 'the_deity',
+            'frozen.boss': 'siberia',
+            'sewer.character': 'crat',
+        });
+    });
+
+    test('a pool of one always picks its one: today the Sewer character is the Crat', () => {
+        for (let seed = 0; seed < 50; seed++) assert.equal(pickSlots(seed)['sewer.character'], 'crat');
     });
 });
 
@@ -114,7 +189,12 @@ describe('resolveSpawn: the map says where, the registry says who', () => {
         assert.equal(e.boss, true);
         assert.equal(e.sewerDweller, true);
         assert.equal(e.gold, 44);
-        assert.equal(e.entity.armor, 6);
+        // TGR1 (a), TG1R1 (b), TG1R4 (b): bosses wear too. It puts on the heaviest
+        // armour in its kit, the Cardboard Cuirass, and that piece is all it has;
+        // the authored 6 stays in the registry for the balance check to read.
+        assert.equal(ENTRIES.wererat.armor, 6);
+        assert.deepEqual(e.equipped, ['wooden_sword', 'cardboard_cuirass']);
+        assert.equal(e.entity.armor, ITEMS.cardboard_cuirass.armor);
         assert.equal(e.damage, 12);
         assert.equal(e.slot, 'sewer.boss');
         assert.equal(slotIdOf(e), 'sewer.boss');

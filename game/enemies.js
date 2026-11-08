@@ -18,11 +18,55 @@ import { Entity, attack, formatDamageNumber } from './combat.js';
 import { manhattan } from './utils.js';
 import { stepEntity, fleeStep } from './pathing.js';
 import { tickNpcState } from './npc.js';
-import { tickBuffList } from './buffs.js';
+import { tickBuffList, sumBuffStat } from './buffs.js';
 import { parseCapabilities, deriveAllegiance, isHunting } from './ai.js';
 import { makeHostile } from './give-action.js';   // (theft) one spelling of "turned against you"
 import { FACING_VECTORS } from './perception.js';
 import { resolveItemDef } from './item-registry.js';
+import { labelOf } from './slots.js';
+import { RNG } from './rng.js';
+import { isAnt } from './ants.js';
+import { dressOne, isWearable } from './theft.js';
+
+// (FX4, plans/fx4-boss-one-name.md) The name a character goes by on the
+// surfaces that used to print its type: the log, the target panel, the KO tag.
+// A boss goes by its one name (slots.js labelOf prefers the entry's name), so
+// "Alien Invasion" never reads as "Boss" anywhere; anyone else keeps its type.
+export function shownName(enemy) {
+    if (!enemy) return enemy;
+    if (enemy.boss) return labelOf(enemy);
+    return townName(enemy) || enemy.type;
+}
+
+// (FX38, plans/fx38-townsfolk-names.md) A named townsperson goes by the name
+// their dialogue uses. Named = a dialogue and a real name: a bracketed
+// placeholder ("[TEXT]") and an unnamed Violencian keep their type.
+export function townName(enemy) {
+    if (!enemy || enemy.boss || !enemy.dialogueId) return null;
+    const n = typeof enemy.name === 'string' ? enemy.name.trim() : '';
+    return n && !/[[\]]/.test(n) ? n : null;
+}
+
+// (FX38) A log line is bracketed, and item and character names carry their own
+// brackets, so lines read "[Dropped [Rock]]". Drop every bracket nested inside
+// another; the outer pair stays. A stray "]" with nothing open is kept.
+export function unnestBrackets(text) {
+    let depth = 0, out = '';
+    for (const ch of String(text)) {
+        if (ch === '[') { if (depth === 0) out += ch; depth++; }
+        else if (ch === ']') {
+            if (depth === 0) out += ch;
+            else { depth--; if (depth === 0) out += ch; }
+        }
+        else out += ch;
+    }
+    return out;
+}
+
+// "The Violencian" but "Knuckles": a name takes no article.
+export function theShown(enemy) {
+    return townName(enemy) || `The ${shownName(enemy)}`;
+}
 
 const DEFAULT_SIGHT = 8;
 const DEFAULT_DAMAGE = 8;
@@ -168,6 +212,19 @@ export class Enemy {
         // (plans/t1-tag-layer.md) Shared-vocabulary tags (tags.js). Not the
         // free-form `tag` above. Nothing reads them for an effect yet.
         tags = null,
+        // (plans/ic4-frozen-creatures.md) This creature's own examine text, from
+        // its registry entry.
+        examine = null,
+        // (plans/as1-unicycle-clown.md) How this creature is DRAWN, nothing else: a size
+        // under one tile (null = the full tile every other creature has) and a unicycle
+        // under it. Both come from a registry entry; neither touches a stat.
+        drawScale = null,
+        unicycle = false,
+        // (plans/as1-unicycle-clown.md) Rolls about on a dice stream of his own, seeded from his
+        // id, instead of the shared ambient one. A wanderer drawing from the shared stream
+        // moves every later wander in the run, so a new one anywhere shifts a replay that never
+        // went near him; his own stream touches no one else's.
+        ownDice = false,
     }) {
         this.id         = id;
         this.type       = type;
@@ -176,7 +233,11 @@ export class Enemy {
         this.damage     = damage;
         this.sightRange = sightRange;
         this.state      = 'idle'; // legacy chase state: 'idle' | 'chasing' | 'returning'
-        this.entity     = new Entity({ name: `[${type}]`, hp, armor });
+        this.entity     = new Entity({ name: `[${shownName({ boss, name, type, dialogueId })}]`, hp, armor });
+        // Its live defence buffs soak every blow its body takes (combat.js takeDamage).
+        Object.defineProperty(this.entity, 'guardOf', {
+            value: () => sumBuffStat(this.buffs, 'defence'), enumerable: false,
+        });
 
         // Leash anchor — where this enemy spawned. A chaser that strays too far
         // from home (or loses sight of the player for too long) drops aggro and
@@ -267,11 +328,21 @@ export class Enemy {
         this.sewerDweller  = !!sewerDweller;
         this.slot          = slot;
         this.tags          = Array.isArray(tags) ? [...tags] : [];
+        this.examine       = examine;
+        this.drawScale     = (typeof drawScale === 'number' && drawScale > 0 && drawScale < 1) ? drawScale : null;
+        this.unicycle      = unicycle === true;
+        this.ownDice       = ownDice === true;
 
         // Debuffs / buffs — symmetric with Game.buffs[] on the player side
         // (DoTs, fear, the poition riders), ticked by the same BUFF_EFFECTS table.
         this.buffs = [];
     }
+
+    // (FX4) The name the log, the target panel and the KO tag use (shownName
+    // above): a boss's one name, anyone else's type.
+    get shownName() { return shownName(this); }
+    // (FX38) "The Violencian" for the unnamed, "Knuckles" for a name.
+    get shownThe() { return theShown(this); }
 
     // Buff management — mirrors Game.addBuff / removeBuff / hasBuff /
     // _tickBuffs at main.js:147-167 so both sides of combat use the same
@@ -335,6 +406,15 @@ export class Enemy {
             slot: this.slot || undefined,
             // Same rule: an untagged enemy saves byte-identically to before tags.
             tags: this.tags.length ? [...this.tags] : undefined,
+            // Same rule: a creature with no examine text of its own saves as before.
+            examine: this.examine || undefined,
+            // Same rule for how it is drawn: a full-size creature saves as before.
+            drawScale: this.drawScale || undefined,
+            unicycle: this.unicycle || undefined,
+            ownDice: this.ownDice || undefined,
+            // (FX45) The one-time talk choices this NPC has already given. Left out while
+            // none are spent, so an NPC nobody has talked to saves exactly as before.
+            dialogueDone: (this._dialogueDone && this._dialogueDone.size) ? [...this._dialogueDone] : undefined,
             // runtime
             state: this.state, fsmState: this.fsmState, lastWanderTurn: this._lastWanderTurn,
             // (perception ladder) so a save taken mid-hunt reloads mid-hunt.
@@ -396,6 +476,10 @@ export class Enemy {
         if (typeof s.summonTurnsLeft === 'number') e._summonTurnsLeft = s.summonTurnsLeft;
         if (s.isBarricade) e.isBarricade = true;
         if (s.tag != null) e.tag = s.tag;
+        // (FX45) Old saves have no dialogueDone: nothing is spent.
+        if (Array.isArray(s.dialogueDone) && s.dialogueDone.length) {
+            e._dialogueDone = new Set(s.dialogueDone.filter(x => typeof x === 'string'));
+        }
         return e;
     }
 }
@@ -440,10 +524,46 @@ function defaultKit(armor) {
     return KIT_DEFAULTS[KIT_DEFAULTS.length - 1];
 }
 
+// (FX13, plans/fx13-townsfolk-purse.md) A townsperson's purse: a few GP, varying
+// by person, so Thieve has something to lift. Ruling FX13R1 pick a.
+export const TOWNSFOLK_PURSE_MIN = 2;
+export const TOWNSFOLK_PURSE_MAX = 6;
+const PURSE_SALT = 0x5A17C0DE;
+
+// An ambient, non-fighting, non-vendor NPC whose spawn states no wallet.
+export function isTownsperson(spawnDef) {
+    return !!spawnDef?.ambient && !spawnDef.vendor && !((spawnDef.damage ?? 0) > 0)
+        && spawnDef.gold == null;
+}
+
+const OWN_DICE_SALT = 0x5A17C0DE;   // keeps an own-dice wanderer's stream apart from his purse's
+
+// FNV-1a over the id, so the purse is keyed on the person, not on load order.
+function idHash(id) {
+    let h = 0x811C9DC5;
+    for (const ch of String(id ?? '')) {
+        h ^= ch.charCodeAt(0);
+        h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return h >>> 0;
+}
+
+// Its own Mulberry32 stream per person — never game.rng, so no fight or theft
+// roll moves — and the same purse on every load of the zone, so leaving and
+// coming back cannot re-roll it.
+export function townsfolkPurse(id, seed = 0) {
+    const rng = new RNG((idHash(id) ^ PURSE_SALT ^ (seed >>> 0)) >>> 0);
+    return rng.range(TOWNSFOLK_PURSE_MIN, TOWNSFOLK_PURSE_MAX);
+}
+
 // Law 6d: a spawn the player already mugged comes back broke — no gold AND no
 // kit, so re-entering a zone can't farm either half of the wallet. Pure so it
 // stays Node-testable.
-export function spawnEnemy(spawnDef, muggedIds, robbed = null) {
+//
+// (plans/ne1-rival-remembered.md) `rivalKit`, when given, is the item ids this
+// enemy took off you. It is added LAST, after the mugged clear and the theft
+// subtraction, so a looted enemy that later beats you still carries your things.
+export function spawnEnemy(spawnDef, muggedIds, robbed = null, rivalKit = null) {
     const e = new Enemy(spawnDef);
     const fights = (e.damage ?? 0) > 0 && !e.ambient;
     if (fights && spawnDef.gold == null && spawnDef.loadout == null) {
@@ -451,8 +571,26 @@ export function spawnEnemy(spawnDef, muggedIds, robbed = null) {
         e.gold = kit.gold;
         e.loadout = [...kit.loadout];
     }
+    if (isTownsperson(spawnDef)) e.gold = townsfolkPurse(e.id);
     if (!Array.isArray(e.loadout)) e.loadout = e.loadout ? [...e.loadout] : [];
     if (muggedIds?.has(e.id)) { e.gold = 0; e.loadout = []; }
+
+    // (plans/tg1-enemies-wear-armour.md) A fighter whose kit lists armour puts one
+    // piece on: out of the kit, into `equipped`, and that piece is ALL its armour
+    // (TG1R4; the authored number goes). A kit with no armour leaves the number as
+    // authored. Decided before the theft below is subtracted, so a stolen piece
+    // stays stolen rather than the next one going on, and before a rival's kit is
+    // added, so a rival never wears what it took from you. Worn gear the spawn
+    // authors (a boss's sword) stays; one that already wears armour puts nothing
+    // more on. Worn gear is not dropped on a kill (TG1R2): main.js drops the kit
+    // only, so the piece goes with them.
+    const authoredWorn = Array.isArray(e.equipped) ? e.equipped : [];
+    if (fights && !e.vendor && !authoredWorn.some(id => isWearable(resolveItemDef(id)))) {
+        const dressed = dressOne(e.entity.armor ?? 0, e.loadout, resolveItemDef, robbed?.[e.id]?.items ?? []);
+        e.loadout = dressed.loadout;
+        e.entity.armor = dressed.armor;
+        if (dressed.worn) e.equipped = [...authoredWorn, dressed.worn];
+    }
 
     // (theft) A robbed enemy re-hydrates from map JSON on every _loadMap, so
     // without this the theft — and the hostility that came with being caught —
@@ -469,6 +607,7 @@ export function spawnEnemy(spawnDef, muggedIds, robbed = null) {
         // that is what makes it clean.
         if (r.noticed) makeHostile(e);
     }
+    if (rivalKit?.length) e.loadout = [...(e.loadout ?? []), ...rivalKit];
     return e;
 }
 
@@ -490,6 +629,10 @@ export function resolveEnemyTurns(game) {
         // heartbeat (resolveAmbientTurns), not the per-player-turn loop. Skip
         // them here so they never double-advance, tick combat buffs, or burn a turn.
         if (enemy.ambient) continue;
+
+        // Ants move by the swarm's rules (ants.js swarmTurn, driven from main.js),
+        // not the chase.
+        if (isAnt(enemy)) continue;
 
         // (zone pursuit) Just came through a door after the player — spend one
         // turn "emerging" (inert, but visible in the threshold) so the player
@@ -591,6 +734,7 @@ export function resolveAmbientTurns(game) {
 
     for (const npc of game.enemies) {
         if (!npc.entity.isAlive()) continue;
+        if (isAnt(npc)) continue;       // ants have no moods to show; the swarm moves them
         if (isHunting(npc)) continue;   // engaged hostile = combat, not ambient
         if (npc._ally) continue;                  // allies resolve on the player-turn loop
         if (npc.hasBuff('feared')) continue;      // (fear) the per-turn loop owns its flee
@@ -608,7 +752,10 @@ export function resolveAmbientTurns(game) {
         // whitelist still gates who actually MOVES inside tickNpcState — IDLE-only
         // NPCs stay put; WANDER/WORKING NPCs roam/labour while the player stands still.
         if (npc.allegiance === 'neutral') {
-            const npcMessages = tickNpcState(game, npc, game.worldTick, game.ambientRng || game.rng);
+            const dice = npc.ownDice
+                ? (npc._dice ??= new RNG((idHash(npc.id) ^ OWN_DICE_SALT) >>> 0))
+                : (game.ambientRng || game.rng);
+            const npcMessages = tickNpcState(game, npc, game.worldTick, dice);
             for (const m of npcMessages) messages.push(m);
         }
     }
@@ -621,21 +768,22 @@ export function resolveAmbientTurns(game) {
 // Edge-triggered: fires only on the turn the player BECOMES adjacent
 // (manhattan distance 1) to this NPC, having been non-adjacent on the
 // previous resolution. Doesn't re-fire while the player remains adjacent,
-// and re-arms once they step away. Used for non-hostile dialogue NPCs
-// like Carrion who deliver a single line per encounter.
+// and re-arms only once they have stopped TOUCHING it — a diagonal step still
+// touches, so walking around the NPC says the line once, not at every corner.
+// Used for non-hostile dialogue NPCs like Carrion who deliver a single line
+// per encounter.
 //
 // One-shot-per-approach is the right cadence for dialogue — repeated
 // barks every turn while standing next to an NPC would be log spam.
 
 function maybeAdjacencyBark(game, enemy) {
     if (!enemy.adjacencyBark) return null;
-    const dist = manhattan(enemy.x, enemy.y, game.playerX, game.playerY);
-    const isAdjacent = dist === 1;
-    if (isAdjacent && !enemy._wasAdjacent) {
+    const dx = Math.abs(enemy.x - game.playerX), dy = Math.abs(enemy.y - game.playerY);
+    if (manhattan(enemy.x, enemy.y, game.playerX, game.playerY) === 1 && !enemy._wasAdjacent) {
         enemy._wasAdjacent = true;
         return { text: enemy.adjacencyBark, sourceEnemy: enemy, category: 'adjacency-bark' };
     }
-    if (!isAdjacent) {
+    if (Math.max(dx, dy) > 1) {
         enemy._wasAdjacent = false;
     }
     return null;

@@ -39,9 +39,10 @@ const dirTo = (from, to) =>
     Object.keys(STEP).find((d) => from.x + STEP[d][0] === to.x && from.y + STEP[d][1] === to.y) || null;
 const around = (p) => Object.entries(STEP).map(([dir, [dx, dy]]) => ({ x: p.x + dx, y: p.y + dy, dir }));
 
-// A kill goal names a spine slot ('sewer.boss') or a tag. By slot, it hunts
-// whoever this game picked for it, so a new pool entry needs no new route.
-const isQuarry = (e, kill) => e.tag === kill || (!!e.slot && e.slot === kill);
+// A kill goal names a spine slot ('sewer.boss'), a tag, or one enemy's id
+// (the loops run's 'green1'). By slot, it hunts whoever this game picked for
+// it, so a new pool entry needs no new route.
+const isQuarry = (e, kill) => e.tag === kill || (!!e.slot && e.slot === kill) || (!!e.id && e.id === kill);
 
 export function goalDone(view, goal) {
     if (goal.kill) return view.mapUrl === goal.map && !view.enemies.some((e) => isQuarry(e, goal.kill));

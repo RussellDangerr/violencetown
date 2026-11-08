@@ -13,6 +13,8 @@
 
 import { isHostile, isSewerDweller } from './ai.js';
 import { burnGold } from './trade.js';
+import { isWearable, gearWeight } from './theft.js';
+import { equipOptions } from './inspector.js';   // (FX14) the GEAR chooser's rows
 
 // ── Poition (all six stats wired) ────────────────────────────────────────────
 // A poition moves exactly one of six stats by a signed amount: positive is a
@@ -136,7 +138,7 @@ export const ITEMS = {
         description: 'Rusty copper pipe, wrenched free from the wall. Swings like it means it.',
         equipSlot: 'weapon',
         weaponClass: 'hammer',   // the class table is WEAPON_CLASSES in weapons.js
-        useType: 'melee',
+        useType: 'equip',        // an ordinary weapon: the bag's main button wields it (fx37)
         range: 1,
         damage: 12,
         consumable: false,
@@ -328,6 +330,44 @@ export const ITEMS = {
         fallbackColor: '#9a8a6a',
         baseValue: 0,
     },
+    // Act 2's three required items (plans/spine.md §1, §9; named 2026-10-30). Shaped
+    // like the Converter; each belongs to its zone's boss slot (slots.js).
+    act2_item_a: {
+        id: 'act2_item_a',
+        name: 'Stuffed Animal',
+        description: '[TEXT]',
+        category: 'quest',
+        useType: 'none',
+        consumable: false,
+        questItem: true,
+        tier: 'orange',
+        fallbackColor: '#ff00ff',
+        baseValue: 0,
+    },
+    act2_item_b: {
+        id: 'act2_item_b',
+        name: 'Flux Capacitor',
+        description: '[TEXT]',
+        category: 'quest',
+        useType: 'none',
+        consumable: false,
+        questItem: true,
+        tier: 'orange',
+        fallbackColor: '#ff00ff',
+        baseValue: 0,
+    },
+    act2_item_c: {
+        id: 'act2_item_c',
+        name: 'Soul Crystal',
+        description: '[TEXT]',
+        category: 'quest',
+        useType: 'none',
+        consumable: false,
+        questItem: true,
+        tier: 'orange',
+        fallbackColor: '#ff00ff',
+        baseValue: 0,
+    },
 
     // ── Special / mechanic-shop stock (Phase 6d + Chapter Two) ────────────────
     // Pike's grappling_hook is the canyon's way UP/OUT (the mobility unlock).
@@ -342,7 +382,33 @@ export const ITEMS = {
         useType: 'none',
         consumable: false,
         fallbackColor: '#8a5a2a',
-        baseValue: 20,
+        baseValue: 14,
+    },
+    // Carried, it does nothing yet: once ants exist they come for it, except
+    // where it is too cold (plans/ic1-tigers-blood-ice-cone.md).
+    tigers_blood_ice_cone: {
+        id: 'tigers_blood_ice_cone',
+        name: "[Tiger's Blood Ice Cone]",
+        description: '[TEXT]',
+        useType: 'none',
+        consumable: false,
+        fallbackColor: '#e84537',
+        baseValue: 0,
+    },
+    // The Factory manager hands it over once the bill is paid; used on the
+    // diner's ice cone machine it is spent and the machine makes the cone
+    // (plans/ic6-factory-bill-ice-cone-machine.md). Not `questItem`: the item
+    // overlay refuses quest items, and "use this on that" lives there. Lost
+    // before it is used, the manager hands over another.
+    ice_cone_machine_part: {
+        id: 'ice_cone_machine_part',
+        name: '[Ice Cone Machine Part]',
+        description: '[TEXT]',
+        category: 'quest',
+        useType: 'none',
+        consumable: false,
+        fallbackColor: '#9a9a9a',
+        baseValue: 0,
     },
     grappling_hook: {
         id: 'grappling_hook',
@@ -352,7 +418,7 @@ export const ITEMS = {
         consumable: false,
         questItem: true,
         fallbackColor: '#9a7b4a',
-        baseValue: 1000,
+        baseValue: 15,
     },
 
     // ── Poition (a potion, a poison — the pun is the point) ──────────────────
@@ -564,26 +630,48 @@ export function equipItem(game, itemDef) {
 // Persistent equip via the Use action (armor pieces — useType: 'equip'). Moves
 // the item into its body-zone slot; any piece already worn there goes back into
 // the bag. The caller (main.js _doItemUse) removes the used item from the
-// hotbar so it isn't duplicated.
-function resolveEquip(game, itemDef) {
+// hotbar so it isn't duplicated. (FX34) The caller takes the item out of its bag
+// slot FIRST and names that slot as `bagSlot`, so the piece swapped out lands in
+// the slot the new one came from. Any further piece, or a slot still occupied (a
+// stack of two), goes to the first free place as before.
+function resolveEquip(game, itemDef, hand = 'weapon', bagSlot = -1) {
     const slot = itemDef.equipSlot;
     if (!slot) return `[${itemDef.name} can't be worn]`;
+    const bagIt = (d) => {
+        const inv = game.inventory;
+        if (bagSlot >= 0 && Array.isArray(inv) && inv[bagSlot] == null) inv[bagSlot] = { itemDef: d, count: 1 };
+        else game._addToInventory(d);
+    };
     if (slot === 'weapon') {
-        // Into the right hand, as the one weapon slot did; a two-hander takes
-        // both, and whatever it pushes out goes back in the bag.
-        const out = holdInHands(game.equipment, itemDef, handsRule(game))
-            .filter(d => d.id !== itemDef.id);
-        for (const d of out) game._addToInventory(d);
+        // Into `hand` (the right, as the one weapon slot did, unless the GEAR
+        // tab's left plate asks for the left); a two-hander takes both, and
+        // whatever it pushes out goes back in the bag.
+        // (EQ1) No same-id filter: every caller takes the item out of the bag first,
+        // so a pushed-out copy of the same thing is a second copy and goes back too.
+        const out = holdInHands(game.equipment, itemDef, handsRule(game), hand);
+        for (const d of out) bagIt(d);
         return out.length
             ? `[Equipped ${itemDef.name} — ${out.map(d => d.name).join(', ')} back in your bag]`
             : `[Equipped ${itemDef.name}]`;
     }
     const old = game.equipment[slot];
     game.equipment[slot] = itemDef;
-    if (old && old.id !== itemDef.id) game._addToInventory(old);
-    return old && old.id !== itemDef.id
+    if (old) bagIt(old);
+    return old
         ? `[Equipped ${itemDef.name} — ${old.name} back in your bag]`
         : `[Equipped ${itemDef.name}]`;
+}
+
+// (FX14) The rows the GEAR chooser lists for a plate. An armour plate lists the
+// bag items that fit its slot; the left-hand plate lists the bag's weapons (the
+// right hand's own slot key), measured against what the left hand holds. When
+// the left hand is only half of a two-hander there is nothing to take off on
+// its own, so the Bare row is left out.
+export function gearOptions(game, plateKey) {
+    const worn = game.equipment[plateKey];
+    if (plateKey !== 'left') return equipOptions(plateKey, worn, game.inventory);
+    const opts = equipOptions('weapon', worn, game.inventory);
+    return worn && handsRule(game)(worn) >= 2 ? opts.filter(o => o.id !== '__bare__') : opts;
 }
 
 // Take a worn armor piece off and return it to the bag. Weapon and temp-equips
@@ -599,7 +687,7 @@ export function unequipItem(game, slot) {
     if ((game.tempEquips || []).some(te => te.slot === slot)) {
         return `[${item.name} will wear off on its own]`;
     }
-    if (!game._addToInventory(item)) return '[Your bag is full — no room to stow it]';
+    game._addToInventory(item);
     game.equipment[slot] = null;
     return `[Unequipped ${item.name}]`;
 }
@@ -629,7 +717,9 @@ export function tickTempEquips(game) {
 
 // Resolve a Use action. Returns a log message string.
 // stackCount: how many items are in the stack (for throw damage calc)
-export function resolveUse(game, itemDef, direction, stackCount = 1) {
+// hand: which hand a weapon equip fills, 'weapon' (right) by default or 'left'.
+// bagSlot: the (already emptied) bag slot an equip came from; the swapped-out piece takes it.
+export function resolveUse(game, itemDef, direction, stackCount = 1, hand = 'weapon', bagSlot = -1) {
     if (!itemDef) return null;
 
     switch (itemDef.useType) {
@@ -640,7 +730,7 @@ export function resolveUse(game, itemDef, direction, stackCount = 1) {
         case 'melee':
             return resolveMelee(game, itemDef, direction);
         case 'equip':
-            return resolveEquip(game, itemDef);
+            return resolveEquip(game, itemDef, hand, bagSlot);
         default:
             return itemDef.useHint || `[Used ${itemDef.name}]`;
     }
@@ -1018,5 +1108,31 @@ export function applyKitItem(def, drinker, sewerDweller) {
     }
     if (def.effect === 'heal') { gain(def.healAmount ?? 0); return def; }
     if (def.sewerFare && typeof def.damage === 'number') { gain(flip ? def.damage : -def.damage); return def; }
+
+    // (plans/ek1-hurt-enemy-uses-kit.md) A Defence Poition rides the buff list
+    // as a rider, exactly as it does for the player; Entity.takeDamage reads it.
+    if (kitDefenceValue(def) > 0) {
+        const b = poitionBuff(def.poition, false);
+        drinker.addBuff(b.id, 'Defence Poition', b.turns, 'buff', { stat: b.stat, amount: b.amount });
+        return def;
+    }
+    // An armour piece goes ON: its number is added to what the enemy has, and it
+    // joins `equipped`, so Thieve's Gear can take it and a kill does not drop it.
+    if (isWearable(def)) {
+        ent.armor = (ent.armor ?? 0) + def.armor;
+        drinker.equipped = [...(Array.isArray(drinker.equipped) ? drinker.equipped : []), def.id];
+        return def;
+    }
     return null;
+}
+
+// What a kit poition gives as DEFENCE, 0 for anything else (a poison, another stat).
+export function kitDefenceValue(def) {
+    if (!def || !def.poition || def.poition.stat !== 'defence') return 0;
+    return def.poition.amount > 0 ? def.poition.amount : 0;
+}
+
+// How heavy a kit armour piece is, by Thieve's own weight; 0 if it is not wearable.
+export function kitGearWeight(def) {
+    return isWearable(def) ? gearWeight(def) : 0;
 }

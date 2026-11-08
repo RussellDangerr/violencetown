@@ -6,13 +6,13 @@
       "seed": 1,
       "finished": true,
       "reason": null,
-      "fingerprint": "8ac62944",
-      "turn": 110,
+      "fingerprint": "f73cf4c4",
+      "turn": 106,
       "deaths": 2,
       "stages": [
         {
           "id": "examine_car",
-          "turns": 12,
+          "turns": 9,
           "hpLost": 0,
           "healed": 0,
           "eats": 0,
@@ -26,35 +26,35 @@
         },
         {
           "id": "recover_converter",
-          "turns": 55,
-          "hpLost": 121,
+          "turns": 74,
+          "hpLost": 288,
+          "healed": 0,
+          "eats": 0,
+          "drinks": 3,
+          "attacks": 1,
+          "casts": 29,
+          "mpSpent": 268,
+          "throws": 4,
+          "deaths": 2,
+          "gold": 6
+        },
+        {
+          "id": "escape_sewer",
+          "turns": 4,
+          "hpLost": 8,
           "healed": 0,
           "eats": 0,
           "drinks": 1,
           "attacks": 0,
-          "casts": 17,
-          "mpSpent": 168,
-          "throws": 1,
-          "deaths": 1,
-          "gold": 0
-        },
-        {
-          "id": "escape_sewer",
-          "turns": 36,
-          "hpLost": 79,
-          "healed": 0,
-          "eats": 0,
-          "drinks": 5,
-          "attacks": 1,
-          "casts": 11,
-          "mpSpent": 110,
-          "throws": 3,
-          "deaths": 1,
+          "casts": 2,
+          "mpSpent": 20,
+          "throws": 0,
+          "deaths": 0,
           "gold": 0
         },
         {
           "id": "return_to_car",
-          "turns": 7,
+          "turns": 19,
           "hpLost": 0,
           "healed": 0,
           "eats": 0,
@@ -66,20 +66,27 @@
           "deaths": 0,
           "gold": 0
         }
-      ]
+      ],
+      "sewerExit": {
+        "bag": [
+          "catalytic_converter",
+          "wererat_fur"
+        ],
+        "gold": 6
+      }
     },
     "sneak": {
       "script": "sneak",
       "seed": 1,
       "finished": true,
       "reason": null,
-      "fingerprint": "c1c5daeb",
-      "turn": 187,
-      "deaths": 5,
+      "fingerprint": "b275f651",
+      "turn": 175,
+      "deaths": 3,
       "stages": [
         {
           "id": "examine_car",
-          "turns": 12,
+          "turns": 9,
           "hpLost": 0,
           "healed": 0,
           "eats": 0,
@@ -93,35 +100,35 @@
         },
         {
           "id": "recover_converter",
-          "turns": 135,
-          "hpLost": 293,
+          "turns": 102,
+          "hpLost": 212,
           "healed": 0,
           "eats": 0,
-          "drinks": 3,
+          "drinks": 2,
           "attacks": 0,
-          "casts": 33,
-          "mpSpent": 290,
+          "casts": 22,
+          "mpSpent": 200,
           "throws": 0,
-          "deaths": 4,
-          "gold": 17
+          "deaths": 2,
+          "gold": 0
         },
         {
           "id": "escape_sewer",
-          "turns": 33,
-          "hpLost": 57,
+          "turns": 45,
+          "hpLost": 88,
           "healed": 0,
-          "eats": 1,
-          "drinks": 3,
-          "attacks": 3,
-          "casts": 8,
-          "mpSpent": 78,
-          "throws": 2,
+          "eats": 0,
+          "drinks": 2,
+          "attacks": 7,
+          "casts": 5,
+          "mpSpent": 48,
+          "throws": 4,
           "deaths": 1,
-          "gold": -1
+          "gold": 0
         },
         {
           "id": "return_to_car",
-          "turns": 7,
+          "turns": 19,
           "hpLost": 0,
           "healed": 0,
           "eats": 0,
@@ -133,7 +140,93 @@
           "deaths": 0,
           "gold": 0
         }
-      ]
+      ],
+      "sewerExit": {
+        "bag": [
+          "catalytic_converter",
+          "wererat_fur"
+        ],
+        "gold": 0
+      }
+    },
+    "loops": {
+      "script": "loops",
+      "seed": 2,
+      "finished": true,
+      "reason": null,
+      "fingerprint": "1796a092",
+      "turn": 85,
+      "deaths": 0,
+      "stages": [
+        {
+          "id": "to_carnival",
+          "turns": 14,
+          "deaths": 0,
+          "gold": 0
+        },
+        {
+          "id": "pick_up",
+          "turns": 12,
+          "deaths": 0,
+          "gold": 0
+        },
+        {
+          "id": "equip",
+          "turns": 1,
+          "deaths": 0,
+          "gold": 0
+        },
+        {
+          "id": "drop",
+          "turns": 0,
+          "deaths": 0,
+          "gold": 0
+        },
+        {
+          "id": "to_town",
+          "turns": 9,
+          "deaths": 0,
+          "gold": 0
+        },
+        {
+          "id": "to_factory",
+          "turns": 24,
+          "deaths": 0,
+          "gold": 0
+        },
+        {
+          "id": "fight_green",
+          "turns": 14,
+          "deaths": 0,
+          "gold": 8
+        },
+        {
+          "id": "to_puck",
+          "turns": 11,
+          "deaths": 0,
+          "gold": 0
+        },
+        {
+          "id": "sell_buy",
+          "turns": 0,
+          "deaths": 0,
+          "gold": -1
+        },
+        {
+          "id": "reload_continue",
+          "turns": 0,
+          "deaths": 0,
+          "gold": 0
+        }
+      ],
+      "end": {
+        "bag": [
+          "rock",
+          "soap"
+        ],
+        "weapon": "lion_whip",
+        "gold": 7
+      }
     }
   }
 }

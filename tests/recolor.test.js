@@ -10,7 +10,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
-import { SHEETS, TINY_INK, TINY_STYLE_SHEETS } from '../game/sprites.js';
+import { SHEETS, ENEMY_SPRITES, TINY_INK, TINY_STYLE_SHEETS } from '../game/sprites.js';
 
 const url = (p) => new URL(p, import.meta.url);
 const gen = readFileSync(url('../tools/gen_recolor.py'), 'utf8');
@@ -138,10 +138,13 @@ describe('the recolor tool: rat variants', () => {
         assert.ok(TINY_STYLE_SHEETS.has('ratVariants'));
     });
 
-    test('nothing in the game draws from it yet', () => {
+    test('only the rats draw from it', () => {
         const dir = url('../game/');
         const users = readdirSync(dir).filter((f) => f.endsWith('.js'))
             .filter((f) => /sheet:\s*'ratVariants'/.test(readFileSync(new URL(f, dir), 'utf8')));
-        assert.deepEqual(users, []);
+        assert.deepEqual(users, ['sprites.js']);
+        const drawn = Object.entries(ENEMY_SPRITES)
+            .filter(([, s]) => s.sheet === 'ratVariants').map(([type]) => type).sort();
+        assert.deepEqual(drawn, ['Birthday Rat', 'Robot Rat', 'Sludge Rat']);
     });
 });

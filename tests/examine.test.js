@@ -104,7 +104,7 @@ describe('doExamine — the E key', () => {
         const g = recorder();                       // faces down, onto (5,6): FLOOR
         doExamine(g);
         assert.deepEqual(g.logs, ['[Floor.]']);
-        assert.equal(g.panels.length, 1);
+        assert.equal(g.panels.length, 0);
         assert.deepEqual(g.events, [], 'only authored instances fire the quest event');
     });
 
