@@ -679,6 +679,9 @@ class Game {
 
     // ── Map Loading ──────────────────────────────────────────────────────────
 
+    // (BS2) Remember the gold each mugger still carries, so a re-spawn gives it back.
+    _recordMuggers() { this._tookGold = muggerRecords(this.enemies, this._tookGold); }
+
     async _loadMap(url, spawnX, spawnY) {
         this.map = await loadMap(url);
         this._mapUrl = url;
@@ -4467,7 +4470,7 @@ class Game {
             // new map is in place (the .then() restores IDLE). Prevents acting
             // against the old map mid-fetch.
             this.state = STATE.RESOLVING;
-            this._tookGold = muggerRecords(this.enemies, this._tookGold);   // (BS2) a mugger keeps what he took
+            this._recordMuggers?.();   // (BS2) a mugger keeps what he took
             this._zoneChange();   // (plans/ks1-respawn-list.md) the respawn lists take a step
             this._loadMap(t.toMap, t.toX, t.toY).then(() => {
                 this._log(`[Entered ${this.map.zoneName}]`);
