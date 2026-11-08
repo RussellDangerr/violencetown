@@ -12,8 +12,17 @@ import { transferGold } from '../game/trade.js';
 import { applyDispositionDelta } from '../game/give-action.js';
 import { ITEMS } from '../game/items.js';
 import { RINGS, FUSIONS } from '../game/ring-data.js';
-import { acquireRing, slotRing, slottedActives, resolveAdjacencies, aggregatePassives } from '../game/rings.js';
-import { DEVICE_TABS, cycleDeviceTab } from '../game/layout.js';
+import { acquireRing, slotRing, slottedActives, resolveAdjacencies, aggregatePassives, mergeKnown, findFusion } from '../game/rings.js';
+import { DEVICE_TABS, cycleDeviceTab, deviceRingsLayout, deviceBodyRect, ringPassiveRows } from '../game/layout.js';
+import { attack, formatDamageNumber, computeHit, elementalMult, weaponHitKind, isBackstab } from '../game/combat.js';
+import { emitNoise, NOISE } from '../game/perception.js';
+import { HEAVY_HIT_DAMAGE } from '../game/hit-splat.js';
+import { defaultVerb } from '../game/wheel-model.js';
+import { SPELLS } from '../game/spells.js';
+import { TRICKS } from '../game/tricks.js';
+import { sumBuffStat } from '../game/buffs.js';
+import { Enemy } from '../game/enemies.js';
+import { RNG } from '../game/rng.js';
 
 globalThis.localStorage ??= { getItem: () => null, setItem() {}, removeItem() {} };
 
@@ -38,6 +47,8 @@ const liveConst = (name) => {
 };
 const STATE = liveConst('STATE');
 const DIRS = liveConst('DIRS');
+const RING_IGNITE_DAMAGE = Number(/const RING_IGNITE_DAMAGE\s*=\s*(\d+);/.exec(mainSrc)[1]);
+const BASE_SPELLS = ['fireball', 'coneOfCold'];
 const DIALOGUE_HOSTILE_AT = Number(/const DIALOGUE_HOSTILE_AT = (-?\d+);/.exec(mainSrc)[1]);
 
 class Key extends Event {
@@ -60,32 +71,34 @@ function makeGame({ fireBlood = [] } = {}) {
         inventory: fireBlood.map(count => ({ itemDef: ITEMS.fire_blood, count })),
         enemies: [platero], containers: [], examinables: [], gold: 0, logs: [],
         ownedRings: new Set(), ringSlots: {}, ringTier: 1, discoveredFusions: new Set(),
-        equipment: {}, ringMods: {},
+        equipment: {}, ringMods: {}, knownSpells: [...BASE_SPELLS], grantedTricks: [],
+        map: { getTile: () => 0 }, buffs: [], turn: 0, rng: new RNG(1), splats: [],
         _heldDirKeys: [], _physicalHeld: new Set(), _queuedMoveDir: null,
         _animating: false, _paused: false, _deviceTab: 'items', _deviceSel: null, _journalScroll: 0,
         renderer: {}, platero,
         _log(m) { this.logs.push(m); },
+        _earshot() { return []; }, _spawnHitSplat(x, y, text, type) { this.splats.push({ text, type }); },
+        _ensureParticleLoop() {}, _triggerScreenShake() {}, _spreadFireBlood() {},
+        _handleEnemyDeath(e) { this.deaths = (this.deaths || 0) + 1; },
         _render() {}, _resumeHeldWalk() {}, _stopAutoRepeat() {}, _onEntityHarmed() {}, _wheelOpenerUp() {},
         hasBuff() { return false; }, emitGameEvent() {},
-        _refreshGrantedSkills() {
-            const getRing = id => RINGS[id] || null;
-            const adj = resolveAdjacencies(this.ringTier, this.ringSlots, getRing, FUSIONS);
-            for (const f of adj.fusions) this.discoveredFusions.add(f.fusion.id);
-            this.actives = [...slottedActives(this.ringSlots, getRing), ...adj.grantedActives];
-            this.ringMods = aggregatePassives(this.ringSlots, getRing);
-        },
     };
     const free = {
         STATE, DIRS, audio, document, window, DEVICE_TABS, cycleDeviceTab,
         getDialogue, transferGold, applyDispositionDelta, DIALOGUE_HOSTILE_AT,
         performance: { now: () => 0 }, setTimeout: () => 0,
-        RINGS, acquireRing, slotRing,
+        RINGS, acquireRing, slotRing, FUSIONS, SPELLS, TRICKS, mergeKnown, BASE_SPELLS, slottedActives,
+        resolveAdjacencies, aggregatePassives, defaultVerb, sumBuffStat, RING_IGNITE_DAMAGE,
+        attack, formatDamageNumber, computeHit, elementalMult, weaponHitKind, isBackstab,
+        emitNoise, NOISE, HEAVY_HIT_DAMAGE,
     };
     for (const [n, p] of [
         ['_bindInput', ''], ['_noteHeld', 'code'], ['_digitToSlot', 'code'], ['_openDevice', "tab = 'items'"],
         ['_closeDevice', ''], ['_deviceKey', 'code'], ['_deviceCycleTab', 'dir'], ['_openWorldMap', ''],
         ['_scrollJournal', 'delta'], ['_openDialogue', 'npc'], ['_closeDialogue', ''], ['_dialogueChoices', ''],
         ['_pickDialogueChoice', 'choice'], ['_removeFromSlot', 'slot'],
+        ['_refreshGrantedSkills', ''], ['_targetAt', 'x, y'], ['_actOnTarget', 'verb, t'], ['_fireResolver', 'verb, t'],
+        ['combatAttack', 'enemyObj, damage, opts = {}'], ['_applyTrigger', 'trigger, enemyObj'], ['_poitionMod', 'stat'],
         ['_fashionRing', 'materialId, ringId, count = 1, price = 0'], ['_acquireRing', 'ringId'],
     ]) g[n] = liveMethod(n, p, free);
     g._bindInput();
@@ -98,8 +111,10 @@ function makeGame({ fireBlood = [] } = {}) {
 }
 
 async function pickRow(g, id) {
-    g._openDialogue(g.platero);
-    assert.equal(g.state, STATE.DIALOGUE);
+    // Face Platero (he stands one tile up) and press the talk key, as a player does.
+    g.facing = 'up';
+    await g.press('KeyE');
+    assert.equal(g.state, STATE.DIALOGUE, 'E on a faced Platero opens his talk');
     const row = g._dialogueChoices().findIndex(c => c.id === id);
     assert.ok(row >= 0, `Platero offers ${id}`);
     for (let i = 0; i < row; i++) await g.press('ArrowDown');
@@ -143,15 +158,66 @@ describe('Platero sets a Fire Ring', () => {
         assert.equal(g.gold, 4);
     });
 
-    test('Fire Ring beside the Rat Ring shows the Ember Rat fusion; its fire bonus and ignite are in the data', async () => {
+    test('Fire Ring beside the Rat Ring: the real refresh grants the Ember Rat and the link is fusible', async () => {
         const g = makeGame({ fireBlood: [3] });
         g._acquireRing('rat_ring');
         await pickRow(g, 'fashion_fire');
         g.ringSlots = { 'left:ring': 'rat_ring', 'left:middle': 'fire_ring' };
         g._refreshGrantedSkills();
         assert.ok(g.discoveredFusions.has('ember_rat'));
-        assert.ok(g.actives.includes('ember_rat'));
+        assert.ok(g.grantedTricks.includes('ember_rat'), 'the Ember Rat trick is granted');
+        // The spark on the Hands tab is drawn when this holds for two linked rings (renderer.js ~2857).
+        assert.ok(findFusion(RINGS.rat_ring, RINGS.fire_ring, FUSIONS), 'the pair is a fusion, so the spark draws');
         assert.equal(g.ringMods.fireDamage, 10);
-        assert.equal(RINGS.fire_ring.trigger.effect, 'ignite');
+    });
+});
+
+describe('the Fire Ring in a fight (the real combatAttack and _applyTrigger)', () => {
+    const foe = () => new Enemy({ id: 'dummy', type: 'dummy', x: 7, y: 8 });
+    const wear = (g) => { g.ringSlots = { 'left:ring': 'fire_ring' }; g._refreshGrantedSkills(); };
+    const hit = (g, e, dmg, opts) => { const before = e.entity.hp; g.combatAttack(e, dmg, opts); return before - e.entity.hp; };
+
+    test('worn, the ring adds its percent to a fire hit and not to a plain one', () => {
+        const bare = makeGame(); bare.rng = { float: () => 0.99 };   // no proc: damage alone
+        const worn = makeGame(); worn.rng = { float: () => 0.99 }; wear(worn);
+        const fireBare = hit(bare, foe(), 20, { type: 'fire' });
+        const fireWorn = hit(worn, foe(), 20, { type: 'fire' });
+        assert.equal(fireWorn, computeHit({ base: 20 * 1.1, elemental: 1 }));
+        assert.ok(fireWorn > fireBare, `fire hit ${fireBare} -> ${fireWorn}`);
+        const plainBare = hit(bare, foe(), 20, {});
+        const plainWorn = hit(worn, foe(), 20, {});
+        assert.equal(plainWorn, plainBare, 'a plain hit is not boosted');
+    });
+
+    test('on a hit the ring ignites the target for the cinder damage when its chance rolls; not when it does not', () => {
+        const g = makeGame(); wear(g);
+        const miss = foe(); g.rng = { float: () => 0.99 };
+        const base = hit(g, miss, 20, {});
+        assert.ok(!g.logs.some(l => l.includes('Cinders catch')), 'no proc, no cinders');
+        const burn = foe(); g.rng = { float: () => 0 };
+        const total = hit(g, burn, 20, {});
+        assert.equal(total, base + RING_IGNITE_DAMAGE, 'the cinder damage lands on top of the hit');
+        assert.ok(g.logs.some(l => l.includes('Cinders catch')));
+        assert.ok(g.splats.some(s => s.type === 'fire'));
+    });
+
+    test('a fire-immune target takes no cinders (the 0-contract)', () => {
+        const g = makeGame(); wear(g); g.rng = { float: () => 0 };
+        const e = new Enemy({ id: 'imp', type: 'imp', x: 7, y: 8, immune: ['fire'] });
+        g.combatAttack(e, 20, {});
+        assert.ok(!g.logs.some(l => l.includes('Cinders catch')));
+    });
+});
+
+describe('the Hands tab shows the Fire Ring', () => {
+    test('opened with real keys, a worn Fire Ring has its passive row', async () => {
+        const g = makeGame();
+        g._acquireRing('fire_ring');
+        await g.press('Tab');
+        await g.press('KeyR');
+        assert.equal(g._deviceTab, 'rings');
+        const worn = deviceRingsLayout(deviceBodyRect(), g).sockets.filter(s => s.ringId === 'fire_ring');
+        assert.equal(worn.length, 1, 'the ring sits in a socket on the Hands tab');
+        assert.deepEqual(ringPassiveRows(RINGS[worn[0].ringId]).map(r => [r.key, r.value]), [['fireDamage', 10]]);
     });
 });
