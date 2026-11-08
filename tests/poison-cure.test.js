@@ -7,7 +7,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { ITEMS, resolveUse, resolveThrow, unequipItem } from '../game/items.js';
 import { buffBarChips } from '../game/renderer.js';
@@ -21,8 +20,6 @@ import {
     deviceEquipLayout, deviceRingsLayout, inspectorActionRects, gearOptionRects, nearestRectInDir,
 } from '../game/layout.js';
 
-const BASE = '69c3614';   // dev as this branch was cut: items.js as it was before the cure
-const REPO = fileURLToPath(new URL('..', import.meta.url));
 const mainSrc = readFileSync(fileURLToPath(new URL('../game/main.js', import.meta.url)), 'utf8');
 
 function liveMethod(name, params, freeVars) {
@@ -93,18 +90,16 @@ assert.ok(soapAt > 0, 'the end-of-turn soap check is not found in main.js');
 const soapEnd = mainSrc.indexOf('this._soapUsedThisTurn = false;', soapAt) + 'this._soapUsedThisTurn = false;'.length;
 const endOfTurn = new Function(`'use strict'; return function () {${mainSrc.slice(soapAt, soapEnd)}}`)();
 
-// Live methods and the keydown listener, bound to one items.js (the branch's, or the one before it).
-const withItems = (items) => ({ ...FREE, resolveUse: items.resolveUse, resolveThrow: items.resolveThrow, unequipItem: items.unequipItem });
-const bind = (items) => ({
-    live: LIVE_NAMES.map(([n, p]) => [n, liveMethod(n, p, withItems(items))]),
-    keydown: liveKeydown(withItems(items)),
-});
-const NOW = bind({ resolveUse, resolveThrow, unequipItem });
+// Live methods and the keydown listener, bound to the branch's items.js.
+const bound = {
+    live: LIVE_NAMES.map(([n, p]) => [n, liveMethod(n, p, FREE)]),
+    keydown: liveKeydown(FREE),
+};
 
 const cfg = { size: INVENTORY_SIZE, safeSlots: SAFE_SLOTS, maxStack: MAX_STACK };
 
 // A game on an open floor at (5,5), world running; the player pulls the device out with Tab.
-function makeGame(setup = () => {}, bound = NOW) {
+function makeGame(setup = () => {}) {
     const g = {
         state: STATE.IDLE, _soapUsedThisTurn: false, _deviceTab: 'items', _deviceSel: null, _journalScroll: 0, selectedSlot: -1,
         inventory: new Array(INVENTORY_SIZE).fill(null),
@@ -193,29 +188,32 @@ describe('ps2 — Soap cures poison', () => {
         assert.ok(chipIds(g).includes('poison'));
     });
 
-    // "Does what it does today": the same keys against items.js as it was before this change.
-    describe('not poisoned: identical to items.js before the change', () => {
-        const before = execFileSync('git', ['show', `${BASE}:game/items.js`], { encoding: 'utf8', cwd: REPO })
-            .replace(/from '\.\/([^']+)'/g, (_, f) => `from '${new URL(`../game/${f}`, import.meta.url).href}'`);
-        const OLD = import('data:text/javascript;base64,' + Buffer.from(before).toString('base64'));
-        const run = (bound, setup) => {
-            const g = makeGame(h => { put(h, 12, 'soap'); setup(h); }, bound);
+    // "Does what it does today": results recorded once by running these same keys against
+    // items.js as it was before this change (dev 69c3614), kept here as literal values.
+    describe('not poisoned: exactly what Soap did before the change', () => {
+        const EQUIP_BEFORE = { weapon: 'wooden_sword', left: null, top: null, bottom: null, front: null, back: 'soap', sides: null };
+        const RECORDED = {
+            clean: {
+                logs: ['[[Soap] equipped to back for 3 turns] [Already clean]'],
+                beats: 1, slot: null, buffs: [], hp: 5, equip: EQUIP_BEFORE,
+            },
+            sludged: {
+                logs: ['[[Soap] equipped to back for 3 turns] [Soap applied \u2014 sludge will be neutralized]', '[Soap neutralized sludge]'],
+                beats: 1, slot: null, buffs: [], hp: 5, equip: EQUIP_BEFORE,
+            },
+        };
+        const run = (setup) => {
+            const g = makeGame(h => { put(h, 12, 'soap'); setup(h); });
             useFromBag(g, 12);
-            return { logs: g.logs, beats: g.beats, slot: g.inventory[12], buffs: g.buffs.map(b => b.id), hp: g.playerHp, equip: JSON.stringify(g.equipment) };
+            const equip = Object.fromEntries(Object.entries(g.equipment).map(([k, v]) => [k, v ? v.id : null]));
+            return { logs: g.logs, beats: g.beats, slot: g.inventory[12], buffs: g.buffs.map(b => b.id), hp: g.playerHp, equip };
         };
         for (const [name, setup] of [['clean', () => {}], ['sludged', sludge]]) {
-            test(name, async () => {
-                const oldItems = await OLD;
-                assert.equal(typeof oldItems.resolveUse, 'function');
-                const a = run(NOW, setup), b = run(bind(oldItems), setup);
-                assert.ok(a.logs.length > 0, 'something was logged');
-                assert.deepEqual(a, b);
+            test(name, () => {
+                const a = run(setup);
+                assert.deepEqual(a, RECORDED[name]);
                 assert.ok(!a.logs.some(l => /poison cured/.test(l)));
             });
         }
-        test('the clean path reads Already clean', () => {
-            const a = run(NOW, () => {});
-            assert.ok(a.logs.some(l => /already clean/i.test(l)), a.logs.join(' | '));
-        });
     });
 });
