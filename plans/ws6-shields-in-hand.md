@@ -47,12 +47,16 @@ shields make a slow, hard-to-hurt build.
   number the game already has. The block comes back after 1 turn. A shield
   def may carry its own `armor`, which is used instead.
 
-## Waiting on a ruling
+## The main.js wiring (WS6R1 picked a: done)
 
-- Wiring the rule into the hits the player takes and the player's armour
-  total. Both live in `game/main.js` (`applyDamageToPlayer`, `_playerArmor`),
-  which is outside this slice's files. Until it is wired, acceptance 1 and 2
-  hold for the rule, not yet in play.
+- The ruling let this slice touch `game/main.js` for a few lines. A held
+  shield's armour now joins `_playerArmor`, and `applyDamageToPlayer` takes
+  the first ready shield's cut as part of the hit's one calculation, so a
+  held shield works in a fight.
+- A hit that would deal nothing leaves the block unspent.
+- A new game or restart clears every shield block; a block left over from a
+  longer game (a load turns the clock back) is treated as ready.
+- The cut can never turn a hit into 0: any hit above 0 rounds to at least 1.
 
 ## Out of scope
 

@@ -116,7 +116,10 @@ function shieldArmor(eq) {
 //   -> { mult, hand }   hand is null when nothing blocked
 function raiseShield(eq, blocks, turn) {
     for (const hand of shieldHands(eq)) {
-        if ((blocks[hand] ?? -Infinity) <= turn) {
+        // A block further off than one cooldown is left over from another game
+        // (the turn counter went back, e.g. a load): treat it as ready.
+        const readyAt = blocks[hand] ?? -Infinity;
+        if (readyAt <= turn || readyAt > turn + SHIELD_DEFAULTS.blockCooldown) {
             blocks[hand] = turn + SHIELD_DEFAULTS.blockCooldown;
             return { mult: SHIELD_DEFAULTS.blockMult, hand };
         }

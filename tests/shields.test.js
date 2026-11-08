@@ -3,6 +3,8 @@
 // two shields stack.
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 import {
     computeHit, weaponHitKind, isShield, shieldHands, shieldArmor, raiseShield, SHIELD_DEFAULTS,
@@ -157,5 +159,113 @@ describe('two shields', () => {
         assert.deepEqual(out, [SHIELD, SHIELD_B]);
         assert.equal(shieldArmor(eq), 0);
         assert.deepEqual(raiseShield(eq, {}, 0), { mult: 1, hand: null });
+    });
+});
+
+// ── The real damage path ─────────────────────────────────────────────────────
+// main.js touches `document` at import, so the real methods are lifted out of
+// the source and bound onto a small game object (as cascade.test.js does).
+globalThis.localStorage ??= { getItem: () => null, setItem() {}, removeItem() {} };
+const mainSrc = readFileSync(fileURLToPath(new URL('../game/main.js', import.meta.url)), 'utf8');
+function liveMethod(signature, freeVars) {
+    const at = mainSrc.indexOf(signature, mainSrc.indexOf('class Game {'));
+    assert.ok(at > 0, `${signature} not found in main.js`);
+    const body = mainSrc.slice(at + signature.indexOf('('), mainSrc.indexOf('\n    }', at) + '\n    }'.length);
+    const names = Object.keys(freeVars);
+    return new Function(...names, `'use strict'; return function ${body}`)(...names.map(n => freeVars[n]));
+}
+const live = {
+    applyDamageToPlayer: liveMethod('    applyDamageToPlayer(', { computeHit, audio: { playSfx() {} } }),
+    _playerArmor: liveMethod('    _playerArmor(', {}),
+};
+
+function liveGame(eq, { hp = 1000, turn = 0, guard = false } = {}) {
+    const g = {
+        equipment: eq, turn, playerHp: hp, playerX: 5, playerY: 5, ringMods: {},
+        rng: { pick: (a) => a[0], float: () => 0.5 },
+        hasBuff: (b) => guard && b === 'guard',
+        _poitionMod: () => 0, _spreadFireBlood() {}, _spawnHitSplat() {},
+        _ensureParticleLoop() {}, _triggerScreenShake() {}, _spawnEventWord() {},
+        _log() {},
+        _shieldArmor() { return shieldArmor(this.equipment || {}); },
+        _shieldCut() { return raiseShield(this.equipment || {}, this._shieldBlocks ??= {}, this.turn ?? 0).mult; },
+    };
+    for (const [k, f] of Object.entries(live)) g[k] = f.bind(g);
+    g.take = (raw) => { const before = g.playerHp; g.applyDamageToPlayer(raw); return before - g.playerHp; };
+    return g;
+}
+
+describe('a held shield through the real damage path', () => {
+    const A = SHIELD_DEFAULTS.armor;
+    const cut20 = computeHit({ base: 20, incomingMult: SHIELD_DEFAULTS.blockMult });
+
+    test('the two shield helpers in main.js are the ones the rule tests cover', () => {
+        assert.ok(mainSrc.includes('_shieldArmor() { return shieldArmor(this.equipment || {}); }'));
+        assert.ok(mainSrc.includes('_shieldCut() { return raiseShield(this.equipment || {}, this._shieldBlocks ??= {}, this.turn ?? 0).mult; }'));
+    });
+
+    test('armour: the real _playerArmor adds each held shield', () => {
+        assert.equal(liveGame(hands(SWORD, null))._playerArmor(), 0);
+        assert.equal(liveGame(hands(SWORD, SHIELD))._playerArmor(), A);
+        assert.equal(liveGame(hands(SHIELD, SHIELD_B))._playerArmor(), 2 * A);
+    });
+
+    test('one shield: the first hit of a turn is cut, the second only soaked', () => {
+        const g = liveGame(hands(SWORD, SHIELD));
+        assert.equal(g.take(20), cut20 - A);
+        assert.equal(g.take(20), 20 - A);
+    });
+
+    test('one shield: ready again next turn', () => {
+        const g = liveGame(hands(SWORD, SHIELD));
+        g.take(20);
+        g.turn += SHIELD_DEFAULTS.blockCooldown;
+        assert.equal(g.take(20), cut20 - A);
+    });
+
+    test('no shield: nothing changes', () => {
+        const g = liveGame(hands(SWORD, null));
+        assert.equal(g.take(20), 20);
+        assert.equal(g.take(20), 20);
+    });
+
+    test('two shields cut two separate hits, the third is only soaked', () => {
+        const g = liveGame(hands(SHIELD, SHIELD_B));
+        assert.equal(g.take(20), cut20 - 2 * A);
+        assert.equal(g.take(20), cut20 - 2 * A);
+        assert.equal(g.take(20), 20 - 2 * A);
+        g.turn += SHIELD_DEFAULTS.blockCooldown;
+        assert.equal(g.take(20), cut20 - 2 * A);
+    });
+
+    test('a hit that deals nothing leaves the block unspent', () => {
+        const g = liveGame(hands(SWORD, SHIELD));
+        assert.equal(g.take(0), 0);
+        assert.equal(g.take(-3), 0);
+        assert.deepEqual(g._shieldBlocks ?? {}, {});
+        assert.equal(g.take(20), cut20 - A);
+    });
+
+    test('the cut never turns a landing hit into nothing', () => {
+        assert.equal(liveGame(hands(SWORD, SHIELD)).take(1), 1);
+    });
+
+    test('guard and a shield fold into one rounding', () => {
+        const g = liveGame(hands(SWORD, SHIELD), { guard: true });
+        const once = computeHit({ base: 20, incomingMult: 0.5 * SHIELD_DEFAULTS.blockMult });
+        assert.equal(g.take(20), Math.max(1, once - A));
+    });
+
+    test('a new game clears the blocks', () => {
+        const src = mainSrc.slice(mainSrc.indexOf('async _fullReset('));
+        const reset = src.slice(0, src.indexOf('\n    }'));
+        assert.match(reset, /this\.turn = 0;\s*\n\s*this\._shieldBlocks = \{\}/);
+    });
+
+    test('a block left from a longer game is ready once the turn counter is back', () => {
+        const g = liveGame(hands(SWORD, SHIELD), { turn: 500 });
+        g.take(20);
+        g.turn = 3;   // loaded an earlier save
+        assert.equal(g.take(20), cut20 - A);
     });
 });

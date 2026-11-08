@@ -5791,11 +5791,11 @@ class Game {
         // Guard (incoming, defender) folds into one computeHit call — round once,
         // no double-rounding.
         // A held shield cuts the first hit it meets each turn (ws6): its cut folds in here.
+        // A hit that deals nothing leaves the block unspent.
+        const guardMult = this.hasBuff('guard') ? 0.5 : 1;
+        if (computeHit({ base: rawDamage, incomingMult: guardMult }) === 0) return 0;
         const shieldCut = this._shieldCut?.() ?? 1;
-        let dmg = computeHit({
-            base: rawDamage,
-            incomingMult: (this.hasBuff('guard') ? 0.5 : 1) * shieldCut,
-        });
+        let dmg = computeHit({ base: rawDamage, incomingMult: guardMult * shieldCut });
         if (dmg === 0) return 0;   // 0-contract: hit doesn't happen, never floor back via armor
         if (attacker) this._spreadFireBlood(attacker, this);   // (poisons) a fire-blooded foe sets you burning
         dmg = Math.max(1, dmg - this._playerArmor());   // worn armor soaks the hit (min 1 always lands)
@@ -6127,6 +6127,7 @@ class Game {
         this.questEngine = new QuestEngine(this);
         this._lastAutosaveTurn = -999;
         this.turn = 0;
+        this._shieldBlocks = {};   // a new game starts with every shield block ready
         this._dayClock = 0;
         this._nightLevel = 0;
         this._dispositionDecayTurns = 0;
