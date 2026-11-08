@@ -27,7 +27,7 @@ import { addToInventory as addToInv, moveToZone, zoneOf, pageCount, slotOnPage, 
 import { itemActions, equipOptions, inspectorUsesRect } from './inspector.js';   // (C1) tap-to-inspect: context actions; (C2) GEAR chooser options
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
-import { attack, formatDamageNumber, computeHit, elementalMult, weaponHitKind, isBackstab } from './combat.js';
+import { attack, formatDamageNumber, computeHit, elementalMult, weaponHitKind, isBackstab, shieldArmor, raiseShield } from './combat.js';
 import { Enemy, spawnEnemy, resolveEnemyTurns, resolveAmbientTurns, unnestBrackets } from './enemies.js';
 import { canBeRival, itemIdsOf, recordDefeat, kitFor, markCarrying, settleItems, clearRival } from './rivals.js'; // the enemy that beat you is remembered (pure, node-tested)
 import { isHostile, isHunting, isSewerDweller, allyAids } from './ai.js';
@@ -5380,6 +5380,11 @@ class Game {
         this._log(`[${target.shownThe || `The ${target.shownName || target.type || target.entity.name}`} turns on you!]`, 'combat');
     }
 
+    // (ws6) Held shields: the armour they add, and the cut the first ready one
+    // makes to the hit now landing (it then waits out its cooldown, per hand).
+    _shieldArmor() { return shieldArmor(this.equipment || {}); }
+    _shieldCut() { return raiseShield(this.equipment || {}, this._shieldBlocks ??= {}, this.turn ?? 0).mult; }
+
     // Total damage-reduction from worn armor: every equipped body-zone piece's
     // `armor` sums into one number. It stays one flat total (ruled 2026-10-23):
     // there is no per-zone hit location, only Law 2's back tile.
@@ -5396,6 +5401,7 @@ class Game {
         // (Poition) An active Defence Poition rides alongside worn armor +
         // rings the same way — a rider read, not a tick (see _poitionMod).
         total += this._poitionMod('defence');
+        total += this._shieldArmor?.() ?? 0;   // a shield held in a hand adds its armour
         return total;
     }
 
@@ -5784,10 +5790,12 @@ class Game {
         if (attacker) this._lastDefeatedBy = attacker;
         // Guard (incoming, defender) folds into one computeHit call — round once,
         // no double-rounding.
-        let dmg = computeHit({
-            base: rawDamage,
-            incomingMult: this.hasBuff('guard') ? 0.5 : 1,
-        });
+        // A held shield cuts the first hit it meets each turn (ws6): its cut folds in here.
+        // A hit that deals nothing leaves the block unspent.
+        const guardMult = this.hasBuff('guard') ? 0.5 : 1;
+        if (computeHit({ base: rawDamage, incomingMult: guardMult }) === 0) return 0;
+        const shieldCut = this._shieldCut?.() ?? 1;
+        let dmg = computeHit({ base: rawDamage, incomingMult: guardMult * shieldCut });
         if (dmg === 0) return 0;   // 0-contract: hit doesn't happen, never floor back via armor
         if (attacker) this._spreadFireBlood(attacker, this);   // (poisons) a fire-blooded foe sets you burning
         dmg = Math.max(1, dmg - this._playerArmor());   // worn armor soaks the hit (min 1 always lands)
@@ -6119,6 +6127,7 @@ class Game {
         this.questEngine = new QuestEngine(this);
         this._lastAutosaveTurn = -999;
         this.turn = 0;
+        this._shieldBlocks = {};   // a new game starts with every shield block ready
         this._dayClock = 0;
         this._nightLevel = 0;
         this._dispositionDecayTurns = 0;
