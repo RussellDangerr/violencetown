@@ -96,7 +96,6 @@ const SPLAT_COLOR = {
     cold:     '#5ec3e8',
     energy:   '#f5d02a',
     heal:     '#3fb56a',
-    dodge:    '#9aa3ad',   // (RR1) a dodge
 };
 
 // Digits are white on every splat but the ones too light to carry white: on
