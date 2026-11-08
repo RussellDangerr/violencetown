@@ -331,6 +331,17 @@ export function feedRows(messages, budget, maxPx, measure) {
 // `maxPx`, with no cut mark (a trailing space is dropped). BUFF_CHIP is the
 // chip's size and the inset its name is drawn at, on both sides.
 export const BUFF_CHIP = Object.freeze({ w: 52, h: 26, gap: 3, padX: 3 });
+// (FX49) The chips the buff bar shows: the buffs, then one for the free
+// actions a Speed Poition left (game._hasteCharges), gone at 0. Haste is not a
+// buff (it is a count the world-beat spends), so it is added here. The label is
+// a placeholder; the number below it is the count of free actions left.
+export const HASTE_CHIP_LABEL = '[TEXT]';
+export function buffBarChips(game) {
+    const chips = [...(game.buffs || [])];
+    const haste = game._hasteCharges || 0;
+    if (haste > 0) chips.push({ id: 'haste', name: HASTE_CHIP_LABEL, turns: haste, type: 'buff' });
+    return chips;
+}
 export function buffChipLabel(name, maxPx, measure) {
     const s = String(name).toUpperCase();
     let n = s.length;
@@ -2619,10 +2630,11 @@ export class Renderer {
     // ── Buff Bar (top-right) ─────────────────────────────────────────────────
 
     _drawBuffBar(game) {
-        if (game.buffs.length === 0) return;
+        const chips = buffBarChips(game);
+        if (chips.length === 0) return;
         const { ctx } = this;
         const { w: bw, h: bh, gap, padX } = BUFF_CHIP;
-        const total = game.buffs.length;
+        const total = chips.length;
         const totalW = total * (bw + gap) - gap + 12;
         const hud = this._hud();
         const px = hud.buffsRight - totalW, py = hud.buffsTop;
@@ -2630,7 +2642,7 @@ export class Renderer {
         drawPanelSmall(ctx, px, py, totalW, bh + 12, this.uiSheet);
 
         for (let i = 0; i < total; i++) {
-            const buff = game.buffs[i];
+            const buff = chips[i];
             const bx = px + 6 + i * (bw + gap), by = py + 6;
 
             // Inset background
