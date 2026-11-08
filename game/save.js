@@ -129,7 +129,8 @@ export function serialize(game) {
             // re-hydrate from map JSON every _loadMap.
             robbed: game._robbed ?? {},
             // (BS2) enemyId -> gold a mugger took off you and still carries.
-            tookGold: muggerRecords(game.enemies, game._tookGold),
+            // Left out while empty, so a save nobody was mugged in is unchanged.
+            ...tookGoldEntry(game),
             // (fence) itemId -> count the street has heard about.
             hot: game._hot ?? {},
             containers: (game.containers || []).map(c => ({
@@ -151,6 +152,11 @@ function skillsEntry(game) {
 }
 
 // (plans/ch1-chests-stay-empty.md) The chest record as a save field, or nothing while it is empty.
+function tookGoldEntry(game) {
+    const rec = muggerRecords(game.enemies, game._tookGold);
+    return Object.keys(rec).length ? { tookGold: rec } : {};
+}
+
 function chestEntry(game) {
     const chestRecords = sanitizeChestRecords(game._chestRecords);
     return Object.keys(chestRecords).length ? { chestRecords } : {};
