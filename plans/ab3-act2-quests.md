@@ -12,7 +12,7 @@ Skipping the quest (beating the boss, never finishing) leaves the bag without th
 
 Verbs, as ruled by SP1R1:
 
-- **Factory: given.** The flux capacitor is handed to you by a Factory NPC after the Alien falls.
+- **Factory: given.** The flux capacitor is the Factory's to give. This build has no Factory NPC to hand it over: after the Alien falls, you use a claim spot standing in the Factory, the same as in the other two zones.
 - **Graveyard: taken.** After the Deity falls you take the soul crystal yourself.
 - **Carnival: earned.** After Bigfoot falls you collect the stuffed animal as the prize.
 
@@ -33,7 +33,7 @@ Every quest title, objective, claim-spot line and hand-over line is `[TEXT]`.
 - `game/main.js`: in the required-drop block, a boss whose slot is `viaQuest` tells the quest it
   fell and skips its floor drop. A few lines.
 - The three Act 2 maps: one claim spot each, a prop with an examinable on it near the boss
-  (`act2-<zone>-<verb>`, text `[TEXT]`). `game/dialogue.js` stays untouched: a claim spot, not an NPC,
+  (id `[TEXT]_claim_<zone>`, text `[TEXT]`; the examine panel titles an examinable by its id, so the id is itself the placeholder name and no raw id shows). `game/dialogue.js` stays untouched: a claim spot, not an NPC,
   keeps the enemy counts and the balance golden where they are.
 - `plans/spine.md`: drop "interim" from the three Act 2 rows, nothing else.
 
@@ -56,6 +56,6 @@ drop when its zone's quest gives the item; main.js's drop block and two tests ch
 
 - Real names, copy, art, tuning. Naming the items.
 - The other ways to finish each quest (SQ1R1): one way each here.
-- The verbs as different mechanics: today the verbs differ in who hands the item over and in the
-  placeholder labels only.
+- The verbs as different mechanics: today every zone uses a claim spot and the verbs differ in the
+  placeholder labels only. A Factory NPC who hands the item over is left for later.
 - The frozen area's slot, the finale, the Financier, quest 1.

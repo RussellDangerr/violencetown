@@ -58,7 +58,7 @@
         {"type": "shelfB", "x": 7, "y": 24}
     ],
     "examinables": [
-        {"id": "act2-factory-given", "x": 7, "y": 22, "text": "[TEXT]"},
+        {"id": "[TEXT]_claim_factory", "x": 7, "y": 22, "text": "[TEXT]"},
         {"id": "alien-arena-console", "x": 4, "y": 19, "text": "[TEXT]"},
         {"id": "alien-arena-shelf-n", "x": 7, "y": 21, "text": "[TEXT]"},
         {"id": "alien-arena-shelf-s", "x": 7, "y": 24, "text": "[TEXT]"}

@@ -62,7 +62,7 @@
         {"type": "shelfA", "x": 46, "y": 12}
     ],
     "examinables": [
-        {"id": "act2-carnival-earned", "x": 46, "y": 12, "text": "[TEXT]"},
+        {"id": "[TEXT]_claim_carnival", "x": 46, "y": 12, "text": "[TEXT]"},
         {"id": "booth", "x": 28, "y": 12, "text": "[A shuttered game booth — RING THE BOTTLE, WIN A PRIZE. The bottles are glued down. The tents stretch east as far as you can see.]"}
     ],
     "transitions": [

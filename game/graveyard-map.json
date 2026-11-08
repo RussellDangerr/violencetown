@@ -150,7 +150,7 @@
         {"id": "ankou-1", "entry": "ankou", "x": 8, "y": 22}
     ],
     "examinables": [
-        {"id": "act2-graveyard-taken", "x": 22, "y": 20, "text": "[TEXT]"}
+        {"id": "[TEXT]_claim_graveyard", "x": 22, "y": 20, "text": "[TEXT]"}
     ],
     "items": [
         {"type": "soap", "x": 6, "y": 8},

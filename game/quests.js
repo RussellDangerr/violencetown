@@ -215,7 +215,7 @@ for (const zone of ACT2_ZONES) {
     ACT2_QUESTS[zone] = {
         zone, slot, map: SLOTS[slot].map, verb: ACT2_VERBS[zone],
         // The examinable on the zone's map whose use is the quest's last step ([E] on it).
-        claimId: `act2-${zone.toLowerCase()}-${ACT2_VERBS[zone]}`,
+        claimId: `[TEXT]_claim_${zone.toLowerCase()}`,
         title: '[TEXT]',
         steps: { boss: { objective: '[TEXT]' }, collect: { objective: '[TEXT]' } },
     };
