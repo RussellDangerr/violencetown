@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { GameMap } from '../game/map.js';
 import { WEAPONS } from '../game/weapons.js';
+import { SLOTS, ENTRIES } from '../game/slots.js';
 
 const GAME_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'game');
 
@@ -60,6 +61,9 @@ describe('grapple anchors', () => {
         const canyon = maps.find(m => m.file === 'canyon-map.json').data;
         assert.ok((canyon.anchors || []).some(a => a.requires === 'grappling_hook' && a.toMap === 'downtown-map.json'),
             'no hook-gated anchor out of the canyon');
+        // GV1R1 / GV2R1: the way up to the Valley needs the hook too, and is the same kind of thing.
+        assert.ok((canyon.anchors || []).some(a => a.requires === 'grappling_hook' && a.toMap === 'valley-map.json'),
+            'no hook-gated anchor up to the Valley');
         assert.ok(!(canyon.transitions || []).some(t => t.requires === 'grappling_hook'),
             'the plain hook-gated exit is still there');
     });
@@ -71,13 +75,22 @@ const GRANTED_IN_CODE = {
     wooden_sword: 'the starting weapon — equipped on a new game (main.js)',
 };
 
+// A spine slot's spawn may hold ANY entry of its pool, and a spawn naming an
+// `entry` holds that entry (plans/slot-registry.md): their kit lives in the
+// registry, not the map, and drops on death the same way.
+const everyPick = (s) => {
+    if (s && s.slot && SLOTS[s.slot]) return SLOTS[s.slot].pool.map((p) => ENTRIES[p.entry]).filter(Boolean);
+    if (s && s.entry && ENTRIES[s.entry]) return [ENTRIES[s.entry]];
+    return [s];
+};
+
 describe('weapons', () => {
     test('every weapon can be obtained somewhere', () => {
         const sources = new Set(Object.keys(GRANTED_IN_CODE));
         const note = (id) => { if (typeof id === 'string') sources.add(id); else if (id?.type) sources.add(id.type); };
         for (const { data } of maps) {
             for (const i of data.items || []) note(i.type);                       // lying on the ground
-            for (const e of data.enemies || []) {
+            for (const e of (data.enemies || []).flatMap(everyPick)) {
                 for (const l of e.loadout || []) note(l);                         // dropped on death (Law 6f)
                 for (const s of e.stock || []) note(s);                           // for sale
             }

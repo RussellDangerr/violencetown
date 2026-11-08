@@ -22,7 +22,7 @@ import { QuestEngine } from '../game/quests.js';
 import { RNG, randomSeed } from '../game/rng.js';
 import { pickSlots } from '../game/slots.js';
 import { WEAPONS } from '../game/weapons.js';
-import { PLAYER_MAX_HP, PLAYER_MAX_MP } from '../game/data.js';
+import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE } from '../game/data.js';
 import { RINGS, FUSIONS } from '../game/ring-data.js';
 import { SPELLS } from '../game/spells.js';
 import { TRICKS } from '../game/tricks.js';
@@ -363,7 +363,7 @@ describe('ranks survive a save and load', () => {
 describe('a new game starts every skill from nothing', () => {
     const STATE = { SPLASH: 'splash', IDLE: 'idle' };
     const fullReset = liveMethod('_fullReset({ seed } = {}) {', {
-        STATE, PLAYER_MAX_HP, PLAYER_MAX_MP, WEAPONS, RNG, QuestEngine, clearSave: () => {},
+        STATE, PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, WEAPONS, RNG, QuestEngine, clearSave: () => {},
         randomSeed, pickSlots,
     }, { async: true });
 

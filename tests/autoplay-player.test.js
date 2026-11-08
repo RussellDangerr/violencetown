@@ -54,6 +54,18 @@ describe('the standard fighter', () => {
         const a = decide(view({ rows: open, player: { x: 1, y: 1 }, enemies, mapUrl: 'sewer-map.json' }), [{ kill: 'wererat_boss', map: 'sewer-map.json' }]);
         assert.deepEqual(a.at, { x: 2, y: 1 });
     });
+    test('a kill goal may name one enemy by id (the loops run hunts green1)', () => {
+        const enemies = [{ x: 0, y: 1, hp: 10, hostile: true, tag: null, id: 'other' }, { x: 2, y: 1, hp: 90, hostile: true, tag: null, id: 'green1' }];
+        const goals = [{ kill: 'green1', map: 'factory-map.json' }];
+        const v = view({ rows: open, player: { x: 1, y: 1 }, enemies, mapUrl: 'factory-map.json' });
+        assert.deepEqual(decide(v, goals).at, { x: 2, y: 1 });
+        assert.equal(goalDone(v, goals[0]), false);
+        assert.equal(goalDone(view({ rows: open, player: { x: 1, y: 1 }, enemies: [enemies[0]], mapUrl: 'factory-map.json' }), goals[0]), true);
+    });
+    test('an enemy with no id is never the quarry of an id goal', () => {
+        const v = view({ rows: open, player: { x: 1, y: 1 }, enemies: [{ x: 2, y: 1, hp: 90, hostile: false, tag: null }], mapUrl: 'factory-map.json' });
+        assert.equal(goalDone(v, { kill: 'green1', map: 'factory-map.json' }), true);
+    });
     test('otherwise the weakest adjacent hostile', () => {
         const enemies = [{ x: 0, y: 1, hp: 90, hostile: true, tag: null }, { x: 2, y: 1, hp: 30, hostile: true, tag: null }];
         assert.deepEqual(decide(view({ rows: open, player: { x: 1, y: 1 }, enemies }), far).at, { x: 2, y: 1 });

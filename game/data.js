@@ -6,15 +6,14 @@
 // tags.js tileTags); the content check fails on any other tag.
 
 export const TILES = {
-    // Sewer tiles (0-7)
+    // Sewer tiles (0-7). 3 was GAP and 7 was BOSS_TRIGGER, both placed in no
+    // map (the boss-trigger trap went long before) — retired; don't reuse the ids.
     WALL:         { id: 0, walkable: false, hazard: null, fallbackColor: '#1c1510' },
     FLOOR:        { id: 1, walkable: true,  hazard: null, fallbackColor: '#2a2a3a' },
     SLUDGE:       { id: 2, walkable: true,  hazard: 'sludge', fallbackColor: '#3c145a' },
-    GAP:          { id: 3, walkable: true,  hazard: null, fallbackColor: '#1e1e30' },
     GRATE:        { id: 4, walkable: false, hazard: null, fallbackColor: '#333340' },
     DRAIN:        { id: 5, walkable: true,  hazard: null, fallbackColor: '#252535' },
     BOSS_FLOOR:   { id: 6, walkable: true,  hazard: null, fallbackColor: '#2e1a3e' },
-    BOSS_TRIGGER: { id: 7, walkable: true,  hazard: null, fallbackColor: '#5a1a6a' },
 
     // Town tiles (10-19)
     TOWN_WALL:    { id: 10, walkable: false, hazard: null, fallbackColor: '#4a3a2a' },
@@ -69,6 +68,12 @@ export const TILES = {
     LEDGE:         { id: 64, walkable: true,  hazard: null, fallbackColor: '#e8a468' },
     CHASM:         { id: 65, walkable: false, hazard: null, fallbackColor: '#120c0a' },
     RIVER:         { id: 66, walkable: false, hazard: null, fallbackColor: '#5ac8d0' },
+
+    // Frozen tiles (70-79) — the frozen area between the Factory and the
+    // Wilderness (plans/ic3-frozen-area.md). The pond is iced over, so ICE is
+    // ground you walk on, not water.
+    SNOW:          { id: 70, walkable: true,  hazard: null, fallbackColor: '#e3e3e3' },
+    ICE:           { id: 71, walkable: true,  hazard: null, fallbackColor: '#d9dde6' },
 };
 
 // Reverse lookup: id → tile def
@@ -105,6 +110,9 @@ export const SLUDGE_DOT = 5;
 // The bag is two zones: SAFE (indices 0..SAFE_SLOTS-1, kept on defeat) + PACK
 // (SAFE_SLOTS..INVENTORY_SIZE-1, at-risk). Rendered as a grid in the REMOTICON
 // ITEMS tab, no longer coupled to the 9-slot XMB usable-bar. (remoticon-overhaul)
+// (BG1) INVENTORY_SIZE is the STARTING size: a full PACK grows another page of
+// PACK_PAGE slots (one more PACK grid's worth), so the bag never refuses.
 export const INVENTORY_SIZE = 50;
 export const SAFE_SLOTS = 10;
+export const PACK_PAGE = INVENTORY_SIZE - SAFE_SLOTS;
 export const MAX_STACK = 99;

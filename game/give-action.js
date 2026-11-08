@@ -4,7 +4,7 @@
 // disposition by `values[item.id] × SHIFT_MULTIPLIER`. When disposition
 // crosses `flipThreshold`, the recipient's `onFlip` behavior fires —
 // typically removing HOSTILE from their behavior whitelist (becomeAlly) or
-// setting a discount flag (offerDiscount).
+// moving a merchant's prices (offerDiscount).
 //
 // Phase B (future): active ally behavior, hover-preview UI, bribed-ally
 // counter-bribery, etc. See plans/give-action-feature.md for the phased
@@ -21,6 +21,10 @@ import { isHostile, isSewerDweller } from './ai.js';
 import { poitionBuff } from './items.js';
 import { DISPOSITION_MIN, dispositionCeil } from './disposition-curves.js';   // one ceiling, three writers
 import { BANDS_STEP } from './trade.js';   // paranoia is priced in whole trade bands
+
+// (FX47) A boss is called by its one name in every line below, anyone else by its type.
+const bossOr = (r) => (r.boss && r.shownName) || r.type;
+const theName = (r) => `The ${bossOr(r)}`;
 
 // Tuning constant — controls how much disposition each unit of `values`
 // shifts. Currently 5 (so values:{soap:8} means soap gives +40 disposition).
@@ -98,7 +102,7 @@ export function applyGive(item, recipient) {
         return {
             accepted: false,
             flipped: false,
-            log: `[The ${recipient.type} ignores your offering.]`,
+            log: `[${theName(recipient)} ignores your offering.]`,
         };
     }
 
@@ -130,7 +134,7 @@ export function applyGive(item, recipient) {
     return {
         accepted: true,
         flipped: false,
-        log: `[The ${recipient.type} pockets the ${item.name}. Disposition +${preview.shift}.]`,
+        log: `[${theName(recipient)} pockets the ${item.name}. Disposition +${preview.shift}.]`,
     };
 }
 
@@ -199,7 +203,7 @@ function applySewerFareGive(item, recipient) {
         return {
             accepted: true,
             flipped: false,
-            log: `[The ${recipient.type} savors the ${item.name} — down here, it's medicine. Disposition +${preview.shift}.]`,
+            log: `[${theName(recipient)} savors the ${item.name} — down here, it's medicine. Disposition +${preview.shift}.]`,
         };
     }
 
@@ -229,14 +233,14 @@ function applySewerFareGive(item, recipient) {
         return {
             accepted: true,
             flipped: true,
-            log: `[The ${recipient.type} realizes what you fed it — and comes at you!]`,
+            log: `[${theName(recipient)} realizes what you fed it — and comes at you!]`,
         };
     }
 
     return {
         accepted: true,
         flipped: false,
-        log: `[The ${recipient.type} eats the ${item.name}... something's wrong. Disposition ${penalty}.]`,
+        log: `[${theName(recipient)} eats the ${item.name}... something's wrong. Disposition ${penalty}.]`,
     };
 }
 
@@ -371,7 +375,7 @@ export function applyHostileFlip(recipient) {
 //
 // Dispatches on the recipient's `onFlip` value. Each onFlip mode is a
 // different *consequence* of crossing the disposition threshold —
-// becomeAlly turns off hostility, offerDiscount sets the merchant flag,
+// becomeAlly turns off hostility, offerDiscount leaves the merchant's prices to her disposition,
 // etc. New onFlip modes are added here as new gameplay verbs ship.
 
 function applyFlip(recipient) {
@@ -401,9 +405,10 @@ function applyFlip(recipient) {
             break;
 
         case 'offerDiscount':
-            // Merchant-side flip — set the discount flag. Future merchant
-            // UI (when Carrion's trade screen exists) will check this.
-            recipient._discountMode = true;
+            // Merchant-side flip. The deal she promises is already in her
+            // prices: she is a vendor, and a vendor's prices come from her
+            // disposition (trade.js), which the bribe just raised. There is
+            // nothing left to set here, and no separate discount to track.
             // No FSM change — these NPCs were never hostile to begin with.
             break;
 
@@ -430,10 +435,10 @@ function flipLogLine(item, recipient) {
     // Same default as applyFlip — missing onFlip reads as becomeAlly.
     switch (recipient.onFlip || 'becomeAlly') {
         case 'becomeAlly':
-            return `[The ${recipient.type} pockets the ${item.name} — they stop snarling at you.]`;
+            return `[${theName(recipient)} pockets the ${item.name} — they stop snarling at you.]`;
         case 'offerDiscount':
-            return `[${recipient.type} accepts the ${item.name}. "...much obliged. I'll work you a deal next time."]`;
+            return `[${bossOr(recipient)} accepts the ${item.name}. "...much obliged. I'll work you a deal next time."]`;
         default:
-            return `[The ${recipient.type} pockets the ${item.name}. Something in them shifts.]`;
+            return `[${theName(recipient)} pockets the ${item.name}. Something in them shifts.]`;
     }
 }

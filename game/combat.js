@@ -7,6 +7,7 @@
 //   - You always hit; armor just means you hit softer
 
 import { weaponClassOf } from './weapons.js';
+import { heldInHands } from './items.js';
 
 const DEFAULT_HP    = 100;
 const DEFAULT_MP    = 100;   // Skill / mana — every creature starts at 100
@@ -74,8 +75,10 @@ function weaponHitKind(def, target) {
 // Backstab (Law 2 positional, ×WEAKNESS_MULT): the attacker stands on the tile DIRECTLY
 // behind the target's last step direction. Strict — only the single tile
 // directly opposite the last step counts (a diagonal step yields a diagonal
-// back tile); a target that has never moved has no back. The 5-Zone Body's
-// "Back" zone, as a rule instead of an HP pool.
+// back tile); a target with no facing (never stepped, none seeded) has no
+// back. Every other tile is ×1: no flanks, no top or bottom hits, no per-zone
+// health or armour (Law 2's positional table, ruled 2026-10-23; pinned in
+// tests/positional-table.test.js).
 function isBackstab(attackerX, attackerY, target) {
     if (!target._lastDx && !target._lastDy) return false;
     return attackerX === target.x - target._lastDx
@@ -120,6 +123,58 @@ function knockoutDamage(dmg, entity) {
     return Math.max(dmg, (entity.hp ?? 0) + (entity.armor ?? 0), 1);
 }
 
+// ── Shields in a hand (plans/ws6-shields-in-hand.md) ─────────────────────────
+// Ruled "both": a held shield bashes (its class lands crush), adds armour while
+// held, and cuts the next hit you take. Two shields stack: each hand's shield
+// adds its own armour and cuts a hit of its own.
+//
+// Placeholders, no ruling gives them: armour is the smallest any worn piece has
+// today, the cut is the Defend action's halving, and a spent block is ready
+// again after one turn. A shield def's own `armor` wins over the default.
+const SHIELD_DEFAULTS = Object.freeze({ armor: 1, blockMult: 0.5, blockCooldown: 1 });
+
+const handsOfClass = (def) => weaponClassOf(def)?.hands || 1;
+
+function isShield(def) {
+    return weaponClassOf(def)?.id === 'shield';
+}
+
+// The hands holding a shield, right hand first: ['weapon'], ['left'], both, or [].
+function shieldHands(eq) {
+    return heldInHands(eq, handsOfClass).filter(h => isShield(h.def)).map(h => h.hand);
+}
+
+// Armour the held shields add, one shield per hand.
+function shieldArmor(eq) {
+    let total = 0;
+    for (const hand of shieldHands(eq)) total += eq[hand].armor ?? SHIELD_DEFAULTS.armor;
+    return total;
+}
+
+// Raise a shield against a hit landing on `turn`. `blocks` maps a hand to the
+// turn its block is ready again (missing = ready). The first ready shield, right
+// hand first, spends its block and the hit's incoming multiplier is the cut;
+// with none ready it is 1. The caller folds `mult` into the hit's one
+// computeHit call, alongside guard, so the hit still rounds once.
+//   -> { mult, hand }   hand is null when nothing blocked
+function raiseShield(eq, blocks, turn) {
+    for (const hand of shieldHands(eq)) {
+        // A block further off than one cooldown is left over from another game
+        // (the turn counter went back, e.g. a load): treat it as ready.
+        const readyAt = blocks[hand] ?? -Infinity;
+        if (readyAt <= turn || readyAt > turn + SHIELD_DEFAULTS.blockCooldown) {
+            blocks[hand] = turn + SHIELD_DEFAULTS.blockCooldown;
+            return { mult: SHIELD_DEFAULTS.blockMult, hand };
+        }
+    }
+    return { mult: 1, hand: null };
+}
+
+// A hit's number, or 0 when it is not one (undefined, null, NaN, a string).
+function hitNumber(n) {
+    return typeof n === 'number' && !Number.isNaN(n) ? n : 0;
+}
+
 // ── Entity ────────────────────────────────────────────────────────────────────
 
 class Entity {
@@ -137,8 +192,14 @@ class Entity {
     }
 
     // Returns actual damage dealt after armor reduction (minimum 1).
+    // A hit that is not a number (a weapon with no damage) counts as 0, so it
+    // lands the minimum: NaN through Math.max would leave hp NaN, never 0.
     takeDamage(rawDamage) {
-        const dealt = Math.max(1, rawDamage - this.armor);
+        // (plans/ek1-hurt-enemy-uses-kit.md) An enemy's live Defence Poition adds to
+        // its armour for as long as it runs. `guardOf` is set by the Enemy that owns
+        // this body (not an own-enumerable field); the player and bare entities have none.
+        const guard = typeof this.guardOf === 'function' ? this.guardOf() : 0;
+        const dealt = Math.max(1, hitNumber(rawDamage) - (this.armor + guard));
         this.hp     = Math.max(0, this.hp - dealt);
         if (this.hp === 0) this.alive = false;
         return dealt;
@@ -159,13 +220,14 @@ class Entity {
 function attack(attacker, target, damage) {
     if (target.isDead()) return null;
 
-    const dealt   = target.takeDamage(damage);
-    const blocked = damage - dealt;
+    const raw     = hitNumber(damage);
+    const dealt   = target.takeDamage(raw);
+    const blocked = raw - dealt;
 
     return {
         attacker: attacker.name,
         target:   target.name,
-        rawDamage: damage,
+        rawDamage: raw,
         dealt,
         blocked,
         targetHp:  target.hp,
@@ -186,4 +248,4 @@ function formatDamageNumber(result) {
 
 // ── Exports ───────────────────────────────────────────────────────────────────
 
-export { Entity, attack, formatDamageNumber, computeHit, elementalMult, bestAttackKind, weaponHitKind, isBackstab, WEAKNESS_MULT, WEAKNESS_STATES, weaknessKinds, critOf, knockoutDamage, DEFAULT_HP, DEFAULT_MP, DEFAULT_ARMOR };
+export { Entity, attack, formatDamageNumber, computeHit, elementalMult, bestAttackKind, weaponHitKind, isBackstab, isShield, shieldHands, shieldArmor, raiseShield, SHIELD_DEFAULTS, WEAKNESS_MULT, WEAKNESS_STATES, weaknessKinds, critOf, knockoutDamage, DEFAULT_HP, DEFAULT_MP, DEFAULT_ARMOR };

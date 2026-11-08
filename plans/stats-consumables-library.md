@@ -5,6 +5,8 @@
 
 > **Origin:** Design session 2026-05-21. The original design pillar was "no XP, no levels, no skill trees, no stat growth — power comes from equipment and rings." This revision preserves the spirit (no grinding, no XP bars) while adding two new progression axes: **permanent stat-boost items** found through exploration, and **skills learned from books at the Library**. The player still never grinds. Stats grow because you found something, not because you killed 200 rats.
 
+> **Note (2026-10-26):** skills now rank up by use, under the ruling that use-ranks may grant perks. Each skill counts clean successes of one action and grants a small perk at set counts. There is still no XP bar, no single level number and no stat growth past Law 0 — a rank changes what an action can do, never a stat. See `plans/us1-light-fingers.md` and `game/skills.js`.
+
 > **Connects to:** `plans/economy-merchants.md` (ambro/necta are trade goods), `plans/give-action-and-disposition.md` (Charisma stat modifies disposition shifts), `plans/combat-health-system.md` (Attack/Defense replace flat damage/armor), `plans/cosmology-and-arc.md` (Behest joins the cast as a knowledge broker), `plans/ground-items-inventory.md` (inventory model is now infinite-with-stacking).
 
 > **Supersedes:** The "No stat growth" clause of the original design pillar (quoted under *Origin* above). The spirit — no grinding — survives. The letter changes: stats CAN grow, through placed items only.
@@ -42,6 +44,8 @@
 ### Stats
 
 Eight stats, split into combat and non-combat. All start at a base value. All increase ONLY through permanent stat-boost items (ambro and books). No XP, no level-ups, no stat growth from combat.
+
+> **Note (2026-10-26):** skills now rank up by use, under the ruling that use-ranks may grant perks: clean successes of one action earn small perks at set counts. That adds no level number and grows none of the stats below. See `plans/us1-light-fingers.md` and `game/skills.js`.
 
 **Combat Stats (4):**
 

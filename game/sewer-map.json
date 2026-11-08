@@ -17,7 +17,7 @@
     0,
     0,
     0,
-    0,
+    5,
     0,
     0,
     0,
@@ -633,6 +633,11 @@
         "soap": 8
       },
       "onFlip": "offerDiscount",
+      "vendor": true,
+      "stock": [
+        "soap",
+        "bandage"
+      ],
       "adjacencyBark": "[Carrion: Road's blocked, friend. Sewer river's swollen with sludge. Come back later.]"
     },
     { "id": "wererat", "slot": "sewer.boss", "x": 17, "y": 10 },
@@ -783,16 +788,6 @@
       "y": 4
     },
     {
-      "type": "cardboard_cuirass",
-      "x": 17,
-      "y": 13
-    },
-    {
-      "type": "latex_gloves",
-      "x": 2,
-      "y": 2
-    },
-    {
       "type": "shoe_bags",
       "x": 9,
       "y": 8
@@ -852,6 +847,14 @@
       "toX": 28,
       "toY": 12,
       "label": "[West \u2014 climb out, back to the street]"
+    },
+    {
+      "x": 11,
+      "y": 0,
+      "toMap": "sewer-north-map.json",
+      "toX": 6,
+      "toY": 8,
+      "label": "[North \u2014 TEXT: into the side room]"
     }
   ],
   "examinables": [

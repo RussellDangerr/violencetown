@@ -20,13 +20,20 @@
 // the HOSTILE (chase), ALLIED, or ambient states.
 
 import { manhattan, chebyshev } from './utils.js';
-import { getGreedyStep, stepEntity, findPath } from './pathing.js';
-import { perceives, nextAwareness, VERDICT, BLIND_SWEEP_BEATS } from './perception.js';
-import { healPurchase, kitChoice, isSewerDweller, bossSpend, BOSS_RALLY_RANGE, isHunting } from './ai.js';
-import { ITEMS, kitHealValue, applyKitItem } from './items.js';
+import { getGreedyStep, stepEntity, findPath, fleeFrom, fleeStep, stepFree } from './pathing.js';
+import { perceives, nextAwareness, VERDICT, BLIND_SWEEP_BEATS, FACING_VECTORS } from './perception.js';
+import { healPurchase, kitChoice, isSewerDweller, bossSpend, BOSS_RALLY_RANGE, isHunting,
+         isCircler, circlesThisBeat, circleStep, isAngel, ANGEL_GAZE_RANGE } from './ai.js';
+import { ITEMS, kitHealValue, applyKitItem, kitDefenceValue, kitGearWeight } from './items.js';
 import { WEAPONS } from './weapons.js';
-import { burnGold } from './trade.js';
+import { burnGold, transferGold } from './trade.js';
 import { spreadParanoia } from './give-action.js';
+import { fighters, inFightView } from './fight-area.js';
+import { shownName } from './enemies.js';
+
+// (FX47) What a log line calls someone: a boss by its one name, anyone else as
+// before (their own name, else their type).
+export const logName = (x) => (x && x.boss ? shownName(x) : (x?.name ?? x?.type));
 
 // ── Leash tuning ─────────────────────────────────────────────────────────────
 // A chasing enemy gives up and walks home when it strays past LEASH_DISTANCE
@@ -74,14 +81,17 @@ function useKit(npc, messages) {
     const pick = kitChoice(
         npc.entity.hp, npc.entity.maxHp, kitDefs,
         (d) => kitHealValue(d, dweller),
-        (npc.buffs ?? []).some(b => (b.dmg ?? 0) < 0));   // already regenerating?
+        (npc.buffs ?? []).some(b => (b.dmg ?? 0) < 0),    // already regenerating?
+        // (plans/ek1-hurt-enemy-uses-kit.md) no heal to use: poition, then armour.
+        { defenceOf: kitDefenceValue, gearWeightOf: kitGearWeight,
+          defended: (npc.buffs ?? []).some(b => b.stat === 'defence' && (b.amount ?? 0) > 0) });
     // `heal` on a report is the HP it actually gave (0 for a poition, whose
     // heal arrives tick by tick); main.js floats it over whoever it healed.
     const hpBeforeKit = npc.entity.hp;
     if (!pick || !applyKitItem(pick.def, npc, dweller)) return false;
     npc.loadout = (npc.loadout ?? []).filter((_, i) => i !== pick.index);
     messages.push({
-        text: `[${npc.name ?? npc.type} digs out ${pick.def.name} and uses it.]`,
+        text: `[${logName(npc)} digs out ${pick.def.name} and uses it.]`,
         sourceEnemy: npc,
         category: 'combat',
         heal: npc.entity.hp - hpBeforeKit,
@@ -107,6 +117,10 @@ export function tickNpcState(game, npc, clock = game.turn, rng = game.rng) {
     }
 
     const messages = [];
+
+    // (F3c) A neutral who has seen a fight spends its turn getting out of it,
+    // and the turns after it walking home.
+    if (bystanderTurn(game, npc)) return messages;
 
     switch (npc.fsmState) {
         case STATE.IDLE: {
@@ -187,6 +201,12 @@ export function tickNpcState(game, npc, clock = game.turn, rng = game.rng) {
         }
 
         case STATE.HOSTILE: {
+            // (ca1) The angel keeps no ladder of its own: it moves, or not, by whether you look.
+            if (isAngel(npc)) { angelTurn(game, npc); break; }
+
+            // (BS1) A mugger who already has your gold only runs.
+            if (isMugger(npc) && npc._tookGold > 0) { runOff(game, npc); break; }
+
             // Legacy chase logic — relocated verbatim from enemies.js (PD-3 step 4),
             // plus the leash (a strayed/blind chaser breaks off and walks home).
             // (perception) ONE source of truth, shared with the threat overlay, so
@@ -416,7 +436,7 @@ export function tickNpcState(game, npc, clock = game.turn, rng = game.rng) {
                         const hpBefore = npc.entity.hp;
                         npc.entity.hp = Math.min(npc.entity.maxHp, npc.entity.hp + plan.heal);
                         messages.push({
-                            text: `[${npc.name ?? npc.type} spends ${plan.spend} GP on itself. (+${plan.heal} HP)]`,
+                            text: `[${logName(npc)} spends ${plan.spend} GP on itself. (+${plan.heal} HP)]`,
                             sourceEnemy: npc,
                             category: 'combat',
                             heal: npc.entity.hp - hpBefore,
@@ -426,7 +446,7 @@ export function tickNpcState(game, npc, clock = game.turn, rng = game.rng) {
                         const hpBefore = ward.entity.hp;
                         ward.entity.hp = Math.min(ward.entity.maxHp, ward.entity.hp + plan.heal);
                         messages.push({
-                            text: `[${npc.name ?? npc.type} pays ${plan.spend} GP — ${ward.name ?? ward.type} straightens up. (+${plan.heal} HP)]`,
+                            text: `[${logName(npc)} pays ${plan.spend} GP — ${logName(ward)} straightens up. (+${plan.heal} HP)]`,
                             sourceEnemy: npc,
                             category: 'combat',
                             heal: ward.entity.hp - hpBefore,
@@ -447,7 +467,7 @@ export function tickNpcState(game, npc, clock = game.turn, rng = game.rng) {
                 const hpBefore = npc.entity.hp;
                 npc.entity.hp = Math.min(npc.entity.maxHp, npc.entity.hp + buy.heal);
                 messages.push({
-                    text: `[${npc.name ?? npc.type} buys back ${buy.heal} HP! (-${buy.spend} GP)]`,
+                    text: `[${logName(npc)} buys back ${buy.heal} HP! (-${buy.spend} GP)]`,
                     sourceEnemy: npc,
                     category: 'combat',
                     heal: npc.entity.hp - hpBefore,
@@ -480,9 +500,27 @@ export function tickNpcState(game, npc, clock = game.turn, rng = game.rng) {
             // Raw damage only — guard (incoming) folds into the single
             // computeHit call inside applyDamageToPlayer, which rounds once.
             if (chebyshev(npc.x, npc.y, game.playerX, game.playerY) <= 1) {
+                // (cb1) A circler beside you takes turns: this beat a step to the next free tile
+                // around you, the next a blow. No free tile, or its hitting beat: it hits below.
+                // The step draws nothing from game.rng and falls on the player's action.
+                if (isCircler(npc) && circlesThisBeat(npc.id, game.turn)) {
+                    const to = circleStep(
+                        { x: game.playerX, y: game.playerY }, { x: npc.x, y: npc.y },
+                        (fx, fy, tx, ty) => stepFree(game, tx, ty, { self: npc })
+                            // No corner-cutting, as the chase step has it.
+                            && game.map.isWalkable(tx, fy) && game.map.isWalkable(fx, ty));
+                    if (to) {
+                        stepEntity(npc, to.x, to.y, game._MOVE_MS);
+                        break;
+                    }
+                }
                 // Attacking faces the target — a shove buys one backstab window, not a farm.
                 npc._lastDx = Math.sign(game.playerX - npc.x);
                 npc._lastDy = Math.sign(game.playerY - npc.y);
+                // (BS1) A mugger takes gold instead of swinging. An empty purse
+                // has nothing to take, so then he swings like anyone else.
+                const took = mug(game, npc);
+                if (took) { messages.push(took); break; }
                 game.applyDamageToPlayer(npc.damage, npc);
                 break;
             }
@@ -506,6 +544,81 @@ export function tickNpcState(game, npc, clock = game.turn, rng = game.rng) {
     }
 
     return messages;
+}
+
+// ── The angel (CA1, plans/ca1-crying-angel.md) ─────────────────────────────
+//
+// It acts on the player's action, and only when it is looked at. "Looked at" is perception.js's
+// own question asked of YOU: the player is the watcher, facing as the game has it, sight out to
+// ANGEL_GAZE_RANGE, so the cone and the line of sight are exactly the ones enemies use on you
+// and a wall between you counts as not looking. A blow from you counts as looking for that beat
+// (a blow does not turn you): perception.js struck() has already marked it. Nothing here touches
+// its `state` (it stays idle, so it is never in a fight) or draws from game.rng.
+//
+// The player's facing is the game's: 'up' | 'down' | 'left' | 'right'.
+const GAZE_FACING = { up: 'N', down: 'S', left: 'W', right: 'E' };
+
+export function isLookedAt(game, npc) {
+    const [fx, fy] = FACING_VECTORS[GAZE_FACING[game.facing] ?? 'S'];
+    const gazer = { x: game.playerX, y: game.playerY, _lastDx: fx, _lastDy: fy, sightRange: ANGEL_GAZE_RANGE };
+    return perceives(game.map, gazer, npc.x, npc.y) === VERDICT.DIRECT;
+}
+
+export function angelTurn(game, npc) {
+    const blow = !!npc._struckBy;
+    npc._struckBy = null;
+    // A noise can nudge it to 'suspicious'; it has no ladder, so it is always plain idle.
+    npc.state = 'idle';
+    if (!blow && !isLookedAt(game, npc)) return;      // not looked at: nothing at all
+    if (chebyshev(npc.x, npc.y, game.playerX, game.playerY) <= 1) {
+        npc._lastDx = Math.sign(game.playerX - npc.x);
+        npc._lastDy = Math.sign(game.playerY - npc.y);
+        game.applyDamageToPlayer(npc.damage, npc);
+        return;
+    }
+    const step = getGreedyStep(game, { x: npc.x, y: npc.y }, { x: game.playerX, y: game.playerY }, { self: npc });
+    if (step) stepEntity(npc, step.x, step.y, game._MOVE_MS);
+}
+
+// ── The mugger (BS1, plans/bs1-ruffian-steals-gold.md) ─────────────────────
+//
+// A hostile spawned with `tag: "mugger"` takes gold instead of dealing damage,
+// once, then runs. The gold moves through transferGold, so your loss is exactly
+// his gain; killing him (the death loot) or thieving him (Thieve Coin) are the
+// existing ways to get it back.
+
+// Placeholder: how much he takes in one go (all you have, if less).
+export const MUG_GP = 10;
+
+export function isMugger(npc) {
+    return !!npc && npc.tag === 'mugger';
+}
+
+// Take gold from the player, if he has not already and there is any to take.
+// Returns the log message, or null when nothing was taken (his turn is then an
+// ordinary attack).
+export function mug(game, npc) {
+    if (!isMugger(npc) || npc._tookGold > 0) return null;
+    const amount = Math.min(MUG_GP, game.gold ?? 0);
+    if (!(amount > 0) || !transferGold(game, npc, amount, 'mugging')) return null;
+    npc._tookGold = amount;
+    return { text: '[TEXT]', sourceEnemy: npc, category: 'combat' };
+}
+
+// One turn on the run. In reach of you (his sight range, all the way round: he
+// is looking over his shoulder) he takes the shipped flee step and stays in the
+// fight. Boxed in, the step is null and he stands still, which is how he is
+// caught. Out of reach he stops and drops out of the fight. Running is the
+// whole turn: no kit, no bought-back HP, so the stolen gold is never burned.
+export function runOff(game, npc) {
+    const reach = npc.sightRange ?? 0;
+    if (chebyshev(npc.x, npc.y, game.playerX, game.playerY) > reach) {
+        npc.state = 'idle';
+        return;
+    }
+    npc.state = 'chasing';
+    const step = fleeStep(game, npc);
+    if (step) stepEntity(npc, step.x, step.y, game._MOVE_MS);
 }
 
 // ── WORKING state ───────────────────────────────────────────────────────────
@@ -665,10 +778,13 @@ function findNearestWantedItem(game, npc) {
 //
 // Returns true when a step was taken so the caller can spend the turn on it —
 // walking home is what you are doing this turn, the same way wandering is.
-export function goHomeStep(game, npc) {
+//
+// `anyone` lifts the wanderer exemption: a bystander walking back after a fight
+// (bystanderTurn) heads for where it spawned even if it normally roams.
+export function goHomeStep(game, npc, { anyone = false } = {}) {
     if (!npc || npc.homeX == null || npc.homeY == null) return false;
     // A wanderer has no post to keep; see the note at the IDLE case.
-    if (npc.behavior && npc.behavior.includes(STATE.WANDER)) return false;
+    if (!anyone && npc.behavior && npc.behavior.includes(STATE.WANDER)) return false;
     if (npc.x === npc.homeX && npc.y === npc.homeY) return false;
 
     // A real route, not a greedy nudge. getGreedyStep only ever moves to a
@@ -685,6 +801,72 @@ export function goHomeStep(game, npc) {
     const step = path[0];
     stepEntity(npc, step.x, step.y, game._MOVE_MS);
     return true;
+}
+
+// ── Bystanders (F3c, plans/f3c-bystanders-clear-out.md) ─────────────────────
+//
+// Most neutral characters run out of the way of a fight; vendors and quest
+// givers hold their ground (Caelan's pick). The ones he named, by spawn id:
+// the Corner Merchant, the Cook, the Pit Boss, Pike, Carrion, Platero and the
+// Financier.
+export const HOLD_GROUND_IDS = new Set([
+    'dt-merch1', 'diner-cook', 'casino-pit-boss', 'pike', 'carrion', 'dt-platero', 'bank-financier',
+]);
+
+// Does this character stay put when a fight breaks out nearby? The named ones,
+// any other vendor, anything that cannot be moved or is a set piece (a heavy
+// puzzle wall, a boss), and sewer dwellers (the Violet Fungi, the rats): only
+// surface townsfolk scatter (Caelan's pick).
+export function holdsGround(npc) {
+    return !!npc && (HOLD_GROUND_IDS.has(npc.id) || !!npc.vendor || !!npc.heavy || !!npc.boss
+        || isSewerDweller(npc));
+}
+
+// One bystander turn. Returns true when it took the turn.
+//
+// While a fight is on (fight-area.js fighters()), a neutral who directly sees
+// the player or a fighter — the notice rule F3a and F3b use — is scared
+// (`_fleeing`) until the fight ends, even once it has turned its back. While
+// the fight can see it (a fighter perceives its tile, or the player does —
+// fight-area.js inFightView, FX15) it steps away from all of them, preferring a
+// tile none can see; out of view, it stands still so it does not wander back in. Fleeing is a flag, never `state`, so it can never count as a
+// fighter. No random draw is spent.
+//
+// When the fight is over the scare drops on the next turn and it walks home,
+// one step a turn; a blocked way home ends the walk where it stands.
+export function bystanderTurn(game, npc) {
+    if (!npc) return false;
+    if (npc.allegiance !== 'neutral') {
+        npc._fleeing = false;
+        npc._headingHome = false;
+        return false;
+    }
+    const fs = fighters(game.enemies);
+    if (fs.length > 0) {
+        if (holdsGround(npc)) return false;
+        const player = { x: game.playerX, y: game.playerY };
+        if (!npc._fleeing) {
+            const sees = (x, y) => perceives(game.map, npc, x, y) === VERDICT.DIRECT;
+            if (!sees(player.x, player.y) && !fs.some(f => f !== npc && sees(f.x, f.y))) return false;
+            npc._fleeing = true;
+            npc._headingHome = false;
+        }
+        const inArea = (x, y) => inFightView(game.map, fs, player, x, y);
+        if (inArea(npc.x, npc.y)) {
+            const step = fleeFrom(game, npc, [player, ...fs], { safe: (x, y) => !inArea(x, y) });
+            if (step) stepEntity(npc, step.x, step.y, game._MOVE_MS);
+        }
+        return true;
+    }
+    if (npc._fleeing) {
+        npc._fleeing = false;
+        npc._headingHome = true;
+    }
+    if (npc._headingHome) {
+        if (goHomeStep(game, npc, { anyone: true })) return true;
+        npc._headingHome = false;   // home, or no way there: carry on from here
+    }
+    return false;
 }
 
 // (theft) A robbed victim's sweep has ended. If it found nobody, the chill

@@ -1,0 +1,25 @@
+{
+  "_note": "Sewer side room south of Carrion's corridor (plans/cs2-crat-reward.md). Reached through the wall that opens once the Crat's dispute is ruled (main.js _openCarrionRoadIfRuled). Placeholder geometry and text; the drain at the bottom leads back into the Sewer. Tiles: 0 wall, 1 floor, 5 drain.",
+  "width": 10,
+  "height": 8,
+  "spawn": { "x": 5, "y": 6 },
+  "zoneName": "SEWER",
+  "enemies": [],
+  "items": [],
+  "examinables": [
+    { "id": "carrion_road_sign", "x": 5, "y": 1, "text": "[TEXT: the sign at the end of Carrion's road]" }
+  ],
+  "tiles": [
+    0,0,0,0,0,0,0,0,0,0,
+    0,1,1,1,1,1,1,1,1,0,
+    0,1,1,1,1,1,1,1,1,0,
+    0,1,1,1,1,1,1,1,1,0,
+    0,1,1,1,1,1,1,1,1,0,
+    0,1,1,1,1,1,1,1,1,0,
+    0,1,1,1,1,1,1,1,1,0,
+    0,0,0,0,0,5,0,0,0,0
+  ],
+  "transitions": [
+    { "x": 5, "y": 7, "toMap": "sewer-map.json", "toX": 9, "toY": 18, "label": "[South — TEXT: back into the Sewer]" }
+  ]
+}

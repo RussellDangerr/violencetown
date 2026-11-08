@@ -3,7 +3,7 @@
     "height": 22,
     "spawn": {"x": 4, "y": 2},
     "zoneName": "CARNIVAL",
-    "border": { "tile": 13, "prop": "tree" },
+    "border": { "tile": 13, "prop": ["tree", "pine"] },
     "tiles": [
         34,34,35,35,30,30,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,
         34,34,35,35,30,30,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,
@@ -28,8 +28,29 @@
         34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,30,30,35,35,34,34,
         34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,34,34,35,35,30,30,35,35,34,34
     ],
+    "regions": [
+        {"name": "assistant-yard", "x": 30, "y": 2, "w": 5, "h": 4}
+    ],
     "enemies": [
-        {"id": "clown1", "gold": 7, "loadout": ["hot_dog", "red_cape", "soap", "fire_blood"], "type": "Carnival Clown", "x": 28, "y": 10, "hp": 100, "armor": 0, "damage": 8, "disposition": -40, "flipThreshold": 30, "bribeable": true, "values": {"bandage": 6, "soap": 4, "rock": 3}, "behavior": ["IDLE", "WANDER"], "wanderRadius": 6, "wanderEveryTurns": 3, "adjacencyBark": "[Carnival Clown: HONK. You wanna play? You wanna PLAY?]"}
+        {"id": "carnival_boss", "slot": "carnival.boss", "x": 48, "y": 12},
+        {"id": "clown1", "gold": 7, "loadout": ["hot_dog", "red_cape", "soap", "fire_blood"], "type": "Carnival Clown", "x": 28, "y": 10, "hp": 100, "armor": 0, "damage": 12, "disposition": -40, "flipThreshold": 30, "bribeable": true, "values": {"bandage": 6, "soap": 4, "rock": 3}, "behavior": ["IDLE", "WANDER"], "wanderRadius": 6, "wanderEveryTurns": 3, "adjacencyBark": "[Carnival Clown: HONK. You wanna play? You wanna PLAY?]"},
+        {"id": "clown2", "gold": 7, "loadout": ["hot_dog", "red_cape", "soap", "fire_blood"], "type": "Carnival Clown", "x": 34, "y": 4, "hp": 100, "armor": 0, "damage": 12, "disposition": -40, "flipThreshold": 30, "bribeable": true, "values": {"bandage": 6, "soap": 4, "rock": 3}, "behavior": ["IDLE", "WANDER"], "wanderRadius": 6, "wanderEveryTurns": 3, "adjacencyBark": "[Carnival Clown: HONK. You wanna play? You wanna PLAY?]"},
+        {"id": "clown3", "gold": 7, "loadout": ["hot_dog", "red_cape", "soap", "fire_blood"], "type": "Carnival Clown", "x": 20, "y": 13, "hp": 100, "armor": 0, "damage": 12, "disposition": -40, "flipThreshold": 30, "bribeable": true, "values": {"bandage": 6, "soap": 4, "rock": 3}, "behavior": ["IDLE", "WANDER"], "wanderRadius": 6, "wanderEveryTurns": 3, "adjacencyBark": "[Carnival Clown: HONK. You wanna play? You wanna PLAY?]"},
+        {"id": "clown4", "gold": 7, "loadout": ["hot_dog", "red_cape", "soap", "fire_blood"], "type": "Carnival Clown", "x": 38, "y": 12, "hp": 100, "armor": 0, "damage": 12, "disposition": -40, "flipThreshold": 30, "bribeable": true, "values": {"bandage": 6, "soap": 4, "rock": 3}, "behavior": ["IDLE", "WANDER"], "wanderRadius": 6, "wanderEveryTurns": 3, "adjacencyBark": "[Carnival Clown: HONK. You wanna play? You wanna PLAY?]"},
+        {"id": "clown5", "gold": 7, "loadout": ["hot_dog", "red_cape", "soap", "fire_blood"], "type": "Carnival Clown", "x": 44, "y": 19, "hp": 100, "armor": 0, "damage": 12, "disposition": -40, "flipThreshold": 30, "bribeable": true, "values": {"bandage": 6, "soap": 4, "rock": 3}, "behavior": ["IDLE", "WANDER"], "wanderRadius": 6, "wanderEveryTurns": 3, "adjacencyBark": "[Carnival Clown: HONK. You wanna play? You wanna PLAY?]"},
+        {"id": "birthday-rat-1", "slot": "carnival.mob", "seat": 0, "x": 46, "y": 4},
+        {"id": "sludge-rat-1", "slot": "carnival.mob", "seat": 1, "x": 36, "y": 17},
+        {"id": "robot-rat-1", "slot": "carnival.mob", "seat": 2, "x": 50, "y": 13},
+        {"id": "carnival-lion", "entry": "carnival_lion", "x": 20, "y": 16},
+        {"id": "the-clown", "entry": "the_clown", "x": 38, "y": 8},
+        {"id": "carnival-horse-1", "entry": "carnival_horse", "x": 27, "y": 3},
+        {"id": "carnival-horse-2", "entry": "carnival_horse", "x": 29, "y": 3},
+        {"id": "carnival-horse-3", "entry": "carnival_horse", "x": 28, "y": 5},
+        {"id": "carnival-doll-1", "entry": "carnival_doll", "x": 9, "y": 16},
+        {"id": "carnival-doll-2", "entry": "carnival_doll", "x": 11, "y": 16},
+        {"id": "carnival-doll-3", "entry": "carnival_doll", "x": 9, "y": 18},
+        {"id": "carnival-doll-4", "entry": "carnival_doll", "x": 11, "y": 18},
+        {"id": "assistant-manager", "entry": "assistant_manager", "x": 32, "y": 3}
     ],
     "items": [
         {"type": "hot_dog", "x": 16, "y": 6},

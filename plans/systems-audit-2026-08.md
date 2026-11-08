@@ -291,6 +291,11 @@ delight.
 `playerLevel` across `game/*.js` returns nothing but an unrelated word in `buffs.js`.) And **Law 0
 fixes every combatant at 100 HP**, with armor as the only durability axis, bounded at ±10.
 
+> **Note (2026-10-26):** skills now rank up by use, under the ruling that use-ranks may grant
+> perks. Each skill counts clean successes of one action and grants a small perk at set counts.
+> There is still no single level number and no stat growth past Law 0 — a rank changes what an
+> action can do, never how hard you hit. See `plans/us1-light-fingers.md` and `game/skills.js`.
+
 This matters more than it looks. A level is a **scalar** — one number, total order — and a total
 order *is* a timeline. It forces the designer into a trap with no exit:
 

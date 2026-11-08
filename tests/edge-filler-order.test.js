@@ -27,6 +27,13 @@ describe('actorOrder', () => {
         assert.deepEqual([lamp, filler, enemy].sort(actorOrder), [filler, enemy, lamp]);
     });
 
+    test('a one-cell pine filler draws behind map props and the player too (the forest mix)', () => {
+        const pine = at('prop', 30, { filler: true });
+        const lamp = at('prop', 2);
+        const player = at('player', 29);
+        assert.deepEqual([player, lamp, pine].sort(actorOrder), [pine, lamp, player]);
+    });
+
     test('fillers keep their own back-to-front order', () => {
         const north = at('prop', -1, { filler: true });
         const south = at('prop', 30, { filler: true });

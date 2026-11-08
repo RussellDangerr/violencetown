@@ -9,6 +9,8 @@
 
 import { isHostile, isHunting, isFriendlyWith } from './ai.js';
 import { perceives, VERDICT } from './perception.js';
+import { hasLineOfSight } from './pathing.js';
+import { chebyshev } from './utils.js';
 
 // How many tiles past the view's edge the area reaches, so the fog's blur and
 // a step's scroll never show where it stops.
@@ -38,6 +40,25 @@ export function joiners(map, npcs, fs, player) {
         return fs.some(f => f !== n && isFriendlyWith(n, f)
             && perceives(map, n, f.x, f.y) === VERDICT.DIRECT);
     });
+}
+
+// Does the player see (x, y) during this fight? (plans/fx15-bystanders-move-away.md)
+// The player has no facing cone, so it is all round: a clear line of sight,
+// walls blocking, out to the farthest any fighter in `fs` can see. No reach of
+// its own: the fight's.
+export function playerSees(map, player, fs, x, y) {
+    if (!player || !fs || fs.length === 0) return false;
+    const reach = Math.max(...fs.map(f => f.sightRange || 0));
+    if (chebyshev(player.x, player.y, x, y) > reach) return false;
+    return hasLineOfSight(map, player.x, player.y, x, y);
+}
+
+// Is (x, y) in view of the fight: a fighter perceives it, or the player sees
+// it? Where a scared bystander keeps moving away from (npc.js bystanderTurn).
+// The fog (fightArea below) still draws the fighters' view alone.
+export function inFightView(map, fs, player, x, y) {
+    return (fs || []).some(f => perceives(map, f, x, y) !== VERDICT.NONE)
+        || playerSees(map, player, fs, x, y);
 }
 
 // The area over `bounds` ({ x0, y0, x1, y1 }, inclusive, world tiles). Returns

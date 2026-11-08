@@ -61,15 +61,32 @@ packed (gutter-free) row of 16x16 cells, so it registers in sprites.js with
 padding: 0 (unlike its 1px-gutter source). Re-run and copy the printed
 column order into OUTLINED_SPRITES in sprites.js if this list ever changes.
 
+A second sheet (plans/zone-1-interiors-get-a-vocabulary.md): the furniture of
+Kenney's Roguelike Interior Pack (CC0), roguelikeIndoor_transparent.png — 27x18
+cells at the same stride 17 — outlined into
+game/assets-placeholder/kenney/rlInterior_outlined.png. See INTERIOR_RUNS for
+how it differs from the sheet above: furniture is mostly full-bleed and stands
+side by side, so it is outlined per run and inked at the cell edge rather than
+shrunk. Copy its printed order into INTERIOR_SPRITES in sprites.js.
+
 Run (needs Pillow):
-    python tools/gen_outlined_sheet.py
+    python tools/gen_outlined_sheet.py                 # both sheets
+    python tools/gen_outlined_sheet.py floors          # rlOutlined_packed.png only
+    python tools/gen_outlined_sheet.py interior [--src PATH]
+                                                       # rlInterior_outlined.png only
 """
+import sys
 from pathlib import Path
 from PIL import Image
 
 REPO = Path(__file__).resolve().parent.parent
 SRC  = REPO / "game" / "assets-placeholder" / "kenney" / "roguelikeSheet_transparent.png"
 OUT  = REPO / "game" / "assets-placeholder" / "kenney" / "rlOutlined_packed.png"
+
+# The Interior Pack's sheet. Kept beside the other Kenney sources when bundled;
+# `interior --src PATH` reads it from anywhere else (e.g. the Kenney library).
+INTERIOR_SRC = REPO / "game" / "assets-placeholder" / "kenney" / "roguelikeIndoor_transparent.png"
+INTERIOR_OUT = REPO / "game" / "assets-placeholder" / "kenney" / "rlInterior_outlined.png"
 
 CELL    = 16
 STRIDE  = 17                          # 1px gutter — SOURCE sheet only, not the output
@@ -120,6 +137,43 @@ FLOOR = [
 # Appended last, so every existing column index above stays where it was.
 GATEWAYS = [
     ("cemeteryArch", [(31, 17), (33, 17)]),
+]
+
+# ── The Interior Pack (rlInterior_outlined.png) ──────────────────────────────
+# The Tiny packs' plum, the colour sprites.js TINY_INK gives every sprite from a
+# foreign pack at draw time, so this furniture matches whatever stands beside it.
+INTERIOR_INK = (63, 38, 49, 255)
+
+# Runs: pieces that stand side by side in a room, each list read left to right
+# against roguelikeIndoor_transparent.png's grid. A run is assembled into one
+# strip, outlined ONCE and sliced back into cells, so the cells carry no stroke
+# where they meet: any middle cell sits between any other with no seam, and
+# only the strip's two ends carry a side stroke.
+# Column order — KEEP IN SYNC with INTERIOR_SPRITES in game/sprites.js.
+INTERIOR_RUNS = [
+    # Kitchen counter: grey top over cupboards. Left end, six middles, right end.
+    [("counterL", (0, 12)), ("counterDrawers", (1, 12)), ("counterDoors", (2, 12)),
+     ("counterGrill", (4, 12)), ("counterBottles", (5, 12)), ("counterDishes", (7, 12)),
+     ("counterSink", (8, 12)), ("counterR", (9, 12))],
+    # Service counter: a long plain front. Left, a repeatable middle, right.
+    [("deskL", (8, 15)), ("deskMid", (9, 15)), ("deskR", (10, 15))],
+    # Green-felt oval table, two cells wide.
+    [("feltTableL", (19, 10)), ("feltTableR", (20, 10))],
+]
+
+# Pieces that stand alone, one cell each.
+INTERIOR_SINGLES = [
+    ("stove",       (14, 14)),
+    ("chairDown",   (0, 2)),     # seat toward you
+    ("chairUp",     (1, 2)),     # back toward you
+    ("chairRight",  (2, 2)),
+    ("chairLeft",   (3, 2)),
+    ("tableSquare", (5, 3)),
+    ("tableRound",  (7, 0)),
+    ("shelfA",      (20, 17)),
+    ("shelfB",      (21, 17)),
+    ("plantA",      (16, 0)),
+    ("plantB",      (17, 0)),
 ]
 
 
@@ -256,5 +310,66 @@ def build():
     print(f"outlined in place, no inset:   {gateway_names}")
 
 
+def outline_to_edge(img, colour=INTERIOR_INK):
+    """The interior outline. Like outline(), every transparent pixel 4-adjacent
+    to an opaque one is inked. Furniture is mostly full-bleed, though: where the
+    silhouette runs into the image edge there is no transparent pixel outside it
+    to ink, so the silhouette's own pixels on that edge are inked instead —
+    Kenney's dark brown border, recoloured. The piece keeps its size; nothing
+    is shrunk or cropped (inset_for_outline's shrink would squash a strip of
+    cells unevenly)."""
+    w, h = img.size
+    px = img.load()
+    op = [[px[x, y][3] > 0 for y in range(h)] for x in range(w)]
+    out = img.copy()
+    o = out.load()
+    for x in range(w):
+        for y in range(h):
+            if op[x][y]:
+                if x == 0 or y == 0 or x == w - 1 or y == h - 1:
+                    o[x, y] = colour
+                continue
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < w and 0 <= ny < h and op[nx][ny]:
+                    o[x, y] = colour
+                    break
+    return out
+
+
+def build_interior(src=INTERIOR_SRC):
+    sheet = Image.open(src).convert('RGBA')
+    columns = []
+
+    for run in INTERIOR_RUNS:
+        strip = Image.new('RGBA', (CELL * len(run), CELL), (0, 0, 0, 0))
+        for i, (_, (col, row)) in enumerate(run):
+            strip.paste(extract(sheet, col, row), (CELL * i, 0))
+        strip = outline_to_edge(strip)
+        for i, (name, _) in enumerate(run):
+            columns.append((name, strip.crop((CELL * i, 0, CELL * (i + 1), CELL))))
+
+    for name, (col, row) in INTERIOR_SINGLES:
+        columns.append((name, outline_to_edge(extract(sheet, col, row))))
+
+    atlas = Image.new('RGBA', (CELL * len(columns), CELL), (0, 0, 0, 0))
+    for i, (_, img) in enumerate(columns):
+        atlas.paste(img, (i * CELL, 0))
+    INTERIOR_OUT.parent.mkdir(parents=True, exist_ok=True)
+    atlas.save(INTERIOR_OUT)
+
+    print(f"wrote {INTERIOR_OUT} ({atlas.width}x{atlas.height}, {len(columns)} cells)")
+    print("order:", ", ".join(n for n, _ in columns))
+
+
 if __name__ == '__main__':
-    build()
+    args = sys.argv[1:]
+    what = args[0] if args and not args[0].startswith('--') else 'all'
+    src = Path(args[args.index('--src') + 1]) if '--src' in args else INTERIOR_SRC
+    if what in ('all', 'floors'):
+        build()
+    if what in ('all', 'interior'):
+        if src.exists():
+            build_interior(src)
+        else:
+            print(f"skipped the interior sheet: {src} not found (pass --src PATH)")
