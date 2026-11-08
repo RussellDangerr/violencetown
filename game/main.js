@@ -4469,6 +4469,7 @@ class Game {
             this._zoneChange();   // (plans/ks1-respawn-list.md) the respawn lists take a step
             this._loadMap(t.toMap, t.toX, t.toY).then(() => {
                 this._log(`[Entered ${this.map.zoneName}]`);
+                this._armourShopNotice?.();   // (AA1) optional-called, like _saveMoment, for the stand-in games tests build
                 this.state = STATE.IDLE;
                 this.emitGameEvent('map_entered', { map: t.toMap });
                 this.autosave({ force: true });
@@ -4483,6 +4484,27 @@ class Game {
 
         this._render();
         this.autosave();
+    }
+
+    // (AA1) Walking into a zone whose shop sells armour you do not own says so, once per visit.
+    // "Own" is worn or in the bag. Armour here means a wearable, non-consumable body piece (a
+    // bandage carries an armour number too, but it is a heal). The words are a placeholder: [TEXT].
+    _armourShopNotice() {
+        const owns = (id) => Object.values(this.equipment || {}).some(it => it && it.id === id)
+            || (this.inventory || []).some(sl => sl && sl.itemDef && sl.itemDef.id === id);
+        const BODY = ['top', 'bottom', 'front', 'back', 'sides'];
+        for (const e of this.enemies || []) {
+            if (!e.vendor || !Array.isArray(e.stock)) continue;
+            for (const id of e.stock) {
+                const def = this._resolveItemDef(id);
+                if (def && def.useType === 'equip' && !def.consumable && def.armor
+                    && BODY.includes(def.equipSlot) && !owns(id)) {
+                    this._log('[TEXT]');
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     // Route world-advance messages: plain strings → side log; spoken tuples
