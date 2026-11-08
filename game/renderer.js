@@ -3685,7 +3685,8 @@ export class Renderer {
         // one; both are drawn here, before the dial, so neither band can paint
         // over it.
         if (this.font) {
-            const msg = 'WHEEL OPEN  ·  MOVE KEYS STEER IT  ·  ESC TO CLOSE';
+            // (FX50) In a sub-ring Esc steps back one ring; only the first ring's Esc closes.
+            const msg = depth > 1 ? 'WHEEL OPEN  ·  MOVE KEYS STEER IT  ·  ESC [TEXT]' : 'WHEEL OPEN  ·  MOVE KEYS STEER IT  ·  ESC TO CLOSE';
             const dialLeft = cx - this._hud().dialRadius(depth, kids.length > 0) - 8;
             let countMsg = null;
             if (combat) {
