@@ -5380,6 +5380,11 @@ class Game {
         this._log(`[${target.shownThe || `The ${target.shownName || target.type || target.entity.name}`} turns on you!]`, 'combat');
     }
 
+    // (ws6) Held shields: the armour they add, and the cut the first ready one
+    // makes to the hit now landing (it then waits out its cooldown, per hand).
+    _shieldArmor() { return shieldArmor(this.equipment || {}); }
+    _shieldCut() { return raiseShield(this.equipment || {}, this._shieldBlocks ??= {}, this.turn ?? 0).mult; }
+
     // Total damage-reduction from worn armor: every equipped body-zone piece's
     // `armor` sums into one number. It stays one flat total (ruled 2026-10-23):
     // there is no per-zone hit location, only Law 2's back tile.
@@ -5396,7 +5401,7 @@ class Game {
         // (Poition) An active Defence Poition rides alongside worn armor +
         // rings the same way — a rider read, not a tick (see _poitionMod).
         total += this._poitionMod('defence');
-        total += shieldArmor(eq);   // a shield held in a hand adds its armour
+        total += this._shieldArmor?.() ?? 0;   // a shield held in a hand adds its armour
         return total;
     }
 
@@ -5786,7 +5791,7 @@ class Game {
         // Guard (incoming, defender) folds into one computeHit call — round once,
         // no double-rounding.
         // A held shield cuts the first hit it meets each turn (ws6): its cut folds in here.
-        const shieldCut = raiseShield(this.equipment || {}, this._shieldBlocks ??= {}, this.turn ?? 0).mult;
+        const shieldCut = this._shieldCut?.() ?? 1;
         let dmg = computeHit({
             base: rawDamage,
             incomingMult: (this.hasBuff('guard') ? 0.5 : 1) * shieldCut,
