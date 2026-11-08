@@ -65,9 +65,8 @@ describe('finishing the quest yields the item; skipping it does not', () => {
     for (const z of ZONES) {
         const item = SLOTS[z.slot].requiredDrop;
         describe(z.zone, () => {
-            test('entering the zone begins the quest, and the bag is still empty', () => {
+            test('the quest stands at its boss step from the start, and the bag is empty', () => {
                 const g = stand(z.zone);
-                assert.equal(g.questEngine.act2Step(z.zone), null);
                 g.questEngine.emit('map_entered', { map: z.map });
                 assert.equal(g.questEngine.act2Step(z.zone), 'boss');
                 assert.ok(!holds(g, item));
@@ -134,34 +133,41 @@ describe('finishing the quest yields the item; skipping it does not', () => {
 });
 
 describe('the quests sit beside the active quest and the save', () => {
-    test('entering an Act 2 zone mid-delivery leaves the burger delivery exactly as it was', () => {
+    test('Act 2 progress mid-delivery leaves the burger delivery exactly as it was', () => {
         const g = stand('FACTORY');
         g.questEngine.start('deliver_burger');
         const before = JSON.stringify({ a: g.questEngine.state.activeId, i: g.questEngine.state.stageIndex });
         g.questEngine.emit('map_entered', { map: 'factory-map.json' });
+        const { enemy, spawns } = bossOf('FACTORY');
+        g.questEngine.act2BossDown(enemy, spawns);
         assert.equal(JSON.stringify({ a: g.questEngine.state.activeId, i: g.questEngine.state.stageIndex }), before);
-        assert.equal(g.questEngine.act2Step('FACTORY'), 'boss');
+        assert.equal(g.questEngine.act2Step('FACTORY'), 'collect');
     });
 
     test('all three can be open at once, in any order', () => {
         const g = stand();
-        for (const z of ['GRAVEYARD', 'CARNIVAL', 'FACTORY']) g.questEngine.emit('map_entered', { map: ACT2_QUESTS[z].map });
-        assert.deepEqual(['FACTORY', 'GRAVEYARD', 'CARNIVAL'].map(z => g.questEngine.act2Step(z)), ['boss', 'boss', 'boss']);
+        for (const z of ['GRAVEYARD', 'CARNIVAL']) {
+            const { enemy, spawns } = bossOf(z);
+            g.questEngine.act2BossDown(enemy, spawns);
+        }
+        assert.deepEqual(['FACTORY', 'GRAVEYARD', 'CARNIVAL'].map(z => g.questEngine.act2Step(z)), ['boss', 'collect', 'collect']);
     });
 
-    test('the save carries nothing for them until an Act 2 zone is entered (quest 1 saves are unchanged)', () => {
+    test('the save carries nothing for them until a boss falls (quest 1 walks the Factory and its saves must not change)', () => {
         const g = stand();
         g.questEngine.start('fix_car');
         g.questEngine.emit('map_entered', { map: 'sewer-map.json' });
+        g.questEngine.emit('map_entered', { map: 'factory-map.json' });
         assert.ok(!Object.keys(g.questEngine.serialize().flags).some(k => k.startsWith('act2_')));
     });
 
     test('a step survives save and load', () => {
         const g = stand();
-        g.questEngine.emit('map_entered', { map: 'carnival-map.json' });
+        const { enemy, spawns } = bossOf('CARNIVAL');
+        g.questEngine.act2BossDown(enemy, spawns);
         const h = stand();
         h.questEngine.restore(JSON.parse(JSON.stringify(g.questEngine.serialize())));
-        assert.equal(h.questEngine.act2Step('CARNIVAL'), 'boss');
+        assert.equal(h.questEngine.act2Step('CARNIVAL'), 'collect');
     });
 
     test('the HUD line is the zone\'s quest step while you stand in it, the usual line elsewhere', () => {

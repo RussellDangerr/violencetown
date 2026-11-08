@@ -202,8 +202,9 @@ const ACT2_ZONES = ['CARNIVAL', 'FACTORY', 'GRAVEYARD'];
 
 // (AB3, plans/ab3-act2-quests.md) The three Act 2 quests. They run side by side with the active
 // quest (Act 2 is played in any order) and never touch it: each one's step is a saved flag,
-// `act2_<zone>`, absent until the zone is entered. Steps: 'boss' (set on entering the zone),
-// 'collect' (set when the boss falls; examining the zone's claim spot ends the quest),
+// `act2_<zone>`, absent until the boss falls (quest 1's autoplay walks into the Factory, so
+// entering a zone must not write the save). Steps: 'boss' (the default: not yet beaten),
+// 'collect' (the boss has fallen; examining the zone's claim spot ends the quest),
 // 'done' (the item is in the bag). The boss slot says
 // which item and where; the verb is how the item reaches you (SP1R1). All text is [TEXT].
 export const ACT2_VERBS = { FACTORY: 'given', GRAVEYARD: 'taken', CARNIVAL: 'earned' };
@@ -278,7 +279,6 @@ export class QuestEngine {
     // Ingest a game event. Auto-starts any quest whose startOn matches, then
     // advances the active quest if the current stage's condition is met.
     emit(type, payload = {}) {
-        if (type === 'map_entered') this.act2Begin(payload.map);
         if (type === 'examine') {
             const q = Object.values(ACT2_QUESTS).find(a => a.claimId === payload.targetId);
             if (q) this.act2Claim(q.zone);
@@ -411,14 +411,8 @@ export class QuestEngine {
         return QUESTS[id].stages[this.state.stageIndex] || null;
     }
 
-    // (AB3) The Act 2 quest steps. null = not begun.
-    act2Step(zone) { return this.state.flags[act2Key(zone)] ?? null; }
-
-    // Entering an Act 2 zone begins its quest.
-    act2Begin(mapFile) {
-        const q = Object.values(ACT2_QUESTS).find(a => a.map === mapFile);
-        if (q && !this.act2Step(q.zone)) this.state.flags[act2Key(q.zone)] = 'boss';
-    }
+    // (AB3) The Act 2 quest steps. Unset = 'boss'.
+    act2Step(zone) { return ACT2_QUESTS[zone] ? (this.state.flags[act2Key(zone)] ?? 'boss') : null; }
 
     // A boss fell. True when its slot's item is the quest's to give (the caller skips the floor
     // drop); the quest moves to its collect step.

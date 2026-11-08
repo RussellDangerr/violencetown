@@ -16,24 +16,25 @@ Verbs, as ruled by SP1R1:
 - **Graveyard: taken.** After the Deity falls you take the soul crystal yourself.
 - **Carnival: earned.** After Bigfoot falls you collect the stuffed animal as the prize.
 
-Every quest title, objective, NPC name, label and reply is `[TEXT]` or `[NPC]`.
+Every quest title, objective, claim-spot line and hand-over line is `[TEXT]`.
 
 ## The shape
 
 - `game/quests.js`: `ACT2_QUESTS`, one record per zone, derived from the three boss slots (the item
-  id is read from the slot, never written in the quest). Three steps each: `boss` (set on entering
-  the zone), `collect` (set when the boss dies), `done`. The step lives in the quest engine's saved
-  `flags` under `act2_<zone>`, so it sits beside the active quest, never touches `activeId`, and is
-  absent from the save until a player has entered an Act 2 zone. Quest 1 and the burger delivery
-  are untouched. While you stand in an Act 2 zone with an unfinished quest, the HUD line shows that
-  quest's step.
+  id is read from the slot, never written in the quest). Steps: `boss` (the default; nothing is
+  saved, because quest 1's autoplay walks the Factory and entering a zone must not touch the save),
+  `collect` (set when the boss dies), `done`. The step lives in the quest engine's saved `flags`
+  under `act2_<zone>`, beside the active quest, never touching `activeId`; the save gains a flag
+  only once a boss has fallen. Examining the zone's claim spot at `collect` puts the item in the
+  bag. Quest 1 and the burger delivery are untouched. While you stand in an Act 2 zone with an
+  unfinished quest, the HUD line shows that quest's step.
 - `game/slots.js`: the three Act 2 slots keep their `requiredDrop` (SL-4: the item belongs to the
   slot, so any boss in the pool leads to it) and gain `viaQuest: true`.
 - `game/main.js`: in the required-drop block, a boss whose slot is `viaQuest` tells the quest it
   fell and skips its floor drop. A few lines.
-- `game/dialogue.js`: one `[NPC]` conversation per zone; its reward choice appears only at the
-  `collect` step and hands the item over (`_grantItem`).
-- The three Act 2 maps: one `[NPC]` placed near each boss.
+- The three Act 2 maps: one claim spot each, a prop with an examinable on it near the boss
+  (`act2-<zone>-<verb>`, text `[TEXT]`). `game/dialogue.js` stays untouched: a claim spot, not an NPC,
+  keeps the enemy counts and the balance golden where they are.
 - `plans/spine.md`: drop "interim" from the three Act 2 rows, nothing else.
 
 ## Acceptance
