@@ -1767,7 +1767,7 @@ export class Renderer {
         const py = vp.origin.y + fy * TILE_PX - this._scrollY;
         const text = verb.label.toUpperCase();
         const tw = this.font.measure ? this.font.measure(text, 1) : text.length * 6;
-        const box = intentLabelRect(px, py, tw, false);
+        const box = intentLabelRect(px, py + 20, tw, false);
         ctx.fillStyle = '#000000cc';
         ctx.fillRect(box.x, box.y, box.w, box.h);
         ctx.fillStyle = verb.color || UI.text;
