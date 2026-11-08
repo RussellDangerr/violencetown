@@ -79,6 +79,11 @@ function isBackstab(attackerX, attackerY, target) {
         && attackerY === target.y - target._lastDy;
 }
 
+// A hit's number, or 0 when it is not one (undefined, null, NaN, a string).
+function hitNumber(n) {
+    return typeof n === 'number' && !Number.isNaN(n) ? n : 0;
+}
+
 // ── Entity ────────────────────────────────────────────────────────────────────
 
 class Entity {
@@ -96,8 +101,14 @@ class Entity {
     }
 
     // Returns actual damage dealt after armor reduction (minimum 1).
+    // A hit that is not a number (a weapon with no damage) counts as 0, so it
+    // lands the minimum: NaN through Math.max would leave hp NaN, never 0.
     takeDamage(rawDamage) {
-        const dealt = Math.max(1, rawDamage - this.armor);
+        // (plans/ek1-hurt-enemy-uses-kit.md) An enemy's live Defence Poition adds to
+        // its armour for as long as it runs. `guardOf` is set by the Enemy that owns
+        // this body (not an own-enumerable field); the player and bare entities have none.
+        const guard = typeof this.guardOf === 'function' ? this.guardOf() : 0;
+        const dealt = Math.max(1, hitNumber(rawDamage) - (this.armor + guard));
         this.hp     = Math.max(0, this.hp - dealt);
         if (this.hp === 0) this.alive = false;
         return dealt;
@@ -118,13 +129,14 @@ class Entity {
 function attack(attacker, target, damage) {
     if (target.isDead()) return null;
 
-    const dealt   = target.takeDamage(damage);
-    const blocked = damage - dealt;
+    const raw     = hitNumber(damage);
+    const dealt   = target.takeDamage(raw);
+    const blocked = raw - dealt;
 
     return {
         attacker: attacker.name,
         target:   target.name,
-        rawDamage: damage,
+        rawDamage: raw,
         dealt,
         blocked,
         targetHp:  target.hp,

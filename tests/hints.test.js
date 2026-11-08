@@ -92,8 +92,9 @@ describe('a hint fires only when you are standing in its situation', () => {
     });
 
     test('being badly hurt points at the hotbar', () => {
-        assert.equal(nextHint(game({ playerHp: 30 }), none).id, 'wounded');
-        assert.equal(nextHint(game({ playerHp: 90 }), none), null);
+        const withDrink = { inventory: [{ itemDef: { id: 'drink', useType: 'self', consumeKind: 'drink' }, count: 1 }] };
+        assert.equal(nextHint(game({ playerHp: 30, ...withDrink }), none).id, 'wounded');
+        assert.equal(nextHint(game({ playerHp: 90, ...withDrink }), none), null);
     });
 
     test('an ally beside you is not a stranger to hide from', () => {

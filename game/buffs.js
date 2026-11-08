@@ -31,6 +31,7 @@
 // the _advanceWorld chokepoint (main.js) via this file's worldBeatPlan.
 
 import { SLUDGE_DOT } from './data.js';
+import { logName } from './npc.js';
 
 export const DOT_FLOOR = 1;
 
@@ -81,7 +82,7 @@ function applyDot(owner, game, buff, label, cause) {
     // either way, and _log flattens the em-dash to a hyphen — so a fungus
     // regenerating on its own sewer fare read "[Violet Fungus - Sludge 3]", as if
     // the sludge were hurting it.
-    const who = owner === game ? 'You' : (owner.name ?? owner.type);
+    const who = owner === game ? 'You' : logName(owner);
     const change = after - before;
     game._log(dmg < 0 ? `[${who} — ${label} (+${change} HP)]` : `[${who} — ${label} ${dmg}]`, 'combat');
 
@@ -143,17 +144,26 @@ export const BUFF_DEFS = {
         },
     },
 
-    // Post-defeat flavor statuses (Outward-style). Temporary + cosmetic — no
-    // per-turn effect; tickBuffList decrements + drops them like any buff. They
-    // read the defeat on the HUD, never a permanent stat cut.
     // (poisons) Fire blood — a rider with no tick. While it AND `fire` last, the
     // bearer's hits set their target burning (Game._spreadFireBlood).
     fire_blood: { name: 'Fire Blood' },
 
-    rattled: { name: 'Rattled' },
-    hunched: { name: 'Hunched' },
-    sludged: { name: 'Sludged' },
+    // (plans/fin2-financier-fight.md) Weakened — a rider with no tick, the
+    // defence Poition's mirror: a negative `defence` amount. An enemy's blows-
+    // soaked sum (Enemy guardOf -> sumBuffStat) already reads it, so its armour
+    // falls by `amount` for as long as the buff lasts. See weakenedBuff below.
+    weakened: { name: 'Weakened' },
 };
+
+// "The rest of the fight" as a count: an enemy's buffs tick once per turn it
+// takes, and no fight runs this long. The fight's end clears the buff instead
+// (the boss retry rebuilds the enemy; a kill ends it).
+export const WEAKENED_FOR = 9999;
+
+// The record a weakening writes on an enemy: its defence falls by `amount`.
+export function weakenedBuff(amount, turns = WEAKENED_FOR) {
+    return { id: 'weakened', name: 'Weakened', turns, type: 'debuff', stat: 'defence', amount: -Math.abs(amount) };
+}
 
 // Advance a buff list one turn: fire each still-active buff's onTick, decrement,
 // then for every buff that hit 0 remove it, run onExpireLog (side-specific), and
@@ -180,7 +190,7 @@ export function tickBuffList(buffs, owner, game, onExpireLog) {
 //
 // The strength/defence Poition riders carry no onTick — they just have to
 // exist and count down (tickBuffList already does that for any hookless
-// buff, per the post-defeat flavor statuses above). The value is read where
+// buff, as fire_blood above shows). The value is read where
 // the number is actually computed: Game.combatAttack's `flats` bucket for
 // strength, Game._playerArmor's sum for defence. Both go through this one
 // helper (Game._poitionMod delegates here) so there's exactly one place that

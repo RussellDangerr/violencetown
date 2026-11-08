@@ -246,6 +246,20 @@ const BAR_HALF = 160;          // the item bar's widest half-width: three chips 
 const BAR_ABOVE = 78;          // the bar's panel runs from 78 above its anchor's bottom …
 const BAR_BELOW = 4;           // … to 4 below it (xmbBarPanelRect)
 
+// ── The loot reel (plans/fx3c-slot-machine-loot-reel.md) ──
+// A panel at the top-centre of the world, `rows` lines tall (loot-ticker.js
+// windowRows), each two text lines high. On a wide screen it sits at the very top,
+// between the HP panel at the left and the buffs at the right. On a narrow one
+// (a phone, under NARROW logical px) those three would touch, so it sits below
+// the HP panel's row instead.
+export const LOOT_REEL = Object.freeze({ W: 280, ROW_H: 32, PAD: 8, TOP: 8, NARROW: 900, HP_H: 90 });
+export function lootReelRect(vp = DEFAULT_VIEW, rows = 1) {
+    const w = Math.min(LOOT_REEL.W, vp.w - 2 * HUD_M);
+    const h = rows * LOOT_REEL.ROW_H + 2 * LOOT_REEL.PAD;
+    const top = vp.w < LOOT_REEL.NARROW ? HUD_M + LOOT_REEL.HP_H + HUD_GAP : LOOT_REEL.TOP;
+    return { x: Math.round((vp.w - w) / 2), y: vp.world.y + top, w, h };
+}
+
 // `opts.fight` picks the dock's FIGHT face (plans/combat-hud.md stage 3): the
 // same geometry down to the pixel, with the log showing the combat feed instead
 // of the quest objective. Nothing moves when a fight starts — a dock that
@@ -446,8 +460,15 @@ export const EQUIP_SLOT_RECTS = [
     { key: 'front',  label: 'TORSO',   x: 452, y: 240, w: 96, h: 48, zone: { fx: 0.92, fy: 0.42 } }, // right
     { key: 'back',   label: 'BACK',    x: 60,  y: 380, w: 96, h: 48, zone: { fx: 0.2,  fy: 0.68 } }, // lower-left
     { key: 'bottom', label: 'FEET',    x: 452, y: 380, w: 96, h: 48, zone: { fx: 0.5,  fy: 0.98 } }, // below (right stack)
-    { key: 'weapon', label: 'WEAPON',  x: 256, y: 480, w: 96, h: 48, zone: { fx: 0.5,  fy: 0.55 } }, // bottom-center
+    { key: 'weapon', label: 'WEAPON [RIGHT]', x: 60,  y: 480, w: 96, h: 48, zone: { fx: 0.36, fy: 0.7 } }, // bottom-left, under BACK: the figure's right hand (the viewer's left)
 ];
+
+// (FX14) The left hand's plate. Its own rect rather than a seventh entry in
+// EQUIP_SLOT_RECTS: it is the one plate that chooses a weapon, not a body-zone
+// piece. It mirrors the right-hand plate about the figure, bottom-right under
+// FEET (so HEAD's "down" key still lands on ARMS, and the connectors clear the
+// BACK and FEET plates). `key` is the game.equipment key it reads.
+export const EQUIP_LEFT_HAND_RECT = { key: 'left', label: 'WEAPON [LEFT]', x: 452, y: 480, w: 96, h: 48, zone: { fx: 0.64, fy: 0.7 } };
 
 // (menu grammar) The always-visible ✕ / Back chip — a ~30px tappable target at a
 // panel's top-right inner corner, the device-agnostic exit on every Menu. Drawn by
@@ -502,6 +523,25 @@ export function deviceBagSlotRects(bodyRect) {
         rects.push({ x: ox + col * STRIDE, y, w: SLOT, h: SLOT });
     }
     return rects;
+}
+
+// (BG1) Once the bag has grown past one PACK page: a page arrow either side of
+// the PACK grid (prev on the left, next on the right), vertically centred on
+// it, and the "page/pages" label's anchor at the right end of the PACK label
+// line. The arrows sit PAGER_GAP clear of the grid, which is more than
+// 2*HIT_SLOP, so an arrow's tap zone and a slot's can never overlap. Drawn by
+// renderer._drawHotbar and hit-tested by main._tapDevice from this one helper.
+const PAGER_W = 28, PAGER_H = 48, PAGER_GAP = 14;
+export function deviceBagPagerRects(bodyRect) {
+    const rects = deviceBagSlotRects(bodyRect);
+    const left = rects[10].x, right = rects[19].x + rects[19].w;
+    const top = rects[10].y, bottom = rects[49].y + rects[49].h;
+    const y = Math.round(top + (bottom - top - PAGER_H) / 2);
+    return {
+        prev:  { x: left - PAGER_GAP - PAGER_W, y, w: PAGER_W, h: PAGER_H },
+        next:  { x: right + PAGER_GAP,          y, w: PAGER_W, h: PAGER_H },
+        label: { x: right, y: top - 12 },
+    };
 }
 
 // The inspector panel sits below the bag grid (which ends ~y382) in the lower
@@ -567,7 +607,15 @@ export function deviceEquipLayout(bodyRect) {
         w: r.w * sx,
         h: r.h * sy,
     });
-    return { figure: map(EQUIP_FIGURE_RECT), slots: EQUIP_SLOT_RECTS.map(map) };
+    return { figure: map(EQUIP_FIGURE_RECT), slots: EQUIP_SLOT_RECTS.map(map), leftHand: map(EQUIP_LEFT_HAND_RECT) };
+}
+
+// (AT1) Where the GEAR tab's "ARMOR n" line sits: the body's top-left corner, left
+// of the HEAD plate and above the ARMS plate, clear of the open chooser (which
+// starts below HEAD). renderer._drawEquipmentModal draws it; pinned by
+// tests/gear-armour-total.test.js.
+export function gearArmourRect(bodyRect) {
+  return { x: bodyRect.x + 10, y: bodyRect.y + 8, w: 120, h: 20 };
 }
 
 // The GEAR chooser's option rows — a centered column living in the clear
@@ -579,13 +627,32 @@ export function deviceEquipLayout(bodyRect) {
 // current catalog gives ≤2 (one equip item + Bare); a slot that ever gained many
 // items would need this uncapped column capped or scrolled. Pinned by
 // tests/device-layout.test.js.
+//
+// (FX11) The rows live inside gearChooserRect, whose top edge sits below the
+// HEAD plate's bottom edge — the panel and its title band, not just the rows,
+// clear the plate. Pinned by tests/gear-chooser.test.js.
+const GEAR_ROW_W = 200, GEAR_ROW_H = 26, GEAR_ROW_GAP = 12;
+const GEAR_PANEL_PAD = 8, GEAR_PANEL_HEAD = 30, GEAR_PANEL_FOOT = 12, GEAR_PANEL_CLEAR = 6;
 export function gearOptionRects(bodyRect, n) {
-  const w = 200, x = bodyRect.x + (bodyRect.w - w) / 2;
-  const rowH = 26, gap = 12;
-  const y0 = bodyRect.y + 60;
+  const p = gearChooserRect(bodyRect, n);
+  const x = p.x + GEAR_PANEL_PAD, y0 = p.y + GEAR_PANEL_HEAD;
   const rects = [];
-  for (let i = 0; i < n; i++) rects.push({ x, y: y0 + i * (rowH + gap), w, h: rowH });
+  for (let i = 0; i < n; i++) rects.push({ x, y: y0 + i * (GEAR_ROW_H + GEAR_ROW_GAP), w: GEAR_ROW_W, h: GEAR_ROW_H });
   return rects;
+}
+
+// The GEAR chooser's titled panel: a centred column starting just below the
+// HEAD plate (the plate above it), tall enough for a title band and `n` rows.
+// renderer._drawGearPicker draws it; gearOptionRects lays the rows inside it.
+export function gearChooserRect(bodyRect, n) {
+  const w = GEAR_ROW_W + 2 * GEAR_PANEL_PAD;
+  const head = deviceEquipLayout(bodyRect).slots.find(s => s.key === 'top');
+  const y = head ? Math.ceil(head.y + head.h) + GEAR_PANEL_CLEAR : bodyRect.y + 30;   // whole px, so the edges stay crisp
+  // No rows: the title band and one line for the empty note.
+  const h = n > 0
+    ? GEAR_PANEL_HEAD + n * GEAR_ROW_H + (n - 1) * GEAR_ROW_GAP + GEAR_PANEL_FOOT
+    : GEAR_ROW_H + GEAR_PANEL_FOOT;
+  return { x: bodyRect.x + (bodyRect.w - w) / 2, y, w, h };
 }
 
 // (Remembrance Rings, Task 5) The SKILLS tab body IS THE HANDS — two hands split

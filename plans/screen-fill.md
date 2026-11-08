@@ -91,12 +91,17 @@ the wheel at each depth, and the dial/tower backing.
 
   | Zone | `border` |
   |---|---|
-  | Town, Carnival, Downtown | `{ "tile": 13, "prop": "tree" }` — forest (GRASS + tree) |
+  | Town, Carnival, Downtown | `{ "tile": 13, "prop": ["tree", "pine"] }` — forest (GRASS + tall tree mixed with a one-cell pine, APR2) |
   | Graveyard, Wilderness | `{ "tile": 52, "prop": "tree" }` — dead forest (DEAD_GRASS + tree) |
+  | [Frozen Area] | `{ "tile": 70, "prop": "tree" }` — forest in snow (SNOW + tree; added 2026-10-26, plans/ic3-frozen-area.md) |
   | Sewer | `{ "tile": 0 }` — its brick (WALL) |
   | Factory | `{ "tile": 41 }` — FACTORY_WALL |
   | Canyon | `{ "tile": 61 }` — its red rock (CANYON_WALL; was WALL until 2026-09-27) |
   | Bank, Casino, Diner, Borgir | none — black, as Pokémon interiors are |
+
+  `prop` may be one name or a list; with a list, each off-map cell picks one by a hash of its own
+  position (stable frame to frame). *Ruled APR2: Town, Carnival and Downtown mix the tall tree
+  with Tiny Town's one-cell pine (4,2); Graveyard, Wilderness and Frozen keep the single tree.*
 
   *Ruled 2026-10-03 (SF): the table stands; vary the forest later (an art pick); and draw the
   filler trees behind everything, so the row past the south edge never covers the map's last row

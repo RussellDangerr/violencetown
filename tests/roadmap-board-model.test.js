@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {
     LANES, KINDS, WIP_CAP, byLane, blockerIndex, unblocked, nextSlice, answerRuling, newIdea,
     triageIdea, approveSlice, reviewVerdict, addFeedback, yourTurn, claudesTurn, sendWords,
-    migrateCard, mermaidSource, moveCard, waitingOn, freesIndex,
+    migrateCard, mermaidSource, moveCard, waitingOn, freesIndex, myTurn,
 } from '../tools/roadmap-board/board-model.js';
 
 const cards = [
@@ -403,6 +403,63 @@ describe('moveCard', () => {
         const g = byLane(next);
         assert.deepEqual(g.ready.map(c => c.id), ['B2', 'B1'], 'B1 moved past B2');
     });
+});
+
+describe('myTurn — only what he can move right now', () => {
+    const options = [{ id: 'a', label: 'Yes' }];
+    const deck = [
+        { id: 'R1', title: 'Open ruling', lane: 'ruling', order: 10, kind: 'ruling', blockedBy: [], options },
+        { id: 'R2', title: 'No options yet', lane: 'ruling', order: 20, kind: 'ruling', blockedBy: [] },
+        { id: 'R3', title: 'Behind a ruling', lane: 'ruling', order: 30, kind: 'ruling', blockedBy: ['R1'], options },
+        { id: 'I1', title: 'Untriaged idea', lane: 'idea', order: 10, kind: 'idea', blockedBy: [] },
+        { id: 'I2', title: 'Sent for a tweak', lane: 'idea', order: 20, kind: 'idea', blockedBy: [], triage: { choice: 'tweak', at: 1 } },
+        { id: 'S1', title: 'Free to approve', lane: 'ready', order: 10, kind: 'slice', blockedBy: [], acceptance: ['x'] },
+        { id: 'S2', title: 'Approve, but ruling first', lane: 'ready', order: 20, kind: 'slice', blockedBy: ['R1'], acceptance: ['x'] },
+        { id: 'S3', title: 'Approve, but merge first', lane: 'ready', order: 30, kind: 'slice', blockedBy: ['V1'], acceptance: ['x'] },
+        { id: 'S4', title: 'Approve, behind a done card', lane: 'ready', order: 40, kind: 'slice', blockedBy: ['D1'], acceptance: ['x'] },
+        { id: 'S5', title: 'Approve, behind a missing card', lane: 'ready', order: 50, kind: 'slice', blockedBy: ['GONE'], acceptance: ['x'] },
+        { id: 'S6', title: 'Already approved', lane: 'ready', order: 60, kind: 'slice', blockedBy: [], acceptance: ['x'], approved: { at: 1 } },
+        { id: 'V1', title: 'Waiting on his merge', lane: 'review', order: 10, kind: 'slice', blockedBy: [], acceptance: ['x'] },
+        { id: 'V2', title: 'Merge said', lane: 'review', order: 20, kind: 'slice', blockedBy: [], acceptance: ['x'], verdict: { verdict: 'merge' } },
+        { id: 'V3', title: 'Branch behind a branch', lane: 'review', order: 30, kind: 'slice', blockedBy: ['V1'], acceptance: ['x'] },
+        { id: 'D1', title: 'Done', lane: 'done', order: 10, kind: 'slice', blockedBy: [] },
+        { id: 'D2', title: 'Done, with a question', lane: 'done', order: 20, kind: 'ruling', blockedBy: [],
+          feedback: [{ from: 'claude', text: 'Which name?', at: 1, ask: true }] },
+    ];
+    const ids = d => myTurn(d).map(t => t.id).sort();
+
+    test('keeps every card he can act on, and drops the rest', () => {
+        assert.deepEqual(ids(deck), ['D2', 'I1', 'R1', 'S1', 'S4', 'V1'].sort());
+    });
+    test('every card it lists is on Your turn, with the same reason', () => {
+        const yours = Object.fromEntries(yourTurn(deck).map(t => [t.id, t.why]));
+        for (const t of myTurn(deck)) assert.equal(t.why, yours[t.id]);
+    });
+    test('a blocked card shows up once its blocker is settled', () => {
+        const d = answerRuling(deck, 'R1', { option: 'a', at: 1 });
+        const after = ids(d);
+        assert.ok(after.includes('S2') && after.includes('R3'), 'both were behind R1');
+        assert.ok(!after.includes('R1'), 'the answered ruling has left');
+    });
+    test('a card he just wrote on waits on Claude, and comes back when Claude asks', () => {
+        const sent = addFeedback(deck, 'I1', 'make it a hat', 1);
+        assert.ok(!ids(sent).includes('I1'));
+        const asked = sent.map(c => c.id === 'I1'
+            ? { ...c, feedback: [...c.feedback, { from: 'claude', text: 'What kind?', at: 2, ask: true }] } : c);
+        assert.ok(ids(asked).includes('I1'));
+    });
+    test('a gesture takes the card out', () => {
+        assert.ok(!ids(approveSlice(deck, 'S1', 1)).includes('S1'));
+        assert.ok(!ids(reviewVerdict(deck, 'V1', 'merge', '', 1)).includes('V1'));
+        assert.ok(!ids(triageIdea(deck, 'I1', 'tweak', 1)).includes('I1'));
+    });
+    test('a hostile card cannot break it', () => {
+        assert.doesNotThrow(() => myTurn([
+            { id: '__proto__', lane: 'ruling', kind: 'ruling', options, blockedBy: [] },
+            { id: 'H', lane: '__proto__', kind: 'ruling', options: 'nope', feedback: 'nope' },
+        ]));
+    });
+    test('an empty board has nothing for him', () => assert.deepEqual(myTurn([]), []));
 });
 
 describe('waitingOn and freesIndex — what a blocked card waits on (§9)', () => {

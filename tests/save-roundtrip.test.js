@@ -792,7 +792,7 @@ describe('slot picks in the save', () => {
     test("a save from before slots existed loads today's content", () => {
         const raw = serialize(makePopulatedGame());
         // Today's picks: the Sewer's boss and character (CS1R1) plus the three Act 2 boss slots (AB1R3).
-        const today = { 'sewer.boss': 'wererat', 'carnival.boss': 'bigfoot', 'factory.boss': 'alien_invasion', 'graveyard.boss': 'the_deity', 'sewer.character': 'crat' };
+        const today = { 'sewer.boss': 'wererat', 'carnival.boss': 'bigfoot', 'factory.boss': 'alien_invasion', 'graveyard.boss': 'the_deity', 'frozen.boss': 'siberia', 'sewer.character': 'crat' };
         delete raw.slots;
         assert.deepEqual(migrate(raw).slots, today);
         raw.slots = ['not', 'an', 'object'];
@@ -813,6 +813,6 @@ describe('slot picks in the save', () => {
         g._loadMap = async function (...a) { seenAtLoad = this.slots && { ...this.slots }; return load.apply(this, a); };
         await loadIntoReal(g, raw);
         // The saved pick stands; the slots it predates fill from today's picks (AB1R3).
-        assert.deepEqual(seenAtLoad, { 'sewer.boss': 'picked', 'carnival.boss': 'bigfoot', 'factory.boss': 'alien_invasion', 'graveyard.boss': 'the_deity', 'sewer.character': 'crat' });
+        assert.deepEqual(seenAtLoad, { 'sewer.boss': 'picked', 'carnival.boss': 'bigfoot', 'factory.boss': 'alien_invasion', 'graveyard.boss': 'the_deity', 'frozen.boss': 'siberia', 'sewer.character': 'crat' });
     });
 });

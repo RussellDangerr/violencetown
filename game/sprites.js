@@ -18,7 +18,7 @@ import { dirOf } from './perception.js';
 export const TINY_INK = [63, 38, 49];   // #3F2631, the Tiny packs' outline
 // Sheets already drawn in the Tiny style (or re-outlined by a tool), which the
 // outline pass leaves alone.
-export const TINY_STYLE_SHEETS = new Set(['tinyDungeon', 'tinyTown', 'tinyExtra', 'outlined', 'interior', 'emotes', 'marks', 'ratVariants']);
+export const TINY_STYLE_SHEETS = new Set(['tinyDungeon', 'tinyTown', 'tinyExtra', 'outlined', 'interior', 'emotes', 'marks', 'ratVariants', 'beastVariants', 'iceCone', 'ant']);
 
 export class SpriteSheet {
     // `padding` is the gap (in source pixels) between adjacent cells. Kenney's
@@ -96,6 +96,16 @@ export class SpriteSheet {
     drawFrameInk(ctx, col, row, x, y, destW, destH) {
         return this.drawRegionInk(ctx, col * (this.frameW + this.padding), row * (this.frameH + this.padding),
             this.frameW, this.frameH, x, y, destW ?? this.frameW, destH ?? this.frameH);
+    }
+    // (plans/ak1-ankou-graveyard.md) A cell drawn see-through: the surround a creature's sprite
+    // entry names under `ghost`. Same ink as any sprite, at `alpha` of the canvas's own.
+    drawGhost(ctx, col, row, x, y, destW, destH, alpha) {
+        if (!this.loaded) return false;
+        ctx.save();
+        ctx.globalAlpha *= alpha;
+        const ok = this.drawFrameInk(ctx, col, row, x, y, destW, destH);
+        ctx.restore();
+        return ok;
     }
     _inked(sx, sy, sw, sh) {
         this._inkCache = this._inkCache || new Map();
@@ -181,6 +191,21 @@ export const SHEETS = {
     // Packed, padding 0. The Carnival's rats draw from it (ENEMY_SPRITES).
     ratVariants:  { src: `${K}/ratVariants_packed.png`, frameW: 16, frameH: 16 },
 
+    // The Tiny Dungeon (Kenney, CC0) grey beast, (4,10), recoloured by the same tool: only its
+    // two greys swapped, the outline and orange tail kept. Column order is the
+    // tool's BEAST_VARIANTS list. Packed, padding 0. Lire draws from it.
+    beastVariants: { src: `${K}/beastVariants_packed.png`, frameW: 16, frameH: 16 },
+
+    // The Tiger's Blood Ice Cone: Tiny Ski's snowy pine (Kenney, CC0) mirrored
+    // and repainted by tools/gen_ice_cone.py, outline included. One cell.
+    iceCone:      { src: './assets-placeholder/ice_cone.png', frameW: 16, frameH: 16 },
+
+    // The ants (plans/an4-ants-pico-mite-art.md): the Pico-8 Platformer mite (Kenney, CC0)
+    // reshaped and drawn in the Tiny ink by tools/gen_ant.py. One row of four 16x16
+    // cells, each holding two or three mites. Already ink-coloured, so it is a
+    // Tiny-style sheet and the outline pass leaves it alone.
+    ant:          { src: './assets/ant.png', frameW: 16, frameH: 16 },
+
     // Kenney Emote Pack (Pixel, Style 8) — manga impact marks (animation pass
     // §1). A star inside Style 1's white balloon reads as someone SAYING
     // "star", so hit-marks need the bare glyph instead. Style 5 was the
@@ -247,6 +272,12 @@ export const SHEETS = {
     // causes. Coordinates below were checked against a labeled contact sheet
     // generated at this stride, not eyeballed at a packed one.
     roguelikeDungeon: { src: `${K}/roguelikeDungeon_transparent.png`, frameW: 16, frameH: 16, padding: 1 },
+
+    // Kenney roguelikeSheet, raw (the `outlined` sheet above is a re-packed
+    // subset of it). Registered for its flat ground cells — the frozen area's
+    // snow. It carries the native 1px gutter like roguelikeDungeon, so
+    // padding: 1; coordinates are picked at stride 17.
+    roguelikeSheet: { src: `${K}/roguelikeSheet_transparent.png`, frameW: 16, frameH: 16, padding: 1 },
 };
 
 // ── Sewer/dungeon tile coords (Tiny Dungeon + roguelikeDungeon packs) ──────
@@ -274,11 +305,9 @@ export const TILE_SPRITE_MAP = {
     0: { sheet: 'roguelikeDungeon', col: 8, row: 0, under: 'fill' },  // wall — plain grey brick (10 see-through corner px: its own dark colour under them reads as mortar)
     1: { sheet: 'tinyDungeon', col: 0, row: 4 },  // floor — clean tan dungeon stone
     2: { sheet: 'roguelikeDungeon', col: 6, row: 11 }, // sludge — bordered teal pool
-    3: { sheet: 'tinyDungeon', col: 4, row: 4 },  // gap — speckled tan floor variant
     4: { sheet: 'tinyDungeon', col: 0, row: 3 },  // grate — horizontal iron bars
     5: { sheet: 'tinyDungeon', col: 6, row: 3 },  // drain — floor with 4-square stone inset
     6: { sheet: 'tinyDungeon', col: 4, row: 3 },  // boss floor — seamless grey brick, the boss's two-cell dais (was (9,4), Factory's FACTORY_FLOOR; (9-11,4) are wall-run pieces with dark end caps and seam when tiled)
-    7: { sheet: 'tinyDungeon', col: 5, row: 2 },  // boss trigger — red banner on stone (accent)
     22: { sheet: 'tinyDungeon', col: 5, row: 3 }, // PORTCULLIS — spiked vertical gate
     23: { sheet: 'tinyDungeon', col: 3, row: 5, under: 1 }, // BARRICADE — wooden crate front (destructible), on sewer floor
 };
@@ -355,6 +384,7 @@ export const ITEM_SPRITES = {
     cardboard_cuirass: { sheet: 'tinyDungeon', x: 6 * 16,  y: 5 * 16,  w: 16, h: 16 },  // brown board
     grappling_hook:    { sheet: 'tinyTown',    x: 9 * 16,  y: 10 * 16, w: 16, h: 16 },  // hooked blade
     alcohol:           { sheet: 'tinyTown',    x: 8 * 16,  y: 8 * 16,  w: 16, h: 16 },  // blue jar
+    tigers_blood_ice_cone: { sheet: 'iceCone', x: 0,     y: 0,       w: 16, h: 16 },  // tools/gen_ice_cone.py (ICR6)
     // latex_gloves, red_cape, shoe_bags: no fitting cell yet; they draw as
     // UNKNOWN_ITEM_SPRITE until they get art.
 };
@@ -487,6 +517,9 @@ export const ENEMY_SPRITES = {
 
     // Zone-exclusive enemies (compromise picks — no clown/skeleton art exists):
     'Greedy Green':     { sheet: 'tinyDungeon', col: 4, row: 9,  static: true }, // green-bandana goblin
+    // Downtown's mugger wears the same goblin (ruled: the two read as kin). Safe
+    // to share: Greedy Green never stands in Downtown.
+    'Ruffian':          { sheet: 'tinyDungeon', col: 4, row: 9,  static: true }, // green-bandana goblin
     'Carnival Clown':   { sheet: 'tinyDungeon', col: 0, row: 7,  static: true }, // purple mage — most colorful humanoid
     'Rattling Skeleton':{ sheet: 'tinyDungeon', col: 1, row: 10, static: true }, // white ghost — pale/bony proxy
 
@@ -511,6 +544,49 @@ export const ENEMY_SPRITES = {
     // Puck gave the knight helm (0,8) back to Boss, which now stands in the
     // Factory too (the Act 2 placeholder boss); (4,8) was free.
     'Puck':       { sheet: 'tinyDungeon', col: 4, row: 8, static: true }, // grey-haired elder
+
+    // Lire, the lion the Lion Whip's "Hire Lire" trick summons (main.js
+    // _spawnSummon). No lion in Tiny Dungeon: the grey beast, (4,10), recoloured
+    // tawny by tools/gen_recolor.py (BEAST_VARIANTS column 0).
+    'Lire': { sheet: 'beastVariants', col: 0, row: 0, static: true },
+    // The Carnival's own lion (plans/ln1-carnival-lion.md): the same beast in
+    // the crimson column (BEAST_VARIANTS column 1), so it is never taken for Lire.
+    'Carnival Lion': { sheet: 'beastVariants', col: 1, row: 0, static: true },
+    // The Carnival's horses (plans/cb1-carnival-horses-circle.md): the grey beast the Polar Bear
+    // uses, a stand-in (the two never share a map).
+    'Carnival Horse': { sheet: 'tinyDungeon', col: 4, row: 10, static: true },
+    // The Carnival's dolls (plans/ec1-carnival-doll-pack.md): the grey visored figure, an unused Tiny
+    // Dungeon cell, a stand-in that reads as a toy soldier and not as a child.
+    'Carnival Doll': { sheet: 'tinyDungeon', col: 1, row: 8, static: true },
+    // The Graveyard's angel (plans/ca1-crying-angel.md): the grey stone bust, an unused Tiny
+    // Dungeon cell, a stand-in until it is drawn.
+    'Crying Angel': { sheet: 'tinyDungeon', col: 2, row: 6, static: true },
+    // The Graveyard's Ankou (plans/ak1-ankou-graveyard.md): the hooded gaunt cell the Sewer's
+    // Carrion wears (they never share a map), a stand-in, with `ghost`: the white ghost cell
+    // (1,10), drawn behind the body, see-through and a little larger (renderer.js). Only the
+    // Ankou has the field.
+    'Ankou': { sheet: 'tinyDungeon', col: 3, row: 9, static: true, ghost: { col: 1, row: 10, scale: 1.4, alpha: 0.5 } },
+    // The Carnival's named clown (plans/cw1-the-clown-mini-boss.md): an unused Tiny Dungeon
+    // cell, a stand-in, so he is never taken for the ordinary purple-mage clown.
+    'The Clown': { sheet: 'tinyDungeon', col: 3, row: 8, static: true },
+
+    // The frozen area's mooks (plans/ic4-frozen-creatures.md). No snow creature
+    // exists in the bundled sheets, so each borrows the closest Tiny Dungeon
+    // cell. The two shared cells belong to types that never stand in the frozen
+    // area (tests/sprite-coverage.test.js enforces that).
+    'Snowman':    { sheet: 'tinyDungeon', col: 1, row: 10, static: true }, // white ghost, shared with Rattling Skeleton
+    'Yeti':       { sheet: 'tinyDungeon', col: 1, row: 9,  static: true }, // the ogre, shared with Fungus King
+    'Polar Bear': { sheet: 'tinyDungeon', col: 4, row: 10, static: true }, // grey beast, Lire's uncoloured source
+    // Siberia, the frozen area's boss (plans/ic5-siberia-frozen-boss.md): the
+    // placeholder boss's knight helm until she is drawn.
+    'Siberia':    { sheet: 'tinyDungeon', col: 0, row: 8,  static: true },
+
+    // The swarm's ants (plans/an4-ants-pico-mite-art.md): a cell of two or three mites
+    // each, one of four by the ant's id. tools/gen_ant.py draws the sheet.
+    'Ant': {
+        sheet: 'ant', col: 0, row: 0, static: true,
+        variants: [{ col: 0, row: 0 }, { col: 1, row: 0 }, { col: 2, row: 0 }, { col: 3, row: 0 }],
+    },
 
     // Not a person: a puzzleWall growth blocking a sewer pipe.
     'Sludge Bloom': { sheet: 'tinyDungeon', col: 8, row: 2, static: true }, // stone hatch leaking green ooze
@@ -732,7 +808,55 @@ export const PROP_SPRITES = {
     // dot with blobs.
     ...Object.fromEntries(Object.entries(INTERIOR_SPRITES)
         .map(([name, col]) => [name, { sheet: 'interior', sx: col * 16, sy: 0, sw: 16, sh: 16, wTiles: 1, hTiles: 1, shadow: false }])),
+
+    // The casino's slot machine — Tiny Dungeon's grey cabinet with a dark window,
+    // (6,4) on the packed sheet (no gutter, so stride 16). Solid, standing on the
+    // examine spot at (6,2): you face it from below and examine it.
+    slotMachine: { sheet: 'tinyDungeon', sx: 6 * 16, sy: 4 * 16, sw: 16, sh: 16, wTiles: 1, hTiles: 1, shadowRx: 9, shadowRy: 3 },
+
+    // The bank's vault door — Tiny Town's metal door with a slot, (5,10). It is
+    // drawn on the real door tile in the back wall and placed `solid: false` in
+    // the map, so the walk through it into the vault (and its item gate) is
+    // exactly what it was. No ground shadow: it is a door, not an object.
+    vaultDoor: { sheet: 'tinyTown', sx: 5 * 16, sy: 10 * 16, sw: 16, sh: 16, wTiles: 1, hTiles: 1, shadow: false },
 };
+
+// Art drawn ONLY past a map's edge, never placed in a map, so it is not a PROP_SPRITES
+// entry (the prop-coverage and examine tests ask of those that a map places them and
+// that they have a name; nothing off the map can be placed or examined).
+//   pine: Tiny Town's one-cell green pine (col 4, row 2: the small cousin under the tall
+//   tree's two cells; tinyTown is packed, so the stride is 16). It varies the forest past
+//   a map's edge (`border.prop: ["tree", "pine"]`, borderPropKey below).
+export const FILLER_SPRITES = {
+    pine: { sheet: 'tinyTown', sx: 4 * 16, sy: 2 * 16, sw: 16, sh: 16, wTiles: 1, hTiles: 1, shadowRx: 8, shadowRy: 3 },
+};
+
+// The art a border prop name draws: a placed prop's, or filler-only art.
+export function fillerSprite(key) {
+    return PROP_SPRITES[key] ?? FILLER_SPRITES[key] ?? null;
+}
+
+// The props a map's border may draw past its edge, as a list. `border.prop` is one
+// PROP_SPRITES name or a list of them (the forest mix); no prop is an empty list.
+export function borderPropKeys(border) {
+    const p = border?.prop;
+    return p ? (Array.isArray(p) ? p : [p]) : [];
+}
+
+// Which prop the off-map cell (wx, wy) draws. A single name is that name for every
+// cell, as before. A list picks one per cell from a hash of the cell's own position:
+// a pure function of where it is, so the same cell is the same tree every frame and
+// every visit. idHash alone leaves a checkerboard in its low bit (the key is "x,y"),
+// so its result goes through murmur's finalizer before it is split.
+export function borderPropKey(border, wx, wy) {
+    const keys = borderPropKeys(border);
+    if (keys.length < 2) return keys[0] ?? null;
+    let h = idHash({ x: wx, y: wy });
+    h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b);
+    h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35);
+    h ^= h >>> 16;
+    return keys[(h >>> 0) % keys.length];
+}
 
 // ── Emote balloons (Kenney Emote Pack, Pixel Style 1) ───────────────────────
 // Column index into the `emotes` strip (game/assets-placeholder/kenney/
@@ -803,9 +927,12 @@ export const ZONE_TILE_SPRITE_MAP = {
     // replace TENT_STRIPE, red roof shingles that stood in for a tent over all
     // 344 of the carnival's tent cells. (Striped awnings exist too, green/white
     // and orange/white in roguelikeCity_packed.png — still unused.)
-    30: { sheet: 'tinyTown', col: 1, row: 2 },   // CIRCUS_GROUND — packed dirt/sand
+    30: { sheet: 'tinyTown', col: 7, row: 3 },   // CIRCUS_GROUND — stone pavers on grass, a fairground path (its own cell, not the road's)
     32: { sheet: 'tinyTown', col: 2, row: 0 },   // CONFETTI      — grass dotted with orange flowers
-    33: { sheet: 'tinyTown', col: 4, row: 3 },   // SAWDUST       — packed tan dirt
+    // SAWDUST — a rounded dirt patch with a grass rim, Tiny Town's four corner
+    // cells as one 2x2 picture; every sawdust patch on the map is 2x2 from an
+    // even tile, so each one draws whole.
+    33: { sheet: 'tinyTown', quad: [[0, 1], [2, 1], [0, 3], [2, 3]].map(([col, row]) => ({ sheet: 'tinyTown', col, row })) },
     34: { sheet: 'outlined', quad: outlinedQuad('tentGreen'), under: 30 }, // GREEN_TENT
     35: { sheet: 'outlined', quad: outlinedQuad('tentTan'),   under: 30 }, // TAN_TENT
 
@@ -866,6 +993,12 @@ export const ZONE_TILE_SPRITE_MAP = {
     64: { sheet: 'tinyDungeon',      col: 2,  row: 4 },  // LEDGE        — sand with a darker lip along the top
     65: null,                                            // CHASM        — no art: the flat near-black is the drop
     66: { sheet: 'roguelikeDungeon', col: 1,  row: 11 }, // RIVER        — open water
+
+    // Frozen area — picked 2026-10-26 from sheets already bundled; no pack has
+    // real snow or ice. The open-water cells were passed over for ICE: they are
+    // RIVER's colour, and RIVER is water you cannot walk on. Both opaque.
+    70: { sheet: 'roguelikeSheet', col: 45, row: 26 },   // SNOW — flat white ground
+    71: { sheet: 'roguelikeCity',  col: 14, row: 9 },    // ICE  — pale glass with a diagonal sheen, seamless
 };
 
 // ── Phase B TODO ────────────────────────────────────────────────────────────

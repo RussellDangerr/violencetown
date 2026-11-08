@@ -17,6 +17,58 @@ export const ART_PX = TILE_PX / 16;    // logical px per art pixel: 2
 export const MIN_TILES = 20;           // the rule: at least this many tiles along the short side
 export const MENU_SIZE = CANVAS_PX;    // menus keep their 608x608 layouts, in a centred box
 
+// The scales a screen allows (plans/zm1-zoom-steps.md). Every step is a whole
+// k, so pixel art stays crisp. 1 is the farthest. The automatic scale (the
+// tile rule above) is one of the steps. Closer may go past that rule's floor,
+// but only as far as menus still fit: they keep their 608x608 layouts, so the
+// closest step is the largest k that leaves MENU_SIZE logical px along the
+// short side. On many screens that is the automatic step itself.
+export function zoomRange(backingW, backingH) {
+    const short = Math.min(backingW, backingH);
+    const auto = Math.max(1, Math.floor(short / (16 * MIN_TILES)));
+    const closest = Math.max(auto, Math.floor(short / (MENU_SIZE / ART_PX)));
+    return Object.freeze({ min: 1, auto, max: closest });
+}
+
+// A saved zoom is a whole number or nothing (nothing = automatic).
+const asZoom = (v) => (Number.isInteger(v) && v >= 1 && v <= 64) ? v : null;
+
+// The step one Closer (dir +1) or Farther (dir -1) from `k`, kept inside the range.
+export function stepZoom(range, k, dir) {
+    const next = (Number.isInteger(k) ? k : range.auto) + (dir > 0 ? 1 : -1);
+    return Math.min(range.max, Math.max(range.min, next));
+}
+
+// What to save for a chosen step: choosing the automatic step saves nothing,
+// so the setting keeps following the screen.
+export function zoomToSave(range, k) {
+    return (asZoom(k) === null || k === range.auto) ? null : k;
+}
+
+// The zoom is kept on the device under its own key, apart from the save file
+// and from settings.js. `storage` is a localStorage, passed in so this stays
+// pure; every access is wrapped so private mode or a quota never throws.
+export const ZOOM_KEY = 'violencetown.zoom';
+
+export function readZoom(storage) {
+    try {
+        const raw = storage && storage.getItem(ZOOM_KEY);
+        return raw ? asZoom(JSON.parse(raw)) : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+export function writeZoom(storage, k) {
+    try {
+        if (!storage) return;
+        if (asZoom(k) === null) storage.removeItem(ZOOM_KEY);
+        else storage.setItem(ZOOM_KEY, JSON.stringify(k));
+    } catch (e) {
+        console.warn('[zoom] not saved', e);
+    }
+}
+
 // Round a logical coordinate to whole art pixels, which land on whole
 // backing-store px at every k.
 const toArt = (v) => ART_PX * Math.round(v / ART_PX);
@@ -25,8 +77,9 @@ const toArt = (v) => ART_PX * Math.round(v / ART_PX);
 // still shows MIN_TILES along the short side. `dock` ({ oneRow, twoRows,
 // minOneRowW }, logical px) is the strip along the bottom the world does not
 // show through: one row on a wide screen, two rows on an upright one or one
-// narrower than minOneRowW.
-export function computeViewport({ cssW, cssH, dpr = 1, dock = null } = {}) {
+// narrower than minOneRowW. `zoom` (a whole scale, optional) overrides the
+// automatic scale; it is clamped to the screen's steps, and unset is automatic.
+export function computeViewport({ cssW, cssH, dpr = 1, dock = null, zoom = null } = {}) {
     const d = (Number.isFinite(dpr) && dpr > 0) ? dpr : 1;
     // A screen we cannot measure has to fall back the way a bad dpr does. Every
     // radial gradient the renderer builds is placed from origin/w/h, and
@@ -38,7 +91,9 @@ export function computeViewport({ cssW, cssH, dpr = 1, dock = null } = {}) {
     const backingW = Math.max(1, Math.floor(px(cssW) * d));
     const backingH = Math.max(1, Math.floor(px(cssH) * d));
     const cssOut = { w: backingW / d, h: backingH / d };
-    const k = Math.max(1, Math.floor(Math.min(backingW, backingH) / (16 * MIN_TILES)));
+    const range = zoomRange(backingW, backingH);
+    const chosen = asZoom(zoom);
+    const k = chosen === null ? range.auto : Math.min(range.max, Math.max(range.min, chosen));
     const scale = k / ART_PX;
     const w = backingW / scale, h = backingH / scale;
     const portrait = h > w;
@@ -51,7 +106,7 @@ export function computeViewport({ cssW, cssH, dpr = 1, dock = null } = {}) {
     };
     return Object.freeze({
         cssW: cssOut.w, cssH: cssOut.h, backingW, backingH,
-        scale, k: scale * ART_PX, w, h, cols: w / TILE_PX, rows: h / TILE_PX,
+        scale, k: scale * ART_PX, zoom: range, w, h, cols: w / TILE_PX, rows: h / TILE_PX,
         world, origin, dockH, dockRows, portrait,
         // The tiles, relative to yours, that are at least partly on screen.
         span: {

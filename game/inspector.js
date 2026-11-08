@@ -20,11 +20,19 @@ export function inspectorUsesRect(bodyRect) {
     return { x, y: last.y, w: p.x + p.w - gap - x, h: last.h };
 }
 
+// (fx37) A throw item's main button arms the throw (the game then waits for a
+// direction). A drinkable throw item (Fire Blood) keeps its Drink.
+export function armsThrow(itemDef) {
+    return !!itemDef && itemDef.useType === 'throw' && !itemDef.drinkable;
+}
+
 function primaryAction(itemDef) {
     if (itemDef.useType === 'equip' && itemDef.equipSlot) return { id: 'equip', label: 'Equip' };
     // A drinkable throw item (Fire Blood): throwing needs the bar or the wheel,
     // so the device's one primary row is the drink.
     if (itemDef.drinkable) return { id: 'drink', label: 'Drink' };
+    // A throw item's Use arms the throw; the flag tells the dispatcher (fx37).
+    if (armsThrow(itemDef)) return { id: 'use', label: 'Use', arms: true };
     return { id: 'use', label: 'Use' };
 }
 
