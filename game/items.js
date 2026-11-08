@@ -632,8 +632,9 @@ function resolveEquip(game, itemDef, hand = 'weapon', bagSlot = -1) {
         // Into `hand` (the right, as the one weapon slot did, unless the GEAR
         // tab's left plate asks for the left); a two-hander takes both, and
         // whatever it pushes out goes back in the bag.
-        const out = holdInHands(game.equipment, itemDef, handsRule(game), hand)
-            .filter(d => d.id !== itemDef.id);
+        // (EQ1) No same-id filter: every caller takes the item out of the bag first,
+        // so a pushed-out copy of the same thing is a second copy and goes back too.
+        const out = holdInHands(game.equipment, itemDef, handsRule(game), hand);
         for (const d of out) bagIt(d);
         return out.length
             ? `[Equipped ${itemDef.name} — ${out.map(d => d.name).join(', ')} back in your bag]`
@@ -641,8 +642,8 @@ function resolveEquip(game, itemDef, hand = 'weapon', bagSlot = -1) {
     }
     const old = game.equipment[slot];
     game.equipment[slot] = itemDef;
-    if (old && old.id !== itemDef.id) bagIt(old);
-    return old && old.id !== itemDef.id
+    if (old) bagIt(old);
+    return old
         ? `[Equipped ${itemDef.name} — ${old.name} back in your bag]`
         : `[Equipped ${itemDef.name}]`;
 }
