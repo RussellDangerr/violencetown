@@ -875,3 +875,11 @@ export function offerTraySlotAt(L, pt, side) {
     }
     return -1;
 }
+
+// (RR1) What a worn ring's passive says on the Hands tab: one row per passive,
+// a label and its number. The label is a placeholder until its copy is ruled.
+export const RING_PASSIVE_LABEL = '[TEXT]';
+export function ringPassiveRows(ring) {
+    const passive = (ring && ring.passive) || {};
+    return Object.keys(passive).map(key => ({ key, label: RING_PASSIVE_LABEL, value: passive[key] }));
+}
