@@ -770,6 +770,7 @@ class Game {
         // If the car's already fixed, re-open the North bridge — derives
         // from the persistent flag so it's open again on every town re-entry.
         this._openBridgeIfCarFixed();
+        this._openCarrionRoadIfRuled?.();   // `?.`: stand-in games in tests don't carry it
         // (fight-fog) Whatever fog was up belongs to the map you left.
         this.renderer.dropFightFog();
         this._render();
@@ -1071,6 +1072,18 @@ class Game {
         for (let x = 14; x <= 19; x++) { this.setTile(x, 0, 12); this.setTile(x, 1, 12); }
         const br = (this.examinables || []).find(e => e.id === 'bridge');
         if (br) br.text = '[TEXT]';
+    }
+
+    // (CS2) Once the Crat's dispute is ruled (saved flag `carrionRoadOpen`), the
+    // wall south of Carrion's corridor opens onto her side room. Read from the
+    // saved flag on every Sewer load, like the bridge, so CONTINUE keeps it open.
+    _openCarrionRoadIfRuled() {
+        if (!this.questEngine || !this.map || this.map.zoneName !== 'SEWER') return;
+        if (!this.map.transitions.some(t => t.toMap === 'sewer-north-map.json')) return;   // the Sewer proper
+        if (!this.questEngine.getFlag('carrionRoadOpen')) return;
+        this.setTile(9, 19, 5);
+        this.map.transitions.push({ x: 9, y: 19, toMap: 'carrion-room-map.json', toX: 5, toY: 6,
+            label: "[South — TEXT: down Carrion's road]" });
     }
 
     // Persist the game. Debounced to every few turns unless forced (forced on
