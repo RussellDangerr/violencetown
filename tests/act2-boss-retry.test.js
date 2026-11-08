@@ -116,7 +116,7 @@ describe('losing to an Act 2 boss runs the boss retry', () => {
             assert.equal(boss.entity.hp, boss.entity.maxHp, 'the boss is back to full');
             assert.equal(g.playerHp, g.playerMaxHp, 'you wake at full health');
             assert.equal(g.state, STATE.IDLE);
-            assert.ok(g.buffs.includes('rattled'));
+            assert.ok(!g.buffs.includes('rattled'), 'no debuff for losing (ruling DFR1)');
             assert.ok(!g.logs.some(l => /beaten and dumped/.test(l)), 'not the generic scenario');
         });
     }

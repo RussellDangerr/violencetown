@@ -1,5 +1,5 @@
 {
-    "note": "Your car, folded around a boulder at the foot of the far wall, with scree thrown out around it.",
+    "note": "The taxi, folded around a boulder at the foot of the far wall, with scree thrown out around it.",
     "width": 6,
     "height": 5,
     "tiles": [
@@ -13,7 +13,7 @@
         {"type": "wreckedCar", "x": 3, "y": 2}
     ],
     "examinables": [
-        {"id": "canyon_wreck", "x": 3, "y": 2, "text": "[Your car, folded around a boulder — a total write-off. Off across the dry riverbed: the ribs of a COVERED WAGON, and a grizzled man perched on a rock like he grew there.]"}
+        {"id": "canyon_wreck", "x": 3, "y": 2, "text": "[TEXT]"}
     ],
     "marks": [
         {"id": "spawn", "x": 4, "y": 3}

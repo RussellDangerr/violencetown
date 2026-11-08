@@ -4,48 +4,49 @@
 // 1-9 pick a bag slot.
 
 import { Renderer } from './renderer.js';
-import { computeViewport, screenToTile, clientToScreen, toMenu } from './viewport.js';   // (screen-fill) the screen's geometry
+import { computeViewport, screenToTile, clientToScreen, toMenu, stepZoom, zoomToSave, readZoom, writeZoom } from './viewport.js';   // (screen-fill) the screen's geometry
 import { loadMap, carriesAll } from './map.js';
 import { loadAllSprites } from './sprites.js';
 import { BitmapFont } from './bitmap-font.js';
-import { pickHitMark, HEAVY_HIT_DAMAGE } from './hit-splat.js';   // (manga-impact-marks) the mark rule + the heavy threshold
+import { pickHitMark, HEAVY_HIT_DAMAGE, dodgeChance, DODGE_WORD } from './hit-splat.js';   // (manga-impact-marks) the mark rule + the heavy threshold
 import { makeEffectLoop } from './effect-loop.js';                 // one tick of the transient-effects loop, and its refusal to die on a bad frame
-import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, MAX_STACK, SLUDGE_DOT } from './data.js';
+import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK, SLUDGE_DOT } from './data.js';
 import { puddleTiles, layPuddle, puddleAt, dryPuddles } from './puddles.js';   // (poisons) Sludge Brain's puddles
 import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef } from './items.js';
 import { WEAPONS, weaponClassOf } from './weapons.js';
 import { resolveItemDef } from './item-registry.js';
-import { tickBuffList, BUFF_DEFS, sumBuffStat, worldBeatPlan } from './buffs.js';
+import { tickBuffList, sumBuffStat, worldBeatPlan } from './buffs.js';
 import { RINGS, FUSIONS } from './ring-data.js';
 import {
     unlockedSlots, resolveAdjacencies, slottedActives, aggregatePassives,
     slotRing, unslotRing, acquireRing, sanitizeSlots,
     mergeKnown,   // (ring Task 5) skill-merge helper, relocated from the retired skills.js
 } from './rings.js';
-import { isBoss, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS } from './defeat-scenarios.js';
-import { addToInventory as addToInv, moveToZone, zoneOf } from './inventory.js';
+import { isBoss, bossInFight, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS } from './defeat-scenarios.js';
+import { addToInventory as addToInv, moveToZone, zoneOf, pageCount, slotOnPage, pageOfSlot } from './inventory.js';
 import { itemActions, equipOptions, inspectorUsesRect } from './inspector.js';   // (C1) tap-to-inspect: context actions; (C2) GEAR chooser options
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
-import { attack, formatDamageNumber, computeHit, elementalMult, weaponHitKind, isBackstab } from './combat.js';
-import { Enemy, spawnEnemy, resolveEnemyTurns, resolveAmbientTurns } from './enemies.js';
+import { attack, formatDamageNumber, computeHit, elementalMult, weaponHitKind, isBackstab, shieldArmor, raiseShield } from './combat.js';
+import { Enemy, spawnEnemy, resolveEnemyTurns, resolveAmbientTurns, unnestBrackets } from './enemies.js';
+import { canBeRival, itemIdsOf, recordDefeat, kitFor, markCarrying, settleItems, clearRival } from './rivals.js'; // the enemy that beat you is remembered (pure, node-tested)
 import { isHostile, isHunting, isSewerDweller, allyAids } from './ai.js';
 import { getGreedyStep, stepEntity, findPath } from './pathing.js'; // pathfinding (greedy chase + BFS click-to-move); stepEntity = shove a character aside
 import { applyDispositionDelta, reactToTransaction } from './give-action.js';
 import { getDialogue } from './dialogue.js';
 import { manhattan, clamp } from './utils.js';
 import { RNG, randomSeed } from './rng.js';
-import { pickSlots, defaultPicks, resolveSpawn, requiredDropFor, dropLineFor } from './slots.js';
+import { pickSlots, defaultPicks, resolveSpawn, requiredDropFor, dropLineFor, FINALE_PHASE1 } from './slots.js';
 import { hasSave, readSaveRaw, writeSave, loadInto, clearSave } from './save.js';
 import { QuestEngine } from './quests.js';
 import { doExamine, resolveExamine } from './examine.js';
-import { recordDrop, pendingDrops, dropLoadout } from './drops.js'; // per-zone runtime dropped-items layer (pure, node-tested)
+import { recordDrop, pendingDrops, takeDrop, dropLoadout, recordKill, stepRespawns, deadIds, bossDropOnce } from './drops.js'; // per-zone runtime dropped-items layer + respawn list (pure, node-tested)
 import {
     HIT_SLOP, throwRects, DOCK, hitHud,
     HOTBAR_X_START, HOTBAR_Y, HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_STRIDE, HOTBAR_SLOTS,
     WHEEL_HUB_R, wheelRingR, LOG_MODAL_RECT, targetListRowRect, itemOverlayRowRect,
     EQUIPMENT_MODAL_RECT, EQUIP_SLOT_RECTS,
-    DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceBagSlotRects, deviceEquipLayout, deviceRingsLayout,
+    DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceBagSlotRects, deviceBagPagerRects, deviceEquipLayout, deviceRingsLayout,
     inspectorActionRects, gearOptionRects, nearestRectInDir,
     xmbBarLayout,
     // (offer screen) the one panel every modal shares, its geometry, and the two
@@ -61,6 +62,8 @@ import { logCategory } from './combat-log.js';   // (log tagging) one rule for a
 import { takeable } from './fight-panels.js';   // (combat-hud stage 4) the one answer to "what could I take"
 import { buildXmbBar, resolveXmbSelection, cycleXmbCategory, cycleXmbItem, xmbCategoryOf, XMB_LABELS } from './xmb.js';
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
+import { biteSunMan, riseSunMan, beastFell, resetBeast, finaleTick, blocksCowerHit, restoreFinale, isCowering } from './finale-setpiece.js';
+import { CREDITS, endingDue, markEndingSeen, newRoll, stepRoll } from './credits.js';   // (FIN4) the credits, then the town stays open
 import { contextualUses } from './item-uses.js'; // "use THIS on THAT" — the authored table
 import { nextHint } from './hints.js';           // situational one-shots: the tutorial that is not one
 
@@ -86,13 +89,20 @@ import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (n
 import {
     createWheelState, cycle, drill, back, compose, autoAimTile,
     needsFriendlyConfirm, aimRange, affectedTiles, selectedNode, restoreLastCategory, verbApplies,
+    greyedReasonLine,
     orderedTargetVerbs, isCombatActive, defaultVerb, previewChildren,
     aimTap, adjacentFacing,
 } from './wheel-model.js'; // (sunburst wheel) node-tree model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
+import { introAt, isSkipKey } from './tv-intro.js';                                     // (TV1) the TV opening before the title
+import { arcSlots, arcVisible, arcSlotAt, arcFaded, ARC_MAX } from './fight-arc.js';                  // (FA1) the arc of attacks under you in a fight
 import { fighters, joiners } from './fight-area.js';                                     // (fight-fog) who is in the fight
 import { fightStartKind, entranceFor, fightFxActive } from './fight-entrance.js'; // (fight-fog) how it began, and how long its fog moves
 import { createCascade, CASCADE_BEAT_MS, LUNGE_MS } from './cascade.js';           // (turn-model C1) the enemy phase, one actor at a time
+import { reelEntries, extendReel, liveReel } from './loot-ticker.js';                      // (FX3c) a reel rolls through what a kill gave
+import { makeBurst, liveBursts } from './loot-burst.js';                            // (FX3b) a kill's loot bursts out and flies to you
+import { isAnt, isColdTile, carriesSweet, swarmTurn, squashAnt, brushOff,
+         ANT_TYPE, ANT_TAG, ANT_HP, ANT_BITE } from './ants.js';                    // (AN2) carry sweet food and ants come for it
 
 // Chebyshev (king-move) distance — used by the wheel reticle's range clamp.
 const cheb = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
@@ -118,6 +128,7 @@ const STATE = {
     TRADE:           'trade',           // (trade slice 1) Puck's shop window — buy/sell/bribe
     DIALOGUE:        'dialogue',        // (Step 4) disposition dialogue with an NPC
     INSPECT:         'inspect',         // (§12.3) Examine → a layered inspect panel
+    CREDITS:         'credits',         // (FIN4) the credits roll after the Final Arc; then back to IDLE, world untouched
     DEVICE:          'device',          // (Slice 3) the Remoticon — one tabbed, soft-pausing device (ITEMS·GEAR·QUESTS·MAP; absorbs the retired EQUIPMENT + JOURNAL states)
 };
 
@@ -345,6 +356,7 @@ class Game {
         this._pathArrive = null;
         this._pressTimer = null;    // touch long-press timer → full Target List
         this._pressStart = null;    // pointerdown client pos, to cancel the press on drag
+        this._pendingTap = null;    // (FX60) a touch Hit held back until the finger lifts
         this._turnPress = null;     // (C3b) { tile } — a press beside you: walks on release, turns on long-press
 
         // In-canvas log strip (Phase 1B of overhead-dialogue plan). Mirrors
@@ -375,8 +387,11 @@ class Game {
         this._offerCursor = null;        // keyboard cursor: { side, index } (Task 13 moves it)
         this._dispositionDecayTurns = 0; // (Phase 6c) actions since the last mood nudge
 
-        // Inventory: INVENTORY_SIZE slots (SAFE 0..9 + PACK 10..49), each { itemDef, count } or null
+        // Inventory: INVENTORY_SIZE slots (SAFE 0..9 + PACK 10..49), each { itemDef, count } or null.
+        // (BG1) A full PACK grows another page of PACK_PAGE slots; _bagPage is
+        // the PACK page the bag screen shows (0-based).
         this.inventory = new Array(INVENTORY_SIZE).fill(null);
+        this._bagPage = 0;
         this.selectedSlot = -1; // -1 = none selected
 
         // Item overlay options (populated when overlay shows)
@@ -395,6 +410,7 @@ class Game {
         this.wheel = createWheelState();
         this.targetList = { x: 0, y: 0, target: null, verbs: [], sel: 0 };   // (Target List) RuneScape-style verb menu
         this._lastActKeyAt = 0; // double-tap-Act window for express-repeat
+        this._spaceOpenedWheelAt = 0;   // when a bare Space tap opened the wheel; a second Space inside the window repeats instead of drilling
         this._wheelOpenedByHold = false; // (Slice 2) true only between a HOLD-mode open and its release; cleared by every wheel close
         this._deviceTab = 'items';       // (Slice 3) the Remoticon's active tab (ITEMS·GEAR·QUESTS·MAP)
         this._deviceSel = null;          // (C1) inspector sub-selection inside ITEMS: { tab:'items', index } or null
@@ -422,6 +438,10 @@ class Game {
         // array is empty, so the game returns to its idle 4fps redraw cadence.
         this._damageNumbers = [];
         this._particleLoopRunning = false;
+        // (FX3b) Loot bursts in the air: pure show, the items are already bagged.
+        this._lootBursts = [];
+        // (FX3c) The reel that rolls through what a kill gave: pure show, never a game state.
+        this._lootReel = null;
 
         // Player hit-flash + stagger — short-lived visual feedback when
         // damage lands on the player. Timestamps are performance.now()
@@ -465,7 +485,24 @@ class Game {
         // (drops.js dedups records so a re-killed respawning boss can't farm it).
         // Persisted.
         this._droppedItems = {};
-        this._mapUrl = null;                 // url of the currently-loaded map
+        // (plans/ks1-respawn-list.md) Map-placed enemies you killed, per zone
+        // ("mapUrl" → [{ id, age }]). _loadMap leaves them out; each zone change
+        // (_zoneChange) brings a share back. Persisted (left out while empty).
+        this._respawnLists = {};
+        // (plans/ne1-rival-remembered.md) The enemy that beat you and took your things,
+        // per zone ("mapUrl" → { id, items, carrying? }). _loadMap hands it the items
+        // as kit. Persisted (left out while empty).
+        this._rivals = {};
+        // "url|id" of bosses whose own items already dropped, so a respawned boss
+        // dies with nothing. Persisted (left out while empty).
+        this._bossDropsGiven = new Set();
+        // (plans/ch1-chests-stay-empty.md) Containers that are no longer what their
+        // map says, per zone ("mapUrl" → [{ id, type, x, y, contents }]): taken
+        // from, deposited into, or never in the map at all (a robbery stash).
+        // _loadMap lets these win over the map's own contents. Persisted (left out
+        // while empty).
+        this._chestRecords = {};
+        this._mapUrl = null;                // url of the currently-loaded map
         this._cameFrom = null;               // url of the zone you ENTERED this one from (for the pipe-jam)
         this._jammedDoor = null;             // {x,y,toMap,integrity,max,intruders[]} while a door is wedged shut
 
@@ -554,6 +591,8 @@ class Game {
         // system reads them (reduceMotion gates screenshake/flash, volumes feed
         // audio after merge). Validated/clamped inside; never throws.
         Settings.load();
+        // (ZM1) The saved zoom step, or null for the automatic one.
+        this._zoom = readZoom(typeof localStorage !== 'undefined' ? localStorage : null);
 
         const canvas = document.getElementById('game-canvas');
         this.renderer = new Renderer(canvas);
@@ -586,7 +625,7 @@ class Game {
 
         // Render splash screen with pixel art
         const splashCanvas = document.getElementById('splash-canvas');
-        if (splashCanvas) this.renderer.renderSplash(splashCanvas);
+        if (splashCanvas) this._startTvIntro(splashCanvas);   // (TV1) the TV opening, then the title as ever
 
         await this._loadMap('town-map.json');
         this._bindSplash();
@@ -596,6 +635,7 @@ class Game {
         this._bindHelpModal();
         this._bindOptionsModal(); // [settings] options/accessibility UI
         this._bindPauseOverlay(); // [settings] turn-based pause overlay
+        this._bindLeaveSave();    // (FX24) hiding or closing the tab saves
 
         // (screen-fill) The touch ACTION button retired: the dock's ✦ opens the
         // wheel on every device (_onCanvasPointerDown), and a tap in the wheel's
@@ -647,6 +687,7 @@ class Game {
         // so the HP bar has caught up before you arrive.
         this._cascade?.flush();
         this._damageNumbers = [];
+        this._lootBursts = [];
         this.playerX = spawnX ?? this.map.spawn.x;
         this.playerY = spawnY ?? this.map.spawn.y;
 
@@ -673,7 +714,14 @@ class Game {
         this._endBuybacks();        // (one clock) a buyback lasts until you leave the zone: close the old zone's shelves
         this.enemies = [];
         // (slot registry) A spawn carrying a `slot` becomes this game's pick for it.
-        for (const s of this.map.enemySpawns) this.enemies.push(spawnEnemy(resolveSpawn(s, this.slots), this._muggedIds, this._robbed));
+        // A kill still on this zone's respawn list stays dead (plans/ks1-respawn-list.md).
+        const dead = deadIds(this._respawnLists, url);
+        for (const s of this.map.enemySpawns) {
+            if (dead.has(s.id)) continue;
+            this.enemies.push(spawnEnemy(resolveSpawn(s, this.slots), this._muggedIds, this._robbed, this._rivalKit?.(url, s.id)));
+        }
+        this._rivalArrived?.(url);   // (plans/ne1-rival-remembered.md) the rival is at its post, kit and all
+        this._finaleOnLoad?.(url);   // (FIN3) the vault after phase 1: no Financier, the beast in his corner
 
         // (zone pursuit) Re-inject any hostiles that chased you through the door.
         // They spawn at the door leading back where you came from — visible in
@@ -687,17 +735,26 @@ class Game {
         this._advanceDayClock(0);   // the new zone's watchers see by tonight's light at once
 
         // Live containers — copy from spawn data so opening/depositing mutates
-        // the live instance, not the map definition. Map reload re-snapshots
-        // contents from JSON, mirroring how items/enemies behave today.
+        // the live instance, not the map definition. A container you have changed
+        // comes back as you left it (_chestRecords), not as the map has it.
         this.containers = [];
+        const chestKey = (c) => c.id || `${c.x},${c.y}`;
+        const kept = new Map(((this._chestRecords || {})[url] || []).map(r => [chestKey(r), r]));
         for (const c of this.map.containerSpawns) {
+            const r = kept.get(chestKey(c));
+            kept.delete(chestKey(c));
+            const contents = r ? r.contents : c.contents;
             this.containers.push({
                 id: c.id,
                 type: c.type,
                 x: c.x,
                 y: c.y,
-                contents: Array.isArray(c.contents) ? c.contents.slice() : []
+                contents: Array.isArray(contents) ? contents.slice() : []
             });
+        }
+        // What is left on the record is a container the map never had (a stash).
+        for (const r of kept.values()) {
+            this.containers.push({ id: r.id, type: r.type, x: r.x, y: r.y, contents: r.contents.slice() });
         }
 
         // Examinables for this map (live copy of the spawn data).
@@ -713,6 +770,7 @@ class Game {
         // If the car's already fixed, re-open the North bridge — derives
         // from the persistent flag so it's open again on every town re-entry.
         this._openBridgeIfCarFixed();
+        this._openCarrionRoadIfRuled?.();   // `?.`: stand-in games in tests don't carry it
         // (fight-fog) Whatever fog was up belongs to the map you left.
         this.renderer.dropFightFog();
         this._render();
@@ -864,6 +922,131 @@ class Game {
         recordDrop(this._droppedItems, this._mapUrl, type, x, y);
     }
 
+    // (FX25) The bag's Drop: the whole stack lands on the player's tile, one ground
+    // item per unit, each recorded as a runtime drop so it survives a zone change and
+    // a reload. Nothing is picked up here: pickup runs when you walk onto a tile, so
+    // stepping off and back on takes it, and it never starts a loot reel (that is the
+    // kill burst's). A "collected" marker for this tile and kind (an authored item you
+    // took from here) would hide the dropped copy on reload: lift it, and when an
+    // authored spawn of that kind is really here it stands in for one dropped unit.
+    _dropToGround(stack) {
+        const def = stack && stack.itemDef;
+        if (!def || def.questItem) return;
+        const n = Math.max(1, stack.count | 0), x = this.playerX, y = this.playerY;
+        const key = `${this._mapUrl}|${x}|${y}|${def.id}`;
+        let record = n;
+        if (this._collectedItems.delete(key) && (this.map?.itemSpawns || []).some(s => s.x === x && s.y === y && s.type === def.id)) record--;
+        for (let i = 0; i < n; i++) {
+            if (i < record) this._recordDrop(def.id, x, y);
+            this.groundItems.push({ type: def.id, x, y, def });
+        }
+        this._log(n > 1 ? `[Dropped ${def.name} x${n}]` : `[Dropped ${def.name}]`);
+        this._saveMoment?.();
+    }
+
+    // A ground item was just taken: if it was a runtime drop, take ONE off its
+    // record (so the rest of a stack on that tile still comes back) and return
+    // true. False means it was an authored spawn, which the caller marks
+    // collected. The pickup paths call it as `_takeDropRecord?.()`, so the
+    // stand-in games tests lift them onto need not carry it.
+    _takeDropRecord(type, x, y) {
+        return takeDrop(this._droppedItems, this._mapUrl, type, x, y);
+    }
+
+    // (plans/ks1-respawn-list.md) One zone change: every remembered kill ages a
+    // step and each zone's list sends a share back. Called just before _loadMap
+    // on a real move between zones — never on a save restore or a new game.
+    _zoneChange() {
+        this._settleRival?.();
+        stepRespawns(this._respawnLists);
+        this._rememberChests?.();
+    }
+
+    // (plans/ch1-chests-stay-empty.md) Write down every container in this zone that
+    // no longer matches the map, so _loadMap can give it back as you left it.
+    // One that matches the map again drops off the record, which is also what keeps
+    // it out of the save while nothing has been touched.
+    _rememberChests() {
+        const url = this._mapUrl;
+        if (!url || !this.containers) return;
+        this._chestRecords ||= {};
+        const spawned = new Map((this.map?.containerSpawns || []).map(c => [c.id || `${c.x},${c.y}`, c]));
+        const changed = [];
+        for (const c of this.containers) {
+            const was = spawned.get(c.id || `${c.x},${c.y}`);
+            // Only what the player (or a robbery) put there is kept. A bar a soap-mine
+            // worker dropped in ({ type, source }) is the day's output, not the
+            // chest's state, and still starts over when the zone loads.
+            const contents = (c.contents || []).filter(e => !(e && typeof e === 'object' && e.source));
+            if (was && was.x === c.x && was.y === c.y
+                && JSON.stringify(was.contents || []) === JSON.stringify(contents)) continue;
+            changed.push({ id: c.id, type: c.type, x: c.x, y: c.y, contents });
+        }
+        if (changed.length) this._chestRecords[url] = changed;
+        else delete this._chestRecords[url];
+    }
+
+    // (plans/ne1-rival-remembered.md) The rival died: its record goes, and the items it
+    // was owed but not yet carrying come back as a list.
+    _clearRival(enemyObj) {
+        return clearRival(this._rivals, this._mapUrl, enemyObj.id);
+    }
+
+    // (plans/ks1-respawn-list.md) A map-placed enemy died: put it on this zone's
+    // respawn list. Enemies the game spawned on the fly aren't rebuilt from the
+    // map anyway, so they are left off.
+    _rememberKill(enemyObj) {
+        if (!this._mapUrl || !(this.map?.enemySpawns || []).some(s => s && s.id === enemyObj.id)) return;
+        recordKill(this._respawnLists, this._mapUrl, enemyObj.id);
+    }
+
+    // (plans/ne1-rival-remembered.md) You went down to `by` and `taken` is what the
+    // defeat took for good. An ordinary map-placed enemy now holds this zone's post
+    // as the rival; the items reach its kit the next time the zone loads.
+    _rememberRival(by, taken) {
+        if (!canBeRival(by, this.map?.enemySpawns)) return;
+        const items = itemIdsOf(taken);
+        // Already carrying (you went down to it a second time this visit): its kit grows now.
+        const how = recordDefeat(this._rivals, this._mapUrl, by.id, items);
+        if (how === 'grew' && this._rivals[this._mapUrl]?.carrying) by.loadout = [...(by.loadout ?? []), ...items];
+    }
+
+    // The kit the rival of `url` takes into the zone, for enemy `id`, or null.
+    _rivalKit(url, id) {
+        return kitFor(this._rivals, url, id);
+    }
+
+    // The zone has loaded: if its rival is there, the record reads carrying.
+    _rivalArrived(url) {
+        const r = this._rivals[url];
+        if (r && this.enemies.some(e => e.id === r.id)) markCarrying(this._rivals, url, r.id);
+    }
+
+    // Leaving a zone: the record keeps only what its rival still carries of your
+    // things, so something it used or Thieve lifted never comes back as a second copy.
+    _settleRival() {
+        const url = this._mapUrl;
+        const r = this._rivals?.[url];
+        if (!r || !r.carrying) return;
+        const live = this.enemies.find(e => e.id === r.id);
+        const spawn = (this.map?.enemySpawns || []).find(s => s && s.id === r.id);
+        if (!live || !spawn) return;
+        const base = spawnEnemy(resolveSpawn(spawn, this.slots), this._muggedIds, this._robbed).loadout;
+        r.items = settleItems(r.items, live.loadout, base);
+        if (!r.items.length) delete this._rivals[url];
+    }
+
+    // True the first time a boss with its own items (a slot's required item, the
+    // Were-Rat's fur, Pike's rope) dies, false on every later kill of that same
+    // enemy. An enemy with no such items is never written down.
+    _bossFirstFall(enemyObj, required) {
+        const hasItems = (required && ITEMS[required])
+            || (enemyObj.tag === 'wererat_boss' && ITEMS.wererat_fur)
+            || (enemyObj.tag === 'pike_boss' && ITEMS.grappling_hook);
+        if (!hasItems) return true;
+        return bossDropOnce(this._bossDropsGiven, this._mapUrl, enemyObj.id);
+    }
+
     // Mutate a map tile at runtime AND record the change as a diff so the save
     // can re-apply it (the map JSON is re-snapshotted on every _loadMap).
     setTile(x, y, id) {
@@ -888,7 +1071,19 @@ class Game {
         // player can drive across.
         for (let x = 14; x <= 19; x++) { this.setTile(x, 0, 12); this.setTile(x, 1, 12); }
         const br = (this.examinables || []).find(e => e.id === 'bridge');
-        if (br) br.text = "[The barricade's down and the engine's warm. North across the bridge, out of Violencetown for good. Drive.]";
+        if (br) br.text = '[TEXT]';
+    }
+
+    // (CS2) Once the Crat's dispute is ruled (saved flag `carrionRoadOpen`), the
+    // wall south of Carrion's corridor opens onto her side room. Read from the
+    // saved flag on every Sewer load, like the bridge, so CONTINUE keeps it open.
+    _openCarrionRoadIfRuled() {
+        if (!this.questEngine || !this.map || this.map.zoneName !== 'SEWER') return;
+        if (!this.map.transitions.some(t => t.toMap === 'sewer-north-map.json')) return;   // the Sewer proper
+        if (!this.questEngine.getFlag('carrionRoadOpen')) return;
+        this.setTile(9, 19, 5);
+        this.map.transitions.push({ x: 9, y: 19, toMap: 'carrion-room-map.json', toX: 5, toY: 6,
+            label: "[South — TEXT: down Carrion's road]" });
     }
 
     // Persist the game. Debounced to every few turns unless forced (forced on
@@ -898,6 +1093,31 @@ class Game {
         if (!opts.force && (this.turn - (this._lastAutosaveTurn ?? -999)) < 5) return;
         this._lastAutosaveTurn = this.turn;
         writeSave(this);
+    }
+
+    // (FX24) A moment a reload must not lose — gear put on, something picked
+    // up, a trade made, a drink drunk — saves now instead of waiting on the
+    // five-turn timer. A map load in flight is left alone: the zone change
+    // saves itself once the new map is in. The flows call it as
+    // `_saveMoment?.()`, so the stand-in games tests lift them onto need not carry it.
+    _saveMoment() {
+        if (this.state === STATE.RESOLVING) return;
+        this.autosave({ force: true });
+    }
+
+    // (FX24) Hiding or closing the tab saves. A fresh run that has not yet
+    // taken a turn or saved leaves the old save on disk, so GAME START pressed
+    // by mistake and a reload can still CONTINUE (see _bindSplash).
+    _saveOnLeave() {
+        if (this.turn === 0 && this._lastAutosaveTurn === -999) return;
+        this._saveMoment();
+    }
+
+    _bindLeaveSave() {
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') this._saveOnLeave();
+        });
+        window.addEventListener('pagehide', () => this._saveOnLeave());
     }
 
     // Forward a game event to the quest engine (and future subscribers, e.g.
@@ -960,8 +1180,9 @@ class Game {
             }
             return;
         }
-        const vp = computeViewport({ cssW: box.width, cssH: box.height, dpr: window.devicePixelRatio, dock: DOCK });
+        const vp = computeViewport({ cssW: box.width, cssH: box.height, dpr: window.devicePixelRatio, dock: DOCK, zoom: this._zoom });
         this.renderer.setViewport(vp);
+        this._syncZoomUI();
         canvas.style.width  = `${vp.cssW}px`;
         canvas.style.height = `${vp.cssH}px`;
         // The first-run hint is a page element: keep it just above the dock.
@@ -971,10 +1192,51 @@ class Game {
 
     // ── Splash ───────────────────────────────────────────────────────────────
 
+    // (TV1) The game opens like a TV switching on, then the title screen. It
+    // plays every time the game starts; any key or tap skips it to the title
+    // (the key is spent: it does not also press GAME START). reduceMotion shows
+    // the still card at once. The autoplay starts from the title and skips it,
+    // as if a key had already been pressed. Draws on the splash canvas only.
+    _startTvIntro(splashCanvas) {
+        const splash = document.getElementById('splash');
+        if (typeof window !== 'undefined' && window.__autoplay) { this.renderer.renderSplash(splashCanvas); return; }
+        const hidden = ['splash-buttons', 'splash-hint'].map((id) => document.getElementById(id)).filter(Boolean);
+        const reduceMotion = !!Settings.get('reduceMotion');
+        const t0 = performance.now();
+        let raf = 0;
+        const end = () => {
+            window.removeEventListener('keydown', onKey, true);
+            splash?.removeEventListener('pointerdown', onTap, true);
+            cancelAnimationFrame(raf);
+            for (const el of hidden) el.style.visibility = '';
+            this._endTvIntro = null;
+            this.renderer.renderSplash(splashCanvas);
+        };
+        const onKey = (e) => {
+            if (!isSkipKey(e)) return;
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            end();
+        };
+        const onTap = (e) => { e.preventDefault(); end(); };
+        const frame = () => {
+            const f = introAt(performance.now() - t0, { reduceMotion });
+            if (f.done) { end(); return; }
+            this.renderer.renderSplash(splashCanvas, f);
+            raf = requestAnimationFrame(frame);
+        };
+        for (const el of hidden) el.style.visibility = 'hidden';
+        window.addEventListener('keydown', onKey, true);
+        splash?.addEventListener('pointerdown', onTap, true);
+        this._endTvIntro = end;
+        frame();
+    }
+
     _bindSplash() {
         const splash = document.getElementById('splash');
         const wrapper = document.getElementById('game-wrapper');
         const start = () => {
+            this._endTvIntro?.();         // (TV1) a button pressed any other way ends the opening too
             audio.init();                 // [audio] first user gesture — unlock Web Audio
             this._applyAudioSettings();   // [settings] apply persisted volume/mute on boot
             audio.playMusic('town');      // [audio] start the ambient bed for the town hub
@@ -987,10 +1249,12 @@ class Game {
             this._log('[Entered the town]');
             this._maybeShowFirstRunHint();
         };
-        // CONTINUE loads the autosave into the live game. GAME START / Space
-        // begins fresh (the existing save survives until the fresh run's first
-        // autosave overwrites it, so a stray reload can still resume).
+        // CONTINUE loads the autosave into the live game. GAME START begins
+        // fresh (the existing save survives until the fresh run's first
+        // autosave overwrites it, so a stray reload can still resume). Space
+        // does what CONTINUE does when there is a save, and GAME START when not.
         const continueGame = async () => {
+            this._endTvIntro?.();         // (TV1)
             audio.init();                 // [audio] first user gesture — unlock Web Audio
             this._applyAudioSettings();   // [settings] apply persisted volume/mute on boot
             audio.playMusic('town');      // [audio] start the ambient bed (zone music re-syncs on map load)
@@ -1030,8 +1294,17 @@ class Game {
             continueBtn.classList.remove('hidden');
             continueBtn.addEventListener('click', continueGame);
         }
+        // (FX23) The Space that leaves the title is spent here. _bindInput's
+        // listener sits on the same document and runs after this one; by then the
+        // state is IDLE, so without stopImmediatePropagation it opened the wheel.
+        // A save loads asynchronously and the state stays SPLASH until it lands,
+        // so once the splash is gone a second Space must not start another run.
         document.addEventListener('keydown', (e) => {
-            if (this.state === STATE.SPLASH && e.code === 'Space') { e.preventDefault(); start(); }
+            if (this.state !== STATE.SPLASH || e.code !== 'Space') return;
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            if (splash.classList.contains('gone')) return;
+            if (hasSave()) continueGame(); else start();
         });
     }
 
@@ -1078,6 +1351,7 @@ class Game {
             case STATE.DIALOGUE:
             case STATE.INSPECT:
             case STATE.DEVICE:
+            case STATE.CREDITS:
             case STATE.DEAD:
                 return true;
             default:
@@ -1118,6 +1392,8 @@ class Game {
             if (e.ctrlKey || e.metaKey || e.altKey) return;
 
             if (this.state === STATE.SPLASH || this.state === STATE.RESOLVING) return;
+            // (FX3c) A fresh key press skips the loot reel, then does its normal job below.
+            if (!e.repeat) this._skipLootReel?.();
             // [settings] While paused, swallow all gameplay keys. P / Escape
             // resume (so the player isn't trapped); everything else is eaten.
             // The pause overlay's own RESUME button also clears the flag.
@@ -1125,6 +1401,8 @@ class Game {
                 if (e.code === 'KeyP' || e.code === 'Escape') { e.preventDefault(); this._setPaused(false); }
                 return;
             }
+            // (FIN4) The credits own every key while they roll: a key steps the card, Escape skips.
+            if (this.state === STATE.CREDITS) { e.preventDefault(); if (!e.repeat) this._creditsKey(e.code); return; }
             // Record the raw physical key state BEFORE any state-specific early
             // return, so a direction held while a menu/wheel is open (or during a
             // slide, or on OS key-repeat) is remembered and _resumeHeldWalk can
@@ -1187,7 +1465,25 @@ class Game {
             // closes the menu entirely without consuming a turn.
             if (this.state === STATE.RADIAL_MENU) {
                 e.preventDefault();
+                // (FX39) A direction pressed WHILE the wheel is up belongs to the wheel.
+                // The handler above logged it as physically held; if it fires the action
+                // the wheel closes, _closeWheel resumes any held walk, and this very key
+                // would walk into the person it just acted on (a bump, i.e. Talk). Drop
+                // it from the held sets. A direction held BEFORE the wheel opened is not
+                // touched, so that walk still resumes on close.
+                this._wheelTakesKey?.(e.code);
                 const w = this.wheel;
+                // (FX59) Tap mode: the first Space of a double-tap has already opened the
+                // wheel, so the second arrives here, not at IDLE. Inside the same window,
+                // and with nothing else pressed since, it repeats the last action rather
+                // than drilling the freshly opened wheel. Any other key cancels the chance.
+                const openedAt = this._spaceOpenedWheelAt || 0;
+                this._spaceOpenedWheelAt = 0;
+                if (e.code === 'Space' && !e.repeat && openedAt && !w.aiming && !w.confirming
+                    && performance.now() - openedAt < 250 && this._canRepeatLast()) {
+                    this._repeatLastAction();
+                    return;
+                }
                 const UP   = (e.code === 'ArrowUp'   || e.code === 'KeyW' || e.code === 'Space' || e.code === 'Enter');
                 const DOWN = (e.code === 'ArrowDown' || e.code === 'KeyS' || e.code === 'Escape');
                 // "Plus Ultra" friendly-confirm intercept.
@@ -1196,6 +1492,7 @@ class Game {
                     if (DOWN) { w.confirming = false; audio.playSfx('menu-cancel'); this._render(); return; }
                     return;
                 }
+                if (w.aiming && this._arcDigit?.(e.code)) return;   // (FA1) the same number commits; another switches
                 if (w.aiming) { this._reticleKey(e.code); return; }
                 if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { this._wheelCycle(-1); return; }
                 if (e.code === 'ArrowRight' || e.code === 'KeyD') { this._wheelCycle(+1); return; }
@@ -1325,6 +1622,11 @@ class Game {
                     cursorTo(i); return;
                 }
                 if (e.code === 'Space') { this._offerActivate(c.side, c.index); return; }
+                // Backspace is Space's undo: it takes ONE unit of the row under the
+                // cursor back out of the tray, the keyboard's way of tapping a tray
+                // slot. Space cannot do both jobs, because pressing it again on a
+                // staged row is how you stage a second unit.
+                if (e.code === 'Backspace') { this._offerUnstageRow(c.side, c.index); return; }
                 return;
             }
 
@@ -1377,7 +1679,9 @@ class Game {
                 return;
             }
 
-            // 1-9 = select item
+            // 1-9 = select item. (FA1) While a fight is on and the arc shows, 1-8 are the arc's
+            // slots instead; 9, and every digit outside a fight, still pick the bag.
+            if (this._arcDigit?.(e.code)) { e.preventDefault(); return; }
             const slot = this._digitToSlot(e.code);
             if (slot >= 0) { e.preventDefault(); this._selectItem(slot); return; }
 
@@ -1388,12 +1692,15 @@ class Game {
                 e.preventDefault();
                 const now = performance.now();
                 if (now - (this._lastActKeyAt || 0) < 250 && this._canRepeatLast()) this._repeatLastAction();
-                else this._wheelOpenerDown();   // (Slice 2) hold vs tap-toggle open mode
+                else {
+                    this._wheelOpenerDown();   // (Slice 2) hold vs tap-toggle open mode
+                    if (this.state === STATE.RADIAL_MENU) this._spaceOpenedWheelAt = now;   // (FX59)
+                }
                 this._lastActKeyAt = now;
                 return;
             }
             // T = wait a turn (Space used to wait; it now opens the wheel).
-            if (e.code === 'KeyT') { e.preventDefault(); this._log('[Wait]'); this._advanceWorld(); return; }
+            if (e.code === 'KeyT') { e.preventDefault(); this._waitTurn(); return; }
 
             // Tab = pull out the Remoticon device (opens to ITEMS). preventDefault
             // early so focus never leaves the canvas. (Slice 3)
@@ -1507,12 +1814,19 @@ class Game {
         canvas.addEventListener('pointerdown', (e) => this._onCanvasPointerDown(e));
         // Long-press bookkeeping: releasing / dragging / cancelling before the timer
         // fires means it was a normal tap (default action already ran) — drop it.
-        const cancelPress = () => { if (this._pressTimer) { clearTimeout(this._pressTimer); this._pressTimer = null; } };
+        const cancelPress = () => {
+            this._pendingTap = null;   // (FX60) a deferred touch Hit dies with the press
+            if (this._pressTimer) { clearTimeout(this._pressTimer); this._pressTimer = null; }
+        };
         // Resolve a dialogue drag: a press that never moved past the threshold is a
         // tap → pick the row; a real drag scrolled the list and picks nothing.
         const endPress = (e) => {
+            // (FX60) A touch tap on a hostile waited for the finger to lift: the lift
+            // before the long-press timer fired is the tap, so it hits now.
+            const tap = (this._pressTimer && e && e.type === 'pointerup') ? this._pendingTap : null;
             cancelPress();
             this._releaseTurnPress(e);   // (C3b) a quick tap beside you walks the step on release
+            if (tap && this.state === STATE.IDLE && !this._animating) tap();
             if (this._openerHeld) { this._openerHeld = false; this._wheelOpenerUp(); }   // (screen-fill) the dock's ✦, released
             if (this._dlgDrag) {
                 const d = this._dlgDrag; this._dlgDrag = null;
@@ -1609,10 +1923,7 @@ class Game {
                         // Same as pressing Space in IDLE: log a wait line and
                         // advance the world. Mirrors the previous WAIT
                         // button's behavior so muscle memory carries.
-                        if (this.state === STATE.IDLE) {
-                            this._log('[Wait]');
-                            this._advanceWorld();
-                        }
+                        if (this.state === STATE.IDLE) this._waitTurn();
                         break;
                     case 'cancel':
                         // Synthetic Escape — routes through the same paths
@@ -1724,6 +2035,31 @@ class Game {
         // Fullscreen reflects the actual document state, not a stored value.
         this._setToggleUI('opt-fullscreen', !!document.fullscreenElement);
         this._setWheelOpenUI(s.wheelOpenMode);   // (Slice 2) HOLD / TAP
+        this._syncZoomUI();
+    }
+
+    // (ZM1) Zoom: Farther / Closer move one whole pixel step and the view
+    // resizes at once. The automatic step is saved as nothing, so it keeps
+    // following the screen. The readout is the scale in use; [TEXT] marks
+    // that it is the automatic one.
+    _stepZoom(dir) {
+        const vp = this.renderer?.viewport;
+        if (!vp) return;
+        const next = stepZoom(vp.zoom, vp.k, dir);
+        this._zoom = zoomToSave(vp.zoom, next);
+        writeZoom(typeof localStorage !== 'undefined' ? localStorage : null, this._zoom);
+        this._fitCanvas();
+    }
+
+    _syncZoomUI() {
+        const vp = this.renderer?.viewport;
+        const val = document.getElementById('opt-zoom-val');
+        if (!vp || !val) return;
+        val.textContent = `x${vp.k}${vp.k === vp.zoom.auto ? ' [TEXT]' : ''}`;
+        const farther = document.getElementById('opt-zoom-farther');
+        const closer  = document.getElementById('opt-zoom-closer');
+        if (farther) farther.disabled = vp.k <= vp.zoom.min;
+        if (closer)  closer.disabled  = vp.k >= vp.zoom.max;
     }
 
     // Flip an on/off toggle button's label + class + ARIA to match `on`.
@@ -1813,6 +2149,10 @@ class Game {
             Settings.set('wheelOpenMode', next);
             this._setWheelOpenUI(next);
         });
+
+        // (ZM1) Zoom row: Farther / Closer.
+        document.getElementById('opt-zoom-farther')?.addEventListener('click', () => this._stepZoom(-1));
+        document.getElementById('opt-zoom-closer')?.addEventListener('click', () => this._stepZoom(+1));
 
         // Esc closes the modal without falling through to game state. Capture
         // phase beats _bindInput's bubble handler, matching the help modal.
@@ -1930,11 +2270,14 @@ class Game {
         // first, then the menu would bail because the state left IDLE.
         if (e.button >= 1) return;
         this._turnPress = null;   // (C3b) a new press never inherits an old one's pending step
+        this._pendingTap = null;  // (FX60) ...nor an old one's held-back Hit
+        this._skipLootReel?.();   // (FX3c) a tap skips the loot reel, then does its normal job
         // Mirror the keyboard gate: don't process taps during the move
         // animation or while the world is resolving. Splash has its own
         // handler (DOM button). Dead is a non-interactive end state.
         if (this.state === STATE.SPLASH || this.state === STATE.RESOLVING) return;
         if (this.state === STATE.DEAD) return;   // non-interactive end state
+        if (this.state === STATE.CREDITS) { e.preventDefault(); this._creditsStep(); return; }   // (FIN4) a tap steps the credits
         if (this._animating || this._uiAnimating()) return;
 
         const canvas = e.currentTarget;
@@ -2028,6 +2371,7 @@ class Game {
         // target; nothing there → fall through to the hotbar.
         if (this.state === STATE.IDLE) {
             if (this._tapXmbBar(pt)) return;   // (XMB) consumed a bottom-bar tap
+            if (this._arcTap?.(pt)) return;      // (FA1) a tap on one of the arc's slots runs it
             if (hitHud(this._hud(), pt) === 'dock') return;   // (screen-fill) the dock's bare chrome, not the world under it
             const tile = this._screenToTile(pt);
             // Bare tap on a thing → walk adjacent (if needed) → fire its DEFAULT
@@ -2036,7 +2380,15 @@ class Game {
             const target = this._targetAt(tile.x, tile.y);
             if (target) {
                 const v = defaultVerb(target, this);
-                if (v) { this._actOnTarget(v, target); this._armLongPress(tile, e); return; }
+                if (v) {
+                    // (FX60) On touch a Hit waits for the finger to lift, so a long-press
+                    // opens the list without having spent a turn. Mouse hits on press.
+                    if (v.key === 'hit' && e.pointerType === 'touch') {
+                        this._armLongPress(tile, e, () => this._actOnTarget(v, target));
+                        return;
+                    }
+                    this._actOnTarget(v, target); this._armLongPress(tile, e); return;
+                }
             }
             // (C3b, ruling C3R2) An empty tile straight beside you: a long-press
             // faces it without stepping, so the step waits for the release.
@@ -2056,11 +2408,14 @@ class Game {
     // stays put over a thing ~450ms, open the full Target List instead (opening it
     // halts the walk the tap just started). Cancelled on pointerup / drag / cancel
     // (see _bindCanvasTap) and by _stopAutoRepeat. Desktop uses right-click.
-    _armLongPress(tile, e) {
+    // (FX60) `onTap`, when given, is the action held back until the finger lifts.
+    _armLongPress(tile, e, onTap = null) {
         if (this._pressTimer) clearTimeout(this._pressTimer);
         this._pressStart = e ? { x: e.clientX, y: e.clientY } : null;
+        this._pendingTap = onTap;
         this._pressTimer = setTimeout(() => {
             this._pressTimer = null;
+            this._pendingTap = null;
             if (this.state === STATE.IDLE) this._openTargetList(tile.x, tile.y);
         }, 450);
     }
@@ -2187,6 +2542,7 @@ class Game {
                 if (w.confirming) w.confirming = false; else { w.aiming = false; w.reticle = null; }
                 audio.playSfx('menu-cancel'); this._render(); return;
             }
+            if (w.aiming && !w.confirming && this._arcTap?.(pt)) return;   // (FA1) a slot of the arc, unless it has faded aside
             if (w.aiming) { this._aimTapAt(pt); return; }
             this._wheelCommit(); return;
         }
@@ -2337,9 +2693,18 @@ class Game {
             // The bridge mouth (row 0, x14-19) is only walkable once the car's fixed
             // (_openBridgeIfCarFixed), so reaching it here is the deliberate beat,
             // not the instant-on-fix cut that used to happen.
+            // (CY1) The cutscene plays once. After the first crossing, by either
+            // route, the bridge is an ordinary walkway: it queues a plain map
+            // change to Downtown's spawn (where the ramp lands you) and the step
+            // finishes like any other door.
+            let bridgeWalk = false;
             if (ny === 0 && nx >= 14 && nx <= 19 && this.questEngine.getFlag('carFixed')) {
-                this._playBridgeCutscene();   // (Phase 2) fuel decides: crash → Canyon, or ramp → Downtown
-                return;
+                if (!this.questEngine.bridgeRoute()) {
+                    this._playBridgeCutscene();   // (Phase 2) fuel decides: crash → Canyon, or ramp → Downtown
+                    return;
+                }
+                this._pendingTransition = { toMap: 'downtown-map.json' };
+                bridgeWalk = true;
             }
 
             // Hazards
@@ -2377,7 +2742,7 @@ class Game {
             // Chain the next tile if a direction is still held or was buffered
             // mid-slide. Skipped across a map transition so a held key doesn't
             // auto-walk you straight into the new zone. (movement-feel Finding 1)
-            if (!transition) this._onStepSettled();
+            if (!transition && !bridgeWalk) this._onStepSettled();
         });
     }
 
@@ -2390,7 +2755,9 @@ class Game {
     // requiresMsg, no swing and no turn, the same as walking into a gated door.
     // `_swinging` is what the renderer reads to arc the hero up and over.
     _interactGrapple(anchor) {
-        if (anchor.requires && !(this.inventory || []).some(s => s && s.itemDef.id === anchor.requires)) {
+        // `requires` is one id or a list that must ALL be carried (carriesAll's rule, map.js).
+        const held = new Set((this.inventory || []).map(s => s && s.itemDef && s.itemDef.id));
+        if (![].concat(anchor.requires || []).every(id => held.has(id))) {
             audio.playSfx('bump-wall');
             this._log(anchor.requiresMsg || '[You need something to get a grip here.]');
             return;
@@ -2423,7 +2790,7 @@ class Game {
     // Returns true if the shove landed. Heavy characters and boxed-in ones bounce.
     _shoveNpc(enemy, dir) {
         if (!enemy || !dir) return false;
-        const who = enemy.name ?? enemy.type ?? 'them';
+        const who = ((enemy.boss && enemy.shownName) || (enemy.name ?? enemy.type)) ?? 'them';
         // (ruled 2026-09-02) The two ways a shove fails each get their own beat.
         // Caelan: "trying to push someone and not being able to, I think, is a
         // good source of physical comedy." It was a thud and a recoil with no
@@ -2452,7 +2819,7 @@ class Game {
         // stepEntity already set _lastDx/_lastDy to the victim's own displacement,
         // which is unit-length because the destination is always one tile away.
         enemy._spunTurns = 1;                   // burns on the victim's next HOSTILE turn
-        this._log(`[You shove ${enemy.name ?? enemy.type} so hard they spin around!]`, 'combat');
+        this._log(`[You shove ${((enemy.boss && enemy.shownName) || (enemy.name ?? enemy.type))} so hard they spin around!]`, 'combat');
         return true;
     }
 
@@ -2523,13 +2890,13 @@ class Game {
                 this._removeFromSlot(alc);
                 this.carFuel = 'alcohol';
                 audio.playSfx('pickup');
-                this._log('[You empty the whole bottle into the tank. The engine coughs, then drops into a slower, meaner idle. That should tame the jump.]', 'pickup');
+                this._log('[TEXT]', 'pickup');
                 this._render();
                 return;
             }
             this._log(this.carFuel === 'alcohol'
-                ? '[The car idles low and steady now — the alcohol is doing its work. Ready for the bridge.]'
-                : '[The car SNARLS, revving way past redline. At this speed you will never make the ramp — you will go straight through the bridge. There has to be a way to slow it down.]');
+                ? '[TEXT]'
+                : '[TEXT]');
             this._render();
             return;
         }
@@ -2543,13 +2910,13 @@ class Game {
             // (There's only one car, in town, so reaching here means we're home.)
             this._removeFromSlot(idx);
             this._sewerEscape = null;
-            this._log('[You wrench the cataclysmic converter back into place. The engine turns over!]', 'pickup');
+            this._log('[TEXT]', 'pickup');
             this.emitGameEvent('interact_car', {});                       // advances return_to_car if we're there
             if (!this.questEngine.getFlag('carFixed')) this.questEngine.forceComplete('fix_car'); // else force it home
             this._render();
             return;
         }
-        this._log("[The car won't start. Pop the hood and examine it (E).]");
+        this._log('[TEXT]');
         this._render();
     }
 
@@ -2736,6 +3103,7 @@ class Game {
         this._pathQueue = [];       // cancel any click-to-walk in progress
         this._pathArrive = null;
         if (this._pressTimer) { clearTimeout(this._pressTimer); this._pressTimer = null; }
+        this._pendingTap = null;    // (FX60) a touch Hit still waiting on the lift
         this._turnPress = null;     // (C3b) a pending tap-beside-you step
     }
 
@@ -2864,6 +3232,11 @@ class Game {
 
         switch (opt.action) {
             case 'use':
+                // (fx55) The Eat row at full health: the food stays in the bag, no turn passes.
+                // (The row is labelled Eat only for a healing food; see _openItemOverlay.)
+                if (opt.label === 'Eat' && this.playerHp >= this.playerMaxHp) {
+                    this._log('[TEXT]'); this.state = STATE.ITEM_SELECTED; this._render(); return;
+                }
                 this._doItemUse(item);
                 break;
             case 'ctx': {
@@ -2932,19 +3305,28 @@ class Game {
             return;
         }
 
+        // (fx37) A throw item's Use (inspector.js armsThrow) arms the throw and waits for a direction; it
+        // is neither spent nor resolved here (that was a "no direction" line).
+        if (item.useType === 'throw' && !item.drinkable) { this._armThrow(this.selectedSlot); return; }
+
         if (item.effect === 'cure_sludge') this._soapUsedThisTurn = true;
         if (item.effect === 'heal') audio.playSfx('heal'); // [audio] healing item used
 
-        const msg = resolveUse(this, item, null);
+        // (FX34) An equip leaves its bag slot BEFORE it resolves, so the piece it
+        // swaps out lands in that very slot.
+        const equips = item.useType === 'equip';
+        if (equips) this._removeFromSlot(this.selectedSlot);
+        const msg = resolveUse(this, item, null, 1, 'weapon', equips ? this.selectedSlot : -1);
         if (msg) this._log(msg);
         this._refreshGrantedSkills();   // a weapon may have changed → refresh Magic/Trick grants
 
-        // Consumables are spent; a persistent equip (armor) moves out of the bag
-        // and onto the body, so it leaves the hotbar slot too.
-        if (item.consumable || item.useType === 'equip') this._removeFromSlot(this.selectedSlot);
+        // Consumables are spent; a persistent equip (armor) moved out of the bag
+        // and onto the body, so it has left the hotbar slot too.
+        if (item.consumable && !equips) this._removeFromSlot(this.selectedSlot);
         this.selectedSlot = -1;
         this.state = STATE.IDLE;
         this._advanceWorld();
+        this._saveMoment?.();   // (FX24) gear on, or eaten / drunk: a reload keeps it
     }
 
     // (Task 9) After a throw resolves, a pullsAggro item (the rock) sends any
@@ -2957,6 +3339,17 @@ class Game {
         if (!itemDef || !itemDef.pullsAggro) return;
         emitNoise(this._earshot(), x, y, NOISE.throwImpact);
         this._log('[The rock clatters off down the tunnel.]');
+    }
+
+    // (fx37) Arm a throw from the bag slot: whatever menu is open closes, and the
+    // next direction key (or tap on the throw prompt) throws it.
+    _armThrow(slot) {
+        const stack = this.inventory[slot];
+        if (!stack) { this.state = STATE.IDLE; this._render(); return; }
+        this.selectedSlot = slot;
+        this.state = STATE.ITEM_THROW_DIR;
+        this._log(`[Throw ${stack.itemDef.name} — pick a direction]`);
+        this._render();
     }
 
     _doThrow(dir) {
@@ -3089,9 +3482,24 @@ class Game {
         if (!npc && !item && !examinable && this.map.getTile(x, y) === 19) {
             examinable = (this.examinables || []).find(e => e.id === 'car') || null;
         }
-        if (!npc && !item && !examinable && !container) return null;
+        // (HP1) A bench (tile 20, like the car's 19) is a rest spot.
+        const rest = this.map.getTile(x, y) === 20;
+        if (!npc && !item && !examinable && !container && !rest) return null;
         return { x, y, npc: npc || null, item: item || null, examinable: examinable || null,
-                 container: container || null };
+                 container: container || null, rest };
+    }
+
+    // (HP1) Rest on the faced bench: out of a fight, HP and MP to full and a few hours pass
+    // (the defeat path's time skip); in a fight, refused. Texts are placeholders.
+    _restHere() {
+        if (this._inCombat()) { this._log('[TEXT: you cannot rest in a fight.]'); this._render(); return false; }
+        this.playerHp = this.playerMaxHp;
+        this.playerMp = this.playerMaxMp;
+        this._skipTime('hours');
+        this._log('[TEXT: you rest.]', 'transition');
+        this._render();
+        this.autosave({ force: true });
+        return true;
     }
 
     // (Target List) Open the RuneScape-style verb list on a target — same target
@@ -3183,7 +3591,7 @@ class Game {
         // same widget, same keys, and Cancel starts selected so a held Enter
         // cannot carry through into a punch.
         if (verb.key === 'hit' && !verb.confirmed && t && t.npc && !isHostile(t.npc)) {
-            const who = String(t.npc.name || t.npc.type || 'them').replace(/[[\]]/g, '');
+            const who = String((t.npc.boss && t.npc.shownName) || t.npc.name || t.npc.type || 'them').replace(/[[\]]/g, '');
             this.targetList.verbs = [
                 { ...verb, label: `Really hit ${who}?`, confirmed: true },
                 { key: 'cancel', label: 'Cancel', resolver: 'cancel', color: '#4a3c2a', text: '#b0a184' },
@@ -3285,6 +3693,7 @@ class Game {
             case 'throw': { const th = this._resolveThrowable(); if (th) { const msg = resolveThrow(this, th.itemDef, null, th.count, { x: t.x, y: t.y }); if (msg) this._log(msg, 'combat'); this._rockClatter(th.itemDef, t.x, t.y); th.consume(); this._advanceWorld(); } else this._log('[Nothing to throw.]'); this._render(); break; }
             case 'take':  this._takeItemAt(t.x, t.y); this._render(); break;
             case 'open':  if (t.container) this._openContainer(t.container); break;
+            case 'rest':  this._restHere(); break;
             default: this._render();
         }
     }
@@ -3307,7 +3716,7 @@ class Game {
         // in the bag as spare (swap it in from the GEAR tab). Usables land in the
         // bag and surface on the XMB bar. The log names where the item went.
         const markTaken = () => {
-            this._collectedItems.add(`${this._mapUrl}|${x}|${y}|${gi.type}`);
+            if (!this._takeDropRecord?.(gi.type, x, y)) this._collectedItems.add(`${this._mapUrl}|${x}|${y}|${gi.type}`);
             this.groundItems.splice(idx, 1);
             audio.playSfx('pickup');
         };
@@ -3316,18 +3725,26 @@ class Game {
             this.equipment[def.equipSlot] = def;
             markTaken();
             this._log(`[Equipped ${def.name}.]`, 'pickup');
+            this._saveMoment?.();   // (FX24)
             return;
         }
 
-        if (!this._addToInventory(def)) { this._log('[Your bag is full.]'); return; }
+        this._addToInventory(def);
         markTaken();
         const cat = xmbCategoryOf(def);
         if (cat)                          this._log(`[Took ${def.name} → ${XMB_LABELS[cat]}.]`, 'pickup');
         else if (def.useType === 'equip') this._log(`[Stashed ${def.name} in your bag.]`, 'pickup');
         else                              this._log(`[Took ${def.name}.]`, 'pickup');
+        this._saveMoment?.();   // (FX24)
     }
 
     // Spin the active ring one slot and stamp the spin so the renderer sweeps it.
+    // (FX39) The wheel owns a direction pressed while it is up: forget it as "held".
+    _wheelTakesKey(code) {
+        this._physicalHeld.delete(code);
+        this._heldDirKeys = this._heldDirKeys.filter(c => c !== code);
+    }
+
     _wheelCycle(dir) {
         const w = this.wheel;
         cycle(w, dir);
@@ -3348,15 +3765,78 @@ class Game {
     _wheelDrill() {
         const w = this.wheel;
         const node = selectedNode(w);
+        // (fx58) A refused press still bumps and passes no turn, but now says why:
+        // one log line from wheel-model's reasons table (greyedReasonLine).
+        const refuse = () => {
+            const line = this.wheelGreyedLine?.(node);
+            if (line) this._log(line);
+            audio.playSfx('bump-wall'); this._render();
+        };
         if (node.placeholder) { audio.playSfx('bump-wall'); return; }
-        if (node.available && !node.available(this)) { audio.playSfx('bump-wall'); return; }
-        if (!verbApplies(node, this)) { audio.playSfx('bump-wall'); return; }   // (Phase 1) no valid target → bump
+        if (node.available && !node.available(this)) { refuse(); return; }
+        if (!verbApplies(node, this)) { refuse(); return; }   // (Phase 1) no valid target → bump
         const r = drill(w, this);
         if (r === 'bump') { audio.playSfx('bump-wall'); return; }
         if (r === 'fire') { this._wheelCommit(); return; }
         if (r === 'aim')  { if (!w.reticle) w.reticle = autoAimTile(selectedNode(w), this); audio.playSfx('menu-tick'); this._render(); return; }
         w._drillAt = performance.now(); w._drillDir = +1;
         audio.playSfx('menu-tick'); this._render();   // 'push' / descended into a sub-wheel
+    }
+
+    // (fx58) The log line for why `node` is greyed, from wheel-model's reasons table.
+    wheelGreyedLine(node) { return greyedReasonLine(node, this); }
+
+    // ── The fight arc (FA1, plans/fa1-fight-arc.md) ─────────────────────────────
+    // While a fight is on, a half-ring of numbered slots sits under the player: every attack
+    // owned, each one a node of the wheel's own tree (game/fight-arc.js). A slot runs through
+    // the wheel's own drill, so it does exactly what drilling to that node on the wheel does.
+
+    // Digit1-8 while the arc shows: run that slot. False when the arc is not showing (no fight,
+    // a menu up) or the key is not 1-8, so the caller carries on with the bag as before.
+    _arcDigit(code) {
+        const n = this._digitToSlot(code) + 1;
+        if (n < 1 || n > ARC_MAX || !arcVisible(this)) return false;
+        this._arcPress(n);
+        return true;
+    }
+
+    // A press on one of the arc's slots. False when it landed on none, when the arc has faded
+    // out of the way of an aim, or when a thing you could already click sits under the slot:
+    // that thing wins, so nothing that worked before the arc stops working.
+    _arcTap(pt) {
+        if (!arcVisible(this)) return false;
+        const vp = this._vp();
+        if (arcFaded(vp, this)) return false;
+        const n = arcSlotAt(vp, arcSlots(this), pt);
+        if (!n) return false;
+        const tile = this._screenToTile(pt);
+        if (this._targetAt(tile.x, tile.y)) return false;
+        this._arcPress(n);
+        return true;
+    }
+
+    _arcPress(n) {
+        const slot = arcSlots(this).find(s => s.n === n);
+        if (!slot) { audio.playSfx('bump-wall'); return; }
+        const w = this.wheel;
+        if (this.state === STATE.RADIAL_MENU) {
+            if (!w.aiming || w.confirming) return;
+            if (selectedNode(w) === slot.node) { this._wheelCommit(); return; }   // the same number again fires, as Space does
+            w.aiming = false; w.reticle = null; this.state = STATE.IDLE;          // another number switches to it
+        }
+        if (this.state !== STATE.IDLE || this._animating) return;
+        if (slot.reason) {   // greyed: say why, spend nothing (FX58's reasons, the wheel's refusal)
+            const line = this.wheelGreyedLine(slot.node);
+            if (line) this._log(line);
+            audio.playSfx('bump-wall'); this._render(); return;
+        }
+        this._stopAutoRepeat();
+        this._heldDirKeys = [];
+        this.state = STATE.RADIAL_MENU;
+        w.path = slot.path.slice();
+        w.aiming = false; w.confirming = false; w.reticle = null;
+        this._wheelDrill();   // fire a self action, or enter the aim layer with the reticle seeded
+        if (this.state === STATE.RADIAL_MENU && !w.aiming && !w.confirming) { this.state = STATE.IDLE; w.reticle = null; this._render(); }
     }
 
     // Commit the composed action — surfacing the Plus-Ultra confirm if it would
@@ -3469,6 +3949,12 @@ class Game {
             if (!tile) { this.selectedSlot = -1; this._log(`[No target in range for ${def.name}.]`); this._render(); return; }
             this._doThrowAt(tile);
         } else {
+            // (fx55) Full health: a healing food stays in the bag and no turn passes. Only the
+            // Eat column's healers; drinks and foods that heal nothing go through as before.
+            // The check sits here and in _pickOverlay, not in _doItemUse, which the wheel shares.
+            if (sel.column.key === 'eat' && def.effect === 'heal' && this.playerHp >= this.playerMaxHp) {
+                this.selectedSlot = -1; this._log('[TEXT]'); this._render(); return;
+            }
             this._doItemUse(def);
         }
     }
@@ -3695,7 +4181,7 @@ class Game {
             case 'resolveThrow': { if (itemSlot >= 0 && aimTile) { this._throwAt(itemSlot, aimTile); } break; }
             case 'resolveUse':   { const stack = itemSlot >= 0 ? this.inventory[itemSlot] : null; if (stack) { this.selectedSlot = itemSlot; this._doItemUse(stack.itemDef); } else this._log('[Nothing to use]'); break; }
             case 'guard':        { this.addBuff('guard', 'Guard', 2, 'buff'); this._log('[Bracing — incoming damage reduced.]', 'combat'); this._advanceWorld(); break; }
-            case 'wait':         { this._log('[Wait]'); this._advanceWorld(); break; }
+            case 'wait':         { this._waitTurn(); break; }
             case 'run':          { const d = this._aimDir(aimTile); if (d) { this._closeWheel(); this._doMove(d); return; } break; }
             case 'thieveCoin': case 'thieveKit': case 'thieveGear': {
                 const victim = this._thieveTarget(aimTile);
@@ -3756,7 +4242,7 @@ class Game {
                     if (took) this._hot[took.id] = (this._hot[took.id] ?? 0) + 1;
                     victim._robbedSweep = true;            // arms the blind sweep + paranoia
                     reactToTransaction(victim, 'theft', { item: took, gold: gp });
-                    this._log(`[${victim.name ?? victim.type} feels the weight change.]`, 'combat');
+                    this._log(`[${((victim.boss && victim.shownName) || (victim.name ?? victim.type))} feels the weight change.]`, 'combat');
                 }
                 this._advanceWorld();
                 break;
@@ -3805,6 +4291,61 @@ class Game {
     _entitiesInRadius(cx, cy, r) {
         return this.enemies.filter(e => e.entity.isAlive()
             && Math.abs(e.x - cx) <= r && Math.abs(e.y - cy) <= r);
+    }
+
+    // ── Ants (plans/an2-ant-swarm-sweet-food.md) ─────────────────────────────
+    // ants.js owns the rules; this is the swarm's view of this map and turn.
+    _antEnv() {
+        const m = this.map;
+        return {
+            grid: {
+                width: m.width, height: m.height,
+                isWalkable: (x, y) => m.isWalkable(x, y),
+                isCold: (x, y) => isColdTile(m.getTile(x, y)),
+            },
+            player: { x: this.playerX, y: this.playerY },
+            sweet: carriesSweet(this.inventory),
+            entries: m.transitions || [],
+            isFree: (x, y) => !(x === this.playerX && y === this.playerY) && this._tileFreeForShove(x, y),
+            spawn: (x, y) => this._spawnAnt(x, y),
+            move: (a, x, y) => stepEntity(a, x, y, this._MOVE_MS),
+            bite: (a) => { this._cascadeMark?.(a); this.applyDamageToPlayer(ANT_BITE, a); },
+            remove: (a) => { this.enemies = this.enemies.filter(e => e !== a); },
+        };
+    }
+
+    _spawnAnt(x, y) {
+        this._antSeq = (this._antSeq || 0) + 1;
+        const a = new Enemy({
+            id: `ant_${this.turn}_${this._antSeq}`, type: ANT_TYPE, x, y,
+            hp: ANT_HP, damage: ANT_BITE, sightRange: 0, tag: ANT_TAG,
+        });
+        this.enemies.push(a);
+        return a;
+    }
+
+    // One world turn of ants: squashed ones leave their alarm and go, then the
+    // swarm moves and bites. Draws no RNG with no sweet food and no ants.
+    _antTurn() {
+        if (!this.map) return;
+        if (this._antSwarmMap !== this.map) { this._antSwarm = null; this._antSwarmMap = this.map; }
+        const dead = this.enemies.filter(e => isAnt(e) && !e.entity.isAlive());
+        if (dead.length) {
+            for (const a of dead) squashAnt(this._antSwarm, a.x, a.y, this.rng);
+            this.enemies = this.enemies.filter(e => !dead.includes(e));
+        }
+        const ants = this.enemies.filter(isAnt);
+        this._antSwarm = swarmTurn(this._antSwarm, ants, this._antEnv(), this.rng).swarm;
+        // No eyes, no chase: a noise or a blow never turns an ant into a fighter.
+        for (const a of this.enemies) if (isAnt(a)) a.state = 'idle';
+    }
+
+    // Wait a turn; with ants latched on, the turn goes to brushing them off.
+    _waitTurn() {
+        const latched = this.enemies.filter(e => isAnt(e) && e._latched && e.entity.isAlive());
+        if (latched.length) { brushOff(latched, this._antEnv()); this._log('[TEXT]'); }
+        else this._log('[Wait]');
+        this._advanceWorld();
     }
 
     // ── World Advance (after any action) ─────────────────────────────────────
@@ -3861,6 +4402,9 @@ class Game {
         this._cascade?.begin();
         const msgs = resolveEnemyTurns(this);
         this._routeWorldMessages(msgs);
+        // (AN2) The swarm moves and bites after the other creatures. Optional-called,
+        // like _saveMoment, so the stand-in games tests lift this method onto need not carry it.
+        this._antTurn?.();
         // (C1) Effects outside an enemy's turn spawn at once; the phase stays open
         // until the player's own tick below, which plays as the last beat.
         this._cascadeActor = null;
@@ -3871,9 +4415,13 @@ class Game {
         if (this.enemies.some(e => e._isSummon)) {
             for (const e of this.enemies) if (e._isSummon) e._summonTurnsLeft--;
             const gone = this.enemies.filter(e => e._isSummon && e._summonTurnsLeft <= 0);
-            for (const e of gone) this._log(`[${e.type || 'The summon'} slinks back into the crowd.]`);
+            for (const e of gone) {
+                if (this._finaleSummonLeft?.(e)) continue;   // Sun Man is bitten, not sent away
+                this._log(`[${((e.boss && e.shownName) || e.type) || 'The summon'} slinks back into the crowd.]`);
+            }
             if (gone.length) this.enemies = this.enemies.filter(e => !(e._isSummon && e._summonTurnsLeft <= 0));
         }
+        this._finaleTick?.();   // (FIN3) Monstrous Sun Man's scream keeps time with the turn
 
         // (Rat Form) the transform lasts a few beats — count it down each world
         // beat and unfold at zero. Ticks once per committed turn, like the summon.
@@ -3947,8 +4495,10 @@ class Game {
             // new map is in place (the .then() restores IDLE). Prevents acting
             // against the old map mid-fetch.
             this.state = STATE.RESOLVING;
+            this._zoneChange();   // (plans/ks1-respawn-list.md) the respawn lists take a step
             this._loadMap(t.toMap, t.toX, t.toY).then(() => {
                 this._log(`[Entered ${this.map.zoneName}]`);
+                this._armourShopNotice?.();   // (AA1) optional-called, like _saveMoment, for the stand-in games tests build
                 this.state = STATE.IDLE;
                 this.emitGameEvent('map_entered', { map: t.toMap });
                 this.autosave({ force: true });
@@ -3963,6 +4513,27 @@ class Game {
 
         this._render();
         this.autosave();
+    }
+
+    // (AA1) Walking into a zone whose shop sells armour you do not own says so, once per visit.
+    // "Own" is worn or in the bag. Armour here means a wearable, non-consumable body piece (a
+    // bandage carries an armour number too, but it is a heal). The words are a placeholder: [TEXT].
+    _armourShopNotice() {
+        const owns = (id) => Object.values(this.equipment || {}).some(it => it && it.id === id)
+            || (this.inventory || []).some(sl => sl && sl.itemDef && sl.itemDef.id === id);
+        const BODY = ['top', 'bottom', 'front', 'back', 'sides'];
+        for (const e of this.enemies || []) {
+            if (!e.vendor || !Array.isArray(e.stock)) continue;
+            for (const id of e.stock) {
+                const def = this._resolveItemDef(id);
+                if (def && def.useType === 'equip' && !def.consumable && def.armor
+                    && BODY.includes(def.equipSlot) && !owns(id)) {
+                    this._log('[TEXT]');
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     // Route world-advance messages: plain strings → side log; spoken tuples
@@ -4074,9 +4645,40 @@ class Game {
         const bar = buildXmbBar(this.inventory);
         const col = bar.columns.find(c => c.key === cat);
         if (!col || !col.items.length) return -1;
+        // (fx36) The wheel's Eat is not the bar's pick: it eats the food that best
+        // fills the missing HP, and there is none to eat at full health.
+        if (cat === 'eat') { const pick = this.eatChoice(); return pick ? pick.slot : -1; }
         const wantId = this.xmbPick ? this.xmbPick[cat] : null;
         const item = col.items.find(it => it.itemDef.id === wantId) || col.items[0];
         return item.slot;
+    }
+
+    // (fx36) The food the wheel's Eat would eat now: { slot, itemDef, heal }, or null.
+    // Hurt: the smallest heal that covers the missing HP, else the biggest food there
+    // is (ties go to the earlier bag slot). Full health: null, so no food is wasted.
+    // A food that heals nothing is never picked while there is a healer to pick.
+    eatChoice() {
+        const col = buildXmbBar(this.inventory).columns.find(c => c.key === 'eat');
+        if (!col) return null;
+        const missing = this.playerMaxHp - this.playerHp;
+        const foods = col.items.map(it => ({
+            slot: it.slot, itemDef: it.itemDef,
+            heal: it.itemDef.effect === 'heal' ? (it.itemDef.healAmount ?? 0) : 0,
+        }));
+        if (missing <= 0) return null;
+        const healers = foods.filter(f => f.heal > 0);
+        if (!healers.length) return foods[0] || null;
+        const covers = healers.filter(f => f.heal >= missing).sort((a, b) => a.heal - b.heal || a.slot - b.slot);
+        if (covers.length) return covers[0];
+        return healers.sort((a, b) => b.heal - a.heal || a.slot - b.slot)[0];
+    }
+
+    // (fx36) Why the wheel's Eat is greyed: 'full' (nothing to heal), 'none' (no food
+    // in the bag), or null when it is live. The renderer reads this for the reason line.
+    eatBlockedBy() {
+        if (this.eatChoice()) return null;
+        const col = buildXmbBar(this.inventory).columns.find(c => c.key === 'eat');
+        return col ? 'full' : 'none';
     }
 
     // (skills) What the Thieve verb reads: the slotted rings' passives plus every
@@ -4249,7 +4851,8 @@ class Game {
     // ── Inventory ────────────────────────────────────────────────────────────
 
     _addToInventory(itemDef) {
-        return addToInv(this.inventory, itemDef, { size: INVENTORY_SIZE, safeSlots: SAFE_SLOTS, maxStack: MAX_STACK });
+        // (BG1) The bag grows: a full PACK adds a page, so this never refuses.
+        return addToInv(this.inventory, itemDef, { size: this.inventory.length, safeSlots: SAFE_SLOTS, maxStack: MAX_STACK, pageSize: PACK_PAGE });
     }
 
     _removeFromSlot(slot) {
@@ -4286,22 +4889,23 @@ class Game {
     }
 
     _tryPickup() {
-        let go = true;
+        let go = true, took = false;
         while (go) {
             go = false;
             const idx = this.groundItems.findIndex(gi => gi.x === this.playerX && gi.y === this.playerY);
             if (idx === -1) break;
             const gi = this.groundItems[idx];
-            if (this._addToInventory(gi.def)) {
-                audio.playSfx('pickup'); // [audio] item picked up off the ground
-                this._log(`[Picked up ${gi.def.name}]`);
-                this.emitGameEvent('item_pickup', { id: gi.def.id });
-                // Remember it so re-entering this zone doesn't respawn it.
-                this._collectedItems.add(`${this._mapUrl}|${gi.x}|${gi.y}|${gi.type}`);
-                this.groundItems.splice(idx, 1);
-                go = true;
-            } else { this._log('[Inventory full]'); break; }
+            this._addToInventory(gi.def);
+            audio.playSfx('pickup'); // [audio] item picked up off the ground
+            this._log(`[Picked up ${gi.def.name}]`);
+            this.emitGameEvent('item_pickup', { id: gi.def.id });
+            // Remember it so re-entering this zone doesn't respawn it.
+            if (!this._takeDropRecord?.(gi.type, gi.x, gi.y)) this._collectedItems.add(`${this._mapUrl}|${gi.x}|${gi.y}|${gi.type}`);
+            this.groundItems.splice(idx, 1);
+            go = true;
+            took = true;
         }
+        if (took) this._saveMoment?.();   // (FX24) a reload keeps what you picked up
     }
 
     // An examinable that yields a one-time item (the Red Cape wedged in a grate).
@@ -4316,11 +4920,12 @@ class Game {
         }
         const def = this._resolveItemDef(target.grants);   // WEAPONS too, not just ITEMS
         if (!def) { this._log(target.text || `[You examine the ${target.id}.]`); return true; }
-        if (!this._addToInventory(def)) { this._log('[Your bag is full — leave it for now.]'); return true; }
+        this._addToInventory(def);
         this._collectedItems.add(key);
         this._log(target.text || `[You take the ${def.name}.]`);
         this._log(`[+ ${def.name}]`, 'pickup');
         audio.playSfx('pickup');
+        this._saveMoment?.();   // (FX24)
         return true;
     }
 
@@ -4328,8 +4933,7 @@ class Game {
     //
     // Open a chest (or other container) the player has bumped into. Empty
     // chests log a one-liner; full ones transfer their contents into the
-    // player's inventory item-by-item (respecting inventory-full case the
-    // same way _tryPickup does).
+    // player's inventory item-by-item.
     //
     // Contents entries may be strings ('rock') OR objects ({ type: 'rock' })
     // for forward-compat — the soap-mine workers in step 4 will deposit
@@ -4402,6 +5006,7 @@ class Game {
     // ── Combat ───────────────────────────────────────────────────────────────
 
     combatAttack(enemyObj, damage, opts = {}) {
+        if (this._finaleBlocksHit?.(enemyObj)) return null;   // (FIN3) no one strikes the cowering Sun Man
         const playerEntity = { name: '[Player]', isDead: () => false };
 
         // (Rings) Passive damage modifiers fold into the swing before it lands.
@@ -4435,7 +5040,7 @@ class Game {
             elemental: elementalMult(opts.type || kind, enemyObj),
             positional: backstab ? 1.5 : 1,
         });
-        if (finalDmg === 0) { this._log(`[${enemyObj.type} is immune!]`, 'combat'); return null; }
+        if (finalDmg === 0) { this._log(`[${enemyObj.shownName || enemyObj.type} is immune!]`, 'combat'); return null; }
         if (backstab) this._log('[Backstab!]', 'combat');
 
         const result = attack(playerEntity, enemyObj.entity, finalDmg);
@@ -4525,6 +5130,14 @@ class Game {
         return formatDamageNumber(result);
     }
 
+    // (FX30) True when the player already has the Ray Gun: the old Factory floor
+    // gun is marked collected in the save, or one is held anywhere (hasItem walks
+    // the bag, the worn gear and temp-equips).
+    _alreadyHasRayGun() {
+        return this._collectedItems.has('factory-map.json|3|2|ray_gun')
+            || this.hasItem(d => d.id === 'ray_gun');
+    }
+
     // Shared "an enemy just died" side-effects — the K.O. beat, the kill event,
     // the Were-Rat converter drop, and the sewer-escape wave counter. Called
     // from combatAttack (player kills) AND _allyTakeTurn (ally kills) so a bribed
@@ -4551,41 +5164,54 @@ class Game {
         // didn't — what's left is the reward for rushing him. Farming stays
         // closed because spawnEnemy clears the loadout for a mugged id, exactly
         // as it clears the gold.
-        const kit = dropLoadout(enemyObj.loadout, enemyObj.x, enemyObj.y);
-        for (const item of kit) {
-            this._recordDrop(item.type, item.x, item.y);
-            this.groundItems.push(item);
-        }
+        // (FX3) What the kill gives is gathered here and handed to the bag at
+        // the end (_takeKillLoot), never left on the floor.
+        const drops = [];
+        // (FX30) The Ray Gun comes once: a save that already holds one (or took the
+        // old floor gun) gets no second from the Alien.
+        const haveGun = this._alreadyHasRayGun?.();
+        // (plans/ne1-rival-remembered.md) A rival's record ends here. What it carries is in
+        // its kit already; what it never got to carry (you beat it first) is owed too.
+        const owed = this._clearRival?.(enemyObj) ?? [];
+        const kit = dropLoadout([...(enemyObj.loadout ?? []), ...owed], enemyObj.x, enemyObj.y)
+            .filter(d => !(haveGun && d.type === 'ray_gun'));
+        drops.push(...kit);
         if (kit.length) {
             this._log(`[They drop what they didn't get to use.]`, 'pickup');
             this._muggedIds.add(enemyObj.id);
         }
         enemyObj.loadout = [];
+        // (plans/ks1-respawn-list.md) It stays dead until the zone's respawn list
+        // sends it back.
+        // (Optional-called, like _saveMoment, so the stand-in games tests lift
+        // this method onto need not carry them.)
+        this._rememberKill?.(enemyObj);
+        this._finaleOnDeath?.(enemyObj);   // (FIN2) the Financier falling is phase 1 won
         // A spine slot's required item drops from whoever filled the slot (the
         // Sewer's boss drops the converter); rat kills feed the escape waves.
+        // A boss's own items drop only the first time it dies: once it respawns
+        // off the list, beating it again gives nothing new.
         const required = requiredDropFor(enemyObj, this.map?.enemySpawns);
-        if (required && ITEMS[required]) {
-            this._recordDrop(required, enemyObj.x, enemyObj.y);
-            this.groundItems.push({ type: required, x: enemyObj.x, y: enemyObj.y, def: ITEMS[required] });
+        const firstFall = this._bossFirstFall?.(enemyObj, required) ?? true;
+        if (firstFall && required && ITEMS[required]) {
+            drops.push({ type: required, x: enemyObj.x, y: enemyObj.y, def: ITEMS[required] });
             this._log(dropLineFor(enemyObj, this.map?.enemySpawns) || `[${ITEMS[required].name} dropped.]`, 'pickup');
         }
         // (Remembrance Rings) The Were-Rat also leaves a remembrance — a braided
         // tuft of fur → the Rat Ring (fashioned at Platero). Drop it on a free
         // adjacent tile so it doesn't stack on the converter; persist it (Task 2).
-        if (enemyObj.tag === 'wererat_boss' && ITEMS.wererat_fur) {
+        if (firstFall && enemyObj.tag === 'wererat_boss' && ITEMS.wererat_fur) {
             let fx = enemyObj.x, fy = enemyObj.y;
             for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
                 const tx = enemyObj.x + dx, ty = enemyObj.y + dy;
-                if (this.map.isWalkable(tx, ty) && !this.groundItems.some(gi => gi.x === tx && gi.y === ty)) { fx = tx; fy = ty; break; }
+                if (this.map.isWalkable(tx, ty) && ![...this.groundItems, ...drops].some(gi => gi.x === tx && gi.y === ty)) { fx = tx; fy = ty; break; }
             }
-            this._recordDrop('wererat_fur', fx, fy);
-            this.groundItems.push({ type: 'wererat_fur', x: fx, y: fy, def: ITEMS.wererat_fur });
+            drops.push({ type: 'wererat_fur', x: fx, y: fy, def: ITEMS.wererat_fur });
             this._log('[Among the matted fur, one coarse braided tuft stays warm — a remembrance.]', 'pickup');
         }
         // Pike guards his climbing rope with his life — take it off his body.
-        if (enemyObj.tag === 'pike_boss' && ITEMS.grappling_hook) {
-            this._recordDrop('grappling_hook', enemyObj.x, enemyObj.y);
-            this.groundItems.push({ type: 'grappling_hook', x: enemyObj.x, y: enemyObj.y, def: ITEMS.grappling_hook });
+        if (firstFall && enemyObj.tag === 'pike_boss' && ITEMS.grappling_hook) {
+            drops.push({ type: 'grappling_hook', x: enemyObj.x, y: enemyObj.y, def: ITEMS.grappling_hook });
             this._log('[Pike crumples. His big coil of rope — the grappling hook — thuds to the stone.]', 'pickup');
         }
         // Pike's deal (his dialogue onPick set the flag): clearing the LAST canyon
@@ -4597,6 +5223,66 @@ class Game {
             this._grantItem('grappling_hook', '["Deal\'s a deal." Pike coils the big rope into your pack — the grappling hook is yours.]');
         }
         onSewerEnemyKilled(this, enemyObj);
+        // (FX3) Auto-loot: everything gathered above goes straight into the bag.
+        // Handed over last, so the quest hears item_pickup after the kill, in the
+        // order a walk-over pickup gave it. Whatever the bag can't take (an item
+        // that doesn't resolve) falls to the floor as it always did; a stand-in
+        // game without _takeKillLoot drops everything there.
+        const left = this._takeKillLoot ? this._takeKillLoot(drops, enemyObj) : drops;
+        for (const item of left) {
+            this._recordDrop(item.type, item.x, item.y);
+            this.groundItems.push(item);
+        }
+    }
+
+    // (FX3) A kill's loot goes straight into the bag: each item is logged with the
+    // walk-over pickup's line and fires item_pickup, then (FX3b) the burst shows it
+    // flying from the body to you. The bag never refuses (BG1), so `left` holds
+    // only items with no def. Pure show follows: the items are already yours.
+    _takeKillLoot(drops, enemyObj) {
+        const left = [], got = [];
+        for (const item of drops) {
+            if (item.def) { this._addToInventory(item.def); got.push(item.def); }
+            else left.push(item);
+        }
+        if (!got.length) return left;
+        audio.playSfx('pickup');
+        for (const def of got) {
+            this._log(`[Picked up ${def.name}]`, 'pickup');
+            this.emitGameEvent('item_pickup', { id: def.id });
+        }
+        this._saveMoment?.();
+        this._startLootBurst?.(enemyObj.x, enemyObj.y, got);
+        this._startLootReel?.(got);
+        return left;
+    }
+
+    // (FX3b) Start the burst that shows a kill's loot flying from the body at
+    // (x, y) to you, one icon per item. Nothing waits on it. An ally's kill in a
+    // cascaded enemy phase bursts on that ally's beat, like its K.O. word.
+    _startLootBurst(x, y, defs) {
+        if (this._cascadeActor && this._cascade?.defer(this._cascadeActor, () => this._startLootBurst(x, y, defs))) return;
+        this._lootBursts.push(makeBurst(x, y, defs.map(d => ({ id: d.id, icon: d.icon })), performance.now()));
+        this._ensureParticleLoop();
+    }
+
+    // (FX3c) Roll the reel through what a kill gave: one line per kind of item, with
+    // its count. A reel still rolling takes the new items in (extendReel). Nothing
+    // waits on it; a fresh key press or a tap clears it (_skipLootReel). An ally's
+    // kill in a cascaded enemy phase rolls on that ally's beat, like its burst.
+    _startLootReel(defs) {
+        if (this._cascadeActor && this._cascade?.defer(this._cascadeActor, () => this._startLootReel(defs))) return;
+        const entries = reelEntries(defs);
+        if (!entries.length) return;
+        const now = performance.now();
+        this._lootReel = extendReel(liveReel(this._lootReel, now), entries, now);
+        this._ensureParticleLoop();
+    }
+
+    // (FX3c) Any fresh key press or tap skips the reel. The key still does its job:
+    // this only clears the show, and runs before the key is read.
+    _skipLootReel() {
+        if (this._lootReel) { this._lootReel = null; this._render?.(); }
     }
 
     // (Remembrance Rings) Platero's craft: consume a remembrance material from
@@ -4619,7 +5305,7 @@ class Game {
     _grantItem(id, msg) {
         const def = this._resolveItemDef(id);   // WEAPONS too, not just ITEMS
         if (!def) return false;
-        if (!this._addToInventory(def)) { this._log('[Your bag is full — no room for it.]'); return false; }
+        this._addToInventory(def);
         if (msg) this._log(msg, 'pickup');
         this.emitGameEvent('item_pickup', { id });
         this._render();
@@ -4642,6 +5328,7 @@ class Game {
     // adjacent, else step toward it. Otherwise leash-follow the player (close in
     // only when more than LEASH tiles away) so allies neither wander off nor crowd you.
     _allyTakeTurn(ally) {
+        if (this._finaleCowering?.(ally)) return [];   // (FIN3) bitten, under his cloak, changing: no turns
         const SEEK = 8, LEASH = 3;
 
         const fs = fighters(this.enemies);
@@ -4695,7 +5382,7 @@ class Game {
         enemyObj.state = 'chasing';     // immediately hostile, no re-acquire delay
         enemyObj.disposition = -50;     // betrayed: head-meter goes angry + re-bribing costs more
         enemyObj._wasFlipped = false;   // ...but they CAN be won back if you make amends
-        this._log(`[The ${enemyObj.type} turns on you!]`, 'combat');
+        this._log(`[${enemyObj.shownThe || `The ${enemyObj.shownName || enemyObj.type}`} turns on you!]`, 'combat');
     }
 
     // ── Reaction bus ──────────────────────────────────────────────────────────
@@ -4707,6 +5394,8 @@ class Game {
     // wheel's offensive verbs actually land on the people around you.
     _onEntityHarmed(target, { kind = 'attack' } = {}) {
         if (!target || !target.entity || !target.entity.isAlive() || target._ally) return;
+        // (FIN2) Hitting the Financier first starts the same fight talking to him does.
+        if (this._finaleOnHarmed?.(target)) return;
         if (isHostile(target)) {                     // already hostile — nothing to provoke,
             struck(target, { x: this.playerX, y: this.playerY });   // but it turns to face the blow
             return;
@@ -4717,8 +5406,13 @@ class Game {
         if (target.vendor) { target.vendor = false; target.stock = null; }   // a vendor you struck won't keep shop
         if (target.ambient) target.ambient = false;  // a provoked townsperson fights for real, not as ambient
         if (typeof target.disposition === 'number') target.disposition = Math.min(target.disposition, -50);
-        this._log(`[The ${target.type || target.entity.name} turns on you!]`, 'combat');
+        this._log(`[${target.shownThe || `The ${target.shownName || target.type || target.entity.name}`} turns on you!]`, 'combat');
     }
+
+    // (ws6) Held shields: the armour they add, and the cut the first ready one
+    // makes to the hit now landing (it then waits out its cooldown, per hand).
+    _shieldArmor() { return shieldArmor(this.equipment || {}); }
+    _shieldCut() { return raiseShield(this.equipment || {}, this._shieldBlocks ??= {}, this.turn ?? 0).mult; }
 
     // Total damage-reduction from worn armor: every equipped body-zone piece's
     // `armor` sums into one number. It stays one flat total (ruled 2026-10-23):
@@ -4736,6 +5430,7 @@ class Game {
         // (Poition) An active Defence Poition rides alongside worn armor +
         // rings the same way — a rider read, not a tick (see _poitionMod).
         total += this._poitionMod('defence');
+        total += this._shieldArmor?.() ?? 0;   // a shield held in a hand adds its armour
         return total;
     }
 
@@ -4901,7 +5596,7 @@ class Game {
         if (!npc || !def) return null;
         npc._lastDx = Math.sign(this.playerX - npc.x);   // it faces what it threw at
         npc._lastDy = Math.sign(this.playerY - npc.y);
-        const who = npc.name ?? npc.type;
+        const who = ((npc.boss && npc.shownName) || (npc.name ?? npc.type));
         const what = String(def.name || def.id).replace(/[[\]]/g, '');
         if (def.fireBlood) {
             this._applyFireBlood(this, def.poition?.turns ?? 5);
@@ -4947,7 +5642,7 @@ class Game {
         if (!this._hasFireBlood(attacker) || !target) return;
         if (target !== this && !(target.entity && target.entity.isAlive())) return;
         this._ignite(target, FIRE_BLOOD_SPREAD_TURNS);
-        const name = target === this ? 'You catch' : `${target.name ?? target.type} catches`;
+        const name = target === this ? 'You catch' : `${((target.boss && target.shownName) || (target.name ?? target.type))} catches`;
         this._log(`[${name} fire.]`, 'combat');
     }
 
@@ -4965,9 +5660,14 @@ class Game {
         if (!spot) { this._log('[No room beside you to summon anything.]'); return false; }
         const name = opts.summonName || (type.charAt(0).toUpperCase() + type.slice(1));
         this._summonSeq = (this._summonSeq || 0) + 1;
+        // (FIN2) An authored ally may wear another type's picture and go by a name of
+        // its own: `summonLook` is the type the sprite is looked up by. The lion
+        // passes none, so its type stays its name exactly as before.
         const ally = new Enemy({
             id: `summon_${type}_${this.turn}_${this._summonSeq}`,
-            type: name, x: spot.x, y: spot.y,
+            type: opts.summonLook || name, x: spot.x, y: spot.y,
+            name: opts.summonLook ? name : undefined,
+            dialogueId: opts.dialogueId, tag: opts.tag,
             // Pass through undefined so the Enemy ctor's own defaults apply — a
             // summon is a combatant, so Law 0's hp 100 is its floor too. The old
             // `|| 30` silently undercut The Hundred for any trick omitting the field
@@ -4982,9 +5682,91 @@ class Game {
         ally.state = 'idle';
         ally._isSummon = true;
         ally._summonTurnsLeft = turns;
+        if (opts.aiding) ally._aiding = true;   // (FIN2) already in the fight, no need to see it first
         this.enemies.push(ally);
-        this._log(`[You whistle sharp — ${name} bounds out of the crowd, all teeth.]`, 'combat');
+        this._log(opts.summonLine ?? `[You whistle sharp — ${name} bounds out of the crowd, all teeth.]`, 'combat');
         return true;
+    }
+
+    // ── The finale, phase 1 (plans/fin2-financier-fight.md) ─────────────────────
+
+    _isFinancier(e) {
+        return !!e && e.tag === FINALE_PHASE1.financierTag;
+    }
+
+    // Start the fight with the Financier: he turns on you and Sun Man comes in at
+    // your side for a few turns (FINR3). Idempotent: a Financier already hostile,
+    // or already down, starts nothing. Returns true when it began a fight.
+    _beginFinalFight(financier) {
+        if (!this._isFinancier(financier) || !financier.entity?.isAlive() || isHostile(financier)) return false;
+        financier.allegiance = 'hostile';       // authoritative: routes him to the chase (npc.js)
+        financier.fsmState = 'HOSTILE';
+        financier.state = 'chasing';
+        financier.ambient = false;
+        this._log(`[${financier.shownThe} turns on you!]`, 'combat');
+        const sun = FINALE_PHASE1.sunMan;
+        this._spawnSummon('sun_man', FINALE_PHASE1.sunManTurns, {
+            summonName: sun.name, summonLook: sun.type, summonHp: sun.hp, summonDamage: sun.damage,
+            tag: FINALE_PHASE1.sunManTag, dialogueId: sun.dialogueId, aiding: true,
+            summonLine: '[TEXT]',
+        });
+        return true;
+    }
+
+    // `_onEntityHarmed` asks first: a blow at the calm Financier starts the same fight.
+    _finaleOnHarmed(target) {
+        return this._isFinancier(target) && this._beginFinalFight(target);
+    }
+
+    // The summon timer ran out. Sun Man is not sent away: the Financier bites him, once, and
+    // he goes to a corner to cower while he changes (FIN3, finale-setpiece.js). The Financier
+    // is weakened for the rest of the fight (FINR7 b). Returns true when `e` was Sun Man, so
+    // the lion's slink-away line is skipped.
+    _finaleSummonLeft(e) {
+        return biteSunMan(this, e);
+    }
+
+    // The Financier fell: phase 1 is won. The flag is saved with the quest state;
+    // the event fires the first time only. Then Sun Man, cowering, rises as Monstrous Sun Man
+    // (FINR8 a, FIN3). Monstrous Sun Man falling is phase 2 won.
+    _finaleOnDeath(e) {
+        if (beastFell(this, e)) return;
+        if (!this._isFinancier(e) || !this.questEngine) return;
+        const first = this.questEngine.state.flags[FINALE_PHASE1.flag] !== FINALE_PHASE1.won;
+        this.questEngine.state.flags[FINALE_PHASE1.flag] = FINALE_PHASE1.won;
+        if (first) this.emitGameEvent('finale_phase1_won', { id: e.id });
+        riseSunMan(this);
+    }
+
+    // (FIN3) The world turn ended: Monstrous Sun Man's scream keeps time with it.
+    _finaleTick() {
+        finaleTick(this);
+    }
+
+    // (FIN3) A map loaded: the vault after phase 1 holds the beast, not the Financier.
+    _finaleOnLoad(url) {
+        restoreFinale(this, url);
+    }
+
+    // (FIN3) Bitten Sun Man cannot be struck, and takes no turns.
+    _finaleBlocksHit(target) {
+        return blocksCowerHit(this, target);
+    }
+
+    _finaleCowering(e) {
+        return isCowering(e);
+    }
+
+    // The Financier beat you: rebuild him at his post (full health, no
+    // weakening, calm until you talk to him) and send Sun Man away, so the whole
+    // fight can start again. Only the Financier's retry comes here.
+    _finaleReset(boss) {
+        if (resetBeast(this, boss)) return;   // (FIN3) Monstrous Sun Man goes back to his corner
+        if (!this._isFinancier(boss)) return;
+        this.enemies = this.enemies.filter(e => e.tag !== FINALE_PHASE1.sunManTag && !this._isFinancier(e));
+        const spawn = (this.map?.enemySpawns || []).find(s => s.id === boss.id);
+        if (!spawn) return;   // he chased you out of the vault: the vault rebuilds him when you return
+        this.enemies.push(spawnEnemy(resolveSpawn(spawn, this.slots), this._muggedIds, this._robbed));
     }
 
     // (Lion Whip) Yank a struck enemy up to `dist` tiles toward the player, one
@@ -5033,15 +5815,31 @@ class Game {
         this._cascade.mark(actor);
     }
 
+    // (RR1) Does this blow miss you? Draws the seeded RNG only with evasion.
+    _rollDodge() {
+        const chance = dodgeChance(this.ringMods && this.ringMods.evasion);
+        return chance > 0 && this.rng.float() < chance;
+    }
+
     applyDamageToPlayer(rawDamage, attacker = null) {
         if (attacker) this._lastDefeatedBy = attacker;
         // Guard (incoming, defender) folds into one computeHit call — round once,
         // no double-rounding.
-        let dmg = computeHit({
-            base: rawDamage,
-            incomingMult: this.hasBuff('guard') ? 0.5 : 1,
-        });
+        // A held shield cuts the first hit it meets each turn (ws6): its cut folds in here.
+        // A hit that deals nothing leaves the block unspent.
+        const guardMult = this.hasBuff('guard') ? 0.5 : 1;
+        if (computeHit({ base: rawDamage, incomingMult: guardMult }) === 0) return 0;
+        const shieldCut = this._shieldCut?.() ?? 1;
+        let dmg = computeHit({ base: rawDamage, incomingMult: guardMult * shieldCut });
         if (dmg === 0) return 0;   // 0-contract: hit doesn't happen, never floor back via armor
+        // (RR1) Evasion is rolled before armour; a dodged blow deals nothing. The
+        // RNG is drawn only when you have evasion, so a run without it replays as before.
+        if (this._rollDodge?.()) {
+            const dx = this.playerX, dy = this.playerY;
+            const dodgeFx = () => { this._spawnHitSplat(dx, dy, DODGE_WORD, 'dodge', { omni: true }); this._ensureParticleLoop(); };
+            if (!this._cascade?.defer(attacker ?? this._cascadeActor, dodgeFx, { hp: 0 })) dodgeFx();
+            return 0;
+        }
         if (attacker) this._spreadFireBlood(attacker, this);   // (poisons) a fire-blooded foe sets you burning
         dmg = Math.max(1, dmg - this._playerArmor());   // worn armor soaks the hit (min 1 always lands)
         this.playerHp = Math.max(0, this.playerHp - dmg);
@@ -5145,11 +5943,19 @@ class Game {
         setTimeout(() => this._resolveDefeat(), 500);
     }
 
+    // The boss in the fight you are losing (fight-area.js says who is in it), or null.
+    _bossInFight() {
+        return bossInFight(fighters(this.enemies), null);
+    }
+
     _resolveDefeat() {
         const by = this._lastDefeatedBy;
         this._lastDefeatedBy = null;
-        // Boss (Wererat) → reset the encounter and retry; no scenario, no loss.
-        if (isBoss(by)) { this._runBossRetry(by); return; }
+        // A boss in your fight when you went down (whoever landed the blow, its ally
+        // included) → reset the encounter and retry; no scenario, no loss.
+        // Optional-called, like _antTurn, so the stand-in games tests lift this onto need not carry it.
+        const boss = isBoss(by) ? by : this._bossInFight?.();
+        if (boss) { this._runBossRetry(boss); return; }
         // Otherwise pick a scenario, weighted by (zone × who-beat-you × state).
         // Task 3 swaps the runner stub for the full template; for now the generic
         // fallback delegates to _respawn so ordinary defeats are unchanged.
@@ -5173,14 +5979,26 @@ class Game {
         this.playerMp = this.playerMaxMp;
         this.buffs = [];                                       // clean slate (matches _respawn) — no DoT carries past the defeat
         if (c.timeSkip) this._skipTime(c.timeSkip);            // 3. time
-        if (c.status) this.addBuff(c.status, (BUFF_DEFS[c.status] && BUFF_DEFS[c.status].name) || c.status, 6, 'debuff'); // 4. status
-        if (c.take) this._applyTake(c.take);                   // 5. taken
-        if (c.gift && Array.isArray(c.gift.items)) for (const id of c.gift.items) { const gd = this._resolveItemDef(id); if (gd && !this._addToInventory(gd)) this._log('[No room — you leave it behind.]'); } // 6. given (guard unknown ids + full bag)
+        // 4. no status: the post-defeat debuffs did nothing and were dropped (ruling DFR1)
+        const cost = c.take ? this._applyTake(c.take) : null;  // 5. taken
+        // (plans/ne1-rival-remembered.md) What went for good (not into a stash) is in the hands
+        // of whoever beat you, if that is an ordinary enemy.
+        if (cost && cost.taken.length && !c.take.recoverable) this._rememberRival?.(_ctx && _ctx.by, cost.taken);
+        if (c.gift && Array.isArray(c.gift.items)) for (const id of c.gift.items) { const gd = this._resolveItemDef(id); if (gd) this._addToInventory(gd); } // 6. given (guard unknown ids)
         if (c.gift && c.gift.heal) this.playerHp = this.playerMaxHp;
         this._pendingTransition = null;                        // 7. de-aggro + resume (mirror _respawn's tail)
         this._deAggroAll();
         this.state = STATE.IDLE;
         if (c.log) this._log(c.log, 'transition');
+        // The cost line: every item taken and the GP, or that nothing was (DFR1).
+        const lost = ((cost && cost.taken) || []).map(e => {
+            const name = e.itemDef.name || e.itemDef.id;
+            return (e.count | 0) > 1 ? `${name} x${e.count}` : name;
+        });
+        const gp = (cost && cost.takenGold) || 0;
+        this._log(lost.length || gp
+            ? `[Taken: ${lost.length ? lost.join(', ') : 'no items'}. GP taken: ${gp}.]`
+            : '[Nothing was taken.]', 'transition');
         this._render();
         this._resumeHeldWalk();
         this.autosave({ force: true });
@@ -5217,6 +6035,7 @@ class Game {
         if (take.recoverable && taken.length) {
             this._spawnStash(take.stashAt, taken.flatMap(e => Array(Math.max(1, e.count | 0)).fill(e.itemDef.id)), takenGold);
         }
+        return { taken, takenGold };
     }
 
     // Spawn a stash chest of recoverable loot at a reachable tile near `stashAt`.
@@ -5262,8 +6081,8 @@ class Game {
         this.playerHp = this.playerMaxHp; this.playerMp = this.playerMaxMp;
         this.buffs = [];                          // clean slate (matches _respawn)
         this._pendingTransition = null;           // don't ghost-load a queued transition after the retry
-        this.addBuff('rattled', 'Rattled', 6, 'debuff');
         this._deAggroAll();
+        this._finaleReset?.(boss);                // (FIN2) the Financier starts over, Sun Man and all
         this.state = STATE.IDLE;
         this._log('[Down but not out. Regroup and finish it.]', 'transition');
         this._render();
@@ -5351,6 +6170,7 @@ class Game {
         this.questEngine = new QuestEngine(this);
         this._lastAutosaveTurn = -999;
         this.turn = 0;
+        this._shieldBlocks = {};   // a new game starts with every shield block ready
         this._dayClock = 0;
         this._nightLevel = 0;
         this._dispositionDecayTurns = 0;
@@ -5359,6 +6179,10 @@ class Game {
         // enemies come back broke, pursuers follow you in).
         this._collectedItems = new Set();
         this._droppedItems = {};
+        this._respawnLists = {};
+        this._rivals = {};
+        this._bossDropsGiven = new Set();
+        this._chestRecords = {};
         this._muggedIds = new Set();
         this._robbed = {};
         this._hot = {};
@@ -5377,7 +6201,8 @@ class Game {
         this._ratFormTurns = 0;
         this._lastHitTarget = null;
         this._lastDefeatedBy = null;
-        this.inventory.fill(null);
+        this.inventory = new Array(INVENTORY_SIZE).fill(null);   // (BG1) a new game starts on one page
+        this._bagPage = 0;
         this.tempEquips = [];
         this.selectedSlot = -1;
         this.equipment = { weapon: WEAPONS.wooden_sword, left: null, top: null, bottom: null, front: null, back: null, sides: null };
@@ -5391,6 +6216,13 @@ class Game {
         this._pendingTransition = null;
         this.gold = 0;
         this.carFuel = 'raw';
+        // The old run's words. The strip, the [L] history (which the fight's combat
+        // feed reads), the log scroll and the hint pacing all belong to the run.
+        // Settings and the seen-hints record are the player's, and stay.
+        this._logStripMessages = [];
+        this._logHistory = [];
+        this._logModalScroll = 0;
+        this._lastHintTurn = null;
         await this._loadMap('town-map.json');
         this.state = STATE.IDLE;
         this._startMainQuest();   // deterministic fix_car start (fix/critical-path)
@@ -5408,16 +6240,17 @@ class Game {
         this._heldDirKeys = [];
         this.state = STATE.RESOLVING;                 // block input through the beat
         if (this.carFuel === 'alcohol') {
-            this._log('[You feed it the doctored fuel and floor it — the engine burbles, tamed —]', 'transition');
-            this._log('[— you hit the ramp CLEAN and SAIL over the canyon. Downtown rises up to meet you.]', 'transition');
+            // (TX3) The driver takes the wheel in his taxi. Placeholder lines until Caelan writes them.
+            this._log('[TEXT]', 'transition');
+            this._log('[TEXT]', 'transition');
             audio.playSfx('quest-advance');
             this._flash('rgba(255, 220, 120, 0.35)');
             this._triggerScreenShake(280, 4);
             this._render();
             setTimeout(() => this._rampToDowntown(), 1100);
         } else {
-            this._log('[The Cataclysmic Converter SCREAMS — too fast, WAY too fast —]', 'combat');
-            this._log('[— you punch STRAIGHT THROUGH the wooden bridge and slam the far canyon wall. The world goes end over end.]', 'combat');
+            this._log('[TEXT]', 'combat');
+            this._log('[TEXT]', 'combat');
             audio.playSfx('take-damage');
             this._flash('rgba(200, 40, 40, 0.5)');
             this._triggerScreenShake(520, 9);
@@ -5430,9 +6263,12 @@ class Game {
     // with Pike + the grappling hook + the fight out; for now it's a scaffold room
     // with a placeholder scramble-out exit.)
     async _crashToCanyon() {
+        this._zoneChange();
         await this._loadMap('canyon-map.json');
+        if (this.questEngine) this.questEngine.state.flags.bridgeRoute = 'canyon';   // (CY1) the crash plays once
         this.state = STATE.IDLE;
-        this._log('[You come to at the bottom of the canyon, ears ringing and the car a write-off. No climbing back up the way you fell.]', 'transition');
+        // (TX3) The driver is placed beside the landing in canyon-map.json: the crash is the only way in.
+        this._log('[TEXT]', 'transition');
         if (this.questEngine) this.questEngine.start('canyon_escape');
         this._render();
     }
@@ -5440,9 +6276,11 @@ class Game {
     // Bridge SUCCESS (alcohol) → ramp over into Downtown. (Phase 4 builds Downtown
     // out + starts Main Quest 2; for now it's a scaffold street.)
     async _rampToDowntown() {
+        this._zoneChange();
         await this._loadMap('downtown-map.json');
+        if (this.questEngine) this.questEngine.state.flags.bridgeRoute = 'ramp';     // (CY1) the ramp plays once
         this.state = STATE.IDLE;
-        this._log('[You skid to a stop on a Downtown street, the engine ticking as it cools. The real part of town. Now — that delivery.]', 'transition');
+        this._log('[TEXT]', 'transition');
         this._startMainQuest2();   // (Phase 4) MQ2 begins on arrival
         this._render();
     }
@@ -5451,8 +6289,70 @@ class Game {
 
     _render() {
         this._trackFight();
+        this._creditsCheck();
         this._syncFirstRunHint();
         this.renderer.renderFrame(this);
+    }
+
+    // ── Credits (FIN4, plans/fin4-credits-town-open.md) ──────────────────────
+
+    // Asked on every frame: once the Final Arc is won and the ending not yet seen, and the
+    // world is quiet (idle, no fight, nothing sliding, not paused), a short beat later the
+    // credits take the screen. The beat is re-checked when it ends, so a menu that opened in
+    // the meantime makes the credits wait for the next frame.
+    _creditsCheck() {
+        if (this._creditsTimer || !this._creditsReady()) return;
+        this._creditsTimer = setTimeout(() => {
+            this._creditsTimer = null;
+            if (this._creditsReady()) this._startCredits();
+        }, CREDITS.beatMs);
+    }
+
+    _creditsReady() {
+        return this.state === STATE.IDLE && !this._animating && !this._paused
+            && !this._inCombat() && endingDue(this);
+    }
+
+    _startCredits() {
+        this.state = STATE.CREDITS;
+        this._credits = newRoll();
+        this._armCreditsCard();
+        this._render();
+    }
+
+    // A card steps on its own after CREDITS.cardMs. The token stops a stale timer from
+    // stepping a card the player already stepped.
+    _armCreditsCard() {
+        clearTimeout(this._creditsCardTimer);
+        const roll = this._credits, at = roll.index;
+        this._creditsCardTimer = setTimeout(() => {
+            if (this.state === STATE.CREDITS && this._credits === roll && roll.index === at) this._creditsStep();
+        }, CREDITS.cardMs);
+    }
+
+    _creditsKey(code) {
+        if (code === 'Escape') { this._endCredits(); return; }
+        if (code === 'Enter' || code === 'NumpadEnter' || code === 'Space' || code === 'KeyE'
+            || code === 'ArrowDown' || code === 'ArrowRight' || code === 'KeyS' || code === 'KeyD') this._creditsStep();
+    }
+
+    _creditsStep() {
+        if (this.state !== STATE.CREDITS) return;
+        if (stepRoll(this._credits)) { this._armCreditsCard(); this._render(); }
+        else this._endCredits();
+    }
+
+    // The credits are over (ended or skipped): the ending is remembered, saved, and the world
+    // is handed back exactly as it was.
+    _endCredits() {
+        if (this.state !== STATE.CREDITS) return;
+        clearTimeout(this._creditsCardTimer);
+        this._credits = null;
+        markEndingSeen(this);
+        this.state = STATE.IDLE;
+        this.autosave({ force: true });
+        this._render();
+        this._resumeHeldWalk();
     }
 
     // (fight-fog) A fight's two edges, checked before every frame is drawn
@@ -5482,7 +6382,8 @@ class Game {
     _joinFight() {
         const fs = fighters(this.enemies);
         if (fs.length === 0) return;
-        for (const n of joiners(this.map, this.enemies, fs, { x: this.playerX, y: this.playerY })) {
+        const joining = joiners(this.map, this.enemies, fs, { x: this.playerX, y: this.playerY });
+        for (const n of joining) {
             n.state = 'chasing';
             n._struckBy = null;
             n._lostSightTurns = 0;
@@ -5490,8 +6391,9 @@ class Game {
             n._sweepBeats = 0;
             n._lastSeenX = this.playerX;
             n._lastSeenY = this.playerY;
-            this._log('[TEXT]', 'combat');
         }
+        // (fx17) One line per beat, however many joined.
+        if (joining.length > 0) this._log('[TEXT]', 'combat');
     }
 
     // ── Floating damage numbers ──────────────────────────────────────────────
@@ -5659,6 +6561,8 @@ class Game {
             this._damageNumbers = this._damageNumbers.filter(
                 dn => now - dn.bornAt < dn.maxAge
             );
+            this._lootBursts = liveBursts(this._lootBursts, now);   // (FX3b) landed bursts go
+            this._lootReel = liveReel(this._lootReel, now);          // (FX3c) a finished reel goes
             this._cascade?.tick(now);   // (C1) play the blows whose beat has come
             if (frame.tick()) requestAnimationFrame(loop);
         };
@@ -5670,6 +6574,8 @@ class Game {
     // because the enemy count is small (single digits typically).
     _hasActiveEffects() {
         if (this._damageNumbers.length > 0) return true;
+        if (this._lootBursts?.length > 0) return true;   // (FX3b) loot still in the air
+        if (this._lootReel) return true;                  // (FX3c) the reel still rolling
         if (this._cascade?.pending()) return true;   // (C1) blows still waiting for their beat
         const now = performance.now();
         if ((this._playerHitFlashUntil ?? 0) > now) return true;
@@ -5756,10 +6662,23 @@ class Game {
     // again). Tab / the on-screen button toggle it; [ ] cycle tabs; C/J/M/R jump to a
     // tab. The ✕ chip + tap-outside come from the Slice-1 CLOSE_PANEL machinery
     // (device is registered there), routing Cancel through _closeCurrentMenu.
+    // (FX43) The first filled slot on the bag's first page, in the order the grid shows
+    // them (page 0 shows slots 0 .. SAFE_SLOTS+PACK_PAGE-1). -1 when that page is empty.
+    _bagFirstFilled() {
+        return this.inventory.slice(0, SAFE_SLOTS + PACK_PAGE).findIndex(Boolean);
+    }
+
     _openDevice(tab = 'items') {
         if (this.state !== STATE.IDLE && this.state !== STATE.DEVICE) return;
         this._deviceTab = DEVICE_TABS.includes(tab) ? tab : 'items';
         this._deviceSel = null;   // (C1) a fresh open starts with no inspector selection
+        this._bagPage = 0;        // (BG1) the bag opens on its first page
+        if (this._deviceTab === 'items') {
+            // (FX43) The bag's cursor starts on your first item, so the first arrow press
+            // moves from something. An empty bag keeps no selection.
+            const first = this._bagFirstFilled?.() ?? -1;
+            if (first >= 0) this._deviceSel = { tab: 'items', index: first };
+        }
         this.state = STATE.DEVICE;
         audio.playSfx('menu-open');
         this._render();
@@ -5813,10 +6732,20 @@ class Game {
                 const uses = this._deviceUsesRect?.(sel.index);
                 if (uses && this._pointInRect(pt, uses, HIT_SLOP)) { this._deviceActivate('action', 'uses'); return; }
             }
-            // 2) Otherwise a slot tap: SELECT a filled slot, clear on an empty one.
+            // 2) (BG1) The page arrows either side of the PACK, once it has grown.
+            if (pageCount(this.inventory.length, { safeSlots: SAFE_SLOTS, pageSize: PACK_PAGE }) > 1) {
+                const pager = deviceBagPagerRects(body);
+                if (this._pointInRect(pt, pager.prev, HIT_SLOP)) { this._deviceActivate('page', -1); return; }
+                if (this._pointInRect(pt, pager.next, HIT_SLOP)) { this._deviceActivate('page', 1); return; }
+            }
+            // 3) Otherwise a slot tap: SELECT a filled slot, clear on an empty one.
+            // A screen position maps to the slot it shows on the current page.
             const rects = deviceBagSlotRects(body);
             for (let i = 0; i < rects.length; i++) {
-                if (this._pointInRect(pt, rects[i], HIT_SLOP)) { this._deviceActivate('slot', i); return; }
+                if (this._pointInRect(pt, rects[i], HIT_SLOP)) {
+                    this._deviceActivate('slot', slotOnPage(i, this._bagPage || 0, { safeSlots: SAFE_SLOTS, pageSize: PACK_PAGE }));
+                    return;
+                }
             }
             return;
         }
@@ -5829,11 +6758,16 @@ class Game {
         }
         // GEAR body → a plate tap opens that armor slot's CHOOSER; a row tap equips
         // (or bares) it; a tap outside every row dismisses it (picker convention).
-        // The weapon plate stays out of scope — weapon swap lives on the ITEMS tap.
+        // The two weapon plates choose a weapon for their hand (FX14 left, FX57 right).
+        // Their rows are the bag's weapons. The right hand is never emptied from
+        // here, so it has no Bare row (worn passed as null); neither has the left
+        // while it is only half of a two-hander (nothing to take off on its own).
+        // The renderer draws the same rows (items.js gearOptions, minus the right Bare).
         if (this._deviceTab === 'gear') {
             const sel = this._deviceSel;
             if (sel && sel.tab === 'gear' && sel.open) {
-                const n = equipOptions(sel.slotKey, this.equipment[sel.slotKey], this.inventory).length;
+                const lw = sel.slotKey === 'left', w = this.equipment[sel.slotKey];
+                const n = equipOptions(lw ? 'weapon' : sel.slotKey, sel.slotKey === 'weapon' || (lw && (this._handsOf?.(w) ?? 1) >= 2) ? null : w, this.inventory).length;
                 const rows = gearOptionRects(body, n);
                 for (let i = 0; i < n; i++) {
                     if (this._pointInRect(pt, rows[i], HIT_SLOP)) { this._deviceActivate('option', i); return; }
@@ -5841,8 +6775,8 @@ class Game {
                 this._deviceActivate('dismiss', 0);
                 return;
             }
-            for (const s of deviceEquipLayout(body).slots) {
-                if (s.key === 'weapon') continue;
+            const layout = deviceEquipLayout(body);
+            for (const s of [...layout.slots, layout.leftHand]) {
                 if (this._pointInRect(pt, s)) { this._deviceActivate('plate', s.key); return; }
             }
         }
@@ -5857,6 +6791,23 @@ class Game {
         if (zone === 'tab') {
             this._deviceTab = DEVICE_TABS[index];
             this._deviceSel = null;   // (C1) switching tabs drops any inspector selection
+            audio.playSfx('menu-tick');
+            this._render();
+            return;
+        }
+        if (zone === 'page') {
+            // (BG1) Step the bag's PACK page by `index` (-1 / +1), clamped. A
+            // cursor standing on a PACK slot keeps its spot on the screen; one
+            // on the SAFE row stays put, since SAFE shows on every page.
+            const pc = { safeSlots: SAFE_SLOTS, pageSize: PACK_PAGE };
+            const was = this._bagPage || 0;
+            const page = Math.max(0, Math.min(pageCount(this.inventory.length, pc) - 1, was + index));
+            if (page === was) return;
+            this._bagPage = page;
+            const sel = this._deviceSel;
+            if (sel && sel.tab === 'items' && pageOfSlot(sel.index, pc) >= 0) {
+                this._deviceSel = { tab: 'items', index: sel.index + (page - was) * PACK_PAGE };
+            }
             audio.playSfx('menu-tick');
             this._render();
             return;
@@ -5878,17 +6829,26 @@ class Game {
             const def = this.inventory[sel.index].itemDef;
             const action = itemActions(def, zoneOf(sel.index, SAFE_SLOTS))[index];
             if (!action) return;
-            const cfg = { size: INVENTORY_SIZE, safeSlots: SAFE_SLOTS, maxStack: MAX_STACK };
+            // (fx56) Use on a healing food at full health: the food stays in the bag, no turn
+            // passes, and you are still looking at it. Drinks and foods that heal nothing go through.
+            // (The Eat column's own test, spelled out: xmb.js xmbCategoryOf. No import, so the
+            // older tests that lift this method out of main.js keep working.)
+            if (action.id === 'use' && def.useType === 'self' && (def.consumeKind ? def.consumeKind === 'eat' : def.category === 'ambro')
+                && def.effect === 'heal' && this.playerHp >= this.playerMaxHp) {
+                this._log('[TEXT]'); this._render(); return;
+            }
+            const cfg = { size: this.inventory.length, safeSlots: SAFE_SLOTS, maxStack: MAX_STACK, pageSize: PACK_PAGE };
             const idx = sel.index;
             this._deviceSel = null;   // selection resolves this frame; the panel drops
             switch (action.id) {
                 case 'use':
                 case 'equip': {
+                    // (fx37) A throw item arms the throw instead: the device closes and
+                    // the next direction throws it (a rock is `consumable:true`, but
+                    // nothing is spent until it is thrown).
+                    if (action.arms) { this._armThrow(idx); audio.playSfx('menu-confirm'); return; }
                     // Route through resolveUse like canonical _doItemUse, but GATE the
-                    // removal the same way — the paused device supplies no throw/melee
-                    // DIRECTION, so resolveUse is a no-op for those and the item must
-                    // survive (a rock is `consumable:true` yet nothing was thrown; the
-                    // pipe is a non-consumable tool). Only a self-use (heal) or an equip
+                    // removal the same way. Only a self-use (heal) or an equip
                     // (moves onto the body) truly consumes it here, and only a real use
                     // costs a world beat — closing the free-heal-while-paused gap without
                     // wasting a turn on a no-op.
@@ -5896,11 +6856,14 @@ class Game {
                     // removeBuff('sludge') fires in _advanceWorld gated on this flag, so
                     // it MUST be set before resolveUse, exactly as canonical _doItemUse.
                     if (def.effect === 'cure_sludge') this._soapUsedThisTurn = true;
-                    const msg = resolveUse(this, def, null);   // equip → resolveEquip (re-bags any displaced piece)
+                    // (FX34) An equip leaves its slot first, so the piece it swaps out lands there.
+                    const equips = def.useType === 'equip';
+                    if (equips) this._removeFromSlot(idx);
+                    const msg = resolveUse(this, def, null, 1, 'weapon', equips ? idx : -1);   // equip → resolveEquip (re-bags any displaced piece)
                     if (msg) this._log(msg);
                     this._refreshGrantedSkills();
-                    const usedUp = def.useType === 'self' || def.useType === 'equip';
-                    if (usedUp) { this._removeFromSlot(idx); this._advanceWorld(); }
+                    const usedUp = def.useType === 'self' || equips;
+                    if (usedUp) { if (!equips) this._removeFromSlot(idx); this._advanceWorld(); this._saveMoment?.(); }
                     break;
                 }
                 case 'drink': {
@@ -5912,6 +6875,7 @@ class Game {
                     }
                     this._removeFromSlot(idx);
                     this._advanceWorld();
+                    this._saveMoment?.();   // (FX24)
                     break;
                 }
                 case 'protect':
@@ -5920,9 +6884,14 @@ class Game {
                 case 'unprotect':
                     if (!moveToZone(this.inventory, idx, 'pack', cfg)) this._log('[Pack is full.]');
                     break;
-                case 'drop':
+                case 'drop': {
+                    // (FX25) The whole stack lands on your tile, and the log says so.
+                    // (Optional-called, like _saveMoment, so stand-in games need not carry it.)
+                    const stack = this.inventory[idx];
                     this.inventory[idx] = null;
+                    this._dropToGround?.(stack);
                     break;
+                }
             }
             audio.playSfx('menu-confirm');
             this._render();
@@ -5951,18 +6920,22 @@ class Game {
         if (zone === 'option') {
             const sel = this._deviceSel;
             if (!sel || sel.tab !== 'gear' || !sel.open) return;
-            const opt = equipOptions(sel.slotKey, this.equipment[sel.slotKey], this.inventory)[index];
+            const lw = sel.slotKey === 'left', w = this.equipment[sel.slotKey];
+            const opt = equipOptions(lw ? 'weapon' : sel.slotKey, sel.slotKey === 'weapon' || (lw && (this._handsOf?.(w) ?? 1) >= 2) ? null : w, this.inventory)[index];
             if (!opt) return;
             if (opt.bagIndex >= 0) {
                 const def = this.inventory[opt.bagIndex].itemDef;
-                const msg = resolveUse(this, def, null);   // equip → resolveEquip (re-bags any displaced piece)
+                // equip → resolveEquip (re-bags any displaced piece); the left plate fills the left hand
+                // (FX34) The piece leaves its bag slot first; what it swaps out lands there.
                 this._removeFromSlot(opt.bagIndex);
+                const msg = resolveUse(this, def, null, 1, lw ? 'left' : 'weapon', opt.bagIndex);
                 this._refreshGrantedSkills();
                 if (msg) this._log(msg);
             } else if (opt.id === '__bare__') {
                 const msg = unequipItem(this, sel.slotKey);
                 if (msg) this._log(msg);
             }
+            this._saveMoment?.();   // (FX24) the GEAR tab's swap survives a reload
             this._deviceSel = null;
             audio.playSfx('menu-confirm');
             this._render();
@@ -6015,16 +6988,20 @@ class Game {
                     return { zone: 'action', rects, ids, cur: Math.min(sel.action, rects.length - 1) };
                 }
             }
+            // (BG1) The cursor walks the slots of the page on screen.
             const rects = deviceBagSlotRects(body);
-            return { zone: 'slot', rects, ids: rects.map((_, i) => i), cur: sel && sel.tab === 'items' ? sel.index : -1 };
+            const ids = rects.map((_, i) => slotOnPage(i, this._bagPage || 0, { safeSlots: SAFE_SLOTS, pageSize: PACK_PAGE }));
+            return { zone: 'slot', rects, ids, cur: sel && sel.tab === 'items' ? ids.indexOf(sel.index) : -1 };
         }
         if (tab === 'gear') {
             if (sel && sel.tab === 'gear' && sel.open) {
-                const n = equipOptions(sel.slotKey, this.equipment[sel.slotKey], this.inventory).length;
+                const lw = sel.slotKey === 'left', w = this.equipment[sel.slotKey];
+                const n = equipOptions(lw ? 'weapon' : sel.slotKey, sel.slotKey === 'weapon' || (lw && (this._handsOf?.(w) ?? 1) >= 2) ? null : w, this.inventory).length;
                 const rects = gearOptionRects(body, n);
                 return { zone: 'option', rects, ids: rects.map((_, i) => i), cur: sel.option != null ? Math.min(sel.option, n - 1) : -1 };
             }
-            const plates = deviceEquipLayout(body).slots.filter(s => s.key !== 'weapon');
+            const layout = deviceEquipLayout(body);
+            const plates = [...layout.slots, layout.leftHand];
             const ids = plates.map(s => s.key);
             return { zone: 'plate', rects: plates, ids, cur: sel && sel.tab === 'gear' ? ids.indexOf(sel.slotKey) : -1 };
         }
@@ -6066,6 +7043,11 @@ class Game {
         if (code === 'KeyJ') { this._deviceTab = 'quests'; this._deviceSel = null; this._render(); return; }
         if (code === 'KeyM') { this._deviceTab = 'map';    this._deviceSel = null; this._render(); return; }
         if (code === 'KeyR') { this._deviceTab = 'rings';  this._deviceSel = null; this._render(); return; }
+        // (BG1) , / . and PageUp / PageDown turn the bag's PACK page.
+        if (this._deviceTab === 'items') {
+            const step = { Comma: -1, PageUp: -1, Period: 1, PageDown: 1 }[code];
+            if (step) { this._deviceActivate('page', step); return; }
+        }
         const dir = DIRS[code];
         if (this._deviceTab === 'quests') {
             if (dir && dir.dy) this._scrollJournal(-dir.dy);
@@ -6095,7 +7077,8 @@ class Game {
         if (t.zone === 'plate') {
             const key = t.ids[t.cur];
             this._deviceActivate('plate', key);
-            if (equipOptions(key, this.equipment[key], this.inventory).length) this._deviceSel.option = 0;
+            const lw = key === 'left', w = this.equipment[key];
+            if (equipOptions(lw ? 'weapon' : key, key === 'weapon' || (lw && (this._handsOf?.(w) ?? 1) >= 2) ? null : w, this.inventory).length) this._deviceSel.option = 0;
             this._render();
             return;
         }
@@ -6197,8 +7180,8 @@ class Game {
         this.state = STATE.TRADE;
         audio.playSfx('menu-open');
         if (npc._container)   this._log(`[You pry open the ${npc.type}.]`, 'transition');
-        else if (npc.vendor)  this._log(`[${npc.type} opens the till. "What'll it be?"]`, 'transition');
-        else                  this._log(`[You open your satchel to ${npc.type}.]`, 'transition');
+        else if (npc.vendor)  this._log(`[${npc.shownName || npc.type} opens the till. "What'll it be?"]`, 'transition');
+        else                  this._log(`[You open your satchel to ${npc.shownName || npc.type}.]`, 'transition');
         this._render();
     }
 
@@ -6292,30 +7275,6 @@ class Game {
         return list[sel.index] || null;
     }
 
-    // Would the whole take side fit in the bag?
-    //
-    // Simulated against a lightweight copy of the stack counts rather than the
-    // real inventory, because this runs from the DRAW path. Mirrors
-    // inventory.addToInventory exactly: top up a matching stack under maxStack
-    // first, else take a free slot.
-    _offerTakeFitsBag(taken) {
-        const stacks = [];
-        for (let i = 0; i < INVENTORY_SIZE; i++) {
-            const st = this.inventory[i];
-            stacks.push(st && st.itemDef ? { id: st.itemDef.id, count: st.count } : null);
-        }
-        for (const e of taken || []) {
-            for (let n = 0; n < e.count; n++) {
-                const top = stacks.findIndex(s => s && s.id === e.def.id && s.count < MAX_STACK);
-                if (top >= 0) { stacks[top].count++; continue; }
-                const free = stacks.findIndex(s => !s);
-                if (free < 0) return false;
-                stacks[free] = { id: e.def.id, count: 1 };
-            }
-        }
-        return true;
-    }
-
     // Scroll one column by `delta` rows, clamped to the list. The single writer
     // for _offer.scroll, so the pointer, the wheel and the keyboard cannot
     // disagree about the bounds.
@@ -6381,7 +7340,8 @@ class Game {
         return commitBlocker(npc, this._offer, {
             playerGold: this.gold ?? 0,
             npcGold: npc.gold ?? 0,
-            bagFull: !this._offerTakeFitsBag(this._offer && this._offer.take),
+            // (BG1) There is no bag-full blocker: the bag grows a page instead
+            // of refusing, so whatever is staged on the take side always fits.
             // (fence) Two questions offer.js asks and cannot answer itself.
             stolenFrom: (id) => (this._robbed[npc.id]?.items ?? []).includes(id),
             isHot: (id) => (this._hot[id] ?? 0) > 0,
@@ -6462,6 +7422,20 @@ class Game {
         }
 
         if (zone === 'commit') { this._commitOffer(); return; }
+    }
+
+    // (FX33) The keyboard's way to unstage: take one unit of the row at `index`
+    // back out of its tray. It resolves the row to its tray slot and goes through
+    // _offerActivate, the very path a tap on that slot takes, so the two cannot
+    // drift. A row with nothing staged is simply left alone.
+    _offerUnstageRow(zone, index) {
+        if (!this._offerNpc || !this._offer) return;
+        const list = zone === 'theirs' ? this._offerTheirsList() : this._offerYoursList();
+        const entry = list[index]; if (!entry) return;
+        const side = zone === 'theirs' ? 'take' : 'give';
+        const at = (this._offer[side] || []).findIndex(x => sameEntry(x, entry));
+        if (at < 0) return;
+        this._offerActivate(side === 'give' ? 'giveTray' : 'takeTray', at);
     }
 
     // A quest item may only be staged when the quest actually wants it delivered
@@ -6581,11 +7555,11 @@ class Game {
         // FIRST, for the same reason the bag does.
         for (const e of [...taken].sort((a, b) => (b.index ?? 0) - (a.index ?? 0))) {
             for (let n = 0; n < e.count; n++) {
-                // Last line of defence. _offerBlocker refuses a full bag before
-                // any gold moves, so this should be unreachable -- but taking
-                // the return seriously is what stops a chest being spliced into
-                // a bag that refused the item, which loses it from the world
-                // with no gold trail and no log.
+                // Last line of defence. The bag grows a page rather than refuse
+                // (BG1), so this should be unreachable -- but taking the return
+                // seriously is what stops a chest being spliced into a bag that
+                // refused the item, which loses it from the world with no gold
+                // trail and no log.
                 if (!this._addToInventory(e.def)) { this._log('[Your bag is full.]'); break; }
                 if (e.source === 'contents')      this._takeFromContainer(npc, e.index);
                 // Taking a buyback row CONSUMES its credit. The retired
@@ -6660,6 +7634,16 @@ class Game {
         // touch, with no way back. A zero-delta scroll is the clamp.
         this._offerScrollBy('theirs', 0);
         this._offerScrollBy('yours', 0);
+        // The keyboard cursor shrinks with its list too: selling the last row
+        // left it one past the end, so Space staged nothing. Same clamp as the
+        // column switch; the scroll clamp above already keeps its row in view.
+        const cur = this._offerCursor;
+        if (cur) {
+            const len = (cur.side === 'theirs' ? this._offerTheirsList() : this._offerYoursList()).length;
+            cur.index = Math.max(0, Math.min(len - 1, cur.index));
+        }
+
+        this._saveMoment?.();   // (FX24) a finished trade survives a reload
 
         // A committed offer can turn the partner hostile -- sewer fare does
         // exactly that. Do not leave the player standing in an offer window
@@ -6693,10 +7677,10 @@ class Game {
         // A chest is not handed anything -- "You hand crate nothing for 2 items"
         // is grammatical and still wrong. You take FROM a container.
         const deal = npc._container
-            ? `[You take ${back.join(' and ') || 'nothing'} from the ${npc.type}.`
+            ? `[You take ${back.join(' and ') || 'nothing'} from the ${(npc.boss && npc.shownName) || npc.type}.`
             : back.length
-                ? `[You hand ${npc.type} ${out.join(' and ') || 'nothing'} for ${back.join(' and ')}.`
-                : `[You hand ${npc.type} ${out.join(' and ')}.`;
+                ? `[You hand ${npc.shownName || npc.type} ${out.join(' and ') || 'nothing'} for ${back.join(' and ')}.`
+                : `[You hand ${npc.shownName || npc.type} ${out.join(' and ')}.`;
         const mood = R.points > 0 ? ` Disposition +${R.points}.]`
                    : R.points < 0 ? ` They take it, and remember. Disposition ${R.points}.]`
                    : `]`;
@@ -6721,12 +7705,12 @@ class Game {
             // Gold reached a threshold it is not allowed to carry them across.
             // Distinct from having no room at all: they would still warm to a
             // GIFT, just not to money.
-            this._log(`[${npc.type} takes the gold, but it buys nothing more. Some things aren't for sale.]`);
+            this._log(`[${npc.shownName || npc.type} takes the gold, but it buys nothing more. Some things aren't for sale.]`);
         } else if (R.goldUnspent > 0 && R.fromGold === 0) {
-            this._log(`[${npc.type} pockets the gold. It buys nothing he wants.]`);
+            this._log(`[${npc.shownName || npc.type} pockets the gold. It buys nothing he wants.]`);
         }
         if (R.itemUnspent > 0 && R.fromItems === 0) {
-            this._log(`[${npc.type} is already as fond of you as he can be.]`);
+            this._log(`[${npc.shownName || npc.type} is already as fond of you as he can be.]`);
         }
     }
 
@@ -6834,7 +7818,7 @@ class Game {
         this._dialogueReply = choice.reply || '"..."';
         audio.playSfx((choice.delta ?? 0) < 0 ? 'bump-wall' : 'menu-confirm');
         if ((npc.disposition ?? 0) <= DIALOGUE_HOSTILE_AT) {
-            this._log(`[${npc.name || npc.type} has heard enough.]`, 'combat');
+            this._log(`[${(npc.boss && npc.shownName) || npc.name || npc.type} has heard enough.]`, 'combat');
             this._closeDialogue();
             this._onEntityHarmed(npc, { kind: 'insult' });
             return;
@@ -6896,15 +7880,17 @@ class Game {
             .replace(/…/g, '...')         // ellipsis → three dots
             .replace(/[‘’]/g, "'")   // smart single quotes
             .replace(/[“”]/g, '"');  // smart double quotes
+        // (FX38) No bracket nested inside a bracketed line: "[Dropped [Rock]]".
+        const flat = unnestBrackets(ascii);
 
         // Mirror into the in-canvas strip (ring buffer, newest at end).
-        this._logStripMessages.push({ text: ascii, category, bornAt: performance.now() });
+        this._logStripMessages.push({ text: flat, category, bornAt: performance.now() });
         if (this._logStripMessages.length > this._STRIP_MAX) {
             this._logStripMessages.shift();
         }
 
         // Full history for the [L] log modal (newest at end, capped).
-        this._logHistory.push({ text: ascii, category });
+        this._logHistory.push({ text: flat, category });
         if (this._logHistory.length > this._LOG_HISTORY_MAX) {
             this._logHistory.shift();
         }
@@ -6924,7 +7910,12 @@ function boot() {
 // fired (preview-tool reloads, bf-cache restoration, etc.). Check readyState
 // up front and run boot inline if the DOM is already ready; otherwise wait
 // for the event as before.
-if (document.readyState === 'loading') {
+// (FX60) Exported, and booted only where there is a page, so a test can drive the
+// game's own pointer listeners without a browser.
+export { Game };
+if (typeof document === 'undefined') {
+    // no page: imported by a test
+} else if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);
 } else {
     boot();

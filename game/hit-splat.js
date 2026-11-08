@@ -61,3 +61,15 @@ export const HIT_KIND_TAG = Object.freeze({
 export function hitKindTag(kind) {
     return (kind && HIT_KIND_TAG[kind]) || null;
 }
+
+// (RR1) Evasion. A point of evasion dodges 2% of blows (ruled RRR2: the Rat
+// Ring's 5 points is about 1 blow in 10). The word on the dodge splat is a
+// placeholder until its copy is ruled.
+export const DODGE_PER_POINT = 0.02;
+export const DODGE_WORD = '[TEXT]';
+
+// The chance (0..1) that a blow is dodged, for `evasion` points.
+export function dodgeChance(evasion) {
+    const e = Number(evasion) || 0;
+    return e > 0 ? Math.min(1, e * DODGE_PER_POINT) : 0;
+}

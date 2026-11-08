@@ -179,16 +179,26 @@ describe('interior furniture sheet', () => {
 
 describe('what the furniture leaves alone', () => {
     const map = (f) => JSON.parse(readFileSync(join(GAME, f), 'utf8'));
-    for (const [file, id] of [['casino-map.json', 'casino_slots'], ['bank-map.json', 'bank_vault']]) {
-        test(`${id} stays where it is, with nothing placed on it`, () => {
-            const m = map(file);
-            const ex = (m.examinables || []).find(e => e.id === id);
-            assert.ok(ex, `${id} is gone`);
-            assert.deepEqual([ex.x, ex.y], [6, 2]);
-            assert.equal(m.tiles[ex.y * m.width + ex.x], 11, `${id} still stands on the floor tile`);
-            assert.ok(!(m.props || []).some(p => p.x === ex.x && p.y === ex.y), `a prop covers ${id}`);
-        });
-    }
+    // AP4R1: the casino's slot machine now stands on its examine spot, so only
+    // the bank's vault spot is still kept bare.
+    test('casino_slots stays where it is, on the floor, with the slot machine standing on it', () => {
+        const m = map('casino-map.json');
+        const ex = (m.examinables || []).find(e => e.id === 'casino_slots');
+        assert.ok(ex, 'casino_slots is gone');
+        assert.deepEqual([ex.x, ex.y], [6, 2]);
+        assert.equal(m.tiles[ex.y * m.width + ex.x], 11, 'casino_slots still stands on the floor tile');
+        const on = (m.props || []).filter(p => p.x === ex.x && p.y === ex.y);
+        assert.deepEqual(on.map(p => p.type), ['slotMachine']);
+    });
+
+    test('bank_vault stays where it is, with nothing placed on it', () => {
+        const m = map('bank-map.json');
+        const ex = (m.examinables || []).find(e => e.id === 'bank_vault');
+        assert.ok(ex, 'bank_vault is gone');
+        assert.deepEqual([ex.x, ex.y], [6, 2]);
+        assert.equal(m.tiles[ex.y * m.width + ex.x], 11, 'bank_vault still stands on the floor tile');
+        assert.ok(!(m.props || []).some(p => p.x === ex.x && p.y === ex.y), 'a prop covers bank_vault');
+    });
 });
 
 describe('the furniture in the four rooms', () => {

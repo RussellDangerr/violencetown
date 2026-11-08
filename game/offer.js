@@ -270,13 +270,6 @@ export function commitBlocker(npc, offer, ctx = {}) {
     const npcGold = ctx.npcGold ?? 0;
     if (owedToPlayer > npcGold) return `THEIR TILL IS ${owedToPlayer - npcGold} GP SHORT`;
 
-    // Room to carry it is a FEASIBILITY check, so it sits with the tills rather
-    // than with the willingness rules below: it is not that they refuse, it is
-    // that the deal cannot physically complete. Stated here so the button is
-    // dark BEFORE any gold moves -- the commit is not transactional, and a bag
-    // that fills halfway through would leave the player paid-up and empty.
-    if (ctx.bagFull) return 'YOUR BAG IS FULL';
-
     // Sewer fare is the one item that still routes through applyGive, and
     // applyGive refuses ALL offerings from a bribery-immune NPC
     // (`accepted: false`, "[The X ignores your offering.]"). _commitOffer runs

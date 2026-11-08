@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { Renderer } from '../game/renderer.js';
 import { GameMap } from '../game/map.js';
 import { TILES, TILE_PX } from '../game/data.js';
-import { OUTLINED_SPRITES, TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, PROP_SPRITES } from '../game/sprites.js';
+import { OUTLINED_SPRITES, TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, PROP_SPRITES } from '../game/sprites.js';
 import { DEFAULT_VIEW } from '../game/viewport.js';
 
 // Which tile a recorded frame draws — matched back through the town sprite map.
@@ -140,7 +140,7 @@ describe('_drawTiles', () => {
     test('a tent cell paints carnival ground, then its own quadrant on top', () => {
         const T = TILES.GREEN_TENT.id, G = TILES.CIRCUS_GROUND.id;
         const at = paint(4, [T, T, G, G, T, T, G, G], 1, 1);
-        const ground = { sheet: 'tinyTown', col: 1, row: 2 };
+        const ground = ZONE_TILE_SPRITE_MAP[G];
         const quad = col => ({ sheet: 'outlined', col, row: 0 });
         assert.deepEqual(at(0, 0), [ground, quad(OUTLINED_SPRITES.tentGreenTL)]);
         assert.deepEqual(at(1, 0), [ground, quad(OUTLINED_SPRITES.tentGreenTR)]);

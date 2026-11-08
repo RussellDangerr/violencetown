@@ -11,6 +11,70 @@ import { itemTier } from './items.js';
 import { resolveItemDef } from './item-registry.js';
 import { tileDisplayName } from './data.js';
 import { isHostile } from './ai.js';
+import { weaponClassOf } from './weapons.js';
+import { SPELLS } from './spells.js';
+import { TRICKS } from './tricks.js';
+
+// (FX44) The weapon compare block. One model for the three places a player
+// meets a weapon: the bag's inspector, this examine panel and the shop's
+// description strip (the renderer draws all three). It is built from the
+// weapon's own data and the weapon in the right hand (the hand a plain Equip
+// fills); it names nothing new. It lives here, not in inspector.js, because
+// items.js imports inspector.js and the class table is in weapons.js, which
+// imports items.js.
+export function isComparableWeapon(def) {
+    return !!def && !def.questItem && def.equipSlot === 'weapon' && typeof def.damage === 'number';
+}
+
+const plainName = d => String(d.name || d.id || '').replace(/[\[\]]/g, '');
+
+// A granted skill by the name its table carries, with what it costs.
+function grantedSkills(def) {
+    const out = [];
+    for (const id of def.grantsSpells || []) {
+        const s = SPELLS[id];
+        if (s) out.push(`${s.name} (${s.mpCost} MP)`);
+    }
+    for (const id of def.grantsTricks || []) {
+        const t = TRICKS[id];
+        if (t) out.push(`${t.name} (${t.gpCost} GP)`);
+    }
+    return out;
+}
+
+// { damage, build, grants } as three plain strings (grants is null when the
+// weapon grants nothing), or null for anything that is not a weapon. `held` is
+// the weapon in the right hand, or null/undefined for none: with none there is
+// no difference to show.
+export function weaponCompare(def, held) {
+    if (!isComparableWeapon(def)) return null;
+    const type = def.damageType && def.damageType !== 'physical' ? `${def.damageType} ` : '';
+    let damage = `${type}${def.damage} dmg`;
+    if (isComparableWeapon(held)) {
+        const diff = def.damage - held.damage;
+        damage += diff === 0
+            ? ` (same as ${plainName(held)})`
+            : ` (${diff > 0 ? '+' : ''}${diff} vs ${plainName(held)})`;
+    }
+    const cls = weaponClassOf(def);
+    const hands = cls ? cls.hands : 1;
+    const parts = [`${hands} hand${hands === 1 ? '' : 's'}`];
+    if (cls) parts.push(cls.id.replace(/_/g, ' '));
+    if (def.reach) parts.push(`reach ${def.reach}`);
+    if (def.pullDistance) parts.push(`pulls ${def.pullDistance}`);
+    const skills = grantedSkills(def);
+    return {
+        damage,
+        build: parts.join(', '),
+        grants: skills.length ? `Grants: ${skills.join(', ')}` : null,
+    };
+}
+
+// The block as lines, or null for a non-weapon.
+export function weaponCompareLines(def, held) {
+    const c = weaponCompare(def, held);
+    return c ? [c.damage, c.build, ...(c.grants ? [c.grants] : [])] : null;
+}
 
 const FACE = { up: { dx: 0, dy: -1 }, down: { dx: 0, dy: 1 }, left: { dx: -1, dy: 0 }, right: { dx: 1, dy: 0 } };
 
@@ -33,6 +97,9 @@ const PROP_NAMES = [
     ['shelf', 'Shelf'],
     ['plant', 'Plant'],
     ['stove', 'Stove'],
+    // The casino's slot machine and the bank's vault door, by their plain names.
+    ['slotMachine', 'Slot machine'],
+    ['vaultDoor', 'Vault door'],
 ];
 const propName = type => PROP_NAMES.find(([prefix]) => type.startsWith(prefix))?.[1] ?? null;
 
@@ -51,7 +118,9 @@ const propName = type => PROP_NAMES.find(([prefix]) => type.startsWith(prefix))?
 // `body` is the bracketed log line; `panelBody` is what the inspect panel shows
 // (the same, except an item's panel shows its description beside the tier chip);
 // `instanceId` is set only for an authored instance — the caller fires the
-// `examine` quest event for those alone, as before.
+// `examine` quest event for those alone, as before. `bare` is true only on the
+// last two rungs (the tile's own name, and off the map): nothing there but the
+// ground, so the E key logs the line and opens no panel (FX42).
 export function resolveExamine(game, x, y) {
     const result = (title, body, extra = {}) => ({
         title, body, panelBody: body, instanceId: null, grantsInstance: null, tierName: null, tierColor: null, ...extra,
@@ -65,7 +134,10 @@ export function resolveExamine(game, x, y) {
 
     const npc = (game.enemies || []).find(e => e.x === x && e.y === y && e.entity?.isAlive?.());
     if (npc) {
-        const name = npc.name || npc.type;
+        // (FX47) A boss goes by its one name; anyone else reads as before.
+        const name = (npc.boss && npc.shownName) || npc.name || npc.type;
+        // A creature with examine text of its own says it (plans/ic4-frozen-creatures.md).
+        if (typeof npc.examine === 'string' && npc.examine) return result(name, npc.examine);
         return result(name, `[${name}. ${isHostile(npc) ? 'Looks like trouble.' : 'Minding their own business.'}]`);
     }
 
@@ -80,7 +152,13 @@ export function resolveExamine(game, x, y) {
         const tier = itemTier(def);
         const name = def.name || item.type;
         const body = `[${name} (${tier.name}).${def.description ? ` ${def.description}` : ''}]`;
-        return result(name, body, { panelBody: def.description || body, tierName: tier.name, tierColor: tier.color });
+        // (FX44) A weapon's panel keeps its description and adds the compare
+        // block under it (what it hits for against what you hold, hands, class,
+        // skills). The panel splits its body on newlines; the log line stays as
+        // it was.
+        const block = weaponCompareLines(def, game.equipment?.weapon);
+        const panelBody = block ? [def.description || '', '', ...block].join('\n').trim() : (def.description || body);
+        return result(name, body, { panelBody, tierName: tier.name, tierColor: tier.color });
     }
 
     const prop = (game.map?.propSpawns || []).find(p => p.x === x && p.y === y);
@@ -89,9 +167,9 @@ export function resolveExamine(game, x, y) {
 
     const onMap = game.map && (!game.map.isInBounds || game.map.isInBounds(x, y));
     const tName = onMap ? tileDisplayName(game.map.getTile(x, y)) : null;
-    if (tName) return result(tName, `[${tName}.]`);
+    if (tName) return result(tName, `[${tName}.]`, { bare: true });
 
-    return result('Examine', '[Nothing here worth examining.]');
+    return result('Examine', '[Nothing here worth examining.]', { bare: true });
 }
 
 // The examinable the player is facing, then any adjacent (incl. current) one.
@@ -160,7 +238,8 @@ export function doExamine(game) {
         res.panelBody = (res.panelBody ? res.panelBody + ' ' : '') + hint;
     }
     game._log(res.body);
-    // (§12.3) Also surface it as a layered inspect panel.
-    if (game._openInspect) game._openInspect({ title: res.title, body: res.panelBody, tierName: res.tierName, tierColor: res.tierColor });
+    // (§12.3) Also surface it as a layered inspect panel — unless it is bare
+    // ground with nothing added to it (FX42): that is one log line, no panel.
+    if (game._openInspect && !(res.bare && !hint)) game._openInspect({ title: res.title, body: res.panelBody, tierName: res.tierName, tierColor: res.tierColor });
     return true;
 }

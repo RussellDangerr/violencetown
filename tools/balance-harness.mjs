@@ -15,7 +15,7 @@ import { HEAL_HP_FLOOR, HEAL_MIN_GOLD } from '../game/ai.js';
 // the DOM at module-evaluation time (tests/wallets.test.js and tests/save-
 // roundtrip.test.js already import Enemy from here under bare `node --test`),
 // so this pure helper is safe to pull into a headless Node tool too.
-import { challengeGp } from '../game/enemies.js';
+import { challengeGp, isTownsperson, townsfolkPurse } from '../game/enemies.js';
 import { SLOTS, ENTRIES, resolveSpawn, defaultPicks } from '../game/slots.js';
 import { ITEMS } from '../game/items.js';
 
@@ -394,7 +394,9 @@ function rosterRow(zone, id, s) {
         hp: s.hp ?? 100,
         armor: s.armor ?? 0,
         damage: s.damage ?? ENEMY_DEFAULT_DAMAGE,
-        gold: s.gold ?? 0,
+        // (FX13) A townsperson's purse comes from spawnEnemy, not the map, so the
+        // bench draws the same one the game does, keyed on the same id.
+        gold: isTownsperson(s) ? townsfolkPurse(s.id ?? id) : (s.gold ?? 0),
         vermin: s.vermin ?? false,
         puzzleWall: s.puzzleWall ?? false,
         // Needed by the Law 4 kit lint: a vendor's gold is a till, not a
@@ -416,6 +418,7 @@ export function loadMapRoster() {
 
     const roster = [];
     const placed = new Set();   // registry entries a map places by hand
+    const shown = new Set();    // "slot|type" a map already shows (a mob slot shows its whole deal)
     for (const file of files) {
         const zone = file.slice(0, -'-map.json'.length);
         const raw = fs.readFileSync(path.join(GAME_DIR, file), 'utf8');
@@ -428,16 +431,21 @@ export function loadMapRoster() {
         const spawns = authored.map(s => resolveSpawn(s, defaultPicks()));
         for (const s of spawns) {
             roster.push(rosterRow(zone, s.id, s));
+            if (s && s.slot) shown.add(`${s.slot}|${s.type}`);
         }
     }
     // Every pool entry no map is showing today (a slot's later picks): linted as
     // if it stood in its slot's place, so a new boss cannot dodge the bands.
-    // No rows today — every pool holds only its default.
+    // No rows today: every anchor pool holds only its default, and a mob slot
+    // (plans/ic4-frozen-creatures.md) has no pick but its map deals every entry
+    // to a seat, so each is already a map row above. Matched on type within the
+    // slot, since a resolved spawn carries its entry's type, not its id.
     const picked = defaultPicks();
     for (const [slotId, slot] of Object.entries(SLOTS)) {
         const zone = slot.map.slice(0, -'-map.json'.length);
         for (const { entry } of slot.pool) {
             if (entry === picked[slotId]) continue;
+            if (shown.has(`${slotId}|${ENTRIES[entry]?.type}`)) continue;
             roster.push(rosterRow(zone, `${slotId}:${entry}`, ENTRIES[entry]));
         }
     }

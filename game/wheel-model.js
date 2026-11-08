@@ -451,6 +451,70 @@ export function verbApplies(node, game) {
   return pool.some(e => cheb(game.playerX, game.playerY, e.x, e.y) <= 1);
 }
 
+// ── Why an option is grey (FX58) ─────────────────────────────────────────────
+// ONE place for the reasons, so the wheel's refused press and the later fight
+// arc read the same table. Every line is a placeholder for the owner's words.
+export const GREYED_REASON_TEXT = {
+  'nobody-beside': '[TEXT: nobody beside you]',
+  'not-fighting':  '[TEXT: not fighting you]',
+  'no-rock':       '[TEXT: no rock]',
+  'no-mp':         '[TEXT: not enough MP]',
+  'no-spell':      '[TEXT: no spell known]',
+  'not-hidden':    '[TEXT: not hidden]',
+  'nothing-to-take': '[TEXT: nothing to take]',
+  'no-food':       '[TEXT: no food]',
+  'full-health':   '[TEXT: already at full health]',
+  'no-drink':      '[TEXT: nothing to drink]',
+  'no-room':       '[TEXT: nowhere to run]',
+  'no-gold':       '[TEXT: not enough GP]',
+  'no-trick':      '[TEXT: trick not granted]',
+  'unavailable':   '[TEXT: not now]',
+};
+
+const NEEDS_ITEM_REASON = { throw: 'no-rock', drink: 'no-drink' };
+
+// The reason key for a node the wheel refuses, or null when the node is usable
+// (or a placeholder, which is a pad and not an option). Mirrors the order of the
+// gates in main._wheelDrill: `available` first, then verbApplies. Pure.
+export function greyedReason(node, game) {
+  if (!node || node.placeholder) return null;
+  if (node.available && !node.available(game)) {
+    if (node.spellId || node.key === 'magic') {
+      const known = node.spellId
+        ? (game.hasSpell ? game.hasSpell(node.spellId) : (game.knownSpells || []).includes(node.spellId))
+        : ((game.knownSpells && game.knownSpells.length) || 0) > 0;
+      return known ? 'no-mp' : 'no-spell';
+    }
+    if (node.key === 'thieve') return 'not-hidden';
+    if (node.resolver && node.resolver.startsWith('thieve')) return 'nothing-to-take';
+    if (node.trickId) {
+      const has = game.hasTrick ? game.hasTrick(node.trickId) : (game.grantedTricks || []).includes(node.trickId);
+      return has ? 'no-gold' : 'no-trick';
+    }
+    return 'unavailable';
+  }
+  if (!verbApplies(node, game)) {
+    if (node.needsItem && barSlot(game, node.needsItem) < 0) {
+      if (node.needsItem === 'eat') {
+        // The game already knows which (eatBlockedBy: 'full' | 'none'); fall back to HP.
+        const why = game.eatBlockedBy ? game.eatBlockedBy() : (game.playerHp >= game.playerMaxHp ? 'full' : 'none');
+        return why === 'full' ? 'full-health' : 'no-food';
+      }
+      return NEEDS_ITEM_REASON[node.needsItem] || 'unavailable';
+    }
+    if (node.resolver === 'run') return 'no-room';
+    const near = (game.enemies || []).filter(e => e.entity.isAlive() && cheb(game.playerX, game.playerY, e.x, e.y) <= 1);
+    return near.length ? 'not-fighting' : 'nobody-beside';
+  }
+  return null;
+}
+
+// The log line for a refused node, or null when there is nothing to say.
+export function greyedReasonLine(node, game) {
+  const key = greyedReason(node, game);
+  return key ? GREYED_REASON_TEXT[key] : null;
+}
+
 // ── Combat state (§12.5 aggro re-skin) ───────────────────────────────────────
 // True when the player is in an active fight: any non-ambient, still-alive enemy
 // is CHASING (the same signal that locks the world in main._inCombat, which now
@@ -514,6 +578,8 @@ export function targetVerbs(target, game) {
   // needsAdjacent and the fire path walks the Hero adjacent FIRST (path-then-act,
   // pointer-model slice). Examine + Throw are rangeless. (Supersedes the old
   // offer-time adjacency gate — walking now prevents the reach-across-map grab.)
+  // A bench (HP1): E rests. The label word is a placeholder.
+  if (target.rest) V.push({ key: 'rest', label: 'Rest', color: '#6f8fb8', text: '#eef4fb', icon: 'z', resolver: 'rest', needsAdjacent: true });
   if (target.item) V.push({ key: 'take', label: 'Take', color: '#4f9b4a', text: '#effbe9', resolver: 'take', needsAdjacent: true });
   // A container's tile is never walkable, so Open carries needsAdjacent and the
   // fire path stops BESIDE it — the same path-then-act the car already uses.
@@ -528,7 +594,7 @@ export function targetVerbs(target, game) {
 // re-ordered by CONVENTION: the natural default action on top, then other verbs,
 // then Examine, then a Cancel row at the bottom. (`Walk here` + path-then-act
 // arrive with the pointer-model slice; not present yet.)
-const TARGET_VERB_RANK = { hit: 0, talk: 0, take: 0, open: 0, trade: 20, shove: 35, throw: 40, examine: 90 };
+const TARGET_VERB_RANK = { hit: 0, talk: 0, take: 0, open: 0, trade: 20, rest: 0, shove: 35, throw: 40, examine: 90 };
 
 // Hit against someone who is not fighting you sinks to the bottom of the list,
 // below even Shove — present, because you may swing at anyone, but never near
@@ -561,6 +627,7 @@ export function defaultVerb(target, game) {
            : npc.dialogueId ? 'talk'
            : 'shove')
     : target.container ? 'open'
+    : target.rest ? 'rest'
     : 'examine';
   return verbs.find(v => v.key === key) || verbs.find(v => v.key === 'examine') || verbs[0] || null;
 }

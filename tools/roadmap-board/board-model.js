@@ -75,21 +75,32 @@ export function unblocked(cards) {
 // A path as a run would compare it: forward slashes, no leading ./, trimmed.
 const normPath = p => String(p ?? '').trim().replace(/\\/g, '/').replace(/^\.\//, '');
 
+// (plans/loop-shared-file-picks.md) The big files several slices may hold at once,
+// and how many. Git merges edits to different parts of one file cleanly; the loop's
+// stack check (stack-check.mjs) catches the ones that don't before they reach Review.
+// The loop passes this map; with none, every file takes one slice at a time.
+export const SHARED_FILES = Object.freeze({ 'game/main.js': 5, 'game/renderer.js': 3 });
+
 // What the loop builds next (plans/ticket-board.md §2). Returns
 //   { picks, reason, wip, skipped }
 // reason: 'ok' | 'wip-cap' | 'nothing-pickable'. `picks` holds up to `max`
-// slices, never more than the cap leaves room for, and no two share a file —
-// each one's touches join the busy set, so the next pick can't clash with it
-// (plans/loop-limits-ten.md). `skipped` lists every Ready slice that was passed
-// over, with why, so a run can report it.
-export function nextSlices(cards, { wipCap = WIP_CAP, max = PICKS_PER_PASS } = {}) {
+// slices, never more than the cap leaves room for. A file takes one slice in
+// flight at a time (plans/loop-limits-ten.md) unless `shared` names it, and then
+// up to its number; each pick's touches count against the next one. `skipped`
+// lists every Ready slice that was passed over, with why, so a run can report it.
+export function nextSlices(cards, { wipCap = WIP_CAP, max = PICKS_PER_PASS, shared = {} } = {}) {
     const lanes = byLane(cards);
     const inFlight = [...lanes.doing, ...lanes.review].filter(c => kindOf(c) === 'slice');
     const wip = inFlight.length;
     if (wip >= wipCap) return { picks: [], reason: 'wip-cap', wip, skipped: [] };
     const room = Math.min(max, wipCap - wip);
 
-    const busy = new Set(inFlight.flatMap(c => (c.touches ?? []).map(normPath)));
+    const capOf = Object.create(null);
+    for (const [p, n] of Object.entries(shared ?? {})) if (Number.isInteger(n) && n > 1) capOf[normPath(p)] = n;
+    const filesOf = c => [...new Set((c.touches ?? []).map(normPath))];
+    const held = Object.create(null);   // file -> slices in flight (and picked) touching it
+    const hold = c => { for (const p of filesOf(c)) held[p] = (held[p] ?? 0) + 1; };
+    for (const c of inFlight) hold(c);
     const ix = blockerIndex(cards);
     const picks = [], skipped = [];
     for (const c of lanes.ready) {
@@ -102,10 +113,13 @@ export function nextSlices(cards, { wipCap = WIP_CAP, max = PICKS_PER_PASS } = {
         if (!c.approved) { skipped.push({ id: c.id, why: 'waiting for your approval' }); continue; }
         const open = ix.openBlockedBy[c.id];
         if (open.length) { skipped.push({ id: c.id, why: `blocked by ${open.join(', ')}` }); continue; }
-        const clash = (c.touches ?? []).map(normPath).filter(p => busy.has(p));
+        const files = filesOf(c);
+        const clash = files.filter(p => !capOf[p] && held[p]);
         if (clash.length) { skipped.push({ id: c.id, why: `touches unmerged ${clash.join(', ')}` }); continue; }
+        const full = files.filter(p => capOf[p] && (held[p] ?? 0) >= capOf[p]);
+        if (full.length) { skipped.push({ id: c.id, why: `touches busy ${full.map(p => `${p} (${held[p]} of ${capOf[p]})`).join(', ')}` }); continue; }
         picks.push(c);
-        for (const p of c.touches ?? []) busy.add(normPath(p));
+        hold(c);
     }
     return { picks, reason: picks.length ? 'ok' : 'nothing-pickable', wip, skipped };
 }
@@ -203,6 +217,15 @@ export function claudesTurn(cards) {
         else if (kindOf(c) === 'slice' && laneOf(c) === 'ready' && !isTweaked(c)) out.push({ id: c.id, why: 'tweak it (no acceptance checks yet)' });
     }
     return out;
+}
+
+// What only he can move right now (plans/board-my-turn.md): his turn, minus any card
+// still blocked, and minus any card whose thread is waiting on Claude's reply.
+export function myTurn(cards) {
+    const ix = blockerIndex(cards);
+    const byId = Object.create(null);
+    for (const c of cards) byId[c.id] = c;
+    return yourTurn(cards).filter(t => !ix.openBlockedBy[t.id].length && lastFrom(byId[t.id]) !== 'you');
 }
 
 // What a card is really waiting on (plans/ticket-board.md §9): its open blockers

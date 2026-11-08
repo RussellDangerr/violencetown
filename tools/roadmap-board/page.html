@@ -243,6 +243,20 @@
   }
   .ask b { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; margin-right: 4px; }
 
+  /* ── My Turn view ───────────────────────────────────────────────────── */
+  #mine { display: flex; flex-direction: column; gap: 20px; padding: 16px 20px; }
+  #mine .mine-hint { font-size: 12.5px; color: var(--muted); }
+  #mine .mine-empty { padding: 32px 0; text-align: center; color: var(--muted); font-style: italic; }
+  .mine-group { display: flex; flex-direction: column; gap: 10px; }
+  .mine-group h2 { font-size: 24px; text-transform: uppercase; letter-spacing: .06em; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+  .mine-group h2 .count {
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 11.5px;
+    text-transform: none; letter-spacing: 0; font-variant-numeric: tabular-nums;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 1px 7px;
+    color: var(--muted);
+  }
+  .mine-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr)); gap: 12px; align-items: start; }
+
   /* ── Graph view ─────────────────────────────────────────────────────── */
   #graph { padding: 16px 20px; }
   #graph pre.mermaid {
@@ -268,6 +282,7 @@
   <p class="sub" id="status">loading…</p>
   <p class="hint">Ideas → rulings → ready slices → the loop → your merge. Dragging needs a mouse; Tab, chips and the ruling buttons work without one.</p>
   <nav>
+    <button id="view-mine" aria-pressed="false">My Turn</button>
     <button id="view-board" aria-pressed="true">Board</button>
     <button id="view-graph" aria-pressed="false">Graph</button>
   </nav>
@@ -279,6 +294,7 @@
 </form>
 <section id="unblocked" class="turns" aria-label="Whose turn"></section>
 <main id="board" class="rail" aria-label="Lanes"></main>
+<section id="mine" aria-label="My Turn" hidden></section>
 <section id="graph" hidden><pre class="mermaid" id="mermaid-src"></pre></section>
 
 <script>
@@ -295,6 +311,10 @@ let frees = Object.create(null); // ruling id -> approved slices its answer help
 // here, not in the DOM: a draft survives a re-render, and so does an open thread.
 const drafts = Object.create(null);   // 'fb:<id>' -> text in that card's box
 const openFb = new Set();             // card ids whose feedback thread is open
+const VIEWS = ['board', 'mine', 'graph'];
+// A per-browser convenience: storage can throw or come back empty, and Board is fine then.
+const storedView = () => { try { return localStorage.getItem('vt-board-view'); } catch { return null; } };
+let view = VIEWS.includes(storedView()) ? storedView() : 'board';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
@@ -309,6 +329,14 @@ const isShortCodeId = id => /^[A-Z]{1,3}\d?[a-z]?$/.test(id);
 // ── Render ─────────────────────────────────────────────────────────────────
 const TURN_ORDER = { ruling: 0, review: 1, ready: 2, idea: 3 };
 const label = c => isShortCodeId(c.id) ? c.id : (c.title.length > 34 ? `${c.title.slice(0, 34)}…` : c.title);
+// What each of his cards asks for, in the order the My Turn view shows them.
+const MINE_GROUPS = [
+  ['merge it or ask for changes', 'Your merge call'],
+  ['Claude asked you something', 'Claude asked you'],
+  ['pick an option', 'Rulings'],
+  ['approve it', 'Approve'],
+  ['tweak it or park it', 'Ideas'],
+];
 
 function render() {
   // Hold on to the focused text box so a re-render does not steal it mid-word.
@@ -338,7 +366,11 @@ function render() {
     <div class="turnrow"><h2>Your turn · ${yours.length}</h2><div class="chips">${turnChips(yours, 'nothing waits on you')}</div></div>
     <div class="turnrow"><h2>Claude's turn · ${claudes.length}</h2><div class="chips">${turnChips(claudes, 'Claude is caught up')}</div>${nextLine}</div>`;
 
-  $('#board').innerHTML = LANES.map(l => `
+  const mine = myTurn(cards);
+  $('#view-mine').textContent = `My Turn · ${mine.length}`;
+  // One view's cards at a time: a jump or a kept focus must find the card on screen.
+  $('#mine').innerHTML = view === 'mine' ? mineHTML(mine, byId) : '';
+  $('#board').innerHTML = view === 'mine' ? '' : LANES.map(l => `
     <section class="lane" data-lane="${esc(l.id)}" aria-label="${esc(l.label)}">
       <h2>${esc(l.label)} <span class="count">${lanes[l.id].length}</span><small>${esc(l.hint)}</small></h2>
       <div class="cards" data-lane="${esc(l.id)}">${lanes[l.id].map(c => cardHTML(c, byId)).join('')}</div>
@@ -352,6 +384,19 @@ function render() {
   }
 }
 
+function mineHTML(mine, byId) {
+  if (!mine.length) return `<p class="mine-empty">Nothing needs you right now.</p>`;
+  const groups = MINE_GROUPS.map(([why, title]) => {
+    const list = mine.filter(t => t.why === why).map(t => byId[t.id])
+      .sort((a, b) => (frees[b.id]?.length ?? 0) - (frees[a.id]?.length ?? 0) || a.order - b.order);
+    return list.length ? `<section class="mine-group" aria-label="${esc(title)}">
+        <h2>${esc(title)} <span class="count">${list.length}</span></h2>
+        <div class="mine-cards">${list.map(c => cardHTML(c, byId)).join('')}</div>
+      </section>` : '';
+  }).join('');
+  return `<p class="mine-hint">Only cards waiting on your input, with nothing blocking them.</p>${groups}`;
+}
+
 function cardHTML(c, byId) {
   const chip = (id, cls) => byId[id]
     ? `<button class="chip ${cls}" data-jump="${esc(id)}" title="${esc(byId[id].title)}">${esc(id)}</button>`
@@ -362,7 +407,7 @@ function cardHTML(c, byId) {
   const list = (label, xs) => Array.isArray(xs) && xs.length
     ? `<p class="label">${esc(label)}</p><ul>${xs.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '';
   return `
-    <article class="card ${cls}${open.length && lane !== 'done' ? ' blocked' : ''}" draggable="${db ? 'true' : 'false'}"
+    <article class="card ${cls}${open.length && lane !== 'done' ? ' blocked' : ''}" draggable="${db && view !== 'mine' ? 'true' : 'false'}"
              data-id="${esc(c.id)}" tabindex="0">
       <header><b>${esc(c.id)}</b><span class="kind">${lane === 'done' ? '' : esc(kind)}${c.source === 'scout' && lane !== 'done' ? ' · scout' : ''}</span>${c.size ? `<em>${esc(c.size)}</em>` : ''}</header>
       <p class="title">${esc(c.title)}</p>
@@ -578,6 +623,8 @@ function highlight(id) {
 }
 document.addEventListener('click', e => {
   const j = e.target.closest('[data-jump]'); if (!j) return;
+  // A chip in My Turn can name a card that isn't shown there: Board has every card.
+  if (view === 'mine' && !document.querySelector(`.card[data-id="${CSS.escape(j.dataset.jump)}"]`)) setView('board');
   const el = document.querySelector(`.card[data-id="${CSS.escape(j.dataset.jump)}"]`);
   el?.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' }); el?.focus();
 });
@@ -617,7 +664,8 @@ async function persist(card, fields) {
 function setStatus(s) { $('#status').textContent = s; }
 
 async function boot() {
-  render();                                    // seed first: the page works with nothing
+  setView(view);                               // seed first: the page works with nothing
+  $('#view-mine').onclick = () => setView('mine');
   $('#view-board').onclick = () => setView('board');
   $('#view-graph').onclick = () => setView('graph');
 
@@ -649,10 +697,15 @@ async function boot() {
   setStatus('connected');
 }
 function setView(v) {
+  view = v;
+  try { localStorage.setItem('vt-board-view', v); } catch { /* the view just won't be remembered */ }
   $('#board').hidden = v !== 'board'; $('#unblocked').hidden = v !== 'board';
+  $('#mine').hidden = v !== 'mine';
   $('#graph').hidden = v !== 'graph';
   $('#view-board').setAttribute('aria-pressed', v === 'board');
   $('#view-graph').setAttribute('aria-pressed', v === 'graph');
+  $('#view-mine').setAttribute('aria-pressed', v === 'mine');
+  render();
 }
 boot();
 </script>

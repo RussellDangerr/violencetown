@@ -15,13 +15,13 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { ITEMS, resolveUse, unequipItem } from '../game/items.js';
 import { WEAPONS } from '../game/weapons.js';
-import { moveToZone, zoneOf } from '../game/inventory.js';
-import { INVENTORY_SIZE, SAFE_SLOTS, MAX_STACK } from '../game/data.js';
+import { moveToZone, zoneOf, pageCount, slotOnPage, pageOfSlot } from '../game/inventory.js';
+import { INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK } from '../game/data.js';
 import { itemActions, equipOptions, inspectorUsesRect, USES_ACTION } from '../game/inspector.js';
 import { contextualUses, ITEM_USES } from '../game/item-uses.js';
 import { slotRing, unslotRing } from '../game/rings.js';
 import {
-    HIT_SLOP, DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceBagSlotRects,
+    HIT_SLOP, DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceBagSlotRects, deviceBagPagerRects,
     deviceEquipLayout, deviceRingsLayout, inspectorActionRects, inspectorPanelRect, gearOptionRects,
     nearestRectInDir, rectsOverlap,
 } from '../game/layout.js';
@@ -54,7 +54,7 @@ const audio = { playSfx() {} };
 const FREE = {
     STATE, DIRS, audio, HIT_SLOP, DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect,
     deviceBagSlotRects, deviceEquipLayout, deviceRingsLayout, inspectorActionRects, gearOptionRects,
-    nearestRectInDir, itemActions, equipOptions, zoneOf, moveToZone, SAFE_SLOTS, INVENTORY_SIZE,
+    nearestRectInDir, itemActions, equipOptions, zoneOf, moveToZone, SAFE_SLOTS, INVENTORY_SIZE, PACK_PAGE, pageCount, slotOnPage, pageOfSlot, deviceBagPagerRects,
     MAX_STACK, resolveUse, unequipItem, slotRing, unslotRing, contextualUses, inspectorUsesRect,
     performance,
 };

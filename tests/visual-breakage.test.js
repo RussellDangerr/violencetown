@@ -52,7 +52,9 @@ describe('no item draws as a letter in a box', () => {
         const bare = Object.keys(all).filter(id => !ITEM_SPRITES[id]).sort();
         // The three Act 2 required items draw as the bag until they are named
         // (AB1R2, plans/ab1-act2-placeholder-bosses.md).
-        assert.deepEqual(bare, ['act2_item_a', 'act2_item_b', 'act2_item_c', 'latex_gloves', 'red_cape', 'shoe_bags']);
+        // The ice cone machine part draws as the bag until it has a picture
+        // (IC6R1, plans/ic6-factory-bill-ice-cone-machine.md).
+        assert.deepEqual(bare, ['act2_item_a', 'act2_item_b', 'act2_item_c', 'ice_cone_machine_part', 'latex_gloves', 'red_cape', 'shoe_bags']);
         assert.ok(bare.length > 0 && bare.every(id => itemSprite(id) === UNKNOWN_ITEM_SPRITE));
     });
     test('no fallback still draws ITEM_COLORS letters unless a sheet failed to load', () => {
@@ -60,9 +62,11 @@ describe('no item draws as a letter in a box', () => {
         assert.equal((rendererSrc.match(/ITEM_SPRITES\[/g) || []).length, 0);
         assert.equal((rendererSrc.match(/itemSprite\(/g) || []).length, 4);
     });
-    test('the derived sheet exists and is five 16-px cells wide', () => {
+    test('the derived sheet exists and is ten 16-px cells wide', () => {
+        // Five, plus the four weapon recolours of WA1 (plans/wa1-weapon-pictures-match.md)
+        // and the Ray Gun's pistol of WA2 (plans/wa2-ray-gun-picture.md).
         const png = readFileSync(join(GAME, 'assets-placeholder', 'kenney', 'tinyExtra_packed.png'));
-        assert.equal(png.readUInt32BE(16), 80);   // IHDR width
+        assert.equal(png.readUInt32BE(16), 160);  // IHDR width
         assert.equal(png.readUInt32BE(20), 16);   // IHDR height
     });
     test('the rock and Fire Blood no longer use cells that carry a square of ground', () => {

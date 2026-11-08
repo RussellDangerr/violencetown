@@ -41,14 +41,14 @@ function loadMap(file) {
 // short and justified — each entry is a spawn site that a map sweep cannot see.
 const DYNAMIC_SPAWNS = [
     { type: 'Lire', why: 'tricks.js "Hire Lire" summon, via main.js _spawnSummon' },
+    { type: 'Ant', why: 'ants.js ANT_TYPE, via main.js _spawnAnt (the sweet-food swarm)' },
 ];
 
 // Types knowingly left on the fallback box, with the reason. This list is the
 // escape hatch that keeps the suite honest: a gap is either fixed or written
 // down here, never merely unnoticed. Adding to it should feel expensive.
-const KNOWN_UNSPRITED = {
-    'Lire': 'no lion in Tiny Dungeon; every near-miss (rats, spiders, bare humanoid) reads worse than the fallback. Awaiting Caelan.',
-};
+// Empty since Lire got the tawny beast (tools/gen_recolor.py, BEAST_VARIANTS).
+const KNOWN_UNSPRITED = {};
 
 describe('sprite coverage', () => {
     test('the map sweep actually found maps', () => {

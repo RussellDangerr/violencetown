@@ -78,6 +78,70 @@ export function isSewerDweller(e) {
   return !!(e && e.sewerDweller);
 }
 
+// ── Circling (plans/cb1-carnival-horses-circle.md) ─────────────────────────
+//
+// A circler walks up like any chaser. Once beside the player it takes turns: one beat it
+// steps to the next free tile around the player, the next beat it hits. The step draws no
+// dice: it is a function of the creature's id, the turn count and which tiles are free, so
+// every step falls on the player's action and replays exactly.
+//
+// The flag is off unless a registry entry sets it. The Enemy ctor drops unknown fields, so it
+// rides the free-form `tag`, the way the mugger does.
+export const CIRCLER_TAG = 'circler';
+
+export function isCircler(e) {
+  return !!e && e.tag === CIRCLER_TAG;
+}
+
+// The eight tiles around a centre, clockwise from north. Each is an orthogonal neighbour of
+// the next, so walking the ring is a run of single steps.
+export const RING = Object.freeze([
+  [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1],
+]);
+
+// Which of the two beats this creature steps on: 0 or 1, from its id alone. Neighbouring ids
+// (a pack numbered 1, 2, 3) differ in their last character, so a pack never swings in unison.
+export function circlePhase(id) {
+  let sum = 0;
+  for (const ch of String(id ?? '')) sum += ch.charCodeAt(0);
+  return sum % 2;
+}
+
+// Does this creature step (rather than hit) on this turn?
+export function circlesThisBeat(id, turn) {
+  return ((turn | 0) + circlePhase(id)) % 2 === 0;
+}
+
+// The next free tile clockwise around `centre` from the tile `from` stands on, reachable in
+// one step. `canStep(fromX, fromY, toX, toY)` says whether the step is open (a wall, another
+// creature or a container says no). Returns { x, y }, or null when there is none, and the
+// creature just hits.
+export function circleStep(centre, from, canStep) {
+  const at = RING.findIndex(([dx, dy]) => centre.x + dx === from.x && centre.y + dy === from.y);
+  if (at < 0) return null;                       // not beside the centre: nothing to circle
+  for (let k = 1; k < RING.length; k++) {
+    const x = centre.x + RING[(at + k) % RING.length][0];
+    const y = centre.y + RING[(at + k) % RING.length][1];
+    if (Math.max(Math.abs(x - from.x), Math.abs(y - from.y)) !== 1) continue;   // one step only
+    if (canStep(from.x, from.y, x, y)) return { x, y };
+  }
+  return null;
+}
+
+// ── The angel (plans/ca1-crying-angel.md) ──────────────────────────────────
+//
+// A stone figure that moves only on the beats you look at it (npc.js angelTurn). The flag is
+// off unless a registry entry sets it; it rides the free-form `tag` the way the circler's does.
+export const ANGEL_TAG = 'angel';
+
+// How far out you can hold it in your gaze: the sight range handed to perception.js when the
+// player is the watcher.
+export const ANGEL_GAZE_RANGE = 8;
+
+export function isAngel(e) {
+  return !!e && e.tag === ANGEL_TAG;
+}
+
 // Default grunt heal policy — per-enemy policies come later (first boss build).
 export const HEAL_HP_FLOOR  = 40; // buy only at or below this HP
 export const HEAL_MIN_GOLD  = 20; // a sliver below this can never heal
@@ -106,24 +170,49 @@ export function healPurchase(hp, maxHp, gold) {
 // because some of it gets used.
 export const KIT_HP_FLOOR = 70;   // at or below this, drink before you swing
 
-export function kitChoice(hp, maxHp, defs, healValueOf, alreadyHealing = false) {
+// (plans/ek1-hurt-enemy-uses-kit.md) Past the heals, a hurt enemy reaches for what
+// else it carries. `extra` is injected for the same reason `healValueOf` is:
+//   defenceOf(def)    -> the defence a drinkable poition gives, 0 for anything else
+//   gearWeightOf(def) -> how heavy a wearable armour piece is, 0 for anything else
+//   defended          -> a defence buff is already running on it
+// Order: heal, then poition, then armour. A kit that holds ANY heal never falls
+// through, so an enemy with a heal behaves exactly as it did before.
+// Returns { index, def, heal, kind } with kind 'heal' | 'defence' | 'armour'.
+export function kitChoice(hp, maxHp, defs, healValueOf, alreadyHealing = false, extra = null) {
     if (!defs || !defs.length) return null;
     if (hp >= maxHp) return null;       // nothing to heal
     if (hp > KIT_HP_FLOOR) return null; // not hurt enough to bother
-    // Do not double-dose. Found in live play: a kitted enemy ate three items on
-    // three consecutive turns, burning a mushroom while the sludge sack it had
-    // just drunk was still regenerating it. Waiting for the dose to finish looks
-    // smarter AND leaves more of the kit on the corpse — which is Law 6f's whole
-    // reward for rushing an enemy down instead of letting it settle in.
-    if (alreadyHealing) return null;
 
     let best = null;
     for (let i = 0; i < defs.length; i++) {
         const heal = healValueOf(defs[i]) || 0;
         if (heal <= 0) continue;                    // inedible, or poison to this drinker
-        if (!best || heal > best.heal) best = { index: i, def: defs[i], heal };
+        if (!best || heal > best.heal) best = { index: i, def: defs[i], heal, kind: 'heal' };
     }
-    return best;
+    if (best) {
+        // Do not double-dose. Found in live play: a kitted enemy ate three items on
+        // three consecutive turns, burning a mushroom while the sludge sack it had
+        // just drunk was still regenerating it. Waiting for the dose to finish looks
+        // smarter AND leaves more of the kit on the corpse — which is Law 6f's whole
+        // reward for rushing an enemy down instead of letting it settle in.
+        return alreadyHealing ? null : best;
+    }
+    if (!extra) return null;
+
+    if (!extra.defended && extra.defenceOf) {
+        for (let i = 0; i < defs.length; i++) {
+            if ((extra.defenceOf(defs[i]) || 0) > 0) return { index: i, def: defs[i], heal: 0, kind: 'defence' };
+        }
+    }
+    if (extra.gearWeightOf) {
+        let gear = null;
+        for (let i = 0; i < defs.length; i++) {
+            const w = extra.gearWeightOf(defs[i]) || 0;
+            if (w > 0 && (!gear || w > gear.w)) gear = { index: i, def: defs[i], heal: 0, kind: 'armour', w };
+        }
+        if (gear) { delete gear.w; return gear; }
+    }
+    return null;
 }
 
 // ── Law 5 — bosses spend, not pool ──────────────────────────────────────────

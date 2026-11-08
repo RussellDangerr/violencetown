@@ -14,10 +14,17 @@ import { fileURLToPath } from 'node:url';
 
 const norm = p => String(p ?? '').trim().replace(/\\/g, '/').replace(/^\.\//, '');
 
-// Paths a slice never edits, whatever its card says.
+// A golden file: a name whose last word is "golden", whatever its extension
+// (tools/autoplay-golden.json, tools/balance-golden.txt, golden.json). A name
+// that only mentions it, such as plans/fx19-guard-golden-files.md or an
+// item's golden-crown.png, is not one.
+const GOLDEN = /(?:^|[/_.-])golden(?:\.[^/.]+)?$/i;
+export const isGolden = path => GOLDEN.test(norm(path));
+
+// Paths a slice never edits, whatever its card says. A golden file is refused
+// the same way unless a ruling accepted the change (checkGolden below).
 const FORBIDDEN = [
     [/^tiled\//, 'tiled/ is Caelan\'s, untracked, never touched'],
-    [/golden[^/]*\.json$/i, 'a golden file moves only on his ruling'],
     [/^package(-lock)?\.json$/, 'package.json carries the release version'],
     [/^\.claude\/settings[^/]*\.json$/, 'permission settings are his to change'],
     [/^CLAUDE\.md$/, 'CLAUDE.md is changed only when he asks'],
@@ -29,14 +36,19 @@ export function checkBranch(branch) {
         ? [] : [`branch "${branch}" is not feature/<lower-case-slug>`];
 }
 
-// changed: [{ status: 'A'|'M'|'D'|'R…', path }] from `git diff --name-status origin/dev...HEAD`.
-// Allowed: a file the card lists in `touches`, the slice's own spec, and NEW test files.
-export function checkScope(changed, touches, slug) {
+// changed: [{ status: 'A'|'M'|'D'|'R…', path, from? }] from `git diff --name-status origin/dev...HEAD`
+// (`from` is a rename's old path). Allowed: a file the card lists in `touches`, the slice's own
+// spec, NEW test files, and a golden file whose every commit cites an accept ruling. `commits`
+// is [{ sha, message, files }], as for checkTestIntegrity; `files` lists the paths a commit touched.
+export function checkScope(changed, touches, slug, commits = []) {
     const allowed = new Set((touches ?? []).map(norm));
     const spec = `plans/${slug}.md`;
     const problems = [];
-    for (const { status, path } of changed) {
+    for (const { status, path, from } of changed) {
         const p = norm(path);
+        const golden = [...new Set([from, path].filter(x => x != null && isGolden(x)).map(norm))];
+        problems.push(...golden.flatMap(g => checkGolden(g, commits)));
+        if (isGolden(p)) continue;
         const banned = FORBIDDEN.find(([re]) => re.test(p));
         if (banned) { problems.push(`${p}: ${banned[1]}`); continue; }
         if (p === spec || allowed.has(p)) continue;
@@ -45,6 +57,24 @@ export function checkScope(changed, touches, slug) {
     }
     return problems;
 }
+
+// A golden file moves only on an "accept the new golden?" ruling (LOOP.md §3).
+// The change passes when at least one commit on the branch touched the file and
+// every commit that did cites an accept ruling in its message.
+export function checkGolden(path, commits = []) {
+    const p = norm(path);
+    const touching = (commits ?? []).filter(c => (c.files ?? []).map(norm).includes(p));
+    if (!touching.length) return [`${p}: a golden file moves only on his ruling, and no commit on the branch that cites one touches it`];
+    return touching.filter(c => !citesAcceptRuling(c.message))
+        .map(c => `${p}: a golden file moves only on his ruling, and ${String(c.sha ?? '').slice(0, 7) || '(commit)'} does not cite an accept ruling (say "accept" and the ruling's id)`);
+}
+
+// The same convention as "behaviour changed" for a retitled test: the message
+// says so in words. Here it must say accept and name the ruling card by its id
+// (F3aR1, AB1R3, WS3R1 — a slice id, then R and a number).
+const ACCEPT = /\baccept(?:s|ed)?\b/i;
+const RULING_ID = /\b[A-Z]{1,4}\d+[a-z]?R\d+\b/;
+export const citesAcceptRuling = message => ACCEPT.test(String(message ?? '')) && RULING_ID.test(String(message ?? ''));
 
 // The first commit on the branch must carry the spec.
 export function checkSpecFirst(firstCommitFiles, slug) {
@@ -169,7 +199,7 @@ const sharesPath = (a, b) => a.paths.some(p => b.paths.includes(p)) || (!a.paths
 export function runGuard({ branch, changed, touches, slug, firstCommitFiles, testsDiff, commits }) {
     const problems = [
         ...checkBranch(branch),
-        ...checkScope(changed, touches, slug),
+        ...checkScope(changed, touches, slug, commits),
         ...checkSpecFirst(firstCommitFiles, slug),
         ...checkTestIntegrity(testsDiff, commits),
     ];
@@ -191,12 +221,18 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     if (!slug) { console.error('usage: node loop-guard.mjs --slug <slug> --touches a,b [--base <ref>]'); process.exit(2); }
     const branch = git('rev-parse', '--abbrev-ref', 'HEAD');
     const changed = git('diff', '--name-status', `${base}...HEAD`).split('\n').filter(Boolean)
-        .map(l => { const [status, ...rest] = l.split('\t'); return { status: status[0], path: rest.at(-1) }; });
+        .map(l => { const [status, ...rest] = l.split('\t'); return { status: status[0], path: rest.at(-1), from: rest.length > 1 ? rest[0] : undefined }; });
     const first = git('rev-list', '--reverse', `${base}..HEAD`).split('\n').filter(Boolean)[0];
     const firstCommitFiles = first ? git('show', '--name-only', '--format=', first).split('\n').filter(Boolean) : [];
     const testsDiff = git('diff', `${base}...HEAD`, '--', 'tests/');
     const commits = git('rev-list', '--reverse', '--no-merges', `${base}..HEAD`).split('\n').filter(Boolean)
-        .map(sha => ({ sha, message: git('log', '-1', '--format=%B', sha), testsDiff: git('diff', `${sha}^`, sha, '--', 'tests/') }));
+        .map(sha => ({
+            sha,
+            message: git('log', '-1', '--format=%B', sha),
+            testsDiff: git('diff', `${sha}^`, sha, '--', 'tests/'),
+            // Both sides of a rename, so a golden renamed away still counts.
+            files: git('diff', '--name-status', `${sha}^`, sha).split('\n').filter(Boolean).flatMap(l => l.split('\t').slice(1)),
+        }));
     const r = runGuard({ branch, changed, touches, slug, firstCommitFiles, testsDiff, commits });
     console.log(JSON.stringify(r, null, 2));
     process.exit(r.ok ? 0 : 1);

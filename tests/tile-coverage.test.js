@@ -7,7 +7,8 @@
 // as red boxes. Two more, PORTCULLIS (22) and BARRICADE (23), appear in no map
 // JSON but ARE placed at runtime by sewer-setpiece.js, so they are real and
 // reachable. Nothing caught any of it: content-validate.js never looked at
-// tiles, and no test imported the tile sprite maps at all.
+// tiles, and no test imported the tile sprite maps at all. GAP and
+// BOSS_TRIGGER have since been removed outright (plans/dt1-remove-unused-tiles.md).
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -15,7 +16,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { TILES, TILE_BY_ID } from '../game/data.js';
-import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, SHEETS, PROP_SPRITES } from '../game/sprites.js';
+import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, SHEETS, fillerSprite } from '../game/sprites.js';
 import { readAlpha, seeThroughCount } from './helpers/png-alpha.js';
 
 const GAME_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'game');
@@ -24,6 +25,12 @@ const GAME_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'game');
 const mapFiles = readdirSync(GAME_DIR)
     .filter(f => f.endsWith('-map.json'))
     .sort();
+
+// Every radical (game/radicals/<zone>/<piece>.json) — map pieces stamped in by tools/radicals.mjs.
+const RADICALS_DIR = join(GAME_DIR, 'radicals');
+const radicalFiles = readdirSync(RADICALS_DIR, { withFileTypes: true })
+    .filter(d => d.isDirectory())
+    .flatMap(d => readdirSync(join(RADICALS_DIR, d.name)).filter(f => f.endsWith('.json')).map(f => join(RADICALS_DIR, d.name, f)));
 
 function loadMap(file) {
     return JSON.parse(readFileSync(join(GAME_DIR, file), 'utf8'));
@@ -34,8 +41,6 @@ function loadMap(file) {
 // written down here, or a bug that needs fixing. Adding to it should feel
 // expensive.
 const KNOWN_UNPLACED = {
-    3: 'GAP — defined and mapped, placed nowhere',
-    7: 'BOSS_TRIGGER — defined and mapped, placed nowhere; the legacy boss-trigger trap it belonged to was removed',
     13: "GRASS — in no map's tiles, even though Town has room for it; drawn past the edge of Town, Carnival and Downtown as their filler",
 };
 
@@ -154,23 +159,57 @@ describe('tile coverage', () => {
             const b = loadMap(file).border;
             if (!b) continue;
             if (!(b.tile in allTileMaps)) bad.push(`${file}: border tile ${b.tile} has no sprite`);
-            if (b.prop && !PROP_SPRITES[b.prop]) bad.push(`${file}: border prop '${b.prop}' has no art`);
+            for (const k of [].concat(b.prop ?? [])) {   // one name, or a list (the forest mix)
+                if (!fillerSprite(k)) bad.push(`${file}: border prop '${k}' has no art`);
+            }
         }
         assert.deepEqual(bad, [], bad.join('\n'));
     });
 
     test('the fillers are the table in plans/screen-fill.md (change the two together)', () => {
         const want = {
-            'town-map.json':       { tile: 13, prop: 'tree' },
-            'carnival-map.json':   { tile: 13, prop: 'tree' },
-            'downtown-map.json':   { tile: 13, prop: 'tree' },
+            // The forest mixes the tall tree with a one-cell pine (APR2), picked per cell.
+            'town-map.json':       { tile: 13, prop: ['tree', 'pine'] },
+            'carnival-map.json':   { tile: 13, prop: ['tree', 'pine'] },
+            'downtown-map.json':   { tile: 13, prop: ['tree', 'pine'] },
             'graveyard-map.json':  { tile: 52, prop: 'tree' },
             'wilderness-map.json': { tile: 52, prop: 'tree' },
-            'sewer-map.json':      { tile: 0 },
+            'frozen-map.json':     { tile: 70, prop: 'tree' },
+            'sewer-map.json':     { tile: 0 },
             'factory-map.json':    { tile: 41 },
             'canyon-map.json':     { tile: 61 },
+            'gorge-map.json':      { tile: 61 },
+            'valley-map.json':     { tile: 61 },
         };
         for (const file of mapFiles) assert.deepEqual(loadMap(file).border ?? null, want[file] ?? null, file);
+    });
+
+    test('the retired tile ids stay retired: not defined, not drawn, not allowlisted, not placed', () => {
+        // 3 (GAP) and 7 (BOSS_TRIGGER) were placed nowhere and were taken out
+        // (plans/dt1-remove-unused-tiles.md). The ids are left as gaps, not reused.
+        const RETIRED = { 3: 'GAP', 7: 'BOSS_TRIGGER' };
+        for (const [id, name] of Object.entries(RETIRED)) {
+            const n = Number(id);
+            assert.equal(TILES[name], undefined, `${name} is defined in TILES again`);
+            assert.equal(TILE_BY_ID[n], undefined, `id ${n} is defined in TILES again`);
+            assert.ok(!(n in allTileMaps), `id ${n} has a sprite entry again`);
+            assert.ok(!(n in KNOWN_UNPLACED), `id ${n} is on the known-unplaced list again`);
+            for (const file of mapFiles) {
+                const map = loadMap(file);
+                assert.ok(!(map.tiles || []).includes(n), `${file} places retired tile ${n}`);
+                assert.notEqual(map.border?.tile, n, `${file} borders with retired tile ${n}`);
+            }
+            for (const file of radicalFiles) {
+                const piece = JSON.parse(readFileSync(file, 'utf8'));
+                assert.ok(!(piece.tiles || []).includes(n), `${file} places retired tile ${n}`);
+            }
+        }
+        assert.ok(radicalFiles.length > 0, 'the radical sweep found no pieces');
+        // The ids around them did not shift.
+        assert.equal(TILES.SLUDGE.id, 2);
+        assert.equal(TILES.GRATE.id, 4);
+        assert.equal(TILES.BOSS_FLOOR.id, 6);
+        assert.equal(TILES.TOWN_WALL.id, 10);
     });
 
     test('the known-unplaced list has not gone stale', () => {
