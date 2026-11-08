@@ -158,11 +158,12 @@ describe('EQ1 - a second copy keeps both', () => {
     });
 
     test('no copy from nothing: the chooser never lists the worn piece, and a one-copy swap stays one', () => {
-        const g = makeGame({ tab: 'gear', right: SWORD, left: WHIP, bag: { 12: WHIP } });
-        const before = count(g, 'wooden_sword') + count(g, 'lion_whip');
+        const g = makeGame({ tab: 'gear', right: SWORD, left: GATOR, bag: { 12: WHIP } });
+        const total = () => count(g, 'wooden_sword') + count(g, 'lion_whip') + count(g, 'gator_tail');
+        const before = total();
         g._deviceSel = { tab: 'gear', slotKey: 'weapon' };
         press(g, 'Enter', 'Enter');   // bag whip into the right hand
-        assert.equal(count(g, 'wooden_sword') + count(g, 'lion_whip'), before);
+        assert.equal(total(), before);
         assert.equal(worn(g, 'wooden_sword'), 0);
         assert.equal(g.inventory[12].itemDef, SWORD);
         const rows = equipOptions('weapon', g.equipment.weapon, g.inventory);
