@@ -7582,6 +7582,14 @@ class Game {
         // touch, with no way back. A zero-delta scroll is the clamp.
         this._offerScrollBy('theirs', 0);
         this._offerScrollBy('yours', 0);
+        // The keyboard cursor shrinks with its list too: selling the last row
+        // left it one past the end, so Space staged nothing. Same clamp as the
+        // column switch; the scroll clamp above already keeps its row in view.
+        const cur = this._offerCursor;
+        if (cur) {
+            const len = (cur.side === 'theirs' ? this._offerTheirsList() : this._offerYoursList()).length;
+            cur.index = Math.max(0, Math.min(len - 1, cur.index));
+        }
 
         this._saveMoment?.();   // (FX24) a finished trade survives a reload
 
