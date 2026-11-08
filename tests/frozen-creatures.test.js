@@ -128,7 +128,7 @@ describe('each creature', () => {
         }
     });
 
-    test('the row is live in a fight: double from its weakness, half from its resistance', () => {
+    test('the row is live in a fight: x1.5 from its weakness, half from its resistance', () => {
         const [w] = weaknessesOf('cold');
         const [r] = resistancesOf('cold');
         for (const e of creatures) {
