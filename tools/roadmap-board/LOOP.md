@@ -40,9 +40,12 @@ Caelan dislikes the other word for it; never use it.
 4. **Ask what's next:** `node tools/roadmap-board/next-slice.mjs <that folder>`.
    - `wip-cap` or `nothing-pickable`: no build this pass. Go to step 8.
    - `ok`: carry on with `picks` (up to 10). Only an approved, tweaked, unblocked slice is ever
-     picked, and no two picks share a file. Steps 5 to 7 run for each pick.
+     picked. A file takes one slice in flight at a time, except the shared files in
+     `SHARED_FILES` (`game/main.js` up to 5, `game/renderer.js` up to 3;
+     plans/loop-shared-file-picks.md). Steps 5 to 7 run for each pick.
 5. **Recon.** Run `git fetch`, `git branch -r --no-merged origin/dev`, and `git log -S` on the
-   slice's key names. If it already shipped, or it overlaps a branch still in review:
+   slice's key names. If it already shipped, or it overlaps a branch still in review on a file
+   that is not shared:
    - note it on the card;
    - move the card to `someday`;
    - go to step 8.
@@ -56,7 +59,13 @@ Caelan dislikes the other word for it; never use it.
      - `slug`;
      - the `touches` list.
    - Read its report, then write the card with a pinned `update`:
-     - **DONE:** `{lane: "review", summary, branch}` and drop `claim`.
+     - **DONE:** first run the stack check: `node tools/roadmap-board/stack-check.mjs
+       origin/dev <every branch in Review, in board order> <this branch>`. Exit 0 means
+       `{lane: "review", summary, branch}` and drop `claim`. Exit 1 means it clashes with a
+       branch already in Review: move it to `ready`, drop `claim`, keep `branch`, and say in
+       `note` which branch and files. Once that branch merges, the next builder for it merges
+       `origin/dev` into the branch, reruns every gate, and reports DONE again. Branches already
+       in Review are never touched.
      - **BLOCKED:** write the new ruling card it asked for and add its id to the slice's
        `blockedBy`. Move the slice to `ready` and drop `claim`.
      - **FAILED:** move the slice to `ready`, drop `claim`, and put the failure plus the branch
@@ -65,8 +74,10 @@ Caelan dislikes the other word for it; never use it.
 9. **Post the update and pick the wait** (§7).
 
 **Up to 10 slices per pass**, one builder each, all spawned in the same message so they run at
-once. `next-slice.mjs` never hands out two that share a file, so their branches can't collide. A
-pass that cleared Claude's turn may still build.
+once. `next-slice.mjs` never hands out two that share an ordinary file. The shared files can hold
+several: git merges edits to different parts of one file cleanly, and the stack check in step 7
+catches the edits that don't before anything reaches Review. A pass that cleared Claude's turn
+may still build.
 
 ## 2. What a slice must prove (the builder's definition of done)
 
@@ -147,6 +158,12 @@ His click on the card is the merge call. Do it away from his checkout:
    `git push origin HEAD:refs/heads/dev`.
 5. Run `git ls-remote origin dev` to check it landed. Then remove the worktree, move the card to
    `done`, and drop `verdict`.
+
+**Several at once.** When he presses Merge it on several cards, merge them one at a time in
+board order, every step above for each, each on top of the last. A card that no longer merges
+cleanly once an earlier one has landed is aborted as in step 2 and goes back to a builder, who
+merges `origin/dev` into its branch and reruns every gate; it returns to Review for his Merge it.
+The loop still never resolves a conflict itself.
 
 Never touch `main`, never tag, never release. Those are his.
 
