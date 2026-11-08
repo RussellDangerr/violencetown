@@ -14,6 +14,7 @@ import { BUFF_DEFS } from '../game/buffs.js';
 import { applyGive } from '../game/give-action.js';
 import { ITEMS } from '../game/items.js';
 import { ITEM_USES } from '../game/item-uses.js';
+import { resolveExamine } from '../game/examine.js';
 
 globalThis.localStorage ??= { getItem: () => null, setItem() {}, removeItem() {} };
 
@@ -72,6 +73,13 @@ for (const [label, make] of Object.entries(BOSSES)) {
             assert.ok(b.shownName.includes(b.type) || !text.includes(b.type),
                 `"${text}" must not carry the type "${b.type}"`);
         };
+
+        test('the E-key line and panel title name it', () => {
+            const b = make(); b.x = 2; b.y = 2;
+            const r = resolveExamine({ enemies: [b] }, 2, 2);
+            onlyName(b, r.body);
+            assert.equal(r.title, b.shownName);
+        });
 
         test('give lines name it', () => {
             const item = { id: 'x', name: 'Thing' };
@@ -160,12 +168,21 @@ describe('FX47 a non-boss reads exactly as before', () => {
     });
 });
 
+describe('FX47 examine, non-boss', () => {
+    test('a non-boss reads exactly as before', () => {
+        const g = goon(); g.x = 2; g.y = 2;
+        const r = resolveExamine({ enemies: [g] }, 2, 2);
+        assert.equal(r.title, g.name ?? g.type);
+        assert.ok(r.body.startsWith(`[${g.name ?? g.type}. `));
+    });
+});
+
 describe('FX47 source sweep', () => {
     // A line that builds visible text from a bare type, or from a name-or-type
     // fallback (`??` or `||`), without the boss-first form or logName/bossOr.
     // Out of scope by ruling: the worker lines ("A <type> drops/pockets") and
     // the container branch.
-    const FILES = ['npc.js', 'buffs.js', 'main.js', 'give-action.js', 'item-uses.js'];
+    const FILES = ['npc.js', 'buffs.js', 'main.js', 'give-action.js', 'item-uses.js', 'examine.js'];
     const ALLOWED = [/console\.warn/, /A \$\{npc\.type\} (drops|pockets)/, /pry open the/, /isn't interested in what you've got/];
     const BARE = [
         /\$\{[^}]*\.name \?\? [^}]*\.type[^}]*\}/,

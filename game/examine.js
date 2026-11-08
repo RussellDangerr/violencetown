@@ -134,7 +134,8 @@ export function resolveExamine(game, x, y) {
 
     const npc = (game.enemies || []).find(e => e.x === x && e.y === y && e.entity?.isAlive?.());
     if (npc) {
-        const name = npc.name || npc.type;
+        // (FX47) A boss goes by its one name; anyone else reads as before.
+        const name = (npc.boss && npc.shownName) || npc.name || npc.type;
         // A creature with examine text of its own says it (plans/ic4-frozen-creatures.md).
         if (typeof npc.examine === 'string' && npc.examine) return result(name, npc.examine);
         return result(name, `[${name}. ${isHostile(npc) ? 'Looks like trouble.' : 'Minding their own business.'}]`);
