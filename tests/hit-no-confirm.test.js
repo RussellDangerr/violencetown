@@ -21,6 +21,7 @@ const tap = (code) => { down(code); up(code); };
 
 const FOE = { x: 6, y: 5 };
 function makeGame(allegiance) {
+    globalThis.document = new EventTarget();   // one page per game: listeners never leak across tests
     const g = new Game();
     const foe = { x: FOE.x, y: FOE.y, allegiance, name: 'Bystander',
                   entity: { hp: 100, isAlive() { return this.hp > 0; } } };
