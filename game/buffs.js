@@ -31,6 +31,7 @@
 // the _advanceWorld chokepoint (main.js) via this file's worldBeatPlan.
 
 import { SLUDGE_DOT } from './data.js';
+import { logName } from './npc.js';
 
 export const DOT_FLOOR = 1;
 
@@ -81,7 +82,7 @@ function applyDot(owner, game, buff, label, cause) {
     // either way, and _log flattens the em-dash to a hyphen — so a fungus
     // regenerating on its own sewer fare read "[Violet Fungus - Sludge 3]", as if
     // the sludge were hurting it.
-    const who = owner === game ? 'You' : (owner.name ?? owner.type);
+    const who = owner === game ? 'You' : logName(owner);
     const change = after - before;
     game._log(dmg < 0 ? `[${who} — ${label} (+${change} HP)]` : `[${who} — ${label} ${dmg}]`, 'combat');
 

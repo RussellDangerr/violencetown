@@ -29,6 +29,11 @@ import { WEAPONS } from './weapons.js';
 import { burnGold, transferGold } from './trade.js';
 import { spreadParanoia } from './give-action.js';
 import { fighters, inFightView } from './fight-area.js';
+import { shownName } from './enemies.js';
+
+// (FX47) What a log line calls someone: a boss by its one name, anyone else as
+// before (their own name, else their type).
+export const logName = (x) => (x && x.boss ? shownName(x) : (x?.name ?? x?.type));
 
 // ── Leash tuning ─────────────────────────────────────────────────────────────
 // A chasing enemy gives up and walks home when it strays past LEASH_DISTANCE
@@ -86,7 +91,7 @@ function useKit(npc, messages) {
     if (!pick || !applyKitItem(pick.def, npc, dweller)) return false;
     npc.loadout = (npc.loadout ?? []).filter((_, i) => i !== pick.index);
     messages.push({
-        text: `[${npc.name ?? npc.type} digs out ${pick.def.name} and uses it.]`,
+        text: `[${logName(npc)} digs out ${pick.def.name} and uses it.]`,
         sourceEnemy: npc,
         category: 'combat',
         heal: npc.entity.hp - hpBeforeKit,
@@ -431,7 +436,7 @@ export function tickNpcState(game, npc, clock = game.turn, rng = game.rng) {
                         const hpBefore = npc.entity.hp;
                         npc.entity.hp = Math.min(npc.entity.maxHp, npc.entity.hp + plan.heal);
                         messages.push({
-                            text: `[${npc.name ?? npc.type} spends ${plan.spend} GP on itself. (+${plan.heal} HP)]`,
+                            text: `[${logName(npc)} spends ${plan.spend} GP on itself. (+${plan.heal} HP)]`,
                             sourceEnemy: npc,
                             category: 'combat',
                             heal: npc.entity.hp - hpBefore,
@@ -441,7 +446,7 @@ export function tickNpcState(game, npc, clock = game.turn, rng = game.rng) {
                         const hpBefore = ward.entity.hp;
                         ward.entity.hp = Math.min(ward.entity.maxHp, ward.entity.hp + plan.heal);
                         messages.push({
-                            text: `[${npc.name ?? npc.type} pays ${plan.spend} GP — ${ward.name ?? ward.type} straightens up. (+${plan.heal} HP)]`,
+                            text: `[${logName(npc)} pays ${plan.spend} GP — ${logName(ward)} straightens up. (+${plan.heal} HP)]`,
                             sourceEnemy: npc,
                             category: 'combat',
                             heal: ward.entity.hp - hpBefore,
@@ -462,7 +467,7 @@ export function tickNpcState(game, npc, clock = game.turn, rng = game.rng) {
                 const hpBefore = npc.entity.hp;
                 npc.entity.hp = Math.min(npc.entity.maxHp, npc.entity.hp + buy.heal);
                 messages.push({
-                    text: `[${npc.name ?? npc.type} buys back ${buy.heal} HP! (-${buy.spend} GP)]`,
+                    text: `[${logName(npc)} buys back ${buy.heal} HP! (-${buy.spend} GP)]`,
                     sourceEnemy: npc,
                     category: 'combat',
                     heal: npc.entity.hp - hpBefore,

@@ -2777,7 +2777,7 @@ class Game {
     // Returns true if the shove landed. Heavy characters and boxed-in ones bounce.
     _shoveNpc(enemy, dir) {
         if (!enemy || !dir) return false;
-        const who = enemy.name ?? enemy.type ?? 'them';
+        const who = ((enemy.boss && enemy.shownName) || (enemy.name ?? enemy.type)) ?? 'them';
         // (ruled 2026-09-02) The two ways a shove fails each get their own beat.
         // Caelan: "trying to push someone and not being able to, I think, is a
         // good source of physical comedy." It was a thud and a recoil with no
@@ -2806,7 +2806,7 @@ class Game {
         // stepEntity already set _lastDx/_lastDy to the victim's own displacement,
         // which is unit-length because the destination is always one tile away.
         enemy._spunTurns = 1;                   // burns on the victim's next HOSTILE turn
-        this._log(`[You shove ${enemy.name ?? enemy.type} so hard they spin around!]`, 'combat');
+        this._log(`[You shove ${((enemy.boss && enemy.shownName) || (enemy.name ?? enemy.type))} so hard they spin around!]`, 'combat');
         return true;
     }
 
@@ -4213,7 +4213,7 @@ class Game {
                     if (took) this._hot[took.id] = (this._hot[took.id] ?? 0) + 1;
                     victim._robbedSweep = true;            // arms the blind sweep + paranoia
                     reactToTransaction(victim, 'theft', { item: took, gold: gp });
-                    this._log(`[${victim.name ?? victim.type} feels the weight change.]`, 'combat');
+                    this._log(`[${((victim.boss && victim.shownName) || (victim.name ?? victim.type))} feels the weight change.]`, 'combat');
                 }
                 this._advanceWorld();
                 break;
@@ -4388,7 +4388,7 @@ class Game {
             const gone = this.enemies.filter(e => e._isSummon && e._summonTurnsLeft <= 0);
             for (const e of gone) {
                 if (this._finaleSummonLeft?.(e)) continue;   // Sun Man is bitten, not sent away
-                this._log(`[${e.type || 'The summon'} slinks back into the crowd.]`);
+                this._log(`[${((e.boss && e.shownName) || e.type) || 'The summon'} slinks back into the crowd.]`);
             }
             if (gone.length) this.enemies = this.enemies.filter(e => !(e._isSummon && e._summonTurnsLeft <= 0));
         }
@@ -5561,7 +5561,7 @@ class Game {
         if (!npc || !def) return null;
         npc._lastDx = Math.sign(this.playerX - npc.x);   // it faces what it threw at
         npc._lastDy = Math.sign(this.playerY - npc.y);
-        const who = npc.name ?? npc.type;
+        const who = ((npc.boss && npc.shownName) || (npc.name ?? npc.type));
         const what = String(def.name || def.id).replace(/[[\]]/g, '');
         if (def.fireBlood) {
             this._applyFireBlood(this, def.poition?.turns ?? 5);
@@ -5607,7 +5607,7 @@ class Game {
         if (!this._hasFireBlood(attacker) || !target) return;
         if (target !== this && !(target.entity && target.entity.isAlive())) return;
         this._ignite(target, FIRE_BLOOD_SPREAD_TURNS);
-        const name = target === this ? 'You catch' : `${target.name ?? target.type} catches`;
+        const name = target === this ? 'You catch' : `${((target.boss && target.shownName) || (target.name ?? target.type))} catches`;
         this._log(`[${name} fire.]`, 'combat');
     }
 
