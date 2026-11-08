@@ -76,6 +76,7 @@ export const MATRIX = Object.freeze(Object.fromEntries(Object.entries({
     talk:       { flammable: N,      metal: N, porous: N, wet: N, rigid: N, vermin: N, undead: N, conducts: N, sewer: N,     fire: N },
     shove:      { flammable: N,      metal: N, porous: N, wet: N, rigid: N, vermin: N, undead: N, conducts: N, sewer: N,     fire: N },
     take:       { flammable: N,      metal: N, porous: N, wet: N, rigid: N, vermin: N, undead: N, conducts: N, sewer: N,     fire: N },
+    rest:       { flammable: N,      metal: N, porous: N, wet: N, rigid: N, vermin: N, undead: N, conducts: N, sewer: N,     fire: N },
     open:       { flammable: N,      metal: N, porous: N, wet: N, rigid: N, vermin: N, undead: N, conducts: N, sewer: N,     fire: N },
 }).map(([verb, row]) => [verb, Object.freeze(row)])));
 
@@ -86,7 +87,7 @@ export const EMPTY = Object.freeze({
         'hit', 'cleave', 'spin', 'coneofcold', 'boo', 'defend',
         'coin', 'kit', 'gear', 'rayblast', 'hirelion', 'ratform',
         'run', 'wait', 'eat', 'cleanse',
-        'examine', 'talk', 'shove', 'take', 'open',
+        'examine', 'talk', 'shove', 'take', 'open', 'rest',
     ]),
     tags: Object.freeze(['metal', 'porous', 'wet', 'rigid', 'vermin', 'undead', 'conducts', 'fire']),
 });

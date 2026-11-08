@@ -1750,6 +1750,29 @@ export class Renderer {
         } finally {
             this._koShown = null;
         }
+        this._drawRestLabel(game, vp);
+    }
+
+    // (HP1) The faced bench names its verb over itself, like a faced character does.
+    _drawRestLabel(game, vp) {
+        if (!this.font || game._animating || !game._targetAt) return;
+        const FACE = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+        const [fx, fy] = FACE[game.facing] || FACE.down;
+        const tgt = game._targetAt(game.playerX + fx, game.playerY + fy);
+        if (!tgt || !tgt.rest) return;
+        const verb = defaultVerb(tgt, game);
+        if (!verb) return;
+        const { ctx } = this;
+        const px = vp.origin.x + fx * TILE_PX - this._scrollX;
+        const py = vp.origin.y + fy * TILE_PX - this._scrollY;
+        const text = verb.label.toUpperCase();
+        const tw = this.font.measure ? this.font.measure(text, 1) : text.length * 6;
+        const box = intentLabelRect(px, py, tw, false);
+        ctx.fillStyle = '#000000cc';
+        ctx.fillRect(box.x, box.y, box.w, box.h);
+        ctx.fillStyle = verb.color || UI.text;
+        ctx.fillRect(box.x, box.y, box.w, 1);
+        this.font.drawText(ctx, text, box.tx, box.ty, { color: verb.color || UI.text, scale: 1 });
     }
 
     // Soft elliptical drop-shadow on the ground beneath a character — a radial

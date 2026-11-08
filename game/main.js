@@ -3469,9 +3469,24 @@ class Game {
         if (!npc && !item && !examinable && this.map.getTile(x, y) === 19) {
             examinable = (this.examinables || []).find(e => e.id === 'car') || null;
         }
-        if (!npc && !item && !examinable && !container) return null;
+        // (HP1) A bench (tile 20, like the car's 19) is a rest spot.
+        const rest = this.map.getTile(x, y) === 20;
+        if (!npc && !item && !examinable && !container && !rest) return null;
         return { x, y, npc: npc || null, item: item || null, examinable: examinable || null,
-                 container: container || null };
+                 container: container || null, rest };
+    }
+
+    // (HP1) Rest on the faced bench: out of a fight, HP and MP to full and a few hours pass
+    // (the defeat path's time skip); in a fight, refused. Texts are placeholders.
+    _restHere() {
+        if (this._inCombat()) { this._log('[TEXT: you cannot rest in a fight.]'); this._render(); return false; }
+        this.playerHp = this.playerMaxHp;
+        this.playerMp = this.playerMaxMp;
+        this._skipTime('hours');
+        this._log('[TEXT: you rest.]', 'transition');
+        this._render();
+        this.autosave({ force: true });
+        return true;
     }
 
     // (Target List) Open the RuneScape-style verb list on a target — same target
@@ -3665,6 +3680,7 @@ class Game {
             case 'throw': { const th = this._resolveThrowable(); if (th) { const msg = resolveThrow(this, th.itemDef, null, th.count, { x: t.x, y: t.y }); if (msg) this._log(msg, 'combat'); this._rockClatter(th.itemDef, t.x, t.y); th.consume(); this._advanceWorld(); } else this._log('[Nothing to throw.]'); this._render(); break; }
             case 'take':  this._takeItemAt(t.x, t.y); this._render(); break;
             case 'open':  if (t.container) this._openContainer(t.container); break;
+            case 'rest':  this._restHere(); break;
             default: this._render();
         }
     }
