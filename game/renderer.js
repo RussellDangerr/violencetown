@@ -23,7 +23,7 @@ import {
     WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
     EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, EQUIP_LEFT_HAND_RECT, closeButtonRect,
     DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceBagPagerRects, deviceEquipLayout, gearArmourRect, deviceRingsLayout,
-    deviceSkillsLayout,                                                      // (US2) the skills readout in the RINGS tab
+    deviceSkillsLayout, ringPassiveRows,                                     // (US2) the skills readout in the RINGS tab; (RR1) a ring's passive rows
     inspectorPanelRect, inspectorActionRects,                               // (C1) tap-to-inspect panel + action-row geometry
     gearOptionRects, gearChooserRect,                                       // (C2) GEAR chooser option-row + panel geometry
     xmbBarLayout, hudLayout, throwRects, wheelTopMarks, fightPanelRects, XMB_CELL,                      // (XMB) usable-bar geometry; (screen-fill) the HUD, throw targets, the marks above the wheel
@@ -1750,6 +1750,29 @@ export class Renderer {
         } finally {
             this._koShown = null;
         }
+        this._drawRestLabel(game, vp);
+    }
+
+    // (HP1) The faced bench names its verb over itself, like a faced character does.
+    _drawRestLabel(game, vp) {
+        if (!this.font || game._animating || !game._targetAt) return;
+        const FACE = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+        const [fx, fy] = FACE[game.facing] || FACE.down;
+        const tgt = game._targetAt(game.playerX + fx, game.playerY + fy);
+        if (!tgt || !tgt.rest) return;
+        const verb = defaultVerb(tgt, game);
+        if (!verb) return;
+        const { ctx } = this;
+        const px = vp.origin.x + fx * TILE_PX - this._scrollX;
+        const py = vp.origin.y + fy * TILE_PX - this._scrollY;
+        const text = verb.label.toUpperCase();
+        const tw = this.font.measure ? this.font.measure(text, 1) : text.length * 6;
+        const box = intentLabelRect(px, py + 20, tw, false);
+        ctx.fillStyle = '#000000cc';
+        ctx.fillRect(box.x, box.y, box.w, box.h);
+        ctx.fillStyle = verb.color || UI.text;
+        ctx.fillRect(box.x, box.y, box.w, 1);
+        this.font.drawText(ctx, text, box.tx, box.ty, { color: verb.color || UI.text, scale: 1 });
     }
 
     // Soft elliptical drop-shadow on the ground beneath a character — a radial
@@ -2859,6 +2882,10 @@ export class Renderer {
                     ctx.strokeRect(s.x + 1, s.y + 1, s.w - 2, s.h - 2);
                     const name = this._fitText(strip((RINGS[f.ringId] && RINGS[f.ringId].name) || f.ringId), s.w - 6);
                     this.font.drawText(ctx, name.text, s.x + s.w / 2, s.y + s.h / 2 - 4, { color: UI.gold, scale: name.scale, align: 'center' });
+                    // (RR1) The worn ring's passives, a label and its number, under the socket.
+                    ringPassiveRows(RINGS[f.ringId]).forEach((row, i) => {
+                        this.font.drawText(ctx, `${row.label} ${row.value}`, s.x + s.w / 2, s.y + s.h + 2 + i * 10, { color: UI.gold, scale: 1, align: 'center' });
+                    });
                 }
                 const cur = game._deviceSel;
                 if (cur && cur.tab === 'rings' && cur.key === s.key) this._drawCursorHalo(ctx, s);   // (C3) keyboard cursor
@@ -3685,7 +3712,8 @@ export class Renderer {
         // one; both are drawn here, before the dial, so neither band can paint
         // over it.
         if (this.font) {
-            const msg = 'WHEEL OPEN  ·  MOVE KEYS STEER IT  ·  ESC TO CLOSE';
+            // (FX50) In a sub-ring Esc steps back one ring; only the first ring's Esc closes.
+            const msg = depth > 1 ? 'WHEEL OPEN  ·  MOVE KEYS STEER IT  ·  ESC [TEXT]' : 'WHEEL OPEN  ·  MOVE KEYS STEER IT  ·  ESC TO CLOSE';
             const dialLeft = cx - this._hud().dialRadius(depth, kids.length > 0) - 8;
             let countMsg = null;
             if (combat) {

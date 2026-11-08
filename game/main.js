@@ -8,7 +8,7 @@ import { computeViewport, screenToTile, clientToScreen, toMenu, stepZoom, zoomTo
 import { loadMap, carriesAll } from './map.js';
 import { loadAllSprites } from './sprites.js';
 import { BitmapFont } from './bitmap-font.js';
-import { pickHitMark, HEAVY_HIT_DAMAGE } from './hit-splat.js';   // (manga-impact-marks) the mark rule + the heavy threshold
+import { pickHitMark, HEAVY_HIT_DAMAGE, dodgeChance, DODGE_WORD } from './hit-splat.js';   // (manga-impact-marks) the mark rule + the heavy threshold
 import { makeEffectLoop } from './effect-loop.js';                 // one tick of the transient-effects loop, and its refusal to die on a bad frame
 import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK, SLUDGE_DOT } from './data.js';
 import { puddleTiles, layPuddle, puddleAt, dryPuddles } from './puddles.js';   // (poisons) Sludge Brain's puddles
@@ -27,7 +27,7 @@ import { addToInventory as addToInv, moveToZone, zoneOf, pageCount, slotOnPage, 
 import { itemActions, equipOptions, inspectorUsesRect } from './inspector.js';   // (C1) tap-to-inspect: context actions; (C2) GEAR chooser options
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
-import { attack, formatDamageNumber, computeHit, elementalMult, weaponHitKind, isBackstab } from './combat.js';
+import { attack, formatDamageNumber, computeHit, elementalMult, weaponHitKind, isBackstab, shieldArmor, raiseShield } from './combat.js';
 import { Enemy, spawnEnemy, muggerRecords, resolveEnemyTurns, resolveAmbientTurns, unnestBrackets } from './enemies.js';
 import { canBeRival, itemIdsOf, recordDefeat, kitFor, markCarrying, settleItems, clearRival } from './rivals.js'; // the enemy that beat you is remembered (pure, node-tested)
 import { isHostile, isHunting, isSewerDweller, allyAids } from './ai.js';
@@ -774,6 +774,7 @@ class Game {
         // If the car's already fixed, re-open the North bridge — derives
         // from the persistent flag so it's open again on every town re-entry.
         this._openBridgeIfCarFixed();
+        this._openCarrionRoadIfRuled?.();   // `?.`: stand-in games in tests don't carry it
         // (fight-fog) Whatever fog was up belongs to the map you left.
         this.renderer.dropFightFog();
         this._render();
@@ -1075,6 +1076,18 @@ class Game {
         for (let x = 14; x <= 19; x++) { this.setTile(x, 0, 12); this.setTile(x, 1, 12); }
         const br = (this.examinables || []).find(e => e.id === 'bridge');
         if (br) br.text = '[TEXT]';
+    }
+
+    // (CS2) Once the Crat's dispute is ruled (saved flag `carrionRoadOpen`), the
+    // wall south of Carrion's corridor opens onto her side room. Read from the
+    // saved flag on every Sewer load, like the bridge, so CONTINUE keeps it open.
+    _openCarrionRoadIfRuled() {
+        if (!this.questEngine || !this.map || this.map.zoneName !== 'SEWER') return;
+        if (!this.map.transitions.some(t => t.toMap === 'sewer-north-map.json')) return;   // the Sewer proper
+        if (!this.questEngine.getFlag('carrionRoadOpen')) return;
+        this.setTile(9, 19, 5);
+        this.map.transitions.push({ x: 9, y: 19, toMap: 'carrion-room-map.json', toX: 5, toY: 6,
+            label: "[South — TEXT: down Carrion's road]" });
     }
 
     // Persist the game. Debounced to every few turns unless forced (forced on
@@ -3473,9 +3486,24 @@ class Game {
         if (!npc && !item && !examinable && this.map.getTile(x, y) === 19) {
             examinable = (this.examinables || []).find(e => e.id === 'car') || null;
         }
-        if (!npc && !item && !examinable && !container) return null;
+        // (HP1) A bench (tile 20, like the car's 19) is a rest spot.
+        const rest = this.map.getTile(x, y) === 20;
+        if (!npc && !item && !examinable && !container && !rest) return null;
         return { x, y, npc: npc || null, item: item || null, examinable: examinable || null,
-                 container: container || null };
+                 container: container || null, rest };
+    }
+
+    // (HP1) Rest on the faced bench: out of a fight, HP and MP to full and a few hours pass
+    // (the defeat path's time skip); in a fight, refused. Texts are placeholders.
+    _restHere() {
+        if (this._inCombat()) { this._log('[TEXT: you cannot rest in a fight.]'); this._render(); return false; }
+        this.playerHp = this.playerMaxHp;
+        this.playerMp = this.playerMaxMp;
+        this._skipTime('hours');
+        this._log('[TEXT: you rest.]', 'transition');
+        this._render();
+        this.autosave({ force: true });
+        return true;
     }
 
     // (Target List) Open the RuneScape-style verb list on a target — same target
@@ -3669,6 +3697,7 @@ class Game {
             case 'throw': { const th = this._resolveThrowable(); if (th) { const msg = resolveThrow(this, th.itemDef, null, th.count, { x: t.x, y: t.y }); if (msg) this._log(msg, 'combat'); this._rockClatter(th.itemDef, t.x, t.y); th.consume(); this._advanceWorld(); } else this._log('[Nothing to throw.]'); this._render(); break; }
             case 'take':  this._takeItemAt(t.x, t.y); this._render(); break;
             case 'open':  if (t.container) this._openContainer(t.container); break;
+            case 'rest':  this._restHere(); break;
             default: this._render();
         }
     }
@@ -5385,6 +5414,11 @@ class Game {
         this._log(`[${target.shownThe || `The ${target.shownName || target.type || target.entity.name}`} turns on you!]`, 'combat');
     }
 
+    // (ws6) Held shields: the armour they add, and the cut the first ready one
+    // makes to the hit now landing (it then waits out its cooldown, per hand).
+    _shieldArmor() { return shieldArmor(this.equipment || {}); }
+    _shieldCut() { return raiseShield(this.equipment || {}, this._shieldBlocks ??= {}, this.turn ?? 0).mult; }
+
     // Total damage-reduction from worn armor: every equipped body-zone piece's
     // `armor` sums into one number. It stays one flat total (ruled 2026-10-23):
     // there is no per-zone hit location, only Law 2's back tile.
@@ -5401,6 +5435,7 @@ class Game {
         // (Poition) An active Defence Poition rides alongside worn armor +
         // rings the same way — a rider read, not a tick (see _poitionMod).
         total += this._poitionMod('defence');
+        total += this._shieldArmor?.() ?? 0;   // a shield held in a hand adds its armour
         return total;
     }
 
@@ -5785,15 +5820,31 @@ class Game {
         this._cascade.mark(actor);
     }
 
+    // (RR1) Does this blow miss you? Draws the seeded RNG only with evasion.
+    _rollDodge() {
+        const chance = dodgeChance(this.ringMods && this.ringMods.evasion);
+        return chance > 0 && this.rng.float() < chance;
+    }
+
     applyDamageToPlayer(rawDamage, attacker = null) {
         if (attacker) this._lastDefeatedBy = attacker;
         // Guard (incoming, defender) folds into one computeHit call — round once,
         // no double-rounding.
-        let dmg = computeHit({
-            base: rawDamage,
-            incomingMult: this.hasBuff('guard') ? 0.5 : 1,
-        });
+        // A held shield cuts the first hit it meets each turn (ws6): its cut folds in here.
+        // A hit that deals nothing leaves the block unspent.
+        const guardMult = this.hasBuff('guard') ? 0.5 : 1;
+        if (computeHit({ base: rawDamage, incomingMult: guardMult }) === 0) return 0;
+        const shieldCut = this._shieldCut?.() ?? 1;
+        let dmg = computeHit({ base: rawDamage, incomingMult: guardMult * shieldCut });
         if (dmg === 0) return 0;   // 0-contract: hit doesn't happen, never floor back via armor
+        // (RR1) Evasion is rolled before armour; a dodged blow deals nothing. The
+        // RNG is drawn only when you have evasion, so a run without it replays as before.
+        if (this._rollDodge?.()) {
+            const dx = this.playerX, dy = this.playerY;
+            const dodgeFx = () => { this._spawnHitSplat(dx, dy, DODGE_WORD, 'dodge', { omni: true }); this._ensureParticleLoop(); };
+            if (!this._cascade?.defer(attacker ?? this._cascadeActor, dodgeFx, { hp: 0 })) dodgeFx();
+            return 0;
+        }
         if (attacker) this._spreadFireBlood(attacker, this);   // (poisons) a fire-blooded foe sets you burning
         dmg = Math.max(1, dmg - this._playerArmor());   // worn armor soaks the hit (min 1 always lands)
         this.playerHp = Math.max(0, this.playerHp - dmg);
@@ -6124,6 +6175,7 @@ class Game {
         this.questEngine = new QuestEngine(this);
         this._lastAutosaveTurn = -999;
         this.turn = 0;
+        this._shieldBlocks = {};   // a new game starts with every shield block ready
         this._dayClock = 0;
         this._nightLevel = 0;
         this._dispositionDecayTurns = 0;
