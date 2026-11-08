@@ -60,9 +60,9 @@ describe('the Carnival rats are registry entries with canyon-rat stats', () => {
         });
     }
 
-    test('no slot pools them: they are placed by hand', () => {
-        const pooled = Object.values(SLOTS).flatMap(s => s.pool.map(p => p.entry));
-        for (const { entry } of RATS) assert.ok(!pooled.includes(entry), `${entry} is in a slot pool`);
+    test('only the Carnival spawn table pools them (RV2)', () => {
+        const pooledIn = (entry) => Object.entries(SLOTS).filter(([, s]) => s.pool.some(p => p.entry === entry)).map(([id]) => id);
+        for (const { entry } of RATS) assert.deepEqual(pooledIn(entry), ['carnival.mob'], `${entry} pooled in ${pooledIn(entry)}`);
     });
 });
 
@@ -95,9 +95,11 @@ describe('each rat wears its own recolor cell', () => {
 describe('placed by hand on the Carnival', () => {
     const map = new GameMap(carnival);
 
-    for (const { entry, type } of RATS) {
+    // RV2: each spot is a seat in the spawn table; with no roll saved (the pool's order)
+    // seat i holds RATS[i], which is where RV1 placed it.
+    for (const [seat, { entry, type }] of RATS.entries()) {
         test(`${entry} stands once, on a walkable tile of its own`, () => {
-            const spawns = carnival.enemies.filter(s => s.entry === entry);
+            const spawns = carnival.enemies.filter(s => s.slot === 'carnival.mob' && s.seat === seat);
             assert.equal(spawns.length, 1, `${entry} placed ${spawns.length} times`);
             const s = spawns[0];
             assert.equal(s.type, undefined, 'the entry owns the type');
@@ -117,7 +119,7 @@ describe('placed by hand on the Carnival', () => {
 
     test('no other map places them', () => {
         for (const file of ['canyon-map.json', 'sewer-map.json', 'wilderness-map.json', 'town-map.json']) {
-            const placed = (mapData(file).enemies || []).filter(s => RATS.some(r => r.entry === s.entry));
+            const placed = (mapData(file).enemies || []).filter(s => RATS.some(r => r.entry === s.entry) || s.slot === 'carnival.mob');
             assert.deepEqual(placed, [], `${file} places a Carnival rat`);
         }
     });
@@ -168,8 +170,8 @@ describe('the content check learns the entry form', () => {
 describe('the balance harness lints every rat', () => {
     test('each rat has a Carnival roster row with its stats', () => {
         const roster = loadMapRoster();
-        for (const { entry, type } of RATS) {
-            const id = carnival.enemies.find(s => s.entry === entry).id;
+        for (const [seat, { entry, type }] of RATS.entries()) {
+            const id = carnival.enemies.find(s => s.slot === 'carnival.mob' && s.seat === seat).id;
             const row = roster.find(r => r.zone === 'carnival' && r.id === id);
             assert.ok(row, `no roster row for ${id}`);
             assert.equal(row.type, type);

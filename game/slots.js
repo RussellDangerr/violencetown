@@ -396,6 +396,19 @@ export const SLOTS = {
         requiredDrop: 'tigers_blood_ice_cone',
         pool: [{ entry: 'siberia', weight: 1 }],
     },
+    // The Carnival's spawn table (plans/rv2-rats-roll-spawn-table.md): the three rats RV1
+    // placed, equal weights (a stand-in until tuned). Each rat spawn on the map names a
+    // seat and rolls one from here per new game; `seats` is how many spawns there are.
+    'carnival.mob': {
+        kind: 'mob',
+        map: 'carnival-map.json',
+        seats: 3,
+        pool: [
+            { entry: 'birthday_rat', weight: 1 },
+            { entry: 'sludge_rat', weight: 1 },
+            { entry: 'robot_rat', weight: 1 },
+        ],
+    },
     // A mob slot (spine SL-6) holds mooks, not an anchor: see dealDeck below.
     'frozen.mob': {
         kind: 'mob',
@@ -446,7 +459,10 @@ export function pickSlots(seed, slots = SLOTS) {
         if (!isMob(slots[id])) picks[id] = pickFrom(slots[id].pool, rng);
     }
     for (const id of Object.keys(slots).sort()) {
-        if (isMob(slots[id])) picks[id] = dealDeck(slots[id].pool, new RNG((seed ^ SLOT_SALT ^ hashId(id)) >>> 0));
+        if (isMob(slots[id])) {
+            const rng = new RNG((seed ^ SLOT_SALT ^ hashId(id)) >>> 0);
+            picks[id] = slots[id].seats ? rollSeats(slots[id].pool, slots[id].seats, rng) : dealDeck(slots[id].pool, rng);
+        }
     }
     return picks;
 }
@@ -477,10 +493,24 @@ function dealDeck(pool, rng) {
     return deck;
 }
 
+// A mob slot with `seats` rolls one entry per seat, independently (repeats allowed):
+// the zone's spawn table, one roll per mook spawn (plans/rv2-rats-roll-spawn-table.md).
+function rollSeats(pool, seats, rng) {
+    const rolls = [];
+    for (let i = 0; i < seats; i++) rolls.push(pickFrom(pool, rng));
+    return rolls;
+}
+
 // The deck a mob slot deals from: this game's, when it is a true shuffle of the
-// pool, else the pool's own order (a save from before the slot, or the bench).
+// pool (a rolled slot: `seats` entries from it), else the pool's own order (a
+// save from before the slot, or the bench).
 function deckFor(slot, saved) {
     const order = slot.pool.map(p => p.entry);
+    if (slot.seats) {
+        const ids = new Set(order);
+        const ok = Array.isArray(saved) && saved.length === slot.seats && saved.every(e => ids.has(e));
+        return ok ? saved : Array.from({ length: slot.seats }, (_, i) => order[i % order.length]);
+    }
     const ok = Array.isArray(saved) && saved.length === order.length
         && order.every(e => saved.includes(e));
     return ok ? saved : order;
