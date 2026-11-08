@@ -29,8 +29,8 @@ a piece you lack. (A Map mark and a shopkeeper bark were not picked.)
 
 ## How it is built
 
-The zone-change block in `_advanceWorldOnce` moves unchanged into `_runPendingTransition()` so a
-test can drive the real path. After `[Entered <zone>]`, `_armourShopNotice()` looks at the vendors
+The zone-change block in `_advanceWorldOnce` stays where it is; one optional call is added to it.
+After `[Entered <zone>]`, `_armourShopNotice()` looks at the vendors
 now in the zone and their `stock` (data, not a hard-coded zone list). Tests are
 `tests/armour-shop-notice.test.js`.
 
