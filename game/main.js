@@ -3581,26 +3581,10 @@ class Game {
         if (verb.resolver === 'cancel') { this._closeTargetList(); return; }
         const t = this.targetList.target;
 
-        // (ruled 2026-09-02) You may swing at anyone in this town — but swinging
-        // at someone who is not fighting you asks first. Between this and the
-        // bottom-of-the-list rank, an unprovoked attack takes opening the full
-        // list, scrolling past everything, and then saying yes a second time. It
-        // is allowed and it is deliberate, which is the whole ask.
-        //
-        // The confirmation is the LIST ITSELF re-dressed rather than a new modal:
-        // same widget, same keys, and Cancel starts selected so a held Enter
-        // cannot carry through into a punch.
-        if (verb.key === 'hit' && !verb.confirmed && t && t.npc && !isHostile(t.npc)) {
-            const who = String((t.npc.boss && t.npc.shownName) || t.npc.name || t.npc.type || 'them').replace(/[[\]]/g, '');
-            this.targetList.verbs = [
-                { ...verb, label: `Really hit ${who}?`, confirmed: true },
-                { key: 'cancel', label: 'Cancel', resolver: 'cancel', color: '#4a3c2a', text: '#b0a184' },
-            ];
-            this.targetList.sel = 1;                      // Cancel, not the punch
-            audio.playSfx('menu-open');
-            this._render();
-            return;
-        }
+        // (ruled RHR1) You may swing at anyone, and Hit asks nothing: choosing it swings
+        // at once. What the victim does back is the cost. A held Enter or Space that
+        // opened the list is an OS key-repeat, which the key handler drops, so it
+        // cannot carry through into the swing.
 
         this.state = STATE.IDLE;   // the resolvers + click-walk assume IDLE
         this._actOnTarget(verb, t);
