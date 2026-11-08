@@ -1880,8 +1880,9 @@ export class Renderer {
         withWalk(ctx, ecx, ecy, { bob: ea.bob, rot: ea.rot, flipX: eFlip }, () => {
             if (rider) this._drawUnicycle(ctx, px, py, wheelR, (e._stepIndex || 0) + slideProgress);
             // (plans/ak1-ankou-graveyard.md) A living creature whose sprite has a `ghost` has it drawn
-            // first, behind the body: see-through, a little larger, centred on the tile.
-            if (isAlive && info?.ghost) this._drawGhost(ctx, sprites, info.ghost, px, py);
+            // first, behind the body: see-through, a little larger, centred on the tile. Not in the
+            // fight entrance's silhouettes (bodyOnly), which are the body alone.
+            if (isAlive && info?.ghost && !bodyOnly) this._drawGhost(ctx, sprites, info.ghost, px, py);
             if (frame && sprites?.[frame.sheet]?.loaded) {
                 ok = dscale < 1
                     ? this._inkFrame(sprites[frame.sheet], ctx, frame.col, frame.row, bx0, by0, bw0, bw0)
