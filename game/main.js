@@ -3563,7 +3563,7 @@ class Game {
         // same widget, same keys, and Cancel starts selected so a held Enter
         // cannot carry through into a punch.
         if (verb.key === 'hit' && !verb.confirmed && t && t.npc && !isHostile(t.npc)) {
-            const who = String(t.npc.name || t.npc.type || 'them').replace(/[[\]]/g, '');
+            const who = String((t.npc.boss && t.npc.shownName) || t.npc.name || t.npc.type || 'them').replace(/[[\]]/g, '');
             this.targetList.verbs = [
                 { ...verb, label: `Really hit ${who}?`, confirmed: true },
                 { key: 'cancel', label: 'Cancel', resolver: 'cancel', color: '#4a3c2a', text: '#b0a184' },
@@ -7625,7 +7625,7 @@ class Game {
         // A chest is not handed anything -- "You hand crate nothing for 2 items"
         // is grammatical and still wrong. You take FROM a container.
         const deal = npc._container
-            ? `[You take ${back.join(' and ') || 'nothing'} from the ${npc.type}.`
+            ? `[You take ${back.join(' and ') || 'nothing'} from the ${(npc.boss && npc.shownName) || npc.type}.`
             : back.length
                 ? `[You hand ${npc.shownName || npc.type} ${out.join(' and ') || 'nothing'} for ${back.join(' and ')}.`
                 : `[You hand ${npc.shownName || npc.type} ${out.join(' and ')}.`;
@@ -7766,7 +7766,7 @@ class Game {
         this._dialogueReply = choice.reply || '"..."';
         audio.playSfx((choice.delta ?? 0) < 0 ? 'bump-wall' : 'menu-confirm');
         if ((npc.disposition ?? 0) <= DIALOGUE_HOSTILE_AT) {
-            this._log(`[${npc.name || npc.type} has heard enough.]`, 'combat');
+            this._log(`[${(npc.boss && npc.shownName) || npc.name || npc.type} has heard enough.]`, 'combat');
             this._closeDialogue();
             this._onEntityHarmed(npc, { kind: 'insult' });
             return;

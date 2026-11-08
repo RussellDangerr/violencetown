@@ -33,7 +33,7 @@ export const ITEM_USES = [
         // Deliberately NOT restricted to puzzleWall: if a future sludge creature
         // shows up, soap should work on it too without a code change here.
         match: (t) => isSludge(t.npc),
-        label: (t) => `Scrub ${t.npc.name || t.npc.type}`,
+        label: (t) => `Scrub ${(t.npc.boss && t.npc.shownName) || t.npc.name || t.npc.type}`,
         apply: (game, t, ctx) => {
             const e = t.npc.entity;
             // However much sludge there is. Written against the target's own
