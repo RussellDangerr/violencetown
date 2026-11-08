@@ -84,6 +84,7 @@ function writeSeenHints(set) {
 import { emitNoise, NOISE, perceives, spotters, struck, VERDICT } from './perception.js'; // sound + sight
 import { coinTake, kitTake, gearTake, coinWeight, itemWeight, gearWeight,
          noticeBuffer, isClean, stealLimit } from './theft.js';
+import { overworldZone } from './world-map.js'; // (mp2) which overworld zone a map belongs to
 import { recordUse, skillPerks, mergePassives } from './skills.js'; // (skills) use-ranks: clean lifts rank up light fingers
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
 import {
@@ -502,6 +503,7 @@ class Game {
         // _loadMap lets these win over the map's own contents. Persisted (left out
         // while empty).
         this._chestRecords = {};
+        this._visitedZones = new Set();     // (mp2) overworld zones entered; null = an old save, every zone counts
         this._mapUrl = null;                // url of the currently-loaded map
         this._cameFrom = null;               // url of the zone you ENTERED this one from (for the pipe-jam)
         this._jammedDoor = null;             // {x,y,toMap,integrity,max,intruders[]} while a door is wedged shut
@@ -678,9 +680,17 @@ class Game {
 
     // ── Map Loading ──────────────────────────────────────────────────────────
 
+    // (mp2) The Map remembers which overworld zones you have stood in. An interior counts
+    // for its parent zone. A null record (an old save) is left alone: every zone counts.
+    _noteZoneVisited() {
+        const z = overworldZone(this.map && this.map.zoneName);
+        if (z && this._visitedZones) this._visitedZones.add(z);
+    }
+
     async _loadMap(url, spawnX, spawnY) {
         this.map = await loadMap(url);
         this._mapUrl = url;
+        this._noteZoneVisited?.();
         this._jammedDoor = null;   // per-zone: any wedged door is left behind when you leave
         // Splats, words and barks belong to the map they were spawned on: a new
         // zone starts clear, with anything a (C1) cascade still held played first
@@ -6183,6 +6193,7 @@ class Game {
         this._rivals = {};
         this._bossDropsGiven = new Set();
         this._chestRecords = {};
+        this._visitedZones = new Set();   // (mp2) a new run has been nowhere yet
         this._muggedIds = new Set();
         this._robbed = {};
         this._hot = {};

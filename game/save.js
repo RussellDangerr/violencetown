@@ -121,6 +121,9 @@ export function serialize(game) {
             // (plans/ch1-chests-stay-empty.md) Containers changed since the map made
             // them, per zone. Left out while empty, like the lists above.
             ...chestEntry(game),
+            // (plans/mp2-map-dims-unvisited.md) Overworld zones entered. Left out for an old
+            // save (null), where every zone counts as visited.
+            ...visitedEntry(game),
             // Law 6: enemies already looted on death, so respawns stay broke
             // across a reload too (twin of collectedItems — a Set of ids).
             muggedIds: game._muggedIds ? [...game._muggedIds] : [],
@@ -146,6 +149,21 @@ export function serialize(game) {
 function skillsEntry(game) {
     const skills = sanitizeSkills(game.skills);
     return Object.keys(skills).length ? { skills } : {};
+}
+
+// (plans/mp2-map-dims-unvisited.md) The visited-zone record as a save field, or nothing while
+// there is none (an old save, or a game that has not loaded a map yet).
+function visitedEntry(game) {
+    const visitedZones = sanitizeVisited(game._visitedZones);
+    return visitedZones && visitedZones.length ? { visitedZones } : {};
+}
+
+// Names only, sorted so a save reads the same however you wandered. Anything that is not a
+// list of names means "no record" (null): every zone counts as visited.
+function sanitizeVisited(raw) {
+    const list = raw instanceof Set ? [...raw] : raw;
+    if (!Array.isArray(list)) return null;
+    return [...new Set(list.filter(n => typeof n === 'string'))].sort();
 }
 
 // (plans/ch1-chests-stay-empty.md) The chest record as a save field, or nothing while it is empty.
@@ -287,6 +305,8 @@ export function migrate(raw) {
     r.world.containers = objects(r.world.containers);
     // An older save has no chest record: every container is as the map made it.
     r.world.chestRecords = sanitizeChestRecords(r.world.chestRecords);
+    // An older save has no visited record: every zone counts as visited.
+    if (sanitizeVisited(r.world.visitedZones) === null) delete r.world.visitedZones;
     if (r.quest === undefined) r.quest = null;
     if (r.sewerEscape === undefined) r.sewerEscape = null;
     return r;
@@ -377,6 +397,8 @@ export async function loadInto(game, raw) {
     game._rivals = {};
     game._bossDropsGiven = new Set(raw.world.bossDropsGiven ?? []);
     game._chestRecords = sanitizeChestRecords(raw.world.chestRecords);
+    // null (no record) is kept: the Map shows every zone as visited.
+    { const v = sanitizeVisited(raw.world.visitedZones); game._visitedZones = v ? new Set(v) : null; }
 
     // 1. baseline map (spawns JSON enemies/items/containers; sets renderer
     //    zone). Missing coords fall back to the map spawn; clamp to bounds so
