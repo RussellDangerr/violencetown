@@ -5193,7 +5193,9 @@ class Game {
         // off the list, beating it again gives nothing new.
         const required = requiredDropFor(enemyObj, this.map?.enemySpawns);
         const firstFall = this._bossFirstFall?.(enemyObj, required) ?? true;
-        if (firstFall && required && ITEMS[required]) {
+        // (AB3) An Act 2 boss's item is its zone's quest to give: the fall moves the quest on.
+        const viaQuest = !!required && !!this.questEngine?.act2BossDown?.(enemyObj, this.map?.enemySpawns);
+        if (firstFall && required && !viaQuest && ITEMS[required]) {
             drops.push({ type: required, x: enemyObj.x, y: enemyObj.y, def: ITEMS[required] });
             this._log(dropLineFor(enemyObj, this.map?.enemySpawns) || `[${ITEMS[required].name} dropped.]`, 'pickup');
         }
