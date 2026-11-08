@@ -11,7 +11,7 @@
 // reconstruction blob so dynamically-spawned entities (not in the map JSON)
 // survive a round-trip too.
 
-import { Enemy } from './enemies.js';
+import { Enemy, muggerRecords } from './enemies.js';
 import { defaultPicks } from './slots.js';
 import { clamp } from './utils.js';
 import { INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE } from './data.js';
@@ -128,6 +128,8 @@ export function serialize(game) {
             // this a robbery undoes itself on zone re-entry, because enemies
             // re-hydrate from map JSON every _loadMap.
             robbed: game._robbed ?? {},
+            // (BS2) enemyId -> gold a mugger took off you and still carries.
+            tookGold: muggerRecords(game.enemies, game._tookGold),
             // (fence) itemId -> count the street has heard about.
             hot: game._hot ?? {},
             containers: (game.containers || []).map(c => ({
@@ -283,6 +285,11 @@ export function migrate(raw) {
         const v = r.world.robbed[k];
         if (!v || typeof v !== 'object' || Array.isArray(v)) delete r.world.robbed[k];
     }
+    if (!r.world.tookGold || typeof r.world.tookGold !== 'object' || Array.isArray(r.world.tookGold)) r.world.tookGold = {};
+    for (const k of Object.keys(r.world.tookGold)) {
+        const v = r.world.tookGold[k];
+        if (typeof v !== 'number' || !(v > 0) || !isFinite(v)) delete r.world.tookGold[k];
+    }
     if (!r.world.hot || typeof r.world.hot !== 'object' || Array.isArray(r.world.hot)) r.world.hot = {};
     r.world.containers = objects(r.world.containers);
     // An older save has no chest record: every container is as the map made it.
@@ -368,6 +375,7 @@ export async function loadInto(game, raw) {
     // JSON below, or a previously-looted enemy would respawn funded.
     game._muggedIds = new Set(raw.world.muggedIds ?? []);
     game._robbed = raw.world.robbed ?? {};
+    game._tookGold = raw.world.tookGold ?? {};
     game._hot = raw.world.hot ?? {};
     // ...and the respawn lists, or a kill still waiting would spawn back alive.
     game._respawnLists = sanitizeRespawnLists(raw.world.respawnLists);
