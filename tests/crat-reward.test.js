@@ -14,6 +14,7 @@ import { applyDispositionDelta } from '../game/give-action.js';
 import { QuestEngine } from '../game/quests.js';
 import { resolveSpawn, defaultPicks } from '../game/slots.js';
 import { spawnEnemy } from '../game/enemies.js';
+import { GameMap } from '../game/map.js';
 
 const room = JSON.parse(readFileSync(new URL('../game/sewer-north-map.json', import.meta.url), 'utf8'));
 
@@ -129,5 +130,63 @@ describe('settling the dispute opens Carrion\'s road, once', () => {
         back.questEngine.restore(blob);
         assert.equal(carrionRoadOpen(back), true);
         assert.equal(blob.flags[CRAT_REWARD_FLAG], true);
+    });
+});
+
+// ── the road: a wall opens in the Sewer, on every load, from the saved flag ──
+const mapData = (f) => JSON.parse(readFileSync(new URL(`../game/${f}`, import.meta.url), 'utf8'));
+const openRoad = liveMethod('_openCarrionRoadIfRuled() {');
+const setTile = liveMethod('setTile(x, y, id) {');
+
+// A stand-in game that has just loaded `file`, the way _loadMap leaves it.
+function loaded(file, flags = {}) {
+    const g = { _tileDiffs: [], questEngine: { getFlag: (k) => flags[k] }, setTile, _openCarrionRoadIfRuled: openRoad };
+    g.map = new GameMap(mapData(file), file);
+    g._openCarrionRoadIfRuled();
+    return g;
+}
+const WALL = { x: 9, y: 19 };
+
+describe("Carrion's road", () => {
+    test('before a ruling the wall stays shut and the Sewer has no way south', () => {
+        const g = loaded('sewer-map.json');
+        assert.equal(g.map.isWalkable(WALL.x, WALL.y), false);
+        assert.ok(!g.map.transitions.some(t => t.toMap === 'carrion-room-map.json'));
+    });
+
+    test('after a ruling the wall opens onto the new room, on every load', () => {
+        for (let i = 0; i < 2; i++) {   // a second load is a reload / CONTINUE
+            const g = loaded('sewer-map.json', { [CRAT_REWARD_FLAG]: true });
+            assert.equal(g.map.isWalkable(WALL.x, WALL.y), true);
+            const doors = g.map.transitions.filter(t => t.toMap === 'carrion-room-map.json');
+            assert.equal(doors.length, 1);
+            assert.deepEqual([doors[0].x, doors[0].y], [WALL.x, WALL.y]);
+        }
+    });
+
+    test('the opening has floor above it, and Carrion is not in it', () => {
+        const g = loaded('sewer-map.json', { [CRAT_REWARD_FLAG]: true });
+        assert.ok(g.map.isWalkable(WALL.x, WALL.y - 1));
+        assert.ok(!g.map.enemySpawns.some(e => e.x === WALL.x && e.y === WALL.y));
+    });
+
+    test('other maps are left alone even with the flag set', () => {
+        const g = loaded('sewer-north-map.json', { [CRAT_REWARD_FLAG]: true });
+        assert.ok(!g.map.transitions.some(t => t.toMap === 'carrion-room-map.json'));
+    });
+
+    test('the new room ends in a sign and a way back, and its door lands on its floor', () => {
+        const r = mapData('carrion-room-map.json');
+        const g = loaded('sewer-map.json', { [CRAT_REWARD_FLAG]: true });
+        const door = g.map.transitions.find(t => t.toMap === 'carrion-room-map.json');
+        const room2 = new GameMap(r, 'carrion-room-map.json');
+        assert.ok(room2.isWalkable(door.toX, door.toY), 'the door lands in a wall');
+        const sign = r.examinables.find(e => e.id === 'carrion_road_sign');
+        assert.ok(sign && room2.isWalkable(sign.x, sign.y), 'the sign is missing or in a wall');
+        assert.match(sign.text, /^\[TEXT/);
+        const back = r.transitions.find(t => t.toMap === 'sewer-map.json');
+        assert.ok(back, 'no way back');
+        assert.ok(g.map.isWalkable(back.toX, back.toY), 'the way back lands in a wall');
+        assert.equal(r.zoneName, 'SEWER');
     });
 });
