@@ -36,14 +36,24 @@ Tests: `tests/crat-reward.test.js`, played through the same dialogue choices CS1
      `main.js`, outside this slice's files. The quest engine only hears `map_entered` on a walk
      through a door, not on CONTINUE, so it cannot stand in for it.
 
+## Where the road goes (CS2R1, picked a)
+
+A short new Sewer side room south of Carrion's corridor, through a wall that opens after the
+ruling, with a [TEXT] sign at its end. It stays inside the Sewer, like the Crat's room.
+
 ## What this branch does
 
-- Ruling on the dispute sets a saved flag, `carrionRoadOpen`, once. It is never set before a
-  ruling, and ruling cannot happen twice. Every way of opening the road reads this one flag.
-- Nothing a player can see changes yet. The road waits on the destination ruling.
+- Ruling on the dispute sets a saved flag, , once. Never before a ruling.
+- , called from  beside the bridge's hook, reads that
+  flag on every Sewer load (so CONTINUE keeps it): the wall tile at (9,19), under Carrion's
+  corridor, becomes a drain and a door to .
+- The new room is plain and small (10x8), with a [TEXT] sign at its far end and a drain back.
+  Its layout, the wall spot and the sign spot are placeholders for Caelan to move.
+- Tests in : wall shut before a ruling, open after, on every load,
+  the room's doors land on floor, the sign is [TEXT].
 
 ## Out of scope
 
-- Where the road leads, and any map, tile or exit for it.
 - Any change to Carrion's line, talk or position.
-- Any words: every line stays a `[TEXT: ...]` placeholder until Caelan writes it.
+- Words: every line and sign stays a  placeholder until Caelan writes it.
+- What is in the room beyond the sign.
