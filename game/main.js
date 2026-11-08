@@ -770,7 +770,7 @@ class Game {
         // If the car's already fixed, re-open the North bridge — derives
         // from the persistent flag so it's open again on every town re-entry.
         this._openBridgeIfCarFixed();
-        this._openCarrionRoadIfRuled();
+        this._openCarrionRoadIfRuled?.();   // `?.`: stand-in games in tests don't carry it
         // (fight-fog) Whatever fog was up belongs to the map you left.
         this.renderer.dropFightFog();
         this._render();
