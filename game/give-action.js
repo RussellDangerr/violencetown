@@ -22,6 +22,10 @@ import { poitionBuff } from './items.js';
 import { DISPOSITION_MIN, dispositionCeil } from './disposition-curves.js';   // one ceiling, three writers
 import { BANDS_STEP } from './trade.js';   // paranoia is priced in whole trade bands
 
+// (FX47) A boss is called by its one name in every line below, anyone else by its type.
+const bossOr = (r) => (r.boss && r.shownName) || r.type;
+const theName = (r) => `The ${bossOr(r)}`;
+
 // Tuning constant — controls how much disposition each unit of `values`
 // shifts. Currently 5 (so values:{soap:8} means soap gives +40 disposition).
 // Balance knob; revisit after first playtest.
@@ -98,7 +102,7 @@ export function applyGive(item, recipient) {
         return {
             accepted: false,
             flipped: false,
-            log: `[The ${recipient.type} ignores your offering.]`,
+            log: `[${theName(recipient)} ignores your offering.]`,
         };
     }
 
@@ -130,7 +134,7 @@ export function applyGive(item, recipient) {
     return {
         accepted: true,
         flipped: false,
-        log: `[The ${recipient.type} pockets the ${item.name}. Disposition +${preview.shift}.]`,
+        log: `[${theName(recipient)} pockets the ${item.name}. Disposition +${preview.shift}.]`,
     };
 }
 
@@ -199,7 +203,7 @@ function applySewerFareGive(item, recipient) {
         return {
             accepted: true,
             flipped: false,
-            log: `[The ${recipient.type} savors the ${item.name} — down here, it's medicine. Disposition +${preview.shift}.]`,
+            log: `[${theName(recipient)} savors the ${item.name} — down here, it's medicine. Disposition +${preview.shift}.]`,
         };
     }
 
@@ -229,14 +233,14 @@ function applySewerFareGive(item, recipient) {
         return {
             accepted: true,
             flipped: true,
-            log: `[The ${recipient.type} realizes what you fed it — and comes at you!]`,
+            log: `[${theName(recipient)} realizes what you fed it — and comes at you!]`,
         };
     }
 
     return {
         accepted: true,
         flipped: false,
-        log: `[The ${recipient.type} eats the ${item.name}... something's wrong. Disposition ${penalty}.]`,
+        log: `[${theName(recipient)} eats the ${item.name}... something's wrong. Disposition ${penalty}.]`,
     };
 }
 
@@ -431,10 +435,10 @@ function flipLogLine(item, recipient) {
     // Same default as applyFlip — missing onFlip reads as becomeAlly.
     switch (recipient.onFlip || 'becomeAlly') {
         case 'becomeAlly':
-            return `[The ${recipient.type} pockets the ${item.name} — they stop snarling at you.]`;
+            return `[${theName(recipient)} pockets the ${item.name} — they stop snarling at you.]`;
         case 'offerDiscount':
-            return `[${recipient.type} accepts the ${item.name}. "...much obliged. I'll work you a deal next time."]`;
+            return `[${bossOr(recipient)} accepts the ${item.name}. "...much obliged. I'll work you a deal next time."]`;
         default:
-            return `[The ${recipient.type} pockets the ${item.name}. Something in them shifts.]`;
+            return `[${theName(recipient)} pockets the ${item.name}. Something in them shifts.]`;
     }
 }

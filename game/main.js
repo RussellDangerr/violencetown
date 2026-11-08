@@ -2777,7 +2777,7 @@ class Game {
     // Returns true if the shove landed. Heavy characters and boxed-in ones bounce.
     _shoveNpc(enemy, dir) {
         if (!enemy || !dir) return false;
-        const who = enemy.name ?? enemy.type ?? 'them';
+        const who = ((enemy.boss && enemy.shownName) || (enemy.name ?? enemy.type)) ?? 'them';
         // (ruled 2026-09-02) The two ways a shove fails each get their own beat.
         // Caelan: "trying to push someone and not being able to, I think, is a
         // good source of physical comedy." It was a thud and a recoil with no
@@ -2806,7 +2806,7 @@ class Game {
         // stepEntity already set _lastDx/_lastDy to the victim's own displacement,
         // which is unit-length because the destination is always one tile away.
         enemy._spunTurns = 1;                   // burns on the victim's next HOSTILE turn
-        this._log(`[You shove ${enemy.name ?? enemy.type} so hard they spin around!]`, 'combat');
+        this._log(`[You shove ${((enemy.boss && enemy.shownName) || (enemy.name ?? enemy.type))} so hard they spin around!]`, 'combat');
         return true;
     }
 
@@ -3563,7 +3563,7 @@ class Game {
         // same widget, same keys, and Cancel starts selected so a held Enter
         // cannot carry through into a punch.
         if (verb.key === 'hit' && !verb.confirmed && t && t.npc && !isHostile(t.npc)) {
-            const who = String(t.npc.name || t.npc.type || 'them').replace(/[[\]]/g, '');
+            const who = String((t.npc.boss && t.npc.shownName) || t.npc.name || t.npc.type || 'them').replace(/[[\]]/g, '');
             this.targetList.verbs = [
                 { ...verb, label: `Really hit ${who}?`, confirmed: true },
                 { key: 'cancel', label: 'Cancel', resolver: 'cancel', color: '#4a3c2a', text: '#b0a184' },
@@ -4213,7 +4213,7 @@ class Game {
                     if (took) this._hot[took.id] = (this._hot[took.id] ?? 0) + 1;
                     victim._robbedSweep = true;            // arms the blind sweep + paranoia
                     reactToTransaction(victim, 'theft', { item: took, gold: gp });
-                    this._log(`[${victim.name ?? victim.type} feels the weight change.]`, 'combat');
+                    this._log(`[${((victim.boss && victim.shownName) || (victim.name ?? victim.type))} feels the weight change.]`, 'combat');
                 }
                 this._advanceWorld();
                 break;
@@ -4388,7 +4388,7 @@ class Game {
             const gone = this.enemies.filter(e => e._isSummon && e._summonTurnsLeft <= 0);
             for (const e of gone) {
                 if (this._finaleSummonLeft?.(e)) continue;   // Sun Man is bitten, not sent away
-                this._log(`[${e.type || 'The summon'} slinks back into the crowd.]`);
+                this._log(`[${((e.boss && e.shownName) || e.type) || 'The summon'} slinks back into the crowd.]`);
             }
             if (gone.length) this.enemies = this.enemies.filter(e => !(e._isSummon && e._summonTurnsLeft <= 0));
         }
@@ -5561,7 +5561,7 @@ class Game {
         if (!npc || !def) return null;
         npc._lastDx = Math.sign(this.playerX - npc.x);   // it faces what it threw at
         npc._lastDy = Math.sign(this.playerY - npc.y);
-        const who = npc.name ?? npc.type;
+        const who = ((npc.boss && npc.shownName) || (npc.name ?? npc.type));
         const what = String(def.name || def.id).replace(/[[\]]/g, '');
         if (def.fireBlood) {
             this._applyFireBlood(this, def.poition?.turns ?? 5);
@@ -5607,7 +5607,7 @@ class Game {
         if (!this._hasFireBlood(attacker) || !target) return;
         if (target !== this && !(target.entity && target.entity.isAlive())) return;
         this._ignite(target, FIRE_BLOOD_SPREAD_TURNS);
-        const name = target === this ? 'You catch' : `${target.name ?? target.type} catches`;
+        const name = target === this ? 'You catch' : `${((target.boss && target.shownName) || (target.name ?? target.type))} catches`;
         this._log(`[${name} fire.]`, 'combat');
     }
 
@@ -7625,7 +7625,7 @@ class Game {
         // A chest is not handed anything -- "You hand crate nothing for 2 items"
         // is grammatical and still wrong. You take FROM a container.
         const deal = npc._container
-            ? `[You take ${back.join(' and ') || 'nothing'} from the ${npc.type}.`
+            ? `[You take ${back.join(' and ') || 'nothing'} from the ${(npc.boss && npc.shownName) || npc.type}.`
             : back.length
                 ? `[You hand ${npc.shownName || npc.type} ${out.join(' and ') || 'nothing'} for ${back.join(' and ')}.`
                 : `[You hand ${npc.shownName || npc.type} ${out.join(' and ')}.`;
@@ -7766,7 +7766,7 @@ class Game {
         this._dialogueReply = choice.reply || '"..."';
         audio.playSfx((choice.delta ?? 0) < 0 ? 'bump-wall' : 'menu-confirm');
         if ((npc.disposition ?? 0) <= DIALOGUE_HOSTILE_AT) {
-            this._log(`[${npc.name || npc.type} has heard enough.]`, 'combat');
+            this._log(`[${(npc.boss && npc.shownName) || npc.name || npc.type} has heard enough.]`, 'combat');
             this._closeDialogue();
             this._onEntityHarmed(npc, { kind: 'insult' });
             return;
