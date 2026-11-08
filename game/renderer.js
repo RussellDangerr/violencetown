@@ -23,7 +23,7 @@ import {
     WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
     EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, EQUIP_LEFT_HAND_RECT, closeButtonRect,
     DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceBagPagerRects, deviceEquipLayout, gearArmourRect, deviceRingsLayout,
-    deviceSkillsLayout,                                                      // (US2) the skills readout in the RINGS tab
+    deviceSkillsLayout, ringPassiveRows,                                     // (US2) the skills readout in the RINGS tab; (RR1) a ring's passive rows
     inspectorPanelRect, inspectorActionRects,                               // (C1) tap-to-inspect panel + action-row geometry
     gearOptionRects, gearChooserRect,                                       // (C2) GEAR chooser option-row + panel geometry
     xmbBarLayout, hudLayout, throwRects, wheelTopMarks, fightPanelRects, XMB_CELL,                      // (XMB) usable-bar geometry; (screen-fill) the HUD, throw targets, the marks above the wheel
@@ -96,6 +96,7 @@ const SPLAT_COLOR = {
     cold:     '#5ec3e8',
     energy:   '#f5d02a',
     heal:     '#3fb56a',
+    dodge:    '#9aa3ad',   // (RR1) a dodge
 };
 
 // Digits are white on every splat but the ones too light to carry white: on
@@ -2859,6 +2860,10 @@ export class Renderer {
                     ctx.strokeRect(s.x + 1, s.y + 1, s.w - 2, s.h - 2);
                     const name = this._fitText(strip((RINGS[f.ringId] && RINGS[f.ringId].name) || f.ringId), s.w - 6);
                     this.font.drawText(ctx, name.text, s.x + s.w / 2, s.y + s.h / 2 - 4, { color: UI.gold, scale: name.scale, align: 'center' });
+                    // (RR1) The worn ring's passives, a label and its number, under the socket.
+                    ringPassiveRows(RINGS[f.ringId]).forEach((row, i) => {
+                        this.font.drawText(ctx, `${row.label} ${row.value}`, s.x + s.w / 2, s.y + s.h + 2 + i * 10, { color: UI.gold, scale: 1, align: 'center' });
+                    });
                 }
                 const cur = game._deviceSel;
                 if (cur && cur.tab === 'rings' && cur.key === s.key) this._drawCursorHalo(ctx, s);   // (C3) keyboard cursor

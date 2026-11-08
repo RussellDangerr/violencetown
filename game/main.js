@@ -8,7 +8,7 @@ import { computeViewport, screenToTile, clientToScreen, toMenu, stepZoom, zoomTo
 import { loadMap, carriesAll } from './map.js';
 import { loadAllSprites } from './sprites.js';
 import { BitmapFont } from './bitmap-font.js';
-import { pickHitMark, HEAVY_HIT_DAMAGE } from './hit-splat.js';   // (manga-impact-marks) the mark rule + the heavy threshold
+import { pickHitMark, HEAVY_HIT_DAMAGE, dodgeChance, DODGE_WORD } from './hit-splat.js';   // (manga-impact-marks) the mark rule + the heavy threshold
 import { makeEffectLoop } from './effect-loop.js';                 // one tick of the transient-effects loop, and its refusal to die on a bad frame
 import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK, SLUDGE_DOT } from './data.js';
 import { puddleTiles, layPuddle, puddleAt, dryPuddles } from './puddles.js';   // (poisons) Sludge Brain's puddles
@@ -5780,6 +5780,12 @@ class Game {
         this._cascade.mark(actor);
     }
 
+    // (RR1) Does this blow miss you? Draws the seeded RNG only with evasion.
+    _rollDodge() {
+        const chance = dodgeChance(this.ringMods && this.ringMods.evasion);
+        return chance > 0 && this.rng.float() < chance;
+    }
+
     applyDamageToPlayer(rawDamage, attacker = null) {
         if (attacker) this._lastDefeatedBy = attacker;
         // Guard (incoming, defender) folds into one computeHit call — round once,
@@ -5789,6 +5795,14 @@ class Game {
             incomingMult: this.hasBuff('guard') ? 0.5 : 1,
         });
         if (dmg === 0) return 0;   // 0-contract: hit doesn't happen, never floor back via armor
+        // (RR1) Evasion is rolled before armour; a dodged blow deals nothing. The
+        // RNG is drawn only when you have evasion, so a run without it replays as before.
+        if (this._rollDodge?.()) {
+            const dx = this.playerX, dy = this.playerY;
+            const dodgeFx = () => { this._spawnHitSplat(dx, dy, DODGE_WORD, 'dodge', { omni: true }); this._ensureParticleLoop(); };
+            if (!this._cascade?.defer(attacker ?? this._cascadeActor, dodgeFx, { hp: 0 })) dodgeFx();
+            return 0;
+        }
         if (attacker) this._spreadFireBlood(attacker, this);   // (poisons) a fire-blooded foe sets you burning
         dmg = Math.max(1, dmg - this._playerArmor());   // worn armor soaks the hit (min 1 always lands)
         this.playerHp = Math.max(0, this.playerHp - dmg);
