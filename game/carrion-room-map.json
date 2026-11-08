@@ -20,6 +20,6 @@
     0,0,0,0,0,5,0,0,0,0
   ],
   "transitions": [
-    { "x": 5, "y": 7, "toMap": "sewer-map.json", "toX": 9, "toY": 18, "label": "[North — TEXT: back into the Sewer]" }
+    { "x": 5, "y": 7, "toMap": "sewer-map.json", "toX": 9, "toY": 18, "label": "[South — TEXT: back into the Sewer]" }
   ]
 }
