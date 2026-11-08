@@ -6164,6 +6164,13 @@ class Game {
         this._pendingTransition = null;
         this.gold = 0;
         this.carFuel = 'raw';
+        // The old run's words. The strip, the [L] history (which the fight's combat
+        // feed reads), the log scroll and the hint pacing all belong to the run.
+        // Settings and the seen-hints record are the player's, and stay.
+        this._logStripMessages = [];
+        this._logHistory = [];
+        this._logModalScroll = 0;
+        this._lastHintTurn = null;
         await this._loadMap('town-map.json');
         this.state = STATE.IDLE;
         this._startMainQuest();   // deterministic fix_car start (fix/critical-path)
