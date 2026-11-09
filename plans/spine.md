@@ -62,9 +62,9 @@ The beats in code today:
 | The driver takes you across the bridge | — | — | `_openBridgeIfCarFixed`, the bridge cutscene |
 | Out of the Canyon | `canyon.npc` | the grappling hook | `canyon_escape`; Pike (SP6: the Canyon is a branch today) |
 | Meet the Financier | — | — | quest 1's last stage: hand the delivery to him in the bank (`quests.js` `deliver_burger`, stage `handoff`; SP8) |
-| Carnival quest, its boss a step | `carnival.boss` | the stuffed animal (earned) | placeholder boss (first entry: Bigfoot) drops it directly — interim |
-| Factory quest, its boss a step | `factory.boss` | the flux capacitor (given) | placeholder boss (first entry: Alien Invasion) drops it directly — interim |
-| Graveyard quest, its boss a step | `graveyard.boss` | the soul crystal (taken) | placeholder boss (first entry: The Deity) drops it directly — interim |
+| Carnival quest, its boss a step | `carnival.boss` | the stuffed animal (earned) | placeholder boss (first entry: Bigfoot) is a step; its zone's quest hands over the item (`quests.js` `ACT2_QUESTS`) |
+| Factory quest, its boss a step | `factory.boss` | the flux capacitor (given) | placeholder boss (first entry: Alien Invasion) is a step; its zone's quest hands over the item (`quests.js` `ACT2_QUESTS`) |
+| Graveyard quest, its boss a step | `graveyard.boss` | the soul crystal (taken) | placeholder boss (first entry: The Deity) is a step; its zone's quest hands over the item (`quests.js` `ACT2_QUESTS`) |
 | The finale | — | stuffed animal + flux capacitor + soul crystal | not built (`bank-map.json` holds a placeholder Financier) |
 
 It keeps two standing rulings from `species-adventures.md`:
@@ -109,7 +109,7 @@ framework rather than beside it.
 |---|---|---|
 | The shape: the Town as hub, nine episodes (three per required item), Bank Street as finale | **Locked** (ruled 2026-11-03, §9) | six episodes exist as maps: Sewer, Canyon, Downtown, Carnival, Factory, Graveyard; three are unnamed (SP11). Bank Street = `bank-map.json` (SP7) |
 | The Converter, quest 1's reward | **Locked**, name and id (SP10, ruled 2026-11-03, §9) | `catalytic_converter`, the Sewer boss's drop and the taxi's fix |
-| Three required items, each from one quest in one of its three episodes, the boss fight a step inside it | **Locked** as three slots, named: stuffed animal (Carnival), flux capacitor (Factory), soul crystal (Graveyard) (ruled 2026-10-23, 2026-10-30, §9) | interim: the boss drops it |
+| Three required items, each from one quest in one of its three episodes, the boss fight a step inside it | **Locked** as three slots, named: stuffed animal (Carnival), flux capacitor (Factory), soul crystal (Graveyard) (ruled 2026-10-23, 2026-10-30, §9) | each zone's quest hands it over, the boss a step (`quests.js` `ACT2_QUESTS`) |
 | Which slot holds which required item | **Locked** (a randomizer mode may shuffle it later) | — |
 | The ending: Financier → Final Arc → credits, then New Game+ | **Locked** (New Game+ ruled 2026-11-03, §9) | New Game+ not built |
 | Night Kid, the Financier, Sun Man | **Locked** characters (the cosmology's cast spine) | — |
