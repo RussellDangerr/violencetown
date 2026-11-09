@@ -33,7 +33,7 @@ import { canBeRival, itemIdsOf, recordDefeat, kitFor, markCarrying, settleItems,
 import { isHostile, isHunting, isSewerDweller, allyAids } from './ai.js';
 import { getGreedyStep, stepEntity, findPath } from './pathing.js'; // pathfinding (greedy chase + BFS click-to-move); stepEntity = shove a character aside
 import { applyDispositionDelta, reactToTransaction } from './give-action.js';
-import { getDialogue } from './dialogue.js';
+import { getDialogue, greetingFor } from './dialogue.js';
 import { manhattan, clamp } from './utils.js';
 import { RNG, randomSeed } from './rng.js';
 import { pickSlots, defaultPicks, resolveSpawn, requiredDropFor, dropLineFor, FINALE_PHASE1 } from './slots.js';
@@ -7816,7 +7816,7 @@ class Game {
         const d = npc && getDialogue(npc.dialogueId);
         if (!d) return;
         this._dialogueNpc = npc;
-        this._dialogueReply = d.greeting || '';
+        this._dialogueReply = greetingFor(d, this);
         this._dialogueCursor = 0;
         this.renderer._dialogueScroll = 0;         // fresh scroll for the response list
         this.renderer._dialogueLastCursor = -1;    // force cursor-follow on the first frame
