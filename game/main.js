@@ -5183,7 +5183,7 @@ class Game {
     _handleEnemyDeath(enemyObj) {
         audio.playSfx('enemy-killed'); // [audio] K.O. sting on a kill
         this._spawnEventWord(enemyObj.x, enemyObj.y, 'K.O.!', '#ff8822', 22);
-        this._log(`[Defeated ${enemyObj.entity.name}]`);
+        this._log(`[Defeated ${enemyObj.entity.name}]`, 'combat');
         this.emitGameEvent('enemy_killed', {
             type: enemyObj.type, id: enemyObj.id, x: enemyObj.x, y: enemyObj.y, tag: enemyObj.tag,
         });
