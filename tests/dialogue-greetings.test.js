@@ -77,7 +77,7 @@ function makeGame(npcDef) {
     };
     const free = {
         STATE, DIRS, audio, document, window, DEVICE_TABS, cycleDeviceTab,
-        getDialogue, greetingFor, transferGold, applyDispositionDelta, DIALOGUE_HOSTILE_AT,
+        getDialogue, transferGold, applyDispositionDelta, DIALOGUE_HOSTILE_AT,
         performance: { now: () => 0 }, setTimeout: () => 0,
     };
     for (const [n, p] of [

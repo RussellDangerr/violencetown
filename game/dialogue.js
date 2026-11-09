@@ -494,6 +494,9 @@ export function greetingFor(d, g) {
     return d.greeting || '';
 }
 
-export function getDialogue(id) {
-    return DIALOGUES[id] || null;
+// With a game, the returned dialogue carries the greeting that holds right now.
+export function getDialogue(id, g) {
+    const d = DIALOGUES[id] || null;
+    if (!d || !g || !d.greetings) return d;
+    return { ...d, greeting: greetingFor(d, g) };
 }
