@@ -5845,6 +5845,16 @@ class Game {
         return chance > 0 && this.rng.float() < chance;
     }
 
+    // (ZB2) Is `attacker` on the tile directly behind you? Your back is opposite
+    // the way you face (this.facing), run through combat.js isBackstab.
+    _isBackstabbed(attacker) {
+        if (!attacker || typeof attacker.x !== 'number' || typeof attacker.y !== 'number') return false;
+        const FACE = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+        const f = FACE[this.facing];
+        if (!f) return false;
+        return isBackstab(attacker.x, attacker.y, { x: this.playerX, y: this.playerY, _lastDx: f[0], _lastDy: f[1] });
+    }
+
     applyDamageToPlayer(rawDamage, attacker = null) {
         if (attacker) this._lastDefeatedBy = attacker;
         // Guard (incoming, defender) folds into one computeHit call — round once,
@@ -5854,7 +5864,11 @@ class Game {
         const guardMult = this.hasBuff('guard') ? 0.5 : 1;
         if (computeHit({ base: rawDamage, incomingMult: guardMult }) === 0) return 0;
         const shieldCut = this._shieldCut?.() ?? 1;
-        let dmg = computeHit({ base: rawDamage, incomingMult: guardMult * shieldCut });
+        // (ZB2) The same behind-the-target test as yours: an attacker on the tile
+        // directly behind where you face hits ×WEAKNESS_MULT. Only that one kind
+        // applies to you — no enemy crit or knockout exists on the player today.
+        const backstab = this._isBackstabbed?.(attacker) === true;
+        let dmg = computeHit({ base: rawDamage, positional: backstab ? WEAKNESS_MULT : 1, incomingMult: guardMult * shieldCut });
         if (dmg === 0) return 0;   // 0-contract: hit doesn't happen, never floor back via armor
         // (RR1) Evasion is rolled before armour; a dodged blow deals nothing. The
         // RNG is drawn only when you have evasion, so a run without it replays as before.
@@ -5864,6 +5878,7 @@ class Game {
             if (!this._cascade?.defer(attacker ?? this._cascadeActor, dodgeFx, { hp: 0 })) dodgeFx();
             return 0;
         }
+        if (backstab) this._log('[Backstab!]', 'combat');
         if (attacker) this._spreadFireBlood(attacker, this);   // (poisons) a fire-blooded foe sets you burning
         dmg = Math.max(1, dmg - this._playerArmor());   // worn armor soaks the hit (min 1 always lands)
         this.playerHp = Math.max(0, this.playerHp - dmg);
