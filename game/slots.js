@@ -343,7 +343,10 @@ function alienInvasion() {
     const e = { ...act2Boss(), name: 'Alien Invasion' };
     // GW1R2 (a): he carries the Great Sword. In the kit, so it drops when he falls; in his
     // worn gear in place of the Wooden Sword, so he swings it at you.
-    e.loadout = [...e.loadout, 'ray_gun', 'great_sword'];
+    // GW1R5 (c): the sword pushed his haul to 238 GP, over the elite band's 200. Three 15 GP
+    // items come off (a burger, a defence poition, a soap): 45 GP, back to 193.
+    const lighter = ['boardwalk_burger', 'defence_poition', 'soap'];
+    e.loadout = [...e.loadout.filter(x => !lighter.includes(x)), 'ray_gun', 'great_sword'];
     e.equipped = ['great_sword'];
     return e;
 }

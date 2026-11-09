@@ -141,7 +141,7 @@ export const WEAPONS = {
         weaponClass: 'great_sword',
         category: 'weapon',
         baseValue: 45,
-        description: '[TEXT]',
+        description: '[TEXT: Great Sword description]',
     },
     // Fearmur — a leg-bone club. Grants the Boo! fear spell (MP) while worn, and
     // fears an enemy you hit twice in a row (onHit: 'fearOnRepeat'). Source: the
