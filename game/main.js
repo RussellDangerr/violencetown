@@ -6836,7 +6836,7 @@ class Game {
             if (sel && sel.tab === 'gear' && sel.open) {
                 const lw = sel.slotKey === 'left', w = this.equipment[sel.slotKey];
                 const n = equipOptions(lw ? 'weapon' : sel.slotKey, sel.slotKey === 'weapon' || (lw && (this._handsOf?.(w) ?? 1) >= 2) ? null : w, this.inventory).length;
-                const rows = gearOptionRects(body, n);
+                const rows = gearOptionRects(body, n, sel.slotKey);
                 for (let i = 0; i < n; i++) {
                     if (this._pointInRect(pt, rows[i], HIT_SLOP)) { this._deviceActivate('option', i); return; }
                 }
@@ -7065,7 +7065,7 @@ class Game {
             if (sel && sel.tab === 'gear' && sel.open) {
                 const lw = sel.slotKey === 'left', w = this.equipment[sel.slotKey];
                 const n = equipOptions(lw ? 'weapon' : sel.slotKey, sel.slotKey === 'weapon' || (lw && (this._handsOf?.(w) ?? 1) >= 2) ? null : w, this.inventory).length;
-                const rects = gearOptionRects(body, n);
+                const rects = gearOptionRects(body, n, sel.slotKey);
                 return { zone: 'option', rects, ids: rects.map((_, i) => i), cur: sel.option != null ? Math.min(sel.option, n - 1) : -1 };
             }
             const layout = deviceEquipLayout(body);

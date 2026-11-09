@@ -635,26 +635,57 @@ export function gearArmourRect(bodyRect) {
 // clear the plate. Pinned by tests/gear-chooser.test.js.
 const GEAR_ROW_W = 200, GEAR_ROW_H = 26, GEAR_ROW_GAP = 12;
 const GEAR_PANEL_PAD = 8, GEAR_PANEL_HEAD = 30, GEAR_PANEL_FOOT = 12, GEAR_PANEL_CLEAR = 6;
-export function gearOptionRects(bodyRect, n) {
-  const p = gearChooserRect(bodyRect, n);
+export function gearOptionRects(bodyRect, n, key) {
+  const p = gearChooserRect(bodyRect, n, key);
   const x = p.x + GEAR_PANEL_PAD, y0 = p.y + GEAR_PANEL_HEAD;
   const rects = [];
   for (let i = 0; i < n; i++) rects.push({ x, y: y0 + i * (GEAR_ROW_H + GEAR_ROW_GAP), w: GEAR_ROW_W, h: GEAR_ROW_H });
   return rects;
 }
 
-// The GEAR chooser's titled panel: a centred column starting just below the
-// HEAD plate (the plate above it), tall enough for a title band and `n` rows.
-// renderer._drawGearPicker draws it; gearOptionRects lays the rows inside it.
-export function gearChooserRect(bodyRect, n) {
+// (GC1) The room the empty chooser's note has: a full row's height, in the panel
+// below its title band and clear of its border. renderer._drawGearPicker centres
+// the note in it. Pinned by tests/gear-chooser-placement.test.js.
+export function gearEmptyNoteRect(bodyRect, key) {
+  const p = gearChooserRect(bodyRect, 0, key);
+  return { x: p.x + GEAR_PANEL_PAD, y: p.y + GEAR_PANEL_HEAD, w: p.w - 2 * GEAR_PANEL_PAD, h: GEAR_ROW_H };
+}
+
+// The GEAR chooser's titled panel, tall enough for a title band and `n` rows
+// (or, with none, the band and a row's room for the empty note). renderer.
+// _drawGearPicker draws it; gearOptionRects lays the rows inside it.
+//
+// (GC1) It opens at the plate you picked (`key`): beside it, towards the middle
+// of the body, level with it and slid up if it would run off the bottom; else
+// below it; else above it; else beside it on the far side. The first place that is
+// inside the body and covers no plate wins. With no key, or an unknown one, it is
+// the old place: centred, just below the HEAD plate (FX11).
+export function gearChooserRect(bodyRect, n, key = 'top') {
   const w = GEAR_ROW_W + 2 * GEAR_PANEL_PAD;
-  const head = deviceEquipLayout(bodyRect).slots.find(s => s.key === 'top');
-  const y = head ? Math.ceil(head.y + head.h) + GEAR_PANEL_CLEAR : bodyRect.y + 30;   // whole px, so the edges stay crisp
-  // No rows: the title band and one line for the empty note.
-  const h = n > 0
-    ? GEAR_PANEL_HEAD + n * GEAR_ROW_H + (n - 1) * GEAR_ROW_GAP + GEAR_PANEL_FOOT
-    : GEAR_ROW_H + GEAR_PANEL_FOOT;
-  return { x: bodyRect.x + (bodyRect.w - w) / 2, y, w, h };
+  const h = GEAR_PANEL_HEAD + (n > 0 ? n * GEAR_ROW_H + (n - 1) * GEAR_ROW_GAP : GEAR_ROW_H) + GEAR_PANEL_FOOT;
+  const lay = deviceEquipLayout(bodyRect);
+  const plates = [...lay.slots, lay.leftHand];
+  const head = lay.slots.find(s => s.key === 'top');
+  const centreX = Math.round(bodyRect.x + (bodyRect.w - w) / 2);
+  const below = (pl) => ({ x: centreX, y: Math.ceil(pl.y + pl.h) + GEAR_PANEL_CLEAR, w, h });
+  const old = head ? below(head) : { x: centreX, y: bodyRect.y + 30, w, h };
+  const plate = plates.find(s => s.key === key);
+  if (!plate || key === 'top') return old;
+  const bodyBottom = bodyRect.y + bodyRect.h, bodyRight = bodyRect.x + bodyRect.w;
+  const rightward = plate.x + plate.w / 2 < bodyRect.x + bodyRect.w / 2;
+  const beside = (toRight) => ({
+    x: Math.round(toRight ? plate.x + plate.w + GEAR_PANEL_CLEAR : plate.x - GEAR_PANEL_CLEAR - w),
+    y: Math.round(Math.min(Math.max(plate.y, bodyRect.y), bodyBottom - h)), w, h,
+  });
+  const candidates = [
+    beside(rightward),
+    below(plate),
+    { x: centreX, y: Math.floor(plate.y) - GEAR_PANEL_CLEAR - h, w, h },
+    beside(!rightward),
+  ];
+  const fits = (r) => r.x >= bodyRect.x && r.y >= bodyRect.y && r.x + r.w <= bodyRight && r.y + r.h <= bodyBottom
+    && !plates.some(pl => rectsOverlap(r, pl));
+  return candidates.find(fits) || old;
 }
 
 // (Remembrance Rings, Task 5) The SKILLS tab body IS THE HANDS — two hands split
