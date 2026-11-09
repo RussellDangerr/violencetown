@@ -84,6 +84,7 @@ function writeSeenHints(set) {
 import { emitNoise, NOISE, perceives, spotters, struck, VERDICT } from './perception.js'; // sound + sight
 import { coinTake, kitTake, gearTake, coinWeight, itemWeight, gearWeight,
          noticeBuffer, isClean, stealLimit } from './theft.js';
+import { INTERACTIONS, fireRows } from './interactions.js'; // (IN1) carry-this-here rules
 import { overworldZone } from './world-map.js'; // (mp2) which overworld zone a map belongs to
 import { recordUse, skillPerks, mergePassives } from './skills.js'; // (skills) use-ranks: clean lifts rank up light fingers
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
@@ -252,6 +253,7 @@ class Game {
         // swap touches it. Persisted. Its perks join ringMods only where an action
         // reads them (see _theftPassives).
         this.skills           = {};
+        this.interactionNotes = [];          // (IN1) ids of the interaction rows whose note has been shown; persisted
         this._peakDisposition = 0;           // (rings) highest disposition any NPC has ever shown — monotonic; gates the hidden thumb tier
         this._lastHitTarget = null;   // (fear) id of the enemy the last Melee-Hit struck
         this._ratFormTurns = 0;        // (Rat Ring) turns left folded into a rat; while >0 the player can enter GRATE tiles
@@ -4375,6 +4377,20 @@ class Game {
     // named in the original design note) because `_worldBeat` already names
     // the unrelated ambient/day-clock/disposition-decay heartbeat below,
     // shared with free-roam — reusing it here would have silently clobbered it.
+    // (IN1) Fire the interaction rows for what you carry in the zone you are in. A row's note
+    // is logged the first time it fires (its own log colour) and remembered for the save.
+    _checkInteractions(rows = INTERACTIONS) {
+        if (!rows.length) return;
+        const carried = new Set();
+        for (const s of this.inventory || []) if (s && s.itemDef) carried.add(s.itemDef.id);
+        for (const it of Object.values(this.equipment || {})) if (it && it.id) carried.add(it.id);
+        const fresh = fireRows(this, rows, carried, this._mapUrl, this.interactionNotes);
+        for (const row of fresh) {
+            this.interactionNotes.push(row.id);
+            this._log(row.note, 'note');
+        }
+    }
+
     _advanceWorld() {
         const plan = worldBeatPlan(this._hasteCharges, this._slowCharges);
         this._hasteCharges = plan.hasteCharges;
@@ -4384,6 +4400,7 @@ class Game {
             return;
         }
         this._advanceWorldOnce();
+        this._checkInteractions?.();   // (IN1) optional-called, like _saveMoment, for stand-in games
         // Slow's second beat only fires if the first one left things in a
         // state where "again, right now" is safe: not dead (die() already
         // guards re-entry, but there's nothing to advance for a corpse) and
@@ -4505,6 +4522,7 @@ class Game {
             this._zoneChange();   // (plans/ks1-respawn-list.md) the respawn lists take a step
             this._loadMap(t.toMap, t.toX, t.toY).then(() => {
                 this._log(`[Entered ${this.map.zoneName}]`);
+                this._checkInteractions?.();   // (IN1) optional-called, like _saveMoment, for stand-in games
                 this._armourShopNotice?.();   // (AA1) optional-called, like _saveMoment, for the stand-in games tests build
                 this.state = STATE.IDLE;
                 this.emitGameEvent('map_entered', { map: t.toMap });
@@ -6253,6 +6271,7 @@ class Game {
         this.discoveredFusions = new Set();
         this._peakDisposition = 0;       // it gates the ring tier, so it goes with the rings
         this.skills = {};                // a new run starts every skill from nothing
+        this.interactionNotes = [];      // (IN1) and every interaction note is new again
         this._refreshGrantedSkills();   // fresh weapon, no rings → no granted skills
         this._pendingTransition = null;
         this.gold = 0;

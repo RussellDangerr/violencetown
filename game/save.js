@@ -19,6 +19,7 @@ import { pagedSize } from './inventory.js';
 import { sanitizeSlots } from './rings.js';
 import { settleHands } from './items.js';
 import { sanitizeSkills } from './skills.js';
+import { sanitizeNoteIds } from './interactions.js';
 import { sanitizeRespawnLists } from './drops.js';
 import { sanitizeRivals } from './rivals.js';
 
@@ -84,6 +85,7 @@ export function serialize(game) {
             // never ranked anything saves byte-for-byte as it did before skills
             // existed (the autoplay fingerprint hashes this object).
             ...skillsEntry(game),
+            ...interactionNotesEntry(game),
             equipment: {
                 weapon: idOf(game.equipment.weapon),   // the right hand
                 left: idOf(game.equipment.left),
@@ -152,6 +154,12 @@ export function serialize(game) {
 function skillsEntry(game) {
     const skills = sanitizeSkills(game.skills);
     return Object.keys(skills).length ? { skills } : {};
+}
+
+// (IN1) The interaction notes already seen, as a save field, or nothing while there are none.
+function interactionNotesEntry(game) {
+    const interactionNotes = sanitizeNoteIds(game.interactionNotes);
+    return interactionNotes.length ? { interactionNotes } : {};
 }
 
 // (plans/mp2-map-dims-unvisited.md) The visited-zone record as a save field, or nothing while
@@ -370,6 +378,7 @@ function validate(raw) {
     // (skills) Known skills, whole counts, never below zero; a save from before
     // skills existed loads with none.
     p.skills = sanitizeSkills(p.skills);
+    p.interactionNotes = sanitizeNoteIds(p.interactionNotes);   // (IN1)
     // collectedItems is a Set of string keys on the live game; drop anything
     // non-string so a malformed save can't poison the lookup.
     const ci = Array.isArray(raw.world?.collectedItems) ? raw.world.collectedItems : [];
@@ -450,6 +459,7 @@ export async function loadInto(game, raw) {
     game.ringTier          = p.ringTier || 0;
     game.discoveredFusions = new Set(p.discoveredFusions || []);
     game.skills            = { ...p.skills };
+    game.interactionNotes  = [...p.interactionNotes];   // (IN1)
     // knownSpells/grantedTricks are derived, not stored — rebuild from the
     // restored weapon + rings (a slotted Rat Ring grants Rat Form, etc.).
     if (game._refreshGrantedSkills) game._refreshGrantedSkills();
