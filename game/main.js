@@ -1266,9 +1266,11 @@ class Game {
             this._maybeShowFirstRunHint();
         };
         // CONTINUE loads the autosave into the live game. GAME START begins
-        // fresh (the existing save survives until the fresh run's first
-        // autosave overwrites it, so a stray reload can still resume). Space
-        // does what CONTINUE does when there is a save, and GAME START when not.
+        // fresh, and the fresh run's first autosave overwrites the old save, so
+        // with a save on disk a click on GAME START asks first, with the same
+        // line RESTART uses; Cancel leaves the title and the save untouched.
+        // With no save it starts at once. Space does what CONTINUE does when
+        // there is a save (no confirm), and GAME START when not.
         const continueGame = async () => {
             this._endTvIntro?.();         // (TV1)
             audio.init();                 // [audio] first user gesture — unlock Web Audio
@@ -1304,7 +1306,11 @@ class Game {
             this._maybeShowFirstRunHint();
         };
 
-        document.getElementById('splash-go').addEventListener('click', start);
+        document.getElementById('splash-go').addEventListener('click', () => {
+            if (hasSave() && typeof confirm === 'function'
+                && !confirm('Restart from the beginning? This erases your current save.')) return;
+            start();
+        });
         const continueBtn = document.getElementById('splash-continue');
         if (continueBtn && hasSave()) {
             continueBtn.classList.remove('hidden');
