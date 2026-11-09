@@ -76,6 +76,10 @@ export const TILES = {
     ICE:           { id: 71, walkable: true,  hazard: null, fallbackColor: '#d9dde6' },
 };
 
+// Tiles that put Burning out when the player steps onto them (plans/fb1-snow-puts-out-burning.md).
+// Water is one more entry here once the game has a water tile.
+export const FIRE_QUENCHING_TILES = [TILES.SNOW.id, TILES.ICE.id];
+
 // Reverse lookup: id → tile def
 export const TILE_BY_ID = {};
 for (const [key, def] of Object.entries(TILES)) {
