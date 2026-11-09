@@ -127,9 +127,7 @@ export const ENTRIES = {
         flipThreshold: 30,
         bribeable: true,
         values: { bandage: 6, soap: 4, rock: 3 },
-        behavior: ['IDLE', 'WANDER'],
-        wanderRadius: 6,
-        wanderEveryTurns: 3,
+        behavior: ['IDLE'],   // he stands where he is placed: a wander would draw the shared ambient stream and move the autoplay replay
         adjacencyBark: '[TEXT]',
     },
     // The Carnival's horses (plans/cb1-carnival-horses-circle.md): three combatants placed by
