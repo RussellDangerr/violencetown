@@ -269,3 +269,9 @@ Each is a row in `roadmap-2026-09.md` §2. Answers land here, dated, and strike 
     to the stranded traveler. No Locked row changes.
   - **Open:** what becomes of the traveler is not decided, and nor is whether the bank's Financier
     and the vault's (the finale's) are one character.
+- **2026-11-08 — What "earned" covers (ST1R1).** Caelan's pick (a): *"Yes: you earn it by beating
+  the guard, and then it's yours to take."* The Carnival's item is earned by beating the boss slot's
+  occupant, whoever it is; after that it is yours to take at the quest's claim spot or at the booth
+  the boss guards, and either gives the one Stuffed Animal, never two. Spec:
+  `plans/st1-carnival-booth-route.md`. Answers SQ1R1 for the Carnival.
+  - **Replaces** nothing; no Locked row changes.
