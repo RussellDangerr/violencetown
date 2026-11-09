@@ -6,8 +6,8 @@
       "seed": 1,
       "finished": true,
       "reason": null,
-      "fingerprint": "ab8567f9",
-      "turn": 105,
+      "fingerprint": "f73cf4c4",
+      "turn": 106,
       "deaths": 2,
       "stages": [
         {
@@ -26,22 +26,22 @@
         },
         {
           "id": "recover_converter",
-          "turns": 73,
-          "hpLost": 248,
+          "turns": 74,
+          "hpLost": 288,
           "healed": 0,
           "eats": 0,
           "drinks": 3,
           "attacks": 1,
-          "casts": 28,
-          "mpSpent": 270,
+          "casts": 29,
+          "mpSpent": 268,
           "throws": 4,
           "deaths": 2,
-          "gold": 31
+          "gold": 6
         },
         {
           "id": "escape_sewer",
           "turns": 4,
-          "hpLost": 0,
+          "hpLost": 8,
           "healed": 0,
           "eats": 0,
           "drinks": 1,
@@ -72,7 +72,7 @@
           "catalytic_converter",
           "wererat_fur"
         ],
-        "gold": 31
+        "gold": 6
       }
     },
     "sneak": {
