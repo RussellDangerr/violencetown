@@ -28,7 +28,7 @@ import { itemActions, equipOptions, inspectorUsesRect } from './inspector.js';  
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
 import { attack, formatDamageNumber, computeHit, elementalMult, weaponHitKind, isBackstab, shieldArmor, raiseShield, WEAKNESS_MULT, weaknessKinds, critOf, knockoutDamage } from './combat.js';
-import { Enemy, spawnEnemy, resolveEnemyTurns, resolveAmbientTurns, unnestBrackets } from './enemies.js';
+import { Enemy, spawnEnemy, muggerRecords, resolveEnemyTurns, resolveAmbientTurns, unnestBrackets } from './enemies.js';
 import { canBeRival, itemIdsOf, recordDefeat, kitFor, markCarrying, settleItems, clearRival } from './rivals.js'; // the enemy that beat you is remembered (pure, node-tested)
 import { isHostile, isHunting, isSewerDweller, allyAids } from './ai.js';
 import { getGreedyStep, stepEntity, findPath } from './pathing.js'; // pathfinding (greedy chase + BFS click-to-move); stepEntity = shove a character aside
@@ -470,6 +470,7 @@ class Game {
         // (theft) enemyId -> { gold, items, weightTaken, noticed }. Survives a save,
         // and is re-applied by spawnEnemy so a zone re-entry cannot undo a robbery.
         this._robbed = {};
+        this._tookGold = {};   // (BS2) enemyId -> gold he took off you and still carries
         // (fence) itemId -> how many you are carrying that the street has heard
         // about. Written only when a take is NOTICED, so a clean theft leaves
         // goods worth full price anywhere. Decremented when a fence takes them
@@ -678,6 +679,9 @@ class Game {
 
     // ── Map Loading ──────────────────────────────────────────────────────────
 
+    // (BS2) Remember the gold each mugger still carries, so a re-spawn gives it back.
+    _recordMuggers() { this._tookGold = muggerRecords(this.enemies, this._tookGold); }
+
     async _loadMap(url, spawnX, spawnY) {
         this.map = await loadMap(url);
         this._mapUrl = url;
@@ -718,7 +722,7 @@ class Game {
         const dead = deadIds(this._respawnLists, url);
         for (const s of this.map.enemySpawns) {
             if (dead.has(s.id)) continue;
-            this.enemies.push(spawnEnemy(resolveSpawn(s, this.slots), this._muggedIds, this._robbed, this._rivalKit?.(url, s.id)));
+            this.enemies.push(spawnEnemy(resolveSpawn(s, this.slots), this._muggedIds, this._robbed, this._rivalKit?.(url, s.id), this._tookGold));
         }
         this._rivalArrived?.(url);   // (plans/ne1-rival-remembered.md) the rival is at its post, kit and all
         this._finaleOnLoad?.(url);   // (FIN3) the vault after phase 1: no Financier, the beast in his corner
@@ -4487,6 +4491,7 @@ class Game {
             // new map is in place (the .then() restores IDLE). Prevents acting
             // against the old map mid-fetch.
             this.state = STATE.RESOLVING;
+            this._recordMuggers?.();   // (BS2) a mugger keeps what he took
             this._zoneChange();   // (plans/ks1-respawn-list.md) the respawn lists take a step
             this._loadMap(t.toMap, t.toX, t.toY).then(() => {
                 this._log(`[Entered ${this.map.zoneName}]`);
@@ -6194,6 +6199,7 @@ class Game {
         this._chestRecords = {};
         this._muggedIds = new Set();
         this._robbed = {};
+        this._tookGold = {};
         this._hot = {};
         this._pendingFollowers = null;
         this._pendingFollowersFrom = null;

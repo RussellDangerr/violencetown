@@ -444,6 +444,8 @@ export class Enemy {
             // Law 2 positional: a mid-fight reload must not erase a spun
             // victim's recovery turn (that would hand back the free hit).
             _spunTurns: this._spunTurns,
+            // (BS2) The mark that he has already mugged you. Left out while unset.
+            tookGold: this._tookGold > 0 ? this._tookGold : undefined,
         };
     }
 
@@ -461,6 +463,7 @@ export class Enemy {
         e.fsmState = s.fsmState ?? null;
         e._lastWanderTurn = num(s.lastWanderTurn, 0);
         e.carrying = s.carrying ?? null;
+        if (num(s.tookGold, 0) > 0) e._tookGold = s.tookGold;   // (BS2) he does not mug you twice after a reload
         e._barkIndex = num(s.barkIndex, 0);
         e._barkOffset = (typeof s.barkOffset === 'number') ? s.barkOffset : null;
         e._wasAdjacent = s.wasAdjacent === true;
@@ -563,7 +566,20 @@ export function townsfolkPurse(id, seed = 0) {
 // (plans/ne1-rival-remembered.md) `rivalKit`, when given, is the item ids this
 // enemy took off you. It is added LAST, after the mugged clear and the theft
 // subtraction, so a looted enemy that later beats you still carries your things.
-export function spawnEnemy(spawnDef, muggedIds, robbed = null, rivalKit = null) {
+// (BS2) enemyId -> gold he took off you and still carries. Written from the live
+// enemies (so a fresh mugging is seen) over what was already recorded for other
+// zones; an enemy who is dead, or who has lost the gold, drops out.
+export function muggerRecords(enemies, prior = {}) {
+    const out = { ...prior };
+    for (const e of enemies ?? []) {
+        const amt = Math.min(e._tookGold ?? 0, e.gold ?? 0);
+        if (e.entity?.alive !== false && amt > 0) out[e.id] = amt;
+        else delete out[e.id];
+    }
+    return out;
+}
+
+export function spawnEnemy(spawnDef, muggedIds, robbed = null, rivalKit = null, tookGold = null) {
     const e = new Enemy(spawnDef);
     const fights = (e.damage ?? 0) > 0 && !e.ambient;
     if (fights && spawnDef.gold == null && spawnDef.loadout == null) {
@@ -607,6 +623,9 @@ export function spawnEnemy(spawnDef, muggedIds, robbed = null, rivalKit = null) 
         // that is what makes it clean.
         if (r.noticed) makeHostile(e);
     }
+    // (BS2) He still carries what he took off you, and knows he took it.
+    const took = tookGold?.[e.id];
+    if (took > 0 && !muggedIds?.has(e.id)) { e.gold = (e.gold ?? 0) + took; e._tookGold = took; }
     if (rivalKit?.length) e.loadout = [...(e.loadout ?? []), ...rivalKit];
     return e;
 }
