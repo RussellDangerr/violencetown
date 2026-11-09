@@ -67,8 +67,8 @@ describe('SHARED_FILES', () => {
         }
     });
 
-    test('the WIP cap still binds when shares are free', () => {
+    test('the Doing cap still binds when shares are free', () => {
         const ready = Array.from({ length: 5 }, (_, i) => slice(`M${i}`, i, ['game/main.js']));
-        assert.equal(nextSlices(ready, { shared: SHARED_FILES, wipCap: 2 }).picks.length, 2);
+        assert.equal(nextSlices(ready, { shared: SHARED_FILES, doingCap: 2 }).picks.length, 2);
     });
 });
