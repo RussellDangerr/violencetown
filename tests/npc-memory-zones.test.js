@@ -69,7 +69,7 @@ const LIFTED = [
     // the talk: opening it, what it offers, picking
     ['_openDialogue', 'npc'], ['_closeDialogue', ''], ['_dialogueChoices', ''], ['_pickDialogueChoice', 'choice'],
     // the zone change and the memory it writes
-    ['_zoneChange', ''], ['_rememberChests', ''], ['_rememberSpentChoices', ''], ['_loadMap', 'url, spawnX, spawnY'],
+    ['_zoneChange', ''], ['_rememberChests', ''], ['_rememberSpentChoices', ''], ['_applySpentChoices', 'url'], ['_loadMap', 'url, spawnX, spawnY'],
 ];
 
 function makeGame() {

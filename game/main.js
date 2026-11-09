@@ -738,7 +738,7 @@ class Game {
             if (dead.has(s.id)) continue;
             this.enemies.push(spawnEnemy(resolveSpawn(s, this.slots), this._muggedIds, this._robbed, this._rivalKit?.(url, s.id), this._tookGold));
         }
-        applySpent(this._spentChoices, url, this.enemies);   // (NM1) a one-time talk choice you used stays used
+        this._applySpentChoices?.(url);   // (NM1) a one-time talk choice you used stays used
         this._rivalArrived?.(url);   // (plans/ne1-rival-remembered.md) the rival is at its post, kit and all
         this._finaleOnLoad?.(url);   // (FIN3) the vault after phase 1: no Financier, the beast in his corner
 
@@ -980,6 +980,11 @@ class Game {
         stepRespawns(this._respawnLists);
         this._rememberChests?.();
         this._rememberSpentChoices?.();
+    }
+
+    // (NM1) Give the people just spawned in `url` back the one-time choices you used.
+    _applySpentChoices(url) {
+        applySpent(this._spentChoices, url, this.enemies);
     }
 
     // (NM1) Write down the one-time talk choices spent in this zone, per person.
