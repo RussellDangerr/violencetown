@@ -54,9 +54,11 @@
         {"type": "deskMid", "x": 4, "y": 19},
         {"type": "deskR", "x": 5, "y": 19},
         {"type": "shelfA", "x": 7, "y": 21},
+        {"type": "shelfA", "x": 7, "y": 22},
         {"type": "shelfB", "x": 7, "y": 24}
     ],
     "examinables": [
+        {"id": "[TEXT]_claim_factory", "x": 7, "y": 22, "text": "[TEXT]"},
         {"id": "alien-arena-console", "x": 4, "y": 19, "text": "[TEXT]"},
         {"id": "alien-arena-shelf-n", "x": 7, "y": 21, "text": "[TEXT]"},
         {"id": "alien-arena-shelf-s", "x": 7, "y": 24, "text": "[TEXT]"}
