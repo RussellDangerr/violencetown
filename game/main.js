@@ -5291,11 +5291,19 @@ class Game {
     // the bag and grant its ring. Wired from Platero's dialogue choice (onPick).
     // Self-guarding: no material in the bag → nothing is consumed; already own the
     // ring → the material is kept. Returns true only on a successful fashioning.
-    _fashionRing(materialId, ringId) {
+    _fashionRing(materialId, ringId, count = 1, price = 0) {
         if (this.ownedRings.has(ringId)) { this._log('[Platero: "You already wear its like."]'); return false; }
-        const idx = (this.inventory || []).findIndex(s => s && s.itemDef && s.itemDef.id === materialId);
-        if (idx < 0) { this._log('[Platero: "Bring me the material and I\'ll set it into a ring."]'); return false; }
-        this._removeFromSlot(idx);
+        const slots = [];
+        let have = 0;
+        (this.inventory || []).forEach((s, i) => {
+            if (s && s.itemDef && s.itemDef.id === materialId) { slots.push(i); have += s.count || 1; }
+        });
+        if (have < count || (this.gold || 0) < price) { this._log('[Platero: "Bring me the material and I\'ll set it into a ring."]'); return false; }
+        let need = count;
+        for (const i of slots) {
+            while (need > 0 && this.inventory[i]) { this._removeFromSlot(i); need--; }
+        }
+        if (price > 0) this.gold -= price;
         this._acquireRing(ringId);   // logs its own "[You slip on the …]" line
         this._log('[Platero turns it in the light. It becomes a ring.]', 'transition');
         this._render();
