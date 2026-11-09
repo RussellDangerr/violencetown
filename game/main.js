@@ -5867,7 +5867,7 @@ class Game {
         // (ZB2) The same behind-the-target test as yours: an attacker on the tile
         // directly behind where you face hits ×WEAKNESS_MULT. Only that one kind
         // applies to you — no enemy crit or knockout exists on the player today.
-        const backstab = this._isBackstabbed(attacker);
+        const backstab = this._isBackstabbed?.(attacker) === true;
         let dmg = computeHit({ base: rawDamage, positional: backstab ? WEAKNESS_MULT : 1, incomingMult: guardMult * shieldCut });
         if (dmg === 0) return 0;   // 0-contract: hit doesn't happen, never floor back via armor
         // (RR1) Evasion is rolled before armour; a dodged blow deals nothing. The
