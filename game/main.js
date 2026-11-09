@@ -734,6 +734,8 @@ class Game {
         const dead = deadIds(this._respawnLists, url);
         for (const s of this.map.enemySpawns) {
             if (dead.has(s.id)) continue;
+            // (plans/tt1-traveler-after-burger.md) A spawn with `goneAfter` leaves once that quest is complete.
+            if (s.goneAfter && this.questEngine?.isComplete?.(s.goneAfter)) continue;
             this.enemies.push(spawnEnemy(resolveSpawn(s, this.slots), this._muggedIds, this._robbed, this._rivalKit?.(url, s.id), this._tookGold));
         }
         this._rivalArrived?.(url);   // (plans/ne1-rival-remembered.md) the rival is at its post, kit and all
