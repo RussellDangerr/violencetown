@@ -83,7 +83,8 @@ describe('main.js and the GEAR tab are wired to it', () => {
 
     test('the grant refresh reads both hands and merges the pair skill', () => {
         assert.match(main, /import \{ handPairOf \} from '\.\/hand-data\.js'/);
-        assert.match(main, /this\.handPair = handPairOf\(eq\.left, eq\.weapon\)/);
+        assert.match(main, /this\.handPair = this\._handPairNow\?\.\(\) \?\? null/);
+        assert.match(main, /_handPairNow\(\) \{[^\n]*handPairOf\(eq\.left, eq\.weapon\)/);
         assert.match(main, /mergeKnown\(BASE_SPELLS, \[\.\.\.ringSpells, \.\.\.pairSpells\]/);
         assert.match(main, /mergeKnown\(\[\], \[\.\.\.ringTricks, \.\.\.pairTricks\]/);
     });

@@ -5521,6 +5521,9 @@ class Game {
     // not a weapon, is one hand. items.js and save.js ask through this.
     _handsOf(def) { return (weaponClassOf(def) || {}).hands || 1; }
 
+    // (HB2) The pair the two hands make right now, or null.
+    _handPairNow() { const eq = this.equipment || {}; return handPairOf(eq.left, eq.weapon); }
+
     _refreshGrantedSkills() {
         const w  = this.equipment && this.equipment.weapon;
         const gs = (w && w.grantsSpells) || [];
@@ -5536,8 +5539,7 @@ class Game {
         const ringTricks = actives.filter(a => TRICKS[a]);
 
         // (HB2) The pair the two hands make: its name shows on GEAR, its skill joins the wheel.
-        const eq = this.equipment || {};
-        this.handPair = handPairOf(eq.left, eq.weapon);
+        this.handPair = this._handPairNow?.() ?? null;
         const pairSkill = this.handPair && this.handPair.grants;
         const pairSpells = pairSkill && SPELLS[pairSkill] ? [pairSkill] : [];
         const pairTricks = pairSkill && TRICKS[pairSkill] ? [pairSkill] : [];
