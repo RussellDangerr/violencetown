@@ -22,6 +22,7 @@ import { sanitizeSkills } from './skills.js';
 import { sanitizeNoteIds } from './interactions.js';
 import { sanitizeRespawnLists } from './drops.js';
 import { sanitizeRivals } from './rivals.js';
+import { sanitizeSpent } from './npc-memory.js';
 
 // 2: two hands (plans/ws3-two-hands-left-right.md) — equipment.left joins
 // equipment.weapon, which is now the right hand.
@@ -123,6 +124,7 @@ export function serialize(game) {
             // (plans/ch1-chests-stay-empty.md) Containers changed since the map made
             // them, per zone. Left out while empty, like the lists above.
             ...chestEntry(game),
+            ...spentEntry(game),
             // (plans/mp2-map-dims-unvisited.md) Overworld zones entered. Left out for an old
             // save (null), where every zone counts as visited.
             ...visitedEntry(game),
@@ -181,6 +183,12 @@ function sanitizeVisited(raw) {
 function tookGoldEntry(game) {
     const rec = muggerRecords(game.enemies, game._tookGold);
     return Object.keys(rec).length ? { tookGold: rec } : {};
+}
+
+// (NM1) The spent one-time talk choices as a save field, or nothing while there are none.
+function spentEntry(game) {
+    const spentChoices = sanitizeSpent(game._spentChoices);
+    return Object.keys(spentChoices).length ? { spentChoices } : {};
 }
 
 function chestEntry(game) {
@@ -326,6 +334,7 @@ export function migrate(raw) {
     r.world.containers = objects(r.world.containers);
     // An older save has no chest record: every container is as the map made it.
     r.world.chestRecords = sanitizeChestRecords(r.world.chestRecords);
+    r.world.spentChoices = sanitizeSpent(r.world.spentChoices);   // (NM1)
     // An older save has no visited record: every zone counts as visited.
     if (sanitizeVisited(r.world.visitedZones) === null) delete r.world.visitedZones;
     if (r.quest === undefined) r.quest = null;
@@ -420,6 +429,7 @@ export async function loadInto(game, raw) {
     game._rivals = {};
     game._bossDropsGiven = new Set(raw.world.bossDropsGiven ?? []);
     game._chestRecords = sanitizeChestRecords(raw.world.chestRecords);
+    game._spentChoices = sanitizeSpent(raw.world.spentChoices);   // (NM1)
     // null (no record) is kept: the Map shows every zone as visited.
     { const v = sanitizeVisited(raw.world.visitedZones); game._visitedZones = v ? new Set(v) : null; }
 

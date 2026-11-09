@@ -37,6 +37,7 @@ import { getDialogue } from './dialogue.js';
 import { manhattan, clamp } from './utils.js';
 import { RNG, randomSeed } from './rng.js';
 import { pickSlots, defaultPicks, resolveSpawn, requiredDropFor, dropLineFor, FINALE_PHASE1 } from './slots.js';
+import { rememberSpent, applySpent } from './npc-memory.js';
 import { hasSave, readSaveRaw, writeSave, loadInto, clearSave } from './save.js';
 import { QuestEngine } from './quests.js';
 import { doExamine, resolveExamine } from './examine.js';
@@ -506,6 +507,7 @@ class Game {
         // _loadMap lets these win over the map's own contents. Persisted (left out
         // while empty).
         this._chestRecords = {};
+        this._spentChoices = {};   // (NM1) { mapUrl: { spawnId: [choiceId] } }: one-time talk choices used
         this._visitedZones = new Set();     // (mp2) overworld zones entered; null = an old save, every zone counts
         this._mapUrl = null;                // url of the currently-loaded map
         this._cameFrom = null;               // url of the zone you ENTERED this one from (for the pipe-jam)
@@ -736,6 +738,7 @@ class Game {
             if (dead.has(s.id)) continue;
             this.enemies.push(spawnEnemy(resolveSpawn(s, this.slots), this._muggedIds, this._robbed, this._rivalKit?.(url, s.id), this._tookGold));
         }
+        applySpent(this._spentChoices, url, this.enemies);   // (NM1) a one-time talk choice you used stays used
         this._rivalArrived?.(url);   // (plans/ne1-rival-remembered.md) the rival is at its post, kit and all
         this._finaleOnLoad?.(url);   // (FIN3) the vault after phase 1: no Financier, the beast in his corner
 
@@ -976,6 +979,13 @@ class Game {
         this._settleRival?.();
         stepRespawns(this._respawnLists);
         this._rememberChests?.();
+        this._rememberSpentChoices?.();
+    }
+
+    // (NM1) Write down the one-time talk choices spent in this zone, per person.
+    _rememberSpentChoices() {
+        this._spentChoices ||= {};
+        rememberSpent(this._spentChoices, this._mapUrl, this.enemies);
     }
 
     // (plans/ch1-chests-stay-empty.md) Write down every container in this zone that
@@ -6248,6 +6258,7 @@ class Game {
         this._rivals = {};
         this._bossDropsGiven = new Set();
         this._chestRecords = {};
+        this._spentChoices = {};
         this._visitedZones = new Set();   // (mp2) a new run has been nowhere yet
         this._muggedIds = new Set();
         this._robbed = {};
