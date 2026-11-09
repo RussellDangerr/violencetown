@@ -133,6 +133,16 @@ export const WEAPONS = {
         baseValue: 45,
         description: 'Dented brass housing around a coil of glass that hums when charged. Nobody has explained how it works, least of all it.',
     },
+    // Great Sword — the first two-hander in the world (plans/gw1-great-sword-factory-boss.md).
+    // It slashes and stabs like the sword and fills both hands; the Factory's boss carries it.
+    // Name, value and description are placeholders until he rules them.
+    great_sword: {
+        id: 'great_sword', name: '[Great Sword]', damage: 20, equipSlot: 'weapon', useType: 'equip',
+        weaponClass: 'great_sword',
+        category: 'weapon',
+        baseValue: 45,
+        description: '[TEXT: Great Sword description]',
+    },
     // Fearmur — a leg-bone club. Grants the Boo! fear spell (MP) while worn, and
     // fears an enemy you hit twice in a row (onHit: 'fearOnRepeat'). Source: the
     // Graveyard (world drop deferred; the def lives here for the fear mechanics).

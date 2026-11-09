@@ -50,8 +50,10 @@ describe('the Ray Gun moves from the Factory floor to the Alien', () => {
         assert.ok(!ENTRIES.the_deity.loadout.includes('ray_gun'));
         const { loadout: alien, ...alienRest } = ENTRIES.alien_invasion;
         const { loadout: big, ...bigRest } = ENTRIES.bigfoot;
-        assert.deepEqual(alien, [...big, 'ray_gun']);
-        assert.deepEqual({ ...alienRest, name: null }, { ...bigRest, name: null });
+        // GW1R2: he also carries the Great Sword. GW1R5: three 15 GP items are off his kit.
+        const lighter = ['boardwalk_burger', 'defence_poition', 'soap'];
+        assert.deepEqual(alien, [...big.filter(x => !lighter.includes(x)), 'ray_gun', 'great_sword']);
+        assert.deepEqual({ ...alienRest, name: null, equipped: null }, { ...bigRest, name: null, equipped: null });   // GW1R2: and wields it
     });
 });
 

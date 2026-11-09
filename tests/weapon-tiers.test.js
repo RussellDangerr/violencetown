@@ -137,7 +137,7 @@ describe('no existing item changes', () => {
 
     test('WEAPONS holds the same weapons as before', () => {
         assert.deepEqual(Object.keys(WEAPONS).sort(),
-            ['fearmur', 'gator_tail', 'lion_whip', 'ray_gun', 'wooden_sword']);
+            ['fearmur', 'gator_tail', 'great_sword', 'lion_whip', 'ray_gun', 'wooden_sword']);
     });
 
     test('the placed weapons keep their numbers, and gain no tier or perks', () => {
