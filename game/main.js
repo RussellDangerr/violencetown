@@ -6046,7 +6046,10 @@ class Game {
         this._pendingTransition = null;                        // 7. de-aggro + resume (mirror _respawn's tail)
         this._deAggroAll();
         this.state = STATE.IDLE;
-        if (c.log) this._log(c.log, 'transition');
+        // (plans/dl1-empty-defeat-line.md) A loss line only shows if something was lost.
+        const tookAny = !!(cost && ((cost.taken && cost.taken.length) || cost.takenGold));
+        const openLog = (!tookAny && c.emptyLog) || c.log;
+        if (openLog) this._log(openLog, 'transition');
         // The cost line: every item taken and the GP, or that nothing was (DFR1).
         const lost = ((cost && cost.taken) || []).map(e => {
             const name = e.itemDef.name || e.itemDef.id;
