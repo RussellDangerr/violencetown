@@ -124,6 +124,57 @@ export function sanitizeRespawnLists(raw) {
     return out;
 }
 
+// ── Returning boss spots (plans/ro1-returning-boss-spot.md, ruling RO1R1 a) ─────
+//
+// A boss with a returning spot does not come back off the respawn list: when it is due, the
+// spot is marked filled instead and a different boss stands there. `back` is what stepRespawns
+// returned; `find(url, id)` says which spot (if any) a due id leaves open. Mutates `back` (the
+// claimed ids come out of it) and `filled` ("url" → [{ spawn, replaces }]); returns the claims.
+export function claimSpots(back, filled, find) {
+    const claimed = [];
+    for (const url of Object.keys(back)) {
+        const keep = [];
+        for (const id of back[url]) {
+            const spot = find(url, id);
+            if (!spot) { keep.push(id); continue; }
+            const list = (filled[url] ||= []);
+            if (!list.some(f => f.spawn === spot.spawn)) list.push({ spawn: spot.spawn, replaces: id });
+            claimed.push({ url, id, spawn: spot.spawn });
+        }
+        if (keep.length) back[url] = keep; else delete back[url];
+    }
+    return claimed;
+}
+
+// True when `spawn` is a boss whose returning spot is filled: he stays dead for good.
+export function spotHolds(filled, url, spawn) {
+    return (filled?.[url] || []).some(f => f.replaces === spawn.id);
+}
+
+// The spawns the filled spots of `url` put on the map: `{ id, returning, x, y }`, which
+// resolveSpawn turns into this game's picked entry. `spots` is RETURNING_SPOTS.
+export function spotSpawns(filled, url, spots = null) {
+    const out = [];
+    for (const f of filled?.[url] || []) {
+        const [spotId, spot] = Object.entries(spots || {}).find(([, v]) => v.spawn === f.spawn) || [];
+        if (spot) out.push({ id: spot.spawn, returning: spotId, x: spot.at.x, y: spot.at.y });
+    }
+    return out;
+}
+
+// Keep only well-formed filled spots of a saved game.
+export function sanitizeFilledSpots(raw) {
+    const out = {};
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+    for (const [url, list] of Object.entries(raw)) {
+        if (!Array.isArray(list)) continue;
+        const kept = list.filter(f => f && typeof f.spawn === 'string' && typeof f.replaces === 'string')
+            .map(f => ({ spawn: f.spawn, replaces: f.replaces }));
+        if (kept.length) out[url] = kept;
+    }
+    return out;
+}
+
 // A boss's own items (its slot's required item, a remembrance, Pike's rope) drop
 // only the first time it dies. `given` is a Set of "url|id" keys. Returns true —
 // and remembers the kill — on the first call for that enemy, false ever after.
