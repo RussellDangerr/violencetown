@@ -31,6 +31,11 @@ import { spreadParanoia } from './give-action.js';
 import { fighters, inFightView } from './fight-area.js';
 import { shownName } from './enemies.js';
 
+// (ps1) Food some enemies throw instead of eating, by kind of enemy. Everyone
+// else keeps theirs as food. Only the two Red Fungi are named.
+const THROWS_CARRIED = Object.freeze({ 'Red Fungus': ['tunnel_mushroom'] });
+const carriedThrows = (npc, itemId) => !!THROWS_CARRIED[npc.type]?.includes(itemId);
+
 // (FX47) What a log line calls someone: a boss by its one name, anyone else as
 // before (their own name, else their type).
 export const logName = (x) => (x && x.boss ? shownName(x) : (x?.name ?? x?.type));
@@ -481,7 +486,8 @@ export function tickNpcState(game, npc, clock = game.turn, rng = game.rng) {
             // Deterministic: the first chance it gets (plans/poisons.md).
             const throwDist = chebyshev(npc.x, npc.y, game.playerX, game.playerY);
             const throwAt = (canSeePlayer && throwDist >= 2 && game._enemyThrow)
-                ? (npc.loadout ?? []).findIndex(x => typeof x === 'string' && ITEMS[x]?.enemyThrows
+                ? (npc.loadout ?? []).findIndex(x => typeof x === 'string'
+                                                    && (ITEMS[x]?.enemyThrows || carriedThrows(npc, x))
                                                     && throwDist <= (ITEMS[x].range ?? 5))
                 : -1;
             if (throwAt >= 0) {
