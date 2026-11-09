@@ -761,11 +761,18 @@ function resolveSelfUse(game, itemDef) {
     if (itemDef.effect === 'cure_sludge') {
         // Soap is tracked via _soapUsedThisTurn in main.js
         // It cancels sludge at end of resolution without harm
+        // Washing out the mouth ends Poisoned at once (PSR3); sludge still waits for end of turn.
+        let cured = '';
+        if (game.hasBuff && game.hasBuff('poison') && game.removeBuff) {
+            game.removeBuff('poison');
+            cured = ' [TEXT: poison cured]';
+        }
         if (game.hasBuff && game.hasBuff('sludge')) {
             return equipMsg
-                ? `${equipMsg} [Soap applied — sludge will be neutralized]`
-                : `[Used ${itemDef.name} — sludge will be neutralized]`;
+                ? `${equipMsg} [Soap applied — sludge will be neutralized]${cured}`
+                : `[Used ${itemDef.name} — sludge will be neutralized]${cured}`;
         }
+        if (cured) return equipMsg ? `${equipMsg}${cured}` : `[Used ${itemDef.name}]${cured}`;
         return equipMsg
             ? `${equipMsg} [Already clean]`
             : `[Used ${itemDef.name} — already clean]`;

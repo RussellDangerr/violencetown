@@ -89,7 +89,7 @@ const LIFTED = [
     ['_goldTray', ''], ['_toggleOfferGold', 'npc'], ['_buybackList', 'npc'], ['_buybackLive', 'npc'],
     ['_buybackRecord', 'npc, itemId, kind, price'], ['_endBuybacks', ''],
     ['_commitOffer', ''], ['_offerBlocker', ''], ['_logOffer', 'npc, R, { given, taken, gold }'],
-    ['_removeFromSlot', 'slot'], ['_addToInventory', 'itemDef'], ['_wheelOpenerUp', ''],
+    ['_removeFromSlot', 'slot'], ['_hasSludgeImmunity', ''], ['addBuff', "id, name, turns, type = 'buff', extra = {}"], ['_addToInventory', 'itemDef'], ['_wheelOpenerUp', ''],
     // the zone change: the memory the fix adds, and the load that reads it
     ['_zoneChange', ''], ['_rememberChests', ''], ['_loadMap', 'url, spawnX, spawnY'],
 ];
@@ -132,7 +132,7 @@ function makeGame(url = 'sewer-map.json') {
         },
     };
     const free = {
-        STATE, DIRS, audio, document, window, carriesAll,
+        STATE, DIRS, audio, document, window, carriesAll, SLUDGE_DURATION: 3,
         requestAnimationFrame: (f) => queueMicrotask(() => f(Infinity)),
         performance: { now: () => 0 },
         setTimeout: () => 0,

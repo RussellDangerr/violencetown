@@ -61,6 +61,9 @@ export const DIALOGUES = {
             { id: 'fashion_rat', label: 'Have him fashion the wererat fur into a ring', repeatable: true,
               onPick: (game) => { if (game._fashionRing) game._fashionRing('wererat_fur', 'rat_ring'); },
               reply: '"Let\'s see what you\'re carrying, then."' },
+            { id: 'fashion_fire', label: '[TEXT: have him set Fire Blood into a ring]', repeatable: true,
+              onPick: (game) => { if (game._fashionRing) game._fashionRing('fire_blood', 'fire_ring', 3); },
+              reply: '"Let\'s see what you\'re carrying, then."' },
         ],
     },
     bartho: {

@@ -15,7 +15,7 @@ const GAME = new URL('../game/', import.meta.url);
 const mapData = (file) => JSON.parse(readFileSync(new URL(file, GAME), 'utf8'));
 const allMaps = () => readdirSync(GAME).filter(f => f.endsWith('-map.json')).map(file => ({ file, data: mapData(file) }));
 
-describe('SL-4: a required item belongs to the slot, so every entry drops it', () => {
+describe('SL-4: a required item belongs to the slot, so every entry yields it (by drop, or by its zone\'s quest)', () => {
     const required = Object.entries(SLOTS).filter(([, s]) => s.requiredDrop);
 
     test('there is at least one required-item slot to check (the Sewer boss)', () => {
@@ -29,7 +29,7 @@ describe('SL-4: a required item belongs to the slot, so every entry drops it', (
 
     for (const [slotId, slot] of required) {
         for (const { entry } of slot.pool) {
-            test(`${slotId} filled by '${entry}' drops ${slot.requiredDrop}`, () => {
+            test(`${slotId} filled by '${entry}' yields ${slot.requiredDrop}, ${slot.viaQuest ? 'by its zone\'s quest' : 'by a floor drop'}`, () => {
                 const spawns = mapData(slot.map).enemies;
                 const spawn = spawns.find(s => s.slot === slotId);
                 assert.ok(spawn, `${slotId} stands nowhere on ${slot.map}`);
@@ -39,6 +39,8 @@ describe('SL-4: a required item belongs to the slot, so every entry drops it', (
                 assert.equal(requiredDropFor(enemy, []), slot.requiredDrop);
                 assert.equal(requiredDropFor({ id: spawn.id }, spawns), slot.requiredDrop);
                 assert.ok(ITEMS[slot.requiredDrop], `${slot.requiredDrop} is not a real item`);
+                // (AB3) The three Act 2 slots are the quests' to give; every other slot drops on the floor.
+                assert.equal(!!slot.viaQuest, ['carnival.boss', 'factory.boss', 'graveyard.boss'].includes(slotId));
             });
         }
     }
@@ -47,6 +49,9 @@ describe('SL-4: a required item belongs to the slot, so every entry drops it', (
         const src = readFileSync(new URL('main.js', GAME), 'utf8');
         const body = src.slice(src.indexOf('    _handleEnemyDeath(enemyObj) {'), src.indexOf('(Remembrance Rings) The Were-Rat also'));
         assert.match(body, /requiredDropFor\(enemyObj/);
+        // (AB3) A quest-given item skips the floor drop; the fall is told to the quest.
+        assert.match(body, /act2BossDown\?\.\(enemyObj/);
+        assert.match(body, /firstFall && required && !viaQuest/);
         assert.doesNotMatch(body, /tag === 'wererat_boss' && ITEMS\.catalytic_converter/);
     });
 

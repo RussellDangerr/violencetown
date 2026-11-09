@@ -10,7 +10,7 @@ import { loadAllSprites } from './sprites.js';
 import { BitmapFont } from './bitmap-font.js';
 import { pickHitMark, HEAVY_HIT_DAMAGE, dodgeChance, DODGE_WORD } from './hit-splat.js';   // (manga-impact-marks) the mark rule + the heavy threshold
 import { makeEffectLoop } from './effect-loop.js';                 // one tick of the transient-effects loop, and its refusal to die on a bad frame
-import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK, SLUDGE_DOT } from './data.js';
+import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK, SLUDGE_DOT, FIRE_QUENCHING_TILES } from './data.js';
 import { puddleTiles, layPuddle, puddleAt, dryPuddles } from './puddles.js';   // (poisons) Sludge Brain's puddles
 import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef } from './items.js';
 import { WEAPONS, weaponClassOf } from './weapons.js';
@@ -27,7 +27,7 @@ import { addToInventory as addToInv, moveToZone, zoneOf, pageCount, slotOnPage, 
 import { itemActions, equipOptions, inspectorUsesRect } from './inspector.js';   // (C1) tap-to-inspect: context actions; (C2) GEAR chooser options
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
-import { attack, formatDamageNumber, computeHit, elementalMult, weaponHitKind, isBackstab, shieldArmor, raiseShield } from './combat.js';
+import { attack, formatDamageNumber, computeHit, elementalMult, weaponHitKind, isBackstab, shieldArmor, raiseShield, WEAKNESS_MULT, weaknessKinds, critOf, knockoutDamage } from './combat.js';
 import { Enemy, spawnEnemy, muggerRecords, resolveEnemyTurns, resolveAmbientTurns, unnestBrackets } from './enemies.js';
 import { canBeRival, itemIdsOf, recordDefeat, kitFor, markCarrying, settleItems, clearRival } from './rivals.js'; // the enemy that beat you is remembered (pure, node-tested)
 import { isHostile, isHunting, isSewerDweller, allyAids } from './ai.js';
@@ -2722,6 +2722,12 @@ class Game {
                 }
             }
 
+            // Snow / ice (the FIRE_QUENCHING_TILES list) put Burning out.
+            if (this.hasBuff('fire') && FIRE_QUENCHING_TILES.includes(this.map.getTile(nx, ny))) {
+                this.removeBuff('fire');
+                this._log('[TEXT: the cold puts the fire out.]');
+            }
+
             // Pickup
             this._tryPickup();
 
@@ -3585,26 +3591,10 @@ class Game {
         if (verb.resolver === 'cancel') { this._closeTargetList(); return; }
         const t = this.targetList.target;
 
-        // (ruled 2026-09-02) You may swing at anyone in this town — but swinging
-        // at someone who is not fighting you asks first. Between this and the
-        // bottom-of-the-list rank, an unprovoked attack takes opening the full
-        // list, scrolling past everything, and then saying yes a second time. It
-        // is allowed and it is deliberate, which is the whole ask.
-        //
-        // The confirmation is the LIST ITSELF re-dressed rather than a new modal:
-        // same widget, same keys, and Cancel starts selected so a held Enter
-        // cannot carry through into a punch.
-        if (verb.key === 'hit' && !verb.confirmed && t && t.npc && !isHostile(t.npc)) {
-            const who = String((t.npc.boss && t.npc.shownName) || t.npc.name || t.npc.type || 'them').replace(/[[\]]/g, '');
-            this.targetList.verbs = [
-                { ...verb, label: `Really hit ${who}?`, confirmed: true },
-                { key: 'cancel', label: 'Cancel', resolver: 'cancel', color: '#4a3c2a', text: '#b0a184' },
-            ];
-            this.targetList.sel = 1;                      // Cancel, not the punch
-            audio.playSfx('menu-open');
-            this._render();
-            return;
-        }
+        // (ruled RHR1) You may swing at anyone, and Hit asks nothing: choosing it swings
+        // at once. What the victim does back is the cost. A held Enter or Space that
+        // opened the list is an OS key-repeat, which the key handler drops, so it
+        // cannot carry through into the swing.
 
         this.state = STATE.IDLE;   // the resolvers + click-walk assume IDLE
         this._actOnTarget(verb, t);
@@ -4046,14 +4036,16 @@ class Game {
     // Compose the wheel selection and route to the existing resolvers.
     // Apply `damage` to every alive entity standing on any of `tiles`. Each hit
     // routes through combatAttack (typed splat, death, reaction bus). Returns the
-    // count struck. Hits friendlies too — the Plus-Ultra confirm gated that.
+    // list of who was struck ({ name, dealt }: shown name, damage after armour and
+    // weakness). Hits friendlies too — the Plus-Ultra confirm gated that.
     _aoeStrike(tiles, damage, opts = {}) {
-        let hit = 0;
+        const hit = [];
         for (const t of tiles) {
             const e = this.enemies.find(en => en.entity.isAlive() && en.x === t.x && en.y === t.y);
             // combatAttack composes the elemental matchup itself and returns null
             // on immune (already logged) — only count tiles that actually landed.
-            if (e && this.combatAttack(e, damage, opts)) hit++;
+            const shown = e && this.combatAttack(e, damage, opts);
+            if (shown) hit.push({ name: (e.boss && e.shownName) || (e.name ?? e.type), dealt: parseInt(shown, 10) });
         }
         return hit;
     }
@@ -4100,7 +4092,7 @@ class Game {
                 const dmg = this.equipment.weapon.damage * 2 / 3;
                 const tiles = affectedTiles(w, this);
                 const hit = this._aoeStrike(tiles, dmg, { type: this.equipment.weapon.damageType, weapon: this.equipment.weapon });
-                if (hit) { this._log(`[Cleave! ${hit} caught.]`, 'combat'); this._advanceWorld(); }
+                if (hit.length) { this._log(`[Cleave! ${hit.length} caught.]`, 'combat'); this._advanceWorld(); }
                 else if (this._enemiesPresent(tiles) > 0) { this._log('[Cleave connects — shrugged off, immune.]', 'combat'); this._advanceWorld(); }
                 else this._log('[Cleave hits only air]', 'combat');
                 break;
@@ -4112,7 +4104,7 @@ class Game {
                 const dmg = this.equipment.weapon.damage * 2 / 5;
                 const tiles = affectedTiles(w, this);
                 const hit = this._aoeStrike(tiles, dmg, { type: this.equipment.weapon.damageType, weapon: this.equipment.weapon });
-                if (hit) { this._log(`[Spin! ${hit} caught.]`, 'combat'); this._advanceWorld(); }
+                if (hit.length) { this._log(`[Spin! ${hit.length} caught.]`, 'combat'); this._advanceWorld(); }
                 else if (this._enemiesPresent(tiles) > 0) { this._log('[Spin connects — shrugged off, immune.]', 'combat'); this._advanceWorld(); }
                 else this._log('[You spin, hitting nothing]', 'combat');
                 break;
@@ -4126,7 +4118,7 @@ class Game {
                 this.playerMp = Math.max(0, this.playerMp - spell.mpCost);
                 emitNoise(this._earshot(), this.playerX, this.playerY, NOISE.cast);
                 const hit = this._aoeStrike(affectedTiles(w, this), spell.damage, { type: spell.damageType });
-                if (hit) this._log(`[${spell.name}! ${spell.damage} ${spell.damageType} to ${hit}.]`, 'combat');
+                if (hit.length) this._log(`[${spell.name}! ${hit.map(h => `${h.name} ${h.dealt}`).join(', ')}]`, 'combat');
                 else this._log(`[${spell.name} fizzles — nothing caught.]`, 'combat');
                 this._advanceWorld();
                 break;
@@ -4157,7 +4149,7 @@ class Game {
                     break;
                 }
                 const hit = this._aoeStrike(affectedTiles(w, this), trick.damage, { type: trick.damageType });
-                if (hit) this._log(`[${trick.name}! ${trick.damage} ${trick.damageType} to ${hit}. (-${trick.gpCost}g)]`, 'combat');
+                if (hit.length) this._log(`[${trick.name}! ${hit.map(h => `${h.name} ${h.dealt}`).join(', ')}. (-${trick.gpCost}g)]`, 'combat');
                 else this._log(`[${trick.name} fizzles — nothing caught. (-${trick.gpCost}g)]`, 'combat');
                 this._advanceWorld();
                 break;
@@ -5033,7 +5025,12 @@ class Game {
         // (WS4) A weapon hit with no damageType of its own lands its best kind —
         // slash, stab or crush — on this target (WR1 b); the splat shows it.
         const kind = opts.type ? null : weaponHitKind(opts.weapon, enemyObj);
-        const finalDmg = computeHit({
+        // (EL2) Each weakness KIND the hit meets — element, back, state (feared
+        // or poisoned) — is ×1.5, and they multiply. Two kinds is a crit (the
+        // gold-ring splat); three knock out a non-boss (combat.js critOf).
+        const kinds = weaknessKinds({ elemental: elementalMult(opts.type || kind, enemyObj), backstab, target: enemyObj });
+        const weakHit = critOf(kinds, { boss: enemyObj.boss === true || isBoss(enemyObj) });
+        let finalDmg = computeHit({
             base: dmg,
             // (Poition) An active Strength Poition adds flat damage here — Law
             // 2's flats bucket ("same-family flat bonuses add"), read at the
@@ -5043,9 +5040,11 @@ class Game {
             // splash) since they all funnel through this single computeHit call.
             flats: this._poitionMod('strength'),
             elemental: elementalMult(opts.type || kind, enemyObj),
-            positional: backstab ? 1.5 : 1,
+            positional: backstab ? WEAKNESS_MULT : 1,
+            state: kinds.includes('state') ? WEAKNESS_MULT : 1,
         });
         if (finalDmg === 0) { this._log(`[${enemyObj.shownName || enemyObj.type} is immune!]`, 'combat'); return null; }
+        if (weakHit.knockout) finalDmg = knockoutDamage(finalDmg, enemyObj.entity);
         if (backstab) this._log('[Backstab!]', 'combat');
 
         const result = attack(playerEntity, enemyObj.entity, finalDmg);
@@ -5075,7 +5074,7 @@ class Game {
         // 3×3 burst) pass opts.omni so it bursts around the target instead.
         const splatDir = { dx: enemyObj.x - this.playerX, dy: enemyObj.y - this.playerY };
         this._spawnHitSplat(enemyObj.x, enemyObj.y, `-${result.dealt}`, opts.type || 'physical',
-            { dir: splatDir, omni: !!opts.omni, crit: !!opts.crit, killed: !!result.killed, kind });
+            { dir: splatDir, omni: !!opts.omni, crit: !!opts.crit || weakHit.crit, killed: !!result.killed, kind });
 
         // Hit flash + stagger — Phase C, polished in B6. Flash duration
         // and stagger distance now scale with damage so light taps feel
@@ -5198,7 +5197,9 @@ class Game {
         // off the list, beating it again gives nothing new.
         const required = requiredDropFor(enemyObj, this.map?.enemySpawns);
         const firstFall = this._bossFirstFall?.(enemyObj, required) ?? true;
-        if (firstFall && required && ITEMS[required]) {
+        // (AB3) An Act 2 boss's item is its zone's quest to give: the fall moves the quest on.
+        const viaQuest = !!required && !!this.questEngine?.act2BossDown?.(enemyObj, this.map?.enemySpawns);
+        if (firstFall && required && !viaQuest && ITEMS[required]) {
             drops.push({ type: required, x: enemyObj.x, y: enemyObj.y, def: ITEMS[required] });
             this._log(dropLineFor(enemyObj, this.map?.enemySpawns) || `[${ITEMS[required].name} dropped.]`, 'pickup');
         }
@@ -5294,11 +5295,19 @@ class Game {
     // the bag and grant its ring. Wired from Platero's dialogue choice (onPick).
     // Self-guarding: no material in the bag → nothing is consumed; already own the
     // ring → the material is kept. Returns true only on a successful fashioning.
-    _fashionRing(materialId, ringId) {
+    _fashionRing(materialId, ringId, count = 1, price = 0) {
         if (this.ownedRings.has(ringId)) { this._log('[Platero: "You already wear its like."]'); return false; }
-        const idx = (this.inventory || []).findIndex(s => s && s.itemDef && s.itemDef.id === materialId);
-        if (idx < 0) { this._log('[Platero: "Bring me the material and I\'ll set it into a ring."]'); return false; }
-        this._removeFromSlot(idx);
+        const slots = [];
+        let have = 0;
+        (this.inventory || []).forEach((s, i) => {
+            if (s && s.itemDef && s.itemDef.id === materialId) { slots.push(i); have += s.count || 1; }
+        });
+        if (have < count || (this.gold || 0) < price) { this._log('[Platero: "Bring me the material and I\'ll set it into a ring."]'); return false; }
+        let need = count;
+        for (const i of slots) {
+            while (need > 0 && this.inventory[i]) { this._removeFromSlot(i); need--; }
+        }
+        if (price > 0) this.gold -= price;
         this._acquireRing(ringId);   // logs its own "[You slip on the …]" line
         this._log('[Platero turns it in the light. It becomes a ring.]', 'transition');
         this._render();
