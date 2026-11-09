@@ -8,7 +8,7 @@ import { HINTS, nextHint } from '../game/hints.js';
 import { fighters } from '../game/fight-area.js';
 
 const hunter = () => ({
-    x: 9, y: 9, entity: { isAlive: () => true }, sightRange: 6, state: 'chase', hunting: true,
+    x: 9, y: 9, entity: { isAlive: () => true }, sightRange: 6, state: 'chasing',
 });
 
 function game(enemies) {
