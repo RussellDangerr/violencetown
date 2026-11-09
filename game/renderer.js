@@ -5078,6 +5078,8 @@ export class Renderer {
             const A = gearArmourRect(bodyRect);
             const armorTotal = game._playerArmor ? game._playerArmor() : 0;
             this.font.drawText(ctx, 'ARMOR ' + armorTotal, A.x, A.y, { color: UI.gold, scale: 2, align: 'left' });
+            // (HB2) The pair the two hands make, under the ARMOR line.
+            if (game.handPair) this.font.drawText(ctx, String(game.handPair.name || game.handPair.id).replace(/^\[|\]$/g, '').toUpperCase(), A.x, A.y + 22, { color: UI.text, scale: 1, align: 'left' });
         }
 
         const _eq = hosted ? deviceEquipLayout(bodyRect) : { figure: EQUIP_FIGURE_RECT, slots: EQUIP_SLOT_RECTS, leftHand: EQUIP_LEFT_HAND_RECT };
