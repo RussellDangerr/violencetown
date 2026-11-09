@@ -94,7 +94,7 @@ import {
     needsFriendlyConfirm, aimRange, affectedTiles, selectedNode, restoreLastCategory, verbApplies,
     greyedReasonLine,
     orderedTargetVerbs, isCombatActive, defaultVerb, previewChildren,
-    aimTap, adjacentFacing,
+    aimTap, adjacentFacing, setMeleeKit,
 } from './wheel-model.js'; // (sunburst wheel) node-tree model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
 import { introAt, isSkipKey } from './tv-intro.js';                                     // (TV1) the TV opening before the title
@@ -3442,8 +3442,18 @@ class Game {
     // combat/item resolvers (combatAttack, resolveThrow, resolveUse, addBuff,
     // _doMove, _openOffer).
 
+    // The Melee ring shows Hit plus the moves the wielded weapon's class brings
+    // (plans/wk1-weapon-class-moves.md); a move outside the kit is not on the wheel.
+    _syncMeleeKit() {
+        // A weapon that names no class (none in the world) leaves the starting ring alone.
+        const cls = weaponClassOf(this.equipment && this.equipment.weapon);
+        setMeleeKit(cls ? cls.kit : null);
+    }
+
     _openWheel() {
         if (this.state !== STATE.IDLE) return;
+        // The Melee ring shows Hit plus the moves the wielded weapon's class brings (plans/wk1-weapon-class-moves.md).
+        this._syncMeleeKit?.();
         this._stopAutoRepeat();
         this._heldDirKeys = [];
         this.state = STATE.RADIAL_MENU;
@@ -4052,7 +4062,11 @@ class Game {
     // Restore the last selection into the wheel and fire it without drawing.
     _repeatLastAction() {
         const lf = this.wheel.lastFired; if (!lf || !lf.path) { this._openWheel(); return; }
+        this._syncMeleeKit?.();
         this.wheel.path = lf.path.slice();
+        // A move the weapon in hand no longer brings is not repeated.
+        const again = selectedNode(this.wheel);
+        if (!again || again.key !== lf.nodeKey) { this._openWheel(); return; }
         this.wheel.aiming = false;
         this.wheel.confirming = false;
         this.wheel.reticle = lf.aimTile || autoAimTile(selectedNode(this.wheel), this);
@@ -4135,6 +4149,23 @@ class Game {
                 if (hit.length) { this._log(`[Cleave! ${hit.length} caught.]`, 'combat'); this._advanceWorld(); }
                 else if (this._enemiesPresent(tiles) > 0) { this._log('[Cleave connects — shrugged off, immune.]', 'combat'); this._advanceWorld(); }
                 else this._log('[Cleave hits only air]', 'combat');
+                break;
+            }
+            case 'stunAttack': {
+                // A hammer hit that also costs the survivor its next turn: the same
+                // lost turn a shove costs (_spunTurns), with no push and no new number.
+                const enemy = aimTile && this.enemies.find(e => e.entity.isAlive() && e.x === aimTile.x && e.y === aimTile.y);
+                if (enemy) {
+                    const wpn = this.equipment.weapon;
+                    this._lastHitTarget = null;
+                    this.combatAttack(enemy, wpn.damage, { type: wpn && wpn.damageType, weapon: wpn });
+                    if (enemy.entity.isAlive()) {
+                        enemy._spunTurns = 1;
+                        this._log('[The blow leaves them reeling.]', 'combat');
+                    }
+                    this._advanceWorld();
+                }
+                else { this._log('[Nothing to stun there]', 'combat'); }
                 break;
             }
             case 'spinAttack': {
