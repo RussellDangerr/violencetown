@@ -6,6 +6,9 @@
 // delegates here; the ITEMS/GEAR glyph shares isSafe so the marker and the
 // take-logic can never disagree.
 
+import { fillsBossSlot, FINALE_PHASE1 } from './slots.js';
+import { FINALE_PHASE2 } from './finale-setpiece.js';
+
 // An item survives EVERY defeat iff it's a quest item, the equipped weapon, or
 // explicitly flagged essential. Everything else is the at-risk pool.
 export function isSafe(itemDef, equippedWeapon) {
@@ -26,6 +29,22 @@ export function isBoss(enemy) {
 export function bossInFight(fs, by) {
     if (isBoss(by)) return by;
     return (fs || []).find(isBoss) || null;
+}
+
+// Does losing to this enemy give the boss retry? (ruling EMR1) Only the story's bosses do:
+// whoever fills a spine boss slot, and the finale's two fixed fights, which sit in no slot
+// (the Financier and Monstrous Sun Man). The Borgir boss and Pike are ordinary defeats.
+// `isBoss` above stays what the name and boss spending read.
+export function isStoryBoss(enemy) {
+    if (!enemy) return false;
+    return fillsBossSlot(enemy) || enemy.tag === 'wererat_boss'   // a save from before slots
+        || enemy.tag === FINALE_PHASE1.financierTag || enemy.tag === FINALE_PHASE2.beastTag;
+}
+
+// bossInFight, asking the story question.
+export function storyBossInFight(fs, by) {
+    if (isStoryBoss(by)) return by;
+    return (fs || []).find(isStoryBoss) || null;
 }
 
 // Split inventory into { safe, atRisk } — entries carry the slot index so the

@@ -22,7 +22,9 @@ import {
     slotRing, unslotRing, acquireRing, sanitizeSlots,
     mergeKnown,   // (ring Task 5) skill-merge helper, relocated from the retired skills.js
 } from './rings.js';
-import { isBoss, bossInFight, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS } from './defeat-scenarios.js';
+// (ruling EMR1) The defeat code asks whether the story's boss is in the fight, not whether
+// anything carries the boss flag; the local names are the ones its methods already read.
+import { isStoryBoss as isBoss, storyBossInFight as bossInFight, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS } from './defeat-scenarios.js';
 import { addToInventory as addToInv, moveToZone, zoneOf, pageCount, slotOnPage, pageOfSlot } from './inventory.js';
 import { itemActions, equipOptions, inspectorUsesRect } from './inspector.js';   // (C1) tap-to-inspect: context actions; (C2) GEAR chooser options
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
