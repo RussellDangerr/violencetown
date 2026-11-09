@@ -111,6 +111,27 @@ export const ENTRIES = {
         barks: ['[TEXT]'],
         barkEveryTurns: 6,
     },
+    // The Carnival's strongman (plans/st2-strongman-wins-contest.md, ruling ST2R1 a): placed by
+    // hand. Give him enough and he turns to your side (give-action.js applyFlip), then fights
+    // beside you at the contest against the boss. Stand-ins until designed: the ordinary Carnival
+    // Clown's look, numbers, kit and gift values, the name, the barks. No `boss`, no slot.
+    strongman: {
+        type: 'Carnival Clown',
+        name: '[Strongman]',
+        gold: 7,
+        loadout: ['hot_dog', 'red_cape', 'soap', 'fire_blood'],
+        hp: 100,
+        armor: 0,
+        damage: ACT2_MOB_DAMAGE,
+        disposition: -40,
+        flipThreshold: 30,
+        bribeable: true,
+        values: { bandage: 6, soap: 4, rock: 3 },
+        behavior: ['IDLE', 'WANDER'],
+        wanderRadius: 6,
+        wanderEveryTurns: 3,
+        adjacencyBark: '[TEXT]',
+    },
     // The Carnival's horses (plans/cb1-carnival-horses-circle.md): three combatants placed by
     // hand around (28,4), which circle you once beside you (ai.js circleStep; the `circler`
     // tag is the flag, off for every other entry). Stand-ins until designed: the Graveyard
