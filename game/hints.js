@@ -22,6 +22,7 @@
 
 import { buildXmbBar } from './xmb.js';
 import { takeable } from './fight-panels.js';
+import { arcOn } from './fight-arc.js';
 
 const cheb = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
 
@@ -94,6 +95,13 @@ export const HINTS = [
         when: (game) => (game.playerHp ?? 100) < (game.playerMaxHp ?? 100) * 0.5
             && buildXmbBar(game.inventory).columns.length > 0,
         text: '[You are hurt. The bar along the bottom is live — Shift+↑↓ picks something to drink.]',
+    },
+    {
+        id: 'fightArc',
+        // The numbered arc under you appears the moment a fight starts, and the
+        // number keys fire it. Same test the arc itself draws by (fight-arc arcOn).
+        when: (game) => arcOn(game),
+        text: '[TEXT: attack arc hint, placeholder.]',
     },
 ];
 
