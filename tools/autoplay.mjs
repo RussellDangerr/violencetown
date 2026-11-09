@@ -91,7 +91,9 @@ async function launchChrome() {
     ], { stdio: 'ignore' });
     const portFile = path.join(profile, 'DevToolsActivePort');
     for (let i = 0; i < 300; i++) {
-        const port = existsSync(portFile) ? Number(readFileSync(portFile, 'utf8').split('\n')[0]) : 0;
+        let port = 0;
+        // On Windows the file can be locked while Chrome writes it (EBUSY): not ready yet.
+        try { port = existsSync(portFile) ? Number(readFileSync(portFile, 'utf8').split('\n')[0]) : 0; } catch { /* retry */ }
         if (port > 0) return { proc, profile, port };
         await sleep(50);
     }
