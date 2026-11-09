@@ -14,6 +14,7 @@ const SS = 2;
 // at its second text row, from the ring geometry in layout.js (ring 1, 60 to 88).
 const EAT_SLICE_TEXT_W = 96;
 import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, itemSprite, CONTAINER_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES, MARK_SPRITES, spriteVariant, spriteFrame, tileFrame, idHash, borderPropKeys, borderPropKey, fillerSprite, TINY_INK } from './sprites.js';
+import { INTERACTIONS, seenNotes } from './interactions.js'; // (IN1)
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
 import { CREDITS, currentCard } from './credits.js';   // (FIN4) the credits screen
 import { ROOT, selectedNode, activeRing, activeIndex, decisionPath, previewChildren, affectedTiles, verbApplies, isCombatActive, flapperDeflection, defaultVerb } from './wheel-model.js'; // (sunburst wheel) + the bump telegraph
@@ -22,7 +23,7 @@ import {
     ITEM_OVERLAY_RECT, ITEM_OVERLAY_ROW_H,
     WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
     EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, EQUIP_LEFT_HAND_RECT, closeButtonRect,
-    DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceBagPagerRects, deviceEquipLayout, gearArmourRect, deviceRingsLayout,
+    DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_LABELS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceBagPagerRects, deviceEquipLayout, gearArmourRect, deviceRingsLayout,
     deviceSkillsLayout, ringPassiveRows,                                     // (US2) the skills readout in the RINGS tab; (RR1) a ring's passive rows
     inspectorPanelRect, inspectorActionRects,                               // (C1) tap-to-inspect panel + action-row geometry
     gearOptionRects, gearChooserRect,                                       // (C2) GEAR chooser option-row + panel geometry
@@ -2778,6 +2779,7 @@ export class Renderer {
         switch (category) {
             case 'combat':     return UI.hpRed;    // damage, deaths, fights
             case 'pickup':     return UI.hpGreen;  // items collected, gold
+            case 'note':       return UI.textLight; // (IN1) an interaction note: muted tan, apart from the cream default
             case 'transition': return UI.gold;     // zone entries, milestones
             case 'system':
             default:           return UI.text;     // dark brown — default
@@ -2811,7 +2813,7 @@ export class Renderer {
             const on = DEVICE_TABS[i] === active;
             drawInset(ctx, t.x, t.y, t.w, t.h);
             if (on) { ctx.strokeStyle = UI.gold; ctx.lineWidth = 2; ctx.strokeRect(t.x + 1, t.y + 1, t.w - 2, t.h - 2); }
-            this.font.drawText(ctx, DEVICE_TABS[i].toUpperCase(), t.x + t.w / 2, t.y + t.h / 2 - 4, { color: on ? UI.gold : UI.dim, scale: 1, align: 'center' });
+            this.font.drawText(ctx, (DEVICE_TAB_LABELS[DEVICE_TABS[i]] || DEVICE_TABS[i].toUpperCase()), t.x + t.w / 2, t.y + t.h / 2 - 4, { color: on ? UI.gold : UI.dim, scale: 1, align: 'center' });
         }
 
         // Delegate the active tab's body into the shared body region.
@@ -2826,6 +2828,7 @@ export class Renderer {
         else if (active === 'quests') this._drawJournalQuestsBody(game, body);
         else if (active === 'map')    this._drawWorldMapBody(game, body, body.y);
         else if (active === 'rings') this._drawDeviceRings(game, body);
+        else if (active === 'notes') this._drawDeviceNotes(game, body);
 
         // (FX43) The bag lists the keys that work in it: the phrases the pickers and shop already
         // use for arrows and Esc, and a placeholder for Space until its verb is chosen.
@@ -2833,6 +2836,27 @@ export class Renderer {
         const fit = this._fitText(foot, R.w - 32, 1, 0.75);
         this.font.drawText(ctx, fit.text, CANVAS_PX / 2, R.y + R.h - 12, { color: UI.dim, scale: fit.scale, align: 'center' });
         ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    }
+
+    // (IN1) The notes tab: each interaction note seen so far, oldest first. Empty reads as one
+    // placeholder line. Long notes wrap; what does not fit is cut.
+    _drawDeviceNotes(game, bodyRect) {
+        const { ctx } = this;
+        const notes = seenNotes(INTERACTIONS, game.interactionNotes);
+        if (!notes.length) {
+            this.font.drawText(ctx, '[TEXT]', bodyRect.x + bodyRect.w / 2, bodyRect.y + 40, { color: UI.dim, scale: 1, align: 'center' });
+            return;
+        }
+        const LH = 14, maxRows = Math.floor((bodyRect.h - 8) / LH);
+        let row = 0;
+        for (const n of notes) {
+            for (const line of wrapToWidth(n.note, bodyRect.w - 16, this._measurer(1))) {
+                if (row >= maxRows) return;
+                this.font.drawText(ctx, line, bodyRect.x + 8, bodyRect.y + 4 + row * LH, { color: UI.textLight, scale: 1 });
+                row++;
+            }
+            row++;
+        }
     }
 
     // (Remembrance Rings, Task 5) SKILLS tab → THE HANDS. Two anatomically
