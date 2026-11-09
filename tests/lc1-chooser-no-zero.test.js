@@ -116,7 +116,7 @@ function drawn(g) {
 }
 // The numbers drawn at each chooser row's right edge, one list per row.
 function rowNumbers(g, texts) {
-    const rows = gearOptionRects(body, gearOptions(g, g._deviceSel.slotKey).length);
+    const rows = gearOptionRects(body, gearOptions(g, g._deviceSel.slotKey).length, g._deviceSel.slotKey);
     return rows.map(r => texts
         .filter(t => t.align === 'right' && t.x === r.x + r.w - 8 && t.y >= r.y && t.y < r.y + r.h)
         .map(t => ({ text: t.text, color: t.color })));
@@ -161,7 +161,7 @@ describe('the left-hand chooser (opened by a real tap on the plate)', () => {
         const seen = [0];
         for (let i = 1; i < n; i++) { g._deviceKey('ArrowDown'); seen.push(g._deviceSel.option); }
         assert.deepEqual(seen, [0, 1, 2], 'the cursor stepped through every row');
-        tapRect(g, gearOptionRects(body, n)[0]);
+        tapRect(g, gearOptionRects(body, n, 'left')[0]);
         assert.equal(g.equipment.left, SWORD);
         assert.equal(g._deviceSel, null);
     });
