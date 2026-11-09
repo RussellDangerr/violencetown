@@ -578,6 +578,8 @@ export function targetVerbs(target, game) {
   // needsAdjacent and the fire path walks the Hero adjacent FIRST (path-then-act,
   // pointer-model slice). Examine + Throw are rangeless. (Supersedes the old
   // offer-time adjacency gate — walking now prevents the reach-across-map grab.)
+  // A bench (HP1): E rests. The label word is a placeholder.
+  if (target.rest) V.push({ key: 'rest', label: 'Rest', color: '#6f8fb8', text: '#eef4fb', icon: 'z', resolver: 'rest', needsAdjacent: true });
   if (target.item) V.push({ key: 'take', label: 'Take', color: '#4f9b4a', text: '#effbe9', resolver: 'take', needsAdjacent: true });
   // A container's tile is never walkable, so Open carries needsAdjacent and the
   // fire path stops BESIDE it — the same path-then-act the car already uses.
@@ -592,7 +594,7 @@ export function targetVerbs(target, game) {
 // re-ordered by CONVENTION: the natural default action on top, then other verbs,
 // then Examine, then a Cancel row at the bottom. (`Walk here` + path-then-act
 // arrive with the pointer-model slice; not present yet.)
-const TARGET_VERB_RANK = { hit: 0, talk: 0, take: 0, open: 0, trade: 20, shove: 35, throw: 40, examine: 90 };
+const TARGET_VERB_RANK = { hit: 0, talk: 0, take: 0, open: 0, trade: 20, rest: 0, shove: 35, throw: 40, examine: 90 };
 
 // Hit against someone who is not fighting you sinks to the bottom of the list,
 // below even Shove — present, because you may swing at anyone, but never near
@@ -625,6 +627,7 @@ export function defaultVerb(target, game) {
            : npc.dialogueId ? 'talk'
            : 'shove')
     : target.container ? 'open'
+    : target.rest ? 'rest'
     : 'examine';
   return verbs.find(v => v.key === key) || verbs.find(v => v.key === 'examine') || verbs[0] || null;
 }

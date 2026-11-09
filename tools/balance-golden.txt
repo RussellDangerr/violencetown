@@ -5,67 +5,68 @@ reference damage 20 | armor cap 20 | peg 1 GP : 1 HP | grunt heal policy: hp <= 
 --- ENEMIES (TTK vs the reference loadout; TTD vs the reference player) ---
 zone/id                           type                         hp   armor    dmg  chal_gp       ttk_lazy   ttk_informed    ttd
 bank/bank-financier               Banker                      100     -80      0        0              1              1      -
-borgir/borgir_boss                Boss                        100       6     12      129              8              3      9
-canyon/pike                       Pike                        100       5      9        0              7              3     12
+borgir/borgir_boss                Boss                        100       6     12      129              8              5      9
+canyon/pike                       Pike                        100       5      9        0              7              4     12
 canyon/canyon-rat-1               Rat                         100     -30      6        1              2              2     17
 canyon/canyon-rat-2               Rat                         100     -30      6        1              2              2     17
 canyon/townie-driver              Violencian                  100     -80      0        6              1              1      -
 carnival/birthday-rat-1           Birthday Rat                100     -30      6        4              2              2     17
-carnival/carnival_boss            Boss                        100       6     14      148              8              3      8
+carnival/carnival_boss            Boss                        100       6     14      148              8              5      8
 carnival/assistant-manager        Carnival Clown              100     -80      0        2              1              1      -
-carnival/clown1                   Carnival Clown              100       0     12       59              5              3      9
-carnival/clown2                   Carnival Clown              100       0     12       59              5              3      9
-carnival/clown3                   Carnival Clown              100       0     12       59              5              3      9
-carnival/clown4                   Carnival Clown              100       0     12       59              5              3      9
-carnival/clown5                   Carnival Clown              100       0     12       59              5              3      9
+carnival/clown1                   Carnival Clown              100       0     12       59              5              4      9
+carnival/clown2                   Carnival Clown              100       0     12       59              5              4      9
+carnival/clown3                   Carnival Clown              100       0     12       59              5              4      9
+carnival/clown4                   Carnival Clown              100       0     12       59              5              4      9
+carnival/clown5                   Carnival Clown              100       0     12       59              5              4      9
+carnival/strongman                Carnival Clown              100       0     12       59              5              4      9
 carnival/carnival-doll-1          Carnival Doll               100     -30      4       13              2              2     25
 carnival/carnival-doll-2          Carnival Doll               100     -30      4       13              2              2     25
 carnival/carnival-doll-3          Carnival Doll               100     -30      4       13              2              2     25
 carnival/carnival-doll-4          Carnival Doll               100     -30      4       13              2              2     25
-carnival/carnival-horse-1         Carnival Horse              100       0     12       35              5              3      9
-carnival/carnival-horse-2         Carnival Horse              100       0     12       35              5              3      9
-carnival/carnival-horse-3         Carnival Horse              100       0     12       35              5              3      9
-carnival/carnival-lion            Carnival Lion               100       6     12      113              8              3      9
+carnival/carnival-horse-1         Carnival Horse              100       0     12       35              5              4      9
+carnival/carnival-horse-2         Carnival Horse              100       0     12       35              5              4      9
+carnival/carnival-horse-3         Carnival Horse              100       0     12       35              5              4      9
+carnival/carnival-lion            Carnival Lion               100       6     12      113              8              5      9
 carnival/robot-rat-1              Robot Rat                   100     -30      6        4              2              2     17
 carnival/sludge-rat-1             Sludge Rat                  100     -30      6        4              2              2     17
-carnival/the-clown                The Clown                   100       6     12      120              8              3      9
+carnival/the-clown                The Clown                   100       6     12      120              8              5      9
 casino/casino-pit-boss            Operator                    100     -80      0        0              1              1      -
 diner/diner-cook                  Cook                        100     -80      0        0              1              1      -
-downtown/dt-ruffian               Ruffian                     100       3      9       65              6              3     12
+downtown/dt-ruffian               Ruffian                     100       3      9       65              6              4     12
 downtown/dt-recipient             Stranger                    100     -80      0        0              1              1      -
 downtown/dt-merch1                Vendor                      100     -80      0        0              1              1      -
 downtown/dt-merch2                Vendor                      100     -80      0        0              1              1      -
 downtown/dt-folk1                 Violencian                  100     -80      0        0              1              1      -
 downtown/dt-folk2                 Violencian                  100     -80      0        0              1              1      -
 downtown/dt-platero               Violencian                  100     -80      0        0              1              1      -
-factory/factory_boss              Boss                        100       6     14      193              8              3      8
-factory/alien-ally-1              Greedy Green                100       3     12       65              6              3      9
-factory/alien-ally-2              Greedy Green                100       3     12       65              6              3      9
-factory/alien-ally-3              Greedy Green                100       3     12       65              6              3      9
-factory/green1                    Greedy Green                100       3     12       65              6              3      9
+factory/factory_boss              Boss                        100       6     14      193              8              5      8
+factory/alien-ally-1              Greedy Green                100       3     12       65              6              4      9
+factory/alien-ally-2              Greedy Green                100       3     12       65              6              4      9
+factory/alien-ally-3              Greedy Green                100       3     12       65              6              4      9
+factory/green1                    Greedy Green                100       3     12       65              6              4      9
 factory/puck                      Puck                        100     -30      1        0              2              2    100
 factory/factory-manager           Violencian                  100     -80      0        0              1              1      -
-frozen/frozen-mob-3               Polar Bear                  100       3     10       70              6              3     10
-frozen/frozen-boss                Siberia                     100       6     14      148              8              3      8
-frozen/frozen-mob-1               Snowman                     100       0     12       35              5              3      9
-frozen/frozen-mob-2               Yeti                        100       6     12      113              8              3      9
-graveyard/ankou-1                 Ankou                       100       3     10       70              6              3     10
-graveyard/graveyard_boss          Boss                        100       6     14      148              8              3      8
-graveyard/crying-angel-1          Crying Angel                100       0     12       35              5              3      9
-graveyard/skel1                   Rattling Skeleton           100       0     12       35              5              3      9
-graveyard/skel2                   Rattling Skeleton           100       0     12       35              5              3      9
-graveyard/skel3                   Rattling Skeleton           100       0     12       35              5              3      9
-graveyard/skel4                   Rattling Skeleton           100       0     12       35              5              3      9
-graveyard/skel5                   Rattling Skeleton           100       0     12       35              5              3      9
+frozen/frozen-mob-3               Polar Bear                  100       3     10       70              6              4     10
+frozen/frozen-boss                Siberia                     100       6     14      148              8              5      8
+frozen/frozen-mob-1               Snowman                     100       0     12       35              5              4      9
+frozen/frozen-mob-2               Yeti                        100       6     12      113              8              5      9
+graveyard/ankou-1                 Ankou                       100       3     10       70              6              4     10
+graveyard/graveyard_boss          Boss                        100       6     14      148              8              5      8
+graveyard/crying-angel-1          Crying Angel                100       0     12       35              5              4      9
+graveyard/skel1                   Rattling Skeleton           100       0     12       35              5              4      9
+graveyard/skel2                   Rattling Skeleton           100       0     12       35              5              4      9
+graveyard/skel3                   Rattling Skeleton           100       0     12       35              5              4      9
+graveyard/skel4                   Rattling Skeleton           100       0     12       35              5              4      9
+graveyard/skel5                   Rattling Skeleton           100       0     12       35              5              4      9
 sewer/carrion                     Carrion                     100     -80      0        0              1              1      -
-sewer/e6                          Fungus King                 100       6     12      113              8              3      9
-sewer/e5                          Ghost Fungus                100       0      8       42              5              3     13
-sewer/e3                          Red Fungus                  100       3     10       70              6              3     10
-sewer/e4                          Red Fungus                  100       3     10       63              6              3     10
-sewer/sludge-bloom                Sludge Bloom                100      15      0        0             20              4      -
-sewer/e1                          Violet Fungus               100       0      9       28              5              3     12
-sewer/e2                          Violet Fungus               100       0      9       28              5              3     12
-sewer/wererat                     Wererat                     100       6     12      148              8              3      9
+sewer/e6                          Fungus King                 100       6     12      113              8              5      9
+sewer/e5                          Ghost Fungus                100       0      8       42              5              4     13
+sewer/e3                          Red Fungus                  100       3     10       70              6              4     10
+sewer/e4                          Red Fungus                  100       3     10       63              6              4     10
+sewer/sludge-bloom                Sludge Bloom                 60      15      0        0             12              4      -
+sewer/e1                          Violet Fungus               100       0      9       28              5              4     12
+sewer/e2                          Violet Fungus               100       0      9       28              5              4     12
+sewer/wererat                     Wererat                     100       6     12      148              8              5      9
 sewer-north/crat                  Violencian                  100     -80      0        0              1              1      -
 sewer-north/crat-a                Violencian                  100     -80      0        5              1              1      -
 sewer-north/crat-b                Violencian                  100     -80      0        5              1              1      -
@@ -79,7 +80,7 @@ town/townie-mince                 Violencian                  100     -80      0
 town/townie-praline               Violencian                  100     -80      0        6              1              1      -
 town/townie-s                     Violencian                  100     -80      0        5              1              1      -
 town/townie-w                     Violencian                  100     -80      0        2              1              1      -
-vault/vault-financier             Banker                      100       6     12      148              8              3      9
+vault/vault-financier             Banker                      100       6     12      148              8              5      9
 
 --- WEAPONS (raw damage) ---
 id               damage  type
@@ -109,7 +110,7 @@ zone               faucet_gp
 bank                       0
 borgir                    25
 canyon                     8
-carnival                 144
+carnival                 151
 casino                     0
 diner                      0
 downtown                   8

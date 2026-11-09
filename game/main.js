@@ -8,9 +8,9 @@ import { computeViewport, screenToTile, clientToScreen, toMenu, stepZoom, zoomTo
 import { loadMap, carriesAll } from './map.js';
 import { loadAllSprites } from './sprites.js';
 import { BitmapFont } from './bitmap-font.js';
-import { pickHitMark, HEAVY_HIT_DAMAGE } from './hit-splat.js';   // (manga-impact-marks) the mark rule + the heavy threshold
+import { pickHitMark, HEAVY_HIT_DAMAGE, dodgeChance, DODGE_WORD } from './hit-splat.js';   // (manga-impact-marks) the mark rule + the heavy threshold
 import { makeEffectLoop } from './effect-loop.js';                 // one tick of the transient-effects loop, and its refusal to die on a bad frame
-import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK, SLUDGE_DOT } from './data.js';
+import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK, SLUDGE_DOT, FIRE_QUENCHING_TILES } from './data.js';
 import { puddleTiles, layPuddle, puddleAt, dryPuddles } from './puddles.js';   // (poisons) Sludge Brain's puddles
 import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef } from './items.js';
 import { WEAPONS, weaponClassOf } from './weapons.js';
@@ -27,8 +27,8 @@ import { addToInventory as addToInv, moveToZone, zoneOf, pageCount, slotOnPage, 
 import { itemActions, equipOptions, inspectorUsesRect } from './inspector.js';   // (C1) tap-to-inspect: context actions; (C2) GEAR chooser options
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
-import { attack, formatDamageNumber, computeHit, elementalMult, weaponHitKind, isBackstab } from './combat.js';
-import { Enemy, spawnEnemy, resolveEnemyTurns, resolveAmbientTurns, unnestBrackets } from './enemies.js';
+import { attack, formatDamageNumber, computeHit, elementalMult, weaponHitKind, isBackstab, shieldArmor, raiseShield, WEAKNESS_MULT, weaknessKinds, critOf, knockoutDamage } from './combat.js';
+import { Enemy, spawnEnemy, muggerRecords, resolveEnemyTurns, resolveAmbientTurns, unnestBrackets } from './enemies.js';
 import { canBeRival, itemIdsOf, recordDefeat, kitFor, markCarrying, settleItems, clearRival } from './rivals.js'; // the enemy that beat you is remembered (pure, node-tested)
 import { isHostile, isHunting, isSewerDweller, allyAids } from './ai.js';
 import { getGreedyStep, stepEntity, findPath } from './pathing.js'; // pathfinding (greedy chase + BFS click-to-move); stepEntity = shove a character aside
@@ -84,6 +84,8 @@ function writeSeenHints(set) {
 import { emitNoise, NOISE, perceives, spotters, struck, VERDICT } from './perception.js'; // sound + sight
 import { coinTake, kitTake, gearTake, coinWeight, itemWeight, gearWeight,
          noticeBuffer, isClean, stealLimit } from './theft.js';
+import { INTERACTIONS, fireRows } from './interactions.js'; // (IN1) carry-this-here rules
+import { overworldZone } from './world-map.js'; // (mp2) which overworld zone a map belongs to
 import { recordUse, skillPerks, mergePassives } from './skills.js'; // (skills) use-ranks: clean lifts rank up light fingers
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
 import {
@@ -251,6 +253,7 @@ class Game {
         // swap touches it. Persisted. Its perks join ringMods only where an action
         // reads them (see _theftPassives).
         this.skills           = {};
+        this.interactionNotes = [];          // (IN1) ids of the interaction rows whose note has been shown; persisted
         this._peakDisposition = 0;           // (rings) highest disposition any NPC has ever shown — monotonic; gates the hidden thumb tier
         this._lastHitTarget = null;   // (fear) id of the enemy the last Melee-Hit struck
         this._ratFormTurns = 0;        // (Rat Ring) turns left folded into a rat; while >0 the player can enter GRATE tiles
@@ -410,6 +413,7 @@ class Game {
         this.wheel = createWheelState();
         this.targetList = { x: 0, y: 0, target: null, verbs: [], sel: 0 };   // (Target List) RuneScape-style verb menu
         this._lastActKeyAt = 0; // double-tap-Act window for express-repeat
+        this._spaceOpenedWheelAt = 0;   // when a bare Space tap opened the wheel; a second Space inside the window repeats instead of drilling
         this._wheelOpenedByHold = false; // (Slice 2) true only between a HOLD-mode open and its release; cleared by every wheel close
         this._deviceTab = 'items';       // (Slice 3) the Remoticon's active tab (ITEMS·GEAR·QUESTS·MAP)
         this._deviceSel = null;          // (C1) inspector sub-selection inside ITEMS: { tab:'items', index } or null
@@ -469,6 +473,7 @@ class Game {
         // (theft) enemyId -> { gold, items, weightTaken, noticed }. Survives a save,
         // and is re-applied by spawnEnemy so a zone re-entry cannot undo a robbery.
         this._robbed = {};
+        this._tookGold = {};   // (BS2) enemyId -> gold he took off you and still carries
         // (fence) itemId -> how many you are carrying that the street has heard
         // about. Written only when a take is NOTICED, so a clean theft leaves
         // goods worth full price anywhere. Decremented when a fence takes them
@@ -501,6 +506,7 @@ class Game {
         // _loadMap lets these win over the map's own contents. Persisted (left out
         // while empty).
         this._chestRecords = {};
+        this._visitedZones = new Set();     // (mp2) overworld zones entered; null = an old save, every zone counts
         this._mapUrl = null;                // url of the currently-loaded map
         this._cameFrom = null;               // url of the zone you ENTERED this one from (for the pipe-jam)
         this._jammedDoor = null;             // {x,y,toMap,integrity,max,intruders[]} while a door is wedged shut
@@ -677,9 +683,20 @@ class Game {
 
     // ── Map Loading ──────────────────────────────────────────────────────────
 
+    // (mp2) The Map remembers which overworld zones you have stood in. An interior counts
+    // for its parent zone. A null record (an old save) is left alone: every zone counts.
+    _noteZoneVisited() {
+        const z = overworldZone(this.map && this.map.zoneName);
+        if (z && this._visitedZones) this._visitedZones.add(z);
+    }
+
+    // (BS2) Remember the gold each mugger still carries, so a re-spawn gives it back.
+    _recordMuggers() { this._tookGold = muggerRecords(this.enemies, this._tookGold); }
+
     async _loadMap(url, spawnX, spawnY) {
         this.map = await loadMap(url);
         this._mapUrl = url;
+        this._noteZoneVisited?.();
         this._jammedDoor = null;   // per-zone: any wedged door is left behind when you leave
         // Splats, words and barks belong to the map they were spawned on: a new
         // zone starts clear, with anything a (C1) cascade still held played first
@@ -717,7 +734,7 @@ class Game {
         const dead = deadIds(this._respawnLists, url);
         for (const s of this.map.enemySpawns) {
             if (dead.has(s.id)) continue;
-            this.enemies.push(spawnEnemy(resolveSpawn(s, this.slots), this._muggedIds, this._robbed, this._rivalKit?.(url, s.id)));
+            this.enemies.push(spawnEnemy(resolveSpawn(s, this.slots), this._muggedIds, this._robbed, this._rivalKit?.(url, s.id), this._tookGold));
         }
         this._rivalArrived?.(url);   // (plans/ne1-rival-remembered.md) the rival is at its post, kit and all
         this._finaleOnLoad?.(url);   // (FIN3) the vault after phase 1: no Financier, the beast in his corner
@@ -769,6 +786,7 @@ class Game {
         // If the car's already fixed, re-open the North bridge — derives
         // from the persistent flag so it's open again on every town re-entry.
         this._openBridgeIfCarFixed();
+        this._openCarrionRoadIfRuled?.();   // `?.`: stand-in games in tests don't carry it
         // (fight-fog) Whatever fog was up belongs to the map you left.
         this.renderer.dropFightFog();
         this._render();
@@ -1070,6 +1088,18 @@ class Game {
         for (let x = 14; x <= 19; x++) { this.setTile(x, 0, 12); this.setTile(x, 1, 12); }
         const br = (this.examinables || []).find(e => e.id === 'bridge');
         if (br) br.text = '[TEXT]';
+    }
+
+    // (CS2) Once the Crat's dispute is ruled (saved flag `carrionRoadOpen`), the
+    // wall south of Carrion's corridor opens onto her side room. Read from the
+    // saved flag on every Sewer load, like the bridge, so CONTINUE keeps it open.
+    _openCarrionRoadIfRuled() {
+        if (!this.questEngine || !this.map || this.map.zoneName !== 'SEWER') return;
+        if (!this.map.transitions.some(t => t.toMap === 'sewer-north-map.json')) return;   // the Sewer proper
+        if (!this.questEngine.getFlag('carrionRoadOpen')) return;
+        this.setTile(9, 19, 5);
+        this.map.transitions.push({ x: 9, y: 19, toMap: 'carrion-room-map.json', toX: 5, toY: 6,
+            label: "[South — TEXT: down Carrion's road]" });
     }
 
     // Persist the game. Debounced to every few turns unless forced (forced on
@@ -1459,6 +1489,17 @@ class Game {
                 // touched, so that walk still resumes on close.
                 this._wheelTakesKey?.(e.code);
                 const w = this.wheel;
+                // (FX59) Tap mode: the first Space of a double-tap has already opened the
+                // wheel, so the second arrives here, not at IDLE. Inside the same window,
+                // and with nothing else pressed since, it repeats the last action rather
+                // than drilling the freshly opened wheel. Any other key cancels the chance.
+                const openedAt = this._spaceOpenedWheelAt || 0;
+                this._spaceOpenedWheelAt = 0;
+                if (e.code === 'Space' && !e.repeat && openedAt && !w.aiming && !w.confirming
+                    && performance.now() - openedAt < 250 && this._canRepeatLast()) {
+                    this._repeatLastAction();
+                    return;
+                }
                 const UP   = (e.code === 'ArrowUp'   || e.code === 'KeyW' || e.code === 'Space' || e.code === 'Enter');
                 const DOWN = (e.code === 'ArrowDown' || e.code === 'KeyS' || e.code === 'Escape');
                 // "Plus Ultra" friendly-confirm intercept.
@@ -1667,7 +1708,10 @@ class Game {
                 e.preventDefault();
                 const now = performance.now();
                 if (now - (this._lastActKeyAt || 0) < 250 && this._canRepeatLast()) this._repeatLastAction();
-                else this._wheelOpenerDown();   // (Slice 2) hold vs tap-toggle open mode
+                else {
+                    this._wheelOpenerDown();   // (Slice 2) hold vs tap-toggle open mode
+                    if (this.state === STATE.RADIAL_MENU) this._spaceOpenedWheelAt = now;   // (FX59)
+                }
                 this._lastActKeyAt = now;
                 return;
             }
@@ -2690,6 +2734,12 @@ class Game {
                 }
             }
 
+            // Snow / ice (the FIRE_QUENCHING_TILES list) put Burning out.
+            if (this.hasBuff('fire') && FIRE_QUENCHING_TILES.includes(this.map.getTile(nx, ny))) {
+                this.removeBuff('fire');
+                this._log('[TEXT: the cold puts the fire out.]');
+            }
+
             // Pickup
             this._tryPickup();
 
@@ -2699,7 +2749,12 @@ class Game {
             const transition = this.map.getTransition(nx, ny);
             if (transition) {
                 if (!carriesAll(transition.requires, this.inventory)) {
-                    this._log(transition.requiresMsg || '[You need something to get through here.]');
+                    // A list of items also says how many of them are in the bag, the
+                    // quest HUD's " (n/total)" style (plans/vd1-vault-door-count.md).
+                    const want = Array.isArray(transition.requires) ? transition.requires : [];
+                    const held = new Set((this.inventory || []).map(s => s && s.itemDef && s.itemDef.id));
+                    const count = want.length > 1 ? ` (${want.filter(id => held.has(id)).length}/${want.length})` : '';
+                    this._log((transition.requiresMsg || '[You need something to get through here.]') + count);
                 } else {
                     this._pendingTransition = transition;
                 }
@@ -2762,7 +2817,7 @@ class Game {
     // Returns true if the shove landed. Heavy characters and boxed-in ones bounce.
     _shoveNpc(enemy, dir) {
         if (!enemy || !dir) return false;
-        const who = enemy.name ?? enemy.type ?? 'them';
+        const who = ((enemy.boss && enemy.shownName) || (enemy.name ?? enemy.type)) ?? 'them';
         // (ruled 2026-09-02) The two ways a shove fails each get their own beat.
         // Caelan: "trying to push someone and not being able to, I think, is a
         // good source of physical comedy." It was a thud and a recoil with no
@@ -2791,7 +2846,7 @@ class Game {
         // stepEntity already set _lastDx/_lastDy to the victim's own displacement,
         // which is unit-length because the destination is always one tile away.
         enemy._spunTurns = 1;                   // burns on the victim's next HOSTILE turn
-        this._log(`[You shove ${enemy.name ?? enemy.type} so hard they spin around!]`, 'combat');
+        this._log(`[You shove ${((enemy.boss && enemy.shownName) || (enemy.name ?? enemy.type))} so hard they spin around!]`, 'combat');
         return true;
     }
 
@@ -3454,9 +3509,24 @@ class Game {
         if (!npc && !item && !examinable && this.map.getTile(x, y) === 19) {
             examinable = (this.examinables || []).find(e => e.id === 'car') || null;
         }
-        if (!npc && !item && !examinable && !container) return null;
+        // (HP1) A bench (tile 20, like the car's 19) is a rest spot.
+        const rest = this.map.getTile(x, y) === 20;
+        if (!npc && !item && !examinable && !container && !rest) return null;
         return { x, y, npc: npc || null, item: item || null, examinable: examinable || null,
-                 container: container || null };
+                 container: container || null, rest };
+    }
+
+    // (HP1) Rest on the faced bench: out of a fight, HP and MP to full and a few hours pass
+    // (the defeat path's time skip); in a fight, refused. Texts are placeholders.
+    _restHere() {
+        if (this._inCombat()) { this._log('[TEXT: you cannot rest in a fight.]'); this._render(); return false; }
+        this.playerHp = this.playerMaxHp;
+        this.playerMp = this.playerMaxMp;
+        this._skipTime('hours');
+        this._log('[TEXT: you rest.]', 'transition');
+        this._render();
+        this.autosave({ force: true });
+        return true;
     }
 
     // (Target List) Open the RuneScape-style verb list on a target — same target
@@ -3538,26 +3608,10 @@ class Game {
         if (verb.resolver === 'cancel') { this._closeTargetList(); return; }
         const t = this.targetList.target;
 
-        // (ruled 2026-09-02) You may swing at anyone in this town — but swinging
-        // at someone who is not fighting you asks first. Between this and the
-        // bottom-of-the-list rank, an unprovoked attack takes opening the full
-        // list, scrolling past everything, and then saying yes a second time. It
-        // is allowed and it is deliberate, which is the whole ask.
-        //
-        // The confirmation is the LIST ITSELF re-dressed rather than a new modal:
-        // same widget, same keys, and Cancel starts selected so a held Enter
-        // cannot carry through into a punch.
-        if (verb.key === 'hit' && !verb.confirmed && t && t.npc && !isHostile(t.npc)) {
-            const who = String(t.npc.name || t.npc.type || 'them').replace(/[[\]]/g, '');
-            this.targetList.verbs = [
-                { ...verb, label: `Really hit ${who}?`, confirmed: true },
-                { key: 'cancel', label: 'Cancel', resolver: 'cancel', color: '#4a3c2a', text: '#b0a184' },
-            ];
-            this.targetList.sel = 1;                      // Cancel, not the punch
-            audio.playSfx('menu-open');
-            this._render();
-            return;
-        }
+        // (ruled RHR1) You may swing at anyone, and Hit asks nothing: choosing it swings
+        // at once. What the victim does back is the cost. A held Enter or Space that
+        // opened the list is an OS key-repeat, which the key handler drops, so it
+        // cannot carry through into the swing.
 
         this.state = STATE.IDLE;   // the resolvers + click-walk assume IDLE
         this._actOnTarget(verb, t);
@@ -3650,6 +3704,7 @@ class Game {
             case 'throw': { const th = this._resolveThrowable(); if (th) { const msg = resolveThrow(this, th.itemDef, null, th.count, { x: t.x, y: t.y }); if (msg) this._log(msg, 'combat'); this._rockClatter(th.itemDef, t.x, t.y); th.consume(); this._advanceWorld(); } else this._log('[Nothing to throw.]'); this._render(); break; }
             case 'take':  this._takeItemAt(t.x, t.y); this._render(); break;
             case 'open':  if (t.container) this._openContainer(t.container); break;
+            case 'rest':  this._restHere(); break;
             default: this._render();
         }
     }
@@ -3998,14 +4053,16 @@ class Game {
     // Compose the wheel selection and route to the existing resolvers.
     // Apply `damage` to every alive entity standing on any of `tiles`. Each hit
     // routes through combatAttack (typed splat, death, reaction bus). Returns the
-    // count struck. Hits friendlies too — the Plus-Ultra confirm gated that.
+    // list of who was struck ({ name, dealt }: shown name, damage after armour and
+    // weakness). Hits friendlies too — the Plus-Ultra confirm gated that.
     _aoeStrike(tiles, damage, opts = {}) {
-        let hit = 0;
+        const hit = [];
         for (const t of tiles) {
             const e = this.enemies.find(en => en.entity.isAlive() && en.x === t.x && en.y === t.y);
             // combatAttack composes the elemental matchup itself and returns null
             // on immune (already logged) — only count tiles that actually landed.
-            if (e && this.combatAttack(e, damage, opts)) hit++;
+            const shown = e && this.combatAttack(e, damage, opts);
+            if (shown) hit.push({ name: (e.boss && e.shownName) || (e.name ?? e.type), dealt: parseInt(shown, 10) });
         }
         return hit;
     }
@@ -4052,7 +4109,7 @@ class Game {
                 const dmg = this.equipment.weapon.damage * 2 / 3;
                 const tiles = affectedTiles(w, this);
                 const hit = this._aoeStrike(tiles, dmg, { type: this.equipment.weapon.damageType, weapon: this.equipment.weapon });
-                if (hit) { this._log(`[Cleave! ${hit} caught.]`, 'combat'); this._advanceWorld(); }
+                if (hit.length) { this._log(`[Cleave! ${hit.length} caught.]`, 'combat'); this._advanceWorld(); }
                 else if (this._enemiesPresent(tiles) > 0) { this._log('[Cleave connects — shrugged off, immune.]', 'combat'); this._advanceWorld(); }
                 else this._log('[Cleave hits only air]', 'combat');
                 break;
@@ -4064,7 +4121,7 @@ class Game {
                 const dmg = this.equipment.weapon.damage * 2 / 5;
                 const tiles = affectedTiles(w, this);
                 const hit = this._aoeStrike(tiles, dmg, { type: this.equipment.weapon.damageType, weapon: this.equipment.weapon });
-                if (hit) { this._log(`[Spin! ${hit} caught.]`, 'combat'); this._advanceWorld(); }
+                if (hit.length) { this._log(`[Spin! ${hit.length} caught.]`, 'combat'); this._advanceWorld(); }
                 else if (this._enemiesPresent(tiles) > 0) { this._log('[Spin connects — shrugged off, immune.]', 'combat'); this._advanceWorld(); }
                 else this._log('[You spin, hitting nothing]', 'combat');
                 break;
@@ -4078,7 +4135,7 @@ class Game {
                 this.playerMp = Math.max(0, this.playerMp - spell.mpCost);
                 emitNoise(this._earshot(), this.playerX, this.playerY, NOISE.cast);
                 const hit = this._aoeStrike(affectedTiles(w, this), spell.damage, { type: spell.damageType });
-                if (hit) this._log(`[${spell.name}! ${spell.damage} ${spell.damageType} to ${hit}.]`, 'combat');
+                if (hit.length) this._log(`[${spell.name}! ${hit.map(h => `${h.name} ${h.dealt}`).join(', ')}]`, 'combat');
                 else this._log(`[${spell.name} fizzles — nothing caught.]`, 'combat');
                 this._advanceWorld();
                 break;
@@ -4109,7 +4166,7 @@ class Game {
                     break;
                 }
                 const hit = this._aoeStrike(affectedTiles(w, this), trick.damage, { type: trick.damageType });
-                if (hit) this._log(`[${trick.name}! ${trick.damage} ${trick.damageType} to ${hit}. (-${trick.gpCost}g)]`, 'combat');
+                if (hit.length) this._log(`[${trick.name}! ${hit.map(h => `${h.name} ${h.dealt}`).join(', ')}. (-${trick.gpCost}g)]`, 'combat');
                 else this._log(`[${trick.name} fizzles — nothing caught. (-${trick.gpCost}g)]`, 'combat');
                 this._advanceWorld();
                 break;
@@ -4198,7 +4255,7 @@ class Game {
                     if (took) this._hot[took.id] = (this._hot[took.id] ?? 0) + 1;
                     victim._robbedSweep = true;            // arms the blind sweep + paranoia
                     reactToTransaction(victim, 'theft', { item: took, gold: gp });
-                    this._log(`[${victim.name ?? victim.type} feels the weight change.]`, 'combat');
+                    this._log(`[${((victim.boss && victim.shownName) || (victim.name ?? victim.type))} feels the weight change.]`, 'combat');
                 }
                 this._advanceWorld();
                 break;
@@ -4325,6 +4382,20 @@ class Game {
     // named in the original design note) because `_worldBeat` already names
     // the unrelated ambient/day-clock/disposition-decay heartbeat below,
     // shared with free-roam — reusing it here would have silently clobbered it.
+    // (IN1) Fire the interaction rows for what you carry in the zone you are in. A row's note
+    // is logged the first time it fires (its own log colour) and remembered for the save.
+    _checkInteractions(rows = INTERACTIONS) {
+        if (!rows.length) return;
+        const carried = new Set();
+        for (const s of this.inventory || []) if (s && s.itemDef) carried.add(s.itemDef.id);
+        for (const it of Object.values(this.equipment || {})) if (it && it.id) carried.add(it.id);
+        const fresh = fireRows(this, rows, carried, this._mapUrl, this.interactionNotes);
+        for (const row of fresh) {
+            this.interactionNotes.push(row.id);
+            this._log(row.note, 'note');
+        }
+    }
+
     _advanceWorld() {
         const plan = worldBeatPlan(this._hasteCharges, this._slowCharges);
         this._hasteCharges = plan.hasteCharges;
@@ -4334,6 +4405,7 @@ class Game {
             return;
         }
         this._advanceWorldOnce();
+        this._checkInteractions?.();   // (IN1) optional-called, like _saveMoment, for stand-in games
         // Slow's second beat only fires if the first one left things in a
         // state where "again, right now" is safe: not dead (die() already
         // guards re-entry, but there's nothing to advance for a corpse) and
@@ -4373,7 +4445,7 @@ class Game {
             const gone = this.enemies.filter(e => e._isSummon && e._summonTurnsLeft <= 0);
             for (const e of gone) {
                 if (this._finaleSummonLeft?.(e)) continue;   // Sun Man is bitten, not sent away
-                this._log(`[${e.type || 'The summon'} slinks back into the crowd.]`);
+                this._log(`[${((e.boss && e.shownName) || e.type) || 'The summon'} slinks back into the crowd.]`);
             }
             if (gone.length) this.enemies = this.enemies.filter(e => !(e._isSummon && e._summonTurnsLeft <= 0));
         }
@@ -4451,9 +4523,12 @@ class Game {
             // new map is in place (the .then() restores IDLE). Prevents acting
             // against the old map mid-fetch.
             this.state = STATE.RESOLVING;
+            this._recordMuggers?.();   // (BS2) a mugger keeps what he took
             this._zoneChange();   // (plans/ks1-respawn-list.md) the respawn lists take a step
             this._loadMap(t.toMap, t.toX, t.toY).then(() => {
                 this._log(`[Entered ${this.map.zoneName}]`);
+                this._checkInteractions?.();   // (IN1) optional-called, like _saveMoment, for stand-in games
+                this._armourShopNotice?.();   // (AA1) optional-called, like _saveMoment, for the stand-in games tests build
                 this.state = STATE.IDLE;
                 this.emitGameEvent('map_entered', { map: t.toMap });
                 this.autosave({ force: true });
@@ -4468,6 +4543,27 @@ class Game {
 
         this._render();
         this.autosave();
+    }
+
+    // (AA1) Walking into a zone whose shop sells armour you do not own says so, once per visit.
+    // "Own" is worn or in the bag. Armour here means a wearable, non-consumable body piece (a
+    // bandage carries an armour number too, but it is a heal). The words are a placeholder: [TEXT].
+    _armourShopNotice() {
+        const owns = (id) => Object.values(this.equipment || {}).some(it => it && it.id === id)
+            || (this.inventory || []).some(sl => sl && sl.itemDef && sl.itemDef.id === id);
+        const BODY = ['top', 'bottom', 'front', 'back', 'sides'];
+        for (const e of this.enemies || []) {
+            if (!e.vendor || !Array.isArray(e.stock)) continue;
+            for (const id of e.stock) {
+                const def = this._resolveItemDef(id);
+                if (def && def.useType === 'equip' && !def.consumable && def.armor
+                    && BODY.includes(def.equipSlot) && !owns(id)) {
+                    this._log('[TEXT]');
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     // Route world-advance messages: plain strings → side log; spoken tuples
@@ -4962,7 +5058,12 @@ class Game {
         // (WS4) A weapon hit with no damageType of its own lands its best kind —
         // slash, stab or crush — on this target (WR1 b); the splat shows it.
         const kind = opts.type ? null : weaponHitKind(opts.weapon, enemyObj);
-        const finalDmg = computeHit({
+        // (EL2) Each weakness KIND the hit meets — element, back, state (feared
+        // or poisoned) — is ×1.5, and they multiply. Two kinds is a crit (the
+        // gold-ring splat); three knock out a non-boss (combat.js critOf).
+        const kinds = weaknessKinds({ elemental: elementalMult(opts.type || kind, enemyObj), backstab, target: enemyObj });
+        const weakHit = critOf(kinds, { boss: enemyObj.boss === true || isBoss(enemyObj) });
+        let finalDmg = computeHit({
             base: dmg,
             // (Poition) An active Strength Poition adds flat damage here — Law
             // 2's flats bucket ("same-family flat bonuses add"), read at the
@@ -4972,9 +5073,11 @@ class Game {
             // splash) since they all funnel through this single computeHit call.
             flats: this._poitionMod('strength'),
             elemental: elementalMult(opts.type || kind, enemyObj),
-            positional: backstab ? 1.5 : 1,
+            positional: backstab ? WEAKNESS_MULT : 1,
+            state: kinds.includes('state') ? WEAKNESS_MULT : 1,
         });
         if (finalDmg === 0) { this._log(`[${enemyObj.shownName || enemyObj.type} is immune!]`, 'combat'); return null; }
+        if (weakHit.knockout) finalDmg = knockoutDamage(finalDmg, enemyObj.entity);
         if (backstab) this._log('[Backstab!]', 'combat');
 
         const result = attack(playerEntity, enemyObj.entity, finalDmg);
@@ -5004,7 +5107,7 @@ class Game {
         // 3×3 burst) pass opts.omni so it bursts around the target instead.
         const splatDir = { dx: enemyObj.x - this.playerX, dy: enemyObj.y - this.playerY };
         this._spawnHitSplat(enemyObj.x, enemyObj.y, `-${result.dealt}`, opts.type || 'physical',
-            { dir: splatDir, omni: !!opts.omni, crit: !!opts.crit, killed: !!result.killed, kind });
+            { dir: splatDir, omni: !!opts.omni, crit: !!opts.crit || weakHit.crit, killed: !!result.killed, kind });
 
         // Hit flash + stagger — Phase C, polished in B6. Flash duration
         // and stagger distance now scale with damage so light taps feel
@@ -5127,7 +5230,9 @@ class Game {
         // off the list, beating it again gives nothing new.
         const required = requiredDropFor(enemyObj, this.map?.enemySpawns);
         const firstFall = this._bossFirstFall?.(enemyObj, required) ?? true;
-        if (firstFall && required && ITEMS[required]) {
+        // (AB3) An Act 2 boss's item is its zone's quest to give: the fall moves the quest on.
+        const viaQuest = !!required && !!this.questEngine?.act2BossDown?.(enemyObj, this.map?.enemySpawns);
+        if (firstFall && required && !viaQuest && ITEMS[required]) {
             drops.push({ type: required, x: enemyObj.x, y: enemyObj.y, def: ITEMS[required] });
             this._log(dropLineFor(enemyObj, this.map?.enemySpawns) || `[${ITEMS[required].name} dropped.]`, 'pickup');
         }
@@ -5223,11 +5328,19 @@ class Game {
     // the bag and grant its ring. Wired from Platero's dialogue choice (onPick).
     // Self-guarding: no material in the bag → nothing is consumed; already own the
     // ring → the material is kept. Returns true only on a successful fashioning.
-    _fashionRing(materialId, ringId) {
+    _fashionRing(materialId, ringId, count = 1, price = 0) {
         if (this.ownedRings.has(ringId)) { this._log('[Platero: "You already wear its like."]'); return false; }
-        const idx = (this.inventory || []).findIndex(s => s && s.itemDef && s.itemDef.id === materialId);
-        if (idx < 0) { this._log('[Platero: "Bring me the material and I\'ll set it into a ring."]'); return false; }
-        this._removeFromSlot(idx);
+        const slots = [];
+        let have = 0;
+        (this.inventory || []).forEach((s, i) => {
+            if (s && s.itemDef && s.itemDef.id === materialId) { slots.push(i); have += s.count || 1; }
+        });
+        if (have < count || (this.gold || 0) < price) { this._log('[Platero: "Bring me the material and I\'ll set it into a ring."]'); return false; }
+        let need = count;
+        for (const i of slots) {
+            while (need > 0 && this.inventory[i]) { this._removeFromSlot(i); need--; }
+        }
+        if (price > 0) this.gold -= price;
         this._acquireRing(ringId);   // logs its own "[You slip on the …]" line
         this._log('[Platero turns it in the light. It becomes a ring.]', 'transition');
         this._render();
@@ -5343,6 +5456,11 @@ class Game {
         this._log(`[${target.shownThe || `The ${target.shownName || target.type || target.entity.name}`} turns on you!]`, 'combat');
     }
 
+    // (ws6) Held shields: the armour they add, and the cut the first ready one
+    // makes to the hit now landing (it then waits out its cooldown, per hand).
+    _shieldArmor() { return shieldArmor(this.equipment || {}); }
+    _shieldCut() { return raiseShield(this.equipment || {}, this._shieldBlocks ??= {}, this.turn ?? 0).mult; }
+
     // Total damage-reduction from worn armor: every equipped body-zone piece's
     // `armor` sums into one number. It stays one flat total (ruled 2026-10-23):
     // there is no per-zone hit location, only Law 2's back tile.
@@ -5359,6 +5477,7 @@ class Game {
         // (Poition) An active Defence Poition rides alongside worn armor +
         // rings the same way — a rider read, not a tick (see _poitionMod).
         total += this._poitionMod('defence');
+        total += this._shieldArmor?.() ?? 0;   // a shield held in a hand adds its armour
         return total;
     }
 
@@ -5524,7 +5643,7 @@ class Game {
         if (!npc || !def) return null;
         npc._lastDx = Math.sign(this.playerX - npc.x);   // it faces what it threw at
         npc._lastDy = Math.sign(this.playerY - npc.y);
-        const who = npc.name ?? npc.type;
+        const who = ((npc.boss && npc.shownName) || (npc.name ?? npc.type));
         const what = String(def.name || def.id).replace(/[[\]]/g, '');
         if (def.fireBlood) {
             this._applyFireBlood(this, def.poition?.turns ?? 5);
@@ -5570,7 +5689,7 @@ class Game {
         if (!this._hasFireBlood(attacker) || !target) return;
         if (target !== this && !(target.entity && target.entity.isAlive())) return;
         this._ignite(target, FIRE_BLOOD_SPREAD_TURNS);
-        const name = target === this ? 'You catch' : `${target.name ?? target.type} catches`;
+        const name = target === this ? 'You catch' : `${((target.boss && target.shownName) || (target.name ?? target.type))} catches`;
         this._log(`[${name} fire.]`, 'combat');
     }
 
@@ -5743,15 +5862,46 @@ class Game {
         this._cascade.mark(actor);
     }
 
+    // (RR1) Does this blow miss you? Draws the seeded RNG only with evasion.
+    _rollDodge() {
+        const chance = dodgeChance(this.ringMods && this.ringMods.evasion);
+        return chance > 0 && this.rng.float() < chance;
+    }
+
+    // (ZB2) Is `attacker` on the tile directly behind you? Your back is opposite
+    // the way you face (this.facing), run through combat.js isBackstab.
+    _isBackstabbed(attacker) {
+        if (!attacker || typeof attacker.x !== 'number' || typeof attacker.y !== 'number') return false;
+        const FACE = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+        const f = FACE[this.facing];
+        if (!f) return false;
+        return isBackstab(attacker.x, attacker.y, { x: this.playerX, y: this.playerY, _lastDx: f[0], _lastDy: f[1] });
+    }
+
     applyDamageToPlayer(rawDamage, attacker = null) {
         if (attacker) this._lastDefeatedBy = attacker;
         // Guard (incoming, defender) folds into one computeHit call — round once,
         // no double-rounding.
-        let dmg = computeHit({
-            base: rawDamage,
-            incomingMult: this.hasBuff('guard') ? 0.5 : 1,
-        });
+        // A held shield cuts the first hit it meets each turn (ws6): its cut folds in here.
+        // A hit that deals nothing leaves the block unspent.
+        const guardMult = this.hasBuff('guard') ? 0.5 : 1;
+        if (computeHit({ base: rawDamage, incomingMult: guardMult }) === 0) return 0;
+        const shieldCut = this._shieldCut?.() ?? 1;
+        // (ZB2) The same behind-the-target test as yours: an attacker on the tile
+        // directly behind where you face hits ×WEAKNESS_MULT. Only that one kind
+        // applies to you — no enemy crit or knockout exists on the player today.
+        const backstab = this._isBackstabbed?.(attacker) === true;
+        let dmg = computeHit({ base: rawDamage, positional: backstab ? WEAKNESS_MULT : 1, incomingMult: guardMult * shieldCut });
         if (dmg === 0) return 0;   // 0-contract: hit doesn't happen, never floor back via armor
+        // (RR1) Evasion is rolled before armour; a dodged blow deals nothing. The
+        // RNG is drawn only when you have evasion, so a run without it replays as before.
+        if (this._rollDodge?.()) {
+            const dx = this.playerX, dy = this.playerY;
+            const dodgeFx = () => { this._spawnHitSplat(dx, dy, DODGE_WORD, 'dodge', { omni: true }); this._ensureParticleLoop(); };
+            if (!this._cascade?.defer(attacker ?? this._cascadeActor, dodgeFx, { hp: 0 })) dodgeFx();
+            return 0;
+        }
+        if (backstab) this._log('[Backstab!]', 'combat');
         if (attacker) this._spreadFireBlood(attacker, this);   // (poisons) a fire-blooded foe sets you burning
         dmg = Math.max(1, dmg - this._playerArmor());   // worn armor soaks the hit (min 1 always lands)
         this.playerHp = Math.max(0, this.playerHp - dmg);
@@ -5901,7 +6051,10 @@ class Game {
         this._pendingTransition = null;                        // 7. de-aggro + resume (mirror _respawn's tail)
         this._deAggroAll();
         this.state = STATE.IDLE;
-        if (c.log) this._log(c.log, 'transition');
+        // (plans/dl1-empty-defeat-line.md) A loss line only shows if something was lost.
+        const tookAny = !!(cost && ((cost.taken && cost.taken.length) || cost.takenGold));
+        const openLog = (!tookAny && c.emptyLog) || c.log;
+        if (openLog) this._log(openLog, 'transition');
         // The cost line: every item taken and the GP, or that nothing was (DFR1).
         const lost = ((cost && cost.taken) || []).map(e => {
             const name = e.itemDef.name || e.itemDef.id;
@@ -6082,6 +6235,7 @@ class Game {
         this.questEngine = new QuestEngine(this);
         this._lastAutosaveTurn = -999;
         this.turn = 0;
+        this._shieldBlocks = {};   // a new game starts with every shield block ready
         this._dayClock = 0;
         this._nightLevel = 0;
         this._dispositionDecayTurns = 0;
@@ -6094,8 +6248,10 @@ class Game {
         this._rivals = {};
         this._bossDropsGiven = new Set();
         this._chestRecords = {};
+        this._visitedZones = new Set();   // (mp2) a new run has been nowhere yet
         this._muggedIds = new Set();
         this._robbed = {};
+        this._tookGold = {};
         this._hot = {};
         this._pendingFollowers = null;
         this._pendingFollowersFrom = null;
@@ -6123,10 +6279,18 @@ class Game {
         this.discoveredFusions = new Set();
         this._peakDisposition = 0;       // it gates the ring tier, so it goes with the rings
         this.skills = {};                // a new run starts every skill from nothing
+        this.interactionNotes = [];      // (IN1) and every interaction note is new again
         this._refreshGrantedSkills();   // fresh weapon, no rings → no granted skills
         this._pendingTransition = null;
         this.gold = 0;
         this.carFuel = 'raw';
+        // The old run's words. The strip, the [L] history (which the fight's combat
+        // feed reads), the log scroll and the hint pacing all belong to the run.
+        // Settings and the seen-hints record are the player's, and stay.
+        this._logStripMessages = [];
+        this._logHistory = [];
+        this._logModalScroll = 0;
+        this._lastHintTurn = null;
         await this._loadMap('town-map.json');
         this.state = STATE.IDLE;
         this._startMainQuest();   // deterministic fix_car start (fix/critical-path)
@@ -7538,6 +7702,14 @@ class Game {
         // touch, with no way back. A zero-delta scroll is the clamp.
         this._offerScrollBy('theirs', 0);
         this._offerScrollBy('yours', 0);
+        // The keyboard cursor shrinks with its list too: selling the last row
+        // left it one past the end, so Space staged nothing. Same clamp as the
+        // column switch; the scroll clamp above already keeps its row in view.
+        const cur = this._offerCursor;
+        if (cur) {
+            const len = (cur.side === 'theirs' ? this._offerTheirsList() : this._offerYoursList()).length;
+            cur.index = Math.max(0, Math.min(len - 1, cur.index));
+        }
 
         this._saveMoment?.();   // (FX24) a finished trade survives a reload
 
@@ -7573,7 +7745,7 @@ class Game {
         // A chest is not handed anything -- "You hand crate nothing for 2 items"
         // is grammatical and still wrong. You take FROM a container.
         const deal = npc._container
-            ? `[You take ${back.join(' and ') || 'nothing'} from the ${npc.type}.`
+            ? `[You take ${back.join(' and ') || 'nothing'} from the ${(npc.boss && npc.shownName) || npc.type}.`
             : back.length
                 ? `[You hand ${npc.shownName || npc.type} ${out.join(' and ') || 'nothing'} for ${back.join(' and ')}.`
                 : `[You hand ${npc.shownName || npc.type} ${out.join(' and ')}.`;
@@ -7714,7 +7886,7 @@ class Game {
         this._dialogueReply = choice.reply || '"..."';
         audio.playSfx((choice.delta ?? 0) < 0 ? 'bump-wall' : 'menu-confirm');
         if ((npc.disposition ?? 0) <= DIALOGUE_HOSTILE_AT) {
-            this._log(`[${npc.name || npc.type} has heard enough.]`, 'combat');
+            this._log(`[${(npc.boss && npc.shownName) || npc.name || npc.type} has heard enough.]`, 'combat');
             this._closeDialogue();
             this._onEntityHarmed(npc, { kind: 'insult' });
             return;

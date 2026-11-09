@@ -14,6 +14,7 @@ const SS = 2;
 // at its second text row, from the ring geometry in layout.js (ring 1, 60 to 88).
 const EAT_SLICE_TEXT_W = 96;
 import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, itemSprite, CONTAINER_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES, MARK_SPRITES, spriteVariant, spriteFrame, tileFrame, idHash, borderPropKeys, borderPropKey, fillerSprite, TINY_INK } from './sprites.js';
+import { INTERACTIONS, seenNotes } from './interactions.js'; // (IN1)
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
 import { CREDITS, currentCard } from './credits.js';   // (FIN4) the credits screen
 import { ROOT, selectedNode, activeRing, activeIndex, decisionPath, previewChildren, affectedTiles, verbApplies, isCombatActive, flapperDeflection, defaultVerb } from './wheel-model.js'; // (sunburst wheel) + the bump telegraph
@@ -22,8 +23,8 @@ import {
     ITEM_OVERLAY_RECT, ITEM_OVERLAY_ROW_H,
     WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
     EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, EQUIP_LEFT_HAND_RECT, closeButtonRect,
-    DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceBagPagerRects, deviceEquipLayout, gearArmourRect, deviceRingsLayout,
-    deviceSkillsLayout,                                                      // (US2) the skills readout in the RINGS tab
+    DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_LABELS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceBagPagerRects, deviceEquipLayout, gearArmourRect, deviceRingsLayout,
+    deviceSkillsLayout, ringPassiveRows,                                     // (US2) the skills readout in the RINGS tab; (RR1) a ring's passive rows
     inspectorPanelRect, inspectorActionRects,                               // (C1) tap-to-inspect panel + action-row geometry
     gearOptionRects, gearChooserRect,                                       // (C2) GEAR chooser option-row + panel geometry
     xmbBarLayout, hudLayout, throwRects, wheelTopMarks, fightPanelRects, XMB_CELL,                      // (XMB) usable-bar geometry; (screen-fill) the HUD, throw targets, the marks above the wheel
@@ -331,6 +332,17 @@ export function feedRows(messages, budget, maxPx, measure) {
 // `maxPx`, with no cut mark (a trailing space is dropped). BUFF_CHIP is the
 // chip's size and the inset its name is drawn at, on both sides.
 export const BUFF_CHIP = Object.freeze({ w: 52, h: 26, gap: 3, padX: 3 });
+// (FX49) The chips the buff bar shows: the buffs, then one for the free
+// actions a Speed Poition left (game._hasteCharges), gone at 0. Haste is not a
+// buff (it is a count the world-beat spends), so it is added here. The label is
+// a placeholder; the number below it is the count of free actions left.
+export const HASTE_CHIP_LABEL = '[TEXT]';
+export function buffBarChips(game) {
+    const chips = [...(game.buffs || [])];
+    const haste = game._hasteCharges || 0;
+    if (haste > 0) chips.push({ id: 'haste', name: HASTE_CHIP_LABEL, turns: haste, type: 'buff' });
+    return chips;
+}
 export function buffChipLabel(name, maxPx, measure) {
     const s = String(name).toUpperCase();
     let n = s.length;
@@ -1739,6 +1751,29 @@ export class Renderer {
         } finally {
             this._koShown = null;
         }
+        this._drawRestLabel(game, vp);
+    }
+
+    // (HP1) The faced bench names its verb over itself, like a faced character does.
+    _drawRestLabel(game, vp) {
+        if (!this.font || game._animating || !game._targetAt) return;
+        const FACE = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+        const [fx, fy] = FACE[game.facing] || FACE.down;
+        const tgt = game._targetAt(game.playerX + fx, game.playerY + fy);
+        if (!tgt || !tgt.rest) return;
+        const verb = defaultVerb(tgt, game);
+        if (!verb) return;
+        const { ctx } = this;
+        const px = vp.origin.x + fx * TILE_PX - this._scrollX;
+        const py = vp.origin.y + fy * TILE_PX - this._scrollY;
+        const text = verb.label.toUpperCase();
+        const tw = this.font.measure ? this.font.measure(text, 1) : text.length * 6;
+        const box = intentLabelRect(px, py + 20, tw, false);
+        ctx.fillStyle = '#000000cc';
+        ctx.fillRect(box.x, box.y, box.w, box.h);
+        ctx.fillStyle = verb.color || UI.text;
+        ctx.fillRect(box.x, box.y, box.w, 1);
+        this.font.drawText(ctx, text, box.tx, box.ty, { color: verb.color || UI.text, scale: 1 });
     }
 
     // Soft elliptical drop-shadow on the ground beneath a character — a radial
@@ -1880,8 +1915,9 @@ export class Renderer {
         withWalk(ctx, ecx, ecy, { bob: ea.bob, rot: ea.rot, flipX: eFlip }, () => {
             if (rider) this._drawUnicycle(ctx, px, py, wheelR, (e._stepIndex || 0) + slideProgress);
             // (plans/ak1-ankou-graveyard.md) A living creature whose sprite has a `ghost` has it drawn
-            // first, behind the body: see-through, a little larger, centred on the tile.
-            if (isAlive && info?.ghost) this._drawGhost(ctx, sprites, info.ghost, px, py);
+            // first, behind the body: see-through, a little larger, centred on the tile. Not in the
+            // fight entrance's silhouettes (bodyOnly), which are the body alone.
+            if (isAlive && info?.ghost && !bodyOnly) this._drawGhost(ctx, sprites, info.ghost, px, py);
             if (frame && sprites?.[frame.sheet]?.loaded) {
                 ok = dscale < 1
                     ? this._inkFrame(sprites[frame.sheet], ctx, frame.col, frame.row, bx0, by0, bw0, bw0)
@@ -2618,10 +2654,11 @@ export class Renderer {
     // ── Buff Bar (top-right) ─────────────────────────────────────────────────
 
     _drawBuffBar(game) {
-        if (game.buffs.length === 0) return;
+        const chips = buffBarChips(game);
+        if (chips.length === 0) return;
         const { ctx } = this;
         const { w: bw, h: bh, gap, padX } = BUFF_CHIP;
-        const total = game.buffs.length;
+        const total = chips.length;
         const totalW = total * (bw + gap) - gap + 12;
         const hud = this._hud();
         const px = hud.buffsRight - totalW, py = hud.buffsTop;
@@ -2629,7 +2666,7 @@ export class Renderer {
         drawPanelSmall(ctx, px, py, totalW, bh + 12, this.uiSheet);
 
         for (let i = 0; i < total; i++) {
-            const buff = game.buffs[i];
+            const buff = chips[i];
             const bx = px + 6 + i * (bw + gap), by = py + 6;
 
             // Inset background
@@ -2742,6 +2779,7 @@ export class Renderer {
         switch (category) {
             case 'combat':     return UI.hpRed;    // damage, deaths, fights
             case 'pickup':     return UI.hpGreen;  // items collected, gold
+            case 'note':       return UI.textLight; // (IN1) an interaction note: muted tan, apart from the cream default
             case 'transition': return UI.gold;     // zone entries, milestones
             case 'system':
             default:           return UI.text;     // dark brown — default
@@ -2775,7 +2813,7 @@ export class Renderer {
             const on = DEVICE_TABS[i] === active;
             drawInset(ctx, t.x, t.y, t.w, t.h);
             if (on) { ctx.strokeStyle = UI.gold; ctx.lineWidth = 2; ctx.strokeRect(t.x + 1, t.y + 1, t.w - 2, t.h - 2); }
-            this.font.drawText(ctx, DEVICE_TABS[i].toUpperCase(), t.x + t.w / 2, t.y + t.h / 2 - 4, { color: on ? UI.gold : UI.dim, scale: 1, align: 'center' });
+            this.font.drawText(ctx, (DEVICE_TAB_LABELS[DEVICE_TABS[i]] || DEVICE_TABS[i].toUpperCase()), t.x + t.w / 2, t.y + t.h / 2 - 4, { color: on ? UI.gold : UI.dim, scale: 1, align: 'center' });
         }
 
         // Delegate the active tab's body into the shared body region.
@@ -2790,6 +2828,7 @@ export class Renderer {
         else if (active === 'quests') this._drawJournalQuestsBody(game, body);
         else if (active === 'map')    this._drawWorldMapBody(game, body, body.y);
         else if (active === 'rings') this._drawDeviceRings(game, body);
+        else if (active === 'notes') this._drawDeviceNotes(game, body);
 
         // (FX43) The bag lists the keys that work in it: the phrases the pickers and shop already
         // use for arrows and Esc, and a placeholder for Space until its verb is chosen.
@@ -2797,6 +2836,27 @@ export class Renderer {
         const fit = this._fitText(foot, R.w - 32, 1, 0.75);
         this.font.drawText(ctx, fit.text, CANVAS_PX / 2, R.y + R.h - 12, { color: UI.dim, scale: fit.scale, align: 'center' });
         ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    }
+
+    // (IN1) The notes tab: each interaction note seen so far, oldest first. Empty reads as one
+    // placeholder line. Long notes wrap; what does not fit is cut.
+    _drawDeviceNotes(game, bodyRect) {
+        const { ctx } = this;
+        const notes = seenNotes(INTERACTIONS, game.interactionNotes);
+        if (!notes.length) {
+            this.font.drawText(ctx, '[TEXT]', bodyRect.x + bodyRect.w / 2, bodyRect.y + 40, { color: UI.dim, scale: 1, align: 'center' });
+            return;
+        }
+        const LH = 14, maxRows = Math.floor((bodyRect.h - 8) / LH);
+        let row = 0;
+        for (const n of notes) {
+            for (const line of wrapToWidth(n.note, bodyRect.w - 16, this._measurer(1))) {
+                if (row >= maxRows) return;
+                this.font.drawText(ctx, line, bodyRect.x + 8, bodyRect.y + 4 + row * LH, { color: UI.textLight, scale: 1 });
+                row++;
+            }
+            row++;
+        }
     }
 
     // (Remembrance Rings, Task 5) SKILLS tab → THE HANDS. Two anatomically
@@ -2846,6 +2906,10 @@ export class Renderer {
                     ctx.strokeRect(s.x + 1, s.y + 1, s.w - 2, s.h - 2);
                     const name = this._fitText(strip((RINGS[f.ringId] && RINGS[f.ringId].name) || f.ringId), s.w - 6);
                     this.font.drawText(ctx, name.text, s.x + s.w / 2, s.y + s.h / 2 - 4, { color: UI.gold, scale: name.scale, align: 'center' });
+                    // (RR1) The worn ring's passives, a label and its number, under the socket.
+                    ringPassiveRows(RINGS[f.ringId]).forEach((row, i) => {
+                        this.font.drawText(ctx, `${row.label} ${row.value}`, s.x + s.w / 2, s.y + s.h + 2 + i * 10, { color: UI.gold, scale: 1, align: 'center' });
+                    });
                 }
                 const cur = game._deviceSel;
                 if (cur && cur.tab === 'rings' && cur.key === s.key) this._drawCursorHalo(ctx, s);   // (C3) keyboard cursor
@@ -3424,6 +3488,9 @@ export class Renderer {
         const { ctx } = this;
         const here = overworldZone(game.map && game.map.zoneName);
         const targets = new Set((game.questEngine?.getTargetZones?.() ?? []).map(overworldZone));
+        // (mp2) Zones never entered draw in the dim colour; no record (an old save) dims none.
+        const seen = game._visitedZones;
+        const unvisited = (z) => !!seen && !seen.has(z.zoneName) && z.zoneName !== here;
 
         const cols = WORLD_ZONES.map(z => z.col), rows = WORLD_ZONES.map(z => z.row);
         const c0 = Math.min(...cols), c1 = Math.max(...cols), r0 = Math.min(...rows), r1 = Math.max(...rows);
@@ -3449,13 +3516,14 @@ export class Renderer {
             const b = boxOf(z);
             const isHere = z.zoneName === here;
             const isTarget = targets.has(z.zoneName);
+            const dimmed = unvisited(z);
             ctx.fillStyle = isHere ? 'rgba(212,185,106,0.85)' : 'rgba(30,24,16,0.9)';
             ctx.fillRect(b.x, b.y, b.w, b.h);
             ctx.lineWidth = isTarget ? 3 : 2;
-            ctx.strokeStyle = isTarget ? '#e8462f' : isHere ? '#fff3c0' : 'rgba(212,185,106,0.6)';
+            ctx.strokeStyle = isTarget ? '#e8462f' : isHere ? '#fff3c0' : dimmed ? UI.dim : 'rgba(212,185,106,0.6)';
             ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
             if (!this.font) continue;
-            const txtCol = isHere ? '#2a2010' : UI.text;
+            const txtCol = isHere ? '#2a2010' : unvisited(z) && !isTarget ? UI.dim : UI.text;
             this.font.drawText(ctx, z.label, b.x + b.w / 2, b.y + b.h / 2 - 4, { color: txtCol, scale: 1, align: 'center' });
             if (isHere)        this.font.drawText(ctx, 'YOU',  b.x + b.w / 2, b.y + b.h / 2 + 8, { color: '#7a2010', scale: 1, align: 'center' });
             else if (isTarget) this.font.drawText(ctx, '» GO', b.x + b.w / 2, b.y + b.h / 2 + 8, { color: '#e8462f', scale: 1, align: 'center' });
@@ -3672,7 +3740,8 @@ export class Renderer {
         // one; both are drawn here, before the dial, so neither band can paint
         // over it.
         if (this.font) {
-            const msg = 'WHEEL OPEN  ·  MOVE KEYS STEER IT  ·  ESC TO CLOSE';
+            // (FX50) In a sub-ring Esc steps back one ring; only the first ring's Esc closes.
+            const msg = depth > 1 ? 'WHEEL OPEN  ·  MOVE KEYS STEER IT  ·  ESC [TEXT]' : 'WHEEL OPEN  ·  MOVE KEYS STEER IT  ·  ESC TO CLOSE';
             const dialLeft = cx - this._hud().dialRadius(depth, kids.length > 0) - 8;
             let countMsg = null;
             if (combat) {

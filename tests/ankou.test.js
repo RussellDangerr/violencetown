@@ -144,7 +144,7 @@ function rig() {
     return { r, cells };
 }
 
-function draw(e, { fight = false, walking = false } = {}) {
+function draw(e, { fight = false, walking = false, bodyOnly = false } = {}) {
     e._lastDx = -1; e._lastDy = 0;
     if (walking) { e._slideStart = 100; e._slideMs = 200; e._stepIndex = 1; }
     const g = {
@@ -156,7 +156,7 @@ function draw(e, { fight = false, walking = false } = {}) {
     };
     const { r, cells } = rig();
     const px = VP.origin.x + (e.x - g.playerX) * TILE_PX, py = VP.origin.y + (e.y - g.playerY) * TILE_PX;
-    r._drawEnemySprite(g, e, px, py, 150);
+    r._drawEnemySprite(g, e, px, py, 150, bodyOnly ? { bodyOnly: true } : undefined);
     return { cells, px, py };
 }
 
@@ -182,6 +182,26 @@ describe('the renderer draws the ghost behind the skeleton', () => {
             assert.equal(body.y, py);
         });
     }
+
+    // (plans/ak2-ankou-entrance-silhouette.md) The entrance's silhouettes are each fighter's body alone.
+    test('bodyOnly (the fight entrance): the body alone, no ghost cell', () => {
+        for (const opts of [{}, { walking: true }, { fight: true }]) {
+            const { cells, px, py } = draw(ankou(), { ...opts, bodyOnly: true });
+            assert.equal(cells.length, 1, JSON.stringify(cells));
+            const [body] = cells;
+            assert.deepEqual([body.col, body.row], [ENEMY_SPRITES.Ankou.col, ENEMY_SPRITES.Ankou.row]);
+            assert.equal(body.alpha, 1);
+            assert.ok(!cells.some((c) => c.col === 1 && c.row === 10), 'no ghost cell');
+            assert.equal(body.x, px);
+            assert.equal(body.y, py);
+        }
+    });
+
+    test('without bodyOnly the same Ankou still gets its ghost', () => {
+        const { cells } = draw(ankou(), { fight: true });
+        assert.equal(cells.length, 2);
+        assert.ok(cells.some((c) => c.col === 1 && c.row === 10 && c.alpha < 1), 'ghost cell drawn, see-through');
+    });
 
     test('the control: a Rattling Skeleton draws one cell and no ghost', () => {
         for (const opts of [{}, { walking: true }, { fight: true }]) {

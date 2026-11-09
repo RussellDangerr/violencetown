@@ -485,7 +485,9 @@ export function closeButtonRect(r) {
 // existing draw bodies (ITEMS/GEAR/QUESTS/MAP). Geometry lives here so
 // renderer._drawDevice (draw) and main.js (hit-test) share ONE source of truth.
 export const DEVICE_RECT = MODAL_RECT;
-export const DEVICE_TABS = ['items', 'gear', 'quests', 'map', 'rings'];
+export const DEVICE_TABS = ['items', 'gear', 'quests', 'map', 'rings', 'notes'];
+// (IN1) The label a tab shows when it differs from its id; the notes tab's name is a placeholder.
+export const DEVICE_TAB_LABELS = { notes: '[TEXT]' };
 export const DEVICE_TAB_H = 30;                        // tab-strip height
 const DEVICE_TAB_TOP = DEVICE_RECT.y + 38;             // below the title/✕ band (the chip ends at y+36)
 const DEVICE_TAB_PAD = 14;                             // strip inset from the frame sides
@@ -874,4 +876,12 @@ export function offerTraySlotAt(L, pt, side) {
         if (_ptInRect(pt, slots[i])) return i;
     }
     return -1;
+}
+
+// (RR1) What a worn ring's passive says on the Hands tab: one row per passive,
+// a label and its number. The label is a placeholder until its copy is ruled.
+export const RING_PASSIVE_LABEL = '[TEXT]';
+export function ringPassiveRows(ring) {
+    const passive = (ring && ring.passive) || {};
+    return Object.keys(passive).map(key => ({ key, label: RING_PASSIVE_LABEL, value: passive[key] }));
 }

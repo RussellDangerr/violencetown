@@ -24,7 +24,7 @@
 // (plans/quest-journal.md), which is retrospective evidence with no objectives.
 // This is active objective tracking, surfaced as a one-line HUD goal.
 
-import { SLOTS } from './slots.js';
+import { SLOTS, slotIdOf } from './slots.js';
 
 export const QUESTS = {
     // ── Chapter Two: the Canyon fail-branch escape (Pike + the grappling hook).
@@ -200,6 +200,31 @@ export const BETWEEN_QUESTS = [
 // slot is not listed, so its ice cone never counts.
 const ACT2_ZONES = ['CARNIVAL', 'FACTORY', 'GRAVEYARD'];
 
+// (AB3, plans/ab3-act2-quests.md) The three Act 2 quests. They run side by side with the active
+// quest (Act 2 is played in any order) and never touch it: each one's step is a saved flag,
+// `act2_<zone>`, absent until the boss falls (quest 1's autoplay walks into the Factory, so
+// entering a zone must not write the save). Steps: 'boss' (the default: not yet beaten),
+// 'collect' (the boss has fallen; examining the zone's claim spot ends the quest),
+// 'done' (the item is in the bag). The boss slot says
+// which item and where; the verb is how the item reaches you (SP1R1). All text is [TEXT].
+export const ACT2_VERBS = { FACTORY: 'given', GRAVEYARD: 'taken', CARNIVAL: 'earned' };
+export const ACT2_QUESTS = {};
+for (const zone of ACT2_ZONES) {
+    const slot = `${zone.toLowerCase()}.boss`;
+    if (!SLOTS[slot]?.viaQuest) continue;
+    ACT2_QUESTS[zone] = {
+        zone, slot, map: SLOTS[slot].map, verb: ACT2_VERBS[zone],
+        // The examinable on the zone's map whose use is the quest's last step ([E] on it).
+        claimId: `[TEXT]_claim_${zone.toLowerCase()}`,
+        // (ST1) A second spot that ends the same quest: the Carnival's booth, guarded by whoever
+        // fills the boss slot. Null where a zone has no booth.
+        boothId: zone === 'CARNIVAL' ? '[TEXT]_booth_carnival' : null,
+        title: '[TEXT]',
+        steps: { boss: { objective: '[TEXT]' }, collect: { objective: '[TEXT]' } },
+    };
+}
+const act2Key = (zone) => `act2_${zone}`;
+
 // The Act 2 zones whose required item is not in the bag.
 function act2Missing(qe) {
     return ACT2_ZONES.filter(zone => {
@@ -257,6 +282,16 @@ export class QuestEngine {
     // Ingest a game event. Auto-starts any quest whose startOn matches, then
     // advances the active quest if the current stage's condition is met.
     emit(type, payload = {}) {
+        if (type === 'examine') {
+            const q = Object.values(ACT2_QUESTS).find(a => a.claimId === payload.targetId);
+            if (q) this.act2Claim(q.zone);
+            // (ST1) The booth: closed while the guard lives, then the same last step as the claim spot.
+            const booth = Object.values(ACT2_QUESTS).find(a => a.boothId && a.boothId === payload.targetId);
+            if (booth) {
+                if (this.act2Step(booth.zone) === 'boss') this.game._log?.('[TEXT]', 'transition');
+                else this.act2Claim(booth.zone);
+            }
+        }
         // Durable side-effect: remember the car was examined EVEN IF no quest is
         // active yet. The examine_car stage reads this flag (autoSatisfy) so an
         // early examine — before fix_car reaches that stage — still counts and
@@ -354,6 +389,8 @@ export class QuestEngine {
     // The current objective line for the HUD: the active stage's, else a
     // between-quests row's (null when neither applies).
     getHudText() {
+        const here = this.act2Here();   // (AB3) the zone you stand in speaks first
+        if (here) return here.objective;
         const id = this.state.activeId;
         if (!id) return this._betweenView()?.objective ?? null;
         const stage = QUESTS[id].stages[this.state.stageIndex];
@@ -381,6 +418,44 @@ export class QuestEngine {
         const id = this.state.activeId;
         if (!id) return null;
         return QUESTS[id].stages[this.state.stageIndex] || null;
+    }
+
+    // (AB3) The Act 2 quest steps. Unset = 'boss'.
+    act2Step(zone) { return ACT2_QUESTS[zone] ? (this.state.flags[act2Key(zone)] ?? 'boss') : null; }
+
+    // A boss fell. True when its slot's item is the quest's to give (the caller skips the floor
+    // drop); the quest moves to its collect step.
+    act2BossDown(enemy, mapSpawns) {
+        const slot = slotIdOf(enemy, mapSpawns);
+        const q = Object.values(ACT2_QUESTS).find(a => a.slot === slot);
+        if (!q) return false;
+        if (this.act2Step(q.zone) !== 'done') {
+            this.state.flags[act2Key(q.zone)] = 'collect';
+            this.game._log?.('[TEXT]', 'transition');
+            // (ST2) Won with the strongman beside you: one more line. The step is the same.
+            const ally = (this.game.enemies || []).find(e => e.id === 'strongman' && e._ally && e.entity?.isAlive?.());
+            if (ally) this.game._log?.('[TEXT]', 'transition');
+        }
+        return true;
+    }
+
+    // The quest's last step: the item goes into the bag. False unless the boss has fallen.
+    act2Claim(zone) {
+        const q = ACT2_QUESTS[zone];
+        if (!q || this.act2Step(zone) !== 'collect') return false;
+        const item = SLOTS[q.slot].requiredDrop;
+        if (!this.game._grantItem?.(item, '[TEXT]')) return false;
+        this.state.flags[act2Key(zone)] = 'done';
+        this._note(`Completed "${q.title}".`);
+        return true;
+    }
+
+    // The unfinished Act 2 quest of the zone you stand in, with its step; null elsewhere.
+    act2Here() {
+        const zone = this.game?.map?.zoneName;
+        const q = ACT2_QUESTS[zone];
+        const step = q && this.act2Step(zone);
+        return step && step !== 'done' ? { quest: q, step, objective: q.steps[step].objective } : null;
     }
 
     // (NO1) The BETWEEN_QUESTS row that applies now, or null. Only while no

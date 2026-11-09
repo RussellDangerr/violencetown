@@ -392,6 +392,7 @@ function driver(ap, g) {
         await idle(REPEAT_GAP_MS);
         await press('Space');
         if (g.state !== 'radial_menu') return 'the wheel did not open';
+        await idle(REPEAT_GAP_MS);   // (FX59) a Space inside the double-tap window repeats the last action, so wait it out before drilling
         for (const want of keys) {
             const size = activeRing(g.wheel).length || 1;
             for (let n = 0; n < size && selectedNode(g.wheel)?.key !== want; n++) await press('KeyD');

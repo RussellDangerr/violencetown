@@ -25,8 +25,8 @@ const ZONES = [
     // 18: the three circling horses (plans/cb1-carnival-horses-circle.md) join the 11, and the
     // four circling dolls (plans/ec1-carnival-doll-pack.md) join them. 19: the assistant manager
     // (plans/as1-unicycle-clown.md) is a spawn on the map but never fights; he is counted so the
-    // one-spawn-per-tile and unique-id checks still cover him.
-    { file: 'carnival-map.json',  total: 19, original: 'clown1', copies: ['clown2', 'clown3', 'clown4', 'clown5'], boss: 'carnival_boss' },
+    // one-spawn-per-tile and unique-id checks still cover him. 20: the strongman (plans/st2-strongman-wins-contest.md), a bribeable fighter placed by hand.
+    { file: 'carnival-map.json',  total: 20, original: 'clown1', copies: ['clown2', 'clown3', 'clown4', 'clown5'], boss: 'carnival_boss' },
     { file: 'graveyard-map.json', total: 8, original: 'skel1',  copies: ['skel2', 'skel3', 'skel4', 'skel5'],     boss: 'graveyard_boss' },
 ];
 

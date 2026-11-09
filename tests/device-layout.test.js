@@ -11,8 +11,8 @@ test('DEVICE_RECT reuses the proven {24,44,560,520} panel bezel', () => {
   assert.deepEqual(DEVICE_RECT, { x: 24, y: 44, w: 560, h: 520 });
 });
 
-test('DEVICE_TABS is the five tabs in order', () => {
-  assert.deepEqual(DEVICE_TABS, ['items', 'gear', 'quests', 'map', 'rings']);
+test('DEVICE_TABS is the six tabs in order', () => {
+  assert.deepEqual(DEVICE_TABS, ['items', 'gear', 'quests', 'map', 'rings', 'notes']);
 });
 
 test('cycleDeviceTab wraps forward', () => {
@@ -20,11 +20,13 @@ test('cycleDeviceTab wraps forward', () => {
   assert.equal(cycleDeviceTab('gear', 1), 'quests');
   assert.equal(cycleDeviceTab('quests', 1), 'map');
   assert.equal(cycleDeviceTab('map', 1), 'rings');
-  assert.equal(cycleDeviceTab('rings', 1), 'items');   // wrap
+  assert.equal(cycleDeviceTab('rings', 1), 'notes');
+  assert.equal(cycleDeviceTab('notes', 1), 'items');   // wrap
 });
 
 test('cycleDeviceTab wraps backward', () => {
-  assert.equal(cycleDeviceTab('items', -1), 'rings');  // wrap
+  assert.equal(cycleDeviceTab('items', -1), 'notes');  // wrap
+  assert.equal(cycleDeviceTab('notes', -1), 'rings');
   assert.equal(cycleDeviceTab('rings', -1), 'map');
   assert.equal(cycleDeviceTab('gear', -1), 'items');
 });
@@ -34,15 +36,15 @@ test('cycleDeviceTab defaults an unknown tab to the first', () => {
   assert.equal(cycleDeviceTab(null, 1), 'items');
 });
 
-test('deviceTabRect returns 5 tabs sharing y/h, left-to-right, non-overlapping, inside the frame', () => {
-  const r = [0, 1, 2, 3, 4].map(deviceTabRect);
+test('deviceTabRect returns 6 tabs sharing y/h, left-to-right, non-overlapping, inside the frame', () => {
+  const r = [0, 1, 2, 3, 4, 5].map(deviceTabRect);
   for (const t of r) {
     assert.equal(t.y, r[0].y);
     assert.equal(t.h, r[0].h);
     assert.ok(t.x >= DEVICE_RECT.x, `tab x ${t.x} < frame left`);
     assert.ok(t.x + t.w <= DEVICE_RECT.x + DEVICE_RECT.w, `tab right ${t.x + t.w} > frame right`);
   }
-  for (let i = 1; i < 5; i++) {
+  for (let i = 1; i < 6; i++) {
     assert.ok(r[i].x >= r[i - 1].x + r[i - 1].w, `tab ${i} overlaps tab ${i - 1}`);
   }
 });
@@ -102,4 +104,16 @@ test('gear option rows do not overlap the equipment plates', () => {
       assert.ok(!rectsOverlap(row, plate), `gear option row overlaps the ${plate.key} plate`);
   for (const row of rows)
     assert.ok(row.x + row.w <= body.x + body.w + 0.5 && row.y + row.h <= body.y + body.h + 0.5, 'gear option row escapes body');
+});
+
+test("the Remoticon notes tab is the last of the tabs and cycles to and from the ends", () => {
+  assert.equal(DEVICE_TABS[DEVICE_TABS.length - 1], "notes");
+  assert.equal(cycleDeviceTab("notes", 1), DEVICE_TABS[0]);
+  assert.equal(cycleDeviceTab(DEVICE_TABS[0], -1), "notes");
+});
+
+test("six tabs fit the strip without leaving the frame", () => {
+  const last = deviceTabRect(DEVICE_TABS.length - 1);
+  assert.equal(DEVICE_TABS.length, 6);
+  assert.ok(last.x + last.w <= DEVICE_RECT.x + DEVICE_RECT.w);
 });

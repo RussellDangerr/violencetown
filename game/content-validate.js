@@ -96,12 +96,16 @@ export function validateContent(maps, {
         if (!e || !e.slot) continue;
         if (!slots[e.slot]) { P(`${file}: spawn ${e.id || '?'} names unknown slot '${e.slot}'`); continue; }
         (placed[e.slot] ||= []).push(file);
+        if (slots[e.slot].seats && !(Number.isInteger(e.seat) && e.seat >= 0 && e.seat < slots[e.slot].seats))
+            P(`${file}: spawn ${e.id || '?'} in rolled slot '${e.slot}' needs a seat from 0 to ${slots[e.slot].seats - 1}`);
     }
     for (const [id, slot] of Object.entries(slots)) {
         if (!slot.pool || !slot.pool.length) P(`slot '${id}' has an empty pool`);
         for (const { entry } of (slot.pool || [])) if (!entries[entry]) P(`slot '${id}' pools unknown entry '${entry}'`);
         if (slot.requiredDrop && !itemIds.has(slot.requiredDrop)) P(`slot '${id}' requires unknown item '${slot.requiredDrop}'`);
         const where = placed[id] || [];
+        if (slot.seats && where.length !== slot.seats)
+            P(`slot '${id}' rolls ${slot.seats} seats but ${where.length} spawns stand on it`);
         if (slot.kind === 'boss' && (where.length !== 1 || where[0] !== slot.map))
             P(`slot '${id}' must stand exactly once, on ${slot.map} — found on [${where.join(', ')}]`);
     }

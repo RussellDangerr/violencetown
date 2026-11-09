@@ -572,6 +572,20 @@ export function settleHands(eq, handsOf = oneHanded) {
     return eq;
 }
 
+// What each hand holds, as [{ hand, def }], right hand first. A two-hander
+// fills both keys but is held once, so it lists once, under the right hand.
+// Two of the same one-hander are the same def in both keys too, so identity
+// can't tell them apart: handsOf can.
+export function heldInHands(eq, handsOf = oneHanded) {
+    const held = [];
+    if (!eq) return held;
+    if (eq.weapon) held.push({ hand: 'weapon', def: eq.weapon });
+    if (eq.left && !(eq.left === eq.weapon && handsOf(eq.left) >= 2)) {
+        held.push({ hand: 'left', def: eq.left });
+    }
+    return held;
+}
+
 // Equip an item into its slot. Returns a log message.
 // If the slot is occupied, the old item is stored as a pending restore.
 export function equipItem(game, itemDef) {
@@ -632,8 +646,9 @@ function resolveEquip(game, itemDef, hand = 'weapon', bagSlot = -1) {
         // Into `hand` (the right, as the one weapon slot did, unless the GEAR
         // tab's left plate asks for the left); a two-hander takes both, and
         // whatever it pushes out goes back in the bag.
-        const out = holdInHands(game.equipment, itemDef, handsRule(game), hand)
-            .filter(d => d.id !== itemDef.id);
+        // (EQ1) No same-id filter: every caller takes the item out of the bag first,
+        // so a pushed-out copy of the same thing is a second copy and goes back too.
+        const out = holdInHands(game.equipment, itemDef, handsRule(game), hand);
         for (const d of out) bagIt(d);
         return out.length
             ? `[Equipped ${itemDef.name} — ${out.map(d => d.name).join(', ')} back in your bag]`
@@ -641,8 +656,8 @@ function resolveEquip(game, itemDef, hand = 'weapon', bagSlot = -1) {
     }
     const old = game.equipment[slot];
     game.equipment[slot] = itemDef;
-    if (old && old.id !== itemDef.id) bagIt(old);
-    return old && old.id !== itemDef.id
+    if (old) bagIt(old);
+    return old
         ? `[Equipped ${itemDef.name} — ${old.name} back in your bag]`
         : `[Equipped ${itemDef.name}]`;
 }
@@ -746,11 +761,18 @@ function resolveSelfUse(game, itemDef) {
     if (itemDef.effect === 'cure_sludge') {
         // Soap is tracked via _soapUsedThisTurn in main.js
         // It cancels sludge at end of resolution without harm
+        // Washing out the mouth ends Poisoned at once (PSR3); sludge still waits for end of turn.
+        let cured = '';
+        if (game.hasBuff && game.hasBuff('poison') && game.removeBuff) {
+            game.removeBuff('poison');
+            cured = ' [TEXT: poison cured]';
+        }
         if (game.hasBuff && game.hasBuff('sludge')) {
             return equipMsg
-                ? `${equipMsg} [Soap applied — sludge will be neutralized]`
-                : `[Used ${itemDef.name} — sludge will be neutralized]`;
+                ? `${equipMsg} [Soap applied — sludge will be neutralized]${cured}`
+                : `[Used ${itemDef.name} — sludge will be neutralized]${cured}`;
         }
+        if (cured) return equipMsg ? `${equipMsg}${cured}` : `[Used ${itemDef.name}]${cured}`;
         return equipMsg
             ? `${equipMsg} [Already clean]`
             : `[Used ${itemDef.name} — already clean]`;
