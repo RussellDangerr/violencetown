@@ -1,5 +1,6 @@
 // act2-bosses.test.js — each Act 2 zone has one boss in its slot, and beating it
-// drops that zone's required item (plans/ab1-act2-placeholder-bosses.md).
+// yields that zone's required item through the zone's quest (plans/ab1-act2-placeholder-bosses.md,
+// plans/ab3-act2-quests.md).
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -19,7 +20,7 @@ const ACT2 = [
     { slot: 'graveyard.boss', map: 'graveyard-map.json', entry: 'the_deity',      item: 'act2_item_c', name: 'Soul Crystal' },
 ];
 
-describe('Act 2: one boss per zone, each dropping its required item', () => {
+describe('Act 2: one boss per zone, each yielding its required item through its quest', () => {
     for (const z of ACT2) {
         describe(z.slot, () => {
             const data = mapData(z.map);
@@ -46,13 +47,14 @@ describe('Act 2: one boss per zone, each dropping its required item', () => {
                 assert.equal(bosses.length, 1, 'the zone has exactly one boss');
             });
 
-            test('the spawned boss is a boss, and beating it drops the item', () => {
+            test('the spawned boss is a boss, and beating it moves the quest that gives the item', () => {
                 const sp = spawns.find(e => e.slot === z.slot);
                 const enemy = spawnEnemy(resolveSpawn(sp, defaultPicks()));
                 assert.equal(enemy.boss, true);
                 assert.equal(enemy.slot, z.slot);
                 assert.equal(enemy.type, ENTRIES[z.entry].type);
                 assert.equal(requiredDropFor(enemy, spawns), z.item);
+                assert.equal(SLOTS[z.slot].viaQuest, true, 'the quest, not the floor, gives the item');
                 // A save written before this slot existed carries no `slot`: the map still knows.
                 assert.equal(requiredDropFor({ id: sp.id }, spawns), z.item);
                 // No dropLine of its own: the death handler logs its generic line.

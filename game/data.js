@@ -48,7 +48,7 @@ export const TILES = {
     // Factory tiles (40-49) — Oddworld-coded industrial, alien-occupied
     FACTORY_FLOOR: { id: 40, walkable: true,  hazard: null, fallbackColor: '#3a3a3e' },
     FACTORY_WALL:  { id: 41, walkable: false, hazard: null, fallbackColor: '#5a5a5e' },
-    GOO_VISUAL:    { id: 42, walkable: true,  hazard: null, fallbackColor: '#6abe30' },
+    GOO_VISUAL:    { id: 42, walkable: true,  hazard: 'sludge', fallbackColor: '#6abe30' },
     CONVEYOR_VIS:  { id: 43, walkable: true,  hazard: null, fallbackColor: '#4a4a3e' },
 
     // Graveyard tiles (50-59) — surfer-deity cemetery. Graves are props, not
@@ -75,6 +75,10 @@ export const TILES = {
     SNOW:          { id: 70, walkable: true,  hazard: null, fallbackColor: '#e3e3e3' },
     ICE:           { id: 71, walkable: true,  hazard: null, fallbackColor: '#d9dde6' },
 };
+
+// Tiles that put Burning out when the player steps onto them (plans/fb1-snow-puts-out-burning.md).
+// Water is one more entry here once the game has a water tile.
+export const FIRE_QUENCHING_TILES = [TILES.SNOW.id, TILES.ICE.id];
 
 // Reverse lookup: id → tile def
 export const TILE_BY_ID = {};

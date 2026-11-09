@@ -61,6 +61,7 @@ const worldMemory = (g) => ({
     droppedItems: { ...g._droppedItems },
     muggedIds: [...g._muggedIds],
     robbed: { ...g._robbed },
+    tookGold: { ...g._tookGold },
     pendingFollowers: g._pendingFollowers,
 });
 
@@ -131,6 +132,7 @@ async function lateRun() {
     g._droppedItems = { 'town-map.json': [{ type: 'bomb', x: 2, y: 2 }] };
     g._muggedIds.add('town_thug_1');
     g._robbed = { vendor_1: { gold: 5, items: [], weightTaken: 1, noticed: true } };
+    g._tookGold = { ruffian_1: 10 };
     g._hot = { soap: 2 };
     g.containers = [{ id: 'crate_1', type: 'crate', x: 3, y: 3, contents: [] }];
     g.enemies = [{ toSave: () => ({ id: 'rat_1' }) }];

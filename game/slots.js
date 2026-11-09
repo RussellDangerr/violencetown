@@ -366,25 +366,27 @@ export const SLOTS = {
         map: 'sewer-north-map.json',
         pool: [{ entry: 'crat', weight: 1 }],
     },
-    // Act 2 (plans/spine.md §9, 2026-10-23): each item will come from its zone's
-    // quest with the boss a step inside it. Interim: the boss drops it directly.
-    // No dropLine, so the drop logs the death handler's generic line.
+    // Act 2 (plans/spine.md §9, 2026-10-23): each item comes from its zone's
+    // quest with the boss a step inside it (plans/ab3-act2-quests.md); `viaQuest` marks that.
     'carnival.boss': {
         kind: 'boss',
         map: 'carnival-map.json',
         requiredDrop: 'act2_item_a',
+        viaQuest: true,   // (AB3) the zone's quest hands this over; the boss's death is a step in it
         pool: [{ entry: 'bigfoot', weight: 1 }, { entry: 'ringmaster', weight: 1 }],
     },
     'factory.boss': {
         kind: 'boss',
         map: 'factory-map.json',
         requiredDrop: 'act2_item_b',
+        viaQuest: true,   // (AB3) the zone's quest hands this over; the boss's death is a step in it
         pool: [{ entry: 'alien_invasion', weight: 1 }],
     },
     'graveyard.boss': {
         kind: 'boss',
         map: 'graveyard-map.json',
         requiredDrop: 'act2_item_c',
+        viaQuest: true,   // (AB3) the zone's quest hands this over; the boss's death is a step in it
         pool: [{ entry: 'the_deity', weight: 1 }],
     },
     // The frozen area's boss: a map off the spine, so no Locked row moves. Beating

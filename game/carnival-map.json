@@ -58,7 +58,13 @@
         {"type": "lion_whip", "x": 10, "y": 5},
         {"type": "fire_blood", "x": 11, "y": 3}
     ],
+    "props": [
+        {"type": "shelfA", "x": 46, "y": 12},
+        {"type": "shelfB", "x": 50, "y": 11}
+    ],
     "examinables": [
+        {"id": "[TEXT]_claim_carnival", "x": 46, "y": 12, "text": "[TEXT]"},
+        {"id": "[TEXT]_booth_carnival", "x": 50, "y": 11, "text": "[TEXT]"},
         {"id": "booth", "x": 28, "y": 12, "text": "[A shuttered game booth — RING THE BOTTLE, WIN A PRIZE. The bottles are glued down. The tents stretch east as far as you can see.]"}
     ],
     "transitions": [
