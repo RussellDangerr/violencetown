@@ -46,8 +46,11 @@ differentiation lives in mitigation (armor, resistances, immunities) and behavio
   −10 rat deals 11, and a reference swing against −80 one-shots. The denominator never changes;
   the splat shows the bonus. `vermin: true` survives as a ROLE marker (ambient swarm class,
   challenge GP ≤ 5) but no longer licenses sub-100 HP.
-- Code note: the Enemy ctor defaults `hp = 100`; the Law 0 lint flags ANY non-100 combatant, no
-  exemptions.
+- Code note: the Enemy ctor defaults `hp = 100`; the Law 0 lint flags ANY non-100 combatant.
+- **Puzzle walls are not combatants (amended 2026-10-25, EL2).** A declared `puzzleWall` deals no
+  damage and is tuned to its keys, so its health may differ: the Sludge Bloom is **60**, by ruling,
+  so energy and soap still open it in a few turns once a weakness is ×1.5. The lint exempts a
+  puzzle wall from Law 0 the way it already exempts one from the armor cap (Law 3).
 
 ### Law 1 — The Peg
 **1 GP ≈ 1 HP** is the market rate for *lazy* violence. Autonomous gold solutions — bribes,
@@ -108,15 +111,26 @@ fire bottle is worth more because it gets there sooner.
 Combat stays deterministic — "no rolls, no misses" is permanent. Damage spikes are **conditions the
 player engineers**, not luck:
 
-- **Elemental:** weakness **×2**, resist **×½**, immune **×0**. The clean doubling family — mental
-  math survives. (The Persona verb: find the weakness, exploit it.)
-- **Positional:** backstab **×1.5**. **Shove spins (ruled 2026-07-24):** a shove turns its victim
+- **Every weakness is ×1.5, and the kinds multiply (Caelan, ruled 2026-10-06; built in EL2).** A
+  hit counts the *kinds* of weakness it meets, one each:
+  - **element** — its damage type is one the target is weak to (resist stays **×½**, immune **×0**);
+  - **direction** — a backstab (below);
+  - **state** — the target is **feared or poisoned** (both at once is still one kind). Grounded
+    fliers, spun and soaked join when they are built.
+
+  One kind is ×1.5. **Two kinds is a crit** (×2.25), and the hit wears the gold-ring crit splat.
+  **Three kinds is a knockout** on anything that is not a boss: the hit takes all of its health. A
+  boss (`boss: true`, or a tag ending `_boss`) takes the plain product, ×3.375. (The Persona verb:
+  find the weakness, exploit it; stack them for the crit.) Before EL2 an elemental weakness was ×2.
+  Still to build: the crit preview marker on a target, and enemies critting you by the same rule.
+- **Positional:** backstab **×1.5**, the direction kind above. **Shove spins (ruled 2026-07-24):** a shove turns its victim
   clean around — `[You shove X so hard they spin around!]` — and they spend their next turn
   recovering, so the window survives exactly one follow-up hit. Feared enemies remain
   backstabbable while fleeing; that emergent synergy is canon.
 - Statuses do NOT add attacker-side multipliers by default — they modify the *target's* own output
-  and behavior, which is already how Guard (×0.5 incoming) and Blind (×0.5 outgoing) work. A future
-  status may declare an attacker-side multiplier explicitly, priced when it does.
+  and behavior, which is already how Guard (×0.5 incoming) and Blind (×0.5 outgoing) work. The
+  exception is the weak states above (feared, poisoned): each is the state kind, ×1.5, in its own
+  `state` bucket. Any other status that wants a multiplier declares it, priced when it does.
 
 **Composition rule (the bucket law):** same-family flat bonuses **add**; earned multipliers from
 *different* categories **multiply** (independent achievements both count fully). Round **once**, at
@@ -127,8 +141,9 @@ lets an exploited weakness crack an armored enemy instead of being eaten by the 
 damage = max(1, round((weapon + flat_bonuses) × elemental × positional) − armor)
 ```
 
-Worked check: 20-damage spell on weakness (×2) with backstab (×1.5) = 60 — "above 50 if used
-correctly," derived rather than declared. Guard/Blind migrate from special-cased riders at read
+Worked check: a 20-damage spell on a weakness (×1.5) from behind (×1.5) = 45, a crit; add a feared
+or poisoned target and it is a knockout (a boss takes 20 × 3.375 = 68). Before EL2 the two-kind
+case was 20 × 2 × 1.5 = 60, the "above 50 if used correctly" anchor. Guard/Blind migrate from special-cased riders at read
 sites into named incoming/outgoing multiplier buckets in this one pipeline.
 
 ### Law 3 — Armor is the wall, and walls are puzzles
@@ -154,8 +169,11 @@ bands are declarations, not hopes.
 
 **Reference loadout (act 1): a 20-damage weapon** — the geared act-1 player (Ray Gun tier), not
 the tutorial Wooden Sword. "Lazy" = basic attacks only; "informed" = weakness and/or positioning
-exploited (×2 elemental is the workhorse: 20 × 2 = 40/turn; with backstab, 60). The derivation
-anchor is the design statement "above 50 damage if used correctly."
+exploited (one ×1.5 weakness is the workhorse: 20 × 1.5 = 30/turn; with a second kind, a 45
+crit). The harness's `ttk_informed` column reads that 30 (`INFORMED_DAMAGE`), from combat.js's
+`WEAKNESS_MULT`. Until EL2 it was ×2 (40/turn; 60 with backstab), and the "above 50 damage if used
+correctly" anchor came from there. The TTK informed targets in the table below were set at ×2 and
+have not been re-tuned since.
 
 | Role     | Armor      | TTK lazy | TTK informed | Their dmg/turn | Challenge GP |
 |----------|------------|----------|--------------|----------------|--------------|
