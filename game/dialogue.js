@@ -211,6 +211,7 @@ export const DIALOGUES = {
     // MQ2 wiring pass — for now they just talk. Rewrite freely.
     diner_cook: {
         name: 'Short-Order Cook',
+        greetings: [{ when: burgerPickedUp, text: '[TEXT: the cook, after the pickup]' }],
         greeting: '"Order up — oh. You. You\'re the delivery type, aren\'t you. I can always tell."',
         choices: [
             // (Phase 4 MQ2) The dialogue delivery idiom: only shown at the get_burger
