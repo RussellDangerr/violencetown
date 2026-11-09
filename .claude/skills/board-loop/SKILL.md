@@ -10,11 +10,53 @@ This file is only the running order. If the two ever disagree, LOOP.md wins.
 
 The board's word for turning an idea into rulings and slices is **tweak**. Use no other.
 
+## Where the board lives (this one section wins over LOOP.md)
+
+Caelan's projects share one board since 2026-10-30. Its address is in `.claude/board.local.md`,
+which git ignores because this repo is public; if that file is missing, stop and ask him for it.
+Project id `vt`. Wherever LOOP.md or this file names a board path, use the project's own:
+
+| They say | Use |
+|---|---|
+| collection `cards` | `boards/vt/cards` |
+| `meta/<name>` | collection `boards/vt/meta`, document `<name>` |
+| collection `archive` | `boards/vt/archive` |
+
+A read with `out_dir` lands in `<folder>/boards/vt/cards/`: that is the folder to hand
+`next-slice.mjs`. Cards archived before the move are in collection `boards/vt/archive-2026-10-30`,
+documents `part-N`, each holding a `cards` array: copy one back to `boards/vt/cards` when a new card
+needs it. Write new archived cards to `boards/vt/archive` as usual. Never use the old board's address.
+
+A card may also hold `notes`: words he saved for Claude while its decision waits (`[{text, at}]`). The page moves them into `feedback` or `pick.note` when he decides. If this loop ever decides that card for him, read them first and move them the same way. Otherwise leave them alone; they put nothing on Claude's turn.
+
+## Report what's running
+
+Collection `boards/vt/agents`, written in the same batch as the card writes where you can. Times are
+epoch ms. Read it at the start of a pass for the versions, and delete finished rows over a day old.
+
+- **Document `loop`** (`role: "loop"`). Pass start: `state: "working"`, `startedAt`, `updatedAt`,
+  `note`. Pass end: `state: "idle"`, `updatedAt`, `nextAt` (when the next pass wakes), `note` (the
+  update's first line). When the loop stops: `state: "stopped"`.
+- **One document per agent you spawn**, id `<role>-<card or mode>-<epoch>`. At spawn: `role` (agent
+  name), `card` (if it has one), `state: "working"`, `startedAt`, `updatedAt`. At its report:
+  `state: "done"` or `"failed"`, `endedAt`, `updatedAt`, `note` (one line). A worker that died
+  without reporting: `"failed"`.
+
+Status goes in these rows only, never on a card, and a failed status write never stops the pass.
+
 ## Running order
 
 1. **Read the board**, per LOOP.md §1 step 1. Use a fresh folder:
    `<scratchpad>/board-loop/<yyyy-mm-dd-hhmm>/`.
-2. **Recover stale `doing` cards** (§1 step 2).
+2. **Recover stale `doing` cards** (§1 step 2). Then **archive finished cards** (his 2026-10-30
+   ruling, the one exception to LOOP.md §8's no-delete):
+   - A `done` card with no `doneAt` gets `doneAt: <now>`, pinned.
+   - A `done` card whose `doneAt` is over 7 days old moves to the `archive` collection, unless an
+     open card names it in `blockedBy` or it sits in Your turn or Claude's turn. Add a scout card's
+     `scoutKey` and title to `meta/archived-scouts` first, `set` the copy with `archivedAt`, read it
+     back, then delete it from `cards`, pinned.
+   - A new card that rests on an archived ruling: move that ruling back to `cards` first. A blocker
+     missing from `cards` blocks forever.
 3. **Clear Claude's turn** in the §1 step 3 order. Merges follow §4, tweaks §5, ruling options
    §6. At most 10 merges, 10 Changes builders and 10 tweaks.
 4. **Ask what's next:** `node tools/roadmap-board/next-slice.mjs <folder>`. Besides the picks it
@@ -34,7 +76,8 @@ The board's word for turning an idea into rulings and slices is **tweak**. Use n
    that is due and not running; a scout that plays the game waits while 4+ builders run. Give it
    its mode, `meta/<name>` (`lastSha`, `leads`), the current dev sha, the pass's card folder, the
    next area or system in its rotation, Caelan's checkout path and a scratchpad log folder. Set
-   `meta/<name>.runningSince` at spawn. When it reports, land its proposals as Ideas cards in one
+   `meta/<name>.runningSince` at spawn. When it reports, drop any proposal whose key or title is in
+   `meta/archived-scouts`, then land the rest as Ideas cards in one
    batch with `newScoutIdea()`, and pass its hand-off lines to the other scout's `leads` (a thread
    lead marked "kept for" goes back to its own). Keep `TOOLING` lines for the update, then set
    `meta/<name>` to `{lastSha, lastAt, area}` (plus `lastFullAt` after a full run).
