@@ -4026,14 +4026,16 @@ class Game {
     // Compose the wheel selection and route to the existing resolvers.
     // Apply `damage` to every alive entity standing on any of `tiles`. Each hit
     // routes through combatAttack (typed splat, death, reaction bus). Returns the
-    // count struck. Hits friendlies too — the Plus-Ultra confirm gated that.
+    // list of who was struck ({ name, dealt }: shown name, damage after armour and
+    // weakness). Hits friendlies too — the Plus-Ultra confirm gated that.
     _aoeStrike(tiles, damage, opts = {}) {
-        let hit = 0;
+        const hit = [];
         for (const t of tiles) {
             const e = this.enemies.find(en => en.entity.isAlive() && en.x === t.x && en.y === t.y);
             // combatAttack composes the elemental matchup itself and returns null
             // on immune (already logged) — only count tiles that actually landed.
-            if (e && this.combatAttack(e, damage, opts)) hit++;
+            const shown = e && this.combatAttack(e, damage, opts);
+            if (shown) hit.push({ name: (e.boss && e.shownName) || (e.name ?? e.type), dealt: parseInt(shown, 10) });
         }
         return hit;
     }
@@ -4080,7 +4082,7 @@ class Game {
                 const dmg = this.equipment.weapon.damage * 2 / 3;
                 const tiles = affectedTiles(w, this);
                 const hit = this._aoeStrike(tiles, dmg, { type: this.equipment.weapon.damageType, weapon: this.equipment.weapon });
-                if (hit) { this._log(`[Cleave! ${hit} caught.]`, 'combat'); this._advanceWorld(); }
+                if (hit.length) { this._log(`[Cleave! ${hit.length} caught.]`, 'combat'); this._advanceWorld(); }
                 else if (this._enemiesPresent(tiles) > 0) { this._log('[Cleave connects — shrugged off, immune.]', 'combat'); this._advanceWorld(); }
                 else this._log('[Cleave hits only air]', 'combat');
                 break;
@@ -4092,7 +4094,7 @@ class Game {
                 const dmg = this.equipment.weapon.damage * 2 / 5;
                 const tiles = affectedTiles(w, this);
                 const hit = this._aoeStrike(tiles, dmg, { type: this.equipment.weapon.damageType, weapon: this.equipment.weapon });
-                if (hit) { this._log(`[Spin! ${hit} caught.]`, 'combat'); this._advanceWorld(); }
+                if (hit.length) { this._log(`[Spin! ${hit.length} caught.]`, 'combat'); this._advanceWorld(); }
                 else if (this._enemiesPresent(tiles) > 0) { this._log('[Spin connects — shrugged off, immune.]', 'combat'); this._advanceWorld(); }
                 else this._log('[You spin, hitting nothing]', 'combat');
                 break;
@@ -4106,7 +4108,7 @@ class Game {
                 this.playerMp = Math.max(0, this.playerMp - spell.mpCost);
                 emitNoise(this._earshot(), this.playerX, this.playerY, NOISE.cast);
                 const hit = this._aoeStrike(affectedTiles(w, this), spell.damage, { type: spell.damageType });
-                if (hit) this._log(`[${spell.name}! ${spell.damage} ${spell.damageType} to ${hit}.]`, 'combat');
+                if (hit.length) this._log(`[${spell.name}! ${hit.map(h => `${h.name} ${h.dealt}`).join(', ')}]`, 'combat');
                 else this._log(`[${spell.name} fizzles — nothing caught.]`, 'combat');
                 this._advanceWorld();
                 break;
@@ -4137,7 +4139,7 @@ class Game {
                     break;
                 }
                 const hit = this._aoeStrike(affectedTiles(w, this), trick.damage, { type: trick.damageType });
-                if (hit) this._log(`[${trick.name}! ${trick.damage} ${trick.damageType} to ${hit}. (-${trick.gpCost}g)]`, 'combat');
+                if (hit.length) this._log(`[${trick.name}! ${hit.map(h => `${h.name} ${h.dealt}`).join(', ')}. (-${trick.gpCost}g)]`, 'combat');
                 else this._log(`[${trick.name} fizzles — nothing caught. (-${trick.gpCost}g)]`, 'combat');
                 this._advanceWorld();
                 break;
