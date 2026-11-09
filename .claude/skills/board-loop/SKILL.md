@@ -96,8 +96,30 @@ Status goes in these rows only, never on a card, and a failed status write never
    - **60 s** after a pass that changed anything on the board;
    - otherwise `idleWait` (300, 1200 or 3600 s), with `noop: true`;
    - **600 s** when the board couldn't be read;
-   - **`stop: true`** only when he asks, or after 3 passes in a row that couldn't read the
-     board (§7).
+   - **`stop: true`** when he asks, after 3 passes in a row that couldn't read the board (§7), or
+     at one of the two limits below.
+
+## When the loop stops by itself (his ruling, 2026-11-09)
+
+Two limits, kept on the `loop` row in `boards/vt/agents` so they survive between passes:
+
+- **`sessionStartedAt`**: set at the first pass after a `/loop /board-loop` start (the row says
+  `stopped`, or the field is missing). Leave it alone on every later pass.
+- **`idleStreak`**: how many passes in a row were idle. A pass is idle when it changed nothing on
+  the board, started no agent, ran no merge, and had nothing still in flight (no builder, checker,
+  scout or test run waiting to report). Any other pass sets it back to 0.
+
+1. **15 hours.** At pass start, if `now - sessionStartedAt` is 15 hours or more, start nothing new:
+   no build, scout, check, tweak or merge. Finish what is already in flight (write its result to the
+   card, unlink its worktree), then stop. The last update names everything left open, his Merge it
+   presses included, so the next session starts there.
+2. **5 idle passes.** When a pass ends idle and `idleStreak` reaches 5, stop.
+
+To stop: set the row to `state: "stopped"`, `stoppedBy` (`"15h"`, `"idle"`, `"asked"` or
+`"board"`), `updatedAt`, `note`; drop `nextAt`, `sessionStartedAt` and `idleStreak`; call
+ScheduleWakeup with `stop: true`; and post one line saying why it stopped and that
+`/loop /board-loop` starts it again. Passes waiting on work in flight are not idle, however quiet,
+and a pass does not count as idle just because it chose `noop: true`.
 
 ## Standing policy (his picks on LP1–LP6)
 
@@ -109,6 +131,7 @@ Status goes in these rows only, never on a card, and a failed status write never
 | LP5 | per-pass update, no digest |
 | LP1 | permission settings are his; the loop never changes them |
 | LP6 | standing delegation (LOOP.md §11): approve, pick and tweak what the loop is confident about |
+| Session length | stops itself after 15 hours, or after 5 idle passes in a row |
 
 If he changes a pick on the board, the board wins.
 

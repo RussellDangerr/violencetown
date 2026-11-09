@@ -257,9 +257,14 @@ refactors that leave the autoplay golden untouched, tooling, commit order.
 - **When builds or merges can't run** (no worktree can be created, `origin` can't be reached),
   skip them, do everything else, and say why in the update. His own uncommitted edits in his
   checkout are never a reason to stop: the loop doesn't work there.
-- **Stop the loop** (ScheduleWakeup `stop: true`) only when he asks, or when
-  `unreachable.txt` reaches 3 (three passes in a row that couldn't read the board). Say why in
-  the update.
+- **Stop the loop** (ScheduleWakeup `stop: true`) when he asks, when `unreachable.txt` reaches 3
+  (three passes in a row that couldn't read the board), or at one of two limits (his ruling,
+  2026-11-09). Say why in the update.
+  - **15 hours** after the `/loop /board-loop` start: start nothing new, finish and write back
+    what is in flight, then stop, naming everything left open (his Merge it presses included).
+  - **5 idle passes in a row**: a pass is idle when it changed nothing on the board, started no
+    agent, ran no merge and had nothing in flight; choosing `noop: true` alone doesn't make it so.
+  The skill's "When the loop stops by itself" keeps the clock and the count on the `loop` row.
 
 ## 8. Never
 
