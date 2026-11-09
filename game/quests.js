@@ -216,6 +216,9 @@ for (const zone of ACT2_ZONES) {
         zone, slot, map: SLOTS[slot].map, verb: ACT2_VERBS[zone],
         // The examinable on the zone's map whose use is the quest's last step ([E] on it).
         claimId: `[TEXT]_claim_${zone.toLowerCase()}`,
+        // (ST1) A second spot that ends the same quest: the Carnival's booth, guarded by whoever
+        // fills the boss slot. Null where a zone has no booth.
+        boothId: zone === 'CARNIVAL' ? '[TEXT]_booth_carnival' : null,
         title: '[TEXT]',
         steps: { boss: { objective: '[TEXT]' }, collect: { objective: '[TEXT]' } },
     };
@@ -282,6 +285,12 @@ export class QuestEngine {
         if (type === 'examine') {
             const q = Object.values(ACT2_QUESTS).find(a => a.claimId === payload.targetId);
             if (q) this.act2Claim(q.zone);
+            // (ST1) The booth: closed while the guard lives, then the same last step as the claim spot.
+            const booth = Object.values(ACT2_QUESTS).find(a => a.boothId && a.boothId === payload.targetId);
+            if (booth) {
+                if (this.act2Step(booth.zone) === 'boss') this.game._log?.('[TEXT]', 'transition');
+                else this.act2Claim(booth.zone);
+            }
         }
         // Durable side-effect: remember the car was examined EVEN IF no quest is
         // active yet. The examine_car stage reads this flag (autoSatisfy) so an

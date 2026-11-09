@@ -53,7 +53,7 @@ export function checkScope(changed, touches, slug, commits = []) {
         if (banned) { problems.push(`${p}: ${banned[1]}`); continue; }
         if (p === spec || allowed.has(p)) continue;
         if (p.startsWith('tests/') && status === 'A') continue;
-        problems.push(`${p}: outside the card's touches (stop and ask, LOOP.md step 7)`);
+        problems.push(`${p}: outside the card's touches (stop and ask, LOOP.md §2 item 3)`);
     }
     return problems;
 }

@@ -11,7 +11,7 @@
 // reconstruction blob so dynamically-spawned entities (not in the map JSON)
 // survive a round-trip too.
 
-import { Enemy } from './enemies.js';
+import { Enemy, muggerRecords } from './enemies.js';
 import { defaultPicks } from './slots.js';
 import { clamp } from './utils.js';
 import { INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE } from './data.js';
@@ -123,6 +123,9 @@ export function serialize(game) {
             // (plans/ch1-chests-stay-empty.md) Containers changed since the map made
             // them, per zone. Left out while empty, like the lists above.
             ...chestEntry(game),
+            // (plans/mp2-map-dims-unvisited.md) Overworld zones entered. Left out for an old
+            // save (null), where every zone counts as visited.
+            ...visitedEntry(game),
             // Law 6: enemies already looted on death, so respawns stay broke
             // across a reload too (twin of collectedItems — a Set of ids).
             muggedIds: game._muggedIds ? [...game._muggedIds] : [],
@@ -130,6 +133,9 @@ export function serialize(game) {
             // this a robbery undoes itself on zone re-entry, because enemies
             // re-hydrate from map JSON every _loadMap.
             robbed: game._robbed ?? {},
+            // (BS2) enemyId -> gold a mugger took off you and still carries.
+            // Left out while empty, so a save nobody was mugged in is unchanged.
+            ...tookGoldEntry(game),
             // (fence) itemId -> count the street has heard about.
             hot: game._hot ?? {},
             containers: (game.containers || []).map(c => ({
@@ -156,7 +162,27 @@ function interactionNotesEntry(game) {
     return interactionNotes.length ? { interactionNotes } : {};
 }
 
+// (plans/mp2-map-dims-unvisited.md) The visited-zone record as a save field, or nothing while
+// there is none (an old save, or a game that has not loaded a map yet).
+function visitedEntry(game) {
+    const visitedZones = sanitizeVisited(game._visitedZones);
+    return visitedZones && visitedZones.length ? { visitedZones } : {};
+}
+
+// Names only, sorted so a save reads the same however you wandered. Anything that is not a
+// list of names means "no record" (null): every zone counts as visited.
+function sanitizeVisited(raw) {
+    const list = raw instanceof Set ? [...raw] : raw;
+    if (!Array.isArray(list)) return null;
+    return [...new Set(list.filter(n => typeof n === 'string'))].sort();
+}
+
 // (plans/ch1-chests-stay-empty.md) The chest record as a save field, or nothing while it is empty.
+function tookGoldEntry(game) {
+    const rec = muggerRecords(game.enemies, game._tookGold);
+    return Object.keys(rec).length ? { tookGold: rec } : {};
+}
+
 function chestEntry(game) {
     const chestRecords = sanitizeChestRecords(game._chestRecords);
     return Object.keys(chestRecords).length ? { chestRecords } : {};
@@ -291,10 +317,17 @@ export function migrate(raw) {
         const v = r.world.robbed[k];
         if (!v || typeof v !== 'object' || Array.isArray(v)) delete r.world.robbed[k];
     }
+    if (!r.world.tookGold || typeof r.world.tookGold !== 'object' || Array.isArray(r.world.tookGold)) r.world.tookGold = {};
+    for (const k of Object.keys(r.world.tookGold)) {
+        const v = r.world.tookGold[k];
+        if (typeof v !== 'number' || !(v > 0) || !isFinite(v)) delete r.world.tookGold[k];
+    }
     if (!r.world.hot || typeof r.world.hot !== 'object' || Array.isArray(r.world.hot)) r.world.hot = {};
     r.world.containers = objects(r.world.containers);
     // An older save has no chest record: every container is as the map made it.
     r.world.chestRecords = sanitizeChestRecords(r.world.chestRecords);
+    // An older save has no visited record: every zone counts as visited.
+    if (sanitizeVisited(r.world.visitedZones) === null) delete r.world.visitedZones;
     if (r.quest === undefined) r.quest = null;
     if (r.sewerEscape === undefined) r.sewerEscape = null;
     return r;
@@ -377,6 +410,7 @@ export async function loadInto(game, raw) {
     // JSON below, or a previously-looted enemy would respawn funded.
     game._muggedIds = new Set(raw.world.muggedIds ?? []);
     game._robbed = raw.world.robbed ?? {};
+    game._tookGold = raw.world.tookGold ?? {};
     game._hot = raw.world.hot ?? {};
     // ...and the respawn lists, or a kill still waiting would spawn back alive.
     game._respawnLists = sanitizeRespawnLists(raw.world.respawnLists);
@@ -386,6 +420,8 @@ export async function loadInto(game, raw) {
     game._rivals = {};
     game._bossDropsGiven = new Set(raw.world.bossDropsGiven ?? []);
     game._chestRecords = sanitizeChestRecords(raw.world.chestRecords);
+    // null (no record) is kept: the Map shows every zone as visited.
+    { const v = sanitizeVisited(raw.world.visitedZones); game._visitedZones = v ? new Set(v) : null; }
 
     // 1. baseline map (spawns JSON enemies/items/containers; sets renderer
     //    zone). Missing coords fall back to the map spawn; clamp to bounds so

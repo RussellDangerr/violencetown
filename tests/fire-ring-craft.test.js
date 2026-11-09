@@ -14,7 +14,8 @@ import { ITEMS } from '../game/items.js';
 import { RINGS, FUSIONS } from '../game/ring-data.js';
 import { acquireRing, slotRing, slottedActives, resolveAdjacencies, aggregatePassives, mergeKnown, findFusion } from '../game/rings.js';
 import { DEVICE_TABS, cycleDeviceTab, deviceRingsLayout, deviceBodyRect, ringPassiveRows } from '../game/layout.js';
-import { attack, formatDamageNumber, computeHit, elementalMult, weaponHitKind, isBackstab } from '../game/combat.js';
+import { attack, formatDamageNumber, computeHit, elementalMult, weaponHitKind, isBackstab, WEAKNESS_MULT, weaknessKinds, critOf, knockoutDamage } from '../game/combat.js';
+import { isBoss } from '../game/defeat-scenarios.js';
 import { emitNoise, NOISE } from '../game/perception.js';
 import { HEAVY_HIT_DAMAGE } from '../game/hit-splat.js';
 import { defaultVerb } from '../game/wheel-model.js';
@@ -89,7 +90,7 @@ function makeGame({ fireBlood = [] } = {}) {
         performance: { now: () => 0 }, setTimeout: () => 0,
         RINGS, acquireRing, slotRing, FUSIONS, SPELLS, TRICKS, mergeKnown, BASE_SPELLS, slottedActives,
         resolveAdjacencies, aggregatePassives, defaultVerb, sumBuffStat, RING_IGNITE_DAMAGE,
-        attack, formatDamageNumber, computeHit, elementalMult, weaponHitKind, isBackstab,
+        attack, formatDamageNumber, computeHit, elementalMult, weaponHitKind, isBackstab, WEAKNESS_MULT, weaknessKinds, critOf, knockoutDamage, isBoss,
         emitNoise, NOISE, HEAVY_HIT_DAMAGE,
     };
     for (const [n, p] of [

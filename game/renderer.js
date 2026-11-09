@@ -3488,6 +3488,9 @@ export class Renderer {
         const { ctx } = this;
         const here = overworldZone(game.map && game.map.zoneName);
         const targets = new Set((game.questEngine?.getTargetZones?.() ?? []).map(overworldZone));
+        // (mp2) Zones never entered draw in the dim colour; no record (an old save) dims none.
+        const seen = game._visitedZones;
+        const unvisited = (z) => !!seen && !seen.has(z.zoneName) && z.zoneName !== here;
 
         const cols = WORLD_ZONES.map(z => z.col), rows = WORLD_ZONES.map(z => z.row);
         const c0 = Math.min(...cols), c1 = Math.max(...cols), r0 = Math.min(...rows), r1 = Math.max(...rows);
@@ -3513,13 +3516,14 @@ export class Renderer {
             const b = boxOf(z);
             const isHere = z.zoneName === here;
             const isTarget = targets.has(z.zoneName);
+            const dimmed = unvisited(z);
             ctx.fillStyle = isHere ? 'rgba(212,185,106,0.85)' : 'rgba(30,24,16,0.9)';
             ctx.fillRect(b.x, b.y, b.w, b.h);
             ctx.lineWidth = isTarget ? 3 : 2;
-            ctx.strokeStyle = isTarget ? '#e8462f' : isHere ? '#fff3c0' : 'rgba(212,185,106,0.6)';
+            ctx.strokeStyle = isTarget ? '#e8462f' : isHere ? '#fff3c0' : dimmed ? UI.dim : 'rgba(212,185,106,0.6)';
             ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
             if (!this.font) continue;
-            const txtCol = isHere ? '#2a2010' : UI.text;
+            const txtCol = isHere ? '#2a2010' : unvisited(z) && !isTarget ? UI.dim : UI.text;
             this.font.drawText(ctx, z.label, b.x + b.w / 2, b.y + b.h / 2 - 4, { color: txtCol, scale: 1, align: 'center' });
             if (isHere)        this.font.drawText(ctx, 'YOU',  b.x + b.w / 2, b.y + b.h / 2 + 8, { color: '#7a2010', scale: 1, align: 'center' });
             else if (isTarget) this.font.drawText(ctx, '» GO', b.x + b.w / 2, b.y + b.h / 2 + 8, { color: '#e8462f', scale: 1, align: 'center' });

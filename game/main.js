@@ -10,7 +10,7 @@ import { loadAllSprites } from './sprites.js';
 import { BitmapFont } from './bitmap-font.js';
 import { pickHitMark, HEAVY_HIT_DAMAGE, dodgeChance, DODGE_WORD } from './hit-splat.js';   // (manga-impact-marks) the mark rule + the heavy threshold
 import { makeEffectLoop } from './effect-loop.js';                 // one tick of the transient-effects loop, and its refusal to die on a bad frame
-import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK, SLUDGE_DOT } from './data.js';
+import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK, SLUDGE_DOT, FIRE_QUENCHING_TILES } from './data.js';
 import { puddleTiles, layPuddle, puddleAt, dryPuddles } from './puddles.js';   // (poisons) Sludge Brain's puddles
 import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef } from './items.js';
 import { WEAPONS, weaponClassOf } from './weapons.js';
@@ -27,8 +27,8 @@ import { addToInventory as addToInv, moveToZone, zoneOf, pageCount, slotOnPage, 
 import { itemActions, equipOptions, inspectorUsesRect } from './inspector.js';   // (C1) tap-to-inspect: context actions; (C2) GEAR chooser options
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
-import { attack, formatDamageNumber, computeHit, elementalMult, weaponHitKind, isBackstab, shieldArmor, raiseShield } from './combat.js';
-import { Enemy, spawnEnemy, resolveEnemyTurns, resolveAmbientTurns, unnestBrackets } from './enemies.js';
+import { attack, formatDamageNumber, computeHit, elementalMult, weaponHitKind, isBackstab, shieldArmor, raiseShield, WEAKNESS_MULT, weaknessKinds, critOf, knockoutDamage } from './combat.js';
+import { Enemy, spawnEnemy, muggerRecords, resolveEnemyTurns, resolveAmbientTurns, unnestBrackets } from './enemies.js';
 import { canBeRival, itemIdsOf, recordDefeat, kitFor, markCarrying, settleItems, clearRival } from './rivals.js'; // the enemy that beat you is remembered (pure, node-tested)
 import { isHostile, isHunting, isSewerDweller, allyAids } from './ai.js';
 import { getGreedyStep, stepEntity, findPath } from './pathing.js'; // pathfinding (greedy chase + BFS click-to-move); stepEntity = shove a character aside
@@ -85,6 +85,7 @@ import { emitNoise, NOISE, perceives, spotters, struck, VERDICT } from './percep
 import { coinTake, kitTake, gearTake, coinWeight, itemWeight, gearWeight,
          noticeBuffer, isClean, stealLimit } from './theft.js';
 import { INTERACTIONS, fireRows } from './interactions.js'; // (IN1) carry-this-here rules
+import { overworldZone } from './world-map.js'; // (mp2) which overworld zone a map belongs to
 import { recordUse, skillPerks, mergePassives } from './skills.js'; // (skills) use-ranks: clean lifts rank up light fingers
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
 import {
@@ -472,6 +473,7 @@ class Game {
         // (theft) enemyId -> { gold, items, weightTaken, noticed }. Survives a save,
         // and is re-applied by spawnEnemy so a zone re-entry cannot undo a robbery.
         this._robbed = {};
+        this._tookGold = {};   // (BS2) enemyId -> gold he took off you and still carries
         // (fence) itemId -> how many you are carrying that the street has heard
         // about. Written only when a take is NOTICED, so a clean theft leaves
         // goods worth full price anywhere. Decremented when a fence takes them
@@ -504,6 +506,7 @@ class Game {
         // _loadMap lets these win over the map's own contents. Persisted (left out
         // while empty).
         this._chestRecords = {};
+        this._visitedZones = new Set();     // (mp2) overworld zones entered; null = an old save, every zone counts
         this._mapUrl = null;                // url of the currently-loaded map
         this._cameFrom = null;               // url of the zone you ENTERED this one from (for the pipe-jam)
         this._jammedDoor = null;             // {x,y,toMap,integrity,max,intruders[]} while a door is wedged shut
@@ -680,9 +683,20 @@ class Game {
 
     // ── Map Loading ──────────────────────────────────────────────────────────
 
+    // (mp2) The Map remembers which overworld zones you have stood in. An interior counts
+    // for its parent zone. A null record (an old save) is left alone: every zone counts.
+    _noteZoneVisited() {
+        const z = overworldZone(this.map && this.map.zoneName);
+        if (z && this._visitedZones) this._visitedZones.add(z);
+    }
+
+    // (BS2) Remember the gold each mugger still carries, so a re-spawn gives it back.
+    _recordMuggers() { this._tookGold = muggerRecords(this.enemies, this._tookGold); }
+
     async _loadMap(url, spawnX, spawnY) {
         this.map = await loadMap(url);
         this._mapUrl = url;
+        this._noteZoneVisited?.();
         this._jammedDoor = null;   // per-zone: any wedged door is left behind when you leave
         // Splats, words and barks belong to the map they were spawned on: a new
         // zone starts clear, with anything a (C1) cascade still held played first
@@ -720,7 +734,7 @@ class Game {
         const dead = deadIds(this._respawnLists, url);
         for (const s of this.map.enemySpawns) {
             if (dead.has(s.id)) continue;
-            this.enemies.push(spawnEnemy(resolveSpawn(s, this.slots), this._muggedIds, this._robbed, this._rivalKit?.(url, s.id)));
+            this.enemies.push(spawnEnemy(resolveSpawn(s, this.slots), this._muggedIds, this._robbed, this._rivalKit?.(url, s.id), this._tookGold));
         }
         this._rivalArrived?.(url);   // (plans/ne1-rival-remembered.md) the rival is at its post, kit and all
         this._finaleOnLoad?.(url);   // (FIN3) the vault after phase 1: no Financier, the beast in his corner
@@ -2720,6 +2734,12 @@ class Game {
                 }
             }
 
+            // Snow / ice (the FIRE_QUENCHING_TILES list) put Burning out.
+            if (this.hasBuff('fire') && FIRE_QUENCHING_TILES.includes(this.map.getTile(nx, ny))) {
+                this.removeBuff('fire');
+                this._log('[TEXT: the cold puts the fire out.]');
+            }
+
             // Pickup
             this._tryPickup();
 
@@ -4498,6 +4518,7 @@ class Game {
             // new map is in place (the .then() restores IDLE). Prevents acting
             // against the old map mid-fetch.
             this.state = STATE.RESOLVING;
+            this._recordMuggers?.();   // (BS2) a mugger keeps what he took
             this._zoneChange();   // (plans/ks1-respawn-list.md) the respawn lists take a step
             this._loadMap(t.toMap, t.toX, t.toY).then(() => {
                 this._log(`[Entered ${this.map.zoneName}]`);
@@ -5032,7 +5053,12 @@ class Game {
         // (WS4) A weapon hit with no damageType of its own lands its best kind —
         // slash, stab or crush — on this target (WR1 b); the splat shows it.
         const kind = opts.type ? null : weaponHitKind(opts.weapon, enemyObj);
-        const finalDmg = computeHit({
+        // (EL2) Each weakness KIND the hit meets — element, back, state (feared
+        // or poisoned) — is ×1.5, and they multiply. Two kinds is a crit (the
+        // gold-ring splat); three knock out a non-boss (combat.js critOf).
+        const kinds = weaknessKinds({ elemental: elementalMult(opts.type || kind, enemyObj), backstab, target: enemyObj });
+        const weakHit = critOf(kinds, { boss: enemyObj.boss === true || isBoss(enemyObj) });
+        let finalDmg = computeHit({
             base: dmg,
             // (Poition) An active Strength Poition adds flat damage here — Law
             // 2's flats bucket ("same-family flat bonuses add"), read at the
@@ -5042,9 +5068,11 @@ class Game {
             // splash) since they all funnel through this single computeHit call.
             flats: this._poitionMod('strength'),
             elemental: elementalMult(opts.type || kind, enemyObj),
-            positional: backstab ? 1.5 : 1,
+            positional: backstab ? WEAKNESS_MULT : 1,
+            state: kinds.includes('state') ? WEAKNESS_MULT : 1,
         });
         if (finalDmg === 0) { this._log(`[${enemyObj.shownName || enemyObj.type} is immune!]`, 'combat'); return null; }
+        if (weakHit.knockout) finalDmg = knockoutDamage(finalDmg, enemyObj.entity);
         if (backstab) this._log('[Backstab!]', 'combat');
 
         const result = attack(playerEntity, enemyObj.entity, finalDmg);
@@ -5074,7 +5102,7 @@ class Game {
         // 3×3 burst) pass opts.omni so it bursts around the target instead.
         const splatDir = { dx: enemyObj.x - this.playerX, dy: enemyObj.y - this.playerY };
         this._spawnHitSplat(enemyObj.x, enemyObj.y, `-${result.dealt}`, opts.type || 'physical',
-            { dir: splatDir, omni: !!opts.omni, crit: !!opts.crit, killed: !!result.killed, kind });
+            { dir: splatDir, omni: !!opts.omni, crit: !!opts.crit || weakHit.crit, killed: !!result.killed, kind });
 
         // Hit flash + stagger — Phase C, polished in B6. Flash duration
         // and stagger distance now scale with damage so light taps feel
@@ -6197,8 +6225,10 @@ class Game {
         this._rivals = {};
         this._bossDropsGiven = new Set();
         this._chestRecords = {};
+        this._visitedZones = new Set();   // (mp2) a new run has been nowhere yet
         this._muggedIds = new Set();
         this._robbed = {};
+        this._tookGold = {};
         this._hot = {};
         this._pendingFollowers = null;
         this._pendingFollowersFrom = null;
