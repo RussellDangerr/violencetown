@@ -37,6 +37,7 @@ import { getDialogue } from './dialogue.js';
 import { manhattan, clamp } from './utils.js';
 import { RNG, randomSeed } from './rng.js';
 import { pickSlots, defaultPicks, resolveSpawn, requiredDropFor, dropLineFor, FINALE_PHASE1 } from './slots.js';
+import { rememberSpent, applySpent } from './npc-memory.js';
 import { hasSave, readSaveRaw, writeSave, loadInto, clearSave } from './save.js';
 import { QuestEngine } from './quests.js';
 import { doExamine, resolveExamine } from './examine.js';
@@ -506,6 +507,7 @@ class Game {
         // _loadMap lets these win over the map's own contents. Persisted (left out
         // while empty).
         this._chestRecords = {};
+        this._spentChoices = {};   // (NM1) { mapUrl: { spawnId: [choiceId] } }: one-time talk choices used
         this._visitedZones = new Set();     // (mp2) overworld zones entered; null = an old save, every zone counts
         this._mapUrl = null;                // url of the currently-loaded map
         this._cameFrom = null;               // url of the zone you ENTERED this one from (for the pipe-jam)
@@ -734,8 +736,11 @@ class Game {
         const dead = deadIds(this._respawnLists, url);
         for (const s of this.map.enemySpawns) {
             if (dead.has(s.id)) continue;
+            // (plans/tt1-traveler-after-burger.md) A spawn with `goneAfter` leaves once that quest is complete.
+            if (s.goneAfter && this.questEngine?.isComplete?.(s.goneAfter)) continue;
             this.enemies.push(spawnEnemy(resolveSpawn(s, this.slots), this._muggedIds, this._robbed, this._rivalKit?.(url, s.id), this._tookGold));
         }
+        this._applySpentChoices?.(url);   // (NM1) a one-time talk choice you used stays used
         this._rivalArrived?.(url);   // (plans/ne1-rival-remembered.md) the rival is at its post, kit and all
         this._finaleOnLoad?.(url);   // (FIN3) the vault after phase 1: no Financier, the beast in his corner
 
@@ -976,6 +981,18 @@ class Game {
         this._settleRival?.();
         stepRespawns(this._respawnLists);
         this._rememberChests?.();
+        this._rememberSpentChoices?.();
+    }
+
+    // (NM1) Give the people just spawned in `url` back the one-time choices you used.
+    _applySpentChoices(url) {
+        applySpent(this._spentChoices, url, this.enemies);
+    }
+
+    // (NM1) Write down the one-time talk choices spent in this zone, per person.
+    _rememberSpentChoices() {
+        this._spentChoices ||= {};
+        rememberSpent(this._spentChoices, this._mapUrl, this.enemies);
     }
 
     // (plans/ch1-chests-stay-empty.md) Write down every container in this zone that
@@ -1266,9 +1283,11 @@ class Game {
             this._maybeShowFirstRunHint();
         };
         // CONTINUE loads the autosave into the live game. GAME START begins
-        // fresh (the existing save survives until the fresh run's first
-        // autosave overwrites it, so a stray reload can still resume). Space
-        // does what CONTINUE does when there is a save, and GAME START when not.
+        // fresh, and the fresh run's first autosave overwrites the old save, so
+        // with a save on disk a click on GAME START asks first, with the same
+        // line RESTART uses; Cancel leaves the title and the save untouched.
+        // With no save it starts at once. Space does what CONTINUE does when
+        // there is a save (no confirm), and GAME START when not.
         const continueGame = async () => {
             this._endTvIntro?.();         // (TV1)
             audio.init();                 // [audio] first user gesture — unlock Web Audio
@@ -1304,7 +1323,11 @@ class Game {
             this._maybeShowFirstRunHint();
         };
 
-        document.getElementById('splash-go').addEventListener('click', start);
+        document.getElementById('splash-go').addEventListener('click', () => {
+            if (hasSave() && typeof confirm === 'function'
+                && !confirm('Restart from the beginning? This erases your current save.')) return;
+            start();
+        });
         const continueBtn = document.getElementById('splash-continue');
         if (continueBtn && hasSave()) {
             continueBtn.classList.remove('hidden');
@@ -5183,7 +5206,7 @@ class Game {
     _handleEnemyDeath(enemyObj) {
         audio.playSfx('enemy-killed'); // [audio] K.O. sting on a kill
         this._spawnEventWord(enemyObj.x, enemyObj.y, 'K.O.!', '#ff8822', 22);
-        this._log(`[Defeated ${enemyObj.entity.name}]`);
+        this._log(`[Defeated ${enemyObj.entity.name}]`, 'combat');
         this.emitGameEvent('enemy_killed', {
             type: enemyObj.type, id: enemyObj.id, x: enemyObj.x, y: enemyObj.y, tag: enemyObj.tag,
         });
@@ -6248,6 +6271,7 @@ class Game {
         this._rivals = {};
         this._bossDropsGiven = new Set();
         this._chestRecords = {};
+        this._spentChoices = {};
         this._visitedZones = new Set();   // (mp2) a new run has been nowhere yet
         this._muggedIds = new Set();
         this._robbed = {};

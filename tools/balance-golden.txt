@@ -63,7 +63,7 @@ sewer/e6                          Fungus King                 100       6     12
 sewer/e5                          Ghost Fungus                100       0      8       42              5              4     13
 sewer/e3                          Red Fungus                  100       3     10       70              6              4     10
 sewer/e4                          Red Fungus                  100       3     10       63              6              4     10
-sewer/sludge-bloom                Sludge Bloom                 60      15      0        0             12              4      -
+sewer/sludge-bloom                Sludge Bloom                 60      20      0        0             60              6      -
 sewer/e1                          Violet Fungus               100       0      9       28              5              4     12
 sewer/e2                          Violet Fungus               100       0      9       28              5              4     12
 sewer/wererat                     Wererat                     100       6     12      148              8              5      9
@@ -86,6 +86,7 @@ vault/vault-financier             Banker                      100       6     12
 id               damage  type
 fearmur              16  -
 gator_tail           16  -
+great_sword          20  -
 lion_whip            16  -
 ray_gun              22  energy
 wooden_sword         10  -

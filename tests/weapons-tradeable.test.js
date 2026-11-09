@@ -78,6 +78,7 @@ const EXPECTED = {
     lion_whip:    { baseValue: 26, tier: 'purple' },
     fearmur:      { baseValue: 28, tier: 'purple' },
     ray_gun:      { baseValue: 45, tier: 'purple' },
+    great_sword:  { baseValue: 45, tier: 'purple' },   // GW1: placeholder value, equal to the Ray Gun's
 };
 
 describe('weapons are first-class tradeable items', () => {
