@@ -20,7 +20,7 @@ import { resolveSpawn, defaultPicks, ENTRIES, FINALE_PHASE1 } from '../game/slot
 import { isBoss, bossInFight, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS } from '../game/defeat-scenarios.js';
 import { INVENTORY_SIZE, SAFE_SLOTS } from '../game/data.js';
 import { resolveItemDef } from '../game/item-registry.js';
-import { attack, computeHit, elementalMult, weaponHitKind, isBackstab } from '../game/combat.js';
+import { attack, computeHit, elementalMult, weaponHitKind, isBackstab, WEAKNESS_MULT, weaknessKinds, critOf, knockoutDamage } from '../game/combat.js';
 import { isHostile, isHunting, allyAids } from '../game/ai.js';
 import { fighters } from '../game/fight-area.js';
 import { perceives, VERDICT, emitNoise, NOISE, struck } from '../game/perception.js';
@@ -163,7 +163,7 @@ function makeGame({ seed = 7, weapon = 'wooden_sword', armor = 0, hp = 100 } = {
         performance: { now: () => 0 },
         setTimeout: (f) => { timers.push(f); return timers.length; },
         isBoss, bossInFight, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS, SAFE_SLOTS,
-        computeHit, elementalMult, weaponHitKind, isBackstab, resolveEnemyTurns,
+        computeHit, elementalMult, weaponHitKind, isBackstab, WEAKNESS_MULT, weaknessKinds, critOf, knockoutDamage, resolveEnemyTurns,
         // every blow the game lands, by who struck it
         attack: (a, t, d) => { const r = attack(a, t, d); if (r) g.blows.push({ by: a.name, dealt: r.dealt, raw: r.rawDamage }); return r; },
         isHostile, isHunting, allyAids, fighters, isCombatActive, perceives, VERDICT,

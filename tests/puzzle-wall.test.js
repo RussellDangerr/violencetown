@@ -8,7 +8,10 @@
 //
 // The Sludge Bloom is that beat. It is a lock with keys, not a wall: armor 15
 // floors every melee weapon in the game to 1 damage a turn, which reads
-// correctly as impossible, while fire (weak x2) opens it in four.
+// correctly as impossible, while its keys open it. Since EL2 the keys follow the
+// weakness chart (game/elements.js): sludge is earth and wood opens earth, so
+// energy and soap (clean) are weak x1.5, and fire is not. Its health is 60 so
+// the Ray Gun still opens it in a handful of turns.
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -16,6 +19,8 @@ import fs from 'node:fs';
 import { Entity, computeHit, elementalMult } from '../game/combat.js';
 import { WEAPONS } from '../game/weapons.js';
 import { SPELLS } from '../game/spells.js';
+import { TRICKS } from '../game/tricks.js';
+import { weaknessesOf } from '../game/elements.js';
 import { Enemy } from '../game/enemies.js';
 import { GameMap } from '../game/map.js';
 
@@ -45,8 +50,8 @@ describe('it is authored as a wall, not a fight', () => {
         assert.equal(bloom.sightRange, 0, 'and it does not watch you');
     });
 
-    test('it obeys Law 0 — the Hundred applies to walls too', () => {
-        assert.equal(bloom.hp, 100);
+    test('it is the one combatant under the Hundred: 60, by ruling, so its keys still open it at x1.5', () => {
+        assert.equal(bloom.hp, 60);
     });
 
     test('it is HEAVY, or it would not be a wall at all', () => {
@@ -63,28 +68,44 @@ describe('steel does not open it', () => {
             const r = turnsToBreak(w.damage, w.damageType || 'physical');
             if ((w.damageType || 'physical') === 'physical') {
                 assert.equal(r.perTurn, 1, 'floored to the minimum');
-                assert.ok(r.turns >= 100, `${r.turns} turns is a wall`);
+                assert.ok(r.turns >= bloom.hp, `${r.turns} turns is a wall`);
             }
         });
     }
 });
 
-describe('fire opens it', () => {
-    test('a fireball breaks it in a handful of turns', () => {
-        const r = turnsToBreak(SPELLS.fireball.damage, 'fire');
+describe('energy and soap open it (EL2: fire no longer does)', () => {
+    test('the Ray Gun breaks it in a handful of turns', () => {
+        const r = turnsToBreak(WEAPONS.ray_gun.damage, 'energy');
         assert.ok(r.turns <= 5, `expected a real key, got ${r.turns} turns`);
     });
 
-    test('because it is authored weak to fire', () => {
-        assert.deepEqual(bloom.weak, ['fire']);
-        assert.equal(elementalMult('fire', bloom), 2);
+    test('because it is authored weak to energy and clean, as the chart gives sludge', () => {
+        assert.deepEqual(bloom.weak, ['energy', 'clean']);
+        assert.equal(elementalMult('energy', bloom), 1.5);
+        assert.equal(elementalMult('clean', bloom), 1.5);
+        assert.deepEqual([...bloom.weak].sort(), weaknessesOf('sludge').sort());
     });
 
-    test('and fire is reachable by more than one route', () => {
+    test('and fire is no key: a fireball only chips it', () => {
+        assert.equal(elementalMult('fire', bloom), 1);
+        const r = turnsToBreak(SPELLS.fireball.damage, 'fire');
+        assert.ok(r.turns > 5, `fire should not be a key, got ${r.turns} turns`);
+    });
+
+    test('and energy is reachable by more than one route', () => {
         // A lock with one key is a timeline; a lock with several is a web node.
-        // Fireball is the spell; the fire bottle is the thrown item; the Fire
-        // Ring's ignite trigger is the third. All three already shipped.
-        assert.equal(SPELLS.fireball.damageType, 'fire');
+        // The Ray Gun is the weapon, Ray Blast the trick that rides it, and soap
+        // the scrub (game/item-uses.js). All three already shipped.
+        assert.equal(WEAPONS.ray_gun.damageType, 'energy');
+        assert.equal(TRICKS.ray_blast.damageType, 'energy');
+        assert.ok(turnsToBreak(TRICKS.ray_blast.damage, 'energy').turns <= 5);
+    });
+
+    test('a bar of soap still opens it in one scrub', () => {
+        // item-uses.js scrubs for hp + armor + 1, typed clean.
+        const enough = bloom.hp + bloom.armor + 1;
+        assert.equal(turnsToBreak(enough, 'clean').turns, 1);
     });
 });
 
