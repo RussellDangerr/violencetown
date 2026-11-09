@@ -6,7 +6,7 @@
 // with one gate", so the beat every player recognises — *I couldn't beat that
 // before and now I can* — does not exist anywhere in Violencetown.
 //
-// The Sludge Bloom is that beat. It is a lock with keys, not a wall: armor 15
+// The Sludge Bloom is that beat. It is a lock with keys, not a wall: armor 20 (GW1R4)
 // floors every melee weapon in the game to 1 damage a turn, which reads
 // correctly as impossible, while its keys open it. Since EL2 the keys follow the
 // weakness chart (game/elements.js): sludge is earth and wood opens earth, so
@@ -99,7 +99,7 @@ describe('energy and soap open it (EL2: fire no longer does)', () => {
         // the scrub (game/item-uses.js). All three already shipped.
         assert.equal(WEAPONS.ray_gun.damageType, 'energy');
         assert.equal(TRICKS.ray_blast.damageType, 'energy');
-        assert.ok(turnsToBreak(TRICKS.ray_blast.damage, 'energy').turns <= 5);
+        assert.ok(turnsToBreak(TRICKS.ray_blast.damage, 'energy').turns <= 9);   // GW1R4: armor 20 slows it from 5 turns to 9
     });
 
     test('a bar of soap still opens it in one scrub', () => {
