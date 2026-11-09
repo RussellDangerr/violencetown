@@ -2749,7 +2749,12 @@ class Game {
             const transition = this.map.getTransition(nx, ny);
             if (transition) {
                 if (!carriesAll(transition.requires, this.inventory)) {
-                    this._log(transition.requiresMsg || '[You need something to get through here.]');
+                    // A list of items also says how many of them are in the bag, the
+                    // quest HUD's " (n/total)" style (plans/vd1-vault-door-count.md).
+                    const want = Array.isArray(transition.requires) ? transition.requires : [];
+                    const held = new Set((this.inventory || []).map(s => s && s.itemDef && s.itemDef.id));
+                    const count = want.length > 1 ? ` (${want.filter(id => held.has(id)).length}/${want.length})` : '';
+                    this._log((transition.requiresMsg || '[You need something to get through here.]') + count);
                 } else {
                     this._pendingTransition = transition;
                 }
