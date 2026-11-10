@@ -163,7 +163,7 @@ function makeGame({ seed = 7, weapon = 'wooden_sword', armor = 0, hp = 100 } = {
         requestAnimationFrame: (f) => queueMicrotask(() => f(Infinity)),
         performance: { now: () => 0 },
         setTimeout: (f) => { timers.push(f); return timers.length; },
-        isBoss, bossInFight, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS, SAFE_SLOTS,
+        isBoss, isStoryBoss: isBoss, bossInFight, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS, SAFE_SLOTS,
         computeHit, elementalMult, weaponHitKind, isBackstab, WEAKNESS_MULT, weaknessKinds, critOf, knockoutDamage, resolveEnemyTurns,
         // every blow the game lands, by who struck it
         attack: (a, t, d) => { const r = attack(a, t, d); if (r) g.blows.push({ by: a.name, dealt: r.dealt, raw: r.rawDamage }); return r; },

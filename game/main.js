@@ -23,7 +23,9 @@ import {
     slotRing, unslotRing, acquireRing, sanitizeSlots,
     mergeKnown,   // (ring Task 5) skill-merge helper, relocated from the retired skills.js
 } from './rings.js';
-import { isBoss, bossInFight, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS } from './defeat-scenarios.js';
+// (ruling EMR1) The defeat code asks whether the story's boss is in the fight, not whether
+// anything carries the boss flag; the local names are the ones its methods already read.
+import { isBoss, isStoryBoss, storyBossInFight as bossInFight, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS } from './defeat-scenarios.js';
 import { addToInventory as addToInv, moveToZone, zoneOf, pageCount, slotOnPage, pageOfSlot } from './inventory.js';
 import { itemActions, equipOptions, inspectorUsesRect } from './inspector.js';   // (C1) tap-to-inspect: context actions; (C2) GEAR chooser options
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
@@ -6118,7 +6120,7 @@ class Game {
         // A boss in your fight when you went down (whoever landed the blow, its ally
         // included) → reset the encounter and retry; no scenario, no loss.
         // Optional-called, like _antTurn, so the stand-in games tests lift this onto need not carry it.
-        const boss = isBoss(by) ? by : this._bossInFight?.();
+        const boss = isStoryBoss(by) ? by : this._bossInFight?.();
         if (boss) { this._runBossRetry(boss); return; }
         // Otherwise pick a scenario, weighted by (zone × who-beat-you × state).
         // Task 3 swaps the runner stub for the full template; for now the generic

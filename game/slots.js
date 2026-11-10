@@ -649,6 +649,13 @@ export function slotIdOf(enemy, mapSpawns = []) {
     return enemy.slot ?? ((mapSpawns || []).find(s => s && s.id === enemy.id)?.slot ?? null);
 }
 
+// Does this enemy fill a spine boss slot? (ruling EMR1) The boss flag and a `*_boss` tag
+// do not say so: the Borgir boss has the flag and Pike has a tag, and neither fills one.
+export function fillsBossSlot(enemy, mapSpawns = [], slots = SLOTS) {
+    const slotId = slotIdOf(enemy, mapSpawns);
+    return !!slotId && slots[slotId]?.kind === 'boss';
+}
+
 // The item a slot guarantees for this enemy, or null.
 export function requiredDropFor(enemy, mapSpawns = [], slots = SLOTS) {
     const slotId = slotIdOf(enemy, mapSpawns);

@@ -92,7 +92,7 @@ function stage(enemies) {
         timers, struckBy: [],
     };
     const free = {
-        STATE, audio, SAFE_SLOTS, isBoss, bossInFight, fighters, computeHit, resolveEnemyTurns,
+        STATE, audio, SAFE_SLOTS, isBoss, isStoryBoss: isBoss, bossInFight, fighters, computeHit, resolveEnemyTurns,
         pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS,
         performance, setTimeout: (fn) => timers.push(fn),
     };

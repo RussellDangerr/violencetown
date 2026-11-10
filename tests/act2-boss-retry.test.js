@@ -11,7 +11,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { isBoss, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS } from '../game/defeat-scenarios.js';
+import { isBoss, isStoryBoss, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS } from '../game/defeat-scenarios.js';
 import { ENTRIES, resolveSpawn, defaultPicks } from '../game/slots.js';
 import { spawnEnemy } from '../game/enemies.js';
 import { SAFE_SLOTS } from '../game/data.js';
@@ -30,9 +30,13 @@ describe('isBoss', () => {
     test('a *_boss tag is a boss', () => {
         assert.equal(isBoss({ tag: 'wererat_boss' }), true);
     });
-    test('the boss flag is a boss, with no tag at all', () => {
+    // Ruling EMR1 a: a bare boss flag no longer means a retry. The flag still marks a
+    // boss (his one name, boss spending); the retry asks whether he fills a boss slot.
+    test('the boss flag still marks a boss, but a bare flag is not a story boss (EMR1)', () => {
         assert.equal(isBoss({ boss: true }), true);
         assert.equal(isBoss({ boss: true, tag: null }), true);
+        assert.equal(isStoryBoss({ boss: true }), false);
+        assert.equal(isStoryBoss({ boss: true, tag: null }), false);
     });
     test('an ordinary enemy, a {cause} and nothing are not', () => {
         assert.equal(isBoss({ type: 'Wererat', tag: null, boss: false }), false);
@@ -46,8 +50,9 @@ describe('isBoss', () => {
         for (const z of ACT2) {
             const sp = mapData(z.map).enemies.find(e => e.slot === z.slot);
             const enemy = spawnEnemy(resolveSpawn(sp, defaultPicks()));
-            assert.equal(enemy.tag ?? null, null, `${z.slot} carries no tag, so only the flag can say boss`);
+            assert.equal(enemy.tag ?? null, null, `${z.slot} carries no tag, so only the slot can say story boss`);
             assert.equal(isBoss(enemy), true, `${z.slot}'s boss`);
+            assert.equal(isStoryBoss(enemy), true, `${z.slot} fills a boss slot (EMR1)`);
         }
     });
 });
@@ -90,7 +95,7 @@ function stage(mapFile) {
         addBuff(id) { this.buffs.push(id); },
         timers,
     };
-    const free = { STATE, audio, BUFF_DEFS, SAFE_SLOTS, isBoss, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS, setTimeout: (fn) => timers.push(fn) };
+    const free = { STATE, audio, BUFF_DEFS, SAFE_SLOTS, isStoryBoss, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS, setTimeout: (fn) => timers.push(fn) };
     for (const sig of ['_die() {', '_resolveDefeat() {', '_runBossRetry(boss) {', '_runScenario(pick, _ctx) {', '_resolveWakeCell(wakeAt) {', '_safeRespawnCell() {', '_applyTake(take) {']) {
         g[sig.slice(0, sig.indexOf('('))] = liveMethod(sig, free);
     }
