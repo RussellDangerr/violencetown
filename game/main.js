@@ -42,7 +42,7 @@ import { RNG, randomSeed } from './rng.js';
 import { pickSlots, defaultPicks, resolveSpawn, requiredDropFor, dropLineFor, FINALE_PHASE1, pickReturning, spotFor, RETURNING_SPOTS } from './slots.js';
 import { rememberSpent, applySpent } from './npc-memory.js';
 import { snapshotOf, keepSnapshot, readSnapshots, reportLines } from './bones.js';
-import { hasSave, readSaveRaw, writeSave, loadInto, clearSave } from './save.js';
+import { hasSave, readSaveRaw, writeSave, loadInto, clearSave, encodeSaveCode, importSaveCode } from './save.js';
 import { QuestEngine } from './quests.js';
 import { doExamine, resolveExamine } from './examine.js';
 import { recordDrop, pendingDrops, takeDrop, dropLoadout, recordKill, stepRespawns, deadIds, bossDropOnce, claimSpots, spotHolds, spotSpawns } from './drops.js'; // per-zone runtime dropped-items layer + respawn list (pure, node-tested)
@@ -2228,6 +2228,32 @@ class Game {
         // (ZM1) Zoom row: Farther / Closer.
         document.getElementById('opt-zoom-farther')?.addEventListener('click', () => this._stepZoom(-1));
         document.getElementById('opt-zoom-closer')?.addEventListener('click', () => this._stepZoom(+1));
+
+        // (PK1) Save as a code. COPY puts the code on the clipboard and always fills the
+        // box too, so a browser that blocks clipboard access still lets the player copy by hand.
+        // PASTE reads the clipboard, falling back to whatever is in the box.
+        const codeBox = document.getElementById('opt-save-code');
+        const codeNote = document.getElementById('opt-save-status');
+        const say = (m) => { if (codeNote) codeNote.textContent = m; };
+        document.getElementById('opt-save-copy')?.addEventListener('click', async () => {
+            const code = encodeSaveCode(this);
+            if (codeBox) { codeBox.value = code; codeBox.focus(); codeBox.select(); }
+            try { await navigator.clipboard.writeText(code); say('[TEXT] Code copied.'); }
+            catch { say('[TEXT] Copy the code from the box.'); }
+        });
+        document.getElementById('opt-save-paste')?.addEventListener('click', async () => {
+            let text = '';
+            try { text = await navigator.clipboard.readText(); } catch { /* blocked: use the box */ }
+            if (!text && codeBox) text = codeBox.value;
+            const res = await importSaveCode(this, text);
+            if (!res.ok) { say(res.message); return; }
+            writeSave(this);
+            say('[TEXT] Save loaded.');
+            this._log('[Save loaded from a code]', 'transition');
+            this._closeOptionsModal();
+            this._setPaused?.(false);
+            this._render?.();
+        });
 
         // Esc closes the modal without falling through to game state. Capture
         // phase beats _bindInput's bubble handler, matching the help modal.
