@@ -36,12 +36,12 @@ import { applyDispositionDelta, reactToTransaction } from './give-action.js';
 import { getDialogue } from './dialogue.js';
 import { manhattan, clamp } from './utils.js';
 import { RNG, randomSeed } from './rng.js';
-import { pickSlots, defaultPicks, resolveSpawn, requiredDropFor, dropLineFor, FINALE_PHASE1 } from './slots.js';
+import { pickSlots, defaultPicks, resolveSpawn, requiredDropFor, dropLineFor, FINALE_PHASE1, pickReturning, spotFor, RETURNING_SPOTS } from './slots.js';
 import { rememberSpent, applySpent } from './npc-memory.js';
 import { hasSave, readSaveRaw, writeSave, loadInto, clearSave } from './save.js';
 import { QuestEngine } from './quests.js';
 import { doExamine, resolveExamine } from './examine.js';
-import { recordDrop, pendingDrops, takeDrop, dropLoadout, recordKill, stepRespawns, deadIds, bossDropOnce } from './drops.js'; // per-zone runtime dropped-items layer + respawn list (pure, node-tested)
+import { recordDrop, pendingDrops, takeDrop, dropLoadout, recordKill, stepRespawns, deadIds, bossDropOnce, claimSpots, spotHolds, spotSpawns } from './drops.js'; // per-zone runtime dropped-items layer + respawn list (pure, node-tested)
 import {
     HIT_SLOP, throwRects, DOCK, hitHud,
     HOTBAR_X_START, HOTBAR_Y, HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_STRIDE, HOTBAR_SLOTS,
@@ -494,6 +494,10 @@ class Game {
         // ("mapUrl" → [{ id, age }]). _loadMap leaves them out; each zone change
         // (_zoneChange) brings a share back. Persisted (left out while empty).
         this._respawnLists = {};
+        // (plans/ro1-returning-boss-spot.md) Boss spots a different boss has taken, per zone
+        // ("mapUrl" → [{ spawn, replaces }]), and this game's pick for each. Persisted.
+        this._filledSpots = {};
+        this._returnPicks = {};
         // (plans/ne1-rival-remembered.md) The enemy that beat you and took your things,
         // per zone ("mapUrl" → { id, items, carrying? }). _loadMap hands it the items
         // as kit. Persisted (left out while empty).
@@ -537,6 +541,7 @@ class Game {
         // (slot registry) One entry per spine slot, from the seed's own stream —
         // never game.rng (SL-2). A save restores its own picks over these.
         this.slots = pickSlots(newSeed);
+        this._rollReturning?.(newSeed);   // (RO1) the returning boss spots pick on a stream of their own
         // (one clock) Ambient wander's own stream, so how long you think between
         // moves can never shift a fight's or a theft's rolls. Not saved: wander
         // changes no outcome's dice, so a reload may pick it up anywhere.
@@ -734,11 +739,12 @@ class Game {
         // (slot registry) A spawn carrying a `slot` becomes this game's pick for it.
         // A kill still on this zone's respawn list stays dead (plans/ks1-respawn-list.md).
         const dead = deadIds(this._respawnLists, url);
-        for (const s of this.map.enemySpawns) {
+        for (const s of [...this.map.enemySpawns, ...(this._spotSpawns?.(url) ?? [])]) {
             if (dead.has(s.id)) continue;
+            if (this._spotHolds?.(url, s)) continue;   // (RO1) a boss whose returning spot is filled stays dead
             // (plans/tt1-traveler-after-burger.md) A spawn with `goneAfter` leaves once that quest is complete.
             if (s.goneAfter && this.questEngine?.isComplete?.(s.goneAfter)) continue;
-            this.enemies.push(spawnEnemy(resolveSpawn(s, this.slots), this._muggedIds, this._robbed, this._rivalKit?.(url, s.id), this._tookGold));
+            this.enemies.push(spawnEnemy(resolveSpawn(s, this.slots, undefined, undefined, this._returnPicks), this._muggedIds, this._robbed, this._rivalKit?.(url, s.id), this._tookGold));
         }
         this._applySpentChoices?.(url);   // (NM1) a one-time talk choice you used stays used
         this._rivalArrived?.(url);   // (plans/ne1-rival-remembered.md) the rival is at its post, kit and all
@@ -979,9 +985,32 @@ class Game {
     // on a real move between zones — never on a save restore or a new game.
     _zoneChange() {
         this._settleRival?.();
-        stepRespawns(this._respawnLists);
+        const back = stepRespawns(this._respawnLists);
+        // (RO1) A boss with a returning spot stays dead; a different boss takes the spot instead.
+        this._claimSpots?.(back);
         this._rememberChests?.();
         this._rememberSpentChoices?.();
+    }
+
+    // (RO1) A new game's picks for the returning boss spots, and no spot filled yet.
+    _rollReturning(seed) {
+        this._returnPicks = pickReturning(seed);
+        this._filledSpots = {};
+    }
+
+    // (RO1) Should this map spawn stay off the map: a boss whose returning spot is filled.
+    _spotHolds(url, spawn) {
+        return spotHolds(this._filledSpots, url, spawn);
+    }
+
+    // (RO1) The spawns of this zone's filled returning spots: the different boss standing in a beaten one's place.
+    _spotSpawns(url) {
+        return spotSpawns(this._filledSpots, url, RETURNING_SPOTS);
+    }
+
+    // (RO1) Of the kills just due back, those with a returning spot fill it instead of returning.
+    _claimSpots(back) {
+        claimSpots(back, (this._filledSpots ||= {}), (url, id) => spotFor(url, id));
     }
 
     // (NM1) Give the people just spawned in `url` back the one-time choices you used.
@@ -1029,7 +1058,7 @@ class Game {
     // respawn list. Enemies the game spawned on the fly aren't rebuilt from the
     // map anyway, so they are left off.
     _rememberKill(enemyObj) {
-        if (!this._mapUrl || !(this.map?.enemySpawns || []).some(s => s && s.id === enemyObj.id)) return;
+        if (!this._mapUrl || ![...(this.map?.enemySpawns || []), ...(this._spotSpawns?.(this._mapUrl) ?? [])].some(s => s && s.id === enemyObj.id)) return;
         recordKill(this._respawnLists, this._mapUrl, enemyObj.id);
     }
 
@@ -1064,7 +1093,7 @@ class Game {
         const live = this.enemies.find(e => e.id === r.id);
         const spawn = (this.map?.enemySpawns || []).find(s => s && s.id === r.id);
         if (!live || !spawn) return;
-        const base = spawnEnemy(resolveSpawn(spawn, this.slots), this._muggedIds, this._robbed).loadout;
+        const base = spawnEnemy(resolveSpawn(spawn, this.slots, undefined, undefined, this._returnPicks), this._muggedIds, this._robbed).loadout;
         r.items = settleItems(r.items, live.loadout, base);
         if (!r.items.length) delete this._rivals[url];
     }
@@ -5836,7 +5865,7 @@ class Game {
         this.enemies = this.enemies.filter(e => e.tag !== FINALE_PHASE1.sunManTag && !this._isFinancier(e));
         const spawn = (this.map?.enemySpawns || []).find(s => s.id === boss.id);
         if (!spawn) return;   // he chased you out of the vault: the vault rebuilds him when you return
-        this.enemies.push(spawnEnemy(resolveSpawn(spawn, this.slots), this._muggedIds, this._robbed));
+        this.enemies.push(spawnEnemy(resolveSpawn(spawn, this.slots, undefined, undefined, this._returnPicks), this._muggedIds, this._robbed));
     }
 
     // (Lion Whip) Yank a struck enemy up to `dist` tiles toward the player, one
@@ -6252,6 +6281,7 @@ class Game {
         const newSeed = seed ?? randomSeed();
         this.rng = new RNG(newSeed);
         this.slots = pickSlots(newSeed);   // (slot registry) a new game, new picks
+        this._rollReturning?.(newSeed);   // (RO1)
         // Wander's own stream, derived from the same seed so a seeded run still
         // replays exactly (the autoplay), yet never sharing a draw with game.rng.
         this.ambientRng = new RNG(seed == null ? undefined : (seed ^ 0x9E3779B9) >>> 0);

@@ -66,6 +66,7 @@ sewer/e4                          Red Fungus                  100       3     10
 sewer/sludge-bloom                Sludge Bloom                 60      20      0        0             60              6      -
 sewer/e1                          Violet Fungus               100       0      9       28              5              4     12
 sewer/e2                          Violet Fungus               100       0      9       28              5              4     12
+sewer/sewer.returning:returning_boss  Wererat                     100       6     12      148              8              5      9
 sewer/wererat                     Wererat                     100       6     12      148              8              5      9
 sewer-north/crat                  Violencian                  100     -80      0        0              1              1      -
 sewer-north/crat-a                Violencian                  100     -80      0        5              1              1      -
@@ -118,7 +119,7 @@ downtown                   8
 factory                   76
 frozen                    78
 graveyard                 78
-sewer                    101
+sewer                    145
 sewer-north               10
 town                      30
 vault                     44

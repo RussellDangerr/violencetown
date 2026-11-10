@@ -12,7 +12,7 @@
 // survive a round-trip too.
 
 import { Enemy, muggerRecords } from './enemies.js';
-import { defaultPicks } from './slots.js';
+import { defaultPicks, defaultReturning } from './slots.js';
 import { clamp } from './utils.js';
 import { INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE } from './data.js';
 import { pagedSize } from './inventory.js';
@@ -20,7 +20,7 @@ import { sanitizeSlots } from './rings.js';
 import { settleHands } from './items.js';
 import { sanitizeSkills } from './skills.js';
 import { sanitizeNoteIds } from './interactions.js';
-import { sanitizeRespawnLists } from './drops.js';
+import { sanitizeRespawnLists, sanitizeFilledSpots } from './drops.js';
 import { sanitizeRivals } from './rivals.js';
 import { sanitizeSpent } from './npc-memory.js';
 
@@ -223,6 +223,12 @@ function respawnEntries(game) {
     if (Object.keys(lists).length) out.respawnLists = lists;
     const given = game._bossDropsGiven ? [...game._bossDropsGiven] : [];
     if (given.length) out.bossDropsGiven = given;
+    // (plans/ro1-returning-boss-spot.md) Boss spots a different boss has taken, and this game's
+    // returning picks; each left out while it is the default.
+    const spots = sanitizeFilledSpots(game._filledSpots);
+    if (Object.keys(spots).length) out.filledSpots = spots;
+    const picks = { ...defaultReturning(), ...(game._returnPicks || {}) };
+    if (JSON.stringify(picks) !== JSON.stringify(defaultReturning())) out.returningPicks = picks;
     // (plans/ne1-rival-remembered.md) The enemy that beat you and what it took; left out while there is none.
     const rivals = sanitizeRivals(game._rivals);
     if (Object.keys(rivals).length) out.rivals = rivals;
@@ -313,6 +319,9 @@ export function migrate(raw) {
     r.world.respawnLists = sanitizeRespawnLists(r.world.respawnLists);
     r.world.bossDropsGiven = Array.isArray(r.world.bossDropsGiven)
         ? r.world.bossDropsGiven.filter(k => typeof k === 'string') : [];
+    // (RO1) An older save has no filled spots and the default returning picks.
+    r.world.filledSpots = sanitizeFilledSpots(r.world.filledSpots);
+    r.world.returningPicks = { ...defaultReturning(), ...((r.world.returningPicks && typeof r.world.returningPicks === 'object' && !Array.isArray(r.world.returningPicks)) ? r.world.returningPicks : {}) };
     // An older save has no rival: nobody is carrying anything of yours.
     r.world.rivals = sanitizeRivals(r.world.rivals);
     if (!r.world.robbed || typeof r.world.robbed !== 'object' || Array.isArray(r.world.robbed)) r.world.robbed = {};
@@ -428,6 +437,8 @@ export async function loadInto(game, raw) {
     // once those are in.
     game._rivals = {};
     game._bossDropsGiven = new Set(raw.world.bossDropsGiven ?? []);
+    game._filledSpots = sanitizeFilledSpots(raw.world.filledSpots);   // (RO1) read by _loadMap, so set it first
+    game._returnPicks = { ...defaultReturning(), ...(raw.world.returningPicks || {}) };
     game._chestRecords = sanitizeChestRecords(raw.world.chestRecords);
     game._spentChoices = sanitizeSpent(raw.world.spentChoices);   // (NM1)
     // null (no record) is kept: the Map shows every zone as visited.

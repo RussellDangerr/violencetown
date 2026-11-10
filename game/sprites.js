@@ -18,7 +18,7 @@ import { dirOf } from './perception.js';
 export const TINY_INK = [63, 38, 49];   // #3F2631, the Tiny packs' outline
 // Sheets already drawn in the Tiny style (or re-outlined by a tool), which the
 // outline pass leaves alone.
-export const TINY_STYLE_SHEETS = new Set(['tinyDungeon', 'tinyTown', 'tinyExtra', 'outlined', 'interior', 'emotes', 'marks', 'ratVariants', 'beastVariants', 'iceCone', 'ant']);
+export const TINY_STYLE_SHEETS = new Set(['tinyDungeon', 'tinyTown', 'tinyExtra', 'outlined', 'interior', 'emotes', 'marks', 'ratVariants', 'wereratTint', 'beastVariants', 'iceCone', 'ant']);
 
 export class SpriteSheet {
     // `padding` is the gap (in source pixels) between adjacent cells. Kenney's
@@ -190,6 +190,10 @@ export const SHEETS = {
     // silhouette are the rat's own. Column order is the tool's VARIANTS list.
     // Packed, padding 0. The Carnival's rats draw from it (ENEMY_SPRITES).
     ratVariants:  { src: `${K}/ratVariants_packed.png`, frameW: 16, frameH: 16 },
+
+    // The returning boss's stand-in look (plans/ro1-returning-boss-spot.md): the Tiny Dungeon
+    // sheet again, washed with `tint` when it loads (loadAllSprites). Obviously fake on purpose.
+    wereratTint:  { src: TINY_DUNGEON, frameW: 16, frameH: 16, tint: 'rgba(200, 40, 220, 0.55)' },
 
     // The Tiny Dungeon (Kenney, CC0) grey beast, (4,10), recoloured by the same tool: only its
     // two greys swapped, the outline and orange tail kept. Column order is the
@@ -467,7 +471,8 @@ export const ENEMY_SPRITES = {
     // Pike keeps (2,7) to itself.
     'Carrion': { sheet: 'tinyDungeon', col: 3, row: 9, static: true }, // hooded, gaunt — the freed cell
     'Boss':    { sheet: 'tinyDungeon', col: 0, row: 8, static: true }, // knight helmet — Borgir employer
-    'Wererat': { sheet: 'tinyDungeon', col: 3, row: 7, static: true }, // horned viking — hulking were-rat brute
+    // `byTag`: an enemy carrying that tag is drawn from the other sheet (RO1's stand-in is tinted).
+    'Wererat': { sheet: 'tinyDungeon', col: 3, row: 7, static: true, byTag: { returning_boss: { sheet: 'wereratTint' } } }, // horned viking — hulking were-rat brute
 
     // Town — ambient Violencians. A POOL, not one cell: every citizen used to be
     // tinyDungeon (4,7), a plain brown-haired figure whose palette and silhouette
@@ -615,6 +620,7 @@ export function idHash(entity) {
 // Entries with no `variants` are returned untouched, so this is safe to call on
 // every sprite lookup.
 export function spriteVariant(info, entity) {
+    if (info?.byTag && entity?.tag && info.byTag[entity.tag]) info = { ...info, ...info.byTag[entity.tag] };
     if (!info?.variants?.length) return info;
     const v = info.variants[idHash(entity) % info.variants.length];
     return { ...info, col: v.col, row: v.row };
@@ -1025,6 +1031,21 @@ export async function loadAllSprites() {
     }
 
     await Promise.all(promises);
+
+    // A sheet that names a `tint` is its source image washed with that colour, kept to the
+    // pixels the art already covers.
+    for (const [key, def] of Object.entries(SHEETS)) {
+        const sheet = loaded[key];
+        if (!def.tint || !sheet.loaded || typeof document === 'undefined') continue;
+        const c = document.createElement('canvas');
+        c.width = sheet.img.width; c.height = sheet.img.height;
+        const g = c.getContext('2d');
+        g.drawImage(sheet.img, 0, 0);
+        g.globalCompositeOperation = 'source-atop';
+        g.fillStyle = def.tint;
+        g.fillRect(0, 0, c.width, c.height);
+        sheet.img = c;
+    }
 
     let ok = 0, fail = 0;
     for (const [, sheet] of Object.entries(loaded)) {
