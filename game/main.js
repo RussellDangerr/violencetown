@@ -12,7 +12,7 @@ import { pickHitMark, HEAVY_HIT_DAMAGE, dodgeChance, DODGE_WORD } from './hit-sp
 import { makeEffectLoop } from './effect-loop.js';                 // one tick of the transient-effects loop, and its refusal to die on a bad frame
 import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK, SLUDGE_DOT, FIRE_QUENCHING_TILES } from './data.js';
 import { puddleTiles, layPuddle, puddleAt, dryPuddles } from './puddles.js';   // (poisons) Sludge Brain's puddles
-import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef } from './items.js';
+import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef, poitionBuff } from './items.js';
 import { WEAPONS, weaponClassOf } from './weapons.js';
 import { handPairOf } from './hand-data.js';   // (HB2) two held weapons combine into a named effect
 import { resolveItemDef } from './item-registry.js';
@@ -5746,6 +5746,15 @@ class Game {
             const tiles = this._layPuddle({ x: npc.x, y: npc.y }, { x: this.playerX, y: this.playerY },
                                           def.puddle.kind, def.puddle.turns);
             return `[${who} throws ${what}: a sludge puddle covers ${tiles} tile${tiles === 1 ? '' : 's'} around you.]`;
+        }
+        if (def.poition?.as === 'poison') {
+            // (ps1) A thrown poison food lands on you: Poisoned for its own numbers.
+            const b = poitionBuff(def.poition);
+            const have = this.buffs.find(x => x.id === b.id);
+            if (have) { have.turns = Math.max(have.turns, b.turns); have.dmg = Math.max(have.dmg ?? 0, b.dmg); }
+            else this.addBuff(b.id, 'Poisoned', b.turns, 'debuff', { dmg: b.dmg });
+            this._spawnHitSplat(this.playerX, this.playerY, '[TEXT]', 'poison', { omni: true });
+            return `[${who} throws ${what} at you: [TEXT]]`;
         }
         return null;
     }
