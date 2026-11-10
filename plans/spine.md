@@ -95,6 +95,9 @@ not *"the Were-Rat drops the Converter."* The Were-Rat is one entry in the Sewer
 - **SL-6 Anchors and mooks** (cosmology, principle 1). Boss, mini-boss and character slots hold
   anchors: one pick per game, irreplaceable once picked. Mob slots hold mooks, rolled per spawn
   from the zone's spawn table.
+  *Ruling RO1R1 (a), 2026-11-09:* a boss you beat stays dead, and after the same respawn wait a
+  *different* boss takes its spot, with its own loot once. It has no required item, so the
+  Converter and the three still come only from the first boss.
 - **SL-7 New ideas become pool entries. They never change the structure.** An idea not being built
   yet goes on Caelan's private roadmap board as a card tagged *zone + slot*, not into this repo.
 

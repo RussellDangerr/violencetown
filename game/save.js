@@ -12,15 +12,17 @@
 // survive a round-trip too.
 
 import { Enemy, muggerRecords } from './enemies.js';
-import { defaultPicks } from './slots.js';
+import { defaultPicks, defaultReturning } from './slots.js';
 import { clamp } from './utils.js';
 import { INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE } from './data.js';
 import { pagedSize } from './inventory.js';
 import { sanitizeSlots } from './rings.js';
 import { settleHands } from './items.js';
 import { sanitizeSkills } from './skills.js';
-import { sanitizeRespawnLists } from './drops.js';
+import { sanitizeNoteIds } from './interactions.js';
+import { sanitizeRespawnLists, sanitizeFilledSpots } from './drops.js';
 import { sanitizeRivals } from './rivals.js';
+import { sanitizeSpent } from './npc-memory.js';
 
 // 2: two hands (plans/ws3-two-hands-left-right.md) — equipment.left joins
 // equipment.weapon, which is now the right hand.
@@ -84,6 +86,7 @@ export function serialize(game) {
             // never ranked anything saves byte-for-byte as it did before skills
             // existed (the autoplay fingerprint hashes this object).
             ...skillsEntry(game),
+            ...interactionNotesEntry(game),
             equipment: {
                 weapon: idOf(game.equipment.weapon),   // the right hand
                 left: idOf(game.equipment.left),
@@ -121,6 +124,7 @@ export function serialize(game) {
             // (plans/ch1-chests-stay-empty.md) Containers changed since the map made
             // them, per zone. Left out while empty, like the lists above.
             ...chestEntry(game),
+            ...spentEntry(game),
             // (plans/mp2-map-dims-unvisited.md) Overworld zones entered. Left out for an old
             // save (null), where every zone counts as visited.
             ...visitedEntry(game),
@@ -154,6 +158,12 @@ function skillsEntry(game) {
     return Object.keys(skills).length ? { skills } : {};
 }
 
+// (IN1) The interaction notes already seen, as a save field, or nothing while there are none.
+function interactionNotesEntry(game) {
+    const interactionNotes = sanitizeNoteIds(game.interactionNotes);
+    return interactionNotes.length ? { interactionNotes } : {};
+}
+
 // (plans/mp2-map-dims-unvisited.md) The visited-zone record as a save field, or nothing while
 // there is none (an old save, or a game that has not loaded a map yet).
 function visitedEntry(game) {
@@ -173,6 +183,12 @@ function sanitizeVisited(raw) {
 function tookGoldEntry(game) {
     const rec = muggerRecords(game.enemies, game._tookGold);
     return Object.keys(rec).length ? { tookGold: rec } : {};
+}
+
+// (NM1) The spent one-time talk choices as a save field, or nothing while there are none.
+function spentEntry(game) {
+    const spentChoices = sanitizeSpent(game._spentChoices);
+    return Object.keys(spentChoices).length ? { spentChoices } : {};
 }
 
 function chestEntry(game) {
@@ -207,6 +223,12 @@ function respawnEntries(game) {
     if (Object.keys(lists).length) out.respawnLists = lists;
     const given = game._bossDropsGiven ? [...game._bossDropsGiven] : [];
     if (given.length) out.bossDropsGiven = given;
+    // (plans/ro1-returning-boss-spot.md) Boss spots a different boss has taken, and this game's
+    // returning picks; each left out while it is the default.
+    const spots = sanitizeFilledSpots(game._filledSpots);
+    if (Object.keys(spots).length) out.filledSpots = spots;
+    const picks = { ...defaultReturning(), ...(game._returnPicks || {}) };
+    if (JSON.stringify(picks) !== JSON.stringify(defaultReturning())) out.returningPicks = picks;
     // (plans/ne1-rival-remembered.md) The enemy that beat you and what it took; left out while there is none.
     const rivals = sanitizeRivals(game._rivals);
     if (Object.keys(rivals).length) out.rivals = rivals;
@@ -297,6 +319,9 @@ export function migrate(raw) {
     r.world.respawnLists = sanitizeRespawnLists(r.world.respawnLists);
     r.world.bossDropsGiven = Array.isArray(r.world.bossDropsGiven)
         ? r.world.bossDropsGiven.filter(k => typeof k === 'string') : [];
+    // (RO1) An older save has no filled spots and the default returning picks.
+    r.world.filledSpots = sanitizeFilledSpots(r.world.filledSpots);
+    r.world.returningPicks = { ...defaultReturning(), ...((r.world.returningPicks && typeof r.world.returningPicks === 'object' && !Array.isArray(r.world.returningPicks)) ? r.world.returningPicks : {}) };
     // An older save has no rival: nobody is carrying anything of yours.
     r.world.rivals = sanitizeRivals(r.world.rivals);
     if (!r.world.robbed || typeof r.world.robbed !== 'object' || Array.isArray(r.world.robbed)) r.world.robbed = {};
@@ -318,6 +343,7 @@ export function migrate(raw) {
     r.world.containers = objects(r.world.containers);
     // An older save has no chest record: every container is as the map made it.
     r.world.chestRecords = sanitizeChestRecords(r.world.chestRecords);
+    r.world.spentChoices = sanitizeSpent(r.world.spentChoices);   // (NM1)
     // An older save has no visited record: every zone counts as visited.
     if (sanitizeVisited(r.world.visitedZones) === null) delete r.world.visitedZones;
     if (r.quest === undefined) r.quest = null;
@@ -370,6 +396,7 @@ function validate(raw) {
     // (skills) Known skills, whole counts, never below zero; a save from before
     // skills existed loads with none.
     p.skills = sanitizeSkills(p.skills);
+    p.interactionNotes = sanitizeNoteIds(p.interactionNotes);   // (IN1)
     // collectedItems is a Set of string keys on the live game; drop anything
     // non-string so a malformed save can't poison the lookup.
     const ci = Array.isArray(raw.world?.collectedItems) ? raw.world.collectedItems : [];
@@ -410,7 +437,10 @@ export async function loadInto(game, raw) {
     // once those are in.
     game._rivals = {};
     game._bossDropsGiven = new Set(raw.world.bossDropsGiven ?? []);
+    game._filledSpots = sanitizeFilledSpots(raw.world.filledSpots);   // (RO1) read by _loadMap, so set it first
+    game._returnPicks = { ...defaultReturning(), ...(raw.world.returningPicks || {}) };
     game._chestRecords = sanitizeChestRecords(raw.world.chestRecords);
+    game._spentChoices = sanitizeSpent(raw.world.spentChoices);   // (NM1)
     // null (no record) is kept: the Map shows every zone as visited.
     { const v = sanitizeVisited(raw.world.visitedZones); game._visitedZones = v ? new Set(v) : null; }
 
@@ -450,6 +480,7 @@ export async function loadInto(game, raw) {
     game.ringTier          = p.ringTier || 0;
     game.discoveredFusions = new Set(p.discoveredFusions || []);
     game.skills            = { ...p.skills };
+    game.interactionNotes  = [...p.interactionNotes];   // (IN1)
     // knownSpells/grantedTricks are derived, not stored — rebuild from the
     // restored weapon + rings (a slotted Rat Ring grants Rat Form, etc.).
     if (game._refreshGrantedSkills) game._refreshGrantedSkills();

@@ -26,6 +26,17 @@ function coneOwed(g) {
     return needs && !held && !!qe.state.flags.iceConeMachineFixed;
 }
 
+// (DQ1) A story beat the cook has moved past: the burger is out of the diner. True once
+// the delivery has left its pickup stage, or is done.
+const burgerPickedUp = (g) => {
+    const qe = g && g.questEngine;
+    if (!qe) return false;
+    if (qe.isComplete('deliver_burger')) return true;
+    return qe.isActive('deliver_burger') && qe.currentStageId() !== 'get_burger';
+};
+// True once the car is fixed, which is what opens the north bridge.
+const bridgeOpen = (g) => !!(g && g.questEngine && g.questEngine.getFlag('carFixed'));
+
 export const DIALOGUES = {
     pike: {
         name: 'Pike',
@@ -69,6 +80,7 @@ export const DIALOGUES = {
     bartho: {
         name: 'Bartho',
         greeting: '"...what."',
+        greetings: [{ when: bridgeOpen, text: '[TEXT: Bartho, bridge open]' }],
         choices: [
             { id: 'bridge', label: 'Ask about the north bridge', once: true,
               reply: '"Barricaded. Years now. Whatever\'s past it can stay past it."' },
@@ -199,6 +211,7 @@ export const DIALOGUES = {
     // MQ2 wiring pass — for now they just talk. Rewrite freely.
     diner_cook: {
         name: 'Short-Order Cook',
+        greetings: [{ when: burgerPickedUp, text: '[TEXT: the cook, after the pickup]' }],
         greeting: '"Order up — oh. You. You\'re the delivery type, aren\'t you. I can always tell."',
         choices: [
             // (Phase 4 MQ2) The dialogue delivery idiom: only shown at the get_burger
@@ -471,6 +484,19 @@ DIALOGUES.assistant_manager = {
     ],
 };
 
-export function getDialogue(id) {
-    return DIALOGUES[id] || null;
+// (DQ1) What the speaker opens with. A dialogue may list `greetings`, each with a `when(game)`
+// condition; the first one that holds wins, and otherwise the fixed `greeting` is used.
+export function greetingFor(d, g) {
+    if (!d) return '';
+    for (const e of d.greetings || []) {
+        if (e && typeof e.when === 'function' && e.when(g)) return e.text;
+    }
+    return d.greeting || '';
+}
+
+// With a game, the returned dialogue carries the greeting that holds right now.
+export function getDialogue(id, g) {
+    const d = DIALOGUES[id] || null;
+    if (!d || !g || !d.greetings) return d;
+    return { ...d, greeting: greetingFor(d, g) };
 }

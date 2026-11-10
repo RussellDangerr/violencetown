@@ -25,6 +25,7 @@
 // This is active objective tracking, surfaced as a one-line HUD goal.
 
 import { SLOTS, slotIdOf } from './slots.js';
+import { CREDITS } from './credits.js';
 
 export const QUESTS = {
     // ── Chapter Two: the Canyon fail-branch escape (Pike + the grappling hook).
@@ -174,6 +175,12 @@ export const BETWEEN_QUESTS = [
         id: 'to_bridge',   // the car runs, the bridge isn't crossed yet: the crash or the ramp is next
         when: (qe) => !!qe.getFlag('carFixed') && !qe.bridgeRoute(),
         objective: 'Drive north across the bridge',
+        targetZones: ['TOWN'],
+    },
+    {
+        id: 'back_to_town',   // (OE1) the credits have rolled: the vault is done, the Town is home (OE1R1 a)
+        when: (qe) => qe.getFlag(CREDITS.seenFlag) === true,
+        objective: '[TEXT]',
         targetZones: ['TOWN'],
     },
     {
@@ -432,6 +439,9 @@ export class QuestEngine {
         if (this.act2Step(q.zone) !== 'done') {
             this.state.flags[act2Key(q.zone)] = 'collect';
             this.game._log?.('[TEXT]', 'transition');
+            // (ST2) Won with the strongman beside you: one more line. The step is the same.
+            const ally = (this.game.enemies || []).find(e => e.id === 'strongman' && e._ally && e.entity?.isAlive?.());
+            if (ally) this.game._log?.('[TEXT]', 'transition');
         }
         return true;
     }

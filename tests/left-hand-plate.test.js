@@ -114,7 +114,7 @@ describe('the left-hand plate on the GEAR tab', () => {
 
     test('an open chooser (any row count) leaves the left-hand plate and the right-hand plate in view', () => {
         for (let n = 0; n <= 6; n++) {
-            const panel = gearChooserRect(body, n);
+            const panel = gearChooserRect(body, n, 'left');
             assert.ok(!rectsOverlap(panel, leftPlate), `${n} rows cover the left-hand plate`);
             assert.ok(!rectsOverlap(panel, layout.slots.find(s => s.key === 'weapon')));
         }
@@ -127,7 +127,7 @@ describe('equipping from the left-hand plate (through the GEAR tab entry points)
         tapRect(g, leftPlate);
         assert.deepEqual(g._deviceSel, { tab: 'gear', slotKey: 'left', open: true });
         assert.deepEqual(gearOptions(g, 'left').map(o => o.id), ['lion_whip'], 'no Bare row: the left hand is empty');
-        tapRect(g, gearOptionRects(body, 1)[0]);
+        tapRect(g, gearOptionRects(body, 1, 'left')[0]);
         assert.equal(g.equipment.left, WHIP);
         assert.equal(g.equipment.weapon, SWORD, 'the right hand is untouched');
         assert.deepEqual(bagNames(g), []);
@@ -159,7 +159,7 @@ describe('equipping from the left-hand plate (through the GEAR tab entry points)
         const g = makeGame({ left: WHIP, bag: [SWORD] });
         tapRect(g, leftPlate);
         assert.deepEqual(gearOptions(g, 'left').map(o => o.id), ['wooden_sword', '__bare__']);
-        tapRect(g, gearOptionRects(body, 2)[0]);
+        tapRect(g, gearOptionRects(body, 2, 'left')[0]);
         assert.equal(g.equipment.left, SWORD);
         assert.equal(g.equipment.weapon, SWORD);
         assert.deepEqual(bagNames(g), ['lion_whip']);
@@ -168,7 +168,7 @@ describe('equipping from the left-hand plate (through the GEAR tab entry points)
     test('Bare takes the left item off into the bag, leaving the right hand alone', () => {
         const g = makeGame({ left: WHIP });
         tapRect(g, leftPlate);
-        tapRect(g, gearOptionRects(body, 1)[0]);
+        tapRect(g, gearOptionRects(body, 1, 'left')[0]);
         assert.equal(g.equipment.left, null);
         assert.equal(g.equipment.weapon, SWORD);
         assert.deepEqual(bagNames(g), ['lion_whip']);
@@ -177,7 +177,7 @@ describe('equipping from the left-hand plate (through the GEAR tab entry points)
     test('a two-hander chosen from the left plate fills both hands and bags what it pushed out', () => {
         const g = makeGame({ left: WHIP, bag: [GREAT] });
         tapRect(g, leftPlate);
-        tapRect(g, gearOptionRects(body, 2)[0]);
+        tapRect(g, gearOptionRects(body, 2, 'left')[0]);
         assert.equal(g.equipment.weapon, GREAT);
         assert.equal(g.equipment.left, GREAT);
         assert.deepEqual(bagNames(g).sort(), ['lion_whip', 'wooden_sword']);
@@ -186,7 +186,7 @@ describe('equipping from the left-hand plate (through the GEAR tab entry points)
     test('a one-hander chosen from the left plate frees a held two-hander from both hands', () => {
         const g = makeGame({ right: GREAT, left: GREAT, bag: [WHIP] });
         tapRect(g, leftPlate);
-        tapRect(g, gearOptionRects(body, 1)[0]);   // no Bare row: half a two-hander can't come off alone
+        tapRect(g, gearOptionRects(body, 1, 'left')[0]);   // no Bare row: half a two-hander can't come off alone
         assert.equal(g.equipment.left, WHIP);
         assert.equal(g.equipment.weapon, null);
         assert.deepEqual(bagNames(g), [GREAT.id]);
@@ -230,7 +230,7 @@ describe('the fight panel shows the left-hand item', () => {
     test('after an equip from the left plate, the panel names it on its WEAPON [LEFT] row (a two-hander on both)', () => {
         const g = makeGame({ bag: [WHIP] });
         tapRect(g, leftPlate);
-        tapRect(g, gearOptionRects(body, 1)[0]);
+        tapRect(g, gearOptionRects(body, 1, 'left')[0]);
         const row = k => playerPanel(g).slots.find(s => s.key === k);
         assert.equal(row('left').label, 'WEAPON [LEFT]');
         assert.equal(row('left').name, WHIP.name);
@@ -238,7 +238,7 @@ describe('the fight panel shows the left-hand item', () => {
 
         const h = makeGame({ bag: [GREAT] });
         tapRect(h, leftPlate);
-        tapRect(h, gearOptionRects(body, 1)[0]);
+        tapRect(h, gearOptionRects(body, 1, 'left')[0]);
         const both = k => playerPanel(h).slots.find(s => s.key === k).name;
         assert.equal(both('left'), GREAT.name);
         assert.equal(both('weapon'), GREAT.name);
