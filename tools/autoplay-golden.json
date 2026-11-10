@@ -80,8 +80,8 @@
       "seed": 1,
       "finished": true,
       "reason": null,
-      "fingerprint": "0660b7a8",
-      "turn": 175,
+      "fingerprint": "d83b258d",
+      "turn": 159,
       "deaths": 3,
       "stages": [
         {
@@ -100,28 +100,28 @@
         },
         {
           "id": "recover_converter",
-          "turns": 102,
+          "turns": 101,
           "hpLost": 212,
           "healed": 0,
           "eats": 0,
           "drinks": 2,
           "attacks": 0,
-          "casts": 22,
-          "mpSpent": 200,
+          "casts": 21,
+          "mpSpent": 190,
           "throws": 0,
           "deaths": 2,
           "gold": 0
         },
         {
           "id": "escape_sewer",
-          "turns": 45,
-          "hpLost": 88,
+          "turns": 30,
+          "hpLost": 106,
           "healed": 0,
           "eats": 0,
-          "drinks": 2,
-          "attacks": 7,
-          "casts": 5,
-          "mpSpent": 48,
+          "drinks": 1,
+          "attacks": 6,
+          "casts": 8,
+          "mpSpent": 74,
           "throws": 4,
           "deaths": 1,
           "gold": 0
@@ -143,6 +143,7 @@
       ],
       "sewerExit": {
         "bag": [
+          "rock x3",
           "catalytic_converter",
           "wererat_fur"
         ],
