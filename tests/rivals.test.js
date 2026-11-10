@@ -126,7 +126,7 @@ function game({ pack = [['pipe', 1]] } = {}) {
     const inventory = Array(SAFE_SLOTS).fill(null);
     for (const [id, count] of pack) inventory.push({ itemDef: resolveItemDef(id), count });
     const free = {
-        STATE, audio: { playSfx() {}, playMusic() {} }, SAFE_SLOTS, isBoss, pickScenario, partitionInventory, matchTake,
+        STATE, audio: { playSfx() {}, playMusic() {} }, SAFE_SLOTS, isBoss, isStoryBoss: isBoss, pickScenario, partitionInventory, matchTake,
         DEFEAT_SCENARIOS, setTimeout: (fn) => timers.push(fn),
         loadMap: async (url) => new GameMap(mapJson(url), url),
         document: { getElementById: () => null },

@@ -61,7 +61,7 @@ function stage(zone, pack, { gold = 40, roll = 0 } = {}) {
         timers,
     };
     const free = {
-        STATE, audio: { playSfx() {} }, SAFE_SLOTS, isBoss, pickScenario, partitionInventory, matchTake,
+        STATE, audio: { playSfx() {} }, SAFE_SLOTS, isBoss, isStoryBoss: isBoss, pickScenario, partitionInventory, matchTake,
         DEFEAT_SCENARIOS, setTimeout: (fn) => timers.push(fn),
     };
     for (const sig of ['_die() {', '_resolveDefeat() {', '_runBossRetry(boss) {', '_runScenario(pick, _ctx) {',

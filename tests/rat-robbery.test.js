@@ -139,7 +139,7 @@ function makeGame({ seed = 7 } = {}) {
         requestAnimationFrame: (f) => queueMicrotask(() => f(Infinity)),
         performance: { now: () => 0 },
         setTimeout: (f) => { timers.push(f); return timers.length; },
-        isBoss, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS,
+        isBoss, isStoryBoss: isBoss, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS,
         INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK, addToInv, computeHit, resolveEnemyTurns,
         isHostile, isHunting, logCategory, sumBuffStat,
         OFFER_ROWS_VISIBLE, OFFER_TRAY_SLOTS, emptyOffer, commitBlocker, stage, unstage, settledGold,
