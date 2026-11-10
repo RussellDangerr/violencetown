@@ -146,6 +146,8 @@ export const QUESTS = {
             {
                 id: 'return_to_car',
                 objective: '[TEXT]',
+                // (MC1) Once Macc holds the Converter on his shelf: buy it back from him.
+                objectiveShelved: '[TEXT]',
                 targetZone: 'TOWN',
                 onEnter: (game) => { game._sewerEscape = null; },  // escaped — clear the gauntlet state
                 on: { type: 'interact_car', match: {} },
@@ -403,6 +405,9 @@ export class QuestEngine {
         const stage = QUESTS[id].stages[this.state.stageIndex];
         if (!stage) return null;
         let t = stage.objective;
+        if (stage.objectiveShelved && this.state.flags.shelved && this.state.flags.shelved.catalytic_converter != null) {
+            t = stage.objectiveShelved;
+        }
         if (stage.on && stage.on.count) {
             const n = Math.min(this.state.counters[stage.id] || 0, stage.on.count);
             t += ` (${n}/${stage.on.count})`;
