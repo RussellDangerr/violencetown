@@ -877,6 +877,10 @@ export function offerLayout(panelRect) {
         ledgerValueX:       px + 56,
         ledgerBalanceX:     px + 268,
         button:             { x: buttonX, y: ledgerY - 2, w: buttonW, h: 40 },
+        // (PD1) The Talk button, for a vendor who has something to say. It sits in
+        // the header's quiet middle, between the name (left) and the GP figure
+        // (right-aligned), clear of the close chip and the meter's multiplier text.
+        talkButton:         { x: P.x + 268, y: P.y + 6, w: 120, h: 28 },
         hintY:              P.y + 506,
     };
 }

@@ -4478,6 +4478,14 @@ export class Renderer {
         this._drawOfferTrays(game, L, R);
         this._drawOfferDescription(game, L, R);
         this._drawOfferLedger(game, L, R);
+        if (game._offerCanTalk && game._offerCanTalk()) {
+            const t = L.talkButton;
+            drawInset(ctx, t.x, t.y, t.w, t.h);
+            ctx.strokeStyle = UI.gold;
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(t.x + 1, t.y + 1, t.w - 2, t.h - 2);
+            this.font.drawText(ctx, '[TEXT]', t.x + t.w / 2, t.y + 8, { color: UI.gold, scale: 1, align: 'center' });
+        }
 
         // The key legend sits between the ledger and the frame's bottom stroke:
         // centred, a touch smaller, and clear of the frame on every side.

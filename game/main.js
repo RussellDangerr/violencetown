@@ -1637,6 +1637,9 @@ class Game {
                 e.preventDefault();     // before Tab, or focus escapes to browser chrome
                 if (e.code === 'KeyE') { this._closeOffer(); return; }   // (C1) Escape handled by the gate
                 if (e.code === 'Enter') { this._offerActivate('commit', 0); return; }
+                // (PD1) T opens the vendor's talk, where their deals are. Free in this
+                // state (T is Wait in the world, and the offer screen has no wait).
+                if (e.code === 'KeyT' && this._offerCanTalk()) { this._offerTalk(); return; }
                 if (!this._offer) return;
 
                 const c = this._offerCursor || (this._offerCursor = { side: 'yours', index: 0 });
@@ -7348,6 +7351,22 @@ class Game {
         this._render();
     }
 
+    // (PD1) A vendor with something to say shows a Talk button on the offer screen.
+    // Containers are not people, and a vendor with no dialogue shows nothing.
+    _offerCanTalk() {
+        const npc = this._offerNpc;
+        return !!(npc && npc.vendor && !npc._container && npc.dialogueId
+            && getDialogue(npc.dialogueId, this));
+    }
+
+    // Close the shop (the basket is discarded, like Esc) and open their talk.
+    _offerTalk() {
+        const npc = this._offerNpc;
+        if (!npc || !this._offerCanTalk()) return;
+        this._closeOffer();
+        this._openDialogue(npc);
+    }
+
     // Closing DISCARDS the basket. Nothing is committed until the player presses
     // MAKE THE OFFER, so Escape is always safe and never needs a confirm.
     //
@@ -7635,6 +7654,7 @@ class Game {
         if (!this._pointInRect(pt, L.panel)) { this._closeOffer(); return; }
 
         if (this._pointInRect(pt, L.button, HIT_SLOP)) { this._offerActivate('commit', 0); return; }
+        if (this._offerCanTalk() && this._pointInRect(pt, L.talkButton, HIT_SLOP)) { this._offerTalk(); return; }
 
         // The scroll tracks, BEFORE the rows: the thumb is drawn inside the
         // column's own right edge, so a track tap would otherwise resolve to the
