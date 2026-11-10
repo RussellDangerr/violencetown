@@ -100,6 +100,7 @@ export function walkTargets(vp) {
     add('offer.row', [...L.yours, ...L.theirs]);
     add('offer.traySlot', [...L.giveTray, ...L.takeTray]);
     add('offer.button', L.button);
+    add('offer.talk', L.talkButton);
     return out;
 }
 
@@ -138,7 +139,7 @@ const EXPECTED = [
     'menu.close', 'menu.targetList.row', 'menu.itemOverlay.row', 'menu.hotbar.slot',
     'device.tab', 'device.bagSlot', 'device.inspectorAction', 'device.gearOption',
     'device.equipPlate', 'device.ringSocket',
-    'offer.row', 'offer.traySlot', 'offer.button',
+    'offer.row', 'offer.traySlot', 'offer.button', 'offer.talk',
 ];
 
 // Today's targets under 44 CSS px on each phone, with today's size. Later
@@ -168,6 +169,7 @@ const TODAY_SMALL = {
     'offer.row': 20,
     'offer.traySlot': 18,
     'offer.button': 20,
+    'offer.talk': 14,
 };
 // Both phones come out at 2 logical px per CSS px today, so their lists match.
 // They are kept apart so a slice can shorten one without the other.
@@ -203,6 +205,7 @@ const DESKTOP = {
     'offer.row': [528, 80],
     'offer.traySlot': [72, 72],
     'offer.button': [312, 80],
+    'offer.talk': [240, 56],
 };
 
 const EPS = 0.01;   // the pins are rounded to 2 places

@@ -12,7 +12,7 @@ import { pickHitMark, HEAVY_HIT_DAMAGE, dodgeChance, DODGE_WORD } from './hit-sp
 import { makeEffectLoop } from './effect-loop.js';                 // one tick of the transient-effects loop, and its refusal to die on a bad frame
 import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK, SLUDGE_DOT, FIRE_QUENCHING_TILES } from './data.js';
 import { puddleTiles, layPuddle, puddleAt, dryPuddles } from './puddles.js';   // (poisons) Sludge Brain's puddles
-import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef } from './items.js';
+import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef, poitionBuff } from './items.js';
 import { WEAPONS, weaponClassOf } from './weapons.js';
 import { handPairOf } from './hand-data.js';   // (HB2) two held weapons combine into a named effect
 import { resolveItemDef } from './item-registry.js';
@@ -23,7 +23,9 @@ import {
     slotRing, unslotRing, acquireRing, sanitizeSlots,
     mergeKnown,   // (ring Task 5) skill-merge helper, relocated from the retired skills.js
 } from './rings.js';
-import { isBoss, bossInFight, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS } from './defeat-scenarios.js';
+// (ruling EMR1) The defeat code asks whether the story's boss is in the fight, not whether
+// anything carries the boss flag; the local names are the ones its methods already read.
+import { isBoss, isStoryBoss, storyBossInFight as bossInFight, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS } from './defeat-scenarios.js';
 import { addToInventory as addToInv, moveToZone, zoneOf, pageCount, slotOnPage, pageOfSlot } from './inventory.js';
 import { itemActions, equipOptions, inspectorUsesRect } from './inspector.js';   // (C1) tap-to-inspect: context actions; (C2) GEAR chooser options
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
@@ -39,6 +41,7 @@ import { manhattan, clamp } from './utils.js';
 import { RNG, randomSeed } from './rng.js';
 import { pickSlots, defaultPicks, resolveSpawn, requiredDropFor, dropLineFor, FINALE_PHASE1, pickReturning, spotFor, RETURNING_SPOTS } from './slots.js';
 import { rememberSpent, applySpent } from './npc-memory.js';
+import { snapshotOf, keepSnapshot, readSnapshots, reportLines } from './bones.js';
 import { hasSave, readSaveRaw, writeSave, loadInto, clearSave } from './save.js';
 import { QuestEngine } from './quests.js';
 import { doExamine, resolveExamine } from './examine.js';
@@ -1637,6 +1640,9 @@ class Game {
                 e.preventDefault();     // before Tab, or focus escapes to browser chrome
                 if (e.code === 'KeyE') { this._closeOffer(); return; }   // (C1) Escape handled by the gate
                 if (e.code === 'Enter') { this._offerActivate('commit', 0); return; }
+                // (PD1) T opens the vendor's talk, where their deals are. Free in this
+                // state (T is Wait in the world, and the offer screen has no wait).
+                if (e.code === 'KeyT' && this._offerCanTalk?.()) { this._offerTalk(); return; }
                 if (!this._offer) return;
 
                 const c = this._offerCursor || (this._offerCursor = { side: 'yours', index: 0 });
@@ -5769,6 +5775,15 @@ class Game {
                                           def.puddle.kind, def.puddle.turns);
             return `[${who} throws ${what}: a sludge puddle covers ${tiles} tile${tiles === 1 ? '' : 's'} around you.]`;
         }
+        if (def.poition?.as === 'poison') {
+            // (ps1) A thrown poison food lands on you: Poisoned for its own numbers.
+            const b = poitionBuff(def.poition);
+            const have = this.buffs.find(x => x.id === b.id);
+            if (have) { have.turns = Math.max(have.turns, b.turns); have.dmg = Math.max(have.dmg ?? 0, b.dmg); }
+            else this.addBuff(b.id, 'Poisoned', b.turns, 'debuff', { dmg: b.dmg });
+            this._spawnHitSplat(this.playerX, this.playerY, '[TEXT]', 'poison', { omni: true });
+            return `[${who} throws ${what} at you: [TEXT]]`;
+        }
         return null;
     }
 
@@ -6131,7 +6146,7 @@ class Game {
         // A boss in your fight when you went down (whoever landed the blow, its ally
         // included) → reset the encounter and retry; no scenario, no loss.
         // Optional-called, like _antTurn, so the stand-in games tests lift this onto need not carry it.
-        const boss = isBoss(by) ? by : this._bossInFight?.();
+        const boss = isStoryBoss(by) ? by : this._bossInFight?.();
         if (boss) { this._runBossRetry(boss); return; }
         // Otherwise pick a scenario, weighted by (zone × who-beat-you × state).
         // Task 3 swaps the runner stub for the full template; for now the generic
@@ -6340,6 +6355,12 @@ class Game {
         // RESTART begins a brand-new game: drop the save and reseed the RNG so
         // the new run is independent of the old one. The autoplay passes a seed
         // so a run replays exactly (plans/quest1-autoplay.md §5.3).
+        // (BN1) A player's Restart keeps a snapshot first. A seeded reset (the
+        // autoplay) is not a player's run, so it keeps none and shows no report.
+        let bones = null;
+        if (seed == null && this.turn > 0 && typeof localStorage !== 'undefined') {
+            try { keepSnapshot(localStorage, snapshotOf(this)); bones = readSnapshots(localStorage).pop() || null; } catch { bones = null; }
+        }
         clearSave();
         const newSeed = seed ?? randomSeed();
         this.rng = new RNG(newSeed);
@@ -6412,6 +6433,7 @@ class Game {
         this.state = STATE.IDLE;
         this._startMainQuest();   // deterministic fix_car start (fix/critical-path)
         this._log('[New game]');
+        if (bones) for (const line of reportLines(bones)) this._log(line, 'transition');   // (BN1)
     }
 
     // (Phase 2) Crossing the North bridge with the car fixed. The Cataclysmic
@@ -7370,6 +7392,22 @@ class Game {
         this._render();
     }
 
+    // (PD1) A vendor with something to say shows a Talk button on the offer screen.
+    // Containers are not people, and a vendor with no dialogue shows nothing.
+    _offerCanTalk() {
+        const npc = this._offerNpc;
+        return !!(npc && npc.vendor && !npc._container && npc.dialogueId
+            && getDialogue(npc.dialogueId, this));
+    }
+
+    // Close the shop (the basket is discarded, like Esc) and open their talk.
+    _offerTalk() {
+        const npc = this._offerNpc;
+        if (!npc || !this._offerCanTalk()) return;
+        this._closeOffer();
+        this._openDialogue(npc);
+    }
+
     // Closing DISCARDS the basket. Nothing is committed until the player presses
     // MAKE THE OFFER, so Escape is always safe and never needs a confirm.
     //
@@ -7657,6 +7695,7 @@ class Game {
         if (!this._pointInRect(pt, L.panel)) { this._closeOffer(); return; }
 
         if (this._pointInRect(pt, L.button, HIT_SLOP)) { this._offerActivate('commit', 0); return; }
+        if (this._offerCanTalk?.() && this._pointInRect(pt, L.talkButton, HIT_SLOP)) { this._offerTalk(); return; }
 
         // The scroll tracks, BEFORE the rows: the thumb is drawn inside the
         // column's own right edge, so a track tap would otherwise resolve to the
