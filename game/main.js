@@ -7843,7 +7843,7 @@ class Game {
     // disposition the give-engine and the over-head mood-face read.
     _openDialogue(npc) {
         if (this.state !== STATE.IDLE) return;
-        const d = npc && getDialogue(npc.dialogueId);
+        const d = npc && getDialogue(npc.dialogueId, this);
         if (!d) return;
         this._dialogueNpc = npc;
         this._dialogueReply = d.greeting || '';
