@@ -95,7 +95,7 @@ function stage(mapFile) {
         addBuff(id) { this.buffs.push(id); },
         timers,
     };
-    const free = { STATE, audio, BUFF_DEFS, SAFE_SLOTS, isBoss: isStoryBoss, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS, setTimeout: (fn) => timers.push(fn) };
+    const free = { STATE, audio, BUFF_DEFS, SAFE_SLOTS, isStoryBoss, pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS, setTimeout: (fn) => timers.push(fn) };
     for (const sig of ['_die() {', '_resolveDefeat() {', '_runBossRetry(boss) {', '_runScenario(pick, _ctx) {', '_resolveWakeCell(wakeAt) {', '_safeRespawnCell() {', '_applyTake(take) {']) {
         g[sig.slice(0, sig.indexOf('('))] = liveMethod(sig, free);
     }

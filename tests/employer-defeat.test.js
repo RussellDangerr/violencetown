@@ -64,7 +64,7 @@ function stage(file, enemies, px, py) {
         timers, struckBy: [],
     };
     const free = {
-        STATE, audio, SAFE_SLOTS, isBoss: isStoryBoss, bossInFight: storyBossInFight, fighters, computeHit, resolveEnemyTurns,
+        STATE, audio, SAFE_SLOTS, isStoryBoss, bossInFight: storyBossInFight, fighters, computeHit, resolveEnemyTurns,
         pickScenario, partitionInventory, matchTake, DEFEAT_SCENARIOS,
         tickTempEquips: () => [], MP_REGEN: 2, performance, setTimeout: (fn) => timers.push(fn),
     };
