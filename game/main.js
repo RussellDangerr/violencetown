@@ -7351,6 +7351,12 @@ class Game {
         if (this.state !== STATE.IDLE) return;
         if (!npc || !npc.entity || !npc.entity.isAlive()) return;
         this._offerNpc = npc;
+        // (MC1) A special buyer can always pay his own listed price (once): his till
+        // is raised to it at the counter, not authored into the map.
+        if (npc.specialBuys && typeof npc.gold === 'number') {
+            const top = Math.max(0, ...Object.values(npc.specialBuys));
+            if (npc.gold < top) npc.gold = top;
+        }
         // goldPinned: the player has taken the settled gold off its default and
         // that decision must survive later staging. Settling is the default;
         // the imbalance is the decision (spec 4.1).
@@ -7437,7 +7443,7 @@ class Game {
         if (npc.vendor && npc.specialBuys) {
             // (MC1) The shelf row: bought back for exactly what he paid.
             for (const id in npc.specialBuys) {
-                const price = this._shelfPrice(npc, id);
+                const price = (((this.questEngine && this.questEngine.state.flags.shelved) || {})[id] ?? null);
                 const def = price != null ? this._resolveItemDef(id) : null;
                 if (def) out.push({ def, count: 1, max: 1, price, source: 'buyback', index: -1, boughtBack: true });
             }
@@ -7482,13 +7488,6 @@ class Game {
         return out;
     }
 
-    // (MC1) What a special buyer holds on his shelf for the player, by item id: the
-    // price he paid, kept in the quest flags so leaving the zone doesn't lose it.
-    _shelfPrice(npc, itemId) {
-        if (!npc || !npc.specialBuys || npc.specialBuys[itemId] == null) return null;
-        const shelf = this.questEngine && this.questEngine.state.flags.shelved;
-        return shelf && shelf[itemId] != null ? shelf[itemId] : null;
-    }
 
     // How many of `entry` are currently staged on `side`.
     _stagedCount(side, entry) {
@@ -7803,7 +7802,8 @@ class Game {
                 // _buyFromVendor popped it (`e.rebuy.pop()`); nothing succeeded
                 // that line, so the shelf never emptied and one sold item could
                 // be re-bought without limit for as long as the ledger lived.
-                else if (e.source === 'buyback' && this._shelfPrice(npc, e.def.id) != null) {
+                else if (e.source === 'buyback' && npc.specialBuys && npc.specialBuys[e.def.id] != null
+                    && ((this.questEngine && this.questEngine.state.flags.shelved) || {})[e.def.id] != null) {
                     const flags = this.questEngine.state.flags;
                     const rest = { ...flags.shelved };
                     delete rest[e.def.id];

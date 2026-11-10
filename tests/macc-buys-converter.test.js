@@ -77,7 +77,7 @@ const LIFTED = [
     ['_goldTray', ''], ['_toggleOfferGold', 'npc'], ['_buybackList', 'npc'], ['_buybackLive', 'npc'],
     ['_buybackRecord', 'npc, itemId, kind, price'], ['_endBuybacks', ''],
     ['_commitOffer', ''], ['_offerBlocker', ''], ['_logOffer', 'npc, R, { given, taken, gold }'],
-    ['_removeFromSlot', 'slot'], ['_addToInventory', 'itemDef'], ['_wheelOpenerUp', ''], ['_shelfPrice', 'npc, itemId'], ['_interactCar', ''], ['setTile', 'x, y, id'], ['_openBridgeIfCarFixed', ''],
+    ['_removeFromSlot', 'slot'], ['_addToInventory', 'itemDef'], ['_wheelOpenerUp', ''], ['_interactCar', ''], ['setTile', 'x, y, id'], ['_openBridgeIfCarFixed', ''],
 ];
 
 function makeGame() {
@@ -168,9 +168,11 @@ async function buyItBack(g) {
 }
 
 describe('Macc buys the Converter', () => {
-    test('his purse can cover it, and his line promises it', () => {
+    test('his line promises it, and his till is raised to cover it at the counter', async () => {
         const g = makeGame();
         assert.equal(g.macc.specialBuys.catalytic_converter, 500);
+        g.macc.gold = 3;
+        await g.press('KeyE');
         assert.ok(g.macc.gold >= 500);
     });
 
