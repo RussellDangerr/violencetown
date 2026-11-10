@@ -14,6 +14,7 @@ import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MA
 import { puddleTiles, layPuddle, puddleAt, dryPuddles } from './puddles.js';   // (poisons) Sludge Brain's puddles
 import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef } from './items.js';
 import { WEAPONS, weaponClassOf } from './weapons.js';
+import { handPairOf } from './hand-data.js';   // (HB2) two held weapons combine into a named effect
 import { resolveItemDef } from './item-registry.js';
 import { tickBuffList, sumBuffStat, worldBeatPlan } from './buffs.js';
 import { RINGS, FUSIONS } from './ring-data.js';
@@ -5549,6 +5550,9 @@ class Game {
     // not a weapon, is one hand. items.js and save.js ask through this.
     _handsOf(def) { return (weaponClassOf(def) || {}).hands || 1; }
 
+    // (HB2) The pair the two hands make right now, or null.
+    _handPairNow() { const eq = this.equipment || {}; return handPairOf(eq.left, eq.weapon); }
+
     _refreshGrantedSkills() {
         const w  = this.equipment && this.equipment.weapon;
         const gs = (w && w.grantsSpells) || [];
@@ -5563,8 +5567,14 @@ class Game {
         const ringSpells = actives.filter(a => SPELLS[a]);
         const ringTricks = actives.filter(a => TRICKS[a]);
 
-        this.knownSpells   = mergeKnown(BASE_SPELLS, ringSpells, gs);
-        this.grantedTricks = mergeKnown([], ringTricks, gt);
+        // (HB2) The pair the two hands make: its name shows on GEAR, its skill joins the wheel.
+        this.handPair = this._handPairNow?.() ?? null;
+        const pairSkill = this.handPair && this.handPair.grants;
+        const pairSpells = pairSkill && SPELLS[pairSkill] ? [pairSkill] : [];
+        const pairTricks = pairSkill && TRICKS[pairSkill] ? [pairSkill] : [];
+
+        this.knownSpells   = mergeKnown(BASE_SPELLS, [...ringSpells, ...pairSpells], gs);
+        this.grantedTricks = mergeKnown([], [...ringTricks, ...pairTricks], gt);
         this.ringMods      = aggregatePassives(this.ringSlots, getRing);
     }
 
