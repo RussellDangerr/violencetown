@@ -6233,7 +6233,7 @@ class Game {
         const occupied = (x, y) =>
             this.containers.some(c => c.x === x && c.y === y) ||
             (this.groundItems || []).some(g => g.x === x && g.y === y) ||
-            this.enemies.some(e => e.entity.isAlive() && e.x === x && e.y === y) ||
+            this.enemies.some(e => e.x === x && e.y === y) ||   // live or a body: chests draw under actors
             (this.playerX === x && this.playerY === y);
         const ok = (x, y) => this.map.isInBounds(x, y) && this.map.isWalkable(x, y) && !occupied(x, y);
         if (ok(near.x, near.y)) return { x: near.x, y: near.y };
