@@ -41,6 +41,7 @@ import { manhattan, clamp } from './utils.js';
 import { RNG, randomSeed } from './rng.js';
 import { pickSlots, defaultPicks, resolveSpawn, requiredDropFor, dropLineFor, FINALE_PHASE1, pickReturning, spotFor, RETURNING_SPOTS } from './slots.js';
 import { rememberSpent, applySpent } from './npc-memory.js';
+import { snapshotOf, keepSnapshot, readSnapshots, reportLines } from './bones.js';
 import { hasSave, readSaveRaw, writeSave, loadInto, clearSave } from './save.js';
 import { QuestEngine } from './quests.js';
 import { doExamine, resolveExamine } from './examine.js';
@@ -6332,6 +6333,12 @@ class Game {
         // RESTART begins a brand-new game: drop the save and reseed the RNG so
         // the new run is independent of the old one. The autoplay passes a seed
         // so a run replays exactly (plans/quest1-autoplay.md §5.3).
+        // (BN1) A player's Restart keeps a snapshot first. A seeded reset (the
+        // autoplay) is not a player's run, so it keeps none and shows no report.
+        let bones = null;
+        if (seed == null && this.turn > 0 && typeof localStorage !== 'undefined') {
+            try { keepSnapshot(localStorage, snapshotOf(this)); bones = readSnapshots(localStorage).pop() || null; } catch { bones = null; }
+        }
         clearSave();
         const newSeed = seed ?? randomSeed();
         this.rng = new RNG(newSeed);
@@ -6404,6 +6411,7 @@ class Game {
         this.state = STATE.IDLE;
         this._startMainQuest();   // deterministic fix_car start (fix/critical-path)
         this._log('[New game]');
+        if (bones) for (const line of reportLines(bones)) this._log(line, 'transition');   // (BN1)
     }
 
     // (Phase 2) Crossing the North bridge with the car fixed. The Cataclysmic
