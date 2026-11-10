@@ -95,7 +95,7 @@ import {
     needsFriendlyConfirm, aimRange, affectedTiles, selectedNode, restoreLastCategory, verbApplies,
     greyedReasonLine,
     orderedTargetVerbs, isCombatActive, defaultVerb, previewChildren,
-    aimTap, adjacentFacing, setMeleeKit,
+    aimTap, adjacentFacing, setMeleeKit, tapMoveKey, meleePathTo,
 } from './wheel-model.js'; // (sunburst wheel) node-tree model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
 import { introAt, isSkipKey } from './tv-intro.js';                                     // (TV1) the TV opening before the title
@@ -3480,6 +3480,28 @@ class Game {
         setMeleeKit(cls ? cls.kit : null);
     }
 
+    // (WK2) A tap on an enemy uses the move the weapon in hand brings (sword: Cleave,
+    // hammer: stun), fired through the wheel's own fire path so it is the same move
+    // the wheel gives. Returns false, leaving the plain hit to run, when the weapon
+    // brings no move or the move would catch someone who is not hostile.
+    _tapWithWeaponMove(npc) {
+        this._syncMeleeKit?.();
+        const cls = weaponClassOf(this.equipment && this.equipment.weapon);
+        const key = tapMoveKey(cls && cls.kit);
+        const path = key !== 'hit' && meleePathTo(key);
+        if (!path) return false;
+        const w = this.wheel;
+        w.path = path;
+        w.reticle = { x: npc.x, y: npc.y };
+        w.aiming = false; w.confirming = false;
+        const caught = affectedTiles(w, this);
+        const friendly = this.enemies.some(e => e.entity.isAlive() && !isHostile(e) && caught.some(t => t.x === e.x && t.y === e.y));
+        if (friendly) { w.reticle = null; return false; }
+        this.state = STATE.RADIAL_MENU;   // _fireWheel closes the wheel, back to IDLE
+        this._fireWheel();
+        return true;
+    }
+
     _openWheel() {
         if (this.state !== STATE.IDLE) return;
         // The Melee ring shows Hit plus the moves the wielded weapon's class brings (plans/wk1-weapon-class-moves.md).
@@ -3763,7 +3785,7 @@ class Game {
                 this._render();
                 break;
             }
-            case 'hit':   if (npc) { this.combatAttack(npc, this.equipment.weapon.damage, { type: this.equipment.weapon.damageType, weapon: this.equipment.weapon }); this._advanceWorld(); this._render(); } break;
+            case 'hit':   if (npc && this._tapWithWeaponMove?.(npc)) break; if (npc) { this.combatAttack(npc, this.equipment.weapon.damage, { type: this.equipment.weapon.damageType, weapon: this.equipment.weapon }); this._advanceWorld(); this._render(); } break;
             case 'throw': { const th = this._resolveThrowable(); if (th) { const msg = resolveThrow(this, th.itemDef, null, th.count, { x: t.x, y: t.y }); if (msg) this._log(msg, 'combat'); this._rockClatter(th.itemDef, t.x, t.y); th.consume(); this._advanceWorld(); } else this._log('[Nothing to throw.]'); this._render(); break; }
             case 'take':  this._takeItemAt(t.x, t.y); this._render(); break;
             case 'open':  if (t.container) this._openContainer(t.container); break;
