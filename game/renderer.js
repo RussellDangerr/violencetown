@@ -26,7 +26,7 @@ import {
     DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_LABELS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceBagPagerRects, deviceEquipLayout, gearArmourRect, deviceRingsLayout,
     deviceSkillsLayout, ringPassiveRows,                                     // (US2) the skills readout in the RINGS tab; (RR1) a ring's passive rows
     inspectorPanelRect, inspectorActionRects,                               // (C1) tap-to-inspect panel + action-row geometry
-    gearOptionRects, gearChooserRect,                                       // (C2) GEAR chooser option-row + panel geometry
+    gearOptionRects, gearChooserRect, gearEmptyNoteRect,                                     // (C2) GEAR chooser option-row + panel geometry
     xmbBarLayout, hudLayout, throwRects, wheelTopMarks, fightPanelRects, XMB_CELL,                      // (XMB) usable-bar geometry; (screen-fill) the HUD, throw targets, the marks above the wheel
     LOOT_REEL, lootReelRect,                                                 // (FX3c) the loot reel's panel
     MODAL_RECT, offerLayout,                                             // (offer screen) the one panel + its geometry
@@ -5185,17 +5185,18 @@ export class Renderer {
         const label = ([...EQUIP_SLOT_RECTS, EQUIP_LEFT_HAND_RECT].find(s => s.key === slotKey) || {}).label || slotKey.toUpperCase();
         // (FX57) The right hand is never emptied from here: no Bare row on its plate.
         const opts = gearOptions(game, slotKey).filter(o => !(slotKey === 'weapon' && o.id === '__bare__'));
-        const rows = gearOptionRects(bodyRect, opts.length);
+        const rows = gearOptionRects(bodyRect, opts.length, slotKey);
 
         // Titled panel enclosing the option column (+ header band above row 0),
         // starting below the HEAD plate (FX11) — gearChooserRect owns the geometry.
-        const { x: px, y: py, w: pw, h: ph } = gearChooserRect(bodyRect, opts.length);
+        const { x: px, y: py, w: pw, h: ph } = gearChooserRect(bodyRect, opts.length, slotKey);
         drawPanelSmall(ctx, px, py, pw, ph, this.uiSheet);
         this.font.drawText(ctx, `${label} — CHOOSE`, px + pw / 2, py + 8, { color: UI.gold, scale: 1, align: 'center' });
 
         // Empty bag AND nothing worn → a quiet note, no rows.
         if (!opts.length) {
-            this.font.drawText(ctx, `[No ${label.toLowerCase()} gear]`, px + pw / 2, py + 26, { color: UI.dim, scale: 1, align: 'center' });
+            const note = gearEmptyNoteRect(bodyRect, slotKey);   // (GC1) room inside the panel, clear of its border
+            this.font.drawText(ctx, `[No ${label.toLowerCase()} gear]`, note.x + note.w / 2, note.y + note.h / 2 - 4, { color: UI.dim, scale: 1, align: 'center' });
             return;
         }
 

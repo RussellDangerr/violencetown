@@ -107,7 +107,7 @@ describe('the right-hand plate, by tap', () => {
         const g = makeGame({ bag: [WHIP] });
         tapRect(g, rightPlate);
         assert.deepEqual(g._deviceSel, { tab: 'gear', slotKey: 'weapon', open: true });
-        tapRect(g, gearOptionRects(body, 1)[0]);
+        tapRect(g, gearOptionRects(body, 1, 'weapon')[0]);
         assert.equal(g.equipment.weapon, WHIP);
         assert.equal(g.equipment.left, null, 'the left hand is untouched');
         assert.deepEqual(bagIds(g), [SWORD.id], 'the swapped-out weapon is back in the bag');
@@ -118,7 +118,7 @@ describe('the right-hand plate, by tap', () => {
     test('it is the same result as the ITEMS tab Equip button (bag, hands, log)', () => {
         const viaPlate = makeGame({ bag: [WHIP] });
         tapRect(viaPlate, rightPlate);
-        tapRect(viaPlate, gearOptionRects(body, 1)[0]);
+        tapRect(viaPlate, gearOptionRects(body, 1, 'weapon')[0]);
         const viaItems = makeGame({ bag: [WHIP] });
         const idx = viaItems.inventory.findIndex(s => s && s.itemDef === WHIP);
         viaItems._removeFromSlot(idx);
@@ -132,7 +132,7 @@ describe('the right-hand plate, by tap', () => {
     test('a two-hander chosen here fills both hands and bags what it pushed out', () => {
         const g = makeGame({ left: WHIP, bag: [GREAT] });
         tapRect(g, rightPlate);
-        tapRect(g, gearOptionRects(body, 1)[0]);
+        tapRect(g, gearOptionRects(body, 1, 'weapon')[0]);
         assert.equal(g.equipment.weapon, GREAT);
         assert.equal(g.equipment.left, GREAT);
         assert.deepEqual(bagIds(g).sort(), [SWORD.id, WHIP.id].sort());
@@ -143,7 +143,7 @@ describe('the right-hand plate, by tap', () => {
         const g = makeGame({ bag: [WHIP, HELM, GREAT] });
         tapRect(g, rightPlate);
         assert.equal(g._deviceTargets().rects.length, 2);
-        tapRect(g, gearOptionRects(body, 2)[1]);
+        tapRect(g, gearOptionRects(body, 2, 'weapon')[1]);
         assert.equal(g.equipment.weapon, GREAT);
     });
 });
@@ -252,7 +252,7 @@ describe('the renderer draws the right-hand chooser', () => {
         r._drawEquipmentModal(g, body);
         const n = g._deviceTargets().rects.length;
         assert.equal(n, 2);
-        const rows = gearOptionRects(body, n);
+        const rows = gearOptionRects(body, n, 'weapon');
         const drawn = texts.filter(t => rows.some(row => t.x === row.x + 8 && t.y === row.y + row.h / 2 - 4));
         assert.equal(drawn.length, n);
         assert.match(drawn[0].text, /Lion Whip/);
@@ -260,7 +260,7 @@ describe('the renderer draws the right-hand chooser', () => {
 
     test('the open chooser covers neither weapon plate', () => {
         for (let n = 0; n <= 6; n++) {
-            const panel = gearChooserRect(body, n);
+            const panel = gearChooserRect(body, n, 'weapon');
             assert.ok(!rectsOverlap(panel, rightPlate) && !rectsOverlap(panel, layout.leftHand), `${n} rows`);
         }
     });

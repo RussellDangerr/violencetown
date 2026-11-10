@@ -167,7 +167,7 @@ describe('from his fall to both hands, by real input', () => {
         const rows = gearOptions(g, 'left');
         const at = rows.findIndex(o => o.id === 'great_sword');
         assert.ok(at >= 0, 'the chooser lists it');
-        tap(g, gearOptionRects(body, rows.length)[at]);
+        tap(g, gearOptionRects(body, rows.length, 'left')[at]);
         assert.equal(g.equipment.weapon, WEAPONS.great_sword, 'the right hand holds it');
         assert.equal(g.equipment.left, WEAPONS.great_sword, 'and so does the left');
         assert.equal(g.equipment.weapon, g.equipment.left, 'one def, in both');
@@ -191,7 +191,7 @@ describe('from his fall to both hands, by real input', () => {
         g.killAlien();
         tap(g, layout.leftHand);
         const rows = gearOptions(g, 'left');
-        tap(g, gearOptionRects(body, rows.length)[rows.findIndex(o => o.id === 'great_sword')]);
+        tap(g, gearOptionRects(body, rows.length, 'left')[rows.findIndex(o => o.id === 'great_sword')]);
         assert.equal(g.equipment.left, WEAPONS.great_sword);
 
         // The left plate now lists only one-handers (no Bare row on half a two-hander); pick the sword.
@@ -199,7 +199,7 @@ describe('from his fall to both hands, by real input', () => {
         const rows2 = gearOptions(g, 'left');
         const at = rows2.findIndex(o => o.id === 'wooden_sword');
         assert.ok(at >= 0, 'the Wooden Sword is offered');
-        tap(g, gearOptionRects(body, rows2.length)[at]);
+        tap(g, gearOptionRects(body, rows2.length, 'left')[at]);
         assert.equal(g.equipment.left, WEAPONS.wooden_sword, 'the one-hander is in the hand you chose');
         assert.equal(g.equipment.weapon, null, 'the other hand is free');
         assert.notEqual(g.equipment.weapon, WEAPONS.great_sword);
