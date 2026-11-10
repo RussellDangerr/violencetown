@@ -17,15 +17,18 @@ Caelan dislikes the other word for it; never use it.
    - `ArtifactData list`, collection `cards`, `query.limit: 1000`, with `out_dir` set to a
      **fresh** scratchpad folder (a list only overwrites the ids it returns).
    - Keep every card's `version`.
+   - **If the read fails**, add 1 to the count in `<scratchpad>/board-loop/unreachable.txt` and go
+     straight to the wait (§7). A good read sets it back to 0.
 2. **Recover stale work.** A card in `doing` whose `claim.at` is over 2 hours old means a pass
    died mid-slice.
    - Leave its branch alone.
    - Move the card to `ready` and drop `claim`.
    - Note "resume from `<branch>`".
-3. **Clear Claude's turn**, in this order. Do at most 10 merges and 10 tweaks per pass:
+3. **Clear Claude's turn**, in this order. Do at most 10 merges, 10 Changes builders and 10
+   tweaks per pass. Items 4, 6 and 7 share the 10 tweaks.
    1. **Merge it** (§4).
-   2. **Changes:** hand the slice back to a builder on its existing branch. When it is done, move
-      the card to `review` and clear `verdict`.
+   2. **Changes:** hand the slice back to a builder on its existing branch. When it reports DONE,
+      move the card to `review` and clear `verdict`. Anything else is a FAILED (§3).
    3. **Feedback with no reply:** answer on the card by appending `{from: "claude", text, at}` to
       `feedback`. Add `ask: true` only when the reply needs his answer.
       - **His own answer to a ruling** (`pick.option: "other"`, typed in the card's box) comes in
@@ -34,21 +37,26 @@ Caelan dislikes the other word for it; never use it.
       - If it doesn't settle the question, reply with `ask: true`. Move the ruling back to the
         `ruling` lane and drop `pick`, so it returns to Your turn. Offer new options if his words
         suggest them.
+      - **A card with `fails`:** set it back to 0 once you act on his reply, so the card can be
+        built again.
    4. **Tweak it** (§5).
    5. **A ruling with no options:** write 2–4 options and a recommended one (§6).
    6. **A Ready slice with no acceptance:** tweak it (§5).
+   7. **Scout defects and tweaks he hasn't triaged** (`source: "scout"`, `scoutKind` `defect` or
+      `tweak`, no `triage`): tweak them under the standing delegation (§11).
 4. **Ask what's next:** `node tools/roadmap-board/next-slice.mjs <that folder>`.
    - `wip-cap` or `nothing-pickable`: no build this pass. Go to step 8.
    - `ok`: carry on with `picks` (up to 10). Only an approved, tweaked, unblocked slice is ever
      picked. A file takes one slice in flight at a time, except the shared files in
      `SHARED_FILES` (`game/main.js` up to 5, `game/renderer.js` up to 3;
      plans/loop-shared-file-picks.md). Steps 5 to 7 run for each pick.
+   - It also prints `openRulings` (for §5's pause) and `idleWait` (for §7's wait).
 5. **Recon.** Run `git fetch`, `git branch -r --no-merged origin/dev`, and `git log -S` on the
-   slice's key names. If it already shipped, or it overlaps a branch still in review on a file
-   that is not shared:
-   - note it on the card;
-   - move the card to `someday`;
-   - go to step 8.
+   slice's key names. A hit drops that pick only; carry on with the rest:
+   - **It already shipped:** note where, and move the card to `done`.
+   - **It overlaps a branch still in review on a file that is not shared:** add that card's id to
+     `blockedBy` and leave the slice in `ready`. It frees itself when that branch merges.
+   - **Anything else that makes it wrong to build:** note why and move the card to `someday`.
 6. **Claim it** with a pinned `update`:
    `{lane: "doing", claim: {by: "loop", at: <now>}, branch: "feature/<slug>"}`.
    - `<slug>` is the card id in lower case, plus 2–4 words of its title, hyphenated.
@@ -68,13 +76,16 @@ Caelan dislikes the other word for it; never use it.
        in Review are never touched.
      - **BLOCKED:** write the new ruling card it asked for and add its id to the slice's
        `blockedBy`. Move the slice to `ready` and drop `claim`.
-     - **FAILED:** move the slice to `ready`, drop `claim`, and put the failure plus the branch
-       sha in `note`.
-8. **Scout** (§10), when it's due: alongside the builders, never instead of them.
+     - **FAILED**, or no report at all: move the slice to `ready`, drop `claim`, add 1 to
+       `fails`, and put the failure plus the branch sha in `note` (§3).
+8. **Scouts and checks** (§10, §12), when due: in the same message as step 7's builders, never
+   instead of them. A report that arrives after the pass ended is written back when it arrives,
+   or at the start of the next pass.
 9. **Post the update and pick the wait** (§7).
 
-**Up to 10 slices per pass**, one builder each, all spawned in the same message so they run at
-once. `next-slice.mjs` never hands out two that share an ordinary file. The shared files can hold
+**Up to 10 slices per pass**, one builder each. Recon and claim every pick first, then spawn all
+the builders (and every scout and checker that is due) in the same message so they run at once.
+`next-slice.mjs` never hands out two that share an ordinary file. The shared files can hold
 several: git merges edits to different parts of one file cleanly, and the stack check in step 7
 catches the edits that don't before anything reaches Review. A pass that cleared Claude's turn
 may still build.
@@ -139,6 +150,13 @@ Judge every gate by its exit code; claims don't count. All are fatal:
 - **A judgment call the rulings don't settle** (§6): BLOCKED. Commit only work that passes the
   tests, prefixed `wip:`. Never `git stash`.
 - **A guard failure:** FAILED. Never edit the guard to pass it.
+- **No written outcome:** a step that ends without its DONE is a FAILED for that card. That
+  covers a Changes builder that isn't DONE, a merge push that is rejected or doesn't show in
+  `ls-remote`, and a builder that returns no report.
+- **Counting failures:** every FAILED adds 1 to the card's `fails`. On the second, also append
+  `{from: "claude", text, at, ask: true}` naming what failed. From then on `next-slice.mjs`
+  skips the slice, and a merge clears `verdict`, until his reply sets `fails` back to 0
+  (§1 step 3.3).
 
 ## 4. Merge it
 
@@ -158,6 +176,8 @@ His click on the card is the merge call. Do it away from his checkout:
    `git push origin HEAD:refs/heads/dev`.
 5. Run `git ls-remote origin dev` to check it landed. Then remove the worktree, move the card to
    `done`, and drop `verdict`.
+   - A rejected push or a `ls-remote` that doesn't match: remove the worktree and count a FAILED
+     (§3). The card stays in `review`; its `verdict` stays until the second failure.
 
 **Several at once.** When he presses Merge it on several cards, merge them one at a time in
 board order, every step above for each, each on top of the last. A card that no longer merges
@@ -181,8 +201,11 @@ Never touch `main`, never tag, never release. Those are his.
    - At most 10 rulings and 10 slices per tweak.
    - Slices: about a day each, with `touches`, `acceptance` and `blockedBy`.
    - Each slice must be something he can see on screen, or have a stated reason why it can't.
-4. **Pause when he's busy.** When Your turn holds 10 or more items, tweak nothing new. Say so
-   in the update.
+4. **Pause when he's busy.** Count only open rulings (`openRulings` from `next-slice.mjs`):
+   ideas, approvals and asks don't count. At 10 or more, start no tweak on the loop's own
+   initiative (§1 step 3.6 and 3.7). His Tweak it is always done: write the slices that need no
+   ruling now, and queue its rulings in the idea's `note` for a pass with room. Say so in the
+   update.
 5. **Close the idea.** Move it to `done` with a note naming the cards it became.
 
 ## 6. What the loop decides, and what becomes a ruling
@@ -225,13 +248,23 @@ refactors that leave the autoplay golden untouched, tooling, commit order.
 
   If nothing changed since the last pass, post one line.
 - **The wait:** call ScheduleWakeup with the same `/board-loop` prompt.
-  - **60 s** after a pass that built, merged or tweaked something, because more may be ready.
-  - **3600 s** (the maximum) when idle on `wip-cap` or `nothing-pickable` with Claude's turn
-    empty.
-  - Set `noop: true` on idle passes.
-- **Stop the loop** (ScheduleWakeup `stop: true`) only when he asks, or when something is broken
-  that a pass can't fix (the board is unreachable, or the repo is dirty in a way that isn't the
-  loop's). Say why in the update.
+  - **60 s** after a pass that changed anything on the board: a lane move, a merge, a build
+    outcome (DONE, BLOCKED or FAILED), a reply, or new cards or ruling options. More may be ready.
+  - **Otherwise the pass is idle**, even if Claude's turn still lists items a cap or §5's pause
+    is holding. Set `noop: true` and wait `idleWait` from `next-slice.mjs`: 300 s if he touched
+    the board in the last 30 minutes, 1200 s if in the last 2 hours, else 3600 s.
+  - **The board couldn't be read:** 600 s.
+- **When builds or merges can't run** (no worktree can be created, `origin` can't be reached),
+  skip them, do everything else, and say why in the update. His own uncommitted edits in his
+  checkout are never a reason to stop: the loop doesn't work there.
+- **Stop the loop** (ScheduleWakeup `stop: true`) when he asks, when `unreachable.txt` reaches 3
+  (three passes in a row that couldn't read the board), or at one of two limits (his ruling,
+  2026-11-09). Say why in the update.
+  - **15 hours** after the `/loop /board-loop` start: start nothing new, finish and write back
+    what is in flight, then stop, naming everything left open (his Merge it presses included).
+  - **5 idle passes in a row**: a pass is idle when it changed nothing on the board, started no
+    agent, ran no merge and had nothing in flight; choosing `noop: true` alone doesn't make it so.
+  The skill's "When the loop stops by itself" keeps the clock and the count on the `loop` row.
 
 ## 8. Never
 
@@ -254,24 +287,84 @@ refactors that leave the autoplay golden untouched, tooling, commit order.
   with `/loop /board-loop`. It also expires after 7 days.
 - **A card is stuck in `doing`:** step 2 of the next pass recovers it.
 
-## 10. The scout
+## 10. The scouts
 
-Nothing feeds the board fixes and tweaks Caelan hasn't thought of, so the loop also runs a
-read-only scout (`plans/board-scout.md`, agent `board-scout`).
+Two agents feed the board work Caelan didn't have to think of (`plans/board-scout.md`). Both are
+read-only: they never edit, commit or push, and the loop writes their cards.
 
-1. **When.** Read `meta/scout` from the board database (`lastSha`, `lastAt`). Run a scout when
-   `lastAt` is more than 2 hours ago and either `origin/dev` has moved past `lastSha` or the pass
-   has nothing to build. Never two at once.
-2. **Spawn it** with the pass's card folder, `since: <lastSha>`, and a scratch folder for its
-   evidence. Spawn it in the same message as the builders.
-3. **Land its proposals.** For each one, build the card with `newScoutIdea(proposal, now,
-   cards)` from `board-model.js`; it returns null for a key the board already has, in any lane.
-   Write the cards in one batch, then set `meta/scout` to `{ lastSha: <origin/dev>, lastAt:
-   <now> }`.
-4. **Say so in the update:** how many scout cards landed, and the best one's title.
+| | **Defect scout** (`.claude/agents/scout-defects.md`) | **Thread scout** (`.claude/agents/scout-threads.md`) |
+|---|---|---|
+| Looks for | things that behave against their own intent: bugs, regressions, UI that collides or overflows, tests that can't fail | systems that stop short: never reachable, never connected, no way for a player to know they're there |
+| Per run | `mode: diff` reviews only what merged and the build reports; `mode: full` also plays headless and sweeps one **code area** | traces one **system's** whole thread: notice, read, operate, works, feeds, ends |
+| Rotation | the first list below | the second list below. Skip a system that sits in the code area the defect scout swept last. |
+| Due | `diff` after a merge; `full` at most once an hour | at most once every 2 hours |
+| Card | `scoutKey` starts `defect:`, `scoutKind: "defect"`, note starts "From the defect scout:" | `scoutKey` starts `thread:`, `scoutKind` `tweak` or `idea`, note starts "From the thread scout:" and carries its `THREAD` line |
 
-Scout cards are ideas in his Ideas lane, marked "idea · scout". They wait on his Tweak it or
-Someday like any idea; the loop never builds one he hasn't triaged.
+**The defect scout's code areas**, in order (each takes its share of `main.js` too):
+1. fights: `combat.js`, `fight-area.js`, `fight-entrance.js`, `fight-panels.js`, `threat-phase.js`,
+   `cascade.js`, `enemies.js`, `ai.js`, `defeat-scenarios.js`;
+2. the wheel and its verbs: `wheel-model.js`, `give-action.js`, `theft.js`, `tricks.js`,
+   `spells.js`, `skills.js`, `affordances.js`, `elements.js`;
+3. items, gear and the bag: `items.js`, `weapons.js`, `slots.js`, `inventory.js`, `item-uses.js`,
+   `drops.js`, `loot-burst.js`, `rings.js`, `buffs.js`;
+4. townsfolk, trade and talk: `npc.js`, `trade.js`, `offer.js`, `disposition-curves.js`,
+   `dialogue.js`, `perception.js`;
+5. maps, movement and zones: `map.js`, `pathing.js`, `world-map.js`, the `*-map.json` files,
+   `sewer-setpiece.js`, `ants.js`;
+6. quests, saves and the title: `quests.js`, `save.js`, `hints.js`, `settings.js`, `examine.js`;
+7. the screen: `renderer.js`, `layout.js`, `viewport.js`, `ui-sprites.js`, `xmb.js`,
+   `inspector.js`, `combat-log.js`.
+
+**The thread scout's systems**, in order: the Remoticon's gear tab and equipping → rings → trade
+and barter → giving and bribes → stealing → spells and MP → poitions → secret item uses → buffs →
+quests and the objective → the world map and travel → the day clock → a fight's entrance, fog and
+defeat → weaknesses and elements → townsfolk talk and disposition → examine → saves, the title
+and Continue → the options menu.
+
+- **Hold back both scouts** while his turn holds 10 or more items (`yourTurn` in
+  `board-model.js`), or while 5 or more scout cards (both scouts together, `source: "scout"`, no
+  `triage`) sit in Ideas. Finding work is not the bottleneck; his attention is. Say so in the
+  update.
+- **State:** each scout keeps `meta/<agent name>` in the board database: `lastSha`, `lastAt`,
+  `lastFullAt` (defect scout), `area` (the last code area or system it took; the next run takes
+  the next one in its list), `leads` and `runningSince`. A scout is running while its
+  `runningSince` is under 2 hours old; never run two of the same scout at once. Set
+  `runningSince: <now>` at spawn.
+  - **First run:** with no `meta/scout-defects`, the defect scout takes `lastSha` from the retired
+    `meta/scout`, runs `full` and starts at area 1. The thread scout starts at the top of its
+    list. Leave `meta/scout` as it is; nothing reads it any more.
+- **When:** spawn every scout that is due, in the background, in the same message as the builders,
+  or on its own when there's nothing to build. The two scouts can run at the same time. At most 4
+  agents run the game at once: a scout that plays (a `full` defect run, any thread run) waits
+  while 4 or more builders run. Builders themselves keep LP3's limit; a `diff` run plays nothing.
+- **Its prompt:** its mode (defect scout), its `lastSha` (or "none"), the current dev sha, the
+  pass's card folder (every card's title and note), this run's area or system, its `leads`,
+  Caelan's checkout path, and a scratchpad folder for its logs.
+- **Its report:** each proposal becomes an Ideas card through `newScoutIdea({key, kind, title,
+  note}, now, cards)` from `board-model.js`, which returns null for a key the board already has,
+  in any lane. The defect scout's `kind` is always `defect`; the note holds the rest of the
+  proposal under its "From the … scout:" opening. Write the cards in one batch, then set its
+  `meta` to `{lastSha: <origin/dev>, lastAt: <now>, area}` (and `lastFullAt` after a full run),
+  dropping `runningSince` and `leads`.
+  - **Hand-offs close the gap between them:** the defect scout's `FOR THE THREAD SCOUT` lines go
+    into `meta/scout-threads.leads`, and the thread scout's `FOR THE DEFECT SCOUT` lines into
+    `meta/scout-defects.leads`. A lead the thread scout's `LEADS` line marks "kept for
+    <system>" goes back into its own `leads`.
+  - **`TOOLING` lines are never cards.** The guard forbids slices from touching
+    `tools/roadmap-board/`, so a tooling card could only wait for him. Name them in the update
+    instead.
+- **The update** names what each scout filed, one line for both: how many cards, and the best
+  one's title.
+- **Learning from them:** a card's `scoutKey` prefix and note opening say which scout found it,
+  so each scout's hit rate (tweaked versus Someday) is one board query. When he parks a scout's
+  card with a reason, or a pattern shows (a class of finding he always parks, or always tweaks),
+  say so in the update and propose the change to that scout's file. Those files are committed,
+  so the change goes on a branch like any other; he says yes.
+
+Scout cards are ideas in his Ideas lane, marked "idea · scout". Scout **ideas** (`scoutKind:
+"idea"`) wait on his Tweak it or Someday like any idea. Scout **defects and tweaks** may be
+tweaked by the loop without waiting (§1 step 3.7, §11); what that tweak makes follows §11's
+approval rule.
 
 ## 11. The standing delegation
 
@@ -284,11 +377,36 @@ the board as LP6.
   tuning number or art pick (obvious placeholders are fine) and touches no Locked spine row.
 - **Take its own recommended option on a ruling** about process, code structure, tests,
   tooling, or a golden whose drift is exactly what the slice set out to change.
-- **Tweak the scout's defects and tweaks** without waiting for his Tweak it. The scout's ideas
+- **Tweak the scouts' defects and tweaks** without waiting for his Tweak it. The scouts' ideas
   still wait on him.
 
 **Still his:** names, copy, lore, tuning numbers, art picks, the spine's Locked rows, Merge it,
 and any ruling where the loop's lean is a taste call. A pick the loop makes says so in
-`pick.note` ("picked by the loop under the standing delegation"), so he can see and overrule
-it; an approval it gives carries `approved.by: "loop"`.
+`pick.note` ("picked by the loop under the standing delegation") and carries `pick.by: "loop"`,
+so he can see and overrule it; an approval it gives carries `approved.by: "loop"`.
 
+## 12. The checker
+
+The `slice-checker` agent (`.claude/agents/slice-checker.md`) takes one slice in Review and does
+the reading Caelan would otherwise do before Merge it. It runs no game and no tests: the builder
+already ran the gates, and §4 runs them again on the merged tree. It runs the guard, checks that
+the branch merges cleanly onto dev, and marks each acceptance line **TEST** (a test covers it; the
+mark quotes that line with its `file:line`), **PICTURE** (only a picture can show it; the path is
+for his eye) or **NOT SHOWN**. It never judges looks or feel.
+
+- **When:** once per branch sha. A Review slice is due a check when its card has no `checked`, or
+  `checked.sha` is not its branch's sha. At most 3 checks a pass, oldest first.
+- **Dev moved since:** no agent. The loop itself runs
+  `git merge-tree --write-tree origin/dev origin/<branch>` for each Review slice whose
+  `checked.devSha` is stale, updates `checked.devSha`, and posts only when the answer changed.
+- **Its prompt:** the card JSON, the branch sha, and the current dev sha.
+- **Its report:** first confirm every TEST mark: grep the quoted line at its `file:line` on the
+  branch. A quote that isn't there becomes NOT SHOWN, and the update says the checker got one
+  wrong. Then append `{from: "claude", text, at}` to the card's `feedback`, with the
+  `ACCEPTANCE` count line first and then each line's mark, and set `checked: {sha, devSha, at}`.
+  Add `ask: true` only when the guard failed or the branch no longer merges onto dev. The card
+  stays in `review` either way: only his Changes sends it back.
+- **The update** names what was checked in one line, leading with anything NOT SHOWN or failing.
+- **It runs on Haiku as a trial.** When a report is wrong (a TEST mark its test doesn't support, a
+  missed conflict), say so in the update and propose moving it to Sonnet. Its file is committed,
+  so that change goes on a branch like any other; he says yes.

@@ -18,19 +18,20 @@ import { VALUE_TIERS, ITEMS, ARMOR_IDS } from './items.js';
 // The hit kinds a weapon can land.
 export const ATTACK_KINDS = Object.freeze(['slash', 'stab', 'crush']);
 
-const cls = (id, hands, attackKinds) =>
-    Object.freeze({ id, hands, attackKinds: Object.freeze(attackKinds), kit: Object.freeze([]) });
+const cls = (id, hands, attackKinds, kit = []) =>
+    Object.freeze({ id, hands, attackKinds: Object.freeze(attackKinds), kit: Object.freeze([...kit]) });
 
-// kit: the class's base kit. Empty on every class until it is ruled.
+// kit: the wheel moves (Melee ring keys, beyond Hit) the class brings
+// (plans/wk1-weapon-class-moves.md). Classes not yet ruled bring none.
 export const WEAPON_CLASSES = Object.freeze({
     shield:       cls('shield',       1, ['crush']),
     axe:          cls('axe',          1, ['slash']),
-    sword:        cls('sword',        1, ['slash', 'stab']),
+    sword:        cls('sword',        1, ['slash', 'stab'], ['cleave']),
     dagger:       cls('dagger',       1, ['stab', 'slash']),
-    hammer:       cls('hammer',       1, ['crush']),
-    great_sword:  cls('great_sword',  2, ['slash', 'stab']),
-    battle_axe:   cls('battle_axe',   2, ['slash']),
-    war_hammer:   cls('war_hammer',   2, ['crush']),
+    hammer:       cls('hammer',       1, ['crush'], ['stun']),
+    great_sword:  cls('great_sword',  2, ['slash', 'stab'], ['spin']),
+    battle_axe:   cls('battle_axe',   2, ['slash'], ['spin']),
+    war_hammer:   cls('war_hammer',   2, ['crush'], ['spin']),
     book:         cls('book',         1, ['crush']),    // book and grimoire are one class
     bell:         cls('bell',         1, ['crush']),
     whip:         cls('whip',         1, ['slash']),
@@ -132,6 +133,16 @@ export const WEAPONS = {
         category: 'weapon',
         baseValue: 45,
         description: 'Dented brass housing around a coil of glass that hums when charged. Nobody has explained how it works, least of all it.',
+    },
+    // Great Sword — the first two-hander in the world (plans/gw1-great-sword-factory-boss.md).
+    // It slashes and stabs like the sword and fills both hands; the Factory's boss carries it.
+    // Name, value and description are placeholders until he rules them.
+    great_sword: {
+        id: 'great_sword', name: '[Great Sword]', damage: 20, equipSlot: 'weapon', useType: 'equip',
+        weaponClass: 'great_sword',
+        category: 'weapon',
+        baseValue: 45,
+        description: '[TEXT: Great Sword description]',
     },
     // Fearmur — a leg-bone club. Grants the Boo! fear spell (MP) while worn, and
     // fears an enemy you hit twice in a row (onHit: 'fearOnRepeat'). Source: the

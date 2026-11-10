@@ -25,15 +25,7 @@ const always = () => true;
 // amber (red+warm). Trick gold. Treat green. Flight now nests under Trick.
 export const ROOT = { key: 'menu', label: 'MENU', children: [
   { key: 'fight', label: 'Fight', color: '#c8443a', text: '#fff3d0', children: [
-    { key: 'melee', label: 'Melee', color: '#c8443a', text: '#fff3d0', children: [
-      { key: 'hit',    label: 'Hit',    aimType: 'adjacent', resolver: 'combatAttack', available: always },
-      // Cleave: a fixed 3-tile frontal ARC (the aimed tile + its two flanks). You
-      // commit to all three — no sub-selecting — so it can clip an ally on the
-      // far square (the Plus-Ultra confirm guards that). 2/3 weapon damage each.
-      { key: 'cleave', label: 'Cleave', aimType: 'adjacent', resolver: 'cleaveAttack', available: always },
-      // Spin: no aim — sweeps all 8 tiles around you for 2/5 damage to everything.
-      { key: 'spin',   label: 'Spin',   aimType: 'none',     resolver: 'spinAttack',   available: always },
-    ]},
+    { key: 'melee', label: 'Melee', color: '#c8443a', text: '#fff3d0', children: [] },
     // Ranged: throw a rock/potion at range (duplicate of TRICK → Throw, by design
     // — you throw things, so it lives under both).
     { key: 'ranged', label: 'Ranged', color: '#e08a2a', text: '#2a1400', needsItem: 'throw', aimType: 'reticle', resolver: 'resolveThrow', available: always },
@@ -115,7 +107,34 @@ export const ROOT = { key: 'menu', label: 'MENU', children: [
   ]},
 ]};
 
-const OFFENSIVE_RESOLVERS = new Set(['combatAttack', 'cleaveAttack', 'spinAttack', 'resolveThrow', 'castSpell', 'castTrick']);
+// ── Melee moves, by the class kit that owns them (plans/wk1-weapon-class-moves.md) ──
+// The Melee ring is Hit plus the moves in the wielded weapon's class kit; a move
+// outside the kit is not on the ring at all (WKR2). The ring starts with every
+// move but the stun (a hammer's) until main.js tells it what is in hand.
+export const MELEE_MOVES = [
+  { key: 'hit',    label: 'Hit',    aimType: 'adjacent', resolver: 'combatAttack', available: always },
+  // Cleave: a fixed 3-tile frontal ARC (the aimed tile + its two flanks). You
+  // commit to all three — no sub-selecting — so it can clip an ally on the
+  // far square (the Plus-Ultra confirm guards that). 2/3 weapon damage each.
+  { key: 'cleave', label: 'Cleave', aimType: 'adjacent', resolver: 'cleaveAttack', available: always },
+  // Spin: no aim — sweeps all 8 tiles around you for 2/5 damage to everything.
+  { key: 'spin',   label: 'Spin',   aimType: 'none',     resolver: 'spinAttack',   available: always },
+  // Stun: a weapon hit that also costs the survivor its next turn — the same lost
+  // turn a shove costs (no new number). The hammer's move.
+  { key: 'stun',   label: '[Stun]', aimType: 'adjacent', resolver: 'stunAttack',   available: always },
+];
+
+const MELEE_NODE = () => ROOT.children[0].children[0];
+MELEE_NODE().children = MELEE_MOVES.filter(m => m.key !== 'stun');   // the tree reads as it always did until a weapon is in hand
+
+// Show Hit and the kit's moves on the Melee ring. `kit` is a list of move keys;
+// null puts back the starting ring. Hit is always there, in front.
+export function setMeleeKit(kit) {
+  const keep = (m) => m.key === 'hit' || (kit ? kit.includes(m.key) : m.key !== 'stun');
+  MELEE_NODE().children = MELEE_MOVES.filter(keep);
+}
+
+const OFFENSIVE_RESOLVERS = new Set(['combatAttack', 'cleaveAttack', 'spinAttack', 'stunAttack', 'resolveThrow', 'castSpell', 'castTrick']);
 export const isOffensiveLeaf = (node) => OFFENSIVE_RESOLVERS.has(node.resolver);
 
 // ── Geometry (the single source of truth for what an action hits) ────────────

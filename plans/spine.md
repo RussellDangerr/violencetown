@@ -95,6 +95,9 @@ not *"the Were-Rat drops the Converter."* The Were-Rat is one entry in the Sewer
 - **SL-6 Anchors and mooks** (cosmology, principle 1). Boss, mini-boss and character slots hold
   anchors: one pick per game, irreplaceable once picked. Mob slots hold mooks, rolled per spawn
   from the zone's spawn table.
+  *Ruling RO1R1 (a), 2026-11-09:* a boss you beat stays dead, and after the same respawn wait a
+  *different* boss takes its spot, with its own loot once. It has no required item, so the
+  Converter and the three still come only from the first boss.
 - **SL-7 New ideas become pool entries. They never change the structure.** An idea not being built
   yet goes on Caelan's private roadmap board as a card tagged *zone + slot*, not into this repo.
 
@@ -269,3 +272,9 @@ Each is a row in `roadmap-2026-09.md` §2. Answers land here, dated, and strike 
     to the stranded traveler. No Locked row changes.
   - **Open:** what becomes of the traveler is not decided, and nor is whether the bank's Financier
     and the vault's (the finale's) are one character.
+- **2026-11-08 — What "earned" covers (ST1R1).** Caelan's pick (a): *"Yes: you earn it by beating
+  the guard, and then it's yours to take."* The Carnival's item is earned by beating the boss slot's
+  occupant, whoever it is; after that it is yours to take at the quest's claim spot or at the booth
+  the boss guards, and either gives the one Stuffed Animal, never two. Spec:
+  `plans/st1-carnival-booth-route.md`. Answers SQ1R1 for the Carnival.
+  - **Replaces** nothing; no Locked row changes.

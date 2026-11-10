@@ -10,10 +10,11 @@ import { loadAllSprites } from './sprites.js';
 import { BitmapFont } from './bitmap-font.js';
 import { pickHitMark, HEAVY_HIT_DAMAGE, dodgeChance, DODGE_WORD } from './hit-splat.js';   // (manga-impact-marks) the mark rule + the heavy threshold
 import { makeEffectLoop } from './effect-loop.js';                 // one tick of the transient-effects loop, and its refusal to die on a bad frame
-import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK, SLUDGE_DOT } from './data.js';
+import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK, SLUDGE_DOT, FIRE_QUENCHING_TILES } from './data.js';
 import { puddleTiles, layPuddle, puddleAt, dryPuddles } from './puddles.js';   // (poisons) Sludge Brain's puddles
 import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef } from './items.js';
 import { WEAPONS, weaponClassOf } from './weapons.js';
+import { handPairOf } from './hand-data.js';   // (HB2) two held weapons combine into a named effect
 import { resolveItemDef } from './item-registry.js';
 import { tickBuffList, sumBuffStat, worldBeatPlan } from './buffs.js';
 import { RINGS, FUSIONS } from './ring-data.js';
@@ -29,8 +30,8 @@ import { addToInventory as addToInv, moveToZone, zoneOf, pageCount, slotOnPage, 
 import { itemActions, equipOptions, inspectorUsesRect } from './inspector.js';   // (C1) tap-to-inspect: context actions; (C2) GEAR chooser options
 import { SPELLS } from './spells.js'; // FIGHT → Magic catalog (debug Fireball for now)
 import { TRICKS } from './tricks.js'; // FIGHT → Trick catalog — GP-costed skills
-import { attack, formatDamageNumber, computeHit, elementalMult, weaponHitKind, isBackstab, shieldArmor, raiseShield } from './combat.js';
-import { Enemy, spawnEnemy, resolveEnemyTurns, resolveAmbientTurns, unnestBrackets } from './enemies.js';
+import { attack, formatDamageNumber, computeHit, elementalMult, weaponHitKind, isBackstab, shieldArmor, raiseShield, WEAKNESS_MULT, weaknessKinds, critOf, knockoutDamage } from './combat.js';
+import { Enemy, spawnEnemy, muggerRecords, resolveEnemyTurns, resolveAmbientTurns, unnestBrackets } from './enemies.js';
 import { canBeRival, itemIdsOf, recordDefeat, kitFor, markCarrying, settleItems, clearRival } from './rivals.js'; // the enemy that beat you is remembered (pure, node-tested)
 import { isHostile, isHunting, isSewerDweller, allyAids } from './ai.js';
 import { getGreedyStep, stepEntity, findPath } from './pathing.js'; // pathfinding (greedy chase + BFS click-to-move); stepEntity = shove a character aside
@@ -38,11 +39,12 @@ import { applyDispositionDelta, reactToTransaction } from './give-action.js';
 import { getDialogue } from './dialogue.js';
 import { manhattan, clamp } from './utils.js';
 import { RNG, randomSeed } from './rng.js';
-import { pickSlots, defaultPicks, resolveSpawn, requiredDropFor, dropLineFor, FINALE_PHASE1 } from './slots.js';
+import { pickSlots, defaultPicks, resolveSpawn, requiredDropFor, dropLineFor, FINALE_PHASE1, pickReturning, spotFor, RETURNING_SPOTS } from './slots.js';
+import { rememberSpent, applySpent } from './npc-memory.js';
 import { hasSave, readSaveRaw, writeSave, loadInto, clearSave } from './save.js';
 import { QuestEngine } from './quests.js';
 import { doExamine, resolveExamine } from './examine.js';
-import { recordDrop, pendingDrops, takeDrop, dropLoadout, recordKill, stepRespawns, deadIds, bossDropOnce } from './drops.js'; // per-zone runtime dropped-items layer + respawn list (pure, node-tested)
+import { recordDrop, pendingDrops, takeDrop, dropLoadout, recordKill, stepRespawns, deadIds, bossDropOnce, claimSpots, spotHolds, spotSpawns } from './drops.js'; // per-zone runtime dropped-items layer + respawn list (pure, node-tested)
 import {
     HIT_SLOP, throwRects, DOCK, hitHud,
     HOTBAR_X_START, HOTBAR_Y, HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_STRIDE, HOTBAR_SLOTS,
@@ -86,6 +88,8 @@ function writeSeenHints(set) {
 import { emitNoise, NOISE, perceives, spotters, struck, VERDICT } from './perception.js'; // sound + sight
 import { coinTake, kitTake, gearTake, coinWeight, itemWeight, gearWeight,
          noticeBuffer, isClean, stealLimit } from './theft.js';
+import { INTERACTIONS, fireRows } from './interactions.js'; // (IN1) carry-this-here rules
+import { overworldZone } from './world-map.js'; // (mp2) which overworld zone a map belongs to
 import { recordUse, skillPerks, mergePassives } from './skills.js'; // (skills) use-ranks: clean lifts rank up light fingers
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
 import {
@@ -93,7 +97,7 @@ import {
     needsFriendlyConfirm, aimRange, affectedTiles, selectedNode, restoreLastCategory, verbApplies,
     greyedReasonLine,
     orderedTargetVerbs, isCombatActive, defaultVerb, previewChildren,
-    aimTap, adjacentFacing,
+    aimTap, adjacentFacing, setMeleeKit,
 } from './wheel-model.js'; // (sunburst wheel) node-tree model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
 import { introAt, isSkipKey } from './tv-intro.js';                                     // (TV1) the TV opening before the title
@@ -253,6 +257,7 @@ class Game {
         // swap touches it. Persisted. Its perks join ringMods only where an action
         // reads them (see _theftPassives).
         this.skills           = {};
+        this.interactionNotes = [];          // (IN1) ids of the interaction rows whose note has been shown; persisted
         this._peakDisposition = 0;           // (rings) highest disposition any NPC has ever shown — monotonic; gates the hidden thumb tier
         this._lastHitTarget = null;   // (fear) id of the enemy the last Melee-Hit struck
         this._ratFormTurns = 0;        // (Rat Ring) turns left folded into a rat; while >0 the player can enter GRATE tiles
@@ -472,6 +477,7 @@ class Game {
         // (theft) enemyId -> { gold, items, weightTaken, noticed }. Survives a save,
         // and is re-applied by spawnEnemy so a zone re-entry cannot undo a robbery.
         this._robbed = {};
+        this._tookGold = {};   // (BS2) enemyId -> gold he took off you and still carries
         // (fence) itemId -> how many you are carrying that the street has heard
         // about. Written only when a take is NOTICED, so a clean theft leaves
         // goods worth full price anywhere. Decremented when a fence takes them
@@ -491,6 +497,10 @@ class Game {
         // ("mapUrl" → [{ id, age }]). _loadMap leaves them out; each zone change
         // (_zoneChange) brings a share back. Persisted (left out while empty).
         this._respawnLists = {};
+        // (plans/ro1-returning-boss-spot.md) Boss spots a different boss has taken, per zone
+        // ("mapUrl" → [{ spawn, replaces }]), and this game's pick for each. Persisted.
+        this._filledSpots = {};
+        this._returnPicks = {};
         // (plans/ne1-rival-remembered.md) The enemy that beat you and took your things,
         // per zone ("mapUrl" → { id, items, carrying? }). _loadMap hands it the items
         // as kit. Persisted (left out while empty).
@@ -504,6 +514,8 @@ class Game {
         // _loadMap lets these win over the map's own contents. Persisted (left out
         // while empty).
         this._chestRecords = {};
+        this._spentChoices = {};   // (NM1) { mapUrl: { spawnId: [choiceId] } }: one-time talk choices used
+        this._visitedZones = new Set();     // (mp2) overworld zones entered; null = an old save, every zone counts
         this._mapUrl = null;                // url of the currently-loaded map
         this._cameFrom = null;               // url of the zone you ENTERED this one from (for the pipe-jam)
         this._jammedDoor = null;             // {x,y,toMap,integrity,max,intruders[]} while a door is wedged shut
@@ -532,6 +544,7 @@ class Game {
         // (slot registry) One entry per spine slot, from the seed's own stream —
         // never game.rng (SL-2). A save restores its own picks over these.
         this.slots = pickSlots(newSeed);
+        this._rollReturning?.(newSeed);   // (RO1) the returning boss spots pick on a stream of their own
         // (one clock) Ambient wander's own stream, so how long you think between
         // moves can never shift a fight's or a theft's rolls. Not saved: wander
         // changes no outcome's dice, so a reload may pick it up anywhere.
@@ -680,9 +693,20 @@ class Game {
 
     // ── Map Loading ──────────────────────────────────────────────────────────
 
+    // (mp2) The Map remembers which overworld zones you have stood in. An interior counts
+    // for its parent zone. A null record (an old save) is left alone: every zone counts.
+    _noteZoneVisited() {
+        const z = overworldZone(this.map && this.map.zoneName);
+        if (z && this._visitedZones) this._visitedZones.add(z);
+    }
+
+    // (BS2) Remember the gold each mugger still carries, so a re-spawn gives it back.
+    _recordMuggers() { this._tookGold = muggerRecords(this.enemies, this._tookGold); }
+
     async _loadMap(url, spawnX, spawnY) {
         this.map = await loadMap(url);
         this._mapUrl = url;
+        this._noteZoneVisited?.();
         this._jammedDoor = null;   // per-zone: any wedged door is left behind when you leave
         // Splats, words and barks belong to the map they were spawned on: a new
         // zone starts clear, with anything a (C1) cascade still held played first
@@ -718,10 +742,14 @@ class Game {
         // (slot registry) A spawn carrying a `slot` becomes this game's pick for it.
         // A kill still on this zone's respawn list stays dead (plans/ks1-respawn-list.md).
         const dead = deadIds(this._respawnLists, url);
-        for (const s of this.map.enemySpawns) {
+        for (const s of [...this.map.enemySpawns, ...(this._spotSpawns?.(url) ?? [])]) {
             if (dead.has(s.id)) continue;
-            this.enemies.push(spawnEnemy(resolveSpawn(s, this.slots), this._muggedIds, this._robbed, this._rivalKit?.(url, s.id)));
+            if (this._spotHolds?.(url, s)) continue;   // (RO1) a boss whose returning spot is filled stays dead
+            // (plans/tt1-traveler-after-burger.md) A spawn with `goneAfter` leaves once that quest is complete.
+            if (s.goneAfter && this.questEngine?.isComplete?.(s.goneAfter)) continue;
+            this.enemies.push(spawnEnemy(resolveSpawn(s, this.slots, undefined, undefined, this._returnPicks), this._muggedIds, this._robbed, this._rivalKit?.(url, s.id), this._tookGold));
         }
+        this._applySpentChoices?.(url);   // (NM1) a one-time talk choice you used stays used
         this._rivalArrived?.(url);   // (plans/ne1-rival-remembered.md) the rival is at its post, kit and all
         this._finaleOnLoad?.(url);   // (FIN3) the vault after phase 1: no Financier, the beast in his corner
 
@@ -960,8 +988,43 @@ class Game {
     // on a real move between zones — never on a save restore or a new game.
     _zoneChange() {
         this._settleRival?.();
-        stepRespawns(this._respawnLists);
+        const back = stepRespawns(this._respawnLists);
+        // (RO1) A boss with a returning spot stays dead; a different boss takes the spot instead.
+        this._claimSpots?.(back);
         this._rememberChests?.();
+        this._rememberSpentChoices?.();
+    }
+
+    // (RO1) A new game's picks for the returning boss spots, and no spot filled yet.
+    _rollReturning(seed) {
+        this._returnPicks = pickReturning(seed);
+        this._filledSpots = {};
+    }
+
+    // (RO1) Should this map spawn stay off the map: a boss whose returning spot is filled.
+    _spotHolds(url, spawn) {
+        return spotHolds(this._filledSpots, url, spawn);
+    }
+
+    // (RO1) The spawns of this zone's filled returning spots: the different boss standing in a beaten one's place.
+    _spotSpawns(url) {
+        return spotSpawns(this._filledSpots, url, RETURNING_SPOTS);
+    }
+
+    // (RO1) Of the kills just due back, those with a returning spot fill it instead of returning.
+    _claimSpots(back) {
+        claimSpots(back, (this._filledSpots ||= {}), (url, id) => spotFor(url, id));
+    }
+
+    // (NM1) Give the people just spawned in `url` back the one-time choices you used.
+    _applySpentChoices(url) {
+        applySpent(this._spentChoices, url, this.enemies);
+    }
+
+    // (NM1) Write down the one-time talk choices spent in this zone, per person.
+    _rememberSpentChoices() {
+        this._spentChoices ||= {};
+        rememberSpent(this._spentChoices, this._mapUrl, this.enemies);
     }
 
     // (plans/ch1-chests-stay-empty.md) Write down every container in this zone that
@@ -998,7 +1061,7 @@ class Game {
     // respawn list. Enemies the game spawned on the fly aren't rebuilt from the
     // map anyway, so they are left off.
     _rememberKill(enemyObj) {
-        if (!this._mapUrl || !(this.map?.enemySpawns || []).some(s => s && s.id === enemyObj.id)) return;
+        if (!this._mapUrl || ![...(this.map?.enemySpawns || []), ...(this._spotSpawns?.(this._mapUrl) ?? [])].some(s => s && s.id === enemyObj.id)) return;
         recordKill(this._respawnLists, this._mapUrl, enemyObj.id);
     }
 
@@ -1033,7 +1096,7 @@ class Game {
         const live = this.enemies.find(e => e.id === r.id);
         const spawn = (this.map?.enemySpawns || []).find(s => s && s.id === r.id);
         if (!live || !spawn) return;
-        const base = spawnEnemy(resolveSpawn(spawn, this.slots), this._muggedIds, this._robbed).loadout;
+        const base = spawnEnemy(resolveSpawn(spawn, this.slots, undefined, undefined, this._returnPicks), this._muggedIds, this._robbed).loadout;
         r.items = settleItems(r.items, live.loadout, base);
         if (!r.items.length) delete this._rivals[url];
     }
@@ -1252,9 +1315,11 @@ class Game {
             this._maybeShowFirstRunHint();
         };
         // CONTINUE loads the autosave into the live game. GAME START begins
-        // fresh (the existing save survives until the fresh run's first
-        // autosave overwrites it, so a stray reload can still resume). Space
-        // does what CONTINUE does when there is a save, and GAME START when not.
+        // fresh, and the fresh run's first autosave overwrites the old save, so
+        // with a save on disk a click on GAME START asks first, with the same
+        // line RESTART uses; Cancel leaves the title and the save untouched.
+        // With no save it starts at once. Space does what CONTINUE does when
+        // there is a save (no confirm), and GAME START when not.
         const continueGame = async () => {
             this._endTvIntro?.();         // (TV1)
             audio.init();                 // [audio] first user gesture — unlock Web Audio
@@ -1290,7 +1355,11 @@ class Game {
             this._maybeShowFirstRunHint();
         };
 
-        document.getElementById('splash-go').addEventListener('click', start);
+        document.getElementById('splash-go').addEventListener('click', () => {
+            if (hasSave() && typeof confirm === 'function'
+                && !confirm('Restart from the beginning? This erases your current save.')) return;
+            start();
+        });
         const continueBtn = document.getElementById('splash-continue');
         if (continueBtn && hasSave()) {
             continueBtn.classList.remove('hidden');
@@ -2720,6 +2789,12 @@ class Game {
                 }
             }
 
+            // Snow / ice (the FIRE_QUENCHING_TILES list) put Burning out.
+            if (this.hasBuff('fire') && FIRE_QUENCHING_TILES.includes(this.map.getTile(nx, ny))) {
+                this.removeBuff('fire');
+                this._log('[TEXT: the cold puts the fire out.]');
+            }
+
             // Pickup
             this._tryPickup();
 
@@ -2729,7 +2804,12 @@ class Game {
             const transition = this.map.getTransition(nx, ny);
             if (transition) {
                 if (!carriesAll(transition.requires, this.inventory)) {
-                    this._log(transition.requiresMsg || '[You need something to get through here.]');
+                    // A list of items also says how many of them are in the bag, the
+                    // quest HUD's " (n/total)" style (plans/vd1-vault-door-count.md).
+                    const want = Array.isArray(transition.requires) ? transition.requires : [];
+                    const held = new Set((this.inventory || []).map(s => s && s.itemDef && s.itemDef.id));
+                    const count = want.length > 1 ? ` (${want.filter(id => held.has(id)).length}/${want.length})` : '';
+                    this._log((transition.requiresMsg || '[You need something to get through here.]') + count);
                 } else {
                     this._pendingTransition = transition;
                 }
@@ -3394,8 +3474,18 @@ class Game {
     // combat/item resolvers (combatAttack, resolveThrow, resolveUse, addBuff,
     // _doMove, _openOffer).
 
+    // The Melee ring shows Hit plus the moves the wielded weapon's class brings
+    // (plans/wk1-weapon-class-moves.md); a move outside the kit is not on the wheel.
+    _syncMeleeKit() {
+        // A weapon that names no class (none in the world) leaves the starting ring alone.
+        const cls = weaponClassOf(this.equipment && this.equipment.weapon);
+        setMeleeKit(cls ? cls.kit : null);
+    }
+
     _openWheel() {
         if (this.state !== STATE.IDLE) return;
+        // The Melee ring shows Hit plus the moves the wielded weapon's class brings (plans/wk1-weapon-class-moves.md).
+        this._syncMeleeKit?.();
         this._stopAutoRepeat();
         this._heldDirKeys = [];
         this.state = STATE.RADIAL_MENU;
@@ -4004,7 +4094,11 @@ class Game {
     // Restore the last selection into the wheel and fire it without drawing.
     _repeatLastAction() {
         const lf = this.wheel.lastFired; if (!lf || !lf.path) { this._openWheel(); return; }
+        this._syncMeleeKit?.();
         this.wheel.path = lf.path.slice();
+        // A move the weapon in hand no longer brings is not repeated.
+        const again = selectedNode(this.wheel);
+        if (!again || again.key !== lf.nodeKey) { this._openWheel(); return; }
         this.wheel.aiming = false;
         this.wheel.confirming = false;
         this.wheel.reticle = lf.aimTile || autoAimTile(selectedNode(this.wheel), this);
@@ -4087,6 +4181,23 @@ class Game {
                 if (hit.length) { this._log(`[Cleave! ${hit.length} caught.]`, 'combat'); this._advanceWorld(); }
                 else if (this._enemiesPresent(tiles) > 0) { this._log('[Cleave connects — shrugged off, immune.]', 'combat'); this._advanceWorld(); }
                 else this._log('[Cleave hits only air]', 'combat');
+                break;
+            }
+            case 'stunAttack': {
+                // A hammer hit that also costs the survivor its next turn: the same
+                // lost turn a shove costs (_spunTurns), with no push and no new number.
+                const enemy = aimTile && this.enemies.find(e => e.entity.isAlive() && e.x === aimTile.x && e.y === aimTile.y);
+                if (enemy) {
+                    const wpn = this.equipment.weapon;
+                    this._lastHitTarget = null;
+                    this.combatAttack(enemy, wpn.damage, { type: wpn && wpn.damageType, weapon: wpn });
+                    if (enemy.entity.isAlive()) {
+                        enemy._spunTurns = 1;
+                        this._log('[The blow leaves them reeling.]', 'combat');
+                    }
+                    this._advanceWorld();
+                }
+                else { this._log('[Nothing to stun there]', 'combat'); }
                 break;
             }
             case 'spinAttack': {
@@ -4357,6 +4468,20 @@ class Game {
     // named in the original design note) because `_worldBeat` already names
     // the unrelated ambient/day-clock/disposition-decay heartbeat below,
     // shared with free-roam — reusing it here would have silently clobbered it.
+    // (IN1) Fire the interaction rows for what you carry in the zone you are in. A row's note
+    // is logged the first time it fires (its own log colour) and remembered for the save.
+    _checkInteractions(rows = INTERACTIONS) {
+        if (!rows.length) return;
+        const carried = new Set();
+        for (const s of this.inventory || []) if (s && s.itemDef) carried.add(s.itemDef.id);
+        for (const it of Object.values(this.equipment || {})) if (it && it.id) carried.add(it.id);
+        const fresh = fireRows(this, rows, carried, this._mapUrl, this.interactionNotes);
+        for (const row of fresh) {
+            this.interactionNotes.push(row.id);
+            this._log(row.note, 'note');
+        }
+    }
+
     _advanceWorld() {
         const plan = worldBeatPlan(this._hasteCharges, this._slowCharges);
         this._hasteCharges = plan.hasteCharges;
@@ -4366,6 +4491,7 @@ class Game {
             return;
         }
         this._advanceWorldOnce();
+        this._checkInteractions?.();   // (IN1) optional-called, like _saveMoment, for stand-in games
         // Slow's second beat only fires if the first one left things in a
         // state where "again, right now" is safe: not dead (die() already
         // guards re-entry, but there's nothing to advance for a corpse) and
@@ -4483,9 +4609,11 @@ class Game {
             // new map is in place (the .then() restores IDLE). Prevents acting
             // against the old map mid-fetch.
             this.state = STATE.RESOLVING;
+            this._recordMuggers?.();   // (BS2) a mugger keeps what he took
             this._zoneChange();   // (plans/ks1-respawn-list.md) the respawn lists take a step
             this._loadMap(t.toMap, t.toX, t.toY).then(() => {
                 this._log(`[Entered ${this.map.zoneName}]`);
+                this._checkInteractions?.();   // (IN1) optional-called, like _saveMoment, for stand-in games
                 this._armourShopNotice?.();   // (AA1) optional-called, like _saveMoment, for the stand-in games tests build
                 this.state = STATE.IDLE;
                 this.emitGameEvent('map_entered', { map: t.toMap });
@@ -5016,7 +5144,12 @@ class Game {
         // (WS4) A weapon hit with no damageType of its own lands its best kind —
         // slash, stab or crush — on this target (WR1 b); the splat shows it.
         const kind = opts.type ? null : weaponHitKind(opts.weapon, enemyObj);
-        const finalDmg = computeHit({
+        // (EL2) Each weakness KIND the hit meets — element, back, state (feared
+        // or poisoned) — is ×1.5, and they multiply. Two kinds is a crit (the
+        // gold-ring splat); three knock out a non-boss (combat.js critOf).
+        const kinds = weaknessKinds({ elemental: elementalMult(opts.type || kind, enemyObj), backstab, target: enemyObj });
+        const weakHit = critOf(kinds, { boss: enemyObj.boss === true || isBoss(enemyObj) });
+        let finalDmg = computeHit({
             base: dmg,
             // (Poition) An active Strength Poition adds flat damage here — Law
             // 2's flats bucket ("same-family flat bonuses add"), read at the
@@ -5026,9 +5159,11 @@ class Game {
             // splash) since they all funnel through this single computeHit call.
             flats: this._poitionMod('strength'),
             elemental: elementalMult(opts.type || kind, enemyObj),
-            positional: backstab ? 1.5 : 1,
+            positional: backstab ? WEAKNESS_MULT : 1,
+            state: kinds.includes('state') ? WEAKNESS_MULT : 1,
         });
         if (finalDmg === 0) { this._log(`[${enemyObj.shownName || enemyObj.type} is immune!]`, 'combat'); return null; }
+        if (weakHit.knockout) finalDmg = knockoutDamage(finalDmg, enemyObj.entity);
         if (backstab) this._log('[Backstab!]', 'combat');
 
         const result = attack(playerEntity, enemyObj.entity, finalDmg);
@@ -5058,7 +5193,7 @@ class Game {
         // 3×3 burst) pass opts.omni so it bursts around the target instead.
         const splatDir = { dx: enemyObj.x - this.playerX, dy: enemyObj.y - this.playerY };
         this._spawnHitSplat(enemyObj.x, enemyObj.y, `-${result.dealt}`, opts.type || 'physical',
-            { dir: splatDir, omni: !!opts.omni, crit: !!opts.crit, killed: !!result.killed, kind });
+            { dir: splatDir, omni: !!opts.omni, crit: !!opts.crit || weakHit.crit, killed: !!result.killed, kind });
 
         // Hit flash + stagger — Phase C, polished in B6. Flash duration
         // and stagger distance now scale with damage so light taps feel
@@ -5134,7 +5269,7 @@ class Game {
     _handleEnemyDeath(enemyObj) {
         audio.playSfx('enemy-killed'); // [audio] K.O. sting on a kill
         this._spawnEventWord(enemyObj.x, enemyObj.y, 'K.O.!', '#ff8822', 22);
-        this._log(`[Defeated ${enemyObj.entity.name}]`);
+        this._log(`[Defeated ${enemyObj.entity.name}]`, 'combat');
         this.emitGameEvent('enemy_killed', {
             type: enemyObj.type, id: enemyObj.id, x: enemyObj.x, y: enemyObj.y, tag: enemyObj.tag,
         });
@@ -5448,6 +5583,9 @@ class Game {
     // not a weapon, is one hand. items.js and save.js ask through this.
     _handsOf(def) { return (weaponClassOf(def) || {}).hands || 1; }
 
+    // (HB2) The pair the two hands make right now, or null.
+    _handPairNow() { const eq = this.equipment || {}; return handPairOf(eq.left, eq.weapon); }
+
     _refreshGrantedSkills() {
         const w  = this.equipment && this.equipment.weapon;
         const gs = (w && w.grantsSpells) || [];
@@ -5462,8 +5600,14 @@ class Game {
         const ringSpells = actives.filter(a => SPELLS[a]);
         const ringTricks = actives.filter(a => TRICKS[a]);
 
-        this.knownSpells   = mergeKnown(BASE_SPELLS, ringSpells, gs);
-        this.grantedTricks = mergeKnown([], ringTricks, gt);
+        // (HB2) The pair the two hands make: its name shows on GEAR, its skill joins the wheel.
+        this.handPair = this._handPairNow?.() ?? null;
+        const pairSkill = this.handPair && this.handPair.grants;
+        const pairSpells = pairSkill && SPELLS[pairSkill] ? [pairSkill] : [];
+        const pairTricks = pairSkill && TRICKS[pairSkill] ? [pairSkill] : [];
+
+        this.knownSpells   = mergeKnown(BASE_SPELLS, [...ringSpells, ...pairSpells], gs);
+        this.grantedTricks = mergeKnown([], [...ringTricks, ...pairTricks], gt);
         this.ringMods      = aggregatePassives(this.ringSlots, getRing);
     }
 
@@ -5764,7 +5908,7 @@ class Game {
         this.enemies = this.enemies.filter(e => e.tag !== FINALE_PHASE1.sunManTag && !this._isFinancier(e));
         const spawn = (this.map?.enemySpawns || []).find(s => s.id === boss.id);
         if (!spawn) return;   // he chased you out of the vault: the vault rebuilds him when you return
-        this.enemies.push(spawnEnemy(resolveSpawn(spawn, this.slots), this._muggedIds, this._robbed));
+        this.enemies.push(spawnEnemy(resolveSpawn(spawn, this.slots, undefined, undefined, this._returnPicks), this._muggedIds, this._robbed));
     }
 
     // (Lion Whip) Yank a struck enemy up to `dist` tiles toward the player, one
@@ -5819,6 +5963,16 @@ class Game {
         return chance > 0 && this.rng.float() < chance;
     }
 
+    // (ZB2) Is `attacker` on the tile directly behind you? Your back is opposite
+    // the way you face (this.facing), run through combat.js isBackstab.
+    _isBackstabbed(attacker) {
+        if (!attacker || typeof attacker.x !== 'number' || typeof attacker.y !== 'number') return false;
+        const FACE = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+        const f = FACE[this.facing];
+        if (!f) return false;
+        return isBackstab(attacker.x, attacker.y, { x: this.playerX, y: this.playerY, _lastDx: f[0], _lastDy: f[1] });
+    }
+
     applyDamageToPlayer(rawDamage, attacker = null) {
         if (attacker) this._lastDefeatedBy = attacker;
         // Guard (incoming, defender) folds into one computeHit call — round once,
@@ -5828,7 +5982,11 @@ class Game {
         const guardMult = this.hasBuff('guard') ? 0.5 : 1;
         if (computeHit({ base: rawDamage, incomingMult: guardMult }) === 0) return 0;
         const shieldCut = this._shieldCut?.() ?? 1;
-        let dmg = computeHit({ base: rawDamage, incomingMult: guardMult * shieldCut });
+        // (ZB2) The same behind-the-target test as yours: an attacker on the tile
+        // directly behind where you face hits ×WEAKNESS_MULT. Only that one kind
+        // applies to you — no enemy crit or knockout exists on the player today.
+        const backstab = this._isBackstabbed?.(attacker) === true;
+        let dmg = computeHit({ base: rawDamage, positional: backstab ? WEAKNESS_MULT : 1, incomingMult: guardMult * shieldCut });
         if (dmg === 0) return 0;   // 0-contract: hit doesn't happen, never floor back via armor
         // (RR1) Evasion is rolled before armour; a dodged blow deals nothing. The
         // RNG is drawn only when you have evasion, so a run without it replays as before.
@@ -5838,6 +5996,7 @@ class Game {
             if (!this._cascade?.defer(attacker ?? this._cascadeActor, dodgeFx, { hp: 0 })) dodgeFx();
             return 0;
         }
+        if (backstab) this._log('[Backstab!]', 'combat');
         if (attacker) this._spreadFireBlood(attacker, this);   // (poisons) a fire-blooded foe sets you burning
         dmg = Math.max(1, dmg - this._playerArmor());   // worn armor soaks the hit (min 1 always lands)
         this.playerHp = Math.max(0, this.playerHp - dmg);
@@ -5987,7 +6146,10 @@ class Game {
         this._pendingTransition = null;                        // 7. de-aggro + resume (mirror _respawn's tail)
         this._deAggroAll();
         this.state = STATE.IDLE;
-        if (c.log) this._log(c.log, 'transition');
+        // (plans/dl1-empty-defeat-line.md) A loss line only shows if something was lost.
+        const tookAny = !!(cost && ((cost.taken && cost.taken.length) || cost.takenGold));
+        const openLog = (!tookAny && c.emptyLog) || c.log;
+        if (openLog) this._log(openLog, 'transition');
         // The cost line: every item taken and the GP, or that nothing was (DFR1).
         const lost = ((cost && cost.taken) || []).map(e => {
             const name = e.itemDef.name || e.itemDef.id;
@@ -6162,6 +6324,7 @@ class Game {
         const newSeed = seed ?? randomSeed();
         this.rng = new RNG(newSeed);
         this.slots = pickSlots(newSeed);   // (slot registry) a new game, new picks
+        this._rollReturning?.(newSeed);   // (RO1)
         // Wander's own stream, derived from the same seed so a seeded run still
         // replays exactly (the autoplay), yet never sharing a draw with game.rng.
         this.ambientRng = new RNG(seed == null ? undefined : (seed ^ 0x9E3779B9) >>> 0);
@@ -6181,8 +6344,11 @@ class Game {
         this._rivals = {};
         this._bossDropsGiven = new Set();
         this._chestRecords = {};
+        this._spentChoices = {};
+        this._visitedZones = new Set();   // (mp2) a new run has been nowhere yet
         this._muggedIds = new Set();
         this._robbed = {};
+        this._tookGold = {};
         this._hot = {};
         this._pendingFollowers = null;
         this._pendingFollowersFrom = null;
@@ -6210,6 +6376,7 @@ class Game {
         this.discoveredFusions = new Set();
         this._peakDisposition = 0;       // it gates the ring tier, so it goes with the rings
         this.skills = {};                // a new run starts every skill from nothing
+        this.interactionNotes = [];      // (IN1) and every interaction note is new again
         this._refreshGrantedSkills();   // fresh weapon, no rings → no granted skills
         this._pendingTransition = null;
         this.gold = 0;
@@ -6766,7 +6933,7 @@ class Game {
             if (sel && sel.tab === 'gear' && sel.open) {
                 const lw = sel.slotKey === 'left', w = this.equipment[sel.slotKey];
                 const n = equipOptions(lw ? 'weapon' : sel.slotKey, sel.slotKey === 'weapon' || (lw && (this._handsOf?.(w) ?? 1) >= 2) ? null : w, this.inventory).length;
-                const rows = gearOptionRects(body, n);
+                const rows = gearOptionRects(body, n, sel.slotKey);
                 for (let i = 0; i < n; i++) {
                     if (this._pointInRect(pt, rows[i], HIT_SLOP)) { this._deviceActivate('option', i); return; }
                 }
@@ -6995,7 +7162,7 @@ class Game {
             if (sel && sel.tab === 'gear' && sel.open) {
                 const lw = sel.slotKey === 'left', w = this.equipment[sel.slotKey];
                 const n = equipOptions(lw ? 'weapon' : sel.slotKey, sel.slotKey === 'weapon' || (lw && (this._handsOf?.(w) ?? 1) >= 2) ? null : w, this.inventory).length;
-                const rects = gearOptionRects(body, n);
+                const rects = gearOptionRects(body, n, sel.slotKey);
                 return { zone: 'option', rects, ids: rects.map((_, i) => i), cur: sel.option != null ? Math.min(sel.option, n - 1) : -1 };
             }
             const layout = deviceEquipLayout(body);
@@ -7719,7 +7886,7 @@ class Game {
     // disposition the give-engine and the over-head mood-face read.
     _openDialogue(npc) {
         if (this.state !== STATE.IDLE) return;
-        const d = npc && getDialogue(npc.dialogueId);
+        const d = npc && getDialogue(npc.dialogueId, this);
         if (!d) return;
         this._dialogueNpc = npc;
         this._dialogueReply = d.greeting || '';

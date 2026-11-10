@@ -151,12 +151,12 @@ const lastLog = (g) => g.logs[g.logs.length - 1];
 
 describe('the spell log names each target and what it took, via real keys', () => {
     test('Fireball on two enemies logs both, each with the damage it really took', () => {
-        const a = foe(5, 3, { name: 'Knuckles', weak: ['fire'] });     // weakness: 20 -> 40
+        const a = foe(5, 3, { name: 'Knuckles', weak: ['fire'] });     // weakness: 20 -> 30 (x1.5, EL2)
         const b = foe(6, 3, { name: 'Rat', resist: ['fire'] });        // resistance: 20 -> 10
         const g = makeGame([a, b]);
         castThrough(g, ['fight', 'magic', 'fireball']);
         assert.equal(g.world, 1, 'the cast should spend a turn');
-        assert.equal(lastLog(g), '[Fireball! Knuckles 40, Rat 10]');
+        assert.equal(lastLog(g), '[Fireball! Knuckles 30, Rat 10]');
     });
 
     test('one enemy caught: the line names it, not a count', () => {
@@ -197,6 +197,6 @@ describe('Cleave and Spin keep their count lines', () => {
         const a = foe(5, 7, { name: 'Knuckles', weak: ['fire'] });
         const g = makeGame([a]);
         const hit = g._aoeStrike([{ x: 5, y: 7 }, { x: 0, y: 0 }], 20, { type: 'fire' });
-        assert.deepEqual(hit, [{ name: 'Knuckles', dealt: 40 }]);
+        assert.deepEqual(hit, [{ name: 'Knuckles', dealt: 30 }]);
     });
 });

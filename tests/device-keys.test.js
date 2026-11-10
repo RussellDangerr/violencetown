@@ -132,7 +132,7 @@ const body = deviceBodyRect();
 const bag = deviceBagSlotRects(body);
 const actionRect = a => inspectorActionRects(body)[a];
 const plate = key => deviceEquipLayout(body).slots.find(s => s.key === key);
-const optionRect = (i, n) => gearOptionRects(body, n)[i];
+const optionRect = (i, n, key = 'top') => gearOptionRects(body, n, key)[i];   // (GC1) a chooser opens at its own plate
 const socket = (g, key) => deviceRingsLayout(body, g).sockets.find(s => s.key === key);
 
 // Each case: a setup, the taps, and the keys, for one Remoticon action.
@@ -176,7 +176,7 @@ const CASES = [
     {
         name: 'gear: equip from the chooser',
         setup: g => { g._deviceTab = 'gear'; put(g, 11, 'cardboard_cuirass'); },
-        taps: g => { tap(g, plate('front')); tap(g, optionRect(0, 1)); },
+        taps: g => { tap(g, plate('front')); tap(g, optionRect(0, 1, 'front')); },
         keys: g => { walkTo(g, 'front'); press(g, 'Enter', 'Enter'); },
         done: g => g.equipment.front === ITEMS.cardboard_cuirass && !g.inventory[11],
     },

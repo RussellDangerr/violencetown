@@ -21,9 +21,9 @@ describe('the ruled numbers', () => {
         assert.equal(WEAPONS.gator_tail.damage, 16);
     });
 
-    test('only the Ray Gun hits harder', () => {
+    test('only the Ray Gun and the Great Sword hit harder', () => {
         const above = Object.values(WEAPONS).filter(w => w.damage > WEAPONS.gator_tail.damage).map(w => w.id);
-        assert.deepEqual(above, ['ray_gun']);
+        assert.deepEqual(above, ['ray_gun', 'great_sword']);   // GW1R3: the Great Sword is 20
     });
 
     test('a swing takes 16 off a bare target through the real hit pipeline', () => {

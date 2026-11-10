@@ -14,6 +14,7 @@ const SS = 2;
 // at its second text row, from the ring geometry in layout.js (ring 1, 60 to 88).
 const EAT_SLICE_TEXT_W = 96;
 import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, itemSprite, CONTAINER_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES, MARK_SPRITES, spriteVariant, spriteFrame, tileFrame, idHash, borderPropKeys, borderPropKey, fillerSprite, TINY_INK } from './sprites.js';
+import { INTERACTIONS, seenNotes } from './interactions.js'; // (IN1)
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
 import { CREDITS, currentCard } from './credits.js';   // (FIN4) the credits screen
 import { ROOT, selectedNode, activeRing, activeIndex, decisionPath, previewChildren, affectedTiles, verbApplies, isCombatActive, flapperDeflection, defaultVerb } from './wheel-model.js'; // (sunburst wheel) + the bump telegraph
@@ -22,10 +23,10 @@ import {
     ITEM_OVERLAY_RECT, ITEM_OVERLAY_ROW_H,
     WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
     EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, EQUIP_LEFT_HAND_RECT, closeButtonRect,
-    DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceBagPagerRects, deviceEquipLayout, gearArmourRect, deviceRingsLayout,
+    DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_LABELS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceBagPagerRects, deviceEquipLayout, gearArmourRect, deviceRingsLayout,
     deviceSkillsLayout, ringPassiveRows,                                     // (US2) the skills readout in the RINGS tab; (RR1) a ring's passive rows
     inspectorPanelRect, inspectorActionRects,                               // (C1) tap-to-inspect panel + action-row geometry
-    gearOptionRects, gearChooserRect,                                       // (C2) GEAR chooser option-row + panel geometry
+    gearOptionRects, gearChooserRect, gearEmptyNoteRect,                                     // (C2) GEAR chooser option-row + panel geometry
     xmbBarLayout, hudLayout, throwRects, wheelTopMarks, fightPanelRects, XMB_CELL,                      // (XMB) usable-bar geometry; (screen-fill) the HUD, throw targets, the marks above the wheel
     LOOT_REEL, lootReelRect,                                                 // (FX3c) the loot reel's panel
     MODAL_RECT, offerLayout,                                             // (offer screen) the one panel + its geometry
@@ -2778,6 +2779,7 @@ export class Renderer {
         switch (category) {
             case 'combat':     return UI.hpRed;    // damage, deaths, fights
             case 'pickup':     return UI.hpGreen;  // items collected, gold
+            case 'note':       return UI.textLight; // (IN1) an interaction note: muted tan, apart from the cream default
             case 'transition': return UI.gold;     // zone entries, milestones
             case 'system':
             default:           return UI.text;     // dark brown — default
@@ -2811,7 +2813,7 @@ export class Renderer {
             const on = DEVICE_TABS[i] === active;
             drawInset(ctx, t.x, t.y, t.w, t.h);
             if (on) { ctx.strokeStyle = UI.gold; ctx.lineWidth = 2; ctx.strokeRect(t.x + 1, t.y + 1, t.w - 2, t.h - 2); }
-            this.font.drawText(ctx, DEVICE_TABS[i].toUpperCase(), t.x + t.w / 2, t.y + t.h / 2 - 4, { color: on ? UI.gold : UI.dim, scale: 1, align: 'center' });
+            this.font.drawText(ctx, (DEVICE_TAB_LABELS[DEVICE_TABS[i]] || DEVICE_TABS[i].toUpperCase()), t.x + t.w / 2, t.y + t.h / 2 - 4, { color: on ? UI.gold : UI.dim, scale: 1, align: 'center' });
         }
 
         // Delegate the active tab's body into the shared body region.
@@ -2826,6 +2828,7 @@ export class Renderer {
         else if (active === 'quests') this._drawJournalQuestsBody(game, body);
         else if (active === 'map')    this._drawWorldMapBody(game, body, body.y);
         else if (active === 'rings') this._drawDeviceRings(game, body);
+        else if (active === 'notes') this._drawDeviceNotes(game, body);
 
         // (FX43) The bag lists the keys that work in it: the phrases the pickers and shop already
         // use for arrows and Esc, and a placeholder for Space until its verb is chosen.
@@ -2833,6 +2836,27 @@ export class Renderer {
         const fit = this._fitText(foot, R.w - 32, 1, 0.75);
         this.font.drawText(ctx, fit.text, CANVAS_PX / 2, R.y + R.h - 12, { color: UI.dim, scale: fit.scale, align: 'center' });
         ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    }
+
+    // (IN1) The notes tab: each interaction note seen so far, oldest first. Empty reads as one
+    // placeholder line. Long notes wrap; what does not fit is cut.
+    _drawDeviceNotes(game, bodyRect) {
+        const { ctx } = this;
+        const notes = seenNotes(INTERACTIONS, game.interactionNotes);
+        if (!notes.length) {
+            this.font.drawText(ctx, '[TEXT]', bodyRect.x + bodyRect.w / 2, bodyRect.y + 40, { color: UI.dim, scale: 1, align: 'center' });
+            return;
+        }
+        const LH = 14, maxRows = Math.floor((bodyRect.h - 8) / LH);
+        let row = 0;
+        for (const n of notes) {
+            for (const line of wrapToWidth(n.note, bodyRect.w - 16, this._measurer(1))) {
+                if (row >= maxRows) return;
+                this.font.drawText(ctx, line, bodyRect.x + 8, bodyRect.y + 4 + row * LH, { color: UI.textLight, scale: 1 });
+                row++;
+            }
+            row++;
+        }
     }
 
     // (Remembrance Rings, Task 5) SKILLS tab → THE HANDS. Two anatomically
@@ -3464,6 +3488,9 @@ export class Renderer {
         const { ctx } = this;
         const here = overworldZone(game.map && game.map.zoneName);
         const targets = new Set((game.questEngine?.getTargetZones?.() ?? []).map(overworldZone));
+        // (mp2) Zones never entered draw in the dim colour; no record (an old save) dims none.
+        const seen = game._visitedZones;
+        const unvisited = (z) => !!seen && !seen.has(z.zoneName) && z.zoneName !== here;
 
         const cols = WORLD_ZONES.map(z => z.col), rows = WORLD_ZONES.map(z => z.row);
         const c0 = Math.min(...cols), c1 = Math.max(...cols), r0 = Math.min(...rows), r1 = Math.max(...rows);
@@ -3489,13 +3516,14 @@ export class Renderer {
             const b = boxOf(z);
             const isHere = z.zoneName === here;
             const isTarget = targets.has(z.zoneName);
+            const dimmed = unvisited(z);
             ctx.fillStyle = isHere ? 'rgba(212,185,106,0.85)' : 'rgba(30,24,16,0.9)';
             ctx.fillRect(b.x, b.y, b.w, b.h);
             ctx.lineWidth = isTarget ? 3 : 2;
-            ctx.strokeStyle = isTarget ? '#e8462f' : isHere ? '#fff3c0' : 'rgba(212,185,106,0.6)';
+            ctx.strokeStyle = isTarget ? '#e8462f' : isHere ? '#fff3c0' : dimmed ? UI.dim : 'rgba(212,185,106,0.6)';
             ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
             if (!this.font) continue;
-            const txtCol = isHere ? '#2a2010' : UI.text;
+            const txtCol = isHere ? '#2a2010' : unvisited(z) && !isTarget ? UI.dim : UI.text;
             this.font.drawText(ctx, z.label, b.x + b.w / 2, b.y + b.h / 2 - 4, { color: txtCol, scale: 1, align: 'center' });
             if (isHere)        this.font.drawText(ctx, 'YOU',  b.x + b.w / 2, b.y + b.h / 2 + 8, { color: '#7a2010', scale: 1, align: 'center' });
             else if (isTarget) this.font.drawText(ctx, '» GO', b.x + b.w / 2, b.y + b.h / 2 + 8, { color: '#e8462f', scale: 1, align: 'center' });
@@ -5050,6 +5078,8 @@ export class Renderer {
             const A = gearArmourRect(bodyRect);
             const armorTotal = game._playerArmor ? game._playerArmor() : 0;
             this.font.drawText(ctx, 'ARMOR ' + armorTotal, A.x, A.y, { color: UI.gold, scale: 2, align: 'left' });
+            // (HB2) The pair the two hands make, under the ARMOR line.
+            if (game.handPair) this.font.drawText(ctx, String(game.handPair.name || game.handPair.id).replace(/^\[|\]$/g, '').toUpperCase(), A.x, A.y + 22, { color: UI.text, scale: 1, align: 'left' });
         }
 
         const _eq = hosted ? deviceEquipLayout(bodyRect) : { figure: EQUIP_FIGURE_RECT, slots: EQUIP_SLOT_RECTS, leftHand: EQUIP_LEFT_HAND_RECT };
@@ -5157,17 +5187,18 @@ export class Renderer {
         const label = ([...EQUIP_SLOT_RECTS, EQUIP_LEFT_HAND_RECT].find(s => s.key === slotKey) || {}).label || slotKey.toUpperCase();
         // (FX57) The right hand is never emptied from here: no Bare row on its plate.
         const opts = gearOptions(game, slotKey).filter(o => !(slotKey === 'weapon' && o.id === '__bare__'));
-        const rows = gearOptionRects(bodyRect, opts.length);
+        const rows = gearOptionRects(bodyRect, opts.length, slotKey);
 
         // Titled panel enclosing the option column (+ header band above row 0),
         // starting below the HEAD plate (FX11) — gearChooserRect owns the geometry.
-        const { x: px, y: py, w: pw, h: ph } = gearChooserRect(bodyRect, opts.length);
+        const { x: px, y: py, w: pw, h: ph } = gearChooserRect(bodyRect, opts.length, slotKey);
         drawPanelSmall(ctx, px, py, pw, ph, this.uiSheet);
         this.font.drawText(ctx, `${label} — CHOOSE`, px + pw / 2, py + 8, { color: UI.gold, scale: 1, align: 'center' });
 
         // Empty bag AND nothing worn → a quiet note, no rows.
         if (!opts.length) {
-            this.font.drawText(ctx, `[No ${label.toLowerCase()} gear]`, px + pw / 2, py + 26, { color: UI.dim, scale: 1, align: 'center' });
+            const note = gearEmptyNoteRect(bodyRect, slotKey);   // (GC1) room inside the panel, clear of its border
+            this.font.drawText(ctx, `[No ${label.toLowerCase()} gear]`, note.x + note.w / 2, note.y + note.h / 2 - 4, { color: UI.dim, scale: 1, align: 'center' });
             return;
         }
 

@@ -67,7 +67,7 @@ describe("the fight's own messages are tagged", () => {
 
 describe('categories are spelled from one list', () => {
     test('no _log call invents a category outside the known set', () => {
-        const KNOWN = new Set(['system', 'combat', 'pickup', 'transition', 'quest']);
+        const KNOWN = new Set(['system', 'combat', 'pickup', 'transition', 'quest', 'note']);
         const cats = [...src.matchAll(/this\._log\([^;]*?,\s*'([a-z-]+)'\s*\)/g)].map((m) => m[1]);
         assert.ok(cats.length > 0, 'no categorised _log calls found at all');
         for (const c of cats) {

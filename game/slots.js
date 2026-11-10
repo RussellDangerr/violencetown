@@ -111,6 +111,25 @@ export const ENTRIES = {
         barks: ['[TEXT]'],
         barkEveryTurns: 6,
     },
+    // The Carnival's strongman (plans/st2-strongman-wins-contest.md, ruling ST2R1 a): placed by
+    // hand. Give him enough and he turns to your side (give-action.js applyFlip), then fights
+    // beside you at the contest against the boss. Stand-ins until designed: the ordinary Carnival
+    // Clown's look, numbers, kit and gift values, the name, the barks. No `boss`, no slot.
+    strongman: {
+        type: 'Carnival Clown',
+        name: '[Strongman]',
+        gold: 7,
+        loadout: ['hot_dog', 'red_cape', 'soap', 'fire_blood'],
+        hp: 100,
+        armor: 0,
+        damage: ACT2_MOB_DAMAGE,
+        disposition: -40,
+        flipThreshold: 30,
+        bribeable: true,
+        values: { bandage: 6, soap: 4, rock: 3 },
+        behavior: ['IDLE'],   // he stands where he is placed: a wander would draw the shared ambient stream and move the autoplay replay
+        adjacencyBark: '[TEXT]',
+    },
     // The Carnival's horses (plans/cb1-carnival-horses-circle.md): three combatants placed by
     // hand around (28,4), which circle you once beside you (ai.js circleStep; the `circler`
     // tag is the flag, off for every other entry). Stand-ins until designed: the Graveyard
@@ -285,6 +304,39 @@ export const ENTRIES = {
     },
 };
 
+// RO1: the stand-in that fills the Were-Rat's spot once he has stayed dead the full wait
+// (plans/ro1-returning-boss-spot.md). Obviously fake: the Were-Rat's numbers and kit, a
+// placeholder name and barks, its own tag (so no fur and no required item), and a tint
+// (sprites.js picks the look from that tag).
+ENTRIES.returning_boss = {
+    ...structuredClone(ENTRIES.wererat),
+    name: '[NAME]',
+    tag: 'returning_boss',
+    barks: ['[TEXT]', '[TEXT]'],
+};
+
+// The spot a boss at `id` on map `url` leaves open, or null.
+export function spotFor(url, id, spots = RETURNING_SPOTS) {
+    for (const [spotId, spot] of Object.entries(spots)) {
+        if (spot.replaces === id && url && String(url).endsWith(spot.map)) return { id: spotId, ...spot };
+    }
+    return null;
+}
+
+// The picks for every returning spot, from their own stream (never game.rng, never the slot stream).
+export function pickReturning(seed, spots = RETURNING_SPOTS) {
+    const rng = new RNG((seed ^ 0x2E7B055) >>> 0);
+    const picks = {};
+    for (const id of Object.keys(spots).sort()) picks[id] = pickFrom(spots[id].pool, rng);
+    return picks;
+}
+
+export function defaultReturning(spots = RETURNING_SPOTS) {
+    const picks = {};
+    for (const id of Object.keys(spots)) picks[id] = spots[id].pool[0].entry;
+    return picks;
+}
+
 // The finale's phase 1 in one place (plans/fin2-financier-fight.md). Both are
 // stand-ins until Caelan tunes them: Sun Man stays three turns (his note), and
 // the Financier then loses `defenceDrop` of defence for the rest of the fight
@@ -322,7 +374,13 @@ function frozenMob(type, numbers) {
 
 function alienInvasion() {
     const e = { ...act2Boss(), name: 'Alien Invasion' };
-    e.loadout = [...e.loadout, 'ray_gun'];
+    // GW1R2 (a): he carries the Great Sword. In the kit, so it drops when he falls; in his
+    // worn gear in place of the Wooden Sword, so he swings it at you.
+    // GW1R5 (c): the sword pushed his haul to 238 GP, over the elite band's 200. Three 15 GP
+    // items come off (a burger, a defence poition, a soap): 45 GP, back to 193.
+    const lighter = ['boardwalk_burger', 'defence_poition', 'soap'];
+    e.loadout = [...e.loadout.filter(x => !lighter.includes(x)), 'ray_gun', 'great_sword'];
+    e.equipped = ['great_sword'];
     return e;
 }
 
@@ -398,6 +456,18 @@ export const SLOTS = {
         requiredDrop: 'tigers_blood_ice_cone',
         pool: [{ entry: 'siberia', weight: 1 }],
     },
+    // A returning boss spot (RO1R1 a, an exception to spine SL-6 for bosses; plans/ro1-returning-boss-spot.md):
+    // once the boss at `replaces` has stayed dead the whole respawn wait, a DIFFERENT boss from the
+    // pool stands at `at` as `spawn`. It is not an anchor pick (no map spawn, no entry in the saved
+    // picks): the spot's own pick is made by pickReturning. It carries no required item.
+    'sewer.returning': {
+        kind: 'returning_boss',
+        map: 'sewer-map.json',
+        replaces: 'wererat',
+        spawn: 'wererat_return',
+        at: { x: 17, y: 10 },
+        pool: [{ entry: 'returning_boss', weight: 1 }],
+    },
     // The Carnival's spawn table (plans/rv2-rats-roll-spawn-table.md): the three rats RV1
     // placed, equal weights (a stand-in until tuned). Each rat spawn on the map names a
     // seat and rolls one from here per new game; `seats` is how many spawns there are.
@@ -424,6 +494,10 @@ export const SLOTS = {
 };
 
 const isMob = (slot) => slot?.kind === 'mob';
+const isReturning = (slot) => slot?.kind === 'returning_boss';
+
+// The returning boss spots, by id.
+export const RETURNING_SPOTS = Object.fromEntries(Object.entries(SLOTS).filter(([, s]) => isReturning(s)));
 
 // What the log calls an entry that has no `name` of its own (keyed by type).
 const LABELS = { Wererat: 'Were-Rat' };
@@ -458,7 +532,7 @@ export function pickSlots(seed, slots = SLOTS) {
     const rng = new RNG((seed ^ SLOT_SALT) >>> 0);
     const picks = {};
     for (const id of Object.keys(slots).sort()) {
-        if (!isMob(slots[id])) picks[id] = pickFrom(slots[id].pool, rng);
+        if (!isMob(slots[id]) && !isReturning(slots[id])) picks[id] = pickFrom(slots[id].pool, rng);
     }
     for (const id of Object.keys(slots).sort()) {
         if (isMob(slots[id])) {
@@ -523,14 +597,25 @@ function deckFor(slot, saved) {
 // A mob slot has no pick; its deck falls back to the pool's order (deckFor).
 export function defaultPicks(slots = SLOTS) {
     const picks = {};
-    for (const id of Object.keys(slots)) if (!isMob(slots[id])) picks[id] = slots[id].pool[0].entry;
+    for (const id of Object.keys(slots)) if (!isMob(slots[id]) && !isReturning(slots[id])) picks[id] = slots[id].pool[0].entry;
     return picks;
 }
 
 // A spawn with a `slot` becomes its picked entry (a mob slot: the entry dealt to
 // its seat), with the spawn's own id, place and facing on top. A spawn naming an `entry` is placed by hand: it becomes
 // that entry the same way. Any other spawn passes through untouched.
-export function resolveSpawn(spawn, picks, slots = SLOTS, entries = ENTRIES) {
+export function resolveSpawn(spawn, picks, slots = SLOTS, entries = ENTRIES, returning = null) {
+    if (spawn && spawn.returning) {
+        const spot = RETURNING_SPOTS[spawn.returning];
+        if (!spot) return spawn;
+        const want = returning?.[spawn.returning];
+        const entryId = spot.pool.some(p => p.entry === want) ? want : spot.pool[0].entry;
+        const entry = entries[entryId];
+        if (!entry) return spawn;
+        const out = { ...structuredClone(entry), id: spawn.id, x: spawn.x, y: spawn.y };
+        if (spawn.facing) out.facing = spawn.facing;
+        return out;
+    }
     if (spawn && !spawn.slot && spawn.entry) {
         const entry = entries[spawn.entry];
         if (!entry) return spawn;

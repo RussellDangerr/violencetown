@@ -97,6 +97,9 @@ export function pickScenario(ctx, scenarios, rand) {
 // interprets them. Seeded with the generic fallback; sewer flavor added in Task 5.
 // No scenario adds a status: the post-defeat debuffs did nothing and were dropped
 // (ruling DFR1); the log's cost line says what a defeat cost instead.
+// When a scenario's take matched nothing, its loss line would lie; this one stands in.
+export const EMPTY_TAKE_LOG = '[You come to, beaten and dumped.]';
+
 export const DEFEAT_SCENARIOS = [
     {
         id: 'processed_by_fungus',
@@ -108,6 +111,7 @@ export const DEFEAT_SCENARIOS = [
             wakeAt: { spot: { x: 12, y: 17 } },
             hp: 0.5, timeSkip: 'hours',
             take: { categories: ['ambro'], recoverable: false },   // they feast on your food/mushrooms — gone
+            emptyLog: EMPTY_TAKE_LOG,    // shown instead of `log` when nothing was taken
             log: '[You wake in a spore-cell. Your provisions are gone; the Fungus fed well.]',
         },
     },
@@ -123,6 +127,7 @@ export const DEFEAT_SCENARIOS = [
             wakeAt: null,                            // dumped at the sewer mouth (spawn)
             hp: 0.6,
             take: { loot: 'all', recoverable: true, stashAt: { spot: { x: 17, y: 10 } } },
+            emptyLog: EMPTY_TAKE_LOG,    // shown instead of `log` when nothing was taken
             log: "[The rats rolled you and scampered off with your haul. You'll want it back.]",
         },
     },
@@ -134,6 +139,7 @@ export const DEFEAT_SCENARIOS = [
             wakeAt: { spot: { x: 3, y: 10 } },       // washed downstream
             hp: 0.5,
             take: { breakables: true, recoverable: false },
+            emptyLog: EMPTY_TAKE_LOG,    // shown instead of `log` when nothing was taken
             log: '[The sludge river took you downstream. Your kit is soaked and cracked.]',
         },
     },
@@ -157,7 +163,7 @@ export const DEFEAT_SCENARIOS = [
             wakeAt: null,             // → _safeRespawnCell (zone entrance/spawn)
             hp: 0.5,
             take: { loot: 0.5, recoverable: false },
-            log: '[You come to, beaten and dumped.]',   // the cost line after it says what was taken
+            log: EMPTY_TAKE_LOG,   // the cost line after it says what was taken
         },
     },
 ];

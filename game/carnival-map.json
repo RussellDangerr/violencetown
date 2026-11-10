@@ -43,6 +43,7 @@
         {"id": "robot-rat-1", "slot": "carnival.mob", "seat": 2, "x": 50, "y": 13},
         {"id": "carnival-lion", "entry": "carnival_lion", "x": 20, "y": 16},
         {"id": "the-clown", "entry": "the_clown", "x": 38, "y": 8},
+        {"id": "strongman", "entry": "strongman", "x": 43, "y": 14},
         {"id": "carnival-horse-1", "entry": "carnival_horse", "x": 27, "y": 3},
         {"id": "carnival-horse-2", "entry": "carnival_horse", "x": 29, "y": 3},
         {"id": "carnival-horse-3", "entry": "carnival_horse", "x": 28, "y": 5},
@@ -59,10 +60,12 @@
         {"type": "fire_blood", "x": 11, "y": 3}
     ],
     "props": [
-        {"type": "shelfA", "x": 46, "y": 12}
+        {"type": "shelfA", "x": 46, "y": 12},
+        {"type": "shelfB", "x": 50, "y": 11}
     ],
     "examinables": [
         {"id": "[TEXT]_claim_carnival", "x": 46, "y": 12, "text": "[TEXT]"},
+        {"id": "[TEXT]_booth_carnival", "x": 50, "y": 11, "text": "[TEXT]"},
         {"id": "booth", "x": 28, "y": 12, "text": "[A shuttered game booth — RING THE BOTTLE, WIN A PRIZE. The bottles are glued down. The tents stretch east as far as you can see.]"}
     ],
     "transitions": [

@@ -98,7 +98,7 @@ describe('_drawGearPicker', () => {
             const { r, fills } = rig();
             r._drawGearPicker(game, body);
             assert.ok(fills.length > 0, 'the panel was drawn');
-            assert.deepEqual(fills[0], gearChooserRect(body, n));
+            assert.deepEqual(fills[0], gearChooserRect(body, n, key));
             assert.ok(!rectsOverlap(fills[0], plate(key)), 'the drawn chooser covers its plate');
             assert.ok(!rectsOverlap(fills[0], plate('top')), 'the drawn chooser covers the HEAD plate');
         });

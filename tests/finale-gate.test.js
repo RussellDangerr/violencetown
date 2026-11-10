@@ -141,7 +141,7 @@ describe('stepping onto a gated door (main.js)', () => {
             const g = game(bag(...held, 'pipe'));
             step.call(g, DOOR.x, DOOR.y);
             assert.equal(g._pendingTransition, null, `opened with only ${held.join(', ') || 'nothing'}`);
-            assert.deepEqual(g.logs, [g.map.getTransition(DOOR.x, DOOR.y).requiresMsg]);
+            assert.deepEqual(g.logs, [`${g.map.getTransition(DOOR.x, DOOR.y).requiresMsg} (${held.filter(id => ACT2.includes(id)).length}/3)`]);   // vd1: the line now carries the count
         }
     });
 
