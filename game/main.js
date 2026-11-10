@@ -43,6 +43,7 @@ import { pickSlots, defaultPicks, resolveSpawn, requiredDropFor, dropLineFor, FI
 import { rememberSpent, applySpent } from './npc-memory.js';
 import { snapshotOf, keepSnapshot, readSnapshots, reportLines } from './bones.js';
 import { hasSave, readSaveRaw, writeSave, loadInto, clearSave } from './save.js';
+import { readAway } from './away.js';   // (CK1) hours since the save's savedAt
 import { QuestEngine } from './quests.js';
 import { doExamine, resolveExamine } from './examine.js';
 import { recordDrop, pendingDrops, takeDrop, dropLoadout, recordKill, stepRespawns, deadIds, bossDropOnce, claimSpots, spotHolds, spotSpawns } from './drops.js'; // per-zone runtime dropped-items layer + respawn list (pure, node-tested)
@@ -1179,9 +1180,22 @@ class Game {
         this._saveMoment();
     }
 
+    // (CK1) Whole hours since this save's stamp, kept as this.hoursAway.
+    _noteAway(raw) {
+        readAway(this, raw.savedAt);
+    }
+
     _bindLeaveSave() {
         document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'hidden') this._saveOnLeave();
+            if (document.visibilityState === 'hidden') {
+                this._saveOnLeave();
+                this._wentAway = true;
+            } else if (this._wentAway) {
+                // (CK1) Back in the tab: read the stamp the leaving save wrote, once.
+                this._wentAway = false;
+                const raw = readSaveRaw();
+                if (raw) this._noteAway?.(raw);
+            }
         });
         window.addEventListener('pagehide', () => this._saveOnLeave());
     }
@@ -1328,6 +1342,7 @@ class Game {
             audio.playMusic('town');      // [audio] start the ambient bed (zone music re-syncs on map load)
             const raw = readSaveRaw();
             if (!raw) { start(); return; }
+            this._noteAway?.(raw);   // (CK1) once, before any new save overwrites the stamp
             splash.classList.add('gone');
             wrapper.classList.remove('hidden');
             this._fitCanvas();            // (screen-fill) measure the now-visible layout box
