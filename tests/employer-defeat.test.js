@@ -15,7 +15,7 @@ import { isBoss, isStoryBoss, storyBossInFight, pickScenario, partitionInventory
 import { fillsBossSlot, resolveSpawn, defaultPicks } from '../game/slots.js';
 import { spawnEnemy, resolveEnemyTurns } from '../game/enemies.js';
 import { fighters } from '../game/fight-area.js';
-import { computeHit } from '../game/combat.js';
+import { computeHit, critOf } from '../game/combat.js';
 import { GameMap } from '../game/map.js';
 import { SAFE_SLOTS } from '../game/data.js';
 
@@ -167,6 +167,13 @@ describe('a real world turn delivers the blow', () => {
     });
 });
 
-test('main.js hands the defeat code the story versions, not the flag check', () => {
-    assert.match(mainSrc, /import \{[^}]*\bisStoryBoss as isBoss\b[^}]*\bstoryBossInFight as bossInFight\b[^}]*\} from '\.\/defeat-scenarios\.js'/);
+test('main.js hands the defeat code the story versions, and combat keeps the flag-or-tag isBoss', () => {
+    assert.match(mainSrc, /import \{[^}]*\bisBoss\b[^}]*\bisStoryBoss\b[^}]*\bstoryBossInFight as bossInFight\b[^}]*\} from '\.\/defeat-scenarios\.js'/);
+    // the retry decision asks the story question
+    assert.match(mainSrc, /const boss = isStoryBoss\(by\) \? by/);
+    // the three-kind knockout spare (EL2) still asks the flag-or-tag question, so Pike stays unknockable
+    assert.match(mainSrc, /critOf\(kinds, \{ boss: enemyObj\.boss === true \|\| isBoss\(enemyObj\) \}\)/);
+    assert.equal(isBoss({ tag: 'pike_boss' }), true);
+    assert.equal(isStoryBoss({ tag: 'pike_boss' }), false);
+    assert.deepEqual(critOf(['a', 'b', 'c'], { boss: isBoss({ tag: 'pike_boss' }) }).knockout, false);
 });
