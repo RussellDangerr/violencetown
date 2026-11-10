@@ -1639,7 +1639,7 @@ class Game {
                 if (e.code === 'Enter') { this._offerActivate('commit', 0); return; }
                 // (PD1) T opens the vendor's talk, where their deals are. Free in this
                 // state (T is Wait in the world, and the offer screen has no wait).
-                if (e.code === 'KeyT' && this._offerCanTalk()) { this._offerTalk(); return; }
+                if (e.code === 'KeyT' && this._offerCanTalk?.()) { this._offerTalk(); return; }
                 if (!this._offer) return;
 
                 const c = this._offerCursor || (this._offerCursor = { side: 'yours', index: 0 });
@@ -7654,7 +7654,7 @@ class Game {
         if (!this._pointInRect(pt, L.panel)) { this._closeOffer(); return; }
 
         if (this._pointInRect(pt, L.button, HIT_SLOP)) { this._offerActivate('commit', 0); return; }
-        if (this._offerCanTalk() && this._pointInRect(pt, L.talkButton, HIT_SLOP)) { this._offerTalk(); return; }
+        if (this._offerCanTalk?.() && this._pointInRect(pt, L.talkButton, HIT_SLOP)) { this._offerTalk(); return; }
 
         // The scroll tracks, BEFORE the rows: the thumb is drawn inside the
         // column's own right edge, so a track tap would otherwise resolve to the
