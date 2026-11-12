@@ -7717,6 +7717,13 @@ class Game {
         this._offerActivate(side === 'give' ? 'giveTray' : 'takeTray', at);
     }
 
+    // (FD3) A sale-locked item (the Mola Cola before the delivery is done) is refused with a line.
+    _saleRefused(def) {
+        if (!saleLocked(def, this)) return false;
+        this._log(SALE_LOCK_REFUSAL);
+        return true;
+    }
+
     // A quest item may only be staged when the quest actually wants it delivered
     // here. Reuses the rule and the words the retired give path had, rather than
     // inventing a second phrasing.
@@ -7729,7 +7736,7 @@ class Game {
     // complaint, so there is no arithmetic reason for it either.
     _canStageGive(entry) {
         const def = entry.def, npc = this._offerNpc;
-        if (saleLocked(def, this)) { this._log(SALE_LOCK_REFUSAL); return false; }   // (FD3)
+        if (this._saleRefused?.(def)) return false;   // (FD3)
         const isDelivery = this.questEngine && this.questEngine.expectsDelivery(def.id, npc.id);
         if (def.questItem && !isDelivery) { this._log('[Best hold onto that.]'); return false; }
         return true;

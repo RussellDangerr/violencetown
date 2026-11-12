@@ -110,7 +110,7 @@ async function makeGame() {
         ['_doMove', 'dir'], ['_canEnter', 'x, y'], ['setTile', 'x, y, id'],
         ['_openBridgeIfCarFixed', ''], ['_playBridgeCutscene', ''], ['_crashToCanyon', ''],
         ['_rampToDowntown', ''], ['_startMainQuest2', ''], ['_bossHandsOver', ''],
-        ['_grantItem', 'id, msg'], ['_addToInventory', 'itemDef'], ['_canStageGive', 'entry'],
+        ['_grantItem', 'id, msg'], ['_addToInventory', 'itemDef'], ['_canStageGive', 'entry'], ['_saleRefused', 'def'],
     ]) g[n] = liveMethod(n, p, n === '_beginMoveOrTurn' ? { ...free, setTimeout: () => 0 } : free);
     g.questEngine = new QuestEngine(g);
     g._bindInput();
@@ -144,7 +144,8 @@ describe('the can as an item', () => {
         assert.equal(d.healAmount, ITEMS.hot_dog.healAmount);
         assert.ok(!d.questItem, 'it can be dropped and drunk');
         assert.equal(d.description, '[TEXT]');
-        assert.ok(ITEM_SPRITES.mola_cola, 'has an icon');
+        assert.ok(ITEM_SPRITES.mola_cola, 'has a placeholder icon');
+        assert.ok(d.fallbackColor);
     });
 
     test('drinking heals, and the content check knows about sale locks', () => {
