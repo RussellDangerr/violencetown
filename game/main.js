@@ -43,7 +43,7 @@ import { pickSlots, defaultPicks, resolveSpawn, requiredDropFor, dropLineFor, FI
 import { rememberSpent, applySpent } from './npc-memory.js';
 import { snapshotOf, keepSnapshot, readSnapshots, reportLines } from './bones.js';
 import { hasSave, readSaveRaw, writeSave, loadInto, clearSave } from './save.js';
-import { readAway } from './away.js';   // (CK1) hours since the save's savedAt
+import { readAway, tellAwayNews } from './away.js';   // (CK1) hours since the save's savedAt
 import { QuestEngine } from './quests.js';
 import { doExamine, resolveExamine } from './examine.js';
 import { recordDrop, pendingDrops, takeDrop, dropLoadout, recordKill, stepRespawns, deadIds, bossDropOnce, claimSpots, spotHolds, spotSpawns } from './drops.js'; // per-zone runtime dropped-items layer + respawn list (pure, node-tested)
@@ -4655,6 +4655,7 @@ class Game {
             this._zoneChange();   // (plans/ks1-respawn-list.md) the respawn lists take a step
             this._loadMap(t.toMap, t.toX, t.toY).then(() => {
                 this._log(`[Entered ${this.map.zoneName}]`);
+                tellAwayNews(this, (m) => this._log(m));   // (CK2) one line of news after time away
                 this._checkInteractions?.();   // (IN1) optional-called, like _saveMoment, for stand-in games
                 this._armourShopNotice?.();   // (AA1) optional-called, like _saveMoment, for the stand-in games tests build
                 this.state = STATE.IDLE;
