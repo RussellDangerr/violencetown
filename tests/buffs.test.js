@@ -8,7 +8,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { tickBuffList } from '../game/buffs.js';
+import { tickBuffList, BUFF_DEFS } from '../game/buffs.js';
 import { SLUDGE_DOT } from '../game/data.js';
 
 // A minimal "owner"/game exposing what the migrated defs read.
@@ -58,5 +58,19 @@ describe('buff table + shared tick (PD-4)', () => {
     test('tolerates an empty / missing buff list', () => {
         assert.doesNotThrow(() => tickBuffList([], fakeGame(), fakeGame(), null));
         assert.doesNotThrow(() => tickBuffList(undefined, fakeGame(), fakeGame(), null));
+    });
+});
+
+describe("goo (go1)", () => {
+    test("goo is a buff of its own, named, and does no damage", () => {
+        assert.ok(BUFF_DEFS.goo, "no goo def");
+        assert.ok(BUFF_DEFS.goo.name.length > 0);
+        const g = fakeGame();
+        const buffs = [{ id: "goo", name: BUFF_DEFS.goo.name, turns: 2, type: "debuff" }];
+        tickBuffList(buffs, g, g, null);
+        assert.equal(g.playerHp, 100, "goo does not hurt");
+        assert.equal(buffs.length, 1);
+        tickBuffList(buffs, g, g, null);
+        assert.equal(buffs.length, 0, "goo expires after its turns");
     });
 });
