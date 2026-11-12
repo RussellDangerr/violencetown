@@ -86,6 +86,7 @@ export function serialize(game) {
             // never ranked anything saves byte-for-byte as it did before skills
             // existed (the autoplay fingerprint hashes this object).
             ...skillsEntry(game),
+            ...defaultAttackEntry(game),
             ...interactionNotesEntry(game),
             equipment: {
                 weapon: idOf(game.equipment.weapon),   // the right hand
@@ -153,6 +154,13 @@ export function serialize(game) {
 }
 
 // (skills) The player's skill record as a save field, or nothing while it is empty.
+// (WK3) The starred melee move, left out while there is none so a run that never
+// chose one saves exactly as before.
+function defaultAttackEntry(game) {
+    const d = game.defaultAttack;
+    return d && typeof d.key === 'string' && typeof d.weaponId === 'string' ? { defaultAttack: { weaponId: d.weaponId, key: d.key } } : {};
+}
+
 function skillsEntry(game) {
     const skills = sanitizeSkills(game.skills);
     return Object.keys(skills).length ? { skills } : {};
@@ -396,6 +404,8 @@ function validate(raw) {
     // (skills) Known skills, whole counts, never below zero; a save from before
     // skills existed loads with none.
     p.skills = sanitizeSkills(p.skills);
+    p.defaultAttack = (p.defaultAttack && typeof p.defaultAttack.key === 'string' && typeof p.defaultAttack.weaponId === 'string')
+        ? { weaponId: p.defaultAttack.weaponId, key: p.defaultAttack.key } : null;   // (WK3)
     p.interactionNotes = sanitizeNoteIds(p.interactionNotes);   // (IN1)
     // collectedItems is a Set of string keys on the live game; drop anything
     // non-string so a malformed save can't poison the lookup.
@@ -480,6 +490,7 @@ export async function loadInto(game, raw) {
     game.ringTier          = p.ringTier || 0;
     game.discoveredFusions = new Set(p.discoveredFusions || []);
     game.skills            = { ...p.skills };
+    game.defaultAttack     = p.defaultAttack || null;   // (WK3)
     game.interactionNotes  = [...p.interactionNotes];   // (IN1)
     // knownSpells/grantedTricks are derived, not stored — rebuild from the
     // restored weapon + rings (a slotted Rat Ring grants Rat Form, etc.).

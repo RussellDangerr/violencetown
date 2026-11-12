@@ -99,7 +99,7 @@ import {
     needsFriendlyConfirm, aimRange, affectedTiles, selectedNode, restoreLastCategory, verbApplies,
     greyedReasonLine,
     orderedTargetVerbs, isCombatActive, defaultVerb, previewChildren,
-    aimTap, adjacentFacing, setMeleeKit, tapMoveKey, meleePathTo,
+    aimTap, adjacentFacing, setMeleeKit, tapMoveKey, meleePathTo, meleeRingKeys, resolveDefaultKey, starrableMove,
 } from './wheel-model.js'; // (sunburst wheel) node-tree model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
 import { introAt, isSkipKey } from './tv-intro.js';                                     // (TV1) the TV opening before the title
@@ -524,6 +524,7 @@ class Game {
 
         // Economy
         this.gold = 0;
+        this.defaultAttack = null;       // (WK3) the melee move you starred: { weaponId, key }
         // (Phase 2) Car fuel. The Cataclysmic Converter runs the fixed car too
         // HOT ('raw' → it punches straight through the North bridge into the
         // Canyon). Pouring a bottle of alcohol in the tank slows it ('alcohol' →
@@ -1583,6 +1584,7 @@ class Game {
                 if (w.aiming) { this._reticleKey(e.code); return; }
                 if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { this._wheelCycle(-1); return; }
                 if (e.code === 'ArrowRight' || e.code === 'KeyD') { this._wheelCycle(+1); return; }
+                if (e.code === 'KeyF' && !e.repeat && this._setDefaultAttack()) return;   // (WK3) star the highlighted Melee move
                 if (DOWN) { this._wheelBack(); return; }
                 if (UP)   { this._wheelDrill(); return; }
                 return;
@@ -1915,6 +1917,7 @@ class Game {
             // before the long-press timer fired is the tap, so it hits now.
             const tap = (this._pressTimer && e && e.type === 'pointerup') ? this._pendingTap : null;
             cancelPress();
+            this._endWheelHold(e);   // (WK3)
             this._releaseTurnPress(e);   // (C3b) a quick tap beside you walks the step on release
             if (tap && this.state === STATE.IDLE && !this._animating) tap();
             if (this._openerHeld) { this._openerHeld = false; this._wheelOpenerUp(); }   // (screen-fill) the dock's ✦, released
@@ -2648,8 +2651,22 @@ class Game {
         const a = (Math.atan2(dy, dx) + Math.PI * 2) % (Math.PI * 2); // 0..2π
         if      (a >= Math.PI * 0.25 && a < Math.PI * 0.75) this._wheelBack();     // BOTTOM → back
         else if (a >= Math.PI * 0.75 && a < Math.PI * 1.25) this._wheelCycle(-1);  // LEFT → prev
-        else if (a >= Math.PI * 1.25 && a < Math.PI * 1.75) this._wheelDrill();    // TOP → drill
+        else if (a >= Math.PI * 1.25 && a < Math.PI * 1.75) {                      // TOP → drill
+            // (WK3) On a Melee move a held press stars it as your default; a quick tap drills as ever,
+            // on release. Anywhere else the drill is immediate.
+            if (starrableMove(w)) this._armWheelHold(); else this._wheelDrill();
+        }
         else                                                this._wheelCycle(+1);  // RIGHT → next
+    }
+
+    _armWheelHold() {
+        if (this._wheelHold) clearTimeout(this._wheelHold.timer);
+        this._wheelHold = { timer: setTimeout(() => { this._wheelHold = null; this._setDefaultAttack(); }, 450) };
+    }
+    _endWheelHold(e) {
+        const h = this._wheelHold; if (!h) return;
+        clearTimeout(h.timer); this._wheelHold = null;
+        if (e && e.type === 'pointerup' && this.state === STATE.RADIAL_MENU) this._wheelDrill();
     }
 
     // (C3b, ruling C3R3) A tap on the world while aiming: on the reticle it fires
@@ -3500,6 +3517,29 @@ class Game {
         // A weapon that names no class (none in the world) leaves the starting ring alone.
         const cls = weaponClassOf(this.equipment && this.equipment.weapon);
         setMeleeKit(cls ? cls.kit : null);
+        // (WK3) A starred move belongs to the weapon it was starred on: a different weapon
+        // in hand puts the new weapon's own move back.
+        const d = this.defaultAttack;
+        if (d && d.weaponId !== (this.equipment && this.equipment.weapon && this.equipment.weapon.id)) this.defaultAttack = null;
+    }
+
+    // (WK3) The key of the move a tap uses now: the starred move if it is still yours,
+    // else the weapon's own. Call after _syncMeleeKit so the ring is the weapon's.
+    _defaultMoveKey() {
+        const wpn = this.equipment && this.equipment.weapon;
+        const cls = weaponClassOf(wpn);
+        return resolveDefaultKey({ chosen: this.defaultAttack, weaponId: wpn && wpn.id, ringKeys: meleeRingKeys(), own: tapMoveKey(cls && cls.kit) });
+    }
+
+    // (WK3) Make the highlighted Melee move your default (hold it on the wheel; F on keys).
+    _setDefaultAttack() {
+        const key = starrableMove(this.wheel);
+        const wpn = this.equipment && this.equipment.weapon;
+        if (!key || !wpn) return false;
+        this.defaultAttack = { weaponId: wpn.id, key };
+        audio.playSfx('menu-tick');
+        this._render();
+        return true;
     }
 
     // (WK2) A tap on an enemy uses the move the weapon in hand brings (sword: Cleave,
@@ -3509,7 +3549,7 @@ class Game {
     _tapWithWeaponMove(npc) {
         this._syncMeleeKit?.();
         const cls = weaponClassOf(this.equipment && this.equipment.weapon);
-        const key = tapMoveKey(cls && cls.kit);
+        const key = this._defaultMoveKey?.() ?? tapMoveKey(cls && cls.kit);   // (WK3) your starred move, else the weapon's own
         const path = key !== 'hit' && meleePathTo(key);
         if (!path) return false;
         const w = this.wheel;
@@ -6433,6 +6473,7 @@ class Game {
         this.discoveredFusions = new Set();
         this._peakDisposition = 0;       // it gates the ring tier, so it goes with the rings
         this.skills = {};                // a new run starts every skill from nothing
+        this.defaultAttack = null;       // (WK3)
         this.interactionNotes = [];      // (IN1) and every interaction note is new again
         this._refreshGrantedSkills();   // fresh weapon, no rings → no granted skills
         this._pendingTransition = null;
