@@ -62,9 +62,10 @@ export const QUESTS = {
         stages: [
             {
                 id: 'get_burger',
-                objective: 'Pick up the burger + fries at the diner',
-                location: 'Downtown · The Diner',
-                description: 'The diner cook has a delivery bagged and waiting. The diner is the leftmost door on the Downtown strip.',
+                // (FD3) Your boss hands the bag over before the crossing, so this settles on its own.
+                objective: '[TEXT]',
+                location: '[TEXT]',
+                description: '[TEXT]',
                 targetZone: 'DOWNTOWN',
                 on: { type: 'item_pickup', match: { id: 'burger_fries' } },
                 autoSatisfy: (game) => (game.inventory || []).some(s => s && s.itemDef.id === 'burger_fries'),

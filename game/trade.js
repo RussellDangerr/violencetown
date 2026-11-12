@@ -77,6 +77,15 @@ export function sellPrice(item, disposition) {
     return Math.max(1, Math.floor(item.baseValue * b.sell));
 }
 
+// (FD3) An item that carries `saleLockedUntil: '<quest id>'` cannot be sold or handed to a
+// vendor until that quest is complete. Dropping and using it are not affected.
+export const SALE_LOCK_REFUSAL = '[TEXT]';
+export function saleLocked(def, game) {
+    if (!def || !def.saleLockedUntil) return false;
+    const qe = game && game.questEngine;
+    return !(qe && qe.isComplete(def.saleLockedUntil));
+}
+
 // (MC1) A copy of `def` as one special buyer sees it: sellable, at his fixed GP.
 // The copy is for the offer screen only; the bag still holds the real item.
 export function specialDef(def, price) {

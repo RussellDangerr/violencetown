@@ -136,6 +136,11 @@ export function validateContent(maps, {
             W(`${file}: zoneName '${data.zoneName}' is neither a WORLD_ZONE nor a known interior (world-map "you are here" won't land)`);
     }
 
+    // ── Sale locks (FD3) ─────────────────────────────────────────────────────
+    for (const [id, def] of Object.entries(items))
+        if (def && def.saleLockedUntil && !quests[def.saleLockedUntil])
+            P(`item '${id}' is sale-locked until unknown quest '${def.saleLockedUntil}'`);
+
     // ── Quest references ─────────────────────────────────────────────────────
     for (const [qid, q] of Object.entries(quests)) {
         for (const stage of (q.stages || [])) {

@@ -218,7 +218,7 @@ export const DIALOGUES = {
             // stage; grants the deliverable via _grantItem (emits item_pickup → the
             // quest advances). The trade window is the other idiom.
             { id: 'take_burger', label: 'Take the burger and fries for delivery', once: true,
-              available: (g) => g.questEngine && g.questEngine.currentStageId && g.questEngine.currentStageId() === 'get_burger',
+              available: (g) => g.questEngine && g.questEngine.currentStageId && g.questEngine.currentStageId() === 'get_burger',   // (FD3) fallback only: your boss now hands the bag over
               onPick: (g) => { if (g._grantItem) g._grantItem('burger_fries', '[The cook slides a warm paper bag across the counter. Burger and fries — for delivery.]'); },
               reply: '"Bag\'s hot. Somebody past the bank\'s waitin\' on it. Don\'t eat it, delivery type."' },
             // (IC2) The order includes the ice cone. The machine makes only one and a

@@ -63,7 +63,7 @@ import {
 import {
     emptyOffer, commitBlocker, stage, unstage, settledGold, resolveOffer, sameEntry,
 } from './offer.js';   // (offer screen) the basket model
-import { canTrade, sellPrice, specialDef, transferGold, burnGold } from './trade.js'; // pricing + the transaction spine
+import { canTrade, sellPrice, specialDef, transferGold, burnGold, saleLocked, SALE_LOCK_REFUSAL } from './trade.js'; // pricing + the transaction spine
 import { logCategory } from './combat-log.js';   // (log tagging) one rule for a message's category
 import { takeable } from './fight-panels.js';   // (combat-hud stage 4) the one answer to "what could I take"
 import { buildXmbBar, resolveXmbSelection, cycleXmbCategory, cycleXmbItem, xmbCategoryOf, XMB_LABELS } from './xmb.js';
@@ -1227,6 +1227,17 @@ class Game {
         if (!this.questEngine) return;
         if (this.questEngine.isActive('fix_car') || this.questEngine.isComplete('fix_car')) return;
         this.questEngine.start('fix_car');
+    }
+
+    // (FD3) Your boss catches you before you cross and hands over the delivery: the burger
+    // bag and a can of Mola Cola. Once only (a quest flag); the words are placeholders.
+    _bossHandsOver() {
+        const qe = this.questEngine; if (!qe) return;
+        if (qe.getFlag('bossHandedOver') || qe.isComplete('deliver_burger')) return;
+        qe.state.flags.bossHandedOver = true;
+        this._log('[TEXT]', 'transition');
+        this._grantItem('burger_fries', '[TEXT]');
+        this._grantItem('mola_cola', '[TEXT]');
     }
 
     // (Phase 4) Main Quest 2 — the burger delivery. Started deterministically the
@@ -6460,6 +6471,7 @@ class Game {
     // beat later loads the destination zone.
     _playBridgeCutscene() {
         this._stopAutoRepeat();
+        this._bossHandsOver?.();                      // (FD3) the bag and the can, before you cross
         this._heldDirKeys = [];
         this.state = STATE.RESOLVING;                 // block input through the beat
         if (this.carFuel === 'alcohol') {
@@ -7717,6 +7729,7 @@ class Game {
     // complaint, so there is no arithmetic reason for it either.
     _canStageGive(entry) {
         const def = entry.def, npc = this._offerNpc;
+        if (saleLocked(def, this)) { this._log(SALE_LOCK_REFUSAL); return false; }   // (FD3)
         const isDelivery = this.questEngine && this.questEngine.expectsDelivery(def.id, npc.id);
         if (def.questItem && !isDelivery) { this._log('[Best hold onto that.]'); return false; }
         return true;
