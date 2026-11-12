@@ -303,15 +303,18 @@ describe('losing to the sewer rats leaves your things in a stash (RB1)', () => {
         // its rats are down by the time you go back.
         for (const e of g.enemies) if (e.tag === 'sewer_rat') e.entity.alive = false;
 
-        const beside = { x: chest.x - 1, y: chest.y };
-        assert.ok(g.map.isWalkable(beside.x, beside.y), 'the tile west of the stash is floor');
+        // The stash steps off the Were-Rat's body, and a live enemy may stand on one side of it:
+        // stand on whichever side of the chest has a floor tile you can reach.
+        const beside = [{ x: chest.x - 1, y: chest.y }, { x: chest.x, y: chest.y + 1 }, { x: chest.x, y: chest.y - 1 }, { x: chest.x + 1, y: chest.y }]
+            .find(c => g.map.isWalkable(c.x, c.y) && route4(g, c));
+        assert.ok(beside, 'a floor tile beside the stash is reachable');
         const keys = route4(g, beside);
         assert.ok(keys, 'a 4-way route reaches the stash');
         for (const k of keys) await step(g, k);
         assert.deepEqual([g.playerX, g.playerY], [beside.x, beside.y], 'you walked there');
         assert.ok(g.beats >= keys.length, 'every step was a turn');
 
-        await step(g, 'ArrowRight');                 // bump the chest
+        await step(g, ARROW[`${chest.x - beside.x},${chest.y - beside.y}`]);   // bump the chest
         assert.equal(g.state, STATE.TRADE, 'the chest opens');
         assert.ok(g.logs.includes('[You pry open the chest.]'));
         assert.equal(g._offerTheirsList().length, 7, 'all seven things are in it');
