@@ -137,6 +137,20 @@ export function setMeleeKit(kit) {
 const OFFENSIVE_RESOLVERS = new Set(['combatAttack', 'cleaveAttack', 'spinAttack', 'stunAttack', 'resolveThrow', 'castSpell', 'castTrick']);
 export const isOffensiveLeaf = (node) => OFFENSIVE_RESOLVERS.has(node.resolver);
 
+// The move a tap on an enemy uses (plans/wk2-weapon-move-autopick.md): the first
+// move the weapon's class kit brings, or 'hit' when it brings none. There is no
+// plain hit beside a class move; a weapon with no move of its own still hits.
+export function tapMoveKey(kit) {
+  const own = (kit || []).find(k => MELEE_MOVES.some(m => m.key === k && m.key !== 'hit'));
+  return own || 'hit';
+}
+
+// The wheel path to a Melee move on the ring as it stands now (kit already synced).
+export function meleePathTo(key) {
+  const i = MELEE_NODE().children.findIndex(m => m.key === key);
+  return i < 0 ? null : [0, 0, i];
+}
+
 // ── Geometry (the single source of truth for what an action hits) ────────────
 const cheb = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
 // 8 neighbours, clockwise from N.
