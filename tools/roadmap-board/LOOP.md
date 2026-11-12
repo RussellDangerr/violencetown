@@ -82,6 +82,8 @@ Caelan dislikes the other word for it; never use it.
    instead of them. A report that arrives after the pass ended is written back when it arrives,
    or at the start of the next pass.
 9. **Post the update and pick the wait** (§7).
+10. **The sim** (§13): when dev's tip has no sim run yet and none is running, start one in the
+    background. Write its outcome back when it exits, in whichever pass that is.
 
 **Up to 10 slices per pass**, one builder each. Recon and claim every pick first, then spawn all
 the builders (and every scout and checker that is due) in the same message so they run at once.
@@ -187,6 +189,8 @@ The loop still never resolves a conflict itself.
 
 Never touch `main`, never tag, never release. Those are his.
 
+Every merge moves dev's tip, so the next pass runs the 50-seed sim on it (§13).
+
 ## 5. Tweaking an idea
 
 1. **Recon.** Find what already exists in the code (cite `file:line`), and check whether it
@@ -272,6 +276,7 @@ refactors that leave the autoplay golden untouched, tooling, commit order.
   `reset --hard`, `clean`, `stash`, or `branch -D`.
 - Edit `tiled/`, a golden file, `package.json`, `CLAUDE.md`, `.claude/settings*.json`, or deploy
   config. The guard refuses all of them.
+- Run `autoplay:write`, `balance:write` or `sim:write`, except on an accept ruling's pick (§3, §13).
 - Answer a ruling or approve a slice for him, except as the standing delegation allows (§11).
   Press Merge it for him.
 - Write idea, ruling or card content into a committed file.
@@ -410,3 +415,39 @@ for his eye) or **NOT SHOWN**. It never judges looks or feel.
 - **It runs on Haiku as a trial.** When a report is wrong (a TEST mark its test doesn't support, a
   missed conflict), say so in the update and propose moving it to Sonnet. Its file is committed,
   so that change goes on a branch like any other; he says yes.
+
+## 13. The 50-seed sim
+
+`npm run sim:check` (plans/sim1-autoplay-many-seeds.md) plays the autoplay's three scripts over
+seeds 1–50 and flags any number that moved past its noise against
+`tools/autoplay-sim-baseline.json`. The autoplay check in §2 replays one seed; this is what says
+whether a change moved the game in general. It takes about 11 minutes with 8 Chromes, so it runs
+in the background, never as a merge gate (plans/sim-after-merges.md).
+
+- **When:** dev's tip is not `meta/sim.lastSha`, and no sim is running (`meta/sim.runningSince`
+  is empty, or over an hour old, which means it died). That covers every §4 merge and any merge
+  he makes by hand. One run at a time: merges that land while it runs are covered by the next.
+- **How:** `git worktree add --detach <scratch>/vt-sim origin/dev`, then `npm run -s sim:check`
+  inside it with `run_in_background`, its output saved to the scratchpad. Set `meta/sim` to
+  `{sha, runningSince}`. Builders don't wait for it: three autoplay checks ran beside a full sim
+  on 2026-11-11 with no timeouts on either side.
+- **Its outcome**, when it exits. Remove the worktree, then set `meta/sim` to
+  `{lastSha, lastAt, result}`:
+  - **Exit 0:** one line in the update. `result: "ok"`.
+  - **A number moved** (`MOVED` lines): one ruling card, "The 50-seed autoplay moved after
+    <titles of the merges since `lastSha`>: is that intended?". Its id is the newest of those
+    merged slices' ids plus the next free R number (WK2R2), so an accept commit can cite it.
+    Quote every `MOVED` line in its note. Options: (a) intended, so re-record the baseline;
+    (b) a bug, so the loop opens a defect idea naming the moves and the merges. Recommend (a)
+    only when each move is what a merged slice set out to change. The standing delegation (§11)
+    covers that case, as it covers a golden. While that ruling is open, a later run's moves are
+    appended to its note, not a new card. `result: "moved"`.
+  - **Broken runs only** (console errors, a timeout, no report): run it once more. Still broken:
+    a defect idea naming the seeds and the first error. `result: "broken"`.
+  - **Exit 3** (no Chrome): one line in the update. `result: "no-chrome"`, and leave `lastSha`
+    as it was so the next pass tries again.
+- **Re-recording, on pick (a):** the loop itself, as for an accepted golden. A detached worktree
+  at dev's tip, branch `feature/<ruling id>-sim-baseline`: the spec commit, then
+  `npm run -s sim:write` in a commit saying "accept the sim baseline, citing <ruling id> (a)",
+  then `npm run -s sim:check` must exit 0. Run the guard, push the branch, and add a slice card
+  in Review for his Merge it. The guard treats the baseline as a golden.

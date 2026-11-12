@@ -90,6 +90,11 @@ Status goes in these rows only, never on a card, and a failed status write never
    (`ask: true` only on a failed guard or a conflict) and set `checked: {sha, devSha, at}`. When
    only `checked.devSha` is stale, run `git merge-tree --write-tree origin/dev origin/<branch>`
    yourself and post only if the answer changed.
+   **The sim** (§13): when dev's tip is not `meta/sim.lastSha` and `meta/sim.runningSince` is
+   empty, start `npm run -s sim:check` in the background in a detached worktree at dev's tip,
+   and set `meta/sim` `{sha, runningSince}`. When it exits, write the outcome as §13 says, set
+   `meta/sim` to `{lastSha, lastAt, result}`, and remove the worktree. A sim still running keeps
+   the pass from counting as idle.
 7. **Post the update** (§7): six lines at most, in plain words, no card codes without their
    title.
 8. **Schedule the next pass** with ScheduleWakeup, prompt `/board-loop`:

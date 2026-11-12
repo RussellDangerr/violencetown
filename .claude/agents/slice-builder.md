@@ -55,7 +55,7 @@ FAILURE (FAILED only): <what failed, test names, last command output in ≤5 lin
 - Push anything but your `feature/<slug>`.
 - Tag, force-push, `reset --hard`, `clean`, `stash`.
 - Edit `tiled/`, golden files, `package.json`, `CLAUDE.md` or `.claude/settings*.json`.
-- Run `autoplay:write` or `balance:write`.
+- Run `autoplay:write`, `balance:write` or `sim:write`.
 - Weaken or skip a test to get green.
 - Guess at a judgment call. Report BLOCKED with a ruling.
 - Write to the board. That's the loop's job.
