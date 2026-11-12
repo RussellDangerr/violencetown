@@ -62,7 +62,7 @@ import {
 import {
     emptyOffer, commitBlocker, stage, unstage, settledGold, resolveOffer, sameEntry,
 } from './offer.js';   // (offer screen) the basket model
-import { canTrade, sellPrice, transferGold, burnGold } from './trade.js'; // pricing + the transaction spine
+import { canTrade, sellPrice, specialDef, transferGold, burnGold } from './trade.js'; // pricing + the transaction spine
 import { logCategory } from './combat-log.js';   // (log tagging) one rule for a message's category
 import { takeable } from './fight-panels.js';   // (combat-hud stage 4) the one answer to "what could I take"
 import { buildXmbBar, resolveXmbSelection, cycleXmbCategory, cycleXmbItem, xmbCategoryOf, XMB_LABELS } from './xmb.js';
@@ -3002,7 +3002,8 @@ class Game {
             this._render();
             return;
         }
-        this._log('[TEXT]');
+        const shelved = this.questEngine.state.flags.shelved;
+        this._log(shelved && shelved.catalytic_converter != null ? '[TEXT]' : '[TEXT]');
         this._render();
     }
 
@@ -7350,6 +7351,12 @@ class Game {
         if (this.state !== STATE.IDLE) return;
         if (!npc || !npc.entity || !npc.entity.isAlive()) return;
         this._offerNpc = npc;
+        // (MC1) A special buyer can always pay his own listed price (once): his till
+        // is raised to it at the counter, not authored into the map.
+        if (npc.specialBuys && typeof npc.gold === 'number') {
+            const top = Math.max(0, ...Object.values(npc.specialBuys));
+            if (npc.gold < top) npc.gold = top;
+        }
         // goldPinned: the player has taken the settled gold off its default and
         // that decision must survive later staging. Settling is the default;
         // the imbalance is the decision (spec 4.1).
@@ -7433,6 +7440,14 @@ class Game {
             const def = this._resolveItemDef(id);
             if (def) out.push({ def, count: 1, max: Infinity, source: 'stock', index });
         });
+        if (npc.vendor && npc.specialBuys) {
+            // (MC1) The shelf row: bought back for exactly what he paid.
+            for (const id in npc.specialBuys) {
+                const price = (((this.questEngine && this.questEngine.state.flags.shelved) || {})[id] ?? null);
+                const def = price != null ? this._resolveItemDef(id) : null;
+                if (def) out.push({ def, count: 1, max: 1, price, source: 'buyback', index: -1, boughtBack: true });
+            }
+        }
         if (npc.vendor) {
             this._buybackList(npc).forEach((e, index) => {
                 const def = this._resolveItemDef(e.itemId);
@@ -7455,10 +7470,24 @@ class Game {
             const st = this.inventory[i];
             // The stack IS the ceiling here: you cannot hand over ten rocks from
             // a slot holding seven.
-            if (st && st.itemDef) out.push({ def: st.itemDef, count: st.count, max: st.count, slot: i });
+            if (!st || !st.itemDef) continue;
+            // (MC1) A special buyer takes a listed quest item at his fixed price: the
+            // row carries the sellable copy, one copy per item so a staged row still
+            // matches the next frame's list.
+            const fixed = this._offerNpc && this._offerNpc.specialBuys
+                && this._offerNpc.specialBuys[st.itemDef.id];
+            let def = st.itemDef;
+            if (fixed != null) {
+                const cache = this._specialDefs || (this._specialDefs = new Map());
+                const key = `${def.id}:${fixed}`;
+                if (!cache.has(key)) cache.set(key, specialDef(def, fixed));
+                def = cache.get(key);
+            }
+            out.push({ def, count: st.count, max: st.count, slot: i });
         }
         return out;
     }
+
 
     // How many of `entry` are currently staged on `side`.
     _stagedCount(side, entry) {
@@ -7739,7 +7768,12 @@ class Game {
                 this._removeFromSlot(e.slot);
                 // ONE price per call -- the ledger is per-unit LIFO stacks, which
                 // is what closed the gold-dup exploit found in pre-prod review.
-                if (wasPaid && unit != null) this._buybackRecord(npc, e.def.id, 'rebuy', unit);
+                if (e.def.specialSell != null) {
+                    // (MC1) He keeps it on his shelf; the loan comes back at the same price.
+                    const flags = this.questEngine.state.flags;
+                    flags.shelved = { ...(flags.shelved || {}), [e.def.id]: unit };
+                }
+                else if (wasPaid && unit != null) this._buybackRecord(npc, e.def.id, 'rebuy', unit);
                 // (fence) Off your hands and off the ledger. Only a fence can get
                 // here with a hot item -- commitBlocker refuses everyone else --
                 // so this is the one place heat is cleared, which is what makes
@@ -7768,6 +7802,13 @@ class Game {
                 // _buyFromVendor popped it (`e.rebuy.pop()`); nothing succeeded
                 // that line, so the shelf never emptied and one sold item could
                 // be re-bought without limit for as long as the ledger lived.
+                else if (e.source === 'buyback' && npc.specialBuys && npc.specialBuys[e.def.id] != null
+                    && ((this.questEngine && this.questEngine.state.flags.shelved) || {})[e.def.id] != null) {
+                    const flags = this.questEngine.state.flags;
+                    const rest = { ...flags.shelved };
+                    delete rest[e.def.id];
+                    flags.shelved = rest;
+                }
                 else if (e.source === 'buyback') this._buybackConsume(npc, e.def.id);
             }
         }
