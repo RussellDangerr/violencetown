@@ -1185,6 +1185,11 @@ class Game {
         readAway(this, raw.savedAt);
     }
 
+    // (CK2) The first zone change after an hour or more away tells one piece of news.
+    _tellAwayNews() {
+        tellAwayNews(this, (m) => this._log(m));
+    }
+
     _bindLeaveSave() {
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'hidden') {
@@ -4655,7 +4660,7 @@ class Game {
             this._zoneChange();   // (plans/ks1-respawn-list.md) the respawn lists take a step
             this._loadMap(t.toMap, t.toX, t.toY).then(() => {
                 this._log(`[Entered ${this.map.zoneName}]`);
-                tellAwayNews(this, (m) => this._log(m));   // (CK2) one line of news after time away
+                this._tellAwayNews?.();   // (CK2) optional-called, like _noteAway: one line of news after time away
                 this._checkInteractions?.();   // (IN1) optional-called, like _saveMoment, for stand-in games
                 this._armourShopNotice?.();   // (AA1) optional-called, like _saveMoment, for the stand-in games tests build
                 this.state = STATE.IDLE;
