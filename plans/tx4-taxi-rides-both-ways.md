@@ -14,8 +14,10 @@ cannot walk across silently in either direction.
   one, instead of a second hardcoded tile check. The bridge mouth in the Town, once the route is
   known, plays the same ride.
 - Downtown's exits land at the Town stand (15,4), walkable road beside the driver, not (16,12).
-- A driver and taxi stand fixed at Downtown's landing (driver at 13,8 next to the spawn, taxi block
-  at 14-15,7-8). The Town's driver and taxi are TX2's, unchanged.
+- A taxi stands fixed at Downtown's landing (taxi block at 14-15,7-8). The driver there (planned at
+  13,8, same `taxi_driver` dialogue) is NOT in this branch: a placed enemy adds a row to the
+  balance golden, which a builder may not rewrite, so that one row waits on a ruling. The Town's
+  driver and taxi are TX2's, unchanged.
 - bridgeRoute flags and the between-quests rows are untouched. The mugger record (`_recordMuggers`)
   is called as in the plain transition path; moving it into `_zoneChange` is a later card.
 - All ride lines are `[TEXT]`; the driver reuses the `taxi_driver` dialogue.

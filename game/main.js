@@ -2821,17 +2821,15 @@ class Game {
             // (_openBridgeIfCarFixed), so reaching it here is the deliberate beat,
             // not the instant-on-fix cut that used to happen.
             // (CY1) The cutscene plays once. After the first crossing, by either
-            // route, the bridge is an ordinary walkway: it queues a plain map
-            // change to Downtown's spawn (where the ramp lands you) and the step
-            // finishes like any other door.
-            let bridgeWalk = false;
+            // route, the mouth plays a taxi ride (TX4) that lands you at Downtown's spawn.
             if (ny === 0 && nx >= 14 && nx <= 19 && this.questEngine.getFlag('carFixed')) {
                 if (!this.questEngine.bridgeRoute()) {
                     this._playBridgeCutscene();   // (Phase 2) fuel decides: crash → Canyon, or ramp → Downtown
                     return;
                 }
+                // (TX4) After the first crossing the mouth is a taxi ride, not a walkway.
+                if (this._rideTo) { this._rideTo('downtown-map.json'); return; }
                 this._pendingTransition = { toMap: 'downtown-map.json' };
-                bridgeWalk = true;
             }
 
             // Hazards
@@ -2867,6 +2865,11 @@ class Game {
             // (the bank's vault door wants all three Act 2 items) — data-driven
             // so any door can gate.
             const transition = this.map.getTransition(nx, ny);
+            if (transition && transition.ride && this._rideTo) {   // (stand-in games without _rideTo walk it as a door)
+                // (TX4) A marked exit is a taxi ride: the beat plays, then the map loads.
+                this._rideTo(transition.toMap, transition.toX, transition.toY);
+                return;
+            }
             if (transition) {
                 if (!carriesAll(transition.requires, this.inventory)) {
                     // A list of items also says how many of them are in the bag, the
@@ -2889,7 +2892,7 @@ class Game {
             // Chain the next tile if a direction is still held or was buffered
             // mid-slide. Skipped across a map transition so a held key doesn't
             // auto-walk you straight into the new zone. (movement-feel Finding 1)
-            if (!transition && !bridgeWalk) this._onStepSettled();
+            if (!transition) this._onStepSettled();
         });
     }
 
@@ -6562,6 +6565,30 @@ class Game {
             this._render();
             setTimeout(() => this._crashToCanyon(), 1100);
         }
+    }
+
+    // (TX4) A later crossing, either way: the first crossing's flash and shake, ending in
+    // a clean ramp (the driver tames the engine himself), then the far side. Free (TX4R1 a).
+    // Placeholder lines until Caelan writes them.
+    _rideTo(toMap, toX, toY) {
+        this._stopAutoRepeat();
+        this._heldDirKeys = [];
+        this.state = STATE.RESOLVING;                 // block input through the beat
+        this._log('[TEXT]', 'transition');
+        audio.playSfx('quest-advance');
+        this._flash('rgba(255, 220, 120, 0.35)');
+        this._triggerScreenShake(280, 4);
+        this._render();
+        setTimeout(async () => {
+            this._recordMuggers?.();   // (BS2) a mugger keeps what he took
+            this._zoneChange();
+            await this._loadMap(toMap, toX, toY);
+            this.state = STATE.IDLE;
+            this._log('[TEXT]', 'transition');
+            this.emitGameEvent('map_entered', { map: toMap });
+            this.autosave?.({ force: true });
+            this._render();
+        }, 1100);
     }
 
     // Bridge FAIL (too fast) → wake at the bottom of the Canyon. (Phase 3 fills it
