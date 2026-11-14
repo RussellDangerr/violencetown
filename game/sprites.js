@@ -18,7 +18,7 @@ import { dirOf } from './perception.js';
 export const TINY_INK = [63, 38, 49];   // #3F2631, the Tiny packs' outline
 // Sheets already drawn in the Tiny style (or re-outlined by a tool), which the
 // outline pass leaves alone.
-export const TINY_STYLE_SHEETS = new Set(['tinyDungeon', 'tinyTown', 'tinyExtra', 'outlined', 'interior', 'emotes', 'marks', 'ratVariants', 'wereratTint', 'beastVariants', 'iceCone', 'ant']);
+export const TINY_STYLE_SHEETS = new Set(['tinyDungeon', 'tinyTown', 'tinyExtra', 'outlined', 'interior', 'emotes', 'marks', 'ratVariants', 'wereratTint', 'ratMaskTint', 'beastVariants', 'iceCone', 'ant']);
 
 export class SpriteSheet {
     // `padding` is the gap (in source pixels) between adjacent cells. Kenney's
@@ -193,6 +193,8 @@ export const SHEETS = {
 
     // The returning boss's stand-in look (plans/ro1-returning-boss-spot.md): the Tiny Dungeon
     // sheet again, washed with `tint` when it loads (loadAllSprites). Obviously fake on purpose.
+    // The Rat Mask's bag icon: the same sheet washed in a fake tint, a placeholder until it has art.
+    ratMaskTint:  { src: TINY_DUNGEON, frameW: 16, frameH: 16, tint: 'rgba(80, 220, 80, 0.5)' },
     wereratTint:  { src: TINY_DUNGEON, frameW: 16, frameH: 16, tint: 'rgba(200, 40, 220, 0.55)' },
 
     // The Tiny Dungeon (Kenney, CC0) grey beast, (4,10), recoloured by the same tool: only its
@@ -386,6 +388,7 @@ export const ITEM_SPRITES = {
     lion_whip:         { sheet: 'tinyExtra',   x: 5 * 16,  y: 0,       w: 16, h: 16 },  // the wavy shaft in leather (WA1; it drew as a staff)
     fearmur:           { sheet: 'tinyExtra',   x: 7 * 16,  y: 0,       w: 16, h: 16 },  // the staff in bone (WA1; it drew as a hammer)
     gator_tail:        { sheet: 'tinyExtra',   x: 6 * 16,  y: 0,       w: 16, h: 16 },  // the tapered blade in gator green (WA1; it drew as a spear)
+    rat_mask:          { sheet: 'ratMaskTint', x: 3 * 16, y: 10 * 16, w: 16, h: 16 },  // the rat cell, tinted: placeholder
     foil_hat:          { sheet: 'tinyDungeon', x: 4 * 16,  y: 5 * 16,  w: 16, h: 16 },  // silver dome
     cardboard_cuirass: { sheet: 'tinyDungeon', x: 6 * 16,  y: 5 * 16,  w: 16, h: 16 },  // brown board
     grappling_hook:    { sheet: 'tinyTown',    x: 9 * 16,  y: 10 * 16, w: 16, h: 16 },  // hooked blade

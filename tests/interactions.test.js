@@ -31,8 +31,12 @@ function standIn(mapUrl, carry) {
 }
 
 describe('the table', () => {
-    test('ships with no row a player can meet', () => {
-        assert.equal(INTERACTIONS.length, 0);
+    test('ships with only the Mola Cola row (FD1)', () => {
+        assert.deepEqual(INTERACTIONS.map(r => r.id), ['mola_cola_frozen']);
+    });
+    test('the Mola Cola row carries a placeholder note and the frozen zone', () => {
+        assert.equal(INTERACTIONS[0].note, '[TEXT]');
+        assert.equal(INTERACTIONS[0].zone, 'frozen-map.json');
     });
     test('the notes tab exists with a placeholder label', () => {
         assert.ok(DEVICE_TABS.includes('notes'));

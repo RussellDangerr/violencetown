@@ -43,7 +43,7 @@ import { pickSlots, defaultPicks, resolveSpawn, requiredDropFor, dropLineFor, FI
 import { rememberSpent, applySpent } from './npc-memory.js';
 import { snapshotOf, keepSnapshot, readSnapshots, reportLines } from './bones.js';
 import { hasSave, readSaveRaw, writeSave, loadInto, clearSave } from './save.js';
-import { readAway, tellAwayNews } from './away.js';   // (CK1) hours since the save's savedAt
+import { readAway, tellAwayNews, restedOnReturn } from './away.js';   // (CK1) hours since the save's savedAt
 import { QuestEngine } from './quests.js';
 import { doExamine, resolveExamine } from './examine.js';
 import { recordDrop, pendingDrops, takeDrop, dropLoadout, recordKill, stepRespawns, deadIds, bossDropOnce, claimSpots, spotHolds, spotSpawns } from './drops.js'; // per-zone runtime dropped-items layer + respawn list (pure, node-tested)
@@ -90,7 +90,7 @@ function writeSeenHints(set) {
 import { emitNoise, NOISE, perceives, spotters, struck, VERDICT } from './perception.js'; // sound + sight
 import { coinTake, kitTake, gearTake, coinWeight, itemWeight, gearWeight,
          noticeBuffer, isClean, stealLimit } from './theft.js';
-import { INTERACTIONS, fireRows } from './interactions.js'; // (IN1) carry-this-here rules
+import { INTERACTIONS, fireRows, molaPackLeaves } from './interactions.js'; // (IN1) carry-this-here rules
 import { overworldZone } from './world-map.js'; // (mp2) which overworld zone a map belongs to
 import { recordUse, skillPerks, mergePassives } from './skills.js'; // (skills) use-ranks: clean lifts rank up light fingers
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
@@ -709,6 +709,7 @@ class Game {
     async _loadMap(url, spawnX, spawnY) {
         this.map = await loadMap(url);
         this._mapUrl = url;
+        this._molaPackCalled = false;   // (FD1) a pack may come once for each entry
         this._noteZoneVisited?.();
         this._jammedDoor = null;   // per-zone: any wedged door is left behind when you leave
         // Splats, words and barks belong to the map they were spawned on: a new
@@ -1190,6 +1191,11 @@ class Game {
         readAway(this, raw.savedAt);
     }
 
+    // (WP1) Back beside a bench after an hour or more: one rested buff and one log line.
+    _applyRested() {
+        restedOnReturn(this, (m) => this._log(m));
+    }
+
     // (CK2) The first zone change after an hour or more away tells one piece of news.
     _tellAwayNews() {
         tellAwayNews(this, (m) => this._log(m));
@@ -1204,7 +1210,7 @@ class Game {
                 // (CK1) Back in the tab: read the stamp the leaving save wrote, once.
                 this._wentAway = false;
                 const raw = readSaveRaw();
-                if (raw) this._noteAway?.(raw);
+                if (raw) { this._noteAway?.(raw); this._applyRested?.(); }
             }
         });
         window.addEventListener('pagehide', () => this._saveOnLeave());
@@ -1389,6 +1395,7 @@ class Game {
                 return;
             }
             this._log('[Save loaded]', 'transition');
+            this._applyRested?.();   // (WP1) after the load, so the restored buffs do not overwrite it
             this._maybeShowFirstRunHint();
         };
 
@@ -2821,17 +2828,15 @@ class Game {
             // (_openBridgeIfCarFixed), so reaching it here is the deliberate beat,
             // not the instant-on-fix cut that used to happen.
             // (CY1) The cutscene plays once. After the first crossing, by either
-            // route, the bridge is an ordinary walkway: it queues a plain map
-            // change to Downtown's spawn (where the ramp lands you) and the step
-            // finishes like any other door.
-            let bridgeWalk = false;
+            // route, the mouth plays a taxi ride (TX4) that lands you at Downtown's spawn.
             if (ny === 0 && nx >= 14 && nx <= 19 && this.questEngine.getFlag('carFixed')) {
                 if (!this.questEngine.bridgeRoute()) {
                     this._playBridgeCutscene();   // (Phase 2) fuel decides: crash → Canyon, or ramp → Downtown
                     return;
                 }
+                // (TX4) After the first crossing the mouth is a taxi ride, not a walkway.
+                if (this._rideTo) { this._rideTo('downtown-map.json'); return; }
                 this._pendingTransition = { toMap: 'downtown-map.json' };
-                bridgeWalk = true;
             }
 
             // Hazards
@@ -2867,6 +2872,11 @@ class Game {
             // (the bank's vault door wants all three Act 2 items) — data-driven
             // so any door can gate.
             const transition = this.map.getTransition(nx, ny);
+            if (transition && transition.ride && this._rideTo) {   // (stand-in games without _rideTo walk it as a door)
+                // (TX4) A marked exit is a taxi ride: the beat plays, then the map loads.
+                this._rideTo(transition.toMap, transition.toX, transition.toY);
+                return;
+            }
             if (transition) {
                 if (!carriesAll(transition.requires, this.inventory)) {
                     // A list of items also says how many of them are in the bag, the
@@ -2889,7 +2899,7 @@ class Game {
             // Chain the next tile if a direction is still held or was buffered
             // mid-slide. Skipped across a map transition so a held key doesn't
             // auto-walk you straight into the new zone. (movement-feel Finding 1)
-            if (!transition && !bridgeWalk) this._onStepSettled();
+            if (!transition) this._onStepSettled();
         });
     }
 
@@ -4567,7 +4577,9 @@ class Game {
     // grate. A non-rat step onto a grate still bumps.
     _canEnter(x, y) {
         if (this.map.isWalkable(x, y)) return true;
-        return this._ratFormTurns > 0 && this.map.getTile(x, y) === 4;
+        // (MS1) A worn mask that grants the 'grates' verb opens them for as long as it is on.
+        const maskGrates = Object.values(this.equipment || {}).some(d => d && d.body && (d.body.verbs || []).includes('grates'));
+        return (this._ratFormTurns > 0 || maskGrates) && this.map.getTile(x, y) === 4;
     }
 
     // Speed Poition chokepoint. In a turn-based game where one input = one
@@ -4582,6 +4594,7 @@ class Game {
     // (IN1) Fire the interaction rows for what you carry in the zone you are in. A row's note
     // is logged the first time it fires (its own log colour) and remembered for the save.
     _checkInteractions(rows = INTERACTIONS) {
+        molaPackLeaves(this);   // (FD1) no cola left on you: the pack takes what is on the ground and goes
         if (!rows.length) return;
         const carried = new Set();
         for (const s of this.inventory || []) if (s && s.itemDef) carried.add(s.itemDef.id);
@@ -6564,6 +6577,30 @@ class Game {
         }
     }
 
+    // (TX4) A later crossing, either way: the first crossing's flash and shake, ending in
+    // a clean ramp (the driver tames the engine himself), then the far side. Free (TX4R1 a).
+    // Placeholder lines until Caelan writes them.
+    _rideTo(toMap, toX, toY) {
+        this._stopAutoRepeat();
+        this._heldDirKeys = [];
+        this.state = STATE.RESOLVING;                 // block input through the beat
+        this._log('[TEXT]', 'transition');
+        audio.playSfx('quest-advance');
+        this._flash('rgba(255, 220, 120, 0.35)');
+        this._triggerScreenShake(280, 4);
+        this._render();
+        setTimeout(async () => {
+            this._recordMuggers?.();   // (BS2) a mugger keeps what he took
+            this._zoneChange();
+            await this._loadMap(toMap, toX, toY);
+            this.state = STATE.IDLE;
+            this._log('[TEXT]', 'transition');
+            this.emitGameEvent('map_entered', { map: toMap });
+            this.autosave?.({ force: true });
+            this._render();
+        }, 1100);
+    }
+
     // Bridge FAIL (too fast) → wake at the bottom of the Canyon. (Phase 3 fills it
     // with Pike + the grappling hook + the fight out; for now it's a scaffold room
     // with a placeholder scramble-out exit.)
@@ -7195,6 +7232,7 @@ class Game {
                     const stack = this.inventory[idx];
                     this.inventory[idx] = null;
                     this._dropToGround?.(stack);
+                    this._checkInteractions?.();   // (FD1) dropping the last cola sends the pack away
                     break;
                 }
             }
