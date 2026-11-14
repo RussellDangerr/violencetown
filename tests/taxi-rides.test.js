@@ -159,6 +159,15 @@ describe("the map: Downtown's south exits are rides", () => {
         }
     });
 
+    test('the Downtown driver stands beside the landing and talks with taxi_driver', () => {
+        const driver = rawJson('downtown-map.json').enemies.find(e => e.id === 'dt-driver');
+        assert.ok(driver, 'a driver is placed');
+        assert.equal(driver.dialogueId, 'taxi_driver');
+        assert.deepEqual(driver.behavior, ['IDLE'], 'he stands still');
+        assert.equal(Math.abs(driver.x - downtown.spawn.x) + Math.abs(driver.y - downtown.spawn.y), 1, 'next to the landing');
+        assert.ok(downtown.isWalkable(driver.x, driver.y));
+    });
+
     test('Downtown has a taxi standing by the landing', () => {
         const cars = [];
         for (let y = 0; y < downtown.height; y++) for (let x = 0; x < downtown.width; x++) if (downtown.getTile(x, y) === 19) cars.push([x, y]);
