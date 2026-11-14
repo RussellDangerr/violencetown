@@ -23,7 +23,7 @@ import { coinTake, kitTake, gearTake, coinWeight, itemWeight, gearWeight,
          noticeBuffer, isClean, stealLimit } from '../game/theft.js';
 import { transferGold } from '../game/trade.js';
 import { takeable } from '../game/fight-panels.js';
-import { SKILLS, recordUse, skillPerks, mergePassives } from '../game/skills.js';
+import { SKILLS, recordUse, skillPerks, mergePassives, rankPerk, perkText } from '../game/skills.js';
 import { Enemy } from '../game/enemies.js';
 
 const mainSrc = readFileSync(new URL('../game/main.js', import.meta.url), 'utf8');
@@ -80,7 +80,7 @@ const m = {
     canThieve:     liveMethod('canThieve(branch) {', { cheb, takeable }),
     isHidden:      liveMethod('isHidden() {', { spotters }),
     _theftPassives: liveMethod('_theftPassives() {', { mergePassives, skillPerks }),
-    _countCleanLift: liveMethod('_countCleanLift() {', { recordUse }),
+    _countCleanLift: liveMethod('_countCleanLift() {', { recordUse, rankPerk, perkText }),
 };
 const radialKeys = liveRadialKeys({ STATE });
 
@@ -250,6 +250,6 @@ describe('light fingers counts lifts from townsfolk', () => {
             g.press('Space');
         }
         assert.equal(g.skills[LF], first);
-        assert.ok(g.logs.includes('[TEXT]'), 'reaching the rank should write its log line');
+        assert.ok(g.logs.some(l => l.startsWith('[TEXT]')), 'reaching the rank should write its log line');
     });
 });

@@ -12,7 +12,7 @@ import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { SKILLS, rankOf, recordUse, skillPerks, mergePassives, sanitizeSkills } from '../game/skills.js';
+import { SKILLS, rankOf, recordUse, skillPerks, mergePassives, sanitizeSkills, nextThreshold, rankPerk, perkText } from '../game/skills.js';
 import { coinTake, kitTake, gearTake, coinWeight, itemWeight, gearWeight,
          noticeBuffer, isClean, stealLimit, STEAL_BASE, NOTICE_BASE } from '../game/theft.js';
 import { VERDICT } from '../game/perception.js';
@@ -60,7 +60,7 @@ function liftThieve(freeVars) {
 }
 
 const skillMethods = {
-    recordUse, skillPerks, mergePassives,
+    recordUse, skillPerks, mergePassives, rankPerk, perkText,
 };
 const theftPassives = liveMethod('_theftPassives() {', skillMethods);
 const countCleanLift = liveMethod('_countCleanLift() {', skillMethods);
@@ -220,11 +220,12 @@ describe('reaching a rank grants its perk', () => {
     test('the rank-up writes one log line, on the lift that reaches it', () => {
         const g = thiefGame();
         for (let i = 0; i < at(1) - 1; i++) g.lift(mark());
-        assert.ok(!g.logs.includes('[TEXT]'));
+        const rankLines = () => g.logs.filter(l => l.startsWith('[TEXT]'));
+        assert.equal(rankLines().length, 0);
         g.lift(mark());
-        assert.equal(g.logs.filter(l => l === '[TEXT]').length, 1);
+        assert.deepEqual(rankLines(), [`[TEXT] ${perkText(ranks[0].perk)}`], 'the line carries that rank perk values');
         g.lift(mark());
-        assert.equal(g.logs.filter(l => l === '[TEXT]').length, 1, 'no line between ranks');
+        assert.equal(rankLines().length, 1, 'no line between ranks');
     });
 
     test('a rank lets you lift more from one pocket', () => {
@@ -381,5 +382,27 @@ describe('a new game starts every skill from nothing', () => {
         g.skills = { [LF]: at(2) };
         await fullReset.call(g, { seed: 1 });
         assert.deepEqual(g.skills, {});
+    });
+});
+
+describe('the progress helpers', () => {
+    test('nextThreshold is the next rank count, and null at the top', () => {
+        assert.equal(nextThreshold({}, LF), at(1));
+        assert.equal(nextThreshold({ [LF]: at(1) }, LF), at(2));
+        assert.equal(nextThreshold({ [LF]: at(ranks.length) }, LF), null);
+        assert.equal(nextThreshold({}, 'nope'), null);
+    });
+
+    test('rankPerk is one rank own perk; perkText prints it raw', () => {
+        assert.deepEqual(rankPerk(LF, 1), ranks[0].perk);
+        assert.deepEqual(rankPerk(LF, 99), {});
+        assert.equal(perkText({ stealLimit: 25, noticeBuffer: 1 }), 'stealLimit=25 noticeBuffer=1');
+        assert.equal(perkText({}), '');
+    });
+
+    test('a rank-up line names the perk, and the next lift take reflects it', () => {
+        const g = thiefGame();
+        for (let i = 0; i < at(1); i++) g.lift(mark());
+        assert.deepEqual(g._theftPassives(), ranks[0].perk);
     });
 });

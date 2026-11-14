@@ -13,7 +13,7 @@
 // keeps this module dependency-light while letting the hands geometry derive from
 // the one source of truth for the unlock ladder + adjacency.
 import { unlockedSlots, adjacentPairs, HANDS } from './rings.js';
-import { SKILLS, rankOf } from './skills.js';   // (US2) pure too: which skills show in the RINGS tab, and their rank
+import { SKILLS, rankOf, nextThreshold } from './skills.js';   // (US2) pure too: which skills show in the RINGS tab, and their rank
 import { TILE_PX } from './data.js';
 import { DEFAULT_VIEW } from './viewport.js';   // (screen-fill) the default viewport for the HUD helpers
 
@@ -767,6 +767,7 @@ const SKILL_BAND_TOP = 16;     // below the "THE HANDS" title (drawn at body.y -
 const SKILL_BAND_H = 64;       // three rows; the tallest socket starts ~body.y + 100
 const SKILL_ROW_W = 240;
 const SKILL_PIP = 10, SKILL_PIP_GAP = 4;
+export const SKILL_COUNT_W = 56;   // room for "n/next" in digits, between the label and the pips
 
 export function deviceSkillsBand(bodyRect) {
     return { x: bodyRect.x + (bodyRect.w - SKILL_ROW_W) / 2, y: bodyRect.y + SKILL_BAND_TOP, w: SKILL_ROW_W, h: SKILL_BAND_H };
@@ -787,7 +788,10 @@ export function deviceSkillsLayout(bodyRect, skills) {
         const pips = Array.from({ length: of }, (_, i) => ({
             x: px + i * (SKILL_PIP + SKILL_PIP_GAP), y: py, w: SKILL_PIP, h: SKILL_PIP, lit: i < rank,
         }));
-        rows.push({ id, rank, of, x: band.x, y, w: band.w, h: SKILL_ROW_H, labelW: px - band.x - 8, pips });
+        const n = skills[id], next = nextThreshold(skills, id);
+        const countText = next == null ? `${n}` : `${n}/${next}`;
+        const countR = px - 8;               // the count's right edge
+        rows.push({ id, rank, of, x: band.x, y, w: band.w, h: SKILL_ROW_H, labelW: countR - SKILL_COUNT_W - 4 - band.x, countText, countR, pips });
     }
     return { band, rows };
 }

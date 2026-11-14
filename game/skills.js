@@ -33,6 +33,24 @@ export function rankOf(skills, id) {
     return rank;
 }
 
+// The count the next rank needs, or null at the top rank (or for an unknown id).
+export function nextThreshold(skills, id) {
+    const def = SKILLS[id];
+    if (!def) return null;
+    const r = def.ranks[rankOf(skills, id)];
+    return r ? r.at : null;
+}
+
+// The perk rank k (1-based) added on its own, or {} for a rank that does not exist.
+export function rankPerk(id, k) {
+    return SKILLS[id]?.ranks[k - 1]?.perk ?? {};
+}
+
+// A perk printed raw, for placeholder lines: "stealLimit=25 noticeBuffer=1".
+export function perkText(perk) {
+    return Object.entries(perk || {}).map(([k, v]) => `${k}=${v}`).join(' ');
+}
+
 // Count one clean use. Returns a NEW record and the rank reached by this use, or
 // 0 if it reached none. An unknown id changes nothing.
 export function recordUse(skills, id) {
