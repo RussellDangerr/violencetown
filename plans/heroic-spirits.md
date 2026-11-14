@@ -19,10 +19,12 @@ doorway, or that never takes the side route, shows up on screen long before it m
 | Provenance | Seed, script, game version, a hash of each zone map it walked, the sim baseline it came from |
 | Track | One row per turn: map, x, y, facing, action kind, HP, target id. **State, not key presses**: a track is drawn, never re-simulated, so it cannot desync and cannot touch the dice |
 | Outcome | Cleared or fell; the turn; the quest stage; what killed it |
-| Anchors | Three to five remembered facts ("Paul Bunyan fell to the Sewer's boss on turn 41, attempt 37"), the same shape the rival record uses (`game/rivals.js`), so a rival and a spirit say the same kind of thing |
+| Anchors | Three to five remembered facts ("Paul Bunyan fell to the Sewer's boss on turn 41, attempt 37"), kept as data (`kind`, `turn`, `map`, `who`) so the words are written where a spirit is shown. A rival (`game/rivals.js`) could later say the same kind of thing in the same shape |
 | Knowledge | 0-3 per enemy, zone and quest, counted from the track's kills and clears |
 
-A track row is a few bytes; a whole quest run is one or two kilobytes.
+Measured on seed 1: Paul Bunyan's quest run is 118 rows, about 15 KB of plain JSON; Amelia
+Earhart's loops run is 73 rows, about 7 KB. Packed rows would be a tenth of that if a set ever
+needs to ship small.
 
 ## Rules
 
@@ -61,8 +63,9 @@ Live heroes — spirits that act in the world — are not this branch.
 - `npm test` passes, with new tests for the row and record builders. The recorder's test hands it a
   game whose `rng` throws if drawn from.
 - `npm run autoplay:check` passes with no drift.
-- The report of a quest run carries a spirit record whose track has one row per turn the run took,
-  and whose outcome matches the report's `finished` and `deaths`.
+- The report of a quest run carries a spirit record whose track has one row per action the hero
+  took, a row for each fall and each foe felled, and whose outcome matches the report's `finished`
+  and `deaths`.
 - The naming grep returns zero lines.
 
 ## Overlaps with unmerged branches (11-13)
