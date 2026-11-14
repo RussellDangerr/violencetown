@@ -41,6 +41,7 @@ function loadMap(file) {
 // short and justified — each entry is a spawn site that a map sweep cannot see.
 const DYNAMIC_SPAWNS = [
     { type: 'Lire', why: 'tricks.js "Hire Lire" summon, via main.js _spawnSummon' },
+    { type: 'Bear', why: 'interactions.js callWildernessBear (Mola Cola into the Wilderness), via spawnEnemy' },
     { type: 'Ant', why: 'ants.js ANT_TYPE, via main.js _spawnAnt (the sweet-food swarm)' },
 ];
 

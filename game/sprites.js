@@ -18,7 +18,7 @@ import { dirOf } from './perception.js';
 export const TINY_INK = [63, 38, 49];   // #3F2631, the Tiny packs' outline
 // Sheets already drawn in the Tiny style (or re-outlined by a tool), which the
 // outline pass leaves alone.
-export const TINY_STYLE_SHEETS = new Set(['tinyDungeon', 'tinyTown', 'tinyExtra', 'outlined', 'interior', 'emotes', 'marks', 'ratVariants', 'wereratTint', 'ratMaskTint', 'beastVariants', 'iceCone', 'ant']);
+export const TINY_STYLE_SHEETS = new Set(['tinyDungeon', 'tinyTown', 'tinyExtra', 'outlined', 'interior', 'emotes', 'marks', 'ratVariants', 'wereratTint', 'ratMaskTint', 'beastVariants', 'bearVariants', 'iceCone', 'ant']);
 
 export class SpriteSheet {
     // `padding` is the gap (in source pixels) between adjacent cells. Kenney's
@@ -200,6 +200,7 @@ export const SHEETS = {
     // The Tiny Dungeon (Kenney, CC0) grey beast, (4,10), recoloured by the same tool: only its
     // two greys swapped, the outline and orange tail kept. Column order is the
     // tool's BEAST_VARIANTS list. Packed, padding 0. Lire draws from it.
+    bearVariants: { src: `${K}/bearVariants_packed.png`, frameW: 16, frameH: 16 },   // (FD2) the Wilderness bear, brown
     beastVariants: { src: `${K}/beastVariants_packed.png`, frameW: 16, frameH: 16 },
 
     // The Tiger's Blood Ice Cone: Tiny Ski's snowy pine (Kenney, CC0) mirrored
@@ -587,6 +588,8 @@ export const ENEMY_SPRITES = {
     'Snowman':    { sheet: 'tinyDungeon', col: 1, row: 10, static: true }, // white ghost, shared with Rattling Skeleton
     'Yeti':       { sheet: 'tinyDungeon', col: 1, row: 9,  static: true }, // the ogre, shared with Fungus King
     'Polar Bear': { sheet: 'tinyDungeon', col: 4, row: 10, static: true }, // grey beast, Lire's uncoloured source
+    // (FD2) The Wilderness bear: the polar bear recoloured brown (FDR4), tools/gen_recolor.py.
+    'Bear':       { sheet: 'bearVariants', col: 0, row: 0, static: true },
     // Siberia, the frozen area's boss (plans/ic5-siberia-frozen-boss.md): the
     // placeholder boss's knight helm until she is drawn.
     'Siberia':    { sheet: 'tinyDungeon', col: 0, row: 8,  static: true },

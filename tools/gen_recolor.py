@@ -84,6 +84,13 @@ BEAST_VARIANTS = [
     ('crimson', (140, 52, 60), (196, 92, 88)),
 ]
 
+# (FD2) The Wilderness bear: the grey beast again (the Polar Bear's own cell), recoloured brown.
+# Its own sheet, so the Lire sheet's columns stay as they are.
+BEAR_OUT = K / 'bearVariants_packed.png'
+BEAR_VARIANTS = [
+    ('brown', (120, 80, 50), (170, 125, 85)),
+]
+
 
 def base_cell(at, colours):
     """The 16x16 cell at (col, row) of the Tiny Dungeon sheet, refused unless
@@ -138,10 +145,17 @@ def build_beast():
                       for _name, shade, light in BEAST_VARIANTS])
 
 
+def build_bear():
+    base = base_cell(BEAST_CELL, (OUTLINE, BEAST_SHADE, BEAST_LIGHT, BEAST_TAIL))
+    return strip_png([recolour(base, {BEAST_SHADE: shade, BEAST_LIGHT: light}, (OUTLINE, BEAST_TAIL))
+                      for _name, shade, light in BEAR_VARIANTS])
+
+
 def main():
     check = '--check' in sys.argv[1:]
     stale = False
-    for out, (strip, data), variants in ((OUT, build(), VARIANTS), (BEAST_OUT, build_beast(), BEAST_VARIANTS)):
+    for out, (strip, data), variants in ((OUT, build(), VARIANTS), (BEAST_OUT, build_beast(), BEAST_VARIANTS),
+                               (BEAR_OUT, build_bear(), BEAR_VARIANTS)):
         rel = out.relative_to(ROOT).as_posix()
         if check:
             if not out.exists() or out.read_bytes() != data:
