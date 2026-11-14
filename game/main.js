@@ -2845,6 +2845,15 @@ class Game {
                 }
             }
 
+            if (tileDef.hazard === 'goo') {
+                if (this._hasSludgeImmunity()) {
+                    this._log('[The goo slides right off your bagged feet.]');
+                } else if (!this.hasBuff('goo')) {
+                    this.addBuff('goo', '[TEXT] Goo', SLUDGE_DURATION, 'debuff');
+                    this._log('[TEXT: stepped in goo — 3 turns]');
+                }
+            }
+
             // Snow / ice (the FIRE_QUENCHING_TILES list) put Burning out.
             if (this.hasBuff('fire') && FIRE_QUENCHING_TILES.includes(this.map.getTile(nx, ny))) {
                 this.removeBuff('fire');
@@ -4586,6 +4595,9 @@ class Game {
 
     _advanceWorld() {
         const plan = worldBeatPlan(this._hasteCharges, this._slowCharges);
+        // Goo slows like a Slow charge, but lives on its buff: one extra beat per move.
+        const gooSlow = plan.runs === 1 && this.hasBuff('goo');
+        if (gooSlow) plan.runs = 2;
         this._hasteCharges = plan.hasteCharges;
         this._slowCharges = plan.slowCharges;
         if (plan.runs === 0) {
@@ -4603,6 +4615,9 @@ class Game {
         // loads is exactly the kind of race the CLAUDE.md merge-hygiene notes
         // warn about, just at runtime instead of at merge time).
         if (plan.runs === 2 && this.playerHp > 0 && this.state !== STATE.DEAD && this.state !== STATE.RESOLVING) {
+            // the extra beat is free: it must not spend Goo's turns
+            const goo = gooSlow ? this.buffs.find(b => b.id === 'goo') : null;
+            if (goo) goo.turns++;
             this._advanceWorldOnce();
         }
     }
@@ -4676,6 +4691,10 @@ class Game {
         if (this._soapUsedThisTurn && this.hasBuff('sludge')) {
             this.removeBuff('sludge');
             this._log('[Soap neutralized sludge]');
+        }
+        if (this._soapUsedThisTurn && this.hasBuff('goo')) {
+            this.removeBuff('goo');
+            this._log('[TEXT: Soap washed the goo off]');
         }
         this._soapUsedThisTurn = false;
 

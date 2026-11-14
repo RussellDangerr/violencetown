@@ -48,7 +48,7 @@ export const TILES = {
     // Factory tiles (40-49) — Oddworld-coded industrial, alien-occupied
     FACTORY_FLOOR: { id: 40, walkable: true,  hazard: null, fallbackColor: '#3a3a3e' },
     FACTORY_WALL:  { id: 41, walkable: false, hazard: null, fallbackColor: '#5a5a5e' },
-    GOO_VISUAL:    { id: 42, walkable: true,  hazard: 'sludge', fallbackColor: '#6abe30' },
+    GOO_VISUAL:    { id: 42, walkable: true,  hazard: 'goo', fallbackColor: '#6abe30' },
     CONVEYOR_VIS:  { id: 43, walkable: true,  hazard: null, fallbackColor: '#4a4a3e' },
 
     // Graveyard tiles (50-59) — surfer-deity cemetery. Graves are props, not
