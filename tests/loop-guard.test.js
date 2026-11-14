@@ -204,6 +204,14 @@ describe('golden files: refused unless a commit cites an accept ruling', () => {
         assert.match(p[0], /aaaaaaa does not cite an accept ruling/);
         assert.equal(slice('tools/balance-golden.txt', [{ sha: 'a', message: 'feat: tweak the rats', files: ['tools/balance-golden.txt'] }]).ok, false);
     });
+    test('the 50-seed sim baseline is a golden too (plans/sim-after-merges.md)', () => {
+        const path = 'tools/autoplay-sim-baseline.json';
+        assert.equal(isGolden(path), true);
+        assert.equal(isGolden('tools\\autoplay-sim-baseline.json'), true);
+        assert.equal(isGolden('tools/other-baseline.json'), false);
+        assert.equal(slice(path, [{ sha: 'b', message: 'chore(sim): re-record the baseline', files: [path] }]).ok, false);
+        assert.equal(slice(path, [{ sha: 'b', message: 'chore(sim): accept the sim baseline, citing WK2R2 (a)', files: [path] }]).ok, true);
+    });
     test('a ruled golden change passes, outside touches too', () => {
         for (const path of ['tools/balance-golden.txt', 'tools/autoplay-golden.json']) {
             const r = slice(path, [{ sha: 'b', message: 'spec', files: ['plans/s.md'] }, { sha: 'c', message: ruled, files: [path] }]);

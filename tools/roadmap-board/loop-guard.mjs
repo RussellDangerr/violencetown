@@ -19,7 +19,9 @@ const norm = p => String(p ?? '').trim().replace(/\\/g, '/').replace(/^\.\//, ''
 // that only mentions it, such as plans/fx19-guard-golden-files.md or an
 // item's golden-crown.png, is not one.
 const GOLDEN = /(?:^|[/_.-])golden(?:\.[^/.]+)?$/i;
-export const isGolden = path => GOLDEN.test(norm(path));
+// Baselines that are goldens in all but name: the 50-seed sim's (plans/sim-after-merges.md).
+const GOLDEN_FILES = new Set(['tools/autoplay-sim-baseline.json']);
+export const isGolden = path => GOLDEN.test(norm(path)) || GOLDEN_FILES.has(norm(path));
 
 // Paths a slice never edits, whatever its card says. A golden file is refused
 // the same way unless a ruling accepted the change (checkGolden below).
