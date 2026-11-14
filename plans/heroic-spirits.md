@@ -152,6 +152,12 @@ boss**: the place the player is about to walk into.
   Sewer, the frame shows the ghost (pixels sampled where it stands differ from the switch-off frame).
 - The naming grep returns zero lines.
 
+**Built 11-14** (0306eda). Headless Chrome, switch on, player at Sewer 8,11: Paul Bunyan's
+attempt 15 replays three tiles east, labelled, no console errors; switch off, `_spiritShow` stays
+null. npm test 5185/0, autoplay:check no drift and spirits match. Four planted mutations (ignore
+whether the boss stands, drop failures-first, show with the switch off, drop the range) each fail
+a test.
+
 ## Acceptance (slice 2)
 
 - `npm test` passes, with the curation, hashing, retiring and stranded-row tests, and the checks on
