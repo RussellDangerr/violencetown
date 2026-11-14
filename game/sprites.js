@@ -390,6 +390,7 @@ export const ITEM_SPRITES = {
     fearmur:           { sheet: 'tinyExtra',   x: 7 * 16,  y: 0,       w: 16, h: 16 },  // the staff in bone (WA1; it drew as a hammer)
     gator_tail:        { sheet: 'tinyExtra',   x: 6 * 16,  y: 0,       w: 16, h: 16 },  // the tapered blade in gator green (WA1; it drew as a spear)
     rat_mask:          { sheet: 'ratMaskTint', x: 3 * 16, y: 10 * 16, w: 16, h: 16 },  // the rat cell, tinted: placeholder
+    test_costume:      { sheet: 'ratMaskTint', x: 4 * 16, y: 10 * 16, w: 16, h: 16 },  // (CO1) a tinted cell: placeholder
     foil_hat:          { sheet: 'tinyDungeon', x: 4 * 16,  y: 5 * 16,  w: 16, h: 16 },  // silver dome
     cardboard_cuirass: { sheet: 'tinyDungeon', x: 6 * 16,  y: 5 * 16,  w: 16, h: 16 },  // brown board
     grappling_hook:    { sheet: 'tinyTown',    x: 9 * 16,  y: 10 * 16, w: 16, h: 16 },  // hooked blade

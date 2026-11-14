@@ -19,6 +19,7 @@ import { pagedSize } from './inventory.js';
 import { sanitizeSlots } from './rings.js';
 import { settleHands } from './items.js';
 import { sanitizeSkills } from './skills.js';
+import { costumeToSave, sanitizeCostume, costumeFromSave } from './costumes.js';
 import { sanitizeNoteIds } from './interactions.js';
 import { sanitizeRespawnLists, sanitizeFilledSpots } from './drops.js';
 import { sanitizeRivals } from './rivals.js';
@@ -86,6 +87,7 @@ export function serialize(game) {
             // never ranked anything saves byte-for-byte as it did before skills
             // existed (the autoplay fingerprint hashes this object).
             ...skillsEntry(game),
+            ...costumeToSave(game),   // (CO1) left out while no costume is worn
             ...defaultAttackEntry(game),
             ...interactionNotesEntry(game),
             equipment: {
@@ -404,6 +406,7 @@ function validate(raw) {
     // (skills) Known skills, whole counts, never below zero; a save from before
     // skills existed loads with none.
     p.skills = sanitizeSkills(p.skills);
+    p.costume = sanitizeCostume(p.costume);   // (CO1)
     p.defaultAttack = (p.defaultAttack && typeof p.defaultAttack.key === 'string' && typeof p.defaultAttack.weaponId === 'string')
         ? { weaponId: p.defaultAttack.weaponId, key: p.defaultAttack.key } : null;   // (WK3)
     p.interactionNotes = sanitizeNoteIds(p.interactionNotes);   // (IN1)
@@ -490,6 +493,7 @@ export async function loadInto(game, raw) {
     game.ringTier          = p.ringTier || 0;
     game.discoveredFusions = new Set(p.discoveredFusions || []);
     game.skills            = { ...p.skills };
+    game.costume           = costumeFromSave(p.costume, R);   // (CO1) worn: equipment/skills above are its kit
     game.defaultAttack     = p.defaultAttack || null;   // (WK3)
     game.interactionNotes  = [...p.interactionNotes];   // (IN1)
     // knownSpells/grantedTricks are derived, not stored — rebuild from the

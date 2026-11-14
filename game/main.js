@@ -16,6 +16,7 @@ import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDe
 import { WEAPONS, weaponClassOf } from './weapons.js';
 import { handPairOf } from './hand-data.js';   // (HB2) two held weapons combine into a named effect
 import { resolveItemDef } from './item-registry.js';
+import { toggleCostume, dropCostume } from './costumes.js';   // (CO1)
 import { tickBuffList, sumBuffStat, worldBeatPlan } from './buffs.js';
 import { RINGS, FUSIONS } from './ring-data.js';
 import {
@@ -943,6 +944,10 @@ class Game {
     // Resolve an item id to its definition — delegates to item-registry.js,
     // the one shared spelling of "weapons win over items". Used by the save
     // system to rehydrate equipment/inventory (we persist ids, not whole defs).
+    // (CO1) A costume in the bag: put it on, or take it off. Optional-called, like _saveMoment.
+    _toggleCostume(item) { return toggleCostume(this, item); }
+    _dropCostume() { dropCostume(this); }
+
     _resolveItemDef(id) {
         return resolveItemDef(id);
     }
@@ -3474,7 +3479,9 @@ class Game {
         // swaps out lands in that very slot.
         const equips = item.useType === 'equip';
         if (equips) this._removeFromSlot(this.selectedSlot);
-        const msg = resolveUse(this, item, null, 1, 'weapon', equips ? this.selectedSlot : -1);
+        const msg = item.useType === 'costume'   // (CO1) put on / take off; stays in the bag, costs the turn
+            ? this._toggleCostume?.(item)
+            : resolveUse(this, item, null, 1, 'weapon', equips ? this.selectedSlot : -1);
         if (msg) this._log(msg);
         this._refreshGrantedSkills();   // a weapon may have changed → refresh Magic/Trick grants
 
@@ -6413,6 +6420,7 @@ class Game {
         }
         this.tempEquips = [];
         this.selectedSlot = -1;
+        this._dropCostume?.();   // (CO1) a worn costume does not survive this
         this.equipment = { weapon: WEAPONS.wooden_sword, left: null, top: null, bottom: null, front: null, back: null, sides: null };
         this._refreshGrantedSkills();   // reset weapon → no granted skills
         // Clear any transition queued before death so the first post-respawn
@@ -6519,6 +6527,7 @@ class Game {
         this._bagPage = 0;
         this.tempEquips = [];
         this.selectedSlot = -1;
+        this._dropCostume?.();   // (CO1) a worn costume does not survive this
         this.equipment = { weapon: WEAPONS.wooden_sword, left: null, top: null, bottom: null, front: null, back: null, sides: null };
         this.ownedRings = new Set();
         this.ringSlots = {};
@@ -7201,11 +7210,12 @@ class Game {
                     // (FX34) An equip leaves its slot first, so the piece it swaps out lands there.
                     const equips = def.useType === 'equip';
                     if (equips) this._removeFromSlot(idx);
-                    const msg = resolveUse(this, def, null, 1, 'weapon', equips ? idx : -1);   // equip → resolveEquip (re-bags any displaced piece)
+                    const isCostume = def.useType === 'costume';   // (CO1) toggles; stays in the bag
+                    const msg = isCostume ? this._toggleCostume?.(def) : resolveUse(this, def, null, 1, 'weapon', equips ? idx : -1);   // equip → resolveEquip (re-bags any displaced piece)
                     if (msg) this._log(msg);
                     this._refreshGrantedSkills();
-                    const usedUp = def.useType === 'self' || equips;
-                    if (usedUp) { if (!equips) this._removeFromSlot(idx); this._advanceWorld(); this._saveMoment?.(); }
+                    const usedUp = def.useType === 'self' || equips || isCostume;
+                    if (usedUp) { if (!equips && !isCostume) this._removeFromSlot(idx); this._advanceWorld(); this._saveMoment?.(); }
                     break;
                 }
                 case 'drink': {
