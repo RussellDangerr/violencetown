@@ -102,6 +102,7 @@ import {
     aimTap, adjacentFacing, setMeleeKit, tapMoveKey, meleePathTo, meleeRingKeys, resolveDefaultKey, starrableMove,
 } from './wheel-model.js'; // (sunburst wheel) node-tree model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
+import { spiritToShow } from './spirit-replay.js';                                        // (heroic spirits) the boss-door replay
 import { introAt, isSkipKey } from './tv-intro.js';                                     // (TV1) the TV opening before the title
 import { arcSlots, arcVisible, arcSlotAt, arcFaded, ARC_MAX } from './fight-arc.js';                  // (FA1) the arc of attacks under you in a fight
 import { fighters, joiners } from './fight-area.js';                                     // (fight-fog) who is in the fight
@@ -2152,6 +2153,7 @@ class Game {
         if (sfxVal)   sfxVal.textContent = Math.round(s.sfxVolume * 100);
         this._setToggleUI('opt-muted',         s.muted);
         this._setToggleUI('opt-reduce-motion', s.reduceMotion);
+        this._setToggleUI('opt-spirits',       s.spirits);
         // Fullscreen reflects the actual document state, not a stored value.
         this._setToggleUI('opt-fullscreen', !!document.fullscreenElement);
         this._setWheelOpenUI(s.wheelOpenMode);   // (Slice 2) HOLD / TAP
@@ -2247,6 +2249,13 @@ class Game {
             const next = !Settings.get('reduceMotion');
             Settings.set('reduceMotion', next);
             this._setToggleUI('opt-reduce-motion', next);
+        });
+
+        // Heroic spirits (HS-R2): the boss-door replay, read live by _render.
+        document.getElementById('opt-spirits')?.addEventListener('click', () => {
+            const next = !Settings.get('spirits');
+            Settings.set('spirits', next);
+            this._setToggleUI('opt-spirits', next);
         });
 
         // Fullscreen toggle — drives the Fullscreen API on #game-wrapper (or
@@ -6633,6 +6642,7 @@ class Game {
         this._trackFight();
         this._creditsCheck();
         this._syncFirstRunHint();
+        this._spiritShow = spiritToShow(this, Settings.get('spirits'), performance.now());   // (heroic spirits) HS-R2
         this.renderer.renderFrame(this);
     }
 

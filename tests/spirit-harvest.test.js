@@ -115,7 +115,7 @@ describe('Mary Shelley, the caster (HS-R1)', () => {
 });
 
 // The harvested set itself, as committed.
-const set = read('../tools/autoplay-sim-spirits.json');
+const set = read('../game/spirits-harvest.json');
 const maps = new Map();
 const mapOf = (zone) => {
     if (!maps.has(zone)) maps.set(zone, new GameMap(read(`../game/${zone}-map.json`), `${zone}-map.json`));

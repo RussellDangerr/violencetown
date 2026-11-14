@@ -79,7 +79,8 @@ Live heroes — spirits that act in the world — are not this branch.
 
 - `npm run spirits:harvest` (`tools/spirit-harvest.mjs`) plays every hero's script over the sim
   baseline's seeds, the way the sim does (both now share `tools/autoplay-runs.mjs`), and writes
-  `tools/autoplay-sim-spirits.json` beside the baseline. It changes no golden and no baseline.
+  `game/spirits-harvest.json` (first beside the baseline in `tools/`; moved in slice 3 so the game
+  can load it). It changes no golden and no baseline.
 - The set holds every attempt as one short row (seed, cleared, turn, stage, falls, and an `ending`
   line such as `stopped at recover_converter after falling to Fungus King`), so the montage and per-seed
   stats need no tracks; and three curated spirits per hero with their tracks. Curation is rule 5:

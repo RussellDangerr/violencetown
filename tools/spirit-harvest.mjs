@@ -4,7 +4,7 @@
 //   node tools/spirit-harvest.mjs [--seeds=1-50] [--scripts=quest,sneak,loops,caster] [--per-hero=3] [--workers=8]
 //
 // Plays every hero's script over the sim baseline's seeds, the way the sim does,
-// and writes tools/autoplay-sim-spirits.json beside the baseline:
+// and writes game/spirits-harvest.json (served, for the boss-door replay):
 //   - every attempt's outcome, one short row per seed (the montage and the stats)
 //   - a few curated spirits per hero with their tracks, the failures first (rule 5)
 //   - each kept spirit's provenance: the hash of every zone map it walked
@@ -24,7 +24,7 @@ import { HEROES, hashJson, zonesOf, curate, attemptOf, describeRow } from '../ga
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const GAME = path.join(HERE, '..', 'game');
 const BASELINE = path.join(HERE, 'autoplay-sim-baseline.json');
-const OUT = path.join(HERE, 'autoplay-sim-spirits.json');
+const OUT = path.join(GAME, 'spirits-harvest.json');   // in game/, so the boss-door replay can load it
 
 const o = { seeds: null, scripts: Object.keys(HEROES), perHero: 3, workers: Math.max(1, Math.min(8, Math.floor(cpus().length / 2))), timeout: 180000 };
 for (const a of process.argv.slice(2)) {
