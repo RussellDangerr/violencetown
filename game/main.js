@@ -1087,7 +1087,11 @@ class Game {
     // The zone has loaded: if its rival is there, the record reads carrying.
     _rivalArrived(url) {
         const r = this._rivals[url];
-        if (r && this.enemies.some(e => e.id === r.id)) markCarrying(this._rivals, url, r.id);
+        const rival = r && this.enemies.find(e => e.id === r.id);
+        if (!rival) return;
+        markCarrying(this._rivals, url, r.id);
+        // (plans/ne2-rival-title.md) It wears its title, and the log says so once per entry.
+        this._log(rival.promoteToRival(), 'combat');
     }
 
     // Leaving a zone: the record keeps only what its rival still carries of your

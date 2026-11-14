@@ -28,6 +28,11 @@ import { RNG } from './rng.js';
 import { isAnt } from './ants.js';
 import { dressOne, isWearable } from './theft.js';
 
+// (plans/ne2-rival-title.md) The words of a rival's promotion, one constant each.
+// All copy: every word is a placeholder until the owner writes it.
+export const RIVAL_TITLE = '[TEXT]';            // the form is "<title> <the enemy's type>"
+export const RIVAL_RETURN_LINE = '[TEXT]';      // logged once each time you enter the zone that holds one
+
 // (FX4, plans/fx4-boss-one-name.md) The name a character goes by on the
 // surfaces that used to print its type: the log, the target panel, the KO tag.
 // A boss goes by its one name (slots.js labelOf prefers the entry's name), so
@@ -35,6 +40,7 @@ import { dressOne, isWearable } from './theft.js';
 export function shownName(enemy) {
     if (!enemy) return enemy;
     if (enemy.boss) return labelOf(enemy);
+    if (enemy.rival === true && !townName(enemy)) return `${RIVAL_TITLE} ${enemy.type}`;
     return townName(enemy) || enemy.type;
 }
 
@@ -341,6 +347,14 @@ export class Enemy {
     // (FX4) The name the log, the target panel and the KO tag use (shownName
     // above): a boss's one name, anyone else's type.
     get shownName() { return shownName(this); }
+    // (plans/ne2-rival-title.md) Promote this enemy to a rival: it takes the title on every
+    // surface that prints its name. The entity's name is fixed when the Enemy is built, so it
+    // is set again here. Returns the line to log on arrival.
+    promoteToRival() {
+        this.rival = true;
+        this.entity.name = unnestBrackets(`[${shownName(this)}]`);
+        return RIVAL_RETURN_LINE;
+    }
     // (FX38) "The Violencian" for the unnamed, "Knuckles" for a name.
     get shownThe() { return theShown(this); }
 
@@ -406,6 +420,8 @@ export class Enemy {
             slot: this.slot || undefined,
             // Same rule: an untagged enemy saves byte-identically to before tags.
             tags: this.tags.length ? [...this.tags] : undefined,
+            // (plans/ne2-rival-title.md) Written only when set, so every plain enemy saves as before.
+            rival: this.rival === true ? true : undefined,
             // Same rule: a creature with no examine text of its own saves as before.
             examine: this.examine || undefined,
             // Same rule for how it is drawn: a full-size creature saves as before.
@@ -463,6 +479,7 @@ export class Enemy {
         e.fsmState = s.fsmState ?? null;
         e._lastWanderTurn = num(s.lastWanderTurn, 0);
         e.carrying = s.carrying ?? null;
+        if (s.rival === true) e.promoteToRival();   // (NE2) the title survives a reload
         if (num(s.tookGold, 0) > 0) e._tookGold = s.tookGold;   // (BS2) he does not mug you twice after a reload
         e._barkIndex = num(s.barkIndex, 0);
         e._barkOffset = (typeof s.barkOffset === 'number') ? s.barkOffset : null;

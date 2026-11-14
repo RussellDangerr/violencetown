@@ -2056,7 +2056,7 @@ export class Renderer {
             if (this.font && !game._animating && !splatUp && !pest && this._isFaced(game, e)) {
                 const verb = defaultVerb({ x: e.x, y: e.y, npc: e }, game);
                 if (verb) {
-                    const who  = String((e.boss ? shownName(e) : e.name || e.type) || '').replace(/[[\]]/g, '');
+                    const who  = String((e.boss || e.rival ? shownName(e) : e.name || e.type) || '').replace(/[[\]]/g, '');
                     const text = `${who} · ${verb.label}`.toUpperCase();
                     const tw   = this.font.measure ? this.font.measure(text, 1) : text.length * 6;
                     // Clear of the HP bar, buffs and pips; and when an awareness
