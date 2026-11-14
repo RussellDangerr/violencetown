@@ -4568,7 +4568,9 @@ class Game {
     // grate. A non-rat step onto a grate still bumps.
     _canEnter(x, y) {
         if (this.map.isWalkable(x, y)) return true;
-        return this._ratFormTurns > 0 && this.map.getTile(x, y) === 4;
+        // (MS1) A worn mask that grants the 'grates' verb opens them for as long as it is on.
+        const maskGrates = Object.values(this.equipment || {}).some(d => d && d.body && (d.body.verbs || []).includes('grates'));
+        return (this._ratFormTurns > 0 || maskGrates) && this.map.getTile(x, y) === 4;
     }
 
     // Speed Poition chokepoint. In a turn-based game where one input = one
