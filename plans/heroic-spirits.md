@@ -47,6 +47,13 @@ needs to ship small.
    the game, build a record from a finished run (name, outcome, anchors, knowledge). `run.js` keeps
    the structured track beside its existing flight-recorder `trace`, uncapped, and puts the record
    in the report. The heroes of HS-R1 who play an existing script are named here. No UI.
+1b. **The gate's evidence.** `diffSpirits` names the first track row where two spirits of the same
+   run part, the outcome fields that changed, and the anchors lost, gained or moved.
+   `autoplay:write` records the golden runs' spirits in `tools/autoplay-spirits-golden.json` (a
+   golden by name, so the loop guard protects it); `autoplay:check` prints the diff under any drift,
+   or `spirits match`. Evidence only: pass or fail stays the golden's. Planted check: Fireball
+   20 -> 19 names each hero's first changed move (Paul Bunyan's row 64: the cast lands on the
+   Wererat, not a Violet Fungus), his falls going 2 -> 4, and the clear moving from turn 105 to 120.
 2. **The harvest.** A tool that plays the harvest runs and writes the curated spirit set (map
    hashes included) next to the sim baseline. Mary Shelley's caster inclination arrives here. A test that retires a track whose map hash moved, and
    that a replayed track never stands on a tile that is no longer walkable — a free map-drift check.
