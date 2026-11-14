@@ -22,6 +22,7 @@ export function hoursAway(savedAt, now) {
 export function readAway(game, savedAt, now = Date.now()) {
     game.hoursAway = hoursAway(savedAt, now);
     game.awaySavedAt = savedAt;   // (CK2) the news is keyed on the save's own stamp
+    game.awayRestHours = game.hoursAway;   // (WP1) the news clears hoursAway on a zone change; this stays for the rested check
     return game.hoursAway;
 }
 
@@ -73,4 +74,36 @@ export function tellAwayNews(game, say) {
     game.hoursAway = 0;
     if (line) say(line);
     return line;
+}
+
+// ── WP1: quit beside a bench, come back rested ───────────────────────────────────────────
+// One fixed buff per return (never banked, never stacked): the strength Poition's numbers.
+// It costs nothing and changes nothing else. Placeholders: the name and the log line.
+
+export const BENCH_TILE = 20;                 // the Town bench, HP1's rest spot
+export const REST_ZONE = 'town-map.json';     // Town only for now (WP1R1)
+export const RESTED_MIN_HOURS = NEWS_MIN_HOURS;   // CK1's one-hour threshold
+export const RESTED_BUFF = { id: 'rested', name: '[TEXT] rested', turns: 5, stat: 'strength', amount: 6 };
+export const RESTED_LINE = '[TEXT] you come back rested.';
+
+// True when (x, y) has a bench on one of its four sides, the way a hero faces one.
+export function besideBench(map, x, y) {
+    if (!map || typeof map.getTile !== 'function') return false;
+    return [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => map.getTile(x + dx, y + dy) === BENCH_TILE);
+}
+
+// Give the rested buff when the player is in the Town beside a bench and was away an hour or
+// more. The save's own stamp marks it as given, so reading the same return twice gives it once.
+// Returns true when it was given.
+export function restedOnReturn(game, say) {
+    if (!(game.awayRestHours >= RESTED_MIN_HOURS)) return false;
+    if (game.map?.url !== REST_ZONE) return false;
+    if (!besideBench(game.map, game.playerX, game.playerY)) return false;
+    if (game.awaySavedAt != null && game._restedFor === game.awaySavedAt) return false;
+    if (typeof game._inCombat === 'function' && game._inCombat()) return false;
+    game._restedFor = game.awaySavedAt;
+    const b = RESTED_BUFF;
+    game.addBuff(b.id, b.name, b.turns, 'buff', { stat: b.stat, amount: b.amount });
+    if (say) say(RESTED_LINE);
+    return true;
 }
