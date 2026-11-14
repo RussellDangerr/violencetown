@@ -44,9 +44,9 @@ A track row is a few bytes; a whole quest run is one or two kilobytes.
 1. **The recorder.** `game/spirits.js` (pure, node-tested): build a track row from a plain view of
    the game, build a record from a finished run (name, outcome, anchors, knowledge). `run.js` keeps
    the structured track beside its existing flight-recorder `trace`, uncapped, and puts the record
-   in the report. The two heroes of HS-R1 are named here. No UI.
+   in the report. The heroes of HS-R1 who play an existing script are named here. No UI.
 2. **The harvest.** A tool that plays the harvest runs and writes the curated spirit set (map
-   hashes included) next to the sim baseline; a test that retires a track whose map hash moved, and
+   hashes included) next to the sim baseline. Mary Shelley's caster inclination arrives here. A test that retires a track whose map hash moved, and
    that a replayed track never stands on a tile that is no longer walkable — a free map-drift check.
 3. **First sight: the boss door.** A spirit that died to the zone's boss replays its last few turns
    when you step up to that boss's door, drawn faint, opt-in. Touches the renderer and `main.js`.
@@ -75,12 +75,17 @@ Live heroes — spirits that act in the world — are not this branch.
 
 ## Rulings
 
-- HS-R1 (11-13): The first two heroes are **Paul Bunyan** and **Johnny Appleseed**.
+- HS-R1 (11-13): The first heroes are **Paul Bunyan**, **Johnny Appleseed**, **Mary Shelley** and
+  **Amelia Earhart**.
 
 ## Open questions
 
-- HS-Q1: Which hero plays which? The lean: Paul Bunyan is the fighter (the axe, straight through),
-  Johnny Appleseed the sneak (the wanderer who walks around trouble).
+- HS-Q1: Which hero plays which? The lean:
+  - Paul Bunyan: the fighter (`quest`), the axe straight through.
+  - Johnny Appleseed: the sneak (`sneak`), the wanderer who walks around trouble.
+  - Amelia Earhart: the everyday loops (`loops`), the traveller who crosses every zone.
+  - Mary Shelley: a new caster inclination, spells before steel. It exists only in the harvest
+    (rule 3), so it adds a hero without touching the goldens.
 - HS-Q2: The first thing players see: the boss-door replay (the lean) or the Town roster?
 - HS-Q3: Your own runs as "past self" spirits: on by default, or opt-in?
 
