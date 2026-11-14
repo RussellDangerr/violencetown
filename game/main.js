@@ -991,6 +991,7 @@ class Game {
     // step and each zone's list sends a share back. Called just before _loadMap
     // on a real move between zones — never on a save restore or a new game.
     _zoneChange() {
+        this._recordMuggers?.();   // (BS2) a mugger keeps what he took, however you leave
         this._settleRival?.();
         const back = stepRespawns(this._respawnLists);
         // (RO1) A boss with a returning spot stays dead; a different boss takes the spot instead.
@@ -4743,7 +4744,6 @@ class Game {
             // new map is in place (the .then() restores IDLE). Prevents acting
             // against the old map mid-fetch.
             this.state = STATE.RESOLVING;
-            this._recordMuggers?.();   // (BS2) a mugger keeps what he took
             this._zoneChange();   // (plans/ks1-respawn-list.md) the respawn lists take a step
             this._loadMap(t.toMap, t.toX, t.toY).then(() => {
                 this._log(`[Entered ${this.map.zoneName}]`);
@@ -6590,7 +6590,6 @@ class Game {
         this._triggerScreenShake(280, 4);
         this._render();
         setTimeout(async () => {
-            this._recordMuggers?.();   // (BS2) a mugger keeps what he took
             this._zoneChange();
             await this._loadMap(toMap, toX, toY);
             this.state = STATE.IDLE;
