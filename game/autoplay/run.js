@@ -19,6 +19,7 @@ import { nearestRectInDir } from '../layout.js';
 import { itemActions } from '../inspector.js';
 import { zoneOf } from '../inventory.js';
 import { SAFE_SLOTS } from '../data.js';
+import { trackRow, fellRow, foesNow, felled, spiritRecord } from '../spirits.js';
 
 export const SCRIPTS = {
     // Quest 1's first stage. The taxi's 2x2 block stands on the road under the
@@ -126,7 +127,7 @@ export async function run(ap) {
         // page reads the carry and plays on from this step. tools/autoplay.mjs
         // does the reload over the DevTools protocol; a person watching in a
         // browser has no driver, so the page does it itself.
-        ap.carryOnLeave({ ...outcome.reload, deaths: d.deaths(), trace: d.trace(), errors: [...ap.errors], virtualMs, realMs });
+        ap.carryOnLeave({ ...outcome.reload, deaths: d.deaths(), trace: d.trace(), track: [...(back?.track || []), ...d.track()], errors: [...ap.errors], virtualMs, realMs });
         if (watching) {
             window.removeEventListener('keydown', stop, true);
             window.removeEventListener('pointerdown', stop, true);
@@ -153,7 +154,20 @@ export async function run(ap) {
         virtualMs,
         realMs,
         errors,
-        trace: [...(back?.trace || []), ...d.trace()].slice(-300),        log: (g._logHistory || []).slice(-40).map((l) => l.text),
+        trace: [...(back?.trace || []), ...d.trace()].slice(-300),
+        // The run as a heroic spirit (plans/heroic-spirits.md): the whole
+        // track, uncapped, read off the game without drawing on its dice.
+        spirit: spiritRecord({
+            script: ap.opts.script, seed: ap.opts.seed,
+            version: document.querySelector('meta[name="version"]')?.content ?? null,
+            finished: outcome.finished, failure: outcome.failure, turn: g.turn,
+            // The quest the hero set out to play (a cleared quest is no longer
+            // active) and the last stage it worked; a steps run plays no quest.
+            quest: script?.route ? { id: script.route, stage: outcome.stages?.at(-1)?.id ?? null } : null,
+            stageCount: QUESTS[script?.route]?.stages?.length ?? 0,
+            track: [...(back?.track || []), ...d.track()],
+        }),
+        log: (g._logHistory || []).slice(-40).map((l) => l.text),
         // Where everything stood when an unfinished run gave up — what a
         // "no way to …" needs to be read.
         scene: outcome.finished ? null : {
@@ -319,6 +333,7 @@ function driver(ap, g) {
     let deaths = 0;
     let lastKiller = null;
     const trace = [];   // the flight recorder: every action the fighter took, newest last
+    const track = [];   // the same run as a spirit's track (spirits.js), structured and uncapped
 
     // Deaths are counted where they are resolved. A step's world turn runs
     // after its slide — inside settle(), not at the key press — so a death on a
@@ -336,6 +351,7 @@ function driver(ap, g) {
         const retry = isBoss(k) || !!g._bossInFight?.();
         trace.push(`t${g.turn} ${g._mapUrl.replace('-map.json', '')} ${g.playerX},${g.playerY} DIED to ${lastKiller}`
             + ` (${retry ? 'a boss: retry' : 'a defeat scenario'})`);
+        track.push(fellRow(g, lastKiller, retry));
         return resolveDefeat(...args);
     };
 
@@ -506,10 +522,13 @@ function driver(ap, g) {
             if (a.kind === 'wait' && ++waits > MAX_WAITS) return result(`${stageId}: stuck — ${a.why}`);
             if (a.kind !== 'wait') waits = 0;
             const hp = g.playerHp, mp = g.playerMp, died = deaths;
+            const foes = foesNow(g);
+            track.push(trackRow(g, a, stageId));
             trace.push(`t${g.turn} ${g._mapUrl.replace('-map.json', '')} ${g.playerX},${g.playerY} hp${hp} ${a.kind}`
                 + (a.dir ? ` ${a.dir}` : '') + (a.at ? ` @${a.at.x},${a.at.y}` : '')
                 + (a.exposure && a.exposure !== 'unseen' ? ` [${a.exposure}]` : '') + (a.why ? ` (${a.why})` : ''));
             const failure = await act(a);
+            track.push(...felled(g, foes));
             if (failure) return result(`${stageId}: ${failure}`);
             if (deaths > died) { cur.deaths += deaths - died; cur.hpLost += hp; }
             else if (g.playerHp < hp) cur.hpLost += hp - g.playerHp;
@@ -570,9 +589,12 @@ function driver(ap, g) {
             const a = decide(v, goals, knobs);
             if (a.kind === 'wait' && ++waits > MAX_WAITS) return `stuck — ${a.why}`;
             if (a.kind !== 'wait') waits = 0;
+            const foes = foesNow(g);
+            track.push(trackRow(g, a));
             trace.push(`t${g.turn} ${g._mapUrl.replace('-map.json', '')} ${g.playerX},${g.playerY} hp${g.playerHp} ${a.kind}`
                 + (a.dir ? ` ${a.dir}` : '') + (a.at ? ` @${a.at.x},${a.at.y}` : '') + (a.why ? ` (${a.why})` : ''));
             const failure = await act(a);
+            track.push(...felled(g, foes));
             if (failure) return failure;
             await idle(BEAT_MS);
         }
@@ -751,7 +773,7 @@ function driver(ap, g) {
         return { finished: !miss, failure: miss, stages: [] };
     }
 
-    return { settle, playRoute, playOps, playSteps, deaths: () => deaths, trace: () => trace.slice(-300) };
+    return { settle, playRoute, playOps, playSteps, deaths: () => deaths, trace: () => trace.slice(-300), track: () => track };
 }
 
 function showLabel(text) {
