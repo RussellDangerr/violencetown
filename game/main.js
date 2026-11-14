@@ -12,7 +12,7 @@ import { pickHitMark, HEAVY_HIT_DAMAGE, dodgeChance, DODGE_WORD } from './hit-sp
 import { makeEffectLoop } from './effect-loop.js';                 // one tick of the transient-effects loop, and its refusal to die on a bad frame
 import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK, SLUDGE_DOT, FIRE_QUENCHING_TILES } from './data.js';
 import { puddleTiles, layPuddle, puddleAt, dryPuddles } from './puddles.js';   // (poisons) Sludge Brain's puddles
-import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef, poitionBuff } from './items.js';
+import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef, poitionBuff, wornVerb } from './items.js';
 import { WEAPONS, weaponClassOf } from './weapons.js';
 import { handPairOf } from './hand-data.js';   // (HB2) two held weapons combine into a named effect
 import { resolveItemDef } from './item-registry.js';
@@ -4567,7 +4567,7 @@ class Game {
     // grate. A non-rat step onto a grate still bumps.
     _canEnter(x, y) {
         if (this.map.isWalkable(x, y)) return true;
-        return this._ratFormTurns > 0 && this.map.getTile(x, y) === 4;
+        return (this._ratFormTurns > 0 || wornVerb(this.equipment, 'grates')) && this.map.getTile(x, y) === 4;
     }
 
     // Speed Poition chokepoint. In a turn-based game where one input = one

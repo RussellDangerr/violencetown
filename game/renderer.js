@@ -35,7 +35,7 @@ import { itemStatLine, itemActions, USES_ACTION } from './inspector.js';
 import { weaponCompare, weaponCompareLines } from './examine.js';   // (FX44) the weapon compare block    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
 import { zoneOf, pageCount, slotOnPage } from './inventory.js';                                     // (C1) safe/pack label for the inspector
 import { buildXmbBar, resolveXmbSelection } from './xmb.js';                 // (XMB) usable-bar model
-import { ITEMS, itemTier, gearOptions } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
+import { ITEMS, itemTier, gearOptions, wornBody } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
 import { RINGS, FUSIONS } from './ring-data.js';                             // (rings Task 5) SKILLS-tab hands: ring names + fusion spark
 import { findFusion } from './rings.js';                                     // (rings Task 5) mark a link fusible when its two rings have an authored fusion
 import { act2Checklist } from './quests.js';                               // (NI2) the Quests tab's three-item checklist
@@ -2505,7 +2505,13 @@ export class Renderer {
         const cx = ppx + TILE_PX / 2, cy = ppy + TILE_PX / 2; // sprite center
         withWalk(ctx, cx, cy, { bob: a.bob, rot: a.rot, flipX }, () => {
             let ok = false;
-            if (sprites?.player?.loaded) {
+            // (MS1) A worn mask is the body: draw its sprite instead of Night Kid.
+            const maskBody = wornBody(game.equipment);
+            const maskInfo = maskBody ? ENEMY_SPRITES[maskBody.sprite] : null;
+            if (maskInfo && sprites?.[maskInfo.sheet]?.loaded) {
+                ok = sprites[maskInfo.sheet].drawFrame(ctx, maskInfo.col, maskInfo.row, ppx, ppy, TILE_PX, TILE_PX);
+            }
+            if (!ok && sprites?.player?.loaded) {
                 ok = sprites.player.drawFrame(
                     ctx, PLAYER_SPRITE.col, PLAYER_SPRITE.row,
                     ppx, ppy, TILE_PX, TILE_PX

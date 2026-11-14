@@ -176,6 +176,20 @@ export const ITEMS = {
         fallbackColor: '#c8c8d0',
         baseValue: 10,
     },
+    // A mask is a hat with a body (MS1): it takes the head slot and its own armour,
+    // and while worn the player draws as `body.sprite` and may do `body.verbs`.
+    rat_mask: {
+        id: 'rat_mask',
+        name: '[Rat Mask]',
+        description: '[TEXT]',
+        equipSlot: 'top',
+        useType: 'equip',
+        armor: 2,
+        body: { species: 'rat', sprite: 'Rat', verbs: ['grates'] },
+        consumable: false,
+        fallbackColor: '#a070c0',
+        baseValue: 10,
+    },
     cardboard_cuirass: {
         id: 'cardboard_cuirass',
         name: '[Cardboard Cuirass]',
@@ -521,6 +535,17 @@ export const ITEMS = {
 export function isArmorPiece(def) {
     return !!def && def.useType === 'equip' && !!def.equipSlot
         && def.equipSlot !== 'weapon' && !def.equipDuration;
+}
+
+// The body a worn piece gives (a mask), or null. Armour can grant verbs, not just the weapon.
+export function wornBody(equipment) {
+    for (const def of Object.values(equipment || {})) if (def && def.body) return def.body;
+    return null;
+}
+// True when a worn piece grants the named verb (e.g. 'grates').
+export function wornVerb(equipment, verb) {
+    const b = wornBody(equipment);
+    return !!b && Array.isArray(b.verbs) && b.verbs.includes(verb);
 }
 
 export const ARMOR_IDS = Object.freeze(Object.keys(ITEMS).filter(id => isArmorPiece(ITEMS[id])));
