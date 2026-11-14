@@ -718,6 +718,7 @@ export class Renderer {
         // Depth pass: enemies + player draw in one y-sorted (feet-line) pass so
         // closer characters occlude farther ones, each grounded by a drop-shadow.
         this._drawActors(game);
+        this._drawSpirit(game);       // (heroic spirits) the boss-door replay, under the fog
         this._drawJammedDoor(game);
 
         // (aggro overlay) Alerted-enemy sight rings + LOS threads — world space,
@@ -2486,6 +2487,39 @@ export class Renderer {
         const now = performance.now();
         const { ppx, ppy } = this._playerScreenPos(game, now);
         this._drawPlayerSprite(game, ppx, ppy, now);
+    }
+
+    // (heroic spirits, plans/heroic-spirits.md slice 3) A spirit's last turns
+    // before a boss felled it, replayed faint where they happened. main.js
+    // sets game._spiritShow each frame ({ hero, attempt, row }), only with the
+    // Options switch on; the row is where the hero stood and how it faced. The
+    // fall is drawn lying down. Reads no dice: nothing here touches game.rng.
+    _drawSpirit(game) {
+        const show = game._spiritShow;
+        if (!show || !show.row) return;
+        const { ctx, sprites } = this;
+        const vp = this._view();
+        const r = show.row;
+        const px = vp.origin.x + (r.x - game.playerX) * TILE_PX - this._scrollX;
+        const py = vp.origin.y + (r.y - game.playerY) * TILE_PX - this._scrollY;
+        if (offView(vp, r.x - game.playerX, r.y - game.playerY, 2)) return;
+        const cx = px + TILE_PX / 2, cy = py + TILE_PX / 2;
+        ctx.save();
+        ctx.globalAlpha = 0.4;
+        ctx.translate(cx, cy);
+        if (r.act === 'fell') ctx.rotate(Math.PI / 2);
+        if (r.facing === 'left') ctx.scale(-1, 1);
+        const ok = sprites?.player?.loaded
+            && sprites.player.drawFrame(ctx, PLAYER_SPRITE.col, PLAYER_SPRITE.row, -TILE_PX / 2, -TILE_PX / 2, TILE_PX, TILE_PX);
+        if (!ok) {
+            ctx.fillStyle = '#bfe3ff';
+            ctx.fillRect(-TILE_PX / 2 + 6, -TILE_PX / 2 + 6, TILE_PX - 12, TILE_PX - 12);
+        }
+        ctx.restore();
+        const label = `${show.hero.toUpperCase()}, ATTEMPT ${show.attempt}`;
+        if (this.font) {
+            this.font.drawText(ctx, label, cx, py - 12, { color: 'rgba(191, 227, 255, 0.75)', scale: 1, align: 'center', shadow: 'rgba(0, 0, 0, 0.6)' });
+        }
     }
 
     _drawPlayerSprite(game, ppx, ppy, now, { bodyOnly = false } = {}) {

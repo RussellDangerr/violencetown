@@ -21,6 +21,9 @@ export const DEFAULTS = Object.freeze({
     musicVolume: 0.7,
     sfxVolume:   0.8,
     reduceMotion: false,   // suppress / dampen screenshake + flash
+    // Heroic spirits' boss-door replay (plans/heroic-spirits.md, HS-R2): opt-in,
+    // off by default, the way sound is.
+    spirits:      false,
     // MUTED BY DEFAULT, and this is a RULING rather than a placeholder.
     //
     // (Caelan, 2026-09-02) The previous comment here said "default-ON until
@@ -91,6 +94,7 @@ export function validate(raw) {
         musicVolume:  clamp01(o.musicVolume, DEFAULTS.musicVolume),
         sfxVolume:    clamp01(o.sfxVolume,   DEFAULTS.sfxVolume),
         reduceMotion: asBool(o.reduceMotion, DEFAULTS.reduceMotion),
+        spirits:      asBool(o.spirits,      DEFAULTS.spirits),
         muted:        asBool(o.muted,        DEFAULTS.muted),
         firstRunHintSeen: asBool(o.firstRunHintSeen, DEFAULTS.firstRunHintSeen),
         wheelOpenMode:    asEnum(o.wheelOpenMode, ['hold', 'tap-toggle'], DEFAULTS.wheelOpenMode),
