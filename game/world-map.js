@@ -7,7 +7,7 @@
 // a parent zone, so they don't appear here. Hand-authored from the maps'
 // transition graph; keep it in sync when zones are added/rewired.
 //
-//        [DOWNTOWN]—[CANYON]—[GORGE]
+// [SIDE AREA]—[DOWNTOWN]—[CANYON]—[GORGE]   (the side area's gate is fenced shut until TX6)
 //            |  (bridge / grapple)
 //  [FACTORY]—[TOWN]—[SEWER]
 //    |       |
@@ -17,11 +17,14 @@
 //    |       |
 //  [FROZEN]—[WILDERNESS]—[VALLEY]  (the Valley also hangs off the Canyon, by the hook)
 export const WORLD_ZONES = [
-    { zoneName: 'DOWNTOWN',   label: 'DOWNTOWN',   col: 2, row: 0, connects: ['TOWN', 'CANYON'] },
+    { zoneName: 'DOWNTOWN',   label: 'DOWNTOWN',   col: 2, row: 0, connects: ['TOWN', 'CANYON', '[SIDE AREA]'] },
     { zoneName: 'CANYON',     label: 'CANYON',     col: 3, row: 0, connects: ['DOWNTOWN', 'GORGE', 'VALLEY'] },
     // The Gorge (plans/gv1-canyon-to-gorge.md): reached by the Canyon's left wall. Downtown holds the
     // Canyon's left on this grid, so its box sits to the right for now; the place is a stand-in.
     { zoneName: 'GORGE',      label: 'GORGE',      col: 4, row: 0, connects: ['CANYON'] },
+    // The side area (plans/tx5-downtown-side-area.md): off the spine, behind a fenced gate on Downtown's
+    // west edge. Its name is a placeholder.
+    { zoneName: '[SIDE AREA]', label: '[SIDE AREA]', col: 1, row: 0, connects: ['DOWNTOWN'] },
     { zoneName: 'FACTORY',    label: 'FACTORY',    col: 1, row: 1, connects: ['TOWN', '[FROZEN AREA]'] },
     { zoneName: 'TOWN',       label: 'TOWN',       col: 2, row: 1, connects: ['DOWNTOWN', 'FACTORY', 'SEWER', 'CARNIVAL'] },
     { zoneName: 'SEWER',      label: 'SEWER',      col: 3, row: 1, connects: ['TOWN'] },
