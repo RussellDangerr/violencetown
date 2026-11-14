@@ -90,7 +90,7 @@ function writeSeenHints(set) {
 import { emitNoise, NOISE, perceives, spotters, struck, VERDICT } from './perception.js'; // sound + sight
 import { coinTake, kitTake, gearTake, coinWeight, itemWeight, gearWeight,
          noticeBuffer, isClean, stealLimit } from './theft.js';
-import { INTERACTIONS, fireRows } from './interactions.js'; // (IN1) carry-this-here rules
+import { INTERACTIONS, fireRows, molaPackLeaves } from './interactions.js'; // (IN1) carry-this-here rules
 import { overworldZone } from './world-map.js'; // (mp2) which overworld zone a map belongs to
 import { recordUse, skillPerks, mergePassives } from './skills.js'; // (skills) use-ranks: clean lifts rank up light fingers
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
@@ -709,6 +709,7 @@ class Game {
     async _loadMap(url, spawnX, spawnY) {
         this.map = await loadMap(url);
         this._mapUrl = url;
+        this._molaPackCalled = false;   // (FD1) a pack may come once for each entry
         this._noteZoneVisited?.();
         this._jammedDoor = null;   // per-zone: any wedged door is left behind when you leave
         // Splats, words and barks belong to the map they were spawned on: a new
@@ -4582,6 +4583,7 @@ class Game {
     // (IN1) Fire the interaction rows for what you carry in the zone you are in. A row's note
     // is logged the first time it fires (its own log colour) and remembered for the save.
     _checkInteractions(rows = INTERACTIONS) {
+        molaPackLeaves(this);   // (FD1) no cola left on you: the pack takes what is on the ground and goes
         if (!rows.length) return;
         const carried = new Set();
         for (const s of this.inventory || []) if (s && s.itemDef) carried.add(s.itemDef.id);
@@ -7195,6 +7197,7 @@ class Game {
                     const stack = this.inventory[idx];
                     this.inventory[idx] = null;
                     this._dropToGround?.(stack);
+                    this._checkInteractions?.();   // (FD1) dropping the last cola sends the pack away
                     break;
                 }
             }
