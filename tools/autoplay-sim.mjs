@@ -13,15 +13,14 @@
 // finish rate.
 // Exit: 0 ok · 1 something moved or a run broke · 3 no Chrome.
 
-import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { cpus } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { aggregate, compare } from './autoplay-stats.mjs';
+import { playAll, parseSeeds } from './autoplay-runs.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const AUTOPLAY = path.join(HERE, 'autoplay.mjs');
 const BASELINE = path.join(HERE, 'autoplay-sim-baseline.json');
 const SCRIPTS = ['quest', 'sneak', 'loops'];
 
@@ -37,55 +36,6 @@ function parseArgs(argv) {
         else throw new Error(`unknown option ${a}`);
     }
     return o;
-}
-
-// "50" is seeds 1..50; "11-60" is 11..60.
-function parseSeeds(v) {
-    const m = /^(\d+)(?:-(\d+))?$/.exec(v ?? '');
-    if (!m) throw new Error(`--seeds wants N or A-B, got ${v}`);
-    const [from, to] = m[2] ? [Number(m[1]), Number(m[2])] : [1, Number(m[1])];
-    if (!(from >= 1 && to >= from)) throw new Error(`bad seed range ${v}`);
-    return [from, to];
-}
-
-function playOne(script, seed, timeout) {
-    return new Promise((resolve) => {
-        const child = spawn(process.execPath, [AUTOPLAY, `--script=${script}`, `--seed=${seed}`, '--json', `--timeout=${timeout}`],
-            { stdio: ['ignore', 'pipe', 'pipe'] });
-        let out = '', err = '';
-        child.stdout.on('data', (d) => { out += d; });
-        child.stderr.on('data', (d) => { err += d; });
-        child.on('close', (code) => {
-            if (code === 3) return resolve({ noChrome: true });
-            let report = null;
-            try { report = JSON.parse(out.slice(out.indexOf('{'))).runs?.[0] ?? null; } catch { /* broken below */ }
-            const firstError = err.split('\n').find((l) => /Error|error/.test(l))?.trim() ?? err.trim().split('\n')[0] ?? '';
-            const why = !report ? `no report (exit ${code}) ${firstError}`.trim()
-                : report.errors?.length ? `console errors: ${report.errors[0]}`
-                : report.finished === undefined ? report.reason || 'no result'
-                : null;
-            resolve({ script, seed, report, broken: why });
-        });
-    });
-}
-
-async function playAll(jobs, workers, timeout) {
-    const results = [];
-    let next = 0, done = 0;
-    const t0 = Date.now();
-    const worker = async () => {
-        while (next < jobs.length) {
-            const job = jobs[next++];
-            const r = await playOne(job.script, job.seed, timeout);
-            if (r.noChrome) { console.error('autoplay-sim: no Chrome found — set CHROME_PATH'); process.exit(3); }
-            results.push(r);
-            done++;
-            process.stderr.write(`\r  ${done}/${jobs.length} runs · ${Math.round((Date.now() - t0) / 1000)} s `);
-        }
-    };
-    await Promise.all(Array.from({ length: Math.min(workers, jobs.length) }, worker));
-    process.stderr.write('\n');
-    return results;
 }
 
 // What the baseline keeps of a script: its numbers, the broken seeds, and each
@@ -125,7 +75,7 @@ const scripts = o.check && !process.argv.some((a) => a.startsWith('--scripts')) 
 const jobs = scripts.flatMap((script) => Array.from({ length: to - from + 1 }, (_, i) => ({ script, seed: from + i })));
 console.log(`autoplay-sim: ${scripts.join(', ')} on seeds ${from}-${to} (${jobs.length} runs, ${o.workers} at a time)`);
 
-const results = await playAll(jobs, o.workers, o.timeout);
+const results = await playAll(jobs, o.workers, o.timeout, 'autoplay-sim');
 const now = { seeds: [from, to], scripts: Object.fromEntries(scripts.map((s) => [s, scoreScript(results.filter((r) => r.script === s))])) };
 
 let failed = false;

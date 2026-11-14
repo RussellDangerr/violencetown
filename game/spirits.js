@@ -13,11 +13,12 @@ export const SPIRIT_VERSION = 1;
 
 // HS-R1 names the heroes; which script each one plays is HS-Q1's lean. A
 // script with no hero here makes no spirit. Mary Shelley plays the caster,
-// which arrives with the harvest (slice 2).
+// which only the harvest plays (slice 2).
 export const HEROES = Object.freeze({
     quest: 'Paul Bunyan',
     sneak: 'Johnny Appleseed',
     loops: 'Amelia Earhart',
+    caster: 'Mary Shelley',
 });
 
 const ANCHOR_CAP = 5;
@@ -183,4 +184,74 @@ export function spiritRecord({ script, seed, version = null, finished, failure =
         anchors: anchorsOf(track, outcome),
         knowledge: knowledgeOf(track, outcome, stageCount),
     };
+}
+
+// ── The harvest (slice 2) ─────────────────────────────────────────────────
+
+// A short hash of a parsed JSON value (FNV-1a, 32 bits): the same in node and
+// the browser, and blind to how the file was laid out or its line endings.
+export function hashJson(value) {
+    const s = JSON.stringify(value);
+    let h = 0x811c9dc5;
+    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+    return (h >>> 0).toString(16).padStart(8, '0');
+}
+
+// Each zone a track walked, once, in the order it got there.
+export const zonesOf = (track) => [...new Set((track || []).map((r) => r.map).filter(Boolean))];
+
+// Rule 4: a spirit whose zone map no longer hashes the same stops showing its
+// track; its outcome and anchors stay, as history. `hashes` is zone -> hash now.
+export function retire(spirit, hashes) {
+    const maps = spirit?.provenance?.maps;
+    if (!spirit || !spirit.track || !maps) return spirit;
+    const moved = Object.keys(maps).filter((z) => hashes[z] !== maps[z]).sort();
+    return moved.length ? { ...spirit, track: null, retired: moved } : spirit;
+}
+
+// The rows where the hero stood somewhere `passable(zone, x, y)` says nobody
+// can. A felled row is where the foe stood, not the hero, so it is skipped.
+export function strandedRows(spirit, passable) {
+    return (spirit?.track || []).filter((r) => r.act !== 'felled' && r.map && Number.isInteger(r.x) && !passable(r.map, r.x, r.y));
+}
+
+// How a run ended, as one line the stats can count and curation can group by.
+export function endingOf(spirit) {
+    const o = spirit.outcome;
+    const first = (spirit.track || []).find((r) => r.act === 'fell');
+    const fall = first ? ` after falling to ${first.by}` : '';
+    if (o.cleared) return first ? `cleared${fall}` : 'cleared clean';
+    return `stopped${o.stage ? ` at ${o.stage}` : ''}${fall}`;
+}
+
+// One attempt, without its track: for the montage and the per-seed stats.
+export function attemptOf(spirit) {
+    const o = spirit.outcome;
+    const a = { seed: spirit.attempt, cleared: o.cleared, turn: o.turn, stage: o.stage, falls: o.falls, ending: endingOf(spirit) };
+    if (o.gaveUp) a.gaveUp = o.gaveUp;
+    return a;
+}
+
+// Rule 5: the spirits worth keeping. For each hero, one spirit per way a run
+// ended (the lowest seed), failures first, then clears that fell on the way
+// (most falls first), a clean clear last; `perHero` at most.
+export function curate(spirits, perHero = 3) {
+    const rank = (s) => (s.outcome.cleared ? (s.outcome.falls ? 1 : 2) : 0);
+    const byHero = new Map();
+    for (const s of spirits.filter(Boolean)) {
+        if (!byHero.has(s.hero)) byHero.set(s.hero, []);
+        byHero.get(s.hero).push(s);
+    }
+    const kept = [];
+    for (const list of byHero.values()) {
+        const firsts = new Map();
+        for (const s of [...list].sort((a, b) => a.attempt - b.attempt)) {
+            const k = endingOf(s);
+            if (!firsts.has(k)) firsts.set(k, s);
+        }
+        kept.push(...[...firsts.values()]
+            .sort((a, b) => rank(a) - rank(b) || b.outcome.falls - a.outcome.falls || a.attempt - b.attempt)
+            .slice(0, perHero));
+    }
+    return kept;
 }

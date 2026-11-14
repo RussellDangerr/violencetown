@@ -128,8 +128,8 @@ describe('the spirit of a run', () => {
         assert.equal(s.track, track);
     });
 
-    test('the three scripts that exist each have a hero', () => {
-        assert.deepEqual(HEROES, { quest: 'Paul Bunyan', sneak: 'Johnny Appleseed', loops: 'Amelia Earhart' });
+    test('each of the four heroes plays one script', () => {
+        assert.deepEqual(HEROES, { quest: 'Paul Bunyan', sneak: 'Johnny Appleseed', loops: 'Amelia Earhart', caster: 'Mary Shelley' });
     });
 
     test('a run that gave up says why, and is not cleared', () => {

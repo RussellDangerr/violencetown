@@ -7,7 +7,7 @@
 import { FRAME_MS } from './clock.js';
 import { pathTo, cursorPath, DIR_CODES } from './path.js';
 import { fingerprint } from './fingerprint.js';
-import { decide, currentGoal, FIGHTER, SNEAK } from './player.js';
+import { decide, currentGoal, FIGHTER, SNEAK, CASTER } from './player.js';
 import { ROUTES } from './route.js';
 import { QUESTS } from '../quests.js';
 import { isHostile } from '../ai.js';
@@ -35,6 +35,9 @@ export const SCRIPTS = {
     quest: { route: 'fix_car', knobs: FIGHTER },
     // ...and by the sneak, the way ruling Q1-8 says the Fungus King is passed.
     sneak: { route: 'fix_car', knobs: SNEAK },
+    // ...and by Mary Shelley's caster, whom only the spirit harvest plays
+    // (plans/heroic-spirits.md, slice 2): no golden and no sim baseline holds her.
+    caster: { route: 'fix_car', knobs: CASTER },
     // The everyday loops (plans/al1-autoplay-loops.md): pick up, equip
     // through the bag, drop, sell, buy. Goals steps are walked by the standard
     // fighter; bag and shop steps press the keys a player presses. The Green is
