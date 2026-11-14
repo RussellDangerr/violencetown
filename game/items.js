@@ -236,6 +236,24 @@ export const ITEMS = {
         baseValue: 15,
     },
 
+    // (FD3) Handed over with the burger bag. Looks like any can; vendors will not buy it
+    // until the delivery is done (saleLockedUntil, read by trade.js saleLocked), but it
+    // can be dropped or drunk. Name, description and icon are placeholders; the heal is
+    // copied from the hot dog, the cheapest healing food.
+    mola_cola: {
+        id: 'mola_cola',
+        name: '[Mola Cola]',
+        description: '[TEXT]',
+        category: 'ambro',
+        useType: 'self',
+        effect: 'heal',
+        healAmount: 10,
+        consumable: true,
+        saleLockedUntil: 'deliver_burger',
+        fallbackColor: '#d94a8c',
+        baseValue: 10,
+    },
+
     // (Phase 4) MQ2 deliverable — a quest item, so it can't be sold/thrown/given
     // away EXCEPT to its sanctioned delivery target (QuestEngine.expectsDelivery).
     // Templates: boardwalk_burger (food) + catalytic_converter (questItem).

@@ -352,6 +352,7 @@ export const ITEM_SPRITES = {
 
     // Ambro (food) items — Tiny packs:
     boardwalk_burger: { sheet: 'tinyDungeon', x: 10 * 16, y: 6 * 16, w: 16, h: 16 },  // burger/bun stack (exact)
+    mola_cola:        { sheet: 'tinyDungeon', x: 9 * 16,  y: 10 * 16, w: 16, h: 16 },  // (FD3) placeholder cell until its own can icon
     hot_dog:          { sheet: 'tinyTown',    x: 9 * 16,  y: 7 * 16, w: 16, h: 16 },  // round bread loaf
     mystery_meat:     { sheet: 'tinyTown',    x: 10 * 16, y: 7 * 16, w: 16, h: 16 },  // ambiguous bun/meat lump
     tunnel_mushroom:  { sheet: 'tinyTown',    x: 5 * 16,  y: 2 * 16, w: 16, h: 16 },  // red-cap toadstools (exact)
