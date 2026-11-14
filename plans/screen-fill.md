@@ -94,6 +94,7 @@ the wheel at each depth, and the dial/tower backing.
   | Town, Carnival, Downtown | `{ "tile": 13, "prop": ["tree", "pine"] }` — forest (GRASS + tall tree mixed with a one-cell pine, APR2) |
   | Graveyard, Wilderness | `{ "tile": 52, "prop": "tree" }` — dead forest (DEAD_GRASS + tree) |
   | [Frozen Area] | `{ "tile": 70, "prop": "tree" }` — forest in snow (SNOW + tree; added 2026-10-26, plans/ic3-frozen-area.md) |
+  | [Side Area] | `{ "tile": 13, "prop": ["tree", "pine"] }` — the Downtown forest (off the spine, behind Downtown's west gate; added 2026-11-14, plans/tx5-downtown-side-area.md) |
   | Sewer | `{ "tile": 0 }` — its brick (WALL) |
   | Factory | `{ "tile": 41 }` — FACTORY_WALL |
   | Canyon | `{ "tile": 61 }` — its red rock (CANYON_WALL; was WALL until 2026-09-27) |
