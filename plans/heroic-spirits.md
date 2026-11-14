@@ -115,6 +115,42 @@ Live heroes — spirits that act in the world — are not this branch.
 - The set lives in `tools/`, which the game does not serve. Slice 3 copies what it shows into
   `game/` or serves it from there.
 
+## Slice 3 as designed: the boss-door replay (HS-R2)
+
+There is no boss door in the code: no arena, threshold or door tile, only the bosses' spawns and
+the fight that starts when one sees you. So "the door" is **the spot where a spirit fell to a
+boss**: the place the player is about to walk into.
+
+- **What shows.** A replay is the last 8 rows a spirit lived before a boss felled it, on that map,
+  ending on the fall. One plays at a time: within 6 tiles of where it fell, while the foe that
+  felled it still stands on this map. Ties go to a spirit that never cleared the quest (rule 5),
+  then the nearest, then the lowest seed. Once you fell that boss, its replays stop.
+- **How it looks.** The hero's own sprite, faint (alpha 0.4), stepping one row every 500 ms, with
+  the hero's name and attempt above it. It holds a beat on the fall, then loops. It is drawn just
+  after the actors, so the fight fog covers it like anything else in the dark. Canvas primitives
+  and the player sprite only: no new art.
+- **Where it comes from.** The harvest now writes the set to `game/spirits-harvest.json`, so the
+  game can load it (it moves out of `tools/`). It is fetched only once the switch is on, with each
+  zone map a kept spirit walked; `retire()` drops any track whose map hash moved before it can show.
+- **Opt-in (HS-R2).** `Settings.spirits`, default `false`; a HEROIC SPIRITS switch in Options.
+- **Code.** `game/spirit-replay.js` holds the picking (pure, node-tested) and the loader.
+  `main.js` gets one line in `_render()` (`this._spiritShow = spiritToShow(...)`) and the switch's
+  wiring; `renderer.js` gets `_drawSpirit`. Nothing here reads or draws `game.rng` (rule 2), and the
+  autoplay never turns the switch on, so the goldens and the sim are untouched.
+- **Overlap (11-14).** `feature/el2-crits-from-weakness-kinds`, `feature/fx3-boss-loot-spread` and
+  `feature/pk1-save-code` (all unmerged) touch `main.js`; this slice adds a few lines elsewhere in it
+  and none of them touch `renderer.js`.
+
+## Acceptance (slice 3)
+
+- `npm test` passes, with tests for picking a replay (in range, foe alive, failures first, none
+  once the boss is down), its frames, and the setting's default.
+- With the switch off nothing is fetched and nothing is drawn; `npm run autoplay:check` shows no
+  drift and spirits match.
+- In headless Chrome, with the switch on and the player stood near a kept spirit's fall in the
+  Sewer, the frame shows the ghost (pixels sampled where it stands differ from the switch-off frame).
+- The naming grep returns zero lines.
+
 ## Acceptance (slice 2)
 
 - `npm test` passes, with the curation, hashing, retiring and stranded-row tests, and the checks on
@@ -136,6 +172,8 @@ Live heroes — spirits that act in the world — are not this branch.
 
 - HS-R1 (11-13): The first heroes are **Paul Bunyan**, **Johnny Appleseed**, **Mary Shelley** and
   **Amelia Earhart**.
+- HS-R2 (11-14, settles HS-Q2): the first thing players see is the **boss-door replay** (slice 3),
+  and it is **opt-in**: a switch in Options, off by default, the way sound is.
 
 ## Open questions
 
@@ -145,7 +183,6 @@ Live heroes — spirits that act in the world — are not this branch.
   - Amelia Earhart: the everyday loops (`loops`), the traveller who crosses every zone.
   - Mary Shelley: a new caster inclination, spells before steel. It exists only in the harvest
     (rule 3), so it adds a hero without touching the goldens.
-- HS-Q2: The first thing players see: the boss-door replay (the lean) or the Town roster?
 - HS-Q3: Your own runs as "past self" spirits: on by default, or opt-in?
 
 ## Out of scope
