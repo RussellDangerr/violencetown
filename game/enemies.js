@@ -23,7 +23,7 @@ import { parseCapabilities, deriveAllegiance, isHunting } from './ai.js';
 import { makeHostile } from './give-action.js';   // (theft) one spelling of "turned against you"
 import { FACING_VECTORS } from './perception.js';
 import { resolveItemDef } from './item-registry.js';
-import { labelOf } from './slots.js';
+import { labelOf, ENTRIES } from './slots.js';
 import { RNG } from './rng.js';
 import { isAnt } from './ants.js';
 import { dressOne, isWearable } from './theft.js';
@@ -503,6 +503,16 @@ export class Enemy {
         return e;
     }
 }
+
+// (FD2) The bear the Wilderness sends for a carried Mola Cola. Not a slot entry nor a map spawn:
+// interactions.js spawns it. Its numbers start as the Polar Bear's (so they track it); the name
+// is the stand-in `[Bear]` and the examine text `[TEXT]` until Caelan names and writes it.
+export const WILDERNESS_BEAR_TYPE = 'Bear';
+export const WILDERNESS_BEAR = {
+    ...structuredClone(ENTRIES.polar_bear),
+    type: WILDERNESS_BEAR_TYPE,
+    name: '[Bear]',
+};
 
 // Resolve a loadout to real item defs. Entries are item IDS so an enemy can
 // actually USE what it carries and so the death drop is a one-liner. Unknown ids

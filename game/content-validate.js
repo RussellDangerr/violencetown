@@ -23,6 +23,7 @@ import { DIALOGUES } from './dialogue.js';
 import { zoneByName, overworldZone } from './world-map.js';
 import { ENEMY_SPRITES } from './sprites.js';
 import { SLOTS, ENTRIES } from './slots.js';
+import { WILDERNESS_BEAR } from './enemies.js';
 import { ITEMS } from './items.js';
 import { WEAPONS, WEAPON_TIERS } from './weapons.js';
 import { RINGS, FUSIONS } from './ring-data.js';
@@ -78,7 +79,8 @@ export function validateContent(maps, {
     // A registry entry is a spawn that has not been placed yet, so it gets the
     // same reference checks a map spawn does — or moving the Were-Rat into the
     // registry would have quietly stopped checking its kit and its art.
-    for (const [id, e] of Object.entries(entries)) {
+    // (FD2) The Wilderness bear is spawned by interactions.js, so it is no entry; it is checked the same way.
+    for (const [id, e] of [...Object.entries(entries), ['wilderness-bear', WILDERNESS_BEAR]]) {
         for (const it of [...(e.loadout || []), ...(e.equipped || [])])
             if (!itemIds.has(it)) P(`registry: entry '${id}' carries unknown item '${it}'`);
         if (!e.type) P(`registry: entry '${id}' has no type`);

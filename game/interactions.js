@@ -4,7 +4,8 @@
 // firing), is remembered in the save, and is listed on the Remoticon notes tab.
 
 import { resolveSpawn } from './slots.js';
-import { spawnEnemy } from './enemies.js';
+import { spawnEnemy, WILDERNESS_BEAR } from './enemies.js';
+import { getGreedyStep } from './pathing.js';
 
 // (FD1) Carry Mola Cola into the frozen area and a pack of polar bears comes for it.
 export const MOLA_ID = 'mola_cola';
@@ -44,6 +45,44 @@ export function callMolaPack(game) {
     });
 }
 
+// (FD2) The Wilderness sends one bear for the can. It is the pack's one-bear case: same flag,
+// so `molaPackLeaves` takes it away when no cola is carried.
+export const WILDERNESS_MAP = 'wilderness-map.json';
+function greedyReaches(game, from, limit = 60) {
+    let at = { x: from.x, y: from.y };
+    const to = { x: game.playerX, y: game.playerY };
+    const self = { x: from.x, y: from.y };
+    for (let i = 0; i < limit; i++) {
+        if (Math.max(Math.abs(at.x - to.x), Math.abs(at.y - to.y)) <= 1) return true;
+        const step = getGreedyStep(game, at, to, { self });
+        if (!step) return false;
+        at = step;
+    }
+    return false;
+}
+
+export function callWildernessBear(game) {
+    if (game._molaPackCalled) return;
+    game._molaPackCalled = true;
+    // The chase is greedy (each step must close the distance), and the Wilderness's one open edge
+    // is a corridor: from some tiles a bear would stand stuck in it. Take the nearest spot from
+    // which that same chase actually reaches you.
+    const s = edgeSpots(game, 99).find(c => greedyReaches(game, c));
+    if (!s) return;
+    const e = spawnEnemy({ ...structuredClone(WILDERNESS_BEAR), id: 'mola-bear', x: s.x, y: s.y });
+    // The Wilderness is wide and dark, and the only open edge is far from the door you came in by.
+    // It smells the can: it sees the whole zone, faces you, and knows where you stand.
+    e.sightRange = game.map.width + game.map.height;
+    const dx = game.playerX - s.x, dy = game.playerY - s.y;
+    if (Math.abs(dy) >= Math.abs(dx)) { e._lastDy = Math.sign(dy); e._lastDx = 0; } else { e._lastDx = Math.sign(dx); e._lastDy = 0; }
+    e._lastSeenX = game.playerX;
+    e._lastSeenY = game.playerY;
+    e.state = 'chasing';
+    e._emergeDelay = 1;
+    e._molaPack = true;
+    game.enemies.push(e);
+}
+
 const carriesMola = (game) =>
     (game.inventory || []).some(s => s && s.itemDef && s.itemDef.id === MOLA_ID)
     || Object.values(game.equipment || {}).some(it => it && it.id === MOLA_ID);
@@ -65,6 +104,7 @@ export function molaPackLeaves(game) {
 
 export const INTERACTIONS = [
     { id: 'mola_cola_frozen', carry: MOLA_ID, zone: FROZEN_MAP, effect: callMolaPack, note: '[TEXT]' },
+    { id: 'mola_cola_wilderness', carry: MOLA_ID, zone: WILDERNESS_MAP, effect: callWildernessBear, note: '[TEXT]' },
 ];
 
 // Rows whose item is carried and whose zone is the one you are in.

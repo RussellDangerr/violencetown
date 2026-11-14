@@ -587,6 +587,9 @@ export const ENEMY_SPRITES = {
     'Snowman':    { sheet: 'tinyDungeon', col: 1, row: 10, static: true }, // white ghost, shared with Rattling Skeleton
     'Yeti':       { sheet: 'tinyDungeon', col: 1, row: 9,  static: true }, // the ogre, shared with Fungus King
     'Polar Bear': { sheet: 'tinyDungeon', col: 4, row: 10, static: true }, // grey beast, Lire's uncoloured source
+    // (FD2) The Wilderness bear: FDR4 picked the polar bear recoloured brown; until that sheet exists it
+    // wears the grey cell (the tool and a brown column are the blocked part of the slice).
+    'Bear':       { sheet: 'tinyDungeon', col: 4, row: 10, static: true },
     // Siberia, the frozen area's boss (plans/ic5-siberia-frozen-boss.md): the
     // placeholder boss's knight helm until she is drawn.
     'Siberia':    { sheet: 'tinyDungeon', col: 0, row: 8,  static: true },
