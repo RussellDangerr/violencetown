@@ -131,6 +131,21 @@ describe('rested on return, through the real save', () => {
         assert.equal(b.log.length, 1);
     });
 
+    test('the news on loading the zone clears hoursAway first: rested still comes', async () => {
+        const { tellAwayNews } = await import('../game/away.js');
+        const t0 = 1_800_000_000_000;
+        Date.now = () => t0;
+        writeSave(miniGame(4, 5));
+        Date.now = () => t0 + 5 * MS_PER_HOUR;
+        const b = miniGame(4, 5);
+        b._noteAway(readSaveRaw());
+        tellAwayNews(b, (m) => b.log.push(m));   // what the zone load does
+        assert.equal(b.hoursAway, 0);
+        b._applyRested();
+        assert.equal(b.buffs.length, 1);
+        assert.equal(b.log.at(-1), RESTED_LINE);
+    });
+
     test('being away costs nothing beyond the buff', () => {
         const { a, b } = leaveAndReturn(4, 5, 50);
         for (const k of ['gold', 'playerHp', 'playerMp', 'playerX', 'playerY', 'turn']) assert.equal(b[k], a[k], k);

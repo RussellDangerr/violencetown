@@ -22,6 +22,7 @@ export function hoursAway(savedAt, now) {
 export function readAway(game, savedAt, now = Date.now()) {
     game.hoursAway = hoursAway(savedAt, now);
     game.awaySavedAt = savedAt;   // (CK2) the news is keyed on the save's own stamp
+    game.awayRestHours = game.hoursAway;   // (WP1) the news clears hoursAway on a zone change; this stays for the rested check
     return game.hoursAway;
 }
 
@@ -95,7 +96,7 @@ export function besideBench(map, x, y) {
 // more. The save's own stamp marks it as given, so reading the same return twice gives it once.
 // Returns true when it was given.
 export function restedOnReturn(game, say) {
-    if (!(game.hoursAway >= RESTED_MIN_HOURS)) return false;
+    if (!(game.awayRestHours >= RESTED_MIN_HOURS)) return false;
     if (game.map?.url !== REST_ZONE) return false;
     if (!besideBench(game.map, game.playerX, game.playerY)) return false;
     if (game.awaySavedAt != null && game._restedFor === game.awaySavedAt) return false;
