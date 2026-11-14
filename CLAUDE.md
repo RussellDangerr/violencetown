@@ -84,10 +84,14 @@ browser at all still cannot run it. `?autoplay&speed=2` on the page watches a ru
 
 **The sim** (`plans/sim1-autoplay-many-seeds.md`): after merging a batch to dev, run `npm run
 sim:check` once — the autoplay over 50 seeds against `tools/autoplay-sim-baseline.json`, about 11
-min. It is not part of `npm test` or the board loop. A MOVED line is either an intended change,
-re-recorded with `npm run sim:write` in a commit that cites the ruling, or a bug. Accepting a new
-autoplay golden does not update the sim baseline; that is how it went stale after PS1
-(plans/sim-baseline-refresh.md).
+min. It is not part of `npm test`; the board loop runs it in the background on dev's tip after
+merges (`tools/roadmap-board/LOOP.md` §13, plans/sim-after-merges.md). A MOVED line is either an
+intended change, re-recorded with `npm run sim:write` in a commit that cites the ruling, or a bug.
+Re-recording the baseline means `npm run spirits:harvest` too, in the same commit: the heroic
+spirits belong to the baseline, and `tests/spirit-harvest.test.js` fails until they are harvested
+again (plans/heroic-spirits.md rule 4). Accepting a new autoplay golden does not update the sim
+baseline; that is how it went stale after PS1 (plans/sim-baseline-refresh.md) and again after
+GO1, whose golden was also accepted without its spirits.
 
 Several older docs — `plans/defeat-scenarios*.md`, `plans/remembrance-rings*.md`,
 `plans/pd3-ai-consolidation*.md`, `plans/ring-builds-ability-axis.md`,

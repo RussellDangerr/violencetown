@@ -448,6 +448,9 @@ in the background, never as a merge gate (plans/sim-after-merges.md).
     as it was so the next pass tries again.
 - **Re-recording, on pick (a):** the loop itself, as for an accepted golden. A detached worktree
   at dev's tip, branch `feature/<ruling id>-sim-baseline`: the spec commit, then
-  `npm run -s sim:write` in a commit saying "accept the sim baseline, citing <ruling id> (a)",
-  then `npm run -s sim:check` must exit 0. Run the guard, push the branch, and add a slice card
+  `npm run -s sim:write` and then `npm run -s spirits:harvest` (about 15 minutes; the heroic
+  spirits belong to the baseline, and `tests/spirit-harvest.test.js` fails until they are
+  harvested again on it, plans/heroic-spirits.md rule 4), both files in one commit saying
+  "accept the sim baseline, citing <ruling id> (a)", then `npm run -s sim:check` must exit 0
+  and `npm test` pass. Run the guard, push the branch, and add a slice card
   in Review for his Merge it. The guard treats the baseline as a golden.
