@@ -190,6 +190,18 @@ export const ITEMS = {
         fallbackColor: '#a070c0',
         baseValue: 10,
     },
+    // A costume is worn whole (CO1): using it from the bag puts it on, using it again takes it off.
+    // Its kit and ranks live in costumes.js; the bag icon is a flat fallback colour.
+    test_costume: {
+        id: 'test_costume',
+        name: '[Test Costume]',
+        description: '[TEXT]',
+        useType: 'costume',
+        costume: 'test_costume',
+        consumable: false,
+        fallbackColor: '#e0a030',
+        baseValue: 10,
+    },
     cardboard_cuirass: {
         id: 'cardboard_cuirass',
         name: '[Cardboard Cuirass]',
@@ -685,6 +697,10 @@ function resolveEquip(game, itemDef, hand = 'weapon', bagSlot = -1) {
         if (bagSlot >= 0 && Array.isArray(inv) && inv[bagSlot] == null) inv[bagSlot] = { itemDef: d, count: 1 };
         else game._addToInventory(d);
     };
+    if (slot === 'weapon' && game.costume) {   // (CO1) as below: a costume's hands are its own
+        bagIt(itemDef);
+        return `[TEXT: take the costume off first]`;
+    }
     if (slot === 'weapon') {
         // Into `hand` (the right, as the one weapon slot did, unless the GEAR
         // tab's left plate asks for the left); a two-hander takes both, and
@@ -696,6 +712,10 @@ function resolveEquip(game, itemDef, hand = 'weapon', bagSlot = -1) {
         return out.length
             ? `[Equipped ${itemDef.name} — ${out.map(d => d.name).join(', ')} back in your bag]`
             : `[Equipped ${itemDef.name}]`;
+    }
+    if (game.costume) {   // (CO1) the kit is the costume: take the whole costume off to change it
+        bagIt(itemDef);
+        return `[TEXT: take the costume off first]`;
     }
     const old = game.equipment[slot];
     game.equipment[slot] = itemDef;
@@ -725,6 +745,7 @@ export function unequipItem(game, slot) {
     if (slot === 'weapon') return null;
     const item = game.equipment[slot];
     if (!item) return null;
+    if (game.costume) return `[TEXT: take the costume off first]`;   // (CO1)
     // A two-hander's left hand is the weapon itself, which never comes off.
     if (slot === 'left' && handsRule(game)(item) >= 2) return null;
     if ((game.tempEquips || []).some(te => te.slot === slot)) {
