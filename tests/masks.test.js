@@ -23,7 +23,7 @@ function canEnterFn() {
     assert.ok(at > 0, '_canEnter not found');
     const end = mainSrc.indexOf('\n    }', at + 1);
     const body = mainSrc.slice(at + 5 + '_canEnter'.length, end + '\n    }'.length);
-    return new Function('wornVerb', `'use strict'; return function ${body}`)(wornVerb);
+    return new Function(`'use strict'; return function ${body}`)();
 }
 const canEnter = canEnterFn();
 
@@ -100,6 +100,6 @@ describe('the Rat Mask', () => {
         const r = src('renderer.js');
         assert.match(r, /wornBody\(game\.equipment\)/);
         assert.match(r, /ENEMY_SPRITES\[maskBody\.sprite\]/);
-        assert.match(mainSrc, /wornVerb\(this\.equipment, 'grates'\)/);
+        assert.match(mainSrc, /maskGrates/);
     });
 });
