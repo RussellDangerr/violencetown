@@ -13,7 +13,7 @@ import { SAFE_SLOTS, MAX_STACK, PACK_PAGE } from '../game/data.js';
 import { pickSlots, ENTRIES } from '../game/slots.js';
 import { resolveEnemyTurns, WILDERNESS_BEAR } from '../game/enemies.js';
 import { getGreedyStep } from '../game/pathing.js';
-import { ENEMY_SPRITES } from '../game/sprites.js';
+import { ENEMY_SPRITES, SHEETS, TINY_STYLE_SHEETS } from '../game/sprites.js';
 import { isHostile } from '../game/ai.js';
 import { RNG } from '../game/rng.js';
 import { INTERACTIONS, callWildernessBear } from '../game/interactions.js';
@@ -214,5 +214,16 @@ describe('wherever you come in, the bear finds a way to you', () => {
             }
             assert.ok(Math.max(Math.abs(b.x - x), Math.abs(b.y - y)) <= 1, `never arrived entering at ${x},${y}`);
         }
+    });
+});
+
+describe('the bear art', () => {
+    test('it draws the brown cell of its own sheet, which the recolour tool wrote', () => {
+        assert.deepEqual(ENEMY_SPRITES.Bear, { sheet: 'bearVariants', col: 0, row: 0, static: true });
+        assert.ok(SHEETS.bearVariants && TINY_STYLE_SHEETS.has('bearVariants'));
+        assert.notDeepEqual(ENEMY_SPRITES.Bear, ENEMY_SPRITES['Polar Bear']);
+        const bytes = readFileSync(fileURLToPath(new URL('../game/assets-placeholder/kenney/bearVariants_packed.png', import.meta.url)));
+        assert.equal(bytes.readUInt32BE(16), 16);
+        assert.equal(bytes.readUInt32BE(20), 16);
     });
 });
