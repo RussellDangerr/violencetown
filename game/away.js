@@ -21,5 +21,56 @@ export function hoursAway(savedAt, now) {
 // Work out the hours away and keep them on the game as `hoursAway`. Returns the number.
 export function readAway(game, savedAt, now = Date.now()) {
     game.hoursAway = hoursAway(savedAt, now);
+    game.awaySavedAt = savedAt;   // (CK2) the news is keyed on the save's own stamp
     return game.hoursAway;
+}
+
+// ── CK2: the city tells you something happened ───────────────────────────────────────────
+// News only: one line in the log, the first time you change zone after an hour or more away.
+// It costs nothing and changes no state. Which line it is comes from a hash of the save's own
+// stamp and the hours away, run through a small stream of its own: the same save and the same
+// hours give the same news, and game.rng is never read or advanced.
+
+export const NEWS_MIN_HOURS = 1;
+// PLACEHOLDER pool: obviously fake lines. Caelan writes the real ones.
+export const NEWS_LINES = [
+    '[TEXT] news A',
+    '[TEXT] news B',
+    '[TEXT] news C',
+    '[TEXT] news D',
+];
+
+// FNV-1a over a string, as an unsigned 32-bit number.
+function fnv1a(str) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < str.length; i++) {
+        h ^= str.charCodeAt(i);
+        h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return h >>> 0;
+}
+
+// A first draw from the news's own stream (mulberry32 seeded by the hash). Pure.
+function newsDraw(seed) {
+    let a = (seed + 0x6D2B79F5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
+// The news line for a save stamp and hours away, or null when it was under an hour.
+export function pickNews(savedAt, hours) {
+    if (!(hours >= NEWS_MIN_HOURS)) return null;
+    const r = newsDraw(fnv1a(`away-news|${savedAt}|${hours}`));
+    return `${NEWS_LINES[Math.floor(r * NEWS_LINES.length)]} (${hours}h)`;
+}
+
+// Tell the news once, then forget the absence so a second zone change says nothing.
+// `say` is the game's log. Returns the line told, or null.
+export function tellAwayNews(game, say) {
+    const hours = game.hoursAway;
+    const line = pickNews(game.awaySavedAt, hours);
+    game.hoursAway = 0;
+    if (line) say(line);
+    return line;
 }
