@@ -43,7 +43,7 @@ import { pickSlots, defaultPicks, resolveSpawn, requiredDropFor, dropLineFor, FI
 import { rememberSpent, applySpent } from './npc-memory.js';
 import { snapshotOf, keepSnapshot, readSnapshots, reportLines } from './bones.js';
 import { hasSave, readSaveRaw, writeSave, loadInto, clearSave } from './save.js';
-import { readAway, tellAwayNews } from './away.js';   // (CK1) hours since the save's savedAt
+import { readAway, tellAwayNews, restedOnReturn } from './away.js';   // (CK1) hours since the save's savedAt
 import { QuestEngine } from './quests.js';
 import { doExamine, resolveExamine } from './examine.js';
 import { recordDrop, pendingDrops, takeDrop, dropLoadout, recordKill, stepRespawns, deadIds, bossDropOnce, claimSpots, spotHolds, spotSpawns } from './drops.js'; // per-zone runtime dropped-items layer + respawn list (pure, node-tested)
@@ -1190,6 +1190,11 @@ class Game {
         readAway(this, raw.savedAt);
     }
 
+    // (WP1) Back beside a bench after an hour or more: one rested buff and one log line.
+    _applyRested() {
+        restedOnReturn(this, (m) => this._log(m));
+    }
+
     // (CK2) The first zone change after an hour or more away tells one piece of news.
     _tellAwayNews() {
         tellAwayNews(this, (m) => this._log(m));
@@ -1204,7 +1209,7 @@ class Game {
                 // (CK1) Back in the tab: read the stamp the leaving save wrote, once.
                 this._wentAway = false;
                 const raw = readSaveRaw();
-                if (raw) this._noteAway?.(raw);
+                if (raw) { this._noteAway?.(raw); this._applyRested?.(); }
             }
         });
         window.addEventListener('pagehide', () => this._saveOnLeave());
@@ -1389,6 +1394,7 @@ class Game {
                 return;
             }
             this._log('[Save loaded]', 'transition');
+            this._applyRested?.();   // (WP1) after the load, so the restored buffs do not overwrite it
             this._maybeShowFirstRunHint();
         };
 
