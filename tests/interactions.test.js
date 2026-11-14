@@ -31,8 +31,8 @@ function standIn(mapUrl, carry) {
 }
 
 describe('the table', () => {
-    test('ships with only the Mola Cola row (FD1)', () => {
-        assert.deepEqual(INTERACTIONS.map(r => r.id), ['mola_cola_frozen']);
+    test('ships the two Mola Cola rows (FD1, FD2)', () => {
+        assert.deepEqual(INTERACTIONS.map(r => r.id), ['mola_cola_frozen', 'mola_cola_wilderness']);
     });
     test('the Mola Cola row carries a placeholder note and the frozen zone', () => {
         assert.equal(INTERACTIONS[0].note, '[TEXT]');
