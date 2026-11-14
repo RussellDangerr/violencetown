@@ -32,11 +32,9 @@ function findNode(key, node = ROOT, path = []) {
     return null;
 }
 
-const FOUND = ARC_KEYS.map(key => {
-    const f = findNode(key);
-    if (!f) throw new Error(`fight-arc: the wheel has no node "${key}"`);
-    return f;
-});
+// Found live, each time: the Melee ring changes with the weapon in hand (setMeleeKit), so a
+// node or path worked out once at load goes stale. A key the ring does not have has no slot.
+const found = () => ARC_KEYS.map(key => findNode(key)).filter(Boolean);
 
 function owns(node, game) {
     if (!node.spellId) return true;   // moves are always yours; only spells are owned or not
@@ -47,7 +45,7 @@ function owns(node, game) {
 // key (null when the slot is usable); `line` is its log line.
 export function arcSlots(game) {
     const out = [];
-    for (const { node, path } of FOUND) {
+    for (const { node, path } of found()) {
         if (!owns(node, game)) continue;
         if (out.length >= ARC_MAX) break;
         const reason = greyedReason(node, game);
