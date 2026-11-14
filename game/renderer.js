@@ -3581,6 +3581,13 @@ export class Renderer {
     // Angles in radians: `mid` = the tile's centre angle, `half` = half its width.
     // `sub` (fx36) is a second line under the label: { text, color }. It replaces the
     // icon, because the ring is only one line and a half thick.
+    // (WK3) The move a tap uses carries a star on the Melee ring ([*] is a placeholder mark).
+    _starred(node, game) {
+        if (!game._defaultMoveKey || !game.equipment) return node.label;
+        const onRing = node.resolver === 'combatAttack' || node.resolver === 'cleaveAttack' || node.resolver === 'spinAttack' || node.resolver === 'stunAttack';
+        return onRing && node.key === game._defaultMoveKey() ? '[*] ' + node.label : node.label;
+    }
+
     _wheelTile(r0, r1, mid, half, fill, alpha, label, txtColor, outline, icon, dominant = false, sub = null) {
         const { ctx } = this, { cx, cy } = this._hud().wheel;
         // (§12.4) the selected wedge "rises" — a touch wider + a longer outer
@@ -3806,7 +3813,7 @@ export class Renderer {
             const sub = isSel ? this._eatSliceLine(node, game, en) : null;
             this._wheelTile(activeBand[0], activeBand[1], mid, QHALF,
                 col, en ? (isSel ? 1 : 0.5) : 0.32,
-                node.placeholder ? '…' : node.label,
+                node.placeholder ? '…' : this._starred(node, game),
                 txt,
                 isSel ? { w: 3, c: '#fff3c0' } : null,
                 node.placeholder ? null : WHEEL_ICONS[node.key],
@@ -3845,7 +3852,7 @@ export class Renderer {
                 // being brighter than its siblings, not by competing with the
                 // thing you have actually chosen.
                 this._wheelTile(band[0], band[1], TOP + off * SPREAD, HALF,
-                    center ? HUE : '#4a3c2a', center ? 0.34 : 0.22, kids[j].label,
+                    center ? HUE : '#4a3c2a', center ? 0.34 : 0.22, this._starred(kids[j], game),
                     center ? '#cbbb95' : '#8d8069',
                     center ? { w: 1, c: 'rgba(232,207,144,0.3)' } : null);
             }
