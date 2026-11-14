@@ -36,6 +36,7 @@ downtown/dt-ruffian               Ruffian                     100       3      9
 downtown/dt-recipient             Stranger                    100     -80      0        0              1              1      -
 downtown/dt-merch1                Vendor                      100     -80      0        0              1              1      -
 downtown/dt-merch2                Vendor                      100     -80      0        0              1              1      -
+downtown/dt-driver                Violencian                  100     -80      0        6              1              1      -
 downtown/dt-folk1                 Violencian                  100     -80      0        0              1              1      -
 downtown/dt-folk2                 Violencian                  100     -80      0        0              1              1      -
 downtown/dt-platero               Violencian                  100     -80      0        0              1              1      -
@@ -115,7 +116,7 @@ canyon                     8
 carnival                 151
 casino                     0
 diner                      0
-downtown                   8
+downtown                  14
 factory                   76
 frozen                    78
 graveyard                 78
