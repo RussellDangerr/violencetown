@@ -82,6 +82,13 @@ autoplay:write` records an intended change. It needs Chrome, so it is not part o
 under `PLAYWRIGHT_BROWSERS_PATH` and passes `--no-sandbox` when running as root. A routine with no
 browser at all still cannot run it. `?autoplay&speed=2` on the page watches a run; any key stops it.
 
+**The sim** (`plans/sim1-autoplay-many-seeds.md`): after merging a batch to dev, run `npm run
+sim:check` once — the autoplay over 50 seeds against `tools/autoplay-sim-baseline.json`, about 11
+min. It is not part of `npm test` or the board loop. A MOVED line is either an intended change,
+re-recorded with `npm run sim:write` in a commit that cites the ruling, or a bug. Accepting a new
+autoplay golden does not update the sim baseline; that is how it went stale after PS1
+(plans/sim-baseline-refresh.md).
+
 Several older docs — `plans/defeat-scenarios*.md`, `plans/remembrance-rings*.md`,
 `plans/pd3-ai-consolidation*.md`, `plans/ring-builds-ability-axis.md`,
 `plans/interaction-ui-polish.md` — say "no local Node" and mark their node tests UNRUN. That was true
