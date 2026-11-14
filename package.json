@@ -37,6 +37,7 @@
     "sim": "node tools/autoplay-sim.mjs",
     "sim:check": "node tools/autoplay-sim.mjs --check",
     "sim:write": "node tools/autoplay-sim.mjs --write",
+    "spirits:harvest": "node tools/spirit-harvest.mjs",
     "map:audit": "node -e \"for (const f of require('fs').readdirSync('game').filter(n=>n.endsWith('-map.json'))) require('child_process').execSync(`node tools/map-audit.mjs game/${f}`,{stdio:'inherit'})\"",
     "tiled:tileset": "node tools/tiled.mjs tileset",
     "tiled:import": "node tools/tiled.mjs import",

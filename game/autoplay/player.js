@@ -21,6 +21,10 @@ const ARSENAL = ['fireball', 'coneofcold'];
 export const FIGHTER = { healBelow: 0.4, sneak: false, spells: ARSENAL, items: true };
 export const SNEAK = { healBelow: 0.4, sneak: true, spells: ARSENAL, items: true };
 export const KNOBS = FIGHTER;
+// Mary Shelley's inclination (plans/heroic-spirits.md, slice 2): Cone of Cold
+// before Fireball, nothing drunk or thrown. Only the spirit harvest plays it,
+// so the goldens never see it.
+export const CASTER = { healBelow: 0.4, sneak: false, spells: ['coneofcold', 'fireball'], items: false };
 
 // What a tile costs the sneak, in steps. `seenAt` is the worst verdict any
 // hostile holds on a tile (perception.js): DIRECT is its cone, PERIPHERAL its
