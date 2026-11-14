@@ -24,7 +24,7 @@ import {
     WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
     EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, EQUIP_LEFT_HAND_RECT, closeButtonRect,
     DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_LABELS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceBagPagerRects, deviceEquipLayout, gearArmourRect, deviceRingsLayout,
-    deviceSkillsLayout, ringPassiveRows,                                     // (US2) the skills readout in the RINGS tab; (RR1) a ring's passive rows
+    deviceSkillsLayout, SKILL_COUNT_W, ringPassiveRows,                                     // (US2) the skills readout in the RINGS tab; (RR1) a ring's passive rows
     inspectorPanelRect, inspectorActionRects,                               // (C1) tap-to-inspect panel + action-row geometry
     gearOptionRects, gearChooserRect, gearEmptyNoteRect,                                     // (C2) GEAR chooser option-row + panel geometry
     xmbBarLayout, hudLayout, throwRects, wheelTopMarks, fightPanelRects, XMB_CELL,                      // (XMB) usable-bar geometry; (screen-fill) the HUD, throw targets, the marks above the wheel
@@ -2935,6 +2935,8 @@ export class Renderer {
         for (const row of deviceSkillsLayout(bodyRect, game.skills).rows) {
             const label = this._fitText(SKILL_LABELS[row.id] ?? '[TEXT]', row.labelW);
             this.font.drawText(ctx, label.text, row.x, row.y + row.h / 2 - 4, { color: row.rank > 0 ? UI.gold : UI.dim, scale: label.scale });
+            const count = this._fitText(row.countText, SKILL_COUNT_W);
+            this.font.drawText(ctx, count.text, row.countR, row.y + row.h / 2 - 4, { color: row.rank > 0 ? UI.gold : UI.dim, scale: count.scale, align: 'right' });
             for (const p of row.pips) {
                 if (p.lit) { ctx.fillStyle = UI.gold; ctx.fillRect(p.x, p.y, p.w, p.h); }
                 else       { ctx.strokeStyle = UI.dim; ctx.lineWidth = 1; ctx.strokeRect(p.x + 0.5, p.y + 0.5, p.w - 1, p.h - 1); }

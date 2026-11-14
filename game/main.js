@@ -92,7 +92,7 @@ import { coinTake, kitTake, gearTake, coinWeight, itemWeight, gearWeight,
          noticeBuffer, isClean, stealLimit } from './theft.js';
 import { INTERACTIONS, fireRows } from './interactions.js'; // (IN1) carry-this-here rules
 import { overworldZone } from './world-map.js'; // (mp2) which overworld zone a map belongs to
-import { recordUse, skillPerks, mergePassives } from './skills.js'; // (skills) use-ranks: clean lifts rank up light fingers
+import { recordUse, skillPerks, mergePassives, rankPerk, perkText } from './skills.js'; // (skills) use-ranks: clean lifts rank up light fingers
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
 import {
     createWheelState, cycle, drill, back, compose, autoAimTile,
@@ -4930,7 +4930,7 @@ class Game {
     _countCleanLift() {
         const { skills, rankedUp } = recordUse(this.skills, 'light_fingers');
         this.skills = skills;
-        if (rankedUp) this._log('[TEXT]', 'pickup');
+        if (rankedUp) this._log(`[TEXT] ${perkText(rankPerk('light_fingers', rankedUp))}`, 'pickup');
     }
 
     // (theft) The victim on an aimed tile, or null. Takes the tile as an ARGUMENT
