@@ -95,6 +95,70 @@ export function knowledgeOf(track, outcome, stageCount = 0) {
     return { foes, zones, quests: outcome.quest ? { [outcome.quest]: quest } : {} };
 }
 
+// ── What changed between two spirits of the same run ───────────────────────
+//
+// The autoplay gate's evidence (plans/heroic-spirits.md, slice 1b): when a
+// golden drifts, this says what the hero did differently, not only which
+// number moved. Same seed, same game: the same spirit, so any difference is
+// real. The diff is evidence; pass or fail stays the golden's.
+
+const sameRow = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const anchorKey = (a) => `${a.kind}|${a.who}|${a.map}`;
+
+// The first row where the tracks part, what changed in the outcome, and the
+// anchors gained, lost or moved to another turn.
+export function diffSpirits(before, after) {
+    if (!before || !after) return { same: !before && !after, missing: !before && !after ? null : !before ? 'before' : 'after' };
+    const a = before.track || [], b = after.track || [];
+    let i = 0;
+    while (i < a.length && i < b.length && sameRow(a[i], b[i])) i++;
+    const first = i < a.length || i < b.length ? { index: i, before: a[i] ?? null, after: b[i] ?? null } : null;
+
+    const outcome = [];
+    for (const k of new Set([...Object.keys(before.outcome || {}), ...Object.keys(after.outcome || {})])) {
+        const was = before.outcome?.[k], now = after.outcome?.[k];
+        if (JSON.stringify(was) !== JSON.stringify(now)) outcome.push({ key: k, was: was ?? null, now: now ?? null });
+    }
+
+    const was = new Map((before.anchors || []).map((x) => [anchorKey(x), x]));
+    const now = new Map((after.anchors || []).map((x) => [anchorKey(x), x]));
+    const lost = [...was].filter(([k]) => !now.has(k)).map(([, x]) => x);
+    const gained = [...now].filter(([k]) => !was.has(k)).map(([, x]) => x);
+    const moved = [...now].filter(([k, x]) => was.has(k) && was.get(k).turn !== x.turn)
+        .map(([k, x]) => ({ ...x, from: was.get(k).turn, to: x.turn }));
+
+    const same = !first && !outcome.length && !lost.length && !gained.length && !moved.length;
+    return { same, rows: { before: a.length, after: b.length }, first, outcome, lost, gained, moved };
+}
+
+// One track row in a few words, for a person reading the gate's output.
+export function describeRow(r) {
+    if (!r) return '(the track ends)';
+    const where = `${r.map} ${r.x},${r.y}`;
+    if (r.act === 'fell') return `t${r.t} ${where}: fell to ${r.by}`;
+    if (r.act === 'felled') return `t${r.t} ${where}: ${r.who} fell`;
+    return `t${r.t} ${where} hp${r.hp}: ${r.act}${r.dir ? ` ${r.dir}` : ''}${r.at ? ` @${r.at.x},${r.at.y}` : ''}${r.target ? ` on ${r.target}` : ''}`;
+}
+
+const describeAnchor = (x) => `${x.kind}${x.who ? ` ${x.who}` : ''}${x.map ? ` (${x.map})` : ''} t${x.turn}`;
+
+// The diff as lines to print under a run's name.
+export function describeDiff(d) {
+    if (d.same) return ['spirit matches'];
+    if (d.missing) return [`no ${d.missing} spirit to compare`];
+    const out = [];
+    if (d.first) {
+        out.push(`first differs at row ${d.first.index} of ${d.rows.before} -> ${d.rows.after}:`);
+        out.push(`  was  ${describeRow(d.first.before)}`);
+        out.push(`  now  ${describeRow(d.first.after)}`);
+    }
+    for (const o of d.outcome) out.push(`outcome.${o.key}: ${JSON.stringify(o.was)} -> ${JSON.stringify(o.now)}`);
+    for (const x of d.lost) out.push(`lost:   ${describeAnchor(x)}`);
+    for (const x of d.gained) out.push(`gained: ${describeAnchor(x)}`);
+    for (const x of d.moved) out.push(`moved:  ${x.kind}${x.who ? ` ${x.who}` : ''} t${x.from} -> t${x.to}`);
+    return out;
+}
+
 // The spirit of one finished run, or null when the script has no hero or the
 // run left no track.
 export function spiritRecord({ script, seed, version = null, finished, failure = null, turn, quest = null, stageCount = 0, track }) {

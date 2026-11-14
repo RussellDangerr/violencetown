@@ -21,6 +21,7 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { diffSpirits, describeDiff } from '../game/spirits.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'game');
 const MIME = {
@@ -278,6 +279,10 @@ function drift(want, got, at = '') {
 
 const o = parseArgs(process.argv.slice(2));
 const GOLDEN = path.resolve(ROOT, '..', 'tools', 'autoplay-golden.json');
+// The same runs as heroic spirits (plans/heroic-spirits.md): written with the
+// golden, and diffed on --check so a drift says what the hero did differently.
+// Evidence only: pass or fail stays the golden's.
+const SPIRITS = path.resolve(ROOT, '..', 'tools', 'autoplay-spirits-golden.json');
 if (o.check) o.seed = JSON.parse(readFileSync(GOLDEN, 'utf8')).seed;
 if (!o.seedGiven && OWN_SEED[o.script] != null) o.seed = OWN_SEED[o.script];
 const scored = o.check || o.write;
@@ -324,9 +329,12 @@ try {
     // made the fighter's failure the expected outcome), so a run that does not
     // finish is reported, and fails the check only if that is a change.
     const golden = { seed: o.seed, runs: Object.fromEntries(runs.map((r) => [r.script, summary(r)])) };
+    const spirits = { seed: o.seed, runs: Object.fromEntries(runs.map((r) => [r.script, r.spirit ?? null])) };
     if (o.write) {
         writeFileSync(GOLDEN, JSON.stringify(golden, null, 2) + '\n');
         console.log(`wrote ${path.relative(process.cwd(), GOLDEN)}`);
+        writeFileSync(SPIRITS, JSON.stringify(spirits) + '\n');
+        console.log(`wrote ${path.relative(process.cwd(), SPIRITS)}`);
     }
     let checkFailed = false;
     if (o.check) {
@@ -334,6 +342,20 @@ try {
         if (diffs.length) { console.log('DRIFT from the autoplay golden:'); for (const d of diffs) console.log(`  ${d}`); }
         else console.log('autoplay golden matches — no drift');
         for (const r of runs) if (!r.finished) console.log(`not finished (${r.script}): ${r.reason}`);
+        if (!existsSync(SPIRITS)) console.log('no golden spirits yet — autoplay:write records them');
+        else {
+            const want = JSON.parse(readFileSync(SPIRITS, 'utf8')).runs || {};
+            const told = runs.map((r) => ({ r, d: diffSpirits(want[r.script] ?? null, r.spirit ?? null) }));
+            if (told.every(({ d }) => d.same)) console.log('spirits match');
+            else {
+                if (!diffs.length) console.log('SPIRITS DIFFER while the golden matches (evidence only):');
+                for (const { r, d } of told) {
+                    const who = r.spirit?.hero || want[r.script]?.hero || r.script;
+                    console.log(`spirit ${who} (${r.script}, seed ${r.seed}):`);
+                    for (const l of describeDiff(d)) console.log(`  ${l}`);
+                }
+            }
+        }
         checkFailed = diffs.length > 0;
     }
     const failed = runs.some((r) => !r.ok && !(scored && r.finished === false && !(r.errors || []).length));

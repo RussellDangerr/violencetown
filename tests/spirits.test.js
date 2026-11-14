@@ -3,7 +3,8 @@
 // never draws on its dice.
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { trackRow, fellRow, foesNow, felled, anchorsOf, knowledgeOf, spiritRecord, HEROES } from '../game/spirits.js';
+import { trackRow, fellRow, foesNow, felled, anchorsOf, knowledgeOf, spiritRecord, HEROES,
+         diffSpirits, describeDiff, describeRow } from '../game/spirits.js';
 
 const foe = (type, x, y, extra = {}) => {
     const f = { type, x, y, ...extra, hp: 10 };
@@ -150,5 +151,72 @@ describe('the spirit of a run', () => {
         g.enemies[0].hp = 0;
         rows.push(...felled(g, before), fellRow(g, 'green'));
         assert.doesNotThrow(() => spiritRecord({ script: 'quest', seed: 1, finished: false, turn: 7, track: rows }));
+    });
+});
+
+// The gate's evidence: a planted change in a copy of a spirit must be named
+// exactly, and an unchanged copy must say it matches.
+describe('what changed between two spirits of the same run', () => {
+    const spirit = (t = track, extra = {}) => spiritRecord({ script: 'quest', seed: 1, finished: true, turn: 20,
+        quest: { id: 'fix_car', stage: 'c' }, stageCount: 3, track: t, ...extra });
+    const copy = (rows) => rows.map((r) => ({ ...r }));
+
+    test('the same run matches', () => {
+        const d = diffSpirits(spirit(), spirit(copy(track)));
+        assert.equal(d.same, true);
+        assert.deepEqual(describeDiff(d), ['spirit matches']);
+    });
+
+    test('names the first row where the tracks part, at every position it is planted', () => {
+        for (let k = 0; k < track.length; k++) {
+            const planted = copy(track);
+            planted[k] = { ...planted[k], x: 99 };
+            const d = diffSpirits(spirit(), spirit(planted));
+            assert.equal(d.same, false);
+            assert.equal(d.first.index, k);
+            assert.equal(d.first.before.x, track[k].x);
+            assert.equal(d.first.after.x, 99);
+        }
+    });
+
+    test('a hero who now falls to the boss and never fells it: outcome and anchors say so', () => {
+        const after = copy(track.slice(0, 7));
+        after.push({ t: 16, map: 'sewer', act: 'fell', by: 'Fungus King', boss: true });
+        const d = diffSpirits(spirit(), spirit(after, { finished: false, failure: 'b: died 3 times', turn: 16 }));
+        assert.equal(d.first.index, 7);
+        assert.equal(d.first.before.act, 'felled');
+        assert.equal(d.first.after.act, 'fell');
+        assert.deepEqual(d.outcome.find((o) => o.key === 'cleared'), { key: 'cleared', was: true, now: false });
+        assert.deepEqual(d.lost.map((x) => `${x.kind} ${x.who}`).sort(), ['cleared fix_car', 'felled were_rat']);
+        assert.deepEqual(d.gained.map((x) => `${x.kind} ${x.who}`).sort(), ['fell Fungus King', 'stopped fix_car']);
+    });
+
+    test('an anchor that happened later is moved, not lost and gained', () => {
+        const later = copy(track).map((r) => (r.act === 'fell' ? { ...r, t: 11 } : r));
+        const d = diffSpirits(spirit(), spirit(later));
+        assert.deepEqual(d.moved.map((x) => [x.kind, x.who, x.from, x.to]), [['fell', 'were_rat', 10, 11]]);
+        assert.equal(d.lost.length + d.gained.length, 0);
+    });
+
+    test('a track that only got longer parts where the shorter one ends', () => {
+        const longer = [...copy(track), { t: 19, map: 'factory', x: 1, y: 1, act: 'step', stage: 'c' }];
+        const d = diffSpirits(spirit(), spirit(longer));
+        assert.equal(d.first.index, track.length);
+        assert.equal(d.first.before, null);
+        assert.equal(describeRow(d.first.before), '(the track ends)');
+    });
+
+    test('a missing spirit on either side is said, not thrown', () => {
+        assert.deepEqual(describeDiff(diffSpirits(null, spirit())), ['no before spirit to compare']);
+        assert.deepEqual(describeDiff(diffSpirits(spirit(), null)), ['no after spirit to compare']);
+        assert.equal(diffSpirits(null, null).same, true);
+    });
+
+    test('the printed lines name the turn, the zone and both actions', () => {
+        const planted = copy(track);
+        planted[2] = { t: 9, map: 'sewer', x: 4, y: 5, hp: 60, act: 'step', dir: 'left', stage: 'b' };
+        const lines = describeDiff(diffSpirits(spirit(), spirit(planted)));
+        assert.match(lines[0], /^first differs at row 2 of 9 -> 9:/);
+        assert.match(lines[2], /now  t9 sewer 4,5 hp60: step left/);
     });
 });
