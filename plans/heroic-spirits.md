@@ -75,11 +75,60 @@ Live heroes — spirits that act in the world — are not this branch.
   and `deaths`.
 - The naming grep returns zero lines.
 
+## Slice 2 as built: the harvest
+
+- `npm run spirits:harvest` (`tools/spirit-harvest.mjs`) plays every hero's script over the sim
+  baseline's seeds, the way the sim does (both now share `tools/autoplay-runs.mjs`), and writes
+  `tools/autoplay-sim-spirits.json` beside the baseline. It changes no golden and no baseline.
+- The set holds every attempt as one short row (seed, cleared, turn, stage, falls, and an `ending`
+  line such as `stopped at recover_converter after falling to Fungus King`), so the montage and per-seed
+  stats need no tracks; and three curated spirits per hero with their tracks. Curation is rule 5:
+  one spirit per way a run ended, the lowest seed of each, failures first, then clears with falls,
+  a clean clear last.
+- Each kept spirit's provenance carries the sim baseline's hash and the hash of every zone map its
+  track walked (`hashJson`: FNV-1a over the parsed JSON, so line endings never move it, and the same
+  in the browser for slice 3). `retire(spirit, hashes)` drops the track of a spirit whose map moved
+  and keeps its outcome and anchors.
+- `tests/spirit-harvest.test.js` fails when the sim baseline was re-recorded and the set was not
+  harvested again (rule 4), and when any kept track stands on a tile the current maps say nobody
+  can stand on (a barricade counts as passable: the hero breaks it and walks on). A planted wall
+  under a kept row proves the check can fail.
+- **Mary Shelley** plays `caster`: quest 1 with `CASTER` knobs in `player.js` — Cone of Cold before
+  Fireball, no drinks, no throws. Only the harvest plays her, so `decide()`, the goldens and the sim
+  baseline do not move (rule 3). The fighter already casts before he swings (ruling Q1-10), so
+  what sets her apart with knobs alone is the order and the empty hands; a caster that keeps her
+  distance would need a change to `decide()` and is not this slice.
+- First harvest (dev 998b119, seeds 1-50, 200 runs, 0 broken, 138 KB):
+
+  | Hero | Cleared | How the runs ended | Kept (seed) |
+  |---|---:|---|---|
+  | Paul Bunyan (quest) | 49 | 46 cleared after falling to the Fungus King, 3 after the Wererat, 1 stopped at `recover_converter` | 15, 1, 8 |
+  | Johnny Appleseed (sneak) | 50 | all 50 cleared after falling to the Fungus King | 1 |
+  | Amelia Earhart (loops) | 50 | all 50 clean | 1 |
+  | Mary Shelley (caster) | 48 | 42 after the Fungus King, 6 after the Wererat, 2 stopped at `recover_converter` | 20, 4, 1 |
+
+  On every seed, every hero who plays quest 1 first falls to a boss (the Fungus King or the
+  Wererat), so the boss-door replay (slice 3) has a spirit to show on every seed. The runs that stop do so in the
+  same corner (sewer 1,10), where the last fall is to the Wererat.
+- Planted checks: a wall at sewer 1,10 fails the stranded-row test naming Paul Bunyan, seed 15,
+  turns 31, 56, 73 and 74; a one-field change to the sim baseline fails the rule-4 test.
+- The set lives in `tools/`, which the game does not serve. Slice 3 copies what it shows into
+  `game/` or serves it from there.
+
+## Acceptance (slice 2)
+
+- `npm test` passes, with the curation, hashing, retiring and stranded-row tests, and the checks on
+  the committed set.
+- `npm run autoplay:check` and `npm run sim:check` show no drift: the caster adds a script, never
+  changes one.
+- `npm run spirits:harvest` writes a set with an attempt for every seed of every hero.
+- The naming grep returns zero lines.
+
 ## Overlaps with unmerged branches (11-13)
 
 - `feature/ah1-bots-carry-food` edits `game/autoplay/player.js`. Slice 1 does not touch it.
-- `feature/sim-baseline-refresh` re-records `tools/autoplay-sim-baseline.json`. The harvest
-  (slice 2) lands after it.
+- `feature/sim-baseline-refresh` re-recorded `tools/autoplay-sim-baseline.json`; merged to dev
+  before the harvest (slice 2) was built on it.
 - `feature/ck2-away-city-news` adds the news line the notice board (slice 4) builds on.
 - `feature/ne2-rival-title` changes how rivals read; anchors follow the rival record's shape.
 
