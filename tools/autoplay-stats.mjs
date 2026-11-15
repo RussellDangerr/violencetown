@@ -66,3 +66,53 @@ export function compare(base, now, { z = Z95, minShift = MIN_SHIFT } = {}) {
 // Run-level numbers first, then the stage numbers, each group alphabetical.
 const byName = (a, b) => (a.includes('.') - b.includes('.')) || a.localeCompare(b);
 const round = (x) => Math.round(x * 1000) / 1000;
+
+// ---- Paired comparison (plans/sim2-per-seed-numbers.md) --------------------
+// Seed 17 before against seed 17 after: the per-seed differences carry far less
+// luck than two separate groups do.
+
+// Seeds-file lines (one per script and seed) -> { script: { seed: { metric: number } } }.
+export function rowsByScript(lines) {
+    const out = {};
+    for (const { script, seed, ...metrics } of lines) (out[script] ??= {})[seed] = metrics;
+    return out;
+}
+
+// One script's rows -> one jsonl line each, seeds ascending.
+export function rowLines(script, perSeed) {
+    return Object.entries(perSeed).sort((a, b) => a[0] - b[0]).map(([seed, metrics]) => ({ script, seed: Number(seed), ...metrics }));
+}
+
+// base and now are { seed: { metric: number } }. For each metric, the seeds both
+// sides have it for are paired. MOVED means the mean difference is past
+// z * sd(differences) / sqrt(n) AND at least minShift of the baseline's mean over
+// those seeds (one whole unit when that mean is 0). `top` is the (up to) five
+// seeds whose difference was largest, before -> after.
+export function pairedCompare(base, now, { z = Z95, minShift = MIN_SHIFT, top = 5 } = {}) {
+    const shared = Object.keys(base).filter((s) => s in now).map(Number).sort((a, b) => a - b);
+    const names = new Set();
+    for (const s of shared) for (const k of [...Object.keys(base[s]), ...Object.keys(now[s])]) names.add(k);
+    const moved = [], steady = [], appeared = [], gone = [];
+    for (const name of [...names].sort(byName)) {
+        const pairs = shared.filter((s) => name in base[s] && name in now[s]).map((s) => ({ seed: s, was: base[s][name], now: now[s][name] }));
+        if (!pairs.length) {
+            if (shared.some((s) => name in now[s])) appeared.push(name); else gone.push(name);
+            continue;
+        }
+        const d = pairs.map((p) => p.now - p.was);
+        const n = d.length;
+        const meanD = d.reduce((a, b) => a + b, 0) / n;
+        const sd = n > 1 ? Math.sqrt(d.reduce((a, v) => a + (v - meanD) ** 2, 0) / (n - 1)) : 0;
+        const noise = z * sd / Math.sqrt(n);
+        const was = pairs.reduce((a, p) => a + p.was, 0) / n;
+        const floor = was === 0 ? 1 : Math.abs(was) * minShift;
+        const row = { name, n, was: round(was), now: round(was + meanD), delta: round(meanD), noise: round(noise) };
+        if (n > 1 && Math.abs(meanD) > noise && Math.abs(meanD) >= floor) {
+            row.top = pairs.filter((p) => p.now !== p.was)
+                .sort((a, b) => Math.abs(b.now - b.was) - Math.abs(a.now - a.was) || a.seed - b.seed)
+                .slice(0, top);
+            moved.push(row);
+        } else steady.push(row);
+    }
+    return { pairs: shared.length, moved, steady, appeared, gone };
+}
