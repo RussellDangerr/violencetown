@@ -22,6 +22,16 @@ export const COSTUMES = {
         // Its own skill record ({ skillId: uses }): placeholder, the first rank of one skill.
         skills: { light_fingers: 3 },
     },
+    // CO2: what absorbing Monstrous Sun Man leaves you. Placeholder kit and ranks.
+    sun_man_costume: {
+        id: 'sun_man_costume',
+        name: '[Sun Man Costume]',
+        kit: {
+            weapon: 'wooden_sword', left: null,
+            top: 'foil_hat', bottom: 'shoe_bags', front: 'cardboard_cuirass', back: 'red_cape', sides: 'latex_gloves',
+        },
+        skills: { light_fingers: 3 },
+    },
 };
 
 export const isCostumed = (game) => !!(game && game.costume);

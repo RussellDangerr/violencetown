@@ -18,6 +18,7 @@ import { ENTRIES, FINALE_PHASE1 } from './slots.js';
 import { spawnEnemy } from './enemies.js';
 import { weakenedBuff } from './buffs.js';
 import { stepEntity } from './pathing.js';
+import { resolveItemDef } from './item-registry.js';
 
 export const FINALE_PHASE2 = {
     beastTag: 'monstrous_sun_man_boss',       // a `_boss` tag: losing to him runs the boss retry
@@ -28,6 +29,8 @@ export const FINALE_PHASE2 = {
     // The quest flag that says phase 2 was won, and its value (FIN4 reads this).
     flag: 'finalePhase2',
     won: 'won',
+    // CO2: the bag item given the first time phase 2 is won.
+    costumeItem: 'sun_man_costume',
     // The sunlight he is wrapped in: a defence rider so ordinary blows do one point.
     sunlitDefence: 40,
     // His scream: every `screamEvery` turns it opens for `screamTurns` turns. While it is open
@@ -193,7 +196,13 @@ export function beastFell(game, e) {
     if (!game.questEngine) return true;
     const first = game.questEngine.state.flags[FINALE_PHASE2.flag] !== FINALE_PHASE2.won;
     game.questEngine.state.flags[FINALE_PHASE2.flag] = FINALE_PHASE2.won;
-    if (first) game.emitGameEvent('finale_phase2_won', { id: e.id });
+    if (first) {
+        game.emitGameEvent('finale_phase2_won', { id: e.id });
+        // CO2: his essence leaves you his costume, once.
+        const costume = resolveItemDef(FINALE_PHASE2.costumeItem);
+        if (costume) game._addToInventory?.(costume);
+        game._log(text, 'combat');                            // the costume, in your hands
+    }
     return true;
 }
 
