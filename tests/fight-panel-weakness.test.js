@@ -28,9 +28,10 @@ function liveMethod(signature, freeVars = {}) {
 }
 const combatAttack = liveMethod('combatAttack(enemyObj, damage, opts = {}) {', {
     isBackstab, weaponHitKind, weaknessKinds, elementalMult, critOf, isBoss, computeHit, WEAKNESS_MULT,
-    knockoutDamage, attack, emitNoise, NOISE, formatDamageNumber, learnFromHit,
+    knockoutDamage, attack, emitNoise, NOISE, formatDamageNumber,
     performance: { now: () => 0 }, HEAVY_HIT_DAMAGE: 1e9, audio: { playSfx() {} }, RINGS: {},
 });
+const learnWeakness = liveMethod('_learnWeakness(enemyObj, damageType) {', { learnFromHit });
 
 function installGlobals() {
     const store = new Map();
@@ -63,7 +64,7 @@ function makeGame() {
         emitGameEvent() {}, _removeFromSlot() {}, _resolveItemDef: () => null,
         async _loadMap(url, x, y) { this.map = { ...map, url: url || map.url }; this.playerX = x ?? 1; this.playerY = y ?? 1; },
         setTile() {},
-        combatAttack,
+        combatAttack, _learnWeakness: learnWeakness,
     };
 }
 const foe = (over = {}) => new Enemy({ id: 'f1', type: 'wererat', x: 4, y: 3, hp: 500, armor: 0, damage: 1,

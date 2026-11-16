@@ -5303,6 +5303,11 @@ class Game {
 
     // ── Combat ───────────────────────────────────────────────────────────────
 
+    // (WN1, WNR1 b) Land a hit of a type the foe is weak to or resists and you know it for that kind.
+    _learnWeakness(enemyObj, damageType) {
+        learnFromHit(this._knownWeak ||= {}, enemyObj, damageType);
+    }
+
     combatAttack(enemyObj, damage, opts = {}) {
         if (this._finaleBlocksHit?.(enemyObj)) return null;   // (FIN3) no one strikes the cowering Sun Man
         const playerEntity = { name: '[Player]', isDead: () => false };
@@ -5346,7 +5351,7 @@ class Game {
         });
         if (finalDmg === 0) { this._log(`[${enemyObj.shownName || enemyObj.type} is immune!]`, 'combat'); return null; }
         // (WN1, WNR1 b) A landed hit of a type the foe is weak to or resists teaches you that.
-        learnFromHit(this._knownWeak ||= {}, enemyObj, opts.type || kind);
+        this._learnWeakness?.(enemyObj, opts.type || kind);
         if (weakHit.knockout) finalDmg = knockoutDamage(finalDmg, enemyObj.entity);
         if (backstab) this._log('[Backstab!]', 'combat');
 
