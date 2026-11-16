@@ -20,7 +20,9 @@ export const DEFAULTS = Object.freeze({
     version:     SETTINGS_VERSION,
     musicVolume: 0.7,
     sfxVolume:   0.8,
-    reduceMotion: false,   // suppress / dampen screenshake + flash
+    reduceMotion: false,   // suppress / dampen screenshake + flash. Fallback only:
+                           // with no saved choice the device's prefers-reduced-motion
+                           // decides (plans/op2-reduce-motion-default.md)
     // Heroic spirits' boss-door replay (plans/heroic-spirits.md, HS-R2): opt-in,
     // off by default, the way sound is.
     spirits:      false,
@@ -56,6 +58,24 @@ export const DEFAULTS = Object.freeze({
     // existing player who already learned that one is not told again.
     hintsSeen: '',
 });
+
+// Does the device ask for reduced motion? Safe where there is no window or
+// matchMedia (node tests, old engines): anything unexpected reads as false.
+export function deviceReducesMotion() {
+    try {
+        const mm = globalThis.matchMedia;
+        if (typeof mm !== 'function') return false;
+        const q = mm.call(globalThis, '(prefers-reduced-motion: reduce)');
+        return !!(q && q.matches === true);
+    } catch (e) {
+        return false;
+    }
+}
+
+// True once the player has made a reduce-motion choice (saved, or set this
+// session). Until then the device's setting is used and is not written to disk,
+// so a later change to the device setting still takes effect.
+let motionChosen = false;
 
 // Live, mutable copy of the settings. Seeded with defaults so callers can read
 // safely before load() runs (it runs on boot, but defensive code is cheap).
@@ -93,7 +113,7 @@ export function validate(raw) {
         version:      SETTINGS_VERSION,
         musicVolume:  clamp01(o.musicVolume, DEFAULTS.musicVolume),
         sfxVolume:    clamp01(o.sfxVolume,   DEFAULTS.sfxVolume),
-        reduceMotion: asBool(o.reduceMotion, DEFAULTS.reduceMotion),
+        reduceMotion: asBool(o.reduceMotion, deviceReducesMotion()),
         spirits:      asBool(o.spirits,      DEFAULTS.spirits),
         muted:        asBool(o.muted,        DEFAULTS.muted),
         firstRunHintSeen: asBool(o.firstRunHintSeen, DEFAULTS.firstRunHintSeen),
@@ -112,15 +132,18 @@ export function load() {
         const s = localStorage.getItem(KEY);
         if (s) {
             const parsed = JSON.parse(s);
+            motionChosen = !!parsed && typeof parsed.reduceMotion === 'boolean';
             current = validate(parsed);
         } else {
-            current = { ...DEFAULTS };
+            motionChosen = false;
+            current = validate({});
         }
     } catch (e) {
         // Corrupt JSON, disabled storage, etc. — fall back to defaults rather
         // than crashing the boot path. Settings are non-critical.
         console.warn('[settings] load failed, using defaults', e);
-        current = { ...DEFAULTS };
+        motionChosen = false;
+        current = validate({});
     }
     return current;
 }
@@ -129,7 +152,9 @@ export function load() {
 // the in-memory copy still drives the session, it just won't persist.
 function persist() {
     try {
-        localStorage.setItem(KEY, JSON.stringify(current));
+        const out = { ...current };
+        if (!motionChosen) delete out.reduceMotion;
+        localStorage.setItem(KEY, JSON.stringify(out));
     } catch (e) {
         console.warn('[settings] persist failed (not saved)', e);
     }
@@ -153,7 +178,11 @@ export function get(key) {
 export function set(key, value) {
     if (!(key in DEFAULTS) || key === 'version') return;
     const next = validate({ ...current, [key]: value });
-    if (next[key] === current[key]) return; // no-op — skip churn
+    if (key === 'reduceMotion' && typeof value === 'boolean') motionChosen = true;
+    if (next[key] === current[key]) {
+        if (key === 'reduceMotion') persist(); // pin the choice
+        return; // no-op — skip churn
+    }
     current = next;
     persist();
     notify();
@@ -162,6 +191,7 @@ export function set(key, value) {
 // Apply a patch of several fields at once (one persist + one notify).
 export function update(patch) {
     if (!patch || typeof patch !== 'object') return;
+    if (typeof patch.reduceMotion === 'boolean') motionChosen = true;
     current = validate({ ...current, ...patch });
     persist();
     notify();
@@ -169,7 +199,8 @@ export function update(patch) {
 
 // Restore every field to its default. Used by a "reset to defaults" affordance.
 export function reset() {
-    current = { ...DEFAULTS };
+    motionChosen = false;
+    current = validate({});
     persist();
     notify();
 }
