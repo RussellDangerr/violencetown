@@ -68,6 +68,7 @@ export const ITEM_COLORS = {
     cardboard_cuirass:{ bg: '#b58a56', letter: 'A' },
     latex_gloves:     { bg: '#9fc7e8', letter: 'G' },
     red_cape:         { bg: '#c03030', letter: 'C' },
+    lava_cape:        { bg: '#e8661a', letter: 'L' },
     shoe_bags:        { bg: '#3a3a3a', letter: 'F' },
     ray_gun:          { bg: '#4aa0a0', letter: 'Z' },
     fearmur:          { bg: '#d8d0b8', letter: 'J' },
