@@ -90,6 +90,7 @@ export function serialize(game) {
             ...costumeToSave(game),   // (CO1) left out while no costume is worn
             ...defaultAttackEntry(game),
             ...interactionNotesEntry(game),
+            ...bodiesWornEntry(game),
             equipment: {
                 weapon: idOf(game.equipment.weapon),   // the right hand
                 left: idOf(game.equipment.left),
@@ -166,6 +167,12 @@ function defaultAttackEntry(game) {
 function skillsEntry(game) {
     const skills = sanitizeSkills(game.skills);
     return Object.keys(skills).length ? { skills } : {};
+}
+
+// (MS2) The body species worn so far, or nothing while none has been.
+function bodiesWornEntry(game) {
+    const bodiesWorn = sanitizeNoteIds(game.bodiesWorn);
+    return bodiesWorn.length ? { bodiesWorn } : {};
 }
 
 // (IN1) The interaction notes already seen, as a save field, or nothing while there are none.
@@ -410,6 +417,7 @@ function validate(raw) {
     p.defaultAttack = (p.defaultAttack && typeof p.defaultAttack.key === 'string' && typeof p.defaultAttack.weaponId === 'string')
         ? { weaponId: p.defaultAttack.weaponId, key: p.defaultAttack.key } : null;   // (WK3)
     p.interactionNotes = sanitizeNoteIds(p.interactionNotes);   // (IN1)
+    p.bodiesWorn = sanitizeNoteIds(p.bodiesWorn);   // (MS2)
     // collectedItems is a Set of string keys on the live game; drop anything
     // non-string so a malformed save can't poison the lookup.
     const ci = Array.isArray(raw.world?.collectedItems) ? raw.world.collectedItems : [];
@@ -496,6 +504,7 @@ export async function loadInto(game, raw) {
     game.costume           = costumeFromSave(p.costume, R);   // (CO1) worn: equipment/skills above are its kit
     game.defaultAttack     = p.defaultAttack || null;   // (WK3)
     game.interactionNotes  = [...p.interactionNotes];   // (IN1)
+    game.bodiesWorn        = [...p.bodiesWorn];   // (MS2)
     // knownSpells/grantedTricks are derived, not stored — rebuild from the
     // restored weapon + rings (a slotted Rat Ring grants Rat Form, etc.).
     if (game._refreshGrantedSkills) game._refreshGrantedSkills();

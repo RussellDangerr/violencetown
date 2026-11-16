@@ -2869,6 +2869,7 @@ export class Renderer {
         else if (active === 'map')    this._drawWorldMapBody(game, body, body.y);
         else if (active === 'rings') this._drawDeviceRings(game, body);
         else if (active === 'notes') this._drawDeviceNotes(game, body);
+        else if (active === 'bodies') this._drawDeviceBodies(game, body);
 
         // (FX43) The bag lists the keys that work in it: the phrases the pickers and shop already
         // use for arrows and Esc, and a placeholder for Space until its verb is chosen.
@@ -2876,6 +2877,16 @@ export class Renderer {
         const fit = this._fitText(foot, R.w - 32, 1, 0.75);
         this.font.drawText(ctx, fit.text, CANVAS_PX / 2, R.y + R.h - 12, { color: UI.dim, scale: fit.scale, align: 'center' });
         ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    }
+
+    // (MS2) The bodies tab: Night Kid first, then each body worn so far in the order first worn.
+    // A body never worn has no row. Labels are placeholders.
+    _drawDeviceBodies(game, bodyRect) {
+        const { ctx } = this;
+        const rows = ['[kid]', ...(game.bodiesWorn || []).map(sp => `[${sp}]`)];
+        rows.forEach((label, i) => {
+            this.font.drawText(ctx, label, bodyRect.x + 8, bodyRect.y + 8 + i * 18, { color: UI.textLight, scale: 1 });
+        });
     }
 
     // (IN1) The notes tab: each interaction note seen so far, oldest first. Empty reads as one
