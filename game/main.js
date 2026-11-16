@@ -1199,6 +1199,9 @@ class Game {
     }
 
     // (CK1) Whole hours since this save's stamp, kept as this.hoursAway.
+    // (FX66) Copy the save that would not open aside; true when a copy was kept.
+    _keepUnreadable() { return keepUnreadableSave(); }
+
     _noteAway(raw) {
         readAway(this, raw.savedAt);
     }
@@ -1388,7 +1391,7 @@ class Game {
             if (!raw) {
                 // (FX66) A save is on disk but will not parse: copy it aside before
                 // the fresh run's autosave replaces it.
-                if (hasSave() && keepUnreadableSave()) {
+                if (hasSave() && this._keepUnreadable?.()) {
                     start();
                     this._log('[TEXT: that save would not read; a copy is kept aside]', 'transition');
                     return;
@@ -1418,7 +1421,7 @@ class Game {
                 await loadInto(this, raw);
             } catch (e) {
                 console.error('[save] could not be loaded; starting fresh', e);
-                keepUnreadableSave();
+                this._keepUnreadable?.();
                 start();
                 this._log('[That save would not open. Starting a new run.]', 'transition');
                 return;

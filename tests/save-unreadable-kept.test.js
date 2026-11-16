@@ -38,7 +38,7 @@ test('autosaves and clearSave leave the kept copy alone', () => {
 
 test('continueGame keeps the copy on both bad-save paths and no longer claims the save is left on disk', () => {
     const main = readFileSync(new URL('../game/main.js', import.meta.url), 'utf8');
-    assert.equal((main.match(/keepUnreadableSave\(\)/g) || []).length, 2);
+    assert.equal((main.match(/this\._keepUnreadable\?\.\(\)/g) || []).length, 2);
     assert.ok(!/left on disk/.test(main));
     assert.ok(main.includes('[That save would not open. Starting a new run.]'));
 });
