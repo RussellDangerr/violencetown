@@ -47,7 +47,7 @@ import { PHASE, threatPhase, alertWatchers } from './threat-phase.js';        //
 import { isSafe } from './defeat-scenarios.js';   // (defeat legibility) mark safe-floor items
 import { buyPrice, sellPrice, bribeStepCost, mood, canTrade, band, BRIBE_STEP } from './trade.js'; // (trade slice 1) pricing + mood smiley; band feeds the offer meter's multiplier readout
 import { isHunting } from './ai.js'; // one spelling of "actively hunting the player"
-import { arcSlots, arcVisible, arcLayout, arcFaded, ARC_ALPHA, ARC_FADED_ALPHA } from './fight-arc.js';   // (FA1) the arc of attacks under you in a fight
+import { arcAllSlots, arcVisible, arcLayout, arcFaded, ARC_ALPHA, ARC_FADED_ALPHA } from './fight-arc.js';   // (FA1) the arc of attacks under you in a fight
 import { fighters, fightArea, FIGHT_MARGIN } from './fight-area.js';        // (fight-fog) who is in the fight, and what they can see
 import { entranceAt, fogReveal, fogDepth, fogOut, tileJitter, FOG_TINT, FOG_DENSITY, FOG_BLUR_TILES,
          FOG_FAR_TILES, FOG_IN_MS, FOG_OUT_MS } from './fight-entrance.js'; // (fight-fog) the entrance, and the fog's timeline and look
@@ -3210,7 +3210,7 @@ export class Renderer {
         if (!game || !this.font || !arcVisible(game)) return;
         const { ctx } = this;
         const vp = this._view();
-        const slots = arcSlots(game);
+        const slots = arcAllSlots(game);
         if (!slots.length) return;
         const rects = arcLayout(vp).slots;
         const faded = arcFaded(vp, game, { x: this._scrollX || 0, y: this._scrollY || 0 });
