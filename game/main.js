@@ -5545,7 +5545,11 @@ class Game {
             // every player-initiated hit that routes through combatAttack
             // (weapon swing, Cleave/Spin, item Smash, spells, tricks, thrown
             // splash) since they all funnel through this single computeHit call.
-            flats: this._poitionMod('strength'),
+            flats: this._poitionMod('strength')
+                // (QC2) A worn item's flat melee bonus (the Lava Cape), weapon swings only: a
+                // spell, smash or throw carries no weapon. Inline so lifts of this method need
+                // no new free variable.
+                + (opts.weapon ? Object.values(this.equipment || {}).reduce((s, it) => s + ((it && it.meleeBonus) || 0), 0) : 0),
             elemental: elementalMult(opts.type || kind, enemyObj),
             positional: backstab ? WEAKNESS_MULT : 1,
             state: kinds.includes('state') ? WEAKNESS_MULT : 1,

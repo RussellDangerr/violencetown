@@ -191,7 +191,7 @@ describe('every armor piece yields five tiers from one base', () => {
     test('the armor set is the five Sewer pieces', () => {
         // A check that finds nothing would pass on nothing.
         assert.deepEqual([...ARMOR_IDS].sort(),
-            ['cardboard_cuirass', 'delivery_cap_blue', 'delivery_cap_grey', 'foil_hat', 'latex_gloves', 'rat_mask', 'red_cape', 'shoe_bags', 'strongman_mask']);
+            ['cardboard_cuirass', 'delivery_cap_blue', 'delivery_cap_grey', 'foil_hat', 'latex_gloves', 'lava_cape', 'rat_mask', 'red_cape', 'shoe_bags', 'strongman_mask']);
         assert.ok(Object.isFrozen(ARMOR_IDS));
     });
 

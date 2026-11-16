@@ -291,6 +291,20 @@ export const ITEMS = {
         fallbackColor: '#c03030',
         baseValue: 10,
     },
+    // (QC2) The reward for finishing every quest. Placeholder armour number; +6 melee matches
+    // the Strength Poition (QC2R2 a). The bonus is read in combatAttack, weapon swings only.
+    lava_cape: {
+        id: 'lava_cape',
+        name: '[Lava Cape]',
+        description: '[TEXT]',
+        equipSlot: 'back',
+        useType: 'equip',
+        armor: 2,
+        meleeBonus: 6,
+        consumable: false,
+        fallbackColor: '#e8661a',
+        baseValue: 10,
+    },
     shoe_bags: {
         id: 'shoe_bags',
         name: '[Shoe Bags]',

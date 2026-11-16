@@ -383,7 +383,16 @@ export class QuestEngine {
         this.state.activeId = null;
         this.state.stageIndex = 0;
         if (q && q.onComplete) q.onComplete(this.game);
+        this._maybeGrantCape();
         this.game._render?.();
+    }
+
+    // (QC2) Once every quest in QUESTS is complete the Lava Cape lands in the bag, once per save.
+    _maybeGrantCape() {
+        const flags = this.state.flags;
+        if (flags.lava_cape_given) return;
+        if (!Object.keys(QUESTS).every(id => this.state.completed.includes(id))) return;
+        if (this.game._grantItem?.('lava_cape', '[TEXT]')) flags.lava_cape_given = true;
     }
 
     // Force the active quest straight to completion (runs onComplete once).
