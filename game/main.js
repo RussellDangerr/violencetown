@@ -40,7 +40,7 @@ import { applyDispositionDelta, reactToTransaction } from './give-action.js';
 import { getDialogue } from './dialogue.js';
 import { manhattan, clamp } from './utils.js';
 import { RNG, randomSeed } from './rng.js';
-import { pickSlots, echoSpawn, ECHO_SLOTS, defaultPicks, resolveSpawn, requiredDropFor, dropLineFor, FINALE_PHASE1, pickReturning, spotFor, RETURNING_SPOTS } from './slots.js';
+import { pickSlots, echoSpawn, echoStands, ECHO_SLOTS, defaultPicks, resolveSpawn, requiredDropFor, dropLineFor, FINALE_PHASE1, pickReturning, spotFor, RETURNING_SPOTS } from './slots.js';
 import { rememberSpent, applySpent } from './npc-memory.js';
 import { snapshotOf, keepSnapshot, readSnapshots, reportLines } from './bones.js';
 import { hasSave, readSaveRaw, writeSave, loadInto, clearSave, encodeSaveCode, importSaveCode } from './save.js';
@@ -6513,7 +6513,7 @@ class Game {
         try { snap = readSnapshots(localStorage).pop() || null; } catch { snap = null; }
         const out = [];
         for (const [slotId, slot] of Object.entries(ECHO_SLOTS)) {
-            if (slot.map !== url || dead.has(slot.spawn)) continue;
+            if (slot.map !== url || dead.has(slot.spawn) || !echoStands(slot, snap)) continue;
             const e = echoSpawn({ id: slot.spawn, slot: slotId, x: slot.at.x, y: slot.at.y }, snap);
             if (e) out.push(e);
         }
