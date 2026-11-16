@@ -2560,7 +2560,8 @@ class Game {
             // Examine; a quick tap does what it always did.
             const prop = !target && this._propTargetAt(tile.x, tile.y);
             const face = !target && adjacentFacing(this.playerX, this.playerY, tile);
-            if (face) { this._armTurnPress(tile, face, e, !!prop); return; }
+            this._pressProp = !!prop;
+            if (face) { this._armTurnPress(tile, face, e); return; }
             // Click-to-move: empty walkable ground → BFS-path the Hero there.
             if (this._tapWalkTo(tile)) { if (prop) this._armLongPress(tile, e, null, true); return; }
             if (prop) { this._armLongPress(tile, e, null, true); return; }
@@ -2602,7 +2603,8 @@ class Game {
     // it: no step, no turn spent, the arrow keys' free pivot. Released sooner it
     // is a tap and walks the step (endPress in _bindCanvasTap). A drag drops the
     // turn but keeps the step; a cancelled pointer drops both.
-    _armTurnPress(tile, face, e, prop = false) {
+    _armTurnPress(tile, face, e) {
+        const prop = this._pressProp;   // (EX2) set by the press: the tile held a named prop
         if (this._pressTimer) clearTimeout(this._pressTimer);
         this._pressStart = e ? { x: e.clientX, y: e.clientY } : null;
         this._turnPress = { tile };
