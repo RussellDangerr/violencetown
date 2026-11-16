@@ -3,6 +3,8 @@
 //
 //   node tools/autoplay-sim.mjs [--seeds=50 | --seeds=1-50] [--scripts=quest,sneak,loops] [--workers=8]
 //   node tools/autoplay-sim.mjs --write     save the result as tools/autoplay-sim-baseline.json
+//                                           and every seed's numbers as tools/autoplay-sim-seeds.jsonl
+//   node tools/autoplay-sim.mjs --write-seeds   save only the seeds file (plans/sim2-per-seed-numbers.md)
 //   node tools/autoplay-sim.mjs --check     run the baseline's seeds again and say what moved
 //   add --all to print every number, not only the ones that moved
 //
@@ -17,22 +19,24 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { cpus } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { aggregate, compare } from './autoplay-stats.mjs';
+import { aggregate, compare, metricsOf, pairedCompare, rowsByScript, rowLines } from './autoplay-stats.mjs';
 import { playAll, parseSeeds } from './autoplay-runs.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BASELINE = path.join(HERE, 'autoplay-sim-baseline.json');
+const SEEDS_FILE = path.join(HERE, 'autoplay-sim-seeds.jsonl');
 const SCRIPTS = ['quest', 'sneak', 'loops'];
 
 function parseArgs(argv) {
     const o = { seeds: null, scripts: SCRIPTS, workers: Math.max(1, Math.min(8, Math.floor(cpus().length / 2))),
-                write: false, check: false, all: false, timeout: 180000 };
+                write: false, writeSeeds: false, check: false, all: false, timeout: 180000 };
     for (const a of argv) {
         const [k, v] = a.replace(/^--/, '').split('=');
         if (k === 'seeds') o.seeds = parseSeeds(v);
         else if (k === 'scripts') o.scripts = v.split(',').filter(Boolean);
         else if (k === 'workers' || k === 'timeout') o[k] = Number(v);
         else if (k === 'write' || k === 'check' || k === 'all') o[k] = true;
+        else if (k === 'write-seeds') o.writeSeeds = true;
         else throw new Error(`unknown option ${a}`);
     }
     return o;
@@ -48,6 +52,9 @@ function scoreScript(results) {
         seeds: Object.fromEntries(ok.map((r) => [r.seed, r.report.fingerprint])),
     };
 }
+
+// Every seed's numbers, per script, for the paired check.
+const seedRows = (results) => Object.fromEntries(results.filter((r) => !r.broken).map((r) => [r.seed, metricsOf(r.report)]));
 
 const fmt = (x) => (x == null ? '—' : Number.isInteger(x) ? String(x) : x.toFixed(2));
 const pct = (x) => `${Math.round(x * 100)}%`;
@@ -75,6 +82,8 @@ const scripts = o.check && !process.argv.some((a) => a.startsWith('--scripts')) 
 const jobs = scripts.flatMap((script) => Array.from({ length: to - from + 1 }, (_, i) => ({ script, seed: from + i })));
 console.log(`autoplay-sim: ${scripts.join(', ')} on seeds ${from}-${to} (${jobs.length} runs, ${o.workers} at a time)`);
 
+const seedsBase = o.check && existsSync(SEEDS_FILE)
+    ? rowsByScript(readFileSync(SEEDS_FILE, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l))) : null;
 const results = await playAll(jobs, o.workers, o.timeout, 'autoplay-sim');
 const now = { seeds: [from, to], scripts: Object.fromEntries(scripts.map((s) => [s, scoreScript(results.filter((r) => r.script === s))])) };
 
@@ -90,12 +99,15 @@ if (o.check) {
     for (const [name, s] of Object.entries(now.scripts)) {
         const was = base.scripts[name];
         if (!was) { console.log(`  ${name}: not in the baseline`); continue; }
-        const r = compare(was, s);
+        const paired = seedsBase?.[name] ? pairedCompare(seedsBase[name], seedRows(results.filter((r) => r.script === name))) : null;
+        const r = paired ?? compare(was, s);
         const changed = Object.keys(s.seeds).filter((k) => was.seeds?.[k] && was.seeds[k] !== s.seeds[k]).length;
-        console.log(`  ${name}: ${r.moved.length} moved · ${changed} of ${Object.keys(s.seeds).length} seeds ended differently`);
+        console.log(`  ${name}: ${r.moved.length} moved · ${changed} of ${Object.keys(s.seeds).length} seeds ended differently`
+            + (paired ? ` · paired on ${paired.pairs} shared seeds` : ' · no seeds file for this script: two-group test (run sim:write to keep per-seed numbers)'));
         const show = (tag, m) => {
             const sign = m.delta > 0 ? '+' : '';
             console.log(`    ${tag} ${m.name.padEnd(28)} ${fmt(m.was)} -> ${fmt(m.now)}  (${sign}${fmt(m.delta)}, noise ±${fmt(m.noise)})`);
+            if (m.top?.length) console.log(`          moved most: ${m.top.map((t) => `seed ${t.seed} ${fmt(t.was)} -> ${fmt(t.now)}`).join(' · ')}`);
         };
         for (const m of r.moved) show('MOVED', m);
         if (o.all) for (const m of r.steady.filter((x) => x.delta !== 0)) show('steady', m);
@@ -105,6 +117,11 @@ if (o.check) {
     }
 }
 
+if (o.write || o.writeSeeds) {
+    const lines = scripts.flatMap((name) => rowLines(name, seedRows(results.filter((r) => r.script === name))));
+    writeFileSync(SEEDS_FILE, lines.map((l) => `${JSON.stringify(l)}\n`).join(''));
+    console.log(`\nwrote ${path.relative(process.cwd(), SEEDS_FILE)} (${lines.length} lines)`);
+}
 if (o.write) {
     writeFileSync(BASELINE, JSON.stringify(now, null, 2) + '\n');
     console.log(`\nwrote ${path.relative(process.cwd(), BASELINE)}`);
