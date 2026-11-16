@@ -17,8 +17,8 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { computeViewport } from '../game/viewport.js';
 import {
-    DOCK, HIT_SLOP, hudLayout, xmbBarLayout, throwRects,
-    WHEEL_HUB_R, wheelRingR,
+    DOCK, dockFor, HIT_SLOP, hudLayout, xmbBarLayout, throwRects,
+    WHEEL_DESKTOP, wheelRingR,
     HOTBAR_SLOT_W, HOTBAR_SLOT_H,
     MODAL_RECT, closeButtonRect, targetListRowRect, itemOverlayRowRect,
     DEVICE_TABS, deviceTabRect, deviceBodyRect, deviceBagSlotRects, inspectorActionRects,
@@ -37,7 +37,9 @@ export const SCREENS = Object.freeze({
 
 // The viewport exactly as main.js builds it for the live canvas.
 export function viewportFor(screen) {
-    return computeViewport({ ...screen, dock: DOCK });
+    const vp = computeViewport({ ...screen, dock: DOCK });
+    const dock = dockFor(vp);   // (TL3) a phone gets the taller thumb-sized dock
+    return dock === DOCK ? vp : computeViewport({ ...screen, dock });
 }
 
 // An item bar with three columns, the first long enough to overflow its row so
@@ -72,12 +74,16 @@ export function walkTargets(vp) {
     add('bar.down', lay.down);
 
     // The wheel: the hub disc, and the compass band at each depth, from the
-    // hub's edge to the active ring's outer edge (its short side is radial).
-    add('wheel.hub', { w: 2 * WHEEL_HUB_R, h: 2 * WHEEL_HUB_R });
+    // hub's edge to the active ring's outer edge (its short side is radial),
+    // and one ring itself (its thickness, by the arc of a quarter of it).
+    const m = hud.wheelM || WHEEL_DESKTOP;
+    add('wheel.hub', { w: 2 * m.hubR, h: 2 * m.hubR });
     for (let d = 0; d <= MAX_WHEEL_DEPTH; d++) {
-        const outer = wheelRingR(d)[1];
-        add(`wheel.band.d${d}`, { w: (Math.PI / 2) * (WHEEL_HUB_R + outer) / 2, h: outer - WHEEL_HUB_R });
+        const outer = wheelRingR(d, m)[1];
+        add(`wheel.band.d${d}`, { w: (Math.PI / 2) * (m.hubR + outer) / 2, h: outer - m.hubR });
     }
+    const ring0 = wheelRingR(0, m);
+    add('wheel.ring', { w: (Math.PI / 2) * (ring0[0] + ring0[1]) / 2, h: ring0[1] - ring0[0] });
 
     // The throw prompt around the player's tile.
     add('world.throw', Object.values(throwRects(vp)));
@@ -135,7 +141,7 @@ function table(label, screen) {
 // Every kind the walk must find, at every screen.
 const EXPECTED = [
     'hud.opener', 'hud.log', 'bar.chip', 'bar.cell', 'bar.up', 'bar.down',
-    'wheel.hub', 'wheel.band.d0', 'wheel.band.d1', 'wheel.band.d2', 'world.throw',
+    'wheel.hub', 'wheel.band.d0', 'wheel.band.d1', 'wheel.band.d2', 'wheel.ring', 'world.throw',
     'menu.close', 'menu.targetList.row', 'menu.itemOverlay.row', 'menu.hotbar.slot',
     'device.tab', 'device.bagSlot', 'device.inspectorAction', 'device.gearOption',
     'device.equipPlate', 'device.ringSocket',
@@ -144,17 +150,10 @@ const EXPECTED = [
 
 // Today's targets under 44 CSS px on each phone, with today's size. Later
 // slices may delete entries (a target that reached 44) and may raise a size;
-// they may not add an entry or lower one.
+// they may not add an entry or lower one. (TL3: the dock, the item bar and the
+// wheel reached 44 on both phones and left this list; tests/thumb-dock-wheel.test.js
+// pins their layout.)
 const TODAY_SMALL = {
-    'hud.opener': 36,
-    'hud.log': 42,
-    'bar.chip': 10,
-    'bar.cell': 16,
-    'bar.up': 7,
-    'bar.down': 7,
-    'wheel.hub': 24,
-    'wheel.band.d0': 16,
-    'wheel.band.d1': 32,
     'world.throw': 16,
     'menu.close': 15,
     'menu.targetList.row': 13,
@@ -191,6 +190,7 @@ const DESKTOP = {
     'wheel.band.d0': [125.66, 64],
     'wheel.band.d1': [175.93, 128],
     'wheel.band.d2': [226.19, 192],
+    'wheel.ring': [131.95, 56],
     'world.throw': [64, 64],
     'menu.close': [60, 60],
     'menu.targetList.row': [456, 52],
