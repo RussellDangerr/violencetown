@@ -161,17 +161,14 @@ const EXPECTED = [
 // they may not add an entry or lower one. (TL3: the dock, the item bar and the
 // wheel reached 44 on both phones and left this list; tests/thumb-dock-wheel.test.js
 // pins their layout. TL4: the Remoticon's tabs, bag slots, inspector buttons, pager,
-// uses button and close chip reached 44 on its phone sheet and left it; the GEAR
-// plates, GEAR rows and ring sockets are the Remoticon's remaining small targets.)
+// uses button and close chip reached 44 on its phone sheet and left it; TL6: the GEAR
+// plates, GEAR rows and ring sockets reached 44 and left it.)
 const TODAY_SMALL = {
     'world.throw': 16,
     'menu.close': 15,
     'menu.targetList.row': 13,
     'menu.itemOverlay.row': 13,
     'menu.hotbar.slot': 21,
-    'device.gearOption': 13,
-    'device.equipPlate': 27.5,
-    'device.ringSocket': 17,
     'offer.row': 20,
     'offer.traySlot': 18,
     'offer.button': 20,

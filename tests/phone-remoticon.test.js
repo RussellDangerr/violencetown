@@ -5,7 +5,9 @@ import { computeViewport } from '../game/viewport.js';
 import {
     DOCK, dockFor, HIT_SLOP, DEVICE_TABS, DEVICE_RECT, deviceSheetRect, deviceTabRect, deviceBodyRect,
     deviceBagSlotRects, deviceBagPagerRects, inspectorPanelRect, inspectorActionRects, closeButtonRect, rectsOverlap, expandRect,
+    deviceEquipLayout, deviceRingsLayout, gearChooserRect, gearOptionRects,
 } from '../game/layout.js';
+import { UNLOCK_ORDER } from '../game/rings.js';
 
 function vpFor(screen) {
     const vp = computeViewport({ ...screen, dock: DOCK });
@@ -68,11 +70,65 @@ for (const [key, screen] of Object.entries(PHONES)) {
             for (let i = 0; i < actions.length - 1; i++) assert.ok(!rectsOverlap(actions[i], actions[i + 1]));
         });
 
-        test('the other tabs get a body of the desktop\'s shape, inside the sheet', () => {
+        test('the quests, map and notes tabs get a body of the desktop shape, inside the sheet', () => {
+            const q = deviceBodyRect(sheet, 'quests');
+            assert.ok(inside(q, sheet));
+            assert.ok(q.h < body.h);
+            assert.equal(q.thumb, sheet.thumb);
+        });
+
+        test('GEAR and RINGS use the sheet full height, as the bag does', () => {
+            for (const tab of ['gear', 'rings']) {
+                const b = deviceBodyRect(sheet, tab);
+                assert.equal(b.h, body.h, tab);
+                assert.ok(inside(b, sheet));
+            }
+        });
+
+        test('GEAR: seven thumb-tall plates inside the body, none overlapping, slop included', () => {
             const gear = deviceBodyRect(sheet, 'gear');
-            assert.ok(inside(gear, sheet));
-            assert.ok(gear.h < body.h);
-            assert.equal(gear.thumb, sheet.thumb);
+            const lay = deviceEquipLayout(gear);
+            const plates = [...lay.slots, lay.leftHand];
+            assert.equal(plates.length, 7);
+            for (const p of plates) {
+                assert.ok(Math.min(p.w, p.h) >= tap - 0.01, p.key);
+                assert.ok(inside(p, gear), p.key);
+            }
+            for (let i = 0; i < plates.length; i++) for (let j = i + 1; j < plates.length; j++) {
+                assert.ok(!rectsOverlap(expandRect(plates[i], HIT_SLOP), plates[j]), `${plates[i].key} vs ${plates[j].key}`);
+            }
+        });
+
+        test('GEAR chooser: rows a thumb tall, inside the body, clear of every plate and of each other', () => {
+            const gear = deviceBodyRect(sheet, 'gear');
+            const lay = deviceEquipLayout(gear);
+            const plates = [...lay.slots, lay.leftHand];
+            for (const key of plates.map((p) => p.key)) {
+                for (const n of [0, 1, 2, 3]) {
+                    const panel = gearChooserRect(gear, n, key);
+                    assert.ok(inside(panel, gear), `${key} n${n} panel in body`);
+                    for (const p of plates) assert.ok(!rectsOverlap(panel, p), `${key} n${n} panel over ${p.key}`);
+                    const rows = gearOptionRects(gear, n, key);
+                    rows.forEach((r, i) => {
+                        assert.ok(Math.min(r.w, r.h) >= tap - 0.01, `${key} row ${i}`);
+                        assert.ok(inside(r, panel), `${key} row ${i} in panel`);
+                        if (i) assert.ok(!rectsOverlap(expandRect(rows[i - 1], HIT_SLOP), r));
+                    });
+                }
+            }
+        });
+
+        test('RINGS: every socket of the full hands is a thumb square, inside the body, none overlapping', () => {
+            const rings = deviceBodyRect(sheet, 'rings');
+            const { sockets } = deviceRingsLayout(rings, { ringTier: UNLOCK_ORDER.length - 1, ringSlots: {} });
+            assert.ok(sockets.length >= 10, 'all ten fingers');
+            for (const s of sockets) {
+                assert.ok(Math.min(s.w, s.h) >= tap - 0.01, s.key);
+                assert.ok(inside(s, rings), s.key);
+            }
+            for (let i = 0; i < sockets.length; i++) for (let j = i + 1; j < sockets.length; j++) {
+                assert.ok(!rectsOverlap(sockets[i], sockets[j]), `${sockets[i].key} vs ${sockets[j].key}`);
+            }
         });
     });
 }

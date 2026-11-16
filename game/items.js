@@ -14,6 +14,7 @@
 import { isHostile, isSewerDweller } from './ai.js';
 import { burnGold } from './trade.js';
 import { isWearable, gearWeight } from './theft.js';
+import { powerWielding, POWER_WIELD_REFUSAL } from './hands.js';   // (HB1) the mask that holds two two-handers
 import { equipOptions } from './inspector.js';   // (FX14) the GEAR chooser's rows
 
 // ── Poition (all six stats wired) ────────────────────────────────────────────
@@ -217,6 +218,21 @@ export const ITEMS = {
         deliveryCap: true,
         consumable: false,
         fallbackColor: '#4a86c8',
+        baseValue: 10,
+    },
+    // Power wield (HB1): while worn, each hand may hold its own two-hander (hands.js). Every
+    // field is a placeholder: the name is his to give, the art its own.
+    strongman_mask: {
+        id: 'strongman_mask',
+        name: '[NAME: POWER-WIELD MASK]',
+        description: '[TEXT]',
+        equipSlot: 'top',
+        useType: 'equip',
+        armor: 2,
+        body: { species: 'strongman', sprite: 'Boss', verbs: [] },
+        powerWield: true,
+        consumable: false,
+        fallbackColor: '#d03030',
         baseValue: 10,
     },
     // A costume is worn whole (CO1): using it from the bag puts it on, using it again takes it off.
@@ -642,6 +658,12 @@ const handsRule = (game) => (game && typeof game._handsOf === 'function')
 export function holdInHands(eq, def, handsOf = oneHanded, hand = 'weapon') {
     const out = [];
     const push = (d) => { if (d && !out.includes(d)) out.push(d); };
+    // (HB1) Power wield: each hand holds its own, a two-hander included.
+    if (powerWielding(eq)) {
+        push(eq[hand]);
+        eq[hand] = def;
+        return out;
+    }
     const twoHeld = !!eq.weapon && handsOf(eq.weapon) >= 2;
     if (handsOf(def) >= 2) {
         push(eq.weapon); push(eq.left);
@@ -661,6 +683,10 @@ export function holdInHands(eq, def, handsOf = oneHanded, hand = 'weapon') {
 // fills the left too, and a two-hander only in the left (a pair no equip makes)
 // leaves it, so the right hand's weapon is the one that stays.
 export function settleHands(eq, handsOf = oneHanded) {
+    if (powerWielding(eq)) {   // (HB1) a two-hander in each hand is the pair
+        if (eq.left === undefined) eq.left = null;
+        return eq;
+    }
     if (eq.weapon && handsOf(eq.weapon) >= 2) eq.left = eq.weapon;
     else if (eq.left && handsOf(eq.left) >= 2) eq.left = null;
     if (eq.left === undefined) eq.left = null;
@@ -675,10 +701,29 @@ export function heldInHands(eq, handsOf = oneHanded) {
     const held = [];
     if (!eq) return held;
     if (eq.weapon) held.push({ hand: 'weapon', def: eq.weapon });
-    if (eq.left && !(eq.left === eq.weapon && handsOf(eq.left) >= 2)) {
+    if (eq.left && !(eq.left === eq.weapon && handsOf(eq.left) >= 2 && !powerWielding(eq))) {
         held.push({ hand: 'left', def: eq.left });
     }
     return held;
+}
+
+// (HB1) The head slot changed: bring the hands in line. `wasPower` is whether it power-wielded
+// before. Putting the mask on frees the left key of a lone two-hander; taking it off bags a
+// second two-hander and refills the left from the right. Returns what was bagged.
+export function settleHeadChange(game, wasPower) {
+    const eq = game.equipment, handsOf = handsRule(game);
+    const now = powerWielding(eq);
+    if (!wasPower && now) {
+        if (eq.weapon && eq.weapon === eq.left && handsOf(eq.weapon) >= 2) eq.left = null;
+    } else if (wasPower && !now) {
+        if (eq.weapon && handsOf(eq.weapon) >= 2) {
+            if (eq.left) game._addToInventory(eq.left);
+            eq.left = eq.weapon;
+        } else if (eq.left && handsOf(eq.left) >= 2) {
+            game._addToInventory(eq.left);
+            eq.left = null;
+        }
+    }
 }
 
 // Equip an item into its slot. Returns a log message.
@@ -745,6 +790,13 @@ function resolveEquip(game, itemDef, hand = 'weapon', bagSlot = -1) {
         // Into `hand` (the right, as the one weapon slot did, unless the GEAR
         // tab's left plate asks for the left); a two-hander takes both, and
         // whatever it pushes out goes back in the bag.
+        // (HB1) A second two-hander needs the power-wield mask; without it, refuse.
+        const rule = handsRule(game);
+        if (hand === 'left' && !powerWielding(game.equipment) && rule(itemDef) >= 2
+            && game.equipment.weapon && rule(game.equipment.weapon) >= 2) {
+            bagIt(itemDef);
+            return POWER_WIELD_REFUSAL;
+        }
         // (EQ1) No same-id filter: every caller takes the item out of the bag first,
         // so a pushed-out copy of the same thing is a second copy and goes back too.
         const out = holdInHands(game.equipment, itemDef, handsRule(game), hand);
@@ -758,8 +810,10 @@ function resolveEquip(game, itemDef, hand = 'weapon', bagSlot = -1) {
         return `[TEXT: take the costume off first]`;
     }
     const old = game.equipment[slot];
+    const wasPower = powerWielding(game.equipment);
     game.equipment[slot] = itemDef;
     if (old) bagIt(old);
+    if (slot === 'top') settleHeadChange(game, wasPower);
     return old
         ? `[Equipped ${itemDef.name} — ${old.name} back in your bag]`
         : `[Equipped ${itemDef.name}]`;
@@ -774,7 +828,7 @@ export function gearOptions(game, plateKey) {
     const worn = game.equipment[plateKey];
     if (plateKey !== 'left') return equipOptions(plateKey, worn, game.inventory);
     const opts = equipOptions('weapon', worn, game.inventory);
-    return worn && handsRule(game)(worn) >= 2 ? opts.filter(o => o.id !== '__bare__') : opts;
+    return worn && handsRule(game)(worn) >= 2 && !powerWielding(game.equipment) ? opts.filter(o => o.id !== '__bare__') : opts;
 }
 
 // Take a worn armor piece off and return it to the bag. Weapon and temp-equips
@@ -787,12 +841,14 @@ export function unequipItem(game, slot) {
     if (!item) return null;
     if (game.costume) return `[TEXT: take the costume off first]`;   // (CO1)
     // A two-hander's left hand is the weapon itself, which never comes off.
-    if (slot === 'left' && handsRule(game)(item) >= 2) return null;
+    if (slot === 'left' && handsRule(game)(item) >= 2 && !powerWielding(game.equipment)) return null;
     if ((game.tempEquips || []).some(te => te.slot === slot)) {
         return `[${item.name} will wear off on its own]`;
     }
+    const wasPower = powerWielding(game.equipment);
     game._addToInventory(item);
     game.equipment[slot] = null;
+    if (slot === 'top') settleHeadChange(game, wasPower);
     return `[Unequipped ${item.name}]`;
 }
 

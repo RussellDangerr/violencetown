@@ -43,7 +43,7 @@ import { RNG, randomSeed } from './rng.js';
 import { pickSlots, echoSpawn, echoStands, ECHO_SLOTS, defaultPicks, resolveSpawn, requiredDropFor, dropLineFor, FINALE_PHASE1, pickReturning, spotFor, RETURNING_SPOTS } from './slots.js';
 import { rememberSpent, applySpent } from './npc-memory.js';
 import { snapshotOf, keepSnapshot, readSnapshots, reportLines } from './bones.js';
-import { hasSave, readSaveRaw, writeSave, loadInto, clearSave, encodeSaveCode, importSaveCode, decodeSaveCode, CODE_REFUSALS } from './save.js';
+import { hasSave, readSaveRaw, writeSave, loadInto, clearSave, keepUnreadableSave, encodeSaveCode, importSaveCode, decodeSaveCode, CODE_REFUSALS } from './save.js';
 import { createKey, loadKeyId } from './save-key.js';
 import { readAway, tellAwayNews, restedOnReturn } from './away.js';   // (CK1) hours since the save's savedAt
 import { QuestEngine } from './quests.js';
@@ -1199,6 +1199,9 @@ class Game {
     }
 
     // (CK1) Whole hours since this save's stamp, kept as this.hoursAway.
+    // (FX66) Copy the save that would not open aside; true when a copy was kept.
+    _keepUnreadable() { return keepUnreadableSave(); }
+
     _noteAway(raw) {
         readAway(this, raw.savedAt);
     }
@@ -1385,7 +1388,16 @@ class Game {
             this._applyAudioSettings();   // [settings] apply persisted volume/mute on boot
             audio.playMusic('town');      // [audio] start the ambient bed (zone music re-syncs on map load)
             const raw = readSaveRaw();
-            if (!raw) { start(); return; }
+            if (!raw) {
+                // (FX66) A save is on disk but will not parse: copy it aside before
+                // the fresh run's autosave replaces it.
+                if (hasSave() && this._keepUnreadable?.()) {
+                    start();
+                    this._log('[TEXT: that save would not read; a copy is kept aside]', 'transition');
+                    return;
+                }
+                start(); return;
+            }
             this._noteAway?.(raw);   // (CK1) once, before any new save overwrites the stamp
             splash.classList.add('gone');
             wrapper.classList.remove('hidden');
@@ -1401,12 +1413,15 @@ class Game {
             // and throw partway through.
             //
             // Falling back to a fresh run is the honest recovery: start() rebuilds
-            // the world from scratch, and the broken save is left on disk rather
-            // than overwritten, so it can still be recovered by hand.
+            // the world from scratch. The fresh run's autosave would replace the
+            // broken save (and the backup slot rotates it out one write later),
+            // so its text is first copied under its own key, which writeSave and
+            // clearSave never touch (FX66).
             try {
                 await loadInto(this, raw);
             } catch (e) {
                 console.error('[save] could not be loaded; starting fresh', e);
+                this._keepUnreadable?.();
                 start();
                 this._log('[That save would not open. Starting a new run.]', 'transition');
                 return;
@@ -1550,6 +1565,15 @@ class Game {
     _bindInput() {
         document.addEventListener('keydown', (e) => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+            // (FX67) The Options window, the help window and the key screen sit over
+            // the world; game keys stop there. No preventDefault: a focused button
+            // still gets its own Space / Enter. Esc is closed by each window's
+            // capture-phase handler before this one runs.
+            {
+                const up = (id) => { const m = typeof document === 'undefined' ? null : document.getElementById?.(id); return !!m && !m.classList.contains('hidden'); };
+                if (up('options-modal') || up('help-modal') || (typeof document !== 'undefined' && document.getElementById?.('key-once'))) return;
+            }
 
             // A browser chord is not a game input. Nothing here checked modifiers,
             // so every shortcut the browser owns ALSO fired a game action behind
@@ -7318,7 +7342,7 @@ class Game {
             const sel = this._deviceSel;
             if (sel && sel.tab === 'gear' && sel.open) {
                 const lw = sel.slotKey === 'left', w = this.equipment[sel.slotKey];
-                const n = equipOptions(lw ? 'weapon' : sel.slotKey, sel.slotKey === 'weapon' || (lw && (this._handsOf?.(w) ?? 1) >= 2) ? null : w, this.inventory).length;
+                const n = equipOptions(lw ? 'weapon' : sel.slotKey, sel.slotKey === 'weapon' || (lw && (this._handsOf?.(w) ?? 1) >= 2 && !this.equipment.top?.powerWield) ? null : w, this.inventory).length;
                 const rows = gearOptionRects(body, n, sel.slotKey);
                 for (let i = 0; i < n; i++) {
                     if (this._pointInRect(pt, rows[i], HIT_SLOP)) { this._deviceActivate('option', i); return; }
@@ -7474,7 +7498,7 @@ class Game {
             const sel = this._deviceSel;
             if (!sel || sel.tab !== 'gear' || !sel.open) return;
             const lw = sel.slotKey === 'left', w = this.equipment[sel.slotKey];
-            const opt = equipOptions(lw ? 'weapon' : sel.slotKey, sel.slotKey === 'weapon' || (lw && (this._handsOf?.(w) ?? 1) >= 2) ? null : w, this.inventory)[index];
+            const opt = equipOptions(lw ? 'weapon' : sel.slotKey, sel.slotKey === 'weapon' || (lw && (this._handsOf?.(w) ?? 1) >= 2 && !this.equipment.top?.powerWield) ? null : w, this.inventory)[index];
             if (!opt) return;
             if (opt.bagIndex >= 0) {
                 const def = this.inventory[opt.bagIndex].itemDef;
@@ -7549,7 +7573,7 @@ class Game {
         if (tab === 'gear') {
             if (sel && sel.tab === 'gear' && sel.open) {
                 const lw = sel.slotKey === 'left', w = this.equipment[sel.slotKey];
-                const n = equipOptions(lw ? 'weapon' : sel.slotKey, sel.slotKey === 'weapon' || (lw && (this._handsOf?.(w) ?? 1) >= 2) ? null : w, this.inventory).length;
+                const n = equipOptions(lw ? 'weapon' : sel.slotKey, sel.slotKey === 'weapon' || (lw && (this._handsOf?.(w) ?? 1) >= 2 && !this.equipment.top?.powerWield) ? null : w, this.inventory).length;
                 const rects = gearOptionRects(body, n, sel.slotKey);
                 return { zone: 'option', rects, ids: rects.map((_, i) => i), cur: sel.option != null ? Math.min(sel.option, n - 1) : -1 };
             }
@@ -7631,7 +7655,7 @@ class Game {
             const key = t.ids[t.cur];
             this._deviceActivate('plate', key);
             const lw = key === 'left', w = this.equipment[key];
-            if (equipOptions(lw ? 'weapon' : key, key === 'weapon' || (lw && (this._handsOf?.(w) ?? 1) >= 2) ? null : w, this.inventory).length) this._deviceSel.option = 0;
+            if (equipOptions(lw ? 'weapon' : key, key === 'weapon' || (lw && (this._handsOf?.(w) ?? 1) >= 2 && !this.equipment.top?.powerWield) ? null : w, this.inventory).length) this._deviceSel.option = 0;
             this._render();
             return;
         }
