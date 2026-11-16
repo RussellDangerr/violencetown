@@ -33,7 +33,7 @@ import {
     MODAL_RECT, offerLayout,                                             // (offer screen) the one panel + its geometry
 } from './layout.js';
 import { itemStatLine, itemActions, USES_ACTION } from './inspector.js';
-import { weaponCompare, weaponCompareLines } from './examine.js';   // (FX44) the weapon compare block    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
+import { weaponCompare, weaponCompareLines, examineLabelAt } from './examine.js';   // (FX44) the weapon compare block    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
 import { zoneOf, pageCount, slotOnPage } from './inventory.js';                                     // (C1) safe/pack label for the inspector
 import { buildXmbBar, resolveXmbSelection } from './xmb.js';                 // (XMB) usable-bar model
 import { ITEMS, itemTier, gearOptions, wornBody } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
@@ -719,6 +719,7 @@ export class Renderer {
         // Depth pass: enemies + player draw in one y-sorted (feet-line) pass so
         // closer characters occlude farther ones, each grounded by a drop-shadow.
         this._drawActors(game);
+        this._drawExamineLabel(game, this._view());   // (EX1) a faced note, sign or wreck
         this._drawSpirit(game);       // (heroic spirits) the boss-door replay, under the fog
         this._drawJammedDoor(game);
 
@@ -1776,6 +1777,31 @@ export class Renderer {
         ctx.fillStyle = verb.color || UI.text;
         ctx.fillRect(box.x, box.y, box.w, 1);
         this.font.drawText(ctx, text, box.tx, box.ty, { color: verb.color || UI.text, scale: 1 });
+    }
+
+    // (EX1) A faced note, sign or wreck names itself over its tile with the Examine verb, in the
+    // same strip a faced creature gets. `_examineLabel` keeps the text drawn (null when none).
+    _drawExamineLabel(game, vp) {
+        this._examineLabel = null;
+        if (!this.font || game._animating || game.state === 'dialogue') return;
+        const name = examineLabelAt(game);
+        if (!name) return;
+        const FACE = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+        const [fx, fy] = FACE[game.facing] || FACE.down;
+        const verb = defaultVerb({ x: game.playerX + fx, y: game.playerY + fy, examinable: true }, game);
+        if (!verb) return;
+        const { ctx } = this;
+        const px = vp.origin.x + fx * TILE_PX - this._scrollX;
+        const py = vp.origin.y + fy * TILE_PX - this._scrollY;
+        const text = `${name.replace(/[[\]]/g, '')} · ${verb.label}`.toUpperCase();
+        const tw = this.font.measure ? this.font.measure(text, 1) : text.length * 6;
+        const box = intentLabelRect(px, py, tw, false);
+        ctx.fillStyle = '#000000cc';
+        ctx.fillRect(box.x, box.y, box.w, box.h);
+        ctx.fillStyle = verb.color || UI.text;
+        ctx.fillRect(box.x, box.y, box.w, 1);
+        this.font.drawText(ctx, text, box.tx, box.ty, { color: verb.color || UI.text, scale: 1 });
+        this._examineLabel = text;
     }
 
     // Soft elliptical drop-shadow on the ground beneath a character — a radial
