@@ -44,6 +44,7 @@ import { pickSlots, echoSpawn, ECHO_SLOTS, defaultPicks, resolveSpawn, requiredD
 import { rememberSpent, applySpent } from './npc-memory.js';
 import { snapshotOf, keepSnapshot, readSnapshots, reportLines } from './bones.js';
 import { hasSave, readSaveRaw, writeSave, loadInto, clearSave, encodeSaveCode, importSaveCode } from './save.js';
+import { createKey, loadKeyId } from './save-key.js';
 import { readAway, tellAwayNews, restedOnReturn } from './away.js';   // (CK1) hours since the save's savedAt
 import { QuestEngine } from './quests.js';
 import { doExamine, resolveExamine } from './examine.js';
@@ -2318,6 +2319,10 @@ class Game {
             this._render?.();
         });
 
+        // (PK2) A four-word key, shown once. Built here, not in index.html. Only the derived
+        // id is kept on the device; the phrase lives in the overlay until it is closed.
+        this._bindKeyRow(codeNote);
+
         // Esc closes the modal without falling through to game state. Capture
         // phase beats _bindInput's bubble handler, matching the help modal.
         document.addEventListener('keydown', (e) => {
@@ -2327,6 +2332,41 @@ class Game {
                 this._closeOptionsModal();
             }
         }, true);
+    }
+
+    _bindKeyRow(note) {
+        const anchor = document.getElementById('opt-save-status');
+        if (!anchor || document.getElementById('opt-key-new')) return;
+        const btn = document.createElement('button');
+        btn.type = 'button'; btn.id = 'opt-key-new'; btn.className = 'opt-toggle';
+        const label = () => { btn.textContent = loadKeyId() ? '[TEXT] NEW KEY (REPLACES)' : '[TEXT] MAKE A KEY'; };
+        label();
+        let armed = false;
+        btn.addEventListener('click', async () => {
+            if (loadKeyId() && !armed) { armed = true; if (note) note.textContent = '[TEXT] A key exists. Press again to replace it.'; return; }
+            armed = false;
+            const { phrase } = await createKey();
+            this._showKeyOnce(phrase);
+            label();
+        });
+        anchor.insertAdjacentElement('afterend', btn);
+    }
+
+    // The shown-once key screen. The phrase is held only in this element's text and removed on close.
+    _showKeyOnce(phrase) {
+        const box = document.createElement('div');
+        box.id = 'key-once';
+        box.setAttribute('role', 'dialog');
+        box.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;background:rgba(0,0,0,.92);color:#f2e6b8;font-family:inherit;text-align:center;padding:24px';
+        const head = document.createElement('div'); head.textContent = '[TEXT] YOUR KEY'; head.style.fontSize = '32px';
+        const words = document.createElement('div'); words.id = 'key-once-words'; words.textContent = phrase; words.style.cssText = 'font-size:56px;letter-spacing:2px';
+        const warn = document.createElement('div'); warn.textContent = '[TEXT] Shown once. Write it down.'; warn.style.fontSize = '24px';
+        const done = document.createElement('button'); done.type = 'button'; done.className = 'opt-toggle'; done.textContent = '[TEXT] I HAVE IT';
+        const close = () => { words.textContent = ''; box.remove(); };
+        done.addEventListener('click', close);
+        box.append(head, words, warn, done);
+        document.body.appendChild(box);
+        done.focus();
     }
 
     _toggleFullscreen() {
