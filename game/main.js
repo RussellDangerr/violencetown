@@ -1522,6 +1522,10 @@ class Game {
             // a space) or button (COPY / PASTE CODE press), not to the title.
             const tag = e.target?.tagName;
             if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'BUTTON') return;
+            // (FX72) The help and Options windows sit over the title too; the same
+            // check _bindInput makes (FX67) holds the title's Space while one is up.
+            const up = (id) => { const m = document.getElementById?.(id); return !!m && !m.classList.contains('hidden'); };
+            if (up('options-modal') || up('help-modal')) return;
             e.preventDefault();
             e.stopImmediatePropagation();
             if (splash.classList.contains('gone')) return;
