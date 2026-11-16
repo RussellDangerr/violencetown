@@ -15,6 +15,8 @@ import { TILE_PX, CANVAS_PX } from './data.js';
 
 export const ART_PX = TILE_PX / 16;    // logical px per art pixel: 2
 export const MIN_TILES = 20;           // the rule: at least this many tiles along the short side
+export const PHONE_TILES = 14;         // (TLR1) the short side's tile count on a coarse pointer, when the phone zoom is on
+export const PHONE_ZOOM_ON = false;    // (TL2R1) the one switch: off until menus shrink to fit (TL5)
 export const MENU_SIZE = CANVAS_PX;    // menus keep their 608x608 layouts, in a centred box
 
 // The scales a screen allows (plans/zm1-zoom-steps.md). Every step is a whole
@@ -23,9 +25,9 @@ export const MENU_SIZE = CANVAS_PX;    // menus keep their 608x608 layouts, in a
 // but only as far as menus still fit: they keep their 608x608 layouts, so the
 // closest step is the largest k that leaves MENU_SIZE logical px along the
 // short side. On many screens that is the automatic step itself.
-export function zoomRange(backingW, backingH) {
+export function zoomRange(backingW, backingH, tiles = MIN_TILES) {
     const short = Math.min(backingW, backingH);
-    const auto = Math.max(1, Math.floor(short / (16 * MIN_TILES)));
+    const auto = Math.max(1, Math.floor(short / (16 * tiles)));
     const closest = Math.max(auto, Math.floor(short / (MENU_SIZE / ART_PX)));
     return Object.freeze({ min: 1, auto, max: closest });
 }
@@ -79,7 +81,9 @@ const toArt = (v) => ART_PX * Math.round(v / ART_PX);
 // show through: one row on a wide screen, two rows on an upright one or one
 // narrower than minOneRowW. `zoom` (a whole scale, optional) overrides the
 // automatic scale; it is clamped to the screen's steps, and unset is automatic.
-export function computeViewport({ cssW, cssH, dpr = 1, dock = null, zoom = null } = {}) {
+// `coarse` (a touch screen) asks for the phone zoom: PHONE_TILES instead of
+// MIN_TILES. It only counts while `phoneZoom` (default PHONE_ZOOM_ON) is on.
+export function computeViewport({ cssW, cssH, dpr = 1, dock = null, zoom = null, coarse = false, phoneZoom = PHONE_ZOOM_ON } = {}) {
     const d = (Number.isFinite(dpr) && dpr > 0) ? dpr : 1;
     // A screen we cannot measure has to fall back the way a bad dpr does. Every
     // radial gradient the renderer builds is placed from origin/w/h, and
@@ -91,7 +95,7 @@ export function computeViewport({ cssW, cssH, dpr = 1, dock = null, zoom = null 
     const backingW = Math.max(1, Math.floor(px(cssW) * d));
     const backingH = Math.max(1, Math.floor(px(cssH) * d));
     const cssOut = { w: backingW / d, h: backingH / d };
-    const range = zoomRange(backingW, backingH);
+    const range = zoomRange(backingW, backingH, (coarse && phoneZoom) ? PHONE_TILES : MIN_TILES);
     const chosen = asZoom(zoom);
     const k = chosen === null ? range.auto : Math.min(range.max, Math.max(range.min, chosen));
     const scale = k / ART_PX;

@@ -1295,7 +1295,7 @@ class Game {
             }
             return;
         }
-        const vp = computeViewport({ cssW: box.width, cssH: box.height, dpr: window.devicePixelRatio, dock: DOCK, zoom: this._zoom });
+        const vp = computeViewport({ cssW: box.width, cssH: box.height, dpr: window.devicePixelRatio, dock: DOCK, zoom: this._zoom, coarse: typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches });
         this.renderer.setViewport(vp);
         this._syncZoomUI();
         canvas.style.width  = `${vp.cssW}px`;
