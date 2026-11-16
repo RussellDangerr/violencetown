@@ -17,7 +17,7 @@ import { resolveSpawn, defaultPicks } from '../game/slots.js';
 import { INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK } from '../game/data.js';
 import { addToInventory as addToInv, zoneOf, moveToZone, pageCount, slotOnPage, pageOfSlot } from '../game/inventory.js';
 import { resolveItemDef } from '../game/item-registry.js';
-import { ITEMS, tickTempEquips } from '../game/items.js';
+import { ITEMS, tickTempEquips, canStandOn } from '../game/items.js';
 import { isHostile } from '../game/ai.js';
 import { defaultVerb } from '../game/wheel-model.js';
 import { RNG } from '../game/rng.js';
@@ -131,7 +131,7 @@ function makeGame({ file, start }) {
         MODAL_RECT, HIT_SLOP, offerLayout, offerRowIndexAt, offerTraySlotAt, OFFER_ROWS_VISIBLE, OFFER_TRAY_SLOTS,
         emptyOffer, commitBlocker, stage, unstage, settledGold, resolveOffer, sameEntry,
         sellPrice, buyPrice, transferGold, applyDispositionDelta, reactToTransaction,
-        worldBeatPlan, resolveEnemyTurns, tickTempEquips, MP_REGEN: 2,
+        worldBeatPlan, resolveEnemyTurns, tickTempEquips, canStandOn, MP_REGEN: 2,
     };
     for (const [n, p] of LIFTED) g[n] = liveMethod(n, p, free);
     g._bindInput();

@@ -5,7 +5,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { ITEMS, ARMOR_IDS, wornBody, wornVerb, resolveUse, unequipItem } from '../game/items.js';
+import { ITEMS, ARMOR_IDS, wornBody, wornVerb, canStandOn, resolveUse, unequipItem } from '../game/items.js';
 import { resolveItemDef } from '../game/item-registry.js';
 import { ARMOR_TIERS } from '../game/weapons.js';
 import { ENEMY_SPRITES, ITEM_SPRITES, SHEETS } from '../game/sprites.js';
@@ -23,7 +23,7 @@ function canEnterFn() {
     assert.ok(at > 0, '_canEnter not found');
     const end = mainSrc.indexOf('\n    }', at + 1);
     const body = mainSrc.slice(at + 5 + '_canEnter'.length, end + '\n    }'.length);
-    return new Function(`'use strict'; return function ${body}`)();
+    return new Function('canStandOn', `'use strict'; return function ${body}`)(canStandOn);
 }
 const canEnter = canEnterFn();
 
@@ -100,6 +100,6 @@ describe('the Rat Mask', () => {
         const r = src('renderer.js');
         assert.match(r, /wornBody\(game\.equipment\)/);
         assert.match(r, /ENEMY_SPRITES\[maskBody\.sprite\]/);
-        assert.match(mainSrc, /maskGrates/);
+        assert.match(mainSrc, /canStandOn/);
     });
 });
