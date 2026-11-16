@@ -50,7 +50,7 @@ import { QuestEngine } from './quests.js';
 import { doExamine, resolveExamine } from './examine.js';
 import { recordDrop, pendingDrops, takeDrop, dropLoadout, recordKill, stepRespawns, deadIds, bossDropOnce, claimSpots, spotHolds, spotSpawns } from './drops.js'; // per-zone runtime dropped-items layer + respawn list (pure, node-tested)
 import {
-    HIT_SLOP, throwRects, DOCK, hitHud,
+    HIT_SLOP, throwRects, DOCK, dockFor, WHEEL_DESKTOP, hitHud,
     HOTBAR_X_START, HOTBAR_Y, HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_STRIDE, HOTBAR_SLOTS,
     WHEEL_HUB_R, wheelRingR, LOG_MODAL_RECT, targetListRowRect, itemOverlayRowRect,
     EQUIPMENT_MODAL_RECT, EQUIP_SLOT_RECTS,
@@ -1298,7 +1298,11 @@ class Game {
             }
             return;
         }
-        const vp = computeViewport({ cssW: box.width, cssH: box.height, dpr: window.devicePixelRatio, dock: DOCK, zoom: this._zoom, coarse: typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches });
+        const _coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+        let vp = computeViewport({ cssW: box.width, cssH: box.height, dpr: window.devicePixelRatio, dock: DOCK, zoom: this._zoom, coarse: _coarse });
+        // (TL3) A phone gets the taller thumb-sized dock; the scale does not depend on the dock, so one more pass settles it.
+        const _dock = dockFor(vp);
+        if (_dock !== DOCK) vp = computeViewport({ cssW: box.width, cssH: box.height, dpr: window.devicePixelRatio, dock: _dock, zoom: this._zoom, coarse: _coarse });
         this.renderer.setViewport(vp);
         this._syncZoomUI();
         canvas.style.width  = `${vp.cssW}px`;
@@ -2738,11 +2742,12 @@ class Game {
         // the compass, so they keep the interim hub-cancels / tap-commits behaviour.
         const w = this.wheel;
         const wc = this._hud().wheel;
+        const wm = this._hud().wheelM || WHEEL_DESKTOP;   // (TL3) a phone's wheel is thumb-sized
         const dx = pt.x - wc.cx, dy = pt.y - wc.cy;
         const r = Math.hypot(dx, dy);
 
         if (w.confirming || w.aiming) {
-            if (r < WHEEL_HUB_R + 8) {
+            if (r < wm.hubR + 8) {
                 if (w.confirming) w.confirming = false; else { w.aiming = false; w.reticle = null; }
                 audio.playSfx('menu-cancel'); this._render(); return;
             }
@@ -2752,10 +2757,10 @@ class Game {
         }
 
         // Hub = back / close.
-        if (r < WHEEL_HUB_R + 8) { this._wheelBack(); return; }
+        if (r < wm.hubR + 8) { this._wheelBack(); return; }
         // Ignore taps beyond the wheel (preview band outer + slop) so a stray far
         // tap doesn't misfire a quadrant.
-        if (r > wheelRingR(w.path.length)[1] + 12) return;
+        if (r > wheelRingR(w.path.length, wm)[1] + 12) return;
 
         // Cardinal by angle: atan2 → right=0, down=π/2, left=±π, up=-π/2. Bucket the
         // full turn into four quadrants centred on each cardinal.

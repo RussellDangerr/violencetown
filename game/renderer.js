@@ -22,7 +22,7 @@ import { ROOT, selectedNode, activeRing, activeIndex, decisionPath, previewChild
 import {
     LOG_MODAL_RECT, TARGET_LIST_RECT, TARGET_LIST_ROW_H,
     ITEM_OVERLAY_RECT, ITEM_OVERLAY_ROW_H,
-    WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
+    WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR, WHEEL_DESKTOP,
     EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, EQUIP_LEFT_HAND_RECT, closeButtonRect,
     DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_LABELS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceBagPagerRects, deviceEquipLayout, gearArmourRect, deviceRingsLayout,
     deviceSkillsLayout, SKILL_COUNT_W, ringPassiveRows,                                     // (US2) the skills readout in the RINGS tab; (RR1) a ring's passive rows
@@ -3381,8 +3381,15 @@ export class Renderer {
             }
             // ▲/▼ only when the column is longer than the row can show.
             if (lay.overflow) {
-                this.font.drawText(ctx, '▲', lay.up.x, lay.up.y, { color: UI.dim, scale: 1 });
-                this.font.drawText(ctx, '▼', lay.down.x, lay.down.y, { color: UI.dim, scale: 1 });
+                if (lay.thumb) {   // (TL3) thumb-sized arrows: a cell each, the glyph centred
+                    for (const [r, g] of [[lay.up, '▲'], [lay.down, '▼']]) {
+                        drawInset(ctx, r.x, r.y, r.w, r.h);
+                        this.font.drawText(ctx, g, r.x + r.w / 2, r.y + r.h / 2 - 8, { color: UI.dim, scale: 2, align: 'center' });
+                    }
+                } else {
+                    this.font.drawText(ctx, '▲', lay.up.x, lay.up.y, { color: UI.dim, scale: 1 });
+                    this.font.drawText(ctx, '▼', lay.down.x, lay.down.y, { color: UI.dim, scale: 1 });
+                }
             }
         }
         ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
@@ -3688,6 +3695,7 @@ export class Renderer {
     _drawWheel(game) {
         const { ctx } = this;
         const { cx, cy } = this._hud().wheel, TOP = -Math.PI / 2;
+        const wm = this._hud().wheelM || WHEEL_DESKTOP;   // (TL3) a phone's wheel is thumb-sized
         // (Slice 2) Full-screen AIM/CONFIRM/threat text re-centres on the SCREEN
         // (CC across, CY down), not the wheel hub — the wheel sits at its own
         // anchor, but these strips are full-width takeovers that stay screen-centred.
@@ -3846,7 +3854,7 @@ export class Renderer {
         // 1) Greyed decision breadcrumb: each locked parent's chosen tile at TOP,
         //    stacked inward toward the hub (innermost = the earliest choice).
         for (let d = 0; d < depth - 1; d++) {
-            const r = ringAt(d), node = r.ring[r.sel], band = wheelRingR(d);
+            const r = ringAt(d), node = r.ring[r.sel], band = wheelRingR(d, wm);
             this._wheelTile(band[0], band[1], TOP, QHALF, node.color || HUE, 0.3, node.label, '#9a8c70', null);
         }
 
@@ -3854,7 +3862,7 @@ export class Renderer {
         //    next, bottom = reserved BACK. Options beyond prev/sel/next are OFF-SCREEN
         //    (spin to bring one into a slot); the pip carousel (§5) hints how many.
         const ring = activeRing(w), sel = activeIndex(w), n = ring.length;
-        const activeBand = wheelRingR(depth - 1);
+        const activeBand = wheelRingR(depth - 1, wm);
         // (Phase 4) verified monochrome glyphs — a colour-free shape cue per node.
         const WHEEL_ICONS = {
             fight: '⚔', trick: '♦', treat: '♥', flight: '»',
@@ -3893,7 +3901,7 @@ export class Renderer {
         //    the pointer, last-used child centred; or a "fire" cue for a leaf.
         let outerMost = activeBand[1];
         if (kids.length) {
-            const band = wheelRingR(depth); outerMost = band[1];
+            const band = wheelRingR(depth, wm); outerMost = band[1];
             const memIdx = Math.max(0, Math.min((w._memory && w._memory[w.path.join('.')]) ?? 0, kids.length - 1));
             const SPREAD = 0.42, HALF = 0.18;
             for (let off = -1; off <= 1; off++) {
@@ -3923,7 +3931,7 @@ export class Renderer {
         }
 
         // 4) Hub disc + breadcrumb tip (MENU / Fight / Melee …).
-        ctx.beginPath(); ctx.arc(cx, cy, WHEEL_HUB_R, 0, Math.PI * 2); ctx.closePath();
+        ctx.beginPath(); ctx.arc(cx, cy, wm.hubR, 0, Math.PI * 2); ctx.closePath();
         ctx.fillStyle = 'rgba(30,24,16,0.95)'; ctx.fill();
         ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(212,185,106,0.6)'; ctx.stroke();
         if (this.font) { const dp = decisionPath(w); this.font.drawText(ctx, dp[dp.length - 1].toUpperCase(), cx, cy - 6, { color: UI.gold, scale: 1, align: 'center' }); }
