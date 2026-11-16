@@ -669,6 +669,7 @@ class Game {
         this._bindMenuSheet();
         this._bindHelpModal();
         this._bindOptionsModal(); // [settings] options/accessibility UI
+        this._bindOptionsKey();
         this._bindPauseOverlay(); // [settings] turn-based pause overlay
         this._bindLeaveSave();    // (FX24) hiding or closing the tab saves
 
@@ -2327,6 +2328,23 @@ class Game {
     // applyToAudio stays duck-typed/defensive, so this is safe pre-init too.
     _applyAudioSettings() {
         Settings.applyToAudio(audio);
+    }
+
+    // (OP1) O opens Options, from play and from the pause screen. Capture phase, so
+    // it runs before _bindInput's paused early-return. Not while typing, not on the
+    // title, not with a browser chord, and not when a window already covers the world.
+    _bindOptionsKey() {
+        document.addEventListener('keydown', (e) => {
+            if (e.code !== 'KeyO' || e.repeat) return;
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
+            const tag = e.target?.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+            if (this.state === STATE.SPLASH) return;
+            const up = (id) => { const m = document.getElementById?.(id); return !!m && !m.classList.contains('hidden'); };
+            if (up('options-modal') || up('help-modal') || document.getElementById?.('key-once')) return;
+            e.preventDefault();
+            this._openOptionsModal();
+        }, true); // capture
     }
 
     _bindOptionsModal() {
