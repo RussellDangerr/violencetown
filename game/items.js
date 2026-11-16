@@ -190,6 +190,35 @@ export const ITEMS = {
         fallbackColor: '#a070c0',
         baseValue: 10,
     },
+    // The delivery cap (MS3): the first tiered mask family. Grey and blue share one body and
+    // one perk (enemies carry more gold, trade.js carriedGold); only the tier differs. Names, art,
+    // armour and prices are placeholders.
+    delivery_cap_grey: {
+        id: 'delivery_cap_grey',
+        name: '[Delivery Cap, Grey]',
+        description: '[TEXT]',
+        equipSlot: 'top',
+        useType: 'equip',
+        armor: 2,
+        body: { species: 'courier', sprite: 'Courier', verbs: [] },
+        deliveryCap: true,
+        consumable: false,
+        fallbackColor: '#9aa0a6',
+        baseValue: 3,
+    },
+    delivery_cap_blue: {
+        id: 'delivery_cap_blue',
+        name: '[Delivery Cap, Blue]',
+        description: '[TEXT]',
+        equipSlot: 'top',
+        useType: 'equip',
+        armor: 2,
+        body: { species: 'courier', sprite: 'Courier', verbs: [] },
+        deliveryCap: true,
+        consumable: false,
+        fallbackColor: '#4a86c8',
+        baseValue: 10,
+    },
     // A costume is worn whole (CO1): using it from the bag puts it on, using it again takes it off.
     // Its kit and ranks live in costumes.js; the bag icon is a flat fallback colour.
     test_costume: {

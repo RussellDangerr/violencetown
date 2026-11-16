@@ -133,3 +133,15 @@ export function burnGold(holder, amount, reason = '') {
     holder.gold -= amount;
     return true;
 }
+
+// (MS3, MR5 b) The delivery cap: while one is worn, enemies carry more. The purse is raised
+// by half (rounded up) on the enemy's own wallet, before it is looted, so the extra still moves
+// through transferGold and nothing is minted at the till. Returns the purse unchanged without it.
+export const DELIVERY_CAP_PURSE = 1.5;
+export function wearsDeliveryCap(equipment) {
+    return Object.values(equipment || {}).some(d => d && d.deliveryCap);
+}
+export function carriedGold(gold, equipment) {
+    if (!(gold > 0) || !wearsDeliveryCap(equipment)) return gold;
+    return Math.ceil(gold * DELIVERY_CAP_PURSE);
+}
