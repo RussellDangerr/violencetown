@@ -40,7 +40,7 @@ import { applyDispositionDelta, reactToTransaction } from './give-action.js';
 import { getDialogue } from './dialogue.js';
 import { manhattan, clamp } from './utils.js';
 import { RNG, randomSeed } from './rng.js';
-import { pickSlots, defaultPicks, resolveSpawn, requiredDropFor, dropLineFor, FINALE_PHASE1, pickReturning, spotFor, RETURNING_SPOTS } from './slots.js';
+import { pickSlots, echoSpawn, ECHO_SLOTS, defaultPicks, resolveSpawn, requiredDropFor, dropLineFor, FINALE_PHASE1, pickReturning, spotFor, RETURNING_SPOTS } from './slots.js';
 import { rememberSpent, applySpent } from './npc-memory.js';
 import { snapshotOf, keepSnapshot, readSnapshots, reportLines } from './bones.js';
 import { hasSave, readSaveRaw, writeSave, loadInto, clearSave } from './save.js';
@@ -755,6 +755,8 @@ class Game {
             if (s.goneAfter && this.questEngine?.isComplete?.(s.goneAfter)) continue;
             this.enemies.push(spawnEnemy(resolveSpawn(s, this.slots, undefined, undefined, this._returnPicks), this._muggedIds, this._robbed, this._rivalKit?.(url, s.id), this._tookGold));
         }
+        // (BN2) Your old character stands in Town when a snapshot is kept; none, nobody.
+        for (const e of this._echoEnemies?.(url, dead) ?? []) this.enemies.push(spawnEnemy(e, this._muggedIds, this._robbed));
         this._applySpentChoices?.(url);   // (NM1) a one-time talk choice you used stays used
         this._rivalArrived?.(url);   // (plans/ne1-rival-remembered.md) the rival is at its post, kit and all
         this._finaleOnLoad?.(url);   // (FIN3) the vault after phase 1: no Financier, the beast in his corner
@@ -6470,6 +6472,21 @@ class Game {
             if (fallback) return fallback; // nearest walkable (even if hazardous) beats searching forever
         }
         return { x: sx, y: sy }; // degenerate map — nothing walkable; spawn anyway
+    }
+
+    // (BN2) The old character of an echo slot on this map, built from the newest kept snapshot
+    // (slots.js echoSpawn): none without one, and none once it has been killed. Not a map spawn,
+    // so no map, save or balance reading changes.
+    _echoEnemies(url, dead = new Set()) {
+        let snap = null;
+        try { snap = readSnapshots(localStorage).pop() || null; } catch { snap = null; }
+        const out = [];
+        for (const [slotId, slot] of Object.entries(ECHO_SLOTS)) {
+            if (slot.map !== url || dead.has(slot.spawn)) continue;
+            const e = echoSpawn({ id: slot.spawn, slot: slotId, x: slot.at.x, y: slot.at.y }, snap);
+            if (e) out.push(e);
+        }
+        return out;
     }
 
     async _fullReset({ seed } = {}) {

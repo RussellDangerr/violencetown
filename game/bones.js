@@ -27,7 +27,29 @@ export function snapshotOf(game) {
         map: typeof game.map?.url === 'string' ? game.map.url : null,
         turn: num(game.turn),
         zones: game._visitedZones ? game._visitedZones.size : 0,
+        // (BN2) How the run went, for the old character's attitude: the best disposition anyone
+        // showed, and how many people it harmed (mugged, robbed, killed and still down).
+        peak: num(game._peakDisposition),
+        harm: harmOf(game),
     };
+}
+
+function harmOf(game) {
+    const lists = game._respawnLists && typeof game._respawnLists === 'object' ? Object.values(game._respawnLists) : [];
+    return (game._muggedIds ? game._muggedIds.size : 0)
+        + (game._robbed ? Object.keys(game._robbed).length : 0)
+        + lists.reduce((n, l) => n + (Array.isArray(l) ? l.length : 0), 0);
+}
+
+// (BN2, BNR2 a) How your old character treats you, from its history. A small rule:
+// harm done makes it a foe, otherwise a good disposition makes it a friend, else it is neutral.
+// Placeholder thresholds (any harm / any warmth): Caelan tunes them. An old snapshot without the
+// two facts reads as neutral.
+export function attitudeOf(snap) {
+    if (!isValid(snap)) return 'neutral';
+    if (num(snap.harm) > 0) return 'foe';
+    if (num(snap.peak) > 0) return 'friend';
+    return 'neutral';
 }
 
 // A snapshot is usable only if it is the current version and the right shape.
