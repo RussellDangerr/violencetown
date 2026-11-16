@@ -4427,19 +4427,20 @@ export class Renderer {
         // ASCII arrows (the bitmap font is plain ASCII). ^ v < > read as
         // direction immediately and stay crisp at scale 2.
         const dirs = [
-            { x: R.up.x,    y: R.up.y,    l: '^' },
-            { x: R.down.x,  y: R.down.y,  l: 'V' },
-            { x: R.left.x,  y: R.left.y,  l: '<' },
-            { x: R.right.x, y: R.right.y, l: '>' },
+            { x: R.up.x,    y: R.up.y,    w: R.up.w,    l: '^' },
+            { x: R.down.x,  y: R.down.y,  w: R.down.w,  l: 'V' },
+            { x: R.left.x,  y: R.left.y,  w: R.left.w,  l: '<' },
+            { x: R.right.x, y: R.right.y, w: R.right.w, l: '>' },
         ];
 
         for (const d of dirs) {
             // 32×32 throw targets stay with the flat-fill fallback since
             // drawPanelSmall thresholds the 9-slice at 64px (corners
-            // would overlap and degenerate at smaller sizes).
-            drawPanelSmall(ctx, d.x, d.y, 32, 32, this.uiSheet);
+            // would overlap and degenerate at smaller sizes). (TL8) A phone's
+            // thumb squares draw at their own size, the arrow centred.
+            drawPanelSmall(ctx, d.x, d.y, d.w, d.w, this.uiSheet);
             if (this.font) {
-                this.font.drawText(ctx, d.l, d.x + 16, d.y + 8, {
+                this.font.drawText(ctx, d.l, d.x + d.w / 2, d.y + d.w / 2 - 8, {
                     color: UI.text, scale: 2, align: 'center',
                 });
             }

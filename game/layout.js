@@ -66,6 +66,18 @@ export const THROW_RECTS = {
 export function throwRects(vp = DEFAULT_VIEW) {
     const dx = vp.origin.x + TILE_PX / 2 - CANVAS_INTERNAL_PX / 2;
     const dy = vp.origin.y + TILE_PX / 2 - CANVAS_INTERNAL_PX / 2;
+    // (TL8) On a phone each target is a thumb square. The side pair hugs the hero's tile
+    // (a few px clear of it); the top and bottom pair sit half a thumb out so no two touch.
+    const T = thumbOf(vp);
+    if (T) {
+        const cx = vp.origin.x + TILE_PX / 2, cy = vp.origin.y + TILE_PX / 2, side = TILE_PX / 2 + 4, away = T / 2;
+        return {
+            up:    { x: cx - T / 2, y: cy - away - T, w: T, h: T },
+            down:  { x: cx - T / 2, y: cy + away,     w: T, h: T },
+            left:  { x: cx - side - T, y: cy - T / 2, w: T, h: T },
+            right: { x: cx + side,     y: cy - T / 2, w: T, h: T },
+        };
+    }
     const at = (r) => ({ x: r.x + dx, y: r.y + dy, w: r.w, h: r.h });
     return { up: at(THROW_RECTS.up), down: at(THROW_RECTS.down), left: at(THROW_RECTS.left), right: at(THROW_RECTS.right) };
 }
