@@ -7303,7 +7303,7 @@ class Game {
     // (the sheet's own ✕ closes it).
     _syncSheetChrome() {
         if (typeof document === 'undefined') return;
-        const on = (this.state === STATE.DEVICE || this.state === STATE.TARGET_LIST || this.state === STATE.ITEM_OVERLAY) && !!this._deviceSheet();   // (TL7) the two list sheets too
+        const on = (this.state === STATE.DEVICE || this.state === STATE.TARGET_LIST || this.state === STATE.ITEM_OVERLAY || (this.state === STATE.TRADE && !!this._offer)) && !!this._deviceSheet();   // (TL7, TL9) the list sheets and the offer sheet
         if (on === !!this._sheetChrome) return;
         this._sheetChrome = on;
         for (const id of ['menu-btn', 'remoticon-btn']) {
