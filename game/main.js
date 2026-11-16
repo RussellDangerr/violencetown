@@ -13,7 +13,7 @@ import { makeEffectLoop } from './effect-loop.js';                 // one tick o
 import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK, SLUDGE_DOT, FIRE_QUENCHING_TILES } from './data.js';
 import { puddleTiles, layPuddle, puddleAt, dryPuddles } from './puddles.js';   // (poisons) Sludge Brain's puddles
 import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef, poitionBuff } from './items.js';
-import { WEAPONS, weaponClassOf } from './weapons.js';
+import { WEAPONS, weaponClassOf, handWeapon } from './weapons.js';
 import { handPairOf } from './hand-data.js';   // (HB2) two held weapons combine into a named effect
 import { resolveItemDef } from './item-registry.js';
 import { toggleCostume, dropCostume } from './costumes.js';   // (CO1)
@@ -3903,7 +3903,7 @@ class Game {
                 this._render();
                 break;
             }
-            case 'hit':   if (npc && this._tapWithWeaponMove?.(npc)) break; if (npc) { this.combatAttack(npc, this.equipment.weapon.damage, { type: this.equipment.weapon.damageType, weapon: this.equipment.weapon }); this._advanceWorld(); this._render(); } break;
+            case 'hit':   if (npc && this._tapWithWeaponMove?.(npc)) break; if (npc) { this.combatAttack(npc, handWeapon(this.equipment).damage, { type: handWeapon(this.equipment).damageType, weapon: handWeapon(this.equipment) }); this._advanceWorld(); this._render(); } break;
             case 'throw': { const th = this._resolveThrowable(); if (th) { const msg = resolveThrow(this, th.itemDef, null, th.count, { x: t.x, y: t.y }); if (msg) this._log(msg, 'combat'); this._rockClatter(th.itemDef, t.x, t.y); th.consume(); this._advanceWorld(); } else this._log('[Nothing to throw.]'); this._render(); break; }
             case 'take':  this._takeItemAt(t.x, t.y); this._render(); break;
             case 'open':  if (t.container) this._openContainer(t.container); break;
@@ -4290,7 +4290,7 @@ class Game {
             case 'combatAttack': {
                 const enemy = aimTile && this.enemies.find(e => e.entity.isAlive() && e.x === aimTile.x && e.y === aimTile.y);
                 if (enemy) {
-                    const wpn = this.equipment.weapon;
+                    const wpn = handWeapon(this.equipment);
                     // (fear) Fearmur fears an enemy struck twice in a row — check
                     // BEFORE the hit (which may kill it and reset the tracker).
                     const repeat = wpn && wpn.onHit === 'fearOnRepeat' && this._lastHitTarget === enemy.id;
@@ -4313,9 +4313,9 @@ class Game {
                 // Pass the raw fraction (not pre-rounded) + the weapon's type so
                 // computeHit rounds once and elemental matchups apply, same as a
                 // single hit — the weapon-AoE case the basic-hit typing pass missed.
-                const dmg = this.equipment.weapon.damage * 2 / 3;
+                const dmg = handWeapon(this.equipment).damage * 2 / 3;
                 const tiles = affectedTiles(w, this);
-                const hit = this._aoeStrike(tiles, dmg, { type: this.equipment.weapon.damageType, weapon: this.equipment.weapon });
+                const hit = this._aoeStrike(tiles, dmg, { type: handWeapon(this.equipment).damageType, weapon: handWeapon(this.equipment) });
                 if (hit.length) { this._log(`[Cleave! ${hit.length} caught.]`, 'combat'); this._advanceWorld(); }
                 else if (this._enemiesPresent(tiles) > 0) { this._log('[Cleave connects — shrugged off, immune.]', 'combat'); this._advanceWorld(); }
                 else this._log('[Cleave hits only air]', 'combat');
@@ -4326,7 +4326,7 @@ class Game {
                 // lost turn a shove costs (_spunTurns), with no push and no new number.
                 const enemy = aimTile && this.enemies.find(e => e.entity.isAlive() && e.x === aimTile.x && e.y === aimTile.y);
                 if (enemy) {
-                    const wpn = this.equipment.weapon;
+                    const wpn = handWeapon(this.equipment);
                     this._lastHitTarget = null;
                     this.combatAttack(enemy, wpn.damage, { type: wpn && wpn.damageType, weapon: wpn });
                     if (enemy.entity.isAlive()) {
@@ -4342,9 +4342,9 @@ class Game {
                 this._lastHitTarget = null;   // (fear) AoE breaks the Fearmur single-target streak
                 // Sweep all 8 tiles, 2/5 weapon damage to everything around you.
                 // Raw fraction + weapon type, as Cleave above — round once, type applies.
-                const dmg = this.equipment.weapon.damage * 2 / 5;
+                const dmg = handWeapon(this.equipment).damage * 2 / 5;
                 const tiles = affectedTiles(w, this);
-                const hit = this._aoeStrike(tiles, dmg, { type: this.equipment.weapon.damageType, weapon: this.equipment.weapon });
+                const hit = this._aoeStrike(tiles, dmg, { type: handWeapon(this.equipment).damageType, weapon: handWeapon(this.equipment) });
                 if (hit.length) { this._log(`[Spin! ${hit.length} caught.]`, 'combat'); this._advanceWorld(); }
                 else if (this._enemiesPresent(tiles) > 0) { this._log('[Spin connects — shrugged off, immune.]', 'combat'); this._advanceWorld(); }
                 else this._log('[You spin, hitting nothing]', 'combat');

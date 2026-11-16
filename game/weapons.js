@@ -175,3 +175,16 @@ export const WEAPONS = {
         description: "A tamer's whip, braided leather gone shiny at the grip. Crack it right and something always comes closer.",
     },
 };
+
+// (LH1) What a bare right hand fights with. A fallback only: never in WEAPONS or
+// ITEMS, so it cannot be bagged, bought or saved. 5 is half the Wooden Sword (LH1R2);
+// the name is a placeholder.
+export const FISTS = Object.freeze({
+    id: 'fists', name: '[Fists]', damage: 5, equipSlot: 'weapon',
+    weaponClass: 'knuckles', category: 'weapon',
+});
+
+// The right hand's weapon, or FISTS when it is bare. Every attack path reads this.
+export function handWeapon(eq) {
+    return (eq && eq.weapon) || FISTS;
+}
