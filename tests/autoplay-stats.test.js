@@ -3,7 +3,7 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { metricsOf, summarize, aggregate, compare, Z95 } from '../tools/autoplay-stats.mjs';
+import { metricsOf, summarize, aggregate, compare, spreadCompare, Z95 } from '../tools/autoplay-stats.mjs';
 
 const run = (turn, hpLost, finished = true, extra = {}) => ({
     finished, turn, deaths: 0,
@@ -95,5 +95,35 @@ describe('compare', () => {
         const r = compare(a, b);
         assert.ok(r.appeared.includes('new.turns'));
         assert.ok(r.gone.includes('fight.turns'));
+    });
+});
+
+describe('spreadCompare', () => {
+    const agg = (metrics) => ({ n: 50, metrics: Object.fromEntries(Object.entries(metrics).map(([k, sd]) => [k, { n: 50, mean: 10, sd, margin: 0 }])) });
+
+    test("PS1's real case: casts sd 0.65 -> 0 and mpSpent 6.48 -> 0 each get a row", () => {
+        const r = spreadCompare(
+            agg({ 'recover_converter.casts': 0.65, 'recover_converter.mpSpent': 6.48 }),
+            agg({ 'recover_converter.casts': 0, 'recover_converter.mpSpent': 0 }));
+        assert.deepEqual(r.map((x) => [x.name, x.kind]), [['recover_converter.casts', 'collapsed'], ['recover_converter.mpSpent', 'collapsed']]);
+    });
+    test('an unchanged spread gets none, and neither does 0 -> 0', () => {
+        assert.equal(spreadCompare(agg({ a: 1.2, z: 0 }), agg({ a: 1.2, z: 0 })).length, 0);
+    });
+    test('a spread that grows from 0 is reported', () => {
+        assert.equal(spreadCompare(agg({ a: 0 }), agg({ a: 0.4 }))[0].kind, 'grew');
+    });
+    test('x2 wider or narrower with 50 seeds is reported; under x2 is not', () => {
+        assert.equal(spreadCompare(agg({ a: 1 }), agg({ a: 2.5 }))[0].kind, 'wider');
+        assert.equal(spreadCompare(agg({ a: 3 }), agg({ a: 1 }))[0].kind, 'narrower');
+        assert.equal(spreadCompare(agg({ a: 1 }), agg({ a: 1.8 })).length, 0);
+    });
+    test('x2 on a handful of seeds is inside the noise', () => {
+        const few = (sd) => ({ n: 4, metrics: { a: { n: 4, mean: 10, sd, margin: 0 } } });
+        assert.equal(spreadCompare(few(1), few(2.1)).length, 0);
+    });
+    test('a single-seed side has no spread to compare', () => {
+        const one = { n: 1, metrics: { a: { n: 1, mean: 1, sd: 0, margin: 0 } } };
+        assert.equal(spreadCompare(agg({ a: 1 }), one).length, 0);
     });
 });

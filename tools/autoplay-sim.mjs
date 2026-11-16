@@ -20,7 +20,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { cpus } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { aggregate, compare, metricsOf, pairedCompare, rowsByScript, rowLines } from './autoplay-stats.mjs';
+import { aggregate, compare, metricsOf, pairedCompare, rowsByScript, rowLines, spreadCompare } from './autoplay-stats.mjs';
 import { playAll, parseSeeds } from './autoplay-runs.mjs';
 import { execSync } from 'node:child_process';
 import { appendRun, buildRow, historyLines, readRows } from './autoplay-sim-log.mjs';
@@ -125,6 +125,9 @@ if (o.check) {
         if (o.all) for (const m of r.steady.filter((x) => x.delta !== 0)) show('steady', m);
         for (const k of r.appeared) console.log(`    new   ${k}`);
         for (const k of r.gone) console.log(`    gone  ${k}`);
+        for (const sp of spreadCompare(was, s)) {
+            console.log(`    SPREAD ${sp.name.padEnd(27)} sd ${fmt(sp.was)} -> ${fmt(sp.now)}  (${sp.kind}; shown only, does not fail)`);
+        }
         movedLog[name] = r.moved.map((m) => m.name);
         changedLog[name] = changed;
         if (r.moved.length) failed = true;
