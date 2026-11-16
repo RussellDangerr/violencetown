@@ -3203,7 +3203,7 @@ export class Renderer {
         const t = panelTarget(game);
         if (!t) return;
         // (FX4) A boss goes by its one name here too; fight-panels reads the type.
-        const panel = targetPanel(t);
+        const panel = targetPanel(t, game._knownWeak);
         panel.name = shownName(t) || panel.name;
         this._drawTargetPanel(p.right, panel);
     }
@@ -3289,7 +3289,18 @@ export class Renderer {
         // (plans/tg1-enemies-wear-armour.md) Their armour and what they have on.
         // Both labels are placeholders for Caelan to name.
         this.font.drawText(ctx, clip(`[TEXT] ${t.armor}`), tx, y, { color: UI.text, scale: 1 });
-        y += LH + 2;
+        y += LH;
+        // (WN1) What you have learned this foe is weak to or resists; no line while neither is known.
+        // The labels are placeholders for Caelan to name.
+        if ((t.weak ?? []).length) {
+            this.font.drawText(ctx, clip(`[TEXT] ${t.weak.join(' ').toUpperCase()}`), tx, y, { color: UI.hpGreen, scale: 1 });
+            y += LH;
+        }
+        if ((t.resist ?? []).length) {
+            this.font.drawText(ctx, clip(`[TEXT] ${t.resist.join(' ').toUpperCase()}`), tx, y, { color: UI.hpRed, scale: 1 });
+            y += LH;
+        }
+        y += 2;
         this.font.drawText(ctx, '[TEXT]', tx, y, { color: UI.dim, scale: 1 });
         y += LH - 2;
         if (!(t.worn ?? []).length) {
