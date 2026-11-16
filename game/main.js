@@ -46,7 +46,7 @@ import { snapshotOf, keepSnapshot, readSnapshots, reportLines } from './bones.js
 import { hasSave, readSaveRaw, writeSave, loadInto, clearSave, encodeSaveCode, importSaveCode } from './save.js';
 import { readAway, tellAwayNews, restedOnReturn } from './away.js';   // (CK1) hours since the save's savedAt
 import { QuestEngine } from './quests.js';
-import { doExamine, resolveExamine } from './examine.js';
+import { doExamine, resolveExamine, propNameAt } from './examine.js';
 import { recordDrop, pendingDrops, takeDrop, dropLoadout, recordKill, stepRespawns, deadIds, bossDropOnce, claimSpots, spotHolds, spotSpawns } from './drops.js'; // per-zone runtime dropped-items layer + respawn list (pure, node-tested)
 import {
     HIT_SLOP, throwRects, DOCK, hitHud,
@@ -2556,10 +2556,14 @@ class Game {
             }
             // (C3b, ruling C3R2) An empty tile straight beside you: a long-press
             // faces it without stepping, so the step waits for the release.
+            // (EX2) A prop (tree, grave, sign) answers a long-press with a list of just
+            // Examine; a quick tap does what it always did.
+            const prop = !target && this._propTargetAt(tile.x, tile.y);
             const face = !target && adjacentFacing(this.playerX, this.playerY, tile);
-            if (face) { this._armTurnPress(tile, face, e); return; }
+            if (face) { this._armTurnPress(tile, face, e, !!prop); return; }
             // Click-to-move: empty walkable ground → BFS-path the Hero there.
-            if (this._tapWalkTo(tile)) return;
+            if (this._tapWalkTo(tile)) { if (prop) this._armLongPress(tile, e, null, true); return; }
+            if (prop) { this._armLongPress(tile, e, null, true); return; }
         }
         // ITEM_SELECTED → legacy hotbar tap (slot re-select / tap-outside cancel).
         // In IDLE the bottom bar is the XMB (handled above by _tapXmbBar), so we
@@ -2573,14 +2577,14 @@ class Game {
     // halts the walk the tap just started). Cancelled on pointerup / drag / cancel
     // (see _bindCanvasTap) and by _stopAutoRepeat. Desktop uses right-click.
     // (FX60) `onTap`, when given, is the action held back until the finger lifts.
-    _armLongPress(tile, e, onTap = null) {
+    _armLongPress(tile, e, onTap = null, prop = false) {
         if (this._pressTimer) clearTimeout(this._pressTimer);
         this._pressStart = e ? { x: e.clientX, y: e.clientY } : null;
         this._pendingTap = onTap;
         this._pressTimer = setTimeout(() => {
             this._pressTimer = null;
             this._pendingTap = null;
-            if (this.state === STATE.IDLE) this._openTargetList(tile.x, tile.y);
+            if (this.state === STATE.IDLE) this._openTargetList(tile.x, tile.y, prop);
         }, 450);
     }
 
@@ -2598,7 +2602,7 @@ class Game {
     // it: no step, no turn spent, the arrow keys' free pivot. Released sooner it
     // is a tap and walks the step (endPress in _bindCanvasTap). A drag drops the
     // turn but keeps the step; a cancelled pointer drops both.
-    _armTurnPress(tile, face, e) {
+    _armTurnPress(tile, face, e, prop = false) {
         if (this._pressTimer) clearTimeout(this._pressTimer);
         this._pressStart = e ? { x: e.clientX, y: e.clientY } : null;
         this._turnPress = { tile };
@@ -2607,6 +2611,8 @@ class Game {
             this._turnPress = null;
             if (this.state !== STATE.IDLE || this._animating) return;
             this.facing = face;
+            // (EX2) A prop beside you: the long-press turns to it AND offers Examine.
+            if (prop && this._openTargetList(tile.x, tile.y, true)) return;
             this._render();
         }, 450);
     }
@@ -3748,6 +3754,14 @@ class Game {
                  container: container || null, rest };
     }
 
+    // (EX2) A named prop (tree, grave, sign) with nothing else on its tile. It is not a
+    // _targetAt target, so a tap and the F key ignore it; only a touch long-press
+    // opens its list, which carries Examine alone.
+    _propTargetAt(x, y) {
+        if (!propNameAt(this, x, y)) return null;
+        return { x, y, npc: null, item: null, examinable: null, container: null, rest: false, prop: true };
+    }
+
     // (HP1) Rest on the faced bench: out of a fight, HP and MP to full and a few hours pass
     // (the defeat path's time skip); in a fight, refused. Texts are placeholders.
     _restHere() {
@@ -3764,9 +3778,9 @@ class Game {
     // (Target List) Open the RuneScape-style verb list on a target — same target
     // resolution as the retired Target Wheel, but ordered verbs + a Cancel row,
     // drawn as a vertical list. Static (no particle loop needed).
-    _openTargetList(x, y) {
+    _openTargetList(x, y, prop = false) {
         if (this.state !== STATE.IDLE) return false;
-        const target = this._targetAt(x, y);
+        const target = this._targetAt(x, y) || (prop ? this._propTargetAt(x, y) : null);
         if (!target) return false;
         const verbs = orderedTargetVerbs(target, this);
         if (!verbs.length) return false;
