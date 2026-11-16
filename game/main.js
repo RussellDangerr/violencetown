@@ -6770,6 +6770,7 @@ class Game {
         this._trackBodies();
         this._creditsCheck();
         this._syncFirstRunHint();
+        this._syncSheetChrome();
         this._spiritShow = spiritToShow(this, Settings.get('spirits'), performance.now());   // (heroic spirits) HS-R2
         this.renderer.renderFrame(this);
     }
@@ -7175,6 +7176,20 @@ class Game {
     // `this._deviceSheet?.()` where the geometry is asked for.
     _deviceSheet() {
         return deviceSheetRect(this._vp());
+    }
+
+    // (TL4) The ☰ and Remoticon buttons float over the page's top-right corner, which a
+    // phone's Remoticon sheet fills edge to edge: they step aside while it is open
+    // (the sheet's own ✕ closes it).
+    _syncSheetChrome() {
+        if (typeof document === 'undefined') return;
+        const on = this.state === STATE.DEVICE && !!this._deviceSheet();
+        if (on === !!this._sheetChrome) return;
+        this._sheetChrome = on;
+        for (const id of ['menu-btn', 'remoticon-btn']) {
+            const el = document.getElementById(id);
+            if (el) el.style.visibility = on ? 'hidden' : '';
+        }
     }
 
     _closeDevice() {
