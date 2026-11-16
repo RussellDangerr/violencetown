@@ -676,6 +676,7 @@ export async function loadInto(game, raw) {
 
     // 7. settle
     game._lastAutosaveTurn = game.turn;
+    game._lastHintTurn = null;   // (FX71) hint pacing belongs to the run, as RESTART has it
     game.state = 'idle';
     game._render();
     return true;
