@@ -169,9 +169,9 @@ describe('main.js carries the kind from the weapon to the splat', () => {
     };
 
     test('the inspector hit, the wheel swing, Cleave and Spin all pass the weapon', () => {
-        assert.match(mainSrc, /case 'hit':[^\n]*this\.combatAttack\(npc, [^\n]*weapon: this\.equipment\.weapon \}/);
+        assert.match(mainSrc, /case 'hit':[^\n]*this\.combatAttack\(npc, [^\n]*weapon: \(this\.equipment\.weapon \|\| this\.bareHand\) \}/);
         assert.match(mainSrc, /this\.combatAttack\(enemy, wpn\.damage, \{ type: wpn && wpn\.damageType, weapon: wpn \}\)/);
-        const aoe = mainSrc.match(/this\._aoeStrike\(tiles, dmg, \{ type: this\.equipment\.weapon\.damageType, weapon: this\.equipment\.weapon \}\)/g) || [];
+        const aoe = mainSrc.match(/this\._aoeStrike\(tiles, dmg, \{ type: \(this\.equipment\.weapon \|\| this\.bareHand\)\.damageType, weapon: \(this\.equipment\.weapon \|\| this\.bareHand\) \}\)/g) || [];
         assert.equal(aoe.length, 2, 'Cleave and Spin');
     });
 

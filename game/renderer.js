@@ -16,6 +16,7 @@ const EAT_SLICE_TEXT_W = 96;
 import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, itemSprite, CONTAINER_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES, MARK_SPRITES, spriteVariant, spriteFrame, tileFrame, idHash, borderPropKeys, borderPropKey, fillerSprite, TINY_INK } from './sprites.js';
 import { INTERACTIONS, seenNotes } from './interactions.js'; // (IN1)
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
+import { handWeapon } from './weapons.js';   // (LH1) a bare right hand shows its fists
 import { CREDITS, currentCard } from './credits.js';   // (FIN4) the credits screen
 import { ROOT, selectedNode, activeRing, activeIndex, decisionPath, previewChildren, affectedTiles, verbApplies, isCombatActive, flapperDeflection, defaultVerb } from './wheel-model.js'; // (sunburst wheel) + the bump telegraph
 import {
@@ -2649,7 +2650,7 @@ export class Renderer {
 
         // — Weapon line at the bottom (informational; the hotbar carries
         //   the canonical inventory).
-        const wpn = game.equipment.weapon;
+        const wpn = handWeapon(game.equipment);
         if (wpn && this.font) {
             const name = wpn.name.replace(/[\[\]]/g, '').toUpperCase();
             this.font.drawText(ctx, `${name}  ${wpn.damage} DMG`, x + 8, by, {
