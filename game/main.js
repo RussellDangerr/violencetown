@@ -5528,9 +5528,10 @@ class Game {
         // Mark them mugged so a respawn (zone re-entry) comes back broke, not
         // farmable every reload.
         if (enemyObj.gold > 0) {
-            const loot = enemyObj.gold;
+            const loot = enemyObj.gold, before = this.gold || 0;
+            // (MS3) a worn delivery cap makes them carry more: transferGold tops the purse up on 'loot'.
             transferGold(enemyObj, this, loot, 'loot'); // can't fail — amount == balance, guarded > 0
-            this._log(`[Looted ${loot} GP.]`, 'pickup');
+            this._log(`[Looted ${(this.gold || 0) - before} GP.]`, 'pickup');
             this._muggedIds.add(enemyObj.id);
         }
         // Law 6f AS AMENDED: the unused kit drops. He spent his tricks or he

@@ -118,6 +118,10 @@ export function bribeStepCost(disposition) {
 // future hooks).
 export function transferGold(from, to, amount, reason = '') {
     if (!from || !to || !(amount > 0)) return false;
+    // (MS3) Looting a purse the whole way while wearing a delivery cap: the enemy carried more.
+    if (reason === 'loot' && amount === from.gold) {
+        from.gold = amount = carriedGold(from.gold, to.equipment);
+    }
     if ((from.gold ?? 0) < amount) return false;
     from.gold = (from.gold ?? 0) - amount;
     to.gold   = (to.gold ?? 0) + amount;
@@ -132,4 +136,16 @@ export function burnGold(holder, amount, reason = '') {
     if (!(amount > 0) || (holder.gold ?? 0) < amount) return false;
     holder.gold -= amount;
     return true;
+}
+
+// (MS3, MR5 b) The delivery cap: while one is worn, enemies carry more. The purse is raised
+// by half (rounded up) on the enemy's own wallet, before it is looted, so the extra still moves
+// through transferGold and nothing is minted at the till. Returns the purse unchanged without it.
+export const DELIVERY_CAP_PURSE = 1.5;
+export function wearsDeliveryCap(equipment) {
+    return Object.values(equipment || {}).some(d => d && d.deliveryCap);
+}
+export function carriedGold(gold, equipment) {
+    if (!(gold > 0) || !wearsDeliveryCap(equipment)) return gold;
+    return Math.ceil(gold * DELIVERY_CAP_PURSE);
 }

@@ -18,7 +18,7 @@ import { dirOf } from './perception.js';
 export const TINY_INK = [63, 38, 49];   // #3F2631, the Tiny packs' outline
 // Sheets already drawn in the Tiny style (or re-outlined by a tool), which the
 // outline pass leaves alone.
-export const TINY_STYLE_SHEETS = new Set(['tinyDungeon', 'tinyTown', 'tinyExtra', 'outlined', 'interior', 'emotes', 'marks', 'ratVariants', 'wereratTint', 'oldSelfTint', 'ratMaskTint', 'beastVariants', 'bearVariants', 'iceCone', 'ant']);
+export const TINY_STYLE_SHEETS = new Set(['tinyDungeon', 'tinyTown', 'tinyExtra', 'outlined', 'interior', 'emotes', 'marks', 'ratVariants', 'wereratTint', 'oldSelfTint', 'ratMaskTint', 'capGreyTint', 'capBlueTint', 'beastVariants', 'bearVariants', 'iceCone', 'ant']);
 
 export class SpriteSheet {
     // `padding` is the gap (in source pixels) between adjacent cells. Kenney's
@@ -195,6 +195,9 @@ export const SHEETS = {
     // sheet again, washed with `tint` when it loads (loadAllSprites). Obviously fake on purpose.
     // The Rat Mask's bag icon: the same sheet washed in a fake tint, a placeholder until it has art.
     ratMaskTint:  { src: TINY_DUNGEON, frameW: 16, frameH: 16, tint: 'rgba(80, 220, 80, 0.5)' },
+    // The delivery caps' icons: placeholder washes of the same sheet.
+    capGreyTint:  { src: TINY_DUNGEON, frameW: 16, frameH: 16, tint: 'rgba(150, 156, 162, 0.6)' },
+    capBlueTint:  { src: TINY_DUNGEON, frameW: 16, frameH: 16, tint: 'rgba(60, 120, 220, 0.55)' },
     // (BN2) Your old character: the player's own sheet washed pale like a ghost (one tint, BNR3 a).
     oldSelfTint:  { src: TINY_DUNGEON, frameW: 16, frameH: 16, tint: 'rgba(210, 225, 255, 0.55)' },
     wereratTint:  { src: TINY_DUNGEON, frameW: 16, frameH: 16, tint: 'rgba(200, 40, 220, 0.55)' },
@@ -392,6 +395,8 @@ export const ITEM_SPRITES = {
     fearmur:           { sheet: 'tinyExtra',   x: 7 * 16,  y: 0,       w: 16, h: 16 },  // the staff in bone (WA1; it drew as a hammer)
     gator_tail:        { sheet: 'tinyExtra',   x: 6 * 16,  y: 0,       w: 16, h: 16 },  // the tapered blade in gator green (WA1; it drew as a spear)
     rat_mask:          { sheet: 'ratMaskTint', x: 3 * 16, y: 10 * 16, w: 16, h: 16 },  // the rat cell, tinted: placeholder
+    delivery_cap_grey: { sheet: 'capGreyTint', x: 4 * 16, y: 7 * 16, w: 16, h: 16 },  // a tinted figure cell: placeholder
+    delivery_cap_blue: { sheet: 'capBlueTint', x: 4 * 16, y: 7 * 16, w: 16, h: 16 },  // same cell, blue wash: placeholder
     test_costume:      { sheet: 'ratMaskTint', x: 4 * 16, y: 10 * 16, w: 16, h: 16 },  // (CO1) a tinted cell: placeholder
     sun_man_costume:   { sheet: 'ratMaskTint', x: 5 * 16, y: 10 * 16, w: 16, h: 16 },  // (CO2) next cell along from test_costume (no two items may share a cell): placeholder
     foil_hat:          { sheet: 'tinyDungeon', x: 4 * 16,  y: 5 * 16,  w: 16, h: 16 },  // silver dome
