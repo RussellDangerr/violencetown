@@ -223,6 +223,18 @@ const FIRE_BLOOD_SPREAD_TURNS = 3;
 
 // ── Game ─────────────────────────────────────────────────────────────────────
 
+// (CT1) A save's mapUrl -> the zone name the title line shows.
+const CONTINUE_ZONE_NAMES = {
+    'town-map.json': 'TOWN', 'borgir-map.json': 'BORGIR', 'sewer-map.json': 'SEWER',
+    'sewer-north-map.json': 'SEWER', 'carrion-room-map.json': 'SEWER',
+    'downtown-map.json': 'DOWNTOWN', 'diner-map.json': 'DINER', 'bank-map.json': 'FIRST BLOOD BANK',
+    'vault-map.json': '[TEXT]', 'casino-map.json': 'CASINO', 'canyon-map.json': 'CANYON',
+    'gorge-map.json': 'GORGE', 'valley-map.json': 'VALLEY', 'factory-map.json': 'FACTORY',
+    'carnival-map.json': 'CARNIVAL', 'graveyard-map.json': 'GRAVEYARD',
+    'wilderness-map.json': 'WILDERNESS', 'frozen-map.json': '[FROZEN AREA]',
+    'side-area-map.json': '[SIDE AREA]',
+};
+
 class Game {
     constructor() {
         this.state    = STATE.SPLASH;
@@ -1199,6 +1211,23 @@ class Game {
     }
 
     // (CK1) Whole hours since this save's stamp, kept as this.hoursAway.
+    // (CT1) The one line that says where and how long ago the save on disk was left.
+    // No save, or one that will not read: null, and nothing is said.
+    _continueLine(now = Date.now()) {
+        let raw = null;
+        try { raw = readSaveRaw(); } catch { return null; }
+        if (!raw) return null;
+        const zone = CONTINUE_ZONE_NAMES[raw.mapUrl];
+        const ms = now - raw.savedAt;
+        if (!zone || !Number.isFinite(ms)) return null;
+        const mins = Math.max(0, Math.floor(ms / 60000));
+        const hours = Math.floor(mins / 60);
+        const age = mins < 60 ? 'under 1 hour'
+            : hours < 48 ? `${hours} ${hours === 1 ? 'hour' : 'hours'}`
+            : `${Math.floor(hours / 24)} days`;
+        return `[TEXT] ${zone}, ${age}`;
+    }
+
     // (FX66) Copy the save that would not open aside; true when a copy was kept.
     _keepUnreadable() { return keepUnreadableSave(); }
 
@@ -1432,14 +1461,18 @@ class Game {
         };
 
         document.getElementById('splash-go').addEventListener('click', () => {
+            const where = hasSave() ? this._continueLine?.() : null;   // (CT1) the same line, appended
             if (hasSave() && typeof confirm === 'function'
-                && !confirm('Restart from the beginning? This erases your current save.')) return;
+                && !confirm('Restart from the beginning? This erases your current save.' + (where ? '\n' + where : ''))) return;
             start();
         });
         const continueBtn = document.getElementById('splash-continue');
         if (continueBtn && hasSave()) {
             continueBtn.classList.remove('hidden');
             continueBtn.addEventListener('click', continueGame);
+            const lineEl = document.getElementById('splash-continue-line');   // (CT1)
+            const where = this._continueLine?.();
+            if (lineEl && where) { lineEl.textContent = where; lineEl.classList.remove('hidden'); }
         }
         // (TP1) A save code pasted on the title. A code that will not read says why
         // and changes nothing; with a save on disk it asks first, with RESTART's line.
