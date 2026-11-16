@@ -202,6 +202,17 @@ export const ITEMS = {
         fallbackColor: '#e0a030',
         baseValue: 10,
     },
+    // CO2: given once when Monstrous Sun Man falls (finale-setpiece.js beastFell).
+    sun_man_costume: {
+        id: 'sun_man_costume',
+        name: '[Sun Man Costume]',
+        description: '[TEXT]',
+        useType: 'costume',
+        costume: 'sun_man_costume',
+        consumable: false,
+        fallbackColor: '#f0d020',
+        baseValue: 10,
+    },
     cardboard_cuirass: {
         id: 'cardboard_cuirass',
         name: '[Cardboard Cuirass]',
