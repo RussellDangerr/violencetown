@@ -43,7 +43,7 @@ import { RNG, randomSeed } from './rng.js';
 import { pickSlots, echoSpawn, echoStands, ECHO_SLOTS, defaultPicks, resolveSpawn, requiredDropFor, dropLineFor, FINALE_PHASE1, pickReturning, spotFor, RETURNING_SPOTS } from './slots.js';
 import { rememberSpent, applySpent } from './npc-memory.js';
 import { snapshotOf, keepSnapshot, readSnapshots, reportLines } from './bones.js';
-import { hasSave, readSaveRaw, writeSave, loadInto, clearSave, encodeSaveCode, importSaveCode } from './save.js';
+import { hasSave, readSaveRaw, writeSave, loadInto, clearSave, encodeSaveCode, importSaveCode, decodeSaveCode, CODE_REFUSALS } from './save.js';
 import { createKey, loadKeyId } from './save-key.js';
 import { readAway, tellAwayNews, restedOnReturn } from './away.js';   // (CK1) hours since the save's savedAt
 import { QuestEngine } from './quests.js';
@@ -1426,6 +1426,43 @@ class Game {
             continueBtn.classList.remove('hidden');
             continueBtn.addEventListener('click', continueGame);
         }
+        // (TP1) A save code pasted on the title. A code that will not read says why
+        // and changes nothing; with a save on disk it asks first, with RESTART's line.
+        // A good one loads, is written as the Options paste writes it, and enters the
+        // game the way CONTINUE does.
+        const pasteBtn = document.getElementById('splash-paste');
+        const pastePanel = document.getElementById('splash-paste-panel');
+        const pasteBox = document.getElementById('splash-code');
+        const pasteNote = document.getElementById('splash-code-status');
+        const pasteSay = (m) => { if (pasteNote) pasteNote.textContent = m; };
+        pasteBtn?.addEventListener('click', () => {
+            const opening = pastePanel?.classList.contains('hidden');
+            if (opening) pastePanel.classList.remove('hidden'); else pastePanel?.classList.add('hidden');
+            pasteBtn.setAttribute?.('aria-expanded', opening ? 'true' : 'false');
+            if (opening) pasteBox?.focus?.();
+        });
+        document.getElementById('splash-code-go')?.addEventListener('click', async () => {
+            if (this.state !== STATE.SPLASH || splash.classList.contains('gone')) return;
+            let text = pasteBox ? pasteBox.value : '';
+            if (!text) { try { text = await navigator.clipboard.readText(); } catch { /* blocked: the box is the way */ } }
+            const d = decodeSaveCode(text);
+            if (!d.ok) { pasteSay(CODE_REFUSALS[d.reason]); return; }
+            if (hasSave() && typeof confirm === 'function'
+                && !confirm('Restart from the beginning? This erases your current save.')) return;
+            this._endTvIntro?.();
+            audio.init();
+            this._applyAudioSettings();
+            audio.playMusic('town');
+            const res = await importSaveCode(this, text);
+            if (!res.ok) { this.state = STATE.SPLASH; pasteSay(res.message); return; }
+            writeSave(this);
+            splash.classList.add('gone');
+            wrapper.classList.remove('hidden');
+            this._fitCanvas();
+            this._log('[Save loaded from a code]', 'transition');
+            this._render?.();
+            this._maybeShowFirstRunHint();
+        });
         // (FX23) The Space that leaves the title is spent here. _bindInput's
         // listener sits on the same document and runs after this one; by then the
         // state is IDLE, so without stopImmediatePropagation it opened the wheel.
