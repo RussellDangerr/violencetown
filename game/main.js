@@ -1336,6 +1336,7 @@ class Game {
             this.renderer.renderSplash(splashCanvas);
         };
         const onKey = (e) => {
+            if (e.target?.tagName === 'INPUT' || e.target?.tagName === 'TEXTAREA') return;   // (FX65) typing is not a skip
             if (!isSkipKey(e)) return;
             e.preventDefault();
             e.stopImmediatePropagation();
@@ -1432,6 +1433,10 @@ class Game {
         // so once the splash is gone a second Space must not start another run.
         document.addEventListener('keydown', (e) => {
             if (this.state !== STATE.SPLASH || e.code !== 'Space') return;
+            // (FX65) Space belongs to a focused text box (the save-code box types
+            // a space) or button (COPY / PASTE CODE press), not to the title.
+            const tag = e.target?.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'BUTTON') return;
             e.preventDefault();
             e.stopImmediatePropagation();
             if (splash.classList.contains('gone')) return;
@@ -2118,7 +2123,7 @@ class Game {
         // Use capture phase to beat _bindInput's bubble-phase handler so Esc
         // closes the modal instead of cancelling game state behind it.
         document.addEventListener('keydown', (e) => {
-            // Skip when typing in an input (defensive — no inputs exist today)
+            // Skip when typing in an input (the save-code box on the title is one)
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
             if (e.key === '?' || (e.code === 'Slash' && e.shiftKey)) {
                 e.preventDefault();
