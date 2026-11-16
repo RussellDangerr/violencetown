@@ -564,7 +564,9 @@ export async function loadInto(game, raw) {
 
     // 3. equipment / inventory / temp-equips / buffs (rehydrate defs by id)
     game.equipment = {
-        weapon: R(p.equipment.weapon) || game.equipment.weapon,
+        // An explicit null is a bare right hand (fists, LH1); only a save with no
+        // right-hand entry at all falls back to the weapon the game already holds.
+        weapon: p.equipment.weapon === null ? null : (R(p.equipment.weapon) || game.equipment.weapon),
         left: R(p.equipment.left),
         top: R(p.equipment.top), bottom: R(p.equipment.bottom),
         front: R(p.equipment.front), back: R(p.equipment.back), sides: R(p.equipment.sides),
