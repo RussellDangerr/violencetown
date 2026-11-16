@@ -172,6 +172,18 @@ describe('PK1 save code', () => {
         assert.equal(dst.turn, 42);
     });
 
+    test('newer fields from dev (worn bodies, savedAt) ride through a code', async () => {
+        const src = makePopulatedGame();
+        src.bodiesWorn = ['rat', 'crow'];
+        await settle(src);
+        assert.deepEqual(serialize(src).player.bodiesWorn, ['rat', 'crow'], 'the field is in the save');
+        const dst = makeBlankGame();
+        assert.equal((await importSaveCode(dst, encodeSaveCode(src))).ok, true);
+        assert.deepEqual(serialize(dst).player.bodiesWorn, ['rat', 'crow']);
+        assert.equal(snap(dst), snap(src));
+        assert.equal(typeof decodeSaveCode(encodeSaveCode(src)).raw.savedAt, 'number', 'savedAt travels with the code');
+    });
+
     test('a code survives being wrapped and padded with spaces', async () => {
         const src = await settle(makePopulatedGame());
         const messy = '  ' + encodeSaveCode(src).replace(/(.{40})/g, '$1\n') + '\n ';
