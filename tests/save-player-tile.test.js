@@ -3,6 +3,7 @@ import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { serialize, loadInto, nearestWalkable } from '../game/save.js';
 import { QuestEngine } from '../game/quests.js';
+import { canStandOn, ITEMS } from '../game/items.js';
 
 beforeEach(() => {
     const store = new Map();
@@ -81,4 +82,54 @@ test('a map with no open tile leaves the tile as given and does not hang', () =>
     const none = { width: 3, height: 3, spawn: { x: 1, y: 1 },
         isInBounds: (x, y) => x >= 0 && y >= 0 && x < 3 && y < 3, isWalkable: () => false };
     assert.deepEqual(nearestWalkable(none, 0, 0), { x: 0, y: 0 });
+});
+
+// (FX70) A grate is open ground for a grates-mask wearer, by the same rule the movement gate reads.
+function grateMap() {
+    const m = mkMap();
+    const open = m.isWalkable;
+    m.isWalkable = (x, y) => open(x, y) && !(x === 4 && y === 3);
+    m.getTile = (x, y) => (x === 4 && y === 3 ? 4 : (open(x, y) ? 1 : 2));
+    return m;
+}
+const MASK = ITEMS.rat_mask;
+
+async function loadWith(equipment, x, y) {
+    const map = grateMap();
+    const src = makeGame(map);
+    src.equipment = equipment;
+    const blob = JSON.parse(JSON.stringify(serialize(src)));
+    blob.player.x = x; blob.player.y = y;
+    const dst = makeGame(map);
+    dst._resolveItemDef = (id) => ITEMS[id] || null;   // equipment is saved as ids and rehydrated here
+    await loadInto(dst, blob);
+    return dst;
+}
+const bare = () => makeGame(mkMap()).equipment;
+
+test('a save on a grate with a grates mask worn reloads on that grate', async () => {
+    const g = await loadWith({ ...bare(), top: MASK }, 4, 3);
+    assert.deepEqual([g.playerX, g.playerY], [4, 3]);
+});
+
+test('a save on a grate without the mask moves to the nearest open tile', async () => {
+    const g = await loadWith(bare(), 4, 3);
+    assert.notDeepEqual([g.playerX, g.playerY], [4, 3]);
+    assert.ok(g.map.isWalkable(g.playerX, g.playerY));
+});
+
+test('walls and off-map stay moved even with the mask', async () => {
+    const eq = { ...bare(), top: MASK };
+    const w = await loadWith(eq, 0, 0);
+    assert.deepEqual([w.playerX, w.playerY], [1, 1]);
+    const o = await loadWith(eq, 9999, -50);
+    assert.deepEqual([o.playerX, o.playerY], [8, 1]);
+});
+
+test('canStandOn: rat form or the mask opens a grate, nothing else does', () => {
+    const m = grateMap();
+    assert.equal(canStandOn(m, 4, 3, {}), false);
+    assert.equal(canStandOn(m, 4, 3, { ratForm: true }), true);
+    assert.equal(canStandOn(m, 4, 3, { equipment: { top: MASK } }), true);
+    assert.equal(canStandOn(m, 0, 0, { ratForm: true, equipment: { top: MASK } }), false);
 });

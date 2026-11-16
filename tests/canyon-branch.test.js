@@ -18,6 +18,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { GameMap, carriesAll } from '../game/map.js';
+import { canStandOn } from '../game/items.js';
 import { QuestEngine, QUESTS } from '../game/quests.js';
 import { Renderer } from '../game/renderer.js';
 
@@ -108,7 +109,7 @@ async function makeGame({ fuel = 'raw' } = {}) {
         },
     };
     const free = {
-        STATE, DIRS, audio, carriesAll, document, window,
+        STATE, DIRS, audio, carriesAll, canStandOn, document, window,
         requestAnimationFrame: (f) => queueMicrotask(() => f(Infinity)),
         performance: { now: () => 0 },
         setTimeout: (f) => { timers.push(f); return timers.length; },
