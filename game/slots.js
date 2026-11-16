@@ -429,8 +429,16 @@ export const OLD_SELF = {
 // apart from SLOTS because nothing in them is picked, saved or required: no seed stream, no save
 // field, no registry entry for the balance and validator sweeps to read. `at` is where it stands.
 export const ECHO_SLOTS = {
-    'town.echo': { kind: 'echo', map: 'town-map.json', spawn: 'old-self', at: { x: 21, y: 16 } },
+    'town.echo': { kind: 'echo', map: 'town-map.json', spawn: 'old-self', at: { x: 21, y: 16 }, shows: ['friend', 'neutral'] },
+    // (GH1, GHR2 c) A character that turned on you is fought only in the Graveyard.
+    'graveyard.echo': { kind: 'echo', map: 'graveyard-map.json', spawn: 'old-self-foe', at: { x: 20, y: 12 }, shows: ['foe'] },
 };
+
+// (GH1) Does this echo slot stand for this snapshot? No usable snapshot, no ghost.
+export function echoStands(slot, snap) {
+    if (!slot || !snap || !(snap.maxHp > 0)) return false;
+    return (slot.shows || ['friend', 'neutral', 'foe']).includes(attitudeOf(snap));
+}
 
 // A required item belongs to the slot, not the entry (SL-4): every entry in the
 // pool drops it, so a new boss can never strand the quest.
@@ -535,7 +543,12 @@ export function echoSpawn(spawn, snap, echoes = ECHO_SLOTS, slots = SLOTS) {
     const attitude = attitudeOf(snap);
     const out = { ...structuredClone(entry), id: spawn.id, x: spawn.x, y: spawn.y, slot: spawn.slot, equipped: worn, attitude };
     if (spawn.facing) out.facing = spawn.facing;
-    if (attitude === 'foe') { out.damage = ACT2_MOB_DAMAGE; out.disposition = -40; delete out.behavior; }   // no behavior list: born hostile (ai.js)
+    if (attitude === 'foe') {
+        out.damage = ACT2_MOB_DAMAGE; out.disposition = -40; delete out.behavior;   // no behavior list: born hostile (ai.js)
+        // (GH1) Its own snapshot's stats: its max HP, and one worn item is what beating it drops.
+        out.hp = snap.maxHp;
+        if (worn.length) { out.loadout = [worn[0]]; out.equipped = worn.slice(1); }
+    }
     else if (attitude === 'friend') out.disposition = 40;
     return out;
 }
