@@ -27,7 +27,7 @@ import {
     deviceSkillsLayout, SKILL_COUNT_W, ringPassiveRows,                                     // (US2) the skills readout in the RINGS tab; (RR1) a ring's passive rows
     inspectorPanelRect, inspectorActionRects,                               // (C1) tap-to-inspect panel + action-row geometry
     gearOptionRects, gearChooserRect, gearEmptyNoteRect,                                     // (C2) GEAR chooser option-row + panel geometry
-    xmbBarLayout, hudLayout, throwRects, wheelTopMarks, fightPanelRects, XMB_CELL,                      // (XMB) usable-bar geometry; (screen-fill) the HUD, throw targets, the marks above the wheel
+    xmbBarLayout, hudLayout, dialogueBottom, throwRects, wheelTopMarks, fightPanelRects, XMB_CELL,                      // (XMB) usable-bar geometry; (screen-fill) the HUD, throw targets, the marks above the wheel
     LOOT_REEL, lootReelRect,                                                 // (FX3c) the loot reel's panel
     MODAL_RECT, offerLayout,                                             // (offer screen) the one panel + its geometry
 } from './layout.js';
@@ -1822,6 +1822,12 @@ export class Renderer {
     // That is the condition for the bump telegraph: adjacent AND faced, so
     // turning on the spot moves the label from one neighbour to the next and the
     // player can see what each of them would do before committing to any.
+    // (FX63) The "NAME · VERB" tag is the hover of walking: it names what a bump does, so
+    // it has no business while a dialogue is already open with that person.
+    _facedLabelShows(game, e) {
+        return game.state !== 'dialogue' && this._isFaced(game, e);
+    }
+
     _isFaced(game, e) {
         const FACE = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
         const [dx, dy] = FACE[game.facing] || FACE.down;
@@ -2054,7 +2060,7 @@ export class Renderer {
             // Only the ONE character you face is labelled — a row of floating
             // verbs over a crowd would be noise, and the whole point is that this
             // reads as "the thing you are about to do".
-            if (this.font && !game._animating && !splatUp && !pest && this._isFaced(game, e)) {
+            if (this.font && !game._animating && !splatUp && !pest && this._facedLabelShows(game, e)) {
                 const verb = defaultVerb({ x: e.x, y: e.y, npc: e }, game);
                 if (verb) {
                     const who  = String((e.boss || e.rival ? shownName(e) : e.name || e.type) || '').replace(/[[\]]/g, '');
@@ -4975,7 +4981,7 @@ export class Renderer {
         const m = mood(disp);
 
         // ── measure pass (size the panel to its content) ──
-        const R_X = 16, R_W = 576, R_BOTTOM = 592, PAD = 16, wellPadX = 14;
+        const R_X = 16, R_W = 576, R_BOTTOM = dialogueBottom(this._view()), PAD = 16, wellPadX = 14;
         const speechChars = Math.max(8, Math.floor((R_W - PAD * 2 - wellPadX - 6) / cw(S_BODY)));
         const speechLines = this._wrapText(game._dialogueReply || '', speechChars);
 
