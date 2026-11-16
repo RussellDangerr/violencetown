@@ -40,9 +40,16 @@
     <!-- Splash — rendered on its own canvas for pixel art consistency -->
     <div id="splash">
         <canvas id="splash-canvas"></canvas>
-        <div id="splash-buttons">
+        <div id="splash-buttons" style="flex-wrap:wrap;justify-content:center">
             <button id="splash-go">GAME START</button>
             <button id="splash-continue" class="hidden">CONTINUE</button>
+            <button id="splash-paste" type="button" aria-expanded="false" aria-controls="splash-paste-panel">[TEXT] PASTE CODE</button>
+            <div id="splash-paste-panel" class="hidden" style="flex-basis:100%;display:flex;flex-direction:column;align-items:center;gap:8px;max-width:100%">
+                <textarea id="splash-code" rows="3" spellcheck="false" aria-label="[TEXT]" placeholder="[TEXT]"
+                          style="width:min(420px,100%);box-sizing:border-box;font-family:inherit;font-size:14px;resize:vertical"></textarea>
+                <button id="splash-code-go" type="button">[TEXT] LOAD</button>
+                <p id="splash-code-status" role="status" style="margin:0;color:#f3e3c0;font-size:12px;text-align:center"></p>
+            </div>
         </div>
         <div id="splash-hint">press Space <span class="help-touch">or tap START</span></div>
     </div>
