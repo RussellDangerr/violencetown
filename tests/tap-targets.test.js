@@ -17,7 +17,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { computeViewport } from '../game/viewport.js';
 import {
-    DOCK, dockFor, HIT_SLOP, hudLayout, xmbBarLayout, throwRects,
+    DOCK, dockFor, HIT_SLOP, hudLayout, xmbBarLayout, throwRects, THROW_RECTS,
     WHEEL_DESKTOP, wheelRingR,
     HOTBAR_SLOT_W, HOTBAR_SLOT_H,
     MODAL_RECT, closeButtonRect, targetListRowRect, itemOverlayRowRect,
@@ -26,6 +26,7 @@ import {
     offerLayout, deviceSheetRect, deviceBagPagerRects, DEVICE_RECT,
 } from '../game/layout.js';
 import { inspectorUsesRect } from '../game/inspector.js';
+import { TILE_PX } from '../game/data.js';
 import { UNLOCK_ORDER } from '../game/rings.js';
 
 export const APPLE_MIN_CSS = 44;
@@ -164,9 +165,10 @@ const EXPECTED = [
 // pins their layout. TL4: the Remoticon's tabs, bag slots, inspector buttons, pager,
 // uses button and close chip reached 44 on its phone sheet and left it; TL6: the GEAR
 // plates, GEAR rows and ring sockets reached 44 and left it; TL7: the target list rows,
-// the item menu rows and the shared close chip reached 44 on their phone sheets and left it.)
+// the item menu rows and the shared close chip reached 44 on their phone sheets and left it;
+// TL8: the throw prompt's four buttons reached 44 and left it. The hotbar slot stays: main.js
+// hit-tests it from the layout constants, so it cannot grow from layout.js alone.)
 const TODAY_SMALL = {
-    'world.throw': 16,
     'menu.hotbar.slot': 21,
     'offer.row': 20,
     'offer.traySlot': 18,
@@ -265,6 +267,34 @@ describe('tap targets, in CSS px', () => {
             assert.deepEqual(stale, [], 'these reached 44: delete them from KNOWN_SMALL');
         });
     }
+
+    for (const key of ['phone375', 'phone390']) {
+        test(`${key}: the throw prompt is four thumb squares clear of each other, the hero and the dock`, () => {
+            const vp = viewportFor(SCREENS[key]);
+            const R = throwRects(vp), per = vp.logicalPerCss;
+            const hero = { x: vp.origin.x, y: vp.origin.y, w: TILE_PX, h: TILE_PX };
+            const dockTop = vp.h - vp.dockH;
+            const hit = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+            const names = Object.keys(R);
+            assert.equal(names.length, 4);
+            for (const n of names) {
+                assert.ok(Math.min(R[n].w, R[n].h) / per >= APPLE_MIN_CSS, `${n} is ${R[n].w / per} CSS px`);
+                assert.ok(!hit(R[n], hero), `${n} covers the hero's tile`);
+                assert.ok(R[n].x >= 0 && R[n].y >= 0 && R[n].x + R[n].w <= vp.w, `${n} is on screen`);
+                assert.ok(R[n].y + R[n].h <= dockTop, `${n} reaches the dock`);
+            }
+            for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++) {
+                assert.ok(!hit(R[names[i]], R[names[j]]), `${names[i]} overlaps ${names[j]}`);
+            }
+        });
+    }
+
+    test('desktop throw prompt keeps the four 32 px targets around the player tile', () => {
+        const vp = viewportFor(SCREENS.desktop);
+        const R = throwRects(vp);
+        const dx = vp.origin.x + TILE_PX / 2 - 304, dy = vp.origin.y + TILE_PX / 2 - 304;
+        for (const [n, r] of Object.entries(THROW_RECTS)) assert.deepEqual(R[n], { x: r.x + dx, y: r.y + dy, w: 32, h: 32 }, n);
+    });
 
     test('desktop at 3440x1440 is unchanged', () => {
         const got = Object.fromEntries(measure(SCREENS.desktop).map((r) => [r.name, [r2(r.w), r2(r.h)]]));
