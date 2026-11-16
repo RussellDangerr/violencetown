@@ -103,6 +103,13 @@ const PROP_NAMES = [
 ];
 const propName = type => PROP_NAMES.find(([prefix]) => type.startsWith(prefix))?.[1] ?? null;
 
+// (EX2) The plain name of the prop on tile (x, y), or null. The long-press on touch
+// offers Examine only where this finds one.
+export function propNameAt(game, x, y) {
+    const prop = (game.map?.propSpawns || []).find(p => p.x === x && p.y === y);
+    return (prop && propName(prop.type)) || null;
+}
+
 // The most salient thing at tile (x, y), as Examine reports it. One ladder for
 // both entry points — the E key (doExamine, below) and the Target List / tap
 // (main.js _fireResolver) — so they cannot drift apart again. First match wins:
