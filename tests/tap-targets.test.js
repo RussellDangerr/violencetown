@@ -196,7 +196,7 @@ const DESKTOP = {
     'menu.targetList.row': [456, 52],
     'menu.itemOverlay.row': [392, 52],
     'menu.hotbar.slot': [84, 84],
-    'device.tab': [169.33, 60],
+    'device.tab': [144, 60],
     'device.bagSlot': [76, 76],
     'device.inspectorAction': [192, 52],
     'device.gearOption': [400, 52],

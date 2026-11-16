@@ -12,7 +12,7 @@ import { pickHitMark, HEAVY_HIT_DAMAGE, dodgeChance, DODGE_WORD } from './hit-sp
 import { makeEffectLoop } from './effect-loop.js';                 // one tick of the transient-effects loop, and its refusal to die on a bad frame
 import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK, SLUDGE_DOT, FIRE_QUENCHING_TILES } from './data.js';
 import { puddleTiles, layPuddle, puddleAt, dryPuddles } from './puddles.js';   // (poisons) Sludge Brain's puddles
-import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef, poitionBuff } from './items.js';
+import { ITEMS, wornBody, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef, poitionBuff } from './items.js';
 import { WEAPONS, weaponClassOf, FISTS } from './weapons.js';
 import { handPairOf } from './hand-data.js';   // (HB2) two held weapons combine into a named effect
 import { resolveItemDef } from './item-registry.js';
@@ -261,6 +261,7 @@ class Game {
         // swap touches it. Persisted. Its perks join ringMods only where an action
         // reads them (see _theftPassives).
         this.skills           = {};
+        this.bodiesWorn = [];                // (MS2) species of every mask body worn so far; persisted, never shows unworn ones
         this.interactionNotes = [];          // (IN1) ids of the interaction rows whose note has been shown; persisted
         this._peakDisposition = 0;           // (rings) highest disposition any NPC has ever shown — monotonic; gates the hidden thumb tier
         this._lastHitTarget = null;   // (fear) id of the enemy the last Melee-Hit struck
@@ -6548,6 +6549,7 @@ class Game {
         this._peakDisposition = 0;       // it gates the ring tier, so it goes with the rings
         this.skills = {};                // a new run starts every skill from nothing
         this.defaultAttack = null;       // (WK3)
+        this.bodiesWorn = [];            // (MS2) and no body has been worn yet
         this.interactionNotes = [];      // (IN1) and every interaction note is new again
         this._refreshGrantedSkills();   // fresh weapon, no rings → no granted skills
         this._pendingTransition = null;
@@ -6651,6 +6653,7 @@ class Game {
 
     _render() {
         this._trackFight();
+        this._trackBodies();
         this._creditsCheck();
         this._syncFirstRunHint();
         this._spiritShow = spiritToShow(this, Settings.get('spirits'), performance.now());   // (heroic spirits) HS-R2
@@ -6723,6 +6726,13 @@ class Game {
     // so which entrance it gets; the last one leaving notes when, for the
     // fog's fade and the 3-second no-replay rule. Dying ends it without the
     // fade.
+    // (MS2) The first time a body is worn, its species joins the roster. Night Kid is always worn,
+    // so it is not stored.
+    _trackBodies() {
+        const sp = wornBody(this.equipment)?.species;
+        if (sp && !this.bodiesWorn.includes(sp)) this.bodiesWorn.push(sp);
+    }
+
     _trackFight() {
         const fs = this.state === STATE.DEAD ? [] : fighters(this.enemies);
         const on = fs.length > 0;
