@@ -43,7 +43,7 @@ import { RNG, randomSeed } from './rng.js';
 import { pickSlots, echoSpawn, echoStands, ECHO_SLOTS, defaultPicks, resolveSpawn, requiredDropFor, dropLineFor, FINALE_PHASE1, pickReturning, spotFor, RETURNING_SPOTS } from './slots.js';
 import { rememberSpent, applySpent } from './npc-memory.js';
 import { snapshotOf, keepSnapshot, readSnapshots, reportLines } from './bones.js';
-import { hasSave, readSaveRaw, writeSave, loadInto, clearSave, encodeSaveCode, importSaveCode } from './save.js';
+import { hasSave, readSaveRaw, writeSave, loadInto, clearSave, keepUnreadableSave, encodeSaveCode, importSaveCode } from './save.js';
 import { createKey, loadKeyId } from './save-key.js';
 import { readAway, tellAwayNews, restedOnReturn } from './away.js';   // (CK1) hours since the save's savedAt
 import { QuestEngine } from './quests.js';
@@ -1385,7 +1385,16 @@ class Game {
             this._applyAudioSettings();   // [settings] apply persisted volume/mute on boot
             audio.playMusic('town');      // [audio] start the ambient bed (zone music re-syncs on map load)
             const raw = readSaveRaw();
-            if (!raw) { start(); return; }
+            if (!raw) {
+                // (FX66) A save is on disk but will not parse: copy it aside before
+                // the fresh run's autosave replaces it.
+                if (hasSave() && keepUnreadableSave()) {
+                    start();
+                    this._log('[TEXT: that save would not read; a copy is kept aside]', 'transition');
+                    return;
+                }
+                start(); return;
+            }
             this._noteAway?.(raw);   // (CK1) once, before any new save overwrites the stamp
             splash.classList.add('gone');
             wrapper.classList.remove('hidden');
@@ -1401,12 +1410,15 @@ class Game {
             // and throw partway through.
             //
             // Falling back to a fresh run is the honest recovery: start() rebuilds
-            // the world from scratch, and the broken save is left on disk rather
-            // than overwritten, so it can still be recovered by hand.
+            // the world from scratch. The fresh run's autosave would replace the
+            // broken save (and the backup slot rotates it out one write later),
+            // so its text is first copied under its own key, which writeSave and
+            // clearSave never touch (FX66).
             try {
                 await loadInto(this, raw);
             } catch (e) {
                 console.error('[save] could not be loaded; starting fresh', e);
+                keepUnreadableSave();
                 start();
                 this._log('[That save would not open. Starting a new run.]', 'transition');
                 return;
