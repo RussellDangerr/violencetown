@@ -531,6 +531,34 @@ function _num(v, d) { return (typeof v === 'number' && isFinite(v)) ? v : d; }
 // Mutates the existing Game (so renderer + event listeners stay wired) rather
 // than constructing a new one. Order matters: load the map baseline first,
 // then overwrite the live world from the save, then re-apply tile diffs.
+// (FX69) The closest open tile to (x, y): breadth-first over the four neighbours, so the
+// answer is the same every time (ring by ring, up, right, down, left within a ring). The
+// search covers the whole map, so the spawn fallback only matters for a map the search
+// finds no open tile on; if even that fails the tile is returned as given.
+export function nearestWalkable(map, x, y) {
+    if (typeof map?.isWalkable !== 'function' || typeof map.isInBounds !== 'function') return { x, y };   // a map with no walls to check
+    const open = (a, b) => map.isInBounds(a, b) && map.isWalkable(a, b);
+    if (open(x, y)) return { x, y };
+    const seen = new Set([`${x},${y}`]);
+    let ring = [[x, y]];
+    while (ring.length) {
+        const next = [];
+        for (const [cx, cy] of ring) {
+            for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+                const nx = cx + dx, ny = cy + dy, k = `${nx},${ny}`;
+                if (seen.has(k) || !map.isInBounds(nx, ny)) continue;
+                seen.add(k);
+                if (map.isWalkable(nx, ny)) return { x: nx, y: ny };
+                next.push([nx, ny]);
+            }
+        }
+        ring = next;
+    }
+    const sp = map.spawn;
+    if (sp && open(sp.x, sp.y)) return { x: sp.x, y: sp.y };
+    return { x, y };
+}
+
 export async function loadInto(game, raw) {
     raw = validate(migrate(raw));
     const p = raw.player;
@@ -637,6 +665,9 @@ export async function loadInto(game, raw) {
         if (game.map.isInBounds(d.x, d.y)) game.setTile(d.x, d.y, d.id);
     }
     game._pendingTransition = raw.world.pendingTransition || null;
+    // (FX69) A save that stands the player in a wall (or off the map, clamped to its edge)
+    // moves them to the nearest open tile, now that the tile diffs are back in place.
+    { const t = nearestWalkable(game.map, game.playerX, game.playerY); game.playerX = t.x; game.playerY = t.y; }
 
     // 6. quest progress (engine arrives in Phase C; guarded for older builds)
     if (game.questEngine && raw.quest) game.questEngine.restore(raw.quest);
