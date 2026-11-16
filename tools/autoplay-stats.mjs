@@ -67,6 +67,29 @@ export function compare(base, now, { z = Z95, minShift = MIN_SHIFT } = {}) {
 const byName = (a, b) => (a.includes('.') - b.includes('.')) || a.localeCompare(b);
 const round = (x) => Math.round(x * 1000) / 1000;
 
+// ---- Spread (plans/sim4-sim-spread-changes.md) -----------------------------
+// The averages can stay put while the dice stop mattering. A metric's spread
+// changed when its sd moved by at least x2 or /2 AND a 95% variance test agrees
+// (normal approximation on ln of the variance ratio, se^2 = 2/(n1-1) + 2/(n2-1)),
+// or whenever it collapses to 0 or grows from 0. Shown, never a failure.
+export const MIN_SPREAD_RATIO = 2;
+
+export function spreadCompare(base, now, { z = Z95, ratio = MIN_SPREAD_RATIO } = {}) {
+    const changed = [];
+    for (const name of Object.keys(base.metrics).sort(byName)) {
+        const a = base.metrics[name], b = now.metrics[name];
+        if (!a || !b || a.n < 2 || b.n < 2) continue;
+        if (a.sd === 0 && b.sd === 0) continue;
+        const row = { name, was: a.sd, now: b.sd, n: Math.min(a.n, b.n) };
+        if (a.sd === 0 || b.sd === 0) { changed.push({ ...row, kind: b.sd === 0 ? 'collapsed' : 'grew' }); continue; }
+        const r = b.sd / a.sd;
+        if (r < ratio && r > 1 / ratio) continue;
+        const se = Math.sqrt(2 / (a.n - 1) + 2 / (b.n - 1));
+        if (Math.abs(Math.log(r * r)) > z * se) changed.push({ ...row, kind: r > 1 ? 'wider' : 'narrower' });
+    }
+    return changed;
+}
+
 // ---- Paired comparison (plans/sim2-per-seed-numbers.md) --------------------
 // Seed 17 before against seed 17 after: the per-seed differences carry far less
 // luck than two separate groups do.
