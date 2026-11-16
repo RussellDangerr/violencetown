@@ -90,13 +90,14 @@ export function walkTargets(vp) {
     add('world.throw', Object.values(throwRects(vp)));
 
     // Menus, in the 608 box.
-    add('menu.close', closeButtonRect(MODAL_RECT));
-    add('menu.targetList.row', [0, 1, 2].map(targetListRowRect));
-    add('menu.itemOverlay.row', [0, 1, 2].map(itemOverlayRowRect));
+    // (TL4, TL7) On a phone the Remoticon, the target list and the item menu are
+    // full-screen sheets, and every menu's close chip is a thumb; on desktop `sheet` is null.
+    const sheet = deviceSheetRect(vp);
+    add('menu.close', closeButtonRect(MODAL_RECT, sheet ? sheet.thumb : 0));
+    add('menu.targetList.row', [0, 1, 2].map((i) => targetListRowRect(i, sheet)));
+    add('menu.itemOverlay.row', [0, 1, 2].map((i) => itemOverlayRowRect(i, sheet)));
     add('menu.hotbar.slot', { w: HOTBAR_SLOT_W, h: HOTBAR_SLOT_H });
 
-    // (TL4) On a phone the Remoticon is a full-screen sheet; on desktop `sheet` is null.
-    const sheet = deviceSheetRect(vp);
     const body = deviceBodyRect(sheet);
     add('device.close', closeButtonRect(sheet || DEVICE_RECT, sheet ? sheet.thumb : 0));
     add('device.tab', DEVICE_TABS.map((_, i) => deviceTabRect(i, sheet)));
@@ -162,12 +163,10 @@ const EXPECTED = [
 // wheel reached 44 on both phones and left this list; tests/thumb-dock-wheel.test.js
 // pins their layout. TL4: the Remoticon's tabs, bag slots, inspector buttons, pager,
 // uses button and close chip reached 44 on its phone sheet and left it; TL6: the GEAR
-// plates, GEAR rows and ring sockets reached 44 and left it.)
+// plates, GEAR rows and ring sockets reached 44 and left it; TL7: the target list rows,
+// the item menu rows and the shared close chip reached 44 on their phone sheets and left it.)
 const TODAY_SMALL = {
     'world.throw': 16,
-    'menu.close': 15,
-    'menu.targetList.row': 13,
-    'menu.itemOverlay.row': 13,
     'menu.hotbar.slot': 21,
     'offer.row': 20,
     'offer.traySlot': 18,

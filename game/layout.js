@@ -46,7 +46,8 @@ export function expandRect(r, slop) {
 // one ROW_H row per option).
 export const ITEM_OVERLAY_RECT  = { x: 196, y: 176, w: 216 };
 export const ITEM_OVERLAY_ROW_H = 30;
-export function itemOverlayRowRect(i) {
+export function itemOverlayRowRect(i, sheet = null) {
+  if (sheet && sheet.thumb) return sheetListRowRect(i, sheet);   // (TL7) a thumb-tall row on the phone sheet
   return { x: ITEM_OVERLAY_RECT.x + 10, y: ITEM_OVERLAY_RECT.y + 44 + i * ITEM_OVERLAY_ROW_H, w: ITEM_OVERLAY_RECT.w - 20, h: ITEM_OVERLAY_ROW_H - 4 };
 }
 
@@ -484,7 +485,8 @@ export const LOG_MODAL_RECT = MODAL_RECT;
 // per-target in the renderer (44px title band + one ROW_H row per verb).
 export const TARGET_LIST_RECT  = { x: 180, y: 150, w: 248 };
 export const TARGET_LIST_ROW_H = 30;
-export function targetListRowRect(i) {
+export function targetListRowRect(i, sheet = null) {
+  if (sheet && sheet.thumb) return sheetListRowRect(i, sheet);   // (TL7) a thumb-tall row on the phone sheet
   return { x: TARGET_LIST_RECT.x + 10, y: TARGET_LIST_RECT.y + 44 + i * TARGET_LIST_ROW_H, w: TARGET_LIST_RECT.w - 20, h: TARGET_LIST_ROW_H - 4 };
 }
 
@@ -574,7 +576,21 @@ export function deviceSheetRect(vp) {
     const t = thumbOf(vp);
     return t ? Object.freeze({ x: -vp.menu.x, y: -vp.menu.y, w: vp.w, h: vp.h, thumb: t }) : null;
 }
+
+// (TL7) The target list and the item menu on a phone are sheets too: the whole screen,
+// a title band the height of the close chip, then one thumb-tall row per line, top down.
+// `sheet` is deviceSheetRect(vp); every function here gives today's layout without one.
+export function sheetListRowRect(i, sheet) {
+    const top = sheet.y + sheet.thumb + SHEET_GAP + 8;
+    return { x: sheet.x + SHEET_PAD, y: top + i * (sheet.thumb + SHEET_ROW_GAP), w: sheet.w - 2 * SHEET_PAD, h: sheet.thumb };
+}
+// The panel a list of n rows is drawn in: the sheet on a phone, else the old floating panel.
+export function listPanelRect(base, rowH, n, sheet = null) {
+    if (sheet && sheet.thumb) return { x: sheet.x, y: sheet.y, w: sheet.w, h: sheet.h };
+    return { x: base.x, y: base.y, w: base.w, h: 44 + n * rowH + 22 };
+}
 const SHEET_PAD = 8, SHEET_GAP = 16, SHEET_FOOT = 28;
+const SHEET_ROW_GAP = 8;
 const SHEET_BODY_ASPECT = 432 / 532;   // the desktop body's shape, kept for the tabs that draw to it
 
 // The `i`-th tab's hit/draw rect, evenly dividing the strip below the title band.

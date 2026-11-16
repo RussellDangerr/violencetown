@@ -2743,7 +2743,7 @@ class Game {
         // earlier by the CLOSE_PANEL menu-grammar block. Rows behave like the
         // Target List: tap a row to highlight it, tap the highlighted row to fire.
         for (let i = 0; i < this.overlayOptions.length; i++) {
-            if (this._pointInRect(pt, itemOverlayRowRect(i), 4)) {
+            if (this._pointInRect(pt, itemOverlayRowRect(i, this._deviceSheet()), 4)) {
                 if (i === this.overlayCursor) { this._pickOverlay(i); return; }
                 this.overlayCursor = i; audio.playSfx('menu-tick'); this._render(); return;
             }
@@ -3916,7 +3916,7 @@ class Game {
     _tapTargetList(pt) {
         const tl = this.targetList;
         for (let i = 0; i < tl.verbs.length; i++) {
-            if (this._pointInRect(pt, targetListRowRect(i), 4)) {
+            if (this._pointInRect(pt, targetListRowRect(i, this._deviceSheet()), 4)) {
                 if (i === tl.sel) { this._fireTargetVerb(tl.verbs[i]); return; }
                 tl.sel = i; audio.playSfx('menu-tick'); this._render(); return;
             }
@@ -7213,7 +7213,7 @@ class Game {
     // (the sheet's own ✕ closes it).
     _syncSheetChrome() {
         if (typeof document === 'undefined') return;
-        const on = this.state === STATE.DEVICE && !!this._deviceSheet();
+        const on = (this.state === STATE.DEVICE || this.state === STATE.TARGET_LIST || this.state === STATE.ITEM_OVERLAY) && !!this._deviceSheet();   // (TL7) the two list sheets too
         if (on === !!this._sheetChrome) return;
         this._sheetChrome = on;
         for (const id of ['menu-btn', 'remoticon-btn']) {
