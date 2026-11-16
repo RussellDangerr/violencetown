@@ -594,8 +594,8 @@ export function deviceBodyRect(sheet = null, tab = 'items') {
         const top = sheet.y + 2 * sheet.thumb + SHEET_GAP + 8;
         const w = sheet.w - 2 * SHEET_PAD;
         const full = sheet.y + sheet.h - SHEET_FOOT - top;
-        // The bag needs the height; the other tabs draw to the desktop body's shape.
-        const h = tab === 'items' ? full : Math.min(full, Math.round(w * SHEET_BODY_ASPECT));
+        // The bag, GEAR and RINGS use the sheet's whole height (TL6); the other tabs draw to the desktop body's shape.
+        const h = (tab === 'items' || tab === 'gear' || tab === 'rings') ? full : Math.min(full, Math.round(w * SHEET_BODY_ASPECT));
         return { x: sheet.x + SHEET_PAD, y: top, w, h, thumb: sheet.thumb };
     }
     const top = DEVICE_TAB_TOP + DEVICE_TAB_H + 8;
@@ -741,7 +741,31 @@ export function cycleDeviceTab(current, dir) {
 // WEAPON plate off; scaling fits it. renderer._drawEquipmentModal (draw) and
 // main._tapDevice (hit-test) both read this ONE helper, so the plates and their
 // tap zones can never drift.
+// (TL6) On a phone sheet the plates are two thumb-tall columns either side of the
+// figure, HEAD above it, in rows spread down the body's full height.
+function thumbEquipLayout(b) {
+    const t = b.thumb, pw = Math.min(190, Math.floor((b.w - 16 - 120) / 2));
+    const left = b.x + 8, right = b.x + b.w - 8 - pw;
+    const row = (f) => Math.round(b.y + Math.max(52, b.h * f));
+    const plate = (r, x, y) => ({ ...r, x, y, w: pw, h: t });
+    const by = EQUIP_SLOT_RECTS.reduce((m, r) => ({ ...m, [r.key]: r }), {});
+    const slots = [
+        plate(by.top,    Math.round(b.x + (b.w - pw) / 2), Math.round(b.y + 40)),
+        plate(by.sides,  left,  row(0.26)),
+        plate(by.front,  right, row(0.26)),
+        plate(by.back,   left,  row(0.46)),
+        plate(by.bottom, right, row(0.46)),
+        plate(by.weapon, left,  row(0.66)),
+    ];
+    const fh = Math.min(Math.round(b.h * 0.55), 700), fw = 200;
+    return {
+        figure: { ...EQUIP_FIGURE_RECT, x: Math.round(b.x + (b.w - fw) / 2), y: Math.round(b.y + b.h * 0.14), w: fw, h: fh },
+        slots,
+        leftHand: plate(EQUIP_LEFT_HAND_RECT, right, row(0.66)),
+    };
+}
 export function deviceEquipLayout(bodyRect) {
+    if (bodyRect.thumb) return thumbEquipLayout(bodyRect);
     const M = EQUIPMENT_MODAL_RECT;
     const sx = bodyRect.w / M.w, sy = bodyRect.h / M.h;
     const map = (r) => ({
@@ -777,11 +801,14 @@ export function gearArmourRect(bodyRect) {
 // clear the plate. Pinned by tests/gear-chooser.test.js.
 const GEAR_ROW_W = 200, GEAR_ROW_H = 26, GEAR_ROW_GAP = 12;
 const GEAR_PANEL_PAD = 8, GEAR_PANEL_HEAD = 30, GEAR_PANEL_FOOT = 12, GEAR_PANEL_CLEAR = 6;
+// (TL6) On a phone the rows are a thumb tall and the panel is as wide as the gap between the plate columns.
+const gearRowH = (b) => b.thumb || GEAR_ROW_H;
+const gearRowW = (b) => b.thumb ? Math.min(300, b.w - 2 * Math.min(190, Math.floor((b.w - 16 - 120) / 2)) - 16 - 2 * GEAR_PANEL_PAD - 4) : GEAR_ROW_W;
 export function gearOptionRects(bodyRect, n, key) {
   const p = gearChooserRect(bodyRect, n, key);
   const x = p.x + GEAR_PANEL_PAD, y0 = p.y + GEAR_PANEL_HEAD;
   const rects = [];
-  for (let i = 0; i < n; i++) rects.push({ x, y: y0 + i * (GEAR_ROW_H + GEAR_ROW_GAP), w: GEAR_ROW_W, h: GEAR_ROW_H });
+  for (let i = 0; i < n; i++) rects.push({ x, y: y0 + i * (gearRowH(bodyRect) + GEAR_ROW_GAP), w: gearRowW(bodyRect), h: gearRowH(bodyRect) });
   return rects;
 }
 
@@ -790,7 +817,7 @@ export function gearOptionRects(bodyRect, n, key) {
 // the note in it. Pinned by tests/gear-chooser-placement.test.js.
 export function gearEmptyNoteRect(bodyRect, key) {
   const p = gearChooserRect(bodyRect, 0, key);
-  return { x: p.x + GEAR_PANEL_PAD, y: p.y + GEAR_PANEL_HEAD, w: p.w - 2 * GEAR_PANEL_PAD, h: GEAR_ROW_H };
+  return { x: p.x + GEAR_PANEL_PAD, y: p.y + GEAR_PANEL_HEAD, w: p.w - 2 * GEAR_PANEL_PAD, h: gearRowH(bodyRect) };
 }
 
 // The GEAR chooser's titled panel, tall enough for a title band and `n` rows
@@ -803,8 +830,9 @@ export function gearEmptyNoteRect(bodyRect, key) {
 // inside the body and covers no plate wins. With no key, or an unknown one, it is
 // the old place: centred, just below the HEAD plate (FX11).
 export function gearChooserRect(bodyRect, n, key = 'top') {
-  const w = GEAR_ROW_W + 2 * GEAR_PANEL_PAD;
-  const h = GEAR_PANEL_HEAD + (n > 0 ? n * GEAR_ROW_H + (n - 1) * GEAR_ROW_GAP : GEAR_ROW_H) + GEAR_PANEL_FOOT;
+  const w = gearRowW(bodyRect) + 2 * GEAR_PANEL_PAD;
+  const rh = gearRowH(bodyRect);
+  const h = GEAR_PANEL_HEAD + (n > 0 ? n * rh + (n - 1) * GEAR_ROW_GAP : rh) + GEAR_PANEL_FOOT;
   const lay = deviceEquipLayout(bodyRect);
   const plates = [...lay.slots, lay.leftHand];
   const head = lay.slots.find(s => s.key === 'top');
@@ -851,10 +879,11 @@ export function deviceRingsLayout(bodyRect, game) {
     const unlockedKeys = new Set(unlockedSlots(tier).map(s => s.key));
     const ringOf = (key) => (game && game.ringSlots && game.ringSlots[key]) || null;
 
-    const socketW = 40, socketH = 34;
+    // (TL6) On a phone each socket is a thumb square; the staggered tips keep neighbours apart.
+    const socketW = bodyRect.thumb || 40, socketH = bodyRect.thumb || 34;
     const handW   = bodyRect.w / 2;
     const palmY   = bodyRect.y + bodyRect.h - 70;   // baseline the fingers rise from
-    const reach   = bodyRect.h - 190;               // the longest finger's rise above the palm
+    const reach   = bodyRect.h - (bodyRect.thumb ? 210 : 190);   // the longest finger's rise above the palm
 
     // Relative tip height per finger (anatomical stagger) and the L→R draw order
     // per hand — thumbs face inward so the two hands read as a mirrored pair.
