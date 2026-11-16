@@ -136,13 +136,13 @@ function drawMap(game) {
     const rects = [], words = [];
     const ctx = new Proxy({}, {
         get: (t, k) => {
-            if (k === 'strokeRect') return (x, y, w, h) => rects.push({ x, y, w, h, stroke: t.strokeStyle });
+            if (k === 'strokeRect') return (x, y, w, h) => rects.push({ x, y, w, h, stroke: t.strokeStyle, alpha: t.globalAlpha });
             return k in t ? t[k] : () => {};
         },
         set: (t, k, v) => { t[k] = v; return true; },
     });
     const r = Object.assign(Object.create(Renderer.prototype), {
-        ctx, font: { drawText: (c, text, x, y, o = {}) => words.push({ text, x, y, color: o.color }) },
+        ctx, font: { drawText: (c, text, x, y, o = {}) => words.push({ text, x, y, color: o.color, alpha: ctx.globalAlpha }) },
     });
     r._drawWorldMapBody(game, { x: 0, y: 0, w: 608, h: 608 }, 40);
     const inside = (b, p) => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
@@ -150,11 +150,13 @@ function drawMap(game) {
     for (const z of WORLD_ZONES) {
         const label = words.find(w => w.text === z.label);
         const box = rects.find(b => inside(b, label));
-        out[z.zoneName] = { stroke: box.stroke, text: label.color };
+        out[z.zoneName] = { stroke: box.stroke, text: label.color, boxAlpha: box.alpha, textAlpha: label.alpha };
     }
     return out;
 }
-const isDim = (z) => z.stroke === UI.dim && z.text === UI.dim;
+// MP3R1 (a): an unvisited zone's box and name draw at half alpha, in the colours a visited one uses.
+const FAINT = 0.5;
+const isDim = (z) => z.boxAlpha === FAINT && z.textAlpha === FAINT;
 const dimmedZones = (game) => Object.entries(drawMap(game)).filter(([, z]) => isDim(z)).map(([n]) => n).sort();
 const ALL = WORLD_ZONES.map(z => z.zoneName);
 
@@ -183,7 +185,21 @@ describe('the Map dims the zones you have not been to', () => {
         g.questEngine.start('canyon_escape');
         const canyon = drawMap(g).CANYON;
         assert.equal(canyon.stroke, '#e8462f');
-        assert.notEqual(canyon.text, UI.dim);
+        assert.equal(canyon.boxAlpha, 1);
+        assert.equal(canyon.textAlpha, 1);
+        assert.equal(canyon.text, UI.text);
+    });
+
+    test('(MP3R1 a) the alpha of a visited and an unvisited zone differ by the ruled amount, colours unchanged', async () => {
+        const g = await makeGame();
+        const m = drawMap(g);
+        assert.equal(m.TOWN.boxAlpha, 1);
+        assert.equal(m.TOWN.textAlpha, 1);
+        assert.equal(m.SEWER.boxAlpha, 0.5);
+        assert.equal(m.SEWER.textAlpha, 0.5);
+        assert.equal(m.TOWN.boxAlpha - m.SEWER.boxAlpha, 0.5);
+        assert.equal(m.SEWER.text, UI.text, 'faded by alpha, not by a dimmer colour');
+        assert.notEqual(m.SEWER.stroke, UI.dim);
     });
 
     test('an old record of null dims nothing', async () => {
