@@ -536,6 +536,7 @@ function _num(v, d) { return (typeof v === 'number' && isFinite(v)) ? v : d; }
 // search covers the whole map, so the spawn fallback only matters for a map the search
 // finds no open tile on; if even that fails the tile is returned as given.
 export function nearestWalkable(map, x, y) {
+    if (typeof map?.isWalkable !== 'function' || typeof map.isInBounds !== 'function') return { x, y };   // a map with no walls to check
     const open = (a, b) => map.isInBounds(a, b) && map.isWalkable(a, b);
     if (open(x, y)) return { x, y };
     const seen = new Set([`${x},${y}`]);
