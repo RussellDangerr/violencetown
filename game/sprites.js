@@ -18,7 +18,7 @@ import { dirOf } from './perception.js';
 export const TINY_INK = [63, 38, 49];   // #3F2631, the Tiny packs' outline
 // Sheets already drawn in the Tiny style (or re-outlined by a tool), which the
 // outline pass leaves alone.
-export const TINY_STYLE_SHEETS = new Set(['tinyDungeon', 'tinyTown', 'tinyExtra', 'outlined', 'interior', 'emotes', 'marks', 'ratVariants', 'wereratTint', 'oldSelfTint', 'ratMaskTint', 'capGreyTint', 'capBlueTint', 'courierTint', 'beastVariants', 'bearVariants', 'iceCone', 'ant']);
+export const TINY_STYLE_SHEETS = new Set(['tinyDungeon', 'tinyTown', 'tinyExtra', 'outlined', 'interior', 'emotes', 'marks', 'ratVariants', 'wereratTint', 'oldSelfTint', 'ratMaskTint', 'capGreyTint', 'capBlueTint', 'beastVariants', 'bearVariants', 'iceCone', 'ant']);
 
 export class SpriteSheet {
     // `padding` is the gap (in source pixels) between adjacent cells. Kenney's
@@ -195,10 +195,9 @@ export const SHEETS = {
     // sheet again, washed with `tint` when it loads (loadAllSprites). Obviously fake on purpose.
     // The Rat Mask's bag icon: the same sheet washed in a fake tint, a placeholder until it has art.
     ratMaskTint:  { src: TINY_DUNGEON, frameW: 16, frameH: 16, tint: 'rgba(80, 220, 80, 0.5)' },
-    // The delivery caps' icons and the courier body they share: placeholder washes of the same sheet.
+    // The delivery caps' icons: placeholder washes of the same sheet.
     capGreyTint:  { src: TINY_DUNGEON, frameW: 16, frameH: 16, tint: 'rgba(150, 156, 162, 0.6)' },
     capBlueTint:  { src: TINY_DUNGEON, frameW: 16, frameH: 16, tint: 'rgba(60, 120, 220, 0.55)' },
-    courierTint:  { src: TINY_DUNGEON, frameW: 16, frameH: 16, tint: 'rgba(60, 120, 220, 0.35)' },
     // (BN2) Your old character: the player's own sheet washed pale like a ghost (one tint, BNR3 a).
     oldSelfTint:  { src: TINY_DUNGEON, frameW: 16, frameH: 16, tint: 'rgba(210, 225, 255, 0.55)' },
     wereratTint:  { src: TINY_DUNGEON, frameW: 16, frameH: 16, tint: 'rgba(200, 40, 220, 0.55)' },
@@ -479,9 +478,6 @@ export const ENEMY_SPRITES = {
     'Birthday Rat': { sheet: 'ratVariants', col: 0, row: 0, static: true },
     'Sludge Rat':   { sheet: 'ratVariants', col: 1, row: 0, static: true },
     'Robot Rat':    { sheet: 'ratVariants', col: 2, row: 0, static: true },
-
-    // (MS3) The body the delivery caps give: the plain figure cell, washed blue. Placeholder.
-    'Courier': { sheet: 'courierTint', col: 4, row: 7, static: true },
 
     // Merchant / bosses — humanoid cells:
     // Carrion: was (2,7), shared with Pike. (3,9) is freed by the Rat move and

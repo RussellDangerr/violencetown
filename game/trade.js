@@ -118,6 +118,10 @@ export function bribeStepCost(disposition) {
 // future hooks).
 export function transferGold(from, to, amount, reason = '') {
     if (!from || !to || !(amount > 0)) return false;
+    // (MS3) Looting a purse the whole way while wearing a delivery cap: the enemy carried more.
+    if (reason === 'loot' && amount === from.gold) {
+        from.gold = amount = carriedGold(from.gold, to.equipment);
+    }
     if ((from.gold ?? 0) < amount) return false;
     from.gold = (from.gold ?? 0) - amount;
     to.gold   = (to.gold ?? 0) + amount;

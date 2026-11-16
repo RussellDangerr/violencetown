@@ -35,19 +35,23 @@ describe('the delivery caps', () => {
         assert.equal(wearsDeliveryCap({ top: grey }), true);
     });
 
-    test('the extra still moves through transferGold: the enemy pays all of it', () => {
-        const enemy = { gold: 10 }, me = { gold: 0 };
-        enemy.gold = carriedGold(enemy.gold, { top: grey });
-        assert.ok(transferGold(enemy, me, enemy.gold, 'loot'));
+    test('looting a whole purse through transferGold pays half again while worn; ordinary moves are untouched', () => {
+        const me = { gold: 0, equipment: { top: grey } };
+        const enemy = { gold: 10 };
+        assert.ok(transferGold(enemy, me, 10, 'loot'));
         assert.equal(me.gold, 15);
-        assert.equal(enemy.gold, 0);
+        assert.equal(enemy.gold, 0, 'the enemy paid every coin of it');
+        const bare = { gold: 0, equipment: {} }, e2 = { gold: 10 };
+        transferGold(e2, bare, 10, 'loot');
+        assert.equal(bare.gold, 10);
+        const buyer = { gold: 0, equipment: { top: blue } }, shop = { gold: 10 };
+        transferGold(shop, buyer, 10, 'sale');
+        assert.equal(buyer.gold, 10, 'a sale is not a loot');
     });
 
-    test('the enemy-death loot reads the cap before it loots', () => {
+    test('the enemy-death loot goes through transferGold with the loot reason', () => {
         const at = mainSrc.indexOf('_handleEnemyDeath(enemyObj) {');
         assert.ok(at > 0);
-        const body = mainSrc.slice(at, at + 2500);
-        const a = body.indexOf('carriedGold('), b = body.indexOf("transferGold(enemyObj, this, loot, 'loot')");
-        assert.ok(a > 0 && b > a);
+        assert.ok(mainSrc.slice(at, at + 2500).includes("transferGold(enemyObj, this, loot, 'loot')"));
     });
 });

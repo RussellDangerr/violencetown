@@ -65,7 +65,7 @@ import {
 import {
     emptyOffer, commitBlocker, stage, unstage, settledGold, resolveOffer, sameEntry,
 } from './offer.js';   // (offer screen) the basket model
-import { canTrade, sellPrice, specialDef, transferGold, carriedGold, burnGold, saleLocked, SALE_LOCK_REFUSAL } from './trade.js'; // pricing + the transaction spine
+import { canTrade, sellPrice, specialDef, transferGold, burnGold, saleLocked, SALE_LOCK_REFUSAL } from './trade.js'; // pricing + the transaction spine
 import { logCategory } from './combat-log.js';   // (log tagging) one rule for a message's category
 import { takeable, learnFromHit } from './fight-panels.js';   // (combat-hud stage 4) the one answer to "what could I take"
 import { buildXmbBar, resolveXmbSelection, cycleXmbCategory, cycleXmbItem, xmbCategoryOf, XMB_LABELS } from './xmb.js';
@@ -5528,10 +5528,10 @@ class Game {
         // Mark them mugged so a respawn (zone re-entry) comes back broke, not
         // farmable every reload.
         if (enemyObj.gold > 0) {
-            enemyObj.gold = carriedGold(enemyObj.gold, this.equipment); // (MS3) the delivery cap: they carried more
-            const loot = enemyObj.gold;
+            const loot = enemyObj.gold, before = this.gold || 0;
+            // (MS3) a worn delivery cap makes them carry more: transferGold tops the purse up on 'loot'.
             transferGold(enemyObj, this, loot, 'loot'); // can't fail — amount == balance, guarded > 0
-            this._log(`[Looted ${loot} GP.]`, 'pickup');
+            this._log(`[Looted ${(this.gold || 0) - before} GP.]`, 'pickup');
             this._muggedIds.add(enemyObj.id);
         }
         // Law 6f AS AMENDED: the unused kit drops. He spent his tricks or he
