@@ -24,7 +24,7 @@ import {
     WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR,
     EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, EQUIP_LEFT_HAND_RECT, closeButtonRect,
     DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_LABELS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceBagPagerRects, deviceEquipLayout, gearArmourRect, deviceRingsLayout,
-    deviceSkillsLayout, ringPassiveRows,                                     // (US2) the skills readout in the RINGS tab; (RR1) a ring's passive rows
+    deviceSkillsLayout, SKILL_COUNT_W, ringPassiveRows,                                     // (US2) the skills readout in the RINGS tab; (RR1) a ring's passive rows
     inspectorPanelRect, inspectorActionRects,                               // (C1) tap-to-inspect panel + action-row geometry
     gearOptionRects, gearChooserRect, gearEmptyNoteRect,                                     // (C2) GEAR chooser option-row + panel geometry
     xmbBarLayout, hudLayout, throwRects, wheelTopMarks, fightPanelRects, XMB_CELL,                      // (XMB) usable-bar geometry; (screen-fill) the HUD, throw targets, the marks above the wheel
@@ -35,7 +35,7 @@ import { itemStatLine, itemActions, USES_ACTION } from './inspector.js';
 import { weaponCompare, weaponCompareLines } from './examine.js';   // (FX44) the weapon compare block    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
 import { zoneOf, pageCount, slotOnPage } from './inventory.js';                                     // (C1) safe/pack label for the inspector
 import { buildXmbBar, resolveXmbSelection } from './xmb.js';                 // (XMB) usable-bar model
-import { ITEMS, itemTier, gearOptions } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
+import { ITEMS, itemTier, gearOptions, wornBody } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
 import { RINGS, FUSIONS } from './ring-data.js';                             // (rings Task 5) SKILLS-tab hands: ring names + fusion spark
 import { findFusion } from './rings.js';                                     // (rings Task 5) mark a link fusible when its two rings have an authored fusion
 import { act2Checklist } from './quests.js';                               // (NI2) the Quests tab's three-item checklist
@@ -718,6 +718,7 @@ export class Renderer {
         // Depth pass: enemies + player draw in one y-sorted (feet-line) pass so
         // closer characters occlude farther ones, each grounded by a drop-shadow.
         this._drawActors(game);
+        this._drawSpirit(game);       // (heroic spirits) the boss-door replay, under the fog
         this._drawJammedDoor(game);
 
         // (aggro overlay) Alerted-enemy sight rings + LOS threads — world space,
@@ -2056,7 +2057,7 @@ export class Renderer {
             if (this.font && !game._animating && !splatUp && !pest && this._isFaced(game, e)) {
                 const verb = defaultVerb({ x: e.x, y: e.y, npc: e }, game);
                 if (verb) {
-                    const who  = String((e.boss ? shownName(e) : e.name || e.type) || '').replace(/[[\]]/g, '');
+                    const who  = String((e.boss || e.rival ? shownName(e) : e.name || e.type) || '').replace(/[[\]]/g, '');
                     const text = `${who} · ${verb.label}`.toUpperCase();
                     const tw   = this.font.measure ? this.font.measure(text, 1) : text.length * 6;
                     // Clear of the HP bar, buffs and pips; and when an awareness
@@ -2488,6 +2489,39 @@ export class Renderer {
         this._drawPlayerSprite(game, ppx, ppy, now);
     }
 
+    // (heroic spirits, plans/heroic-spirits.md slice 3) A spirit's last turns
+    // before a boss felled it, replayed faint where they happened. main.js
+    // sets game._spiritShow each frame ({ hero, attempt, row }), only with the
+    // Options switch on; the row is where the hero stood and how it faced. The
+    // fall is drawn lying down. Reads no dice: nothing here touches game.rng.
+    _drawSpirit(game) {
+        const show = game._spiritShow;
+        if (!show || !show.row) return;
+        const { ctx, sprites } = this;
+        const vp = this._view();
+        const r = show.row;
+        const px = vp.origin.x + (r.x - game.playerX) * TILE_PX - this._scrollX;
+        const py = vp.origin.y + (r.y - game.playerY) * TILE_PX - this._scrollY;
+        if (offView(vp, r.x - game.playerX, r.y - game.playerY, 2)) return;
+        const cx = px + TILE_PX / 2, cy = py + TILE_PX / 2;
+        ctx.save();
+        ctx.globalAlpha = 0.4;
+        ctx.translate(cx, cy);
+        if (r.act === 'fell') ctx.rotate(Math.PI / 2);
+        if (r.facing === 'left') ctx.scale(-1, 1);
+        const ok = sprites?.player?.loaded
+            && sprites.player.drawFrame(ctx, PLAYER_SPRITE.col, PLAYER_SPRITE.row, -TILE_PX / 2, -TILE_PX / 2, TILE_PX, TILE_PX);
+        if (!ok) {
+            ctx.fillStyle = '#bfe3ff';
+            ctx.fillRect(-TILE_PX / 2 + 6, -TILE_PX / 2 + 6, TILE_PX - 12, TILE_PX - 12);
+        }
+        ctx.restore();
+        const label = `${show.hero.toUpperCase()}, ATTEMPT ${show.attempt}`;
+        if (this.font) {
+            this.font.drawText(ctx, label, cx, py - 12, { color: 'rgba(191, 227, 255, 0.75)', scale: 1, align: 'center', shadow: 'rgba(0, 0, 0, 0.6)' });
+        }
+    }
+
     _drawPlayerSprite(game, ppx, ppy, now, { bodyOnly = false } = {}) {
         const { ctx, sprites } = this;
         const flashing = (game._playerHitFlashUntil ?? 0) > now;
@@ -2505,7 +2539,13 @@ export class Renderer {
         const cx = ppx + TILE_PX / 2, cy = ppy + TILE_PX / 2; // sprite center
         withWalk(ctx, cx, cy, { bob: a.bob, rot: a.rot, flipX }, () => {
             let ok = false;
-            if (sprites?.player?.loaded) {
+            // (MS1) A worn mask is the body: draw its sprite instead of Night Kid.
+            const maskBody = wornBody(game.equipment);
+            const maskInfo = maskBody ? ENEMY_SPRITES[maskBody.sprite] : null;
+            if (maskInfo && sprites?.[maskInfo.sheet]?.loaded) {
+                ok = sprites[maskInfo.sheet].drawFrame(ctx, maskInfo.col, maskInfo.row, ppx, ppy, TILE_PX, TILE_PX);
+            }
+            if (!ok && sprites?.player?.loaded) {
                 ok = sprites.player.drawFrame(
                     ctx, PLAYER_SPRITE.col, PLAYER_SPRITE.row,
                     ppx, ppy, TILE_PX, TILE_PX
@@ -2829,6 +2869,7 @@ export class Renderer {
         else if (active === 'map')    this._drawWorldMapBody(game, body, body.y);
         else if (active === 'rings') this._drawDeviceRings(game, body);
         else if (active === 'notes') this._drawDeviceNotes(game, body);
+        else if (active === 'bodies') this._drawDeviceBodies(game, body);
 
         // (FX43) The bag lists the keys that work in it: the phrases the pickers and shop already
         // use for arrows and Esc, and a placeholder for Space until its verb is chosen.
@@ -2836,6 +2877,16 @@ export class Renderer {
         const fit = this._fitText(foot, R.w - 32, 1, 0.75);
         this.font.drawText(ctx, fit.text, CANVAS_PX / 2, R.y + R.h - 12, { color: UI.dim, scale: fit.scale, align: 'center' });
         ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    }
+
+    // (MS2) The bodies tab: Night Kid first, then each body worn so far in the order first worn.
+    // A body never worn has no row. Labels are placeholders.
+    _drawDeviceBodies(game, bodyRect) {
+        const { ctx } = this;
+        const rows = ['[kid]', ...(game.bodiesWorn || []).map(sp => `[${sp}]`)];
+        rows.forEach((label, i) => {
+            this.font.drawText(ctx, label, bodyRect.x + 8, bodyRect.y + 8 + i * 18, { color: UI.textLight, scale: 1 });
+        });
     }
 
     // (IN1) The notes tab: each interaction note seen so far, oldest first. Empty reads as one
@@ -2935,6 +2986,8 @@ export class Renderer {
         for (const row of deviceSkillsLayout(bodyRect, game.skills).rows) {
             const label = this._fitText(SKILL_LABELS[row.id] ?? '[TEXT]', row.labelW);
             this.font.drawText(ctx, label.text, row.x, row.y + row.h / 2 - 4, { color: row.rank > 0 ? UI.gold : UI.dim, scale: label.scale });
+            const count = this._fitText(row.countText, SKILL_COUNT_W);
+            this.font.drawText(ctx, count.text, row.countR, row.y + row.h / 2 - 4, { color: row.rank > 0 ? UI.gold : UI.dim, scale: count.scale, align: 'right' });
             for (const p of row.pips) {
                 if (p.lit) { ctx.fillStyle = UI.gold; ctx.fillRect(p.x, p.y, p.w, p.h); }
                 else       { ctx.strokeStyle = UI.dim; ctx.lineWidth = 1; ctx.strokeRect(p.x + 0.5, p.y + 0.5, p.w - 1, p.h - 1); }
@@ -3581,6 +3634,13 @@ export class Renderer {
     // Angles in radians: `mid` = the tile's centre angle, `half` = half its width.
     // `sub` (fx36) is a second line under the label: { text, color }. It replaces the
     // icon, because the ring is only one line and a half thick.
+    // (WK3) The move a tap uses carries a star on the Melee ring ([*] is a placeholder mark).
+    _starred(node, game) {
+        if (!game._defaultMoveKey || !game.equipment) return node.label;
+        const onRing = node.resolver === 'combatAttack' || node.resolver === 'cleaveAttack' || node.resolver === 'spinAttack' || node.resolver === 'stunAttack';
+        return onRing && node.key === game._defaultMoveKey() ? '[*] ' + node.label : node.label;
+    }
+
     _wheelTile(r0, r1, mid, half, fill, alpha, label, txtColor, outline, icon, dominant = false, sub = null) {
         const { ctx } = this, { cx, cy } = this._hud().wheel;
         // (§12.4) the selected wedge "rises" — a touch wider + a longer outer
@@ -3806,7 +3866,7 @@ export class Renderer {
             const sub = isSel ? this._eatSliceLine(node, game, en) : null;
             this._wheelTile(activeBand[0], activeBand[1], mid, QHALF,
                 col, en ? (isSel ? 1 : 0.5) : 0.32,
-                node.placeholder ? '…' : node.label,
+                node.placeholder ? '…' : this._starred(node, game),
                 txt,
                 isSel ? { w: 3, c: '#fff3c0' } : null,
                 node.placeholder ? null : WHEEL_ICONS[node.key],
@@ -3845,7 +3905,7 @@ export class Renderer {
                 // being brighter than its siblings, not by competing with the
                 // thing you have actually chosen.
                 this._wheelTile(band[0], band[1], TOP + off * SPREAD, HALF,
-                    center ? HUE : '#4a3c2a', center ? 0.34 : 0.22, kids[j].label,
+                    center ? HUE : '#4a3c2a', center ? 0.34 : 0.22, this._starred(kids[j], game),
                     center ? '#cbbb95' : '#8d8069',
                     center ? { w: 1, c: 'rgba(232,207,144,0.3)' } : null);
             }

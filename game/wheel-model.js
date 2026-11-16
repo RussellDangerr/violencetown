@@ -137,6 +137,38 @@ export function setMeleeKit(kit) {
 const OFFENSIVE_RESOLVERS = new Set(['combatAttack', 'cleaveAttack', 'spinAttack', 'stunAttack', 'resolveThrow', 'castSpell', 'castTrick']);
 export const isOffensiveLeaf = (node) => OFFENSIVE_RESOLVERS.has(node.resolver);
 
+// The move a tap on an enemy uses (plans/wk2-weapon-move-autopick.md): the first
+// move the weapon's class kit brings, or 'hit' when it brings none. There is no
+// plain hit beside a class move; a weapon with no move of its own still hits.
+export function tapMoveKey(kit) {
+  const own = (kit || []).find(k => MELEE_MOVES.some(m => m.key === k && m.key !== 'hit'));
+  return own || 'hit';
+}
+
+// The move keys on the Melee ring as it stands now (kit already synced).
+export function meleeRingKeys() { return MELEE_NODE().children.map(m => m.key); }
+
+// (WK3) The move a tap uses once you may have chosen one. `chosen` is what the player
+// starred: { weaponId, key }. It holds only for the weapon it was starred on and only
+// while that move is still on the ring; otherwise the weapon's own move (`own`) stands.
+export function resolveDefaultKey({ chosen, weaponId, ringKeys, own }) {
+  if (chosen && chosen.weaponId === weaponId && (ringKeys || []).includes(chosen.key)) return chosen.key;
+  return own;
+}
+
+// The key of the Melee move the wheel's highlight sits on, so it can be starred (WK3); else null.
+export function starrableMove(w) {
+  if (!w || w.aiming || w.confirming || !w.path || w.path.length !== 3 || w.path[0] !== 0 || w.path[1] !== 0) return null;
+  const node = selectedNode(w);
+  return node && MELEE_MOVES.some(m => m.key === node.key) ? node.key : null;
+}
+
+// The wheel path to a Melee move on the ring as it stands now (kit already synced).
+export function meleePathTo(key) {
+  const i = MELEE_NODE().children.findIndex(m => m.key === key);
+  return i < 0 ? null : [0, 0, i];
+}
+
 // ── Geometry (the single source of truth for what an action hits) ────────────
 const cheb = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
 // 8 neighbours, clockwise from N.

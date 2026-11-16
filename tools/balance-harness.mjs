@@ -15,7 +15,7 @@ import { HEAL_HP_FLOOR, HEAL_MIN_GOLD } from '../game/ai.js';
 // the DOM at module-evaluation time (tests/wallets.test.js and tests/save-
 // roundtrip.test.js already import Enemy from here under bare `node --test`),
 // so this pure helper is safe to pull into a headless Node tool too.
-import { challengeGp, isTownsperson, townsfolkPurse } from '../game/enemies.js';
+import { challengeGp, isTownsperson, townsfolkPurse, WILDERNESS_BEAR } from '../game/enemies.js';
 import { SLOTS, ENTRIES, resolveSpawn, defaultPicks } from '../game/slots.js';
 import { ITEMS } from '../game/items.js';
 import { WEAKNESS_MULT } from '../game/combat.js';
@@ -464,6 +464,9 @@ export function loadMapRoster() {
         if (pooled.has(id) || placed.has(id)) continue;
         roster.push(rosterRow('registry', id, ENTRIES[id]));
     }
+    // (FD2) The bear the Wilderness sends for a carried Mola Cola: spawned by interactions.js, so no
+    // map or slot shows it. Listed under the zone that sends it.
+    roster.push(rosterRow('wilderness', 'wilderness-bear', WILDERNESS_BEAR));
     return roster;
 }
 

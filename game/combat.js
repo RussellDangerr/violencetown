@@ -120,7 +120,9 @@ function critOf(kinds, { boss = false } = {}) {
 // when the multiplied hit alone would fall short. Never less than `dmg`.
 function knockoutDamage(dmg, entity) {
     if (!entity) return dmg;
-    return Math.max(dmg, (entity.hp ?? 0) + (entity.armor ?? 0), 1);
+    // Count the same guard takeDamage soaks (a live Defence Poition), or it lives.
+    const guard = typeof entity.guardOf === 'function' ? entity.guardOf() : 0;
+    return Math.max(dmg, (entity.hp ?? 0) + (entity.armor ?? 0) + guard, 1);
 }
 
 // ── Shields in a hand (plans/ws6-shields-in-hand.md) ─────────────────────────

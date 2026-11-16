@@ -176,6 +176,32 @@ export const ITEMS = {
         fallbackColor: '#c8c8d0',
         baseValue: 10,
     },
+    // A mask is a hat with a body (MS1): it takes the head slot and its own armour,
+    // and while worn the player draws as `body.sprite` and may do `body.verbs`.
+    rat_mask: {
+        id: 'rat_mask',
+        name: '[Rat Mask]',
+        description: '[TEXT]',
+        equipSlot: 'top',
+        useType: 'equip',
+        armor: 2,
+        body: { species: 'rat', sprite: 'Rat', verbs: ['grates'] },
+        consumable: false,
+        fallbackColor: '#a070c0',
+        baseValue: 10,
+    },
+    // A costume is worn whole (CO1): using it from the bag puts it on, using it again takes it off.
+    // Its kit and ranks live in costumes.js; the bag icon is a flat fallback colour.
+    test_costume: {
+        id: 'test_costume',
+        name: '[Test Costume]',
+        description: '[TEXT]',
+        useType: 'costume',
+        costume: 'test_costume',
+        consumable: false,
+        fallbackColor: '#e0a030',
+        baseValue: 10,
+    },
     cardboard_cuirass: {
         id: 'cardboard_cuirass',
         name: '[Cardboard Cuirass]',
@@ -234,6 +260,24 @@ export const ITEMS = {
         consumable: true,
         fallbackColor: '#cc8844',
         baseValue: 15,
+    },
+
+    // (FD3) Handed over with the burger bag. Looks like any can; vendors will not buy it
+    // until the delivery is done (saleLockedUntil, read by trade.js saleLocked), but it
+    // can be dropped or drunk. Name, description and icon are placeholders; the heal is
+    // copied from the hot dog, the cheapest healing food.
+    mola_cola: {
+        id: 'mola_cola',
+        name: '[Mola Cola]',
+        description: '[TEXT]',
+        category: 'ambro',
+        useType: 'self',
+        effect: 'heal',
+        healAmount: 10,
+        consumable: true,
+        saleLockedUntil: 'deliver_burger',
+        fallbackColor: '#d94a8c',
+        baseValue: 10,
     },
 
     // (Phase 4) MQ2 deliverable — a quest item, so it can't be sold/thrown/given
@@ -505,6 +549,17 @@ export function isArmorPiece(def) {
         && def.equipSlot !== 'weapon' && !def.equipDuration;
 }
 
+// The body a worn piece gives (a mask), or null. Armour can grant verbs, not just the weapon.
+export function wornBody(equipment) {
+    for (const def of Object.values(equipment || {})) if (def && def.body) return def.body;
+    return null;
+}
+// True when a worn piece grants the named verb (e.g. 'grates').
+export function wornVerb(equipment, verb) {
+    const b = wornBody(equipment);
+    return !!b && Array.isArray(b.verbs) && b.verbs.includes(verb);
+}
+
 export const ARMOR_IDS = Object.freeze(Object.keys(ITEMS).filter(id => isArmorPiece(ITEMS[id])));
 
 // ── Value tiers (Phase 6d) ────────────────────────────────────────────────────
@@ -642,6 +697,10 @@ function resolveEquip(game, itemDef, hand = 'weapon', bagSlot = -1) {
         if (bagSlot >= 0 && Array.isArray(inv) && inv[bagSlot] == null) inv[bagSlot] = { itemDef: d, count: 1 };
         else game._addToInventory(d);
     };
+    if (slot === 'weapon' && game.costume) {   // (CO1) as below: a costume's hands are its own
+        bagIt(itemDef);
+        return `[TEXT: take the costume off first]`;
+    }
     if (slot === 'weapon') {
         // Into `hand` (the right, as the one weapon slot did, unless the GEAR
         // tab's left plate asks for the left); a two-hander takes both, and
@@ -653,6 +712,10 @@ function resolveEquip(game, itemDef, hand = 'weapon', bagSlot = -1) {
         return out.length
             ? `[Equipped ${itemDef.name} — ${out.map(d => d.name).join(', ')} back in your bag]`
             : `[Equipped ${itemDef.name}]`;
+    }
+    if (game.costume) {   // (CO1) the kit is the costume: take the whole costume off to change it
+        bagIt(itemDef);
+        return `[TEXT: take the costume off first]`;
     }
     const old = game.equipment[slot];
     game.equipment[slot] = itemDef;
@@ -682,6 +745,7 @@ export function unequipItem(game, slot) {
     if (slot === 'weapon') return null;
     const item = game.equipment[slot];
     if (!item) return null;
+    if (game.costume) return `[TEXT: take the costume off first]`;   // (CO1)
     // A two-hander's left hand is the weapon itself, which never comes off.
     if (slot === 'left' && handsRule(game)(item) >= 2) return null;
     if ((game.tempEquips || []).some(te => te.slot === slot)) {

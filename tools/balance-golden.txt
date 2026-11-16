@@ -36,6 +36,7 @@ downtown/dt-ruffian               Ruffian                     100       3      9
 downtown/dt-recipient             Stranger                    100     -80      0        0              1              1      -
 downtown/dt-merch1                Vendor                      100     -80      0        0              1              1      -
 downtown/dt-merch2                Vendor                      100     -80      0        0              1              1      -
+downtown/dt-driver                Violencian                  100     -80      0        6              1              1      -
 downtown/dt-folk1                 Violencian                  100     -80      0        0              1              1      -
 downtown/dt-folk2                 Violencian                  100     -80      0        0              1              1      -
 downtown/dt-platero               Violencian                  100     -80      0        0              1              1      -
@@ -82,6 +83,7 @@ town/townie-praline               Violencian                  100     -80      0
 town/townie-s                     Violencian                  100     -80      0        5              1              1      -
 town/townie-w                     Violencian                  100     -80      0        2              1              1      -
 vault/vault-financier             Banker                      100       6     12      148              8              5      9
+wilderness/wilderness-bear        Bear                        100       3     10       70              6              4     10
 
 --- WEAPONS (raw damage) ---
 id               damage  type
@@ -115,7 +117,7 @@ canyon                     8
 carnival                 151
 casino                     0
 diner                      0
-downtown                   8
+downtown                  14
 factory                   76
 frozen                    78
 graveyard                 78
@@ -123,6 +125,7 @@ sewer                    145
 sewer-north               10
 town                      30
 vault                     44
+wilderness                10
 sinks: burnGold('heal'|'trick'), bribes/buyouts via transferGold
 
 --- LINT ---

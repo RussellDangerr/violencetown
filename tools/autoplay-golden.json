@@ -80,8 +80,8 @@
       "seed": 1,
       "finished": true,
       "reason": null,
-      "fingerprint": "d83b258d",
-      "turn": 159,
+      "fingerprint": "27cd3745",
+      "turn": 160,
       "deaths": 3,
       "stages": [
         {
@@ -114,12 +114,12 @@
         },
         {
           "id": "escape_sewer",
-          "turns": 30,
+          "turns": 31,
           "hpLost": 106,
           "healed": 0,
           "eats": 0,
           "drinks": 1,
-          "attacks": 6,
+          "attacks": 7,
           "casts": 8,
           "mpSpent": 74,
           "throws": 4,
@@ -155,8 +155,8 @@
       "seed": 2,
       "finished": true,
       "reason": null,
-      "fingerprint": "6d061c28",
-      "turn": 85,
+      "fingerprint": "c717eea8",
+      "turn": 88,
       "deaths": 0,
       "stages": [
         {
@@ -191,7 +191,7 @@
         },
         {
           "id": "to_factory",
-          "turns": 24,
+          "turns": 27,
           "deaths": 0,
           "gold": 0
         },

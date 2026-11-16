@@ -5,7 +5,7 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { deviceBodyRect, deviceRingsLayout, deviceSkillsLayout, deviceSkillsBand, rectsOverlap } from '../game/layout.js';
+import { deviceBodyRect, deviceRingsLayout, deviceSkillsLayout, deviceSkillsBand, rectsOverlap, SKILL_COUNT_W } from '../game/layout.js';
 import { SKILLS } from '../game/skills.js';
 import { Renderer, SKILL_LABELS } from '../game/renderer.js';
 import { UI } from '../game/ui-sprites.js';
@@ -44,6 +44,31 @@ describe('which skills the readout lists', () => {
         }
         const [justShort] = deviceSkillsLayout(BODY, { light_fingers: RANKS[0] - 1 }).rows;
         assert.equal(justShort.rank, 0);
+    });
+});
+
+describe('the count toward the next rank', () => {
+    const row = (n) => deviceSkillsLayout(BODY, { light_fingers: n }).rows[0];
+
+    test('shows clean lifts against the next threshold, and rises by one per lift', () => {
+        assert.equal(row(1).countText, `1/${RANKS[0]}`);
+        assert.equal(row(2).countText, `2/${RANKS[0]}`);
+        assert.equal(row(RANKS[0]).countText, `${RANKS[0]}/${RANKS[1]}`);
+    });
+
+    test('at the top rank it shows the count alone', () => {
+        assert.equal(row(RANKS.at(-1)).countText, `${RANKS.at(-1)}`);
+        assert.equal(row(RANKS.at(-1) + 40).countText, `${RANKS.at(-1) + 40}`);
+    });
+
+    test('the count has room between the label and the pips, and the text fits it', () => {
+        for (const n of [1, RANKS.at(-1), 9999]) {
+            const r = row(n);
+            assert.ok(r.labelW > 0);
+            assert.ok(r.x + r.labelW + SKILL_COUNT_W <= r.countR, 'label room ends before the count');
+            assert.ok(r.countR <= r.pips[0].x);
+            assert.ok(r.countText.length * 8 <= SKILL_COUNT_W, r.countText);
+        }
     });
 });
 
@@ -144,8 +169,9 @@ describe('what the readout draws', () => {
         const { r, drawn, calls } = rig();
         r._drawDeviceSkills({ skills: { light_fingers: RANKS[0] } }, BODY);
         const [row] = deviceSkillsLayout(BODY, { light_fingers: RANKS[0] }).rows;
-        assert.equal(drawn.length, 1);
+        assert.equal(drawn.length, 2, 'the label and the count');
         assert.equal(drawn[0].text, SKILL_LABELS.light_fingers);
+        assert.equal(drawn[1].text, `${RANKS[0]}/${RANKS[1]}`);
         assert.equal(drawn[0].color, UI.gold);
         const filled = calls.filter((c) => c.fn === 'fillRect');
         const hollow = calls.filter((c) => c.fn === 'strokeRect');

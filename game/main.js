@@ -12,10 +12,11 @@ import { pickHitMark, HEAVY_HIT_DAMAGE, dodgeChance, DODGE_WORD } from './hit-sp
 import { makeEffectLoop } from './effect-loop.js';                 // one tick of the transient-effects loop, and its refusal to die on a bad frame
 import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK, SLUDGE_DOT, FIRE_QUENCHING_TILES } from './data.js';
 import { puddleTiles, layPuddle, puddleAt, dryPuddles } from './puddles.js';   // (poisons) Sludge Brain's puddles
-import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef, poitionBuff } from './items.js';
+import { ITEMS, wornBody, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef, poitionBuff } from './items.js';
 import { WEAPONS, weaponClassOf } from './weapons.js';
 import { handPairOf } from './hand-data.js';   // (HB2) two held weapons combine into a named effect
 import { resolveItemDef } from './item-registry.js';
+import { toggleCostume, dropCostume } from './costumes.js';   // (CO1)
 import { tickBuffList, sumBuffStat, worldBeatPlan } from './buffs.js';
 import { RINGS, FUSIONS } from './ring-data.js';
 import {
@@ -43,6 +44,7 @@ import { pickSlots, defaultPicks, resolveSpawn, requiredDropFor, dropLineFor, FI
 import { rememberSpent, applySpent } from './npc-memory.js';
 import { snapshotOf, keepSnapshot, readSnapshots, reportLines } from './bones.js';
 import { hasSave, readSaveRaw, writeSave, loadInto, clearSave, encodeSaveCode, importSaveCode } from './save.js';
+import { readAway, tellAwayNews, restedOnReturn } from './away.js';   // (CK1) hours since the save's savedAt
 import { QuestEngine } from './quests.js';
 import { doExamine, resolveExamine } from './examine.js';
 import { recordDrop, pendingDrops, takeDrop, dropLoadout, recordKill, stepRespawns, deadIds, bossDropOnce, claimSpots, spotHolds, spotSpawns } from './drops.js'; // per-zone runtime dropped-items layer + respawn list (pure, node-tested)
@@ -62,7 +64,7 @@ import {
 import {
     emptyOffer, commitBlocker, stage, unstage, settledGold, resolveOffer, sameEntry,
 } from './offer.js';   // (offer screen) the basket model
-import { canTrade, sellPrice, transferGold, burnGold } from './trade.js'; // pricing + the transaction spine
+import { canTrade, sellPrice, specialDef, transferGold, burnGold, saleLocked, SALE_LOCK_REFUSAL } from './trade.js'; // pricing + the transaction spine
 import { logCategory } from './combat-log.js';   // (log tagging) one rule for a message's category
 import { takeable } from './fight-panels.js';   // (combat-hud stage 4) the one answer to "what could I take"
 import { buildXmbBar, resolveXmbSelection, cycleXmbCategory, cycleXmbItem, xmbCategoryOf, XMB_LABELS } from './xmb.js';
@@ -89,18 +91,19 @@ function writeSeenHints(set) {
 import { emitNoise, NOISE, perceives, spotters, struck, VERDICT } from './perception.js'; // sound + sight
 import { coinTake, kitTake, gearTake, coinWeight, itemWeight, gearWeight,
          noticeBuffer, isClean, stealLimit } from './theft.js';
-import { INTERACTIONS, fireRows } from './interactions.js'; // (IN1) carry-this-here rules
+import { INTERACTIONS, fireRows, molaPackLeaves } from './interactions.js'; // (IN1) carry-this-here rules
 import { overworldZone } from './world-map.js'; // (mp2) which overworld zone a map belongs to
-import { recordUse, skillPerks, mergePassives } from './skills.js'; // (skills) use-ranks: clean lifts rank up light fingers
+import { recordUse, skillPerks, mergePassives, rankPerk, perkText } from './skills.js'; // (skills) use-ranks: clean lifts rank up light fingers
 import { audio } from './audio.js'; // [audio] procedural SFX + ambient music (no asset files)
 import {
     createWheelState, cycle, drill, back, compose, autoAimTile,
     needsFriendlyConfirm, aimRange, affectedTiles, selectedNode, restoreLastCategory, verbApplies,
     greyedReasonLine,
     orderedTargetVerbs, isCombatActive, defaultVerb, previewChildren,
-    aimTap, adjacentFacing, setMeleeKit,
+    aimTap, adjacentFacing, setMeleeKit, tapMoveKey, meleePathTo, meleeRingKeys, resolveDefaultKey, starrableMove,
 } from './wheel-model.js'; // (sunburst wheel) node-tree model
 import * as Settings from './settings.js'; // [settings] options/accessibility store
+import { spiritToShow } from './spirit-replay.js';                                        // (heroic spirits) the boss-door replay
 import { introAt, isSkipKey } from './tv-intro.js';                                     // (TV1) the TV opening before the title
 import { arcSlots, arcVisible, arcSlotAt, arcFaded, ARC_MAX } from './fight-arc.js';                  // (FA1) the arc of attacks under you in a fight
 import { fighters, joiners } from './fight-area.js';                                     // (fight-fog) who is in the fight
@@ -258,6 +261,7 @@ class Game {
         // swap touches it. Persisted. Its perks join ringMods only where an action
         // reads them (see _theftPassives).
         this.skills           = {};
+        this.bodiesWorn = [];                // (MS2) species of every mask body worn so far; persisted, never shows unworn ones
         this.interactionNotes = [];          // (IN1) ids of the interaction rows whose note has been shown; persisted
         this._peakDisposition = 0;           // (rings) highest disposition any NPC has ever shown — monotonic; gates the hidden thumb tier
         this._lastHitTarget = null;   // (fear) id of the enemy the last Melee-Hit struck
@@ -523,6 +527,7 @@ class Game {
 
         // Economy
         this.gold = 0;
+        this.defaultAttack = null;       // (WK3) the melee move you starred: { weaponId, key }
         // (Phase 2) Car fuel. The Cataclysmic Converter runs the fixed car too
         // HOT ('raw' → it punches straight through the North bridge into the
         // Canyon). Pouring a bottle of alcohol in the tank slows it ('alcohol' →
@@ -707,6 +712,7 @@ class Game {
     async _loadMap(url, spawnX, spawnY) {
         this.map = await loadMap(url);
         this._mapUrl = url;
+        this._molaPackCalled = false;   // (FD1) a pack may come once for each entry
         this._noteZoneVisited?.();
         this._jammedDoor = null;   // per-zone: any wedged door is left behind when you leave
         // Splats, words and barks belong to the map they were spawned on: a new
@@ -940,6 +946,10 @@ class Game {
     // Resolve an item id to its definition — delegates to item-registry.js,
     // the one shared spelling of "weapons win over items". Used by the save
     // system to rehydrate equipment/inventory (we persist ids, not whole defs).
+    // (CO1) A costume in the bag: put it on, or take it off. Optional-called, like _saveMoment.
+    _toggleCostume(item) { return toggleCostume(this, item); }
+    _dropCostume() { dropCostume(this); }
+
     _resolveItemDef(id) {
         return resolveItemDef(id);
     }
@@ -988,6 +998,7 @@ class Game {
     // step and each zone's list sends a share back. Called just before _loadMap
     // on a real move between zones — never on a save restore or a new game.
     _zoneChange() {
+        this._recordMuggers?.();   // (BS2) a mugger keeps what he took, however you leave
         this._settleRival?.();
         const back = stepRespawns(this._respawnLists);
         // (RO1) A boss with a returning spot stays dead; a different boss takes the spot instead.
@@ -1085,7 +1096,11 @@ class Game {
     // The zone has loaded: if its rival is there, the record reads carrying.
     _rivalArrived(url) {
         const r = this._rivals[url];
-        if (r && this.enemies.some(e => e.id === r.id)) markCarrying(this._rivals, url, r.id);
+        const rival = r && this.enemies.find(e => e.id === r.id);
+        if (!rival) return;
+        markCarrying(this._rivals, url, r.id);
+        // (plans/ne2-rival-title.md) It wears its title, and the log says so once per entry.
+        this._log(rival.promoteToRival(), 'combat');
     }
 
     // Leaving a zone: the record keeps only what its rival still carries of your
@@ -1179,9 +1194,32 @@ class Game {
         this._saveMoment();
     }
 
+    // (CK1) Whole hours since this save's stamp, kept as this.hoursAway.
+    _noteAway(raw) {
+        readAway(this, raw.savedAt);
+    }
+
+    // (WP1) Back beside a bench after an hour or more: one rested buff and one log line.
+    _applyRested() {
+        restedOnReturn(this, (m) => this._log(m));
+    }
+
+    // (CK2) The first zone change after an hour or more away tells one piece of news.
+    _tellAwayNews() {
+        tellAwayNews(this, (m) => this._log(m));
+    }
+
     _bindLeaveSave() {
         document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'hidden') this._saveOnLeave();
+            if (document.visibilityState === 'hidden') {
+                this._saveOnLeave();
+                this._wentAway = true;
+            } else if (this._wentAway) {
+                // (CK1) Back in the tab: read the stamp the leaving save wrote, once.
+                this._wentAway = false;
+                const raw = readSaveRaw();
+                if (raw) { this._noteAway?.(raw); this._applyRested?.(); }
+            }
         });
         window.addEventListener('pagehide', () => this._saveOnLeave());
     }
@@ -1213,6 +1251,17 @@ class Game {
         if (!this.questEngine) return;
         if (this.questEngine.isActive('fix_car') || this.questEngine.isComplete('fix_car')) return;
         this.questEngine.start('fix_car');
+    }
+
+    // (FD3) Your boss catches you before you cross and hands over the delivery: the burger
+    // bag and a can of Mola Cola. Once only (a quest flag); the words are placeholders.
+    _bossHandsOver() {
+        const qe = this.questEngine; if (!qe) return;
+        if (qe.getFlag('bossHandedOver') || qe.isComplete('deliver_burger')) return;
+        qe.state.flags.bossHandedOver = true;
+        this._log('[TEXT]', 'transition');
+        this._grantItem('burger_fries', '[TEXT]');
+        this._grantItem('mola_cola', '[TEXT]');
     }
 
     // (Phase 4) Main Quest 2 — the burger delivery. Started deterministically the
@@ -1328,6 +1377,7 @@ class Game {
             audio.playMusic('town');      // [audio] start the ambient bed (zone music re-syncs on map load)
             const raw = readSaveRaw();
             if (!raw) { start(); return; }
+            this._noteAway?.(raw);   // (CK1) once, before any new save overwrites the stamp
             splash.classList.add('gone');
             wrapper.classList.remove('hidden');
             this._fitCanvas();            // (screen-fill) measure the now-visible layout box
@@ -1353,6 +1403,7 @@ class Game {
                 return;
             }
             this._log('[Save loaded]', 'transition');
+            this._applyRested?.();   // (WP1) after the load, so the restored buffs do not overwrite it
             this._maybeShowFirstRunHint();
         };
 
@@ -1568,6 +1619,7 @@ class Game {
                 if (w.aiming) { this._reticleKey(e.code); return; }
                 if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { this._wheelCycle(-1); return; }
                 if (e.code === 'ArrowRight' || e.code === 'KeyD') { this._wheelCycle(+1); return; }
+                if (e.code === 'KeyF' && !e.repeat && this._setDefaultAttack()) return;   // (WK3) star the highlighted Melee move
                 if (DOWN) { this._wheelBack(); return; }
                 if (UP)   { this._wheelDrill(); return; }
                 return;
@@ -1901,6 +1953,7 @@ class Game {
             const tap = (this._pressTimer && e && e.type === 'pointerup') ? this._pendingTap : null;
             cancelPress();
             this._releaseTurnPress(e);   // (C3b) a quick tap beside you walks the step on release
+            this._endWheelHold(e);   // (WK3)
             if (tap && this.state === STATE.IDLE && !this._animating) tap();
             if (this._openerHeld) { this._openerHeld = false; this._wheelOpenerUp(); }   // (screen-fill) the dock's ✦, released
             if (this._dlgDrag) {
@@ -2107,6 +2160,7 @@ class Game {
         if (sfxVal)   sfxVal.textContent = Math.round(s.sfxVolume * 100);
         this._setToggleUI('opt-muted',         s.muted);
         this._setToggleUI('opt-reduce-motion', s.reduceMotion);
+        this._setToggleUI('opt-spirits',       s.spirits);
         // Fullscreen reflects the actual document state, not a stored value.
         this._setToggleUI('opt-fullscreen', !!document.fullscreenElement);
         this._setWheelOpenUI(s.wheelOpenMode);   // (Slice 2) HOLD / TAP
@@ -2202,6 +2256,13 @@ class Game {
             const next = !Settings.get('reduceMotion');
             Settings.set('reduceMotion', next);
             this._setToggleUI('opt-reduce-motion', next);
+        });
+
+        // Heroic spirits (HS-R2): the boss-door replay, read live by _render.
+        document.getElementById('opt-spirits')?.addEventListener('click', () => {
+            const next = !Settings.get('spirits');
+            Settings.set('spirits', next);
+            this._setToggleUI('opt-spirits', next);
         });
 
         // Fullscreen toggle — drives the Fullscreen API on #game-wrapper (or
@@ -2659,8 +2720,22 @@ class Game {
         const a = (Math.atan2(dy, dx) + Math.PI * 2) % (Math.PI * 2); // 0..2π
         if      (a >= Math.PI * 0.25 && a < Math.PI * 0.75) this._wheelBack();     // BOTTOM → back
         else if (a >= Math.PI * 0.75 && a < Math.PI * 1.25) this._wheelCycle(-1);  // LEFT → prev
-        else if (a >= Math.PI * 1.25 && a < Math.PI * 1.75) this._wheelDrill();    // TOP → drill
+        else if (a >= Math.PI * 1.25 && a < Math.PI * 1.75) {                      // TOP → drill
+            // (WK3) On a Melee move a held press stars it as your default; a quick tap drills as ever,
+            // on release. Anywhere else the drill is immediate.
+            if (starrableMove(w)) this._armWheelHold(); else this._wheelDrill();
+        }
         else                                                this._wheelCycle(+1);  // RIGHT → next
+    }
+
+    _armWheelHold() {
+        if (this._wheelHold) clearTimeout(this._wheelHold.timer);
+        this._wheelHold = { timer: setTimeout(() => { this._wheelHold = null; this._setDefaultAttack(); }, 450) };
+    }
+    _endWheelHold(e) {
+        const h = this._wheelHold; if (!h) return;
+        clearTimeout(h.timer); this._wheelHold = null;
+        if (e && e.type === 'pointerup' && this.state === STATE.RADIAL_MENU) this._wheelDrill();
     }
 
     // (C3b, ruling C3R3) A tap on the world while aiming: on the reticle it fires
@@ -2795,17 +2870,15 @@ class Game {
             // (_openBridgeIfCarFixed), so reaching it here is the deliberate beat,
             // not the instant-on-fix cut that used to happen.
             // (CY1) The cutscene plays once. After the first crossing, by either
-            // route, the bridge is an ordinary walkway: it queues a plain map
-            // change to Downtown's spawn (where the ramp lands you) and the step
-            // finishes like any other door.
-            let bridgeWalk = false;
+            // route, the mouth plays a taxi ride (TX4) that lands you at Downtown's spawn.
             if (ny === 0 && nx >= 14 && nx <= 19 && this.questEngine.getFlag('carFixed')) {
                 if (!this.questEngine.bridgeRoute()) {
                     this._playBridgeCutscene();   // (Phase 2) fuel decides: crash → Canyon, or ramp → Downtown
                     return;
                 }
+                // (TX4) After the first crossing the mouth is a taxi ride, not a walkway.
+                if (this._rideTo) { this._rideTo('downtown-map.json'); return; }
                 this._pendingTransition = { toMap: 'downtown-map.json' };
-                bridgeWalk = true;
             }
 
             // Hazards
@@ -2816,6 +2889,15 @@ class Game {
                 } else {
                     this.addBuff('sludge', 'Sludge', SLUDGE_DURATION, 'debuff');
                     this._log('[Stepped in sludge — 3 turns]');
+                }
+            }
+
+            if (tileDef.hazard === 'goo') {
+                if (this._hasSludgeImmunity()) {
+                    this._log('[The goo slides right off your bagged feet.]');
+                } else if (!this.hasBuff('goo')) {
+                    this.addBuff('goo', '[TEXT] Goo', SLUDGE_DURATION, 'debuff');
+                    this._log('[TEXT: stepped in goo — 3 turns]');
                 }
             }
 
@@ -2832,6 +2914,11 @@ class Game {
             // (the bank's vault door wants all three Act 2 items) — data-driven
             // so any door can gate.
             const transition = this.map.getTransition(nx, ny);
+            if (transition && transition.ride && this._rideTo) {   // (stand-in games without _rideTo walk it as a door)
+                // (TX4) A marked exit is a taxi ride: the beat plays, then the map loads.
+                this._rideTo(transition.toMap, transition.toX, transition.toY);
+                return;
+            }
             if (transition) {
                 if (!carriesAll(transition.requires, this.inventory)) {
                     // A list of items also says how many of them are in the bag, the
@@ -2854,7 +2941,7 @@ class Game {
             // Chain the next tile if a direction is still held or was buffered
             // mid-slide. Skipped across a map transition so a held key doesn't
             // auto-walk you straight into the new zone. (movement-feel Finding 1)
-            if (!transition && !bridgeWalk) this._onStepSettled();
+            if (!transition) this._onStepSettled();
         });
     }
 
@@ -3028,7 +3115,8 @@ class Game {
             this._render();
             return;
         }
-        this._log('[TEXT]');
+        const shelved = this.questEngine.state.flags.shelved;
+        this._log(shelved && shelved.catalytic_converter != null ? '[TEXT]' : '[TEXT]');
         this._render();
     }
 
@@ -3428,7 +3516,9 @@ class Game {
         // swaps out lands in that very slot.
         const equips = item.useType === 'equip';
         if (equips) this._removeFromSlot(this.selectedSlot);
-        const msg = resolveUse(this, item, null, 1, 'weapon', equips ? this.selectedSlot : -1);
+        const msg = item.useType === 'costume'   // (CO1) put on / take off; stays in the bag, costs the turn
+            ? this._toggleCostume?.(item)
+            : resolveUse(this, item, null, 1, 'weapon', equips ? this.selectedSlot : -1);
         if (msg) this._log(msg);
         this._refreshGrantedSkills();   // a weapon may have changed → refresh Magic/Trick grants
 
@@ -3510,6 +3600,51 @@ class Game {
         // A weapon that names no class (none in the world) leaves the starting ring alone.
         const cls = weaponClassOf(this.equipment && this.equipment.weapon);
         setMeleeKit(cls ? cls.kit : null);
+        // (WK3) A starred move belongs to the weapon it was starred on: a different weapon
+        // in hand puts the new weapon's own move back.
+        const d = this.defaultAttack;
+        if (d && d.weaponId !== (this.equipment && this.equipment.weapon && this.equipment.weapon.id)) this.defaultAttack = null;
+    }
+
+    // (WK3) The key of the move a tap uses now: the starred move if it is still yours,
+    // else the weapon's own. Call after _syncMeleeKit so the ring is the weapon's.
+    _defaultMoveKey() {
+        const wpn = this.equipment && this.equipment.weapon;
+        const cls = weaponClassOf(wpn);
+        return resolveDefaultKey({ chosen: this.defaultAttack, weaponId: wpn && wpn.id, ringKeys: meleeRingKeys(), own: tapMoveKey(cls && cls.kit) });
+    }
+
+    // (WK3) Make the highlighted Melee move your default (hold it on the wheel; F on keys).
+    _setDefaultAttack() {
+        const key = starrableMove(this.wheel);
+        const wpn = this.equipment && this.equipment.weapon;
+        if (!key || !wpn) return false;
+        this.defaultAttack = { weaponId: wpn.id, key };
+        audio.playSfx('menu-tick');
+        this._render();
+        return true;
+    }
+
+    // (WK2) A tap on an enemy uses the move the weapon in hand brings (sword: Cleave,
+    // hammer: stun), fired through the wheel's own fire path so it is the same move
+    // the wheel gives. Returns false, leaving the plain hit to run, when the weapon
+    // brings no move or the move would catch someone who is not hostile.
+    _tapWithWeaponMove(npc) {
+        this._syncMeleeKit?.();
+        const cls = weaponClassOf(this.equipment && this.equipment.weapon);
+        const key = this._defaultMoveKey?.() ?? tapMoveKey(cls && cls.kit);   // (WK3) your starred move, else the weapon's own
+        const path = key !== 'hit' && meleePathTo(key);
+        if (!path) return false;
+        const w = this.wheel;
+        w.path = path;
+        w.reticle = { x: npc.x, y: npc.y };
+        w.aiming = false; w.confirming = false;
+        const caught = affectedTiles(w, this);
+        const friendly = this.enemies.some(e => e.entity.isAlive() && !isHostile(e) && caught.some(t => t.x === e.x && t.y === e.y));
+        if (friendly) { w.reticle = null; return false; }
+        this.state = STATE.RADIAL_MENU;   // _fireWheel closes the wheel, back to IDLE
+        this._fireWheel();
+        return true;
     }
 
     _openWheel() {
@@ -3795,7 +3930,7 @@ class Game {
                 this._render();
                 break;
             }
-            case 'hit':   if (npc) { this.combatAttack(npc, this.equipment.weapon.damage, { type: this.equipment.weapon.damageType, weapon: this.equipment.weapon }); this._advanceWorld(); this._render(); } break;
+            case 'hit':   if (npc && this._tapWithWeaponMove?.(npc)) break; if (npc) { this.combatAttack(npc, this.equipment.weapon.damage, { type: this.equipment.weapon.damageType, weapon: this.equipment.weapon }); this._advanceWorld(); this._render(); } break;
             case 'throw': { const th = this._resolveThrowable(); if (th) { const msg = resolveThrow(this, th.itemDef, null, th.count, { x: t.x, y: t.y }); if (msg) this._log(msg, 'combat'); this._rockClatter(th.itemDef, t.x, t.y); th.consume(); this._advanceWorld(); } else this._log('[Nothing to throw.]'); this._render(); break; }
             case 'take':  this._takeItemAt(t.x, t.y); this._render(); break;
             case 'open':  if (t.container) this._openContainer(t.container); break;
@@ -4486,7 +4621,9 @@ class Game {
     // grate. A non-rat step onto a grate still bumps.
     _canEnter(x, y) {
         if (this.map.isWalkable(x, y)) return true;
-        return this._ratFormTurns > 0 && this.map.getTile(x, y) === 4;
+        // (MS1) A worn mask that grants the 'grates' verb opens them for as long as it is on.
+        const maskGrates = Object.values(this.equipment || {}).some(d => d && d.body && (d.body.verbs || []).includes('grates'));
+        return (this._ratFormTurns > 0 || maskGrates) && this.map.getTile(x, y) === 4;
     }
 
     // Speed Poition chokepoint. In a turn-based game where one input = one
@@ -4501,6 +4638,7 @@ class Game {
     // (IN1) Fire the interaction rows for what you carry in the zone you are in. A row's note
     // is logged the first time it fires (its own log colour) and remembered for the save.
     _checkInteractions(rows = INTERACTIONS) {
+        molaPackLeaves(this);   // (FD1) no cola left on you: the pack takes what is on the ground and goes
         if (!rows.length) return;
         const carried = new Set();
         for (const s of this.inventory || []) if (s && s.itemDef) carried.add(s.itemDef.id);
@@ -4514,6 +4652,9 @@ class Game {
 
     _advanceWorld() {
         const plan = worldBeatPlan(this._hasteCharges, this._slowCharges);
+        // Goo slows like a Slow charge, but lives on its buff: one extra beat per move.
+        const gooSlow = plan.runs === 1 && this.hasBuff('goo');
+        if (gooSlow) plan.runs = 2;
         this._hasteCharges = plan.hasteCharges;
         this._slowCharges = plan.slowCharges;
         if (plan.runs === 0) {
@@ -4531,6 +4672,9 @@ class Game {
         // loads is exactly the kind of race the CLAUDE.md merge-hygiene notes
         // warn about, just at runtime instead of at merge time).
         if (plan.runs === 2 && this.playerHp > 0 && this.state !== STATE.DEAD && this.state !== STATE.RESOLVING) {
+            // the extra beat is free: it must not spend Goo's turns
+            const goo = gooSlow ? this.buffs.find(b => b.id === 'goo') : null;
+            if (goo) goo.turns++;
             this._advanceWorldOnce();
         }
     }
@@ -4605,6 +4749,10 @@ class Game {
             this.removeBuff('sludge');
             this._log('[Soap neutralized sludge]');
         }
+        if (this._soapUsedThisTurn && this.hasBuff('goo')) {
+            this.removeBuff('goo');
+            this._log('[TEXT: Soap washed the goo off]');
+        }
         this._soapUsedThisTurn = false;
 
         // Tick buffs — the sludge DoT now lives in its buff def's onTick (buffs.js).
@@ -4639,10 +4787,10 @@ class Game {
             // new map is in place (the .then() restores IDLE). Prevents acting
             // against the old map mid-fetch.
             this.state = STATE.RESOLVING;
-            this._recordMuggers?.();   // (BS2) a mugger keeps what he took
             this._zoneChange();   // (plans/ks1-respawn-list.md) the respawn lists take a step
             this._loadMap(t.toMap, t.toX, t.toY).then(() => {
                 this._log(`[Entered ${this.map.zoneName}]`);
+                this._tellAwayNews?.();   // (CK2) optional-called, like _noteAway: one line of news after time away
                 this._checkInteractions?.();   // (IN1) optional-called, like _saveMoment, for stand-in games
                 this._armourShopNotice?.();   // (AA1) optional-called, like _saveMoment, for the stand-in games tests build
                 this.state = STATE.IDLE;
@@ -4838,7 +4986,7 @@ class Game {
     _countCleanLift() {
         const { skills, rankedUp } = recordUse(this.skills, 'light_fingers');
         this.skills = skills;
-        if (rankedUp) this._log('[TEXT]', 'pickup');
+        if (rankedUp) this._log(`[TEXT] ${perkText(rankPerk('light_fingers', rankedUp))}`, 'pickup');
     }
 
     // (theft) The victim on an aimed tile, or null. Takes the tile as an ARGUMENT
@@ -6259,7 +6407,7 @@ class Game {
         const occupied = (x, y) =>
             this.containers.some(c => c.x === x && c.y === y) ||
             (this.groundItems || []).some(g => g.x === x && g.y === y) ||
-            this.enemies.some(e => e.entity.isAlive() && e.x === x && e.y === y) ||
+            this.enemies.some(e => e.x === x && e.y === y) ||   // live or a body: chests draw under actors
             (this.playerX === x && this.playerY === y);
         const ok = (x, y) => this.map.isInBounds(x, y) && this.map.isWalkable(x, y) && !occupied(x, y);
         if (ok(near.x, near.y)) return { x: near.x, y: near.y };
@@ -6308,6 +6456,7 @@ class Game {
         }
         this.tempEquips = [];
         this.selectedSlot = -1;
+        this._dropCostume?.();   // (CO1) a worn costume does not survive this
         this.equipment = { weapon: WEAPONS.wooden_sword, left: null, top: null, bottom: null, front: null, back: null, sides: null };
         this._refreshGrantedSkills();   // reset weapon → no granted skills
         // Clear any transition queued before death so the first post-respawn
@@ -6414,6 +6563,7 @@ class Game {
         this._bagPage = 0;
         this.tempEquips = [];
         this.selectedSlot = -1;
+        this._dropCostume?.();   // (CO1) a worn costume does not survive this
         this.equipment = { weapon: WEAPONS.wooden_sword, left: null, top: null, bottom: null, front: null, back: null, sides: null };
         this.ownedRings = new Set();
         this.ringSlots = {};
@@ -6421,6 +6571,8 @@ class Game {
         this.discoveredFusions = new Set();
         this._peakDisposition = 0;       // it gates the ring tier, so it goes with the rings
         this.skills = {};                // a new run starts every skill from nothing
+        this.defaultAttack = null;       // (WK3)
+        this.bodiesWorn = [];            // (MS2) and no body has been worn yet
         this.interactionNotes = [];      // (IN1) and every interaction note is new again
         this._refreshGrantedSkills();   // fresh weapon, no rings → no granted skills
         this._pendingTransition = null;
@@ -6448,6 +6600,7 @@ class Game {
     // beat later loads the destination zone.
     _playBridgeCutscene() {
         this._stopAutoRepeat();
+        this._bossHandsOver?.();                      // (FD3) the bag and the can, before you cross
         this._heldDirKeys = [];
         this.state = STATE.RESOLVING;                 // block input through the beat
         if (this.carFuel === 'alcohol') {
@@ -6468,6 +6621,29 @@ class Game {
             this._render();
             setTimeout(() => this._crashToCanyon(), 1100);
         }
+    }
+
+    // (TX4) A later crossing, either way: the first crossing's flash and shake, ending in
+    // a clean ramp (the driver tames the engine himself), then the far side. Free (TX4R1 a).
+    // Placeholder lines until Caelan writes them.
+    _rideTo(toMap, toX, toY) {
+        this._stopAutoRepeat();
+        this._heldDirKeys = [];
+        this.state = STATE.RESOLVING;                 // block input through the beat
+        this._log('[TEXT]', 'transition');
+        audio.playSfx('quest-advance');
+        this._flash('rgba(255, 220, 120, 0.35)');
+        this._triggerScreenShake(280, 4);
+        this._render();
+        setTimeout(async () => {
+            this._zoneChange();
+            await this._loadMap(toMap, toX, toY);
+            this.state = STATE.IDLE;
+            this._log('[TEXT]', 'transition');
+            this.emitGameEvent('map_entered', { map: toMap });
+            this.autosave?.({ force: true });
+            this._render();
+        }, 1100);
     }
 
     // Bridge FAIL (too fast) → wake at the bottom of the Canyon. (Phase 3 fills it
@@ -6500,8 +6676,10 @@ class Game {
 
     _render() {
         this._trackFight();
+        this._trackBodies();
         this._creditsCheck();
         this._syncFirstRunHint();
+        this._spiritShow = spiritToShow(this, Settings.get('spirits'), performance.now());   // (heroic spirits) HS-R2
         this.renderer.renderFrame(this);
     }
 
@@ -6571,6 +6749,13 @@ class Game {
     // so which entrance it gets; the last one leaving notes when, for the
     // fog's fade and the 3-second no-replay rule. Dying ends it without the
     // fade.
+    // (MS2) The first time a body is worn, its species joins the roster. Night Kid is always worn,
+    // so it is not stored.
+    _trackBodies() {
+        const sp = wornBody(this.equipment)?.species;
+        if (sp && !this.bodiesWorn.includes(sp)) this.bodiesWorn.push(sp);
+    }
+
     _trackFight() {
         const fs = this.state === STATE.DEAD ? [] : fighters(this.enemies);
         const on = fs.length > 0;
@@ -7070,11 +7255,12 @@ class Game {
                     // (FX34) An equip leaves its slot first, so the piece it swaps out lands there.
                     const equips = def.useType === 'equip';
                     if (equips) this._removeFromSlot(idx);
-                    const msg = resolveUse(this, def, null, 1, 'weapon', equips ? idx : -1);   // equip → resolveEquip (re-bags any displaced piece)
+                    const isCostume = def.useType === 'costume';   // (CO1) toggles; stays in the bag
+                    const msg = isCostume ? this._toggleCostume?.(def) : resolveUse(this, def, null, 1, 'weapon', equips ? idx : -1);   // equip → resolveEquip (re-bags any displaced piece)
                     if (msg) this._log(msg);
                     this._refreshGrantedSkills();
-                    const usedUp = def.useType === 'self' || equips;
-                    if (usedUp) { if (!equips) this._removeFromSlot(idx); this._advanceWorld(); this._saveMoment?.(); }
+                    const usedUp = def.useType === 'self' || equips || isCostume;
+                    if (usedUp) { if (!equips && !isCostume) this._removeFromSlot(idx); this._advanceWorld(); this._saveMoment?.(); }
                     break;
                 }
                 case 'drink': {
@@ -7101,6 +7287,7 @@ class Game {
                     const stack = this.inventory[idx];
                     this.inventory[idx] = null;
                     this._dropToGround?.(stack);
+                    this._checkInteractions?.();   // (FD1) dropping the last cola sends the pack away
                     break;
                 }
             }
@@ -7376,6 +7563,12 @@ class Game {
         if (this.state !== STATE.IDLE) return;
         if (!npc || !npc.entity || !npc.entity.isAlive()) return;
         this._offerNpc = npc;
+        // (MC1) A special buyer can always pay his own listed price (once): his till
+        // is raised to it at the counter, not authored into the map.
+        if (npc.specialBuys && typeof npc.gold === 'number') {
+            const top = Math.max(0, ...Object.values(npc.specialBuys));
+            if (npc.gold < top) npc.gold = top;
+        }
         // goldPinned: the player has taken the settled gold off its default and
         // that decision must survive later staging. Settling is the default;
         // the imbalance is the decision (spec 4.1).
@@ -7459,6 +7652,14 @@ class Game {
             const def = this._resolveItemDef(id);
             if (def) out.push({ def, count: 1, max: Infinity, source: 'stock', index });
         });
+        if (npc.vendor && npc.specialBuys) {
+            // (MC1) The shelf row: bought back for exactly what he paid.
+            for (const id in npc.specialBuys) {
+                const price = (((this.questEngine && this.questEngine.state.flags.shelved) || {})[id] ?? null);
+                const def = price != null ? this._resolveItemDef(id) : null;
+                if (def) out.push({ def, count: 1, max: 1, price, source: 'buyback', index: -1, boughtBack: true });
+            }
+        }
         if (npc.vendor) {
             this._buybackList(npc).forEach((e, index) => {
                 const def = this._resolveItemDef(e.itemId);
@@ -7481,10 +7682,24 @@ class Game {
             const st = this.inventory[i];
             // The stack IS the ceiling here: you cannot hand over ten rocks from
             // a slot holding seven.
-            if (st && st.itemDef) out.push({ def: st.itemDef, count: st.count, max: st.count, slot: i });
+            if (!st || !st.itemDef) continue;
+            // (MC1) A special buyer takes a listed quest item at his fixed price: the
+            // row carries the sellable copy, one copy per item so a staged row still
+            // matches the next frame's list.
+            const fixed = this._offerNpc && this._offerNpc.specialBuys
+                && this._offerNpc.specialBuys[st.itemDef.id];
+            let def = st.itemDef;
+            if (fixed != null) {
+                const cache = this._specialDefs || (this._specialDefs = new Map());
+                const key = `${def.id}:${fixed}`;
+                if (!cache.has(key)) cache.set(key, specialDef(def, fixed));
+                def = cache.get(key);
+            }
+            out.push({ def, count: st.count, max: st.count, slot: i });
         }
         return out;
     }
+
 
     // How many of `entry` are currently staged on `side`.
     _stagedCount(side, entry) {
@@ -7665,6 +7880,13 @@ class Game {
         this._offerActivate(side === 'give' ? 'giveTray' : 'takeTray', at);
     }
 
+    // (FD3) A sale-locked item (the Mola Cola before the delivery is done) is refused with a line.
+    _saleRefused(def) {
+        if (!saleLocked(def, this)) return false;
+        this._log(SALE_LOCK_REFUSAL);
+        return true;
+    }
+
     // A quest item may only be staged when the quest actually wants it delivered
     // here. Reuses the rule and the words the retired give path had, rather than
     // inventing a second phrasing.
@@ -7677,6 +7899,7 @@ class Game {
     // complaint, so there is no arithmetic reason for it either.
     _canStageGive(entry) {
         const def = entry.def, npc = this._offerNpc;
+        if (this._saleRefused?.(def)) return false;   // (FD3)
         const isDelivery = this.questEngine && this.questEngine.expectsDelivery(def.id, npc.id);
         if (def.questItem && !isDelivery) { this._log('[Best hold onto that.]'); return false; }
         return true;
@@ -7765,7 +7988,12 @@ class Game {
                 this._removeFromSlot(e.slot);
                 // ONE price per call -- the ledger is per-unit LIFO stacks, which
                 // is what closed the gold-dup exploit found in pre-prod review.
-                if (wasPaid && unit != null) this._buybackRecord(npc, e.def.id, 'rebuy', unit);
+                if (e.def.specialSell != null) {
+                    // (MC1) He keeps it on his shelf; the loan comes back at the same price.
+                    const flags = this.questEngine.state.flags;
+                    flags.shelved = { ...(flags.shelved || {}), [e.def.id]: unit };
+                }
+                else if (wasPaid && unit != null) this._buybackRecord(npc, e.def.id, 'rebuy', unit);
                 // (fence) Off your hands and off the ledger. Only a fence can get
                 // here with a hot item -- commitBlocker refuses everyone else --
                 // so this is the one place heat is cleared, which is what makes
@@ -7794,6 +8022,13 @@ class Game {
                 // _buyFromVendor popped it (`e.rebuy.pop()`); nothing succeeded
                 // that line, so the shelf never emptied and one sold item could
                 // be re-bought without limit for as long as the ledger lived.
+                else if (e.source === 'buyback' && npc.specialBuys && npc.specialBuys[e.def.id] != null
+                    && ((this.questEngine && this.questEngine.state.flags.shelved) || {})[e.def.id] != null) {
+                    const flags = this.questEngine.state.flags;
+                    const rest = { ...flags.shelved };
+                    delete rest[e.def.id];
+                    flags.shelved = rest;
+                }
                 else if (e.source === 'buyback') this._buybackConsume(npc, e.def.id);
             }
         }

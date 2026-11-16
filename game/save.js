@@ -19,6 +19,7 @@ import { pagedSize } from './inventory.js';
 import { sanitizeSlots } from './rings.js';
 import { settleHands } from './items.js';
 import { sanitizeSkills } from './skills.js';
+import { costumeToSave, sanitizeCostume, costumeFromSave } from './costumes.js';
 import { sanitizeNoteIds } from './interactions.js';
 import { sanitizeRespawnLists, sanitizeFilledSpots } from './drops.js';
 import { sanitizeRivals } from './rivals.js';
@@ -86,7 +87,10 @@ export function serialize(game) {
             // never ranked anything saves byte-for-byte as it did before skills
             // existed (the autoplay fingerprint hashes this object).
             ...skillsEntry(game),
+            ...costumeToSave(game),   // (CO1) left out while no costume is worn
+            ...defaultAttackEntry(game),
             ...interactionNotesEntry(game),
+            ...bodiesWornEntry(game),
             equipment: {
                 weapon: idOf(game.equipment.weapon),   // the right hand
                 left: idOf(game.equipment.left),
@@ -153,9 +157,22 @@ export function serialize(game) {
 }
 
 // (skills) The player's skill record as a save field, or nothing while it is empty.
+// (WK3) The starred melee move, left out while there is none so a run that never
+// chose one saves exactly as before.
+function defaultAttackEntry(game) {
+    const d = game.defaultAttack;
+    return d && typeof d.key === 'string' && typeof d.weaponId === 'string' ? { defaultAttack: { weaponId: d.weaponId, key: d.key } } : {};
+}
+
 function skillsEntry(game) {
     const skills = sanitizeSkills(game.skills);
     return Object.keys(skills).length ? { skills } : {};
+}
+
+// (MS2) The body species worn so far, or nothing while none has been.
+function bodiesWornEntry(game) {
+    const bodiesWorn = sanitizeNoteIds(game.bodiesWorn);
+    return bodiesWorn.length ? { bodiesWorn } : {};
 }
 
 // (IN1) The interaction notes already seen, as a save field, or nothing while there are none.
@@ -463,7 +480,11 @@ function validate(raw) {
     // (skills) Known skills, whole counts, never below zero; a save from before
     // skills existed loads with none.
     p.skills = sanitizeSkills(p.skills);
+    p.costume = sanitizeCostume(p.costume);   // (CO1)
+    p.defaultAttack = (p.defaultAttack && typeof p.defaultAttack.key === 'string' && typeof p.defaultAttack.weaponId === 'string')
+        ? { weaponId: p.defaultAttack.weaponId, key: p.defaultAttack.key } : null;   // (WK3)
     p.interactionNotes = sanitizeNoteIds(p.interactionNotes);   // (IN1)
+    p.bodiesWorn = sanitizeNoteIds(p.bodiesWorn);   // (MS2)
     // collectedItems is a Set of string keys on the live game; drop anything
     // non-string so a malformed save can't poison the lookup.
     const ci = Array.isArray(raw.world?.collectedItems) ? raw.world.collectedItems : [];
@@ -547,7 +568,10 @@ export async function loadInto(game, raw) {
     game.ringTier          = p.ringTier || 0;
     game.discoveredFusions = new Set(p.discoveredFusions || []);
     game.skills            = { ...p.skills };
+    game.costume           = costumeFromSave(p.costume, R);   // (CO1) worn: equipment/skills above are its kit
+    game.defaultAttack     = p.defaultAttack || null;   // (WK3)
     game.interactionNotes  = [...p.interactionNotes];   // (IN1)
+    game.bodiesWorn        = [...p.bodiesWorn];   // (MS2)
     // knownSpells/grantedTricks are derived, not stored — rebuild from the
     // restored weapon + rings (a slotted Rat Ring grants Rat Form, etc.).
     if (game._refreshGrantedSkills) game._refreshGrantedSkills();

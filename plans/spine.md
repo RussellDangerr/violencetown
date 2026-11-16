@@ -278,3 +278,10 @@ Each is a row in `roadmap-2026-09.md` §2. Answers land here, dated, and strike 
   the boss guards, and either gives the one Stuffed Animal, never two. Spec:
   `plans/st1-carnival-booth-route.md`. Answers SQ1R1 for the Carnival.
   - **Replaces** nothing; no Locked row changes.
+- **2026-11-10 — Macc's offer for the Converter is real (MCR1).** Caelan's pick (b): make Macc's
+  500 GP offer for the Converter real. He buys it, keeps it on his shelf, and you buy it back for
+  exactly what he paid, so the taxi quest can still be finished. Spec:
+  `plans/mc1-macc-buys-converter.md`.
+  - **Touches** the Locked row *"The Converter, quest 1's reward"* (§3): its name and id stay, and
+    the taxi's fix gains a second way to a converter (buying it back from Macc).
+  - No other Locked row changes.

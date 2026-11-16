@@ -119,7 +119,7 @@ async function makeGame({ fuel = 'raw' } = {}) {
         ['_animateMove', 'fromX, fromY, toX, toY, callback, duration = this._animDuration'],
         ['_doMove', 'dir'], ['_canEnter', 'x, y'], ['setTile', 'x, y, id'],
         ['_openBridgeIfCarFixed', ''], ['_playBridgeCutscene', ''], ['_crashToCanyon', ''],
-        ['_rampToDowntown', ''], ['_startMainQuest2', ''],
+        ['_rampToDowntown', ''], ['_startMainQuest2', ''], ['_rideTo', 'toMap, toX, toY'],
     ]) g[n] = liveMethod(n, p, n === '_beginMoveOrTurn' ? { ...free, setTimeout: () => 0 } : free);
     g.questEngine = new QuestEngine(g);
     g._bindInput();
@@ -159,7 +159,8 @@ async function walkSouthToTown(g) {
         for (let i = 0; i < 30 && g.playerX !== 12; i++) await g.press(code);
         await g.press('ArrowDown');
     }
-    for (let i = 0; i < 30 && g._mapUrl !== 'town-map.json'; i++) await g.press('ArrowDown');
+    for (let i = 0; i < 30 && g._mapUrl !== 'town-map.json' && g.state === STATE.IDLE; i++) await g.press('ArrowDown');
+    await g.flushCutscene();   // (TX4) the south exits are a taxi ride
     assert.equal(g._mapUrl, 'town-map.json', 'Downtown\'s south exit leads back to the old town');
 }
 
@@ -204,12 +205,15 @@ describe('the bridge plays its cutscene once', () => {
 
         await walkSouthToTown(g);
         const logsBefore = g.logs.length;
+        const shakes = g.shakes;
         await walkNorth(g);
+        // (TX4) a later crossing is a taxi ride: the beat plays, then the map loads.
+        assert.equal(g.state, STATE.RESOLVING, 'the ride is a beat');
+        assert.equal(g.shakes, shakes + 1, 'the ride shakes');
+        assert.equal(g.timers.length, 1, 'the ride waits a beat before landing you');
+        await g.flushCutscene();
         assert.equal(g._mapUrl, 'downtown-map.json', 'the bridge took you to Downtown');
         assert.equal(g.state, STATE.IDLE);
-        assert.equal(g.shakes, 1, 'no second shake');
-        assert.equal(g.flashes, 1, 'no second flash');
-        assert.equal(g.timers.length, 0, 'no cutscene beat was queued');
         assert.deepEqual([g.playerX, g.playerY], [g.map.spawn.x, g.map.spawn.y], 'you land where the ramp lands you');
         const said = g.logs.slice(logsBefore).join(' ');
         assert.doesNotMatch(said, /ramp|SAIL|STRAIGHT THROUGH|Converter/);
@@ -229,9 +233,10 @@ describe('the bridge plays its cutscene once', () => {
         await walkSouthToTown(g);
         const crashes = g.shakes;
         await walkNorth(g);
+        await g.flushCutscene();
         assert.equal(g._mapUrl, 'downtown-map.json', 'the bridge took you to Downtown, not the Canyon');
-        assert.equal(g.shakes, crashes, 'the crash never replays');
-        assert.equal(g.timers.length, 0);
+        assert.equal(g.shakes, crashes + 1, 'only the ride shakes: the crash never replays');
+        assert.equal(g.questEngine.bridgeRoute(), 'canyon');
         assert.equal(g.state, STATE.IDLE);
     });
 
@@ -242,17 +247,19 @@ describe('the bridge plays its cutscene once', () => {
         for (let i = 0; i < 2; i++) {
             await walkSouthToTown(g);
             await walkNorth(g);
+            await g.flushCutscene();
             assert.equal(g._mapUrl, 'downtown-map.json');
         }
-        assert.equal(g.shakes, 1);
+        assert.equal(g.shakes, 1 + 4, 'the first crossing, then a ride each way, twice');
     });
 
     test('a save from before the route flag still walks: the delivery quest begun means you crossed', async () => {
         const g = await makeGame({ fuel: 'alcohol' });
         g.questEngine.restore({ completed: ['fix_car', 'deliver_burger'], flags: { carFixed: true } });
         await walkNorth(g);
+        await g.flushCutscene();
         assert.equal(g._mapUrl, 'downtown-map.json');
-        assert.equal(g.shakes, 0, 'no cutscene');
+        assert.equal(g.shakes, 1, 'a ride, not the cutscene');
     });
 
     test('a step onto the bridge mouth while the car is still broken does nothing', async () => {
