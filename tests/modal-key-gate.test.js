@@ -30,7 +30,6 @@ function rig() {
     };
     const game = { state: 'IDLE', playerX: 16, playerY: 12, reached: 0 };
     game._skipLootReel = () => { game.reached++; };
-    game._keyWindowOpen = new Function('document', `return function ${lift('_keyWindowOpen')}`)(document);
     const STATE = { SPLASH: 'SPLASH', RESOLVING: 'RESOLVING', IDLE: 'IDLE' };
     const bind = new Function('document', 'window', 'STATE', `return function ${lift('_bindInput').replace(/^_bindInput/, '_bindInput')}`);
     bind(document, { addEventListener() {}, innerWidth: 1, innerHeight: 1 }, new Proxy(STATE, { get: (t, k) => t[k] ?? k })).call(game);

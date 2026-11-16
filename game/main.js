@@ -1518,7 +1518,10 @@ class Game {
             // the world; game keys stop there. No preventDefault: a focused button
             // still gets its own Space / Enter. Esc is closed by each window's
             // capture-phase handler before this one runs.
-            if (this._keyWindowOpen()) return;
+            {
+                const up = (id) => { const m = typeof document === 'undefined' ? null : document.getElementById?.(id); return !!m && !m.classList.contains('hidden'); };
+                if (up('options-modal') || up('help-modal') || (typeof document !== 'undefined' && document.getElementById?.('key-once'))) return;
+            }
 
             // A browser chord is not a game input. Nothing here checked modifiers,
             // so every shortcut the browser owns ALSO fired a game action behind
@@ -2100,12 +2103,6 @@ class Game {
                 }
             });
         });
-    }
-
-    // (FX67) True while a window that covers the world is up.
-    _keyWindowOpen() {
-        const shown = (id) => { const m = document.getElementById(id); return !!m && !m.classList.contains('hidden'); };
-        return shown('options-modal') || shown('help-modal') || !!document.getElementById('key-once');
     }
 
     // ── Help modal ──────────────────────────────────────────────────────────
