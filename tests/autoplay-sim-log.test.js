@@ -39,7 +39,7 @@ test('appendRun adds a row and keeps the per-seed lines; history is newest first
     const lines = historyLines(readRows(dir));
     assert.equal(lines.length, 2);
     assert.match(lines[0], /^2026-11-15 09:31 {2}bbbbbbb\+ {2}quest 75% loops — {2}2 MOVED$/);
-    assert.match(lines[1], /aaaaaaa {2}quest 75% loops — {2}write$/);
+    assert.match(lines[1], /aaaaaaa {3}quest 75% loops — {2}write$/);
 });
 
 test('readRows on a missing folder is empty', () => {
