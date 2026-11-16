@@ -6,6 +6,7 @@
 //                                           and every seed's numbers as tools/autoplay-sim-seeds.jsonl
 //   node tools/autoplay-sim.mjs --write-seeds   save only the seeds file (plans/sim2-per-seed-numbers.md)
 //   node tools/autoplay-sim.mjs --check     run the baseline's seeds again and say what moved
+//   node tools/autoplay-sim.mjs --history   one line per past run, newest first (tools/.sim-runs/, plans/sim3-run-log.md)
 //   add --all to print every number, not only the ones that moved
 //
 // Each run is one `node tools/autoplay.mjs --script=S --seed=K --json`, several
@@ -21,21 +22,24 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { aggregate, compare, metricsOf, pairedCompare, rowsByScript, rowLines } from './autoplay-stats.mjs';
 import { playAll, parseSeeds } from './autoplay-runs.mjs';
+import { execSync } from 'node:child_process';
+import { appendRun, buildRow, historyLines, readRows } from './autoplay-sim-log.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BASELINE = path.join(HERE, 'autoplay-sim-baseline.json');
 const SEEDS_FILE = path.join(HERE, 'autoplay-sim-seeds.jsonl');
+const RUNS_DIR = path.join(HERE, '.sim-runs');
 const SCRIPTS = ['quest', 'sneak', 'loops'];
 
 function parseArgs(argv) {
     const o = { seeds: null, scripts: SCRIPTS, workers: Math.max(1, Math.min(8, Math.floor(cpus().length / 2))),
-                write: false, writeSeeds: false, check: false, all: false, timeout: 180000 };
+                history: false, write: false, writeSeeds: false, check: false, all: false, timeout: 180000 };
     for (const a of argv) {
         const [k, v] = a.replace(/^--/, '').split('=');
         if (k === 'seeds') o.seeds = parseSeeds(v);
         else if (k === 'scripts') o.scripts = v.split(',').filter(Boolean);
         else if (k === 'workers' || k === 'timeout') o[k] = Number(v);
-        else if (k === 'write' || k === 'check' || k === 'all') o[k] = true;
+        else if (k === 'write' || k === 'history' || k === 'check' || k === 'all') o[k] = true;
         else if (k === 'write-seeds') o.writeSeeds = true;
         else throw new Error(`unknown option ${a}`);
     }
@@ -75,6 +79,14 @@ function printScript(name, s, all) {
 }
 
 const o = parseArgs(process.argv.slice(2));
+if (o.history) {
+    const rows = readRows(RUNS_DIR);
+    console.log(rows.length ? historyLines(rows).join('\n') : 'autoplay-sim: no runs logged yet');
+    process.exit(0);
+}
+const startedAt = Date.now();
+const git = (c) => { try { return execSync(`git ${c}`, { cwd: HERE, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { return null; } };
+const movedLog = {}, changedLog = {};
 const base = o.check ? (existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, 'utf8')) : null) : null;
 if (o.check && !base) { console.error(`autoplay-sim: no baseline at ${path.relative(process.cwd(), BASELINE)}; run --write first`); process.exit(1); }
 const [from, to] = o.seeds ?? base?.seeds ?? [1, 50];
@@ -113,6 +125,8 @@ if (o.check) {
         if (o.all) for (const m of r.steady.filter((x) => x.delta !== 0)) show('steady', m);
         for (const k of r.appeared) console.log(`    new   ${k}`);
         for (const k of r.gone) console.log(`    gone  ${k}`);
+        movedLog[name] = r.moved.map((m) => m.name);
+        changedLog[name] = changed;
         if (r.moved.length) failed = true;
     }
 }
@@ -125,5 +139,17 @@ if (o.write || o.writeSeeds) {
 if (o.write) {
     writeFileSync(BASELINE, JSON.stringify(now, null, 2) + '\n');
     console.log(`\nwrote ${path.relative(process.cwd(), BASELINE)}`);
+}
+if (o.check || o.write) {
+    try {
+        const row = buildRow({
+            at: startedAt, sha: git('rev-parse --short HEAD'), dirty: Boolean(git('status --porcelain')),
+            command: o.check ? 'check' : 'write', seeds: [from, to], scripts: now.scripts,
+            moved: o.check ? movedLog : null, changed: o.check ? changedLog : null, minutes: (Date.now() - startedAt) / 60000,
+        });
+        const lines = scripts.flatMap((name) => rowLines(name, seedRows(results.filter((r) => r.script === name))));
+        appendRun(RUNS_DIR, row, lines);
+        console.log(`\nlogged run ${row.id} in ${path.relative(process.cwd(), RUNS_DIR)}`);
+    } catch (e) { console.log(`\n(run log not written: ${e.message})`); }
 }
 process.exit(failed ? 1 : 0);
