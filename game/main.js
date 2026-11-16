@@ -12,7 +12,7 @@ import { pickHitMark, HEAVY_HIT_DAMAGE, dodgeChance, DODGE_WORD } from './hit-sp
 import { makeEffectLoop } from './effect-loop.js';                 // one tick of the transient-effects loop, and its refusal to die on a bad frame
 import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK, SLUDGE_DOT, FIRE_QUENCHING_TILES } from './data.js';
 import { puddleTiles, layPuddle, puddleAt, dryPuddles } from './puddles.js';   // (poisons) Sludge Brain's puddles
-import { ITEMS, wornBody, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef, poitionBuff } from './items.js';
+import { ITEMS, canStandOn, wornBody, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef, poitionBuff } from './items.js';
 import { WEAPONS, weaponClassOf, FISTS } from './weapons.js';
 import { handPairOf } from './hand-data.js';   // (HB2) two held weapons combine into a named effect
 import { resolveItemDef } from './item-registry.js';
@@ -4804,10 +4804,9 @@ class Game {
     // keep calling map.isWalkable directly, so nothing can follow you through the
     // grate. A non-rat step onto a grate still bumps.
     _canEnter(x, y) {
-        if (this.map.isWalkable(x, y)) return true;
-        // (MS1) A worn mask that grants the 'grates' verb opens them for as long as it is on.
-        const maskGrates = Object.values(this.equipment || {}).some(d => d && d.body && (d.body.verbs || []).includes('grates'));
-        return (this._ratFormTurns > 0 || maskGrates) && this.map.getTile(x, y) === 4;
+        // (FX70) one rule, shared with the save loader: open ground, or a grate for rat form / a 'grates' mask.
+        if (this.map.isWalkable(x, y)) return true;   // fast path; the helper below holds the whole rule
+        return canStandOn(this.map, x, y, { equipment: this.equipment, ratForm: this._ratFormTurns > 0 });
     }
 
     // Speed Poition chokepoint. In a turn-based game where one input = one

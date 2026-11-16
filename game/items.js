@@ -616,6 +616,16 @@ export function wornVerb(equipment, verb) {
     return !!b && Array.isArray(b.verbs) && b.verbs.includes(verb);
 }
 
+// (FX70) The one rule for where the player may stand: an open tile, or a grate (tile 4) while
+// rat form is on or a worn mask grants the 'grates' verb. The movement gate (main.js _canEnter)
+// and the save loader (save.js nearestWalkable) both read it. Rat form is not saved, so the
+// loader passes it as false.
+export function canStandOn(map, x, y, { equipment = null, ratForm = false } = {}) {
+    if (map.isWalkable(x, y)) return true;
+    const maskGrates = Object.values(equipment || {}).some(d => d && d.body && (d.body.verbs || []).includes('grates'));
+    return (!!ratForm || maskGrates) && map.getTile(x, y) === 4;
+}
+
 export const ARMOR_IDS = Object.freeze(Object.keys(ITEMS).filter(id => isArmorPiece(ITEMS[id])));
 
 // ── Value tiers (Phase 6d) ────────────────────────────────────────────────────
