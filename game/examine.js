@@ -190,6 +190,17 @@ export function findExaminable(game) {
     return ex.find(e => manhattan(e.x, e.y, x, y) <= 1) || null;
 }
 
+// (EX1) The name to float over the authored examinable the player is FACING (the Town fuel
+// note, the canyon wreck, a road sign), or null. Same name resolveExamine gives it; a living creature
+// standing on that tile keeps its own label instead.
+export function examineLabelAt(game) {
+    const fd = FACE[game.facing] || { dx: 0, dy: 1 };
+    const x = game.playerX + fd.dx, y = game.playerY + fd.dy;
+    if ((game.enemies || []).some(e => e.x === x && e.y === y && e.entity?.isAlive?.())) return null;
+    const res = resolveExamine(game, x, y);
+    return res.instanceId ? res.title : null;
+}
+
 // Examine action. A free look (no turn cost). A faced-or-adjacent authored
 // instance wins, so the 2x2 car still answers when you stand beside it rather
 // than facing its one tile; otherwise the faced tile — which always resolves to
