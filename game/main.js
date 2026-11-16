@@ -7281,7 +7281,7 @@ class Game {
             const sel = this._deviceSel;
             if (sel && sel.tab === 'gear' && sel.open) {
                 const lw = sel.slotKey === 'left', w = this.equipment[sel.slotKey];
-                const n = equipOptions(lw ? 'weapon' : sel.slotKey, sel.slotKey === 'weapon' || (lw && (this._handsOf?.(w) ?? 1) >= 2) ? null : w, this.inventory).length;
+                const n = equipOptions(lw ? 'weapon' : sel.slotKey, sel.slotKey === 'weapon' || (lw && (this._handsOf?.(w) ?? 1) >= 2 && !this.equipment.top?.powerWield) ? null : w, this.inventory).length;
                 const rows = gearOptionRects(body, n, sel.slotKey);
                 for (let i = 0; i < n; i++) {
                     if (this._pointInRect(pt, rows[i], HIT_SLOP)) { this._deviceActivate('option', i); return; }
@@ -7437,7 +7437,7 @@ class Game {
             const sel = this._deviceSel;
             if (!sel || sel.tab !== 'gear' || !sel.open) return;
             const lw = sel.slotKey === 'left', w = this.equipment[sel.slotKey];
-            const opt = equipOptions(lw ? 'weapon' : sel.slotKey, sel.slotKey === 'weapon' || (lw && (this._handsOf?.(w) ?? 1) >= 2) ? null : w, this.inventory)[index];
+            const opt = equipOptions(lw ? 'weapon' : sel.slotKey, sel.slotKey === 'weapon' || (lw && (this._handsOf?.(w) ?? 1) >= 2 && !this.equipment.top?.powerWield) ? null : w, this.inventory)[index];
             if (!opt) return;
             if (opt.bagIndex >= 0) {
                 const def = this.inventory[opt.bagIndex].itemDef;
@@ -7512,7 +7512,7 @@ class Game {
         if (tab === 'gear') {
             if (sel && sel.tab === 'gear' && sel.open) {
                 const lw = sel.slotKey === 'left', w = this.equipment[sel.slotKey];
-                const n = equipOptions(lw ? 'weapon' : sel.slotKey, sel.slotKey === 'weapon' || (lw && (this._handsOf?.(w) ?? 1) >= 2) ? null : w, this.inventory).length;
+                const n = equipOptions(lw ? 'weapon' : sel.slotKey, sel.slotKey === 'weapon' || (lw && (this._handsOf?.(w) ?? 1) >= 2 && !this.equipment.top?.powerWield) ? null : w, this.inventory).length;
                 const rects = gearOptionRects(body, n, sel.slotKey);
                 return { zone: 'option', rects, ids: rects.map((_, i) => i), cur: sel.option != null ? Math.min(sel.option, n - 1) : -1 };
             }
@@ -7594,7 +7594,7 @@ class Game {
             const key = t.ids[t.cur];
             this._deviceActivate('plate', key);
             const lw = key === 'left', w = this.equipment[key];
-            if (equipOptions(lw ? 'weapon' : key, key === 'weapon' || (lw && (this._handsOf?.(w) ?? 1) >= 2) ? null : w, this.inventory).length) this._deviceSel.option = 0;
+            if (equipOptions(lw ? 'weapon' : key, key === 'weapon' || (lw && (this._handsOf?.(w) ?? 1) >= 2 && !this.equipment.top?.powerWield) ? null : w, this.inventory).length) this._deviceSel.option = 0;
             this._render();
             return;
         }
