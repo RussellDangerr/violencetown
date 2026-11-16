@@ -817,7 +817,7 @@ export class Renderer {
                 item_overlay: this._itemOverlayRect,
                 target_list: this._targetListRect,
                 log_modal:   LOG_MODAL_RECT,
-                trade:       MODAL_RECT,   // STATE.TRADE is also the offer screen's state —
+                trade:       deviceSheetRect(vp) || MODAL_RECT,   // (TL9) a phone's offer sheet; STATE.TRADE is also the offer screen's state —
                                            // one panel rect serves both.
                 dialogue:    this._dialogueRect,
                 device:      deviceSheetRect(vp) || DEVICE_RECT,   // (TL4) a phone's sheet fills the screen
@@ -4614,7 +4614,7 @@ export class Renderer {
         // half-cleared close (state back in TRADE with _offer already nulled)
         // throwing from inside the frame instead of simply not drawing.
         if (!npc || !game._offer || !game._offer.scroll) return;
-        const L = offerLayout(MODAL_RECT);
+        const L = offerLayout(MODAL_RECT, deviceSheetRect(this._view()));   // (TL9) a phone's sheet
 
         ctx.fillStyle = 'rgba(0,0,0,0.72)';
         this._fillScreen(ctx);
@@ -4633,14 +4633,16 @@ export class Renderer {
             ctx.strokeStyle = UI.gold;
             ctx.lineWidth = 1.5;
             ctx.strokeRect(t.x + 1, t.y + 1, t.w - 2, t.h - 2);
-            this.font.drawText(ctx, '[TEXT]', t.x + t.w / 2, t.y + 8, { color: UI.gold, scale: 1, align: 'center' });
+            this.font.drawText(ctx, '[TEXT]', t.x + t.w / 2, t.y + t.h / 2 - 6 * L.ts.button, { color: UI.gold, scale: L.ts.button, align: 'center' });
         }
 
         // The key legend sits between the ledger and the frame's bottom stroke:
         // centred, a touch smaller, and clear of the frame on every side.
-        const legend = this._fitText('TAB SIDE  SPACE STAGE  BKSP UNSTAGE  ENTER OFFER  ESC CLOSE', L.panel.w - 32, 0.85, 0.75);
-        this.font.drawText(ctx, legend.text, L.panel.x + L.panel.w / 2, L.hintY - 2,
-            { color: UI.dim, scale: legend.scale, align: 'center' });
+        if (!L.thumb) {   // (TL9) a phone has no keys to list
+            const legend = this._fitText('TAB SIDE  SPACE STAGE  BKSP UNSTAGE  ENTER OFFER  ESC CLOSE', L.panel.w - 32, 0.85, 0.75);
+            this.font.drawText(ctx, legend.text, L.panel.x + L.panel.w / 2, L.hintY - 2,
+                { color: UI.dim, scale: legend.scale, align: 'center' });
+        }
     }
 
     // The staged offer, made unambiguous. Gold rides in whichever tray its sign
@@ -4649,8 +4651,9 @@ export class Renderer {
         const ctx = this.ctx;
         const offer = game._offer || { give: [], take: [], gold: 0 };
         const gold = offer.gold || 0;
-        this.font.drawText(ctx, 'YOU GIVE', L.giveTray[0].x, L.trayLabelY, { color: UI.dim, scale: 1 });
-        this.font.drawText(ctx, 'YOU TAKE', L.takeTray[0].x, L.trayLabelY, { color: UI.dim, scale: 1 });
+        const ls = L.ts.label;
+        this.font.drawText(ctx, 'YOU GIVE', L.giveTray[0].x, L.trayLabelY, { color: UI.dim, scale: ls });
+        this.font.drawText(ctx, 'YOU TAKE', L.takeTray[0].x, L.trayLabelY, { color: UI.dim, scale: ls });
 
         const slot = (r, filled) => {
             drawInset(ctx, r.x, r.y, r.w, r.h);
@@ -4670,10 +4673,11 @@ export class Renderer {
             const col = refused ? UI.dim : UI.gold;
             ctx.strokeStyle = col; ctx.lineWidth = 1.2;
             if (refused) ctx.setLineDash([2, 2]);
-            ctx.beginPath(); ctx.arc(r.x + 18, r.y + 13, 7, 0, Math.PI * 2); ctx.stroke();
+            const big = !!L.thumb;   // (TL9) a thumb slot: the coin centred, its figure under it
+            ctx.beginPath(); ctx.arc(big ? r.x + r.w / 2 : r.x + 18, r.y + (big ? 28 : 13), big ? 13 : 7, 0, Math.PI * 2); ctx.stroke();
             ctx.setLineDash([]);
-            this.font.drawText(ctx, String(amount), r.x + r.w / 2, r.y + 23,
-                { color: col, scale: 1, align: 'center' });
+            this.font.drawText(ctx, String(amount), r.x + r.w / 2, r.y + r.h - 13 * ls - (big ? 6 : 0),
+                { color: col, scale: ls, align: 'center' });
         };
         const fill = (rects, entries, goldHere, showCoin, refused) => {
             rects.forEach(r => slot(r, false));
@@ -4681,9 +4685,11 @@ export class Renderer {
             for (const e of entries || []) {
                 const r = rects[i++]; if (!r) break;
                 slot(r, true);
-                this._drawItemIcon(e.def, r.x + 8, r.y + 6, 20);
-                if (e.count > 1) this.font.drawText(ctx, `x${e.count}`, r.x + r.w - 3, r.y + 25,
-                    { color: UI.gold, scale: 1, align: 'right' });
+                const isz = L.thumb ? 48 : 20;
+                if (L.thumb) this._drawItemIcon(e.def, r.x + (r.w - isz) / 2, r.y + 6, isz);
+                else this._drawItemIcon(e.def, r.x + 8, r.y + 6, isz);
+                if (e.count > 1) this.font.drawText(ctx, `x${e.count}`, r.x + r.w - 5, r.y + r.h - 11 * ls - (L.thumb ? 4 : 0),
+                    { color: UI.gold, scale: ls, align: 'right' });
             }
             if (showCoin && rects[i]) coin(rects[i], goldHere, refused);
         };
@@ -4705,6 +4711,8 @@ export class Renderer {
         const d = npc.disposition ?? 0;
         drawInset(ctx, L.desc.x, L.desc.y, L.desc.w, L.desc.h);
         const sel = game._offerSelection ? game._offerSelection() : null;
+        const ds = L.ts.desc;                          // (TL9) text scale: ds on desktop
+        const dy1 = Math.round(6 + 18 * ds), dyN = 14 * ds;   // the second row, then each row after
 
         if (!sel) {
             const m = mood(d);
@@ -4712,21 +4720,21 @@ export class Renderer {
             const line = npc._container
                 ? `THE ${who} IS OPEN.`
                 : `${who} IS ${m.mood.toUpperCase()}.`;
-            this.font.drawText(ctx, line, L.desc.x + 10, L.desc.y + 6, { color: UI.gold, scale: 1 });
+            this.font.drawText(ctx, line, L.desc.x + 10, L.desc.y + 6, { color: UI.gold, scale: ds });
             this.font.drawText(ctx, npc._container
                 ? 'PICK SOMETHING TO SEE WHAT IT IS.'
                 : 'PICK SOMETHING TO SEE WHAT IT IS WORTH TO THEM.',
-                L.desc.x + 10, L.desc.y + 24, { color: UI.dim, scale: 1 });
+                L.desc.x + 10, L.desc.y + dy1, { color: UI.dim, scale: ds });
             return;
         }
 
         const def = sel.def;
         const tier = itemTier(def);          // returns the tier OBJECT, not a key
         let x = L.desc.x + 10;
-        this.font.drawText(ctx, def.name, x, L.desc.y + 6, { color: UI.gold, scale: 1 });
-        x += this.font.measure(def.name, 1) + 14;
-        this.font.drawText(ctx, tier.name.toUpperCase(), x, L.desc.y + 6, { color: tier.color, scale: 1 });
-        x += this.font.measure(tier.name, 1) + 14;
+        this.font.drawText(ctx, def.name, x, L.desc.y + 6, { color: UI.gold, scale: ds });
+        x += this.font.measure(def.name, ds) + 14;
+        this.font.drawText(ctx, tier.name.toUpperCase(), x, L.desc.y + 6, { color: tier.color, scale: ds });
+        x += this.font.measure(tier.name, ds) + 14;
         // A chest has no till and buys nothing, so quoting what it "PAYS" invents a
         // transaction that cannot happen. Its rows are worth their base value to
         // the player and nothing to the box.
@@ -4734,12 +4742,12 @@ export class Renderer {
         this.font.drawText(ctx, npc._container
             ? `${def.baseValue ?? 0} GP BASE - FREE TO TAKE`
             : `${def.baseValue ?? 0} GP BASE - PAYS ${pays == null ? '-' : pays}`,
-            x, L.desc.y + 6, { color: UI.dim, scale: 1 });
+            x, L.desc.y + 6, { color: UI.dim, scale: ds });
 
         const weight = npc.values && npc.values[def.id];
         if (weight > 1) {
             this.font.drawText(ctx, `VALUES THIS x${weight}`,
-                L.desc.x + L.desc.w - 10, L.desc.y + 6, { color: '#79c46a', scale: 1, align: 'right' });
+                L.desc.x + L.desc.w - 10, L.desc.y + 6, { color: '#79c46a', scale: ds, align: 'right' });
         }
 
         // (FX44) A weapon shows its compare block on the next row: damage against
@@ -4748,11 +4756,11 @@ export class Renderer {
         const cmp = weaponCompare(def, game.equipment && game.equipment.weapon);
         const maxPx = L.desc.w - 20;
         if (cmp) {
-            this.font.drawText(ctx, this._fitText(`${cmp.damage}   ${cmp.build}`, maxPx, 1, 1).text,
-                L.desc.x + 10, L.desc.y + 24, { color: UI.text, scale: 1 });
+            this.font.drawText(ctx, this._fitText(`${cmp.damage}   ${cmp.build}`, maxPx, ds, ds).text,
+                L.desc.x + 10, L.desc.y + dy1, { color: UI.text, scale: ds });
             const second = cmp.grants || String(def.description || '');
-            this.font.drawText(ctx, this._fitText(second, maxPx, 1, 1).text,
-                L.desc.x + 10, L.desc.y + 38, { color: cmp.grants ? UI.gold : UI.dim, scale: 1 });
+            this.font.drawText(ctx, this._fitText(second, maxPx, ds, ds).text,
+                L.desc.x + 10, L.desc.y + dy1 + dyN, { color: cmp.grants ? UI.gold : UI.dim, scale: ds });
             return;
         }
 
@@ -4762,11 +4770,11 @@ export class Renderer {
         const lines = []; let cur = '';
         for (const w of words) {
             const t = cur ? `${cur} ${w}` : w;
-            if (this.font.measure(t, 1) > maxPx && cur) { lines.push(cur); cur = w; } else cur = t;
+            if (this.font.measure(t, ds) > maxPx && cur) { lines.push(cur); cur = w; } else cur = t;
         }
         if (cur) lines.push(cur);
         lines.slice(0, 2).forEach((ln, i) =>
-            this.font.drawText(ctx, ln, L.desc.x + 10, L.desc.y + 24 + i * 14, { color: UI.text, scale: 1 }));
+            this.font.drawText(ctx, ln, L.desc.x + 10, L.desc.y + dy1 + i * dyN, { color: UI.text, scale: ds }));
     }
 
     // The ledger. A negative balance does NOT disable the button — it arms it
@@ -4780,6 +4788,7 @@ export class Renderer {
     _drawOfferLedger(game, L, R) {
         const ctx = this.ctx;
         const rowH = L.ledgerRowH;
+        const lsc = L.ts.ledger;   // (TL9) text scale: lsc on desktop
         ctx.fillStyle = '#3a352c';
         ctx.fillRect(L.desc.x, L.desc.y + L.desc.h + 8, L.desc.w, 1);
 
@@ -4796,21 +4805,21 @@ export class Renderer {
         // Neither bound is a literal -- ledger.x + ledger.w is the button's left
         // edge less its gutter, so a wider button moves both automatically.
         const fitTo = (s, maxPx) => {
-            if (this.font.measure(s, 1) <= maxPx) return s;
+            if (this.font.measure(s, lsc) <= maxPx) return s;
             let out = s;
-            while (out.length > 1 && this.font.measure(`${out}...`, 1) > maxPx) out = out.slice(0, -1);
+            while (out.length > 1 && this.font.measure(`${out}...`, lsc) > maxPx) out = out.slice(0, -1);
             return `${out}...`;
         };
         const listPx = L.ledgerBalanceX - L.ledgerValueX - 10;
         const balPx  = L.ledger.x + L.ledger.w - L.ledgerBalanceX;
 
-        this.font.drawText(ctx, 'GIVING', L.ledger.x, L.ledger.y, { color: UI.dim, scale: 1 });
-        this.font.drawText(ctx, fitTo(giving, listPx), L.ledgerValueX, L.ledger.y, { color: UI.text, scale: 1 });
-        this.font.drawText(ctx, 'TAKING', L.ledger.x, L.ledger.y + rowH, { color: UI.dim, scale: 1 });
-        this.font.drawText(ctx, fitTo(taking, listPx), L.ledgerValueX, L.ledger.y + rowH, { color: UI.text, scale: 1 });
+        this.font.drawText(ctx, 'GIVING', L.ledger.x, L.ledger.y, { color: UI.dim, scale: lsc });
+        this.font.drawText(ctx, fitTo(giving, listPx), L.ledgerValueX, L.ledger.y, { color: UI.text, scale: lsc });
+        this.font.drawText(ctx, 'TAKING', L.ledger.x, L.ledger.y + rowH, { color: UI.dim, scale: lsc });
+        this.font.drawText(ctx, fitTo(taking, listPx), L.ledgerValueX, L.ledger.y + rowH, { color: UI.text, scale: lsc });
 
         const blocker = game._offerBlocker ? game._offerBlocker() : null;
-        this.font.drawText(ctx, 'BALANCE', L.ledgerBalanceX, L.ledger.y, { color: UI.dim, scale: 1 });
+        this.font.drawText(ctx, 'BALANCE', L.ledgerBalanceX, L.ledger.y, { color: UI.dim, scale: lsc });
 
         // An EMPTY basket is not a refusal. `NOTHING STAGED` blocks the commit
         // like any other blocker, but printing NO DEAL beside GIVING NOTHING /
@@ -4821,17 +4830,17 @@ export class Renderer {
                      + (Math.trunc(gold) ? 1 : 0);
         if (!staged) {
             this.font.drawText(ctx, '-', L.ledgerBalanceX, L.ledger.y + rowH,
-                { color: UI.dim, scale: 1 });
+                { color: UI.dim, scale: lsc });
         } else if (blocker) {
             this.font.drawText(ctx, 'NO DEAL', L.ledgerBalanceX, L.ledger.y + rowH,
-                { color: UI.dim, scale: 1 });
+                { color: UI.dim, scale: lsc });
         } else {
             const balTxt = R.balance >= 0 ? `+${R.balance} IN THEIR FAVOUR` : `${-R.balance} GP SHORT`;
             this.font.drawText(ctx, fitTo(balTxt, balPx), L.ledgerBalanceX, L.ledger.y + rowH,
-                { color: R.balance >= 0 ? '#79c46a' : UI.hpRed, scale: 1 });
+                { color: R.balance >= 0 ? '#79c46a' : UI.hpRed, scale: lsc });
             if (R.points < 0) {
                 this.font.drawText(ctx, fitTo(`${R.points} THEY'LL REMEMBER`, balPx),
-                    L.ledgerBalanceX, L.ledger.y + rowH * 2, { color: UI.hpRed, scale: 1 });
+                    L.ledgerBalanceX, L.ledger.y + rowH * 2, { color: UI.hpRed, scale: lsc });
             }
         }
 
@@ -4848,8 +4857,8 @@ export class Renderer {
         ctx.strokeStyle = blocker ? UI.dim : UI.gold;
         ctx.lineWidth = 1.5;
         ctx.strokeRect(b.x + 1, b.y + 1, b.w - 2, b.h - 2);
-        this.font.drawText(ctx, blocker || (isBribe ? 'OFFER THE BRIBE' : 'MAKE THE OFFER'), b.x + b.w / 2, b.y + 14,
-            { color: blocker ? UI.dim : UI.gold, scale: 1, align: 'center' });
+        this.font.drawText(ctx, blocker || (isBribe ? 'OFFER THE BRIBE' : 'MAKE THE OFFER'), b.x + b.w / 2, b.y + b.h / 2 - 6 * L.ts.button,
+            { color: blocker ? UI.dim : UI.gold, scale: L.ts.button, align: 'center' });
     }
 
     // Header: mood face, name, the disposition meter, and the player's gold.
@@ -4864,15 +4873,16 @@ export class Renderer {
         // skipped the mood row entirely. Drawn as-is it gives a wooden crate a
         // smiling face, an ADORING label and a full meter.
         const isContainer = !!npc._container;
-        if (!isContainer) this._drawMoodFace(L.panel.x + 24, L.panel.y + 20, mood(d).face);
+        const H = L.head;
+        if (!isContainer) this._drawMoodFace(H.faceX, H.faceY, mood(d).face, L.thumb ? 14 : 9);
         this.font.drawText(ctx, String(shownName(npc)).toUpperCase(),
-            L.panel.x + (isContainer ? 8 : 44), L.panel.y + 10, { color: UI.gold, scale: 2 });
+            isContainer ? H.nameXBox : H.nameX, H.nameY, { color: UI.gold, scale: 2 });
         this.font.drawText(ctx, `GP ${game.gold ?? 0}`,
-            L.panel.x + L.panel.w - 44, L.panel.y + 10, { color: UI.gold, scale: 2, align: 'right' });
+            H.gpRight, H.gpY, { color: UI.gold, scale: 2, align: 'right' });
 
         if (isContainer) {
             this.font.drawText(ctx, 'EVERYTHING HERE IS FREE',
-                L.meterBar.x, L.meterBar.y, { color: UI.dim, scale: 1 });
+                L.meterBar.x, L.meterBar.y, { color: UI.dim, scale: L.ts.label });
             return;
         }
 
@@ -4880,7 +4890,7 @@ export class Renderer {
         // rather than inventing a zero they never had.
         if (npc.disposition == null) {
             this.font.drawText(ctx, 'NO OPINION OF YOU EITHER WAY',
-                L.meterBar.x, L.meterBar.y, { color: UI.dim, scale: 1 });
+                L.meterBar.x, L.meterBar.y, { color: UI.dim, scale: L.ts.label });
             return;
         }
 
@@ -4926,17 +4936,17 @@ export class Renderer {
         const label = R.points !== 0
             ? `${sign(d)} > ${sign(R.projected)} ${(b1 ? b1.mood : "WON'T DEAL").toUpperCase()}`
             : `${sign(d)} ${(b0 ? b0.mood : "WON'T DEAL").toUpperCase()}`;
-        this.font.drawText(ctx, label, mb.x + mb.w + 12, mb.y + 1, { color: dirCol, scale: 1 });
+        this.font.drawText(ctx, label, mb.x + mb.w + 12, mb.y + 1, { color: dirCol, scale: L.ts.label });
 
         // The payoff: the multipliers the player is actually buying or losing.
-        const mulX = mb.x + mb.w + 12 + this.font.measure(label, 1) + 14;
+        const mulX = mb.x + mb.w + 12 + this.font.measure(label, L.ts.label) + 14;
         const mulCol = (b1 === b0) ? UI.dim : dirCol;
         const arrow = (a, b, fmt) => (a === b ? fmt(a) : `${fmt(a)} > ${fmt(b)}`);
         if (b0 && b1) {
             this.font.drawText(ctx, `BUY x${arrow(b0.buy, b1.buy, v => v.toFixed(1))}`,
-                mulX, L.meterMulTopY, { color: mulCol, scale: 1 });
+                mulX, L.meterMulTopY, { color: mulCol, scale: L.ts.label });
             this.font.drawText(ctx, `SELL x${arrow(b0.sell, b1.sell, v => v.toFixed(2))}`,
-                mulX, L.meterMulBotY, { color: mulCol, scale: 1 });
+                mulX, L.meterMulBotY, { color: mulCol, scale: L.ts.label });
         }
     }
 
@@ -4949,9 +4959,9 @@ export class Renderer {
         const d = npc.disposition ?? 0;
 
         this.font.drawText(ctx, `${String(shownName(npc)).toUpperCase()}'S GOODS`,
-            L.theirs[0].x, L.colHeadY, { color: UI.dim, scale: 1 });
+            L.theirs[0].x, L.colHeadY, { color: UI.dim, scale: L.ts.label });
         this.font.drawText(ctx, 'YOUR SATCHEL',
-            L.yours[0].x, L.colHeadY, { color: UI.dim, scale: 1 });
+            L.yours[0].x, L.colHeadY, { color: UI.dim, scale: L.ts.label });
 
         const theirs = game._offerTheirsList();
         const yours  = game._offerYoursList();
@@ -4972,15 +4982,15 @@ export class Renderer {
             (def, entry) => (npc._container ? 0
                           : entry && entry.price != null ? entry.price
                           : buyPrice(def, d)),
-            sel && sel.side === 'theirs' ? sel.index : -1);
+            sel && sel.side === 'theirs' ? sel.index : -1, L.thumb);
         this._drawOfferColumn(game, L.yours, L.yoursScrollTrack, yours,
             game._offer.scroll.yours, 'give', (def) => sellPrice(def, d),
-            sel && sel.side === 'yours' ? sel.index : -1);
+            sel && sel.side === 'yours' ? sel.index : -1, L.thumb);
     }
 
     // One column: `rects` are the visible row slots, `list` is the full backing
     // list, `scroll` is the index of the first visible row.
-    _drawOfferColumn(game, rects, thumb, list, scroll, side, priceOf, cursorIndex = -1) {
+    _drawOfferColumn(game, rects, thumb, list, scroll, side, priceOf, cursorIndex = -1, phone = 0) {
         const ctx = this.ctx;
         for (let i = 0; i < rects.length; i++) {
             const entry = list[scroll + i];
@@ -4994,19 +5004,31 @@ export class Renderer {
                 ctx.fillRect(r.x, r.y, r.w, r.h);
             }
             const tier = itemTier(def);
-            this._drawItemIcon(def, r.x + 10, r.y + 8, 24);
-
             const name = entry.count > 1 ? `${def.name} x${entry.count}` : def.name;
-            this.font.drawText(ctx, name, r.x + 42, r.y + 6, { color: UI.text, scale: 1 });
-            this.font.drawText(ctx, tier.name.toLowerCase(), r.x + 42, r.y + 22,
-                { color: tier.color, scale: 1 });
-
             const price = priceOf(def, entry);
-            this.font.drawText(ctx, price == null ? '-' : String(price),
-                r.x + r.w - 10, r.y + 6, { color: UI.gold, scale: 1, align: 'right' });
+            const priceTxt = price == null ? '-' : String(price);
+            if (phone) {
+                // (TL9) A phone row: a big icon, the name and tier at scale 2 and 1.5, the price at the right.
+                const mid = r.y + r.h / 2;
+                this._drawItemIcon(def, r.x + 14, mid - 28, 56);
+                const room = r.w - 86 - (this.font.measure(priceTxt, 2) + 24);
+                const shown = this._fitText(name, Math.max(40, room), 2, 1).text;
+                this.font.drawText(ctx, shown, r.x + 86, mid - 26, { color: UI.text, scale: 2 });
+                this.font.drawText(ctx, tier.name.toLowerCase(), r.x + 86, mid + 4,
+                    { color: tier.color, scale: 1.5 });
+                this.font.drawText(ctx, priceTxt, r.x + r.w - 14, mid - 26, { color: UI.gold, scale: 2, align: 'right' });
+                ctx.fillStyle = '#3a352c'; ctx.fillRect(r.x, r.y + r.h - 1, r.w, 1);
+            } else {
+                this._drawItemIcon(def, r.x + 10, r.y + 8, 24);
+                this.font.drawText(ctx, name, r.x + 42, r.y + 6, { color: UI.text, scale: 1 });
+                this.font.drawText(ctx, tier.name.toLowerCase(), r.x + 42, r.y + 22,
+                    { color: tier.color, scale: 1 });
+                this.font.drawText(ctx, priceTxt,
+                    r.x + r.w - 10, r.y + 6, { color: UI.gold, scale: 1, align: 'right' });
+            }
             if (staged) {
-                this.font.drawText(ctx, `staged x${staged}`, r.x + r.w - 10, r.y + 22,
-                    { color: '#79c46a', scale: 1, align: 'right' });
+                this.font.drawText(ctx, `staged x${staged}`, r.x + r.w - (phone ? 14 : 10), phone ? r.y + r.h / 2 + 4 : r.y + 22,
+                    { color: '#79c46a', scale: phone ? 1.5 : 1, align: 'right' });
                 ctx.strokeStyle = UI.gold; ctx.lineWidth = 1.5;
                 ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
             }
@@ -5015,7 +5037,7 @@ export class Renderer {
             // repainting its tier stripe solid gold -- losing, on exactly the
             // rows the player is acting on, the one cue this screen was built
             // to add.
-            ctx.fillStyle = tier.color; ctx.fillRect(r.x, r.y, 3, r.h);
+            ctx.fillStyle = tier.color; ctx.fillRect(r.x, r.y, phone ? 6 : 3, r.h);
 
             // The focus ring, outermost so it reads over both. Dashed and pale
             // so it is never mistaken for the solid gold STAGED border -- one

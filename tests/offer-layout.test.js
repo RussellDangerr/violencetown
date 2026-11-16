@@ -2,8 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   MODAL_RECT, HIT_SLOP, offerLayout, closeButtonRect, rectsOverlap, expandRect,
-  offerRowIndexAt, offerTraySlotAt,
+  offerRowIndexAt, offerTraySlotAt, DOCK, dockFor, deviceSheetRect,
 } from '../game/layout.js';
+import { computeViewport } from '../game/viewport.js';
 
 const PANEL = MODAL_RECT;
 const inPanel = (r) =>
@@ -280,3 +281,73 @@ test('offerTraySlotAt distinguishes give from take', () => {
   assert.equal(offerTraySlotAt(L, { x: t2.x + 5, y: t2.y + 5 }, 'take'), 2);
   assert.equal(offerTraySlotAt(L, { x: t2.x + 5, y: t2.y + 5 }, 'give'), -1);
 });
+
+// ── (TL9) the phone sheet ────────────────────────────────────────────────────
+function phoneSheet(screen) {
+  let vp = computeViewport({ ...screen, dock: DOCK });
+  const dock = dockFor(vp);
+  if (dock !== DOCK) vp = computeViewport({ ...screen, dock });
+  return { vp, sheet: deviceSheetRect(vp) };
+}
+const PHONES = { phone375: { cssW: 375, cssH: 812, dpr: 2 }, phone390: { cssW: 390, cssH: 844, dpr: 3 } };
+
+test('without a sheet the layout is exactly the desktop one', () => {
+  assert.deepEqual(offerLayout(MODAL_RECT, null), offerLayout(MODAL_RECT));
+  assert.equal(offerLayout(MODAL_RECT).button.h, 40);
+  assert.equal(offerLayout(MODAL_RECT).thumb, 0);
+});
+
+for (const [key, screen] of Object.entries(PHONES)) {
+  const { vp, sheet } = phoneSheet(screen);
+  const L = offerLayout(MODAL_RECT, sheet);
+  const per = vp.logicalPerCss;
+  const inSheet = (r) => r.x >= sheet.x && r.y >= sheet.y && r.x + r.w <= sheet.x + sheet.w && r.y + r.h <= sheet.y + sheet.h;
+  const hit = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
+  test(`${key}: the offer panel is the whole sheet and every target is at least 44 CSS px`, () => {
+    assert.deepEqual(L.panel, { x: sheet.x, y: sheet.y, w: sheet.w, h: sheet.h });
+    for (const r of [...L.yours, ...L.theirs, ...L.giveTray, ...L.takeTray, L.button, L.talkButton]) {
+      assert.ok(Math.min(r.w, r.h) / per >= 44, `${JSON.stringify(r)} is under 44 CSS px`);
+    }
+  });
+
+  test(`${key}: everything sits inside the sheet, in order, and no two targets overlap`, () => {
+    const all = [...L.yours, ...L.theirs, ...L.giveTray, ...L.takeTray, L.button, L.talkButton, L.desc, L.ledger, L.meterBar];
+    for (const r of all) assert.ok(inSheet(r), `escapes the sheet: ${JSON.stringify(r)}`);
+    const targets = [...L.giveTray, ...L.takeTray, L.button, L.talkButton];
+    for (const rows of [L.yours, L.theirs]) targets.push(...rows);
+    for (let i = 0; i < targets.length; i++) for (let j = i + 1; j < targets.length; j++) {
+      assert.ok(!hit(targets[i], targets[j]), `${i} overlaps ${j}`);
+    }
+    assert.ok(L.theirs[5].y + L.theirs[5].h <= L.giveTray[0].y);
+    assert.ok(L.giveTray[5].y + L.giveTray[5].h <= L.desc.y);
+    assert.ok(L.desc.y + L.desc.h <= L.ledger.y);
+    assert.ok(L.ledger.y + L.ledger.h <= L.button.y);
+    assert.ok(L.button.y + L.button.h <= sheet.y + sheet.h);
+  });
+
+  test(`${key}: the rows keep their zero-slop rule and the gutter clears two slops`, () => {
+    for (const rows of [L.yours, L.theirs]) {
+      for (let i = 1; i < rows.length; i++) assert.equal(rows[i].y, rows[i - 1].y + rows[i - 1].h);
+    }
+    const gutter = L.theirs[0].x - (L.yours[0].x + L.yours[0].w);
+    assert.ok(gutter > 2 * HIT_SLOP);
+    const r = L.theirs[2];
+    assert.equal(offerRowIndexAt(L, { x: r.x + 3, y: r.y + 3 }, 'theirs', 4), 6);
+    assert.equal(offerRowIndexAt(L, { x: r.x + 3, y: r.y + r.h }, 'theirs', 0), 3);
+    assert.equal(offerRowIndexAt(L, { x: r.x + 3, y: L.theirs[0].y - 1 }, 'theirs', 0), -1);
+  });
+
+  test(`${key}: the six tray slots are all reachable and stay apart`, () => {
+    for (const [side, slots] of [['give', L.giveTray], ['take', L.takeTray]]) {
+      assert.equal(slots.length, 6);
+      slots.forEach((s, i) => assert.equal(offerTraySlotAt(L, { x: s.x + 3, y: s.y + 3 }, side), i));
+    }
+  });
+
+  test(`${key}: the close chip fits the title row beside the gold figure`, () => {
+    const chip = closeButtonRect(sheet, sheet.thumb);
+    assert.ok(L.head.gpRight <= chip.x, 'the GP figure runs under the close chip');
+    assert.ok(!hit(chip, L.talkButton) && !hit(chip, L.meterBar));
+  });
+}
