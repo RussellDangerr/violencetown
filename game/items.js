@@ -229,7 +229,7 @@ export const ITEMS = {
         equipSlot: 'top',
         useType: 'equip',
         armor: 2,
-        body: { species: 'strongman', sprite: 'Boss', verbs: [] },
+        body: { species: 'strongman', sprite: 'Pike', verbs: [] },   // (SM1) bald, mustached Tiny figure: tinyDungeon (2,7)
         powerWield: true,
         consumable: false,
         fallbackColor: '#d03030',
