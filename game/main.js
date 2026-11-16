@@ -1514,6 +1514,12 @@ class Game {
         document.addEventListener('keydown', (e) => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
+            // (FX67) The Options window, the help window and the key screen sit over
+            // the world; game keys stop there. No preventDefault: a focused button
+            // still gets its own Space / Enter. Esc is closed by each window's
+            // capture-phase handler before this one runs.
+            if (this._keyWindowOpen()) return;
+
             // A browser chord is not a game input. Nothing here checked modifiers,
             // so every shortcut the browser owns ALSO fired a game action behind
             // it: Ctrl+S walked you south, Ctrl+L opened the log, and Alt+Tab
@@ -2094,6 +2100,12 @@ class Game {
                 }
             });
         });
+    }
+
+    // (FX67) True while a window that covers the world is up.
+    _keyWindowOpen() {
+        const shown = (id) => { const m = document.getElementById(id); return !!m && !m.classList.contains('hidden'); };
+        return shown('options-modal') || shown('help-modal') || !!document.getElementById('key-once');
     }
 
     // ── Help modal ──────────────────────────────────────────────────────────
