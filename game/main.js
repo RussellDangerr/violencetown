@@ -12,8 +12,8 @@ import { pickHitMark, HEAVY_HIT_DAMAGE, dodgeChance, DODGE_WORD } from './hit-sp
 import { makeEffectLoop } from './effect-loop.js';                 // one tick of the transient-effects loop, and its refusal to die on a bad frame
 import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK, SLUDGE_DOT, FIRE_QUENCHING_TILES } from './data.js';
 import { puddleTiles, layPuddle, puddleAt, dryPuddles } from './puddles.js';   // (poisons) Sludge Brain's puddles
-import { ITEMS, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef, poitionBuff } from './items.js';
-import { WEAPONS, weaponClassOf } from './weapons.js';
+import { ITEMS, wornBody, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef, poitionBuff } from './items.js';
+import { WEAPONS, weaponClassOf, FISTS } from './weapons.js';
 import { handPairOf } from './hand-data.js';   // (HB2) two held weapons combine into a named effect
 import { resolveItemDef } from './item-registry.js';
 import { toggleCostume, dropCostume } from './costumes.js';   // (CO1)
@@ -40,10 +40,10 @@ import { applyDispositionDelta, reactToTransaction } from './give-action.js';
 import { getDialogue } from './dialogue.js';
 import { manhattan, clamp } from './utils.js';
 import { RNG, randomSeed } from './rng.js';
-import { pickSlots, defaultPicks, resolveSpawn, requiredDropFor, dropLineFor, FINALE_PHASE1, pickReturning, spotFor, RETURNING_SPOTS } from './slots.js';
+import { pickSlots, echoSpawn, ECHO_SLOTS, defaultPicks, resolveSpawn, requiredDropFor, dropLineFor, FINALE_PHASE1, pickReturning, spotFor, RETURNING_SPOTS } from './slots.js';
 import { rememberSpent, applySpent } from './npc-memory.js';
 import { snapshotOf, keepSnapshot, readSnapshots, reportLines } from './bones.js';
-import { hasSave, readSaveRaw, writeSave, loadInto, clearSave } from './save.js';
+import { hasSave, readSaveRaw, writeSave, loadInto, clearSave, encodeSaveCode, importSaveCode } from './save.js';
 import { readAway, tellAwayNews, restedOnReturn } from './away.js';   // (CK1) hours since the save's savedAt
 import { QuestEngine } from './quests.js';
 import { doExamine, resolveExamine } from './examine.js';
@@ -105,7 +105,7 @@ import {
 import * as Settings from './settings.js'; // [settings] options/accessibility store
 import { spiritToShow } from './spirit-replay.js';                                        // (heroic spirits) the boss-door replay
 import { introAt, isSkipKey } from './tv-intro.js';                                     // (TV1) the TV opening before the title
-import { arcSlots, arcVisible, arcSlotAt, arcFaded, ARC_MAX } from './fight-arc.js';                  // (FA1) the arc of attacks under you in a fight
+import { arcAllSlots, arcVisible, arcSlotAt, arcFaded, ARC_MAX } from './fight-arc.js';                  // (FA1) the arc of attacks under you in a fight
 import { fighters, joiners } from './fight-area.js';                                     // (fight-fog) who is in the fight
 import { fightStartKind, entranceFor, fightFxActive } from './fight-entrance.js'; // (fight-fog) how it began, and how long its fog moves
 import { createCascade, CASCADE_BEAT_MS, LUNGE_MS } from './cascade.js';           // (turn-model C1) the enemy phase, one actor at a time
@@ -261,6 +261,7 @@ class Game {
         // swap touches it. Persisted. Its perks join ringMods only where an action
         // reads them (see _theftPassives).
         this.skills           = {};
+        this.bodiesWorn = [];                // (MS2) species of every mask body worn so far; persisted, never shows unworn ones
         this.interactionNotes = [];          // (IN1) ids of the interaction rows whose note has been shown; persisted
         this._peakDisposition = 0;           // (rings) highest disposition any NPC has ever shown — monotonic; gates the hidden thumb tier
         this._lastHitTarget = null;   // (fear) id of the enemy the last Melee-Hit struck
@@ -755,6 +756,8 @@ class Game {
             if (s.goneAfter && this.questEngine?.isComplete?.(s.goneAfter)) continue;
             this.enemies.push(spawnEnemy(resolveSpawn(s, this.slots, undefined, undefined, this._returnPicks), this._muggedIds, this._robbed, this._rivalKit?.(url, s.id), this._tookGold));
         }
+        // (BN2) Your old character stands in Town when a snapshot is kept; none, nobody.
+        for (const e of this._echoEnemies?.(url, dead) ?? []) this.enemies.push(spawnEnemy(e, this._muggedIds, this._robbed));
         this._applySpentChoices?.(url);   // (NM1) a one-time talk choice you used stays used
         this._rivalArrived?.(url);   // (plans/ne1-rival-remembered.md) the rival is at its post, kit and all
         this._finaleOnLoad?.(url);   // (FIN3) the vault after phase 1: no Financier, the beast in his corner
@@ -1294,7 +1297,7 @@ class Game {
             }
             return;
         }
-        const vp = computeViewport({ cssW: box.width, cssH: box.height, dpr: window.devicePixelRatio, dock: DOCK, zoom: this._zoom });
+        const vp = computeViewport({ cssW: box.width, cssH: box.height, dpr: window.devicePixelRatio, dock: DOCK, zoom: this._zoom, coarse: typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches });
         this.renderer.setViewport(vp);
         this._syncZoomUI();
         canvas.style.width  = `${vp.cssW}px`;
@@ -2288,6 +2291,32 @@ class Game {
         // (ZM1) Zoom row: Farther / Closer.
         document.getElementById('opt-zoom-farther')?.addEventListener('click', () => this._stepZoom(-1));
         document.getElementById('opt-zoom-closer')?.addEventListener('click', () => this._stepZoom(+1));
+
+        // (PK1) Save as a code. COPY puts the code on the clipboard and always fills the
+        // box too, so a browser that blocks clipboard access still lets the player copy by hand.
+        // PASTE reads the clipboard, falling back to whatever is in the box.
+        const codeBox = document.getElementById('opt-save-code');
+        const codeNote = document.getElementById('opt-save-status');
+        const say = (m) => { if (codeNote) codeNote.textContent = m; };
+        document.getElementById('opt-save-copy')?.addEventListener('click', async () => {
+            const code = encodeSaveCode(this);
+            if (codeBox) { codeBox.value = code; codeBox.focus(); codeBox.select(); }
+            try { await navigator.clipboard.writeText(code); say('[TEXT] Code copied.'); }
+            catch { say('[TEXT] Copy the code from the box.'); }
+        });
+        document.getElementById('opt-save-paste')?.addEventListener('click', async () => {
+            let text = '';
+            try { text = await navigator.clipboard.readText(); } catch { /* blocked: use the box */ }
+            if (!text && codeBox) text = codeBox.value;
+            const res = await importSaveCode(this, text);
+            if (!res.ok) { say(res.message); return; }
+            writeSave(this);
+            say('[TEXT] Save loaded.');
+            this._log('[Save loaded from a code]', 'transition');
+            this._closeOptionsModal();
+            this._setPaused?.(false);
+            this._render?.();
+        });
 
         // Esc closes the modal without falling through to game state. Capture
         // phase beats _bindInput's bubble handler, matching the help modal.
@@ -3903,7 +3932,7 @@ class Game {
                 this._render();
                 break;
             }
-            case 'hit':   if (npc && this._tapWithWeaponMove?.(npc)) break; if (npc) { this.combatAttack(npc, this.equipment.weapon.damage, { type: this.equipment.weapon.damageType, weapon: this.equipment.weapon }); this._advanceWorld(); this._render(); } break;
+            case 'hit':   if (npc && this._tapWithWeaponMove?.(npc)) break; if (npc) { this.combatAttack(npc, (this.equipment.weapon || this.bareHand).damage, { type: (this.equipment.weapon || this.bareHand).damageType, weapon: (this.equipment.weapon || this.bareHand) }); this._advanceWorld(); this._render(); } break;
             case 'throw': { const th = this._resolveThrowable(); if (th) { const msg = resolveThrow(this, th.itemDef, null, th.count, { x: t.x, y: t.y }); if (msg) this._log(msg, 'combat'); this._rockClatter(th.itemDef, t.x, t.y); th.consume(); this._advanceWorld(); } else this._log('[Nothing to throw.]'); this._render(); break; }
             case 'take':  this._takeItemAt(t.x, t.y); this._render(); break;
             case 'open':  if (t.container) this._openContainer(t.container); break;
@@ -4008,7 +4037,8 @@ class Game {
     // Digit1-8 while the arc shows: run that slot. False when the arc is not showing (no fight,
     // a menu up) or the key is not 1-8, so the caller carries on with the bag as before.
     _arcDigit(code) {
-        const n = this._digitToSlot(code) + 1;
+        // 1-9 are slots 1-9 and 0 is slot 10 (Run); the bag's own mapping has no 0.
+        const n = code === 'Digit0' ? 10 : this._digitToSlot(code) + 1;
         if (n < 1 || n > ARC_MAX || !arcVisible(this)) return false;
         this._arcPress(n);
         return true;
@@ -4021,7 +4051,7 @@ class Game {
         if (!arcVisible(this)) return false;
         const vp = this._vp();
         if (arcFaded(vp, this)) return false;
-        const n = arcSlotAt(vp, arcSlots(this), pt);
+        const n = arcSlotAt(vp, arcAllSlots(this), pt);
         if (!n) return false;
         const tile = this._screenToTile(pt);
         if (this._targetAt(tile.x, tile.y)) return false;
@@ -4030,7 +4060,7 @@ class Game {
     }
 
     _arcPress(n) {
-        const slot = arcSlots(this).find(s => s.n === n);
+        const slot = arcAllSlots(this).find(s => s.n === n);
         if (!slot) { audio.playSfx('bump-wall'); return; }
         const w = this.wheel;
         if (this.state === STATE.RADIAL_MENU) {
@@ -4290,7 +4320,7 @@ class Game {
             case 'combatAttack': {
                 const enemy = aimTile && this.enemies.find(e => e.entity.isAlive() && e.x === aimTile.x && e.y === aimTile.y);
                 if (enemy) {
-                    const wpn = this.equipment.weapon;
+                    const wpn = (this.equipment.weapon || this.bareHand);
                     // (fear) Fearmur fears an enemy struck twice in a row — check
                     // BEFORE the hit (which may kill it and reset the tracker).
                     const repeat = wpn && wpn.onHit === 'fearOnRepeat' && this._lastHitTarget === enemy.id;
@@ -4313,9 +4343,9 @@ class Game {
                 // Pass the raw fraction (not pre-rounded) + the weapon's type so
                 // computeHit rounds once and elemental matchups apply, same as a
                 // single hit — the weapon-AoE case the basic-hit typing pass missed.
-                const dmg = this.equipment.weapon.damage * 2 / 3;
+                const dmg = (this.equipment.weapon || this.bareHand).damage * 2 / 3;
                 const tiles = affectedTiles(w, this);
-                const hit = this._aoeStrike(tiles, dmg, { type: this.equipment.weapon.damageType, weapon: this.equipment.weapon });
+                const hit = this._aoeStrike(tiles, dmg, { type: (this.equipment.weapon || this.bareHand).damageType, weapon: (this.equipment.weapon || this.bareHand) });
                 if (hit.length) { this._log(`[Cleave! ${hit.length} caught.]`, 'combat'); this._advanceWorld(); }
                 else if (this._enemiesPresent(tiles) > 0) { this._log('[Cleave connects — shrugged off, immune.]', 'combat'); this._advanceWorld(); }
                 else this._log('[Cleave hits only air]', 'combat');
@@ -4326,7 +4356,7 @@ class Game {
                 // lost turn a shove costs (_spunTurns), with no push and no new number.
                 const enemy = aimTile && this.enemies.find(e => e.entity.isAlive() && e.x === aimTile.x && e.y === aimTile.y);
                 if (enemy) {
-                    const wpn = this.equipment.weapon;
+                    const wpn = (this.equipment.weapon || this.bareHand);
                     this._lastHitTarget = null;
                     this.combatAttack(enemy, wpn.damage, { type: wpn && wpn.damageType, weapon: wpn });
                     if (enemy.entity.isAlive()) {
@@ -4342,9 +4372,9 @@ class Game {
                 this._lastHitTarget = null;   // (fear) AoE breaks the Fearmur single-target streak
                 // Sweep all 8 tiles, 2/5 weapon damage to everything around you.
                 // Raw fraction + weapon type, as Cleave above — round once, type applies.
-                const dmg = this.equipment.weapon.damage * 2 / 5;
+                const dmg = (this.equipment.weapon || this.bareHand).damage * 2 / 5;
                 const tiles = affectedTiles(w, this);
-                const hit = this._aoeStrike(tiles, dmg, { type: this.equipment.weapon.damageType, weapon: this.equipment.weapon });
+                const hit = this._aoeStrike(tiles, dmg, { type: (this.equipment.weapon || this.bareHand).damageType, weapon: (this.equipment.weapon || this.bareHand) });
                 if (hit.length) { this._log(`[Spin! ${hit.length} caught.]`, 'combat'); this._advanceWorld(); }
                 else if (this._enemiesPresent(tiles) > 0) { this._log('[Spin connects — shrugged off, immune.]', 'combat'); this._advanceWorld(); }
                 else this._log('[You spin, hitting nothing]', 'combat');
@@ -5734,6 +5764,9 @@ class Game {
     // not a weapon, is one hand. items.js and save.js ask through this.
     _handsOf(def) { return (weaponClassOf(def) || {}).hands || 1; }
 
+    // (LH1) What a bare right hand fights with. A getter, so lifted attack methods need no import.
+    get bareHand() { return FISTS; }
+
     // (HB2) The pair the two hands make right now, or null.
     _handPairNow() { const eq = this.equipment || {}; return handPairOf(eq.left, eq.weapon); }
 
@@ -6472,6 +6505,21 @@ class Game {
         return { x: sx, y: sy }; // degenerate map — nothing walkable; spawn anyway
     }
 
+    // (BN2) The old character of an echo slot on this map, built from the newest kept snapshot
+    // (slots.js echoSpawn): none without one, and none once it has been killed. Not a map spawn,
+    // so no map, save or balance reading changes.
+    _echoEnemies(url, dead = new Set()) {
+        let snap = null;
+        try { snap = readSnapshots(localStorage).pop() || null; } catch { snap = null; }
+        const out = [];
+        for (const [slotId, slot] of Object.entries(ECHO_SLOTS)) {
+            if (slot.map !== url || dead.has(slot.spawn)) continue;
+            const e = echoSpawn({ id: slot.spawn, slot: slotId, x: slot.at.x, y: slot.at.y }, snap);
+            if (e) out.push(e);
+        }
+        return out;
+    }
+
     async _fullReset({ seed } = {}) {
         // RESTART is reachable from the DOM ☰ sheet in ANY state, including with
         // the offer screen open — the one path out of STATE.TRADE that goes
@@ -6545,6 +6593,7 @@ class Game {
         this._peakDisposition = 0;       // it gates the ring tier, so it goes with the rings
         this.skills = {};                // a new run starts every skill from nothing
         this.defaultAttack = null;       // (WK3)
+        this.bodiesWorn = [];            // (MS2) and no body has been worn yet
         this.interactionNotes = [];      // (IN1) and every interaction note is new again
         this._refreshGrantedSkills();   // fresh weapon, no rings → no granted skills
         this._pendingTransition = null;
@@ -6648,6 +6697,7 @@ class Game {
 
     _render() {
         this._trackFight();
+        this._trackBodies();
         this._creditsCheck();
         this._syncFirstRunHint();
         this._spiritShow = spiritToShow(this, Settings.get('spirits'), performance.now());   // (heroic spirits) HS-R2
@@ -6720,6 +6770,13 @@ class Game {
     // so which entrance it gets; the last one leaving notes when, for the
     // fog's fade and the 3-second no-replay rule. Dying ends it without the
     // fade.
+    // (MS2) The first time a body is worn, its species joins the roster. Night Kid is always worn,
+    // so it is not stored.
+    _trackBodies() {
+        const sp = wornBody(this.equipment)?.species;
+        if (sp && !this.bodiesWorn.includes(sp)) this.bodiesWorn.push(sp);
+    }
+
     _trackFight() {
         const fs = this.state === STATE.DEAD ? [] : fighters(this.enemies);
         const on = fs.length > 0;

@@ -18,7 +18,7 @@ import { dirOf } from './perception.js';
 export const TINY_INK = [63, 38, 49];   // #3F2631, the Tiny packs' outline
 // Sheets already drawn in the Tiny style (or re-outlined by a tool), which the
 // outline pass leaves alone.
-export const TINY_STYLE_SHEETS = new Set(['tinyDungeon', 'tinyTown', 'tinyExtra', 'outlined', 'interior', 'emotes', 'marks', 'ratVariants', 'wereratTint', 'ratMaskTint', 'beastVariants', 'bearVariants', 'iceCone', 'ant']);
+export const TINY_STYLE_SHEETS = new Set(['tinyDungeon', 'tinyTown', 'tinyExtra', 'outlined', 'interior', 'emotes', 'marks', 'ratVariants', 'wereratTint', 'oldSelfTint', 'ratMaskTint', 'beastVariants', 'bearVariants', 'iceCone', 'ant']);
 
 export class SpriteSheet {
     // `padding` is the gap (in source pixels) between adjacent cells. Kenney's
@@ -195,6 +195,8 @@ export const SHEETS = {
     // sheet again, washed with `tint` when it loads (loadAllSprites). Obviously fake on purpose.
     // The Rat Mask's bag icon: the same sheet washed in a fake tint, a placeholder until it has art.
     ratMaskTint:  { src: TINY_DUNGEON, frameW: 16, frameH: 16, tint: 'rgba(80, 220, 80, 0.5)' },
+    // (BN2) Your old character: the player's own sheet washed pale like a ghost (one tint, BNR3 a).
+    oldSelfTint:  { src: TINY_DUNGEON, frameW: 16, frameH: 16, tint: 'rgba(210, 225, 255, 0.55)' },
     wereratTint:  { src: TINY_DUNGEON, frameW: 16, frameH: 16, tint: 'rgba(200, 40, 220, 0.55)' },
 
     // The Tiny Dungeon (Kenney, CC0) grey beast, (4,10), recoloured by the same tool: only its
@@ -521,6 +523,9 @@ export const ENEMY_SPRITES = {
             { col: 24, row: 6 },  // pale blue hair, blue-grey top (also Banker, bank only)
             { col: 24, row: 12 }, // light hair, pale blue top (also Operator, casino only)
         ],
+        // (BN2) Your old character is drawn as you: the player's cell, tinted pale like a ghost,
+        // with no facings or variants of its own.
+        byTag: { old_self: { sheet: 'oldSelfTint', col: 1, row: 7, dirCols: null, walkRows: null, variants: [] } },
     },
 
     // Canyon — Pike the ageless prospector (reuses the gaunt robed-monk cell; a

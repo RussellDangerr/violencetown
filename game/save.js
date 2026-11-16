@@ -90,6 +90,7 @@ export function serialize(game) {
             ...costumeToSave(game),   // (CO1) left out while no costume is worn
             ...defaultAttackEntry(game),
             ...interactionNotesEntry(game),
+            ...bodiesWornEntry(game),
             equipment: {
                 weapon: idOf(game.equipment.weapon),   // the right hand
                 left: idOf(game.equipment.left),
@@ -166,6 +167,12 @@ function defaultAttackEntry(game) {
 function skillsEntry(game) {
     const skills = sanitizeSkills(game.skills);
     return Object.keys(skills).length ? { skills } : {};
+}
+
+// (MS2) The body species worn so far, or nothing while none has been.
+function bodiesWornEntry(game) {
+    const bodiesWorn = sanitizeNoteIds(game.bodiesWorn);
+    return bodiesWorn.length ? { bodiesWorn } : {};
 }
 
 // (IN1) The interaction notes already seen, as a save field, or nothing while there are none.
@@ -276,6 +283,73 @@ export function clearSave() {
         localStorage.removeItem(BACKUP_KEY);
         localStorage.removeItem(TMP_KEY);
     } catch { /* ignore */ }
+}
+
+// ── Save as a code (PK1) ─────────────────────────────────────────────────────
+// A save as one line of text: VT1.<checksum>.<base64url of the save JSON>.
+// Nothing here touches the network; the code travels by the player's clipboard.
+
+const CODE_PREFIX = 'VT1';
+// Placeholder wording ([TEXT]); the copy is the owner's to write.
+export const CODE_REFUSALS = {
+    format:  '[TEXT] That is not a save code.',
+    garbled: '[TEXT] That save code is damaged.',
+    version: '[TEXT] That save code is from a different version.',
+    load:    '[TEXT] That save code would not open.',
+};
+
+function _checksum(str) {   // FNV-1a, 32 bit, as 8 hex digits
+    let h = 0x811c9dc5;
+    for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+    return h.toString(16).padStart(8, '0');
+}
+function _b64urlEncode(str) {
+    const bytes = new TextEncoder().encode(str);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function _b64urlDecode(b64) {
+    const bin = atob(b64.replace(/-/g, '+').replace(/_/g, '/'));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+}
+
+export function encodeSaveCode(game) {
+    const body = _b64urlEncode(JSON.stringify(serialize(game)));
+    return `${CODE_PREFIX}.${_checksum(body)}.${body}`;
+}
+
+// -> { ok: true, raw } (raw is the decoded save, not yet migrated) or { ok: false, reason }.
+export function decodeSaveCode(text) {
+    if (typeof text !== 'string') return { ok: false, reason: 'format' };
+    const parts = text.replace(/\s+/g, '').split('.');
+    if (parts.length !== 3 || parts[0] !== CODE_PREFIX) return { ok: false, reason: 'format' };
+    const [, sum, body] = parts;
+    if (!/^[A-Za-z0-9_-]+$/.test(body) || sum !== _checksum(body)) return { ok: false, reason: 'garbled' };
+    let raw;
+    try { raw = JSON.parse(_b64urlDecode(body)); } catch { return { ok: false, reason: 'garbled' }; }
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ok: false, reason: 'garbled' };
+    if (typeof raw.version === 'number' && raw.version > SAVE_VERSION) return { ok: false, reason: 'version' };
+    return { ok: true, raw };
+}
+
+// Replace the live game with a pasted code. A refused code touches nothing; a code that
+// decodes but then fails to load is rolled back to the game as it was.
+export async function importSaveCode(game, text) {
+    const d = decodeSaveCode(text);
+    if (!d.ok) return { ok: false, reason: d.reason, message: CODE_REFUSALS[d.reason] };
+    let before;
+    try { before = JSON.parse(JSON.stringify(serialize(game))); } catch { before = null; }
+    try {
+        await loadInto(game, d.raw);
+    } catch (e) {
+        console.warn('[save] pasted code failed to load; restoring', e);
+        if (before) { try { await loadInto(game, before); } catch (e2) { console.error('[save] rollback failed', e2); } }
+        return { ok: false, reason: 'load', message: CODE_REFUSALS.load };
+    }
+    return { ok: true };
 }
 
 // ── Migrate / validate ───────────────────────────────────────────────────────
@@ -410,6 +484,7 @@ function validate(raw) {
     p.defaultAttack = (p.defaultAttack && typeof p.defaultAttack.key === 'string' && typeof p.defaultAttack.weaponId === 'string')
         ? { weaponId: p.defaultAttack.weaponId, key: p.defaultAttack.key } : null;   // (WK3)
     p.interactionNotes = sanitizeNoteIds(p.interactionNotes);   // (IN1)
+    p.bodiesWorn = sanitizeNoteIds(p.bodiesWorn);   // (MS2)
     // collectedItems is a Set of string keys on the live game; drop anything
     // non-string so a malformed save can't poison the lookup.
     const ci = Array.isArray(raw.world?.collectedItems) ? raw.world.collectedItems : [];
@@ -496,6 +571,7 @@ export async function loadInto(game, raw) {
     game.costume           = costumeFromSave(p.costume, R);   // (CO1) worn: equipment/skills above are its kit
     game.defaultAttack     = p.defaultAttack || null;   // (WK3)
     game.interactionNotes  = [...p.interactionNotes];   // (IN1)
+    game.bodiesWorn        = [...p.bodiesWorn];   // (MS2)
     // knownSpells/grantedTricks are derived, not stored — rebuild from the
     // restored weapon + rings (a slotted Rat Ring grants Rat Form, etc.).
     if (game._refreshGrantedSkills) game._refreshGrantedSkills();

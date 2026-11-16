@@ -11,8 +11,8 @@ test('DEVICE_RECT reuses the proven {24,44,560,520} panel bezel', () => {
   assert.deepEqual(DEVICE_RECT, { x: 24, y: 44, w: 560, h: 520 });
 });
 
-test('DEVICE_TABS is the six tabs in order', () => {
-  assert.deepEqual(DEVICE_TABS, ['items', 'gear', 'quests', 'map', 'rings', 'notes']);
+test('DEVICE_TABS is the seven tabs in order', () => {
+  assert.deepEqual(DEVICE_TABS, ['items', 'gear', 'quests', 'map', 'rings', 'notes', 'bodies']);
 });
 
 test('cycleDeviceTab wraps forward', () => {
@@ -21,11 +21,13 @@ test('cycleDeviceTab wraps forward', () => {
   assert.equal(cycleDeviceTab('quests', 1), 'map');
   assert.equal(cycleDeviceTab('map', 1), 'rings');
   assert.equal(cycleDeviceTab('rings', 1), 'notes');
-  assert.equal(cycleDeviceTab('notes', 1), 'items');   // wrap
+  assert.equal(cycleDeviceTab('notes', 1), 'bodies');
+  assert.equal(cycleDeviceTab('bodies', 1), 'items');   // wrap
 });
 
 test('cycleDeviceTab wraps backward', () => {
-  assert.equal(cycleDeviceTab('items', -1), 'notes');  // wrap
+  assert.equal(cycleDeviceTab('items', -1), 'bodies');  // wrap
+  assert.equal(cycleDeviceTab('bodies', -1), 'notes');
   assert.equal(cycleDeviceTab('notes', -1), 'rings');
   assert.equal(cycleDeviceTab('rings', -1), 'map');
   assert.equal(cycleDeviceTab('gear', -1), 'items');
@@ -106,14 +108,14 @@ test('gear option rows do not overlap the equipment plates', () => {
     assert.ok(row.x + row.w <= body.x + body.w + 0.5 && row.y + row.h <= body.y + body.h + 0.5, 'gear option row escapes body');
 });
 
-test("the Remoticon notes tab is the last of the tabs and cycles to and from the ends", () => {
-  assert.equal(DEVICE_TABS[DEVICE_TABS.length - 1], "notes");
-  assert.equal(cycleDeviceTab("notes", 1), DEVICE_TABS[0]);
-  assert.equal(cycleDeviceTab(DEVICE_TABS[0], -1), "notes");
+test("the Remoticon bodies tab is the last of the tabs and cycles to and from the ends", () => {
+  assert.equal(DEVICE_TABS[DEVICE_TABS.length - 1], "bodies");
+  assert.equal(cycleDeviceTab("bodies", 1), DEVICE_TABS[0]);
+  assert.equal(cycleDeviceTab(DEVICE_TABS[0], -1), "bodies");
 });
 
-test("six tabs fit the strip without leaving the frame", () => {
+test("seven tabs fit the strip without leaving the frame", () => {
   const last = deviceTabRect(DEVICE_TABS.length - 1);
-  assert.equal(DEVICE_TABS.length, 6);
+  assert.equal(DEVICE_TABS.length, 7);
   assert.ok(last.x + last.w <= DEVICE_RECT.x + DEVICE_RECT.w);
 });

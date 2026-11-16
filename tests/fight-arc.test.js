@@ -21,9 +21,10 @@ const arc = await import('../game/fight-arc.js');
 const { computeViewport } = await import('../game/viewport.js');
 const { DOCK, hudLayout, fightPanelRects } = await import('../game/layout.js');
 const { TILE_PX } = await import('../game/data.js');
+const { ITEMS } = await import('../game/items.js');
 
 const { ROOT, GREYED_REASON_TEXT, greyedReason } = wm;
-const { arcSlots, arcVisible, arcOn, arcLayout, arcSlotAt, arcFaded, ARC_MAX, ARC_KEYS } = arc;
+const { arcAllSlots, arcSlots, arcVisible, arcOn, arcLayout, arcSlotAt, arcFaded, ARC_MAX, ARC_KEYS } = arc;
 
 // Set after main.js is imported: with a document present, importing it would boot the real page.
 globalThis.window = new EventTarget();
@@ -124,7 +125,6 @@ describe('the arc: which slots exist', () => {
 
     test('at most eight, even with every spell; Ranged and Throw are one slot', () => {
         const all = arcSlots(bare({ knownSpells: ['fireball', 'coneOfCold', 'boo'], grantedTricks: ['ray_blast', 'hire_lion'] }));
-        assert.equal(all.length, ARC_MAX);
         assert.equal(all.length, 8);
         assert.equal(all.filter(s => s.node.resolver === 'resolveThrow').length, 1);
     });
@@ -195,9 +195,9 @@ describe('the arc: where it sits', () => {
     test('a position belongs to its number: the layout never depends on who is here', () => {
         const a = arcLayout(VP).slots, b = arcLayout(VP).slots;
         assert.deepEqual(a, b);
-        assert.equal(a.length, 8);
+        assert.equal(a.length, 10);
         const xs = a.map(r => r.x);
-        assert.deepEqual([...xs].sort((p, q) => p - q), xs, 'slot 1 is leftmost and 8 rightmost');
+        assert.deepEqual([...xs].sort((p, q) => p - q), xs, 'slot 1 is leftmost and 10 rightmost');
     });
 
     for (const [name, size] of VIEWS) {
@@ -279,12 +279,19 @@ describe('the arc: the number keys, in a real fight', () => {
         assert.equal(g.turns, 0);
     });
 
-    test('in a fight 1-8 are the arc\'s and 9 is still the bag', () => {
+    test('in a fight every digit, 9 and 0 included, is the arc\'s and never the bag\'s (EA1)', () => {
         const g = makeGame();
-        g.tap('Digit9');
-        assert.deepEqual(g.selected, [8]);
+        g.tap('Digit9'); g.tap('Digit0');
+        assert.deepEqual(g.selected, []);
         g.tap('Digit3');   // Spin
-        assert.deepEqual(g.selected, [8], 'a digit the arc took never reaches the bag');
+        assert.deepEqual(g.selected, [], 'a digit the arc took never reaches the bag');
+    });
+
+    test('outside a fight 9 still picks bag slot 9 and 0 does nothing', () => {
+        const g = makeGame([]);
+        g.tap('Digit9'); g.tap('Digit0');
+        assert.deepEqual(g.selected, [8]);
+        assert.equal(g.turns, 0);
     });
 
     test('a digit with no slot behind it does nothing at all', () => {
@@ -644,5 +651,76 @@ describe('the arc: what it draws', () => {
         const { r, drawn } = rig();
         r._drawFightArc(bare({ state: 'radial_menu', enemies: [foe(PX + 3, PY)] }));
         assert.equal(drawn.length, 0);
+    });
+});
+
+// ── EA1: Eat and Run on the arc, 9 and 0 ────────────────────────────────────────────────
+describe('the arc: Eat and Run (EA1)', () => {
+    const BURGER = ITEMS.boardwalk_burger;
+    const stack = (itemDef, count = 1) => ({ itemDef, count });
+
+    test('Eat and Run come after the attacks, at slots 9 and 10, and are the wheel own own nodes', () => {
+        const slots = arcAllSlots(bare({ knownSpells: ['fireball', 'coneOfCold', 'boo'] }));
+        assert.deepEqual(slots.slice(-2).map(s => [s.n, s.key]), [[9, 'eat'], [10, 'run']]);
+        const wheelEat = ROOT.children.find(c => c.key === 'treat').children.find(c => c.key === 'eat');
+        assert.equal(slots.find(s => s.key === 'eat').node, wheelEat, 'the same node object, not a copy');
+        for (const s of slots.slice(-2)) {
+            let n = ROOT;
+            for (const i of s.path) n = n.children[i];
+            assert.equal(n, s.node);
+        }
+    });
+
+    test('key 9 eats: food is eaten, a turn is spent', () => {
+        const g = makeGame([foe(PX + 1, PY)], { playerHp: 50, inventory: [stack(BURGER)] });
+        assert.equal(arcAllSlots(g).find(s => s.key === 'eat').reason, null);
+        g.tap('Digit9');
+        assert.equal(g.playerHp, 50 + BURGER.healAmount);
+        assert.equal(g.turns, 1);
+        assert.equal(g.state, 'idle');
+        assert.deepEqual(g.selected, [], 'the bag did not see the digit');
+    });
+
+    test('a greyed Eat says the wheel own reason and spends nothing', () => {
+        const g = makeGame([foe(PX + 1, PY)], { inventory: [] });
+        const eat = arcAllSlots(g).find(s => s.key === 'eat');
+        assert.ok(eat.reason, 'nothing to eat is greyed');
+        g.tap('Digit9');
+        assert.deepEqual(g.logs, [GREYED_REASON_TEXT[eat.reason]]);
+        assert.equal(g.turns, 0);
+        assert.equal(g.playerHp, 100);
+        const full = makeGame([foe(PX + 1, PY)], { inventory: [stack(BURGER)] });   // full health
+        const r = arcAllSlots(full).find(s => s.key === 'eat').reason;
+        assert.equal(r, 'full-health');
+        full.tap('Digit9');
+        assert.deepEqual(full.logs, [GREYED_REASON_TEXT[r]]);
+        assert.equal(full.turns, 0);
+    });
+
+    test('key 0 enters Run aim and the same key again runs, like the wheel Run', () => {
+        const g = makeGame([foe(PX + 1, PY)]);
+        g.tap('Digit0');
+        assert.equal(g.state, 'radial_menu');
+        assert.equal(g.wheel.aiming, true);
+        assert.equal(wm.selectedNode(g.wheel).key, 'run');
+        g.moves = [];
+        g._doMove = (d) => { g.moves.push(d); g.turns++; };
+        g.tap('Digit0');
+        assert.equal(g.moves.length, 1, 'ran one step');
+        assert.equal(g.turns, 1);
+    });
+
+    test('a click on the Eat slot eats too', () => {
+        const g = makeGame([foe(PX + 1, PY)], { playerHp: 50, inventory: [stack(BURGER)] });
+        g._screenToTile = () => ({ x: -999, y: -999 });
+        g._targetAt = () => null;
+        assert.equal(g._arcTap(slotPt(9)), true);
+        assert.equal(g.playerHp, 50 + BURGER.healAmount);
+    });
+
+    test('Eat and Run are drawn on the arc with their own numbers', () => {
+        const { r, drawn } = rig();
+        r._drawFightArc(bare({ enemies: [foe(PX + 1, PY)] }));
+        for (const t of ['EAT', 'RUN', '9', '10']) assert.ok(drawn.some(d => d.text === t), t);
     });
 });

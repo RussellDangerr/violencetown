@@ -16,6 +16,7 @@ const EAT_SLICE_TEXT_W = 96;
 import { TILE_SPRITE_MAP, TOWN_TILE_SPRITE_MAP, ZONE_TILE_SPRITE_MAP, ENEMY_SPRITES, itemSprite, CONTAINER_SPRITES, PLAYER_SPRITE, PROP_SPRITES, EMOTE_SPRITES, MARK_SPRITES, spriteVariant, spriteFrame, tileFrame, idHash, borderPropKeys, borderPropKey, fillerSprite, TINY_INK } from './sprites.js';
 import { INTERACTIONS, seenNotes } from './interactions.js'; // (IN1)
 import { UI, ITEM_COLORS, drawPanelBig, drawPanelSmall, drawInset } from './ui-sprites.js';
+import { handWeapon } from './weapons.js';   // (LH1) a bare right hand shows its fists
 import { CREDITS, currentCard } from './credits.js';   // (FIN4) the credits screen
 import { ROOT, selectedNode, activeRing, activeIndex, decisionPath, previewChildren, affectedTiles, verbApplies, isCombatActive, flapperDeflection, defaultVerb } from './wheel-model.js'; // (sunburst wheel) + the bump telegraph
 import {
@@ -27,7 +28,7 @@ import {
     deviceSkillsLayout, SKILL_COUNT_W, ringPassiveRows,                                     // (US2) the skills readout in the RINGS tab; (RR1) a ring's passive rows
     inspectorPanelRect, inspectorActionRects,                               // (C1) tap-to-inspect panel + action-row geometry
     gearOptionRects, gearChooserRect, gearEmptyNoteRect,                                     // (C2) GEAR chooser option-row + panel geometry
-    xmbBarLayout, hudLayout, throwRects, wheelTopMarks, fightPanelRects, XMB_CELL,                      // (XMB) usable-bar geometry; (screen-fill) the HUD, throw targets, the marks above the wheel
+    xmbBarLayout, hudLayout, dialogueBottom, throwRects, wheelTopMarks, fightPanelRects, XMB_CELL,                      // (XMB) usable-bar geometry; (screen-fill) the HUD, throw targets, the marks above the wheel
     LOOT_REEL, lootReelRect,                                                 // (FX3c) the loot reel's panel
     MODAL_RECT, offerLayout,                                             // (offer screen) the one panel + its geometry
 } from './layout.js';
@@ -47,7 +48,7 @@ import { PHASE, threatPhase, alertWatchers } from './threat-phase.js';        //
 import { isSafe } from './defeat-scenarios.js';   // (defeat legibility) mark safe-floor items
 import { buyPrice, sellPrice, bribeStepCost, mood, canTrade, band, BRIBE_STEP } from './trade.js'; // (trade slice 1) pricing + mood smiley; band feeds the offer meter's multiplier readout
 import { isHunting } from './ai.js'; // one spelling of "actively hunting the player"
-import { arcSlots, arcVisible, arcLayout, arcFaded, ARC_ALPHA, ARC_FADED_ALPHA } from './fight-arc.js';   // (FA1) the arc of attacks under you in a fight
+import { arcAllSlots, arcVisible, arcLayout, arcFaded, ARC_ALPHA, ARC_FADED_ALPHA } from './fight-arc.js';   // (FA1) the arc of attacks under you in a fight
 import { fighters, fightArea, FIGHT_MARGIN } from './fight-area.js';        // (fight-fog) who is in the fight, and what they can see
 import { entranceAt, fogReveal, fogDepth, fogOut, tileJitter, FOG_TINT, FOG_DENSITY, FOG_BLUR_TILES,
          FOG_FAR_TILES, FOG_IN_MS, FOG_OUT_MS } from './fight-entrance.js'; // (fight-fog) the entrance, and the fog's timeline and look
@@ -1822,6 +1823,12 @@ export class Renderer {
     // That is the condition for the bump telegraph: adjacent AND faced, so
     // turning on the spot moves the label from one neighbour to the next and the
     // player can see what each of them would do before committing to any.
+    // (FX63) The "NAME · VERB" tag is the hover of walking: it names what a bump does, so
+    // it has no business while a dialogue is already open with that person.
+    _facedLabelShows(game, e) {
+        return game.state !== 'dialogue' && this._isFaced(game, e);
+    }
+
     _isFaced(game, e) {
         const FACE = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
         const [dx, dy] = FACE[game.facing] || FACE.down;
@@ -2054,7 +2061,7 @@ export class Renderer {
             // Only the ONE character you face is labelled — a row of floating
             // verbs over a crowd would be noise, and the whole point is that this
             // reads as "the thing you are about to do".
-            if (this.font && !game._animating && !splatUp && !pest && this._isFaced(game, e)) {
+            if (this.font && !game._animating && !splatUp && !pest && this._facedLabelShows(game, e)) {
                 const verb = defaultVerb({ x: e.x, y: e.y, npc: e }, game);
                 if (verb) {
                     const who  = String((e.boss || e.rival ? shownName(e) : e.name || e.type) || '').replace(/[[\]]/g, '');
@@ -2649,7 +2656,7 @@ export class Renderer {
 
         // — Weapon line at the bottom (informational; the hotbar carries
         //   the canonical inventory).
-        const wpn = game.equipment.weapon;
+        const wpn = handWeapon(game.equipment);
         if (wpn && this.font) {
             const name = wpn.name.replace(/[\[\]]/g, '').toUpperCase();
             this.font.drawText(ctx, `${name}  ${wpn.damage} DMG`, x + 8, by, {
@@ -2869,6 +2876,7 @@ export class Renderer {
         else if (active === 'map')    this._drawWorldMapBody(game, body, body.y);
         else if (active === 'rings') this._drawDeviceRings(game, body);
         else if (active === 'notes') this._drawDeviceNotes(game, body);
+        else if (active === 'bodies') this._drawDeviceBodies(game, body);
 
         // (FX43) The bag lists the keys that work in it: the phrases the pickers and shop already
         // use for arrows and Esc, and a placeholder for Space until its verb is chosen.
@@ -2876,6 +2884,16 @@ export class Renderer {
         const fit = this._fitText(foot, R.w - 32, 1, 0.75);
         this.font.drawText(ctx, fit.text, CANVAS_PX / 2, R.y + R.h - 12, { color: UI.dim, scale: fit.scale, align: 'center' });
         ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    }
+
+    // (MS2) The bodies tab: Night Kid first, then each body worn so far in the order first worn.
+    // A body never worn has no row. Labels are placeholders.
+    _drawDeviceBodies(game, bodyRect) {
+        const { ctx } = this;
+        const rows = ['[kid]', ...(game.bodiesWorn || []).map(sp => `[${sp}]`)];
+        rows.forEach((label, i) => {
+            this.font.drawText(ctx, label, bodyRect.x + 8, bodyRect.y + 8 + i * 18, { color: UI.textLight, scale: 1 });
+        });
     }
 
     // (IN1) The notes tab: each interaction note seen so far, oldest first. Empty reads as one
@@ -3199,7 +3217,7 @@ export class Renderer {
         if (!game || !this.font || !arcVisible(game)) return;
         const { ctx } = this;
         const vp = this._view();
-        const slots = arcSlots(game);
+        const slots = arcAllSlots(game);
         if (!slots.length) return;
         const rects = arcLayout(vp).slots;
         const faded = arcFaded(vp, game, { x: this._scrollX || 0, y: this._scrollY || 0 });
@@ -4964,7 +4982,7 @@ export class Renderer {
         const m = mood(disp);
 
         // ── measure pass (size the panel to its content) ──
-        const R_X = 16, R_W = 576, R_BOTTOM = 592, PAD = 16, wellPadX = 14;
+        const R_X = 16, R_W = 576, R_BOTTOM = dialogueBottom(this._view()), PAD = 16, wellPadX = 14;
         const speechChars = Math.max(8, Math.floor((R_W - PAD * 2 - wellPadX - 6) / cw(S_BODY)));
         const speechLines = this._wrapText(game._dialogueReply || '', speechChars);
 

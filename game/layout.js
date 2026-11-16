@@ -432,6 +432,17 @@ export function targetListRowRect(i) {
 // renderer._drawDialogueModal, which stashes the live rect on this._dialogueRect
 // for the ✕ / tap-outside menu grammar.
 //
+// Where the dialogue window's bottom edge sits, in menu-box px: 592 in the 608
+// box, or higher when the box overlaps the dock (the box is centred on the whole
+// screen, the dock is not part of the world above it), so the window stops a few
+// px above the dock's top edge instead of covering the item bar and the log.
+export const DIALOGUE_BOTTOM = 592;
+export const DIALOGUE_DOCK_GAP = 4;
+export function dialogueBottom(vp) {
+  if (!vp || !vp.dockH || !vp.menu) return DIALOGUE_BOTTOM;
+  return Math.min(DIALOGUE_BOTTOM, vp.h - vp.dockH - vp.menu.y - DIALOGUE_DOCK_GAP);
+}
+
 // The trade window's two-grid geometry lived here until the offer screen
 // replaced it. TRADE_MODAL_RECT went with it: it was an alias of MODAL_RECT and
 // nothing named it any more.
@@ -485,9 +496,9 @@ export function closeButtonRect(r) {
 // existing draw bodies (ITEMS/GEAR/QUESTS/MAP). Geometry lives here so
 // renderer._drawDevice (draw) and main.js (hit-test) share ONE source of truth.
 export const DEVICE_RECT = MODAL_RECT;
-export const DEVICE_TABS = ['items', 'gear', 'quests', 'map', 'rings', 'notes'];
+export const DEVICE_TABS = ['items', 'gear', 'quests', 'map', 'rings', 'notes', 'bodies'];
 // (IN1) The label a tab shows when it differs from its id; the notes tab's name is a placeholder.
-export const DEVICE_TAB_LABELS = { notes: '[TEXT]' };
+export const DEVICE_TAB_LABELS = { notes: '[TEXT]', bodies: '[TEXT]' };
 export const DEVICE_TAB_H = 30;                        // tab-strip height
 const DEVICE_TAB_TOP = DEVICE_RECT.y + 38;             // below the title/✕ band (the chip ends at y+36)
 const DEVICE_TAB_PAD = 14;                             // strip inset from the frame sides
