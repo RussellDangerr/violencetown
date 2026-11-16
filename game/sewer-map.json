@@ -418,6 +418,14 @@
         "mystery_meat"
       ],
       "type": "Violet Fungus",
+      "weak": [
+        "energy",
+        "clean"
+      ],
+      "resist": [
+        "cold",
+        "fear"
+      ],
       "x": 12,
       "y": 9,
       "hp": 100,
@@ -456,6 +464,14 @@
         "mystery_meat"
       ],
       "type": "Violet Fungus",
+      "weak": [
+        "energy",
+        "clean"
+      ],
+      "resist": [
+        "cold",
+        "fear"
+      ],
       "x": 13,
       "y": 11,
       "hp": 100,
@@ -498,6 +514,14 @@
         "defence_poition"
       ],
       "type": "Red Fungus",
+      "weak": [
+        "energy",
+        "clean"
+      ],
+      "resist": [
+        "cold",
+        "fear"
+      ],
       "x": 8,
       "y": 4,
       "hp": 100,
@@ -527,6 +551,14 @@
         "defence_poition"
       ],
       "type": "Red Fungus",
+      "weak": [
+        "energy",
+        "clean"
+      ],
+      "resist": [
+        "cold",
+        "fear"
+      ],
       "x": 16,
       "y": 7,
       "facing": "N",
@@ -555,6 +587,14 @@
         "sludge_brain"
       ],
       "type": "Ghost Fungus",
+      "weak": [
+        "energy",
+        "clean"
+      ],
+      "resist": [
+        "cold",
+        "fear"
+      ],
       "x": 5,
       "y": 7,
       "facing": "N",
