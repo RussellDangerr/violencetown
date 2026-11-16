@@ -3751,6 +3751,26 @@ class Game {
         this._render();
     }
 
+    // (FX68) A pasted save replaces the run, so nothing the old run had open may outlive it:
+    // talk, offer, wheel and its aim, target pick, throw aim, inspect. CONTINUE does not call this.
+    _clearTransients() {
+        this._dialogueNpc = null;
+        this._dialogueReply = '';
+        this._dialogueCursor = 0;
+        this._offerNpc = null;
+        this._offer = null;
+        this._offerCursor = null;
+        this.wheel = createWheelState();
+        this._wheelOpenedByHold = false;
+        this.targetList = { x: 0, y: 0, target: null, verbs: [], sel: 0 };
+        this.inspect = null;
+        this.selectedSlot = -1;
+        this.overlayOptions = [];
+        this.overlayCursor = 0;
+        this._stopAutoRepeat?.();
+        this._heldDirKeys = [];
+    }
+
     _closeWheel() {
         // A wheel action's own world turn can kill you: _die has already set
         // DEAD and queued the defeat. _fireWheel closes the wheel after the

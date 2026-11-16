@@ -372,6 +372,9 @@ export async function importSaveCode(game, text) {
         if (before) { try { await loadInto(game, before); } catch (e2) { console.error('[save] rollback failed', e2); } }
         return { ok: false, reason: 'load', message: CODE_REFUSALS.load };
     }
+    // (FX68) loadInto only stands the state back to idle. Whatever the old run had open
+    // (talk, offer, wheel, target pick, throw aim) is cleared by the game itself.
+    game._clearTransients?.();
     return { ok: true };
 }
 
