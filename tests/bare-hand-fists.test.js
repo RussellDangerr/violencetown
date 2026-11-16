@@ -103,6 +103,7 @@ function makeGame({ right, left, bag = [], enemy } = {}) {
         _doMove(dir) { this.steps.push(dir); },
         // Stand-in: records what the swing asked for. Damage maths is pinned in the combat tests.
         combatAttack(target, damage, opts = {}) { this.attacks.push({ target, damage, opts }); return `${damage}`; },
+        bareHand: FISTS,
         _handsOf(def) { return (weaponClassOf(def) || {}).hands || 1; },
     };
     const devFree = {
@@ -127,7 +128,7 @@ function makeGame({ right, left, bag = [], enemy } = {}) {
         _wheelCommit: liveMethod('_wheelCommit() {', { needsFriendlyConfirm }),
         _aimRange: liveMethod('_aimRange(leaf) {', { aimRange }),
         _reticleKey: liveMethod('_reticleKey(code) {', { selectedNode, autoAimTile, cheb, audio }),
-        _fireWheel: liveMethod('_fireWheel() {', { compose, audio, STATE, perceives, handWeapon }),
+        _fireWheel: liveMethod('_fireWheel() {', { compose, audio, STATE, perceives }),
         _resumeHeldWalk: liveMethod('_resumeHeldWalk() {', { STATE, DIRS }),
         _stopAutoRepeat: liveMethod('_stopAutoRepeat() {'),
         _onStepSettled: liveMethod('_onStepSettled() {', { STATE }),
