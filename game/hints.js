@@ -97,6 +97,14 @@ export const HINTS = [
         text: '[You are hurt. The bar along the bottom is live — Shift+↑↓ picks something to drink.]',
     },
     {
+        id: 'ringFashion',
+        // The Were-Rat's fur is a ring waiting to be made. Quiet once any ring
+        // exists, so it never nags a player who already found Platero.
+        when: (game) => (game.ownedRings?.size || 0) === 0
+            && (game.inventory || []).some(s => s?.itemDef?.id === 'wererat_fur'),
+        text: '[TEXT: ring fashion hint — the silversmith, the rings tab, placeholder.]',
+    },
+    {
         id: 'fightArc',
         // The numbered arc under you appears the moment a fight starts, and the
         // number keys fire it. Same test the arc itself draws by (fight-arc arcOn).
