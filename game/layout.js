@@ -124,16 +124,20 @@ export function xmbBarLayout(bar, anchor = XMB_ANCHOR_CLASSIC, sel = null) {
     const cols = (bar && bar.columns) || [];
     const cx = anchor.cx;
     const bottom = anchor.bottom;
-    const chipY = bottom - XMB_ITEM_H - XMB_CHIP_H - 6;
+    // (TL3) On a phone `anchor.t` is the thumb size: chips and cells grow to it,
+    // and the name band under the cells stays 14 as on desktop.
+    const T = anchor.t || 0;
+    const chipH = T || XMB_CHIP_H, cell = T || XMB_CELL, itemH = T ? T + 14 : XMB_ITEM_H;
+    const chipY = bottom - itemH - chipH - 6;
     const n = cols.length;
     const totalW = n > 0 ? n * XMB_CHIP_W + (n - 1) * XMB_CHIP_GAP : 0;
     const startX = Math.round(cx - totalW / 2);
     const chips = cols.map((c, i) => ({
         key: c.key, label: c.label,
-        x: startX + i * (XMB_CHIP_W + XMB_CHIP_GAP), y: chipY, w: XMB_CHIP_W, h: XMB_CHIP_H,
+        x: startX + i * (XMB_CHIP_W + XMB_CHIP_GAP), y: chipY, w: XMB_CHIP_W, h: chipH,
     }));
-    const iconSize = XMB_ITEM_H - 6;                          // 40
-    const itemY = chipY + XMB_CHIP_H + 6;
+    const iconSize = itemH - 6;                               // 40
+    const itemY = chipY + chipH + 6;
 
     const colIndex = Math.max(0, Math.min(sel ? (sel.colIndex | 0) : 0, n - 1));
     const items = (cols[colIndex] && cols[colIndex].items) || [];
@@ -141,7 +145,7 @@ export function xmbBarLayout(bar, anchor = XMB_ANCHOR_CLASSIC, sel = null) {
 
     // The row never grows wider than the chips above it, so the bar's panel —
     // which is sized from the chips — always contains it.
-    const stride = XMB_CELL + XMB_CELL_GAP;
+    const stride = cell + XMB_CELL_GAP;
     const fit = totalW > 0 ? Math.max(1, Math.floor((totalW + XMB_CELL_GAP) / stride)) : 1;
     const shown = Math.min(items.length, fit);
     const overflow = items.length > shown;
@@ -157,7 +161,7 @@ export function xmbBarLayout(bar, anchor = XMB_ANCHOR_CLASSIC, sel = null) {
         cells.push({
             index, id: it && it.itemDef ? it.itemDef.id : null, slot: it ? it.slot : -1,
             count: it ? it.count : 0, selected: index === pick,
-            x: rowX + k * stride, y: itemY, w: XMB_CELL, h: XMB_CELL,
+            x: rowX + k * stride, y: itemY, w: cell, h: cell,
         });
     }
 
@@ -165,10 +169,13 @@ export function xmbBarLayout(bar, anchor = XMB_ANCHOR_CLASSIC, sel = null) {
     const current = chosen
         ? { x: chosen.x, y: chosen.y, w: chosen.w, h: chosen.h }
         : { x: Math.round(cx - iconSize / 2), y: itemY, w: iconSize, h: iconSize };
-    const rowRight = cells.length ? cells[cells.length - 1].x + XMB_CELL : current.x + current.w;
-    const up   = { x: rowRight + 10, y: itemY - 4,              w: 18, h: 14 };
-    const down = { x: rowRight + 10, y: itemY + XMB_CELL - 10,  w: 18, h: 14 };
-    return { chips, items: cells, current, up, down, bottom, overflow };
+    const rowRight = cells.length ? cells[cells.length - 1].x + cell : current.x + current.w;
+    // (TL3) A thumb-sized arrow is as big as a cell, so the pair cannot stack:
+    // ▲ sits left of the row and ▼ right of it.
+    const rowLeft = cells.length ? cells[0].x : current.x;
+    const up   = T ? { x: rowLeft - 10 - T, y: itemY, w: T, h: T } : { x: rowRight + 10, y: itemY - 4,              w: 18, h: 14 };
+    const down = T ? { x: rowRight + 10,    y: itemY, w: T, h: T } : { x: rowRight + 10, y: itemY + XMB_CELL - 10,  w: 18, h: 14 };
+    return { chips, items: cells, current, up, down, bottom, overflow, thumb: T };
 }
 
 // The XMB usable-bar's background PANEL rect for `n` visible category chips
@@ -179,7 +186,7 @@ export function xmbBarPanelRect(n = 3, anchor = XMB_ANCHOR_CLASSIC) {
   const totalChips = n * stride - gap;               // n=3 -> 300
   const left = anchor.cx - totalChips / 2 - 10;      // n=3, classic -> 144
   const right = anchor.cx + totalChips / 2 + 10;     // n=3, classic -> 464
-  const top = anchor.bottom - 78;                    // chipY - 6: classic 510
+  const top = anchor.bottom - (anchor.t ? 2 * anchor.t + 26 : 78);   // chipY - 6: classic 510
   const bottom = anchor.bottom + 4;                  // the panel's bottom edge: classic 592
   return { x: left, y: top, w: right - left, h: bottom - top };
 }
@@ -201,7 +208,7 @@ export function hudInteractiveRects(state, vp = DEFAULT_VIEW) {
     rects.push({ name: 'xmb', rect: xmbBarPanelRect(3, hud.bar) });
     // The open wheel replaces its own opener: the dial is drawn over where the
     // ✦ sits, and the ✦ is not tappable while the wheel is up.
-    if (state === 'radial_menu') rects.push({ name: 'dial', rect: dialRect(hud) });
+    if (state === 'radial_menu') rects.push({ name: 'dial', rect: dialRect(hud, hud.thumb ? hud.dialRadius(3, false) : DIAL_MAX_R) });
     else if (hud.opener) rects.push({ name: 'opener', rect: hud.opener });
   }
   return rects;
@@ -224,7 +231,10 @@ export const WHEEL_RING_GAP  = 4;            // gap between adjacent rings
 export const WHEEL_RING0_R0  = 28;           // inner edge of the first ring out from the hub
 export const WHEEL_TILE_GAP  = 0.03;         // angular gap between tiles (radians)
 // Ring k's [inner, outer] radius (k = 0 nearest the hub).
-export function wheelRingR(k) { const r0 = WHEEL_RING0_R0 + k * (WHEEL_RING_W + WHEEL_RING_GAP); return [r0, r0 + WHEEL_RING_W]; }
+export const WHEEL_DESKTOP = Object.freeze({ hubR: WHEEL_HUB_R, ringW: WHEEL_RING_W, gap: WHEEL_RING_GAP, r0: WHEEL_RING0_R0 });
+// (TL3) On a phone the hub and every ring are `t` thick (the thumb size).
+export function wheelMetrics(t = 0) { return t ? Object.freeze({ hubR: t / 2, ringW: t, gap: 2, r0: t / 2 + 2 }) : WHEEL_DESKTOP; }
+export function wheelRingR(k, m = WHEEL_DESKTOP) { const r0 = m.r0 + k * (m.ringW + m.gap); return [r0, r0 + m.ringW]; }
 
 // ── Quest Log panel (bottom-left) + [L] history modal panel ──
 // One consolidated "Quest Log" box holding the zone/time/turn header, the active
@@ -320,11 +330,35 @@ export function wheelTopMarks(outerMost) {
 // The dial the wheel sits on, sized for the wheel as it is drawn: with
 // children to preview, the outermost ring is the preview ring and the pointer
 // tops it; at a leaf, the FIRE cue tops the active ring.
-export function dialRadius(depth, hasKids) {
-    const marks = wheelTopMarks(wheelRingR(hasKids ? depth : depth - 1)[1]);
+export function dialRadius(depth, hasKids, m = WHEEL_DESKTOP) {
+    const marks = wheelTopMarks(wheelRingR(hasKids ? depth : depth - 1, m)[1]);
     return (hasKids ? marks.pointerTop : marks.cueTop) + DIAL_MARGIN;
 }
 export const DIAL_MAX_R = dialRadius(3, false);   // a leaf at the deepest ring: 162
+
+// ── Thumb size (TL3, plans/tl3-thumb-sized-dock-wheel.md) ──
+// A phone's tap target is 44 CSS px; in logical px that is 44 * logicalPerCss,
+// rounded up to an even number so art pixels stay whole. On a screen that
+// squeezes the world (logicalPerCss over THUMB_MIN_PER_CSS: every phone,
+// no desktop) the dock and the wheel are laid out at that size. It needs a
+// viewport built with thumbDock(vp) (a taller dock); one built with DOCK keeps
+// today's layout, so older callers and tests are unchanged.
+export const THUMB_CSS = 44;
+export const THUMB_MIN_PER_CSS = 1.2;
+const thumbSize = (vp) => (vp && vp.logicalPerCss > THUMB_MIN_PER_CSS) ? 2 * Math.ceil(THUMB_CSS * vp.logicalPerCss / 2) : 0;
+const thumbLogH = (t) => Math.max(84, t);                    // the log: header + objective + 3 lines, at least a thumb tall
+const thumbBarH = (t) => (2 * t + 26) + 4;                   // the bar panel: chips, a gap, cells, the name band
+const thumbDockH = (t) => 2 * 8 + thumbLogH(t) + 12 + thumbBarH(t);
+// The dock to build a viewport with: DOCK, or the taller phone dock.
+export function dockFor(vp) {
+    const t = thumbSize(vp);
+    return t ? Object.freeze({ oneRow: thumbDockH(t), twoRows: thumbDockH(t), minOneRowW: Infinity }) : DOCK;
+}
+// The thumb size a built viewport's dock and wheel use, or 0 for today's layout.
+export function thumbOf(vp) {
+    const t = thumbSize(vp);
+    return (t && vp.dockRows === 2 && vp.dockH >= thumbDockH(t)) ? t : 0;
+}
 
 // (combat-hud stage 2) The open wheel's dial as a rect: the disc's bounding box
 // around the hub. The dial is a circle, so this is conservative — which is what
@@ -372,6 +406,8 @@ export function fightPanelRects(vp = DEFAULT_VIEW) {
 
 function dockLayout(vp, fight = false) {
     const { w, h } = vp;
+    const T = thumbOf(vp);
+    if (T) return thumbDockLayout(vp, fight, T);
     const dialLeft = dialColumnLeft(w);
     // The item bar centres in the dock MINUS the dial's column, so a narrow
     // dock slides it left rather than letting it run under the wheel. On a wide
@@ -403,6 +439,31 @@ function dockLayout(vp, fight = false) {
         log, bar: { cx, bottom: barBottom }, wheel, strip: dock.y,
         dock, opener: { x: openerX, y: openerY, w: OPENER, h: OPENER },
         dialRadius,
+    };
+}
+
+// (TL3) The phone's dock: two rows, the log above, the item bar below with the
+// opener at its right. The wheel is too big to leave a column for (its rings
+// are a thumb thick), so it opens over the dock, centred, and the log runs full
+// width. Every tap target here is at least `t` logical px (44 CSS).
+function thumbDockLayout(vp, fight, t) {
+    const { w, h } = vp;
+    const m = wheelMetrics(t);
+    const R = dialRadius(3, false, m);
+    const dock = { x: 0, y: h - vp.dockH, w, h: vp.dockH, rows: 2 };
+    const wheel = { cx: Math.round(w / 2), cy: h - Math.ceil(R * 1.05) - 2 };   // room for the 1.05 open overshoot
+    const log = { x: DOCK_PAD, y: dock.y + DOCK_PAD, w: w - 2 * DOCK_PAD, h: thumbLogH(t), ...logFace(fight, 3) };
+    const rowTop = log.y + log.h + HUD_GAP;
+    const barBottom = rowTop + 2 * t + 26;
+    const barH = thumbBarH(t);
+    const opener = { x: w - DOCK_PAD - t, y: rowTop + Math.round((barH - t) / 2), w: t, h: t };
+    return {
+        hp: { x: HUD_M, y: HUD_M },
+        buffsRight: w - HUD_M - Math.ceil(PAGE_BUTTONS_CSS * vp.logicalPerCss), buffsTop: HUD_M,
+        log, bar: { cx: Math.round(w / 2), bottom: barBottom, t }, wheel, strip: dock.y,
+        dock, opener,
+        dialRadius: (depth, hasKids) => dialRadius(depth, hasKids, m),
+        wheelM: m, thumb: t,
     };
 }
 
