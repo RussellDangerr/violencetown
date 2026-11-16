@@ -14,12 +14,17 @@ import { fighters } from './fight-area.js';
 import { tileToScreen } from './viewport.js';
 import { TILE_PX } from './data.js';
 
-export const ARC_MAX = 8;
+// Attacks take slots 1-8; Eat and Run (EA1) sit after them at fixed slots 9 and 10, on keys 9 and 0.
+export const ARC_ATTACK_MAX = 8;
+export const ARC_MAX = 10;
 
 // The arc's slots, in their fixed order. Ranged and Throw are the same action on the wheel
 // (Ranged is "a duplicate of TRICK > Throw, by design"), so the arc has the one slot; that
 // keeps the cap at eight even with all three spells.
-export const ARC_KEYS = Object.freeze(['hit', 'cleave', 'spin', 'ranged', 'fireball', 'coneofcold', 'boo', 'defend']);
+export const ARC_ATTACK_KEYS = Object.freeze(['hit', 'cleave', 'spin', 'ranged', 'fireball', 'coneofcold', 'boo', 'defend']);
+// Eat and Run: the wheel's own nodes (Treat > Eat, Flight > Run), each at a fixed number.
+export const ARC_EXTRA_KEYS = Object.freeze(['eat', 'run']);
+export const ARC_KEYS = Object.freeze([...ARC_ATTACK_KEYS, ...ARC_EXTRA_KEYS]);
 
 // Find a node by key in the wheel's tree: { node, path } with path = indices into ROOT.
 function findNode(key, node = ROOT, path = []) {
@@ -34,24 +39,39 @@ function findNode(key, node = ROOT, path = []) {
 
 // Found live, each time: the Melee ring changes with the weapon in hand (setMeleeKit), so a
 // node or path worked out once at load goes stale. A key the ring does not have has no slot.
-const found = () => ARC_KEYS.map(key => findNode(key)).filter(Boolean);
+const found = (keys) => keys.map(key => findNode(key)).filter(Boolean);
 
 function owns(node, game) {
     if (!node.spellId) return true;   // moves are always yours; only spells are owned or not
     return game.hasSpell ? !!game.hasSpell(node.spellId) : (game.knownSpells || []).includes(node.spellId);
 }
 
-// Every slot you have right now, numbered from 1. `reason` is wheel-model's greyed reason
-// key (null when the slot is usable); `line` is its log line.
+const slotOf = (n, { node, path }, game) => {
+    const reason = greyedReason(node, game);
+    return { n, key: node.key, label: node.label, node, path, reason, line: reason ? GREYED_REASON_TEXT[reason] : null };
+};
+
+// Every ATTACK slot you have right now, numbered from 1 with no gap. `reason` is wheel-model's
+// greyed reason key (null when the slot is usable); `line` is its log line.
 export function arcSlots(game) {
     const out = [];
-    for (const { node, path } of found()) {
-        if (!owns(node, game)) continue;
-        if (out.length >= ARC_MAX) break;
-        const reason = greyedReason(node, game);
-        out.push({ n: out.length + 1, key: node.key, label: node.label, node, path, reason, line: reason ? GREYED_REASON_TEXT[reason] : null });
+    for (const f of found(ARC_ATTACK_KEYS)) {
+        if (!owns(f.node, game)) continue;
+        if (out.length >= ARC_ATTACK_MAX) break;
+        out.push(slotOf(out.length + 1, f, game));
     }
     return out;
+}
+
+// Eat and Run (EA1): the wheel's own nodes, at fixed numbers 9 and 10 (keys 9 and 0) whatever
+// the attacks are, so a number never moves.
+export function arcExtraSlots(game) {
+    return found(ARC_EXTRA_KEYS).map((f, i) => slotOf(ARC_ATTACK_MAX + 1 + i, f, game));
+}
+
+// Every slot the arc shows: the attacks, then Eat and Run.
+export function arcAllSlots(game) {
+    return [...arcSlots(game), ...arcExtraSlots(game)];
 }
 
 // A fight is on: the same test the fog uses (fight-area.js).
@@ -68,9 +88,9 @@ export function arcVisible(game) {
 }
 
 // ── Geometry (all stand-ins; the look is the owner's) ───────────────────────
-export const ARC_RX = 190;        // half-ellipse radii, logical px, from the player's centre
-export const ARC_RY = 84;         // 64 keeps the ring of tiles beside you (reach 48) clear of it
-export const ARC_SLOT_W = 64;
+export const ARC_RX = 224;        // half-ellipse radii, logical px, from the player's centre
+export const ARC_RY = 100;        // 64 keeps the ring of tiles beside you (reach 48) clear of it
+export const ARC_SLOT_W = 56;
 export const ARC_SLOT_H = 28;
 export const ARC_ALPHA = 0.9;
 export const ARC_FADED_ALPHA = 0.2;
@@ -110,7 +130,7 @@ export function arcFaded(vp, game, scroll = { x: 0, y: 0 }) {
     if (!w || !w.aiming || !w.reticle) return false;
     const tiles = affectedTiles(w, game);
     const rects = arcLayout(vp).slots;
-    const have = new Set(arcSlots(game).map(s => s.n));
+    const have = new Set(arcAllSlots(game).map(s => s.n));
     return tiles.some(t => {
         const p = tileToScreen(vp, t.x, t.y, game.playerX, game.playerY, scroll.x, scroll.y);
         const tr = { x: p.x, y: p.y, w: TILE_PX, h: TILE_PX };

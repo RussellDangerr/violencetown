@@ -105,7 +105,7 @@ import {
 import * as Settings from './settings.js'; // [settings] options/accessibility store
 import { spiritToShow } from './spirit-replay.js';                                        // (heroic spirits) the boss-door replay
 import { introAt, isSkipKey } from './tv-intro.js';                                     // (TV1) the TV opening before the title
-import { arcSlots, arcVisible, arcSlotAt, arcFaded, ARC_MAX } from './fight-arc.js';                  // (FA1) the arc of attacks under you in a fight
+import { arcAllSlots, arcVisible, arcSlotAt, arcFaded, ARC_MAX } from './fight-arc.js';                  // (FA1) the arc of attacks under you in a fight
 import { fighters, joiners } from './fight-area.js';                                     // (fight-fog) who is in the fight
 import { fightStartKind, entranceFor, fightFxActive } from './fight-entrance.js'; // (fight-fog) how it began, and how long its fog moves
 import { createCascade, CASCADE_BEAT_MS, LUNGE_MS } from './cascade.js';           // (turn-model C1) the enemy phase, one actor at a time
@@ -4008,7 +4008,8 @@ class Game {
     // Digit1-8 while the arc shows: run that slot. False when the arc is not showing (no fight,
     // a menu up) or the key is not 1-8, so the caller carries on with the bag as before.
     _arcDigit(code) {
-        const n = this._digitToSlot(code) + 1;
+        // 1-9 are slots 1-9 and 0 is slot 10 (Run); the bag's own mapping has no 0.
+        const n = code === 'Digit0' ? 10 : this._digitToSlot(code) + 1;
         if (n < 1 || n > ARC_MAX || !arcVisible(this)) return false;
         this._arcPress(n);
         return true;
@@ -4021,7 +4022,7 @@ class Game {
         if (!arcVisible(this)) return false;
         const vp = this._vp();
         if (arcFaded(vp, this)) return false;
-        const n = arcSlotAt(vp, arcSlots(this), pt);
+        const n = arcSlotAt(vp, arcAllSlots(this), pt);
         if (!n) return false;
         const tile = this._screenToTile(pt);
         if (this._targetAt(tile.x, tile.y)) return false;
@@ -4030,7 +4031,7 @@ class Game {
     }
 
     _arcPress(n) {
-        const slot = arcSlots(this).find(s => s.n === n);
+        const slot = arcAllSlots(this).find(s => s.n === n);
         if (!slot) { audio.playSfx('bump-wall'); return; }
         const w = this.wheel;
         if (this.state === STATE.RADIAL_MENU) {
