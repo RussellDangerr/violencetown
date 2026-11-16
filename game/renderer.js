@@ -719,6 +719,7 @@ export class Renderer {
         // Depth pass: enemies + player draw in one y-sorted (feet-line) pass so
         // closer characters occlude farther ones, each grounded by a drop-shadow.
         this._drawActors(game);
+        this._drawExamineLabel(game, this._view());   // (EX1) a faced note, sign or wreck
         this._drawSpirit(game);       // (heroic spirits) the boss-door replay, under the fog
         this._drawJammedDoor(game);
 
@@ -1754,7 +1755,6 @@ export class Renderer {
             this._koShown = null;
         }
         this._drawRestLabel(game, vp);
-        this._drawExamineLabel(game, vp);
     }
 
     // (HP1) The faced bench names its verb over itself, like a faced character does.
