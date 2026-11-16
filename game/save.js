@@ -24,6 +24,7 @@ import { sanitizeNoteIds } from './interactions.js';
 import { sanitizeRespawnLists, sanitizeFilledSpots } from './drops.js';
 import { sanitizeRivals } from './rivals.js';
 import { sanitizeSpent } from './npc-memory.js';
+import { sanitizeKnown } from './fight-panels.js';
 
 // 2: two hands (plans/ws3-two-hands-left-right.md) — equipment.left joins
 // equipment.weapon, which is now the right hand.
@@ -129,6 +130,7 @@ export function serialize(game) {
             // them, per zone. Left out while empty, like the lists above.
             ...chestEntry(game),
             ...spentEntry(game),
+            ...knownWeakEntry(game),   // (WN1)
             // (plans/mp2-map-dims-unvisited.md) Overworld zones entered. Left out for an old
             // save (null), where every zone counts as visited.
             ...visitedEntry(game),
@@ -206,6 +208,12 @@ function tookGoldEntry(game) {
 function spentEntry(game) {
     const spentChoices = sanitizeSpent(game._spentChoices);
     return Object.keys(spentChoices).length ? { spentChoices } : {};
+}
+
+// (WN1) What you have learned of each kind of foe's weak and resisted types; left out while empty.
+function knownWeakEntry(game) {
+    const knownWeak = sanitizeKnown(game._knownWeak);
+    return Object.keys(knownWeak).length ? { knownWeak } : {};
 }
 
 function chestEntry(game) {
@@ -428,6 +436,7 @@ export function migrate(raw) {
     // An older save has no chest record: every container is as the map made it.
     r.world.chestRecords = sanitizeChestRecords(r.world.chestRecords);
     r.world.spentChoices = sanitizeSpent(r.world.spentChoices);   // (NM1)
+    r.world.knownWeak = sanitizeKnown(r.world.knownWeak);   // (WN1)
     // An older save has no visited record: every zone counts as visited.
     if (sanitizeVisited(r.world.visitedZones) === null) delete r.world.visitedZones;
     if (r.quest === undefined) r.quest = null;
@@ -529,6 +538,7 @@ export async function loadInto(game, raw) {
     game._returnPicks = { ...defaultReturning(), ...(raw.world.returningPicks || {}) };
     game._chestRecords = sanitizeChestRecords(raw.world.chestRecords);
     game._spentChoices = sanitizeSpent(raw.world.spentChoices);   // (NM1)
+    game._knownWeak = sanitizeKnown(raw.world.knownWeak);   // (WN1)
     // null (no record) is kept: the Map shows every zone as visited.
     { const v = sanitizeVisited(raw.world.visitedZones); game._visitedZones = v ? new Set(v) : null; }
 

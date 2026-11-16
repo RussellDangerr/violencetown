@@ -65,7 +65,7 @@ export function takeable(victim) {
 // The right panel: who you are fighting, what they have, and what you could
 // take. HP as digits, kit by name — precision is what the player is planning
 // against, and "3 items" does not tell you whether robbing them is worth it.
-export function targetPanel(victim) {
+export function targetPanel(victim, known) {
     if (!victim) return null;
     const ent = victim.entity || {};
     return {
@@ -79,6 +79,39 @@ export function targetPanel(victim) {
         worn: (victim.equipped ?? []).map((id) => ({ id, name: itemName(id) })),
         kit: (victim.loadout ?? []).map((id) => ({ id, name: itemName(id) })),
         takeable: takeable(victim),
+        // (WN1) What you have learned of this kind of foe; empty lists draw no line.
+        ...knownLines(victim, known),
+    };
+}
+
+// (WN1, WNR1 b) The known list is { <enemy type>: [damage type, ...] }: a type goes in when a
+// hit of it lands on a foe of that kind that is weak to it or resists it. Nothing else is kept,
+// so a run that learns nothing saves nothing.
+export function learnFromHit(known, victim, damageType) {
+    if (!known || !victim || !victim.type || typeof damageType !== 'string') return false;
+    const meets = victim.weak?.includes(damageType) || victim.resist?.includes(damageType);
+    if (!meets) return false;
+    const list = (known[victim.type] ||= []);
+    if (list.includes(damageType)) return false;
+    list.push(damageType);
+    return true;
+}
+
+export function sanitizeKnown(raw) {
+    const out = {};
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+    for (const [type, list] of Object.entries(raw)) {
+        const kept = Array.isArray(list) ? [...new Set(list.filter((t) => typeof t === 'string'))] : [];
+        if (kept.length) out[type] = kept;
+    }
+    return out;
+}
+
+function knownLines(victim, known) {
+    const got = (known && known[victim.type]) || [];
+    return {
+        weak: (victim.weak ?? []).filter((t) => got.includes(t)),
+        resist: (victim.resist ?? []).filter((t) => got.includes(t)),
     };
 }
 

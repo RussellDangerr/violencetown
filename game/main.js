@@ -67,7 +67,7 @@ import {
 } from './offer.js';   // (offer screen) the basket model
 import { canTrade, sellPrice, specialDef, transferGold, burnGold, saleLocked, SALE_LOCK_REFUSAL } from './trade.js'; // pricing + the transaction spine
 import { logCategory } from './combat-log.js';   // (log tagging) one rule for a message's category
-import { takeable } from './fight-panels.js';   // (combat-hud stage 4) the one answer to "what could I take"
+import { takeable, learnFromHit } from './fight-panels.js';   // (combat-hud stage 4) the one answer to "what could I take"
 import { buildXmbBar, resolveXmbSelection, cycleXmbCategory, cycleXmbItem, xmbCategoryOf, XMB_LABELS } from './xmb.js';
 import { startSewerEscape, onSewerEnemyKilled, hitBarricade } from './sewer-setpiece.js';
 import { biteSunMan, riseSunMan, beastFell, resetBeast, finaleTick, blocksCowerHit, restoreFinale, isCowering } from './finale-setpiece.js';
@@ -520,6 +520,7 @@ class Game {
         // _loadMap lets these win over the map's own contents. Persisted (left out
         // while empty).
         this._chestRecords = {};
+        this._knownWeak = {};   // (WN1) { enemy type: [damage types learned] }
         this._spentChoices = {};   // (NM1) { mapUrl: { spawnId: [choiceId] } }: one-time talk choices used
         this._visitedZones = new Set();     // (mp2) overworld zones entered; null = an old save, every zone counts
         this._mapUrl = null;                // url of the currently-loaded map
@@ -5347,6 +5348,11 @@ class Game {
 
     // ── Combat ───────────────────────────────────────────────────────────────
 
+    // (WN1, WNR1 b) Land a hit of a type the foe is weak to or resists and you know it for that kind.
+    _learnWeakness(enemyObj, damageType) {
+        learnFromHit(this._knownWeak ||= {}, enemyObj, damageType);
+    }
+
     combatAttack(enemyObj, damage, opts = {}) {
         if (this._finaleBlocksHit?.(enemyObj)) return null;   // (FIN3) no one strikes the cowering Sun Man
         const playerEntity = { name: '[Player]', isDead: () => false };
@@ -5389,6 +5395,8 @@ class Game {
             state: kinds.includes('state') ? WEAKNESS_MULT : 1,
         });
         if (finalDmg === 0) { this._log(`[${enemyObj.shownName || enemyObj.type} is immune!]`, 'combat'); return null; }
+        // (WN1, WNR1 b) A landed hit of a type the foe is weak to or resists teaches you that.
+        this._learnWeakness?.(enemyObj, opts.type || kind);
         if (weakHit.knockout) finalDmg = knockoutDamage(finalDmg, enemyObj.entity);
         if (backstab) this._log('[Backstab!]', 'combat');
 
@@ -6605,6 +6613,7 @@ class Game {
         this._bossDropsGiven = new Set();
         this._chestRecords = {};
         this._spentChoices = {};
+        this._knownWeak = {};   // (WN1)
         this._visitedZones = new Set();   // (mp2) a new run has been nowhere yet
         this._muggedIds = new Set();
         this._robbed = {};
