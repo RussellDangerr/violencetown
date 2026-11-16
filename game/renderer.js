@@ -23,7 +23,7 @@ import {
     LOG_MODAL_RECT, TARGET_LIST_RECT, TARGET_LIST_ROW_H,
     ITEM_OVERLAY_RECT, ITEM_OVERLAY_ROW_H,
     WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR, WHEEL_DESKTOP,
-    EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, EQUIP_LEFT_HAND_RECT, closeButtonRect,
+    EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, EQUIP_LEFT_HAND_RECT, closeButtonRect, deviceSheetRect,
     DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_LABELS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceBagPagerRects, deviceEquipLayout, gearArmourRect, deviceRingsLayout,
     deviceSkillsLayout, SKILL_COUNT_W, ringPassiveRows,                                     // (US2) the skills readout in the RINGS tab; (RR1) a ring's passive rows
     inspectorPanelRect, inspectorActionRects,                               // (C1) tap-to-inspect panel + action-row geometry
@@ -819,12 +819,12 @@ export class Renderer {
                 trade:       MODAL_RECT,   // STATE.TRADE is also the offer screen's state —
                                            // one panel rect serves both.
                 dialogue:    this._dialogueRect,
-                device:      DEVICE_RECT,
+                device:      deviceSheetRect(vp) || DEVICE_RECT,   // (TL4) a phone's sheet fills the screen
             }[game.state] || null;
             // Stashed in SCREEN px: the panel was drawn inside the menu box, and
             // main hit-tests the ✕ and tap-outside against the screen.
             this._menuPanelRect = CLOSE_PANEL && { x: CLOSE_PANEL.x + box.x, y: CLOSE_PANEL.y + box.y, w: CLOSE_PANEL.w, h: CLOSE_PANEL.h };
-            this._closeBtnRect = this._menuPanelRect ? closeButtonRect(this._menuPanelRect) : null;
+            this._closeBtnRect = this._menuPanelRect ? closeButtonRect(this._menuPanelRect, game.state === 'device' ? (deviceSheetRect(vp)?.thumb || 0) : 0) : null;
             if (this._closeBtnRect) this._drawCloseButton(this.ctx, this._closeBtnRect);
         }
 
@@ -850,7 +850,7 @@ export class Renderer {
         ctx.closePath();
         ctx.fillStyle = UI.panelBg; ctx.fill();
         ctx.lineWidth = 2; ctx.strokeStyle = UI.panelBorder; ctx.stroke();
-        const m = 9;
+        const m = Math.round(w * 0.3);   // 9 on the 30px chip
         ctx.lineWidth = 2.5; ctx.strokeStyle = UI.gold; ctx.lineCap = 'round';
         ctx.beginPath();
         ctx.moveTo(x + m, y + m); ctx.lineTo(x + w - m, y + h - m);
@@ -2843,7 +2843,8 @@ export class Renderer {
     _drawDevice(game) {
         const { ctx } = this;
         const ui = this.uiSheet;
-        const R = DEVICE_RECT;
+        const sheet = deviceSheetRect(this._view());   // (TL4) null off a phone
+        const R = sheet || DEVICE_RECT;
         ctx.fillStyle = 'rgba(0,0,0,0.72)';
         this._fillScreen(ctx);
         if (ui?.loaded) drawPanelBig(ctx, ui, R.x, R.y, R.w, R.h, 'base');
@@ -2851,12 +2852,12 @@ export class Renderer {
         if (!this.font) return;
 
         // Title (the ✕ chip is drawn top-right by the CLOSE_PANEL machinery).
-        this.font.drawText(ctx, 'REMOTICON', CANVAS_PX / 2, R.y + 12, { color: UI.gold, scale: 2, align: 'center' });
+        this.font.drawText(ctx, 'REMOTICON', R.x + R.w / 2, sheet ? R.y + sheet.thumb / 2 + 4 : R.y + 12, { color: UI.gold, scale: 2, align: 'center' });
 
         // Tab strip — active tab gold + stroked, the rest dim.
         const active = game._deviceTab || 'items';
         for (let i = 0; i < DEVICE_TABS.length; i++) {
-            const t = deviceTabRect(i);
+            const t = deviceTabRect(i, sheet);
             const on = DEVICE_TABS[i] === active;
             drawInset(ctx, t.x, t.y, t.w, t.h);
             if (on) { ctx.strokeStyle = UI.gold; ctx.lineWidth = 2; ctx.strokeRect(t.x + 1, t.y + 1, t.w - 2, t.h - 2); }
@@ -2864,7 +2865,7 @@ export class Renderer {
         }
 
         // Delegate the active tab's body into the shared body region.
-        const body = deviceBodyRect();
+        const body = deviceBodyRect(sheet, active);
         if (active === 'items') {
             this._drawHotbar(game, body);
             if (game._deviceSel && game._deviceSel.tab === 'items' && game.inventory[game._deviceSel.index]) {
@@ -2882,7 +2883,7 @@ export class Renderer {
         // use for arrows and Esc, and a placeholder for Space until its verb is chosen.
         const foot = active === 'items' ? '[ ] TABS   ↑↓ PICK   SPACE [TEXT]   ESC CLOSE' : '[ ] TABS   ESC CLOSE';
         const fit = this._fitText(foot, R.w - 32, 1, 0.75);
-        this.font.drawText(ctx, fit.text, CANVAS_PX / 2, R.y + R.h - 12, { color: UI.dim, scale: fit.scale, align: 'center' });
+        this.font.drawText(ctx, fit.text, R.x + R.w / 2, R.y + R.h - 12, { color: UI.dim, scale: fit.scale, align: 'center' });
         ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     }
 
@@ -3027,8 +3028,13 @@ export class Renderer {
         const sh = rects[0].h;
 
         // Parchment bands behind each zone (drawn first so the labels sit on top).
-        drawPanelSmall(ctx, rects[0].x - 4, rects[0].y - 4, (rects[9].x + rects[9].w) - rects[0].x + 8, sh + 8, this.uiSheet);
-        drawPanelSmall(ctx, rects[10].x - 4, rects[10].y - 4, (rects[19].x + rects[19].w) - rects[10].x + 8, (rects[49].y + rects[49].h) - rects[10].y + 8, this.uiSheet);
+        const band = (a, b) => {   // the box around rects a..b (the SAFE rows, the PACK rows)
+            const zone = rects.slice(a, b + 1);
+            const x0 = Math.min(...zone.map(r => r.x)), y0 = Math.min(...zone.map(r => r.y));
+            const x1 = Math.max(...zone.map(r => r.x + r.w)), y1 = Math.max(...zone.map(r => r.y + r.h));
+            drawPanelSmall(ctx, x0 - 4, y0 - 4, x1 - x0 + 8, y1 - y0 + 8, this.uiSheet);
+        };
+        band(0, 9); band(10, 49);
 
         // Zone labels, on top of the bands.
         if (this.font) {
@@ -3061,14 +3067,18 @@ export class Renderer {
                 const spr = itemSprite(stack.itemDef.id);
                 let drawn = false;
                 if (spr && sprites?.[spr.sheet]?.loaded) {
-                    drawn = sprites[spr.sheet].drawRegion(ctx, spr.x, spr.y, spr.w, spr.h, rect.x + 7, rect.y + 9, 24, 24);
+                    // (TL4) a phone's bigger slot draws a bigger icon, centred; today's slot is unchanged
+                    drawn = bodyRect.thumb
+                        ? sprites[spr.sheet].drawRegion(ctx, spr.x, spr.y, spr.w, spr.h, rect.x + (rect.w - 48) / 2, rect.y + (rect.h - 48) / 2, 48, 48)
+                        : sprites[spr.sheet].drawRegion(ctx, spr.x, spr.y, spr.w, spr.h, rect.x + 7, rect.y + 9, 24, 24);
                 }
                 if (!drawn) {
                     const info = ITEM_COLORS[stack.itemDef.id] || { bg: '#888', letter: '?' };
                     ctx.fillStyle = info.bg;
-                    ctx.fillRect(rect.x + 9, rect.y + 11, 22, 22);
+                    const fo = bodyRect.thumb ? (rect.w - 44) / 2 : 9, fs = bodyRect.thumb ? 44 : 22;
+                    ctx.fillRect(rect.x + fo, rect.y + (bodyRect.thumb ? fo : 11), fs, fs);
                     if (this.font) {
-                        this.font.drawText(ctx, info.letter, rect.x + 16, rect.y + 17, {
+                        this.font.drawText(ctx, info.letter, rect.x + (bodyRect.thumb ? rect.w / 2 - 8 : 16), rect.y + (bodyRect.thumb ? rect.h / 2 - 8 : 17), {
                             color: '#fff', scale: 2,
                         });
                     }
@@ -3092,7 +3102,10 @@ export class Renderer {
             }
         }
         // (defeat legibility) tell the player what survives a defeat.
-        if (this.font) this.font.drawText(ctx, 'SAFE zone + quest items = kept if defeated', rects[0].x, rects[49].y + rects[49].h + 8, { color: UI.dim, scale: 1 });
+        if (this.font) {
+            const noteY = bodyRect.thumb ? deviceBagPagerRects(bodyRect).prev.y + bodyRect.thumb + 6 : rects[49].y + rects[49].h + 8;
+            this.font.drawText(ctx, 'SAFE zone + quest items = kept if defeated', rects[0].x, noteY, { color: UI.dim, scale: 1 });
+        }
     }
 
     // (BG1) The PACK page arrows and the "page/pages" label, on the rects

@@ -546,7 +546,8 @@ export const EQUIP_LEFT_HAND_RECT = { key: 'left', label: 'WEAPON [LEFT]', x: 45
 // panel's top-right inner corner, the device-agnostic exit on every Menu. Drawn by
 // renderer._drawCloseButton and hit-tested in main._onCanvasPointerDown, both off
 // the SAME panel rect so the button and its hit-zone can't drift.
-export function closeButtonRect(r) {
+export function closeButtonRect(r, thumb = 0) {
+    if (thumb) return { x: r.x + r.w - thumb - 8, y: r.y + 8, w: thumb, h: thumb };   // (TL4) a thumb-sized chip on a phone sheet
     return { x: r.x + r.w - 36, y: r.y + 6, w: 30, h: 30 };
 }
 
@@ -564,17 +565,65 @@ export const DEVICE_TAB_H = 30;                        // tab-strip height
 const DEVICE_TAB_TOP = DEVICE_RECT.y + 38;             // below the title/✕ band (the chip ends at y+36)
 const DEVICE_TAB_PAD = 14;                             // strip inset from the frame sides
 
+// (TL4) On a phone the Remoticon is a full-screen sheet (TLR2 a). `deviceSheetRect`
+// is that sheet in MENU space: the whole screen, offset by the menu box so the
+// renderer's translate and main's toMenu stay as they are. Null off a phone; every
+// device function below takes the sheet as an optional last argument and gives
+// today's layout without one. `thumb` is the tap size in logical px.
+export function deviceSheetRect(vp) {
+    const t = thumbOf(vp);
+    return t ? Object.freeze({ x: -vp.menu.x, y: -vp.menu.y, w: vp.w, h: vp.h, thumb: t }) : null;
+}
+const SHEET_PAD = 8, SHEET_GAP = 16, SHEET_FOOT = 28;
+const SHEET_BODY_ASPECT = 432 / 532;   // the desktop body's shape, kept for the tabs that draw to it
+
 // The `i`-th tab's hit/draw rect, evenly dividing the strip below the title band.
-export function deviceTabRect(i) {
+export function deviceTabRect(i, sheet = null) {
+    if (sheet && sheet.thumb) {
+        const tabW = (sheet.w - 2 * SHEET_PAD) / DEVICE_TABS.length;
+        return { x: sheet.x + SHEET_PAD + i * tabW, y: sheet.y + sheet.thumb + SHEET_GAP, w: tabW - 4, h: sheet.thumb };
+    }
     const stripX = DEVICE_RECT.x + DEVICE_TAB_PAD;
     const tabW = (DEVICE_RECT.w - DEVICE_TAB_PAD * 2) / DEVICE_TABS.length;
     return { x: stripX + i * tabW, y: DEVICE_TAB_TOP, w: tabW - 4, h: DEVICE_TAB_H };
 }
 
 // The body region below the tab strip that hosts the active tab's draw body.
-export function deviceBodyRect() {
+export function deviceBodyRect(sheet = null, tab = 'items') {
+    if (sheet && sheet.thumb) {
+        const top = sheet.y + 2 * sheet.thumb + SHEET_GAP + 8;
+        const w = sheet.w - 2 * SHEET_PAD;
+        const full = sheet.y + sheet.h - SHEET_FOOT - top;
+        // The bag needs the height; the other tabs draw to the desktop body's shape.
+        const h = tab === 'items' ? full : Math.min(full, Math.round(w * SHEET_BODY_ASPECT));
+        return { x: sheet.x + SHEET_PAD, y: top, w, h, thumb: sheet.thumb };
+    }
     const top = DEVICE_TAB_TOP + DEVICE_TAB_H + 8;
     return { x: DEVICE_RECT.x + 14, y: top, w: DEVICE_RECT.w - 28, h: DEVICE_RECT.y + DEVICE_RECT.h - 12 - top };
+}
+
+// (TL4) The bag on a phone sheet: thumb-sized slots, as many columns as fit
+// (7 on a 375 phone), SAFE on its own rows over the PACK rows.
+const T_GAP = 6, T_LABEL = 24;
+function thumbBagGeo(b) {
+    const SLOT = b.thumb, STRIDE = SLOT + T_GAP;
+    const cols = Math.max(1, Math.floor((b.w + T_GAP) / STRIDE));
+    const gridW = cols * STRIDE - T_GAP;
+    const ox = Math.round(b.x + (b.w - gridW) / 2);
+    const safeY = b.y + 30;
+    const safeRows = Math.ceil(10 / cols), packRows = Math.ceil(40 / cols);
+    const packY = safeY + safeRows * STRIDE - T_GAP + T_LABEL;
+    const packBottom = packY + packRows * STRIDE - T_GAP;
+    return { SLOT, STRIDE, cols, gridW, ox, safeY, packY, packBottom };
+}
+function thumbBagSlotRects(b) {
+    const g = thumbBagGeo(b);
+    const rects = [];
+    for (let i = 0; i < 50; i++) {
+        const inSafe = i < 10, j = inSafe ? i : i - 10;
+        rects.push({ x: g.ox + (j % g.cols) * g.STRIDE, y: (inSafe ? g.safeY : g.packY) + Math.floor(j / g.cols) * g.STRIDE, w: g.SLOT, h: g.SLOT });
+    }
+    return rects;
 }
 
 // The ITEMS-tab bag as two zones, returned in SLOT-INDEX order (0..9 = SAFE
@@ -583,6 +632,7 @@ export function deviceBodyRect() {
 // four rows below it with a gap band between. Non-overlap is pinned by
 // tests/device-layout.test.js.
 export function deviceBagSlotRects(bodyRect) {
+    if (bodyRect.thumb) return thumbBagSlotRects(bodyRect);
     const COLS = 10, SLOT = 38, GAP = 6, STRIDE = SLOT + GAP;   // 44; 10*44-6 = 434 < body.w
     const gridW = COLS * STRIDE - GAP;
     const ox = Math.round(bodyRect.x + (bodyRect.w - gridW) / 2);
@@ -607,6 +657,16 @@ export function deviceBagSlotRects(bodyRect) {
 // renderer._drawHotbar and hit-tested by main._tapDevice from this one helper.
 const PAGER_W = 28, PAGER_H = 48, PAGER_GAP = 14;
 export function deviceBagPagerRects(bodyRect) {
+    if (bodyRect.thumb) {
+        // Under the PACK, either side of the page label, a thumb each.
+        const g = thumbBagGeo(bodyRect), t = bodyRect.thumb, cx = bodyRect.x + bodyRect.w / 2;
+        const y = g.packBottom + PAGER_GAP;
+        return {
+            prev:  { x: Math.round(cx - 40 - t), y, w: t, h: t },
+            next:  { x: Math.round(cx + 40),     y, w: t, h: t },
+            label: { x: Math.round(cx + 20), y: y + t / 2 - 8 },
+        };
+    }
     const rects = deviceBagSlotRects(bodyRect);
     const left = rects[10].x, right = rects[19].x + rects[19].w;
     const top = rects[10].y, bottom = rects[49].y + rects[49].h;
@@ -622,11 +682,21 @@ export function deviceBagPagerRects(bodyRect) {
 // band of the device body — it MUST NOT overlap the bag slots. Enforced by
 // tests/device-layout.test.js.
 export function inspectorPanelRect(bodyRect) {
+  if (bodyRect.thumb) {
+    // Below the pager row and the SAFE note, tall enough for the header and a thumb-tall button row.
+    const g = thumbBagGeo(bodyRect);
+    return { x: bodyRect.x + 8, y: g.packBottom + PAGER_GAP + bodyRect.thumb + 32, w: bodyRect.w - 16, h: 132 + bodyRect.thumb };
+  }
   return { x: bodyRect.x + 8, y: bodyRect.y + 300, w: bodyRect.w - 16, h: 120 };
 }
 // Up to 3 action buttons in a row along the bottom of the inspector panel.
 export function inspectorActionRects(bodyRect) {
   const p = inspectorPanelRect(bodyRect);
+  if (bodyRect.thumb) {
+    const n = 3, bw = 150, gap = 12, rowW = n * bw + (n - 1) * gap;
+    const ox = p.x + (p.w - rowW) / 2, y = p.y + p.h - bodyRect.thumb - 8;
+    return Array.from({ length: n }, (_, i) => ({ x: ox + i * (bw + gap), y, w: bw, h: bodyRect.thumb }));
+  }
   const n = 3, bw = 96, gap = 12, rowW = n * bw + (n - 1) * gap;
   const ox = p.x + (p.w - rowW) / 2, y = p.y + p.h - 34;
   const rects = [];

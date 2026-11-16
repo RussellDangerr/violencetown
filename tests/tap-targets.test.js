@@ -23,8 +23,9 @@ import {
     MODAL_RECT, closeButtonRect, targetListRowRect, itemOverlayRowRect,
     DEVICE_TABS, deviceTabRect, deviceBodyRect, deviceBagSlotRects, inspectorActionRects,
     gearOptionRects, deviceEquipLayout, deviceRingsLayout,
-    offerLayout,
+    offerLayout, deviceSheetRect, deviceBagPagerRects, DEVICE_RECT,
 } from '../game/layout.js';
+import { inspectorUsesRect } from '../game/inspector.js';
 import { UNLOCK_ORDER } from '../game/rings.js';
 
 export const APPLE_MIN_CSS = 44;
@@ -94,13 +95,20 @@ export function walkTargets(vp) {
     add('menu.itemOverlay.row', [0, 1, 2].map(itemOverlayRowRect));
     add('menu.hotbar.slot', { w: HOTBAR_SLOT_W, h: HOTBAR_SLOT_H });
 
-    const body = deviceBodyRect();
-    add('device.tab', DEVICE_TABS.map((_, i) => deviceTabRect(i)));
+    // (TL4) On a phone the Remoticon is a full-screen sheet; on desktop `sheet` is null.
+    const sheet = deviceSheetRect(vp);
+    const body = deviceBodyRect(sheet);
+    add('device.close', closeButtonRect(sheet || DEVICE_RECT, sheet ? sheet.thumb : 0));
+    add('device.tab', DEVICE_TABS.map((_, i) => deviceTabRect(i, sheet)));
+    add('device.pager', Object.values(deviceBagPagerRects(body)).filter((r) => r.w));
+    add('device.uses', inspectorUsesRect(body));
     add('device.bagSlot', deviceBagSlotRects(body));
     add('device.inspectorAction', inspectorActionRects(body));
-    add('device.gearOption', gearOptionRects(body, 2));
-    add('device.equipPlate', deviceEquipLayout(body).slots);
-    add('device.ringSocket', deviceRingsLayout(body, { ringTier: UNLOCK_ORDER.length - 1, ringSlots: {} }).sockets);
+    // The other tabs draw in a body of the desktop's shape (deviceBodyRect's `tab`).
+    const other = deviceBodyRect(sheet, 'gear');
+    add('device.gearOption', gearOptionRects(other, 2));
+    add('device.equipPlate', deviceEquipLayout(other).slots);
+    add('device.ringSocket', deviceRingsLayout(deviceBodyRect(sheet, 'rings'), { ringTier: UNLOCK_ORDER.length - 1, ringSlots: {} }).sockets);
 
     const L = offerLayout(MODAL_RECT);
     add('offer.row', [...L.yours, ...L.theirs]);
@@ -143,7 +151,7 @@ const EXPECTED = [
     'hud.opener', 'hud.log', 'bar.chip', 'bar.cell', 'bar.up', 'bar.down',
     'wheel.hub', 'wheel.band.d0', 'wheel.band.d1', 'wheel.band.d2', 'wheel.ring', 'world.throw',
     'menu.close', 'menu.targetList.row', 'menu.itemOverlay.row', 'menu.hotbar.slot',
-    'device.tab', 'device.bagSlot', 'device.inspectorAction', 'device.gearOption',
+    'device.close', 'device.tab', 'device.pager', 'device.uses', 'device.bagSlot', 'device.inspectorAction', 'device.gearOption',
     'device.equipPlate', 'device.ringSocket',
     'offer.row', 'offer.traySlot', 'offer.button', 'offer.talk',
 ];
@@ -152,18 +160,17 @@ const EXPECTED = [
 // slices may delete entries (a target that reached 44) and may raise a size;
 // they may not add an entry or lower one. (TL3: the dock, the item bar and the
 // wheel reached 44 on both phones and left this list; tests/thumb-dock-wheel.test.js
-// pins their layout.)
+// pins their layout. TL4: the Remoticon's tabs, bag slots, inspector buttons, pager,
+// uses button and close chip reached 44 on its phone sheet and left it; the GEAR
+// plates, GEAR rows and ring sockets are the Remoticon's remaining small targets.)
 const TODAY_SMALL = {
     'world.throw': 16,
     'menu.close': 15,
     'menu.targetList.row': 13,
     'menu.itemOverlay.row': 13,
     'menu.hotbar.slot': 21,
-    'device.tab': 15,
-    'device.bagSlot': 19,
-    'device.inspectorAction': 13,
     'device.gearOption': 13,
-    'device.equipPlate': 19.94,
+    'device.equipPlate': 27.5,
     'device.ringSocket': 17,
     'offer.row': 20,
     'offer.traySlot': 18,
@@ -196,7 +203,10 @@ const DESKTOP = {
     'menu.targetList.row': [456, 52],
     'menu.itemOverlay.row': [392, 52],
     'menu.hotbar.slot': [84, 84],
+    'device.close': [60, 60],
     'device.tab': [144, 60],
+    'device.pager': [56, 96],
+    'device.uses': [156, 52],
     'device.bagSlot': [76, 76],
     'device.inspectorAction': [192, 52],
     'device.gearOption': [400, 52],

@@ -54,7 +54,7 @@ import {
     HOTBAR_X_START, HOTBAR_Y, HOTBAR_SLOT_W, HOTBAR_SLOT_H, HOTBAR_STRIDE, HOTBAR_SLOTS,
     WHEEL_HUB_R, wheelRingR, LOG_MODAL_RECT, targetListRowRect, itemOverlayRowRect,
     EQUIPMENT_MODAL_RECT, EQUIP_SLOT_RECTS,
-    DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceBagSlotRects, deviceBagPagerRects, deviceEquipLayout, deviceRingsLayout,
+    DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceSheetRect, deviceBagSlotRects, deviceBagPagerRects, deviceEquipLayout, deviceRingsLayout,
     inspectorActionRects, gearOptionRects, nearestRectInDir,
     xmbBarLayout,
     // (offer screen) the one panel every modal shares, its geometry, and the two
@@ -7171,6 +7171,12 @@ class Game {
         this._render();
     }
 
+    // (TL4) The Remoticon's full-screen sheet on a phone, else null. Read as
+    // `this._deviceSheet?.()` where the geometry is asked for.
+    _deviceSheet() {
+        return deviceSheetRect(this._vp());
+    }
+
     _closeDevice() {
         if (this.state !== STATE.DEVICE) return;
         this.state = STATE.IDLE;
@@ -7200,9 +7206,9 @@ class Game {
     _tapDevice(pt) {
         // Tab strip → switch tabs.
         for (let i = 0; i < DEVICE_TABS.length; i++) {
-            if (this._pointInRect(pt, deviceTabRect(i), HIT_SLOP)) { this._deviceActivate('tab', i); return; }
+            if (this._pointInRect(pt, deviceTabRect(i, this._deviceSheet?.()), HIT_SLOP)) { this._deviceActivate('tab', i); return; }
         }
-        const body = deviceBodyRect();
+        const body = deviceBodyRect(this._deviceSheet?.(), this._deviceTab);
         // ITEMS (Bag) tab — tap-to-inspect. A tap SELECTS a filled slot; the
         // inspector panel then shows the item's stats + action buttons. A second
         // tap on an action row dispatches (Use/Equip · Protect/Unprotect · Drop).
@@ -7443,7 +7449,7 @@ class Game {
         const stack = this.inventory[index];
         if (!stack || stack.itemDef.questItem) return null;
         if (!contextualUses(stack.itemDef, this).length) return null;
-        return inspectorUsesRect(deviceBodyRect());
+        return inspectorUsesRect(deviceBodyRect(this._deviceSheet?.(), this._deviceTab));
     }
 
     // (C3c) Leave the Remoticon holding that item, as its digit key would, and
@@ -7462,7 +7468,7 @@ class Game {
     // levels (an item's action buttons, an open gear chooser) take over from the
     // outer ones (the bag, the plates) while they are open.
     _deviceTargets() {
-        const body = deviceBodyRect();
+        const body = deviceBodyRect(this._deviceSheet?.(), this._deviceTab);
         const sel = this._deviceSel;
         const tab = this._deviceTab;
         if (tab === 'items') {
