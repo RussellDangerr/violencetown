@@ -10,7 +10,7 @@ globalThis.localStorage ??= { getItem: () => null, setItem() {}, removeItem() {}
 const { Game } = await import('../game/main.js');
 const { Enemy } = await import('../game/enemies.js');
 const wm = await import('../game/wheel-model.js');
-const { arcSlots } = await import('../game/fight-arc.js');
+const { arcSlots, arcAllSlots } = await import('../game/fight-arc.js');
 const { WEAPON_CLASSES } = await import('../game/weapons.js');
 
 globalThis.window = new EventTarget();
@@ -63,6 +63,7 @@ describe('the arc follows the weapon in hand', () => {
             const keys = slots.map(s => s.key);
             assert.equal(keys.includes('cleave'), cls.kit.includes('cleave'), 'Cleave only when the kit has it');
             assert.equal(keys.includes('spin'), cls.kit.includes('spin'), 'Spin only when the kit has it');
+            assert.equal(keys.includes('stun'), cls.kit.includes('stun'), 'Stun only when the kit has it');
             assert.ok(keys.includes('hit'));
             for (const s of slots) {
                 const at = nodeAtPath(s.path);
@@ -74,10 +75,25 @@ describe('the arc follows the weapon in hand', () => {
         });
     }
 
-    test('a hammer has no Cleave slot, and no slot fires Stun', () => {
+    test('a hammer has no Cleave slot, and a Stun slot that fires the stun', () => {
         const g = fightGame('hammer');
         assert.ok(!labels(g).includes('Cleave'));
-        assert.ok(!arcSlots(g).some(s => s.node.resolver === 'stunAttack'));
+        const stun = arcSlots(g).filter(s => s.node.resolver === 'stunAttack');
+        assert.equal(stun.length, 1);
+        assert.equal(stun[0].label, '[Stun]');
+        assert.equal(stun[0].n, 2, 'right after Hit');
+    });
+
+    test('no other weapon shows a Stun slot', () => {
+        for (const [id, cls] of Object.entries(WEAPON_CLASSES)) {
+            if (cls.kit.includes('stun')) continue;
+            assert.ok(!arcSlots(fightGame(id)).some(s => s.key === 'stun'), id);
+        }
+    });
+
+    test('Eat and Run stay on 9 and 10 with a hammer', () => {
+        const g = fightGame('hammer');
+        assert.deepEqual(arcAllSlots(g).slice(-2).map(s => [s.n, s.key]), [[9, 'eat'], [10, 'run']]);
     });
 
     test('changing weapon mid-fight changes the slots and their numbers', () => {
@@ -98,15 +114,13 @@ describe('the arc follows the weapon in hand', () => {
         assert.equal(wm.selectedNode(g.wheel).key, 'cleave');
     });
 
-    test('pressing 2 with a hammer never lands on Cleave or Stun', () => {
+    test('pressing 2 with a hammer goes to Stun, never Cleave', () => {
         const g = fightGame('hammer');
         g.tap('Digit2');
-        if (g.state === 'radial_menu') {
-            const n = wm.selectedNode(g.wheel);
-            assert.notEqual(n.key, 'cleave');
-            assert.notEqual(n.resolver, 'stunAttack');
-        }
-        assert.equal(arcSlots(g)[1].key, 'ranged');
+        assert.equal(g.state, 'radial_menu');
+        const n = wm.selectedNode(g.wheel);
+        assert.equal(n.resolver, 'stunAttack');
+        assert.notEqual(n.key, 'cleave');
     });
 
     test('pressing 2 with a great sword goes to Spin', () => {

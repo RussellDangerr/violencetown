@@ -22,6 +22,9 @@ export const ARC_MAX = 10;
 // (Ranged is "a duplicate of TRICK > Throw, by design"), so the arc has the one slot; that
 // keeps the cap at eight even with all three spells.
 export const ARC_ATTACK_KEYS = Object.freeze(['hit', 'cleave', 'spin', 'ranged', 'fireball', 'coneofcold', 'boo', 'defend']);
+// The slots are searched in this order: the weapon's own move (Cleave, Spin or Stun, FA3) sits
+// right after Hit, and only the one the live ring has shows. Stun is a hammer's move.
+const ARC_ATTACK_ORDER = Object.freeze(['hit', 'cleave', 'spin', 'stun', ...ARC_ATTACK_KEYS.slice(3)]);
 // Eat and Run: the wheel's own nodes (Treat > Eat, Flight > Run), each at a fixed number.
 export const ARC_EXTRA_KEYS = Object.freeze(['eat', 'run']);
 export const ARC_KEYS = Object.freeze([...ARC_ATTACK_KEYS, ...ARC_EXTRA_KEYS]);
@@ -55,7 +58,7 @@ const slotOf = (n, { node, path }, game) => {
 // greyed reason key (null when the slot is usable); `line` is its log line.
 export function arcSlots(game) {
     const out = [];
-    for (const f of found(ARC_ATTACK_KEYS)) {
+    for (const f of found(ARC_ATTACK_ORDER)) {
         if (!owns(f.node, game)) continue;
         if (out.length >= ARC_ATTACK_MAX) break;
         out.push(slotOf(out.length + 1, f, game));
