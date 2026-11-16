@@ -289,7 +289,7 @@ describe('tap targets, in CSS px', () => {
         });
     }
 
-    test('desktop throw prompt keeps the four 32 px targets around the player's tile', () => {
+    test('desktop throw prompt keeps the four 32 px targets around the player tile', () => {
         const vp = viewportFor(SCREENS.desktop);
         const R = throwRects(vp);
         const dx = vp.origin.x + TILE_PX / 2 - 304, dy = vp.origin.y + TILE_PX / 2 - 304;
