@@ -23,7 +23,7 @@ import {
     LOG_MODAL_RECT, TARGET_LIST_RECT, TARGET_LIST_ROW_H,
     ITEM_OVERLAY_RECT, ITEM_OVERLAY_ROW_H,
     WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR, WHEEL_DESKTOP,
-    EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, EQUIP_LEFT_HAND_RECT, closeButtonRect, deviceSheetRect,
+    EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, EQUIP_LEFT_HAND_RECT, closeButtonRect, deviceSheetRect, listPanelRect, sheetListRowRect,
     DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_LABELS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceBagPagerRects, deviceEquipLayout, gearArmourRect, deviceRingsLayout,
     deviceSkillsLayout, SKILL_COUNT_W, ringPassiveRows,                                     // (US2) the skills readout in the RINGS tab; (RR1) a ring's passive rows
     inspectorPanelRect, inspectorActionRects,                               // (C1) tap-to-inspect panel + action-row geometry
@@ -825,7 +825,7 @@ export class Renderer {
             // Stashed in SCREEN px: the panel was drawn inside the menu box, and
             // main hit-tests the ✕ and tap-outside against the screen.
             this._menuPanelRect = CLOSE_PANEL && { x: CLOSE_PANEL.x + box.x, y: CLOSE_PANEL.y + box.y, w: CLOSE_PANEL.w, h: CLOSE_PANEL.h };
-            this._closeBtnRect = this._menuPanelRect ? closeButtonRect(this._menuPanelRect, game.state === 'device' ? (deviceSheetRect(vp)?.thumb || 0) : 0) : null;
+            this._closeBtnRect = this._menuPanelRect ? closeButtonRect(this._menuPanelRect, deviceSheetRect(vp)?.thumb || 0) : null;
             if (this._closeBtnRect) this._drawCloseButton(this.ctx, this._closeBtnRect);
         }
 
@@ -3452,6 +3452,26 @@ export class Renderer {
     // at the top, its verbs as rows, the highlighted row picked on confirm. One
     // tap on a hotbar item opens it. Fades in over 80ms; the ✕ / tap-outside come
     // free from the CLOSE_PANEL machinery (item_overlay stashes its rect below).
+    // (TL7) The title and rows the target list and the item menu share. On a phone sheet
+    // the title sits in the chip's band at scale 2 and each row is a thumb-tall bar.
+    _drawListTitle(text, P, sheet) {
+        if (sheet) this.font.drawText(this.ctx, text, P.x + P.w / 2, P.y + sheet.thumb / 2 + 4, { color: UI.gold, scale: 2, align: 'center' });
+        else       this.font.drawText(this.ctx, text, P.x + P.w / 2, P.y + 14, { color: UI.gold, scale: 1, align: 'center' });
+    }
+    _drawListRow(label, P, i, sheet, sel, color) {
+        const { ctx } = this;
+        if (sheet) {
+            const r = sheetListRowRect(i, sheet);
+            drawInset(ctx, r.x, r.y, r.w, r.h);
+            if (sel) { ctx.fillStyle = 'rgba(212,185,106,0.18)'; ctx.fillRect(r.x, r.y, r.w, r.h); ctx.strokeStyle = UI.gold; ctx.lineWidth = 2; ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2); }
+            this.font.drawText(ctx, label, r.x + 16, r.y + r.h / 2 - 8, { color, scale: 2 });
+            return;
+        }
+        const ry = P.y + 44 + i * ITEM_OVERLAY_ROW_H;   // both lists step 30 a row
+        if (sel) { ctx.fillStyle = 'rgba(212,185,106,0.18)'; ctx.fillRect(P.x + 8, ry - 2, P.w - 16, ITEM_OVERLAY_ROW_H - 4); }
+        this.font.drawText(ctx, label, P.x + 16, ry + 6, { color, scale: 1 });
+    }
+
     _drawItemOverlay(game) {
         const { ctx } = this; const ui = this.uiSheet; if (!this.font) return;
         const opts = game.overlayOptions || [];
@@ -3464,8 +3484,10 @@ export class Renderer {
 
         ctx.save(); ctx.fillStyle = `rgba(0,0,0,${0.5 * t})`; this._fillScreen(ctx); ctx.restore();
 
-        const RH = ITEM_OVERLAY_ROW_H, px = ITEM_OVERLAY_RECT.x, py = ITEM_OVERLAY_RECT.y, w = ITEM_OVERLAY_RECT.w;
-        const h = 44 + opts.length * RH + 22;   // title band + rows + exit-cue footer
+        const sheet = deviceSheetRect(this._view());   // (TL7) a phone's sheet; null on desktop
+        const RH = ITEM_OVERLAY_ROW_H;
+        const P = listPanelRect(ITEM_OVERLAY_RECT, RH, opts.length, sheet);
+        const { x: px, y: py, w, h } = P;
         this._itemOverlayRect = { x: px, y: py, w, h };   // stashed for the ✕ / tap-outside hit-test (menu grammar)
 
         const prevAlpha = ctx.globalAlpha; ctx.globalAlpha = t;
@@ -3473,11 +3495,10 @@ export class Renderer {
         else            drawPanelSmall(ctx, px, py, w, h);
 
         const title = (item && item.name) ? item.name : 'ITEM';
-        this.font.drawText(ctx, String(title).replace(/[\[\]]/g, '').toUpperCase().slice(0, 16), px + w / 2, py + 14, { color: UI.gold, scale: 1, align: 'center' });
+        this._drawListTitle(String(title).replace(/[\[\]]/g, '').toUpperCase().slice(0, 16), P, sheet);
         for (let i = 0; i < opts.length; i++) {
-            const sel = (i === game.overlayCursor), ry = py + 44 + i * RH;
-            if (sel) { ctx.fillStyle = 'rgba(212,185,106,0.18)'; ctx.fillRect(px + 8, ry - 2, w - 16, RH - 4); }
-            this.font.drawText(ctx, (sel ? '> ' : '  ') + String(opts[i].label).toUpperCase(), px + 16, ry + 6, { color: sel ? UI.textLight : UI.text, scale: 1 });
+            const sel = (i === game.overlayCursor);
+            this._drawListRow((sel ? '> ' : '  ') + String(opts[i].label).toUpperCase(), P, i, sheet, sel, sel ? UI.textLight : UI.text);
         }
         this.font.drawText(ctx, '↑↓ PICK · ESC CLOSE', px + w / 2, py + h - 14, { color: UI.dim, scale: 1, align: 'center' });
         ctx.globalAlpha = prevAlpha;
@@ -3503,19 +3524,20 @@ export class Renderer {
         const { ctx } = this; const ui = this.uiSheet; if (!this.font) return;
         const tl = game.targetList; if (!tl || !tl.verbs.length) return;
         ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.5)'; this._fillScreen(ctx); ctx.restore();
-        const RH = TARGET_LIST_ROW_H, px = TARGET_LIST_RECT.x, py = TARGET_LIST_RECT.y, w = TARGET_LIST_RECT.w;
-        const h = 44 + tl.verbs.length * RH + 22;   // +room for the exit-cue footer
+        const sheet = deviceSheetRect(this._view());   // (TL7) a phone's sheet; null on desktop
+        const RH = TARGET_LIST_ROW_H;
+        const P = listPanelRect(TARGET_LIST_RECT, RH, tl.verbs.length, sheet);   // +room for the exit-cue footer
+        const { x: px, y: py, w, h } = P;
         this._targetListRect = { x: px, y: py, w, h };   // stashed for the ✕ / tap-outside hit-test (menu grammar)
         if (ui?.loaded) drawPanelBig(ctx, ui, px, py, w, h, 'base');
         else            drawPanelSmall(ctx, px, py, w, h);
         const t = tl.target;
         const name = (t.npc && (t.npc.name || t.npc.type)) || (t.item && ((t.item.def && t.item.def.name) || t.item.type)) || (t.examinable && t.examinable.id) || '?';
-        this.font.drawText(ctx, String(name).replace(/[\[\]]/g, '').toUpperCase().slice(0, 18), px + w / 2, py + 14, { color: UI.gold, scale: 1, align: 'center' });
+        this._drawListTitle(String(name).replace(/[\[\]]/g, '').toUpperCase().slice(0, 18), P, sheet);
         for (let i = 0; i < tl.verbs.length; i++) {
-            const v = tl.verbs[i], sel = (i === tl.sel), ry = py + 44 + i * RH;
-            if (sel) { ctx.fillStyle = 'rgba(212,185,106,0.18)'; ctx.fillRect(px + 8, ry - 2, w - 16, RH - 4); }
+            const v = tl.verbs[i], sel = (i === tl.sel);
             const col = sel ? UI.textLight : (v.key === 'cancel' ? UI.dim : (v.color || UI.text));
-            this.font.drawText(ctx, (sel ? '> ' : '  ') + v.label, px + 16, ry + 6, { color: col, scale: 1 });
+            this._drawListRow((sel ? '> ' : '  ') + v.label, P, i, sheet, sel, col);
         }
         this.font.drawText(ctx, '↑↓ PICK · ESC CLOSE', px + w / 2, py + h - 14, { color: UI.dim, scale: 1, align: 'center' });
         ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
