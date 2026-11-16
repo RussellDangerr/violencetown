@@ -2103,7 +2103,7 @@ class Game {
             if (this.state === STATE.TRADE && this._offer) {
                 e.preventDefault();
                 const pt = toMenu(this._vp(), this._canvasLocalCoords(e, canvas));   // offerLayout is menu space
-                const L = offerLayout(MODAL_RECT);
+                const L = offerLayout(MODAL_RECT, this._deviceSheet?.());   // (TL9) a phone's sheet
                 const side = (pt && pt.x >= L.theirs[0].x) ? 'theirs' : 'yours';
                 if (this._offerScrollBy(side, Math.sign(e.deltaY))) this._render();
                 return;
@@ -8150,7 +8150,7 @@ class Game {
     _tapOffer(pt) {
         const npc = this._offerNpc;
         if (!npc || !this._offer) { this._closeOffer(); return; }
-        const L = offerLayout(MODAL_RECT);
+        const L = offerLayout(MODAL_RECT, this._deviceSheet?.());   // (TL9) a phone's sheet
         if (!this._pointInRect(pt, L.panel)) { this._closeOffer(); return; }
 
         if (this._pointInRect(pt, L.button, HIT_SLOP)) { this._offerActivate('commit', 0); return; }

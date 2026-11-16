@@ -1015,7 +1015,8 @@ export const OFFER_ROWS_VISIBLE = 6;
 export const OFFER_ROW_H = 40;
 export const OFFER_TRAY_SLOTS = 6;
 
-export function offerLayout(panelRect) {
+export function offerLayout(panelRect, sheet = null) {
+    if (sheet && sheet.thumb) return offerSheetLayout(sheet);   // (TL9) a phone gets the full-screen sheet
     const P = panelRect || MODAL_RECT;
     const px = P.x + 8, pr = P.x + P.w - 8;
     const gutter = 16;                       // gutter MUST exceed 2 * HIT_SLOP
@@ -1085,6 +1086,73 @@ export function offerLayout(panelRect) {
         // (right-aligned), clear of the close chip and the meter's multiplier text.
         talkButton:         { x: P.x + 268, y: P.y + 6, w: 120, h: 28 },
         hintY:              P.y + 506,
+        // (TL9) Text sizes and the header's spots; desktop's are today's, number for number.
+        thumb:              0,
+        ts:                 { row: 1, label: 1, desc: 1, ledger: 1, button: 1 },
+        head:               { faceX: P.x + 24, faceY: P.y + 20, nameX: P.x + 44, nameXBox: P.x + 8, nameY: P.y + 10, gpRight: P.x + P.w - 44, gpY: P.y + 10 },
+    };
+}
+
+// (TL9) The offer screen on a phone (TLR2 a, TLR3 a): the whole screen, a title row with the
+// close chip, a meter row with Talk, two goods columns of tall rows, two trays of thumb-tall
+// slots (three to a line, so six fit a column), then the strip, the ledger and one full-width
+// button. Same keys as the desktop layout, so the renderer and main read it the same way.
+// Rows still tile with no gap, so the zero-slop hit-test holds.
+function offerSheetLayout(sheet) {
+    const T = sheet.thumb, P = { x: sheet.x, y: sheet.y, w: sheet.w, h: sheet.h };
+    const pad = 8, px = P.x + pad, pr = P.x + P.w - pad;
+    const gutter = 16;
+    const colW = (pr - px - gutter) / 2;
+    const leftX = px, rightX = px + colW + gutter;
+
+    const titleY = P.y + 8;                       // row A: face, name, GP, the close chip
+    const meterRowY = titleY + T + 8;             // row B: the meter, its words, Talk
+    const meterY = meterRowY + Math.round((T - 12) / 2);
+    const colHeadY = meterRowY + T + 8;
+    const listY = colHeadY + 26;
+    const ledgerRowH = 22;
+    // What sits under the rows: tray label + two tray lines + strip + ledger + button + margin.
+    const trayLineH = T + 8, descH = 84, ledgerH = 3 * ledgerRowH;
+    const below = 14 + 26 + 2 * trayLineH + 14 + descH + 18 + ledgerH + 14 + T + 12;
+    const rowH = Math.max(T, Math.min(120, Math.floor((P.h - (listY - P.y) - below) / OFFER_ROWS_VISIBLE)));
+
+    const rows = (ox) => Array.from({ length: OFFER_ROWS_VISIBLE }, (_, i) => ({ x: ox, y: listY + i * rowH, w: colW, h: rowH }));
+    const listH = OFFER_ROWS_VISIBLE * rowH;
+    const trayLabelY = listY + listH + 14;
+    const trayY = trayLabelY + 26;
+    const perLine = 3, slotGap = 6;
+    const slotW = (colW - (perLine - 1) * slotGap) / perLine;
+    const tray = (ox) => Array.from({ length: OFFER_TRAY_SLOTS }, (_, i) => ({
+        x: ox + (i % perLine) * (slotW + slotGap), y: trayY + Math.floor(i / perLine) * trayLineH, w: slotW, h: T,
+    }));
+    const descY = trayY + 2 * trayLineH - 8 + 14;
+    const ledgerY = descY + descH + 18;
+    const buttonY = ledgerY + ledgerH + 14;
+    const trackW = 8;
+    return {
+        panel: P,
+        meterBar:          { x: px, y: meterY, w: 320, h: 12 },
+        meterMulTopY:       meterY - 14,
+        meterMulBotY:       meterY + 8,
+        colHeadY,
+        yours:              rows(leftX),
+        theirs:             rows(rightX),
+        yoursScrollTrack:   { x: leftX + colW - trackW - 2,  y: listY, w: trackW, h: listH },
+        theirsScrollTrack:  { x: rightX + colW - trackW - 2, y: listY, w: trackW, h: listH },
+        trayLabelY,
+        giveTray:           tray(leftX),
+        takeTray:           tray(rightX),
+        desc:               { x: px, y: descY, w: pr - px, h: descH },
+        ledger:             { x: px, y: ledgerY, w: pr - px, h: ledgerH },
+        ledgerRowH,
+        ledgerValueX:       px + 96,
+        ledgerBalanceX:     px + Math.round((pr - px) * 0.55),
+        button:             { x: px, y: buttonY, w: pr - px, h: T },
+        talkButton:         { x: pr - 168, y: meterRowY, w: 168, h: T },
+        hintY:              buttonY + T + 12,
+        thumb:              T,
+        ts:                 { row: 2, label: 1.5, desc: 1.5, ledger: 1.5, button: 2 },
+        head:               { faceX: P.x + 32, faceY: titleY + T / 2, nameX: P.x + 64, nameXBox: P.x + 16, nameY: titleY + T / 2 - 12, gpRight: P.x + P.w - T - 24, gpY: titleY + T / 2 - 12 },
     };
 }
 

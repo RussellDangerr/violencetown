@@ -112,7 +112,7 @@ export function walkTargets(vp) {
     add('device.equipPlate', deviceEquipLayout(other).slots);
     add('device.ringSocket', deviceRingsLayout(deviceBodyRect(sheet, 'rings'), { ringTier: UNLOCK_ORDER.length - 1, ringSlots: {} }).sockets);
 
-    const L = offerLayout(MODAL_RECT);
+    const L = offerLayout(MODAL_RECT, sheet);   // (TL9) the sheet's rows, slots and buttons on a phone
     add('offer.row', [...L.yours, ...L.theirs]);
     add('offer.traySlot', [...L.giveTray, ...L.takeTray]);
     add('offer.button', L.button);
@@ -166,14 +166,11 @@ const EXPECTED = [
 // uses button and close chip reached 44 on its phone sheet and left it; TL6: the GEAR
 // plates, GEAR rows and ring sockets reached 44 and left it; TL7: the target list rows,
 // the item menu rows and the shared close chip reached 44 on their phone sheets and left it;
-// TL8: the throw prompt's four buttons reached 44 and left it. The hotbar slot stays: main.js
+// TL8: the throw prompt's four buttons reached 44 and left it; TL9: the offer rows, tray slots,
+// button and Talk reached 44 on their phone sheet and left it. The hotbar slot stays: main.js
 // hit-tests it from the layout constants, so it cannot grow from layout.js alone.)
 const TODAY_SMALL = {
     'menu.hotbar.slot': 21,
-    'offer.row': 20,
-    'offer.traySlot': 18,
-    'offer.button': 20,
-    'offer.talk': 14,
 };
 // Both phones come out at 2 logical px per CSS px today, so their lists match.
 // They are kept apart so a slice can shorten one without the other.
