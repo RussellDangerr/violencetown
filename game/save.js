@@ -32,6 +32,9 @@ export const SAVE_VERSION = 2;
 const KEY = 'violencetown.save';
 const BACKUP_KEY = 'violencetown.save.bak';
 const TMP_KEY = 'violencetown.save.tmp';
+// (FX66) A save that would not open, copied aside. writeSave and clearSave never
+// touch this key, so the fresh run's autosaves leave it be.
+export const UNREADABLE_KEY = 'violencetown.save.unreadable';
 
 // ── Existence / raw read ─────────────────────────────────────────────────────
 
@@ -283,6 +286,18 @@ export function writeSave(game) {
         if (typeof game._log === 'function') game._log('[Save failed]');
         return false;
     }
+}
+
+// (FX66) Copy the save text that would not open under its own key, before a
+// fresh run can write over it. Takes the live save, else the backup slot.
+// Returns true when a copy was kept.
+export function keepUnreadableSave() {
+    try {
+        const text = localStorage.getItem(KEY) ?? localStorage.getItem(BACKUP_KEY);
+        if (text == null) return false;
+        localStorage.setItem(UNREADABLE_KEY, text);
+        return true;
+    } catch { return false; }
 }
 
 export function clearSave() {
