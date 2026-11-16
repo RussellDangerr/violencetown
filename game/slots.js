@@ -10,6 +10,8 @@
 
 import { RNG } from './rng.js';
 import { weaknessesOf, resistancesOf } from './elements.js';
+import { resolveItemDef } from './item-registry.js';
+import { attitudeOf } from './bones.js';
 
 // What every Act 2 boss hits for (plans/ep1-act2-boss-damage.md, ruling EP1R1 a),
 // two above the Were-Rat's 12. Each boss gets its own number when it is designed.
@@ -407,6 +409,29 @@ function placeholderBoss() {
     };
 }
 
+// Your old character (plans/bn2-old-character-in-town.md): a stand-in block, built from a
+// snapshot by echoSpawn. Your own sprite tinted pale (tag old_self), [TEXT] barks.
+export const OLD_SELF = {
+    type: 'Violencian',   // drawn as you, tinted pale, by its tag (sprites.js byTag)
+    tag: 'old_self',
+    name: '[TEXT]',
+    hp: 100,
+    armor: 0,
+    damage: 0,
+    sightRange: 4,
+    disposition: 0,
+    behavior: ['IDLE'],
+    barks: ['[TEXT]', '[TEXT]'],
+    barkEveryTurns: 6,
+};
+
+// Echo slots (BN2): a character slot filled from a player's kept snapshot, not from a pool. Kept
+// apart from SLOTS because nothing in them is picked, saved or required: no seed stream, no save
+// field, no registry entry for the balance and validator sweeps to read. `at` is where it stands.
+export const ECHO_SLOTS = {
+    'town.echo': { kind: 'echo', map: 'town-map.json', spawn: 'old-self', at: { x: 21, y: 16 } },
+};
+
 // A required item belongs to the slot, not the entry (SL-4): every entry in the
 // pool drops it, so a new boss can never strand the quest.
 export const SLOTS = {
@@ -495,6 +520,25 @@ export const SLOTS = {
 
 const isMob = (slot) => slot?.kind === 'mob';
 const isReturning = (slot) => slot?.kind === 'returning_boss';
+
+// (BN2) The old character a snapshot makes, standing where the map's echo spawn is; null when
+// there is no usable snapshot (the spawn then does not exist). It wears the snapshot's gear,
+// minus anything a slot guarantees or a quest owns (it never carries a required item), and
+// acts by attitudeOf: a foe fights, a friend is warm, a neutral just stands there.
+export function echoSpawn(spawn, snap, echoes = ECHO_SLOTS, slots = SLOTS) {
+    if (!spawn || !snap || !snap.gear || typeof snap.gear !== 'object') return null;
+    const entry = echoes[spawn.slot] ? OLD_SELF : null;
+    if (!entry || attitudeOf(snap) == null || !(snap.maxHp > 0)) return null;
+    const required = new Set(Object.values(slots).map(s => s.requiredDrop).filter(Boolean));
+    const worn = Object.values(snap.gear).filter(id => typeof id === 'string' && !required.has(id)
+        && resolveItemDef(id) && !resolveItemDef(id).questItem);
+    const attitude = attitudeOf(snap);
+    const out = { ...structuredClone(entry), id: spawn.id, x: spawn.x, y: spawn.y, slot: spawn.slot, equipped: worn, attitude };
+    if (spawn.facing) out.facing = spawn.facing;
+    if (attitude === 'foe') { out.damage = ACT2_MOB_DAMAGE; out.disposition = -40; delete out.behavior; }   // no behavior list: born hostile (ai.js)
+    else if (attitude === 'friend') out.disposition = 40;
+    return out;
+}
 
 // The returning boss spots, by id.
 export const RETURNING_SPOTS = Object.fromEntries(Object.entries(SLOTS).filter(([, s]) => isReturning(s)));
