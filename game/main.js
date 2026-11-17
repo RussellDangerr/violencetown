@@ -256,6 +256,7 @@ class Game {
         // DEFAULT_MP in combat.js.
         this.playerMp    = PLAYER_MAX_MP;
         this.playerMaxMp = PLAYER_MAX_MP;
+        this.boons = {};   // (BP1) permanent boosts drunk, { stat: n }
         // Known spells for FIGHT → Magic (base set; equipped weapons grant more
         // via _refreshGrantedSkills). Granted TRICKS (GP skills) live in a
         // parallel list the Trick ring reads.
@@ -6830,6 +6831,7 @@ class Game {
         this.playerHp = this.playerMaxHp;
         this.playerMaxMp = PLAYER_MAX_MP;
         this.playerMp = this.playerMaxMp;
+        this.boons = {};   // (BP1) a new game has drunk none
         this.facing = 'down';
         this.buffs = [];
         this._hasteCharges = 0;

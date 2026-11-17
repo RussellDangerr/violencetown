@@ -91,6 +91,7 @@ export function serialize(game) {
             // never ranked anything saves byte-for-byte as it did before skills
             // existed (the autoplay fingerprint hashes this object).
             ...skillsEntry(game),
+            ...boonsEntry(game),
             ...costumeToSave(game),   // (CO1) left out while no costume is worn
             ...defaultAttackEntry(game),
             ...interactionNotesEntry(game),
@@ -167,6 +168,17 @@ export function serialize(game) {
 function defaultAttackEntry(game) {
     const d = game.defaultAttack;
     return d && typeof d.key === 'string' && typeof d.weaponId === 'string' ? { defaultAttack: { weaponId: d.weaponId, key: d.key } } : {};
+}
+
+// (BP1) Permanent boosts drunk, { stat: n }; left out while empty so a boonless save is unchanged.
+function sanitizeBoons(b) {
+    const out = {};
+    if (b && typeof b === 'object') for (const k of Object.keys(b)) { const n = Math.floor(Number(b[k])); if (Number.isFinite(n) && n > 0) out[k] = n; }
+    return out;
+}
+function boonsEntry(game) {
+    const boons = sanitizeBoons(game.boons);
+    return Object.keys(boons).length ? { boons } : {};
 }
 
 function skillsEntry(game) {
@@ -507,6 +519,7 @@ function validate(raw) {
     // (skills) Known skills, whole counts, never below zero; a save from before
     // skills existed loads with none.
     p.skills = sanitizeSkills(p.skills);
+    p.boons = sanitizeBoons(p.boons);   // (BP1)
     p.costume = sanitizeCostume(p.costume);   // (CO1)
     p.defaultAttack = (p.defaultAttack && typeof p.defaultAttack.key === 'string' && typeof p.defaultAttack.weaponId === 'string')
         ? { weaponId: p.defaultAttack.weaponId, key: p.defaultAttack.key } : null;   // (WK3)
@@ -627,6 +640,7 @@ export async function loadInto(game, raw) {
     game.ringTier          = p.ringTier || 0;
     game.discoveredFusions = new Set(p.discoveredFusions || []);
     game.skills            = { ...p.skills };
+    game.boons             = { ...p.boons };   // (BP1)
     game.costume           = costumeFromSave(p.costume, R);   // (CO1) worn: equipment/skills above are its kit
     game.defaultAttack     = p.defaultAttack || null;   // (WK3)
     game.interactionNotes  = [...p.interactionNotes];   // (IN1)

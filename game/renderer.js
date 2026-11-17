@@ -3597,6 +3597,11 @@ export class Renderer {
             }
         }
 
+        // (BP1) Boons drunk: one line, 0 on a new game.
+        y += 6;
+        const boonN = Object.values(game.boons || {}).reduce((a, n) => a + (Number(n) || 0), 0);
+        this.font.drawText(ctx, `[TEXT] ${boonN}`, innerX, y, { color: UI.textLight, scale: 1 }); y += 14;
+
         // Completed quests.
         const done = qe ? qe.getCompletedTitles() : [];
         if (done.length) {
