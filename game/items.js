@@ -592,6 +592,17 @@ export const ITEMS = {
         fallbackColor: '#4a86c8',
         baseValue: 30,
     },
+    boon_poition: {
+        id: 'boon_poition',
+        name: '[TEXT]',
+        description: '[TEXT]',
+        category: 'poition',
+        poition: { stat: 'mana', amount: 1, permanent: true },
+        consumable: true,
+        useType: 'self',
+        fallbackColor: '#8a4ac8',
+        baseValue: 0,
+    },
     gold_poition: {
         id: 'gold_poition',
         name: '[Gold Poition]',
@@ -1043,6 +1054,16 @@ function applyPoitionSelf(game, itemDef) {
             return delta >= 0 ? `[${itemDef.name} — healed ${delta} HP]` : `[${itemDef.name} — lost ${-delta} HP]`;
         }
         case 'mana': {
+            // A boon is the permanent half: it raises the cap itself and is
+            // written to game.boons, which the save carries.
+            if (p.permanent) {
+                const n = Math.max(0, Math.floor(amount));
+                game.playerMaxMp += n;
+                game.playerMp += n;
+                const rec = game.boons || (game.boons = {});
+                rec.mana = (rec.mana || 0) + n;
+                return `[${itemDef.name} — max MP +${n}]`;
+            }
             // MP is real (main.js:3231/:3276 spend it on spells) — instant like
             // health; turns>1 rides the same tick machinery (buffs.js) for symmetry.
             if (p.turns > 1) {
