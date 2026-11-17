@@ -40,6 +40,18 @@ describe('exits', () => {
     });
 });
 
+// (MO1) A grave that gives way names where it drops you, the way a door does.
+describe('falls', () => {
+    test('every fallTo names a map that exists and lands you on ground you can stand on', () => {
+        const byFile = Object.fromEntries(maps.map(({ file, data }) => [file, new GameMap(data, file)]));
+        const falls = maps.flatMap(({ file, data }) => (data.examinables || []).filter(e => e.fallTo).map(e => ({ file, e })));
+        assert.ok(falls.length > 0, 'no map has a fall');
+        const bad = falls.filter(({ e }) => !byFile[e.fallTo.toMap] || !byFile[e.fallTo.toMap].isWalkable(e.fallTo.toX, e.fallTo.toY))
+            .map(({ file, e }) => `${file} (${e.x}, ${e.y}) -> ${e.fallTo.toMap} (${e.fallTo.toX}, ${e.fallTo.toY})`);
+        assert.deepEqual(bad, [], `falls that land nowhere, or in a wall: ${bad.join(', ')}`);
+    });
+});
+
 describe('grapple anchors', () => {
     const byFile = Object.fromEntries(maps.map(({ file, data }) => [file, new GameMap(data, file)]));
     const anchors = maps.flatMap(({ file, data }) => (data.anchors || []).map(a => ({ file, ...a })));

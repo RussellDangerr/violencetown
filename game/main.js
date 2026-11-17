@@ -233,7 +233,7 @@ const CONTINUE_ZONE_NAMES = {
     'vault-map.json': '[TEXT]', 'casino-map.json': 'CASINO', 'canyon-map.json': 'CANYON',
     'gorge-map.json': 'GORGE', 'valley-map.json': 'VALLEY', 'factory-map.json': 'FACTORY',
     'carnival-map.json': 'CARNIVAL', 'graveyard-map.json': 'GRAVEYARD',
-    'wilderness-map.json': 'WILDERNESS', 'frozen-map.json': '[FROZEN AREA]',
+    'wilderness-map.json': 'WILDERNESS', 'frozen-map.json': '[FROZEN AREA]', 'tunnels-map.json': 'TUNNELS',
     'side-area-map.json': '[SIDE AREA]', 'compactor-map.json': '[COMPACTOR ROOM]',
 };
 
@@ -4227,6 +4227,7 @@ class Game {
                 const res = resolveExamine(this, ex ? ex.x : t.x, ex ? ex.y : t.y);
                 if (res.instanceId) this.emitGameEvent('examine', { targetId: res.instanceId });
                 if (res.grantsInstance) { this._grantFromExaminable(res.grantsInstance); break; }
+                if (res.fallInstance) { this._log(res.body); this._fallThrough(res.fallInstance); break; }
                 this._log(res.body);
                 // (§12.3) The layered inspect panel: an item wears its value tier + colour.
                 this._openInspect({ title: res.title, body: res.panelBody, tierName: res.tierName, tierColor: res.tierColor });
@@ -5128,6 +5129,25 @@ class Game {
 
         this._render();
         this.autosave();
+    }
+
+    // (MO1) Searching a grave that gives way: you land where its `fallTo` says. Searching costs no
+    // turn, so the drop is made here and now, not at the end of one. It is the door's load (the
+    // turn end above) without the turn: the same follower snapshot, zone step and arrival.
+    _fallThrough(inst) {
+        const f = inst.fallTo;
+        this._pendingFollowers = this._captureFollowers({ x: inst.x, y: inst.y });
+        this._pendingFollowersFrom = this._mapUrl;
+        this._cameFrom = this._mapUrl;
+        this.state = STATE.RESOLVING;
+        this._zoneChange();
+        this._loadMap(f.toMap, f.toX, f.toY).then(() => {
+            this._log(`[Entered ${this.map.zoneName}]`);
+            this.state = STATE.IDLE;
+            this.emitGameEvent('map_entered', { map: f.toMap });
+            this.autosave({ force: true });
+            this._render();
+        });
     }
 
     // (AA1) Walking into a zone whose shop sells armour you do not own says so, once per visit.
