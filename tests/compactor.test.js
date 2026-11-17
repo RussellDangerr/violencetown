@@ -10,7 +10,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { GameMap } from '../game/map.js';
-import { Enemy, spawnEnemy } from '../game/enemies.js';
+import { Enemy, spawnEnemy, resolveEnemyTurns } from '../game/enemies.js';
+import { isHostile } from '../game/ai.js';
+import { struck } from '../game/perception.js';
 import { resolveSpawn, ENTRIES } from '../game/slots.js';
 import { ENEMY_SPRITES } from '../game/sprites.js';
 import { WORLD_ZONES, zoneByName, overworldZone, connectorPairs } from '../game/world-map.js';
@@ -514,5 +516,55 @@ describe('a reload mid-fight keeps the walls where they were', () => {
         const n = standIn();
         await loadInto(n, raw);
         assert.deepEqual(n._compactor, newCompactor());
+    });
+});
+
+// ── The machine itself never moves, hunts or swings ──
+
+describe('the compactor never acts', () => {
+    const lift = (name, vars = {}) => {
+        const body = methodBody(name).replace(new RegExp(`^\\s*(async )?${name}`), '');
+        const names = Object.keys(vars);
+        return new Function(...names, `'use strict'; return function ${body}`)(...names.map(n => vars[n]));
+    };
+
+    test('noise from your own blows does not wake it, so it never goes looking', async () => {
+        const g = await inRoom();
+        const earshot = lift('_earshot', { isHostile });
+        const heard = earshot.call({ enemies: g.enemies, _isCompactor: isCompactor });
+        assert.deepEqual(heard, [], 'the compactor can hear');
+        assert.ok(isHostile(machine(g)), 'it should still be a hostile you can hit by bumping');
+        // A hostile that is not the compactor still hears.
+        const other = { allegiance: 'hostile', tag: 'x' };
+        assert.deepEqual(earshot.call({ enemies: [machine(g), other], _isCompactor: isCompactor }), [other]);
+    });
+
+    test('a blow to it does not provoke it', async () => {
+        const g = await inRoom();
+        const m = machine(g);
+        const harmed = lift('_onEntityHarmed', { isHostile, struck });
+        harmed.call({ _isCompactor: isCompactor, _log(l) { g.logs.push(l); } }, m, { kind: 'attack' });
+        assert.equal(m._struckBy ?? null, null, 'it turned to face the blow');
+        assert.equal(m.state, 'idle');
+        assert.ok(!g.logs.some(l => /turns on you/.test(l)));
+    });
+
+    test('beside you for twenty beats it stays put and never swings', async () => {
+        const g = await inRoom();
+        const m = machine(g);
+        g.playerX = 5; g.playerY = 4;
+        const swings = [];
+        Object.assign(g, {
+            _MOVE_MS: 150, hasBuff: () => false, _cascadeMark() {}, ambientRng: null,
+            applyDamageToPlayer(raw, by) { swings.push([raw, by.type]); },
+        });
+        for (let i = 0; i < 20; i++) { g.turn++; resolveEnemyTurns(g); }
+        assert.deepEqual([m.x, m.y], [5, 5]);
+        assert.equal(m.state, 'idle');
+        assert.deepEqual(swings, []);
+        // And with you out of reach it does not come for you either.
+        g.playerX = 1; g.playerY = 1;
+        for (let i = 0; i < 20; i++) { g.turn++; resolveEnemyTurns(g); }
+        assert.deepEqual([m.x, m.y], [5, 5]);
     });
 });

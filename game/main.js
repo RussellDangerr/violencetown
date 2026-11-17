@@ -5283,7 +5283,7 @@ class Game {
     // neutrals get their ladder ticked, which is Thieve's business: a neutral who
     // notices you is a WITNESS, and that is the whole theft rule.
     _earshot() {
-        return (this.enemies || []).filter(isHostile);
+        return (this.enemies || []).filter(e => isHostile(e) && !this._isCompactor?.(e));   // (TC1) the compactor is deaf: noise never wakes it
     }
 
     // Stand everyone down. Called on a zone change, on the retry after a defeat,
