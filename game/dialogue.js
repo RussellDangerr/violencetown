@@ -485,6 +485,16 @@ DIALOGUES.assistant_manager = {
     ],
 };
 
+// SG1: the Carnival's strongman. He stands at -40, so only one line is offered: any other pick
+// would read as a taunt past DIALOGUE_HOSTILE_AT. The recruit choice crosses his flip threshold.
+DIALOGUES.strongman = {
+    name: '[Strongman]',
+    greeting: '[TEXT]',
+    choices: [
+        { id: 'recruit', label: '[TEXT]', once: true, delta: 70, reply: '[TEXT]' },
+    ],
+};
+
 // (DQ1) What the speaker opens with. A dialogue may list `greetings`, each with a `when(game)`
 // condition; the first one that holds wins, and otherwise the fixed `greeting` is used.
 export function greetingFor(d, g) {

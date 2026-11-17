@@ -118,9 +118,12 @@ export const ENTRIES = {
     // hand. Give him enough and he turns to your side (give-action.js applyFlip), then fights
     // beside you at the contest against the boss. Stand-ins until designed: the ordinary Carnival
     // Clown's look, numbers, kit and gift values, the name, the barks. No `boss`, no slot.
+    // SG1: calm where he stands (24,13); a talk recruit sits beside the gift flip. His own type
+    // carries the art stand-in (Pike's cell); the numbers are still the Clown's.
     strongman: {
-        type: 'Carnival Clown',
+        type: 'Strongman',
         name: '[Strongman]',
+        dialogueId: 'strongman',
         gold: 7,
         loadout: ['hot_dog', 'red_cape', 'soap', 'fire_blood'],
         hp: 100,
