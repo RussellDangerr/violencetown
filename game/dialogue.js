@@ -46,7 +46,7 @@ export const DIALOGUES = {
             { id: 'lore', label: "Ask how long he's been down here", once: true, delta: 4,
               reply: '"Floated my wagon across when this was still a RIVER. She sank. I woke on the mud — still here. The water did somethin\' to me. Don\'t age, don\'t die, don\'t leave. Just prospect."' },
             { id: 'buy', label: 'Ask about the rope (the grappling hook)', once: true,
-              reply: '[TEXT]' },
+              reply: 'Pike has the grappling hook. Offer to clear the canyon critters and he gives it to you.' },
             { id: 'deal', label: 'Offer to clear the critters for the rope', once: true,
               onPick: (game, npc) => {
                   if (!game.questEngine) return;
@@ -73,7 +73,7 @@ export const DIALOGUES = {
             { id: 'fashion_rat', label: 'Have him fashion the wererat fur into a ring', repeatable: true,
               onPick: (game) => { if (game._fashionRing) game._fashionRing('wererat_fur', 'rat_ring'); },
               reply: '"Let\'s see what you\'re carrying, then."' },
-            { id: 'fashion_fire', label: '[TEXT: have him set Fire Blood into a ring]', repeatable: true,
+            { id: 'fashion_fire', label: 'Have him set the Fire Blood into a ring', repeatable: true,
               requiresItem: 'fire_blood',
               onPick: (game) => { if (game._fashionRing) game._fashionRing('fire_blood', 'fire_ring', 3); },
               reply: '"Let\'s see what you\'re carrying, then."' },
@@ -82,7 +82,7 @@ export const DIALOGUES = {
     bartho: {
         name: 'Bartho',
         greeting: '"...what."',
-        greetings: [{ when: bridgeOpen, text: '[TEXT: Bartho, bridge open]' }],
+        greetings: [{ when: bridgeOpen, text: 'The north bridge is open now that the car is fixed.' }],
         choices: [
             { id: 'bridge', label: 'Ask about the north bridge', once: true,
               reply: '"Barricaded. Years now. Whatever\'s past it can stay past it."' },
@@ -101,20 +101,22 @@ export const DIALOGUES = {
     // he is the one who tells you (plans/taxi-driver.md). Every line is a
     // placeholder until Caelan writes it.
     taxi_driver: {
-        name: '[TEXT]',
-        greeting: '[TEXT]',
+        name: 'Taxi driver',
+        greeting: 'I am the taxi driver. My taxi crosses the bridge north out of Town, and it needs the cataclysmic converter to run.',
         choices: [
-            { id: 'ask', label: '[TEXT]', repeatable: true, reply: '[TEXT]' },
+            { id: 'ask', label: 'Ask about the taxi', repeatable: true,
+              reply: 'The Were-Rat in the Sewer drops the cataclysmic converter. Bring it back to Town and put it in the car. Then step onto the bridge to cross.' },
         ],
     },
 
     // (TX3) The same driver, in the Canyon after the taxi went down with him
     // (plans/tx3-taxi-crash-driver.md). Placeholder lines until Caelan writes them.
     taxi_driver_canyon: {
-        name: '[TEXT]',
-        greeting: '[TEXT]',
+        name: 'Taxi driver',
+        greeting: 'I am the taxi driver. The taxi crashed into the Canyon with me in it.',
         choices: [
-            { id: 'ask', label: '[TEXT]', repeatable: true, reply: '[TEXT]' },
+            { id: 'ask', label: 'Ask how to get out of the Canyon', repeatable: true,
+              reply: 'Climbing out needs the grappling hook. Pike has it.' },
         ],
     },
 
@@ -213,7 +215,7 @@ export const DIALOGUES = {
     // MQ2 wiring pass — for now they just talk. Rewrite freely.
     diner_cook: {
         name: 'Short-Order Cook',
-        greetings: [{ when: burgerPickedUp, text: '[TEXT: the cook, after the pickup]' }],
+        greetings: [{ when: burgerPickedUp, text: 'The burger and fries have already been picked up.' }],
         greeting: '"Order up — oh. You. You\'re the delivery type, aren\'t you. I can always tell."',
         choices: [
             // (Phase 4 MQ2) The dialogue delivery idiom: only shown at the get_burger
@@ -227,10 +229,10 @@ export const DIALOGUES = {
             // cone is not a quest item, so a lost one would stall the delivery: while
             // the order still needs a cone, the machine is fixed and none is in the
             // bag, the cook hands over another (the Factory manager's `collect` shape).
-            { id: 'another_cone', label: '[TEXT]', repeatable: true,
+            { id: 'another_cone', label: 'Ask for another ice cone', repeatable: true,
               available: (g) => coneOwed(g),
-              onPick: (g) => { if (g._grantItem) g._grantItem(ORDER_CONE, '[TEXT]'); },
-              reply: '[TEXT]' },
+              onPick: (g) => { if (g._grantItem) g._grantItem(ORDER_CONE, 'The cook hands you another ice cone.'); },
+              reply: 'The cook hands you another ice cone for the delivery order.' },
             { id: 'burger', label: 'Ask about the burger and fries', repeatable: true,
               reply: '"Bag\'s under the lamp. Somebody out there\'s waitin\' on it."' },
             { id: 'flatter', label: '[Compliment the grease]', repeatable: true, delta: 3,
@@ -248,18 +250,18 @@ export const DIALOGUES = {
             // handOver removes it all AND emits item_given per item (the event the satchel
             // give fires), so either idiom completes the quest (IC2: the order is more than
             // one item).
-            { id: 'deliver', label: '[TEXT]', once: true,
+            { id: 'deliver', label: 'Hand over the delivery order', once: true,
               available: (g) => !!g.questEngine && g.questEngine.currentStageId() === 'handoff' && g.questEngine.holdsOwed(),
               onPick: (g, npc) => g.questEngine.handOver(npc.id),
-              reply: '[TEXT]' },
+              reply: 'The Financier takes the delivery order.' },
             // (YC1 / YCR1 a) After the delivery he brings up the Yellow Card, once. The quest
             // flag also gates it (the NPC's spent `once` choices are saved with the NPC).
             // No item, no mechanic; label and reply are placeholders.
-            { id: 'yellowCard', label: '[TEXT]', once: true,
+            { id: 'yellowCard', label: 'Ask about the Yellow Card', once: true,
               available: (g) => !!g.questEngine && g.questEngine.isComplete('deliver_burger')
                   && !g.questEngine.getFlag('yellowCardRaised'),
               onPick: (g) => { g.questEngine.state.flags.yellowCardRaised = true; },
-              reply: '[TEXT]' },
+              reply: 'The Financier mentions the Yellow Card. It does nothing yet.' },
             { id: 'loan', label: 'Ask what the bank actually does', once: true,
               reply: '"We lend. We collect. We are very, very patient about the collecting. (Placeholder — the Financier\'s arc comes later.)"' },
             { id: 'flatter', label: '[Flatter him]', repeatable: true, delta: 3,
@@ -269,20 +271,20 @@ export const DIALOGUES = {
         ],
     },
     // (FIN2) The Financier in his vault. Talking to him is how the fight starts
-    // (main.js _beginFinalFight): one choice, every word [TEXT] until Caelan writes it.
+    // (main.js _beginFinalFight): one choice that starts the fight.
     financier_vault: {
         name: 'The Financier',
-        greeting: '[TEXT]',
+        greeting: 'I am the Financier. This is my vault. Talk to me and the fight starts.',
         choices: [
-            { id: 'begin', label: '[TEXT]', repeatable: true,
+            { id: 'begin', label: 'Start the fight with the Financier', repeatable: true,
               onPick: (g, npc) => { if (g._beginFinalFight) g._beginFinalFight(npc); },
-              reply: '[TEXT]' },
+              reply: 'The Financier turns on you and Sun Man joins you for a few turns.' },
         ],
     },
     // Sun Man, so the fight's panel and log can name him. His lines are later slices.
     sun_man: {
         name: 'Sun Man',
-        greeting: '[TEXT]',
+        greeting: 'I am Sun Man. I fight beside you against the Financier for a few turns.',
         choices: [],
     },
     casino_op: {
@@ -375,12 +377,13 @@ function cratRulingChoices() {
             const paidBy = bribe === 'none' ? null : (bribe === 'same' ? side : CRAT.sides.find(s => s !== side));
             out.push({
                 id: `rule_${side}${paidBy ? '_paid_' + paidBy : ''}`,
-                label: `[TEXT: rule for side ${side.toUpperCase()}]`,
+                label: `Rule for side ${side.toUpperCase()}`,
                 once: true,
                 available: (g) => heardBoth(g) && !ruled(g) && (cratFlag(g, 'cratBribe') ?? null) === paidBy,
                 onPick: (g) => { setCratFlag(g, 'cratRuling', side); grantCratReward(g); },
-                reply: `[TEXT: the reveal, "you are not the mother" — you ruled for ${verdict}`
-                    + (bribe === 'none' ? ', unbought' : bribe === 'same' ? ', paid by that side' : ', paid by the other side') + ']',
+                reply: `You ruled for side ${side.toUpperCase()}, ${verdict}`
+                    + (bribe === 'none' ? ', and took no money' : bribe === 'same' ? ', and took that side\'s money' : ', and took the other side\'s money')
+                    + '. The road to Carrion is open now.',
             });
         }
     }
@@ -391,45 +394,45 @@ function cratSide(side) {
     const flag = CRAT.heardFlag(side);
     const S = side.toUpperCase();
     return {
-        name: `[NAME: side ${S}]`,
-        greeting: `[TEXT: side ${S} greets you]`,
+        name: `Side ${S}`,
+        greeting: `Side ${S} is in a dispute with the other side. Hear it out, then rule.`,
         choices: [
-            { id: 'testify', label: `[TEXT: hear side ${S} out]`, once: true,
+            { id: 'testify', label: `Hear side ${S} out`, once: true,
               available: (g) => !cratFlag(g, flag),
               onPick: (g) => setCratFlag(g, flag, true),
-              reply: `[TEXT: side ${S}'s side of it]` },
-            { id: 'again', label: `[TEXT: ask side ${S} again]`, repeatable: true,
+              reply: `Side ${S} says it is in the right. The clues in this room show which side is.` },
+            { id: 'again', label: `Ask side ${S} again`, repeatable: true,
               available: (g) => !!cratFlag(g, flag) && !ruled(g),
-              reply: `[TEXT: side ${S} repeats itself]` },
+              reply: `Side ${S} says again that it is in the right.` },
             // The bribe runs the other way to every other in the game: they pay you.
-            { id: 'offer', label: `[TEXT: take side ${S}'s money - ${CRAT_BRIBE_GP} GP]`, once: true,
+            { id: 'offer', label: `Take side ${S}'s money - ${CRAT_BRIBE_GP} GP`, once: true,
               available: (g, npc) => !!cratFlag(g, flag) && !ruled(g) && !cratFlag(g, 'cratBribe')
                   && (npc ? (npc.gold ?? 0) >= CRAT_BRIBE_GP : true),
               onPick: (g, npc) => {
                   if (transferGold(npc, g, CRAT_BRIBE_GP, 'dialogue')) setCratFlag(g, 'cratBribe', side);
               },
-              reply: `[TEXT: side ${S} pays you to rule its way]` },
-            { id: 'after', label: `[TEXT: ask side ${S} about the ruling]`, repeatable: true,
+              reply: `Side ${S} pays you ${CRAT_BRIBE_GP} GP to rule its way.` },
+            { id: 'after', label: `Ask side ${S} about the ruling`, repeatable: true,
               available: (g) => ruled(g),
-              reply: `[TEXT: side ${S} on the ruling]` },
+              reply: `The ruling is made. Side ${S} has nothing more to say.` },
         ],
     };
 }
 
 DIALOGUES.crat = {
     name: 'The Crat',
-    greeting: '[TEXT: the Crat greets you]',
+    greeting: 'I am the Crat. Two sides in this room dispute the same thing. Hear both sides, then rule for one.',
     choices: [
-        { id: 'dispute', label: '[TEXT: ask what the dispute is]', repeatable: true,
+        { id: 'dispute', label: 'Ask what the dispute is', repeatable: true,
           available: (g) => !ruled(g),
-          reply: '[TEXT: the Crat lays out the dispute and asks you to hear both sides]' },
-        { id: 'waiting', label: '[TEXT: ask what happens now]', repeatable: true,
+          reply: 'Two sides claim the same thing. Hear both of them, then rule for one.' },
+        { id: 'waiting', label: 'Ask what happens now', repeatable: true,
           available: (g) => !heardBoth(g) && !ruled(g),
-          reply: '[TEXT: the Crat says to hear both sides first]' },
+          reply: 'Hear both sides first. Then you can rule.' },
         ...cratRulingChoices(),
-        { id: 'after', label: '[TEXT: ask the Crat about the ruling]', repeatable: true,
+        { id: 'after', label: 'Ask the Crat about the ruling', repeatable: true,
           available: (g) => ruled(g),
-          reply: '[TEXT: the Crat on the ruling]' },
+          reply: 'You have ruled. The road to Carrion is open.' },
     ],
 };
 DIALOGUES.crat_side_a = cratSide('a');
@@ -450,29 +453,29 @@ const flagsOf = (g) => (g && g.questEngine && g.questEngine.state && g.questEngi
 const billPaid = (g) => !!flagsOf(g).factoryBillPaid;
 const holdsPart = (g) => (g.inventory || []).some(s => s && s.itemDef && s.itemDef.id === MACHINE_PART);
 const partOwed = (g) => billPaid(g) && !flagsOf(g).iceConeMachineFixed && !holdsPart(g);
-const handOverPart = (g) => { if (g._grantItem) g._grantItem(MACHINE_PART, '[TEXT]'); };
+const handOverPart = (g) => { if (g._grantItem) g._grantItem(MACHINE_PART, 'The manager hands you the ice cone machine part.'); };
 
 DIALOGUES.factory_manager = {
     name: '[Factory Manager]',
-    greeting: '[TEXT]',
+    greeting: 'I am the Factory manager. I hold the ice cone machine part until the factory bill is paid.',
     choices: [
-        { id: 'bill', label: '[TEXT]', repeatable: true,
+        { id: 'bill', label: 'Ask about the bill', repeatable: true,
           available: (g) => !billPaid(g),
-          reply: '[TEXT]' },
-        { id: 'pay', label: `[TEXT - ${FACTORY_BILL_GP} GP]`, repeatable: true, cost: FACTORY_BILL_GP,
+          reply: `The bill is ${FACTORY_BILL_GP} GP. Pay it and I hand over the ice cone machine part.` },
+        { id: 'pay', label: `Pay the bill - ${FACTORY_BILL_GP} GP`, repeatable: true, cost: FACTORY_BILL_GP,
           available: (g) => !billPaid(g),
           onPick: (g) => {
               if (g.questEngine) g.questEngine.state.flags.factoryBillPaid = true;
               handOverPart(g);
           },
-          reply: '[TEXT]' },
-        { id: 'collect', label: '[TEXT]', repeatable: true,
+          reply: 'The bill is paid. The manager hands over the ice cone machine part if your bag has room. If it does not, ask for the part again.' },
+        { id: 'collect', label: 'Ask for the ice cone machine part', repeatable: true,
           available: (g) => partOwed(g),
           onPick: (g) => handOverPart(g),
-          reply: '[TEXT]' },
-        { id: 'paid', label: '[TEXT]', repeatable: true,
+          reply: 'The manager hands over the ice cone machine part.' },
+        { id: 'paid', label: 'Ask about the part', repeatable: true,
           available: (g) => billPaid(g) && !partOwed(g),
-          reply: '[TEXT]' },
+          reply: 'The bill is paid. The ice cone machine part goes in the ice cone machine.' },
     ],
 };
 
@@ -496,12 +499,13 @@ DIALOGUES.hypno_nerd = {
 };
 
 // (AS1, plans/as1-unicycle-clown.md) The Carnival's assistant manager: he talks and does
-// nothing else. Every word is [TEXT] until Caelan writes it.
+// nothing else.
 DIALOGUES.assistant_manager = {
     name: '[Assistant Manager]',
-    greeting: '[TEXT]',
+    greeting: 'I am the Assistant manager of the Carnival. I only talk.',
     choices: [
-        { id: 'chat', label: '[TEXT]', repeatable: true, reply: '[TEXT]' },
+        { id: 'chat', label: 'Talk to the Assistant manager', repeatable: true,
+          reply: 'The Assistant manager has nothing to give you.' },
     ],
 };
 
@@ -509,9 +513,10 @@ DIALOGUES.assistant_manager = {
 // would read as a taunt past DIALOGUE_HOSTILE_AT. The recruit choice crosses his flip threshold.
 DIALOGUES.strongman = {
     name: '[Strongman]',
-    greeting: '[TEXT]',
+    greeting: 'I am the Strongman of the Carnival.',
     choices: [
-        { id: 'recruit', label: '[TEXT]', once: true, delta: 70, reply: '[TEXT]' },
+        { id: 'recruit', label: 'Ask him to fight on your side', once: true, delta: 70,
+          reply: 'The Strongman agrees. He fights on your side now.' },
     ],
 };
 
