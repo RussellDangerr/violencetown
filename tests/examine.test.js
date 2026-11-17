@@ -32,8 +32,8 @@ describe('resolveExamine — the ladder', () => {
     });
 
     test('a creature is named, hostile or not — the strings the Target List already used', () => {
-        assert.equal(resolveExamine(game({ enemies: [creature('Wererat', 3, 3, 'hostile')] }), 3, 3).body, '[Wererat. Looks like trouble.]');
-        assert.equal(resolveExamine(game({ enemies: [creature('Puck', 3, 3, 'neutral')] }), 3, 3).body, '[Puck. Minding their own business.]');
+        assert.equal(resolveExamine(game({ enemies: [creature('Wererat', 3, 3, 'hostile')] }), 3, 3).body, '[Wererat. Creature. Looks like trouble.]');
+        assert.equal(resolveExamine(game({ enemies: [creature('Puck', 3, 3, 'neutral')] }), 3, 3).body, '[Puck. Creature. Minding their own business.]');
     });
 
     test('a container says whether anything is in it', () => {

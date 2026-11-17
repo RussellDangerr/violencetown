@@ -210,9 +210,9 @@ describe('examining a creature', () => {
             assert.equal(e.allegiance, 'hostile');
             const g = view([e]);
             tap(g, e);
-            assert.deepEqual(g.logs, ['[TEXT]'], e.type);
-            assert.equal(g.panels[0].body, '[TEXT]');
-            assert.equal(g.panels[0].title, e.name);
+            assert.deepEqual(g.logs, [`[TEXT] [${e.type}. Creature. Looks like trouble.]`], e.type);
+            assert.ok(g.panels[0].body.startsWith('[TEXT]\n[') &&g.panels[0].body.includes('HP:'));
+            assert.equal(g.panels[0].title, e.name.replace(/[\[\]]/g, ''));
         }
     });
 
@@ -222,7 +222,7 @@ describe('examining a creature', () => {
         e.x = 0; e.y = 1;                      // the tile the player faces
         const g = view([e]);
         doExamine(g);
-        assert.deepEqual(g.logs, ['[TEXT]']);
+        assert.ok(g.logs[0].startsWith('[TEXT] [') && g.logs.length === 1);
     });
 
     test('a creature with no text of its own keeps the generic line, hostile or not', () => {
@@ -230,11 +230,11 @@ describe('examining a creature', () => {
         assert.equal(rat.examine, null);
         const g = view([rat]);
         tap(g, rat);
-        assert.deepEqual(g.logs, ['[Rat. Looks like trouble.]']);
+        assert.deepEqual(g.logs, ['[Rat. Creature. Looks like trouble.]']);
         rat.allegiance = 'neutral';
         const g2 = view([rat]);
         doExamine(g2);
-        assert.deepEqual(g2.logs, ['[Rat. Minding their own business.]']);
+        assert.deepEqual(g2.logs, ['[Rat. Creature. Minding their own business.]']);
     });
 });
 
