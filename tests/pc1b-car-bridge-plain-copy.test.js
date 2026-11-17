@@ -68,14 +68,14 @@ describe('the car says plainly what happened', () => {
     test('fixed, no alcohol: says the engine is too hot and where to get alcohol', () => {
         const g = stub({ flags: { carFixed: true } });
         g._interactCar();
-        assert.deepEqual(g.logs, ['Your car is fixed, but the engine runs too hot for the bridge. Buy a bottle of alcohol from Hooch and pour it into the tank.']);
+        assert.deepEqual(g.logs, ['Your car is fixed, but the engine runs too hot. If you drive over the bridge now, you crash. Buy a bottle of alcohol from Hooch and pour it into the tank.']);
         assert.equal(g.carFuel, 'raw');
     });
 
     test('fixed, with alcohol in the bag: the pour is spent and says so', () => {
         const g = stub({ flags: { carFixed: true }, inventory: [item('alcohol')] });
         g._interactCar();
-        assert.deepEqual(g.logs, ['You pour a bottle of alcohol into the tank of your car. The engine now runs slower, so you can drive over the bridge.']);
+        assert.deepEqual(g.logs, ['You pour a bottle of alcohol into the tank of your car. The engine now runs slower. You can drive over the bridge without crashing.']);
         assert.equal(g.carFuel, 'alcohol');
         assert.equal(g.inventory[0], null);
     });

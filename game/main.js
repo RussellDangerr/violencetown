@@ -3338,13 +3338,13 @@ class Game {
                 this._removeFromSlot(alc);
                 this.carFuel = 'alcohol';
                 audio.playSfx('pickup');
-                this._log('You pour a bottle of alcohol into the tank of your car. The engine now runs slower, so you can drive over the bridge.', 'pickup');
+                this._log('You pour a bottle of alcohol into the tank of your car. The engine now runs slower. You can drive over the bridge without crashing.', 'pickup');
                 this._render();
                 return;
             }
             this._log(this.carFuel === 'alcohol'
                 ? 'Your car is fixed and has alcohol in the tank. Drive north over the bridge.'
-                : 'Your car is fixed, but the engine runs too hot for the bridge. Buy a bottle of alcohol from Hooch and pour it into the tank.');
+                : 'Your car is fixed, but the engine runs too hot. If you drive over the bridge now, you crash. Buy a bottle of alcohol from Hooch and pour it into the tank.');
             this._render();
             return;
         }
