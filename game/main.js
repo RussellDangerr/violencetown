@@ -12,7 +12,7 @@ import { pickHitMark, HEAVY_HIT_DAMAGE, dodgeChance, DODGE_WORD } from './hit-sp
 import { makeEffectLoop } from './effect-loop.js';                 // one tick of the transient-effects loop, and its refusal to die on a bad frame
 import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK, SLUDGE_DOT, FIRE_QUENCHING_TILES } from './data.js';
 import { puddleTiles, layPuddle, puddleAt, dryPuddles } from './puddles.js';   // (poisons) Sludge Brain's puddles
-import { ITEMS, canStandOn, wornBody, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef, poitionBuff } from './items.js';
+import { ITEMS, canStandOn, wornBody, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef, poitionBuff, BOON_KINDS } from './items.js';
 import { WEAPONS, weaponClassOf, FISTS } from './weapons.js';
 import { handPairOf } from './hand-data.js';   // (HB2) two held weapons combine into a named effect
 import { resolveItemDef } from './item-registry.js';
@@ -3677,6 +3677,23 @@ class Game {
         this._render();
     }
 
+    // (BP4) Drinking a boon asks what it raises: the item list is swapped for one row per kind.
+    // Escape / tap outside close it as for any item list, keeping the poition and the turn.
+    _openBoonChooser() {
+        this.overlayOptions = Object.entries(BOON_KINDS).map(([kind, k]) => ({ label: `${k.label} +${k.amount}`, action: 'boon', kind }));
+        this.overlayCursor = 0;
+        this._overlayOpenedAt = performance.now();
+        this._render();
+    }
+
+    // (BP4) The Remoticon's Use on a boon: leave it holding that item and ask which kind.
+    _deviceOpenBoon(index) {
+        this._deviceSel = null;
+        this.selectedSlot = index;
+        this.state = STATE.ITEM_OVERLAY;
+        this._openBoonChooser();
+    }
+
     _pickOverlay(index) {
         const opt = this.overlayOptions[index];
         if (!opt) return; // no option at that row
@@ -3694,6 +3711,11 @@ class Game {
                 if (opt.label === 'Eat' && this.playerHp >= this.playerMaxHp) {
                     this._log('[TEXT]'); this.state = STATE.ITEM_SELECTED; this._render(); return;
                 }
+                if (item.poition && item.poition.permanent && item.useType === 'self') { this._openBoonChooser(); return; }   // (BP4) ask which kind first
+                this._doItemUse(item);
+                break;
+            case 'boon':
+                this._boonKind = opt.kind;   // (BP4) read and cleared by resolveUse
                 this._doItemUse(item);
                 break;
             case 'ctx': {
@@ -5630,6 +5652,7 @@ class Game {
             // (weapon swing, Cleave/Spin, item Smash, spells, tricks, thrown
             // splash) since they all funnel through this single computeHit call.
             flats: this._poitionMod('strength')
+                + ((this.boons && this.boons.strength) || 0)   // (BP4) boons drunk, kept for good
                 // (QC2) A worn item's flat melee bonus (the Lava Cape), weapon swings only: a
                 // spell, smash or throw carries no weapon. Inline so lifts of this method need
                 // no new free variable.
@@ -6048,6 +6071,7 @@ class Game {
         // rings the same way — a rider read, not a tick (see _poitionMod).
         total += this._poitionMod('defence');
         total += this._shieldArmor?.() ?? 0;   // a shield held in a hand adds its armour
+        total += (this.boons && this.boons.defence) || 0;   // (BP4) boons drunk, kept for good
         return total;
     }
 
@@ -7607,6 +7631,8 @@ class Game {
                     // the next direction throws it (a rock is `consumable:true`, but
                     // nothing is spent until it is thrown).
                     if (action.arms) { this._armThrow(idx); audio.playSfx('menu-confirm'); return; }
+                    // (BP4) A boon asks which kind first: hand over to the item list's chooser.
+                    if (def.poition && def.poition.permanent && def.useType === 'self') { this._deviceOpenBoon?.(idx); audio.playSfx('menu-confirm'); return; }   // inline test and ?. call, as the lines above: older tests lift this method
                     // Route through resolveUse like canonical _doItemUse, but GATE the
                     // removal the same way. Only a self-use (heal) or an equip
                     // (moves onto the body) truly consumes it here, and only a real use
