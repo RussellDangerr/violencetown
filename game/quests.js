@@ -383,8 +383,20 @@ export class QuestEngine {
         this.state.activeId = null;
         this.state.stageIndex = 0;
         if (q && q.onComplete) q.onComplete(this.game);
+        this._payBoon(id);
         this._maybeGrantCape();
         this.game._render?.();
+    }
+
+    // (BP3, BPR2 a) Every quest pays one boon poition, once per game: the saved flag
+    // `boon_<key>` stops a forced completion or a reload from paying twice.
+    _payBoon(key) {
+        const flag = `boon_${key}`;
+        const flags = this.state.flags;
+        if (flags[flag]) return false;
+        if (!this.game._grantBoon?.()) return false;   // main.js: the item, and the log line
+        flags[flag] = true;
+        return true;
     }
 
     // (QC2) Once every quest in QUESTS is complete the Lava Cape lands in the bag, once per save.
@@ -468,6 +480,7 @@ export class QuestEngine {
         const item = SLOTS[q.slot].requiredDrop;
         if (!this.game._grantItem?.(item, '[TEXT]')) return false;
         this.state.flags[act2Key(zone)] = 'done';
+        this._payBoon(act2Key(zone));
         this._note(`Completed "${q.title}".`);
         return true;
     }
