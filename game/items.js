@@ -135,7 +135,7 @@ export const ITEMS = {
         damageType: 'goo',
         consumable: true,
         fallbackColor: '#6abe30',
-        baseValue: 12,
+        baseValue: 0,   // placeholder: any value tips the Robot Rat and the Alien out of their balance bands
     },
     soap: {
         id: 'soap',

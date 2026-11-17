@@ -34,7 +34,7 @@ const run = (g, e, beats = 2) => { const out = []; for (let t = 1; t <= beats; t
 describe('who throws what', () => {
     test('only Fire Blood and Sludge Brain are thrown by enemies', () => {
         const throwers = Object.values(ITEMS).filter(d => d.enemyThrows).map(d => d.id).sort();
-        assert.deepEqual(throwers, ['fire_blood', 'sludge_brain']);
+        assert.deepEqual(throwers, ['fire_blood', 'goo', 'sludge_brain']);   // GO2: aliens and robots throw goo
     });
 
     test('a carrier that sees you from 3 tiles throws Fire Blood instead of closing in', () => {

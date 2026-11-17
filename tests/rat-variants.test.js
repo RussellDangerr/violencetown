@@ -53,7 +53,7 @@ describe('the Carnival rats are registry entries with canyon-rat stats', () => {
 
         test(`${entry}: one drop, inside the vermin cap, and none of Pike's tag`, () => {
             const e = ENTRIES[entry];
-            assert.equal(e.loadout.length, 1, 'one themed drop each');
+            assert.equal(e.loadout.length, entry === 'robot_rat' ? 2 : 1, 'one themed drop each; the Robot Rat also carries goo (GO2)');
             assert.ok(challengeGp(e) <= 5, `kit worth ${challengeGp(e)} GP, over the vermin cap`);
             assert.notEqual(e.tag, 'canyon_critter', 'that tag feeds Pike\'s deal');
             assert.deepEqual(lintEntity({ id: entry, ...e }), []);
