@@ -53,7 +53,7 @@ export const QUESTS = {
 
     // ── Chapter Two: Main Quest 2 — the burger delivery (Phase 4 playground).
     //    STRUCTURE is real (3 stages; both delivery idioms via item_given; journal
-    //    location + description; world-map targetZone). The TEXT is placeholder for
+    //    location + description; world-map targetZone). The text is plain stand-in copy for
     //    Caelan to author. Started deterministically on Downtown arrival (both the
     //    canyon-grapple climb-out and the alcohol-ramp → game._startMainQuest2).
     deliver_burger: {
@@ -63,9 +63,9 @@ export const QUESTS = {
             {
                 id: 'get_burger',
                 // (FD3) Your boss hands the bag over before the crossing, so this settles on its own.
-                objective: '[TEXT]',
-                location: '[TEXT]',
-                description: '[TEXT]',
+                objective: 'Get the burger and fries',
+                location: 'Downtown',
+                description: 'You need the burger and fries for the delivery. Your boss gives them to you before you cross the bridge. Keep them in your bag.',
                 targetZone: 'DOWNTOWN',
                 on: { type: 'item_pickup', match: { id: 'burger_fries' } },
                 autoSatisfy: (game) => (game.inventory || []).some(s => s && s.itemDef.id === 'burger_fries'),
@@ -76,18 +76,18 @@ export const QUESTS = {
                 // the frozen area later): the stage only asks that it is in the bag.
                 // The Factory is where both of its sources begin.
                 id: 'get_cone',
-                objective: '[TEXT]',
-                location: '[TEXT]',
-                description: '[TEXT]',
+                objective: "Get a Tiger's Blood Ice Cone",
+                location: 'Factory',
+                description: "The delivery order includes a Tiger's Blood Ice Cone. Get one and keep it in your bag. Start in the Factory.",
                 targetZone: 'FACTORY',
                 on: { type: 'item_pickup', match: { id: 'tigers_blood_ice_cone' } },
                 autoSatisfy: (game) => (game.inventory || []).some(s => s && s.itemDef.id === 'tigers_blood_ice_cone'),
             },
             {
                 id: 'handoff',
-                objective: '[TEXT]',
-                location: '[TEXT]',
-                description: '[TEXT]',
+                objective: 'Give the burger and ice cone to the Financier',
+                location: 'Downtown, the bank',
+                description: 'Give the burger and fries and the ice cone to the Financier in the bank. You can give them together or one at a time.',
                 targetZone: 'DOWNTOWN',
                 // (AE1, SP8) The Financier takes it, in the bank. Both items, handed over together or one at a time (QuestEngine.owedItems).
                 on: { type: 'item_given', match: { npc: 'bank-financier' }, items: ['burger_fries', 'tigers_blood_ice_cone'] },
@@ -95,13 +95,13 @@ export const QUESTS = {
         ],
         onComplete: (game) => {
             game.gold = (game.gold || 0) + 50;
-            game._log('[TEXT] +50 GP.', 'transition');
+            game._log('Delivery done. +50 GP.', 'transition');
         },
     },
 
     fix_car: {
         id: 'fix_car',
-        title: '[TEXT]',
+        title: 'Fix the car',
         // Started DETERMINISTICALLY (game._startMainQuest, on game start / first
         // town entry) rather than via a fragile once-per-approach adjacency bark
         // off the Borgir boss — the old startOn could be missed entirely if the
@@ -116,7 +116,7 @@ export const QUESTS = {
                 // floor(innerW / 8) chars, and "walk to it and examine it (E)" cut to
                 // "...AND EXAMINE~" on a phone, losing the very (E) this line is about.
                 // examine.js points the way when E lands on anything else.
-                objective: '[TEXT]',
+                objective: 'Walk to your car and examine it (E)',
                 targetZone: 'TOWN',
                 on: { type: 'examine', match: { targetId: 'car' } },
                 // Tolerant: if the player already examined the car before this
@@ -126,7 +126,7 @@ export const QUESTS = {
             },
             {
                 id: 'recover_converter',
-                objective: '[TEXT]',
+                objective: 'Kill the Were-Rat in the Sewer and take the converter',
                 targetZone: 'SEWER',
                 on: { type: 'item_pickup', match: { id: 'catalytic_converter' } },
                 // Tolerant: the converter only advances this stage on PICKUP. If
@@ -138,7 +138,7 @@ export const QUESTS = {
             },
             {
                 id: 'escape_sewer',
-                objective: '[TEXT]',
+                objective: 'Leave the Sewer and go back to Town',
                 targetZone: 'SEWER',
                 // Phase D implements the set-piece as a Game method; no-op here.
                 onEnter: (game) => { if (game._sewerEscapeSetpiece) game._sewerEscapeSetpiece(); },
@@ -146,9 +146,9 @@ export const QUESTS = {
             },
             {
                 id: 'return_to_car',
-                objective: '[TEXT]',
+                objective: 'Put the converter in your car in Town',
                 // (MC1) Once Macc holds the Converter on his shelf: buy it back from him.
-                objectiveShelved: '[TEXT]',
+                objectiveShelved: 'Buy the converter back from Macc',
                 targetZone: 'TOWN',
                 onEnter: (game) => { game._sewerEscape = null; },  // escaped — clear the gauntlet state
                 on: { type: 'interact_car', match: {} },
@@ -161,7 +161,7 @@ export const QUESTS = {
             // (main.js _doMove), so the bridge that's been the visible
             // objective all game finally pays off.
             game.questEngine.state.flags.carFixed = true;
-            game._log('[TEXT]', 'transition');
+            game._log('The car runs. The bridge north is open.', 'transition');
             if (game._openBridgeIfCarFixed) game._openBridgeIfCarFixed();
         },
     },
@@ -183,13 +183,13 @@ export const BETWEEN_QUESTS = [
     {
         id: 'back_to_town',   // (OE1) the credits have rolled: the vault is done, the Town is home (OE1R1 a)
         when: (qe) => qe.getFlag(CREDITS.seenFlag) === true,
-        objective: '[TEXT]',
+        objective: 'Go back to Town',
         targetZones: ['TOWN'],
     },
     {
         id: 'to_downtown',   // all three Act 2 items are in the bag: the bank's vault in Downtown is next (FX54)
         when: (qe) => qe.isComplete('deliver_burger') && act2Missing(qe).length === 0,
-        objective: '[TEXT]',
+        objective: 'Go to the bank vault in Downtown',
         targetZones: ['DOWNTOWN'],
     },
     {
@@ -216,9 +216,10 @@ const ACT2_ZONES = ['CARNIVAL', 'FACTORY', 'GRAVEYARD'];
 // entering a zone must not write the save). Steps: 'boss' (the default: not yet beaten),
 // 'collect' (the boss has fallen; examining the zone's claim spot ends the quest),
 // 'done' (the item is in the bag). The boss slot says
-// which item and where; the verb is how the item reaches you (SP1R1). All text is [TEXT].
+// which item and where; the verb is how the item reaches you (SP1R1). The text is plain stand-in copy.
 export const ACT2_VERBS = { FACTORY: 'given', GRAVEYARD: 'taken', CARNIVAL: 'earned' };
 export const ACT2_QUESTS = {};
+const zoneName = (zone) => zone[0] + zone.slice(1).toLowerCase();
 for (const zone of ACT2_ZONES) {
     const slot = `${zone.toLowerCase()}.boss`;
     if (!SLOTS[slot]?.viaQuest) continue;
@@ -229,8 +230,11 @@ for (const zone of ACT2_ZONES) {
         // (ST1) A second spot that ends the same quest: the Carnival's booth, guarded by whoever
         // fills the boss slot. Null where a zone has no booth.
         boothId: zone === 'CARNIVAL' ? '[TEXT]_booth_carnival' : null,
-        title: '[TEXT]',
-        steps: { boss: { objective: '[TEXT]' }, collect: { objective: '[TEXT]' } },
+        title: `Get the ${zoneName(zone)} item`,
+        steps: {
+            boss: { objective: `Defeat the ${zoneName(zone)} boss` },
+            collect: { objective: `Collect the ${zoneName(zone)} item at its claim spot (E)` },
+        },
     };
 }
 const act2Key = (zone) => `act2_${zone}`;
@@ -298,7 +302,7 @@ export class QuestEngine {
             // (ST1) The booth: closed while the guard lives, then the same last step as the claim spot.
             const booth = Object.values(ACT2_QUESTS).find(a => a.boothId && a.boothId === payload.targetId);
             if (booth) {
-                if (this.act2Step(booth.zone) === 'boss') this.game._log?.('[TEXT]', 'transition');
+                if (this.act2Step(booth.zone) === 'boss') this.game._log?.('The booth is closed. Defeat its guard first.', 'transition');
                 else this.act2Claim(booth.zone);
             }
         }
@@ -404,7 +408,7 @@ export class QuestEngine {
         const flags = this.state.flags;
         if (flags.lava_cape_given) return;
         if (!Object.keys(QUESTS).every(id => this.state.completed.includes(id))) return;
-        if (this.game._grantItem?.('lava_cape', '[TEXT]')) flags.lava_cape_given = true;
+        if (this.game._grantItem?.('lava_cape', 'You finished every quest. The Lava Cape is in your bag.')) flags.lava_cape_given = true;
     }
 
     // Force the active quest straight to completion (runs onComplete once).
@@ -465,10 +469,10 @@ export class QuestEngine {
         if (!q) return false;
         if (this.act2Step(q.zone) !== 'done') {
             this.state.flags[act2Key(q.zone)] = 'collect';
-            this.game._log?.('[TEXT]', 'transition');
+            this.game._log?.('The boss is down. Collect its item at the claim spot.', 'transition');
             // (ST2) Won with the strongman beside you: one more line. The step is the same.
             const ally = (this.game.enemies || []).find(e => e.id === 'strongman' && e._ally && e.entity?.isAlive?.());
-            if (ally) this.game._log?.('[TEXT]', 'transition');
+            if (ally) this.game._log?.('The strongman fought beside you.', 'transition');
         }
         return true;
     }
@@ -478,7 +482,7 @@ export class QuestEngine {
         const q = ACT2_QUESTS[zone];
         if (!q || this.act2Step(zone) !== 'collect') return false;
         const item = SLOTS[q.slot].requiredDrop;
-        if (!this.game._grantItem?.(item, '[TEXT]')) return false;
+        if (!this.game._grantItem?.(item, 'The boss item is in your bag.')) return false;
         this.state.flags[act2Key(zone)] = 'done';
         this._payBoon(act2Key(zone));
         this._note(`Completed "${q.title}".`);
