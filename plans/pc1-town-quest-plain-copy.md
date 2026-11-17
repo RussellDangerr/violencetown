@@ -20,6 +20,13 @@ prose. A nameless character goes by its role ("Taxi driver").
 PCR1, picked (a): plain deadpan lines; `[TEXT]` never reaches a player; creative writing stays
 with Caelan. LOOP.md section 6.
 
+## Rulings since
+PC1R1 (loop, standing delegation): touches widen to the eleven older tests that pin the old
+placeholders; each is re-pinned to the exact new line, never loosened, in its own commit. The Act 2
+claim and booth ids (`[TEXT]_claim_<zone>`, `[TEXT]_booth_carnival`) stay: they are internal ids
+matched against three map files, not player text.
+
 ## Out of scope
+The car and bridge log lines in main.js (PC1b) and the taxi dialogue (PC2).
 Copy in other files (main.js car/bridge log lines, dialogue.js taxi lines, map claim-spot text).
 Tests that pin `[TEXT]` outside `touches`.
