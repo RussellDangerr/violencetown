@@ -45,6 +45,6 @@ test('save leaves boons out while empty, keeps them once drunk', () => {
 
 test('nothing lists it; Quests tab line and new-game clear exist', () => {
     assert.ok(readFileSync('game/main.js', 'utf8').includes('this.boons = {}'));
-    assert.match(readFileSync('game/renderer.js', 'utf8'), /\[TEXT\] \$\{boonN\}/);
+    assert.match(readFileSync('game/renderer.js', 'utf8'), /Boons drunk: \$\{boonN\} \/ \$\{BOON_CAP\}/);
     assert.equal(readFileSync('game/items.js', 'utf8').split('boon_poition').length - 1, 2);
 });
