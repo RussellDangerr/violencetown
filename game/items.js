@@ -1172,6 +1172,22 @@ export function resolveThrow(game, itemDef, direction, _stackCount = 1, targetTi
     const allowCenterFriendly = !!targetTile; // real placement implies the Plus Ultra gate already cleared
     let affected = 0;
 
+    // (BP2) A boon poition thrown takes from the hostile on the impact tile what
+    // drinking gives you: the same poitionBuff flip, the full amount, that one
+    // tile only. A friendly or empty tile gets nothing; the poition is spent.
+    if (itemDef.poition && itemDef.poition.permanent && itemDef.poition.stat === 'mana') {
+        const foe = game.enemies.find(e => e.entity.isAlive() && e.x === ix && e.y === iy);
+        if (!foe || !isHostile(foe)) {
+            return hitWall ? `[${itemDef.name} splatters against the wall]` : `[Threw ${itemDef.name} — it shatters harmlessly]`;
+        }
+        const buff = poitionBuff(itemDef.poition, true);
+        const n = Math.max(0, Math.floor(buff.stat ? -buff.amount : buff.dmg));
+        const ent = foe.entity;
+        ent.maxMp = Math.max(0, (ent.maxMp ?? 0) - n);
+        ent.mp = Math.max(0, Math.min(ent.maxMp, (ent.mp ?? 0) - n));
+        return `[${itemDef.name} lowers ${ent.name}'s max MP by ${n}]`;
+    }
+
     if (isDot) {
         // The 3x3 burst applies HALF TURNS at the edge, not half damage. A weaker
         // tick would misprice the item against the harness's dotValue ladder,
