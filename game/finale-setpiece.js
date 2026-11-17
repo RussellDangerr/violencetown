@@ -12,7 +12,7 @@
 //   - the scream rhythm is a function of game.turn (isExposedOn);
 //   - the buffs ride the beast's own buff list, which the save keeps.
 //
-// Every number here is a stand-in, and every line a player reads is [TEXT].
+// Every number here is a stand-in, and every line a player reads is a plain stand-in (FINALE_LINES).
 
 import { ENTRIES, FINALE_PHASE1 } from './slots.js';
 import { spawnEnemy } from './enemies.js';
@@ -43,7 +43,20 @@ export const FINALE_PHASE2 = {
 
 const SUNLIT = 'sunlit';
 
-const text = '[TEXT]';
+// One plain line per moment: what is happening, and what to do about it.
+export const FINALE_LINES = Object.freeze({
+    bite: 'The Financier bites Sun Man.',
+    biteSaid: 'Bitten.',
+    cloak: 'Sun Man pulls his cloak over his face and goes to a corner of the room.',
+    refused: 'Sun Man is hiding under his cloak. You cannot hit him.',
+    rises: 'Sun Man rises as Monstrous Sun Man.',
+    cue: 'Monstrous Sun Man is wrapped in sunlight. Hit him while he screams.',
+    risesSaid: 'Monstrous Sun Man.',
+    scream: 'Monstrous Sun Man screams. His sunlight is down. Hit him now.',
+    screamSaid: 'Scream. Hit him now.',
+    essence: 'Monstrous Sun Man falls and shrinks to a point of light.',
+    costume: 'A Sun Man costume is added to your bag.',
+});
 
 export const isSunMan = (e) => !!e && e.tag === FINALE_PHASE1.sunManTag;
 export const isBeast = (e) => !!e && e.tag === FINALE_PHASE2.beastTag;
@@ -89,8 +102,8 @@ export function cornerFor(game, fromX, fromY, ignore = null) {
 // _finaleSummonLeft), in place of him leaving. Returns true when it was Sun Man.
 export function biteSunMan(game, sun) {
     if (!isSunMan(sun) || !sun.entity.isAlive()) return false;
-    game._log(text, 'combat');                                // the bite
-    game._spawnOverheadDialogue?.(sun.x, sun.y, text, { sourceRef: sun });
+    game._log(FINALE_LINES.bite, 'combat');
+    game._spawnOverheadDialogue?.(sun.x, sun.y, FINALE_LINES.biteSaid, { sourceRef: sun });
     const fin = liveFinancier(game);
     if (fin) {
         const w = weakenedBuff(FINALE_PHASE1.defenceDrop);
@@ -107,7 +120,7 @@ export function biteSunMan(game, sun) {
         sun._lastDx = corner.faceDx;
         sun._lastDy = corner.faceDy;
     }
-    game._log(text, 'combat');                                // the cloak over his face
+    game._log(FINALE_LINES.cloak, 'combat');
     game.emitGameEvent('sun_man_bitten', { weakened: !!fin });
     return true;
 }
@@ -115,7 +128,7 @@ export function biteSunMan(game, sun) {
 // A blow aimed at a cowering Sun Man goes nowhere. True when it was refused.
 export function blocksCowerHit(game, target) {
     if (!isCowering(target)) return false;
-    game._log(text, 'combat');
+    game._log(FINALE_LINES.refused, 'combat');
     return true;
 }
 
@@ -168,9 +181,9 @@ export function riseSunMan(game) {
     syncBeast(beast, game.turn + 1);
     beast._emergeDelay = 1;                  // he spends the turn rising: inert, but standing there
     game.enemies.push(beast);
-    game._log(text, 'combat');                                // he rises
-    game._log(text, 'combat');                                // the coaching cue: hit him when he screams
-    game._spawnOverheadDialogue?.(x, y, text, { sourceRef: beast });
+    game._log(FINALE_LINES.rises, 'combat');
+    game._log(FINALE_LINES.cue, 'combat');
+    game._spawnOverheadDialogue?.(x, y, FINALE_LINES.risesSaid, { sourceRef: beast });
     game.emitGameEvent('monstrous_sun_man_rises', { id: beast.id });
     return true;
 }
@@ -181,8 +194,8 @@ export function finaleTick(game) {
     const beast = liveBeast(game);
     if (!beast) return;
     if (syncBeast(beast, game.turn + 1)) {
-        game._log(text, 'combat');                            // the scream, and the cue again
-        game._spawnOverheadDialogue?.(beast.x, beast.y, text, { sourceRef: beast });
+        game._log(FINALE_LINES.scream, 'combat');
+        game._spawnOverheadDialogue?.(beast.x, beast.y, FINALE_LINES.screamSaid, { sourceRef: beast });
     }
 }
 
@@ -192,7 +205,7 @@ export function finaleTick(game) {
 // first time only. Returns true when `e` was the beast.
 export function beastFell(game, e) {
     if (!isBeast(e)) return false;
-    game._log(text, 'combat');                                // the essence, compressed
+    game._log(FINALE_LINES.essence, 'combat');
     if (!game.questEngine) return true;
     const first = game.questEngine.state.flags[FINALE_PHASE2.flag] !== FINALE_PHASE2.won;
     game.questEngine.state.flags[FINALE_PHASE2.flag] = FINALE_PHASE2.won;
@@ -201,7 +214,7 @@ export function beastFell(game, e) {
         // CO2: his essence leaves you his costume, once.
         const costume = resolveItemDef(FINALE_PHASE2.costumeItem);
         if (costume) game._addToInventory?.(costume);
-        game._log(text, 'combat');                            // the costume, in your hands
+        game._log(FINALE_LINES.costume, 'combat');
     }
     return true;
 }

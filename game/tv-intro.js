@@ -22,10 +22,10 @@ export const W = 320, H = 220;   // the splash canvas's logical size
 export const LINE_PX = 2;        // the line's thickness
 export const LINE_LEVEL = 0.82;  // its brightest (of full white): warm, not blinding
 
-// The title card's words. The game's name is real; the rest is stand-in text.
+// The title card's words. The game's name is real; the rest is plain stand-in text.
 export const CARD = Object.freeze({
     name:  'VIOLENCETOWN',
-    lines: Object.freeze(['[TEXT]', '[TEXT]']),
+    lines: Object.freeze(['A turn-based game of fighting and trading.', 'Press any key to skip.']),
 });
 
 const clamp01 = (v) => Math.max(0, Math.min(1, v));

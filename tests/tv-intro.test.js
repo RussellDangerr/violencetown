@@ -188,10 +188,11 @@ describe('gentle on the eyes', () => {
 });
 
 describe('the words', () => {
-    test('every word but the game name is [TEXT]', () => {
+    test('every word but the game name is a plain line, never [TEXT]', () => {
         assert.equal(CARD.name, 'VIOLENCETOWN');
         assert.ok(CARD.lines.length > 0);
-        for (const line of CARD.lines) assert.equal(line, '[TEXT]');
+        for (const line of CARD.lines) { assert.ok(line.length > 0); assert.ok(!line.includes('[TEXT')); }
+        assert.deepEqual([...CARD.lines], ['A turn-based game of fighting and trading.', 'Press any key to skip.']);
     });
 });
 
