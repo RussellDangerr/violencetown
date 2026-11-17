@@ -552,6 +552,7 @@ export const ENEMY_SPRITES = {
     // to share: Greedy Green never stands in Downtown.
     'Ruffian':          { sheet: 'tinyDungeon', col: 4, row: 9,  static: true }, // green-bandana goblin
     'Carnival Clown':   { sheet: 'tinyDungeon', col: 0, row: 7,  static: true }, // purple mage — most colorful humanoid
+    'Mimic':            { sheet: 'tinyDungeon', col: 8, row: 7,  static: true }, // the chest with a tongue (MM1): its awake look; asleep it is drawn as a chest
     'Rattling Skeleton':{ sheet: 'tinyDungeon', col: 1, row: 10, static: true }, // white ghost — pale/bony proxy
 
     // ── Named town NPCs (DS1) ───────────────────────────────────────────────

@@ -3023,6 +3023,9 @@ class Game {
         // deliberate — bumping opens the menu that HOUSES the fight rather than
         // starting one.
         const enemy = this.enemies.find(e => e.entity.isAlive() && e.x === nx && e.y === ny);
+        // (plans/mm1-carnival-mimic.md) A chest that is a mimic wakes on the bump and is neither
+        // shoved nor opened: the fight starts, it hunts you.
+        if (enemy && enemy.disguised) { this._wakeMimic?.(enemy); return; }
         if (enemy) {
             const t = this._targetAt(nx, ny);
             const verb = t && defaultVerb(t, this);
@@ -3955,10 +3958,20 @@ class Game {
         return screenToTile(this._vp(), pt, this.playerX, this.playerY, sx, sy);
     }
 
+    // (plans/mm1-carnival-mimic.md) The bump on a disguised mimic: it wakes for good, the world takes
+    // a beat, and it hunts. Placeholder log text.
+    _wakeMimic(enemy) {
+        if (!enemy.wakeDisguise(this.playerX, this.playerY)) return;
+        this._log('[TEXT: the chest bites back.]');
+        this._render();
+        this._advanceWorld();
+    }
+
     // What's targetable at a tile: a live entity, else a ground item, else an
     // examinable. Returns { x, y, npc?, item?, examinable? } or null.
     _targetAt(x, y) {
-        const npc = (this.enemies || []).find(e => e.entity.isAlive() && e.x === x && e.y === y);
+        // (MM1) A disguised mimic is no one's target: it has no name, panel or verb until it wakes.
+        const npc = (this.enemies || []).find(e => e.entity.isAlive() && !e.disguised && e.x === x && e.y === y);
         const item = (this.groundItems || []).find(gi => gi.x === x && gi.y === y);
         const container = (this.containers || []).find(c => c.x === x && c.y === y);
         let examinable = (this.examinables || []).find(e => e.x === x && e.y === y);

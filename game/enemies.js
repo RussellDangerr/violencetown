@@ -231,13 +231,20 @@ export class Enemy {
         // moves every later wander in the run, so a new one anywhere shifts a replay that never
         // went near him; his own stream touches no one else's.
         ownDice = false,
+        // (plans/mm1-carnival-mimic.md) Disguised as a chest until the player bumps it: it sees
+        // nothing (sightRange held at 0, the real reach kept in `wakeSight`), is drawn as a chest
+        // and carries no name or threat. `wakeDisguise` ends it for good.
+        disguised = false,
+        wakeSight = null,
     }) {
         this.id         = id;
         this.type       = type;
         this.x          = x;
         this.y          = y;
         this.damage     = damage;
-        this.sightRange = sightRange;
+        this.disguised  = disguised === true;
+        this.wakeSight  = this.disguised ? (wakeSight ?? sightRange) : null;
+        this.sightRange = this.disguised ? 0 : sightRange;
         this.state      = 'idle'; // legacy chase state: 'idle' | 'chasing' | 'returning'
         this.entity     = new Entity({ name: `[${shownName({ boss, name, type, dialogueId })}]`, hp, armor });
         // Its live defence buffs soak every blow its body takes (combat.js takeDamage).
@@ -390,6 +397,20 @@ export class Enemy {
     // gates the ally turn on _ally) nor is hostile. Deliberately NOT persisted
     // (re-derived / RAM-only): _lostSightTurns, _buyback, render/emote
     // transients.
+    // (plans/mm1-carnival-mimic.md) The bump that ends a disguise: it sees at its real reach and
+    // knows where you stand, so it hunts. Returns whether it was asleep.
+    wakeDisguise(toX, toY) {
+        if (!this.disguised) return false;
+        this.disguised = false;
+        this.sightRange = this.wakeSight ?? this.sightRange;
+        this.wakeSight = null;
+        makeHostile(this);   // a bump is a fight: it turns on you, whatever its asleep behaviour was
+        this.state = 'chasing';
+        this._lastSeenX = toX;
+        this._lastSeenY = toY;
+        return true;
+    }
+
     toSave() {
         return {
             id: this.id, type: this.type, x: this.x, y: this.y,
@@ -428,6 +449,9 @@ export class Enemy {
             drawScale: this.drawScale || undefined,
             unicycle: this.unicycle || undefined,
             ownDice: this.ownDice || undefined,
+            // Written only while disguised: a mimic that was never bumped saves asleep, an awake one as any enemy.
+            disguised: this.disguised || undefined,
+            wakeSight: this.disguised ? this.wakeSight : undefined,
             // (FX45) The one-time talk choices this NPC has already given. Left out while
             // none are spent, so an NPC nobody has talked to saves exactly as before.
             dialogueDone: (this._dialogueDone && this._dialogueDone.size) ? [...this._dialogueDone] : undefined,

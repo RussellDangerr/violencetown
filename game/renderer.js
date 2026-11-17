@@ -1904,6 +1904,15 @@ export class Renderer {
     _drawEnemySprite(game, e, px, py, now, { bodyOnly = false } = {}) {
         const { ctx, sprites } = this;
         const isAlive = e.entity.isAlive();
+        // (plans/mm1-carnival-mimic.md) A sleeping mimic is a chest and nothing more: the chest cell,
+        // no animation, no bar, name, verb or threat.
+        if (e.disguised === true && isAlive) {
+            const ci = CONTAINER_SPRITES.closed;
+            if (sprites?.[ci.sheet]?.loaded && this._inkFrame(sprites[ci.sheet], ctx, ci.col, ci.row, px, py, TILE_PX, TILE_PX)) return;
+            ctx.fillStyle = '#5a3a1a';
+            ctx.fillRect(px + 6, py + 10, TILE_PX - 12, TILE_PX - 16);
+            return;
+        }
         // (AN4) A swarm reads as pests, not a row of enemies: an ant keeps its
         // body and its hit flash, and none of the overlays that mark a fighter.
         const pest = isAnt(e);
