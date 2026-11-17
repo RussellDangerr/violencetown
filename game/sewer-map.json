@@ -884,7 +884,7 @@
       "x": 0,
       "y": 10,
       "toMap": "town-map.json",
-      "toX": 28,
+      "toX": 32,
       "toY": 12,
       "label": "[West \u2014 climb out, back to the street]"
     },
