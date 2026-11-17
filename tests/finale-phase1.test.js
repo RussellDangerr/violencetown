@@ -40,7 +40,7 @@ import { dropLoadout } from '../game/drops.js';
 import { ENEMY_SPRITES } from '../game/sprites.js';
 import { validateContent } from '../game/content-validate.js';
 import { WEAPONS } from '../game/weapons.js';
-import { biteSunMan, riseSunMan, beastFell, resetBeast, finaleTick, blocksCowerHit, restoreFinale, isCowering } from '../game/finale-setpiece.js';
+import { FINALE_LINES, biteSunMan, riseSunMan, beastFell, resetBeast, finaleTick, blocksCowerHit, restoreFinale, isCowering } from '../game/finale-setpiece.js';
 
 globalThis.localStorage ??= { getItem: () => null, setItem() {}, removeItem() {} };
 
@@ -396,7 +396,8 @@ describe('the fight, driven with real keys', () => {
         assert.deepEqual(sunTurns, [true, true, true], 'Sun Man is still in the room after turn 3: cowering, not gone');
         assert.equal(isCowering(sunManOf(g)), true, 'Sun Man is bitten and cowering');
         assert.equal(fin.entity.armor + sumBuffStat(fin.buffs, 'defence'), 4 - FINALE_PHASE1.defenceDrop, 'his defence has dropped');
-        assert.ok(g.logs.filter(l => l === '[TEXT]').length >= 2, 'Sun Man\'s leaving line is the placeholder');
+        assert.ok(g.logs.includes(FINALE_LINES.bite), 'the bite is said plainly');
+        assert.ok(g.logs.includes(FINALE_LINES.cloak), 'the cloak over his face is said plainly');
         assert.ok(fin.buffs.some(b => b.id === 'weakened' && b.type === 'debuff'), 'the red W badge the renderer draws over an enemy');
         assert.equal(g.events.filter(e => e.type === 'sun_man_bitten').length, 1, 'the hook for the Bite fires once');
         assert.ok(!g.logs.some(l => /slinks back/.test(l)), 'he does not leave like the lion');
