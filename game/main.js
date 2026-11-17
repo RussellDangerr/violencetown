@@ -3455,7 +3455,10 @@ class Game {
         if (this._pathQueue.length) {
             const node = this._pathQueue.shift();
             const step = this._resolveWalkStep({ dx: node.x - this.playerX, dy: node.y - this.playerY });
-            if (this._autoRepeatShouldStop(step)) { this._pathQueue = []; this._pathArrive = null; }
+            // (TW1) The last step is the tile you aimed at: a tap on a hazard takes you
+            // onto it. Steps before it still halt at a hazard, as held-walk does.
+            const aimed = this._pathQueue.length === 0 && this._hazardIsOnlyThingStopping(step);
+            if (this._autoRepeatShouldStop(step) && !aimed) { this._pathQueue = []; this._pathArrive = null; }
             else { this._doMove(step); return; }
         } else if (this._pathArrive) {
             const arrive = this._pathArrive; this._pathArrive = null; arrive();
@@ -3554,6 +3557,18 @@ class Game {
         if (puddleAt(this._puddles, nx, ny)) return true;         // (poisons) a puddle is a hazard too
 
         return false;
+    }
+
+    // (TW1) True when the only reason to halt before `dir` is a hazard or puddle on
+    // the tile: open floor, no hostile, no container. The aimed last step of a
+    // click-to-walk may go onto such a tile; a wall, a hostile or a container still stops it.
+    _hazardIsOnlyThingStopping(dir) {
+        const nx = this.playerX + dir.dx, ny = this.playerY + dir.dy;
+        if (!this.map.isWalkable(nx, ny)) return false;
+        if (this.enemies.some(e => e.x === nx && e.y === ny && this._isHostileToPlayer(e))) return false;
+        if (this.containers.some(c => c.x === nx && c.y === ny)) return false;
+        const td = this.map.getTileDef(nx, ny);
+        return !!(td && td.hazard) || !!puddleAt(this._puddles, nx, ny);
     }
 
     // ── Item Selection & Overlay ──────────────────────────────────────────────
