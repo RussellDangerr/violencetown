@@ -126,7 +126,7 @@ export const QUESTS = {
             },
             {
                 id: 'recover_converter',
-                objective: 'Kill the Were-Rat in the Sewer and take the converter',
+                objective: 'Kill the Were-Rat in the Sewer, get converter',
                 targetZone: 'SEWER',
                 on: { type: 'item_pickup', match: { id: 'catalytic_converter' } },
                 // Tolerant: the converter only advances this stage on PICKUP. If
@@ -233,7 +233,7 @@ for (const zone of ACT2_ZONES) {
         title: `Get the ${zoneName(zone)} item`,
         steps: {
             boss: { objective: `Defeat the ${zoneName(zone)} boss` },
-            collect: { objective: `Collect the ${zoneName(zone)} item at its claim spot (E)` },
+            collect: { objective: `Take the ${zoneName(zone)} item at its claim spot (E)` },
         },
     };
 }
