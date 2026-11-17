@@ -33,12 +33,13 @@ export function readAway(game, savedAt, now = Date.now()) {
 // hours give the same news, and game.rng is never read or advanced.
 
 export const NEWS_MIN_HOURS = 1;
-// PLACEHOLDER pool: obviously fake lines. Caelan writes the real ones.
+// Plain placeholder pool: each line says time passed and that nothing in the save changed.
+// Caelan replaces them with the real news.
 export const NEWS_LINES = [
-    '[TEXT] news A',
-    '[TEXT] news B',
-    '[TEXT] news C',
-    '[TEXT] news D',
+    'Time passed in the city while you were away. Nothing in your save changed.',
+    'You were away for a while. Your items, gold and health are the same as when you left.',
+    'The game was closed for a while. Nothing was taken from you in that time.',
+    'You have been away. The city is as you left it, and your save is unchanged.',
 ];
 
 // FNV-1a over a string, as an unsigned 32-bit number.
@@ -83,8 +84,8 @@ export function tellAwayNews(game, say) {
 export const BENCH_TILE = 20;                 // the Town bench, HP1's rest spot
 export const REST_ZONE = 'town-map.json';     // Town only for now (WP1R1)
 export const RESTED_MIN_HOURS = NEWS_MIN_HOURS;   // CK1's one-hour threshold
-export const RESTED_BUFF = { id: 'rested', name: '[TEXT] rested', turns: 5, stat: 'strength', amount: 6 };
-export const RESTED_LINE = '[TEXT] you come back rested.';
+export const RESTED_BUFF = { id: 'rested', name: 'Rested', turns: 5, stat: 'strength', amount: 6 };
+export const RESTED_LINE = `You were away for an hour or more and left beside a bench, so you come back rested: ${RESTED_BUFF.stat} +${RESTED_BUFF.amount} for ${RESTED_BUFF.turns} turns.`;
 
 // True when (x, y) has a bench on one of its four sides, the way a hero faces one.
 export function besideBench(map, x, y) {

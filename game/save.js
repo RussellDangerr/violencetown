@@ -327,12 +327,12 @@ export function clearSave() {
 // Nothing here touches the network; the code travels by the player's clipboard.
 
 const CODE_PREFIX = 'VT1';
-// Placeholder wording ([TEXT]); the copy is the owner's to write.
+// Plain placeholder wording; the copy is the owner's to write.
 export const CODE_REFUSALS = {
-    format:  '[TEXT] That is not a save code.',
-    garbled: '[TEXT] That save code is damaged.',
-    version: '[TEXT] That save code is from a different version.',
-    load:    '[TEXT] That save code would not open.',
+    format:  'That is not a save code, so nothing was loaded. A save code starts with VT1.',
+    garbled: 'That save code is damaged, so nothing was loaded. Copy it again in full.',
+    version: 'That save code is from a different version, so nothing was loaded.',
+    load:    'That save code would not open, so nothing was loaded. Your current save is unchanged.',
 };
 
 function _checksum(str) {   // FNV-1a, 32 bit, as 8 hex digits
