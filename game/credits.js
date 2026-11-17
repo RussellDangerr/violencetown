@@ -8,7 +8,7 @@
 // Like finale-setpiece.js these are plain functions: main.js calls them from thin methods, and
 // nothing here keeps state of its own beyond the roll object a game holds while it plays.
 //
-// Every line a player reads is [TEXT]; every number below is a stand-in.
+// Every line a player reads is a plain placeholder, to be replaced; every number below is a stand-in.
 
 import { FINALE_PHASE2 } from './finale-setpiece.js';
 
@@ -16,14 +16,14 @@ export const CREDITS = {
     seenFlag: 'endingSeen',          // the saved quest flag: the ending has been seen
     beatMs: 1500,                    // stand-in: the pause between the last blow and the credits
     cardMs: 4000,                    // stand-in: how long a card holds before it steps on its own
-    // Stand-in cards: three lines each, all placeholders.
+    // Plain stand-in cards: three lines each, the first is the card's title.
     cards: [
-        ['[TEXT]', '[TEXT]', '[TEXT]'],
-        ['[TEXT]', '[TEXT]', '[TEXT]'],
-        ['[TEXT]', '[TEXT]', '[TEXT]'],
-        ['[TEXT]', '[TEXT]', '[TEXT]'],
+        ['The credits', 'You beat Monstrous Sun Man.', 'The next cards say who made this.'],
+        ['Game design', 'This card is for the designers.', 'Their names go here.'],
+        ['Art and sound', 'This card is for the artists.', 'Their names go here.'],
+        ['The end', 'The credits are over.', 'The town stays open to play.'],
     ],
-    hint: '[TEXT]',                  // the dismiss hint under a card
+    hint: 'Press Enter for the next card. Press Escape to skip.',                  // the dismiss hint under a card
 };
 
 // The credits are due: the Final Arc was won and the ending has not been seen. Derived from the
