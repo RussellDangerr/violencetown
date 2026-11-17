@@ -205,13 +205,19 @@ describe('examining a creature', () => {
     };
     const tap = (g, npc) => fire.call(g, { resolver: 'examine' }, { npc, item: null, examinable: null, container: null, x: npc.x, y: npc.y });
 
+    const EXAMINE_BODY = {
+        'Snowman': '[TEXT]\n[Snowman. Creature. Looks like trouble.]\nHP: 100 / 100\nArmour: 2\nDamage: 12\nWeapon: [Pipe]\nDrops: [Rock], [Pipe], [Shoe Bags]',
+        'Yeti': '[TEXT]\n[Yeti. Creature. Looks like trouble.]\nHP: 100 / 100\nArmour: 2\nDamage: 12\nDrops: [Tunnel Mushroom], [Tunnel Mushroom], [Sludge Sack], [Sludge Sack], [Boardwalk Burger], [Defence Poition], [Soap]',
+        'Polar Bear': '[TEXT]\n[Polar Bear. Creature. Looks like trouble.]\nHP: 100 / 100\nArmour: 3\nDamage: 10\nDrops: [Mystery Meat], [Mystery Meat], [Mystery Meat], [Tunnel Mushroom], [Sludge Sack], [Fire Blood], [Defence Poition]',
+    };
+
     test('tapping a hostile frozen creature (Target List) shows its own text', () => {
         for (const e of spawnedWith(defaultPicks())) {
             assert.equal(e.allegiance, 'hostile');
             const g = view([e]);
             tap(g, e);
             assert.deepEqual(g.logs, [`[TEXT] [${e.type}. Creature. Looks like trouble.]`], e.type);
-            assert.ok(g.panels[0].body.startsWith('[TEXT]\n[') &&g.panels[0].body.includes('HP:'));
+            assert.equal(g.panels[0].body, EXAMINE_BODY[e.type], e.type);
             assert.equal(g.panels[0].title, e.name.replace(/[\[\]]/g, ''));
         }
     });
@@ -222,7 +228,7 @@ describe('examining a creature', () => {
         e.x = 0; e.y = 1;                      // the tile the player faces
         const g = view([e]);
         doExamine(g);
-        assert.ok(g.logs[0].startsWith('[TEXT] [') && g.logs.length === 1);
+        assert.deepEqual(g.logs, ['[TEXT] [Snowman. Creature. Minding their own business.]']);
     });
 
     test('a creature with no text of its own keeps the generic line, hostile or not', () => {
