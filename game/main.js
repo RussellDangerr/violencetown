@@ -108,6 +108,7 @@ import { spiritToShow } from './spirit-replay.js';                              
 import { introAt, isSkipKey } from './tv-intro.js';                                     // (TV1) the TV opening before the title
 import { arcAllSlots, arcVisible, arcSlotAt, arcFaded, ARC_MAX } from './fight-arc.js';                  // (FA1) the arc of attacks under you in a fight
 import { applyCompactor, compactorBeat, breakCompactor, resetCompactor, isCompactor } from './compactor.js';   // (TC1) the trash compactor room
+import { hypnoBeat, applyHypno, hypnoOnDeath } from './hypno-vision.js';   // (HV1) the Factory's Hypno Vision
 import { fighters, joiners } from './fight-area.js';                                     // (fight-fog) who is in the fight
 import { fightStartKind, entranceFor, fightFxActive } from './fight-entrance.js'; // (fight-fog) how it began, and how long its fog moves
 import { createCascade, CASCADE_BEAT_MS, LUNGE_MS } from './cascade.js';           // (turn-model C1) the enemy phase, one actor at a time
@@ -831,6 +832,7 @@ class Game {
         this._openCarrionRoadIfRuled?.();   // `?.`: stand-in games in tests don't carry it
         this._openDowntownGateIfSlid?.();   // (TX6)
         this._applyCompactor?.();   // (TC1) the compactor room's walls and door, from its state
+        this._applyHypno?.();       // (HV1) the Hypno Vision off: whoever it turned is calm again
         // (fight-fog) Whatever fog was up belongs to the map you left.
         this.renderer.dropFightFog();
         this._render();
@@ -1226,6 +1228,11 @@ class Game {
     _breakCompactor(enemy) { return breakCompactor(this, enemy); }
     _resetCompactor() { return resetCompactor(this); }
     _isCompactor(e) { return isCompactor(e); }
+
+    // (HV1) The Factory's Hypno Vision: after a map loads, what it turned stays calm once it is off.
+    _applyHypno() { return applyHypno(this); }
+    _hypnoBeat() { return hypnoBeat(this); }
+    _hypnoOnDeath(enemy) { return hypnoOnDeath(this, enemy); }
 
     _openDowntownGateIfSlid() {
         if (!this.questEngine || !this.map || this.map.zoneName !== 'DOWNTOWN') return;
@@ -5041,6 +5048,9 @@ class Game {
         // too, in lockstep with the fight rather than freezing.
         this._worldBeat({ ambient: this._inCombat() });
 
+        // (HV1) Every committed action in the Hypno Vision's sight counts toward its next turn.
+        this._hypnoBeat?.();
+
         // (TC1) In the compactor room every committed action counts toward the next wall step; the
         // last step crushes you, and the beat ends there.
         if (this._compactorBeat?.()) return;
@@ -5772,6 +5782,7 @@ class Game {
         this._spawnEventWord(enemyObj.x, enemyObj.y, 'K.O.!', '#ff8822', 22);
         this._log(`[Defeated ${enemyObj.entity.name}]`, 'combat');
         this._breakCompactor?.(enemyObj);   // (TC1) the compactor falling stops the walls and opens the door
+        this._hypnoOnDeath?.(enemyObj);     // (HV1) the nerd falling switches the Hypno Vision off
         this.emitGameEvent('enemy_killed', {
             type: enemyObj.type, id: enemyObj.id, x: enemyObj.x, y: enemyObj.y, tag: enemyObj.tag,
         });
