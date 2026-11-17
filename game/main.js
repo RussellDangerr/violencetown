@@ -825,6 +825,7 @@ class Game {
         // from the persistent flag so it's open again on every town re-entry.
         this._openBridgeIfCarFixed();
         this._openCarrionRoadIfRuled?.();   // `?.`: stand-in games in tests don't carry it
+        this._openDowntownGateIfSlid?.();   // (TX6)
         // (fight-fog) Whatever fog was up belongs to the map you left.
         this.renderer.dropFightFog();
         this._render();
@@ -1170,6 +1171,38 @@ class Game {
         for (let x = 14; x <= 19; x++) { this.setTile(x, 0, 12); this.setTile(x, 1, 12); }
         const br = (this.examinables || []).find(e => e.id === 'bridge');
         if (br) br.text = '[TEXT]';
+    }
+
+    // (TX6) The slide: oil spread at the bridge and the Downtown gate still shut means the
+    // next landing in Downtown slides through it. A crash never reaches here, so the oil
+    // waits. `_openDowntownGateIfSlid` re-derives the open gate from the saved flag on every
+    // Downtown load, like the bridge, so it survives leaving, a save and CONTINUE.
+    _oilSlideDue() {
+        const f = this.questEngine?.state?.flags;
+        return !!f && !!f.oilSpread && !f.downtownGateOpen;
+    }
+
+    // The landing tile beside the gate (the tile east of the fence).
+    _oilSlideSpawn() {
+        return { x: 1, y: 9 };
+    }
+
+    _oilSlideDone() {
+        const f = this.questEngine?.state?.flags;
+        if (f) f.downtownGateOpen = true;
+        this._openDowntownGateIfSlid?.();
+        this._log('[TEXT]', 'transition');
+        this.autosave?.({ force: true });
+    }
+
+    _openDowntownGateIfSlid() {
+        if (!this.questEngine || !this.map || this.map.zoneName !== 'DOWNTOWN') return;
+        if (!this.questEngine.getFlag('downtownGateOpen')) return;
+        this.setTile(0, 9, 11);   // the fence at the west gate becomes road
+        // Loading dropped the door on the fenced tile (a door on ground nobody can stand on), so it is put back.
+        if (!this.map.transitions.some(t => t.x === 0 && t.y === 9)) {
+            this.map.transitions.push({ x: 0, y: 9, toMap: 'side-area-map.json', toX: 1, toY: 6, label: '[TEXT]' });
+        }
     }
 
     // (CS2) Once the Crat's dispute is ruled (saved flag `carrionRoadOpen`), the
@@ -6873,9 +6906,12 @@ class Game {
         this._render();
         setTimeout(async () => {
             this._zoneChange();
-            await this._loadMap(toMap, toX, toY);
+            const slide = toMap === 'downtown-map.json' && !!this._oilSlideDue?.();   // (TX6)
+            const at = slide ? this._oilSlideSpawn() : { x: toX, y: toY };
+            await this._loadMap(toMap, at.x, at.y);
             this.state = STATE.IDLE;
             this._log('[TEXT]', 'transition');
+            if (slide) this._oilSlideDone?.();
             this.emitGameEvent('map_entered', { map: toMap });
             this.autosave?.({ force: true });
             this._render();
@@ -6900,10 +6936,13 @@ class Game {
     // out + starts Main Quest 2; for now it's a scaffold street.)
     async _rampToDowntown() {
         this._zoneChange();
-        await this._loadMap('downtown-map.json');
+        const slide = !!this._oilSlideDue?.();      // (TX6) oil spread: this landing slides through the gate
+        const at = slide ? this._oilSlideSpawn() : {};
+        await this._loadMap('downtown-map.json', at.x, at.y);
         if (this.questEngine) this.questEngine.state.flags.bridgeRoute = 'ramp';     // (CY1) the ramp plays once
         this.state = STATE.IDLE;
         this._log('[TEXT]', 'transition');
+        if (slide) this._oilSlideDone?.();
         this._startMainQuest2();   // (Phase 4) MQ2 begins on arrival
         this._render();
     }

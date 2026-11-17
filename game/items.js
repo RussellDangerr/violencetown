@@ -498,6 +498,18 @@ export const ITEMS = {
         fallbackColor: '#8a5a2a',
         baseValue: 14,
     },
+    // (TX6) Spread on the road at the bridge (item-uses.js 'oil-on-bridge'); the next
+    // ramp landing in Downtown then slides through the gate. Spent only by that use.
+    // Not for sale until TX7. Placeholder text.
+    oil: {
+        id: 'oil',
+        name: '[TEXT: Oil]',
+        description: '[TEXT]',
+        useType: 'none',
+        consumable: false,
+        fallbackColor: '#2a2418',
+        baseValue: 35,
+    },
     // Carried, it does nothing yet: once ants exist they come for it, except
     // where it is too cold (plans/ic1-tigers-blood-ice-cone.md).
     tigers_blood_ice_cone: {
