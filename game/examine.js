@@ -110,6 +110,49 @@ export function propNameAt(game, x, y) {
     return (prop && propName(prop.type)) || null;
 }
 
+// (ND1) What examining a character says, built from its spawn row's fields alone (never a
+// per-character table). `line` is the bracketed log line: name, role, stance. `rows` are the
+// inspect panel's extra lines: HP, armour, damage, weapon, what they sell, what they drop.
+// The words are plain placeholders for the owner to review.
+export const ROLE_WORDS = { boss: 'Boss', vendor: 'Vendor', talker: 'Talker', wanderer: 'Wanderer', guard: 'Guard', creature: 'Creature' };
+export const STANCE_WORDS = { hostile: 'Looks like trouble.', neutral: 'Minding their own business.', ally: 'On your side.' };
+
+const sentence = id => { const t = String(id).replace(/_/g, ' ').trim(); return t.charAt(0).toUpperCase() + t.slice(1); };
+const itemId = it => (it && typeof it === 'object') ? (it.type || it.id) : it;
+const itemName = it => resolveItemDef(itemId(it))?.name || sentence(itemId(it));
+const nameList = items => items.map(itemName).join(', ');
+
+export function characterRole(npc) {
+    if (npc.boss) return 'boss';
+    if (Array.isArray(npc.stock) && npc.stock.length) return 'vendor';
+    if (npc.dialogueId) return 'talker';
+    if (npc.capabilities?.has?.('WANDER')) return 'wanderer';
+    if (npc.capabilities?.size || (Array.isArray(npc.behavior) && npc.behavior.length)) return 'guard';
+    return 'creature';
+}
+
+export function characterSheet(npc) {
+    const named = typeof npc.name === 'string' && npc.name.trim() && !/[[\]]/.test(npc.name) ? npc.name.trim() : null;
+    // (FX47) A boss goes by its one name. No name of its own: its role from the dialogue id, else its type.
+    const name = (npc.boss && npc.shownName) || named || (npc.dialogueId ? sentence(npc.dialogueId) : null) || npc.type || 'Someone';
+    const role = characterRole(npc);
+    const stance = isHostile(npc) ? 'hostile' : npc.allegiance === 'ally' ? 'ally' : 'neutral';
+    const line = `[${name}. ${ROLE_WORDS[role]}. ${STANCE_WORDS[stance]}]`;
+
+    const rows = [];
+    const e = npc.entity || {};
+    if (Number.isFinite(e.hp)) rows.push(`HP: ${e.hp}${Number.isFinite(e.maxHp) ? ` / ${e.maxHp}` : ''}`);
+    if (Number.isFinite(e.armor)) rows.push(`Armour: ${e.armor}`);
+    if (Number.isFinite(npc.damage)) rows.push(`Damage: ${npc.damage}`);
+    const worn = Array.isArray(npc.equipped) ? npc.equipped : [];
+    const loadout = Array.isArray(npc.loadout) ? npc.loadout : [];
+    const weapon = [...worn, ...loadout].find(it => weaponClassOf(resolveItemDef(itemId(it))));
+    if (weapon) rows.push(`Weapon: ${itemName(weapon)}`);
+    if (role === 'vendor') rows.push(`Sells: ${nameList(npc.stock)}`);
+    if (loadout.length) rows.push(`Drops: ${nameList(loadout)}`);
+    return { name, role, stance, line, rows };
+}
+
 // The most salient thing at tile (x, y), as Examine reports it. One ladder for
 // both entry points — the E key (doExamine, below) and the Target List / tap
 // (main.js _fireResolver) — so they cannot drift apart again. First match wins:
@@ -141,11 +184,12 @@ export function resolveExamine(game, x, y) {
 
     const npc = (game.enemies || []).find(e => e.x === x && e.y === y && e.entity?.isAlive?.());
     if (npc) {
-        // (FX47) A boss goes by its one name; anyone else reads as before.
-        const name = (npc.boss && npc.shownName) || npc.name || npc.type;
-        // A creature with examine text of its own says it (plans/ic4-frozen-creatures.md).
-        if (typeof npc.examine === 'string' && npc.examine) return result(name, npc.examine);
-        return result(name, `[${name}. ${isHostile(npc) ? 'Looks like trouble.' : 'Minding their own business.'}]`);
+        const sheet = characterSheet(npc);
+        // A creature with examine text of its own (plans/ic4-frozen-creatures.md) says it first, then the sheet (NDR3).
+        if (typeof npc.examine === 'string' && npc.examine) {
+            return result(sheet.name, `${npc.examine} ${sheet.line}`, { panelBody: [npc.examine, sheet.line, ...sheet.rows].join('\n') });
+        }
+        return result(sheet.name, sheet.line, { panelBody: [sheet.line, ...sheet.rows].join('\n') });
     }
 
     const chest = (game.containers || []).find(c => c.x === x && c.y === y);
