@@ -130,13 +130,14 @@ const worldOf = (g) => ({
 });
 
 describe('the data', () => {
-    test('every credits line and the hint are the [TEXT] placeholder', () => {
+    test('every credits line and the hint are plain words, none the [TEXT] placeholder', () => {
         assert.ok(CREDITS.cards.length >= 2, 'more than one card, so stepping means something');
         for (const card of CREDITS.cards) {
             assert.ok(card.length >= 1);
-            for (const line of card) assert.equal(line, '[TEXT]');
+            for (const line of card) assert.ok(typeof line === 'string' && line.length > 0 && !line.includes('[TEXT]'));
         }
-        assert.equal(CREDITS.hint, '[TEXT]');
+        assert.equal(CREDITS.hint, 'Press Enter for the next card. Press Escape to skip.');
+        assert.deepEqual(CREDITS.cards.map((c) => c[0]), ['The credits', 'Game design', 'Art and sound', 'The end']);
     });
 
     test('a roll steps through every card once, then is over', () => {

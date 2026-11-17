@@ -34,12 +34,13 @@ async function changeZone(g) {
 const newsLines = (log) => log.filter((m) => NEWS_LINES.some((n) => m.startsWith(n)));
 
 describe('news after time away, through a real zone change', () => {
-    test('an hour or more away: the first zone change gives exactly one news line, in [TEXT] words', async () => {
+    test('an hour or more away: the first zone change gives exactly one news line, in plain words', async () => {
         const { g, log } = makeGame({ hoursLater: 5 });
         await changeZone(g);
         const news = newsLines(log);
         assert.equal(news.length, 1);
-        assert.match(news[0], /^\[TEXT\]/);
+        assert.ok(!news[0].includes('[TEXT]'));
+        assert.match(news[0], /nothing|same|unchanged|as you left/i, 'says nothing in the save changed');
         assert.ok(log.indexOf(news[0]) > log.findIndex((m) => m.startsWith('[Entered')), 'after the zone is entered');
         // told once: the next zone change says nothing
         await changeZone(g);

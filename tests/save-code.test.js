@@ -3,7 +3,7 @@
 import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    serialize, encodeSaveCode, decodeSaveCode, importSaveCode, SAVE_VERSION,
+    serialize, encodeSaveCode, decodeSaveCode, importSaveCode, SAVE_VERSION, CODE_REFUSALS,
 } from '../game/save.js';
 import { QuestEngine } from '../game/quests.js';
 import { Enemy } from '../game/enemies.js';
@@ -208,7 +208,8 @@ describe('PK1 save code', () => {
             const before = snap(dst);
             const res = await importSaveCode(dst, text);
             assert.equal(res.ok, false, name);
-            assert.ok(res.message.startsWith('[TEXT]'), name);
+            assert.equal(res.message, CODE_REFUSALS[res.reason], name);
+            assert.ok(!res.message.includes('[TEXT]') && res.message.includes('nothing was loaded'), name);
             assert.equal(snap(dst), before, `${name}: game untouched`);
             assert.equal(dst.gold, 999, name);
         }
