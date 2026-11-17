@@ -40,7 +40,7 @@ describe('news after time away, through a real zone change', () => {
         const news = newsLines(log);
         assert.equal(news.length, 1);
         assert.ok(!news[0].includes('[TEXT]'));
-        assert.match(news[0], /nothing|same|unchanged|as you left/i, 'says nothing in the save changed');
+        assert.ok(NEWS_LINES.map((n) => `${n} (5h)`).includes(news[0]), 'exactly a pool line and the hours');
         assert.ok(log.indexOf(news[0]) > log.findIndex((m) => m.startsWith('[Entered')), 'after the zone is entered');
         // told once: the next zone change says nothing
         await changeZone(g);
@@ -90,6 +90,20 @@ describe('news after time away, through a real zone change', () => {
             q: g.questEngine && g.questEngine.serialize ? g.questEngine.serialize() : null,
         });
         assert.equal(after, before);
+    });
+});
+
+describe('the pool, pinned exactly', () => {
+    test('every news line is exactly this', () => {
+        assert.deepEqual(NEWS_LINES, [
+            'Time passed in the city while you were away. Your items, gold and health are as you left them.',
+            'You were away for a while. Your items, gold and health are as you left them.',
+            'You were away from the game for a while. Nothing was taken from you in that time.',
+            'You have been away. The city is as you left it.',
+        ]);
+    });
+    test('the told line is the pool line plus the hours, exactly', () => {
+        for (const h of [1, 5, 30]) assert.ok(NEWS_LINES.map((n) => `${n} (${h}h)`).includes(pickNews(T0, h)));
     });
 });
 

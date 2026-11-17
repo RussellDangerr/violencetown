@@ -137,7 +137,12 @@ describe('the data', () => {
             for (const line of card) assert.ok(typeof line === 'string' && line.length > 0 && !line.includes('[TEXT]'));
         }
         assert.equal(CREDITS.hint, 'Press Enter for the next card. Press Escape to skip.');
-        assert.deepEqual(CREDITS.cards.map((c) => c[0]), ['The credits', 'Game design', 'Art and sound', 'The end']);
+        assert.deepEqual(CREDITS.cards, [
+            ['The credits', 'You beat Monstrous Sun Man.', 'The next cards say who made this.'],
+            ['Game design', 'This card is for the designers.', 'Their names go here.'],
+            ['Art and sound', 'This card is for the artists.', 'Their names go here.'],
+            ['The end', 'The credits are over.', 'The town stays open to play.'],
+        ]);
     });
 
     test('a roll steps through every card once, then is over', () => {
