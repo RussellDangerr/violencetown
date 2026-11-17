@@ -75,7 +75,8 @@ export const ENTRIES = {
         sewerDweller: true,
         vermin: true,
         gold: 1,
-        loadout: ['rock'],
+        loadout: ['rock', 'goo'],
+        immune: ['goo'],   // (GO2) robots are immune to goo, and throw it
         hp: 100,
         armor: -30,
         damage: 6,
@@ -269,7 +270,8 @@ export const ENTRIES = {
         type: 'Greedy Green',
         name: '[NAME]',
         gold: 8,
-        loadout: ['hot_dog', 'foil_hat', 'latex_gloves', 'cardboard_cuirass', 'soap'],
+        loadout: ['hot_dog', 'foil_hat', 'latex_gloves', 'cardboard_cuirass', 'soap', 'goo'],
+        immune: ['goo'],   // (GO2) aliens are immune to goo, and throw it
         hp: 100,
         armor: 3,
         damage: ACT2_MOB_DAMAGE,
@@ -383,6 +385,8 @@ function alienInvasion() {
     const lighter = ['boardwalk_burger', 'defence_poition', 'soap'];
     e.loadout = [...e.loadout.filter(x => !lighter.includes(x)), 'ray_gun', 'great_sword'];
     e.equipped = ['great_sword'];
+    e.loadout.push('goo');
+    e.immune = ['goo'];   // (GO2)
     return e;
 }
 

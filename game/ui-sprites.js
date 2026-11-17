@@ -80,6 +80,7 @@ export const ITEM_COLORS = {
     hot_dog:          { bg: '#cc6633', letter: 'H' },
     catalytic_converter: { bg: '#9a8a6a', letter: 'C' },
     alcohol:          { bg: '#8a5a2a', letter: 'A' },
+    goo:              { bg: '#6abe30', letter: 'G' },   // (GO2) placeholder
     oil:              { bg: '#2a2418', letter: 'O' },   // (TX6) placeholder
     grappling_hook:   { bg: '#9a7b4a', letter: 'G' },
 };

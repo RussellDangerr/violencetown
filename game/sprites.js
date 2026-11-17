@@ -409,6 +409,7 @@ export const ITEM_SPRITES = {
     cardboard_cuirass: { sheet: 'tinyDungeon', x: 6 * 16,  y: 5 * 16,  w: 16, h: 16 },  // brown board
     grappling_hook:    { sheet: 'tinyTown',    x: 9 * 16,  y: 10 * 16, w: 16, h: 16 },  // hooked blade
     alcohol:           { sheet: 'tinyTown',    x: 8 * 16,  y: 8 * 16,  w: 16, h: 16 },  // blue jar
+    goo:               { sheet: 'ratMaskTint', x: 7 * 16, y: 10 * 16, w: 16, h: 16 },  // (GO2) a tinted cell: placeholder
     oil:               { sheet: 'ratMaskTint', x: 6 * 16, y: 10 * 16, w: 16, h: 16 },  // (TX6) a tinted cell: placeholder
     tigers_blood_ice_cone: { sheet: 'iceCone', x: 0,     y: 0,       w: 16, h: 16 },  // tools/gen_ice_cone.py (ICR6)
     // latex_gloves, red_cape, shoe_bags: no fitting cell yet; they draw as
