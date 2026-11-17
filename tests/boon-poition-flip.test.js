@@ -4,7 +4,7 @@ import { ITEMS, resolveThrow } from '../game/items.js';
 import { Enemy } from '../game/enemies.js';
 
 function foe(x, y, extra = {}) {
-    return new Enemy({ id: 'e' + x + y, type: 'rat', x, y, hp: 10, behavior: 'chase', ...extra });
+    return new Enemy({ id: 'e' + x + y, type: 'rat', x, y, hp: 10, behavior: null, ...extra });
 }
 function stub(enemies) {
     return { playerX: 5, playerY: 5, enemies, map: { isWalkable: () => true },
@@ -36,7 +36,7 @@ test('an empty tile gets nothing and the throw is spent', () => {
 
 test('a friendly on the tile gets nothing', () => {
     const e = foe(7, 5);
-    e._ally = true;
+    e.allegiance = 'neutral';
     resolveThrow(stub([e]), D, null, 1, { x: 7, y: 5 });
     assert.equal(e.entity.maxMp, 100);
 });
