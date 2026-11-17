@@ -277,3 +277,18 @@ test('a boxed-in character bounces rather than being shoved nowhere', () => {
     assert.equal(shove.call(self, { x: 6, y: 5 }, { dx: 1, dy: 0 }), false);
     assert.equal(bounced, 1);
 });
+
+// ── oil at the bridge (TX6) ─────────────────────────────────────────────────
+
+const oil = { id: 'oil', name: '[TEXT: Oil]', useType: 'none', consumable: false };
+
+test('oil is offered at the bridge and at the taxi parked there, fixed or not, and nowhere else', () => {
+    for (const id of ['bridge', 'car']) {
+        const tiles = { '5,4': { x: 5, y: 4, examinable: { id } } };
+        for (const carFixed of [false, true]) {
+            assert.deepEqual(contextualUses(oil, gameWith({ tiles, carFixed })).map(u => u.id), ['oil-on-bridge']);
+        }
+    }
+    const sign = { '5,4': { x: 5, y: 4, examinable: { id: 'fuel_note' } } };
+    assert.deepEqual(contextualUses(oil, gameWith({ tiles: sign })), []);
+});

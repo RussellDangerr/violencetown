@@ -118,6 +118,7 @@ const SCENES = [
     { name: 'soap beside sludge', slot: 3, setup: g => { put(g, 3, 'soap', 2); sludgeAt(g, 6, 5); } },
     { name: 'soap facing sludge', slot: 14, setup: g => { put(g, 14, 'soap'); sludgeAt(g, 5, 6); } },
     { name: 'alcohol at the fixed car', slot: 12, setup: g => { put(g, 12, 'alcohol'); carAt(g, 5, 4); g.flags.carFixed = true; } },
+    { name: 'oil at the bridge', slot: 9, setup: g => { put(g, 9, 'oil'); g.world['5,4'] = { x: 5, y: 4, examinable: { id: 'bridge' } }; } },
 ];
 
 describe('C3c — where the uses button sits', () => {

@@ -65,6 +65,29 @@ export const ITEM_USES = [
         },
     },
     {
+        // (TX6) Oil is spread on the road at the bridge. The bridge point itself cannot be
+        // reached before the Converter is fitted, so the taxi parked at it counts too.
+        // Works before and after the Converter. Placeholder lines.
+        id: 'oil-on-bridge',
+        item: 'oil',
+        match: (t) => !!t.examinable && (t.examinable.id === 'bridge' || t.examinable.id === 'car'),
+        label: '[TEXT]',
+        apply: (game, t, ctx) => {
+            game.selectedSlot = -1;
+            const flags = game.questEngine?.state?.flags;
+            if (!flags) return;
+            if (flags.oilSpread || flags.downtownGateOpen) {
+                game._log('[TEXT]');                 // already spread: nothing is spent
+                game._render?.();
+                return;
+            }
+            game._removeFromSlot(ctx.slot);
+            flags.oilSpread = true;
+            game._log('[TEXT]', 'pickup');
+            game._advanceWorld();
+        },
+    },
+    {
         // The diner's ice cone machine, fixed with the part the Factory manager
         // holds until his bill is paid (plans/ic6-factory-bill-ice-cone-machine.md).
         // The part is spent and the machine makes one Tiger's Blood Ice Cone.
