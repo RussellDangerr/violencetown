@@ -219,15 +219,21 @@ refactors that leave the autoplay golden untouched, tooling, commit order.
 
 **A ruling card is needed** for anything a player would notice:
 - names of items, bosses, zones and UI labels;
-- every line of copy and flavour (never written by the loop);
+- creative copy: character voice, jokes, story prose and invented proper names (never written by
+  the loop);
 - tuning numbers;
 - art picks;
 - anything that changes what is on screen;
 - the spine's Locked rows.
 
 **Grey areas:**
-- **A placeholder must exist:** make it obviously fake. Use `[TEXT]`, a tinted square, or a number
-  left exactly as today. List it under "Needs your eye".
+- **A placeholder must exist:** for art, a tinted square; for tuning, a number left exactly as
+  today. List it under "Needs your eye".
+- **Placeholder copy is plain, never `[TEXT]`:** the loop writes flat functional lines. Plain
+  means: what the thing is, what it does, and what the player should do about it, in flat
+  sentences. No jokes, no character voice, no story prose. A character with no name goes by its
+  role ("Taxi driver"). Lines that are already creative writing stay as they are. List each
+  plain line under "Needs your eye" so he can replace it.
 - **The golden moved:** something a player sees changed. Stop and ask.
 - **Unsure:** ask only if guessing wrong would cost more than about an hour to redo. Otherwise
   pick, flag it under "Needs your eye", and let him overrule.
