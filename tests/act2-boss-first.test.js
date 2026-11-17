@@ -48,11 +48,11 @@ describe('the Ray Gun moves from the Factory floor to the Alien', () => {
     test('only he gains it: the other bosses keep the placeholder kit', () => {
         assert.ok(!ENTRIES.bigfoot.loadout.includes('ray_gun'));
         assert.ok(!ENTRIES.the_deity.loadout.includes('ray_gun'));
-        const { loadout: alien, ...alienRest } = ENTRIES.alien_invasion;
+        const { loadout: alien, immune: alienImmune, ...alienRest } = ENTRIES.alien_invasion;   // GO2: he is immune to goo
         const { loadout: big, ...bigRest } = ENTRIES.bigfoot;
         // GW1R2: he also carries the Great Sword. GW1R5: three 15 GP items are off his kit.
         const lighter = ['boardwalk_burger', 'defence_poition', 'soap'];
-        assert.deepEqual(alien, [...big.filter(x => !lighter.includes(x)), 'ray_gun', 'great_sword']);
+        assert.deepEqual(alien, [...big.filter(x => !lighter.includes(x)), 'ray_gun', 'great_sword', 'goo']);   // GO2: and goo
         assert.deepEqual({ ...alienRest, name: null, equipped: null }, { ...bigRest, name: null, equipped: null });   // GW1R2: and wields it
     });
 });
@@ -87,7 +87,7 @@ describe('a boss with a few allies he funds', () => {
         assert.equal(a.type, green.type);
         assert.equal(a.name, '[NAME]');
         for (const k of ['hp', 'armor', 'damage', 'gold']) assert.equal(a[k], green[k], k);
-        assert.deepEqual(a.loadout, green.loadout);
+        assert.deepEqual(a.loadout, [...green.loadout, 'goo']);   // GO2: the allies carry goo; green1 is left alone
         assert.equal(a.behavior, undefined, 'no behaviour list: born hostile, on his side');
     });
 

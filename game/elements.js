@@ -100,6 +100,9 @@ export const DAMAGE_TYPES = Object.freeze({
     poison:   row(null,    [],
         'The source has no place for poison, so it stays outside the chart, neutral to '
         + 'everything, until it is placed.'),
+    goo:      row(null,    [],
+        'GO2R1 (a): goo stays outside the chart like poison, neutral to everything. Aliens and '
+        + 'robots are immune to it rather than placed on it.'),
 });
 
 // The phase a damage type belongs to, or null.

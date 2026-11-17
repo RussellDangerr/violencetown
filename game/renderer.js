@@ -1518,6 +1518,7 @@ export class Renderer {
         const { ctx } = this;
         const vp = this._view();
         const ref = tileRef(2);   // SLUDGE
+        const gooRef = tileRef(42);   // (GO2) GOO_VISUAL: a goo puddle wears the Factory goo tile
         for (const p of list) {
             const dx = p.x - game.playerX, dy = p.y - game.playerY;
             if (offView(vp, dx, dy, 1)) continue;
@@ -1525,8 +1526,10 @@ export class Renderer {
             const py = vp.origin.y + dy * TILE_PX - this._scrollY;
             ctx.save();
             ctx.globalAlpha = Math.min(1, 0.35 + p.turnsLeft * 0.1);
-            if (!(ref && this._drawTileRef(tileFrame(ref, p.x, p.y), px, py))) {
-                ctx.fillStyle = (TILE_BY_ID[2] && TILE_BY_ID[2].fallbackColor) || '#3c145a';
+            const useRef = p.kind === 'goo' && gooRef ? gooRef : ref;
+            const useId = p.kind === 'goo' ? 42 : 2;
+            if (!(useRef && this._drawTileRef(tileFrame(useRef, p.x, p.y), px, py))) {
+                ctx.fillStyle = (TILE_BY_ID[useId] && TILE_BY_ID[useId].fallbackColor) || '#3c145a';
                 ctx.fillRect(px, py, TILE_PX, TILE_PX);
             }
             ctx.restore();

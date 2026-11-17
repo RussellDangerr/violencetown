@@ -120,6 +120,23 @@ export const ITEMS = {
         fallbackColor: '#5aa84a',
         baseValue: 12,
     },
+    // (GO2) Aliens and robots carry it. Thrown, it leaves a goo puddle; ending a turn in it gives
+    // the Goo status (GO1). Placeholder name, text and icon.
+    goo: {
+        id: 'goo',
+        name: '[TEXT: Goo]',
+        description: '[TEXT]',
+        category: 'poition',
+        useType: 'throw',
+        equipSlot: 'sides',
+        range: 5,
+        puddle: { kind: 'goo', turns: 8 },
+        enemyThrows: true,
+        damageType: 'goo',
+        consumable: true,
+        fallbackColor: '#6abe30',
+        baseValue: 0,   // placeholder: any value tips the Robot Rat and the Alien out of their balance bands
+    },
     soap: {
         id: 'soap',
         name: '[Soap]',

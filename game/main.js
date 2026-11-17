@@ -6143,7 +6143,14 @@ class Game {
     // DoT (a sewer dweller is healed instead), then every puddle dries by one.
     _tickPuddles() {
         if (!this._puddles || !this._puddles.length) return;
-        if (puddleAt(this._puddles, this.playerX, this.playerY)) {
+        const under = puddleAt(this._puddles, this.playerX, this.playerY);
+        if (under && under.kind === 'goo') {
+            // (GO2) A goo puddle gives the Goo status, as the goo tile does.
+            if (!this._hasSludgeImmunity() && !this.hasBuff('goo')) {
+                this.addBuff('goo', '[TEXT] Goo', SLUDGE_DURATION, 'debuff');
+                this._log('[TEXT: standing in goo]', 'combat');
+            }
+        } else if (under) {
             if (this._hasSludgeImmunity()) {
                 // The bagged feet keep you dry; no message every turn.
             } else {
@@ -6152,7 +6159,8 @@ class Game {
             }
         }
         for (const e of this.enemies) {
-            if (!e.entity || !e.entity.isAlive() || !puddleAt(this._puddles, e.x, e.y)) continue;
+            const wet = e.entity && e.entity.isAlive() ? puddleAt(this._puddles, e.x, e.y) : null;
+            if (!wet || wet.kind === 'goo') continue;   // (GO2) goo does nothing to a foe
             const dmg = isSewerDweller(e) ? -SLUDGE_DOT : SLUDGE_DOT;
             const b = e.buffs.find(x => x.id === 'sludge');
             if (b) { b.turns = Math.max(b.turns, SLUDGE_DURATION); b.dmg = dmg; }
@@ -6178,7 +6186,8 @@ class Game {
         if (def.puddle) {
             const tiles = this._layPuddle({ x: npc.x, y: npc.y }, { x: this.playerX, y: this.playerY },
                                           def.puddle.kind, def.puddle.turns);
-            return `[${who} throws ${what}: a sludge puddle covers ${tiles} tile${tiles === 1 ? '' : 's'} around you.]`;
+            const stuff = def.puddle.kind === 'goo' ? 'goo' : 'sludge';
+            return `[${who} throws ${what}: a ${stuff} puddle covers ${tiles} tile${tiles === 1 ? '' : 's'} around you.]`;
         }
         if (def.poition?.as === 'poison') {
             // (ps1) A thrown poison food lands on you: Poisoned for its own numbers.
