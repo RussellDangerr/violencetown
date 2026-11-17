@@ -33,13 +33,14 @@ export function readAway(game, savedAt, now = Date.now()) {
 // hours give the same news, and game.rng is never read or advanced.
 
 export const NEWS_MIN_HOURS = 1;
-// Plain placeholder pool: each line says time passed and that nothing in the save changed.
-// Caelan replaces them with the real news.
+// Plain placeholder pool: each line says time passed or that items, gold and health are as you
+// left them. None claims the whole save is unchanged: a rested return adds a buff. Caelan
+// replaces them with the real news.
 export const NEWS_LINES = [
-    'Time passed in the city while you were away. Nothing in your save changed.',
-    'You were away for a while. Your items, gold and health are the same as when you left.',
-    'The game was closed for a while. Nothing was taken from you in that time.',
-    'You have been away. The city is as you left it, and your save is unchanged.',
+    'Time passed in the city while you were away. Your items, gold and health are as you left them.',
+    'You were away for a while. Your items, gold and health are as you left them.',
+    'You were away from the game for a while. Nothing was taken from you in that time.',
+    'You have been away. The city is as you left it.',
 ];
 
 // FNV-1a over a string, as an unsigned 32-bit number.

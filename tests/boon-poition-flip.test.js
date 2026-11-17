@@ -15,15 +15,15 @@ const D = ITEMS.boon_poition;
 test('thrown on a hostile it lowers max MP and MP by the full amount', () => {
     const e = foe(7, 5);
     const msg = resolveThrow(stub([e]), D, null, 1, { x: 7, y: 5 });
-    assert.equal(e.entity.maxMp, 99);
-    assert.equal(e.entity.mp, 99);
-    assert.match(msg, /lowers .* max MP by 1/);
+    assert.equal(e.entity.maxMp, 90);
+    assert.equal(e.entity.mp, 90);
+    assert.match(msg, /lowers .* max MP by 10/);
 });
 
 test('a neighbour of the impact tile is untouched (no burst)', () => {
     const a = foe(7, 5), b = foe(8, 5);
     resolveThrow(stub([a, b]), D, null, 1, { x: 7, y: 5 });
-    assert.equal(a.entity.maxMp, 99);
+    assert.equal(a.entity.maxMp, 90);
     assert.equal(b.entity.maxMp, 100);
 });
 
@@ -45,7 +45,7 @@ test('the lowered max survives save and load', () => {
     const e = foe(7, 5);
     resolveThrow(stub([e]), D, null, 1, { x: 7, y: 5 });
     const back = Enemy.fromSave(JSON.parse(JSON.stringify(e.toSave())));
-    assert.equal(back.entity.maxMp, 99);
-    assert.equal(back.entity.mp, 99);
+    assert.equal(back.entity.maxMp, 90);
+    assert.equal(back.entity.mp, 90);
     assert.equal('maxMp' in foe(1, 1).toSave(), false);
 });

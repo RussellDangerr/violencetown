@@ -33,8 +33,8 @@ test('there are three kinds and no max HP', () => {
 test('each kind is written to the record; only MP moves a bar', () => {
     const g = stub();
     drink(g, 'defence'); drink(g, 'defence'); drink(g, 'strength'); drink(g, 'mana');
-    assert.deepEqual(g.boons, { defence: 2, strength: 1, mana: 1 });
-    assert.equal(g.playerMaxMp, 101);
+    assert.deepEqual(g.boons, { defence: 2, strength: 1, mana: 10 });
+    assert.equal(g.playerMaxMp, 110);
     assert.equal(g.playerMaxHp, 100);
     assert.equal(g._boonKind, undefined, 'the pick is spent');
 });
@@ -42,7 +42,7 @@ test('each kind is written to the record; only MP moves a bar', () => {
 test('no kind asked is max MP, as before', () => {
     const g = stub();
     resolveUse(g, ITEMS.boon_poition, null);
-    assert.deepEqual(g.boons, { mana: 1 });
+    assert.deepEqual(g.boons, { mana: 10 });
 });
 
 test('armour is read where the armour number is computed', () => {

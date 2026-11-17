@@ -142,8 +142,9 @@ export function equipOptions(slotKey, worn, bag) {
             id: d.id, name: d.name, bagIndex,
             delta: ((d.armor || 0) - wornArmor),
             sludgeImmune: !!d.sludgeImmune,
+            perks: armourPerkPhrases(d),   // (GL2) what the piece does, from GL1's table
         });
     });
-    if (worn) opts.push({ id: '__bare__', name: 'Bare', bagIndex: -1, delta: -wornArmor });
+    if (worn) opts.push({ id: '__bare__', name: 'Bare', bagIndex: -1, delta: -wornArmor, perks: [] });
     return opts;
 }

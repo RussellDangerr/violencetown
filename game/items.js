@@ -52,6 +52,13 @@ export function poitionBuff(p, flip = false) {
     return { id: p.as || p.stat, turns, dmg: -amount };
 }
 
+// (BP4) What a boon can raise. The list rows are plain functional lines, not final copy.
+// The one place the amounts live: the poition's own `amount` and the thrown flip read `mana`'s.
+export const BOON_KINDS = {
+    mana:     { label: 'Max MP',   amount: 10 },
+    defence:  { label: 'Armour',   amount: 1 },
+    strength: { label: 'Strength', amount: 1 },
+};
 export const ITEMS = {
     rock: {
         id: 'rock',
@@ -597,7 +604,7 @@ export const ITEMS = {
         name: '[TEXT]',
         description: '[TEXT]',
         category: 'poition',
-        poition: { stat: 'mana', amount: 1, permanent: true },
+        poition: { stat: 'mana', amount: BOON_KINDS.mana.amount, permanent: true },
         consumable: true,
         useType: 'self',
         fallbackColor: '#8a4ac8',
@@ -1033,13 +1040,6 @@ function resolveSelfUse(game, itemDef) {
 // flip is always false in practice) — a future effect that makes the PLAYER
 // a sewer-dweller (Rat Form?) inherits the inversion for free instead of
 // needing its own.
-// (BP4) What a boon can raise. The list rows are plain functional lines, not final copy.
-// `mana` takes its amount from the poition itself (the thrown flip reads the same number).
-export const BOON_KINDS = {
-    mana:     { label: 'Max MP',   amount: 1 },
-    defence:  { label: 'Armour',   amount: 1 },
-    strength: { label: 'Strength', amount: 1 },
-};
 export const isBoon = (def) => !!(def && def.poition && def.poition.permanent && def.poition.stat === 'mana' && def.useType === 'self');
 
 function applyPoitionSelf(game, itemDef) {

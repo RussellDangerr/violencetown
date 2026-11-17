@@ -13,6 +13,7 @@
 // disposition that craters past the hostile threshold turns the speaker on you.
 
 import { transferGold } from './trade.js';
+import { switchOff as switchOffHypno } from './hypno-vision.js';   // (HV1) the nerd's off switch
 
 // (IC2) The delivery order's ice cone, and when the diner cook owes another.
 const ORDER_CONE = 'tigers_blood_ice_cone';
@@ -472,6 +473,25 @@ DIALOGUES.factory_manager = {
         { id: 'paid', label: '[TEXT]', repeatable: true,
           available: (g) => billPaid(g) && !partOwed(g),
           reply: '[TEXT]' },
+    ],
+};
+
+// (HV1, plans/hv1-hypno-vision-factory.md) The nerd who runs the Hypno Vision. Asking him to switch
+// it off does it (the quest flag hypnoVisionOff, which the save keeps) and calms whoever it turned.
+// Plain placeholder lines.
+const hypnoOff = (g) => !!flagsOf(g).hypnoVisionOff;
+DIALOGUES.hypno_nerd = {
+    name: '[Nerd]',
+    greeting: '[The nerd runs the Hypno Vision. It is on.]',
+    greetings: [{ when: hypnoOff, text: '[The nerd runs the Hypno Vision. It is off.]' }],
+    choices: [
+        { id: 'switch_off', label: '[Ask him to switch off the Hypno Vision]', once: true,
+          available: (g) => !hypnoOff(g),
+          onPick: (g) => switchOffHypno(g),
+          reply: '[He switches the Hypno Vision off.]' },
+        { id: 'status', label: '[Ask about the Hypno Vision]', repeatable: true,
+          available: (g) => hypnoOff(g),
+          reply: '[It is off.]' },
     ],
 };
 
