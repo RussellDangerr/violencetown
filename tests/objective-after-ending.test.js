@@ -35,7 +35,7 @@ describe('OE1: objective after the ending', () => {
         const qe = g.questEngine;
         assert.equal(qe.betweenQuests().id, 'back_to_town');
         assert.deepEqual(qe.getTargetZones(), ['TOWN']);
-        assert.equal(qe.getHudText(), '[TEXT]');
+        assert.equal(qe.getHudText(), 'Go back to Town');
         assert.ok(!qe.getTargetZones().includes('DOWNTOWN'));
     });
 

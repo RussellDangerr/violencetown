@@ -189,7 +189,11 @@ describe('the order is delivered to the Financier', () => {
         assert.ok(inBank, 'the bank holds the NPC the stage names');
         assert.equal(inBank.dialogueId, 'banker');
         assert.equal(HANDOFF.targetZone, 'DOWNTOWN', 'the bank is an interior off Downtown');
-        for (const k of ['objective', 'location', 'description']) assert.equal(HANDOFF[k], '[TEXT]', `${k} is a placeholder`);
+        assert.deepEqual({ objective: HANDOFF.objective, location: HANDOFF.location, description: HANDOFF.description }, {
+            objective: 'Give the burger and ice cone to the Financier',
+            location: 'Downtown, the bank',
+            description: 'Give the burger and fries and the ice cone to the Financier in the bank. You can give them together or one at a time.',
+        });
     });
 
     test('talking to him (real keys) hands it over, finishes the quest and pays 50 GP', async () => {

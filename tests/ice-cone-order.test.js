@@ -206,7 +206,11 @@ describe('quest 2 sends you for the cone as well as the burger', () => {
         const cone = QUESTS.deliver_burger.stages[1];
         assert.equal(cone.targetZone, 'FACTORY');
         assert.deepEqual(cone.on, { type: 'item_pickup', match: { id: CONE } });
-        for (const k of ['objective', 'location', 'description']) assert.equal(cone[k], '[TEXT]', `${k} is a placeholder`);
+        assert.deepEqual({ objective: cone.objective, location: cone.location, description: cone.description }, {
+            objective: "Get a Tiger's Blood Ice Cone",
+            location: 'Factory',
+            description: "The delivery order includes a Tiger's Blood Ice Cone. Get one and keep it in your bag. Start in the Factory.",
+        });
     });
 
     test('the hand-off needs both items for the traveler', () => {

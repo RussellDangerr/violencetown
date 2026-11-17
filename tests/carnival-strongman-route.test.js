@@ -194,7 +194,8 @@ describe('the strongman who wins the contest with you (ST2)', () => {
         assert.ok(!g.boss.entity.isAlive(), `the boss fell to him in ${turns} turns`);
         assert.equal(g.questEngine.act2Step('CARNIVAL'), 'collect');
         assert.equal(g.held(), 0, 'the fall alone gives nothing');
-        assert.ok(g.logs.filter(l => l === '[TEXT]').length >= 2, 'the win with him says its extra line');
+        assert.ok(g.logs.includes('The boss is down. Collect its item at the claim spot.'));
+        assert.ok(g.logs.includes('The strongman fought beside you.'), 'the win with him says its extra line');
         g.playerX = 44; g.playerY = 11; g.facing = 'right';
         await walkToBooth(g);
         await g.press('KeyE');
@@ -241,7 +242,8 @@ describe('the strongman who wins the contest with you (ST2)', () => {
         await walkToBooth(g);
         beatTheGuard(g);
         assert.equal(g.questEngine.act2Step('CARNIVAL'), 'collect');
-        assert.equal(g.logs.filter(l => l === '[TEXT]').length, 1, 'no ally, no extra line');
+        assert.equal(g.logs.filter(l => l === 'The boss is down. Collect its item at the claim spot.').length, 1);
+        assert.ok(!g.logs.includes('The strongman fought beside you.'), 'no ally, no extra line');
         await g.press('KeyE');
         assert.equal(g.held(), 1);
         assert.equal(g.questEngine.act2Step('CARNIVAL'), 'done');

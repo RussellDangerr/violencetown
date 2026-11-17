@@ -145,7 +145,7 @@ describe('the booth the Carnival boss guards (ST1)', () => {
         assert.ok(map.examinableSpawns.some(e => e.id === 'booth' && e.x === 28), 'the decoy booth is untouched');
     });
 
-    test('with the guard alive the booth says one [TEXT] line and gives nothing', async () => {
+    test('with the guard alive the booth says one plain line and gives nothing', async () => {
         const g = makeGame();
         await walkToBooth(g);
         assert.ok(g.boss.entity.isAlive());
@@ -153,7 +153,8 @@ describe('the booth the Carnival boss guards (ST1)', () => {
         await g.press('KeyE');
         assert.equal(g.held(), 0);
         assert.equal(g.questEngine.act2Step('CARNIVAL'), 'boss');
-        assert.ok(g.logs.length > 0 && g.logs.every(l => l === '[TEXT]'), g.logs.join(' | '));
+        // the booth's own examine text is still [TEXT] in carnival-map.json (not this slice)
+        assert.deepEqual(g.logs, ['The booth is closed. Defeat its guard first.', '[TEXT]']);
         await g.press('KeyE');
         assert.equal(g.held(), 0, 'again: still nothing');
         assert.deepEqual(Object.keys(g.questEngine.serialize().flags).filter(k => k.startsWith('act2_')), [], 'nothing was saved');
