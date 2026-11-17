@@ -1033,6 +1033,15 @@ function resolveSelfUse(game, itemDef) {
 // flip is always false in practice) — a future effect that makes the PLAYER
 // a sewer-dweller (Rat Form?) inherits the inversion for free instead of
 // needing its own.
+// (BP4) What a boon can raise. The list rows are plain functional lines, not final copy.
+// `mana` takes its amount from the poition itself (the thrown flip reads the same number).
+export const BOON_KINDS = {
+    mana:     { label: 'Max MP',   amount: 1 },
+    defence:  { label: 'Armour',   amount: 1 },
+    strength: { label: 'Strength', amount: 1 },
+};
+export const isBoon = (def) => !!(def && def.poition && def.poition.permanent && def.poition.stat === 'mana' && def.useType === 'self');
+
 function applyPoitionSelf(game, itemDef) {
     const p = itemDef.poition;
     const flip = !!(itemDef.sewerFare && isSewerDweller(game));
@@ -1057,12 +1066,20 @@ function applyPoitionSelf(game, itemDef) {
             // A boon is the permanent half: it raises the cap itself and is
             // written to game.boons, which the save carries.
             if (p.permanent) {
-                const n = Math.max(0, Math.floor(amount));
-                game.playerMaxMp += n;
-                game.playerMp += n;
+                // (BP4) The kind was asked for when the poition was lifted; none asked
+                // (an old call path) is max MP, the only kind there was.
+                const kind = BOON_KINDS[game._boonKind] ? game._boonKind : 'mana';
+                game._boonKind = undefined;
+                const n = Math.max(0, Math.floor(kind === 'mana' ? amount : BOON_KINDS[kind].amount));
                 const rec = game.boons || (game.boons = {});
-                rec.mana = (rec.mana || 0) + n;
-                return `[${itemDef.name} — max MP +${n}]`;
+                rec[kind] = (rec[kind] || 0) + n;
+                if (kind === 'mana') {
+                    game.playerMaxMp += n;
+                    game.playerMp += n;
+                }
+                // Armour and strength are not written to a bar: they are read from the
+                // record where the number is computed (main.js _playerArmor, combatAttack).
+                return `[${itemDef.name} — ${BOON_KINDS[kind].label} +${n}]`;
             }
             // MP is real (main.js:3231/:3276 spend it on spells) — instant like
             // health; turns>1 rides the same tick machinery (buffs.js) for symmetry.
