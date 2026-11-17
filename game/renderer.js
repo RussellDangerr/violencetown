@@ -294,6 +294,18 @@ export function actorOrder(a, b) {
         || (a.kind === 'player' ? 1 : -1);
 }
 
+// (GL2) The dim perk line of a GEAR chooser row: the row's perks joined by commas, shrunk
+// (never below `min`) to fit `maxPx`, then cut if it still won't. Rows without perks give ''.
+export function gearPerkLine(opt, maxPx, measure, min = 0.6) {
+    const perks = (opt && opt.perks && opt.perks.length) ? opt.perks : (opt && opt.sludgeImmune ? ['sludge-proof'] : []);
+    const text = perks.join(', ');
+    if (!text) return { text: '', scale: 1 };
+    const w = measure(text);
+    const scale = w <= maxPx ? 1 : Math.max(min, maxPx / w);
+    const m = (t) => measure(t) * scale;
+    return { text: cutToWidth(text, maxPx, m), scale };
+}
+
 // Fitting text by its measured width. `measure(s)` is the pixel width of `s`
 // (Renderer._measurer hands one over). Never by a fixed px per letter: the 8 px
 // idiom was a fossil of the retired 8x8 atlas and fit ~40% less than the room.
@@ -5395,7 +5407,8 @@ export class Renderer {
             const name = (opt.name || opt.id || '').replace(/[\[\]]/g, '');
             const isBare = opt.id === '__bare__';
             this.font.drawText(ctx, isBare ? 'Bare (remove)' : name, r.x + 8, r.y + r.h / 2 - 4, { color: isBare ? UI.textLight : UI.text, scale: 1 });
-            if (opt.sludgeImmune) this.font.drawText(ctx, 'sludge-proof', r.x + 8, r.y + r.h - 9, { color: UI.dim, scale: 1 });
+            const perkLine = gearPerkLine(opt, r.w - 16 - this.font.measure('+00', 1) - 4, this._measurer(1));   // (GL2) clear of the armour delta
+            if (perkLine.text) this.font.drawText(ctx, perkLine.text, r.x + 8, r.y + r.h - 9, { color: UI.dim, scale: perkLine.scale });
 
             // Armor delta: +N green / −N red / 0 dim, right-aligned. (LC1) On the
             // left-hand (and, FX57, right-hand) plate the rows are weapons, so a 0 says nothing: it is
