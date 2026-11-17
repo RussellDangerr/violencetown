@@ -120,10 +120,10 @@ describe('the Financier brings up the Yellow Card after the delivery', () => {
         await g.press('Space');                       // hand the order over
         assert.ok(g.questEngine.isComplete('deliver_burger'), g.logs.join(' | '));
         assert.equal(ids(g)[0], 'yellowCard', 'now first on offer');
-        assert.equal(DIALOGUES.banker.choices.find(c => c.id === 'yellowCard').label, '[TEXT]');
+        assert.equal(DIALOGUES.banker.choices.find(c => c.id === 'yellowCard').label, 'Ask about the Yellow Card');
 
         await g.press('Space');                       // pick it
-        assert.equal(g._dialogueReply, '[TEXT]');
+        assert.equal(g._dialogueReply, 'The Financier mentions the Yellow Card. It does nothing yet.');
         assert.ok(!ids(g).includes('yellowCard'), 'spent');
         assert.equal(g.questEngine.getFlag('yellowCardRaised'), true);
 

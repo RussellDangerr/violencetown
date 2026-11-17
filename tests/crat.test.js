@@ -181,14 +181,14 @@ describe('every line is a placeholder', () => {
     const fake = (s) => typeof s === 'string' && /^\[(TEXT|NAME)\b/.test(s);
     const exitFake = (s) => /^\[(North|South) — TEXT\b/.test(s);
 
-    test('the three dialogues', () => {
+    test('no line of the three dialogues is a placeholder', () => {
         for (const id of ['crat', 'crat_side_a', 'crat_side_b']) {
             const d = DIALOGUES[id];
-            if (id !== 'crat') assert.ok(fake(d.name), `${id} name: ${d.name}`);
-            assert.ok(fake(d.greeting), `${id} greeting: ${d.greeting}`);
+            assert.ok(typeof d.name === 'string' && d.name.length > 0 && !fake(d.name), `${id} name: ${d.name}`);
+            assert.ok(typeof d.greeting === 'string' && d.greeting.length > 0 && !fake(d.greeting), `${id} greeting: ${d.greeting}`);
             for (const c of d.choices) {
-                assert.ok(fake(c.label), `${id}/${c.id} label: ${c.label}`);
-                assert.ok(fake(c.reply), `${id}/${c.id} reply: ${c.reply}`);
+                assert.ok(typeof c.label === 'string' && c.label.length > 0 && !fake(c.label), `${id}/${c.id} label: ${c.label}`);
+                assert.ok(typeof c.reply === 'string' && c.reply.length > 0 && !fake(c.reply), `${id}/${c.id} reply: ${c.reply}`);
             }
         }
     });

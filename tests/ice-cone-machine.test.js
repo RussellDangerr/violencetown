@@ -127,10 +127,17 @@ describe('the Factory manager', () => {
         const d = getDialogue(spawn.dialogueId);
         assert.ok(d, 'he has nothing to say');
         assert.equal(d.name, '[Factory Manager]');
-        assert.equal(d.greeting, '[TEXT]');
+        assert.equal(d.greeting, 'I am the Factory manager. I hold the ice cone machine part until the factory bill is paid.');
+        const lines = {
+            bill: ['Ask about the bill', 'The bill is 100 GP. Pay it and I hand over the ice cone machine part.'],
+            pay: ['Pay the bill - 100 GP', 'The bill is paid. The manager hands over the ice cone machine part if your bag has room. If it does not, ask for the part again.'],
+            collect: ['Ask for the ice cone machine part', 'The manager hands over the ice cone machine part.'],
+            paid: ['Ask about the part', 'The bill is paid. The ice cone machine part goes in the ice cone machine.'],
+        };
+        assert.deepEqual(d.choices.map(c => c.id), Object.keys(lines));
         for (const c of d.choices) {
-            assert.match(c.label, /^\[TEXT/, `${c.id}: label`);
-            assert.equal(c.reply, '[TEXT]', `${c.id}: reply`);
+            assert.equal(c.label, lines[c.id][0], `${c.id}: label`);
+            assert.equal(c.reply, lines[c.id][1], `${c.id}: reply`);
         }
     });
 });
