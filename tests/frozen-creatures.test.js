@@ -210,9 +210,9 @@ describe('examining a creature', () => {
             assert.equal(e.allegiance, 'hostile');
             const g = view([e]);
             tap(g, e);
-            assert.deepEqual(g.logs, [`[TEXT] [${e.name || e.type}. Creature. Looks like trouble.]`], e.type);
+            assert.deepEqual(g.logs, [`[TEXT] [${e.type}. Creature. Looks like trouble.]`], e.type);
             assert.ok(g.panels[0].body.startsWith('[TEXT]\n[') &&g.panels[0].body.includes('HP:'));
-            assert.equal(g.panels[0].title, e.name);
+            assert.equal(g.panels[0].title, e.name.replace(/[\[\]]/g, ''));
         }
     });
 
