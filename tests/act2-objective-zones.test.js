@@ -124,9 +124,9 @@ describe('each Act 2 zone leaves the objective and the Map once you hold its ite
         assert.deepEqual(both(g), { hud: FULL.toUpperCase(), map: ALL });
     });
 
-    test('all three held: the objective is the [TEXT] placeholder and the Map rings Downtown only', () => {
+    test('all three held: the objective is the plain bank-vault line and the Map rings Downtown only', () => {
         const g = makeGame(Object.values(ITEM));
-        assert.deepEqual(both(g), { hud: '[TEXT]', map: ['DOWNTOWN'] });
+        assert.deepEqual(both(g), { hud: 'GO TO THE BANK VAULT IN DOWNTOWN', map: ['DOWNTOWN'] });
         assert.equal(g.questEngine.getTargetZone(), 'DOWNTOWN');
     });
 

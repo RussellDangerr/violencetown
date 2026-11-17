@@ -173,7 +173,7 @@ describe('the quests sit beside the active quest and the save', () => {
     test('the HUD line is the zone\'s quest step while you stand in it, the usual line elsewhere', () => {
         const g = stand('GRAVEYARD');
         g.questEngine.emit('map_entered', { map: 'graveyard-map.json' });
-        assert.equal(g.questEngine.getHudText(), '[TEXT]');
+        assert.equal(g.questEngine.getHudText(), 'Defeat the Graveyard boss');
         assert.equal(g.questEngine.act2Here().step, 'boss');
         g.map.zoneName = 'TOWN';
         assert.equal(g.questEngine.act2Here(), null);
@@ -203,16 +203,19 @@ describe('the claim spot stands on each map, and every line is a placeholder', (
         });
     }
 
-    test('the quest titles, objectives and hand-over lines are all [TEXT]', () => {
+    test('the quest titles, objectives and hand-over lines are plain', () => {
         for (const q of Object.values(ACT2_QUESTS)) {
-            assert.equal(q.title, '[TEXT]');
-            for (const st of Object.values(q.steps)) assert.equal(st.objective, '[TEXT]');
+            const name = q.zone[0] + q.zone.slice(1).toLowerCase();
+            assert.equal(q.title, `Get the ${name} item`);
+            assert.equal(q.steps.boss.objective, `Defeat the ${name} boss`);
+            assert.equal(q.steps.collect.objective, `Take the ${name} item at its claim spot (E)`);
         }
         const g = stand('FACTORY');
         g.questEngine.emit('map_entered', { map: 'factory-map.json' });
         const { enemy, spawns } = bossOf('FACTORY');
         g.questEngine.act2BossDown(enemy, spawns);
         g.questEngine.act2Claim('FACTORY');
-        assert.ok(g.logs.length > 0 && g.logs.every(l => l === '[TEXT]'), JSON.stringify(g.logs));
+        // the test game's grant stub logs nothing, so only the boss-down line shows here
+        assert.deepEqual(g.logs, ['The boss is down. Collect its item at the claim spot.']);
     });
 });
