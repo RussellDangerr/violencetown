@@ -27,8 +27,9 @@ The rules are `tools/roadmap-board/LOOP.md` §2 (definition of done), §3 (failu
    acceptance checks, the rulings and picks it rests on, and what is out of scope.
 4. **Build, inside `touches` only.**
    - New test files are fine; every feature gets at least one.
-   - Placeholders are obviously fake (LOOP.md §6). You never write player-facing copy, names or
-     tuning numbers.
+   - Art and tuning placeholders are obviously fake; where a line is needed, write a plain
+     functional one as LOOP.md §6 describes, never `[TEXT]`. You never write creative copy,
+     names or tuning numbers.
 5. **Run every gate in LOOP.md §2, in order, on exit codes.** That includes
    `node tools/roadmap-board/loop-guard.mjs --slug <slug> --touches <comma-list>` after
    committing.
