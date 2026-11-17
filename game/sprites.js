@@ -624,6 +624,9 @@ export const ENEMY_SPRITES = {
 
     // Not a person: a puzzleWall growth blocking a sewer pipe.
     'Sludge Bloom': { sheet: 'tinyDungeon', col: 8, row: 2, static: true }, // stone hatch leaking green ooze
+    // The trash compactor (plans/tc1-trash-compactor-walls.md): the Sludge Bloom's cell, a stand-in.
+    // The two never share a map: the Bloom is the Sewer's, the compactor stands alone in its room.
+    'Compactor': { sheet: 'tinyDungeon', col: 8, row: 2, static: true },
 };
 
 // Stable per-entity hash. Used for cosmetic variety (spriteVariant) and for
