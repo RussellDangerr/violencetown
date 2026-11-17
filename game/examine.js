@@ -114,7 +114,7 @@ export function propNameAt(game, x, y) {
 // per-character table). `line` is the bracketed log line: name, role, stance. `rows` are the
 // inspect panel's extra lines: HP, armour, damage, weapon, what they sell, what they drop.
 // The words are plain placeholders for the owner to review.
-export const ROLE_WORDS = { boss: 'Boss', vendor: 'Vendor', talker: 'Talker', wanderer: 'Wanderer', guard: 'Guard', creature: 'Creature' };
+export const ROLE_WORDS = { boss: 'Leader', vendor: 'Vendor', talker: 'Talker', wanderer: 'Wanderer', guard: 'Guard', creature: 'Creature' };
 export const STANCE_WORDS = { hostile: 'Looks like trouble.', neutral: 'Minding their own business.', ally: 'On your side.' };
 
 const sentence = id => { const t = String(id).replace(/_/g, ' ').trim(); return t.charAt(0).toUpperCase() + t.slice(1); };

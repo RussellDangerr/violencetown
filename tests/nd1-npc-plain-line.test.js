@@ -13,9 +13,9 @@ const look = (e) => resolveExamine({ examinables: [], enemies: [e], containers: 
 const at = (row) => look(new Enemy({ x: 3, y: 3, ...row }));
 
 describe('ND1 — the plain character line', () => {
-    test('a boss goes by its one name, as a boss', () => {
+    test('a boss goes by its one name, as a leader', () => {
         const r = at({ type: 'Boss', boss: true, behavior: ['IDLE'], hp: 100, armor: 6, damage: 12 });
-        assert.match(r.body, /^\[.+\. Boss\. Minding their own business\.\]$/);
+        assert.match(r.body, /^\[.+\. Leader. Minding their own business\.\]$/);
     });
 
     test('a vendor is a vendor and the panel lists what it sells', () => {
