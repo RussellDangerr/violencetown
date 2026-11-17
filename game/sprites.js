@@ -555,6 +555,7 @@ export const ENEMY_SPRITES = {
     'Strongman':        { sheet: 'tinyDungeon', col: 2, row: 7,  static: true }, // SG1 placeholder: bald mustached, Pike's cell
     'Carnival Clown':   { sheet: 'tinyDungeon', col: 0, row: 7,  static: true }, // purple mage — most colorful humanoid
     'Rattling Skeleton':{ sheet: 'tinyDungeon', col: 1, row: 10, static: true }, // white ghost — pale/bony proxy
+    'Worker':           { sheet: 'tinyDungeon', col: 1, row: 10, static: true }, // (HV1) the Skeleton's cell, a stand-in
 
     // ── Named town NPCs (DS1) ───────────────────────────────────────────────
     // Each borrows one of the six RPG Urban people, so it walks with real

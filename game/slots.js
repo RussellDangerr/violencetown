@@ -279,6 +279,50 @@ export const ENTRIES = {
         armor: 3,
         damage: ACT2_MOB_DAMAGE,
     },
+    // The Factory's Hypno Vision (plans/hv1-hypno-vision-factory.md): two workers and a robot who
+    // stand neutral until the screen turns them on you one at a time (hypno-vision.js; the
+    // `hypno_target` tag is the flag). Stand-ins until designed: the workers carry the Graveyard
+    // Rattling Skeleton's numbers and kit, the robot the Greedy Green's look, numbers and kit; the
+    // names. They stand where they are placed (IDLE only: a wander would draw the shared ambient
+    // stream and move the autoplay replay).
+    factory_worker: {
+        type: 'Worker',
+        name: '[Worker]',
+        tag: 'hypno_target',
+        gold: 4,
+        loadout: ['rock', 'pipe', 'foil_hat', 'shoe_bags'],
+        hp: 100,
+        armor: 0,
+        damage: ACT2_MOB_DAMAGE,
+        disposition: 0,
+        behavior: ['IDLE'],
+    },
+    factory_robot: {
+        type: 'Greedy Green',
+        name: '[Robot]',
+        tag: 'hypno_target',
+        gold: 8,
+        loadout: ['hot_dog', 'foil_hat', 'latex_gloves', 'cardboard_cuirass', 'soap'],
+        hp: 100,
+        armor: 3,
+        damage: ACT2_MOB_DAMAGE,
+        disposition: 0,
+        behavior: ['IDLE'],
+    },
+    // The nerd who runs the Hypno Vision: you talk to him or knock him out, and either switches it
+    // off. The Factory Manager's numbers (damage 0) until he is designed.
+    hypno_nerd: {
+        type: 'Violencian',
+        name: '[Nerd]',
+        tag: 'hypno_nerd',
+        hp: 100,
+        armor: -80,
+        damage: 0,
+        sightRange: 4,
+        disposition: 0,
+        behavior: ['IDLE'],
+        dialogueId: 'hypno_nerd',
+    },
     // The frozen area's mooks (plans/ic4-frozen-creatures.md), its `frozen.mob`
     // pool. Each copies the fight numbers and kit of the nearest existing enemy,
     // and its weakness row is the chart's `cold` row (elements.js).
