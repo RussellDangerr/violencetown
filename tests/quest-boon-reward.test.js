@@ -12,7 +12,7 @@ function fakeGame() {
     const g = {
         gold: 0, granted: [], logs: [],
         _grantItem(id, msg) { g.granted.push(id); if (msg) g.logs.push(msg); return true; },
-        _grantBoon() { return g._grantItem('boon_poition', '[TEXT]'); },
+        _grantBoon() { return g._grantItem('boon_poition', 'Quest done: you get a boon poition.'); },
         _log(m) { g.logs.push(m); },
         _render() {}, _startMainQuest2() {}, _openBridgeIfCarFixed() {},
     };

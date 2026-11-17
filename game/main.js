@@ -5905,7 +5905,7 @@ class Game {
     }
 
     // (BP3) A finished quest's boon poition. The bag grows a page when full, so it always lands.
-    _grantBoon() { return this._grantItem('boon_poition', '[TEXT]'); }
+    _grantBoon() { return this._grantItem('boon_poition', 'Quest done: you get a boon poition.'); }
 
     // ── Allies (bribe-flipped — AGGRO behavior bands) ──────────────────────────
 
