@@ -4,6 +4,7 @@
 // renderer draws and main.js dispatches.
 
 import { inspectorPanelRect, inspectorActionRects } from './layout.js';
+import { DELIVERY_CAP_PURSE } from './trade.js';
 
 // (C3c) The button that opens an item's "use this on that" list (the overlay
 // Space opens). main.js decides whether it shows; this only names it.
@@ -47,6 +48,22 @@ export function itemActions(itemDef, zone) {
     return [primaryAction(itemDef), toggle, { id: 'drop', label: 'Drop' }];
 }
 
+// (GL1) What each armour perk does, said after "+N armor". One row per perk field;
+// phrase(def) returns the words, or '' when the piece doesn't carry it. Numbers are read
+// from the item or trade.js. inspector.js can't import items.js (it imports this file), so
+// the rat mask's 'grates' verb is read off def.body.verbs directly.
+export const ARMOUR_PERKS = Object.freeze([
+    { field: 'sludgeImmune', phrase: d => (d.sludgeImmune ? 'sludge-proof' : '') },
+    { field: 'meleeBonus', phrase: d => (d.meleeBonus ? `${signed(d.meleeBonus)} melee` : '') },
+    { field: 'deliveryCap', phrase: d => (d.deliveryCap ? `foes carry +${Math.round((DELIVERY_CAP_PURSE - 1) * 100)}% gold` : '') },
+    { field: 'powerWield', phrase: d => (d.powerWield ? 'a two-hander in each hand' : '') },
+    { field: 'grates', phrase: d => ((d.body && d.body.verbs || []).includes('grates') ? 'walks through grates' : '') },
+]);
+
+export function armourPerkPhrases(d) {
+    return ARMOUR_PERKS.map(r => r.phrase(d)).filter(Boolean);
+}
+
 // One-line stat summary for the panel header. Gear folds in sludge-immunity;
 // weapons read their damageType (energy/sludge/…) rather than a blanket "Melee"
 // — only a THROW item is prefixed with the verb, since a ranged/energy weapon
@@ -59,7 +76,7 @@ export function itemStatLine(itemDef) {
     const effect = effectLine(itemDef);
     if (effect) return itemDef.description ? `${effect}. ${itemDef.description}` : effect;
     if (itemDef.healAmount) return `Heals ${itemDef.healAmount} HP`;
-    if (itemDef.armor) return `+${itemDef.armor} armor${itemDef.sludgeImmune ? ', sludge-proof' : ''}`;
+    if (itemDef.armor) return `+${itemDef.armor} armor${armourPerkPhrases(itemDef).map(p => `, ${p}`).join('')}`;
     if (itemDef.damage) {
         if (itemDef.useType === 'throw') return `Throw ${itemDef.damage} dmg`;
         const dt = itemDef.damageType;
