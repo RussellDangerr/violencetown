@@ -13,7 +13,7 @@
 //    |       |
 //    |   [CARNIVAL]
 //    |       |
-//    |   [GRAVEYARD]
+//    |   [GRAVEYARD]—[TUNNELS]   (the Tunnels also join the Wilderness)
 //    |       |
 //  [FROZEN]—[WILDERNESS]—[VALLEY]  (the Valley also hangs off the Canyon, by the hook)
 export const WORLD_ZONES = [
@@ -32,8 +32,12 @@ export const WORLD_ZONES = [
     { zoneName: 'TOWN',       label: 'TOWN',       col: 2, row: 1, connects: ['DOWNTOWN', 'FACTORY', 'SEWER', 'CARNIVAL'] },
     { zoneName: 'SEWER',      label: 'SEWER',      col: 3, row: 1, connects: ['TOWN'] },
     { zoneName: 'CARNIVAL',   label: 'CARNIVAL',   col: 2, row: 2, connects: ['TOWN', 'GRAVEYARD'] },
-    { zoneName: 'GRAVEYARD',  label: 'GRAVEYARD',  col: 2, row: 3, connects: ['CARNIVAL', 'WILDERNESS'] },
-    { zoneName: 'WILDERNESS', label: 'WILDERNESS', col: 2, row: 4, connects: ['GRAVEYARD', '[FROZEN AREA]', 'VALLEY'] },
+    { zoneName: 'GRAVEYARD',  label: 'GRAVEYARD',  col: 2, row: 3, connects: ['CARNIVAL', 'WILDERNESS', 'TUNNELS'] },
+    { zoneName: 'WILDERNESS', label: 'WILDERNESS', col: 2, row: 4, connects: ['GRAVEYARD', '[FROZEN AREA]', 'VALLEY', 'TUNNELS'] },
+    // The Tunnels (plans/mo1-molemen-tunnels.md): fall in through a grave in the Graveyard, out
+    // through a door in the Wilderness's east wall. The box sits beside the Graveyard; the place
+    // is a stand-in.
+    { zoneName: 'TUNNELS',    label: 'TUNNELS',    col: 3, row: 3, connects: ['GRAVEYARD', 'WILDERNESS'] },
     // The Valley (plans/gv2-canyon-to-valley.md): up the hook climb from the Canyon, and out its far
     // side into the Wilderness. The box sits beside the Wilderness; the place is a stand-in, and the
     // line from the Canyon runs a long way, behind the boxes between.

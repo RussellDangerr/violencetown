@@ -122,6 +122,7 @@ framework rather than beside it.
 | What is on a map: spawns, props, containers | Pool material | — |
 | Maps off the spine: Wilderness, Borgir, Diner, Casino, the Gorge (walk left out of the Canyon; open any time, empty for now), the Valley (hook climb up the Canyon's top right; its far side opens into the Wilderness; empty for now) | Exist, carry no beat; candidate transition zones (SP12) | content there is pool material |
 | The oil side area, past the barricade (ruled 2026-11-01, §9) | Optional, carries no beat | name is [TEXT]; content there is pool material |
+| The Tunnels (MO1): fall in through one grave in the Graveyard, walk out through a door in the Wilderness's east wall; the Molemen live there | Off the spine, optional, carries no beat (SA-6) | name is the owner's; terrain, Molemen and every line are stand-ins; the cave off the Valley is a later map |
 
 ## 4. The lock clause
 

@@ -600,6 +600,9 @@ export const ENEMY_SPRITES = {
     // (1,10), drawn behind the body, see-through and a little larger (renderer.js). Only the
     // Ankou has the field.
     'Ankou': { sheet: 'tinyDungeon', col: 3, row: 9, static: true, ghost: { col: 1, row: 10, scale: 1.4, alpha: 0.5 } },
+    // The Tunnels' Molemen (plans/mo1-molemen-tunnels.md): the grey beast cell the Polar Bear wears (they
+    // never share a map), a stand-in until they are drawn.
+    'Moleman': { sheet: 'tinyDungeon', col: 4, row: 10, static: true },
     // The Carnival's named clown (plans/cw1-the-clown-mini-boss.md): an unused Tiny Dungeon
     // cell, a stand-in, so he is never taken for the ordinary purple-mage clown.
     'The Clown': { sheet: 'tinyDungeon', col: 3, row: 8, static: true },

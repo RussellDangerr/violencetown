@@ -165,6 +165,7 @@ export function characterSheet(npc) {
 // Only off the map does it still come back empty-handed.
 //
 // Returns { title, body, panelBody, instanceId, grantsInstance, tierName, tierColor }:
+// `fallInstance` is set when the instance drops the player to another map (MO1).
 // `body` is the bracketed log line; `panelBody` is what the inspect panel shows
 // (the same, except an item's panel shows its description beside the tier chip);
 // `instanceId` is set only for an authored instance — the caller fires the
@@ -179,7 +180,7 @@ export function resolveExamine(game, x, y) {
     const inst = (game.examinables || []).find(e => e.x === x && e.y === y);
     if (inst) {
         return result(String(inst.id).replace(/_/g, ' '), inst.text || `[You examine the ${inst.id}.]`,
-            { instanceId: inst.id, grantsInstance: inst.grants ? inst : null });
+            { instanceId: inst.id, grantsInstance: inst.grants ? inst : null, fallInstance: inst.fallTo ? inst : null });
     }
 
     const npc = (game.enemies || []).find(e => e.x === x && e.y === y && e.entity?.isAlive?.());
@@ -292,6 +293,8 @@ export function doExamine(game) {
     // Some examinables yield a one-time item (e.g. the Red Cape in a grate);
     // main.js owns the inventory + collected-set bookkeeping and its logging.
     if (res.grantsInstance && game._grantFromExaminable) return game._grantFromExaminable(res.grantsInstance);
+    // (MO1) A grave you search can give way: say so, then drop the player through.
+    if (res.fallInstance && game._fallThrough) { game._log(res.body); game._fallThrough(res.fallInstance); return true; }
     // A quest stage waiting on some OTHER examinable: say where it is, so E
     // never answers the opening objective with just the name of the floor.
     const hint = questExamineHint(game, res);

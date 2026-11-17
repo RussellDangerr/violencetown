@@ -226,6 +226,20 @@ export const ENTRIES = {
         barkEveryTurns: 6,
         examine: '[TEXT]',
     },
+    // The Tunnels' Molemen (plans/mo1-molemen-tunnels.md): two placed by hand, each born hostile
+    // so it hunts you. The name is Caelan's; stand-ins until designed: the Graveyard Rattling
+    // Skeleton's numbers and kit, the bark, the art. No `boss`, no slot, so it is in no pool.
+    moleman: {
+        type: 'Moleman',
+        name: 'Moleman',
+        gold: 4,
+        loadout: ['rock', 'pipe', 'foil_hat', 'shoe_bags'],
+        hp: 100,
+        armor: 0,
+        damage: ACT2_MOB_DAMAGE,
+        barks: ['The Moleman stops digging and comes for you.'],
+        barkEveryTurns: 6,
+    },
     // The Sewer's character (plans/cs1-crat-talk-both-sides.md): the Crat, who
     // asks you to settle a dispute in the side room north of the Sewer. A
     // townsperson's numbers; borrowed Violencian art until it is designed.
