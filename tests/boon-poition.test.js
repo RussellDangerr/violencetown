@@ -13,17 +13,17 @@ function stub(over = {}) {
 test('boon_poition is a permanent mana poition', () => {
     const d = ITEMS.boon_poition;
     assert.equal(d.name, '[TEXT]');
-    assert.deepEqual(d.poition, { stat: 'mana', amount: 1, permanent: true });
+    assert.deepEqual(d.poition, { stat: 'mana', amount: 10, permanent: true });
 });
 
 test('drinking raises max MP and MP and records it', () => {
     const g = stub();
     resolveUse(g, ITEMS.boon_poition, null);
-    assert.equal(g.playerMaxMp, 101);
-    assert.equal(g.playerMp, 101);
-    assert.deepEqual(g.boons, { mana: 1 });
+    assert.equal(g.playerMaxMp, 110);
+    assert.equal(g.playerMp, 110);
+    assert.deepEqual(g.boons, { mana: 10 });
     resolveUse(g, ITEMS.boon_poition, null);
-    assert.equal(g.boons.mana, 2);
+    assert.equal(g.boons.mana, 20);
 });
 
 test('throwing it leaves the record alone and shatters', () => {
