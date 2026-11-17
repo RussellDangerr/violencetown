@@ -59,6 +59,10 @@ export const BOON_KINDS = {
     defence:  { label: 'Armour',   amount: 1 },
     strength: { label: 'Strength', amount: 1 },
 };
+// (BP5, BPR4 a) At most 12 boons drunk in a game, counted across every kind.
+export const BOON_CAP = 12;
+export const boonCount = (game) => Object.values((game && game.boons) || {}).reduce((a, n) => a + (Number(n) || 0), 0);
+export const BOON_CAP_LINE = `You have drunk ${BOON_CAP} boon poitions, the most you can. This one stays in your bag.`;
 export const ITEMS = {
     rock: {
         id: 'rock',
@@ -1066,6 +1070,7 @@ function applyPoitionSelf(game, itemDef) {
             // A boon is the permanent half: it raises the cap itself and is
             // written to game.boons, which the save carries.
             if (p.permanent) {
+                if (boonCount(game) >= BOON_CAP) return BOON_CAP_LINE;   // (BP5) never reached from the menus, which refuse first
                 // (BP4) The kind was asked for when the poition was lifted; none asked
                 // (an old call path) is max MP, the only kind there was.
                 const kind = BOON_KINDS[game._boonKind] ? game._boonKind : 'mana';

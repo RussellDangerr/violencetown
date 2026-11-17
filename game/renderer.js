@@ -36,7 +36,7 @@ import { itemStatLine, itemActions, USES_ACTION } from './inspector.js';
 import { weaponCompare, weaponCompareLines, examineLabelAt } from './examine.js';   // (FX44) the weapon compare block    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
 import { zoneOf, pageCount, slotOnPage } from './inventory.js';                                     // (C1) safe/pack label for the inspector
 import { buildXmbBar, resolveXmbSelection } from './xmb.js';                 // (XMB) usable-bar model
-import { ITEMS, itemTier, gearOptions, wornBody } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
+import { ITEMS, itemTier, gearOptions, wornBody, BOON_CAP } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
 import { RINGS, FUSIONS } from './ring-data.js';                             // (rings Task 5) SKILLS-tab hands: ring names + fusion spark
 import { findFusion } from './rings.js';                                     // (rings Task 5) mark a link fusible when its two rings have an authored fusion
 import { act2Checklist } from './quests.js';                               // (NI2) the Quests tab's three-item checklist
@@ -3612,7 +3612,7 @@ export class Renderer {
         // (BP1) Boons drunk: one line, 0 on a new game.
         y += 6;
         const boonN = Object.values(game.boons || {}).reduce((a, n) => a + (Number(n) || 0), 0);
-        this.font.drawText(ctx, `[TEXT] ${boonN}`, innerX, y, { color: UI.textLight, scale: 1 }); y += 14;
+        this.font.drawText(ctx, `Boons drunk: ${boonN} / ${BOON_CAP}`, innerX, y, { color: UI.textLight, scale: 1 }); y += 14;
 
         // Completed quests.
         const done = qe ? qe.getCompletedTitles() : [];
