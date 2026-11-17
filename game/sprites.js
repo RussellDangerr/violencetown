@@ -382,6 +382,7 @@ export const ITEM_SPRITES = {
     speed_poition:    { sheet: 'tinyDungeon', x: 5 * 16, y: 10 * 16, w: 16, h: 16 },  // plain vial
     gold_poition:     { sheet: 'tinyDungeon', x: 6 * 16, y: 9  * 16, w: 16, h: 16 },  // green bottle — money green
     defence_poition:  { sheet: 'tinyDungeon', x: 8 * 16, y: 9  * 16, w: 16, h: 16 },  // blue bottle
+    boon_poition:     { sheet: 'tinyDungeon', x: 6 * 16, y: 8  * 16, w: 16, h: 16 },  // placeholder cell: no free vial left on the sheet
 
     // ── Item icons, second pass (visual-pass, 2026-09-06) ───────────────────
     // Shortlist picks verified against the labeled contact sheets (tools/contact_*.png).
