@@ -46,8 +46,12 @@ factory/alien-ally-1              Greedy Green                100       3     12
 factory/alien-ally-2              Greedy Green                100       3     12       65              6              4      9
 factory/alien-ally-3              Greedy Green                100       3     12       65              6              4      9
 factory/green1                    Greedy Green                100       3     12       65              6              4      9
+factory/hypno-robot               Greedy Green                100       3     12       65              6              4      9
 factory/puck                      Puck                        100     -30      1        0              2              2    100
 factory/factory-manager           Violencian                  100     -80      0        0              1              1      -
+factory/hypno-nerd                Violencian                  100     -80      0        0              1              1      -
+factory/hypno-worker-1            Worker                      100       0     12       35              5              4      9
+factory/hypno-worker-2            Worker                      100       0     12       35              5              4      9
 frozen/frozen-mob-3               Polar Bear                  100       3     10       70              6              4     10
 frozen/frozen-boss                Siberia                     100       6     14      148              8              5      8
 frozen/frozen-mob-1               Snowman                     100       0     12       35              5              4      9
@@ -120,7 +124,7 @@ casino                     0
 compactor                  0
 diner                      0
 downtown                  14
-factory                   76
+factory                   92
 frozen                    78
 graveyard                 78
 sewer                    145
