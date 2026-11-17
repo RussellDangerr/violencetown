@@ -306,6 +306,25 @@ export const ENTRIES = {
         resist: resistancesOf('cold'),
         examine: '[TEXT]',
     },
+    // The trash compactor (plans/tc1-trash-compactor-walls.md, ruling TC1R1 a): one machine in the
+    // middle of its room that never swings and never moves (sight 0, so it never hunts, and
+    // main.js does not let a blow provoke it). The walls closing in are the threat (compactor.js).
+    // Stand-ins until designed: armour 6, damage 0, 100 HP, the name and the examine line. Its
+    // tag is compactor.js COMPACTOR_TAG; breaking it is what stops the walls.
+    compactor: {
+        type: 'Compactor',
+        name: '[Compactor]',
+        tag: 'compactor',
+        gold: 0,
+        hp: 100,
+        armor: 6,
+        damage: 0,
+        sightRange: 0,
+        heavy: true,
+        bribeable: false,
+        thievable: false,
+        examine: '[A trash compactor. Break it to stop the walls.]',
+    },
 };
 
 // RO1: the stand-in that fills the Were-Rat's spot once he has stayed dead the full wait

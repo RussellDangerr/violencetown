@@ -178,6 +178,7 @@ describe('tile coverage', () => {
             'side-area-map.json':  { tile: 13, prop: ['tree', 'pine'] },
             'sewer-map.json':     { tile: 0 },
             'factory-map.json':    { tile: 41 },
+            'compactor-map.json':  { tile: 41 },
             'canyon-map.json':     { tile: 61 },
             'gorge-map.json':      { tile: 61 },
             'valley-map.json':     { tile: 61 },

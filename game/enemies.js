@@ -14,7 +14,7 @@
 // `behavior` is now ctor-input / save-only — parsed once into capabilities +
 // allegiance at construction; runtime dispatch never reads it.
 
-import { Entity, attack, formatDamageNumber } from './combat.js';
+import { Entity, attack, formatDamageNumber, DEFAULT_MP } from './combat.js';
 import { manhattan } from './utils.js';
 import { stepEntity, fleeStep } from './pathing.js';
 import { tickNpcState } from './npc.js';
@@ -460,6 +460,8 @@ export class Enemy {
             // Law 2 positional: a mid-fight reload must not erase a spun
             // victim's recovery turn (that would hand back the free hit).
             _spunTurns: this._spunTurns,
+            // (BP2) A lowered max MP survives a reload. Left out while it is the default.
+            ...((this.entity.maxMp !== DEFAULT_MP || this.entity.mp !== DEFAULT_MP) ? { maxMp: this.entity.maxMp, mp: this.entity.mp } : {}),
             // (BS2) The mark that he has already mugged you. Left out while unset.
             tookGold: this._tookGold > 0 ? this._tookGold : undefined,
         };
@@ -475,6 +477,10 @@ export class Enemy {
         e.entity.maxHp = Math.max(1, num(s.maxHp, e.entity.maxHp));
         e.entity.hp = Math.max(0, Math.min(num(s.hp, e.entity.maxHp), e.entity.maxHp));
         e.entity.alive = s.alive !== false;
+        if (typeof s.maxMp === 'number' && isFinite(s.maxMp)) {   // (BP2)
+            e.entity.maxMp = Math.max(0, s.maxMp);
+            e.entity.mp = Math.max(0, Math.min(num(s.mp, e.entity.maxMp), e.entity.maxMp));
+        }
         e.state = s.state || 'idle';
         e.fsmState = s.fsmState ?? null;
         e._lastWanderTurn = num(s.lastWanderTurn, 0);

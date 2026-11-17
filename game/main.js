@@ -107,6 +107,7 @@ import * as Settings from './settings.js'; // [settings] options/accessibility s
 import { spiritToShow } from './spirit-replay.js';                                        // (heroic spirits) the boss-door replay
 import { introAt, isSkipKey } from './tv-intro.js';                                     // (TV1) the TV opening before the title
 import { arcAllSlots, arcVisible, arcSlotAt, arcFaded, ARC_MAX } from './fight-arc.js';                  // (FA1) the arc of attacks under you in a fight
+import { applyCompactor, compactorBeat, breakCompactor, resetCompactor, isCompactor } from './compactor.js';   // (TC1) the trash compactor room
 import { fighters, joiners } from './fight-area.js';                                     // (fight-fog) who is in the fight
 import { fightStartKind, entranceFor, fightFxActive } from './fight-entrance.js'; // (fight-fog) how it began, and how long its fog moves
 import { createCascade, CASCADE_BEAT_MS, LUNGE_MS } from './cascade.js';           // (turn-model C1) the enemy phase, one actor at a time
@@ -232,7 +233,7 @@ const CONTINUE_ZONE_NAMES = {
     'gorge-map.json': 'GORGE', 'valley-map.json': 'VALLEY', 'factory-map.json': 'FACTORY',
     'carnival-map.json': 'CARNIVAL', 'graveyard-map.json': 'GRAVEYARD',
     'wilderness-map.json': 'WILDERNESS', 'frozen-map.json': '[FROZEN AREA]',
-    'side-area-map.json': '[SIDE AREA]',
+    'side-area-map.json': '[SIDE AREA]', 'compactor-map.json': '[COMPACTOR ROOM]',
 };
 
 class Game {
@@ -244,6 +245,7 @@ class Game {
         this.worldTick = 0;   // Town Clock — ambient wander beats (see WORLD_TICK_MS)
         this._nightLevel = 0; // Town Clock day/night — 0 = full day (lighting off), 1 = deep night
         this._dayClock = 0;   // actions into the day, 0..DAY_LENGTH_ACTIONS-1, driving _nightLevel (saved)
+        this._compactor = null;   // (TC1) the trash compactor room's count and door, made on first use (compactor.js; saved as world.compactor)
 
         // Player
         this.playerX     = 0;
@@ -827,6 +829,7 @@ class Game {
         this._openBridgeIfCarFixed();
         this._openCarrionRoadIfRuled?.();   // `?.`: stand-in games in tests don't carry it
         this._openDowntownGateIfSlid?.();   // (TX6)
+        this._applyCompactor?.();   // (TC1) the compactor room's walls and door, from its state
         // (fight-fog) Whatever fog was up belongs to the map you left.
         this.renderer.dropFightFog();
         this._render();
@@ -1195,6 +1198,13 @@ class Game {
         this._log('[TEXT]', 'transition');
         this.autosave?.({ force: true });
     }
+
+    // (TC1) The trash compactor room as its state says: walls, door, and no machine once it is broken.
+    _applyCompactor() { applyCompactor(this); }
+    _compactorBeat() { return compactorBeat(this); }
+    _breakCompactor(enemy) { return breakCompactor(this, enemy); }
+    _resetCompactor() { return resetCompactor(this); }
+    _isCompactor(e) { return isCompactor(e); }
 
     _openDowntownGateIfSlid() {
         if (!this.questEngine || !this.map || this.map.zoneName !== 'DOWNTOWN') return;
@@ -3455,7 +3465,10 @@ class Game {
         if (this._pathQueue.length) {
             const node = this._pathQueue.shift();
             const step = this._resolveWalkStep({ dx: node.x - this.playerX, dy: node.y - this.playerY });
-            if (this._autoRepeatShouldStop(step)) { this._pathQueue = []; this._pathArrive = null; }
+            // (TW1) The last step is the tile you aimed at: a tap on a hazard takes you
+            // onto it. Steps before it still halt at a hazard, as held-walk does.
+            const aimed = this._pathQueue.length === 0 && this._hazardIsOnlyThingStopping(step);
+            if (this._autoRepeatShouldStop(step) && !aimed) { this._pathQueue = []; this._pathArrive = null; }
             else { this._doMove(step); return; }
         } else if (this._pathArrive) {
             const arrive = this._pathArrive; this._pathArrive = null; arrive();
@@ -3554,6 +3567,18 @@ class Game {
         if (puddleAt(this._puddles, nx, ny)) return true;         // (poisons) a puddle is a hazard too
 
         return false;
+    }
+
+    // (TW1) True when the only reason to halt before `dir` is a hazard or puddle on
+    // the tile: open floor, no hostile, no container. The aimed last step of a
+    // click-to-walk may go onto such a tile; a wall, a hostile or a container still stops it.
+    _hazardIsOnlyThingStopping(dir) {
+        const nx = this.playerX + dir.dx, ny = this.playerY + dir.dy;
+        if (!this.map.isWalkable(nx, ny)) return false;
+        if (this.enemies.some(e => e.x === nx && e.y === ny && this._isHostileToPlayer(e))) return false;
+        if (this.containers.some(c => c.x === nx && c.y === ny)) return false;
+        const td = this.map.getTileDef(nx, ny);
+        return !!(td && td.hazard) || !!puddleAt(this._puddles, nx, ny);
     }
 
     // ── Item Selection & Overlay ──────────────────────────────────────────────
@@ -4973,6 +4998,10 @@ class Game {
         // too, in lockstep with the fight rather than freezing.
         this._worldBeat({ ambient: this._inCombat() });
 
+        // (TC1) In the compactor room every committed action counts toward the next wall step; the
+        // last step crushes you, and the beat ends there.
+        if (this._compactorBeat?.()) return;
+
         // (zone pursuit) A wedged door takes a pounding from the pursuers trapped
         // behind it; it bursts when their blows break it.
         this._tickJammedDoor();
@@ -5269,7 +5298,7 @@ class Game {
     // neutrals get their ladder ticked, which is Thieve's business: a neutral who
     // notices you is a WITNESS, and that is the whole theft rule.
     _earshot() {
-        return (this.enemies || []).filter(isHostile);
+        return (this.enemies || []).filter(e => isHostile(e) && !this._isCompactor?.(e));   // (TC1) the compactor is deaf: noise never wakes it
     }
 
     // Stand everyone down. Called on a zone change, on the retry after a defeat,
@@ -5698,6 +5727,7 @@ class Game {
         audio.playSfx('enemy-killed'); // [audio] K.O. sting on a kill
         this._spawnEventWord(enemyObj.x, enemyObj.y, 'K.O.!', '#ff8822', 22);
         this._log(`[Defeated ${enemyObj.entity.name}]`, 'combat');
+        this._breakCompactor?.(enemyObj);   // (TC1) the compactor falling stops the walls and opens the door
         this.emitGameEvent('enemy_killed', {
             type: enemyObj.type, id: enemyObj.id, x: enemyObj.x, y: enemyObj.y, tag: enemyObj.tag,
         });
@@ -5959,6 +5989,7 @@ class Game {
     // wheel's offensive verbs actually land on the people around you.
     _onEntityHarmed(target, { kind = 'attack' } = {}) {
         if (!target || !target.entity || !target.entity.isAlive() || target._ally) return;
+        if (this._isCompactor?.(target)) return;   // (TC1) a machine that never acts: a blow does not provoke it
         // (FIN2) Hitting the Financier first starts the same fight talking to him does.
         if (this._finaleOnHarmed?.(target)) return;
         if (isHostile(target)) {                     // already hostile — nothing to provoke,
@@ -6559,6 +6590,7 @@ class Game {
     }
 
     _resolveDefeat() {
+        this._resetCompactor?.();   // (TC1) a defeat in the compactor room starts it over, door open
         const by = this._lastDefeatedBy;
         this._lastDefeatedBy = null;
         // A boss in your fight when you went down (whoever landed the blow, its ally
@@ -6809,6 +6841,7 @@ class Game {
         this._shieldBlocks = {};   // a new game starts with every shield block ready
         this._dayClock = 0;
         this._nightLevel = 0;
+        this._compactor = null;   // (TC1) a new game's compactor room starts as new
         this._dispositionDecayTurns = 0;
         // The world's memory of the old run. Cleared BEFORE _loadMap, which reads
         // it to decide what the town spawns (collected items stay gone, looted

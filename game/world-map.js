@@ -9,7 +9,7 @@
 //
 // [SIDE AREA]—[DOWNTOWN]—[CANYON]—[GORGE]   (the side area's gate is fenced shut until TX6)
 //            |  (bridge / grapple)
-//  [FACTORY]—[TOWN]—[SEWER]
+// [COMPACTOR]—[FACTORY]—[TOWN]—[SEWER]
 //    |       |
 //    |   [CARNIVAL]
 //    |       |
@@ -25,7 +25,10 @@ export const WORLD_ZONES = [
     // The side area (plans/tx5-downtown-side-area.md): off the spine, behind a fenced gate on Downtown's
     // west edge. Its name is a placeholder.
     { zoneName: '[SIDE AREA]', label: '[SIDE AREA]', col: 1, row: 0, connects: ['DOWNTOWN'] },
-    { zoneName: 'FACTORY',    label: 'FACTORY',    col: 1, row: 1, connects: ['TOWN', '[FROZEN AREA]'] },
+    { zoneName: 'FACTORY',    label: 'FACTORY',    col: 1, row: 1, connects: ['TOWN', '[FROZEN AREA]', '[COMPACTOR ROOM]'] },
+    // The trash compactor room (plans/tc1-trash-compactor-walls.md): off the Factory's south-west
+    // door. Its name is a placeholder; the box sits west of the Factory.
+    { zoneName: '[COMPACTOR ROOM]', label: '[COMPACTOR ROOM]', col: 0, row: 1, connects: ['FACTORY'] },
     { zoneName: 'TOWN',       label: 'TOWN',       col: 2, row: 1, connects: ['DOWNTOWN', 'FACTORY', 'SEWER', 'CARNIVAL'] },
     { zoneName: 'SEWER',      label: 'SEWER',      col: 3, row: 1, connects: ['TOWN'] },
     { zoneName: 'CARNIVAL',   label: 'CARNIVAL',   col: 2, row: 2, connects: ['TOWN', 'GRAVEYARD'] },

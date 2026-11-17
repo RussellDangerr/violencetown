@@ -25,6 +25,7 @@ import { sanitizeRespawnLists, sanitizeFilledSpots } from './drops.js';
 import { sanitizeRivals } from './rivals.js';
 import { sanitizeSpent } from './npc-memory.js';
 import { sanitizeKnown } from './fight-panels.js';
+import { sanitizeCompactor, compactorEntry } from './compactor.js';
 
 // 2: two hands (plans/ws3-two-hands-left-right.md) — equipment.left joins
 // equipment.weapon, which is now the right hand.
@@ -155,6 +156,7 @@ export function serialize(game) {
             })),
             enemies: (game.enemies || []).map(serEnemy),
             tileDiffs: (game._tileDiffs || []).map(d => ({ x: d.x, y: d.y, id: d.id })),
+            ...compactorEntry(game._compactor),   // (TC1) the trash compactor room; left out while it is as new
             pendingTransition: game._pendingTransition || null,
         },
         quest: game.questEngine ? game.questEngine.serialize() : null,
@@ -431,6 +433,7 @@ export function migrate(raw) {
     // Array.isArray alone let that straight through.
     const objects = (a) => (Array.isArray(a) ? a.filter(e => e && typeof e === 'object') : []);
     r.world.tileDiffs   = objects(r.world.tileDiffs);
+    r.world.compactor   = sanitizeCompactor(r.world.compactor);   // (TC1)
     r.world.enemies     = objects(r.world.enemies);
     r.world.groundItems = objects(r.world.groundItems);
     if (!Array.isArray(r.world.collectedItems)) r.world.collectedItems = [];
@@ -605,6 +608,8 @@ export async function loadInto(game, raw) {
     // 1. baseline map (spawns JSON enemies/items/containers; sets renderer
     //    zone). Missing coords fall back to the map spawn; clamp to bounds so
     //    a malformed save can't strand the player off-map.
+    // (TC1) The trash compactor room's state goes in first: _loadMap paints the room from it.
+    game._compactor = sanitizeCompactor(raw.world.compactor);
     await game._loadMap(raw.mapUrl, p.x, p.y);
     game.playerX = clamp(game.playerX, 0, game.map.width - 1);
     game.playerY = clamp(game.playerY, 0, game.map.height - 1);
@@ -679,6 +684,7 @@ export async function loadInto(game, raw) {
     for (const d of raw.world.tileDiffs) {
         if (game.map.isInBounds(d.x, d.y)) game.setTile(d.x, d.y, d.id);
     }
+    game._applyCompactor?.();   // (TC1) the room as the saved state says: walls, door, and no machine once broken
     game._pendingTransition = raw.world.pendingTransition || null;
     // (FX69) A save that stands the player in a wall (or off the map, clamped to its edge)
     // moves them to the nearest open tile, now that the tile diffs are back in place.
