@@ -12,7 +12,7 @@ import { pickHitMark, HEAVY_HIT_DAMAGE, dodgeChance, DODGE_WORD } from './hit-sp
 import { makeEffectLoop } from './effect-loop.js';                 // one tick of the transient-effects loop, and its refusal to die on a bad frame
 import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK, SLUDGE_DOT, FIRE_QUENCHING_TILES } from './data.js';
 import { puddleTiles, layPuddle, puddleAt, dryPuddles } from './puddles.js';   // (poisons) Sludge Brain's puddles
-import { ITEMS, canStandOn, wornBody, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef, poitionBuff, BOON_KINDS, isBoon } from './items.js';
+import { ITEMS, canStandOn, wornBody, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef, poitionBuff, BOON_KINDS } from './items.js';
 import { WEAPONS, weaponClassOf, FISTS } from './weapons.js';
 import { handPairOf } from './hand-data.js';   // (HB2) two held weapons combine into a named effect
 import { resolveItemDef } from './item-registry.js';
@@ -3665,6 +3665,14 @@ class Game {
         this._render();
     }
 
+    // (BP4) The Remoticon's Use on a boon: leave it holding that item and ask which kind.
+    _deviceOpenBoon(index) {
+        this._deviceSel = null;
+        this.selectedSlot = index;
+        this.state = STATE.ITEM_OVERLAY;
+        this._openBoonChooser();
+    }
+
     _pickOverlay(index) {
         const opt = this.overlayOptions[index];
         if (!opt) return; // no option at that row
@@ -3682,7 +3690,7 @@ class Game {
                 if (opt.label === 'Eat' && this.playerHp >= this.playerMaxHp) {
                     this._log('[TEXT]'); this.state = STATE.ITEM_SELECTED; this._render(); return;
                 }
-                if (isBoon(item)) { this._openBoonChooser(); return; }   // (BP4) ask which kind first
+                if (item.poition && item.poition.permanent && item.useType === 'self') { this._openBoonChooser(); return; }   // (BP4) ask which kind first
                 this._doItemUse(item);
                 break;
             case 'boon':
@@ -7600,7 +7608,7 @@ class Game {
                     // nothing is spent until it is thrown).
                     if (action.arms) { this._armThrow(idx); audio.playSfx('menu-confirm'); return; }
                     // (BP4) A boon asks which kind first: hand over to the item list's chooser.
-                    if (isBoon(def)) { this._deviceOpenUses(idx); this._openBoonChooser(); audio.playSfx('menu-confirm'); return; }
+                    if (def.poition && def.poition.permanent && def.useType === 'self') { this._deviceOpenBoon?.(idx); audio.playSfx('menu-confirm'); return; }   // inline test and ?. call, as the lines above: older tests lift this method
                     // Route through resolveUse like canonical _doItemUse, but GATE the
                     // removal the same way. Only a self-use (heal) or an equip
                     // (moves onto the body) truly consumes it here, and only a real use

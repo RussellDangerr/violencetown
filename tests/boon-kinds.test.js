@@ -69,9 +69,9 @@ test('the chooser lists one plain row per kind and no [TEXT]', () => {
 });
 
 test('Use asks first; a picked row drinks; closing keeps the poition', () => {
-    assert.match(mainSrc, /if \(isBoon\(item\)\) \{ this\._openBoonChooser\(\); return; \}/);
+    assert.match(mainSrc, /if \(item\.poition && item\.poition\.permanent && item\.useType === 'self'\) \{ this\._openBoonChooser\(\); return; \}/);
     assert.match(mainSrc, /case 'boon':\s*this\._boonKind = opt\.kind;[^\n]*\s*this\._doItemUse\(item\);/);
-    assert.match(mainSrc, /if \(isBoon\(def\)\) \{ this\._deviceOpenUses\(idx\); this\._openBoonChooser\(\)/);
+    assert.match(mainSrc, /if \(def\.poition && def\.poition\.permanent && def\.useType === 'self'\) \{ this\._deviceOpenBoon\?\.\(idx\)/);
     // Escape / tap outside on the item list returns to ITEM_SELECTED without resolving anything.
     assert.match(mainSrc, /case STATE\.ITEM_OVERLAY:\s+this\.state = STATE\.ITEM_SELECTED;/);
 });
