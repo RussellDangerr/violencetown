@@ -777,6 +777,7 @@ class Game {
         // (BN2) Your old character stands in Town when a snapshot is kept; none, nobody.
         for (const e of this._echoEnemies?.(url, dead) ?? []) this.enemies.push(spawnEnemy(e, this._muggedIds, this._robbed));
         this._applySpentChoices?.(url);   // (NM1) a one-time talk choice you used stays used
+        this._applyRecruits?.();   // (SG1) the strongman you recruited is still yours
         this._rivalArrived?.(url);   // (plans/ne1-rival-remembered.md) the rival is at its post, kit and all
         this._finaleOnLoad?.(url);   // (FIN3) the vault after phase 1: no Financier, the beast in his corner
 
@@ -1027,6 +1028,7 @@ class Game {
         this._claimSpots?.(back);
         this._rememberChests?.();
         this._rememberSpentChoices?.();
+        this._rememberRecruits?.();
     }
 
     // (RO1) A new game's picks for the returning boss spots, and no spot filled yet.
@@ -1048,6 +1050,25 @@ class Game {
     // (RO1) Of the kills just due back, those with a returning spot fill it instead of returning.
     _claimSpots(back) {
         claimSpots(back, (this._filledSpots ||= {}), (url, id) => spotFor(url, id));
+    }
+
+    // (SG1) The strongman you recruited is written down as a quest flag when you leave, and only
+    // then: a game that never recruits him carries nothing. Hit him and he is no longer an ally,
+    // so the flag drops.
+    _rememberRecruits() {
+        const s = (this.enemies || []).find(e => e.id === 'strongman');
+        const flags = this.questEngine?.state?.flags;
+        if (!s || !flags) return;
+        if (s._ally) flags.strongmanRecruited = true;
+        else delete flags.strongmanRecruited;
+    }
+
+    // (SG1) After a zone's people spawn: a recruited strongman comes back as your ally, through the
+    // same flip a gift or a talk uses.
+    _applyRecruits() {
+        if (!this.questEngine?.getFlag?.('strongmanRecruited')) return;
+        const s = (this.enemies || []).find(e => e.id === 'strongman');
+        if (s && !s._ally) applyDispositionDelta(s, 100);
     }
 
     // (NM1) Give the people just spawned in `url` back the one-time choices you used.
