@@ -3686,9 +3686,10 @@ class Game {
 
     // (BP4) Drinking a boon asks what it raises: the item list is swapped for one row per kind.
     // Escape / tap outside close it as for any item list, keeping the poition and the turn.
+    _boonCapped() { return boonCount(this) >= BOON_CAP; }
     _openBoonChooser() {
         // (BP5) Past the cap the poition stays in the bag and no turn passes.
-        if (boonCount(this) >= BOON_CAP) { this._log(BOON_CAP_LINE); this.selectedSlot = -1; this.state = STATE.IDLE; this._render(); return; }
+        if (this._boonCapped?.()) { this._log(BOON_CAP_LINE); this.selectedSlot = -1; this.state = STATE.IDLE; this._render(); return; }
         this.overlayOptions = Object.entries(BOON_KINDS).map(([kind, k]) => ({ label: `${k.label} +${k.amount}`, action: 'boon', kind }));
         this.overlayCursor = 0;
         this._overlayOpenedAt = performance.now();

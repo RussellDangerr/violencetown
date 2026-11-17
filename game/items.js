@@ -61,7 +61,8 @@ export const BOON_KINDS = {
 };
 // (BP5, BPR4 a) At most 12 boons drunk in a game, counted across every kind.
 export const BOON_CAP = 12;
-export const boonCount = (game) => Object.values((game && game.boons) || {}).reduce((a, n) => a + (Number(n) || 0), 0);
+// Drinks, not points: the record holds stat gained, so each kind is divided by its amount.
+export const boonCount = (game) => Object.entries((game && game.boons) || {}).reduce((a, [k, n]) => a + (BOON_KINDS[k] ? Math.round((Number(n) || 0) / BOON_KINDS[k].amount) : 0), 0);
 export const BOON_CAP_LINE = `You have drunk ${BOON_CAP} boon poitions, the most you can. This one stays in your bag.`;
 export const ITEMS = {
     rock: {

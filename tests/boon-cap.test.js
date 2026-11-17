@@ -37,9 +37,11 @@ test('the chooser refuses at the cap: logs the line, no chooser, no turn', () =>
     assert.ok(at > 0);
     const end = mainSrc.indexOf('\n    }', at) + 6;
     const body = mainSrc.slice(at + 4 + '_openBoonChooser'.length, end);
-    const f = new Function('BOON_KINDS', 'BOON_CAP', 'BOON_CAP_LINE', 'boonCount', 'STATE', `'use strict'; return function ${body}`)(BOON_KINDS, BOON_CAP, BOON_CAP_LINE, boonCount, { IDLE: 'idle' });
+    const f = new Function('BOON_KINDS', 'BOON_CAP_LINE', 'STATE', `'use strict'; return function ${body}`)(BOON_KINDS, BOON_CAP_LINE, { IDLE: 'idle' });
+    const cap = mainSrc.indexOf('    _boonCapped() {');
+    assert.ok(cap > 0 && mainSrc.slice(cap, cap + 120).includes('boonCount(this) >= BOON_CAP'));
     const logs = [];
-    const g = { boons: { mana: 12 }, selectedSlot: 3, state: 'x', _log: (m) => logs.push(m), _render: () => {}, overlayOptions: null };
+    const g = { boons: { mana: 120 }, _boonCapped() { return boonCount(this) >= BOON_CAP; }, selectedSlot: 3, state: 'x', _log: (m) => logs.push(m), _render: () => {}, overlayOptions: null };
     f.call(g);
     assert.deepEqual(logs, [BOON_CAP_LINE]);
     assert.equal(g.overlayOptions, null);
