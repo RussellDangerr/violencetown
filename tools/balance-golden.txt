@@ -87,6 +87,8 @@ town/townie-mince                 Violencian                  100     -80      0
 town/townie-praline               Violencian                  100     -80      0        6              1              1      -
 town/townie-s                     Violencian                  100     -80      0        5              1              1      -
 town/townie-w                     Violencian                  100     -80      0        2              1              1      -
+tunnels/moleman-1                 Moleman                     100       0     12       35              5              4      9
+tunnels/moleman-2                 Moleman                     100       0     12       35              5              4      9
 vault/vault-financier             Banker                      100       6     12      148              8              5      9
 wilderness/wilderness-bear        Bear                        100       3     10       70              6              4     10
 
@@ -130,6 +132,7 @@ graveyard                 78
 sewer                    145
 sewer-north               10
 town                      30
+tunnels                    8
 vault                     44
 wilderness                10
 sinks: burnGold('heal'|'trick'), bribes/buyouts via transferGold
