@@ -5874,6 +5874,9 @@ class Game {
         return true;
     }
 
+    // (BP3) A finished quest's boon poition. The bag grows a page when full, so it always lands.
+    _grantBoon() { return this._grantItem('boon_poition', '[TEXT]'); }
+
     // ── Allies (bribe-flipped — AGGRO behavior bands) ──────────────────────────
 
     // Is `e` a hostile the player's allies should hunt? Alive, not itself an
