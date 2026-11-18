@@ -218,8 +218,8 @@ describe('the bag: Tab, arrow keys, and the inspector panel', () => {
         r._drawDevice(g);
         const lines = said(texts);
         // (PC10) stats, then the sources; no fact (the Fearmur's is empty)
-        assert.ok(lines.includes('Weapon: 16 damage (+6 vs Wooden Sword). 1 hand, hammer. Hitting the same enemy twice in a row'), lines.join(' | '));
-        assert.ok(lines.includes('frightens it for 3 turns. Grants while worn: Boo! (8 MP). Epic, value 28 GP.'));
+        assert.ok(lines.includes('Weapon: 16 damage (+6 vs Wooden Sword). 1 hand, hammer. Hitting the same enemy twice in a row frightens'), lines.join(' | '));
+        assert.ok(lines.includes('it for 3 turns. Grants while worn: Boo! (8 MP). Epic, value 28 GP.'));
         assert.ok(lines.includes('Found in: Graveyard.'));
         assert.equal(lines.filter(s => s.startsWith('Weapon:')).length, 1, 'one stat block');
     });
@@ -234,8 +234,8 @@ describe('the bag: Tab, arrow keys, and the inspector panel', () => {
         const { r, texts } = rig();
         r._drawDevice(g);
         const lines = said(texts);
-        assert.ok(lines.includes('Weapon: 16 damage (+6 vs Wooden Sword). 1 hand, whip. Reach 3 tiles. A hit enemy is pulled 1'), lines.join(' | '));
-        assert.ok(lines.includes('tile closer. Grants while worn: Hire Lire (50 GP). Epic, value 26 GP.'));
+        assert.ok(lines.includes('Weapon: 16 damage (+6 vs Wooden Sword). 1 hand, whip. Reach 3 tiles. A hit enemy is pulled 1 tile'), lines.join(' | '));
+        assert.ok(lines.includes('closer. Grants while worn: Hire Lire (50 GP). Epic, value 26 GP.'));
         assert.ok(lines.includes('Found in: Carnival.'));
         assert.ok(!lines.some(s => /hammer/.test(s)), 'the last weapon\'s block is still up');
     });
@@ -248,7 +248,7 @@ describe('the bag: Tab, arrow keys, and the inspector panel', () => {
         press(page, 'ArrowRight');
         const { r, texts } = rig();
         r._drawDevice(g);
-        assert.ok(said(texts).includes('Weapon: 16 damage (same as Gator Tail). 1 hand, hammer. Hitting the same enemy twice in a row'), said(texts).join(' | '));
+        assert.ok(said(texts).includes('Weapon: 16 damage (same as Gator Tail). 1 hand, hammer. Hitting the same enemy twice in a row frightens'), said(texts).join(' | '));
     });
 
     test('every drawn line sits inside the panel and above the buttons', () => {
@@ -258,7 +258,7 @@ describe('the bag: Tab, arrow keys, and the inspector panel', () => {
         press(page, 'ArrowRight');
         const { r, texts, font } = rig();
         r._drawDevice(g);
-        const mine = texts.filter(t => /^Weapon:|^tile closer|^Found in/.test(t.s));
+        const mine = texts.filter(t => /^Weapon:|^closer\.|^Found in/.test(t.s));
         assert.equal(mine.length, 3);
         for (const t of mine) {
             assert.ok(t.x >= panel.x && t.x + font.measure(t.s, t.scale) <= panel.x + panel.w, `${t.s} runs off the panel`);
@@ -276,10 +276,9 @@ describe('the bag: Tab, arrow keys, and the inspector panel', () => {
         press(page, 'ArrowRight');
         const { r, texts } = rig();
         r._drawDevice(g);
-        assert.ok(said(texts).includes('Use: heals 25 HP. Also worn on your front for 2 turns: +1 armour. Used up when used. Epic,'), said(texts).join(' | '));
-        assert.ok(said(texts).includes('value 25 GP.'));
-        assert.ok(said(texts).includes('Dropped by: Alien Invasion, Bigfoot, Financier and 6 more. Sold by: Carrion, Corner Merchant,'));
-        assert.ok(said(texts).includes('Newsstand Kid and 1 more. Found in: Carnival, Sewer, Town.'));
+        assert.ok(said(texts).includes('Use: heals 25 HP. Also worn on your front for 2 turns: +1 armour. Used up when used. Epic, value 25 GP.'), said(texts).join(' | '));
+        assert.ok(said(texts).includes('Dropped by: Alien Invasion, Bigfoot, Financier and 6 more. Sold by: Carrion, Corner Merchant, Newsstand'));
+        assert.ok(said(texts).includes('Kid and 1 more. Found in: Carnival, Sewer, Town.'));
         assert.ok(!said(texts).some(s => /Grants|\bhands?\b/.test(s)));
     });
 });
