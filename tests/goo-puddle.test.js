@@ -190,7 +190,7 @@ describe('who carries it', () => {
         assert.equal(d.useType, 'throw');
         assert.equal(d.enemyThrows, true);
         assert.deepEqual(d.puddle, { kind: 'goo', turns: 8 });
-        assert.match(d.name, /TEXT/);
+        assert.equal(d.name, 'Goo');
     });
     for (const id of ['alien_ally', 'alien_invasion', 'robot_rat']) {
         test(`${id} carries goo and is immune to it`, () => {

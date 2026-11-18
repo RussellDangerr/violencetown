@@ -204,7 +204,7 @@ describe('spreading the oil', () => {
 
     test('the item is a placeholder worth 35', () => {
         assert.equal(ITEMS.oil.baseValue, 35);
-        assert.equal(ITEMS.oil.name, '[TEXT: Oil]');
+        assert.equal(ITEMS.oil.name, 'Oil');
     });
 });
 

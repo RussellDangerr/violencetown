@@ -228,12 +228,12 @@ describe('the barter screen', () => {
 
 describe('no log line nests brackets', () => {
     test('unnestBrackets drops only the nested pairs', () => {
-        assert.equal(unnestBrackets('[Dropped Rock x2]'), '[Dropped Rock x2]');
-        assert.equal(unnestBrackets('[Hit Violencian with Rock - hit]'), '[Hit Violencian with Rock - hit]');
+        assert.equal(unnestBrackets('[Dropped [Rock] x2]'), '[Dropped Rock x2]');
+        assert.equal(unnestBrackets('[Hit [Violencian] with [Rock] - hit]'), '[Hit Violencian with Rock - hit]');
         assert.equal(unnestBrackets('[Smashed [A [B]] on [C]]'), '[Smashed A B on C]');
         assert.equal(unnestBrackets('[Plain line.]'), '[Plain line.]');
         assert.equal(unnestBrackets('[One] [Two]'), '[One] [Two]');
-        assert.equal(unnestBrackets('Rock Rock text'), 'Rock Rock text');
+        assert.equal(unnestBrackets('Rock [Rock] text'), 'Rock [Rock] text');
         assert.equal(unnestBrackets(']stray'), ']stray');
     });
 

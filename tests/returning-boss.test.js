@@ -30,7 +30,7 @@ const standIn = (mugged) => {
 describe('the placeholder', () => {
     test("is the Were-Rat's numbers under a fake name and its own tag", () => {
         const e = ENTRIES.returning_boss, w = ENTRIES.wererat;
-        assert.equal(e.name, '[NAME]');
+        assert.equal(e.name, 'Returning Boss');
         for (const k of ['hp', 'armor', 'damage', 'gold', 'type']) assert.equal(e[k], w[k], k);
         assert.notEqual(e.tag, w.tag);
         assert.ok(e.boss);
@@ -86,7 +86,7 @@ describe('beat the Were-Rat and walk the wait', () => {
     test("the stand-in stands in his place with the Were-Rat's numbers and its own kit", () => {
         const e = standIn();
         assert.equal(e.id, 'wererat_return');
-        assert.equal(e.name, '[NAME]');
+        assert.equal(e.name, 'Returning Boss');
         assert.deepEqual([e.x, e.y], [spot.at.x, spot.at.y]);
         assert.equal(e.entity.hp, ENTRIES.wererat.hp);
         assert.ok(e.loadout.length > 0, 'it has a kit to drop');

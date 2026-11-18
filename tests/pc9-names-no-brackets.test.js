@@ -6,10 +6,12 @@ import { WEAPONS, WEAPON_TIERS, classBase, WEAPON_CLASSES } from '../game/weapon
 import { RINGS } from '../game/ring-data.js';
 import { COSTUMES } from '../game/costumes.js';
 import { Enemy } from '../game/enemies.js';
+import { ENTRIES, OLD_SELF } from '../game/slots.js';
+import { BUFF_DEFS } from '../game/buffs.js';
 
-const wrapped = n => typeof n === 'string' && /^\[.*\]$/.test(n.trim());
-// Stand-in markers are later copy work; only a pure wrapper around a real name is under test here.
-const marker = n => /^\[(TEXT|NAME|PAIR|PERK)/.test(n);
+// A name has no square bracket anywhere. The one exception is a hand-data PAIR name (later copy work).
+const wrapped = n => typeof n === 'string' && /[[\]]/.test(n);
+const marker = () => false;
 
 describe('names carry no wrapping brackets', () => {
     test('every item and weapon name is bare', () => {
@@ -44,5 +46,26 @@ describe('names carry no wrapping brackets', () => {
         const e = new Enemy({ type: 'rat', x: 1, y: 1 });
         assert.ok(e.entity.name.length > 0);
         assert.ok(!wrapped(e.entity.name), e.entity.name);
+    });
+
+    test('placeholder names are plain names, pinned exactly', () => {
+        assert.equal(ITEMS.goo.name, 'Goo');
+        assert.equal(ITEMS.oil.name, 'Oil');
+        assert.equal(ITEMS.strongman_mask.name, 'Power-Wield Mask');
+        assert.equal(ITEMS.boon_poition.name, 'Boon Poition');
+        assert.equal(BUFF_DEFS.goo.name, 'Goo');
+        assert.equal(OLD_SELF.name, 'Old Self');
+        assert.equal(ENTRIES.returning_boss.name, 'Returning Boss');
+        assert.equal(ENTRIES.alien_ally.name, 'Alien Ally');
+    });
+
+    test('no entry, buff or old-self name holds a bracket', () => {
+        const entries = Object.entries(ENTRIES);
+        assert.ok(entries.length > 10);
+        for (const [id, e] of entries) if (e.name !== undefined) assert.ok(!wrapped(e.name), `${id}: ${e.name}`);
+        const buffs = Object.entries(BUFF_DEFS);
+        assert.ok(buffs.length > 5);
+        for (const [id, d] of buffs) if (d.name !== undefined) assert.ok(!wrapped(d.name), `${id}: ${d.name}`);
+        assert.ok(!wrapped(OLD_SELF.name));
     });
 });

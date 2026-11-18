@@ -12,7 +12,7 @@ function stub(over = {}) {
 
 test('boon_poition is a permanent mana poition', () => {
     const d = ITEMS.boon_poition;
-    assert.equal(d.name, '[TEXT]');
+    assert.equal(d.name, 'Boon Poition');
     assert.deepEqual(d.poition, { stat: 'mana', amount: 10, permanent: true });
 });
 
