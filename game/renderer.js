@@ -3206,15 +3206,20 @@ export class Renderer {
         this.font.drawText(ctx, fitName.text, tx, p.y + 12, { color: UI.gold, scale: fitName.scale });
         this.font.drawText(ctx, tag, p.x + p.w - 12, p.y + 14, { color: UI.dim, scale: 1, align: 'right' });
         // (PC10) The stats (a weapon's against the one in your hand), then the fact, then where
-        // it comes from: one paragraph each, wrapped to the panel. Four rows fit above the buttons;
-        // what does not fit is cut with "..." on the last row.
-        const MAX_ROWS = 4;
-        let statLines = itemParagraphsCompact(def, game.equipment && game.equipment.weapon)
-            .flatMap(par => wrapToWidth(par, room, this._measurer(1)));
-        if (statLines.length > MAX_ROWS) {
-            statLines = [...statLines.slice(0, MAX_ROWS - 1), this._fitText(statLines.slice(MAX_ROWS - 1).join(' '), room, 1, 1).text];
+        // it comes from: one paragraph each, wrapped to the panel at a slightly smaller scale
+        // (VT323 scales smoothly) so five rows fit above the buttons. The stats paragraph gives
+        // up rows, with "..." on its last, before the fact or the sources lose theirs.
+        const MAX_ROWS = 5, TS = 0.9, STEP = 10.5;
+        const paras = itemParagraphsCompact(def, game.equipment && game.equipment.weapon)
+            .map(par => wrapToWidth(par, room, this._measurer(TS)));
+        const others = paras.slice(1).reduce((n, l) => n + l.length, 0);
+        const statRows = Math.max(1, MAX_ROWS - others);
+        if (paras.length && paras[0].length > statRows) {
+            paras[0] = [...paras[0].slice(0, statRows - 1), this._fitText(paras[0].slice(statRows - 1).join(' '), room, TS, TS).text];
         }
-        statLines.forEach((line, i) => this.font.drawText(ctx, line, tx, p.y + 32 + i * 12, { color: UI.text, scale: 1 }));
+        let statLines = paras.flat();
+        if (statLines.length > MAX_ROWS) statLines = [...statLines.slice(0, MAX_ROWS - 1), this._fitText(statLines.slice(MAX_ROWS - 1).join(' '), room, TS, TS).text];
+        statLines.forEach((line, i) => this.font.drawText(ctx, line, tx, p.y + 32 + i * STEP, { color: UI.text, scale: TS }));
 
         // Action buttons — one per action, on the shared action-row rects. Drop is
         // destructive (whole-stack, no confirm) so it wears red, not gold — with
