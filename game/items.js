@@ -462,7 +462,7 @@ export const ITEMS = {
         fact: '',
         category: 'quest',
         useType: 'none',
-        useHint: "[The Cataclysmic Converter belongs in your car — head to your car in Town and tap (or walk into) it to drop it back in.]",
+        useHint: 'Return it to your car in Town: walk into the car or tap it.',
         consumable: false,
         questItem: true,
         // (Phase 6d) An ORANGE tier despite baseValue 0: worthless to ordinary

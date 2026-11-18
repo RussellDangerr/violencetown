@@ -11,7 +11,7 @@ One generated text for every item, ring and weapon: stats, then at most one shor
    field (damage, damage type, range, reach, onHit, poition, puddle, heal, effect, armour and
    perks, sewerFare, consumable, quest item, tier, value). It extends `itemStatLine`,
    `poitionLine` and `ARMOUR_PERKS`.
-2. `tools/item-sources.mjs` writes `game/item-sources.json` (dropped by, sold by, found in)
+2. `tools/item-sources.mjs` writes `game/item-sources.js` (a generated module; dropped by, sold by, found in)
    from map loadouts, slot ENTRIES loadouts, shop stock, THROWS_CARRIED and the tier table.
    A test fails if the file is stale.
 3. Each flavour `description` becomes a short `fact`: empty, or one physical fact he or the data
@@ -28,5 +28,15 @@ One generated text for every item, ring and weapon: stats, then at most one shor
 Quest stage descriptions (quests.js), NPC dialogue, map text, new item names.
 
 ## Status
-Blocked at the start: tests outside the touches pin the strings this slice changes (see the
-BLOCKED report). Nothing is built yet.
+Built. The tests that pinned item text were outside the first touches; the loop widened them
+(ruling PC10R1) and they are re-pinned exactly.
+
+- The sources are a JS module, not JSON: dev-server.py's cache-buster and the Cloudflare headers
+  only cover .js, so a JSON import could run with stale data beside new code.
+- npc.js THROWS_CARRIED is not read as a source. It says only what an enemy throws instead of
+  eating; who carries the item already comes from the loadouts, which spawnEnemy returns.
+- `itemStatLine` is no longer called in the game (the panels use describeItem). It is left in
+  place with its tests; PC12 removes it.
+- A thrown item hits enemies only, plus whoever stands on an aimed centre tile (items.js
+  resolveThrow); the text says so.
+- A thing with no base value (a ring) prints no tier or value.
