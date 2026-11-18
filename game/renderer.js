@@ -2699,7 +2699,7 @@ export class Renderer {
         //   the canonical inventory).
         const wpn = handWeapon(game.equipment);
         if (wpn && this.font) {
-            const name = wpn.name.replace(/[\[\]]/g, '').toUpperCase();
+            const name = wpn.name.toUpperCase();
             this.font.drawText(ctx, `${name}  ${wpn.damage} DMG`, x + 8, by, {
                 color: UI.text, scale: 1,
             });
@@ -3314,7 +3314,7 @@ export class Renderer {
         for (const slot of data.slots) {
             this.font.drawText(ctx, clip(slot.label), tx, y, { color: UI.dim, scale: 1 });
             y += LH - 2;
-            const worn = slot.name ? clip(slot.name.replace(/[\[\]]/g, '').toUpperCase()) : '-';
+            const worn = slot.name ? clip(slot.name.toUpperCase()) : '-';
             this.font.drawText(ctx, worn, tx, y, { color: slot.name ? UI.text : UI.dim, scale: 1 });
             y += LH;
         }
@@ -3362,7 +3362,7 @@ export class Renderer {
             y += LH;
         } else {
             for (const k of t.worn) {
-                this.font.drawText(ctx, clip(k.name.replace(/[\[\]]/g, '').toUpperCase()), tx, y, { color: UI.text, scale: 1 });
+                this.font.drawText(ctx, clip(k.name.toUpperCase()), tx, y, { color: UI.text, scale: 1 });
                 y += LH;
             }
         }
@@ -3376,7 +3376,7 @@ export class Renderer {
             // Room is finite; the rest is honest about being cut off.
             const room = Math.max(1, Math.floor((R.y + R.h - PAD - y - LH * 2) / LH));
             for (const k of t.kit.slice(0, room)) {
-                this.font.drawText(ctx, clip(k.name.replace(/[\[\]]/g, '').toUpperCase()), tx, y, { color: UI.text, scale: 1 });
+                this.font.drawText(ctx, clip(k.name.toUpperCase()), tx, y, { color: UI.text, scale: 1 });
                 y += LH;
             }
             if (t.kit.length > room) {

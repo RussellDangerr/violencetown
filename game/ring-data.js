@@ -9,7 +9,7 @@
 export const RINGS = {
     rat_ring: {
         id: 'rat_ring',
-        name: '[Rat Ring]',
+        name: 'Rat Ring',
         description: 'A braid of coarse wererat fur set in dull silver. It twitches when you look away.',
         tags: ['vermin', 'sewer'],
         remembranceFrom: 'wererat_boss',
@@ -18,7 +18,7 @@ export const RINGS = {
     },
     fire_ring: {
         id: 'fire_ring',
-        name: '[Fire Ring]',
+        name: 'Fire Ring',
         description: 'A band of blackened copper that is always a little too warm to wear.',
         tags: ['fire'],
         passive: { fireDamage: 10 },   // +10% (applied in combat, Task 6)
@@ -32,7 +32,7 @@ export const FUSIONS = [
         // rat. NOT a live animal — a rat of cinder and grudge (content rule).
         pair: ['vermin', 'fire'],
         id: 'ember_rat',
-        name: '[Ember Rat]',
+        name: 'Ember Rat',
         grants: 'ember_rat',
     },
 ];
