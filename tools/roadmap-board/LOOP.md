@@ -229,11 +229,27 @@ refactors that leave the autoplay golden untouched, tooling, commit order.
 **Grey areas:**
 - **A placeholder must exist:** for art, a tinted square; for tuning, a number left exactly as
   today. List it under "Needs your eye".
-- **Placeholder copy is plain, never `[TEXT]`:** the loop writes flat functional lines. Plain
-  means: what the thing is, what it does, and what the player should do about it, in flat
-  sentences. No jokes, no character voice, no story prose. A character with no name goes by its
-  role ("Taxi driver"). Lines that are already creative writing stay as they are. List each
-  plain line under "Needs your eye" so he can replace it.
+- **Copy is plain facts (PCR3):** every line a player reads that the loop writes or touches is
+  plain, flat and true to the code. It says what the thing is, what it does, its numbers, where
+  it comes from, and what the player should do about it. Nothing else.
+  - No jokes, no character voice, no atmosphere, no story prose.
+  - Keep every name, whoever invented it. A character with no name goes by its role ("Taxi
+    driver").
+  - Keep his own quoted lines and the design facts written in `plans/`.
+  - No square brackets in player-visible text: no `[TEXT]`, no `[placeholder]`.
+  - Lines that are already AI-written creative writing are replaced with plain facts too; they
+    no longer stay as they are.
+  - Why: people are wary of generative AI in creative work, and he wants the game's creative
+    side to come from people. He writes the flavour himself later.
+  - List each plain line under "Needs your eye" so he can replace it.
+- **Item text pattern:** first the generated stats line (every number and interaction), then at
+  most one short physical fact that he or the item's data already states, then the generated
+  "Dropped by / Sold by / Found in" line. A reader should learn the item's class, role and
+  source from the text alone.
+- **A copy slice greps the tests first.** Before editing, grep `tests/` for every string it will
+  change. If any test that pins one of those strings is outside `touches`, report BLOCKED with
+  the full list (file and string) and edit nothing. Under PCR3 the loop widens `touches` to
+  cover those tests and builds again.
 - **The golden moved:** something a player sees changed. Stop and ask.
 - **Unsure:** ask only if guessing wrong would cost more than about an hour to redo. Otherwise
   pick, flag it under "Needs your eye", and let him overrule.
@@ -403,7 +419,8 @@ the reading Caelan would otherwise do before Merge it. It runs no game and no te
 already ran the gates, and §4 runs them again on the merged tree. It runs the guard, checks that
 the branch merges cleanly onto dev, and marks each acceptance line **TEST** (a test covers it; the
 mark quotes that line with its `file:line`), **PICTURE** (only a picture can show it; the path is
-for his eye) or **NOT SHOWN**. It never judges looks or feel.
+for his eye) or **NOT SHOWN**. It also checks every new or changed line of copy against the code
+and reports any cause or effect the code doesn't have (§6, PCR3). It never judges looks or feel.
 
 - **When:** once per branch sha. A Review slice is due a check when its card has no `checked`, or
   `checked.sha` is not its branch's sha. At most 3 checks a pass, oldest first.
