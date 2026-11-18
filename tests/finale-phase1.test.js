@@ -234,11 +234,11 @@ describe('the data', () => {
         assert.ok(getDialogue(FINALE_PHASE1.sunMan.dialogueId), 'Sun Man has a conversation stub so he can be named');
     });
 
-    test('every line the player reads is the [TEXT] placeholder', () => {
+    test('every line the player reads is plain', () => {
         const d = getDialogue('financier_vault');
-        assert.equal(d.greeting, '[TEXT]');
-        for (const c of d.choices) { assert.equal(c.label, '[TEXT]'); assert.equal(c.reply, '[TEXT]'); }
-        assert.equal(getDialogue('sun_man').greeting, '[TEXT]');
+        assert.equal(d.greeting, 'I am the Financier. This is my vault. Talk to me and the fight starts.');
+        assert.deepEqual(d.choices.map(c => [c.label, c.reply]), [['Start the fight with the Financier', 'The Financier turns on you and Sun Man joins you for a few turns.']]);
+        assert.equal(getDialogue('sun_man').greeting, 'I am Sun Man. I fight beside you against the Financier for a few turns.');
     });
 
     test('Sun Man\'s numbers are the encounter\'s stand-ins: three turns, a lot more than the lion\'s 25', () => {

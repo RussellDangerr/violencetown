@@ -204,8 +204,8 @@ describe('the strongman you can talk into walking with you (SG1)', () => {
         assert.ok(!isHostile(s), 'he does not attack');
         assert.equal(s.type, 'Strongman');
         const d = getDialogue('strongman');
-        assert.equal(d.greeting, '[TEXT]');
-        assert.ok(d.choices.every(c => c.label === '[TEXT]' && c.reply === '[TEXT]'));
+        assert.equal(d.greeting, 'I am the Strongman of the Carnival.');
+        assert.deepEqual(d.choices.map(c => [c.label, c.reply]), [['Ask him to fight on your side', 'The Strongman agrees. He fights on your side now.']]);
     });
 
     test('taking the recruit line makes him an ally who fights beside you', async () => {

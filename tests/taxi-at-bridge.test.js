@@ -171,8 +171,8 @@ describe('the map: the taxi and its driver at the bridge', () => {
         assert.equal(text('bridge'), 'This is the bridge north out of Town. A barricade blocks it. Fix your car, then drive north across the bridge.');
         assert.equal(driverSpawn.name, 'Taxi driver');
         const d = getDialogue('taxi_driver');
-        assert.equal(d.name, '[TEXT]');
-        assert.equal(d.greeting, '[TEXT]');
+        assert.equal(d.name, 'Taxi driver');
+        assert.equal(d.greeting, 'I am the taxi driver. My taxi crosses the bridge north out of Town, and it needs the cataclysmic converter to run.');
         const q = QUESTS.fix_car;
         assert.equal(q.title, 'Fix the car');
         assert.deepEqual(q.stages.map(s => s.objective), [

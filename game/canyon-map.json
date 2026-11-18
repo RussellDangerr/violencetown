@@ -31,7 +31,7 @@
         {"id": "pike", "type": "Pike", "name": "Pike", "dialogueId": "pike", "x": 5, "y": 12, "hp": 100, "armor": 5, "damage": 9, "disposition": 30, "bribeable": true, "vendor": true, "stock": ["grappling_hook"], "tag": "pike_boss", "behavior": ["IDLE"], "sightRange": 4, "barks": ["[Pike: Careful near the wagon.]", "[Pike: Rope ain't cheap, friend.]", "[Pike: The river took my years. Left me all this patience.]"], "barkEveryTurns": 6, "adjacencyBark": "[Pike: Buyin' the rope, or just gawkin'? Press E.]"},
         {"id": "canyon-rat-1", "sewerDweller": true, "gold": 1, "loadout": [], "type": "Rat", "name": "Canyon Rat", "x": 13, "y": 6, "hp": 100, "armor": -30, "damage": 6, "tag": "canyon_critter", "sightRange": 6, "vermin": true, "barks": ["[skreee!]", "[hiss]"], "barkEveryTurns": 5},
         {"id": "canyon-rat-2", "sewerDweller": true, "gold": 1, "loadout": [], "type": "Rat", "name": "Canyon Rat", "x": 18, "y": 16, "hp": 100, "armor": -30, "damage": 6, "tag": "canyon_critter", "sightRange": 6, "vermin": true, "barks": ["[chitter]", "[skree]"], "barkEveryTurns": 5},
-        {"id": "townie-driver", "type": "Violencian", "name": "[TEXT]", "dialogueId": "taxi_driver_canyon", "disposition": 0, "x": 28, "y": 6, "hp": 100, "armor": -80, "damage": 0, "sightRange": 4, "ambient": true, "behavior": ["IDLE"], "wanderRadius": 0, "wanderEveryTurns": 2}
+        {"id": "townie-driver", "type": "Violencian", "name": "Taxi driver", "dialogueId": "taxi_driver_canyon", "disposition": 0, "x": 28, "y": 6, "hp": 100, "armor": -80, "damage": 0, "sightRange": 4, "ambient": true, "behavior": ["IDLE"], "wanderRadius": 0, "wanderEveryTurns": 2}
     ],
     "items": [],
     "examinables": [

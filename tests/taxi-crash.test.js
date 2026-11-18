@@ -207,9 +207,9 @@ describe('raw fuel: the driver goes down with you', () => {
         assert.equal(driverOf(canyon).dialogueId, 'taxi_driver_canyon');
         const d = getDialogue('taxi_driver_canyon');
         assert.ok(d, 'the dialogue id resolves');
-        assert.equal(d.greeting, '[TEXT]');
+        assert.equal(d.greeting, 'I am the taxi driver. The taxi crashed into the Canyon with me in it.');
         assert.ok(d.choices.length >= 1);
-        for (const c of d.choices) { assert.equal(c.label, '[TEXT]'); assert.equal(c.reply, '[TEXT]'); }
+        assert.deepEqual(d.choices.map(c => [c.label, c.reply]), [['Ask how to get out of the Canyon', 'Climbing out needs the grappling hook. Pike has it.']]);
         assert.ok(DIALOGUES.taxi_driver, 'the bridge driver keeps his own entry');
         assert.notEqual(DIALOGUES.taxi_driver, d);
     });

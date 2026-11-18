@@ -739,14 +739,14 @@ describe('the assistant manager never fights, wanders, and talks', () => {
         assert.equal(verb.label, 'Talk');
     });
 
-    test('talking opens [TEXT] lines and nothing else', () => {
+    test('talking opens plain lines and nothing else', () => {
         const d = getDialogue(ENTRIES.assistant_manager.dialogueId);
         assert.ok(d, 'no dialogue under his dialogueId');
-        assert.equal(d.greeting, '[TEXT]');
+        assert.equal(d.greeting, 'I am the Assistant manager of the Carnival. I only talk.');
         assert.ok(d.choices.length > 0);
         for (const c of d.choices) {
-            assert.equal(c.label, '[TEXT]');
-            assert.equal(c.reply, '[TEXT]');
+            assert.equal(c.label, 'Talk to the Assistant manager');
+            assert.equal(c.reply, 'The Assistant manager has nothing to give you.');
             assert.equal(c.cost, undefined, 'he asks for no money');
             assert.equal(c.onPick, undefined, 'he does nothing but talk');
         }
