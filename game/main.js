@@ -1197,7 +1197,7 @@ class Game {
         // player can drive across.
         for (let x = 14; x <= 19; x++) { this.setTile(x, 0, 12); this.setTile(x, 1, 12); }
         const br = (this.examinables || []).find(e => e.id === 'bridge');
-        if (br) br.text = '[TEXT]';
+        if (br) br.text = 'This is the bridge north out of Town. Your car is fixed. Drive north across the bridge.';
     }
 
     // (TX6) The slide: oil spread at the bridge and the Downtown gate still shut means the
@@ -3338,13 +3338,13 @@ class Game {
                 this._removeFromSlot(alc);
                 this.carFuel = 'alcohol';
                 audio.playSfx('pickup');
-                this._log('[TEXT]', 'pickup');
+                this._log('You pour a bottle of alcohol into the tank of your car. The engine now runs slower. You can drive over the bridge without crashing.', 'pickup');
                 this._render();
                 return;
             }
             this._log(this.carFuel === 'alcohol'
-                ? '[TEXT]'
-                : '[TEXT]');
+                ? 'Your car is fixed and has alcohol in the tank. Drive north over the bridge.'
+                : 'Your car is fixed, but the engine runs too hot. If you drive over the bridge now, you crash. Buy a bottle of alcohol from Hooch and pour it into the tank.');
             this._render();
             return;
         }
@@ -3358,14 +3358,16 @@ class Game {
             // (There's only one car, in town, so reaching here means we're home.)
             this._removeFromSlot(idx);
             this._sewerEscape = null;
-            this._log('[TEXT]', 'pickup');
+            this._log('You put the cataclysmic converter in your car. The car is fixed. Drive north over the bridge.', 'pickup');
             this.emitGameEvent('interact_car', {});                       // advances return_to_car if we're there
             if (!this.questEngine.getFlag('carFixed')) this.questEngine.forceComplete('fix_car'); // else force it home
             this._render();
             return;
         }
         const shelved = this.questEngine.state.flags.shelved;
-        this._log(shelved && shelved.catalytic_converter != null ? '[TEXT]' : '[TEXT]');
+        this._log(shelved && shelved.catalytic_converter != null
+            ? 'Your car needs the cataclysmic converter. You left it with Macc. Buy it back from him.'
+            : 'Your car needs the cataclysmic converter. Go to the sewer and kill the Were-Rat so that it drops the converter.');
         this._render();
     }
 
