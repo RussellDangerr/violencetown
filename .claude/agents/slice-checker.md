@@ -46,6 +46,13 @@ Run these in order. Judge every command by its exit code.
    If a test covers only part of the line, mark it NOT SHOWN and say which part is missing. A test
    that calls a game method directly, where the line is about what a player does, covers only part
    of it. Never stretch a test to cover more than it checks. When unsure, NOT SHOWN.
+6. **Check the copy against the code.** For every player-visible line the branch adds or changes
+   (`git diff origin/dev...HEAD`), read the code it describes. Copy must be true to the code
+   (LOOP.md §6, PCR3). Report every cause or effect a line states that the code doesn't have: a
+   number that differs, an effect that isn't applied, a trigger, source or condition the code
+   doesn't check. Quote the line and give the `file:line` of the code you checked. Also report
+   any square brackets left in player-visible text. A branch that changes no copy reports
+   `COPY: none changed`.
 
 ## Report: your final message, exactly this shape
 
@@ -57,6 +64,7 @@ ACCEPTANCE: <n> test · <n> picture · <n> not shown
 1. TEST: <the acceptance line, shortened> → <file:line> `<the line, copied exactly>`
 2. PICTURE: <the acceptance line, shortened> → <path>
 3. NOT SHOWN: <the acceptance line, shortened> → <what's missing>
+COPY: none changed | true to the code | UNTRUE: <"the line"> claims <x>; <file:line> does <y> (one per line)
 ```
 
 ## Never
