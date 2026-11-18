@@ -57,7 +57,6 @@ export function weaponClassOf(def) {
 export const PERK_PLACEHOLDER = '[PERK]';
 export const WEAPON_TIER_KEYS = Object.freeze(VALUE_TIERS.map(t => t.key));
 
-const unbracket = s => String(s ?? '').replace(/^\[(.*)\]$/, '$1');
 const titleCase = s => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
 function deepFreeze(o) {
@@ -74,7 +73,7 @@ export function weaponTiers(base) {
     return WEAPON_TIER_KEYS.map((key, step) => {
         const def = structuredClone(base);
         def.id = `${base.id}_${key}`;
-        def.name = `${titleCase(key)} ${unbracket(base.name)}`;
+        def.name = `${titleCase(key)} ${base.name}`;
         def.tier = key;
         def.baseId = base.id;
         def.perks = [...basePerks, ...Array(step).fill(PERK_PLACEHOLDER)];

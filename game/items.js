@@ -543,7 +543,7 @@ export const ITEMS = {
     // where it is too cold (plans/ic1-tigers-blood-ice-cone.md).
     tigers_blood_ice_cone: {
         id: 'tigers_blood_ice_cone',
-        name: "[Tiger's Blood Ice Cone]",
+        name: "Tiger's Blood Ice Cone",
         description: '[TEXT]',
         useType: 'none',
         consumable: false,
