@@ -114,7 +114,7 @@ export const BUFF_DEFS = {
     // Goo (plans/go1-goo-status.md) — the Factory's goo. No tick: while it lasts,
     // Game._advanceWorld gives the world a second beat after each move (the Slow
     // Poition's rule) and keeps that beat from spending Goo's own turns.
-    goo: { name: '[TEXT] Goo' },
+    goo: { name: 'Goo' },
     poison: {
         name: 'Poisoned',
         onTick(owner, game, buff) { applyDot(owner, game, buff, 'Poison', 'poison'); },

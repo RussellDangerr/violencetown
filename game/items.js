@@ -136,7 +136,7 @@ export const ITEMS = {
     // the Goo status (GO1). Placeholder name, text and icon.
     goo: {
         id: 'goo',
-        name: '[TEXT: Goo]',
+        name: 'Goo',
         description: '[TEXT]',
         category: 'poition',
         useType: 'throw',
@@ -253,7 +253,7 @@ export const ITEMS = {
     // field is a placeholder: the name is his to give, the art its own.
     strongman_mask: {
         id: 'strongman_mask',
-        name: '[NAME: POWER-WIELD MASK]',
+        name: 'Power-Wield Mask',
         description: '[TEXT]',
         equipSlot: 'top',
         useType: 'equip',
@@ -532,7 +532,7 @@ export const ITEMS = {
     // Not for sale until TX7. Placeholder text.
     oil: {
         id: 'oil',
-        name: '[TEXT: Oil]',
+        name: 'Oil',
         description: '[TEXT]',
         useType: 'none',
         consumable: false,
@@ -606,7 +606,7 @@ export const ITEMS = {
     },
     boon_poition: {
         id: 'boon_poition',
-        name: '[TEXT]',
+        name: 'Boon Poition',
         description: '[TEXT]',
         category: 'poition',
         poition: { stat: 'mana', amount: BOON_KINDS.mana.amount, permanent: true },

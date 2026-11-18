@@ -285,7 +285,7 @@ export const ENTRIES = {
     // they are designed.
     alien_ally: {
         type: 'Greedy Green',
-        name: '[NAME]',
+        name: 'Alien Ally',
         gold: 8,
         loadout: ['hot_dog', 'foil_hat', 'latex_gloves', 'cardboard_cuirass', 'soap', 'goo'],
         immune: ['goo'],   // (GO2) aliens are immune to goo, and throw it
@@ -394,7 +394,7 @@ export const ENTRIES = {
 // (sprites.js picks the look from that tag).
 ENTRIES.returning_boss = {
     ...structuredClone(ENTRIES.wererat),
-    name: '[NAME]',
+    name: 'Returning Boss',
     tag: 'returning_boss',
     barks: ['[TEXT]', '[TEXT]'],
 };
@@ -498,7 +498,7 @@ function placeholderBoss() {
 export const OLD_SELF = {
     type: 'Violencian',   // drawn as you, tinted pale, by its tag (sprites.js byTag)
     tag: 'old_self',
-    name: '[TEXT]',
+    name: 'Old Self',
     hp: 100,
     armor: 0,
     damage: 0,
