@@ -9,6 +9,7 @@ import { readFileSync } from 'node:fs';
 import { SLOTS, ENTRIES, resolveSpawn, defaultPicks, requiredDropFor, dropLineFor } from '../game/slots.js';
 import { spawnEnemy } from '../game/enemies.js';
 import { ITEMS } from '../game/items.js';
+import { describeItemParts } from '../game/inspector.js';
 import { GameMap } from '../game/map.js';
 
 const GAME = new URL('../game/', import.meta.url);
@@ -83,7 +84,8 @@ describe('the placeholders are obviously fake', () => {
             const e = ENTRIES[z.entry];
             assert.equal(e.type, 'Boss');
             assert.ok(e.barks.length > 0 && e.barks.every(b => b === '[TEXT]'));
-            assert.equal(ITEMS[z.item].description, '[TEXT]');
+            assert.equal(ITEMS[z.item].fact, '');
+            assert.equal(describeItemParts(ITEMS[z.item], { sources: {} }).stats, 'Quest item: always kept, cannot be dropped. Legendary, value 0 GP.');
         });
     }
 

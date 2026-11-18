@@ -154,7 +154,7 @@ describe('every panel shows stats, then the fact, then the sources', () => {
 
     test('the renderer reads itemParagraphs in the bag panel and the trade strip, and no description', () => {
         const r = src('renderer.js');
-        assert.ok(r.split('itemParagraphs(').length - 1 >= 2);
+        assert.ok(r.split('itemParagraphsCompact(').length - 1 >= 2);
         assert.ok(!/def\.description/.test(r));
         assert.ok(!/def\.description/.test(src('examine.js')));
     });
