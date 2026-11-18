@@ -263,10 +263,12 @@ export function itemStatSentences(def, opts = {}) {
 }
 
 // "Dropped by: A, B. Sold by: C. Found in: D." as separate lines; nothing for an item with no source.
-export function itemSourceLines(def, sources = ITEM_SOURCES) {
+export function itemSourceLines(def, sources = ITEM_SOURCES, maxNames = Infinity) {
     const r = def && sources && sources[def.id];
     if (!r) return [];
-    const names = list => list.join(', ');
+    const names = list => (list.length > maxNames
+        ? `${list.slice(0, maxNames).join(', ')} and ${list.length - maxNames} more`
+        : list.join(', '));
     const out = [];
     if (r.droppedBy && r.droppedBy.length) out.push(`Dropped by: ${names(r.droppedBy)}.`);
     if (r.soldBy && r.soldBy.length) out.push(`Sold by: ${names(r.soldBy)}.`);
@@ -280,7 +282,7 @@ export function describeItemParts(def, opts = {}) {
     return {
         stats: itemStatSentences(def, opts).join(' '),
         fact: def.fact || '',
-        sources: itemSourceLines(def, opts.sources || ITEM_SOURCES),
+        sources: itemSourceLines(def, opts.sources || ITEM_SOURCES, opts.maxNames),
     };
 }
 

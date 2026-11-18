@@ -33,7 +33,7 @@ import {
     MODAL_RECT, offerLayout,                                             // (offer screen) the one panel + its geometry
 } from './layout.js';
 import { itemActions, USES_ACTION } from './inspector.js';
-import { itemParagraphs, examineLabelAt } from './examine.js';   // (FX44) the weapon compare block    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
+import { itemParagraphsCompact, examineLabelAt } from './examine.js';   // (FX44) the weapon compare block    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
 import { zoneOf, pageCount, slotOnPage } from './inventory.js';                                     // (C1) safe/pack label for the inspector
 import { buildXmbBar, resolveXmbSelection } from './xmb.js';                 // (XMB) usable-bar model
 import { ITEMS, itemTier, gearOptions, wornBody, BOON_CAP, boonCount } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
@@ -3209,7 +3209,7 @@ export class Renderer {
         // it comes from: one paragraph each, wrapped to the panel. Four rows fit above the buttons;
         // what does not fit is cut with "..." on the last row.
         const MAX_ROWS = 4;
-        let statLines = itemParagraphs(def, game.equipment && game.equipment.weapon)
+        let statLines = itemParagraphsCompact(def, game.equipment && game.equipment.weapon)
             .flatMap(par => wrapToWidth(par, room, this._measurer(1)));
         if (statLines.length > MAX_ROWS) {
             statLines = [...statLines.slice(0, MAX_ROWS - 1), this._fitText(statLines.slice(MAX_ROWS - 1).join(' '), room, 1, 1).text];
@@ -4777,7 +4777,7 @@ export class Renderer {
         // (NOT the /8 idiom, a fossil of the retired 8x8 atlas). What does not fit is cut
         // with "..." on the second row.
         const maxPx = L.desc.w - 20;
-        const wrapped = itemParagraphs(def, game.equipment && game.equipment.weapon)
+        const wrapped = itemParagraphsCompact(def, game.equipment && game.equipment.weapon)
             .flatMap(par => wrapToWidth(par, maxPx, this._measurer(ds)));
         const rows = wrapped.length > 2 ? [wrapped[0], this._fitText(wrapped.slice(1).join(' '), maxPx, ds, ds).text] : wrapped;
         rows.forEach((ln, i) =>

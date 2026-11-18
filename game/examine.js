@@ -74,8 +74,8 @@ export function weaponCompare(def, held) {
 // (PC10) Everything a panel shows about an item, in the order it shows it: { stats, fact, sources }.
 // A weapon's hands, class and granted skills come from here because weapons.js, spells.js and
 // tricks.js cannot be imported by inspector.js; `held` is the weapon in the right hand.
-export function itemParts(def, held) {
-    const opts = { held };
+export function itemParts(def, held, maxNames) {
+    const opts = { held, maxNames };
     if (isComparableWeapon(def)) {
         const cls = weaponClassOf(def);
         opts.hands = cls ? cls.hands : 1;
@@ -85,10 +85,18 @@ export function itemParts(def, held) {
     return describeItemParts(def, opts);
 }
 
-// The same, as the paragraphs of a panel body.
+// The same, as the paragraphs of a panel body: stats, fact, then one paragraph per source line.
 export function itemParagraphs(def, held) {
     const p = itemParts(def, held);
     return [p.stats, p.fact, ...p.sources].filter(Boolean);
+}
+
+// The same for the small panels (the bag's, the trade strip): the sources share one paragraph and
+// a long list is cut to three names and a count, so all three kinds still fit.
+export const COMPACT_NAMES = 3;
+export function itemParagraphsCompact(def, held) {
+    const p = itemParts(def, held, COMPACT_NAMES);
+    return [p.stats, p.fact, p.sources.join(' ')].filter(Boolean);
 }
 
 // The block as lines, or null for a non-weapon.
