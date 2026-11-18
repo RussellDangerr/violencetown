@@ -403,7 +403,7 @@ describe('the fight, driven with real keys', () => {
         assert.ok(!g.logs.some(l => /slinks back/.test(l)), 'he does not leave like the lion');
 
         // He hit hard: every one of his blows was his 30 less the Financier's 4 (before he was weakened).
-        const sunBlows = g.blows.filter(b => b.by === '[Sun Man]');
+        const sunBlows = g.blows.filter(b => b.by === 'Sun Man');
         assert.ok(sunBlows.length >= 2, `Sun Man landed ${sunBlows.length} blows`);
         assert.ok(sunBlows.length <= 3, 'and never more than one a turn');
         for (const b of sunBlows) { assert.equal(b.raw, FINALE_PHASE1.sunMan.damage); assert.equal(b.dealt, FINALE_PHASE1.sunMan.damage - 4); }

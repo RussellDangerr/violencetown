@@ -194,11 +194,11 @@ describe('ps2 — Soap cures poison', () => {
         const EQUIP_BEFORE = { weapon: 'wooden_sword', left: null, top: null, bottom: null, front: null, back: 'soap', sides: null };
         const RECORDED = {
             clean: {
-                logs: ['[[Soap] equipped to back for 3 turns] [Already clean]'],
+                logs: ['[Soap equipped to back for 3 turns] [Already clean]'],
                 beats: 1, slot: null, buffs: [], hp: 5, equip: EQUIP_BEFORE,
             },
             sludged: {
-                logs: ['[[Soap] equipped to back for 3 turns] [Soap applied \u2014 sludge will be neutralized]', '[Soap neutralized sludge]'],
+                logs: ['[Soap equipped to back for 3 turns] [Soap applied \u2014 sludge will be neutralized]', '[Soap neutralized sludge]'],
                 beats: 1, slot: null, buffs: [], hp: 5, equip: EQUIP_BEFORE,
             },
         };

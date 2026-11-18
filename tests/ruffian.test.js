@@ -204,7 +204,7 @@ describe('the Downtown spawn', () => {
         const e = spawnEnemy(spawn, new Set());
         assert.equal(e.allegiance, 'hostile');
         assert.ok(isMugger(e));
-        assert.equal(e.entity.name, '[Ruffian]');
+        assert.equal(e.entity.name, 'Ruffian');
     });
 
     test('he wears the green-bandana goblin', () => {

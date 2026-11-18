@@ -173,7 +173,7 @@ describe('the strongman who wins the contest with you (ST2)', () => {
         assert.equal(e.bribeable, true);
         assert.equal(e.slot, undefined);
         assert.equal(e.boss, undefined);
-        assert.equal(e.name, '[Strongman]');
+        assert.equal(e.name, 'Strongman');
         assert.equal(e.adjacencyBark, '[TEXT]');
     });
 

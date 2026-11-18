@@ -97,7 +97,7 @@ describe('the Tiger\'s Blood Ice Cone — the item', () => {
         const d = ITEMS[ID];
         assert.ok(d, 'no item');
         assert.equal(d.id, ID);
-        assert.equal(d.name, "[Tiger's Blood Ice Cone]");
+        assert.equal(d.name, "Tiger's Blood Ice Cone");
         assert.equal(d.description, '[TEXT]');
     });
 
@@ -132,7 +132,7 @@ describe('the Tiger\'s Blood Ice Cone — the item', () => {
             map: { getTile: () => TILES.FLOOR.id, isInBounds: () => true, propSpawns: [] },
         };
         const r = resolveExamine(g, 4, 4);
-        assert.equal(r.title, "[Tiger's Blood Ice Cone]");
+        assert.equal(r.title, "Tiger's Blood Ice Cone");
         assert.ok(r.body.includes('[TEXT]'), r.body);
     });
 

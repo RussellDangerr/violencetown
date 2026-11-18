@@ -38,7 +38,7 @@ describe('the test costume', () => {
         const it = ITEMS.test_costume;
         assert.equal(it.useType, 'costume');
         assert.ok(COSTUMES[it.costume]);
-        assert.match(it.name, /^\[/);
+        assert.equal(it.name, 'Test Costume');
         assert.ok(it.fallbackColor, 'a tinted placeholder icon');
     });
 

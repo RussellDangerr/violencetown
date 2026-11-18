@@ -203,7 +203,7 @@ describe('the part', () => {
     test('is a placeholder, worth 0, and draws as the plain bag', () => {
         const d = ITEMS[MACHINE_PART];
         assert.ok(d, 'no part');
-        assert.equal(d.name, '[Ice Cone Machine Part]');
+        assert.equal(d.name, 'Ice Cone Machine Part');
         assert.equal(d.description, '[TEXT]');
         assert.equal(d.baseValue, 0);
         assert.equal(d.category, 'quest');

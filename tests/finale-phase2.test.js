@@ -386,7 +386,7 @@ describe('the Bite', () => {
         await fightOnward(g, { limit: 12, until: () => eventsOf(g, 'sun_man_bitten').length > 0 });
         assert.equal(fin.hasBuff('weakened'), true);
         assert.equal(g.events.find(e => e.type === 'sun_man_bitten').payload.weakened, true);
-        const sunBlows = g.blows.filter(b => b.by === '[Sun Man]');
+        const sunBlows = g.blows.filter(b => b.by === 'Sun Man');
         assert.ok(sunBlows.length >= 2 && sunBlows.length <= 3);
     });
 
@@ -402,11 +402,11 @@ describe('the Bite', () => {
         assert.ok(isCorner(g.map, sun.x, sun.y), `a corner of the room (${sun.x},${sun.y})`);
         assert.ok(g.logs.includes(FINALE_LINES.bite) && g.logs.includes(FINALE_LINES.cloak), 'the bite and the cloak are said plainly');
         const at = [sun.x, sun.y];
-        const blowsBefore = g.blows.filter(b => b.by === '[Sun Man]').length;
+        const blowsBefore = g.blows.filter(b => b.by === 'Sun Man').length;
         await fightOnward(g, { limit: 12, until: (x) => !financierOf(x).entity.isAlive() });
         // He is still there, not moved, not fighting, not hostile, and nobody hurt him.
         const nowSun = sunManOf(g) ?? beastOf(g);
-        assert.equal(g.blows.filter(b => b.by === '[Sun Man]').length, blowsBefore, 'he struck no blow after the Bite');
+        assert.equal(g.blows.filter(b => b.by === 'Sun Man').length, blowsBefore, 'he struck no blow after the Bite');
         assert.ok(nowSun);
         assert.equal(sun.entity.hp, sun.entity.maxHp, 'unhurt');
         assert.deepEqual([sun.x, sun.y], at, 'he did not move');

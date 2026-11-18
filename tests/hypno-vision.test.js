@@ -89,13 +89,13 @@ describe('the map and its cast', () => {
     test('two workers and a robot, neutral, in the screen\'s sight; the nerd is in the alcove', async () => {
         const g = await factory();
         const ts = targets(g);
-        assert.deepEqual(ts.map(e => e.name), ['[Worker]', '[Worker]', '[Robot]']);
+        assert.deepEqual(ts.map(e => e.name), ['Worker', 'Worker', 'Robot']);
         for (const e of ts) {
             assert.equal(e.allegiance, 'neutral');
             assert.ok(inSight(g, e.x, e.y), `${e.id} is out of the screen's sight`);
         }
         const nerd = g.enemies.find(e => e.tag === NERD_TAG);
-        assert.equal(nerd.name, '[Nerd]');
+        assert.equal(nerd.name, 'Nerd');
         assert.equal(nerd.damage, 0);
         assert.equal(nerd.dialogueId, 'hypno_nerd');
     });

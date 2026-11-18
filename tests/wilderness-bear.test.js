@@ -150,10 +150,10 @@ describe('the table row and the bear', () => {
         assert.ok(INTERACTIONS.some(r => r.zone === 'frozen-map.json'), 'FD1 row kept');
     });
 
-    test('the bear starts as the polar bear, wears the [Bear] stand-in name, and has art', () => {
+    test('the bear starts as the polar bear, wears the Bear stand-in name, and has art', () => {
         const polar = ENTRIES.polar_bear;
         for (const k of ['hp', 'armor', 'damage', 'gold', 'loadout']) assert.deepEqual(WILDERNESS_BEAR[k], polar[k], k);
-        assert.equal(WILDERNESS_BEAR.name, '[Bear]');
+        assert.equal(WILDERNESS_BEAR.name, 'Bear');
         assert.ok(ENEMY_SPRITES[WILDERNESS_BEAR.type], 'the bear has a sprite entry');
     });
 });
