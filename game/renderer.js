@@ -32,8 +32,8 @@ import {
     LOOT_REEL, lootReelRect,                                                 // (FX3c) the loot reel's panel
     MODAL_RECT, offerLayout,                                             // (offer screen) the one panel + its geometry
 } from './layout.js';
-import { itemStatLine, itemActions, USES_ACTION } from './inspector.js';
-import { weaponCompare, weaponCompareLines, examineLabelAt } from './examine.js';   // (FX44) the weapon compare block    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
+import { itemActions, USES_ACTION } from './inspector.js';
+import { itemParagraphs, examineLabelAt } from './examine.js';   // (FX44) the weapon compare block    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
 import { zoneOf, pageCount, slotOnPage } from './inventory.js';                                     // (C1) safe/pack label for the inspector
 import { buildXmbBar, resolveXmbSelection } from './xmb.js';                 // (XMB) usable-bar model
 import { ITEMS, itemTier, gearOptions, wornBody, BOON_CAP, boonCount } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
@@ -3199,20 +3199,22 @@ export class Renderer {
         const zone = zoneOf(sel.index, SAFE_SLOTS).toUpperCase();
         const qty = stack.count > 1 ? ` x${stack.count}` : '';
         const room = p.x + p.w - 12 - tx;
-        const fitName = this._fitText(name, room, 2, 1);
+        // The stack and zone label sits right of the name, so the text below gets every row.
+        const tag = `${zone}${qty}`;
+        const tagW = this.font.measure(tag, 1);
+        const fitName = this._fitText(name, room - tagW - 10, 2, 1);
         this.font.drawText(ctx, fitName.text, tx, p.y + 12, { color: UI.gold, scale: fitName.scale });
-        // The stat line falls back to the item's description, which is often a
-        // sentence: wrap it to the panel, two lines at most.
-        const perLine = Math.max(8, Math.floor(room / this.font.measure('M', 1)));
-        // (FX44) A weapon reads as the compare block instead: what it hits for
-        // against the weapon in your hand, its hands and class, its skills.
-        const block = weaponCompareLines(def, game.equipment && game.equipment.weapon);
-        let statLines = block
-            ? block.map(l => this._fitText(l, room, 1, 1).text)
-            : this._wrapText(itemStatLine(def), perLine);
-        if (!block && statLines.length > 2) statLines = [statLines[0], this._fitText(statLines.slice(1).join(' '), room).text];
-        statLines.forEach((line, i) => this.font.drawText(ctx, line, tx, p.y + 34 + i * 12, { color: UI.text, scale: 1 }));
-        this.font.drawText(ctx, `${zone}${qty}`, tx, p.y + 38 + statLines.length * 12, { color: UI.dim, scale: 1 });
+        this.font.drawText(ctx, tag, p.x + p.w - 12, p.y + 14, { color: UI.dim, scale: 1, align: 'right' });
+        // (PC10) The stats (a weapon's against the one in your hand), then the fact, then where
+        // it comes from: one paragraph each, wrapped to the panel. Four rows fit above the buttons;
+        // what does not fit is cut with "..." on the last row.
+        const MAX_ROWS = 4;
+        let statLines = itemParagraphs(def, game.equipment && game.equipment.weapon)
+            .flatMap(par => wrapToWidth(par, room, this._measurer(1)));
+        if (statLines.length > MAX_ROWS) {
+            statLines = [...statLines.slice(0, MAX_ROWS - 1), this._fitText(statLines.slice(MAX_ROWS - 1).join(' '), room, 1, 1).text];
+        }
+        statLines.forEach((line, i) => this.font.drawText(ctx, line, tx, p.y + 32 + i * 12, { color: UI.text, scale: 1 }));
 
         // Action buttons — one per action, on the shared action-row rects. Drop is
         // destructive (whole-stack, no confirm) so it wears red, not gold — with
@@ -4770,30 +4772,15 @@ export class Renderer {
                 L.desc.x + L.desc.w - 10, L.desc.y + 6, { color: '#79c46a', scale: ds, align: 'right' });
         }
 
-        // (FX44) A weapon shows its compare block on the next row: damage against
-        // the weapon in your hand, then hands and class. Its granted skills take
-        // the row below; with none, the description does.
-        const cmp = weaponCompare(def, game.equipment && game.equipment.weapon);
+        // (PC10) The two rows under the title: the stats (a weapon's against the weapon in
+        // your hand), then the fact, then where it comes from, wrapped on the real advance
+        // (NOT the /8 idiom, a fossil of the retired 8x8 atlas). What does not fit is cut
+        // with "..." on the second row.
         const maxPx = L.desc.w - 20;
-        if (cmp) {
-            this.font.drawText(ctx, this._fitText(`${cmp.damage}   ${cmp.build}`, maxPx, ds, ds).text,
-                L.desc.x + 10, L.desc.y + dy1, { color: UI.text, scale: ds });
-            const second = cmp.grants || String(def.description || '');
-            this.font.drawText(ctx, this._fitText(second, maxPx, ds, ds).text,
-                L.desc.x + 10, L.desc.y + dy1 + dyN, { color: cmp.grants ? UI.gold : UI.dim, scale: ds });
-            return;
-        }
-
-        // Measured wrap against the real advance. NOT the /8 idiom, which is a
-        // fossil of the retired 8x8 atlas and wraps ~40% narrow.
-        const words = String(def.description || '').split(/\s+/);
-        const lines = []; let cur = '';
-        for (const w of words) {
-            const t = cur ? `${cur} ${w}` : w;
-            if (this.font.measure(t, ds) > maxPx && cur) { lines.push(cur); cur = w; } else cur = t;
-        }
-        if (cur) lines.push(cur);
-        lines.slice(0, 2).forEach((ln, i) =>
+        const wrapped = itemParagraphs(def, game.equipment && game.equipment.weapon)
+            .flatMap(par => wrapToWidth(par, maxPx, this._measurer(ds)));
+        const rows = wrapped.length > 2 ? [wrapped[0], this._fitText(wrapped.slice(1).join(' '), maxPx, ds, ds).text] : wrapped;
+        rows.forEach((ln, i) =>
             this.font.drawText(ctx, ln, L.desc.x + 10, L.desc.y + dy1 + i * dyN, { color: UI.text, scale: ds }));
     }
 

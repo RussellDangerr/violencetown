@@ -120,7 +120,7 @@ export const WEAPONS = {
         useType: 'equip',   // without it, the sword could never be re-equipped once swapped out
         category: 'weapon',
         baseValue: 6,
-        description: 'A practice blade, all splinters and optimism. Swings true enough.',
+        fact: '',
     },
     // Ray Gun — a tech weapon that GRANTS the Ray Blast trick (GP) while worn.
     // Its world source is the Factory alien boss (deferred); the def lives here
@@ -131,7 +131,7 @@ export const WEAPONS = {
         weaponClass: 'wand',
         category: 'weapon',
         baseValue: 45,
-        description: 'Dented brass housing around a coil of glass that hums when charged. Nobody has explained how it works, least of all it.',
+        fact: '',
     },
     // Great Sword — the first two-hander in the world (plans/gw1-great-sword-factory-boss.md).
     // It slashes and stabs like the sword and fills both hands; the Factory's boss carries it.
@@ -141,7 +141,7 @@ export const WEAPONS = {
         weaponClass: 'great_sword',
         category: 'weapon',
         baseValue: 45,
-        description: '[TEXT: Great Sword description]',
+        fact: '',
     },
     // Fearmur — a leg-bone club. Grants the Boo! fear spell (MP) while worn, and
     // fears an enemy you hit twice in a row (onHit: 'fearOnRepeat'). Source: the
@@ -152,7 +152,7 @@ export const WEAPONS = {
         weaponClass: 'hammer',
         category: 'weapon',
         baseValue: 28,
-        description: "A single femur, gripped at the joint and colder than it has any right to be. It hasn't warmed up once.",
+        fact: '',
     },
     // Gator Tail — a dehydrated gator club. Heavy, mean, and you're not sure
     // where it came from (Lonny, the Sewer's own alligator, has a theory).
@@ -161,7 +161,7 @@ export const WEAPONS = {
         weaponClass: 'hammer',
         category: 'weapon',
         baseValue: 18,
-        description: "A stiff, leathery tail, heavier than it looks and reeking faintly of swamp water. You've carried worse for less reason.",
+        fact: '',
     },
     // Lion Whip — a carnival tamer's whip. Reaches 3 tiles and YANKS whatever it
     // strikes one tile closer; grants the "Hire a Lion" trick (GP) while worn.
@@ -171,7 +171,7 @@ export const WEAPONS = {
         weaponClass: 'whip',
         category: 'weapon',
         baseValue: 26,
-        description: "A tamer's whip, braided leather gone shiny at the grip. Crack it right and something always comes closer.",
+        fact: '',
     },
 };
 

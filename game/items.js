@@ -68,7 +68,7 @@ export const ITEMS = {
     rock: {
         id: 'rock',
         name: 'Rock',
-        description: 'A heavy chunk of sewer masonry. Better thrown than held — though a clatter down the tunnel turns heads.',
+        fact: '',
         useType: 'throw',
         equipSlot: 'sides',
         range: 4,
@@ -82,7 +82,7 @@ export const ITEMS = {
     sludge_sack: {
         id: 'sludge_sack',
         name: 'Sludge Sack',
-        description: 'A burlap sack cinched with a leather tie, heavy with sewer sludge. Bursts on impact and keeps eating.',
+        fact: 'Burlap sack, leather tie, filled with sludge.',
         useType: 'throw',
         equipSlot: 'sides',
         range: 5,
@@ -100,7 +100,7 @@ export const ITEMS = {
     fire_blood: {
         id: 'fire_blood',
         name: 'Fire Blood',
-        description: 'Thrown, it sets everyone it splashes burning. Drunk, you burn, and every hit you land sets the target burning too.',
+        fact: '',
         category: 'poition',
         useType: 'throw',
         drinkable: true,
@@ -120,7 +120,7 @@ export const ITEMS = {
     sludge_brain: {
         id: 'sludge_brain',
         name: 'Sludge Brain',
-        description: 'Thrown, it leaves a 3-tile sludge puddle for 8 turns. Ending a turn in it applies Sludge; sewer dwellers are healed instead.',
+        fact: '',
         category: 'poition',
         useType: 'throw',
         equipSlot: 'sides',
@@ -137,7 +137,7 @@ export const ITEMS = {
     goo: {
         id: 'goo',
         name: 'Goo',
-        description: '[TEXT]',
+        fact: '',
         category: 'poition',
         useType: 'throw',
         equipSlot: 'sides',
@@ -152,7 +152,7 @@ export const ITEMS = {
     soap: {
         id: 'soap',
         name: 'Soap',
-        description: 'Industrial-grade lye bar. Cuts through sludge. The Sewer\'s most valuable commodity.',
+        fact: '',
         equipSlot: 'back',
         equipDuration: 3,
         useType: 'self',
@@ -165,7 +165,7 @@ export const ITEMS = {
     pipe: {
         id: 'pipe',
         name: 'Pipe',
-        description: 'Rusty copper pipe, wrenched free from the wall. Swings like it means it.',
+        fact: '',
         equipSlot: 'weapon',
         weaponClass: 'hammer',   // the class table is WEAPON_CLASSES in weapons.js
         useType: 'equip',        // an ordinary weapon: the bag's main button wields it (fx37)
@@ -179,7 +179,7 @@ export const ITEMS = {
     bandage: {
         id: 'bandage',
         name: 'Bandage',
-        description: 'Torn fabric strip, reasonably clean. Stops the bleeding, not the pain.',
+        fact: '',
         equipSlot: 'front',
         equipDuration: 2,
         useType: 'self',
@@ -198,7 +198,7 @@ export const ITEMS = {
     foil_hat: {
         id: 'foil_hat',
         name: 'Foil Hat',
-        description: 'Tin-foil, triple-layered. They can\'t read you now.',
+        fact: '',
         equipSlot: 'top',
         useType: 'equip',
         armor: 2,
@@ -211,7 +211,7 @@ export const ITEMS = {
     rat_mask: {
         id: 'rat_mask',
         name: 'Rat Mask',
-        description: '[TEXT]',
+        fact: '',
         equipSlot: 'top',
         useType: 'equip',
         armor: 2,
@@ -226,7 +226,7 @@ export const ITEMS = {
     delivery_cap_grey: {
         id: 'delivery_cap_grey',
         name: 'Delivery Cap, Grey',
-        description: '[TEXT]',
+        fact: '',
         equipSlot: 'top',
         useType: 'equip',
         armor: 2,
@@ -239,7 +239,7 @@ export const ITEMS = {
     delivery_cap_blue: {
         id: 'delivery_cap_blue',
         name: 'Delivery Cap, Blue',
-        description: '[TEXT]',
+        fact: '',
         equipSlot: 'top',
         useType: 'equip',
         armor: 2,
@@ -254,7 +254,7 @@ export const ITEMS = {
     strongman_mask: {
         id: 'strongman_mask',
         name: 'Power-Wield Mask',
-        description: '[TEXT]',
+        fact: '',
         equipSlot: 'top',
         useType: 'equip',
         armor: 2,
@@ -269,7 +269,7 @@ export const ITEMS = {
     test_costume: {
         id: 'test_costume',
         name: 'Test Costume',
-        description: '[TEXT]',
+        fact: '',
         useType: 'costume',
         costume: 'test_costume',
         consumable: false,
@@ -280,7 +280,7 @@ export const ITEMS = {
     sun_man_costume: {
         id: 'sun_man_costume',
         name: 'Sun Man Costume',
-        description: '[TEXT]',
+        fact: '',
         useType: 'costume',
         costume: 'sun_man_costume',
         consumable: false,
@@ -290,7 +290,7 @@ export const ITEMS = {
     cardboard_cuirass: {
         id: 'cardboard_cuirass',
         name: 'Cardboard Cuirass',
-        description: 'A refrigerator box with the arm-holes torn out. FRAGILE, stencilled on both sides. It is not wrong.',
+        fact: '',
         equipSlot: 'front',
         useType: 'equip',
         armor: 4,
@@ -301,7 +301,7 @@ export const ITEMS = {
     latex_gloves: {
         id: 'latex_gloves',
         name: 'Latex Gloves',
-        description: 'Powder-blue, one size too big, snapped at the wrist. Surgical, in the loosest sense.',
+        fact: '',
         equipSlot: 'sides',
         useType: 'equip',
         armor: 1,
@@ -312,7 +312,7 @@ export const ITEMS = {
     red_cape: {
         id: 'red_cape',
         name: 'Red Cape',
-        description: 'Torn from something that left in a hurry. Snags on everything. Makes you feel taller.',
+        fact: '',
         equipSlot: 'back',
         useType: 'equip',
         armor: 1,
@@ -325,7 +325,7 @@ export const ITEMS = {
     lava_cape: {
         id: 'lava_cape',
         name: 'Lava Cape',
-        description: '[TEXT]',
+        fact: '',
         equipSlot: 'back',
         useType: 'equip',
         armor: 2,
@@ -337,7 +337,7 @@ export const ITEMS = {
     shoe_bags: {
         id: 'shoe_bags',
         name: 'Shoe Bags',
-        description: 'Garbage-bag socks, double-knotted at the shin. The Sewer stays out of your socks.',
+        fact: '',
         equipSlot: 'bottom',
         useType: 'equip',
         armor: 2,
@@ -351,7 +351,7 @@ export const ITEMS = {
     boardwalk_burger: {
         id: 'boardwalk_burger',
         name: 'Boardwalk Burger',
-        description: 'Jersey\'s house special. Grease-soaked, overcooked, perfect.',
+        fact: '',
         category: 'ambro',
         useType: 'self',
         effect: 'heal',
@@ -368,7 +368,7 @@ export const ITEMS = {
     mola_cola: {
         id: 'mola_cola',
         name: 'Mola Cola',
-        description: '[TEXT]',
+        fact: '',
         category: 'ambro',
         useType: 'self',
         effect: 'heal',
@@ -385,7 +385,7 @@ export const ITEMS = {
     burger_fries: {
         id: 'burger_fries',
         name: 'Burger & Fries',
-        description: 'A warm paper bag, grease-spotted, smells incredible. For delivery — not for eating.',
+        fact: '',
         category: 'quest',
         useType: 'none',
         consumable: false,
@@ -401,7 +401,7 @@ export const ITEMS = {
     wererat_fur: {
         id: 'wererat_fur',
         name: 'Tuft of Wererat Fur',
-        description: 'A braided tuft that stays blood-warm. Platero could set it into something you\'d wear.',
+        fact: '',
         category: 'quest',
         useType: 'none',
         consumable: false,
@@ -413,7 +413,7 @@ export const ITEMS = {
     mystery_meat: {
         id: 'mystery_meat',
         name: 'Mystery Meat',
-        description: "Grey, sweating, and warm in a way meat should not be. It's food to somebody.",
+        fact: '',
         category: 'ambro',
         useType: 'throw',
         equipSlot: 'sides',
@@ -428,7 +428,7 @@ export const ITEMS = {
     tunnel_mushroom: {
         id: 'tunnel_mushroom',
         name: 'Tunnel Mushroom',
-        description: 'Pale, damp, and thriving where nothing should. Something down here eats these on purpose.',
+        fact: '',
         category: 'ambro',
         useType: 'throw',
         equipSlot: 'sides',
@@ -443,7 +443,7 @@ export const ITEMS = {
     hot_dog: {
         id: 'hot_dog',
         name: 'Hot Dog',
-        description: 'Boardwalk classic. Been on the roller since this morning. Maybe yesterday.',
+        fact: '',
         category: 'ambro',
         useType: 'self',
         effect: 'heal',
@@ -459,7 +459,7 @@ export const ITEMS = {
     catalytic_converter: {
         id: 'catalytic_converter',
         name: 'Cataclysmic Converter',
-        description: 'The thingamajig that makes the car go. Rat people tore it clean out. Smells like grease and betrayal. No ordinary merchant wants it — but Macc pays.',
+        fact: '',
         category: 'quest',
         useType: 'none',
         useHint: "[The Cataclysmic Converter belongs in your car — head to your car in Town and tap (or walk into) it to drop it back in.]",
@@ -478,7 +478,7 @@ export const ITEMS = {
     act2_item_a: {
         id: 'act2_item_a',
         name: 'Stuffed Animal',
-        description: '[TEXT]',
+        fact: '',
         category: 'quest',
         useType: 'none',
         consumable: false,
@@ -490,7 +490,7 @@ export const ITEMS = {
     act2_item_b: {
         id: 'act2_item_b',
         name: 'Flux Capacitor',
-        description: '[TEXT]',
+        fact: '',
         category: 'quest',
         useType: 'none',
         consumable: false,
@@ -502,7 +502,7 @@ export const ITEMS = {
     act2_item_c: {
         id: 'act2_item_c',
         name: 'Soul Crystal',
-        description: '[TEXT]',
+        fact: '',
         category: 'quest',
         useType: 'none',
         consumable: false,
@@ -521,7 +521,7 @@ export const ITEMS = {
     alcohol: {
         id: 'alcohol',
         name: 'Bottle of Alcohol',
-        description: 'Cheap, high-proof, and mean. Burns FAST and burns out fast — barely a push. Not a drink. A tank\'s worth of "slow down".',
+        fact: '',
         useType: 'none',
         consumable: false,
         fallbackColor: '#8a5a2a',
@@ -533,7 +533,7 @@ export const ITEMS = {
     oil: {
         id: 'oil',
         name: 'Oil',
-        description: '[TEXT]',
+        fact: '',
         useType: 'none',
         consumable: false,
         fallbackColor: '#2a2418',
@@ -544,7 +544,7 @@ export const ITEMS = {
     tigers_blood_ice_cone: {
         id: 'tigers_blood_ice_cone',
         name: "Tiger's Blood Ice Cone",
-        description: '[TEXT]',
+        fact: '',
         useType: 'none',
         consumable: false,
         fallbackColor: '#e84537',
@@ -558,7 +558,7 @@ export const ITEMS = {
     ice_cone_machine_part: {
         id: 'ice_cone_machine_part',
         name: 'Ice Cone Machine Part',
-        description: '[TEXT]',
+        fact: '',
         category: 'quest',
         useType: 'none',
         consumable: false,
@@ -568,7 +568,7 @@ export const ITEMS = {
     grappling_hook: {
         id: 'grappling_hook',
         name: 'Grappling Hook',
-        description: "Pike's big coil of rope and an iron hook that bites stone and holds. A way UP.",
+        fact: '',
         useType: 'none',
         consumable: false,
         questItem: true,
@@ -585,7 +585,7 @@ export const ITEMS = {
     health_poition: {
         id: 'health_poition',
         name: 'Health Poition',
-        description: 'Vial of thick red syrup, corked with a wine stopper. Stings on the way down. Works anyway.',
+        fact: '',
         category: 'poition',
         poition: { stat: 'health', amount: 25, turns: 1 },
         consumable: true,
@@ -596,7 +596,7 @@ export const ITEMS = {
     mana_poition: {
         id: 'mana_poition',
         name: 'Mana Poition',
-        description: 'Vial of something blue that fizzes on its own. Drink it fast — thinking about it too long makes it worse.',
+        fact: '',
         category: 'poition',
         poition: { stat: 'mana', amount: 20, turns: 1 },
         consumable: true,
@@ -607,7 +607,7 @@ export const ITEMS = {
     boon_poition: {
         id: 'boon_poition',
         name: 'Boon Poition',
-        description: '[TEXT]',
+        fact: '',
         category: 'poition',
         poition: { stat: 'mana', amount: BOON_KINDS.mana.amount, permanent: true },
         consumable: true,
@@ -618,7 +618,7 @@ export const ITEMS = {
     gold_poition: {
         id: 'gold_poition',
         name: 'Gold Poition',
-        description: "Swallow it and cough up loose change for about a minute straight. Where it comes from is above your pay grade.",
+        fact: '',
         category: 'poition',
         poition: { stat: 'gold', amount: 50, turns: 1 },
         consumable: true,
@@ -629,7 +629,7 @@ export const ITEMS = {
     strength_poition: {
         id: 'strength_poition',
         name: 'Strength Poition',
-        description: 'Thick as tar and tastes like a bad idea. Your arms believe it before your brain does.',
+        fact: '',
         category: 'poition',
         poition: { stat: 'strength', amount: 6, turns: 5 },
         consumable: true,
@@ -640,7 +640,7 @@ export const ITEMS = {
     defence_poition: {
         id: 'defence_poition',
         name: 'Defence Poition',
-        description: 'Sets like plaster somewhere behind your ribs. Hurts going down, helps for a while after.',
+        fact: '',
         category: 'poition',
         poition: { stat: 'defence', amount: 4, turns: 6 },
         consumable: true,
@@ -651,7 +651,7 @@ export const ITEMS = {
     speed_poition: {
         id: 'speed_poition',
         name: 'Speed Poition',
-        description: 'Fizzy, cold, gone in one gulp. Everything after moves faster than your judgment does.',
+        fact: '',
         category: 'poition',
         poition: { stat: 'speed', amount: 2, turns: 1 },
         consumable: true,
