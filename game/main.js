@@ -12,7 +12,7 @@ import { pickHitMark, HEAVY_HIT_DAMAGE, dodgeChance, DODGE_WORD } from './hit-sp
 import { makeEffectLoop } from './effect-loop.js';                 // one tick of the transient-effects loop, and its refusal to die on a bad frame
 import { PLAYER_MAX_HP, PLAYER_MAX_MP, INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK, SLUDGE_DOT, FIRE_QUENCHING_TILES } from './data.js';
 import { puddleTiles, layPuddle, puddleAt, dryPuddles } from './puddles.js';   // (poisons) Sludge Brain's puddles
-import { ITEMS, canStandOn, wornBody, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef, poitionBuff, BOON_KINDS } from './items.js';
+import { ITEMS, canStandOn, wornBody, resolveUse, resolveThrow, tickTempEquips, unequipItem, hasItemDef, poitionBuff, BOON_KINDS, BOON_CAP, BOON_CAP_LINE, boonCount } from './items.js';
 import { WEAPONS, weaponClassOf, FISTS } from './weapons.js';
 import { handPairOf } from './hand-data.js';   // (HB2) two held weapons combine into a named effect
 import { resolveItemDef } from './item-registry.js';
@@ -3686,7 +3686,10 @@ class Game {
 
     // (BP4) Drinking a boon asks what it raises: the item list is swapped for one row per kind.
     // Escape / tap outside close it as for any item list, keeping the poition and the turn.
+    _boonCapped() { return boonCount(this) >= BOON_CAP; }
     _openBoonChooser() {
+        // (BP5) Past the cap the poition stays in the bag and no turn passes.
+        if (this._boonCapped?.()) { this._log(BOON_CAP_LINE); this.selectedSlot = -1; this.state = STATE.IDLE; this._render(); return; }
         this.overlayOptions = Object.entries(BOON_KINDS).map(([kind, k]) => ({ label: `${k.label} +${k.amount}`, action: 'boon', kind }));
         this.overlayCursor = 0;
         this._overlayOpenedAt = performance.now();
