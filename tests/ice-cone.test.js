@@ -122,7 +122,7 @@ describe('the Tiger\'s Blood Ice Cone — the item', () => {
         const dir = url('../game/');
         const readers = readdirSync(dir).filter(f => /\.(js|json)$/.test(f))
             .filter(f => readFileSync(new URL(f, dir), 'utf8').includes(ID));
-        assert.deepEqual(readers.sort(), ['ants.js', 'dialogue.js', 'item-sources.json', 'item-uses.js', 'items.js', 'quests.js', 'slots.js', 'sprites.js']);
+        assert.deepEqual(readers.sort(), ['ants.js', 'dialogue.js', 'item-sources.js', 'item-uses.js', 'items.js', 'quests.js', 'slots.js', 'sprites.js']);
     });
 
     test('examining it on the ground names it and shows its stats and its source', () => {

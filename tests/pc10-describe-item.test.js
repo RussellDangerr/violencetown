@@ -38,7 +38,7 @@ describe('the flavour is gone; a fact is empty or one he stated', () => {
 describe('describeItem: stats, then the fact, then the sources', () => {
     test('the Sludge Sack reads in that order', () => {
         assert.equal(describeItem(ITEMS.sludge_sack),
-            'Throw: sludge, 3 damage per turn for 5 turns, range 5. It bursts over 3x3 tiles; the tiles around the centre get 2 turns. '
+            'Throw: sludge, 3 damage per turn for 5 turns, range 5. It bursts over 3x3 tiles, hitting enemies and whoever stands on an aimed centre tile; the tiles around the centre get 2 turns. '
             + 'Sewer creatures are healed instead of hurt. Used up when used. Rare, value 10 GP.\n'
             + 'Burlap sack, leather tie, filled with sludge.\n'
             + `${itemSourceLines(ITEMS.sludge_sack).join('\n')}`);
@@ -50,7 +50,7 @@ describe('describeItem: stats, then the fact, then the sources', () => {
 
     test('the Tunnel Mushroom: poison, 5 per turn for 2 turns, range 4, found in the Sewer, dropped by Red Fungus', () => {
         const p = describeItemParts(ITEMS.tunnel_mushroom, { sources: { tunnel_mushroom: { droppedBy: ['Red Fungus'], foundIn: ['Sewer'] } } });
-        assert.equal(p.stats, 'Throw: poison, 5 damage per turn for 2 turns, range 4. It bursts over 3x3 tiles; the tiles around the centre get 1 turn. '
+        assert.equal(p.stats, 'Throw: poison, 5 damage per turn for 2 turns, range 4. It bursts over 3x3 tiles, hitting enemies and whoever stands on an aimed centre tile; the tiles around the centre get 1 turn. '
             + 'Sewer creatures are healed instead of hurt. Used up when used. Uncommon, value 9 GP.');
         assert.equal(p.fact, '');
         assert.deepEqual(p.sources, ['Dropped by: Red Fungus.', 'Found in: Sewer.']);
@@ -65,12 +65,12 @@ describe('describeItem: stats, then the fact, then the sources', () => {
 
     test('exact stat lines, item by item (no sources)', () => {
         const stats = (d, o = {}) => describeItemParts(d, { sources: NO_SOURCES, ...o }).stats;
-        assert.equal(stats(ITEMS.rock), 'Throw: 2 damage to everything in a 3x3 burst (half of 3), range 4. Idle or wandering enemies in earshot go to where it lands. Used up when used. Common, value 3 GP.');
-        assert.equal(stats(ITEMS.fire_blood), 'Throw: fire, 5 damage per turn for 5 turns, range 5. It bursts over 3x3 tiles; the tiles around the centre get 2 turns. '
+        assert.equal(stats(ITEMS.rock), 'Throw: 2 damage (half of 3) to every enemy in a 3x3 burst and to whoever stands on an aimed centre tile, range 4. Idle or wandering enemies in earshot go to where it lands. Used up when used. Common, value 3 GP.');
+        assert.equal(stats(ITEMS.fire_blood), 'Throw: fire, 5 damage per turn for 5 turns, range 5. It bursts over 3x3 tiles, hitting enemies and whoever stands on an aimed centre tile; the tiles around the centre get 2 turns. '
             + 'Whoever it burns also gets fire blood for as long; while both last, their hits set the target burning. Can be drunk. Enemies throw it at you. Used up when used. Rare, value 17 GP.');
         assert.equal(stats(ITEMS.sludge_brain), 'Throw: leaves a sludge puddle on up to 3 tiles for 8 turns, range 5. Ending a turn in it applies Sludge; sewer creatures are healed instead. Enemies throw it at you. Used up when used. Rare, value 12 GP.');
         assert.equal(stats(ITEMS.goo), 'Throw: leaves a goo puddle on up to 3 tiles for 8 turns, range 5. Ending a turn in it gives the Goo status. Enemies throw it at you. Used up when used. Common, value 0 GP.');
-        assert.equal(stats(ITEMS.mystery_meat), 'Throw: poison 2 damage to everything in a 3x3 burst (half of 3), range 3. Sewer creatures are healed instead of hurt. Used up when used. Common, value 3 GP.');
+        assert.equal(stats(ITEMS.mystery_meat), 'Throw: poison 2 damage (half of 3) to every enemy in a 3x3 burst and to whoever stands on an aimed centre tile, range 3. Sewer creatures are healed instead of hurt. Used up when used. Common, value 3 GP.');
         assert.equal(stats(ITEMS.soap), 'Use: cures sludge and poison. Also worn on your back for 3 turns: +2 armour. Used up when used. Rare, value 15 GP.');
         assert.equal(stats(ITEMS.bandage), 'Use: heals 25 HP. Also worn on your front for 2 turns: +1 armour. Used up when used. Epic, value 25 GP.');
         assert.equal(stats(ITEMS.boardwalk_burger), 'Eat: heals 15 HP. Used up when used. Rare, value 15 GP.');
@@ -100,6 +100,16 @@ describe('describeItem: stats, then the fact, then the sources', () => {
         assert.equal(itemParts(WEAPONS.fearmur, WEAPONS.wooden_sword).stats,
             'Weapon: 16 damage (+6 vs Wooden Sword). 1 hand, hammer. Hitting the same enemy twice in a row frightens it for 3 turns. Grants while worn: Boo! (8 MP). Epic, value 28 GP.');
         assert.deepEqual(itemParagraphs(WEAPONS.fearmur, null).slice(1), itemSourceLines(WEAPONS.fearmur));
+    });
+
+    test('a ring has no value or tier to print; its data is restated', () => {
+        assert.equal(describeItem(RINGS.rat_ring), 'Passive: evasion 5. Grants: rat form.');
+        assert.equal(describeItem(RINGS.fire_ring), 'Passive: fire damage 10. 25% chance on hit: ignite.');
+        for (const r of Object.values(RINGS)) assert.ok(!/value|GP/.test(describeItem(r)), r.id);
+    });
+
+    test('the Converter\'s use hint is plain', () => {
+        assert.equal(ITEMS.catalytic_converter.useHint, 'Return it to your car in Town: walk into the car or tap it.');
     });
 
     test('a tiered copy counts its empty perk slots and prints no bracket', () => {

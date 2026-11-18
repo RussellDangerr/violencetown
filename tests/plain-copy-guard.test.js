@@ -67,7 +67,7 @@ const ALLOWED = {
     'index.html': 15,
     'interactions.js': 3,
     'item-uses.js': 5,
-    'items.js': 5,
+    'items.js': 4,
     'layout.js': 3,
     'main.js': 186,
     'npc.js': 11,
