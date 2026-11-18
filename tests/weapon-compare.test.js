@@ -309,7 +309,7 @@ describe('examine: E at a weapon on the ground', () => {
         const g = groundGame(page, 'fearmur');
         press(page, 'KeyE');
         assert.equal(g.logs.length, 1);
-        assert.match(g.logs[0], /^\[\[Fearmur\] \(\w+\)\. A single femur/);
+        assert.match(g.logs[0], /^\[Fearmur \(\w+\)\. A single femur/);
         assert.doesNotMatch(g.logs[0], /dmg/);
     });
 

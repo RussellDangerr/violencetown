@@ -45,9 +45,9 @@ describe('resolveExamine — the ladder', () => {
 
     test('an item on the ground wears its value tier — weapons included', () => {
         const r = resolveExamine(game({ groundItems: [{ type: 'ray_gun', x: 4, y: 4 }] }), 4, 4);
-        assert.equal(r.title, '[Ray Gun]');
+        assert.equal(r.title, 'Ray Gun');
         assert.ok(r.tierName, 'no tier on an item');
-        assert.match(r.body, /^\[\[Ray Gun\] \(\w+\)\. Dented brass/);
+        assert.match(r.body, /^\[Ray Gun \(\w+\)\. Dented brass/);
     });
 
     test('a prop names itself instead of the ground under it', () => {

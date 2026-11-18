@@ -139,7 +139,7 @@ describe('the helper', () => {
 describe('Knuckles in a fight', () => {
     test('the defeat line, the target panel and the KO tag say his name', () => {
         const s = surfaces(knuckles());
-        assert.equal(s.death, '[Defeated [Knuckles]]');
+        assert.equal(s.death, '[Defeated Knuckles]');
         assert.ok(s.panelAll.includes('KNUCKLES'), s.panelAll.join(' | '));
         assert.ok(!s.panelAll.includes('VIOLENCIAN'), 'the panel no longer prints the type');
         assert.equal(s.ko, '[KO] KNUCKLES');
@@ -175,7 +175,7 @@ describe('unnamed townsfolk read as before', () => {
     test('an unnamed Violencian keeps the demonym on every surface', () => {
         const provoked = unnamedTownie(); provoked.ambient = false;   // a provoked townsperson fights for real
         const s = surfaces(provoked);
-        assert.equal(s.death, '[Defeated [Violencian]]');
+        assert.equal(s.death, '[Defeated Violencian]');
         assert.equal(s.ko, '[KO] VIOLENCIAN');
         assert.ok(s.panelAll.includes('VIOLENCIAN'), s.panelAll.join(' | '));
         const g = standIn([unnamedTownie()]);
@@ -186,7 +186,7 @@ describe('unnamed townsfolk read as before', () => {
     test('a creature keeps its type', () => {
         const e = new Enemy({ id: 'g1', type: 'Violet Fungus', x: 5, y: 5, gold: 0 });
         const s = surfaces(e);
-        assert.equal(s.death, '[Defeated [Violet Fungus]]');
+        assert.equal(s.death, '[Defeated Violet Fungus]');
         assert.equal(s.ko, '[KO] VIOLET FUNGUS');
     });
 });

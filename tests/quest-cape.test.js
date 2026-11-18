@@ -1,4 +1,4 @@
-// quest-cape.test.js — QC2: finishing every quest gives you the [Lava Cape]
+// quest-cape.test.js — QC2: finishing every quest gives you the Lava Cape
 // (plans/qc2-quest-cape.md). +6 melee while worn (QC2R2 a), weapon swings only.
 
 import { test, describe, before, after } from 'node:test';
@@ -37,7 +37,7 @@ function flatsOf(equipment, opts, poition = 0) {
 describe('the Lava Cape item', () => {
     const cape = ITEMS.lava_cape;
     test('is a back-slot equip named in brackets, better than the red cape', () => {
-        assert.equal(cape.name, '[Lava Cape]');
+        assert.equal(cape.name, 'Lava Cape');
         assert.equal(cape.equipSlot, 'back');
         assert.equal(cape.useType, 'equip');
         assert.equal(cape.meleeBonus, 6);

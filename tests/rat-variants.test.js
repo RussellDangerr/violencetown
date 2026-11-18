@@ -111,7 +111,7 @@ describe('placed by hand on the Carnival', () => {
             assert.equal(enemy.type, type);
             assert.equal(enemy.id, s.id);
             assert.deepEqual([enemy.x, enemy.y], [s.x, s.y]);
-            assert.equal(enemy.entity.name, `[${type}]`);
+            assert.equal(enemy.entity.name, type);
             assert.equal(labelOf(enemy), type);
             assert.deepEqual(enemy.loadout, ENTRIES[entry].loadout);
         });

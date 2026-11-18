@@ -138,10 +138,10 @@ describe('each creature', () => {
         }
     });
 
-    test('carries [TEXT] examine text and a bracketed placeholder name', () => {
+    test('carries [TEXT] examine text and a plain name', () => {
         for (const e of creatures) {
             assert.equal(e.examine, '[TEXT]', e.type);
-            assert.equal(e.name, `[${e.type}]`);
+            assert.equal(e.name, e.type);
         }
     });
 
@@ -206,9 +206,9 @@ describe('examining a creature', () => {
     const tap = (g, npc) => fire.call(g, { resolver: 'examine' }, { npc, item: null, examinable: null, container: null, x: npc.x, y: npc.y });
 
     const EXAMINE_BODY = {
-        'Snowman': '[TEXT]\n[Snowman. Creature. Looks like trouble.]\nHP: 100 / 100\nArmour: 2\nDamage: 12\nWeapon: [Pipe]\nDrops: [Rock], [Pipe], [Shoe Bags]',
-        'Yeti': '[TEXT]\n[Yeti. Creature. Looks like trouble.]\nHP: 100 / 100\nArmour: 2\nDamage: 12\nDrops: [Tunnel Mushroom], [Tunnel Mushroom], [Sludge Sack], [Sludge Sack], [Boardwalk Burger], [Defence Poition], [Soap]',
-        'Polar Bear': '[TEXT]\n[Polar Bear. Creature. Looks like trouble.]\nHP: 100 / 100\nArmour: 3\nDamage: 10\nDrops: [Mystery Meat], [Mystery Meat], [Mystery Meat], [Tunnel Mushroom], [Sludge Sack], [Fire Blood], [Defence Poition]',
+        'Snowman': '[TEXT]\n[Snowman. Creature. Looks like trouble.]\nHP: 100 / 100\nArmour: 2\nDamage: 12\nWeapon: Pipe\nDrops: Rock, Pipe, Shoe Bags',
+        'Yeti': '[TEXT]\n[Yeti. Creature. Looks like trouble.]\nHP: 100 / 100\nArmour: 2\nDamage: 12\nDrops: Tunnel Mushroom, Tunnel Mushroom, Sludge Sack, Sludge Sack, Boardwalk Burger, Defence Poition, Soap',
+        'Polar Bear': '[TEXT]\n[Polar Bear. Creature. Looks like trouble.]\nHP: 100 / 100\nArmour: 3\nDamage: 10\nDrops: Mystery Meat, Mystery Meat, Mystery Meat, Tunnel Mushroom, Sludge Sack, Fire Blood, Defence Poition',
     };
 
     test('tapping a hostile frozen creature (Target List) shows its own text', () => {

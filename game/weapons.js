@@ -57,7 +57,6 @@ export function weaponClassOf(def) {
 export const PERK_PLACEHOLDER = '[PERK]';
 export const WEAPON_TIER_KEYS = Object.freeze(VALUE_TIERS.map(t => t.key));
 
-const unbracket = s => String(s ?? '').replace(/^\[(.*)\]$/, '$1');
 const titleCase = s => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
 function deepFreeze(o) {
@@ -74,7 +73,7 @@ export function weaponTiers(base) {
     return WEAPON_TIER_KEYS.map((key, step) => {
         const def = structuredClone(base);
         def.id = `${base.id}_${key}`;
-        def.name = `[${titleCase(key)} ${unbracket(base.name)}]`;
+        def.name = `${titleCase(key)} ${base.name}`;
         def.tier = key;
         def.baseId = base.id;
         def.perks = [...basePerks, ...Array(step).fill(PERK_PLACEHOLDER)];
@@ -98,7 +97,7 @@ export function classBase(classId) {
     const c = WEAPON_CLASSES[classId];
     if (!c) return null;
     return {
-        id: c.id, name: `[${titleCase(c.id)}]`, weaponClass: c.id, damage: WEAPON_CLASS_DAMAGE[c.id],
+        id: c.id, name: `${titleCase(c.id)}`, weaponClass: c.id, damage: WEAPON_CLASS_DAMAGE[c.id],
         equipSlot: 'weapon', useType: 'equip', category: 'weapon',
     };
 }
@@ -116,7 +115,7 @@ export const ARMOR_TIERS = Object.freeze(Object.fromEntries(
 
 export const WEAPONS = {
     wooden_sword: {
-        id: 'wooden_sword', name: '[Wooden Sword]', damage: 10, equipSlot: 'weapon', icon: 'sword',
+        id: 'wooden_sword', name: 'Wooden Sword', damage: 10, equipSlot: 'weapon', icon: 'sword',
         weaponClass: 'sword',
         useType: 'equip',   // without it, the sword could never be re-equipped once swapped out
         category: 'weapon',
@@ -127,7 +126,7 @@ export const WEAPONS = {
     // Its world source is the Factory alien boss (deferred); the def lives here
     // so the weapon-grants-skill wiring is real and testable now.
     ray_gun: {
-        id: 'ray_gun', name: '[Ray Gun]', damage: 22, damageType: 'energy', equipSlot: 'weapon',
+        id: 'ray_gun', name: 'Ray Gun', damage: 22, damageType: 'energy', equipSlot: 'weapon',
         useType: 'equip', grantsTricks: ['ray_blast'],
         weaponClass: 'wand',
         category: 'weapon',
@@ -138,7 +137,7 @@ export const WEAPONS = {
     // It slashes and stabs like the sword and fills both hands; the Factory's boss carries it.
     // Name, value and description are placeholders until he rules them.
     great_sword: {
-        id: 'great_sword', name: '[Great Sword]', damage: 20, equipSlot: 'weapon', useType: 'equip',
+        id: 'great_sword', name: 'Great Sword', damage: 20, equipSlot: 'weapon', useType: 'equip',
         weaponClass: 'great_sword',
         category: 'weapon',
         baseValue: 45,
@@ -148,7 +147,7 @@ export const WEAPONS = {
     // fears an enemy you hit twice in a row (onHit: 'fearOnRepeat'). Source: the
     // Graveyard (world drop deferred; the def lives here for the fear mechanics).
     fearmur: {
-        id: 'fearmur', name: '[Fearmur]', damage: 16, equipSlot: 'weapon',
+        id: 'fearmur', name: 'Fearmur', damage: 16, equipSlot: 'weapon',
         useType: 'equip', grantsSpells: ['boo'], onHit: 'fearOnRepeat',
         weaponClass: 'hammer',
         category: 'weapon',
@@ -158,7 +157,7 @@ export const WEAPONS = {
     // Gator Tail — a dehydrated gator club. Heavy, mean, and you're not sure
     // where it came from (Lonny, the Sewer's own alligator, has a theory).
     gator_tail: {
-        id: 'gator_tail', name: '[Gator Tail]', damage: 16, equipSlot: 'weapon', useType: 'equip',
+        id: 'gator_tail', name: 'Gator Tail', damage: 16, equipSlot: 'weapon', useType: 'equip',
         weaponClass: 'hammer',
         category: 'weapon',
         baseValue: 18,
@@ -167,7 +166,7 @@ export const WEAPONS = {
     // Lion Whip — a carnival tamer's whip. Reaches 3 tiles and YANKS whatever it
     // strikes one tile closer; grants the "Hire a Lion" trick (GP) while worn.
     lion_whip: {
-        id: 'lion_whip', name: '[Lion Whip]', damage: 16, equipSlot: 'weapon', useType: 'equip',
+        id: 'lion_whip', name: 'Lion Whip', damage: 16, equipSlot: 'weapon', useType: 'equip',
         reach: 3, pullDistance: 1, grantsTricks: ['hire_lion'],
         weaponClass: 'whip',
         category: 'weapon',
@@ -180,7 +179,7 @@ export const WEAPONS = {
 // ITEMS, so it cannot be bagged, bought or saved. 5 is half the Wooden Sword (LH1R2);
 // the name is a placeholder.
 export const FISTS = Object.freeze({
-    id: 'fists', name: '[Fists]', damage: 5, equipSlot: 'weapon',
+    id: 'fists', name: 'Fists', damage: 5, equipSlot: 'weapon',
     weaponClass: 'knuckles', category: 'weapon',
 });
 

@@ -88,7 +88,7 @@ export const ENTRIES = {
     // the barks, the tint. No `boss`, `tag` or slot, so it drops nothing required.
     carnival_lion: {
         type: 'Carnival Lion',
-        name: '[Lion]',
+        name: 'Lion',
         gold: 20,
         loadout: ['tunnel_mushroom', 'tunnel_mushroom', 'sludge_sack', 'sludge_sack', 'boardwalk_burger', 'foil_hat', 'defence_poition', 'soap'],
         hp: 100,
@@ -104,7 +104,7 @@ export const ENTRIES = {
     // bribe. No `boss`, `tag` or slot, so he drops nothing required.
     the_clown: {
         type: 'The Clown',
-        name: '[The Clown]',
+        name: 'The Clown',
         gold: 20,
         loadout: ['tunnel_mushroom', 'tunnel_mushroom', 'sludge_sack', 'fire_blood', 'boardwalk_burger', 'foil_hat', 'defence_poition', 'soap'],
         hp: 100,
@@ -122,7 +122,7 @@ export const ENTRIES = {
     // carries the art stand-in (Pike's cell); the numbers are still the Clown's.
     strongman: {
         type: 'Strongman',
-        name: '[Strongman]',
+        name: 'Strongman',
         dialogueId: 'strongman',
         gold: 7,
         loadout: ['hot_dog', 'red_cape', 'soap', 'fire_blood'],
@@ -142,7 +142,7 @@ export const ENTRIES = {
     // Rattling Skeleton's numbers and kit, the name, the barks, the art. No `boss`, no slot.
     carnival_horse: {
         type: 'Carnival Horse',
-        name: '[Horse]',
+        name: 'Horse',
         tag: 'circler',
         gold: 4,
         loadout: ['rock', 'pipe', 'foil_hat', 'shoe_bags'],
@@ -158,7 +158,7 @@ export const ENTRIES = {
     // damage with a two-item kit, the purse, the name, the barks, the art. No `boss`, no slot.
     carnival_doll: {
         type: 'Carnival Doll',
-        name: '[Doll]',
+        name: 'Doll',
         tag: 'circler',
         gold: 2,
         loadout: ['rock', 'pipe'],
@@ -175,7 +175,7 @@ export const ENTRIES = {
     // size, the unicycle. No `boss`, no slot.
     assistant_manager: {
         type: 'Carnival Clown',
-        name: '[Assistant Manager]',
+        name: 'Assistant Manager',
         ambient: true,
         hp: 100,
         armor: -80,
@@ -198,7 +198,7 @@ export const ENTRIES = {
     // kit, the name, the barks, the examine text, the art. No `boss`, no slot.
     crying_angel: {
         type: 'Crying Angel',
-        name: '[Angel]',
+        name: 'Angel',
         tag: 'angel',
         gold: 4,
         loadout: ['rock', 'pipe', 'foil_hat', 'shoe_bags'],
@@ -260,7 +260,7 @@ export const ENTRIES = {
     bigfoot:        { ...act2Boss(), name: 'Bigfoot' },
     // The Carnival's second pool entry (plans/rm1-ringmaster-carnival-boss.md):
     // the same stand-in block, a placeholder name.
-    ringmaster:     { ...act2Boss(), name: '[Ringmaster]' },
+    ringmaster:     { ...act2Boss(), name: 'Ringmaster' },
     // The first built out (plans/ab2-alien-boss-fight.md). He carries the Ray
     // Gun, so his death drop hands it over (ABR3: it left the Factory floor);
     // it heals nothing, so his kit never spends it.
@@ -285,7 +285,7 @@ export const ENTRIES = {
     // they are designed.
     alien_ally: {
         type: 'Greedy Green',
-        name: '[NAME]',
+        name: 'Alien Ally',
         gold: 8,
         loadout: ['hot_dog', 'foil_hat', 'latex_gloves', 'cardboard_cuirass', 'soap', 'goo'],
         immune: ['goo'],   // (GO2) aliens are immune to goo, and throw it
@@ -301,7 +301,7 @@ export const ENTRIES = {
     // stream and move the autoplay replay).
     factory_worker: {
         type: 'Worker',
-        name: '[Worker]',
+        name: 'Worker',
         tag: 'hypno_target',
         gold: 4,
         loadout: ['rock', 'pipe', 'foil_hat', 'shoe_bags'],
@@ -313,7 +313,7 @@ export const ENTRIES = {
     },
     factory_robot: {
         type: 'Greedy Green',
-        name: '[Robot]',
+        name: 'Robot',
         tag: 'hypno_target',
         gold: 8,
         loadout: ['hot_dog', 'foil_hat', 'latex_gloves', 'cardboard_cuirass', 'soap'],
@@ -327,7 +327,7 @@ export const ENTRIES = {
     // off. The Factory Manager's numbers (damage 0) until he is designed.
     hypno_nerd: {
         type: 'Violencian',
-        name: '[Nerd]',
+        name: 'Nerd',
         tag: 'hypno_nerd',
         hp: 100,
         armor: -80,
@@ -374,7 +374,7 @@ export const ENTRIES = {
     // tag is compactor.js COMPACTOR_TAG; breaking it is what stops the walls.
     compactor: {
         type: 'Compactor',
-        name: '[Compactor]',
+        name: 'Compactor',
         tag: 'compactor',
         gold: 0,
         hp: 100,
@@ -394,7 +394,7 @@ export const ENTRIES = {
 // (sprites.js picks the look from that tag).
 ENTRIES.returning_boss = {
     ...structuredClone(ENTRIES.wererat),
-    name: '[NAME]',
+    name: 'Returning Boss',
     tag: 'returning_boss',
     barks: ['[TEXT]', '[TEXT]'],
 };
@@ -448,7 +448,7 @@ export const FINALE_PHASE1 = {
 function frozenMob(type, numbers) {
     return {
         type,
-        name: `[${type}]`,
+        name: type,
         ...numbers,
         weak: weaknessesOf('cold'),
         resist: resistancesOf('cold'),
@@ -498,7 +498,7 @@ function placeholderBoss() {
 export const OLD_SELF = {
     type: 'Violencian',   // drawn as you, tinted pale, by its tag (sprites.js byTag)
     tag: 'old_self',
-    name: '[TEXT]',
+    name: 'Old Self',
     hp: 100,
     armor: 0,
     damage: 0,

@@ -3145,7 +3145,7 @@ class Game {
                 if (this._hasSludgeImmunity()) {
                     this._log('[The goo slides right off your bagged feet.]');
                 } else if (!this.hasBuff('goo')) {
-                    this.addBuff('goo', '[TEXT] Goo', SLUDGE_DURATION, 'debuff');
+                    this.addBuff('goo', 'Goo', SLUDGE_DURATION, 'debuff');
                     this._log('[TEXT: stepped in goo — 3 turns]');
                 }
             }
@@ -6263,7 +6263,7 @@ class Game {
         if (under && under.kind === 'goo') {
             // (GO2) A goo puddle gives the Goo status, as the goo tile does.
             if (!this._hasSludgeImmunity() && !this.hasBuff('goo')) {
-                this.addBuff('goo', '[TEXT] Goo', SLUDGE_DURATION, 'debuff');
+                this.addBuff('goo', 'Goo', SLUDGE_DURATION, 'debuff');
                 this._log('[TEXT: standing in goo]', 'combat');
             }
         } else if (under) {

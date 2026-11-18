@@ -67,7 +67,7 @@ export const BOON_CAP_LINE = `You have drunk ${BOON_CAP} boon poitions, the most
 export const ITEMS = {
     rock: {
         id: 'rock',
-        name: '[Rock]',
+        name: 'Rock',
         description: 'A heavy chunk of sewer masonry. Better thrown than held — though a clatter down the tunnel turns heads.',
         useType: 'throw',
         equipSlot: 'sides',
@@ -81,7 +81,7 @@ export const ITEMS = {
     },
     sludge_sack: {
         id: 'sludge_sack',
-        name: '[Sludge Sack]',
+        name: 'Sludge Sack',
         description: 'A burlap sack cinched with a leather tie, heavy with sewer sludge. Bursts on impact and keeps eating.',
         useType: 'throw',
         equipSlot: 'sides',
@@ -99,7 +99,7 @@ export const ITEMS = {
     // target burning (Game._spreadFireBlood). Drinkable on purpose.
     fire_blood: {
         id: 'fire_blood',
-        name: '[Fire Blood]',
+        name: 'Fire Blood',
         description: 'Thrown, it sets everyone it splashes burning. Drunk, you burn, and every hit you land sets the target burning too.',
         category: 'poition',
         useType: 'throw',
@@ -119,7 +119,7 @@ export const ITEMS = {
     // diagonals (puddles.js); ending a turn in it applies the Sludge DoT.
     sludge_brain: {
         id: 'sludge_brain',
-        name: '[Sludge Brain]',
+        name: 'Sludge Brain',
         description: 'Thrown, it leaves a 3-tile sludge puddle for 8 turns. Ending a turn in it applies Sludge; sewer dwellers are healed instead.',
         category: 'poition',
         useType: 'throw',
@@ -136,7 +136,7 @@ export const ITEMS = {
     // the Goo status (GO1). Placeholder name, text and icon.
     goo: {
         id: 'goo',
-        name: '[TEXT: Goo]',
+        name: 'Goo',
         description: '[TEXT]',
         category: 'poition',
         useType: 'throw',
@@ -151,7 +151,7 @@ export const ITEMS = {
     },
     soap: {
         id: 'soap',
-        name: '[Soap]',
+        name: 'Soap',
         description: 'Industrial-grade lye bar. Cuts through sludge. The Sewer\'s most valuable commodity.',
         equipSlot: 'back',
         equipDuration: 3,
@@ -164,7 +164,7 @@ export const ITEMS = {
     },
     pipe: {
         id: 'pipe',
-        name: '[Pipe]',
+        name: 'Pipe',
         description: 'Rusty copper pipe, wrenched free from the wall. Swings like it means it.',
         equipSlot: 'weapon',
         weaponClass: 'hammer',   // the class table is WEAPON_CLASSES in weapons.js
@@ -178,7 +178,7 @@ export const ITEMS = {
     },
     bandage: {
         id: 'bandage',
-        name: '[Bandage]',
+        name: 'Bandage',
         description: 'Torn fabric strip, reasonably clean. Stops the bleeding, not the pain.',
         equipSlot: 'front',
         equipDuration: 2,
@@ -197,7 +197,7 @@ export const ITEMS = {
     // Shoe Bags carry `sludgeImmune` (see _hasSludgeImmunity in main.js).
     foil_hat: {
         id: 'foil_hat',
-        name: '[Foil Hat]',
+        name: 'Foil Hat',
         description: 'Tin-foil, triple-layered. They can\'t read you now.',
         equipSlot: 'top',
         useType: 'equip',
@@ -210,7 +210,7 @@ export const ITEMS = {
     // and while worn the player draws as `body.sprite` and may do `body.verbs`.
     rat_mask: {
         id: 'rat_mask',
-        name: '[Rat Mask]',
+        name: 'Rat Mask',
         description: '[TEXT]',
         equipSlot: 'top',
         useType: 'equip',
@@ -225,7 +225,7 @@ export const ITEMS = {
     // armour and prices are placeholders.
     delivery_cap_grey: {
         id: 'delivery_cap_grey',
-        name: '[Delivery Cap, Grey]',
+        name: 'Delivery Cap, Grey',
         description: '[TEXT]',
         equipSlot: 'top',
         useType: 'equip',
@@ -238,7 +238,7 @@ export const ITEMS = {
     },
     delivery_cap_blue: {
         id: 'delivery_cap_blue',
-        name: '[Delivery Cap, Blue]',
+        name: 'Delivery Cap, Blue',
         description: '[TEXT]',
         equipSlot: 'top',
         useType: 'equip',
@@ -253,7 +253,7 @@ export const ITEMS = {
     // field is a placeholder: the name is his to give, the art its own.
     strongman_mask: {
         id: 'strongman_mask',
-        name: '[NAME: POWER-WIELD MASK]',
+        name: 'Power-Wield Mask',
         description: '[TEXT]',
         equipSlot: 'top',
         useType: 'equip',
@@ -268,7 +268,7 @@ export const ITEMS = {
     // Its kit and ranks live in costumes.js; the bag icon is a flat fallback colour.
     test_costume: {
         id: 'test_costume',
-        name: '[Test Costume]',
+        name: 'Test Costume',
         description: '[TEXT]',
         useType: 'costume',
         costume: 'test_costume',
@@ -279,7 +279,7 @@ export const ITEMS = {
     // CO2: given once when Monstrous Sun Man falls (finale-setpiece.js beastFell).
     sun_man_costume: {
         id: 'sun_man_costume',
-        name: '[Sun Man Costume]',
+        name: 'Sun Man Costume',
         description: '[TEXT]',
         useType: 'costume',
         costume: 'sun_man_costume',
@@ -289,7 +289,7 @@ export const ITEMS = {
     },
     cardboard_cuirass: {
         id: 'cardboard_cuirass',
-        name: '[Cardboard Cuirass]',
+        name: 'Cardboard Cuirass',
         description: 'A refrigerator box with the arm-holes torn out. FRAGILE, stencilled on both sides. It is not wrong.',
         equipSlot: 'front',
         useType: 'equip',
@@ -300,7 +300,7 @@ export const ITEMS = {
     },
     latex_gloves: {
         id: 'latex_gloves',
-        name: '[Latex Gloves]',
+        name: 'Latex Gloves',
         description: 'Powder-blue, one size too big, snapped at the wrist. Surgical, in the loosest sense.',
         equipSlot: 'sides',
         useType: 'equip',
@@ -311,7 +311,7 @@ export const ITEMS = {
     },
     red_cape: {
         id: 'red_cape',
-        name: '[Red Cape]',
+        name: 'Red Cape',
         description: 'Torn from something that left in a hurry. Snags on everything. Makes you feel taller.',
         equipSlot: 'back',
         useType: 'equip',
@@ -324,7 +324,7 @@ export const ITEMS = {
     // the Strength Poition (QC2R2 a). The bonus is read in combatAttack, weapon swings only.
     lava_cape: {
         id: 'lava_cape',
-        name: '[Lava Cape]',
+        name: 'Lava Cape',
         description: '[TEXT]',
         equipSlot: 'back',
         useType: 'equip',
@@ -336,7 +336,7 @@ export const ITEMS = {
     },
     shoe_bags: {
         id: 'shoe_bags',
-        name: '[Shoe Bags]',
+        name: 'Shoe Bags',
         description: 'Garbage-bag socks, double-knotted at the shin. The Sewer stays out of your socks.',
         equipSlot: 'bottom',
         useType: 'equip',
@@ -350,7 +350,7 @@ export const ITEMS = {
     // ── Ambro (food — healing) ──────────────────────────────────────────────
     boardwalk_burger: {
         id: 'boardwalk_burger',
-        name: '[Boardwalk Burger]',
+        name: 'Boardwalk Burger',
         description: 'Jersey\'s house special. Grease-soaked, overcooked, perfect.',
         category: 'ambro',
         useType: 'self',
@@ -367,7 +367,7 @@ export const ITEMS = {
     // copied from the hot dog, the cheapest healing food.
     mola_cola: {
         id: 'mola_cola',
-        name: '[Mola Cola]',
+        name: 'Mola Cola',
         description: '[TEXT]',
         category: 'ambro',
         useType: 'self',
@@ -384,7 +384,7 @@ export const ITEMS = {
     // Templates: boardwalk_burger (food) + catalytic_converter (questItem).
     burger_fries: {
         id: 'burger_fries',
-        name: '[Burger & Fries]',
+        name: 'Burger & Fries',
         description: 'A warm paper bag, grease-spotted, smells incredible. For delivery — not for eating.',
         category: 'quest',
         useType: 'none',
@@ -400,7 +400,7 @@ export const ITEMS = {
     // (_fashionRing) consumes it.
     wererat_fur: {
         id: 'wererat_fur',
-        name: '[Tuft of Wererat Fur]',
+        name: 'Tuft of Wererat Fur',
         description: 'A braided tuft that stays blood-warm. Platero could set it into something you\'d wear.',
         category: 'quest',
         useType: 'none',
@@ -412,7 +412,7 @@ export const ITEMS = {
     },
     mystery_meat: {
         id: 'mystery_meat',
-        name: '[Mystery Meat]',
+        name: 'Mystery Meat',
         description: "Grey, sweating, and warm in a way meat should not be. It's food to somebody.",
         category: 'ambro',
         useType: 'throw',
@@ -427,7 +427,7 @@ export const ITEMS = {
     },
     tunnel_mushroom: {
         id: 'tunnel_mushroom',
-        name: '[Tunnel Mushroom]',
+        name: 'Tunnel Mushroom',
         description: 'Pale, damp, and thriving where nothing should. Something down here eats these on purpose.',
         category: 'ambro',
         useType: 'throw',
@@ -442,7 +442,7 @@ export const ITEMS = {
     },
     hot_dog: {
         id: 'hot_dog',
-        name: '[Hot Dog]',
+        name: 'Hot Dog',
         description: 'Boardwalk classic. Been on the roller since this morning. Maybe yesterday.',
         category: 'ambro',
         useType: 'self',
@@ -458,7 +458,7 @@ export const ITEMS = {
     // ("Cataclysmic") is intentional — it's how the delivery boy says it.
     catalytic_converter: {
         id: 'catalytic_converter',
-        name: '[Cataclysmic Converter]',
+        name: 'Cataclysmic Converter',
         description: 'The thingamajig that makes the car go. Rat people tore it clean out. Smells like grease and betrayal. No ordinary merchant wants it — but Macc pays.',
         category: 'quest',
         useType: 'none',
@@ -520,7 +520,7 @@ export const ITEMS = {
     // the bootlegger in Town; consumed at the car (_interactCar).
     alcohol: {
         id: 'alcohol',
-        name: '[Bottle of Alcohol]',
+        name: 'Bottle of Alcohol',
         description: 'Cheap, high-proof, and mean. Burns FAST and burns out fast — barely a push. Not a drink. A tank\'s worth of "slow down".',
         useType: 'none',
         consumable: false,
@@ -532,7 +532,7 @@ export const ITEMS = {
     // Not for sale until TX7. Placeholder text.
     oil: {
         id: 'oil',
-        name: '[TEXT: Oil]',
+        name: 'Oil',
         description: '[TEXT]',
         useType: 'none',
         consumable: false,
@@ -543,7 +543,7 @@ export const ITEMS = {
     // where it is too cold (plans/ic1-tigers-blood-ice-cone.md).
     tigers_blood_ice_cone: {
         id: 'tigers_blood_ice_cone',
-        name: "[Tiger's Blood Ice Cone]",
+        name: "Tiger's Blood Ice Cone",
         description: '[TEXT]',
         useType: 'none',
         consumable: false,
@@ -557,7 +557,7 @@ export const ITEMS = {
     // before it is used, the manager hands over another.
     ice_cone_machine_part: {
         id: 'ice_cone_machine_part',
-        name: '[Ice Cone Machine Part]',
+        name: 'Ice Cone Machine Part',
         description: '[TEXT]',
         category: 'quest',
         useType: 'none',
@@ -567,7 +567,7 @@ export const ITEMS = {
     },
     grappling_hook: {
         id: 'grappling_hook',
-        name: '[Grappling Hook]',
+        name: 'Grappling Hook',
         description: "Pike's big coil of rope and an iron hook that bites stone and holds. A way UP.",
         useType: 'none',
         consumable: false,
@@ -584,7 +584,7 @@ export const ITEMS = {
     // resolveSelfUse's poition branch below when drunk (useType:'self').
     health_poition: {
         id: 'health_poition',
-        name: '[Health Poition]',
+        name: 'Health Poition',
         description: 'Vial of thick red syrup, corked with a wine stopper. Stings on the way down. Works anyway.',
         category: 'poition',
         poition: { stat: 'health', amount: 25, turns: 1 },
@@ -595,7 +595,7 @@ export const ITEMS = {
     },
     mana_poition: {
         id: 'mana_poition',
-        name: '[Mana Poition]',
+        name: 'Mana Poition',
         description: 'Vial of something blue that fizzes on its own. Drink it fast — thinking about it too long makes it worse.',
         category: 'poition',
         poition: { stat: 'mana', amount: 20, turns: 1 },
@@ -606,7 +606,7 @@ export const ITEMS = {
     },
     boon_poition: {
         id: 'boon_poition',
-        name: '[TEXT]',
+        name: 'Boon Poition',
         description: '[TEXT]',
         category: 'poition',
         poition: { stat: 'mana', amount: BOON_KINDS.mana.amount, permanent: true },
@@ -617,7 +617,7 @@ export const ITEMS = {
     },
     gold_poition: {
         id: 'gold_poition',
-        name: '[Gold Poition]',
+        name: 'Gold Poition',
         description: "Swallow it and cough up loose change for about a minute straight. Where it comes from is above your pay grade.",
         category: 'poition',
         poition: { stat: 'gold', amount: 50, turns: 1 },
@@ -628,7 +628,7 @@ export const ITEMS = {
     },
     strength_poition: {
         id: 'strength_poition',
-        name: '[Strength Poition]',
+        name: 'Strength Poition',
         description: 'Thick as tar and tastes like a bad idea. Your arms believe it before your brain does.',
         category: 'poition',
         poition: { stat: 'strength', amount: 6, turns: 5 },
@@ -639,7 +639,7 @@ export const ITEMS = {
     },
     defence_poition: {
         id: 'defence_poition',
-        name: '[Defence Poition]',
+        name: 'Defence Poition',
         description: 'Sets like plaster somewhere behind your ribs. Hurts going down, helps for a while after.',
         category: 'poition',
         poition: { stat: 'defence', amount: 4, turns: 6 },
@@ -650,7 +650,7 @@ export const ITEMS = {
     },
     speed_poition: {
         id: 'speed_poition',
-        name: '[Speed Poition]',
+        name: 'Speed Poition',
         description: 'Fizzy, cold, gone in one gulp. Everything after moves faster than your judgment does.',
         category: 'poition',
         poition: { stat: 'speed', amount: 2, turns: 1 },

@@ -261,7 +261,7 @@ describe('losing to the sewer rats leaves your things in a stash (RB1)', () => {
         assert.equal(g.equipment.weapon.id, 'wooden_sword');
         // The cost line names every one, right after the scenario line.
         const at = g.logs.indexOf("[The rats rolled you and scampered off with your haul. You'll want it back.]");
-        assert.equal(g.logs[at + 1], '[Taken: [Pipe], [Rock] x3, [Bandage] x2, [Foil Hat]. GP taken: 0.]');
+        assert.equal(g.logs[at + 1], '[Taken: Pipe, Rock x3, Bandage x2, Foil Hat. GP taken: 0.]');
         assert.equal(g.gold, 25, 'the rats take no gold');
         assert.equal(g.playerHp, 60, 'you wake at the robbery\'s 60%');
     });
