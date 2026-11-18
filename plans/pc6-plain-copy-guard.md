@@ -14,6 +14,12 @@ It reads every `.js`, `.json` and `.html` file under `game/` as text. A finding 
   one of these fields: `name`, `description`, `text`, `greeting`, `label`, `reply`, `barks`,
   `adjacencyBark` (in JS objects and assignments, and in JSON).
 
+Widened after review: the field list also holds every other key whose string a player sees:
+`log`, `examine`, `dropLine`, `summonLine`, `off`, `note`, `notes`, `bodies`, `zoneName`,
+`requiresMsg`, `spentText`, `useHint`, `shut`, `shove`, `broken`, `crush`, `slash`, `stab`,
+`DODGE_WORD`, `clean`, `noticed`, `light_fingers`, `line`, `body`. The allow-list was re-measured:
+53 files, 611 findings (it was 50 and 581).
+
 It skips comments (JS `//` and `/* */`, HTML `<!-- -->`), everything inside `console.*(...)`
 calls (tags like `[save]`), regular expressions, and strings in any other field, such as ids.
 

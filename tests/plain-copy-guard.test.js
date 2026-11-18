@@ -8,7 +8,8 @@
 //   2. a bracket-wrapped string (its text, trimmed, starts with '[' and ends with ']'; a
 //      template such as `[${name}]` counts) when it sits in a player position:
 //        - anywhere inside the arguments of a _log(...) call (this._log, game._log?.(...));
-//        - the value of a FIELDS key below, in JS and in JSON. In JS the value runs from the key's
+//        - the value of a FIELDS key below (the player-visible keys: name, text, log, examine,
+//          zoneName, requiresMsg and so on), in JS and in JSON. In JS the value runs from the key's
 //          ':' or '=' to the next ',' or ';' at that depth, through any ( ) and [ ] in it, so
 //          `name: '[x]'`, `def.name = f(`[${x}]`)`, `a ? '[x]' : b` and `barks: ['[x]']` all
 //          count; an object literal { } inside the value starts afresh.
@@ -17,6 +18,10 @@
 // value of an id key (`id`, or ending in Id / ID), markers included: those are internal ids.
 // Bracket-wrapped strings anywhere else (a key hint like '[E]', a drawText label) are not
 // counted unless they carry a marker.
+//
+// '[Test Costume]' (costumes.js, and its item in items.js): a fixture. No map, shop or loot table
+// hands it out and only tests/costume.test.js uses it, so a player cannot reach it today. It sits in
+// shipped data tables, so it is counted anyway.
 //
 // THE ALLOW-LIST. ALLOWED names every file with findings today and its exact count. The test
 // fails when a file not on the list has a finding, when a listed file's count goes up, and when
@@ -37,31 +42,34 @@ const ALLOWED = {
     'bank-map.json': 4,
     'borgir-map.json': 3,
     'buffs.js': 4,
-    'canyon-map.json': 13,
+    'canyon-map.json': 14,
     'carnival-map.json': 10,
     'carrion-room-map.json': 2,
     'casino-map.json': 2,
-    'compactor-map.json': 1,
-    'compactor.js': 1,
+    'compactor-map.json': 2,
+    'compactor.js': 5,
     'costumes.js': 2,
+    'defeat-scenarios.js': 4,
     'dialogue.js': 36,
     'diner-map.json': 3,
     'downtown-map.json': 17,
     'enemies.js': 5,
+    'examine.js': 2,
     'factory-map.json': 11,
-    'frozen-map.json': 4,
+    'frozen-map.json': 5,
+    'give-action.js': 5,
     'gorge-map.json': 1,
     'graveyard-map.json': 8,
     'hand-data.js': 2,
     'hands.js': 1,
     'hints.js': 8,
-    'hit-splat.js': 1,
-    'hypno-vision.js': 1,
+    'hit-splat.js': 4,
+    'hypno-vision.js': 2,
     'index.html': 15,
     'inspector.js': 1,
     'interactions.js': 3,
     'item-uses.js': 5,
-    'items.js': 60,
+    'items.js': 61,
     'layout.js': 3,
     'main.js': 188,
     'npc.js': 11,
@@ -70,11 +78,11 @@ const ALLOWED = {
     'renderer.js': 13,
     'ring-data.js': 3,
     'save.js': 1,
-    'sewer-map.json': 9,
+    'sewer-map.json': 10,
     'sewer-north-map.json': 5,
     'sewer-setpiece.js': 4,
-    'side-area-map.json': 2,
-    'slots.js': 35,
+    'side-area-map.json': 3,
+    'slots.js': 37,
     'theft.js': 2,
     'town-map.json': 38,
     'trade.js': 1,
@@ -83,10 +91,25 @@ const ALLOWED = {
     'weapons.js': 10,
     'wheel-model.js': 15,
     'wilderness-map.json': 6,
-    'world-map.js': 4,
+    'world-map.js': 7,
 };
 
-const FIELDS = new Set(['name', 'description', 'text', 'greeting', 'label', 'reply', 'barks', 'adjacencyBark']);
+const FIELDS = new Set([
+    // the first pass (PC6)
+    'name', 'description', 'text', 'greeting', 'label', 'reply', 'barks', 'adjacencyBark',
+    // widened: every other key whose string a player sees on screen or in the log
+    'log',                                   // defeat-scenarios.js, give-action.js (template literals too)
+    'examine', 'dropLine', 'summonLine',     // slots.js, main.js
+    'off',                                   // hypno-vision.js
+    'note', 'notes', 'bodies',               // interactions.js, layout.js
+    'zoneName',                              // map JSON: shown as the zone title
+    'requiresMsg', 'spentText', 'useHint',   // map JSON and items.js
+    'shut', 'shove', 'broken', 'crush',      // compactor.js and the hit-splat word of the same name
+    'slash', 'stab', 'DODGE_WORD',           // hit-splat.js words
+    'clean', 'noticed',                      // theft.js lines
+    'light_fingers',                         // renderer.js skill line
+    'line', 'body',                          // examine.js text built by assignment
+]);
 const ID_KEY = /^id$|Id$|ID$/;
 const MARKER = /\[(?:TEXT|NAME)[\]:]/;
 const isWrapped = (s) => { const t = s.trim(); return t.length >= 2 && t[0] === '[' && t[t.length - 1] === ']'; };
@@ -395,6 +418,22 @@ describe('plain-copy guard: the scanner', () => {
         });
         assert.deepEqual(scanJson(src).map(f => f.path),
             ['npcs[0].name', 'npcs[1].name', 'npcs[1].barks[0]', 'props[0].note']);
+    });
+
+    test('the widened keys: caught in JS and in JSON', () => {
+        const src = [
+            "const a = { greeting: '[Hi]', reply: '[Ok]', adjacencyBark: '[Pike: Hey.]' };",
+            "const b = { log: '[You wake.]', examine: '[Look]', dropLine: `[${who} drops it]`, off: '[Off]' };",
+            "const c = { summonLine: '[x]', note: '[y]', zoneName: '[ZONE]', requiresMsg: '[no]', spentText: '[spent]' };",
+            "const d = { slash: '[slash]', crush: '[crush]', clean: '[c]', line: '[l]' }; const DODGE_WORD = '[dodge]';",
+        ].join('\n');
+        assert.equal(scanJs(src).length, 3 + 4 + 5 + 5);
+        const json = JSON.stringify({
+            zoneName: '[ZONE]', requiresMsg: '[no]', spentText: '[spent]',
+            npcs: [{ greeting: '[Hi]', reply: '[Ok]', adjacencyBark: '[Pike: Hey.]', log: ['[a]'] }],
+        });
+        assert.deepEqual(scanJson(json).map(f => f.path), ['zoneName', 'requiresMsg', 'spentText',
+            'npcs[0].greeting', 'npcs[0].reply', 'npcs[0].adjacencyBark', 'npcs[0].log[0]']);
     });
 
     test('HTML: markers in text and attributes, not in comments', () => {
