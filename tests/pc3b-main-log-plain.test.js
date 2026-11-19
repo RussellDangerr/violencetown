@@ -51,6 +51,6 @@ describe('the lines the card names', () => {
         has('fights for you for ${FINALE_PHASE1.sunManTurns} turns.');
     });
     test('the fight-join line', () => {
-        has("'Other hostile characters that see you join the fight.'");
+        has("'Hostile characters who see the fight come after you.'");
     });
 });

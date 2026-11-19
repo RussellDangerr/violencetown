@@ -1045,7 +1045,7 @@ describe('_logOffer - the sentences the unspent fields were kept for', () => {
 
     test('a bad deal says they remember', () => {
         const out = lines({ ...R0, points: -15 }, { given: [{ count: 1 }], taken: [{ count: 1 }], gold: 0 });
-        assert.match(out[0], /Disposition -15/);
+        assert.match(out[0], /^You hand puck 1 item for 1 item\. Disposition -15\.$/);
     });
 
     test('GOLD THAT BOUGHT NOTHING IS SAID OUT LOUD', () => {

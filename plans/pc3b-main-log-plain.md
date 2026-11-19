@@ -45,3 +45,5 @@ line and label; commit B writes a plain factual line for each flavoured or [TEXT
 against the code beside it; commit C re-pins the tests that pinned the old text, exactly.
 The bag-full and defeat lines that live in other files (defeat-scenarios.js, quests.js, enemies.js
 barks) are not touched here.
+
+The continue-line table says VAULT for the vault. PC4 sets vault-map.json zoneName to Vault to match, which removes "Entered [TEXT]"; tests/vault-zone-name.test.js keeps pinning the map value until that re-pin. Lire is the trick data name (tricks.js summonName) and stays.

@@ -223,7 +223,7 @@ describe('reaching a rank grants its perk', () => {
         const rankLines = () => g.logs.filter(l => l.startsWith('Light fingers is now rank'));
         assert.equal(rankLines().length, 0);
         g.lift(mark());
-        assert.deepEqual(rankLines(), [`Light fingers is now rank 1: ${perkText(ranks[0].perk)}`], 'the line carries that rank perk values');
+        assert.deepEqual(rankLines(), ['Light fingers is now rank 1. A steal can take 25 more GP.'], 'the line carries that rank perk values');
         g.lift(mark());
         assert.equal(rankLines().length, 1, 'no line between ranks');
     });

@@ -157,7 +157,7 @@ describe('_joinFight', () => {
         assert.equal(watcher.state, 'chasing');
         assert.deepEqual([watcher._lastSeenX, watcher._lastSeenY], [FAR.x, FAR.y]);
         assert.deepEqual([watcher._awareBeats, watcher._sweepBeats, watcher._lostSightTurns, watcher._struckBy], [0, 0, 0, null]);
-        assert.deepEqual(g.logs, [['Other hostile characters that see you join the fight.', 'combat']]);
+        assert.deepEqual(g.logs, [['Hostile characters who see the fight come after you.', 'combat']]);
         assert.equal(fighters(g.enemies).length, 2, 'it is in the fight now');
     });
 

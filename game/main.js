@@ -5332,7 +5332,13 @@ class Game {
     _countCleanLift() {
         const { skills, rankedUp } = recordUse(this.skills, 'light_fingers');
         this.skills = skills;
-        if (rankedUp) this._log(`Light fingers is now rank ${rankedUp}: ${perkText(rankPerk('light_fingers', rankedUp))}`, 'pickup');
+        if (rankedUp) {
+            const perk = rankPerk('light_fingers', rankedUp);
+            const says = [];
+            if (perk.stealLimit) says.push(`A steal can take ${perk.stealLimit} more GP.`);
+            if (perk.noticeBuffer) says.push(`A theft can carry ${perk.noticeBuffer} more weight before the victim notices.`);
+            this._log(`Light fingers is now rank ${rankedUp}. ${says.join(' ')}`.trim(), 'pickup');
+        }
     }
 
     // (theft) The victim on an aimed tile, or null. Takes the tile as an ARGUMENT
@@ -7193,7 +7199,7 @@ class Game {
             n._lastSeenY = this.playerY;
         }
         // (fx17) One line per beat, however many joined.
-        if (joining.length > 0) this._log('Other hostile characters that see you join the fight.', 'combat');
+        if (joining.length > 0) this._log('Hostile characters who see the fight come after you.', 'combat');
     }
 
     // ── Floating damage numbers ──────────────────────────────────────────────
