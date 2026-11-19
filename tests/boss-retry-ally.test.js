@@ -135,7 +135,7 @@ describe('going down in the Alien\'s fight', () => {
         assert.equal(g.playerHp, g.playerMaxHp, 'you wake at full health');
         assert.equal(g.state, STATE.IDLE);
         assert.ok(g.logs.some(l => /Down but not out/.test(l)), 'the retry\'s line');
-        assert.ok(!g.logs.some(l => /beaten and dumped|Taken:/.test(l)), 'not a defeat scenario');
+        assert.ok(!g.logs.some(l => /You lost the fight and woke up|Taken:/.test(l)), 'not a defeat scenario');
     });
 
     test('the same ally with the Alien out of the fight: an ordinary defeat', () => {

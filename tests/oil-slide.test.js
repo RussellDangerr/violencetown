@@ -181,7 +181,7 @@ describe('spreading the oil', () => {
             spread(g);
             assert.equal(stock(g, 'oil'), 1);
             assert.equal(flag(g, 'oilSpread'), true);
-            assert.deepEqual(g.logs.slice(before), ['You poured oil on the road at the bridge.']);
+            assert.deepEqual(g.logs.slice(before), ['You poured oil on the road.']);
         });
     }
 

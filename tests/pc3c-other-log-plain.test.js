@@ -22,7 +22,7 @@ describe('PC3c plain lines', () => {
         assert.equal(by.processed_by_fungus, 'You lost to the Fungus and woke in a walled pocket of the sewer. It took your food and mushrooms.');
         assert.equal(by.robbed_by_wererats, 'You lost to the sewer rats and woke at the sewer entrance. They took your unprotected items and left them in a stash.');
         assert.equal(by.swept_into_sludge, 'You fell in the sludge and woke downstream. Your consumables were destroyed.');
-        assert.equal(by.patched_by_carrion, "You lost and woke in Carrion's corridor. She healed you fully, took 10% of your gold and gave you a bandage.");
+        assert.equal(by.patched_by_carrion, "You lost and woke in Carrion's corridor. She healed you fully, took a tenth of your gold, rounded down, and gave you a bandage.");
         assert.equal(by.beaten_and_dumped, EMPTY_TAKE_LOG);
         for (const l of Object.values(by)) assert.ok(plain(l), l);
     });
@@ -33,6 +33,10 @@ describe('PC3c plain lines', () => {
         assert.deepEqual(LIFT_WORDS, { clean: 'Not noticed', noticed: 'Noticed' });
         assert.equal(SALE_LOCK_REFUSAL, 'This item cannot be sold until its quest is done.');
         for (const h of HINTS) assert.ok(plain(h.text), h.id);
+        const hint = (id) => HINTS.find(h => h.id === id).text;
+        assert.equal(hint('hotGoods'), 'Shops will not buy goods you were seen stealing. A fence will.');
+        assert.equal(hint('fightArc'), 'The numbered arc under you lists your moves. Press its number key to use one. 9 is Eat and 0 is Run.');
+        assert.equal(hint('wounded'), 'You are below half health. The bar along the bottom lists the items you can throw, drink or eat. Shift+Up and Shift+Down pick an item.');
     });
 
     test('the Mola Cola notes and the compactor and Hypno Vision lines are plain', () => {

@@ -299,7 +299,7 @@ describe('The Clown refuses a bribe; the ordinary clown still takes one', () => 
         const no = applyGive(ITEMS.soap, clown);
         assert.equal(no.accepted, false);
         assert.equal(clown.disposition, before);
-        assert.match(no.log, /did not accept the/);
+        assert.equal(no.log, `The Clown did not accept the ${ITEMS.soap.name}.`);
     });
 
     test('he cannot be flipped to an ally by any run of gifts', () => {
