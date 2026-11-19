@@ -49,7 +49,6 @@ const ALLOWED = {
     'compactor-map.json': 2,
     'compactor.js': 5,
     'defeat-scenarios.js': 4,
-    'dialogue.js': 36,
     'diner-map.json': 3,
     'downtown-map.json': 17,
     'enemies.js': 2,
