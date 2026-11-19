@@ -83,7 +83,7 @@ describe('the Help line', () => {
     const combat = modal.slice(modal.indexOf('<h3>Combat'), modal.indexOf('<h3>Inventory'));
 
     test('Combat & actions carries exactly one Thieve placeholder bullet', () => {
-        const hits = combat.match(/<li>\[TEXT: Thieve[^<]*\]<\/li>/g) || [];
+        const hits = combat.match(/<li>Thieve is on the action wheel:[^<]*<\/li>/g) || [];
         assert.equal(hits.length, 1);
     });
 });

@@ -37,7 +37,7 @@ describe('the fight-arc hint', () => {
 describe('Help', () => {
     const html = readFileSync(fileURLToPath(new URL('../game/index.html', import.meta.url)), 'utf8');
     test('has an arc line in Combat and the 1-9 line is bag slots outside a fight', () => {
-        assert.match(html, /attack arc help line/);
-        assert.match(html, /bag slots outside a fight/);
+        assert.ok(html.includes('In a fight, an arc under you lists your attacks: press <kbd>1</kbd>–<kbd>9</kbd> (<kbd>0</kbd> is Run) to pick one, and the same number again to fire it. A greyed slot says why.'));
+        assert.ok(html.includes('<kbd>1</kbd>–<kbd>9</kbd> pick bag slots outside a fight.'));
     });
 });
