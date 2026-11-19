@@ -7002,16 +7002,16 @@ class Game {
         this.state = STATE.RESOLVING;                 // block input through the beat
         if (this.carFuel === 'alcohol') {
             // (TX3) The driver takes the wheel in his taxi.
-            this._log('The taxi driver drives your car over the bridge. The alcohol in the tank slows the engine.', 'transition');
-            this._log('The car clears the bridge.', 'transition');
+            this._log('There is alcohol in the tank. The taxi driver drives across the bridge.', 'transition');
+            this._log('The taxi clears the bridge.', 'transition');
             audio.playSfx('quest-advance');
             this._flash('rgba(255, 220, 120, 0.35)');
             this._triggerScreenShake(280, 4);
             this._render();
             setTimeout(() => this._rampToDowntown(), 1100);
         } else {
-            this._log('There is no alcohol in the tank. The car is too fast and breaks through the bridge.', 'combat');
-            this._log('The car falls into the Canyon.', 'combat');
+            this._log('There is no alcohol in the tank. The taxi is too fast and breaks through the bridge.', 'combat');
+            this._log('The taxi falls into the Canyon.', 'combat');
             audio.playSfx('take-damage');
             this._flash('rgba(200, 40, 40, 0.5)');
             this._triggerScreenShake(520, 9);
@@ -7038,7 +7038,7 @@ class Game {
             const at = slide ? this._oilSlideSpawn() : { x: toX, y: toY };
             await this._loadMap(toMap, at.x, at.y);
             this.state = STATE.IDLE;
-            this._log(`You arrive in ${this.map.zoneName}.`, 'transition');
+            this._log('The taxi ride ends.', 'transition');
             if (slide) this._oilSlideDone?.();
             this.emitGameEvent('map_entered', { map: toMap });
             this.autosave?.({ force: true });
@@ -7055,7 +7055,7 @@ class Game {
         if (this.questEngine) this.questEngine.state.flags.bridgeRoute = 'canyon';   // (CY1) the crash plays once
         this.state = STATE.IDLE;
         // (TX3) The driver is placed beside the landing in canyon-map.json: the crash is the only way in.
-        this._log('The car is at the bottom of the Canyon. The taxi driver is beside it.', 'transition');
+        this._log('The taxi is at the bottom of the Canyon. The taxi driver is beside it.', 'transition');
         if (this.questEngine) this.questEngine.start('canyon_escape');
         this._render();
     }
@@ -7069,7 +7069,7 @@ class Game {
         await this._loadMap('downtown-map.json', at.x, at.y);
         if (this.questEngine) this.questEngine.state.flags.bridgeRoute = 'ramp';     // (CY1) the ramp plays once
         this.state = STATE.IDLE;
-        this._log('The car lands in Downtown.', 'transition');
+        this._log('The taxi lands in Downtown.', 'transition');
         if (slide) this._oilSlideDone?.();
         this._startMainQuest2();   // (Phase 4) MQ2 begins on arrival
         this._render();
@@ -7193,7 +7193,7 @@ class Game {
             n._lastSeenY = this.playerY;
         }
         // (fx17) One line per beat, however many joined.
-        if (joining.length > 0) this._log(joining.length === 1 ? '1 more hostile character sees you and joins the fight.' : `${joining.length} more hostile characters see you and join the fight.`, 'combat');
+        if (joining.length > 0) this._log('Other hostile characters that see you join the fight.', 'combat');
     }
 
     // ── Floating damage numbers ──────────────────────────────────────────────
