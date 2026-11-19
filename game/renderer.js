@@ -349,7 +349,7 @@ export const BUFF_CHIP = Object.freeze({ w: 52, h: 26, gap: 3, padX: 3 });
 // actions a Speed Poition left (game._hasteCharges), gone at 0. Haste is not a
 // buff (it is a count the world-beat spends), so it is added here. The label is
 // a placeholder; the number below it is the count of free actions left.
-export const HASTE_CHIP_LABEL = '[TEXT]';
+export const HASTE_CHIP_LABEL = 'Haste';
 export function buffBarChips(game) {
     const chips = [...(game.buffs || [])];
     const haste = game._hasteCharges || 0;
@@ -403,7 +403,7 @@ export function koLabelsShown(labels) {
 // (US2) The label each skill shows in the Remoticon's skills readout, keyed by
 // its id in game/skills.js. Not written yet.
 export const SKILL_LABELS = {
-    light_fingers: '[TEXT]',
+    light_fingers: 'Light fingers',
 };
 
 export class Renderer {
@@ -2921,8 +2921,8 @@ export class Renderer {
         else if (active === 'bodies') this._drawDeviceBodies(game, body);
 
         // (FX43) The bag lists the keys that work in it: the phrases the pickers and shop already
-        // use for arrows and Esc, and a placeholder for Space until its verb is chosen.
-        const foot = active === 'items' ? '[ ] TABS   ↑↓ PICK   SPACE [TEXT]   ESC CLOSE' : '[ ] TABS   ESC CLOSE';
+        // use for arrows and Esc, and Space opens the item's actions.
+        const foot = active === 'items' ? '[ ] TABS   ↑↓ PICK   SPACE ACTIONS   ESC CLOSE' : '[ ] TABS   ESC CLOSE';
         const fit = this._fitText(foot, R.w - 32, 1, 0.75);
         this.font.drawText(ctx, fit.text, R.x + R.w / 2, R.y + R.h - 12, { color: UI.dim, scale: fit.scale, align: 'center' });
         ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
@@ -2932,19 +2932,19 @@ export class Renderer {
     // A body never worn has no row. Labels are placeholders.
     _drawDeviceBodies(game, bodyRect) {
         const { ctx } = this;
-        const rows = ['[kid]', ...(game.bodiesWorn || []).map(sp => `[${sp}]`)];
+        const rows = ['kid', ...(game.bodiesWorn || [])];
         rows.forEach((label, i) => {
             this.font.drawText(ctx, label, bodyRect.x + 8, bodyRect.y + 8 + i * 18, { color: UI.textLight, scale: 1 });
         });
     }
 
     // (IN1) The notes tab: each interaction note seen so far, oldest first. Empty reads as one
-    // placeholder line. Long notes wrap; what does not fit is cut.
+    // plain line. Long notes wrap; what does not fit is cut.
     _drawDeviceNotes(game, bodyRect) {
         const { ctx } = this;
         const notes = seenNotes(INTERACTIONS, game.interactionNotes);
         if (!notes.length) {
-            this.font.drawText(ctx, '[TEXT]', bodyRect.x + bodyRect.w / 2, bodyRect.y + 40, { color: UI.dim, scale: 1, align: 'center' });
+            this.font.drawText(ctx, 'No notes yet.', bodyRect.x + bodyRect.w / 2, bodyRect.y + 40, { color: UI.dim, scale: 1, align: 'center' });
             return;
         }
         const LH = 14, maxRows = Math.floor((bodyRect.h - 8) / LH);
@@ -3033,7 +3033,7 @@ export class Renderer {
     _drawDeviceSkills(game, bodyRect) {
         const { ctx } = this;
         for (const row of deviceSkillsLayout(bodyRect, game.skills).rows) {
-            const label = this._fitText(SKILL_LABELS[row.id] ?? '[TEXT]', row.labelW);
+            const label = this._fitText(SKILL_LABELS[row.id] ?? String(row.id).replace(/_/g, ' '), row.labelW);
             this.font.drawText(ctx, label.text, row.x, row.y + row.h / 2 - 4, { color: row.rank > 0 ? UI.gold : UI.dim, scale: label.scale });
             const count = this._fitText(row.countText, SKILL_COUNT_W);
             this.font.drawText(ctx, count.text, row.countR, row.y + row.h / 2 - 4, { color: row.rank > 0 ? UI.gold : UI.dim, scale: count.scale, align: 'right' });
@@ -3348,21 +3348,21 @@ export class Renderer {
         this.font.drawText(ctx, clip(`GP ${t.gold}`), tx, y, { color: UI.gold, scale: 1 });
         y += LH;
         // (plans/tg1-enemies-wear-armour.md) Their armour and what they have on.
-        // Both labels are placeholders for Caelan to name.
-        this.font.drawText(ctx, clip(`[TEXT] ${t.armor}`), tx, y, { color: UI.text, scale: 1 });
+        // The labels are plain facts.
+        this.font.drawText(ctx, clip(`Armour ${t.armor}`), tx, y, { color: UI.text, scale: 1 });
         y += LH;
         // (WN1) What you have learned this foe is weak to or resists; no line while neither is known.
-        // The labels are placeholders for Caelan to name.
+        // The labels are plain facts.
         if ((t.weak ?? []).length) {
-            this.font.drawText(ctx, clip(`[TEXT] ${t.weak.join(' ').toUpperCase()}`), tx, y, { color: UI.hpGreen, scale: 1 });
+            this.font.drawText(ctx, clip(`Weak: ${t.weak.join(' ').toUpperCase()}`), tx, y, { color: UI.hpGreen, scale: 1 });
             y += LH;
         }
         if ((t.resist ?? []).length) {
-            this.font.drawText(ctx, clip(`[TEXT] ${t.resist.join(' ').toUpperCase()}`), tx, y, { color: UI.hpRed, scale: 1 });
+            this.font.drawText(ctx, clip(`Resists: ${t.resist.join(' ').toUpperCase()}`), tx, y, { color: UI.hpRed, scale: 1 });
             y += LH;
         }
         y += 2;
-        this.font.drawText(ctx, '[TEXT]', tx, y, { color: UI.dim, scale: 1 });
+        this.font.drawText(ctx, 'Wearing', tx, y, { color: UI.dim, scale: 1 });
         y += LH - 2;
         if (!(t.worn ?? []).length) {
             this.font.drawText(ctx, '-', tx, y, { color: UI.dim, scale: 1 });
@@ -3608,7 +3608,7 @@ export class Renderer {
         const act2 = act2Checklist(qe);
         if (act2) {
             y += 6;
-            this.font.drawText(ctx, '[TEXT]', innerX, y, { color: UI.textLight, scale: 1 }); y += 14;
+            this.font.drawText(ctx, 'Items to find', innerX, y, { color: UI.textLight, scale: 1 }); y += 14;
             for (const row of act2) {
                 const name = ITEMS[row.itemId]?.name ?? row.itemId ?? '?';
                 const zone = row.zone[0] + row.zone.slice(1).toLowerCase();
@@ -3916,7 +3916,7 @@ export class Renderer {
         // over it.
         if (this.font) {
             // (FX50) In a sub-ring Esc steps back one ring; only the first ring's Esc closes.
-            const msg = depth > 1 ? 'WHEEL OPEN  ·  MOVE KEYS STEER IT  ·  ESC [TEXT]' : 'WHEEL OPEN  ·  MOVE KEYS STEER IT  ·  ESC TO CLOSE';
+            const msg = depth > 1 ? 'WHEEL OPEN  ·  MOVE KEYS STEER IT  ·  ESC BACK' : 'WHEEL OPEN  ·  MOVE KEYS STEER IT  ·  ESC TO CLOSE';
             const dialLeft = cx - this._hud().dialRadius(depth, kids.length > 0) - 8;
             let countMsg = null;
             if (combat) {
@@ -4073,13 +4073,13 @@ export class Renderer {
 
     // (fx36) The second line on the wheel's Eat slice, or null for every other slice.
     // Live: the food's own name and its heal ("HOT DOG +10"), trimmed to fit the
-    // slice. Greyed at full health: a reason, which is a [TEXT] placeholder for now.
+    // slice. Greyed at full health: a reason, which is the plain words HP FULL.
     // Greyed with no food in the bag has no line, as before.
     _eatSliceLine(node, game, enabled) {
         if (!this.font || node.needsItem !== 'eat' || node.placeholder) return null;
         if (!enabled) {
             return game.eatBlockedBy && game.eatBlockedBy() === 'full'
-                ? { text: '[TEXT]', color: '#a89878' } : null;
+                ? { text: 'HP FULL', color: '#a89878' } : null;
         }
         const pick = game.eatChoice && game.eatChoice();
         if (!pick) return null;
@@ -4660,7 +4660,7 @@ export class Renderer {
             ctx.strokeStyle = UI.gold;
             ctx.lineWidth = 1.5;
             ctx.strokeRect(t.x + 1, t.y + 1, t.w - 2, t.h - 2);
-            this.font.drawText(ctx, '[TEXT]', t.x + t.w / 2, t.y + t.h / 2 - 6 * L.ts.button, { color: UI.gold, scale: L.ts.button, align: 'center' });
+            this.font.drawText(ctx, 'TALK', t.x + t.w / 2, t.y + t.h / 2 - 6 * L.ts.button, { color: UI.gold, scale: L.ts.button, align: 'center' });
         }
 
         // The key legend sits between the ledger and the frame's bottom stroke:
