@@ -152,7 +152,7 @@ export const DEFEAT_SCENARIOS = [
             hp: 1.0,
             take: { gold: 0.1, recoverable: false },  // a small fee, not a robbery
             gift: { items: ['bandage'] },
-            log: 'You lost and woke in Carrion\'s corridor. She healed you fully, took 10% of your gold and gave you a bandage.',
+            log: 'You lost and woke in Carrion\'s corridor. She healed you fully, took a tenth of your gold, rounded down, and gave you a bandage.',
         },
     },
     {

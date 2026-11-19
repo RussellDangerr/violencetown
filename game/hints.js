@@ -50,7 +50,7 @@ export const HINTS = [
         // rule the whole stealth layer rests on, and the kind of rule a player
         // either stumbles into or never learns at all.
         when: (game) => neighbours(game).length > 0 && game.isHidden?.(),
-        text: "They haven't seen you. Standing behind someone keeps you out of their sight, which is the best place to thieve from.",
+        text: "They haven't seen you. Standing behind someone keeps you out of their sight. The Thieve option is available from there.",
     },
     {
         id: 'thieveHere',
@@ -83,7 +83,7 @@ export const HINTS = [
         // so it is a payoff, not an instruction, and it names the fence at the
         // exact moment the town starts refusing them.
         when: (game) => Object.values(game._hot || {}).some(n => n > 0),
-        text: 'Shops will not buy stolen goods now. Sell them to a fence.',
+        text: 'Shops will not buy goods you were seen stealing. A fence will.',
     },
     {
         id: 'wounded',
@@ -94,7 +94,7 @@ export const HINTS = [
         // for the same check the bar's own drawing uses (renderer _drawXmbBar).
         when: (game) => (game.playerHp ?? 100) < (game.playerMaxHp ?? 100) * 0.5
             && buildXmbBar(game.inventory).columns.length > 0,
-        text: 'You are below half health. The bar along the bottom lists what you can drink. Shift+Up and Shift+Down pick an item.',
+        text: 'You are below half health. The bar along the bottom lists the items you can throw, drink or eat. Shift+Up and Shift+Down pick an item.',
     },
     {
         id: 'ringFashion',
@@ -109,7 +109,7 @@ export const HINTS = [
         // The numbered arc under you appears the moment a fight starts, and the
         // number keys fire it. Same test the arc itself draws by (fight-arc arcOn).
         when: (game) => arcOn(game),
-        text: 'The numbered arc under you lists your attacks. Press a number key to use that attack.',
+        text: 'The numbered arc under you lists your moves. Press its number key to use one. 9 is Eat and 0 is Run.',
     },
 ];
 

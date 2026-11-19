@@ -83,7 +83,7 @@ export const ITEM_USES = [
             }
             game._removeFromSlot(ctx.slot);
             flags.oilSpread = true;
-            game._log('You poured oil on the road at the bridge.', 'pickup');
+            game._log('You poured oil on the road.', 'pickup');
             game._advanceWorld();
         },
     },

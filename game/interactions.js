@@ -98,7 +98,7 @@ export function molaPackLeaves(game) {
         return false;
     });
     game.enemies = game.enemies.filter(e => !pack.includes(e));
-    game._log?.('The bears took the Mola Cola and left.', 'note');
+    game._log?.('The bears left. The Mola Cola on the ground is gone.', 'note');
     return pack.length;
 }
 

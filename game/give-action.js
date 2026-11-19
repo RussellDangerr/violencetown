@@ -24,7 +24,7 @@ import { BANDS_STEP } from './trade.js';   // paranoia is priced in whole trade 
 
 // (FX47) A boss is called by its one name in every line below, anyone else by its type.
 const bossOr = (r) => (r.boss && r.shownName) || r.type;
-const theName = (r) => `The ${bossOr(r)}`;
+const theName = (r) => { const n = bossOr(r); return /^The /.test(n) ? n : `The ${n}`; };
 
 // Tuning constant — controls how much disposition each unit of `values`
 // shifts. Currently 5 (so values:{soap:8} means soap gives +40 disposition).
@@ -203,7 +203,7 @@ function applySewerFareGive(item, recipient) {
         return {
             accepted: true,
             flipped: false,
-            log: `${theName(recipient)} accepted the ${item.name}. Sewer food is medicine to it. Disposition +${preview.shift}.`,
+            log: `${theName(recipient)} accepted the ${item.name}. Sewer food helps it. Disposition +${preview.shift}.`,
         };
     }
 
