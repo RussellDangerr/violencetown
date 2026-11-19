@@ -19,6 +19,18 @@ test('index.html: no [TEXT] in a label, an aria label or a placeholder attribute
     assert.ok(!/<(button|label)[^>]*>[^<]*\[TEXT\]/.test(html));
 });
 
+test('ring passive rows are named from their key', async () => {
+    const { ringPassiveName } = await import('../game/layout.js');
+    assert.equal(ringPassiveName('evasion'), 'Evasion');
+    assert.equal(ringPassiveName('fireDamage'), 'Fire damage');
+    assert.equal(ringPassiveName('someNewKey'), 'Some New Key');
+    assert.ok(rend.includes('${ringPassiveName(row.key)} ${row.value}'));
+});
+
+test('the Thieve help line states the running total and the hostile search', () => {
+    assert.ok(html.includes('What you take from a person adds up and never resets; past their limit (lower when you stand at their side) they notice, turn hostile and search for you.'));
+});
+
 test('the target panel, bag footer, notes line and offer button read plainly', () => {
     for (const s of ['`Armour ${t.armor}`', "'Wearing'", "'No notes yet.'", "'TALK'", 'SPACE ACTIONS', 'ESC BACK', "'Items to find'"]) {
         assert.ok(rend.includes(s), s);
