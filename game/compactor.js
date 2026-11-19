@@ -28,15 +28,15 @@ export const DOOR = { x: 5, y: 0 };
 // What the door leads to, the same as compactor-map.json's own transition (a test pins them).
 export const DOOR_BACK = {
     x: DOOR.x, y: DOOR.y, toMap: 'factory-map.json', toX: 4, toY: 27,
-    label: '[North — back out to the Factory]',
+    label: 'North: back to the Factory',
 };
 
 export const LINES = {
-    shut: '[The door shuts behind you. Break the compactor to open it.]',
-    step: (left) => `[The walls close in. ${left} ${left === 1 ? 'column is' : 'columns are'} left.]`,
-    shove: '[A wall shoves you inward.]',
-    crush: '[The walls close on you.]',
-    broken: '[The compactor breaks. The walls stop and the door opens.]',
+    shut: 'The door shut behind you. Break the compactor to open it.',
+    step: (left) => `The walls closed in. ${left} ${left === 1 ? 'column is' : 'columns are'} left.`,
+    shove: 'A wall pushed you inward.',
+    crush: 'The walls crushed you.',
+    broken: 'The compactor broke. The walls stopped and the door opened.',
 };
 
 export function newCompactor() {

@@ -98,13 +98,13 @@ export function molaPackLeaves(game) {
         return false;
     });
     game.enemies = game.enemies.filter(e => !pack.includes(e));
-    game._log?.('[TEXT: the bears took the cola and left.]', 'note');
+    game._log?.('The bears took the Mola Cola and left.', 'note');
     return pack.length;
 }
 
 export const INTERACTIONS = [
-    { id: 'mola_cola_frozen', carry: MOLA_ID, zone: FROZEN_MAP, effect: callMolaPack, note: '[TEXT]' },
-    { id: 'mola_cola_wilderness', carry: MOLA_ID, zone: WILDERNESS_MAP, effect: callWildernessBear, note: '[TEXT]' },
+    { id: 'mola_cola_frozen', carry: MOLA_ID, zone: FROZEN_MAP, effect: callMolaPack, note: 'Carrying Mola Cola in the Frozen zone calls a pack of polar bears.' },
+    { id: 'mola_cola_wilderness', carry: MOLA_ID, zone: WILDERNESS_MAP, effect: callWildernessBear, note: 'Carrying Mola Cola in the Wilderness calls a bear.' },
 ];
 
 // Rows whose item is carried and whose zone is the one you are in.

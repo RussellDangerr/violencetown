@@ -102,7 +102,7 @@ export function applyGive(item, recipient) {
         return {
             accepted: false,
             flipped: false,
-            log: `[${theName(recipient)} ignores your offering.]`,
+            log: `${theName(recipient)} did not accept the ${item?.name ?? 'offering'}.`,
         };
     }
 
@@ -134,7 +134,7 @@ export function applyGive(item, recipient) {
     return {
         accepted: true,
         flipped: false,
-        log: `[${theName(recipient)} pockets the ${item.name}. Disposition +${preview.shift}.]`,
+        log: `${theName(recipient)} accepted the ${item.name}. Disposition +${preview.shift}.`,
     };
 }
 
@@ -203,7 +203,7 @@ function applySewerFareGive(item, recipient) {
         return {
             accepted: true,
             flipped: false,
-            log: `[${theName(recipient)} savors the ${item.name} — down here, it's medicine. Disposition +${preview.shift}.]`,
+            log: `${theName(recipient)} accepted the ${item.name}. Sewer food is medicine to it. Disposition +${preview.shift}.`,
         };
     }
 
@@ -233,14 +233,14 @@ function applySewerFareGive(item, recipient) {
         return {
             accepted: true,
             flipped: true,
-            log: `[${theName(recipient)} realizes what you fed it — and comes at you!]`,
+            log: `${theName(recipient)} ate the ${item.name}, turned hostile and attacks you.`,
         };
     }
 
     return {
         accepted: true,
         flipped: false,
-        log: `[${theName(recipient)} eats the ${item.name}... something's wrong. Disposition ${penalty}.]`,
+        log: `${theName(recipient)} ate the ${item.name}. Sewer food harms it. Disposition ${penalty}.`,
     };
 }
 
@@ -435,10 +435,10 @@ function flipLogLine(item, recipient) {
     // Same default as applyFlip — missing onFlip reads as becomeAlly.
     switch (recipient.onFlip || 'becomeAlly') {
         case 'becomeAlly':
-            return `[${theName(recipient)} pockets the ${item.name} — they stop snarling at you.]`;
+            return `${theName(recipient)} accepted the ${item.name} and is no longer hostile.`;
         case 'offerDiscount':
-            return `[${bossOr(recipient)} accepts the ${item.name}. "...much obliged. I'll work you a deal next time."]`;
+            return `${bossOr(recipient)} accepted the ${item.name} and now offers a discount.`;
         default:
-            return `[${theName(recipient)} pockets the ${item.name}. Something in them shifts.]`;
+            return `${theName(recipient)} accepted the ${item.name}.`;
     }
 }
