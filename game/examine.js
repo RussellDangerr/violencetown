@@ -12,6 +12,7 @@ import { resolveItemDef } from './item-registry.js';
 import { tileDisplayName } from './data.js';
 import { isHostile } from './ai.js';
 import { weaponClassOf } from './weapons.js';
+import { describeItemParts } from './inspector.js';
 import { SPELLS } from './spells.js';
 import { TRICKS } from './tricks.js';
 
@@ -68,6 +69,34 @@ export function weaponCompare(def, held) {
         build: parts.join(', '),
         grants: skills.length ? `Grants: ${skills.join(', ')}` : null,
     };
+}
+
+// (PC10) Everything a panel shows about an item, in the order it shows it: { stats, fact, sources }.
+// A weapon's hands, class and granted skills come from here because weapons.js, spells.js and
+// tricks.js cannot be imported by inspector.js; `held` is the weapon in the right hand.
+export function itemParts(def, held, maxNames) {
+    const opts = { held, maxNames };
+    if (isComparableWeapon(def)) {
+        const cls = weaponClassOf(def);
+        opts.hands = cls ? cls.hands : 1;
+        opts.weaponClass = cls ? cls.id : null;
+        opts.grants = grantedSkills(def);
+    }
+    return describeItemParts(def, opts);
+}
+
+// The same, as the paragraphs of a panel body: stats, fact, then one paragraph per source line.
+export function itemParagraphs(def, held) {
+    const p = itemParts(def, held);
+    return [p.stats, p.fact, ...p.sources].filter(Boolean);
+}
+
+// The same for the small panels (the bag's, the trade strip): the sources share one paragraph and
+// a long list is cut to three names and a count, so all three kinds still fit.
+export const COMPACT_NAMES = 3;
+export function itemParagraphsCompact(def, held) {
+    const p = itemParts(def, held, COMPACT_NAMES);
+    return [p.stats, p.fact, p.sources.join(' ')].filter(Boolean);
 }
 
 // The block as lines, or null for a non-weapon.
@@ -203,13 +232,11 @@ export function resolveExamine(game, x, y) {
     if (def) {
         const tier = itemTier(def);
         const name = def.name || item.type;
-        const body = `[${name} (${tier.name}).${def.description ? ` ${def.description}` : ''}]`;
-        // (FX44) A weapon's panel keeps its description and adds the compare
-        // block under it (what it hits for against what you hold, hands, class,
-        // skills). The panel splits its body on newlines; the log line stays as
-        // it was.
-        const block = weaponCompareLines(def, game.equipment?.weapon);
-        const panelBody = block ? [def.description || '', '', ...block].join('\n').trim() : (def.description || body);
+        // (PC10) The panel shows the stats (a weapon's against the one you hold), then the fact,
+        // then where it comes from, one paragraph each; the log gets the same as one line.
+        const paras = itemParagraphs(def, game.equipment?.weapon);
+        const body = `${name}. ${paras.join(' ')}`;
+        const panelBody = paras.join('\n');
         return result(name, body, { panelBody, tierName: tier.name, tierColor: tier.color });
     }
 

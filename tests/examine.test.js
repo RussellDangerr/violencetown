@@ -47,7 +47,8 @@ describe('resolveExamine — the ladder', () => {
         const r = resolveExamine(game({ groundItems: [{ type: 'ray_gun', x: 4, y: 4 }] }), 4, 4);
         assert.equal(r.title, 'Ray Gun');
         assert.ok(r.tierName, 'no tier on an item');
-        assert.match(r.body, /^\[Ray Gun \(\w+\)\. Dented brass/);
+        assert.equal(r.body, 'Ray Gun. Weapon: energy 22 damage. 1 hand, wand. Grants while worn: Ray Blast (6 GP). Epic, value 45 GP. Dropped by: Alien Invasion.');
+        assert.equal(r.panelBody, 'Weapon: energy 22 damage. 1 hand, wand. Grants while worn: Ray Blast (6 GP). Epic, value 45 GP.\nDropped by: Alien Invasion.');
     });
 
     test('a prop names itself instead of the ground under it', () => {
@@ -151,11 +152,11 @@ describe('the Target List / tap examine — main.js _fireResolver', () => {
         assert.deepEqual(g.logs, ['[Floor.]']);
     });
 
-    test('an item keeps its tier chip and shows its description in the panel', () => {
+    test('an item keeps its tier chip and shows its stats and its source in the panel', () => {
         const g = view({ groundItems: [{ type: 'ray_gun', x: 3, y: 3 }] });
         examine(g, { x: 3, y: 3, item: g.groundItems[0] });
         assert.ok(g.panels[0].tierName);
-        assert.match(g.panels[0].body, /^Dented brass/);
+        assert.equal(g.panels[0].body, 'Weapon: energy 22 damage. 1 hand, wand. Grants while worn: Ray Blast (6 GP). Epic, value 45 GP.\nDropped by: Alien Invasion.');
     });
 
     test('a multi-tile instance resolves at its own tile, and fires its quest event', () => {

@@ -10,7 +10,7 @@ export const RINGS = {
     rat_ring: {
         id: 'rat_ring',
         name: 'Rat Ring',
-        description: 'A braid of coarse wererat fur set in dull silver. It twitches when you look away.',
+        fact: '',
         tags: ['vermin', 'sewer'],
         remembranceFrom: 'wererat_boss',
         grants: 'rat_form',            // an active — feeds the wheel
@@ -19,7 +19,7 @@ export const RINGS = {
     fire_ring: {
         id: 'fire_ring',
         name: 'Fire Ring',
-        description: 'A band of blackened copper that is always a little too warm to wear.',
+        fact: '',
         tags: ['fire'],
         passive: { fireDamage: 10 },   // +10% (applied in combat, Task 6)
         trigger: { on: 'hit', effect: 'ignite', chance: 0.25 },

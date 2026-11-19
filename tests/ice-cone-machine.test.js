@@ -14,6 +14,7 @@ import { readFileSync } from 'node:fs';
 
 import { getDialogue, FACTORY_BILL_GP, MACHINE_PART } from '../game/dialogue.js';
 import { ITEMS } from '../game/items.js';
+import { describeItemParts } from '../game/inspector.js';
 import { ITEM_USES, contextualUses } from '../game/item-uses.js';
 import { transferGold } from '../game/trade.js';
 import { applyDispositionDelta } from '../game/give-action.js';
@@ -204,7 +205,8 @@ describe('the part', () => {
         const d = ITEMS[MACHINE_PART];
         assert.ok(d, 'no part');
         assert.equal(d.name, 'Ice Cone Machine Part');
-        assert.equal(d.description, '[TEXT]');
+        assert.equal(d.fact, '');
+        assert.equal(describeItemParts(d, { sources: {} }).stats, 'Common, value 0 GP.');
         assert.equal(d.baseValue, 0);
         assert.equal(d.category, 'quest');
         assert.equal(itemSprite(MACHINE_PART), UNKNOWN_ITEM_SPRITE);
