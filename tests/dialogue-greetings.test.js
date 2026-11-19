@@ -133,7 +133,7 @@ describe('the diner cook', () => {
 describe('Bartho', () => {
     test('before the car opens the bridge: today\'s line; after: the after line', async () => {
         const g = makeGame(bartho);
-        assert.equal(await g.talk(), '"...what."');
+        assert.equal(await g.talk(), 'Bartho is a townsperson.');
         g.questEngine.state.flags.carFixed = true;
         assert.equal(await g.talk(), 'The north bridge is open now that the car is fixed.');
     });
