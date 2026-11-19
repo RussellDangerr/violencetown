@@ -40,7 +40,8 @@ Bark data, dialogue files, item text, anything outside `game/main.js`.
 
 ## Status
 
-Blocked before the build: the copy rule says to grep `tests/` first, and many tests outside this
-slice's touches pin the lines to be changed (`combat-log`, `bag-drop`, `spell-log`,
-`save-unreadable-kept`, `grapple`, `restart-clears-log` and many more). The touches need widening
-to cover them.
+Built in one pass (ruling PC3bR1: one slice). Commit A strips whole-line brackets from every log
+line and label; commit B writes a plain factual line for each flavoured or [TEXT] line, checked
+against the code beside it; commit C re-pins the tests that pinned the old text, exactly.
+The bag-full and defeat lines that live in other files (defeat-scenarios.js, quests.js, enemies.js
+barks) are not touched here.
