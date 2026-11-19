@@ -4707,7 +4707,7 @@ class Game {
                 this.playerMp = Math.max(0, this.playerMp - spell.mpCost);
                 emitNoise(this._earshot(), this.playerX, this.playerY, NOISE.cast);
                 const hit = this._aoeStrike(affectedTiles(w, this), spell.damage, { type: spell.damageType });
-                if (hit.length) this._log(`[${spell.name}! ${hit.map(h => `${h.name} ${h.dealt}`).join(', ')}]`, 'combat');
+                if (hit.length) this._log(`${spell.name}! ${hit.map(h => `${h.name} ${h.dealt}`).join(', ')}`, 'combat');
                 else this._log(`${spell.name} fizzles — nothing caught.`, 'combat');
                 this._advanceWorld();
                 break;
@@ -4738,7 +4738,7 @@ class Game {
                     break;
                 }
                 const hit = this._aoeStrike(affectedTiles(w, this), trick.damage, { type: trick.damageType });
-                if (hit.length) this._log(`[${trick.name}! ${hit.map(h => `${h.name} ${h.dealt}`).join(', ')}. (-${trick.gpCost}g)]`, 'combat');
+                if (hit.length) this._log(`${trick.name}! ${hit.map(h => `${h.name} ${h.dealt}`).join(', ')}. (-${trick.gpCost}g)`, 'combat');
                 else this._log(`${trick.name} fizzles — nothing caught. (-${trick.gpCost}g)`, 'combat');
                 this._advanceWorld();
                 break;
@@ -6057,7 +6057,7 @@ class Game {
         enemyObj.state = 'chasing';     // immediately hostile, no re-acquire delay
         enemyObj.disposition = -50;     // betrayed: head-meter goes angry + re-bribing costs more
         enemyObj._wasFlipped = false;   // ...but they CAN be won back if you make amends
-        this._log(`[${enemyObj.shownThe || `The ${enemyObj.shownName || enemyObj.type}`} turns on you!]`, 'combat');
+        this._log(`${enemyObj.shownThe || `The ${enemyObj.shownName || enemyObj.type}`} turns on you!`, 'combat');
     }
 
     // ── Reaction bus ──────────────────────────────────────────────────────────
@@ -6082,7 +6082,7 @@ class Game {
         if (target.vendor) { target.vendor = false; target.stock = null; }   // a vendor you struck won't keep shop
         if (target.ambient) target.ambient = false;  // a provoked townsperson fights for real, not as ambient
         if (typeof target.disposition === 'number') target.disposition = Math.min(target.disposition, -50);
-        this._log(`[${target.shownThe || `The ${target.shownName || target.type || target.entity.name}`} turns on you!]`, 'combat');
+        this._log(`${target.shownThe || `The ${target.shownName || target.type || target.entity.name}`} turns on you!`, 'combat');
     }
 
     // (ws6) Held shields: the armour they add, and the cut the first ready one
@@ -8566,13 +8566,13 @@ class Game {
         // A chest is not handed anything -- "You hand crate nothing for 2 items"
         // is grammatical and still wrong. You take FROM a container.
         const deal = npc._container
-            ? `[You take ${back.join(' and ') || 'nothing'} from the ${(npc.boss && npc.shownName) || npc.type}.`
+            ? `You take ${back.join(' and ') || 'nothing'} from the ${(npc.boss && npc.shownName) || npc.type}.`
             : back.length
-                ? `[You hand ${npc.shownName || npc.type} ${out.join(' and ') || 'nothing'} for ${back.join(' and ')}.`
-                : `[You hand ${npc.shownName || npc.type} ${out.join(' and ')}.`;
-        const mood = R.points > 0 ? ` Disposition +${R.points}.]`
-                   : R.points < 0 ? ` They take it, and remember. Disposition ${R.points}.]`
-                   : `]`;
+                ? `You hand ${npc.shownName || npc.type} ${out.join(' and ') || 'nothing'} for ${back.join(' and ')}.`
+                : `You hand ${npc.shownName || npc.type} ${out.join(' and ')}.`;
+        const mood = R.points > 0 ? ` Disposition +${R.points}.`
+                   : R.points < 0 ? ` They take it, and remember. Disposition ${R.points}.`
+                   : ``;
         this._log(deal + mood, 'transition');
 
         // Each fires when a surplus existed and bought NOTHING -- never on the
