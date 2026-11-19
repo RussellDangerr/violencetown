@@ -512,12 +512,13 @@ export class Enemy {
 
 // (FD2) The bear the Wilderness sends for a carried Mola Cola. Not a slot entry nor a map spawn:
 // interactions.js spawns it. Its numbers start as the Polar Bear's (so they track it); the name
-// is the stand-in `[Bear]` and the examine text `[TEXT]` until Caelan names and writes it.
+// is the stand-in `Bear` and its examine text is a plain line until Caelan writes it.
 export const WILDERNESS_BEAR_TYPE = 'Bear';
 export const WILDERNESS_BEAR = {
     ...structuredClone(ENTRIES.polar_bear),
     type: WILDERNESS_BEAR_TYPE,
     name: 'Bear',
+    examine: 'Bear. Wild animal. It attacks if you come close.',
 };
 
 // Resolve a loadout to real item defs. Entries are item IDS so an enemy can
