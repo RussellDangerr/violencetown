@@ -233,8 +233,8 @@ const CONTINUE_ZONE_NAMES = {
     'vault-map.json': '[TEXT]', 'casino-map.json': 'CASINO', 'canyon-map.json': 'CANYON',
     'gorge-map.json': 'GORGE', 'valley-map.json': 'VALLEY', 'factory-map.json': 'FACTORY',
     'carnival-map.json': 'CARNIVAL', 'graveyard-map.json': 'GRAVEYARD',
-    'wilderness-map.json': 'WILDERNESS', 'frozen-map.json': '[FROZEN AREA]', 'tunnels-map.json': 'TUNNELS',
-    'side-area-map.json': '[SIDE AREA]', 'compactor-map.json': '[COMPACTOR ROOM]',
+    'wilderness-map.json': 'WILDERNESS', 'frozen-map.json': 'FROZEN AREA', 'tunnels-map.json': 'TUNNELS',
+    'side-area-map.json': 'SIDE AREA', 'compactor-map.json': 'COMPACTOR ROOM',
 };
 
 class Game {
@@ -620,7 +620,7 @@ class Game {
     // onTick while active, then on expiry log + fire onExpire (e.g. the recover
     // heal). See game/buffs.js — Enemy.tickBuffs runs the same helper.
     _tickBuffs() {
-        tickBuffList(this.buffs, this, this, (b) => this._log(`[${b.name} expired]`));
+        tickBuffList(this.buffs, this, this, (b) => this._log(`${b.name} expired`));
     }
 
     // ── Boot ─────────────────────────────────────────────────────────────────
@@ -648,8 +648,8 @@ class Game {
         const spriteResult = await loadAllSprites();
         this.renderer.sprites = spriteResult.sheets;
         this._log(spriteResult.fail > 0
-            ? `[Sprites: ${spriteResult.ok} loaded, ${spriteResult.fail} missing]`
-            : `[All ${spriteResult.ok} spritesheets loaded]`);
+            ? `Sprites: ${spriteResult.ok} loaded, ${spriteResult.fail} missing`
+            : `All ${spriteResult.ok} spritesheets loaded`);
 
         // Bitmap font for all in-canvas UI text. Loaded once and stashed on
         // the renderer so any draw method can call `this.font.drawText(...)`
@@ -713,7 +713,7 @@ class Game {
             if (this.state === STATE.IDLE && !this._animating) this._ambientTick();
         }, WORLD_TICK_MS);
 
-        this._log('[Violencetown loaded — Town hub ready]');
+        this._log('Violencetown loaded — Town hub ready');
     }
 
     // ── Map Loading ──────────────────────────────────────────────────────────
@@ -885,7 +885,7 @@ class Game {
             this.enemies.push(f);
             placed++;
         }
-        if (placed > 0) this._log('[They shoulder through the door after you!]', 'combat');
+        if (placed > 0) this._log('They shoulder through the door after you!', 'combat');
     }
 
     // Up to `n` walkable, unoccupied tiles in expanding rings from (cx,cy) —
@@ -919,12 +919,12 @@ class Game {
     // (see _tickJammedDoor). Returns true if a door was jammed.
     _tryJamDoor() {
         const door = (this.map.transitions || []).find(tr => tr.toMap === this._cameFrom);
-        if (!door) { this._log('[No door behind you to wedge.]'); return false; }
+        if (!door) { this._log('No door behind you to wedge.'); return false; }
         if (manhattan(this.playerX, this.playerY, door.x, door.y) > 3) {
-            this._log('[Get closer to the door to wedge it shut.]');
+            this._log('Get closer to the door to wedge it shut.');
             return false;
         }
-        if (this._jammedDoor) { this._log('[That door is already wedged.]'); return false; }
+        if (this._jammedDoor) { this._log('That door is already wedged.'); return false; }
 
         // Pull intruders still hanging at the threshold back behind the door.
         const trapped = this.enemies.filter(e =>
@@ -935,8 +935,8 @@ class Game {
         audio.playSfx('bump-wall');
         if (this._triggerScreenShake) this._triggerScreenShake(150, 3);
         this._log(trapped.length
-            ? '[You wedge the pipe through the door. It holds — and they start POUNDING.]'
-            : '[You wedge the pipe through the door. Sealed behind you.]', 'combat');
+            ? 'You wedge the pipe through the door. It holds — and they start POUNDING.'
+            : 'You wedge the pipe through the door. Sealed behind you.', 'combat');
         return true;
     }
 
@@ -959,10 +959,10 @@ class Game {
             this._injectFollowers();          // they burst back in at the same door, emerging one beat
             this._pendingFollowers = null;
             if (this._triggerScreenShake) this._triggerScreenShake(260, 5);
-            this._log('[The door BURSTS off its frame — they pour through!]', 'combat');
+            this._log('The door BURSTS off its frame — they pour through!', 'combat');
         } else {
             if (this._triggerScreenShake) this._triggerScreenShake(90, 2);
-            this._log('[The door SHUDDERS under the pounding...]');
+            this._log('The door SHUDDERS under the pounding...');
         }
     }
 
@@ -1006,7 +1006,7 @@ class Game {
             if (i < record) this._recordDrop(def.id, x, y);
             this.groundItems.push({ type: def.id, x, y, def });
         }
-        this._log(n > 1 ? `[Dropped ${def.name} x${n}]` : `[Dropped ${def.name}]`);
+        this._log(n > 1 ? `Dropped ${def.name} x${n}` : `Dropped ${def.name}`);
         this._saveMoment?.();
     }
 
@@ -1475,7 +1475,7 @@ class Game {
             this.state = STATE.IDLE;
             this._startMainQuest();   // deterministic fix_car start (fix/critical-path)
             this._render();
-            this._log('[Entered the town]');
+            this._log('Entered the town');
             this._maybeShowFirstRunHint();
         };
         // CONTINUE loads the autosave into the live game. GAME START begins
@@ -1525,10 +1525,10 @@ class Game {
                 console.error('[save] could not be loaded; starting fresh', e);
                 this._keepUnreadable?.();
                 start();
-                this._log('[That save would not open. Starting a new run.]', 'transition');
+                this._log('That save would not open. Starting a new run.', 'transition');
                 return;
             }
-            this._log('[Save loaded]', 'transition');
+            this._log('Save loaded', 'transition');
             this._applyRested?.();   // (WP1) after the load, so the restored buffs do not overwrite it
             this._maybeShowFirstRunHint();
         };
@@ -1580,7 +1580,7 @@ class Game {
             splash.classList.add('gone');
             wrapper.classList.remove('hidden');
             this._fitCanvas();
-            this._log('[Save loaded from a code]', 'transition');
+            this._log('Save loaded from a code', 'transition');
             this._render?.();
             this._maybeShowFirstRunHint();
         });
@@ -2511,7 +2511,7 @@ class Game {
             if (!res.ok) { say(res.message); return; }
             writeSave(this);
             say('[TEXT] Save loaded.');
-            this._log('[Save loaded from a code]', 'transition');
+            this._log('Save loaded from a code', 'transition');
             this._closeOptionsModal();
             this._setPaused?.(false);
             this._render?.();
@@ -3134,16 +3134,16 @@ class Game {
             const tileDef = this.map.getTileDef(nx, ny);
             if (tileDef.hazard === 'sludge' && !this.hasBuff('sludge')) {
                 if (this._hasSludgeImmunity()) {
-                    this._log('[The sludge slides right off your bagged feet.]');
+                    this._log('The sludge slides right off your bagged feet.');
                 } else {
                     this.addBuff('sludge', 'Sludge', SLUDGE_DURATION, 'debuff');
-                    this._log('[Stepped in sludge — 3 turns]');
+                    this._log('Stepped in sludge — 3 turns');
                 }
             }
 
             if (tileDef.hazard === 'goo') {
                 if (this._hasSludgeImmunity()) {
-                    this._log('[The goo slides right off your bagged feet.]');
+                    this._log('The goo slides right off your bagged feet.');
                 } else if (!this.hasBuff('goo')) {
                     this.addBuff('goo', 'Goo', SLUDGE_DURATION, 'debuff');
                     this._log('[TEXT: stepped in goo — 3 turns]');
@@ -3175,7 +3175,7 @@ class Game {
                     const want = Array.isArray(transition.requires) ? transition.requires : [];
                     const held = new Set((this.inventory || []).map(s => s && s.itemDef && s.itemDef.id));
                     const count = want.length > 1 ? ` (${want.filter(id => held.has(id)).length}/${want.length})` : '';
-                    this._log((transition.requiresMsg || '[You need something to get through here.]') + count);
+                    this._log((transition.requiresMsg || 'You need something to get through here.') + count);
                 } else {
                     this._pendingTransition = transition;
                 }
@@ -3207,7 +3207,7 @@ class Game {
         const held = new Set((this.inventory || []).map(s => s && s.itemDef && s.itemDef.id));
         if (![].concat(anchor.requires || []).every(id => held.has(id))) {
             audio.playSfx('bump-wall');
-            this._log(anchor.requiresMsg || '[You need something to get a grip here.]');
+            this._log(anchor.requiresMsg || 'You need something to get a grip here.');
             return;
         }
         const SWING_TIME = 2.5;   // × a walk step: a swing should read as flight, not a shuffle
@@ -3220,7 +3220,7 @@ class Game {
             } else {
                 this.playerX = lx;
                 this.playerY = ly;
-                this._log(anchor.label || '[You swing across.]');
+                this._log(anchor.label || 'You swing across.');
             }
             this._advanceWorld();
         }, this._animDuration * SWING_TIME);
@@ -3246,7 +3246,7 @@ class Game {
         if (this._isHeavy(enemy)) {
             audio.playSfx('bump-wall');
             this._bounceOff(dir);
-            this._log(`[You put your shoulder into ${who}. ${who} does not appear to notice.]`);
+            this._log(`You put your shoulder into ${who}. ${who} does not appear to notice.`);
             this._render();
             return false;                       // immovable — no step, no turn
         }
@@ -3256,7 +3256,7 @@ class Game {
             this._bounceOff(dir);
             // A different failure and it should read as one: they WOULD move,
             // there is simply nowhere to put them.
-            this._log(`[You lean on ${who}, who has nowhere to go.]`);
+            this._log(`You lean on ${who}, who has nowhere to go.`);
             this._render();
             return false;                       // boxed in — nowhere to put them
         }
@@ -3267,7 +3267,7 @@ class Game {
         // stepEntity already set _lastDx/_lastDy to the victim's own displacement,
         // which is unit-length because the destination is always one tile away.
         enemy._spunTurns = 1;                   // burns on the victim's next HOSTILE turn
-        this._log(`[You shove ${((enemy.boss && enemy.shownName) || (enemy.name ?? enemy.type))} so hard they spin around!]`, 'combat');
+        this._log(`You shove ${((enemy.boss && enemy.shownName) || (enemy.name ?? enemy.type))} so hard they spin around!`, 'combat');
         return true;
     }
 
@@ -3615,7 +3615,7 @@ class Game {
 
     _selectItem(slot) {
         if (!this.inventory[slot]) {
-            this._log(`[Slot ${slot + 1} empty]`);
+            this._log(`Slot ${slot + 1} empty`);
             return;
         }
         this.selectedSlot = slot;
@@ -3631,7 +3631,7 @@ class Game {
         // Quest items are held, not used/thrown/smashed/given — bail before
         // building the overlay so the converter can't be lost.
         if (item.questItem) {
-            this._log('[Best hold onto that.]');
+            this._log('Best hold onto that.');
             this.state = STATE.ITEM_SELECTED;
             this._render();
             return;
@@ -3744,14 +3744,14 @@ class Game {
                 // re-resolved target that no longer matches means the moment
                 // passed, so don't spend the item on nothing.
                 const still = contextualUses(item, this).find(o => o.id === u.id);
-                if (!still) { this._log('[Too late.]'); this.state = STATE.ITEM_SELECTED; this._render(); return; }
+                if (!still) { this._log('Too late.'); this.state = STATE.ITEM_SELECTED; this._render(); return; }
                 still.apply(this, still.target, { slot });
                 this._render();
                 return;
             }
             case 'throw':
                 this.state = STATE.ITEM_THROW_DIR;
-                this._log(`[Throw ${item.name} — pick a direction]`);
+                this._log(`Throw ${item.name} — pick a direction`);
                 this._render();
                 return; // don't advance yet
             case 'smash': {
@@ -3762,14 +3762,14 @@ class Game {
                 if (adjHostile.length === 0) {
                     // Target gone between opening the overlay and confirming —
                     // don't waste the item or a turn; drop back to selected.
-                    this._log('[Nothing to smash.]');
+                    this._log('Nothing to smash.');
                     this.state = STATE.ITEM_SELECTED;
                     this._render();
                     return;
                 }
                 const dmg = 10 * stack.count;
                 const result = this.combatAttack(adjHostile[0], dmg);
-                this._log(`[Smashed ${item.name} on ${adjHostile[0].entity.name} — ${result}]`);
+                this._log(`Smashed ${item.name} on ${adjHostile[0].entity.name} — ${result}`);
                 this._removeFromSlot(this.selectedSlot);
                 this.selectedSlot = -1;
                 this.state = STATE.IDLE;
@@ -3831,7 +3831,7 @@ class Game {
     _rockClatter(itemDef, x, y) {
         if (!itemDef || !itemDef.pullsAggro) return;
         emitNoise(this._earshot(), x, y, NOISE.throwImpact);
-        this._log('[The rock clatters off down the tunnel.]');
+        this._log('The rock clatters off down the tunnel.');
     }
 
     // (fx37) Arm a throw from the bag slot: whatever menu is open closes, and the
@@ -3841,7 +3841,7 @@ class Game {
         if (!stack) { this.state = STATE.IDLE; this._render(); return; }
         this.selectedSlot = slot;
         this.state = STATE.ITEM_THROW_DIR;
-        this._log(`[Throw ${stack.itemDef.name} — pick a direction]`);
+        this._log(`Throw ${stack.itemDef.name} — pick a direction`);
         this._render();
     }
 
@@ -4251,7 +4251,7 @@ class Game {
                 break;
             }
             case 'hit':   if (npc && this._tapWithWeaponMove?.(npc)) break; if (npc) { this.combatAttack(npc, (this.equipment.weapon || this.bareHand).damage, { type: (this.equipment.weapon || this.bareHand).damageType, weapon: (this.equipment.weapon || this.bareHand) }); this._advanceWorld(); this._render(); } break;
-            case 'throw': { const th = this._resolveThrowable(); if (th) { const msg = resolveThrow(this, th.itemDef, null, th.count, { x: t.x, y: t.y }); if (msg) this._log(msg, 'combat'); this._rockClatter(th.itemDef, t.x, t.y); th.consume(); this._advanceWorld(); } else this._log('[Nothing to throw.]'); this._render(); break; }
+            case 'throw': { const th = this._resolveThrowable(); if (th) { const msg = resolveThrow(this, th.itemDef, null, th.count, { x: t.x, y: t.y }); if (msg) this._log(msg, 'combat'); this._rockClatter(th.itemDef, t.x, t.y); th.consume(); this._advanceWorld(); } else this._log('Nothing to throw.'); this._render(); break; }
             case 'take':  this._takeItemAt(t.x, t.y); this._render(); break;
             case 'open':  if (t.container) this._openContainer(t.container); break;
             case 'rest':  this._restHere(); break;
@@ -4262,14 +4262,14 @@ class Game {
     // Take a specific ground item at a tile (not _tryPickup, which is player-tile only).
     _takeItemAt(x, y) {
         const idx = (this.groundItems || []).findIndex(gi => gi.x === x && gi.y === y);
-        if (idx === -1) { this._log('[Nothing to take there.]'); return; }
+        if (idx === -1) { this._log('Nothing to take there.'); return; }
         const gi = this.groundItems[idx];
         // Resolve through _resolveItemDef so WEAPONS are found too (a bare ITEMS
         // lookup used to miss them). Leave an unresolvable item where it lies,
         // and say so, rather than deleting it off the floor with no log.
         const def = this._resolveItemDef(gi.type);
         if (!def) {
-            this._log(`[Whatever that is, it won't come loose.]`);
+            this._log(`Whatever that is, it won't come loose.`);
             return;
         }
 
@@ -4285,7 +4285,7 @@ class Game {
         if (def.useType === 'equip' && def.equipSlot && !this.equipment[def.equipSlot]) {
             this.equipment[def.equipSlot] = def;
             markTaken();
-            this._log(`[Equipped ${def.name}.]`, 'pickup');
+            this._log(`Equipped ${def.name}.`, 'pickup');
             this._saveMoment?.();   // (FX24)
             return;
         }
@@ -4293,9 +4293,9 @@ class Game {
         this._addToInventory(def);
         markTaken();
         const cat = xmbCategoryOf(def);
-        if (cat)                          this._log(`[Took ${def.name} → ${XMB_LABELS[cat]}.]`, 'pickup');
-        else if (def.useType === 'equip') this._log(`[Stashed ${def.name} in your bag.]`, 'pickup');
-        else                              this._log(`[Took ${def.name}.]`, 'pickup');
+        if (cat)                          this._log(`Took ${def.name} → ${XMB_LABELS[cat]}.`, 'pickup');
+        else if (def.useType === 'equip') this._log(`Stashed ${def.name} in your bag.`, 'pickup');
+        else                              this._log(`Took ${def.name}.`, 'pickup');
         this._saveMoment?.();   // (FX24)
     }
 
@@ -4460,7 +4460,7 @@ class Game {
     // Throw inventory `slot` onto the exact reticle `tile` (real placement — the
     // burst centres on that tile, not a collapsed cardinal direction).
     _throwAt(slot, tile) {
-        if (!tile) { this._log('[Nothing to throw at]'); this.state = STATE.IDLE; return; }
+        if (!tile) { this._log('Nothing to throw at'); this.state = STATE.IDLE; return; }
         this.selectedSlot = slot;
         this._doThrowAt(tile); // consumes item + advances world + sets state IDLE
     }
@@ -4501,14 +4501,14 @@ class Game {
     _useXmbCurrent() {
         const bar = buildXmbBar(this.inventory);
         const sel = resolveXmbSelection(bar, this.xmbCat, this.xmbPick);
-        if (!sel) { this._log('[Nothing usable on the bar.]'); this._render(); return; }
+        if (!sel) { this._log('Nothing usable on the bar.'); this._render(); return; }
         this.xmbCat = sel.column.key;
         this.xmbPick = { ...this.xmbPick, [sel.column.key]: sel.item.itemDef.id };
         const def = sel.item.itemDef;
         this.selectedSlot = sel.item.slot;              // both bridges read selectedSlot
         if (sel.column.key === 'throw') {
             const tile = this._xmbAimTile(def.range || 5);
-            if (!tile) { this.selectedSlot = -1; this._log(`[No target in range for ${def.name}.]`); this._render(); return; }
+            if (!tile) { this.selectedSlot = -1; this._log(`No target in range for ${def.name}.`); this._render(); return; }
             this._doThrowAt(tile);
         } else {
             // (fx55) Full health: a healing food stays in the bag and no turn passes. Only the
@@ -4644,7 +4644,7 @@ class Game {
                     const repeat = wpn && wpn.onHit === 'fearOnRepeat' && this._lastHitTarget === enemy.id;
                     this.combatAttack(enemy, wpn.damage, { type: wpn && wpn.damageType, weapon: wpn });
                     if (enemy.entity.isAlive()) {
-                        if (repeat) { this._applyFear(enemy, 3); this._log('[The Fearmur cracks bone — it recoils in terror!]', 'combat'); }
+                        if (repeat) { this._applyFear(enemy, 3); this._log('The Fearmur cracks bone — it recoils in terror!', 'combat'); }
                         if (wpn && wpn.pullDistance) this._pullEnemyToward(enemy, wpn.pullDistance);   // (Lion Whip) yank it closer
                         this._lastHitTarget = enemy.id;
                     } else {
@@ -4652,7 +4652,7 @@ class Game {
                     }
                     this._advanceWorld();
                 }
-                else { this._log('[Nothing to hit there]', 'combat'); }
+                else { this._log('Nothing to hit there', 'combat'); }
                 break;
             }
             case 'cleaveAttack': {
@@ -4664,9 +4664,9 @@ class Game {
                 const dmg = (this.equipment.weapon || this.bareHand).damage * 2 / 3;
                 const tiles = affectedTiles(w, this);
                 const hit = this._aoeStrike(tiles, dmg, { type: (this.equipment.weapon || this.bareHand).damageType, weapon: (this.equipment.weapon || this.bareHand) });
-                if (hit.length) { this._log(`[Cleave! ${hit.length} caught.]`, 'combat'); this._advanceWorld(); }
-                else if (this._enemiesPresent(tiles) > 0) { this._log('[Cleave connects — shrugged off, immune.]', 'combat'); this._advanceWorld(); }
-                else this._log('[Cleave hits only air]', 'combat');
+                if (hit.length) { this._log(`Cleave! ${hit.length} caught.`, 'combat'); this._advanceWorld(); }
+                else if (this._enemiesPresent(tiles) > 0) { this._log('Cleave connects — shrugged off, immune.', 'combat'); this._advanceWorld(); }
+                else this._log('Cleave hits only air', 'combat');
                 break;
             }
             case 'stunAttack': {
@@ -4679,11 +4679,11 @@ class Game {
                     this.combatAttack(enemy, wpn.damage, { type: wpn && wpn.damageType, weapon: wpn });
                     if (enemy.entity.isAlive()) {
                         enemy._spunTurns = 1;
-                        this._log('[The blow leaves them reeling.]', 'combat');
+                        this._log('The blow leaves them reeling.', 'combat');
                     }
                     this._advanceWorld();
                 }
-                else { this._log('[Nothing to stun there]', 'combat'); }
+                else { this._log('Nothing to stun there', 'combat'); }
                 break;
             }
             case 'spinAttack': {
@@ -4693,22 +4693,22 @@ class Game {
                 const dmg = (this.equipment.weapon || this.bareHand).damage * 2 / 5;
                 const tiles = affectedTiles(w, this);
                 const hit = this._aoeStrike(tiles, dmg, { type: (this.equipment.weapon || this.bareHand).damageType, weapon: (this.equipment.weapon || this.bareHand) });
-                if (hit.length) { this._log(`[Spin! ${hit.length} caught.]`, 'combat'); this._advanceWorld(); }
-                else if (this._enemiesPresent(tiles) > 0) { this._log('[Spin connects — shrugged off, immune.]', 'combat'); this._advanceWorld(); }
-                else this._log('[You spin, hitting nothing]', 'combat');
+                if (hit.length) { this._log(`Spin! ${hit.length} caught.`, 'combat'); this._advanceWorld(); }
+                else if (this._enemiesPresent(tiles) > 0) { this._log('Spin connects — shrugged off, immune.', 'combat'); this._advanceWorld(); }
+                else this._log('You spin, hitting nothing', 'combat');
                 break;
             }
             case 'castSpell': {
                 // The selected spell's AoE (3×3 burst or cardinal cone) hits every
                 // entity in it for full damage. Plus Ultra already gated a friendly.
                 const spell = SPELLS[spellId] || SPELLS[(this.knownSpells || [])[0]];
-                if (!spell) { this._log("[You don't know any spells.]"); break; }
-                if ((this.playerMp || 0) < spell.mpCost) { this._log(`[Not enough MP — ${spell.name} needs ${spell.mpCost}.]`); break; }
+                if (!spell) { this._log("You don't know any spells."); break; }
+                if ((this.playerMp || 0) < spell.mpCost) { this._log(`Not enough MP — ${spell.name} needs ${spell.mpCost}.`); break; }
                 this.playerMp = Math.max(0, this.playerMp - spell.mpCost);
                 emitNoise(this._earshot(), this.playerX, this.playerY, NOISE.cast);
                 const hit = this._aoeStrike(affectedTiles(w, this), spell.damage, { type: spell.damageType });
                 if (hit.length) this._log(`[${spell.name}! ${hit.map(h => `${h.name} ${h.dealt}`).join(', ')}]`, 'combat');
-                else this._log(`[${spell.name} fizzles — nothing caught.]`, 'combat');
+                else this._log(`${spell.name} fizzles — nothing caught.`, 'combat');
                 this._advanceWorld();
                 break;
             }
@@ -4716,16 +4716,16 @@ class Game {
                 // Trick skills cost GP, not MP — "turning tricks for money".
                 // Granted by tech gear (the Ray Gun grants Ray Blast). Same AoE
                 // path as spells; the gold guard mirrors the bribe idiom above.
-                if (!this.hasTrick(node.trickId)) { this._log("[You don't have that trick.]"); break; }
+                if (!this.hasTrick(node.trickId)) { this._log("You don't have that trick."); break; }
                 const trick = TRICKS[node.trickId];
-                if (!trick) { this._log("[That trick isn't ready yet]"); break; }
-                if ((this.gold ?? 0) < trick.gpCost) { this._log(`[Not enough GP — ${trick.name} needs ${trick.gpCost}g.]`); break; }
+                if (!trick) { this._log("That trick isn't ready yet"); break; }
+                if ((this.gold ?? 0) < trick.gpCost) { this._log(`Not enough GP — ${trick.name} needs ${trick.gpCost}g.`); break; }
                 burnGold(this, trick.gpCost, 'trick'); // declared sink (Law 6a) — the guard above covers it
                 if (trick.transform) {
                     // Rat Form — fold down into a rat for a few turns (slips
                     // through grates). No aim/damage; just set the countdown.
                     this._ratFormTurns = trick.transformTurns || 3;
-                    this._log('[You fold down into a rat. The world goes enormous.]', 'transition');
+                    this._log('You fold down into a rat. The world goes enormous.', 'transition');
                     this._advanceWorld();
                     break;
                 }
@@ -4739,7 +4739,7 @@ class Game {
                 }
                 const hit = this._aoeStrike(affectedTiles(w, this), trick.damage, { type: trick.damageType });
                 if (hit.length) this._log(`[${trick.name}! ${hit.map(h => `${h.name} ${h.dealt}`).join(', ')}. (-${trick.gpCost}g)]`, 'combat');
-                else this._log(`[${trick.name} fizzles — nothing caught. (-${trick.gpCost}g)]`, 'combat');
+                else this._log(`${trick.name} fizzles — nothing caught. (-${trick.gpCost}g)`, 'combat');
                 this._advanceWorld();
                 break;
             }
@@ -4748,8 +4748,8 @@ class Game {
                 // Fearmur. Uses the self-burst from affectedTiles; _applyFear skips
                 // allies/townsfolk (so `feared` counts only real routs).
                 const spell = SPELLS[spellId];
-                if (!spell) { this._log("[You don't know that spell.]"); break; }
-                if ((this.playerMp || 0) < spell.mpCost) { this._log(`[Not enough MP — ${spell.name} needs ${spell.mpCost}.]`); break; }
+                if (!spell) { this._log("You don't know that spell."); break; }
+                if ((this.playerMp || 0) < spell.mpCost) { this._log(`Not enough MP — ${spell.name} needs ${spell.mpCost}.`); break; }
                 this.playerMp = Math.max(0, this.playerMp - spell.mpCost);
                 emitNoise(this._earshot(), this.playerX, this.playerY, NOISE.cast);
                 const tiles = affectedTiles(w, this);
@@ -4758,19 +4758,19 @@ class Game {
                     if (!e.entity.isAlive()) continue;
                     if (tiles.some(t => t.x === e.x && t.y === e.y) && this._applyFear(e, spell.fear || 3)) feared++;
                 }
-                if (feared) this._log(`[BOO! ${feared} flee in terror!]`, 'combat');
-                else this._log('[Boo! ...nothing flinches.]');
+                if (feared) this._log(`BOO! ${feared} flee in terror!`, 'combat');
+                else this._log('Boo! ...nothing flinches.');
                 this._advanceWorld();
                 break;
             }
             case 'resolveThrow': { if (itemSlot >= 0 && aimTile) { this._throwAt(itemSlot, aimTile); } break; }
-            case 'resolveUse':   { const stack = itemSlot >= 0 ? this.inventory[itemSlot] : null; if (stack) { this.selectedSlot = itemSlot; this._doItemUse(stack.itemDef); } else this._log('[Nothing to use]'); break; }
-            case 'guard':        { this.addBuff('guard', 'Guard', 2, 'buff'); this._log('[Bracing — incoming damage reduced.]', 'combat'); this._advanceWorld(); break; }
+            case 'resolveUse':   { const stack = itemSlot >= 0 ? this.inventory[itemSlot] : null; if (stack) { this.selectedSlot = itemSlot; this._doItemUse(stack.itemDef); } else this._log('Nothing to use'); break; }
+            case 'guard':        { this.addBuff('guard', 'Guard', 2, 'buff'); this._log('Bracing — incoming damage reduced.', 'combat'); this._advanceWorld(); break; }
             case 'wait':         { this._waitTurn(); break; }
             case 'run':          { const d = this._aimDir(aimTile); if (d) { this._closeWheel(); this._doMove(d); return; } break; }
             case 'thieveCoin': case 'thieveKit': case 'thieveGear': {
                 const victim = this._thieveTarget(aimTile);
-                if (!victim) { this._log('[Nobody to lift from there]'); break; }
+                if (!victim) { this._log('Nobody to lift from there'); break; }
 
                 const verdict  = perceives(this.map, victim, this.playerX, this.playerY);
                 const passives = this._theftPassives();
@@ -4779,7 +4779,7 @@ class Game {
                 let weight = 0, took = null, gp = 0, restore = null;
                 if (node.resolver === 'thieveCoin') {
                     gp = coinTake(victim, stealLimit(passives));
-                    if (gp <= 0) { this._log('[Their pockets are empty]'); break; }
+                    if (gp <= 0) { this._log('Their pockets are empty'); break; }
                     weight = coinWeight(gp);
                 } else {
                     // Through the Game's resolver, not a bare ITEMS[id]: stolen Gear
@@ -4787,7 +4787,7 @@ class Game {
                     const resolve = (id) => this._resolveItemDef(id);
                     const isKit = node.resolver === 'thieveKit';
                     took = isKit ? kitTake(victim, resolve) : gearTake(victim, resolve);
-                    if (!took) { this._log('[Nothing there to take]'); break; }
+                    if (!took) { this._log('Nothing there to take'); break; }
                     weight = isKit ? itemWeight(took) : gearWeight(took);
                     // kitTake/gearTake have ALREADY removed it. If the bag turns out
                     // to be full we have to put it back, or a full bag silently
@@ -4804,15 +4804,15 @@ class Game {
 
                 if (took && !this._addToInventory(took)) {
                     restore();
-                    this._log('[Your bag is full.]');
+                    this._log('Your bag is full.');
                     break;                       // no turn spent, nothing taken, nothing noticed
                 }
 
                 const clean = isClean(rec.weightTaken, weight, noticeBuffer(passives, verdict));
                 rec.weightTaken += weight;
 
-                if (gp > 0) { transferGold(victim, this, gp, 'theft'); rec.gold += gp; this._log(`[Lifted ${gp} GP.]`, 'pickup'); }
-                if (took)   { rec.items.push(took.id); this._log(`[Lifted the ${took.name}.]`, 'pickup'); }
+                if (gp > 0) { transferGold(victim, this, gp, 'theft'); rec.gold += gp; this._log(`Lifted ${gp} GP.`, 'pickup'); }
+                if (took)   { rec.items.push(took.id); this._log(`Lifted the ${took.name}.`, 'pickup'); }
                 audio.playSfx(clean ? 'theft' : 'theft-noticed');
 
                 if (clean) {
@@ -4827,7 +4827,7 @@ class Game {
                     if (took) this._hot[took.id] = (this._hot[took.id] ?? 0) + 1;
                     victim._robbedSweep = true;            // arms the blind sweep + paranoia
                     reactToTransaction(victim, 'theft', { item: took, gold: gp });
-                    this._log(`[${((victim.boss && victim.shownName) || (victim.name ?? victim.type))} feels the weight change.]`, 'combat');
+                    this._log(`${((victim.boss && victim.shownName) || (victim.name ?? victim.type))} feels the weight change.`, 'combat');
                 }
                 this._advanceWorld();
                 break;
@@ -4841,10 +4841,10 @@ class Game {
                 // vendors get the shop, non-vendors get offer mode. Not gated on
                 // npc.vendor (that would regress the give-into-trade fold).
                 if (npc) { this._openOffer(npc); return; }
-                this._log('[No one to trade with there]');
+                this._log('No one to trade with there');
                 break;
             }
-            default: this._log(`[${node.label} isn't ready yet]`); // dep stub — never crash
+            default: this._log(`${node.label} isn't ready yet`); // dep stub — never crash
         }
         this._closeWheel();
     }
@@ -4929,7 +4929,7 @@ class Game {
     _waitTurn() {
         const latched = this.enemies.filter(e => isAnt(e) && e._latched && e.entity.isAlive());
         if (latched.length) { brushOff(latched, this._antEnv()); this._log('[TEXT]'); }
-        else this._log('[Wait]');
+        else this._log('Wait');
         this._advanceWorld();
     }
 
@@ -4978,7 +4978,7 @@ class Game {
         this._hasteCharges = plan.hasteCharges;
         this._slowCharges = plan.slowCharges;
         if (plan.runs === 0) {
-            this._log(`[The world holds still. (${this._hasteCharges} left)]`);
+            this._log(`The world holds still. (${this._hasteCharges} left)`);
             return;
         }
         this._advanceWorldOnce();
@@ -5025,7 +5025,7 @@ class Game {
             const gone = this.enemies.filter(e => e._isSummon && e._summonTurnsLeft <= 0);
             for (const e of gone) {
                 if (this._finaleSummonLeft?.(e)) continue;   // Sun Man is bitten, not sent away
-                this._log(`[${((e.boss && e.shownName) || e.type) || 'The summon'} slinks back into the crowd.]`);
+                this._log(`${((e.boss && e.shownName) || e.type) || 'The summon'} slinks back into the crowd.`);
             }
             if (gone.length) this.enemies = this.enemies.filter(e => !(e._isSummon && e._summonTurnsLeft <= 0));
         }
@@ -5035,7 +5035,7 @@ class Game {
         // beat and unfold at zero. Ticks once per committed turn, like the summon.
         if (this._ratFormTurns > 0) {
             this._ratFormTurns--;
-            if (this._ratFormTurns === 0) this._log('[You unfold. Human again.]', 'transition');
+            if (this._ratFormTurns === 0) this._log('You unfold. Human again.', 'transition');
         }
 
         // Enemies/NPCs may have just begun a one-tile slide (stepEntity). Kick
@@ -5074,7 +5074,7 @@ class Game {
         // at the top of _advanceWorldOnce wiped it before it could be consumed.
         if (this._soapUsedThisTurn && this.hasBuff('sludge')) {
             this.removeBuff('sludge');
-            this._log('[Soap neutralized sludge]');
+            this._log('Soap neutralized sludge');
         }
         if (this._soapUsedThisTurn && this.hasBuff('goo')) {
             this.removeBuff('goo');
@@ -5103,7 +5103,7 @@ class Game {
         if (this._pendingTransition) {
             const t = this._pendingTransition;
             this._pendingTransition = null;
-            this._log(t.label || '[Transitioning...]');
+            this._log(t.label || 'Transitioning...');
             // (zone pursuit) Snapshot the hostiles on your heels BEFORE _loadMap
             // wipes them, plus which zone they're chasing you out of, so they can
             // be re-injected at the matching door in the new zone.
@@ -5116,7 +5116,7 @@ class Game {
             this.state = STATE.RESOLVING;
             this._zoneChange();   // (plans/ks1-respawn-list.md) the respawn lists take a step
             this._loadMap(t.toMap, t.toX, t.toY).then(() => {
-                this._log(`[Entered ${this.map.zoneName}]`);
+                this._log(`Entered ${this.map.zoneName}`);
                 this._tellAwayNews?.();   // (CK2) optional-called, like _noteAway: one line of news after time away
                 this._checkInteractions?.();   // (IN1) optional-called, like _saveMoment, for stand-in games
                 this._armourShopNotice?.();   // (AA1) optional-called, like _saveMoment, for the stand-in games tests build
@@ -5147,7 +5147,7 @@ class Game {
         this.state = STATE.RESOLVING;
         this._zoneChange();
         this._loadMap(f.toMap, f.toX, f.toY).then(() => {
-            this._log(`[Entered ${this.map.zoneName}]`);
+            this._log(`Entered ${this.map.zoneName}`);
             this.state = STATE.IDLE;
             this.emitGameEvent('map_entered', { map: f.toMap });
             this.autosave({ force: true });
@@ -5537,7 +5537,7 @@ class Game {
             const gi = this.groundItems[idx];
             this._addToInventory(gi.def);
             audio.playSfx('pickup'); // [audio] item picked up off the ground
-            this._log(`[Picked up ${gi.def.name}]`);
+            this._log(`Picked up ${gi.def.name}`);
             this.emitGameEvent('item_pickup', { id: gi.def.id });
             // Remember it so re-entering this zone doesn't respawn it.
             if (!this._takeDropRecord?.(gi.type, gi.x, gi.y)) this._collectedItems.add(`${this._mapUrl}|${gi.x}|${gi.y}|${gi.type}`);
@@ -5555,15 +5555,15 @@ class Game {
     _grantFromExaminable(target) {
         const key = `${this._mapUrl}|${target.x}|${target.y}|${target.grants}`;
         if (this._collectedItems.has(key)) {
-            this._log(target.spentText || '[Nothing left here now.]');
+            this._log(target.spentText || 'Nothing left here now.');
             return true;
         }
         const def = this._resolveItemDef(target.grants);   // WEAPONS too, not just ITEMS
-        if (!def) { this._log(target.text || `[You examine the ${target.id}.]`); return true; }
+        if (!def) { this._log(target.text || `You examine the ${target.id}.`); return true; }
         this._addToInventory(def);
         this._collectedItems.add(key);
-        this._log(target.text || `[You take the ${def.name}.]`);
-        this._log(`[+ ${def.name}]`, 'pickup');
+        this._log(target.text || `You take the ${def.name}.`);
+        this._log(`+ ${def.name}`, 'pickup');
         audio.playSfx('pickup');
         this._saveMoment?.();   // (FX24)
         return true;
@@ -5587,7 +5587,7 @@ class Game {
     _openContainer(container) {
         if (this.state !== STATE.IDLE) return;
         if (!container || container.contents.length === 0) {
-            this._log(`[The ${container ? container.type : 'container'} is empty.]`);
+            this._log(`The ${container ? container.type : 'container'} is empty.`);
             return;
         }
         // A chest is a partner with nothing to say: the shim exists so one screen
@@ -5652,7 +5652,7 @@ class Game {
 
     combatAttack(enemyObj, damage, opts = {}) {
         if (this._finaleBlocksHit?.(enemyObj)) return null;   // (FIN3) no one strikes the cowering Sun Man
-        const playerEntity = { name: '[Player]', isDead: () => false };
+        const playerEntity = { name: 'Player', isDead: () => false };
 
         // (Rings) Passive damage modifiers fold into the swing before it lands.
         // A `<type>Damage` passive (fireDamage today, any future coldDamage /
@@ -5696,11 +5696,11 @@ class Game {
             positional: backstab ? WEAKNESS_MULT : 1,
             state: kinds.includes('state') ? WEAKNESS_MULT : 1,
         });
-        if (finalDmg === 0) { this._log(`[${enemyObj.shownName || enemyObj.type} is immune!]`, 'combat'); return null; }
+        if (finalDmg === 0) { this._log(`${enemyObj.shownName || enemyObj.type} is immune!`, 'combat'); return null; }
         // (WN1, WNR1 b) A landed hit of a type the foe is weak to or resists teaches you that.
         this._learnWeakness?.(enemyObj, opts.type || kind);
         if (weakHit.knockout) finalDmg = knockoutDamage(finalDmg, enemyObj.entity);
-        if (backstab) this._log('[Backstab!]', 'combat');
+        if (backstab) this._log('Backstab!', 'combat');
 
         const result = attack(playerEntity, enemyObj.entity, finalDmg);
 
@@ -5805,7 +5805,7 @@ class Game {
     _handleEnemyDeath(enemyObj) {
         audio.playSfx('enemy-killed'); // [audio] K.O. sting on a kill
         this._spawnEventWord(enemyObj.x, enemyObj.y, 'K.O.!', '#ff8822', 22);
-        this._log(`[Defeated ${enemyObj.entity.name}]`, 'combat');
+        this._log(`Defeated ${enemyObj.entity.name}`, 'combat');
         this._breakCompactor?.(enemyObj);   // (TC1) the compactor falling stops the walls and opens the door
         this._hypnoOnDeath?.(enemyObj);     // (HV1) the nerd falling switches the Hypno Vision off
         this.emitGameEvent('enemy_killed', {
@@ -5819,7 +5819,7 @@ class Game {
             const loot = enemyObj.gold, before = this.gold || 0;
             // (MS3) a worn delivery cap makes them carry more: transferGold tops the purse up on 'loot'.
             transferGold(enemyObj, this, loot, 'loot'); // can't fail — amount == balance, guarded > 0
-            this._log(`[Looted ${(this.gold || 0) - before} GP.]`, 'pickup');
+            this._log(`Looted ${(this.gold || 0) - before} GP.`, 'pickup');
             this._muggedIds.add(enemyObj.id);
         }
         // Law 6f AS AMENDED: the unused kit drops. He spent his tricks or he
@@ -5839,7 +5839,7 @@ class Game {
             .filter(d => !(haveGun && d.type === 'ray_gun'));
         drops.push(...kit);
         if (kit.length) {
-            this._log(`[They drop what they didn't get to use.]`, 'pickup');
+            this._log(`They drop what they didn't get to use.`, 'pickup');
             this._muggedIds.add(enemyObj.id);
         }
         enemyObj.loadout = [];
@@ -5859,7 +5859,7 @@ class Game {
         const viaQuest = !!required && !!this.questEngine?.act2BossDown?.(enemyObj, this.map?.enemySpawns);
         if (firstFall && required && !viaQuest && ITEMS[required]) {
             drops.push({ type: required, x: enemyObj.x, y: enemyObj.y, def: ITEMS[required] });
-            this._log(dropLineFor(enemyObj, this.map?.enemySpawns) || `[${ITEMS[required].name} dropped.]`, 'pickup');
+            this._log(dropLineFor(enemyObj, this.map?.enemySpawns) || `${ITEMS[required].name} dropped.`, 'pickup');
         }
         // (Remembrance Rings) The Were-Rat also leaves a remembrance — a braided
         // tuft of fur → the Rat Ring (fashioned at Platero). Drop it on a free
@@ -5871,12 +5871,12 @@ class Game {
                 if (this.map.isWalkable(tx, ty) && ![...this.groundItems, ...drops].some(gi => gi.x === tx && gi.y === ty)) { fx = tx; fy = ty; break; }
             }
             drops.push({ type: 'wererat_fur', x: fx, y: fy, def: ITEMS.wererat_fur });
-            this._log('[Among the matted fur, one coarse braided tuft stays warm — a remembrance.]', 'pickup');
+            this._log('Among the matted fur, one coarse braided tuft stays warm — a remembrance.', 'pickup');
         }
         // Pike guards his climbing rope with his life — take it off his body.
         if (firstFall && enemyObj.tag === 'pike_boss' && ITEMS.grappling_hook) {
             drops.push({ type: 'grappling_hook', x: enemyObj.x, y: enemyObj.y, def: ITEMS.grappling_hook });
-            this._log('[Pike crumples. His big coil of rope — the grappling hook — thuds to the stone.]', 'pickup');
+            this._log('Pike crumples. His big coil of rope — the grappling hook — thuds to the stone.', 'pickup');
         }
         // Pike's deal (his dialogue onPick set the flag): clearing the LAST canyon
         // critter earns the rope — no coin, no killing Pike.
@@ -5884,7 +5884,7 @@ class Game {
             && !this.questEngine.getFlag('pikeDealPaid')
             && !this.enemies.some(e => e.tag === 'canyon_critter' && e.entity.isAlive())) {
             this.questEngine.state.flags.pikeDealPaid = true;
-            this._grantItem('grappling_hook', '["Deal\'s a deal." Pike coils the big rope into your pack — the grappling hook is yours.]');
+            this._grantItem('grappling_hook', '"Deal\'s a deal." Pike coils the big rope into your pack — the grappling hook is yours.');
         }
         onSewerEnemyKilled(this, enemyObj);
         // (FX3) Auto-loot: everything gathered above goes straight into the bag.
@@ -5912,7 +5912,7 @@ class Game {
         if (!got.length) return left;
         audio.playSfx('pickup');
         for (const def of got) {
-            this._log(`[Picked up ${def.name}]`, 'pickup');
+            this._log(`Picked up ${def.name}`, 'pickup');
             this.emitGameEvent('item_pickup', { id: def.id });
         }
         this._saveMoment?.();
@@ -5954,20 +5954,20 @@ class Game {
     // Self-guarding: no material in the bag → nothing is consumed; already own the
     // ring → the material is kept. Returns true only on a successful fashioning.
     _fashionRing(materialId, ringId, count = 1, price = 0) {
-        if (this.ownedRings.has(ringId)) { this._log('[Platero: "You already wear its like."]'); return false; }
+        if (this.ownedRings.has(ringId)) { this._log('Platero: "You already wear its like."'); return false; }
         const slots = [];
         let have = 0;
         (this.inventory || []).forEach((s, i) => {
             if (s && s.itemDef && s.itemDef.id === materialId) { slots.push(i); have += s.count || 1; }
         });
-        if (have < count || (this.gold || 0) < price) { this._log('[Platero: "Bring me the material and I\'ll set it into a ring."]'); return false; }
+        if (have < count || (this.gold || 0) < price) { this._log('Platero: "Bring me the material and I\'ll set it into a ring."'); return false; }
         let need = count;
         for (const i of slots) {
             while (need > 0 && this.inventory[i]) { this._removeFromSlot(i); need--; }
         }
         if (price > 0) this.gold -= price;
         this._acquireRing(ringId);   // logs its own "[You slip on the …]" line
-        this._log('[Platero turns it in the light. It becomes a ring.]', 'transition');
+        this._log('Platero turns it in the light. It becomes a ring.', 'transition');
         this._render();
         return true;
     }
@@ -6170,7 +6170,7 @@ class Game {
         this._refreshGrantedSkills();
         if (got) {
             const def = RINGS[ringId];
-            this._log(`[You slip on the ${(def && def.name || ringId).replace(/[\[\]]/g, '')}.]`, 'transition');
+            this._log(`You slip on the ${(def && def.name || ringId).replace(/[\[\]]/g, '')}.`, 'transition');
         }
         return got;
     }
@@ -6217,11 +6217,11 @@ class Game {
 
         if (this.ringTier < 3 && (dispReady || goldReady)) {
             this._setRingTier(3);
-            this._log('[Your hands feel… readier. Your thumbs, even.]', 'transition');
+            this._log('Your hands feel… readier. Your thumbs, even.', 'transition');
         }
         if (this.ringTier < 4 && goldReady) {
             this._setRingTier(4);
-            this._log('[Fancy enough, now, for a pinky ring.]', 'transition');
+            this._log('Fancy enough, now, for a pinky ring.', 'transition');
         }
     }
 
@@ -6241,7 +6241,7 @@ class Game {
                 const dealt = enemyObj.entity.takeDamage(igniteDmg);
                 const killed = enemyObj.entity.isDead();
                 this._spawnHitSplat(enemyObj.x, enemyObj.y, `-${dealt}`, 'fire', { omni: true, killed });
-                this._log('[Cinders catch — it burns.]', 'combat');
+                this._log('Cinders catch — it burns.', 'combat');
                 if (killed) this._handleEnemyDeath(enemyObj);
             }
         }
@@ -6270,7 +6270,7 @@ class Game {
             if (this._hasSludgeImmunity()) {
                 // The bagged feet keep you dry; no message every turn.
             } else {
-                if (!this.hasBuff('sludge')) this._log('[You are standing in sludge.]', 'combat');
+                if (!this.hasBuff('sludge')) this._log('You are standing in sludge.', 'combat');
                 this.addBuff('sludge', 'Sludge', SLUDGE_DURATION, 'debuff');
             }
         }
@@ -6297,13 +6297,13 @@ class Game {
         const what = String(def.name || def.id).replace(/[[\]]/g, '');
         if (def.fireBlood) {
             this._applyFireBlood(this, def.poition?.turns ?? 5);
-            return `[${who} throws ${what} at you: you burn, and your hits set targets burning.]`;
+            return `${who} throws ${what} at you: you burn, and your hits set targets burning.`;
         }
         if (def.puddle) {
             const tiles = this._layPuddle({ x: npc.x, y: npc.y }, { x: this.playerX, y: this.playerY },
                                           def.puddle.kind, def.puddle.turns);
             const stuff = def.puddle.kind === 'goo' ? 'goo' : 'sludge';
-            return `[${who} throws ${what}: a ${stuff} puddle covers ${tiles} tile${tiles === 1 ? '' : 's'} around you.]`;
+            return `${who} throws ${what}: a ${stuff} puddle covers ${tiles} tile${tiles === 1 ? '' : 's'} around you.`;
         }
         if (def.poition?.as === 'poison') {
             // (ps1) A thrown poison food lands on you: Poisoned for its own numbers.
@@ -6350,7 +6350,7 @@ class Game {
         if (target !== this && !(target.entity && target.entity.isAlive())) return;
         this._ignite(target, FIRE_BLOOD_SPREAD_TURNS);
         const name = target === this ? 'You catch' : `${((target.boss && target.shownName) || (target.name ?? target.type))} catches`;
-        this._log(`[${name} fire.]`, 'combat');
+        this._log(`${name} fire.`, 'combat');
     }
 
     // (Hire a Lion) Spawn a temporary ally on a free tile beside the player. It
@@ -6364,7 +6364,7 @@ class Game {
             const x = this.playerX + dx, y = this.playerY + dy;
             if (this._tileFreeForShove(x, y)) { spot = { x, y }; break; }
         }
-        if (!spot) { this._log('[No room beside you to summon anything.]'); return false; }
+        if (!spot) { this._log('No room beside you to summon anything.'); return false; }
         const name = opts.summonName || (type.charAt(0).toUpperCase() + type.slice(1));
         this._summonSeq = (this._summonSeq || 0) + 1;
         // (FIN2) An authored ally may wear another type's picture and go by a name of
@@ -6391,7 +6391,7 @@ class Game {
         ally._summonTurnsLeft = turns;
         if (opts.aiding) ally._aiding = true;   // (FIN2) already in the fight, no need to see it first
         this.enemies.push(ally);
-        this._log(opts.summonLine ?? `[You whistle sharp — ${name} bounds out of the crowd, all teeth.]`, 'combat');
+        this._log(opts.summonLine ?? `You whistle sharp — ${name} bounds out of the crowd, all teeth.`, 'combat');
         return true;
     }
 
@@ -6410,7 +6410,7 @@ class Game {
         financier.fsmState = 'HOSTILE';
         financier.state = 'chasing';
         financier.ambient = false;
-        this._log(`[${financier.shownThe} turns on you!]`, 'combat');
+        this._log(`${financier.shownThe} turns on you!`, 'combat');
         const sun = FINALE_PHASE1.sunMan;
         this._spawnSummon('sun_man', FINALE_PHASE1.sunManTurns, {
             summonName: sun.name, summonLook: sun.type, summonHp: sun.hp, summonDamage: sun.damage,
@@ -6561,7 +6561,7 @@ class Game {
             if (!this._cascade?.defer(attacker ?? this._cascadeActor, dodgeFx, { hp: 0 })) dodgeFx();
             return 0;
         }
-        if (backstab) this._log('[Backstab!]', 'combat');
+        if (backstab) this._log('Backstab!', 'combat');
         if (attacker) this._spreadFireBlood(attacker, this);   // (poisons) a fire-blooded foe sets you burning
         dmg = Math.max(1, dmg - this._playerArmor());   // worn armor soaks the hit (min 1 always lands)
         this.playerHp = Math.max(0, this.playerHp - dmg);
@@ -6647,7 +6647,7 @@ class Game {
             }
         }
         this._flash('rgba(51, 255, 51, 0.5)'); // [settings] reduce-motion aware
-        this._log(`[CODEBALL — ${kills} eliminated]`);
+        this._log(`CODEBALL — ${kills} eliminated`);
         this._render();
     }
 
@@ -6661,7 +6661,7 @@ class Game {
         this.state = STATE.DEAD;
         audio.playSfx('death'); // [audio] death sting
         this._flash('rgba(255, 0, 0, 0.4)'); // [settings] reduce-motion aware (wraps renderer.flash)
-        this._log('[You go down...]');
+        this._log('You go down...');
         setTimeout(() => this._resolveDefeat(), 500);
     }
 
@@ -6723,8 +6723,8 @@ class Game {
         });
         const gp = (cost && cost.takenGold) || 0;
         this._log(lost.length || gp
-            ? `[Taken: ${lost.length ? lost.join(', ') : 'no items'}. GP taken: ${gp}.]`
-            : '[Nothing was taken.]', 'transition');
+            ? `Taken: ${lost.length ? lost.join(', ') : 'no items'}. GP taken: ${gp}.`
+            : 'Nothing was taken.', 'transition');
         this._render();
         this._resumeHeldWalk();
         this.autosave({ force: true });
@@ -6810,7 +6810,7 @@ class Game {
         this._deAggroAll();
         this._finaleReset?.(boss);                // (FIN2) the Financier starts over, Sun Man and all
         this.state = STATE.IDLE;
-        this._log('[Down but not out. Regroup and finish it.]', 'transition');
+        this._log('Down but not out. Regroup and finish it.', 'transition');
         this._render();
         this._resumeHeldWalk();
         this.autosave({ force: true });
@@ -6849,7 +6849,7 @@ class Game {
         this.state = STATE.IDLE;
         this._render();
         this._resumeHeldWalk();   // resume walking only if a dir is genuinely still held
-        this._log('[Respawned]');
+        this._log('Respawned');
         this.autosave({ force: true });
     }
 
@@ -6985,7 +6985,7 @@ class Game {
         await this._loadMap('town-map.json');
         this.state = STATE.IDLE;
         this._startMainQuest();   // deterministic fix_car start (fix/critical-path)
-        this._log('[New game]');
+        this._log('New game');
         if (bones) for (const line of reportLines(bones)) this._log(line, 'transition');   // (BN1)
     }
 
@@ -7694,7 +7694,7 @@ class Game {
                     // hits spread it. Costs the turn like any use.
                     if (def.fireBlood) {
                         this._applyFireBlood(this, def.poition?.turns ?? 5);
-                        this._log('[You drink Fire Blood: you burn, and your hits set targets burning.]', 'combat');
+                        this._log('You drink Fire Blood: you burn, and your hits set targets burning.', 'combat');
                     }
                     this._removeFromSlot(idx);
                     this._advanceWorld();
@@ -7702,10 +7702,10 @@ class Game {
                     break;
                 }
                 case 'protect':
-                    if (!moveToZone(this.inventory, idx, 'safe', cfg)) this._log('[Safe slots full.]');
+                    if (!moveToZone(this.inventory, idx, 'safe', cfg)) this._log('Safe slots full.');
                     break;
                 case 'unprotect':
-                    if (!moveToZone(this.inventory, idx, 'pack', cfg)) this._log('[Pack is full.]');
+                    if (!moveToZone(this.inventory, idx, 'pack', cfg)) this._log('Pack is full.');
                     break;
                 case 'drop': {
                     // (FX25) The whole stack lands on your tile, and the log says so.
@@ -8009,9 +8009,9 @@ class Game {
         }
         this.state = STATE.TRADE;
         audio.playSfx('menu-open');
-        if (npc._container)   this._log(`[You pry open the ${npc.type}.]`, 'transition');
-        else if (npc.vendor)  this._log(`[${npc.shownName || npc.type} opens the till. "What'll it be?"]`, 'transition');
-        else                  this._log(`[You open your satchel to ${npc.shownName || npc.type}.]`, 'transition');
+        if (npc._container)   this._log(`You pry open the ${npc.type}.`, 'transition');
+        else if (npc.vendor)  this._log(`${npc.shownName || npc.type} opens the till. "What'll it be?"`, 'transition');
+        else                  this._log(`You open your satchel to ${npc.shownName || npc.type}.`, 'transition');
         this._render();
     }
 
@@ -8236,7 +8236,7 @@ class Game {
             // A container is take-only. There is no put-into-chest path anywhere
             // in the codebase, and adding one is a new mechanic, not a reskin.
             if (side === 'give' && npc._container) {
-                this._log(`[The ${npc.type} isn't interested in what you've got.]`);
+                this._log(`The ${npc.type} isn't interested in what you've got.`);
                 this._render(); return;
             }
             if (side === 'give' && !this._canStageGive(entry)) { this._render(); return; }
@@ -8251,7 +8251,7 @@ class Game {
             const tray = this._offer[side] || [];
             const already = tray.some(x => sameEntry(x, entry));
             if (!already && tray.length >= OFFER_TRAY_SLOTS - 1) {
-                this._log(`[The ${side === 'give' ? 'offer' : 'take'} tray is full.]`);
+                this._log(`The ${side === 'give' ? 'offer' : 'take'} tray is full.`);
                 this._render(); return;
             }
 
@@ -8263,7 +8263,7 @@ class Game {
             const before = this._offer;
             this._offer = stage(this._offer, side, entry, entry.max);
             if (this._offer === before) {           // refused by the ceiling
-                this._log(`[That's all the ${entry.def.name} you have.]`);
+                this._log(`That's all the ${entry.def.name} you have.`);
                 this._render(); return;
             }
             this._resettle(npc);
@@ -8327,7 +8327,7 @@ class Game {
         const def = entry.def, npc = this._offerNpc;
         if (this._saleRefused?.(def)) return false;   // (FD3)
         const isDelivery = this.questEngine && this.questEngine.expectsDelivery(def.id, npc.id);
-        if (def.questItem && !isDelivery) { this._log('[Best hold onto that.]'); return false; }
+        if (def.questItem && !isDelivery) { this._log('Best hold onto that.'); return false; }
         return true;
     }
 
@@ -8385,7 +8385,7 @@ class Game {
     _commitOffer() {
         const npc = this._offerNpc; if (!npc || !this._offer) return;
         const blocker = this._offerBlocker();
-        if (blocker) { this._log(`[${blocker}]`); this._render(); return; }
+        if (blocker) { this._log(`${blocker}`); this._render(); return; }
 
         const R = resolveOffer(npc, this._offer);
         const gold = this._offer.gold || 0;
@@ -8442,7 +8442,7 @@ class Game {
                 // seriously is what stops a chest being spliced into a bag that
                 // refused the item, which loses it from the world with no gold
                 // trail and no log.
-                if (!this._addToInventory(e.def)) { this._log('[Your bag is full.]'); break; }
+                if (!this._addToInventory(e.def)) { this._log('Your bag is full.'); break; }
                 if (e.source === 'contents')      this._takeFromContainer(npc, e.index);
                 // Taking a buyback row CONSUMES its credit. The retired
                 // _buyFromVendor popped it (`e.rebuy.pop()`); nothing succeeded
@@ -8594,12 +8594,12 @@ class Game {
             // Gold reached a threshold it is not allowed to carry them across.
             // Distinct from having no room at all: they would still warm to a
             // GIFT, just not to money.
-            this._log(`[${npc.shownName || npc.type} takes the gold, but it buys nothing more. Some things aren't for sale.]`);
+            this._log(`${npc.shownName || npc.type} takes the gold, but it buys nothing more. Some things aren't for sale.`);
         } else if (R.goldUnspent > 0 && R.fromGold === 0) {
-            this._log(`[${npc.shownName || npc.type} pockets the gold. It buys nothing he wants.]`);
+            this._log(`${npc.shownName || npc.type} pockets the gold. It buys nothing he wants.`);
         }
         if (R.itemUnspent > 0 && R.fromItems === 0) {
-            this._log(`[${npc.shownName || npc.type} is already as fond of you as he can be.]`);
+            this._log(`${npc.shownName || npc.type} is already as fond of you as he can be.`);
         }
     }
 
@@ -8707,7 +8707,7 @@ class Game {
         this._dialogueReply = choice.reply || '"..."';
         audio.playSfx((choice.delta ?? 0) < 0 ? 'bump-wall' : 'menu-confirm');
         if ((npc.disposition ?? 0) <= DIALOGUE_HOSTILE_AT) {
-            this._log(`[${(npc.boss && npc.shownName) || npc.name || npc.type} has heard enough.]`, 'combat');
+            this._log(`${(npc.boss && npc.shownName) || npc.name || npc.type} has heard enough.`, 'combat');
             this._closeDialogue();
             this._onEntityHarmed(npc, { kind: 'insult' });
             return;
