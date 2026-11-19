@@ -36,9 +36,11 @@ describe('map barks are plain', () => {
     }
     test('exact lines for the adjacency barks', () => {
         const by = (m, id) => lines(m).filter(l => l.id === id).map(l => l.line);
-        assert.deepEqual(by('carnival', 'clown1'), ['The Carnival Clown wants a fight.']);
-        assert.deepEqual(by('graveyard', 'skel1'), ['The Rattling Skeleton wants a fight.']);
-        assert.deepEqual(by('factory', 'green1'), ['The Greedy Green wants a fight.']);
+        assert.deepEqual(by('carnival', 'clown1'), ['The Carnival Clown fights if you hit it.']);
+        assert.deepEqual(by('graveyard', 'skel1'), ['The Rattling Skeleton fights if you hit it.']);
+        assert.deepEqual(by('factory', 'green1'), ['The Greedy Green fights if you hit it.']);
+        assert.deepEqual(by('borgir', 'borgir_boss'), ['The Boss says the Were-Rat in the Sewer has your Cataclysmic Converter. Get it back.']);
+        assert.deepEqual(by('canyon', 'pike').slice(-1), ['Pike has a grappling hook. Clear the two canyon rats and he gives it to you.']);
         assert.deepEqual(by('sewer', 'carrion'), ['Carrion says the road is blocked.']);
     });
 });
@@ -53,9 +55,12 @@ describe('slots.js barks and examine text are plain', () => {
         for (const b of OLD_SELF.barks) assert.ok(plain(b));
     });
     test('the Strongman, a creature and the Bear', () => {
-        assert.equal(ENTRIES.strongman.adjacencyBark, 'The Strongman wants a fight.');
-        assert.equal(ENTRIES.yeti.examine, 'Yeti. It attacks if you come close.');
+        assert.equal(ENTRIES.crying_angel.examine, 'Angel. A stone figure. It moves and hits only while you look at it.');
+        assert.equal(ENTRIES.ankou.examine, 'Ankou. A skeleton with a ghost around it. It attacks when it sees you.');
+        assert.equal(ENTRIES.siberia.examine, 'Siberia. Boss. She attacks when she sees you.');
+        assert.equal(ENTRIES.strongman.adjacencyBark, 'The Strongman stands here. A gift can turn him to your side.');
+        assert.equal(ENTRIES.yeti.examine, 'Yeti. It attacks when it sees you.');
         assert.equal(ENTRIES.compactor.examine, 'Trash compactor. It does not attack. Break it to stop the walls.');
-        assert.equal(WILDERNESS_BEAR.examine, 'Bear. Wild animal. It attacks if you come close.');
+        assert.equal(WILDERNESS_BEAR.examine, 'Bear. Wild animal. It attacks when it sees you.');
     });
 });

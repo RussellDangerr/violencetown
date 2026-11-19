@@ -518,7 +518,7 @@ export const WILDERNESS_BEAR = {
     ...structuredClone(ENTRIES.polar_bear),
     type: WILDERNESS_BEAR_TYPE,
     name: 'Bear',
-    examine: 'Bear. Wild animal. It attacks if you come close.',
+    examine: 'Bear. Wild animal. It attacks when it sees you.',
 };
 
 // Resolve a loadout to real item defs. Entries are item IDS so an enemy can

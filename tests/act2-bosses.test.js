@@ -83,7 +83,7 @@ describe('the placeholders are obviously fake', () => {
         test(`${z.entry}: plain barks, the existing Boss cell`, () => {
             const e = ENTRIES[z.entry];
             assert.equal(e.type, 'Boss');
-            assert.deepEqual(e.barks, ['The boss wants a fight.', 'The boss attacks intruders.']);
+            assert.deepEqual(e.barks, ['The boss attacks when it sees you.', 'The boss is hostile.']);
             assert.equal(ITEMS[z.item].fact, '');
             assert.equal(describeItemParts(ITEMS[z.item], { sources: {} }).stats, 'Quest item: always kept, cannot be dropped. Legendary, value 0 GP.');
         });

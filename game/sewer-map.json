@@ -642,7 +642,7 @@
         "bandage": 2
       },
       "onFlip": "becomeAlly",
-      "barks": ["The Fungus King is a boss.","The Fungus King attacks intruders.","The Fungus King wants a fight.","The Fungus King is hostile."],
+      "barks": ["The Fungus King can be bribed.","The Fungus King attacks intruders.","The Fungus King wants a fight.","The Fungus King is hostile."],
       "barkEveryTurns": 6
     },
     {

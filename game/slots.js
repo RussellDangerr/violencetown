@@ -134,7 +134,7 @@ export const ENTRIES = {
         bribeable: true,
         values: { bandage: 6, soap: 4, rock: 3 },
         behavior: ['IDLE'],   // he stands where he is placed: a wander would draw the shared ambient stream and move the autoplay replay
-        adjacencyBark: 'The Strongman wants a fight.',
+        adjacencyBark: 'The Strongman stands here. A gift can turn him to your side.',
     },
     // The Carnival's horses (plans/cb1-carnival-horses-circle.md): three combatants placed by
     // hand around (28,4), which circle you once beside you (ai.js circleStep; the `circler`
@@ -224,7 +224,7 @@ export const ENTRIES = {
         damage: 10,
         barks: ['The Ankou wants a fight.'],
         barkEveryTurns: 6,
-        examine: 'Ankou. A skeleton with a ghost around it. It attacks you.',
+        examine: 'Ankou. A skeleton with a ghost around it. It attacks when it sees you.',
     },
     // The Tunnels' Molemen (plans/mo1-molemen-tunnels.md): two placed by hand, each born hostile
     // so it hunts you. The name is Caelan's; stand-ins until designed: the Graveyard Rattling
@@ -277,6 +277,7 @@ export const ENTRIES = {
         tag: 'financier_boss',
         dialogueId: 'financier_vault',
         behavior: ['IDLE'],
+        barks: ['The Financier stands here.', 'The Financier fights if you hit him.'],
     },
     // The Alien's allies (ABR2: a few he funds). Law 5's rally pays for any
     // hurt fighter on his side near him; these are on his side because they
@@ -365,7 +366,7 @@ export const ENTRIES = {
         name: 'Siberia',
         weak: weaknessesOf('cold'),
         resist: resistancesOf('cold'),
-        examine: 'Siberia. Boss. She attacks if you come close.',
+        examine: 'Siberia. Boss. She attacks when she sees you.',
     },
     // The trash compactor (plans/tc1-trash-compactor-walls.md, ruling TC1R1 a): one machine in the
     // middle of its room that never swings and never moves (sight 0, so it never hunts, and
@@ -452,7 +453,7 @@ function frozenMob(type, numbers) {
         ...numbers,
         weak: weaknessesOf('cold'),
         resist: resistancesOf('cold'),
-        examine: `${type}. It attacks if you come close.`,
+        examine: `${type}. It attacks when it sees you.`,
     };
 }
 
@@ -488,7 +489,7 @@ function placeholderBoss() {
         hp: 100,
         armor: 6,
         damage: 12,
-        barks: ['The boss wants a fight.', 'The boss attacks intruders.'],
+        barks: ['The boss attacks when it sees you.', 'The boss is hostile.'],
         barkEveryTurns: 6,
     };
 }
