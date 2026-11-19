@@ -262,8 +262,8 @@ export const DIALOGUES = {
                   && !g.questEngine.getFlag('yellowCardRaised'),
               onPick: (g) => { g.questEngine.state.flags.yellowCardRaised = true; },
               reply: 'The Financier mentions the Yellow Card. It does nothing yet.' },
-            { id: 'loan', label: 'Ask what the bank does', once: true,
-              reply: 'The bank lends money and collects debts.' },
+            { id: 'loan', label: 'Ask about the bank', once: true,
+              reply: 'The Financier does not answer.' },
             { id: 'flatter', label: 'Compliment him', repeatable: true, delta: 3,
               reply: 'His disposition goes up.' },
             { id: 'insult', label: 'Insult him', repeatable: true, delta: -25,
@@ -311,7 +311,7 @@ export const DIALOGUES = {
     },
     downtown_merchant: {
         name: 'Corner Merchant',
-        greeting: 'The Corner Merchant sells goods. Press E to see them.',
+        greeting: 'The Corner Merchant sells goods. Use Trade to see them.',
         choices: [
             { id: 'ask', label: 'Ask how business is', repeatable: true,
               reply: 'Business is slow.' },
@@ -323,8 +323,8 @@ export const DIALOGUES = {
         name: 'Newsstand Kid',
         greeting: 'The Newsstand Kid runs the newsstand.',
         choices: [
-            { id: 'ask', label: 'Ask what is in the news', repeatable: true,
-              reply: 'The bank bought another block. No one saw the buyer.' },
+            { id: 'ask', label: 'Ask for the news', repeatable: true,
+              reply: 'The Newsstand Kid has no news.' },
             { id: 'flatter', label: 'Compliment the kid', repeatable: true, delta: 3,
               reply: 'Their disposition goes up.' },
         ],
