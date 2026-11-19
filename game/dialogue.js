@@ -44,7 +44,7 @@ export const DIALOGUES = {
         greeting: 'Pike lives in the canyon. He has the grappling hook.',
         choices: [
             { id: 'lore', label: 'Ask how long he has been in the canyon', once: true, delta: 4,
-              reply: 'Pike has been in the canyon for a long time. His disposition goes up.' },
+              reply: 'His disposition goes up.' },
             { id: 'buy', label: 'Ask about the grappling hook', once: true,
               reply: 'Pike has the grappling hook. Offer to clear the canyon critters and he gives it to you.' },
             { id: 'deal', label: 'Offer to clear the critters for the hook', once: true,
@@ -66,10 +66,10 @@ export const DIALOGUES = {
     // bag; won't re-make a ring you already wear), so it's safe to always offer.
     platero: {
         name: 'Platero',
-        greeting: 'Platero is a silversmith in Downtown. He makes rings from boss drops.',
+        greeting: 'Platero is a silversmith in Downtown. He makes rings from wererat fur or Fire Blood.',
         choices: [
             { id: 'about', label: 'Ask how the rings are made', once: true, delta: 3,
-              reply: 'Bring Platero a material a boss dropped, such as wererat fur or Fire Blood. He sets it into a ring you can wear. His disposition goes up.' },
+              reply: 'Platero makes a rat ring from wererat fur, or a fire ring from 3 Fire Blood. His disposition goes up.' },
             { id: 'fashion_rat', label: 'Have him fashion the wererat fur into a ring', repeatable: true,
               onPick: (game) => { if (game._fashionRing) game._fashionRing('wererat_fur', 'rat_ring'); },
               reply: 'Platero makes a rat ring from the wererat fur. The fur must be in your bag. He does not make a ring you already wear.' },
@@ -87,7 +87,7 @@ export const DIALOGUES = {
             { id: 'bridge', label: 'Ask about the north bridge', once: true,
               reply: 'The north bridge is closed. It opens when the car is fixed.' },
             { id: 'hat', label: 'Compliment his hat', once: true, delta: 8,
-              reply: 'Bartho likes the compliment. His disposition goes up.' },
+              reply: 'His disposition goes up.' },
             { id: 'flatter', label: 'Compliment him', repeatable: true, delta: 3,
               reply: 'His disposition goes up.' },
             { id: 'insult', label: 'Insult his mother', repeatable: true, delta: -25,
@@ -142,9 +142,9 @@ export const DIALOGUES = {
         greeting: 'Mince is a townsperson.',
         choices: [
             { id: 'goldcard', label: 'Ask why everything costs Gold Card', once: true,
-              reply: 'Mince gives no answer.' },
+              reply: 'Nothing happens.' },
             { id: 'deal', label: 'Ask what he is selling', once: true, delta: 5,
-              reply: 'Mince has nothing for sale. His disposition goes up.' },
+              reply: 'His disposition goes up.' },
             { id: 'flatter', label: 'Compliment him', repeatable: true, delta: 3,
               reply: 'His disposition goes up.' },
             { id: 'insult', label: 'Insult him', repeatable: true, delta: -25,
@@ -159,8 +159,8 @@ export const DIALOGUES = {
         greeting: 'Glunk, a townsperson. He stands by the wall.',
         choices: [
             { id: 'sewer', label: 'Ask about the smell from the sewer', once: true,
-              reply: 'Glunk says it smells like the sewer.' },
-            { id: 'wall', label: 'Compliment him for holding up the wall', once: true, delta: 8,
+              reply: 'Nothing happens.' },
+            { id: 'wall', label: 'Compliment him for standing by the wall', once: true, delta: 8,
               reply: 'His disposition goes up.' },
             { id: 'flatter', label: 'Compliment him', repeatable: true, delta: 3,
               reply: 'His disposition goes up.' },
@@ -176,7 +176,7 @@ export const DIALOGUES = {
         greeting: 'Praline, a townsperson. She cleans the plaza.',
         choices: [
             { id: 'grime', label: 'Ask if the grime comes off', once: true,
-              reply: 'Praline says it does not.' },
+              reply: 'Nothing happens.' },
             { id: 'tidy', label: 'Say the plaza is clean', once: true, delta: 8,
               reply: 'Her disposition goes up.' },
             { id: 'flatter', label: 'Compliment her', repeatable: true, delta: 3,
@@ -202,8 +202,8 @@ export const DIALOGUES = {
             { id: 'standdown', label: 'Apologize and back off', once: true, delta: 70,
               reply: 'Knuckles stops. He fights on your side now.' },
             { id: 'why', label: 'Ask what his problem is', once: true,
-              reply: 'Knuckles says you are in his plaza.' },
-            { id: 'taunt', label: 'Taunt him', repeatable: true, delta: -25,
+              reply: 'Nothing happens.' },
+            { id: 'taunt', label: 'Taunt him (he attacks)', repeatable: true, delta: -25,
               reply: 'His disposition goes down.' },
         ],
     },
@@ -243,7 +243,7 @@ export const DIALOGUES = {
     },
     banker: {
         name: 'The Financier',
-        greeting: 'The Financier runs First Blood Bank.',
+        greeting: 'The Financier runs First Blood Bank. He takes the delivery order.',
         choices: [
             // (Phase 4 MQ2, AE1 / SP8) Dialogue delivery: the order is for the Financier. Only
             // shown at the handoff stage while the player holds everything still owed;
@@ -263,7 +263,7 @@ export const DIALOGUES = {
               onPick: (g) => { g.questEngine.state.flags.yellowCardRaised = true; },
               reply: 'The Financier mentions the Yellow Card. It does nothing yet.' },
             { id: 'loan', label: 'Ask about the bank', once: true,
-              reply: 'The Financier does not answer.' },
+              reply: 'Nothing happens.' },
             { id: 'flatter', label: 'Compliment him', repeatable: true, delta: 3,
               reply: 'His disposition goes up.' },
             { id: 'insult', label: 'Insult him', repeatable: true, delta: -25,
@@ -304,17 +304,17 @@ export const DIALOGUES = {
         greeting: 'The Stranded Traveler is stuck in Downtown and wants food.',
         choices: [
             { id: 'ask', label: 'Ask what they are doing here', repeatable: true,
-              reply: 'The Stranded Traveler is waiting for food.' },
+              reply: 'Nothing happens.' },
             { id: 'flatter', label: 'Reassure them', repeatable: true, delta: 3,
               reply: 'Their disposition goes up.' },
         ],
     },
     downtown_merchant: {
         name: 'Corner Merchant',
-        greeting: 'The Corner Merchant sells goods. Use Trade to see them.',
+        greeting: 'The Corner Merchant sells goods. Stand next to him and use Trade to see what he sells.',
         choices: [
             { id: 'ask', label: 'Ask how business is', repeatable: true,
-              reply: 'Business is slow.' },
+              reply: 'Nothing happens.' },
             { id: 'bribe', label: 'Pay the Corner Merchant 5 GP', repeatable: true, delta: 10, cost: 5,
               reply: 'The Corner Merchant takes 5 GP. Their disposition goes up.' },
         ],
@@ -324,7 +324,7 @@ export const DIALOGUES = {
         greeting: 'The Newsstand Kid runs the newsstand.',
         choices: [
             { id: 'ask', label: 'Ask for the news', repeatable: true,
-              reply: 'The Newsstand Kid has no news.' },
+              reply: 'Nothing happens.' },
             { id: 'flatter', label: 'Compliment the kid', repeatable: true, delta: 3,
               reply: 'Their disposition goes up.' },
         ],
