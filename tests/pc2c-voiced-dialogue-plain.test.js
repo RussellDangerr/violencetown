@@ -62,3 +62,49 @@ describe('the two untrue lines are fixed', () => {
         assert.ok(DIALOGUES.pike.choices.find(c => c.id === 'deal').reply.includes('already dead'));
     });
 });
+
+describe('talk choices state only their effect', () => {
+    const reply = (id, cid) => DIALOGUES[id].choices.find(c => c.id === cid).reply;
+    const label = (id, cid) => DIALOGUES[id].choices.find(c => c.id === cid).label;
+
+    test('no reply of the cast carries an opinion or a story', () => {
+        for (const id of CAST) for (const c of DIALOGUES[id].choices) {
+            assert.ok(!/\b(says|likes|slow|answer|waiting|long time)\b/i.test(c.reply), `${id}.${c.id}: ${c.reply}`);
+        }
+    });
+
+    test('choices with no effect say Nothing happens', () => {
+        for (const [id, cid] of [['glunk', 'sewer'], ['praline', 'grime'], ['knuckles', 'why'], ['downtown_merchant', 'ask'],
+            ['banker', 'loan'], ['downtown_merchant2', 'ask'], ['mince', 'goldcard'], ['mq2_recipient', 'ask']]) {
+            assert.equal(reply(id, cid), 'Nothing happens.', `${id}.${cid}`);
+        }
+    });
+
+    test('choices that only move disposition say so', () => {
+        for (const [id, cid] of [['pike', 'lore'], ['bartho', 'hat'], ['mince', 'deal'], ['glunk', 'wall']]) {
+            assert.equal(reply(id, cid), 'His disposition goes up.', `${id}.${cid}`);
+        }
+    });
+
+    test('two compliments to one character carry different labels', () => {
+        assert.equal(label('glunk', 'wall'), 'Compliment him for standing by the wall');
+        assert.equal(label('glunk', 'flatter'), 'Compliment him');
+    });
+
+    test('Knuckles taunt says it starts a fight: he starts at -30 and the taunt is -25, past -40', () => {
+        assert.equal(label('knuckles', 'taunt'), 'Taunt him (he attacks)');
+        const town = JSON.parse(readFileSync(new URL('../game/town-map.json', import.meta.url), 'utf8'));
+        const k = town.enemies.find(e => e.dialogueId === 'knuckles');
+        assert.ok(k.disposition - 25 <= -40);
+        const others = town.enemies.filter(e => e.dialogueId && e.dialogueId !== 'knuckles' && DIALOGUES[e.dialogueId]?.choices.some(c => c.delta === -25));
+        assert.ok(others.length >= 3, 'the insulted townspeople were found');
+        for (const e of others) assert.ok((e.disposition ?? 0) - 25 > -40, `${e.dialogueId}: one insult would start a fight`);
+    });
+
+    test('Platero names what he takes; the Financier and the Merchant say what they do', () => {
+        assert.equal(DIALOGUES.platero.greeting, 'Platero is a silversmith in Downtown. He makes rings from wererat fur or Fire Blood.');
+        assert.equal(reply('platero', 'about'), 'Platero makes a rat ring from wererat fur, or a fire ring from 3 Fire Blood. His disposition goes up.');
+        assert.equal(DIALOGUES.banker.greeting, 'The Financier runs First Blood Bank. He takes the delivery order.');
+        assert.equal(DIALOGUES.downtown_merchant.greeting, 'The Corner Merchant sells goods. Stand next to him and use Trade to see what he sells.');
+    });
+});
