@@ -80,10 +80,10 @@ describe('Act 2: one boss per zone, each yielding its required item through its 
 
 describe('the placeholders are obviously fake', () => {
     for (const z of ACT2) {
-        test(`${z.entry}: [TEXT] barks, the existing Boss cell`, () => {
+        test(`${z.entry}: plain barks, the existing Boss cell`, () => {
             const e = ENTRIES[z.entry];
             assert.equal(e.type, 'Boss');
-            assert.ok(e.barks.length > 0 && e.barks.every(b => b === '[TEXT]'));
+            assert.deepEqual(e.barks, ['The boss wants a fight.', 'The boss attacks intruders.']);
             assert.equal(ITEMS[z.item].fact, '');
             assert.equal(describeItemParts(ITEMS[z.item], { sources: {} }).stats, 'Quest item: always kept, cannot be dropped. Legendary, value 0 GP.');
         });
