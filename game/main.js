@@ -230,7 +230,7 @@ const CONTINUE_ZONE_NAMES = {
     'town-map.json': 'TOWN', 'borgir-map.json': 'BORGIR', 'sewer-map.json': 'SEWER',
     'sewer-north-map.json': 'SEWER', 'carrion-room-map.json': 'SEWER',
     'downtown-map.json': 'DOWNTOWN', 'diner-map.json': 'DINER', 'bank-map.json': 'FIRST BLOOD BANK',
-    'vault-map.json': '[TEXT]', 'casino-map.json': 'CASINO', 'canyon-map.json': 'CANYON',
+    'vault-map.json': 'VAULT', 'casino-map.json': 'CASINO', 'canyon-map.json': 'CANYON',
     'gorge-map.json': 'GORGE', 'valley-map.json': 'VALLEY', 'factory-map.json': 'FACTORY',
     'carnival-map.json': 'CARNIVAL', 'graveyard-map.json': 'GRAVEYARD',
     'wilderness-map.json': 'WILDERNESS', 'frozen-map.json': 'FROZEN AREA', 'tunnels-map.json': 'TUNNELS',
@@ -885,7 +885,7 @@ class Game {
             this.enemies.push(f);
             placed++;
         }
-        if (placed > 0) this._log('They shoulder through the door after you!', 'combat');
+        if (placed > 0) this._log('The enemies chasing you come through the door.', 'combat');
     }
 
     // Up to `n` walkable, unoccupied tiles in expanding rings from (cx,cy) —
@@ -935,8 +935,8 @@ class Game {
         audio.playSfx('bump-wall');
         if (this._triggerScreenShake) this._triggerScreenShake(150, 3);
         this._log(trapped.length
-            ? 'You wedge the pipe through the door. It holds — and they start POUNDING.'
-            : 'You wedge the pipe through the door. Sealed behind you.', 'combat');
+            ? 'You wedge the pipe through the door. The enemies behind it pound on the door.'
+            : 'You wedge the pipe through the door. The door is sealed.', 'combat');
         return true;
     }
 
@@ -959,10 +959,10 @@ class Game {
             this._injectFollowers();          // they burst back in at the same door, emerging one beat
             this._pendingFollowers = null;
             if (this._triggerScreenShake) this._triggerScreenShake(260, 5);
-            this._log('The door BURSTS off its frame — they pour through!', 'combat');
+            this._log('The door breaks. The enemies come through.', 'combat');
         } else {
             if (this._triggerScreenShake) this._triggerScreenShake(90, 2);
-            this._log('The door SHUDDERS under the pounding...');
+            this._log(`The enemies pound on the door. It holds: ${j.integrity} of ${j.max}.`);
         }
     }
 
@@ -1218,7 +1218,7 @@ class Game {
         const f = this.questEngine?.state?.flags;
         if (f) f.downtownGateOpen = true;
         this._openDowntownGateIfSlid?.();
-        this._log('[TEXT]', 'transition');
+        this._log('You slide on the oil to the west gate. The gate is now open.', 'transition');
         this.autosave?.({ force: true });
     }
 
@@ -1240,7 +1240,7 @@ class Game {
         this.setTile(0, 9, 11);   // the fence at the west gate becomes road
         // Loading dropped the door on the fenced tile (a door on ground nobody can stand on), so it is put back.
         if (!this.map.transitions.some(t => t.x === 0 && t.y === 9)) {
-            this.map.transitions.push({ x: 0, y: 9, toMap: 'side-area-map.json', toX: 1, toY: 6, label: '[TEXT]' });
+            this.map.transitions.push({ x: 0, y: 9, toMap: 'side-area-map.json', toX: 1, toY: 6, label: 'Side area' });
         }
     }
 
@@ -1253,7 +1253,7 @@ class Game {
         if (!this.questEngine.getFlag('carrionRoadOpen')) return;
         this.setTile(9, 19, 5);
         this.map.transitions.push({ x: 9, y: 19, toMap: 'carrion-room-map.json', toX: 5, toY: 6,
-            label: "[South — TEXT: down Carrion's road]" });
+            label: "South: Carrion's road" });
     }
 
     // Persist the game. Debounced to every few turns unless forced (forced on
@@ -1298,7 +1298,7 @@ class Game {
         const age = mins < 60 ? 'under 1 hour'
             : hours < 48 ? `${hours} ${hours === 1 ? 'hour' : 'hours'}`
             : `${Math.floor(hours / 24)} days`;
-        return `[TEXT] ${zone}, ${age}`;
+        return `Saved game: ${zone}, ${age} ago`;
     }
 
     // (FX66) Copy the save that would not open aside; true when a copy was kept.
@@ -1368,9 +1368,9 @@ class Game {
         const qe = this.questEngine; if (!qe) return;
         if (qe.getFlag('bossHandedOver') || qe.isComplete('deliver_burger')) return;
         qe.state.flags.bossHandedOver = true;
-        this._log('[TEXT]', 'transition');
-        this._grantItem('burger_fries', '[TEXT]');
-        this._grantItem('mola_cola', '[TEXT]');
+        this._log('Your boss stops you before the bridge and hands over the delivery.', 'transition');
+        this._grantItem('burger_fries', 'You get the burger bag.');
+        this._grantItem('mola_cola', 'You get a can of Mola Cola.');
     }
 
     // (Phase 4) Main Quest 2 — the burger delivery. Started deterministically the
@@ -1495,7 +1495,7 @@ class Game {
                 // the fresh run's autosave replaces it.
                 if (hasSave() && this._keepUnreadable?.()) {
                     start();
-                    this._log('[TEXT: that save would not read; a copy is kept aside]', 'transition');
+                    this._log('That save would not read. A copy is kept aside.', 'transition');
                     return;
                 }
                 start(); return;
@@ -2353,7 +2353,7 @@ class Game {
 
     // (ZM1) Zoom: Farther / Closer move one whole pixel step and the view
     // resizes at once. The automatic step is saved as nothing, so it keeps
-    // following the screen. The readout is the scale in use; [TEXT] marks
+    // following the screen. The readout is the scale in use; auto marks
     // that it is the automatic one.
     _stepZoom(dir) {
         const vp = this.renderer?.viewport;
@@ -2368,7 +2368,7 @@ class Game {
         const vp = this.renderer?.viewport;
         const val = document.getElementById('opt-zoom-val');
         if (!vp || !val) return;
-        val.textContent = `x${vp.k}${vp.k === vp.zoom.auto ? ' [TEXT]' : ''}`;
+        val.textContent = `x${vp.k}${vp.k === vp.zoom.auto ? ' auto' : ''}`;
         const farther = document.getElementById('opt-zoom-farther');
         const closer  = document.getElementById('opt-zoom-closer');
         if (farther) farther.disabled = vp.k <= vp.zoom.min;
@@ -2500,8 +2500,8 @@ class Game {
         document.getElementById('opt-save-copy')?.addEventListener('click', async () => {
             const code = encodeSaveCode(this);
             if (codeBox) { codeBox.value = code; codeBox.focus(); codeBox.select(); }
-            try { await navigator.clipboard.writeText(code); say('[TEXT] Code copied.'); }
-            catch { say('[TEXT] Copy the code from the box.'); }
+            try { await navigator.clipboard.writeText(code); say('Code copied.'); }
+            catch { say('Copy the code from the box.'); }
         });
         document.getElementById('opt-save-paste')?.addEventListener('click', async () => {
             let text = '';
@@ -2510,7 +2510,7 @@ class Game {
             const res = await importSaveCode(this, text);
             if (!res.ok) { say(res.message); return; }
             writeSave(this);
-            say('[TEXT] Save loaded.');
+            say('Save loaded.');
             this._log('Save loaded from a code', 'transition');
             this._closeOptionsModal();
             this._setPaused?.(false);
@@ -2537,11 +2537,11 @@ class Game {
         if (!anchor || document.getElementById('opt-key-new')) return;
         const btn = document.createElement('button');
         btn.type = 'button'; btn.id = 'opt-key-new'; btn.className = 'opt-toggle';
-        const label = () => { btn.textContent = loadKeyId() ? '[TEXT] NEW KEY (REPLACES)' : '[TEXT] MAKE A KEY'; };
+        const label = () => { btn.textContent = loadKeyId() ? 'NEW KEY (REPLACES)' : 'MAKE A KEY'; };
         label();
         let armed = false;
         btn.addEventListener('click', async () => {
-            if (loadKeyId() && !armed) { armed = true; if (note) note.textContent = '[TEXT] A key exists. Press again to replace it.'; return; }
+            if (loadKeyId() && !armed) { armed = true; if (note) note.textContent = 'A key exists. Press again to replace it.'; return; }
             armed = false;
             const { phrase } = await createKey();
             this._showKeyOnce(phrase);
@@ -2556,10 +2556,10 @@ class Game {
         box.id = 'key-once';
         box.setAttribute('role', 'dialog');
         box.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;background:rgba(0,0,0,.92);color:#f2e6b8;font-family:inherit;text-align:center;padding:24px';
-        const head = document.createElement('div'); head.textContent = '[TEXT] YOUR KEY'; head.style.fontSize = '32px';
+        const head = document.createElement('div'); head.textContent = 'YOUR KEY'; head.style.fontSize = '32px';
         const words = document.createElement('div'); words.id = 'key-once-words'; words.textContent = phrase; words.style.cssText = 'font-size:56px;letter-spacing:2px';
-        const warn = document.createElement('div'); warn.textContent = '[TEXT] Shown once. Write it down.'; warn.style.fontSize = '24px';
-        const done = document.createElement('button'); done.type = 'button'; done.className = 'opt-toggle'; done.textContent = '[TEXT] I HAVE IT';
+        const warn = document.createElement('div'); warn.textContent = 'Shown once. Write it down.'; warn.style.fontSize = '24px';
+        const done = document.createElement('button'); done.type = 'button'; done.className = 'opt-toggle'; done.textContent = 'I HAVE IT';
         const close = () => { words.textContent = ''; box.remove(); };
         done.addEventListener('click', close);
         box.append(head, words, warn, done);
@@ -3134,7 +3134,7 @@ class Game {
             const tileDef = this.map.getTileDef(nx, ny);
             if (tileDef.hazard === 'sludge' && !this.hasBuff('sludge')) {
                 if (this._hasSludgeImmunity()) {
-                    this._log('The sludge slides right off your bagged feet.');
+                    this._log('You step in sludge. Your bagged feet block it.');
                 } else {
                     this.addBuff('sludge', 'Sludge', SLUDGE_DURATION, 'debuff');
                     this._log('Stepped in sludge — 3 turns');
@@ -3143,17 +3143,17 @@ class Game {
 
             if (tileDef.hazard === 'goo') {
                 if (this._hasSludgeImmunity()) {
-                    this._log('The goo slides right off your bagged feet.');
+                    this._log('You step in goo. Your bagged feet block it.');
                 } else if (!this.hasBuff('goo')) {
                     this.addBuff('goo', 'Goo', SLUDGE_DURATION, 'debuff');
-                    this._log('[TEXT: stepped in goo — 3 turns]');
+                    this._log('Stepped in goo — 3 turns');
                 }
             }
 
             // Snow / ice (the FIRE_QUENCHING_TILES list) put Burning out.
             if (this.hasBuff('fire') && FIRE_QUENCHING_TILES.includes(this.map.getTile(nx, ny))) {
                 this.removeBuff('fire');
-                this._log('[TEXT: the cold puts the fire out.]');
+                this._log('The snow or ice puts out the fire on you.');
             }
 
             // Pickup
@@ -3246,7 +3246,7 @@ class Game {
         if (this._isHeavy(enemy)) {
             audio.playSfx('bump-wall');
             this._bounceOff(dir);
-            this._log(`You put your shoulder into ${who}. ${who} does not appear to notice.`);
+            this._log(`You push ${who}. ${who} does not move.`);
             this._render();
             return false;                       // immovable — no step, no turn
         }
@@ -3256,7 +3256,7 @@ class Game {
             this._bounceOff(dir);
             // A different failure and it should read as one: they WOULD move,
             // there is simply nowhere to put them.
-            this._log(`You lean on ${who}, who has nowhere to go.`);
+            this._log(`You push ${who}. ${who} has no free tile to move to.`);
             this._render();
             return false;                       // boxed in — nowhere to put them
         }
@@ -3267,7 +3267,7 @@ class Game {
         // stepEntity already set _lastDx/_lastDy to the victim's own displacement,
         // which is unit-length because the destination is always one tile away.
         enemy._spunTurns = 1;                   // burns on the victim's next HOSTILE turn
-        this._log(`You shove ${((enemy.boss && enemy.shownName) || (enemy.name ?? enemy.type))} so hard they spin around!`, 'combat');
+        this._log(`You shove ${who} 1 tile. ${who} now faces the way they moved and skips the next turn.`, 'combat');
         return true;
     }
 
@@ -3358,7 +3358,7 @@ class Game {
             // (There's only one car, in town, so reaching here means we're home.)
             this._removeFromSlot(idx);
             this._sewerEscape = null;
-            this._log('You put the cataclysmic converter in your car. The car is fixed. Drive north over the bridge.', 'pickup');
+            this._log('You put the cataclysmic converter in your car. The car is fixed. Drive north over the bridge. You need alcohol in the tank to make it.', 'pickup');
             this.emitGameEvent('interact_car', {});                       // advances return_to_car if we're there
             if (!this.questEngine.getFlag('carFixed')) this.questEngine.forceComplete('fix_car'); // else force it home
             this._render();
@@ -3631,7 +3631,7 @@ class Game {
         // Quest items are held, not used/thrown/smashed/given — bail before
         // building the overlay so the converter can't be lost.
         if (item.questItem) {
-            this._log('Best hold onto that.');
+            this._log('Quest items cannot be used, thrown or given.');
             this.state = STATE.ITEM_SELECTED;
             this._render();
             return;
@@ -3721,7 +3721,7 @@ class Game {
                 // (fx55) The Eat row at full health: the food stays in the bag, no turn passes.
                 // (The row is labelled Eat only for a healing food; see _openItemOverlay.)
                 if (opt.label === 'Eat' && this.playerHp >= this.playerMaxHp) {
-                    this._log('[TEXT]'); this.state = STATE.ITEM_SELECTED; this._render(); return;
+                    this._log('Your HP is full. The food stays in your bag.'); this.state = STATE.ITEM_SELECTED; this._render(); return;
                 }
                 if (item.poition && item.poition.permanent && item.useType === 'self') { this._openBoonChooser(); return; }   // (BP4) ask which kind first
                 this._doItemUse(item);
@@ -3744,7 +3744,7 @@ class Game {
                 // re-resolved target that no longer matches means the moment
                 // passed, so don't spend the item on nothing.
                 const still = contextualUses(item, this).find(o => o.id === u.id);
-                if (!still) { this._log('Too late.'); this.state = STATE.ITEM_SELECTED; this._render(); return; }
+                if (!still) { this._log('That use is no longer available.'); this.state = STATE.ITEM_SELECTED; this._render(); return; }
                 still.apply(this, still.target, { slot });
                 this._render();
                 return;
@@ -3831,7 +3831,7 @@ class Game {
     _rockClatter(itemDef, x, y) {
         if (!itemDef || !itemDef.pullsAggro) return;
         emitNoise(this._earshot(), x, y, NOISE.throwImpact);
-        this._log('The rock clatters off down the tunnel.');
+        this._log('The rock lands. Enemies within earshot come to look.');
     }
 
     // (fx37) Arm a throw from the bag slot: whatever menu is open closes, and the
@@ -4068,11 +4068,11 @@ class Game {
     // (HP1) Rest on the faced bench: out of a fight, HP and MP to full and a few hours pass
     // (the defeat path's time skip); in a fight, refused. Texts are placeholders.
     _restHere() {
-        if (this._inCombat()) { this._log('[TEXT: you cannot rest in a fight.]'); this._render(); return false; }
+        if (this._inCombat()) { this._log('You cannot rest during a fight.'); this._render(); return false; }
         this.playerHp = this.playerMaxHp;
         this.playerMp = this.playerMaxMp;
         this._skipTime('hours');
-        this._log('[TEXT: you rest.]', 'transition');
+        this._log('You rest. HP and MP are full. A few hours pass.', 'transition');
         this._render();
         this.autosave({ force: true });
         return true;
@@ -4269,7 +4269,7 @@ class Game {
         // and say so, rather than deleting it off the floor with no log.
         const def = this._resolveItemDef(gi.type);
         if (!def) {
-            this._log(`Whatever that is, it won't come loose.`);
+            this._log(`That item is unknown. It stays on the floor.`);
             return;
         }
 
@@ -4515,7 +4515,7 @@ class Game {
             // Eat column's healers; drinks and foods that heal nothing go through as before.
             // The check sits here and in _pickOverlay, not in _doItemUse, which the wheel shares.
             if (sel.column.key === 'eat' && def.effect === 'heal' && this.playerHp >= this.playerMaxHp) {
-                this.selectedSlot = -1; this._log('[TEXT]'); this._render(); return;
+                this.selectedSlot = -1; this._log('Your HP is full. The food stays in your bag.'); this._render(); return;
             }
             this._doItemUse(def);
         }
@@ -4644,7 +4644,7 @@ class Game {
                     const repeat = wpn && wpn.onHit === 'fearOnRepeat' && this._lastHitTarget === enemy.id;
                     this.combatAttack(enemy, wpn.damage, { type: wpn && wpn.damageType, weapon: wpn });
                     if (enemy.entity.isAlive()) {
-                        if (repeat) { this._applyFear(enemy, 3); this._log('The Fearmur cracks bone — it recoils in terror!', 'combat'); }
+                        if (repeat) { this._applyFear(enemy, 3); this._log('You hit the same enemy twice in a row with the Fearmur. It is Feared for 3 turns.', 'combat'); }
                         if (wpn && wpn.pullDistance) this._pullEnemyToward(enemy, wpn.pullDistance);   // (Lion Whip) yank it closer
                         this._lastHitTarget = enemy.id;
                     } else {
@@ -4665,7 +4665,7 @@ class Game {
                 const tiles = affectedTiles(w, this);
                 const hit = this._aoeStrike(tiles, dmg, { type: (this.equipment.weapon || this.bareHand).damageType, weapon: (this.equipment.weapon || this.bareHand) });
                 if (hit.length) { this._log(`Cleave! ${hit.length} caught.`, 'combat'); this._advanceWorld(); }
-                else if (this._enemiesPresent(tiles) > 0) { this._log('Cleave connects — shrugged off, immune.', 'combat'); this._advanceWorld(); }
+                else if (this._enemiesPresent(tiles) > 0) { this._log('Cleave hits, but the enemy is immune.', 'combat'); this._advanceWorld(); }
                 else this._log('Cleave hits only air', 'combat');
                 break;
             }
@@ -4679,7 +4679,7 @@ class Game {
                     this.combatAttack(enemy, wpn.damage, { type: wpn && wpn.damageType, weapon: wpn });
                     if (enemy.entity.isAlive()) {
                         enemy._spunTurns = 1;
-                        this._log('The blow leaves them reeling.', 'combat');
+                        this._log('You hit it. It skips its next turn.', 'combat');
                     }
                     this._advanceWorld();
                 }
@@ -4694,7 +4694,7 @@ class Game {
                 const tiles = affectedTiles(w, this);
                 const hit = this._aoeStrike(tiles, dmg, { type: (this.equipment.weapon || this.bareHand).damageType, weapon: (this.equipment.weapon || this.bareHand) });
                 if (hit.length) { this._log(`Spin! ${hit.length} caught.`, 'combat'); this._advanceWorld(); }
-                else if (this._enemiesPresent(tiles) > 0) { this._log('Spin connects — shrugged off, immune.', 'combat'); this._advanceWorld(); }
+                else if (this._enemiesPresent(tiles) > 0) { this._log('Spin hits, but the enemy is immune.', 'combat'); this._advanceWorld(); }
                 else this._log('You spin, hitting nothing', 'combat');
                 break;
             }
@@ -4725,7 +4725,7 @@ class Game {
                     // Rat Form — fold down into a rat for a few turns (slips
                     // through grates). No aim/damage; just set the countdown.
                     this._ratFormTurns = trick.transformTurns || 3;
-                    this._log('You fold down into a rat. The world goes enormous.', 'transition');
+                    this._log(`You turn into a rat for ${this._ratFormTurns} turns. You can enter grates.`, 'transition');
                     this._advanceWorld();
                     break;
                 }
@@ -4758,14 +4758,14 @@ class Game {
                     if (!e.entity.isAlive()) continue;
                     if (tiles.some(t => t.x === e.x && t.y === e.y) && this._applyFear(e, spell.fear || 3)) feared++;
                 }
-                if (feared) this._log(`BOO! ${feared} flee in terror!`, 'combat');
-                else this._log('Boo! ...nothing flinches.');
+                if (feared) this._log(`Boo. ${feared} feared.`, 'combat');
+                else this._log('Boo. No enemy is feared.');
                 this._advanceWorld();
                 break;
             }
             case 'resolveThrow': { if (itemSlot >= 0 && aimTile) { this._throwAt(itemSlot, aimTile); } break; }
             case 'resolveUse':   { const stack = itemSlot >= 0 ? this.inventory[itemSlot] : null; if (stack) { this.selectedSlot = itemSlot; this._doItemUse(stack.itemDef); } else this._log('Nothing to use'); break; }
-            case 'guard':        { this.addBuff('guard', 'Guard', 2, 'buff'); this._log('Bracing — incoming damage reduced.', 'combat'); this._advanceWorld(); break; }
+            case 'guard':        { this.addBuff('guard', 'Guard', 2, 'buff'); this._log('You guard. Incoming damage is reduced for 2 turns.', 'combat'); this._advanceWorld(); break; }
             case 'wait':         { this._waitTurn(); break; }
             case 'run':          { const d = this._aimDir(aimTile); if (d) { this._closeWheel(); this._doMove(d); return; } break; }
             case 'thieveCoin': case 'thieveKit': case 'thieveGear': {
@@ -4827,7 +4827,7 @@ class Game {
                     if (took) this._hot[took.id] = (this._hot[took.id] ?? 0) + 1;
                     victim._robbedSweep = true;            // arms the blind sweep + paranoia
                     reactToTransaction(victim, 'theft', { item: took, gold: gp });
-                    this._log(`${((victim.boss && victim.shownName) || (victim.name ?? victim.type))} feels the weight change.`, 'combat');
+                    this._log(`${((victim.boss && victim.shownName) || (victim.name ?? victim.type))} noticed the theft.`, 'combat');
                 }
                 this._advanceWorld();
                 break;
@@ -4928,7 +4928,7 @@ class Game {
     // Wait a turn; with ants latched on, the turn goes to brushing them off.
     _waitTurn() {
         const latched = this.enemies.filter(e => isAnt(e) && e._latched && e.entity.isAlive());
-        if (latched.length) { brushOff(latched, this._antEnv()); this._log('[TEXT]'); }
+        if (latched.length) { brushOff(latched, this._antEnv()); this._log('You spend the turn brushing the ants off.'); }
         else this._log('Wait');
         this._advanceWorld();
     }
@@ -4978,7 +4978,7 @@ class Game {
         this._hasteCharges = plan.hasteCharges;
         this._slowCharges = plan.slowCharges;
         if (plan.runs === 0) {
-            this._log(`The world holds still. (${this._hasteCharges} left)`);
+            this._log(`The enemies do not act. ${this._hasteCharges} haste charges left.`);
             return;
         }
         this._advanceWorldOnce();
@@ -5025,7 +5025,7 @@ class Game {
             const gone = this.enemies.filter(e => e._isSummon && e._summonTurnsLeft <= 0);
             for (const e of gone) {
                 if (this._finaleSummonLeft?.(e)) continue;   // Sun Man is bitten, not sent away
-                this._log(`${((e.boss && e.shownName) || e.type) || 'The summon'} slinks back into the crowd.`);
+                this._log(`${((e.boss && e.shownName) || e.type) || 'The summon'} leaves. Its time is up.`);
             }
             if (gone.length) this.enemies = this.enemies.filter(e => !(e._isSummon && e._summonTurnsLeft <= 0));
         }
@@ -5035,7 +5035,7 @@ class Game {
         // beat and unfold at zero. Ticks once per committed turn, like the summon.
         if (this._ratFormTurns > 0) {
             this._ratFormTurns--;
-            if (this._ratFormTurns === 0) this._log('You unfold. Human again.', 'transition');
+            if (this._ratFormTurns === 0) this._log('Rat form ends.', 'transition');
         }
 
         // Enemies/NPCs may have just begun a one-tile slide (stepEntity). Kick
@@ -5074,11 +5074,11 @@ class Game {
         // at the top of _advanceWorldOnce wiped it before it could be consumed.
         if (this._soapUsedThisTurn && this.hasBuff('sludge')) {
             this.removeBuff('sludge');
-            this._log('Soap neutralized sludge');
+            this._log('Soap cancels the sludge.');
         }
         if (this._soapUsedThisTurn && this.hasBuff('goo')) {
             this.removeBuff('goo');
-            this._log('[TEXT: Soap washed the goo off]');
+            this._log('Soap washes the goo off.');
         }
         this._soapUsedThisTurn = false;
 
@@ -5157,7 +5157,7 @@ class Game {
 
     // (AA1) Walking into a zone whose shop sells armour you do not own says so, once per visit.
     // "Own" is worn or in the bag. Armour here means a wearable, non-consumable body piece (a
-    // bandage carries an armour number too, but it is a heal). The words are a placeholder: [TEXT].
+    // bandage carries an armour number too, but it is a heal).
     _armourShopNotice() {
         const owns = (id) => Object.values(this.equipment || {}).some(it => it && it.id === id)
             || (this.inventory || []).some(sl => sl && sl.itemDef && sl.itemDef.id === id);
@@ -5168,7 +5168,7 @@ class Game {
                 const def = this._resolveItemDef(id);
                 if (def && def.useType === 'equip' && !def.consumable && def.armor
                     && BODY.includes(def.equipSlot) && !owns(id)) {
-                    this._log('[TEXT]');
+                    this._log('A shop here sells armour you do not own.');
                     return true;
                 }
             }
@@ -5332,7 +5332,7 @@ class Game {
     _countCleanLift() {
         const { skills, rankedUp } = recordUse(this.skills, 'light_fingers');
         this.skills = skills;
-        if (rankedUp) this._log(`[TEXT] ${perkText(rankPerk('light_fingers', rankedUp))}`, 'pickup');
+        if (rankedUp) this._log(`Light fingers is now rank ${rankedUp}: ${perkText(rankPerk('light_fingers', rankedUp))}`, 'pickup');
     }
 
     // (theft) The victim on an aimed tile, or null. Takes the tile as an ARGUMENT
@@ -5871,12 +5871,12 @@ class Game {
                 if (this.map.isWalkable(tx, ty) && ![...this.groundItems, ...drops].some(gi => gi.x === tx && gi.y === ty)) { fx = tx; fy = ty; break; }
             }
             drops.push({ type: 'wererat_fur', x: fx, y: fy, def: ITEMS.wererat_fur });
-            this._log('Among the matted fur, one coarse braided tuft stays warm — a remembrance.', 'pickup');
+            this._log('The Were-Rat drops its fur.', 'pickup');
         }
         // Pike guards his climbing rope with his life — take it off his body.
         if (firstFall && enemyObj.tag === 'pike_boss' && ITEMS.grappling_hook) {
             drops.push({ type: 'grappling_hook', x: enemyObj.x, y: enemyObj.y, def: ITEMS.grappling_hook });
-            this._log('Pike crumples. His big coil of rope — the grappling hook — thuds to the stone.', 'pickup');
+            this._log('Pike drops the grappling hook.', 'pickup');
         }
         // Pike's deal (his dialogue onPick set the flag): clearing the LAST canyon
         // critter earns the rope — no coin, no killing Pike.
@@ -5884,7 +5884,7 @@ class Game {
             && !this.questEngine.getFlag('pikeDealPaid')
             && !this.enemies.some(e => e.tag === 'canyon_critter' && e.entity.isAlive())) {
             this.questEngine.state.flags.pikeDealPaid = true;
-            this._grantItem('grappling_hook', '"Deal\'s a deal." Pike coils the big rope into your pack — the grappling hook is yours.');
+            this._grantItem('grappling_hook', 'Pike gives you the grappling hook.');
         }
         onSewerEnemyKilled(this, enemyObj);
         // (FX3) Auto-loot: everything gathered above goes straight into the bag.
@@ -5954,20 +5954,20 @@ class Game {
     // Self-guarding: no material in the bag → nothing is consumed; already own the
     // ring → the material is kept. Returns true only on a successful fashioning.
     _fashionRing(materialId, ringId, count = 1, price = 0) {
-        if (this.ownedRings.has(ringId)) { this._log('Platero: "You already wear its like."'); return false; }
+        if (this.ownedRings.has(ringId)) { this._log('You already own this ring.'); return false; }
         const slots = [];
         let have = 0;
         (this.inventory || []).forEach((s, i) => {
             if (s && s.itemDef && s.itemDef.id === materialId) { slots.push(i); have += s.count || 1; }
         });
-        if (have < count || (this.gold || 0) < price) { this._log('Platero: "Bring me the material and I\'ll set it into a ring."'); return false; }
+        if (have < count || (this.gold || 0) < price) { this._log('Platero needs the ring material and the gold price.'); return false; }
         let need = count;
         for (const i of slots) {
             while (need > 0 && this.inventory[i]) { this._removeFromSlot(i); need--; }
         }
         if (price > 0) this.gold -= price;
         this._acquireRing(ringId);   // logs its own "[You slip on the …]" line
-        this._log('Platero turns it in the light. It becomes a ring.', 'transition');
+        this._log('Platero makes the ring.', 'transition');
         this._render();
         return true;
     }
@@ -6217,11 +6217,11 @@ class Game {
 
         if (this.ringTier < 3 && (dispReady || goldReady)) {
             this._setRingTier(3);
-            this._log('Your hands feel… readier. Your thumbs, even.', 'transition');
+            this._log('A thumb ring slot is now open.', 'transition');
         }
         if (this.ringTier < 4 && goldReady) {
             this._setRingTier(4);
-            this._log('Fancy enough, now, for a pinky ring.', 'transition');
+            this._log('A pinky ring slot is now open.', 'transition');
         }
     }
 
@@ -6241,7 +6241,7 @@ class Game {
                 const dealt = enemyObj.entity.takeDamage(igniteDmg);
                 const killed = enemyObj.entity.isDead();
                 this._spawnHitSplat(enemyObj.x, enemyObj.y, `-${dealt}`, 'fire', { omni: true, killed });
-                this._log('Cinders catch — it burns.', 'combat');
+                this._log('The ring sets it on fire.', 'combat');
                 if (killed) this._handleEnemyDeath(enemyObj);
             }
         }
@@ -6264,7 +6264,7 @@ class Game {
             // (GO2) A goo puddle gives the Goo status, as the goo tile does.
             if (!this._hasSludgeImmunity() && !this.hasBuff('goo')) {
                 this.addBuff('goo', 'Goo', SLUDGE_DURATION, 'debuff');
-                this._log('[TEXT: standing in goo]', 'combat');
+                this._log('You are standing in goo. Goo for 3 turns.', 'combat');
             }
         } else if (under) {
             if (this._hasSludgeImmunity()) {
@@ -6311,8 +6311,8 @@ class Game {
             const have = this.buffs.find(x => x.id === b.id);
             if (have) { have.turns = Math.max(have.turns, b.turns); have.dmg = Math.max(have.dmg ?? 0, b.dmg); }
             else this.addBuff(b.id, 'Poisoned', b.turns, 'debuff', { dmg: b.dmg });
-            this._spawnHitSplat(this.playerX, this.playerY, '[TEXT]', 'poison', { omni: true });
-            return `[${who} throws ${what} at you: [TEXT]]`;
+            this._spawnHitSplat(this.playerX, this.playerY, 'Poisoned', 'poison', { omni: true });
+            return `${who} throws ${what} at you. You are poisoned.`;
         }
         return null;
     }
@@ -6391,7 +6391,7 @@ class Game {
         ally._summonTurnsLeft = turns;
         if (opts.aiding) ally._aiding = true;   // (FIN2) already in the fight, no need to see it first
         this.enemies.push(ally);
-        this._log(opts.summonLine ?? `You whistle sharp — ${name} bounds out of the crowd, all teeth.`, 'combat');
+        this._log(opts.summonLine ?? `${name} appears beside you and fights for you for ${turns} turns.`, 'combat');
         return true;
     }
 
@@ -6415,7 +6415,7 @@ class Game {
         this._spawnSummon('sun_man', FINALE_PHASE1.sunManTurns, {
             summonName: sun.name, summonLook: sun.type, summonHp: sun.hp, summonDamage: sun.damage,
             tag: FINALE_PHASE1.sunManTag, dialogueId: sun.dialogueId, aiding: true,
-            summonLine: '[TEXT]',
+            summonLine: `${sun.name} appears beside you and fights for you for ${FINALE_PHASE1.sunManTurns} turns.`,
         });
         return true;
     }
@@ -6661,7 +6661,7 @@ class Game {
         this.state = STATE.DEAD;
         audio.playSfx('death'); // [audio] death sting
         this._flash('rgba(255, 0, 0, 0.4)'); // [settings] reduce-motion aware (wraps renderer.flash)
-        this._log('You go down...');
+        this._log('You are defeated.');
         setTimeout(() => this._resolveDefeat(), 500);
     }
 
@@ -6810,7 +6810,7 @@ class Game {
         this._deAggroAll();
         this._finaleReset?.(boss);                // (FIN2) the Financier starts over, Sun Man and all
         this.state = STATE.IDLE;
-        this._log('Down but not out. Regroup and finish it.', 'transition');
+        this._log('You retry the boss fight with full HP and MP.', 'transition');
         this._render();
         this._resumeHeldWalk();
         this.autosave({ force: true });
@@ -7001,17 +7001,17 @@ class Game {
         this._heldDirKeys = [];
         this.state = STATE.RESOLVING;                 // block input through the beat
         if (this.carFuel === 'alcohol') {
-            // (TX3) The driver takes the wheel in his taxi. Placeholder lines until Caelan writes them.
-            this._log('[TEXT]', 'transition');
-            this._log('[TEXT]', 'transition');
+            // (TX3) The driver takes the wheel in his taxi.
+            this._log('The taxi driver drives your car over the bridge. The alcohol in the tank slows the engine.', 'transition');
+            this._log('The car clears the bridge.', 'transition');
             audio.playSfx('quest-advance');
             this._flash('rgba(255, 220, 120, 0.35)');
             this._triggerScreenShake(280, 4);
             this._render();
             setTimeout(() => this._rampToDowntown(), 1100);
         } else {
-            this._log('[TEXT]', 'combat');
-            this._log('[TEXT]', 'combat');
+            this._log('There is no alcohol in the tank. The car is too fast and breaks through the bridge.', 'combat');
+            this._log('The car falls into the Canyon.', 'combat');
             audio.playSfx('take-damage');
             this._flash('rgba(200, 40, 40, 0.5)');
             this._triggerScreenShake(520, 9);
@@ -7027,7 +7027,7 @@ class Game {
         this._stopAutoRepeat();
         this._heldDirKeys = [];
         this.state = STATE.RESOLVING;                 // block input through the beat
-        this._log('[TEXT]', 'transition');
+        this._log('The taxi driver drives you across the bridge.', 'transition');
         audio.playSfx('quest-advance');
         this._flash('rgba(255, 220, 120, 0.35)');
         this._triggerScreenShake(280, 4);
@@ -7038,7 +7038,7 @@ class Game {
             const at = slide ? this._oilSlideSpawn() : { x: toX, y: toY };
             await this._loadMap(toMap, at.x, at.y);
             this.state = STATE.IDLE;
-            this._log('[TEXT]', 'transition');
+            this._log(`You arrive in ${this.map.zoneName}.`, 'transition');
             if (slide) this._oilSlideDone?.();
             this.emitGameEvent('map_entered', { map: toMap });
             this.autosave?.({ force: true });
@@ -7055,7 +7055,7 @@ class Game {
         if (this.questEngine) this.questEngine.state.flags.bridgeRoute = 'canyon';   // (CY1) the crash plays once
         this.state = STATE.IDLE;
         // (TX3) The driver is placed beside the landing in canyon-map.json: the crash is the only way in.
-        this._log('[TEXT]', 'transition');
+        this._log('The car is at the bottom of the Canyon. The taxi driver is beside it.', 'transition');
         if (this.questEngine) this.questEngine.start('canyon_escape');
         this._render();
     }
@@ -7069,7 +7069,7 @@ class Game {
         await this._loadMap('downtown-map.json', at.x, at.y);
         if (this.questEngine) this.questEngine.state.flags.bridgeRoute = 'ramp';     // (CY1) the ramp plays once
         this.state = STATE.IDLE;
-        this._log('[TEXT]', 'transition');
+        this._log('The car lands in Downtown.', 'transition');
         if (slide) this._oilSlideDone?.();
         this._startMainQuest2();   // (Phase 4) MQ2 begins on arrival
         this._render();
@@ -7193,7 +7193,7 @@ class Game {
             n._lastSeenY = this.playerY;
         }
         // (fx17) One line per beat, however many joined.
-        if (joining.length > 0) this._log('[TEXT]', 'combat');
+        if (joining.length > 0) this._log(joining.length === 1 ? '1 more hostile character sees you and joins the fight.' : `${joining.length} more hostile characters see you and join the fight.`, 'combat');
     }
 
     // ── Floating damage numbers ──────────────────────────────────────────────
@@ -7655,7 +7655,7 @@ class Game {
             // older tests that lift this method out of main.js keep working.)
             if (action.id === 'use' && def.useType === 'self' && (def.consumeKind ? def.consumeKind === 'eat' : def.category === 'ambro')
                 && def.effect === 'heal' && this.playerHp >= this.playerMaxHp) {
-                this._log('[TEXT]'); this._render(); return;
+                this._log('Your HP is full. The food stays in your bag.'); this._render(); return;
             }
             const cfg = { size: this.inventory.length, safeSlots: SAFE_SLOTS, maxStack: MAX_STACK, pageSize: PACK_PAGE };
             const idx = sel.index;
@@ -8010,7 +8010,7 @@ class Game {
         this.state = STATE.TRADE;
         audio.playSfx('menu-open');
         if (npc._container)   this._log(`You pry open the ${npc.type}.`, 'transition');
-        else if (npc.vendor)  this._log(`${npc.shownName || npc.type} opens the till. "What'll it be?"`, 'transition');
+        else if (npc.vendor)  this._log(`${npc.shownName || npc.type} opens the shop.`, 'transition');
         else                  this._log(`You open your satchel to ${npc.shownName || npc.type}.`, 'transition');
         this._render();
     }
@@ -8327,7 +8327,7 @@ class Game {
         const def = entry.def, npc = this._offerNpc;
         if (this._saleRefused?.(def)) return false;   // (FD3)
         const isDelivery = this.questEngine && this.questEngine.expectsDelivery(def.id, npc.id);
-        if (def.questItem && !isDelivery) { this._log('Best hold onto that.'); return false; }
+        if (def.questItem && !isDelivery) { this._log('Quest items cannot be used, thrown or given.'); return false; }
         return true;
     }
 
@@ -8571,7 +8571,7 @@ class Game {
                 ? `You hand ${npc.shownName || npc.type} ${out.join(' and ') || 'nothing'} for ${back.join(' and ')}.`
                 : `You hand ${npc.shownName || npc.type} ${out.join(' and ')}.`;
         const mood = R.points > 0 ? ` Disposition +${R.points}.`
-                   : R.points < 0 ? ` They take it, and remember. Disposition ${R.points}.`
+                   : R.points < 0 ? ` Disposition ${R.points}.`
                    : ``;
         this._log(deal + mood, 'transition');
 
@@ -8594,12 +8594,12 @@ class Game {
             // Gold reached a threshold it is not allowed to carry them across.
             // Distinct from having no room at all: they would still warm to a
             // GIFT, just not to money.
-            this._log(`${npc.shownName || npc.type} takes the gold, but it buys nothing more. Some things aren't for sale.`);
+            this._log(`${npc.shownName || npc.type} takes the gold. Gold cannot raise disposition any further.`);
         } else if (R.goldUnspent > 0 && R.fromGold === 0) {
-            this._log(`${npc.shownName || npc.type} pockets the gold. It buys nothing he wants.`);
+            this._log(`${npc.shownName || npc.type} takes the gold. It adds no disposition.`);
         }
         if (R.itemUnspent > 0 && R.fromItems === 0) {
-            this._log(`${npc.shownName || npc.type} is already as fond of you as he can be.`);
+            this._log(`${npc.shownName || npc.type} is at the highest disposition items can give.`);
         }
     }
 
@@ -8707,7 +8707,7 @@ class Game {
         this._dialogueReply = choice.reply || '"..."';
         audio.playSfx((choice.delta ?? 0) < 0 ? 'bump-wall' : 'menu-confirm');
         if ((npc.disposition ?? 0) <= DIALOGUE_HOSTILE_AT) {
-            this._log(`${(npc.boss && npc.shownName) || npc.name || npc.type} has heard enough.`, 'combat');
+            this._log(`${(npc.boss && npc.shownName) || npc.name || npc.type} turns hostile.`, 'combat');
             this._closeDialogue();
             this._onEntityHarmed(npc, { kind: 'insult' });
             return;
