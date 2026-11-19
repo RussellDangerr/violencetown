@@ -673,7 +673,7 @@
         "soap",
         "bandage"
       ],
-      "adjacencyBark": "Carrion says the road is blocked by sludge. Come back later."
+      "adjacencyBark": "Carrion says the road is blocked."
     },
     { "id": "wererat", "slot": "sewer.boss", "x": 17, "y": 10 },
     {

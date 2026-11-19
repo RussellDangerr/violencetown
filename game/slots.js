@@ -36,7 +36,7 @@ export const ENTRIES = {
         damage: 12,
         tag: 'wererat_boss',
         barks: [
-            'The Were-Rat has your catalytic converter.',
+            'The Were-Rat has your Cataclysmic Converter.',
             'The Were-Rat wants a fight.',
         ],
         barkEveryTurns: 6,
@@ -206,9 +206,9 @@ export const ENTRIES = {
         armor: 0,
         damage: ACT2_MOB_DAMAGE,
         sightRange: 0,
-        barks: ['The Angel moves when you look at it.'],
+        barks: ['The Angel moves while you look at it.'],
         barkEveryTurns: 6,
-        examine: 'Angel. A stone figure. It never starts a fight.',
+        examine: 'Angel. A stone figure. It moves and hits only while you look at it.',
     },
     // The Graveyard's Ankou (plans/ak1-ankou-graveyard.md): one skeleton with a ghost drawn
     // around it (sprites.js `ghost`, renderer.js), placed by hand at (8,22). It fights as an

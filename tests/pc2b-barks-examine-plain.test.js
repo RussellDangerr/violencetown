@@ -39,7 +39,7 @@ describe('map barks are plain', () => {
         assert.deepEqual(by('carnival', 'clown1'), ['The Carnival Clown wants a fight.']);
         assert.deepEqual(by('graveyard', 'skel1'), ['The Rattling Skeleton wants a fight.']);
         assert.deepEqual(by('factory', 'green1'), ['The Greedy Green wants a fight.']);
-        assert.deepEqual(by('sewer', 'carrion'), ['Carrion says the road is blocked by sludge. Come back later.']);
+        assert.deepEqual(by('sewer', 'carrion'), ['Carrion says the road is blocked.']);
     });
 });
 
