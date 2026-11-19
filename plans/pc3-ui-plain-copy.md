@@ -27,11 +27,9 @@ text, every line matches what the code does.
 ## Out of scope
 Gear slot labels (HEAD/ARMS/TORSO/FEET, WEAPON [RIGHT]): PC11 renames them. main.js log lines.
 
-## Status: blocked on touches
-Tests outside the touches pin these strings; the loop must widen the touches to include them:
-- tests/plain-copy-guard.test.js: ALLOWED counts for index.html (15), layout.js (3), renderer.js (13) must be lowered.
-- tests/fight-panel-weakness.test.js:165-166: pins '[TEXT] FIRE' and '[TEXT] COLD'.
-- tests/act2-item-checklist.test.js:83: pins the heading '[TEXT]'.
-- tests/body-roster.test.js:41: pins DEVICE_TAB_LABELS.bodies === '[TEXT]'.
-- tests/interactions.test.js:43: pins DEVICE_TAB_LABELS.notes === '[TEXT]'.
-- tests/bag-cursor-start.test.js:232: pins the footer parts '[ ] TABS', 'SPACE' (kept if the footer's key words stay).
+## Status
+Built. The touches were widened by ruling PC3R1 to the tests that pin these strings, and those
+are re-pinned exactly. Help lines (Thieve, attack arc, bag keys), the Eat reason and the ring
+passive row names were written from the code they describe. The checker's corrections:
+the Thieve line states the per-person running total and the hostile search; the arc line names
+slots 1-8, Eat on 9 and Run on 0; ring rows name their passive from its key.

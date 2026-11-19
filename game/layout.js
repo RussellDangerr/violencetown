@@ -1187,6 +1187,11 @@ export function offerTraySlotAt(L, pt, side) {
 // (RR1) What a worn ring's passive says on the Hands tab: one row per passive,
 // a label and its number. The label is a placeholder until its copy is ruled.
 export const RING_PASSIVE_LABEL = 'Passive';
+// The name a ring passive row shows, from the passive's key.
+const RING_PASSIVE_NAMES = { evasion: 'Evasion', fireDamage: 'Fire damage', stealLimit: 'Steal limit', noticeBuffer: 'Notice buffer' };
+export function ringPassiveName(key) {
+    return RING_PASSIVE_NAMES[key] ?? String(key).replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase());
+}
 export function ringPassiveRows(ring) {
     const passive = (ring && ring.passive) || {};
     return Object.keys(passive).map(key => ({ key, label: RING_PASSIVE_LABEL, value: passive[key] }));
