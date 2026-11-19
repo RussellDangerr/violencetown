@@ -159,7 +159,7 @@ describe('it turns one every 3 committed actions in its sight', () => {
         assert.equal(turned(g).length, 3);
         beats(g, 12);
         assert.equal(turned(g).length, 3);
-        assert.equal(g.logs.filter(l => l.startsWith('[The Hypno Vision turns')).length, 3);
+        assert.equal(g.logs.filter(l => l.startsWith('The Hypno Vision turned')).length, 3);
     });
 
     test('a turned one is on the chase, with its mood to match', async () => {
@@ -271,7 +271,7 @@ describe('switching it off', () => {
         switchOff(g);
         beats(g, 30);
         assert.equal(turned(g).length, 0);
-        assert.equal(g.logs.filter(l => l.startsWith('[The Hypno Vision turns')).length, 1);
+        assert.equal(g.logs.filter(l => l.startsWith('The Hypno Vision turned')).length, 1);
     });
 
     test('knocking the nerd out does the same', async () => {

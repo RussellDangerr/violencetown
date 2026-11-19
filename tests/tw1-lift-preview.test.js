@@ -320,11 +320,11 @@ describe('nothing is drawn when there is nothing to show', () => {
 });
 
 describe('the strip', () => {
-    test('the verdict words are the [TEXT] placeholders, kept in one place', () => {
-        assert.deepEqual(LIFT_WORDS, { clean: '[TEXT]', noticed: '[TEXT]' });
+    test('the verdict words are plain, kept in one place', () => {
+        assert.deepEqual(LIFT_WORDS, { clean: 'Not noticed', noticed: 'Noticed' });
         const g = thiefGame([townsperson(5, 5, { gold: 300 })]);
         openToAim(g, 'coin');
-        assert.equal(previewNow(g).words, '[TEXT]');
+        assert.equal(previewNow(g).words, 'Not noticed');
     });
 
     test('the renderer reads it in the aim branch only, and only draws when there is a preview', () => {

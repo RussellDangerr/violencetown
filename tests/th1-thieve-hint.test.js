@@ -25,7 +25,7 @@ describe('the Thieve hint', () => {
     test('it sits right after the blind-spot row, which is untouched', () => {
         const ids = HINTS.map(h => h.id);
         assert.equal(ids.indexOf('thieveHere'), ids.indexOf('blindSpot') + 1);
-        assert.match(HINTS[ids.indexOf('blindSpot')].text, /haven't seen you/);
+        assert.equal(HINTS[ids.indexOf('blindSpot')].text, "They haven't seen you. Standing behind someone keeps you out of their sight, which is the best place to thieve from.");
     });
 
     test('unseen beside someone with gold: blind spot first, then Thieve', () => {

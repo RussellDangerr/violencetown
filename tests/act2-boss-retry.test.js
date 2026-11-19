@@ -122,7 +122,7 @@ describe('losing to an Act 2 boss runs the boss retry', () => {
             assert.equal(g.playerHp, g.playerMaxHp, 'you wake at full health');
             assert.equal(g.state, STATE.IDLE);
             assert.ok(!g.buffs.includes('rattled'), 'no debuff for losing (ruling DFR1)');
-            assert.ok(!g.logs.some(l => /beaten and dumped/.test(l)), 'not the generic scenario');
+            assert.ok(!g.logs.some(l => /You lost the fight and woke up/.test(l)), 'not the generic scenario');
         });
     }
 
@@ -134,7 +134,7 @@ describe('losing to an Act 2 boss runs the boss retry', () => {
         g._lastDefeatedBy = grunt;
         g._die();
         g.timers.forEach((fn) => fn());
-        assert.ok(g.logs.some(l => /beaten and dumped/.test(l)), 'the generic scenario ran');
+        assert.ok(g.logs.some(l => /You lost the fight and woke up/.test(l)), 'the generic scenario ran');
         assert.ok(spares(g) < before, 'it took something');
     });
 });

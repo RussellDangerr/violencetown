@@ -93,7 +93,7 @@ describe('the log says what a defeat cost', () => {
         lose(g, grunt());
         const gone = before.filter((id) => !held(g).includes(id));
         assert.ok(gone.length > 0, 'the generic scenario took something');
-        assert.ok(g.logs.some((l) => /beaten and dumped/.test(l)), 'the generic scenario ran');
+        assert.ok(g.logs.some((l) => /You lost the fight and woke up/.test(l)), 'the generic scenario ran');
         const lines = costLine(g);
         assert.equal(lines.length, 1, 'one cost line');
         for (const id of gone) assert.ok(lines[0].includes(resolveItemDef(id).name), `${id} is named`);
@@ -130,7 +130,7 @@ describe('the log says what a defeat cost', () => {
     test('a robbery you can win back still names everything taken', () => {
         const g = stage('sewer', [['pipe', 1], ['rock', 3]], { roll: 0 });
         lose(g, wererat());
-        assert.ok(g.logs.some((l) => /rats rolled you/.test(l)), 'the rats robbed you');
+        assert.ok(g.logs.some((l) => /You lost to the sewer rats/.test(l)), 'the rats robbed you');
         assert.deepEqual(held(g), []);
         assert.deepEqual(g.stashes, [['pipe', 'rock', 'rock', 'rock']], 'the haul went to the stash');
         assert.deepEqual(costLine(g), ['[Taken: Pipe, Rock x3. GP taken: 0.]']);

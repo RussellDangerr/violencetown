@@ -63,7 +63,7 @@ describe('the mugging', () => {
         const g = makeGame();
         const r = ruffianAt(g, 9, 5);
         const msgs = tickNpcState(g, r, 1);
-        assert.ok(msgs.some(m => m.text === '[TEXT]' && m.sourceEnemy === r));
+        assert.ok(msgs.some(m => / took \d+ GP\.$/.test(m.text) && m.sourceEnemy === r));
     });
 
     test('he takes no more than you have', () => {

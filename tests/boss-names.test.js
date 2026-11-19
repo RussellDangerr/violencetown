@@ -140,7 +140,7 @@ describe('the Alien Invasion goes by one name everywhere', () => {
             map: { isWalkable: () => true }, rng: { pick: (a) => a[0], float: () => 0.5 } };
         const messages = tickNpcState(g, e) || [];
         const line = messages.map(m => m.text).find(t => t.includes('turns to face you'));
-        assert.equal(line, `[${NAME} turns to face you!]`);
+        assert.equal(line, `${NAME} turns to face you.`);
     });
 
     test('every Act 2 boss gets the same treatment', () => {

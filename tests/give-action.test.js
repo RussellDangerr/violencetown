@@ -280,7 +280,7 @@ describe('the offerDiscount flip leaves the deal to her prices', () => {
 
     test('the flip log line is the one she always had', () => {
         const r = reactToTransaction(merchant(), 'give', { item: ITEMS.soap });
-        assert.equal(r.log, `[Carrion accepts the ${ITEMS.soap.name}. "...much obliged. I'll work you a deal next time."]`);
+        assert.equal(r.log, `Carrion accepted the ${ITEMS.soap.name} and now offers a discount.`);
     });
 
     test('her stock costs less after the flip, by her disposition alone', () => {

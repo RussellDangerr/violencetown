@@ -85,6 +85,6 @@ describe('the wounded hint waits for the bar', () => {
     test('the wording is unchanged', () => {
         const row = HINTS.find(x => x.id === 'wounded');
         assert.equal(row.text,
-            '[You are hurt. The bar along the bottom is live — Shift+↑↓ picks something to drink.]');
+            'You are below half health. The bar along the bottom lists what you can drink. Shift+Up and Shift+Down pick an item.');
     });
 });

@@ -192,7 +192,7 @@ describe('a robbed victim sweeps before giving up', () => {
         assert.equal(v.state, 'returning', 'the sweep should end');
         assert.equal(bystander.disposition, 40 + PARANOIA_DELTA, 'the neighbour got warier');
         assert.equal(v._robbedSweep, false, 'and it fires exactly once');
-        assert.ok(msgs.some(m => /watching you now/.test(m.text || '')),
+        assert.ok(msgs.some(m => /warier of you/.test(m.text || '')),
             `no paranoia line: ${JSON.stringify(msgs)}`);
     });
 
