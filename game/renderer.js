@@ -4073,13 +4073,13 @@ export class Renderer {
 
     // (fx36) The second line on the wheel's Eat slice, or null for every other slice.
     // Live: the food's own name and its heal ("HOT DOG +10"), trimmed to fit the
-    // slice. Greyed at full health: a reason, which is the plain words HP FULL.
+    // slice. Greyed at full health: a reason, which is a [TEXT] placeholder for now.
     // Greyed with no food in the bag has no line, as before.
     _eatSliceLine(node, game, enabled) {
         if (!this.font || node.needsItem !== 'eat' || node.placeholder) return null;
         if (!enabled) {
             return game.eatBlockedBy && game.eatBlockedBy() === 'full'
-                ? { text: 'HP FULL', color: '#a89878' } : null;
+                ? { text: '[TEXT]', color: '#a89878' } : null;
         }
         const pick = game.eatChoice && game.eatChoice();
         if (!pick) return null;

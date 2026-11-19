@@ -38,9 +38,9 @@ describe('the table', () => {
         assert.equal(INTERACTIONS[0].note, '[TEXT]');
         assert.equal(INTERACTIONS[0].zone, 'frozen-map.json');
     });
-    test('the notes tab exists with a placeholder label', () => {
+    test('the notes tab exists with a plain label', () => {
         assert.ok(DEVICE_TABS.includes('notes'));
-        assert.equal(DEVICE_TAB_LABELS.notes, '[TEXT]');
+        assert.equal(DEVICE_TAB_LABELS.notes, 'NOTES');
     });
 });
 
