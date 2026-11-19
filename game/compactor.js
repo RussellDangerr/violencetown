@@ -28,7 +28,7 @@ export const DOOR = { x: 5, y: 0 };
 // What the door leads to, the same as compactor-map.json's own transition (a test pins them).
 export const DOOR_BACK = {
     x: DOOR.x, y: DOOR.y, toMap: 'factory-map.json', toX: 4, toY: 27,
-    label: 'North: back to the Factory',
+    label: '[North — back out to the Factory]',
 };
 
 export const LINES = {
