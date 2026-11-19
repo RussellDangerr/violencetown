@@ -149,7 +149,7 @@ function standIn(enemies, player = FAR) {
 }
 
 describe('_joinFight', () => {
-    test('a joiner starts chasing that turn, marked on the player, with the join line', () => {
+    test('a joiner starts chasing that turn, marked on the player, with a [TEXT] line', () => {
         const fighter = npc(10, 14, 'chasing');
         const watcher = npc(10, 10, 'suspicious', { _awareBeats: 1, _sweepBeats: 3, _lostSightTurns: 2, _struckBy: { x: 1, y: 1 } });
         const g = standIn([fighter, watcher]);
