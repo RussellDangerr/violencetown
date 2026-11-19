@@ -6,7 +6,7 @@
 // under both fuels on the same stand-in game as canyon-branch.test.js (the real
 // _doMove, cutscene and landing methods lifted out of main.js, the real maps and quest
 // engine). The crash lands the driver in the Canyon beside you; the ramp leaves him
-// at the bridge. Every line a player reads that changed is the placeholder [TEXT].
+// at the bridge. Every line a player reads that changed is plain.
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -153,12 +153,12 @@ describe('alcohol poured: the driver ramps you into Downtown', () => {
         const before = g.logs.length;
         await walkNorth(g);
         assert.equal(g.state, STATE.RESOLVING, 'the crossing is the cutscene');
-        assert.deepEqual(g.logs.slice(-2), ['[TEXT]', '[TEXT]'], 'two ride lines, placeholders');
+        assert.deepEqual(g.logs.slice(-2), ['There is alcohol in the tank. The taxi driver drives across the bridge.', 'The taxi clears the bridge.'], 'two ride lines');
         assert.equal(g.shakes, 1);
         await g.flushCutscene();
         assert.equal(g._mapUrl, 'downtown-map.json');
         assert.equal(g.questEngine.bridgeRoute(), 'ramp');
-        assert.equal(g.logs.slice(before).filter(l => l === '[TEXT]').length, 3, 'two ride lines and the landing line, all placeholders');
+        assert.deepEqual(g.logs.slice(before).filter(l => !l.startsWith('[New quest')), ['There is alcohol in the tank. The taxi driver drives across the bridge.', 'The taxi clears the bridge.', 'The taxi lands in Downtown.'], 'two ride lines and the landing line');
         assert.ok(g.questEngine.isActive('deliver_burger'));
         assert.equal(g.questEngine.isActive('canyon_escape'), false);
     });
@@ -170,13 +170,13 @@ describe('raw fuel: the driver goes down with you', () => {
         const before = g.logs.length;
         await walkNorth(g);
         assert.equal(g.state, STATE.RESOLVING);
-        assert.deepEqual(g.logs.slice(-2), ['[TEXT]', '[TEXT]']);
+        assert.deepEqual(g.logs.slice(-2), ['There is no alcohol in the tank. The taxi is too fast and breaks through the bridge.', 'The taxi falls into the Canyon.']);
         assert.equal(g.shakes, 1);
         assert.equal(g.flashes, 1);
         await g.flushCutscene();
         assert.equal(g._mapUrl, 'canyon-map.json');
         assert.equal(g.questEngine.bridgeRoute(), 'canyon');
-        assert.equal(g.logs.slice(before).filter(l => l === '[TEXT]').length, 3, 'two crash lines and the landing line');
+        assert.deepEqual(g.logs.slice(before).filter(l => !l.startsWith('[New quest')), ['There is no alcohol in the tank. The taxi is too fast and breaks through the bridge.', 'The taxi falls into the Canyon.', 'The taxi is at the bottom of the Canyon. The taxi driver is beside it.'], 'two crash lines and the landing line');
         assert.deepEqual([g.playerX, g.playerY], [canyon.spawn.x, canyon.spawn.y]);
         assert.ok(g.questEngine.isActive('canyon_escape'));
     });

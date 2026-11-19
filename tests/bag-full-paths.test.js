@@ -71,7 +71,7 @@ describe('BF1 — a full PACK refuses nothing', () => {
         assert.equal(g.inventory.length, INVENTORY_SIZE + PACK_PAGE, 'the bag did not grow a page');
         assert.equal(held(g, 'soap'), 1);
         assert.deepEqual(g.groundItems, [], 'the item is still on the ground');
-        assert.deepEqual(g.logs, [`[Picked up ${ITEMS.soap.name}]`]);
+        assert.deepEqual(g.logs, [`Picked up ${ITEMS.soap.name}`]);
         noRefusal(g);
     });
 
@@ -143,7 +143,7 @@ describe('BF1 — the dead paths are gone from the source, the pinned guards are
     });
 
     test('main.js refuses in exactly two places: the shop take loop and the Thieve lift', () => {
-        const hits = mainSrc.match(/\[Your bag is full\.\]/g) || [];
+        const hits = mainSrc.match(/'Your bag is full\.'/g) || [];
         assert.equal(hits.length, 2, 'expected the two pinned guards and nothing else');
         for (const gone of ['Inventory full', 'leave it for now', 'no room for it', 'you leave it behind']) {
             assert.ok(!mainSrc.includes(gone), `main.js still says "${gone}"`);

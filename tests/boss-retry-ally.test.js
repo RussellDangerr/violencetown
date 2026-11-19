@@ -134,7 +134,7 @@ describe('going down in the Alien\'s fight', () => {
         assert.equal(alien.entity.hp, alien.entity.maxHp, 'the Alien is back to full');
         assert.equal(g.playerHp, g.playerMaxHp, 'you wake at full health');
         assert.equal(g.state, STATE.IDLE);
-        assert.ok(g.logs.some(l => /Down but not out/.test(l)), 'the retry\'s line');
+        assert.ok(g.logs.some(l => /You retry the boss fight/.test(l)), 'the retry\'s line');
         assert.ok(!g.logs.some(l => /beaten and dumped|Taken:/.test(l)), 'not a defeat scenario');
     });
 
@@ -149,7 +149,7 @@ describe('going down in the Alien\'s fight', () => {
 
         assert.equal(g.struckBy[0], ally);
         assert.ok(spares(g) < before, 'the defeat took something');
-        assert.ok(!g.logs.some(l => /Down but not out/.test(l)), 'no retry');
+        assert.ok(!g.logs.some(l => /You retry the boss fight/.test(l)), 'no retry');
         assert.equal(alien.entity.hp, alien.entity.maxHp);
     });
 
@@ -165,7 +165,7 @@ describe('going down in the Alien\'s fight', () => {
         playOutTurn(g);
 
         assert.ok(spares(g) < before, 'the defeat took something');
-        assert.ok(!g.logs.some(l => /Down but not out/.test(l)), 'no retry');
+        assert.ok(!g.logs.some(l => /You retry the boss fight/.test(l)), 'no retry');
     });
 });
 
@@ -179,7 +179,7 @@ describe('going down to an ordinary enemy, no boss in the fight', () => {
 
         assert.equal(g.struckBy[0], grunt);
         assert.ok(spares(g) < before, 'the defeat took something');
-        assert.ok(!g.logs.some(l => /Down but not out/.test(l)), 'no retry');
+        assert.ok(!g.logs.some(l => /You retry the boss fight/.test(l)), 'no retry');
     });
 
     test('the Alien himself landing it is still the retry (the control)', () => {
@@ -191,7 +191,7 @@ describe('going down to an ordinary enemy, no boss in the fight', () => {
 
         assert.equal(g.struckBy[0], alien);
         assert.equal(spares(g), before);
-        assert.ok(g.logs.some(l => /Down but not out/.test(l)));
+        assert.ok(g.logs.some(l => /You retry the boss fight/.test(l)));
     });
 });
 

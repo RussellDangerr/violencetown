@@ -86,7 +86,7 @@ function playOutTurn(g) {
     assert.equal(g.state, STATE.DEAD, 'the blow went in');
     g.timers.forEach((fn) => fn());
 }
-const retried = (g) => g.logs.some(l => /Down but not out/.test(l));
+const retried = (g) => g.logs.some(l => /You retry the boss fight/.test(l));
 
 const borgir = mapJson('borgir-map.json');
 const canyon = mapJson('canyon-map.json');
@@ -131,7 +131,7 @@ describe('a real world turn delivers the blow', () => {
         assert.equal(g.struckBy[0], boss, 'the boss landed it');
         assert.equal(retried(g), false, 'no retry');
         assert.ok(spares(g) < before, 'the defeat took something');
-        assert.ok(g.logs.some(l => /^\[Taken: .+\. GP taken: \d+\.\]$/.test(l)), `a cost line: ${JSON.stringify(g.logs)}`);
+        assert.ok(g.logs.some(l => /^Taken: .+\. GP taken: \d+\.$/.test(l)), `a cost line: ${JSON.stringify(g.logs)}`);
         assert.equal(boss.entity.hp, boss.entity.maxHp);
     });
 

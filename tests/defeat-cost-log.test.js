@@ -84,7 +84,7 @@ function lose(g, by) {
 const grunt = () => spawnEnemy({ id: 'grunt', type: 'Grunt', x: 1, y: 1, hp: 30 });
 const wererat = () => spawnEnemy({ id: 'rat', type: 'Wererat', x: 1, y: 1, hp: 30 });
 const held = (g) => g.inventory.filter(Boolean).map((s) => s.itemDef.id);
-const costLine = (g) => g.logs.filter((l) => /^\[(Taken:|Nothing was taken)/.test(l));
+const costLine = (g) => g.logs.filter((l) => /^(Taken:|Nothing was taken)/.test(l));
 
 describe('the log says what a defeat cost', () => {
     test('an ordinary defeat names every item taken and the GP lost', () => {
@@ -98,7 +98,7 @@ describe('the log says what a defeat cost', () => {
         assert.equal(lines.length, 1, 'one cost line');
         for (const id of gone) assert.ok(lines[0].includes(resolveItemDef(id).name), `${id} is named`);
         for (const id of held(g)) assert.ok(!lines[0].includes(resolveItemDef(id).name), `${id} was kept, so not named`);
-        assert.equal(lines[0], '[Taken: Pipe, Bandage x3. GP taken: 0.]');
+        assert.equal(lines[0], 'Taken: Pipe, Bandage x3. GP taken: 0.');
         assert.equal(g.gold, 40, 'the generic scenario takes no gold');
         assert.equal(g.logs.at(-1), lines[0], 'the cost line follows the scenario line');
     });
@@ -108,13 +108,13 @@ describe('the log says what a defeat cost', () => {
         const g = stage('factory', [['wererat_fur', 1], ['burger_fries', 1]]);
         lose(g, grunt());
         assert.deepEqual(held(g), ['wererat_fur', 'burger_fries']);
-        assert.deepEqual(costLine(g), ['[Nothing was taken.]']);
+        assert.deepEqual(costLine(g), ['Nothing was taken.']);
     });
 
     test('a defeat with an empty bag says nothing was taken', () => {
         const g = stage('factory', []);
         lose(g, grunt());
-        assert.deepEqual(costLine(g), ['[Nothing was taken.]']);
+        assert.deepEqual(costLine(g), ['Nothing was taken.']);
     });
 
     test('a fee in gold alone names the GP and no items', () => {
@@ -124,7 +124,7 @@ describe('the log says what a defeat cost', () => {
         lose(g, wererat());
         assert.ok(g.logs.some((l) => /Carrion/.test(l)), 'Carrion patched you up');
         assert.equal(g.gold, 36);
-        assert.deepEqual(costLine(g), ['[Taken: no items. GP taken: 4.]']);
+        assert.deepEqual(costLine(g), ['Taken: no items. GP taken: 4.']);
     });
 
     test('a robbery you can win back still names everything taken', () => {
@@ -133,7 +133,7 @@ describe('the log says what a defeat cost', () => {
         assert.ok(g.logs.some((l) => /rats rolled you/.test(l)), 'the rats robbed you');
         assert.deepEqual(held(g), []);
         assert.deepEqual(g.stashes, [['pipe', 'rock', 'rock', 'rock']], 'the haul went to the stash');
-        assert.deepEqual(costLine(g), ['[Taken: Pipe, Rock x3. GP taken: 0.]']);
+        assert.deepEqual(costLine(g), ['Taken: Pipe, Rock x3. GP taken: 0.']);
     });
 });
 

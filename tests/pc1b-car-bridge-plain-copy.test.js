@@ -60,7 +60,7 @@ describe('the car says plainly what happened', () => {
     test('the converter goes in and the car is fixed', () => {
         const g = stub({ inventory: [item('catalytic_converter')] });
         g._interactCar();
-        assert.deepEqual(g.logs, ['You put the cataclysmic converter in your car. The car is fixed. Drive north over the bridge.']);
+        assert.deepEqual(g.logs, ['You put the cataclysmic converter in your car. The car is fixed. Drive north over the bridge. You need alcohol in the tank to make it.']);
         assert.equal(g.inventory[0], null);
         assert.deepEqual(g.events, ['interact_car']);
     });

@@ -199,7 +199,7 @@ describe('Space on the title, with a save', () => {
         assert.ok(bag(g).slice(3).every(s => s === null), 'nothing else in the bag');
         assert.deepEqual([g.playerX, g.playerY], [7, 9]);
         assert.equal(g.newRuns, 0, 'no new run was started');
-        assert.ok(g.logs.includes('[Save loaded]'));
+        assert.ok(g.logs.includes('Save loaded'));
         assert.equal(page.els['splash'].classList.contains('gone'), true);
     });
 
@@ -232,7 +232,7 @@ describe('Space on the title, with a save', () => {
         press(page, 'Space');
         await settle();
         assert.equal(g.newRuns, 0);
-        assert.equal(g.logs.filter(m => m === '[Save loaded]').length, 1, 'the save loaded once');
+        assert.equal(g.logs.filter(m => m === 'Save loaded').length, 1, 'the save loaded once');
         assert.equal(g.gold, 77);
         assert.equal(g.wheelOpens, 0);
         assert.equal(g.state, STATE.IDLE);
@@ -248,7 +248,7 @@ describe('Space on the title, with a save', () => {
         await settle();
         assert.equal(down.defaultPrevented, true);
         assert.equal(g.newRuns, 0);
-        assert.equal(g.logs.filter(m => m === '[Save loaded]').length, 1, 'the save loaded once');
+        assert.equal(g.logs.filter(m => m === 'Save loaded').length, 1, 'the save loaded once');
         assert.equal(g.wheelOpens, 0);
         assert.equal(g.gold, 77);
     });
@@ -279,7 +279,7 @@ describe('Space on the title, with no save', () => {
         assert.equal(down.defaultPrevented, true);
         assert.equal(g.newRuns, 1);
         assert.equal(g.state, STATE.IDLE);
-        assert.ok(g.logs.includes('[Entered the town]'));
+        assert.ok(g.logs.includes('Entered the town'));
     });
 
     test('never opens the wheel; the game starts idle', () => {

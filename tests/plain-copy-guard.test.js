@@ -69,7 +69,6 @@ const ALLOWED = {
     'item-uses.js': 5,
     'items.js': 4,
     'layout.js': 3,
-    'main.js': 186,
     'npc.js': 11,
     'quests.js': 1,
     'radicals/canyon/wreck.json': 1,

@@ -38,6 +38,6 @@ test('beating a foe puts its defeat line in the fight feed', () => {
     const e = { id: 'e1', type: 'rat', x: 1, y: 1, gold: 0, loadout: [], entity: { name: 'Test Foe', hp: 0, isAlive: () => false } };
     g._handleEnemyDeath(e);
     const feed = combatLines(g._logHistory);
-    assert.deepEqual(feed.map((m) => m.text), ['[Defeated Test Foe]']);
-    assert.ok(g._logStripMessages.some((m) => m.text === '[Defeated Test Foe]'), 'still in the strip');
+    assert.deepEqual(feed.map((m) => m.text), ['Defeated Test Foe']);
+    assert.ok(g._logStripMessages.some((m) => m.text === 'Defeated Test Foe'), 'still in the strip');
 });

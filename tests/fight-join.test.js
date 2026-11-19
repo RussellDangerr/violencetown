@@ -149,7 +149,7 @@ function standIn(enemies, player = FAR) {
 }
 
 describe('_joinFight', () => {
-    test('a joiner starts chasing that turn, marked on the player, with a [TEXT] line', () => {
+    test('a joiner starts chasing that turn, marked on the player, with the join line', () => {
         const fighter = npc(10, 14, 'chasing');
         const watcher = npc(10, 10, 'suspicious', { _awareBeats: 1, _sweepBeats: 3, _lostSightTurns: 2, _struckBy: { x: 1, y: 1 } });
         const g = standIn([fighter, watcher]);
@@ -157,7 +157,7 @@ describe('_joinFight', () => {
         assert.equal(watcher.state, 'chasing');
         assert.deepEqual([watcher._lastSeenX, watcher._lastSeenY], [FAR.x, FAR.y]);
         assert.deepEqual([watcher._awareBeats, watcher._sweepBeats, watcher._lostSightTurns, watcher._struckBy], [0, 0, 0, null]);
-        assert.deepEqual(g.logs, [['[TEXT]', 'combat']]);
+        assert.deepEqual(g.logs, [['Other hostile characters that see you join the fight.', 'combat']]);
         assert.equal(fighters(g.enemies).length, 2, 'it is in the fight now');
     });
 

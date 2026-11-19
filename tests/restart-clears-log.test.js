@@ -81,8 +81,8 @@ describe('RESTART clears the log and the hint pacing', () => {
 
         await restartViaMenu(g);
 
-        assert.deepEqual(g._logHistory.map(m => m.text), ['[New game]']);
-        assert.deepEqual(g._logStripMessages.map(m => m.text), ['[New game]']);
+        assert.deepEqual(g._logHistory.map(m => m.text), ['New game']);
+        assert.deepEqual(g._logStripMessages.map(m => m.text), ['New game']);
         assert.deepEqual(combatLines(g._logHistory), []);
         assert.equal(g._logModalScroll, 0);
     });
