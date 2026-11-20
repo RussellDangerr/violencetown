@@ -1578,6 +1578,7 @@ class Game {
             audio.playMusic('town');
             const res = await importSaveCode(this, text);
             if (!res.ok) { this.state = STATE.SPLASH; pasteSay(res.message); return; }
+            this._noteAway?.(d.raw); this._applyRested?.();   // (FX75) a pasted save is a return too, before writeSave stamps anew
             writeSave(this);
             splash.classList.add('gone');
             wrapper.classList.remove('hidden');
@@ -2512,6 +2513,7 @@ class Game {
             if (!text && codeBox) text = codeBox.value;
             const res = await importSaveCode(this, text);
             if (!res.ok) { say(res.message); return; }
+            this._noteAway?.(decodeSaveCode(text).raw); this._applyRested?.();   // (FX75) same as the title paste
             writeSave(this);
             say('Save loaded.');
             this._log('Save loaded from a code', 'transition');
