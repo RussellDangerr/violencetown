@@ -3682,6 +3682,11 @@ export class Renderer {
             const b = boxOf(z);
             const isHere = z.zoneName === here;
             const isTarget = targets.has(z.zoneName);
+            // (FX73) An opaque backing in the panel's colour first, so no connector shows through
+            // the box's see-through fill; an unvisited box then fades over it, not over the line.
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = UI.panelBg;
+            ctx.fillRect(b.x, b.y, b.w, b.h);
             ctx.globalAlpha = unvisited(z) && !isTarget ? 0.5 : 1;
             ctx.fillStyle = isHere ? 'rgba(212,185,106,0.85)' : 'rgba(30,24,16,0.9)';
             ctx.fillRect(b.x, b.y, b.w, b.h);
