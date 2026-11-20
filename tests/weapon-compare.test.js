@@ -423,7 +423,7 @@ describe('the shop: the description strip for the highlighted row', () => {
         const { r, texts } = rig();
         const lines = said(stripLines(r, texts, g));
         assert.deepEqual(lines.slice(3), ['Use: cures sludge and poison. Also worn on your back for 3 turns: +2 armour. Used up when used. Rare, value',
-            '15 GP. Dropped by: Alien Ally, Bigfoot, Boss and 16 more. Sold by: Carrion, Puck. Found in: Graveyard, Sew...']);
+            '15 GP. Dropped by: Alien Ally, Bigfoot, Boss and 17 more. Sold by: Carrion, Puck. Found in: Graveyard, Sew...']);
         assert.ok(!lines.some(s => /\bdmg\b/.test(s)));
     });
 });

@@ -51,7 +51,8 @@
         {"id": "carnival-doll-2", "entry": "carnival_doll", "x": 11, "y": 16},
         {"id": "carnival-doll-3", "entry": "carnival_doll", "x": 9, "y": 18},
         {"id": "carnival-doll-4", "entry": "carnival_doll", "x": 11, "y": 18},
-        {"id": "assistant-manager", "entry": "assistant_manager", "x": 32, "y": 3}
+        {"id": "assistant-manager", "entry": "assistant_manager", "x": 32, "y": 3},
+        {"id": "carnival-mimic", "entry": "carnival_mimic", "x": 54, "y": 16}
     ],
     "items": [
         {"type": "hot_dog", "x": 16, "y": 6},
