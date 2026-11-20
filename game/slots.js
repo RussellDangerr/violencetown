@@ -136,6 +136,29 @@ export const ENTRIES = {
         behavior: ['IDLE'],   // he stands where he is placed: a wander would draw the shared ambient stream and move the autoplay replay
         adjacencyBark: 'The Strongman stands here. A gift can turn him to your side.',
     },
+    // The Carnival's mimic (plans/mm1-carnival-mimic.md): one chest in the far corner placed by
+    // hand at (54,16). Asleep it is drawn as a chest, sees nothing and shows no name or threat;
+    // a bump wakes it for good (enemies.js wakeDisguise, main.js) and it hunts you. Stand-ins until
+    // designed: the ordinary Carnival Clown's numbers and kit, the name, the barks, the awake art.
+    // No `boss`, no slot.
+    carnival_mimic: {
+        type: 'Mimic',
+        name: 'Mimic',
+        disguised: true,
+        gold: 7,
+        loadout: ['hot_dog', 'red_cape', 'soap', 'fire_blood'],
+        hp: 100,
+        armor: 0,
+        damage: ACT2_MOB_DAMAGE,
+        disposition: -40,
+        flipThreshold: 30,
+        bribeable: true,
+        values: { bandage: 6, soap: 4, rock: 3 },
+        behavior: ['IDLE'],   // it stays where it is placed: a wander would draw the shared ambient stream
+        barks: ['The Mimic is hostile and comes for you.'],
+        barkEveryTurns: 6,
+        adjacencyBark: 'A Mimic, a monster that looks like a chest. It is hostile and will fight you.',
+    },
     // The Carnival's horses (plans/cb1-carnival-horses-circle.md): three combatants placed by
     // hand around (28,4), which circle you once beside you (ai.js circleStep; the `circler`
     // tag is the flag, off for every other entry). Stand-ins until designed: the Graveyard

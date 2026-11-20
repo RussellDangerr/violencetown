@@ -554,6 +554,7 @@ export const ENEMY_SPRITES = {
     'Ruffian':          { sheet: 'tinyDungeon', col: 4, row: 9,  static: true }, // green-bandana goblin
     'Strongman':        { sheet: 'tinyDungeon', col: 2, row: 7,  static: true }, // SG1 placeholder: bald mustached, Pike's cell
     'Carnival Clown':   { sheet: 'tinyDungeon', col: 0, row: 7,  static: true }, // purple mage — most colorful humanoid
+    'Mimic':            { sheet: 'tinyDungeon', col: 8, row: 7,  static: true }, // the chest with a tongue (MM1): its awake look; asleep it is drawn as a chest
     'Rattling Skeleton':{ sheet: 'tinyDungeon', col: 1, row: 10, static: true }, // white ghost — pale/bony proxy
     'Worker':           { sheet: 'tinyDungeon', col: 1, row: 10, static: true }, // (HV1) the Skeleton's cell, a stand-in
 

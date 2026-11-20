@@ -123,6 +123,7 @@ export default {
     "droppedBy": [
       "Ankou",
       "Carnival Clown",
+      "Mimic",
       "Pike",
       "Polar Bear",
       "Red Fungus",
@@ -195,6 +196,7 @@ export default {
       "Carnival Clown",
       "Financier",
       "Greedy Green",
+      "Mimic",
       "Returning Boss",
       "Ringmaster",
       "Robot",
@@ -364,6 +366,7 @@ export default {
       "Fungus King",
       "Greedy Green",
       "Lion",
+      "Mimic",
       "Returning Boss",
       "Ringmaster",
       "Robot",
