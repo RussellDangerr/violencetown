@@ -227,6 +227,41 @@ export function findPath(game, from, to, options = {}) {
     return null;
 }
 
+// (TW2) The walk toward a tile that can't be stood on or reached: flood outward
+// from `from` over the same steps findPath takes, and return the path to the
+// reached tile nearest `to` (straight-line distance). Ties go to the tile fewest
+// steps from you (the flood meets it first). [] when you already stand on the
+// nearest one; null only when nothing at all is reachable.
+export function pathToNearest(game, from, to, options = {}) {
+    const { self = null, avoidPlayer = false, maxNodes = 20000 } = options;
+    const key = (x, y) => `${x},${y}`;
+    const d2 = (x, y) => (x - to.x) * (x - to.x) + (y - to.y) * (y - to.y);
+    const prev = new Map();
+    const seen = new Set([key(from.x, from.y)]);
+    const queue = [from];
+    let head = 0, best = from, bestD = d2(from.x, from.y);
+    const NB = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]];
+    while (head < queue.length && head < maxNodes) {
+        const cur = queue[head++];
+        for (const [dx, dy] of NB) {
+            const nx = cur.x + dx, ny = cur.y + dy, k = key(nx, ny);
+            if (seen.has(k)) continue;
+            if (dx !== 0 && dy !== 0 &&
+                (!game.map.isWalkable(cur.x + dx, cur.y) || !game.map.isWalkable(cur.x, cur.y + dy))) continue;
+            if (!stepFree(game, nx, ny, { self, avoidPlayer })) continue;
+            seen.add(k);
+            prev.set(k, cur);
+            const node = { x: nx, y: ny };
+            const d = d2(nx, ny);
+            if (d < bestD) { bestD = d; best = node; }
+            queue.push(node);
+        }
+    }
+    const path = [];
+    for (let c = best; c && !(c.x === from.x && c.y === from.y); c = prev.get(key(c.x, c.y))) path.push({ x: c.x, y: c.y });
+    return path.reverse();
+}
+
 // ── Bresenham Line-of-Sight ──────────────────────────────────────────────────
 //
 // Pure map LOS — walk the Bresenham line from (x0,y0) to (x1,y1) and report
