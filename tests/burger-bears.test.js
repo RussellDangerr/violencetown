@@ -144,7 +144,7 @@ describe('the table row', () => {
         const row = INTERACTIONS.find(r => r.carry === 'mola_cola');
         assert.ok(row);
         assert.equal(row.zone, 'frozen-map.json');
-        assert.equal(row.note, '[TEXT]');
+        assert.equal(row.note, 'Carrying Mola Cola in the Frozen zone calls a pack of polar bears.');
         assert.equal(PACK_SIZE, 3);
     });
 });
@@ -163,7 +163,7 @@ describe('walking into the frozen area', () => {
             assert.ok(e.x <= 1 || e.y <= 1 || e.x >= m.width - 2 || e.y >= m.height - 2, 'on the edge');
         }
         assert.deepEqual(g.interactionNotes, ['mola_cola_frozen']);
-        assert.equal(g.logs.filter(l => l === '[TEXT]').length, 1, 'the note shows once');
+        assert.equal(g.logs.filter(l => l === 'Carrying Mola Cola in the Frozen zone calls a pack of polar bears.').length, 1, 'the note shows once');
         for (let i = 0; i < 3; i++) g.beat();
         assert.equal(pack(g).length, PACK_SIZE, 'no more come while you stay');
         assert.equal(g.enemies.filter(e => e.type === 'Polar Bear' && e._molaPack).length, PACK_SIZE);

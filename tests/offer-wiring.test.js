@@ -341,7 +341,7 @@ describe('_openOffer', () => {
 
     test('the log line says which of the three shapes opened, and names the container', () => {
         const vg = stubGame(); openOffer.call(vg, puck());
-        assert.match(vg.logs[0].msg, /puck opens the till/);
+        assert.match(vg.logs[0].msg, /puck opens the shop/);
 
         const fg = stubGame(); openOffer.call(fg, friend());
         assert.match(fg.logs[0].msg, /open your satchel to gus/);
@@ -806,7 +806,7 @@ describe('_canStageGive', () => {
         const quest = Object.values(ITEMS).find(d => d.questItem);
         assert.ok(quest, 'no quest item in ITEMS to test with');
         assert.equal(canStageGive.call(g, { def: quest }), false);
-        assert.match(g.logs.at(-1).msg, /Best hold onto that/);
+        assert.match(g.logs.at(-1).msg, /Quest items cannot be used, thrown or given/);
     });
 
     test('THE SANCTIONED DELIVERY IS ALLOWED THROUGH', () => {
@@ -1045,7 +1045,7 @@ describe('_logOffer - the sentences the unspent fields were kept for', () => {
 
     test('a bad deal says they remember', () => {
         const out = lines({ ...R0, points: -15 }, { given: [{ count: 1 }], taken: [{ count: 1 }], gold: 0 });
-        assert.match(out[0], /take it, and remember\. Disposition -15/);
+        assert.match(out[0], /^You hand puck 1 item for 1 item\. Disposition -15\.$/);
     });
 
     test('GOLD THAT BOUGHT NOTHING IS SAID OUT LOUD', () => {
@@ -1053,7 +1053,7 @@ describe('_logOffer - the sentences the unspent fields were kept for', () => {
         // NOT goldUnspent > 0 -- goodwill rounds down, so a remainder is left
         // over on almost every offer and would fire this on a normal purchase.
         const out = lines({ ...R0, fromGold: 0, goldUnspent: 12 }, { given: [], taken: [], gold: 12 });
-        assert.match(out.at(-1), /pockets the gold\. It buys nothing he wants\./);
+        assert.match(out.at(-1), /takes the gold\. It adds no disposition\./);
     });
 
     test('a rounding remainder says nothing - the surplus bought something', () => {
@@ -1081,7 +1081,7 @@ describe('_logOffer - the sentences the unspent fields were kept for', () => {
         // At the ceiling the whole item surplus goes unspent and buys 0 points.
         const out = lines({ ...R0, itemUnspent: 20, fromItems: 0, points: 0 },
                           { given: [{ count: 3 }], taken: [], gold: 0 });
-        assert.match(out.at(-1), /already as fond of you as he can be/);
+        assert.match(out.at(-1), /highest disposition items can give/);
     });
 
     test('a gift with room left does NOT claim they are already as fond as they can be', () => {
@@ -1097,8 +1097,8 @@ describe('_logOffer - the sentences the unspent fields were kept for', () => {
         // Distinct from having no room at all: they would still warm to a GIFT,
         // just not to money. Fusing the two would say the wrong thing.
         const out = lines({ ...R0, goldRefusedPoints: 3, goldUnspent: 40 }, none);
-        assert.match(out.at(-1), /buys nothing more\. Some things aren't for sale\./);
-        assert.ok(!out.some(l => /pockets the gold/.test(l)),
+        assert.match(out.at(-1), /Gold cannot raise disposition any further\./);
+        assert.ok(!out.some(l => /It adds no disposition/.test(l)),
             'both gold sentences fired for one offer');
     });
 

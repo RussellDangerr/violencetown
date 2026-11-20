@@ -150,7 +150,7 @@ describe('a real hurt enemy does it in a real turn', () => {
         const g = makeGame(5, 3);
         const e = hurt(g, 60, { loadout: ['defence_poition', 'rock'] });
         const msgs = tickNpcState(g, e, 1);
-        assert.match(text(msgs), /digs out \[Defence Poition\] and uses it\./);
+        assert.match(text(msgs), /digs out Defence Poition and uses it\./);
         assert.deepEqual(e.loadout, ['rock']);
         assert.equal(e.hasBuff('defence'), true);
         assert.equal(g.damageTaken, 0, 'drinking IS the turn');
@@ -162,7 +162,7 @@ describe('a real hurt enemy does it in a real turn', () => {
         const e = hurt(g, 60, { loadout: ['foil_hat', 'rock'] });
         const armourBefore = e.entity.armor;
         const msgs = tickNpcState(g, e, 1);
-        assert.match(text(msgs), /digs out \[Foil Hat\] and uses it\./);
+        assert.match(text(msgs), /digs out Foil Hat and uses it\./);
         assert.deepEqual(e.loadout, ['rock']);
         assert.deepEqual(e.equipped, ['foil_hat']);
         assert.equal(e.entity.armor, armourBefore + ITEMS.foil_hat.armor);

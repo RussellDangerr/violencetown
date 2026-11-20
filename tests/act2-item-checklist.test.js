@@ -75,12 +75,12 @@ describe('the Act 2 checklist on the Quests tab', () => {
         const g = makeGame({ delivered: false, held: Object.values(ID) });
         assert.equal(act2Checklist(g.questEngine), null);
         assert.deepEqual(itemLines(g), []);
-        assert.ok(!tabLines(g).includes('[TEXT]'));
+        assert.ok(!tabLines(g).includes('Items to find'));
     });
 
-    test('after the delivery: heading [TEXT], then each item at its zone, none ticked', () => {
+    test('after the delivery: heading Items to find, then each item at its zone, none ticked', () => {
         const lines = tabLines(makeGame({ delivered: true }));
-        assert.ok(lines.includes('[TEXT]'));
+        assert.ok(lines.includes('Items to find'));
         assert.deepEqual(itemLines(makeGame({ delivered: true })), [
             '· Stuffed Animal @ Carnival', '· Flux Capacitor @ Factory', '· Soul Crystal @ Graveyard',
         ]);

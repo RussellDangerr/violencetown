@@ -158,11 +158,11 @@ describe('the panel draws the line', () => {
     const base = { name: 'Wererat', hp: 5, maxHp: 9, armor: 1, gold: 0, worn: [], kit: [],
         takeable: { coin: false, kit: false, gear: false } };
 
-    test('a placeholder line per known kind; none when nothing is known', () => {
+    test('a plain line per known kind; none when nothing is known', () => {
         const none = draw({ ...base, weak: [], resist: [] });
         const some = draw({ ...base, weak: ['fire'], resist: ['cold'] });
         assert.ok(!none.some(t => /FIRE|COLD/.test(t)));
-        assert.ok(some.includes('[TEXT] FIRE'), `drawn: ${some.join(' | ')}`);
-        assert.ok(some.includes('[TEXT] COLD'));
+        assert.ok(some.includes('Weak: FIRE'), `drawn: ${some.join(' | ')}`);
+        assert.ok(some.includes('Resists: COLD'));
     });
 });

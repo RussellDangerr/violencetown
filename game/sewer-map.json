@@ -642,12 +642,7 @@
         "bandage": 2
       },
       "onFlip": "becomeAlly",
-      "barks": [
-        "[Fungus King: Q3 QUOTA IS DOWN FOURTEEN PERCENT. UNACCEPTABLE.]",
-        "[Fungus King: TUESDAY'S SHIPMENT TO BANK STREET IS LATE AGAIN.]",
-        "[Fungus King: THE FINANCIER PAYS IN GOLD. I PAY YOU IN MUSHROOMS. EVERYONE WINS.]",
-        "[Fungus King: AN INTRUDER. FORM 4-J IS REQUIRED FOR UNAUTHORIZED VISITORS.]"
-      ],
+      "barks": ["The Fungus King can be bribed.","The Fungus King attacks intruders.","The Fungus King wants a fight.","The Fungus King is hostile."],
       "barkEveryTurns": 6
     },
     {
@@ -678,7 +673,7 @@
         "soap",
         "bandage"
       ],
-      "adjacencyBark": "[Carrion: Road's blocked, friend. Sewer river's swollen with sludge. Come back later.]"
+      "adjacencyBark": "Carrion says the road is blocked."
     },
     { "id": "wererat", "slot": "sewer.boss", "x": 17, "y": 10 },
     {
@@ -703,7 +698,7 @@
       "bribeable": false,
       "thievable": false,
       "sewerDweller": true,
-      "adjacencyBark": "[A wall of wet fungus, breathing. Steel just sinks into it.]"
+      "adjacencyBark": "A wall of fungus blocks the way. It does not attack. It is weak to energy and clean."
     }
   ],
   "items": [

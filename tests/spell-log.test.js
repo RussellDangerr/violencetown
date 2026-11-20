@@ -156,14 +156,14 @@ describe('the spell log names each target and what it took, via real keys', () =
         const g = makeGame([a, b]);
         castThrough(g, ['fight', 'magic', 'fireball']);
         assert.equal(g.world, 1, 'the cast should spend a turn');
-        assert.equal(lastLog(g), '[Fireball! Knuckles 30, Rat 10]');
+        assert.equal(lastLog(g), 'Fireball! Knuckles 30, Rat 10');
     });
 
     test('one enemy caught: the line names it, not a count', () => {
         const a = foe(5, 3, { name: 'Knuckles' });
         const g = makeGame([a]);
         castThrough(g, ['fight', 'magic', 'fireball']);
-        assert.equal(lastLog(g), '[Fireball! Knuckles 20]');
+        assert.equal(lastLog(g), 'Fireball! Knuckles 20');
     });
 
     test('a boss shows its one shown name, an unnamed one its type', () => {
@@ -171,27 +171,27 @@ describe('the spell log names each target and what it took, via real keys', () =
         const b = foe(6, 3, { name: undefined });
         const g = makeGame([a, b]);
         castThrough(g, ['fight', 'magic', 'fireball']);
-        assert.equal(lastLog(g), '[Fireball! The Shown 20, Violencian 20]');
+        assert.equal(lastLog(g), 'Fireball! The Shown 20, Violencian 20');
     });
 
     test('a trick lists them the same way and keeps its GP note', () => {
         const a = foe(5, 3, { name: 'Knuckles' });
         const g = makeGame([a]);
         castThrough(g, ['trick', 'rayblast']);
-        assert.equal(lastLog(g), `[Ray Blast! Knuckles ${TRICKS.ray_blast.damage}. (-${TRICKS.ray_blast.gpCost}g)]`);
+        assert.equal(lastLog(g), `Ray Blast! Knuckles ${TRICKS.ray_blast.damage}. (-${TRICKS.ray_blast.gpCost}g)`);
     });
 
     test('nothing caught still fizzles as before', () => {
         const g = makeGame([foe(1, 1, { name: 'Far' })]);
         castThrough(g, ['fight', 'magic', 'fireball']);
-        assert.equal(lastLog(g), '[Fireball fizzles — nothing caught.]');
+        assert.equal(lastLog(g), 'Fireball fizzles — nothing caught.');
     });
 });
 
 describe('Cleave and Spin keep their count lines', () => {
     test('the Cleave and Spin log lines still read "N caught"', () => {
-        assert.match(mainSrc, /\[Cleave! \$\{hit\.length\} caught\.\]/);
-        assert.match(mainSrc, /\[Spin! \$\{hit\.length\} caught\.\]/);
+        assert.match(mainSrc, /Cleave! \$\{hit\.length\} caught\./);
+        assert.match(mainSrc, /Spin! \$\{hit\.length\} caught\./);
     });
     test('_aoeStrike hands back who was hit, with the damage taken', () => {
         const a = foe(5, 7, { name: 'Knuckles', weak: ['fire'] });

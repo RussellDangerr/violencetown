@@ -82,7 +82,7 @@ const LIFTED = [
     ['_advanceWorld', ''], ['_advanceWorldOnce', ''], ['_armourShopNotice', ''],
 ];
 
-const NOTICE = '[TEXT]';
+const NOTICE = 'A shop here sells armour you do not own.';
 
 // Starts in `file` at `start`. Only vendors are placed (the beat is the shop's alone); a door
 // walked through loads the real destination JSON the way _loadMap would.
@@ -175,7 +175,7 @@ describe('Downtown (the Corner Merchant sells Latex Gloves)', () => {
         assert.equal(g._mapUrl, 'downtown-map.json', 'the real door took you to Downtown');
         assert.equal(notices(g), 1, 'one line on walking in');
         assert.equal(g.logs.at(-1), NOTICE, 'right after [Entered DOWNTOWN]');
-        assert.ok(g.logs.some(l => l === '[Entered DOWNTOWN]'));
+        assert.ok(g.logs.some(l => l === 'Entered DOWNTOWN'));
 
         // Down the street to the Corner Merchant (5,8): stand at (5,7) facing him.
         await walk(g, 'ArrowDown', 3);

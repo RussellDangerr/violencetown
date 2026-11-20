@@ -250,6 +250,6 @@ describe('light fingers counts lifts from townsfolk', () => {
             g.press('Space');
         }
         assert.equal(g.skills[LF], first);
-        assert.ok(g.logs.some(l => l.startsWith('[TEXT]')), 'reaching the rank should write its log line');
+        assert.ok(g.logs.some(l => l.startsWith('Light fingers is now rank')), 'reaching the rank should write its log line');
     });
 });

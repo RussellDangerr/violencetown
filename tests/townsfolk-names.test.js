@@ -100,7 +100,7 @@ function surfaces(e) {
     const ko = rig(); ko.r._drawEnemySprite(g, e, 0, 0, 0);
     return {
         panelAll: panel.drawn,
-        death: s.logs.find(l => l.startsWith('[Defeated')),
+        death: s.logs.find(l => l.startsWith('Defeated')),
         ko: ko.drawn.find(t => t.startsWith('[KO]')),
     };
 }
@@ -139,7 +139,7 @@ describe('the helper', () => {
 describe('Knuckles in a fight', () => {
     test('the defeat line, the target panel and the KO tag say his name', () => {
         const s = surfaces(knuckles());
-        assert.equal(s.death, '[Defeated [Knuckles]]');
+        assert.equal(s.death, 'Defeated Knuckles');
         assert.ok(s.panelAll.includes('KNUCKLES'), s.panelAll.join(' | '));
         assert.ok(!s.panelAll.includes('VIOLENCIAN'), 'the panel no longer prints the type');
         assert.equal(s.ko, '[KO] KNUCKLES');
@@ -153,21 +153,21 @@ describe('Knuckles in a fight', () => {
     test('"turns on you" has no article in front of a name', () => {
         const g = standIn([knuckles()]);
         g.revert(g.enemies[0]);
-        assert.equal(g.logs[0], '[Knuckles turns on you!]');
+        assert.equal(g.logs[0], 'Knuckles turns on you!');
         const calm = knuckles();
         calm.allegiance = 'neutral'; calm.fsmState = null;
         g.harm(calm);
-        assert.equal(g.logs[1], '[Knuckles turns on you!]');
+        assert.equal(g.logs[1], 'Knuckles turns on you!');
     });
 
     test('the live log shows no nested bracket for the defeat line', () => {
         const g = standIn([knuckles()]);
         g.kill(g.enemies[0]);
-        const line = g.logs.find(l => l.startsWith('[Defeated'));
+        const line = g.logs.find(l => l.startsWith('Defeated'));
         const live = { _logStripMessages: [], _logHistory: [], _STRIP_MAX: 9, _LOG_HISTORY_MAX: 99 };
         logLive.call(live, line, 'combat');
-        assert.equal(live._logHistory[0].text, '[Defeated Knuckles]');
-        assert.equal(live._logStripMessages[0].text, '[Defeated Knuckles]');
+        assert.equal(live._logHistory[0].text, 'Defeated Knuckles');
+        assert.equal(live._logStripMessages[0].text, 'Defeated Knuckles');
     });
 });
 
@@ -175,18 +175,18 @@ describe('unnamed townsfolk read as before', () => {
     test('an unnamed Violencian keeps the demonym on every surface', () => {
         const provoked = unnamedTownie(); provoked.ambient = false;   // a provoked townsperson fights for real
         const s = surfaces(provoked);
-        assert.equal(s.death, '[Defeated [Violencian]]');
+        assert.equal(s.death, 'Defeated Violencian');
         assert.equal(s.ko, '[KO] VIOLENCIAN');
         assert.ok(s.panelAll.includes('VIOLENCIAN'), s.panelAll.join(' | '));
         const g = standIn([unnamedTownie()]);
         g.revert(g.enemies[0]);
-        assert.equal(g.logs[0], '[The Violencian turns on you!]');
+        assert.equal(g.logs[0], 'The Violencian turns on you!');
     });
 
     test('a creature keeps its type', () => {
         const e = new Enemy({ id: 'g1', type: 'Violet Fungus', x: 5, y: 5, gold: 0 });
         const s = surfaces(e);
-        assert.equal(s.death, '[Defeated [Violet Fungus]]');
+        assert.equal(s.death, 'Defeated Violet Fungus');
         assert.equal(s.ko, '[KO] VIOLET FUNGUS');
     });
 });
@@ -218,11 +218,11 @@ describe('the barter screen', () => {
         const R = { points: 0, goldRefusedPoints: 0, goldUnspent: 5, fromGold: 0, itemUnspent: 0, fromItems: 0 };
         const g = { logs: [], _log(m) { this.logs.push(m); } };
         logOffer.call(g, macc(), R, { given: [], taken: [], gold: 5 });
-        assert.equal(g.logs[0], '[You hand Macc 5 GP.]');
-        assert.equal(g.logs[1], '[Macc pockets the gold. It buys nothing he wants.]');
+        assert.equal(g.logs[0], 'You hand Macc 5 GP.');
+        assert.equal(g.logs[1], 'Macc takes the gold. It adds no disposition.');
         const u = { logs: [], _log(m) { this.logs.push(m); } };
         logOffer.call(u, unnamedTownie(), R, { given: [], taken: [], gold: 5 });
-        assert.equal(u.logs[0], '[You hand Violencian 5 GP.]');
+        assert.equal(u.logs[0], 'You hand Violencian 5 GP.');
     });
 });
 

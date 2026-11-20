@@ -24,7 +24,7 @@ import { ITEMS, resolveUse, unequipItem } from '../game/items.js';
 import { WEAPONS } from '../game/weapons.js';
 import { zoneOf, moveToZone, pageCount, slotOnPage, pageOfSlot } from '../game/inventory.js';
 import { INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK } from '../game/data.js';
-import { itemActions, equipOptions } from '../game/inspector.js';
+import { itemActions, equipOptions, describeItem } from '../game/inspector.js';
 import { weaponCompare, weaponCompareLines, isComparableWeapon, doExamine } from '../game/examine.js';
 import { emptyOffer } from '../game/offer.js';
 import {
@@ -217,10 +217,11 @@ describe('the bag: Tab, arrow keys, and the inspector panel', () => {
         const { r, texts } = rig();
         r._drawDevice(g);
         const lines = said(texts);
-        assert.ok(lines.includes('16 dmg (+6 vs Wooden Sword)'), lines.join(' | '));
-        assert.ok(lines.includes('1 hand, hammer'));
-        assert.ok(lines.includes('Grants: Boo! (8 MP)'));
-        assert.ok(!lines.includes('16 dmg'), 'the bare stat line is still drawn');
+        // (PC10) stats, then the sources; no fact (the Fearmur's is empty)
+        assert.ok(lines.includes('Weapon: 16 damage (+6 vs Wooden Sword). 1 hand, hammer. Hitting the same enemy twice in a row frightens'), lines.join(' | '));
+        assert.ok(lines.includes('it for 3 turns. Grants while worn: Boo! (8 MP). Epic, value 28 GP.'));
+        assert.ok(lines.includes('Found in: Graveyard.'));
+        assert.equal(lines.filter(s => s.startsWith('Weapon:')).length, 1, 'one stat block');
     });
 
     test('the next arrow moves to the next weapon and the block follows', () => {
@@ -233,10 +234,10 @@ describe('the bag: Tab, arrow keys, and the inspector panel', () => {
         const { r, texts } = rig();
         r._drawDevice(g);
         const lines = said(texts);
-        assert.ok(lines.includes('16 dmg (+6 vs Wooden Sword)'));
-        assert.ok(lines.includes('1 hand, whip, reach 3, pulls 1'));
-        assert.ok(lines.includes('Grants: Hire Lire (50 GP)'));
-        assert.ok(!lines.includes('1 hand, hammer'), 'the last weapon\'s block is still up');
+        assert.ok(lines.includes('Weapon: 16 damage (+6 vs Wooden Sword). 1 hand, whip. Reach 3 tiles. A hit enemy is pulled 1 tile'), lines.join(' | '));
+        assert.ok(lines.includes('closer. Grants while worn: Hire Lire (50 GP). Epic, value 26 GP.'));
+        assert.ok(lines.includes('Found in: Carnival.'));
+        assert.ok(!lines.some(s => /hammer/.test(s)), 'the last weapon\'s block is still up');
     });
 
     test('the difference follows what is in the right hand', () => {
@@ -247,7 +248,7 @@ describe('the bag: Tab, arrow keys, and the inspector panel', () => {
         press(page, 'ArrowRight');
         const { r, texts } = rig();
         r._drawDevice(g);
-        assert.ok(said(texts).includes('16 dmg (same as Gator Tail)'), said(texts).join(' | '));
+        assert.ok(said(texts).includes('Weapon: 16 damage (same as Gator Tail). 1 hand, hammer. Hitting the same enemy twice in a row frightens'), said(texts).join(' | '));
     });
 
     test('every drawn line sits inside the panel and above the buttons', () => {
@@ -257,7 +258,7 @@ describe('the bag: Tab, arrow keys, and the inspector panel', () => {
         press(page, 'ArrowRight');
         const { r, texts, font } = rig();
         r._drawDevice(g);
-        const mine = texts.filter(t => /dmg|hand|Grants/.test(t.s));
+        const mine = texts.filter(t => /^Weapon:|^closer\.|^Found in/.test(t.s));
         assert.equal(mine.length, 3);
         for (const t of mine) {
             assert.ok(t.x >= panel.x && t.x + font.measure(t.s, t.scale) <= panel.x + panel.w, `${t.s} runs off the panel`);
@@ -268,14 +269,16 @@ describe('the bag: Tab, arrow keys, and the inspector panel', () => {
         assert.ok(zone && zone.y + 12 <= buttonsTop, 'the SAFE/PACK label runs into the buttons');
     });
 
-    test('a thing that is not a weapon keeps its old stat line', () => {
+    test('a thing that is not a weapon reads its stats and its sources, with no weapon block', () => {
         const page = makePage();
         const g = bagGame(page, [ITEMS.bandage]);
         press(page, 'Tab');
         press(page, 'ArrowRight');
         const { r, texts } = rig();
         r._drawDevice(g);
-        assert.ok(said(texts).includes('Heals 25 HP'), said(texts).join(' | '));
+        assert.ok(said(texts).includes('Use: heals 25 HP. Also worn on your front for 2 turns: +1 armour. Used up when used. Epic, value 25 GP.'), said(texts).join(' | '));
+        assert.ok(said(texts).includes('Dropped by: Alien Invasion, Bigfoot, Financier and 6 more. Sold by: Carrion, Corner Merchant, Newsstand'));
+        assert.ok(said(texts).includes('Kid and 1 more. Found in: Carnival, Sewer, Town.'));
         assert.ok(!said(texts).some(s => /Grants|\bhands?\b/.test(s)));
     });
 });
@@ -288,29 +291,29 @@ describe('examine: E at a weapon on the ground', () => {
         return makeGame(page, g => { g.groundItems = [{ type, x: 5, y: 6 }]; });
     }
 
-    test('E opens the examine panel; it carries the description and the block', () => {
+    test('E opens the examine panel; it carries the stats, then the sources', () => {
         const page = makePage();
         const g = groundGame(page, 'fearmur');
         press(page, 'KeyE');
         assert.equal(g.state, STATE.INSPECT, 'E did not open the examine panel');
-        assert.match(g.inspect.body, /^A single femur/);
-        assert.match(g.inspect.body, /16 dmg \(\+6 vs Wooden Sword\)\n1 hand, hammer\nGrants: Boo! \(8 MP\)$/);
+        assert.equal(g.inspect.body, 'Weapon: 16 damage (+6 vs Wooden Sword). 1 hand, hammer. Hitting the same enemy twice in a row frightens it for 3 turns. '
+            + 'Grants while worn: Boo! (8 MP). Epic, value 28 GP.\nFound in: Graveyard.');
 
         const { r, texts } = rig();
         r._drawInspectPanel(g);
         const lines = said(texts);
-        assert.ok(lines.includes('16 dmg (+6 vs Wooden Sword)'), lines.join(' | '));
-        assert.ok(lines.includes('1 hand, hammer'));
-        assert.ok(lines.includes('Grants: Boo! (8 MP)'));
+        assert.ok(lines.some(s => s.startsWith('Weapon: 16 damage (+6 vs Wooden Sword). 1 hand, hammer.')), lines.join(' | '));
+        assert.deepEqual(lines.slice(2, 6), ['Weapon: 16 damage (+6 vs Wooden Sword). 1 hand, hammer. Hitting the same', 'enemy twice in a row frightens it for 3 turns. Grants while worn: Boo! (8', 'MP). Epic, value 28 GP.', 'Found in: Graveyard.']);
+        assert.ok(lines.includes('Found in: Graveyard.'));
     });
 
-    test('the log line is the one it always was', () => {
+    test('the log line says the same as the panel, in one line', () => {
         const page = makePage();
         const g = groundGame(page, 'fearmur');
         press(page, 'KeyE');
         assert.equal(g.logs.length, 1);
-        assert.match(g.logs[0], /^\[\[Fearmur\] \(\w+\)\. A single femur/);
-        assert.doesNotMatch(g.logs[0], /dmg/);
+        assert.equal(g.logs[0], 'Fearmur. Weapon: 16 damage (+6 vs Wooden Sword). 1 hand, hammer. Hitting the same enemy twice in a row frightens it for 3 turns. '
+            + 'Grants while worn: Boo! (8 MP). Epic, value 28 GP. Found in: Graveyard.');
     });
 
     test('the panel is tall enough for its lines, which stay inside it', () => {
@@ -319,7 +322,7 @@ describe('examine: E at a weapon on the ground', () => {
         press(page, 'KeyE');
         const { r, texts, font } = rig();
         r._drawInspectPanel(g);
-        const block = texts.filter(t => /dmg|hand|Grants/.test(t.s));
+        const block = texts.filter(t => /damage|Grants|Found in/.test(t.s));
         assert.equal(block.length, 3);
         const close = texts.find(t => /CLOSE/.test(t.s));
         for (const t of block) {
@@ -328,11 +331,12 @@ describe('examine: E at a weapon on the ground', () => {
         }
     });
 
-    test('an ordinary item on the ground is described as before', () => {
+    test('an ordinary item on the ground gets its stats and its sources', () => {
         const page = makePage();
         const g = groundGame(page, 'soap');
         press(page, 'KeyE');
-        assert.equal(g.inspect.body, ITEMS.soap.description);
+        assert.equal(g.inspect.body, describeItem(ITEMS.soap));
+        assert.match(g.inspect.body, /^Use: cures sludge and poison\. Also worn on your back for 3 turns: \+2 armour\. Used up when used\. Rare, value 15 GP\.\nDropped by: Alien Ally, /);
     });
 });
 
@@ -371,18 +375,18 @@ describe('the shop: the description strip for the highlighted row', () => {
         const { r, texts } = rig();
         const rows = stripLines(r, texts, g);
         const lines = said(rows);
-        assert.ok(lines.some(s => s.startsWith('16 dmg (+6 vs Wooden Sword)') && s.includes('1 hand, hammer')), lines.join(' | '));
+        assert.deepEqual(lines.slice(3), ['Weapon: 16 damage (+6 vs Wooden Sword). 1 hand, hammer. Rare, value 18 GP.', 'Found in: Sewer.']);
     });
 
-    test('a weapon that grants a skill names it on the row under', () => {
+    test('a weapon that grants a skill names it in the stats', () => {
         const page = makePage();
         const g = shopGame(page, ['ray_gun']);
         press(page, 'ArrowRight');
         press(page, 'ArrowDown');
         const { r, texts } = rig();
         const lines = said(stripLines(r, texts, g));
-        assert.ok(lines.some(s => s.startsWith('energy 22 dmg (+12 vs Wooden Sword)') && s.includes('1 hand, wand')), lines.join(' | '));
-        assert.ok(lines.includes('Grants: Ray Blast (6 GP)'));
+        assert.deepEqual(lines.slice(3), ['Weapon: energy 22 damage (+12 vs Wooden Sword). 1 hand, wand. Grants while worn: Ray Blast (6 GP). Epic,',
+            'value 45 GP. Dropped by: Alien Invasion.']);
     });
 
     test('your own weapon in your satchel gets the same block', () => {
@@ -393,8 +397,8 @@ describe('the shop: the description strip for the highlighted row', () => {
         assert.deepEqual(g._offer.selection, { side: 'yours', index: 0 });
         const { r, texts } = rig();
         const lines = said(stripLines(r, texts, g));
-        assert.ok(lines.some(s => s.startsWith('16 dmg (+6 vs Wooden Sword)') && s.includes('reach 3, pulls 1')), lines.join(' | '));
-        assert.ok(lines.includes('Grants: Hire Lire (50 GP)'));
+        assert.deepEqual(lines.slice(3), ['Weapon: 16 damage (+6 vs Wooden Sword). 1 hand, whip. Reach 3 tiles. A hit enemy is pulled 1 tile closer.',
+            'Grants while worn: Hire Lire (50 GP). Epic, value 26 GP. Found in: Carnival.']);
     });
 
     test('every drawn line sits inside the strip', () => {
@@ -404,21 +408,22 @@ describe('the shop: the description strip for the highlighted row', () => {
         press(page, 'ArrowDown');
         const { r, texts, font } = rig();
         const rows = stripLines(r, texts, g);
-        assert.ok(rows.length >= 3, 'header and two rows');
+        assert.ok(rows.length >= 5, 'header (three pieces) and two rows');
         for (const t of rows) {
             assert.ok(t.x >= L.desc.x && t.x + font.measure(t.s, t.scale) <= L.desc.x + L.desc.w, `${t.s} runs off the strip`);
             assert.ok(t.y + 12 <= L.desc.y + L.desc.h, `${t.s} runs off the bottom of the strip`);
         }
     });
 
-    test('something that is not a weapon keeps its description there', () => {
+    test('something that is not a weapon gets its stats there, cut to two rows', () => {
         const page = makePage();
         const g = shopGame(page, ['soap']);
         press(page, 'ArrowRight');
         press(page, 'ArrowDown');
         const { r, texts } = rig();
         const lines = said(stripLines(r, texts, g));
-        assert.ok(lines.some(s => s.startsWith('Industrial-grade lye bar')), lines.join(' | '));
+        assert.deepEqual(lines.slice(3), ['Use: cures sludge and poison. Also worn on your back for 3 turns: +2 armour. Used up when used. Rare, value',
+            '15 GP. Dropped by: Alien Ally, Bigfoot, Boss and 15 more. Sold by: Carrion, Puck. Found in: Graveyard, Sew...']);
         assert.ok(!lines.some(s => /\bdmg\b/.test(s)));
     });
 });

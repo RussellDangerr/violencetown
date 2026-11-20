@@ -138,7 +138,7 @@ describe('Platero sets a Fire Ring', () => {
         await pickRow(g, 'fashion_fire');
         assert.ok(!g.ownedRings.has('fire_ring'));
         assert.equal(fireBloodCount(g), 2);
-        assert.ok(g.logs.some(l => l.includes('Bring me the material')), g.logs.join(' | '));
+        assert.ok(g.logs.some(l => l.includes('Platero needs the ring material')), g.logs.join(' | '));
     });
 
     test('the Rat Ring choice still works as before', async () => {
@@ -194,11 +194,11 @@ describe('the Fire Ring in a fight (the real combatAttack and _applyTrigger)', (
         const g = makeGame(); wear(g);
         const miss = foe(); g.rng = { float: () => 0.99 };
         const base = hit(g, miss, 20, {});
-        assert.ok(!g.logs.some(l => l.includes('Cinders catch')), 'no proc, no cinders');
+        assert.ok(!g.logs.some(l => l.includes('The ring sets it on fire')), 'no proc, no cinders');
         const burn = foe(); g.rng = { float: () => 0 };
         const total = hit(g, burn, 20, {});
         assert.equal(total, base + RING_IGNITE_DAMAGE, 'the cinder damage lands on top of the hit');
-        assert.ok(g.logs.some(l => l.includes('Cinders catch')));
+        assert.ok(g.logs.some(l => l.includes('The ring sets it on fire')));
         assert.ok(g.splats.some(s => s.type === 'fire'));
     });
 
@@ -206,7 +206,7 @@ describe('the Fire Ring in a fight (the real combatAttack and _applyTrigger)', (
         const g = makeGame(); wear(g); g.rng = { float: () => 0 };
         const e = new Enemy({ id: 'imp', type: 'imp', x: 7, y: 8, immune: ['fire'] });
         g.combatAttack(e, 20, {});
-        assert.ok(!g.logs.some(l => l.includes('Cinders catch')));
+        assert.ok(!g.logs.some(l => l.includes('The ring sets it on fire')));
     });
 });
 

@@ -36,18 +36,18 @@ describe('recording worn bodies', () => {
 });
 
 describe('the tab', () => {
-    test('is the last device tab with a placeholder label', () => {
+    test('is the last device tab with a plain label', () => {
         assert.equal(DEVICE_TABS[DEVICE_TABS.length - 1], 'bodies');
-        assert.equal(DEVICE_TAB_LABELS.bodies, '[TEXT]');
+        assert.equal(DEVICE_TAB_LABELS.bodies, 'BODIES');
     });
     test('the renderer lists only Night Kid and the worn bodies', () => {
         const rows = [];
         const fake = { ctx: {}, font: { drawText: (c, t) => rows.push(t) } };
         const body = { x: 0, y: 0, w: 400, h: 400 };
         Renderer.prototype._drawDeviceBodies.call(fake, { bodiesWorn: [] }, body);
-        assert.deepEqual(rows.splice(0), ['[kid]']);
+        assert.deepEqual(rows.splice(0), ['kid']);
         Renderer.prototype._drawDeviceBodies.call(fake, { bodiesWorn: ['rat'] }, body);
-        assert.deepEqual(rows, ['[kid]', '[rat]']);
+        assert.deepEqual(rows, ['kid', 'rat']);
     });
 });
 

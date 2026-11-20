@@ -125,7 +125,7 @@ describe('Factory goo gives Goo', () => {
         g.press('ArrowRight');
         assert.equal(g.playerX, 1);
         assert.equal(g.hasBuff('goo'), false);
-        assert.match(g.logs.join(' '), /slides right off/);
+        assert.match(g.logs.join(' '), /Your bagged feet block it/);
     });
 
     test('examining goo still reads Goo', () => {

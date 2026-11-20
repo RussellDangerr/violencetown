@@ -25,18 +25,18 @@ import {
     WHEEL_HUB_R, WHEEL_TILE_GAP, wheelRingR, WHEEL_DESKTOP,
     EQUIPMENT_MODAL_RECT, EQUIP_FIGURE_RECT, EQUIP_SLOT_RECTS, EQUIP_LEFT_HAND_RECT, closeButtonRect, deviceSheetRect, listPanelRect, sheetListRowRect,
     DEVICE_RECT, DEVICE_TABS, DEVICE_TAB_LABELS, DEVICE_TAB_H, deviceTabRect, deviceBodyRect, deviceBagSlotRects, deviceBagPagerRects, deviceEquipLayout, gearArmourRect, deviceRingsLayout,
-    deviceSkillsLayout, SKILL_COUNT_W, ringPassiveRows,                                     // (US2) the skills readout in the RINGS tab; (RR1) a ring's passive rows
+    deviceSkillsLayout, SKILL_COUNT_W, ringPassiveRows, ringPassiveName,                                     // (US2) the skills readout in the RINGS tab; (RR1) a ring's passive rows
     inspectorPanelRect, inspectorActionRects,                               // (C1) tap-to-inspect panel + action-row geometry
     gearOptionRects, gearChooserRect, gearEmptyNoteRect,                                     // (C2) GEAR chooser option-row + panel geometry
     xmbBarLayout, hudLayout, dialogueBottom, throwRects, wheelTopMarks, fightPanelRects, XMB_CELL,                      // (XMB) usable-bar geometry; (screen-fill) the HUD, throw targets, the marks above the wheel
     LOOT_REEL, lootReelRect,                                                 // (FX3c) the loot reel's panel
     MODAL_RECT, offerLayout,                                             // (offer screen) the one panel + its geometry
 } from './layout.js';
-import { itemStatLine, itemActions, USES_ACTION } from './inspector.js';
-import { weaponCompare, weaponCompareLines, examineLabelAt } from './examine.js';   // (FX44) the weapon compare block    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
+import { itemActions, USES_ACTION } from './inspector.js';
+import { itemParagraphsCompact, examineLabelAt } from './examine.js';   // (FX44) the weapon compare block    // (C1) tap-to-inspect: stat line + context actions; (C2) GEAR chooser
 import { zoneOf, pageCount, slotOnPage } from './inventory.js';                                     // (C1) safe/pack label for the inspector
 import { buildXmbBar, resolveXmbSelection } from './xmb.js';                 // (XMB) usable-bar model
-import { ITEMS, itemTier, gearOptions, wornBody } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
+import { ITEMS, itemTier, gearOptions, wornBody, BOON_CAP, boonCount } from './items.js';                                // (trade slice 1) stock item defs; (6d) value tiers
 import { RINGS, FUSIONS } from './ring-data.js';                             // (rings Task 5) SKILLS-tab hands: ring names + fusion spark
 import { findFusion } from './rings.js';                                     // (rings Task 5) mark a link fusible when its two rings have an authored fusion
 import { act2Checklist } from './quests.js';                               // (NI2) the Quests tab's three-item checklist
@@ -349,7 +349,7 @@ export const BUFF_CHIP = Object.freeze({ w: 52, h: 26, gap: 3, padX: 3 });
 // actions a Speed Poition left (game._hasteCharges), gone at 0. Haste is not a
 // buff (it is a count the world-beat spends), so it is added here. The label is
 // a placeholder; the number below it is the count of free actions left.
-export const HASTE_CHIP_LABEL = '[TEXT]';
+export const HASTE_CHIP_LABEL = 'Haste';
 export function buffBarChips(game) {
     const chips = [...(game.buffs || [])];
     const haste = game._hasteCharges || 0;
@@ -403,7 +403,7 @@ export function koLabelsShown(labels) {
 // (US2) The label each skill shows in the Remoticon's skills readout, keyed by
 // its id in game/skills.js. Not written yet.
 export const SKILL_LABELS = {
-    light_fingers: '[TEXT]',
+    light_fingers: 'Light fingers',
 };
 
 export class Renderer {
@@ -2699,7 +2699,7 @@ export class Renderer {
         //   the canonical inventory).
         const wpn = handWeapon(game.equipment);
         if (wpn && this.font) {
-            const name = wpn.name.replace(/[\[\]]/g, '').toUpperCase();
+            const name = wpn.name.toUpperCase();
             this.font.drawText(ctx, `${name}  ${wpn.damage} DMG`, x + 8, by, {
                 color: UI.text, scale: 1,
             });
@@ -2921,8 +2921,8 @@ export class Renderer {
         else if (active === 'bodies') this._drawDeviceBodies(game, body);
 
         // (FX43) The bag lists the keys that work in it: the phrases the pickers and shop already
-        // use for arrows and Esc, and a placeholder for Space until its verb is chosen.
-        const foot = active === 'items' ? '[ ] TABS   ↑↓ PICK   SPACE [TEXT]   ESC CLOSE' : '[ ] TABS   ESC CLOSE';
+        // use for arrows and Esc, and Space opens the item's actions.
+        const foot = active === 'items' ? '[ ] TABS   ↑↓ PICK   SPACE ACTIONS   ESC CLOSE' : '[ ] TABS   ESC CLOSE';
         const fit = this._fitText(foot, R.w - 32, 1, 0.75);
         this.font.drawText(ctx, fit.text, R.x + R.w / 2, R.y + R.h - 12, { color: UI.dim, scale: fit.scale, align: 'center' });
         ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
@@ -2932,19 +2932,19 @@ export class Renderer {
     // A body never worn has no row. Labels are placeholders.
     _drawDeviceBodies(game, bodyRect) {
         const { ctx } = this;
-        const rows = ['[kid]', ...(game.bodiesWorn || []).map(sp => `[${sp}]`)];
+        const rows = ['kid', ...(game.bodiesWorn || [])];
         rows.forEach((label, i) => {
             this.font.drawText(ctx, label, bodyRect.x + 8, bodyRect.y + 8 + i * 18, { color: UI.textLight, scale: 1 });
         });
     }
 
     // (IN1) The notes tab: each interaction note seen so far, oldest first. Empty reads as one
-    // placeholder line. Long notes wrap; what does not fit is cut.
+    // plain line. Long notes wrap; what does not fit is cut.
     _drawDeviceNotes(game, bodyRect) {
         const { ctx } = this;
         const notes = seenNotes(INTERACTIONS, game.interactionNotes);
         if (!notes.length) {
-            this.font.drawText(ctx, '[TEXT]', bodyRect.x + bodyRect.w / 2, bodyRect.y + 40, { color: UI.dim, scale: 1, align: 'center' });
+            this.font.drawText(ctx, 'No notes yet.', bodyRect.x + bodyRect.w / 2, bodyRect.y + 40, { color: UI.dim, scale: 1, align: 'center' });
             return;
         }
         const LH = 14, maxRows = Math.floor((bodyRect.h - 8) / LH);
@@ -3008,7 +3008,7 @@ export class Renderer {
                     this.font.drawText(ctx, name.text, s.x + s.w / 2, s.y + s.h / 2 - 4, { color: UI.gold, scale: name.scale, align: 'center' });
                     // (RR1) The worn ring's passives, a label and its number, under the socket.
                     ringPassiveRows(RINGS[f.ringId]).forEach((row, i) => {
-                        this.font.drawText(ctx, `${row.label} ${row.value}`, s.x + s.w / 2, s.y + s.h + 2 + i * 10, { color: UI.gold, scale: 1, align: 'center' });
+                        this.font.drawText(ctx, `${ringPassiveName(row.key)} ${row.value}`, s.x + s.w / 2, s.y + s.h + 2 + i * 10, { color: UI.gold, scale: 1, align: 'center' });
                     });
                 }
                 const cur = game._deviceSel;
@@ -3033,7 +3033,7 @@ export class Renderer {
     _drawDeviceSkills(game, bodyRect) {
         const { ctx } = this;
         for (const row of deviceSkillsLayout(bodyRect, game.skills).rows) {
-            const label = this._fitText(SKILL_LABELS[row.id] ?? '[TEXT]', row.labelW);
+            const label = this._fitText(SKILL_LABELS[row.id] ?? String(row.id).replace(/_/g, ' '), row.labelW);
             this.font.drawText(ctx, label.text, row.x, row.y + row.h / 2 - 4, { color: row.rank > 0 ? UI.gold : UI.dim, scale: label.scale });
             const count = this._fitText(row.countText, SKILL_COUNT_W);
             this.font.drawText(ctx, count.text, row.countR, row.y + row.h / 2 - 4, { color: row.rank > 0 ? UI.gold : UI.dim, scale: count.scale, align: 'right' });
@@ -3199,20 +3199,27 @@ export class Renderer {
         const zone = zoneOf(sel.index, SAFE_SLOTS).toUpperCase();
         const qty = stack.count > 1 ? ` x${stack.count}` : '';
         const room = p.x + p.w - 12 - tx;
-        const fitName = this._fitText(name, room, 2, 1);
+        // The stack and zone label sits right of the name, so the text below gets every row.
+        const tag = `${zone}${qty}`;
+        const tagW = this.font.measure(tag, 1);
+        const fitName = this._fitText(name, room - tagW - 10, 2, 1);
         this.font.drawText(ctx, fitName.text, tx, p.y + 12, { color: UI.gold, scale: fitName.scale });
-        // The stat line falls back to the item's description, which is often a
-        // sentence: wrap it to the panel, two lines at most.
-        const perLine = Math.max(8, Math.floor(room / this.font.measure('M', 1)));
-        // (FX44) A weapon reads as the compare block instead: what it hits for
-        // against the weapon in your hand, its hands and class, its skills.
-        const block = weaponCompareLines(def, game.equipment && game.equipment.weapon);
-        let statLines = block
-            ? block.map(l => this._fitText(l, room, 1, 1).text)
-            : this._wrapText(itemStatLine(def), perLine);
-        if (!block && statLines.length > 2) statLines = [statLines[0], this._fitText(statLines.slice(1).join(' '), room).text];
-        statLines.forEach((line, i) => this.font.drawText(ctx, line, tx, p.y + 34 + i * 12, { color: UI.text, scale: 1 }));
-        this.font.drawText(ctx, `${zone}${qty}`, tx, p.y + 38 + statLines.length * 12, { color: UI.dim, scale: 1 });
+        this.font.drawText(ctx, tag, p.x + p.w - 12, p.y + 14, { color: UI.dim, scale: 1, align: 'right' });
+        // (PC10) The stats (a weapon's against the one in your hand), then the fact, then where
+        // it comes from: one paragraph each, wrapped to the panel at a slightly smaller scale
+        // (VT323 scales smoothly) so five rows fit above the buttons. The stats paragraph gives
+        // up rows, with "..." on its last, before the fact or the sources lose theirs.
+        const MAX_ROWS = 5, TS = 0.9, STEP = 10.5;
+        const paras = itemParagraphsCompact(def, game.equipment && game.equipment.weapon)
+            .map(par => wrapToWidth(par, room, this._measurer(TS)));
+        const others = paras.slice(1).reduce((n, l) => n + l.length, 0);
+        const statRows = Math.max(1, MAX_ROWS - others);
+        if (paras.length && paras[0].length > statRows) {
+            paras[0] = [...paras[0].slice(0, statRows - 1), this._fitText(paras[0].slice(statRows - 1).join(' '), room, TS, TS).text];
+        }
+        let statLines = paras.flat();
+        if (statLines.length > MAX_ROWS) statLines = [...statLines.slice(0, MAX_ROWS - 1), this._fitText(statLines.slice(MAX_ROWS - 1).join(' '), room, TS, TS).text];
+        statLines.forEach((line, i) => this.font.drawText(ctx, line, tx, p.y + 32 + i * STEP, { color: UI.text, scale: TS }));
 
         // Action buttons — one per action, on the shared action-row rects. Drop is
         // destructive (whole-stack, no confirm) so it wears red, not gold — with
@@ -3314,7 +3321,7 @@ export class Renderer {
         for (const slot of data.slots) {
             this.font.drawText(ctx, clip(slot.label), tx, y, { color: UI.dim, scale: 1 });
             y += LH - 2;
-            const worn = slot.name ? clip(slot.name.replace(/[\[\]]/g, '').toUpperCase()) : '-';
+            const worn = slot.name ? clip(slot.name.toUpperCase()) : '-';
             this.font.drawText(ctx, worn, tx, y, { color: slot.name ? UI.text : UI.dim, scale: 1 });
             y += LH;
         }
@@ -3341,28 +3348,28 @@ export class Renderer {
         this.font.drawText(ctx, clip(`GP ${t.gold}`), tx, y, { color: UI.gold, scale: 1 });
         y += LH;
         // (plans/tg1-enemies-wear-armour.md) Their armour and what they have on.
-        // Both labels are placeholders for Caelan to name.
-        this.font.drawText(ctx, clip(`[TEXT] ${t.armor}`), tx, y, { color: UI.text, scale: 1 });
+        // The labels are plain facts.
+        this.font.drawText(ctx, clip(`Armour ${t.armor}`), tx, y, { color: UI.text, scale: 1 });
         y += LH;
         // (WN1) What you have learned this foe is weak to or resists; no line while neither is known.
-        // The labels are placeholders for Caelan to name.
+        // The labels are plain facts.
         if ((t.weak ?? []).length) {
-            this.font.drawText(ctx, clip(`[TEXT] ${t.weak.join(' ').toUpperCase()}`), tx, y, { color: UI.hpGreen, scale: 1 });
+            this.font.drawText(ctx, clip(`Weak: ${t.weak.join(' ').toUpperCase()}`), tx, y, { color: UI.hpGreen, scale: 1 });
             y += LH;
         }
         if ((t.resist ?? []).length) {
-            this.font.drawText(ctx, clip(`[TEXT] ${t.resist.join(' ').toUpperCase()}`), tx, y, { color: UI.hpRed, scale: 1 });
+            this.font.drawText(ctx, clip(`Resists: ${t.resist.join(' ').toUpperCase()}`), tx, y, { color: UI.hpRed, scale: 1 });
             y += LH;
         }
         y += 2;
-        this.font.drawText(ctx, '[TEXT]', tx, y, { color: UI.dim, scale: 1 });
+        this.font.drawText(ctx, 'Wearing', tx, y, { color: UI.dim, scale: 1 });
         y += LH - 2;
         if (!(t.worn ?? []).length) {
             this.font.drawText(ctx, '-', tx, y, { color: UI.dim, scale: 1 });
             y += LH;
         } else {
             for (const k of t.worn) {
-                this.font.drawText(ctx, clip(k.name.replace(/[\[\]]/g, '').toUpperCase()), tx, y, { color: UI.text, scale: 1 });
+                this.font.drawText(ctx, clip(k.name.toUpperCase()), tx, y, { color: UI.text, scale: 1 });
                 y += LH;
             }
         }
@@ -3376,7 +3383,7 @@ export class Renderer {
             // Room is finite; the rest is honest about being cut off.
             const room = Math.max(1, Math.floor((R.y + R.h - PAD - y - LH * 2) / LH));
             for (const k of t.kit.slice(0, room)) {
-                this.font.drawText(ctx, clip(k.name.replace(/[\[\]]/g, '').toUpperCase()), tx, y, { color: UI.text, scale: 1 });
+                this.font.drawText(ctx, clip(k.name.toUpperCase()), tx, y, { color: UI.text, scale: 1 });
                 y += LH;
             }
             if (t.kit.length > room) {
@@ -3601,7 +3608,7 @@ export class Renderer {
         const act2 = act2Checklist(qe);
         if (act2) {
             y += 6;
-            this.font.drawText(ctx, '[TEXT]', innerX, y, { color: UI.textLight, scale: 1 }); y += 14;
+            this.font.drawText(ctx, 'Items to find', innerX, y, { color: UI.textLight, scale: 1 }); y += 14;
             for (const row of act2) {
                 const name = ITEMS[row.itemId]?.name ?? row.itemId ?? '?';
                 const zone = row.zone[0] + row.zone.slice(1).toLowerCase();
@@ -3611,8 +3618,8 @@ export class Renderer {
 
         // (BP1) Boons drunk: one line, 0 on a new game.
         y += 6;
-        const boonN = Object.values(game.boons || {}).reduce((a, n) => a + (Number(n) || 0), 0);
-        this.font.drawText(ctx, `[TEXT] ${boonN}`, innerX, y, { color: UI.textLight, scale: 1 }); y += 14;
+        const boonN = boonCount(game);
+        this.font.drawText(ctx, `Boons drunk: ${boonN} / ${BOON_CAP}`, innerX, y, { color: UI.textLight, scale: 1 }); y += 14;
 
         // Completed quests.
         const done = qe ? qe.getCompletedTitles() : [];
@@ -3909,7 +3916,7 @@ export class Renderer {
         // over it.
         if (this.font) {
             // (FX50) In a sub-ring Esc steps back one ring; only the first ring's Esc closes.
-            const msg = depth > 1 ? 'WHEEL OPEN  ·  MOVE KEYS STEER IT  ·  ESC [TEXT]' : 'WHEEL OPEN  ·  MOVE KEYS STEER IT  ·  ESC TO CLOSE';
+            const msg = depth > 1 ? 'WHEEL OPEN  ·  MOVE KEYS STEER IT  ·  ESC BACK' : 'WHEEL OPEN  ·  MOVE KEYS STEER IT  ·  ESC TO CLOSE';
             const dialLeft = cx - this._hud().dialRadius(depth, kids.length > 0) - 8;
             let countMsg = null;
             if (combat) {
@@ -4066,13 +4073,13 @@ export class Renderer {
 
     // (fx36) The second line on the wheel's Eat slice, or null for every other slice.
     // Live: the food's own name and its heal ("HOT DOG +10"), trimmed to fit the
-    // slice. Greyed at full health: a reason, which is a [TEXT] placeholder for now.
+    // slice. Greyed at full health: a reason, which is the words HP FULL.
     // Greyed with no food in the bag has no line, as before.
     _eatSliceLine(node, game, enabled) {
         if (!this.font || node.needsItem !== 'eat' || node.placeholder) return null;
         if (!enabled) {
             return game.eatBlockedBy && game.eatBlockedBy() === 'full'
-                ? { text: '[TEXT]', color: '#a89878' } : null;
+                ? { text: 'HP FULL', color: '#a89878' } : null;
         }
         const pick = game.eatChoice && game.eatChoice();
         if (!pick) return null;
@@ -4653,7 +4660,7 @@ export class Renderer {
             ctx.strokeStyle = UI.gold;
             ctx.lineWidth = 1.5;
             ctx.strokeRect(t.x + 1, t.y + 1, t.w - 2, t.h - 2);
-            this.font.drawText(ctx, '[TEXT]', t.x + t.w / 2, t.y + t.h / 2 - 6 * L.ts.button, { color: UI.gold, scale: L.ts.button, align: 'center' });
+            this.font.drawText(ctx, 'TALK', t.x + t.w / 2, t.y + t.h / 2 - 6 * L.ts.button, { color: UI.gold, scale: L.ts.button, align: 'center' });
         }
 
         // The key legend sits between the ledger and the frame's bottom stroke:
@@ -4770,30 +4777,15 @@ export class Renderer {
                 L.desc.x + L.desc.w - 10, L.desc.y + 6, { color: '#79c46a', scale: ds, align: 'right' });
         }
 
-        // (FX44) A weapon shows its compare block on the next row: damage against
-        // the weapon in your hand, then hands and class. Its granted skills take
-        // the row below; with none, the description does.
-        const cmp = weaponCompare(def, game.equipment && game.equipment.weapon);
+        // (PC10) The two rows under the title: the stats (a weapon's against the weapon in
+        // your hand), then the fact, then where it comes from, wrapped on the real advance
+        // (NOT the /8 idiom, a fossil of the retired 8x8 atlas). What does not fit is cut
+        // with "..." on the second row.
         const maxPx = L.desc.w - 20;
-        if (cmp) {
-            this.font.drawText(ctx, this._fitText(`${cmp.damage}   ${cmp.build}`, maxPx, ds, ds).text,
-                L.desc.x + 10, L.desc.y + dy1, { color: UI.text, scale: ds });
-            const second = cmp.grants || String(def.description || '');
-            this.font.drawText(ctx, this._fitText(second, maxPx, ds, ds).text,
-                L.desc.x + 10, L.desc.y + dy1 + dyN, { color: cmp.grants ? UI.gold : UI.dim, scale: ds });
-            return;
-        }
-
-        // Measured wrap against the real advance. NOT the /8 idiom, which is a
-        // fossil of the retired 8x8 atlas and wraps ~40% narrow.
-        const words = String(def.description || '').split(/\s+/);
-        const lines = []; let cur = '';
-        for (const w of words) {
-            const t = cur ? `${cur} ${w}` : w;
-            if (this.font.measure(t, ds) > maxPx && cur) { lines.push(cur); cur = w; } else cur = t;
-        }
-        if (cur) lines.push(cur);
-        lines.slice(0, 2).forEach((ln, i) =>
+        const wrapped = itemParagraphsCompact(def, game.equipment && game.equipment.weapon)
+            .flatMap(par => wrapToWidth(par, maxPx, this._measurer(ds)));
+        const rows = wrapped.length > 2 ? [wrapped[0], this._fitText(wrapped.slice(1).join(' '), maxPx, ds, ds).text] : wrapped;
+        rows.forEach((ln, i) =>
             this.font.drawText(ctx, ln, L.desc.x + 10, L.desc.y + dy1 + i * dyN, { color: UI.text, scale: ds }));
     }
 

@@ -83,8 +83,8 @@ describe('the Carnival lion: the Fungus King\'s numbers and kit, stand-in name a
     });
 
     test('the name and bark are obvious placeholders, and the harness lints it clean', () => {
-        assert.equal(e.name, '[Lion]');
-        assert.deepEqual(e.barks, ['[TEXT]']);
+        assert.equal(e.name, 'Lion');
+        assert.deepEqual(e.barks, ['The Lion wants a fight.']);
         assert.deepEqual(lintEntity({ id: 'carnival-lion', ...e }), []);
     });
 
@@ -93,7 +93,7 @@ describe('the Carnival lion: the Fungus King\'s numbers and kit, stand-in name a
         assert.equal(lion.type, 'Carnival Lion');
         assert.equal(lion.id, 'carnival-lion');
         assert.deepEqual([lion.x, lion.y], [20, 16]);
-        assert.equal(labelOf(lion), '[Lion]');
+        assert.equal(labelOf(lion), 'Lion');
         assert.ok(lion.sightRange > 0);
         // Spawned, it dresses and carries exactly as the Fungus King does.
         const fk = spawnEnemy(king);
@@ -242,8 +242,8 @@ describe('The Clown: the Fungus King\'s numbers, one sludge sack swapped for Fir
     });
 
     test('the name and bark are obvious placeholders, and the harness lints him clean', () => {
-        assert.equal(e.name, '[The Clown]');
-        assert.deepEqual(e.barks, ['[TEXT]']);
+        assert.equal(e.name, 'The Clown');
+        assert.deepEqual(e.barks, ['The Clown wants a fight.']);
         assert.deepEqual(lintEntity({ id: 'the-clown', ...e }), []);
     });
 
@@ -259,7 +259,7 @@ describe('The Clown: the Fungus King\'s numbers, one sludge sack swapped for Fir
         assert.equal(c.type, 'The Clown');
         assert.equal(c.id, 'the-clown');
         assert.deepEqual([c.x, c.y], [38, 8]);
-        assert.equal(labelOf(c), '[The Clown]');
+        assert.equal(labelOf(c), 'The Clown');
         assert.ok(c.sightRange > 0);
         assert.ok(!c.boss && !c.tag && !c.slot);
         assert.equal(requiredDropFor(c, carnival.enemies), null);
@@ -299,7 +299,7 @@ describe('The Clown refuses a bribe; the ordinary clown still takes one', () => 
         const no = applyGive(ITEMS.soap, clown);
         assert.equal(no.accepted, false);
         assert.equal(clown.disposition, before);
-        assert.match(no.log, /ignores your offering/);
+        assert.equal(no.log, `The Clown did not accept the ${ITEMS.soap.name}.`);
     });
 
     test('he cannot be flipped to an ally by any run of gifts', () => {
@@ -349,7 +349,7 @@ describe('The Clown throws his Fire Blood in a fight', () => {
         const { g, clown, burned } = fight(3);
         turns(g, 1);
         assert.equal(burned.length, 1, 'the Fire Blood never landed');
-        assert.match(g.logs.join('\n'), /\[The Clown\] throws Fire Blood at you: you burn/);
+        assert.match(g.logs.join('\n'), /The Clown throws Fire Blood at you: you burn/);
         assert.ok(!clown.loadout.includes('fire_blood'), 'the throw leaves his kit');
         assert.ok(clown.loadout.includes('sludge_sack'), 'the Sludge Sack stays');
     });
@@ -389,8 +389,8 @@ describe('the Carnival horses (plans/cb1-carnival-horses-circle.md): three, plac
         const e = ENTRIES.carnival_horse;
         for (const k of ['hp', 'armor', 'damage', 'gold']) assert.equal(e[k], skeleton[k], k);
         assert.deepEqual(e.loadout, skeleton.loadout);
-        assert.equal(e.name, '[Horse]');
-        assert.deepEqual(e.barks, ['[TEXT]']);
+        assert.equal(e.name, 'Horse');
+        assert.deepEqual(e.barks, ['The Horse circles you.']);
         assert.deepEqual(lintEntity({ id: 'carnival-horse-1', ...e }), []);
     });
 
@@ -458,8 +458,8 @@ describe('the Carnival dolls (plans/ec1-carnival-doll-pack.md): four, placed by 
         for (const k of ['armor', 'damage']) assert.equal(e[k], knuckles[k], k);
         assert.deepEqual([e.armor, e.damage], [-30, 4]);
         assert.deepEqual(e.loadout, knuckles.loadout);
-        assert.equal(e.name, '[Doll]');
-        assert.deepEqual(e.barks, ['[TEXT]']);
+        assert.equal(e.name, 'Doll');
+        assert.deepEqual(e.barks, ['The Doll circles you.']);
         assert.deepEqual(lintEntity({ id: 'carnival-doll-1', ...e }), []);
     });
 
@@ -661,7 +661,7 @@ describe('the assistant manager never fights, wanders, and talks', () => {
     test('a townsperson\'s numbers: no damage, a placeholder name, no boss flag', () => {
         const e = ENTRIES.assistant_manager;
         assert.equal(e.damage, 0);
-        assert.equal(e.name, '[Assistant Manager]');
+        assert.equal(e.name, 'Assistant Manager');
         assert.equal(e.boss, undefined);
         assert.equal(e.tag, undefined);
         const m = spawned(manager);
@@ -739,14 +739,14 @@ describe('the assistant manager never fights, wanders, and talks', () => {
         assert.equal(verb.label, 'Talk');
     });
 
-    test('talking opens [TEXT] lines and nothing else', () => {
+    test('talking opens plain lines and nothing else', () => {
         const d = getDialogue(ENTRIES.assistant_manager.dialogueId);
         assert.ok(d, 'no dialogue under his dialogueId');
-        assert.equal(d.greeting, '[TEXT]');
+        assert.equal(d.greeting, 'I am the Assistant manager of the Carnival. I only talk.');
         assert.ok(d.choices.length > 0);
         for (const c of d.choices) {
-            assert.equal(c.label, '[TEXT]');
-            assert.equal(c.reply, '[TEXT]');
+            assert.equal(c.label, 'Talk to the Assistant manager');
+            assert.equal(c.reply, 'The Assistant manager has nothing to give you.');
             assert.equal(c.cost, undefined, 'he asks for no money');
             assert.equal(c.onPick, undefined, 'he does nothing but talk');
         }

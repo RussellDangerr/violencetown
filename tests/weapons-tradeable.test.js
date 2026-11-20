@@ -23,6 +23,7 @@ import { sellPrice, buyPrice } from '../game/trade.js';
 import { audio } from '../game/audio.js';
 import { xmbCategoryOf, XMB_LABELS } from '../game/xmb.js';
 import { resolveItemDef } from '../game/item-registry.js';
+import { describeItem } from '../game/inspector.js';
 
 const mainSrc = readFileSync(fileURLToPath(new URL('../game/main.js', import.meta.url)), 'utf8');
 
@@ -86,8 +87,14 @@ describe('weapons are first-class tradeable items', () => {
         assert.deepEqual(Object.keys(WEAPONS).sort(), Object.keys(EXPECTED).sort(),
             'WEAPONS and EXPECTED have drifted apart — a weapon was added/removed without updating the calibration pin');
         for (const [id, def] of Object.entries(WEAPONS)) {
-            assert.equal(typeof def.description, 'string', `${id} has no description`);
-            assert.ok(def.description.length > 20, `${id} description is too short to be real`);
+            assert.equal(typeof def.fact, 'string', `${id} has no fact`);
+            assert.equal('description' in def, false, `${id} still carries a description`);
+            // The text a player reads is built from the weapon's data: it opens with its damage,
+            // and ends with its tier and value.
+            const damageText = `${def.damageType && def.damageType !== 'physical' ? `${def.damageType} ` : ''}${def.damage} damage`;
+            const text = describeItem(def);
+            assert.ok(text.startsWith(`Weapon: ${damageText}.`), `${id}: "${text}"`);
+            assert.ok(text.split('\n')[0].endsWith(`, value ${def.baseValue} GP.`), `${id}: "${text}"`);
             assert.equal(typeof def.name, 'string', `${id} has no name`);
             assert.equal(def.baseValue, EXPECTED[id].baseValue, `${id} baseValue drifted from its calibrated value`);
             // defeat-scenarios.js's matchTake reads take.categories.includes(d.category)
@@ -129,7 +136,7 @@ describe('_takeItemAt — the ground-take path no longer swallows unresolvable i
         assert.deepEqual(g.groundItems, [], 'lion_whip did not leave the floor');
         assert.ok(g.inventory && g.inventory.includes(WEAPONS.lion_whip), 'lion_whip never reached the bag');
         assert.equal(g.logs.length, 1);
-        assert.doesNotMatch(g.logs[0].msg, /won't come loose/);
+        assert.doesNotMatch(g.logs[0].msg, /That item is unknown/);
     });
 
     test('a weapon on the floor auto-equips into a free slot', () => {
@@ -145,7 +152,7 @@ describe('_takeItemAt — the ground-take path no longer swallows unresolvable i
         assert.equal(g.groundItems.length, 1, 'the unresolvable item was removed from the floor');
         assert.equal(g.groundItems[0].type, 'not_a_real_item_xyz');
         assert.equal(g.logs.length, 1, 'expected exactly one log line');
-        assert.match(g.logs[0].msg, /won't come loose/);
+        assert.match(g.logs[0].msg, /That item is unknown/);
     });
 });
 

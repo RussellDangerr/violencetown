@@ -139,7 +139,7 @@ describe('the bottom bar, at full health', () => {
         assert.deepEqual(g.used, []);
         assert.equal(g.turns, 0);
         assert.equal(g.inventory[0]?.itemDef.id, 'hot_dog', 'the Hot Dog was used up');
-        assert.deepEqual(g.logs, ['[TEXT]']);
+        assert.deepEqual(g.logs, ['Your HP is full. The food stays in your bag.']);
         assert.equal(g.playerHp, 100);
         assert.equal(g.selectedSlot, -1);
         assert.equal(g.state, STATE.IDLE);
@@ -151,7 +151,7 @@ describe('the bottom bar, at full health', () => {
         assert.deepEqual(g.used, []);
         assert.equal(g.turns, 0);
         assert.equal(g.inventory[0]?.itemDef.id, 'hot_dog');
-        assert.deepEqual(g.logs, ['[TEXT]']);
+        assert.deepEqual(g.logs, ['Your HP is full. The food stays in your bag.']);
     });
 
     test('the food you picked on the bar is the one refused, and stays picked', () => {
@@ -176,7 +176,7 @@ describe('the bottom bar, at full health', () => {
         assert.equal(xmbCategoryOf(ITEMS.bandage), 'drink');
         g.pressEnter();
         assert.deepEqual(g.used, ['bandage']);
-        assert.ok(!g.logs.includes('[TEXT]'));
+        assert.ok(!g.logs.includes('Your HP is full. The food stays in your bag.'));
     });
 });
 
@@ -188,7 +188,7 @@ describe('the bottom bar, hurt', () => {
         assert.equal(g.playerHp, 65);
         assert.equal(g.turns, 1);
         assert.equal(g.inventory[0]?.itemDef.id, 'hot_dog');
-        assert.ok(!g.logs.includes('[TEXT]'));
+        assert.ok(!g.logs.includes('Your HP is full. The food stays in your bag.'));
     });
 
     test('a tap on the picked cell eats it', () => {
@@ -208,7 +208,7 @@ describe('the bag\'s Eat row', () => {
         assert.deepEqual(g.used, []);
         assert.equal(g.turns, 0);
         assert.equal(g.inventory[0]?.itemDef.id, 'hot_dog', 'the Hot Dog was used up');
-        assert.deepEqual(g.logs, ['[TEXT]']);
+        assert.deepEqual(g.logs, ['Your HP is full. The food stays in your bag.']);
         assert.equal(g.state, STATE.ITEM_SELECTED, 'the list should close back to the selected slot');
         assert.equal(g.playerHp, 100);
     });
@@ -221,7 +221,7 @@ describe('the bag\'s Eat row', () => {
         assert.equal(g.playerHp, 75);
         assert.equal(g.turns, 1);
         assert.equal(g.inventory[0]?.itemDef.id, 'hot_dog');
-        assert.ok(!g.logs.includes('[TEXT]'));
+        assert.ok(!g.logs.includes('Your HP is full. The food stays in your bag.'));
     });
 
     test('a food that heals nothing is still eaten from the bag', () => {
@@ -243,13 +243,13 @@ describe('who the refusal covers', () => {
         g._doItemUse = function (def) { this.used.push(def.id); };
         g.pressOverlayEnter();
         assert.deepEqual(g.used, ['bandage']);
-        assert.ok(!g.logs.includes('[TEXT]'));
+        assert.ok(!g.logs.includes('Your HP is full. The food stays in your bag.'));
     });
 
     test('main.js leaves _doItemUse itself free of the check (the wheel shares it)', () => {
         const start = mainSrc.indexOf('_doItemUse(item) {', classAt);
         const body = mainSrc.slice(start, mainSrc.indexOf('\n    }', start));
-        assert.ok(!body.includes('[TEXT]') && !body.includes('playerMaxHp'));
+        assert.ok(!body.includes('Your HP is full. The food stays in your bag.') && !body.includes('playerMaxHp'));
     });
 });
 
@@ -323,7 +323,7 @@ describe("the Remoticon's Use button on a food, at full health", () => {
         const g = deviceGame({ hp: 100, item: HOT_DOG });
         g.openButtons();
         g.key('Enter');
-        assert.deepEqual(g.logs, ['[TEXT]']);
+        assert.deepEqual(g.logs, ['Your HP is full. The food stays in your bag.']);
         assert.equal(g.turns, 0);
         assert.equal(g.inventory[0]?.itemDef.id, 'hot_dog', 'the Hot Dog was used up');
         assert.equal(g.playerHp, 100);
@@ -334,7 +334,7 @@ describe("the Remoticon's Use button on a food, at full health", () => {
     test('a real tap on the Use button does the same', () => {
         const g = deviceGame({ hp: 100, item: BURGER, count: 2 });
         g.tapUse();
-        assert.deepEqual(g.logs, ['[TEXT]']);
+        assert.deepEqual(g.logs, ['Your HP is full. The food stays in your bag.']);
         assert.equal(g.turns, 0);
         assert.equal(g.inventory[0].count, 2);
         assert.equal(g.playerHp, 100);
@@ -344,7 +344,7 @@ describe("the Remoticon's Use button on a food, at full health", () => {
         const g = deviceGame({ hp: 100, item: HOT_DOG });
         g.openButtons();
         g.key('Enter'); g.key('Enter');
-        assert.deepEqual(g.logs, ['[TEXT]', '[TEXT]']);
+        assert.deepEqual(g.logs, ['Your HP is full. The food stays in your bag.', 'Your HP is full. The food stays in your bag.']);
         assert.equal(g.inventory[0]?.itemDef.id, 'hot_dog');
         assert.equal(g.turns, 0);
     });
@@ -355,7 +355,7 @@ describe("the Remoticon's Use button on a food, at full health", () => {
         g.key('Enter');
         assert.equal(g.inventory[0], null);
         assert.equal(g.turns, 1);
-        assert.ok(!g.logs.includes('[TEXT]'));
+        assert.ok(!g.logs.includes('Your HP is full. The food stays in your bag.'));
     });
 
     test('a healing drink (bandage) is not refused: it is not in the Eat column', () => {
@@ -363,7 +363,7 @@ describe("the Remoticon's Use button on a food, at full health", () => {
         assert.equal(xmbCategoryOf(ITEMS.bandage), 'drink');
         g.openButtons();
         g.key('Enter');
-        assert.ok(!g.logs.includes('[TEXT]'));
+        assert.ok(!g.logs.includes('Your HP is full. The food stays in your bag.'));
         assert.equal(g.inventory[0], null);
         assert.equal(g.turns, 1);
     });
@@ -377,7 +377,7 @@ describe("the Remoticon's Use button on a food, hurt", () => {
         assert.equal(g.playerHp, 60);
         assert.equal(g.inventory[0], null);
         assert.equal(g.turns, 1);
-        assert.ok(!g.logs.includes('[TEXT]'));
+        assert.ok(!g.logs.includes('Your HP is full. The food stays in your bag.'));
     });
 
     test('a real tap eats it as today', () => {

@@ -85,7 +85,7 @@ describe('a boss with a few allies he funds', () => {
         const green = spawns.find(e => e.id === 'green1');
         const a = ENTRIES.alien_ally;
         assert.equal(a.type, green.type);
-        assert.equal(a.name, '[NAME]');
+        assert.equal(a.name, 'Alien Ally');
         for (const k of ['hp', 'armor', 'damage', 'gold']) assert.equal(a[k], green[k], k);
         assert.deepEqual(a.loadout, [...green.loadout, 'goo']);   // GO2: the allies carry goo; green1 is left alone
         assert.equal(a.behavior, undefined, 'no behaviour list: born hostile, on his side');

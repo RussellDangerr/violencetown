@@ -32,11 +32,11 @@ export const DOOR_BACK = {
 };
 
 export const LINES = {
-    shut: '[The door shuts behind you. Break the compactor to open it.]',
-    step: (left) => `[The walls close in. ${left} ${left === 1 ? 'column is' : 'columns are'} left.]`,
-    shove: '[A wall shoves you inward.]',
-    crush: '[The walls close on you.]',
-    broken: '[The compactor breaks. The walls stop and the door opens.]',
+    shut: 'The door shut behind you. Break the compactor to open it.',
+    step: (left) => `The walls closed in. ${left} ${left === 1 ? 'column is' : 'columns are'} left.`,
+    shove: 'A wall pushed you inward.',
+    crush: 'The walls crushed you.',
+    broken: 'The compactor broke. The walls stopped and the door opened.',
 };
 
 export function newCompactor() {

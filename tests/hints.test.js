@@ -44,9 +44,9 @@ describe('the table itself', () => {
         assert.equal(new Set(ids).size, ids.length);
     });
 
-    test('every line is bracketed, like every other log line in the game', () => {
+    test('no hint line is bracketed or carries a placeholder', () => {
         for (const h of HINTS) {
-            assert.match(h.text, /^\[.*\]$/, `${h.id} is not in the house voice`);
+            assert.ok(!h.text.startsWith('[') && !h.text.includes('[TEXT'), `${h.id} is bracketed or a placeholder`);
         }
     });
 });

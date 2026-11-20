@@ -239,7 +239,7 @@ export class Enemy {
         this.damage     = damage;
         this.sightRange = sightRange;
         this.state      = 'idle'; // legacy chase state: 'idle' | 'chasing' | 'returning'
-        this.entity     = new Entity({ name: `[${shownName({ boss, name, type, dialogueId })}]`, hp, armor });
+        this.entity     = new Entity({ name: shownName({ boss, name, type, dialogueId }), hp, armor });
         // Its live defence buffs soak every blow its body takes (combat.js takeDamage).
         Object.defineProperty(this.entity, 'guardOf', {
             value: () => sumBuffStat(this.buffs, 'defence'), enumerable: false,
@@ -352,7 +352,7 @@ export class Enemy {
     // is set again here. Returns the line to log on arrival.
     promoteToRival() {
         this.rival = true;
-        this.entity.name = unnestBrackets(`[${shownName(this)}]`);
+        this.entity.name = shownName(this);
         return RIVAL_RETURN_LINE;
     }
     // (FX38) "The Violencian" for the unnamed, "Knuckles" for a name.
@@ -512,12 +512,13 @@ export class Enemy {
 
 // (FD2) The bear the Wilderness sends for a carried Mola Cola. Not a slot entry nor a map spawn:
 // interactions.js spawns it. Its numbers start as the Polar Bear's (so they track it); the name
-// is the stand-in `[Bear]` and the examine text `[TEXT]` until Caelan names and writes it.
+// is the stand-in `Bear` and its examine text is a plain line until Caelan writes it.
 export const WILDERNESS_BEAR_TYPE = 'Bear';
 export const WILDERNESS_BEAR = {
     ...structuredClone(ENTRIES.polar_bear),
     type: WILDERNESS_BEAR_TYPE,
-    name: '[Bear]',
+    name: 'Bear',
+    examine: 'Bear. Wild animal. It attacks when it sees you.',
 };
 
 // Resolve a loadout to real item defs. Entries are item IDS so an enemy can
