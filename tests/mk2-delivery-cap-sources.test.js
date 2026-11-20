@@ -43,6 +43,20 @@ describe('one source for each cap', () => {
     test('grey: the Diner floor, and nowhere else', () => {
         assert.deepEqual(sourcesOf('delivery_cap_grey'), ['diner-map.json floor']);
     });
+    test('blue: the Newsstand Kid, and nowhere else', () => {
+        assert.deepEqual(sourcesOf('delivery_cap_blue'), ['downtown-map.json shop dt-merch2']);
+    });
+});
+
+describe('the blue cap on the Newsstand Kid shelf', () => {
+    const kid = mapJson('downtown-map.json').enemies.find(e => e.id === 'dt-merch2');
+
+    test('it is listed beside his bandage', () => {
+        assert.deepEqual(kid.stock, ['bandage', 'delivery_cap_blue']);
+    });
+    test('at his neutral mood it costs 16 GP', () => {
+        assert.equal(buyPrice(ITEMS.delivery_cap_blue, kid.disposition), 16);
+    });
 });
 
 describe('the grey cap on the Diner floor', () => {

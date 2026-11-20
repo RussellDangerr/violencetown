@@ -101,6 +101,11 @@ export default {
       "Sewer"
     ]
   },
+  "delivery_cap_blue": {
+    "soldBy": [
+      "Newsstand Kid"
+    ]
+  },
   "delivery_cap_grey": {
     "foundIn": [
       "Diner"
