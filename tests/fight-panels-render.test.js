@@ -62,7 +62,7 @@ describe('the fight panels draw', () => {
         const { r, drawn } = rig();
         r._drawFightPanels(game());
         const t = texts(drawn);
-        for (const label of ['WEAPON', 'HEAD', 'ARMS', 'TORSO', 'BACK', 'FEET']) {
+        for (const label of ['WEAPON', 'TOP', 'SIDES', 'FRONT', 'BACK', 'BOTTOM']) {
             assert.ok(t.includes(label), `${label} missing from ${t}`);
         }
     });
