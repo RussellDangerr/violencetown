@@ -57,6 +57,7 @@ export default {
       "Returning Boss",
       "Ringmaster",
       "Siberia",
+      "T. rex",
       "The Clown",
       "The Deity",
       "Were-Rat",
@@ -92,8 +93,10 @@ export default {
       "Returning Boss",
       "Ringmaster",
       "Siberia",
+      "T. rex",
       "The Clown",
       "The Deity",
+      "Triceratops",
       "Were-Rat",
       "Yeti"
     ],
@@ -114,7 +117,8 @@ export default {
       "Polar Bear",
       "Red Fungus",
       "Strongman",
-      "The Clown"
+      "The Clown",
+      "Triceratops"
     ],
     "foundIn": [
       "Carnival"
@@ -227,6 +231,7 @@ export default {
       "Polar Bear",
       "Red Fungus",
       "Sludge Rat",
+      "Triceratops",
       "Violet Fungus"
     ],
     "foundIn": [
@@ -245,6 +250,7 @@ export default {
       "Horse",
       "Knuckles",
       "Moleman",
+      "Raptor",
       "Rattling Skeleton",
       "Snowman",
       "Worker"
@@ -276,6 +282,7 @@ export default {
       "Horse",
       "Knuckles",
       "Moleman",
+      "Raptor",
       "Rattling Skeleton",
       "Robot Rat",
       "Snowman",
@@ -296,6 +303,7 @@ export default {
       "Angel",
       "Horse",
       "Moleman",
+      "Raptor",
       "Rattling Skeleton",
       "Snowman",
       "Worker"
@@ -321,7 +329,9 @@ export default {
       "Pike",
       "Polar Bear",
       "Red Fungus",
+      "T. rex",
       "The Clown",
+      "Triceratops",
       "Violet Fungus",
       "Yeti"
     ],
@@ -345,6 +355,7 @@ export default {
       "Ruffian",
       "Siberia",
       "Strongman",
+      "T. rex",
       "The Clown",
       "The Deity",
       "Were-Rat",
@@ -384,7 +395,9 @@ export default {
       "Polar Bear",
       "Puck",
       "Red Fungus",
+      "T. rex",
       "The Clown",
+      "Triceratops",
       "Violet Fungus",
       "Yeti"
     ],
