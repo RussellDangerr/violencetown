@@ -35,7 +35,7 @@ import { attack, formatDamageNumber, computeHit, elementalMult, weaponHitKind, i
 import { Enemy, spawnEnemy, muggerRecords, resolveEnemyTurns, resolveAmbientTurns, unnestBrackets } from './enemies.js';
 import { canBeRival, itemIdsOf, recordDefeat, kitFor, markCarrying, settleItems, clearRival } from './rivals.js'; // the enemy that beat you is remembered (pure, node-tested)
 import { isHostile, isHunting, isSewerDweller, allyAids } from './ai.js';
-import { getGreedyStep, stepEntity, findPath } from './pathing.js'; // pathfinding (greedy chase + BFS click-to-move); stepEntity = shove a character aside
+import { getGreedyStep, stepEntity, findPath, pathToNearest } from './pathing.js'; // pathfinding (greedy chase + BFS click-to-move); stepEntity = shove a character aside
 import { applyDispositionDelta, reactToTransaction } from './give-action.js';
 import { getDialogue } from './dialogue.js';
 import { manhattan, clamp } from './utils.js';
@@ -2830,8 +2830,11 @@ class Game {
     // Click-to-move: empty walkable ground (not your own tile) → BFS-path the
     // Hero there. True when a walk started.
     _tapWalkTo(tile) {
-        if (!this.map.isWalkable(tile.x, tile.y) || (tile.x === this.playerX && tile.y === this.playerY)) return false;
-        const path = findPath(this, { x: this.playerX, y: this.playerY }, tile);
+        if (tile.x === this.playerX && tile.y === this.playerY) return false;
+        const me = { x: this.playerX, y: this.playerY };
+        // (TW2) A wall, a blocked tile or no route: walk to the reachable tile nearest it.
+        let path = this.map.isWalkable(tile.x, tile.y) && findPath(this, { x: this.playerX, y: this.playerY }, tile);
+        if (!path) path = pathToNearest(this, me, tile);
         if (path && path.length) { this._walkPath(path); return true; }
         return false;
     }
