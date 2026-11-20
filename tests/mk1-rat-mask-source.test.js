@@ -81,6 +81,19 @@ describe('its tile', () => {
     });
 });
 
+describe('taken once, it stays taken across a save and reload', () => {
+    test('the pickup key survives JSON and the loader, and the spawn filter then skips it', async () => {
+        const { migrate } = await import('../game/save.js');
+        const map = new GameMap(load('sewer-north-map.json'));
+        const url = 'sewer-north-map.json';
+        const keyOf = s => `${url}|${s.x}|${s.y}|${s.type}`;
+        const blob = JSON.parse(JSON.stringify({ world: { collectedItems: map.itemSpawns.map(keyOf) } }));
+        const loaded = new Set(migrate(blob).world.collectedItems);
+        assert.equal(map.itemSpawns.filter(s => !loaded.has(keyOf(s))).length, 0, 'taken: nothing respawns');
+        assert.equal(map.itemSpawns.filter(s => !new Set().has(keyOf(s))).length, 1, 'untaken: it spawns');
+    });
+});
+
 describe('worn, it opens the Sewer grate', () => {
     test('canStandOn is true at (2,4) with the mask and false without', () => {
         const sewer = new GameMap(load('sewer-map.json'));
