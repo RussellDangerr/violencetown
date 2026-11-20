@@ -541,12 +541,12 @@ export const EQUIP_FIGURE_RECT = {
 // is the body-zone caption. `zone` (0..1 of the figure box) is where the
 // connector line points on the mannequin.
 export const EQUIP_SLOT_RECTS = [
-    { key: 'top',    label: 'HEAD',    x: 256, y: 60,  w: 96, h: 48, zone: { fx: 0.5, fy: 0.06 } },  // above
-    { key: 'sides',  label: 'ARMS',    x: 60,  y: 240, w: 96, h: 48, zone: { fx: 0.08, fy: 0.42 } }, // left
-    { key: 'front',  label: 'TORSO',   x: 452, y: 240, w: 96, h: 48, zone: { fx: 0.92, fy: 0.42 } }, // right
+    { key: 'top',    label: 'TOP',    x: 256, y: 60,  w: 96, h: 48, zone: { fx: 0.5, fy: 0.06 } },  // above
+    { key: 'sides',  label: 'SIDES',  x: 60,  y: 240, w: 96, h: 48, zone: { fx: 0.08, fy: 0.42 } }, // left
+    { key: 'front',  label: 'FRONT',  x: 452, y: 240, w: 96, h: 48, zone: { fx: 0.92, fy: 0.42 } }, // right
     { key: 'back',   label: 'BACK',    x: 60,  y: 380, w: 96, h: 48, zone: { fx: 0.2,  fy: 0.68 } }, // lower-left
-    { key: 'bottom', label: 'FEET',    x: 452, y: 380, w: 96, h: 48, zone: { fx: 0.5,  fy: 0.98 } }, // below (right stack)
-    { key: 'weapon', label: 'WEAPON [RIGHT]', x: 60,  y: 480, w: 96, h: 48, zone: { fx: 0.36, fy: 0.7 } }, // bottom-left, under BACK: the figure's right hand (the viewer's left)
+    { key: 'bottom', label: 'BOTTOM', x: 452, y: 380, w: 96, h: 48, zone: { fx: 0.5,  fy: 0.98 } }, // below (right stack)
+    { key: 'weapon', label: 'WEAPON RIGHT', x: 60,  y: 480, w: 96, h: 48, zone: { fx: 0.36, fy: 0.7 } }, // bottom-left, under BACK: the figure's right hand (the viewer's left)
 ];
 
 // (FX14) The left hand's plate. Its own rect rather than a seventh entry in
@@ -554,7 +554,7 @@ export const EQUIP_SLOT_RECTS = [
 // piece. It mirrors the right-hand plate about the figure, bottom-right under
 // FEET (so HEAD's "down" key still lands on ARMS, and the connectors clear the
 // BACK and FEET plates). `key` is the game.equipment key it reads.
-export const EQUIP_LEFT_HAND_RECT = { key: 'left', label: 'WEAPON [LEFT]', x: 452, y: 480, w: 96, h: 48, zone: { fx: 0.64, fy: 0.7 } };
+export const EQUIP_LEFT_HAND_RECT = { key: 'left', label: 'WEAPON LEFT', x: 452, y: 480, w: 96, h: 48, zone: { fx: 0.64, fy: 0.7 } };
 
 // (menu grammar) The always-visible ✕ / Back chip — a ~30px tappable target at a
 // panel's top-right inner corner, the device-agnostic exit on every Menu. Drawn by
@@ -574,7 +574,7 @@ export function closeButtonRect(r, thumb = 0) {
 export const DEVICE_RECT = MODAL_RECT;
 export const DEVICE_TABS = ['items', 'gear', 'quests', 'map', 'rings', 'notes', 'bodies'];
 // (IN1) The label a tab shows when it differs from its id; the notes tab's name is a placeholder.
-export const DEVICE_TAB_LABELS = { notes: '[TEXT]', bodies: '[TEXT]' };
+export const DEVICE_TAB_LABELS = { notes: 'NOTES', bodies: 'BODIES' };
 export const DEVICE_TAB_H = 30;                        // tab-strip height
 const DEVICE_TAB_TOP = DEVICE_RECT.y + 38;             // below the title/✕ band (the chip ends at y+36)
 const DEVICE_TAB_PAD = 14;                             // strip inset from the frame sides
@@ -1186,7 +1186,12 @@ export function offerTraySlotAt(L, pt, side) {
 
 // (RR1) What a worn ring's passive says on the Hands tab: one row per passive,
 // a label and its number. The label is a placeholder until its copy is ruled.
-export const RING_PASSIVE_LABEL = '[TEXT]';
+export const RING_PASSIVE_LABEL = 'Passive';
+// The name a ring passive row shows, from the passive's key.
+const RING_PASSIVE_NAMES = { evasion: 'Evasion', fireDamage: 'Fire damage', stealLimit: 'Steal limit', noticeBuffer: 'Notice buffer' };
+export function ringPassiveName(key) {
+    return RING_PASSIVE_NAMES[key] ?? String(key).replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase());
+}
 export function ringPassiveRows(ring) {
     const passive = (ring && ring.passive) || {};
     return Object.keys(passive).map(key => ({ key, label: RING_PASSIVE_LABEL, value: passive[key] }));

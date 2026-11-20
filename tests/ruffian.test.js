@@ -8,7 +8,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Enemy, spawnEnemy } from '../game/enemies.js';
-import { tickNpcState, isMugger, mug, MUG_GP } from '../game/npc.js';
+import { tickNpcState, isMugger, mug, MUG_GP, logName } from '../game/npc.js';
 import { transferGold } from '../game/trade.js';
 import { coinTake } from '../game/theft.js';
 import { fighters } from '../game/fight-area.js';
@@ -63,7 +63,7 @@ describe('the mugging', () => {
         const g = makeGame();
         const r = ruffianAt(g, 9, 5);
         const msgs = tickNpcState(g, r, 1);
-        assert.ok(msgs.some(m => m.text === '[TEXT]' && m.sourceEnemy === r));
+        assert.ok(msgs.some(m => m.text === `${logName(r)} took ${MUG_GP} GP.` && m.sourceEnemy === r));
     });
 
     test('he takes no more than you have', () => {
@@ -204,7 +204,7 @@ describe('the Downtown spawn', () => {
         const e = spawnEnemy(spawn, new Set());
         assert.equal(e.allegiance, 'hostile');
         assert.ok(isMugger(e));
-        assert.equal(e.entity.name, '[Ruffian]');
+        assert.equal(e.entity.name, 'Ruffian');
     });
 
     test('he wears the green-bandana goblin', () => {

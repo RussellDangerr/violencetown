@@ -49,8 +49,13 @@ test('broken, old and mis-shaped snapshots are ignored, never thrown', () => {
     assert.equal(keepSnapshot(broken, good), false);
 });
 
-test('the report is three [TEXT] lines for a good snapshot, none for a bad one', () => {
-    assert.deepEqual(reportLines(snapshotOf(fakeGame())), ['[TEXT]', '[TEXT]', '[TEXT]']);
+test('the report is three plain lines for a good snapshot, none for a bad one', () => {
+    assert.deepEqual(reportLines(snapshotOf(fakeGame())), [
+        'These are the remains of your last character, kept when you restarted.',
+        'They held 42 gold and 1 piece of gear.',
+        'They are a record only. None of it carries into this run.',
+    ]);
+    assert.match(reportLines(snapshotOf(fakeGame({ gold: 0, equipment: {} })))[1], /0 gold and 0 pieces of gear/);
     assert.deepEqual(reportLines({ v: 0 }), []);
     assert.deepEqual(reportLines(null), []);
 });

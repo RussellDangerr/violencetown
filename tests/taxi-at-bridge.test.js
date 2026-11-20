@@ -165,15 +165,22 @@ describe('the map: the taxi and its driver at the bridge', () => {
         assert.ok(DIALOGUES[driverSpawn.dialogueId], 'his dialogue exists');
     });
 
-    test('every line a player reads that this slice changed is a placeholder', () => {
-        for (const id of ['car', 'bridge']) assert.equal(townJson.examinables.find(e => e.id === id).text, '[TEXT]', id);
-        assert.equal(driverSpawn.name, '[TEXT]');
+    test('the lines a player reads here are plain, or still a placeholder in dialogue.js', () => {
+        const text = (id) => townJson.examinables.find(e => e.id === id).text;
+        assert.equal(text('car'), 'This is your car. You need to go to the sewer and kill the Were-Rat so that it drops the cataclysmic converter.');
+        assert.equal(text('bridge'), 'This is the bridge north out of Town. A barricade blocks it. Fix your car, then drive north across the bridge.');
+        assert.equal(driverSpawn.name, 'Taxi driver');
         const d = getDialogue('taxi_driver');
-        assert.equal(d.name, '[TEXT]');
-        assert.equal(d.greeting, '[TEXT]');
+        assert.equal(d.name, 'Taxi driver');
+        assert.equal(d.greeting, 'I am the taxi driver. My taxi crosses the bridge north out of Town, and it needs the cataclysmic converter to run.');
         const q = QUESTS.fix_car;
-        assert.equal(q.title, '[TEXT]');
-        for (const s of q.stages) assert.equal(s.objective, '[TEXT]', s.id);
+        assert.equal(q.title, 'Fix the car');
+        assert.deepEqual(q.stages.map(s => s.objective), [
+            'Walk to your car and examine it (E)',
+            'Kill the Were-Rat in the Sewer, get converter',
+            'Leave the Sewer and go back to Town',
+            'Put the converter in your car in Town',
+        ]);
     });
 });
 

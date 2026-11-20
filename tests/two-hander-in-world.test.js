@@ -130,7 +130,7 @@ describe('the Great Sword in the world', () => {
         assert.equal(WEAPON_CLASSES.great_sword.hands, 2);
         assert.deepEqual([...WEAPON_CLASSES.great_sword.attackKinds], ['slash', 'stab']);
         assert.ok(w.damage < WEAPONS.ray_gun.damage && w.damage > WEAPONS.gator_tail.damage);
-        assert.match(w.name, /^\[.*\]$/, 'a bracket placeholder name');
+        assert.equal(w.name, 'Great Sword');
         assert.ok(ITEM_SPRITES.great_sword, 'it has a picture');
     });
 

@@ -78,8 +78,14 @@ export function keepSnapshot(storage, snap) {
     } catch { return false; }
 }
 
-// The "while you were gone" report: three lines, all placeholders (copy is Caelan's).
+// The report shown on a new run: three plain lines saying whose remains these are and what they
+// hold. Placeholder wording; the copy is Caelan's.
 export function reportLines(snap) {
     if (!isValid(snap)) return [];
-    return ['[TEXT]', '[TEXT]', '[TEXT]'];
+    const pieces = Object.keys(snap.gear).length;
+    return [
+        'These are the remains of your last character, kept when you restarted.',
+        `They held ${snap.gold} gold and ${pieces} piece${pieces === 1 ? '' : 's'} of gear.`,
+        'They are a record only. None of it carries into this run.',
+    ];
 }

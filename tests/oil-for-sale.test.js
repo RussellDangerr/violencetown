@@ -161,7 +161,7 @@ describe("Hooch's shelf", () => {
         const note = JSON.parse(townJson).examinables.find(e => e.id === 'fuel_note');
         assert.ok(note, 'the card is still there');
         assert.ok(!/hours|slow, dense|OIL/i.test(note.text), note.text);
-        assert.match(note.text, /\[TEXT\]/);
+        assert.match(note.text, /Hooch sells it here\. Pour a bottle into your car's tank before you drive over the bridge\./);
     });
 });
 

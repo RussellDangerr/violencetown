@@ -39,7 +39,7 @@ import { dropLoadout } from '../game/drops.js';
 import { ENEMY_SPRITES } from '../game/sprites.js';
 import { validateContent } from '../game/content-validate.js';
 import { WEAPONS } from '../game/weapons.js';
-import { biteSunMan, riseSunMan, beastFell, resetBeast, finaleTick, blocksCowerHit, restoreFinale, isCowering } from '../game/finale-setpiece.js';
+import { FINALE_LINES, biteSunMan, riseSunMan, beastFell, resetBeast, finaleTick, blocksCowerHit, restoreFinale, isCowering } from '../game/finale-setpiece.js';
 
 globalThis.localStorage ??= { getItem: () => null, setItem() {}, removeItem() {} };
 
@@ -386,7 +386,7 @@ describe('the Bite', () => {
         await fightOnward(g, { limit: 12, until: () => eventsOf(g, 'sun_man_bitten').length > 0 });
         assert.equal(fin.hasBuff('weakened'), true);
         assert.equal(g.events.find(e => e.type === 'sun_man_bitten').payload.weakened, true);
-        const sunBlows = g.blows.filter(b => b.by === '[Sun Man]');
+        const sunBlows = g.blows.filter(b => b.by === 'Sun Man');
         assert.ok(sunBlows.length >= 2 && sunBlows.length <= 3);
     });
 
@@ -400,13 +400,13 @@ describe('the Bite', () => {
         assert.equal(sun._isSummon, false, 'off the summon clock, so the cleanup keeps him');
         assert.equal(sun._ally, true);
         assert.ok(isCorner(g.map, sun.x, sun.y), `a corner of the room (${sun.x},${sun.y})`);
-        assert.ok(g.logs.filter(l => l === '[TEXT]').length >= 3, 'the lines are placeholders');
+        assert.ok(g.logs.includes(FINALE_LINES.bite) && g.logs.includes(FINALE_LINES.cloak), 'the bite and the cloak are said plainly');
         const at = [sun.x, sun.y];
-        const blowsBefore = g.blows.filter(b => b.by === '[Sun Man]').length;
+        const blowsBefore = g.blows.filter(b => b.by === 'Sun Man').length;
         await fightOnward(g, { limit: 12, until: (x) => !financierOf(x).entity.isAlive() });
         // He is still there, not moved, not fighting, not hostile, and nobody hurt him.
         const nowSun = sunManOf(g) ?? beastOf(g);
-        assert.equal(g.blows.filter(b => b.by === '[Sun Man]').length, blowsBefore, 'he struck no blow after the Bite');
+        assert.equal(g.blows.filter(b => b.by === 'Sun Man').length, blowsBefore, 'he struck no blow after the Bite');
         assert.ok(nowSun);
         assert.equal(sun.entity.hp, sun.entity.maxHp, 'unhurt');
         assert.deepEqual([sun.x, sun.y], at, 'he did not move');
@@ -501,10 +501,11 @@ describe('the rise', () => {
         g._spawnOverheadDialogue = (x, y, t) => said.push({ x, y, t });
         const before = g.logs.length;
         await fightOnward(g, { limit: 120, until: () => !!beastOf(g) });
-        const lines = g.logs.slice(before).filter(l => l === '[TEXT]');
-        assert.ok(lines.length >= 2, 'he rises, and the cue tells you to hit him when he screams');
+        const lines = g.logs.slice(before);
+        assert.ok(lines.includes(FINALE_LINES.rises), 'he rises');
+        assert.ok(lines.includes(FINALE_LINES.cue), 'the cue tells you to hit him when he screams');
         const b = beastOf(g);
-        assert.ok(said.some(s => s.x === b.x && s.y === b.y && s.t === '[TEXT]'), 'words over his head');
+        assert.ok(said.some(s => s.x === b.x && s.y === b.y && s.t === FINALE_LINES.risesSaid), 'words over his head');
     });
 
     test('if the Financier falls before the third turn ends, the Bite lands first and he still rises', async () => {
@@ -632,7 +633,7 @@ describe('losing to Monstrous Sun Man, leaving the vault, coming back', () => {
         assert.equal(g.state, STATE.DEAD, 'he put you down');
         g.timers.splice(0).forEach(fn => fn());
         assert.equal(g.state, STATE.IDLE);
-        assert.ok(g.logs.some(l => /Down but not out/.test(l)), 'the boss retry, not a defeat scenario');
+        assert.ok(g.logs.some(l => /You retry the boss fight/.test(l)), 'the boss retry, not a defeat scenario');
         const again = beastOf(g);
         assert.equal(g.enemies.filter(isBeast).length, 1);
         assert.equal(again.entity.hp, again.entity.maxHp);

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="version" content="0.34.0">
+    <meta name="version" content="0.35.0">
     <meta name="description" content="Violencetown — a browser-based 2D RPG with tick-based combat, an Omnitrix-style radial menu, and hand-authored zones. Zero dependencies, no build step, just open and play.">
     <meta name="theme-color" content="#0a0a0a">
     <meta name="color-scheme" content="dark">
@@ -43,11 +43,11 @@
         <div id="splash-buttons" style="flex-wrap:wrap;justify-content:center">
             <button id="splash-go">GAME START</button>
             <button id="splash-continue" class="hidden">CONTINUE</button>
-            <button id="splash-paste" type="button" aria-expanded="false" aria-controls="splash-paste-panel">[TEXT] PASTE CODE</button>
+            <button id="splash-paste" type="button" aria-expanded="false" aria-controls="splash-paste-panel">PASTE CODE</button>
             <div id="splash-paste-panel" class="hidden" style="flex-basis:100%;display:flex;flex-direction:column;align-items:center;gap:8px;max-width:100%">
-                <textarea id="splash-code" rows="3" spellcheck="false" aria-label="[TEXT]" placeholder="[TEXT]"
+                <textarea id="splash-code" rows="3" spellcheck="false" aria-label="Save code" placeholder="Paste a save code here"
                           style="width:min(420px,100%);box-sizing:border-box;font-family:inherit;font-size:14px;resize:vertical"></textarea>
-                <button id="splash-code-go" type="button">[TEXT] LOAD</button>
+                <button id="splash-code-go" type="button">LOAD CODE</button>
                 <p id="splash-code-status" role="status" style="margin:0;color:#f3e3c0;font-size:12px;text-align:center"></p>
             </div>
             <p id="splash-continue-line" class="hidden" role="status" style="flex-basis:100%;margin:0;color:#f3e3c0;font-size:14px;text-align:center"></p>
@@ -103,15 +103,15 @@
                     <li><kbd>Space</kbd> opens the action wheel anywhere — it pre-aims at the nearest enemy. Double-tap <kbd>Space</kbd> to instantly repeat your last action.</li>
                     <li>The wheel is a menu you walk into: <kbd>←</kbd> <kbd>→</kbd> spin the ring · <kbd>↑</kbd> (or <kbd>Space</kbd>) go deeper — <em>firing is just going deeper into an action</em> · <kbd>↓</kbd> (or <kbd>Esc</kbd>) back out, closing at the top</li>
                     <li>While aiming, arrows nudge the reticle. If an action would catch a friendly, the wheel asks first — <kbd>↑</kbd> confirms, <kbd>↓</kbd> cancels.</li>
-                    <li>[TEXT: Thieve help line, placeholder.]</li>
-                    <li>[TEXT: attack arc help line, placeholder.]</li>
+                    <li>Thieve is on the action wheel: take Coin, Kit or Gear from someone beside you. What you take from a person adds up and never resets; past their limit (lower when you stand at their side) they notice, turn hostile and search for you.</li>
+                    <li>In a fight, an arc under you lists your attacks: press <kbd>1</kbd>–<kbd>8</kbd> to pick one (<kbd>9</kbd> is Eat, <kbd>0</kbd> is Run). Aimed attacks fire when you press the same number again; self and instant slots fire on the first press. A greyed slot sometimes logs why.</li>
                     <li><span class="help-touch">On touch:</span> tap <strong>✦</strong> to open the wheel. The wheel reads as a compass: tap <strong>above</strong> the hub to go deeper (fire), <strong>left/right</strong> to spin, <strong>below</strong> or on the <strong>hub itself</strong> to back out.</li>
                 </ul>
 
                 <h3>Inventory</h3>
                 <ul>
                     <li>The bar along the bottom is always live: <kbd>Shift</kbd>+<kbd>←</kbd> <kbd>→</kbd> changes category, <kbd>Shift</kbd>+<kbd>↑</kbd> <kbd>↓</kbd> steps through items, <kbd>Enter</kbd> uses what's showing</li>
-                    <li>[TEXT: <kbd>1</kbd>–<kbd>9</kbd> are bag slots outside a fight, placeholder.] <kbd>Space</kbd> opens its use overlay · pick Use / Eat / Drink, or Smash when something hostile is next to you (throwing is on the action wheel; giving is in Trade)</li>
+                    <li><kbd>1</kbd>–<kbd>9</kbd> pick bag slots outside a fight. <kbd>Space</kbd> opens its use overlay · pick Use / Eat / Drink, or Smash when something hostile is next to you (throwing is on the action wheel; giving is in Trade)</li>
                     <li><span class="help-touch">On touch:</span> tap a category chip to switch, <strong>▲ ▼</strong> to step items, and the item cell to use it. Everything else lives in the Remoticon's ITEMS tab.</li>
                 </ul>
 
@@ -190,21 +190,21 @@
                 </div>
 
                 <div class="opt-row opt-row-toggle">
-                    <label for="opt-zoom-closer">[TEXT]</label>
+                    <label for="opt-zoom-closer">Zoom</label>
                     <button type="button" id="opt-zoom-farther" class="opt-toggle opt-step"
-                            aria-label="[TEXT]">-</button>
+                            aria-label="Zoom farther out">-</button>
                     <span class="opt-val opt-zoom-val" id="opt-zoom-val">x2</span>
                     <button type="button" id="opt-zoom-closer" class="opt-toggle opt-step"
-                            aria-label="[TEXT]">+</button>
+                            aria-label="Zoom closer in">+</button>
                 </div>
 
                 <div class="opt-row opt-row-toggle">
-                    <label for="opt-save-copy">[TEXT]</label>
-                    <button type="button" id="opt-save-copy" class="opt-toggle">[TEXT] COPY CODE</button>
-                    <button type="button" id="opt-save-paste" class="opt-toggle">[TEXT] PASTE CODE</button>
+                    <label for="opt-save-copy">Save code</label>
+                    <button type="button" id="opt-save-copy" class="opt-toggle">COPY CODE</button>
+                    <button type="button" id="opt-save-paste" class="opt-toggle">PASTE CODE</button>
                 </div>
-                <textarea id="opt-save-code" rows="3" spellcheck="false" aria-label="[TEXT]"
-                          placeholder="[TEXT]"
+                <textarea id="opt-save-code" rows="3" spellcheck="false" aria-label="Save code"
+                          placeholder="Copy shows your save code here; paste a code here to load it"
                           style="width:100%;box-sizing:border-box;font-family:inherit;font-size:14px;resize:vertical"></textarea>
                 <p class="opt-note" id="opt-save-status" role="status"></p>
 

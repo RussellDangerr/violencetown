@@ -101,12 +101,12 @@ describe('RM1: the ringmaster can stand in the Carnival\'s boss spot', () => {
         assert.equal(saved['carnival.boss'], 'bigfoot');
         assert.equal(shownName(spawnEnemy(resolveSpawn(spawn(), saved))), 'Bigfoot');
         const kept = migrate({ slots: { 'carnival.boss': 'ringmaster' } }).slots;
-        assert.equal(shownName(spawnEnemy(resolveSpawn(spawn(), kept))), '[Ringmaster]');
+        assert.equal(shownName(spawnEnemy(resolveSpawn(spawn(), kept))), 'Ringmaster');
     });
 
     test('he shows his own placeholder name on the target panel, and is a boss', () => {
         const e = spawnEnemy(resolveSpawn(spawn(), { 'carnival.boss': 'ringmaster' }));
-        assert.equal(shownName(e), '[Ringmaster]');
+        assert.equal(shownName(e), 'Ringmaster');
         assert.equal(e.boss, true);
         assert.equal(e.slot, 'carnival.boss');
     });

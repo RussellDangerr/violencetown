@@ -1,5 +1,6 @@
 // inspector-poition-line.test.js — (FX35) the bag's stat line says what a
-// poition, Soap or Alcohol does, then its description.
+// poition, Soap or Alcohol does. (PC10) The description is gone: the fact and the sources are
+// their own lines, built by describeItem (tests/pc10-describe-item.test.js).
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { itemStatLine, poitionLine } from '../game/inspector.js';
@@ -17,14 +18,21 @@ describe('every item with a poition or a cure gets a stat line', () => {
         assert.ok(cures.length >= 1, `cure items: ${cures.length}`);
     });
 
-    for (const d of new Set([...withPoition, ...poitionCategory, ...cures, ITEMS.alcohol])) {
-        test(`${d.id}: a stat line, then its description`, () => {
-            const line = itemStatLine(d);
-            assert.ok(d.description, `${d.id} has a description`);
-            assert.ok(line.endsWith(`. ${d.description}`), `${d.id}: "${line}"`);
-            const stat = line.slice(0, line.length - d.description.length - 2);
-            assert.ok(stat.length > 0 && stat.length <= 40, `${d.id}: stat "${stat}" is short`);
-            assert.ok(!stat.includes('undefined') && !stat.includes('NaN'), `${d.id}: "${stat}"`);
+    const STAT = {
+        health_poition: '+25 HP', mana_poition: '+20 MP', boon_poition: '+10 MP', gold_poition: '+50 GP',
+        strength_poition: '+6 strength, 5 turns', defence_poition: '+4 defence, 6 turns', speed_poition: '2 free actions',
+        sludge_sack: 'Throw -3 HP/turn, 5 turns', fire_blood: 'Throw -5 HP/turn, 5 turns', tunnel_mushroom: 'Throw -5 HP/turn, 2 turns',
+        sludge_brain: 'Throw sludge puddle, 8 turns', goo: 'Throw goo puddle, 8 turns',
+        soap: 'Cures sludge, +2 armor for 3 turns', alcohol: 'Car fuel: slows the car',
+    };
+    const covered = new Set([...withPoition, ...poitionCategory, ...cures, ITEMS.alcohol]);
+    test('the table pins every one of them', () => {
+        assert.deepEqual([...covered].map(d => d.id).sort(), Object.keys(STAT).sort());
+    });
+    for (const d of covered) {
+        test(`${d.id}: the stat line alone, with no description after it`, () => {
+            assert.equal(itemStatLine(d), STAT[d.id]);
+            assert.equal('description' in d, false);
         });
     }
 
@@ -72,19 +80,19 @@ describe('poitionLine — one mechanical line per stat', () => {
 
 describe('the shipped lines', () => {
     test('the six drinkable poitions', () => {
-        assert.ok(itemStatLine(ITEMS.health_poition).startsWith('+25 HP. '));
-        assert.ok(itemStatLine(ITEMS.mana_poition).startsWith('+20 MP. '));
-        assert.ok(itemStatLine(ITEMS.gold_poition).startsWith('+50 GP. '));
-        assert.ok(itemStatLine(ITEMS.strength_poition).startsWith('+6 strength, 5 turns. '));
-        assert.ok(itemStatLine(ITEMS.defence_poition).startsWith('+4 defence, 6 turns. '));
-        assert.ok(itemStatLine(ITEMS.speed_poition).startsWith('2 free actions. '));
+        assert.equal(itemStatLine(ITEMS.health_poition), '+25 HP');
+        assert.equal(itemStatLine(ITEMS.mana_poition), '+20 MP');
+        assert.equal(itemStatLine(ITEMS.gold_poition), '+50 GP');
+        assert.equal(itemStatLine(ITEMS.strength_poition), '+6 strength, 5 turns');
+        assert.equal(itemStatLine(ITEMS.defence_poition), '+4 defence, 6 turns');
+        assert.equal(itemStatLine(ITEMS.speed_poition), '2 free actions');
     });
     test('thrown poitions, the puddle, Soap and Alcohol', () => {
-        assert.ok(itemStatLine(ITEMS.sludge_sack).startsWith('Throw -3 HP/turn, 5 turns. '));
-        assert.ok(itemStatLine(ITEMS.fire_blood).startsWith('Throw -5 HP/turn, 5 turns. '));
-        assert.ok(itemStatLine(ITEMS.sludge_brain).startsWith('Throw sludge puddle, 8 turns. '));
-        assert.ok(itemStatLine(ITEMS.soap).startsWith('Cures sludge, +2 armor for 3 turns. '));
-        assert.ok(itemStatLine(ITEMS.alcohol).startsWith('Car fuel: slows the car. '));
+        assert.equal(itemStatLine(ITEMS.sludge_sack), 'Throw -3 HP/turn, 5 turns');
+        assert.equal(itemStatLine(ITEMS.fire_blood), 'Throw -5 HP/turn, 5 turns');
+        assert.equal(itemStatLine(ITEMS.sludge_brain), 'Throw sludge puddle, 8 turns');
+        assert.equal(itemStatLine(ITEMS.soap), 'Cures sludge, +2 armor for 3 turns');
+        assert.equal(itemStatLine(ITEMS.alcohol), 'Car fuel: slows the car');
     });
     test('other items read as before', () => {
         assert.equal(itemStatLine(ITEMS.bandage), 'Heals 25 HP');

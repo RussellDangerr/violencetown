@@ -25,6 +25,7 @@ import { sanitizeRespawnLists, sanitizeFilledSpots } from './drops.js';
 import { sanitizeRivals } from './rivals.js';
 import { sanitizeSpent } from './npc-memory.js';
 import { sanitizeKnown } from './fight-panels.js';
+import { sanitizeCompactor, compactorEntry } from './compactor.js';
 
 // 2: two hands (plans/ws3-two-hands-left-right.md) — equipment.left joins
 // equipment.weapon, which is now the right hand.
@@ -91,6 +92,8 @@ export function serialize(game) {
             // never ranked anything saves byte-for-byte as it did before skills
             // existed (the autoplay fingerprint hashes this object).
             ...skillsEntry(game),
+            ...boonsEntry(game),
+            ...jobsEntry(game),   // (BP6)
             ...costumeToSave(game),   // (CO1) left out while no costume is worn
             ...defaultAttackEntry(game),
             ...interactionNotesEntry(game),
@@ -154,6 +157,7 @@ export function serialize(game) {
             })),
             enemies: (game.enemies || []).map(serEnemy),
             tileDiffs: (game._tileDiffs || []).map(d => ({ x: d.x, y: d.y, id: d.id })),
+            ...compactorEntry(game._compactor),   // (TC1) the trash compactor room; left out while it is as new
             pendingTransition: game._pendingTransition || null,
         },
         quest: game.questEngine ? game.questEngine.serialize() : null,
@@ -167,6 +171,27 @@ export function serialize(game) {
 function defaultAttackEntry(game) {
     const d = game.defaultAttack;
     return d && typeof d.key === 'string' && typeof d.weaponId === 'string' ? { defaultAttack: { weaponId: d.weaponId, key: d.key } } : {};
+}
+
+// (BP1) Permanent boosts drunk, { stat: n }; left out while empty so a boonless save is unchanged.
+function sanitizeBoons(b) {
+    const out = {};
+    if (b && typeof b === 'object') for (const k of Object.keys(b)) { const n = Math.floor(Number(b[k])); if (Number.isFinite(n) && n > 0) out[k] = n; }
+    return out;
+}
+function boonsEntry(game) {
+    const boons = sanitizeBoons(game.boons);
+    return Object.keys(boons).length ? { boons } : {};
+}
+
+// (BP6) Jobs done and Shards held; left out while both are zero so a save with no jobs is unchanged.
+function sanitizeJobs(j) {
+    const n = (v) => { const x = Math.floor(Number(v)); return Number.isFinite(x) && x > 0 ? x : 0; };
+    return { done: n(j && j.done), shards: Math.min(3, n(j && j.shards)) };
+}
+function jobsEntry(game) {
+    const jobs = sanitizeJobs(game.jobs);
+    return jobs.done || jobs.shards ? { jobs } : {};
 }
 
 function skillsEntry(game) {
@@ -313,12 +338,12 @@ export function clearSave() {
 // Nothing here touches the network; the code travels by the player's clipboard.
 
 const CODE_PREFIX = 'VT1';
-// Placeholder wording ([TEXT]); the copy is the owner's to write.
+// Plain placeholder wording; the copy is the owner's to write.
 export const CODE_REFUSALS = {
-    format:  '[TEXT] That is not a save code.',
-    garbled: '[TEXT] That save code is damaged.',
-    version: '[TEXT] That save code is from a different version.',
-    load:    '[TEXT] That save code would not open.',
+    format:  'That is not a save code, so nothing was loaded. A save code starts with VT1.',
+    garbled: 'That save code is damaged, so nothing was loaded. Copy it again in full.',
+    version: 'That save code is from a different version, so nothing was loaded.',
+    load:    'That save code would not open, so nothing was loaded. Your current save is unchanged.',
 };
 
 function _checksum(str) {   // FNV-1a, 32 bit, as 8 hex digits
@@ -419,6 +444,7 @@ export function migrate(raw) {
     // Array.isArray alone let that straight through.
     const objects = (a) => (Array.isArray(a) ? a.filter(e => e && typeof e === 'object') : []);
     r.world.tileDiffs   = objects(r.world.tileDiffs);
+    r.world.compactor   = sanitizeCompactor(r.world.compactor);   // (TC1)
     r.world.enemies     = objects(r.world.enemies);
     r.world.groundItems = objects(r.world.groundItems);
     if (!Array.isArray(r.world.collectedItems)) r.world.collectedItems = [];
@@ -507,6 +533,8 @@ function validate(raw) {
     // (skills) Known skills, whole counts, never below zero; a save from before
     // skills existed loads with none.
     p.skills = sanitizeSkills(p.skills);
+    p.boons = sanitizeBoons(p.boons);   // (BP1)
+    p.jobs = sanitizeJobs(p.jobs);   // (BP6)
     p.costume = sanitizeCostume(p.costume);   // (CO1)
     p.defaultAttack = (p.defaultAttack && typeof p.defaultAttack.key === 'string' && typeof p.defaultAttack.weaponId === 'string')
         ? { weaponId: p.defaultAttack.weaponId, key: p.defaultAttack.key } : null;   // (WK3)
@@ -592,6 +620,8 @@ export async function loadInto(game, raw) {
     // 1. baseline map (spawns JSON enemies/items/containers; sets renderer
     //    zone). Missing coords fall back to the map spawn; clamp to bounds so
     //    a malformed save can't strand the player off-map.
+    // (TC1) The trash compactor room's state goes in first: _loadMap paints the room from it.
+    game._compactor = sanitizeCompactor(raw.world.compactor);
     await game._loadMap(raw.mapUrl, p.x, p.y);
     game.playerX = clamp(game.playerX, 0, game.map.width - 1);
     game.playerY = clamp(game.playerY, 0, game.map.height - 1);
@@ -627,6 +657,8 @@ export async function loadInto(game, raw) {
     game.ringTier          = p.ringTier || 0;
     game.discoveredFusions = new Set(p.discoveredFusions || []);
     game.skills            = { ...p.skills };
+    game.boons             = { ...p.boons };   // (BP1)
+    game.jobs              = { ...p.jobs };   // (BP6)
     game.costume           = costumeFromSave(p.costume, R);   // (CO1) worn: equipment/skills above are its kit
     game.defaultAttack     = p.defaultAttack || null;   // (WK3)
     game.interactionNotes  = [...p.interactionNotes];   // (IN1)
@@ -665,6 +697,7 @@ export async function loadInto(game, raw) {
     for (const d of raw.world.tileDiffs) {
         if (game.map.isInBounds(d.x, d.y)) game.setTile(d.x, d.y, d.id);
     }
+    game._applyCompactor?.();   // (TC1) the room as the saved state says: walls, door, and no machine once broken
     game._pendingTransition = raw.world.pendingTransition || null;
     // (FX69) A save that stands the player in a wall (or off the map, clamped to its edge)
     // moves them to the nearest open tile, now that the tile diffs are back in place.

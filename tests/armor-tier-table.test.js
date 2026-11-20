@@ -41,7 +41,7 @@ describe('the armor tier table', () => {
                 assert.equal(t.baseId, id);
                 assert.ok(isArmorPiece(t), `${t.id} is not armor`);
                 assert.equal(itemTier(t).key, WEAPON_TIER_KEYS[i], `${t.id} shows the wrong colour`);
-                assert.match(t.name, /^\[.+\]$/, `${t.id} name is not a bracketed placeholder`);
+                assert.equal(t.name, `${WEAPON_TIER_KEYS[i][0].toUpperCase()}${WEAPON_TIER_KEYS[i].slice(1)} ${ITEMS[id].name}`, `${t.id} name is its tier and its piece's name`);
             });
         });
     }

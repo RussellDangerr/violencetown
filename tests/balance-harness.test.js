@@ -78,6 +78,12 @@ describe('harness math', () => {
         assert.deepEqual(frozen.map(e => e.type).sort(), ['Polar Bear', 'Siberia', 'Snowman', 'Yeti']);
         assert.ok(frozen.every(e => !String(e.id).startsWith('frozen.mob:')), 'a pool row came back');
     });
+    // (plans/dn1-dinosaurs-roam-valley.md) The Valley's mob slot works the same way.
+    test('the Valley dinosaurs are listed once each, as the map rows', () => {
+        const valley = loadMapRoster().filter(e => e.zone === 'valley');
+        assert.deepEqual(valley.map(e => e.type).sort(), ['Raptor', 'T. rex', 'Triceratops']);
+        assert.ok(valley.every(e => !String(e.id).startsWith('valley.mob:')), 'a pool row came back');
+    });
     test('no pool entry dodges the bench: every one is a row in its slot\'s zone', () => {
         const roster = loadMapRoster();
         for (const [slotId, slot] of Object.entries(SLOTS)) {

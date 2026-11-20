@@ -29,6 +29,8 @@ before you read the PR.
   (`tools/balance-harness.mjs`): ANY `hp !== 100` flags — vermin included. **Amended 2026-10-25
   (EL2):** a declared `puzzleWall` is exempt, as it is from the armor cap, because it is a lock, not
   a combatant; the Sludge Bloom is 60 by ruling, so its keys still open it at ×1.5.
+  **Note 2026-11-17 (BP4, ruling BPR1 b):** Law 0 is unchanged. A boon poition raises the player's max MP,
+  armour or strength, never max HP; the armour rides `_playerArmor` and the strength the attack's flats.
 - **Law 1 — The Peg.** 1 GP ≈ 1 HP is the rate for autonomous violence; per-cast skill buys rates
   above peg. Bands enforced by `lintSkills` (`tools/balance-harness.mjs:147-187`): spells
   `[1.5, 2.5]` dmg/MP (`SPELL_MIN_RATE`/`SPELL_MAX_RATE`, lines 38-39) — area spells

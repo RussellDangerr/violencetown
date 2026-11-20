@@ -75,7 +75,7 @@ export function startSewerEscape(game) {
 
     // 3. First wave.
     spawnRats(game, 10);
-    game._log('[Steel SLAMS down. The fungus-folk twist into RATS. The exit is barricaded!]', 'combat');
+    game._log('The portcullis closed. The Fungus turned into rats. The exit is barricaded.', 'combat');
     if (game._triggerScreenShake) game._triggerScreenShake(300, 6);
 }
 
@@ -86,7 +86,7 @@ export function onSewerEnemyKilled(game, enemy) {
     st.ratsKilled++;
     if (st.ratsKilled >= 5 && !st.wave2Spawned) {
         st.wave2Spawned = true;
-        if (spawnRats(game, 5) > 0) game._log('[More rats boil out of the walls!]', 'combat');
+        if (spawnRats(game, 5) > 0) game._log('More rats appeared.', 'combat');
     }
 }
 
@@ -99,9 +99,9 @@ export function hitBarricade(game, x, y) {
     if (hp - 1 <= 0) {
         game.setTile(x, y, FLOOR);
         if (st) delete st.barricadeHp[key];
-        game._log('[You tear through the barricade!]', 'combat');
+        game._log('You broke down a barricade tile.', 'combat');
     } else {
         if (st) st.barricadeHp[key] = hp - 1;
-        game._log('[You batter the barricade. It buckles.]');
+        game._log(`You hit the barricade. ${hp - 1} more to break this tile.`);
     }
 }

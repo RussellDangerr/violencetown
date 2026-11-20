@@ -22,10 +22,10 @@ const none = () => false;
 const afterBlind = (id) => id === 'blindSpot';
 
 describe('the Thieve hint', () => {
-    test('it sits right after the blind-spot row, which is untouched', () => {
+    test('it sits right after the blind-spot row', () => {
         const ids = HINTS.map(h => h.id);
         assert.equal(ids.indexOf('thieveHere'), ids.indexOf('blindSpot') + 1);
-        assert.match(HINTS[ids.indexOf('blindSpot')].text, /haven't seen you/);
+        assert.equal(HINTS[ids.indexOf('blindSpot')].text, "They haven't seen you. Standing behind someone keeps you out of their sight. The Thieve option is available from there.");
     });
 
     test('unseen beside someone with gold: blind spot first, then Thieve', () => {
@@ -83,7 +83,7 @@ describe('the Help line', () => {
     const combat = modal.slice(modal.indexOf('<h3>Combat'), modal.indexOf('<h3>Inventory'));
 
     test('Combat & actions carries exactly one Thieve placeholder bullet', () => {
-        const hits = combat.match(/<li>\[TEXT: Thieve[^<]*\]<\/li>/g) || [];
+        const hits = combat.match(/<li>Thieve is on the action wheel:[^<]*<\/li>/g) || [];
         assert.equal(hits.length, 1);
     });
 });

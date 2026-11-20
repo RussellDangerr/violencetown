@@ -27,7 +27,7 @@ describe('the player panel — read-only, and the shape never changes', () => {
         assert.equal(by.weapon.name, '[Wooden Sword]');
         assert.equal(by.front.name, '[Soap]');
         assert.equal(by.top.name, null, 'an empty slot is still a row');
-        assert.equal(by.top.label, 'HEAD');
+        assert.equal(by.top.label, 'TOP');
     });
 
     test('carries no action of any kind — the fight HUD never equips (ruling H1-4)', () => {

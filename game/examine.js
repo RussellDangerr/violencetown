@@ -12,6 +12,7 @@ import { resolveItemDef } from './item-registry.js';
 import { tileDisplayName } from './data.js';
 import { isHostile } from './ai.js';
 import { weaponClassOf } from './weapons.js';
+import { describeItemParts } from './inspector.js';
 import { SPELLS } from './spells.js';
 import { TRICKS } from './tricks.js';
 
@@ -70,6 +71,34 @@ export function weaponCompare(def, held) {
     };
 }
 
+// (PC10) Everything a panel shows about an item, in the order it shows it: { stats, fact, sources }.
+// A weapon's hands, class and granted skills come from here because weapons.js, spells.js and
+// tricks.js cannot be imported by inspector.js; `held` is the weapon in the right hand.
+export function itemParts(def, held, maxNames) {
+    const opts = { held, maxNames };
+    if (isComparableWeapon(def)) {
+        const cls = weaponClassOf(def);
+        opts.hands = cls ? cls.hands : 1;
+        opts.weaponClass = cls ? cls.id : null;
+        opts.grants = grantedSkills(def);
+    }
+    return describeItemParts(def, opts);
+}
+
+// The same, as the paragraphs of a panel body: stats, fact, then one paragraph per source line.
+export function itemParagraphs(def, held) {
+    const p = itemParts(def, held);
+    return [p.stats, p.fact, ...p.sources].filter(Boolean);
+}
+
+// The same for the small panels (the bag's, the trade strip): the sources share one paragraph and
+// a long list is cut to three names and a count, so all three kinds still fit.
+export const COMPACT_NAMES = 3;
+export function itemParagraphsCompact(def, held) {
+    const p = itemParts(def, held, COMPACT_NAMES);
+    return [p.stats, p.fact, p.sources.join(' ')].filter(Boolean);
+}
+
 // The block as lines, or null for a non-weapon.
 export function weaponCompareLines(def, held) {
     const c = weaponCompare(def, held);
@@ -110,6 +139,49 @@ export function propNameAt(game, x, y) {
     return (prop && propName(prop.type)) || null;
 }
 
+// (ND1) What examining a character says, built from its spawn row's fields alone (never a
+// per-character table). `line` is the bracketed log line: name, role, stance. `rows` are the
+// inspect panel's extra lines: HP, armour, damage, weapon, what they sell, what they drop.
+// The words are plain placeholders for the owner to review.
+export const ROLE_WORDS = { boss: 'Leader', vendor: 'Vendor', talker: 'Talker', wanderer: 'Wanderer', guard: 'Guard', creature: 'Creature' };
+export const STANCE_WORDS = { hostile: 'Looks like trouble.', neutral: 'Minding their own business.', ally: 'On your side.' };
+
+const sentence = id => { const t = String(id).replace(/_/g, ' ').trim(); return t.charAt(0).toUpperCase() + t.slice(1); };
+const itemId = it => (it && typeof it === 'object') ? (it.type || it.id) : it;
+const itemName = it => resolveItemDef(itemId(it))?.name || sentence(itemId(it));
+const nameList = items => items.map(itemName).join(', ');
+
+export function characterRole(npc) {
+    if (npc.boss) return 'boss';
+    if (Array.isArray(npc.stock) && npc.stock.length) return 'vendor';
+    if (npc.dialogueId) return 'talker';
+    if (npc.capabilities?.has?.('WANDER')) return 'wanderer';
+    if (npc.capabilities?.size || (Array.isArray(npc.behavior) && npc.behavior.length)) return 'guard';
+    return 'creature';
+}
+
+export function characterSheet(npc) {
+    const named = typeof npc.name === 'string' && npc.name.trim() && !/[[\]]/.test(npc.name) ? npc.name.trim() : null;
+    // (FX47) A boss goes by its one name. No name of its own: its role from the dialogue id, else its type.
+    const name = (npc.boss && npc.shownName) || named || (npc.dialogueId ? sentence(npc.dialogueId) : null) || npc.type || 'Someone';
+    const role = characterRole(npc);
+    const stance = isHostile(npc) ? 'hostile' : npc.allegiance === 'ally' ? 'ally' : 'neutral';
+    const line = `[${name}. ${ROLE_WORDS[role]}. ${STANCE_WORDS[stance]}]`;
+
+    const rows = [];
+    const e = npc.entity || {};
+    if (Number.isFinite(e.hp)) rows.push(`HP: ${e.hp}${Number.isFinite(e.maxHp) ? ` / ${e.maxHp}` : ''}`);
+    if (Number.isFinite(e.armor)) rows.push(`Armour: ${e.armor}`);
+    if (Number.isFinite(npc.damage)) rows.push(`Damage: ${npc.damage}`);
+    const worn = Array.isArray(npc.equipped) ? npc.equipped : [];
+    const loadout = Array.isArray(npc.loadout) ? npc.loadout : [];
+    const weapon = [...worn, ...loadout].find(it => weaponClassOf(resolveItemDef(itemId(it))));
+    if (weapon) rows.push(`Weapon: ${itemName(weapon)}`);
+    if (role === 'vendor') rows.push(`Sells: ${nameList(npc.stock)}`);
+    if (loadout.length) rows.push(`Drops: ${nameList(loadout)}`);
+    return { name, role, stance, line, rows };
+}
+
 // The most salient thing at tile (x, y), as Examine reports it. One ladder for
 // both entry points — the E key (doExamine, below) and the Target List / tap
 // (main.js _fireResolver) — so they cannot drift apart again. First match wins:
@@ -122,6 +194,7 @@ export function propNameAt(game, x, y) {
 // Only off the map does it still come back empty-handed.
 //
 // Returns { title, body, panelBody, instanceId, grantsInstance, tierName, tierColor }:
+// `fallInstance` is set when the instance drops the player to another map (MO1).
 // `body` is the bracketed log line; `panelBody` is what the inspect panel shows
 // (the same, except an item's panel shows its description beside the tier chip);
 // `instanceId` is set only for an authored instance — the caller fires the
@@ -136,16 +209,17 @@ export function resolveExamine(game, x, y) {
     const inst = (game.examinables || []).find(e => e.x === x && e.y === y);
     if (inst) {
         return result(String(inst.id).replace(/_/g, ' '), inst.text || `[You examine the ${inst.id}.]`,
-            { instanceId: inst.id, grantsInstance: inst.grants ? inst : null });
+            { instanceId: inst.id, grantsInstance: inst.grants ? inst : null, fallInstance: inst.fallTo ? inst : null });
     }
 
     const npc = (game.enemies || []).find(e => e.x === x && e.y === y && e.entity?.isAlive?.());
     if (npc) {
-        // (FX47) A boss goes by its one name; anyone else reads as before.
-        const name = (npc.boss && npc.shownName) || npc.name || npc.type;
-        // A creature with examine text of its own says it (plans/ic4-frozen-creatures.md).
-        if (typeof npc.examine === 'string' && npc.examine) return result(name, npc.examine);
-        return result(name, `[${name}. ${isHostile(npc) ? 'Looks like trouble.' : 'Minding their own business.'}]`);
+        const sheet = characterSheet(npc);
+        // A creature with examine text of its own (plans/ic4-frozen-creatures.md) says it first, then the sheet (NDR3).
+        if (typeof npc.examine === 'string' && npc.examine) {
+            return result(sheet.name, `${npc.examine} ${sheet.line}`, { panelBody: [npc.examine, sheet.line, ...sheet.rows].join('\n') });
+        }
+        return result(sheet.name, sheet.line, { panelBody: [sheet.line, ...sheet.rows].join('\n') });
     }
 
     const chest = (game.containers || []).find(c => c.x === x && c.y === y);
@@ -158,13 +232,11 @@ export function resolveExamine(game, x, y) {
     if (def) {
         const tier = itemTier(def);
         const name = def.name || item.type;
-        const body = `[${name} (${tier.name}).${def.description ? ` ${def.description}` : ''}]`;
-        // (FX44) A weapon's panel keeps its description and adds the compare
-        // block under it (what it hits for against what you hold, hands, class,
-        // skills). The panel splits its body on newlines; the log line stays as
-        // it was.
-        const block = weaponCompareLines(def, game.equipment?.weapon);
-        const panelBody = block ? [def.description || '', '', ...block].join('\n').trim() : (def.description || body);
+        // (PC10) The panel shows the stats (a weapon's against the one you hold), then the fact,
+        // then where it comes from, one paragraph each; the log gets the same as one line.
+        const paras = itemParagraphs(def, game.equipment?.weapon);
+        const body = `${name}. ${paras.join(' ')}`;
+        const panelBody = paras.join('\n');
         return result(name, body, { panelBody, tierName: tier.name, tierColor: tier.color });
     }
 
@@ -248,6 +320,8 @@ export function doExamine(game) {
     // Some examinables yield a one-time item (e.g. the Red Cape in a grate);
     // main.js owns the inventory + collected-set bookkeeping and its logging.
     if (res.grantsInstance && game._grantFromExaminable) return game._grantFromExaminable(res.grantsInstance);
+    // (MO1) A grave you search can give way: say so, then drop the player through.
+    if (res.fallInstance && game._fallThrough) { game._log(res.body); game._fallThrough(res.fallInstance); return true; }
     // A quest stage waiting on some OTHER examinable: say where it is, so E
     // never answers the opening objective with just the name of the floor.
     const hint = questExamineHint(game, res);

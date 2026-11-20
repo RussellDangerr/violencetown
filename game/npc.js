@@ -96,7 +96,7 @@ function useKit(npc, messages) {
     if (!pick || !applyKitItem(pick.def, npc, dweller)) return false;
     npc.loadout = (npc.loadout ?? []).filter((_, i) => i !== pick.index);
     messages.push({
-        text: `[${logName(npc)} digs out ${pick.def.name} and uses it.]`,
+        text: `${logName(npc)} digs out ${pick.def.name} and uses it.`,
         sourceEnemy: npc,
         category: 'combat',
         heal: npc.entity.hp - hpBeforeKit,
@@ -241,7 +241,7 @@ export function tickNpcState(game, npc, clock = game.turn, rng = game.rng) {
                     const reacquire = npc.state !== 'returning';
                     npc.state = 'chasing';
                     if (reacquire) messages.push({
-                        text: `[${npc.entity.name} spotted you!]`,
+                        text: `${npc.entity.name} spotted you.`,
                         sourceEnemy: npc,
                         category: 'spotted',
                     });
@@ -273,7 +273,7 @@ export function tickNpcState(game, npc, clock = game.turn, rng = game.rng) {
                     npc.state = 'suspicious';
                     npc._awareBeats = 0;
                     messages.push({
-                        text: `[${npc.entity.name} turns to face you!]`,
+                        text: `${npc.entity.name} turns to face you.`,
                         sourceEnemy: npc,
                         category: 'spotted',
                     });
@@ -294,7 +294,7 @@ export function tickNpcState(game, npc, clock = game.turn, rng = game.rng) {
                 }
                 if (npc.state === 'suspicious') {
                     if (before !== 'suspicious') messages.push({
-                        text: `[${npc.entity.name} looks your way...]`,
+                        text: `${npc.entity.name} looks your way.`,
                         sourceEnemy: npc,
                         category: 'spotted',
                     });
@@ -347,7 +347,7 @@ export function tickNpcState(game, npc, clock = game.turn, rng = game.rng) {
                     npc.state = 'returning';
                     npc._lostSightTurns = 0;
                     messages.push({
-                        text: `[${npc.entity.name} loses interest.]`,
+                        text: `${npc.entity.name} loses interest.`,
                         sourceEnemy: npc,
                         category: 'deaggro',
                     });
@@ -379,7 +379,7 @@ export function tickNpcState(game, npc, clock = game.turn, rng = game.rng) {
                 npc.state = 'returning';
                 npc._lostSightTurns = 0;
                 messages.push({
-                    text: `[${npc.entity.name} loses the trail.]`,
+                    text: `${npc.entity.name} loses the trail.`,
                     sourceEnemy: npc,
                     category: 'deaggro',
                 });
@@ -441,7 +441,7 @@ export function tickNpcState(game, npc, clock = game.turn, rng = game.rng) {
                         const hpBefore = npc.entity.hp;
                         npc.entity.hp = Math.min(npc.entity.maxHp, npc.entity.hp + plan.heal);
                         messages.push({
-                            text: `[${logName(npc)} spends ${plan.spend} GP on itself. (+${plan.heal} HP)]`,
+                            text: `${logName(npc)} spends ${plan.spend} GP on itself and heals ${plan.heal} HP.`,
                             sourceEnemy: npc,
                             category: 'combat',
                             heal: npc.entity.hp - hpBefore,
@@ -451,7 +451,7 @@ export function tickNpcState(game, npc, clock = game.turn, rng = game.rng) {
                         const hpBefore = ward.entity.hp;
                         ward.entity.hp = Math.min(ward.entity.maxHp, ward.entity.hp + plan.heal);
                         messages.push({
-                            text: `[${logName(npc)} pays ${plan.spend} GP — ${logName(ward)} straightens up. (+${plan.heal} HP)]`,
+                            text: `${logName(npc)} pays ${plan.spend} GP and heals ${logName(ward)} by ${plan.heal} HP.`,
                             sourceEnemy: npc,
                             category: 'combat',
                             heal: ward.entity.hp - hpBefore,
@@ -472,7 +472,7 @@ export function tickNpcState(game, npc, clock = game.turn, rng = game.rng) {
                 const hpBefore = npc.entity.hp;
                 npc.entity.hp = Math.min(npc.entity.maxHp, npc.entity.hp + buy.heal);
                 messages.push({
-                    text: `[${logName(npc)} buys back ${buy.heal} HP! (-${buy.spend} GP)]`,
+                    text: `${logName(npc)} spends ${buy.spend} GP and heals ${buy.heal} HP.`,
                     sourceEnemy: npc,
                     category: 'combat',
                     heal: npc.entity.hp - hpBefore,
@@ -608,7 +608,7 @@ export function mug(game, npc) {
     const amount = Math.min(MUG_GP, game.gold ?? 0);
     if (!(amount > 0) || !transferGold(game, npc, amount, 'mugging')) return null;
     npc._tookGold = amount;
-    return { text: '[TEXT]', sourceEnemy: npc, category: 'combat' };
+    return { text: `${logName(npc)} took ${amount} GP.`, sourceEnemy: npc, category: 'combat' };
 }
 
 // One turn on the run. In reach of you (his sight range, all the way round: he
@@ -672,7 +672,7 @@ function tickCarrying(game, npc) {
             : npc.carrying.type;
         chest.contents.push({ type: itemType, source: npc.id });
         npc.carrying = null;
-        return `[A ${npc.type} drops a ${itemType} into the chest.]`;
+        return `A ${npc.type} drops a ${itemType} into the chest.`;
     }
 
     // Not adjacent — step toward chest
@@ -703,7 +703,7 @@ function tickFindingItem(game, npc) {
         npc.carrying = target.type;
         const idx = game.groundItems.indexOf(target);
         if (idx >= 0) game.groundItems.splice(idx, 1);
-        return `[A ${npc.type} pockets a ${target.type}.]`;
+        return `A ${npc.type} picks up a ${target.type}.`;
     }
 
     // Step toward it
@@ -888,7 +888,7 @@ function endRobbedSweep(game, npc) {
     npc._robbedSweep = false;
     spreadParanoia(game.enemies, { x: npc.x, y: npc.y }, npc);
     return [{
-        text: `[${npc.entity.name} gives up looking. People are watching you now.]`,
+        text: `${npc.entity.name} gives up looking. Other people nearby are now warier of you.`,
         sourceEnemy: npc,
         category: 'deaggro',
     }];

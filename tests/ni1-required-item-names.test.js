@@ -34,10 +34,10 @@ describe('each Act 2 boss hands over the item with its zone\'s name', () => {
         });
     }
 
-    test('descriptions stay [TEXT] and icons stay the magenta placeholder', () => {
+    test('facts stay empty and icons stay the magenta placeholder', () => {
         for (const slot of Object.keys(BY_SLOT)) {
             const it = ITEMS[SLOTS[slot].requiredDrop];
-            assert.equal(it.description, '[TEXT]');
+            assert.equal(it.fact, '');
             assert.equal(it.fallbackColor, '#ff00ff');
         }
     });

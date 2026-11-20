@@ -263,7 +263,7 @@ describe('the Eat slice, drawn', () => {
         const g = eater({ hp: 100, inventory: [stack(HOT_DOG)] });
         openToEat(g);
         const { drawn } = draw(g);
-        assert.ok(drawn.some(d => d.text === '[TEXT]'), `no reason; drew ${JSON.stringify(drawn.map(d => d.text))}`);
+        assert.ok(drawn.some(d => d.text === 'HP FULL'), `no reason; drew ${JSON.stringify(drawn.map(d => d.text))}`);
         assert.ok(!drawn.some(d => /HOT DOG/.test(d.text)));
     });
 
@@ -271,14 +271,14 @@ describe('the Eat slice, drawn', () => {
         const g = eater({ hp: 30, inventory: [] });
         openToEat(g);
         const { drawn } = draw(g);
-        assert.ok(!drawn.some(d => d.text === '[TEXT]'));
+        assert.ok(!drawn.some(d => d.text === 'HP FULL'));
     });
 
     test('every other slice draws no second line', () => {
         const g = eater({ hp: 30, inventory: [stack(HOT_DOG)] });
         m._openWheel.call(g);
         const { drawn } = draw(g);
-        assert.ok(!drawn.some(d => d.text === '[TEXT]' || / \+\d+$/.test(d.text)));
+        assert.ok(!drawn.some(d => d.text === 'HP FULL' || / \+\d+$/.test(d.text)));
     });
 
     for (const [name, size] of [['ultrawide', [3440, 1440, 1]], ['phone', [390, 844, 3]]]) {

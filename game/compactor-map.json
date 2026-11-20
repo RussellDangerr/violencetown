@@ -1,0 +1,27 @@
+{
+  "_note": "The trash compactor room (plans/tc1-trash-compactor-walls.md). Off the Factory, behind its south-west door. compactor.js shuts the door and closes the side walls column by column; the tiles here are the room as it starts. Placeholder geometry and text. Tiles: 40 floor, 41 wall.",
+  "width": 11,
+  "height": 9,
+  "spawn": { "x": 5, "y": 1 },
+  "zoneName": "[COMPACTOR ROOM]",
+  "border": { "tile": 41 },
+  "tiles": [
+    41,41,41,41,41,40,41,41,41,41,41,
+    40,40,40,40,40,40,40,40,40,40,40,
+    40,40,40,40,40,40,40,40,40,40,40,
+    40,40,40,40,40,40,40,40,40,40,40,
+    40,40,40,40,40,40,40,40,40,40,40,
+    40,40,40,40,40,40,40,40,40,40,40,
+    40,40,40,40,40,40,40,40,40,40,40,
+    40,40,40,40,40,40,40,40,40,40,40,
+    41,41,41,41,41,41,41,41,41,41,41
+  ],
+  "enemies": [
+    { "id": "compactor", "entry": "compactor", "x": 5, "y": 5 }
+  ],
+  "items": [],
+  "examinables": [],
+  "transitions": [
+    { "x": 5, "y": 0, "toMap": "factory-map.json", "toX": 4, "toY": 27, "label": "[North — back out to the Factory]" }
+  ]
+}

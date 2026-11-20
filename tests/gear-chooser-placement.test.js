@@ -171,7 +171,7 @@ describe('GC1 - where each plate chooser opens', () => {
 
 describe('GC1 - real keys open the FEET and BACK choosers where they are drawn', () => {
     const CASES = [
-        { key: 'bottom', label: 'FEET', id: 'shoe_bags' },
+        { key: 'bottom', label: 'BOTTOM', id: 'shoe_bags' },
         { key: 'back', label: 'BACK', id: 'red_cape' },
     ];
     for (const c of CASES) {

@@ -146,14 +146,14 @@ describe('the table row and the bear', () => {
         const row = INTERACTIONS.find(r => r.zone === 'wilderness-map.json');
         assert.ok(row);
         assert.equal(row.carry, 'mola_cola');
-        assert.equal(row.note, '[TEXT]');
+        assert.equal(row.note, 'Carrying Mola Cola in the Wilderness calls a bear.');
         assert.ok(INTERACTIONS.some(r => r.zone === 'frozen-map.json'), 'FD1 row kept');
     });
 
-    test('the bear starts as the polar bear, wears the [Bear] stand-in name, and has art', () => {
+    test('the bear starts as the polar bear, wears the Bear stand-in name, and has art', () => {
         const polar = ENTRIES.polar_bear;
         for (const k of ['hp', 'armor', 'damage', 'gold', 'loadout']) assert.deepEqual(WILDERNESS_BEAR[k], polar[k], k);
-        assert.equal(WILDERNESS_BEAR.name, '[Bear]');
+        assert.equal(WILDERNESS_BEAR.name, 'Bear');
         assert.ok(ENEMY_SPRITES[WILDERNESS_BEAR.type], 'the bear has a sprite entry');
     });
 });
@@ -171,7 +171,7 @@ describe('walking into the Wilderness', () => {
         const m = g.map;
         assert.ok(b.x <= 1 || b.y <= 1 || b.x >= m.width - 2 || b.y >= m.height - 2, 'on the edge');
         assert.deepEqual(g.interactionNotes, ['mola_cola_wilderness']);
-        assert.equal(g.logs.filter(l => l === '[TEXT]').length, 1, 'the note shows once');
+        assert.equal(g.logs.filter(l => l === 'Carrying Mola Cola in the Wilderness calls a bear.').length, 1, 'the note shows once');
         for (let i = 0; i < 3; i++) g.beat();
         assert.equal(bears(g).length, 1, 'no more come while you stay');
     });

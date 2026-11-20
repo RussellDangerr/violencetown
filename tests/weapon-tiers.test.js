@@ -58,7 +58,7 @@ describe('every class yields five tiers from one base', () => {
                 assert.equal(t.weaponClass, id);
                 assert.equal(t.equipSlot, 'weapon');
                 assert.equal(itemTier(t).key, WEAPON_TIER_KEYS[i], `${t.id} shows the wrong colour`);
-                assert.match(t.name, /^\[.+\]$/, `${t.id} name is not a bracketed placeholder`);
+                assert.equal(t.name, `${WEAPON_TIER_KEYS[i][0].toUpperCase()}${WEAPON_TIER_KEYS[i].slice(1)} ${base.name}`, `${t.id} name is its tier and its class's name`);
             });
             assert.equal(new Set(tiers.map(t => t.id)).size, 5);
         });
@@ -218,7 +218,7 @@ describe('every armor piece yields five tiers from one base', () => {
                 assert.equal(t.useType, 'equip');
                 assert.ok(isArmorPiece(t), `${t.id} is no longer armor`);
                 assert.equal(itemTier(t).key, WEAPON_TIER_KEYS[i], `${t.id} shows the wrong colour`);
-                assert.match(t.name, /^\[.+\]$/, `${t.id} name is not a bracketed placeholder`);
+                assert.equal(t.name, `${WEAPON_TIER_KEYS[i][0].toUpperCase()}${WEAPON_TIER_KEYS[i].slice(1)} ${base.name}`, `${t.id} name is its tier and its class's name`);
                 assert.ok(Object.isFrozen(t) && Object.isFrozen(t.perks), `${t.id} is not frozen`);
             });
             assert.equal(new Set(tiers.map(t => t.id)).size, 5);

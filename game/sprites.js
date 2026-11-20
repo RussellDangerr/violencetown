@@ -382,6 +382,7 @@ export const ITEM_SPRITES = {
     speed_poition:    { sheet: 'tinyDungeon', x: 5 * 16, y: 10 * 16, w: 16, h: 16 },  // plain vial
     gold_poition:     { sheet: 'tinyDungeon', x: 6 * 16, y: 9  * 16, w: 16, h: 16 },  // green bottle — money green
     defence_poition:  { sheet: 'tinyDungeon', x: 8 * 16, y: 9  * 16, w: 16, h: 16 },  // blue bottle
+    boon_poition:     { sheet: 'tinyDungeon', x: 6 * 16, y: 8  * 16, w: 16, h: 16 },  // placeholder cell: no free vial left on the sheet
 
     // ── Item icons, second pass (visual-pass, 2026-09-06) ───────────────────
     // Shortlist picks verified against the labeled contact sheets (tools/contact_*.png).
@@ -551,9 +552,11 @@ export const ENEMY_SPRITES = {
     // Downtown's mugger wears the same goblin (ruled: the two read as kin). Safe
     // to share: Greedy Green never stands in Downtown.
     'Ruffian':          { sheet: 'tinyDungeon', col: 4, row: 9,  static: true }, // green-bandana goblin
+    'Strongman':        { sheet: 'tinyDungeon', col: 2, row: 7,  static: true }, // SG1 placeholder: bald mustached, Pike's cell
     'Carnival Clown':   { sheet: 'tinyDungeon', col: 0, row: 7,  static: true }, // purple mage — most colorful humanoid
     'Mimic':            { sheet: 'tinyDungeon', col: 8, row: 7,  static: true }, // the chest with a tongue (MM1): its awake look; asleep it is drawn as a chest
     'Rattling Skeleton':{ sheet: 'tinyDungeon', col: 1, row: 10, static: true }, // white ghost — pale/bony proxy
+    'Worker':           { sheet: 'tinyDungeon', col: 1, row: 10, static: true }, // (HV1) the Skeleton's cell, a stand-in
 
     // ── Named town NPCs (DS1) ───────────────────────────────────────────────
     // Each borrows one of the six RPG Urban people, so it walks with real
@@ -598,6 +601,9 @@ export const ENEMY_SPRITES = {
     // (1,10), drawn behind the body, see-through and a little larger (renderer.js). Only the
     // Ankou has the field.
     'Ankou': { sheet: 'tinyDungeon', col: 3, row: 9, static: true, ghost: { col: 1, row: 10, scale: 1.4, alpha: 0.5 } },
+    // The Tunnels' Molemen (plans/mo1-molemen-tunnels.md): the grey beast cell the Polar Bear wears (they
+    // never share a map), a stand-in until they are drawn.
+    'Moleman': { sheet: 'tinyDungeon', col: 4, row: 10, static: true },
     // The Carnival's named clown (plans/cw1-the-clown-mini-boss.md): an unused Tiny Dungeon
     // cell, a stand-in, so he is never taken for the ordinary purple-mage clown.
     'The Clown': { sheet: 'tinyDungeon', col: 3, row: 8, static: true },
@@ -609,6 +615,11 @@ export const ENEMY_SPRITES = {
     'Snowman':    { sheet: 'tinyDungeon', col: 1, row: 10, static: true }, // white ghost, shared with Rattling Skeleton
     'Yeti':       { sheet: 'tinyDungeon', col: 1, row: 9,  static: true }, // the ogre, shared with Fungus King
     'Polar Bear': { sheet: 'tinyDungeon', col: 4, row: 10, static: true }, // grey beast, Lire's uncoloured source
+    // The Valley's dinosaurs (plans/dn1-dinosaurs-roam-valley.md): the cells of the enemies
+    // each copies. Those types never stand in the Valley, so no cell is shared on its map.
+    'Raptor':      { sheet: 'tinyDungeon', col: 1, row: 10, static: true }, // white ghost, shared with Rattling Skeleton
+    'Triceratops': { sheet: 'tinyDungeon', col: 2, row: 9,  static: true }, // red crab, shared with Red Fungus
+    'T. rex':      { sheet: 'tinyDungeon', col: 1, row: 9,  static: true }, // the ogre, shared with Fungus King
     // (FD2) The Wilderness bear: the polar bear recoloured brown (FDR4), tools/gen_recolor.py.
     'Bear':       { sheet: 'bearVariants', col: 0, row: 0, static: true },
     // Siberia, the frozen area's boss (plans/ic5-siberia-frozen-boss.md): the
@@ -624,6 +635,9 @@ export const ENEMY_SPRITES = {
 
     // Not a person: a puzzleWall growth blocking a sewer pipe.
     'Sludge Bloom': { sheet: 'tinyDungeon', col: 8, row: 2, static: true }, // stone hatch leaking green ooze
+    // The trash compactor (plans/tc1-trash-compactor-walls.md): the Sludge Bloom's cell, a stand-in.
+    // The two never share a map: the Bloom is the Sewer's, the compactor stands alone in its room.
+    'Compactor': { sheet: 'tinyDungeon', col: 8, row: 2, static: true },
 };
 
 // Stable per-entity hash. Used for cosmetic variety (spriteVariant) and for

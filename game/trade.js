@@ -79,7 +79,7 @@ export function sellPrice(item, disposition) {
 
 // (FD3) An item that carries `saleLockedUntil: '<quest id>'` cannot be sold or handed to a
 // vendor until that quest is complete. Dropping and using it are not affected.
-export const SALE_LOCK_REFUSAL = '[TEXT]';
+export const SALE_LOCK_REFUSAL = 'This item cannot be sold until its quest is done.';
 export function saleLocked(def, game) {
     if (!def || !def.saleLockedUntil) return false;
     const qe = game && game.questEngine;

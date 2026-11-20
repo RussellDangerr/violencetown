@@ -99,7 +99,7 @@ describe('the fight panels show long names whole', () => {
             const { r, drawn } = rig(vp);
             r._drawTargetPanel(P.right, {
                 name: 'Wererat', hp: 66, maxHp: 100, armor: 0, gold: 20,
-                kit: [{ id: 'a', name: 'Defence Poition' }, { id: 'b', name: '[Cardboard Cuirass]' }],
+                kit: [{ id: 'a', name: 'Defence Poition' }, { id: 'b', name: 'Cardboard Cuirass' }],
                 takeable: { coin: true, kit: true, gear: false },
             });
             const texts = drawn.map((d) => d.text);

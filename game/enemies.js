@@ -14,7 +14,7 @@
 // `behavior` is now ctor-input / save-only — parsed once into capabilities +
 // allegiance at construction; runtime dispatch never reads it.
 
-import { Entity, attack, formatDamageNumber } from './combat.js';
+import { Entity, attack, formatDamageNumber, DEFAULT_MP } from './combat.js';
 import { manhattan } from './utils.js';
 import { stepEntity, fleeStep } from './pathing.js';
 import { tickNpcState } from './npc.js';
@@ -246,7 +246,7 @@ export class Enemy {
         this.wakeSight  = this.disguised ? (wakeSight ?? sightRange) : null;
         this.sightRange = this.disguised ? 0 : sightRange;
         this.state      = 'idle'; // legacy chase state: 'idle' | 'chasing' | 'returning'
-        this.entity     = new Entity({ name: `[${shownName({ boss, name, type, dialogueId })}]`, hp, armor });
+        this.entity     = new Entity({ name: shownName({ boss, name, type, dialogueId }), hp, armor });
         // Its live defence buffs soak every blow its body takes (combat.js takeDamage).
         Object.defineProperty(this.entity, 'guardOf', {
             value: () => sumBuffStat(this.buffs, 'defence'), enumerable: false,
@@ -359,7 +359,7 @@ export class Enemy {
     // is set again here. Returns the line to log on arrival.
     promoteToRival() {
         this.rival = true;
-        this.entity.name = unnestBrackets(`[${shownName(this)}]`);
+        this.entity.name = shownName(this);
         return RIVAL_RETURN_LINE;
     }
     // (FX38) "The Violencian" for the unnamed, "Knuckles" for a name.
@@ -484,6 +484,8 @@ export class Enemy {
             // Law 2 positional: a mid-fight reload must not erase a spun
             // victim's recovery turn (that would hand back the free hit).
             _spunTurns: this._spunTurns,
+            // (BP2) A lowered max MP survives a reload. Left out while it is the default.
+            ...((this.entity.maxMp !== DEFAULT_MP || this.entity.mp !== DEFAULT_MP) ? { maxMp: this.entity.maxMp, mp: this.entity.mp } : {}),
             // (BS2) The mark that he has already mugged you. Left out while unset.
             tookGold: this._tookGold > 0 ? this._tookGold : undefined,
         };
@@ -499,6 +501,10 @@ export class Enemy {
         e.entity.maxHp = Math.max(1, num(s.maxHp, e.entity.maxHp));
         e.entity.hp = Math.max(0, Math.min(num(s.hp, e.entity.maxHp), e.entity.maxHp));
         e.entity.alive = s.alive !== false;
+        if (typeof s.maxMp === 'number' && isFinite(s.maxMp)) {   // (BP2)
+            e.entity.maxMp = Math.max(0, s.maxMp);
+            e.entity.mp = Math.max(0, Math.min(num(s.mp, e.entity.maxMp), e.entity.maxMp));
+        }
         e.state = s.state || 'idle';
         e.fsmState = s.fsmState ?? null;
         e._lastWanderTurn = num(s.lastWanderTurn, 0);
@@ -530,12 +536,13 @@ export class Enemy {
 
 // (FD2) The bear the Wilderness sends for a carried Mola Cola. Not a slot entry nor a map spawn:
 // interactions.js spawns it. Its numbers start as the Polar Bear's (so they track it); the name
-// is the stand-in `[Bear]` and the examine text `[TEXT]` until Caelan names and writes it.
+// is the stand-in `Bear` and its examine text is a plain line until Caelan writes it.
 export const WILDERNESS_BEAR_TYPE = 'Bear';
 export const WILDERNESS_BEAR = {
     ...structuredClone(ENTRIES.polar_bear),
     type: WILDERNESS_BEAR_TYPE,
-    name: '[Bear]',
+    name: 'Bear',
+    examine: 'Bear. Wild animal. It attacks when it sees you.',
 };
 
 // Resolve a loadout to real item defs. Entries are item IDS so an enemy can

@@ -40,7 +40,7 @@ import { dropLoadout } from '../game/drops.js';
 import { ENEMY_SPRITES } from '../game/sprites.js';
 import { validateContent } from '../game/content-validate.js';
 import { WEAPONS } from '../game/weapons.js';
-import { biteSunMan, riseSunMan, beastFell, resetBeast, finaleTick, blocksCowerHit, restoreFinale, isCowering } from '../game/finale-setpiece.js';
+import { FINALE_LINES, biteSunMan, riseSunMan, beastFell, resetBeast, finaleTick, blocksCowerHit, restoreFinale, isCowering } from '../game/finale-setpiece.js';
 
 globalThis.localStorage ??= { getItem: () => null, setItem() {}, removeItem() {} };
 
@@ -234,11 +234,11 @@ describe('the data', () => {
         assert.ok(getDialogue(FINALE_PHASE1.sunMan.dialogueId), 'Sun Man has a conversation stub so he can be named');
     });
 
-    test('every line the player reads is the [TEXT] placeholder', () => {
+    test('every line the player reads is plain', () => {
         const d = getDialogue('financier_vault');
-        assert.equal(d.greeting, '[TEXT]');
-        for (const c of d.choices) { assert.equal(c.label, '[TEXT]'); assert.equal(c.reply, '[TEXT]'); }
-        assert.equal(getDialogue('sun_man').greeting, '[TEXT]');
+        assert.equal(d.greeting, 'I am the Financier. This is my vault. Talk to me and the fight starts.');
+        assert.deepEqual(d.choices.map(c => [c.label, c.reply]), [['Start the fight with the Financier', 'The Financier turns on you and Sun Man joins you for a few turns.']]);
+        assert.equal(getDialogue('sun_man').greeting, 'I am Sun Man. I fight beside you against the Financier for a few turns.');
     });
 
     test('Sun Man\'s numbers are the encounter\'s stand-ins: three turns, a lot more than the lion\'s 25', () => {
@@ -363,7 +363,7 @@ describe('the fight, driven with real keys', () => {
         assert.equal(sun.shownName, 'Sun Man', 'the log and panel call him by name');
         assert.equal(sun.type, FINALE_PHASE1.sunMan.type);
         assert.ok(chebyshev(sun.x, sun.y, g.playerX, g.playerY) === 1, 'he stands beside you');
-        assert.equal(g.logs.filter(l => l === '[TEXT]').length, 1, 'his arrival line is the placeholder');
+        assert.equal(g.logs.filter(l => l === `${FINALE_PHASE1.sunMan.name} appears beside you and fights for you for ${FINALE_PHASE1.sunManTurns} turns.`).length, 1, 'his arrival line');
 
         await g.press('KeyE');                        // read it, leave the conversation
         assert.equal(g.state, STATE.IDLE);
@@ -396,13 +396,14 @@ describe('the fight, driven with real keys', () => {
         assert.deepEqual(sunTurns, [true, true, true], 'Sun Man is still in the room after turn 3: cowering, not gone');
         assert.equal(isCowering(sunManOf(g)), true, 'Sun Man is bitten and cowering');
         assert.equal(fin.entity.armor + sumBuffStat(fin.buffs, 'defence'), 4 - FINALE_PHASE1.defenceDrop, 'his defence has dropped');
-        assert.ok(g.logs.filter(l => l === '[TEXT]').length >= 2, 'Sun Man\'s leaving line is the placeholder');
+        assert.ok(g.logs.includes(FINALE_LINES.bite), 'the bite is said plainly');
+        assert.ok(g.logs.includes(FINALE_LINES.cloak), 'the cloak over his face is said plainly');
         assert.ok(fin.buffs.some(b => b.id === 'weakened' && b.type === 'debuff'), 'the red W badge the renderer draws over an enemy');
         assert.equal(g.events.filter(e => e.type === 'sun_man_bitten').length, 1, 'the hook for the Bite fires once');
-        assert.ok(!g.logs.some(l => /slinks back/.test(l)), 'he does not leave like the lion');
+        assert.ok(!g.logs.some(l => /Its time is up/.test(l)), 'he does not leave like the lion');
 
         // He hit hard: every one of his blows was his 30 less the Financier's 4 (before he was weakened).
-        const sunBlows = g.blows.filter(b => b.by === '[Sun Man]');
+        const sunBlows = g.blows.filter(b => b.by === 'Sun Man');
         assert.ok(sunBlows.length >= 2, `Sun Man landed ${sunBlows.length} blows`);
         assert.ok(sunBlows.length <= 3, 'and never more than one a turn');
         for (const b of sunBlows) { assert.equal(b.raw, FINALE_PHASE1.sunMan.damage); assert.equal(b.dealt, FINALE_PHASE1.sunMan.damage - 4); }
@@ -551,7 +552,7 @@ describe('losing to the Financier', () => {
         g.timers.splice(0).forEach(fn => fn());      // the beat _die waits before the defeat resolves
 
         assert.equal(g.state, STATE.IDLE);
-        assert.ok(g.logs.some(l => /Down but not out/.test(l)), 'the boss retry, not a defeat scenario');
+        assert.ok(g.logs.some(l => /You retry the boss fight/.test(l)), 'the boss retry, not a defeat scenario');
         assert.equal(g.inventory.filter(Boolean).length, bag, 'nothing taken');
         const fin = financierOf(g);
         assert.notEqual(fin, old, 'he is rebuilt, not patched');
