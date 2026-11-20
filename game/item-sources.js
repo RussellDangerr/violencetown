@@ -101,6 +101,11 @@ export default {
       "Sewer"
     ]
   },
+  "delivery_cap_grey": {
+    "foundIn": [
+      "Diner"
+    ]
+  },
   "fearmur": {
     "foundIn": [
       "Graveyard"
