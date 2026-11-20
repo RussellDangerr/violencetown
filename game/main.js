@@ -66,7 +66,7 @@ import {
 import {
     emptyOffer, commitBlocker, stage, unstage, settledGold, resolveOffer, sameEntry,
 } from './offer.js';   // (offer screen) the basket model
-import { canTrade, sellPrice, specialDef, transferGold, burnGold, saleLocked, SALE_LOCK_REFUSAL, stockPrice, NIGHT_SELLER_ID } from './trade.js'; // pricing + the transaction spine
+import { canTrade, sellPrice, specialDef, transferGold, burnGold, saleLocked, SALE_LOCK_REFUSAL, stockPrice, NIGHT_SELLER_ID, NIGHT_SPAWNS } from './trade.js'; // pricing + the transaction spine
 import { logCategory } from './combat-log.js';   // (log tagging) one rule for a message's category
 import { takeable, learnFromHit } from './fight-panels.js';   // (combat-hud stage 4) the one answer to "what could I take"
 import { buildXmbBar, resolveXmbSelection, cycleXmbCategory, cycleXmbItem, xmbCategoryOf, XMB_LABELS } from './xmb.js';
@@ -772,7 +772,6 @@ class Game {
         const dead = deadIds(this._respawnLists, url);
         for (const s of [...this.map.enemySpawns, ...(this._spotSpawns?.(url) ?? [])]) {
             if (dead.has(s.id)) continue;
-            if (s.nightOnly) continue;   // (BP7) _syncNightNpcs adds it once the day clock says night
             if (this._spotHolds?.(url, s)) continue;   // (RO1) a boss whose returning spot is filled stays dead
             // (plans/tt1-traveler-after-burger.md) A spawn with `goneAfter` leaves once that quest is complete.
             if (s.goneAfter && this.questEngine?.isComplete?.(s.goneAfter)) continue;
@@ -5460,11 +5459,11 @@ class Game {
         this._syncNightNpcs?.();   // (BP7) inline ?. call: older tests lift this method
     }
 
-    // (BP7) A spawn marked `nightOnly` stands in its zone while it is night (_nightLevel above 0)
+    // (BP7) A spawn in NIGHT_SPAWNS (trade.js) stands in its zone while it is night (_nightLevel above 0)
     // and is gone otherwise. It stays put while its trade screen is open, and is not added on a
     // tile someone stands on.
     _syncNightNpcs() {
-        const spawns = (this.map && this.map.enemySpawns) || [];
+        const spawns = NIGHT_SPAWNS.filter(s => s.map === this._mapUrl);
         if (!this.enemies) return;
         const night = (this._nightLevel || 0) > 0;
         for (const s of spawns) {
@@ -8122,7 +8121,7 @@ class Game {
         (npc.stock || []).forEach((id, index) => {
             const def = this._resolveItemDef(id);
             // (BP7) The Night seller's boon carries its fixed price on the row, as a buyback row does.
-            const fixed = stockPrice(npc, id);
+            const fixed = this._stockPrice?.(npc, id) ?? null;   // inline ?. call: older tests lift this method
             if (def) out.push(fixed != null ? { def, count: 1, max: Infinity, price: fixed, source: 'stock', index }
                                             : { def, count: 1, max: Infinity, source: 'stock', index });
         });
@@ -8247,6 +8246,8 @@ class Game {
 
     // (BP7, BPR4) The Night seller sells no boon that would take drunk plus held boons past
     // the cap. Drunk ones are boonCount; held ones are the boon poitions in the bag.
+    _stockPrice(npc, id) { return stockPrice(npc, id); }
+
     _nightSellerCapLine(npc) {
         if (!npc || npc.id !== NIGHT_SELLER_ID || !this._offer) return null;
         const staged = (this._offer.take || []).filter(e => e.def && e.def.id === 'boon_poition').reduce((a, e) => a + (e.count || 1), 0);

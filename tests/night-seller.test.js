@@ -4,7 +4,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { ITEMS, BOON_CAP, boonCount } from '../game/items.js';
-import { NIGHT_BOON_PRICE, NIGHT_SELLER_ID, stockPrice, buyPrice } from '../game/trade.js';
+import { NIGHT_BOON_PRICE, NIGHT_SELLER_ID, NIGHT_SPAWNS, stockPrice, buyPrice } from '../game/trade.js';
 import { emptyOffer, offerBalance, stage } from '../game/offer.js';
 import { GameMap } from '../game/map.js';
 
@@ -13,7 +13,7 @@ const { Game } = await import('../game/main.js');
 const P = Game.prototype;
 
 const town = JSON.parse(readFileSync(new URL('../game/town-map.json', import.meta.url), 'utf8'));
-const spawn = town.enemies.find(e => e.id === NIGHT_SELLER_ID);
+const spawn = NIGHT_SPAWNS.find(e => e.id === NIGHT_SELLER_ID);
 
 // A game stub with the real day-clock and sync methods bound on.
 function stub(extra = {}) {
@@ -28,6 +28,7 @@ function stub(extra = {}) {
     g._nightSellerCapLine = P._nightSellerCapLine;
     g._offerTheirsList = P._offerTheirsList;
     g._buybackList = () => [];
+    g._stockPrice = P._stockPrice;
     return g;
 }
 const setClock = (g, n) => { g._dayClock = n; g._advanceDayClock(0); };
@@ -43,8 +44,11 @@ describe('the spawn', () => {
         for (const line of [spawn.name, ...spawn.barks]) assert.ok(!/[\[\]]/.test(line), line);
     });
     test('stands on a tile nobody else holds', () => {
-        const same = town.enemies.filter(e => e.x === spawn.x && e.y === spawn.y);
-        assert.equal(same.length, 1);
+        assert.equal(town.enemies.filter(e => e.x === spawn.x && e.y === spawn.y).length, 0);
+        assert.ok(!town.enemies.some(e => e.id === NIGHT_SELLER_ID));   // day-only Town for the zone's tools
+        const map = new GameMap(town);
+        assert.ok(map.tiles[spawn.y * map.width + spawn.x] === 11);   // the street tile
+        assert.ok(!map.propBlocked.has(`${spawn.x},${spawn.y}`));
     });
 });
 

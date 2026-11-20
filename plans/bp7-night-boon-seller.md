@@ -12,7 +12,9 @@ them offers one thing: a boon poition, at 500 GP.
   The seller goes by the role name "Night seller".
 
 ## How it works
-- town-map.json gets a vendor spawn `night-seller` flagged `nightOnly`, stocking `boon_poition`.
+- The seller is a vendor spawn `night-seller` stocking `boon_poition`, kept in trade.js (NIGHT_SPAWNS)
+  rather than the map's enemy list, so the balance harness and item-sources goldens keep reading a
+  day-only Town.
 - main.js keeps that spawn in step with the day clock: it is added when `_nightLevel` is above 0
   (dusk to dawn) and removed when it is 0 again, never while its trade screen is open. A zone load
   skips it by day.
