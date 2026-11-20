@@ -7,6 +7,7 @@ import { ITEMS, BOON_CAP, boonCount } from '../game/items.js';
 import { NIGHT_BOON_PRICE, NIGHT_SELLER_ID, NIGHT_SPAWNS, stockPrice, buyPrice } from '../game/trade.js';
 import { emptyOffer, offerBalance, stage } from '../game/offer.js';
 import { GameMap } from '../game/map.js';
+import { shownName } from '../game/enemies.js';
 
 globalThis.localStorage ??= { getItem: () => null, setItem() {}, removeItem() {} };
 const { Game } = await import('../game/main.js');
@@ -39,6 +40,7 @@ describe('the spawn', () => {
         assert.ok(spawn);
         assert.equal(spawn.name, 'Night seller');
         assert.equal(spawn.nightOnly, true);
+        assert.equal(shownName(spawn), 'Night seller');   // a named townsperson needs a dialogueId; none is written, so there is no Talk
         assert.equal(spawn.vendor, true);
         assert.deepEqual(spawn.stock, ['boon_poition']);
         for (const line of [spawn.name, ...spawn.barks]) assert.ok(!/[\[\]]/.test(line), line);

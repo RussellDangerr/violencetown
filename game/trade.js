@@ -99,7 +99,7 @@ export const NIGHT_BOON_PRICE = 500;
 // The seller's spawn, in the same shape as a map's enemy spawns. It lives here, not in the map's
 // enemy list, so the zone's tools (balance harness, item sources) keep reading a day-only Town.
 export const NIGHT_SPAWNS = [
-    { map: 'town-map.json', id: NIGHT_SELLER_ID, nightOnly: true, type: 'Violencian', name: 'Night seller', x: 18, y: 16,
+    { map: 'town-map.json', id: NIGHT_SELLER_ID, nightOnly: true, type: 'Violencian', name: 'Night seller', dialogueId: 'night_seller', x: 18, y: 16,
       hp: 100, armor: -80, damage: 0, sightRange: 4, ambient: true, behavior: ['IDLE'], vendor: true, stock: ['boon_poition'],
       disposition: 20,
       barks: ['The Night seller sells boon poitions for 500 GP.', 'The Night seller is only here at night.', 'The Night seller is waiting.'],
