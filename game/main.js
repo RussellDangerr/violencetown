@@ -2051,7 +2051,7 @@ class Game {
                 const t = this._targetAt(this.playerX + fdx, this.playerY + fdy);
                 const verb = t && defaultVerb(t, this);
                 if (verb) { this._actOnTarget(verb, t); return; }
-                if (findExaminable(this)?.id === BOARD_ID) { useJobBoard(this); this._render(); return; }   // (BP6)
+                if (this._useJobBoard?.(true)) { this._render(); return; }   // (BP6) inline ?. call: older tests lift this block
                 doExamine(this); this._render(); return;
             }
 
@@ -4232,7 +4232,7 @@ class Game {
                 // instance like the car resolves at its own tile, whichever half
                 // was tapped.
                 const ex = t.examinable;
-                if (ex && ex.id === BOARD_ID) { useJobBoard(this); this._render(); break; }   // (BP6)
+                if (ex && ex.id === 'job_board' && this._useJobBoard?.()) { this._render(); break; }   // (BP6)
                 const res = resolveExamine(this, ex ? ex.x : t.x, ex ? ex.y : t.y);
                 if (res.instanceId) this.emitGameEvent('examine', { targetId: res.instanceId });
                 if (res.grantsInstance) { this._grantFromExaminable(res.grantsInstance); break; }
@@ -5991,6 +5991,13 @@ class Game {
         if (msg) this._log(msg, 'pickup');
         this.emitGameEvent('item_pickup', { id });
         this._render();
+        return true;
+    }
+
+    // (BP6) The Job board. With `facing` it only fires when the E key's faced examinable is the board; a tap already knows.
+    _useJobBoard(facing) {
+        if (facing && findExaminable(this)?.id !== BOARD_ID) return false;
+        useJobBoard(this);
         return true;
     }
 

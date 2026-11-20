@@ -132,7 +132,7 @@ describe('Town', () => {
     test('main.js and save.js carry the board and its counts', () => {
         const main = readFileSync(new URL('../game/main.js', import.meta.url), 'utf8');
         const save = readFileSync(new URL('../game/save.js', import.meta.url), 'utf8');
-        assert.equal((main.match(/useJobBoard\(this\)/g) || []).length, 2);
+        assert.equal((main.match(/this\._useJobBoard\?\./g) || []).length, 2);
         assert.match(main, /this\.jobs = \{ done: 0, shards: 0 \}/);
         for (const needle of ['jobsEntry(game)', 'sanitizeJobs(p.jobs)', 'game.jobs ']) assert.ok(save.includes(needle), needle);
     });
