@@ -1075,6 +1075,18 @@ class Game {
         if (s && !s._ally) applyDispositionDelta(s, 100);
     }
 
+    // (MK3) The strongman hands over the Power-Wield Mask the first time he joins you, by a gift or
+    // by the talk: both set the same ally flag. "Once" is a key in _collectedItems, which is saved.
+    _syncStrongmanGift() {
+        const s = (this.enemies || []).find(e => e.id === 'strongman');
+        if (!s || !s._ally || !this._collectedItems) return false;
+        const key = 'strongman|strongman_mask';
+        if (this._collectedItems.has(key)) return false;
+        if (!this._grantItem('strongman_mask', 'The Strongman gives you the Power-Wield Mask.')) return false;
+        this._collectedItems.add(key);
+        return true;
+    }
+
     // (NM1) Give the people just spawned in `url` back the one-time choices you used.
     _applySpentChoices(url) {
         applySpent(this._spentChoices, url, this.enemies);
@@ -7137,6 +7149,7 @@ class Game {
     // ── Render ───────────────────────────────────────────────────────────────
 
     _render() {
+        this._syncStrongmanGift();
         this._trackFight();
         this._trackBodies();
         this._creditsCheck();
