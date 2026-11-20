@@ -37,7 +37,7 @@ function makeGame(bagFull = false) {
         _collectedItems: new Set(), enemies: [],
         _log(m, kind) { this.logs.push([m, kind]); },
         emitGameEvent(n, d) { this.pickups.push([n, d.id]); },
-        _render() { this.renders++; },
+        _render() { if (++this.renders > 50) throw new Error('render loop'); this._syncStrongmanGift(); },   // as the real _render does
         _resolveItemDef: resolveItemDef,
     };
     const free = { addToInv, SAFE_SLOTS, PACK_PAGE, MAX_STACK, audio: { playSfx() {} } };

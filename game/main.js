@@ -1082,8 +1082,8 @@ class Game {
         if (!s || !s._ally || !this._collectedItems) return false;
         const key = 'strongman|strongman_mask';
         if (this._collectedItems.has(key)) return false;
-        if (!this._grantItem('strongman_mask', 'The Strongman gives you the Power-Wield Mask.')) return false;
-        this._collectedItems.add(key);
+        this._collectedItems.add(key);   // first: the grant renders, and a render runs this check again
+        if (!this._grantItem('strongman_mask', 'The Strongman gives you the Power-Wield Mask.')) { this._collectedItems.delete(key); return false; }
         return true;
     }
 
