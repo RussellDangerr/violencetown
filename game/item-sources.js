@@ -367,7 +367,8 @@ export default {
   },
   "strength_poition": {
     "foundIn": [
-      "Factory"
+      "Factory",
+      "Sewer"
     ]
   },
   "tigers_blood_ice_cone": {
