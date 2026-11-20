@@ -357,6 +357,25 @@ export const ENTRIES = {
         loadout: ['mystery_meat', 'mystery_meat', 'mystery_meat', 'tunnel_mushroom', 'sludge_sack', 'fire_blood', 'defence_poition'],
         hp: 100, armor: 3, damage: 10,
     }),
+    // The Valley's dinosaurs (plans/dn1-dinosaurs-roam-valley.md), its `valley.mob`
+    // pool. Each copies the fight numbers and kit of the nearest existing enemy, the
+    // same three the frozen area's mooks copy, tier for tier.
+    // Copied from the Graveyard's Rattling Skeleton, whose art it shares.
+    raptor: dinoMob('Raptor', 'A raptor, a small quick dinosaur. It is hostile and will fight you.', {
+        gold: 4, loadout: ['rock', 'pipe', 'foil_hat', 'shoe_bags'], hp: 100, armor: 0, damage: ACT2_MOB_DAMAGE,
+    }),
+    // Copied from the Sewer's Red Fungus, the middle tier.
+    triceratops: dinoMob('Triceratops', 'A triceratops, a horned dinosaur. It is hostile and will fight you.', {
+        gold: 10,
+        loadout: ['mystery_meat', 'mystery_meat', 'mystery_meat', 'tunnel_mushroom', 'sludge_sack', 'fire_blood', 'defence_poition'],
+        hp: 100, armor: 3, damage: 10,
+    }),
+    // Copied from the Sewer's Fungus King, whose art it shares.
+    t_rex: dinoMob('T. rex', 'A T. rex, a large dinosaur. It is hostile and will fight you.', {
+        gold: 20,
+        loadout: ['tunnel_mushroom', 'tunnel_mushroom', 'sludge_sack', 'sludge_sack', 'boardwalk_burger', 'foil_hat', 'defence_poition', 'soap'],
+        hp: 100, armor: 6, damage: 12,
+    }),
     // The frozen area's boss (plans/ic5-siberia-frozen-boss.md): a tigress
     // snowwoman. The shared placeholder boss numbers and kit until she is
     // designed, the chart's cold row like the mooks, her one name, [TEXT] copy.
@@ -455,6 +474,12 @@ function frozenMob(type, numbers) {
         resist: resistancesOf('cold'),
         examine: `${type}. It attacks when it sees you.`,
     };
+}
+
+// One Valley dinosaur: its numbers and a plain examine line. No weakness row, as
+// the enemy it copies has none.
+function dinoMob(type, examine, numbers) {
+    return { type, name: type, ...numbers, examine };
 }
 
 function alienInvasion() {
@@ -607,6 +632,15 @@ export const SLOTS = {
             { entry: 'snowman', weight: 1 },
             { entry: 'yeti', weight: 1 },
             { entry: 'polar_bear', weight: 1 },
+        ],
+    },
+    'valley.mob': {
+        kind: 'mob',
+        map: 'valley-map.json',
+        pool: [
+            { entry: 'raptor', weight: 1 },
+            { entry: 'triceratops', weight: 1 },
+            { entry: 't_rex', weight: 1 },
         ],
     },
 };
