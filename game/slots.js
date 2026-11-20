@@ -36,8 +36,8 @@ export const ENTRIES = {
         damage: 12,
         tag: 'wererat_boss',
         barks: [
-            "[Were-Rat: The converter's OURS now, grease-boy.]",
-            '[Were-Rat: You smell like a dead-end job.]',
+            'The Were-Rat has your Cataclysmic Converter.',
+            'The Were-Rat wants a fight.',
         ],
         barkEveryTurns: 6,
     },
@@ -94,7 +94,7 @@ export const ENTRIES = {
         hp: 100,
         armor: 6,
         damage: 12,
-        barks: ['[TEXT]'],
+        barks: ['The Lion wants a fight.'],
         barkEveryTurns: 6,
     },
     // The Carnival's named clown (plans/cw1-the-clown-mini-boss.md, ruling LN1R1 a): a
@@ -111,7 +111,7 @@ export const ENTRIES = {
         armor: 6,
         damage: 12,
         bribeable: false,
-        barks: ['[TEXT]'],
+        barks: ['The Clown wants a fight.'],
         barkEveryTurns: 6,
     },
     // The Carnival's strongman (plans/st2-strongman-wins-contest.md, ruling ST2R1 a): placed by
@@ -134,7 +134,7 @@ export const ENTRIES = {
         bribeable: true,
         values: { bandage: 6, soap: 4, rock: 3 },
         behavior: ['IDLE'],   // he stands where he is placed: a wander would draw the shared ambient stream and move the autoplay replay
-        adjacencyBark: '[TEXT]',
+        adjacencyBark: 'The Strongman stands here. A gift can turn him to your side.',
     },
     // The Carnival's horses (plans/cb1-carnival-horses-circle.md): three combatants placed by
     // hand around (28,4), which circle you once beside you (ai.js circleStep; the `circler`
@@ -149,7 +149,7 @@ export const ENTRIES = {
         hp: 100,
         armor: 0,
         damage: ACT2_MOB_DAMAGE,
-        barks: ['[TEXT]'],
+        barks: ['The Horse circles you.'],
         barkEveryTurns: 6,
     },
     // The Carnival's dolls (plans/ec1-carnival-doll-pack.md): four combatants placed by hand
@@ -165,7 +165,7 @@ export const ENTRIES = {
         hp: 100,
         armor: -30,
         damage: 4,
-        barks: ['[TEXT]'],
+        barks: ['The Doll circles you.'],
         barkEveryTurns: 6,
     },
     // The Carnival's assistant manager (plans/as1-unicycle-clown.md, ruling LN1R1 a): someone
@@ -206,9 +206,9 @@ export const ENTRIES = {
         armor: 0,
         damage: ACT2_MOB_DAMAGE,
         sightRange: 0,
-        barks: ['[TEXT]'],
+        barks: ['The Angel moves while you look at it.'],
         barkEveryTurns: 6,
-        examine: '[TEXT]',
+        examine: 'Angel. A stone figure. It moves and hits only while you look at it.',
     },
     // The Graveyard's Ankou (plans/ak1-ankou-graveyard.md): one skeleton with a ghost drawn
     // around it (sprites.js `ghost`, renderer.js), placed by hand at (8,22). It fights as an
@@ -222,9 +222,9 @@ export const ENTRIES = {
         hp: 100,
         armor: 3,
         damage: 10,
-        barks: ['[TEXT]'],
+        barks: ['The Ankou wants a fight.'],
         barkEveryTurns: 6,
-        examine: '[TEXT]',
+        examine: 'Ankou. A skeleton with a ghost around it. It attacks when it sees you.',
     },
     // The Tunnels' Molemen (plans/mo1-molemen-tunnels.md): two placed by hand, each born hostile
     // so it hunts you. The name is Caelan's; stand-ins until designed: the Graveyard Rattling
@@ -237,7 +237,7 @@ export const ENTRIES = {
         hp: 100,
         armor: 0,
         damage: ACT2_MOB_DAMAGE,
-        barks: ['The Moleman stops digging and comes for you.'],
+        barks: ['The Moleman is hostile and comes for you.'],
         barkEveryTurns: 6,
     },
     // The Sewer's character (plans/cs1-crat-talk-both-sides.md): the Crat, who
@@ -277,6 +277,7 @@ export const ENTRIES = {
         tag: 'financier_boss',
         dialogueId: 'financier_vault',
         behavior: ['IDLE'],
+        barks: ['The Financier stands here.', 'The Financier fights if you hit him.'],
     },
     // The Alien's allies (ABR2: a few he funds). Law 5's rally pays for any
     // hurt fighter on his side near him; these are on his side because they
@@ -365,7 +366,7 @@ export const ENTRIES = {
         name: 'Siberia',
         weak: weaknessesOf('cold'),
         resist: resistancesOf('cold'),
-        examine: '[TEXT]',
+        examine: 'Siberia. Boss. She attacks when she sees you.',
     },
     // The trash compactor (plans/tc1-trash-compactor-walls.md, ruling TC1R1 a): one machine in the
     // middle of its room that never swings and never moves (sight 0, so it never hunts, and
@@ -384,7 +385,7 @@ export const ENTRIES = {
         heavy: true,
         bribeable: false,
         thievable: false,
-        examine: '[A trash compactor. Break it to stop the walls.]',
+        examine: 'Trash compactor. It does not attack. Break it to stop the walls.',
     },
 };
 
@@ -396,7 +397,7 @@ ENTRIES.returning_boss = {
     ...structuredClone(ENTRIES.wererat),
     name: 'Returning Boss',
     tag: 'returning_boss',
-    barks: ['[TEXT]', '[TEXT]'],
+    barks: ['The Returning Boss wants a fight.', "The Returning Boss took the Were-Rat's place."],
 };
 
 // The spot a boss at `id` on map `url` leaves open, or null.
@@ -452,7 +453,7 @@ function frozenMob(type, numbers) {
         ...numbers,
         weak: weaknessesOf('cold'),
         resist: resistancesOf('cold'),
-        examine: '[TEXT]',
+        examine: `${type}. It attacks when it sees you.`,
     };
 }
 
@@ -488,7 +489,7 @@ function placeholderBoss() {
         hp: 100,
         armor: 6,
         damage: 12,
-        barks: ['[TEXT]', '[TEXT]'],
+        barks: ['The boss attacks when it sees you.', 'The boss is hostile.'],
         barkEveryTurns: 6,
     };
 }
@@ -505,7 +506,7 @@ export const OLD_SELF = {
     sightRange: 4,
     disposition: 0,
     behavior: ['IDLE'],
-    barks: ['[TEXT]', '[TEXT]'],
+    barks: ['Your old self is standing here.', 'Your old self is waiting.'],
     barkEveryTurns: 6,
 };
 

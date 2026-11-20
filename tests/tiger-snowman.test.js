@@ -89,7 +89,7 @@ describe('Siberia fills the frozen area\'s boss slot', () => {
         assert.equal(e.slot, SLOT);
         assert.equal(e.type, 'Siberia');
         assert.deepEqual(e.weak, weaknessesOf('cold'));
-        assert.equal(e.examine, '[TEXT]');
+        assert.equal(e.examine, 'Siberia. Boss. She attacks when she sees you.');
         const act2 = ENTRIES.bigfoot;
         for (const k of ['hp', 'armor', 'damage', 'gold']) assert.equal(ENTRIES.siberia[k], act2[k], `${k} stands in at the shared boss row`);
     });

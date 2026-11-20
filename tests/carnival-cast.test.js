@@ -84,7 +84,7 @@ describe('the Carnival lion: the Fungus King\'s numbers and kit, stand-in name a
 
     test('the name and bark are obvious placeholders, and the harness lints it clean', () => {
         assert.equal(e.name, 'Lion');
-        assert.deepEqual(e.barks, ['[TEXT]']);
+        assert.deepEqual(e.barks, ['The Lion wants a fight.']);
         assert.deepEqual(lintEntity({ id: 'carnival-lion', ...e }), []);
     });
 
@@ -243,7 +243,7 @@ describe('The Clown: the Fungus King\'s numbers, one sludge sack swapped for Fir
 
     test('the name and bark are obvious placeholders, and the harness lints him clean', () => {
         assert.equal(e.name, 'The Clown');
-        assert.deepEqual(e.barks, ['[TEXT]']);
+        assert.deepEqual(e.barks, ['The Clown wants a fight.']);
         assert.deepEqual(lintEntity({ id: 'the-clown', ...e }), []);
     });
 
@@ -390,7 +390,7 @@ describe('the Carnival horses (plans/cb1-carnival-horses-circle.md): three, plac
         for (const k of ['hp', 'armor', 'damage', 'gold']) assert.equal(e[k], skeleton[k], k);
         assert.deepEqual(e.loadout, skeleton.loadout);
         assert.equal(e.name, 'Horse');
-        assert.deepEqual(e.barks, ['[TEXT]']);
+        assert.deepEqual(e.barks, ['The Horse circles you.']);
         assert.deepEqual(lintEntity({ id: 'carnival-horse-1', ...e }), []);
     });
 
@@ -459,7 +459,7 @@ describe('the Carnival dolls (plans/ec1-carnival-doll-pack.md): four, placed by 
         assert.deepEqual([e.armor, e.damage], [-30, 4]);
         assert.deepEqual(e.loadout, knuckles.loadout);
         assert.equal(e.name, 'Doll');
-        assert.deepEqual(e.barks, ['[TEXT]']);
+        assert.deepEqual(e.barks, ['The Doll circles you.']);
         assert.deepEqual(lintEntity({ id: 'carnival-doll-1', ...e }), []);
     });
 
