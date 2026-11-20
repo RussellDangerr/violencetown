@@ -47,7 +47,8 @@ import { hasSave, readSaveRaw, writeSave, loadInto, clearSave, keepUnreadableSav
 import { createKey, loadKeyId } from './save-key.js';
 import { readAway, tellAwayNews, restedOnReturn } from './away.js';   // (CK1) hours since the save's savedAt
 import { QuestEngine } from './quests.js';
-import { doExamine, resolveExamine, propNameAt } from './examine.js';
+import { doExamine, resolveExamine, propNameAt, findExaminable } from './examine.js';
+import { useJobBoard, BOARD_ID } from './jobs.js';   // (BP6)
 import { recordDrop, pendingDrops, takeDrop, dropLoadout, recordKill, stepRespawns, deadIds, bossDropOnce, claimSpots, spotHolds, spotSpawns } from './drops.js'; // per-zone runtime dropped-items layer + respawn list (pure, node-tested)
 import {
     HIT_SLOP, throwRects, DOCK, dockFor, WHEEL_DESKTOP, hitHud,
@@ -260,6 +261,7 @@ class Game {
         this.playerMp    = PLAYER_MAX_MP;
         this.playerMaxMp = PLAYER_MAX_MP;
         this.boons = {};   // (BP1) permanent boosts drunk, { stat: n }
+        this.jobs = { done: 0, shards: 0 };   // (BP6) Job board: jobs done, Shards held
         // Known spells for FIGHT → Magic (base set; equipped weapons grant more
         // via _refreshGrantedSkills). Granted TRICKS (GP skills) live in a
         // parallel list the Trick ring reads.
@@ -2049,6 +2051,7 @@ class Game {
                 const t = this._targetAt(this.playerX + fdx, this.playerY + fdy);
                 const verb = t && defaultVerb(t, this);
                 if (verb) { this._actOnTarget(verb, t); return; }
+                if (findExaminable(this)?.id === BOARD_ID) { useJobBoard(this); this._render(); return; }   // (BP6)
                 doExamine(this); this._render(); return;
             }
 
@@ -4229,6 +4232,7 @@ class Game {
                 // instance like the car resolves at its own tile, whichever half
                 // was tapped.
                 const ex = t.examinable;
+                if (ex && ex.id === BOARD_ID) { useJobBoard(this); this._render(); break; }   // (BP6)
                 const res = resolveExamine(this, ex ? ex.x : t.x, ex ? ex.y : t.y);
                 if (res.instanceId) this.emitGameEvent('examine', { targetId: res.instanceId });
                 if (res.grantsInstance) { this._grantFromExaminable(res.grantsInstance); break; }
@@ -6955,6 +6959,7 @@ class Game {
         this.playerMaxMp = PLAYER_MAX_MP;
         this.playerMp = this.playerMaxMp;
         this.boons = {};   // (BP1) a new game has drunk none
+        this.jobs = { done: 0, shards: 0 };   // (BP6)
         this.facing = 'down';
         this.buffs = [];
         this._hasteCharges = 0;
