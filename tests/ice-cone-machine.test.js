@@ -127,11 +127,11 @@ describe('the Factory manager', () => {
     test('talks, every line a placeholder', () => {
         const d = getDialogue(spawn.dialogueId);
         assert.ok(d, 'he has nothing to say');
-        assert.equal(d.name, '[Factory Manager]');
+        assert.equal(d.name, 'Factory Manager');
         assert.equal(d.greeting, 'I am the Factory manager. I hold the ice cone machine part until the factory bill is paid.');
         const lines = {
             bill: ['Ask about the bill', 'The bill is 100 GP. Pay it and I hand over the ice cone machine part.'],
-            pay: ['Pay the bill - 100 GP', 'The bill is paid. The manager hands over the ice cone machine part if your bag has room. If it does not, ask for the part again.'],
+            pay: ['Pay the bill - 100 GP', 'The bill is paid. The manager hands over the ice cone machine part.'],
             collect: ['Ask for the ice cone machine part', 'The manager hands over the ice cone machine part.'],
             paid: ['Ask about the part', 'The bill is paid. The ice cone machine part goes in the ice cone machine.'],
         };

@@ -41,23 +41,23 @@ const bridgeOpen = (g) => !!(g && g.questEngine && g.questEngine.getFlag('carFix
 export const DIALOGUES = {
     pike: {
         name: 'Pike',
-        greeting: '"...Company. Ain\'t had company since the river dried up. You fall in like the rest of the junk? Heh."',
+        greeting: 'Pike lives in the canyon. He has the grappling hook.',
         choices: [
-            { id: 'lore', label: "Ask how long he's been down here", once: true, delta: 4,
-              reply: '"Floated my wagon across when this was still a RIVER. She sank. I woke on the mud — still here. The water did somethin\' to me. Don\'t age, don\'t die, don\'t leave. Just prospect."' },
-            { id: 'buy', label: 'Ask about the rope (the grappling hook)', once: true,
+            { id: 'lore', label: 'Ask how long he has been in the canyon', once: true, delta: 4,
+              reply: 'His disposition goes up.' },
+            { id: 'buy', label: 'Ask about the grappling hook', once: true,
               reply: 'Pike has the grappling hook. Offer to clear the canyon critters and he gives it to you.' },
-            { id: 'deal', label: 'Offer to clear the critters for the rope', once: true,
+            { id: 'deal', label: 'Offer to clear the critters for the hook', once: true,
               onPick: (game, npc) => {
                   if (!game.questEngine) return;
                   game.questEngine.state.flags.pikeDeal = true;
                   const alive = (game.enemies || []).some(e => e.tag === 'canyon_critter' && e.entity && e.entity.isAlive());
                   if (!alive) {
                       game.questEngine.state.flags.pikeDealPaid = true;
-                      if (game._grantItem) game._grantItem('grappling_hook', '[Pike eyes the still bodies. "...Already done? Then she\'s yours." He presses the rope into your hands.]');
+                      if (game._grantItem) game._grantItem('grappling_hook', 'Pike gives you the grappling hook.');
                   }
               },
-              reply: '"...Hah. The vermin gnawin\' at my wagon? Put the two of \'em down and the rope\'s yours — free and clear. A deal\'s a deal down here."' },
+              reply: 'Kill the canyon critters and Pike gives you the grappling hook. If they are already dead, he gives it to you now.' },
         ],
     },
     // (Remembrance Rings) Platero — the Downtown silversmith who fashions a boss
@@ -66,34 +66,34 @@ export const DIALOGUES = {
     // bag; won't re-make a ring you already wear), so it's safe to always offer.
     platero: {
         name: 'Platero',
-        greeting: '"A silversmith remembers every piece he sets. Bring me something a fight left behind, and I\'ll set it into a ring you can wear."',
+        greeting: 'Platero is a silversmith in Downtown. He makes rings from wererat fur or Fire Blood.',
         choices: [
-            { id: 'about', label: 'Ask what he means by "remembrance"', once: true, delta: 3,
-              reply: '"The big ones — the ones that nearly finished you — leave a little of themselves behind. Fur, ash, a tooth. Silver holds a memory better than a mind does. Wear it, and you keep the fight."' },
+            { id: 'about', label: 'Ask how the rings are made', once: true, delta: 3,
+              reply: 'Platero makes a rat ring from wererat fur, or a fire ring from 3 Fire Blood. His disposition goes up.' },
             { id: 'fashion_rat', label: 'Have him fashion the wererat fur into a ring', repeatable: true,
               onPick: (game) => { if (game._fashionRing) game._fashionRing('wererat_fur', 'rat_ring'); },
-              reply: '"Let\'s see what you\'re carrying, then."' },
+              reply: 'Platero makes a rat ring from the wererat fur. The fur must be in your bag. He does not make a ring you already wear.' },
             { id: 'fashion_fire', label: 'Have him set the Fire Blood into a ring', repeatable: true,
               requiresItem: 'fire_blood',
               onPick: (game) => { if (game._fashionRing) game._fashionRing('fire_blood', 'fire_ring', 3); },
-              reply: '"Let\'s see what you\'re carrying, then."' },
+              reply: 'Platero makes a fire ring from 3 Fire Blood. They must be in your bag. He does not make a ring you already wear.' },
         ],
     },
     bartho: {
         name: 'Bartho',
-        greeting: '"...what."',
+        greeting: 'Bartho is a townsperson.',
         greetings: [{ when: bridgeOpen, text: 'The north bridge is open now that the car is fixed.' }],
         choices: [
             { id: 'bridge', label: 'Ask about the north bridge', once: true,
-              reply: '"Barricaded. Years now. Whatever\'s past it can stay past it."' },
+              reply: 'The north bridge is closed. It opens when the car is fixed.' },
             { id: 'hat', label: 'Compliment his hat', once: true, delta: 8,
-              reply: '"...you noticed the hat. Huh. Maybe you ain\'t all bad."' },
-            { id: 'flatter', label: '[Flatter him]', repeatable: true, delta: 3,
-              reply: '"Heh. Keep talkin\', pal."' },
-            { id: 'insult', label: '[Insult his mother]', repeatable: true, delta: -25,
-              reply: '"...the HELL did you just say about my ma."' },
-            { id: 'bribe', label: '[Bribe - 5 GP]', repeatable: true, delta: 10, cost: 5,
-              reply: '"This changes nothin\'. (pockets it immediately)"' },
+              reply: 'His disposition goes up.' },
+            { id: 'flatter', label: 'Compliment him', repeatable: true, delta: 3,
+              reply: 'His disposition goes up.' },
+            { id: 'insult', label: 'Insult his mother', repeatable: true, delta: -25,
+              reply: 'His disposition goes down.' },
+            { id: 'bribe', label: 'Pay him 5 GP', repeatable: true, delta: 10, cost: 5,
+              reply: 'Bartho takes 5 GP. His disposition goes up.' },
         ],
     },
 
@@ -124,67 +124,67 @@ export const DIALOGUES = {
     // has a buyer (500 GP).
     macc: {
         name: 'Macc',
-        greeting: '"*chittering* ...oh. A customer. Mind the grease. What\'s broke?"',
+        greeting: 'Macc is a mechanic in Town. He buys the cataclysmic converter for 500 GP.',
         choices: [
-            { id: 'converter', label: 'Ask if he buys weird car parts', once: true, delta: 5,
-              reply: '"That Cataclysmic thing? *eyes gleam* ...five hundred. Cash. Don\'t ask what I do with em."' },
-            { id: 'flatter', label: '[Praise his workshop]', repeatable: true, delta: 3,
-              reply: '"*preens* ...she\'s a mess, but she\'s MY mess."' },
-            { id: 'insult', label: '[Call him a trash panda]', repeatable: true, delta: -25,
-              reply: '"TRASH? This is ARTISANAL salvage, you philistine."' },
-            { id: 'bribe', label: '[Bribe - 5 GP]', repeatable: true, delta: 10, cost: 5,
-              reply: '"*snatches it* ...friend of Macc. For now."' },
+            { id: 'converter', label: 'Ask if he buys car parts', once: true, delta: 5,
+              reply: 'Macc buys the cataclysmic converter for 500 GP. His disposition goes up.' },
+            { id: 'flatter', label: 'Compliment his workshop', repeatable: true, delta: 3,
+              reply: 'His disposition goes up.' },
+            { id: 'insult', label: 'Insult him', repeatable: true, delta: -25,
+              reply: 'His disposition goes down.' },
+            { id: 'bribe', label: 'Pay him 5 GP', repeatable: true, delta: 10, cost: 5,
+              reply: 'Macc takes 5 GP. His disposition goes up.' },
         ],
     },
 
     mince: {
         name: 'Mince',
-        greeting: '"Pssst. Hey. You buyin\'? You look like a buyin\' guy."',
+        greeting: 'Mince is a townsperson.',
         choices: [
             { id: 'goldcard', label: 'Ask why everything costs Gold Card', once: true,
-              reply: '"Surcharge on the surcharge, friend. That\'s the Card. You don\'t pay it, you ARE it."' },
-            { id: 'deal', label: 'Ask what he\'s selling', once: true, delta: 5,
-              reply: '"Eh. Half a rock, mostly. But it\'s MY half a rock. Respect that."' },
-            { id: 'flatter', label: '[Flatter him]', repeatable: true, delta: 3,
-              reply: '"Smart guy. I LIKE a smart guy."' },
-            { id: 'insult', label: '[Call him a two-bit hustler]', repeatable: true, delta: -25,
-              reply: '"Two-BIT? I am at LEAST a four-bit hustler, you mope."' },
-            { id: 'bribe', label: '[Bribe - 5 GP]', repeatable: true, delta: 10, cost: 5,
-              reply: '"Now THAT\'S a language I speak. (it vanishes)"' },
+              reply: 'Nothing happens.' },
+            { id: 'deal', label: 'Ask what he is selling', once: true, delta: 5,
+              reply: 'His disposition goes up.' },
+            { id: 'flatter', label: 'Compliment him', repeatable: true, delta: 3,
+              reply: 'His disposition goes up.' },
+            { id: 'insult', label: 'Insult him', repeatable: true, delta: -25,
+              reply: 'His disposition goes down.' },
+            { id: 'bribe', label: 'Pay him 5 GP', repeatable: true, delta: 10, cost: 5,
+              reply: 'Mince takes 5 GP. His disposition goes up.' },
         ],
     },
 
     glunk: {
         name: 'Glunk',
-        greeting: '"...you\'re standin\' in my leanin\' spot."',
+        greeting: 'Glunk, a townsperson. He stands by the wall.',
         choices: [
-            { id: 'sewer', label: 'Ask about the smell off the sewer', once: true,
-              reply: '"Smells like the sewer. \'Cause it\'s the sewer. Genius work, that."' },
-            { id: 'wall', label: 'Admire how well he holds up the wall', once: true, delta: 8,
-              reply: '"...heh. Wall\'d fall right over without me. Somebody gets it."' },
-            { id: 'flatter', label: '[Flatter him]', repeatable: true, delta: 3,
-              reply: '"Keep it comin\'. I got all day. Literally."' },
-            { id: 'insult', label: '[Tell him to get a job]', repeatable: true, delta: -25,
-              reply: '"This IS the job. Leanin\'. Don\'t you disrespect the leanin\'."' },
-            { id: 'bribe', label: '[Bribe - 5 GP]', repeatable: true, delta: 10, cost: 5,
-              reply: '"Mm. I\'ll lean a little friendlier, then. (pockets it)"' },
+            { id: 'sewer', label: 'Ask about the smell from the sewer', once: true,
+              reply: 'Nothing happens.' },
+            { id: 'wall', label: 'Compliment him for standing by the wall', once: true, delta: 8,
+              reply: 'His disposition goes up.' },
+            { id: 'flatter', label: 'Compliment him', repeatable: true, delta: 3,
+              reply: 'His disposition goes up.' },
+            { id: 'insult', label: 'Tell him to get a job', repeatable: true, delta: -25,
+              reply: 'His disposition goes down.' },
+            { id: 'bribe', label: 'Pay him 5 GP', repeatable: true, delta: 10, cost: 5,
+              reply: 'Glunk takes 5 GP. His disposition goes up.' },
         ],
     },
 
     praline: {
         name: 'Praline',
-        greeting: '"Ugh, do NOT look at the floor. I just got the floor lookin\' decent."',
+        greeting: 'Praline, a townsperson. She cleans the plaza.',
         choices: [
-            { id: 'grime', label: 'Ask if the grime ever comes off', once: true,
-              reply: '"Off? Sweetheart, the grime is load-bearin\'. Take it off, the whole town sags."' },
-            { id: 'tidy', label: 'Say the plaza looks spotless', once: true, delta: 8,
-              reply: '"...SPOTLESS. You hear that, everybody? SOMEBODY noticed."' },
-            { id: 'flatter', label: '[Flatter her]', repeatable: true, delta: 3,
-              reply: '"Oh, you. Go on, then. Go ON."' },
-            { id: 'insult', label: '[Track mud on her floor]', repeatable: true, delta: -25,
-              reply: '"You did NOT. You did not just— get OUT, get out get out!"' },
-            { id: 'bribe', label: '[Bribe - 5 GP]', repeatable: true, delta: 10, cost: 5,
-              reply: '"Mm. Buys a mop. Buys me likin\' you. (snatches it)"' },
+            { id: 'grime', label: 'Ask if the grime comes off', once: true,
+              reply: 'Nothing happens.' },
+            { id: 'tidy', label: 'Say the plaza is clean', once: true, delta: 8,
+              reply: 'Her disposition goes up.' },
+            { id: 'flatter', label: 'Compliment her', repeatable: true, delta: 3,
+              reply: 'Her disposition goes up.' },
+            { id: 'insult', label: 'Track mud on her floor', repeatable: true, delta: -25,
+              reply: 'Her disposition goes down.' },
+            { id: 'bribe', label: 'Pay her 5 GP', repeatable: true, delta: 10, cost: 5,
+              reply: 'Praline takes 5 GP. Her disposition goes up.' },
         ],
     },
 
@@ -197,14 +197,14 @@ export const DIALOGUES = {
     // becomeAlly flip — he becomes a fighting ally, mid-fight or not.
     knuckles: {
         name: 'Knuckles',
-        greeting: '"You got a LOT of nerve walkin\' up on me like that."',
+        greeting: 'Knuckles is a townsperson who wants a fight. He fights only if you hit him or taunt him.',
         choices: [
-            { id: 'standdown', label: '[Hands up — apologize, back off slow]', once: true, delta: 70,
-              reply: '"...alright. ALRIGHT. You\'re backin\' off. Fine. I hate this. But fine — I\'m with ya."' },
-            { id: 'why', label: 'Ask what his problem even is', once: true,
-              reply: '"My PROBLEM? You\'re breathin\' my air in MY plaza, that\'s my problem."' },
-            { id: 'taunt', label: '[Square up and taunt him]', repeatable: true, delta: -25,
-              reply: '"Oh, you wanna GO? You absolutely wanna GO."' },
+            { id: 'standdown', label: 'Apologize and back off', once: true, delta: 70,
+              reply: 'Knuckles stops. He fights on your side now.' },
+            { id: 'why', label: 'Ask what his problem is', once: true,
+              reply: 'Nothing happens.' },
+            { id: 'taunt', label: 'Taunt him (he attacks)', repeatable: true, delta: -25,
+              reply: 'His disposition goes down.' },
         ],
     },
 
@@ -216,15 +216,15 @@ export const DIALOGUES = {
     diner_cook: {
         name: 'Short-Order Cook',
         greetings: [{ when: burgerPickedUp, text: 'The burger and fries have already been picked up.' }],
-        greeting: '"Order up — oh. You. You\'re the delivery type, aren\'t you. I can always tell."',
+        greeting: 'The short-order cook works the diner. He gives you the burger and fries for delivery.',
         choices: [
             // (Phase 4 MQ2) The dialogue delivery idiom: only shown at the get_burger
             // stage; grants the deliverable via _grantItem (emits item_pickup → the
             // quest advances). The trade window is the other idiom.
             { id: 'take_burger', label: 'Take the burger and fries for delivery', once: true,
               available: (g) => g.questEngine && g.questEngine.currentStageId && g.questEngine.currentStageId() === 'get_burger',   // (FD3) fallback only: your boss now hands the bag over
-              onPick: (g) => { if (g._grantItem) g._grantItem('burger_fries', '[The cook slides a warm paper bag across the counter. Burger and fries — for delivery.]'); },
-              reply: '"Bag\'s hot. Somebody past the bank\'s waitin\' on it. Don\'t eat it, delivery type."' },
+              onPick: (g) => { if (g._grantItem) g._grantItem('burger_fries', 'The cook gives you the burger and fries for delivery.'); },
+              reply: 'The cook gives you the burger and fries. Deliver them.' },
             // (IC2) The order includes the ice cone. The machine makes only one and a
             // cone is not a quest item, so a lost one would stall the delivery: while
             // the order still needs a cone, the machine is fixed and none is in the
@@ -234,16 +234,16 @@ export const DIALOGUES = {
               onPick: (g) => { if (g._grantItem) g._grantItem(ORDER_CONE, 'The cook hands you another ice cone.'); },
               reply: 'The cook hands you another ice cone for the delivery order.' },
             { id: 'burger', label: 'Ask about the burger and fries', repeatable: true,
-              reply: '"Bag\'s under the lamp. Somebody out there\'s waitin\' on it."' },
-            { id: 'flatter', label: '[Compliment the grease]', repeatable: true, delta: 3,
-              reply: '"Forty years on this griddle. Damn right it\'s good grease."' },
-            { id: 'bribe', label: '[Bribe - 5 GP]', repeatable: true, delta: 10, cost: 5,
-              reply: '"...extra pickles for you, then."' },
+              reply: 'The burger and fries are for delivery.' },
+            { id: 'flatter', label: 'Compliment his cooking', repeatable: true, delta: 3,
+              reply: 'His disposition goes up.' },
+            { id: 'bribe', label: 'Pay him 5 GP', repeatable: true, delta: 10, cost: 5,
+              reply: 'The cook takes 5 GP. His disposition goes up.' },
         ],
     },
     banker: {
         name: 'The Financier',
-        greeting: '"Welcome to First Blood. *a smile with too many teeth* ...you look positively FULL of life. How can we serve you?"',
+        greeting: 'The Financier runs First Blood Bank. He takes the delivery order.',
         choices: [
             // (Phase 4 MQ2, AE1 / SP8) Dialogue delivery: the order is for the Financier. Only
             // shown at the handoff stage while the player holds everything still owed;
@@ -262,12 +262,12 @@ export const DIALOGUES = {
                   && !g.questEngine.getFlag('yellowCardRaised'),
               onPick: (g) => { g.questEngine.state.flags.yellowCardRaised = true; },
               reply: 'The Financier mentions the Yellow Card. It does nothing yet.' },
-            { id: 'loan', label: 'Ask what the bank actually does', once: true,
-              reply: '"We lend. We collect. We are very, very patient about the collecting. (Placeholder — the Financier\'s arc comes later.)"' },
-            { id: 'flatter', label: '[Flatter him]', repeatable: true, delta: 3,
-              reply: '"Charming. We do so like the charming ones."' },
-            { id: 'insult', label: '[Call him a bloodsucker]', repeatable: true, delta: -25,
-              reply: '"*the smile does not move* ...how droll."' },
+            { id: 'loan', label: 'Ask about the bank', once: true,
+              reply: 'Nothing happens.' },
+            { id: 'flatter', label: 'Compliment him', repeatable: true, delta: 3,
+              reply: 'His disposition goes up.' },
+            { id: 'insult', label: 'Insult him', repeatable: true, delta: -25,
+              reply: 'His disposition goes down.' },
         ],
     },
     // (FIN2) The Financier in his vault. Talking to him is how the fight starts
@@ -289,44 +289,44 @@ export const DIALOGUES = {
     },
     casino_op: {
         name: 'Pit Boss',
-        greeting: '"Table\'s open, the odds are terrible, and the drinks are free. What\'s your poison?"',
+        greeting: 'The Pit Boss runs the casino.',
         choices: [
-            { id: 'games', label: 'Ask what they\'re running', once: true,
-              reply: '"Everything that takes your money. (Placeholder — the casino minigames come later.)"' },
-            { id: 'flatter', label: '[Flatter the house]', repeatable: true, delta: 3,
-              reply: '"Ha! House always likes a talker."' },
-            { id: 'bribe', label: '[Bribe - 5 GP]', repeatable: true, delta: 10, cost: 5,
-              reply: '"...comped. Enjoy the floor."' },
+            { id: 'games', label: 'Ask what games they run', once: true,
+              reply: 'The casino games are not available yet.' },
+            { id: 'flatter', label: 'Compliment the casino', repeatable: true, delta: 3,
+              reply: 'The Pit Boss\'s disposition goes up.' },
+            { id: 'bribe', label: 'Pay the Pit Boss 5 GP', repeatable: true, delta: 10, cost: 5,
+              reply: 'The Pit Boss takes 5 GP. Their disposition goes up.' },
         ],
     },
     mq2_recipient: {
         name: 'Stranded Traveler',
-        greeting: '"Hey — hey, you. You didn\'t happen to bring food, did you? I haven\'t eaten since the bridge."',
+        greeting: 'The Stranded Traveler is stuck in Downtown and wants food.',
         choices: [
-            { id: 'ask', label: 'Ask what they\'re doing out here', repeatable: true,
-              reply: '"Waitin\'. Starvin\'. Same as always."' },
-            { id: 'flatter', label: '[Reassure them]', repeatable: true, delta: 3,
-              reply: '"...thanks. That helps. A little."' },
+            { id: 'ask', label: 'Ask what they are doing here', repeatable: true,
+              reply: 'Nothing happens.' },
+            { id: 'flatter', label: 'Reassure them', repeatable: true, delta: 3,
+              reply: 'Their disposition goes up.' },
         ],
     },
     downtown_merchant: {
         name: 'Corner Merchant',
-        greeting: '"Fresh stock, downtown prices. Press E to see the goods."',
+        greeting: 'The Corner Merchant sells goods. Stand next to him and use Trade to see what he sells.',
         choices: [
             { id: 'ask', label: 'Ask how business is', repeatable: true,
-              reply: '"Slow. Everybody\'s broke or bitten. You buyin\' or browsin\'?"' },
-            { id: 'bribe', label: '[Bribe - 5 GP]', repeatable: true, delta: 10, cost: 5,
-              reply: '"...I\'ll knock a little off. Maybe."' },
+              reply: 'Nothing happens.' },
+            { id: 'bribe', label: 'Pay the Corner Merchant 5 GP', repeatable: true, delta: 10, cost: 5,
+              reply: 'The Corner Merchant takes 5 GP. Their disposition goes up.' },
         ],
     },
     downtown_merchant2: {
         name: 'Newsstand Kid',
-        greeting: '"Papers, gum, batteries, secrets. What\'s it gonna be?"',
+        greeting: 'The Newsstand Kid runs the newsstand.',
         choices: [
-            { id: 'ask', label: 'Ask what\'s in the news', repeatable: true,
-              reply: '"Bank bought another block. Nobody saw the buyer. Spooky, right?"' },
-            { id: 'flatter', label: '[Flatter the kid]', repeatable: true, delta: 3,
-              reply: '"*grins* ...you\'re alright."' },
+            { id: 'ask', label: 'Ask for the news', repeatable: true,
+              reply: 'Nothing happens.' },
+            { id: 'flatter', label: 'Compliment the kid', repeatable: true, delta: 3,
+              reply: 'Their disposition goes up.' },
         ],
     },
 };
@@ -383,7 +383,7 @@ function cratRulingChoices() {
                 onPick: (g) => { setCratFlag(g, 'cratRuling', side); grantCratReward(g); },
                 reply: `You ruled for side ${side.toUpperCase()}, ${verdict}`
                     + (bribe === 'none' ? ', and took no money' : bribe === 'same' ? ', and took that side\'s money' : ', and took the other side\'s money')
-                    + '. The road to Carrion is open now.',
+                    + '. The road to Carrion opens the next time the Sewer loads.',
             });
         }
     }
@@ -432,7 +432,7 @@ DIALOGUES.crat = {
         ...cratRulingChoices(),
         { id: 'after', label: 'Ask the Crat about the ruling', repeatable: true,
           available: (g) => ruled(g),
-          reply: 'You have ruled. The road to Carrion is open.' },
+          reply: 'You have ruled. The road to Carrion opens the next time the Sewer loads.' },
     ],
 };
 DIALOGUES.crat_side_a = cratSide('a');
@@ -456,7 +456,7 @@ const partOwed = (g) => billPaid(g) && !flagsOf(g).iceConeMachineFixed && !holds
 const handOverPart = (g) => { if (g._grantItem) g._grantItem(MACHINE_PART, 'The manager hands you the ice cone machine part.'); };
 
 DIALOGUES.factory_manager = {
-    name: '[Factory Manager]',
+    name: 'Factory Manager',
     greeting: 'I am the Factory manager. I hold the ice cone machine part until the factory bill is paid.',
     choices: [
         { id: 'bill', label: 'Ask about the bill', repeatable: true,
@@ -468,7 +468,7 @@ DIALOGUES.factory_manager = {
               if (g.questEngine) g.questEngine.state.flags.factoryBillPaid = true;
               handOverPart(g);
           },
-          reply: 'The bill is paid. The manager hands over the ice cone machine part if your bag has room. If it does not, ask for the part again.' },
+          reply: 'The bill is paid. The manager hands over the ice cone machine part.' },
         { id: 'collect', label: 'Ask for the ice cone machine part', repeatable: true,
           available: (g) => partOwed(g),
           onPick: (g) => handOverPart(g),
@@ -484,24 +484,24 @@ DIALOGUES.factory_manager = {
 // Plain placeholder lines.
 const hypnoOff = (g) => !!flagsOf(g).hypnoVisionOff;
 DIALOGUES.hypno_nerd = {
-    name: '[Nerd]',
-    greeting: '[The nerd runs the Hypno Vision. It is on.]',
-    greetings: [{ when: hypnoOff, text: '[The nerd runs the Hypno Vision. It is off.]' }],
+    name: 'Nerd',
+    greeting: 'The nerd runs the Hypno Vision. It is on.',
+    greetings: [{ when: hypnoOff, text: 'The nerd runs the Hypno Vision. It is off.' }],
     choices: [
-        { id: 'switch_off', label: '[Ask him to switch off the Hypno Vision]', once: true,
+        { id: 'switch_off', label: 'Ask him to switch off the Hypno Vision', once: true,
           available: (g) => !hypnoOff(g),
           onPick: (g) => switchOffHypno(g),
-          reply: '[He switches the Hypno Vision off.]' },
-        { id: 'status', label: '[Ask about the Hypno Vision]', repeatable: true,
+          reply: 'He switches the Hypno Vision off.' },
+        { id: 'status', label: 'Ask about the Hypno Vision', repeatable: true,
           available: (g) => hypnoOff(g),
-          reply: '[It is off.]' },
+          reply: 'It is off.' },
     ],
 };
 
 // (AS1, plans/as1-unicycle-clown.md) The Carnival's assistant manager: he talks and does
 // nothing else.
 DIALOGUES.assistant_manager = {
-    name: '[Assistant Manager]',
+    name: 'Assistant Manager',
     greeting: 'I am the Assistant manager of the Carnival. I only talk.',
     choices: [
         { id: 'chat', label: 'Talk to the Assistant manager', repeatable: true,
@@ -512,7 +512,7 @@ DIALOGUES.assistant_manager = {
 // SG1: the Carnival's strongman. He stands at -40, so only one line is offered: any other pick
 // would read as a taunt past DIALOGUE_HOSTILE_AT. The recruit choice crosses his flip threshold.
 DIALOGUES.strongman = {
-    name: '[Strongman]',
+    name: 'Strongman',
     greeting: 'I am the Strongman of the Carnival.',
     choices: [
         { id: 'recruit', label: 'Ask him to fight on your side', once: true, delta: 70,

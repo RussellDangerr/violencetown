@@ -66,9 +66,9 @@ describe('the plain lines say what the code does', () => {
         assert.equal(rules.length, 6);
         assert.deepEqual(rules.map(c => c.label).sort(), ['Rule for side A', 'Rule for side A', 'Rule for side A', 'Rule for side B', 'Rule for side B', 'Rule for side B']);
         const clean = rules.find(c => c.id === 'rule_a');
-        assert.equal(clean.reply, 'You ruled for side A, the side in the right, and took no money. The road to Carrion is open now.');
+        assert.equal(clean.reply, 'You ruled for side A, the side in the right, and took no money. The road to Carrion opens the next time the Sewer loads.');
         const bought = rules.find(c => c.id === 'rule_b_paid_a');
-        assert.equal(bought.reply, 'You ruled for side B, the side in the wrong, and took the other side\'s money. The road to Carrion is open now.');
+        assert.equal(bought.reply, 'You ruled for side B, the side in the wrong, and took the other side\'s money. The road to Carrion opens the next time the Sewer loads.');
         const offer = DIALOGUES.crat_side_a.choices.find(c => c.id === 'offer');
         assert.equal(offer.label, `Take side A's money - ${CRAT_BRIBE_GP} GP`);
         assert.equal(offer.reply, `Side A pays you ${CRAT_BRIBE_GP} GP to rule its way.`);
