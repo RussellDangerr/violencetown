@@ -541,12 +541,12 @@ export const EQUIP_FIGURE_RECT = {
 // is the body-zone caption. `zone` (0..1 of the figure box) is where the
 // connector line points on the mannequin.
 export const EQUIP_SLOT_RECTS = [
-    { key: 'top',    label: 'HEAD',    x: 256, y: 60,  w: 96, h: 48, zone: { fx: 0.5, fy: 0.06 } },  // above
-    { key: 'sides',  label: 'ARMS',    x: 60,  y: 240, w: 96, h: 48, zone: { fx: 0.08, fy: 0.42 } }, // left
-    { key: 'front',  label: 'TORSO',   x: 452, y: 240, w: 96, h: 48, zone: { fx: 0.92, fy: 0.42 } }, // right
+    { key: 'top',    label: 'TOP',    x: 256, y: 60,  w: 96, h: 48, zone: { fx: 0.5, fy: 0.06 } },  // above
+    { key: 'sides',  label: 'SIDES',  x: 60,  y: 240, w: 96, h: 48, zone: { fx: 0.08, fy: 0.42 } }, // left
+    { key: 'front',  label: 'FRONT',  x: 452, y: 240, w: 96, h: 48, zone: { fx: 0.92, fy: 0.42 } }, // right
     { key: 'back',   label: 'BACK',    x: 60,  y: 380, w: 96, h: 48, zone: { fx: 0.2,  fy: 0.68 } }, // lower-left
-    { key: 'bottom', label: 'FEET',    x: 452, y: 380, w: 96, h: 48, zone: { fx: 0.5,  fy: 0.98 } }, // below (right stack)
-    { key: 'weapon', label: 'WEAPON [RIGHT]', x: 60,  y: 480, w: 96, h: 48, zone: { fx: 0.36, fy: 0.7 } }, // bottom-left, under BACK: the figure's right hand (the viewer's left)
+    { key: 'bottom', label: 'BOTTOM', x: 452, y: 380, w: 96, h: 48, zone: { fx: 0.5,  fy: 0.98 } }, // below (right stack)
+    { key: 'weapon', label: 'WEAPON RIGHT', x: 60,  y: 480, w: 96, h: 48, zone: { fx: 0.36, fy: 0.7 } }, // bottom-left, under BACK: the figure's right hand (the viewer's left)
 ];
 
 // (FX14) The left hand's plate. Its own rect rather than a seventh entry in
@@ -554,7 +554,7 @@ export const EQUIP_SLOT_RECTS = [
 // piece. It mirrors the right-hand plate about the figure, bottom-right under
 // FEET (so HEAD's "down" key still lands on ARMS, and the connectors clear the
 // BACK and FEET plates). `key` is the game.equipment key it reads.
-export const EQUIP_LEFT_HAND_RECT = { key: 'left', label: 'WEAPON [LEFT]', x: 452, y: 480, w: 96, h: 48, zone: { fx: 0.64, fy: 0.7 } };
+export const EQUIP_LEFT_HAND_RECT = { key: 'left', label: 'WEAPON LEFT', x: 452, y: 480, w: 96, h: 48, zone: { fx: 0.64, fy: 0.7 } };
 
 // (menu grammar) The always-visible ✕ / Back chip — a ~30px tappable target at a
 // panel's top-right inner corner, the device-agnostic exit on every Menu. Drawn by
