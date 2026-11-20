@@ -107,6 +107,16 @@ describe('the bump', () => {
         assert.ok(src.includes('const container = this.containers.find(c => c.x === nx && c.y === ny);\n        if (container) {\n            this._openContainer(container);'));
     });
 
+    test('its lines are plain, and a sleeping one says nothing', () => {
+        const m = mimic();
+        assert.equal(m.entity.name, 'Mimic');
+        const lines = [...m.barks, m.adjacencyBark, liftFn('_wakeMimic').toString().match(/_log\('([^']*)'/)[1]];
+        for (const l of lines) assert.ok(l && !/[\[\]]/.test(l), `plain line: ${l}`);
+        const g = { playerX: SPOT.x - 1, playerY: SPOT.y, enemies: [m], groundItems: [], containers: [], map: { getTile: () => 0 }, worldTick: 1, rng: new RNG(1) };
+        const said = resolveEnemyTurns(g).map((x) => x.text ?? x);
+        assert.ok(!said.some((t) => String(t).includes('Mimic')), 'asleep, it is silent beside you');
+    });
+
     test('_wakeMimic wakes it for good, hunting where you stand, and takes a beat', () => {
         const m = mimic();
         const calls = [];

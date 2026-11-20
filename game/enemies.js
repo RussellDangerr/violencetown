@@ -854,7 +854,7 @@ export function resolveAmbientTurns(game) {
 // barks every turn while standing next to an NPC would be log spam.
 
 function maybeAdjacencyBark(game, enemy) {
-    if (!enemy.adjacencyBark) return null;
+    if (!enemy.adjacencyBark || enemy.disguised) return null;   // (MM1) a sleeping mimic says nothing: it is a chest
     const dx = Math.abs(enemy.x - game.playerX), dy = Math.abs(enemy.y - game.playerY);
     if (manhattan(enemy.x, enemy.y, game.playerX, game.playerY) === 1 && !enemy._wasAdjacent) {
         enemy._wasAdjacent = true;

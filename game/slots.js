@@ -143,7 +143,7 @@ export const ENTRIES = {
     // No `boss`, no slot.
     carnival_mimic: {
         type: 'Mimic',
-        name: '[Mimic]',
+        name: 'Mimic',
         disguised: true,
         gold: 7,
         loadout: ['hot_dog', 'red_cape', 'soap', 'fire_blood'],
@@ -155,9 +155,9 @@ export const ENTRIES = {
         bribeable: true,
         values: { bandage: 6, soap: 4, rock: 3 },
         behavior: ['IDLE'],   // it stays where it is placed: a wander would draw the shared ambient stream
-        barks: ['[TEXT]'],
+        barks: ['The Mimic is hostile and comes for you.'],
         barkEveryTurns: 6,
-        adjacencyBark: '[TEXT]',
+        adjacencyBark: 'A Mimic, a monster that looks like a chest. It is hostile and will fight you.',
     },
     // The Carnival's horses (plans/cb1-carnival-horses-circle.md): three combatants placed by
     // hand around (28,4), which circle you once beside you (ai.js circleStep; the `circler`

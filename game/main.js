@@ -4046,10 +4046,10 @@ class Game {
     }
 
     // (plans/mm1-carnival-mimic.md) The bump on a disguised mimic: it wakes for good, the world takes
-    // a beat, and it hunts. Placeholder log text.
+    // a beat, and it hunts.
     _wakeMimic(enemy) {
         if (!enemy.wakeDisguise(this.playerX, this.playerY)) return;
-        this._log('[TEXT: the chest bites back.]');
+        this._log('The chest is a Mimic. It is hostile and comes for you.');
         this._render();
         this._advanceWorld();
     }

@@ -24,8 +24,8 @@ wakes it for good: it is drawn as itself from then on and hunts the player, whic
 - sprites.js: `Mimic` awake art is an existing Tiny Dungeon cell.
 
 ## Rulings and picks
-None. Stand-ins (flagged for Caelan): the Carnival Clown's numbers and kit, the name `[Mimic]`,
-barks `[TEXT]`, the awake art cell.
+None. Stand-ins (flagged for Caelan): the Carnival Clown's numbers and kit, the name `Mimic`,
+its plain bark and examine line, the awake art cell. A sleeping mimic never barks.
 
 ## Out of scope
 Real name, barks and art; mimics elsewhere; waking by anything other than a bump.
