@@ -2833,7 +2833,8 @@ class Game {
         if (tile.x === this.playerX && tile.y === this.playerY) return false;
         const me = { x: this.playerX, y: this.playerY };
         // (TW2) A wall, a blocked tile or no route: walk to the reachable tile nearest it.
-        const path = (this.map.isWalkable(tile.x, tile.y) && findPath(this, me, tile)) || pathToNearest(this, me, tile);
+        let path = this.map.isWalkable(tile.x, tile.y) && findPath(this, { x: this.playerX, y: this.playerY }, tile);
+        if (!path) path = pathToNearest(this, me, tile);
         if (path && path.length) { this._walkPath(path); return true; }
         return false;
     }
