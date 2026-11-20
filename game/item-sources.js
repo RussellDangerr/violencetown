@@ -256,6 +256,11 @@ export default {
       "Sewer"
     ]
   },
+  "rat_mask": {
+    "foundIn": [
+      "Sewer"
+    ]
+  },
   "ray_gun": {
     "droppedBy": [
       "Alien Invasion"
