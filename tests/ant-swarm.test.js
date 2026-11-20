@@ -385,7 +385,7 @@ describe('ants in the game', () => {
         assert.ok(enemyTurn > 0 && body.indexOf('this._antTurn?.()') > enemyTurn, 'the world turn does not run the swarm');
         assert.ok(body.indexOf('this._antTurn?.()') < body.indexOf('this._die()'), 'an ant bite could not kill');
         // The key, the menu and the wheel all wait through _waitTurn: one plain wait line left.
-        assert.equal(mainSrc.split("'[Wait]'").length - 1, 1);
+        assert.equal(mainSrc.split("'Wait'").length - 1, 1);
         assert.equal(mainSrc.split('this._waitTurn()').length - 1, 3);
     });
 
@@ -414,10 +414,10 @@ describe('ants in the game', () => {
         for (let i = 0; i < 60 && !ants(g).some(a => a._latched); i++) g._advanceWorld();
         assert.ok(ants(g).some(a => a._latched), 'set-up: an ant latched');
         g._waitTurn();
-        assert.equal(g.log.at(-1), '[TEXT]');
+        assert.equal(g.log.at(-1), 'You spend the turn brushing the ants off.');
         const fresh = dinerGame({ cone: false });
         fresh._waitTurn();
-        assert.equal(fresh.log.at(-1), '[Wait]');
+        assert.equal(fresh.log.at(-1), 'Wait');
         assert.equal(fresh.advanced, 1);
     });
 

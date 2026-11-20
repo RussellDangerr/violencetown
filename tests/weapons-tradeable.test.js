@@ -136,7 +136,7 @@ describe('_takeItemAt — the ground-take path no longer swallows unresolvable i
         assert.deepEqual(g.groundItems, [], 'lion_whip did not leave the floor');
         assert.ok(g.inventory && g.inventory.includes(WEAPONS.lion_whip), 'lion_whip never reached the bag');
         assert.equal(g.logs.length, 1);
-        assert.doesNotMatch(g.logs[0].msg, /won't come loose/);
+        assert.doesNotMatch(g.logs[0].msg, /That item is unknown/);
     });
 
     test('a weapon on the floor auto-equips into a free slot', () => {
@@ -152,7 +152,7 @@ describe('_takeItemAt — the ground-take path no longer swallows unresolvable i
         assert.equal(g.groundItems.length, 1, 'the unresolvable item was removed from the floor');
         assert.equal(g.groundItems[0].type, 'not_a_real_item_xyz');
         assert.equal(g.logs.length, 1, 'expected exactly one log line');
-        assert.match(g.logs[0].msg, /won't come loose/);
+        assert.match(g.logs[0].msg, /That item is unknown/);
     });
 });
 

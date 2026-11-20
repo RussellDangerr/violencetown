@@ -58,7 +58,7 @@ describe('enemies backstab you (ZB2)', () => {
         const dmg = applyDamageToPlayer.call(g, 10, { x: 5, y: 4 });
         assert.equal(dmg, Math.round(10 * combat.WEAKNESS_MULT));
         assert.ok(dmg > 10);
-        assert.deepEqual(g.logs, ['[Backstab!]']);
+        assert.deepEqual(g.logs, ['Backstab!']);
     });
 
     test('a hit from the front or side is unchanged and silent', () => {

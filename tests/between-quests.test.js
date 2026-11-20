@@ -234,7 +234,7 @@ describe('after the car runs, the objective points at the bridge', () => {
         assert.equal(hudObjective(g), QUESTS.fix_car.stages[3].objective.toUpperCase(), 'before: install the converter');
 
         await g.press('ArrowUp');
-        assert.ok(g.logs.includes('You put the cataclysmic converter in your car. The car is fixed. Drive north over the bridge.'), `the car took the converter: ${g.logs.join(' | ')}`);
+        assert.ok(g.logs.includes('You put the cataclysmic converter in your car. The car is fixed. Drive north over the bridge. You need alcohol in the tank to make it.'), `the car took the converter: ${g.logs.join(' | ')}`);
         assert.ok(g.questEngine.isComplete('fix_car'));
         assert.equal(g.questEngine.state.activeId, null, 'no quest is active in the gap');
         assert.equal(g.inventory[0], null, 'the converter left the bag');

@@ -58,7 +58,6 @@ const ALLOWED = {
     'hand-data.js': 2,
     'hands.js': 1,
     'items.js': 4,
-    'main.js': 186,
     'radicals/canyon/wreck.json': 1,
     'save.js': 1,
     'sewer-map.json': 4,

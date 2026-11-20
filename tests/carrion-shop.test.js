@@ -224,7 +224,7 @@ describe('Carrion keeps a shop (CN1)', () => {
         assert.equal(g.state, STATE.TRADE, 'E opens the shop');
         assert.equal(g._offerNpc, g.carrion);
         assert.deepEqual(theirNames(g), ['soap', 'bandage']);
-        assert.ok(g.logs.some(l => /opens the till/.test(l)), 'it opened as a till, not a bare satchel');
+        assert.ok(g.logs.some(l => /opens the shop/.test(l)), 'it opened as a till, not a bare satchel');
         await g.press('KeyE');
         assert.equal(g.state, STATE.IDLE, 'E closes it again');
     });

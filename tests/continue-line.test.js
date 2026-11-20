@@ -49,15 +49,15 @@ const HOUR = 3600e3;
 test('a real save gives the zone and how long ago', () => {
     const raw = stage('sewer-map.json');
     const line = lift().call({}, raw.savedAt + 2 * HOUR + 5000);
-    assert.equal(line, '[TEXT] SEWER, 2 hours');
+    assert.equal(line, 'Saved game: SEWER, 2 hours ago');
 });
 
 test('the age steps: under an hour, one hour, days', () => {
     const raw = stage('town-map.json');
     const f = lift();
-    assert.match(f.call({}, raw.savedAt + 60000), /TOWN, under 1 hour$/);
-    assert.match(f.call({}, raw.savedAt + HOUR), /TOWN, 1 hour$/);
-    assert.match(f.call({}, raw.savedAt + 72 * HOUR), /TOWN, 3 days$/);
+    assert.match(f.call({}, raw.savedAt + 60000), /TOWN, under 1 hour ago$/);
+    assert.match(f.call({}, raw.savedAt + HOUR), /TOWN, 1 hour ago$/);
+    assert.match(f.call({}, raw.savedAt + 72 * HOUR), /TOWN, 3 days ago$/);
 });
 
 test('no save gives no line', () => {

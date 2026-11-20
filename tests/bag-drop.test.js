@@ -127,7 +127,7 @@ describe('FX25 — Drop through the bag\'s real keys', () => {
         assert.equal(g.inventory[12], null, 'the slot is empty');
         assert.deepEqual(here(g), ['bandage', 'bandage', 'bandage'], 'three bandages lie under you');
         assert.deepEqual(g._droppedItems[URL_A], [{ type: 'bandage', x: 5, y: 5, count: 3 }]);
-        assert.deepEqual(g.logs, [`[Dropped ${ITEMS.bandage.name} x3]`]);
+        assert.deepEqual(g.logs, [`Dropped ${ITEMS.bandage.name} x3`]);
         assert.equal(g.saves, 1, 'the moment is saved, so a reload keeps it');
         assert.equal(g.beats, 0, 'dropping costs no world turn, as before');
     });
@@ -136,7 +136,7 @@ describe('FX25 — Drop through the bag\'s real keys', () => {
         const g = makeGame(x => put(x, 14, 'foil_hat'));
         dropBySlot(g, 14);
         assert.deepEqual(here(g), ['foil_hat']);
-        assert.deepEqual(g.logs, [`[Dropped ${ITEMS.foil_hat.name}]`]);
+        assert.deepEqual(g.logs, [`Dropped ${ITEMS.foil_hat.name}`]);
     });
 
     test('a safe-slot item drops too', () => {

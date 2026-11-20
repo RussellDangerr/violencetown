@@ -116,7 +116,7 @@ describe('Siberia goes by one name', () => {
         assert.equal(e.entity.name, 'Siberia');
         const g = standIn();
         g.kill(e);
-        assert.ok(g.logs.includes('[Defeated Siberia]'), g.logs.join(' | '));
+        assert.ok(g.logs.includes('Defeated Siberia'), g.logs.join(' | '));
     });
 });
 

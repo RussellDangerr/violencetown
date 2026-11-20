@@ -214,7 +214,7 @@ describe('the part', () => {
 
     test('is not a questItem, because the item overlay refuses those and its use lives there', () => {
         assert.ok(!ITEMS[MACHINE_PART].questItem);
-        assert.match(mainSrc, /if \(item\.questItem\) \{\s*this\._log\('\[Best hold onto that\.\]'\)/);
+        assert.match(mainSrc, /if \(item\.questItem\) \{\s*this\._log\('Quest items cannot be used, thrown or given\.'\)/);
     });
 });
 

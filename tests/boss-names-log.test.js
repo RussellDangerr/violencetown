@@ -99,7 +99,7 @@ for (const [label, make] of Object.entries(BOSSES)) {
             const lines = [];
             pickDialogueChoice.call(talkGame(b, lines), { id: 'rude' });
             assert.equal(lines.length, 1);
-            assert.match(lines[0], /has heard enough/);
+            assert.match(lines[0], /turns hostile/);
             onlyName(b, lines[0]);
         });
 
@@ -160,7 +160,7 @@ describe('FX47 a non-boss reads exactly as before', () => {
         const g = goon(); g.disposition = -100;
         const lines = [];
         pickDialogueChoice.call(talkGame(g, lines), { id: 'r' });
-        assert.equal(lines[0], '[Violet Fungus has heard enough.]');
+        assert.equal(lines[0], 'Violet Fungus turns hostile.');
     });
     test('the scrub label keeps name-or-type', () => {
         const use = ITEM_USES.find(u => u.id === 'soap-on-sludge');

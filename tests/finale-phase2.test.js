@@ -633,7 +633,7 @@ describe('losing to Monstrous Sun Man, leaving the vault, coming back', () => {
         assert.equal(g.state, STATE.DEAD, 'he put you down');
         g.timers.splice(0).forEach(fn => fn());
         assert.equal(g.state, STATE.IDLE);
-        assert.ok(g.logs.some(l => /Down but not out/.test(l)), 'the boss retry, not a defeat scenario');
+        assert.ok(g.logs.some(l => /You retry the boss fight/.test(l)), 'the boss retry, not a defeat scenario');
         const again = beastOf(g);
         assert.equal(g.enemies.filter(isBeast).length, 1);
         assert.equal(again.entity.hp, again.entity.maxHp);

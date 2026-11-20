@@ -183,7 +183,7 @@ describe('the room and its door', () => {
     });
 
     test('main.js names the room for the Continue line and calls the room at its seams', () => {
-        assert.match(mainSrc, /'compactor-map\.json': '\[COMPACTOR ROOM\]'/);
+        assert.match(mainSrc, /'compactor-map\.json': 'COMPACTOR ROOM'/);
         const loadMap = methodBody('_loadMap');
         assert.match(loadMap, /this\._applyCompactor\?\.\(\)/);
         const beat = methodBody('_advanceWorldOnce');

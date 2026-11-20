@@ -261,7 +261,7 @@ describe('losing to the sewer rats leaves your things in a stash (RB1)', () => {
         assert.equal(g.equipment.weapon.id, 'wooden_sword');
         // The cost line names every one, right after the scenario line.
         const at = g.logs.indexOf('You lost to the sewer rats and woke at the sewer entrance. They took your unprotected items and left them in a stash.');
-        assert.equal(g.logs[at + 1], '[Taken: Pipe, Rock x3, Bandage x2, Foil Hat. GP taken: 0.]');
+        assert.equal(g.logs[at + 1], 'Taken: Pipe, Rock x3, Bandage x2, Foil Hat. GP taken: 0.');
         assert.equal(g.gold, 25, 'the rats take no gold');
         assert.equal(g.playerHp, 60, 'you wake at the robbery\'s 60%');
     });
@@ -316,7 +316,7 @@ describe('losing to the sewer rats leaves your things in a stash (RB1)', () => {
 
         await step(g, ARROW[`${chest.x - beside.x},${chest.y - beside.y}`]);   // bump the chest
         assert.equal(g.state, STATE.TRADE, 'the chest opens');
-        assert.ok(g.logs.includes('[You pry open the chest.]'));
+        assert.ok(g.logs.includes('You pry open the chest.'));
         assert.equal(g._offerTheirsList().length, 7, 'all seven things are in it');
 
         await takeAll(g, chest);
@@ -340,7 +340,7 @@ describe('losing to the sewer rats leaves your things in a stash (RB1)', () => {
         g.playerHp = 0;
         g._die();
         g.timers.splice(0).forEach(fn => fn());
-        assert.ok(g.logs.includes('[Down but not out. Regroup and finish it.]'));
+        assert.ok(g.logs.includes('You retry the boss fight with full HP and MP.'));
         assert.deepEqual(counts(g), had);
         assert.equal(g.containers.length, before);
     });
