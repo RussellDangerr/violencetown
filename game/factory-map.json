@@ -71,7 +71,7 @@
         {"id": "factory-locker", "type": "chest", "x": 2, "y": 27, "contents": ["strength_poition"]}
     ],
     "transitions": [
-        {"x": 29, "y": 14, "toMap": "town-map.json", "toX": 1, "toY": 12, "label": "[East — back out to the street]"},
+        {"x": 29, "y": 14, "toMap": "town-map.json", "toX": 1, "toY": 12, "label": "East — back out to the street"},
         {"x": 29, "y": 15, "toMap": "town-map.json", "toX": 1, "toY": 12, "label": "[East — back out to the street]"},
         {"x": 26, "y": 29, "toMap": "frozen-map.json", "toX": 9, "toY": 2, "label": "[TEXT]"},
         {"x": 27, "y": 29, "toMap": "frozen-map.json", "toX": 9, "toY": 2, "label": "[TEXT]"},
