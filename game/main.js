@@ -47,7 +47,8 @@ import { hasSave, readSaveRaw, writeSave, loadInto, clearSave, keepUnreadableSav
 import { createKey, loadKeyId } from './save-key.js';
 import { readAway, tellAwayNews, restedOnReturn } from './away.js';   // (CK1) hours since the save's savedAt
 import { QuestEngine } from './quests.js';
-import { doExamine, resolveExamine, propNameAt } from './examine.js';
+import { doExamine, resolveExamine, propNameAt, findExaminable } from './examine.js';
+import { useJobBoard, BOARD_ID } from './jobs.js';   // (BP6)
 import { recordDrop, pendingDrops, takeDrop, dropLoadout, recordKill, stepRespawns, deadIds, bossDropOnce, claimSpots, spotHolds, spotSpawns } from './drops.js'; // per-zone runtime dropped-items layer + respawn list (pure, node-tested)
 import {
     HIT_SLOP, throwRects, DOCK, dockFor, WHEEL_DESKTOP, hitHud,
@@ -260,6 +261,7 @@ class Game {
         this.playerMp    = PLAYER_MAX_MP;
         this.playerMaxMp = PLAYER_MAX_MP;
         this.boons = {};   // (BP1) permanent boosts drunk, { stat: n }
+        this.jobs = { done: 0, shards: 0 };   // (BP6) Job board: jobs done, Shards held
         // Known spells for FIGHT → Magic (base set; equipped weapons grant more
         // via _refreshGrantedSkills). Granted TRICKS (GP skills) live in a
         // parallel list the Trick ring reads.
@@ -2049,6 +2051,7 @@ class Game {
                 const t = this._targetAt(this.playerX + fdx, this.playerY + fdy);
                 const verb = t && defaultVerb(t, this);
                 if (verb) { this._actOnTarget(verb, t); return; }
+                if (this._useJobBoard?.(true)) { this._render(); return; }   // (BP6) inline ?. call: older tests lift this block
                 doExamine(this); this._render(); return;
             }
 
@@ -4232,6 +4235,7 @@ class Game {
                 // instance like the car resolves at its own tile, whichever half
                 // was tapped.
                 const ex = t.examinable;
+                if (ex && ex.id === 'job_board' && this._useJobBoard?.()) { this._render(); break; }   // (BP6)
                 const res = resolveExamine(this, ex ? ex.x : t.x, ex ? ex.y : t.y);
                 if (res.instanceId) this.emitGameEvent('examine', { targetId: res.instanceId });
                 if (res.grantsInstance) { this._grantFromExaminable(res.grantsInstance); break; }
@@ -5993,6 +5997,13 @@ class Game {
         return true;
     }
 
+    // (BP6) The Job board. With `facing` it only fires when the E key's faced examinable is the board; a tap already knows.
+    _useJobBoard(facing) {
+        if (facing && findExaminable(this)?.id !== BOARD_ID) return false;
+        useJobBoard(this);
+        return true;
+    }
+
     // (BP3) A finished quest's boon poition. The bag grows a page when full, so it always lands.
     _grantBoon() { return this._grantItem('boon_poition', 'Quest done: you get a boon poition.'); }
 
@@ -6958,6 +6969,7 @@ class Game {
         this.playerMaxMp = PLAYER_MAX_MP;
         this.playerMp = this.playerMaxMp;
         this.boons = {};   // (BP1) a new game has drunk none
+        this.jobs = { done: 0, shards: 0 };   // (BP6)
         this.facing = 'down';
         this.buffs = [];
         this._hasteCharges = 0;

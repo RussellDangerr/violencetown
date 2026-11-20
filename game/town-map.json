@@ -94,6 +94,7 @@
     "examinables": [
         {"id": "car", "x": 16, "y": 2, "text": "This is your car. You need to go to the sewer and kill the Were-Rat so that it drops the cataclysmic converter."},
         {"id": "bridge", "x": 16, "y": 0, "text": "This is the bridge north out of Town. A barricade blocks it. Fix your car, then drive north across the bridge."},
-        {"id": "fuel_note", "x": 21, "y": 7, "text": "[A hand-lettered card on Hooch's stall: \"ALCOHOL — burns FAST, burns HOT, gone in a blink, barely a shove. Hooch sells it here. Pour a bottle into your car's tank before you drive over the bridge.\"]"}
+        {"id": "fuel_note", "x": 21, "y": 7, "text": "[A hand-lettered card on Hooch's stall: \"ALCOHOL — burns FAST, burns HOT, gone in a blink, barely a shove. Hooch sells it here. Pour a bottle into your car's tank before you drive over the bridge.\"]"},
+        {"id": "job_board", "x": 13, "y": 10, "text": "Job board. It lists one job at a time. Bring back the item and use the board to get a Shard."}
     ]
 }
