@@ -231,7 +231,7 @@ describe('the diner\'s ice cone machine', () => {
     test('one row in item-uses.js joins the part to the machine', () => {
         const rows = ITEM_USES.filter(r => r.item === MACHINE_PART);
         assert.equal(rows.length, 1);
-        assert.equal(rows[0].label, '[TEXT]');
+        assert.equal(rows[0].label, 'Fit the part in the ice cone machine');
     });
 
     test('the part offers nothing anywhere else', () => {

@@ -25,8 +25,8 @@ export const NERD_TAG = 'hypno_nerd';
 export const OFF_FLAG = 'hypnoVisionOff';
 
 export const LINES = {
-    turn: (who) => `[The Hypno Vision turns the ${String(who).replace(/[\[\]]/g, '')} against you.]`,
-    off: '[The Hypno Vision is off. Those it turned go back to neutral.]',
+    turn: (who) => `The Hypno Vision turned the ${String(who).replace(/[\[\]]/g, '')} against you.`,
+    off: 'The Hypno Vision is off. Those it turned are neutral again.',
 };
 
 const mapUrl = (game) => game._mapUrl ?? game.map?.url;
@@ -94,7 +94,7 @@ export function switchOff(game) {
 export const SCREEN_PROP = { type: 'slotMachine', x: TV.x, y: TV.y, solid: false };
 export const SCREEN_EXAMINE = {
     id: 'hypno-vision', x: TV.x, y: TV.y,
-    text: '[Hypno Vision. A screen on the wall. While you are within 6 tiles and it can see you, it turns one worker or robot against you every 3 actions. The nerd in the south alcove can switch it off.]',
+    text: 'Hypno Vision. A screen on the wall. While you are within 6 tiles and it can see you, it turns one worker or robot against you every 3 actions. The nerd in the south alcove can switch it off.',
 };
 
 function placeScreen(game) {

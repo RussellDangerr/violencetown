@@ -152,9 +152,9 @@ for (const [label, make] of Object.entries(BOSSES)) {
 describe('FX47 a non-boss reads exactly as before', () => {
     test('give lines keep "The <type>"', () => {
         const g = goon(); g.bribeable = false;
-        assert.equal(applyGive({ id: 'x', name: 'Thing' }, g).log, '[The Violet Fungus ignores your offering.]');
+        assert.equal(applyGive({ id: 'x', name: 'Thing' }, g).log, 'The Violet Fungus did not accept the Thing.');
         const h = goon(); h.bribeable = true; h.values = { x: 8 }; h.flipThreshold = 1; h.onFlip = 'offerDiscount';
-        assert.match(applyGive({ id: 'x', name: 'Thing' }, h).log, /^\[Violet Fungus accepts the Thing\./);
+        assert.equal(applyGive({ id: 'x', name: 'Thing' }, h).log, "Violet Fungus accepted the Thing and now offers a discount.");
     });
     test('hostile talk keeps name-or-type', () => {
         const g = goon(); g.disposition = -100;
@@ -183,7 +183,7 @@ describe('FX47 source sweep', () => {
     // Out of scope by ruling: the worker lines ("A <type> drops/pockets") and
     // the container branch.
     const FILES = ['npc.js', 'buffs.js', 'main.js', 'give-action.js', 'item-uses.js', 'examine.js'];
-    const ALLOWED = [/console\.warn/, /A \$\{npc\.type\} (drops|pockets)/, /pry open the/, /isn't interested in what you've got/];
+    const ALLOWED = [/console\.warn/, /A \$\{npc\.type\} (drops|picks up)/, /pry open the/, /isn't interested in what you've got/];
     const BARE = [
         /\$\{[^}]*\.name \?\? [^}]*\.type[^}]*\}/,
         /\$\{[^}]*\.name \|\| [^}]*\.type[^}]*\}/,

@@ -36,14 +36,14 @@ describe('a DoT tick says which way it went', () => {
         const f = fungus(50, [{ id: 'sludge', turns: 3, dmg: -3 }]);
         tickBuffList(f.buffs, f, g);
         assert.equal(f.entity.hp, 53);
-        assert.equal(g.logs[0], '[Violet Fungus — Sludge (+3 HP)]');
+        assert.equal(g.logs[0], 'Violet Fungus: Sludge +3 HP');
     });
 
     test('a damage tick reads as it always did', () => {
         const g = game();
         const f = fungus(50, [{ id: 'sludge', turns: 3, dmg: 3 }]);
         tickBuffList(f.buffs, f, g);
-        assert.equal(g.logs[0], '[Violet Fungus — Sludge 3]');
+        assert.equal(g.logs[0], 'Violet Fungus: Sludge -3 HP');
     });
 
     test('the heal it reports is the heal it gave — clamped at the Hundred', () => {
@@ -51,7 +51,7 @@ describe('a DoT tick says which way it went', () => {
         g.buffs = [{ id: 'poison', turns: 2, dmg: -5 }];
         tickBuffList(g.buffs, g, g);
         assert.equal(g.playerHp, 100);
-        assert.equal(g.logs[0], '[You — Poison (+2 HP)]');
+        assert.equal(g.logs[0], 'You: Poison +2 HP');
     });
 });
 

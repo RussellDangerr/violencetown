@@ -118,7 +118,7 @@ describe('the rats rob you in the sewer (RB1)', () => {
     assert.equal(robbery.consequence.wakeAt, null);
     assert.equal(robbery.consequence.hp, 0.6);
     assert.deepEqual(robbery.consequence.take, { loot: 'all', recoverable: true, stashAt: { spot: { x: 17, y: 10 } } });
-    assert.equal(robbery.consequence.log, "[The rats rolled you and scampered off with your haul. You'll want it back.]");
+    assert.equal(robbery.consequence.log, 'You lost to the sewer rats and woke at the sewer entrance. They took your unprotected items and left them in a stash.');
   });
   test('anything else in the sewer picks from the same scenarios as before', () => {
     assert.deepEqual(eligible('SEWER', { type: 'Violencian', entity: {} }), ['patched_by_carrion', 'beaten_and_dumped']);

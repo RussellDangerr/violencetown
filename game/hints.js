@@ -42,7 +42,7 @@ export const HINTS = [
         // a mood face over someone's head means nothing until you know it prices
         // things. This is the only hint that fires in the opening square.
         when: (game) => neighbours(game).some(e => e.vendor),
-        text: "[They'll trade. Walk into them, or press E — the same screen buys, sells, gives and bribes.]",
+        text: "They'll trade. Walk into them, or press E. The same screen buys, sells, gives and bribes.",
     },
     {
         id: 'blindSpot',
@@ -50,7 +50,7 @@ export const HINTS = [
         // rule the whole stealth layer rests on, and the kind of rule a player
         // either stumbles into or never learns at all.
         when: (game) => neighbours(game).length > 0 && game.isHidden?.(),
-        text: "[They haven't seen you. People don't look behind themselves — and a pocket is easiest to pick from back here.]",
+        text: "They haven't seen you. Standing behind someone keeps you out of their sight. The Thieve option is available from there.",
     },
     {
         id: 'thieveHere',
@@ -60,7 +60,7 @@ export const HINTS = [
         // pacing gap teaches the stance first and the verb a few turns later.
         when: (game) => !!game.isHidden?.()
             && neighbours(game).some(e => Object.values(takeable(e)).some(Boolean)),
-        text: '[TEXT: Thieve hint, placeholder.]',
+        text: 'You are hidden beside someone with something to take. Open the wheel and pick Thieve: Coin, Kit or Gear.',
     },
     {
         id: 'contextualUse',
@@ -75,7 +75,7 @@ export const HINTS = [
             }
             return (game._contextualUsesFor?.(stack.itemDef) || []).length > 0;
         },
-        text: '[Something you are carrying works on what is in front of you. Open it and look.]',
+        text: 'Something you are carrying can be used on what is in front of you. Open your bag to see the use.',
     },
     {
         id: 'hotGoods',
@@ -83,7 +83,7 @@ export const HINTS = [
         // so it is a payoff, not an instruction, and it names the fence at the
         // exact moment the town starts refusing them.
         when: (game) => Object.values(game._hot || {}).some(n => n > 0),
-        text: '[Word got around about that. Honest shops will not touch it now — find someone who deals in things with a history.]',
+        text: 'Shops will not buy goods you were seen stealing. A fence will.',
     },
     {
         id: 'wounded',
@@ -94,7 +94,7 @@ export const HINTS = [
         // for the same check the bar's own drawing uses (renderer _drawXmbBar).
         when: (game) => (game.playerHp ?? 100) < (game.playerMaxHp ?? 100) * 0.5
             && buildXmbBar(game.inventory).columns.length > 0,
-        text: '[You are hurt. The bar along the bottom is live — Shift+↑↓ picks something to drink.]',
+        text: 'You are below half health. The bar along the bottom lists the items you can throw, drink or eat. Shift+Up and Shift+Down pick an item.',
     },
     {
         id: 'ringFashion',
@@ -102,14 +102,14 @@ export const HINTS = [
         // exists, so it never nags a player who already found Platero.
         when: (game) => (game.ownedRings?.size || 0) === 0
             && (game.inventory || []).some(s => s?.itemDef?.id === 'wererat_fur'),
-        text: '[TEXT: ring fashion hint — the silversmith, the rings tab, placeholder.]',
+        text: 'Tuft of Wererat Fur can be made into a ring by Platero, the silversmith in Downtown.',
     },
     {
         id: 'fightArc',
         // The numbered arc under you appears the moment a fight starts, and the
         // number keys fire it. Same test the arc itself draws by (fight-arc arcOn).
         when: (game) => arcOn(game),
-        text: '[TEXT: attack arc hint, placeholder.]',
+        text: 'The numbered arc under you lists your moves. Press its number key to use one. 9 is Eat and 0 is Run.',
     },
 ];
 

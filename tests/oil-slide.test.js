@@ -3,7 +3,7 @@
 //
 // Same stand-in game as taxi-crash.test.js: the real _doMove, cutscene, landing and
 // gate methods lifted out of main.js, the real maps and quest engine, every step a real
-// key. Oil is granted (it is not for sale until TX7). Every line is the placeholder [TEXT].
+// key. Oil is granted (it is not for sale until TX7). Every line is plain.
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -181,7 +181,7 @@ describe('spreading the oil', () => {
             spread(g);
             assert.equal(stock(g, 'oil'), 1);
             assert.equal(flag(g, 'oilSpread'), true);
-            assert.deepEqual(g.logs.slice(before), ['[TEXT]']);
+            assert.deepEqual(g.logs.slice(before), ['You poured oil on the road.']);
         });
     }
 
@@ -192,7 +192,7 @@ describe('spreading the oil', () => {
         const before = g.logs.length;
         spread(g);
         assert.equal(stock(g, 'oil'), 1, 'the second bottle is kept');
-        assert.deepEqual(g.logs.slice(before), ['[TEXT]']);
+        assert.deepEqual(g.logs.slice(before), ['The oil is already on the road.']);
     });
 
     test('oil has no use away from the bridge and the taxi', async () => {
@@ -279,6 +279,6 @@ describe('the slide', () => {
         const before = g.logs.length;
         spread(g);
         assert.equal(stock(g, 'oil'), 1);
-        assert.deepEqual(g.logs.slice(before), ['[TEXT]']);
+        assert.deepEqual(g.logs.slice(before), ['The oil is already on the road.']);
     });
 });
