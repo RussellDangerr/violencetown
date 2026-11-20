@@ -92,6 +92,24 @@ export function specialDef(def, price) {
     return { ...def, questItem: false, specialSell: price };
 }
 
+// (BP7, BPR7 a) The Night seller in Town sells a boon poition for one fixed price. The
+// price lives here so the trade screen and the offer maths read the same number.
+export const NIGHT_SELLER_ID = 'night-seller';
+export const NIGHT_BOON_PRICE = 500;
+// The seller's spawn, in the same shape as a map's enemy spawns. It lives here, not in the map's
+// enemy list, so the zone's tools (balance harness, item sources) keep reading a day-only Town.
+export const NIGHT_SPAWNS = [
+    { map: 'town-map.json', id: NIGHT_SELLER_ID, nightOnly: true, type: 'Violencian', name: 'Night seller', dialogueId: 'night_seller', x: 18, y: 16,
+      hp: 100, armor: -80, damage: 0, sightRange: 4, ambient: true, behavior: ['IDLE'], vendor: true, stock: ['boon_poition'],
+      disposition: 20,
+      barks: ['The Night seller sells boon poitions for 500 GP.', 'The Night seller is only here at night.', 'The Night seller is waiting.'],
+      barkEveryTurns: 7 },
+];
+// The fixed price a vendor puts on one stock item, or null when the market rate applies.
+export function stockPrice(npc, itemId) {
+    return npc && npc.id === NIGHT_SELLER_ID && itemId === 'boon_poition' ? NIGHT_BOON_PRICE : null;
+}
+
 // Gold cost to nudge disposition up by one BRIBE_STEP from `disposition`.
 // Per-point rate rises across the step so a fat wallet can't trivialize fights:
 // ~1 GP/point while they still dislike you (calming is cheap), ~2 GP/point once
