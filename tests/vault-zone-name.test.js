@@ -45,9 +45,9 @@ describe('the vault\'s own zone name', () => {
 
     test('walking through a door logs the new map\'s own zone name', () => {
         const src = readFileSync(join(GAME, 'main.js'), 'utf8');
-        assert.ok(src.includes('this._log(`[Entered ${this.map.zoneName}]`);'),
+        assert.ok(src.includes('this._log(`Entered ${this.map.zoneName}`);'),
             'the entry line reads the zone name of the map you walked into');
-        assert.equal(`[Entered ${vault.zoneName}]`, '[Entered [TEXT]]');
+        assert.equal(`Entered ${vault.zoneName}`, 'Entered [TEXT]');
         assert.equal(`[Entered ${bank.zoneName}]`, '[Entered FIRST BLOOD BANK]');
     });
 });

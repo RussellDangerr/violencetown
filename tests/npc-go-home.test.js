@@ -212,15 +212,15 @@ describe('a shove that does not land', () => {
         assert.equal(shove.call(self, { x: 6, y: 5, name: 'Hooch', heavy: true }, { dx: 1, dy: 0 }), false);
         assert.equal(logs.length, 1);
         assert.match(logs[0], /Hooch/);
-        assert.match(logs[0], /does not appear to notice/);
+        assert.match(logs[0], /does not move/);
     });
 
     test('a boxed-in character reads as a DIFFERENT failure', () => {
         const { self, logs } = harness({ _shoveDestination: () => null });
         assert.equal(shove.call(self, { x: 6, y: 5, name: 'Puck' }, { dx: 1, dy: 0 }), false);
         assert.equal(logs.length, 1);
-        assert.match(logs[0], /nowhere to go/);
-        assert.doesNotMatch(logs[0], /does not appear to notice/,
+        assert.match(logs[0], /no free tile to move to/);
+        assert.doesNotMatch(logs[0], /does not move/,
             'the two failures must not share a line — they are not the same joke');
     });
 

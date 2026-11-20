@@ -52,9 +52,9 @@ test('attitude shapes the NPC: a foe fights, a friend and a neutral do not', () 
     assert.ok(spawnEnemy(echoSpawn(SPAWN, snap({ peak: 9 }))).disposition > 0);
 });
 
-test('barks are placeholders', () => {
+test('barks are plain', () => {
     const e = echoSpawn(SPAWN, snap());
-    assert.ok(e.barks.every(b => b === '[TEXT]'));
+    assert.deepEqual(e.barks, ['Your old self is standing here.', 'Your old self is waiting.']);
 });
 
 test('the echo slot is no anchor: no game rolls it, so picks do not shift', () => {

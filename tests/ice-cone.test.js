@@ -12,7 +12,7 @@ import { inflateSync } from 'node:zlib';
 import { ITEMS } from '../game/items.js';
 import { SHEETS, ITEM_SPRITES, UNKNOWN_ITEM_SPRITE, TINY_INK, TINY_STYLE_SHEETS, itemSprite } from '../game/sprites.js';
 import { resolveExamine } from '../game/examine.js';
-import { itemStatLine } from '../game/inspector.js';
+import { itemStatLine, describeItem } from '../game/inspector.js';
 import { TILES } from '../game/data.js';
 
 const ID = 'tigers_blood_ice_cone';
@@ -93,12 +93,12 @@ const silhouette = () => {
 const png = () => readRGBA(url(`../game/${SHEETS.iceCone.src.replace(/^\.\//, '')}`));
 
 describe('the Tiger\'s Blood Ice Cone — the item', () => {
-    test('it exists under his name, with the placeholder description', () => {
+    test('it exists under his name, with an empty fact', () => {
         const d = ITEMS[ID];
         assert.ok(d, 'no item');
         assert.equal(d.id, ID);
-        assert.equal(d.name, "[Tiger's Blood Ice Cone]");
-        assert.equal(d.description, '[TEXT]');
+        assert.equal(d.name, "Tiger's Blood Ice Cone");
+        assert.equal(d.fact, '');
     });
 
     test('carrying it does nothing: no use, no slot, no stat, no effect', () => {
@@ -122,22 +122,24 @@ describe('the Tiger\'s Blood Ice Cone — the item', () => {
         const dir = url('../game/');
         const readers = readdirSync(dir).filter(f => /\.(js|json)$/.test(f))
             .filter(f => readFileSync(new URL(f, dir), 'utf8').includes(ID));
-        assert.deepEqual(readers.sort(), ['ants.js', 'dialogue.js', 'item-uses.js', 'items.js', 'quests.js', 'slots.js', 'sprites.js']);
+        assert.deepEqual(readers.sort(), ['ants.js', 'dialogue.js', 'item-sources.js', 'item-uses.js', 'items.js', 'quests.js', 'slots.js', 'sprites.js']);
     });
 
-    test('examining it on the ground names it and shows [TEXT]', () => {
+    test('examining it on the ground names it and shows its stats and its source', () => {
         const g = {
             examinables: [], enemies: [], containers: [], groundItems: [{ type: ID, x: 4, y: 4 }],
             playerX: 5, playerY: 5, facing: 'down',
             map: { getTile: () => TILES.FLOOR.id, isInBounds: () => true, propSpawns: [] },
         };
         const r = resolveExamine(g, 4, 4);
-        assert.equal(r.title, "[Tiger's Blood Ice Cone]");
-        assert.ok(r.body.includes('[TEXT]'), r.body);
+        assert.equal(r.title, "Tiger's Blood Ice Cone");
+        assert.equal(r.body, "Tiger's Blood Ice Cone. Common, value 0 GP. Dropped by: Siberia.");
+        assert.equal(r.panelBody, 'Common, value 0 GP.\nDropped by: Siberia.');
     });
 
-    test('examining it in the bag shows [TEXT]', () => {
-        assert.equal(itemStatLine(ITEMS[ID]), '[TEXT]');
+    test('examining it in the bag shows its stats and its source', () => {
+        assert.equal(itemStatLine(ITEMS[ID]), '');
+        assert.equal(describeItem(ITEMS[ID]), 'Common, value 0 GP.\nDropped by: Siberia.');
     });
 });
 

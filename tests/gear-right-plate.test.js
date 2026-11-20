@@ -1,4 +1,4 @@
-// gear-right-plate.test.js — the GEAR tab's WEAPON [RIGHT] plate opens a chooser
+// gear-right-plate.test.js — the GEAR tab's WEAPON RIGHT plate opens a chooser
 // of the bag's weapons (plans/fx57-gear-right-plate-chooser.md). It used to be
 // skipped on purpose, so clicking it did nothing.
 //
@@ -99,8 +99,8 @@ const press = (g, ...codes) => { for (const c of codes) g._deviceKey(c); };
 const bagIds = g => g.inventory.filter(Boolean).map(s => s.itemDef.id);
 
 describe('the right-hand plate, by tap', () => {
-    test('the plate is the one labelled WEAPON [RIGHT]', () => {
-        assert.equal(rightPlate.label, 'WEAPON [RIGHT]');
+    test('the plate is the one labelled WEAPON RIGHT', () => {
+        assert.equal(rightPlate.label, 'WEAPON RIGHT');
     });
 
     test('a tap on it opens a chooser; a tap on a row wields that weapon in the right hand', () => {
@@ -239,7 +239,7 @@ describe('the renderer draws the right-hand chooser', () => {
         g._deviceSel = { tab: 'gear', slotKey: 'weapon', open: true };
         const { r, texts } = rig();
         r._drawEquipmentModal(g, body);
-        assert.ok(texts.some(t => t.text === 'WEAPON [RIGHT] — CHOOSE'));
+        assert.ok(texts.some(t => t.text === 'WEAPON RIGHT — CHOOSE'));
         assert.ok(texts.some(t => /Lion Whip/.test(t.text)));
         assert.ok(!texts.some(t => /Bare/.test(t.text)), 'no Bare row');
         assert.ok(!texts.some(t => t.text === '0'), 'no meaningless 0');

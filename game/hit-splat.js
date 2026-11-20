@@ -52,9 +52,9 @@ export function pickHitMark(type, amount, killed) {
 // crush (combat.js weaponHitKind picks the kind). The tag is a placeholder
 // until the art for each kind is ruled (plans/ws4-hit-kind-splats.md).
 export const HIT_KIND_TAG = Object.freeze({
-    slash: '[slash]',
-    stab:  '[stab]',
-    crush: '[crush]',
+    slash: 'Slash',
+    stab:  'Stab',
+    crush: 'Crush',
 });
 
 // The tag for `kind`, or null when the hit has no kind (or an unknown one).
@@ -66,7 +66,7 @@ export function hitKindTag(kind) {
 // Ring's 5 points is about 1 blow in 10). The word on the dodge splat is a
 // placeholder until its copy is ruled.
 export const DODGE_PER_POINT = 0.02;
-export const DODGE_WORD = '[TEXT]';
+export const DODGE_WORD = 'Dodged';
 
 // The chance (0..1) that a blow is dodged, for `evasion` points.
 export function dodgeChance(evasion) {

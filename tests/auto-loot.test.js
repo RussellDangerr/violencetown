@@ -106,9 +106,9 @@ describe('a kill\'s loot goes straight into the bag', () => {
     test('the log names every item you got, after the kill\'s own lines', () => {
         g.kill('e1');
         const kit = kitOf('sewer-map.json', 'e1');
-        const picked = g.logs.filter(l => l.startsWith('[Picked up '));
-        assert.deepEqual(picked, kit.map(id => `[Picked up ${ITEMS[id].name}]`));
-        assert.ok(g.logs.indexOf(`[They drop what they didn't get to use.]`) < g.logs.indexOf(picked[0]));
+        const picked = g.logs.filter(l => l.startsWith('Picked up '));
+        assert.deepEqual(picked, kit.map(id => `Picked up ${ITEMS[id].name}`));
+        assert.ok(g.logs.indexOf(`They drop what they didn't get to use.`) < g.logs.indexOf(picked[0]));
         assert.deepEqual(sfx.filter(n => n === 'pickup'), ['pickup'], 'one pickup sound per kill');
         assert.equal(g.saves, 1, 'the loot is saved at once');
     });
@@ -173,7 +173,7 @@ describe('a kill\'s loot goes straight into the bag', () => {
         g.enemies.push(e);
         g.kill('rat_99');
         assert.deepEqual(g.bursts, []);
-        assert.ok(!g.logs.some(l => l.startsWith('[Picked up ')));
+        assert.ok(!g.logs.some(l => l.startsWith('Picked up ')));
     });
 
     test('an item that will not resolve still falls to the floor', () => {

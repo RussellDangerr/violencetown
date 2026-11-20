@@ -36,8 +36,8 @@ export const ENTRIES = {
         damage: 12,
         tag: 'wererat_boss',
         barks: [
-            "[Were-Rat: The converter's OURS now, grease-boy.]",
-            '[Were-Rat: You smell like a dead-end job.]',
+            'The Were-Rat has your Cataclysmic Converter.',
+            'The Were-Rat wants a fight.',
         ],
         barkEveryTurns: 6,
     },
@@ -88,13 +88,13 @@ export const ENTRIES = {
     // the barks, the tint. No `boss`, `tag` or slot, so it drops nothing required.
     carnival_lion: {
         type: 'Carnival Lion',
-        name: '[Lion]',
+        name: 'Lion',
         gold: 20,
         loadout: ['tunnel_mushroom', 'tunnel_mushroom', 'sludge_sack', 'sludge_sack', 'boardwalk_burger', 'foil_hat', 'defence_poition', 'soap'],
         hp: 100,
         armor: 6,
         damage: 12,
-        barks: ['[TEXT]'],
+        barks: ['The Lion wants a fight.'],
         barkEveryTurns: 6,
     },
     // The Carnival's named clown (plans/cw1-the-clown-mini-boss.md, ruling LN1R1 a): a
@@ -104,14 +104,14 @@ export const ENTRIES = {
     // bribe. No `boss`, `tag` or slot, so he drops nothing required.
     the_clown: {
         type: 'The Clown',
-        name: '[The Clown]',
+        name: 'The Clown',
         gold: 20,
         loadout: ['tunnel_mushroom', 'tunnel_mushroom', 'sludge_sack', 'fire_blood', 'boardwalk_burger', 'foil_hat', 'defence_poition', 'soap'],
         hp: 100,
         armor: 6,
         damage: 12,
         bribeable: false,
-        barks: ['[TEXT]'],
+        barks: ['The Clown wants a fight.'],
         barkEveryTurns: 6,
     },
     // The Carnival's strongman (plans/st2-strongman-wins-contest.md, ruling ST2R1 a): placed by
@@ -122,7 +122,7 @@ export const ENTRIES = {
     // carries the art stand-in (Pike's cell); the numbers are still the Clown's.
     strongman: {
         type: 'Strongman',
-        name: '[Strongman]',
+        name: 'Strongman',
         dialogueId: 'strongman',
         gold: 7,
         loadout: ['hot_dog', 'red_cape', 'soap', 'fire_blood'],
@@ -134,7 +134,30 @@ export const ENTRIES = {
         bribeable: true,
         values: { bandage: 6, soap: 4, rock: 3 },
         behavior: ['IDLE'],   // he stands where he is placed: a wander would draw the shared ambient stream and move the autoplay replay
-        adjacencyBark: '[TEXT]',
+        adjacencyBark: 'The Strongman stands here. A gift can turn him to your side.',
+    },
+    // The Carnival's mimic (plans/mm1-carnival-mimic.md): one chest in the far corner placed by
+    // hand at (54,16). Asleep it is drawn as a chest, sees nothing and shows no name or threat;
+    // a bump wakes it for good (enemies.js wakeDisguise, main.js) and it hunts you. Stand-ins until
+    // designed: the ordinary Carnival Clown's numbers and kit, the name, the barks, the awake art.
+    // No `boss`, no slot.
+    carnival_mimic: {
+        type: 'Mimic',
+        name: 'Mimic',
+        disguised: true,
+        gold: 7,
+        loadout: ['hot_dog', 'red_cape', 'soap', 'fire_blood'],
+        hp: 100,
+        armor: 0,
+        damage: ACT2_MOB_DAMAGE,
+        disposition: -40,
+        flipThreshold: 30,
+        bribeable: true,
+        values: { bandage: 6, soap: 4, rock: 3 },
+        behavior: ['IDLE'],   // it stays where it is placed: a wander would draw the shared ambient stream
+        barks: ['The Mimic is hostile and comes for you.'],
+        barkEveryTurns: 6,
+        adjacencyBark: 'A Mimic, a monster that looks like a chest. It is hostile and will fight you.',
     },
     // The Carnival's horses (plans/cb1-carnival-horses-circle.md): three combatants placed by
     // hand around (28,4), which circle you once beside you (ai.js circleStep; the `circler`
@@ -142,14 +165,14 @@ export const ENTRIES = {
     // Rattling Skeleton's numbers and kit, the name, the barks, the art. No `boss`, no slot.
     carnival_horse: {
         type: 'Carnival Horse',
-        name: '[Horse]',
+        name: 'Horse',
         tag: 'circler',
         gold: 4,
         loadout: ['rock', 'pipe', 'foil_hat', 'shoe_bags'],
         hp: 100,
         armor: 0,
         damage: ACT2_MOB_DAMAGE,
-        barks: ['[TEXT]'],
+        barks: ['The Horse circles you.'],
         barkEveryTurns: 6,
     },
     // The Carnival's dolls (plans/ec1-carnival-doll-pack.md): four combatants placed by hand
@@ -158,14 +181,14 @@ export const ENTRIES = {
     // damage with a two-item kit, the purse, the name, the barks, the art. No `boss`, no slot.
     carnival_doll: {
         type: 'Carnival Doll',
-        name: '[Doll]',
+        name: 'Doll',
         tag: 'circler',
         gold: 2,
         loadout: ['rock', 'pipe'],
         hp: 100,
         armor: -30,
         damage: 4,
-        barks: ['[TEXT]'],
+        barks: ['The Doll circles you.'],
         barkEveryTurns: 6,
     },
     // The Carnival's assistant manager (plans/as1-unicycle-clown.md, ruling LN1R1 a): someone
@@ -175,7 +198,7 @@ export const ENTRIES = {
     // size, the unicycle. No `boss`, no slot.
     assistant_manager: {
         type: 'Carnival Clown',
-        name: '[Assistant Manager]',
+        name: 'Assistant Manager',
         ambient: true,
         hp: 100,
         armor: -80,
@@ -198,7 +221,7 @@ export const ENTRIES = {
     // kit, the name, the barks, the examine text, the art. No `boss`, no slot.
     crying_angel: {
         type: 'Crying Angel',
-        name: '[Angel]',
+        name: 'Angel',
         tag: 'angel',
         gold: 4,
         loadout: ['rock', 'pipe', 'foil_hat', 'shoe_bags'],
@@ -206,9 +229,9 @@ export const ENTRIES = {
         armor: 0,
         damage: ACT2_MOB_DAMAGE,
         sightRange: 0,
-        barks: ['[TEXT]'],
+        barks: ['The Angel moves while you look at it.'],
         barkEveryTurns: 6,
-        examine: '[TEXT]',
+        examine: 'Angel. A stone figure. It moves and hits only while you look at it.',
     },
     // The Graveyard's Ankou (plans/ak1-ankou-graveyard.md): one skeleton with a ghost drawn
     // around it (sprites.js `ghost`, renderer.js), placed by hand at (8,22). It fights as an
@@ -222,9 +245,9 @@ export const ENTRIES = {
         hp: 100,
         armor: 3,
         damage: 10,
-        barks: ['[TEXT]'],
+        barks: ['The Ankou wants a fight.'],
         barkEveryTurns: 6,
-        examine: '[TEXT]',
+        examine: 'Ankou. A skeleton with a ghost around it. It attacks when it sees you.',
     },
     // The Tunnels' Molemen (plans/mo1-molemen-tunnels.md): two placed by hand, each born hostile
     // so it hunts you. The name is Caelan's; stand-ins until designed: the Graveyard Rattling
@@ -237,7 +260,7 @@ export const ENTRIES = {
         hp: 100,
         armor: 0,
         damage: ACT2_MOB_DAMAGE,
-        barks: ['The Moleman stops digging and comes for you.'],
+        barks: ['The Moleman is hostile and comes for you.'],
         barkEveryTurns: 6,
     },
     // The Sewer's character (plans/cs1-crat-talk-both-sides.md): the Crat, who
@@ -260,7 +283,7 @@ export const ENTRIES = {
     bigfoot:        { ...act2Boss(), name: 'Bigfoot' },
     // The Carnival's second pool entry (plans/rm1-ringmaster-carnival-boss.md):
     // the same stand-in block, a placeholder name.
-    ringmaster:     { ...act2Boss(), name: '[Ringmaster]' },
+    ringmaster:     { ...act2Boss(), name: 'Ringmaster' },
     // The first built out (plans/ab2-alien-boss-fight.md). He carries the Ray
     // Gun, so his death drop hands it over (ABR3: it left the Factory floor);
     // it heals nothing, so his kit never spends it.
@@ -277,6 +300,7 @@ export const ENTRIES = {
         tag: 'financier_boss',
         dialogueId: 'financier_vault',
         behavior: ['IDLE'],
+        barks: ['The Financier stands here.', 'The Financier fights if you hit him.'],
     },
     // The Alien's allies (ABR2: a few he funds). Law 5's rally pays for any
     // hurt fighter on his side near him; these are on his side because they
@@ -285,7 +309,7 @@ export const ENTRIES = {
     // they are designed.
     alien_ally: {
         type: 'Greedy Green',
-        name: '[NAME]',
+        name: 'Alien Ally',
         gold: 8,
         loadout: ['hot_dog', 'foil_hat', 'latex_gloves', 'cardboard_cuirass', 'soap', 'goo'],
         immune: ['goo'],   // (GO2) aliens are immune to goo, and throw it
@@ -301,7 +325,7 @@ export const ENTRIES = {
     // stream and move the autoplay replay).
     factory_worker: {
         type: 'Worker',
-        name: '[Worker]',
+        name: 'Worker',
         tag: 'hypno_target',
         gold: 4,
         loadout: ['rock', 'pipe', 'foil_hat', 'shoe_bags'],
@@ -313,7 +337,7 @@ export const ENTRIES = {
     },
     factory_robot: {
         type: 'Greedy Green',
-        name: '[Robot]',
+        name: 'Robot',
         tag: 'hypno_target',
         gold: 8,
         loadout: ['hot_dog', 'foil_hat', 'latex_gloves', 'cardboard_cuirass', 'soap'],
@@ -327,7 +351,7 @@ export const ENTRIES = {
     // off. The Factory Manager's numbers (damage 0) until he is designed.
     hypno_nerd: {
         type: 'Violencian',
-        name: '[Nerd]',
+        name: 'Nerd',
         tag: 'hypno_nerd',
         hp: 100,
         armor: -80,
@@ -356,6 +380,25 @@ export const ENTRIES = {
         loadout: ['mystery_meat', 'mystery_meat', 'mystery_meat', 'tunnel_mushroom', 'sludge_sack', 'fire_blood', 'defence_poition'],
         hp: 100, armor: 3, damage: 10,
     }),
+    // The Valley's dinosaurs (plans/dn1-dinosaurs-roam-valley.md), its `valley.mob`
+    // pool. Each copies the fight numbers and kit of the nearest existing enemy, the
+    // same three the frozen area's mooks copy, tier for tier.
+    // Copied from the Graveyard's Rattling Skeleton, whose art it shares.
+    raptor: dinoMob('Raptor', 'A raptor, a small quick dinosaur. It is hostile and will fight you.', {
+        gold: 4, loadout: ['rock', 'pipe', 'foil_hat', 'shoe_bags'], hp: 100, armor: 0, damage: ACT2_MOB_DAMAGE,
+    }),
+    // Copied from the Sewer's Red Fungus, the middle tier.
+    triceratops: dinoMob('Triceratops', 'A triceratops, a horned dinosaur. It is hostile and will fight you.', {
+        gold: 10,
+        loadout: ['mystery_meat', 'mystery_meat', 'mystery_meat', 'tunnel_mushroom', 'sludge_sack', 'fire_blood', 'defence_poition'],
+        hp: 100, armor: 3, damage: 10,
+    }),
+    // Copied from the Sewer's Fungus King, whose art it shares.
+    t_rex: dinoMob('T. rex', 'A T. rex, a large dinosaur. It is hostile and will fight you.', {
+        gold: 20,
+        loadout: ['tunnel_mushroom', 'tunnel_mushroom', 'sludge_sack', 'sludge_sack', 'boardwalk_burger', 'foil_hat', 'defence_poition', 'soap'],
+        hp: 100, armor: 6, damage: 12,
+    }),
     // The frozen area's boss (plans/ic5-siberia-frozen-boss.md): a tigress
     // snowwoman. The shared placeholder boss numbers and kit until she is
     // designed, the chart's cold row like the mooks, her one name, [TEXT] copy.
@@ -365,7 +408,7 @@ export const ENTRIES = {
         name: 'Siberia',
         weak: weaknessesOf('cold'),
         resist: resistancesOf('cold'),
-        examine: '[TEXT]',
+        examine: 'Siberia. Boss. She attacks when she sees you.',
     },
     // The trash compactor (plans/tc1-trash-compactor-walls.md, ruling TC1R1 a): one machine in the
     // middle of its room that never swings and never moves (sight 0, so it never hunts, and
@@ -374,7 +417,7 @@ export const ENTRIES = {
     // tag is compactor.js COMPACTOR_TAG; breaking it is what stops the walls.
     compactor: {
         type: 'Compactor',
-        name: '[Compactor]',
+        name: 'Compactor',
         tag: 'compactor',
         gold: 0,
         hp: 100,
@@ -384,7 +427,7 @@ export const ENTRIES = {
         heavy: true,
         bribeable: false,
         thievable: false,
-        examine: '[A trash compactor. Break it to stop the walls.]',
+        examine: 'Trash compactor. It does not attack. Break it to stop the walls.',
     },
 };
 
@@ -394,9 +437,9 @@ export const ENTRIES = {
 // (sprites.js picks the look from that tag).
 ENTRIES.returning_boss = {
     ...structuredClone(ENTRIES.wererat),
-    name: '[NAME]',
+    name: 'Returning Boss',
     tag: 'returning_boss',
-    barks: ['[TEXT]', '[TEXT]'],
+    barks: ['The Returning Boss wants a fight.', "The Returning Boss took the Were-Rat's place."],
 };
 
 // The spot a boss at `id` on map `url` leaves open, or null.
@@ -448,12 +491,18 @@ export const FINALE_PHASE1 = {
 function frozenMob(type, numbers) {
     return {
         type,
-        name: `[${type}]`,
+        name: type,
         ...numbers,
         weak: weaknessesOf('cold'),
         resist: resistancesOf('cold'),
-        examine: '[TEXT]',
+        examine: `${type}. It attacks when it sees you.`,
     };
+}
+
+// One Valley dinosaur: its numbers and a plain examine line. No weakness row, as
+// the enemy it copies has none.
+function dinoMob(type, examine, numbers) {
+    return { type, name: type, ...numbers, examine };
 }
 
 function alienInvasion() {
@@ -488,7 +537,7 @@ function placeholderBoss() {
         hp: 100,
         armor: 6,
         damage: 12,
-        barks: ['[TEXT]', '[TEXT]'],
+        barks: ['The boss attacks when it sees you.', 'The boss is hostile.'],
         barkEveryTurns: 6,
     };
 }
@@ -498,14 +547,14 @@ function placeholderBoss() {
 export const OLD_SELF = {
     type: 'Violencian',   // drawn as you, tinted pale, by its tag (sprites.js byTag)
     tag: 'old_self',
-    name: '[TEXT]',
+    name: 'Old Self',
     hp: 100,
     armor: 0,
     damage: 0,
     sightRange: 4,
     disposition: 0,
     behavior: ['IDLE'],
-    barks: ['[TEXT]', '[TEXT]'],
+    barks: ['Your old self is standing here.', 'Your old self is waiting.'],
     barkEveryTurns: 6,
 };
 
@@ -606,6 +655,15 @@ export const SLOTS = {
             { entry: 'snowman', weight: 1 },
             { entry: 'yeti', weight: 1 },
             { entry: 'polar_bear', weight: 1 },
+        ],
+    },
+    'valley.mob': {
+        kind: 'mob',
+        map: 'valley-map.json',
+        pool: [
+            { entry: 'raptor', weight: 1 },
+            { entry: 'triceratops', weight: 1 },
+            { entry: 't_rex', weight: 1 },
         ],
     },
 };

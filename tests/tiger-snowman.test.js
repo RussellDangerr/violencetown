@@ -89,7 +89,7 @@ describe('Siberia fills the frozen area\'s boss slot', () => {
         assert.equal(e.slot, SLOT);
         assert.equal(e.type, 'Siberia');
         assert.deepEqual(e.weak, weaknessesOf('cold'));
-        assert.equal(e.examine, '[TEXT]');
+        assert.equal(e.examine, 'Siberia. Boss. She attacks when she sees you.');
         const act2 = ENTRIES.bigfoot;
         for (const k of ['hp', 'armor', 'damage', 'gold']) assert.equal(ENTRIES.siberia[k], act2[k], `${k} stands in at the shared boss row`);
     });
@@ -113,10 +113,10 @@ describe('Siberia goes by one name', () => {
         assert.equal(labelOf(e), 'Siberia');
         assert.equal(shownName(e), 'Siberia');
         assert.equal(e.shownName, 'Siberia');
-        assert.equal(e.entity.name, '[Siberia]');
+        assert.equal(e.entity.name, 'Siberia');
         const g = standIn();
         g.kill(e);
-        assert.ok(g.logs.includes('[Defeated [Siberia]]'), g.logs.join(' | '));
+        assert.ok(g.logs.includes('Defeated Siberia'), g.logs.join(' | '));
     });
 });
 

@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { GameMap, carriesAll } from '../game/map.js';
 import { QuestEngine } from '../game/quests.js';
 import { ITEMS, resolveUse } from '../game/items.js';
+import { describeItemParts } from '../game/inspector.js';
 import { resolveItemDef, ALL_ITEM_IDS } from '../game/item-registry.js';
 import { ITEM_SPRITES } from '../game/sprites.js';
 import { saleLocked, sellPrice } from '../game/trade.js';
@@ -143,7 +144,8 @@ describe('the can as an item', () => {
         assert.equal(d.category, 'ambro');
         assert.equal(d.healAmount, ITEMS.hot_dog.healAmount);
         assert.ok(!d.questItem, 'it can be dropped and drunk');
-        assert.equal(d.description, '[TEXT]');
+        assert.equal(d.fact, '');
+        assert.equal(describeItemParts(d, { sources: {} }).stats, 'Eat: heals 10 HP. Vendors will not buy it until the delivery is done. Used up when used. Rare, value 10 GP.');
         assert.ok(ITEM_SPRITES.mola_cola, 'has a placeholder icon');
         assert.ok(d.fallbackColor);
     });

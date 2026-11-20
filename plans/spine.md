@@ -124,6 +124,12 @@ framework rather than beside it.
 | The oil side area, past the barricade (ruled 2026-11-01, §9) | Optional, carries no beat | name is [TEXT]; content there is pool material |
 | The Tunnels (MO1): fall in through one grave in the Graveyard, walk out through a door in the Wilderness's east wall; the Molemen live there | Off the spine, optional, carries no beat (SA-6) | name is the owner's; terrain, Molemen and every line are stand-ins; the cave off the Valley is a later map |
 
+## 3b. Boon poitions
+
+| Thing | Locked or pool | Today |
+|---|---|---|
+| Boon poitions: at most 12 drunk per game, counted across all kinds (ruled 2026-11-17, BPR4) | Pool, not locked | `BOON_CAP` in `items.js`; the Quests tab reads n / 12 |
+
 ## 4. The lock clause
 
 A change to anything marked **Locked** above — the hub, the episodes, the required items, or the

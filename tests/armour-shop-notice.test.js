@@ -82,7 +82,7 @@ const LIFTED = [
     ['_advanceWorld', ''], ['_advanceWorldOnce', ''], ['_armourShopNotice', ''],
 ];
 
-const NOTICE = '[TEXT]';
+const NOTICE = 'A shop here sells armour you do not own.';
 
 // Starts in `file` at `start`. Only vendors are placed (the beat is the shop's alone); a door
 // walked through loads the real destination JSON the way _loadMap would.
@@ -175,7 +175,7 @@ describe('Downtown (the Corner Merchant sells Latex Gloves)', () => {
         assert.equal(g._mapUrl, 'downtown-map.json', 'the real door took you to Downtown');
         assert.equal(notices(g), 1, 'one line on walking in');
         assert.equal(g.logs.at(-1), NOTICE, 'right after [Entered DOWNTOWN]');
-        assert.ok(g.logs.some(l => l === '[Entered DOWNTOWN]'));
+        assert.ok(g.logs.some(l => l === 'Entered DOWNTOWN'));
 
         // Down the street to the Corner Merchant (5,8): stand at (5,7) facing him.
         await walk(g, 'ArrowDown', 3);
@@ -183,13 +183,24 @@ describe('Downtown (the Corner Merchant sells Latex Gloves)', () => {
         assert.equal(g.facing, 'down');
         await buy(g, 'latex_gloves');
         assert.equal(bagCount(g, 'latex_gloves'), 1, 'the Gloves are in your bag, not yet worn');
+        g._addToInventory(ITEMS.delivery_cap_blue);       // the Kid's cap is owned too (bought in the next test)
 
         // Back up and into the diner, then out again: a second visit.
         await walk(g, 'ArrowUp', 4);                      // (5,3) is the diner door
         assert.equal(g._mapUrl, 'diner-map.json');
         await step(g, 'ArrowDown');
         assert.equal(g._mapUrl, 'downtown-map.json');
-        assert.equal(notices(g), 1, 'owning the only piece it sells, the line did not come back');
+        assert.equal(notices(g), 1, 'owning every piece it sells, the line did not come back');
+    });
+
+    test('the Newsstand Kid sells the blue cap for 16 GP, bought with real keys', async () => {
+        const g = makeGame({ file: 'downtown-map.json', start: [18, 7] });
+        g.facing = 'down';
+        const kid = g.enemies.find(e => e.id === 'dt-merch2');
+        assert.deepEqual([kid.x, kid.y], [18, 8]);
+        await buy(g, 'delivery_cap_blue');
+        assert.equal(bagCount(g, 'delivery_cap_blue'), 1);
+        assert.equal(g.gold, 100 - 16, 'the 16 GP moved');
     });
 
     test('once per visit, not once ever: leave without buying and the next visit says it again', async () => {
@@ -206,6 +217,7 @@ describe('Downtown (the Corner Merchant sells Latex Gloves)', () => {
     test('Gloves already worn count as owned', async () => {
         const g = makeGame({ file: 'diner-map.json', start: [6, 9] });
         g.equipment.sides = ITEMS.latex_gloves;
+        g.equipment.top = ITEMS.delivery_cap_blue;
         await step(g, 'ArrowDown');
         assert.equal(g._mapUrl, 'downtown-map.json');
         assert.equal(notices(g), 0);

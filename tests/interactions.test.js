@@ -35,12 +35,12 @@ describe('the table', () => {
         assert.deepEqual(INTERACTIONS.map(r => r.id), ['mola_cola_frozen', 'mola_cola_wilderness']);
     });
     test('the Mola Cola row carries a placeholder note and the frozen zone', () => {
-        assert.equal(INTERACTIONS[0].note, '[TEXT]');
+        assert.equal(INTERACTIONS[0].note, 'Carrying Mola Cola in the Frozen zone calls a pack of polar bears.');
         assert.equal(INTERACTIONS[0].zone, 'frozen-map.json');
     });
-    test('the notes tab exists with a placeholder label', () => {
+    test('the notes tab exists with a plain label', () => {
         assert.ok(DEVICE_TABS.includes('notes'));
-        assert.equal(DEVICE_TAB_LABELS.notes, '[TEXT]');
+        assert.equal(DEVICE_TAB_LABELS.notes, 'NOTES');
     });
 });
 

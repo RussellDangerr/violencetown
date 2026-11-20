@@ -203,7 +203,7 @@ describe('a clean lift counts; a noticed or failed one does not', () => {
         g._addToInventory = () => false;
         g.victims = [{ ...mark(), loadout: ['soap'] }];
         thieve.call(g, { resolver: 'thieveKit' }, { x: 1, y: 0 });
-        assert.ok(g.logs.includes('[Your bag is full.]'), 'fixture: the bag was full');
+        assert.ok(g.logs.includes('Your bag is full.'), 'fixture: the bag was full');
         assert.deepEqual(g.skills, {});
     });
 
@@ -220,10 +220,10 @@ describe('reaching a rank grants its perk', () => {
     test('the rank-up writes one log line, on the lift that reaches it', () => {
         const g = thiefGame();
         for (let i = 0; i < at(1) - 1; i++) g.lift(mark());
-        const rankLines = () => g.logs.filter(l => l.startsWith('[TEXT]'));
+        const rankLines = () => g.logs.filter(l => l.startsWith('Light fingers is now rank'));
         assert.equal(rankLines().length, 0);
         g.lift(mark());
-        assert.deepEqual(rankLines(), [`[TEXT] ${perkText(ranks[0].perk)}`], 'the line carries that rank perk values');
+        assert.deepEqual(rankLines(), ['Light fingers is now rank 1. A steal can take 25 more GP.'], 'the line carries that rank perk values');
         g.lift(mark());
         assert.equal(rankLines().length, 1, 'no line between ranks');
     });

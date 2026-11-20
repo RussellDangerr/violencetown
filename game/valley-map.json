@@ -1,5 +1,5 @@
 {
-    "_scaffold": "DRAFT GEOMETRY (plans/gv2-canyon-to-valley.md). A plain placeholder at 26x18, in tiles the Canyon already uses: a dry riverbed running down the middle, scree at the edges. Claude's first draft: Caelan repaints it in Tiled, and his version is the one that ships. It holds nothing yet. Its two ways out: the hook climb back down to the Canyon, and the door in the west wall into the Wilderness.",
+    "_scaffold": "DRAFT GEOMETRY (plans/gv2-canyon-to-valley.md). A plain placeholder at 26x18, in tiles the Canyon already uses: a dry riverbed running down the middle, scree at the edges. Claude's first draft: Caelan repaints it in Tiled, and his version is the one that ships. It holds three dinosaurs (plans/dn1-dinosaurs-roam-valley.md). Its two ways out: the hook climb back down to the Canyon, and the door in the west wall into the Wilderness.",
     "width": 26,
     "height": 18,
     "spawn": {"x": 20, "y": 2},
@@ -25,7 +25,11 @@
         61,60,60,60,60,60,60,60,60,60,60,62,62,60,60,60,60,60,60,60,60,60,60,60,60,61,
         61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61
     ],
-    "enemies": [],
+    "enemies": [
+        {"id": "valley-mob-1", "slot": "valley.mob", "seat": 0, "x": 5, "y": 12},
+        {"id": "valley-mob-2", "slot": "valley.mob", "seat": 1, "x": 15, "y": 10},
+        {"id": "valley-mob-3", "slot": "valley.mob", "seat": 2, "x": 23, "y": 13}
+    ],
     "items": [],
     "examinables": [],
     "props": [

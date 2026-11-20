@@ -40,13 +40,13 @@ describe('a defeat line only claims a loss that happened', () => {
             const g = stage(['wererat_fur', 'burger_fries']);   // quest items only: never taken
             g._runScenario(s, {});
             assert.ok(!g.logs.includes(s.consequence.log), 'the loss line is not shown');
-            assert.deepEqual(g.logs, [EMPTY_TAKE_LOG, '[Nothing was taken.]']);
+            assert.deepEqual(g.logs, [EMPTY_TAKE_LOG, 'Nothing was taken.']);
         });
         test(`${id}: a bag with takeable things keeps the scenario's line`, () => {
             const g = stage(['pipe', 'bandage', 'rock', 'tunnel_mushroom', 'foil_hat']);
             g._runScenario(s, {});
             assert.equal(g.logs[0], s.consequence.log);
-            assert.match(g.logs.at(-1), /^\[Taken:/);
+            assert.match(g.logs.at(-1), /^Taken:/);
         });
     }
 });

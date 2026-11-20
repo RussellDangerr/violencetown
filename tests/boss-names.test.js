@@ -95,7 +95,7 @@ function surfaces(e) {
     return {
         panelAll: panel.drawn,
         overhead: over.drawn.find(t => t.includes(' · ')),
-        death: s.logs.find(l => l.startsWith('[Defeated')),
+        death: s.logs.find(l => l.startsWith('Defeated')),
         ko: ko.drawn.find(t => t.startsWith('[KO]')),
     };
 }
@@ -113,7 +113,7 @@ describe('the Alien Invasion goes by one name everywhere', () => {
 
     test('death line, target panel, KO tag and overhead label all say it', () => {
         const s = surfaces(alien());
-        assert.equal(s.death, `[Defeated [${NAME}]]`);
+        assert.equal(s.death, `Defeated ${NAME}`);
         assert.ok(s.panelAll.includes(clean(NAME)), s.panelAll.join(' | '));
         assert.ok(!s.panelAll.includes('BOSS'), 'the panel no longer prints the type');
         assert.equal(s.ko, `[KO] ${clean(NAME)}`);
@@ -124,11 +124,11 @@ describe('the Alien Invasion goes by one name everywhere', () => {
         const e = alien();
         const g = standIn([e]);
         g.revert(e);
-        assert.equal(g.logs[0], `[The ${NAME} turns on you!]`);
+        assert.equal(g.logs[0], `The ${NAME} turns on you!`);
         const calm = alien();
         calm.allegiance = 'neutral'; calm.fsmState = null;
         g.harm(calm);
-        assert.equal(g.logs[1], `[The ${NAME} turns on you!]`);
+        assert.equal(g.logs[1], `The ${NAME} turns on you!`);
     });
 
     test('the perception lines (turns to face you) say it', () => {
@@ -140,7 +140,7 @@ describe('the Alien Invasion goes by one name everywhere', () => {
             map: { isWalkable: () => true }, rng: { pick: (a) => a[0], float: () => 0.5 } };
         const messages = tickNpcState(g, e) || [];
         const line = messages.map(m => m.text).find(t => t.includes('turns to face you'));
-        assert.equal(line, `[[${NAME}] turns to face you!]`);
+        assert.equal(line, `${NAME} turns to face you.`);
     });
 
     test('every Act 2 boss gets the same treatment', () => {
@@ -149,7 +149,7 @@ describe('the Alien Invasion goes by one name everywhere', () => {
             const e = spawnEnemy(resolveSpawn(spawn, defaultPicks()));
             assert.equal(e.boss, true, slot);
             assert.notEqual(shownName(e), e.type, slot);
-            assert.equal(e.entity.name, `[${shownName(e)}]`, slot);
+            assert.equal(e.entity.name, shownName(e), slot);
         }
     });
 });
@@ -158,7 +158,7 @@ describe('ordinary enemies read exactly as before', () => {
     test('a plain enemy: its type on every surface', () => {
         const e = goon();
         const s = surfaces(e);
-        assert.equal(s.death, '[Defeated [Violet Fungus]]');
+        assert.equal(s.death, 'Defeated Violet Fungus');
         assert.equal(s.ko, '[KO] VIOLET FUNGUS');
         assert.ok(s.panelAll.includes('VIOLET FUNGUS'), s.panelAll.join(' | '));
         assert.ok(s.overhead.startsWith('VIOLET FUNGUS · '), s.overhead);
@@ -169,13 +169,13 @@ describe('ordinary enemies read exactly as before', () => {
         assert.ok(!e.boss);
         assert.equal(shownName(e), e.type);
         const s = surfaces(e);
-        assert.equal(s.death, `[Defeated [${e.type}]]`);
+        assert.equal(s.death, `Defeated ${e.type}`);
         assert.equal(s.ko, `[KO] ${e.type.toUpperCase()}`);
         assert.ok(s.panelAll.includes(e.type.toUpperCase()), s.panelAll.join(' | '));
         assert.ok(s.overhead.startsWith(`${clean(e.name)} · `), s.overhead);
         const g = standIn([e]);
         g.revert(e);
-        assert.equal(g.logs[0], `[The ${e.type} turns on you!]`);
+        assert.equal(g.logs[0], `The ${e.type} turns on you!`);
     });
 
     test('a character with no type or name still has the old fallbacks', () => {

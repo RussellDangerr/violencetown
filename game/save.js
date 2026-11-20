@@ -93,6 +93,7 @@ export function serialize(game) {
             // existed (the autoplay fingerprint hashes this object).
             ...skillsEntry(game),
             ...boonsEntry(game),
+            ...jobsEntry(game),   // (BP6)
             ...costumeToSave(game),   // (CO1) left out while no costume is worn
             ...defaultAttackEntry(game),
             ...interactionNotesEntry(game),
@@ -181,6 +182,16 @@ function sanitizeBoons(b) {
 function boonsEntry(game) {
     const boons = sanitizeBoons(game.boons);
     return Object.keys(boons).length ? { boons } : {};
+}
+
+// (BP6) Jobs done and Shards held; left out while both are zero so a save with no jobs is unchanged.
+function sanitizeJobs(j) {
+    const n = (v) => { const x = Math.floor(Number(v)); return Number.isFinite(x) && x > 0 ? x : 0; };
+    return { done: n(j && j.done), shards: Math.min(3, n(j && j.shards)) };
+}
+function jobsEntry(game) {
+    const jobs = sanitizeJobs(game.jobs);
+    return jobs.done || jobs.shards ? { jobs } : {};
 }
 
 function skillsEntry(game) {
@@ -523,6 +534,7 @@ function validate(raw) {
     // skills existed loads with none.
     p.skills = sanitizeSkills(p.skills);
     p.boons = sanitizeBoons(p.boons);   // (BP1)
+    p.jobs = sanitizeJobs(p.jobs);   // (BP6)
     p.costume = sanitizeCostume(p.costume);   // (CO1)
     p.defaultAttack = (p.defaultAttack && typeof p.defaultAttack.key === 'string' && typeof p.defaultAttack.weaponId === 'string')
         ? { weaponId: p.defaultAttack.weaponId, key: p.defaultAttack.key } : null;   // (WK3)
@@ -646,6 +658,7 @@ export async function loadInto(game, raw) {
     game.discoveredFusions = new Set(p.discoveredFusions || []);
     game.skills            = { ...p.skills };
     game.boons             = { ...p.boons };   // (BP1)
+    game.jobs              = { ...p.jobs };   // (BP6)
     game.costume           = costumeFromSave(p.costume, R);   // (CO1) worn: equipment/skills above are its kit
     game.defaultAttack     = p.defaultAttack || null;   // (WK3)
     game.interactionNotes  = [...p.interactionNotes];   // (IN1)

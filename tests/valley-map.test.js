@@ -231,9 +231,11 @@ describe('the Valley', () => {
     const raw = readJson('valley-map.json');
     const valley = loadMap('valley-map.json');
 
-    test('is named VALLEY and holds nothing yet', () => {
+    test('is named VALLEY and holds three dinosaurs and nothing else (DN1R1)', () => {
         assert.equal(raw.zoneName, 'VALLEY');
-        for (const k of ['enemies', 'items', 'examinables']) assert.deepEqual(raw[k], [], k);
+        for (const k of ['items', 'examinables']) assert.deepEqual(raw[k], [], k);
+        assert.deepEqual(raw.enemies.map(e => e.slot), ['valley.mob', 'valley.mob', 'valley.mob']);
+        assert.deepEqual(raw.enemies.map(e => e.seat), [0, 1, 2]);
     });
 
     test('has two ways out: the hook climb to the Canyon and the door to the Wilderness', () => {

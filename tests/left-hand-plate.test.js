@@ -98,12 +98,12 @@ const tapRect = (g, r) => g._tapDevice(centre(r));
 const bagNames = g => g.inventory.filter(Boolean).map(s => s.itemDef.id);
 
 describe('the left-hand plate on the GEAR tab', () => {
-    test('GEAR lays out a left-hand plate beside the six, labelled with the existing WEAPON [LEFT]', () => {
+    test('GEAR lays out a left-hand plate beside the six, labelled with the existing WEAPON LEFT', () => {
         assert.equal(leftPlate.key, 'left');
-        assert.equal(leftPlate.label, 'WEAPON [LEFT]');
+        assert.equal(leftPlate.label, 'WEAPON LEFT');
         assert.equal(layout.slots.length, EQUIP_SLOT_RECTS.length, 'the six-plate list is unchanged');
         assert.ok(!layout.slots.some(s => s.key === 'left'));
-        assert.equal(layout.slots.find(s => s.key === 'weapon').label, 'WEAPON [RIGHT]');
+        assert.equal(layout.slots.find(s => s.key === 'weapon').label, 'WEAPON RIGHT');
     });
 
     test('the plate sits inside the body and overlaps no other plate', () => {
@@ -227,12 +227,12 @@ describe('equipping from the left-hand plate (through the GEAR tab entry points)
 });
 
 describe('the fight panel shows the left-hand item', () => {
-    test('after an equip from the left plate, the panel names it on its WEAPON [LEFT] row (a two-hander on both)', () => {
+    test('after an equip from the left plate, the panel names it on its WEAPON LEFT row (a two-hander on both)', () => {
         const g = makeGame({ bag: [WHIP] });
         tapRect(g, leftPlate);
         tapRect(g, gearOptionRects(body, 1, 'left')[0]);
         const row = k => playerPanel(g).slots.find(s => s.key === k);
-        assert.equal(row('left').label, 'WEAPON [LEFT]');
+        assert.equal(row('left').label, 'WEAPON LEFT');
         assert.equal(row('left').name, WHIP.name);
         assert.equal(row('weapon').name, SWORD.name);
 
@@ -260,15 +260,15 @@ describe('the renderer draws the plate', () => {
         return { r, texts };
     }
 
-    test('the tab draws WEAPON [LEFT] and the left-hand item name on the left plate', () => {
+    test('the tab draws WEAPON LEFT and the left-hand item name on the left plate', () => {
         const g = makeGame({ left: WHIP });
         const { r, texts } = rig();
         r._drawEquipmentModal(g, body);
-        const label = texts.find(t => t.text === 'WEAPON [LEFT]');
+        const label = texts.find(t => t.text === 'WEAPON LEFT');
         assert.ok(label, 'the label is drawn');
         assert.ok(label.x > leftPlate.x && label.x < leftPlate.x + leftPlate.w, 'on the left-hand plate');
         assert.ok(texts.some(t => /LION WHIP/.test(t.text)), 'the left-hand item is named');
-        assert.ok(texts.some(t => t.text === 'WEAPON [RIGHT]'));
+        assert.ok(texts.some(t => t.text === 'WEAPON RIGHT'));
     });
 
     test('an open left chooser is titled for the hand and draws the bag weapons', () => {
@@ -276,7 +276,7 @@ describe('the renderer draws the plate', () => {
         g._deviceSel = { tab: 'gear', slotKey: 'left', open: true };
         const { r, texts } = rig();
         r._drawEquipmentModal(g, body);
-        assert.ok(texts.some(t => t.text === 'WEAPON [LEFT] — CHOOSE'));
+        assert.ok(texts.some(t => t.text === 'WEAPON LEFT — CHOOSE'));
         assert.ok(texts.some(t => /Lion Whip/.test(t.text)));
     });
 });

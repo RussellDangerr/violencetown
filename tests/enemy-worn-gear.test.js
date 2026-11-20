@@ -401,7 +401,7 @@ describe('Thieve Gear off a Greedy Green, through the wheel, with real keys', ()
         assert.equal(before, ITEMS.cardboard_cuirass.armor);
         await toThieveGear(g);
         await g.press('ArrowRight');                            // toward the green: lock and commit
-        assert.ok(g.logs.includes(`[Lifted the ${ITEMS.cardboard_cuirass.name}.]`), g.logs.join(' | '));
+        assert.ok(g.logs.includes(`Lifted the ${ITEMS.cardboard_cuirass.name}.`), g.logs.join(' | '));
         assert.deepEqual(green.equipped, [], 'it no longer wears it');
         assert.equal(green.entity.armor, 0, 'the piece was all it had');
         assert.equal(g.advanced, 1, 'one world turn');

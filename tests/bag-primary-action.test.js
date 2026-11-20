@@ -174,7 +174,7 @@ describe('fx37 — a throw item\'s main button arms the throw', () => {
         assert.equal(g.selectedSlot, 12);
         assert.equal(g.inventory[12].count, 3);
         assert.equal(g.beats, 0);
-        assert.ok(g.logs.some(l => /\[Rock\] — pick a direction/.test(l)), g.logs.join(' | '));
+        assert.ok(g.logs.some(l => /Rock — pick a direction/.test(l)), g.logs.join(' | '));
         assert.ok(!g.logs.some(l => /no direction/.test(l)));
     });
 
@@ -186,7 +186,7 @@ describe('fx37 — a throw item\'s main button arms the throw', () => {
         assert.equal(g.inventory[12].count, 2);
         assert.equal(g.beats, 1);
         assert.equal(g.rattled, 1, 'the rock clatters like any thrown rock');
-        assert.ok(g.logs.some(l => /Threw \[Rock\]|splatters|bursts/.test(l)), g.logs.join(' | '));
+        assert.ok(g.logs.some(l => /Threw Rock|splatters|bursts/.test(l)), g.logs.join(' | '));
         assert.ok(!g.logs.some(l => /no direction/.test(l)));
     });
 

@@ -9,6 +9,7 @@ import { readFileSync } from 'node:fs';
 import { SLOTS, ENTRIES, resolveSpawn, defaultPicks, requiredDropFor, dropLineFor } from '../game/slots.js';
 import { spawnEnemy } from '../game/enemies.js';
 import { ITEMS } from '../game/items.js';
+import { describeItemParts } from '../game/inspector.js';
 import { GameMap } from '../game/map.js';
 
 const GAME = new URL('../game/', import.meta.url);
@@ -79,11 +80,12 @@ describe('Act 2: one boss per zone, each yielding its required item through its 
 
 describe('the placeholders are obviously fake', () => {
     for (const z of ACT2) {
-        test(`${z.entry}: [TEXT] barks, the existing Boss cell`, () => {
+        test(`${z.entry}: plain barks, the existing Boss cell`, () => {
             const e = ENTRIES[z.entry];
             assert.equal(e.type, 'Boss');
-            assert.ok(e.barks.length > 0 && e.barks.every(b => b === '[TEXT]'));
-            assert.equal(ITEMS[z.item].description, '[TEXT]');
+            assert.deepEqual(e.barks, ['The boss attacks when it sees you.', 'The boss is hostile.']);
+            assert.equal(ITEMS[z.item].fact, '');
+            assert.equal(describeItemParts(ITEMS[z.item], { sources: {} }).stats, 'Quest item: always kept, cannot be dropped. Legendary, value 0 GP.');
         });
     }
 

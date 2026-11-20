@@ -71,19 +71,19 @@ export const ITEM_USES = [
         id: 'oil-on-bridge',
         item: 'oil',
         match: (t) => !!t.examinable && (t.examinable.id === 'bridge' || t.examinable.id === 'car'),
-        label: '[TEXT]',
+        label: 'Pour oil on the road',
         apply: (game, t, ctx) => {
             game.selectedSlot = -1;
             const flags = game.questEngine?.state?.flags;
             if (!flags) return;
             if (flags.oilSpread || flags.downtownGateOpen) {
-                game._log('[TEXT]');                 // already spread: nothing is spent
+                game._log('The oil is already on the road.');                 // already spread: nothing is spent
                 game._render?.();
                 return;
             }
             game._removeFromSlot(ctx.slot);
             flags.oilSpread = true;
-            game._log('[TEXT]', 'pickup');
+            game._log('You poured oil on the road.', 'pickup');
             game._advanceWorld();
         },
     },
@@ -94,12 +94,12 @@ export const ITEM_USES = [
         id: 'part-in-ice-cone-machine',
         item: 'ice_cone_machine_part',
         match: (t) => !!t.examinable && t.examinable.id === 'diner_ice_cone_machine',
-        label: '[TEXT]',
+        label: 'Fit the part in the ice cone machine',
         apply: (game, t, ctx) => {
             // The part comes out first, so a full bag still has room for the cone.
             game._removeFromSlot(ctx.slot);
             game.selectedSlot = -1;
-            if (!game._grantItem('tigers_blood_ice_cone', '[TEXT]')) {
+            if (!game._grantItem('tigers_blood_ice_cone', 'You fit the part. The machine makes a Tiger\'s Blood Ice Cone.')) {
                 game._grantItem('ice_cone_machine_part');   // no cone, so the part is not spent
                 return;
             }

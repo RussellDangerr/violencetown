@@ -178,7 +178,7 @@ describe('ps2 — Soap cures poison', () => {
         assert.ok(!chipIds(g).includes('poison'));
         assert.equal(g.hasBuff('sludge'), false, 'the end-of-turn soap check cleared the sludge');
         assert.ok(g.logs.some(l => /sludge will be neutralized/.test(l)), g.logs.join(' | '));
-        assert.ok(g.logs.some(l => /Soap neutralized sludge/.test(l)), g.logs.join(' | '));
+        assert.ok(g.logs.some(l => /Soap cancels the sludge/.test(l)), g.logs.join(' | '));
     });
 
     test('Poisoned, another item leaves poison alone', () => {
@@ -194,11 +194,11 @@ describe('ps2 — Soap cures poison', () => {
         const EQUIP_BEFORE = { weapon: 'wooden_sword', left: null, top: null, bottom: null, front: null, back: 'soap', sides: null };
         const RECORDED = {
             clean: {
-                logs: ['[[Soap] equipped to back for 3 turns] [Already clean]'],
+                logs: ['[Soap equipped to back for 3 turns] [Already clean]'],
                 beats: 1, slot: null, buffs: [], hp: 5, equip: EQUIP_BEFORE,
             },
             sludged: {
-                logs: ['[[Soap] equipped to back for 3 turns] [Soap applied \u2014 sludge will be neutralized]', '[Soap neutralized sludge]'],
+                logs: ['[Soap equipped to back for 3 turns] [Soap applied \u2014 sludge will be neutralized]', 'Soap cancels the sludge.'],
                 beats: 1, slot: null, buffs: [], hp: 5, equip: EQUIP_BEFORE,
             },
         };

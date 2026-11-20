@@ -98,7 +98,7 @@ export function pickScenario(ctx, scenarios, rand) {
 // No scenario adds a status: the post-defeat debuffs did nothing and were dropped
 // (ruling DFR1); the log's cost line says what a defeat cost instead.
 // When a scenario's take matched nothing, its loss line would lie; this one stands in.
-export const EMPTY_TAKE_LOG = '[You come to, beaten and dumped.]';
+export const EMPTY_TAKE_LOG = 'You lost the fight and woke up.';
 
 export const DEFEAT_SCENARIOS = [
     {
@@ -112,7 +112,7 @@ export const DEFEAT_SCENARIOS = [
             hp: 0.5, timeSkip: 'hours',
             take: { categories: ['ambro'], recoverable: false },   // they feast on your food/mushrooms — gone
             emptyLog: EMPTY_TAKE_LOG,    // shown instead of `log` when nothing was taken
-            log: '[You wake in a spore-cell. Your provisions are gone; the Fungus fed well.]',
+            log: 'You lost to the Fungus and woke in a walled pocket of the sewer. It took your food and mushrooms.',
         },
     },
     {
@@ -128,7 +128,7 @@ export const DEFEAT_SCENARIOS = [
             hp: 0.6,
             take: { loot: 'all', recoverable: true, stashAt: { spot: { x: 17, y: 10 } } },
             emptyLog: EMPTY_TAKE_LOG,    // shown instead of `log` when nothing was taken
-            log: "[The rats rolled you and scampered off with your haul. You'll want it back.]",
+            log: 'You lost to the sewer rats and woke at the sewer entrance. They took your unprotected items and left them in a stash.',
         },
     },
     {
@@ -140,7 +140,7 @@ export const DEFEAT_SCENARIOS = [
             hp: 0.5,
             take: { breakables: true, recoverable: false },
             emptyLog: EMPTY_TAKE_LOG,    // shown instead of `log` when nothing was taken
-            log: '[The sludge river took you downstream. Your kit is soaked and cracked.]',
+            log: 'You fell in the sludge and woke downstream. Your consumables were destroyed.',
         },
     },
     {
@@ -152,7 +152,7 @@ export const DEFEAT_SCENARIOS = [
             hp: 1.0,
             take: { gold: 0.1, recoverable: false },  // a small fee, not a robbery
             gift: { items: ['bandage'] },
-            log: "[Carrion dragged you to her corner and patched you up. 'You owe me,' she grunts.]",
+            log: 'You lost and woke in Carrion\'s corridor. She healed you fully, took a tenth of your gold, rounded down, and gave you a bandage.',
         },
     },
     {

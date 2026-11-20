@@ -91,13 +91,15 @@ describe('EX2: a long-press on a prop offers Examine', () => {
         assert.equal(g.inspect.body, want.panelBody.replace(/[\[\]]/g, '').trim());
     });
 
-    test('a quick tap on a prop opens nothing and walks nowhere (it is not walkable)', async () => {
+    test('a quick tap on a prop opens nothing and walks you to the nearest tile you can reach (TW2)', async () => {
         const g = makeGame([TREE]);
         g.touch(TREE.x, TREE.y);
         g.lift(TREE.x, TREE.y);
         await wait(LONG);
         assert.equal(g.state, 'idle');
-        assert.equal(g.walks.length, 0);
+        assert.equal(g.walks.length, 1);
+        // The tree is 3 tiles east; the tile beside it on your side is the nearest, and the closest to you.
+        assert.deepEqual(g.walks[0].at(-1), { x: TREE.x - 1, y: TREE.y });
     });
 
     test('a long-press on bare ground opens nothing', async () => {

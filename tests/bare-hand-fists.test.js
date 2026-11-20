@@ -184,7 +184,7 @@ describe('fists: the fallback', () => {
         assert.equal(handWeapon(undefined), FISTS);
         assert.equal(FISTS.damage, 5);
         assert.equal(FISTS.damage * 2, SWORD.damage, 'half the Wooden Sword');
-        assert.equal(FISTS.name, '[Fists]');
+        assert.equal(FISTS.name, 'Fists');
         assert.equal(handWeapon({ weapon: SWORD }), SWORD, 'a held weapon is untouched');
     });
 

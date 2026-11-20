@@ -231,15 +231,22 @@ export class Enemy {
         // moves every later wander in the run, so a new one anywhere shifts a replay that never
         // went near him; his own stream touches no one else's.
         ownDice = false,
+        // (plans/mm1-carnival-mimic.md) Disguised as a chest until the player bumps it: it sees
+        // nothing (sightRange held at 0, the real reach kept in `wakeSight`), is drawn as a chest
+        // and carries no name or threat. `wakeDisguise` ends it for good.
+        disguised = false,
+        wakeSight = null,
     }) {
         this.id         = id;
         this.type       = type;
         this.x          = x;
         this.y          = y;
         this.damage     = damage;
-        this.sightRange = sightRange;
+        this.disguised  = disguised === true;
+        this.wakeSight  = this.disguised ? (wakeSight ?? sightRange) : null;
+        this.sightRange = this.disguised ? 0 : sightRange;
         this.state      = 'idle'; // legacy chase state: 'idle' | 'chasing' | 'returning'
-        this.entity     = new Entity({ name: `[${shownName({ boss, name, type, dialogueId })}]`, hp, armor });
+        this.entity     = new Entity({ name: shownName({ boss, name, type, dialogueId }), hp, armor });
         // Its live defence buffs soak every blow its body takes (combat.js takeDamage).
         Object.defineProperty(this.entity, 'guardOf', {
             value: () => sumBuffStat(this.buffs, 'defence'), enumerable: false,
@@ -352,7 +359,7 @@ export class Enemy {
     // is set again here. Returns the line to log on arrival.
     promoteToRival() {
         this.rival = true;
-        this.entity.name = unnestBrackets(`[${shownName(this)}]`);
+        this.entity.name = shownName(this);
         return RIVAL_RETURN_LINE;
     }
     // (FX38) "The Violencian" for the unnamed, "Knuckles" for a name.
@@ -390,6 +397,20 @@ export class Enemy {
     // gates the ally turn on _ally) nor is hostile. Deliberately NOT persisted
     // (re-derived / RAM-only): _lostSightTurns, _buyback, render/emote
     // transients.
+    // (plans/mm1-carnival-mimic.md) The bump that ends a disguise: it sees at its real reach and
+    // knows where you stand, so it hunts. Returns whether it was asleep.
+    wakeDisguise(toX, toY) {
+        if (!this.disguised) return false;
+        this.disguised = false;
+        this.sightRange = this.wakeSight ?? this.sightRange;
+        this.wakeSight = null;
+        makeHostile(this);   // a bump is a fight: it turns on you, whatever its asleep behaviour was
+        this.state = 'chasing';
+        this._lastSeenX = toX;
+        this._lastSeenY = toY;
+        return true;
+    }
+
     toSave() {
         return {
             id: this.id, type: this.type, x: this.x, y: this.y,
@@ -428,6 +449,9 @@ export class Enemy {
             drawScale: this.drawScale || undefined,
             unicycle: this.unicycle || undefined,
             ownDice: this.ownDice || undefined,
+            // Written only while disguised: a mimic that was never bumped saves asleep, an awake one as any enemy.
+            disguised: this.disguised || undefined,
+            wakeSight: this.disguised ? this.wakeSight : undefined,
             // (FX45) The one-time talk choices this NPC has already given. Left out while
             // none are spent, so an NPC nobody has talked to saves exactly as before.
             dialogueDone: (this._dialogueDone && this._dialogueDone.size) ? [...this._dialogueDone] : undefined,
@@ -512,12 +536,13 @@ export class Enemy {
 
 // (FD2) The bear the Wilderness sends for a carried Mola Cola. Not a slot entry nor a map spawn:
 // interactions.js spawns it. Its numbers start as the Polar Bear's (so they track it); the name
-// is the stand-in `[Bear]` and the examine text `[TEXT]` until Caelan names and writes it.
+// is the stand-in `Bear` and its examine text is a plain line until Caelan writes it.
 export const WILDERNESS_BEAR_TYPE = 'Bear';
 export const WILDERNESS_BEAR = {
     ...structuredClone(ENTRIES.polar_bear),
     type: WILDERNESS_BEAR_TYPE,
-    name: '[Bear]',
+    name: 'Bear',
+    examine: 'Bear. Wild animal. It attacks when it sees you.',
 };
 
 // Resolve a loadout to real item defs. Entries are item IDS so an enemy can
@@ -829,7 +854,7 @@ export function resolveAmbientTurns(game) {
 // barks every turn while standing next to an NPC would be log spam.
 
 function maybeAdjacencyBark(game, enemy) {
-    if (!enemy.adjacencyBark) return null;
+    if (!enemy.adjacencyBark || enemy.disguised) return null;   // (MM1) a sleeping mimic says nothing: it is a chest
     const dx = Math.abs(enemy.x - game.playerX), dy = Math.abs(enemy.y - game.playerY);
     if (manhattan(enemy.x, enemy.y, game.playerX, game.playerY) === 1 && !enemy._wasAdjacent) {
         enemy._wasAdjacent = true;

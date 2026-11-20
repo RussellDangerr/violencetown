@@ -13,7 +13,7 @@ export const SLOT_KEYS = ['weapon', 'left', 'top', 'bottom', 'front', 'back', 's
 export const COSTUMES = {
     test_costume: {
         id: 'test_costume',
-        name: '[Test Costume]',
+        name: 'Test Costume',
         // Every slot, named by item id (null = an empty hand). Existing pieces, so the stats are today's.
         kit: {
             weapon: 'wooden_sword', left: null,
@@ -25,7 +25,7 @@ export const COSTUMES = {
     // CO2: what absorbing Monstrous Sun Man leaves you. Placeholder kit and ranks.
     sun_man_costume: {
         id: 'sun_man_costume',
-        name: '[Sun Man Costume]',
+        name: 'Sun Man Costume',
         kit: {
             weapon: 'wooden_sword', left: null,
             top: 'foil_hat', bottom: 'shoe_bags', front: 'cardboard_cuirass', back: 'red_cape', sides: 'latex_gloves',

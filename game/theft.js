@@ -187,7 +187,7 @@ export function gearTake(victim, resolve) {
 // who can be lifted from, nothing to take, or any verb but the three lifts.
 //
 // The words are placeholders and live here, in one place, for Caelan to write.
-export const LIFT_WORDS = { clean: '[TEXT]', noticed: '[TEXT]' };
+export const LIFT_WORDS = { clean: 'Not noticed', noticed: 'Noticed' };
 
 const LIFT_BRANCH = { thieveCoin: 'coin', thieveKit: 'kit', thieveGear: 'gear' };
 

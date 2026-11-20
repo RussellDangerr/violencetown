@@ -28,7 +28,7 @@ describe('the power-wield mask', () => {
     test('it is a head-slot mask carrying the flag, with a placeholder name and bag sprite', () => {
         assert.equal(MASK.equipSlot, 'top');
         assert.equal(MASK.powerWield, true);
-        assert.match(MASK.name, /^\[NAME/);
+        assert.equal(MASK.name, 'Power-Wield Mask');
         assert.ok(MASK.body && MASK.body.sprite);
         assert.ok(ITEM_SPRITES.strongman_mask && SHEETS[ITEM_SPRITES.strongman_mask.sheet].tint);
         assert.equal(powerWielding({ top: MASK }), true);

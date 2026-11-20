@@ -116,7 +116,7 @@ describe('the diner cook', () => {
         g.questEngine.emit('item_pickup', { id: 'burger_fries' });
         assert.notEqual(g.questEngine.currentStageId(), 'get_burger');
         const after = await g.talk();
-        assert.equal(after, '[TEXT: the cook, after the pickup]');
+        assert.equal(after, 'The burger and fries have already been picked up.');
         assert.notEqual(after, DIALOGUES.diner_cook.greeting);
     });
     test('no quest started yet: today\'s line', async () => {
@@ -126,16 +126,16 @@ describe('the diner cook', () => {
     test('after the delivery is done he still has the after line', async () => {
         const g = makeGame(cook);
         g.questEngine.forceComplete('deliver_burger');
-        assert.equal(await g.talk(), '[TEXT: the cook, after the pickup]');
+        assert.equal(await g.talk(), 'The burger and fries have already been picked up.');
     });
 });
 
 describe('Bartho', () => {
     test('before the car opens the bridge: today\'s line; after: the after line', async () => {
         const g = makeGame(bartho);
-        assert.equal(await g.talk(), '"...what."');
+        assert.equal(await g.talk(), 'Bartho is a townsperson.');
         g.questEngine.state.flags.carFixed = true;
-        assert.equal(await g.talk(), '[TEXT: Bartho, bridge open]');
+        assert.equal(await g.talk(), 'The north bridge is open now that the car is fixed.');
     });
 });
 

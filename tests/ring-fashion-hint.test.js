@@ -20,7 +20,7 @@ describe('ringFashion hint', () => {
     test('fires with the fur and no ring', () => {
         const h = nextHint(g({ inventory: [stack('wererat_fur')] }), () => false);
         assert.equal(h?.id, 'ringFashion');
-        assert.match(h.text, /TEXT/);
+        assert.equal(h.text, 'Tuft of Wererat Fur can be made into a ring by Platero, the silversmith in Downtown.');
     });
     test('silent once a ring exists', () => {
         assert.equal(nextHint(g({ inventory: [stack('wererat_fur')], ownedRings: new Set(['rat_ring']) }), () => false), null);

@@ -286,7 +286,7 @@ export class QuestEngine {
         this.state.activeId = questId;
         this.state.stageIndex = 0;
         this._note(`Began "${q.title}".`);
-        this.game._log?.(`[New quest: ${q.title}]`, 'transition');
+        this.game._log?.(`New quest: ${q.title}`, 'transition');
         const stage = q.stages[0];
         if (stage && stage.onEnter) stage.onEnter(this.game);
         this._settleAutoSatisfy();   // skip past any stage already satisfied at start

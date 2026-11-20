@@ -26,6 +26,7 @@ carnival/carnival-horse-1         Carnival Horse              100       0     12
 carnival/carnival-horse-2         Carnival Horse              100       0     12       35              5              4      9
 carnival/carnival-horse-3         Carnival Horse              100       0     12       35              5              4      9
 carnival/carnival-lion            Carnival Lion               100       6     12      113              8              5      9
+carnival/carnival-mimic           Mimic                       100       0     12       59              5              4      9
 carnival/robot-rat-1              Robot Rat                   100     -30      6        4              2              2     17
 carnival/sludge-rat-1             Sludge Rat                  100     -30      6        4              2              2     17
 carnival/strongman                Strongman                   100       0     12       59              5              4      9
@@ -89,6 +90,9 @@ town/townie-s                     Violencian                  100     -80      0
 town/townie-w                     Violencian                  100     -80      0        2              1              1      -
 tunnels/moleman-1                 Moleman                     100       0     12       35              5              4      9
 tunnels/moleman-2                 Moleman                     100       0     12       35              5              4      9
+valley/valley-mob-1               Raptor                      100       0     12       35              5              4      9
+valley/valley-mob-3               T. rex                      100       6     12      113              8              5      9
+valley/valley-mob-2               Triceratops                 100       3     10       70              6              4     10
 vault/vault-financier             Banker                      100       6     12      148              8              5      9
 wilderness/wilderness-bear        Bear                        100       3     10       70              6              4     10
 
@@ -121,7 +125,7 @@ zone               faucet_gp
 bank                       0
 borgir                    25
 canyon                     8
-carnival                 151
+carnival                 158
 casino                     0
 compactor                  0
 diner                      0
@@ -133,6 +137,7 @@ sewer                    145
 sewer-north               10
 town                      30
 tunnels                    8
+valley                    34
 vault                     44
 wilderness                10
 sinks: burnGold('heal'|'trick'), bribes/buyouts via transferGold

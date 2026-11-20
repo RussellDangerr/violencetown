@@ -310,7 +310,7 @@ describe('the arc: the number keys, in a real fight', () => {
         g.tap(`Digit${n}`);
         assert.equal(g.turns, 1);
         assert.equal(g.state, 'idle', 'back to idle, as after a wheel action');
-        assert.ok(g.logs.some(l => /Bracing/.test(l)), g.logs.join('|'));
+        assert.ok(g.logs.some(l => /You guard/.test(l)), g.logs.join('|'));
     });
 
     test('Spin with a foe beside you hits it, like the wheel\'s Spin', () => {
@@ -414,7 +414,7 @@ describe('the arc: a greyed slot says why and spends nothing', () => {
 // wheel with keys and firing it. Recorded: who was hit and for how much, MP, turns, the log.
 function effects(g) {
     return { hits: g.hits.map(h => ({ x: h.npc.x, y: h.npc.y, dmg: h.dmg, type: h.type })), mp: g.playerMp, turns: g.turns,
-             logs: g.logs.filter(l => !/Bracing/.test(l) || true), state: g.state, buffs: JSON.stringify(g.buffs || null) };
+             logs: g.logs.filter(l => !/You guard/.test(l) || true), state: g.state, buffs: JSON.stringify(g.buffs || null) };
 }
 
 function viaWheel(g, slot) {
@@ -467,7 +467,7 @@ describe('the arc: click and tap', () => {
         const defend = arcSlots(g).find(s => s.key === 'defend');
         g.canvas.fire('pointerdown', client(slotPt(defend.n)));
         assert.equal(g.turns, 1);
-        assert.ok(g.logs.some(l => /Bracing/.test(l)));
+        assert.ok(g.logs.some(l => /You guard/.test(l)));
     });
 
     test('a touch tap on a slot runs it too', () => {

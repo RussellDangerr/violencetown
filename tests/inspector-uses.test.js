@@ -140,8 +140,8 @@ describe('C3c — where the uses button sits', () => {
         for (const r of bag) assert.ok(!rectsOverlap(usesRect, r), 'it overlaps a bag slot');
     });
 
-    test('its label is the placeholder until the copy is written', () => {
-        assert.deepEqual({ ...USES_ACTION }, { id: 'uses', label: '[TEXT]' });
+    test('its label names the action: it opens the use-this-on-that list', () => {
+        assert.deepEqual({ ...USES_ACTION }, { id: 'uses', label: 'Use on' });
     });
 });
 

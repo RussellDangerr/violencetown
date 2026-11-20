@@ -554,6 +554,7 @@ export const ENEMY_SPRITES = {
     'Ruffian':          { sheet: 'tinyDungeon', col: 4, row: 9,  static: true }, // green-bandana goblin
     'Strongman':        { sheet: 'tinyDungeon', col: 2, row: 7,  static: true }, // SG1 placeholder: bald mustached, Pike's cell
     'Carnival Clown':   { sheet: 'tinyDungeon', col: 0, row: 7,  static: true }, // purple mage — most colorful humanoid
+    'Mimic':            { sheet: 'tinyDungeon', col: 8, row: 7,  static: true }, // the chest with a tongue (MM1): its awake look; asleep it is drawn as a chest
     'Rattling Skeleton':{ sheet: 'tinyDungeon', col: 1, row: 10, static: true }, // white ghost — pale/bony proxy
     'Worker':           { sheet: 'tinyDungeon', col: 1, row: 10, static: true }, // (HV1) the Skeleton's cell, a stand-in
 
@@ -614,6 +615,11 @@ export const ENEMY_SPRITES = {
     'Snowman':    { sheet: 'tinyDungeon', col: 1, row: 10, static: true }, // white ghost, shared with Rattling Skeleton
     'Yeti':       { sheet: 'tinyDungeon', col: 1, row: 9,  static: true }, // the ogre, shared with Fungus King
     'Polar Bear': { sheet: 'tinyDungeon', col: 4, row: 10, static: true }, // grey beast, Lire's uncoloured source
+    // The Valley's dinosaurs (plans/dn1-dinosaurs-roam-valley.md): the cells of the enemies
+    // each copies. Those types never stand in the Valley, so no cell is shared on its map.
+    'Raptor':      { sheet: 'tinyDungeon', col: 1, row: 10, static: true }, // white ghost, shared with Rattling Skeleton
+    'Triceratops': { sheet: 'tinyDungeon', col: 2, row: 9,  static: true }, // red crab, shared with Red Fungus
+    'T. rex':      { sheet: 'tinyDungeon', col: 1, row: 9,  static: true }, // the ogre, shared with Fungus King
     // (FD2) The Wilderness bear: the polar bear recoloured brown (FDR4), tools/gen_recolor.py.
     'Bear':       { sheet: 'bearVariants', col: 0, row: 0, static: true },
     // Siberia, the frozen area's boss (plans/ic5-siberia-frozen-boss.md): the

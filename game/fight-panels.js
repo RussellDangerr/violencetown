@@ -28,8 +28,8 @@ import { resolveItemDef } from './item-registry.js';
 // hand, `left` the other, and a two-hander shows in both rows.
 export const SLOT_ORDER = ['weapon', 'left', 'top', 'sides', 'front', 'back', 'bottom'];
 const SLOT_LABEL = {
-    weapon: 'WEAPON [RIGHT]', left: 'WEAPON [LEFT]', top: 'HEAD', sides: 'ARMS',
-    front: 'TORSO', back: 'BACK', bottom: 'FEET',
+    weapon: 'WEAPON RIGHT', left: 'WEAPON LEFT', top: 'TOP', sides: 'SIDES',
+    front: 'FRONT', back: 'BACK', bottom: 'BOTTOM',
 };
 
 // Weapons first, then items: the same resolution the rest of the game uses, so

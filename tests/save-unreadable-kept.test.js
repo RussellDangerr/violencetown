@@ -40,5 +40,5 @@ test('continueGame keeps the copy on both bad-save paths and no longer claims th
     const main = readFileSync(new URL('../game/main.js', import.meta.url), 'utf8');
     assert.equal((main.match(/this\._keepUnreadable\?\.\(\)/g) || []).length, 2);
     assert.ok(!/left on disk/.test(main));
-    assert.ok(main.includes('[That save would not open. Starting a new run.]'));
+    assert.ok(main.includes('That save would not open. Starting a new run.'));
 });
