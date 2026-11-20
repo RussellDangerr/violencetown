@@ -574,7 +574,7 @@ export function closeButtonRect(r, thumb = 0) {
 export const DEVICE_RECT = MODAL_RECT;
 export const DEVICE_TABS = ['items', 'gear', 'quests', 'map', 'rings', 'notes', 'bodies'];
 // (IN1) The label a tab shows when it differs from its id; the notes tab's name is a placeholder.
-export const DEVICE_TAB_LABELS = { notes: '[TEXT]', bodies: '[TEXT]' };
+export const DEVICE_TAB_LABELS = { notes: 'NOTES', bodies: 'BODIES' };
 export const DEVICE_TAB_H = 30;                        // tab-strip height
 const DEVICE_TAB_TOP = DEVICE_RECT.y + 38;             // below the title/✕ band (the chip ends at y+36)
 const DEVICE_TAB_PAD = 14;                             // strip inset from the frame sides
@@ -1186,7 +1186,12 @@ export function offerTraySlotAt(L, pt, side) {
 
 // (RR1) What a worn ring's passive says on the Hands tab: one row per passive,
 // a label and its number. The label is a placeholder until its copy is ruled.
-export const RING_PASSIVE_LABEL = '[TEXT]';
+export const RING_PASSIVE_LABEL = 'Passive';
+// The name a ring passive row shows, from the passive's key.
+const RING_PASSIVE_NAMES = { evasion: 'Evasion', fireDamage: 'Fire damage', stealLimit: 'Steal limit', noticeBuffer: 'Notice buffer' };
+export function ringPassiveName(key) {
+    return RING_PASSIVE_NAMES[key] ?? String(key).replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase());
+}
 export function ringPassiveRows(ring) {
     const passive = (ring && ring.passive) || {};
     return Object.keys(passive).map(key => ({ key, label: RING_PASSIVE_LABEL, value: passive[key] }));
