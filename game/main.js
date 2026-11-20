@@ -66,7 +66,7 @@ import {
 import {
     emptyOffer, commitBlocker, stage, unstage, settledGold, resolveOffer, sameEntry,
 } from './offer.js';   // (offer screen) the basket model
-import { canTrade, sellPrice, specialDef, transferGold, burnGold, saleLocked, SALE_LOCK_REFUSAL } from './trade.js'; // pricing + the transaction spine
+import { canTrade, sellPrice, specialDef, transferGold, burnGold, saleLocked, SALE_LOCK_REFUSAL, stockPrice, NIGHT_SELLER_ID } from './trade.js'; // pricing + the transaction spine
 import { logCategory } from './combat-log.js';   // (log tagging) one rule for a message's category
 import { takeable, learnFromHit } from './fight-panels.js';   // (combat-hud stage 4) the one answer to "what could I take"
 import { buildXmbBar, resolveXmbSelection, cycleXmbCategory, cycleXmbItem, xmbCategoryOf, XMB_LABELS } from './xmb.js';
@@ -772,6 +772,7 @@ class Game {
         const dead = deadIds(this._respawnLists, url);
         for (const s of [...this.map.enemySpawns, ...(this._spotSpawns?.(url) ?? [])]) {
             if (dead.has(s.id)) continue;
+            if (s.nightOnly) continue;   // (BP7) _syncNightNpcs adds it once the day clock says night
             if (this._spotHolds?.(url, s)) continue;   // (RO1) a boss whose returning spot is filled stays dead
             // (plans/tt1-traveler-after-burger.md) A spawn with `goneAfter` leaves once that quest is complete.
             if (s.goneAfter && this.questEngine?.isComplete?.(s.goneAfter)) continue;
@@ -5456,6 +5457,29 @@ class Game {
         // perceives() is called from the AI, the overlay and the theft gate, and
         // threading a level through all three would be three chances to disagree.
         for (const e of (this.enemies || [])) e._nightLevel = this._nightLevel;
+        this._syncNightNpcs?.();   // (BP7) inline ?. call: older tests lift this method
+    }
+
+    // (BP7) A spawn marked `nightOnly` stands in its zone while it is night (_nightLevel above 0)
+    // and is gone otherwise. It stays put while its trade screen is open, and is not added on a
+    // tile someone stands on.
+    _syncNightNpcs() {
+        const spawns = (this.map && this.map.enemySpawns) || [];
+        if (!this.enemies) return;
+        const night = (this._nightLevel || 0) > 0;
+        for (const s of spawns) {
+            if (!s || !s.nightOnly) continue;
+            const at = this.enemies.findIndex(e => e && e.id === s.id);
+            if (night && at < 0) {
+                if (deadIds(this._respawnLists, this._mapUrl).has(s.id)) continue;   // a kill stays a kill
+                const taken = (this.playerX === s.x && this.playerY === s.y)
+                    || this.enemies.some(e => e && e.x === s.x && e.y === s.y);
+                if (taken) continue;
+                this.enemies.push(spawnEnemy(resolveSpawn(s, this.slots, undefined, undefined, this._returnPicks), this._muggedIds, this._robbed));
+            } else if (!night && at >= 0 && this._offerNpc !== this.enemies[at]) {
+                this.enemies.splice(at, 1);
+            }
+        }
     }
 
     // (Phase 6c) The disposition tick clock — one nudge of every non-ally NPC's
@@ -8097,7 +8121,10 @@ class Game {
         }
         (npc.stock || []).forEach((id, index) => {
             const def = this._resolveItemDef(id);
-            if (def) out.push({ def, count: 1, max: Infinity, source: 'stock', index });
+            // (BP7) The Night seller's boon carries its fixed price on the row, as a buyback row does.
+            const fixed = stockPrice(npc, id);
+            if (def) out.push(fixed != null ? { def, count: 1, max: Infinity, price: fixed, source: 'stock', index }
+                                            : { def, count: 1, max: Infinity, source: 'stock', index });
         });
         if (npc.vendor && npc.specialBuys) {
             // (MC1) The shelf row: bought back for exactly what he paid.
@@ -8218,9 +8245,22 @@ class Game {
         this._offer.gold = 0;
     }
 
+    // (BP7, BPR4) The Night seller sells no boon that would take drunk plus held boons past
+    // the cap. Drunk ones are boonCount; held ones are the boon poitions in the bag.
+    _nightSellerCapLine(npc) {
+        if (!npc || npc.id !== NIGHT_SELLER_ID || !this._offer) return null;
+        const staged = (this._offer.take || []).filter(e => e.def && e.def.id === 'boon_poition').reduce((a, e) => a + (e.count || 1), 0);
+        if (!staged) return null;
+        const held = (this.inventory || []).reduce((a, s) => a + (s && s.itemDef && s.itemDef.id === 'boon_poition' ? (s.count || 0) : 0), 0);
+        if (boonCount(this) + held + staged <= BOON_CAP) return null;
+        return `No sale. You have drunk ${boonCount(this)} and hold ${held} boon poitions, and ${BOON_CAP} is the most there can be.`;
+    }
+
     // Why MAKE THE OFFER is disabled, or null when it is armed.
     _offerBlocker() {
         const npc = this._offerNpc; if (!npc) return 'NOTHING STAGED';
+        const capLine = this._nightSellerCapLine?.(npc);   // (BP7) inline ?. call: older tests lift this method
+        if (capLine) return capLine;
         // No `isContainer` here: commitBlocker's own noResentment test already
         // ORs `npc._container`, and this npc IS the shim -- passing the flag
         // hands it the same bit twice, from the same object, where the two can
