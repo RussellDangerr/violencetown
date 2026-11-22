@@ -111,6 +111,7 @@ import { arcAllSlots, arcVisible, arcSlotAt, arcFaded, ARC_MAX } from './fight-a
 import { applyCompactor, compactorBeat, breakCompactor, resetCompactor, isCompactor } from './compactor.js';   // (TC1) the trash compactor room
 import { hypnoBeat, applyHypno, hypnoOnDeath } from './hypno-vision.js';   // (HV1) the Factory's Hypno Vision
 import { fighters, joiners } from './fight-area.js';                                     // (fight-fog) who is in the fight
+import { sendToPosts } from './npc.js';                                                    // a boss retry puts the fight back at its posts
 import { fightStartKind, entranceFor, fightFxActive } from './fight-entrance.js'; // (fight-fog) how it began, and how long its fog moves
 import { createCascade, CASCADE_BEAT_MS, LUNGE_MS } from './cascade.js';           // (turn-model C1) the enemy phase, one actor at a time
 import { reelEntries, extendReel, liveReel } from './loot-ticker.js';                      // (FX3c) a reel rolls through what a kill gave
@@ -6865,6 +6866,7 @@ class Game {
         this.playerHp = this.playerMaxHp; this.playerMp = this.playerMaxMp;
         this.buffs = [];                          // clean slate (matches _respawn)
         this._pendingTransition = null;           // don't ghost-load a queued transition after the retry
+        this._fightToPosts?.(boss);               // the fight starts over, everyone at their post
         this._deAggroAll();
         this._finaleReset?.(boss);                // (FIN2) the Financier starts over, Sun Man and all
         this.state = STATE.IDLE;
@@ -6872,6 +6874,13 @@ class Game {
         this._render();
         this._resumeHeldWalk();
         this.autosave({ force: true });
+    }
+
+    // (plans/pathing-round-corners.md) Everyone in the boss fight back at their post.
+    // Optional-called from _runBossRetry, so the stand-in games tests lift it onto
+    // need not carry it.
+    _fightToPosts(boss) {
+        sendToPosts(this, [boss, ...fighters(this.enemies)]);
     }
 
     _respawn() {
