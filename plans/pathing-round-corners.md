@@ -43,3 +43,26 @@ old rule, waits when the only way forward is occupied, falls back when walled of
 `npm test`, then `npm run autoplay:check`. Quest 1 enemies now come round corners, so a drift is
 expected; if the runs still play out, re-record with `npm run autoplay:write` citing this
 request. Then `npm run sim:check` (and `sim:write` + `spirits:harvest` for an intended move).
+
+## Results (133fc90)
+
+- `npm test`: all pass but one, the plain-copy guard, which fails the same way on dev (an
+  ignored local `game/_design-screen.html`). 7 new pathing tests.
+- Autoplay: all three runs still clear quest 1; golden re-recorded in 133fc90. The fighter's
+  sewer escape went from 4 turns to 61, with one more fall.
+- Sim, 50 seeds: **the fighter finishes quest 1 on 54% of seeds, down from 98%.** Every
+  unfinished run ends at 5 falls in the sewer (recover_converter): the rats that used to stand
+  stuck behind the sewer walls now come round them. The sneak finishes 98% (unchanged), and
+  its escape is faster (48 to 20 turns) since nothing gets wedged in its way. Loops did not
+  move. The sim baseline is **not** re-recorded; that waits on Caelan's ruling.
+- Cost: about 0.27 ms per step on the largest map (Carnival) with far targets.
+
+## Open: Caelan's ruling
+
+Quest 1 got much harder for a fighter. Options:
+
+1. Keep it for everyone, then rebalance the quest-1 sewer (or teach the fighter bot) and
+   re-record the sim.
+2. Hostiles chase the old straight-line way, so corners stay an escape route; allies,
+   wanderers, walk-home and errands get the new step.
+3. Hostiles take a detour only when it is a few steps longer than the straight line.
