@@ -627,8 +627,8 @@
         "soap"
       ],
       "type": "Fungus King",
-      "x": 15,
-      "y": 10,
+      "x": 11,
+      "y": 2,
       "hp": 100,
       "damage": 12,
       "armor": 6,
