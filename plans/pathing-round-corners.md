@@ -57,12 +57,46 @@ request. Then `npm run sim:check` (and `sim:write` + `spirits:harvest` for an in
   move. The sim baseline is **not** re-recorded; that waits on Caelan's ruling.
 - Cost: about 0.27 ms per step on the largest map (Carnival) with far targets.
 
-## Open: Caelan's ruling
+## Ruling (Caelan, 2026-11-22)
 
-Quest 1 got much harder for a fighter. Options:
+**Everyone gets the corner-rounding chase, and the sewer is rebalanced.**
 
-1. Keep it for everyone, then rebalance the quest-1 sewer (or teach the fighter bot) and
-   re-record the sim.
-2. Hostiles chase the old straight-line way, so corners stay an escape route; allies,
-   wanderers, walk-home and errands get the new step.
-3. Hostiles take a detour only when it is a few steps longer than the straight line.
+## The sewer rebalance
+
+Why the fighter stopped finishing: after a fall in the boss fight you wake at the sewer door,
+and the Wererat and the Fungus King used to be stuck behind the walls on their way there. Now
+they arrive, and the retry killed you again as you woke, five times over.
+
+- **A boss retry puts the fight back at its posts** (adf3a1c). Everyone in the boss fight goes
+  back to their own post, out of the hunt, as the retry's "start the encounter over" always
+  meant. `npc.js` `sendToPosts`, called through `_fightToPosts` (optional-called, like
+  `_finaleReset`, so the defeat tests' stand-in games need not carry it).
+  tests/boss-retry-posts.test.js.
+- Tried and dropped: a smaller first escape wave (10 to 8 rats). Escape falls went 0.92 to 0.90,
+  inside the noise, so it was reverted.
+
+Sim, 50 seeds, after the retry reset:
+
+| | finished | falls per run | turns |
+|---|---|---|---|
+| fighter, before this branch | 98% | 2.22 | 108 |
+| fighter, now | 98% | 3.54 | 144 |
+| sneak, before this branch | 98% | 2.76 | 180 |
+| sneak, now | 98% | 5.16 | 217 |
+
+Both finish as often as before. The extra falls are in the boss fight (recover_converter): the
+Fungus King and the fungi who spot you now reach you, so the Wererat is rarely fought alone.
+Who lands the killing blow, 8 seeds each: the Wererat 30, the escape rats 17, the Fungus King
+11, the other fungi 10.
+
+## Open: the boss fight
+
+The levers that would bring the falls back down are not sewer-only:
+
+- the Wererat's damage (12) is the anchor the Act 2 bosses are ruled against ("14, two above
+  the Were-Rat"), and the Returning Boss copies it;
+- the Fungus King's numbers are copied by the Carnival lion.
+
+Sewer-only options: move the Fungus King's post out of the boss room (he stands at 15,10, two
+tiles from the Wererat), or leave the boss fight harder now that it is a real fight. The sim
+baseline is re-recorded once that is settled.
