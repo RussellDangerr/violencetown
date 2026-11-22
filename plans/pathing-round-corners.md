@@ -89,14 +89,46 @@ Fungus King and the fungi who spot you now reach you, so the Wererat is rarely f
 Who lands the killing blow, 8 seeds each: the Wererat 30, the escape rats 17, the Fungus King
 11, the other fungi 10.
 
-## Open: the boss fight
+## The boss fight: the King moves (Caelan, 2026-11-22: "Move the King")
 
-The levers that would bring the falls back down are not sewer-only:
+The Wererat's and the Fungus King's numbers are anchors for other zones, so the boss fight was
+eased by placement instead. The King's post moves from (15,10), two tiles from the Wererat, to
+**(11,2) in the north hall** (677930f): off the hall you walk, away from the door you wake at.
 
-- the Wererat's damage (12) is the anchor the Act 2 bosses are ruled against ("14, two above
-  the Were-Rat"), and the Returning Boss copies it;
-- the Fungus King's numbers are copied by the Carnival lion.
+Every candidate post was checked against the two placement rules the sewer already pins, then
+played 8 seeds per bot:
 
-Sewer-only options: move the Fungus King's post out of the boss room (he stands at 15,10, two
-tiles from the Wererat), or leave the boss fight harder now that it is a real fight. The sim
-baseline is re-recorded once that is settled.
+| King's post | sneak route (Q1-8/9) | fungus wake tile hidden (FX46) | fighter falls | sneak falls |
+|---|---|---|---|---|
+| (15,10), old | open | yes | ~3.6 | ~4.9 |
+| (14,4) north-east lobe | **closed** | yes | 5.4 | 2.0 |
+| (14,17) south room | open | | 4.4 | 2.25 |
+| (16,17) south room | open | | 4.5 | 2.25 |
+| (11,18) south room | open | **watched** | 3.6 | 2.0 |
+| **(11,2) north hall** | open | yes | 3.4 | 2.1 |
+
+The south-room posts at (14,17) and (16,17) still see the fight through the gap at (13,14) and
+join it. tests/fungus-wake-spot.test.js "the check bites" now names only the Violet Fungus as
+seeing the old wake tile; the King no longer stands where he could.
+
+## Final numbers (sim, 50 seeds, 677930f)
+
+| | finished | falls per run | turns |
+|---|---|---|---|
+| fighter, before this branch | 98% | 2.22 | 108 |
+| fighter, now | 100% | 3.02 | 152 |
+| sneak, before this branch | 98% | 2.76 | 180 |
+| sneak, now | 100% | 2.06 | 130 |
+
+The fighter still falls about once more a run: the fungi that spot it now reach it. The sneak
+is easier and quicker: nothing that spots it gets wedged in the way.
+
+Sim baseline, spirits and autoplay golden re-recorded on this branch, citing the two rulings.
+
+## Found, not fixed here
+
+The fighter's escape gold rose from 0 to about 1018 GP: in 5 of 50 seeds it wakes in Carrion's
+corridor after a rat defeat, the rats follow it in, and its Fireball catches Carrion, whose
+vendor till (9999 GP, enemies.js `VENDOR_WALLET`) is looted whole on death (main.js
+`_handleEnemyDeath`). That was already true on dev for any vendor you kill; this branch only
+made the bot do it. Its own fix.
