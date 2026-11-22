@@ -15,17 +15,22 @@ corridor whenever a rat stands next to her, and the log reads "Looted 9999 GP." 
 it in 5 of 50 fighter seeds on `feature/pathing-round-corners`, where rats now follow you into her
 corridor. The bug is already on `dev`; that branch only made the autoplay fighter walk into it.
 
-Every vendor on the maps carries the default till: Carrion (sewer), Pike (canyon), Puck (factory),
-Corner Merchant and Newsstand Kid (downtown), Macc and Hooch (town), and the Night seller.
+The vendors who never fight carry the 9999 till on their person: Carrion (sewer), Corner Merchant
+and Newsstand Kid (downtown), Macc and Hooch (town), and the Night seller.
 
-Related, same cause: a vendor you strike turns hostile (`_onEntityHarmed`) and keeps its 9999. A
-hostile enemy at 40 HP or less buys heals at the peg from that gold (`healPurchase`, `npc.js`), so a
-hostile vendor that is not killed outright can buy a heal of 60 HP or more about a hundred times.
-Pike is the case that matters: killing him is an authored route to the grappling hook, he has armour
-5 and 9 damage, and his till pays for the heals.
+The same shared field is wrong the other way for the two vendors who fight. `spawnEnemy` gives any
+fighter (damage > 0) with no authored kit the role-default kit, which overwrites the till: Pike's
+`gold` is 30 and Puck's is 3. So killing Pike pays 30 GP, as Law 6 intends, but selling either of
+them anything worth more than that should hit "THEIR TILL IS N GP SHORT" (read from `offer.js`, not
+played).
+
+Not verified: a struck vendor turns hostile (`_onEntityHarmed`) and keeps its 9999, and a hostile
+enemy at 40 HP or less buys heals from its gold (`healPurchase`). The non-fighting vendors all have
+armour -80, so a blow likely kills them before they reach 40 HP; I have not seen one heal.
 
 Repro: `tests/vendor-till-loot.test.js` runs the real `_handleEnemyDeath` on the real sewer map and
-kills Carrion. It pins today's behaviour (passes now) so the fix has to flip it on purpose.
+kills Carrion (9999 GP, 14999 with a delivery cap), and pins every vendor's spawn gold, Pike's and
+Puck's small tills included. It passes now; the fix has to flip it on purpose.
 
 ## Options (Law 6 is a ruled law; each option says what it changes)
 
@@ -34,8 +39,9 @@ kills Carrion. It pins today's behaviour (passes now) so the fix has to flip it 
 vendor's own pocket purse (a few GP, like `townsfolkPurse`). Law 6 stays exactly as written, because
 the till was never a combatant's wallet. Conservation holds: `transferGold` already treats any object
 with a numeric `gold` as a holder, so the till becomes a holder of its own (the stall), and a dead
-vendor's till simply stays with the stall, out of reach. Fixes the heal-from-till case too, since
-`healPurchase` reads `gold`, and Thieve on a vendor would lift from the pocket instead of the till
+vendor's till simply stays with the stall, out of reach. It also fixes Pike and Puck: their fighter
+kit becomes the pocket and their till is set apart, so they can buy from you again. A struck vendor
+could only spend its pocket on heals, and Thieve would lift from the pocket instead of the till
 (today `coinTake` reads the till, bounded by `stealLimit`). Touches save/load (`toJSON` round-trips
 the till), the offer screen, MC1's special-buyer top-up, and `tests/townsfolk-purse.test.js`, which
 pins Macc at 9999. Medium-sized; the cleanest model.
@@ -43,16 +49,16 @@ pins Macc at 9999. Medium-sized; the cleanest model.
 **B. A vendor's death drops only a pocket purse.** Keep `gold` as the till; in `_handleEnemyDeath`,
 a vendor (or ex-vendor) loots a small purse and the rest leaves the world through `burnGold` as a
 declared sink ("the till closes"). This amends Law 6 for vendors: "the wallet is the loot, except a
-shop's till". One function changes. It does not fix the heal-from-till case: a struck vendor still
-heals from 9999, so Pike would need a separate cap.
+shop's till". One function changes. It leaves Pike's and Puck's 30 and 3 GP tills as they are, and a
+struck vendor still holds 9999 to spend while alive.
 
 **C. Friendly vendors take no blast damage.** `_aoeStrike` skips a non-hostile vendor. Stops the
-accidental sewer case and the sim's 5 seeds, but not a deliberate kill: hit Carrion with a sword, or
-kill Pike by his own route, and the 9999 still pays out. No change to Law 6. Could sit on top of A or
+accidental sewer case and the sim's 5 seeds, but not a deliberate kill: hit Carrion or a downtown
+merchant with a sword and the 9999 still pays out. No change to Law 6. Could sit on top of A or
 B if he wants blasts to spare shopkeepers anyway; on its own it hides the exploit, not closes it.
 
-**My lean: A.** It is the only option that keeps Law 6 unamended and closes both halves (the loot and
-the heals) for every vendor, including Pike's authored kill route. B is the cheap stop-gap if he wants
+**My lean: A.** It is the only option that keeps Law 6 unamended and fixes the field in both
+directions: no vendor carries a till on its person, and the fighting vendors get a till to buy with. B is the cheap stop-gap if he wants
 the sim clean this week; C alone leaves the exploit open.
 
 ## After the ruling
