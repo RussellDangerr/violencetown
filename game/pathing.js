@@ -12,10 +12,10 @@
 
 import { chebyshev } from './utils.js';
 
-// ── Greedy single-step pathfinding ──────────────────────────────────────────
+// ── Single-step pathfinding ─────────────────────────────────────────────────
 //
-// Take one step toward `to`, picking the 8-way neighbour that most reduces
-// Chebyshev distance (diagonals cost the same as orthogonals). Skips walls,
+// Take one step toward `to`, picking the 8-way neighbour that most reduces the
+// walking distance (diagonals cost the same as orthogonals). Skips walls,
 // other living characters, and (by default) the player tile; a diagonal is
 // only taken when both of its orthogonal component tiles are open, so enemies
 // and allies never cut through a wall seam — symmetric with the player's rule.
@@ -41,7 +41,68 @@ export function stepFree(game, x, y, opts = {}) {
     return true;
 }
 
+// (plans/pathing-round-corners.md) The step follows the true walking distance,
+// not the straight line: distanceToward floods out from `to` over terrain until
+// it reaches `from`, and the step goes to the free neighbour nearest by that
+// measure. On open ground that is the same step as before (same tie-breaks);
+// behind a wall it leads round the corner instead of standing still. Only a
+// step that brings the mover closer counts, so a character in the way means
+// wait. With no route over terrain at all, the old straight-line nudge.
 export function getGreedyStep(game, from, to, options = {}) {
+    const { self = null, avoidPlayer = true } = options;
+    const dist = distanceToward(game, to, from);
+    const here = dist && dist.get(from.x, from.y);
+    if (here === undefined) return straightLineStep(game, from, to, { self, avoidPlayer });
+
+    let best = null, bestD = here, bestC = Infinity;
+    for (const [dx, dy] of NB8) {
+        const x = from.x + dx, y = from.y + dy;
+        // No corner-cutting: a diagonal needs both orthogonal seams open.
+        if (dx !== 0 && dy !== 0 &&
+            (!game.map.isWalkable(x, from.y) || !game.map.isWalkable(from.x, y))) continue;
+        const d = dist.get(x, y);
+        if (d === undefined || d > bestD) continue;
+        if (!stepFree(game, x, y, { self, avoidPlayer })) continue;
+        const c = chebyshev(x, y, to.x, to.y);
+        if (d < bestD || c < bestC) { best = { x, y }; bestD = d; bestC = c; }
+    }
+    return bestD < here ? best : null;
+}
+
+// Ortho first, then diagonals — the order getGreedyStep always broke ties in.
+const NB8 = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]];
+
+// Walking distance to `to` over terrain (walls and containers block; characters
+// don't, they move), flooded breadth-first from `to` until `from` is reached.
+// When `from` is found every tile nearer than it already has its distance, which
+// is all getGreedyStep reads. `to` itself is the source whatever stands there.
+// Returns { get(x, y) } (undefined = not reached), or null past `maxNodes`.
+function distanceToward(game, to, from, maxNodes = 4096) {
+    const seen = new Map([[`${to.x},${to.y}`, 0]]);
+    const get = (x, y) => seen.get(`${x},${y}`);
+    if (to.x === from.x && to.y === from.y) return { get };
+    const open = (x, y) => game.map.isWalkable(x, y) && !game.containers?.some(cc => cc.x === x && cc.y === y);
+    const queue = [to];
+    for (let head = 0; head < queue.length; head++) {
+        if (head >= maxNodes) return null;
+        const cur = queue[head], d = seen.get(`${cur.x},${cur.y}`) + 1;
+        for (const [dx, dy] of NB8) {
+            const nx = cur.x + dx, ny = cur.y + dy, k = `${nx},${ny}`;
+            if (seen.has(k)) continue;
+            if (dx !== 0 && dy !== 0 &&
+                (!game.map.isWalkable(cur.x + dx, cur.y) || !game.map.isWalkable(cur.x, cur.y + dy))) continue;
+            if (!open(nx, ny)) continue;
+            seen.set(k, d);
+            if (nx === from.x && ny === from.y) return { get };
+            queue.push({ x: nx, y: ny });
+        }
+    }
+    return { get };
+}
+
+// The old rule, kept for when terrain gives no route: the 8-way neighbour that
+// most cuts Chebyshev distance, ortho first.
+function straightLineStep(game, from, to, options = {}) {
     const { self = null, avoidPlayer = true } = options;
 
     const ortho = [

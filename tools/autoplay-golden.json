@@ -6,82 +6,8 @@
       "seed": 1,
       "finished": true,
       "reason": null,
-      "fingerprint": "b7b09044",
-      "turn": 105,
-      "deaths": 2,
-      "stages": [
-        {
-          "id": "examine_car",
-          "turns": 9,
-          "hpLost": 0,
-          "healed": 0,
-          "eats": 0,
-          "drinks": 0,
-          "attacks": 0,
-          "casts": 0,
-          "mpSpent": 0,
-          "throws": 0,
-          "deaths": 0,
-          "gold": 0
-        },
-        {
-          "id": "recover_converter",
-          "turns": 73,
-          "hpLost": 248,
-          "healed": 0,
-          "eats": 0,
-          "drinks": 3,
-          "attacks": 1,
-          "casts": 28,
-          "mpSpent": 270,
-          "throws": 4,
-          "deaths": 2,
-          "gold": 31
-        },
-        {
-          "id": "escape_sewer",
-          "turns": 4,
-          "hpLost": 0,
-          "healed": 0,
-          "eats": 0,
-          "drinks": 1,
-          "attacks": 0,
-          "casts": 2,
-          "mpSpent": 20,
-          "throws": 0,
-          "deaths": 0,
-          "gold": 0
-        },
-        {
-          "id": "return_to_car",
-          "turns": 19,
-          "hpLost": 0,
-          "healed": 0,
-          "eats": 0,
-          "drinks": 0,
-          "attacks": 0,
-          "casts": 0,
-          "mpSpent": 0,
-          "throws": 0,
-          "deaths": 0,
-          "gold": 0
-        }
-      ],
-      "sewerExit": {
-        "bag": [
-          "catalytic_converter",
-          "wererat_fur"
-        ],
-        "gold": 31
-      }
-    },
-    "sneak": {
-      "script": "sneak",
-      "seed": 1,
-      "finished": true,
-      "reason": null,
-      "fingerprint": "140acbbf",
-      "turn": 160,
+      "fingerprint": "844ada9b",
+      "turn": 182,
       "deaths": 3,
       "stages": [
         {
@@ -100,29 +26,29 @@
         },
         {
           "id": "recover_converter",
-          "turns": 101,
-          "hpLost": 212,
+          "turns": 93,
+          "hpLost": 200,
           "healed": 0,
           "eats": 0,
           "drinks": 2,
           "attacks": 0,
-          "casts": 21,
-          "mpSpent": 190,
-          "throws": 0,
+          "casts": 27,
+          "mpSpent": 268,
+          "throws": 5,
           "deaths": 2,
-          "gold": 0
+          "gold": 5
         },
         {
           "id": "escape_sewer",
-          "turns": 31,
-          "hpLost": 106,
+          "turns": 61,
+          "hpLost": 74,
           "healed": 0,
           "eats": 0,
-          "drinks": 1,
-          "attacks": 7,
-          "casts": 8,
-          "mpSpent": 74,
-          "throws": 4,
+          "drinks": 2,
+          "attacks": 10,
+          "casts": 16,
+          "mpSpent": 154,
+          "throws": 0,
           "deaths": 1,
           "gold": 0
         },
@@ -143,11 +69,90 @@
       ],
       "sewerExit": {
         "bag": [
-          "rock x3",
+          "gator_tail",
+          "catalytic_converter",
+          "wererat_fur",
+          "tunnel_mushroom",
+          "defence_poition",
+          "soap",
+          "mystery_meat x2"
+        ],
+        "gold": 5
+      }
+    },
+    "sneak": {
+      "script": "sneak",
+      "seed": 1,
+      "finished": true,
+      "reason": null,
+      "fingerprint": "27927ff4",
+      "turn": 152,
+      "deaths": 4,
+      "stages": [
+        {
+          "id": "examine_car",
+          "turns": 9,
+          "hpLost": 0,
+          "healed": 0,
+          "eats": 0,
+          "drinks": 0,
+          "attacks": 0,
+          "casts": 0,
+          "mpSpent": 0,
+          "throws": 0,
+          "deaths": 0,
+          "gold": 0
+        },
+        {
+          "id": "recover_converter",
+          "turns": 108,
+          "hpLost": 280,
+          "healed": 7,
+          "eats": 1,
+          "drinks": 3,
+          "attacks": 0,
+          "casts": 20,
+          "mpSpent": 180,
+          "throws": 0,
+          "deaths": 2,
+          "gold": 10
+        },
+        {
+          "id": "escape_sewer",
+          "turns": 16,
+          "hpLost": 77,
+          "healed": 0,
+          "eats": 0,
+          "drinks": 1,
+          "attacks": 0,
+          "casts": 8,
+          "mpSpent": 60,
+          "throws": 0,
+          "deaths": 2,
+          "gold": 0
+        },
+        {
+          "id": "return_to_car",
+          "turns": 19,
+          "hpLost": 0,
+          "healed": 0,
+          "eats": 0,
+          "drinks": 0,
+          "attacks": 0,
+          "casts": 0,
+          "mpSpent": 0,
+          "throws": 0,
+          "deaths": 0,
+          "gold": 0
+        }
+      ],
+      "sewerExit": {
+        "bag": [
+          "mystery_meat x4",
           "catalytic_converter",
           "wererat_fur"
         ],
-        "gold": 0
+        "gold": 10
       }
     },
     "loops": {
