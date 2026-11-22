@@ -9,349 +9,9 @@
       "metrics": {
         "deaths": {
           "n": 50,
-          "mean": 2.22,
-          "sd": 0.465,
-          "margin": 0.129
-        },
-        "finished": {
-          "n": 50,
-          "mean": 0.98,
-          "sd": 0.141,
-          "margin": 0.039
-        },
-        "turn": {
-          "n": 50,
-          "mean": 108.46,
-          "sd": 9.622,
-          "margin": 2.667
-        },
-        "escape_sewer.attacks": {
-          "n": 49,
-          "mean": 0.265,
-          "sd": 0.758,
-          "margin": 0.212
-        },
-        "escape_sewer.casts": {
-          "n": 49,
-          "mean": 5.041,
-          "sd": 3.663,
-          "margin": 1.026
-        },
-        "escape_sewer.deaths": {
-          "n": 49,
-          "mean": 0.653,
-          "sd": 0.631,
-          "margin": 0.177
-        },
-        "escape_sewer.drinks": {
-          "n": 49,
-          "mean": 1.347,
-          "sd": 0.83,
-          "margin": 0.233
-        },
-        "escape_sewer.eats": {
-          "n": 49,
-          "mean": 0,
-          "sd": 0,
-          "margin": 0
-        },
-        "escape_sewer.gold": {
-          "n": 49,
-          "mean": -0.02,
-          "sd": 0.143,
-          "margin": 0.04
-        },
-        "escape_sewer.healed": {
-          "n": 49,
-          "mean": 1.02,
-          "sd": 7.143,
-          "margin": 2
-        },
-        "escape_sewer.hpLost": {
-          "n": 49,
-          "mean": 38.816,
-          "sd": 41.019,
-          "margin": 11.485
-        },
-        "escape_sewer.mpSpent": {
-          "n": 49,
-          "mean": 48.653,
-          "sd": 34.81,
-          "margin": 9.747
-        },
-        "escape_sewer.throws": {
-          "n": 49,
-          "mean": 0.898,
-          "sd": 1.327,
-          "margin": 0.371
-        },
-        "escape_sewer.turns": {
-          "n": 49,
-          "mean": 12.367,
-          "sd": 10.805,
-          "margin": 3.025
-        },
-        "examine_car.attacks": {
-          "n": 50,
-          "mean": 0,
-          "sd": 0,
-          "margin": 0
-        },
-        "examine_car.casts": {
-          "n": 50,
-          "mean": 0,
-          "sd": 0,
-          "margin": 0
-        },
-        "examine_car.deaths": {
-          "n": 50,
-          "mean": 0,
-          "sd": 0,
-          "margin": 0
-        },
-        "examine_car.drinks": {
-          "n": 50,
-          "mean": 0,
-          "sd": 0,
-          "margin": 0
-        },
-        "examine_car.eats": {
-          "n": 50,
-          "mean": 0,
-          "sd": 0,
-          "margin": 0
-        },
-        "examine_car.gold": {
-          "n": 50,
-          "mean": 0,
-          "sd": 0,
-          "margin": 0
-        },
-        "examine_car.healed": {
-          "n": 50,
-          "mean": 0,
-          "sd": 0,
-          "margin": 0
-        },
-        "examine_car.hpLost": {
-          "n": 50,
-          "mean": 0,
-          "sd": 0,
-          "margin": 0
-        },
-        "examine_car.mpSpent": {
-          "n": 50,
-          "mean": 0,
-          "sd": 0,
-          "margin": 0
-        },
-        "examine_car.throws": {
-          "n": 50,
-          "mean": 0,
-          "sd": 0,
-          "margin": 0
-        },
-        "examine_car.turns": {
-          "n": 50,
-          "mean": 9,
-          "sd": 0,
-          "margin": 0
-        },
-        "recover_converter.attacks": {
-          "n": 50,
-          "mean": 0.34,
-          "sd": 0.772,
-          "margin": 0.214
-        },
-        "recover_converter.casts": {
-          "n": 50,
-          "mean": 24.12,
-          "sd": 4.543,
-          "margin": 1.259
-        },
-        "recover_converter.deaths": {
-          "n": 50,
-          "mean": 1.58,
-          "sd": 0.609,
-          "margin": 0.169
-        },
-        "recover_converter.drinks": {
-          "n": 50,
-          "mean": 2.78,
-          "sd": 0.764,
-          "margin": 0.212
-        },
-        "recover_converter.eats": {
-          "n": 50,
-          "mean": 0,
-          "sd": 0,
-          "margin": 0
-        },
-        "recover_converter.gold": {
-          "n": 50,
-          "mean": 12.06,
-          "sd": 12.569,
-          "margin": 3.484
-        },
-        "recover_converter.healed": {
-          "n": 50,
-          "mean": 0,
-          "sd": 0,
-          "margin": 0
-        },
-        "recover_converter.hpLost": {
-          "n": 50,
-          "mean": 212.66,
-          "sd": 60.454,
-          "margin": 16.757
-        },
-        "recover_converter.mpSpent": {
-          "n": 50,
-          "mean": 232.52,
-          "sd": 42.988,
-          "margin": 11.916
-        },
-        "recover_converter.throws": {
-          "n": 50,
-          "mean": 3.54,
-          "sd": 1.644,
-          "margin": 0.456
-        },
-        "recover_converter.turns": {
-          "n": 50,
-          "mean": 68.72,
-          "sd": 6.048,
-          "margin": 1.676
-        },
-        "return_to_car.attacks": {
-          "n": 49,
-          "mean": 0,
-          "sd": 0,
-          "margin": 0
-        },
-        "return_to_car.casts": {
-          "n": 49,
-          "mean": 0,
-          "sd": 0,
-          "margin": 0
-        },
-        "return_to_car.deaths": {
-          "n": 49,
-          "mean": 0,
-          "sd": 0,
-          "margin": 0
-        },
-        "return_to_car.drinks": {
-          "n": 49,
-          "mean": 0,
-          "sd": 0,
-          "margin": 0
-        },
-        "return_to_car.eats": {
-          "n": 49,
-          "mean": 0,
-          "sd": 0,
-          "margin": 0
-        },
-        "return_to_car.gold": {
-          "n": 49,
-          "mean": 0,
-          "sd": 0,
-          "margin": 0
-        },
-        "return_to_car.healed": {
-          "n": 49,
-          "mean": 0,
-          "sd": 0,
-          "margin": 0
-        },
-        "return_to_car.hpLost": {
-          "n": 49,
-          "mean": 0,
-          "sd": 0,
-          "margin": 0
-        },
-        "return_to_car.mpSpent": {
-          "n": 49,
-          "mean": 0,
-          "sd": 0,
-          "margin": 0
-        },
-        "return_to_car.throws": {
-          "n": 49,
-          "mean": 0,
-          "sd": 0,
-          "margin": 0
-        },
-        "return_to_car.turns": {
-          "n": 49,
-          "mean": 19,
-          "sd": 0,
-          "margin": 0
-        }
-      },
-      "broken": [],
-      "seeds": {
-        "1": "e3c92e8a",
-        "2": "c9697391",
-        "3": "42bd8a7d",
-        "4": "866b8d4f",
-        "5": "c756d0a7",
-        "6": "b4451ed5",
-        "7": "f40d8a84",
-        "8": "a9d7a943",
-        "9": "44b79d85",
-        "10": "633fab9f",
-        "11": "9205e885",
-        "12": "cb23f715",
-        "13": "2c858b9b",
-        "14": "58eefd3d",
-        "15": "458488a4",
-        "16": "64b0c154",
-        "17": "31171dff",
-        "18": "7904ed6b",
-        "19": "ab551dc8",
-        "20": "427519be",
-        "21": "f32a46ed",
-        "22": "19e381df",
-        "23": "3603fac5",
-        "24": "b4558e7e",
-        "25": "1f0cff34",
-        "26": "8231d40e",
-        "27": "0bbb5d90",
-        "28": "86c1287a",
-        "29": "91fed4e6",
-        "30": "abf1f2a3",
-        "31": "8788eb4b",
-        "32": "41b418ef",
-        "33": "b3e3be8a",
-        "34": "198f2783",
-        "35": "3f02047b",
-        "36": "ec22bcfe",
-        "37": "97f6d9bb",
-        "38": "07c01fb4",
-        "39": "0e3b42cb",
-        "40": "cc77ef10",
-        "41": "6f5e356f",
-        "42": "8a5a5c22",
-        "43": "864aa4e6",
-        "44": "10be78fe",
-        "45": "c8565186",
-        "46": "de965c31",
-        "47": "9b5fcf78",
-        "48": "2b4731cd",
-        "49": "127ce3bf",
-        "50": "f9f25484"
-      }
-    },
-    "sneak": {
-      "n": 50,
-      "metrics": {
-        "deaths": {
-          "n": 50,
-          "mean": 2.76,
-          "sd": 0.431,
-          "margin": 0.12
+          "mean": 3.02,
+          "sd": 0.769,
+          "margin": 0.213
         },
         "finished": {
           "n": 50,
@@ -361,33 +21,33 @@
         },
         "turn": {
           "n": 50,
-          "mean": 179.7,
-          "sd": 20.473,
-          "margin": 5.675
+          "mean": 151.66,
+          "sd": 17.399,
+          "margin": 4.823
         },
         "escape_sewer.attacks": {
           "n": 50,
-          "mean": 6.1,
-          "sd": 2.41,
-          "margin": 0.668
+          "mean": 4.14,
+          "sd": 5.38,
+          "margin": 1.491
         },
         "escape_sewer.casts": {
           "n": 50,
-          "mean": 8.1,
-          "sd": 1.594,
-          "margin": 0.442
+          "mean": 7.92,
+          "sd": 1.748,
+          "margin": 0.484
         },
         "escape_sewer.deaths": {
           "n": 50,
-          "mean": 0.76,
-          "sd": 0.431,
-          "margin": 0.12
+          "mean": 0.7,
+          "sd": 0.463,
+          "margin": 0.128
         },
         "escape_sewer.drinks": {
           "n": 50,
-          "mean": 2.12,
-          "sd": 1.189,
-          "margin": 0.33
+          "mean": 1.26,
+          "sd": 0.565,
+          "margin": 0.156
         },
         "escape_sewer.eats": {
           "n": 50,
@@ -397,39 +57,39 @@
         },
         "escape_sewer.gold": {
           "n": 50,
-          "mean": 0,
-          "sd": 0,
-          "margin": 0
+          "mean": 997.94,
+          "sd": 3024.508,
+          "margin": 838.351
         },
         "escape_sewer.healed": {
           "n": 50,
-          "mean": 4.72,
-          "sd": 11.925,
-          "margin": 3.305
+          "mean": 1.9,
+          "sd": 9.416,
+          "margin": 2.61
         },
         "escape_sewer.hpLost": {
           "n": 50,
-          "mean": 91.68,
-          "sd": 15.052,
-          "margin": 4.172
+          "mean": 45.14,
+          "sd": 20.292,
+          "margin": 5.625
         },
         "escape_sewer.mpSpent": {
           "n": 50,
-          "mean": 76.2,
-          "sd": 15.488,
-          "margin": 4.293
+          "mean": 75.52,
+          "sd": 17.443,
+          "margin": 4.835
         },
         "escape_sewer.throws": {
           "n": 50,
-          "mean": 4.04,
-          "sd": 0.755,
-          "margin": 0.209
+          "mean": 0.4,
+          "sd": 0.606,
+          "margin": 0.168
         },
         "escape_sewer.turns": {
           "n": 50,
-          "mean": 48.4,
-          "sd": 18.752,
-          "margin": 5.198
+          "mean": 27.16,
+          "sd": 14.908,
+          "margin": 4.132
         },
         "examine_car.attacks": {
           "n": 50,
@@ -499,27 +159,27 @@
         },
         "recover_converter.attacks": {
           "n": 50,
-          "mean": 0.02,
-          "sd": 0.141,
-          "margin": 0.039
+          "mean": 1.58,
+          "sd": 1.785,
+          "margin": 0.495
         },
         "recover_converter.casts": {
           "n": 50,
-          "mean": 21,
-          "sd": 0,
-          "margin": 0
+          "mean": 31.96,
+          "sd": 5.617,
+          "margin": 1.557
         },
         "recover_converter.deaths": {
           "n": 50,
-          "mean": 2,
-          "sd": 0,
-          "margin": 0
+          "mean": 2.32,
+          "sd": 0.587,
+          "margin": 0.163
         },
         "recover_converter.drinks": {
           "n": 50,
-          "mean": 1.98,
-          "sd": 0.141,
-          "margin": 0.039
+          "mean": 2.98,
+          "sd": 0.958,
+          "margin": 0.266
         },
         "recover_converter.eats": {
           "n": 50,
@@ -529,39 +189,39 @@
         },
         "recover_converter.gold": {
           "n": 50,
-          "mean": 0.56,
-          "sd": 1.981,
-          "margin": 0.549
+          "mean": 10.02,
+          "sd": 5.723,
+          "margin": 1.586
         },
         "recover_converter.healed": {
           "n": 50,
-          "mean": 0,
-          "sd": 0,
-          "margin": 0
+          "mean": 2.64,
+          "sd": 10.265,
+          "margin": 2.845
         },
         "recover_converter.hpLost": {
           "n": 50,
-          "mean": 212.4,
-          "sd": 1.616,
-          "margin": 0.448
+          "mean": 269.92,
+          "sd": 66.663,
+          "margin": 18.478
         },
         "recover_converter.mpSpent": {
           "n": 50,
-          "mean": 190,
-          "sd": 0,
-          "margin": 0
+          "mean": 312.96,
+          "sd": 51.786,
+          "margin": 14.354
         },
         "recover_converter.throws": {
           "n": 50,
-          "mean": 0.08,
-          "sd": 0.566,
-          "margin": 0.157
+          "mean": 6.4,
+          "sd": 1.512,
+          "margin": 0.419
         },
         "recover_converter.turns": {
           "n": 50,
-          "mean": 103.3,
-          "sd": 6.485,
-          "margin": 1.797
+          "mean": 96.5,
+          "sd": 10.336,
+          "margin": 2.865
         },
         "return_to_car.attacks": {
           "n": 50,
@@ -632,56 +292,396 @@
       },
       "broken": [],
       "seeds": {
-        "1": "27cd3745",
-        "2": "bb62993b",
-        "3": "eede989f",
-        "4": "7350dc6a",
-        "5": "8e87d5df",
-        "6": "445bfd6f",
-        "7": "3d3969ed",
-        "8": "28001e4b",
-        "9": "30c15bf5",
-        "10": "8f5e6fd4",
-        "11": "9d0c53fb",
-        "12": "a5ad7ce6",
-        "13": "83c1277b",
-        "14": "c6a04b8f",
-        "15": "c2344cb0",
-        "16": "5df20970",
-        "17": "5a6c3b3f",
-        "18": "6993c93d",
-        "19": "cad9ff58",
-        "20": "b7ffb54c",
-        "21": "24d4087b",
-        "22": "ce4c47c6",
-        "23": "4597b132",
-        "24": "e29b9721",
-        "25": "500b214d",
-        "26": "f45523ef",
-        "27": "905308c1",
-        "28": "3617dd59",
-        "29": "cbe2f620",
-        "30": "3c61bb28",
-        "31": "7531aa2e",
-        "32": "a1cee4da",
-        "33": "21dc4a88",
-        "34": "f71b3151",
-        "35": "8ec5d15d",
-        "36": "6202f4ab",
-        "37": "1f1cb413",
-        "38": "4e1552c6",
-        "39": "a9054387",
-        "40": "adba2e8d",
-        "41": "c2d1947a",
-        "42": "f846d22c",
-        "43": "a08495a2",
-        "44": "88f61622",
-        "45": "ebb73727",
-        "46": "c5dcf155",
-        "47": "91864752",
-        "48": "050bfbe7",
-        "49": "05fe1489",
-        "50": "8f232564"
+        "1": "90a30e59",
+        "2": "696b53b6",
+        "3": "7dfbebbc",
+        "4": "25376243",
+        "5": "a2c0528f",
+        "6": "19fed7fd",
+        "7": "5558bd57",
+        "8": "74147ac3",
+        "9": "f2ca8d6a",
+        "10": "94ef973f",
+        "11": "011e6789",
+        "12": "0afa0bf8",
+        "13": "3ce44e30",
+        "14": "79894ae5",
+        "15": "b3cf10cf",
+        "16": "04e066b6",
+        "17": "ec52817c",
+        "18": "348dccd9",
+        "19": "75386f97",
+        "20": "50c3ee17",
+        "21": "f4f72aa8",
+        "22": "19ed306b",
+        "23": "b52f6b6c",
+        "24": "c4336dbc",
+        "25": "792b1c14",
+        "26": "6165d617",
+        "27": "61d1b261",
+        "28": "91588cd3",
+        "29": "2ee6a2e3",
+        "30": "1f6abf61",
+        "31": "a3312a30",
+        "32": "4013496e",
+        "33": "3e6e356a",
+        "34": "57713cfe",
+        "35": "6d2d84bf",
+        "36": "89cd3e1f",
+        "37": "48382203",
+        "38": "0be760b0",
+        "39": "62ec2dfc",
+        "40": "11ce28fa",
+        "41": "d79ade9d",
+        "42": "9d5c2c92",
+        "43": "826e301b",
+        "44": "b3966ab2",
+        "45": "198328b6",
+        "46": "d81139ee",
+        "47": "ebcbfb17",
+        "48": "301ca1eb",
+        "49": "2d6f12c6",
+        "50": "7decdfdf"
+      }
+    },
+    "sneak": {
+      "n": 50,
+      "metrics": {
+        "deaths": {
+          "n": 50,
+          "mean": 2.06,
+          "sd": 0.24,
+          "margin": 0.066
+        },
+        "finished": {
+          "n": 50,
+          "mean": 1,
+          "sd": 0,
+          "margin": 0
+        },
+        "turn": {
+          "n": 50,
+          "mean": 130.42,
+          "sd": 19.411,
+          "margin": 5.38
+        },
+        "escape_sewer.attacks": {
+          "n": 50,
+          "mean": 3.52,
+          "sd": 1.887,
+          "margin": 0.523
+        },
+        "escape_sewer.casts": {
+          "n": 50,
+          "mean": 6.7,
+          "sd": 2.957,
+          "margin": 0.82
+        },
+        "escape_sewer.deaths": {
+          "n": 50,
+          "mean": 1.06,
+          "sd": 0.24,
+          "margin": 0.066
+        },
+        "escape_sewer.drinks": {
+          "n": 50,
+          "mean": 1.72,
+          "sd": 1.31,
+          "margin": 0.363
+        },
+        "escape_sewer.eats": {
+          "n": 50,
+          "mean": 0.08,
+          "sd": 0.274,
+          "margin": 0.076
+        },
+        "escape_sewer.gold": {
+          "n": 50,
+          "mean": 0,
+          "sd": 0,
+          "margin": 0
+        },
+        "escape_sewer.healed": {
+          "n": 50,
+          "mean": 1.56,
+          "sd": 4.385,
+          "margin": 1.216
+        },
+        "escape_sewer.hpLost": {
+          "n": 50,
+          "mean": 58.8,
+          "sd": 19.549,
+          "margin": 5.419
+        },
+        "escape_sewer.mpSpent": {
+          "n": 50,
+          "mean": 63.72,
+          "sd": 29.14,
+          "margin": 8.077
+        },
+        "escape_sewer.throws": {
+          "n": 50,
+          "mean": 3,
+          "sd": 0.535,
+          "margin": 0.148
+        },
+        "escape_sewer.turns": {
+          "n": 50,
+          "mean": 31.06,
+          "sd": 19.236,
+          "margin": 5.332
+        },
+        "examine_car.attacks": {
+          "n": 50,
+          "mean": 0,
+          "sd": 0,
+          "margin": 0
+        },
+        "examine_car.casts": {
+          "n": 50,
+          "mean": 0,
+          "sd": 0,
+          "margin": 0
+        },
+        "examine_car.deaths": {
+          "n": 50,
+          "mean": 0,
+          "sd": 0,
+          "margin": 0
+        },
+        "examine_car.drinks": {
+          "n": 50,
+          "mean": 0,
+          "sd": 0,
+          "margin": 0
+        },
+        "examine_car.eats": {
+          "n": 50,
+          "mean": 0,
+          "sd": 0,
+          "margin": 0
+        },
+        "examine_car.gold": {
+          "n": 50,
+          "mean": 0,
+          "sd": 0,
+          "margin": 0
+        },
+        "examine_car.healed": {
+          "n": 50,
+          "mean": 0,
+          "sd": 0,
+          "margin": 0
+        },
+        "examine_car.hpLost": {
+          "n": 50,
+          "mean": 0,
+          "sd": 0,
+          "margin": 0
+        },
+        "examine_car.mpSpent": {
+          "n": 50,
+          "mean": 0,
+          "sd": 0,
+          "margin": 0
+        },
+        "examine_car.throws": {
+          "n": 50,
+          "mean": 0,
+          "sd": 0,
+          "margin": 0
+        },
+        "examine_car.turns": {
+          "n": 50,
+          "mean": 9,
+          "sd": 0,
+          "margin": 0
+        },
+        "recover_converter.attacks": {
+          "n": 50,
+          "mean": 0,
+          "sd": 0,
+          "margin": 0
+        },
+        "recover_converter.casts": {
+          "n": 50,
+          "mean": 17,
+          "sd": 0,
+          "margin": 0
+        },
+        "recover_converter.deaths": {
+          "n": 50,
+          "mean": 1,
+          "sd": 0,
+          "margin": 0
+        },
+        "recover_converter.drinks": {
+          "n": 50,
+          "mean": 0,
+          "sd": 0,
+          "margin": 0
+        },
+        "recover_converter.eats": {
+          "n": 50,
+          "mean": 0,
+          "sd": 0,
+          "margin": 0
+        },
+        "recover_converter.gold": {
+          "n": 50,
+          "mean": 0,
+          "sd": 0,
+          "margin": 0
+        },
+        "recover_converter.healed": {
+          "n": 50,
+          "mean": 0,
+          "sd": 0,
+          "margin": 0
+        },
+        "recover_converter.hpLost": {
+          "n": 50,
+          "mean": 158.96,
+          "sd": 3.232,
+          "margin": 0.896
+        },
+        "recover_converter.mpSpent": {
+          "n": 50,
+          "mean": 160,
+          "sd": 0,
+          "margin": 0
+        },
+        "recover_converter.throws": {
+          "n": 50,
+          "mean": 0,
+          "sd": 0,
+          "margin": 0
+        },
+        "recover_converter.turns": {
+          "n": 50,
+          "mean": 71.36,
+          "sd": 0.776,
+          "margin": 0.215
+        },
+        "return_to_car.attacks": {
+          "n": 50,
+          "mean": 0,
+          "sd": 0,
+          "margin": 0
+        },
+        "return_to_car.casts": {
+          "n": 50,
+          "mean": 0,
+          "sd": 0,
+          "margin": 0
+        },
+        "return_to_car.deaths": {
+          "n": 50,
+          "mean": 0,
+          "sd": 0,
+          "margin": 0
+        },
+        "return_to_car.drinks": {
+          "n": 50,
+          "mean": 0,
+          "sd": 0,
+          "margin": 0
+        },
+        "return_to_car.eats": {
+          "n": 50,
+          "mean": 0,
+          "sd": 0,
+          "margin": 0
+        },
+        "return_to_car.gold": {
+          "n": 50,
+          "mean": 0,
+          "sd": 0,
+          "margin": 0
+        },
+        "return_to_car.healed": {
+          "n": 50,
+          "mean": 0,
+          "sd": 0,
+          "margin": 0
+        },
+        "return_to_car.hpLost": {
+          "n": 50,
+          "mean": 0,
+          "sd": 0,
+          "margin": 0
+        },
+        "return_to_car.mpSpent": {
+          "n": 50,
+          "mean": 0,
+          "sd": 0,
+          "margin": 0
+        },
+        "return_to_car.throws": {
+          "n": 50,
+          "mean": 0,
+          "sd": 0,
+          "margin": 0
+        },
+        "return_to_car.turns": {
+          "n": 50,
+          "mean": 19,
+          "sd": 0,
+          "margin": 0
+        }
+      },
+      "broken": [],
+      "seeds": {
+        "1": "c26b078d",
+        "2": "e3b8629d",
+        "3": "98bb86c2",
+        "4": "fa509bc5",
+        "5": "3e6325cb",
+        "6": "2de2607e",
+        "7": "a9ed9389",
+        "8": "8d559769",
+        "9": "350634f9",
+        "10": "816530b8",
+        "11": "42fa1f6a",
+        "12": "f1df846d",
+        "13": "7c6d1d89",
+        "14": "2cd85d9d",
+        "15": "02939165",
+        "16": "4755ff4c",
+        "17": "9dfbe511",
+        "18": "ce61bb36",
+        "19": "59db8fdd",
+        "20": "86cf392a",
+        "21": "05bcec54",
+        "22": "c5f1bc56",
+        "23": "ade32439",
+        "24": "afa92b84",
+        "25": "2a606f61",
+        "26": "2d6e35c9",
+        "27": "32396eda",
+        "28": "8e86edd1",
+        "29": "01574cdb",
+        "30": "16d788e9",
+        "31": "c685331c",
+        "32": "acf42ba8",
+        "33": "ae09805c",
+        "34": "f8a4a84f",
+        "35": "523e5353",
+        "36": "43f8ae96",
+        "37": "c2f03015",
+        "38": "22972fa8",
+        "39": "76d5f10b",
+        "40": "54e0807c",
+        "41": "81d9dff5",
+        "42": "21911885",
+        "43": "b24c2708",
+        "44": "af1ddcc1",
+        "45": "c8494ce6",
+        "46": "e53de0e5",
+        "47": "ad534edb",
+        "48": "1f9e90ae",
+        "49": "98ebc756",
+        "50": "578f5705"
       }
     },
     "loops": {
@@ -888,56 +888,56 @@
       },
       "broken": [],
       "seeds": {
-        "1": "893e1c73",
-        "2": "c717eea8",
-        "3": "580a61b2",
-        "4": "b2b616da",
-        "5": "de12d5bc",
-        "6": "bea782ae",
-        "7": "71b24012",
-        "8": "5cf56123",
-        "9": "775f63ff",
-        "10": "5ae21519",
-        "11": "2308501a",
-        "12": "69e521be",
-        "13": "1877ea51",
-        "14": "a96739a2",
-        "15": "5bc3ca17",
-        "16": "30dff914",
-        "17": "6660f0d1",
-        "18": "7a1d7fd5",
-        "19": "e8da3119",
-        "20": "8ca713c8",
-        "21": "afa1062f",
-        "22": "3b9a9719",
-        "23": "0ad3e995",
-        "24": "1d521316",
-        "25": "71d17d6d",
-        "26": "ffd8b581",
-        "27": "5bf6acce",
-        "28": "9fc71b28",
-        "29": "cb645866",
-        "30": "7f3cbcdd",
-        "31": "ed7bd6b3",
-        "32": "d92ca2ba",
-        "33": "9db3b157",
-        "34": "859a05be",
-        "35": "d597901b",
-        "36": "ad831e77",
-        "37": "080b9665",
-        "38": "b66f8100",
-        "39": "f9bc4c1f",
-        "40": "b82a6b69",
-        "41": "56f2fa0c",
-        "42": "89c22cf8",
-        "43": "e0ba52eb",
-        "44": "89949a07",
-        "45": "25a72dc2",
-        "46": "92a53064",
-        "47": "5a926d7d",
-        "48": "5107ae09",
-        "49": "a171146a",
-        "50": "f289d520"
+        "1": "6598426d",
+        "2": "773a5536",
+        "3": "b443e2e2",
+        "4": "f62a32aa",
+        "5": "8e862778",
+        "6": "e184732e",
+        "7": "ca102d1e",
+        "8": "55b0a73d",
+        "9": "f3572a01",
+        "10": "2cd79753",
+        "11": "609b389a",
+        "12": "7b973c1a",
+        "13": "5b62455b",
+        "14": "0f4848ba",
+        "15": "0145aa81",
+        "16": "94145fac",
+        "17": "eda0ffcb",
+        "18": "4b05212f",
+        "19": "dc1ffde3",
+        "20": "83b580fc",
+        "21": "feb4c0c9",
+        "22": "117f9da9",
+        "23": "18f7d96f",
+        "24": "beabfc7a",
+        "25": "bbc8f1af",
+        "26": "7767507d",
+        "27": "a3311d6c",
+        "28": "85fce2a8",
+        "29": "6384eac6",
+        "30": "00edbc3f",
+        "31": "d7cdc36d",
+        "32": "ab0c2618",
+        "33": "0edf0d41",
+        "34": "2415081a",
+        "35": "5ee0572d",
+        "36": "461b6519",
+        "37": "48a5ccd5",
+        "38": "1458cb0e",
+        "39": "483aebd9",
+        "40": "de0a3353",
+        "41": "62c33af8",
+        "42": "fc81b970",
+        "43": "6d521d5f",
+        "44": "ad895b49",
+        "45": "c0a6ecc0",
+        "46": "73b251f0",
+        "47": "121fab5f",
+        "48": "84efd933",
+        "49": "6a9e70ee",
+        "50": "80d92c3c"
       }
     }
   }
