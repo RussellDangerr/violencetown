@@ -1,6 +1,6 @@
 # Vendor till loot — killing a vendor pays out the whole till
 
-Status: **awaiting Caelan's ruling.** Repro test only; no fix on this branch until he picks.
+Status: **ruled 2026-11-22 — option A** (Caelan: "A: separate till"). Built on this branch.
 
 ## The bug
 
@@ -60,6 +60,22 @@ B if he wants blasts to spare shopkeepers anyway; on its own it hides the exploi
 **My lean: A.** It is the only option that keeps Law 6 unamended and fixes the field in both
 directions: no vendor carries a till on its person, and the fighting vendors get a till to buy with. B is the cheap stop-gap if he wants
 the sim clean this week; C alone leaves the exploit open.
+
+## Ruling and what was built (VTR1, 2026-11-22: option A)
+
+- `Enemy` has a `till` apart from `gold`. A vendor's till defaults to `VENDOR_WALLET` (9999); its
+  `gold` is the purse it carries and defaults to 0. Both save and load (`toSave`).
+- `spawnEnemy`: a vendor who never fights and has no authored gold carries a townsperson's purse
+  (`townsfolkPurse`, 2 to 6 GP). A vendor who fights keeps its role kit as its purse (Pike 30, Puck 3),
+  and now has the full till as well. A mugged vendor comes back with an empty purse; the till is untouched.
+- `tradeHolder(npc)` (`trade.js`): a vendor's side of a trade is a holder over its till; anyone else's
+  is the NPC itself. `_commitOffer`, the till check in `_offerBlocker` and MC1's special-buyer top-up
+  go through it, so trades still conserve through `transferGold`.
+- Law 6 is unchanged: `_handleEnemyDeath` still loots `gold` whole. It just no longer holds the till.
+- Old saves: a vendor saved before the split (no `till` key) loads with the full till and an empty
+  purse; so does a struck vendor still holding 9,999 or more.
+- `tests/vendor-till-loot.test.js` asserts all of the above. Vendor fixtures in the offer tests
+  that used `gold` as the till now use `till`.
 
 ## After the ruling
 

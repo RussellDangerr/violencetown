@@ -146,6 +146,19 @@ export function transferGold(from, to, amount, reason = '') {
     return true;
 }
 
+// (plans/vendor-till-loot.md, ruled option A) The holder a trade pays into and
+// out of. A vendor trades from its till, which is not on its person, so a death
+// (which loots `gold`) cannot reach it; anyone else trades from the purse they
+// carry. The till holder is a view over `npc.till`, so transferGold conserves
+// across it like any other holder.
+export function tradeHolder(npc) {
+    if (!npc?.vendor) return npc;
+    return {
+        get gold() { return npc.till ?? 0; },
+        set gold(v) { npc.till = v; },
+    };
+}
+
 // burnGold — the declared SINK. Transfers conserve (transferGold); burns remove
 // gold from the world on purpose (offscreen purchases, trick costs). Every burn
 // goes through here so the economy audit has one hook. Returns false if holder

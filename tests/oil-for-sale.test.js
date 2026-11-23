@@ -20,7 +20,7 @@ import {
     MODAL_RECT, HIT_SLOP, offerLayout, offerRowIndexAt, offerTraySlotAt, OFFER_ROWS_VISIBLE, OFFER_TRAY_SLOTS,
 } from '../game/layout.js';
 import { emptyOffer, commitBlocker, stage, unstage, settledGold, resolveOffer, sameEntry } from '../game/offer.js';
-import { band, buyPrice, sellPrice, specialDef, transferGold } from '../game/trade.js';
+import { band, buyPrice, sellPrice, specialDef, transferGold, tradeHolder } from '../game/trade.js';
 import { QuestEngine } from '../game/quests.js';
 import { applyDispositionDelta, reactToTransaction } from '../game/give-action.js';
 import { contextualUses } from '../game/item-uses.js';
@@ -108,7 +108,7 @@ function makeGame() {
         defaultVerb, isHostile, SAFE_SLOTS, PACK_PAGE, MAX_STACK, addToInv,
         MODAL_RECT, HIT_SLOP, offerLayout, offerRowIndexAt, offerTraySlotAt, OFFER_ROWS_VISIBLE, OFFER_TRAY_SLOTS,
         emptyOffer, commitBlocker, stage, unstage, settledGold, resolveOffer, sameEntry,
-        sellPrice, buyPrice, specialDef, transferGold, applyDispositionDelta, reactToTransaction,
+        sellPrice, buyPrice, specialDef, transferGold, tradeHolder, applyDispositionDelta, reactToTransaction,
     };
     for (const [n, p] of LIFTED) g[n] = liveMethod(n, p, free);
     g._closeCurrentMenu = function () { this._closeOffer(); };

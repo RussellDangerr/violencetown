@@ -30,7 +30,7 @@ import {
     MODAL_RECT, HIT_SLOP, offerLayout, offerRowIndexAt, offerTraySlotAt, OFFER_ROWS_VISIBLE, OFFER_TRAY_SLOTS,
 } from '../game/layout.js';
 import { emptyOffer, commitBlocker, stage, unstage, settledGold, resolveOffer, sameEntry } from '../game/offer.js';
-import { band, buyPrice, sellPrice, transferGold } from '../game/trade.js';
+import { band, buyPrice, sellPrice, transferGold, tradeHolder } from '../game/trade.js';
 import { applyDispositionDelta, reactToTransaction } from '../game/give-action.js';
 
 globalThis.localStorage ??= { getItem: () => null, setItem() {}, removeItem() {} };
@@ -134,7 +134,7 @@ function makeGame({ seed = 7 } = {}) {
         SAFE_SLOTS, PACK_PAGE, MAX_STACK, addToInv,
         MODAL_RECT, HIT_SLOP, offerLayout, offerRowIndexAt, offerTraySlotAt, OFFER_ROWS_VISIBLE, OFFER_TRAY_SLOTS,
         emptyOffer, commitBlocker, stage, unstage, settledGold, resolveOffer, sameEntry,
-        sellPrice, buyPrice, transferGold, applyDispositionDelta, reactToTransaction,
+        sellPrice, buyPrice, transferGold, tradeHolder, applyDispositionDelta, reactToTransaction,
     };
     for (const [n, p] of LIFTED) g[n] = liveMethod(n, p, free);
     g._bindInput();
