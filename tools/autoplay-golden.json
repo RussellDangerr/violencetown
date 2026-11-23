@@ -6,8 +6,8 @@
       "seed": 1,
       "finished": true,
       "reason": null,
-      "fingerprint": "f7a714ba",
-      "turn": 154,
+      "fingerprint": "f2144514",
+      "turn": 158,
       "deaths": 2,
       "stages": [
         {
@@ -54,7 +54,7 @@
         },
         {
           "id": "return_to_car",
-          "turns": 19,
+          "turns": 23,
           "hpLost": 0,
           "healed": 0,
           "eats": 0,
@@ -80,8 +80,8 @@
       "seed": 1,
       "finished": true,
       "reason": null,
-      "fingerprint": "9fbe9016",
-      "turn": 137,
+      "fingerprint": "1ff1d39b",
+      "turn": 141,
       "deaths": 2,
       "stages": [
         {
@@ -128,7 +128,7 @@
         },
         {
           "id": "return_to_car",
-          "turns": 19,
+          "turns": 23,
           "hpLost": 0,
           "healed": 0,
           "eats": 0,
@@ -154,8 +154,8 @@
       "seed": 2,
       "finished": true,
       "reason": null,
-      "fingerprint": "03ce824d",
-      "turn": 88,
+      "fingerprint": "9321bcb9",
+      "turn": 92,
       "deaths": 0,
       "stages": [
         {
@@ -166,7 +166,7 @@
         },
         {
           "id": "pick_up",
-          "turns": 12,
+          "turns": 13,
           "deaths": 0,
           "gold": 0
         },
@@ -190,13 +190,13 @@
         },
         {
           "id": "to_factory",
-          "turns": 27,
+          "turns": 28,
           "deaths": 0,
           "gold": 0
         },
         {
           "id": "fight_green",
-          "turns": 14,
+          "turns": 16,
           "deaths": 0,
           "gold": 8
         },
