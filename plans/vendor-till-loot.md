@@ -77,8 +77,13 @@ the sim clean this week; C alone leaves the exploit open.
 - `tests/vendor-till-loot.test.js` asserts all of the above. Vendor fixtures in the offer tests
   that used `gold` as the till now use `till`.
 
-## After the ruling
+## Results (on dev d908d1e, with pathing round corners merged in)
 
-Whatever is picked moves the sim's gold numbers on the seeds that kill Carrion, so the fix commit
-re-records with `npm run sim:write` and `npm run spirits:harvest` and cites his ruling, and the
-repro test flips to assert the new loot.
+- `npm test`: 6030 pass, 0 fail.
+- `npm run sim:check` before re-recording: one line moved, the intended one.
+  `quest escape_sewer.gold` 997.94 -> 0.32. Seeds 26, 32, 41, 44 and 47 looted Carrion's till
+  (9999, or 9905 after a sale); each now loots her 4 GP purse. Sneak and loops moved nothing.
+  No other number on any seed changed.
+- The autoplay golden moved by fingerprint only: the fingerprint hashes the save, and every enemy's
+  save now carries `till`. Every stage number is unchanged.
+- Re-recorded in one commit: `autoplay:write`, `sim:write`, `spirits:harvest` (ruling VTR1).
