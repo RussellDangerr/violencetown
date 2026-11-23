@@ -45,7 +45,10 @@ describe('FX13 — townsfolk carry a small purse', () => {
         const macc = town.enemies.find(s => s.vendor && s.ambient);
         assert.ok(macc);
         assert.equal(isTownsperson(macc), false);
-        assert.equal(spawnEnemy(macc, new Set()).gold, 9999);
+        // (vendor-till-loot) The till is the shop's, kept apart; he carries a townsperson's purse.
+        const m = spawnEnemy(macc, new Set());
+        assert.equal(m.till, 9999);
+        assert.ok(m.gold >= TOWNSFOLK_PURSE_MIN && m.gold <= TOWNSFOLK_PURSE_MAX, `purse ${m.gold}`);
         assert.equal(isTownsperson(folk('f', { damage: 4 })), false);
         assert.equal(spawnEnemy(folk('g', { gold: 17 }), new Set()).gold, 17);
         assert.equal(isTownsperson(folk('n', { ambient: false })), false);

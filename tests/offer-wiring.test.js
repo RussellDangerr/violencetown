@@ -23,7 +23,7 @@ import { INVENTORY_SIZE, SAFE_SLOTS, PACK_PAGE, MAX_STACK } from '../game/data.j
 import {
     emptyOffer, commitBlocker, stage, unstage, settledGold, offerBalance, resolveOffer, sameEntry,
 } from '../game/offer.js';
-import { transferGold, sellPrice, buyPrice } from '../game/trade.js';
+import { transferGold, tradeHolder, sellPrice, buyPrice } from '../game/trade.js';
 import {
     applyDispositionDelta, previewGive, applyGive, reactToTransaction,
 } from '../game/give-action.js';
@@ -82,7 +82,7 @@ test('the lifted module constants are the real ones', () => {
 
 const audio = { played: [], playSfx(n) { this.played.push(n); } };
 
-const openOffer = liveMethod('_openOffer', 'npc', { STATE, audio, emptyOffer });
+const openOffer = liveMethod('_openOffer', 'npc', { STATE, audio, emptyOffer, tradeHolder });
 const closeOffer = liveMethod('_closeOffer', '', { STATE, audio });
 const tapOffer = liveMethod('_tapOffer', 'pt',
     { MODAL_RECT, HIT_SLOP, offerLayout, offerRowIndexAt, offerTraySlotAt, audio, OFFER_ROWS_VISIBLE });
@@ -108,13 +108,13 @@ const addToInventoryLive = liveMethod('_addToInventory', 'itemDef',
     { addToInv: addToInventory, SAFE_SLOTS, PACK_PAGE, MAX_STACK });
 const logOffer = liveMethod('_logOffer', 'npc, R, { given, taken, gold }', { dispositionCeil });
 const commitOfferFull = liveMethod('_commitOffer', '',
-    { resolveOffer, transferGold, sellPrice, buyPrice, applyDispositionDelta, isHostile, emptyOffer,
+    { resolveOffer, transferGold, tradeHolder, sellPrice, buyPrice, applyDispositionDelta, isHostile, emptyOffer,
       audio, reactToTransaction });
 const theirsList = liveMethod('_offerTheirsList', '');
 const yoursList = liveMethod('_offerYoursList', '');
 const stagedCount = liveMethod('_stagedCount', 'side, entry');
 const offerSelection = liveMethod('_offerSelection', '');
-const offerBlocker = liveMethod('_offerBlocker', '', { commitBlocker });
+const offerBlocker = liveMethod('_offerBlocker', '', { commitBlocker, tradeHolder });
 
 function stubGame(overrides = {}) {
     audio.played = [];
@@ -212,7 +212,7 @@ const this_inPanel = (pt) =>
 
 const alive = { isAlive: () => true };
 const dead = { isAlive: () => false };
-const puck = () => ({ type: 'puck', vendor: true, disposition: 40, gold: 200, entity: alive, stock: ['soap', 'rock'] });
+const puck = () => ({ type: 'puck', vendor: true, disposition: 40, till: 200, entity: alive, stock: ['soap', 'rock'] });
 const friend = () => ({ type: 'gus', disposition: 10, entity: alive });
 const chestShim = (contents = ['rock', 'soap']) => ({
     type: 'chest', vendor: true, bribeable: false, disposition: 100,
@@ -891,7 +891,7 @@ describe('_commitOffer', () => {
     const commit = commitOfferFull;
 
     const vendor = (over = {}) => Object.assign(
-        { id: 'puck', type: 'puck', vendor: true, disposition: 40, gold: 200, entity: alive,
+        { id: 'puck', type: 'puck', vendor: true, disposition: 40, till: 200, entity: alive,
           stock: ['bandage', 'soap'], values: { soap: 4 }, behavior: ['IDLE'] }, over);
 
     test('a blocked offer changes nothing and says why', () => {
@@ -901,7 +901,7 @@ describe('_commitOffer', () => {
         g._offer.gold = 40;                       // more than the player has
         commit.call(g);
         assert.equal(g.gold, 5, 'gold moved on a blocked offer');
-        assert.equal(npc.gold, 200);
+        assert.equal(npc.till, 200);
         assert.match(g.logs.at(-1).msg, /GP SHORT/);
         assert.ok(g._offer.take !== null, 'the basket was cleared by a refusal');
     });
@@ -915,7 +915,7 @@ describe('_commitOffer', () => {
         assert.ok(price > 0);
         commit.call(g);
         assert.equal(g.gold, 100 - price, 'the player did not pay');
-        assert.equal(npc.gold, 200 + price, 'the vendor was not paid');
+        assert.equal(npc.till, 200 + price, 'the vendor was not paid');
         assert.deepEqual(g.got, ['bandage'], 'the item never reached the bag');
         assert.deepEqual(g._offer.take, [], 'the basket survived the commit');
     });
@@ -929,7 +929,7 @@ describe('_commitOffer', () => {
         assert.ok(owed > 0, 'the vendor owes nothing for a sale');
         commit.call(g);
         assert.equal(g.gold, 10 + owed);
-        assert.equal(npc.gold, 200 - owed);
+        assert.equal(npc.till, 200 - owed);
         assert.equal(g.inventory[0], null, 'the sold item stayed in the bag');
     });
 
@@ -1325,7 +1325,7 @@ describe('disposition decay and the open offer screen', () => {
 
 describe('a full bag never costs the player anything', () => {
     const commit = commitOfferFull;
-    const vendor = () => ({ id: 'puck', type: 'puck', vendor: true, disposition: 40, gold: 200,
+    const vendor = () => ({ id: 'puck', type: 'puck', vendor: true, disposition: 40, till: 200,
                             entity: alive, stock: ['bandage'], values: {}, behavior: ['IDLE'] });
     // 50 distinct defs would be ideal; 50 full stacks of one is equivalent for
     // addToInventory, which only merges below maxStack.
@@ -1354,7 +1354,7 @@ describe('a full bag never costs the player anything', () => {
         const price = g._offer.gold;
         commit.call(g);
         assert.equal(g.gold, 500 - price, 'the player did not pay');
-        assert.equal(npc.gold, 200 + price, 'the vendor was not paid');
+        assert.equal(npc.till, 200 + price, 'the vendor was not paid');
         assert.equal(g.inventory.length, INVENTORY_SIZE + PACK_PAGE, 'the bag did not grow a page');
         assert.equal(g.inventory[INVENTORY_SIZE].itemDef.id, 'bandage', 'the bandage is not first on page 2');
     });
@@ -1470,7 +1470,7 @@ describe('the buyback shelf is an undo, not a duplicator', () => {
         offerActivate.call(g, 'yours', 0);
         commit.call(g);
     };
-    const vendor = () => ({ id: 'puck', type: 'puck', vendor: true, disposition: 40, gold: 500,
+    const vendor = () => ({ id: 'puck', type: 'puck', vendor: true, disposition: 40, till: 500,
                             entity: alive, stock: [], values: {}, behavior: ['IDLE'] });
     const bag = (n = 1) => {
         const inv = new Array(INVENTORY_SIZE).fill(null);
@@ -1560,7 +1560,7 @@ describe('the buyback shelf is an undo, not a duplicator', () => {
 
 describe('the player can refuse the settled gold', () => {
     const commit = commitOfferFull;
-    const puckish = () => ({ id: 'puck', type: 'puck', vendor: true, disposition: 40, gold: 400,
+    const puckish = () => ({ id: 'puck', type: 'puck', vendor: true, disposition: 40, till: 400,
                              entity: alive, stock: ['bandage'], values: { soap: 4 }, behavior: ['IDLE'] });
     const withSoap = (n = 2) => {
         const inv = new Array(INVENTORY_SIZE).fill(null);
@@ -1661,7 +1661,7 @@ describe('the whole bag is reachable with a pointer', () => {
         for (let i = 0; i < 40; i++) inv[i] = { itemDef: ITEMS[ids[i % ids.length]], count: 1 };
         return inv;
     };
-    const vendor = () => ({ id: 'p', type: 'p', vendor: true, disposition: 40, gold: 400,
+    const vendor = () => ({ id: 'p', type: 'p', vendor: true, disposition: 40, till: 400,
                             entity: alive, stock: [], values: {}, behavior: ['IDLE'] });
     const open = () => {
         const g = stubGame({ gold: 100, inventory: bigBag() });
@@ -1734,7 +1734,7 @@ describe('the whole bag is reachable with a pointer', () => {
         const inv = new Array(INVENTORY_SIZE).fill(null);
         for (let i = 0; i < 12; i++) inv[i] = { itemDef: ITEMS.rock, count: 1 };
         const g = stubGame({ gold: 100, inventory: inv });
-        const npc = { id: 'p', type: 'p', vendor: true, disposition: 40, gold: 900,
+        const npc = { id: 'p', type: 'p', vendor: true, disposition: 40, till: 900,
                       entity: alive, stock: [], values: {}, behavior: ['IDLE'] };
         openOffer.call(g, npc);
         g._offer.scroll.yours = 6;

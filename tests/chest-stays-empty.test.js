@@ -28,7 +28,7 @@ import {
     MODAL_RECT, HIT_SLOP, offerLayout, offerRowIndexAt, offerTraySlotAt, OFFER_ROWS_VISIBLE, OFFER_TRAY_SLOTS,
 } from '../game/layout.js';
 import { emptyOffer, commitBlocker, stage, unstage, settledGold, resolveOffer, sameEntry } from '../game/offer.js';
-import { band, buyPrice, sellPrice, transferGold } from '../game/trade.js';
+import { band, buyPrice, sellPrice, transferGold, tradeHolder } from '../game/trade.js';
 import { applyDispositionDelta, reactToTransaction } from '../game/give-action.js';
 import { serialize, loadInto, migrate } from '../game/save.js';
 
@@ -140,7 +140,7 @@ function makeGame(url = 'sewer-map.json') {
         SAFE_SLOTS, PACK_PAGE, MAX_STACK, addToInv,
         MODAL_RECT, HIT_SLOP, offerLayout, offerRowIndexAt, offerTraySlotAt, OFFER_ROWS_VISIBLE, OFFER_TRAY_SLOTS,
         emptyOffer, commitBlocker, stage, unstage, settledGold, resolveOffer, sameEntry,
-        band, sellPrice, buyPrice, transferGold, applyDispositionDelta, reactToTransaction,
+        band, sellPrice, buyPrice, transferGold, tradeHolder, applyDispositionDelta, reactToTransaction,
         // _loadMap
         loadMap: async (u) => new GameMap(mapJson(u), u),
         spawnEnemy, resolveSpawn, deadIds, pendingDrops, stepRespawns: () => {},
