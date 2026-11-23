@@ -67,9 +67,10 @@ describe('the fungus defeat wakes you out of sight (FX46)', () => {
     });
 
     test('the check bites: the old wake spot is in plain sight', () => {
+        // (The Fungus King saw it too until his post moved to the north hall,
+        // plans/pathing-round-corners.md.)
         const who = seenBy(OLD_SPOT.x, OLD_SPOT.y);
-        assert.ok(who.some(w => w.includes('Fungus King')), `the Fungus King sees the old spot (seen by ${who})`);
-        assert.ok(who.some(w => w.includes('Violet Fungus')), 'a Violet Fungus sees the old spot');
+        assert.ok(who.some(w => w.includes('Violet Fungus')), `a Violet Fungus sees the old spot (seen by ${who})`);
     });
 
     test('a fungus defeat in the sewer still picks this scenario', () => {
