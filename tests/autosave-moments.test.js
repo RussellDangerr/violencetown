@@ -32,7 +32,7 @@ import { buildXmbBar, resolveXmbSelection, xmbCategoryOf, XMB_LABELS } from '../
 import {
     emptyOffer, commitBlocker, stage, unstage, settledGold, resolveOffer, sameEntry,
 } from '../game/offer.js';
-import { transferGold, sellPrice, buyPrice } from '../game/trade.js';
+import { transferGold, tradeHolder, sellPrice, buyPrice } from '../game/trade.js';
 import { applyDispositionDelta, reactToTransaction } from '../game/give-action.js';
 import { isHostile } from '../game/ai.js';
 import { dispositionCeil } from '../game/disposition-curves.js';
@@ -126,7 +126,7 @@ const FREE = {
     deviceEquipLayout, deviceRingsLayout, inspectorActionRects, gearOptionRects, nearestRectInDir,
     itemActions, equipOptions, zoneOf, moveToZone, slotRing, unslotRing,
     emptyOffer, commitBlocker, stage, unstage, settledGold, resolveOffer, sameEntry,
-    transferGold, sellPrice, buyPrice, applyDispositionDelta, reactToTransaction, isHostile,
+    transferGold, tradeHolder, sellPrice, buyPrice, applyDispositionDelta, reactToTransaction, isHostile,
     dispositionCeil, OFFER_ROWS_VISIBLE, OFFER_TRAY_SLOTS,
 };
 

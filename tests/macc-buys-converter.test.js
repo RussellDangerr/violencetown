@@ -20,7 +20,7 @@ import {
     MODAL_RECT, HIT_SLOP, offerLayout, offerRowIndexAt, offerTraySlotAt, OFFER_ROWS_VISIBLE, OFFER_TRAY_SLOTS,
 } from '../game/layout.js';
 import { emptyOffer, commitBlocker, stage, unstage, settledGold, resolveOffer, sameEntry } from '../game/offer.js';
-import { band, buyPrice, sellPrice, specialDef, transferGold } from '../game/trade.js';
+import { band, buyPrice, sellPrice, specialDef, transferGold, tradeHolder } from '../game/trade.js';
 import { QuestEngine, QUESTS } from '../game/quests.js';
 import { applyDispositionDelta, reactToTransaction } from '../game/give-action.js';
 
@@ -115,7 +115,7 @@ function makeGame() {
         SAFE_SLOTS, PACK_PAGE, MAX_STACK, addToInv,
         MODAL_RECT, HIT_SLOP, offerLayout, offerRowIndexAt, offerTraySlotAt, OFFER_ROWS_VISIBLE, OFFER_TRAY_SLOTS,
         emptyOffer, commitBlocker, stage, unstage, settledGold, resolveOffer, sameEntry,
-        sellPrice, buyPrice, specialDef, transferGold, applyDispositionDelta, reactToTransaction,
+        sellPrice, buyPrice, specialDef, transferGold, tradeHolder, applyDispositionDelta, reactToTransaction,
     };
     for (const [n, p] of LIFTED) g[n] = liveMethod(n, p, free);
     g._closeCurrentMenu = function () { this._closeOffer(); };
@@ -171,9 +171,9 @@ describe('Macc buys the Converter', () => {
     test('his line promises it, and his till is raised to cover it at the counter', async () => {
         const g = makeGame();
         assert.equal(g.macc.specialBuys.catalytic_converter, 500);
-        g.macc.gold = 3;
+        g.macc.till = 3;
         await g.press('KeyE');
-        assert.ok(g.macc.gold >= 500);
+        assert.ok(g.macc.till >= 500);
     });
 
     test('selling with real keys pays exactly 500 and takes it from the bag', async () => {

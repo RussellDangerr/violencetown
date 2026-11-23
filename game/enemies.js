@@ -82,8 +82,11 @@ const DEFAULT_DAMAGE = 8;
 // (transaction spine) A vendor's "till" — the gold they can pay out when you SELL
 // to them, so the transferGold conservation has a funded source. Generous enough
 // that it never runs dry in normal play; a real number so it saves/loads. Plain
-// NPCs start at 0 (they don't buy/sell).
-const VENDOR_WALLET    = 9999;
+// NPCs have none (they don't buy/sell).
+// (plans/vendor-till-loot.md, ruled option A) The till is the shop's money, kept
+// in `till`, apart from `gold`, the purse the vendor carries. Law 6 loots `gold`
+// only, so killing a vendor never pays out the till.
+export const VENDOR_WALLET = 9999;
 
 export class Enemy {
     constructor({
@@ -193,6 +196,8 @@ export class Enemy {
         specialBuys = null,
         // (transaction spine) real gold + a transaction log (restored from saves).
         gold = null,
+        // (vendor-till-loot) A vendor's till, apart from the purse it carries.
+        till = null,
         giftLog = null,
         // Law 6f (plans/gold-standard-design.md): the potions/gear this enemy
         // carries — an array of item ids (resolveLoadout below resolves them to
@@ -331,10 +336,13 @@ export class Enemy {
         this.fence         = fence === true;
         this.stock         = stock;
         this.specialBuys   = specialBuys;
-        // (transaction spine) Vendors carry a funded till so SELL has a source;
+        // (transaction spine) Vendors have a funded till so SELL has a source;
         // plain NPCs start empty. Both round-trip via serEnemy. giftLog is a
         // stub for future barter/memory.
-        this.gold          = gold != null ? gold : (vendor ? VENDOR_WALLET : 0);
+        // (vendor-till-loot) `gold` is the purse on the person (what Law 6 loots);
+        // `till` is the shop's money, which a death leaves behind.
+        this.gold          = gold != null ? gold : 0;
+        this.till          = till != null ? till : (vendor ? VENDOR_WALLET : 0);
         this.giftLog       = Array.isArray(giftLog) ? giftLog : [];
         this.loadout       = loadout;
         this.ambient       = ambient;
@@ -423,7 +431,7 @@ export class Enemy {
             disposition: this.disposition, flipThreshold: this.flipThreshold, bribeable: this.bribeable,
             values: this.values, onFlip: this.onFlip,
             name: this.name, dialogueId: this.dialogueId,
-            vendor: this.vendor, stock: this.stock, specialBuys: this.specialBuys, gold: this.gold, giftLog: this.giftLog,
+            vendor: this.vendor, stock: this.stock, specialBuys: this.specialBuys, gold: this.gold, till: this.till, giftLog: this.giftLog,
             fence: this.fence,
             // Law 6f: the carried kit must survive a reload the same way gold
             // does, or a boss's Challenge GP would drop on save/load.
@@ -493,6 +501,13 @@ export class Enemy {
 
     static fromSave(s) {
         const e = new Enemy(s);   // config fields incl. ambient; s.hp → Entity
+        // (vendor-till-loot) A save from before the till split kept the till in
+        // `gold`. A vendor (or a struck one, still holding the 9999) loads with
+        // the till where it belongs and an empty purse.
+        if (s.till == null && (s.vendor || (s.gold ?? 0) >= VENDOR_WALLET)) {
+            e.till = s.vendor ? VENDOR_WALLET : 0;
+            e.gold = 0;
+        }
         const num = (v, d) => (typeof v === 'number' && isFinite(v)) ? v : d;
         // Floored at 1: a saved maxHp of 0 is finite, so `num` waved it through,
         // and the nameplate's hp/maxHp then became NaN — which a canvas fillRect
@@ -646,6 +661,9 @@ export function spawnEnemy(spawnDef, muggedIds, robbed = null, rivalKit = null, 
         e.loadout = [...kit.loadout];
     }
     if (isTownsperson(spawnDef)) e.gold = townsfolkPurse(e.id);
+    // (vendor-till-loot) A shopkeeper who never fights carries a townsperson's
+    // purse; its till stays with the shop. A vendor who fights keeps its kit.
+    if (spawnDef.vendor && !fights && spawnDef.gold == null) e.gold = townsfolkPurse(e.id);
     if (!Array.isArray(e.loadout)) e.loadout = e.loadout ? [...e.loadout] : [];
     if (muggedIds?.has(e.id)) { e.gold = 0; e.loadout = []; }
 

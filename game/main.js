@@ -66,7 +66,7 @@ import {
 import {
     emptyOffer, commitBlocker, stage, unstage, settledGold, resolveOffer, sameEntry,
 } from './offer.js';   // (offer screen) the basket model
-import { canTrade, sellPrice, specialDef, transferGold, burnGold, saleLocked, SALE_LOCK_REFUSAL, stockPrice, NIGHT_SELLER_ID, NIGHT_SPAWNS } from './trade.js'; // pricing + the transaction spine
+import { canTrade, sellPrice, specialDef, transferGold, tradeHolder, burnGold, saleLocked, SALE_LOCK_REFUSAL, stockPrice, NIGHT_SELLER_ID, NIGHT_SPAWNS } from './trade.js'; // pricing + the transaction spine
 import { logCategory } from './combat-log.js';   // (log tagging) one rule for a message's category
 import { takeable, learnFromHit } from './fight-panels.js';   // (combat-hud stage 4) the one answer to "what could I take"
 import { buildXmbBar, resolveXmbSelection, cycleXmbCategory, cycleXmbItem, xmbCategoryOf, XMB_LABELS } from './xmb.js';
@@ -111,6 +111,7 @@ import { arcAllSlots, arcVisible, arcSlotAt, arcFaded, ARC_MAX } from './fight-a
 import { applyCompactor, compactorBeat, breakCompactor, resetCompactor, isCompactor } from './compactor.js';   // (TC1) the trash compactor room
 import { hypnoBeat, applyHypno, hypnoOnDeath } from './hypno-vision.js';   // (HV1) the Factory's Hypno Vision
 import { fighters, joiners } from './fight-area.js';                                     // (fight-fog) who is in the fight
+import { sendToPosts } from './npc.js';                                                    // a boss retry puts the fight back at its posts
 import { fightStartKind, entranceFor, fightFxActive } from './fight-entrance.js'; // (fight-fog) how it began, and how long its fog moves
 import { createCascade, CASCADE_BEAT_MS, LUNGE_MS } from './cascade.js';           // (turn-model C1) the enemy phase, one actor at a time
 import { reelEntries, extendReel, liveReel } from './loot-ticker.js';                      // (FX3c) a reel rolls through what a kill gave
@@ -6865,6 +6866,7 @@ class Game {
         this.playerHp = this.playerMaxHp; this.playerMp = this.playerMaxMp;
         this.buffs = [];                          // clean slate (matches _respawn)
         this._pendingTransition = null;           // don't ghost-load a queued transition after the retry
+        this._fightToPosts?.(boss);               // the fight starts over, everyone at their post
         this._deAggroAll();
         this._finaleReset?.(boss);                // (FIN2) the Financier starts over, Sun Man and all
         this.state = STATE.IDLE;
@@ -6872,6 +6874,13 @@ class Game {
         this._render();
         this._resumeHeldWalk();
         this.autosave({ force: true });
+    }
+
+    // (plans/pathing-round-corners.md) Everyone in the boss fight back at their post.
+    // Optional-called from _runBossRetry, so the stand-in games tests lift it onto
+    // need not carry it.
+    _fightToPosts(boss) {
+        sendToPosts(this, [boss, ...fighters(this.enemies)]);
     }
 
     _respawn() {
@@ -8050,9 +8059,11 @@ class Game {
         this._offerNpc = npc;
         // (MC1) A special buyer can always pay his own listed price (once): his till
         // is raised to it at the counter, not authored into the map.
-        if (npc.specialBuys && typeof npc.gold === 'number') {
+        // (vendor-till-loot) It is the till that is raised, not the purse he carries.
+        const till = tradeHolder(npc);
+        if (npc.specialBuys && typeof till.gold === 'number') {
             const top = Math.max(0, ...Object.values(npc.specialBuys));
-            if (npc.gold < top) npc.gold = top;
+            if (till.gold < top) till.gold = top;
         }
         // goldPinned: the player has taken the settled gold off its default and
         // that decision must survive later staging. Settling is the default;
@@ -8284,7 +8295,7 @@ class Game {
         // WITHOUT its shim; this is not one.
         return commitBlocker(npc, this._offer, {
             playerGold: this.gold ?? 0,
-            npcGold: npc.gold ?? 0,
+            npcGold: tradeHolder(npc).gold ?? 0,   // (vendor-till-loot) a vendor pays from its till
             // (BG1) There is no bag-full blocker: the bag grows a page instead
             // of refusing, so whatever is staged on the take side always fits.
             // (fence) Two questions offer.js asks and cannot answer itself.
@@ -8469,8 +8480,10 @@ class Game {
         const given = this._offer.give;
         const taken = this._offer.take;
 
-        if (gold > 0 && !transferGold(this, npc, gold, 'offer')) { this._render(); return; }
-        if (gold < 0 && !transferGold(npc, this, -gold, 'offer')) { this._render(); return; }
+        // (vendor-till-loot) A vendor's side of the gold is its till, not its purse.
+        const theirs = tradeHolder(npc);
+        if (gold > 0 && !transferGold(this, theirs, gold, 'offer')) { this._render(); return; }
+        if (gold < 0 && !transferGold(theirs, this, -gold, 'offer')) { this._render(); return; }
 
         // Items out of the bag. NO sort: _removeFromSlot nulls the slot in place
         // rather than splicing, so nothing shifts and order cannot matter. (An

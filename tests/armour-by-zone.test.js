@@ -33,7 +33,7 @@ import {
     deviceEquipLayout, deviceRingsLayout, inspectorActionRects, gearOptionRects, nearestRectInDir,
 } from '../game/layout.js';
 import { emptyOffer, commitBlocker, stage, unstage, settledGold, resolveOffer, sameEntry } from '../game/offer.js';
-import { buyPrice, sellPrice, transferGold } from '../game/trade.js';
+import { buyPrice, sellPrice, transferGold, tradeHolder } from '../game/trade.js';
 import { applyDispositionDelta, reactToTransaction } from '../game/give-action.js';
 
 globalThis.localStorage ??= { getItem: () => null, setItem() {}, removeItem() {} };
@@ -140,7 +140,7 @@ function makeGame({ file, vendorId, start, seed = 7 }) {
         SAFE_SLOTS, PACK_PAGE, MAX_STACK, INVENTORY_SIZE, addToInv, zoneOf, moveToZone, pageCount, slotOnPage, pageOfSlot,
         MODAL_RECT, HIT_SLOP, offerLayout, offerRowIndexAt, offerTraySlotAt, OFFER_ROWS_VISIBLE, OFFER_TRAY_SLOTS,
         emptyOffer, commitBlocker, stage, unstage, settledGold, resolveOffer, sameEntry,
-        sellPrice, buyPrice, transferGold, applyDispositionDelta, reactToTransaction,
+        sellPrice, buyPrice, transferGold, tradeHolder, applyDispositionDelta, reactToTransaction,
         DEVICE_TABS, deviceTabRect, cycleDeviceTab, deviceBodyRect, deviceBagSlotRects, deviceBagPagerRects,
         deviceEquipLayout, deviceRingsLayout, inspectorActionRects, gearOptionRects, nearestRectInDir,
         itemActions, equipOptions, resolveUse, unequipItem,

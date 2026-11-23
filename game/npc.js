@@ -793,11 +793,9 @@ export function goHomeStep(game, npc, { anyone = false } = {}) {
     if (!anyone && npc.behavior && npc.behavior.includes(STATE.WANDER)) return false;
     if (npc.x === npc.homeX && npc.y === npc.homeY) return false;
 
-    // A real route, not a greedy nudge. getGreedyStep only ever moves to a
-    // neighbour that reduces straight-line distance, so it strands anyone whose
-    // post is back around a corner — it cannot even leave a spot where every
-    // improving neighbour is a wall. "If possible" was meant literally, so this
-    // asks whether a way home EXISTS and takes its first step.
+    // A real route, which characters in the way block too: "if possible" was
+    // meant literally, so this asks whether a way home EXISTS and takes its
+    // first step.
     const path = findPath(game, { x: npc.x, y: npc.y }, { x: npc.homeX, y: npc.homeY },
                           { self: npc, avoidPlayer: true });
     // No path means genuinely cut off — someone standing in the doorway, most
@@ -807,6 +805,29 @@ export function goHomeStep(game, npc, { anyone = false } = {}) {
     const step = path[0];
     stepEntity(npc, step.x, step.y, game._MOVE_MS);
     return true;
+}
+
+// (plans/pathing-round-corners.md) A boss retry starts the fight over, so everyone
+// who was in it is back at their post, out of the hunt. Chasers come round corners
+// now; left where they stood, they would be waiting beside the tile you wake on.
+// A post someone else is standing on stays taken; that one stays where it is.
+export function sendToPosts(game, movers) {
+    const live = (e) => e && e.entity?.isAlive?.();
+    const pending = (movers || []).filter(n => live(n) && n.homeX != null && n.homeY != null
+        && !(n.x === n.homeX && n.y === n.homeY));
+    // Two passes, so one going home can free the post of another.
+    for (let pass = 0; pass < 2; pass++) {
+        for (const npc of pending) {
+            if (npc.x === npc.homeX && npc.y === npc.homeY) continue;
+            const hx = npc.homeX, hy = npc.homeY;
+            const taken = (hx === game.playerX && hy === game.playerY)
+                || game.enemies.some(e => e !== npc && live(e) && e.x === hx && e.y === hy);
+            if (taken) continue;
+            npc.x = hx; npc.y = hy;
+            npc._slideStart = null;   // there, not gliding there
+            npc.state = 'idle';
+        }
+    }
 }
 
 // ── Bystanders (F3c, plans/f3c-bystanders-clear-out.md) ─────────────────────
