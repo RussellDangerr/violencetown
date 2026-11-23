@@ -98,7 +98,8 @@ describe('every exit arrow points the way its label says', () => {
     const exits = maps.flatMap(({ f, d }) => (d.transitions || []).map(t => ({ f, t, d })));
     test('there are exits to check', () => assert.ok(exits.length > 20));
     for (const { f, t, d } of exits) {
-        const m = /^\[(North|South|East|West)\b/.exec(t.label || '');
+        // ZE1 made some exit labels plain (no brackets); both kinds are checked.
+        const m = /^\[?(North|South|East|West)\b/.exec(t.label || '');
         if (!m) continue;
         test(`${f} (${t.x},${t.y}) "${m[1]}" points ${word[m[1]]}`, () => {
             assert.equal(exitDir(t, d.width, d.height), word[m[1]]);
