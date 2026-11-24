@@ -94,8 +94,8 @@
     "items": [],
     "examinables": [],
     "transitions": [
-        {"x": 9, "y": 0, "toMap": "factory-map.json", "toX": 26, "toY": 26, "label": "[TEXT]"},
-        {"x": 10, "y": 0, "toMap": "factory-map.json", "toX": 26, "toY": 26, "label": "[TEXT]"},
+        {"x": 9, "y": 0, "toMap": "factory-map.json", "toX": 26, "toY": 28, "label": "[TEXT]"},
+        {"x": 10, "y": 0, "toMap": "factory-map.json", "toX": 26, "toY": 28, "label": "[TEXT]"},
         {"x": 19, "y": 6, "toMap": "wilderness-map.json", "toX": 2, "toY": 6, "label": "[TEXT]"},
         {"x": 19, "y": 7, "toMap": "wilderness-map.json", "toX": 2, "toY": 6, "label": "[TEXT]"}
     ]

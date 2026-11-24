@@ -54,7 +54,7 @@ const ALLOWED = {
     'factory-map.json': 8,
     'frozen-map.json': 5,
     'gorge-map.json': 1,
-    'graveyard-map.json': 3,
+    'graveyard-map.json': 1,
     'hand-data.js': 2,
     'hands.js': 1,
     'items.js': 4,
@@ -68,7 +68,7 @@ const ALLOWED = {
     'valley-map.json': 3,
     'vault-map.json': 2,
     'wheel-model.js': 15,
-    'wilderness-map.json': 6,
+    'wilderness-map.json': 5,
     'world-map.js': 7,
 };
 

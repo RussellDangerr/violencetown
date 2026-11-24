@@ -72,7 +72,7 @@
     "transitions": [
         {"x": 4, "y": 0, "toMap": "town-map.json", "toX": 16, "toY": 24, "label": "North — back into Violencetown"},
         {"x": 5, "y": 0, "toMap": "town-map.json", "toX": 16, "toY": 24, "label": "North — back into Violencetown"},
-        {"x": 52, "y": 21, "toMap": "graveyard-map.json", "toX": 14, "toY": 2, "label": "South — on through to the GRAVEYARD"},
-        {"x": 53, "y": 21, "toMap": "graveyard-map.json", "toX": 14, "toY": 2, "label": "South — on through to the GRAVEYARD"}
+        {"x": 52, "y": 21, "toMap": "graveyard-map.json", "toX": 14, "toY": 1, "label": "South — on through to the GRAVEYARD"},
+        {"x": 53, "y": 21, "toMap": "graveyard-map.json", "toX": 14, "toY": 1, "label": "South — on through to the GRAVEYARD"}
     ]
 }

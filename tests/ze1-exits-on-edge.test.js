@@ -17,13 +17,6 @@ for (const f of fs.readdirSync(dir).filter(n => n.endsWith('-map.json'))) {
 const OUTDOOR = new Set(['town', 'factory', 'carnival', 'graveyard', 'wilderness', 'valley',
     'tunnels', 'frozen', 'canyon', 'gorge', 'sewer'].map(n => `${n}-map.json`));
 
-// Zones that fail today, keyed `from -> to`. ZE2 empties this list.
-const FAILING_TODAY = new Set([
-    'graveyard-map.json -> carnival-map.json',   // two-wide road, one exit tile
-    'graveyard-map.json -> wilderness-map.json', // the road stops at row 27 of 30
-    'wilderness-map.json -> graveyard-map.json', // one exit tile, road two wide
-]);
-
 // Every problem with the crossings that go from `file` to another outdoor zone.
 export function crossingProblems(file) {
     const { data, map } = maps[file];
@@ -57,30 +50,43 @@ export function crossingProblems(file) {
     return problems;
 }
 
-test('every outdoor exit sits on the edge and covers its crossing, except the listed zones', () => {
-    const seen = new Set();
+// Every pair of outdoor zones joined by a road, each pair once.
+const PAIRS = [];
+for (const [a, { data }] of Object.entries(maps)) {
+    if (!OUTDOOR.has(a)) continue;
+    for (const b of new Set((data.transitions || []).map(t => t.toMap))) {
+        if (OUTDOOR.has(b) && a < b) PAIRS.push([a, b]);
+    }
+}
+
+test('every outdoor exit sits on the edge and covers its crossing (ZE2: no exceptions)', () => {
     let checked = 0;
     for (const file of Object.keys(maps)) {
-        for (const [key, msgs] of crossingProblems(file)) {
-            seen.add(key);
-            assert.ok(FAILING_TODAY.has(key), `${key} should be on the edge: ${msgs.join('; ')}`);
-        }
+        for (const [key, msgs] of crossingProblems(file)) assert.fail(`${key} should be on the edge: ${msgs.join('; ')}`);
         checked += (maps[file].data.transitions || []).filter(t => OUTDOOR.has(file) && OUTDOOR.has(t.toMap)).length;
     }
     assert.ok(checked > 20, 'the check looked at the outdoor exits');
-    // The list may only name zones that really still fail: when one is fixed, take it off.
-    for (const key of FAILING_TODAY) assert.ok(seen.has(key), `${key} passes now; take it off the list`);
 });
 
-test('Town, Factory, Carnival and Sewer pass outright', () => {
-    for (const file of ['town-map.json', 'factory-map.json', 'carnival-map.json', 'sewer-map.json']) {
-        const p = crossingProblems(file);
-        const own = [...p.keys()].filter(k => !FAILING_TODAY.has(k));
-        assert.deepEqual(own, [], file);
-    }
-    assert.equal([...crossingProblems('town-map.json').keys()].length, 0);
-    assert.equal([...crossingProblems('factory-map.json').keys()].length, 0);
-    assert.equal([...crossingProblems('carnival-map.json').keys()].length, 0);
+test('the check still catches an exit off the edge, and a road left half covered', () => {
+    const g = maps['graveyard-map.json'];
+    const saved = g.data.transitions;
+    try {
+        g.data.transitions = saved.filter(t => !(t.x === 15 && t.y === 0));
+        assert.match([...crossingProblems('graveyard-map.json').values()].flat().join(' '), /\(15,0\) is road beside/);
+        g.data.transitions = saved.map(t => t.y === 27 ? { ...t, y: 26 } : t);
+        assert.match([...crossingProblems('graveyard-map.json').values()].flat().join(' '), /is not on the last row or column/);
+    } finally { g.data.transitions = saved; }
+});
+
+test("the Graveyard's two roads: both tiles wide, on the first and last rows", () => {
+    const g = maps['graveyard-map.json'].data;
+    assert.equal(g.height, 28, 'the solid rows under the south road are cut');
+    const at = (to) => g.transitions.filter(x => x.toMap === to).map(x => `${x.x},${x.y}`).sort();
+    assert.deepEqual(at('carnival-map.json'), ['14,0', '15,0']);
+    assert.deepEqual(at('wilderness-map.json'), ['14,27', '15,27']);
+    const w = maps['wilderness-map.json'].data.transitions.filter(x => x.toMap === 'graveyard-map.json');
+    assert.deepEqual(w.map(x => `${x.x},${x.y}`).sort(), ['8,0', '9,0']);
 });
 
 test("Town's three roads: whole width, last row or column", () => {
@@ -98,18 +104,14 @@ test('every outdoor exit lands on a walkable tile that is not itself an exit', (
             const dest = maps[t.toMap];
             assert.ok(dest.map.isWalkable(t.toX, t.toY), `${file} (${t.x},${t.y}) lands off the floor in ${t.toMap}`);
             const onExit = dest.map.transitions.some(d => d.x === t.toX && d.y === t.toY);
-            // Not asserted for the zones still to fix (their landings are ZE2's); the four
-            // maps this slice owns must not drop you onto an exit.
-            if (['town-map.json', 'factory-map.json', 'carnival-map.json', 'sewer-map.json'].includes(t.toMap)) {
-                assert.ok(!onExit, `${file} (${t.x},${t.y}) lands on an exit in ${t.toMap}`);
-            }
+            assert.ok(!onExit, `${file} (${t.x},${t.y}) lands on an exit in ${t.toMap}`);
         }
     }
 });
 
 test('walking back lands beside the exit you came through', () => {
-    const pairs = [['town-map.json', 'factory-map.json'], ['town-map.json', 'sewer-map.json'], ['town-map.json', 'carnival-map.json']];
-    for (const [a, b] of pairs) {
+    assert.ok(PAIRS.length >= 10, `${PAIRS.length} pairs`);
+    for (const [a, b] of PAIRS) {
         const there = maps[a].data.transitions.find(t => t.toMap === b);
         const back = maps[b].data.transitions.find(t => t.toMap === a);
         const nearBack = maps[b].map.transitions.some(d => d.toMap === a && Math.abs(d.x - there.toX) + Math.abs(d.y - there.toY) <= 2);

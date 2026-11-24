@@ -26,6 +26,8 @@ already pass.
   - Graveyard -> Carnival lands at (52,20).
   - Graveyard -> Wilderness lands at (8,1).
   - Wilderness -> Graveyard lands at (14,26).
+- Frozen -> Factory moves its landing from (26,26) to (26,28), one tile inside the exit. Before,
+  it put you three tiles from the way back, the one walk-back that failed once every outdoor pair was checked.
 - Labels: copy changes are out of scope, so each new exit tile copies its neighbour's label word for word.
 
 ## Acceptance
