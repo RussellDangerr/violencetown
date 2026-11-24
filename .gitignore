@@ -109,3 +109,6 @@ tools/roadmap-board/dist/db/
 
 # --- Local sim run log (tools/autoplay-sim-log.mjs) ---
 tools/.sim-runs/
+
+# Python bytecode from dev-server.py
+__pycache__/
